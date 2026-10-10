@@ -264,13 +264,22 @@ Probe and numbers:
   the view centre sat in the fade's depth band (about 70 % of its cards gone at zoom 16) and
   read as a bare log; the render job's `fall_3_nofade` A/B shows the fallen crowns now match
   with the fade off. `ScatterShrink.hold` keeps the Clear's rebuild from standing the held
-  instances up to shrink them. Puffs (`EventPuffs`, one pooled MultiMesh of 96 billboards,
-  optional gravity, an aspect per puff; `shaders/event_puff.gdshader`: an unshaded lobed soft
-  shape lit from above over a cool shade, stretched to its aspect, melting into the ground by
-  a depth proximity fade, in the graphics warm-up): dust is a see-through golden ochre, squat
-  puffs rolling out low to either side of each trunk; a splash is a crown of eight tall
-  tongues thrown up and out, a jet, both falling back and shrinking, and three squat foam
-  patches spreading on the water (round puffs read as cotton or steam in the looks). Headless,
+  instances up to shrink them. Puffs (`EventPuffs`, one pooled MultiMesh of 96 puffs, no
+  allocation while they play; `shaders/event_puff.gdshader`: an unshaded lobed soft shape lit
+  from above over a cool shade, melting into what it touches by a depth proximity fade, drawn
+  after the water's transparent pass at render priority 2, in the graphics warm-up) come in
+  three kinds: a blob faces the camera with its length along a world axis as it falls on
+  screen (upright, along a trunk, or along a drop's flight), drawn a little toward the camera
+  so a fallen crown does not swallow it; a plume is a column standing on its point that
+  shoots up and falls back into a mound (`plume_rise`), upright or leaning out; a ring lies
+  flat on the water and spreads, thinning. Dust is golden ochre at alpha 0.5, two puffs per
+  tree as its crown lands: a squat billow there, rolling on the way it fell, and a long roll
+  along the trunk sliding to one side (three small puffs at 0.4 all but vanished). A splash
+  is sized to its piece (1.1-1.8 m): a crown column, three tongues leaning out, three drops
+  on arcs, and a foam ring spreading to twice the piece's size over about 1.5 s, white on top
+  over a pale blue shade and a bluer clear rim (eight tongues a fifth of a plank wide read as
+  confetti at tabletop zoom; round puffs as cotton or steam). Eight puffs a splash, so all
+  ten pieces fit the pool. Headless,
   `surface_get_arrays` may return nothing and MultiMesh transforms read identity, so the
   effects compute from the document's rows and tolerate empty meshes; tests check behaviour,
   not pixels (the render job `terrain_events` checks the look).

@@ -522,16 +522,20 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   arm, hover, press, move, release, put_away, undo, redo, player, dismiss, cleanup; the night
   step uses `p6.gd preset` and `avatar_kit.gd sun`) deletes `_gm_events_table` at the end.
 - `jobs/terrain_events.json`: the GM's presets with spectacle (card gm-events-2b; about 49 s
-  with `--saved --full`, 19 captures). The build phase makes a new 150 ft temperate forest map
+  with `--saved --full`, 20 captures). The build phase makes a new 150 ft temperate forest map
   (seed 1234) with a curved waist river and a plank bridge (`crossing.gd place`), saves it as
   `_gm_events_spectacle` (`events_pane.gd save`) and plays it; `--saved` loads it in play.
   Its probe (`probes/terrain_events.gd`: look, fire, advance, free, arm, hover, report) fires
   each event on the GM's side with the TerrainEvents clock held, so the filmstrips step it to
-  exact times: the bridge at zoom 11 (`collapse_0_before`, then 0.3, 0.7, 1.1, 1.6 and 2.1 s:
-  `collapse_1_shudder` to `collapse_5_settle`) and, the clock freed, the river open with the
-  toast and its Undo (`collapse_6_after`); the densest stand within 18 m of the bridge at zoom
-  16 (`fall_0_before`, then 0.45, 0.95, 1.45, 1.95 and 2.45 s: `fall_1_tip` to `fall_5_clear`,
-  and `fall_6_after`); at 1.45 s also `fall_3_nofade`, the canopy fade off (`close_zoom.gd
+  exact times: the bridge at zoom 11 with the camera turned 56 deg (`look` `yaw`) to look west
+  up the river, so no crown stands in front of it (`collapse_0_before`, then 0.3, 0.7, 1.1,
+  1.6 and 2.1 s: `collapse_1_shudder` to `collapse_5_settle`; at 1.6 s also `collapse_4_gm`,
+  the play angle with the bridge at the screen centre under the canopy fade, as a GM sees it)
+  and, the clock freed, the river open with the toast and its Undo (`collapse_6_after`).
+  `look` sets the zoom at once and centres the point exactly (an eased zoom drifted toward the
+  cursor and left the bridge 2 m off centre). Then the densest stand within 18 m of the
+  bridge at zoom 16 (`fall_0_before`, then 0.45, 0.95, 1.45, 1.95 and 2.45 s: `fall_1_tip` to
+  `fall_5_clear`, and `fall_6_after`); at 1.45 s also `fall_3_nofade`, the canopy fade off (`close_zoom.gd
   fade`), an A/B in which the fallen crowns must match `fall_3_down`. Both events are then
   undone through `events_pane.gd undo` (Ctrl+Z's path: the trees and the bridge back, no
   effect played), and the Events pane is captured at 1280x720 and 1920x1080 with its Presets

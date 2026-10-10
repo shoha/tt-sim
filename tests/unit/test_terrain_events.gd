@@ -231,6 +231,37 @@ func test_a_falling_tree_goes_still_and_rests_on_its_crown() -> void:
 	assert_lt(broad, slim, "the broad crown holds its trunk further from the ground")
 
 
+func test_event_puffs_shoot_up_spread_and_fit_the_pool() -> void:
+	# A plume shoots up to its height, then falls back to a mound.
+	assert_eq(EventPuffs.plume_rise(0.0), 0.0)
+	assert_almost_eq(EventPuffs.plume_rise(EventPuffs.PLUME_RISE), 1.0, 0.001, "at its height")
+	assert_almost_eq(EventPuffs.plume_rise(1.0), EventPuffs.PLUME_MOUND, 0.001, "a mound at the end")
+	assert_gt(EventPuffs.plume_rise(0.6), EventPuffs.plume_rise(0.9), "falling back")
+	# Swells in, holds, fades out.
+	assert_eq(EventPuffs.fade(0.0), 0.0)
+	assert_eq(EventPuffs.fade(EventPuffs.FADE_FROM), 1.0)
+	assert_almost_eq(EventPuffs.fade(1.0), 0.0, 0.001)
+	# A puff's length lies along its axis; its width is its size.
+	var basis := EventPuffs.basis_along(Vector3(1, 1, 0), 2.0)
+	assert_almost_eq(basis.y.normalized().dot(Vector3(1, 1, 0).normalized()), 1.0, 0.001)
+	assert_almost_eq(basis.x.length(), 2.0, 0.001)
+	assert_lt(EventPuffs.basis_along(Vector3.ZERO, 1.0).y.distance_to(Vector3.UP), 0.001, "upright")
+	# Every piece's splash, and every tree's dust, at once.
+	var splash := 1 + BridgeCollapse.TONGUES + BridgeCollapse.DROPS + 1
+	assert_lte(splash * BridgeCollapse.MAX_PIECES, EventPuffs.CAPACITY)
+	assert_lte(2 * ForestFall.MAX_TREES, EventPuffs.CAPACITY)
+	# The pool plays each kind out and empties.
+	var puffs := EventPuffs.new()
+	add_child_autofree(puffs)
+	puffs.emit(Vector3.ZERO, Vector3(1, 3, 0), 0.4, 0.8, Color.WHITE, 9.0, 1.3)
+	puffs.emit_plume(Vector3.ZERO, 0.7, 1.8, 1.0, Color.WHITE, Vector3(0.5, 1, 0))
+	puffs.emit_ring(Vector3.ZERO, 3.0, 1.5, Color.WHITE)
+	puffs.step(0.3)
+	assert_false(puffs.is_idle())
+	puffs.step(1.5)
+	assert_true(puffs.is_idle(), "every puff spent")
+
+
 func test_a_client_never_starts_an_event() -> void:
 	var doc := MapDocument.create_flat(Vector2i(4, 4), "grass", "v", 1)
 	var root := Node3D.new()
