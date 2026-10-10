@@ -552,9 +552,17 @@ count as a bare number beside the heading.
 `PlayTogetherCard` (`scenes/ui/play_together_card.gd`) answers one question, the italic
 Fraunces eyebrow **Play together?** (`Eyebrow`, the card's own question, never a category over
 a heading), on a 336x112 pill where two watercolour washes meet in a wet seam
-(`shaders/ui_wash_split.gdshader` on a `ColorRect`: the seam wanders +-5 px, a paper hairline
-breathes 0-2.8 px and opens with a smoothstep fade, each wash pools 14% darker along its edges,
-5% mottle in 70 px blots, a slow drift held under Reduce motion). **Host** is the persimmon
+(`shaders/ui_wash_split.gdshader` on a `ColorRect`, worked in OKLab lightness at each wash's
+own hue: a lighter bloom, up to +0.14 L, in the open band between the words and the seam,
+swelling and thinning along it; a pooled darker edge along the rim (-0.06 L) and along the
+seam where the washes part (-0.07 L); +-0.025 L mottle in 55 px blots and the faintest
+granulation; the seam wanders +-5 px and the washes bleed into each other over about 3 px
+with soft fingers, a soft light line breathing where they part; a slow drift held under Reduce
+motion). Nothing lightens a wash under its words: the card hands the shader each face's words
+rect (`words_rect()`, `text_rects()`: icon, title and caption as drawn), where the wash stays
+at or below its own step, so paper words keep 4.5:1 (rest 4.97 and 5.60, hover 5.55 and 6.22;
+the `contrast` step of `jobs/play_together.json` reads the lightest pixel under them in the
+real frame). **Host** is the persimmon
 face on the left, "Open a room": a room needs no map (room first, user verdict 2026-10-09), so
 it acts on nothing selected (`host_game_requested({})`, `SessionFlow.host_from_title` with no
 path: `host_session(null)`) and maps are added in the room. **Join** is the lake face on the
@@ -567,25 +575,34 @@ offset) and its ring `WashRing`.
 
 - **Pick and press.** Hover, or Left and Right on the focused pill (keys, D-pad, stick), picks
   a face: the seam swings 6% away from it over `MOTION_WASH` (0.28 s, sine out), the face
-  deepens to its hover colour, its icon lifts 2 px and the shadow lifts. On an end face Left or
-  Right is not consumed, so focus moves on. Accept (Enter, Space, pad A) presses: the pill
-  squashes to 0.97 on `offset_transform_scale`; Host floods the card persimmon, then asks for
-  the room, and the wash settles back under the "Opening a room..." wait. The pill is the one
-  focus stop; the ring wraps it.
+  deepens to its hover step (persimmon and lake hovers are a step deeper than rest in OKLCH,
+  C6 and C8: `#A93F25`, `#266177`), its icon lifts 2 px and the shadow lifts. With keyboard
+  focus a soft paper ring 5 px inside the picked face marks it too, inside the card's lake
+  ring (the shader's `focus`, `focus_side`). On an end face Left or Right is not consumed, so
+  focus moves on. Accept (Enter, Space, pad A) presses: the pill squashes to 0.97 on
+  `offset_transform_scale`; Host floods the card persimmon, then asks for the room, and the
+  wash settles back under the "Opening a room..." wait. The pill is the one focus stop.
 - **Join in place** (user verdict 2026-10-09: there is no join screen). The lake widens to the
   whole card and becomes a room-code field (`WashField`, Inter with the code features) and a
-  Join button (`WashJoin`); Host shrinks to a persimmon blot at the left (the hairline closes
-  round it, so it reads wet into wet, not a cut-out) with a back arrow (`WashDisc`). The disc,
-  or Esc or pad B anywhere in the card, goes back with Join still picked. Focus goes to the
-  field and editing starts (`edit()` after `grab_focus()`: in 4.7 focus alone does not). In
-  Join mode the control with focus rings itself in paper and the card's lake ring is gone: one
-  ring. Join (or Enter) hands the trimmed code to Root's `SessionFlow.join_session()`; its
-  progress and failure come back through `TitleScreen.show_join_status()` on a line under the
-  pill: "Connecting to the room...", "Connected. Joining the room...", or the failure in W3
-  words with the alert icon and the code selected to correct (`SessionFlow.join_error_text()`).
-  Going back while a join is under way drops it (`join_cancelled`, `SessionFlow.cancel_join()`).
-  Resume is held out of the way while Join is open, so a long failure never pushes the column
-  off a 720 px canvas.
+  Join button (`WashJoin`), the one persimmon fill in Join mode, with a paper rim that parts it
+  from the lake; Host's wash draws into a blot in the left cap and dries away as the back disc
+  fades in with the field (`WashDisc`: raised paper with a persimmon arrow, deepening on hover
+  and press, 8 px from the field; coordinator decision 2026-10-10). The disc, or Esc or pad B
+  anywhere in the card, goes back with Join still picked. Focus goes to the field and editing
+  starts (`edit()` after `grab_focus()`: in 4.7 focus alone does not). In Join mode the control
+  with focus rings itself in paper and the card's lake ring is gone: one ring. Join (or Enter)
+  hands the trimmed code to Root's `SessionFlow.join_session()`; its progress and failure come
+  back through `TitleScreen.show_join_status()` on a line under the pill: "Connecting to the
+  room...", "Connected. Joining the room...", or the failure in W3 words with the alert icon
+  (a body line tall). Only a code no room has (`SessionFlow.NO_ROOM`) selects the code to
+  correct; any other failure (the version gate's "Update TTSim to join this room", no answer)
+  leaves it as typed (`show_error(message, code_wrong)`). Going back while a join is under way
+  drops it (`join_cancelled`, `SessionFlow.cancel_join()`).
+- **One slot under the card.** The card's `slot` holds Resume (`set_under()`) and the join's
+  line, which trade places (Resume is held while Join is open); it is as tall as the taller of
+  Resume with its caption and a three-line failure in body type (measured as a label lays
+  three lines out), so entering Join, a failure and the longest failure never move the card or
+  anything below it (`test_interface_size_fit`: `test_join_in_place_moves_nothing`).
 - **One fill.** While a sheet's scrim covers the title, Host's wash steps back to paper inset
   with soft ink (`step_back()`, `WashTitleQuiet`, `WashCaptionQuiet`) and takes its fill back
   when the last sheet closes.
@@ -599,11 +616,18 @@ offset) and its ring `WashRing`.
 sessions exist (`SessionFile.list()`, through `TitleScreen.session_provider`): the newest named
 in a quiet Ghost button by the local day it was last played ("Resume yesterday's session",
 "Resume Friday's session" within the week, "Resume the session from 2 October" before it) over
-a caption naming its maps ("Old Mill and 2 more"), and the older ones, named the same way, in
-an overflow menu beside it. A choice emits `resume_requested(id)`, which Root answers with
+a caption naming its maps ("Old Mill and 2 more maps", "Fen and 1 more map"), its words starting
+where the button's do (a spacer as wide as the button's padding, icon and gap), and the older
+ones, named the same way, in an overflow menu beside it, headed by its name, "Older sessions"
+(a labelled separator; also the icon button's tooltip and accessible name, W7). It sits in the
+card's slot (above). A choice emits `resume_requested(id)`, which Root answers with
 `TableMover.keeper.resume(id)`: a new room with the session's shelf, kept tables and party. In
 the room the GM's shelf rows then say what Resume found (`RoomPanel.notes_source`,
-`SessionKeeper.notes()`): "Changed since last time" or "Missing from your library".
+`SessionKeeper.notes()`) on a line of their own between the name and the caption (the row grows
+by it, `RoomRows.NOTE_LINE`): "Changed since last time", or "Missing from your library", whose
+row has no caption under it, its picture faded into the well (`RoomRows.mute_well()`, also on
+the stage), no Set out, and once selected Remove from shelf on a line under it
+(`RoomRows.missing_line()`, `RoomPanel.remove_requested`, `SessionChannel.unshelve()`).
 
 ### Right Zone
 
@@ -769,9 +793,17 @@ when Steam starts (`NetworkManager._name_from_steam()`).
 
 - **Resume notes.** After Resume the GM's shelf rows say what Resume found of each map
   (`notes_source`, `SessionKeeper.notes()`, wired by `TableMover.attach_panel`;
-  `show_notes()` for tests and the tour): "Changed since last time" (its map files changed, so
-  its live edits were dropped) after "On the table", or "Missing from your library" alone (its
-  folder is gone; it stays on the shelf as kept). A player's rows never say either.
+  `show_notes()` for tests and the tour), on a line of their own between the name and the
+  caption, so the caption's words stay whole (a note in the caption was cut at both sizes):
+  "Changed since last time" (its map files changed, so its live edits were dropped), or
+  "Missing from your library" (its folder is gone; it stays on the shelf as kept). A missing
+  map's row has no caption, its picture is faded into the well (on the stage too), its action
+  is disabled (it cannot be set out), and selected it has **Remove from shelf** on a line under
+  it (`RoomRows.missing_line()`, `remove_requested(key)`; with `connect_network` the panel
+  calls `SessionChannel.unshelve()`). On the stage the note leads the readiness line. A
+  player's rows never say either. `test_room_panel` asserts a selected row's name, note and
+  caption reach 4.5:1 on the lake fill on both leaves (`ON_SELECTED`; chalk_soft would be
+  3.7:1).
 
 The pause menu offers the host one quiet extra row, **Return everyone to the room** (`users`
 icon, Secondary, `ui_silent`, visible only while hosting); its confirmation emits

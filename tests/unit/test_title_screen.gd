@@ -187,9 +187,9 @@ func test_resume_lists_saved_sessions_and_asks_for_one() -> void:
 	watch_signals(title)
 	var entry := title.resume_entry
 	assert_true(entry.visible)
-	assert_eq(entry.caption.text, "Old Mill and 2 more")
+	assert_eq(entry.caption.text, "Old Mill and 2 more maps")
 	assert_true(entry.older_button.visible, "an older session to choose")
-	assert_eq(entry.older_button.get_popup().item_count, 1)
+	assert_eq(entry.older_button.get_popup().item_count, 2, "the menu's name and one session")
 	entry.resume_button.pressed.emit()
 	assert_signal_emitted_with_parameters(title, "resume_requested", ["s2"])
 	entry.older_button.get_popup().id_pressed.emit(1)

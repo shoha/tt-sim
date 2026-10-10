@@ -43,11 +43,15 @@ const PAPER_EDGE := Color("#CDB68C")
 const PAPER_TRACK := Color("#887A8E")
 const INK := Color("#2B2335")
 const INK_SOFT := Color("#5C5066")
+## Persimmon and lake ramps (C8): hover and press each a step deeper at the same OKLCH hue,
+## hover 0.4 of the way from rest to press in lightness and chroma (persimmon L 0.537, 0.511,
+## 0.470; lake 0.488, 0.464, 0.428), so a hover only deepens (C6) and paper text on every step
+## keeps 4.5:1 (persimmon 4.97, 5.55, 6.58; lake 5.60, 6.22, 7.27).
 const PERSIMMON := Color("#B4452A")
-const PERSIMMON_HOVER := Color("#BC4426")
+const PERSIMMON_HOVER := Color("#A93F25")
 const PERSIMMON_PRESS := Color("#983621")
 const LAKE := Color("#2A6880")
-const LAKE_HOVER := Color("#2E7089")
+const LAKE_HOVER := Color("#266177")
 const LAKE_PRESS := Color("#22566B")
 ## Fills only the confirming button of a danger dialog.
 const MADDER := Color("#A12F3A")

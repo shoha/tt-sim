@@ -52,8 +52,9 @@ sizes per file against `tests/ui_bypass_baseline.json`, and a count may only fal
 - **T2** Caption 14 is the floor. A `font_size` under 14 is a finding; Interface size Auto
   (`content_scale_factor`, THEME_GUIDE "Interface Size") keeps it at 13 physical px or more on
   every window 669 px tall and up (1.40 at 720p).
-- **T3** Fraunces only where only it can serve: the wordmark, titles, headings and the Play
-  together question. Never in rows or buttons.
+- **T3** Fraunces only where only it can serve: the wordmark, titles, headings, the Play
+  together question and the card's two faces, Host and Join (the card's own words on its
+  washes, not buttons in a row; coordinator decision 2026-10-10). Never in rows or buttons.
 - **T4** The default `Label` is body 16.
 - **T5** Light text on glass gets a little more weight and leading; step weight before size.
   Judged at 720p.
@@ -197,6 +198,9 @@ that conflicts with one stops and asks. Add each new verdict here with its date.
 - **2026-10-09** No Host control far from what it acts on.
 - **2026-10-09** **Join happens in place**: the Join half of the Play together card becomes the
   room-code field. There is no separate join screen.
+- **2026-10-10** (coordinator) In Join mode Join is the one persimmon fill; the back disc steps
+  back to paper with a persimmon arrow. Persimmon and lake hovers deepen (C6, C8). Fraunces
+  stays on the card's Host and Join faces (T3).
 - **2026-10-09** A session remembers its tables across nights: a session file with Resume.
 - **2026-10-09** Map creation: no "Try" step; "From image" never in the default view; custom
   dimensions under Advanced.

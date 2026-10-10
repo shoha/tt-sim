@@ -511,40 +511,114 @@ func test_the_side_sheet_ends_at_its_content() -> void:
 	assert_eq(panel.shelf_scroll.vertical_scroll_mode, ScrollContainer.SCROLL_MODE_DISABLED)
 
 
-## After Resume the GM's shelf rows say what Resume found (SessionKeeper.notes()): a map whose
-## files changed since, and one gone from the library; a player's rows say nothing of it.
+## After Resume the GM's shelf rows say what Resume found (SessionKeeper.notes()) on a line of
+## their own, so the caption keeps its words whole: a map whose files changed since, and one
+## gone from the library, its picture faded and no caption under the note; a row with a note
+## grows by its line; a player's rows say nothing of it.
 func test_resumed_shelf_rows_say_changed_or_missing() -> void:
 	var notes := {MAP_B: SessionFile.CHANGED, MAP_C: SessionFile.MISSING}
 	var panel := _panel()
 	panel.show_session(_sample(), GM, true)
 	panel.show_notes(notes)
+	assert_eq(_line_of(panel, MAP_A, "Note"), "")
 	assert_eq(_caption_of(panel, MAP_A), "Everyone has it")
-	assert_eq(_caption_of(panel, MAP_B), "Changed since last time · 2 of 4 have it")
-	assert_eq(_caption_of(panel, MAP_C), RoomModel.MISSING, "missing says all there is")
-	panel.show_changes({MAP_B: true})
+	assert_eq(_line_of(panel, MAP_B, "Note"), RoomModel.SINCE_CHANGED)
+	assert_eq(_caption_of(panel, MAP_B), "2 of 4 have it")
+	assert_eq(_line_of(panel, MAP_C, "Note"), RoomModel.MISSING)
+	assert_eq(_caption_of(panel, MAP_C), "", "missing says all there is")
+	var row_a := _row(panel, MAP_A)
+	var row_b := _row(panel, MAP_B)
 	assert_eq(
-		_caption_of(panel, MAP_B),
-		"Changed since last time · changed this session · 2 of 4 have it"
+		row_b.custom_minimum_size.y, row_a.custom_minimum_size.y + RoomRows.NOTE_LINE, "a note line"
 	)
+	var faded := _row(panel, MAP_C).get_node("Inner/Well/Placeholder") as Control
+	assert_almost_eq(faded.modulate.a, RoomRows.MUTED_PICTURE, 0.001, "a missing map's picture faded")
+	assert_eq((row_a.get_node("Inner/Well/Placeholder") as Control).modulate.a, 1.0)
+	panel.show_changes({MAP_B: true})
+	assert_eq(_caption_of(panel, MAP_B), "Changed this session · 2 of 4 have it")
 	var player := _panel()
 	player.show_session(_sample(), WREN, false)
 	player.show_notes(notes)
-	assert_false(_caption_of(player, MAP_C).contains(RoomModel.MISSING), "the GM's library alone")
+	assert_eq(_line_of(player, MAP_C, "Note"), "", "the GM's library alone")
 
 
-func test_the_shelf_caption_puts_the_resume_note_after_the_table() -> void:
+## Selected, a map missing from the GM's library has Remove from shelf on a line under its row
+## and cannot be set out; the stage says why. Selecting another map takes the line away.
+func test_a_missing_map_offers_remove_from_shelf() -> void:
+	var panel := _panel()
+	panel.show_session(_sample(), GM, true)
+	panel.show_notes({MAP_C: SessionFile.MISSING})
+	watch_signals(panel)
+	panel.select(MAP_C)
+	var line := panel.shelf_rows.get_node_or_null("Missing_%s" % MAP_C.validate_node_name())
+	assert_not_null(line, "a line under the row")
+	assert_eq(line.get_index(), _row(panel, MAP_C).get_index() + 1)
+	var remove := line.find_child("RemoveFromShelf", true, false) as Button
+	assert_eq(remove.text, RoomRows.REMOVE)
+	assert_true(panel.action_button.disabled, "a missing map cannot be set out")
+	assert_eq(_fills(panel).size(), 0, "no fill for an action that cannot happen")
+	assert_eq(panel.readiness_label.text, RoomModel.MISSING)
+	remove.pressed.emit()
+	assert_signal_emitted_with_parameters(panel, "remove_requested", [MAP_C])
+	panel.select(MAP_A)
+	await wait_process_frames(1)
+	assert_null(panel.shelf_rows.get_node_or_null("Missing_%s" % MAP_C.validate_node_name()))
+	assert_false(panel.action_button.disabled)
+
+
+func test_the_shelf_caption_leaves_the_resume_note_to_its_line() -> void:
 	var changed := SessionFile.CHANGED
-	assert_eq(
-		RoomModel.shelf_caption(true, false, "", changed), "On the table · changed since last time"
-	)
-	assert_eq(RoomModel.shelf_caption(false, false, "", SessionFile.MISSING), RoomModel.MISSING)
+	assert_eq(RoomModel.shelf_caption(true, false, "", changed), "On the table")
+	assert_eq(RoomModel.shelf_caption(false, false, "", SessionFile.MISSING), "")
 	assert_eq(RoomModel.shelf_caption(false, false, "3 of 4 have it"), "3 of 4 have it")
+	assert_eq(RoomModel.note_text(changed), RoomModel.SINCE_CHANGED)
+	assert_eq(RoomModel.note_text(SessionFile.MISSING), RoomModel.MISSING)
+	assert_eq(RoomModel.note_text(&""), "")
+
+
+## A selected row's words read on the lake fill at 4.5:1 on both leaves: name, note and caption
+## take ON_SELECTED (paper, chalk), never the soft text role (chalk_soft is 3.7:1 on lake).
+func test_selected_row_words_keep_contrast_on_lake() -> void:
+	for path: String in [ThemeColors.PAPER_THEME_PATH, ThemeColors.GLASS_THEME_PATH]:
+		var theme := load(path) as Theme
+		var holder := Control.new()
+		holder.theme = theme
+		add_child_autofree(holder)
+		var entry := {"key": MAP_B, "name": "Old Mill", "folder": MAP_B}
+		var note := RoomModel.SINCE_CHANGED
+		var row := RoomRows.shelf_row(entry, null, "", "3 of 4 have it", true, note)
+		holder.add_child(row)
+		RoomRows.show_shelf_selected(row, true)
+		var fill := theme.get_color(ThemeColors.SELECTED, ThemeColors.TYPE)
+		for line: String in ["Name", "Note", "Caption"]:
+			var label := row.get_node("Inner/Text/" + line) as Label
+			var ratio := _contrast(label.get_theme_color(&"font_color"), fill)
+			assert_gt(ratio, 4.5, "%s on the selected fill, %s: %.2f" % [line, path, ratio])
+
+
+func _row(panel: RoomPanel, key: String) -> Control:
+	return panel.shelf_rows.get_node("Map_%s" % key.validate_node_name()) as Control
 
 
 func _caption_of(panel: RoomPanel, key: String) -> String:
-	var row := panel.shelf_rows.get_node("Map_%s" % key.validate_node_name())
-	var caption := row.get_node("Inner/Text/Caption") as Label
-	return caption.text if caption.visible else ""
+	return _line_of(panel, key, "Caption")
+
+
+func _line_of(panel: RoomPanel, key: String, line: String) -> String:
+	var label := _row(panel, key).get_node("Inner/Text/" + line) as Label
+	return label.text if label.visible else ""
+
+
+## WCAG 2.x contrast ratio of two opaque colours.
+func _contrast(a: Color, b: Color) -> float:
+	var la := _luminance(a)
+	var lb := _luminance(b)
+	return (maxf(la, lb) + 0.05) / (minf(la, lb) + 0.05)
+
+
+func _luminance(color: Color) -> float:
+	var linear := color.srgb_to_linear()
+	return 0.2126 * linear.r + 0.7152 * linear.g + 0.0722 * linear.b
 
 
 ## Inside a scroll region (what it holds may run past it; the player scrolls to it).

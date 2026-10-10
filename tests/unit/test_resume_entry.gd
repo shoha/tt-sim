@@ -36,13 +36,13 @@ func test_the_button_and_the_menu_name_the_session() -> void:
 	var now := FRIDAY_EVENING + DAY
 	var friday := {"id": "a", "name": "Old Mill", "last_played": FRIDAY_EVENING, "maps": 3}
 	assert_eq(ResumeEntry.button_text(friday, now, 0), "Resume yesterday's session")
-	assert_eq(ResumeEntry.maps_line(friday), "Old Mill and 2 more")
+	assert_eq(ResumeEntry.maps_line(friday), "Old Mill and 2 more maps")
 	var old := {"id": "b", "name": "Oak's Lab", "last_played": FRIDAY_EVENING - 9 * DAY, "maps": 1}
 	assert_eq(ResumeEntry.button_text(old, now, 0), "Resume the session from 30 September")
 	assert_eq(ResumeEntry.maps_line(old), "Oak's Lab")
 	assert_eq(ResumeEntry.menu_text(old, now, 0), "The session from 30 September: Oak's Lab")
 	var week := {"id": "c", "name": "Fen", "last_played": FRIDAY_EVENING - 3 * DAY, "maps": 2}
-	assert_eq(ResumeEntry.menu_text(week, now, 0), "Tuesday's session: Fen and 1 more")
+	assert_eq(ResumeEntry.menu_text(week, now, 0), "Tuesday's session: Fen and 1 more map")
 	assert_eq(ResumeEntry.button_text({"id": "d"}, now, 0), ResumeEntry.RESUME_UNDATED)
 	assert_eq(ResumeEntry.maps_line({"id": "d", "maps": 2}), "", "no name, no line")
 
@@ -63,16 +63,37 @@ func test_the_newest_leads_and_the_older_ones_are_in_its_menu() -> void:
 	assert_true(entry.visible)
 	assert_eq(entry.resume_button.text, "Resume yesterday's session")
 	assert_eq(entry.resume_button.theme_type_variation, &"Ghost", "quiet beside the card")
-	assert_eq(entry.caption.text, "Old Mill and 2 more")
+	assert_eq(entry.caption.text, "Old Mill and 2 more maps")
 	var popup := entry.older_button.get_popup()
-	assert_eq(popup.item_count, 2)
-	assert_eq(popup.get_item_text(0), "Tuesday's session: Fen and 1 more")
+	assert_eq(popup.item_count, 3, "the menu's name, then the two older sessions")
+	assert_true(popup.is_item_separator(0))
+	assert_eq(popup.get_item_text(0), ResumeEntry.OLDER, "the open menu names itself")
+	assert_eq(popup.get_item_text(1), "Tuesday's session: Fen and 1 more map")
 	assert_eq(entry.older_button.tooltip_text, ResumeEntry.OLDER, "an icon button has a name")
 	entry.resume_button.pressed.emit()
 	assert_signal_emitted_with_parameters(entry, "resume_requested", ["new"])
-	popup.id_pressed.emit(popup.get_item_id(1))
+	popup.id_pressed.emit(popup.get_item_id(2))
 	assert_signal_emitted_with_parameters(entry, "resume_requested", ["old"])
 	assert_eq(entry.session_ids(), ["new", "mid", "old"] as Array[String])
+
+
+## The caption starts where the button's words do: its padding, icon and gap in.
+func test_the_caption_lines_up_with_the_button_words() -> void:
+	var sessions: Array[Dictionary] = [
+		{"id": "only", "name": "Old Mill", "last_played": FRIDAY_EVENING, "maps": 3},
+	]
+	var entry := _entry(sessions)
+	var button := entry.resume_button
+	var icon := float(button.icon.get_width())
+	if button.get_theme_constant(&"icon_max_width") > 0:
+		icon = minf(icon, button.get_theme_constant(&"icon_max_width"))
+	var words_x := (
+		button.get_theme_stylebox(&"normal").get_margin(SIDE_LEFT)
+		+ icon
+		+ button.get_theme_constant(&"h_separation")
+	)
+	assert_gt(words_x, 0.0)
+	assert_almost_eq(entry.caption_indent(), words_x, 0.5)
 
 
 func test_one_session_has_no_older_menu() -> void:

@@ -228,18 +228,18 @@ func _build_left_column() -> void:
 	play_together.host_pressed.connect(_on_host_pressed)
 	play_together.join_submitted.connect(join_requested.emit)
 	play_together.join_cancelled.connect(join_cancel_requested.emit)
-	# Resume belongs to the card: directly under it, at the column's own separation.
+	# Resume belongs to the card: in the slot under it, where the join's line takes its place
+	# while Join is open, so neither moves the card or anything below it.
 	resume_entry = ResumeEntry.new()
 	resume_entry.name = "ResumeEntry"
 	resume_entry.provider = session_provider
-	_left.add_child(resume_entry)
+	play_together.set_under(resume_entry)
 	resume_entry.resume_requested.connect(resume_requested.emit)
 	play_together.join_mode_changed.connect(resume_entry.hold)
-	# A join's line under the card, or Resume shown or hidden, changes the column's height
-	# (deferred: the column is still being built when the first of these can come).
+	# Only a failure taller than the slot changes the column's height (deferred: the column is
+	# still being built when the first of these can come).
 	var refit := func() -> void: _fit_to_canvas.call_deferred()
 	play_together.minimum_size_changed.connect(refit)
-	resume_entry.visibility_changed.connect(refit)
 	_section_gaps.append(UiActions.spacer(0, _left))
 	_left.add_child(HSeparator.new())
 	_section_gaps.append(UiActions.spacer(0, _left))
@@ -426,7 +426,8 @@ func _refresh_host_fill() -> void:
 
 
 ## A join under way, as Root's SessionFlow reports it (SessionFlow.JOIN_*): connecting,
-## connected and waiting for the room, or failed with `message`.
+## connected and waiting for the room, or failed with `message`. Only a code no room has
+## selects the code to correct; any other failure leaves it as typed.
 func show_join_status(state: StringName, message := "") -> void:
 	match state:
 		SessionFlow.JOIN_CONNECTING:
@@ -434,7 +435,7 @@ func show_join_status(state: StringName, message := "") -> void:
 		SessionFlow.JOIN_JOINED:
 			play_together.show_joining()
 		SessionFlow.JOIN_FAILED:
-			play_together.show_error(message)
+			play_together.show_error(message, message == SessionFlow.NO_ROOM)
 
 
 ## A level saved from the Level Editor overlay (not through the title) must

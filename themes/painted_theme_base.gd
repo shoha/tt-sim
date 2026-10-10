@@ -483,9 +483,25 @@ func _define_wash_card() -> void:
 			}
 		)
 	)
-	var disc: Dictionary = inherit(bare, {focus = paper_ring, icon_max_width = 20})
-	for state: String in ["normal_", "hover_", "pressed_", "hover_pressed_", "focus_"]:
-		disc["icon_%scolor" % state] = on
+	# Join mode's back disc steps back from the fill (C5: Join is the one fill there): raised
+	# paper on the lake with a persimmon arrow (4.4:1 on the deepest step), deepening on hover
+	# and press as any raised control does.
+	var disc_box := box(c(ThemeColors.SURFACE_RAISED), RADIUS_PILL)
+	var disc: Dictionary = {
+		normal = disc_box,
+		hover = inherit(disc_box, {bg_color = c(ThemeColors.SURFACE_HOVER)}),
+		pressed = inherit(disc_box, {bg_color = c(ThemeColors.SURFACE_PRESS)}),
+		hover_pressed = inherit(disc_box, {bg_color = c(ThemeColors.SURFACE_PRESS)}),
+		disabled = disc_box,
+		focus = paper_ring,
+		icon_max_width = 20,
+	}
+	var arrow := c(ThemeColors.ACCENT)
+	var arrow_deep := c(ThemeColors.ACCENT_HOVER)
+	disc.icon_normal_color = arrow
+	disc.icon_focus_color = arrow
+	for state: String in ["hover_", "pressed_", "hover_pressed_"]:
+		disc["icon_%scolor" % state] = arrow_deep
 	define_variant_style("WashDisc", "Button", disc)
 	# A room code is 12 or 13 characters: label size and 12 px sides fit one in the field.
 	var field := box(c(ThemeColors.SURFACE_RAISED), RADIUS_PILL, SPACE_3, CONTROL_PAD_V)
@@ -500,12 +516,16 @@ func _define_wash_card() -> void:
 			font_size = SIZE_LABEL,
 		}
 	)
-	var join := box(c(ThemeColors.SURFACE_RAISED), RADIUS_PILL, CONTROL_PAD_H, CONTROL_PAD_V)
+	# Join is the one fill in Join mode: persimmon with paper words, its paper rim parting it
+	# from the lake (the two fills are close in value; the rim and the hue carry the edge).
+	var join := box(
+		c(ThemeColors.ACCENT), RADIUS_PILL, CONTROL_PAD_H, CONTROL_PAD_V, edge(2, on)
+	)
 	var join_style := _button(
 		join,
-		inherit(join, {bg_color = c(ThemeColors.SURFACE_HOVER)}),
-		inherit(join, {bg_color = c(ThemeColors.SURFACE_PRESS)}),
-		ThemeColors.STATE_PRESS
+		inherit(join, {bg_color = c(ThemeColors.ACCENT_HOVER)}),
+		inherit(join, {bg_color = c(ThemeColors.ACCENT_PRESS)}),
+		ThemeColors.ON_ACCENT
 	)
 	join_style.focus = paper_ring
 	join_style.font = font_strong

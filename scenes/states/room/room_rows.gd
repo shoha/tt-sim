@@ -22,6 +22,12 @@ extends RefCounted
 const PORTRAIT := Vector2(40, 40)
 const SHELF_THUMB := Vector2(64, 36)
 const SHELF_ROW_HEIGHT := 52.0
+## A row with a Resume note grows by one caption line.
+const NOTE_LINE := 18.0
+## A missing map's picture, faded into its well.
+const MUTED_PICTURE := 0.4
+## The GM's way on from a map missing from the library (missing_line()).
+const REMOVE := "Remove from shelf"
 ## Every row's content inset from the column's sides (a shelf row's inside its button).
 const ROW_INSET := 8
 ## The download state's icon, beside its caption word.
@@ -65,6 +71,12 @@ static func set_map_well(well: Panel, texture: Texture2D, key: String, mood: Str
 	placeholder.visible = texture == null
 	if texture == null:
 		placeholder.paint(key, mood)
+
+
+## Fade a map well's picture into the well (`on`: a map missing from the library), or not.
+static func mute_well(well: Panel, on: bool) -> void:
+	for picture: Control in [well.get_node("Picture"), well.get_node("Placeholder")]:
+		picture.modulate.a = MUTED_PICTURE if on else 1.0
 
 
 ## A player's portrait: a CardThumb well with the initial of `player_name` in Inter semibold
@@ -212,15 +224,24 @@ static func _tint_state_icon(icon: TextureRect) -> void:
 
 
 ## One shelf map: `entry` is a RoomModel.shelf() entry, `mood` its environment preset (for the
-## placeholder). A toggle row; `selectable` false makes it read-only.
+## placeholder). A toggle row; `selectable` false makes it read-only. `note` (what Resume found
+## of it, RoomModel.note_text()) is a line of its own between the name and the caption, and the
+## row grows by that line; a map missing from the library (`muted`) shows its picture faded
+## into the well, as a map that is not here.
 static func shelf_row(
-	entry: Dictionary, texture: Texture2D, mood: String, caption: String, selectable: bool
+	entry: Dictionary,
+	texture: Texture2D,
+	mood: String,
+	caption: String,
+	selectable: bool,
+	note := "",
+	muted := false
 ) -> Button:
 	var row := Button.new()
 	row.name = "Map_%s" % str(entry.key).validate_node_name()
 	row.theme_type_variation = &"ListRow"
 	row.toggle_mode = true
-	row.custom_minimum_size = Vector2(0, SHELF_ROW_HEIGHT)
+	row.custom_minimum_size = Vector2(0, SHELF_ROW_HEIGHT + (NOTE_LINE if note != "" else 0.0))
 	row.tooltip_text = str(entry.name)
 	row.focus_mode = Control.FOCUS_ALL if selectable else Control.FOCUS_NONE
 	row.mouse_filter = Control.MOUSE_FILTER_STOP if selectable else Control.MOUSE_FILTER_IGNORE
@@ -237,6 +258,7 @@ static func shelf_row(
 	var key := str(entry.folder) if str(entry.folder) != "" else str(entry.name)
 	var well := map_well(SHELF_THUMB, texture, key, mood)
 	well.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	mute_well(well, muted)
 	inner.add_child(well)
 	var text := VBoxContainer.new()
 	text.name = "Text"
@@ -247,6 +269,10 @@ static func shelf_row(
 	var name_label := _caption(str(entry.name), &"Body")
 	name_label.name = "Name"
 	text.add_child(name_label)
+	var note_label := _caption(note, &"Caption")
+	note_label.name = "Note"
+	note_label.visible = note != ""
+	text.add_child(note_label)
 	var caption_label := _caption(caption, &"Caption")
 	caption_label.name = "Caption"
 	caption_label.visible = caption != ""
@@ -259,9 +285,10 @@ static func show_shelf_selected(row: Button, on: bool) -> void:
 	row.set_pressed_no_signal(on)
 	var text := row.get_node("Inner/Text")
 	(text.get_node("Name") as Label).theme_type_variation = &"BodyOnSelected" if on else &"Body"
-	(text.get_node("Caption") as Label).theme_type_variation = (
-		&"CaptionOnSelected" if on else &"Caption"
-	)
+	for line: String in ["Note", "Caption"]:
+		(text.get_node(line) as Label).theme_type_variation = (
+			&"CaptionOnSelected" if on else &"Caption"
+		)
 
 
 ## The GM's actions on the selected shelf row of a map that changed this session (`key`), under
@@ -310,6 +337,31 @@ static func changes_line(
 	discard.tooltip_text = TableMover.DISCARD_TEXT
 	discard.accessibility_name = TableMover.DISCARD_TEXT
 	line.add_child(discard)
+	fit.call()
+	return holder
+
+
+## The GM's way on from a map missing from this library (`key`), on a line under its selected
+## row as the changes line is: Remove from shelf (REMOVE), a quiet button calling `on_remove`
+## with the key. A missing map cannot be set out, so taking it off is the one step there is
+## (bringing its folder back is the other, outside the game).
+static func missing_line(key: String, on_remove: Callable) -> Control:
+	var holder := Control.new()
+	holder.name = "Missing_%s" % key.validate_node_name()
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var line := HFlowContainer.new()
+	line.name = "Line"
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	line.offset_left = ROW_INSET
+	line.offset_right = -ROW_INSET
+	line.offset_top = ROW_INSET * 0.5
+	line.offset_bottom = -ROW_INSET
+	holder.add_child(line)
+	line.add_child(_row_action("RemoveFromShelf", REMOVE, "x", on_remove, key))
+	var fit := func() -> void:
+		holder.custom_minimum_size.y = line.get_combined_minimum_size().y + ROW_INSET * 1.5
+	line.minimum_size_changed.connect(fit)
 	fit.call()
 	return holder
 
