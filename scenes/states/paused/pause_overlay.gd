@@ -50,7 +50,9 @@ func _on_panel_ready() -> void:
 	resume_button.pressed.connect(_on_resume_pressed)
 	# The Level Editor and the level picker, by their player-facing names (W5); the editor
 	# by the title's own words for it, here acting on the map on the table.
-	edit_level_button = UiActions.secondary(TitleScreen.SET_UP_TOKENS, "wand", box)
+	edit_level_button = UiActions.secondary(
+		TitleScreen.SET_UP_TOKENS, TitleScreen.SET_UP_TOKENS_ICON, box
+	)
 	edit_level_button.pressed.connect(_on_edit_level_pressed)
 	change_level_button = UiActions.secondary("Change map", "map", box)
 	change_level_button.pressed.connect(_on_change_level_pressed)
@@ -65,7 +67,7 @@ func _on_panel_ready() -> void:
 	main_menu_button = UiActions.secondary("Return to title", "home", box)
 	main_menu_button.set_meta("ui_silent", true)
 	main_menu_button.pressed.connect(_on_main_menu_pressed)
-	quit_game_button = UiActions.secondary("Quit game", "logout", box)
+	quit_game_button = UiActions.secondary(TitleScreen.QUIT, TitleScreen.QUIT_ICON, box)
 	quit_game_button.set_meta("ui_silent", true)
 	quit_game_button.pressed.connect(_on_quit_game_pressed)
 

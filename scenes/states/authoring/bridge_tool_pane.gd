@@ -46,7 +46,7 @@ const KIND_TILES: Array[Dictionary] = [
 const HINT := (
 	"Drag a line across a river or pond, from one bank to the other: the crossing finds the"
 	+ " banks and sizes itself. Bridges cross calm water, not a waterfall. Arches cross like"
-	+ " planks; a ford needs wadeable water (its width runs along the river). Shift+wheel or"
+	+ " planks; a ford needs wadeable water (its width runs along the river). Shift + scroll or"
 	+ " [ and ] set its width. Hold Ctrl and click a crossing to remove it. A crossing follows"
 	+ " later edits to its banks and goes when its water does."
 )

@@ -4,8 +4,10 @@ extends MarginContainer
 ## The "Avatar" tab of the Add Token browser: the player's saved avatars (AvatarLibrary,
 ## made on the title screen or saved from a game) as cards with their figures, where one
 ## click places the avatar and a drag carries it onto the map (as a pack asset drags),
-## followed by one tall action that opens the avatar builder for a new one. The browser
-## relays them to GameplayMenuController, which spawns the avatar where an asset would land.
+## followed by one action that opens the avatar builder for a new one: a control-height
+## button, not a full-width bar, since an ember bar across the sheet outshone a dusk board
+## (UI_TASTE G12). The browser relays them to GameplayMenuController, which spawns the avatar
+## where an asset would land.
 
 signal build_requested
 signal avatar_chosen(entry: Dictionary)
@@ -25,12 +27,9 @@ var _empty: Label
 
 
 func _ready() -> void:
-	var button := UiActions.primary(
-		"Make an avatar",
-		"wand",
-		"Pick a pose, a face, colours and a shape; the figure follows every pick.",
-		actions
-	)
+	var button := UiActions.primary("Make an avatar", "user-plus", AvatarBuilder.SUBTITLE, actions)
+	button.custom_minimum_size.y = UiActions.SECONDARY_HEIGHT
+	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	button.pressed.connect(func() -> void: build_requested.emit())
 	_heading = Label.new()
 	_heading.name = "Heading"

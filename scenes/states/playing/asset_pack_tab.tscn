@@ -22,7 +22,7 @@ clear_button_enabled = true
 select_all_on_focus = true
 
 [node name="ItemList" type="ItemList" parent="Content"]
-custom_minimum_size = Vector2(550, 300)
+custom_minimum_size = Vector2(536, 300)
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 1

@@ -155,7 +155,7 @@ Some buttons play specialized sounds instead of the generic click:
 |------------------------------------|----------------------|------------------------------------------|
 | Confirmation dialog "Confirm"      | `confirm` (or the dialog's `confirm_sound`, e.g. `leave_game` for Return to Title) | Button has `ui_silent` meta; calls `play()`; outranks the dialog's close |
 | Confirmation dialog "Cancel"       | `cancel`             | Button has `ui_silent` meta; calls `play()`; outranks the dialog's close |
-| Avatar builder "Save" / "Add to board" | `confirm`        | `AvatarBuilder.confirm()` calls `play()`; outranks the button's click and the panel's close |
+| Avatar builder "Save" / "Place on the table" | `confirm`        | `AvatarBuilder.confirm()` calls `play()`; outranks the button's click and the panel's close |
 | Avatar builder "Cancel" (and Escape) | `cancel`           | `AvatarBuilder.cancel()` calls `play()`; outranks the click and the close |
 
 ---
