@@ -232,7 +232,7 @@ func _process_resumer() -> void:
 				_resume()
 		"resumed":
 			if _has(LEAVER, "room1"):
-				_main.call("set_out", TABLE_A.folder)
+				_mover().set_out(TABLE_A.folder)
 				_set_phase("a2_load")
 		"a2_load":
 			if _table_up(TABLE_A) and _hero_landed() and _named(BYSTANDER) != null:

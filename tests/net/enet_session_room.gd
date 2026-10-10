@@ -17,7 +17,7 @@ extends "res://tests/net/enet_late_joiner.gd"
 ## the ENet stand-in for a Steam id.
 ##
 ## host: builds table A, opens the session in the room; once client and client2 are in the
-##   room, sets table A out from the shelf (Root.set_out) and places Hero A (granted to
+##   room, sets table A out from the shelf (TableMover.set_out) and places Hero A (granted to
 ##   client: it leaves A's placements) and Bystander A (nobody's); raises the ground at
 ##   RAISE_AT with the play-side editor (a live edit) and moves Bystander A to MOVED_TO; once
 ##   both clients see the tokens, moves the table to the room (TableMover.move_now, Keep: A's
@@ -27,7 +27,7 @@ extends "res://tests/net/enet_late_joiner.gd"
 ##   not be in the saved placements); records client's leave (entry kept with no peer, grant
 ##   kept by session id) and its rejoin (same entry, a new peer, CONTROL of Hero A again).
 ##   Then table B must count as unchanged (saved, the party not counted), so the drawer's Move
-##   the table here (Root.move_table) asks nothing and counts down; table A comes back with
+##   the table here (TableMover.request_move) asks nothing and counts down; table A comes back with
 ##   Bystander A where it was moved, the raised ground and its one op, and Hero A set out
 ##   on it; then client4 may join. It finishes when every client has reported, checking one
 ##   peer object and room code throughout, the shelf and the table pointer.
@@ -338,7 +338,7 @@ func _set_out_a() -> void:
 		_finish(false, "table A is not in the host's library")
 		return
 	NetworkManager.session.shelve(level.to_dict())
-	_main.call("set_out", TABLE_A.folder)
+	_mover().set_out(TABLE_A.folder)
 	_set_phase("table_a_load")
 
 
@@ -510,7 +510,7 @@ func _host_move_back() -> void:
 	if changes.values().has(true):
 		_finish(false, "table B counted as changed: %s" % str(changes))
 		return
-	_main.call("move_table", TABLE_A.folder)
+	_mover().request_move(TABLE_A.folder)
 	var notice := _mover().get_node_or_null("TableMoveNotice") as TableMoveNotice
 	_result["host_notice"] = notice.shown_text() if notice != null else ""
 	_result["prompted"] = _mover().is_moving() and notice == null
