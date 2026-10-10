@@ -41,6 +41,10 @@ extends Node
 ## counts itself as holding every shelf map. The room shows them ("3 of 4 have it"); Set out
 ## never waits for them. There is no partial progress yet: a map is downloaded at the table.
 ##
+## A table move is announced before it happens: the host's TableMover counts it down on
+## every peer (announce_move(), cancel_move()), and the move itself is the level broadcast or
+## open() that follows.
+##
 ## Accessed via NetworkManager.session; do not add as a standalone autoload. Its RPCs live at
 ## /root/NetworkManager/Session on every peer.
 
@@ -48,6 +52,11 @@ extends Node
 signal room_opened
 ## Emitted on every peer when the shelf, the table pointer or the players changed.
 signal session_changed
+## Emitted on a client when the host announced a table move (TableMover's notice): `text`
+## names where the table goes, `seconds` until it does.
+signal table_moving(text: String, seconds: float)
+## Emitted on a client when the host called that move off.
+signal table_move_cancelled
 
 ## Session id prefix for a peer on a transport without Steam ids (ENet scenarios, tests).
 const TEST_ID_PREFIX := "enet-"
@@ -61,6 +70,8 @@ const SESSION_KEY_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
 const MAX_SHELF := 64
 const MAX_SESSION_PLAYERS := 64
 const MAX_TEXT := 256
+## The longest table-move notice a client shows, in seconds (untrusted input).
+const MAX_NOTICE_S := 10.0
 
 ## The players' avatars and their grants by session id (host; see SessionParty).
 var party: SessionParty
@@ -185,6 +196,19 @@ func note_table_out(level_dict: Dictionary) -> void:
 	_open = false
 	_table = key
 	_publish()
+
+
+## Host: tell every client the table moves in `seconds` (`text` says where), so each shows
+## the notice the GM sees (TableMover).
+func announce_move(text: String, seconds: float) -> void:
+	if _can_send():
+		_rpc_table_moving.rpc(_clip(text), seconds)
+
+
+## Host: the move announced is off; every client drops its notice.
+func cancel_move() -> void:
+	if _can_send():
+		_rpc_table_move_cancelled.rpc()
 
 
 ## Host: put a map on the shelf without setting it out (the GM adds it from the room), with
@@ -455,6 +479,23 @@ func _rpc_room_opened() -> void:
 	_reported = []
 	_report_holdings()
 	room_opened.emit()
+
+
+## RPC: host -> clients, the table moves soon (untrusted: the text clipped, the seconds
+## bounded).
+@rpc("authority", "reliable")
+func _rpc_table_moving(text: Variant, seconds: Variant) -> void:
+	if NetworkManager.is_host():
+		return
+	var left := float(seconds) if seconds is float or seconds is int else 0.0
+	table_moving.emit(_clip(text), clampf(left, 0.0, MAX_NOTICE_S))
+
+
+## RPC: host -> clients, the move is off.
+@rpc("authority", "reliable")
+func _rpc_table_move_cancelled() -> void:
+	if not NetworkManager.is_host():
+		table_move_cancelled.emit()
 
 
 ## RPC: host -> clients, the session's summary after a change.

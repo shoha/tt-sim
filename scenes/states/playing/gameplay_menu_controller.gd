@@ -705,24 +705,6 @@ func _on_edit_cancel_requested() -> void:
 	level_edit_panel.close()
 
 
-## Run on_ready once the Visuals drawer's unsaved changes are settled: straight
-## away when clean, after the user confirms discarding otherwise.
-func request_level_change(on_ready: Callable) -> void:
-	if not level_edit_panel or not level_edit_panel.is_dirty():
-		on_ready.call()
-		return
-	UIManager.show_danger_confirmation(
-		"Discard the look and change map?",
-		"The changes made in the Visuals drawer are not saved to this map.",
-		func() -> void:
-			level_edit_panel.mark_clean()
-			level_edit_panel.close()
-			on_ready.call(),
-		"Discard and change map",
-		"Cancel"
-	)
-
-
 # --- Player List ---
 
 

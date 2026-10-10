@@ -271,8 +271,11 @@ stack (the AuthoringPanel), never the pause menu.
 
 A hosted session is a room first (`NetworkManager.session`, `SessionChannel`): TITLE > ROOM
 (Host, once hosting; Join, when the host places the client), ROOM > PLAYING (Set out, refused
-with no map), PLAYING > ROOM (`return_to_room()`, host), PLAYING > PLAYING (a map change), ROOM
+with no map), PLAYING > ROOM (`return_to_room()`, host), PLAYING > PLAYING (`move_table()`), ROOM
 or PLAYING > TITLE (leave). Entering ROOM never connects; GameMap is torn down on every move.
+Both table moves are Root's `TableMover` (`scenes/table_mover.gd`): the Keep / Save into map /
+Discard prompt when the table changed, the notice every peer sees, and each map's session state
+(`TableStates`), laid over the map when it is set out again.
 The table of transitions is in
 [NETWORKING.md](NETWORKING.md#sessions-the-room-and-the-table).
 
