@@ -88,15 +88,27 @@ func landing_position() -> Variant:
 	var collision_shape := _token.collision_shape
 	if not rigid_body or not collision_shape or not collision_shape.shape:
 		return null
+	var aabb = collision_shape.shape.get_debug_mesh().get_aabb()
+	var scaled_top_y = (collision_shape.position.y + aabb.end.y) * rigid_body.scale.y
+	return landing_from(rigid_body.global_position.y + scaled_top_y)
+
+
+## landing_position() cast from world height `from_y` instead of the token's top: for a token
+## buried by ground raised over it, which has no ground under its top (TokenGrounding).
+## Returns Vector3 or null if no surface is found.
+func landing_from(from_y: float) -> Variant:
+	var rigid_body := _token.rigid_body
+	var collision_shape := _token.collision_shape
+	if not rigid_body or not collision_shape or not collision_shape.shape:
+		return null
 
 	var aabb = collision_shape.shape.get_debug_mesh().get_aabb()
 	var scaled_bottom_y = (collision_shape.position.y + aabb.position.y) * rigid_body.scale.y
-	var scaled_top_y = (collision_shape.position.y + aabb.end.y) * rigid_body.scale.y
-	var top_world = rigid_body.global_position + Vector3(0, scaled_top_y, 0)
+	var from := Vector3(rigid_body.global_position.x, from_y, rigid_body.global_position.z)
 
 	# Terrain and water only (layers 1 and WaterSurface.LAYER), never other tokens.
 	var ground := WaterSurface.landing_below(
-		_token.get_world_3d().direct_space_state, top_world, top_world.y, draft()
+		_token.get_world_3d().direct_space_state, from, from_y, draft()
 	)
 	if ground == Vector3.INF:
 		return null

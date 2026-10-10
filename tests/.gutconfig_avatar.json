@@ -14,6 +14,7 @@
 		"res://tests/unit/test_board_token_spawn_scale.gd",
 		"res://tests/unit/test_board_token_visibility.gd",
 		"res://tests/unit/test_draggable_token_submerge.gd",
+		"res://tests/unit/test_token_grounding.gd",
 		"res://tests/unit/test_token_placement_from_token.gd",
 		"res://tests/unit/test_token_placement_serialization.gd",
 		"res://tests/unit/test_token_state_serialization.gd",
