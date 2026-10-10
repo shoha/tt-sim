@@ -181,7 +181,10 @@ A confirmation (any `AnimatedCanvasLayerPanel`) opened over a live panel that st
 grey-mauve (UI_TASTE G1). It stands on the scrim already there and takes the place of the sheet
 below, which fades out (`cover(true)`) and comes back with its focus as the panel over it closes.
 With a third button (`add_alternate_action`) Cancel drops its 120 px minimum so the footer fits
-the 420 sheet.
+the 420 sheet. `hold_width(width)` keeps the sheet on a width token (420 or 600) whatever the
+title says: the title wraps instead of widening the sheet (a long map name). `set_confirm_apart()`
+sets a destructive confirm (the `Danger` style) apart at the footer's left, with Cancel alone at
+its right and focused (Discard changes, see [Table moves](#table-moves)).
 
 ### Parameters
 
@@ -762,15 +765,39 @@ pause menu each confirm stands on the pause menu's scrim in place of its sheet (
 
 The room drawer's Move the table here and the pause menu's Return everyone to the room are one
 operation (`TableMover`, `scenes/table_mover.gd`; the engine side is in NETWORKING.md "Table
-moves"). When the table differs from its map (tokens, the Visuals drawer's look, live terrain
-edits), one dialog asks "Keep the changes to <map>?" with what changed and three verbs:
-**Discard**, **Save into map** (only for a map in the library) and **Keep for this session**,
-the confirm, focused; the Cancel button is hidden and Escape stays at the table. Then every
-peer sees `TableMoveNotice`, a glass chip (the `Toast` variation) at the top centre on layer
-90: a map icon (the users icon for the room) tinted with the lake role, "Moving the table to
-<map> in 3" or "Returning everyone to the room in 3" counting whole seconds, and for the GM
-**Stay here**, which calls the move off for everyone (the move's undo, I4). The chip only fades
-in and out (M7). Captures: `tools/render_jobs/jobs/table_moves.json` (both window sizes).
+moves"). A move asks nothing (direct gestures, not forms): the table is kept for the session as
+it is, and every peer sees `TableMoveNotice`, a glass chip (the `Toast` variation) at the top
+centre on layer 90. Its icon (map; users for the room; restore for a discard; floppy for a
+reload after a save) is tinted with the lake role. Its sentence is one translated template
+with placeholders: the GM reads "Moving the table to <map> in 3", "Returning everyone to the
+room in 3" or "Putting <map> back as it was saved in 3"; a player reads who moves it and where,
+"Marigold is moving the table to Fen Crossing in 3". The count is its own label in the H3
+face with tabular figures (`TableMoveNotice.tabular()`), so the chip never changes width as it
+counts; a long name is shortened to keep the words within `MAX_SENTENCE_WIDTH` (520): the
+GM's name to its first word, then the map's with an ellipsis, the whole in the chip's tooltip.
+The GM's chip ends in **Stay here** (the quiet glass button, as Add token, framed at 3:1 in the
+track role), which calls the move off for everyone (the move's undo, I4). The chip only fades
+in and out (M7).
+
+Save into map and Discard changes are the shelf's, not the move's. A map with changes this
+session (`TableMover.changed_maps()`: a kept state, or the table that is out when it differs
+from its map) reads "Changed this session" on the GM's shelf row ("On the table · changed this
+session" for the table; `RoomModel.shelf_caption()`), in the room and in the room drawer (which
+reads the table again each time it opens). Its row, once selected, has a line under it
+(`RoomRows.changes_line()`): **Save into map**, only for a map with a level folder in this
+library, and **Discard** (Discard changes in its tooltip; the two keep one line in the 396
+column). Each opens a confirm on the 420 width token whose title wraps rather than widen the
+sheet (`ConfirmationDialogUI.hold_width()`) and that names its consequence (W2): Save into
+“Old Mill”? / “Old Mill” itself changes for every later session (a Primary confirm; when the
+table's terrain is written, "The table is set out again from it for everyone."), and Discard
+the changes to “Old Mill”? / “Old Mill” goes back to how it was saved (a Danger confirm with
+Discard changes set apart at the left, Cancel alone at the right and focused,
+`ConfirmationDialogUI.set_confirm_apart()`). A save that fails says what failed, why and how to
+recover (W3: "Could not save into “Old Mill”: its terrain file could not be written. Your
+changes are still kept. Check that your maps folder is not full or read-only, then try
+again."). Captures: `tools/render_jobs/jobs/table_moves.json` (the shelf rows in the room and
+the drawer, the chip's filmstrip, a player's chip, the chip at dusk, long names in the chip and
+the confirms at 1280x720, the save error).
 
 ---
 

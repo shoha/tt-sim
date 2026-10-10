@@ -87,6 +87,28 @@ func add_alternate_action(text: String, callback: Callable) -> Button:
 	return button
 
 
+## Holds the sheet on the width token `width` (420 or 600, UI_TASTE S5) whatever the title
+## says: the title wraps instead of widening the sheet (a long map name in the title).
+func hold_width(width: float) -> void:
+	($CenterContainer/PanelContainer as Control).custom_minimum_size.x = width
+	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+
+## Sets the confirm, a destructive action (the Danger style), apart at the footer's left with
+## Cancel alone at its right, so the action that loses something is never where the eye looks
+## for the safe one. A danger dialog still opens with Cancel focused.
+func set_confirm_apart() -> void:
+	var row := confirm_button.get_parent()
+	row.move_child(confirm_button, 0)
+	var gap := Control.new()
+	gap.name = "Apart"
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(gap)
+	row.move_child(gap, 1)
+	rebuild_focus_trap()
+
+
 func _on_alternate_pressed(callback: Callable) -> void:
 	if _closing:
 		return

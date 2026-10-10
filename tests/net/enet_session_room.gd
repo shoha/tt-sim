@@ -512,7 +512,7 @@ func _host_move_back() -> void:
 		return
 	_main.call("move_table", TABLE_A.folder)
 	var notice := _mover().get_node_or_null("TableMoveNotice") as TableMoveNotice
-	_result["host_notice"] = notice.label.text if notice != null else ""
+	_result["host_notice"] = notice.shown_text() if notice != null else ""
 	_result["prompted"] = _mover().is_moving() and notice == null
 	_set_phase("a2_load")
 
@@ -690,6 +690,16 @@ func _process_client() -> void:
 		"rejoining":
 			if _table_up(TABLE_B) and _on_board(_token("hero")) and _controls(_token("hero")):
 				_client_rejoined()
+			elif Engine.get_process_frames() % 300 == 0:
+				_log(
+					"rejoining: table %s, hero %s on board %s, controls %s"
+					% [
+						_table_up(TABLE_B),
+						_token("hero"),
+						_on_board(_token("hero")),
+						_controls(_token("hero"))
+					]
+				)
 		"table_a2":
 			_client_at_table_a2(host_phase)
 
@@ -743,9 +753,12 @@ func _join_session() -> void:
 			_set_phase("table_a2")
 
 
-func _on_table_moving(text: String, seconds: float) -> void:
-	_notice_text = text
-	_log("notice: %s (%.1f s) in %s" % [text, seconds, _phase])
+## The host announced a move: the chip this client's TableMover shows for it (a player's,
+## naming the GM and the destination).
+func _on_table_moving(kind: int, map_name: String, seconds: float) -> void:
+	var notice := _mover().get_node_or_null("TableMoveNotice") as TableMoveNotice
+	_notice_text = notice.shown_text() if notice != null else ""
+	_log("notice %d %s: %s (%.1f s) in %s" % [kind, map_name, _notice_text, seconds, _phase])
 
 
 func _on_client_connection_state(
@@ -893,7 +906,14 @@ func _client_at_table_a2(host_phase: String) -> void:
 		"hero_at_a": GameState.get_token_state(_token("hero")) != null,
 		"hero_control": _controls(_token("hero")) == (_role == LEAVER),
 		"session_table": NetworkManager.session.get_table() == TABLE_A.folder,
-		"notice": late or _notice_text == TableMoveNotice.moving_text(TABLE_A.name),
+		"notice":
+		(
+			late
+			or (
+				_notice_text.ends_with(" is moving the table to %s in 3" % TABLE_A.name)
+				and not _notice_text.begins_with(TableMoveNotice.SOMEONE)
+			)
+		),
 	}
 	if late:
 		checks["states"] = _states == [STATE_PLAYING]

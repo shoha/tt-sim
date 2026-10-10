@@ -7,7 +7,8 @@ extends RefCounted
 ##
 ## - Players: only those here now (a player who left keeps a session entry with peer 0 so a
 ##   rejoin maps back, but is not in the room), the GM (peer 1) first, then by name.
-## - The shelf, oldest first, each map with its name and whether it is on the table.
+## - The shelf, oldest first, each map with its name and whether it is on the table; the GM's
+##   rows also say whether the map changed this session (shelf_caption()).
 ## - The one action, the GM's only: Add a map while the shelf is empty, then Set out this map
 ##   once a shelf map is selected (nothing with a shelf but no selection) in the room; in the
 ##   drawer, Move the table to the selected map by name, shown only on a map that is not
@@ -23,6 +24,9 @@ const SET_OUT := "Set out this map"
 ## The drawer's action, naming the map the table moves to (W6: one sentence, a placeholder).
 const MOVE_TABLE := "Move the table to %s"
 const ADD_MAP := "Add a map"
+## A shelf row's caption parts (shelf_caption()).
+const ON_TABLE := "On the table"
+const CHANGED := "Changed this session"
 ## A player's download state for one map (download_state()).
 const HAS := &"has"
 const GETTING := &"getting"
@@ -116,6 +120,21 @@ static func action(
 	if selected == "":
 		return none
 	return {"text": SET_OUT, "shown": true, "enabled": true, "add": false}
+
+
+## A shelf row's caption (the GM's view): the map on the table first ("On the table"), then
+## whether it changed this session (`changed`, TableMover.changed_maps()), then `readiness`
+## (readiness_text()), joined by middots, the first clause capitalized: "Changed this session
+## · 3 of 4 have it", "On the table · changed this session". Pure.
+static func shelf_caption(on_table: bool, changed: bool, readiness: String) -> String:
+	var parts: Array[String] = []
+	if on_table:
+		parts.append(ON_TABLE)
+	if changed:
+		parts.append(CHANGED if parts.is_empty() else CHANGED.to_lower())
+	if not on_table and readiness != "":
+		parts.append(readiness)
+	return " · ".join(PackedStringArray(parts))
 
 
 ## How many of the players here have the map `key`: "Everyone has it", "3 of 4 have it", or

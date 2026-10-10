@@ -12,7 +12,8 @@ extends RefCounted
 ## A shelf map is a plain list row like a player (the ListRow button: clear at rest, the
 ## hover wash, the selected fill when picked): its picture, name and a caption. Every map
 ## picture sits in a CardThumb well, and a map with no thumbnail shows its painted placeholder
-## (MapPlaceholder), never a flat box.
+## (MapPlaceholder), never a flat box. For the GM, the selected row of a map that changed this
+## session has its actions on a line under it (changes_line()).
 ##
 ## Both kinds of row hold their content ROW_INSET in from the column, a shelf row inside its
 ## button so the selected fill has a margin round the picture, a player row by its own margin,
@@ -29,6 +30,8 @@ const HAS_IT := "Has it"
 const GETS_IT := "Gets it at the table"
 const GETTING_IT := "Getting it · %d%%"
 const WAITING := "Waiting to get it"
+## A changed map's row action beside Save into map (changes_line()).
+const DISCARD := "Discard"
 
 static var _thumb_material: ShaderMaterial
 
@@ -257,6 +260,57 @@ static func show_shelf_selected(row: Button, on: bool) -> void:
 	(text.get_node("Caption") as Label).theme_type_variation = (
 		&"CaptionOnSelected" if on else &"Caption"
 	)
+
+
+## The GM's actions on the selected shelf row of a map that changed this session (`key`), under
+## the row and ROW_INSET in from the column as the row's picture is: Save into map (only when
+## `can_save`: a level folder here to write) calling `on_save`, and Discard (DISCARD, Discard
+## changes in its tooltip) calling `on_discard`, each with its key. Quiet buttons: the confirm
+## each opens carries the weight (and Discard's red). The line wraps rather than clip at a
+## large interface size.
+static func changes_line(
+	key: String, can_save: bool, on_save: Callable, on_discard: Callable
+) -> Control:
+	# As a player row's: the line laid in a plain holder with the inset as offsets, a little
+	# space above it and a row inset below, and the holder takes the line's height.
+	var holder := Control.new()
+	holder.name = "Changes_%s" % key.validate_node_name()
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var line := HFlowContainer.new()
+	line.name = "Line"
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	line.offset_left = ROW_INSET
+	line.offset_right = -ROW_INSET
+	line.offset_top = ROW_INSET * 0.5
+	line.offset_bottom = -ROW_INSET
+	holder.add_child(line)
+	var fit := func() -> void:
+		holder.custom_minimum_size.y = line.get_combined_minimum_size().y + ROW_INSET * 1.5
+	line.minimum_size_changed.connect(fit)
+	if can_save:
+		var save := _row_action("SaveIntoMap", TableMover.SAVE_TEXT, "device-floppy", on_save, key)
+		line.add_child(save)
+	# "Discard" beside "Save into map" keeps the line to one row in the 396 column (the
+	# caption above says what changed; the tooltip and the confirm say Discard changes).
+	var discard := _row_action("DiscardChanges", DISCARD, "restore", on_discard, key)
+	discard.tooltip_text = TableMover.DISCARD_TEXT
+	discard.accessibility_name = TableMover.DISCARD_TEXT
+	line.add_child(discard)
+	fit.call()
+	return holder
+
+
+static func _row_action(
+	node_name: String, text: String, icon: String, callback: Callable, key: String
+) -> Button:
+	var button := Button.new()
+	button.name = node_name
+	button.text = text
+	button.icon = IconButton.load_icon(icon)
+	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	button.pressed.connect(callback.bind(key))
+	return button
 
 
 static func _well(well_size: Vector2) -> Panel:

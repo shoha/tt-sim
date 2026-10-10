@@ -9,8 +9,8 @@ extends AnimatedCanvasLayerPanel
 ## are lost, which is said only when there are some (tokens_unsaved). A confirm that loses
 ## something is a danger confirm with Cancel focused and, when this player can save
 ## (save_map), offers Save first beside it. Return everyone to the room asks nothing here: it
-## is a table move (TableMover), which asks only when the table changed and keeps the
-## changes for the session by default, and its notice's Stay here undoes it. There is no
+## is a table move (TableMover), which asks nothing either and keeps the table's changes for
+## the session, and its notice's Stay here undoes it. There is no
 ## Change map: the table moves to another map from the room drawer (Tab).
 
 signal resume_requested
@@ -118,8 +118,8 @@ func _on_settings_pressed() -> void:
 	UIManager.open_settings()
 
 
-## A table move to the room (Root.return_to_room, TableMover): it asks only when the table
-## changed, and its notice can be called off.
+## A table move to the room (Root.return_to_room, TableMover): it keeps the table as it is,
+## and its notice can be called off.
 func _on_room_pressed() -> void:
 	room_requested.emit()
 

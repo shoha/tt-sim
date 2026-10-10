@@ -56,9 +56,10 @@ extends Node
 signal room_opened
 ## Emitted on every peer when the shelf, the table pointer or the players changed.
 signal session_changed
-## Emitted on a client when the host announced a table move (TableMover's notice): `text`
-## names where the table goes, `seconds` until it does.
-signal table_moving(text: String, seconds: float)
+## Emitted on a client when the host announced a table move (TableMover's notice): `kind` what
+## it does (a TableMoveNotice.Kind, unchecked), `map_name` where the table goes, `seconds`
+## until it does. The client words it in its own language.
+signal table_moving(kind: int, map_name: String, seconds: float)
 ## Emitted on a client when the host called that move off.
 signal table_move_cancelled
 
@@ -214,11 +215,11 @@ func note_table_out(level_dict: Dictionary) -> void:
 	_publish()
 
 
-## Host: tell every client the table moves in `seconds` (`text` says where), so each shows
-## the notice the GM sees (TableMover).
-func announce_move(text: String, seconds: float) -> void:
+## Host: tell every client the table moves in `seconds` (`kind` a TableMoveNotice.Kind,
+## `map_name` where it goes), so each shows the notice the GM sees (TableMover).
+func announce_move(kind: int, map_name: String, seconds: float) -> void:
 	if _can_send():
-		_rpc_table_moving.rpc(_clip(text), seconds)
+		_rpc_table_moving.rpc(kind, _clip(map_name), seconds)
 
 
 ## Host: the move announced is off; every client drops its notice.
@@ -576,14 +577,15 @@ func _rpc_room_opened() -> void:
 	room_opened.emit()
 
 
-## RPC: host -> clients, the table moves soon (untrusted: the text clipped, the seconds
-## bounded).
+## RPC: host -> clients, the table moves soon (untrusted: the kind an int or -1, the name
+## clipped, the seconds bounded).
 @rpc("authority", "reliable")
-func _rpc_table_moving(text: Variant, seconds: Variant) -> void:
+func _rpc_table_moving(kind: Variant, map_name: Variant, seconds: Variant) -> void:
 	if NetworkManager.is_host():
 		return
 	var left := float(seconds) if seconds is float or seconds is int else 0.0
-	table_moving.emit(_clip(text), clampf(left, 0.0, MAX_NOTICE_S))
+	var move := int(kind) if kind is int else -1
+	table_moving.emit(move, _clip(map_name), clampf(left, 0.0, MAX_NOTICE_S))
 
 
 ## RPC: host -> clients, the move is off.

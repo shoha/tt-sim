@@ -20,7 +20,9 @@ extends RefCounted
 ## joiner's catch-up.
 
 ## shelf key -> {"placements": Array[Dictionary], "look": LevelVisualState, "op_log":
-## Array[PackedByteArray]}
+## Array[PackedByteArray]}, and when the terrain changed on a map with a level folder,
+## "document": the edited MapDocument as the table left it (TableMover keeps it for a Save into
+## map from the shelf, once there is no table to save from; the op log alone needs one built).
 var _entries: Dictionary = {}
 
 
