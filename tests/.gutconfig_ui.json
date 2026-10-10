@@ -6,6 +6,7 @@
 		"res://tests/unit/test_animated_panel_stagger.gd",
 		"res://tests/unit/test_app_menu_editor_load.gd",
 		"res://tests/unit/test_asset_browser_container.gd",
+		"res://tests/unit/test_asset_pack_tab_icons.gd",
 		"res://tests/unit/test_audio_manager.gd",
 		"res://tests/unit/test_avatar_drag_place.gd",
 		"res://tests/unit/test_color_pane.gd",
