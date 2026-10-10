@@ -1,29 +1,35 @@
 shader_type canvas_item;
 
 // The Play together card's two watercolour washes (PlayTogetherCard) inside a pill: persimmon
-// (warm, left, Host) and lake (cool, right, Join), meeting in a wet seam at `split` (a share
-// of the width). Each wash is a few large, soft value shifts at its own hue, worked in OKLab
-// lightness: a lighter bloom in the open band between its words and the seam, swelling and
-// thinning along it; a pooled darker edge along the pill's rim and along the seam where the
-// washes part; slow mottle in big blots and the faintest granulation. (A darker frill round
-// the bloom, as a back-run dries, was tried and drawn as outlines at this size.) Nothing
-// lightens a wash under its words (`text_warm`, `text_cool`): there it stays at or below its
-// own colour, the rest token, so paper words keep 4.5:1. At the seam the washes bleed into each
-// other over a few px with soft fingers, and where they part a soft light line of paper shows
-// (it breathes along the seam, closing where they touch). The words' no-lightening mask fades
-// over `text_feather` (24 px or more) and its seam side follows the seam's own wobble, so as a
-// face narrows its bloom thins to a soft glow along the seam rather than a straight-edged bar;
-// the mottle is round blots, never the lattice streaks of value noise. `disc` pulls the warm wash into a
-// blot at the left end that then dries away (Join in place: the lake takes the card and the
-// back disc stands where the blot was). `focus` draws a soft paper ring just inside the picked
-// face (`focus_side`: -1 Host, 1 Join). Every length is in the card's own pixels (`rect_size`).
+// (warm, left, Host) and lake (cool, right, Join), meeting at a crisp hand-painted seam at
+// `split` (a share of the width) with a thin line of paper showing between them. Each wash is a
+// few large, soft value shifts at its own hue, worked in OKLab lightness: a lighter bloom in the
+// open band between its words and the seam, swelling and thinning along it and kept clear of
+// the seam itself, so the line meets each wash at its own colour; a pooled darker edge along the
+// pill's rim; slow mottle in big round blots and the faintest granulation.
+//
+// Soft tone stays inside a face and never crosses an edge (user verdict 2026-10-10: a blurred
+// seam read as out of focus). Every edge is drawn crisp, with about one screen px of
+// anti-aliasing measured along the edge's own gradient: the pill, the boundary between the
+// washes (a clean curve wandering `seam_amp` either way, never fingers), the paper line along
+// it and the focus ring. (A soft bleed with fingers and a soft light line, then a darker frill
+// round the bloom, were tried: the first read as blur, the second as outlines.)
+//
+// Nothing lightens a wash under its words (`text_warm`, `text_cool`): there it stays at or below
+// its own colour, the rest token, so paper words keep 4.5:1. The words' no-lightening mask fades
+// over `text_feather` and its seam side follows the seam's wobble, so as a face narrows its
+// bloom thins away rather than standing as a straight-edged bar. `disc` pulls the warm wash
+// into a blot at the left end that then dries away (Join in place: the lake takes the card and
+// the back disc stands where the blot was); the blot keeps the seam's crisp edge and paper line.
+// `focus` draws a thin paper ring just inside the picked face (`focus_side`: -1 Host, 1 Join).
+// Every length is in the card's own pixels (`rect_size`), which are screen px at 1080p.
 
 uniform vec4 warm : source_color = vec4(0.706, 0.271, 0.165, 1.0);
 uniform vec4 cool : source_color = vec4(0.165, 0.408, 0.502, 1.0);
 uniform vec4 paper : source_color = vec4(0.980, 0.953, 0.890, 1.0);
 // Seam position as a share of the width (0.5 at rest; 0.56 / 0.44 with a face picked).
 uniform float split : hint_range(0.0, 1.0) = 0.5;
-// Pigment density: deepens the pooled edges and the mottle while pressed.
+// Pigment density: deepens the rim pool and the mottle while pressed.
 uniform float press : hint_range(0.0, 1.0) = 0.0;
 // 0: seam across the card; 1: the warm wash has drawn into a blot at the left end and gone.
 uniform float disc : hint_range(0.0, 1.0) = 0.0;
@@ -34,39 +40,56 @@ uniform vec4 text_cool = vec4(216.0, 22.0, 316.0, 84.0);
 // How far past the words the no-lightening mask holds, then fades over `text_feather`.
 uniform float text_pad = 4.0;
 uniform float text_feather = 26.0;
-// The seam wanders this far either side of `split`, with one soft wiggle per `seam_scale` px.
+// The seam wanders this far either side of `split`, with one gentle bend per `seam_scale` px.
 uniform float seam_amp = 5.0;
 uniform float seam_scale = 40.0;
-// The bleed: each wash feathers into the other over this many px either side, its edge
-// wandering `finger_px` either way in soft fingers.
-uniform float bleed_px = 3.0;
-uniform float finger_px = 0.9;
-// The light line where the washes part: its strength breathes between these.
-uniform float line_min = 0.12;
-uniform float line_max = 0.5;
-// Steps of OKLab lightness: the bloom (up), the seam and rim pools (down), the mottle (either
-// way) and the granulation (down).
+// The paper line along the seam: its width, varying up to `line_vary` either way along it as
+// a gap left between two brushed washes does.
+uniform float line_px = 2.0;
+uniform float line_vary = 0.4;
+// Steps of OKLab lightness: the bloom (up), the rim pool (down), the mottle (either way) and
+// the granulation (down).
 uniform float bloom_l = 0.14;
-uniform float pool_l = 0.07;
 uniform float rim_l = 0.06;
 uniform float mottle_l = 0.025;
 uniform float grain_l = 0.008;
-// The pools' depth in px, the bloom's distance in from the seam and its half width, the blot
-// sizes of the mottle and the granulation.
-uniform float pool_px = 3.5;
+// The rim pool's depth; the bloom's distance in from the seam, its half width, and the margin
+// beside the line it keeps clear before rising over `bloom_rise`; the blot sizes of the mottle
+// and the granulation.
+uniform float rim_px = 5.6;
 uniform float bloom_in = 18.0;
 uniform float bloom_w = 20.0;
+uniform float bloom_clear = 4.0;
+uniform float bloom_rise = 10.0;
 uniform float mottle_px = 55.0;
 uniform float grain_px = 8.0;
+// The picked face's ring: how strongly it shows, its distance in from the face's edges and its
+// width.
 uniform float focus : hint_range(0.0, 1.0) = 0.0;
 uniform float focus_side = -1.0;
-// Slow drift of the wet edge; 0 under Reduce motion.
+uniform float ring_in = 5.0;
+uniform float ring_px = 1.5;
+// Slow drift of the seam's curve; 0 under Reduce motion.
 uniform float drift = 1.0;
 uniform float seed = 3.0;
 
-// Lattice inputs stay small (under a few hundred), so the sine hash keeps its precision.
+uint pcg(uint v) {
+	uint state = v * 747796405u + 2891336453u;
+	uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+	return (word >> 22u) ^ word;
+}
+
+// A random value in [0, 1] for the lattice point `p` (whole numbers) and `salt`, hashed as
+// integers so a corner shared by two cells gets the same value from both. The sine hash this
+// replaced did not: the compiler re-associated its sum differently per cell, the error grew by
+// 43758, and the seam tore sideways across the card at one lattice row.
+float hash_salt(vec2 p, uint salt) {
+	uvec2 q = uvec2(ivec2(round(p)) + ivec2(4096));
+	return float(pcg(q.x + pcg(q.y + pcg(salt)))) / 4294967295.0;
+}
+
 float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+	return hash_salt(p, 0u);
 }
 
 float vnoise(vec2 p) {
@@ -104,8 +127,8 @@ float round_blots(vec2 p) {
 	for (int y = -1; y <= 1; y++) {
 		for (int x = -1; x <= 1; x++) {
 			vec2 g = vec2(float(x), float(y));
-			vec2 spot = g + vec2(hash(cell + g), hash(cell + g + vec2(7.3, 1.9))) - f;
-			float w = hash(cell + g + vec2(3.1, 5.7)) * 2.0 - 1.0;
+			vec2 spot = g + vec2(hash(cell + g), hash_salt(cell + g, 1u)) - f;
+			float w = hash_salt(cell + g, 2u) * 2.0 - 1.0;
 			sum += w * exp(-dot(spot, spot) * 3.0);
 		}
 	}
@@ -163,20 +186,27 @@ float text_mask(vec2 px, vec4 r) {
 	return 1.0 - smoothstep(0.0, text_feather, d);
 }
 
+// A crisp band `width` screen px wide centred on `d` = 0 (`d` in screen px), with one px of
+// anti-aliasing at each side.
+float crisp_band(float d, float width) {
+	return clamp(width * 0.5 + 0.5 - abs(d), 0.0, 1.0);
+}
+
 // One wash's lightness step at `px`: `in_seam` px in from its seam edge, `in_rim` px in from
 // the pill's rim, `words` its words' mask, `open` how much of the bloom shows, `k` the face (0
-// warm, 1 cool) for its own noise, `parted` how far the washes part here (0 touching).
-float face_step(vec2 px, float in_seam, float in_rim, float words, float open, float k, float parted) {
+// warm, 1 cool) for its own noise.
+float face_step(vec2 px, float in_seam, float in_rim, float words, float open, float k) {
 	float deep = 1.0 + press * 0.6;
-	float pool = exp(-max(in_seam, 0.0) / pool_px) * pool_l * mix(0.35, 1.0, parted);
-	pool += exp(-max(in_rim, 0.0) / (pool_px * 1.6)) * rim_l;
-	// The bloom: a soft lighter body in from the seam that swells and thins along it (big,
-	// smooth noise with no threshold, so it never breaks into blocks), and fades toward the rim.
-	// Squares by hand: pow() of a negative base is undefined in GLSL.
+	float pool = exp(-max(in_rim, 0.0) / rim_px) * rim_l;
+	// The bloom: a soft lighter body in from the seam that swells and thins along it (one
+	// octave of big, smooth noise with no threshold, so it never breaks into blocks or streaks;
+	// a second octave read as dashes along the seam), and fades toward the rim. It rises only
+	// past a clear margin beside the line, so no light haze runs along the seam. Squares by
+	// hand: pow() of a negative base is undefined in GLSL.
 	float z = (in_seam - bloom_in) / bloom_w;
-	float band = exp(-z * z);
+	float band = exp(-z * z) * smoothstep(bloom_clear, bloom_clear + bloom_rise, in_seam);
 	vec2 blot = vec2(px.x / 120.0, px.y / 48.0) + vec2(k * 11.0 + seed, 2.0 + k * 3.0);
-	float swell = clamp(0.62 + fbm(blot, 2) * 1.1, 0.0, 1.0);
+	float swell = clamp(0.62 + fbm(blot, 1) * 1.1, 0.0, 1.0);
 	float light = bloom_l * band * swell * smoothstep(0.0, 18.0, in_rim) * open;
 	vec2 blots = px / mottle_px + vec2(seed * 7.0 + k * 5.0, 1.3);
 	float m = round_blots(blots) * 1.6 * mottle_l * (1.0 + press);
@@ -189,15 +219,16 @@ void fragment() {
 	vec2 px = UV * rect_size;
 	float t = TIME * 0.04 * drift;
 	float r = rect_size.y * 0.5;
+	// Card px per screen px: a length in card px over this is in screen px.
+	float per_px = max(length(vec2(dFdx(px.x), dFdy(px.x))), 0.0001);
 
-	// Pill: signed distance, negative inside.
+	// Pill: signed distance, negative inside, with one screen px of anti-aliasing.
 	vec2 axis = vec2(clamp(px.x, r, rect_size.x - r), r);
 	float d_pill = length(px - axis) - r;
-	float aa_pill = max(fwidth(d_pill), 0.0001);
-	float inside = 1.0 - smoothstep(-aa_pill, aa_pill, d_pill);
+	float inside = clamp(0.5 - d_pill / per_px, 0.0, 1.0);
 	float in_rim = -d_pill;
 
-	// The seam: a slow, soft wander, as the edge where two wet washes met.
+	// The seam: a clean curve wandering slowly either side of `split`.
 	float wander = fbm(vec2(px.y / seam_scale, seed + t), 2) * 2.0 * seam_amp;
 	float seam_sd = px.x - (split * rect_size.x + wander);
 
@@ -210,25 +241,25 @@ void fragment() {
 	float shrink = 1.0 - smoothstep(0.55, 1.0, disc);
 	float disc_sd = length(to_disc) - (r * 0.64 + rim) * shrink;
 
-	// Negative: warm side. Soft fingers along the seam where the washes bleed.
-	float finger = fbm(vec2(px.y / 18.0, seed * 3.0 + t * 2.0), 1) * 2.0 * finger_px;
-	float s = mix(seam_sd, disc_sd, disc) + finger * (1.0 - disc);
-	float bleed = bleed_px + max(fwidth(s), 0.5);
-	float warm_share = 1.0 - smoothstep(-bleed, bleed, s);
+	// Negative: warm side. Also taken in screen px along its own gradient, so the edge and the
+	// line keep one width however the seam leans or the blot curves. The last speck of the blot
+	// goes with its line, so neither a persimmon dot nor a paper one is left under the disc.
+	float s = mix(seam_sd, disc_sd, disc);
+	float s_px = s / max(length(vec2(dFdx(s), dFdy(s))), 0.0001);
+	float present = smoothstep(0.0, 0.08, shrink);
+	float warm_share = clamp(0.5 - s_px, 0.0, 1.0) * present;
 
-	// Where the washes part a light line breathes along the seam; where they touch, none, and
-	// their seam pools go too (a wet join dries without a dark line).
-	float parted = smoothstep(0.0, 1.0, 0.5 + fbm(vec2(px.y / 34.0, seed * 5.0), 1) * 2.2);
-	float line_w = 1.2 + 1.2 * parted;
-	float line = exp(-(s * s) / (line_w * line_w)) * mix(line_min, line_max, parted) * (1.0 - disc);
+	// The paper line where the washes meet, its width breathing a little along it.
+	float line_w = line_px + fbm(vec2(px.y / 26.0, seed * 5.0 + t), 1) * 2.0 * line_vary;
+	float line = crisp_band(s_px, line_w / per_px) * present;
 
 	float open = 1.0 - disc;
 	// Each mask's seam side reaches out with the seam's wobble (never in toward the words), so
 	// the bloom's edge there runs along the seam.
 	vec4 warm_words = text_warm + vec4(0.0, 0.0, wander + seam_amp, 0.0);
 	vec4 cool_words = text_cool + vec4(wander - seam_amp, 0.0, 0.0, 0.0);
-	float dl_warm = face_step(px, -s, in_rim, text_mask(px, warm_words), open, 0.0, parted);
-	float dl_cool = face_step(px, s, in_rim, text_mask(px, cool_words), open, 1.0, parted);
+	float dl_warm = face_step(px, -s, in_rim, text_mask(px, warm_words), open, 0.0);
+	float dl_cool = face_step(px, s, in_rim, text_mask(px, cool_words), open, 1.0);
 	vec3 lab = mix(
 		stepped(oklab_of(cool.rgb), dl_cool),
 		stepped(oklab_of(warm.rgb), dl_warm),
@@ -237,10 +268,9 @@ void fragment() {
 	vec3 col = srgb_of(lab);
 	col = mix(col, paper.rgb, line);
 
-	// The picked face's focus: a soft paper ring 5 px in from its edges.
-	float in_face = min(in_rim, -focus_side * -s);
-	float f = (in_face - 5.0) / 1.2;
-	float ring = exp(-f * f) * focus * 0.6 * open;
-	col = mix(col, paper.rgb, ring);
+	// The picked face's focus: a thin paper ring `ring_in` px in from its edges.
+	float in_face = min(in_rim / per_px, focus_side * s_px);
+	float ring = crisp_band(in_face - ring_in / per_px, ring_px / per_px);
+	col = mix(col, paper.rgb, ring * focus * 0.6 * open);
 	COLOR = vec4(col, inside * COLOR.a);
 }
