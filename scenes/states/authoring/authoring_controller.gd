@@ -819,8 +819,7 @@ static func write_level(saved: LevelData, doc: MapDocument, thumbnail: Image) ->
 func capture_thumbnail() -> Image:
 	if not is_instance_valid(_game_map):
 		return null
-	var texture := _game_map.world_viewport.get_texture()
-	return texture.get_image() if texture else null
+	return LevelThumbnail.capture(_game_map.world_viewport)
 
 
 func _on_autosave_timeout() -> void:

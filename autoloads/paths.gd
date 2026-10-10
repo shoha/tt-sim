@@ -43,6 +43,9 @@ const LEVEL_MAP_DOCUMENT_VARIANT: String = "ttmap"
 # AssetStreamer / AssetCacheManager file type of a streamed map document (cached as .ttmap;
 # a streamed map.glb uses the "model" type and is cached as .glb).
 const LEVEL_MAP_DOCUMENT_FILE_TYPE: String = "map_document"
+## The local index of where each imported map.glb came from (ImportSources), under the data
+## root beside levels/, never inside it, so no level lists, copies or streams it.
+const IMPORT_SOURCES_NAME: String = "import_sources.cfg"
 
 # Data files
 const POKEMON_DATA_PATH: String = "res://data/pokemon.json"
@@ -228,6 +231,11 @@ static func get_level_map_file_type(variant_id: String) -> String:
 ## Get the level.json path within a level folder
 static func get_level_json_path(level_name: String) -> String:
 	return get_level_folder(level_name) + "level.json"
+
+
+## The import source index (IMPORT_SOURCES_NAME) under the current data root.
+static func import_sources_path() -> String:
+	return DATA_ROOT + IMPORT_SOURCES_NAME
 
 
 ## Sanitize a level name for use as a folder name

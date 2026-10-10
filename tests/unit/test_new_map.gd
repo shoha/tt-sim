@@ -16,6 +16,38 @@ func test_each_size_is_whole_even_cells() -> void:
 		assert_eq(MapDocumentIO.serialize(doc)["error"], "", "writable as created")
 
 
+func test_a_custom_map_is_width_by_depth_in_whole_squares() -> void:
+	var flat := StartingLandform.FLAT
+	var doc := NewMap.create(200, NewMap.BARE_BIOME, 3, PaletteLibrary.DEFAULT_ROOT, flat, 100)
+	assert_eq(doc.size_cells, Vector2i(40, 20))
+	assert_eq(doc.extent_m(), Vector2(40, 20) * LevelData.DEFAULT_GRID_CELL_SIZE)
+	var spec := {"size_ft": 300, "depth_ft": 120, "biome_id": NewMap.BARE_BIOME, "seed": 4}
+	assert_eq(NewMap.from_spec(spec).size_cells, Vector2i(60, 24))
+	assert_eq(NewMap.size_cells(150), Vector2i(30, 30), "no depth: square")
+	assert_eq(NewMap.size_cells(102, 98), Vector2i(20, 20), "rounded to whole squares")
+
+
+func test_a_map_side_is_capped_at_the_format_limit() -> void:
+	assert_eq(NewMap.MAX_FT, 320)
+	assert_eq(NewMap.RECOMMENDED_MAX_FT, 250)
+	assert_eq(NewMap.size_error(320, 320), "")
+	assert_ne(NewMap.size_error(325), "")
+	assert_ne(NewMap.size_error(200, 400), "")
+	assert_ne(NewMap.size_error(0, 100), "")
+	assert_false(NewMap.is_big(250))
+	assert_true(NewMap.is_big(255))
+	assert_true(NewMap.is_big(100, 300))
+	assert_null(NewMap.create(400, NewMap.BARE_BIOME, 3), "refused, not clamped")
+	assert_push_error(1)
+
+
+func test_a_landform_on_a_long_map_scales_by_its_shorter_side() -> void:
+	var long := MapDocument.create_flat(Vector2i(60, 30), "", "", 0)
+	var square := MapDocument.create_flat(Vector2i(30, 30), "", "", 0)
+	assert_eq(StartingLandform.size_scale(long), StartingLandform.size_scale(square))
+	assert_almost_eq(StartingLandform.size_scale(square), 1.0, 0.001, "150 ft is the reference")
+
+
 func test_bare_ground_uses_the_bare_surface_and_paints_nothing() -> void:
 	var doc := NewMap.create(100, NewMap.BARE_BIOME, 1)
 	assert_eq(doc.base_surface, NewMap.BARE_SURFACE)

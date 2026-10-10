@@ -498,12 +498,9 @@ func save_level() -> String:
 ## The world viewport as an image, or null when no map is loaded. Reads the
 ## render target once; callers use it on explicit saves only.
 func capture_thumbnail() -> Image:
-	if not is_instance_valid(_game_map) or not is_instance_valid(_game_map.world_viewport):
+	if not is_instance_valid(_game_map):
 		return null
-	var texture := _game_map.world_viewport.get_texture()
-	if texture == null:
-		return null
-	return texture.get_image()
+	return LevelThumbnail.capture(_game_map.world_viewport)
 
 
 ## Save the level, then store a thumbnail of the current view beside it. The

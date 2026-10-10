@@ -439,6 +439,14 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   Last, one probe capture of the title at 1720x720 (ultrawide). 35 captures and `INDEX.md`;
   the level is deleted at the end. Half size makes the 720p captures 640x360, smaller than
   any player sees: judge 720p legibility on a `--full` run.
+- `jobs/import_thumb.json`: the map library's import (the level core card, about 35 s, no
+  map open): `probes/import_thumb.gd check` logs `GlbCheck` on terrain-paint's
+  `deciduous_clusters`, `sandyclearing` and `terrain` exports and the built-in Oak's Lab
+  (MB, footprint, floor and top, extras, warning codes, the check's time); then imports
+  `deciduous_clusters` as `_test_library_thumb` (`MapImport.import_glb`, the offscreen
+  thumbnail a headless run cannot draw), `report` copies the saved 320x180 thumbnail to
+  `import_thumb.png` in the output folder, and `cleanup` deletes the level and its source
+  index entry (and the index file when that leaves it empty).
 
 ## Caveats
 

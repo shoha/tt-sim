@@ -1,0 +1,13 @@
+{
+ "out_dir": "render_jobs/import_thumb",
+ "timeout_s": 150,
+ "hang_s": 60,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/import_thumb.gd", "action": "check", "paths": ["D:/dev/terrain-paint/deciduous_clusters.glb", "D:/dev/terrain-paint/sandyclearing.glb", "D:/dev/terrain-paint/terrain.glb", "res://assets/models/maps/oakslabpainted.glb"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/import_thumb.gd", "action": "import", "path": "D:/dev/terrain-paint/deciduous_clusters.glb", "name": "_test_library_thumb"},
+  {"op": "wait", "s": 30.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/import_thumb.gd", "action": "report", "out": "user://render_jobs/import_thumb/"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/import_thumb.gd", "action": "cleanup"}
+ ]
+}
