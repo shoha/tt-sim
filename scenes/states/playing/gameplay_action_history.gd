@@ -113,7 +113,7 @@ func record_token_removal(token: BoardToken, token_state: TokenState) -> Diction
 		"pack_id": token.pack_id,
 		"asset_id": token.asset_id,
 		"variant_id": token.variant_id,
-		"description": 'removed "%s"' % token_state.token_name,
+		"description": "removed “%s”" % token_state.token_name,
 	}
 	_push(action)
 	return action
@@ -127,7 +127,7 @@ func record_token_spawn(network_id: String, token_name: String) -> void:
 		{
 			"type": ActionType.TOKEN_SPAWN,
 			"network_id": network_id,
-			"description": 'duplicated "%s"' % token_name,
+			"description": "duplicated “%s”" % token_name,
 		}
 	)
 
@@ -274,7 +274,7 @@ func _describe_property_change(property: String, old_value: Variant, new_value: 
 		"is_alive":
 			return "toggled alive state"
 		"token_name":
-			return 'renamed "%s" to "%s"' % [old_value, new_value]
+			return "renamed “%s” to “%s”" % [old_value, new_value]
 		"avatar_recipe":
 			return "edited avatar"
 		_:

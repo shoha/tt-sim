@@ -65,6 +65,9 @@ var _network_token_sync := NetworkTokenSync.new(_token_spawner)
 ## class doc comment for why those three fields aren't owned by it directly.
 var _level_loader := LevelPlayLoader.new()
 var _permission_handler: TokenPermissionHandler = null
+## The tokens as last saved to the map (TokenSaveState): taken when the level loads and
+## after each save, for has_unsaved_tokens.
+var _saved_tokens: Dictionary = {}
 
 
 ## Initialize with a reference to the game map
@@ -199,10 +202,12 @@ func _on_token_spawner_token_added(token: BoardToken) -> void:
 ## external listeners connected to LevelPlayController (scenes/root.gd,
 ## gameplay_menu_controller.gd, tests/test_play_level.gd) are unaffected by the extraction.
 func _on_level_loader_level_loaded(level_data: LevelData) -> void:
+	_saved_tokens = TokenSaveState.of_placements(level_data.token_placements)
 	level_loaded.emit(level_data)
 
 
 func _on_level_loader_level_cleared() -> void:
+	_saved_tokens = {}
 	level_cleared.emit()
 
 
@@ -513,7 +518,21 @@ func duplicate_token(token: BoardToken) -> BoardToken:
 ## Forwards to LevelPlayLoader -- kept as a same-named method here since
 ## gameplay_menu_controller.gd calls this directly.
 func save_level() -> String:
-	return _save_level_impl.call()
+	var path: String = _save_level_impl.call()
+	if not path.is_empty() and active_level_data != null:
+		_saved_tokens = TokenSaveState.of_placements(active_level_data.token_placements)
+	return path
+
+
+## Whether the table's tokens differ from what was last saved to its map (TokenSaveState):
+## moved, added, removed or changed since the map loaded or was last saved. False with no
+## level on the table.
+func has_unsaved_tokens() -> bool:
+	if active_level_data == null:
+		return false
+	return TokenSaveState.differs(
+		_saved_tokens, TokenSaveState.of_tokens(_token_spawner.get_spawned_tokens())
+	)
 
 
 ## The world viewport as an image, or null when no map is loaded. Reads the

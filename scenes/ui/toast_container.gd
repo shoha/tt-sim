@@ -19,7 +19,7 @@ const DEFAULT_DURATION := 3.0
 const ACTION_DURATION := 6.0
 const ICON_SIZE := 20
 ## Every toast's width: a stack of equal chips, and room for a two-line warning ("Maps are
-## built offline. Leave the game to build or edit a map.") rather than three.
+## built offline. Leave the session to build or edit a map.") rather than three.
 const WIDTH := 360.0
 ## Per kind: the icon and the role that tints it.
 const KINDS := {

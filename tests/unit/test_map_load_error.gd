@@ -9,7 +9,7 @@ func test_a_missing_map_says_it_is_gone_and_how_to_recover() -> void:
 	assert_eq(
 		text,
 		(
-			'"Mossy Hollow" could not be opened: it is no longer in your maps folder.'
+			"“Mossy Hollow” could not be opened: it is no longer in your maps folder."
 			+ " Choose another map."
 		)
 	)

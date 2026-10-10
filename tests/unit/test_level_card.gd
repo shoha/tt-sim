@@ -228,7 +228,7 @@ func test_edit_is_the_first_overflow_action() -> void:
 	var card := _card(_info())
 
 	assert_eq(card._menu.get_item_index(LevelCard.ACTION_EDIT), 0)
-	assert_eq(card._menu.get_item_text(0), "Edit")
+	assert_eq(card._menu.get_item_text(0), "Set up tokens")
 
 
 func test_edit_requests_the_edit_action() -> void:

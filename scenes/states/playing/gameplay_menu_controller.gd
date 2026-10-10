@@ -682,14 +682,14 @@ func request_level_change(on_ready: Callable) -> void:
 		on_ready.call()
 		return
 	UIManager.show_danger_confirmation(
-		"Unsaved visual changes",
-		"Discard the changes made in the Visuals drawer and change the level?",
+		"Discard the look and change map?",
+		"The changes made in the Visuals drawer are not saved to this map.",
 		func() -> void:
 			level_edit_panel.mark_clean()
 			level_edit_panel.close()
 			on_ready.call(),
-		"Discard and change",
-		"Keep editing"
+		"Discard and change map",
+		"Cancel"
 	)
 
 

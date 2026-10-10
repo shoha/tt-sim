@@ -268,18 +268,18 @@ func request_close() -> void:
 		return
 	UIManager.register_overlay(self)
 	_close_prompt = UIManager.show_danger_confirmation(
-		"Unsaved changes to this map's look",
-		"Discard the changes made in this drawer? Save look keeps them instead.",
+		"Discard changes?",
+		"The changes to this map's look are not saved. Save look keeps them instead.",
 		_on_discard_confirmed,
 		"Discard changes",
-		"Keep editing"
+		"Cancel"
 	)
 	if _close_prompt:
 		_close_prompt.closed.connect(_on_close_prompt_closed)
 
 
 ## Whether the discard prompt is currently on screen. Also true while the
-## prompt is animating out (about 0.2 s after "Keep editing"), so a rail press
+## prompt is animating out (about 0.2 s after Cancel), so a rail press
 ## or Escape in that window is a no-op rather than a second prompt -- that is
 ## intended.
 func _is_close_prompt_open() -> bool:

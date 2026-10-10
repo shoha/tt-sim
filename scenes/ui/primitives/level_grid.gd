@@ -134,7 +134,7 @@ func _on_card_action(info: Dictionary, action: StringName) -> void:
 			var new_path := LevelManager.duplicate_level(info)
 			if new_path.is_empty():
 				UIManager.show_error(
-					'Could not duplicate "%s": the copy was not written. Try again.' % _name(info)
+					"Could not duplicate “%s”: the copy was not written. Try again." % _name(info)
 				)
 				return
 			refresh()
@@ -158,7 +158,7 @@ func _delete(info: Dictionary) -> void:
 	if not LevelManager.delete_level(path):
 		UIManager.show_error(
 			(
-				'Could not delete "%s": its files could not be removed. Try again in a moment.'
+				"Could not delete “%s”: its files could not be removed. Try again in a moment."
 				% _name(info)
 			)
 		)
@@ -173,7 +173,7 @@ func _delete(info: Dictionary) -> void:
 func _on_card_rename(info: Dictionary, new_name: String) -> void:
 	var new_path := LevelManager.rename_level(info, new_name)
 	if new_path.is_empty():
-		UIManager.show_error('Could not rename "%s". Try another name.' % _name(info))
+		UIManager.show_error("Could not rename “%s”. Try another name." % _name(info))
 		return
 	refresh()
 	select(new_path)

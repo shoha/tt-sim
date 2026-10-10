@@ -111,8 +111,14 @@ func test_title_column_fits_by_measurement() -> void:
 		var play_caption := _next_shown(title.play_button)
 		assert_eq(play_caption, title.play_subtitle)
 		assert_almost_eq(_gap(play_caption, title.editor_button), 12.0, SLACK_PX, what)
-		var stack := _gap(title.editor_button, title.build_map_button)
+		var editor_caption := _next_shown(title.editor_button)
+		assert_eq(editor_caption, title.editor_subtitle, "%s: on Mossy Hollow" % what)
+		assert_almost_eq(_gap(editor_caption, title.build_map_button), 12.0, SLACK_PX, what)
+		var new_map_caption := _next_shown(title.build_map_button)
+		assert_almost_eq(_gap(title.build_map_button, new_map_caption), 4.0, SLACK_PX, what)
+		var stack := _gap(title.avatars_button, title.settings_button)
 		assert_true(stack >= TitleScreen.STACK_GAP - SLACK_PX, "%s: stack %.1f" % [what, stack])
+		assert_eq(title.settings_button.global_position.y, title.quit_button.global_position.y)
 		title.free()
 
 
@@ -121,7 +127,7 @@ func test_title_column_is_roomy_at_1080p() -> void:
 	_host.size = Vector2i(1920, 1080)
 	var title := _title()
 	await _assert_fits("title at 1080p", title.quit_button, Vector2(1920, 1080))
-	var stack := _gap(title.editor_button, title.build_map_button)
+	var stack := _gap(title.avatars_button, title.settings_button)
 	assert_almost_eq(stack, TitleScreen.STACK_GAP_ROOMY, SLACK_PX)
 
 
@@ -327,27 +333,28 @@ func test_danger_confirmation_fits() -> void:
 	var dialog := CONFIRM_SCENE.instantiate()
 	_host.add_child(dialog)
 	dialog.setup(
-		"Return to the title?",
-		PauseOverlay.leave_consequence(true, true),
+		"Return to title?",
+		PauseOverlay.leave_consequence(true, true, true),
 		"Return to title",
 		"Cancel",
 		Callable(),
 		Callable(),
 		"Danger"
 	)
+	# With unsaved token moves the footer holds three buttons; the sheet stays 420.
+	dialog.add_alternate_action(PauseOverlay.SAVE_FIRST, Callable())
 	await _assert_fits("danger confirmation", dialog.confirm_button)
+	var sheet := dialog.get_node("CenterContainer/PanelContainer") as Control
+	assert_almost_eq(sheet.size.x, 420.0, 1.0, "a confirm is the 420 sheet (S5)")
 
 
 func test_toasts_fit() -> void:
 	var toasts := TOASTS_SCENE.instantiate()
 	_host.add_child(toasts)
 	toasts.show_toast("Map saved", ToastContainer.ToastType.SUCCESS, 30.0)
-	toasts.show_toast('Removed "Marigold"', ToastContainer.ToastType.INFO, 30.0, "Undo", func(): pass)
-	toasts.show_toast(
-		"Maps are built offline. Leave the game to build or edit a map.",
-		ToastContainer.ToastType.WARNING,
-		30.0
-	)
+	toasts.show_toast("Removed “Marigold”", ToastContainer.ToastType.INFO, 30.0, "Undo", func(): pass)
+	var refusal: String = preload("res://scenes/root.gd").authoring_refusal(null, true)
+	toasts.show_toast(refusal, ToastContainer.ToastType.WARNING, 30.0)
 	toasts.show_toast(MapLoadError.text("", "Mossy Hollow"), ToastContainer.ToastType.ERROR, 30.0)
 	await _assert_fits("four toasts", toasts.toast_vbox)
 	assert_eq(toasts.toast_vbox.get_child_count(), 4)

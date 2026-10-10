@@ -53,7 +53,7 @@ theme_override_constants/separation = 2
 [node name="Title" type="Label" parent="MainContainer/VBox/Header/TitleBlock"]
 layout_mode = 2
 theme_type_variation = &"H2"
-text = "Map editor"
+text = "Set up tokens"
 
 [node name="LevelTitleCaption" type="Label" parent="MainContainer/VBox/Header/TitleBlock"]
 unique_name_in_owner = true

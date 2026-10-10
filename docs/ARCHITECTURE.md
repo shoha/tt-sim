@@ -328,7 +328,7 @@ the game camera. Design: `docs/superpowers/specs/2026-09-26-in-game-map-authorin
 
 **Entry.** `Root.request_authoring(level, return_to)` is the one door, refused with a
 toast while hosting or joined (`Root.authoring_refusal()`, pure) and for built-in `res://`
-maps. Three callers: the title's **Build Map** (`TitleScreen.build_map_requested`, a new
+maps. Three callers: the title's **New map** (`TitleScreen.build_map_requested`, a new
 level), a level card's **Edit map** (`LevelCard.ACTION_EDIT_MAP` ->
 `LevelGrid.level_map_edit_requested` -> `TitleScreen.edit_map_requested`), and the Level
 Editor's **Build map in game** (`LevelEditor.build_map_requested` ->
@@ -632,7 +632,7 @@ stays open. Autosave every 30 s while dirty to `user://levels/_autosave/map.ttma
 never lists `_autosave`).
 
 **Leave.** The rail's leave item, or Escape with the drawer closed, calls
-`request_leave()`: at once when clean, else `UIManager.show_choice()` with Keep editing /
+`request_leave()`: at once when clean, else `UIManager.show_choice()` with Cancel /
 Discard / Save and leave. `exit_requested(level)` makes Root change to TITLE_SCREEN (whose
 grid is rebuilt, so the saved card and thumbnail show) and, when the request came from the
 Level Editor, reopen the editor on the saved level (`open_level_editor_with_level`).

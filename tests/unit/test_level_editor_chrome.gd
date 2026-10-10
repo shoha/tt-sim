@@ -3,7 +3,8 @@ extends GutTest
 ## Level editor chrome: exactly one default-variant Button in the header
 ## (Play), every other header Button is Secondary or IconButton, no Button
 ## anywhere in the scene uses Success/Danger/Warning, the placement footer
-## is end-aligned, and the title reads "Map editor" (W5: a level is a map to the player).
+## is end-aligned, and the title reads "Set up tokens", the name the title screen, a card's
+## menu and the pause menu open it by (W5: a level is a map to the player).
 
 const SCENE := preload("res://scenes/level_editor/level_editor.tscn")
 
@@ -65,10 +66,10 @@ func test_placement_footer_is_end_aligned() -> void:
 	assert_eq(buttons_row.alignment, BoxContainer.ALIGNMENT_END)
 
 
-func test_title_reads_map_editor() -> void:
+func test_title_reads_set_up_tokens() -> void:
 	var editor := _editor()
 	var title: Label = editor.get_node("MainContainer/VBox/Header/TitleBlock/Title")
-	assert_eq(title.text, "Map editor")
+	assert_eq(title.text, TitleScreen.SET_UP_TOKENS)
 
 
 func test_header_caption_follows_the_level_name_while_typing() -> void:

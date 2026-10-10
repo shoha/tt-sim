@@ -441,7 +441,7 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (the input hint bar). `probes/ui_primitives.gd report` logs the underline against the
   selected item's centre, the chevron's rect against its title and the hint bar's rect
   against the window. The job deletes `_u1_ui_hud` at the end (`cleanup`).
-- `jobs/ui_tour.json`: the UI tour (94 captures; about 210 s at half size and 215 s with
+- `jobs/ui_tour.json`: the UI tour (96 captures; about 210 s at half size and 215 s with
   `--full`, timed on `--only` runs, which still run every step but the skipped captures),
   the capture set the `tt-sim-ui-critic` agent judges (`docs/UI_TASTE.md`). It saves a new
   100 ft temperate forest map as `_ui_tour_room` (shown as Mossy Hollow) with a real
@@ -466,10 +466,14 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   drawer on Biome and focus on its picked tile (the probe lets a drawer tile take focus),
   then the real map load of the test map caught about 0.4 s after Play (`map_load_real`), and
   in play the same staged map load over the live table (`map_load_table`), the Visuals drawer
-  on Sun, focus on a quiet glass button, the pause menu, the
+  on Sun and the same with an unsaved change (`play_drawer_unsaved`: the time of day moved
+  45 minutes, the lake dot, the Sun rail item's tooltip shown by a synthetic pointer event,
+  Save look; the probe then presses Cancel), focus on a quiet glass button, the pause menu, the
   pause menu as the host sees it (`pause_host`: the host-only Return everyone to the room row,
-  shown on a solo pause) and the confirmation that row asks (`return_room_confirm`), the
-  pause menu's Return to title danger confirmation with Cancel focused (`danger`), one toast
+  shown on a solo pause) and the confirmation that row asks (`return_room_confirm`, nothing
+  unsaved), the pause menu's Return to title danger confirmation with an unsaved token move
+  staged, Save first and Cancel focused (`danger`; both confirmations stand on the pause
+  menu's scrim in place of its sheet), one toast
   of each kind, the toast a removed token shows with its Undo (`undo_toast`), the Add token
   browser and the avatar builder, and at dusk (19:00 through the Sun pane) the Visuals
   drawer, the browser and the pause menu again. Then the Interface size passes

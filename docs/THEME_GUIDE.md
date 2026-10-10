@@ -216,7 +216,7 @@ window's `content_scale_factor` instead, so the virtual canvas shrinks and the U
   over the board (measure labels, gizmo handles, brush outlines) are UI and follow the factor.
 - **Where it lives:** Settings > Graphics, the Interface Size row (saves and applies the moment
   it is picked; Reset puts Auto back). Its choices read "Auto (recommended)" and bare percents,
-  with only the one Auto picks on this window marked ("140% (Auto's size here)" at 720p), so a
+  with only the one Auto picks on this window marked ("140% (Auto on this screen)" at 720p), so a
   bare "100%" does not read as the normal size (it draws 9 px captions at 720p) without five
   rows of "(smaller than Auto)"; the labels refill when the window resizes. Saved per user in the settings file's `[ui]` section as
   `interface_size` (0 for Auto, else the percent; `UiPreferences`), never networked.

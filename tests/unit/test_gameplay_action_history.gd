@@ -215,7 +215,7 @@ func test_undo_rename_uses_the_rename_callable() -> void:
 func test_rename_description_names_both_names() -> void:
 	_history.record_property_change(TEST_TOKEN_ID, "token_name", "Old", "New")
 	var desc := _history.undo()
-	assert_eq(desc, 'renamed "Old" to "New"')
+	assert_eq(desc, "renamed “Old” to “New”")
 
 
 func test_undo_spawn_uses_the_remove_callable() -> void:
@@ -234,10 +234,10 @@ func test_undo_spawn_uses_the_remove_callable() -> void:
 
 	assert_eq(removed.size(), 1, "Undoing a spawn should remove the spawned token")
 	assert_eq(removed[0], fake)
-	assert_eq(desc, 'duplicated "Goblin Copy"')
+	assert_eq(desc, "duplicated “Goblin Copy”")
 
 
 func test_undo_spawn_without_a_remove_callable_is_a_no_op() -> void:
 	_history.record_token_spawn(TEST_TOKEN_ID, "Goblin Copy")
-	assert_eq(_history.undo(), 'duplicated "Goblin Copy"')
+	assert_eq(_history.undo(), "duplicated “Goblin Copy”")
 	assert_false(_history.can_undo())

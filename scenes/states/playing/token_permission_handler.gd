@@ -84,8 +84,8 @@ func _on_token_permission_requested(network_id: String, peer_id: int, permission
 
 	# Show confirmation dialog to DM
 	var dialog = UIManager.show_confirmation(
-		"Token Control Request",
-		'%s wants to control "%s".\n\nPermission: %s' % [player_name, token_name, permission_name],
+		"Token control request",
+		"%s wants to control “%s”.\n\nPermission: %s" % [player_name, token_name, permission_name],
 		"Approve",
 		"Deny",
 		func(): _approve_permission_request(network_id, peer_id, permission_type, request_key),
@@ -130,7 +130,7 @@ func _approve_permission_request(
 	var token_name = token_state.token_name if token_state else "token"
 	var players = NetworkManager.get_players()
 	var player_name = players[peer_id].get("name", "Player") if players.has(peer_id) else "Player"
-	UIManager.show_success('%s can now control "%s"' % [player_name, token_name])
+	UIManager.show_success("%s can now control “%s”" % [player_name, token_name])
 
 
 ## Host-side: deny a permission request.
@@ -156,9 +156,9 @@ func _on_permission_response_received(
 	var token_name = token_state.token_name if token_state else "token"
 
 	if approved:
-		UIManager.show_success('Control granted for "%s"!' % token_name)
+		UIManager.show_success("You can now control “%s”" % token_name)
 	else:
-		UIManager.show_warning('Control request for "%s" was denied' % token_name)
+		UIManager.show_warning("The GM said no to controlling “%s”" % token_name)
 
 
 ## Client-side: handle full permission sync from host.

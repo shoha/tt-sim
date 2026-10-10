@@ -14,7 +14,7 @@ const DAMAGED := "%s could not be opened: its save file is damaged. Choose anoth
 
 ## The error for the map at `path`, named `map_name` (empty: "That map").
 static func text(path: String, map_name: String = "") -> String:
-	var subject := '"%s"' % map_name if not map_name.is_empty() else "That map"
+	var subject := "“%s”" % map_name if not map_name.is_empty() else "That map"
 	return (DAMAGED if exists(path) else GONE) % subject
 
 
