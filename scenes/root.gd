@@ -6,17 +6,30 @@ extends Node3D
 ## - change_state(): Replaces entire stack with a new base state
 ## - push_state(): Adds overlay state on top of current state
 ## - pop_state(): Removes top overlay state, returning to previous
+##
+## A hosted session is a room first (NetworkManager.session, SessionChannel): a room of
+## people that can exist with no map, where the GM sets maps out and everyone returns
+## between them, on one connection throughout. Entering ROOM never connects; the action that
+## leads there does:
+## - TITLE > ROOM: Host (host_session(): ROOM once hosting), or Join (the join screen over
+##   the title: ROOM on room_opened, or PLAYING on game_starting when a table is out).
+## - ROOM > PLAYING: Set out (_on_lobby_start_game(): refused with no map).
+## - PLAYING > ROOM: return_to_room() (host: the table is torn down, the room opens for all).
+## - PLAYING > PLAYING: a map change in play (_on_play_level_requested()).
+## - ROOM or PLAYING > TITLE: leave, or the host ends the session.
 
 signal state_changed(old_state: State, new_state: State)
 
+## The values are fixed: UIManager.ROOT_STATE_*, the validation bridge's state names and the
+## net scenarios use the numbers.
 enum State {
-	TITLE_SCREEN,
-	LOBBY_HOST,  ## Hosting a game, waiting for players
-	LOBBY_CLIENT,  ## Joined a game, waiting for host to start
-	PLAYING,
-	PAUSED,
-	AUTHORING,  ## Building or dressing a map in the game view (offline only)
-	WARMING_UP,  ## First-launch graphics warm-up before the title screen (GraphicsWarmup)
+	TITLE_SCREEN = 0,
+	ROOM = 1,  ## A hosted session between maps: everyone connected, no table out
+	# 2 was LOBBY_CLIENT; ROOM replaced both lobby states on 2026-10-09.
+	PLAYING = 3,
+	PAUSED = 4,
+	AUTHORING = 5,  ## Building or dressing a map in the game view (offline only)
+	WARMING_UP = 6,  ## First-launch graphics warm-up before the title screen (GraphicsWarmup)
 }
 
 const TITLE_SCREEN_SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
@@ -39,8 +52,13 @@ var _title_screen: CanvasLayer = null
 var _app_menu: CanvasLayer = null
 var _game_map: GameMap = null
 var _pause_overlay: CanvasLayer = null
-var _lobby_host: CanvasLayer = null
-var _lobby_client: CanvasLayer = null
+## The room's view (the lobby screens until the RoomPanel replaces them)
+var _lobby_host: LobbyHost = null
+var _lobby_client: LobbyClient = null
+## The join screen over the title, until the host places this client in the room or a table
+var _join_screen: LobbyClient = null
+## True from host_session() until hosting starts (ROOM) or fails (back to the title)
+var _hosting_requested := false
 var _level_play_controller: LevelPlayController = null
 var _pending_level_data: LevelData = null
 var _loading_overlay: LoadingOverlay = null
@@ -78,7 +96,10 @@ func _ready() -> void:
 
 	# Connect network signals (for handling disconnects and player events while in-game)
 	NetworkManager.connection_state_changed.connect(_on_network_state_changed)
+	NetworkManager.connection_failed.connect(_on_network_connection_failed)
 	NetworkManager.player_left.connect(_on_network_player_left)
+	NetworkManager.game_starting.connect(_on_network_game_starting)
+	NetworkManager.session.room_opened.connect(_on_session_room_opened)
 
 	# Connect EventBus signals — allows UIManager and other systems to request
 	# state changes without importing this script.
@@ -164,6 +185,12 @@ func _on_open_editor_requested(level_path: String = "") -> void:
 
 
 func _on_play_level_requested(level_data: LevelData) -> void:
+	# In the room a map only goes out through Set out, so the clients follow it.
+	if get_current_state() == State.ROOM and NetworkManager.is_host():
+		_pending_level_data = level_data
+		_on_lobby_start_game()
+		return
+
 	# If already in PLAYING state, reload the level directly
 	if get_current_state() == State.PLAYING and _level_play_controller:
 		# Set pending data to prevent level_cleared from triggering title screen
@@ -264,10 +291,8 @@ func _enter_state(state: State) -> void:
 				title_app_ctrl.hide_editor_button()
 			if _take_startup_update_check():
 				_check_for_updates_on_startup()
-		State.LOBBY_HOST:
-			_enter_lobby_host_state()
-		State.LOBBY_CLIENT:
-			_enter_lobby_client_state()
+		State.ROOM:
+			_enter_room_state()
 		State.PLAYING:
 			_enter_playing_state()
 		State.PAUSED:
@@ -329,10 +354,9 @@ func _exit_state(state: State) -> void:
 			if _title_screen:
 				_title_screen.queue_free()
 				_title_screen = null
-		State.LOBBY_HOST:
-			_exit_lobby_host_state()
-		State.LOBBY_CLIENT:
-			_exit_lobby_client_state()
+			_close_join_screen()
+		State.ROOM:
+			_exit_room_state()
 		State.PLAYING:
 			_exit_playing_state()
 		State.PAUSED:
@@ -379,59 +403,80 @@ func _exit_playing_state() -> void:
 		_game_map = null
 
 
-func _enter_lobby_host_state() -> void:
-	_lobby_host = LOBBY_HOST_SCENE.instantiate()
-	add_child(_lobby_host)
-
-	# Connect lobby signals
-	if _lobby_host.has_signal("start_game_requested"):
+## The room's view until the RoomPanel replaces it: the host's lobby screen (room code,
+## players, the map to set out next) or the client's, open on its waiting view. Entering
+## never connects; hosting or joining has already happened.
+func _enter_room_state() -> void:
+	_end_room_wait()
+	if NetworkManager.is_host():
+		_lobby_host = LOBBY_HOST_SCENE.instantiate() as LobbyHost
 		_lobby_host.start_game_requested.connect(_on_lobby_start_game)
-	if _lobby_host.has_signal("cancel_requested"):
 		_lobby_host.cancel_requested.connect(_on_lobby_cancel)
-	if _lobby_host.has_signal("level_change_requested"):
 		_lobby_host.level_change_requested.connect(_on_lobby_level_change_requested)
-	if _pending_level_data and _lobby_host.has_method("set_level"):
-		_lobby_host.set_level(_pending_level_data)
+		add_child(_lobby_host)
+		if _pending_level_data:
+			_lobby_host.set_level(_pending_level_data)
+	else:
+		_lobby_client = LOBBY_CLIENT_SCENE.instantiate() as LobbyClient
+		_lobby_client.leave_requested.connect(_on_lobby_cancel)
+		add_child(_lobby_client)
 
 
-func _exit_lobby_host_state() -> void:
+func _exit_room_state() -> void:
 	if _lobby_host:
 		_lobby_host.queue_free()
 		_lobby_host = null
-
-
-func _enter_lobby_client_state() -> void:
-	_lobby_client = LOBBY_CLIENT_SCENE.instantiate()
-	add_child(_lobby_client)
-
-	# Connect lobby signals
-	if _lobby_client.has_signal("leave_requested"):
-		_lobby_client.leave_requested.connect(_on_lobby_cancel)
-
-	# Listen for game starting from host
-	if not NetworkManager.game_starting.is_connected(_on_network_game_starting):
-		NetworkManager.game_starting.connect(_on_network_game_starting)
-
-
-func _exit_lobby_client_state() -> void:
 	if _lobby_client:
 		_lobby_client.queue_free()
 		_lobby_client = null
 
-	# Disconnect network signals
-	if NetworkManager.game_starting.is_connected(_on_network_game_starting):
-		NetworkManager.game_starting.disconnect(_on_network_game_starting)
 
-
-## The title hands over the level the host picked; it becomes the pending level
-## the playing state loads and broadcasts when the host presses Start.
+## The title hands over the level the host picked; it becomes the pending level, set out
+## when the host presses Start in the room.
 func _on_host_game_requested(level_info: Dictionary) -> void:
 	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
 	if level == null:
 		UIManager.show_error("Could not load that level")
 		return
+	host_session(level)
+
+
+## TITLE > ROOM for the host: start hosting with `level` (null: none chosen yet) as the map
+## to set out first. Root enters ROOM once NetworkManager is HOSTING, or stays on the title
+## with the reason when hosting fails (_on_network_connection_failed).
+func host_session(level: LevelData) -> void:
+	if NetworkManager.connection_state != NetworkManager.ConnectionState.OFFLINE:
+		return
 	_pending_level_data = level
-	change_state(State.LOBBY_HOST)
+	_hosting_requested = true
+	if _loading_overlay:
+		_loading_overlay.show_indeterminate("Opening a room...")
+	NetworkManager.host_game()
+
+
+## Hide the "Opening a room..." wait (and any level loading a client had under way when the
+## room opened), giving the overlay its progress bar back for the next level load.
+func _end_room_wait() -> void:
+	if _loading_overlay and _loading_overlay.visible:
+		_loading_overlay.hide_loading()
+		_loading_overlay.show_progress_bar()
+
+
+## PLAYING > ROOM (host): put the table away for everyone. The connection, the players and
+## the Steam lobby stay; GameMap is torn down as on any move, and every client is sent to
+## the room (SessionChannel.open). The next map is chosen in the room.
+func return_to_room() -> void:
+	if not NetworkManager.is_host() or State.PLAYING not in _state_stack:
+		return
+	_pending_level_data = null
+	NetworkManager.session.open()
+	change_state(State.ROOM)
+
+
+## Client: the host opened the room, from the table or as this client joined it.
+func _on_session_room_opened() -> void:
+	if NetworkManager.is_client() and get_current_state() != State.ROOM:
+		change_state(State.ROOM)
 
 
 func _on_play_solo_requested(level_info: Dictionary) -> void:
@@ -548,22 +593,50 @@ func _on_authoring_exit_requested(level: LevelData) -> void:
 		app_ctrl.open_level_editor_with_level(level)
 
 
+## Title > Join: the join screen opens over the hidden title, and its Connect joins. Root
+## moves on when the host places this client: ROOM on room_opened, or PLAYING on
+## game_starting when a table is out. A client the host rejects stays here with the reason.
 func _on_join_game_requested() -> void:
-	# Transition to client lobby
-	change_state(State.LOBBY_CLIENT)
+	if is_instance_valid(_join_screen):
+		return
+	_join_screen = LOBBY_CLIENT_SCENE.instantiate() as LobbyClient
+	_join_screen.leave_requested.connect(_on_join_screen_left)
+	add_child(_join_screen)
+	if _title_screen:
+		_title_screen.hide()
 
 
+## The join screen's Back or Leave: drop any connection under way and show the title again.
+func _on_join_screen_left() -> void:
+	_close_join_screen()
+	if _title_screen:
+		_title_screen.show()
+	NetworkManager.disconnect_game()
+
+
+func _close_join_screen() -> void:
+	if is_instance_valid(_join_screen):
+		_join_screen.queue_free()
+	_join_screen = null
+
+
+## ROOM > PLAYING (host): set the pending map out. Refused with no map, which used to enter
+## an empty PLAYING where clients waited for a level that never came.
 func _on_lobby_start_game() -> void:
-	# Host is starting the game - notify clients and transition
+	if _pending_level_data == null:
+		UIManager.show_warning("Choose a map to set out first")
+		return
+	NetworkManager.session.close()
 	NetworkManager.notify_game_starting()
 	change_state(State.PLAYING)
 
 
+## ROOM > TITLE: a client leaves the session, the host ends it for everyone. The title
+## comes first, so the disconnect that follows is not read as a lost connection.
 func _on_lobby_cancel() -> void:
-	# Cancel/leave lobby - disconnect and return to title
-	NetworkManager.disconnect_game()
 	_pending_level_data = null
 	change_state(State.TITLE_SCREEN)
+	NetworkManager.disconnect_game()
 
 
 func _on_lobby_level_change_requested(level_info: Dictionary) -> void:
@@ -572,31 +645,50 @@ func _on_lobby_level_change_requested(level_info: Dictionary) -> void:
 		UIManager.show_error("Could not load that level")
 		return
 	_pending_level_data = level
-	if _lobby_host and _lobby_host.has_method("set_level"):
+	if _lobby_host:
 		_lobby_host.set_level(level)
 
 
+## Client: the host set a map out from the room, or this client joined while one is out.
 func _on_network_game_starting() -> void:
-	# Client received game starting signal from host
-	change_state(State.PLAYING)
+	if NetworkManager.is_client() and State.PLAYING not in _state_stack:
+		change_state(State.PLAYING)
 
 
 func _on_network_state_changed(
 	old_state: NetworkManager.ConnectionState, new_state: NetworkManager.ConnectionState
 ) -> void:
-	# Handle disconnect while in PLAYING state.
+	# Hosting started from the title: the session opens in the room.
+	if new_state == NetworkManager.ConnectionState.HOSTING and _hosting_requested:
+		_hosting_requested = false
+		change_state(State.ROOM)
+		return
+	# Handle a disconnect at a table or in the room.
 	# PAUSED is pushed on top of PLAYING (not swapped), so check the whole
 	# stack rather than just the top — otherwise pausing hides this branch.
-	if new_state == NetworkManager.ConnectionState.OFFLINE and State.PLAYING in _state_stack:
+	if new_state != NetworkManager.ConnectionState.OFFLINE:
+		return
+	if State.PLAYING in _state_stack or State.ROOM in _state_stack:
 		_hide_disconnect_indicator()
 		# Show disconnect dialog if we were in any networked state.
-		# Exclude OFFLINE→OFFLINE (redundant) and HOSTING (host disconnects via
-		# pause menu, which handles its own transition to title screen).
+		# Exclude OFFLINE→OFFLINE (redundant) and HOSTING (the host only goes offline by
+		# leaving, and every leave path changes to the title first).
 		if (
 			old_state != NetworkManager.ConnectionState.OFFLINE
 			and old_state != NetworkManager.ConnectionState.HOSTING
 		):
 			_show_disconnect_dialog()
+
+
+## Hosting from the title failed (Steam not running, no lobby): the title stays, with the
+## reason.
+func _on_network_connection_failed(reason: String) -> void:
+	if not _hosting_requested:
+		return
+	_hosting_requested = false
+	_pending_level_data = null
+	_end_room_wait()
+	UIManager.show_error(reason)
 
 
 func _on_network_player_left(_peer_id: int, player_info: Dictionary) -> void:
@@ -693,6 +785,8 @@ func _enter_paused_state() -> void:
 		_pause_overlay.main_menu_requested.connect(_on_pause_main_menu_requested)
 	if _pause_overlay.has_signal("change_level_requested"):
 		_pause_overlay.change_level_requested.connect(_on_pause_change_level_requested)
+	if _pause_overlay.has_signal("room_requested"):
+		_pause_overlay.room_requested.connect(return_to_room)
 
 
 func _on_pause_resume_requested() -> void:
@@ -719,13 +813,16 @@ func request_level_change(level_info: Dictionary) -> void:
 	_on_play_level_requested(level)
 
 
+## PLAYING > TITLE: leave the table (a client leaves the session, the host ends it). The
+## title comes first, so a client's own disconnect is not read as a lost connection (it
+## used to leave a "connection to the host was lost" dialog over the title).
 func _on_pause_main_menu_requested() -> void:
-	# First unpause (if paused), then return to title
-	if not NetworkManager.is_networked():
+	var networked := NetworkManager.is_networked()
+	if not networked:
 		get_tree().paused = false
-	else:
-		NetworkManager.disconnect_game()
 	change_state(State.TITLE_SCREEN)
+	if networked:
+		NetworkManager.disconnect_game()
 
 
 func _exit_paused_state() -> void:

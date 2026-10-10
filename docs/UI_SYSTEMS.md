@@ -74,12 +74,19 @@ The application uses a **state stack** managed by the `Root` node.
 
 | State          | Description                              |
 | -------------- | ---------------------------------------- |
-| `TITLE_SCREEN` | Main menu, level selection               |
-| `LOBBY_HOST`   | Hosting a game, waiting for players      |
-| `LOBBY_CLIENT` | Joined a game, waiting for host to start |
+| `TITLE_SCREEN` | Main menu, level selection; the join screen opens over it |
+| `ROOM`         | A hosted session between maps: everyone connected, no table out (host or client view); see [NETWORKING.md](NETWORKING.md#sessions-the-room-and-the-table) |
 | `PLAYING`      | Active gameplay with GameMap loaded      |
 | `PAUSED`       | Game paused, pause menu visible          |
 | `AUTHORING`    | Building or dressing a map in the game view (offline only); see [Authoring Mode](#authoring-mode) |
+| `WARMING_UP`   | First-launch graphics warm-up before the title screen |
+
+The values are fixed (`TITLE_SCREEN` 0, `ROOM` 1, `PLAYING` 3, `PAUSED` 4, `AUTHORING` 5,
+`WARMING_UP` 6; 2 is retired) because `UIManager`, the validation bridge and the net scenarios
+use the numbers. `ROOM` replaced `LOBBY_HOST` and `LOBBY_CLIENT` on 2026-10-09. Entering it
+never connects: Host starts hosting from the title and Root enters `ROOM` once hosting; Join
+opens the join screen over the title and Root enters `ROOM` (or `PLAYING`, when a table is out)
+when the host places the client.
 
 ### State Transitions
 
@@ -469,7 +476,10 @@ Saved levels are three primitives under `scenes/ui/primitives/`:
 ### Lobby
 
 `LobbyHost` and `LobbyClient` (`scenes/states/lobby/lobby_host.gd` /
-`scenes/states/lobby/lobby_client.gd`) both extend `AnimatedCanvasLayerPanel` with
+`scenes/states/lobby/lobby_client.gd`) are the room's two views (`Root.State.ROOM`) until the
+RoomPanel replaces them, and `LobbyClient` is also the join screen over the title. Neither
+connects: `LobbyHost` opens on a session already hosted and shows its code, and `LobbyClient`
+opens on its waiting view when the connection exists. Both extend `AnimatedCanvasLayerPanel` with
 `play_sounds = false` and a no-op `_on_after_animate_out()` -- `Root` frees them directly on state
 exit, so a stray `animate_out()` must never free the lobby a second time.
 
@@ -486,10 +496,14 @@ fields, a full-width Connect button, and a footer button that reads "Back" while
 "Leave" once a connection attempt is under way or connected (`_set_footer_action()`) -- the same
 button, renamed with the situation.
 
-Both screens guard their network calls for tests: `LobbyHost.start_hosting` (default `true`) gates
-`NetworkManager.host_game()` and its signal connections, and `LobbyClient.connect_network` (default
-`true`) gates the equivalent client-side connections. Tests set these `false` before adding the
-screen to the tree so headless runs never reach the network layer.
+Both screens guard their network calls for tests: `LobbyHost.connect_network` and
+`LobbyClient.connect_network` (default `true`) gate their `NetworkManager` signal connections and
+session reads. Tests set these `false` before adding the screen to the tree so headless runs
+never reach the network layer.
+
+The pause menu offers the host one quiet extra row, **Return everyone to the room** (`users`
+icon, Secondary, `ui_silent`, visible only while hosting); its confirmation emits
+`room_requested`, which `Root.return_to_room()` answers.
 
 ---
 

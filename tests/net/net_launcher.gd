@@ -21,7 +21,8 @@ extends Node
 ##
 ## Before the peers start it records the modification time of every file in the shipped
 ## stores (Paths.store_paths("user://")); any file added, removed or changed there by the end
-## fails the run. Peers still running GRACE_S after the scenario timeout are killed. Every
+## fails the run. Peers still running GRACE_S after the scenario timeout are killed, and all of
+## them at once when a peer has not opened its scenario log STARTUP_S after the start. Every
 ## test root of the run, the launcher's own included, is deleted at the end, pass or fail.
 
 const SCENARIO_DIR := "res://tests/net/"
@@ -32,6 +33,10 @@ const DEFAULT_TIMEOUT_S := 180
 const DEFAULT_PORT := 28471
 ## Time the peers get past the scenario timeout to write their result and quit
 const GRACE_S := 30.0
+## Time a peer gets to open its scenario log. A scenario script that fails to parse leaves a
+## bare scene that never quits, so a peer still without a log by then fails the run at once
+## (its <role>.godot.log holds the parse error) instead of burning CPU until the timeout.
+const STARTUP_S := 60.0
 const POLL_S := 0.25
 ## Gap between starting the host and each client, so the host's port is open first
 const CLIENT_START_DELAY_S := 0.5
@@ -134,19 +139,33 @@ func _start_peer(scene: String, peer: Dictionary, common: Array) -> int:
 	return OS.create_process(OS.get_executable_path(), args)
 
 
-## Wait until every started peer has exited or `limit_s` has passed, then kill the rest.
+## Wait until every started peer has exited or `limit_s` has passed, then kill the rest. A
+## peer that has not opened its scenario log STARTUP_S after the start ends the wait early.
 func _wait_for(peers: Array[Dictionary], limit_s: float) -> void:
-	var deadline_ms := Time.get_ticks_msec() + int(limit_s * 1000.0)
+	var start_ms := Time.get_ticks_msec()
+	var deadline_ms := start_ms + int(limit_s * 1000.0)
 	while Time.get_ticks_msec() < deadline_ms:
 		var running := peers.filter(func(p: Dictionary) -> bool: return _running(p))
 		if running.is_empty():
 			return
+		if Time.get_ticks_msec() - start_ms > int(STARTUP_S * 1000.0):
+			var silent := running.filter(
+				func(p: Dictionary) -> bool: return not FileAccess.file_exists(str(p.out))
+			)
+			if not silent.is_empty():
+				_report["reason"] = (
+					"%s never started its scenario in %d s; see its .godot.log"
+					% [silent[0].role, int(STARTUP_S)]
+				)
+				print("net_launcher: " + str(_report.reason))
+				break
 		await get_tree().create_timer(POLL_S).timeout
+	var waited_s := (Time.get_ticks_msec() - start_ms) / 1000.0
 	for peer in peers:
 		if _running(peer):
 			OS.kill(int(peer.pid))
 			peer["killed"] = true
-			print("net_launcher: killed %s (pid %d) after %.0f s" % [peer.role, peer.pid, limit_s])
+			print("net_launcher: killed %s (pid %d) after %.0f s" % [peer.role, peer.pid, waited_s])
 
 
 func _running(peer: Dictionary) -> bool:

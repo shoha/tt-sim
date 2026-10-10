@@ -13,6 +13,7 @@ func test_boot_goes_through_the_warm_up_only_when_needed() -> void:
 
 func test_warming_up_is_appended_so_existing_state_numbers_hold() -> void:
 	assert_eq(RootScript.State.TITLE_SCREEN, 0)
+	assert_eq(RootScript.State.ROOM, 1, "the validation bridge's state names")
 	assert_eq(RootScript.State.PLAYING, 3, "UIManager.ROOT_STATE_PLAYING")
 	assert_eq(RootScript.State.PAUSED, 4, "UIManager.ROOT_STATE_PAUSED")
 	assert_eq(RootScript.State.AUTHORING, 5)

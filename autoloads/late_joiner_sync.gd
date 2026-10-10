@@ -1,8 +1,10 @@
 class_name LateJoinerSync
 
-## Host side of a late joiner's sync: move the peer into PLAYING, send it the level, and
-## hold its full table state (tokens, avatars, permissions, drag locks) until the peer
-## reports its table loaded.
+## Host side of a late joiner's sync at a table: move the peer into PLAYING, send it the
+## level, and hold its full table state (tokens, avatars, permissions, drag locks) until the
+## peer reports its table loaded. SessionChannel.admit_peer() calls sync_peer() for a peer
+## that joins while a map is out; a peer joining while the room is open gets room_opened
+## instead and never comes here.
 ##
 ## The hold is what keeps the state. A client's LevelPlayLoader yields three frames and
 ## then clear_level() resets GameState, so a state that lands inside that yield is wiped.

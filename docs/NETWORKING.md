@@ -9,6 +9,7 @@ This document covers the multiplayer networking system, including connection man
 - [Connection Flow](#connection-flow)
 - [State Synchronization](#state-synchronization)
 - [Player Roles](#player-roles)
+- [Sessions: the room and the table](#sessions-the-room-and-the-table)
 - [Late Joiner Support](#late-joiner-support)
 - [Level Map Files](#level-map-files)
 - [Token Synchronization](#token-synchronization)
@@ -35,13 +36,14 @@ The networking system uses a **host-authoritative architecture** where one playe
 | `NetworkStateSync` | State broadcasting, rate limiting, batching        |
 | `GameState`        | Authoritative game state storage                   |
 
-`NetworkManager` creates two child nodes in its `_ready` that carry the rest of the RPCs. They
+`NetworkManager` creates three child nodes in its `_ready` that carry the rest of the RPCs. They
 are not autoloads; reach them through the manager:
 
 | Child (node path) | Class | Carries |
 | ----------------- | ----- | ------- |
 | `NetworkManager.game_sync` (`/root/NetworkManager/GameSync`) | `NetworkGameSync` (`autoloads/network_game_sync.gd`) | Table play: token transforms, state and removal, drag locks, live visual settings (see [NetworkGameSync](#networkgamesync)) |
 | `NetworkManager.permissions` (`/root/NetworkManager/Permissions`) | `NetworkPermissions` (`autoloads/network_permissions.gd`) | Token permission requests, responses and broadcasts; avatar recipe edits |
+| `NetworkManager.session` (`/root/NetworkManager/Session`) | `SessionChannel` (`autoloads/session_channel.gd`) | The session: the room, the shelf of maps, the table pointer, players by Steam id, and where a joiner lands (see [Sessions](#sessions-the-room-and-the-table)) |
 
 Callers send through each node's typed `send_*` / `broadcast_*` methods and listen to its
 signals; nothing outside a node calls its `_rpc_*` methods.
@@ -177,10 +179,11 @@ version"; a client from before the gate sends no version and the host rejects it
 
 On `_rpc_version_rejected` the client leaves on its own (deferred `_handle_connection_error`)
 with the version message, before the host's delayed disconnect lands, so the player sees the
-version reason and not "Host disconnected". The host defers a late joiner's
-`LateJoinerSync.sync_peer()` until the player info passes the gate, so a rejected client is never
-pushed into `PLAYING` and the message appears on the join screen, where `LobbyClient` keeps
-the `connection_failed` reason on screen through the following `OFFLINE` state change.
+version reason and not "Host disconnected". The host admits a joiner to the session
+(`SessionChannel.admit_peer()`: the room, or `LateJoinerSync.sync_peer()` at a table) only once
+its player info passes the gate, so a rejected client is never moved into the room or `PLAYING`
+and the message appears on the join screen, where `LobbyClient` keeps the `connection_failed`
+reason on screen through the following `OFFLINE` state change.
 
 ### Disconnecting
 
@@ -288,9 +291,64 @@ var players = NetworkManager.get_players()
 
 ---
 
+## Sessions: the room and the table
+
+A hosted session is a room of people that can exist with no map (Room first, user decision
+2026-10-09). It begins when hosting starts and ends when the host leaves; the GM sets maps out
+from a shelf, and leaving a map returns everyone to the room. Nobody reconnects in between: the
+Steam lobby, the multiplayer peer, the room code and every client's peer id outlive every map.
+`SessionChannel` (`NetworkManager.session`) holds it; `Root.State.ROOM` is its screen (the lobby
+screens until the RoomPanel replaces them).
+
+**Phases.** The host's session is in the room (`is_open()`, no table) or at a table (one map
+out). Hosting starts in the room (`SessionChannel` begins on `HOSTING`). `open()` (host) clears
+the late-joiner level snapshot (`clear_level_data()`: nothing is served, `is_game_in_progress()`
+is false) and sends every client `_rpc_room_opened`; `close()` comes just before
+`notify_game_starting()`, and the level broadcast that follows sets the table pointer.
+
+**Shelf and table pointer.** `broadcast_level_data()` calls `note_table_out()` with the payload
+(map hashes added), so every map that goes out, from the room or by a map change in play, lands
+on the shelf: a MapRef `{"folder", "map_path", "hashes"}` keyed by `ref_key()`, the level folder
+or, for a level without one, its res:// map path. Setting a shelved map out again refreshes its
+hashes. `get_table()` is that key, `""` in the room. Only the host changes any of it; it sends
+clients a summary (`_rpc_session_summary`, sanitized on arrival by `sanitize_summary()`: known
+keys, typed values, bounded sizes) after every change, so clients read the same getters and
+`session_changed` fires on every peer.
+
+**Players by Steam id.** `get_players()` is session id -> `{"name", "peer_id"}`. The session id
+is the Steam id as a decimal string (`SteamMultiplayerPeer.get_steam_id_for_peer_id`, and
+`Steam.getSteamID()` for the host itself), or `"enet-<peer id>"` on a transport without Steam
+ids (the ENet scenarios, GUT). A player who leaves keeps its entry with `peer_id` 0, so later
+work (the party, grants) can map a Steam id to whatever peer id it has now (`peer_for()`,
+`session_id_of()`). The Steam path is not verified yet: real Steam could not run on 2026-10-09.
+
+**Where a joiner lands.** `NetworkManager._rpc_send_player_info()` calls `admit_peer()` once for
+each new peer that passed the version gate. In the room the joiner gets `_rpc_room_opened` and
+Root enters `ROOM`; at a table it gets `LateJoinerSync.sync_peer()` (game_starting, the level,
+then the state after its table-loaded report, below). Only a peer that is still connected is
+sent anything.
+
+**Root's transitions** (`scenes/root.gd`; entering ROOM never connects, the action that leads
+there does):
+
+| From > to | Action | What happens |
+|-----------|--------|--------------|
+| TITLE > ROOM (host) | Host with a map: `host_session(level)` | `host_game()` with an "Opening a room..." wait; ROOM on `HOSTING`; on `connection_failed` the title stays, with the reason |
+| TITLE > ROOM or PLAYING (client) | Join: the join screen (`LobbyClient`) over the hidden title | Connect joins; ROOM on `room_opened`, PLAYING on `game_starting` when a table is out; a rejected client stays on the join screen |
+| ROOM > PLAYING | Start (Set out): `_on_lobby_start_game()` | Refused with "Choose a map to set out first" when no map is pending; else `close()`, `notify_game_starting()`, PLAYING broadcasts the level |
+| PLAYING > ROOM | Pause > Return everyone to the room (host): `return_to_room()` | `open()`, then the table (GameMap, tokens, GameState) is torn down on every peer |
+| PLAYING > PLAYING | Change Level in play | The level broadcast moves the table pointer |
+| ROOM or PLAYING > TITLE | Leave, Cancel, Return to Title | Title first, then `disconnect_game()`, so a voluntary leave is not read as a lost connection; the host leaving ends the session |
+
+A client that loses the host in the room gets the same "Disconnected" dialog as at a table.
+
+---
+
 ## Late Joiner Support
 
-When a player joins mid-game, they automatically receive (`autoloads/late_joiner_sync.gd`):
+When a player joins while a table is out, they automatically receive
+(`autoloads/late_joiner_sync.gd`; a player joining while the room is open gets `room_opened`
+instead, see [Sessions](#sessions-the-room-and-the-table)):
 
 1. `_rpc_game_starting` (`send_game_starting_to_peer()`), which moves them into `PLAYING`
 2. Current level data (`send_level_snapshot_to_peer()`): the `_current_level_dict` snapshot
@@ -621,8 +679,23 @@ log and one `NET_RESULT {json}` line to `--out` and quits 0 on a pass; extending
   leave path the host's copy stayed locked to the departed peer (`host_token_unlocked_ok` and
   `host_drag_allowed_ok` false).
 
-All three passed through the launcher on 2026-10-09, each in about 1.4 s on the host, with no
-shipped store file changed (31,435 files watched) and every test root removed.
+- `enet_session_room` (`--peers=5 --timeout-s=240`): the session room. client and client2 join
+  at the start and land in the room; the host sets out table A, returns everyone to the room
+  (host and clients check no tokens, nothing served, the session open with no table), client3
+  joins in the room, the host sets out table B, and client4 joins at table B and gets its token
+  without ever seeing the room. Both tables are the shipped map under two level folders, so the
+  shelf ends as both folders and the pointer on table B. Every client keeps its peer id with no
+  offline event; the host keeps one peer object and room code; client then leaves the way the
+  pause menu does, with no "connection lost" dialog, and keeps its session entry with no peer.
+
+All three earlier ones passed through the launcher on 2026-10-09, each in about 1.4 s on the
+host, with no shipped store file changed (31,435 files watched) and every test root removed;
+`enet_session_room` passed the same way in about 4.9 s on the host.
+
+The launcher fails a run at once (killing every peer) when a peer has not opened its scenario
+log 60 s after the start (`STARTUP_S`): a scenario script that fails to parse leaves a bare scene
+that never quits, and its `<role>.godot.log` holds the parse error. Scenario scripts are not
+loaded by `--quit-after 1`, so a parse error there only shows up this way.
 
 #### Limitations
 
@@ -699,6 +772,29 @@ snapshot.
 
 ```gdscript
 func report_table_loaded() -> void  # after a level load; releases a late joiner's state
+```
+
+### SessionChannel
+
+`NetworkManager.session`, node `/root/NetworkManager/Session`, `autoloads/session_channel.gd`.
+The model is in [Sessions](#sessions-the-room-and-the-table).
+
+```gdscript
+# Every peer (clients read the host's summary)
+func is_open() -> bool                    # in the room
+func get_table() -> String                # ref_key of the map on the table, "" in the room
+func get_shelf() -> Array[Dictionary]     # MapRefs {"folder", "map_path", "hashes"}, oldest first
+func get_players() -> Dictionary          # session id -> {"name", "peer_id"}
+func peer_for(session_id: String) -> int
+func session_id_of(peer_id: int) -> String
+signal room_opened                        # client: the host opened the room
+signal session_changed                    # shelf, table pointer or players changed
+
+# Host
+func open() -> void                       # Return everyone to the room
+func close() -> void                      # just before game_starting
+func note_table_out(level_dict: Dictionary) -> void   # from broadcast_level_data()
+func admit_peer(peer_id: int) -> StringName           # from _rpc_send_player_info(); &"room" or &"table"
 ```
 
 ### NetworkGameSync
@@ -892,10 +988,11 @@ When the host disconnects, clients receive a `connection_failed("Host disconnect
 
 ### Where `connection_failed` reaches the player
 
-Only the lobby screens listen: `LobbyClient._on_connection_failed()` shows
-`"Connection failed: <reason>"` in the join screen's status label, and `LobbyHost` shows the
-reason as an error toast (`UIManager.show_error`) and cancels hosting. Once in `PLAYING`, a drop shows `Root`'s generic "Disconnected" dialog
-instead, which does not include the reason.
+`LobbyClient._on_connection_failed()` shows `"Connection failed: <reason>"` in the join
+screen's status label. While hosting is starting from the title, `Root` shows the reason as an
+error toast (`UIManager.show_error`) and stays on the title; `LobbyHost` in the room does the
+same and leaves. Once in `ROOM` or `PLAYING`, a client's drop shows `Root`'s generic
+"Disconnected" dialog instead, which does not include the reason.
 
 ---
 
