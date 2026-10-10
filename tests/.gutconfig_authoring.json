@@ -35,6 +35,7 @@
 		"res://tests/unit/test_level_loader_map_sources.gd",
 		"res://tests/unit/test_level_manager_map_document.gd",
 		"res://tests/unit/test_level_map_streaming.gd",
+		"res://tests/unit/test_live_map_edits.gd",
 		"res://tests/unit/test_map_document.gd",
 		"res://tests/unit/test_map_document_crossings.gd",
 		"res://tests/unit/test_map_document_io.gd",
