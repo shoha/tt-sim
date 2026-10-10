@@ -469,9 +469,10 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   with the tool drawer on Biome and focus on its picked tile (the probe lets a drawer tile
   take focus), then the real map load of the test map caught about 0.4 s after Play
   (`map_load_real`), and in play the same staged map load over the live table (`map_load_table`), the Visuals drawer
-  on Sun and the same with an unsaved change (`play_drawer_unsaved`: the time of day moved
-  45 minutes, the lake dot, the Sun rail item's tooltip shown by a synthetic pointer event,
-  Save look; the probe then presses Cancel), focus on a quiet glass button, the pause menu, the
+  on Sun with nothing changed (no foot) and the same with an unsaved change
+  (`play_drawer_unsaved`: the time of day moved 45 minutes, the lake dot, the Sun rail item's
+  tooltip shown by a synthetic pointer event, the foot with Revert look and Save look the one
+  Primary; the probe then presses Revert look), focus on a quiet glass button, the pause menu, the
   pause menu as the host sees it (`pause_host`: the host-only Return everyone to the room row,
   shown on a solo pause) and the confirmation that row asks (`return_room_confirm`, nothing
   unsaved), the pause menu's Return to title danger confirmation with an unsaved token move

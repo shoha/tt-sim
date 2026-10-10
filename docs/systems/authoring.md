@@ -196,7 +196,7 @@ Probe and numbers:
   card) take a field headed "Happenings" (`EventPresets.HEADING`) above the brushes. The
   picked tool's controls stand directly under its own field (`show_tool` moves them), and a
   preset put away takes its line and Advanced with it (`PlayEvents` forgets the pick), so the
-  pane is as fresh. The look's Cancel and Save step out under it. A map
+  pane is as fresh. The look's foot (Revert look, Save look) steps out under it. A map
   that takes no live edits says why in the pane (`PlayEvents.refusal_for`: a player, a Blender
   map without a document, the table still setting out, a client's side); a brush the map
   cannot take is a disabled tile with its descriptor's unavailable tooltip (set through

@@ -32,9 +32,9 @@ extends RefCounted
 ##   Sun pane's Time of day row does (the visuals drawer must be open on Sun; the edit is
 ##   live and left unsaved), so the in-play captures can be taken against a dark board.
 ## - `unsaved` (`shift`, default 0.75 h): the same edit by a small step from the map's own
-##   time, so the Visuals drawer shows its unsaved state (the lake dot, Save look) on a board
-##   that still looks like itself. `revert` presses the drawer's Cancel: the edit is undone
-##   and the drawer closes.
+##   time, so the Visuals drawer shows its unsaved state (the lake dot, the foot with Revert
+##   look and Save look) on a board that still looks like itself. `revert` presses the
+##   drawer's Revert look: the edit is undone, the foot goes and the drawer closes.
 ## - `hover_rail` (`which`, `pane`): hover a drawer's rail item with a synthetic pointer
 ##   event, so its tooltip shows after the tooltip delay (the OS cursor is not moved);
 ##   `unhover` moves the synthetic pointer to the window's top-left corner.
@@ -84,7 +84,7 @@ static func run(base: Node, step: Dictionary) -> String:
 			var panel := _find_drawer(base, "visuals") as LevelEditPanel
 			if panel == null:
 				return "no visuals drawer"
-			panel.cancel_requested.emit()
+			panel.revert_button.pressed.emit()
 			return "visuals edits reverted"
 		"hover_rail":
 			return _hover_rail(base, step)

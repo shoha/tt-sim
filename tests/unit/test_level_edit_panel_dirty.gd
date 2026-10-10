@@ -1,9 +1,9 @@
 extends GutTest
 
 ## Dirty-state contract of the Visuals drawer: any live edit in any pane marks
-## it dirty and badges that pane's rail item, only mark_clean() clears both, a
-## dirty drawer refuses to close from its rail, and pane signals are relayed
-## under the panel's public names.
+## it dirty, badges that pane's rail item and brings the foot (Revert look, Save
+## look), only mark_clean() clears all three, a dirty drawer refuses to close from
+## its rail, and pane signals are relayed under the panel's public names.
 
 const PANEL_SCENE := preload("res://scenes/states/playing/level_edit_panel.tscn")
 const TEMP_SETTINGS := "user://test_panel_ui_preferences.cfg"
@@ -109,6 +109,45 @@ func test_a_badged_item_names_the_unsaved_look_in_its_tooltip() -> void:
 	_panel.mark_clean()
 	assert_eq(sun.tooltip_text, "Sun")
 	assert_eq(_panel.save_button.text, "Save look")
+	assert_eq(_panel.revert_button.text, "Revert look")
+
+
+## With nothing changed there is nothing to save or revert, so the foot is away and no fill
+## shows (C5); the first change brings it in with Save look the one Primary and Revert look
+## quiet, and saving or reverting (mark_clean) takes it away again.
+func test_the_foot_shows_only_while_a_change_stands() -> void:
+	assert_false(_panel._foot.visible, "a clean drawer has no foot")
+	_panel.sun_pane._on_time_changed(19.0)
+	assert_true(_panel._foot.visible, "a change brings the foot")
+	assert_eq(_panel.save_button.theme_type_variation, &"Primary")
+	assert_eq(_panel.revert_button.theme_type_variation, &"Secondary")
+	assert_eq(_panel.save_button.get_parent(), _panel._foot)
+	assert_lt(_panel.revert_button.get_index(), _panel.save_button.get_index(), "Save look last")
+	_panel.mark_clean()
+	assert_false(_panel._foot.visible, "saved or reverted, the foot goes")
+	_panel.film_pane._on_row_changed(0.5, "pixelation")
+	assert_true(_panel._foot.visible, "the next change brings it back")
+
+
+## Revert look is the old Cancel: it asks the controller to put the look back and close.
+func test_revert_look_requests_the_revert() -> void:
+	watch_signals(_panel)
+	_panel.sun_pane._on_energy_changed(0.7)
+	_panel.revert_button.pressed.emit()
+	assert_signal_emitted(_panel, "cancel_requested")
+
+
+## Events are undone, not saved: the foot steps out under that pane even with a look change
+## standing, and comes back on a look pane.
+func test_the_foot_steps_out_under_events() -> void:
+	_panel.sun_pane._on_energy_changed(0.7)
+	_panel._on_pane_requested(LevelEditPanel.EVENTS_ID)
+	assert_false(_panel._foot.visible)
+	_panel._on_pane_requested(&"water")
+	assert_true(_panel._foot.visible)
+	_panel.mark_clean()
+	_panel._on_pane_requested(&"sun")
+	assert_false(_panel._foot.visible)
 
 
 func test_dirty_panel_refuses_rail_close() -> void:

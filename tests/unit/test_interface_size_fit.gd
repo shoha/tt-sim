@@ -357,6 +357,8 @@ func test_play_hud_visuals_drawer_and_asset_browser_fit() -> void:
 	var menu: Node = play.get_node("GameplayMenu")
 	var drawer := menu.get("level_edit_panel") as LevelEditPanel
 	drawer.initialize(LevelData.new())
+	# A change standing, so every pane is measured with the foot (Revert look, Save look).
+	drawer._mark_dirty()
 	var hints := _play_hints()
 	for pane in LevelEditPanel.PANE_IDS:
 		if pane != drawer._rail.selected or not drawer.is_open:
