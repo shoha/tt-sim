@@ -72,15 +72,23 @@ static func factor_for(choice: int, window_size: Vector2, base: Vector2 = BASE_S
 	return picked / 100.0
 
 
-## The Settings label for `choice`; Auto names the size it gives on this window.
+## The Settings label for `choice` on this window. Auto is the recommended size; a fixed size
+## says how it compares with Auto here, because a bare "100%" reads as the normal size, and
+## on a 720p window (Auto 140%) it draws a caption at 9 px.
 static func label_for(choice: int, window_size: Vector2, base: Vector2 = BASE_SIZE) -> String:
-	if sanitize(choice) == AUTO:
-		return "Auto (%d%%)" % roundi(auto_factor(window_size, base) * 100.0)
-	return "%d%%" % choice
+	var picked := sanitize(choice)
+	if picked == AUTO:
+		return "Auto (recommended)"
+	var auto_percent := roundi(auto_factor(window_size, base) * 100.0)
+	if picked < auto_percent:
+		return "%d%% (smaller than Auto)" % picked
+	if picked > auto_percent:
+		return "%d%% (larger than Auto)" % picked
+	return "%d%% (same as Auto)" % picked
 
 
-## Fill a Settings `option` with CHOICES (item ids are the stored values), Auto naming the
-## size it gives on `window`, and select `choice`.
+## Fill a Settings `option` with CHOICES (item ids are the stored values), each fixed size
+## named against Auto on `window`, and select `choice`. Runs again when the window resizes.
 static func fill_option(option: OptionButton, window: Window, choice: int) -> void:
 	option.clear()
 	for each in CHOICES:

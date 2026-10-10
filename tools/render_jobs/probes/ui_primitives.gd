@@ -16,7 +16,9 @@ extends RefCounted
 ##   (run.gd forces 1920x1080 at start) and set the Interface size for the run, unsaved:
 ##   Auto (1.40 at 720p, 1.0 at 1080p) whatever the player saved, or with `content_scale`
 ##   the fixed size it names (1.5 is 150%; a value off InterfaceSize.CHOICES falls back to
-##   Auto). Logs the size the window took, the content scale and the virtual canvas.
+##   Auto). A size string may name the fixed size itself, "1920x1080@150", so one tour
+##   `expand` can mix Auto and fixed passes. Logs the size the window took, the content scale
+##   and the virtual canvas.
 ## - `drawer` (`which` "authoring" or "visuals", `pane`, `open` default true): open a rail
 ##   drawer on a pane as a rail click does (the authoring tool drawer, or the play Visuals
 ##   drawer), or close it.
@@ -177,7 +179,12 @@ static func _size_of(value: Variant) -> Vector2i:
 
 
 static func _window(base: Node, step: Dictionary) -> String:
-	var size := _size_of(step.get("size", [1920, 1080]))
+	var value: Variant = step.get("size", [1920, 1080])
+	var percent := ""
+	if value is String and (value as String).contains("@"):
+		percent = (value as String).get_slice("@", 1)
+		value = (value as String).get_slice("@", 0)
+	var size := _size_of(value)
 	if size == Vector2i.ZERO:
 		return "bad size %s" % str(step.get("size"))
 	var window := base.get_window()
@@ -186,6 +193,8 @@ static func _window(base: Node, step: Dictionary) -> String:
 	var choice := InterfaceSize.AUTO
 	if step.has("content_scale"):
 		choice = roundi(float(step.get("content_scale")) * 100.0)
+	elif not percent.is_empty():
+		choice = percent.to_int()
 	UIManager.set("_interface_size", InterfaceSize.sanitize(choice))
 	UIManager.apply_interface_size()
 	return (

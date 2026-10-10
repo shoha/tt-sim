@@ -13,11 +13,18 @@ extends AnimatedCanvasLayerPanel
 ##
 ## Short canvases (_fit_to_canvas): the 600 sheet is about 830 px tall, so on a canvas under
 ## WIDE_BELOW_PX (720p at Interface size Auto, 1080p at 130% and up) it takes the 960 width
-## token and the biomes go five to a line, two lines instead of three, which keeps all three
+## token and the biomes go six to a line, two lines instead of three, which keeps all three
 ## fields in view at 720p Auto. The fields also sit in a scroll region between the header and
 ## the footer, as tall as they are until the sheet would come closer than space_5 to the
 ## canvas edges (150% on a 16:9 window); then it stops there and the fields scroll, so Cancel
 ## and Create stay in view.
+##
+## One track: the size tiles take the biome columns (three of three on the 600 sheet, three
+## of six on the 960, left-aligned), so a size tile is exactly as wide as a biome tile and
+## never outweighs it, and the six landforms fill a line of the same columns on the 960
+## sheet (two to a biome column on the 600). Six to a line, not five: five left the nine
+## starting places one short of two full lines, and five columns put the landforms on a
+## track of their own.
 
 signal map_chosen(spec: Dictionary)
 signal closed
@@ -30,7 +37,7 @@ const SIZE_TILE_SIZE := Vector2(96, 56)
 const BIOME_TILE_SIZE := Vector2(96, 96)
 const BIOME_THUMB_PX := 64
 const BIOME_COLUMNS := 3
-const BIOME_COLUMNS_WIDE := 5
+const BIOME_COLUMNS_WIDE := 6
 ## The sheet's width tokens (docs/UI_TASTE.md S5), and the canvas height under which the
 ## wide one is used (the 600 sheet needs about 876 px: its height and space_5 above and below).
 const SHEET_WIDTH := 600.0
@@ -82,7 +89,7 @@ func _on_panel_ready() -> void:
 	size_field.name = "SizeField"
 	size_field.caption = "Size"
 	size_field.tiles.tile_min_size = SIZE_TILE_SIZE
-	size_field.tiles.columns = NewMap.SIZES_FT.size()
+	size_field.tiles.columns = BIOME_COLUMNS
 	for feet in NewMap.SIZES_FT:
 		size_field.tiles.add_tile(
 			StringName("size_%d" % feet), "%d ft" % feet, "grid-dots", SIZE_HINTS.get(feet, "")
@@ -189,8 +196,9 @@ func _fit_to_canvas() -> void:
 	var wide := canvas.y < WIDE_BELOW_PX and canvas.x >= WIDE_SHEET_WIDTH + 2.0 * margin
 	_panel.custom_minimum_size.x = WIDE_SHEET_WIDTH if wide else SHEET_WIDTH
 	var columns := BIOME_COLUMNS_WIDE if wide else BIOME_COLUMNS
-	if biome_field.tiles.columns != columns:
-		biome_field.tiles.columns = columns
+	for field in [biome_field, size_field]:
+		if (field as TileField).tiles.columns != columns:
+			(field as TileField).tiles.columns = columns
 	var chrome := _panel.get_combined_minimum_size().y - _scroll.custom_minimum_size.y
 	var room := canvas.y - 2.0 * margin - chrome
 	var wanted := _fields.get_combined_minimum_size().y

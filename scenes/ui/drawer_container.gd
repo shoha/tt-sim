@@ -27,6 +27,13 @@ signal rail_footer_pressed(id: StringName)
 
 enum DrawerEdge { LEFT, RIGHT }
 
+# -- Board span ----------------------------------------------------------------
+# Every drawer is in GROUP. When one starts to open or close, or leaves the tree, it calls
+# `on_drawers_moved` on every node in WATCHERS, which reads free_span() to keep clear of the
+# open panels (InputHints centres its bar in the free span).
+const GROUP := &"drawer_containers"
+const WATCHERS := &"drawer_watchers"
+
 # -- Glass -------------------------------------------------------------------
 # The panel and its handle are glass (UI_TASTE.md C8: play continues under a drawer). Their
 # colours are read from the roles of the glass theme the drawer's host root carries:
@@ -127,6 +134,8 @@ var _closing_from_open: bool = false  ## True when closing/concealing from an op
 func _ready() -> void:
 	# Root Control is full-rect and click-through
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_to_group(GROUP)
+	tree_exiting.connect(_on_tree_exiting)
 
 	_build_ui()
 
@@ -224,6 +233,46 @@ func _default_rail_id() -> StringName:
 	if rail_items.is_empty():
 		return &""
 	return rail_items[0]["id"]
+
+
+## The x span of `viewport`'s canvas that no open drawer in it covers, as (left, right).
+static func free_span(viewport: Viewport) -> Vector2:
+	var rect := viewport.get_visible_rect()
+	var span := Vector2(rect.position.x, rect.end.x)
+	for node in viewport.get_tree().get_nodes_in_group(GROUP):
+		var drawer := node as DrawerContainer
+		if drawer.get_viewport() != viewport or not drawer.is_open:
+			continue
+		if drawer.is_queued_for_deletion() or not drawer.is_visible_in_tree():
+			continue
+		var covered := drawer.covered_span()
+		if drawer.edge == DrawerEdge.LEFT:
+			span.x = maxf(span.x, covered.y)
+		else:
+			span.y = minf(span.y, covered.x)
+	return span
+
+
+## The x span of the canvas this drawer's panel and handle cover when it is open, as
+## (left, right): where the slide is heading, not where it is mid-slide.
+func covered_span() -> Vector2:
+	var rect := get_global_transform_with_canvas() * Rect2(Vector2.ZERO, size)
+	var width := drawer_width + tab_width
+	if edge == DrawerEdge.LEFT:
+		return Vector2(rect.position.x, rect.position.x + width)
+	return Vector2(rect.end.x - width, rect.end.x)
+
+
+func _notify_watchers() -> void:
+	if is_inside_tree():
+		get_tree().call_group(WATCHERS, &"on_drawers_moved")
+
+
+## A drawer freed while open (leaving play with it open) frees its span: the watchers look
+## again once it is out of the tree and its group.
+func _on_tree_exiting() -> void:
+	if is_open:
+		get_tree().call_group.call_deferred(WATCHERS, &"on_drawers_moved")
 
 
 ## Toggle the drawer open or closed.
@@ -548,6 +597,8 @@ func _apply_initial_position() -> void:
 		is_revealed = true
 
 	_sled.position.x = _get_sled_x()
+	if is_open:
+		_notify_watchers()
 
 
 func _get_sled_x() -> float:
@@ -583,6 +634,7 @@ func _animate_to_state() -> void:
 	_slide_tween.set_trans(Tween.TRANS_CUBIC)
 	_slide_tween.tween_property(_sled, "position:x", target, slide_duration)
 	_slide_tween.finished.connect(_on_slide_finished, CONNECT_ONE_SHOT)
+	_notify_watchers()
 
 	if play_sounds:
 		if is_open:

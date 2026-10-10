@@ -462,7 +462,12 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   shown on a solo pause) and the confirmation that row asks (`return_room_confirm`), the
   Remove token danger confirmation, one toast of each kind, the Add Token browser and the
   avatar builder, and at dusk (19:00 through the Sun pane) the Visuals drawer, the browser and
-  the pause menu again. Last, one probe capture of the title at 1720x720 (ultrawide). 65
+  the pause menu again. Then the Interface size passes (`probes/ui_size.gd`): at 1366x768
+  (Auto 1.35, an 800 px canvas) and on a 1920x1080 window at a fixed 150% (names start
+  `1920x1080@150`, a 1280x720 canvas) the title, Settings on Graphics, the new-map dialog as
+  it opens and scrolled to its end, and in play the Visuals drawer on Sun; at 1280x720 (Auto
+  1.40) the Interface Size dropdown open and a staged two-segment measure line over the board
+  (`1280x720_measure`). Last, one probe capture of the title at 1720x720 (ultrawide). The
   captures and `INDEX.md`; the level is deleted at the end. Half size makes the 720p captures
   640x360, smaller than any player sees: judge 720p legibility on a `--full` run.
 - `jobs/import_thumb.json`: the map library's import (the level core card, about 35 s, no

@@ -187,23 +187,43 @@ window's `content_scale_factor` instead, so the virtual canvas shrinks and the U
 - **Every screen fits a 1280x720 canvas**: 150% on any 16:9 window, the smallest any choice
   gives. `tests/unit/test_interface_size_fit.gd` opens every screen and sheet the UI tour
   visits in a 1280x720 viewport and fails on any visible control outside it (a ScrollContainer
-  must fit; what it holds may scroll). Screens that would not fit adapt to the canvas height:
-  the title's left column closes its gaps from `BoxContainerSpaced` to `BoxContainerTight`
-  under 800 px, the new-map dialog takes the 960 sheet with five biome tiles a line under 880
-  px and scrolls its fields when even that is too tall, and the avatar builder and roster size
-  themselves from the canvas already. A screen that sizes itself reads
-  `get_viewport().get_visible_rect().size` (the virtual canvas), never the window's pixel size,
-  and refits on `size_changed`, which also fires when the factor changes.
+  must fit; what it holds may scroll). The same walk fails a hint bar under an open drawer or a
+  bottom-corner button, and a title column that reaches the version label. Screens that would
+  not fit adapt to the canvas, by measurement rather than at a threshold:
+  - The title's left column measures itself against the room the hub's margins leave
+    (`TitleScreen._fit_to_canvas`). A caption always sits 4 px under its own button and 12 px
+    above the next control, so it reads with its button. Stacked buttons stand 12 apart when
+    the column fits that way (1080p, and 1366x768 at Auto, an 800 px canvas), else 8, and the
+    three section gaps (under the wordmark, around the divider) give up the rest, evenly, from
+    36 / 32 / 32 down to 12. At 720p Auto the column fills the height to just above the version
+    label.
+  - The new-map dialog takes the 960 sheet under 880 px and scrolls its fields when even that
+    is too tall. Its fields share one track: six columns on the 960 sheet (biomes 6 + 3, the
+    three sizes on the first three columns at biome width, the six landforms on all six),
+    three on the 600 (sizes and biomes three across, landforms two to a biome column).
+  - The input hint bar (`InputHints`) centres in the board the open drawers leave free
+    (`DrawerContainer.free_span`), moves aside only as far as the play HUD's bottom-right
+    buttons need (`InputHints.OBSTACLES`), and wraps its row onto a second line when the free
+    span is narrower than the row (the measure tool's keys at 720p).
+  - The avatar builder and roster size themselves from the canvas already.
+
+  A screen that sizes itself reads `get_viewport().get_visible_rect().size` (the virtual
+  canvas), never the window's pixel size, and refits on `size_changed`, which also fires when
+  the factor changes.
 - **Only the canvas scales.** `GameMap` sets its world viewport's `scaling_3d_scale` to the
   factor, so the board renders at the resolution it has at 100%: the camera framing, the render
   size and pixel-sized 3D details (grid line widths) are unchanged. Overlays drawn on the canvas
   over the board (measure labels, gizmo handles, brush outlines) are UI and follow the factor.
 - **Where it lives:** Settings > Graphics, the Interface Size row (saves and applies the moment
-  it is picked; Reset puts Auto back). Saved per user in the settings file's `[ui]` section as
+  it is picked; Reset puts Auto back). Its choices read "Auto (recommended)" and each fixed
+  size against Auto on this window ("100% (smaller than Auto)" at 720p, "140% (same as
+  Auto)"), because a bare "100%" reads as the normal size and draws 9 px captions at 720p; the
+  labels refill when the window resizes. Saved per user in the settings file's `[ui]` section as
   `interface_size` (0 for Auto, else the percent; `UiPreferences`), never networked.
   `UIManager` applies it at startup and on every root `size_changed`; a headless run keeps 1.0.
-  The render-job probe `ui_primitives.gd` `window` step applies Auto (or its `content_scale`)
-  for the run without saving it.
+  The render-job probe `ui_primitives.gd` `window` step applies Auto (or its `content_scale`,
+  or the percent after an `@` in its size, "1920x1080@150") for the run without saving it; the
+  UI tour's size passes use it with `probes/ui_size.gd`.
 
 ---
 

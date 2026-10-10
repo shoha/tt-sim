@@ -101,9 +101,14 @@ func test_unknown_choices_fall_back_to_auto() -> void:
 
 
 func test_labels() -> void:
-	assert_eq(InterfaceSize.label_for(InterfaceSize.AUTO, _window(720)), "Auto (140%)")
-	assert_eq(InterfaceSize.label_for(InterfaceSize.AUTO, _window(1080)), "Auto (100%)")
-	assert_eq(InterfaceSize.label_for(120, _window(720)), "120%")
+	assert_eq(InterfaceSize.label_for(InterfaceSize.AUTO, _window(720)), "Auto (recommended)")
+	assert_eq(InterfaceSize.label_for(InterfaceSize.AUTO, _window(1080)), "Auto (recommended)")
+	# A fixed size is named against Auto on this window, so 100% at 720p is not "normal".
+	assert_eq(InterfaceSize.label_for(100, _window(720)), "100% (smaller than Auto)")
+	assert_eq(InterfaceSize.label_for(140, _window(720)), "140% (same as Auto)")
+	assert_eq(InterfaceSize.label_for(150, _window(720)), "150% (larger than Auto)")
+	assert_eq(InterfaceSize.label_for(100, _window(1080)), "100% (same as Auto)")
+	assert_eq(InterfaceSize.label_for(90, _window(1080)), "90% (smaller than Auto)")
 
 
 func test_setting_defaults_to_auto_and_round_trips() -> void:

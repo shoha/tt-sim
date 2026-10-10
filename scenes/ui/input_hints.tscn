@@ -20,14 +20,15 @@ mouse_filter = 2
 theme = ExtResource("2_glass")
 
 [node name="BackdropPanel" type="PanelContainer" parent="HintBar"]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 4
 mouse_filter = 2
 theme_type_variation = &"Chip"
 
-[node name="HintRow" type="HBoxContainer" parent="HintBar/BackdropPanel"]
+[node name="HintRow" type="HFlowContainer" parent="HintBar/BackdropPanel"]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_horizontal = 4
 mouse_filter = 2
-theme_override_constants/separation = 24
+theme_override_constants/h_separation = 24
+alignment = 1
