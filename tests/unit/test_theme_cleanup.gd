@@ -100,6 +100,26 @@ func test_a_toast_action_runs_once_and_dismisses() -> void:
 	assert_eq(toasts._active_toasts.size(), 0, "dismissed")
 
 
+## A table event's toast wears the event's own icon in its kind's tint, and a stack of toasts
+## of different lengths shares one width, so their edges align.
+func test_an_event_toast_wears_its_icon_and_a_stack_aligns() -> void:
+	var toasts: ToastContainer = TOAST_SCENE.instantiate()
+	add_child_autofree(toasts)
+	toasts.show_toast("The bridge fell", 0, 30.0, "", Callable(), "", "bridge-broken")
+	toasts.show_toast("The trees fell for everyone at the table", 0, 30.0, "Undo", func(): pass)
+	var shown: Array = toasts._active_toasts
+	var icon := (shown[0] as Control).find_child("Icon", true, false) as TextureRect
+	assert_eq(icon.texture, IconButton.load_icon("bridge-broken"), "the event's picture")
+	var info: Array = ToastContainer.KINDS[ToastContainer.ToastType.INFO]
+	assert_eq(icon.self_modulate, ThemeColors.GLASS_ROLES[info[1]], "in the kind's tint")
+	await wait_frames(2)
+	var short := shown[0] as Control
+	var long := shown[1] as Control
+	assert_lt(short.custom_minimum_size.x, long.custom_minimum_size.x, "words of two lengths")
+	assert_eq(short.size.x, long.size.x, "one width")
+	assert_eq(short.global_position.x, long.global_position.x, "aligned edges")
+
+
 ## The toast icons sit on glass over any board: each holds 3:1 over white and over black.
 func test_toast_kinds_hold_glyph_contrast_on_glass() -> void:
 	for kind: Array in ToastContainer.KINDS.values():

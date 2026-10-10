@@ -222,18 +222,28 @@ func show_danger_confirmation(
 # --- Toast Notifications ---
 
 
-## Show a toast notification
-func show_toast(message: String, type: int = TOAST_INFO, duration: float = 3.0) -> void:
+## Show a toast notification. `icon` (a Tabler icon name) stands in for the kind's own, in
+## the kind's tint: a table event's toast wears the event's icon.
+func show_toast(
+	message: String, type: int = TOAST_INFO, duration: float = 3.0, icon: String = ""
+) -> void:
 	if _toast_container and _toast_container.has_method("show_toast"):
-		_toast_container.show_toast(message, type, duration)
+		_toast_container.show_toast(message, type, duration, "", Callable(), "", icon)
 
 
 ## Show an info toast that offers Undo, for a change undone safely instead of confirmed
 ## first (UI_TASTE I4: a removed token). Pressing Undo calls `undo` and dismisses the toast.
-func show_undo_toast(message: String, undo: Callable) -> void:
+## `icon` as for show_toast.
+func show_undo_toast(message: String, undo: Callable, icon: String = "") -> void:
 	if _toast_container and _toast_container.has_method("show_toast"):
 		_toast_container.show_toast(
-			message, TOAST_INFO, ToastContainer.ACTION_DURATION, "Undo", undo, "arrow-back-up"
+			message,
+			TOAST_INFO,
+			ToastContainer.ACTION_DURATION,
+			"Undo",
+			undo,
+			"arrow-back-up",
+			icon
 		)
 
 

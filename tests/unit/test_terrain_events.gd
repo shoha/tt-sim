@@ -136,6 +136,13 @@ func test_a_bridge_collapse_and_a_forest_fall_play_on_every_board_then_change_th
 	)
 	gm.edits.events.started.connect(client.edits.events.receive)
 	client.edits.receive_log(key, 0)
+	# Only a player's side shows the notice chip; the GM's toast (with Undo) is PlayEvents'.
+	var announced := {"gm": [], "client": []}
+	for side: String in announced:
+		var copy: Copy = gm if side == "gm" else client
+		copy.edits.events.announced.connect(
+			func(event: TerrainEvent) -> void: announced[side].append(event.kind)
+		)
 
 	# The bridge.
 	var bridge := gm.doc.crossings[0]
@@ -143,6 +150,17 @@ func test_a_bridge_collapse_and_a_forest_fall_play_on_every_board_then_change_th
 	var collapse := TerrainEvent.bridge_collapse(bridge.id, middle, 11)
 	assert_eq(gm.edits.events.start(collapse), "", "the GM's side starts the collapse")
 	assert_eq(client.edits.events.active_count(), 1, "the client plays it too")
+	assert_eq(announced.client, [TerrainEvent.Kind.BRIDGE_COLLAPSE], "a player is told")
+	assert_eq(announced.gm, [], "the GM is not: their toast comes with Undo")
+	var toasts: ToastContainer = UIManager.get("_toast_container")
+	var chip: Control = toasts.get("_active_toasts").back()
+	var icon := chip.find_child("Icon", true, false) as TextureRect
+	assert_eq(icon.texture, IconButton.load_icon("bridge-broken"), "in the event's own icon")
+	assert_null(chip.find_child("Action", true, false), "without Undo")
+	assert_eq(
+		(chip.get_child(0).get_child(1) as Label).text,
+		TerrainEvents.NOTICES[TerrainEvent.Kind.BRIDGE_COLLAPSE]
+	)
 	assert_eq(
 		gm.edits.events.start(TerrainEvent.bridge_collapse(bridge.id, middle, 12)),
 		TerrainEvents.BUSY,
@@ -167,15 +185,18 @@ func test_a_bridge_collapse_and_a_forest_fall_play_on_every_board_then_change_th
 	# The forest.
 	var gm_trees := ForestFall.trees_near(gm.edits.editor.scatter, FALL_CENTRE, FALL_RADIUS)
 	assert_gt(gm_trees.size(), 2, "trees stand where the forest falls")
-	# Topple's cursor marks exactly the trees the fall takes, a blaze on each trunk.
+	# Topple's cursor marks exactly the trees the fall takes, a spot on the ground at each
+	# tree's foot, inside the ring.
 	var editor := gm.edits.editor
-	var marks := ToppleMode.trunk_marks(
-		editor,
-		editor.to_world(Vector3(FALL_CENTRE.x, 0.0, FALL_CENTRE.y)),
-		FALL_RADIUS * editor.map_scale()
-	)
-	assert_eq(marks.size(), gm_trees.size() * 2, "one mark per tree that falls")
-	assert_gt(marks[1].y, marks[0].y, "a mark gives the trunk's direction up")
+	var at := editor.to_world(Vector3(FALL_CENTRE.x, 0.0, FALL_CENTRE.y))
+	var ring := FALL_RADIUS * editor.map_scale()
+	var marks := ToppleMode.base_marks(editor, at, ring)
+	assert_eq(marks.size(), gm_trees.size(), "one mark per tree that falls")
+	for mark in marks:
+		var foot := Vector3(mark.x, mark.y, mark.z)
+		assert_lte(Vector2(foot.x - at.x, foot.z - at.z).length(), ring + 0.001, "inside the ring")
+		assert_almost_eq(foot.y, editor.ground_height_at(foot), 0.3, "on the ground")
+		assert_gt(mark.w, 0.0, "a spot as wide as its tree is tall")
 	var labels := []
 	gm.edits.history.recorded.connect(
 		func(entry: Dictionary) -> void: labels.append([entry.label, entry.get("preset", 0)])
@@ -186,7 +207,10 @@ func test_a_bridge_collapse_and_a_forest_fall_play_on_every_board_then_change_th
 	_advance([gm, client], 1.0)
 	assert_eq(gm.edits.op_log.size(), 1, "no op while the trees fall")
 	_advance([gm, client], fall.duration_s)
-	assert_eq(labels, [["Forest fall", TerrainEvent.Kind.FOREST_FALL]], "labelled for the event")
+	var topple := EventPresets.TOPPLE_LABEL
+	assert_eq(labels, [[topple, TerrainEvent.Kind.FOREST_FALL]], "labelled as its tile")
+	assert_eq(announced.client.back(), TerrainEvent.Kind.FOREST_FALL)
+	assert_eq(announced.gm, [], "never on the GM's side")
 	await _settle([gm, client])
 	assert_eq(gm.edits.op_log.size(), 2)
 	assert_eq(client.edits.op_log.size(), 2)
@@ -196,7 +220,7 @@ func test_a_bridge_collapse_and_a_forest_fall_play_on_every_board_then_change_th
 	_same(gm, client, "after the fall")
 
 	# Undo: the trees come back and nothing plays.
-	assert_eq(gm.edits.history.undo(), "Forest fall")
+	assert_eq(gm.edits.history.undo(), EventPresets.TOPPLE_LABEL)
 	assert_eq(gm.edits.events.active_count(), 0, "an undo plays no effect")
 	await _settle([gm, client])
 	assert_eq(client.edits.events.active_count(), 0)
@@ -220,6 +244,7 @@ func test_a_bridge_collapse_and_a_forest_fall_play_on_every_board_then_change_th
 	client.edits.events.receive(other.encode())
 	client.edits.events.receive(PackedByteArray([1, 2, 3]))
 	assert_eq(client.edits.events.active_count(), 0, "dropped without a word")
+	assert_eq(announced.client.size(), 2, "and without a notice")
 
 
 func test_a_falling_tree_goes_still_and_rests_on_its_crown() -> void:

@@ -9,7 +9,9 @@ extends CanvasLayer
 ## its kind shows twice (C7), in an icon tinted with the kind's role and in the words.
 ## Information is cool (lake: it says what is); the outcomes are moss, ochre and madder.
 ## A toast may offer one action at its end (the removal toast's Undo, I4): pressing it runs
-## the action and dismisses the toast.
+## the action and dismisses the toast. A table event's toast wears the event's own icon
+## (bridge-broken, tree-falling) in its kind's tint. Stacked toasts share the widest one's
+## width, so their edges align in one column.
 
 enum ToastType { INFO, SUCCESS, WARNING, ERROR }
 
@@ -57,8 +59,9 @@ func show_toast(
 	action_label: String = "",
 	action: Callable = Callable(),
 	action_icon: String = "",
+	icon: String = "",
 ) -> void:
-	var toast = _create_toast(message, type)
+	var toast = _create_toast(message, type, icon)
 	var has_action := action.is_valid() and not action_label.is_empty()
 	if has_action:
 		var button := _action_button(action_label, action_icon)
@@ -103,17 +106,20 @@ static func max_width(type: ToastType, has_action: bool) -> float:
 	return ERROR_WIDTH if type == ToastType.ERROR else WIDTH
 
 
-func _create_toast(message: String, type: ToastType) -> Control:
+## A toast's chip: its icon (`icon`, or the kind's own when ""), then its words.
+func _create_toast(message: String, type: ToastType, icon: String = "") -> Control:
 	var panel = PanelContainer.new()
 	panel.theme_type_variation = &"Toast"
 	panel.custom_minimum_size = Vector2(WIDTH, 0)
-	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	# The column is as wide as its widest toast (the box shrinks to it, centred) and each
+	# toast fills it, so a stack's edges align instead of stepping in and out.
+	panel.size_flags_horizontal = Control.SIZE_FILL
 
 	var hbox = HBoxContainer.new()
 	hbox.theme_type_variation = &"BoxContainerSpaced"
 	panel.add_child(hbox)
 	# The roles resolve against the glass theme the container carries.
-	hbox.add_child(kind_icon(type, toast_vbox))
+	hbox.add_child(kind_icon(type, toast_vbox, icon))
 
 	var label = Label.new()
 	label.text = message
@@ -126,12 +132,13 @@ func _create_toast(message: String, type: ToastType) -> Control:
 
 
 ## The icon that names a toast kind, tinted with its role as resolved against `themed` (a
-## node under the glass theme). The disconnect banner wears the warning one.
-static func kind_icon(type: ToastType, themed: Control) -> TextureRect:
+## node under the glass theme); `icon_name` (a Tabler icon) stands in for the kind's own
+## picture when given. The disconnect banner wears the warning one.
+static func kind_icon(type: ToastType, themed: Control, icon_name: String = "") -> TextureRect:
 	var kind: Array = KINDS.get(type, KINDS[ToastType.INFO])
 	var icon := TextureRect.new()
 	icon.name = "Icon"
-	icon.texture = IconButton.load_icon(kind[0])
+	icon.texture = IconButton.load_icon(icon_name if icon_name != "" else String(kind[0]))
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)

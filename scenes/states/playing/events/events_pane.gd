@@ -20,7 +20,9 @@ extends VBoxContainer
 ## dropping, trees toppling) have their own field above Brushes, under EventPresets.HEADING;
 ## the picked tool's controls stand directly under its own field (show_tool moves them), so a
 ## picked preset's gesture line, and Topple's Advanced size, sit under the preset tiles rather
-## than two rows away under the Brushes grid.
+## than two rows away under the Brushes grid. While the map takes events but has no bridge, a
+## caption under the preset tiles says so (NO_BRIDGE): a disabled tile alone read as one at
+## rest.
 ##
 ## The preset and Brushes tiles toggle: pressing the armed one's tile again puts it away, so
 ## they are multi-select TileRows kept to one pressed tile across both by hand. A preset put
@@ -45,6 +47,8 @@ signal brush_strength_changed(flow: float)
 
 const TITLE := "Events"
 const SUMMARY := "Change the map for everyone at the table."
+## The caption under the preset tiles while Drop bridge has no bridge to drop.
+const NO_BRIDGE := "No bridge on this map"
 const TOOL_TILE_SIZE := Vector2(64, 56)
 const TOOL_COLUMNS := 3
 const BIOME_COLUMNS := 3
@@ -70,6 +74,8 @@ const TOOL_HINTS := {
 
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT
 var preset_field: TileField
+## The caption under the preset tiles (NO_BRIDGE), shown by set_available.
+var preset_note: Label
 var tool_field: TileField
 var notice: Label
 var biome_field: TileField
@@ -104,6 +110,9 @@ func _ready() -> void:
 	add_child(notice)
 	preset_field = _tiles_field("EventsPresetField", EventPresets.HEADING, EventPresets.all())
 	add_child(preset_field)
+	preset_note = _caption("EventsPresetNote", NO_BRIDGE)
+	preset_note.visible = false
+	add_child(preset_note)
 	tool_field = _tiles_field("EventsToolField", "Brushes", ToolRegistry.tools(ToolDescriptor.PLAY))
 	add_child(tool_field)
 	_build_options()
@@ -139,8 +148,9 @@ func show_tool(tool_id: StringName, pressed: bool = true) -> void:
 	for id: StringName in _options:
 		(_options[id] as Control).visible = id == tool_id
 	var preset := EventPresets.find(tool_id) != null
-	var field := preset_field if preset else tool_field
-	move_child(_options_holder, field.get_index() + 1)
+	# A preset's controls go under the preset tiles' caption, which belongs to the tiles.
+	var above: Control = preset_note if preset else tool_field
+	move_child(_options_holder, above.get_index() + 1)
 	move_child(_advanced, _options_holder.get_index() + 1)
 	var sized := tool_id != &"" and not tool_id in [WaterTool.ID, BridgeTool.ID]
 	_advanced.visible = sized and tool_id != EventPresets.COLLAPSE
@@ -171,6 +181,9 @@ func set_available(available: Dictionary) -> void:
 		var why := tool.unavailable_tooltip if tool.unavailable_tooltip != "" else tool.summary
 		# Through the row, so a refit (the drawer opening) keeps it.
 		field.tiles.set_tile_tooltip(tool.id, tool.summary if on else why)
+	# Only while the map takes events at all (Topple is open): otherwise the notice says why.
+	var takes_events := bool(available.get(EventPresets.TOPPLE, false))
+	preset_note.visible = takes_events and not bool(available.get(EventPresets.COLLAPSE, false))
 
 
 ## Shows the brush's size and strength in the Advanced rows, without signals.
