@@ -1,7 +1,16 @@
 {
  "format": 1,
- "palette_version": "82d45d0",
+ "palette_version": "6aa86c3",
  "surfaces": {
+  "ash": {
+   "albedo": "surfaces/ash/ash_albedo.png",
+   "normal": "surfaces/ash/ash_normal.png",
+   "orm": "surfaces/ash/ash_orm.png",
+   "height": "surfaces/ash/ash_height.png",
+   "tile_m": 4.0,
+   "kind": "ash",
+   "role": "ground"
+  },
   "cliff": {
    "albedo": "surfaces/cliff/cliff_albedo.png",
    "normal": "surfaces/cliff/cliff_normal.png",
@@ -4807,6 +4816,450 @@
      ]
     }
    ]
+  },
+  {
+   "id": "burnt_forest_summer_s1",
+   "biome": "burnt_forest",
+   "season": "summer",
+   "seed": 1,
+   "name": "Burnt Forest",
+   "climate": "temperate",
+   "thumbnail": "thumbnails/burnt_forest_summer_s1.jpg",
+   "ground_surface": "ash",
+   "cliff_surface": "cliff",
+   "scree_surface": "gravel",
+   "ground_accents": [
+    {
+     "surface": "dirt_peat",
+     "coverage": 0.14,
+     "scale_m": 6.0
+    },
+    {
+     "surface": "dirt",
+     "coverage": 0.08,
+     "scale_m": 9.0
+    }
+   ],
+   "path_surfaces": [
+    "dirt_road_packed",
+    "planks",
+    "flagstone"
+   ],
+   "species": [
+    {
+     "key": "snag_conifer",
+     "kind": "tree",
+     "size_class": "large",
+     "density_per_m2": 0.008,
+     "min_spacing_m": 4.5,
+     "slope_max_deg": 35.0,
+     "scale_spread": 0.15,
+     "scale_floor": null,
+     "yaw_random_deg": 360.0,
+     "align": "upright",
+     "pattern": null,
+     "clump": null,
+     "near": [],
+     "avoid": [],
+     "assets": [
+      "burnt_forest_summer_s1/Snag_Conifer_Charred_summer_00",
+      "burnt_forest_summer_s1/Snag_Conifer_Charred_summer_02",
+      "burnt_forest_summer_s1/Snag_Conifer_Charred_summer_03"
+     ]
+    },
+    {
+     "key": "snag",
+     "kind": "tree",
+     "size_class": "large",
+     "density_per_m2": 0.012,
+     "min_spacing_m": 4.5,
+     "slope_max_deg": 35.0,
+     "scale_spread": 0.15,
+     "scale_floor": null,
+     "yaw_random_deg": 360.0,
+     "align": "upright",
+     "pattern": null,
+     "clump": null,
+     "near": [],
+     "avoid": [],
+     "assets": [
+      "burnt_forest_summer_s1/Snag_Charred_summer_01",
+      "burnt_forest_summer_s1/Snag_Charred_summer_04"
+     ]
+    },
+    {
+     "key": "boulder",
+     "kind": "rock",
+     "size_class": "medium",
+     "density_per_m2": 0.013999999999999999,
+     "min_spacing_m": 2.0,
+     "slope_max_deg": 40.0,
+     "scale_spread": 0.2,
+     "scale_floor": null,
+     "yaw_random_deg": 360.0,
+     "align": "normal",
+     "pattern": {
+      "influence": 0.5,
+      "scale_influence": 0.0,
+      "geoscatter_pattern": {
+       "texture_dict": {
+        "texture_type": "noise_",
+        "scale": 2.0,
+        "detail": 1.0,
+        "distorsion": 0.0,
+        "out_type": "Color",
+        "contrast": 2.0,
+        "use_color_ramp": false,
+        "mapping_projection": "global",
+        "mapping_location": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_rotation": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_scale": [
+         0.1,
+         0.1,
+         0.1
+        ],
+        "mapping_random_allow": true,
+        "mapping_random_seed": 133,
+        "mapping_random_loc": true
+       },
+       "color_sample_method": "id_greyscale",
+       "dist_infl_allow": true,
+       "dist_influence": 50.0,
+       "dist_revert": true,
+       "scale_infl_allow": false,
+       "scale_influence": 0.0,
+       "scale_revert": true
+      }
+     },
+     "clump": null,
+     "near": [],
+     "avoid": [],
+     "assets": [
+      "burnt_forest_summer_s1/Rock_Boulder_summer_05"
+     ]
+    },
+    {
+     "key": "high_stump",
+     "kind": "deadwood",
+     "size_class": "medium",
+     "density_per_m2": 0.027999999999999997,
+     "min_spacing_m": 2.0,
+     "slope_max_deg": 40.0,
+     "scale_spread": 0.2,
+     "scale_floor": null,
+     "yaw_random_deg": 360.0,
+     "align": "normal",
+     "pattern": {
+      "influence": 0.5,
+      "scale_influence": 0.0,
+      "geoscatter_pattern": {
+       "texture_dict": {
+        "texture_type": "noise_",
+        "scale": 2.0,
+        "detail": 1.0,
+        "distorsion": 0.0,
+        "out_type": "Color",
+        "contrast": 2.0,
+        "use_color_ramp": false,
+        "mapping_projection": "global",
+        "mapping_location": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_rotation": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_scale": [
+         0.1,
+         0.1,
+         0.1
+        ],
+        "mapping_random_allow": true,
+        "mapping_random_seed": 134,
+        "mapping_random_loc": true
+       },
+       "color_sample_method": "id_greyscale",
+       "dist_infl_allow": true,
+       "dist_influence": 50.0,
+       "dist_revert": true,
+       "scale_infl_allow": false,
+       "scale_influence": 0.0,
+       "scale_revert": true
+      }
+     },
+     "clump": null,
+     "near": [],
+     "avoid": [],
+     "assets": [
+      "burnt_forest_summer_s1/Stump_High_Charred_summer_06",
+      "burnt_forest_summer_s1/Stump_High_Charred_summer_07"
+     ]
+    },
+    {
+     "key": "branches",
+     "kind": "deadwood",
+     "size_class": "small",
+     "density_per_m2": 0.09,
+     "min_spacing_m": 0.5,
+     "slope_max_deg": 55.0,
+     "scale_spread": 0.3,
+     "scale_floor": 0.5,
+     "yaw_random_deg": 360.0,
+     "align": "normal",
+     "pattern": {
+      "influence": 0.5,
+      "scale_influence": 0.15,
+      "geoscatter_pattern": {
+       "texture_dict": {
+        "texture_type": "noise_",
+        "scale": 2.0,
+        "detail": 1.0,
+        "distorsion": 0.0,
+        "out_type": "Color",
+        "contrast": 2.0,
+        "use_color_ramp": false,
+        "mapping_projection": "global",
+        "mapping_location": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_rotation": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_scale": [
+         0.1,
+         0.1,
+         0.1
+        ],
+        "mapping_random_allow": true,
+        "mapping_random_seed": 135,
+        "mapping_random_loc": true
+       },
+       "color_sample_method": "id_greyscale",
+       "dist_infl_allow": true,
+       "dist_influence": 50.0,
+       "dist_revert": true,
+       "scale_infl_allow": true,
+       "scale_influence": 15.0,
+       "scale_revert": true
+      }
+     },
+     "clump": {
+      "parents_per_m2": 0.05,
+      "radius_m": 2.0,
+      "transition_m": 1.2,
+      "children_spacing_m": 0.5
+     },
+     "near": [],
+     "avoid": [],
+     "assets": [
+      "burnt_forest_summer_s1/Branch_Charred_summer_08",
+      "burnt_forest_summer_s1/Branch_Charred_summer_09",
+      "burnt_forest_summer_s1/Branch_Charred_summer_10",
+      "burnt_forest_summer_s1/Branch_Charred_summer_14"
+     ]
+    },
+    {
+     "key": "stump",
+     "kind": "deadwood",
+     "size_class": "small",
+     "density_per_m2": 0.03,
+     "min_spacing_m": 0.8,
+     "slope_max_deg": 55.0,
+     "scale_spread": 0.3,
+     "scale_floor": 0.5,
+     "yaw_random_deg": 360.0,
+     "align": "normal",
+     "pattern": {
+      "influence": 0.5,
+      "scale_influence": 0.15,
+      "geoscatter_pattern": {
+       "texture_dict": {
+        "texture_type": "noise_",
+        "scale": 2.0,
+        "detail": 1.0,
+        "distorsion": 0.0,
+        "out_type": "Color",
+        "contrast": 2.0,
+        "use_color_ramp": false,
+        "mapping_projection": "global",
+        "mapping_location": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_rotation": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_scale": [
+         0.1,
+         0.1,
+         0.1
+        ],
+        "mapping_random_allow": true,
+        "mapping_random_seed": 136,
+        "mapping_random_loc": true
+       },
+       "color_sample_method": "id_greyscale",
+       "dist_infl_allow": true,
+       "dist_influence": 50.0,
+       "dist_revert": true,
+       "scale_infl_allow": true,
+       "scale_influence": 15.0,
+       "scale_revert": true
+      }
+     },
+     "clump": null,
+     "near": [],
+     "avoid": [],
+     "assets": [
+      "burnt_forest_summer_s1/Stump_Charred_summer_11",
+      "burnt_forest_summer_s1/Stump_Charred_summer_13"
+     ]
+    },
+    {
+     "key": "log",
+     "kind": "deadwood",
+     "size_class": "small",
+     "density_per_m2": 0.06,
+     "min_spacing_m": 0.8,
+     "slope_max_deg": 55.0,
+     "scale_spread": 0.3,
+     "scale_floor": 0.5,
+     "yaw_random_deg": 360.0,
+     "align": "normal",
+     "pattern": {
+      "influence": 0.5,
+      "scale_influence": 0.15,
+      "geoscatter_pattern": {
+       "texture_dict": {
+        "texture_type": "noise_",
+        "scale": 2.0,
+        "detail": 1.0,
+        "distorsion": 0.0,
+        "out_type": "Color",
+        "contrast": 2.0,
+        "use_color_ramp": false,
+        "mapping_projection": "global",
+        "mapping_location": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_rotation": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_scale": [
+         0.1,
+         0.1,
+         0.1
+        ],
+        "mapping_random_allow": true,
+        "mapping_random_seed": 137,
+        "mapping_random_loc": true
+       },
+       "color_sample_method": "id_greyscale",
+       "dist_infl_allow": true,
+       "dist_influence": 50.0,
+       "dist_revert": true,
+       "scale_infl_allow": true,
+       "scale_influence": 15.0,
+       "scale_revert": true
+      }
+     },
+     "clump": null,
+     "near": [],
+     "avoid": [],
+     "assets": [
+      "burnt_forest_summer_s1/Log_Charred_summer_12"
+     ]
+    },
+    {
+     "key": "char_litter",
+     "kind": "grass",
+     "size_class": "ground",
+     "density_per_m2": 0.48,
+     "min_spacing_m": 0.12,
+     "slope_max_deg": 50.0,
+     "scale_spread": 0.3,
+     "scale_floor": 0.5,
+     "yaw_random_deg": 360.0,
+     "align": "normal",
+     "pattern": {
+      "influence": 0.7,
+      "scale_influence": 0.2,
+      "geoscatter_pattern": {
+       "texture_dict": {
+        "texture_type": "noise_",
+        "scale": 3.0,
+        "detail": 1.0,
+        "distorsion": 0.0,
+        "out_type": "Color",
+        "contrast": 2.0,
+        "use_color_ramp": false,
+        "mapping_projection": "global",
+        "mapping_location": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_rotation": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_scale": [
+         0.1,
+         0.1,
+         0.1
+        ],
+        "mapping_random_allow": true,
+        "mapping_random_seed": 138,
+        "mapping_random_loc": true
+       },
+       "color_sample_method": "id_greyscale",
+       "dist_infl_allow": true,
+       "dist_influence": 70.0,
+       "dist_revert": true,
+       "scale_infl_allow": true,
+       "scale_influence": 20.0,
+       "scale_revert": true
+      }
+     },
+     "clump": {
+      "parents_per_m2": 0.5,
+      "radius_m": 1.0,
+      "transition_m": 0.6,
+      "children_spacing_m": 0.12
+     },
+     "near": [],
+     "avoid": [],
+     "assets": [
+      "burnt_forest_summer_s1/Litter_Char_summer_15",
+      "burnt_forest_summer_s1/Litter_Char_summer_16",
+      "burnt_forest_summer_s1/Litter_Char_summer_17",
+      "burnt_forest_summer_s1/Litter_Char_summer_18"
+     ]
+    }
+   ]
   }
  ],
  "assets": {
@@ -6788,6 +7241,215 @@
     0.46629858016967773,
     0.6487242579460144,
     0.5096515417098999
+   ]
+  },
+  "burnt_forest_summer_s1/Snag_Conifer_Charred_summer_00": {
+   "file": "assets/burnt_forest_summer_s1/Snag_Conifer_Charred_summer_00.glb",
+   "node": "Snag_Conifer_Charred_summer_00",
+   "wind_category": "tree",
+   "size_class": "large",
+   "dimensions_m": [
+    1.0040732622146606,
+    10.595024108886719,
+    1.099623203277588
+   ]
+  },
+  "burnt_forest_summer_s1/Snag_Conifer_Charred_summer_02": {
+   "file": "assets/burnt_forest_summer_s1/Snag_Conifer_Charred_summer_02.glb",
+   "node": "Snag_Conifer_Charred_summer_02",
+   "wind_category": "tree",
+   "size_class": "large",
+   "dimensions_m": [
+    1.2953650951385498,
+    7.4669575691223145,
+    1.265838384628296
+   ]
+  },
+  "burnt_forest_summer_s1/Snag_Conifer_Charred_summer_03": {
+   "file": "assets/burnt_forest_summer_s1/Snag_Conifer_Charred_summer_03.glb",
+   "node": "Snag_Conifer_Charred_summer_03",
+   "wind_category": "tree",
+   "size_class": "large",
+   "dimensions_m": [
+    1.8569523096084595,
+    7.250740051269531,
+    1.7852108478546143
+   ]
+  },
+  "burnt_forest_summer_s1/Snag_Charred_summer_01": {
+   "file": "assets/burnt_forest_summer_s1/Snag_Charred_summer_01.glb",
+   "node": "Snag_Charred_summer_01",
+   "wind_category": "tree",
+   "size_class": "large",
+   "dimensions_m": [
+    1.5306243896484375,
+    7.712139129638672,
+    1.6387546062469482
+   ]
+  },
+  "burnt_forest_summer_s1/Snag_Charred_summer_04": {
+   "file": "assets/burnt_forest_summer_s1/Snag_Charred_summer_04.glb",
+   "node": "Snag_Charred_summer_04",
+   "wind_category": "tree",
+   "size_class": "large",
+   "dimensions_m": [
+    1.419692039489746,
+    5.414473533630371,
+    1.5365984439849854
+   ]
+  },
+  "burnt_forest_summer_s1/Rock_Boulder_summer_05": {
+   "file": "assets/burnt_forest_summer_s1/Rock_Boulder_summer_05.glb",
+   "node": "Rock_Boulder_summer_05",
+   "wind_category": "",
+   "size_class": "medium",
+   "dimensions_m": [
+    2.107382297515869,
+    1.2695521116256714,
+    1.4067366123199463
+   ]
+  },
+  "burnt_forest_summer_s1/Stump_High_Charred_summer_06": {
+   "file": "assets/burnt_forest_summer_s1/Stump_High_Charred_summer_06.glb",
+   "node": "Stump_High_Charred_summer_06",
+   "wind_category": "",
+   "size_class": "medium",
+   "dimensions_m": [
+    1.1570478677749634,
+    1.504557490348816,
+    1.1437311172485352
+   ]
+  },
+  "burnt_forest_summer_s1/Stump_High_Charred_summer_07": {
+   "file": "assets/burnt_forest_summer_s1/Stump_High_Charred_summer_07.glb",
+   "node": "Stump_High_Charred_summer_07",
+   "wind_category": "",
+   "size_class": "medium",
+   "dimensions_m": [
+    0.9028726816177368,
+    1.4181239604949951,
+    0.9650576710700989
+   ]
+  },
+  "burnt_forest_summer_s1/Branch_Charred_summer_08": {
+   "file": "assets/burnt_forest_summer_s1/Branch_Charred_summer_08.glb",
+   "node": "Branch_Charred_summer_08",
+   "wind_category": "",
+   "size_class": "small",
+   "dimensions_m": [
+    1.054552674293518,
+    0.1999761313199997,
+    0.3356061279773712
+   ]
+  },
+  "burnt_forest_summer_s1/Branch_Charred_summer_09": {
+   "file": "assets/burnt_forest_summer_s1/Branch_Charred_summer_09.glb",
+   "node": "Branch_Charred_summer_09",
+   "wind_category": "",
+   "size_class": "small",
+   "dimensions_m": [
+    1.4467577934265137,
+    0.2893340587615967,
+    0.49818697571754456
+   ]
+  },
+  "burnt_forest_summer_s1/Branch_Charred_summer_10": {
+   "file": "assets/burnt_forest_summer_s1/Branch_Charred_summer_10.glb",
+   "node": "Branch_Charred_summer_10",
+   "wind_category": "",
+   "size_class": "small",
+   "dimensions_m": [
+    1.5454299449920654,
+    0.3068866431713104,
+    0.17211928963661194
+   ]
+  },
+  "burnt_forest_summer_s1/Branch_Charred_summer_14": {
+   "file": "assets/burnt_forest_summer_s1/Branch_Charred_summer_14.glb",
+   "node": "Branch_Charred_summer_14",
+   "wind_category": "",
+   "size_class": "small",
+   "dimensions_m": [
+    1.059054970741272,
+    0.3385900557041168,
+    0.41055309772491455
+   ]
+  },
+  "burnt_forest_summer_s1/Stump_Charred_summer_11": {
+   "file": "assets/burnt_forest_summer_s1/Stump_Charred_summer_11.glb",
+   "node": "Stump_Charred_summer_11",
+   "wind_category": "",
+   "size_class": "small",
+   "dimensions_m": [
+    0.9501020908355713,
+    0.5340228080749512,
+    1.0969734191894531
+   ]
+  },
+  "burnt_forest_summer_s1/Stump_Charred_summer_13": {
+   "file": "assets/burnt_forest_summer_s1/Stump_Charred_summer_13.glb",
+   "node": "Stump_Charred_summer_13",
+   "wind_category": "",
+   "size_class": "small",
+   "dimensions_m": [
+    1.0887506008148193,
+    0.4876546561717987,
+    1.1163980960845947
+   ]
+  },
+  "burnt_forest_summer_s1/Log_Charred_summer_12": {
+   "file": "assets/burnt_forest_summer_s1/Log_Charred_summer_12.glb",
+   "node": "Log_Charred_summer_12",
+   "wind_category": "",
+   "size_class": "small",
+   "dimensions_m": [
+    2.923941135406494,
+    0.8296971321105957,
+    0.6806937456130981
+   ]
+  },
+  "burnt_forest_summer_s1/Litter_Char_summer_15": {
+   "file": "assets/burnt_forest_summer_s1/Litter_Char_summer_15.glb",
+   "node": "Litter_Char_summer_15",
+   "wind_category": "grass",
+   "size_class": "ground",
+   "dimensions_m": [
+    0.8422050476074219,
+    0.041600458323955536,
+    0.7257907390594482
+   ]
+  },
+  "burnt_forest_summer_s1/Litter_Char_summer_16": {
+   "file": "assets/burnt_forest_summer_s1/Litter_Char_summer_16.glb",
+   "node": "Litter_Char_summer_16",
+   "wind_category": "grass",
+   "size_class": "ground",
+   "dimensions_m": [
+    0.9141268730163574,
+    0.02671153098344803,
+    0.9999164938926697
+   ]
+  },
+  "burnt_forest_summer_s1/Litter_Char_summer_17": {
+   "file": "assets/burnt_forest_summer_s1/Litter_Char_summer_17.glb",
+   "node": "Litter_Char_summer_17",
+   "wind_category": "grass",
+   "size_class": "ground",
+   "dimensions_m": [
+    0.7663529515266418,
+    0.035421598702669144,
+    0.8095764517784119
+   ]
+  },
+  "burnt_forest_summer_s1/Litter_Char_summer_18": {
+   "file": "assets/burnt_forest_summer_s1/Litter_Char_summer_18.glb",
+   "node": "Litter_Char_summer_18",
+   "wind_category": "grass",
+   "size_class": "ground",
+   "dimensions_m": [
+    0.6875728368759155,
+    0.03248027339577675,
+    0.7943480014801025
    ]
   }
  }

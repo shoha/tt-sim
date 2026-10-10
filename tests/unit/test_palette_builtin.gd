@@ -10,8 +10,10 @@ extends GutTest
 ## colour arrays, harvested material parameters, chunk nodes), never on pixels. CI
 ## imports the project before running tests, so the imported resources exist there.
 
-const BIOME_COUNT := 8
-const SURFACE_COUNT := 25
+## Palette v7 (2026-10-10) adds the fire entries (section 9 "Fire"): the burnt_forest
+## biome, listed last, and the ash ground surface.
+const BIOME_COUNT := 9
+const SURFACE_COUNT := 26
 ## Surfaces per role (section 9 "Surface role"); the rest of SURFACE_COUNT is ground.
 const CLIFF_SURFACE_COUNT := 3
 const BUILT_SURFACE_COUNT := 7
@@ -87,6 +89,20 @@ func test_the_palette_loads_without_warnings() -> void:
 	assert_eq(palette["biomes"].size(), BIOME_COUNT)
 	assert_eq(palette["surfaces"].size(), SURFACE_COUNT)
 	# A validation warning is a push_warning, which GUT fails as an unexpected error.
+
+
+## The fire entries tt-sim may assume from this palette on (section 9 "Fire"): an ash
+## ground surface and the burnt forest as the last biome, on that ash, so adding it moved
+## no existing biome index.
+func test_the_fire_entries_are_shipped() -> void:
+	var surfaces := PaletteLibrary.surfaces()
+	assert_true(surfaces.has("ash"), "ash surface")
+	if surfaces.has("ash"):
+		assert_eq(surfaces["ash"].role, "ground")
+	var biomes := PaletteLibrary.biomes()
+	assert_eq(biomes[biomes.size() - 1].id, "burnt_forest_summer_s1", "burnt forest is listed last")
+	assert_eq(biomes[biomes.size() - 1].ground_surface, "ash")
+	assert_eq(biomes[0].id, "alpine_meadow_summer_s1", "the first biome did not move")
 
 
 func test_every_biome_names_a_shipped_ground_surface_and_thumbnail() -> void:
