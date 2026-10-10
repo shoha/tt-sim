@@ -3,10 +3,11 @@ extends RefCounted
 
 ## The Terraces starting landform (P5-2; see StartingLandform and LandformRecipes for the
 ## frame every recipe shares). Two or three tiers (THREE_CHANCE) stepping down across the map
-## along one of eight headings: the lowest terrace is the base ground, each higher one a
-## rounded-corner plateau (corners CORNER_M, its edge wobbled by the seed up to WOBBLE_M)
-## raised one 5 ft tier over the one below with HeightBrush.tier_goal, the Sculpt tool's own
-## terrace: a 66 degree rock face, a grassy lip, a flat top exactly on the tier. The top
+## along one of eight headings (a wide map's own axis: terraces_frame): the lowest
+## terrace is the base ground, each higher one a rounded-corner plateau (corners CORNER_M,
+## its edge wobbled by the seed up to WOBBLE_M) raised one 5 ft tier over the one below with
+## HeightBrush.tier_goal, the Sculpt tool's own terrace: a 66 degree rock face, a grassy lip,
+## a flat top exactly on the tier. The top
 ## terrace's edge lies TOP_EDGE_SHARE of the way across, the next STEP_SHARE further on.
 ## The plateaus narrow across the heading as they rise (WIDTH_SHARE, WIDTH_STEP_M), so a
 ## corner or two shows on the map. The seed draws: a waist river (RIVER_CHANCE) crossing the
@@ -69,7 +70,7 @@ static func terraces(doc: MapDocument, seed_value: int, biome_id: String) -> Dic
 	var half := StartingLandform.half_extent(doc)
 	var tier := doc.tier_height_m
 	var frame := terraces_frame(
-		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME), doc
+		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME), doc, seed_value
 	)
 	var dir: Vector2 = frame.dir
 	var span := span_of(doc, dir, half)
@@ -190,14 +191,18 @@ static func _wants_extra_step(doc: MapDocument, seed_value: int) -> bool:
 ## The Terraces' frame from the seed, for a map of half extent `half`: the downhill heading
 ## `dir`, its `normal`, how far the set of plateaus sits off the axis, and the heading the
 ## report quotes. On `doc` (when given) a long map turns a heading across it to step down
-## along it (LandformGrowth.turned).
+## along it, and a wide one steps down along `seed_value`'s own axis (LandformGrowth.own_axis:
+## the river down the steps is what reads from the whole map, so a line, not a heading; a full
+## turn put seeds 1 and 5's rivers in one line) the way the drawn heading points (heading_of;
+## 2026-10-10: the frame's eight gave seeds 1 and 4 the same 315 at 200 and 250 ft, and their
+## terraces read alike).
 static func terraces_frame(
-	half: float, rng: RandomNumberGenerator, doc: MapDocument = null
+	half: float, rng: RandomNumberGenerator, doc: MapDocument = null, seed_value: int = 0
 ) -> Dictionary:
 	var heading_index := rng.randi_range(0, 7)
 	var dir := Vector2(cos(heading_index * PI / 4.0), sin(heading_index * PI / 4.0))
 	if doc != null:
-		dir = LandformGrowth.turned(doc, dir)
+		dir = LandformGrowth.heading_of(doc, seed_value, dir)
 	var offset := rng.randf_range(-1.0, 1.0) * half * SET_OFFSET_SHARE
 	return {
 		"dir": dir,

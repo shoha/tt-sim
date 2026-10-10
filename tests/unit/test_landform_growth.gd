@@ -2,7 +2,8 @@ extends GutTest
 
 ## LandformGrowth (big and long maps, 2026-10-09): a square map of 250 ft or less has no room
 ## and grows nothing, a big or long map has room; a long map's linear landforms turn along
-## it, its hill and lake move toward an end and its terraces spread; the extras are drawn
+## it, its hill and lake move toward an end and its terraces spread; a wide map's frames take
+## each seed's own heading, so neighbouring seeds stand apart; the extras are drawn
 ## from the palette by the seed, and each lands on open ground clear of the stage, the water
 ## and the map edge, a tarn wet, a knoll raised, a meadow and a tarn's shore open in the
 ## cover. Built on small long maps (200 x 100 ft): a long map has full room at any size, so the
@@ -98,7 +99,7 @@ func test_a_big_valley_may_meander_and_keeps_its_foot() -> void:
 	var meanders := 0
 	for seed_value in range(1, 13):
 		var rng := StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
-		var frame := LandformRecipes.valley_frame(half, rng, big)
+		var frame := LandformRecipes.valley_frame(half, rng, big, seed_value)
 		var foot: Vector2 = StartingLandform.along(frame.axis, frame.foot_arc).point
 		var turn := LandformRecipes._meander(big, frame, seed_value)
 		var axis: PackedVector2Array = frame.axis
@@ -272,7 +273,9 @@ func test_wide_hills_and_lakes_stand_toward_any_side_and_draw_their_wood() -> vo
 		rng.randf()
 		rng.randf()
 		var wide := _doc(Vector2i(50, 50), seed_value)
-		var frame := LandformLakeshore.wide_frame(wide, StartingLandform.half_extent(wide), rng)
+		var frame := LandformLakeshore.wide_frame(
+			wide, StartingLandform.half_extent(wide), rng, seed_value
+		)
 		places[frame.corner] = true
 		large += 1 if float(frame.radius) > 0.5 * StartingLandform.half_extent(wide) else 0
 		var reach := (frame.centre as Vector2).abs() + Vector2.ONE * float(frame.radius)
@@ -291,6 +294,63 @@ func test_wide_hills_and_lakes_stand_toward_any_side_and_draw_their_wood() -> vo
 		assert_gte(off, half * LandformHilltop.HILL_WIDE_OFFSET_SHARE.x - 0.1, "well off centre")
 		hill_sides[shaped.report.split(" deg")[0]] = true
 	assert_gt(hill_sides.size(), 2, "the hill stands toward several sides")
+
+
+func test_a_wide_map_takes_each_seeds_own_heading() -> void:
+	# 2026-10-10: the frame's eight headings gave seeds 1, 4 and 7 the same 315 in every
+	# landform at 200 and 250 ft. Seeds 1-6 now stand apart as the camera sees them: a line
+	# (the terraces' fall, a valley) at least 15 degrees on screen, a gorge 5 within its 32.5
+	# either side of level (60 on the ground, clear of the camera's diagonal), a lake 8 m.
+	var wide := _doc(Vector2i(50, 50))
+	var half := StartingLandform.half_extent(wide)
+	var small := _doc(Vector2i(30, 30))
+	var long := _doc(LONG)
+	var terraces: Array[float] = []
+	var valleys: Array[float] = []
+	var gorges: Array[float] = []
+	var lakes: Array[Vector2] = []
+	for seed_value in range(1, 7):
+		var draw := func() -> RandomNumberGenerator:
+			return StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
+		var terrace := LandformTerraces.terraces_frame(half, draw.call(), wide, seed_value)
+		terraces.append(_screen_deg(terrace.dir))
+		var valley := LandformRecipes.valley_frame(half, draw.call(), wide, seed_value)
+		valleys.append(_screen_deg(valley.dir))
+		var gorge := LandformGorge.gorge_frame(half, false, draw.call(), wide, seed_value)
+		var gorge_dir := Vector2.RIGHT.rotated(deg_to_rad(gorge.heading_deg))
+		gorges.append(_screen_deg(gorge_dir))
+		assert_lt(absf(gorge_dir.dot(StartingLandform.VIEW)), 0.87, "seed %d across" % seed_value)
+		var setting := StartingLandform.stream(seed_value, StartingLandform.STREAM_SETTING)
+		lakes.append(LandformLakeshore.wide_frame(wide, half, setting, seed_value).centre)
+		# A map under 200 ft and a long map keep the frame's drawn (or turned) heading.
+		for doc: MapDocument in [small, long]:
+			var own := LandformTerraces.terraces_frame(half, draw.call(), doc, seed_value)
+			var drawn := LandformTerraces.terraces_frame(half, draw.call())
+			var turned := LandformGrowth.turned(doc, drawn.dir)
+			assert_almost_eq((own.dir as Vector2).distance_to(turned), 0.0, 0.001)
+	for a in 6:
+		for b in range(a + 1, 6):
+			var pair := "seeds %d and %d" % [a + 1, b + 1]
+			assert_gte(_apart(terraces[a], terraces[b]), 15.0, "terraces " + pair)
+			assert_gte(_apart(valleys[a], valleys[b]), 15.0, "valley " + pair)
+			assert_gte(_apart(gorges[a], gorges[b]), 5.0, "gorge " + pair)
+			assert_gte(lakes[a].distance_to(lakes[b]), 8.0, "lake " + pair)
+	for g in gorges:
+		assert_lte(absf(g), 32.6, "the gorge within its spread on screen")
+
+
+## The screen angle (degrees, -90..90, from level) of the line along ground direction `d` as
+## the camera sees it (LandformGrowth.VIEW_RISE).
+func _screen_deg(d: Vector2) -> float:
+	var across := Vector2(-StartingLandform.VIEW.y, StartingLandform.VIEW.x)
+	var rise := LandformGrowth.VIEW_RISE * d.dot(StartingLandform.VIEW)
+	return wrapf(rad_to_deg(atan2(rise, d.dot(across))), -90.0, 90.0)
+
+
+## How far apart two lines' screen angles are (degrees, 0..90).
+func _apart(a: float, b: float) -> float:
+	var deg := absf(a - b)
+	return minf(deg, 180.0 - deg)
 
 
 func test_a_river_over_three_steps_jogs_aside() -> void:

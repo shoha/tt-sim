@@ -6,9 +6,10 @@ extends RefCounted
 ## steps. Metres are written for a 150 ft map and scaled by StartingLandform.size_scale();
 ## shares are of the map's half extent so the stage keeps its proportions at every size.
 ##
-## Valley (P5-1). A broad trough across the whole map: its axis is one of eight headings
-## through a point offset from the centre, bent once by VALLEY_BEND_DEG downstream of the
-## centre, and the ground follows the polyline's distance field (so the bend is smooth):
+## Valley (P5-1). A broad trough across the whole map: its axis is one of eight headings (a
+## wide map's own, valley_frame) through a point offset from the centre, bent once by
+## VALLEY_BEND_DEG downstream of the centre, and the ground follows the polyline's distance
+## field (so the bend is smooth):
 ## flat on the floor, a cosine rise to the rim, the base height from the rim to the map edge,
 ## so the trough reads as ground falling away. The floor tilts VALLEY_FALL_M along the axis
 ## so a river down it has reaches and riffles. The seed then draws: a waist river down the
@@ -111,7 +112,7 @@ static func valley(doc: MapDocument, seed_value: int, biome_id: String, root: St
 	var half := StartingLandform.half_extent(doc)
 	var scale := StartingLandform.size_scale(doc)
 	var frame := valley_frame(
-		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME), doc
+		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME), doc, seed_value
 	)
 	var meander := _meander(doc, frame, seed_value)
 	var river_half_width := RIVER_HALF_WIDTH_M * (1.0 + RIVER_GROWTH * LandformGrowth.room(doc))
@@ -254,16 +255,18 @@ static func valley(doc: MapDocument, seed_value: int, biome_id: String, root: St
 ## downstream directions of its two runs, the turn's sign (+1: the second run turns toward
 ## the first's rotated(PI / 2) side, the inner bank), the arc positions of the centre's foot
 ## and the bend along the axis, and the numbers the report quotes. On `doc` (when given) a long
-## map turns a heading across it to run along it (LandformGrowth.turned) and the runs reach
-## its far ends.
+## map turns a heading across it to run along it and the runs reach its far ends; a wide one
+## lays the axis along `seed_value`'s own (LandformGrowth.own_axis, any line), run the way the
+## drawn heading points (heading_of; 2026-10-10: the frame's eight gave seeds 1, 4 and 7 the
+## same 315 at 200 and 250 ft).
 static func valley_frame(
-	half: float, rng: RandomNumberGenerator, doc: MapDocument = null
+	half: float, rng: RandomNumberGenerator, doc: MapDocument = null, seed_value: int = 0
 ) -> Dictionary:
 	var heading_index := rng.randi_range(0, 7)
 	var dir := Vector2(cos(heading_index * PI / 4.0), sin(heading_index * PI / 4.0))
 	var run := 2.5 * half
 	if doc != null:
-		dir = LandformGrowth.turned(doc, dir)
+		dir = LandformGrowth.heading_of(doc, seed_value, dir)
 		run = 2.5 * maxf(half, LandformGrowth.long_half(doc))
 	var normal := Vector2(-dir.y, dir.x)
 	var offset := rng.randf_range(-1.0, 1.0) * half * VALLEY_OFFSET_SHARE

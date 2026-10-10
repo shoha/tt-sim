@@ -6,10 +6,11 @@ extends RefCounted
 ## TWO_TIERS_MIN_EXTENT_M wide, 150 ft and up) winding across the map: its axis is one of the
 ## six headings off the camera's diagonal (HEADINGS: the ravine crosses the view, so its
 ## far wall and its floor face the camera, which looks along StartingLandform.VIEW pitched
-## 21.6 degrees down and sees only the near rim of a ravine running along the view) through
-## a point off the centre, bent once by BEND_DEG and, half the time, bent back further on
-## (SECOND_BEND_CHANCE), and the ground follows the polyline's distance field cut downward
-## with HeightBrush.tier_goal from the rim at the base height (the Sculpt tool's own tier
+## 21.6 degrees down and sees only the near rim of a ravine running along the view; a wide
+## map's own axis within WIDE_SPREAD_DEG) through a point off the centre, bent once by BEND_DEG
+## and, half the time, bent back further on (SECOND_BEND_CHANCE), and the ground follows the
+## polyline's distance field cut downward with HeightBrush.tier_goal from the rim at the base
+## height (the Sculpt tool's own tier
 ## cut: the rim rounds down with the lip rule's grass on top, a 66 degree rock face drops,
 ## the floor is flat). The flat floor is FLOOR_M wide by the seed, TWO_TIER_FLOOR_EXTRA_M
 ## wider when two tiers deep (the rims stand a face further out); the floor tilts FALL_M
@@ -34,6 +35,10 @@ const TWO_TIERS_MIN_EXTENT_M := 45.0
 ## the header). The axis heads 0 / 90 / 180 / 270 cross the view at 45 degrees, 135 / 315
 ## square on.
 const HEADINGS: Array[int] = [0, 2, 3, 4, 6, 7]
+## A wide map's axis is the seed's own (LandformGrowth.own_axis) within this many degrees
+## either side of across the view: at least 30 off the camera's diagonal (the Valley's
+## BLUFF_ALONG_DEG), so the ravine still crosses the view.
+const WIDE_SPREAD_DEG := 60.0
 const SECOND_BEND_CHANCE := 0.5
 ## A big or long map (LandformGrowth) draws the second bend again with this chance at full
 ## room (scaled by the room), so a long ravine more often winds.
@@ -104,7 +109,8 @@ static func gorge(doc: MapDocument, seed_value: int, biome_id: String, root: Str
 		half,
 		wants_second_bend,
 		StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME),
-		doc
+		doc,
+		seed_value
 	)
 	var axis: PackedVector2Array = frame.axis
 	var centreline := StartingLandform.map_line(doc, axis, EDGE_MARGIN_M, STREAM_SPACING_M)
@@ -205,15 +211,22 @@ static func gorge(doc: MapDocument, seed_value: int, biome_id: String, root: Str
 ## HEADINGS (one draw, so the later draws stand whatever the list holds). On `doc` (when
 ## given) a long map turns a heading across it to wind along it (LandformGrowth.turned; a
 ## turned heading is never along the view, so it stays among HEADINGS), the second bend lies
-## its share of the long half extent on, and the runs reach the far ends.
+## its share of the long half extent on, and the runs reach the far ends; a wide one lays the
+## axis along `seed_value`'s own within WIDE_SPREAD_DEG, run the way the drawn heading
+## points (LandformGrowth.heading_of; 2026-10-10: the frame's draw gave seeds 4 and 5 the same
+## 315, and seeds 1 and 2 the one line, 90 and 270, at 200 and 250 ft).
 static func gorge_frame(
-	half: float, two_bends: bool, rng: RandomNumberGenerator, doc: MapDocument = null
+	half: float,
+	two_bends: bool,
+	rng: RandomNumberGenerator,
+	doc: MapDocument = null,
+	seed_value: int = 0
 ) -> Dictionary:
 	var heading_index: int = HEADINGS[rng.randi_range(0, HEADINGS.size() - 1)]
 	var dir := Vector2(cos(heading_index * PI / 4.0), sin(heading_index * PI / 4.0))
 	var reach := half
 	if doc != null:
-		dir = LandformGrowth.turned(doc, dir)
+		dir = LandformGrowth.heading_of(doc, seed_value, dir, WIDE_SPREAD_DEG)
 		reach = maxf(half, LandformGrowth.long_half(doc))
 	var normal := Vector2(-dir.y, dir.x)
 	var offset := rng.randf_range(-1.0, 1.0) * half * OFFSET_SHARE
