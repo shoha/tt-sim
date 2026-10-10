@@ -1,0 +1,42 @@
+{
+ "out_dir": "render_jobs/table_moves",
+ "timeout_s": 240,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait_title"},
+  {"op": "wait", "s": 1.0},
+
+  {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 100, "seed": 1234},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/table_moves.gd", "action": "save", "folder": "_table_moves_old_mill", "name": "Old Mill"},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0},
+  {"op": "play", "folder": "_table_moves_old_mill"},
+  {"op": "wait", "s": 3.0},
+  {"op": "wait_ready", "settle": 1.5},
+
+  {"op": "expand", "values": ["1280x720", "1920x1080"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/table_moves.gd", "action": "window", "size": "{value}"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/table_moves.gd", "action": "notice", "to": "Fen Crossing"},
+   {"op": "wait", "s": 0.6},
+   {"op": "capture", "name": "{value}_notice_gm", "desc": "{value}: the GM's notice before the table moves, a glass chip at the top centre: map icon, 'Moving the table to Fen Crossing in 3', and Stay here (staged on a solo table)"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/table_moves.gd", "action": "close"},
+   {"op": "wait", "s": 0.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/table_moves.gd", "action": "notice", "room": true, "player": true},
+   {"op": "wait", "s": 0.6},
+   {"op": "capture", "name": "{value}_notice_player_room", "desc": "{value}: a player's notice for Return everyone to the room: the users icon and 'Returning everyone to the room in 3', no Stay here (staged)"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/table_moves.gd", "action": "close"},
+   {"op": "wait", "s": 0.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/table_moves.gd", "action": "prompt", "tokens": true, "look": false, "terrain": true},
+   {"op": "wait", "s": 1.0},
+   {"op": "capture", "name": "{value}_prompt", "desc": "{value}: leaving a changed Old Mill: one dialog, 'Keep the changes to Old Mill?', what changed, and three verbs, Discard, Save into map and Keep for this session (the confirm, focused); no Cancel button (Escape stays)"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/table_moves.gd", "action": "close"},
+   {"op": "wait", "s": 0.6}
+  ]},
+
+  {"op": "index", "title": "Table moves", "intro": "The notice before the table moves and the Keep / Save into map / Discard prompt (card table-moves)."},
+  {"op": "call", "script": "res://tools/render_jobs/probes/table_moves.gd", "action": "cleanup"}
+ ]
+}

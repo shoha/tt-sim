@@ -523,8 +523,7 @@ Saved levels are three primitives under `scenes/ui/primitives/`:
   `AnimatedCanvasLayerPanel`) -- a modal level chooser wrapping a two-column `LevelGrid`.
   `setup(title, locked_path = "")` sets the dialog title and an optional locked card. Choose
   confirms the selected card (double-click chooses directly); Cancel closes without choosing.
-  Signals: `level_chosen(level_info)`, `closed`. Used by the room's Add a map and the pause
-  menu's Change map (see below). Its grid is `manageable = false`, so its cards drop the
+  Signals: `level_chosen(level_info)`, `closed`. Used by the room's Add a map. Its grid is `manageable = false`, so its cards drop the
   library's overflow menu, and it grows with the canvas (`_fit_grid()`): as tall as its cards
   (`LevelGrid.content_height()`), between 240 and 760 px and never past the canvas less the
   sheet's chrome and 32 px above and below, so a short library shows whole at 1080 and a long
@@ -679,15 +678,17 @@ during gameplay).
 
 The scene holds only the shell: `_on_panel_ready()` builds a `MenuHeader` ("Paused" / "Esc to
 resume") and the rows through `UiActions`. **Resume** is the only accent action, continuing play.
-**Set up tokens** and **Change map** are still GM-gated (`NetworkManager.has_gm_access()`) --
-Set up tokens resumes and opens the level editor on the map on the table (the title's name for
-it, `TitleScreen.SET_UP_TOKENS`), Change map opens `LevelPickerDialog` and swaps the
-level without leaving the current game (see Change Level below). **Settings** opens the settings
-menu. **Return to title** and **Quit game** are `Secondary` and still confirm before acting.
+**Set up tokens** is still GM-gated (`NetworkManager.has_gm_access()`): it resumes and opens the
+level editor on the map on the table (the title's name for it, `TitleScreen.SET_UP_TOKENS`).
+There is no Change map: the table moves to another map from the room drawer (see Table moves
+below). **Settings** opens the settings menu. **Return to title** and **Quit game** are
+`Secondary` and still confirm before acting.
 
 ### Leaving the table
 
-Return everyone to the room, Return to title and Quit game confirm through
+Return everyone to the room (the host's) asks nothing in the menu: it emits `room_requested`,
+and Root resumes and moves the table to the room (see Table moves below). Return to title and
+Quit game confirm through
 `_confirm_leaving()`, the question naming the action as its button does ("Return to title?" /
 Return to title, W2). The message is the cost by role (`leave_consequence(networked, host,
 unsaved)`): the host's leaving ends the session for every player, a player's leaves it to the
@@ -711,16 +712,19 @@ pause menu each confirm stands on the pause menu's scrim in place of its sheet (
   animates whether or not the tree is actually paused
 - ESC toggles pause on/off
 
-### Change Level
+### Table moves
 
-Picking a level in the `LevelPickerDialog` (locked to the level currently in play) emits
-`change_level_requested(level_info)`; `Root._on_pause_change_level_requested()` resumes first, then
-routes through `GameplayMenuController.request_level_change(on_ready)`. If the Visuals drawer
-(`LevelEditPanel`) has unsaved edits, that shows a "Discard the look and change map?" danger
-confirmation before continuing; a clean drawer proceeds immediately. Once ready,
-`Root.request_level_change(level_info)` loads the new level and reloads it in place in the current
-session (`Root._on_play_level_requested()`), broadcasting the level data to clients if the local
-peer is the host.
+The room drawer's Move the table here and the pause menu's Return everyone to the room are one
+operation (`TableMover`, `scenes/table_mover.gd`; the engine side is in NETWORKING.md "Table
+moves"). When the table differs from its map (tokens, the Visuals drawer's look, live terrain
+edits), one dialog asks "Keep the changes to <map>?" with what changed and three verbs:
+**Discard**, **Save into map** (only for a map in the library) and **Keep for this session**,
+the confirm, focused; the Cancel button is hidden and Escape stays at the table. Then every
+peer sees `TableMoveNotice`, a glass chip (the `Toast` variation) at the top centre on layer
+90: a map icon (the users icon for the room) tinted with the lake role, "Moving the table to
+<map> in 3" or "Returning everyone to the room in 3" counting whole seconds, and for the GM
+**Stay here**, which calls the move off for everyone (the move's undo, I4). The chip only fades
+in and out (M7). Captures: `tools/render_jobs/jobs/table_moves.json` (both window sizes).
 
 ---
 

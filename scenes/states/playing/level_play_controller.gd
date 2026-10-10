@@ -32,6 +32,10 @@ var loaded_map_document: MapDocument = null
 ## The table's live map edits, over loaded_map_instance and loaded_map_document, or null when
 ## no map is out or it has no document (LiveEdits.refusal() says why).
 var live_edits: LiveEdits = null
+## The ops the next table's live edits start from (the GM's side): the edits this session
+## made to the map before it left the table (TableMover sets it before the map is set out
+## again; start_live_edits() consumes it).
+var replay_log: Array[PackedByteArray] = []
 var is_editor_preview: bool = false  # True when playing a level from the level editor
 
 ## Read-only view onto TokenSpawner's storage (placement_id -> BoardToken) so
@@ -525,14 +529,25 @@ func save_level() -> String:
 
 
 ## Whether the table's tokens differ from what was last saved to its map (TokenSaveState):
-## moved, added, removed or changed since the map loaded or was last saved. False with no
-## level on the table.
+## moved, added, removed or changed since the map loaded or was last saved. Only the tokens a
+## save writes count, those with a placement in the level: a party member (SessionParty)
+## belongs to the session, not the map. False with no level on the table.
 func has_unsaved_tokens() -> bool:
 	if active_level_data == null:
 		return false
-	return TokenSaveState.differs(
-		_saved_tokens, TokenSaveState.of_tokens(_token_spawner.get_spawned_tokens())
-	)
+	var tokens := _token_spawner.get_spawned_tokens()
+	var placed := {}
+	for placement in active_level_data.token_placements:
+		if tokens.has(placement.placement_id):
+			placed[placement.placement_id] = tokens[placement.placement_id]
+	return TokenSaveState.differs(_saved_tokens, TokenSaveState.of_tokens(placed))
+
+
+## The placements the tokens count as saved against (has_unsaved_tokens): a table set out with
+## the session's state over its map compares with the map's own (TableMover), not with the
+## state it was set out with.
+func set_saved_placements(placements: Array) -> void:
+	_saved_tokens = TokenSaveState.of_placements(placements)
 
 
 ## The world viewport as an image, or null when no map is loaded. Reads the
@@ -598,14 +613,18 @@ func clear_level_map() -> void:
 
 
 ## Starts the table's live map edits over the installed map: LevelPlayLoader calls it once
-## the map is in, on every peer. A map with no document gets none (LiveEdits.refusal()). The
-## table follows the ground the edits leave (LiveEditGround, a child of the service).
+## the map is in, on every peer, before the tokens are set out. A map with no document gets
+## none (LiveEdits.refusal()). The table follows the ground the edits leave (LiveEditGround,
+## a child of the service). The GM's side starts from replay_log, which it consumes.
 func start_live_edits() -> void:
 	stop_live_edits()
 	if loaded_map_document == null or not is_instance_valid(loaded_map_instance):
+		replay_log = []
 		return
+	var replay := replay_log
+	replay_log = []
 	live_edits = LiveEdits.create(
-		loaded_map_instance, loaded_map_document, not NetworkManager.is_client()
+		loaded_map_instance, loaded_map_document, not NetworkManager.is_client(), replay
 	)
 	live_edits.add_child(LiveEditGround.create(live_edits, self))
 	add_child(live_edits)

@@ -3,20 +3,21 @@ extends AnimatedCanvasLayerPanel
 
 ## Pause menu overlay with resume, settings, and return to title options.
 ##
-## Leaving the table (Return everyone to the room, Return to title, Quit game) asks first, and
-## the question names the action as its button does (W2). What leaving costs depends on the
-## role and on the tokens: the host's leaving ends the session for everyone, and token moves
-## not yet saved to the map are lost, which is said only when there are some
-## (tokens_unsaved). A confirm that loses something is a danger confirm with Cancel focused
-## and, when this player can save (save_map), offers Save first beside it.
+## Leaving the table (Return to title, Quit game) asks first, and the question names the
+## action as its button does (W2). What leaving costs depends on the role and on the tokens:
+## the host's leaving ends the session for everyone, and token moves not yet saved to the map
+## are lost, which is said only when there are some (tokens_unsaved). A confirm that loses
+## something is a danger confirm with Cancel focused and, when this player can save
+## (save_map), offers Save first beside it. Return everyone to the room asks nothing here: it
+## is a table move (TableMover), which asks only when the table changed and keeps the
+## changes for the session by default, and its notice's Stay here undoes it. There is no
+## Change map: the table moves to another map from the room drawer (Tab).
 
 signal resume_requested
 signal main_menu_requested
-signal change_level_requested(level_info: Dictionary)
 ## The host chose to return everyone to the room (Root.return_to_room)
 signal room_requested
 
-const LEVEL_PICKER_SCENE := preload("res://scenes/ui/level_picker_dialog.tscn")
 ## The cost of leaving with unsaved token moves, shown only when there are some.
 const TOKENS_LOST := "Token moves you have not saved to the map will be lost."
 ## The leave confirm's save offer: save the tokens to the map, then leave.
@@ -32,7 +33,6 @@ var save_map: Callable = Callable()
 var header: MenuHeader
 var resume_button: Button
 var edit_level_button: Button
-var change_level_button: Button
 var settings_button: Button
 var room_button: Button
 var main_menu_button: Button
@@ -48,14 +48,12 @@ func _on_panel_ready() -> void:
 
 	resume_button = UiActions.primary("Resume", "player-play", "", box)
 	resume_button.pressed.connect(_on_resume_pressed)
-	# The Level Editor and the level picker, by their player-facing names (W5); the editor
-	# by the title's own words for it, here acting on the map on the table.
+	# The Level Editor by its player-facing name (W5), the title's own words for it, here
+	# acting on the map on the table.
 	edit_level_button = UiActions.secondary(
 		TitleScreen.SET_UP_TOKENS, TitleScreen.SET_UP_TOKENS_ICON, box
 	)
 	edit_level_button.pressed.connect(_on_edit_level_pressed)
-	change_level_button = UiActions.secondary("Change map", "map", box)
-	change_level_button.pressed.connect(_on_change_level_pressed)
 	settings_button = UiActions.secondary("Settings", "settings", box)
 	settings_button.pressed.connect(_on_settings_pressed)
 	box.add_child(HSeparator.new())
@@ -71,9 +69,8 @@ func _on_panel_ready() -> void:
 	quit_game_button.set_meta("ui_silent", true)
 	quit_game_button.pressed.connect(_on_quit_game_pressed)
 
-	# Only show Set up tokens and Change map for the GM / local player
+	# Only show Set up tokens for the GM / local player
 	edit_level_button.visible = NetworkManager.has_gm_access()
-	change_level_button.visible = NetworkManager.has_gm_access()
 
 
 ## Leaving reads the tokens on `table` (Root passes it as the menu opens): it names lost
@@ -117,38 +114,14 @@ func _on_edit_level_pressed() -> void:
 	EventBus.open_editor_requested.emit("")
 
 
-func _on_change_level_pressed() -> void:
-	var picker: LevelPickerDialog = LEVEL_PICKER_SCENE.instantiate()
-	picker.setup("Change map", LevelManager.current_level_path)
-	picker.level_chosen.connect(_on_level_picked)
-	get_tree().root.add_child(picker)
-	# Returning to the title (or otherwise leaving the tree) while the picker
-	# is still open must not strand it floating over the title screen.
-	tree_exiting.connect(picker.queue_free)
-
-
-func _on_level_picked(info: Dictionary) -> void:
-	change_level_requested.emit(info)
-
-
 func _on_settings_pressed() -> void:
 	UIManager.open_settings()
 
 
-## Confirm first: the table goes away for every player, and unsaved token moves with it.
+## A table move to the room (Root.return_to_room, TableMover): it asks only when the table
+## changed, and its notice can be called off.
 func _on_room_pressed() -> void:
-	var unsaved := _unsaved()
-	var message := "The table is put away for every player."
-	if unsaved:
-		message += " " + TOKENS_LOST
-	_confirm_leaving(
-		"Return to the room?",
-		message,
-		"Return to the room",
-		unsaved,
-		func() -> void: room_requested.emit(),
-		&"confirm",
-	)
+	room_requested.emit()
 
 
 ## Confirm first (W2: the action and its consequence, on the button too).

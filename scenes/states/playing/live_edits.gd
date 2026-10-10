@@ -69,8 +69,12 @@ static func refusal(doc: MapDocument) -> String:
 
 ## The live edits of map `root`, built from `doc` (the loaded copy the table plays on): the
 ## GM's side with `gm_side` (the host, or solo play), else a client's. Add it to the tree to
-## start it.
-static func create(root: Node3D, doc: MapDocument, gm_side: bool) -> LiveEdits:
+## start it. The GM's side starts from `replay` when it is given: the ops this session made
+## to the map before it left the table (TableStates), applied at once and kept as the log, so
+## the tokens that follow land on the edited ground and every client catches up on them.
+static func create(
+	root: Node3D, doc: MapDocument, gm_side: bool, replay: Array[PackedByteArray] = []
+) -> LiveEdits:
 	var service := LiveEdits.new()
 	service.name = "LiveEdits"
 	service.sends = gm_side
@@ -82,6 +86,8 @@ static func create(root: Node3D, doc: MapDocument, gm_side: bool) -> LiveEdits:
 	# Water edits compute on a worker, as the Water tool's do, so none freezes a frame.
 	service.editor.water.use_worker = true
 	if service.sends:
+		# Before the history is watched: a replayed op is the session's past, not a new edit.
+		service._replay(replay)
 		service.table_key = randi() | 1
 		service.history.recorded.connect(service._on_recorded)
 		service.history.undone.connect(service._on_undone)
@@ -150,6 +156,21 @@ func send_now() -> void:
 	if sends and not editor.is_stroking():
 		editor.finish_height_work()
 		_send_pending()
+
+
+## Applies `ops` in order, each through a LiveEditCodec.Queue over the editor with its height
+## work finished, and keeps the ones applied as the log. A refused op stops it there (`problem`
+## says why): the ops after it were made on ground this one would have left.
+func _replay(ops: Array[PackedByteArray]) -> void:
+	var queue := LiveEditCodec.Queue.new(editor)
+	for bytes in ops:
+		var why := queue.push(bytes)
+		if why != "":
+			problem = why
+			push_warning("LiveEdits: a kept op was refused, the map is restored up to it: " + why)
+			return
+		queue.drain()
+		op_log.append(bytes)
 
 
 func _on_recorded(entry: Dictionary) -> void:

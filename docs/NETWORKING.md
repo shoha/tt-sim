@@ -315,8 +315,9 @@ one, its res:// map path; the name is what the room lists. The GM adds a map fro
 leaves the room open. `broadcast_level_data()` calls `note_table_out()` with the payload (map
 hashes added), so every map that goes out, from the room or by a map change in play, lands on
 the shelf too; setting a shelved map out again refreshes its hashes. Root sets a shelf map out
-by key (`Root.set_out(key)` from the room, `Root.move_table(key)` from the drawer), loading the
-level from the host's library by its folder. `get_table()` is that key, `""` in the room. Only the host changes any of it; it sends
+by key (`Root.set_out(key)` from the room, `Root.move_table(key)` from the drawer), and its
+TableMover loads the level from the host's library by its folder and lays over it what this
+session did to that map (see "Table moves" below). `get_table()` is that key, `""` in the room. Only the host changes any of it; it sends
 clients a summary (`_rpc_session_summary`, sanitized on arrival by `sanitize_summary()`: known
 keys, typed values, bounded sizes) after every change, so clients read the same getters and
 `session_changed` fires on every peer.
@@ -392,8 +393,33 @@ there does):
 | TITLE > ROOM or PLAYING (client) | Join: the join form (`LobbyClient`) over the hidden title | Connect joins; the form stays locked ("Connected. Joining the room...") until ROOM on `room_opened`, or PLAYING on `game_starting` when a table is out; a rejected client stays on the form |
 | ROOM (host) | Entering with a map from Host | The map is shelved and selected in the room |
 | ROOM > PLAYING | The room's Set out this map: `set_out(key)`, then `_on_lobby_start_game()` | Refused with "Choose a map to set out first" when no map is pending; else `close()`, `notify_game_starting()`, PLAYING broadcasts the level |
-| PLAYING > ROOM | Pause > Return everyone to the room (host): `return_to_room()` | The party is taken, `open()`, then the table (GameMap, tokens, GameState) is torn down on every peer |
-| PLAYING > PLAYING | The drawer's Move the table to the selected map (`move_table(key)`), or Pause > Change Level | The party is taken; the level broadcast moves the table pointer (the table-moves card adds its notice and the Keep/Save/Discard prompt) |
+| PLAYING > ROOM | Pause > Return everyone to the room (host): `return_to_room()`, a table move to the room | After TableMover's prompt (only when the table changed) and notice: the table's state is kept, saved or discarded, the party is taken, `open()`, then the table (GameMap, tokens, GameState) is torn down on every peer |
+| PLAYING > PLAYING | The drawer's Move the table to the selected map (`move_table(key)`) | After the same prompt and notice: the party is taken; the next map comes with its kept state; the level broadcast moves the table pointer |
+
+#### Table moves
+
+`TableMover` (`scenes/table_mover.gd`, a child of Root) runs both moves for the host. A map is a
+template: nothing a session does changes its level folder unless the GM picks Save into map.
+`changes()` compares the table with its map: the tokens a save writes
+(`LevelPlayController.has_unsaved_tokens()`, which counts only tokens with a placement, so the
+party never does), the look (`TableStates.look_of()`, every live-synced visual field and the
+grid scale, against the look the map loaded with; a save of the map moves it) and the live
+edits' op log. When anything changed the GM is asked once, Keep for this session (the
+default, focused), Save into map or Discard; Escape stays. Then `SessionChannel.announce_move()`
+(`_rpc_table_moving`, text clipped, seconds bounded to `MAX_NOTICE_S`) shows every peer the
+notice (`TableMoveNotice`, `NOTICE_S` = 3 s), and the GM's Stay here calls it off
+(`cancel_move()`). At its end `move_now()` settles the table: Keep stores `TableStates.capture()`
+(the placements synced from their tokens, the look, the op log) under the shelf key when the
+table differs from its map, else forgets it; Save into map writes the edited document
+(`MapDocumentIO.write`, when there were live edits) and then the level (the HUD's save path);
+Discard forgets it. Arriving at a map, its kept state is laid over the template's LevelData
+before it is set out (`TableStates.overlay()`), so every peer and every late joiner gets the
+tokens and the look in the level broadcast and snapshot, and its op log goes to
+`LevelPlayController.replay_log`: the host's `LiveEdits` applies it before the tokens land and
+keeps it as its log, so clients and late joiners catch up on it as on any table's log. The
+state is memory only (a session file keeps it later) and is forgotten when a session begins or
+ends. A restored token comes back under its placement id, so a token placed in play returns
+with a new network id (the party keeps theirs).
 | (any) > PLAYING, map loaded | `_on_level_play_loaded()` (host) | The party is set out on the new map |
 | ROOM or PLAYING > TITLE | Leave or End session (the room, the drawer), Return to Title | Title first, then `disconnect_game()`, so a voluntary leave is not read as a lost connection; the host leaving ends the session (End session asks first) |
 
@@ -760,21 +786,31 @@ log and one `NET_RESULT {json}` line to `--out` and quits 0 on a pass; extending
   leave path the host's copy stayed locked to the departed peer (`host_token_unlocked_ok` and
   `host_drag_allowed_ok` false).
 
-- `enet_session_room` (`--peers=5 --timeout-s=300`): the session room and its party. Each
-  client reports its role as its session key. client and client2 join at the start and land in
-  the room; the host sets out table A with Hero A (granted to client, so it leaves A's
-  placements) and Bystander A (nobody's), returns everyone to the room (host and clients check
-  no tokens, nothing served, the session open with no table; the host's party is Hero A, owned
-  by `enet-client`), client3 joins in the room, the host sets out table B, and client4 joins at
-  table B and gets its tokens without ever seeing the room. On table B Hero A is back under its
-  network id, grounded (within 5 cm of where a drop there lands), controlled by client only,
-  and absent from the placements a save of table B writes (the host saves and reloads it);
-  Bystander A stayed behind. Both tables are the shipped map under two level folders, so the
-  shelf ends as both folders and the pointer on table B. Every client keeps its peer id with no
-  offline event; the host keeps one peer object and room code. client then leaves the way the
+- `enet_session_room` (`--peers=5 --timeout-s=420`): the session room, its party and the
+  table moves (TableMover). Each client reports its role as its session key. Table A is a flat
+  authored map the host builds in its own test root (the clients download its `map.ttmap`);
+  table B is the shipped map under a level folder of its own. client and client2 join at the
+  start and land in the room; the host sets table A out from the shelf (`Root.set_out`), places
+  Hero A (granted to client, so it leaves A's placements) and Bystander A (nobody's), raises the
+  ground with the play-side editor (one live edit) and moves Bystander A; table A then counts as
+  changed in tokens and terrain, not look. The host moves the table to the room
+  (`TableMover.move_now`, Keep: A's state is kept with Bystander A and one op, without Hero A;
+  host and clients check no tokens, nothing served, the session open with no table; the
+  party is Hero A, owned by `enet-client`), client3 joins in the room, and the host sets out
+  table B. On table B Hero A is back under its network id, grounded (within 5 cm of where a
+  drop there lands), controlled by client only, and absent from the placements a save of table
+  B writes (the host saves and reloads it once Hero B has landed); Bystander A stayed behind.
+  The shelf ends as both folders and the pointer on table B. Every client keeps its peer id with
+  no offline event; the host keeps one peer object and room code. client then leaves the way the
   pause menu does, with no "connection lost" dialog (the host keeps its entry with no peer and
   its grant by session id), rejoins through the join screen with a new peer id, lands at table
-  B and controls Hero A again; the host ends with five session players.
+  B and controls Hero A again. Table B, saved and with the party not counted, is unchanged, so
+  the drawer's Move the table here (`Root.move_table`) asks nothing and counts down; client,
+  client2 and client3 get the notice ("Moving the table to Session table A"), and on table A
+  every peer has Bystander A where it was moved (0.0 m off), the ground at the raise as high as
+  the host's (0.599 m, from 0.0) and one op in its live edits' log; client4 joins there as a
+  late joiner and gets the same, without ever seeing the room. The host ends with five session
+  players. Passed on 2026-10-10 in about 8.9 s on the host.
 - `enet_live_edits` (`--peers=3 --timeout-s=300`): live map edits (see "Live map edits"
   below). The host builds a 120 ft authored level (forest west of a river, a plank bridge) in
   its own test root before it opens the room, so both clients download its `map.ttmap`. With

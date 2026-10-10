@@ -17,9 +17,11 @@ extends Node3D
 ##   the title: ROOM on room_opened, or PLAYING on game_starting when a table is out).
 ## - ROOM > PLAYING: the room's Set out this map (set_out(), then _on_lobby_start_game():
 ##   refused with no map).
-## - PLAYING > ROOM: return_to_room() (host: the table is torn down, the room opens for all).
-## - PLAYING > PLAYING: a map change in play (_on_play_level_requested(); the drawer's Move
-##   the table here comes through move_table()).
+## - PLAYING > PLAYING: the drawer's Move the table here (move_table()).
+## - PLAYING > ROOM: Return everyone to the room (return_to_room(), host).
+## Both moves are TableMover's: it asks how to settle a changed table, counts the move down
+## on every peer, keeps what the session did to each map and lays it over the map when it is
+## set out again; Root then carries the move out (_on_table_level_chosen(), _open_room()).
 ## Leaving a table, the host takes the party (the players' avatars, SessionParty) along, and
 ## sets it out on the next map once that map has loaded (_on_level_play_loaded()).
 ## - ROOM or PLAYING > TITLE: leave, or the host ends the session.
@@ -66,6 +68,8 @@ var _hosting_requested := false
 ## True after the player cancelled the "Opening a room..." wait, until a late HOSTING is closed
 var _host_cancelled := false
 var _level_play_controller: LevelPlayController = null
+## Moves the table between the session's maps and keeps each map's session state
+var _table_mover: TableMover = null
 var _pending_level_data: LevelData = null
 var _loading_overlay: LoadingOverlay = null
 var _disconnect_indicator: Node = null
@@ -148,6 +152,12 @@ func _setup_level_play_controller() -> void:
 	NetworkManager.session.party.attach(_level_play_controller)
 	_level_play_controller.level_loaded.connect(_on_level_play_loaded)
 	_level_play_controller.level_cleared.connect(_on_level_cleared)
+	_table_mover = TableMover.new()
+	_table_mover.name = "TableMover"
+	add_child(_table_mover)
+	_table_mover.setup(_level_play_controller)
+	_table_mover.level_chosen.connect(_on_table_level_chosen)
+	_table_mover.room_chosen.connect(_open_room)
 
 	# Connect loading signals for the loading overlay
 	_level_play_controller.level_loading_started.connect(_on_level_loading_started)
@@ -412,6 +422,10 @@ func _exit_playing_state() -> void:
 		NetworkManager.level_data_received.disconnect(_on_level_data_received)
 	_disconnect_client_state_signals()
 
+	# A move still being asked about or counted down goes with the table.
+	if _table_mover:
+		_table_mover.cancel()
+
 	# Clear the level and reset loading state
 	if _level_play_controller:
 		_level_play_controller.reset_loading_state()
@@ -446,36 +460,24 @@ func _exit_room_state() -> void:
 		_room_screen = null
 
 
-## ROOM > PLAYING (host): set the shelf map `key` out, the room's Set out this map.
+## ROOM > PLAYING (host): set the shelf map `key` out, the room's Set out this map, with what
+## this session did to it before (TableMover).
 func set_out(key: String) -> void:
-	var level := _load_shelf_map(key)
-	if level == null:
-		return
-	_pending_level_data = level
-	_on_lobby_start_game()
+	_table_mover.set_out(key)
 
 
-## PLAYING > PLAYING (host): the room drawer's Move the table here, through the change-map
-## path (the party goes along).
+## PLAYING > PLAYING (host): the room drawer's Move the table here (TableMover: the prompt
+## when the table changed, then the notice; the party goes along).
 func move_table(key: String) -> void:
-	var level := _load_shelf_map(key)
-	if level != null:
-		_on_play_level_requested(level)
+	_table_mover.request_move(key)
 
 
-## The level of the shelf map `key` from this host's library, or null (with the reason shown)
-## when it is not on the shelf or has no level folder here.
-func _load_shelf_map(key: String) -> LevelData:
-	for ref in NetworkManager.session.get_shelf():
-		if SessionChannel.ref_key(ref) != key:
-			continue
-		var folder := str(ref.get("folder", ""))
-		var level := LevelManager.load_level_folder(folder, false) if folder != "" else null
-		if level == null:
-			UIManager.show_error("That map is not in your library")
-		return level
-	UIManager.show_error("That map is not on the shelf")
-	return null
+## The level TableMover chose for the table: set out from the room, or the table moved to it
+## in play (over the pause menu too).
+func _on_table_level_chosen(level: LevelData) -> void:
+	if get_current_state() == State.PAUSED:
+		pop_state()
+	_on_play_level_requested(level)
 
 
 ## The title hands over the level the host picked; it goes on the shelf when the room opens,
@@ -521,11 +523,19 @@ func _end_room_wait() -> void:
 		_loading_overlay.hide_loading()
 
 
-## PLAYING > ROOM (host): put the table away for everyone. The connection, the players and
-## the Steam lobby stay; GameMap is torn down as on any move, and every client is sent to
-## the room (SessionChannel.open). The party (the players' avatars) is taken first and set
-## out on the next map (SessionParty). The next map is chosen in the room.
+## PLAYING > ROOM (host): Return everyone to the room, the table move with the room as its
+## destination (TableMover: the prompt when the table changed, then the notice).
 func return_to_room() -> void:
+	if not NetworkManager.is_host() or State.PLAYING not in _state_stack:
+		return
+	_table_mover.request_move(TableMover.ROOM)
+
+
+## Put the table away for everyone, once TableMover has settled it. The connection, the
+## players and the Steam lobby stay; GameMap is torn down as on any move, and every client is
+## sent to the room (SessionChannel.open). The party (the players' avatars) is taken first and
+## set out on the next map (SessionParty). The next map is chosen in the room.
+func _open_room() -> void:
 	if not NetworkManager.is_host() or State.PLAYING not in _state_stack:
 		return
 	_pending_level_data = null
@@ -839,10 +849,8 @@ func _enter_paused_state() -> void:
 		_pause_overlay.resume_requested.connect(_on_pause_resume_requested)
 	if _pause_overlay.has_signal("main_menu_requested"):
 		_pause_overlay.main_menu_requested.connect(_on_pause_main_menu_requested)
-	if _pause_overlay.has_signal("change_level_requested"):
-		_pause_overlay.change_level_requested.connect(_on_pause_change_level_requested)
 	if _pause_overlay.has_signal("room_requested"):
-		_pause_overlay.room_requested.connect(return_to_room)
+		_pause_overlay.room_requested.connect(_on_pause_room_requested)
 	if _pause_overlay is PauseOverlay and _level_play_controller:
 		(_pause_overlay as PauseOverlay).watch_table(_level_play_controller)
 
@@ -851,24 +859,10 @@ func _on_pause_resume_requested() -> void:
 	pop_state()
 
 
-## Mid-session change: resume, settle the Visuals drawer, then reload in place
-## (the host broadcast happens inside the reload path).
-func _on_pause_change_level_requested(level_info: Dictionary) -> void:
+## Pause > Return everyone to the room: resume, then move the table to the room.
+func _on_pause_room_requested() -> void:
 	pop_state()
-	var menu_ctrl = _game_map.gameplay_menu.get_node_or_null("GameplayMenu") if _game_map else null
-	if menu_ctrl and menu_ctrl.has_method("request_level_change"):
-		menu_ctrl.request_level_change(request_level_change.bind(level_info))
-	else:
-		request_level_change(level_info)
-
-
-## Load a level by info and play it without leaving the current state or room.
-func request_level_change(level_info: Dictionary) -> void:
-	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
-	if level == null:
-		UIManager.show_error(MapLoadError.for_info(level_info))
-		return
-	_on_play_level_requested(level)
+	return_to_room()
 
 
 ## PLAYING > TITLE: leave the table (a client leaves the session, the host ends it). The

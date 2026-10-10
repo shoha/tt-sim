@@ -1,25 +1,20 @@
 extends GutTest
 
-## The pause menu offers Change Level to the GM and relays the picked level, offers the
-## host Return everyone to the room, and its buttons are built on the shared menu design
-## language.
+## The pause menu has no Change map (the table moves from the room drawer, TableMover),
+## offers the host Return everyone to the room as a table move that asks nothing here, and
+## its buttons are built on the shared menu design language.
 
 const SCENE := preload("res://scenes/states/paused/pause_overlay.tscn")
 
 
-func test_change_level_visibility_matches_edit_level() -> void:
+## Pause > Change map and its level picker are gone: the room drawer's Move the table here
+## replaces them.
+func test_there_is_no_change_map() -> void:
 	var overlay = SCENE.instantiate()
 	add_child_autofree(overlay)
-	assert_eq(overlay.change_level_button.visible, overlay.edit_level_button.visible)
-
-
-func test_picked_level_is_relayed() -> void:
-	var overlay = SCENE.instantiate()
-	add_child_autofree(overlay)
-	watch_signals(overlay)
-	var info := {"path": "user://x/a/", "name": "Alpha"}
-	overlay._on_level_picked(info)
-	assert_signal_emitted_with_parameters(overlay, "change_level_requested", [info])
+	assert_false(overlay.has_signal("change_level_requested"))
+	for button in overlay.find_children("*", "Button", true, false):
+		assert_ne((button as Button).text, "Change map")
 
 
 func test_header_reads_as_a_sentence() -> void:
@@ -36,7 +31,6 @@ func test_rows_say_map_in_sentence_case_and_leaving_names_its_cost() -> void:
 	var overlay = SCENE.instantiate()
 	add_child_autofree(overlay)
 	assert_eq(overlay.edit_level_button.text, "Set up tokens")
-	assert_eq(overlay.change_level_button.text, "Change map")
 	assert_eq(overlay.main_menu_button.text, "Return to title")
 	assert_eq(overlay.quit_game_button.text, "Quit game")
 	var host := PauseOverlay.leave_consequence(true, true, true)
@@ -107,19 +101,18 @@ func test_return_to_title_with_everything_saved_is_not_a_danger() -> void:
 	_close_dialogs()
 
 
-## Return everyone to the room loses unsaved moves: then it is a danger confirm, Cancel safe.
-func test_return_to_room_with_unsaved_moves_is_a_danger() -> void:
+## Return everyone to the room is a table move: nothing is lost (the session keeps the
+## changes), so the menu asks nothing and hands it to Root, whose TableMover asks only when
+## the table changed.
+func test_return_to_room_asks_nothing_here() -> void:
 	var overlay = SCENE.instantiate()
 	add_child_autofree(overlay)
 	overlay.tokens_unsaved = func() -> bool: return true
+	var before := _open_dialogs().size()
+	watch_signals(overlay)
 	overlay._on_room_pressed()
-	var dialog: ConfirmationDialogUI = _open_dialogs().back()
-	assert_eq(dialog.title_label.text, "Return to the room?")
-	assert_eq(dialog.confirm_button.text, "Return to the room")
-	assert_eq(dialog.confirm_button.theme_type_variation, &"Danger")
-	assert_eq(dialog.cancel_button.text, "Cancel")
-	assert_string_contains(dialog.message_label.text, PauseOverlay.TOKENS_LOST)
-	_close_dialogs()
+	assert_signal_emitted(overlay, "room_requested")
+	assert_eq(_open_dialogs().size(), before, "no confirm")
 
 
 func test_resume_is_the_only_accent_action_and_nothing_shouts() -> void:
@@ -128,7 +121,6 @@ func test_resume_is_the_only_accent_action_and_nothing_shouts() -> void:
 	assert_eq(overlay.resume_button.theme_type_variation, &"Primary")
 	for button in [
 		overlay.edit_level_button,
-		overlay.change_level_button,
 		overlay.settings_button,
 		overlay.room_button,
 		overlay.main_menu_button,
@@ -143,7 +135,6 @@ func test_every_row_carries_an_icon() -> void:
 	for button in [
 		overlay.resume_button,
 		overlay.edit_level_button,
-		overlay.change_level_button,
 		overlay.settings_button,
 		overlay.room_button,
 		overlay.main_menu_button,
