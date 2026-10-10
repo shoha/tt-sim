@@ -786,6 +786,11 @@ func _on_level_loading_completed() -> void:
 	# This syncs token properties and creates any tokens added by host during loading
 	if NetworkManager.is_client():
 		RootNetworkHandler.apply_game_state_to_tokens(_level_play_controller, _game_map)
+		# Tell the host the table is built, unless a queued level is about to clear it again:
+		# a late joiner's full state is held until now, since the loader's clear_level()
+		# wipes any state that lands before it (LateJoinerSync).
+		if not (_level_play_controller and _level_play_controller.has_queued_level()):
+			NetworkManager.report_table_loaded()
 
 	# Clear pending data in case loading was aborted
 	# (successful loads clear this in _on_level_play_loaded via level_loaded signal)

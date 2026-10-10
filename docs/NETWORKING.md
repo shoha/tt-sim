@@ -75,6 +75,7 @@ signal game_starting()
 signal level_data_received(level_dict: Dictionary)
 signal late_joiner_connected(peer_id: int)
 signal game_state_received(state_dict: Dictionary)
+signal table_loaded(peer_id: int)  # host: a client's level load completed
 
 # Token updates (clients)
 signal token_transform_received(network_id, position, rotation, scale)
@@ -163,7 +164,7 @@ version"; a client from before the gate sends no version and the host rejects it
 On `_rpc_version_rejected` the client leaves on its own (deferred `_handle_connection_error`)
 with the version message, before the host's delayed disconnect lands, so the player sees the
 version reason and not "Host disconnected". The host defers a late joiner's
-`_sync_late_joiner()` until the player info passes the gate, so a rejected client is never
+`LateJoinerSync.sync_peer()` until the player info passes the gate, so a rejected client is never
 pushed into `PLAYING` and the message appears on the join screen, where `LobbyClient` keeps
 the `connection_failed` reason on screen through the following `OFFLINE` state change.
 
@@ -275,18 +276,40 @@ var players = NetworkManager.get_players()
 
 ## Late Joiner Support
 
-When a player joins mid-game, they automatically receive:
+When a player joins mid-game, they automatically receive (`autoloads/late_joiner_sync.gd`):
 
-1. Current level data (with signal-driven ACK and timeout — no polling)
-2. Full game state (all tokens and their states)
+1. `_rpc_game_starting`, which moves them into `PLAYING`
+2. Current level data (the `_current_level_dict` snapshot)
+3. Full game state (all tokens, avatars, permissions and drag locks), held by the host until
+   the client reports its table loaded
+
+The hold matters. The client's `LevelPlayLoader` yields three frames and then
+`clear_level()` resets `GameState`, so a state that lands inside that yield is wiped.
+Until 2026-10-09 the client ACKed on mere receipt of the level data and the host sent the
+state on that ACK, which put it inside the yield: every late joiner lost the table, and
+reconciliation (positions only) never repaired it. Now `Root._on_level_loading_completed()`
+calls `NetworkManager.report_table_loaded()` (`_rpc_table_loaded`, sender taken from the
+transport) after the load, and the host's `table_loaded(peer_id)` releases the state.
+
+The hold ends on the report; early, with nothing sent, when the peer leaves `_players` or the
+host stops hosting; and after `LateJoinerSync.TABLE_LOADED_TIMEOUT` (300 s) with the state
+sent anyway, since the client is long past its clear by then. The cap is generous because the
+report waits for token model downloads, and a 20 MB map takes about 13 s per peer at Steam's
+1 MB/s. A client does not report while a queued level is about to clear its table again.
+
+A mid-game level change does not have this race: the host sends no full state with it. The
+new table travels in the level data itself (token placements, whose network ids are the
+placement ids on every peer), and the host rebuilds its own `GameState` from the same
+placements. A state broadcast that reaches a client before its clear describes the old table,
+which the clear rightly discards.
 
 ### Host-Side Handling
 
 ```gdscript
-# Automatic - handled by NetworkManager
+# Automatic - handled by NetworkManager and LateJoinerSync
 NetworkManager.late_joiner_connected.connect(func(peer_id):
     print("Late joiner connected: ", peer_id)
-    # State is automatically sent
+    # Emitted after the state was sent, once the peer's table loaded
 )
 ```
 
@@ -297,6 +320,9 @@ NetworkManager.late_joiner_connected.connect(func(peer_id):
 NetworkManager.level_data_received.connect(func(level_dict):
     load_level_from_dict(level_dict)
 )
+
+# When the load completes, report it; the host then sends the full state
+NetworkManager.report_table_loaded()
 
 # Then full game state
 NetworkManager.game_state_received.connect(func(state_dict):
@@ -606,6 +632,12 @@ client, `visual_settings_received` is handled by `LevelPlayController._on_visual
 rebuilds a `LevelVisualState` from the current level, patches it with `patch_from_broadcast_dict()`,
 writes it back with `apply_to_level_data()`, and re-applies the *whole* state via
 `apply_visual_state()` -- not just the changed fields -- for every (throttled) broadcast.
+
+#### Client Methods
+
+```gdscript
+func report_table_loaded() -> void  # after a level load; releases a late joiner's state
+```
 
 ### NetworkStateSync
 
