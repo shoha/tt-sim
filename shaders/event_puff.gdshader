@@ -8,7 +8,8 @@ shader_type spatial;
 //
 // INSTANCE_CUSTOM: x the seed, y the shape (a blob's or plume's length over its width; a
 // ring's hole as a share of its radius), z the kind (EventPuffs.Kind: blob, plume, ring), w
-// how bold its edge is (water 1, a firmer body with a soft rim; dust 0, soft all through).
+// how bold its edge is (water 1, a firmer body with a soft rim; dust 0, soft all through), or
+// for smoke how far through its life it is (0..1).
 //
 // A blob faces the camera, its length along the instance's Y axis as that falls on screen
 // (upright for most, along a trunk for its dust, along its flight for a drop). A plume does
@@ -23,12 +24,18 @@ shader_type spatial;
 // from the instance colour at the rim through amber to a pale gold core. A flame stands on its
 // base as a plume does: the painted flame (FlameAtlas), three tongues in flat bands, its frames
 // cross-faded on the shader's clock (seeded, so neighbours never lick together). An ember is a
-// small spark with a soft halo that flickers. A billow of smoke is a blob with big soft lobes
-// whose underside is lit warm by the fire below it, its top a cooler violet.
+// small spark with a soft halo that flickers. A billow of smoke is a painted cumulus: a heap
+// of round lobes (seeded) melted into one soft outline, the instance colour's grey-violet
+// body over a darker violet underside, each lobe's upper rim catching the sun in cream gold
+// (fully at the top of the heap), the lobe in front laid over the ones behind it, so the
+// billow reads as a few bold, nearly opaque shapes. Late in its life its lobes shrink apart,
+// the smaller first, so it thins by breaking up rather than going see-through.
 //
 // Colours here and in the instance colours are linear, so they show far lighter than their
 // numbers: a mid value (0.4) shows pale, which is why the first fire's amber and lilac read as
-// cream and pink mist. The fire's are picked as the colour they should show, raised to 2.2.
+// cream and pink mist. The fire's are picked as the colour they should show through the
+// scene's filmic tonemap, which shows a low value lighter still than raising it to 1/2.2 does
+// (0.05 shows about 0.31, 0.15 about 0.54).
 render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled, fog_disabled;
 
 uniform sampler2D depth_texture : hint_depth_texture, filter_linear;
@@ -54,10 +61,34 @@ const float RING = 2.0;
 const float FLAME = 3.0;
 const float EMBER = 4.0;
 const float SMOKE = 5.0;
-// Smoke's underside, lit rust by the fire below it, and its violet top: multipliers on the
-// instance colour.
-const vec3 SMOKE_UNDER = vec3(2.4, 1.3, 0.57);
-const vec3 SMOKE_TOP = vec3(1.1, 1.1, 1.1);
+// Smoke's sunlit top (shows 0.96, 0.88, 0.68, a cream gold, measured in a capture) and its
+// shaded underside (shows about 0.3, 0.26, 0.34, a dark violet); its body is the instance
+// colour. A rust underside lit by the fire, and lighter bodies, read as salmon and pink mist.
+const vec3 SMOKE_LIT = vec3(0.85, 0.58, 0.265);
+const vec3 SMOKE_SHADE = vec3(0.045, 0.034, 0.058);
+// The light on a lobe, from above and a little from the left (x right, y down the quad, z
+// toward the camera): it catches only each lobe's upper rim. Facing the camera more, it lit
+// most of every lobe, and with a dark crescent under each the billow read as a pile of pale
+// balls.
+const vec3 SMOKE_SUN = vec3(-0.3, -0.9, 0.3);
+// A billow's lobes in the quad's -1..1 (y down), heaped into a cumulus (a broad body, two low
+// lobes in front, shoulders and a domed top): centre, radius, and how far in front of the
+// others it stands (the low lobes in front, so their lit rims lie over the body behind them).
+const vec4 SMOKE_LOBES[7] = {
+	vec4(0.0, 0.22, 0.55, 0.1),
+	vec4(-0.42, 0.3, 0.4, 0.14),
+	vec4(0.44, 0.32, 0.38, 0.12),
+	vec4(-0.22, -0.25, 0.42, 0.04),
+	vec4(0.2, -0.35, 0.4, 0.0),
+	vec4(0.55, -0.05, 0.3, 0.02),
+	vec4(-0.6, -0.02, 0.28, 0.03)
+};
+// A billow's soft edge (quad units), how far the lobes melt into one outline, how far a lobe's
+// seed moves it, and the share of its radius it has lost by the end of the billow's life.
+const float SMOKE_EDGE = 0.1;
+const float SMOKE_MERGE = 0.12;
+const float SMOKE_JITTER = 0.05;
+const float SMOKE_BREAK = 0.6;
 // The painted flame flipbook (FlameAtlas, set by EventPuffs.paint_flames): FLAME_FRAMES frames
 // side by side, red the heat, green the coverage, row 0 the tips. Cross-faded at FLAME_FPS.
 uniform sampler2D flame_atlas : filter_linear, repeat_disable;
@@ -66,6 +97,13 @@ const float FLAME_FPS = 7.0;
 
 bool is_kind(float kind, float which) {
 	return abs(kind - which) < 0.5;
+}
+
+// Two distances to shapes' edges joined into one shape, the crease between them filled over
+// `k` (a polynomial smooth minimum).
+float smooth_union(float a, float b, float k) {
+	float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+	return mix(b, a, h) - k * h * (1.0 - h);
 }
 
 varying float puff_seed;
@@ -120,6 +158,8 @@ void fragment() {
 	float edge = 1.0 + 0.09 * sin(3.0 * a + puff_seed * 6.283) + 0.05 * sin(5.0 * a + puff_seed * 17.0);
 	float inner = mix(0.44, 0.58, puff_bold) * edge;
 	float shape;
+	// Smoke's lobe in front here, as a ball: its offset from the lobe's centre (radii) and depth.
+	vec3 smoke_ball = vec3(0.0, 0.0, 1.0);
 	// Fire's kinds: how hot this fragment is (0 its rim colour, 1 FIRE_CORE).
 	float heat = -1.0;
 	if (is_kind(puff_kind, FLAME)) {
@@ -154,10 +194,33 @@ void fragment() {
 		float foot = 1.0 - smoothstep(1.0 - 0.5 * head, 1.0, p.y);
 		shape = (1.0 - smoothstep(inner, 0.98 * edge, r)) * foot;
 	} else if (is_kind(puff_kind, SMOKE)) {
-		// A billow: big lobes round a firm body with a short soft rim (a wide soft edge read
-		// as a translucent smear in the verdict look).
-		float billow = 1.0 + 0.13 * sin(4.0 * a + puff_seed * 6.283) + 0.06 * sin(7.0 * a + puff_seed * 23.0);
-		shape = 1.0 - smoothstep(0.72 * billow, 0.95 * billow, length(p));
+		// The billow's lobes melted into one outline with a short soft rim (a wide one read as
+		// a translucent smear), each point shaded by the lobe in front there (or, between
+		// lobes, the nearest one's edge).
+		float front = -1.0;
+		float outline = 10.0;
+		float nearest = 1e3;
+		for (int i = 0; i < 7; i++) {
+			vec4 lobe = SMOKE_LOBES[i];
+			float draw = fract(puff_seed * (3.7 + 1.9 * float(i)) + 0.37 * float(i));
+			vec2 centre = lobe.xy + SMOKE_JITTER * vec2(sin(puff_seed * 6.283 + 2.4 * float(i)), cos(puff_seed * 9.1 + 1.3 * float(i)));
+			float broken = smoothstep(0.45 + 0.25 * draw, 1.0, puff_bold);
+			float radius = max(lobe.z * (0.92 + 0.16 * draw) * (1.0 - SMOKE_BREAK * broken), 0.01);
+			vec2 d = (p - centre) / radius;
+			float r = length(d);
+			outline = smooth_union(outline, (r - 1.0) * radius, SMOKE_MERGE);
+			if (r < 1.0) {
+				float z = sqrt(1.0 - r * r);
+				if (z * radius + lobe.w > front) {
+					front = z * radius + lobe.w;
+					smoke_ball = vec3(d, z);
+				}
+			} else if (front < 0.0 && r < nearest) {
+				nearest = r;
+				smoke_ball = vec3(d / r, 0.0);
+			}
+		}
+		shape = 1.0 - smoothstep(-SMOKE_EDGE, 0.0, outline);
 	} else {
 		shape = 1.0 - smoothstep(inner, 0.98 * edge, length(p));
 	}
@@ -167,8 +230,14 @@ void fragment() {
 	vec3 body = COLOR.rgb * mix(mix(SHADE_DUST, SHADE_WATER, puff_bold), vec3(1.12), lit);
 	float rim = (1.0 - clamp(shape, 0.0, 1.0)) * puff_bold;
 	if (is_kind(puff_kind, SMOKE)) {
-		// Fire below it: a warm underside under a cooler violet top.
-		body = COLOR.rgb * mix(SMOKE_UNDER, SMOKE_TOP, smoothstep(0.15, 0.85, lit));
+		// A dark violet underside over the billow's lower part (each low lobe's foot a little
+		// darker, for its roundness), the grey-violet body, and the sun catching each lobe's
+		// upper rim in cream gold, fully on the billow's top and fading out down it: fairly
+		// crisp painted steps.
+		float low = lit_y - 0.35 * smoke_ball.y;
+		body = mix(SMOKE_SHADE, COLOR.rgb, smoothstep(-0.75, -0.2, low));
+		float sunlit = smoothstep(0.55, 0.72, dot(smoke_ball, SMOKE_SUN));
+		body = mix(body, SMOKE_LIT, sunlit * smoothstep(-0.4, 0.45, lit_y));
 		rim = 0.0;
 	}
 	vec3 fire = mix(COLOR.rgb, FIRE_AMBER, smoothstep(0.0, 0.6, heat));

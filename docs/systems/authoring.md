@@ -329,17 +329,27 @@ Probe and numbers:
   of its tree's mesh whose surfaces use `wind_foliage_burn.gdshader` (the wind material
   duplicated, its shader swapped), and over its 1.2-1.5 s burn the instance's custom data
   (`burn_progress`) takes its crown through the burn in bold patches about a metre across
-  (height plus slow noise): ember orange (emission; bark at 0.3 of it), then charcoal, the
-  leaf cards burning away from a glowing edge until a bare charred snag stands. One painted
+  (height plus slow noise): hot yellow only along the leading edge, then ember red-orange
+  with deep red patches (a second, finer noise; emission), dimming as it goes to charcoal,
+  the leaf cards burning away from a glowing edge until a bare charred snag stands. Bark
+  never glows, it only chars (a glowing trunk read as a thin orange beam). One painted
   flame (`FlameAtlas`: a 4-frame flipbook of three tongues in red, amber and pale gold bands,
   painted once into an RG8 texture, cross-faded on the shader's clock) stands on each crown
-  as it catches, a smaller second beside it (across the view) on half the trees, a spark on a
-  third; half the trees and a two-billow column over the middle throw up dark plum smoke lit
-  rust underneath. No ground glow. The snags shrink away about their feet over the last
+  as it catches, sized by the crown's width (0.85 of it, within 0.22-0.38 of the tree's
+  height; sized by height a narrow pine's stood as a beam), a smaller second beside it
+  (across the view) on half the trees, a spark on a third; half the trees and a two-billow
+  column over the middle throw up smoke: painted cumulus billows of seven lobes melted into
+  one outline, a grey-violet body over a dark violet underside with each lobe's upper rim in
+  cream gold, nearly opaque, spreading as they rise, their lobes breaking apart late
+  (the billow's age rides in its custom data) and their alpha held to 85 % of their life
+  (`smoke_fade`). No ground glow. The snags shrink away about their feet over the last
   0.6 s (`snag_transform`) as the change lands. Two pools sized so one fire's every puff fits
   at once (`EventPuffs.new(capacity, priority)`: smoke 50 at priority 3, flames 144 at 4).
-  Puff and shader colours are linear, so each is the colour it should show raised to 2.2: the
-  first look's amber (0.7 green) and lilac smoke (0.6-0.8) showed as cream and pink mist. The
+  Puff and shader colours are linear and the scene's filmic tonemap (white 1.0) shows a low
+  value lighter still than raising it to 1/2.2 does, so each is picked through that curve
+  (measured in a capture: linear 0.147, 0.124, 0.172 shows 0.54, 0.5, 0.57; 0.85, 0.58, 0.265
+  shows 0.96, 0.88, 0.68): the first look's amber (0.7 green) and lilac smoke (0.6-0.8)
+  showed as cream and pink mist, and a plum body lit rust underneath as salmon. The
   fire-look card (2026-10-10) probed three approaches side by side (bold opaque tongues, the
   trees burning, a painted flipbook): the burning trees read as a fire at tabletop zoom and
   the sprites alone did not, and the painted flame read as a flame where the procedural
