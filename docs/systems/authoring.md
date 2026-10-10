@@ -323,19 +323,28 @@ Probe and numbers:
   over a pale blue shade and a bluer clear rim (eight tongues a fifth of a plank wide read as
   confetti at tabletop zoom; round puffs as cotton or steam). Eight puffs a splash, so all
   ten pieces fit the pool. `FireSweep` (a ForestFall: the same search, stand-ins, holds and
-  release through its hooks `_find`, `_make_puffs`, `_tree_entry`) runs a front out from the
-  click (the nearest tree catches at once, the farthest 2.0 s later, 0.25 s jitter); each
-  tree burns 1.2-1.5 s: a squat oval of firelight at its foot, four overlapping waves of one
-  bold flame (a teardrop licking on the shader's clock, vermilion at its rim through amber to
-  a pale gold core) and a lick, a spark from about half the trees, its crown standing whole
-  for 35 % of the burn, then drawing in to a thin charred shape and sinking away
-  (`burn_transform`), and a firelit mauve billow rising where it stood; four lavender billows
-  climb over the stand as a column. Three pools sized so one fire's every puff fits at once
-  (`EventPuffs.new(capacity, priority)`: glow 48 at priority 2, smoke 52 at 3, flames 288 at
-  4, so the flames draw over the smoke over the glow); every random draw is made in setup.
-  Fire's kinds are luminous (unshaded with no shade underneath) and hold their alpha to 65 %
-  of their life (`fire_fade`); a glow lying flat as a ring does vanished under the ground's
-  own depth (the proximity fade), so it stands. Headless,
+  release through its hooks `_find`, `_make_puffs`, `_tree_entry`, `_stand_in_mesh`) runs a
+  front out from the click (the nearest tree catches at once, the farthest 2.0 s later,
+  0.25 s jitter), and the fire reads through the trees themselves: each stand-in draws a copy
+  of its tree's mesh whose surfaces use `wind_foliage_burn.gdshader` (the wind material
+  duplicated, its shader swapped), and over its 1.2-1.5 s burn the instance's custom data
+  (`burn_progress`) takes its crown through the burn in bold patches about a metre across
+  (height plus slow noise): ember orange (emission; bark at 0.3 of it), then charcoal, the
+  leaf cards burning away from a glowing edge until a bare charred snag stands. One painted
+  flame (`FlameAtlas`: a 4-frame flipbook of three tongues in red, amber and pale gold bands,
+  painted once into an RG8 texture, cross-faded on the shader's clock) stands on each crown
+  as it catches, a smaller second beside it (across the view) on half the trees, a spark on a
+  third; half the trees and a two-billow column over the middle throw up dark plum smoke lit
+  rust underneath. No ground glow. The snags shrink away about their feet over the last
+  0.6 s (`snag_transform`) as the change lands. Two pools sized so one fire's every puff fits
+  at once (`EventPuffs.new(capacity, priority)`: smoke 50 at priority 3, flames 144 at 4).
+  Puff and shader colours are linear, so each is the colour it should show raised to 2.2: the
+  first look's amber (0.7 green) and lilac smoke (0.6-0.8) showed as cream and pink mist. The
+  fire-look card (2026-10-10) probed three approaches side by side (bold opaque tongues, the
+  trees burning, a painted flipbook): the burning trees read as a fire at tabletop zoom and
+  the sprites alone did not, and the painted flame read as a flame where the procedural
+  tongue read as an egg, so it is the trees plus painted flames. Fire's kinds hold their
+  alpha to 65 % of their life (`fire_fade`). Headless,
   `surface_get_arrays` may return nothing and MultiMesh transforms read identity, so the
   effects compute from the document's rows and tolerate empty meshes; tests check behaviour,
   not pixels (the render job `terrain_events` checks the look).

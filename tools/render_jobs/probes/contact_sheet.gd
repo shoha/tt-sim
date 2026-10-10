@@ -9,6 +9,8 @@ extends RefCounted
 ##   columns  tiles per row (default 3)
 ##   tile     [width, height] of a tile in pixels (default [640, 360]); a capture keeps its
 ##            aspect, fitted and centred in its tile
+##   crop     [x, y, width, height], fractions of each capture: only that part is tiled (the
+##            middle of a look, say; default the whole capture)
 ##   out      the sheet's name, written as `<out>.png` in `dir`
 ## A GAP_PX dark gutter separates the tiles. Returns the sheet's path and the tiles filled.
 
@@ -36,6 +38,12 @@ static func run(_base: Node, step: Dictionary) -> String:
 		if image == null or image.is_empty():
 			continue
 		image.convert(Image.FORMAT_RGB8)
+		if step.has("crop"):
+			var c: Array = step.crop
+			var full := Vector2(image.get_size())
+			var from := Vector2i(Vector2(float(c[0]), float(c[1])) * full)
+			var span := Vector2i(Vector2(float(c[2]), float(c[3])) * full)
+			image = image.get_region(Rect2i(from, span))
 		var fit := minf(float(tile.x) / image.get_width(), float(tile.y) / image.get_height())
 		var size := Vector2i(roundi(image.get_width() * fit), roundi(image.get_height() * fit))
 		image.resize(size.x, size.y, Image.INTERPOLATE_LANCZOS)

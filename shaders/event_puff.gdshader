@@ -19,12 +19,16 @@ shader_type spatial;
 // faint wash. Each melts into whatever it touches (a proximity fade on the depth buffer)
 // instead of cutting a hard line across it.
 //
-// Fire's kinds are luminous, not lit: no shade underneath, their colour running from the
-// instance colour at the rim through amber to a pale gold core. A flame stands on its base as
-// a plume does: a teardrop, round at the foot and pointed at the tip, which licks from side to
-// side on the shader's clock (seeded, so neighbours never lick together). An ember is a small
-// spark with a soft halo that flickers. A glow is a squat soft oval of firelight facing the
-// camera at a burning tree's foot (lying flat, the ground's own depth faded it to nothing).
+// Fire's flames and embers are luminous, not lit: no shade underneath, their colour running
+// from the instance colour at the rim through amber to a pale gold core. A flame stands on its
+// base as a plume does: the painted flame (FlameAtlas), three tongues in flat bands, its frames
+// cross-faded on the shader's clock (seeded, so neighbours never lick together). An ember is a
+// small spark with a soft halo that flickers. A billow of smoke is a blob with big soft lobes
+// whose underside is lit warm by the fire below it, its top a cooler violet.
+//
+// Colours here and in the instance colours are linear, so they show far lighter than their
+// numbers: a mid value (0.4) shows pale, which is why the first fire's amber and lilac read as
+// cream and pink mist. The fire's are picked as the colour they should show, raised to 2.2.
 render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled, fog_disabled;
 
 uniform sampler2D depth_texture : hint_depth_texture, filter_linear;
@@ -40,15 +44,25 @@ const vec3 SHADE_WATER = vec3(0.6, 0.75, 0.97);
 // Water's soft rim: bluer and clearer than its body, so a plume glows from inside instead of
 // sitting flat as a white cut-out.
 const vec3 RIM_WATER = vec3(0.72, 0.86, 1.0);
-// A fire's colours inward from the instance colour at its rim: amber, then a pale gold core.
-const vec3 FIRE_AMBER = vec3(1.0, 0.7, 0.2);
-const vec3 FIRE_CORE = vec3(1.0, 0.95, 0.7);
+// A fire's colours inward from the instance colour at its rim: amber (shows 1, 0.6, 0.15),
+// then a pale gold core (shows 1, 0.9, 0.55).
+const vec3 FIRE_AMBER = vec3(1.0, 0.325, 0.015);
+const vec3 FIRE_CORE = vec3(1.0, 0.79, 0.27);
 // EventPuffs.Kind.
 const float PLUME = 1.0;
 const float RING = 2.0;
 const float FLAME = 3.0;
 const float EMBER = 4.0;
-const float GLOW = 5.0;
+const float SMOKE = 5.0;
+// Smoke's underside, lit rust by the fire below it, and its violet top: multipliers on the
+// instance colour.
+const vec3 SMOKE_UNDER = vec3(2.4, 1.3, 0.57);
+const vec3 SMOKE_TOP = vec3(1.1, 1.1, 1.1);
+// The painted flame flipbook (FlameAtlas, set by EventPuffs.paint_flames): FLAME_FRAMES frames
+// side by side, red the heat, green the coverage, row 0 the tips. Cross-faded at FLAME_FPS.
+uniform sampler2D flame_atlas : filter_linear, repeat_disable;
+const float FLAME_FRAMES = 4.0;
+const float FLAME_FPS = 7.0;
 
 bool is_kind(float kind, float which) {
 	return abs(kind - which) < 0.5;
@@ -109,28 +123,20 @@ void fragment() {
 	// Fire's kinds: how hot this fragment is (0 its rim colour, 1 FIRE_CORE).
 	float heat = -1.0;
 	if (is_kind(puff_kind, FLAME)) {
-		// 0 at the foot, 1 at the tip; the tip licks across, the foot stays put.
-		float rise = 0.5 - 0.5 * p.y;
-		float lick = (0.16 * sin(TIME * 7.3 + puff_seed * 40.0 + rise * 4.0)
-			+ 0.07 * sin(TIME * 12.1 + puff_seed * 17.0)) * rise * rise;
-		float x = p.x - lick;
-		// A teardrop: round at the foot (the square root), drawn to a point at the tip; a firm
-		// body with a short soft rim, so it reads as one bold shape.
-		float half_w = 2.0 * sqrt(max(rise, 0.0)) * pow(max(1.0 - rise, 0.0), 0.8) * edge;
-		shape = 1.0 - smoothstep(half_w * 0.72, half_w, abs(x));
-		vec2 core = vec2(x / max(half_w, 0.05), (rise - 0.25) * 2.2);
-		heat = 1.0 - smoothstep(0.0, 0.9, length(core));
+		// The painted flame: the flipbook's frames cross-faded on the clock (a quick blend
+		// between held frames, so a band's edge licks rather than smears).
+		float clock = TIME * FLAME_FPS + puff_seed * FLAME_FRAMES;
+		float f0 = mod(floor(clock), FLAME_FRAMES);
+		float f1 = mod(f0 + 1.0, FLAME_FRAMES);
+		vec2 a0 = texture(flame_atlas, vec2((UV.x + f0) / FLAME_FRAMES, UV.y)).rg;
+		vec2 a1 = texture(flame_atlas, vec2((UV.x + f1) / FLAME_FRAMES, UV.y)).rg;
+		vec2 paint = mix(a0, a1, smoothstep(0.2, 0.8, fract(clock)));
+		shape = paint.g;
+		heat = paint.r;
 	} else if (is_kind(puff_kind, EMBER)) {
 		float r = length(p) / edge;
 		shape = (1.0 - smoothstep(0.15, 1.0, r)) * (0.75 + 0.25 * sin(TIME * 14.0 + puff_seed * 30.0));
 		heat = 1.0 - smoothstep(0.0, 0.6, r);
-	} else if (is_kind(puff_kind, GLOW)) {
-		// A soft oval of firelight standing at a burning tree's foot.
-		float r = length(p) / edge;
-		shape = 1.0 - smoothstep(0.3, 1.0, r);
-		// Never white: many glows overlap across a burning stand (a hot core in each read as
-		// one white glare in the second look).
-		heat = 0.45 * (1.0 - smoothstep(0.0, 0.75, r));
 	} else if (is_kind(puff_kind, RING)) {
 		float r = length(p) / edge;
 		float hole = puff_shape;
@@ -147,6 +153,11 @@ void fragment() {
 		float r = p.y < head_y ? length(vec2(p.x, (p.y - head_y) / head)) : abs(p.x) / waist;
 		float foot = 1.0 - smoothstep(1.0 - 0.5 * head, 1.0, p.y);
 		shape = (1.0 - smoothstep(inner, 0.98 * edge, r)) * foot;
+	} else if (is_kind(puff_kind, SMOKE)) {
+		// A billow: big lobes round a firm body with a short soft rim (a wide soft edge read
+		// as a translucent smear in the verdict look).
+		float billow = 1.0 + 0.13 * sin(4.0 * a + puff_seed * 6.283) + 0.06 * sin(7.0 * a + puff_seed * 23.0);
+		shape = 1.0 - smoothstep(0.72 * billow, 0.95 * billow, length(p));
 	} else {
 		shape = 1.0 - smoothstep(inner, 0.98 * edge, length(p));
 	}
@@ -155,6 +166,11 @@ void fragment() {
 	float lit = clamp(0.5 + lit_y * 0.7, 0.0, 1.0);
 	vec3 body = COLOR.rgb * mix(mix(SHADE_DUST, SHADE_WATER, puff_bold), vec3(1.12), lit);
 	float rim = (1.0 - clamp(shape, 0.0, 1.0)) * puff_bold;
+	if (is_kind(puff_kind, SMOKE)) {
+		// Fire below it: a warm underside under a cooler violet top.
+		body = COLOR.rgb * mix(SMOKE_UNDER, SMOKE_TOP, smoothstep(0.15, 0.85, lit));
+		rim = 0.0;
+	}
 	vec3 fire = mix(COLOR.rgb, FIRE_AMBER, smoothstep(0.0, 0.6, heat));
 	fire = mix(fire, FIRE_CORE, smoothstep(0.6, 1.0, heat));
 	ALBEDO = heat >= 0.0 ? fire : mix(body, body * RIM_WATER, rim);

@@ -213,6 +213,11 @@ func _find(_editor: AuthoringEditor, event: TerrainEvent) -> Array[Dictionary]:
 	return trees_near(_scatter, event.centre, event.radius_m)
 
 
+## The mesh a stand-in draws for `mesh`: the tree's own.
+func _stand_in_mesh(mesh: Mesh) -> Mesh:
+	return mesh
+
+
 ## The puff pool the effect throws its dust into.
 func _make_puffs() -> void:
 	_puffs = EventPuffs.new()
@@ -239,7 +244,8 @@ func _stand_in(mesh: Mesh, trees: Array, event: TerrainEvent) -> void:
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.use_colors = true
-	multimesh.mesh = mesh
+	multimesh.use_custom_data = true
+	multimesh.mesh = _stand_in_mesh(mesh)
 	multimesh.instance_count = transforms.size()
 	for i in transforms.size():
 		multimesh.set_instance_transform(i, transforms[i])
