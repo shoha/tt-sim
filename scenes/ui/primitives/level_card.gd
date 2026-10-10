@@ -40,6 +40,9 @@ var manageable: bool = true:
 		manageable = value
 		if _menu_button:
 			_menu_button.visible = value
+## Accept (Enter, pad A) on the card while it is not selected only selects it; Accept on the
+## selected card activates it (the library, where selecting opens the detail strip).
+var accept_selects_first: bool = false
 
 var _column: VBoxContainer
 var _strip: PanelContainer
@@ -275,6 +278,10 @@ func _on_gui_input(event: InputEvent) -> void:
 		if mouse.pressed and mouse.double_click and mouse.button_index == MOUSE_BUTTON_LEFT:
 			activated.emit(level_info)
 	elif event.is_action_pressed("ui_accept") and has_focus():
+		# The signal comes before the button's own press, so button_pressed is the state the
+		# card had: the press that follows selects it.
+		if accept_selects_first and not button_pressed:
+			return
 		activated.emit(level_info)
 
 

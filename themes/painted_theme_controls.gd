@@ -62,6 +62,18 @@ func define_fields() -> void:
 			focus = ring(RADIUS_CHIP),
 		}
 	)
+	# A click-to-edit title (the library strip's map name): the heading's face, standing on the
+	# paper it sits on until it is edited, then the ring (a flat LineEdit draws no well).
+	define_variant_style(
+		"TitleField",
+		"LineEdit",
+		{
+			font = font_heading,
+			font_size = SIZE_HEADING,
+			normal = box(c(ThemeColors.SURFACE_INSET), RADIUS_CONTROL, 12, 2),
+			focus = ring(),
+		}
+	)
 	var hover: Dictionary = inherit(well, {bg_color = c(ThemeColors.SURFACE_HOVER)})
 	var option := {
 		normal = well,

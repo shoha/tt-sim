@@ -58,6 +58,11 @@ const SIZE_HINTS := {
 }
 
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT
+## What the library's New map card decided before Generate ({"size_ft", "depth_ft", "seed"},
+## each optional; set before the dialog enters the tree). A size given here hides the Size
+## field (the card's Advanced is where it is chosen) and the header names it; a seed is used
+## instead of a fresh one.
+var preset: Dictionary = {}
 var header: MenuHeader
 var size_field: TileField
 var biome_field: TileField
@@ -103,6 +108,10 @@ func _on_panel_ready() -> void:
 	size_field.tiles.select(StringName("size_%d" % _size_ft))
 	size_field.tiles.selection_changed.connect(_on_size_selected)
 	_fields.add_child(size_field)
+	if preset.has("size_ft"):
+		_size_ft = int(preset.size_ft)
+		size_field.visible = false
+		header.setup("New map", preset_caption(preset), true)
 
 	biome_field = TileField.new()
 	biome_field.name = "BiomeField"
@@ -261,15 +270,27 @@ static func landform_tile(kind: String) -> StringName:
 	return StringName(LANDFORM_PREFIX + kind)
 
 
-## What the author has chosen so far: {"size_ft", "biome_id", "landform", "seed"} (a fresh
-## seed each call).
+## What the author has chosen so far: {"size_ft", "biome_id", "landform", "seed"}, and
+## "depth_ft" for a preset's custom size (a fresh seed each call unless the preset pins one).
 func current_spec() -> Dictionary:
-	return {
+	var spec := {
 		"size_ft": _size_ft,
 		"biome_id": _biome_id,
 		"landform": _landform,
-		"seed": NewMap.random_seed(),
+		"seed": int(preset.get("seed", NewMap.random_seed())),
 	}
+	if preset.has("depth_ft"):
+		spec.depth_ft = int(preset.depth_ft)
+	return spec
+
+
+## The header's line when the library chose the size: "A 150 x 100 ft map. Pick a place and a
+## shape to start from." Pure.
+static func preset_caption(given: Dictionary) -> String:
+	var width := int(given.get("size_ft", NewMap.DEFAULT_SIZE_FT))
+	var depth := int(given.get("depth_ft", width))
+	var size := "%d ft" % width if depth == width else "%d x %d ft" % [width, depth]
+	return "A %s map. Pick a place and a shape to start from." % size
 
 
 func _on_size_selected(id: StringName) -> void:

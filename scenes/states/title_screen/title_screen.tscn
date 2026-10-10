@@ -18,27 +18,14 @@ theme_override_constants/margin_top = 24
 theme_override_constants/margin_right = 24
 theme_override_constants/margin_bottom = 24
 
-[node name="Columns" type="HBoxContainer" parent="Hub"]
-layout_mode = 2
-mouse_filter = 2
-theme_override_constants/separation = 24
-
-[node name="ColumnSheet" type="PanelContainer" parent="Hub/Columns"]
+[node name="Stack" type="VBoxContainer" parent="Hub"]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_vertical = 0
-theme_type_variation = &"Sheet"
-
-[node name="LeftColumn" type="VBoxContainer" parent="Hub/Columns/ColumnSheet"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(300, 0)
-layout_mode = 2
 mouse_filter = 2
-theme_type_variation = &"BoxContainerTight"
+theme_type_variation = &"BoxContainerSpaced"
 
-[node name="RightZone" type="VBoxContainer" parent="Hub/Columns"]
+[node name="TopBar" type="HBoxContainer" parent="Hub/Stack"]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_horizontal = 3
 mouse_filter = 2
-theme_override_constants/separation = 12
+theme_type_variation = &"BoxContainerSpaced"

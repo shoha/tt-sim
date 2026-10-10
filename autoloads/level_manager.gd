@@ -473,6 +473,8 @@ func get_saved_levels() -> Array[Dictionary]:
 							"token_count": level.token_placements.size(),
 							"environment_preset": level.environment_preset,
 							"thumbnail": "",
+							"map_path": level.map_path,
+							"map_document": level.map_document,
 						}
 					)
 				)
@@ -541,6 +543,9 @@ func _get_folder_level_info(folder_name: String) -> Dictionary:
 		"token_count": token_count,
 		"environment_preset": String(data.get("environment_preset", "")),
 		"thumbnail": thumbnail if FileAccess.file_exists(thumbnail) else "",
+		# What the library's source chip is derived from (LibraryFacts.source_of).
+		"map_path": String(map_path) if has_glb else "",
+		"map_document": String(map_document) if has_document else "",
 	}
 
 
@@ -598,6 +603,7 @@ func delete_level_folder(folder_path: String) -> bool:
 		current_level = null
 		current_level_path = ""
 	ImportSources.forget(folder_path.trim_suffix("/").get_file())
+	LibraryPlays.forget(folder_path.trim_suffix("/").get_file())
 
 	return true
 

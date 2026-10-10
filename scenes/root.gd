@@ -304,7 +304,7 @@ func _enter_state(state: State) -> void:
 				_title_screen.play_solo_requested.connect(_on_play_solo_requested)
 			if _title_screen.has_signal("build_map_requested"):
 				_title_screen.build_map_requested.connect(
-					func() -> void: request_authoring(null, RETURN_TO_TITLE)
+					func(preset: Dictionary) -> void: request_authoring(null, RETURN_TO_TITLE, preset)
 				)
 			if _title_screen.has_signal("edit_map_requested"):
 				_title_screen.edit_map_requested.connect(_on_edit_map_requested)
@@ -465,8 +465,9 @@ func _on_level_loaded(_level_data: LevelData) -> void:
 ## Opens map building for `level` (null: a level made there). A level with a map opens at
 ## once (a GLB-only level as a dressing layer over its Blender map); otherwise the new-map
 ## dialog asks for a size and starting biome first, and cancelling it changes nothing.
-## `return_to` (RETURN_TO_TITLE or RETURN_TO_EDITOR) is where leaving goes back to.
-func request_authoring(level: LevelData, return_to: StringName) -> void:
+## `return_to` (RETURN_TO_TITLE or RETURN_TO_EDITOR) is where leaving goes back to. `preset`
+## is what the library's New map card chose (NewMapDialog.preset: size and seed).
+func request_authoring(level: LevelData, return_to: StringName, preset := {}) -> void:
 	var refusal := authoring_refusal(level, NetworkManager.is_networked())
 	if refusal != "":
 		UIManager.show_warning(refusal)
@@ -477,6 +478,7 @@ func request_authoring(level: LevelData, return_to: StringName) -> void:
 	if is_instance_valid(_new_map_dialog):
 		return
 	_new_map_dialog = NEW_MAP_DIALOG_SCENE.instantiate()
+	_new_map_dialog.preset = preset
 	_new_map_dialog.map_chosen.connect(
 		func(spec: Dictionary) -> void:
 			_begin_authoring({"level": level, "new_map": spec, "return_to": return_to})

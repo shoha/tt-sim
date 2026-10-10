@@ -1,34 +1,36 @@
 class_name TitleScreen
 extends CanvasLayer
 
-## Title hub. The Play together card leads the column (PlayTogetherCard: Host and Join as two
-## sides of one question), with a quiet Resume under it when saved sessions exist
-## (ResumeEntry); the saved levels sit beside them as cards and the selected card is the level
-## Play Solo opens. Avatars opens the player's saved avatars (AvatarRoster).
-## The hub stands on the painted backdrop (PaintedBackdrop) in the selected map's mood and
-## land, changing as the selection changes, and making way for the column's sheet, the plaque
-## and the cards (fit_around); with no map selected, and over an empty library, it is
-## morning. The backdrop is the empty library's picture too: the d20 that turned there was
-## a glossy 3D object over a painting, so it went with the flat sky. No word stands straight on
-## the painting: the column (with the version beside the wordmark) is on a paper sheet like
-## the room's side sheet, ending at its content, and "Your maps" with its count (and the empty
-## library's caption) on a paper plaque, so every caption keeps its contrast in every mood.
+## The title is the library. A top bar holds the wordmark on its plaque at the left and, at
+## the right end on a plaque of its own, Avatars, Settings and Quit beside the Play together
+## card (PlayTogetherCard: Host and Join as two sides of one question, the screen's one
+## persimmon fill, C5) with Resume under it when saved sessions exist (ResumeEntry). Under the
+## bar, the maps as a grid of cards (LevelGrid), the most recently played or edited first and
+## the Bundled maps last (LibraryFacts.ordered, LibraryPlays). The first card is New map
+## (NewMapCard: Generate and Import..., Advanced for size and seed); an empty library shows
+## only that card, larger and centred, captioned to make a first map or drop one in.
+##
+## Selecting a card opens its detail strip (MapDetailStrip) directly under its row: the map's
+## picture, its name, description and author edited in place, its source, size, tokens and
+## when it was last played, and Play (solo), Host with this map (a room with this map on its
+## shelf: the Host control beside what it acts on), Edit map and "..." (Set up tokens,
+## Duplicate, Delete, Reload from Blender). Accept on a card selects it first and plays it on
+## a second Accept; a double click plays.
+##
+## A Blender map comes in through Import..., or a .glb dropped anywhere on the library (a new
+## map) or on a map's card (Replace for that map); LibraryImports shows the import check
+## before anything is written and the new or replaced map is selected after.
 ##
 ## Host opens a room with nothing on its shelf: a room needs no map (room first, user verdict
-## 2026-10-09), so it acts on nothing selected and maps are added in the room. Join happens in
-## place on the card (no join screen): the code goes to Root's SessionFlow, whose progress and
-## errors come back to the card (show_join_status()). Resume reopens a saved session. Play solo
-## and Set up tokens act on the selected map, and both name it the same way, the bare name
-## leading the line under the button. Over an empty library the plaque where the cards would
-## be says so once (no count of 0) beside a small painted picture of a map to come, and offers
-## one action, New map's (Start a new map; I5). New map starts one
-## from nothing. Set up tokens is the Level Editor by what it does (starting tokens, the map's
-## details and its Blender file; W5 keeps "level" internal); with no map selected it opens on a
-## new one, where a map exported from Blender is chosen, and its caption says so: it stays
-## enabled, since that is how a Blender map comes into an empty library.
+## 2026-10-09). Join happens in place on the card: the code goes to Root's SessionFlow, whose
+## progress and errors come back to the card (show_join_status()). Resume reopens a saved
+## session. The screen stands on the painted backdrop (PaintedBackdrop) in the selected map's
+## mood and land, morning with none, making way for the paper (fit_around). No word stands
+## straight on the painting: the wordmark, the tools and the card are on plaques, the strip on
+## a sheet.
 
-## Host: open a room. `level_info` is always empty from the card (a room needs no map); a
-## caller may still pass a map to go on the shelf.
+## Host: open a room. Empty `level_info` from the card (a room needs no map); a map's from the
+## detail strip's Host with this map, to go on the shelf.
 signal host_game_requested(level_info: Dictionary)
 ## Join in place: join the room with `code`.
 signal join_requested(code: String)
@@ -37,179 +39,99 @@ signal join_cancel_requested
 ## Resume the saved session `id` (ResumeEntry).
 signal resume_requested(id: String)
 signal play_solo_requested(level_info: Dictionary)
-## New map: a new map in authoring mode (Root shows the new-map dialog).
-signal build_map_requested
-## A card's "Edit map": open that level's map in authoring mode.
+## New map's Generate: a new map from `preset` ({"size_ft", "depth_ft", "seed"}), the rest
+## asked by Root's new-map dialog.
+signal build_map_requested(preset: Dictionary)
+## A map's Edit map: open its map in authoring mode.
 signal edit_map_requested(level_info: Dictionary)
 
 const SettingsMenuScene := preload("res://scenes/ui/settings_menu.tscn")
 const ENTRANCE_STAGGER := Constants.ANIM_ENTRANCE_STAGGER
 const ENTRANCE_DURATION := Constants.ANIM_ENTRANCE
-## The Level Editor's player-facing name, here, on a card's menu and in the pause menu.
+## The Level Editor's player-facing name, on the detail strip's menu and in the pause menu.
 const SET_UP_TOKENS := "Set up tokens"
-## A token on its square, its own icon: the wand stays with the Events rail item and Surprise
-## me, where it means a little magic, not an editor.
+## A token on its square, its own icon: the wand stays with Generate, the Events rail item and
+## Surprise me, where it means a little magic, not an editor.
 const SET_UP_TOKENS_ICON := "chess"
 ## Quitting the game, in the same words and icon here and in the pause menu.
 const QUIT := "Quit game"
 const QUIT_ICON := "logout"
-const NEW_MAP_CAPTION := "Pick a landform, then paint it"
-## The empty library's plaque: one line and one action, New map's.
-const EMPTY_CAPTION := "No maps yet. Paint your first one"
-const EMPTY_ACTION := "Start a new map"
-## The empty library's picture: a map to come, painted in the morning the backdrop shows.
-const EMPTY_PICTURE := Vector2(128, 72)
-const EMPTY_PICTURE_KEY := "Your first map"
-## The line under Set up tokens with no map selected: what it opens there.
-const SET_UP_TOKENS_EMPTY_LINE := "Bring in a map from Blender"
-## The left column's rhythm. Its own separation (BoxContainerTight, 4) puts a caption under
-## its button; every other gap is a spacer before a row, sized by _fit_to_canvas. A caption
-## stands AFTER_CAPTION_GAP above the next control, so it reads with its own button; stacked
-## buttons stand STACK_GAP_ROOMY apart, or STACK_GAP when the canvas is short; the three
-## section gaps (under the wordmark, above and below the divider) take what is left, from
-## their SECTION_GAPS size down to SECTION_GAP_MIN (8: on a 1280x720 canvas the two map
-## actions' captions need the room). The column is measured against the room the hub's
-## margins and its sheet's padding leave it (the hub's margins are the sheet's distance from
-## the canvas edge, so the padding comes out of what used to be margin), and tightens only by
-## what that room needs: the stacked gaps first, then the sections, evenly
-## (docs/THEME_GUIDE.md, Interface size).
-const AFTER_CAPTION_GAP := 12.0
-const STACK_GAP := 8.0
-const STACK_GAP_ROOMY := 12.0
-## Under the wordmark, above the divider, below it.
-const SECTION_GAPS: Array[float] = [36.0, 32.0, 32.0]
-const SECTION_GAP_MIN := 8.0
+## The fewest cards to a line: four keep a row and the strip under it on a 1280x720 canvas.
+const GRID_COLUMNS := 4
 
 ## Returns the level info list; tests inject a fake before the node enters the tree.
 var level_provider: Callable = LevelManager.get_saved_levels
+## Returns {level folder: last played}; tests inject a fake.
+var plays_provider: Callable = LibraryPlays.all
 ## Returns the saved sessions (SessionFile.list()); tests and the UI tour inject a fake.
 var session_provider: Callable = SessionFile.list
 
-## Host and Join, the column's lead and the screen's one fill.
+## Host and Join, the top bar's right end and the screen's one fill.
 var play_together: PlayTogetherCard
 ## Resume a saved session, under the card; hidden with none.
 var resume_entry: ResumeEntry
-var play_button: Button
-var editor_button: Button
-var build_map_button: Button
 var avatars_button: Button
 var settings_button: Button
 var quit_button: Button
-var play_subtitle: Label
-var editor_subtitle: Label
-var heading_count: Label
-var empty_caption: Label
-## The empty library's one action on its plaque: New map.
-var empty_action: Button
 var grid: LevelGrid
+var new_map_card: NewMapCard
+var strip: MapDetailStrip
+var imports: LibraryImports
 var backdrop: PaintedBackdrop
 ## The version, a caption on the wordmark's baseline.
 var version_label: Label
-## "Your maps" and its count, with the empty library's caption under them, on their plaque.
-var heading_plaque: PanelContainer
-var _heading_row: HBoxContainer
-## The empty library's picture, line and action, under the heading on its plaque.
-var _empty_row: HBoxContainer
-## The left column's spacers: the three section gaps in order, and the gap before each
-## row after the card.
-var _section_gaps: Array[Control] = []
-var _row_gaps: Array[Control] = []
+var wordmark_plaque: PanelContainer
+## Avatars, Settings, Quit and the Play together card, on their plaque.
+var tools_plaque: PanelContainer
 
 @onready var _hub: MarginContainer = %Hub
-@onready var _sheet: PanelContainer = %ColumnSheet
-@onready var _left: VBoxContainer = %LeftColumn
-@onready var _right: VBoxContainer = %RightZone
+@onready var _top_bar: HBoxContainer = %TopBar
+@onready var _stack: VBoxContainer = %Stack
 
 
 func _ready() -> void:
 	backdrop = PaintedBackdrop.new()
 	add_child(backdrop)
 	move_child(backdrop, 0)
-	_build_left_column()
-	_build_right_zone()
+	_build_top_bar()
+	_build_library()
 	version_label.text = "v" + UpdateVersion.get_current()
 	version_label.modulate.a = 0.0
 	grid.refresh()
 	_preselect_most_recent()
 	_refresh_actions()
 	_play_entrance_animation()
-	get_viewport().size_changed.connect(_fit_to_canvas)
-	_fit_to_canvas()
-	# The painting makes way for the sheet, the plaque and the cards: its sun, clouds and
+	# The painting makes way for the plaques, the cards and the strip: its sun, clouds and
 	# poplars stand in the sky they leave open.
 	backdrop.fit_around(self)
 	grid.resized.connect(backdrop.refit)
-	_sheet.resized.connect(backdrop.refit)
+	grid.content_resized.connect(backdrop.refit)
+	_top_bar.resized.connect(backdrop.refit)
 	LevelManager.level_saved.connect(_on_level_saved)
 	get_tree().node_added.connect(_on_node_added_or_removed)
 	get_tree().node_removed.connect(_on_node_added_or_removed)
+	get_window().files_dropped.connect(_on_files_dropped)
 
 
 func _exit_tree() -> void:
 	if LevelManager.level_saved.is_connected(_on_level_saved):
 		LevelManager.level_saved.disconnect(_on_level_saved)
+	if get_window().files_dropped.is_connected(_on_files_dropped):
+		get_window().files_dropped.disconnect(_on_files_dropped)
 
 
 func selected_level() -> Dictionary:
 	return grid.selected_info()
 
 
-## Fit the left column to the canvas height: roomy when it fits, else stacked buttons at
-## STACK_GAP, then the section gaps shrunk evenly by what is still over. The room is the
-## canvas less the hub's margins and the sheet's own padding.
-func _fit_to_canvas() -> void:
-	if _section_gaps.is_empty():
-		return
-	var margins := (
-		_hub.get_theme_constant(&"margin_top") + _hub.get_theme_constant(&"margin_bottom")
-	)
-	margins += _sheet.get_theme_stylebox(&"panel").get_minimum_size().y
-	var room := get_viewport().get_visible_rect().size.y - margins
-	_set_gaps(STACK_GAP_ROOMY, 0.0)
-	if _left.get_combined_minimum_size().y <= room:
-		return
-	_set_gaps(STACK_GAP, 0.0)
-	var over := _left.get_combined_minimum_size().y - room
-	if over <= 0.0:
-		return
-	var slack := 0.0
-	for gap in SECTION_GAPS:
-		slack += gap - SECTION_GAP_MIN
-	_set_gaps(STACK_GAP, clampf(over / slack, 0.0, 1.0))
-
-
-## Size every spacer: a row's gap is AFTER_CAPTION_GAP after a caption, else `stack`; each
-## section gap gives up the share `squeeze` of its way down to SECTION_GAP_MIN. A spacer's
-## height is its gap less the column's separation above and below it, in whole pixels, rounded
-## down: the box rounds each child's height up, which put a fully squeezed column 2 px over.
-func _set_gaps(stack: float, squeeze: float) -> void:
-	var separation := float(_left.get_theme_constant(&"separation"))
-	for i in _section_gaps.size():
-		var gap := lerpf(SECTION_GAPS[i], SECTION_GAP_MIN, squeeze)
-		_section_gaps[i].custom_minimum_size.y = floorf(maxf(gap - 2.0 * separation, 0.0))
-	for spacer in _row_gaps:
-		var row := _left.get_child(spacer.get_index() + 1) as Control
-		spacer.visible = row.visible
-		var gap := AFTER_CAPTION_GAP if _follows_caption(spacer) else stack
-		spacer.custom_minimum_size.y = maxf(gap - 2.0 * separation, 0.0)
-
-
-## Whether the nearest shown control above `spacer` is a caption line.
-func _follows_caption(spacer: Control) -> bool:
-	for i in range(spacer.get_index() - 1, -1, -1):
-		var control := _left.get_child(i) as Control
-		if control.visible:
-			return control is Label
-	return false
-
-
-func _build_left_column() -> void:
+func _build_top_bar() -> void:
 	# The version reads with the wordmark, a caption on its baseline, on the same paper.
+	wordmark_plaque = _plaque("WordmarkPlaque")
 	var wordmark_row := HBoxContainer.new()
 	wordmark_row.name = "WordmarkRow"
 	wordmark_row.theme_type_variation = &"BoxContainerSpaced"
 	wordmark_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_left.add_child(wordmark_row)
+	wordmark_plaque.add_child(wordmark_row)
 	var wordmark := Label.new()
 	wordmark.name = "Wordmark"
 	wordmark.text = "TTSim"
@@ -220,11 +142,34 @@ func _build_left_column() -> void:
 	version_label.theme_type_variation = &"Caption"
 	version_label.size_flags_vertical = Control.SIZE_SHRINK_END
 	wordmark_row.add_child(version_label)
-	_section_gaps.append(UiActions.spacer(0, _left))
+	var open_sky := Control.new()
+	open_sky.name = "OpenSky"
+	open_sky.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	open_sky.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_top_bar.add_child(open_sky)
+	tools_plaque = _plaque("ToolsPlaque")
+	var row := HBoxContainer.new()
+	row.name = "ToolsRow"
+	row.theme_type_variation = &"BoxContainerSpaced"
+	tools_plaque.add_child(row)
+	var tools := VBoxContainer.new()
+	tools.name = "Tools"
+	tools.theme_type_variation = &"BoxContainerTight"
+	tools.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	row.add_child(tools)
+	avatars_button = UiActions.secondary("Avatars", "mood-smile", tools)
+	avatars_button.tooltip_text = "Make your characters ahead of time; place them in any game"
+	avatars_button.pressed.connect(_on_avatars_pressed)
+	avatars_button.visible = DevFeatures.avatars
+	settings_button = UiActions.secondary("Settings", "settings", tools)
+	settings_button.pressed.connect(_on_settings_pressed)
+	quit_button = UiActions.secondary(QUIT, QUIT_ICON, tools)
+	quit_button.pressed.connect(_on_quit_pressed)
 	# Host and Join as two sides of one question; its persimmon is the screen's one fill (C5).
 	play_together = PlayTogetherCard.new()
 	play_together.name = "PlayTogether"
-	_left.add_child(play_together)
+	play_together.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	row.add_child(play_together)
 	play_together.host_pressed.connect(_on_host_pressed)
 	play_together.join_submitted.connect(join_requested.emit)
 	play_together.join_cancelled.connect(join_cancel_requested.emit)
@@ -236,165 +181,83 @@ func _build_left_column() -> void:
 	play_together.set_under(resume_entry)
 	resume_entry.resume_requested.connect(resume_requested.emit)
 	play_together.join_mode_changed.connect(resume_entry.hold)
-	# Only a failure taller than the slot changes the column's height (deferred: the column is
-	# still being built when the first of these can come).
-	var refit := func() -> void: _fit_to_canvas.call_deferred()
-	play_together.minimum_size_changed.connect(refit)
-	_section_gaps.append(UiActions.spacer(0, _left))
-	_left.add_child(HSeparator.new())
-	_section_gaps.append(UiActions.spacer(0, _left))
-	play_button = UiActions.secondary("Play solo", "map", _left)
-	play_subtitle = UiActions.subtitle_of(play_button)
-	play_button.pressed.connect(_on_play_pressed)
-	# The Level Editor, by what it does to the selected map (W5: "level" stays internal).
-	editor_button = _stacked(SET_UP_TOKENS, SET_UP_TOKENS_ICON)
-	editor_button.tooltip_text = "Starting tokens, details and the map file of the selected map"
-	editor_subtitle = UiActions.subtitle_of(editor_button)
-	editor_button.pressed.connect(_on_editor_pressed)
-	build_map_button = _stacked("New map", "brush")
-	var new_map_caption := UiActions.subtitle_of(build_map_button)
-	new_map_caption.text = NEW_MAP_CAPTION
-	new_map_caption.visible = true
-	build_map_button.pressed.connect(_on_build_map_pressed)
-	avatars_button = _stacked("Avatars", "mood-smile")
-	avatars_button.tooltip_text = "Make your characters ahead of time; place them in any game"
-	avatars_button.pressed.connect(_on_avatars_pressed)
-	avatars_button.visible = DevFeatures.avatars
-	# Settings and Quit share the last row: the two map actions' captions need its height.
-	_row_gaps.append(UiActions.spacer(0, _left))
-	var last_row := HBoxContainer.new()
-	last_row.name = "SettingsAndQuit"
-	last_row.theme_type_variation = &"BoxContainerSpaced"
-	_left.add_child(last_row)
-	settings_button = UiActions.secondary("Settings", "settings", last_row)
-	settings_button.pressed.connect(_on_settings_pressed)
-	quit_button = UiActions.secondary(QUIT, QUIT_ICON, last_row)
-	quit_button.pressed.connect(_on_quit_pressed)
-	for button in [settings_button, quit_button]:
-		(button as Control).size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 
-## A Secondary button in the lower stack, after its row gap.
-func _stacked(label: String, icon: String) -> Button:
-	_row_gaps.append(UiActions.spacer(0, _left))
-	return UiActions.secondary(label, icon, _left)
+func _plaque(node_name: String) -> PanelContainer:
+	var plaque := PanelContainer.new()
+	plaque.name = node_name
+	plaque.theme_type_variation = &"Plaque"
+	plaque.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	_top_bar.add_child(plaque)
+	return plaque
 
 
-func _build_right_zone() -> void:
-	# The heading's words stand on the painting, so they sit on a plaque of paper that ends at
-	# them; its top edge lines up with the column's sheet.
-	heading_plaque = PanelContainer.new()
-	heading_plaque.name = "HeadingPlaque"
-	heading_plaque.theme_type_variation = &"Plaque"
-	heading_plaque.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	heading_plaque.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_right.add_child(heading_plaque)
-	var words := VBoxContainer.new()
-	words.theme_type_variation = &"BoxContainerTight"
-	words.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	heading_plaque.add_child(words)
-	_heading_row = HBoxContainer.new()
-	_heading_row.name = "Heading"
-	_heading_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# The count reads with its heading as a bare number ("Your maps  3"), sitting on the
-	# heading's baseline rather than pinned to the window's far edge.
-	_heading_row.theme_type_variation = &"BoxContainerSpaced"
-	var heading := Label.new()
-	heading.text = "Your maps"
-	heading.theme_type_variation = &"H2"
-	_heading_row.add_child(heading)
-	heading_count = Label.new()
-	heading_count.name = "Count"
-	heading_count.theme_type_variation = &"Caption"
-	heading_count.size_flags_vertical = Control.SIZE_SHRINK_END
-	_heading_row.add_child(heading_count)
-	words.add_child(_heading_row)
-	# The empty library: a small painted picture of a map to come beside one line and one
-	# action, quiet beside Host's fill (C5): New map's.
-	_empty_row = HBoxContainer.new()
-	_empty_row.name = "EmptyLibrary"
-	_empty_row.theme_type_variation = &"BoxContainerSpaced"
-	_empty_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_empty_row.visible = false
-	words.add_child(_empty_row)
-	var picture := RoomRows.map_well(EMPTY_PICTURE, null, EMPTY_PICTURE_KEY, "")
-	picture.name = "Picture"
-	picture.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_empty_row.add_child(picture)
-	var empty_words := VBoxContainer.new()
-	empty_words.theme_type_variation = &"BoxContainerSpaced"
-	empty_words.alignment = BoxContainer.ALIGNMENT_CENTER
-	empty_words.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_empty_row.add_child(empty_words)
-	empty_caption = Label.new()
-	empty_caption.name = "Empty"
-	empty_caption.text = EMPTY_CAPTION
-	empty_caption.theme_type_variation = &"Caption"
-	empty_words.add_child(empty_caption)
-	empty_action = UiActions.secondary(EMPTY_ACTION, "brush", empty_words)
-	empty_action.name = "StartNewMap"
-	empty_action.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	empty_action.pressed.connect(_on_build_map_pressed)
+func _build_library() -> void:
+	new_map_card = NewMapCard.new()
+	new_map_card.generate_requested.connect(build_map_requested.emit)
+	strip = MapDetailStrip.new()
+	strip.play_requested.connect(play_solo_requested.emit)
+	strip.host_requested.connect(host_game_requested.emit)
+	strip.edit_map_requested.connect(edit_map_requested.emit)
+	strip.action_requested.connect(_on_strip_action)
+	strip.meta_saved.connect(_on_meta_saved)
+	imports = LibraryImports.new()
+	imports.name = "LibraryImports"
+	add_child(imports)
+	imports.imported.connect(_on_imported)
+	imports.replaced.connect(func(folder: String, _result: Dictionary) -> void: _on_imported(folder))
+	new_map_card.import_requested.connect(imports.pick)
 	grid = LevelGrid.new()
 	grid.name = "Grid"
-	grid.columns = 3
-	grid.provider = level_provider
+	grid.columns = GRID_COLUMNS
+	grid.manageable = false
+	grid.select_before_activate = true
+	grid.lead = new_map_card
+	grid.detail = strip
+	grid.provider = library
 	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# The strip is sized to the grid's width; a disabled horizontal scroll would make that its
+	# minimum too and hold the grid at its old width when the window shrinks.
+	grid.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	grid.selection_changed.connect(_on_selection_changed)
-	grid.level_activated.connect(_on_level_activated)
-	grid.level_edit_requested.connect(_on_level_edit_requested)
+	grid.level_activated.connect(play_solo_requested.emit)
+	grid.level_edit_requested.connect(_open_editor)
 	grid.level_map_edit_requested.connect(edit_map_requested.emit)
 	grid.levels_changed.connect(_refresh_actions)
-	_right.add_child(grid)
+	_stack.add_child(grid)
 
 
+## The library's maps in its order (LibraryFacts.ordered), each with when it was last played.
+func library() -> Array[Dictionary]:
+	return LibraryFacts.ordered(level_provider.call(), plays_provider.call())
+
+
+## Selects the map at the head of the library (the most recently played or edited).
 func _preselect_most_recent() -> void:
-	var levels: Array = level_provider.call()
-	if levels.is_empty():
-		return
-	var newest: Dictionary = levels[0]
-	for info in levels:
-		if int(info.get("modified_at", 0)) > int(newest.get("modified_at", 0)):
-			newest = info
-	grid.select(String(newest.get("path", "")))
+	var levels := LibraryFacts.ordered(grid.provider.call(), {})
+	if not levels.is_empty():
+		grid.select(String(levels[0].get("path", "")))
 
 
-## Play Solo and Set up tokens name the selected level (Host on the card needs none: a room
-## needs no map). Play Solo is disabled without one, and Set up tokens opens on a new map,
-## where a Blender map is brought in, as its line then says.
+## The library's state: an empty one is New map alone, larger; the strip shows the selected
+## map; the backdrop takes its mood and land (morning with none).
 func _refresh_actions() -> void:
 	var count := grid.card_count()
-	heading_count.text = str(count)
-	# An empty library says so once, in its own line: no count of 0 above it.
-	heading_count.visible = count > 0
-	_empty_row.visible = count == 0
-	empty_caption.visible = count == 0
-	empty_action.visible = count == 0
+	new_map_card.set_empty(count == 0)
 	var info := grid.selected_info()
-	var has_level := not info.is_empty()
-	play_button.disabled = not has_level
-	play_subtitle.visible = has_level
+	if not info.is_empty():
+		strip.show_map(info)
 	var name := String(info.get("name", ""))
-	play_subtitle.text = name
-	editor_subtitle.text = name if has_level else SET_UP_TOKENS_EMPTY_LINE
-	editor_subtitle.visible = true
-	# The selected map's mood and land (morning with none); the first one shows at once.
 	var folder := String(info.get("folder", ""))
 	backdrop.show_map(
 		String(info.get("environment_preset", "")), folder if folder != "" else name
 	)
 	backdrop.refit()
-	# A caption shown or hidden changes the column's height and the gap after it.
-	_fit_to_canvas()
 
 
-## The rows lift in one after another; the spacers between them are skipped (M4).
+## The top bar's plaques lift in, then the library (M4).
 func _play_entrance_animation() -> void:
-	var targets: Array[Control] = []
-	for control in UiMotion.visible_children(_left):
-		if not (_section_gaps.has(control) or _row_gaps.has(control)):
-			targets.append(control)
-	targets.append_array(UiMotion.visible_children(_right))
+	var targets: Array[Control] = [wordmark_plaque, tools_plaque, grid]
 	await UiMotion.stagger_in(targets, self)
 	if not is_instance_valid(self):
 		return
@@ -411,9 +274,9 @@ func _on_selection_changed(_info: Dictionary) -> void:
 
 
 ## One persimmon fill per screen (C5): while a sheet's scrim covers the title, the sheet's
-## own primary (Apply, Create) is the fill, so Host's wash steps back to paper and takes its
-## fill back when the last sheet closes. Deferred: a node is still in its groups while
-## node_removed is emitted.
+## own primary (Apply, Create, Add to library) is the fill, so Host's wash steps back to paper
+## and takes its fill back when the last sheet closes. Deferred: a node is still in its groups
+## while node_removed is emitted.
 func _on_node_added_or_removed(node: Node) -> void:
 	if node is Scrim:
 		_refresh_host_fill.call_deferred()
@@ -438,15 +301,50 @@ func show_join_status(state: StringName, message := "") -> void:
 			play_together.show_error(message, message == SessionFlow.NO_ROOM)
 
 
-## A level saved from the Level Editor overlay (not through the title) must
-## still show up here; refresh() notifies _refresh_actions via levels_changed.
+## The library entry of the card under `point` (canvas coordinates), or {} between cards.
+func card_at(point: Vector2) -> Dictionary:
+	for card: LevelCard in grid._cards:
+		if card.is_visible_in_tree() and card.get_global_rect().has_point(point):
+			return card.level_info
+	return {}
+
+
+## Files dropped on the window while the library is the screen (no sheet over it): a .glb on
+## a map's card replaces that map; anywhere else it is a new map.
+func _on_files_dropped(files: PackedStringArray) -> void:
+	if not visible or Scrim.any_shown(get_tree()):
+		return
+	var info := card_at(_hub.get_viewport().get_mouse_position())
+	imports.drop(files, String(info.get("folder", "")))
+
+
+## A map written by an import or a replace: the library again, that map selected.
+func _on_imported(folder: String) -> void:
+	grid.refresh()
+	grid.select(LevelManager.folder_path(folder))
+	_refresh_actions()
+
+
+func _on_strip_action(info: Dictionary, action: StringName) -> void:
+	match action:
+		MapDetailStrip.ACTION_SET_UP:
+			_open_editor(info)
+		MapDetailStrip.ACTION_RELOAD:
+			imports.reload(info)
+		_:
+			grid.act(info, action)
+
+
+## A name, description or author saved in the strip shows on the card at once.
+func _on_meta_saved(info: Dictionary) -> void:
+	grid.update_info(info)
+
+
+## A level saved from the Level Editor overlay (not through the title) must still show up
+## here; refresh() notifies _refresh_actions via levels_changed.
 func _on_level_saved(_path: String) -> void:
 	grid.refresh()
 	_preselect_most_recent()
-
-
-func _on_level_activated(info: Dictionary) -> void:
-	play_solo_requested.emit(info)
 
 
 ## Host opens a room with nothing on its shelf (it acts on nothing selected; maps are added
@@ -455,24 +353,8 @@ func _on_host_pressed() -> void:
 	host_game_requested.emit({})
 
 
-func _on_play_pressed() -> void:
-	var info := grid.selected_info()
-	if info.is_empty():
-		return
-	play_solo_requested.emit(info)
-
-
-## Set up tokens opens the editor on the selected map, as its caption says; with none
-## selected, on a new map (where a Blender map file can be chosen).
-func _on_editor_pressed() -> void:
-	EventBus.open_editor_requested.emit(String(grid.selected_info().get("path", "")))
-
-
-func _on_build_map_pressed() -> void:
-	build_map_requested.emit()
-
-
-func _on_level_edit_requested(info: Dictionary) -> void:
+## Set up tokens: the Level Editor on that map.
+func _open_editor(info: Dictionary) -> void:
 	EventBus.open_editor_requested.emit(String(info.get("path", "")))
 
 

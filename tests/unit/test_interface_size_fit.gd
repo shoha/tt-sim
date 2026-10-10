@@ -9,8 +9,8 @@ extends GutTest
 ## The room (RoomScreen) and the room drawer over a table are walked from a sample summary.
 ##
 ## On the canvas is not enough where panels overlap: the input hint bar must never lie under
-## an open drawer (_assert_uncovered), and the title's column must stay on its paper sheet,
-## and the sheet within the hub's margin, on 1366x768 at Auto (1.35, an 800 px canvas) too.
+## an open drawer (_assert_uncovered), and the library's selected map and its detail strip must
+## be in the grid's view as it opens, on 1366x768 at Auto (1.35, an 800 px canvas) too.
 
 const CANVAS := Vector2(1280.0, 720.0)
 ## The canvas of 720p at Auto (1.40) and of 1366x768 at Auto (1.35).
@@ -83,7 +83,7 @@ func after_each() -> void:
 func test_title_screen_fits() -> void:
 	var title := _title()
 	await _assert_fits("title screen", title.quit_button)
-	_assert_column_on_its_sheet("title screen", title, CANVAS)
+	_assert_library_shows("title screen", title)
 
 
 ## A resize while the rows lift in (a saved fullscreen applying just after the title appears
@@ -94,44 +94,32 @@ func test_title_screen_fits_after_a_resize_mid_entrance() -> void:
 	await wait_process_frames(4)
 	_host.size = Vector2i(CANVAS)
 	await _assert_fits("title screen resized mid-entrance", title.quit_button)
-	_assert_column_on_its_sheet("title screen resized mid-entrance", title, CANVAS)
+	_assert_library_shows("title screen resized mid-entrance", title)
 
 
-## The column is measured against its canvas, not switched at a threshold: on 1366x768 at Auto
-## (exactly 800 px tall), 720p at Auto and 1080p it fits on its sheet, with the Play together
-## card at its full size and the Resume entry under it, and every caption sits 4 px under its
-## own button and 12 px above the next control.
-func test_title_column_fits_by_measurement() -> void:
-	for canvas in [CANVAS_768P_AUTO, CANVAS_720P_AUTO, Vector2i(1920, 1080)]:
+## The library on 1280x720 (150% on 1080p), 1366x768 at Auto (exactly 800 px tall), 720p at
+## Auto and 1080p: the top bar on the canvas with the Play together card at its full size on
+## its plaque and Resume 4 px under it, and the selected map's row and its detail strip in view
+## in the grid without scrolling; with Advanced open on New map and a custom size, and over an
+## empty library, everything still lies on the canvas.
+func test_the_library_fits_by_measurement() -> void:
+	for canvas in [Vector2i(CANVAS), CANVAS_768P_AUTO, CANVAS_720P_AUTO, Vector2i(1920, 1080)]:
 		_host.size = canvas
 		var title := _title()
-		var what := "title screen on a %s canvas" % str(canvas)
+		var what := "the library on a %s canvas" % str(canvas)
 		await _assert_fits(what, title.quit_button, Vector2(canvas))
-		_assert_column_on_its_sheet(what, title, Vector2(canvas))
 		_assert_card_whole(what, title)
 		var resume := title.resume_entry
 		assert_almost_eq(_gap(title.play_together.pill, resume), 4.0, SLACK_PX, "%s: Resume" % what)
-		var play_caption := _next_shown(title.play_button)
-		assert_eq(play_caption, title.play_subtitle)
-		assert_almost_eq(_gap(play_caption, title.editor_button), 12.0, SLACK_PX, what)
-		var editor_caption := _next_shown(title.editor_button)
-		assert_eq(editor_caption, title.editor_subtitle, "%s: Mossy Hollow" % what)
-		assert_almost_eq(_gap(editor_caption, title.build_map_button), 12.0, SLACK_PX, what)
-		var new_map_caption := _next_shown(title.build_map_button)
-		assert_almost_eq(_gap(title.build_map_button, new_map_caption), 4.0, SLACK_PX, what)
-		var stack := _gap(title.avatars_button, title.settings_button)
-		assert_true(stack >= TitleScreen.STACK_GAP - SLACK_PX, "%s: stack %.1f" % [what, stack])
-		assert_eq(title.settings_button.global_position.y, title.quit_button.global_position.y)
+		_assert_library_shows(what, title)
+		title.new_map_card.set_advanced(true)
+		title.new_map_card.size_field.tiles.selection_changed.emit(NewMapCard.SIZE_CUSTOM)
+		title.new_map_card.width_box.value = 300
+		await _assert_fits("%s, Advanced open" % what, title.new_map_card.size_line, Vector2(canvas))
+		title.grid.provider = func() -> Array: return []
+		title.grid.refresh()
+		await _assert_fits("%s, empty" % what, title.new_map_card, Vector2(canvas))
 		title.free()
-
-
-## At 1080p the column has room for its roomy stack.
-func test_title_column_is_roomy_at_1080p() -> void:
-	_host.size = Vector2i(1920, 1080)
-	var title := _title()
-	await _assert_fits("title at 1080p", title.quit_button, Vector2(1920, 1080))
-	var stack := _gap(title.avatars_button, title.settings_button)
-	assert_almost_eq(stack, TitleScreen.STACK_GAP_ROOMY, SLACK_PX)
 
 
 func test_every_settings_section_fits() -> void:
@@ -224,7 +212,6 @@ func test_join_in_place_fits() -> void:
 			SessionFlow.JOIN_FAILED, VersionGate.mismatch_message("0.2.9", "0.2.10")
 		)
 		await _assert_fits(what, title.play_together.status_label, Vector2(canvas))
-		_assert_column_on_its_sheet(what, title, Vector2(canvas))
 		_assert_card_whole(what, title)
 		var field := _drawn_rect(title.play_together.code_edit)
 		assert_true(_drawn_rect(title.play_together.pill).encloses(field), "%s: field" % what)
@@ -237,10 +224,10 @@ func test_join_in_place_moves_nothing() -> void:
 	for canvas in [Vector2i(CANVAS), CANVAS_720P_AUTO, Vector2i(1920, 1080)]:
 		_host.size = canvas
 		var title := _title()
-		var what := "the column on a %s canvas" % str(canvas)
+		var what := "the top bar on a %s canvas" % str(canvas)
 		await _assert_fits(what, title.quit_button, Vector2(canvas))
 		var card := title.play_together
-		var rest := [card.pill.get_global_rect(), title.play_button.get_global_rect()]
+		var rest := [card.pill.get_global_rect(), title.grid.get_global_rect()]
 		var version := VersionGate.mismatch_message("0.2.9", "0.2.10")
 		var steps := [
 			func() -> void: card.open_join(),
@@ -252,21 +239,33 @@ func test_join_in_place_moves_nothing() -> void:
 		for i in steps.size():
 			(steps[i] as Callable).call()
 			await wait_process_frames(3)
-			var now := [card.pill.get_global_rect(), title.play_button.get_global_rect()]
+			var now := [card.pill.get_global_rect(), title.grid.get_global_rect()]
 			assert_eq(now[0], rest[0], "%s, step %d: the card stays" % [what, i])
-			assert_eq(now[1], rest[1], "%s, step %d: Play solo stays" % [what, i])
+			assert_eq(now[1], rest[1], "%s, step %d: the library stays" % [what, i])
 		var slot := card.slot.get_global_rect()
 		assert_true(slot.encloses(title.resume_entry.get_global_rect()), "%s: Resume" % what)
 		title.free()
 
 
-## The Play together card at its own size, inside the column's sheet.
+## The Play together card at its own size, on the top bar's plaque.
 func _assert_card_whole(what: String, title: TitleScreen) -> void:
 	var pill := _drawn_rect(title.play_together.pill)
 	assert_almost_eq(pill.size.x, PlayTogetherCard.CARD_SIZE.x, SLACK_PX, "%s: card width" % what)
 	assert_almost_eq(pill.size.y, PlayTogetherCard.CARD_SIZE.y, SLACK_PX, "%s: card height" % what)
-	var sheet := _drawn_rect(title.get_node("%ColumnSheet") as Control)
-	assert_true(sheet.encloses(pill), "%s: the card on the sheet" % what)
+	var plaque := _drawn_rect(title.tools_plaque)
+	assert_true(plaque.encloses(pill), "%s: the card on its plaque" % what)
+
+
+## The selected map's card and its detail strip lie inside the grid's view as it opens (the
+## grid scrolls to them), the strip's Play among them.
+func _assert_library_shows(what: String, title: TitleScreen) -> void:
+	var view := _drawn_rect(title.grid).grow(SLACK_PX)
+	var card := title.grid.card_for(String(title.selected_level().get("path", "")))
+	assert_not_null(card, "%s: a map selected" % what)
+	assert_true(title.strip.is_visible_in_tree(), "%s: its strip" % what)
+	for part: Control in [card, title.strip, title.strip.play_button]:
+		var shown := _drawn_rect(part)
+		assert_true(view.encloses(shown), "%s: %s in view %s of %s" % [what, part.name, shown, view])
 
 
 ## The room as the GM sees it: four players, three maps (one long name), one selected.
@@ -548,7 +547,7 @@ func _sheet(layer: Node) -> Control:
 	return layer.get_node("CenterContainer/PanelContainer") as Control
 
 
-## The title with one saved level selected, so Play Solo shows its caption, and two saved
+## The title with one saved level selected, so its detail strip shows, and two saved
 ## sessions, so the Resume entry shows with its older-sessions menu.
 func _title() -> TitleScreen:
 	var title := TITLE_SCENE.instantiate() as TitleScreen
@@ -556,17 +555,6 @@ func _title() -> TitleScreen:
 	title.session_provider = func() -> Array[Dictionary]: return SESSIONS.duplicate(true)
 	_host.add_child(title)
 	return title
-
-
-## The column's paper sheet holds the whole column, Quit inside its padding, and ends within
-## the hub's margin from the canvas foot (the sheet's padding came out of that margin).
-func _assert_column_on_its_sheet(what: String, title: TitleScreen, canvas: Vector2) -> void:
-	var sheet := _drawn_rect(title.get_node("%ColumnSheet") as Control)
-	var quit := _drawn_rect(title.quit_button)
-	var padding := 24.0
-	assert_lte(quit.end.y + padding, sheet.end.y + SLACK_PX, "%s: Quit on the sheet" % what)
-	var margin := float((title.get_node("%Hub") as Control).get_theme_constant(&"margin_bottom"))
-	assert_lte(sheet.end.y, canvas.y - margin + SLACK_PX, "%s: the sheet in the margin" % what)
 
 
 ## The next shown sibling after `control` that is not a spacer (a bare Control).
