@@ -176,7 +176,7 @@ func _add_item_to_list(item: Dictionary) -> void:
 		return
 	if not FileAccess.file_exists(icon_path):
 		return
-	WorkerThreadPool.add_task(_load_icon_task.bind(icon_path, cache_key, index))
+	WorkerThreadPool.add_task(_load_icon_task.bind(get_instance_id(), icon_path, cache_key, index))
 
 
 ## Decode the icon PNG on a worker thread via Image.load() rather than
@@ -184,20 +184,30 @@ func _add_item_to_list(item: Dictionary) -> void:
 ## spurious "resource file not found" failures for files that demonstrably exist when a
 ## pack's icon count causes many concurrent load requests (e.g. the 65+ asset trainers/
 ## pokemon packs), a known Godot reliability gap. Image.load() has no such issue.
-func _load_icon_task(path: String, cache_key: String, index: int) -> void:
+##
+## Static, and handed only the tab's instance id: the worker (and the deferred call it
+## queues) must not hold a reference to the tab, because the tab can be freed at any point
+## while a task is queued or running (the table tears down soon after a load). An instance
+## method that is mid-run on a worker when its tab is deleted logs "Invalid access ... on a
+## previously freed object" at its next use of self, and no check inside the tab can help,
+## so the id is resolved on the main thread in _apply_icon instead.
+static func _load_icon_task(tab_id: int, path: String, cache_key: String, index: int) -> void:
 	var image := Image.new()
 	if image.load(path) != OK:
 		return
-	_apply_icon.call_deferred(image, cache_key, index)
+	_apply_icon.call_deferred(tab_id, image, cache_key, index)
 
 
-func _apply_icon(image: Image, cache_key: String, index: int) -> void:
-	if not is_instance_valid(self):
+## Main-thread end of the icon pipeline. Resolves the tab from its instance id and drops
+## the result when the tab is gone or about to be.
+static func _apply_icon(tab_id: int, image: Image, cache_key: String, index: int) -> void:
+	var tab := instance_from_id(tab_id) as AssetPackTab
+	if tab == null or tab.is_queued_for_deletion():
 		return
 	var texture := ImageTexture.create_from_image(image)
-	_icon_cache[cache_key] = texture
-	if index < item_list.item_count:
-		item_list.set_item_icon(index, texture)
+	tab._icon_cache[cache_key] = texture
+	if index < tab.item_list.item_count:
+		tab.item_list.set_item_icon(index, texture)
 
 
 func _show_empty_state(filter_text: String = "") -> void:
