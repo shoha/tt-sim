@@ -1,0 +1,78 @@
+{
+ "out_dir": "render_jobs/_msize_",
+ "timeout_s": 1800,
+ "hang_s": 150,
+ "remove_override": true,
+ "steps": [
+  {"op": "wait_title"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "play start"},
+  {"op": "eval", "expr": "FoliageDensityController.budget_from_settings()"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "play", "folder": "_psize_200x200"},
+  {"op": "wait", "s": 2.0},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "title"},
+  {"op": "wait", "s": 1.5},
+  {"op": "expand", "values": ["_psize_200x200", "_psize_400x200", "_psize_250x250", "_psize_300x300", "_psize_350x350", "_psize_400x400", "_psize_200x200", "_psize_400x200", "_psize_250x250", "_psize_300x300", "_psize_350x350", "_psize_400x400"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "play", "folder": "{value}"},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 2.0},
+   {"op": "title"},
+   {"op": "wait", "s": 1.5}
+  ]},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "before play frames"},
+  {"op": "expand", "values": ["_psize_200x200", "_psize_400x200", "_psize_250x250", "_psize_300x300", "_psize_350x350", "_psize_400x400", "_psize_200x200"], "template": [
+   {"op": "play", "folder": "{value}"},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 2.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+   {"op": "vsync_off"},
+   {"op": "home"},
+   {"op": "wait", "s": 2.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "{value} play home"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "{value} play home"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"},
+   {"op": "zoom"},
+   {"op": "wait", "s": 2.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "{value} play out"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "{value} play out"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "{value} play", "ws": true},
+   {"op": "capture", "name": "{value}_play_out", "desc": "{value} in play at full zoom-out"},
+   {"op": "call", "script": "res://tools/map_size/dump.gd", "action": "fit_zoom"},
+   {"op": "zoom"},
+   {"op": "wait", "s": 2.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "{value} play fit"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "{value} play fit"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"},
+   {"op": "capture", "name": "{value}_play_fit", "desc": "{value} in play at whole-map zoom"},
+   {"op": "title"},
+   {"op": "wait", "s": 1.5}
+  ]},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "before authoring frames"},
+  {"op": "expand", "values": ["_psize_200x200", "_psize_400x200", "_psize_250x250", "_psize_300x300", "_psize_350x350", "_psize_400x400", "_psize_200x200"], "template": [
+   {"op": "dress", "folder": "{value}"},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 2.0},
+   {"op": "no_autosave"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+   {"op": "hide_ui"},
+   {"op": "vsync_off"},
+   {"op": "zoom"},
+   {"op": "wait", "s": 2.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "{value} author fit"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "{value} author fit"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "{value} authoring", "ws": true},
+   {"op": "title"},
+   {"op": "wait", "s": 1.5}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "play end"}
+ ]
+}

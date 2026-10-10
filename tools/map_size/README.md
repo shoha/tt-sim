@@ -1,8 +1,9 @@
 # Map size measurement (reference tooling)
 
-Kept as the starting point for a compact map document format, not live tooling: nothing in
-the game or the test suite uses it. Findings are recorded in `docs/ARCHITECTURE.md`, "Map
-document (map.ttmap)", the **Size** bullet (measured 2026-10-09).
+Kept as the starting point for a compact map document format and for re-measuring map size
+limits, not live tooling: nothing in the game or the test suite uses it. Findings are
+recorded in `docs/ARCHITECTURE.md`, "Map document (map.ttmap)", the **Size** bullet
+(measured 2026-10-09), and in `docs/PERFORMANCE.md`, "Map size sweep (2026-10-09)".
 
 ## What is here
 
@@ -10,10 +11,19 @@ document (map.ttmap)", the **Size** bullet (measured 2026-10-09).
 |------|--------------|
 | `msize_build.json` | Render job: four fresh maps (grassland valley 200 ft and forest valley 200 ft, both seed 3; forest flat 100 ft; bare flat 200 ft), each dumped by `dump.gd`. |
 | `msize_full.json` | Render job: the same valley maps (plus grassland flat) painted to full density with `dump.gd`'s `fill` action, then dumped. |
-| `dump.gd` | Render-job `call` probe. `dump` syncs the open authoring document as a save does and writes it to `user://_msize_/<name>.ttmap` through `MapDocumentIO.write`. `fill` paints the first biome at density 255 over every sample and regenerates the scatter. Never writes under `user://levels/`. |
-| `measure.gd` | Offline, headless. Per-entry raw and in-ZIP sizes, the whole file on disk and zstd-compressed (what `AssetStreamer` sends), and the prototypes: packed binary scatter, fewer-decimals JSON, uint16 row-delta heights, each with round-trip errors. |
+| `msize_sizes_build.json` | Render job, the size sweep: forest Terraces seed 3 (a river with two falls and a plank crossing at every size) at 200, 400 x 200, 250, 300, 350 and 400 ft, each opened with `perf.gd author` (timed), given full ground paint and a full-density forest (`dump.gd` `paint`, `fill`, the regeneration timed by `mark` / `since`), saved as `user://levels/_psize_<W>x<D>` and captured at whole-map zoom. |
+| `msize_sizes_play.json` | Render job, the size sweep in play: warm load times (two rounds), then per level the GPU and CPU frame time at Home, at the play camera's zoom-out (20) and at whole-map zoom (`dump.gd` `fit_zoom`), memory, and the authoring frame time at whole-map zoom. Drop in the pinned `override.cfg` first (`docs/PERFORMANCE.md`); the job removes it at startup. |
+| `dump.gd` | Render-job `call` probe (actions in its header). `dump` syncs the open authoring document as a save does and writes it to `user://_msize_/<name>.ttmap` through `MapDocumentIO.write`. `fill` paints the first biome at density 255 over every sample and regenerates the scatter; `paint` covers every sample with eight ground surfaces; `mark` / `since` time a span; `fit_zoom` lets the play camera zoom out to the whole map; `save` writes a level, only into a `user://levels/_psize_*` folder. |
+| `measure.gd` | Offline, headless. Per-entry raw and in-ZIP sizes, the whole file on disk and zstd-compressed (what `AssetStreamer` sends), and the prototypes: packed binary scatter, fewer-decimals JSON, uint16 row-delta heights, each with round-trip errors. With `-- levels`: one line per `_psize_` level, its size on disk and sent, and the time to send it to four peers in turn at 1 MiB/s. |
+| `gen.gd` | Headless, the size sweep's document build: `-- seeds <landform> <first> <last>` lists what each seed's recipe draws at every size (rivers, falls, crossings); `-- time <landform> <seed> <runs>` times `NewMap.from_spec` per size against Flat. |
 | `seeds.gd` | Headless: which grassland valley seeds draw a river and a crossing (`NewMap.from_spec`). |
-| `cleanup.gd` | Deletes `user://_msize_/` and `user://render_jobs/_msize_/`, nothing else. |
+| `cleanup.gd` | Deletes `user://_msize_/`, `user://render_jobs/_msize_/` and the `user://levels/_psize_*` levels, nothing else. |
+
+Sizes over 320 ft and non-square sizes need two patches the 2026-10-09 sweep made and then
+reverted: `MapDocument.MAX_SIZE_CELLS` raised from 64 to 80, and a `depth_ft` key in
+`NewMap.from_spec` passed on to `MapDocument.create_flat` as the Z cell count. Without them
+`create_flat` silently clamps a larger size to 64 cells and ignores the depth (`perf.gd
+author` already takes `"size": "400x200"` and passes `depth_ft`).
 
 ## Running it
 
@@ -21,6 +31,9 @@ document (map.ttmap)", the **Size** bullet (measured 2026-10-09).
 godot --path D:/dev/tt-sim --windowed --resolution 1920x1080 --script res://tools/render_jobs/run.gd -- res://tools/map_size/msize_build.json
 godot --path D:/dev/tt-sim --windowed --resolution 1920x1080 --script res://tools/render_jobs/run.gd -- res://tools/map_size/msize_full.json
 godot --headless --path D:/dev/tt-sim --script res://tools/map_size/measure.gd
+godot --path D:/dev/tt-sim --windowed --resolution 1920x1080 --position 320,120 --script res://tools/render_jobs/run.gd -- res://tools/map_size/msize_sizes_build.json
+godot --path D:/dev/tt-sim --windowed --resolution 1920x1080 --position 320,120 --script res://tools/render_jobs/run.gd -- res://tools/map_size/msize_sizes_play.json
+godot --headless --path D:/dev/tt-sim --script res://tools/map_size/measure.gd -- levels
 godot --headless --path D:/dev/tt-sim --script res://tools/map_size/cleanup.gd
 ```
 

@@ -279,8 +279,10 @@ static func run(base: Node, step: Dictionary) -> String:
 			return "playing %s" % step.folder
 		"author":
 			var landform := String(step.get("landform", StartingLandform.FLAT))
+			var dims := str(step.get("size", 200)).split("x")
+			var depth := int(dims[1]) if dims.size() > 1 else -1
 			var label := (
-				"new %s %s %d ft" % [step.get("biome", ""), landform, int(step.get("size", 200))]
+				"new %s %s %s ft" % [step.get("biome", ""), landform, str(step.get("size", 200))]
 			)
 			_watch(base, "author", label)
 			(
@@ -291,10 +293,11 @@ static func run(base: Node, step: Dictionary) -> String:
 						"level": null,
 						"new_map":
 						{
-							"size_ft": int(step.get("size", 200)),
+							"size_ft": int(dims[0]),
 							"biome_id": String(step.get("biome", "")),
 							"seed": int(step.get("seed", 1234)),
 							"landform": landform,
+							"depth_ft": depth,
 						},
 						"return_to": &"title"
 					}

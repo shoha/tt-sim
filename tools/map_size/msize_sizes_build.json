@@ -1,0 +1,30 @@
+{
+ "out_dir": "render_jobs/_msize_",
+ "timeout_s": 1800,
+ "hang_s": 150,
+ "steps": [
+  {"op": "wait_title"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "build start"},
+  {"op": "expand", "values": ["200x200", "400x200", "250x250", "300x300", "350x350", "400x400"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "author", "biome": "temperate_forest_summer_s1", "landform": "terraces", "seed": 3, "size": "{value}"},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 2.0},
+   {"op": "no_autosave"},
+   {"op": "call", "script": "res://tools/map_size/dump.gd", "action": "mark", "name": "fill"},
+   {"op": "call", "script": "res://tools/map_size/dump.gd", "action": "paint"},
+   {"op": "call", "script": "res://tools/map_size/dump.gd", "action": "fill"},
+   {"op": "wait", "s": 1.0},
+   {"op": "wait_ready", "settle": 1.0},
+   {"op": "call", "script": "res://tools/map_size/dump.gd", "action": "since", "name": "fill"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "{value} authoring", "ws": true},
+   {"op": "call", "script": "res://tools/map_size/dump.gd", "action": "save", "folder": "_psize_{value}"},
+   {"op": "hide_ui"},
+   {"op": "zoom"},
+   {"op": "wait", "s": 2.5},
+   {"op": "capture", "name": "psize_{value}_fit", "desc": "Forest terraces seed 3 at {value} ft, full paint and fill, authoring whole-map zoom"},
+   {"op": "title"},
+   {"op": "wait", "s": 1.5}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "build end"}
+ ]
+}
