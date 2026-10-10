@@ -68,6 +68,10 @@ func _on_level_play_loaded(_level_data: LevelData) -> void:
 	# Already in PLAYING state, no need to transition
 	# Clear pending data now that loading is complete
 	_root.pending_level = null
+	# The library lists the most recently played first (solo or hosted; a client's copy is
+	# not in its library).
+	if _level_data != null and _level_data.level_folder != "" and not NetworkManager.is_client():
+		LibraryPlays.record(_level_data.level_folder)
 	# The party that left the last table with the session lands on this one (host).
 	NetworkManager.session.party.set_out()
 

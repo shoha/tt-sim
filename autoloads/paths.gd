@@ -46,6 +46,8 @@ const LEVEL_MAP_DOCUMENT_FILE_TYPE: String = "map_document"
 ## The local index of where each imported map.glb came from (ImportSources), under the data
 ## root beside levels/, never inside it, so no level lists, copies or streams it.
 const IMPORT_SOURCES_NAME: String = "import_sources.cfg"
+## The local index of when each map was last played here (LibraryPlays), beside it.
+const LIBRARY_PLAYS_NAME: String = "library_plays.cfg"
 
 # Data files
 const POKEMON_DATA_PATH: String = "res://data/pokemon.json"
@@ -241,6 +243,11 @@ static func get_level_json_path(level_name: String) -> String:
 ## The import source index (IMPORT_SOURCES_NAME) under the current data root.
 static func import_sources_path() -> String:
 	return DATA_ROOT + IMPORT_SOURCES_NAME
+
+
+## The library's play index (LIBRARY_PLAYS_NAME) under the current data root.
+static func library_plays_path() -> String:
+	return DATA_ROOT + LIBRARY_PLAYS_NAME
 
 
 ## Sanitize a level name for use as a folder name

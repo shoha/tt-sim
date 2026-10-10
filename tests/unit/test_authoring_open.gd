@@ -149,15 +149,15 @@ func test_card_edit_map_reaches_the_title() -> void:
 	}
 	var title: TitleScreen = TITLE_SCENE.instantiate()
 	title.level_provider = func() -> Array[Dictionary]: return [info]
+	title.plays_provider = func() -> Dictionary: return {}
 	add_child_autofree(title)
 	watch_signals(title)
-	var card: LevelCard = title.grid._cards[0]
-	assert_eq(
-		card._menu.get_item_text(card._menu.get_item_index(LevelCard.ACTION_EDIT_MAP)), "Edit map"
-	)
-	card._on_menu_id_pressed(LevelCard.ACTION_EDIT_MAP)
-	assert_signal_emitted_with_parameters(title, "edit_map_requested", [info])
-	title._on_build_map_pressed()
+	# The library's Edit map is on the selected map's detail strip.
+	assert_eq(title.strip.edit_button.text, "Edit map")
+	title.strip.edit_button.pressed.emit()
+	assert_signal_emitted_with_parameters(title, "edit_map_requested", [title.strip.info])
+	assert_eq(title.strip.info.path, info.path)
+	title.new_map_card.generate()
 	assert_signal_emitted(title, "build_map_requested")
 
 

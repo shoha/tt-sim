@@ -435,8 +435,8 @@ See [THEME_GUIDE.md's UI Primitives](THEME_GUIDE.md#ui-primitives) and
 
 ## Title Hub
 
-`TitleScreen` (`scenes/states/title_screen/title_screen.gd`) is the app's entry screen. It has two
-zones: a left column of actions and a right zone showing the player's saved levels as cards, over
+`TitleScreen` (`scenes/states/title_screen/title_screen.gd`) is the app's entry screen, and it is
+the library (card library-title, 2026-10-10): a top bar over a grid of the player's maps, over
 the painted backdrop in the selected map's mood (morning with none, and over an empty library,
 where the painting is the whole picture: the d20 that turned there went with the flat sky).
 
@@ -503,8 +503,9 @@ told on the CPU, and `BackdropLayout` (`backdrop_layout.gd`) where the screen's 
   nothing (M6).
 - **No words on the painting.** A screen on the backdrop puts its words on paper, so every
   caption reads 4.5:1 in every mood and nothing hazes the painting under them: the title's
-  column on a `Sheet` that ends at its content (the version a caption beside the wordmark),
-  "Your maps" with its count and the empty library's caption on a `Plaque`; the room's
+  wordmark (the version a caption beside it) and its tools with the Play together card each on
+  a `Plaque`, the Bundled heading on a plaque, the New map card and the detail strip on
+  `PictureCard` paper; the room's
   heading on a plaque on the side sheet's margin and as wide as the sheet (the sheet's
   heading, not a narrower slip above it), the code row on a plaque that ends at its words,
   and the selected map's picture on a card of its own with its name and readiness under it
@@ -521,31 +522,71 @@ told on the CPU, and `BackdropLayout` (`backdrop_layout.gd`) where the screen's 
   CPU side mixes about 13 colours and sets about 30 uniforms per frame of a 0.6 s change, and
   measures the layout (a few thousand cells) once per refit.
 
-### Left Column
+### Top bar
 
-Built by `_build_left_column()` on a paper sheet (`%ColumnSheet`, the `Sheet` variation) that
-ends at its content, like the room's side sheet; the version is a caption on the wordmark's
-baseline. The hub's margins (24) are the sheet's distance from the canvas edge, and
-`_fit_to_canvas` measures the column against the canvas less those margins and the sheet's
-padding (`test_interface_size_fit`: 1280x720, 1366x768 at Auto and 150%). The **Play together
-card** leads it (below), with a quiet **Resume** directly under it when saved sessions exist;
-below a separator, **Play solo**,
-**Set up tokens**, **New map**, **Avatars**, and **Settings** and **Quit game** side by side on
-the last row are compact secondary actions (`UiActions.secondary()`); Quit game has the pause
-menu's words and icon (`TitleScreen.QUIT`, `QUIT_ICON`). The two map actions name what
-differs: Set up tokens is the Level Editor by what it does (starting tokens, the map's details
-and its Blender file), with its own icon (a chess pawn, `SET_UP_TOKENS_ICON`; the wand is the
-Events rail item's and Surprise me's), and opens it on the selected map, captioned with its
-name (with none selected it opens on a new map, the way to bring in a Blender map, and its
-caption says so, "Bring in a map from Blender": it stays enabled over an empty library, where
-Play solo is disabled, since that is how a Blender map comes in); New map carries the caption
-"Pick a landform, then paint it" and emits `build_map_requested`, which Root turns into the
-new-map dialog and then [authoring mode](#authoring-mode). A card's overflow menu and the pause
-menu use the same name, Set up tokens (`TitleScreen.SET_UP_TOKENS`), and so does the editor's
-own header. Avatars opens the [avatar roster](#avatar-library).
-Play solo is disabled until a card is selected. Once a card is selected, the two map actions
-name it one way, the name alone under Play solo and Set up tokens. "Your maps" carries its
-count as a bare number beside the heading.
+`%TopBar` in the hub (24 px margins): the wordmark on its plaque (`wordmark_plaque`, the version a
+caption on its baseline) at the left, open sky in the middle for the backdrop's sun, and at the
+right end one plaque (`tools_plaque`) with **Avatars**, **Settings** and **Quit game** stacked as
+quiet `UiActions.secondary()` rows beside the **Play together card** (below) with **Resume**
+under it. Quit game has the pause menu's words and icon (`TitleScreen.QUIT`, `QUIT_ICON`);
+Avatars opens the [avatar roster](#avatar-library). The old left column (Play solo, Set up
+tokens, New map, Avatars, Settings, Quit) is gone: each action lives where it acts (UI_TASTE
+verdict 2026-10-09, no Host control far from what it acts on).
+
+### The library
+
+`grid` is a `LevelGrid` (at least `GRID_COLUMNS` 4 to a line, so a row and its strip fit a
+1280x720 canvas) whose provider is `TitleScreen.library()`: `LibraryFacts.ordered()` over
+`level_provider` and `plays_provider` (`LibraryPlays.all()`), the latest of last played and last
+edited first, the Bundled maps (a `res://` map) last after a "Bundled with TTSim" heading on a
+line of its own. `LibraryPlays` (`utils/library_plays.gd`, `Paths.library_plays_path()`, beside
+`levels/`, never in a level folder so a play never changes a level's revision) is written by
+`LevelFlow` when a table finishes loading, solo or hosted. The head of the library is selected on
+`_ready()` (`_preselect_most_recent()`).
+
+- **New map** (`NewMapCard`, the grid's `lead`): a painted band, **Generate** (the card's lead:
+  `Framed`, not the fill; Host is the screen's one persimmon, C5) and **Import...** side by side,
+  and a closed **Advanced** disclosure (a `FoldoutHeader` button, focusable) with Size (Drawn,
+  100, 150, 200 ft, Custom width x depth in ft) and Seed. Drawn lets the seed draw the size
+  (`NewMapCard.draw_size`); a custom size past `NewMap.size_error`'s range says so in one line
+  and Generate waits; above 200 ft a side a quiet line says it builds more slowly, past
+  `NewMap.RECOMMENDED_MAX_FT` (250) that it builds, opens and saves slowly. No From image, no
+  Try. Generate emits `build_map_requested(preset)` ({"size_ft", "depth_ft", "seed"}); Root opens
+  the new-map dialog with `NewMapDialog.preset`, which hides its Size field and names the size
+  in its header, then [authoring mode](#authoring-mode). No reroll: neighbouring seeds can draw
+  the same coarse landform, so a fresh seed is drawn each time. An empty library shows only this
+  card, larger (`EMPTY_WIDTH` 520) and centred, its picture bigger, captioned "Make your first
+  map, or drop a map.glb from Blender here".
+- **Detail strip** (`MapDetailStrip`, the grid's `detail`): a paper card on a line of its own
+  directly under the selected card's row (`LevelGrid.line_end()` finds the row's last item at the
+  current column count; not a modal). The map's picture; its name (`TitleField`, the heading's
+  face), description and author, flat fields saved on Enter through `LevelManager.update_meta`
+  (an empty name is refused), reverted by Escape or by leaving the field; the source chip
+  (`LibraryFacts.source_of`: From Blender, Blender dressed here, Made here, Bundled), the size
+  (`LibraryFacts.footprint_ft`: the map.glb's import check, or the document's manifest), tokens
+  and when it was last played. Actions: **Play** (solo, `Framed`), **Host with this map** (a
+  room with this map on its shelf), **Edit map** (authoring; none for a Bundled map), and "..."
+  with Set up tokens (`TitleScreen.SET_UP_TOKENS`, the Level Editor), Duplicate, Delete, and
+  Reload from Blender when `MapImport.is_updated_in_blender`. The cards' own overflow disc is
+  off in the library (`manageable = false`).
+- **Keyboard and pad**: Accept on a card that is not selected selects it (opens its strip);
+  Accept on the selected card plays it (`LevelGrid.select_before_activate`); a double click
+  plays. The strip follows its row in the tree, so Tab and the D-pad reach it from the row.
+- **Import** (`LibraryImports`): Import... opens the system's file picker on `.glb`; a file
+  dropped anywhere on the library is a new map, on a map's card Replace for that map
+  (`TitleScreen.card_at`), ignored while a sheet is open. Each opens `ImportCheckPanel`
+  before anything is written: file, MB, footprint in m and ft, floor, what the extras hold, and
+  each warning with its icon (warnings never block); `.gltf` and `.tscn` are refused in one
+  sentence with Close alone. Import has a Name field and Add to library
+  (`MapImport.import_glb`); Replace offers Keep dressing (captioned with the props and plants it
+  drops, a dry run of `DressingReconcile.keep`) beside Start fresh, Start fresh alone over a map
+  made here, or Replace map with no dressing (`MapImport.replace_map`). The written map is
+  selected after.
+
+`test_title_screen` and `test_library_title` cover the library; `test_interface_size_fit` walks
+it at 1280x720, 1366x768 at Auto, 720p at Auto and 1080p with the selected row and its strip in
+view, Advanced open on a custom size, and empty. `jobs/library.json` (`probes/ui_library.gd`)
+captures it.
 
 ### Play together card
 
@@ -629,29 +670,26 @@ row has no caption under it, its picture faded into the well (`RoomRows.mute_wel
 the stage), no Set out, and once selected Remove from shelf on a line under it
 (`RoomRows.missing_line()`, `RoomPanel.remove_requested`, `SessionChannel.unshelve()`).
 
-### Right Zone
+### Grid scrolling
 
-A "Your maps" heading with a live count on a paper plaque (`heading_plaque`, the `Plaque`
-variation, its top edge in line with the column's sheet; over an empty library it says so once,
-with no count of 0: a small painted picture of a map to come (a `MapPlaceholder` in a
-`CardThumb` well, I5) beside one short line, "No maps yet. Paint your first one", and one quiet
-action, Start a new map, which opens New map), and a 3-column `LevelGrid` populated from
-`level_provider` (defaults to `LevelManager.get_saved_levels`; tests inject a fake before the node
-enters the tree). The most recently modified level is preselected on `_ready()`
-(`_preselect_most_recent()`), and a card selected by code (`LevelGrid.select`) scrolls into view
-once the grid has laid it out. The grid's scroll bar stands on the painted backdrop, so it wears
-`CardGridBar`: its grabber on a paper strip of its own, 3:1 in every mood (every other scroll
-bar's grabber is opaque in the track role).
+A card selected by code (`LevelGrid.select`) scrolls into view with its strip once the grid has
+laid it out. The grid's scroll bar stands on the painted backdrop, so it wears `CardGridBar`:
+its grabber on a paper strip of its own, 3:1 in every mood (every other scroll bar's grabber is
+opaque in the track role). Its horizontal scroll is `SHOW_NEVER`, not disabled: the strip is
+sized to the grid's width, and a disabled horizontal scroll makes that the grid's minimum, which
+held the grid at its old width when the window shrank.
 
 ### Signals
 
-- `host_game_requested(level_info: Dictionary)` -- the card's Host (always `{}`: a room needs
-  no map)
+- `host_game_requested(level_info: Dictionary)` -- the card's Host (`{}`: a room needs no map),
+  or the strip's Host with this map (that map, for the shelf)
 - `join_requested(code: String)` -- Join in place submitted a code
 - `join_cancel_requested` -- the card went back while a join was under way
 - `resume_requested(id: String)` -- Resume chose a saved session
-- `play_solo_requested(level_info: Dictionary)` -- Play Solo pressed, or a card double-clicked or
-  Enter-activated
+- `play_solo_requested(level_info: Dictionary)` -- the strip's Play, or a card double-clicked or
+  Accepted while selected
+- `build_map_requested(preset: Dictionary)` -- New map's Generate (size and seed)
+- `edit_map_requested(level_info: Dictionary)` -- the strip's Edit map
 
 `level_info` is one entry from `LevelManager.get_saved_levels()` -- the same Dictionary shape
 `LevelCard.setup()` and `LevelCard.caption_for()` consume (see Level Cards below).

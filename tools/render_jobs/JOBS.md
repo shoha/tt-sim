@@ -454,6 +454,16 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   faces' words are hidden for a frame and `contrast` logs paper against the lightest wash
   pixel under them (the bar is 4.5:1; rest reads 4.97 and 5.60). `crop` saves the card up
   close at the window's pixels to `play_together/crops/` beside the captures.
+- `jobs/library.json`: the title as the library (16 captures, about 35 s), at 1280x720 and
+  1920x1080 (`probes/ui_library.gd`): a staged library of seven maps of every source (one
+  Bundled, so its heading shows), Willow Green selected with its detail strip in the morning
+  and its "..." menu open (Reload from Blender staged), Violet Fen selected at dusk, New map's
+  Advanced open on a custom 300 x 120 ft map (the big-map line) and on 400 ft (refused,
+  Generate waits), the import check on a map.glb whose ground floats 1.5 m (one warning), the
+  Replace prompt for a smaller map dropped on a dressed level (Keep dressing drops one prop),
+  and the empty library. The library and each strip's size are staged; the import files and
+  the dressed level live under `user://_library_title_probe/` with the levels folder pointed
+  there, and `cleanup` deletes it.
 - `jobs/ui_tour.json`: the UI tour (106 captures; about 235 s at half size and 240 s with
   `--full`, timed on `--only` runs, which still run every step but the skipped captures),
   the capture set the `tt-sim-ui-critic` agent judges (`docs/UI_TASTE.md`). It saves a new
