@@ -7,14 +7,14 @@ extends Node
 ##
 ## Owns what LevelPlayController owns in play, minus peers and the token tools: its own
 ## LevelEnvironmentManager and MapViewFit (the camera model play uses), the GameMap setup it
-## needs (authoring mode, measure tool, grid overlay; weather comes with
-## MapSourceLoader.install), the level's tokens as play spawns them (AuthoringTokens:
-## draggable, saved back as its placements), and the map, loaded through the same
-## MapSourceLoader the play-time load uses (with props kept in their own node, since the
-## tools edit scatter and props apart). The MapDocument is the source of truth for
-## everything authored: masks and heights are edited in it in place, and the scatter and
-## props rows are copied back from their AuthoredScatter nodes whenever the document is
-## written (_sync_document).
+## needs (authoring mode, measure tool, grid overlay, and play's F3 performance overlay and
+## debug render toggles; weather comes with MapSourceLoader.install), the level's tokens as
+## play spawns them (AuthoringTokens: draggable, saved back as its placements), and the map,
+## loaded through the same MapSourceLoader the play-time load uses (with props kept in their
+## own node, since the tools edit scatter and props apart). The MapDocument is the source of
+## truth for everything authored: masks and heights are edited in it in place, and the
+## scatter and props rows are copied back from their AuthoredScatter nodes whenever the
+## document is written (_sync_document).
 ##
 ## Three ways in (Root builds the request): a new map (NewMapDialog's spec, NewMap), a level
 ## with a map.ttmap, and a level with only a map.glb, which opens as a dressing layer: the
@@ -96,6 +96,10 @@ func setup(game_map: GameMap) -> void:
 	game_map.setup_authoring()
 	game_map.setup_measure_tool()
 	game_map.setup_grid_overlay()
+	# F3 shows the same numbers and switches play does, so a map is judged for cost as it is
+	# made (its log rows are tagged "unknown": there is no LevelPlayController).
+	game_map.setup_performance_overlay()
+	game_map.setup_debug_render_toggles()
 	brush = game_map.setup_brush_tool()
 	tokens = AuthoringTokens.new(game_map, history)
 	tokens.edited.connect(mark_edited)
