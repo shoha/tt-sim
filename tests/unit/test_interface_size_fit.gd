@@ -6,7 +6,7 @@ extends GutTest
 ## opens in a 1280x720 SubViewport, as the root window's virtual canvas would hold it, its
 ## entrance tweens run to their end, and no visible control may lie outside the canvas. A
 ## ScrollContainer must fit, while what it holds may run past it: the player scrolls to that.
-## The room screens (the session work replacing the host lobby) join this walk when they land.
+## The room (RoomScreen) and the room drawer over a table are walked from a sample summary.
 
 const CANVAS := Vector2(1280.0, 720.0)
 ## Layout rounding.
@@ -121,6 +121,54 @@ func test_join_screen_fits() -> void:
 	lobby.connect_network = false
 	_host.add_child(lobby)
 	await _assert_fits("join screen", lobby.connect_button)
+
+
+## The room as the GM sees it: four players, three maps (one long name), one selected.
+func test_room_fits() -> void:
+	var room := RoomScreen.new()
+	room.connect_network = false
+	_host.add_child(room)
+	room.panel.set_code(LobbyCode.encode(109775244321098765))
+	room.panel.show_session(_room_summary(""), "enet-1", true)
+	room.panel.select("hollow")
+	await _assert_fits("room", room.panel.action_button)
+
+
+## The room drawer over a table, open on another map than the one out.
+func test_room_drawer_fits() -> void:
+	var layer := CanvasLayer.new()
+	_host.add_child(layer)
+	var drawer := RoomDrawer.new()
+	drawer.connect_network = false
+	drawer.theme = ThemeColors.glass_theme()
+	drawer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(drawer)
+	drawer.panel.set_code(LobbyCode.encode(109775244321098765))
+	drawer.panel.show_session(_room_summary("mill"), "enet-1", true)
+	drawer.panel.select("hollow")
+	drawer.open()
+	await _assert_fits("room drawer", drawer.panel.action_button)
+
+
+func _room_summary(table: String) -> Dictionary:
+	var shelf := []
+	for spec in [
+		["hollow", "Mossy Hollow, the long way round past the mill"],
+		["mill", "Old Mill"],
+		["fen", "Fen Crossing"],
+	]:
+		shelf.append({"folder": spec[0], "map_path": "", "hashes": {}, "name": spec[1]})
+	var players := {}
+	var names := ["Marigold", "Ranger", "Starling", "Wren"]
+	for i in names.size():
+		players["enet-%d" % (i + 1)] = {"name": names[i], "peer_id": i + 1}
+	return {
+		"open": table == "",
+		"table": table,
+		"shelf": shelf,
+		"players": players,
+		"holdings": {"enet-1": ["hollow", "mill", "fen"], "enet-2": ["hollow"]},
+	}
 
 
 func test_authoring_drawer_fits() -> void:

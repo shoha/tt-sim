@@ -132,7 +132,7 @@ func animate_out() -> void:
 
 
 ## Collect all focusable controls inside the panel for Tab-wrapping. Re-callable:
-## a subclass that hides/shows containers after _ready() (see LobbyClient) must
+## a subclass that hides/shows containers after _ready() (see LobbyClient's join form) must
 ## call this again after each swap, or the trap keeps naming controls that are
 ## no longer visible.
 func rebuild_focus_trap() -> void:
@@ -151,6 +151,12 @@ func _collect_focusable(node: Node, out: Array[Control]) -> void:
 			out.append(c)
 	for child in node.get_children():
 		_collect_focusable(child, out)
+
+
+## True while any panel is live (a sheet is up), for keys that must not reach the board
+## under it, such as the room drawer's Tab.
+static func any_open() -> bool:
+	return _trap_stack.any(func(p: AnimatedCanvasLayerPanel) -> bool: return is_instance_valid(p))
 
 
 ## True when this panel is the topmost live panel and should trap Tab.

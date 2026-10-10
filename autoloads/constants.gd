@@ -16,7 +16,7 @@ class_name Constants
 #   3. Check for position overlaps with other layers (see screen regions below)
 #
 # Screen regions occupied:
-#   Left edge:     LAYER_GAMEPLAY_MENU (PlayerListDrawer — networked games only)
+#   Left edge:     LAYER_GAMEPLAY_MENU (RoomDrawer — sessions only)
 #   Right edge:    LAYER_GAMEPLAY_MENU (LevelEditPanel drawer — GM only)
 #   Bottom-right:  LAYER_GAMEPLAY_MENU (BottomButtons)
 #   Over map:      LAYER_DRAG_RULER (drag ruler), LAYER_MEASURE_OVERLAY (measure tool lines + label)

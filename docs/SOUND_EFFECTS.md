@@ -172,7 +172,7 @@ and priority columns mirror `tools/sfx_spec.py`, which is the source of truth. A
 | `hover`        | -6 dB  | 0.5    | -        | 10       | Button hover / focus              | Disabled             |
 | `open`         | 0 dB   | 0.5    | -        | 30       | Menu or panel opening             | **Auto** (panels)    |
 | `close`        | 0 dB   | 0.5    | -        | 30       | Menu or panel closing             | **Auto** (panels)    |
-| `success`      | 0 dB   | 0.5    | -        | 40       | Success feedback                  | Success toasts (one per finished pack download); a player joining, in the lobby and mid-game (`PlayerListDrawer`); connecting to a lobby; a game update downloaded |
+| `success`      | 0 dB   | 0.5    | -        | 40       | Success feedback                  | Success toasts (one per finished pack download); a player joining, in the room and at the table (`RoomPanel`); connecting to a room; a game update downloaded |
 | `error`        | 0 dB   | 0.5    | -        | 50       | Error feedback                    | Error toasts (one per failed pack download); a failed connect; a game update download that failed |
 | `confirm`      | 0 dB   | 0.5    | -        | 40       | Dialog accept (confirmation dialog, avatar builder, pickers) | **Wired**            |
 | `cancel`       | 0 dB   | 0.5    | -        | 40       | Cancel / back action              | **Wired**            |

@@ -186,8 +186,8 @@ func test_sheet_rows_share_one_label_column() -> void:
 
 
 func test_copy_counts_and_tells_gestures_apart() -> void:
-	assert_eq(LobbyHost.players_connected_text(1), "1 player connected")
-	assert_eq(LobbyHost.players_connected_text(4), "4 players connected")
+	var two: Array[Dictionary] = [{"holds": ["camp"]}, {"holds": []}]
+	assert_eq(RoomModel.readiness_text(two, "camp"), "1 of 2 have it")
 	for i in range(2):
 		var pan: String = InputProfile.LABELS[&"pan"][i]
 		var rotate: String = InputProfile.LABELS[&"rotate"][i]

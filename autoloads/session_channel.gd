@@ -22,16 +22,24 @@ extends Node
 ## table it gets game_starting, the level, and the full state once it reports its table
 ## loaded (LateJoinerSync).
 ##
-## The shelf is the session's maps, each a MapRef {"folder", "map_path", "hashes"}: the level
-## folder (or, for a level without one, its res:// map path) and the content hashes the
-## clients checked. The table pointer is the ref_key() of the map on the table, "" in the
-## room. Players are keyed by session id, the Steam id as a decimal string, each with a name
-## and the peer id it has now (0 once it left), so the party and its grants (`party`,
-## SessionParty) outlive a peer id: a player who rejoins gets a new peer id and the same
-## session id. A transport without Steam ids (the ENet scenarios, GUT) has no identity of its
-## own, so there the session id is TEST_ID_PREFIX plus the SESSION_KEY the joiner reports in
-## its player info, or plus its peer id when it reports none. The host owns all of it and
-## sends clients a summary on every change; clients read their copy through the same getters.
+## The shelf is the session's maps, each a MapRef {"folder", "map_path", "hashes", "name"}:
+## the level folder (or, for a level without one, its res:// map path), the content hashes the
+## clients checked and the map's name for the room's shelf. A map reaches the shelf when the
+## GM adds it in the room (shelve()) or sets it out. The table pointer is the ref_key() of the
+## map on the table, "" in the room. Players are keyed by session id, the Steam id as a decimal
+## string, each with a name and the peer id it has now (0 once it left), so the party and its
+## grants (`party`, SessionParty) outlive a peer id: a player who rejoins gets a new peer id
+## and the same session id. A transport without Steam ids (the ENet scenarios, GUT) has no
+## identity of its own, so there the session id is TEST_ID_PREFIX plus the SESSION_KEY the
+## joiner reports in its player info, or plus its peer id when it reports none. The host owns
+## all of it and sends clients a summary on every change; clients read their copy through the
+## same getters.
+##
+## Holdings are readiness as download state (there is no manual Ready): each client reports
+## which shelf maps it already holds at the host's content (holds_map(): its own level folder
+## or the download cache), after every summary and on returning to the room, and the host
+## counts itself as holding every shelf map. The room shows them ("3 of 4 have it"); Set out
+## never waits for them. There is no partial progress yet: a map is downloaded at the table.
 ##
 ## Accessed via NetworkManager.session; do not add as a standalone autoload. Its RPCs live at
 ## /root/NetworkManager/Session on every peer.
@@ -62,6 +70,11 @@ var _shelf: Array[Dictionary] = []
 var _table := ""
 ## session id -> {"name": String, "peer_id": int}
 var _players: Dictionary = {}
+## session id -> Array of the ref_key()s that client holds (host: as reported; clients: the
+## host's copy, the host's own entry included)
+var _holdings: Dictionary = {}
+## Client: the keys this peer last reported, so an unchanged report is not sent again
+var _reported: Array = []
 
 
 func _ready() -> void:
@@ -100,6 +113,21 @@ func get_shelf() -> Array[Dictionary]:
 ## session id -> {"name", "peer_id"} (a copy). peer_id is 0 for a player who left.
 func get_players() -> Dictionary:
 	return _players.duplicate(true)
+
+
+## session id -> the ref_key()s of the shelf maps that player holds (a copy). On the host its
+## own entry holds every shelf map.
+func get_holdings() -> Dictionary:
+	var out := _holdings.duplicate(true)
+	if NetworkManager.is_host():
+		var host_id := session_id_of(1)
+		if host_id != "":
+			out[host_id] = _shelf_keys()
+	return out
+
+
+func _shelf_keys() -> Array:
+	return _shelf.map(func(ref: Dictionary) -> String: return ref_key(ref))
 
 
 ## The peer id the player with `session_id` has now, or 0 when absent.
@@ -157,6 +185,22 @@ func note_table_out(level_dict: Dictionary) -> void:
 	_open = false
 	_table = key
 	_publish()
+
+
+## Host: put a map on the shelf without setting it out (the GM adds it from the room), with
+## the host's map hashes; one already there keeps its place. Returns its ref_key(), or "" on a
+## client or for a level with neither a folder nor a map path.
+func shelve(level_dict: Dictionary) -> String:
+	if not NetworkManager.is_host():
+		return ""
+	var ref := map_ref(NetworkManager.with_map_hashes(level_dict))
+	var key := ref_key(ref)
+	if key == "":
+		return ""
+	if not _shelf_keys().has(key):
+		_shelf.append(ref)
+		_publish()
+	return key
 
 
 ## Host: a new peer passed the version gate (NetworkManager._rpc_send_player_info, with the
@@ -240,15 +284,38 @@ static func clean_key(raw: Variant) -> String:
 	return key
 
 
-## The MapRef of a level dictionary: its folder, its map path when it has no folder, and its
-## sanitized map hashes. Pure.
+## The MapRef of a level dictionary: its folder, its map path when it has no folder, its
+## sanitized map hashes and its name. Pure.
 static func map_ref(level_dict: Dictionary) -> Dictionary:
 	var folder := str(level_dict.get("level_folder", ""))
 	return {
 		"folder": folder,
 		"map_path": str(level_dict.get("map_path", "")) if folder == "" else "",
 		"hashes": MapFileHash.sanitize(level_dict.get(MapFileHash.HASHES_KEY, {})),
+		"name": _clip(level_dict.get("level_name", "")),
 	}
+
+
+## Whether this peer holds the map `ref` names at the host's content: a map that ships with
+## the game (no folder), or every hashed file found in its own level folder with the same
+## hash or in the download cache (`cached_file`, AssetStreamer.get_cached_map_file's
+## signature). A folder map the host sent no hashes for is not counted as held.
+static func holds_map(ref: Dictionary, cached_file: Callable) -> bool:
+	var folder := str(ref.get("folder", ""))
+	if folder == "":
+		return true
+	var hashes: Dictionary = ref.get("hashes", {})
+	if hashes.is_empty():
+		return false
+	for variant: String in hashes:
+		var expected := str(hashes[variant])
+		var local := Paths.get_level_map_file_for_variant(folder, variant)
+		if local != "" and FileAccess.file_exists(local):
+			if MapFileHash.hash_file_cached(local) == expected:
+				continue
+		if str(cached_file.call(folder, variant, expected)) == "":
+			return false
+	return true
 
 
 ## What identifies a MapRef on the shelf and in the table pointer: the folder, else the map
@@ -265,6 +332,8 @@ func reset() -> void:
 	_shelf.clear()
 	_table = ""
 	_players.clear()
+	_holdings.clear()
+	_reported = []
 	if party:
 		party.reset()
 
@@ -305,9 +374,16 @@ func _can_send() -> bool:
 	return multiplayer.multiplayer_peer != null and NetworkManager.is_host()
 
 
-## The summary clients keep: the phase, the table pointer, the shelf and the players.
+## The summary clients keep: the phase, the table pointer, the shelf, the players and what
+## each holds of the shelf.
 func summary() -> Dictionary:
-	return {"open": _open, "table": _table, "shelf": get_shelf(), "players": get_players()}
+	return {
+		"open": _open,
+		"table": _table,
+		"shelf": get_shelf(),
+		"players": get_players(),
+		"holdings": get_holdings(),
+	}
 
 
 func _publish() -> void:
@@ -319,7 +395,7 @@ func _publish() -> void:
 ## A host's summary as a client may keep it: known keys and types only, bounded sizes,
 ## hashes through MapFileHash.sanitize. Pure.
 static func sanitize_summary(raw: Variant) -> Dictionary:
-	var out := {"open": false, "table": "", "shelf": [], "players": {}}
+	var out := {"open": false, "table": "", "shelf": [], "players": {}, "holdings": {}}
 	if not raw is Dictionary:
 		return out
 	var summary_in: Dictionary = raw
@@ -334,6 +410,7 @@ static func sanitize_summary(raw: Variant) -> Dictionary:
 						"folder": _clip(ref.get("folder", "")),
 						"map_path": _clip(ref.get("map_path", "")),
 						"hashes": MapFileHash.sanitize(ref.get("hashes", {})),
+						"name": _clip(ref.get("name", "")),
 					}
 				)
 	var players: Variant = summary_in.get("players", {})
@@ -346,6 +423,22 @@ static func sanitize_summary(raw: Variant) -> Dictionary:
 					"name": _clip(entry.get("name", "")),
 					"peer_id": int(peer) if peer is int else 0,
 				}
+	var holdings: Variant = summary_in.get("holdings", {})
+	if holdings is Dictionary:
+		for key: Variant in (holdings as Dictionary).keys().slice(0, MAX_SESSION_PLAYERS):
+			if key is String:
+				out.holdings[_clip(key)] = clean_keys(holdings[key])
+	return out
+
+
+## A list of ref keys as the session may keep it: strings only, at most MAX_SHELF, each
+## clipped. Pure.
+static func clean_keys(raw: Variant) -> Array:
+	var out: Array = []
+	if raw is Array:
+		for key: Variant in (raw as Array).slice(0, MAX_SHELF):
+			if key is String:
+				out.append(_clip(key))
 	return out
 
 
@@ -358,6 +451,9 @@ static func _clip(value: Variant) -> String:
 func _rpc_room_opened() -> void:
 	_open = true
 	_table = ""
+	# Back in the room the map just left is in the cache: say so even if nothing else changed.
+	_reported = []
+	_report_holdings()
 	room_opened.emit()
 
 
@@ -371,4 +467,53 @@ func _rpc_session_summary(raw: Dictionary) -> void:
 	_table = clean.table
 	_shelf.assign(clean.shelf)
 	_players = clean.players
+	_holdings = clean.holdings
+	_report_holdings()
 	session_changed.emit()
+
+
+## Client: tell the host which shelf maps this peer holds, when that changed since the last
+## report.
+func _report_holdings() -> void:
+	if NetworkManager.is_host():
+		return
+	var streamer: Node = AssetManager.streamer
+	var cached := func(folder: String, variant: String, expected: String) -> String:
+		return streamer.get_cached_map_file(folder, variant, expected) if streamer else ""
+	var held: Array = []
+	for ref in _shelf:
+		if holds_map(ref, cached):
+			held.append(ref_key(ref))
+	if held == _reported:
+		return
+	_reported = held
+	# Only a connected client reports: GUT's offline peer is peer 1, the host itself.
+	if (
+		NetworkManager.is_client()
+		and multiplayer.multiplayer_peer != null
+		and multiplayer.get_unique_id() != 1
+	):
+		_rpc_report_holdings.rpc_id(1, held)
+
+
+## RPC: client -> host, the shelf maps the sender holds (untrusted: only keys on the shelf
+## are kept, under the sender's own session id).
+@rpc("any_peer", "reliable")
+func _rpc_report_holdings(raw: Variant) -> void:
+	if not NetworkManager.is_host():
+		return
+	var session_id_value := session_id_of(multiplayer.get_remote_sender_id())
+	if session_id_value == "":
+		return
+	note_holdings(session_id_value, raw)
+
+
+## Host: record what `session_id_value` reports it holds, keeping only shelf keys. Publishes
+## when that changed.
+func note_holdings(session_id_value: String, raw: Variant) -> void:
+	var shelf_keys := _shelf_keys()
+	var held := clean_keys(raw).filter(func(key: String) -> bool: return shelf_keys.has(key))
+	if _holdings.get(session_id_value, []) == held:
+		return
+	_holdings[session_id_value] = held
+	_publish()

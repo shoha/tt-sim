@@ -16,7 +16,7 @@ const STATUS_FLASH_DURATION := 1.0
 
 ## Tests set this false before adding the editor to the tree so headless runs
 ## never probe user:// for a leftover autosave file or pop the recovery
-## prompt, mirroring LobbyHost.connect_network.
+## prompt, mirroring RoomPanel.connect_network.
 @export var check_autosave_on_ready: bool = true
 
 # State

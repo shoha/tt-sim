@@ -351,7 +351,7 @@ Returns all screenshots and the final state in one response.
     {"network_id": "abc", "name": "Goblin", "position": {"x": 1, "y": 0, "z": 2}, "visible": true, "health": 30, "max_health": 30, "alive": true}
   ],
   "ui": {
-    "PlayerListDrawer": {"open": false},
+    "RoomDrawer": {"open": false},
     "LevelEditPanel": {"open": true}
   },
   "camera": {"position": {"x": 5, "y": 0, "z": 5}, "zoom": 8.0},

@@ -11,11 +11,15 @@ extends Node3D
 ## people that can exist with no map, where the GM sets maps out and everyone returns
 ## between them, on one connection throughout. Entering ROOM never connects; the action that
 ## leads there does:
+## ROOM shows the RoomPanel full screen (RoomScreen); at a table the same panel is the room
+## drawer (RoomDrawer, Tab). Both name shelf maps by key (SessionChannel.ref_key()).
 ## - TITLE > ROOM: Host (host_session(): ROOM once hosting), or Join (the join screen over
 ##   the title: ROOM on room_opened, or PLAYING on game_starting when a table is out).
-## - ROOM > PLAYING: Set out (_on_lobby_start_game(): refused with no map).
+## - ROOM > PLAYING: the room's Set out this map (set_out(), then _on_lobby_start_game():
+##   refused with no map).
 ## - PLAYING > ROOM: return_to_room() (host: the table is torn down, the room opens for all).
-## - PLAYING > PLAYING: a map change in play (_on_play_level_requested()).
+## - PLAYING > PLAYING: a map change in play (_on_play_level_requested(); the drawer's Move
+##   the table here comes through move_table()).
 ## Leaving a table, the host takes the party (the players' avatars, SessionParty) along, and
 ## sets it out on the next map once that map has loaded (_on_level_play_loaded()).
 ## - ROOM or PLAYING > TITLE: leave, or the host ends the session.
@@ -38,7 +42,6 @@ const TITLE_SCREEN_SCENE := preload("res://scenes/states/title_screen/title_scre
 const APP_MENU_SCENE := preload("res://scenes/ui/app_menu.tscn")
 const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
 const PAUSE_OVERLAY_SCENE := preload("res://scenes/states/paused/pause_overlay.tscn")
-const LOBBY_HOST_SCENE := preload("res://scenes/states/lobby/lobby_host.tscn")
 const LOBBY_CLIENT_SCENE := preload("res://scenes/states/lobby/lobby_client.tscn")
 const UPDATE_DIALOG_SCENE := preload("res://scenes/ui/update_dialog.tscn")
 const LOADING_OVERLAY_SCENE := preload("res://scenes/ui/loading_overlay.tscn")
@@ -54,9 +57,8 @@ var _title_screen: CanvasLayer = null
 var _app_menu: CanvasLayer = null
 var _game_map: GameMap = null
 var _pause_overlay: CanvasLayer = null
-## The room's view (the lobby screens until the RoomPanel replaces them)
-var _lobby_host: LobbyHost = null
-var _lobby_client: LobbyClient = null
+## The room's view in ROOM (the RoomPanel full screen)
+var _room_screen: RoomScreen = null
 ## The join screen over the title, until the host places this client in the room or a table
 var _join_screen: LobbyClient = null
 ## True from host_session() until hosting starts (ROOM) or fails (back to the title)
@@ -317,6 +319,7 @@ func _enter_playing_state() -> void:
 	# Setup bidirectional references between LevelPlayController and GameMap
 	_level_play_controller.setup(_game_map)
 	_game_map.setup(_level_play_controller)
+	_connect_room_drawer()
 
 	# Hide the AppMenu "Level Editor" button during gameplay — the pause
 	# menu provides "Edit Level" instead.
@@ -342,6 +345,15 @@ func _enter_playing_state() -> void:
 		# Local play: Just load the level
 		if not _level_play_controller.play_level(_pending_level_data):
 			push_error("Root: Failed to play level")
+
+
+## The room drawer over the table: Move the table here and Leave or End session.
+func _connect_room_drawer() -> void:
+	var menu = _game_map.gameplay_menu.get_node_or_null("GameplayMenu")
+	var drawer: RoomDrawer = menu.get("room_drawer") if menu else null
+	if drawer:
+		drawer.move_table_requested.connect(move_table)
+		drawer.leave_requested.connect(_on_pause_main_menu_requested)
 
 
 ## Connect client-side signals for receiving state updates
@@ -409,36 +421,62 @@ func _exit_playing_state() -> void:
 		_game_map = null
 
 
-## The room's view until the RoomPanel replaces it: the host's lobby screen (room code,
-## players, the map to set out next) or the client's, open on its waiting view. Entering
+## The room, full screen (RoomScreen), the same for the GM and the players. A map the GM
+## hosted with (Host with this map) goes on the shelf, selected, ready to set out. Entering
 ## never connects; hosting or joining has already happened.
 func _enter_room_state() -> void:
 	_end_room_wait()
-	if NetworkManager.is_host():
-		_lobby_host = LOBBY_HOST_SCENE.instantiate() as LobbyHost
-		_lobby_host.start_game_requested.connect(_on_lobby_start_game)
-		_lobby_host.cancel_requested.connect(_on_lobby_cancel)
-		_lobby_host.level_change_requested.connect(_on_lobby_level_change_requested)
-		add_child(_lobby_host)
-		if _pending_level_data:
-			_lobby_host.set_level(_pending_level_data)
-	else:
-		_lobby_client = LOBBY_CLIENT_SCENE.instantiate() as LobbyClient
-		_lobby_client.leave_requested.connect(_on_lobby_cancel)
-		add_child(_lobby_client)
+	var first := ""
+	if NetworkManager.is_host() and _pending_level_data:
+		first = NetworkManager.session.shelve(_pending_level_data.to_dict())
+	_room_screen = RoomScreen.new()
+	add_child(_room_screen)
+	_room_screen.panel.set_out_requested.connect(set_out)
+	_room_screen.panel.leave_requested.connect(_on_lobby_cancel)
+	if first != "":
+		_room_screen.panel.select(first)
 
 
 func _exit_room_state() -> void:
-	if _lobby_host:
-		_lobby_host.queue_free()
-		_lobby_host = null
-	if _lobby_client:
-		_lobby_client.queue_free()
-		_lobby_client = null
+	if _room_screen:
+		_room_screen.queue_free()
+		_room_screen = null
 
 
-## The title hands over the level the host picked; it becomes the pending level, set out
-## when the host presses Start in the room.
+## ROOM > PLAYING (host): set the shelf map `key` out, the room's Set out this map.
+func set_out(key: String) -> void:
+	var level := _load_shelf_map(key)
+	if level == null:
+		return
+	_pending_level_data = level
+	_on_lobby_start_game()
+
+
+## PLAYING > PLAYING (host): the room drawer's Move the table here, through the change-map
+## path (the party goes along).
+func move_table(key: String) -> void:
+	var level := _load_shelf_map(key)
+	if level != null:
+		_on_play_level_requested(level)
+
+
+## The level of the shelf map `key` from this host's library, or null (with the reason shown)
+## when it is not on the shelf or has no level folder here.
+func _load_shelf_map(key: String) -> LevelData:
+	for ref in NetworkManager.session.get_shelf():
+		if SessionChannel.ref_key(ref) != key:
+			continue
+		var folder := str(ref.get("folder", ""))
+		var level := LevelManager.load_level_folder(folder, false) if folder != "" else null
+		if level == null:
+			UIManager.show_error("That map is not in your library")
+		return level
+	UIManager.show_error("That map is not on the shelf")
+	return null
+
+
+## The title hands over the level the host picked; it goes on the shelf when the room opens,
+## selected for Set out.
 func _on_host_game_requested(level_info: Dictionary) -> void:
 	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
 	if level == null:
@@ -644,16 +682,6 @@ func _on_lobby_cancel() -> void:
 	_pending_level_data = null
 	change_state(State.TITLE_SCREEN)
 	NetworkManager.disconnect_game()
-
-
-func _on_lobby_level_change_requested(level_info: Dictionary) -> void:
-	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
-	if level == null:
-		UIManager.show_error("Could not load that level")
-		return
-	_pending_level_data = level
-	if _lobby_host:
-		_lobby_host.set_level(level)
 
 
 ## Client: the host set a map out from the room, or this client joined while one is out.

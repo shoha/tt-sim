@@ -64,7 +64,7 @@ func test_without_steam_a_reported_key_is_the_session_id() -> void:
 
 func test_a_map_ref_is_keyed_by_its_folder_else_its_map_path() -> void:
 	var ref := SessionChannel.map_ref(_level_dict("camp", HASH))
-	assert_eq(ref, {"folder": "camp", "map_path": "", "hashes": {"map": HASH}})
+	assert_eq(ref, {"folder": "camp", "map_path": "", "hashes": {"map": HASH}, "name": "camp"})
 	assert_eq(SessionChannel.ref_key(ref), "camp")
 	var shipped := SessionChannel.map_ref({"map_path": MAP_A, "map_hashes": {"map": "bogus"}})
 	assert_eq(SessionChannel.ref_key(shipped), MAP_A, "a level without a folder")
@@ -175,7 +175,11 @@ func test_a_client_keeps_the_hosts_summary() -> void:
 	assert_signal_emitted(_session, "session_changed")
 	assert_eq(_session.get_table(), "camp")
 	assert_eq(_session.get_shelf().size(), 1)
-	assert_eq(_session.get_shelf()[0], {"folder": "camp", "map_path": "", "hashes": {"map": HASH}})
+	assert_eq(
+		_session.get_shelf()[0],
+		{"folder": "camp", "map_path": "", "hashes": {"map": HASH}, "name": ""},
+		"a summary without a name keeps an empty one"
+	)
 	assert_eq(_session.peer_for("enet-1"), 1)
 
 
@@ -195,10 +199,10 @@ func test_a_summary_keeps_only_known_well_typed_fields() -> void:
 			"extra": true,
 		}
 	)
-	assert_eq(clean.keys(), ["open", "table", "shelf", "players"])
+	assert_eq(clean.keys(), ["open", "table", "shelf", "players", "holdings"])
 	assert_eq(clean.open, false)
 	assert_eq(clean.table, "")
-	assert_eq(clean.shelf, [{"folder": "", "map_path": MAP_A, "hashes": {}}])
+	assert_eq(clean.shelf, [{"folder": "", "map_path": MAP_A, "hashes": {}, "name": ""}])
 	assert_eq(clean.players, {"enet-2": {"name": "Di", "peer_id": 0}})
 	assert_eq(SessionChannel.sanitize_summary("not a dictionary").table, "")
 
@@ -229,3 +233,49 @@ func test_going_offline_forgets_the_session() -> void:
 	)
 	assert_eq(_session.get_table(), "")
 	assert_true(_session.get_shelf().is_empty())
+
+
+func test_the_gm_shelves_a_map_without_setting_it_out() -> void:
+	_session.open()
+	watch_signals(_session)
+	assert_eq(_session.shelve(_level_dict("camp")), "camp")
+	assert_signal_emitted(_session, "session_changed")
+	assert_true(_session.is_open(), "the room stays open")
+	assert_eq(_session.get_table(), "")
+	assert_eq(_session.get_shelf()[0].name, "camp")
+	assert_eq(_session.shelve(_level_dict("camp")), "camp", "shelving again keeps one entry")
+	assert_eq(_session.get_shelf().size(), 1)
+	NetworkManager._connection_state = NetworkManager.ConnectionState.JOINED
+	assert_eq(_session.shelve(_level_dict("ruins")), "", "only the host shelves")
+
+
+func test_holdings_keep_shelf_keys_and_the_host_holds_every_map() -> void:
+	_session._add_player("enet-1", "Gm", 1)
+	_session._add_player("enet-ana", "Ana", 7)
+	_session.shelve(_level_dict("camp"))
+	_session.shelve(_level_dict("ruins"))
+	_session.note_holdings("enet-ana", ["ruins", "not-on-the-shelf", 5])
+	var holdings := _session.get_holdings()
+	assert_eq(holdings["enet-ana"], ["ruins"])
+	assert_eq(holdings["enet-1"], ["camp", "ruins"])
+	assert_eq(_session.summary().holdings, holdings, "the summary carries them")
+
+
+func test_a_summary_keeps_clean_holdings() -> void:
+	var clean := SessionChannel.sanitize_summary(
+		{"holdings": {"enet-2": ["camp", 3, {}], 9: ["camp"], "enet-3": "camp"}}
+	)
+	assert_eq(clean.holdings, {"enet-2": ["camp"], "enet-3": []})
+
+
+func test_holding_a_map_needs_its_hashed_files_here() -> void:
+	var none := func(_folder: String, _variant: String, _hash: String) -> String: return ""
+	var cached := func(_folder: String, _variant: String, _hash: String) -> String:
+		return "user://cache/map.glb"
+	var shipped := {"folder": "", "map_path": MAP_A, "hashes": {}}
+	assert_true(SessionChannel.holds_map(shipped, none), "a map that ships with the game")
+	var unhashed := {"folder": "_room_panel_absent", "hashes": {}}
+	assert_false(SessionChannel.holds_map(unhashed, cached), "no hashes: not counted")
+	var hashed := {"folder": "_room_panel_absent", "hashes": {"map": HASH}}
+	assert_false(SessionChannel.holds_map(hashed, none))
+	assert_true(SessionChannel.holds_map(hashed, cached), "in the download cache")
