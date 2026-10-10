@@ -169,6 +169,44 @@ Font sizes form a clear hierarchy for visual organization:
 
 ---
 
+## Interface Size
+
+Every screen is laid out on a 1920x1080 canvas (`window/stretch/mode="canvas_items"`,
+`aspect="expand"`), and a smaller window shrinks that canvas with it: at 1280x720 a 14 px
+caption drew at 9 px. Interface size (`utils/interface_size.gd`, `InterfaceSize`) sets the root
+window's `content_scale_factor` instead, so the virtual canvas shrinks and the UI draws larger.
+
+- **Auto** (the default) is the least 0.05 step from 1.0 to 1.5 that draws a 14 px caption at
+  13 physical px or more (UI_TASTE T2): `ceil(13 / (14 * s))` in 0.05 steps, where `s` is the
+  window's scale of the base canvas, `min(w / 1920, h / 1080)`. 720p gives 1.40 (a 1371x771
+  canvas), 900p 1.15, 1080p and up 1.0. The step rounds up: rounding to the nearest gives 1.10
+  at 900p, where captions draw at 12.8 px. The narrower axis counts, so a 5:4 window reads its
+  width.
+- **A fixed size**, 90% to 150% in 10% steps, replaces Auto rather than multiplying it, so a
+  percent means the same factor on every window and nothing passes 1.5.
+- **Every screen fits a 1280x720 canvas**: 150% on any 16:9 window, the smallest any choice
+  gives. `tests/unit/test_interface_size_fit.gd` opens every screen and sheet the UI tour
+  visits in a 1280x720 viewport and fails on any visible control outside it (a ScrollContainer
+  must fit; what it holds may scroll). Screens that would not fit adapt to the canvas height:
+  the title's left column closes its gaps from `BoxContainerSpaced` to `BoxContainerTight`
+  under 800 px, the new-map dialog takes the 960 sheet with five biome tiles a line under 880
+  px and scrolls its fields when even that is too tall, and the avatar builder and roster size
+  themselves from the canvas already. A screen that sizes itself reads
+  `get_viewport().get_visible_rect().size` (the virtual canvas), never the window's pixel size,
+  and refits on `size_changed`, which also fires when the factor changes.
+- **Only the canvas scales.** `GameMap` sets its world viewport's `scaling_3d_scale` to the
+  factor, so the board renders at the resolution it has at 100%: the camera framing, the render
+  size and pixel-sized 3D details (grid line widths) are unchanged. Overlays drawn on the canvas
+  over the board (measure labels, gizmo handles, brush outlines) are UI and follow the factor.
+- **Where it lives:** Settings > Graphics, the Interface Size row (saves and applies the moment
+  it is picked; Reset puts Auto back). Saved per user in the settings file's `[ui]` section as
+  `interface_size` (0 for Auto, else the percent; `UiPreferences`), never networked.
+  `UIManager` applies it at startup and on every root `size_changed`; a headless run keeps 1.0.
+  The render-job probe `ui_primitives.gd` `window` step applies Auto (or its `content_scale`)
+  for the run without saving it.
+
+---
+
 ## Button Variants
 
 Buttons have semantic variants to communicate their purpose:

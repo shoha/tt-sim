@@ -43,11 +43,12 @@ static func visible_children(parent: Node) -> Array[Control]:
 ## awaited method on the node itself, this coroutine's resumption is not tied
 ## to owner's lifetime, so a screen freed mid-wait (a test's autofree, a fast
 ## screen swap) must be caught before the next call on it rather than only once
-## at the end. [param targets] must be children whose container will not
-## re-sort them while the entrance plays (about 1.1 s for a full staggered
-## group): the tween drives each control's position.y toward the value
-## captured before it starts, so a layout change mid-entrance leaves it
-## tweening toward a position its container no longer holds. The alpha reset
+## at the end. The tween drives each control's position.y toward the value
+## captured before it starts, so a layout change mid-entrance (a window resize,
+## which also changes the Interface size, as when a saved fullscreen applies
+## just after the title appears) leaves it tweening toward a position its
+## container no longer holds; each control's container re-sorts it when its
+## tween ends, so it settles where the layout now puts it. The alpha reset
 ## happens synchronously, before the first await, so call this in the same run
 ## that makes the parent visible (AnimatedCanvasLayerPanel does this through
 ## _stagger_targets()) — never after a fade that already showed the targets, or
@@ -76,3 +77,6 @@ static func stagger_in(targets: Array[Control], owner: Node) -> void:
 		tween.tween_property(control, "position:y", target_y, Constants.ANIM_ENTRANCE).set_delay(
 			delay
 		)
+		var container := control.get_parent() as Container
+		if container:
+			tween.finished.connect(container.queue_sort)

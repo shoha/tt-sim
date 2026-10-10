@@ -75,6 +75,7 @@ var _reset_tween: Tween
 
 # Graphics controls
 @onready var fullscreen_check: CheckButton = %FullscreenCheck
+@onready var interface_size_option: OptionButton = %InterfaceSizeOption
 @onready var vsync_check: CheckButton = %VSyncCheck
 @onready var lofi_check: CheckButton = %LofiCheck
 @onready var occlusion_fade_check: CheckButton = %OcclusionFadeCheck
@@ -298,8 +299,11 @@ func _on_panel_ready() -> void:
 	music_slider.get_parent().visible = SHOW_MUSIC_VOLUME
 
 	# Graphics. The toggles and option buttons here and the P2P toggle have no live handler:
-	# Apply reads and applies them (_apply_settings).
+	# Apply reads and applies them (_apply_settings). Interface size is the exception: it saves
+	# and applies the moment it is picked, so the menu itself shows the new size.
 	foliage_density_slider.value_changed.connect(_on_foliage_density_changed)
+	InterfaceSize.fill_option(interface_size_option, get_tree().root, UIManager.get_interface_size())
+	interface_size_option.item_selected.connect(_on_interface_size_selected)
 
 	# Grid visuals
 	cell_tint_opacity_slider.value_changed.connect(_on_cell_tint_opacity_changed)
@@ -765,17 +769,23 @@ func _on_close_pressed() -> void:
 	animate_out()
 
 
-## Reset to Defaults: shows the defaults (applied on Apply), and resets the two
-## preferences that save the moment they change, the prerelease channel and the input
-## profile, at once as before.
+## Reset to Defaults: shows the defaults (applied on Apply), and resets the three
+## preferences that save the moment they change, the prerelease channel, the input
+## profile and the Interface size, at once as before.
 func _on_reset_pressed() -> void:
 	_show_defaults()
 	prereleases_check.button_pressed = false
 	input_device_option.selected = InputProfile.Profile.AUTO
 	InputProfile.set_profile(InputProfile.Profile.AUTO)
+	interface_size_option.select(0)
+	UIManager.set_interface_size(InterfaceSize.AUTO)
 
 
-## Puts every Settings control except those two on its default without a sound: the
+func _on_interface_size_selected(index: int) -> void:
+	UIManager.set_interface_size(interface_size_option.get_item_id(index))
+
+
+## Puts every Settings control except those three on its default without a sound: the
 ## sliders tween home and hold their ticks (_slider_tick) until they land, and the
 ## toggles and options snap without signals (Apply applies them).
 func _show_defaults() -> void:

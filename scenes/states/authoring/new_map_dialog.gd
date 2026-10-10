@@ -10,6 +10,14 @@ extends AnimatedCanvasLayerPanel
 ## Emits map_chosen({"size_ft", "biome_id", "landform", "seed"}) and closes; Cancel, the
 ## header's close button and Escape close without choosing. Root builds the map from the
 ## spec (NewMap).
+##
+## Short canvases (_fit_to_canvas): the 600 sheet is about 830 px tall, so on a canvas under
+## WIDE_BELOW_PX (720p at Interface size Auto, 1080p at 130% and up) it takes the 960 width
+## token and the biomes go five to a line, two lines instead of three, which keeps all three
+## fields in view at 720p Auto. The fields also sit in a scroll region between the header and
+## the footer, as tall as they are until the sheet would come closer than space_5 to the
+## canvas edges (150% on a 16:9 window); then it stops there and the fields scroll, so Cancel
+## and Create stay in view.
 
 signal map_chosen(spec: Dictionary)
 signal closed
@@ -22,6 +30,12 @@ const SIZE_TILE_SIZE := Vector2(96, 56)
 const BIOME_TILE_SIZE := Vector2(96, 96)
 const BIOME_THUMB_PX := 64
 const BIOME_COLUMNS := 3
+const BIOME_COLUMNS_WIDE := 5
+## The sheet's width tokens (docs/UI_TASTE.md S5), and the canvas height under which the
+## wide one is used (the 600 sheet needs about 876 px: its height and space_5 above and below).
+const SHEET_WIDTH := 600.0
+const WIDE_SHEET_WIDTH := 960.0
+const WIDE_BELOW_PX := 880.0
 const LANDFORM_TILE_SIZE := Vector2(80, 56)
 const LANDFORM_PREFIX := "landform_"
 const SIZE_HINTS := {
@@ -48,8 +62,12 @@ var _landform: String = StartingLandform.DEFAULT
 var _biome_landform: String = StartingLandform.DEFAULT
 var _auto_flat: bool = false
 var _closing: bool = false
+## The scroll region and the fields it holds.
+var _scroll: ScrollContainer
+var _fields: VBoxContainer
 
 @onready var _body: VBoxContainer = %Body
+@onready var _panel: PanelContainer = %PanelContainer
 
 
 func _on_panel_ready() -> void:
@@ -58,6 +76,7 @@ func _on_panel_ready() -> void:
 	header.setup("New map", "Pick a size, a place and a shape to start from.", true)
 	header.close_requested.connect(_on_cancel_pressed)
 	_body.add_child(header)
+	_build_scroll()
 
 	size_field = TileField.new()
 	size_field.name = "SizeField"
@@ -70,7 +89,7 @@ func _on_panel_ready() -> void:
 		)
 	size_field.tiles.select(StringName("size_%d" % _size_ft))
 	size_field.tiles.selection_changed.connect(_on_size_selected)
-	_body.add_child(size_field)
+	_fields.add_child(size_field)
 
 	biome_field = TileField.new()
 	biome_field.name = "BiomeField"
@@ -98,12 +117,12 @@ func _on_panel_ready() -> void:
 	_biome_id = _initial_biome(biomes)
 	biome_field.tiles.select(_tile_for_biome(_biome_id))
 	biome_field.tiles.selection_changed.connect(_on_biome_selected)
-	_body.add_child(biome_field)
+	_fields.add_child(biome_field)
 
 	ground_caption = Label.new()
 	ground_caption.name = "GroundCaption"
 	ground_caption.theme_type_variation = &"Caption"
-	_body.add_child(ground_caption)
+	_fields.add_child(ground_caption)
 	_refresh_ground_caption()
 
 	landform_field = TileField.new()
@@ -122,12 +141,12 @@ func _on_panel_ready() -> void:
 	_landform = StartingLandform.FLAT if _auto_flat else _biome_landform
 	landform_field.tiles.select(landform_tile(_landform))
 	landform_field.tiles.selection_changed.connect(_on_landform_selected)
-	_body.add_child(landform_field)
+	_fields.add_child(landform_field)
 
 	landform_caption = Label.new()
 	landform_caption.name = "LandformCaption"
 	landform_caption.theme_type_variation = &"Caption"
-	_body.add_child(landform_caption)
+	_fields.add_child(landform_caption)
 	_refresh_landform_caption()
 
 	var footer := HBoxContainer.new()
@@ -142,10 +161,51 @@ func _on_panel_ready() -> void:
 	_body.add_child(HSeparator.new())
 	_body.add_child(footer)
 	UIManager.register_overlay($ColorRect as Control)
+	get_viewport().size_changed.connect(_fit_to_canvas)
+	_fields.minimum_size_changed.connect(_fit_to_canvas, CONNECT_DEFERRED)
+	_fit_to_canvas()
 
 
+func _build_scroll() -> void:
+	_fields = VBoxContainer.new()
+	_fields.name = "Fields"
+	_fields.theme_type_variation = &"BoxContainerSpaced"
+	_fields.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll = ScrollContainer.new()
+	_scroll.name = "FieldsScroll"
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.add_child(_fields)
+	_scroll.add_child(ScrollFade.new())
+	_body.add_child(_scroll)
+
+
+## The sheet's width for the canvas, and the scroll region as tall as the fields, or as tall
+## as the canvas leaves room for.
+func _fit_to_canvas() -> void:
+	if not is_instance_valid(_scroll):
+		return
+	var canvas := get_viewport().get_visible_rect().size
+	var margin := _panel.get_theme_constant(&"space_5", &"Space")
+	var wide := canvas.y < WIDE_BELOW_PX and canvas.x >= WIDE_SHEET_WIDTH + 2.0 * margin
+	_panel.custom_minimum_size.x = WIDE_SHEET_WIDTH if wide else SHEET_WIDTH
+	var columns := BIOME_COLUMNS_WIDE if wide else BIOME_COLUMNS
+	if biome_field.tiles.columns != columns:
+		biome_field.tiles.columns = columns
+	var chrome := _panel.get_combined_minimum_size().y - _scroll.custom_minimum_size.y
+	var room := canvas.y - 2.0 * margin - chrome
+	var wanted := _fields.get_combined_minimum_size().y
+	_scroll.custom_minimum_size.y = clampf(wanted, 0.0, maxf(room, 0.0))
+
+
+## The rows lift in one after another, the fields' rows among them.
 func _stagger_targets() -> Array[Control]:
-	return UiMotion.visible_children(_body)
+	var targets: Array[Control] = []
+	for control in UiMotion.visible_children(_body):
+		if control == _scroll:
+			targets.append_array(UiMotion.visible_children(_fields))
+		else:
+			targets.append(control)
+	return targets
 
 
 func _on_after_animate_in() -> void:
