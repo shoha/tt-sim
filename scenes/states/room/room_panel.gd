@@ -155,7 +155,8 @@ func _exit_tree() -> void:
 ## and show them.
 func refresh() -> void:
 	var session := NetworkManager.session
-	var peer := multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
+	# Also runs on the state change to OFFLINE, when a client's transport may be closed.
+	var peer := NetPeers.local_id(multiplayer)
 	if changes_source.is_valid():
 		_changed = changes_source.call()
 	show_session(session.summary(), session.session_id_of(peer), NetworkManager.is_host())

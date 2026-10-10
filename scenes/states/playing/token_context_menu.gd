@@ -70,7 +70,7 @@ func _update_menu_content() -> void:
 
 	var is_gm: bool = NetworkManager.has_gm_access()
 	var is_networked: bool = NetworkManager.is_networked()
-	var my_peer_id = multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
+	var my_peer_id := NetPeers.local_id(multiplayer)
 
 	# Title shows the token's current name
 	var title_label = get_node_or_null("MenuPanel/VBoxContainer/TitleLabel")

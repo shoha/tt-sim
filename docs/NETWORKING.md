@@ -81,7 +81,7 @@ signal connection_timeout()
 
 # Player management
 signal player_joined(peer_id: int, player_info: Dictionary)
-signal player_left(peer_id: int)
+signal player_left(peer_id: int, player_info: Dictionary)  # host: once the poll has drained
 
 # Game state
 signal game_starting()
@@ -192,6 +192,27 @@ NetworkManager.disconnect_game()
 ```
 
 Leaves the Steam lobby, closes the multiplayer peer, and clears all state.
+
+**Leaves and teardown.** A client's leave reaches the host as `peer_disconnected`. The player
+is out of `get_players()` at once, but the host announces the leave (`player_left`, then the
+player list) only once the multiplayer poll that reported it has drained, every leave of that
+poll together (`NetworkManager._announce_leaves()`), so whatever a `player_left` listener sends
+(the session summary, the token permissions, a drag-lock release) goes to the peers still
+connected. Over ENet a closing peer's channels are freed as soon as its disconnect arrives,
+before Godot reports the leave, so when several clients quit together each broadcast made while
+the poll was still reporting them logged `Unable to send packet on channel 0, max channels: 0`
+once per closed peer (19 lines when four clients left `enet_session_room`). Sending only to
+`multiplayer.get_peers()` would not have helped: a peer whose leave is not reported yet is
+still in it. A client announces another client's leave at once; it sends nothing. Godot's own
+notice of a leave to the other clients (SceneMultiplayer's `server_relay`, on by default) still
+goes out from inside the poll and logs that error once for each other client closing in the
+same poll (six when four quit at once); only turning the relay off would silence it.
+
+When the host ends the session, a client's transport is already closed when `disconnect_game()`
+announces OFFLINE (the state changes first, then the peer is dropped), so code that may run on
+that change asks `NetPeers` (`is_live()`, `local_id()`) instead of calling
+`multiplayer.get_unique_id()`, which logs "The multiplayer instance isn't currently active" on a
+closed peer (the room panel's refresh and NetworkTokenSync did, once per session end).
 
 ### Transport Resilience
 
@@ -868,7 +889,7 @@ before the peers start, and it deletes every test root of the run at the end, pa
 GUT run gets such a root without an argument (`Paths.gut_data_root`, see `AGENTS.md` "Running
 tests from the CLI").
 
-The run fails on what a test peer must never do, and on nothing else: a file that existed
+The store check fails on what a test peer must never do, and on nothing else: a file that existed
 before the run was modified or deleted (`shipped_files_changed` lists each as `modified <path>`
 or `deleted <path>`), or a new file or folder appeared under a store only a misdirected peer
 writes, the asset cache and its index, `user_assets/` and `updates/` (listed as `added
@@ -886,6 +907,21 @@ files on the worker threads (about 31,600 files in 0.6 s with the listing, again
 a time, taken before and again after the peers; `shipped_snapshot_ms` in the report). The
 comparison is `compare_snapshots()` in `tests/net/net_launcher.gd`, covered by
 `tests/unit/test_net_launcher_store_check.gd`.
+
+The launcher also reads every engine log of the run (each `*.godot.log` in the run's folder, so
+`enet_session_file`'s `resume.godot.log` too) for the two errors a teardown used to log (see
+"Leaves and teardown" under Disconnecting), and fails the run on one although every peer
+passed: a send to a closed peer from script (`Unable to send packet on channel 0, max channels:
+0` with a GDScript backtrace under it) and a closed peer asked for its id or role ("The
+multiplayer instance isn't currently active"). The engine's own relay notice to a closed peer
+(the same send error with no backtrace) is counted and does not fail. `teardown_errors` in the
+report lists each log that has any, with its counts (`script_sends`, `engine_sends`,
+`inactive`); the check is `tests/net/net_log_check.gd`, covered by
+`tests/unit/test_net_launcher_log_check.gd`. `enet_session_room` (four clients leaving at once)
+and `enet_session_file` (the host ending the session at a table, twice) are the runs that
+logged them. With the check, all seven scenarios passed on 2026-10-10 with none from script and
+no inactive-peer error: the relay's engine sends are six in `enet_session_room`'s host log, one
+each in `enet_live_edits`' and `enet_prefetch`'s (two clients leaving together), none elsewhere.
 
 A scenario is a scene whose script reads `--role`, `--rendezvous` (an absolute path prefix
 for the files the roles coordinate through), `--out`, `--timeout-s` and `--port`, writes its
