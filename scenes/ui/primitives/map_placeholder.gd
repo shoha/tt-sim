@@ -1,40 +1,19 @@
 class_name MapPlaceholder
 extends ColorRect
 
-## The picture of a map that has no thumbnail yet: a small painted landscape (a sky with a
-## soft sun, a far ridge in haze, a near landform and a foreground slope), drawn by
-## shaders/ui_map_placeholder.gdshader in place of a flat slab with an initial. Every map
-## paints its own. The shapes come from a seed hashed from the map's key (its folder, so a
-## rename keeps the picture) and the colours from its mood (LevelData.environment_preset): a
-## sunset or a tavern paints dusk, night and the underground a moonlit blue, arctic snow,
-## desert sand; any other mood, or none, one of the six day palettes, which the key picks.
-## The library card and the room paint the same map the same way. It sits inside a CardThumb
-## well, which clips it to the well's shape.
+## The picture of a map that has no thumbnail yet: the painted backdrop's world
+## (shaders/ui_backdrop.gdshader, BackdropPaint) in a small rect, in place of a flat slab with an
+## initial. Its light is the map's mood, read through the one table the backdrop reads
+## (PaintedBackdrop.mood_of of LevelData.environment_preset), and its land and weather (the
+## skyline, the poplars, the clouds, which side the sun stands) are drawn from a seed hashed from
+## the map's key (its folder, so a rename keeps the picture). So a map's card, its row in the
+## room and the screen behind it when it is selected all paint the same place in the same
+## light. It sits inside a CardThumb well, which clips it to the well's shape.
 
-const SHADER := preload("res://shaders/ui_map_placeholder.gdshader")
-## The shader's palettes by index: the day palettes first (meadow, golden hills, heather,
-## lakeside, spring blossom, teal coast), then the moods.
-const DAY_PALETTES := 6
-const LAKESIDE := 3
-const DUSK := 6
-const NIGHT := 7
-const SNOW := 8
-const SAND := 9
-## Moods with a palette of their own.
-const MOOD_PALETTES := {
-	"outdoor_sunset": DUSK,
-	"tavern": DUSK,
-	"hell": DUSK,
-	"outdoor_night": NIGHT,
-	"dungeon_dark": NIGHT,
-	"dungeon_crypt": NIGHT,
-	"cave": NIGHT,
-	"underwater": NIGHT,
-	"ethereal": NIGHT,
-	"arctic": SNOW,
-	"desert": SAND,
-	"swamp": LAKESIDE,
-}
+const SHADER := preload("res://shaders/ui_backdrop.gdshader")
+
+var _seed := 0.0
+var _mood := 0
 
 
 func _init() -> void:
@@ -43,30 +22,34 @@ func _init() -> void:
 	var paint_material := ShaderMaterial.new()
 	paint_material.shader = SHADER
 	material = paint_material
-	resized.connect(_fit_aspect)
+	resized.connect(_repaint)
 
 
-## Paint the map with the stable `key` (its folder, or its name when it has none) in `mood`.
+## Paint the map with the stable `key` (its folder, or its name when it has none) in the mood
+## of environment preset `mood`.
 func paint(key: String, mood: String = "") -> void:
-	var paint_material := material as ShaderMaterial
-	paint_material.set_shader_parameter(&"seed", seed_of(key))
-	paint_material.set_shader_parameter(&"palette", palette_of(key, mood))
+	_seed = seed_of(key)
+	_mood = PaintedBackdrop.mood_of(mood)
+	_repaint()
 
 
-## The seed the shapes are drawn from, in [0, 1): the same key always paints the same. MD5
-## rather than String.hash(), whose high bits barely move between short keys.
+## The seed the shapes are drawn from, in [0, 1): the same key always paints the same.
 static func seed_of(key: String) -> float:
-	var digest := key.md5_buffer()
-	return float(digest[1] << 8 | digest[2]) / 65536.0
+	return PaintedBackdrop.seed_of(key)
 
 
-## The palette `key` paints in under `mood`: the mood's own, or a day palette the key picks.
-static func palette_of(key: String, mood: String) -> int:
-	if MOOD_PALETTES.has(mood):
-		return MOOD_PALETTES[mood]
-	return key.md5_buffer()[0] % DAY_PALETTES
+## The mood this picture is painted in (a PaintedBackdrop.Mood).
+func mood() -> int:
+	return _mood
 
 
-func _fit_aspect() -> void:
-	if size.y > 0.0:
-		(material as ShaderMaterial).set_shader_parameter(&"aspect", size.x / size.y)
+func _repaint() -> void:
+	var canvas := size if size.y > 0.0 else Vector2(160, 90)
+	var paint_material := material as ShaderMaterial
+	paint_material.set_shader_parameter(&"rect_size", canvas)
+	# Still: a card's clouds hold their places, so a shelf of pictures does not shimmer.
+	paint_material.set_shader_parameter(&"drift", 0.0)
+	var composition := BackdropPaint.compose(_seed, canvas, null)
+	var values := BackdropPaint.uniforms(BackdropPaint.look_of(_mood), composition)
+	for param: String in values:
+		paint_material.set_shader_parameter(StringName(param), values[param])

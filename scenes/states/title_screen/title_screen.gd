@@ -4,9 +4,10 @@ extends CanvasLayer
 ## Title hub. Host and Join lead; the saved levels sit beside them as cards and
 ## the selected card is the level a host starts with (or Play Solo opens). Avatars opens
 ## the player's saved avatars (AvatarRoster).
-## The hub stands on the painted backdrop (PaintedBackdrop) in the selected map's mood,
-## cross-fading as the selection changes; with no map selected, and over an empty library, it
-## is morning. The backdrop is the empty library's picture too: the d20 that turned there was
+## The hub stands on the painted backdrop (PaintedBackdrop) in the selected map's mood and
+## land, changing as the selection changes, and making way for the column's sheet, the plaque
+## and the cards (fit_around); with no map selected, and over an empty library, it is
+## morning. The backdrop is the empty library's picture too: the d20 that turned there was
 ## a glossy 3D object over a painting, so it went with the flat sky. No word stands straight on
 ## the painting: the column (with the version beside the wordmark) is on a paper sheet like
 ## the room's side sheet, ending at its content, and "Your maps" with its count (and the empty
@@ -14,7 +15,10 @@ extends CanvasLayer
 ##
 ## Host opens a room, and the selected map is what goes on its shelf; Play solo and Set up
 ## tokens act on that map, and all three name it the same way, the bare name leading the line
-## under the button. New map starts one from nothing. Set up tokens is the Level Editor by
+## under the button. A room needs no map (room first, user verdict 2026-10-09), so over an
+## empty library Host stays the screen's fill and says maps are added in the room, and the
+## plaque where the cards would be offers one action, New map's (Start a new map). New map
+## starts one from nothing. Set up tokens is the Level Editor by
 ## what it does (starting tokens, the map's details and its Blender file; W5 keeps "level"
 ## internal); with no map selected it opens on a new one.
 
@@ -40,10 +44,12 @@ const QUIT_ICON := "logout"
 const HOST_CAPTION := "Open a room and invite players"
 ## The line under Host once a map is selected: what Host does with it.
 const HOST_MAP_LINE := "%s goes on the shelf"
+## The line under Host with no map: a room needs none (room first, user verdict 2026-10-09).
+const HOST_EMPTY_LINE := "Open a room; add maps there"
 const NEW_MAP_CAPTION := "Pick a landform, then paint it"
-const EMPTY_CAPTION := (
-	"No maps yet. Start a new map, or open Set up tokens to bring one in from Blender"
-)
+## The empty library's plaque: one line and one action, New map's.
+const EMPTY_CAPTION := "No maps yet. Paint your first one"
+const EMPTY_ACTION := "Start a new map"
 ## The left column's rhythm. Its own separation (BoxContainerTight, 4) puts a caption under
 ## its button; every other gap is a spacer before a row, sized by _fit_to_canvas. A caption
 ## stands AFTER_CAPTION_GAP above the next control, so it reads with its own button; stacked
@@ -73,11 +79,15 @@ var build_map_button: Button
 var avatars_button: Button
 var settings_button: Button
 var quit_button: Button
+## Host's caption: what Host does, or with no map that maps are added in the room.
+var host_caption: Label
 var host_subtitle: Label
 var play_subtitle: Label
 var editor_subtitle: Label
 var heading_count: Label
 var empty_caption: Label
+## The empty library's one action on its plaque: New map.
+var empty_action: Button
 var grid: LevelGrid
 var backdrop: PaintedBackdrop
 ## The version, a caption on the wordmark's baseline.
@@ -110,6 +120,11 @@ func _ready() -> void:
 	_play_entrance_animation()
 	get_viewport().size_changed.connect(_fit_to_canvas)
 	_fit_to_canvas()
+	# The painting makes way for the sheet, the plaque and the cards: its sun, clouds and
+	# poplars stand in the sky they leave open.
+	backdrop.fit_around(self)
+	grid.resized.connect(backdrop.refit)
+	_sheet.resized.connect(backdrop.refit)
 	LevelManager.level_saved.connect(_on_level_saved)
 	get_tree().node_added.connect(_on_node_added_or_removed)
 	get_tree().node_removed.connect(_on_node_added_or_removed)
@@ -192,6 +207,7 @@ func _build_left_column() -> void:
 	wordmark_row.add_child(version_label)
 	_section_gaps.append(UiActions.spacer(0, _left))
 	host_button = UiActions.primary("Host game", "network", HOST_CAPTION, _left)
+	host_caption = _left.get_child(host_button.get_index() + 1) as Label
 	host_subtitle = UiActions.subtitle_of(host_button)
 	host_button.pressed.connect(_on_host_pressed)
 	# One persimmon fill per screen (C5): Host is the primary, Join stands beside it quietly.
@@ -275,6 +291,12 @@ func _build_right_zone() -> void:
 	empty_caption.theme_type_variation = &"Caption"
 	empty_caption.visible = false
 	words.add_child(empty_caption)
+	# One action where the cards would be, quiet beside Host's fill (C5): New map's.
+	empty_action = UiActions.secondary(EMPTY_ACTION, "brush", words)
+	empty_action.name = "StartNewMap"
+	empty_action.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	empty_action.visible = false
+	empty_action.pressed.connect(_on_build_map_pressed)
 	grid = LevelGrid.new()
 	grid.name = "Grid"
 	grid.columns = 3
@@ -299,16 +321,18 @@ func _preselect_most_recent() -> void:
 	grid.select(String(newest.get("path", "")))
 
 
-## Host and Play Solo name the selected level and are disabled without one; Set up tokens
-## names it too, and opens on a new map without one.
+## Host, Play Solo and Set up tokens name the selected level. Host needs none (a room needs no
+## map: its caption says maps are added there); Play Solo is disabled without one, and Set up
+## tokens opens on a new map.
 func _refresh_actions() -> void:
 	var count := grid.card_count()
 	heading_count.text = str(count)
 	empty_caption.visible = count == 0
+	empty_action.visible = count == 0
 	var info := grid.selected_info()
 	var has_level := not info.is_empty()
-	host_button.disabled = not has_level
 	play_button.disabled = not has_level
+	host_caption.text = HOST_CAPTION if has_level else HOST_EMPTY_LINE
 	host_subtitle.visible = has_level
 	play_subtitle.visible = has_level
 	editor_subtitle.visible = has_level
@@ -316,8 +340,12 @@ func _refresh_actions() -> void:
 	host_subtitle.text = HOST_MAP_LINE % name if has_level else ""
 	play_subtitle.text = name
 	editor_subtitle.text = name
-	# The selected map's mood (morning with none); the first one shows at once.
-	backdrop.show_mood_of(String(info.get("environment_preset", "")))
+	# The selected map's mood and land (morning with none); the first one shows at once.
+	var folder := String(info.get("folder", ""))
+	backdrop.show_map(
+		String(info.get("environment_preset", "")), folder if folder != "" else name
+	)
+	backdrop.refit()
 	# A caption shown or hidden changes the column's height and the gap after it.
 	_fit_to_canvas()
 
@@ -370,11 +398,9 @@ func _on_level_activated(info: Dictionary) -> void:
 	play_solo_requested.emit(info)
 
 
+## Host opens a room with the selected map on its shelf, or with none (an empty info).
 func _on_host_pressed() -> void:
-	var info := grid.selected_info()
-	if info.is_empty():
-		return
-	host_game_requested.emit(info)
+	host_game_requested.emit(grid.selected_info())
 
 
 func _on_join_pressed() -> void:

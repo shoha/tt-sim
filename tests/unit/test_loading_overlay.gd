@@ -87,13 +87,14 @@ func test_the_text_is_ink_on_a_paper_sheet() -> void:
 ## at once: the hand-over does not change the picture.
 func test_a_map_load_stands_on_the_backdrop_in_the_last_mood() -> void:
 	PaintedBackdrop.last_mood = PaintedBackdrop.Mood.NIGHT
+	PaintedBackdrop.last_key = "moonwell"
 	_overlay.show_loading()
 	var sky := _overlay.get_node("%Sky") as PaintedBackdrop
 	assert_eq(sky.mood(), PaintedBackdrop.Mood.NIGHT)
-	var paint := sky.material as ShaderMaterial
-	assert_eq(paint.get_shader_parameter(&"mood_to"), int(PaintedBackdrop.Mood.NIGHT))
-	assert_eq(paint.get_shader_parameter(&"blend"), 1.0, "at once, no fade")
+	assert_eq(sky.key(), "moonwell", "the same land")
+	assert_eq(sky.blend(), 1.0, "at once, no fade")
 	PaintedBackdrop.last_mood = PaintedBackdrop.Mood.MORNING
+	PaintedBackdrop.last_key = ""
 
 
 func test_a_cancellable_wait_offers_cancel_later_without_moving_the_sheet() -> void:

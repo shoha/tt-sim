@@ -99,10 +99,10 @@ func _ready() -> void:
 
 
 ## Show a map load: the sheet on the painted backdrop with a determinate bar. The backdrop
-## covers the screen at once in the mood last shown (the title and the room stand on the
-## same world); the sheet fades in.
+## covers the screen at once in the mood and land last shown (the title and the room stand on
+## the same world); the sheet fades in.
 func show_loading(title: String = SETTING_OUT_ANY) -> void:
-	_sky.show_mood(PaintedBackdrop.last_mood, true)
+	_sky.show_last()
 	_open(title, false, false)
 
 

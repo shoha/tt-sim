@@ -3,15 +3,19 @@ extends RefCounted
 ## Render-job probe (`call` op) for the painted backdrop (PaintedBackdrop) in the UI tour
 ## (jobs/ui_tour.json): the title in each curated mood, chosen the real way, by selecting a
 ## map whose environment preset paints it, over a staged library. Nothing is written to disk:
-## the title's grid reads a staged list (the tour's test level and four sample maps with no
+## the title's grid reads a staged list (the tour's test level and six sample maps with no
 ## folder, which paint their placeholders) until `restore`. `action`:
 ## - `stage` (`folder`): the title's grid shows `folder` (the tour's test level, read from
-##   disk) and SAMPLE_MAPS.
-## - `select` (`mood`): click the staged card whose preset paints `mood` (morning, golden_hour,
-##   dusk or night), as a player's click does; the backdrop cross-fades to it.
+##   disk) and SAMPLE_MAPS, each edited a day or more before the last.
+## - `select` (`mood`): click the staged card whose preset paints `mood` (morning, midday,
+##   golden_hour, dusk, overcast or night), as a player's click does; the backdrop fades to it.
+## - `fade` (`from`, `to`, `at`): select the card of mood `from` at once, then click the card of
+##   mood `to` and hold the change at `at` (0 to 1) of the way, for a capture of the mix.
+## - `drift` (`held`): hold the clouds still as Reduce motion does (PaintedBackdrop.hold_drift),
+##   or let them drift again.
 ## - `empty`: the title over an empty library.
 ## - `restore`: the title's grid reads the real library again, the newest map selected.
-## - `report`: log the backdrop's moods and how far its cross-fade has run.
+## - `report`: log the backdrop's mood, its map and how far its change has run.
 ## - `room_mood` (`preset`): on ui_room.gd's staged room, give the second sample map `preset`
 ##   and select it, so the room's backdrop takes that map's mood.
 ## - `gpu_start`, `gpu_stop` (`name`): sample the window's GPU render time every frame between
@@ -23,10 +27,13 @@ extends RefCounted
 ## Sample maps by the mood their preset paints: name and preset. Their paths name no folder.
 const SAMPLE_MAPS := {
 	"morning": ["Willow Green", "forest"],
+	"midday": ["Hayfield Rise", "outdoor_day"],
 	"golden_hour": ["Lantern Bay", "outdoor_sunset"],
 	"dusk": ["Violet Fen", "ethereal"],
+	"overcast": ["Misty Tarn", "outdoor_overcast"],
 	"night": ["Moonwell", "outdoor_night"],
 }
+const DAY_S := 86400
 const SAMPLE_PREFIX := "user://levels/_backdrop_sample_"
 
 
@@ -37,6 +44,11 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _stage(title, String(step.get("folder", "")))
 		"select":
 			return _select(title, String(step.get("mood", "")))
+		"fade":
+			return _fade(title, step)
+		"drift":
+			title.backdrop.hold_drift(bool(step.get("held", false)))
+			return "drift %s" % ("held" if step.get("held", false) else "free")
 		"empty":
 			return _provide(title, func() -> Array[Dictionary]: return [])
 		"restore":
@@ -95,7 +107,8 @@ static func _stage(title: TitleScreen, folder: String) -> String:
 	var real := LevelManager.folder_info(folder)
 	if not real.is_empty():
 		levels.append(real)
-	var modified := 1000
+	# Edited over the last week or so, a day or more apart (the newest first), never 1970.
+	var modified := int(Time.get_unix_time_from_system()) - DAY_S
 	for mood: String in SAMPLE_MAPS:
 		var sample: Array = SAMPLE_MAPS[mood]
 		var key := SAMPLE_PREFIX + mood
@@ -111,7 +124,7 @@ static func _stage(title: TitleScreen, folder: String) -> String:
 				"thumbnail": "",
 			}
 		)
-		modified -= 1
+		modified -= DAY_S + 3600 * (levels.size() * 5 % 11)
 	return _provide(title, func() -> Array[Dictionary]: return levels)
 
 
@@ -134,15 +147,28 @@ static func _select(title: TitleScreen, mood: String) -> String:
 	return "no card %s (stage first)" % map_name
 
 
+## Click the card of mood `from` and let it settle at once, then click the card of mood `to`
+## and hold the change at `at` of the way.
+static func _fade(title: TitleScreen, step: Dictionary) -> String:
+	if title == null:
+		return "no title"
+	_select(title, String(step.get("from", "")))
+	var backdrop := title.backdrop
+	backdrop.show_mood(backdrop.mood(), true)
+	_select(title, String(step.get("to", "")))
+	if backdrop._fade and backdrop._fade.is_valid():
+		backdrop._fade.kill()
+	backdrop._set_blend(float(step.get("at", 0.5)))
+	var sun: Vector4 = (backdrop.material as ShaderMaterial).get_shader_parameter(&"sun_at")
+	return "%s; sun at %.3f, %.3f r %.3f" % [_report(title), sun.x, sun.y, sun.z]
+
+
 static func _report(title: TitleScreen) -> String:
 	if title == null:
 		return "no title"
-	var paint := title.backdrop.material as ShaderMaterial
-	var moods := PaintedBackdrop.Mood.keys()
-	return "backdrop %s -> %s at %.2f" % [
-		moods[int(paint.get_shader_parameter(&"mood_from"))],
-		moods[int(paint.get_shader_parameter(&"mood_to"))],
-		float(paint.get_shader_parameter(&"blend")),
+	var backdrop := title.backdrop
+	return "backdrop %s, map %s, at %.2f" % [
+		PaintedBackdrop.Mood.keys()[backdrop.mood()], backdrop.key(), backdrop.blend()
 	]
 
 

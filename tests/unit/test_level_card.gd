@@ -82,7 +82,9 @@ func test_placeholder_paints_the_map_and_a_real_thumbnail_hides_it() -> void:
 	)
 	assert_true(card._placeholder.visible)
 	var paint := card._placeholder.material as ShaderMaterial
-	assert_eq(paint.get_shader_parameter(&"palette"), MapPlaceholder.NIGHT, "the mood's palette")
+	assert_eq(card._placeholder.mood(), PaintedBackdrop.Mood.NIGHT, "the backdrop's own mood")
+	var night: Vector3 = BackdropPaint.look_of(PaintedBackdrop.Mood.NIGHT).sky_top
+	assert_eq(paint.get_shader_parameter(&"sky_top"), night)
 	assert_eq(paint.get_shader_parameter(&"seed"), MapPlaceholder.seed_of("sandy_clearing"))
 	# A real thumbnail: write a tiny PNG to user:// and point the card at it.
 	var image := Image.create(4, 4, false, Image.FORMAT_RGB8)
@@ -94,19 +96,28 @@ func test_placeholder_paints_the_map_and_a_real_thumbnail_hides_it() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
-## Every map paints its own, the same every time: the key picks a day palette and the shapes,
-## a mood with a palette of its own wins.
+## Every map paints its own, the same every time: the key draws the land and the weather (the
+## skyline, the poplars, the clouds), and the mood is the backdrop's for the map's preset.
 func test_the_placeholder_is_stable_per_map_and_varies_across_maps() -> void:
 	assert_eq(MapPlaceholder.seed_of("old_mill"), MapPlaceholder.seed_of("old_mill"))
 	assert_ne(MapPlaceholder.seed_of("old_mill"), MapPlaceholder.seed_of("fen_crossing"))
-	var palettes := {}
+	var lands := {}
+	var groves := {}
 	for key in ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]:
-		var palette := MapPlaceholder.palette_of(key, "")
-		assert_between(palette, 0, MapPlaceholder.DAY_PALETTES - 1, "no mood: a day palette")
-		palettes[palette] = true
-	assert_gt(palettes.size(), 1, "maps without a mood do not all paint alike")
-	assert_eq(MapPlaceholder.palette_of("a", "arctic"), MapPlaceholder.SNOW)
-	assert_eq(MapPlaceholder.palette_of("a", "outdoor_sunset"), MapPlaceholder.DUSK)
+		var composition := BackdropPaint.compose(MapPlaceholder.seed_of(key), Vector2(160, 90), null)
+		lands[composition.ridges] = true
+		var trees := 0
+		for tree: Vector4 in composition.poplars:
+			trees += 1 if tree.y > 0.0 else 0
+		groves[trees] = true
+	assert_eq(lands.size(), 12, "every map its own skyline")
+	assert_gt(groves.size(), 1, "maps do not all stand the same poplars")
+	var placeholder := MapPlaceholder.new()
+	placeholder.paint("a", "arctic")
+	assert_eq(placeholder.mood(), PaintedBackdrop.mood_of("arctic"), "one table for both")
+	placeholder.paint("a", "outdoor_sunset")
+	assert_eq(placeholder.mood(), PaintedBackdrop.Mood.GOLDEN_HOUR)
+	placeholder.free()
 
 
 func test_press_selects_and_double_press_activates() -> void:
@@ -235,9 +246,29 @@ func test_edit_is_the_first_overflow_action() -> void:
 ## thumbnail.
 func test_the_overflow_menu_sits_on_a_paper_disc() -> void:
 	var card := _card(_info())
+	await wait_process_frames(1)
 	assert_eq(card._menu_button.theme_type_variation, &"IconButtonDisc")
+	# A flat button draws no stylebox at all: the disc was themed but never drawn.
+	assert_false(card._menu_button.flat, "the disc is drawn")
 	var disc := card._menu_button.get_theme_stylebox(&"normal") as StyleBoxFlat
 	assert_eq(disc.bg_color, ThemeColors.PAPER_RAISED)
+	# The ink dots read on the disc, and the disc stands out from the darkest picture (the night
+	# sky the placeholder paints under the corner the disc sits in).
+	var ink := card._menu_button.get_theme_color(&"icon_normal_color")
+	assert_gte(_contrast(ink, disc.bg_color), 4.5, "the dots on the disc")
+	var night: Vector3 = BackdropPaint.look_of(PaintedBackdrop.Mood.NIGHT).sky_top
+	assert_gte(_contrast(disc.bg_color, Color(night.x, night.y, night.z)), 3.0, "on a night picture")
+
+
+func _contrast(a: Color, b: Color) -> float:
+	var la := _luminance(a)
+	var lb := _luminance(b)
+	return (maxf(la, lb) + 0.05) / (minf(la, lb) + 0.05)
+
+
+func _luminance(color: Color) -> float:
+	var linear := color.srgb_to_linear()
+	return 0.2126 * linear.r + 0.7152 * linear.g + 0.0722 * linear.b
 
 
 func test_edit_requests_the_edit_action() -> void:

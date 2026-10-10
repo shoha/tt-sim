@@ -485,8 +485,11 @@ func _on_table_level_chosen(level: LevelData) -> void:
 
 
 ## The title hands over the level the host picked; it goes on the shelf when the room opens,
-## selected for Set out.
+## selected for Set out. With none (an empty library) the room opens with an empty shelf.
 func _on_host_game_requested(level_info: Dictionary) -> void:
+	if String(level_info.get("path", "")) == "":
+		host_session(null)
+		return
 	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
 	if level == null:
 		UIManager.show_error(MapLoadError.for_info(level_info))
