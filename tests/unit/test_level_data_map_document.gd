@@ -4,9 +4,8 @@ extends GutTest
 ## both. Round trips, validate() for each combination, untrusted-input handling of the two
 ## fields, and duplicate_level().
 ##
-## validate() resolves files through Paths (the real user://levels/), so the fixture
-## folder below is created there under a name no real level can have and removed after
-## each test.
+## validate() resolves files through Paths.LEVELS_DIR (the GUT run's own test data root), so
+## the fixture folder below is created there and removed after each test.
 
 const FOLDER := "_gut_t4_map_document"
 const HASH_A := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

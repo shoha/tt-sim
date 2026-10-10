@@ -6,8 +6,9 @@ extends GutTest
 ## hash. Unit level only: AssetStreamer's RPCs and a real second peer over Steam are not
 ## exercised here.
 ##
-## The cache tests use the live AssetManager.cache under a folder name no real level can
-## have, and remove their entries afterwards, so the real cache index ends as it started.
+## The cache tests use the live AssetManager.cache, which in a GUT run keeps its files and
+## index in the run's own test data root (Paths.gut_data_root), never the real user's. They
+## still use a folder name no real level can have and remove their entries afterwards.
 
 const CacheScript := preload("res://autoloads/asset_cache_manager.gd")
 const ACTIVE := "my_dungeon"

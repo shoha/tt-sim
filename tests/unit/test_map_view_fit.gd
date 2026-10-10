@@ -6,8 +6,8 @@ extends GutTest
 ##
 ## The play path runs through the real LevelPlayController and GameMap (wired as
 ## Root._enter_playing_state wires them). The level is a 200 ft map document in a level
-## folder under the real user://levels/ with a name no real level can have; it is removed
-## after each test.
+## folder under Paths.LEVELS_DIR (the GUT run's own test data root); it is removed after each
+## test.
 
 const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
 const FOLDER := "_authparity_view_fit_gut"

@@ -186,6 +186,17 @@ Add a new test script to every subset it belongs to when you create it.
 `tests/unit/test_gut_subsets.gd` fails the full run if any subset lists a script that no
 longer exists, so a rename has to update the lists.
 
+**A GUT run never touches the real user's data.** `Paths` sees that the engine's script is
+`gut_cmdln.gd` and points every per-user store (levels, settings, the asset cache and its index,
+user packs, avatars, updates) at `user://_test_roots/gut_<process id>/` before any autoload
+loads, so the command stays the fixed form above and tests can store, evict and delete freely.
+`tests/gut_post_run.gd`, the `post_run_script` of every `tests/.gutconfig*.json` (a new config
+must name it; `test_gut_subsets.gd` checks), deletes that root when the run ends. A test that
+calls `Paths.use_data_root()` puts back the root it found (`Paths.DATA_ROOT` before the call),
+never `SHIPPED_DATA_ROOT`. Not moved: the Level Editor's autosave (`LevelEditorHistory`, fixed
+at `user://levels/_autosave/`) and the update installer's restart scripts, which only an
+interactive session writes.
+
 **After a fresh clone or when new `class_name` scripts are added**, run the import step first (required once):
 ```
 godot --headless --import --path .
