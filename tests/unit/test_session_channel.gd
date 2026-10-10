@@ -199,7 +199,9 @@ func test_a_summary_keeps_only_known_well_typed_fields() -> void:
 			"extra": true,
 		}
 	)
-	assert_eq(clean.keys(), ["open", "table", "shelf", "players", "holdings"])
+	assert_eq(
+		clean.keys(), ["open", "table", "shelf", "players", "holdings", "selected", "progress"]
+	)
 	assert_eq(clean.open, false)
 	assert_eq(clean.table, "")
 	assert_eq(clean.shelf, [{"folder": "", "map_path": MAP_A, "hashes": {}, "name": ""}])
@@ -279,3 +281,66 @@ func test_holding_a_map_needs_its_hashed_files_here() -> void:
 	var hashed := {"folder": "_room_panel_absent", "hashes": {"map": HASH}}
 	assert_false(SessionChannel.holds_map(hashed, none))
 	assert_true(SessionChannel.holds_map(hashed, cached), "in the download cache")
+
+
+func test_missing_variants_name_the_files_to_fetch() -> void:
+	var only_ttmap := func(_folder: String, variant: String, _hash: String) -> String:
+		return "user://cache/map.ttmap" if variant == "ttmap" else ""
+	var both := {"folder": "_room_panel_absent", "hashes": {"map": HASH, "ttmap": HASH}}
+	assert_eq(SessionChannel.missing_variants(both, only_ttmap), ["map"])
+	assert_eq(SessionChannel.missing_variants({"folder": "", "map_path": MAP_A}, only_ttmap), [])
+	assert_eq(SessionChannel.missing_variants({"folder": "x", "hashes": {}}, only_ttmap), [])
+
+
+## The host serves map files only for the map on the table and the shelf maps.
+func test_the_whitelist_is_the_table_and_the_shelf() -> void:
+	_session.shelve(_level_dict("camp"))
+	_session.shelve({"level_name": "Shipped", "map_path": MAP_A})
+	assert_eq(_session.servable_folders(), ["camp"], "a shipped map has no folder to serve")
+	NetworkManager.broadcast_level_data(_level_dict("ruins"))
+	assert_eq(_session.servable_folders(), ["ruins", "camp"])
+	var folders := _session.servable_folders()
+	var streamer := AssetManager.streamer
+	assert_ne(streamer.level_map_file_for_request("camp", "map", folders), "", "a shelf map")
+	assert_ne(streamer.level_map_file_for_request("ruins", "ttmap", folders), "", "the table")
+	assert_eq(streamer.level_map_file_for_request("vault", "map", folders), "", "not shelved")
+	assert_eq(streamer.level_map_file_for_request("../camp", "../x", folders), "", "no variant")
+	assert_eq(SessionChannel.servable("", []), [])
+
+
+func test_the_gms_selection_rides_in_the_summary() -> void:
+	_session.shelve(_level_dict("camp"))
+	_session.select_map("camp")
+	assert_eq(_session.get_selected(), "camp")
+	assert_eq(_session.summary().selected, "camp")
+	_session.select_map("not-on-the-shelf")
+	assert_eq(_session.get_selected(), "", "only a shelf map is selected")
+	var clean := SessionChannel.sanitize_summary(
+		{"selected": 5, "progress": {"enet-2": {"camp": 40.7, "x": "a", 3: 1}, 9: {}}}
+	)
+	assert_eq(clean.selected, "")
+	assert_eq(clean.progress, {"enet-2": {"camp": 40}})
+
+
+## Taking a map off the shelf drops its holdings, its progress and its selection; the map on
+## the table stays.
+func test_unshelving_forgets_the_map_but_never_the_table() -> void:
+	_session._add_player("enet-ana", "Ana", 7)
+	_session.shelve(_level_dict("camp"))
+	_session.shelve(_level_dict("ruins"))
+	_session.note_holdings("enet-ana", ["camp", "ruins"])
+	_session.prefetch.note_progress("enet-bo", {"camp": 30}, ["camp", "ruins"])
+	_session.select_map("camp")
+	watch_signals(_session)
+	assert_true(_session.unshelve("camp"))
+	assert_signal_emitted(_session, "session_changed")
+	assert_eq(_session.get_shelf().map(func(r: Dictionary) -> String: return r.folder), ["ruins"])
+	assert_eq(_session.get_holdings()["enet-ana"], ["ruins"])
+	assert_eq(_session.prefetch.get_progress(), {})
+	assert_eq(_session.get_selected(), "")
+	assert_eq(_session.servable_folders(), ["ruins"], "no longer served")
+	assert_false(_session.unshelve("camp"), "already gone")
+	NetworkManager.broadcast_level_data(_level_dict("ruins"))
+	assert_false(_session.unshelve("ruins"), "the map on the table stays")
+	NetworkManager._connection_state = NetworkManager.ConnectionState.JOINED
+	assert_false(_session.unshelve("ruins"), "only the host")

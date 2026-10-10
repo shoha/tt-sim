@@ -27,6 +27,8 @@ const ROW_INSET := 8
 const STATE_ICON := Vector2(16, 16)
 const HAS_IT := "Has it"
 const GETS_IT := "Gets it at the table"
+const GETTING_IT := "Getting it · %d%%"
+const WAITING := "Waiting to get it"
 
 static var _thumb_material: ShaderMaterial
 
@@ -138,7 +140,7 @@ static func player_row(player: Dictionary, selected: String, choose_avatar: Call
 		you.name = "You"
 		line.add_child(you)
 	if selected != "":
-		line.add_child(download_state(selected in player.holds))
+		line.add_child(download_state(RoomModel.download_state(player, selected)))
 	line.visible = line.get_child_count() > 0
 
 	if player.you:
@@ -147,32 +149,61 @@ static func player_row(player: Dictionary, selected: String, choose_avatar: Call
 	return holder
 
 
-## The selected map's download state for one player, an icon and a word (C7: never colour
-## alone): the lake check and "Has it", or the download arrow and "Gets it at the table".
-## There is no partial progress yet: a player who lacks the map downloads it once it is set
-## out. The word never trims: the caption line wraps it whole onto a line of its own.
-static func download_state(held: bool) -> Control:
+## The selected map's download state for one player (`state`, RoomModel.download_state()),
+## an icon and a word (C7: never colour alone): the lake check and "Has it"; the lake download
+## arrow and "Getting it · 40%" while it comes; the soft arrow and "Waiting to get it" while it
+## waits its turn, or "Gets it at the table" when this player is not fetching it. Progress is
+## lake and a word, never a bar. The word never trims: the caption line wraps it whole onto a
+## line of its own. show_download_state() updates it in place as the percent moves.
+static func download_state(state: Dictionary) -> Control:
 	var box := HBoxContainer.new()
 	box.name = "Download"
 	box.theme_type_variation = &"BoxContainerTight"
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var icon := TextureRect.new()
 	icon.name = "Icon"
-	icon.texture = IconButton.load_icon("circle-check" if held else "download")
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.custom_minimum_size = STATE_ICON
 	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# A white icon tinted by hand: lake (state) for has it, the soft text role for not yet,
-	# read once the icon is under its paper or glass parent.
-	var role := ThemeColors.STATE if held else ThemeColors.TEXT_SOFT
-	icon.theme_changed.connect(func() -> void: icon.self_modulate = ThemeColors.of(icon, role))
+	# A white icon tinted by hand, read once the icon is under its paper or glass parent.
+	icon.theme_changed.connect(func() -> void: _tint_state_icon(icon))
 	box.add_child(icon)
-	var word := _caption(HAS_IT if held else GETS_IT, &"Caption", false)
+	var word := _caption("", &"Caption", false)
 	word.name = "Word"
 	box.add_child(word)
+	show_download_state(box, state)
 	return box
+
+
+## Show `state` (RoomModel.download_state()) on a download_state() box.
+static func show_download_state(box: Control, state: Dictionary) -> void:
+	var kind: StringName = state.get("state", RoomModel.TABLE)
+	var icon := box.get_node("Icon") as TextureRect
+	icon.texture = IconButton.load_icon("circle-check" if kind == RoomModel.HAS else "download")
+	# Lake (state) for has it and getting it, the soft text role for not yet.
+	var lake := kind == RoomModel.HAS or kind == RoomModel.GETTING
+	icon.set_meta(&"role", ThemeColors.STATE if lake else ThemeColors.TEXT_SOFT)
+	if icon.is_inside_tree():
+		_tint_state_icon(icon)
+	(box.get_node("Word") as Label).text = download_word(state)
+
+
+## The word for a download state (RoomModel.download_state()).
+static func download_word(state: Dictionary) -> String:
+	match state.get("state", RoomModel.TABLE):
+		RoomModel.HAS:
+			return HAS_IT
+		RoomModel.GETTING:
+			return GETTING_IT % int(state.get("percent", 0))
+		RoomModel.WAITING:
+			return WAITING
+	return GETS_IT
+
+
+static func _tint_state_icon(icon: TextureRect) -> void:
+	icon.self_modulate = ThemeColors.of(icon, icon.get_meta(&"role", ThemeColors.TEXT_SOFT))
 
 
 ## One shelf map: `entry` is a RoomModel.shelf() entry, `mood` its environment preset (for the

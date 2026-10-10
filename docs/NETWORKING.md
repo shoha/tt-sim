@@ -342,8 +342,46 @@ folder with the same hash or in the download cache) and reports the keys when th
 session id, `note_holdings()`). The host counts itself as holding every shelf map.
 `get_holdings()` (session id -> keys) rides in the summary, and the room shows it ("3 of 4 have
 it"). Set out never waits for it: a player without the map downloads it at the table as before.
-There is no partial progress yet (no download in the room); a host that sent no hashes for a
-folder map leaves it counted as not held.
+A host that sent no hashes for a folder map leaves it counted as not held.
+
+**Prefetch: shelf maps come in the background** (`SessionPrefetch`,
+`NetworkManager.session.prefetch`). Before it, a client downloaded a map only when it was set
+out, and the host serves one peer at a time, so a 20 MB map at Steam's 1 MB/s kept the fourth
+player waiting about 40 s. Now every client fetches the shelf maps it lacks as soon as the GM
+adds them, while it waits in the room or plays at a table:
+
+- *Order.* The map on the table, then the GM's selected shelf map (`select_map()`, which
+  `RoomPanel.select()` calls on the GM's side; `"selected"` in the summary), then shelf order
+  (`SessionPrefetch.order()`). A client fetches one map at a time, every missing file of it at
+  once (`missing_variants()`), so both headers arrive together and its progress is by bytes. A
+  client re-runs the step on every summary and on `room_opened`, deferred to the end of the
+  frame, so several summaries arriving together count once.
+- *Requests.* Each file is `AssetStreamer.request_map_file_from_host(folder, variant, priority,
+  true)`: a prefetch takes none of the client's two download slots (it waits at the host, not
+  here). A table request for a file being prefetched takes that download over (its prefetch
+  flag clears) instead of asking again. A finished map lands in the download cache, the client
+  reports its holdings at once, and the table's load finds it there
+  (`LevelPlayLoader._resolve_map_sources`) with no second transfer.
+- *The table first.* The host classes every transfer at every send: a prefetch is a level map
+  file of a folder other than the one on the table (`AssetStreamer.is_prefetch_transfer`), and
+  everything else (token assets, the table's own map files) is a table transfer. A peer with a
+  table transfer is served before peers with only prefetches (`StreamPeerQueue.served`), and
+  within one peer the table's transfers take the window first. A prefetch that is passed over
+  keeps its place, its acknowledged chunks and its in-flight window, and resumes once no table
+  transfer is left; a prefetch of the map just set out is a table transfer from then on.
+- *Cancel.* A map that leaves the shelf (`unshelve()`, host; the map on the table cannot) is
+  dropped: the host stops sending its files to everyone (`drop_level_transfers`), and each
+  client cancels its fetch on the summary (`AssetStreamer.cancel_download`, which tells the host
+  through `_rpc_cancel_asset`), never a download the table's load took over. A map whose fetch
+  fails is left for the table's load. The room has no Remove control yet; `unshelve()` is the
+  engine's.
+- *Progress.* Each client reports `{ref key: percent}` for the map it is getting and 0 for each
+  waiting behind it (`_rpc_report_progress`, at most every 0.25 s and only on a change); the
+  host keeps shelf keys only, by the sender's session id (`note_progress()`), and sends every
+  client the whole map (`_rpc_progress`) on each change; it also rides in the summary
+  (`"progress"`, sanitized on arrival). `progress_changed` fires on every peer, and the room
+  updates its rows in place (`RoomPanel.show_progress()`): "Getting it · 40%" in lake, "Waiting
+  to get it" while a map waits its turn, "Has it" once held.
 
 **The party** (`NetworkManager.session.party`, `SessionParty`, `autoloads/session_party.gd`,
 host only). Players' avatars belong to the session, not to a map.
@@ -502,11 +540,12 @@ A level's map is up to two files in its folder: `map.glb` (Blender-made) and `ma
 level folder as asset id, and a variant id naming the file.
 
 - **Host whitelist.** `_rpc_request_asset` serves a level map only through
-  `AssetStreamer.level_map_file_for_request(asset_id, variant_id, active_folder)`: the
-  requested folder must sanitize to the active level (`is_level_request_authorized`,
-  unchanged) and the variant must be `"map"` (map.glb) or `"ttmap"` (map.ttmap)
-  (`Paths.get_level_map_file_for_variant`). Anything else is answered with
-  `_rpc_asset_not_found`; neither client-controlled value ever becomes a path.
+  `AssetStreamer.level_map_file_for_request(asset_id, variant_id, servable_folders)`: the
+  requested folder must sanitize to the level on the table or to a map on the session's shelf
+  (`SessionChannel.servable_folders()`, checked with `is_level_request_authorized`), and the
+  variant must be `"map"` (map.glb) or `"ttmap"` (map.ttmap)
+  (`Paths.get_level_map_file_for_variant`). Anything else, any other saved level included, is
+  answered with `_rpc_asset_not_found`; neither client-controlled value ever becomes a path.
 - **Client.** `request_map_file_from_host(folder, variant)` (file type `"model"` for the
   GLB, `Paths.LEVEL_MAP_DOCUMENT_FILE_TYPE` for the document, cached as `.glb` /
   `.ttmap` under `user://asset_cache/_level_maps/<folder>/`). `MapDownloadCoordinator`
@@ -532,14 +571,15 @@ level folder as asset id, and a variant id naming the file.
 - **Flow control.** The host serves bulk transfers to one peer at a time: peers wait in a
   host-wide FIFO in the order they first asked (`StreamPeerQueue`,
   `utils/stream_peer_queue.gd`), only the head peer's chunks are sent, and the next peer
-  is served once the head's transfers finish or it disconnects. A file several peers ask
-  for is sent to each in turn. For the served peer, `AssetStreamer` keeps at most
+  is served once the head's transfers finish or it disconnects, except that a peer with a
+  table transfer goes before peers with only prefetches (see "Prefetch" under Sessions). A
+  file several peers ask for is sent to each in turn. For the served peer, `AssetStreamer` keeps at most
   `SEND_WINDOW_BYTES` (256 KB) of chunks unacknowledged, shared across its transfers
   (`StreamSendWindow`, `utils/stream_send_window.gd`); the client acks the unbroken run
   of chunks it holds, and the host only moves an ack forward. A served peer that acks
   nothing new for `STALL_TIMEOUT_MS` (10 s) is logged and moved to the back of the queue,
-  its transfers rewound to the last ack so its next turn resumes from there; acks from a
-  waiting peer send nothing. The window exists because `SteamMultiplayerPeer` silently
+  its transfers rewound to the last ack so its next turn resumes from there (wherever it stood
+  in the queue); acks from a waiting peer send nothing. The window exists because `SteamMultiplayerPeer` silently
   drops reliable messages once about 512 KB is queued (see
   [Transport Resilience](#transport-resilience)): before it, a 12.9 MB compressed map
   stalled at 21 of 394 chunks with the host reporting "Finished sending". Resume keeps
@@ -558,7 +598,10 @@ GUT suite; see [Automated runs](#automated-runs-agents)). The unit tests
 `test_asset_streamer_flow_control.gd`, `test_stream_send_window.gd`,
 `test_stream_peer_queue.gd`) cover the coordinator, whitelist, cache, hash, window and
 queue logic with a streamer double; with one alt account, more than one client is tested
-only there.
+only there. Prefetch is covered by `test_asset_streamer_prefetch.gd` (the table first across
+peers and within one, promotion at set out, slots, take-over, cancel, reuse at set out) and
+`test_session_prefetch.gd` (order, percent, reports, cancel on unshelve, failure), and between
+real peers by the ENet scenario `enet_prefetch`.
 
 ---
 
@@ -827,6 +870,18 @@ log and one `NET_RESULT {json}` line to `--out` and quits 0 on a pass; extending
   Scout resting on its own ground at the host's heights. Passed on 2026-10-10 in about 20.8 s
   on the host (Scout 0.041 m before the raise, 0.294 m after on every peer; Hero 0.628 m;
   client events_played 2; no shipped file changed).
+- `enet_prefetch` (`--peers=4 --timeout-s=240`): prefetch from the room (see "Prefetch"
+  under Sessions). The host builds Fen (the shipped GLB copied into a folder of its own, 20.5
+  MB), Mill and Pond (flat authored maps) and Secret (never shelved) in its own test root.
+  client and client2 join the room; the host shelves Fen, and once both report progress on
+  it, shelves Mill then Pond and selects Pond. Each client's files arrive Fen, Pond (the GM's
+  pick), Mill (shelf order), and the host relays real percents (Fen 0, 1, 8, 24 ... 93 for
+  one client, the other waiting at 0 for its turn). client2 asks for Secret's map file and is
+  refused ("Asset not found on host"). Once the host's holdings show both clients holding
+  all three, it sets Fen out: both load it with no download (`MapDownloadCoordinator` never
+  starts). client3 joins at the table: its load downloads Fen (the table's map, first),
+  then it fetches Pond and Mill at the table, and every client ends holding all three.
+  Passed on 2026-10-10 in about 10.5 s on the host (held 3.4 s after Fen was shelved).
 
 All three earlier ones passed through the launcher on 2026-10-09, each in about 1.4 s on the
 host, with no shipped store file changed (31,435 files watched) and every test root removed;
@@ -932,23 +987,54 @@ func get_table() -> String                # ref_key of the map on the table, "" 
 func get_shelf() -> Array[Dictionary]     # MapRefs {"folder", "map_path", "hashes", "name"}
 func get_players() -> Dictionary          # session id -> {"name", "peer_id"}
 func get_holdings() -> Dictionary         # session id -> ref keys of the shelf maps it holds
-func summary() -> Dictionary              # {"open", "table", "shelf", "players", "holdings"}
+func get_selected() -> String             # the GM's selected shelf map, fetched after the table's
+func summary() -> Dictionary              # {"open", "table", "shelf", "players", "holdings",
+                                          #  "selected", "progress"}
 func peer_for(session_id: String) -> int
 func session_id_of(peer_id: int) -> String
 static func holds_map(ref: Dictionary, cached_file: Callable) -> bool
+static func missing_variants(ref: Dictionary, cached_file: Callable) -> Array  # files to fetch
 signal room_opened                        # client: the host opened the room
 signal session_changed                    # shelf, table pointer, players or holdings changed
+func report_holdings() -> void            # client: after a summary, in the room, a fetch done
 
 # Host
 func open() -> void                       # Return everyone to the room
 func close() -> void                      # just before game_starting
 func shelve(level_dict: Dictionary) -> String         # the room's Add a map; returns its key
+func unshelve(key: String) -> bool        # off the shelf (never the table's); stops its transfers
+func select_map(key: String) -> void      # the GM's selection (RoomPanel.select)
+func servable_folders() -> Array          # the whitelist: the table's folder and the shelf's
 func note_table_out(level_dict: Dictionary) -> void   # from broadcast_level_data()
 func note_holdings(session_id: String, keys: Variant) -> void  # a client's report, shelf keys only
 func admit_peer(peer_id: int, reported: Dictionary = {}) -> StringName
                                           # from _rpc_send_player_info() with the reported info;
                                           # restores a returning player's grants; &"room" or &"table"
 var party: SessionParty
+var prefetch: SessionPrefetch
+```
+
+### SessionPrefetch
+
+`NetworkManager.session.prefetch`, node `/root/NetworkManager/Session/Prefetch`,
+`autoloads/session_prefetch.gd`. The model is in
+[Sessions](#sessions-the-room-and-the-table) ("Prefetch").
+
+```gdscript
+# Every peer
+func get_progress() -> Dictionary         # session id -> {ref key: percent}, 0 while waiting
+signal progress_changed                   # a player's progress changed (RoomPanel.show_progress)
+
+# Client
+func step(shelf: Array, table: String, selected: String) -> void  # on every summary (deferred)
+func current_key() -> String              # the map being fetched, or ""
+
+# Host
+func note_progress(session_id: String, raw: Variant, shelf_keys: Array) -> void
+
+# Pure
+static func order(shelf: Array, table: String, selected: String) -> Array[Dictionary]
+static func map_percent(files: Array) -> int  # by bytes, 0 until every size is known, at most 99
 ```
 
 ### SessionParty

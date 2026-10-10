@@ -25,28 +25,32 @@ func after_each() -> void:
 func test_whitelisted_variants_name_the_two_map_files() -> void:
 	var streamer := AssetManager.streamer
 	assert_eq(
-		streamer.level_map_file_for_request(ACTIVE, "map", ACTIVE), Paths.get_level_map_path(ACTIVE)
+		streamer.level_map_file_for_request(ACTIVE, "map", [ACTIVE]),
+		Paths.get_level_map_path(ACTIVE)
 	)
 	assert_eq(
-		streamer.level_map_file_for_request(ACTIVE, "ttmap", ACTIVE),
+		streamer.level_map_file_for_request(ACTIVE, "ttmap", [ACTIVE]),
 		Paths.get_level_map_document_path(ACTIVE)
 	)
-	assert_true(streamer.level_map_file_for_request(ACTIVE, "ttmap", ACTIVE).ends_with("map.ttmap"))
+	assert_true(
+		streamer.level_map_file_for_request(ACTIVE, "ttmap", [ACTIVE]).ends_with("map.ttmap")
+	)
 
 
 func test_unknown_variants_are_refused() -> void:
 	var streamer := AssetManager.streamer
 	for variant in ["", "model", "map.glb", "level", "../level.json", "thumbnail", "MAP", "ttmap/"]:
 		assert_eq(
-			streamer.level_map_file_for_request(ACTIVE, variant, ACTIVE), "", "refused: " + variant
+			streamer.level_map_file_for_request(ACTIVE, variant, [ACTIVE]), "", "refused: " + variant
 		)
 
 
 func test_whitelist_keeps_the_authorization_gate() -> void:
 	var streamer := AssetManager.streamer
-	assert_eq(streamer.level_map_file_for_request("other_level", "ttmap", ACTIVE), "")
-	assert_eq(streamer.level_map_file_for_request(ACTIVE, "map", ""), "")
-	assert_eq(streamer.level_map_file_for_request("../../etc/passwd", "ttmap", ACTIVE), "")
+	assert_eq(streamer.level_map_file_for_request("other_level", "ttmap", [ACTIVE]), "")
+	assert_eq(streamer.level_map_file_for_request(ACTIVE, "map", []), "")
+	assert_eq(streamer.level_map_file_for_request(ACTIVE, "map", [""]), "")
+	assert_eq(streamer.level_map_file_for_request("../../etc/passwd", "ttmap", [ACTIVE]), "")
 
 
 func test_client_refuses_to_request_an_unknown_variant() -> void:

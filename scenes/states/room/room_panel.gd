@@ -19,7 +19,9 @@ extends Control
 ## session (a player) or End session (the GM) bottom left. The GM adds maps to the shelf
 ## through a picker over the library; players see the shelf read-only but can select a map to
 ## look at it, and read their own download state first. There is no manual Ready: readiness
-## is download state ("3 of 4 have it"), and Set out never waits.
+## is download state ("3 of 4 have it"), and Set out never waits. Clients fetch shelf maps in
+## the background (SessionPrefetch), so a row reads "Getting it · 40%" while one comes; the
+## percent moves in place (show_progress()), not by rebuilding the rows.
 ##
 ## Everything shown comes from a session summary (show_session()); RoomModel holds the rules
 ## and RoomLayout builds the controls. With connect_network (the default) the panel reads
@@ -109,6 +111,7 @@ func _ready() -> void:
 		body.resized.connect(_fit_side)
 	if connect_network:
 		NetworkManager.session.session_changed.connect(refresh)
+		NetworkManager.session.prefetch.progress_changed.connect(refresh_progress)
 		NetworkManager.player_joined.connect(_on_player_joined)
 		NetworkManager.player_left.connect(_on_player_left)
 		set_code(NetworkManager.room_code)
@@ -122,6 +125,9 @@ func _exit_tree() -> void:
 		return
 	if NetworkManager.session.session_changed.is_connected(refresh):
 		NetworkManager.session.session_changed.disconnect(refresh)
+	var progress := NetworkManager.session.prefetch.progress_changed
+	if progress.is_connected(refresh_progress):
+		progress.disconnect(refresh_progress)
 	if NetworkManager.player_joined.is_connected(_on_player_joined):
 		NetworkManager.player_joined.disconnect(_on_player_joined)
 	if NetworkManager.player_left.is_connected(_on_player_left):
@@ -154,14 +160,39 @@ func show_session(summary: Dictionary, local_id: String, is_gm: bool) -> void:
 	_show_selection()
 
 
+## Read the players' progress from the live session and show it in place.
+func refresh_progress() -> void:
+	show_progress(NetworkManager.session.summary())
+
+
+## Show the players' download states from `summary` in place, as their progress moves: each
+## row's icon and word and the line under the selected map change, nothing is rebuilt (a
+## hovered or focused control keeps its state).
+func show_progress(summary: Dictionary) -> void:
+	_players = RoomModel.players(summary, _local_id)
+	for player in _players:
+		var row_name := "Player_%s" % str(player.id).validate_node_name()
+		var row := player_rows.get_node_or_null(NodePath(row_name))
+		var box := row.find_child("Download", true, false) as Control if row else null
+		if box:
+			RoomRows.show_download_state(box, RoomModel.download_state(player, _selected))
+	if not in_drawer and _selected != "":
+		for entry in _shelf:
+			if entry.key == _selected:
+				readiness_label.text = _readiness(entry)
+
+
 ## The room code, as read aloud and copied.
 func set_code(code: String) -> void:
 	code_label.text = code if code != "" else "------"
 
 
-## Select the shelf map `key` ("" for none) and show it in the centre.
+## Select the shelf map `key` ("" for none) and show it in the centre. The GM's selection
+## goes to the session, so every client fetches that map next (SessionPrefetch).
 func select(key: String) -> void:
 	_selected = key if _shelf.any(func(entry: Dictionary) -> bool: return entry.key == key) else ""
+	if connect_network and _is_gm:
+		NetworkManager.session.select_map(_selected)
 	_show_selection()
 
 

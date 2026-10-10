@@ -588,7 +588,12 @@ lobby, the client's waiting view, the lobby's Change and the in-play `PlayerList
   (`RoomModel.drawer_hint()`: choose a map, add one, or for a player, the GM moves the table).
 - **Rows** (`RoomRows`). A player: a `CardThumb` portrait well with the name's initial, the
   name on its own line, and a caption line (a `KeyChip` GM tag, You, the selected map's
-  download state as an icon and a word: Has it or Gets it at the table), and on your own row
+  download state as an icon and a word, `RoomRows.download_state()`: the lake check and Has
+  it, the lake arrow and Getting it · 40% while the map comes in the background
+  (`SessionPrefetch`), the soft arrow and Waiting to get it while it waits its turn, or Gets
+  it at the table when that player is not fetching it; progress is lake and a word, never a
+  bar, and it moves in place through `RoomPanel.show_progress()` on `progress_changed`,
+  without rebuilding the rows), and on your own row
   a framed Avatar button (opens the `AvatarRoster`; the session does not carry avatar choices
   yet). A shelf map: a `ListRow` toggle with a 64x36 `CardThumb` well and its name and caption
   ("On the table", or how many have it). Both rows hold their content 8 px (`ROW_INSET`) in
@@ -599,8 +604,11 @@ lobby, the client's waiting view, the lobby's Change and the in-play `PlayerList
   Move the table to the map by name in the drawer (shown only for a map other than the one
   out). Only a live action takes `Primary`, so a screen has at most one accent fill and none
   with nothing selected. Readiness is download state ("3 of 4 have it", from the session's
-  holdings), and a player reads their own first ("You and 2 others have it", "You get it at
-  the table · 1 of 4 have it"); Set out never waits. A player never reads the GM's copy: with
+  holdings), and a player reads their own first ("You and 2 others have it", "You are getting
+  it · 40% · 1 of 4 have it", "You are waiting to get it · 1 of 4 have it", "You get it at
+  the table · 1 of 4 have it"); Set out never waits. The GM's selection goes to the session
+  (`SessionChannel.select_map()`), so every client fetches that map next. A player never reads
+  the GM's copy: with
   nothing selected the centre says to look over the shelf, and with an empty shelf that the GM
   is choosing the maps. The heading is computed from the current state every refresh (never
   "Host a game" or "pick a level" after a return). Copy says map, room, table, shelf, GM,

@@ -14,19 +14,28 @@ extends RefCounted
 ##   already out (a caption says what to do instead). Only a live action takes the screen's
 ##   one accent fill.
 ## - Readiness is download state: "3 of 4 have it", and a player reads their own first ("You
-##   and 2 others have it", "You get it at the table · 2 of 4 have it"). Set out never waits
-##   for it.
+##   and 2 others have it", "You are getting it · 40% · 2 of 4 have it"). Each player's state
+##   for a map (download_state()) is has it, getting it with a percent, waiting (behind another
+##   map or for their turn at the host), or at the table (not fetching it). Set out never
+##   waits for it.
 
 const SET_OUT := "Set out this map"
 ## The drawer's action, naming the map the table moves to (W6: one sentence, a placeholder).
 const MOVE_TABLE := "Move the table to %s"
 const ADD_MAP := "Add a map"
+## A player's download state for one map (download_state()).
+const HAS := &"has"
+const GETTING := &"getting"
+const WAITING := &"waiting"
+const TABLE := &"table"
 
 
-## The players here, GM first then by name: {"id", "name", "gm", "you", "holds"}, where
-## "holds" lists the ref keys of the shelf maps that player has.
+## The players here, GM first then by name: {"id", "name", "gm", "you", "holds", "progress"},
+## where "holds" lists the ref keys of the shelf maps that player has and "progress" maps the
+## keys of those they are getting to a percent (0 while they wait).
 static func players(summary: Dictionary, local_id: String) -> Array[Dictionary]:
 	var holdings: Dictionary = summary.get("holdings", {})
+	var progress: Dictionary = summary.get("progress", {})
 	var out: Array[Dictionary] = []
 	var listed: Dictionary = summary.get("players", {})
 	for id: String in listed:
@@ -42,6 +51,7 @@ static func players(summary: Dictionary, local_id: String) -> Array[Dictionary]:
 				"gm": peer == 1,
 				"you": id == local_id,
 				"holds": holdings.get(id, []),
+				"progress": progress.get(id, {}),
 			}
 		)
 	out.sort_custom(
@@ -119,16 +129,36 @@ static func readiness_text(player_list: Array[Dictionary], key: String) -> Strin
 	return "%d of %d have it" % [holding, player_list.size()]
 
 
+## One player's download state for the map `key` (`player` a players() entry): {"state",
+## "percent"}, the state HAS (in their holdings), GETTING (a percent above 0 of it here),
+## WAITING (reported at 0: behind another map, or waiting for their turn at the host) or
+## TABLE (not fetching it, so the table's load gets it).
+static func download_state(player: Dictionary, key: String) -> Dictionary:
+	if key in player.get("holds", []):
+		return {"state": HAS, "percent": 100}
+	var progress: Dictionary = player.get("progress", {})
+	if progress.has(key):
+		var percent := int(progress[key])
+		return {"state": GETTING if percent > 0 else WAITING, "percent": percent}
+	return {"state": TABLE, "percent": 0}
+
+
 ## The readiness a player reads under a selected map: their own state first, then the room's,
-## each saying what it counts ("You and 2 others have it", "Only you have it", "You get it at
-## the table · 2 of 4 have it"), or readiness_text() when the player is not listed or everyone
-## has it.
+## each saying what it counts ("You and 2 others have it", "Only you have it", "You are
+## getting it · 40% · 2 of 4 have it", "You get it at the table · 2 of 4 have it"), or
+## readiness_text() when the player is not listed or everyone has it.
 static func own_readiness_text(player_list: Array[Dictionary], key: String) -> String:
 	var room := readiness_text(player_list, key)
 	var mine := player_list.filter(func(p: Dictionary) -> bool: return p.you)
 	if key == "" or mine.is_empty() or room == "Everyone has it" or room == "":
 		return room
 	if key not in mine[0].holds:
+		var own := download_state(mine[0], key)
+		match own.state:
+			GETTING:
+				return "You are getting it · %d%% · %s" % [own.percent, room]
+			WAITING:
+				return "You are waiting to get it · %s" % room
 		return "You get it at the table · %s" % room
 	var others := player_list.filter(func(p: Dictionary) -> bool: return key in p.holds).size() - 1
 	if others == 0:
