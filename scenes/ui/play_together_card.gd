@@ -3,7 +3,8 @@ extends VBoxContainer
 
 ## The title's Play together card: the one question "Play together?" (an italic eyebrow, the
 ## card's own question and never a category over a heading) answered on a pill where two
-## watercolour washes meet in a wet seam (shaders/ui_wash_split.gdshader on a ColorRect).
+## watercolour washes meet at a crisp hand-painted seam with a thin paper line along it, never a
+## soft bleed (user verdict 2026-10-10; shaders/ui_wash_split.gdshader on a ColorRect).
 ## Host is the persimmon face on the left, "Open a room": a room needs no map (room first, user
 ## verdict 2026-10-09), so it acts on nothing selected. Join is the lake face on the right,
 ## "Enter a code". Two transparent face Buttons over the wash take the mouse and carry the
@@ -12,7 +13,7 @@ extends VBoxContainer
 ##
 ## Picking a face (hover, or Left and Right on the focused pill: keys, D-pad or stick) swings
 ## the seam SWING of the width away from it over MOTION_WASH (sine out), deepens that face to
-## its hover colour, lifts its icon 2 px and lifts the card's shadow; with keyboard focus a soft
+## its hover colour, lifts its icon 2 px and lifts the card's shadow; with keyboard focus a thin
 ## paper ring also marks the picked face inside the card's own ring. On an end face Left or
 ## Right is not consumed, so focus moves on and nothing traps it. Accept (Enter, Space, pad A)
 ## presses the picked face: the pill squashes to PRESS_SCALE; Host floods the card with

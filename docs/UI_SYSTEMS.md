@@ -592,16 +592,21 @@ captures it.
 
 `PlayTogetherCard` (`scenes/ui/play_together_card.gd`) answers one question, the italic
 Fraunces eyebrow **Play together?** (`Eyebrow`, the card's own question, never a category over
-a heading), on a 336x112 pill where two watercolour washes meet in a wet seam
+a heading), on a 336x112 pill where two watercolour washes meet at a crisp hand-painted seam
 (`shaders/ui_wash_split.gdshader` on a `ColorRect`, worked in OKLab lightness at each wash's
 own hue: a lighter bloom, up to +0.14 L, in the open band between the words and the seam,
-swelling and thinning along it; a pooled darker edge along the rim (-0.06 L) and along the
-seam where the washes part (-0.07 L); +-0.025 L mottle in 55 px blots and the faintest
-granulation; the seam wanders +-5 px and the washes bleed into each other over about 3 px
-with soft fingers, a soft light line breathing where they part; a slow drift held under Reduce
-motion). Nothing lightens a wash under its words: the card hands the shader each face's words
+swelling and thinning along it but kept 4 px clear of the seam; a pooled darker edge along the
+rim (-0.06 L); +-0.025 L mottle in 55 px blots and the faintest granulation). The seam is a
+clean curve wandering +-5 px with a thin paper line along it (2 px, +-0.3 px along its
+length), and every edge on the card (the pill, the seam, its line, the blot of Join's opening,
+the focus ring) is drawn with one screen px of anti-aliasing measured along its own gradient:
+soft tone stays inside a face and never crosses an edge (user verdict 2026-10-10, "blurry
+down the middle": a soft bleed with fingers and a soft light line read as out of focus). The
+noise is hashed as integers, so a lattice corner has one value from every cell (a sine hash
+tore the seam sideways at one row). A slow drift of the seam's curve is held under Reduce
+motion. Nothing lightens a wash under its words: the card hands the shader each face's words
 rect (`words_rect()`, `text_rects()`: icon, title and caption as drawn), where the wash stays
-at or below its own step, so paper words keep 4.5:1 (rest 4.97 and 5.60, hover 5.55 and 6.22;
+at or below its own step, so paper words keep 4.5:1 (rest 4.97 and 5.60, hover 5.55 and 6.21;
 the `contrast` step of `jobs/play_together.json` reads the lightest pixel under them in the
 real frame). **Host** is the persimmon
 face on the left, "Open a room": a room needs no map (room first, user verdict 2026-10-09), so
@@ -618,9 +623,10 @@ offset) and its ring `WashRing`.
   a face: the seam swings 6% away from it over `MOTION_WASH` (0.28 s, sine out), the face
   deepens to its hover step (persimmon and lake hovers are a step deeper than rest in OKLCH,
   C6 and C8: `#A93F25`, `#266177`), its icon lifts 2 px and the shadow lifts. With keyboard
-  focus a soft paper ring 5 px inside the picked face marks it too, inside the card's lake
-  ring (the shader's `focus`, `focus_side`). On an end face Left or Right is not consumed, so
-  focus moves on. Accept (Enter, Space, pad A) presses: the pill squashes to 0.97 on
+  focus a thin paper ring (1.5 px at 0.6, crisp) 5 px inside the picked face marks it too,
+  inside the card's lake ring (the shader's `focus`, `focus_side`). On an end face Left or
+  Right is not consumed, so focus moves on. Accept (Enter, Space, pad A) presses: the pill
+  squashes to 0.97 on
   `offset_transform_scale`; Host floods the card persimmon, then asks for the room, and the
   wash settles back under the "Opening a room..." wait. The pill is the one focus stop.
 - **Join in place** (user verdict 2026-10-09: there is no join screen). The lake widens to the

@@ -24,8 +24,11 @@ extends RefCounted
 ##   which the shader never lightens) and log the lightest wash pixel there and paper's
 ##   contrast against it (4.5:1 is the bar), with the lightest pixel of the whole face beside
 ##   it. Hide the words first and wait a frame.
-## - `crop` (`name`): save the window's last frame cut to the card, at the window's pixels,
-##   as CROPS/<name>.png (the card up close; follow a capture or a wait).
+## - `crop` (`name`, `part`, `scale`): save the window's last frame cut to the card, at the
+##   window's pixels, as CROPS/<name>.png (the card up close; follow a capture or a wait).
+##   `part` "seam" cuts the pill's middle third round the seam instead and "cap" its left end
+##   (Join's opening blot); `scale` (default 1) enlarges it with no filtering, so each window
+##   pixel shows as a square and a soft edge cannot hide.
 ## - `sessions` (`count`, default 2): Resume lists `count` sample sessions, the newest played
 ##   yesterday evening; -1 lists none (a first run); 0 reads the real list again.
 
@@ -56,22 +59,38 @@ static func run(base: Node, step: Dictionary) -> String:
 		"contrast":
 			return _contrast(title.play_together)
 		"crop":
-			return _crop(title.play_together, String(step.get("name", "card")))
+			return _crop(
+				title.play_together,
+				String(step.get("name", "card")),
+				String(step.get("part", "card")),
+				int(step.get("scale", 1))
+			)
 	return "unknown action %s" % step.get("action", "")
 
 
 ## Save the window's last frame cut to the card (eyebrow, pill and slot, 16 px round) at the
 ## window's own pixels, as CROPS/<name>.png: the card up close for a look, at a fraction of a
-## full capture's size.
-static func _crop(card: PlayTogetherCard, crop_name: String) -> String:
+## full capture's size. `part` "seam" cuts the pill's middle third (the seam's whole travel)
+## and "cap" its left 128 px (the blot of Join's opening), 8 px round; `scale` enlarges the cut
+## with nearest-neighbour sampling.
+static func _crop(card: PlayTogetherCard, crop_name: String, part: String, scale: int) -> String:
 	var viewport := card.get_viewport()
 	var image := viewport.get_texture().get_image()
 	var to_screen := viewport.get_final_transform() * card.get_global_transform_with_canvas()
-	var rect := Rect2i((to_screen * Rect2(Vector2.ZERO, card.size)).grow(16.0))
+	var area := Rect2(Vector2.ZERO, card.size).grow(16.0)
+	var size := PlayTogetherCard.CARD_SIZE
+	if part == "seam" or part == "cap":
+		to_screen = viewport.get_final_transform() * card.pill.get_global_transform_with_canvas()
+		var span := Vector2(size.x / 3.0, size.x * 2.0 / 3.0) if part == "seam" else Vector2(0, 128)
+		area = Rect2(span.x, 0.0, span.y - span.x, size.y).grow(8.0)
+	var rect := Rect2i(to_screen * area)
 	rect = rect.intersection(Rect2i(Vector2i.ZERO, image.get_size()))
+	var cut := image.get_region(rect)
+	if scale > 1:
+		cut.resize(cut.get_width() * scale, cut.get_height() * scale, Image.INTERPOLATE_NEAREST)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(CROPS))
 	var path := "%s/%s.png" % [CROPS, crop_name]
-	var error := image.get_region(rect).save_png(path)
+	var error := cut.save_png(path)
 	return "crop %s %s -> %s (%s)" % [crop_name, rect, ProjectSettings.globalize_path(path), error]
 
 
