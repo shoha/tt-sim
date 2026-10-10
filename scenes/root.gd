@@ -498,7 +498,7 @@ func host_session(level: LevelData) -> void:
 	_hosting_requested = true
 	_host_cancelled = false
 	if _loading_overlay:
-		_loading_overlay.show_indeterminate("Opening a room...", true)
+		_loading_overlay.show_indeterminate(RoomScreen.OPENING, true, RoomScreen.OPENING_STEP)
 	NetworkManager.host_game()
 
 

@@ -6,19 +6,23 @@ extends RefCounted
 ## A player row is a portrait well with the name's initial in Inter semibold, the name on a
 ## line of its own (the full width the row has), and a caption line under it in one fixed
 ## order in every view: the GM chip, "You", then the selected map's download state as an icon
-## and a word (download_state()). Your own row ends in Choose avatar, a compact framed button
-## with the shirt icon and its name in the tooltip.
+## and a word (download_state()). Your own row ends in a compact framed button with the shirt
+## icon and the word Avatar, which opens the avatar roster.
 ##
 ## A shelf map is a plain list row like a player (the ListRow button: clear at rest, the
 ## hover wash, the selected fill when picked): its picture, name and a caption. Every map
 ## picture sits in a CardThumb well, and a map with no thumbnail shows its painted placeholder
 ## (MapPlaceholder), never a flat box.
+##
+## Both kinds of row hold their content ROW_INSET in from the column, a shelf row inside its
+## button so the selected fill has a margin round the picture, a player row by its own margin,
+## so the portraits and the map pictures share one left edge under the section headings.
 
 const PORTRAIT := Vector2(40, 40)
 const SHELF_THUMB := Vector2(64, 36)
 const SHELF_ROW_HEIGHT := 52.0
-## The row's content inset inside its button.
-const SHELF_INSET := 8.0
+## Every row's content inset from the column's sides (a shelf row's inside its button).
+const ROW_INSET := 8
 ## The download state's icon, beside its caption word.
 const STATE_ICON := Vector2(16, 16)
 const HAS_IT := "Has it"
@@ -82,13 +86,24 @@ static func thumb_material() -> ShaderMaterial:
 
 ## One player: `player` is a RoomModel.players() entry, `selected` the selected map's key (""
 ## for none: no download state). Your own row carries Choose avatar, which calls
-## `choose_avatar`.
+## `choose_avatar`. The row's content sits ROW_INSET in from both sides of the column, as a
+## shelf row's does inside its button: the content is laid in a plain holder with those
+## offsets, and the holder takes the content's height.
 static func player_row(player: Dictionary, selected: String, choose_avatar: Callable) -> Control:
+	var holder := Control.new()
+	holder.name = "Player_%s" % str(player.id).validate_node_name()
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var row := HBoxContainer.new()
-	row.name = "Player_%s" % str(player.id).validate_node_name()
+	row.name = "Row"
 	row.theme_type_variation = &"BoxContainerSpaced"
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.custom_minimum_size.y = PORTRAIT.y
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	row.offset_left = ROW_INSET
+	row.offset_right = -ROW_INSET
+	holder.add_child(row)
+	var fit := func() -> void: holder.custom_minimum_size.y = row.get_combined_minimum_size().y
+	row.minimum_size_changed.connect(fit)
 	var face := portrait(str(player.name))
 	face.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(face)
@@ -104,7 +119,9 @@ static func player_row(player: Dictionary, selected: String, choose_avatar: Call
 	name_label.tooltip_text = str(player.name)
 	name_label.mouse_filter = Control.MOUSE_FILTER_PASS
 	info.add_child(name_label)
-	var line := HBoxContainer.new()
+	# A flow, so on your own row, beside the Avatar button, the download state wraps under
+	# You whole rather than lose its words to an ellipsis.
+	var line := HFlowContainer.new()
 	line.name = "CaptionLine"
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	info.add_child(line)
@@ -126,19 +143,19 @@ static func player_row(player: Dictionary, selected: String, choose_avatar: Call
 
 	if player.you:
 		row.add_child(_choose_avatar_button(choose_avatar))
-	return row
+	fit.call()
+	return holder
 
 
 ## The selected map's download state for one player, an icon and a word (C7: never colour
 ## alone): the lake check and "Has it", or the download arrow and "Gets it at the table".
 ## There is no partial progress yet: a player who lacks the map downloads it once it is set
-## out.
+## out. The word never trims: the caption line wraps it whole onto a line of its own.
 static func download_state(held: bool) -> Control:
 	var box := HBoxContainer.new()
 	box.name = "Download"
 	box.theme_type_variation = &"BoxContainerTight"
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var icon := TextureRect.new()
 	icon.name = "Icon"
 	icon.texture = IconButton.load_icon("circle-check" if held else "download")
@@ -152,9 +169,8 @@ static func download_state(held: bool) -> Control:
 	var role := ThemeColors.STATE if held else ThemeColors.TEXT_SOFT
 	icon.theme_changed.connect(func() -> void: icon.self_modulate = ThemeColors.of(icon, role))
 	box.add_child(icon)
-	var word := _caption(HAS_IT if held else GETS_IT, &"Caption")
+	var word := _caption(HAS_IT if held else GETS_IT, &"Caption", false)
 	word.name = "Word"
-	word.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_child(word)
 	return box
 
@@ -179,8 +195,8 @@ static func shelf_row(
 	inner.theme_type_variation = &"BoxContainerSpaced"
 	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	inner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	inner.offset_left = SHELF_INSET
-	inner.offset_right = -SHELF_INSET
+	inner.offset_left = ROW_INSET
+	inner.offset_right = -ROW_INSET
 	row.add_child(inner)
 	var key := str(entry.folder) if str(entry.folder) != "" else str(entry.name)
 	var well := map_well(SHELF_THUMB, texture, key, mood)
@@ -222,16 +238,17 @@ static func _well(well_size: Vector2) -> Panel:
 	return well
 
 
-## Your own row's Choose avatar: compact, framed at rest so it reads as a button, named in its
+## Your own row's Choose avatar: compact, framed at rest so it reads as a button, the shirt
+## icon with the word Avatar (an icon alone did not say what it opens), the full name in its
 ## tooltip and for screen readers (W7).
 static func _choose_avatar_button(choose_avatar: Callable) -> Button:
 	var choose := Button.new()
 	choose.name = "ChooseAvatar"
+	choose.text = "Avatar"
 	choose.icon = IconButton.load_icon("shirt")
 	choose.tooltip_text = "Choose avatar"
 	choose.accessibility_name = "Choose avatar"
-	choose.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	choose.custom_minimum_size = PORTRAIT
+	choose.custom_minimum_size = Vector2(0, PORTRAIT.y)
 	choose.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	choose.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	choose.pressed.connect(choose_avatar)

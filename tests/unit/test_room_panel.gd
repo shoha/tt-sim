@@ -101,15 +101,41 @@ func test_a_player_sees_the_shelf_read_only_and_no_action() -> void:
 	assert_eq(_fills(panel).size(), 0, "and has no action to fill")
 
 
+## Their own state first, and the count says what it counts.
 func test_a_player_reads_their_own_download_state_first() -> void:
 	var panel := _panel()
 	panel.show_session(_sample(), WREN, false)
 	panel.select(MAP_B)
-	assert_eq(panel.readiness_label.text, "You have it · 2 of 4")
+	assert_eq(panel.readiness_label.text, "You and 1 other have it")
 	panel.select(MAP_C)
-	assert_eq(panel.readiness_label.text, "You get it at the table · 1 of 4")
+	assert_eq(panel.readiness_label.text, "You get it at the table · 1 of 4 have it")
 	panel.select(MAP_A)
 	assert_eq(panel.readiness_label.text, "Everyone has it")
+	var summary := _sample()
+	summary.holdings = {GM: [MAP_A], WREN: [MAP_A, MAP_B, MAP_C], "enet-ranger": [MAP_A, MAP_C]}
+	panel.show_session(summary, WREN, false)
+	panel.select(MAP_B)
+	assert_eq(panel.readiness_label.text, "Only you have it")
+	panel.select(MAP_C)
+	assert_eq(panel.readiness_label.text, "You and 1 other have it")
+
+
+## A player never reads the GM's copy: with nothing selected they are told what they can do
+## here, and with an empty shelf that the GM is choosing the maps.
+func test_a_player_reads_player_copy_with_nothing_selected() -> void:
+	var panel := _panel()
+	panel.show_session(_sample(), WREN, false)
+	assert_eq(panel.map_name_label.text, "Look over the maps on the shelf")
+	assert_false(panel.action_button.visible)
+	var summary := _sample()
+	summary.shelf = []
+	panel.show_session(summary, WREN, false)
+	assert_eq(panel.map_name_label.text, "The GM is choosing the maps")
+	assert_true(panel.preview.get_node("Placeholder").visible, "over the painted placeholder")
+	for shelf_size in [0, 3]:
+		var copy := RoomModel.empty_stage(false, shelf_size)
+		var text := ("%s %s" % [copy.title, copy.caption]).to_lower()
+		assert_false(text.contains("set it out") or text.contains("add a map"), "not the GM's")
 
 
 ## The caption line holds the GM chip, You and the download state, in that order in every
@@ -233,21 +259,95 @@ func test_the_selection_survives_a_refresh_while_its_map_is_on_the_shelf() -> vo
 	assert_eq(panel.selected_key(), "", "a map gone from the shelf is no longer selected")
 
 
+## The drawer opens on the table's map with no action, a caption saying what moves the table;
+## selecting another map shows the action naming it. The selected row is the selection's only
+## picture: there is no second preview in the drawer.
 func test_the_drawer_starts_on_the_table_and_moves_it_elsewhere() -> void:
 	var panel := _panel(true)
 	panel.show_session(_sample(MAP_A), GM, true)
 	assert_eq(panel.selected_key(), MAP_A, "the map on the table")
-	assert_eq(panel.action_button.text, "Move the table here")
-	assert_true(panel.action_button.disabled, "the table is already here")
-	assert_eq(panel.readiness_label.text, "On the table now")
+	assert_false(panel.action_button.visible, "the table is already here: nothing to do")
+	assert_eq(panel.hint_label.text, "Choose a map on the shelf to move the table there")
 	assert_eq(_fills(panel).size(), 0)
+	assert_null(panel.preview, "no second picture of the selected map")
+	assert_null(panel.find_child("Preview", true, false))
 	panel.select(MAP_C)
+	assert_eq(panel.action_button.text, "Move the table to Fen Crossing", "named for its map")
+	assert_eq(panel.action_button.tooltip_text, panel.action_button.text)
+	assert_false(panel.hint_label.visible)
 	assert_eq(_fills(panel), [panel.action_button])
 	var mill := panel.shelf_rows.get_child(1).find_child("Caption", true, false) as Label
 	assert_eq(mill.text, "2 of 4 have it", "the drawer's shelf keeps its readiness")
 	watch_signals(panel)
 	panel.action_button.pressed.emit()
 	assert_signal_emitted_with_parameters(panel, "move_table_requested", [MAP_C])
+	panel.show_session(_sample(MAP_A), WREN, false)
+	assert_false(panel.action_button.visible, "a player has no action")
+	assert_eq(panel.hint_label.text, "The GM moves the table to the next map")
+
+
+## The drawer's action follows its content: right under the shelf while the column fits (no
+## empty glass between the shelf and the action), pinned to the foot over a scrolling column
+## when it does not, with the selected row scrolled into view.
+func test_the_drawer_action_follows_the_shelf_and_pins_only_on_overflow() -> void:
+	for height in [1080, 720]:
+		var host := SubViewport.new()
+		host.size = Vector2i(RoomPanel.SIDE_WIDTH, height)
+		host.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		add_child_autofree(host)
+		var panel := RoomPanel.new()
+		panel.connect_network = false
+		panel.in_drawer = true
+		host.add_child(panel)
+		panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		var summary := _sample(MAP_A)
+		if height == 720:
+			for i in 6:
+				var folder := "_room_panel_extra_%d" % i
+				summary.shelf.append(
+					{"folder": folder, "map_path": "", "hashes": {}, "name": "Extra %d" % i}
+				)
+		panel.show_session(summary, GM, true)
+		var last := "_room_panel_extra_5" if height == 720 else MAP_C
+		panel.select(last)
+		await wait_process_frames(4)
+		var action := panel.action_button.get_global_rect()
+		var shelf := panel.shelf_rows.get_global_rect()
+		var foot := panel.leave_button.get_global_rect()
+		var view := Rect2(Vector2.ZERO, Vector2(host.size))
+		assert_true(view.encloses(action), "%d: the action is on screen" % height)
+		if height == 1080:
+			assert_eq(panel.column_scroll.vertical_scroll_mode, ScrollContainer.SCROLL_MODE_DISABLED)
+			assert_lt(action.position.y - shelf.end.y, 40.0, "1080: the action follows the shelf")
+			assert_gt(foot.position.y - action.end.y, 200.0, "the rest of the height is below it")
+		else:
+			assert_eq(panel.column_scroll.vertical_scroll_mode, ScrollContainer.SCROLL_MODE_AUTO)
+			assert_lt(foot.position.y - action.end.y, 40.0, "720: pinned to the foot")
+			var row := panel.shelf_rows.get_child(panel.shelf_rows.get_child_count() - 1) as Control
+			var clip := panel.column_scroll.get_global_rect().grow(0.5)
+			assert_true(clip.encloses(row.get_global_rect()), "the selected row scrolled into view")
+
+
+## Player rows and shelf rows share one left edge: a portrait and a map picture line up.
+func test_player_and_shelf_rows_share_one_left_edge() -> void:
+	for in_drawer in [false, true]:
+		var host := SubViewport.new()
+		host.size = Vector2i(int(RoomPanel.SIDE_WIDTH), 1000) if in_drawer else Vector2i(1280, 1000)
+		host.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		add_child_autofree(host)
+		var panel := RoomPanel.new()
+		panel.connect_network = false
+		panel.in_drawer = in_drawer
+		host.add_child(panel)
+		if in_drawer:
+			panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		panel.show_session(_sample(MAP_A), GM, true)
+		await wait_process_frames(3)
+		var face := panel.player_rows.get_child(0).find_child("Well", true, false) as Control
+		var picture := panel.shelf_rows.get_child(0).find_child("Well", true, false) as Control
+		assert_almost_eq(face.global_position.x, picture.global_position.x, 0.5)
+		var avatar := panel.player_rows.get_child(0).find_child("ChooseAvatar", true, false)
+		assert_eq((avatar as Button).text, "Avatar", "the button says what it opens")
 
 
 func test_tab_opens_the_drawer_only_at_a_table() -> void:

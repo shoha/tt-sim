@@ -25,9 +25,12 @@ extends CanvasLayer
 ## carries a 1 px edge in the TRACK role (3:1, C6), drawn over it with the glide.
 ##
 ## A cancellable wait (show_indeterminate(title, true), Root's "Opening a room...") offers a
-## quiet Cancel after CANCEL_AFTER_S, when the wait has stopped feeling instant; the button
-## holds its place from the start (invisible and inert), so the sheet does not jump when it
-## fades in. Cancel emits cancel_requested; whoever opened the wait stops it and hides it.
+## quiet Cancel after CANCEL_AFTER_S, when the wait has stopped feeling instant; its band is
+## laid out from the start, so the sheet does not jump when it fades in. Given a step
+## (show_indeterminate(title, true, step)), the step's caption fills that band until then
+## (W4: the sheet names what the wait is doing rather than show an empty strip), and Cancel
+## takes its place; without one, Cancel holds the band invisible and inert. Cancel emits
+## cancel_requested; whoever opened the wait stops it and hides it.
 
 signal loading_complete
 ## The player pressed Cancel on a cancellable wait.
@@ -57,6 +60,8 @@ var _glide_tween: Tween
 var _cancel_tween: Tween
 var _target_progress := 0.0
 var _indeterminate := false
+## The wait on screen offers Cancel (now or after CANCEL_AFTER_S).
+var _cancellable := false
 var _gliding := false
 ## Where the gliding segment is along the bar: 0 at the start, 1 at the end.
 var _glide_at := 0.0
@@ -101,16 +106,28 @@ func show_loading(title: String = SETTING_OUT_ANY) -> void:
 
 ## Show a wait over the live screen behind it: the scrim and a gliding bar, for an
 ## operation whose progress is not known. A `cancellable` wait offers Cancel after
-## CANCEL_AFTER_S (cancel_requested).
-func show_indeterminate(title: String, cancellable: bool = false) -> void:
+## CANCEL_AFTER_S (cancel_requested); its `step`, when given, is the caption in Cancel's band
+## until then.
+func show_indeterminate(title: String, cancellable: bool = false, step: String = "") -> void:
 	_open(title, true, cancellable)
+	if step == "":
+		return
+	_set_status(step)
+	if cancellable:
+		status_label.custom_minimum_size.y = cancel_button.get_combined_minimum_size().y
+		status_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		cancel_button.visible = false
 
 
-## Fade Cancel in now rather than after CANCEL_AFTER_S (a cancellable wait only).
+## Fade Cancel in now rather than after CANCEL_AFTER_S (a cancellable wait only). A step
+## caption holding its band steps out for it.
 func offer_cancel() -> void:
-	if not cancel_button.visible or cancel_button.focus_mode != Control.FOCUS_NONE:
+	if not _cancellable or cancel_button.focus_mode != Control.FOCUS_NONE:
 		return
 	_kill_cancel_tween()
+	if not cancel_button.visible:
+		_set_status("")
+		cancel_button.visible = true
 	cancel_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	cancel_button.focus_mode = Control.FOCUS_ALL
 	_cancel_tween = create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUART)
@@ -171,6 +188,8 @@ func _open(title: String, over_screen: bool, cancellable: bool) -> void:
 	loading_label.text = title
 	_indeterminate = over_screen
 	_set_status("")
+	status_label.custom_minimum_size.y = 0.0
+	status_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	_hold_cancel(cancellable)
 	_sky.visible = not over_screen
 	_scrim.visible = over_screen
@@ -202,6 +221,7 @@ func _set_status(status: String) -> void:
 ## CANCEL_AFTER_S); take it out of the sheet for any other.
 func _hold_cancel(cancellable: bool) -> void:
 	_kill_cancel_tween()
+	_cancellable = cancellable
 	cancel_button.visible = cancellable
 	cancel_button.modulate.a = 0.0
 	cancel_button.mouse_filter = Control.MOUSE_FILTER_IGNORE

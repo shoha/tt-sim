@@ -98,8 +98,9 @@ static func _static_init() -> void:
 ## Point every per-user store at `root` (ending in "/"). Runs once when this class loads,
 ## with the root the command line picks; a test may call it to check the redirect and must
 ## call it again with the root it found (DATA_ROOT before the call). Classes that copied a
-## path when they loaded (LevelManager.levels_dir, UIPreferences.settings_path,
-## AuthoringAutosave.directory, AvatarLibrary.directory) keep the root they loaded with.
+## path when they loaded (UIPreferences.settings_path, AuthoringAutosave.directory,
+## AvatarLibrary.directory) keep the root they loaded with; LevelManager.levels_dir reads
+## LEVELS_DIR live unless a test has pointed it elsewhere.
 static func use_data_root(root: String) -> void:
 	var stores := store_paths(root)
 	DATA_ROOT = root

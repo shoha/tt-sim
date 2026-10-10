@@ -441,7 +441,7 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (the input hint bar). `probes/ui_primitives.gd report` logs the underline against the
   selected item's centre, the chevron's rect against its title and the hint bar's rect
   against the window. The job deletes `_u1_ui_hud` at the end (`cleanup`).
-- `jobs/ui_tour.json`: the UI tour (96 captures; about 210 s at half size and 215 s with
+- `jobs/ui_tour.json`: the UI tour (106 captures; about 235 s at half size and 240 s with
   `--full`, timed on `--only` runs, which still run every step but the skipped captures),
   the capture set the `tt-sim-ui-critic` agent judges (`docs/UI_TASTE.md`). It saves a new
   100 ft temperate forest map as `_ui_tour_room` (shown as Mossy Hollow) with a real
@@ -450,22 +450,25 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   the title, keyboard focus on a quiet paper button and on the selected level card, Settings
   on each of its six sections, the new-map dialog, then the session screens, staged by
   `probes/ui_room.gd` with no network (nothing is hosted or joined): the "Opening a
-  room..." wait over the title (`opening_room`) and with its Cancel offered
-  (`opening_room_cancel`), a map load staged mid-load over the title
-  (`map_load_title`, Root's loading overlay on the backdrop sky; nothing is loaded), the
-  room (RoomPanel, probes/ui_room.gd from a staged session summary) as the GM sees it with
-  four players and a shelf of three maps, Mossy Hollow selected (`room_host`, its thumbnail
+  room..." wait over the title with its step caption in Cancel's band (`opening_room`) and
+  with its Cancel offered in that band (`opening_room_cancel`), a map load staged mid-load
+  over the title (`map_load_title`, Root's loading overlay on the backdrop sky; nothing is
+  loaded), the room (RoomPanel, probes/ui_room.gd from a staged session summary) as the GM
+  sees it with four players and a shelf of three maps, Mossy Hollow selected (`room_host`, its thumbnail
   large; the two sample maps paint their placeholders) and End session's confirmation over
   it (`room_end_confirm`), with no map at all (`room_no_map`: a placeholder and Add a map)
   and the Add a map picker over it (`room_add_map`), with a shelf and nothing selected
   (`room_shelf_none`), with a 24-character GM name and a long map name selected
   (`room_long_names`), the join screen as the title's Join Game opens it (`join`, Root's real
-  entry point), and the room as a player sees it with Old Mill selected (`room_player`); in
-  play, the room drawer as
-  the GM sees it with another map selected (`room_drawer`); then authoring with the tool
-  drawer on Biome and focus on its picked tile (the probe lets a drawer tile take focus),
-  then the real map load of the test map caught about 0.4 s after Play (`map_load_real`), and
-  in play the same staged map load over the live table (`map_load_table`), the Visuals drawer
+  entry point), and the room as a player sees it with Old Mill selected (`room_player`), with
+  Fen Crossing, which they do not have, selected (`room_player_lacks`), just joined with
+  nothing selected (`room_player_none`) and with an empty shelf (`room_player_empty`); in
+  play, the room drawer as the GM sees it with another map selected and Move the table to it
+  under the shelf (`room_drawer`), as a player sees it on opening (`room_drawer_player`) and
+  with the long GM and map names, the long map selected (`room_drawer_long`); then authoring
+  with the tool drawer on Biome and focus on its picked tile (the probe lets a drawer tile
+  take focus), then the real map load of the test map caught about 0.4 s after Play
+  (`map_load_real`), and in play the same staged map load over the live table (`map_load_table`), the Visuals drawer
   on Sun and the same with an unsaved change (`play_drawer_unsaved`: the time of day moved
   45 minutes, the lake dot, the Sun rail item's tooltip shown by a synthetic pointer event,
   Save look; the probe then presses Cancel), focus on a quiet glass button, the pause menu, the

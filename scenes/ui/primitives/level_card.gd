@@ -34,6 +34,12 @@ var locked: bool = false:
 		locked = value
 		if _menu:
 			_menu.set_item_disabled(_menu.get_item_index(ACTION_DELETE), locked)
+## False hides the overflow menu: a card in a picker (choose a map) offers no management.
+var manageable: bool = true:
+	set(value):
+		manageable = value
+		if _menu_button:
+			_menu_button.visible = value
 
 var _column: VBoxContainer
 var _strip: PanelContainer

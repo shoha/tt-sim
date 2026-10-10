@@ -15,8 +15,12 @@ uniform float aspect = 1.7778;
 
 // Per palette: meadow, golden hills, heather, lakeside, spring blossom and teal coast (the day
 // palettes the seed picks among), then dusk, moonlit night, snow and sand (the moods). The
-// golden hills keep olive in their near land and a cool haze on the far ridge: all-orange
-// hills read as desert dunes.
+// golden hills keep a sap-green foreground and a lavender haze on the far ridge: all-orange
+// hills read as desert dunes. Every far ridge carries a hue of its own, since the crest takes
+// on 30% of the warm low sky, which greys a ridge that starts near neutral; every foreground
+// is a luminous green or the mood's own colour, never olive drab or a dim sage (checked one
+// column at a time, 2026-10-10: no far, near or fore colour under about 25% saturation
+// except the snow's white and the blossom's pale pink).
 const vec3 SKY_TOP[10] = {
 	vec3(0.56, 0.78, 0.91), vec3(0.61, 0.79, 0.89), vec3(0.65, 0.75, 0.91), vec3(0.53, 0.80, 0.88),
 	vec3(0.60, 0.80, 0.93), vec3(0.48, 0.76, 0.90),
@@ -28,19 +32,19 @@ const vec3 SKY_LOW[10] = {
 	vec3(0.97, 0.70, 0.49), vec3(0.50, 0.58, 0.80), vec3(0.96, 0.93, 0.90), vec3(0.98, 0.89, 0.75)
 };
 const vec3 FAR[10] = {
-	vec3(0.62, 0.77, 0.72), vec3(0.62, 0.66, 0.74), vec3(0.67, 0.61, 0.78), vec3(0.54, 0.74, 0.77),
-	vec3(0.82, 0.70, 0.80), vec3(0.40, 0.68, 0.72),
-	vec3(0.66, 0.49, 0.62), vec3(0.34, 0.42, 0.64), vec3(0.73, 0.81, 0.90), vec3(0.88, 0.72, 0.56)
+	vec3(0.52, 0.76, 0.74), vec3(0.62, 0.56, 0.86), vec3(0.66, 0.56, 0.84), vec3(0.50, 0.74, 0.80),
+	vec3(0.84, 0.66, 0.82), vec3(0.36, 0.68, 0.74),
+	vec3(0.70, 0.46, 0.64), vec3(0.34, 0.42, 0.66), vec3(0.70, 0.80, 0.93), vec3(0.90, 0.70, 0.52)
 };
 const vec3 NEAR[10] = {
-	vec3(0.49, 0.70, 0.40), vec3(0.80, 0.69, 0.33), vec3(0.55, 0.67, 0.41), vec3(0.42, 0.67, 0.49),
-	vec3(0.58, 0.76, 0.42), vec3(0.86, 0.82, 0.60),
-	vec3(0.45, 0.37, 0.55), vec3(0.24, 0.31, 0.50), vec3(0.94, 0.96, 0.97), vec3(0.92, 0.76, 0.49)
+	vec3(0.49, 0.72, 0.38), vec3(0.84, 0.69, 0.30), vec3(0.55, 0.70, 0.38), vec3(0.40, 0.69, 0.48),
+	vec3(0.58, 0.78, 0.40), vec3(0.88, 0.82, 0.56),
+	vec3(0.52, 0.38, 0.62), vec3(0.24, 0.31, 0.52), vec3(0.93, 0.96, 0.99), vec3(0.93, 0.75, 0.46)
 };
 const vec3 FORE[10] = {
-	vec3(0.30, 0.55, 0.30), vec3(0.47, 0.50, 0.25), vec3(0.42, 0.50, 0.32), vec3(0.24, 0.51, 0.45),
-	vec3(0.36, 0.60, 0.33), vec3(0.48, 0.64, 0.40),
-	vec3(0.30, 0.26, 0.43), vec3(0.16, 0.22, 0.39), vec3(0.62, 0.76, 0.85), vec3(0.79, 0.55, 0.33)
+	vec3(0.30, 0.58, 0.30), vec3(0.54, 0.68, 0.28), vec3(0.36, 0.62, 0.36), vec3(0.22, 0.54, 0.46),
+	vec3(0.36, 0.63, 0.32), vec3(0.40, 0.66, 0.38),
+	vec3(0.34, 0.25, 0.50), vec3(0.16, 0.22, 0.42), vec3(0.58, 0.76, 0.90), vec3(0.80, 0.53, 0.30)
 };
 const vec3 SUN[10] = {
 	vec3(1.00, 0.96, 0.84), vec3(1.00, 0.92, 0.76), vec3(1.00, 0.95, 0.87), vec3(1.00, 0.98, 0.90),

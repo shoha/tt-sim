@@ -74,6 +74,53 @@ func test_refresh_notifies_choose_button_when_the_list_changes() -> void:
 	assert_true(dialog.choose_button.disabled)
 
 
+## A picker's cards only choose: no management menu (that is the library's, on the title).
+func test_picker_cards_have_no_management_menu() -> void:
+	var dialog := _dialog()
+	assert_false(dialog.grid.manageable)
+	for card in dialog.grid._cards:
+		assert_false(card._menu_button.visible)
+	var library := LevelGrid.new()
+	library.provider = _levels
+	add_child_autofree(library)
+	library.refresh()
+	assert_true(library._cards[0]._menu_button.visible, "the library's cards keep it")
+
+
+## The grid grows with the canvas: a short library shows whole at 1080, and on the 1280x720
+## canvas the sheet stays on screen and the grid scrolls.
+func test_the_grid_grows_with_the_canvas_up_to_a_maximum() -> void:
+	for canvas in [Vector2i(1920, 1080), Vector2i(1280, 720)]:
+		var count := 5 if canvas.y == 720 else 3
+		var levels := func() -> Array[Dictionary]:
+			var out: Array[Dictionary] = []
+			for i in count:
+				var info: Dictionary = _levels()[0].duplicate()
+				info.path = "user://x/%d/" % i
+				info.folder = str(i)
+				out.append(info)
+			return out
+		var host := SubViewport.new()
+		host.size = canvas
+		host.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		add_child_autofree(host)
+		var dialog: LevelPickerDialog = SCENE.instantiate()
+		dialog.provider = levels
+		dialog.setup("Pick one")
+		host.add_child(dialog)
+		await wait_process_frames(6)
+		var slot := dialog.grid_slot.size.y
+		var content := dialog.grid.content_height()
+		var sheet := (dialog.grid_slot.get_parent().get_parent() as Control).get_global_rect()
+		if canvas.y == 1080:
+			assert_almost_eq(slot, content, 1.0, "1080: every card shows whole")
+		else:
+			assert_lt(slot, content, "720: a longer library scrolls")
+			assert_true(Rect2(Vector2.ZERO, Vector2(canvas)).encloses(sheet), "on the canvas")
+		assert_lte(slot, LevelPickerDialog.MAX_GRID_HEIGHT)
+		UIManager.unregister_overlay(dialog.get_node("ColorRect") as Control)
+
+
 func test_cancel_after_choose_is_ignored() -> void:
 	var dialog := _dialog()
 	watch_signals(dialog)
