@@ -18,6 +18,7 @@
 		"res://tests/unit/test_crossing_cache.gd",
 		"res://tests/unit/test_crossing_editor.gd",
 		"res://tests/unit/test_crossings.gd",
+		"res://tests/unit/test_dressed_play_load.gd",
 		"res://tests/unit/test_dressing_ground.gd",
 		"res://tests/unit/test_foliage_budget.gd",
 		"res://tests/unit/test_glb_utils_collision.gd",

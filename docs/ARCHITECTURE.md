@@ -370,23 +370,29 @@ from the old to the new normal for normal-aligned assets, keeping yaw and lean),
 the changed cells in place, and the session starts unsaved with a toast, so the author saves
 the fix; it is not an undoable history entry. Props are left alone: the Place brush beds
 each on the collision under it. A document already on its ground settles nothing and opens
-clean. Play-time loads use the saved rows unchanged. The same samples become the grid
-overlay's ground in authoring (`GroundHeightField.for_glb`, see "Grid Overlay"); a
-play-time load samples the GLB's ground for the grid itself (`MapSourceLoader
-.fit_grid_ground_async`, the same sampler over a grid on the map's bounds).
+clean. A play-time load of a dressed level runs the same fit under its loading screen
+(`LevelPlayLoader._finalize_map_loading`, 2026-10-09), so a document saved before the repair,
+or a GLB re-exported since, shows its plants on the ground in play without a save. Play
+keeps a dressed document's props in their own `AuthoredProps` node
+(`MapSourceLoader.props_apart`; other play loads merge them into the scatter node), so
+settling the scatter node leaves them where the Place brush bedded them. The same samples
+become the grid overlay's ground, in authoring and play alike (`GroundHeightField.for_glb`,
+on the document's grid, see "Grid Overlay"); a play-time load of a GLB with no dressing
+document samples its ground for the grid alone (`MapSourceLoader.fit_grid_ground_async`,
+the same sampler over a grid on the map's bounds).
 
 The loader runs with `separate_props = true` (scatter in `AuthoredScatter`, props in
 `AuthoredProps`, both always present) and `MapSourceLoader.install()` puts the root into
 `MapContainer` exactly as a play-time load does. Then the scatter node gets
-`attach_document(document)`, the camera zoom-out limit becomes
+`attach_document(document)`, and `MapViewFit` fits the camera as it does in play: the
+zoom-out limit becomes
 `max(20, GameMap.fit_zoom_for_extent(extent, 12 m) * 1.08)` (52.4 for a 200 ft map at
 16:9), pan bounds come from the document extent (`GameMap.set_map_bounds`; zoomed out past
 `CameraController.RECENTRE_START` (0.6) of the size at which those bounds fit, the pan range
 narrows onto the map centre, reaching it at the fit size, so a full zoom-out frames the whole
-map wherever zoom-toward-cursor was heading; `recentre_weight()`; this applies to any map
-whose fit size the play zoom range reaches), and every frame
+map wherever zoom-toward-cursor was heading; `recentre_weight()`), and every frame
 `LevelEnvironmentManager.fit_shadow_distance_to_view()` keeps the sun's shadows reaching the
-map's far corner (above the fixed 100 m only when zoomed out past the play range).
+map's far corner (above the fixed 100 m only when zoomed out past 20).
 
 **Source of truth.** The `MapDocument`. Masks and heights are edited in it in place; the
 scatter and props rows live in their AuthoredScatter nodes while editing and are copied
@@ -773,14 +779,18 @@ change. A species the filter empties is still resolved so its template is freed.
    on threads (`prepare_assets`) and resolve within an 8 ms frame budget
    (`resolve_prepared`), and cells build within the same budget (`begin_build` /
    `build_cells` / `end_build`). Props are merged into the same rows (the document on
-   `LevelPlayController.loaded_map_document` keeps them apart for the authoring tools).
+   `LevelPlayController.loaded_map_document` keeps them apart for the authoring tools),
+   except over a dressed GLB, whose props get their own `AuthoredProps` node (see
+   "Dressing ground").
    An unreadable document beside a GLB loads the GLB alone (warning toast); alone it fails.
 3. `_finalize_map_loading(root)` as for any map: `MapSourceLoader.install()` (environment,
    water, weather, `notify_map_loaded`, measure tool and grid, and
    `AuthoredScatter.species_added` wired to `GameMap.adopt_foliage_materials()` and
-   `add_wind_materials()`), then the foliage density budget and its toast, then for a GLB
-   map the grid's ground sampled from its collision (`MapSourceLoader
-   .fit_grid_ground_async`, time-sliced, 30-290 ms wall on the reference levels; see
+   `add_wind_materials()`), the camera fit (`MapViewFit`, shared with authoring), then the
+   foliage density budget and its toast, then for a GLB map its ground sampled from its
+   collision: a dressed one's as authoring opens it (`MapSourceLoader
+   .fit_dressing_ground_async`, see "Dressing ground"), any other for the grid alone
+   (`fit_grid_ground_async`, time-sliced, 30-290 ms wall on the reference levels; see
    "Grid Overlay").
 
 Measured (headless, main thread only, fully painted 200 ft temperate forest: 30,755 rows,
