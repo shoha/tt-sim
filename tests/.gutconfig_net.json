@@ -7,6 +7,8 @@
 		"res://tests/unit/test_asset_streamer_listeners.gd",
 		"res://tests/unit/test_asset_streamer_security.gd",
 		"res://tests/unit/test_drag_locks.gd",
+		"res://tests/unit/test_late_joiner_state_survives_load.gd",
+		"res://tests/unit/test_late_joiner_table_sync.gd",
 		"res://tests/unit/test_level_map_streaming.gd",
 		"res://tests/unit/test_level_play_controller_transform_validation.gd",
 		"res://tests/unit/test_level_visual_state.gd",

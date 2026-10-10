@@ -19,7 +19,7 @@ signal game_starting
 signal level_data_received(level_dict: Dictionary)
 signal late_joiner_connected(peer_id: int)  ## Emitted when a player joins mid-game
 signal game_state_received(state_dict: Dictionary)
-signal level_sync_complete(peer_id: int)  ## Emitted when level sync ACK received from client
+signal table_loaded(peer_id: int)  ## Host: a client's level load completed (LateJoinerSync)
 signal state_sync_complete(peer_id: int)  ## Emitted when state sync ACK received from client
 signal token_transform_received(
 	network_id: String, position: Vector3, rotation: Vector3, scale: Vector3
@@ -62,9 +62,6 @@ const MAX_PLAYERS := 8
 
 ## Connection timeout (seconds)
 const CONNECTION_TIMEOUT := 15.0
-
-## Timeout waiting for a late joiner's level/state sync ACK (seconds)
-const LATE_JOINER_SYNC_TIMEOUT := 5.0
 
 ## Rate limiting for inbound client-sent token transform RPCs (mirrors
 ## NetworkStateSync.TRANSFORM_SEND_INTERVAL). Bounds how often a single token's
@@ -115,7 +112,7 @@ var _local_player_info: Dictionary = {
 ## Current level data (for late joiners)
 var _current_level_dict: Dictionary = {}
 
-## Timer tracking CONNECTION_TIMEOUT / LATE_JOINER_SYNC_TIMEOUT
+## Timer tracking CONNECTION_TIMEOUT
 var _connection_timer: Timer = null
 
 ## Game state tracking (for late joiner detection)
@@ -428,60 +425,6 @@ func _on_peer_connected(peer_id: int) -> void:
 	_rpc_send_player_info.rpc_id(peer_id, _local_player_info)
 
 
-## Event-driven late joiner synchronization.
-## Uses a signal race (ACK vs timeout) instead of a busy-wait loop.
-func _sync_late_joiner(peer_id: int) -> void:
-	# Tell the late joiner to transition from lobby to playing state
-	_rpc_game_starting.rpc_id(peer_id)
-
-	# Send level data
-	_rpc_receive_level_data.rpc_id(peer_id, _current_level_dict)
-
-	# Wait for client ACK with timeout — signal-driven, no polling
-	var ack_received := await _await_signal_or_timeout(
-		level_sync_complete, peer_id, LATE_JOINER_SYNC_TIMEOUT
-	)
-
-	# Send game state
-	NetworkStateSync.send_full_state_to_peer(peer_id)
-
-	late_joiner_connected.emit(peer_id)
-
-
-## Race a peer-specific signal against a timeout timer.
-## Returns true if the signal fired for the given peer_id before the timeout.
-func _await_signal_or_timeout(sig: Signal, peer_id: int, timeout_seconds: float) -> bool:
-	var result := {"resolved": false, "success": false}
-
-	# Timeout timer
-	var timer := get_tree().create_timer(timeout_seconds)
-	timer.timeout.connect(
-		func():
-			if not result.resolved:
-				result.resolved = true
-				result.success = false,
-		CONNECT_ONE_SHOT,
-	)
-
-	# Signal handler — filters by peer_id
-	var handler := func(acking_peer_id: int) -> void:
-		if acking_peer_id == peer_id and not result.resolved:
-			result.resolved = true
-			result.success = true
-
-	sig.connect(handler, CONNECT_ONE_SHOT)
-
-	# Wait until one of them fires
-	while not result.resolved:
-		await get_tree().process_frame
-
-	# Clean up signal if the timeout won
-	if sig.is_connected(handler):
-		sig.disconnect(handler)
-
-	return result.success
-
-
 func _on_peer_disconnected(peer_id: int) -> void:
 	if _players.has(peer_id):
 		var player_info: Dictionary = _players[peer_id].duplicate()
@@ -548,10 +491,10 @@ func _rpc_send_player_info(info: Dictionary) -> void:
 		_rpc_sync_player_list.rpc(_players)
 
 		# Handle late joiner - send current level and game state, only once the peer
-		# has passed the version gate above.
+		# has passed the version gate above. The state waits for the peer's table-loaded
+		# report (see LateJoinerSync).
 		if is_new_peer and _game_in_progress and not _current_level_dict.is_empty():
-			# Use event-driven sync instead of hardcoded delays
-			_sync_late_joiner(sender_id)
+			LateJoinerSync.sync_peer(sender_id)
 
 
 ## Host side of a version rejection: tell the client why, then drop it after
@@ -628,17 +571,25 @@ func _rpc_game_starting() -> void:
 @rpc("authority", "reliable")
 func _rpc_receive_level_data(level_dict: Dictionary) -> void:
 	level_data_received.emit(level_dict)
-	# Send ACK back to host
-	_rpc_level_sync_ack.rpc_id(1)
 
 
-## RPC: Client acknowledges level sync complete
+## Client: tell the host this peer's table is loaded (its level load completed, so its
+## loader's clear_level() is behind it). The host holds a late joiner's full state for
+## this (LateJoinerSync); after any other load nothing is waiting and the report is a no-op.
+func report_table_loaded() -> void:
+	if is_client() and multiplayer.multiplayer_peer:
+		_rpc_table_loaded.rpc_id(1)
+
+
+## RPC: client -> host, the sender's table is loaded. It carries no peer id: the host takes
+## the sender from the transport, so a client can only report for itself, and a report only
+## releases a state the host is already holding for that peer.
 @rpc("any_peer", "reliable")
-func _rpc_level_sync_ack() -> void:
+func _rpc_table_loaded() -> void:
 	if not is_host():
 		return
 	var peer_id = multiplayer.get_remote_sender_id()
-	level_sync_complete.emit(peer_id)
+	table_loaded.emit(peer_id)
 
 
 ## RPC: Client acknowledges state sync complete
