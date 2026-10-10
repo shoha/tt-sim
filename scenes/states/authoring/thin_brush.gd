@@ -7,6 +7,7 @@ extends BrushMode
 ## the ground being thinned stays in view.
 
 const THIN_TINT := Color(0.98, 0.93, 0.82)
+const CLEAR_TEXT := "Clear"
 
 
 func _init() -> void:
@@ -19,5 +20,14 @@ func press(brush: BrushTool) -> bool:
 
 ## Red while clearing: Ctrl held at the press during a stroke, else Ctrl held now.
 func cursor_tint(brush: BrushTool) -> Color:
-	var clearing := brush.press_ctrl if brush.stroking else brush.ctrl
-	return BrushCursor.CLEAR_TINT if clearing else THIN_TINT
+	return BrushCursor.CLEAR_TINT if _clearing(brush) else THIN_TINT
+
+
+## The red ring says what it does: "Clear" under it while clearing, as Water and Bridge name
+## their Ctrl erase.
+func cursor_text(brush: BrushTool) -> String:
+	return CLEAR_TEXT if _clearing(brush) else ""
+
+
+func _clearing(brush: BrushTool) -> bool:
+	return brush.press_ctrl if brush.stroking else brush.ctrl

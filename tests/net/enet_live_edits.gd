@@ -14,8 +14,10 @@ extends "res://tests/net/enet_late_joiner.gd"
 ##   flat ground where the raise will go, then runs the GM's ops one at a time, as the GM's
 ##   Events pane does: the sculpt raise, the forest clear (Thin with Ctrl) and the sculpt lower
 ##   are strokes of GameMap's play brush armed by PlayEvents.pick and driven over the board
-##   (its pointer and press, as the render driver drives authoring's), the bridge removal a
-##   direct editor call, and the undo (of the lower: the before side of a height op) is
+##   (its pointer and press, as the render driver drives authoring's), the forest fall and the
+##   bridge collapse terrain events the presets fire (TerrainEvents.start: every board plays
+##   the motion, then the host's op lands; client must have played both, client2 none), and
+##   the undo (of the lower: the before side of a height op) is
 ##   PlayEvents.undo, Ctrl+Z's path. After each it waits for its map to settle and its ground
 ##   follower (LiveEditGround) to set the tokens down, and writes its MapFingerprint, log
 ##   length and Scout's height; client compares. Then it drops Hero onto the raised ground,
@@ -43,9 +45,14 @@ const RIVER: Array[Vector2] = [Vector2(8, -20), Vector2(9, 0), Vector2(10, 20)]
 ## Where the raise is (and Hero lands), and where the lower that is undone goes.
 const RAISE_AT := Vector3(-12, 0, 12)
 const LOWER_AT := Vector3(-12, 0, -14)
+## Where the forest fall's trees topple away from, and how far it reaches.
+const FALL_AT := Vector2(-14, 5)
+const FALL_RADIUS := 4.0
 const OPS: Array[String] = [
-	"sculpt raise", "forest clear", "bridge removal", "sculpt lower", "undo"
+	"sculpt raise", "forest clear", "forest fall", "bridge collapse", "sculpt lower", "undo"
 ]
+## The ops that are terrain events: every board plays their motion before the op lands.
+const EVENT_OPS: Array[String] = ["forest fall", "bridge collapse"]
 ## Frames a map must stay settled before it is fingerprinted.
 const STILL_FRAMES := 10
 ## How far Hero may rest off the host's height, and off its own ground (m).
@@ -73,6 +80,7 @@ var _building := false
 var _stroke: Array = []
 var _stroke_ctrl := false
 var _stroke_until := 0
+var _events_playing := false
 
 
 func _set_phase(phase: String) -> void:
@@ -117,8 +125,10 @@ func _map_still() -> bool:
 	var root := _lpc().loaded_map_instance
 	var water := root.get_node_or_null(AuthoredWater.NODE_NAME) as AuthoredWater
 	var ground := edits.get_node_or_null("LiveEditGround") as LiveEditGround
+	_watch_events()
 	var busy := (
 		not edits.is_settled()
+		or edits.events.active_count() > 0
 		or (ground != null and not ground.is_idle())
 		or edits.editor.scatter.is_regenerating()
 		or edits.editor.scatter.is_growing()
@@ -131,6 +141,14 @@ func _map_still() -> bool:
 
 func _fingerprint() -> Dictionary:
 	return MapFingerprint.of(_lpc().loaded_map_instance, _lpc().loaded_map_document)
+
+
+## Counts the terrain events this peer's board played (each start of one while none was).
+func _watch_events() -> void:
+	var playing := _edits().events.active_count() > 0
+	if playing and not _events_playing:
+		_result["events_played"] = int(_result.get("events_played", 0)) + 1
+	_events_playing = playing
 
 
 ## The table's Events pane controller (the GM's live brushes).
@@ -299,12 +317,20 @@ func _run_op() -> void:
 	if STROKES.has(OPS[_op]):
 		_begin_stroke(STROKES[OPS[_op]])
 		return
+	var events := _edits().events
+	var why := ""
 	match OPS[_op]:
-		"bridge removal":
-			var e := _edits().editor
-			e.crossings.remove(e.document.crossings[0].id)
+		"forest fall":
+			why = events.start(TerrainEvent.forest_fall(FALL_AT, FALL_RADIUS, 7))
+		"bridge collapse":
+			var bridge: Crossing = _edits().editor.document.crossings[0]
+			var middle := (bridge.start + bridge.end) * 0.5
+			why = events.start(TerrainEvent.bridge_collapse(bridge.id, middle, 9))
 		"undo":
 			_result["undid"] = _events().undo()
+	if why != "":
+		_finish(false, "the %s did not start: %s" % [OPS[_op], why])
+		return
 	_still = 0
 	_set_phase("op")
 
@@ -456,6 +482,7 @@ func _join_live() -> void:
 ## After the host's op _op: once this peer holds that many ops and its map is still, the
 ## fingerprints must match.
 func _client_follow_op() -> void:
+	_watch_events()
 	var step := "op%d" % _op
 	if not _has("host", step):
 		return
@@ -483,6 +510,8 @@ func _client_follow_op() -> void:
 	var ok := _edits().problem == ""
 	for label in OPS:
 		ok = ok and (_result[label].mismatch as Array).is_empty() and bool(_result[label].scout_ok)
+	# Every terrain event played on this board too, before its op landed.
+	ok = ok and int(_result.get("events_played", 0)) == EVENT_OPS.size()
 	_result["pass"] = ok
 	_mark("done", _result)
 	_set_phase("wait_done")
@@ -509,9 +538,11 @@ func _joiner_check() -> void:
 	_result["hero_rest_y"] = snappedf(rest.y, 0.001)
 	_result["host_hero_y"] = snappedf(host_y, 0.001)
 	_result["scout_y"] = snappedf(_scout_y(), 0.001)
+	# A late joiner gets the events' ops only: no motion plays on its board.
 	_result["pass"] = (
 		mismatch.is_empty()
 		and edits.problem == ""
+		and int(_result.get("events_played", 0)) == 0
 		and absf(_scout_y() - float(host.get("scout", NAN))) <= GROUND_TOLERANCE_M
 		and absf(at.y - host_y) <= GROUND_TOLERANCE_M
 		and absf(rest.y - at.y) <= GROUND_TOLERANCE_M

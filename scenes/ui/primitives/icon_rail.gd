@@ -32,6 +32,8 @@ var selected: StringName = &""
 
 var _buttons: Dictionary = {}
 var _items: Dictionary = {}
+## Items tinted by set_item_active(), kept through selection changes (id -> true).
+var _held_active: Dictionary = {}
 var _indicator_tween: Tween
 ## Where the running slide ends, so a re-sort mid-slide can tell a moved item.
 var _indicator_goal: float = -1.0
@@ -96,7 +98,7 @@ func select(id: StringName) -> void:
 		push_warning("IconRail: unknown item %s" % id)
 		return
 	if _buttons.has(selected):
-		_buttons[selected].active = false
+		_buttons[selected].active = _held_active.has(selected)
 	selected = id
 	if _buttons.has(id):
 		_buttons[id].active = true
@@ -118,10 +120,16 @@ func set_enabled(id: StringName, on: bool) -> void:
 		_buttons[id].disabled = not on
 
 
-## Tint an item as active without selecting it (footer toggles).
+## Tint an item as active without selecting it (footer toggles, the Events item while a brush
+## is out). The tint holds through select() and deselect(): a drawer that closes deselects its
+## rail, which cleared it before (the 2a critic: a tinted Events item showed nothing).
 func set_item_active(id: StringName, on: bool) -> void:
+	if on:
+		_held_active[id] = true
+	else:
+		_held_active.erase(id)
 	if _buttons.has(id):
-		_buttons[id].active = on
+		_buttons[id].active = on or id == selected
 
 
 ## Update an item's tooltip in place (e.g. a footer toggle whose meaning

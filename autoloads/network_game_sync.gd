@@ -6,7 +6,8 @@ extends Node
 ##
 ## Host -> clients: token transforms (one token, or a batch; unreliable), a token's full
 ## state and its removal (reliable), drag-lock grants, denials and releases, live visual
-## settings, and live map edits (LiveEdits; reliable). Client -> host: a controlled token's
+## settings, live map edits (LiveEdits; reliable) and the terrain events the GM starts
+## (TerrainEvents, through the same outbox; reliable). Client -> host: a controlled token's
 ## transform (dropped when it arrives faster than CLIENT_TRANSFORM_RATE_LIMIT for that
 ## token), drag-lock claims and releases, and a request for the table's live edit log (one
 ## answered per LIVE_EDIT_LOG_REQUEST_INTERVAL a peer). Each RPC re-emits as a typed signal;
@@ -62,6 +63,9 @@ signal live_edit_received(table_key: int, index: int, bytes: PackedByteArray)
 signal live_edit_log_received(table_key: int, count: int)
 ## Emitted on the host when a client asks for the table's live edit log (rate-limited)
 signal live_edit_log_requested(sender_id: int)
+## Emitted on clients when the host started a terrain event (TerrainEvent's wire bytes, not
+## yet decoded): its motion plays on every board, and the live edit it ends in follows as an op
+signal terrain_event_received(bytes: PackedByteArray)
 
 ## Rate limiting for inbound client-sent token transform RPCs (mirrors
 ## NetworkStateSync.TRANSFORM_SEND_INTERVAL). Bounds how often a single token's
@@ -226,6 +230,16 @@ func send_live_edit_log(peer_id: int, table_key: int, ops: Array[PackedByteArray
 	)
 	for index in count:
 		_queue_live_edit(peer_id, table_key, index, ops[index])
+	_live_outbox.drain(0.0)
+
+
+## Host: send terrain event `bytes` (TerrainEvent.encode) to every client, through the live
+## edit outbox so it never overtakes an op queued before it (the crossing it takes down is
+## there when it arrives), reliable.
+func broadcast_terrain_event(bytes: PackedByteArray) -> void:
+	if not NetworkManager.is_host() or bytes.size() != TerrainEvent.EVENT_BYTES:
+		return
+	_live_outbox.push(func() -> void: _rpc_terrain_event.rpc(bytes), bytes.size())
 	_live_outbox.drain(0.0)
 
 
@@ -417,6 +431,15 @@ func _rpc_live_edit_log(table_key: int, count: int) -> void:
 	if NetworkManager.is_host():
 		return
 	live_edit_log_received.emit(table_key, count)
+
+
+## RPC: a terrain event started (host -> clients). Anything but an event's length is dropped
+## here; TerrainEvent.decode checks the rest where it is played.
+@rpc("authority", "reliable")
+func _rpc_terrain_event(bytes: PackedByteArray) -> void:
+	if NetworkManager.is_host() or bytes.size() != TerrainEvent.EVENT_BYTES:
+		return
+	terrain_event_received.emit(bytes)
 
 
 ## RPC: Client asks for the table's live edit log (client -> host), answered at most once a

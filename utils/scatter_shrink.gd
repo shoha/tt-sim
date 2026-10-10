@@ -21,6 +21,41 @@ const INFIX := "_shrink"
 const GROW_UNIFORM := &"grow"
 
 static var _serial: int = 0
+## Held instances, per parent (its instance id): origin -> true. A terrain event that takes
+## instances down itself (ForestFall) holds them, so the rebuild that removes them lets them go
+## at once instead of standing them up again to shrink.
+static var _held: Dictionary = {}
+
+
+## Holds the instances of `parent`'s scatter standing at `origins` (see _held).
+static func hold(parent: Node, origins: Array[Vector3]) -> void:
+	var id := parent.get_instance_id()
+	if not _held.has(id):
+		_held[id] = {}
+	for origin in origins:
+		_held[id][origin] = true
+
+
+## Lets go of instances hold() took.
+static func release(parent: Node, origins: Array[Vector3]) -> void:
+	var id := parent.get_instance_id()
+	var held: Dictionary = _held.get(id, {})
+	for origin in origins:
+		held.erase(origin)
+	if held.is_empty():
+		_held.erase(id)
+
+
+## `transforms` without the instances `parent` holds (all of them when it holds none).
+static func unheld(parent: Node, transforms: Array[Transform3D]) -> Array[Transform3D]:
+	var held: Dictionary = _held.get(parent.get_instance_id(), {})
+	if held.is_empty():
+		return transforms
+	var kept: Array[Transform3D] = []
+	for xform in transforms:
+		if not held.has(xform.origin):
+			kept.append(xform)
+	return kept
 
 
 ## True when `mesh` can shrink through the grow uniform (every surface a wind
@@ -50,6 +85,7 @@ static func start(
 	sink_depth: float,
 	seconds: float = SECONDS
 ) -> MultiMeshInstance3D:
+	transforms = unheld(parent, transforms)
 	if transforms.is_empty() or mesh == null or seconds <= 0.0 or not parent.is_inside_tree():
 		return null
 	_serial += 1

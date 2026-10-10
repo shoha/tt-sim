@@ -259,3 +259,67 @@ func test_a_live_raise_undoes_through_the_live_history_and_regrounds_a_token() -
 	assert_almost_eq(_height_at(RAISE_AT), 0.0, 0.01, "undone")
 	assert_eq(_controller.live_edits.op_log.size(), 2, "the undo went out as an op")
 	assert_almost_eq(token.rigid_body.global_position.y, before, 0.05, "back down with it")
+
+
+func test_the_presets_stand_above_the_brushes_and_lead_their_hints() -> void:
+	var pane := EventsPane.new()
+	add_child_autofree(pane)
+	assert_eq(pane.preset_ids(), [EventPresets.COLLAPSE, EventPresets.TOPPLE])
+	for id in pane.preset_ids():
+		assert_true(pane.preset_field.tiles.has_tile(id), "%s has a tile" % id)
+		assert_false(pane.tool_field.tiles.has_tile(id), "%s is no brush" % id)
+	assert_lt(pane.preset_field.get_index(), pane.tool_field.get_index(), "above Brushes")
+	assert_null(ToolRegistry.find(EventPresets.COLLAPSE), "no map tool: authoring never lists it")
+	var collapse := PlayEvents.hints_for(EventPresets.COLLAPSE)
+	assert_eq(collapse[0], {"key": "Click", "action": "Collapse a bridge"})
+	assert_eq(collapse[-1]["action"], "Put away Collapse")
+	assert_false(collapse.any(func(h: Dictionary) -> bool: return h.key == PlayEvents.SIZE_KEY))
+	var topple := PlayEvents.hints_for(EventPresets.TOPPLE)
+	assert_lte(topple.size(), 5, "one line beside Help")
+	assert_eq(topple[-3]["key"], PlayEvents.SIZE_KEY, "Topple's ring has a size")
+	pane.show_tool(EventPresets.TOPPLE)
+	assert_true(pane.preset_field.tiles.is_on(EventPresets.TOPPLE))
+	for kind in [TerrainEvent.Kind.BRIDGE_COLLAPSE, TerrainEvent.Kind.FOREST_FALL]:
+		assert_true(PlayEvents.PRESET_DONE.has(kind), "every preset has its toast")
+
+
+func test_a_preset_arms_the_board_and_a_map_without_a_bridge_refuses_collapse() -> void:
+	await _play()
+	assert_false(_events.available()[EventPresets.COLLAPSE], "a flat map has no bridge")
+	assert_true(_events.available()[EventPresets.TOPPLE])
+	_events.pick(EventPresets.TOPPLE)
+	var brush := _game_map.get_brush_tool()
+	assert_true(brush.is_active(), "Topple is out on the board")
+	assert_true(brush.mode is ToppleMode)
+	assert_eq(brush.min_stroke_seconds, PlayEvents.PLAY_CLICK_SECONDS)
+	var fired := []
+	(brush.mode as ToppleMode).fired.connect(func(event: TerrainEvent) -> void: fired.append(event))
+	brush.hit = RAISE_AT
+	brush.mode.press(brush)
+	brush.mode.end(brush)
+	assert_eq(fired.size(), 1, "a click fires a forest fall")
+	assert_eq((fired[0] as TerrainEvent).kind, TerrainEvent.Kind.FOREST_FALL)
+	assert_almost_eq((fired[0] as TerrainEvent).radius_m, brush.get_radius(), 0.01)
+	_events.put_away()
+	assert_eq(brush.min_stroke_seconds, 0.0, "authoring's click again")
+
+
+func test_a_quick_click_in_play_shows_on_the_board() -> void:
+	await _play()
+	_events.pick(SculptTool.ID)
+	var brush := _game_map.get_brush_tool()
+	brush.set_radius(BrushTool.DEFAULT_RADIUS)
+	brush.pointer = _game_map.camera_node.unproject_position(RAISE_AT)
+	brush.has_pointer = true
+	await get_tree().process_frame
+	# Pressed and released within one frame: BrushTool resolves the click at once.
+	brush.pressed = true
+	brush.press_pending = true
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	release.position = brush.pointer
+	brush.handle_input(release)
+	await _settle()
+	var raised := _height_at(RAISE_AT)
+	assert_gt(raised, 0.12, "one click raises a mound a GM can see (%.3f m)" % raised)

@@ -12,11 +12,11 @@ extends RefCounted
 ## pass: a dark under-stroke and a light over-stroke read on any ground in either lo-fi theme.
 ## That layer is under every panel and drawer: the ring belongs to the board, so the glass over
 ## the board covers it as it covers the ground (it was on the measure overlay, over the glass).
-## The tint is the mode's (BrushMode.cursor_tint). A faint fill shows the reach, a fan from the
-## centre and never a triangulated outline: a ring conformed over steep ground projects to a
-## self-intersecting outline, which the canvas cannot triangulate ("Invalid polygon data,
-## triangulation failed"). An inner ring brightens as dwell builds strength, and a mode's
-## readout (BrushMode.cursor_text) sits in a small pill under the ring.
+## The tint is the mode's (BrushMode.cursor_tint). The ring is an outline only: a fill, drawn on
+## this 2D layer, veiled the tree crowns standing in front of the ground it covered (the 2a
+## critic). An inner ring brightens as dwell builds strength, and a mode's readout
+## (BrushMode.cursor_text) sits in a small pill under the ring. fan_indices() stays for the
+## Bridge tool's stone ghosts, filled as fans because a conformed outline can cross itself.
 
 ## Above the world viewport (LAYER_WORLD_VIEWPORT), under the drawers and panels
 ## (LAYER_GAMEPLAY_MENU, LAYER_AUTHORING), with the hint bar.
@@ -87,7 +87,6 @@ func redraw() -> void:
 func draw_ring(brush: BrushTool, tint: Color, text: String, live: bool) -> void:
 	_conform_ring(brush, brush.hit, brush.mode.stroke_radius(brush), live)
 	var outline := _project(_ring_world, Vector3.ZERO, 1.0)
-	_fill_fan(outline, camera.unproject_position(brush.hit), Color(tint, 0.10))
 	_stroke_ring(outline, tint, 2.0)
 	if brush.stroking:
 		# The half-strength contour, brightening as dwell builds strength.
@@ -181,19 +180,6 @@ func _project(points: PackedVector3Array, pivot: Vector3, scale: float) -> Packe
 		var at := point if scale == 1.0 else pivot + (point - pivot) * scale
 		out.append(camera.unproject_position(at))
 	return out
-
-
-## The ring's reach, filled as a fan from `centre` (see the header: an outline conformed over
-## steep ground can cross itself, which a triangulated polygon cannot draw).
-func _fill_fan(outline: PackedVector2Array, centre: Vector2, color: Color) -> void:
-	var points := outline.duplicate()
-	points.append(centre)
-	var colors := PackedColorArray()
-	colors.resize(points.size())
-	colors.fill(color)
-	RenderingServer.canvas_item_add_triangle_array(
-		canvas.get_canvas_item(), fan_indices(outline.size()), points, colors
-	)
 
 
 func _stroke_ring(points: PackedVector2Array, tint: Color, width: float) -> void:

@@ -511,10 +511,14 @@ static func draw_pill(canvas: Control, at: Vector2, text: String, color: Color) 
 	var size := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, READOUT_FONT_SIZE)
 	var pad := Vector2(7.0, 3.0)
 	var box := Rect2(at + Vector2(16.0, 14.0), size + pad * 2.0)
-	# Kept on screen: flipped to the cursor's left near the right edge.
+	# Kept on the board an open drawer leaves free (the 2a critic: the pill ran under the
+	# drawer's glass): flipped to the cursor's left near the free span's right edge, and held
+	# inside its left edge.
 	var view := canvas.get_viewport_rect().size
-	if box.end.x > view.x - 4.0:
+	var span := DrawerContainer.free_span(canvas.get_viewport())
+	if box.end.x > span.y - 4.0:
 		box.position.x = at.x - 16.0 - box.size.x
+	box.position.x = maxf(box.position.x, span.x + 4.0)
 	if box.end.y > view.y - 4.0:
 		box.position.y = at.y - 14.0 - box.size.y
 	if _pill_box == null:

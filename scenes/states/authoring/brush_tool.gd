@@ -99,6 +99,10 @@ var editor: AuthoringEditor = null
 var fade_held_only: bool = false
 ## FADE_RADIUS_FACTOR, as a var so a tuning probe can change it in a running game.
 var fade_radius_factor: float = FADE_RADIUS_FACTOR
+## The least exposure (seconds, times the flow) a dab stroke that never left its spot (within
+## DWELL_RADIUS of where it began) gets: it is topped up there as it ends. 0, authoring's, leaves
+## a click its CLICK_SECONDS; play sets PlayEvents.PLAY_CLICK_SECONDS so a GM's click shows.
+var min_stroke_seconds: float = 0.0
 ## The cursor's overlay and the drawing the modes share.
 var cursor := BrushCursor.new()
 
@@ -132,6 +136,9 @@ var _modes: Dictionary = {}
 var _hit_pointer: Vector2 = Vector2.INF
 var _last_dab: Vector3 = Vector3.INF
 var _dwell_anchor: Vector3 = Vector3.INF
+## The stroke's start and the exposure it has had (min_stroke_seconds).
+var _stroke_start: Vector3 = Vector3.INF
+var _stroke_exposure: float = 0.0
 
 
 ## What an input event means to the brush, given whether the mode `picks` targets, whether a
@@ -301,6 +308,7 @@ func finish_gesture() -> void:
 	pressed = false
 	press_pending = false
 	if editor != null and stroking:
+		_top_up_click()
 		editor.end_stroke()
 	mode.end(self)
 	stroking = false
@@ -398,10 +406,26 @@ func _start_gesture(click_seconds: float) -> void:
 	_last_dab = hit
 	dwell = 0.0
 	_dwell_anchor = hit
+	_stroke_start = hit
+	_stroke_exposure = 0.0
 	if click_seconds > 0.0:
 		editor.stroke_dab(hit, hit, mode.stroke_radius(self), click_seconds * session_flow)
 		editor.flush()
+		_stroke_exposure = click_seconds * session_flow
 		mode.dabbed(self)
+
+
+## A stroke that never left its spot gets the rest of min_stroke_seconds there as it ends.
+func _top_up_click() -> void:
+	var least := min_stroke_seconds * session_flow
+	if least <= _stroke_exposure or _last_dab == Vector3.INF or _stroke_start == Vector3.INF:
+		return
+	if _stroke_start.distance_to(_last_dab) > session_radius * DWELL_RADIUS:
+		return
+	editor.stroke_dab(_last_dab, _last_dab, mode.stroke_radius(self), least - _stroke_exposure)
+	editor.flush()
+	_stroke_exposure = least
+	mode.dabbed(self)
 
 
 func _paint(seconds: float) -> void:
@@ -413,6 +437,7 @@ func _paint(seconds: float) -> void:
 	var exposure := seconds * session_flow * dwell_gain(dwell)
 	editor.stroke_dab(_last_dab, hit, mode.stroke_radius(self), exposure)
 	editor.flush()
+	_stroke_exposure += exposure
 	_last_dab = hit
 	mode.dabbed(self)
 
