@@ -360,6 +360,15 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   `user://levels/`, the
   saved levels of the build / look jobs included. Run it when a task's look iterations are
   done.
+- `jobs/authparity_look.json`: authoring parity (2026-10-09, about 35 s; `--saved` loads the
+  level in play for the two play captures): a new 300 ft grassland meadow saved as
+  `_authparity_token` with one avatar token (`authparity.gd save`); reopened in authoring
+  (`auth_token`); a 5 m Raise under it, which authoring sets the token on (`auth_raised`);
+  saved again with the token at its old height, buried; then played: the load sets it down on
+  the raised ground (`play_token`) and full zoom-out shows the whole map with its shadows
+  (`play_whole`, MapViewFit). `authparity.gd report` logs each token's base against the
+  ground, the zoom limit and the sun's shadow distance. `jobs/authparity_cleanup.json`
+  deletes the level.
 - `jobs/grid_ground.json`: the grid on Blender maps' ground (P3-3c, about 50 s):
   `deciduous_clusters`, `river` and the built-in Oak's lab in play with G, the measure
   tool and a token drag's auto-show, the load's grid ground fit and a sampling survey
