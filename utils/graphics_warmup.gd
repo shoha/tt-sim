@@ -38,6 +38,7 @@ const COVERED_SHADERS := [
 	"res://shaders/water.gdshader",
 	"res://shaders/waterfall.gdshader",
 	"res://shaders/wind_foliage.gdshader",
+	"res://shaders/wind_foliage_burn.gdshader",
 	"res://shaders/wind_foliage_no_aa.gdshader",
 ]
 const EXCLUDED_SHADERS := {

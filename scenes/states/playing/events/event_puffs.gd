@@ -19,23 +19,24 @@ extends MultiMeshInstance3D
 ## - A ring (emit_ring) lies flat on the surface and spreads, thinning as it goes: the foam a
 ##   splash leaves on the water.
 ##
-## And three for fire (FireSweep), each luminous, its colour hottest at its core:
+## And three for fire (FireSweep):
 ##
-## - A flame (emit_flame) stands on its base, a teardrop whose tip licks from side to side
-##   (the shader's clock), swelling in fast and narrowing as it rises and dies.
+## - A flame (emit_flame) stands on its base: the painted flame (FlameAtlas, set on the pool
+##   by paint_flames), three tongues in a red rim, an amber body and a pale gold core, licking
+##   on the shader's clock, swelling in fast and narrowing as it rises and dies.
 ## - An ember (emit_ember) is a small glowing spark drifting up and weaving as it goes.
-## - A glow (emit_glow) is a squat soft oval of firelight facing the camera, standing on the
-##   ground (lying flat as a ring does, the proximity fade melted it into the ground it lay on).
+## - A billow of smoke (emit_smoke) drifts and swells as dust does, a firm body with big soft
+##   lobes, its underside lit warm by the fire below it.
 ##
 ## Fire's kinds hold their full alpha longer than the others (fire_fade), so a flame burns
 ## rather than flickers out.
 ##
 ## The puffs draw after the water's transparent pass (RENDER_PRIORITY), which writes no depth,
 ## so a splash or its foam is never painted over by the river it lands in. A pool made with a
-## higher priority draws after one with a lower (a fire's flames over its smoke over its
-## glow), and with a larger capacity holds one event's every puff at once.
+## higher priority draws after one with a lower (a fire's flames over its smoke), and with a
+## larger capacity holds one event's every puff at once.
 
-enum Kind { BLOB, PLUME, RING, FLAME, EMBER, GLOW }
+enum Kind { BLOB, PLUME, RING, FLAME, EMBER, SMOKE }
 
 const CAPACITY := 96
 const SHADER := preload("res://shaders/event_puff.gdshader")
@@ -46,8 +47,6 @@ const RENDER_PRIORITY := 2
 const FLAME_NARROW := 0.55
 const EMBER_WEAVE := 0.35
 const EMBER_WEAVE_RATE := 3.2
-## A glow's height over its width.
-const GLOW_ASPECT := 0.45
 ## Where a fire puff's fade out starts (fire_fade).
 const FIRE_FADE_FROM := 0.65
 ## Fraction of its life a puff takes to swell in, and where its fade out starts.
@@ -160,8 +159,9 @@ func emit_ring(at: Vector3, size: float, life: float, color: Color) -> void:
 
 
 ## A flame standing on `at`, `size` metres wide and `height` tall at its fullest, rising at
-## `velocity` and narrowing as it dies over `life` seconds; `color` is its outer colour (its
-## core burns pale gold whatever it is), alpha its peak.
+## `velocity` and narrowing as it dies over `life` seconds; `color` is its rim's colour (its
+## body burns amber and its core pale gold whatever it is), alpha its peak. Linear colour, as
+## every puff's is: a rim meant to show as deep red is far darker than it shows.
 func emit_flame(
 	at: Vector3, velocity: Vector3, size: float, height: float, life: float, color: Color
 ) -> void:
@@ -174,10 +174,17 @@ func emit_ember(at: Vector3, velocity: Vector3, size: float, life: float, color:
 	_take(Kind.EMBER, at, velocity, Vector3.ZERO, size, ROUND, life, color, 0.0)
 
 
-## An oval of firelight standing on the ground at `at`, `size` metres across and GLOW_ASPECT
-## of that tall, over `life` seconds, in `color`.
-func emit_glow(at: Vector3, size: float, life: float, color: Color) -> void:
-	_take(Kind.GLOW, at, Vector3.ZERO, Vector3.UP, size, GLOW_ASPECT, life, color, 0.0)
+## A billow of smoke at `at` drifting at `velocity` (slowing as it ages), `size` metres across
+## when grown, living `life` seconds, in `color` (its top; the shader warms its underside).
+func emit_smoke(at: Vector3, velocity: Vector3, size: float, life: float, color: Color) -> void:
+	_take(Kind.SMOKE, at, velocity, Vector3.ZERO, size, ROUND, life, color, 0.0)
+
+
+## Draws this pool's flames with the painted flipbook (FlameAtlas), set on its material (shared
+## by every pool of its render priority). Paints the flipbook on the first call.
+func paint_flames() -> void:
+	var material := (multimesh.mesh as QuadMesh).material as ShaderMaterial
+	material.set_shader_parameter("flame_atlas", FlameAtlas.texture())
 
 
 ## Advances every live puff `delta` seconds.
@@ -207,8 +214,6 @@ func step(delta: float) -> void:
 				_place_flame(slot, age, k)
 			Kind.EMBER:
 				_place_ember(slot, age)
-			Kind.GLOW:
-				_place_glow(slot, k)
 			_:
 				keep = _place_blob(slot, age, k)
 		var color := _colors[slot]
@@ -346,13 +351,6 @@ func _place_ember(slot: int, age: float) -> void:
 	var weave := sin(age * EMBER_WEAVE_RATE + _seed[slot] * TAU) * EMBER_WEAVE
 	var at := _from[slot] + velocity * age + across * weave
 	multimesh.set_instance_transform(slot, Transform3D(basis_along(Vector3.UP, _size[slot]), at))
-
-
-## Glow `slot` `k` of its life in: spread out at once to its size, standing on its spot.
-func _place_glow(slot: int, k: float) -> void:
-	var size := _size[slot] * (0.6 + 0.4 * smoothstep(0.0, SWELL * 2.0, k))
-	var at := _from[slot] + Vector3(0.0, size * GLOW_ASPECT * 0.35, 0.0)
-	multimesh.set_instance_transform(slot, Transform3D(basis_along(Vector3.UP, size), at))
 
 
 ## A ring `k` of its life in: spreading fast then slowing, its band thinning as it goes.

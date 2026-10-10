@@ -540,8 +540,9 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (seed 1234) with a curved waist river, a plank bridge and stepping stones downstream
   (`crossing.gd place`), saves it as
   `_gm_events_spectacle` (`events_pane.gd save`) and plays it; `--saved` loads it in play.
-  Its probe (`probes/terrain_events.gd`: look, fire, advance, free, arm, hover, report) fires
-  each event on the GM's side with the TerrainEvents clock held, so the filmstrips step it to
+  Its probe (`probes/terrain_events.gd`: look, fire, advance, free, abort, arm, hover,
+  report) fires each event on the GM's side with the TerrainEvents clock held, so the
+  filmstrips step it to
   exact times: the bridge at zoom 11 with the camera turned 56 deg (`look` `yaw`) to look west
   up the river, so no crown stands in front of it (`collapse_0_before`, then 0.3, 0.7, 1.1,
   1.6 and 2.1 s: `collapse_1_shudder` to `collapse_5_settle`; at 1.6 s also `collapse_4_gm`,
@@ -551,7 +552,12 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   cursor and left the bridge 2 m off centre). Then the densest stand within 18 m of the
   bridge at zoom 16 (`fall_0_before`, then 0.45, 0.95, 1.45, 1.95 and 2.45 s: `fall_1_tip` to
   `fall_5_clear`, and `fall_6_after`); at 1.45 s also `fall_3_nofade`, the canopy fade off (`close_zoom.gd
-  fade`), an A/B in which the fallen crowns must match `fall_3_down`. The pane captures
+  fade`), an A/B in which the fallen crowns must match `fall_3_down`. The fire (card
+  fire-look) fires 7 m over the same stand with the view raised 4 m (`look` `lift`, so the
+  crowns are in frame): `fire_0_before`, then 0.5, 1.2, 1.9, 2.6, 3.4 and 4.2 s (`fire_1_catch`
+  to `fire_6_change`), tiled into `sheet_fire.png` (`contact_sheet.gd`), and the after state
+  with its toast (`fire_7_after`), then undone. `abort` stops a playing event without its
+  change, so a look iteration can fire again on the same stand in one run. The pane captures
   (cards presets-pane-fix, events-followup; 29 captures in all, about 72 s with `--saved
   --full`): with no bridge left, `pane_nobridge` (Drop bridge disabled with its caption;
   `events_pane.gd tile` logs its tooltip); still before any undo, at 1280x720 over the felled

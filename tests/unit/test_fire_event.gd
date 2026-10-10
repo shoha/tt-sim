@@ -304,7 +304,6 @@ func test_a_fire_fits_its_pools() -> void:
 	# Every puff of a fire at its most trees at once, so none is overwritten.
 	assert_lte(FireSweep.FLAMES_PER_TREE * FireSweep.MAX_TREES, FireSweep.FLAME_POOL)
 	assert_lte(FireSweep.MAX_TREES + FireSweep.COLUMN_AT.size(), FireSweep.SMOKE_POOL)
-	assert_lte(FireSweep.MAX_TREES, FireSweep.GLOW_POOL)
 	assert_lte(
 		TerrainEvent.DURATIONS[TerrainEvent.Kind.FIRE], TerrainEvent.MAX_DURATION_S, "in bounds"
 	)
@@ -317,15 +316,37 @@ func test_a_fire_fits_its_pools() -> void:
 	assert_eq(puffs.capacity, 8)
 	puffs.emit_flame(Vector3.ZERO, Vector3.UP, 1.0, 2.0, 0.8, FireSweep.FLAME)
 	puffs.emit_ember(Vector3.ZERO, Vector3(0.2, 1.5, 0.0), 0.3, 1.2, FireSweep.EMBER)
-	puffs.emit_glow(Vector3.ZERO, 2.0, 1.0, FireSweep.GLOW)
+	puffs.emit_smoke(Vector3.ZERO, Vector3(0.0, 0.6, 0.0), 2.0, 1.0, FireSweep.SMOKE)
+	puffs.paint_flames()
 	puffs.step(0.3)
 	assert_false(puffs.is_idle())
 	puffs.step(1.5)
 	assert_true(puffs.is_idle(), "every puff spent")
-	# A crown draws in, then sinks away, by the end of its burn.
-	var tree := {"base": Transform3D.IDENTITY, "burn": 1.2, "height": 8.0}
-	assert_eq(FireSweep.burn_transform(tree, 0.1), Transform3D.IDENTITY, "whole as it catches")
-	var mid := FireSweep.burn_transform(tree, 0.8)
-	assert_lt(mid.basis.x.length(), 0.6, "drawn in")
-	assert_gt(mid.basis.y.length(), mid.basis.x.length(), "taller than wide: a charred shape")
-	assert_almost_eq(FireSweep.burn_transform(tree, 1.2).basis.y.length(), 0.0, 0.001, "gone")
+	# A tree's burn: untouched until it catches, every patch burnt through by the end of it.
+	assert_eq(FireSweep.burn_progress(-0.5, 1.2), 0.0, "waiting for the front")
+	assert_gt(FireSweep.burn_progress(0.3, 1.2), 0.0, "caught")
+	assert_gte(FireSweep.burn_progress(1.2, 1.2), 1.55, "burnt through")
+	# The charred snags stand, then shrink away about their feet by the end of the event.
+	var base := Transform3D(Basis.IDENTITY, Vector3(3.0, 1.0, -2.0))
+	assert_eq(FireSweep.snag_transform(base, 1.0, 4.0), base, "standing while it burns")
+	var going := FireSweep.snag_transform(base, 4.0 - FireSweep.SNAG_GO_S * 0.5, 4.0)
+	assert_lt(going.basis.y.length(), 1.0, "shrinking")
+	assert_eq(going.origin, base.origin, "about its foot")
+	assert_almost_eq(FireSweep.snag_transform(base, 4.0, 4.0).basis.y.length(), 0.0, 0.001, "gone")
+
+
+func test_the_painted_flame() -> void:
+	var image := FlameAtlas.paint()
+	assert_eq(image.get_size(), Vector2i(FlameAtlas.SIZE.x * FlameAtlas.FRAMES, FlameAtlas.SIZE.y))
+	for frame in FlameAtlas.FRAMES:
+		var x0 := frame * FlameAtlas.SIZE.x
+		var middle := x0 + int(FlameAtlas.SIZE.x * 0.5)
+		# The foot of the middle tongue is covered and hot; the frame's corners are bare.
+		var foot := image.get_pixel(middle, FlameAtlas.SIZE.y - int(FlameAtlas.SIZE.y / 6.0))
+		assert_gt(foot.g, 0.9, "the flame covers its foot (frame %d)" % frame)
+		assert_gt(foot.r, 0.9, "its core burns there")
+		assert_lt(image.get_pixel(x0, 0).g, 0.05, "the top corner is bare")
+		assert_lt(image.get_pixel(x0, FlameAtlas.SIZE.y - 1).g, 0.05, "the foot's corner is bare")
+		# Three bands: near the rim's edge the heat is the rim's alone.
+		var edge_heat := image.get_pixel(middle, 4).r
+		assert_lt(edge_heat, 0.6, "a tip burns at the rim's or amber's heat, not the core's")

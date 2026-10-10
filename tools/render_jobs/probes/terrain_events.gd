@@ -7,8 +7,9 @@ extends RefCounted
 ##
 ## Actions (step "action"):
 ##   look     {"at": "bridge" | "forest" | [x, z] (map frame), "zoom": camera size, "yaw":
-##            degrees}: the view centred exactly there (the bridge's deck, the ground
-##            elsewhere; "forest": the densest stand found near the bridge, see find), the
+##            degrees, "lift": metres}: the view centred exactly there (the bridge's deck, the
+##            ground elsewhere, `lift` above it to frame crowns; "forest": the densest stand
+##            found near the bridge, see find), the
 ##            zoom set at once (an eased zoom drifts toward the cursor), the camera turned
 ##            `yaw` about the vertical from the play angle (0, the default, turns it back)
 ##   fire     {"kind": "collapse" | "fall" | "fire", "radius": m, "seed": n}: starts the event
@@ -16,6 +17,8 @@ extends RefCounted
 ##            clock held so `advance` steps it
 ##   advance  {"s": seconds}: the events' clock that much further
 ##   free     the clock back to the frame loop (the change lands, the effects let go)
+##   abort    every playing event stopped without its change (its trees stood back up), the
+##            clock back to the frame loop: look iterations fire again on the same stand
 ##   arm      {"preset": "collapse" | "topple"}: PlayEvents.pick, as the preset's tile does
 ##   hover    {"at": "bridge" | "forest"}: the brush's pointer there, not pressed
 ##   report   the bridges, the forest spot and what is playing
@@ -39,6 +42,7 @@ static func run(base: Node, step: Dictionary) -> String:
 			if at == Vector2.INF:
 				return "nothing to look at"
 			var world := _world(edits, step.get("at", "bridge"), at)
+			world.y += float(step.get("lift", 0.0))
 			var cc := map.get_camera_controller()
 			if step.has("zoom"):
 				cc.set("_target_zoom", float(step.zoom))
@@ -77,6 +81,14 @@ static func run(base: Node, step: Dictionary) -> String:
 		"free":
 			edits.events.set_process(true)
 			return "clock free"
+		"abort":
+			var active: Array = edits.events.get("_active")
+			var stopped := active.size()
+			for entry: Dictionary in active:
+				edits.events.call("_free_effect", entry)
+			active.clear()
+			edits.events.set_process(true)
+			return "aborted %d without their change" % stopped
 		"arm":
 			var events := _play_events(map)
 			if events == null:
