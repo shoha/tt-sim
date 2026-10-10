@@ -86,6 +86,8 @@ func _define_labels() -> void:
 		"BodyState", "Label", inherit({font = font_body, font_size = SIZE_BODY}, in_state)
 	)
 	define_variant_style("CaptionState", "Label", inherit(caption, in_state))
+	# A code someone reads aloud (the room code): never Fraunces, whose 0, o, 1 and l blur.
+	define_variant_style("Code", "Label", {font = font_code, font_size = SIZE_HEADING})
 	# Names the earlier scenes use, kept as aliases of the roles above.
 	define_variant_style("H1", "Label", title)
 	define_variant_style("H2", "Label", heading)
@@ -173,20 +175,23 @@ func _define_flat_buttons() -> void:
 			}
 		)
 	)
+	# Tiles: a centred label, so 4 px sides leave a long name (Grassland Meadow) its room in
+	# a two-column drawer. Picked is the selected fill inside a 2 px state ring: one colour
+	# on paper, a lake tile with a lake_light ring on glass.
 	var tile := box(
-		c(ThemeColors.SURFACE_RAISED), RADIUS_CONTROL, SPACE_2, SPACE_1, edge(1, c(ThemeColors.EDGE))
+		c(ThemeColors.SURFACE_RAISED), RADIUS_CONTROL, SPACE_1, SPACE_1, edge(1, c(ThemeColors.EDGE))
 	)
 	var picked: Dictionary = inherit(
-		tile, {bg_color = c(ThemeColors.STATE), border_color = c(ThemeColors.STATE)}
+		tile, edge(2, c(ThemeColors.STATE)), {bg_color = c(ThemeColors.SELECTED)}
 	)
 	var tile_style := _button(
 		tile, inherit(tile, {bg_color = c(ThemeColors.SURFACE_HOVER)}), picked, ThemeColors.TEXT
 	)
 	for key: String in ["font_pressed_color", "font_hover_pressed_color"]:
-		tile_style[key] = c(ThemeColors.ON_STATE)
+		tile_style[key] = c(ThemeColors.ON_SELECTED)
 	for key: String in ["icon_pressed_color", "icon_hover_pressed_color"]:
-		tile_style[key] = c(ThemeColors.ON_STATE)
-	tile_style.hover_pressed = inherit(picked, {bg_color = c(ThemeColors.STATE_HOVER)})
+		tile_style[key] = c(ThemeColors.ON_SELECTED)
+	tile_style.hover_pressed = inherit(picked, {bg_color = c(ThemeColors.SELECTED_HOVER)})
 	tile_style.font_size = SIZE_CAPTION
 	tile_style.icon_max_width = 24
 	tile_style.h_separation = SPACE_1
@@ -287,6 +292,12 @@ func _define_containers() -> void:
 		"TabContentMargin",
 		"MarginContainer",
 		{margin_left = SPACE_4, margin_top = SPACE_3, margin_right = SPACE_4, margin_bottom = SPACE_3}
+	)
+	# A card's text block, inside the card's own 4 px inset: 12 px from its sides and bottom.
+	define_variant_style(
+		"CardText",
+		"MarginContainer",
+		{margin_left = SPACE_2, margin_top = SPACE_1, margin_right = SPACE_2, margin_bottom = SPACE_2}
 	)
 	var line := {type = "stylebox_line", color = c(ThemeColors.EDGE), thickness = 1}
 	define_style("HSeparator", {separator = line, separation = SPACE_3})

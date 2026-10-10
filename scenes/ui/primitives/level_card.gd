@@ -15,6 +15,9 @@ signal rename_committed(level_info: Dictionary, new_name: String)
 enum { ACTION_EDIT, ACTION_RENAME, ACTION_DUPLICATE, ACTION_DELETE, ACTION_EDIT_MAP }
 
 const THUMB_ASPECT := 16.0 / 9.0
+## The thumbnail's inset from the card edge. The name and caption sit inside the theme's
+## CardText margin as well, 12 px in from the card's sides and bottom in all, so text never
+## runs into the rounded edge.
 const INSET := 4.0
 const THUMB_HOVER_SCALE := Vector2(1.04, 1.04)
 const MONTHS := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -100,25 +103,35 @@ func _init() -> void:
 	_menu.id_pressed.connect(_on_menu_id_pressed)
 	add_child(_menu)
 
+	var text_margin := MarginContainer.new()
+	text_margin.name = "TextMargin"
+	text_margin.theme_type_variation = &"CardText"
+	text_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_column.add_child(text_margin)
+	var text_column := VBoxContainer.new()
+	text_column.name = "Text"
+	text_column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	text_margin.add_child(text_column)
+
 	_name = Label.new()
 	_name.name = "Name"
 	_name.theme_type_variation = &"Body"
 	_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_column.add_child(_name)
+	text_column.add_child(_name)
 	_rename = LineEdit.new()
 	_rename.name = "Rename"
 	_rename.visible = false
 	_rename.text_submitted.connect(_on_rename_submitted)
 	_rename.focus_exited.connect(_cancel_rename)
 	_rename.gui_input.connect(_on_rename_gui_input)
-	_column.add_child(_rename)
+	text_column.add_child(_rename)
 	_caption = Label.new()
 	_caption.name = "Caption"
 	_caption.theme_type_variation = &"Caption"
 	_caption.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_column.add_child(_caption)
+	text_column.add_child(_caption)
 
 	pressed.connect(_on_pressed)
 	gui_input.connect(_on_gui_input)

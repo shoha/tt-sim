@@ -25,6 +25,12 @@ extends RefCounted
 ## - `danger`: the Remove token danger confirmation, with the game's copy.
 ## - `dismiss`: cancel every open confirmation dialog.
 ## - `browser` (`open`, default true): open or close the Add Token browser.
+## - `dusk` (`hour`, default 19.0): set the play map's time of day as a player dragging the
+##   Sun pane's Time of day row does (the visuals drawer must be open on Sun; the edit is
+##   live and left unsaved), so the in-play captures can be taken against a dark board.
+## - `focus` (`target` "title_join" or "add_token"): give keyboard focus to a quiet button,
+##   the title's Join Game (paper) or the play HUD's Add Token (glass), as Tab would;
+##   `blur` takes focus away again.
 ## - `save` (`folder`, `name`, `replace`): write the open authoring map as a test level
 ##   (`_u1_ui_` or `_ui_tour_` folders only), shown under `name` (default the folder).
 ## - `cleanup`: delete every `_u1_ui_*` and `_ui_tour_*` level folder.
@@ -62,6 +68,13 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _dismiss(base)
 		"browser":
 			return _browser(base, bool(step.get("open", true)))
+		"dusk":
+			return _dusk(base, float(step.get("hour", 19.0)))
+		"focus":
+			return _focus(base, String(step.get("target", "")))
+		"blur":
+			base.get_viewport().gui_release_focus()
+			return "focus released"
 		"save":
 			return _save(base, step)
 		"cleanup":
@@ -219,18 +232,19 @@ static func _close_host_lobby(base: Node) -> String:
 	return "host lobby closed" if lobby else "no host lobby"
 
 
-static func _drawer(base: Node, step: Dictionary) -> String:
-	var drawer: DrawerContainer = null
-	var which := String(step.get("which", "authoring"))
+## The authoring tool drawer, or the play Visuals drawer, when that mode is up.
+static func _find_drawer(base: Node, which: String) -> DrawerContainer:
 	if which == "authoring":
 		var ctrl: AuthoringController = base.get("_authoring_controller")
-		drawer = ctrl.panel if ctrl else null
-	else:
-		var game_map: GameMap = base.get("_game_map")
-		var menu: Node = (
-			game_map.gameplay_menu.get_node_or_null("GameplayMenu") if game_map else null
-		)
-		drawer = menu.get("level_edit_panel") if menu else null
+		return ctrl.panel if ctrl else null
+	var game_map: GameMap = base.get("_game_map")
+	var menu: Node = game_map.gameplay_menu.get_node_or_null("GameplayMenu") if game_map else null
+	return menu.get("level_edit_panel") if menu else null
+
+
+static func _drawer(base: Node, step: Dictionary) -> String:
+	var which := String(step.get("which", "authoring"))
+	var drawer := _find_drawer(base, which)
 	if drawer == null:
 		return "no %s drawer" % which
 	if not bool(step.get("open", true)):
@@ -242,6 +256,28 @@ static func _drawer(base: Node, step: Dictionary) -> String:
 	elif not drawer.is_open or drawer._rail.selected != pane:
 		drawer._on_rail_item_pressed(pane)
 	return "%s drawer open on %s" % [which, drawer._rail.selected]
+
+
+static func _dusk(base: Node, hour: float) -> String:
+	var panel := _find_drawer(base, "visuals") as LevelEditPanel
+	if panel == null or not panel.is_open:
+		return "the visuals drawer is not open"
+	panel.sun_pane._on_time_changed(hour)
+	return "time of day %s" % SunPane.format_time(hour)
+
+
+static func _focus(base: Node, target: String) -> String:
+	var button: Button = null
+	match target:
+		"title_join":
+			var title: CanvasLayer = base.get("_title_screen")
+			button = title.get("join_button") if title else null
+		"add_token":
+			button = base.find_child("ToggleAssetBrowserButton", true, false) as Button
+	if button == null or not button.is_visible_in_tree():
+		return "no visible %s button" % target
+	button.grab_focus()
+	return "focus on %s (%s)" % [button.text, button.theme_type_variation]
 
 
 static func _toasts() -> String:

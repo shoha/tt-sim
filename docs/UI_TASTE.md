@@ -28,8 +28,9 @@ sizes per file against `tests/ui_bypass_baseline.json`, and a count may only fal
 - **C3** Tinted neutrals are mandatory (stricter than Impeccable, which makes them optional):
   no UI token with R = G = B. Paper neutrals lean warm, glass neutrals lean plum
   (`chalk_soft #CFC5D6`).
-- **C4** No pure black. The scrim is `#2B2140` at 0.30 plus blur; shadows are warm brown
-  `#5A3B2A`. `Color(0, 0, 0, a)` in UI code is a finding.
+- **C4** No pure black. The scrim is `#2B2140` at 0.30 plus blur; shadows are ink-tinted,
+  `#2B2335` at 0.16 at rest and 0.22 lifted (warm brown read as a beige lip over the sky), and
+  plum near-black `#0E0B14` at 0.25 under glass. `Color(0, 0, 0, a)` in UI code is a finding.
 - **C5** Warm means do, cool means is. One persimmon fill per screen, on the primary action;
   lake shows state; madder fills only a danger-confirm button; moss never fills. The default
   `Button` is the quiet secondary and `Primary` is an explicit variation, so an unthemed

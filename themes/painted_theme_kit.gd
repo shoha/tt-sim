@@ -60,6 +60,9 @@ var font_wordmark: FontVariation
 var font_title: FontVariation
 var font_heading: FontVariation
 var font_eyebrow: FontVariation
+## Codes read aloud (the room code): Inter with tabular figures, a slashed zero and the
+## disambiguation set (a tailed l, a flagged 1), so 0/o and 1/l/i never pass for each other.
+var font_code: FontVariation
 
 
 ## Picks the role map and weights for the theme about to be generated.
@@ -83,13 +86,19 @@ func build_fonts() -> void:
 	font_title = fraunces(600.0, SIZE_TITLE)
 	font_heading = fraunces(600.0, SIZE_HEADING)
 	font_eyebrow = fraunces(500.0 + lift, SIZE_HEADING, true)
+	font_code = inter(600.0 + lift, ["tnum", "zero", "ss02", "cv05"])
+	font_code.spacing_glyph = 1
 
 
-## Inter at a weight.
-func inter(wght: float) -> FontVariation:
+## Inter at a weight, with OpenType `features` (four-letter tags) switched on.
+func inter(wght: float, features: Array[String] = []) -> FontVariation:
 	var font := FontVariation.new()
 	font.base_font = INTER
 	font.variation_opentype = {_tag("wght"): wght}
+	var switched := {}
+	for feature in features:
+		switched[_tag(feature)] = 1
+	font.opentype_features = switched
 	return font
 
 
@@ -152,8 +161,15 @@ func lift(lifted := false) -> Dictionary:
 	return {shadow_color = ThemeColors.SHADOW_REST, shadow_size = 10, shadow_offset = Vector2(0, 4)}
 
 
-## The focus ring (I1): 2 px in the focus role, 2 px outside a control of `radius`.
+## The focus ring (I1): 2 px in the focus role, 2 px outside a control of `radius`. A glass
+## control can sit straight on the board (the HUD's Add Token), where lake_light alone falls
+## under 3:1 on bright grass, so the glass ring carries a soft plum-black halo outside it.
+## With draw_center off, StyleBoxFlat draws only the outer falloff of a shadow, never a fill
+## over the control.
 func ring(radius: int = RADIUS_CONTROL) -> Dictionary:
+	var halo := {}
+	if on_glass:
+		halo = {shadow_color = Color(ThemeColors.SHADOW_GLASS, 0.8), shadow_size = 4}
 	return box(
 		Color(c(ThemeColors.FOCUS), 0.0),
 		radius + 4,
@@ -167,7 +183,8 @@ func ring(radius: int = RADIUS_CONTROL) -> Dictionary:
 				expand_margin_top = 4,
 				expand_margin_right = 4,
 				expand_margin_bottom = 4,
-			}
+			},
+			halo
 		)
 	)
 
