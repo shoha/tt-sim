@@ -188,15 +188,16 @@ window's `content_scale_factor` instead, so the virtual canvas shrinks and the U
   gives. `tests/unit/test_interface_size_fit.gd` opens every screen and sheet the UI tour
   visits in a 1280x720 viewport and fails on any visible control outside it (a ScrollContainer
   must fit; what it holds may scroll). The same walk fails a hint bar under an open drawer or a
-  bottom-corner button, and a title column that reaches the version label. Screens that would
-  not fit adapt to the canvas, by measurement rather than at a threshold:
-  - The title's left column measures itself against the room the hub's margins leave
-    (`TitleScreen._fit_to_canvas`). A caption always sits 4 px under its own button and 12 px
+  bottom-corner button, and a title column that runs off its paper sheet or a sheet past the
+  hub's margin. Screens that would not fit adapt to the canvas, by measurement rather than at
+  a threshold:
+  - The title's left column measures itself against the room the hub's margins and its
+    sheet's padding leave (`TitleScreen._fit_to_canvas`; the margins are the sheet's 24 px
+    from the canvas edge). A caption always sits 4 px under its own button and 12 px
     above the next control, so it reads with its button. Stacked buttons stand 12 apart when
     the column fits that way (1080p, and 1366x768 at Auto, an 800 px canvas), else 8, and the
     three section gaps (under the wordmark, around the divider) give up the rest, evenly, from
-    36 / 32 / 32 down to 12. At 720p Auto the column fills the height to just above the version
-    label.
+    36 / 32 / 32 down to 12. At 720p Auto the sheet fills the height to the hub's margin.
   - The new-map dialog takes the 960 sheet under 880 px and scrolls its fields when even that
     is too tall. Its fields share one track: six columns on the 960 sheet (biomes 6 + 3, the
     three sizes on the first three columns at biome width, the six landforms on all six),
@@ -326,6 +327,7 @@ For consistent tab-change animations, call `TabUtils.animate_tab_change()` from 
 | `PanelInset`    | `background`         | Recessed areas (lists, inputs) |
 | `KeyChip`       | `surface2` + border  | Key caps in shortcut rows      |
 | `CodeChip`      | `surface2` + border, 12 / 6 padding | The room code              |
+| `Plaque`        | `surface1` + border + rest shadow, radius 16, 16 / 8 padding (glass: rim, 12 / 8) | A few words standing on the painted backdrop (the room's heading, code row and map name, the title's "Your maps"), so they read in every mood |
 
 ---
 

@@ -139,11 +139,10 @@ static func _report(title: TitleScreen) -> String:
 		return "no title"
 	var paint := title.backdrop.material as ShaderMaterial
 	var moods := PaintedBackdrop.Mood.keys()
-	return "backdrop %s -> %s at %.2f, %d zones" % [
+	return "backdrop %s -> %s at %.2f" % [
 		moods[int(paint.get_shader_parameter(&"mood_from"))],
 		moods[int(paint.get_shader_parameter(&"mood_to"))],
 		float(paint.get_shader_parameter(&"blend")),
-		int(paint.get_shader_parameter(&"zone_count")),
 	]
 
 

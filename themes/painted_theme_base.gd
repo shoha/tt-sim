@@ -302,6 +302,15 @@ func _define_panels() -> void:
 	define_style("Panel", {panel = box(c(ThemeColors.SURFACE), RADIUS_CONTROL)})
 	define_style("PanelContainer", {panel = sheet})
 	define_variant_style("Sheet", "PanelContainer", {panel = sheet})
+	# A plaque: a few words that stand on the painted backdrop (the room's heading and code row,
+	# the map's name under its picture, the title's "Your maps") on paper of their own, the
+	# sheet's surface and trim at a card's radius with a control's padding. Crisp, so the words
+	# hold their contrast in every mood without a haze over the painting.
+	var paper_trim: Dictionary = inherit(edge(1, c(ThemeColors.EDGE)), lift())
+	var plaque := box(c(ThemeColors.SURFACE), RADIUS_CARD, SPACE_4, SPACE_2, paper_trim)
+	if on_glass:
+		plaque = box(c(ThemeColors.SURFACE), RADIUS_CARD, SPACE_3, SPACE_2, inherit(rim(), lift()))
+	define_variant_style("Plaque", "PanelContainer", {panel = plaque})
 	define_variant_style("Inset", "PanelContainer", {panel = inset})
 	define_variant_style("PanelInset", "PanelContainer", {panel = inset})
 	define_variant_style(

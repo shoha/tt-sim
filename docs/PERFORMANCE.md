@@ -2744,8 +2744,11 @@ time, so absolute times are indicative. GPU median ms (p10 / p90, frames):
 | Backdrop | Shown #1 | Hidden | Shown #2 |
 | --- | --- | --- | --- |
 | Title, 1920x1080 | 0.259 (0.258 / 0.281, 3,483) | 0.123 (0.122 / 0.124, 5,018) | 0.260 (0.258 / 0.261, 3,913) |
+| Title, 1920x1080, round 2 shapes | 0.283 (0.282 / 0.285, 3,586) | 0.128 (0.127 / 0.129, 4,816) | 0.284 (0.283 / 0.285, 3,533) |
 
-**About 0.14 ms of GPU for the whole screen at 1080p**, steady across the two shown windows.
+**About 0.14 ms of GPU for the whole screen at 1080p**, steady across the two shown windows;
+**about 0.16 ms** with round 2's shapes (the distant range, the halo's bloom and three poplars,
+the legibility zones gone; same procedure, 2026-10-10).
 It draws only outside play (a hidden backdrop draws nothing), so it never costs the table a
 frame; during a map load the loading overlay's backdrop and the title's under it both draw
 until the title is freed.

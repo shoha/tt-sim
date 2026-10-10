@@ -80,20 +80,23 @@ func test_the_backdrop_takes_the_selected_maps_mood() -> void:
 	assert_eq(title.backdrop.get_index(), 0, "behind the hub")
 
 
-## The column and the version label are one band of words on the backdrop, the heading
-## another: the backdrop keeps both legible.
-func test_the_words_on_the_backdrop_are_kept_legible() -> void:
+## The column stands on a paper sheet that ends at its content, the version beside the
+## wordmark on it; "Your maps" (and the empty library's caption) on a plaque that ends at its
+## words, its top edge in line with the sheet's.
+func test_the_words_stand_on_paper() -> void:
 	_levels = [_info("new", "New Camp", 200)]
 	var title := _title()
 	await wait_frames(3)
-	var zones := title.backdrop.zone_rects()
-	assert_eq(zones.size(), 2)
-	var version := title.get_node("%VersionLabel") as Label
-	assert_true(zones[0].encloses(Rect2(version.global_position, Vector2(8, version.size.y))))
-	var wordmark := title.get_node("%LeftColumn").get_child(0) as Control
-	assert_true(zones[0].has_point(wordmark.global_position + Vector2(4, 4)))
-	var heading := title.get_node("Hub/Columns/RightZone/Heading") as Control
-	assert_true(zones[1].has_point(heading.global_position + Vector2(4, 4)))
+	var sheet := title.get_node("%ColumnSheet") as PanelContainer
+	assert_eq(sheet.theme_type_variation, &"Sheet")
+	assert_true(title.get_node("%LeftColumn").is_ancestor_of(title.version_label))
+	assert_eq(title.version_label.text, "v" + UpdateVersion.get_current())
+	assert_eq(title.heading_plaque.theme_type_variation, &"Plaque")
+	assert_true(title.heading_plaque.is_ancestor_of(title.heading_count))
+	assert_true(title.heading_plaque.is_ancestor_of(title.empty_caption))
+	assert_almost_eq(title.heading_plaque.global_position.y, sheet.global_position.y, 0.5)
+	var right := title.get_node("%RightZone") as Control
+	assert_lt(title.heading_plaque.size.x, right.size.x * 0.6, "the plaque ends at its words")
 
 
 ## The two map actions name what differs: Set up tokens acts on the selected map, New map
@@ -162,7 +165,7 @@ func test_grid_lands_below_the_heading_after_the_entrance() -> void:
 	var title := _title()
 	var settle := TitleScreen.ENTRANCE_DURATION + 12 * TitleScreen.ENTRANCE_STAGGER + 0.1
 	await wait_seconds(settle)
-	var heading: Control = title.get_node("Hub/Columns/RightZone/Heading")
+	var heading: Control = title.heading_plaque
 	assert_gt(
 		title.grid.position.y,
 		heading.position.y + heading.size.y - 1.0,
