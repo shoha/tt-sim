@@ -7,8 +7,10 @@ extends CanvasLayer
 ## The hub stands on the painted backdrop (PaintedBackdrop) in the selected map's mood,
 ## cross-fading as the selection changes; with no map selected, and over an empty library, it
 ## is morning. The backdrop is the empty library's picture too: the d20 that turned there was
-## a glossy 3D object over a painting, so it went with the flat sky. The column, the heading
-## and the version label are the words on the backdrop, kept legible in every mood.
+## a glossy 3D object over a painting, so it went with the flat sky. No word stands straight on
+## the painting: the column (with the version beside the wordmark) is on a paper sheet like
+## the room's side sheet, ending at its content, and "Your maps" with its count (and the empty
+## library's caption) on a paper plaque, so every caption keeps its contrast in every mood.
 ##
 ## Host opens a room, and the selected map is what goes on its shelf; Play solo and Set up
 ## tokens act on that map, and all three name it the same way, the bare name leading the line
@@ -48,9 +50,10 @@ const EMPTY_CAPTION := (
 ## buttons stand STACK_GAP_ROOMY apart, or STACK_GAP when the canvas is short; the three
 ## section gaps (under the wordmark, above and below the divider) take what is left, from
 ## their SECTION_GAPS size down to SECTION_GAP_MIN (8: on a 1280x720 canvas the two map
-## actions' captions need the room). The column is measured against the room
-## the hub's margins leave it (they keep the bottom-left version label clear), and tightens
-## only by what that room needs: the stacked gaps first, then the sections, evenly
+## actions' captions need the room). The column is measured against the room the hub's
+## margins and its sheet's padding leave it (the hub's margins are the sheet's distance from
+## the canvas edge, so the padding comes out of what used to be margin), and tightens only by
+## what that room needs: the stacked gaps first, then the sections, evenly
 ## (docs/THEME_GUIDE.md, Interface size).
 const AFTER_CAPTION_GAP := 12.0
 const STACK_GAP := 8.0
@@ -77,6 +80,10 @@ var heading_count: Label
 var empty_caption: Label
 var grid: LevelGrid
 var backdrop: PaintedBackdrop
+## The version, a caption on the wordmark's baseline.
+var version_label: Label
+## "Your maps" and its count, with the empty library's caption under them, on their plaque.
+var heading_plaque: PanelContainer
 var _heading_row: HBoxContainer
 ## The left column's spacers: the three section gaps in order, and the gap before each
 ## button after Host's.
@@ -84,9 +91,9 @@ var _section_gaps: Array[Control] = []
 var _row_gaps: Array[Control] = []
 
 @onready var _hub: MarginContainer = %Hub
+@onready var _sheet: PanelContainer = %ColumnSheet
 @onready var _left: VBoxContainer = %LeftColumn
 @onready var _right: VBoxContainer = %RightZone
-@onready var _version_label: Label = %VersionLabel
 
 
 func _ready() -> void:
@@ -95,10 +102,8 @@ func _ready() -> void:
 	move_child(backdrop, 0)
 	_build_left_column()
 	_build_right_zone()
-	# The column and the version label make one band of words down the left edge.
-	backdrop.keep_legible([[_left, _version_label], [_heading_row, empty_caption]])
-	_version_label.text = "v" + UpdateVersion.get_current()
-	_version_label.modulate.a = 0.0
+	version_label.text = "v" + UpdateVersion.get_current()
+	version_label.modulate.a = 0.0
 	grid.refresh()
 	_preselect_most_recent()
 	_refresh_actions()
@@ -120,13 +125,15 @@ func selected_level() -> Dictionary:
 
 
 ## Fit the left column to the canvas height: roomy when it fits, else stacked buttons at
-## STACK_GAP, then the section gaps shrunk evenly by what is still over.
+## STACK_GAP, then the section gaps shrunk evenly by what is still over. The room is the
+## canvas less the hub's margins and the sheet's own padding.
 func _fit_to_canvas() -> void:
 	if _section_gaps.is_empty():
 		return
 	var margins := (
 		_hub.get_theme_constant(&"margin_top") + _hub.get_theme_constant(&"margin_bottom")
 	)
+	margins += _sheet.get_theme_stylebox(&"panel").get_minimum_size().y
 	var room := get_viewport().get_visible_rect().size.y - margins
 	_set_gaps(STACK_GAP_ROOMY, 0.0)
 	if _left.get_combined_minimum_size().y <= room:
@@ -167,11 +174,22 @@ func _follows_caption(spacer: Control) -> bool:
 
 
 func _build_left_column() -> void:
+	# The version reads with the wordmark, a caption on its baseline, on the same paper.
+	var wordmark_row := HBoxContainer.new()
+	wordmark_row.name = "WordmarkRow"
+	wordmark_row.theme_type_variation = &"BoxContainerSpaced"
+	wordmark_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_left.add_child(wordmark_row)
 	var wordmark := Label.new()
 	wordmark.name = "Wordmark"
 	wordmark.text = "TTSim"
 	wordmark.theme_type_variation = &"Wordmark"
-	_left.add_child(wordmark)
+	wordmark_row.add_child(wordmark)
+	version_label = Label.new()
+	version_label.name = "Version"
+	version_label.theme_type_variation = &"Caption"
+	version_label.size_flags_vertical = Control.SIZE_SHRINK_END
+	wordmark_row.add_child(version_label)
 	_section_gaps.append(UiActions.spacer(0, _left))
 	host_button = UiActions.primary("Host game", "network", HOST_CAPTION, _left)
 	host_subtitle = UiActions.subtitle_of(host_button)
@@ -223,6 +241,18 @@ func _stacked(label: String, icon: String) -> Button:
 
 
 func _build_right_zone() -> void:
+	# The heading's words stand on the painting, so they sit on a plaque of paper that ends at
+	# them; its top edge lines up with the column's sheet.
+	heading_plaque = PanelContainer.new()
+	heading_plaque.name = "HeadingPlaque"
+	heading_plaque.theme_type_variation = &"Plaque"
+	heading_plaque.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	heading_plaque.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_right.add_child(heading_plaque)
+	var words := VBoxContainer.new()
+	words.theme_type_variation = &"BoxContainerTight"
+	words.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	heading_plaque.add_child(words)
 	_heading_row = HBoxContainer.new()
 	_heading_row.name = "Heading"
 	_heading_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -238,13 +268,13 @@ func _build_right_zone() -> void:
 	heading_count.theme_type_variation = &"Caption"
 	heading_count.size_flags_vertical = Control.SIZE_SHRINK_END
 	_heading_row.add_child(heading_count)
-	_right.add_child(_heading_row)
+	words.add_child(_heading_row)
 	empty_caption = Label.new()
 	empty_caption.name = "Empty"
 	empty_caption.text = EMPTY_CAPTION
 	empty_caption.theme_type_variation = &"Caption"
 	empty_caption.visible = false
-	_right.add_child(empty_caption)
+	words.add_child(empty_caption)
 	grid = LevelGrid.new()
 	grid.name = "Grid"
 	grid.columns = 3
@@ -305,7 +335,7 @@ func _play_entrance_animation() -> void:
 	var version_tween := create_tween()
 	version_tween.set_ease(Tween.EASE_OUT)
 	version_tween.set_trans(Tween.TRANS_CUBIC)
-	version_tween.tween_property(_version_label, "modulate:a", 1.0, ENTRANCE_DURATION).set_delay(
+	version_tween.tween_property(version_label, "modulate:a", 1.0, ENTRANCE_DURATION).set_delay(
 		targets.size() * ENTRANCE_STAGGER
 	)
 

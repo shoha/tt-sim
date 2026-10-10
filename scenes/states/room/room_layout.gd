@@ -8,7 +8,9 @@ extends RefCounted
 ## below, the side sheet (players, then the shelf with Add a map, then Leave or End session)
 ## and the stage in the centre (the selected map large, its name, its readiness and the one
 ## action). The side sheet ends at its content; a shelf too long for the screen scrolls inside
-## a full-height sheet (RoomPanel._fit_side()).
+## a full-height sheet (RoomPanel._fit_side()). No word stands straight on the painted
+## backdrop: the heading and the code row each sit on a paper plaque that ends at them, and
+## the map's name and readiness on a plaque as wide as its picture, like a caption plate.
 ##
 ## The drawer, over a table: the heading with the full width for "On the table: ...", the code
 ## row on its own line under it, then one column (players and shelf) and directly under the
@@ -75,10 +77,18 @@ static func _build_room(panel: RoomPanel, layout: VBoxContainer) -> void:
 	top.name = "TopBar"
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layout.add_child(top)
+	# The heading and the code row stand on the painting, each on its own plaque that ends at
+	# its words; the heading's words take their whole width there, so nothing ellipsizes.
 	var heading := _build_heading(panel)
-	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top.add_child(heading)
-	top.add_child(_build_code_row(panel))
+	for label: Label in [panel.title_label, panel.caption_label]:
+		label.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+	var heading_plaque := _plaque("HeadingPlaque", heading)
+	heading_plaque.size_flags_horizontal = Control.SIZE_EXPAND
+	heading_plaque.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	top.add_child(heading_plaque)
+	var code_plaque := _plaque("CodePlaque", _build_code_row(panel))
+	code_plaque.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	top.add_child(code_plaque)
 	var body := HBoxContainer.new()
 	body.name = "Body"
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -214,17 +224,26 @@ static func _build_stage(panel: RoomPanel) -> VBoxContainer:
 	panel.preview.name = "Preview"
 	panel.preview.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	stage.add_child(panel.preview)
+	# The name and readiness on a plaque as wide as the picture: its caption plate.
+	var words := _vbox("Words", &"BoxContainerTight")
+	var plate := _plaque("NamePlaque", words)
+	plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	stage.add_child(plate)
+	var preview := panel.preview
+	preview.minimum_size_changed.connect(
+		func() -> void: plate.custom_minimum_size.x = preview.custom_minimum_size.x
+	)
 	panel.map_name_label = Label.new()
 	panel.map_name_label.name = "MapName"
 	panel.map_name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	panel.map_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stage.add_child(panel.map_name_label)
+	words.add_child(panel.map_name_label)
 	panel.readiness_label = Label.new()
 	panel.readiness_label.name = "Readiness"
 	panel.readiness_label.theme_type_variation = &"Caption"
 	panel.readiness_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	panel.readiness_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	stage.add_child(panel.readiness_label)
+	words.add_child(panel.readiness_label)
 	panel.action_button.custom_minimum_size = Vector2(ACTION_MIN_WIDTH, ACTION_HEIGHT)
 	panel.action_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	stage.add_child(panel.action_button)
@@ -249,6 +268,17 @@ static func _button(node_name: String, icon: String, text: String) -> Button:
 	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	return button
+
+
+## `content` on a plaque: the few words that stand on the room's painted backdrop get paper of
+## their own (the Plaque variation), crisp, so they read in every mood.
+static func _plaque(node_name: String, content: Control) -> PanelContainer:
+	var plaque := PanelContainer.new()
+	plaque.name = node_name
+	plaque.theme_type_variation = &"Plaque"
+	plaque.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plaque.add_child(content)
+	return plaque
 
 
 static func _vbox(node_name: String, variation: StringName) -> VBoxContainer:

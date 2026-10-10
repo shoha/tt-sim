@@ -2,37 +2,27 @@ shader_type canvas_item;
 
 // The painted backdrop every screen outside play stands on (scenes/ui/primitives/
 // painted_backdrop.gd): the map placeholder's language (shaders/ui_map_placeholder.gdshader)
-// at the size of the screen. A sky in two washes with a soft sun (a moon at night), four bold
-// cumulus clouds with flat bases that drift very slowly, a hazy far ridge with mist at its
-// foot, a round near hill with a stand of trees on its shoulder, and a meadow rising to the
-// right. A few bold, soft-edged shapes; no textures and no noise.
+// at the size of the screen. A sky in two washes with a sun in a warm halo (a moon at night),
+// four bold cumulus clouds with flat bases that drift very slowly, a pale distant range and a
+// rolling far ridge in the mood's own atmospheric tint, three poplars rising from behind the
+// near hill's shoulder, and a meadow rising to the right. A few bold,
+// soft-edged shapes; no textures and no noise. The painting carries no words: the screens on
+// it put theirs on paper (sheets and plaques), so nothing here hazes under them.
 //
 // The palette is one of six moods (morning, midday, golden hour, dusk, overcast, night), and a
 // change of mood is a cross-fade: every colour mixes from `mood_from` to `mood_to` by `blend`,
 // and the two suns fade into each other rather than slide. The shapes are the same in every
 // mood, so the land stays put while the light changes.
-//
-// The words that sit straight on the backdrop (the title's column, the room's heading) keep
-// their contrast in every mood: inside a zone (a rect in the rect's own pixels, feathered) any
-// colour darker than LEGIBLE_LUMINANCE is lifted toward the mood's haze just far enough, mixed
-// in linear light, so ink-soft captions hold 4.5:1. Over a day sky that changes nothing; over a
-// night it is a pale mist under the words.
 
 // The two moods mixed, 0 morning, 1 midday, 2 golden hour, 3 dusk, 4 overcast, 5 night.
 uniform int mood_from = 0;
 uniform int mood_to = 0;
 uniform float blend : hint_range(0.0, 1.0) = 1.0;
-// The rect's size in pixels: the aspect keeps the shapes round and the zones are in pixels.
+// The rect's size in pixels: the aspect keeps the shapes round and the edges a brush wide.
 uniform vec2 rect_size = vec2(1920.0, 1080.0);
 // 1 lets the clouds drift; 0 holds them (Reduce motion).
 uniform float drift = 1.0;
-// Up to four zones (x0, y0, x1, y1 in the rect's pixels) where the words sit.
-uniform vec4 zones[4];
-uniform int zone_count = 0;
-uniform float zone_feather = 48.0;
 
-// The relative luminance the painting keeps under words: INK_SOFT (0.088) reads 4.7:1 on it.
-const float LEGIBLE_LUMINANCE = 0.6;
 // The four clouds: where each rests (x as a share of the width, y in heights from the foot),
 // how wide it is in heights, its drift period in seconds (UI_TASTE: the painted world
 // breathing, 60-90 s) and where in its sway it starts.
@@ -40,6 +30,12 @@ const vec2 CLOUD_AT[4] = { vec2(0.88, 0.76), vec2(0.47, 0.52), vec2(0.17, 0.66),
 const float CLOUD_SCALE[4] = { 0.30, 0.20, 0.17, 0.26 };
 const float DRIFT_S[4] = { 78.0, 64.0, 88.0, 71.0 };
 const float DRIFT_PHASE[4] = { 0.0, 2.1, 4.0, 5.3 };
+// Three poplars in the dip between the near hill's two rolls: where each stands (x as a share
+// of the width), how tall it is and how wide at its fullest, in heights. Tall flames, not round
+// crowns, so they read as trees at a glance and give the rolling land one upright accent. They
+// stand left of centre, in the gap the room leaves between its side sheet and its stage, and
+// balance the sun on the right.
+const vec3 POPLAR[3] = { vec3(0.300, 0.130, 0.023), vec3(0.328, 0.096, 0.019), vec3(0.364, 0.112, 0.021) };
 
 // Per mood: morning, midday, golden hour, dusk, overcast, night. Every far, near and meadow
 // colour holds at least 25% saturation (the placeholder's rule), so no mood greys or muddies.
@@ -51,15 +47,24 @@ const vec3 SKY_LOW[6] = {
 	vec3(0.99, 0.90, 0.75), vec3(0.86, 0.94, 0.97), vec3(1.00, 0.82, 0.57),
 	vec3(0.99, 0.67, 0.53), vec3(0.94, 0.91, 0.95), vec3(0.44, 0.52, 0.80)
 };
+// The sun's disc (the moon's at night): near white, so it burns against any sky.
 const vec3 SUN[6] = {
-	vec3(1.00, 0.97, 0.86), vec3(1.00, 1.00, 0.94), vec3(1.00, 0.91, 0.64),
-	vec3(1.00, 0.80, 0.58), vec3(0.99, 0.98, 0.97), vec3(0.98, 0.97, 0.90)
+	vec3(1.00, 0.99, 0.93), vec3(1.00, 1.00, 0.97), vec3(1.00, 0.97, 0.84),
+	vec3(1.00, 0.93, 0.78), vec3(0.99, 0.98, 0.97), vec3(0.99, 0.98, 0.92)
+};
+// The halo around it: warmer and more saturated than the disc, so the disc reads by colour as
+// well as by light; at night a cool moonlit ring.
+const vec3 SUN_GLOW[6] = {
+	vec3(1.00, 0.86, 0.56), vec3(1.00, 0.95, 0.74), vec3(1.00, 0.70, 0.36),
+	vec3(1.00, 0.58, 0.44), vec3(0.98, 0.96, 0.92), vec3(0.66, 0.74, 1.00)
 };
 // Where the sun sits (x as a share of the width, y in heights from the foot), its disc's
-// radius (0 for a sun behind cloud) and how far its glow reaches.
+// radius (0 for a sun behind cloud) and how strong its wide glow is. Every disc stands clear
+// of the distant range and under the big cloud's base, toward the right where the room's
+// stage and the title's column leave the sky open; the lower the sun, the warmer and wider.
 const vec4 SUN_AT[6] = {
-	vec4(0.64, 0.40, 0.050, 0.55), vec4(0.88, 0.63, 0.045, 0.35), vec4(0.80, 0.35, 0.065, 0.85),
-	vec4(0.70, 0.25, 0.070, 0.95), vec4(0.62, 0.58, 0.000, 0.30), vec4(0.86, 0.57, 0.042, 0.45)
+	vec4(0.84, 0.57, 0.046, 0.55), vec4(0.90, 0.64, 0.042, 0.40), vec4(0.84, 0.53, 0.056, 0.80),
+	vec4(0.82, 0.51, 0.060, 0.85), vec4(0.62, 0.58, 0.000, 0.30), vec4(0.86, 0.62, 0.040, 0.50)
 };
 const vec3 CLOUD_LIT[6] = {
 	vec3(1.00, 0.98, 0.95), vec3(1.00, 1.00, 1.00), vec3(1.00, 0.89, 0.73),
@@ -71,9 +76,19 @@ const vec3 CLOUD_SHADE[6] = {
 };
 // How large the clouds are: overcast heaps them up.
 const float CLOUD_SIZE[6] = { 1.0, 0.9, 1.05, 1.0, 1.35, 0.95 };
+// The distant range: the sky's own hue a little deeper, light and luminous (mixing a blue
+// range into a warm horizon greyed it).
+const vec3 RANGE[6] = {
+	vec3(0.64, 0.76, 0.92), vec3(0.62, 0.78, 0.95), vec3(0.88, 0.66, 0.84),
+	vec3(0.80, 0.54, 0.70), vec3(0.66, 0.74, 0.90), vec3(0.32, 0.38, 0.70)
+};
+// The far ridge in the mood's atmospheric tint, a step deeper than the range: blue-green by
+// day (green hills seen through air), lavender at golden hour, plum at dusk, deep periwinkle
+// at night. Its value, not its hue, keeps it from reading as sea: darker than the sky, with
+// a lit crest and no pale band at its foot.
 const vec3 FAR[6] = {
-	vec3(0.55, 0.78, 0.80), vec3(0.50, 0.72, 0.88), vec3(0.71, 0.58, 0.85),
-	vec3(0.64, 0.43, 0.67), vec3(0.54, 0.66, 0.84), vec3(0.32, 0.38, 0.69)
+	vec3(0.42, 0.68, 0.78), vec3(0.40, 0.66, 0.82), vec3(0.66, 0.52, 0.76),
+	vec3(0.55, 0.36, 0.60), vec3(0.46, 0.64, 0.78), vec3(0.24, 0.30, 0.58)
 };
 const vec3 NEAR[6] = {
 	vec3(0.49, 0.74, 0.41), vec3(0.45, 0.74, 0.35), vec3(0.80, 0.70, 0.34),
@@ -88,10 +103,10 @@ const vec3 RIM[6] = {
 	vec3(0.70, 0.86, 0.46), vec3(0.62, 0.86, 0.38), vec3(0.95, 0.82, 0.42),
 	vec3(0.78, 0.50, 0.60), vec3(0.56, 0.76, 0.56), vec3(0.34, 0.46, 0.72)
 };
-// The pale light the words sit in (see LEGIBLE_LUMINANCE).
-const vec3 HAZE[6] = {
-	vec3(0.96, 0.95, 0.91), vec3(0.94, 0.97, 0.98), vec3(1.00, 0.94, 0.86),
-	vec3(0.99, 0.89, 0.88), vec3(0.95, 0.95, 0.98), vec3(0.80, 0.83, 0.96)
+// The poplars in shadow: deeper and cooler than the hill they stand on, never black.
+const vec3 TREE[6] = {
+	vec3(0.26, 0.53, 0.36), vec3(0.24, 0.53, 0.30), vec3(0.46, 0.52, 0.26),
+	vec3(0.34, 0.25, 0.50), vec3(0.26, 0.50, 0.42), vec3(0.17, 0.23, 0.48)
 };
 
 // A ridge line: three sines, so the skyline rolls without repeating on screen.
@@ -122,22 +137,24 @@ float cloud(vec2 p, vec2 at, float s, float soft, out float shade) {
 	return 1.0 - smoothstep(-soft, soft, d * s);
 }
 
-// A rounded rect's signed distance in pixels.
-float zone_distance(vec2 px, vec4 r, float radius) {
-	vec2 centre = (r.xy + r.zw) * 0.5;
-	vec2 half_size = (r.zw - r.xy) * 0.5;
-	vec2 q = abs(px - centre) - half_size + radius;
-	return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
+// The near hill's crest at `x`: a bold round shoulder on the right, a lower roll on the left.
+float near_line(float x, float aspect) {
+	float h = 0.11 + 0.17 * exp(-pow((x - 0.74 * aspect) / 0.5, 2.0)) + 0.012 * wave(x * 3.0, 2.4);
+	return h + 0.05 * exp(-pow((x - 0.12 * aspect) / 0.3, 2.0));
 }
 
-// A sun (or the moon) of mood `i`, weighted by `w`, laid over `col`.
+// A sun (or the moon) of mood `i`, weighted by `w`, laid over `col`: a wide glow in the halo's
+// colour, a tighter bloom hugging the disc, and the disc itself.
 vec3 sun(vec3 col, vec2 p, float aspect, int i, float w, float soft) {
 	vec4 at = SUN_AT[i];
 	vec2 centre = vec2(at.x * aspect, at.y);
-	float d2 = dot(p - centre, p - centre);
-	col = mix(col, SUN[i], w * at.w * exp(-d2 / 0.06));
-	float disc = 1.0 - smoothstep(at.z - soft, at.z + soft, sqrt(d2));
-	return mix(col, SUN[i], w * disc * step(0.001, at.z));
+	float d = length(p - centre);
+	col = mix(col, SUN_GLOW[i], w * at.w * exp(-d * d / 0.07));
+	float has_disc = step(0.001, at.z);
+	float bloom = exp(-pow(max(d - at.z, 0.0) / max(at.z * 1.4, 0.001), 2.0));
+	col = mix(col, mix(SUN_GLOW[i], SUN[i], 0.45), w * has_disc * 0.8 * bloom);
+	float disc = 1.0 - smoothstep(at.z - soft, at.z + soft, d);
+	return mix(col, SUN[i], w * disc * has_disc);
 }
 
 void fragment() {
@@ -172,66 +189,51 @@ void fragment() {
 		col = mix(col, mix(lit, shade_col, 0.75 * under_shade), 0.94 * cover);
 	}
 
-	// The far ridge, in haze: mist pools at its foot.
-	float far_h = 0.30 + 0.045 * wave(x * 2.2 + 0.7, 1.3) + 0.05 * smoothstep(0.1, 0.9, UV.x);
+	// The distant range: taller peaks almost lost in the sky, so the far ridge has land
+	// behind it and the eye reads depth rather than a horizon.
+	vec3 range_col = mix(RANGE[a], RANGE[b], k);
+	float range_h = 0.40 + 0.085 * wave(x * 1.35 + 3.1, 4.2);
+	range_col = mix(range_col, low, 0.2 * smoothstep(range_h - 0.1, range_h, y));
+	col = mix(col, range_col, under(y, range_h, soft * 1.5));
+
+	// The far ridge: rolling hills in the mood's tint, deeper toward their foot, their crests
+	// taking on the range's light.
+	float far_h = 0.33 + 0.085 * wave(x * 1.9 + 0.7, 1.3) + 0.026 * sin(x * 6.1 + 0.4);
 	vec3 far_col = mix(FAR[a], FAR[b], k);
-	far_col = mix(far_col, low, 0.2 * smoothstep(far_h - 0.2, far_h, y));
-	float mist = 1.0 - smoothstep(far_h - 0.22, far_h - 0.1, y);
-	far_col = mix(far_col, mix(low, vec3(1.0), 0.3), 0.55 * mist);
+	far_col = mix(far_col * 0.93, far_col, smoothstep(far_h - 0.16, far_h - 0.03, y));
+	far_col = mix(far_col, range_col, 0.3 * smoothstep(far_h - 0.035, far_h, y));
 	col = mix(col, far_col, under(y, far_h, soft));
 
-	// The near hill: a bold round shoulder on the right, a lower roll on the left.
-	float hill_x = 0.74 * aspect;
-	float near_h = 0.11 + 0.17 * exp(-pow((x - hill_x) / 0.5, 2.0)) + 0.012 * wave(x * 3.0, 2.4);
-	near_h += 0.05 * exp(-pow((x - 0.12 * aspect) / 0.3, 2.0));
-	vec3 near_col = mix(NEAR[a], NEAR[b], k);
+	// The poplars, rooted behind the near hill's crest: each a flame of foliage, fullest a
+	// third of the way up and drawn to a soft point, in shadow and lit down its sunward side.
 	vec3 rim = mix(RIM[a], RIM[b], k);
+	vec3 tree_dark = mix(TREE[a], TREE[b], k);
+	for (int i = 0; i < 3; i++) {
+		float tx = POPLAR[i].x * aspect;
+		vec2 q = p - vec2(tx, near_line(tx, aspect) - 0.012);
+		float tall = POPLAR[i].y;
+		float t = clamp(q.y / tall, 0.0, 1.0);
+		float half_w = POPLAR[i].z * (0.75 + 0.6 * sin(3.1416 * pow(t, 0.62))) * (1.0 - 0.9 * t * t);
+		float inside = (1.0 - smoothstep(half_w - soft * 1.5, half_w + soft * 1.5, abs(q.x)));
+		inside *= step(0.0, q.y) * (1.0 - smoothstep(tall - soft, tall + soft, q.y));
+		float sunlit = smoothstep(-0.35 * half_w, 0.6 * half_w, q.x + 0.25 * half_w * t);
+		vec3 leaf = mix(tree_dark, mix(tree_dark, rim, 0.6), sunlit);
+		col = mix(col, leaf, inside);
+	}
+
+	// The near hill, its crest catching the light.
+	float near_h = near_line(x, aspect);
+	vec3 near_col = mix(NEAR[a], NEAR[b], k);
 	near_col = mix(near_col * 0.9, near_col, smoothstep(near_h - 0.14, near_h - 0.02, y));
 	near_col = mix(near_col, rim, 0.55 * smoothstep(near_h - 0.025, near_h, y));
 	col = mix(col, near_col, under(y, near_h, soft));
 
-	// A stand of three trees on the hill's shoulder, dark against it, lit on their crowns.
-	vec3 meadow = mix(MEADOW[a], MEADOW[b], k);
-	vec3 crown_col = meadow * 0.82;
-	float trees = 0.0;
-	float crown_lit = 0.0;
-	for (int i = 0; i < 3; i++) {
-		float tx = (0.56 + 0.035 * float(i)) * aspect;
-		float r = 0.034 - 0.006 * float(i);
-		float base = 0.11 + 0.17 * exp(-pow((tx - hill_x) / 0.5, 2.0));
-		vec2 c = vec2(tx, base + r * 1.1);
-		vec2 squash = vec2(1.0, 0.82);
-		float crown = 1.0 - smoothstep(r - soft, r + soft, length((p - c) * squash));
-		trees = max(trees, crown);
-		crown_lit = max(crown_lit, crown * smoothstep(c.y, c.y + r * 0.9, y));
-	}
-	col = mix(col, mix(crown_col, rim, 0.45 * crown_lit), trees);
-
 	// The meadow, rising toward the right, its crest catching the light.
+	vec3 meadow = mix(MEADOW[a], MEADOW[b], k);
 	float fore_h = 0.045 + 0.10 * smoothstep(0.25, 1.0, UV.x) + 0.012 * wave(x * 2.7 + 4.0, 0.6);
 	vec3 fore_col = mix(meadow * 0.86, meadow, smoothstep(0.0, fore_h, y));
 	fore_col = mix(fore_col, rim, 0.5 * smoothstep(fore_h - 0.02, fore_h, y));
 	col = mix(col, fore_col, under(y, fore_h, soft));
-
-	// Under the words, lift anything too dark toward the haze, in linear light.
-	vec2 px = UV * rect_size;
-	float zone = 0.0;
-	for (int z = 0; z < 4; z++) {
-		if (z < zone_count) {
-			float d = zone_distance(px, zones[z], 24.0);
-			zone = max(zone, 1.0 - smoothstep(0.0, zone_feather, d));
-		}
-	}
-	if (zone > 0.0) {
-		vec3 haze = mix(HAZE[a], HAZE[b], k);
-		vec3 lin = pow(col, vec3(2.2));
-		vec3 haze_lin = pow(haze, vec3(2.2));
-		vec3 weights = vec3(0.2126, 0.7152, 0.0722);
-		float lum = dot(lin, weights);
-		float haze_lum = dot(haze_lin, weights);
-		float lift = clamp((LEGIBLE_LUMINANCE - lum) / max(haze_lum - lum, 0.001), 0.0, 1.0);
-		col = pow(mix(lin, haze_lin, lift * zone), vec3(1.0 / 2.2));
-	}
 
 	COLOR = vec4(col, COLOR.a);
 }

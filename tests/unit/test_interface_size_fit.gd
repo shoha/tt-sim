@@ -9,8 +9,8 @@ extends GutTest
 ## The room (RoomScreen) and the room drawer over a table are walked from a sample summary.
 ##
 ## On the canvas is not enough where panels overlap: the input hint bar must never lie under
-## an open drawer (_assert_uncovered), and the title's column must stay clear of the version
-## label at the bottom of the canvas, on 1366x768 at Auto (1.35, an 800 px canvas) too.
+## an open drawer (_assert_uncovered), and the title's column must stay on its paper sheet,
+## and the sheet within the hub's margin, on 1366x768 at Auto (1.35, an 800 px canvas) too.
 
 const CANVAS := Vector2(1280.0, 720.0)
 ## The canvas of 720p at Auto (1.40) and of 1366x768 at Auto (1.35).
@@ -80,7 +80,7 @@ func after_each() -> void:
 func test_title_screen_fits() -> void:
 	var title := _title()
 	await _assert_fits("title screen", title.quit_button)
-	_assert_clear_of_version_label("title screen", title)
+	_assert_column_on_its_sheet("title screen", title, CANVAS)
 
 
 ## A resize while the rows lift in (a saved fullscreen applying just after the title appears
@@ -91,11 +91,11 @@ func test_title_screen_fits_after_a_resize_mid_entrance() -> void:
 	await wait_process_frames(4)
 	_host.size = Vector2i(CANVAS)
 	await _assert_fits("title screen resized mid-entrance", title.quit_button)
-	_assert_clear_of_version_label("title screen resized mid-entrance", title)
+	_assert_column_on_its_sheet("title screen resized mid-entrance", title, CANVAS)
 
 
 ## The column is measured against its canvas, not switched at a threshold: on 1366x768 at Auto
-## (exactly 800 px tall), 720p at Auto and 1080p it fits above the version label, and every
+## (exactly 800 px tall), 720p at Auto and 1080p it fits on its sheet, and every
 ## caption sits 4 px under its own button and 12 px above the next control.
 func test_title_column_fits_by_measurement() -> void:
 	for canvas in [CANVAS_768P_AUTO, CANVAS_720P_AUTO, Vector2i(1920, 1080)]:
@@ -103,7 +103,7 @@ func test_title_column_fits_by_measurement() -> void:
 		var title := _title()
 		var what := "title screen on a %s canvas" % str(canvas)
 		await _assert_fits(what, title.quit_button, Vector2(canvas))
-		_assert_clear_of_version_label(what, title)
+		_assert_column_on_its_sheet(what, title, Vector2(canvas))
 		var caption := _next_shown(title.host_button)
 		assert_almost_eq(_gap(title.host_button, caption), 4.0, SLACK_PX, "%s: caption" % what)
 		var subtitle := _next_shown(caption)
@@ -435,11 +435,15 @@ func _title() -> TitleScreen:
 	return title
 
 
-## The bottom-left version label stays SPACE_3 or more below the left column's last button.
-func _assert_clear_of_version_label(what: String, title: TitleScreen) -> void:
-	var version := (title.get("_version_label") as Control).get_global_rect()
+## The column's paper sheet holds the whole column, Quit inside its padding, and ends within
+## the hub's margin from the canvas foot (the sheet's padding came out of that margin).
+func _assert_column_on_its_sheet(what: String, title: TitleScreen, canvas: Vector2) -> void:
+	var sheet := _drawn_rect(title.get_node("%ColumnSheet") as Control)
 	var quit := _drawn_rect(title.quit_button)
-	assert_lte(quit.end.y + 12.0, version.position.y, "%s: Quit clears the version" % what)
+	var padding := 24.0
+	assert_lte(quit.end.y + padding, sheet.end.y + SLACK_PX, "%s: Quit on the sheet" % what)
+	var margin := float((title.get_node("%Hub") as Control).get_theme_constant(&"margin_bottom"))
+	assert_lte(sheet.end.y, canvas.y - margin + SLACK_PX, "%s: the sheet in the margin" % what)
 
 
 ## The next shown sibling after `control` that is not a spacer (a bare Control).

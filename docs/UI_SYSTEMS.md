@@ -434,9 +434,13 @@ where the painting is the whole picture: the d20 that turned there went with the
 `PaintedBackdrop` (`scenes/ui/primitives/painted_backdrop.gd`, `shaders/ui_backdrop.gdshader`)
 is the world every screen outside play stands on: the title, the room (`RoomScreen`) and a map
 load (`LoadingOverlay`'s `%Sky`). One full-screen shader pass in the map placeholder's language
-(`MapPlaceholder`): a sky in two washes with a sun (a moon at night), four flat-based cumulus
-clouds, a hazy far ridge with mist at its foot, a round near hill with three trees on its
-shoulder, and a meadow rising to the right. No textures and no noise.
+(`MapPlaceholder`): a sky in two washes with a near-white sun in a warmer halo (a moon in a
+cool ring at night), four flat-based cumulus clouds, a pale distant range and a rolling far
+ridge in the mood's atmospheric tint (`RANGE`, `FAR`: blue-green by day; a flat teal band read
+as sea), a round near hill with three poplars (tall flames, lit on their sunward side) in the
+dip left of centre, and a meadow rising to the right. No textures and no noise. The suns sit
+toward the right, clear of the range and under the big cloud; the poplars stand in the gap
+the room leaves between its side sheet and its stage, so neither hides behind the room.
 
 - **Moods.** Six curated palettes (`PaintedBackdrop.Mood`: morning, midday, golden hour, dusk,
   overcast, night), chosen by the selected map's environment preset (`mood_of`,
@@ -449,20 +453,28 @@ shoulder, and a meadow rising to the right. No textures and no noise.
 - **Drift.** The clouds sway about their places over 64-88 s each (`DRIFT_S`, the shader's
   `TIME`; no `_process`). Reduce motion (`UiMotion.reduced()`) holds them (`drift` 0); the
   cross-fade stays (M5). A hidden backdrop draws nothing (M6).
-- **Legible words.** Text that sits straight on the backdrop registers its controls
-  (`keep_legible`, up to four zones, each the union of its controls' words: a label's text as
-  aligned, a box container's shown children). Inside a zone, feathered over 48 px, the shader
-  lifts any colour darker than relative luminance 0.6 toward the mood's haze in linear light,
-  just far enough that ink-soft captions hold 4.5:1. Over a day sky it changes nothing; at
-  night it is a pale mist under the words. The title registers its column with the version
-  label, and its heading with the empty caption; the room its heading, the room code row and
-  the selected map's name and readiness.
-- **Cost.** One full-screen fragment pass (about 30 smoothsteps, 12 sines, 2 exps; four zone
-  distances). Measured indicatively in `docs/PERFORMANCE.md`.
+- **No words on the painting.** A screen on the backdrop puts its words on paper, so every
+  caption reads 4.5:1 in every mood and nothing hazes the painting under them: the title's
+  column on a `Sheet` that ends at its content (the version a caption beside the wordmark),
+  "Your maps" with its count and the empty library's caption on a `Plaque`; the room's
+  heading and code row each on a plaque that ends at its words, and the selected map's name
+  and readiness on a plaque as wide as its picture (`RoomLayout`). `Plaque` is the sheet's
+  paper and trim at a card's radius with 16 x 8 padding (glass: the rim, 12 x 8).
+  `test_painted_backdrop` walks every word on the title and the room in each mood and fails
+  one that has no opaque fill under it or reads under 4.5:1 on it. (Round 1 lifted dark
+  painting toward a haze under registered words; it read as a milky band and blurred
+  smudges, and went.)
+- **Cost.** One full-screen fragment pass (about 30 smoothsteps, 14 sines, 4 exps).
+  Measured indicatively in `docs/PERFORMANCE.md`.
 
 ### Left Column
 
-Built by `_build_left_column()`. **Host game** and **Join game** are tall primary actions
+Built by `_build_left_column()` on a paper sheet (`%ColumnSheet`, the `Sheet` variation) that
+ends at its content, like the room's side sheet; the version is a caption on the wordmark's
+baseline. The hub's margins (24) are the sheet's distance from the canvas edge, and
+`_fit_to_canvas` measures the column against the canvas less those margins and the sheet's
+padding (`test_interface_size_fit`: 1280x720, 1366x768 at Auto and 150%). **Host game** and
+**Join game** are tall primary actions
 (`UiActions.primary()`: icon, bold label, caption underneath); below a separator, **Play solo**,
 **Set up tokens**, **New map**, **Avatars**, and **Settings** and **Quit game** side by side on
 the last row are compact secondary actions (`UiActions.secondary()`); Quit game has the pause
@@ -484,7 +496,9 @@ count as a bare number beside the heading.
 
 ### Right Zone
 
-A "Your levels" heading with a live count, and a 3-column `LevelGrid` populated from
+A "Your maps" heading with a live count on a paper plaque (`heading_plaque`, the `Plaque`
+variation, its top edge in line with the column's sheet; the empty library's caption sits on it
+too), and a 3-column `LevelGrid` populated from
 `level_provider` (defaults to `LevelManager.get_saved_levels`; tests inject a fake before the node
 enters the tree). The most recently modified level is preselected on `_ready()`
 (`_preselect_most_recent()`). With no saved levels the grid is empty and an empty-state caption
