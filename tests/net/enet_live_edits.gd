@@ -14,9 +14,10 @@ extends "res://tests/net/enet_late_joiner.gd"
 ##   flat ground where the raise will go, then runs the GM's ops one at a time, as the GM's
 ##   Events pane does: the sculpt raise, the forest clear (Thin with Ctrl) and the sculpt lower
 ##   are strokes of GameMap's play brush armed by PlayEvents.pick and driven over the board
-##   (its pointer and press, as the render driver drives authoring's), the forest fall and the
-##   bridge collapse terrain events the presets fire (TerrainEvents.start: every board plays
-##   the motion, then the host's op lands; client must have played both, client2 none), and
+##   (its pointer and press, as the render driver drives authoring's), the forest fall, the
+##   bridge collapse and the fire terrain events the presets fire (TerrainEvents.start: every
+##   board plays the motion, then the host's op lands, two for the fire: the burnt biome and
+##   the ash; client must have played all three, client2 none), and
 ##   the undo (of the lower: the before side of a height op) is
 ##   PlayEvents.undo, Ctrl+Z's path. After each it waits for its map to settle and its ground
 ##   follower (LiveEditGround) to set the tokens down, and writes its MapFingerprint, log
@@ -48,11 +49,16 @@ const LOWER_AT := Vector3(-12, 0, -14)
 ## Where the forest fall's trees topple away from, and how far it reaches.
 const FALL_AT := Vector2(-14, 5)
 const FALL_RADIUS := 4.0
+## Where the fire starts, and how far it burns (clear of the fall and the clear).
+const FIRE_AT := Vector2(-6, -13)
+const FIRE_RADIUS := 3.5
 const OPS: Array[String] = [
-	"sculpt raise", "forest clear", "forest fall", "bridge collapse", "sculpt lower", "undo"
+	"sculpt raise", "forest clear", "forest fall", "bridge collapse", "fire", "sculpt lower", "undo"
 ]
 ## The ops that are terrain events: every board plays their motion before the op lands.
-const EVENT_OPS: Array[String] = ["forest fall", "bridge collapse"]
+const EVENT_OPS: Array[String] = ["forest fall", "bridge collapse", "fire"]
+## Ops the log holds past one an op: the fire's second (its ash after its burnt biome).
+const EXTRA_OPS := 1
 ## Frames a map must stay settled before it is fingerprinted.
 const STILL_FRAMES := 10
 ## How far Hero may rest off the host's height, and off its own ground (m).
@@ -326,6 +332,8 @@ func _run_op() -> void:
 			var bridge: Crossing = _edits().editor.document.crossings[0]
 			var middle := (bridge.start + bridge.end) * 0.5
 			why = events.start(TerrainEvent.bridge_collapse(bridge.id, middle, 9))
+		"fire":
+			why = events.start(TerrainEvent.fire(FIRE_AT, FIRE_RADIUS, 11))
 		"undo":
 			_result["undid"] = _events().undo()
 	if why != "":
@@ -422,7 +430,7 @@ func _host_collect() -> void:
 	var ok := (
 		bool(client.get("pass", false))
 		and bool(joiner.get("pass", false))
-		and _edits().op_log.size() == OPS.size()
+		and _edits().op_log.size() == OPS.size() + EXTRA_OPS
 		and str(_result.get("undid", "")) != ""
 		# The host's ground follower set Scout down on the ground the brush raised.
 		and float(_result.get("scout_raised_m", 0.0)) > float(_result.get("scout_before_m", 0.0)) + 0.1

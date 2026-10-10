@@ -26,6 +26,9 @@ extends Node3D
 ## Lives under the map root (the map frame, as AuthoredScatter is), made by TerrainEvents.
 ## Cost: the search is one pass over the rows of the cells the circle touches; each frame sets
 ## at most MAX_TREES stand-in transforms and steps the puff pool.
+##
+## FireSweep extends it: the same trees found, hidden, held and let go, burning instead of
+## falling (it overrides _find, _make_puffs, _tree_entry, step and is_played).
 
 const MAX_TREES := 48
 ## The ripple: the farthest tree starts this long after the nearest, plus up to RIPPLE_JITTER.
@@ -76,8 +79,13 @@ var _rng := RandomNumberGenerator.new()
 ## The drawn tree instances of `scatter` standing within `radius` of map point `centre`, the
 ## nearest `limit` of them, nearest first: [{"node": the chunk's MultiMeshInstance3D, "index":
 ## its instance, "base": the instance's transform, "distance"}].
+## Assets whose id starts with `skip` ("": none) are passed over (a fire's own snags).
 static func trees_near(
-	scatter: AuthoredScatter, centre: Vector2, radius: float, limit: int = MAX_TREES
+	scatter: AuthoredScatter,
+	centre: Vector2,
+	radius: float,
+	limit: int = MAX_TREES,
+	skip: String = ""
 ) -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
 	if scatter == null:
@@ -90,6 +98,8 @@ static func trees_near(
 			var cell := Vector2i(cx, cz)
 			var rows_by_asset := scatter.cell_rows(cell)
 			for asset_id: String in rows_by_asset:
+				if skip != "" and asset_id.begins_with(skip):
+					continue
 				_collect(scatter, cell, asset_id, rows_by_asset[asset_id], centre, radius, found)
 	found.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.distance < b.distance)
 	if found.size() > limit:
@@ -143,11 +153,10 @@ func setup(editor: AuthoringEditor, event: TerrainEvent) -> bool:
 	duration = event.duration_s
 	_rng.seed = event.seed_value
 	_scatter = editor.scatter
-	var found := trees_near(_scatter, event.centre, event.radius_m)
+	var found := _find(editor, event)
 	if found.is_empty():
 		return false
-	_puffs = EventPuffs.new()
-	add_child(_puffs)
+	_make_puffs()
 	_area = Rect2(event.centre - Vector2.ONE * event.radius_m, Vector2.ONE * event.radius_m * 2.0)
 	var by_mesh := {}
 	for tree in found:
@@ -199,6 +208,17 @@ func release() -> void:
 		_scatter.request_region(_area)
 
 
+## The trees `event` takes on `editor`'s map (trees_near).
+func _find(_editor: AuthoringEditor, event: TerrainEvent) -> Array[Dictionary]:
+	return trees_near(_scatter, event.centre, event.radius_m)
+
+
+## The puff pool the effect throws its dust into.
+func _make_puffs() -> void:
+	_puffs = EventPuffs.new()
+	add_child(_puffs)
+
+
 func _on_cells_applied(cells: Array[Vector2i]) -> void:
 	if not _ended:
 		return
@@ -241,25 +261,32 @@ func _stand_in(mesh: Mesh, trees: Array, event: TerrainEvent) -> void:
 		)
 		_origins.append(base.origin)
 		_cells[ScatterChunker.cell_for(base.origin, size)] = true
-		var away := Vector2(base.origin.x, base.origin.z) - event.centre
-		var heading := away.angle() if away.length() > 0.3 else _rng.randf_range(0.0, TAU)
-		heading += deg_to_rad(_rng.randf_range(-SWAY_DEG, SWAY_DEG))
-		var dir := Vector3(cos(heading), 0.0, sin(heading))
-		var reach := float(tree.distance) / maxf(event.radius_m, 0.1)
-		_trees.append(
-			{
-				"stand_in": node,
-				"slot": slot,
-				"base": base,
-				"axis": Vector3.UP.cross(dir).normalized(),
-				"dir": dir,
-				"height": height * base.basis.get_scale().y,
-				"start": RIPPLE_S * reach + _rng.randf_range(0.0, RIPPLE_JITTER),
-				"fall": _rng.randf_range(FALL_S.x, FALL_S.y),
-				"rest": rest_angle(box, base.basis.get_scale()) + deg_to_rad(_rng.randf_range(-3, 3)),
-				"landed": false,
-			}
-		)
+		var entry := _tree_entry(tree, event, box, height * base.basis.get_scale().y)
+		entry.stand_in = node
+		entry.slot = slot
+		entry.base = base
+		_trees.append(entry)
+
+
+## The fall of `tree` (a trees_near entry) of mesh bounds `box`, `height` metres tall, in
+## `event`: its direction away from the centre, when it starts, how long it falls and where it
+## comes to rest (_stand_in adds its stand-in, slot and base).
+func _tree_entry(tree: Dictionary, event: TerrainEvent, box: AABB, height: float) -> Dictionary:
+	var base: Transform3D = tree.base
+	var away := Vector2(base.origin.x, base.origin.z) - event.centre
+	var heading := away.angle() if away.length() > 0.3 else _rng.randf_range(0.0, TAU)
+	heading += deg_to_rad(_rng.randf_range(-SWAY_DEG, SWAY_DEG))
+	var dir := Vector3(cos(heading), 0.0, sin(heading))
+	var reach := float(tree.distance) / maxf(event.radius_m, 0.1)
+	return {
+		"axis": Vector3.UP.cross(dir).normalized(),
+		"dir": dir,
+		"height": height,
+		"start": RIPPLE_S * reach + _rng.randf_range(0.0, RIPPLE_JITTER),
+		"fall": _rng.randf_range(FALL_S.x, FALL_S.y),
+		"rest": rest_angle(box, base.basis.get_scale()) + deg_to_rad(_rng.randf_range(-3, 3)),
+		"landed": false,
+	}
 
 
 ## The angle from upright a tree of mesh bounds `box` at instance `scale` comes to rest at:

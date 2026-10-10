@@ -93,6 +93,25 @@ static func op_of(entry: Dictionary, editor: AuthoringEditor, undo: bool = false
 	return {}
 
 
+## History entry `entry` as its ops, in the order a peer applies them: op_of()'s one op, or for
+## a group (AuthoringHistory.end_group, "parts") one op per part, in order for its redo and in
+## reverse for its undo, as the group's own undo runs them. Parts that are none of op_of()'s
+## methods are left out.
+static func ops_of(
+	entry: Dictionary, editor: AuthoringEditor, undo: bool = false
+) -> Array[Dictionary]:
+	var ops: Array[Dictionary] = []
+	var parts: Array = entry.get("parts", [entry])
+	if undo:
+		parts = parts.duplicate()
+		parts.reverse()
+	for part: Dictionary in parts:
+		var op := op_of(part, editor, undo)
+		if not op.is_empty():
+			ops.append(op)
+	return ops
+
+
 ## `op` as bytes (no objects inside: op_of() turned them into their JSON forms).
 static func encode(op: Dictionary) -> PackedByteArray:
 	return var_to_bytes(op)

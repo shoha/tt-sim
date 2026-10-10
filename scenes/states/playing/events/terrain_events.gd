@@ -1,21 +1,23 @@
 class_name TerrainEvents
 extends Node
 
-## A table's terrain events (TerrainEvent: a bridge collapsing, a forest falling): the motion
-## every board plays, and on the GM's side the map change it ends in. One per LiveEdits, on
-## every peer (its child, made by LiveEdits.create, freed with it).
+## A table's terrain events (TerrainEvent: a bridge collapsing, a forest falling, a fire): the
+## motion every board plays, and on the GM's side the map change it ends in. One per
+## LiveEdits, on every peer (its child, made by LiveEdits.create, freed with it).
 ##
 ## The GM's side (the host, or solo play): start() checks the event can play on this map
 ## (refusal_for), stamps it with the table's key and the host's lead, broadcasts it
 ## (NetworkGameSync.broadcast_terrain_event, behind any op still queued) and plays it after
 ## the lead. Once it has played, the map change is made on the live editor as one ordinary
-## history entry, labelled as the preset's tile is ("Drop bridge", "Topple trees", label_for;
-## the entry carries "preset": its kind, for PlayEvents' toast with Undo, which is the GM's
-## alone): the crossing removed, or a Clear over the area
-## reaching CLEAR_REACH times the radius (the Clear's falloff is soft at its rim, so the trees
-## that fell are well inside it). LiveEdits turns that entry into an op like any edit, so every
-## client gets it after the motion, a late joiner gets only the op, and an undo restores the
-## map without replaying anything.
+## history entry, labelled as the preset's tile is ("Drop bridge", "Topple trees", "Start a
+## fire", label_for; the entry carries "preset": its kind, for PlayEvents' toast with Undo,
+## which is the GM's alone): the crossing removed, or a Clear over the area reaching
+## CLEAR_REACH times the radius (the Clear's falloff is soft at its rim, so the trees that fell
+## are well inside it), or for a fire a group of two strokes (_burn: the burnt biome painted
+## over the forest, or a Clear on a palette without it, then ash laid over the ground;
+## FireSweep.plan_for). LiveEdits turns that entry into ops like any edit (one per stroke), so
+## every client gets them after the motion, a late joiner gets only the ops, and an undo
+## restores the map without replaying anything.
 ##
 ## A client's side: an event from the host (NetworkGameSync.terrain_event_received) is decoded
 ## (TerrainEvent.decode refuses anything out of bounds), taken only for this table and only
@@ -23,10 +25,10 @@ extends Node
 ## camera is elsewhere still learns of it: the event shows a glass chip in its own icon
 ## ("The bridge fell", show_notice), without Undo (UI_TASTE G13, G14).
 ##
-## The effects (BridgeCollapse, ForestFall) live under the map root, stepped here by one clock
-## (advance(), which a test can call to jump ahead). Each stays, drawing nothing, until its
-## change has landed (the crossing node gone, the scatter rebuilt) or RELEASE_AFTER_S has
-## passed, and then lets go of what it hid. At most MAX_ACTIVE play at once.
+## The effects (BridgeCollapse, ForestFall, FireSweep) live under the map root, stepped here
+## by one clock (advance(), which a test can call to jump ahead). Each stays, drawing nothing,
+## until its change has landed (the crossing node gone, the scatter rebuilt) or
+## RELEASE_AFTER_S has passed, and then lets go of what it hid. At most MAX_ACTIVE play at once.
 
 ## The GM's side started an event: its wire bytes (tests hand them to a client's service).
 signal started(bytes: PackedByteArray)
@@ -41,6 +43,7 @@ const MAX_ACTIVE := 4
 const NOTICES := {
 	TerrainEvent.Kind.BRIDGE_COLLAPSE: "The bridge fell",
 	TerrainEvent.Kind.FOREST_FALL: "Trees fell in the forest",
+	TerrainEvent.Kind.FIRE: "A fire swept through the forest",
 }
 ## How long a player's notice stays: past the motion, so a player who looks up still finds it.
 const NOTICE_S := 5.0
@@ -55,7 +58,10 @@ const BUSY := "Something is already happening there."
 const TOO_MANY := "Let the last events finish first."
 const NO_BRIDGE := "Click a bridge to drop it."
 const NO_TREES := "No trees stand there. Click in a forest."
+const NO_FOREST := "Only a forest burns. Click in a forest."
 const NOT_GM := "Only the GM starts events."
+## Kinds that take the trees in a circle: two of them over the same trees would fight for them.
+const TREE_KINDS: Array[int] = [TerrainEvent.Kind.FOREST_FALL, TerrainEvent.Kind.FIRE]
 
 ## The live edits this belongs to (its parent).
 var edits: LiveEdits = null
@@ -96,7 +102,8 @@ func _process(delta: float) -> void:
 
 
 ## Why `event` cannot play on this map now, or "": too many under way, the bridge gone, not a
-## bridge or already falling, or no tree standing in the circle.
+## bridge or already falling, trees in the circle already falling or burning, or no tree (for
+## a fire, none but the burnt forest's own snags) standing in the circle.
 func refusal_for(event: TerrainEvent) -> String:
 	if _active.size() >= MAX_ACTIVE:
 		return TOO_MANY
@@ -110,13 +117,18 @@ func refusal_for(event: TerrainEvent) -> String:
 				var other: TerrainEvent = entry.event
 				if other.kind == event.kind and other.crossing_id == event.crossing_id:
 					return BUSY
-		TerrainEvent.Kind.FOREST_FALL:
+		TerrainEvent.Kind.FOREST_FALL, TerrainEvent.Kind.FIRE:
 			for entry in _active:
 				var other: TerrainEvent = entry.event
 				var reach := other.radius_m + event.radius_m
-				if other.kind == event.kind and other.centre.distance_to(event.centre) < reach * 0.5:
+				var near := other.centre.distance_to(event.centre) < reach * 0.5
+				if other.kind in TREE_KINDS and near:
 					return BUSY
-			if ForestFall.trees_near(editor.scatter, event.centre, event.radius_m, 1).is_empty():
+			if event.kind == TerrainEvent.Kind.FIRE:
+				var root := editor.palette_root
+				if FireSweep.burnable(editor.scatter, event.centre, event.radius_m, root, 1).is_empty():
+					return NO_FOREST
+			elif ForestFall.trees_near(editor.scatter, event.centre, event.radius_m, 1).is_empty():
 				return NO_TREES
 	return ""
 
@@ -225,6 +237,8 @@ func _make_effect(event: TerrainEvent) -> Node3D:
 			node = BridgeCollapse.new()
 		TerrainEvent.Kind.FOREST_FALL:
 			node = ForestFall.new()
+		TerrainEvent.Kind.FIRE:
+			node = FireSweep.new()
 	editor.map_root.add_child(node)
 	if not node.call(&"setup", editor, event):
 		node.queue_free()
@@ -254,8 +268,40 @@ func _apply(event: TerrainEvent) -> void:
 				var radius := event.radius_m * CLEAR_REACH * editor.map_scale()
 				editor.stroke_dab(at, at, radius, CLEAR_SECONDS)
 				editor.end_stroke()
+		TerrainEvent.Kind.FIRE:
+			_burn(event)
 	_applying = null
 	applied.emit(event)
+
+
+## A fire's change, as one history entry of two strokes (AuthoringHistory's group): the burnt
+## biome painted over the forest (its snags and litter replace the trees there, MaskStroke's
+## contest thinning the forest just past it), or a Clear as a fall's where the palette has no
+## burnt biome, then ash (or its stand-in) laid over the ground, which keeps what grows there
+## (FireSweep.plan_for). One undo takes both back.
+func _burn(event: TerrainEvent) -> void:
+	var editor := edits.editor
+	var root := editor.palette_root
+	var plan := FireSweep.plan_for(PaletteLibrary.biomes(root), PaletteLibrary.surfaces(root))
+	var at := editor.to_world(Vector3(event.centre.x, 0.0, event.centre.y))
+	var scale := editor.map_scale()
+	var biome := String(plan.biome)
+	editor.history.begin_group()
+	# A map whose biome list is full (MapDocument.MAX_BIOMES) takes the Clear too.
+	if biome != "" and editor.begin_stroke(MaskBrush.PAINT, biome):
+		var reach := event.radius_m * FireSweep.BURN_REACH * scale
+		editor.stroke_dab(at, at, reach, FireSweep.BURN_SECONDS)
+		editor.end_stroke()
+	elif editor.begin_stroke(MaskBrush.CLEAR):
+		editor.stroke_dab(at, at, event.radius_m * CLEAR_REACH * scale, CLEAR_SECONDS)
+		editor.end_stroke()
+	var surface := String(plan.surface)
+	if surface != "" and editor.surface_refusal(surface) == "":
+		if editor.begin_surface_stroke(surface, false):
+			var spread := event.radius_m * FireSweep.ASH_REACH * scale
+			editor.stroke_dab(at, at, spread, FireSweep.ASH_SECONDS)
+			editor.end_stroke()
+	editor.history.end_group(label_for(event.kind))
 
 
 func _on_recorded(entry: Dictionary) -> void:

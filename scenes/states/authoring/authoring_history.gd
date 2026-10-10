@@ -18,8 +18,13 @@ extends RefCounted
 ## a long session of huge strokes cannot grow without bound. The newest entry always stays.
 ##
 ## Observers. recorded, undone and redone carry the entry itself, after its action has run:
-## the table's live edits (LiveEdits) turn each into one op (LiveEditCodec.op_of, the before
+## the table's live edits (LiveEdits) turn each into ops (LiveEditCodec.ops_of, the before
 ## side for an undo) without reaching into the stacks.
+##
+## Groups. Between begin_group() and end_group() every record() goes into one group instead
+## of the stack, and end_group() records them as one entry whose "parts" are those entries in
+## order: its redo runs theirs in order, its undo theirs in reverse, so one Ctrl+Z takes back
+## a change made of several strokes (a fire: the burnt biome, then the ash).
 
 signal changed
 ## A new entry went onto the undo stack (record()).
@@ -37,17 +42,60 @@ var max_bytes: int = MAX_BYTES
 
 var _undo: Array[Dictionary] = []
 var _redo: Array[Dictionary] = []
+## The entries of the open group (begin_group), or null when none is open.
+var _group: Variant = null
 
 
 ## Records a done action. Clears the redo stack; drops the oldest entries past MAX_ENTRIES or
-## max_bytes.
+## max_bytes. Inside a group (begin_group) it joins the group instead.
 func record(entry: Dictionary) -> void:
+	if _group != null:
+		(_group as Array).append(entry)
+		return
 	_undo.append(entry)
 	_redo.clear()
 	while _undo.size() > 1 and (_undo.size() > MAX_ENTRIES or held_bytes() > max_bytes):
 		_undo.pop_front()
 	recorded.emit(entry)
 	changed.emit()
+
+
+## Opens a group: the entries recorded until end_group() become one (see the header).
+func begin_group() -> void:
+	_group = []
+
+
+## Closes the group and records its entries as one entry labelled `label`, {"label", "undo",
+## "redo", "parts", "bytes"}, which it returns; a group with nothing in it records nothing
+## and returns {}.
+func end_group(label: String) -> Dictionary:
+	var parts: Array = _group if _group != null else []
+	_group = null
+	if parts.is_empty():
+		return {}
+	var held := 0
+	for part: Dictionary in parts:
+		held += int(part.get("bytes", 0))
+	var entry := {
+		"label": label,
+		"undo": run_parts.bind(parts, false),
+		"redo": run_parts.bind(parts, true),
+		"parts": parts,
+		"bytes": held,
+	}
+	record(entry)
+	return entry
+
+
+## Runs the redo of every entry of `parts` in order (`redo`), or their undo in reverse.
+static func run_parts(parts: Array, redo: bool) -> void:
+	var ordered := parts.duplicate()
+	if not redo:
+		ordered.reverse()
+	for part: Dictionary in ordered:
+		var action: Callable = part.get("redo" if redo else "undo", Callable())
+		if action.is_valid():
+			action.call()
 
 
 ## Bytes held by every entry that says how much it holds.

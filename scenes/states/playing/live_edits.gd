@@ -9,8 +9,9 @@ extends Node
 ##
 ## The GM's side (the host, or solo play): the brushes run on `editor`, which records into
 ## `history`. Every entry recorded, undone or redone becomes one op (LiveEditCodec.op_of: its
-## after side, or its before side for an undo) once the editor's height work has drained, in
-## the order they happened; each is appended to `op_log` and broadcast. A client's side: ops
+## after side, or its before side for an undo), or one per part for a group (a fire's burnt
+## biome and ash, LiveEditCodec.ops_of), once the editor's height work has drained, in the
+## order they happened; each is appended to `op_log` and broadcast. A client's side: ops
 ## arrive through NetworkGameSync, are checked against its own document and applied in order
 ## through a LiveEditCodec.Queue stepped once a frame. Clients never send edits.
 ##
@@ -196,14 +197,12 @@ func _send_pending() -> void:
 	var items := _pending.duplicate()
 	_pending.clear()
 	for item: Dictionary in items:
-		var op := LiveEditCodec.op_of(item.entry, editor, item.undo)
-		if op.is_empty():
-			continue
-		var bytes := LiveEditCodec.encode(op)
-		op_log.append(bytes)
-		op_logged.emit(op_log.size() - 1, bytes)
-		if NetworkManager.is_host():
-			NetworkManager.game_sync.broadcast_live_edit(table_key, op_log.size() - 1, bytes)
+		for op in LiveEditCodec.ops_of(item.entry, editor, item.undo):
+			var bytes := LiveEditCodec.encode(op)
+			op_log.append(bytes)
+			op_logged.emit(op_log.size() - 1, bytes)
+			if NetworkManager.is_host():
+				NetworkManager.game_sync.broadcast_live_edit(table_key, op_log.size() - 1, bytes)
 
 
 # =============================================================================

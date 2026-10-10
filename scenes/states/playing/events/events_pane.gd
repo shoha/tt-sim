@@ -17,9 +17,10 @@ extends VBoxContainer
 ## (thumbnails and labels as AuthoringPanel draws them), WaterToolPane and BridgeToolPane as
 ## they are (their own headers hidden: the tile above names the brush), and one Advanced
 ## foldout with the exact size and strength. The presets with spectacle (EventPresets: a bridge
-## dropping, trees toppling) have their own field above Brushes, under EventPresets.HEADING;
-## the picked tool's controls stand directly under its own field (show_tool moves them), so a
-## picked preset's gesture line, and Topple's Advanced size, sit under the preset tiles rather
+## dropping, trees toppling, a fire) have their own field above Brushes, under
+## EventPresets.HEADING, one row of three; the picked tool's controls stand directly under its
+## own field (show_tool moves them), so a picked preset's gesture line, and Topple's and the
+## fire's Advanced size, sit under the preset tiles rather
 ## than two rows away under the Brushes grid. While the map takes events but has no bridge, a
 ## caption under the preset tiles says so (NO_BRIDGE): a disabled tile alone read as one at
 ## rest.
@@ -70,6 +71,8 @@ const TOOL_HINTS := {
 	EventPresets.COLLAPSE: "Click a bridge: it breaks and falls into the water for everyone.",
 	EventPresets.TOPPLE:
 	"Click in a forest: the marked trees fall away from the click. Drag out for a wider stand.",
+	EventPresets.IGNITE:
+	"Click in a forest: fire spreads out from the click and leaves ash. Drag out for a wider fire.",
 }
 
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT

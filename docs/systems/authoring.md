@@ -192,8 +192,9 @@ Probe and numbers:
   (`ToolRegistry.tools(PLAY)`) as toggling tiles, then the picked brush's controls built from
   the authoring panes' parts (Sculpt's shape tiles, the palette biome and surface tiles,
   `WaterToolPane` and `BridgeToolPane` with their headers hidden, one Advanced foldout with
-  size and strength); the presets with spectacle (Drop bridge, Topple trees; fire is a later
-  card) take a field headed "Happenings" (`EventPresets.HEADING`) above the brushes. The
+  size and strength); the presets with spectacle (Drop bridge, Topple trees, Start a fire)
+  take a field headed "Happenings" (`EventPresets.HEADING`), one row of three, above the
+  brushes. The
   picked tool's controls stand directly under its own field (`show_tool` moves them), and a
   preset put away takes its line and Advanced with it (`PlayEvents` forgets the pick), so the
   pane is as fresh. The look's foot (Revert look, Save look) steps out under it. A map
@@ -243,7 +244,13 @@ Probe and numbers:
   toast (`TerrainEvents.NO_TREES`). The cursor pills and the brush readouts are glass chips
   (`MapOverlayUtils.draw_chip`: the hint bar's Chip, chalk caption 14). Hint rows: Drop bridge
   Click, Ctrl+Z, Esc "Put away"; Topple trees Click, Drag "Wider stand", `[ ]`, Ctrl+Z, Esc
-  "Put away" (the first key names the preset). A fired event goes to `TerrainEvents.start`;
+  "Put away" (the first key names the preset). Start a fire (`IgniteMode`, a ToppleMode:
+  the same ring, click and drag; icon Tabler `flame`) draws the ochre ring with "Start a
+  fire" and no marks (the whole forest in the ring burns); where no tree stands in the ring
+  (the burnt forest's own snags do not count, `FireSweep.burnable`) the ring is chalk_soft
+  with "Only a forest burns" (`IgniteMode.ring_look`) and a release is refused through the
+  brush's `refused` (`TerrainEvents.NO_FOREST`). Hint row: Click "Start a fire", Drag "Wider
+  fire", `[ ]`, Ctrl+Z, Esc. A fired event goes to `TerrainEvents.start`;
   the drawer steps aside as it starts (`stroke_started`) and the preset stays armed for the
   next one, until Drop bridge has no bridge left and puts itself away.
 - **Terrain events** (`TerrainEvent`, `utils/terrain_event.gd`; `TerrainEvents`,
@@ -259,14 +266,25 @@ Probe and numbers:
   (`TerrainEvents.label_for`, `EventPresets.for_kind`; so Ctrl+Z says "Topple trees undone"),
   with `entry.preset` its kind (`_on_recorded` is connected before PlayEvents hears the
   history, so the label is set first): the crossing removed (`crossings.remove`), or one CLEAR
-  dab of 2 s at 1.3x the radius (99.8 % of the density at the fall's radius). LiveEdits sends
-  it as an ordinary op, so a late joiner gets only the op and an undo restores the map without
-  replaying anything. The GM's toast for the entry always offers Undo
+  dab of 2 s at 1.3x the radius (99.8 % of the density at the fall's radius), or for a fire
+  ("Start a fire", 4 s) a group of two strokes (`TerrainEvents._burn`,
+  `AuthoringHistory.begin_group`/`end_group`: one entry whose `parts` redo in order and undo
+  in reverse): the burnt biome painted over the forest (one dab at 1.2x the radius for 3 s:
+  MaskStroke's contest hands the ground to it out to about the radius and thins the forest
+  past it), then ash laid over it (one Paint dab at 1.25x for 2.5 s), as
+  ASSET_PIPELINE.md "Fire" says (`FireSweep.plan_for`: the palette biome whose `biome` is
+  `burnt_forest`, else a Clear as a fall's, which a map with a full biome list gets too; the
+  surface `ash`, else `dirt_peat`, else none). LiveEdits sends an entry as its ops
+  (`LiveEditCodec.ops_of`: one, or one per part, reversed for an undo), so a late joiner gets
+  only the ops (a fire's two) and an undo restores the map without replaying anything. A fire
+  or a fall refuses a circle where either is already under way, and a fire one with no tree
+  but the burnt forest's snags. The GM's toast for the entry always offers Undo
   (`PlayEvents.PRESET_DONE`: "The bridge fell for everyone at the table", "The trees fell
-  ..."); a client's side shows its players a chip without Undo as the event starts playing
-  (`TerrainEvents.show_notice`, `NOTICES`: "The bridge fell", "Trees fell in the forest", 5 s;
-  UI_TASTE G13, G14). Both wear the event's own icon (`icon_for`: `bridge-broken`,
-  `tree-falling`) in the info tint. An effect stays, drawing nothing, until
+  ...", "The forest burned ..."); a client's side shows its players a chip without Undo as
+  the event starts playing (`TerrainEvents.show_notice`, `NOTICES`: "The bridge fell", "Trees
+  fell in the forest", "A fire swept through the forest", 5 s; UI_TASTE G13, G14). Each wears
+  the event's own icon (`icon_for`: `bridge-broken`, `tree-falling`, `flame`) in the info
+  tint. An effect stays, drawing nothing, until
   its change lands (the crossing node freed, every held cell's scatter rebuilt) or
   `RELEASE_AFTER_S` (8 s), then lets go of what it hid (`release()`).
 - **The effects** (`scenes/states/playing/events/`), bounded so a frame only sets transforms:
@@ -304,7 +322,20 @@ Probe and numbers:
   on arcs, and a foam ring spreading to twice the piece's size over about 1.5 s, white on top
   over a pale blue shade and a bluer clear rim (eight tongues a fifth of a plank wide read as
   confetti at tabletop zoom; round puffs as cotton or steam). Eight puffs a splash, so all
-  ten pieces fit the pool. Headless,
+  ten pieces fit the pool. `FireSweep` (a ForestFall: the same search, stand-ins, holds and
+  release through its hooks `_find`, `_make_puffs`, `_tree_entry`) runs a front out from the
+  click (the nearest tree catches at once, the farthest 2.0 s later, 0.25 s jitter); each
+  tree burns 1.2-1.5 s: a squat oval of firelight at its foot, four overlapping waves of one
+  bold flame (a teardrop licking on the shader's clock, vermilion at its rim through amber to
+  a pale gold core) and a lick, a spark from about half the trees, its crown standing whole
+  for 35 % of the burn, then drawing in to a thin charred shape and sinking away
+  (`burn_transform`), and a firelit mauve billow rising where it stood; four lavender billows
+  climb over the stand as a column. Three pools sized so one fire's every puff fits at once
+  (`EventPuffs.new(capacity, priority)`: glow 48 at priority 2, smoke 52 at 3, flames 288 at
+  4, so the flames draw over the smoke over the glow); every random draw is made in setup.
+  Fire's kinds are luminous (unshaded with no shade underneath) and hold their alpha to 65 %
+  of their life (`fire_fade`); a glow lying flat as a ring does vanished under the ground's
+  own depth (the proximity fade), so it stands. Headless,
   `surface_get_arrays` may return nothing and MultiMesh transforms read identity, so the
   effects compute from the document's rows and tolerate empty meshes; tests check behaviour,
   not pixels (the render job `terrain_events` checks the look).

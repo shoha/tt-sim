@@ -277,7 +277,7 @@ func test_a_live_raise_undoes_through_the_live_history_and_regrounds_a_token() -
 func test_the_presets_stand_above_the_brushes_and_lead_their_hints() -> void:
 	var pane := EventsPane.new()
 	add_child_autofree(pane)
-	assert_eq(pane.preset_ids(), [EventPresets.COLLAPSE, EventPresets.TOPPLE])
+	assert_eq(pane.preset_ids(), [EventPresets.COLLAPSE, EventPresets.TOPPLE, EventPresets.IGNITE])
 	for id in pane.preset_ids():
 		assert_true(pane.preset_field.tiles.has_tile(id), "%s has a tile" % id)
 		assert_false(pane.tool_field.tiles.has_tile(id), "%s is no brush" % id)
@@ -300,7 +300,26 @@ func test_the_presets_stand_above_the_brushes_and_lead_their_hints() -> void:
 	assert_eq(topple[0], {"key": "Click", "action": "Topple trees"})
 	assert_eq(topple[1], {"key": "Drag", "action": "Wider stand"})
 	assert_eq(topple[-3]["key"], PlayEvents.SIZE_KEY, "Topple's ring has a size")
-	for kind in [TerrainEvent.Kind.BRIDGE_COLLAPSE, TerrainEvent.Kind.FOREST_FALL]:
+	assert_eq(EventPresets.find(EventPresets.IGNITE).label, IgniteMode.IGNITE_TEXT)
+	assert_eq(EventPresets.find(EventPresets.IGNITE).icon, "flame")
+	var ignite := PlayEvents.hints_for(EventPresets.IGNITE)
+	assert_lte(ignite.size(), 5, "one line beside Help")
+	assert_eq(ignite[0], {"key": "Click", "action": "Start a fire"})
+	assert_eq(ignite[1], {"key": "Drag", "action": "Wider fire"})
+	assert_eq(ignite[-3]["key"], PlayEvents.SIZE_KEY, "the fire's ring has a size")
+	assert_eq(ignite[-1], {"key": "Esc", "action": "Put away"})
+	# Off a forest the ring says so in chalk, not the "do" ochre.
+	assert_eq(IgniteMode.ring_look(true), {"tint": ToppleMode.TINT, "text": "Start a fire"})
+	assert_eq(
+		IgniteMode.ring_look(false),
+		{"tint": CollapseMode.REFUSED_TINT, "text": IgniteMode.NOT_A_FOREST}
+	)
+	assert_eq(
+		TerrainEvents.NOTICES[TerrainEvent.Kind.FIRE],
+		"A fire swept through the forest",
+		"a player's chip"
+	)
+	for kind in TerrainEvent.KINDS:
 		assert_true(PlayEvents.PRESET_DONE.has(kind), "every preset has its toast")
 		assert_true(TerrainEvents.NOTICES.has(kind), "and its players' notice")
 		# The history entry, its undo toast and every chip say and show what the tile does.
@@ -428,6 +447,19 @@ func test_a_preset_arms_the_board_and_a_map_without_a_bridge_refuses_collapse() 
 	assert_eq(fired.size(), 1, "a click fires a forest fall")
 	assert_eq((fired[0] as TerrainEvent).kind, TerrainEvent.Kind.FOREST_FALL)
 	assert_almost_eq((fired[0] as TerrainEvent).radius_m, brush.get_radius(), 0.01)
+	# Start a fire on a map with no forest: the click says why and lights nothing.
+	assert_true(_events.available()[EventPresets.IGNITE])
+	_events.pick(EventPresets.IGNITE)
+	assert_true(brush.mode is IgniteMode, "the fire's ring is out")
+	var lit := []
+	var refused := []
+	(brush.mode as IgniteMode).fired.connect(func(event: TerrainEvent) -> void: lit.append(event))
+	brush.refused.connect(func(why: String) -> void: refused.append(why))
+	brush.hit = RAISE_AT
+	brush.mode.press(brush)
+	brush.mode.end(brush)
+	assert_eq(lit.size(), 0, "no forest, no fire")
+	assert_eq(refused, [TerrainEvents.NO_FOREST], "only a forest burns")
 	_events.put_away()
 	assert_eq(brush.min_stroke_seconds, 0.0, "authoring's click again")
 

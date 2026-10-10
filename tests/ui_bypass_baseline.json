@@ -84,6 +84,9 @@
 		"res://scenes/states/playing/events/event_puffs.gd": {
 			"colour": 1
 		},
+		"res://scenes/states/playing/events/fire_sweep.gd": {
+			"colour": 7
+		},
 		"res://scenes/states/playing/events/forest_fall.gd": {
 			"colour": 2
 		},
