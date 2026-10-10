@@ -76,6 +76,7 @@
 		"res://tests/unit/test_sculpt_tool.gd",
 		"res://tests/unit/test_starting_landform.gd",
 		"res://tests/unit/test_submerged_cue.gd",
+		"res://tests/unit/test_terrain_events.gd",
 		"res://tests/unit/test_terrain_rules.gd",
 		"res://tests/unit/test_token_grounding.gd",
 		"res://tests/unit/test_tool_registry.gd",

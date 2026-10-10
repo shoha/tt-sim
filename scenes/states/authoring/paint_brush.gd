@@ -7,6 +7,8 @@ extends BrushMode
 ## refuses (every paint slot holds paint) emits the brush's `refused` with
 ## AuthoringEditor.surface_refusal's reason. The ring is the surface's colour, red to erase.
 
+const ERASE_TEXT := "Erase paint"
+
 ## The palette surface the brush paints, and the ring's tint.
 var surface: String = ""
 var tint: Color = Color(0.9, 0.82, 0.66)
@@ -28,5 +30,13 @@ func press(brush: BrushTool) -> bool:
 
 ## Red while erasing: Ctrl held at the press during a stroke, else Ctrl held now.
 func cursor_tint(brush: BrushTool) -> Color:
-	var erasing := brush.press_ctrl if brush.stroking else brush.ctrl
-	return BrushCursor.CLEAR_TINT if erasing else tint
+	return BrushCursor.CLEAR_TINT if _erasing(brush) else tint
+
+
+## The red ring names its erase under it ("Erase paint"), as Water and Bridge do.
+func cursor_text(brush: BrushTool) -> String:
+	return ERASE_TEXT if _erasing(brush) else ""
+
+
+func _erasing(brush: BrushTool) -> bool:
+	return brush.press_ctrl if brush.stroking else brush.ctrl

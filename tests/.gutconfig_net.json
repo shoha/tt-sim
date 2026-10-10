@@ -30,6 +30,7 @@
 		"res://tests/unit/test_session_party.gd",
 		"res://tests/unit/test_steam_launch_detection.gd",
 		"res://tests/unit/test_table_mover.gd",
+		"res://tests/unit/test_terrain_event.gd",
 		"res://tests/unit/test_stream_peer_queue.gd",
 		"res://tests/unit/test_stream_send_window.gd",
 		"res://tests/unit/test_token_spawner_network_tracking.gd",

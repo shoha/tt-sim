@@ -53,6 +53,9 @@ var table_key: int = 0
 var sends: bool = true
 ## Why the table stopped taking ops (a refused op), or "".
 var problem: String = ""
+## The table's terrain events (a bridge collapsing, a forest falling): their motion on this
+## board, and on the GM's side the edit each ends in (TerrainEvents, a child).
+var events: TerrainEvents = null
 
 ## The GM's side: {"entry", "undo"} recorded but not yet sent, in order.
 var _pending: Array[Dictionary] = []
@@ -94,6 +97,9 @@ static func create(
 		service.history.redone.connect(service._on_recorded)
 	else:
 		service._queue = LiveEditCodec.Queue.new(service.editor)
+	service.events = TerrainEvents.new()
+	service.events.setup(service)
+	service.add_child(service.events)
 	return service
 
 

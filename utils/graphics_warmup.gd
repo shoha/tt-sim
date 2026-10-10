@@ -24,6 +24,7 @@ const COVERED_SHADERS := [
 	"res://shaders/avatar_figure.gdshader",
 	"res://shaders/avatar_figure_double_sided.gdshader",
 	"res://shaders/authored_ground_skirt.gdshader",
+	"res://shaders/event_puff.gdshader",
 	"res://shaders/grid_overlay.gdshader",
 	"res://shaders/lofi_canvas.gdshader",
 	"res://shaders/occlusion_fade.gdshader",

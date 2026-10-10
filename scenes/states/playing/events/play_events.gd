@@ -25,7 +25,13 @@ extends Node
 ## works on ground under the glass. The brush stays out, named in the hint bar, and the
 ## Events rail item stays tinted (armed_changed); the item opens the pane again to change it.
 ## The canopy over the ring opens only while a press is held (BrushTool.fade_held_only), so
-## the GM sees the result whole once they let go.
+## the GM sees the result whole once they let go. A click that stays on its spot gets at least
+## PLAY_CLICK_SECONDS of exposure (BrushTool.min_stroke_seconds), so it shows.
+##
+## Presets (EventPresets: Collapse, Topple) arm on the same brush as the brushes do. Their
+## modes fire a TerrainEvent, which the table's TerrainEvents plays on every board and ends in
+## an ordinary live edit; that entry, labelled for the event, always offers Undo in a toast
+## ("The bridge fell for everyone at the table"), and its undo restores the map at once.
 
 ## The brush was armed with tool `tool_id`, or put away (&"").
 signal armed_changed(tool_id: StringName)
@@ -56,6 +62,17 @@ const NEWER_EDITS := "Newer changes stand on that one: undo them first with Ctrl
 const SIZE_KEY := "[ ]"
 ## Past tenses an edit label's first word does not take by adding "d" or "ed".
 const IRREGULAR_PAST := {"Thin": "Thinned", "Cut": "Cut", "Lay": "Laid"}
+## A preset's toast once its change is made (the history entry's "preset" kind).
+const PRESET_DONE := {
+	TerrainEvent.Kind.BRIDGE_COLLAPSE: "The bridge fell for everyone at the table",
+	TerrainEvent.Kind.FOREST_FALL: "The trees fell for everyone at the table",
+}
+const NO_BRIDGE := "No bridge stands on this map to collapse."
+## In play a click (a stroke that never left its spot) gets at least this much exposure
+## (BrushTool.min_stroke_seconds), so a GM's quick click shows on the board: a Sculpt raise of
+## about 0.2 m at the default 4 m size where authoring's CLICK_SECONDS left a few millimetres
+## (measured with real input in the 2a review), a firm patch of thinning, a copse of a biome.
+const PLAY_CLICK_SECONDS := 0.6
 
 ## The pane this controls (set by setup()).
 var pane: EventsPane = null
@@ -91,9 +108,10 @@ static func is_large(entry: Dictionary) -> bool:
 	return int(entry.get("bytes", 0)) >= LARGE_EDIT_BYTES
 
 
-## The hint bar's keys while `tool_id` is out: its gestures, then in the same three slots for
-## every brush its size key (SIZE_KEY), Undo, and Esc naming the brush it puts away (at most
-## five, so with Help beside them the row keeps one line at 720p with the drawer open);
+## The hint bar's keys while `tool_id` (a brush or a preset) is out: its gestures, then in the
+## same three slots for every brush its size key (SIZE_KEY; Collapse has no size), Undo, and
+## Esc naming what it puts away (at most five, so with Help beside them the row keeps one line
+## at 720p with the drawer open);
 ## `sculpt_tile` names the Sculpt drag, `water_shape` the Water drag.
 static func hints_for(
 	tool_id: StringName, sculpt_tile: int = HeightBrush.RAISE, water_shape: int = 0
@@ -122,13 +140,26 @@ static func hints_for(
 		BridgeTool.ID:
 			rows = [["Left-drag", "Lay a crossing"], ["Ctrl+click", "Remove one"]]
 			size = "Width"
-	var tool := ToolRegistry.find(tool_id)
+		EventPresets.COLLAPSE:
+			rows = [["Click", "Collapse a bridge"]]
+			size = ""
+		EventPresets.TOPPLE:
+			rows = [["Click", "Topple trees"], ["Left-drag", "Topple a wider stand"]]
+	var tool := find_tool(tool_id)
 	var put_away := "Put away " + tool.label if tool != null else "Put away"
-	rows.append_array([[SIZE_KEY, size], ["Ctrl+Z", "Undo"], ["Esc", put_away]])
+	if size != "":
+		rows.append([SIZE_KEY, size])
+	rows.append_array([["Ctrl+Z", "Undo"], ["Esc", put_away]])
 	var hints: Array[Dictionary] = []
 	for row: Array in rows:
 		hints.append({"key": row[0], "action": row[1]})
 	return hints
+
+
+## The brush or preset with id `id` (ToolRegistry, EventPresets), or null.
+static func find_tool(id: StringName) -> ToolDescriptor:
+	var tool := ToolRegistry.find(id)
+	return tool if tool != null else EventPresets.find(id)
 
 
 ## History label `label` in the past tense, for the large-edit toast: its first word's past
@@ -179,14 +210,25 @@ func refusal() -> String:
 	return refusal_for(NetworkManager.has_gm_access(), _lpc.loaded_map_document, _lpc.live_edits)
 
 
-## The play brushes the table's map can take now (tool id -> true): none while refusal()
-## says why, else each tool's works_on() on the live editor.
+## The play brushes and presets the table's map can take now (tool id -> true): none while
+## refusal() says why, else each tool's works_on() on the live editor, and Collapse while a
+## bridge stands.
 func available() -> Dictionary:
 	var out := {}
 	var ok := refusal() == ""
 	for tool in ToolRegistry.tools(ToolDescriptor.PLAY):
 		out[tool.id] = ok and tool.works_on(_lpc.live_edits.editor)
+	out[EventPresets.TOPPLE] = ok
+	out[EventPresets.COLLAPSE] = ok and has_bridge(_lpc.live_edits.editor.document)
 	return out
+
+
+## Whether `doc` has a bridge (a deck crossing) to collapse. Pure.
+static func has_bridge(doc: MapDocument) -> bool:
+	for crossing in doc.crossings:
+		if crossing.is_deck():
+			return true
+	return false
 
 
 ## Shows on the pane why the map takes no live edits, which brushes it can take, and the
@@ -206,12 +248,14 @@ func refresh() -> void:
 ## Picks `tool_id` and arms it on the board when it has what it needs; a refused pick says
 ## why in a toast.
 func pick(tool_id: StringName) -> void:
-	var tool := ToolRegistry.find(tool_id)
+	var tool := find_tool(tool_id)
 	if tool == null or not tool.exists_in(ToolDescriptor.PLAY):
 		return
 	var why := refusal()
 	if why == "" and not tool.works_on(_lpc.live_edits.editor):
 		why = tool.unavailable_tooltip
+	if why == "" and tool_id == EventPresets.COLLAPSE:
+		why = "" if has_bridge(_lpc.live_edits.editor.document) else NO_BRIDGE
 	if why != "":
 		UIManager.show_toast(why, UIManager.TOAST_WARNING, 5.0)
 		refresh()
@@ -229,7 +273,11 @@ func pick(tool_id: StringName) -> void:
 		refresh()
 		return
 	_prepare(tool_id)
+	var mode := brush.mode_for(tool)
+	if mode.has_signal(&"fired") and not mode.is_connected(&"fired", _on_fired):
+		mode.connect(&"fired", _on_fired)
 	brush.fade_held_only = true
+	brush.min_stroke_seconds = PLAY_CLICK_SECONDS
 	brush.activate()
 	_set_armed(tool_id)
 	refresh()
@@ -240,8 +288,10 @@ func put_away() -> void:
 	if _brush != null:
 		if _brush.is_active():
 			_brush.deactivate()
-		# GameMap's brush is authoring's too: its canopy follows the cursor there.
+		# GameMap's brush is authoring's too: its canopy follows the cursor there, and a click
+		# keeps authoring's own exposure.
 		_brush.fade_held_only = false
+		_brush.min_stroke_seconds = 0.0
 	_set_armed(&"")
 	refresh()
 
@@ -428,12 +478,31 @@ func _pick_again(tool_id: StringName) -> void:
 func _on_brush_toggled(active: bool) -> void:
 	if not active and armed != &"":
 		_brush.fade_held_only = false
+		_brush.min_stroke_seconds = 0.0
 		_set_armed(&"")
 		refresh()
 
 
-## A live edit recorded: a large one offers Undo in a toast, while it is still the newest.
+## A preset fired an event: the table's TerrainEvents starts it on every board (a refusal is
+## toasted), and the drawer steps aside, since the spectacle is the board's (UI_TASTE M7).
+func _on_fired(event: TerrainEvent) -> void:
+	var edits := _lpc.live_edits if _lpc != null else null
+	if edits == null or edits.events == null:
+		return
+	var why := edits.events.start(event)
+	if why != "":
+		UIManager.show_toast(why, UIManager.TOAST_WARNING, 5.0)
+		return
+	stroke_started.emit()
+
+
+## A live edit recorded: a preset's change, or a large edit, offers Undo in a toast while it is
+## still the newest.
 func _on_recorded(entry: Dictionary) -> void:
+	if entry.has("preset"):
+		var done: String = PRESET_DONE.get(int(entry.preset), "Changed for everyone at the table")
+		UIManager.show_undo_toast(done, _undo_entry.bind(entry))
+		return
 	if not is_large(entry):
 		return
 	UIManager.show_undo_toast(

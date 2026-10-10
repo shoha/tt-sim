@@ -16,13 +16,18 @@ extends VBoxContainer
 ## parts: the Sculpt tiles (AuthoringPanel.SCULPT_TILES), the palette biome and surface tiles
 ## (thumbnails and labels as AuthoringPanel draws them), WaterToolPane and BridgeToolPane as
 ## they are (their own headers hidden: the tile above names the brush), and one Advanced
-## foldout with the exact size and strength. The presets with spectacle of later cards
-## (bridge collapse, forest falls, fire) go in their own field above Brushes.
+## foldout with the exact size and strength. The presets with spectacle (EventPresets: a bridge
+## collapsing, trees toppling) have their own field above Brushes; a picked preset shows its
+## gesture line, and Topple the Advanced size.
 ##
-## The Brushes tiles toggle: pressing the armed brush's tile again puts it away, so they are
-## a multi-select TileRow kept to one pressed tile by hand.
+## The Presets and Brushes tiles toggle: pressing the armed one's tile again puts it away, so
+## they are multi-select TileRows kept to one pressed tile across both by hand.
+##
+## Spacing (UI_TASTE S4): a group's heading has more room above it than below. The groups,
+## and a brush's gesture line and its own tiles' heading, stand BoxContainerSpaced apart
+## (SPACE_3); every heading sits SPACE_1 above its tiles (TileField).
 
-## A Brushes tile was pressed: `on` picks the tool, off puts it away.
+## A Presets or Brushes tile was pressed: `on` picks the tool, off puts it away.
 signal tool_toggled(tool_id: StringName, on: bool)
 signal sculpt_selected(op: int)
 signal biome_selected(biome_id: String)
@@ -54,9 +59,13 @@ const TOOL_HINTS := {
 	),
 	BridgeTool.ID:
 	"Drag a line across a river or pond, bank to bank. Hold Ctrl and click a crossing to remove it.",
+	EventPresets.COLLAPSE: "Click a bridge: it breaks and falls into the water for everyone.",
+	EventPresets.TOPPLE:
+	"Click in a forest: the trees fall away from the click. Drag out for a wider stand.",
 }
 
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT
+var preset_field: TileField
 var tool_field: TileField
 var notice: Label
 var biome_field: TileField
@@ -88,15 +97,9 @@ func _ready() -> void:
 	notice = _caption("EventsNotice", "")
 	notice.visible = false
 	add_child(notice)
-	tool_field = TileField.new()
-	tool_field.name = "EventsToolField"
-	tool_field.caption = "Brushes"
-	tool_field.tiles.multi_select = true
-	tool_field.tiles.tile_min_size = TOOL_TILE_SIZE
-	tool_field.tiles.columns = TOOL_COLUMNS
-	for tool in ToolRegistry.tools(ToolDescriptor.PLAY):
-		tool_field.tiles.add_tile(tool.id, tool.label, tool.icon, tool.summary)
-	tool_field.tiles.tile_toggled.connect(_on_tool_tile)
+	preset_field = _tiles_field("EventsPresetField", "Presets", EventPresets.all())
+	add_child(preset_field)
+	tool_field = _tiles_field("EventsToolField", "Brushes", ToolRegistry.tools(ToolDescriptor.PLAY))
 	add_child(tool_field)
 	_build_options()
 	_advanced = _build_advanced()
@@ -112,14 +115,25 @@ func tool_ids() -> Array[StringName]:
 	return ids
 
 
-## Shows `tool_id`'s controls (&"" for none), its tile pressed while `pressed` (the brush is
-## out, or waits on a pick in its controls). Silent.
+## The ids of the presets the pane lists, in tile order.
+func preset_ids() -> Array[StringName]:
+	var ids: Array[StringName] = []
+	for preset in EventPresets.all():
+		ids.append(preset.id)
+	return ids
+
+
+## Shows `tool_id`'s controls (&"" for none; a brush or a preset), its tile pressed while
+## `pressed` (it is out, or waits on a pick in its controls). Silent.
 func show_tool(tool_id: StringName, pressed: bool = true) -> void:
 	for id in tool_ids():
 		tool_field.tiles.set_tile_on(id, pressed and id == tool_id)
+	for id in preset_ids():
+		preset_field.tiles.set_tile_on(id, pressed and id == tool_id)
 	for id: StringName in _options:
 		(_options[id] as Control).visible = id == tool_id
-	_advanced.visible = tool_id != &"" and tool_id != WaterTool.ID and tool_id != BridgeTool.ID
+	var sized := tool_id != &"" and not tool_id in [WaterTool.ID, BridgeTool.ID]
+	_advanced.visible = sized and tool_id != EventPresets.COLLAPSE
 	if tool_id == PaintTool.ID:
 		ensure_paint_tiles()
 
@@ -131,11 +145,14 @@ func set_notice(text: String) -> void:
 	notice.visible = text != ""
 
 
-## Enables the Brushes tiles in `available` (tool id -> true) and disables the rest, with the
-## tool's unavailable tooltip saying why.
+## Enables the Presets and Brushes tiles in `available` (tool id -> true) and disables the
+## rest, with the tool's unavailable tooltip saying why.
 func set_available(available: Dictionary) -> void:
-	for tool in ToolRegistry.tools(ToolDescriptor.PLAY):
-		var tile := tool_field.tiles.get_node_or_null(NodePath(String(tool.id))) as Button
+	var listed: Array[ToolDescriptor] = EventPresets.all().duplicate()
+	listed.append_array(ToolRegistry.tools(ToolDescriptor.PLAY))
+	for tool in listed:
+		var field := preset_field if EventPresets.find(tool.id) != null else tool_field
+		var tile := field.tiles.get_node_or_null(NodePath(String(tool.id))) as Button
 		if tile == null:
 			continue
 		var on := bool(available.get(tool.id, false))
@@ -194,13 +211,29 @@ func _on_tool_tile(id: StringName, on: bool) -> void:
 	tool_toggled.emit(id, on)
 
 
+## A toggling tile field of `tools` (presets or brushes) under `caption`.
+func _tiles_field(node_name: String, caption: String, tools: Array[ToolDescriptor]) -> TileField:
+	var field := TileField.new()
+	field.name = node_name
+	field.caption = caption
+	field.tiles.multi_select = true
+	field.tiles.tile_min_size = TOOL_TILE_SIZE
+	field.tiles.columns = TOOL_COLUMNS
+	for tool in tools:
+		field.tiles.add_tile(tool.id, tool.label, tool.icon, tool.summary)
+	field.tiles.tile_toggled.connect(_on_tool_tile)
+	return field
+
+
 func _build_options() -> void:
 	var holder := VBoxContainer.new()
 	holder.name = "EventsOptions"
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.theme_type_variation = &"BoxContainerSpaced"
 	add_child(holder)
-	for tool in ToolRegistry.tools(ToolDescriptor.PLAY):
+	var listed: Array[ToolDescriptor] = EventPresets.all().duplicate()
+	listed.append_array(ToolRegistry.tools(ToolDescriptor.PLAY))
+	for tool in listed:
 		var box := _build_tool_options(tool.id)
 		if box != null:
 			holder.add_child(box)
@@ -228,7 +261,9 @@ func _build_tool_options(tool_id: StringName) -> Control:
 			return bridge_pane
 	var box := VBoxContainer.new()
 	box.name = String(tool_id).to_pascal_case() + "Options"
-	# The theme's tight spacing: the gesture line belongs to the tiles under it (S2).
+	# The gesture line belongs to the group under it (S2), but its tiles' heading still has
+	# more room above than below (S4).
+	box.theme_type_variation = &"BoxContainerSpaced"
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(_caption(box.name + "Hint", String(TOOL_HINTS.get(tool_id, ""))))
 	match tool_id:
@@ -265,9 +300,7 @@ func _biome_field() -> TileField:
 			AuthoringPanel.short_name(String(biome["name"])),
 			"",
 			String(biome["name"]),
-			SwatchTextures.palette_thumbnail(
-				biome["thumbnail"], AuthoringPanel.BIOME_THUMB_PX, palette_root
-			)
+			BiomeThumbnail.of(biome, AuthoringPanel.BIOME_THUMB_PX, palette_root)
 		)
 	field.tiles.selection_changed.connect(
 		func(id: StringName) -> void: biome_selected.emit(String(id))
