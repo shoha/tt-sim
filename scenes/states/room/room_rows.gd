@@ -1,34 +1,37 @@
 class_name RoomRows
 extends RefCounted
 
-## The rows RoomPanel lists, built fresh from RoomModel data on every refresh: a player (a
-## portrait well with the name's initial, the name, a GM chip, the selected map's download
-## state (download_state()), and Choose avatar on your own row) and a shelf map (a thumbnail
-## well, the name and a caption, selectable as a Tile). Every picture sits in a CardThumb
-## well, so a map with no thumbnail shows the well's wash and the name's Fraunces initial,
-## never a flat grey box.
+## The rows RoomPanel lists, built fresh from RoomModel data on every refresh.
+##
+## A player row is a portrait well with the name's initial in Inter semibold, the name on a
+## line of its own (the full width the row has), and a caption line under it in one fixed
+## order in every view: the GM chip, "You", then the selected map's download state as an icon
+## and a word (download_state()). Your own row ends in Choose avatar, a compact framed button
+## with the shirt icon and its name in the tooltip.
+##
+## A shelf map is a plain list row like a player (the ListRow button: clear at rest, the
+## hover wash, the selected fill when picked): its picture, name and a caption. Every map
+## picture sits in a CardThumb well, and a map with no thumbnail shows its painted placeholder
+## (MapPlaceholder), never a flat box.
 
 const PORTRAIT := Vector2(40, 40)
 const SHELF_THUMB := Vector2(64, 36)
 const SHELF_ROW_HEIGHT := 52.0
-## The row's content inset inside its Tile.
+## The row's content inset inside its button.
 const SHELF_INSET := 8.0
-const BAR_HEIGHT := 6.0
+## The download state's icon, beside its caption word.
+const STATE_ICON := Vector2(16, 16)
+const HAS_IT := "Has it"
+const GETS_IT := "Gets it at the table"
 
 static var _thumb_material: ShaderMaterial
 
 
-## A CardThumb well of `well_size` (x 0: fills its width) holding a picture and, when there is
-## none, the initial of `title` in `initial_variation`. The well clips the picture to its shape.
-static func thumb_well(
-	well_size: Vector2, texture: Texture2D, title: String, initial_variation: StringName
-) -> Panel:
-	var well := Panel.new()
-	well.name = "Well"
-	well.theme_type_variation = &"CardThumb"
-	well.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
-	well.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	well.custom_minimum_size = well_size
+## A CardThumb well of `well_size` (x 0: fills its width) holding a map's thumbnail, or its
+## painted placeholder when `texture` is null. `key` and `mood` paint the placeholder
+## (MapPlaceholder.paint()). The well clips the picture to its shape.
+static func map_well(well_size: Vector2, texture: Texture2D, key: String, mood: String) -> Panel:
+	var well := _well(well_size)
 	var picture := TextureRect.new()
 	picture.name = "Picture"
 	picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -37,24 +40,36 @@ static func thumb_well(
 	picture.material = thumb_material()
 	picture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	well.add_child(picture)
+	var placeholder := MapPlaceholder.new()
+	placeholder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	well.add_child(placeholder)
+	set_map_well(well, texture, key, mood)
+	return well
+
+
+## Show `texture` in a map well, or the placeholder painted for `key` in `mood`.
+static func set_map_well(well: Panel, texture: Texture2D, key: String, mood: String) -> void:
+	(well.get_node("Picture") as TextureRect).texture = texture
+	var placeholder := well.get_node("Placeholder") as MapPlaceholder
+	placeholder.visible = texture == null
+	if texture == null:
+		placeholder.paint(key, mood)
+
+
+## A player's portrait: a CardThumb well with the initial of `player_name` in Inter semibold
+## (T3: Fraunces never in rows).
+static func portrait(player_name: String) -> Panel:
+	var well := _well(PORTRAIT)
 	var letter := Label.new()
 	letter.name = "Letter"
-	letter.theme_type_variation = initial_variation
+	letter.theme_type_variation = &"H3"
+	letter.text = LevelCard.initial_of(player_name)
 	letter.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	letter.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	letter.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	letter.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	well.add_child(letter)
-	set_well(well, texture, title)
 	return well
-
-
-## Show `texture` in a well, or the initial of `title` when there is none.
-static func set_well(well: Panel, texture: Texture2D, title: String) -> void:
-	(well.get_node("Picture") as TextureRect).texture = texture
-	var letter := well.get_node("Letter") as Label
-	letter.text = LevelCard.initial_of(title)
-	letter.visible = texture == null
 
 
 ## The level card's shader that keys an older thumbnail's black void out to the well's wash.
@@ -65,16 +80,18 @@ static func thumb_material() -> ShaderMaterial:
 	return _thumb_material
 
 
-## One player: `player` is a RoomModel.players() entry, `selected` the selected map's key ("":
-## no bar). Your own row carries Choose avatar, which calls `choose_avatar`.
+## One player: `player` is a RoomModel.players() entry, `selected` the selected map's key (""
+## for none: no download state). Your own row carries Choose avatar, which calls
+## `choose_avatar`.
 static func player_row(player: Dictionary, selected: String, choose_avatar: Callable) -> Control:
 	var row := HBoxContainer.new()
 	row.name = "Player_%s" % str(player.id).validate_node_name()
 	row.theme_type_variation = &"BoxContainerSpaced"
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var portrait := thumb_well(PORTRAIT, null, str(player.name), &"Heading")
-	portrait.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(portrait)
+	row.custom_minimum_size.y = PORTRAIT.y
+	var face := portrait(str(player.name))
+	face.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(face)
 
 	var info := VBoxContainer.new()
 	info.name = "Info"
@@ -82,18 +99,15 @@ static func player_row(player: Dictionary, selected: String, choose_avatar: Call
 	info.alignment = BoxContainer.ALIGNMENT_CENTER
 	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(info)
+	var name_label := _caption(str(player.name), &"Body")
+	name_label.name = "Name"
+	name_label.tooltip_text = str(player.name)
+	name_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	info.add_child(name_label)
 	var line := HBoxContainer.new()
+	line.name = "CaptionLine"
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	info.add_child(line)
-	var name_label := Label.new()
-	name_label.name = "Name"
-	name_label.text = str(player.name)
-	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	line.add_child(name_label)
-	if player.you:
-		line.add_child(_caption("You", &"Caption", false))
 	if player.gm:
 		var chip := PanelContainer.new()
 		chip.name = "GmBadge"
@@ -102,52 +116,64 @@ static func player_row(player: Dictionary, selected: String, choose_avatar: Call
 		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		chip.add_child(_caption("GM", &"CaptionState", false))
 		line.add_child(chip)
+	if player.you:
+		var you := _caption("You", &"Caption", false)
+		you.name = "You"
+		line.add_child(you)
 	if selected != "":
-		info.add_child(download_state(selected in player.holds))
+		line.add_child(download_state(selected in player.holds))
+	line.visible = line.get_child_count() > 0
 
 	if player.you:
-		var choose := Button.new()
-		choose.name = "ChooseAvatar"
-		choose.text = "Choose avatar"
-		choose.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		choose.pressed.connect(choose_avatar)
-		row.add_child(choose)
+		row.add_child(_choose_avatar_button(choose_avatar))
 	return row
 
 
-## The selected map's download state for one player: a full bar when the player has it, else
-## "Gets it at the table" (an empty bar's inset track does not read on glass). There is no
-## partial fill yet: a player who lacks the map downloads it once it is set out.
+## The selected map's download state for one player, an icon and a word (C7: never colour
+## alone): the lake check and "Has it", or the download arrow and "Gets it at the table".
+## There is no partial progress yet: a player who lacks the map downloads it once it is set
+## out.
 static func download_state(held: bool) -> Control:
-	if not held:
-		var later := _caption("Gets it at the table", &"Caption")
-		later.name = "Download"
-		return later
-	var bar := ProgressBar.new()
-	bar.name = "Download"
-	bar.show_percentage = false
-	bar.max_value = 1.0
-	bar.value = 1.0
-	bar.custom_minimum_size = Vector2(0, BAR_HEIGHT)
-	bar.theme_type_variation = &"ProgressSuccess"
-	bar.tooltip_text = "Has this map"
-	bar.mouse_filter = Control.MOUSE_FILTER_PASS
-	return bar
+	var box := HBoxContainer.new()
+	box.name = "Download"
+	box.theme_type_variation = &"BoxContainerTight"
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var icon := TextureRect.new()
+	icon.name = "Icon"
+	icon.texture = IconButton.load_icon("circle-check" if held else "download")
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.custom_minimum_size = STATE_ICON
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# A white icon tinted by hand: lake (state) for has it, the soft text role for not yet,
+	# read once the icon is under its paper or glass parent.
+	var role := ThemeColors.STATE if held else ThemeColors.TEXT_SOFT
+	icon.theme_changed.connect(func() -> void: icon.self_modulate = ThemeColors.of(icon, role))
+	box.add_child(icon)
+	var word := _caption(HAS_IT if held else GETS_IT, &"Caption")
+	word.name = "Word"
+	word.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_child(word)
+	return box
 
 
-## One shelf map: `entry` is a RoomModel.shelf() entry. A toggle Tile when `selectable`.
+## One shelf map: `entry` is a RoomModel.shelf() entry, `mood` its environment preset (for the
+## placeholder). A toggle row; `selectable` false makes it read-only.
 static func shelf_row(
-	entry: Dictionary, texture: Texture2D, caption: String, selectable: bool
+	entry: Dictionary, texture: Texture2D, mood: String, caption: String, selectable: bool
 ) -> Button:
 	var row := Button.new()
 	row.name = "Map_%s" % str(entry.key).validate_node_name()
-	row.theme_type_variation = &"Tile"
+	row.theme_type_variation = &"ListRow"
 	row.toggle_mode = true
 	row.custom_minimum_size = Vector2(0, SHELF_ROW_HEIGHT)
 	row.tooltip_text = str(entry.name)
 	row.focus_mode = Control.FOCUS_ALL if selectable else Control.FOCUS_NONE
 	row.mouse_filter = Control.MOUSE_FILTER_STOP if selectable else Control.MOUSE_FILTER_IGNORE
-	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	if selectable:
+		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	var inner := HBoxContainer.new()
 	inner.name = "Inner"
 	inner.theme_type_variation = &"BoxContainerSpaced"
@@ -156,7 +182,8 @@ static func shelf_row(
 	inner.offset_left = SHELF_INSET
 	inner.offset_right = -SHELF_INSET
 	row.add_child(inner)
-	var well := thumb_well(SHELF_THUMB, texture, str(entry.name), &"Heading")
+	var key := str(entry.folder) if str(entry.folder) != "" else str(entry.name)
+	var well := map_well(SHELF_THUMB, texture, key, mood)
 	well.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	inner.add_child(well)
 	var text := VBoxContainer.new()
@@ -175,7 +202,7 @@ static func shelf_row(
 	return row
 
 
-## Show a shelf row selected (the Tile's selected fill, its text on that fill) or not.
+## Show a shelf row selected (the row's selected fill, its text on that fill) or not.
 static func show_shelf_selected(row: Button, on: bool) -> void:
 	row.set_pressed_no_signal(on)
 	var text := row.get_node("Inner/Text")
@@ -183,6 +210,32 @@ static func show_shelf_selected(row: Button, on: bool) -> void:
 	(text.get_node("Caption") as Label).theme_type_variation = (
 		&"CaptionOnSelected" if on else &"Caption"
 	)
+
+
+static func _well(well_size: Vector2) -> Panel:
+	var well := Panel.new()
+	well.name = "Well"
+	well.theme_type_variation = &"CardThumb"
+	well.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	well.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	well.custom_minimum_size = well_size
+	return well
+
+
+## Your own row's Choose avatar: compact, framed at rest so it reads as a button, named in its
+## tooltip and for screen readers (W7).
+static func _choose_avatar_button(choose_avatar: Callable) -> Button:
+	var choose := Button.new()
+	choose.name = "ChooseAvatar"
+	choose.icon = IconButton.load_icon("shirt")
+	choose.tooltip_text = "Choose avatar"
+	choose.accessibility_name = "Choose avatar"
+	choose.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	choose.custom_minimum_size = PORTRAIT
+	choose.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	choose.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	choose.pressed.connect(choose_avatar)
+	return choose
 
 
 ## A label; `trim` ellipsizes it, for text that fills a column (a trimmed label asks for no

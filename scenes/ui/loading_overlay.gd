@@ -21,9 +21,17 @@ extends CanvasLayer
 ## The glide is the only loop and stops when the overlay hides (M6). A map load's bar has
 ## none: a faint glide over the rest of a determinate bar was tried (2026-10-09) and read as
 ## a muddy grey-teal second segment beside the real fill, so a long step shows as a still bar
-## under its caption.
+## under its caption. The bar's inset track alone is 1.17:1 on the sheet, so the track also
+## carries a 1 px edge in the TRACK role (3:1, C6), drawn over it with the glide.
+##
+## A cancellable wait (show_indeterminate(title, true), Root's "Opening a room...") offers a
+## quiet Cancel after CANCEL_AFTER_S, when the wait has stopped feeling instant; the button
+## holds its place from the start (invisible and inert), so the sheet does not jump when it
+## fades in. Cancel emits cancel_requested; whoever opened the wait stops it and hides it.
 
 signal loading_complete
+## The player pressed Cancel on a cancellable wait.
+signal cancel_requested
 
 ## What a map load is called when the map's name is not known.
 const SETTING_OUT_ANY := "Setting out the map"
@@ -40,19 +48,25 @@ const PROGRESS_S := 0.25
 ## The sky's fade off a finished table: the table's entrance, a little longer than an
 ## overlay's exit (M1).
 const REVEAL_S := 0.4
+## How long a cancellable wait runs before it offers Cancel.
+const CANCEL_AFTER_S := 4.0
 
 var _tween: Tween
 var _progress_tween: Tween
 var _glide_tween: Tween
+var _cancel_tween: Tween
 var _target_progress := 0.0
 var _indeterminate := false
 var _gliding := false
 ## Where the gliding segment is along the bar: 0 at the start, 1 at the end.
 var _glide_at := 0.0
+## The track's edge, its colour read from the TRACK role once the overlay is in the tree.
+var _track_edge := StyleBoxFlat.new()
 
 @onready var loading_label: Label = %LoadingLabel
 @onready var progress_bar: ProgressBar = %ProgressBar
 @onready var status_label: Label = %StatusLabel
+@onready var cancel_button: Button = %CancelButton
 @onready var _sky: ColorRect = %Sky
 @onready var _scrim: ColorRect = %Scrim
 @onready var _center: CenterContainer = %CenterContainer
@@ -68,7 +82,12 @@ static func setting_out_text(level: LevelData) -> String:
 
 func _ready() -> void:
 	_sky.color = ThemeColors.of(_sky, ThemeColors.BACKDROP)
+	_track_edge.draw_center = false
+	_track_edge.set_border_width_all(1)
+	_track_edge.set_corner_radius_all(int(progress_bar.custom_minimum_size.y))
+	_track_edge.border_color = ThemeColors.of(progress_bar, ThemeColors.TRACK)
 	_glide.draw.connect(_draw_glide)
+	cancel_button.pressed.connect(cancel_requested.emit)
 	for node: CanvasItem in [_sky, _scrim, _center]:
 		node.modulate.a = 0.0
 	hide()
@@ -77,13 +96,30 @@ func _ready() -> void:
 ## Show a map load: the sheet on the backdrop sky with a determinate bar. The sky covers the
 ## screen at once (the title and the room stand on the same sky); the sheet fades in.
 func show_loading(title: String = SETTING_OUT_ANY) -> void:
-	_open(title, false)
+	_open(title, false, false)
 
 
 ## Show a wait over the live screen behind it: the scrim and a gliding bar, for an
-## operation whose progress is not known.
-func show_indeterminate(title: String) -> void:
-	_open(title, true)
+## operation whose progress is not known. A `cancellable` wait offers Cancel after
+## CANCEL_AFTER_S (cancel_requested).
+func show_indeterminate(title: String, cancellable: bool = false) -> void:
+	_open(title, true, cancellable)
+
+
+## Fade Cancel in now rather than after CANCEL_AFTER_S (a cancellable wait only).
+func offer_cancel() -> void:
+	if not cancel_button.visible or cancel_button.focus_mode != Control.FOCUS_NONE:
+		return
+	_kill_cancel_tween()
+	cancel_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	cancel_button.focus_mode = Control.FOCUS_ALL
+	_cancel_tween = create_tween().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUART)
+	_cancel_tween.tween_property(cancel_button, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
+
+
+## Whether Cancel is offered (shown and live).
+func is_cancel_offered() -> bool:
+	return cancel_button.visible and cancel_button.focus_mode != Control.FOCUS_NONE
 
 
 ## Move the bar to `value` (0.0 to 1.0) and, when given, name the current step.
@@ -102,6 +138,9 @@ func set_progress(value: float, status: String = "") -> void:
 
 ## Fade the overlay out (over a finished table, the sky's reveal) and hide it.
 func hide_loading() -> void:
+	_kill_cancel_tween()
+	cancel_button.focus_mode = Control.FOCUS_NONE
+	cancel_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if _tween:
 		_tween.kill()
 	var duration := REVEAL_S if _sky.visible else Constants.ANIM_FADE_OUT_DURATION
@@ -128,10 +167,11 @@ func is_indeterminate() -> bool:
 	return _indeterminate
 
 
-func _open(title: String, over_screen: bool) -> void:
+func _open(title: String, over_screen: bool, cancellable: bool) -> void:
 	loading_label.text = title
 	_indeterminate = over_screen
 	_set_status("")
+	_hold_cancel(cancellable)
 	_sky.visible = not over_screen
 	_scrim.visible = over_screen
 	if not over_screen:
@@ -156,6 +196,27 @@ func _open(title: String, over_screen: bool) -> void:
 func _set_status(status: String) -> void:
 	status_label.text = status
 	status_label.visible = not status.is_empty()
+
+
+## Lay Cancel out, invisible and inert, for a cancellable wait (and offer it after
+## CANCEL_AFTER_S); take it out of the sheet for any other.
+func _hold_cancel(cancellable: bool) -> void:
+	_kill_cancel_tween()
+	cancel_button.visible = cancellable
+	cancel_button.modulate.a = 0.0
+	cancel_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cancel_button.focus_mode = Control.FOCUS_NONE
+	if not cancellable:
+		return
+	_cancel_tween = create_tween()
+	_cancel_tween.tween_interval(CANCEL_AFTER_S)
+	_cancel_tween.tween_callback(offer_cancel)
+
+
+func _kill_cancel_tween() -> void:
+	if _cancel_tween and _cancel_tween.is_valid():
+		_cancel_tween.kill()
+	_cancel_tween = null
 
 
 func _start_glide() -> void:
@@ -189,9 +250,10 @@ func _set_glide_at(at: float) -> void:
 	_glide.queue_redraw()
 
 
-## The gliding segment, drawn with the bar's own fill style (lake, a pill) so it is the bar's
-## fill in motion rather than a second shape.
+## The track's edge, and over a wait the gliding segment, drawn with the bar's own fill style
+## (lake, a pill) so it is the bar's fill in motion rather than a second shape.
 func _draw_glide() -> void:
+	_glide.draw_style_box(_track_edge, Rect2(Vector2.ZERO, _glide.size))
 	if not _gliding:
 		return
 	var width := _glide.size.x * GLIDE_SHARE

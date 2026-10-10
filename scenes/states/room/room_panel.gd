@@ -6,18 +6,23 @@ extends Control
 ## (RoomDrawer, opened with Tab). It is where the GM keeps the session's maps (the shelf) and
 ## sets one out, and where everyone sees who is here.
 ##
-## Players are listed on the left (portrait, name, GM chip, a download bar for the selected
-## map; your own row has Choose avatar) with the shelf below them. A selected shelf map shows
-## large in the centre with its one action directly under it: Set out this map in the room,
-## Move the table here in the drawer. That action is the screen's one accent fill, and only
-## while it is live. The room code with Copy and Invite sits top right; Leave (a player) or
-## End session (the GM) bottom left. The GM adds maps to the shelf through a picker over the
-## library; players see the shelf read-only but can select a map to look at it. There is no
-## manual Ready: readiness is download state ("3 of 4 have it"), and Set out never waits.
+## Players are listed on the left (portrait, name, and a caption line: the GM chip, You, and
+## the selected map's download state as an icon and a word; your own row ends in Choose
+## avatar) with the shelf below them. A selected shelf map shows large in the centre with its
+## one action directly under it: Set out this map in the room, Move the table here in the
+## drawer. With an empty shelf the centre shows a painted placeholder over what goes there,
+## and its action is Add a map; with maps but none selected it says to choose one, and offers
+## nothing. That action is the screen's one accent fill, and only while it is live. The room
+## code with Copy and Invite sits top right (in the drawer, on its own line under the
+## heading); Leave session (a player) or End session (the GM) bottom left. The GM adds maps
+## to the shelf through a picker over the library; players see the shelf read-only but can
+## select a map to look at it, and read their own download state first. There is no manual
+## Ready: readiness is download state ("3 of 4 have it"), and Set out never waits.
 ##
-## Everything shown comes from a session summary (show_session()); RoomModel holds the rules.
-## With connect_network (the default) the panel reads NetworkManager.session on every change;
-## tests and the UI tour clear it before adding the panel and feed summaries themselves.
+## Everything shown comes from a session summary (show_session()); RoomModel holds the rules
+## and RoomLayout builds the controls. With connect_network (the default) the panel reads
+## NetworkManager.session on every change; tests and the UI tour clear it before adding the
+## panel and feed summaries themselves.
 
 signal set_out_requested(key: String)
 signal move_table_requested(key: String)
@@ -34,10 +39,8 @@ const GAP := 24.0
 const PREVIEW_ASPECT := 16.0 / 9.0
 const PREVIEW_MAX_WIDTH := 720.0
 const PREVIEW_MIN_WIDTH := 320.0
-## The drawer's picture of the selected map, beside its name.
-const DRAWER_PREVIEW := Vector2(128, 72)
 ## The stage's height besides the preview: the name, readiness, action and their gaps.
-const STAGE_CHROME := 170.0
+const STAGE_CHROME := 190.0
 ## Joins this soon after the panel opens are the initial roster sync, not arrivals.
 const JOIN_SOUND_GRACE_MS := 1000
 
@@ -48,10 +51,14 @@ const JOIN_SOUND_GRACE_MS := 1000
 var title_label: Label
 var caption_label: Label
 var code_label: Label
-var copy_button: IconButton
-var invite_button: IconButton
+var copy_button: Button
+var invite_button: Button
 var player_rows: VBoxContainer
 var shelf_rows: VBoxContainer
+## The room's shelf scroll and side sheet, and the body they sit in (null in the drawer).
+var shelf_scroll: ScrollContainer
+var side: PanelContainer
+var body: HBoxContainer
 var add_button: Button
 var leave_button: Button
 var stage: VBoxContainer
@@ -66,8 +73,8 @@ var _selected := ""
 var _table := ""
 var _players: Array[Dictionary] = []
 var _shelf: Array[Dictionary] = []
-## folder -> Texture2D, or null for a map without a thumbnail here
-var _thumbs: Dictionary = {}
+## folder -> {"texture": Texture2D or null, "mood": String}, read once per folder
+var _pictures: Dictionary = {}
 var _ready_ms := 0
 
 
@@ -78,7 +85,15 @@ func _ready() -> void:
 		size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	else:
 		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_build()
+	RoomLayout.build(self)
+	copy_button.pressed.connect(_on_copy_pressed)
+	invite_button.pressed.connect(_on_invite_pressed)
+	add_button.pressed.connect(_on_add_pressed)
+	leave_button.pressed.connect(_on_leave_pressed)
+	action_button.pressed.connect(_on_action_pressed)
+	if not in_drawer:
+		stage.resized.connect(_fit_preview)
+		body.resized.connect(_fit_side)
 	if connect_network:
 		NetworkManager.session.session_changed.connect(refresh)
 		NetworkManager.player_joined.connect(_on_player_joined)
@@ -118,8 +133,9 @@ func show_session(summary: Dictionary, local_id: String, is_gm: bool) -> void:
 	_shelf = RoomModel.shelf(summary)
 	if not _shelf.any(func(entry: Dictionary) -> bool: return entry.key == _selected):
 		_selected = _table if in_drawer else ""
-	add_button.visible = is_gm
-	leave_button.text = "End session" if is_gm else "Leave"
+	# With an empty shelf, Add a map is the centre's action rather than a second button here.
+	add_button.visible = is_gm and not _shelf.is_empty()
+	leave_button.text = "End session" if is_gm else "Leave session"
 	_show_header()
 	_fill_shelf()
 	_show_selection()
@@ -140,243 +156,33 @@ func selected_key() -> String:
 	return _selected
 
 
-# -- Building ------------------------------------------------------------------
+## Open the picker that adds a library map to the shelf (the GM's Add a map).
+func open_map_picker() -> void:
+	var picker: LevelPickerDialog = LEVEL_PICKER_SCENE.instantiate()
+	picker.setup("Add a map to the shelf")
+	picker.level_chosen.connect(_on_level_picked)
+	get_tree().root.add_child(picker)
+	picker.choose_button.text = "Add to the shelf"
+	# Leaving the room with the picker still open must not strand it over what comes next.
+	tree_exiting.connect(picker.queue_free)
 
 
-func _build() -> void:
-	var layout := VBoxContainer.new()
-	layout.name = "Layout"
-	layout.theme_type_variation = &"BoxContainerSpaced"
-	layout.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(layout)
-	if in_drawer:
-		layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		# The code shares the heading's line, so the selected map's action stays on screen.
-		var head := HBoxContainer.new()
-		head.name = "TopBar"
-		head.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		layout.add_child(head)
-		var heading := _build_heading()
-		heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		head.add_child(heading)
-		head.add_child(_build_code_row())
-		var scroll := ScrollContainer.new()
-		scroll.name = "Scroll"
-		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		layout.add_child(scroll)
-		var column := _vbox("Column", &"BoxContainerSpaced")
-		column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		scroll.add_child(column)
-		column.add_child(_build_players())
-		column.add_child(_build_shelf())
-		column.add_child(_build_stage())
-		layout.add_child(_build_footer())
+## Ask to leave: a player leaves at once, the GM confirms ending the session for everyone (W2:
+## the action and its consequence on the message and on the button).
+func ask_to_leave() -> void:
+	if not _is_gm:
+		leave_requested.emit()
 		return
-	layout.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	layout.offset_left = EDGE
-	layout.offset_top = EDGE
-	layout.offset_right = -EDGE
-	layout.offset_bottom = -EDGE
-	var top := HBoxContainer.new()
-	top.name = "TopBar"
-	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layout.add_child(top)
-	var heading := _build_heading()
-	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top.add_child(heading)
-	top.add_child(_build_code_row())
-	var body := HBoxContainer.new()
-	body.name = "Body"
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layout.add_child(body)
-	var side := PanelContainer.new()
-	side.name = "Side"
-	side.custom_minimum_size.x = SIDE_WIDTH
-	body.add_child(side)
-	var side_box := _vbox("SideBox", &"BoxContainerSpaced")
-	side.add_child(side_box)
-	side_box.add_child(_build_players())
-	var shelf := _build_shelf()
-	shelf.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	side_box.add_child(shelf)
-	side_box.add_child(_build_footer())
-	body.add_child(_spacer(Vector2(GAP, 0)))
-	var stage_box := _build_stage()
-	stage_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stage_box.resized.connect(_fit_preview)
-	body.add_child(stage_box)
-
-
-func _build_heading() -> VBoxContainer:
-	var box := _vbox("Heading", &"")
-	title_label = Label.new()
-	title_label.name = "Title"
-	title_label.theme_type_variation = &"Heading" if in_drawer else &"Title"
-	title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	box.add_child(title_label)
-	caption_label = Label.new()
-	caption_label.name = "Caption"
-	caption_label.theme_type_variation = &"Caption"
-	caption_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	box.add_child(caption_label)
-	return box
-
-
-func _build_code_row() -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.name = "CodeRow"
-	row.theme_type_variation = &"" if in_drawer else &"BoxContainerSpaced"
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	if not in_drawer:
-		var caption := Label.new()
-		caption.text = "Room code"
-		caption.theme_type_variation = &"Caption"
-		caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(caption)
-	var chip := PanelContainer.new()
-	chip.name = "CodeChip"
-	chip.theme_type_variation = &"CodeChip"
-	chip.tooltip_text = "Room code"
-	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(chip)
-	code_label = Label.new()
-	code_label.name = "Code"
-	code_label.theme_type_variation = &"Code"
-	chip.add_child(code_label)
-	set_code("")
-	copy_button = _icon_button("Copy", "copy", "Copy code", _on_copy_pressed)
-	row.add_child(copy_button)
-	invite_button = _icon_button("Invite", "share", "Invite friends", _on_invite_pressed)
-	row.add_child(invite_button)
-	return row
-
-
-func _build_players() -> VBoxContainer:
-	var box := _vbox("Players", &"BoxContainerSpaced")
-	box.add_child(_section_label("Players"))
-	player_rows = _vbox("PlayerRows", &"BoxContainerSpaced")
-	box.add_child(player_rows)
-	return box
-
-
-func _build_shelf() -> VBoxContainer:
-	var box := _vbox("Shelf", &"BoxContainerSpaced")
-	var head := HBoxContainer.new()
-	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(head)
-	var label := _section_label("Shelf")
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head.add_child(label)
-	add_button = Button.new()
-	add_button.name = "AddMap"
-	add_button.text = "Add a map"
-	add_button.icon = IconButton.load_icon("plus")
-	add_button.pressed.connect(_on_add_pressed)
-	head.add_child(add_button)
-	shelf_rows = _vbox("ShelfRows", &"")
-	if in_drawer:
-		box.add_child(shelf_rows)
-		return box
-	var scroll := ScrollContainer.new()
-	scroll.name = "ShelfScroll"
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(scroll)
-	shelf_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(shelf_rows)
-	return box
-
-
-## The selected map and its action. The room shows it large in the centre; the drawer, where
-## the column is narrow and the action must stay on screen, as a strip (a small picture beside
-## the name) with the action directly under it.
-func _build_stage() -> VBoxContainer:
-	stage = _vbox("Stage", &"BoxContainerSpaced")
-	stage.alignment = BoxContainer.ALIGNMENT_CENTER
-	var initial := &"Heading" if in_drawer else &"CardInitial"
-	preview = RoomRows.thumb_well(DRAWER_PREVIEW if in_drawer else Vector2.ZERO, null, "", initial)
-	preview.name = "Preview"
-	map_name_label = Label.new()
-	map_name_label.name = "MapName"
-	map_name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	readiness_label = Label.new()
-	readiness_label.name = "Readiness"
-	readiness_label.theme_type_variation = &"Caption"
-	if in_drawer:
-		var strip := HBoxContainer.new()
-		strip.name = "Strip"
-		strip.theme_type_variation = &"BoxContainerSpaced"
-		strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		stage.add_child(strip)
-		strip.add_child(preview)
-		var text := _vbox("Text", &"")
-		text.alignment = BoxContainer.ALIGNMENT_CENTER
-		text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		strip.add_child(text)
-		text.add_child(map_name_label)
-		text.add_child(readiness_label)
-	else:
-		preview.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		map_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		readiness_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		stage.add_child(preview)
-		stage.add_child(map_name_label)
-		stage.add_child(readiness_label)
-	action_button = Button.new()
-	action_button.name = "Action"
-	action_button.custom_minimum_size = Vector2(0 if in_drawer else 280, 44)
-	if not in_drawer:
-		action_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	action_button.pressed.connect(_on_action_pressed)
-	stage.add_child(action_button)
-	return stage
-
-
-func _build_footer() -> HBoxContainer:
-	var footer := HBoxContainer.new()
-	footer.name = "Footer"
-	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	leave_button = Button.new()
-	leave_button.name = "Leave"
-	leave_button.icon = IconButton.load_icon("logout")
-	leave_button.pressed.connect(_on_leave_pressed)
-	footer.add_child(leave_button)
-	return footer
-
-
-func _vbox(node_name: String, variation: StringName) -> VBoxContainer:
-	var box := VBoxContainer.new()
-	box.name = node_name
-	box.theme_type_variation = variation
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return box
-
-
-func _section_label(text: String) -> Label:
-	var label := Label.new()
-	label.text = text
-	label.theme_type_variation = &"SectionHeader"
-	return label
-
-
-func _spacer(min_size: Vector2) -> Control:
-	var spacer := Control.new()
-	spacer.custom_minimum_size = min_size
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return spacer
-
-
-func _icon_button(node_name: String, icon: String, tip: String, action: Callable) -> IconButton:
-	var button := IconButton.new()
-	button.name = node_name
-	button.icon_name = icon
-	button.tooltip_text = tip
-	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	button.pressed.connect(action)
-	return button
+	UIManager.show_confirmation(
+		"End the session?",
+		"Everyone goes back to their title screen.",
+		"End session",
+		"Stay",
+		leave_requested.emit,
+		Callable(),
+		"Danger",
+		&"leave_game"
+	)
 
 
 # -- Showing -------------------------------------------------------------------
@@ -390,7 +196,9 @@ func _show_header() -> void:
 	var gm := RoomModel.gm_name(_players)
 	var text := RoomModel.header(in_drawer, _is_gm, gm, _shelf.size(), table_name)
 	title_label.text = text.title
+	title_label.tooltip_text = text.title
 	caption_label.text = text.caption
+	caption_label.tooltip_text = text.caption
 	caption_label.visible = text.caption != ""
 
 
@@ -413,14 +221,15 @@ func _fill_shelf() -> void:
 		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		empty.text = "No maps yet" if _is_gm else "The GM has not added a map yet"
 		shelf_rows.add_child(empty)
-		return
 	for entry in _shelf:
 		var caption := "On the table" if entry.on_table else ""
-		if caption == "" and not in_drawer:
+		if caption == "":
 			caption = RoomModel.readiness_text(_players, entry.key)
-		var row := RoomRows.shelf_row(entry, _thumb_for(entry), caption, true)
+		var picture := _picture_for(entry)
+		var row := RoomRows.shelf_row(entry, picture.texture, picture.mood, caption, true)
 		row.pressed.connect(select.bind(str(entry.key)))
 		shelf_rows.add_child(row)
+	_fit_side.call_deferred()
 
 
 func _show_selection() -> void:
@@ -432,40 +241,60 @@ func _show_selection() -> void:
 	for candidate in _shelf:
 		if candidate.key == _selected:
 			entry = candidate
-	preview.visible = not entry.is_empty()
+	# The drawer shows only a selected map; the room paints the placeholder when none is.
+	preview.visible = not (entry.is_empty() and in_drawer)
 	if entry.is_empty():
-		map_name_label.text = RoomModel.empty_stage_text(_is_gm, _shelf.size())
+		RoomRows.set_map_well(preview, null, "", "")
+		var empty := RoomModel.empty_stage(_is_gm, _shelf.size())
+		map_name_label.text = empty.title
 		map_name_label.theme_type_variation = &"Body" if in_drawer else &"Heading"
-		readiness_label.text = ""
+		readiness_label.text = "" if in_drawer else empty.caption
 	else:
-		RoomRows.set_well(preview, _thumb_for(entry), str(entry.name))
+		var picture := _picture_for(entry)
+		RoomRows.set_map_well(preview, picture.texture, _picture_key(entry), picture.mood)
 		map_name_label.text = entry.name
 		map_name_label.theme_type_variation = &"Heading" if in_drawer else &"Title"
-		readiness_label.text = (
-			"On the table now" if entry.on_table else RoomModel.readiness_text(_players, _selected)
-		)
+		readiness_label.text = _readiness(entry)
+	map_name_label.tooltip_text = map_name_label.text
 	readiness_label.visible = readiness_label.text != ""
-	var action := RoomModel.action(in_drawer, _is_gm, _selected, _table)
+	var action := RoomModel.action(in_drawer, _is_gm, _selected, _table, _shelf.size())
 	action_button.visible = action.shown
 	action_button.text = action.text
 	action_button.disabled = not action.enabled
-	# The one accent fill, and only while the action is live: a disabled Set out stays quiet.
+	action_button.set_meta(&"adds", action.add)
+	# The one accent fill, and only while the action is live: a held-back Move stays quiet.
 	action_button.theme_type_variation = &"Primary" if action.enabled else &""
 
 
-func _thumb_for(entry: Dictionary) -> Texture2D:
+## The line under the selected map: on the table, or its readiness, a player's own first.
+func _readiness(entry: Dictionary) -> String:
+	if entry.on_table:
+		return "On the table now"
+	if _is_gm:
+		return RoomModel.readiness_text(_players, entry.key)
+	return RoomModel.own_readiness_text(_players, entry.key)
+
+
+## The placeholder's key for a shelf entry: its folder, or its name without one.
+func _picture_key(entry: Dictionary) -> String:
+	return str(entry.folder) if str(entry.folder) != "" else str(entry.name)
+
+
+## A shelf map's thumbnail (null without one here) and mood, read once per folder.
+func _picture_for(entry: Dictionary) -> Dictionary:
 	var folder := str(entry.folder)
 	if folder == "":
-		return null
-	if not _thumbs.has(folder):
+		return {"texture": null, "mood": ""}
+	if not _pictures.has(folder):
 		var texture: Texture2D = null
 		var path := LevelManager.thumbnail_path(folder)
 		if FileAccess.file_exists(path):
 			var image := Image.load_from_file(ProjectSettings.globalize_path(path))
 			if image:
 				texture = ImageTexture.create_from_image(image)
-		_thumbs[folder] = texture
-	return _thumbs[folder]
+		var info := LevelManager.folder_info(folder)
+		_pictures[folder] = {"texture": texture, "mood": str(info.get("environment_preset", ""))}
+	return _pictures[folder]
 
 
 ## The room's preview: as wide as the stage allows up to PREVIEW_MAX_WIDTH, 16:9, leaving the
@@ -479,25 +308,41 @@ func _fit_preview() -> void:
 		preview.custom_minimum_size = target
 
 
+## The room's side sheet ends at its content (no empty paper under a short shelf); when the
+## shelf is too long for the screen, the sheet takes the full height and the shelf scrolls.
+func _fit_side() -> void:
+	if in_drawer or body == null or not is_inside_tree():
+		return
+	var rows_height := shelf_rows.get_combined_minimum_size().y
+	var scrolling := shelf_scroll.vertical_scroll_mode != ScrollContainer.SCROLL_MODE_DISABLED
+	var needed := side.get_combined_minimum_size().y + (rows_height if scrolling else 0.0)
+	var fits := needed <= body.size.y
+	var mode := ScrollContainer.SCROLL_MODE_DISABLED if fits else ScrollContainer.SCROLL_MODE_AUTO
+	if shelf_scroll.vertical_scroll_mode != mode:
+		shelf_scroll.vertical_scroll_mode = mode
+	var flags := Control.SIZE_SHRINK_BEGIN if fits else Control.SIZE_FILL
+	if side.size_flags_vertical != flags:
+		side.size_flags_vertical = flags
+
+
 # -- Actions -------------------------------------------------------------------
 
 
 func _on_action_pressed() -> void:
-	if _selected == "" or action_button.disabled:
+	if action_button.disabled:
 		return
-	if in_drawer:
+	if action_button.get_meta(&"adds", false):
+		open_map_picker()
+	elif _selected == "":
+		return
+	elif in_drawer:
 		move_table_requested.emit(_selected)
 	else:
 		set_out_requested.emit(_selected)
 
 
 func _on_add_pressed() -> void:
-	var picker: LevelPickerDialog = LEVEL_PICKER_SCENE.instantiate()
-	picker.setup("Add a map to the shelf")
-	picker.level_chosen.connect(_on_level_picked)
-	get_tree().root.add_child(picker)
-	# Leaving the room with the picker still open must not strand it over what comes next.
-	tree_exiting.connect(picker.queue_free)
+	open_map_picker()
 
 
 func _on_level_picked(info: Dictionary) -> void:
@@ -514,19 +359,7 @@ func _on_level_picked(info: Dictionary) -> void:
 
 
 func _on_leave_pressed() -> void:
-	if not _is_gm:
-		leave_requested.emit()
-		return
-	UIManager.show_confirmation(
-		"End the session?",
-		"Everyone leaves the room and the table.",
-		"End session",
-		"Stay",
-		leave_requested.emit,
-		Callable(),
-		"Danger",
-		&"leave_game"
-	)
+	ask_to_leave()
 
 
 func _on_choose_avatar_pressed() -> void:

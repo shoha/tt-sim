@@ -85,6 +85,38 @@ func test_the_text_is_ink_on_a_paper_sheet() -> void:
 	assert_eq(sky.color, ThemeColors.PAPER_ROLES[ThemeColors.BACKDROP])
 
 
+func test_a_cancellable_wait_offers_cancel_later_without_moving_the_sheet() -> void:
+	_overlay.show_indeterminate("Opening a room...", true)
+	var cancel := _overlay.cancel_button
+	assert_true(cancel.visible, "laid out from the start, so the sheet does not jump")
+	assert_eq(cancel.modulate.a, 0.0, "but not seen yet")
+	assert_false(_overlay.is_cancel_offered(), "and inert")
+	_overlay.offer_cancel()
+	assert_true(_overlay.is_cancel_offered())
+	assert_eq(cancel.theme_type_variation, &"", "a quiet button, never a fill")
+	watch_signals(_overlay)
+	cancel.pressed.emit()
+	assert_signal_emitted(_overlay, "cancel_requested")
+
+
+func test_other_waits_and_map_loads_offer_no_cancel() -> void:
+	_overlay.show_indeterminate("Opening a room...")
+	assert_false(_overlay.cancel_button.visible)
+	_overlay.show_indeterminate("Opening a room...", true)
+	_overlay.show_loading("Setting out Mossy Hollow")
+	assert_false(_overlay.cancel_button.visible, "a map load takes Cancel out of the sheet")
+	_overlay.offer_cancel()
+	assert_false(_overlay.is_cancel_offered())
+
+
+## The track's own inset fill is 1.17:1 on the sheet; its edge holds 3:1 (C6).
+func test_the_track_has_an_edge_in_the_track_role() -> void:
+	_overlay.show_loading()
+	assert_eq(_overlay._track_edge.border_color, ThemeColors.PAPER_TRACK)
+	assert_eq(_overlay._track_edge.border_width_top, 1)
+	assert_false(_overlay._track_edge.draw_center)
+
+
 func test_a_map_load_names_its_map() -> void:
 	var level := LevelData.new()
 	level.level_name = "Oak's Lab"

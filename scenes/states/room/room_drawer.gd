@@ -4,14 +4,18 @@ extends DrawerContainer
 ## The room over the table: the RoomPanel in its drawer form, on glass at the left edge, the
 ## same players, shelf and code as the full-screen room, learned once. The GM selects a shelf
 ## map and moves the table there; everyone sees who is here. Tab opens and closes it, only at
-## a table (tab_toggles()); its tab handle shows only in a hosted or joined session. A player
-## arriving or leaving sounds as in the room (the panel's own).
+## a table (tab_toggles()); its handle shows only in a hosted or joined session. The handle is
+## a one-item IconRail, like every other drawer's rail, so open reads in the rail's lake state
+## (never the ember of a do). A player arriving or leaving sounds as in the room (the panel's
+## own).
 
 signal move_table_requested(key: String)
 signal leave_requested
 
 ## Drawer width token (UI_TASTE S5), the room's side column too.
 const WIDTH := RoomPanel.SIDE_WIDTH
+## The rail's one item.
+const RAIL_ID := &"room"
 
 ## Cleared by tests before adding, so the panel never reads NetworkManager.
 @export var connect_network := true
@@ -21,8 +25,7 @@ var panel: RoomPanel
 
 func _on_ready() -> void:
 	drawer_width = WIDTH
-	tab_icon = preload("res://assets/icons/ui/users.svg")
-	set_tab_tooltip("The room (Tab)")
+	rail_items = [{"id": RAIL_ID, "icon": "users", "tooltip": "The room (Tab)"}]
 	panel = RoomPanel.new()
 	panel.name = "RoomPanel"
 	panel.in_drawer = true

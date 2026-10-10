@@ -82,6 +82,7 @@ func test_the_gm_sees_the_players_here_gm_first_and_the_shelf() -> void:
 	assert_true(panel.add_button.visible, "the GM adds maps")
 	assert_eq(panel.leave_button.text, "End session")
 	assert_eq(panel.title_label.text, "Your room")
+	panel.select(MAP_A)
 	assert_true(panel.action_button.visible)
 	assert_eq(panel.action_button.text, "Set out this map")
 
@@ -91,13 +92,39 @@ func test_a_player_sees_the_shelf_read_only_and_no_action() -> void:
 	panel.show_session(_sample(), WREN, false)
 	assert_eq(panel.title_label.text, "Marigold's room")
 	assert_false(panel.add_button.visible)
-	assert_eq(panel.leave_button.text, "Leave")
+	assert_eq(panel.leave_button.text, "Leave session")
 	assert_false(panel.action_button.visible)
 	var wren_row := panel.player_rows.get_child(3)
 	assert_not_null(wren_row.find_child("ChooseAvatar", true, false), "your row is Wren's")
 	panel.select(MAP_B)
 	assert_eq(panel.map_name_label.text, "Old Mill", "a player can look at a shelf map")
 	assert_eq(_fills(panel).size(), 0, "and has no action to fill")
+
+
+func test_a_player_reads_their_own_download_state_first() -> void:
+	var panel := _panel()
+	panel.show_session(_sample(), WREN, false)
+	panel.select(MAP_B)
+	assert_eq(panel.readiness_label.text, "You have it · 2 of 4")
+	panel.select(MAP_C)
+	assert_eq(panel.readiness_label.text, "You get it at the table · 1 of 4")
+	panel.select(MAP_A)
+	assert_eq(panel.readiness_label.text, "Everyone has it")
+
+
+## The caption line holds the GM chip, You and the download state, in that order in every
+## view, so the name has the row's full width.
+func test_the_caption_line_is_gm_you_then_the_download_state() -> void:
+	var panel := _panel()
+	panel.show_session(_sample(), GM, true)
+	panel.select(MAP_B)
+	var line := panel.player_rows.get_child(0).find_child("CaptionLine", true, false)
+	var order := line.get_children().map(func(n: Node) -> String: return str(n.name))
+	assert_eq(order, ["GmBadge", "You", "Download"])
+	var name_label := panel.player_rows.get_child(0).find_child("Name", true, false) as Label
+	assert_eq(name_label.get_parent().name, &"Info", "the name has a line of its own")
+	var letter := panel.player_rows.get_child(0).find_child("Letter", true, false) as Label
+	assert_eq(letter.theme_type_variation, &"H3", "a portrait initial in Inter semibold (T3)")
 
 
 func test_header_copy_never_names_a_level_or_a_lobby() -> void:
@@ -110,18 +137,35 @@ func test_header_copy_never_names_a_level_or_a_lobby() -> void:
 	assert_eq(drawer.caption, "On the table: Old Mill")
 
 
-func test_set_out_is_held_back_and_quiet_with_no_map_selected() -> void:
+func test_set_out_appears_only_once_a_shelf_map_is_selected() -> void:
 	var panel := _panel()
 	panel.show_session(_sample(), GM, true)
 	assert_eq(panel.selected_key(), "")
-	assert_true(panel.action_button.disabled)
-	assert_ne(panel.action_button.theme_type_variation, &"Primary", "no fill with no map")
+	assert_false(panel.action_button.visible, "no held-back Set out with nothing selected")
 	assert_eq(_fills(panel).size(), 0)
-	assert_false(panel.preview.visible, "no empty picture box")
+	assert_true(panel.preview.visible, "the painted placeholder, never an empty box")
+	assert_true(panel.preview.get_node("Placeholder").visible)
 	assert_eq(panel.map_name_label.text, "Choose a map from the shelf")
 	watch_signals(panel)
 	panel._on_action_pressed()
 	assert_signal_not_emitted(panel, "set_out_requested")
+
+
+## An empty shelf: the centre paints a placeholder, says what goes there, and Add a map is the
+## screen's one fill (not a quiet button in the side sheet beside a dead Set out).
+func test_an_empty_room_offers_add_a_map_as_its_one_fill() -> void:
+	var panel := _panel()
+	var summary := _sample()
+	summary.shelf = []
+	panel.show_session(summary, GM, true)
+	assert_true(panel.preview.visible)
+	assert_eq(panel.map_name_label.text, "Add a map to the shelf")
+	assert_eq(panel.action_button.text, "Add a map")
+	assert_eq(_fills(panel), [panel.action_button], "Add a map is the one fill")
+	assert_false(panel.add_button.visible, "no second Add a map in the side sheet")
+	assert_true(panel.action_button.get_meta(&"adds"), "it opens the picker")
+	panel.show_session(_sample(), GM, true)
+	assert_true(panel.add_button.visible, "with maps on the shelf, Add a map moves to its head")
 
 
 func test_selecting_a_shelf_map_shows_it_with_the_one_fill_under_it() -> void:
@@ -133,9 +177,11 @@ func test_selecting_a_shelf_map_shows_it_with_the_one_fill_under_it() -> void:
 	assert_eq(panel.map_name_label.text, "Old Mill")
 	assert_eq(panel.readiness_label.text, "2 of 4 have it")
 	var states: Array = panel.player_rows.get_children().map(
-		func(row: Node) -> bool: return row.find_child("Download", true, false) is ProgressBar
+		func(row: Node) -> String: return (row.find_child("Word", true, false) as Label).text
 	)
-	assert_eq(states, [true, false, false, true], "a bar for who has it, a caption for who not")
+	var has := RoomRows.HAS_IT
+	var gets := RoomRows.GETS_IT
+	assert_eq(states, [has, gets, gets, has], "an icon and a word, never colour alone (C7)")
 	assert_eq(_fills(panel), [panel.action_button], "exactly one fill, the action")
 	assert_true((panel.shelf_rows.get_child(1) as Button).button_pressed, "the row shows selected")
 	watch_signals(panel)
@@ -143,16 +189,20 @@ func test_selecting_a_shelf_map_shows_it_with_the_one_fill_under_it() -> void:
 	assert_signal_emitted_with_parameters(panel, "set_out_requested", [MAP_B])
 
 
-func test_a_map_without_a_thumbnail_shows_the_well_and_its_initial() -> void:
+func test_a_map_without_a_thumbnail_paints_its_placeholder() -> void:
 	var panel := _panel()
 	panel.show_session(_sample(), GM, true)
 	panel.select(MAP_A)
-	var letter := panel.preview.get_node("Letter") as Label
+	var placeholder := panel.preview.get_node("Placeholder") as MapPlaceholder
 	assert_eq(panel.preview.theme_type_variation, &"CardThumb")
-	assert_true(letter.visible)
-	assert_eq(letter.text, "M")
-	var shelf_letter := panel.shelf_rows.get_child(0).find_child("Letter", true, false) as Label
-	assert_eq(shelf_letter.text, "M")
+	assert_true(placeholder.visible)
+	var paint := placeholder.material as ShaderMaterial
+	assert_eq(paint.get_shader_parameter(&"seed"), MapPlaceholder.seed_of(MAP_A))
+	var row := panel.shelf_rows.get_child(0)
+	var row_paint := row.find_child("Placeholder", true, false).material as ShaderMaterial
+	assert_eq(row_paint.get_shader_parameter(&"seed"), paint.get_shader_parameter(&"seed"))
+	assert_null(row.find_child("Letter", true, false), "no initial over a map")
+	assert_eq((row as Button).theme_type_variation, &"ListRow", "a plain row, not a tile")
 
 
 func test_adding_a_map_reports_the_pick_and_the_new_map_can_be_selected() -> void:
@@ -193,6 +243,8 @@ func test_the_drawer_starts_on_the_table_and_moves_it_elsewhere() -> void:
 	assert_eq(_fills(panel).size(), 0)
 	panel.select(MAP_C)
 	assert_eq(_fills(panel), [panel.action_button])
+	var mill := panel.shelf_rows.get_child(1).find_child("Caption", true, false) as Label
+	assert_eq(mill.text, "2 of 4 have it", "the drawer's shelf keeps its readiness")
 	watch_signals(panel)
 	panel.action_button.pressed.emit()
 	assert_signal_emitted_with_parameters(panel, "move_table_requested", [MAP_C])
@@ -240,6 +292,7 @@ func test_the_drawer_toggles_on_tab_at_a_table() -> void:
 	AnimatedCanvasLayerPanel._trap_stack.assign(saved_panels)
 	assert_true(drawer.is_open, "paused, Tab leaves it alone")
 	assert_eq(drawer.drawer_width, RoomPanel.SIDE_WIDTH)
+	assert_eq(drawer._rail.selected, RoomDrawer.RAIL_ID, "open is the rail's state, as elsewhere")
 
 
 func test_the_room_fits_the_1280x720_canvas() -> void:
@@ -264,6 +317,22 @@ func test_the_room_fits_the_1280x720_canvas() -> void:
 			outside.append("%s at %s" % [screen.get_path_to(control), rect])
 	assert_eq(outside.size(), 0, "the room lies on the canvas: %s" % "; ".join(outside))
 	assert_gte(screen.panel.preview.size.x, RoomPanel.PREVIEW_MIN_WIDTH, "a large preview")
+
+
+## At 1080 a short shelf ends the side sheet at its content, with no empty paper under it.
+func test_the_side_sheet_ends_at_its_content() -> void:
+	var host := SubViewport.new()
+	host.size = Vector2i(1920, 1080)
+	host.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	add_child_autofree(host)
+	var screen := RoomScreen.new()
+	screen.connect_network = false
+	host.add_child(screen)
+	screen.panel.show_session(_sample(), GM, true)
+	await wait_process_frames(4)
+	var panel := screen.panel
+	assert_lt(panel.side.size.y, panel.body.size.y - 100.0, "the sheet ends at its content")
+	assert_eq(panel.shelf_scroll.vertical_scroll_mode, ScrollContainer.SCROLL_MODE_DISABLED)
 
 
 ## Inside a scroll region (what it holds may run past it; the player scrolls to it).

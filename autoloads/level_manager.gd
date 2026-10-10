@@ -485,6 +485,12 @@ func get_saved_levels() -> Array[Dictionary]:
 ## level_editor_history.gd _perform_autosave()) so it can capture in-progress edits
 ## before a map is chosen. Such an entry can never be played, so it is excluded from
 ## every level list. A level with only an authored map.ttmap is listed.
+## The library entry of the level saved in `folder_name` (the dictionary the level list and
+## LevelCard read: name, thumbnail, environment_preset ...), or {} when no level is there.
+func folder_info(folder_name: String) -> Dictionary:
+	return _get_folder_level_info(folder_name)
+
+
 func _get_folder_level_info(folder_name: String) -> Dictionary:
 	var json_path = json_path(folder_name)
 

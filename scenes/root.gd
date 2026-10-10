@@ -63,6 +63,8 @@ var _room_screen: RoomScreen = null
 var _join_screen: LobbyClient = null
 ## True from host_session() until hosting starts (ROOM) or fails (back to the title)
 var _hosting_requested := false
+## True after the player cancelled the "Opening a room..." wait, until a late HOSTING is closed
+var _host_cancelled := false
 var _level_play_controller: LevelPlayController = null
 var _pending_level_data: LevelData = null
 var _loading_overlay: LoadingOverlay = null
@@ -155,6 +157,7 @@ func _setup_level_play_controller() -> void:
 	# Create loading overlay (always available)
 	_loading_overlay = LOADING_OVERLAY_SCENE.instantiate()
 	add_child(_loading_overlay)
+	_loading_overlay.cancel_requested.connect(_on_room_wait_cancelled)
 
 
 func _setup_disconnect_indicator() -> void:
@@ -493,9 +496,22 @@ func host_session(level: LevelData) -> void:
 		return
 	_pending_level_data = level
 	_hosting_requested = true
+	_host_cancelled = false
 	if _loading_overlay:
-		_loading_overlay.show_indeterminate("Opening a room...")
+		_loading_overlay.show_indeterminate("Opening a room...", true)
 	NetworkManager.host_game()
+
+
+## The "Opening a room..." wait's Cancel: stop hosting and stay on the title. Hosting may
+## still finish after this (Steam answers late); _on_network_state_changed drops it then.
+func _on_room_wait_cancelled() -> void:
+	if not _hosting_requested:
+		return
+	_hosting_requested = false
+	_host_cancelled = true
+	_pending_level_data = null
+	_end_room_wait()
+	NetworkManager.disconnect_game()
 
 
 ## Hide the "Opening a room..." wait (and any level loading a client had under way when the
@@ -697,6 +713,11 @@ func _on_network_state_changed(
 	if new_state == NetworkManager.ConnectionState.HOSTING and _hosting_requested:
 		_hosting_requested = false
 		change_state(State.ROOM)
+		return
+	# Hosting the player cancelled finished late: close it again.
+	if new_state == NetworkManager.ConnectionState.HOSTING and _host_cancelled:
+		_host_cancelled = false
+		NetworkManager.disconnect_game.call_deferred()
 		return
 	# Handle a disconnect at a table or in the room.
 	# PAUSED is pushed on top of PLAYING (not swapped), so check the whole

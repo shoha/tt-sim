@@ -8,13 +8,16 @@ extends RefCounted
 ## - Players: only those here now (a player who left keeps a session entry with peer 0 so a
 ##   rejoin maps back, but is not in the room), the GM (peer 1) first, then by name.
 ## - The shelf, oldest first, each map with its name and whether it is on the table.
-## - The one action: Set out this map in the room, Move the table here in the drawer, the GM's
-##   only. It is live only with a map selected (and, in the drawer, not the one already out),
-##   and only a live action takes the screen's one accent fill.
-## - Readiness is download state: "3 of 4 have it". Set out never waits for it.
+## - The one action, the GM's only: Add a map while the shelf is empty, then Set out this map
+##   once a shelf map is selected (nothing with a shelf but no selection) in the room; Move the
+##   table here in the drawer, live only on a map that is not already out. Only a live action
+##   takes the screen's one accent fill.
+## - Readiness is download state: "3 of 4 have it", and a player reads their own first ("You
+##   have it · 3 of 4"). Set out never waits for it.
 
 const SET_OUT := "Set out this map"
 const MOVE_TABLE := "Move the table here"
+const ADD_MAP := "Add a map"
 
 
 ## The players here, GM first then by name: {"id", "name", "gm", "you", "holds"}, where
@@ -77,13 +80,22 @@ static func gm_name(player_list: Array[Dictionary]) -> String:
 	return ""
 
 
-## The one action: {"text", "shown", "enabled"}. Only the GM has it.
-static func action(in_drawer: bool, is_gm: bool, selected: String, table: String) -> Dictionary:
+## The one action: {"text", "shown", "enabled", "add"} ("add": it opens the map picker). Only
+## the GM has it.
+static func action(
+	in_drawer: bool, is_gm: bool, selected: String, table: String, shelf_size: int
+) -> Dictionary:
+	var none := {"text": "", "shown": false, "enabled": false, "add": false}
 	if not is_gm:
-		return {"text": "", "shown": false, "enabled": false}
+		return none
 	if in_drawer:
-		return {"text": MOVE_TABLE, "shown": true, "enabled": selected != "" and selected != table}
-	return {"text": SET_OUT, "shown": true, "enabled": selected != ""}
+		var live := selected != "" and selected != table
+		return {"text": MOVE_TABLE, "shown": true, "enabled": live, "add": false}
+	if shelf_size == 0:
+		return {"text": ADD_MAP, "shown": true, "enabled": true, "add": true}
+	if selected == "":
+		return none
+	return {"text": SET_OUT, "shown": true, "enabled": true, "add": false}
 
 
 ## How many of the players here have the map `key`: "Everyone has it", "3 of 4 have it", or
@@ -95,6 +107,19 @@ static func readiness_text(player_list: Array[Dictionary], key: String) -> Strin
 	if holding == player_list.size():
 		return "Everyone has it"
 	return "%d of %d have it" % [holding, player_list.size()]
+
+
+## The readiness a player reads under a selected map: their own state first, then the room's
+## ("You have it · 3 of 4", "You get it at the table · 2 of 4"), or readiness_text() when the
+## player `local_id` is not listed or everyone has it.
+static func own_readiness_text(player_list: Array[Dictionary], key: String) -> String:
+	var room := readiness_text(player_list, key)
+	var mine := player_list.filter(func(p: Dictionary) -> bool: return p.you)
+	if key == "" or mine.is_empty() or room == "Everyone has it" or room == "":
+		return room
+	var holding := player_list.filter(func(p: Dictionary) -> bool: return key in p.holds).size()
+	var own := "You have it" if key in mine[0].holds else "You get it at the table"
+	return "%s · %d of %d" % [own, holding, player_list.size()]
 
 
 ## The heading: {"title", "caption"}, from the current state every time, so it never goes stale
@@ -116,8 +141,14 @@ static func header(
 	return {"title": title, "caption": "The GM sets out the next map"}
 
 
-## What the centre says with no map selected.
-static func empty_stage_text(is_gm: bool, shelf_size: int) -> String:
+## What the centre says with no map selected, over its painted placeholder: {"title",
+## "caption"}. An empty shelf says what goes there and why (I5); its one action is Add a map.
+static func empty_stage(is_gm: bool, shelf_size: int) -> Dictionary:
 	if not is_gm:
-		return "The GM is choosing a map"
-	return "Add a map to the shelf" if shelf_size == 0 else "Choose a map from the shelf"
+		return {"title": "The GM is choosing a map", "caption": "It shows here when they pick one"}
+	if shelf_size == 0:
+		return {
+			"title": "Add a map to the shelf",
+			"caption": "The shelf holds the maps you can set out for everyone",
+		}
+	return {"title": "Choose a map from the shelf", "caption": "Set it out when everyone is here"}
