@@ -241,11 +241,11 @@ func _process(delta: float) -> void:
 		"release":
 			# Ends a stroke left pressed by `release: false`, keeping the brush active.
 			var brush := ctrl().brush
-			brush.set("_pressed", false)
-			brush.call("finish_gesture")
+			brush.pressed = false
+			brush.finish_gesture()
 		"cancel":
 			# Right-click during a held stroke (release: false): drops it (P4-4).
-			ctrl().brush.call("_cancel_gesture")
+			ctrl().brush.cancel_gesture()
 		"hover":
 			# The Sculpt tool with `tile` over map point `at`, not pressed, `ctrl` held: the
 			# cursor and its readout as an author sees them before pressing.
@@ -259,7 +259,7 @@ func _process(delta: float) -> void:
 			c.call("_on_sculpt_selected", int(tiles.get(String(step.get("tile", "tier")), 0)))
 			if step.has("radius"):
 				c.brush.set_radius(float(step.radius))
-			c.brush.set("_ctrl", bool(step.get("ctrl", false)))
+			c.brush.ctrl = bool(step.get("ctrl", false))
 			var at: Array = step.at
 			_set_pointer(c.brush, Vector3(float(at[0]), 0.0, float(at[1])))
 		"place":
@@ -271,7 +271,7 @@ func _process(delta: float) -> void:
 				var at: Array = step.at
 				# Bedded on the terrain as the Place brush beds a press (P3-7: at Y = 0 a
 				# prop placed in a sunken hollow hung its trunk in the air).
-				var p: Vector3 = c.brush.call("_bedded", Vector3(float(at[0]), 0.0, float(at[1])))
+				var p: Vector3 = c.brush.bedded(Vector3(float(at[0]), 0.0, float(at[1])))
 				c.editor.place_prop(rule, p, Vector3.UP)
 				c.editor.commit_prop_edit()
 		"bridge_kind":
@@ -386,7 +386,7 @@ func _stroke(step: Dictionary) -> bool:
 				WaterBrush.Shape.POND if pond else WaterBrush.Shape.RIVER
 			)
 			if step.has("flow_speed"):
-				brush.water.speed = float(step.flow_speed)
+				WaterTool.of(brush).speed = float(step.flow_speed)
 			# Again in the Water mode, whose brush may be narrower than the others'.
 			brush.set_radius(float(step.get("radius", 4.0)))
 			_state.ctrl = bool(step.get("ctrl", false))
@@ -395,15 +395,15 @@ func _stroke(step: Dictionary) -> bool:
 		_state.phase = 1
 		_state.dist = 0.0
 		# The modifiers held for the whole stroke (a `hover` step may have left Ctrl on).
-		brush.set("_ctrl", _state.ctrl)
-		brush.set("_shift", _state.shift)
+		brush.ctrl = _state.ctrl
+		brush.shift = _state.shift
 		_set_pointer(brush, _point_at(points, 0.0))
 		return false
 	if _state.phase == 1:
-		brush.set("_pressed", true)
-		brush.set("_press_pending", true)
-		brush.set("_press_ctrl", _state.ctrl)
-		brush.set("_press_shift", _state.shift)
+		brush.pressed = true
+		brush.press_pending = true
+		brush.press_ctrl = _state.ctrl
+		brush.press_shift = _state.shift
 		_state.phase = 2
 		return false
 	var speed := float(step.get("speed", 6.0))
@@ -419,8 +419,8 @@ func _stroke(step: Dictionary) -> bool:
 			# Still pressed at the end point (a capture mid-stroke); a `release` step ends it.
 			return true
 		if bool(step.get("keep_active", false)):
-			brush.set("_pressed", false)
-			brush.call("finish_gesture")
+			brush.pressed = false
+			brush.finish_gesture()
 		else:
 			brush.finish_gesture()
 		return true
@@ -435,8 +435,8 @@ func _set_pointer(brush: BrushTool, world: Vector3) -> void:
 	if c != null and c.editor != null and c.editor.can_sculpt():
 		world.y = c.editor.ground_height_at(world)
 	var screen := gm().camera_node.unproject_position(world)
-	brush.set("_pointer", screen)
-	brush.set("_has_pointer", true)
+	brush.pointer = screen
+	brush.has_pointer = true
 
 
 ## The screen point of map point `at` ([x, z]) on the top walkable surface there (a downward

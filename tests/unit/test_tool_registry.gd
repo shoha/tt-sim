@@ -139,14 +139,13 @@ func test_a_shortcut_is_a_bare_key_press() -> void:
 	)
 
 
-func test_every_brush_mode_belongs_to_one_tool() -> void:
-	for mode in BrushTool.Mode.values():
-		var tool := ToolRegistry.for_mode(mode)
-		assert_not_null(tool, "brush mode %d has a tool" % mode)
-		if tool != null:
-			assert_eq(tool.brush_mode, mode)
+func test_every_tool_brings_its_own_brush_mode() -> void:
 	var modes := {}
 	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
+		assert_not_null(tool.brush_mode, "%s has a brush mode" % tool.id)
+		if tool.brush_mode == null:
+			continue
+		assert_true(tool.brush_mode.new() is BrushMode, "%s's mode is a BrushMode" % tool.id)
 		assert_false(modes.has(tool.brush_mode), "%s runs its own brush mode" % tool.id)
 		modes[tool.brush_mode] = tool.id
 

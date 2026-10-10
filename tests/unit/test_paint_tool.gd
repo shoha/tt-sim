@@ -323,17 +323,17 @@ func test_paint_presses_are_brush_strokes() -> void:
 	var press := InputEventMouseButton.new()
 	press.button_index = MOUSE_BUTTON_LEFT
 	press.pressed = true
-	var mode := BrushTool.Mode.PAINT
-	assert_eq(BrushTool.decide(press, mode, false, false), BrushTool.Action.BEGIN)
+	var picks := PaintBrush.new().picks
+	assert_eq(BrushTool.decide(press, picks, false, false), BrushTool.Action.BEGIN)
 	var rmb := InputEventMouseButton.new()
 	rmb.button_index = MOUSE_BUTTON_RIGHT
 	rmb.pressed = true
-	assert_eq(BrushTool.decide(rmb, mode, true, false), BrushTool.Action.CANCEL)
+	assert_eq(BrushTool.decide(rmb, picks, true, false), BrushTool.Action.CANCEL)
 	var wheel := InputEventMouseButton.new()
 	wheel.button_index = MOUSE_BUTTON_WHEEL_DOWN
 	wheel.pressed = true
 	wheel.shift_pressed = true
-	assert_eq(BrushTool.decide(wheel, mode, false, false), BrushTool.Action.SHRINK)
+	assert_eq(BrushTool.decide(wheel, picks, false, false), BrushTool.Action.SHRINK)
 
 
 # --- The cliff-face rule on the CPU -----------------------------------------------------

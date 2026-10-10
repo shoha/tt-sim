@@ -97,7 +97,7 @@
     {"op": "eval", "expr": "_authoring_controller.history.undo_count()"},
     {"op": "stroke", "mode": "sculpt", "tile": "tier", "points": [[10, 15], [12, 15]], "radius": 2.0, "speed": 2.0, "release": false},
     {"op": "call", "script": "res://tools/render_jobs/probes/height_profile.gd", "from": [11, 15], "to": [11, 15.1], "n": 2},
-    {"op": "eval", "expr": "_game_map.get_brush_tool()._cancel_gesture()"},
+    {"op": "eval", "expr": "_game_map.get_brush_tool().cancel_gesture()"},
     {"op": "call", "script": "res://tools/render_jobs/probes/height_profile.gd", "from": [11, 15], "to": [11, 15.1], "n": 2},
     {"op": "eval", "expr": "_authoring_controller.history.undo_count()"},
     {"op": "eval", "expr": "_authoring_controller.undo()"},

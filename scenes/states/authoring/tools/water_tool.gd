@@ -2,8 +2,8 @@ class_name WaterTool
 extends ToolDescriptor
 
 ## The Water tool: rivers drawn the way they flow and ponds painted as areas, carved into the
-## document's own ground, and Ctrl to erase (BrushTool.Mode.WATER; WaterBrush does the
-## gestures, WaterEditor the carve). Its pane is WaterToolPane, which AuthoringPanel builds and
+## document's own ground, and Ctrl to erase (WaterBrush does the gestures, WaterEditor the
+## carve). Its pane is WaterToolPane, which AuthoringPanel builds and
 ## relays. On a dressed Blender map it only erases water painted over it, and with none to
 ## erase it is disabled (AuthoringPanel.set_water_available).
 
@@ -17,7 +17,7 @@ func _init() -> void:
 	label = LABEL
 	summary = "Rivers, streams and ponds."
 	icon = "droplet"
-	brush_mode = BrushTool.Mode.WATER
+	brush_mode = WaterBrush
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [
 		["Left Drag (Water)", "River: draw it the way it flows. Pond: paint its area"],
@@ -30,6 +30,11 @@ func _init() -> void:
 		],
 		["Dry channel", "Erased water leaves its channel: Sculpt's Smooth fills it"],
 	]
+
+
+## The tool's mode on `brush`.
+static func of(brush: BrushTool) -> WaterBrush:
+	return brush.mode_for(ToolRegistry.find(ID)) as WaterBrush
 
 
 ## Where water can be carved, or the document has water to erase.

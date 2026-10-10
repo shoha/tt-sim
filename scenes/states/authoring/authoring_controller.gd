@@ -108,14 +108,10 @@ func setup(game_map: GameMap) -> void:
 	tokens.edited.connect(mark_edited)
 	_build_ui()
 	brush.toggled.connect(_on_brush_toggled)
-	brush.paint_refused.connect(_on_paint_refused)
-	brush.water_refused.connect(
+	brush.refused.connect(
 		func(reason: String) -> void: UIManager.show_toast(reason, UIManager.TOAST_WARNING, 5.0)
 	)
-	brush.bridge_refused.connect(
-		func(reason: String) -> void: UIManager.show_toast(reason, UIManager.TOAST_WARNING, 5.0)
-	)
-	brush.paint_surface = panel.get_paint_surface()
+	PaintTool.of(brush).surface = panel.get_paint_surface()
 	brush.radius_changed.connect(func(_radius: float) -> void: _show_brush_values())
 	_show_brush_values()
 	_autosave_timer = Timer.new()
@@ -148,7 +144,9 @@ func _build_ui() -> void:
 	panel.paint_selected.connect(_on_paint_selected)
 	panel.water_shape_selected.connect(_on_water_shape_selected)
 	panel.water_depth_selected.connect(_on_water_depth_selected)
-	panel.water_speed_changed.connect(func(speed: float) -> void: brush.water.speed = speed)
+	panel.water_speed_changed.connect(
+		func(speed: float) -> void: WaterTool.of(brush).speed = speed
+	)
 	panel.bridge_kind_selected.connect(_on_bridge_kind_selected)
 	panel.brush_size_changed.connect(func(radius: float) -> void: brush.set_radius(radius))
 	panel.brush_strength_changed.connect(func(flow: float) -> void: brush.set_flow(flow))
@@ -488,8 +486,8 @@ func _use_biome(biome_id: String) -> void:
 	elif is_instance_valid(scatter):
 		scatter.prepare_biome(biome_id)
 	if brush:
-		brush.biome_id = biome_id
-		brush.biome_tint = biome_tint(biome_id)
+		BiomeTool.of(brush).biome_id = biome_id
+		BiomeTool.of(brush).tint = biome_tint(biome_id)
 	# Silent; also opens the biome's group in the Place picker.
 	panel.select_biome(biome_id)
 
@@ -501,8 +499,9 @@ func _on_tool_selected(tool_id: StringName) -> void:
 func _on_place_selected(biome_id: String, species_key: String) -> void:
 	if editor == null:
 		return
-	brush.place_rule = editor.species_rule(biome_id, species_key)
-	for asset_id in brush.place_rule.get("assets", []):
+	var place := PlaceTool.of(brush)
+	place.rule = editor.species_rule(biome_id, species_key)
+	for asset_id in place.rule.get("assets", []):
 		if is_instance_valid(props):
 			props.prepare_assets([asset_id])
 	_select_tool(AuthoringPanel.TOOL_PLACE)
@@ -511,7 +510,7 @@ func _on_place_selected(biome_id: String, species_key: String) -> void:
 ## A picked Sculpt tile becomes the Sculpt brush's operation and switches to that brush.
 func _on_sculpt_selected(tile: int) -> void:
 	if brush:
-		brush.sculpt_tile = tile
+		SculptTool.of(brush).tile = tile
 	_select_tool(AuthoringPanel.TOOL_SCULPT)
 
 
@@ -532,8 +531,8 @@ func _on_paint_selected(surface: String) -> void:
 func use_surface(surface: String) -> void:
 	if brush == null:
 		return
-	brush.paint_surface = surface
-	brush.paint_tint = surface_tint(surface)
+	PaintTool.of(brush).surface = surface
+	PaintTool.of(brush).tint = surface_tint(surface)
 	var terrain := _terrain()
 	if terrain:
 		terrain.warm_surface(surface)
@@ -543,14 +542,14 @@ func use_surface(surface: String) -> void:
 ## A picked Water tile (River or Pond) becomes the Water brush's shape and switches to it.
 func _on_water_shape_selected(shape: int) -> void:
 	if brush:
-		brush.water.shape = shape
+		WaterTool.of(brush).shape = shape
 	_select_tool(AuthoringPanel.TOOL_WATER)
 
 
 ## A picked depth tile becomes the depth the Water brush's next stroke makes.
 func _on_water_depth_selected(depth: int) -> void:
 	if brush:
-		brush.water.depth = depth
+		WaterTool.of(brush).depth = depth
 		_show_brush_values()
 	_select_tool(AuthoringPanel.TOOL_WATER)
 
@@ -558,8 +557,9 @@ func _on_water_depth_selected(depth: int) -> void:
 ## Shows the brush's size and strength in the Advanced rows, and the Water tool's width (its
 ## radius clamped to the depth's narrowest channel, as a full width) and flow.
 func _show_brush_values() -> void:
+	var water := WaterTool.of(brush)
 	panel.set_brush_values(brush.get_radius(), brush.get_flow())
-	panel.set_water_values(2.0 * brush.water_radius(), brush.water.speed)
+	panel.set_water_values(2.0 * water.radius(brush.get_radius()), water.speed)
 
 
 ## Shows on the rail which tools the open map can take, tool by tool
@@ -576,7 +576,7 @@ func _refresh_tools() -> void:
 ## `bridge_kind`) shows in the pane as the tile would.
 func _on_bridge_kind_selected(kind: int) -> void:
 	if brush:
-		brush.bridge.kind = kind
+		BridgeTool.of(brush).kind = kind
 	if panel != null and panel.bridge_pane != null:
 		panel.bridge_pane.select_kind(kind)
 	_select_tool(AuthoringPanel.TOOL_BRIDGE)
@@ -600,13 +600,6 @@ func warm_crossings() -> void:
 			if not _superseded(generation) and is_instance_valid(map_root):
 				AuthoredCrossings.of_map(map_root).warm_materials(document.biome_ids)
 	)
-
-
-## A Paint press was refused (every slot holds paint): say why.
-func _on_paint_refused(surface: String) -> void:
-	var reason := editor.surface_refusal(surface) if editor else ""
-	if reason != "":
-		UIManager.show_toast(reason, UIManager.TOAST_WARNING, 5.0)
 
 
 ## Disables the Paint tiles that cannot take a slot (all eight hold paint) with the reason
@@ -642,11 +635,11 @@ func _refresh_paint_order() -> void:
 ## to but left put down (the Biome brush before a biome is picked).
 func _select_tool(tool_id: StringName) -> void:
 	var tool := ToolRegistry.find(tool_id)
-	if brush == null or not _is_open or tool == null or tool.brush_mode < 0:
+	if brush == null or not _is_open or tool == null or tool.brush_mode == null:
 		return
 	if not tool.can_select(self):
 		return
-	brush.set_mode(tool.brush_mode as BrushTool.Mode)
+	brush.use_tool(tool)
 	if not tool.armed(self):
 		brush.deactivate()
 		return
@@ -655,9 +648,9 @@ func _select_tool(tool_id: StringName) -> void:
 	panel.set_active_tool(tool_id)
 
 
-## Tints the rail item of the tool whose brush is active (ToolRegistry.for_mode).
+## Tints the rail item of the tool whose brush is active.
 func _on_brush_toggled(active: bool) -> void:
-	var tool := ToolRegistry.for_mode(brush.mode) if active else null
+	var tool := brush.tool if active else null
 	panel.set_active_tool(tool.id if tool != null else &"")
 
 

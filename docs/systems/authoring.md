@@ -25,7 +25,9 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 | `scenes/states/authoring/tool_registry.gd` | `ToolRegistry` | Every map tool in rail order; the panel, the controller and F1 help read it |
 | `scenes/states/authoring/tools/tool_descriptor.gd` | `ToolDescriptor` | One tool's declaration and its hooks; `BiomeTool` ... `BridgeTool` beside it |
 | `scenes/states/authoring/authoring_panel.gd` | `AuthoringPanel` | The tool drawer: rail, panes, the session footer, Escape |
-| `scenes/states/authoring/brush_tool.gd` | `BrushTool` | Gestures and the ring cursor; `decide()`, `Mode`, `sculpt_op()` |
+| `scenes/states/authoring/brush_tool.gd` | `BrushTool` | The host every tool's gestures share: pointer, ground ray, size, dab stroke, `decide()`; dispatches to the tool's mode |
+| `scenes/states/authoring/brush_mode.gd` | `BrushMode` | One tool's gestures and cursor; `BiomeBrush`, `ThinBrush`, `PlaceBrush`, `SculptBrush` (`sculpt_op()`), `PaintBrush`, `WaterBrush`, `BridgeBrush` beside it |
+| `scenes/states/authoring/brush_cursor.gd` | `BrushCursor` | The cursor overlay and the ring every mode can draw |
 | `scenes/states/authoring/authoring_editor.gd` | `AuthoringEditor` | One per opened map; owns the edits |
 | `scenes/states/authoring/height_editor.gd` | `HeightEditor` | `AuthoringEditor.heights`: sculpt strokes and the height work they, water edits and live edits share |
 | `utils/live_edit_codec.gd`, `utils/live_edit_reader.gd` | `LiveEditCodec`, `LiveEditReader` | Live edits: a history entry's redo or undo side as bytes, the decode checks, the peer's queue, chunks and the sender's pacing |
@@ -90,8 +92,9 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 
 ## Authoring
 
-- `BrushTool` (created by `GameMap.setup_brush_tool()`) owns gestures and the ring cursor; its
-  input table is the pure `BrushTool.decide()`.
+- `BrushTool` (created by `GameMap.setup_brush_tool()`) hosts the gestures; its input table is
+  the pure `BrushTool.decide()`, and each tool's own gestures are its `BrushMode` (Tools
+  below).
 - `AuthoringEditor` (one per opened map) owns the edits. `MaskStroke` writes the document's
   masks, with its rules in the pure `MaskBrush`: `(1 - t^2)^2` falloff, exposure
   `1 - exp(-3 w s)` toward the target, the biome replacement contest, and the erase mask's
@@ -104,13 +107,13 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 - History stores per-block (40 x 40 samples) ZSTD mask diffs and per-cell prop rows, never
   whole documents.
 - Removed scatter shrinks out (`ScatterShrink`).
-- The Paint tool is `BrushTool.Mode.PAINT`:
+- The Paint tool's mode is `PaintBrush`:
   `AuthoringEditor.begin_surface_stroke(surface, erase)` runs a `SurfaceStroke` (the
   MaskStroke pattern on `MapDocument.surface_weights`: slot claim through `ensure_surface()`,
   trailing empty slots trimmed at stroke end, per-block diffs), blits the ground per frame,
   and regenerates scatter at stroke end only for built or cliff-role surfaces.
-- The Sculpt tool is `BrushTool.Mode.SCULPT`: the press's operation is the pure
-  `BrushTool.sculpt_op(tile, ctrl, shift)`; Tier's target is `AuthoringEditor.tier_target()`
+- The Sculpt tool's mode is `SculptBrush`: the press's operation is the pure
+  `SculptBrush.sculpt_op(tile, ctrl, shift)`; Tier's target is `AuthoringEditor.tier_target()`
   (a whole tier, `HeightBrush.tier_target_level`) and its cliff profile `HeightBrush.tier_goal()`
   (tops exactly on `k * tier_height_m`). Height edits and their refresh calls are in
   [authored_terrain.md](authored_terrain.md). `HeightEditor` (`AuthoringEditor.heights`, split
@@ -127,13 +130,16 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 - One registry (2026-10-09): `ToolRegistry` lists one `ToolDescriptor` per tool, in rail
   order (Biome, Thin / Clear, Place, Sculpt, Paint, Water, Bridge), and nothing else lists
   tools. `AuthoringPanel` builds its rail items (`ToolRegistry.rail_items`) and one pane per
-  tool from it; `AuthoringController._select_tool` and `_on_brush_toggled` go through it;
-  the F1 help overlay puts each tool's rows between the shared Map building rows.
+  tool from it; `AuthoringController._select_tool` goes through it (and hands the brush the
+  descriptor, `BrushTool.use_tool`); the F1 help overlay puts each tool's rows between the
+  shared Map building rows.
 - A descriptor declares the id, label (rail tooltip and pane title), summary (pane caption
   and help row), rail icon, an optional shortcut (a bare `Key`; none of the seven has one,
-  so a key is still free to give), its `BrushTool.Mode`, its own help rows, an unavailable
-  tooltip, and its contexts (`ToolDescriptor.AUTHORING`, `PLAY`; every query takes one, and
-  play lists no tool yet).
+  so a key is still free to give), its `brush_mode` (the `BrushMode` class its gestures run
+  in), its own help rows, an unavailable tooltip, and its contexts
+  (`ToolDescriptor.AUTHORING`, `PLAY`; every query takes one, and play lists no tool yet).
+  A tool whose pane sets what its mode paints has a static `of(brush)` returning that mode,
+  typed (`SculptTool.of(brush).tile`, `WaterTool.of(brush).depth`).
 - Hooks, which read the controller's public state only: `can_select` refuses a pick the open
   map cannot take (Sculpt, Paint: the document's own ground; Water, Bridge:
   `WaterTool.has_water_work`), `armed` leaves the brush put down while it has nothing to
@@ -145,9 +151,28 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   `WaterToolPane` and `BridgeToolPane`, whose signals the panel relays to the controller). A
   new tool returns its pane class from `build_pane` and wires it in `connect_pane`, so it
   edits neither hub.
-- A new tool with gestures of its own still adds a `BrushTool.Mode` and its dispatch in
-  `brush_tool.gd` (with a mode object like `WaterBrush` or `BridgeBrush`), and that file is at
-  980 lines: its cursor drawing (`_on_draw` onward) is the `BrushCursor` seam to take first.
+- Gestures (2026-10-10): `BrushTool` is a host that knows no tool by name. It keeps the
+  pointer and its ground ray, the press and its modifiers, the brush size and flow, and the
+  dab stroke with its dwell gain, and routes the current tool's press, frames, release,
+  cancel, size step, target removal and cursor to its `BrushMode`. `BrushTool.mode_for`
+  makes one mode per tool and keeps it, so a tile picked survives switching tools.
+- A mode's hooks (`brush_mode.gd` has the contract): `press` returns true when it began an
+  editor stroke the host is to dab (Biome, Thin, Sculpt, Paint, a pond or a water erase);
+  otherwise the mode does its own work in `frame`, `end` and `cancel` (Place's prop,
+  Water's river line, Bridge's line). `step` is the Shift+wheel and bracket gesture,
+  `picks` / `has_target` / `remove_target` the Place-style target under the pointer,
+  `sees_crossings` lets the ray pick crossings (Bridge), `fades` and `fade_focus` the canopy
+  fade, `min_radius` and `stroke_radius` the ring's size, `hit_past_edge` a mode's own ground
+  past the map edge (a river). A refused press or release emits the host's one `refused`
+  signal with the reason, which the controller toasts.
+- Cursor: `draw_cursor(brush, cursor)` draws on `BrushCursor`'s overlay; the default is the
+  conformed ring (`BrushCursor.draw_ring`, in `cursor_tint` with `cursor_text` under it).
+  Sculpt conforms it to the document's heights every frame, Water draws its previews under
+  it, and Place and Bridge draw cursors of their own.
+- Modes reach the editor and the host only, never `AuthoringController`, so a play-side host
+  (the GM's Events pane over `LiveEdits.editor`) can run the same modes. A new tool with
+  gestures adds its `BrushMode` subclass beside `water_brush.gd` and names it in its
+  descriptor; it edits no brush code.
 
 ## Live edits
 
@@ -229,7 +254,12 @@ Unit tests in `tests/unit/`: `test_authoring_open.gd`, `test_authoring_session.g
 `test_live_edit_codec.gd`, `test_live_edits_table.gd`, `test_live_map_edits.gd`,
 `test_tool_registry.gd` (every
 registered tool on the rail, with a pane and in help; unique ids, shortcuts and brush modes).
-The render job `tool_panes` captures the rail, each tool's pane and the help rows.
+`test_brush_tool_input.gd` also checks that the brush runs each registered tool's own mode
+and keeps it across switches. The render job `tool_panes` captures the rail, each tool's pane
+and the help rows. The 2026-10-10 split was checked with a before and after run of a cursor
+job (every tool's cursor, Ctrl variants, a held river and a held bridge line on a bare
+100 ft map; 16 full-size captures): no pixel moved by more than 8 levels outside two stray
+3D pixels that also differ in the raw SubViewport captures.
 
 ## Open work
 
@@ -245,3 +275,7 @@ See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work".
   for late joiners; play keeps a document's props apart (`keep_props_apart`).
 - 2026-10-09: the tool registry (`ToolRegistry`, one `ToolDescriptor` per tool); the panel's
   `RAIL_ITEMS` and the controller's per-tool select and mode tables are gone.
+- 2026-10-10: brush modes: `BrushTool` (980 lines) split into a host (about 500), the
+  cursor (`BrushCursor`) and one `BrushMode` per tool, named by its descriptor's
+  `brush_mode`; the `BrushTool.Mode` enum, `ToolRegistry.for_mode` and the three
+  per-tool refusal signals are gone (one `refused`).

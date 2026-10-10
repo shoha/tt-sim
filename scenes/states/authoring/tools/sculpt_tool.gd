@@ -2,9 +2,9 @@ class_name SculptTool
 extends ToolDescriptor
 
 ## The Sculpt tool: raises, smooths, flattens and tiers the document's own ground
-## (BrushTool.Mode.SCULPT; HeightEditor runs the strokes). Its pane is AuthoringPanel's four
-## tiles. A dressed Blender map's ground is the GLB's, so there the tool is disabled with a
-## tooltip saying why.
+## (SculptBrush; HeightEditor runs the strokes). Its pane is AuthoringPanel's four tiles. A
+## dressed Blender map's ground is the GLB's, so there the tool is disabled with a tooltip
+## saying why.
 
 const ID := &"sculpt"
 const LABEL := "Sculpt"
@@ -16,9 +16,14 @@ func _init() -> void:
 	label = LABEL
 	summary = "Shape the ground."
 	icon = "mountain"
-	brush_mode = BrushTool.Mode.SCULPT
+	brush_mode = SculptBrush
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [["Shift + Left Drag", "Smooth the ground (Sculpt, any tile)"]]
+
+
+## The tool's mode on `brush`.
+static func of(brush: BrushTool) -> SculptBrush:
+	return brush.mode_for(ToolRegistry.find(ID)) as SculptBrush
 
 
 ## Only where the ground is the document's.

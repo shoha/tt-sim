@@ -258,7 +258,7 @@ static func _timing(base: Node) -> String:
 	return (
 		"last plan %.2f ms; last refresh %.2f ms (keys %.2f, build %.2f, swap %.2f; rebuilt %d of %d)"
 		% [
-			ctrl.brush.bridge.last_plan_usec / 1000.0,
+			BridgeTool.of(ctrl.brush).last_plan_usec / 1000.0,
 			ctrl.editor.crossings.last_refresh_usec / 1000.0,
 			node.last_key_usec / 1000.0 if node else -1.0,
 			node.last_build_usec / 1000.0 if node else -1.0,

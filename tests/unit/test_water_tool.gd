@@ -126,13 +126,18 @@ func test_width_clamps_to_the_narrowest_channel_of_each_depth() -> void:
 	# The brush itself may be narrower in the Water tool than the other tools allow.
 	var tool := BrushTool.new()
 	add_child_autofree(tool)
-	tool.set_mode(BrushTool.Mode.WATER)
-	tool.water.depth = WaterBody.Depth.ANKLE
+	tool.use_tool(ToolRegistry.find(WaterTool.ID))
+	var water := WaterTool.of(tool)
+	water.depth = WaterBody.Depth.ANKLE
 	tool.set_radius(0.3)
-	assert_almost_eq(tool.water_radius(), WaterCarve.min_half_width(WaterBody.Depth.ANKLE), 1e-5)
-	tool.water.depth = WaterBody.Depth.DEEP
-	assert_almost_eq(tool.water_radius(), WaterCarve.min_half_width(WaterBody.Depth.DEEP), 1e-5)
-	tool.set_mode(BrushTool.Mode.BIOME)
+	assert_almost_eq(tool.get_radius(), 0.3, 1e-5, "below the other tools' MIN_RADIUS")
+	var ankle := WaterCarve.min_half_width(WaterBody.Depth.ANKLE)
+	assert_almost_eq(water.radius(tool.get_radius()), ankle, 1e-5)
+	assert_almost_eq(water.stroke_radius(tool), ankle, 1e-5, "the ring shows the water width")
+	water.depth = WaterBody.Depth.DEEP
+	var deep := WaterCarve.min_half_width(WaterBody.Depth.DEEP)
+	assert_almost_eq(water.radius(tool.get_radius()), deep, 1e-5)
+	tool.use_tool(ToolRegistry.find(BiomeTool.ID))
 	assert_almost_eq(tool.get_radius(), BrushTool.MIN_RADIUS, 1e-5, "other tools start at 1 m")
 	tool.set_radius(BrushTool.DEFAULT_RADIUS)
 	assert_almost_eq(WaterCarve.min_half_width(WaterBody.Depth.ANKLE), 0.44, 0.01)

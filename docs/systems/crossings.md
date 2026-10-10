@@ -34,7 +34,7 @@ Bridge tool's gestures, pane and refusal readout are in [../UI_SYSTEMS.md](../UI
 | `utils/crossing_cache.gd` | `CrossingCache` | Pure: per-crossing rebuild keys over the fields, the ground and the water under a crossing; `plan`, `key_of` |
 | `scenes/terrain/authored_crossings.gd` | `AuthoredCrossings` | The node under the map root: per-crossing meshes, collision, materials per style (wood, stone, moss, paving, gravel), `warm_materials`, `world_top`, `exclude_of` |
 | `scenes/states/authoring/crossing_editor.gd` | `CrossingEditor` | `AuthoringEditor.crossings`: plan, place, replace, remove, `follow(area)` and `restore` |
-| `scenes/states/authoring/bridge_brush.gd` | `BridgeBrush` | The Bridge tool (`BrushTool` mode `BRIDGE`): live re-plan, refusal text |
+| `scenes/states/authoring/bridge_brush.gd` | `BridgeBrush` | The Bridge tool's `BrushMode`: live re-plan, refusal text |
 | `scenes/states/authoring/bridge_tool_pane.gd` | | The Bridge pane (`UI_SYSTEMS.md`) |
 | `utils/ground_height_field.gd` | `GroundHeightField` | The deck texture the grid shader reads (`get_deck_texture()`), `world_height_at()` with decks |
 | `utils/scatter_ground.gd` | `ScatterGround` | Nothing grows under a deck, its stones or the landings (`sampler` times `clearance`) |
@@ -331,8 +331,8 @@ Bridge tool's gestures, pane and refusal readout are in [../UI_SYSTEMS.md](../UI
   ground sampling into document heights (`DressingGround.begin(..., exclude)`); a sculpt
   stroke marches the document's heights and never sees them. Sculpt, Paint and Water edit the
   ground under a bridge.
-- **Bridge tool** (`BridgeBrush`, `scenes/states/authoring/bridge_brush.gd`; `BrushTool` mode
-  `BRIDGE`): a press starts a line, every 8 cm of pointer travel re-plans it (`plan`, 1.8-2.3
+- **Bridge tool** (`BridgeBrush`, `scenes/states/authoring/bridge_brush.gd`; the Bridge
+  tool's `BrushMode`): a press starts a line, every 8 cm of pointer travel re-plans it (`plan`, 1.8-2.3
   ms; 3.1-3.5 ms for any kind on the P4d-5 map), the release adds the last plan (one entry).
   Its pointer ray does not skip crossing bodies (the other brushes do), so a deck is picked
   where it is drawn. Four tiles in the pane (P4d-3, `KIND_TILES`, one column each): Planks,
