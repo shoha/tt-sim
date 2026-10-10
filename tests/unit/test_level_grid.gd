@@ -73,6 +73,8 @@ func test_select_and_selection_signal() -> void:
 	grid.select(TEMP_DIR + "b/")
 	assert_eq(grid.selected_info()["name"], "Bravo")
 	assert_true(grid._cards[1].button_pressed)
+	assert_eq(grid._cards[1]._strip.theme_type_variation, &"CardStripSelected")
+	assert_eq(grid._cards[0]._strip.theme_type_variation, &"CardStrip")
 	assert_signal_not_emitted(grid, "selection_changed", "programmatic select is silent")
 	grid._cards[2]._on_pressed()
 	assert_signal_emitted_with_parameters(grid, "selection_changed", [_levels[2]])
@@ -150,6 +152,25 @@ func test_two_columns_fit_side_by_side_with_a_scrollbar() -> void:
 	var second: Control = grid._cards[1]
 	assert_eq(first.position.y, second.position.y, "second card sits beside the first")
 	assert_lt(first.size.x * 2.0 + 8.0 + grid.get_v_scroll_bar().size.x, 617.0)
+
+
+## A wide grid adds columns rather than stretch a card past MAX_CARD_WIDTH.
+func test_a_wide_grid_adds_columns_instead_of_stretching_cards() -> void:
+	var grid := LevelGrid.new()
+	grid.provider = func() -> Array[Dictionary]: return _levels
+	grid.columns = 2
+	grid.size = Vector2(1400, 600)
+	add_child_autofree(grid)
+	grid.refresh()
+	await wait_frames(2)
+	assert_lte(grid._cards[0].custom_minimum_size.x, float(LevelGrid.MAX_CARD_WIDTH))
+	assert_eq(grid._cards[0].position.y, grid._cards[2].position.y, "three cards in one row")
+	var ring_out := 4.0
+	assert_gte(grid._flow.position.x, ring_out, "a focus ring fits inside the clip on the left")
+	assert_gte(grid._flow.position.y, ring_out, "and on the top")
+	grid.size = Vector2(500, 600)
+	await wait_frames(2)
+	assert_gt(grid._cards[0].custom_minimum_size.x, 200.0, "a narrow grid keeps its two columns")
 
 
 func test_rename_of_a_legacy_level_reselects_by_the_new_path() -> void:

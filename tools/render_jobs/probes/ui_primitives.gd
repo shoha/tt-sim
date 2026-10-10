@@ -28,9 +28,12 @@ extends RefCounted
 ## - `dusk` (`hour`, default 19.0): set the play map's time of day as a player dragging the
 ##   Sun pane's Time of day row does (the visuals drawer must be open on Sun; the edit is
 ##   live and left unsaved), so the in-play captures can be taken against a dark board.
-## - `focus` (`target` "title_join" or "add_token"): give keyboard focus to a quiet button,
-##   the title's Join Game (paper) or the play HUD's Add Token (glass), as Tab would;
-##   `blur` takes focus away again.
+## - `focus` (`target` "title_join", "add_token", "title_card" or "glass_tile"): give
+##   keyboard focus to a quiet button, the title's Join Game (paper) or the play HUD's Add
+##   Token (glass), or to a selected item, the title's selected level card (paper) or the
+##   authoring drawer's picked tile (glass), as Tab would. Drawer tiles take no keyboard focus,
+##   so for `glass_tile` the probe sets the tile's focus_mode first. `blur` takes focus away
+##   again.
 ## - `save` (`folder`, `name`, `replace`): write the open authoring map as a test level
 ##   (`_u1_ui_` or `_ui_tour_` folders only), shown under `name` (default the folder).
 ## - `cleanup`: delete every `_u1_ui_*` and `_ui_tour_*` level folder.
@@ -217,7 +220,7 @@ static func _host_lobby(base: Node, step: Dictionary) -> String:
 	lobby.player_list.add_item("%s (Host)" % NetworkManager.get_player_name())
 	for player in SAMPLE_PLAYERS:
 		lobby.player_list.add_item(player)
-	lobby.status_label.text = "%d player(s) connected" % (SAMPLE_PLAYERS.size() + 1)
+	lobby.status_label.text = LobbyHost.players_connected_text(SAMPLE_PLAYERS.size() + 1)
 	return "host lobby on %s, code %s" % [level.level_name, lobby.room_code_value.text]
 
 
@@ -274,10 +277,35 @@ static func _focus(base: Node, target: String) -> String:
 			button = title.get("join_button") if title else null
 		"add_token":
 			button = base.find_child("ToggleAssetBrowserButton", true, false) as Button
+		"title_card":
+			var title: CanvasLayer = base.get("_title_screen")
+			var grid: Node = title.get("grid") if title else null
+			button = _first_pressed(grid, &"Card")
+		"glass_tile":
+			button = _first_pressed(_find_drawer(base, "authoring"), &"Tile")
+			if button:
+				# Drawer tiles take no keyboard focus (TileRow); the probe lets this one, so the
+				# capture shows how focus and selection stack on glass.
+				button.focus_mode = Control.FOCUS_ALL
 	if button == null or not button.is_visible_in_tree():
 		return "no visible %s button" % target
 	button.grab_focus()
 	return "focus on %s (%s)" % [button.text, button.theme_type_variation]
+
+
+## The first visible pressed Button of `variation` under `root`, or null.
+static func _first_pressed(root: Node, variation: StringName) -> Button:
+	if root == null:
+		return null
+	for node in root.find_children("*", "Button", true, false):
+		var button := node as Button
+		if (
+			button.theme_type_variation == variation
+			and button.button_pressed
+			and button.is_visible_in_tree()
+		):
+			return button
+	return null
 
 
 static func _toasts() -> String:

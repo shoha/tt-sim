@@ -14,10 +14,11 @@ enum Profile { AUTO, MOUSE, TRACKPAD }
 
 ## Label table: action_id -> [mouse_label, trackpad_label]
 const LABELS := {
-	&"pan": ["MMB Drag", "RMB Drag"],
+	&"pan": ["MMB drag", "RMB drag"],
 	&"zoom": ["Scroll", "Scroll"],
 	&"reset_camera": ["Home", "C"],
-	&"rotate": ["MMB Drag", "R+Drag"],
+	# The same gesture as pan, told apart by where it starts.
+	&"rotate": ["MMB drag on a token", "R+drag on a token"],
 	&"scale": ["Shift+MMB", "Shift+R+Drag"],
 	&"reset_transform": ["MMB DblClick", "R+DblClick"],
 	&"measure": ["M", "M"],

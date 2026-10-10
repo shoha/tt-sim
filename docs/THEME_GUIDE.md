@@ -50,9 +50,16 @@ role only to draw or tint by hand, through the control being drawn:
 
 | Type | Variations |
 |---|---|
-| `Label` (default: Inter body 16, text) | `Wordmark` (Fraunces 56), `Title` / `H1` (Fraunces 26), `Heading` / `H2` / `SectionHeader` / `PanelHeader` (Fraunces 19), `Eyebrow` (Fraunces italic 19), `H3` (Inter 16 semibold), `Body`, `Caption` / `RailLabel` (14, soft), `BodyState`, `CaptionState`, `Code` (Inter 19 semibold, tabular figures, slashed zero, tailed l: a code read aloud), `CardInitial` (Fraunces 56, soft: a level card's placeholder initial), `CountBadgeLabel` (caption, strong, on the accent) |
+| `Label` (default: Inter body 16, text) | `Wordmark` (Fraunces 56), `Title` / `H1` (Fraunces 26), `Heading` / `H2` / `SectionHeader` / `PanelHeader` (Fraunces 19), `Eyebrow` (Fraunces italic 19), `H3` (Inter 16 semibold), `Body`, `Caption` / `RailLabel` (14, soft), `BodyState`, `CaptionState`, `Code` (Inter 19 semibold, tabular figures, slashed zero, tailed l: a code read aloud), `CardInitial` (Fraunces 56, soft: a level card's placeholder initial), `CountBadgeLabel` (caption, strong, on the accent), `BodyOnSelected` / `CaptionOnSelected` (body and caption in ON_SELECTED: text on a selected fill) |
 | `Button` (default: the quiet secondary) | `Primary` (one per screen), `Danger` (danger confirm only), `Ghost` (no fill, soft text), `Secondary` (alias of the default), `IconButton`, `IconButtonActive`, `Tile`, `Card`, `FoldoutHeader` |
-| `PanelContainer` (default: a `Sheet`) | `Sheet`, `Inset` / `PanelInset`, `PanelElevated`, `PanelBordered`, `KeyChip`, `Chip` (a label over the board: glass with its rim on glass, never a black box), `CountBadge` (the accent pill behind a count), `ToastInfo` / `ToastSuccess` / `ToastWarning` / `ToastError` (a toast: its kind in a left stripe of state, success, warning or danger); `Panel`: `Badge` (the unsaved dot), `CardThumb` (a card's thumbnail well: the inset wash, the shape the card clips its picture to); `ProgressBar`: `ProgressSuccess`, `ProgressDanger` (a finished or failed bar) |
+| `PanelContainer` (default: a `Sheet`) | `Sheet`, `Inset` / `PanelInset`, `PanelElevated`, `PanelBordered`, `KeyChip`, `CodeChip` (the room code: a key chip with 12 / 6 padding), `CardStrip` / `CardStripSelected` (a card's caption strip: clear, or the selected fill when the card is selected), `Chip` (a label over the board: glass with its rim on glass, never a black box), `CountBadge` (the accent pill behind a count), `ToastInfo` / `ToastSuccess` / `ToastWarning` / `ToastError` (a toast: its kind in a left stripe of state, success, warning or danger); `Panel`: `Badge` (the unsaved dot), `CardThumb` (a card's thumbnail well: the inset wash, the shape the card clips its picture to); `ProgressBar`: `ProgressSuccess`, `ProgressDanger` (a finished or failed bar) |
+| `HBoxContainer` / `ScrollContainer` | `PropertyRow` (a sheet's label-and-control row: 16 px gap; `PropertyRow.fit_sheet_row(row)` also sets the 184 px label column), `CardGrid` (a scrolling card grid: a clear panel whose 6 px margins keep a focused card's ring inside the clip) |
+
+Focus and selection never share a mark (I1). The ring is focus only: a selected `Tile` is the
+selected fill edge to edge, and a selected `Card` fills its caption strip; a focused selected
+item shows both. Dividers (`HSeparator`, `VSeparator`, popup separators) are `DIVIDER` (2 px)
+thick, so they keep a physical pixel at 1280x720. A slider's track is a 3 px rail under its
+6 px fill.
 
 The stop-play scrim is not a theme item: every full-screen sheet's backdrop `ColorRect` takes
 `scenes/ui/primitives/scrim.gd` (`Scrim`), which blurs what is behind it and lays
@@ -173,7 +180,7 @@ Buttons have semantic variants to communicate their purpose:
 | `Success`   | Green         | confirmation dialog only                                    |
 | `Warning`   | Yellow        | Reserved; not currently used by any menu                    |
 | `Danger`    | Red           | confirmation dialog only                                    |
-| `Card`      | --            | Level cards; accent border when pressed                     |
+| `Card`      | --            | Level cards; a selected card fills its caption strip (`CardStripSelected`) |
 
 Every menu screen carries exactly one default-variant (accent) action; every other action is
 `Secondary` with an icon. `Success` and `Danger` fills now appear only on `ConfirmationDialogUI`'s
@@ -260,6 +267,7 @@ For consistent tab-change animations, call `TabUtils.animate_tab_change()` from 
 | `PanelBordered` | Transparent + border | Grouping related controls      |
 | `PanelInset`    | `background`         | Recessed areas (lists, inputs) |
 | `KeyChip`       | `surface2` + border  | Key caps in shortcut rows      |
+| `CodeChip`      | `surface2` + border, 12 / 6 padding | The room code              |
 
 ---
 
@@ -429,8 +437,8 @@ Reusable controls under `scenes/ui/primitives/`, built in code (no `.tscn`). Eve
 | `Foldout` | Advanced or secondary rows | `title`, `expanded`, `body`; children authored in a `.tscn` move into `body`; re-measures wrapping bodies mid-animation; the chevron is `CHEVRON_SIZE` (16 px) square (its `expand_mode` must be set before its size, or the 72 px icon texture wins) |
 | `PropertyRow` | Label + optional check and colour + slider + inline value | `value`, `min_value`, `max_value`, `step`, `show_check`, `show_color`, `show_slider`, `overridden`, `ticks`, `hint_low`, `hint_high`, `values_visible`, `formatter`, `set_control(control)`, `value_changed`, `reset_requested` |
 | `PaneStack` | One-visible-pane content area with crossfade | `add_pane(id, pane)`, `show_pane(id)`, `pane_changed` |
-| `LevelCard` | A saved level as a selectable, actionable card (title hub, level picker) | `setup(info)`, static `caption_for(info, now_unix)`, `locked`, `begin_rename()`, `selected`, `activated`, `action_requested`, `rename_committed` |
-| `LevelGrid` | Grid of `LevelCard`s over a level provider | `provider`, `columns`, `confirm_delete`, `locked_path`, `refresh()`, `select(path)`, `selected_info()`, `card_count()`, `selection_changed`, `level_activated` |
+| `LevelCard` | A saved level as a selectable, actionable card (title hub, level picker) | `setup(info)`, `set_selected(on)` (silent; fills the caption strip), static `caption_for(info, now_unix)`, static `initial_of(name)`, `locked`, `begin_rename()`, `selected`, `activated`, `action_requested`, `rename_committed` |
+| `LevelGrid` | Grid of `LevelCard`s over a level provider; a wide grid adds columns past `columns` rather than stretch a card past `MAX_CARD_WIDTH` (400) | `provider`, `columns`, `confirm_delete`, `locked_path`, `refresh()`, `select(path)`, `selected_info()`, `card_count()`, `selection_changed`, `level_activated` |
 | `UiActions` | The two menu action shapes, as static builders | `primary(label, icon, caption, parent)`, `secondary(label, icon, parent)`, `subtitle_of(button)`, `spacer(height, parent)`, `PRIMARY_HEIGHT` 56, `SECONDARY_HEIGHT` 36 |
 | `MenuHeader` | The title block every menu screen opens with | `setup(title, caption = "", closable = false)`, `title_label`, `caption_label`, `close_button`, `close_requested` |
 

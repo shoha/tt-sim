@@ -171,21 +171,12 @@ func define_toggles() -> void:
 
 ## Sliders, progress bars and scroll bars: a slider's pill track in the track role (3:1, so
 ## the unfilled part still reads), the fill and the knob in the state role (lake shows
-## state, C5).
+## state, C5). The track is a 3 px rail under a 6 px fill. Godot draws both at the track
+## stylebox's minimum height, so the track is 3 px and the fill's expand margins widen it
+## 1.5 px each way.
 func define_ranges() -> void:
-	var track := box(c(ThemeColors.TRACK), RADIUS_PILL, 0, 3)
-	var fill := box(c(ThemeColors.STATE), RADIUS_PILL, 0, 3)
-	var slider := {
-		slider = track,
-		grabber_area = fill,
-		grabber_area_highlight = inherit(fill, {bg_color = c(ThemeColors.STATE_HOVER)}),
-		grabber = _knob(ThemeColors.STATE, 1.0),
-		grabber_highlight = _knob(ThemeColors.STATE_HOVER, 1.0),
-		grabber_disabled = _knob(ThemeColors.TEXT_SOFT, 0.5),
-	}
-	define_style("HSlider", slider)
-	var vertical_track := box(c(ThemeColors.TRACK), RADIUS_PILL, 3, 0)
-	define_style("VSlider", inherit(slider, {slider = vertical_track}))
+	define_style("HSlider", _slider(false))
+	define_style("VSlider", _slider(true))
 	define_style(
 		"ProgressBar",
 		{
@@ -264,7 +255,7 @@ func define_popups() -> void:
 		{
 			panel = panel,
 			hover = box(c(ThemeColors.SURFACE_HOVER), RADIUS_CHIP),
-			separator = {type = "stylebox_line", color = c(ThemeColors.EDGE), thickness = 1},
+			separator = {type = "stylebox_line", color = c(ThemeColors.EDGE), thickness = DIVIDER},
 			font = font_body,
 			font_size = SIZE_BODY,
 			font_color = c(ThemeColors.TEXT),
@@ -388,6 +379,26 @@ func _switch(checked: bool, alpha: float) -> ImageTexture:
 			+ knob % [knob_x, paint("fill", ThemeColors.ON_STATE, alpha)]
 		)
 	)
+
+
+## A slider's items: the 3 px track rail, the 6 px fill over it and the knob, laid across
+## (`vertical` false) or up.
+func _slider(vertical: bool) -> Dictionary:
+	var across := ["top", "bottom"] if not vertical else ["left", "right"]
+	var rail := {}
+	var widen := {}
+	for side: String in across:
+		rail["content_margin_" + side] = 1.5
+		widen["expand_margin_" + side] = 1.5
+	var fill := box(c(ThemeColors.STATE), RADIUS_PILL, 0, 0, widen)
+	return {
+		slider = box(c(ThemeColors.TRACK), RADIUS_PILL, 0, 0, rail),
+		grabber_area = fill,
+		grabber_area_highlight = inherit(fill, {bg_color = c(ThemeColors.STATE_HOVER)}),
+		grabber = _knob(ThemeColors.STATE, 1.0),
+		grabber_highlight = _knob(ThemeColors.STATE_HOVER, 1.0),
+		grabber_disabled = _knob(ThemeColors.TEXT_SOFT, 0.5),
+	}
 
 
 ## The 20 px slider knob: a raised disc with a ring in `role`.

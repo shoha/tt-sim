@@ -16,7 +16,10 @@ signal level_map_edit_requested(level_info: Dictionary)
 signal levels_changed
 
 const GAP := 12
+## The widest a card grows; past it the grid adds a column.
+const MAX_CARD_WIDTH := 400
 
+## The fewest columns; a wide grid adds more.
 @export var columns: int = 3:
 	set(value):
 		columns = value
@@ -35,6 +38,8 @@ var _selected_path: String = ""
 
 func _init() -> void:
 	horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# The CardGrid panel's margins keep a focused card's ring inside the scroll clip.
+	theme_type_variation = &"CardGrid"
 	_flow = HFlowContainer.new()
 	_flow.name = "Flow"
 	_flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -87,7 +92,7 @@ func selected_info() -> Dictionary:
 
 func _apply_selection() -> void:
 	for card in _cards:
-		card.set_pressed_no_signal(card.level_info.get("path", "") == _selected_path)
+		card.set_selected(card.level_info.get("path", "") == _selected_path)
 
 
 func _fit_columns() -> void:
@@ -97,8 +102,12 @@ func _fit_columns() -> void:
 	# flip when the bar appears (a visible-only rule oscillates at the boundary:
 	# narrower cards are shorter, which can hide the bar, which widens them again).
 	var reserved := get_v_scroll_bar().get_combined_minimum_size().x
-	var available := size.x - reserved - float(GAP * (columns - 1))
-	var width := floorf(available / float(columns))
+	reserved += get_theme_stylebox(&"panel").get_minimum_size().x
+	# A wide grid adds columns rather than stretch a card past MAX_CARD_WIDTH (S5).
+	var span := size.x - reserved + float(GAP)
+	var count := maxi(columns, ceili(span / float(MAX_CARD_WIDTH + GAP)))
+	var available := size.x - reserved - float(GAP * (count - 1))
+	var width := floorf(available / float(count))
 	for card in _cards:
 		card.custom_minimum_size.x = width
 

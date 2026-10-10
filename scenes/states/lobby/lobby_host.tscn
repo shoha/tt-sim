@@ -74,7 +74,7 @@ theme_override_constants/separation = 8
 [node name="RoomCodeChip" type="PanelContainer" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/RoomCodeSection/RoomCodeRow"]
 layout_mode = 2
 size_flags_vertical = 4
-theme_type_variation = &"KeyChip"
+theme_type_variation = &"CodeChip"
 
 [node name="RoomCodeValue" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/RoomCodeSection/RoomCodeRow/RoomCodeChip"]
 unique_name_in_owner = true

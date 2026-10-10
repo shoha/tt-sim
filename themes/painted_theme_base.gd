@@ -177,13 +177,14 @@ func _define_flat_buttons() -> void:
 		)
 	)
 	# Tiles: a centred label, so 4 px sides leave a long name (Grassland Meadow) its room in
-	# a two-column drawer. Picked is the selected fill inside a 2 px state ring: one colour
-	# on paper, a lake tile with a lake_light ring on glass.
+	# a two-column drawer. Picked is the selected fill edge to edge, with no ring of its own:
+	# the ring is focus (I1), so a picked tile that also has focus shows both, the fill and the
+	# focus ring 4 px outside it.
 	var tile := box(
 		c(ThemeColors.SURFACE_RAISED), RADIUS_CONTROL, SPACE_1, SPACE_1, edge(1, c(ThemeColors.EDGE))
 	)
 	var picked: Dictionary = inherit(
-		tile, edge(2, c(ThemeColors.STATE)), {bg_color = c(ThemeColors.SELECTED)}
+		tile, {bg_color = c(ThemeColors.SELECTED), border_color = c(ThemeColors.SELECTED)}
 	)
 	var tile_style := _button(
 		tile, inherit(tile, {bg_color = c(ThemeColors.SURFACE_HOVER)}), picked, ThemeColors.TEXT
@@ -192,13 +193,15 @@ func _define_flat_buttons() -> void:
 		tile_style[key] = c(ThemeColors.ON_SELECTED)
 	for key: String in ["icon_pressed_color", "icon_hover_pressed_color"]:
 		tile_style[key] = c(ThemeColors.ON_SELECTED)
-	tile_style.hover_pressed = inherit(picked, {bg_color = c(ThemeColors.SELECTED_HOVER)})
+	var picked_hover := c(ThemeColors.SELECTED_HOVER)
+	tile_style.hover_pressed = inherit(picked, {bg_color = picked_hover, border_color = picked_hover})
 	tile_style.font_size = SIZE_CAPTION
 	tile_style.icon_max_width = 24
 	tile_style.h_separation = SPACE_1
 	define_variant_style("Tile", "Button", tile_style)
-	# Cards: equivalent items (levels, avatars) that lift on hover and take the state ring
-	# when selected (pressed).
+	# Cards: equivalent items (levels, avatars) that lift on hover. A selected card says so in
+	# its caption strip (CardStripSelected below), never with a ring: the ring is focus, so
+	# a selected card with focus shows both.
 	var card := box(
 		c(ThemeColors.SURFACE),
 		RADIUS_CARD,
@@ -206,18 +209,35 @@ func _define_flat_buttons() -> void:
 		SPACE_1,
 		inherit(edge(1, c(ThemeColors.EDGE)), lift())
 	)
-	var card_ring := edge(2, c(ThemeColors.STATE))
 	define_variant_style(
 		"Card",
 		"Button",
 		{
 			normal = card,
 			hover = inherit(card, lift(true)),
-			pressed = inherit(card, card_ring),
-			hover_pressed = inherit(card, lift(true), card_ring),
+			pressed = card,
+			hover_pressed = inherit(card, lift(true)),
 			disabled = inherit(card, {bg_color = c(ThemeColors.SURFACE_INSET), shadow_size = 0}),
 			focus = ring(RADIUS_CARD),
 		}
+	)
+	# The caption strip under a card's picture: clear at rest, the selected fill when the card
+	# is selected, its top corners the well's bottom ones and its bottom corners concentric
+	# with the card's (the card radius less its 4 px inset). The text on it takes ON_SELECTED.
+	var strip := box(c(ThemeColors.SELECTED), RADIUS_CHIP)
+	strip.corner_radius_bottom_left = RADIUS_CARD - SPACE_1
+	strip.corner_radius_bottom_right = RADIUS_CARD - SPACE_1
+	var clear_strip: Dictionary = inherit(strip, {bg_color = Color(c(ThemeColors.SELECTED), 0.0)})
+	define_variant_style("CardStrip", "PanelContainer", {panel = clear_strip})
+	define_variant_style("CardStripSelected", "PanelContainer", {panel = strip})
+	var on_selected := {font_color = c(ThemeColors.ON_SELECTED)}
+	define_variant_style(
+		"BodyOnSelected", "Label", inherit({font = font_body, font_size = SIZE_BODY}, on_selected)
+	)
+	define_variant_style(
+		"CaptionOnSelected",
+		"Label",
+		inherit({font = font_body, font_size = SIZE_CAPTION}, on_selected)
 	)
 	# A card's thumbnail well: the paper-inset wash, its top corners concentric with the
 	# card's (the card radius less its 4 px inset). The card clips its picture to this shape;
@@ -289,6 +309,10 @@ func _define_panels() -> void:
 			)
 		}
 	)
+	# A code someone reads aloud (the room code): a key chip with room around the Code label.
+	var pencil := edge(1, c(ThemeColors.EDGE))
+	var code_chip := box(c(ThemeColors.SURFACE_RAISED), RADIUS_CHIP, SPACE_3, 6, pencil)
+	define_variant_style("CodeChip", "PanelContainer", {panel = code_chip})
 	# The unsaved-changes dot: warm, because it asks for an action (save).
 	define_variant_style("Badge", "Panel", {panel = box(c(ThemeColors.ACCENT), RADIUS_PILL)})
 
@@ -312,9 +336,17 @@ func _define_containers() -> void:
 		"MarginContainer",
 		{margin_left = SPACE_2, margin_top = SPACE_1, margin_right = SPACE_2, margin_bottom = SPACE_2}
 	)
-	var line := {type = "stylebox_line", color = c(ThemeColors.EDGE), thickness = 1}
+	# Dividers are DIVIDER thick: a 1 px line at 1280x720 falls under a physical pixel.
+	var line := {type = "stylebox_line", color = c(ThemeColors.EDGE), thickness = DIVIDER}
 	define_style("HSeparator", {separator = line, separation = SPACE_3})
 	define_style("VSeparator", {separator = inherit(line, {vertical = true}), separation = SPACE_3})
+	# A settings row: its label in one fixed column (PropertyRow.fit_sheet_row), 16 px to the
+	# control.
+	define_variant_style("PropertyRow", "HBoxContainer", {separation = SPACE_4})
+	# A card grid scrolls, so it clips: its clear panel's margins keep the cards in from that
+	# edge far enough for a focus ring (4 px outside a card) to draw whole.
+	var ring_room := box(Color(c(ThemeColors.SURFACE), 0.0), 0, 6, 6)
+	define_variant_style("CardGrid", "ScrollContainer", {panel = ring_room})
 
 
 ## Small status surfaces: chips that label the board (a ruler's distance, the input hints),
