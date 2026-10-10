@@ -10,11 +10,6 @@ const MAX_VISIBLE_ITEMS := 3
 const HIDE_DELAY := 2.0  # Seconds to wait before hiding after all downloads complete
 const PULSE_SPEED := 3.0  # Pulse animation speed
 
-# Colours not yet read from the theme (a later card moves them to ThemeColors roles)
-const COLOR_SURFACE2 := Color("#3e2b3c")
-const COLOR_SURFACE3 := Color("#50374d")
-const COLOR_TEXT_ON_ACCENT := Color("#2c1f2b")
-
 var _download_items: Dictionary = {}  # key -> {container, label, progress_bar}
 var _pack_items: Dictionary = {}  # pack_id -> {container, label, count_label, progress_bar}
 var _resume_items: Dictionary = {}  # pack_id -> {container}
@@ -68,23 +63,15 @@ func _create_badge() -> void:
 	_badge_container.offset_top = -6
 	_badge_container.offset_bottom = 10
 	_badge_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	# Style with the theme's accent colour (ember under the glass theme)
-	var style = StyleBoxFlat.new()
-	style.bg_color = ThemeColors.of(icon_button, ThemeColors.ACCENT)
-	style.set_corner_radius_all(4)
-	style.content_margin_left = 4
-	style.content_margin_right = 4
-	style.content_margin_top = 1
-	style.content_margin_bottom = 1
-	_badge_container.add_theme_stylebox_override("panel", style)
+	# The accent pill with ink text at caption size, the floor (T2).
+	_badge_container.theme_type_variation = &"CountBadge"
+	_badge_container.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 
 	icon_button.add_child(_badge_container)
 
 	_badge_label = Label.new()
 	_badge_label.text = "0"
-	_badge_label.add_theme_font_size_override("font_size", 11)
-	_badge_label.add_theme_color_override("font_color", COLOR_TEXT_ON_ACCENT)
+	_badge_label.theme_type_variation = &"CountBadgeLabel"
 	_badge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_badge_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_badge_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -136,8 +123,7 @@ func _process(delta: float) -> void:
 	# Pulse animation for icon button when not expanded
 	if _is_icon_visible and not _is_panel_expanded:
 		_pulse_time += delta * PULSE_SPEED
-		var pulse = 0.85 + 0.15 * sin(_pulse_time)
-		icon_button.modulate = Color(pulse, pulse, pulse, 1.0)
+		icon_button.modulate.a = 0.85 + 0.15 * sin(_pulse_time)
 
 
 func _add_or_update_item(
@@ -218,9 +204,7 @@ func _remove_item(pack_id: String, asset_id: String, variant_id: String, success
 	# filled the UI voice pool), and the pack's toast speaks once when the pack is done.
 	if success:
 		item.progress_bar.value = 100.0
-		item.progress_bar.modulate = Color(0.5, 0.8, 0.5)
-	else:
-		item.progress_bar.modulate = Color(0.8, 0.4, 0.4)
+	_show_outcome(item.progress_bar, success)
 
 	var tween = create_tween()
 	tween.tween_interval(0.5)
@@ -233,6 +217,12 @@ func _remove_item(pack_id: String, asset_id: String, variant_id: String, success
 			_update_packs_separator()
 			_check_hide_icon()
 	)
+
+
+## A finished row's bar fills in the success role, a failed one in the danger role; the
+## toast that follows says which in words (C7).
+func _show_outcome(progress_bar: ProgressBar, success: bool) -> void:
+	progress_bar.theme_type_variation = &"ProgressSuccess" if success else &"ProgressDanger"
 
 
 func _limit_visible_items() -> void:
@@ -478,14 +468,13 @@ func _remove_pack_item(pack_id: String, success: bool) -> void:
 	var container = item.container
 
 	# The toast plays the success or error sound itself.
+	_show_outcome(item.progress_bar, success)
 	if success:
 		item.progress_bar.value = 100.0
-		item.progress_bar.modulate = Color(0.5, 0.8, 0.5)
 		var pack = AssetManager.get_pack(pack_id)
 		var display = pack.display_name if pack else pack_id
 		UIManager.show_success("%s downloaded and ready." % display)
 	else:
-		item.progress_bar.modulate = Color(0.8, 0.4, 0.4)
 		var pack = AssetManager.get_pack(pack_id)
 		var display = pack.display_name if pack else pack_id
 		UIManager.show_error("Failed to download %s." % display)

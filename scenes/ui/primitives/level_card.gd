@@ -21,6 +21,10 @@ const THUMB_ASPECT := 16.0 / 9.0
 const INSET := 4.0
 const THUMB_HOVER_SCALE := Vector2(1.04, 1.04)
 const MONTHS := ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+## Keys the black void of older thumbnails out to the well's wash.
+const THUMB_SHADER := preload("res://shaders/ui_card_thumb.gdshader")
+
+static var _shared_thumb_material: ShaderMaterial
 
 var level_info: Dictionary = {}
 var locked: bool = false:
@@ -58,29 +62,33 @@ func _init() -> void:
 	_column.minimum_size_changed.connect(_update_minimum_size_from_content)
 	add_child(_column)
 
-	var thumb_slot := Control.new()
+	# The thumbnail well (the CardThumb variation) draws the paper-inset wash and clips the
+	# picture to its rounded shape, hover zoom included, so no square corner pokes out of
+	# the card.
+	var thumb_slot := Panel.new()
 	thumb_slot.name = "ThumbSlot"
+	thumb_slot.theme_type_variation = &"CardThumb"
+	thumb_slot.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 	thumb_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	thumb_slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	thumb_slot.custom_minimum_size = Vector2(0, 90)
-	thumb_slot.clip_contents = true
 	_column.add_child(thumb_slot)
 	_thumb = TextureRect.new()
 	_thumb.name = "Thumb"
 	_thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_thumb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_thumb.material = _thumb_material()
 	_thumb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_thumb.resized.connect(_update_thumb_pivot)
 	thumb_slot.add_child(_thumb)
 	_letter = Label.new()
 	_letter.name = "Letter"
-	_letter.theme_type_variation = &"H2"
+	_letter.theme_type_variation = &"CardInitial"
 	_letter.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_letter.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_letter.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_letter.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_letter.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))
 	thumb_slot.add_child(_letter)
 	thumb_slot.resized.connect(_on_thumb_slot_resized)
 
@@ -151,15 +159,10 @@ func setup(info: Dictionary) -> void:
 		var image := Image.load_from_file(ProjectSettings.globalize_path(thumbnail))
 		if image:
 			texture = ImageTexture.create_from_image(image)
-	var texture_is_placeholder := texture == null
-	if texture_is_placeholder:
-		var config := EnvironmentPresets.get_environment_config(
-			String(info.get("environment_preset", "")), {}, {}
-		)
-		texture = SwatchTextures.sky_preview(String(config.get("sky_preset", "")))
+	# No picture yet: the well's paper-inset wash with the name's initial in Fraunces.
 	_thumb.texture = texture
 	_letter.text = _name.text.substr(0, 1).to_upper()
-	_letter.visible = texture_is_placeholder
+	_letter.visible = texture == null
 
 
 ## "1 token, edited 3 h ago"; "No tokens" alone when the level is empty and has
@@ -273,6 +276,13 @@ func _on_thumb_slot_resized() -> void:
 		slot.custom_minimum_size = Vector2(0, height)
 		_update_minimum_size_from_content()
 	_update_thumb_pivot()
+
+
+static func _thumb_material() -> ShaderMaterial:
+	if _shared_thumb_material == null:
+		_shared_thumb_material = ShaderMaterial.new()
+		_shared_thumb_material.shader = THUMB_SHADER
+	return _shared_thumb_material
 
 
 func _update_thumb_pivot() -> void:

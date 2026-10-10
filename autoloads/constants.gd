@@ -109,13 +109,6 @@ const UI_HOVER_SCALE := Vector2(1.06, 1.06)
 const UI_PRESS_SCALE := Vector2(0.96, 0.96)
 
 # =============================================================================
-# UI COLORS (mirrors theme values for programmatic use)
-# =============================================================================
-
-const COLOR_WARNING := Color("#ffd25f")  # ProgrammaticTheme.color_warning
-const COLOR_TOAST_BG := Color(0.17, 0.12, 0.17, 0.95)  # ~color_surface1 at 95% alpha
-
-# =============================================================================
 # ASSET LOADING
 # =============================================================================
 

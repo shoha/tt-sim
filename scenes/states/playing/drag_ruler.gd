@@ -275,7 +275,7 @@ func _create_overlay(overlay_parent: Node) -> void:
 	_canvas_layer = overlay.canvas_layer
 	_draw_control = overlay.draw_control
 
-	var result: Dictionary = MapOverlayUtils.create_label_panel(16, Color(0.85, 0.92, 1.0))
+	var result: Dictionary = MapOverlayUtils.create_label_panel(16)
 	_distance_panel = result.panel
 	_distance_label = result.label
 	_canvas_layer.add_child(_distance_panel)

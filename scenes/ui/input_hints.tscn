@@ -1,18 +1,7 @@
-[gd_scene load_steps=4 format=3 uid="uid://cinput_hints"]
+[gd_scene load_steps=3 format=3 uid="uid://cinput_hints"]
 
 [ext_resource type="Script" path="res://scenes/ui/input_hints.gd" id="1_hints"]
 [ext_resource type="Theme" path="res://themes/generated/glass_theme.tres" id="2_glass"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_backdrop"]
-bg_color = Color(0, 0, 0, 0.55)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_left = 6
-corner_radius_bottom_right = 6
-content_margin_left = 16.0
-content_margin_top = 6.0
-content_margin_right = 16.0
-content_margin_bottom = 6.0
 
 [node name="InputHints" type="CanvasLayer"]
 layer = 1
@@ -34,7 +23,7 @@ theme = ExtResource("2_glass")
 layout_mode = 2
 size_flags_horizontal = 4
 mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_backdrop")
+theme_type_variation = &"Chip"
 
 [node name="HintRow" type="HBoxContainer" parent="HintBar/BackdropPanel"]
 unique_name_in_owner = true

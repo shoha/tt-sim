@@ -36,6 +36,7 @@ func define_theme() -> void:
 	define_popups()
 	define_lists()
 	_define_containers()
+	_define_status()
 
 
 ## The role table as colour items of type ThemeColors.TYPE, for ThemeColors.of(), and the
@@ -218,6 +219,18 @@ func _define_flat_buttons() -> void:
 			focus = ring(RADIUS_CARD),
 		}
 	)
+	# A card's thumbnail well: the paper-inset wash, its top corners concentric with the
+	# card's (the card radius less its 4 px inset). The card clips its picture to this shape;
+	# with no picture the wash shows with the name's initial in Fraunces.
+	var well := box(c(ThemeColors.SURFACE_INSET), RADIUS_CARD - SPACE_1)
+	well.corner_radius_bottom_left = RADIUS_CHIP
+	well.corner_radius_bottom_right = RADIUS_CHIP
+	define_variant_style("CardThumb", "Panel", {panel = well})
+	define_variant_style(
+		"CardInitial",
+		"Label",
+		{font = font_wordmark, font_size = SIZE_WORDMARK, font_color = c(ThemeColors.TEXT_SOFT)}
+	)
 	define_variant_style(
 		"FoldoutHeader",
 		"Button",
@@ -302,6 +315,42 @@ func _define_containers() -> void:
 	var line := {type = "stylebox_line", color = c(ThemeColors.EDGE), thickness = 1}
 	define_style("HSeparator", {separator = line, separation = SPACE_3})
 	define_style("VSeparator", {separator = inherit(line, {vertical = true}), separation = SPACE_3})
+
+
+## Small status surfaces: chips that label the board (a ruler's distance, the input hints),
+## the count badge, toasts and progress outcomes. On glass a chip is the glass surface with
+## its top rim, never a black box (C4). A toast carries its kind in a left stripe and an icon
+## (C7): cool for information (lake, "is"), moss, ochre and madder for the outcomes; never
+## the warm accent, which means "do" (C5).
+func _define_status() -> void:
+	var chip := box(c(ThemeColors.SURFACE), RADIUS_CHIP, SPACE_3, SPACE_1, rim())
+	if not on_glass:
+		var pencil := edge(1, c(ThemeColors.EDGE))
+		chip = box(c(ThemeColors.SURFACE_RAISED), RADIUS_CHIP, SPACE_3, SPACE_1, pencil)
+	define_variant_style("Chip", "PanelContainer", {panel = chip})
+	define_variant_style(
+		"CountBadge", "PanelContainer", {panel = box(c(ThemeColors.ACCENT), RADIUS_PILL, 6, 0)}
+	)
+	define_variant_style(
+		"CountBadgeLabel",
+		"Label",
+		{font = font_strong, font_size = SIZE_CAPTION, font_color = c(ThemeColors.ON_ACCENT)}
+	)
+	var kinds := {
+		ToastInfo = ThemeColors.STATE,
+		ToastSuccess = ThemeColors.SUCCESS,
+		ToastWarning = ThemeColors.WARNING,
+		ToastError = ThemeColors.DANGER,
+	}
+	for kind: String in kinds:
+		var stripe: Dictionary = inherit({border_color = c(kinds[kind]), border_width_left = 3}, lift())
+		var toast := box(c(ThemeColors.SURFACE), RADIUS_CONTROL, SPACE_3, SPACE_2, stripe)
+		define_variant_style(kind, "PanelContainer", {panel = toast})
+	for outcome: String in ["Success", "Danger"]:
+		var role := ThemeColors.SUCCESS if outcome == "Success" else ThemeColors.DANGER
+		define_variant_style(
+			"Progress" + outcome, "ProgressBar", {fill = box(c(role), RADIUS_PILL)}
+		)
 
 
 ## A button item set from its normal, hover and pressed boxes and a text role (`hover_text`

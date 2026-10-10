@@ -4,12 +4,23 @@ extends CanvasLayer
 ## Container for displaying toast notifications.
 ##
 ## Toasts appear at the bottom-center of the screen and auto-dismiss.
-## Supports different types: info, success, warning, error.
+## Supports different types: info, success, warning, error. Each is a glass chip whose
+## kind shows twice (UI_TASTE.md C7): a left stripe (the Toast* theme variations) and an
+## icon tinted with the same role. Information is cool (lake: it says what is); the
+## outcomes are moss, ochre and madder.
 
 enum ToastType { INFO, SUCCESS, WARNING, ERROR }
 
 const MAX_VISIBLE_TOASTS := 5
 const DEFAULT_DURATION := 3.0
+const ICON_SIZE := 20
+## Per kind: the panel's theme variation, the icon and the role that tints it.
+const KINDS := {
+	ToastType.INFO: [&"ToastInfo", "info-circle", ThemeColors.STATE],
+	ToastType.SUCCESS: [&"ToastSuccess", "circle-check", ThemeColors.SUCCESS],
+	ToastType.WARNING: [&"ToastWarning", "alert-triangle", ThemeColors.WARNING],
+	ToastType.ERROR: [&"ToastError", "alert-circle", ThemeColors.DANGER],
+}
 
 var _active_toasts: Array[Control] = []
 
@@ -38,27 +49,27 @@ func show_toast(
 
 
 func _create_toast(message: String, type: ToastType) -> Control:
+	var kind: Array = KINDS.get(type, KINDS[ToastType.INFO])
 	var panel = PanelContainer.new()
+	panel.theme_type_variation = kind[0]
 	panel.custom_minimum_size = Vector2(250, 0)
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 
-	var margin = MarginContainer.new()
-	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_top", 8)
-	margin.add_theme_constant_override("margin_bottom", 8)
-	panel.add_child(margin)
-
 	var hbox = HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 8)
-	margin.add_child(hbox)
+	hbox.theme_type_variation = &"BoxContainerSpaced"
+	panel.add_child(hbox)
 
-	# Icon label
-	var icon_label = Label.new()
-	icon_label.text = _get_icon_for_type(type)
-	hbox.add_child(icon_label)
+	var icon := TextureRect.new()
+	icon.name = "Icon"
+	icon.texture = IconButton.load_icon(kind[1])
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	# The roles resolve against the glass theme the container carries.
+	icon.self_modulate = ThemeColors.of(toast_vbox, kind[2])
+	hbox.add_child(icon)
 
-	# Message label
 	var label = Label.new()
 	label.text = message
 	label.theme_type_variation = "Body"
@@ -66,55 +77,7 @@ func _create_toast(message: String, type: ToastType) -> Control:
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hbox.add_child(label)
 
-	# Apply style based on type
-	_apply_toast_style(panel, icon_label, type)
-
 	return panel
-
-
-func _get_icon_for_type(type: ToastType) -> String:
-	match type:
-		ToastType.SUCCESS:
-			return "+"
-		ToastType.WARNING:
-			return "!"
-		ToastType.ERROR:
-			return "X"
-		_:
-			return "i"
-
-
-func _apply_toast_style(panel: PanelContainer, icon_label: Label, type: ToastType) -> void:
-	var style = StyleBoxFlat.new()
-	style.corner_radius_top_left = 6
-	style.corner_radius_top_right = 6
-	style.corner_radius_bottom_left = 6
-	style.corner_radius_bottom_right = 6
-	style.border_width_left = 3
-	style.content_margin_left = 8
-	style.content_margin_right = 8
-	style.content_margin_top = 4
-	style.content_margin_bottom = 4
-
-	# Base dark background
-	style.bg_color = Constants.COLOR_TOAST_BG
-
-	# Type-specific accent
-	match type:
-		ToastType.SUCCESS:
-			style.border_color = Color(0.62, 0.72, 0.53)  # Green
-			icon_label.add_theme_color_override("font_color", Color(0.62, 0.72, 0.53))
-		ToastType.WARNING:
-			style.border_color = Constants.COLOR_WARNING
-			icon_label.add_theme_color_override("font_color", Constants.COLOR_WARNING)
-		ToastType.ERROR:
-			style.border_color = Color(0.99, 0.58, 0.51)  # Red
-			icon_label.add_theme_color_override("font_color", Color(0.99, 0.58, 0.51))
-		_:
-			style.border_color = Color(0.86, 0.57, 0.29)  # Orange/Accent
-			icon_label.add_theme_color_override("font_color", Color(0.86, 0.57, 0.29))
-
-	panel.add_theme_stylebox_override("panel", style)
 
 
 func _animate_toast_in(toast: Control, type: ToastType = ToastType.INFO) -> void:

@@ -46,6 +46,7 @@
 		"res://tests/unit/test_sound_call_sites.gd",
 		"res://tests/unit/test_sun_pane.gd",
 		"res://tests/unit/test_swatch_textures.gd",
+		"res://tests/unit/test_theme_cleanup.gd",
 		"res://tests/unit/test_tile_field.gd",
 		"res://tests/unit/test_tile_row.gd",
 		"res://tests/unit/test_title_screen.gd",
