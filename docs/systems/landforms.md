@@ -29,7 +29,7 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
 | `utils/landform_terraces.gd` | `LandformTerraces` | The Terraces (`terraces`, `terraces_frame`, `plateaus_of`, `terraces_stage`) |
 | `utils/landform_lakeshore.gd` | `LandformLakeshore` | The Lakeshore (`lakeshore`, `lakeshore_frame`, `allowed_corners`) |
 | `utils/landform_gorge.gd` | `LandformGorge` | The Gorge (`gorge`, `gorge_frame`, `gorge_stage`) |
-| `utils/landform_growth.gd` | `LandformGrowth` | Big and long maps: `room`, `is_long`, `long_dir`, `turned`, `grow` (the extras: tarn, meadow, knoll), `knoll`, `tarn` |
+| `utils/landform_growth.gd` | `LandformGrowth` | Big, wide and long maps: `room`, `is_long`, `is_wide`, `long_dir`, `turned`, `owns_heading`, `own_heading`, `own_axis` and `heading_of` (a wide map's per-seed heading and line axis), `grow` (the extras: tarn, meadow, knoll), `knoll`, `tarn` |
 | `utils/landform_placement.gd` | `LandformPlacement` | Where the extras stand and the open ground's paint: `find_spot`, `meadow_surface`, `paint_open`, `paint_sparse` (every new map's thin cover and edge band greened), `wood` (a recipe's per-seed wood) |
 | `utils/new_map.gd` | `NewMap` | `create(..., landform, depth_ft)` runs the recipe before the cover; `from_spec(spec)`; `opening_status(spec)`; `paint_starting_cover(doc, biome, centre, glade, clearings, wood)` centres the glade on the stage, opens the clearings, thins the groves by the recipe's wood (`wood_density`) and feathers the cover at the map edge (`edge_feather`, `edge_keep`) |
 | `scenes/terrain/terrain_skirt.gd` | `TerrainSkirt` | The skirt's material; `edge_surface` (the painted surface covering the map's edge, which the skirt continues instead of the base) |
@@ -77,7 +77,25 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   spread their steps along a long map (`span_of`), the Hilltop sits toward one end of a long
   map with its second hill toward the other (`toward_end`), and the Lakeshore's lake takes
   any corner or side of a long map's own extent (`wide_frame`, as on a wide map, since
-  2026-10-10). Then `apply()` runs `grow()`: one extra with chance
+  2026-10-10). A wide map (`is_wide`: the shorter side 60 m or more, 200 ft and up) that is
+  not long composes round the seed's own heading (`owns_heading`; 2026-10-10): the seed times
+  `WIDE_TURN` (the golden ratio's fraction) of the way round. The frame still makes its
+  heading draw, so its later draws stand. The Hilltop's hill and the Lakeshore's lake stand
+  toward `own_heading`, any azimuth (seeds 1-6 at least 33 degrees apart). The Valley, the
+  Terraces (the river down the steps is what reads from the whole map, so their fall is a
+  line too) and the Gorge lay their axis along `own_axis`, run the way the drawn heading
+  points (`heading_of`): the seed's step is taken over the axis's screen angle, not its ground
+  angle, within 90 degrees either side of across the view (the Gorge's `WIDE_SPREAD_DEG` 60,
+  at least 30 off the camera's diagonal). The camera's 21.6 degree pitch (`VIEW_RISE` 0.368)
+  shows a line's slope from across the view at about a third, so lines within 45 degrees of
+  across all show within 20 of level: spread evenly on the ground (the first try), the
+  Valley's seeds 1, 3, 4 and 6 at 250 ft all ran within 25 degrees of level and read alike,
+  and a full turn for the Terraces put seeds 1 and 5's rivers in one line. On screen seeds 1-6
+  now stand at least 16 degrees apart (most wide valleys and terraces therefore run within
+  30 degrees of along the view on the ground), a gorge's 5.9 within its 65 (32.5 either side
+  of level). The frame's eight headings had given seeds 1, 4 and 7 the same 315 in every
+  landform (the 250 ft Terraces of seeds 1 and 4 read alike). A map under 200 ft and a long
+  map keep the drawn (or turned) heading. Then `apply()` runs `grow()`: one extra with chance
   `room`, a second with 0.85 `room`, drawn by weight from the landform's palette (`PALETTES`:
   mostly a tarn or a meadow, a knoll least) from `STREAM_EXTRAS` salted by the landform, each
   placed by `LandformPlacement.find_spot` (48 seeded candidates; clear of the stage, the
@@ -157,7 +175,8 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   along a polyline with a soft edge (a dry wash). A refused crossing leaves the document as it
   was and is named in the report: never a broken map.
 - **Valley** (`LandformRecipes.valley`; caption "A broad valley; often a river runs down it";
-  the default): a broad trough across the whole map along one of eight headings through a
+  the default): a broad trough across the whole map along one of eight headings (a wide
+  map's own axis, `heading_of` above) through a
   point up to `VALLEY_OFFSET_SHARE` 0.25 of the half extent off the centre, bent once by
   `VALLEY_BEND_DEG` 8-25 degrees within `VALLEY_BEND_REACH_SHARE` a third of the half extent
   downstream of the centre's foot. `VALLEY_DEPTH_M` 3.5 m deep (2.5 m in P5-1 read only as a
@@ -210,7 +229,8 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   as a dense forest diamond round a green hill): on a wide map (`LandformGrowth.is_wide`, the
   shorter side 60 m or more: 200 ft and up, not long) the hill stands
   `HILL_WIDE_OFFSET_SHARE` 0.3-0.5 of the half extent toward a heading of its own: the seed
-  times `WIDE_TURN` (the golden ratio's fraction) turns, any azimuth, so a random seed's
+  times `LandformGrowth.WIDE_TURN` (the golden ratio's fraction) turns
+  (`LandformGrowth.own_heading`, shared with the other landforms since), any azimuth, so a random seed's
   heading is as even as a draw and seeds close in number stand far apart (any five in a row
   at least 52 degrees, six 32; `setting_of`). Until 2026-10-10 it was the frame's eight
   headings: at 250 ft seeds 1 and 4 drew the same 315 and near-equal setting draws, so their
@@ -221,7 +241,8 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   keeps 0.4-1.0 of the groves' density over the glade's and with `WOOD_LEAN_CHANCE` 0.6
   gathers them toward a seeded side, the far side opening by 0.55-0.9.
 - **Terraces** (`LandformTerraces.terraces`; "Tiers stepping down across the map"): two or
-  three tiers (`THREE_CHANCE` 0.5) stepping down along one of eight headings, the lowest the
+  three tiers (`THREE_CHANCE` 0.5) stepping down along one of eight headings (on a wide map
+  along the seed's own axis: `heading_of` above), the lowest the
   base ground and each higher one a rounded-corner plateau (corners `CORNER_M` 4-8 m, edge
   wobbled `WOBBLE_M` 1.5 m) raised one 5 ft tier over the one below with `tier_goal`; the top
   terrace's edge at `TOP_EDGE_SHARE` a third of the way across, the next `STEP_SHARE` two
@@ -269,8 +290,11 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   of `WIDE_PLACES` alike, the four corners and the four sides' middles (the home frame no
   longer bounds it: the whole map is what reads), with `LARGE_LAKE_CHANCE` 0.35 a lake of
   `LARGE_LAKE_SHARE` 0.6 of the half extent, its centre its radius plus `LAKE_EDGE_SHARE` 0.05
-  of the half extent in from each edge it lies toward, on a long map's own extent. At every
-  size: a shore meadow (`SHORE_MEADOW_CHANCE` 0.55), a clearing 0.85 of the lake's radius
+  of the half extent in from each edge it lies toward, on a long map's own extent. On a wide
+  map that is not long the place gives way to the seed's own heading (`own_heading`, any
+  azimuth): the lake stands toward it as far out as that inset allows, at a corner, a side or
+  anywhere between (2026-10-10: the place draw gave seeds 3 and 6 the same side and size at
+  200 and 250 ft, seeds 1 and 4 the same side). At every size: a shore meadow (`SHORE_MEADOW_CHANCE` 0.55), a clearing 0.85 of the lake's radius
   across on the shore 20-80 degrees off the stage's line, returned in `clearings` and greened
   by `paint_sparse`; and the wood as the Hilltop's (0.45-1.0, leaning with chance 0.5).
 - **Gorge** (`LandformGorge.gorge`; "A ravine with rock walls winding across the map"): a
@@ -280,7 +304,10 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   `FLOOR_M` 6-9 m wide (`TWO_TIER_FLOOR_EXTRA_M` 3 m wider when two tiers deep, since the
   21.6 degree pitch hides 7.6 m of floor behind a 3 m near rim), tilting `FALL_M` 1.5 m along
   its length. Its axis takes one of `HEADINGS` (six of eight: every heading but 45 and 225,
-  the camera's diagonal, so the far wall and the floor face the camera) through a point up to
+  the camera's diagonal, so the far wall and the floor face the camera; on a wide map the
+  seed's own axis within `WIDE_SPREAD_DEG` 60 of across the view, at least 30 off that diagonal, run
+  the way the drawn heading points: the draw had given seeds 4 and 5 the same 315 and seeds 1
+  and 2 the one line) through a point up to
   `OFFSET_SHARE` 0.15 off the centre, bent by `BEND_DEG` 15-35 degrees and, half the time,
   bent back further on (`SECOND_BEND_CHANCE` 0.5). Draws: an ankle stream along the floor
   (`STREAM_CHANCE` 0.7) pushed `STREAM_FAR_SHARE` 0.7 of the floor's half-width toward the far

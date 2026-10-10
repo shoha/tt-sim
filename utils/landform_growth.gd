@@ -10,10 +10,11 @@ extends RefCounted
 ## spend it two ways.
 ##
 ## Their own shapes grow and turn: a long map's Valley, Gorge and Terraces run along its
-## length (turned()), the Valley may meander and its river widens, the Gorge bends twice
-## more often, the Terraces may gain a step, the Hilltop sits toward one end of a long map,
-## leaving the other for what follows, and the Lakeshore's lake takes any corner or side of
-## it (LandformLakeshore.wide_frame).
+## length (turned()), a wide map's take the seed's own heading, as its hill and lake do
+## (heading_of, WIDE_TURN), the Valley may meander and its river widens, the Gorge bends
+## twice more often, the Terraces may gain a step, the Hilltop sits toward one end of a long
+## map, leaving the other for what follows, and the Lakeshore's lake takes any corner or side
+## of it (LandformLakeshore.wide_frame).
 ##
 ## And grow() adds one or two features drawn from a small palette by the seed (no sameness:
 ## a big map draws one, usually two, and which ones differs by seed and by landform): a tarn
@@ -85,6 +86,19 @@ const KNOLL_WARP := 0.2
 const KNOLL_OPEN_SHARE := 0.95
 ## A map whose shorter side is at least this (metres; 200 ft is 60.96) is wide (is_wide).
 const WIDE_FROM_M := 60.0
+## A wide map's heading is the seed's own (own_heading, own_axis): the seed times this many
+## turns (the golden ratio's fraction, a low-discrepancy step) of the way round, so a random
+## seed's heading is as even as a draw and seeds close in number stand far apart (any five in
+## a row 52 degrees or more on a full turn, six 32), where the frame's eight headings gave
+## seeds 1, 4 and 7 the same 315 in every landform (2026-10-10).
+const WIDE_TURN := 0.6180339887498949
+## The scene camera's back axis rises this much per metre (game_map.tscn, 21.6 degrees of
+## pitch), so a line's slope on screen, measured from across the view, is this share of its
+## slope on the ground: lines within 45 degrees of across the view all show within 20 degrees
+## of level. own_axis spreads a line's axis evenly as the camera sees it, since spread evenly
+## on the ground the Valley's seeds 1, 3, 4 and 6 at 250 ft all ran within 25 degrees of level
+## on screen and read alike (2026-10-10).
+const VIEW_RISE := 0.36812454
 ## The clear ground the search keeps round the stage and a crossing, and between extras.
 const STAGE_CLEAR_M := 8.0
 const CROSSING_CLEAR_M := 5.0
@@ -148,6 +162,46 @@ static func turned(doc: MapDocument, dir: Vector2) -> Vector2:
 ## A heading in whole degrees 0..359 for a report.
 static func degrees(dir: Vector2) -> int:
 	return posmod(roundi(rad_to_deg(dir.angle())), 360)
+
+
+## True when the recipes compose `doc` round the seed's own heading (own_heading, own_axis):
+## a wide map that is not long. A long map's length decides its heading instead (turned()).
+static func owns_heading(doc: MapDocument) -> bool:
+	return is_wide(doc) and not is_long(doc)
+
+
+## The seed's own heading, any azimuth, for what stands toward a side (a hill, a lake):
+## `seed_value` times WIDE_TURN of a turn from +x.
+static func own_heading(seed_value: int) -> Vector2:
+	return Vector2.RIGHT.rotated(_share(seed_value) * TAU)
+
+
+## The seed's own axis for a line (a valley, a gorge, the terraces' fall): `seed_value` times
+## WIDE_TURN of the way across the screen angles of the lines within `spread_deg` either side
+## of across the view (90: any line), so the seeds' lines stand evenly apart as the camera
+## sees them (VIEW_RISE), not as the ground does. One of its two ways; heading_of picks.
+static func own_axis(seed_value: int, spread_deg: float = 90.0) -> Vector2:
+	var edge := atan(tan(deg_to_rad(minf(spread_deg, 89.99))) * VIEW_RISE)
+	var screen := lerpf(-edge, edge, _share(seed_value))
+	var across := Vector2(-StartingLandform.VIEW.y, StartingLandform.VIEW.x)
+	return across.rotated(atan2(sin(screen), VIEW_RISE * cos(screen)))
+
+
+## The heading a line's frame runs along on `doc`, from the frame's drawn heading `dir`: on a
+## long map `dir` turned along its length (turned()), on a wide one the seed's own axis
+## (own_axis within `spread_deg`) run the way `dir` points, else `dir`. The frame still makes
+## its draw, so its later draws stand.
+static func heading_of(
+	doc: MapDocument, seed_value: int, dir: Vector2, spread_deg: float = 90.0
+) -> Vector2:
+	if not owns_heading(doc):
+		return turned(doc, dir)
+	var axis := own_axis(seed_value, spread_deg)
+	return -axis if axis.dot(dir) < 0.0 else axis
+
+
+static func _share(seed_value: int) -> float:
+	return fposmod(float(seed_value) * WIDE_TURN, 1.0)
 
 
 ## Adds the extras a map with room draws (see the header) to `doc`, after `kind`'s recipe
