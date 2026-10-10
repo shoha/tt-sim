@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3 uid="uid://cloading_overlay"]
+[gd_scene load_steps=4 format=3 uid="uid://cloading_overlay"]
 
 [ext_resource type="Script" path="res://scenes/ui/loading_overlay.gd" id="1_loading"]
 [ext_resource type="Script" path="res://scenes/ui/primitives/scrim.gd" id="2_scrim"]
+[ext_resource type="Script" path="res://scenes/ui/primitives/painted_backdrop.gd" id="3_backdrop"]
 
 [node name="LoadingOverlay" type="CanvasLayer"]
 layer = 105
@@ -15,6 +16,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("3_backdrop")
 
 [node name="Scrim" type="ColorRect" parent="."]
 unique_name_in_owner = true

@@ -26,6 +26,13 @@ static var _warned_icons: Dictionary = {}
 		active = value
 		_refresh_icon()
 
+## On a picture: the button sits on a small paper disc (IconButtonDisc), so it reads over
+## any image (a level card's overflow menu).
+@export var disc: bool = false:
+	set(value):
+		disc = value
+		_refresh_icon()
+
 ## Small accent dot at the top-right corner (unsaved changes etc).
 @export var badge: bool = false:
 	set(value):
@@ -70,7 +77,10 @@ static func load_icon(name: String) -> Texture2D:
 func _refresh_icon() -> void:
 	if not is_node_ready():
 		return
-	theme_type_variation = &"IconButtonActive" if active else &"IconButton"
+	if active:
+		theme_type_variation = &"IconButtonActive"
+	else:
+		theme_type_variation = &"IconButtonDisc" if disc else &"IconButton"
 	var filled_path := ICON_DIR + icon_name + "-filled.svg"
 	if active and not icon_name.is_empty() and ResourceLoader.exists(filled_path):
 		icon = load(filled_path)

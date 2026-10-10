@@ -6,8 +6,10 @@ extends MarginContainer
 ## click places the avatar and a drag carries it onto the map (as a pack asset drags),
 ## followed by one action that opens the avatar builder for a new one: a control-height
 ## button, not a full-width bar, since an ember bar across the sheet outshone a dusk board
-## (UI_TASTE G12). The browser relays them to GameplayMenuController, which spawns the avatar
-## where an asset would land.
+## (UI_TASTE G12). It is the tab's ember fill only while there is no avatar yet; once there
+## are, the avatars are what the tab is for and it steps down to a quiet button (the fill
+## outshone the cards). The browser relays them to GameplayMenuController, which spawns the
+## avatar where an asset would land.
 
 signal build_requested
 signal avatar_chosen(entry: Dictionary)
@@ -19,6 +21,7 @@ const COLUMNS := 4
 const EMPTY_CAPTION := "Avatars you save show here. Make one, or use Avatars on the title screen."
 
 var grid: AvatarGrid
+var make_button: Button
 var _heading: Label
 var _empty: Label
 
@@ -27,10 +30,12 @@ var _empty: Label
 
 
 func _ready() -> void:
-	var button := UiActions.primary("Make an avatar", "user-plus", AvatarBuilder.SUBTITLE, actions)
-	button.custom_minimum_size.y = UiActions.SECONDARY_HEIGHT
-	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	button.pressed.connect(func() -> void: build_requested.emit())
+	make_button = UiActions.primary(
+		"Make an avatar", "user-plus", AvatarBuilder.SUBTITLE, actions
+	)
+	make_button.custom_minimum_size.y = UiActions.SECONDARY_HEIGHT
+	make_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	make_button.pressed.connect(func() -> void: build_requested.emit())
 	_heading = Label.new()
 	_heading.name = "Heading"
 	_heading.text = "Your avatars"
@@ -73,6 +78,7 @@ func _refresh_state() -> void:
 	var empty := AvatarLibrary.list().is_empty()
 	_empty.visible = empty
 	_heading.visible = not empty
+	make_button.theme_type_variation = &"Primary" if empty else &"Secondary"
 
 
 func _on_visibility_changed() -> void:

@@ -102,6 +102,8 @@ func _init() -> void:
 	_menu_button.name = "Menu"
 	_menu_button.icon_name = "dots-vertical"
 	_menu_button.tooltip_text = "More"
+	# On a paper disc: the bare glyph vanished over a dark thumbnail.
+	_menu_button.disc = true
 	_menu_button.custom_minimum_size = Vector2(28, 28)
 	_menu_button.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	_menu_button.position = Vector2(-32, 4)

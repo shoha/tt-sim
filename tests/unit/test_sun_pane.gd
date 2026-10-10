@@ -18,6 +18,18 @@ func _pane() -> SunPane:
 	return pane
 
 
+## The pane says Sun once (its heading); the mode field names what it switches, and Auto is
+## not a rayed glyph that reads as the Settings cog at 720p.
+func test_the_mode_field_names_daylight_and_auto_is_no_cog() -> void:
+	var pane := _pane()
+	assert_eq(pane._mode_field.caption, SunPane.MODE_CAPTION)
+	assert_ne(SunPane.MODE_CAPTION, "Sun")
+	var auto := pane._mode_tiles.get_node("auto") as Button
+	assert_ne(auto.icon, IconButton.load_icon("brightness-auto"))
+	assert_ne(auto.icon, IconButton.load_icon("settings"))
+	assert_not_null(auto.icon)
+
+
 func test_round_trip_every_field() -> void:
 	var pane := _pane()
 	var state := LevelVisualState.new()

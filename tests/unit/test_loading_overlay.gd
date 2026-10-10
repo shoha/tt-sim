@@ -81,8 +81,19 @@ func test_the_text_is_ink_on_a_paper_sheet() -> void:
 	assert_eq(panel.bg_color, ThemeColors.PAPER)
 	assert_eq(_overlay.loading_label.get_theme_color(&"font_color"), ThemeColors.INK)
 	assert_eq(_overlay.status_label.get_theme_color(&"font_color"), ThemeColors.INK_SOFT)
-	var sky := _overlay.get_node("%Sky") as ColorRect
-	assert_eq(sky.color, ThemeColors.PAPER_ROLES[ThemeColors.BACKDROP])
+
+
+## A map load stands on the painted backdrop in the mood the title or the room last showed,
+## at once: the hand-over does not change the picture.
+func test_a_map_load_stands_on_the_backdrop_in_the_last_mood() -> void:
+	PaintedBackdrop.last_mood = PaintedBackdrop.Mood.NIGHT
+	_overlay.show_loading()
+	var sky := _overlay.get_node("%Sky") as PaintedBackdrop
+	assert_eq(sky.mood(), PaintedBackdrop.Mood.NIGHT)
+	var paint := sky.material as ShaderMaterial
+	assert_eq(paint.get_shader_parameter(&"mood_to"), int(PaintedBackdrop.Mood.NIGHT))
+	assert_eq(paint.get_shader_parameter(&"blend"), 1.0, "at once, no fade")
+	PaintedBackdrop.last_mood = PaintedBackdrop.Mood.MORNING
 
 
 func test_a_cancellable_wait_offers_cancel_later_without_moving_the_sheet() -> void:

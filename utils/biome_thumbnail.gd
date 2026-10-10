@@ -12,6 +12,11 @@ extends RefCounted
 ## golden savanna, terracotta badlands), with the assets' contact shadows kept as shade on
 ## that ground. The crop is tightened to the assets so they read at 52 px.
 ##
+## The new-map dialog's Start from tiles take a wide strip (strip()) instead of the square: the
+## same landscape painted across the tile with the assets in its middle, cropped closer top
+## and bottom so they stand taller, its corners rounded; Bare ground is that landscape with
+## nothing on it (bare_strip()), its ground the bare surface's own.
+##
 ## Built once per biome and size on the CPU (about 16k pixels at 64 px) and cached.
 
 ## The square of the studio render the assets stand in: in every palette thumbnail they span
@@ -44,6 +49,13 @@ const GROUND_LIGHTNESS := Vector2(0.6, 0.7)
 const RIDGE_HAZE := 0.55
 const HORIZON_HAZE := 0.3
 const FORE_DEEPEN := 0.1
+## A strip keeps this band of the studio square's height (the assets span about 0.16-0.83 of
+## it), so they stand taller in the strip than in the square.
+const STRIP_BAND := Vector2(0.1, 0.88)
+## A strip's corner radius, as a share of its height.
+const STRIP_CORNER := 0.12
+## The studio wall's grey: keyed out entirely and too light to shade the ground.
+const STUDIO_GREY := Color(0.71, 0.71, 0.71)
 
 static var _cache := {}
 
@@ -69,13 +81,52 @@ static func of(
 	return texture
 
 
+## The picture of `biome` as a wide strip `size` px (wider than tall): the landscape across
+## the whole strip, the assets in its middle, the corners rounded. A biome whose thumbnail
+## cannot be read paints its ground alone.
+static func strip(
+	biome: Dictionary, size: Vector2i, root: String = PaletteLibrary.DEFAULT_ROOT
+) -> Texture2D:
+	var id := String(biome.get("id", ""))
+	var key := "%s:%s:%dx%d" % [root, id, size.x, size.y]
+	if not _cache.has(key):
+		var high := size * SUPERSAMPLE
+		var side := int(round(float(high.y) / (STRIP_BAND.y - STRIP_BAND.x)))
+		var square := _studio(root.path_join(String(biome.get("thumbnail", ""))), side)
+		var studio: Image = null
+		if square != null:
+			var top := int(round(STRIP_BAND.x * side))
+			studio = square.get_region(Rect2i(0, top, side, mini(high.y, side - top)))
+		var ground := ground_colour(biome, root)
+		_cache[key] = _strip_texture(studio, size, ground, MapPlaceholder.seed_of(id))
+	return _cache[key]
+
+
+## Plain ground with nothing on it as a strip `size` px (the new-map dialog's Bare ground): the
+## same painted landscape, its ground `surface`'s own (a palette surface entry), lifted.
+static func bare_strip(
+	surface: Dictionary, size: Vector2i, root: String = PaletteLibrary.DEFAULT_ROOT
+) -> Texture2D:
+	var albedo := String(surface.get("albedo", ""))
+	var key := "%s:bare:%s:%dx%d" % [root, albedo, size.x, size.y]
+	if not _cache.has(key):
+		var ground := _luminous(_mean(root.path_join(albedo)))
+		_cache[key] = _strip_texture(null, size, ground, MapPlaceholder.seed_of("bare_ground"))
+	return _cache[key]
+
+
 ## The biome's ground as the picture paints it: the mean of its ground surface's albedo,
 ## lifted to GROUND_SATURATION and into the GROUND_LIGHTNESS band at the same hue.
 static func ground_colour(biome: Dictionary, root: String = PaletteLibrary.DEFAULT_ROOT) -> Color:
 	var surface: Dictionary = PaletteLibrary.surfaces(root).get(
 		String(biome.get("ground_surface", "")), {}
 	)
-	var mean := _mean(root.path_join(String(surface.get("albedo", ""))))
+	return _luminous(_mean(root.path_join(String(surface.get("albedo", "")))))
+
+
+## `mean` lifted to GROUND_SATURATION and into the GROUND_LIGHTNESS band at its own hue (moss
+## when there is none).
+static func _luminous(mean: Color) -> Color:
 	if mean.a == 0.0:
 		mean = ThemeColors.MOSS_LIGHT
 	return Color.from_ok_hsl(
@@ -85,12 +136,17 @@ static func ground_colour(biome: Dictionary, root: String = PaletteLibrary.DEFAU
 	)
 
 
-## Paints the landscape behind `studio` (a square crop of the studio render) and keys the
-## studio's grey out over it: sky, the far ridge whose skyline `seed` draws, then the ground
-## from `ground` at the horizon's haze to a deeper foreground.
-static func paint(studio: Image, ground: Color, seed: float) -> Image:
-	var side := studio.get_width()
-	var out := Image.create(side, side, false, Image.FORMAT_RGBA8)
+## Paints the landscape behind `studio` (a crop of the studio render) and keys the studio's
+## grey out over it: sky, the far ridge whose skyline `seed` draws, then the ground from
+## `ground` at the horizon's haze to a deeper foreground. The picture is `size` px (the
+## studio's own size when zero) with the studio centred across it; with no studio, or beyond
+## its sides, the landscape stands empty.
+static func paint(studio: Image, ground: Color, seed: float, size := Vector2i.ZERO) -> Image:
+	if size == Vector2i.ZERO:
+		size = studio.get_size()
+	var studio_size := studio.get_size() if studio != null else Vector2i.ZERO
+	var studio_left := (size.x - studio_size.x) / 2
+	var out := Image.create(size.x, size.y, false, Image.FORMAT_RGBA8)
 	var sky_top := ThemeColors.SKY_TOP
 	var sky_low := ThemeColors.SKY_LOW
 	var ridge := ground.lerp(sky_low, RIDGE_HAZE)
@@ -99,18 +155,21 @@ static func paint(studio: Image, ground: Color, seed: float) -> Image:
 		ground.ok_hsl_h, ground.ok_hsl_s, ground.ok_hsl_l - FORE_DEEPEN
 	)
 	var phase := seed * TAU
-	var edge := 1.0 / side
-	for y in side:
-		var v := (float(y) + 0.5) / side
+	var edge := 1.0 / size.y
+	for y in size.y:
+		var v := (float(y) + 0.5) / size.y
 		var sky := sky_top.lerp(sky_low, clampf(v / HORIZON, 0.0, 1.0))
 		var land := near.lerp(fore, clampf((v - HORIZON) / (1.0 - HORIZON), 0.0, 1.0))
 		var below := ridge.lerp(land, smoothstep(HORIZON - edge, HORIZON + edge, v))
-		for x in side:
-			var u := (float(x) + 0.5) / side
+		for x in size.x:
+			# The skyline in heights across, so a wide strip rolls on rather than stretches.
+			var u := (float(x) + 0.5) / size.y
 			var rise := 0.55 + 0.45 * sin(u * 5.0 + phase) * cos(u * 2.3 - phase)
 			var crest := HORIZON - RIDGE * rise
 			var back := sky.lerp(below, smoothstep(crest - edge, crest + edge, v))
-			var pixel := studio.get_pixel(x, y)
+			var sx := x - studio_left
+			var inside := sx >= 0 and sx < studio_size.x and y < studio_size.y
+			var pixel := studio.get_pixel(sx, y) if inside else STUDIO_GREY
 			var high := maxf(pixel.r, maxf(pixel.g, pixel.b))
 			var chroma := high - minf(pixel.r, minf(pixel.g, pixel.b))
 			var luma := pixel.get_luminance()
@@ -123,6 +182,25 @@ static func paint(studio: Image, ground: Color, seed: float) -> Image:
 				back = Color(back.r * shade, back.g * shade, back.b * shade)
 			out.set_pixel(x, y, Color(back.lerp(pixel, asset), 1.0))
 	return out
+
+
+## A strip `size` px painted at SUPERSAMPLE over `studio` (a band of the studio square at that
+## resolution, or null for empty ground), downsampled, its corners rounded.
+static func _strip_texture(studio: Image, size: Vector2i, ground: Color, seed: float) -> Texture2D:
+	var image := paint(studio, ground, seed, size * SUPERSAMPLE)
+	image.resize(size.x, size.y, Image.INTERPOLATE_LANCZOS)
+	var radius := STRIP_CORNER * size.y
+	for y in size.y:
+		for x in size.x:
+			var dx := maxf(radius - (x + 0.5), (x + 0.5) - (size.x - radius))
+			var dy := maxf(radius - (y + 0.5), (y + 0.5) - (size.y - radius))
+			if dx <= 0.0 or dy <= 0.0:
+				continue
+			var outside := Vector2(dx, dy).length() - radius
+			var pixel := image.get_pixel(x, y)
+			pixel.a = clampf(0.5 - outside, 0.0, 1.0)
+			image.set_pixel(x, y, pixel)
+	return ImageTexture.create_from_image(image)
 
 
 ## The square of the studio render at `path` the assets stand in, `side` px, or null.

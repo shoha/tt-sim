@@ -40,6 +40,10 @@ const TOOLTIP_META := &"tile_tooltip"
 ## drawn at their own size and untinted in every state. The Tile variation otherwise caps
 ## icons at 24 px and tints them like the white Tabler icons.
 @export var photo_icons: bool = false
+## Photo icons fill the tile above its label, as wide as the tile allows at their own aspect
+## (Button.expand_icon), for pictures painted as wide strips; the tile's height is then
+## tile_min_size's alone.
+@export var photo_fill: bool = false
 
 var selected: StringName = &""
 
@@ -81,6 +85,7 @@ func add_tile(
 	tile.offset_transform_enabled = true
 	if photo_icons and tile.icon:
 		tile.add_theme_constant_override("icon_max_width", tile.icon.get_width())
+		tile.expand_icon = photo_fill
 		for state in [
 			"icon_normal_color",
 			"icon_hover_color",
@@ -214,7 +219,8 @@ func _natural_width(tile: Button) -> float:
 	var font_size := tile.get_theme_font_size(&"font_size")
 	var text_width := font.get_string_size(tile.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 	var icon_width := 0.0
-	if tile.icon:
+	# A filling picture shrinks to the tile, so only the label sets the width it needs.
+	if tile.icon and not tile.expand_icon:
 		var cap := tile.get_theme_constant(&"icon_max_width")
 		icon_width = float(tile.icon.get_width())
 		if cap > 0:

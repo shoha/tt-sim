@@ -306,7 +306,7 @@ func _build_biome_pane(tool: ToolDescriptor) -> Control:
 			"BiomeHint",
 			(
 				"Pick a biome, then drag on the map. Linger to thicken it; Shift + scroll or"
-				+ " [ and ] size the brush; right-click puts it down."
+				+ " [ and ] size the brush; right-click puts the brush down."
 			)
 		)
 	)

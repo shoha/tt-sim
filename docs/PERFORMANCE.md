@@ -2730,3 +2730,22 @@ primitives and is CPU-bound from 300 ft (65-69 ms), unprofiled. Above 320 ft the
 format refuses the map (64 cells), and an older peer would too. The recommendation drawn
 from this (custom sizes up to 250 ft recommended, 320 ft hard) is in the v0.2 evaluation's
 size probe.
+
+## Painted backdrop (2026-10-10, indicative)
+
+The full-screen backdrop shader the title, the room and a map load stand on
+(`PaintedBackdrop`, `shaders/ui_backdrop.gdshader`; UI_SYSTEMS.md "Painted backdrop"). The
+title at a 1920x1080 window, the real library, the backdrop shown / hidden / shown in one run
+(`probes/backdrop.gd gpu_start` / `gpu_stop` / `shown`, sampling the window viewport's own GPU
+time every frame for 2.5 s, vsync off; the `gpu` op samples the 3D world's viewport, which the
+title has not got). RTX 3080, debug build, other sessions running net tests on the CPU at the
+time, so absolute times are indicative. GPU median ms (p10 / p90, frames):
+
+| Backdrop | Shown #1 | Hidden | Shown #2 |
+| --- | --- | --- | --- |
+| Title, 1920x1080 | 0.259 (0.258 / 0.281, 3,483) | 0.123 (0.122 / 0.124, 5,018) | 0.260 (0.258 / 0.261, 3,913) |
+
+**About 0.14 ms of GPU for the whole screen at 1080p**, steady across the two shown windows.
+It draws only outside play (a hidden backdrop draws nothing), so it never costs the table a
+frame; during a map load the loading overlay's backdrop and the title's under it both draw
+until the title is freed.

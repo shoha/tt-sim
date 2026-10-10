@@ -3,10 +3,10 @@ extends AnimatedCanvasLayerPanel
 
 ## The one question before a new map opens in authoring mode: how big, what place to start
 ## from, and what shape. Three tile fields (size, starting biome from the palette thumbnails
-## plus Bare ground, each on a painted backdrop by BiomeThumbnail, landform from
+## plus Bare ground, each a wide painted strip by BiomeThumbnail, landform from
 ## StartingLandform.KINDS) and nothing to type; the ground surface follows from the biome and
-## is named at the end of Start from's caption line, and the landform's caption is named under
-## its tiles, so each choice explains itself. Create is the one primary action. On the
+## is named under its tiles, as the landform's caption is under its own, so each choice
+## explains itself where it is made. Create is the one primary action. On the
 ## smallest canvas (1280x720, 150% on 1080p) all three fields show without scrolling.
 ##
 ## Emits map_chosen({"size_ft", "biome_id", "landform", "seed"}) and closes; Cancel, the
@@ -38,8 +38,10 @@ const DEFAULT_BIOME := "temperate_forest_summer_s1"
 ## Size tiles are words alone at control height: one shared grid icon on all three said
 ## nothing, and the 16 px it took kept the Landform row under the scroll fade at 150%.
 const SIZE_TILE_SIZE := Vector2(96, 40)
-const BIOME_TILE_SIZE := Vector2(96, 96)
-const BIOME_THUMB_PX := 64
+## A starting place is a wide painted strip across its tile (BiomeThumbnail.strip), shrunk to
+## fit the narrower tiles of the 960 sheet: a 64 px square in a 180 px tile read small.
+const BIOME_TILE_SIZE := Vector2(96, 80)
+const BIOME_STRIP_PX := Vector2i(168, 56)
 const BIOME_COLUMNS := 3
 const BIOME_COLUMNS_WIDE := 6
 ## The sheet's width tokens (docs/UI_TASTE.md S5), and the canvas height under which the
@@ -106,6 +108,7 @@ func _on_panel_ready() -> void:
 	biome_field.name = "BiomeField"
 	biome_field.caption = "Start from"
 	biome_field.tiles.photo_icons = true
+	biome_field.tiles.photo_fill = true
 	biome_field.tiles.tile_min_size = BIOME_TILE_SIZE
 	biome_field.tiles.columns = BIOME_COLUMNS
 	var biomes := PaletteLibrary.biomes(palette_root)
@@ -115,7 +118,7 @@ func _on_panel_ready() -> void:
 			AuthoringPanel.short_name(String(biome["name"])),
 			"",
 			String(biome["name"]),
-			BiomeThumbnail.of(biome, BIOME_THUMB_PX, palette_root)
+			BiomeThumbnail.strip(biome, BIOME_STRIP_PX, palette_root)
 		)
 	var bare: Dictionary = PaletteLibrary.surfaces(palette_root).get(NewMap.BARE_SURFACE, {})
 	biome_field.tiles.add_tile(
@@ -123,14 +126,17 @@ func _on_panel_ready() -> void:
 		"Bare ground",
 		"",
 		"Plain ground to paint on",
-		SwatchTextures.palette_thumbnail(bare.get("albedo", ""), BIOME_THUMB_PX, palette_root)
+		BiomeThumbnail.bare_strip(bare, BIOME_STRIP_PX, palette_root)
 	)
 	_biome_id = _initial_biome(biomes)
 	biome_field.tiles.select(_tile_for_biome(_biome_id))
 	biome_field.tiles.selection_changed.connect(_on_biome_selected)
 	_fields.add_child(biome_field)
-	# The ground the biome starts on, at the end of Start from's own line.
-	ground_caption = biome_field.show_note("")
+	# The ground the biome starts on, under its tiles as the landform's caption is under its.
+	ground_caption = Label.new()
+	ground_caption.name = "GroundCaption"
+	ground_caption.theme_type_variation = &"Caption"
+	_fields.add_child(ground_caption)
 	_refresh_ground_caption()
 
 	landform_field = TileField.new()
