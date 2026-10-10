@@ -16,10 +16,27 @@ extends CanvasLayer
 ## key's chip fades in, and a dropped key's chip fades out where it stands and is
 ## then freed. A key re-added while its chip is still fading out takes that chip
 ## back.
+##
+## The bar never lies under an open drawer, under a bottom-corner button or past the canvas
+## edge. It centres in the span of the board the open drawers leave free
+## (DrawerContainer.free_span), sliding there by its backdrop's offset_transform_position.x as
+## a drawer slides. Shown controls in OBSTACLES (the play HUD's Add Token and Save Level) end
+## that span where they stand, and the bar moves aside only as far as they need. Its row (a
+## centred flow) is held to the span less DRAWER_CLEARANCE each side, so a row longer than the
+## span wraps onto a second line, growing up from the bottom edge: the measure tool's ten chips
+## at 720p, or the play row beside the room drawer at 150%. Drawers tell it when they open or
+## close (DrawerContainer.WATCHERS), an obstacle when it shows or hides; a window resize and a
+## change of chips refit it too.
 
 ## How far below its resting place the bar starts its entrance, in pixels.
 const SLIDE_DISTANCE := 12.0
 const BAR_IN_DURATION := 0.25
+## The least space between the bar and an open drawer or the canvas edge, each side (space_3).
+const DRAWER_CLEARANCE := 12.0
+## The drawer slide's length (DrawerContainer.slide_duration), so the bar moves with it.
+const SHIFT_DURATION := 0.25
+## Controls along the bottom edge the bar keeps clear of.
+const OBSTACLES := &"hint_bar_obstacles"
 
 var _current_hints: Array[Dictionary] = []
 ## Key -> chip, for every chip in the row, leaving ones included.
@@ -30,15 +47,86 @@ var _chip_tweens: Dictionary = {}
 var _leaving: Dictionary = {}
 var _bar_tween: Tween
 var _bar_shown: bool = false
+## Where the backdrop stands for the open drawers: its x shift.
+var _shift_tween: Tween
+var _shift: float = 0.0
 
-@onready var hints_container: HBoxContainer = %HintRow
+@onready var hints_container: HFlowContainer = %HintRow
 @onready var _bar: MarginContainer = %HintBar
+@onready var _backdrop: PanelContainer = %BackdropPanel
 
 
 func _ready() -> void:
 	_bar.modulate.a = 0.0
 	_bar.offset_transform_enabled = true
 	_bar.offset_transform_position = Vector2(0.0, SLIDE_DISTANCE)
+	_backdrop.offset_transform_enabled = true
+	add_to_group(DrawerContainer.WATCHERS)
+	get_viewport().size_changed.connect(on_drawers_moved, CONNECT_DEFERRED)
+
+
+## Centre the bar in the board span the open drawers leave free, as near that centre as the
+## obstacles allow, and hold its row to the clear span. The move is animated while the bar
+## shows, so it slides beside the drawer.
+func on_drawers_moved() -> void:
+	var viewport := get_viewport()
+	if viewport == null:
+		return
+	var span := DrawerContainer.free_span(viewport)
+	var centre := (span.x + span.y) / 2.0
+	var clear := _clear_span(viewport, span, centre)
+	var half := _fit_row(clear.y - clear.x - 2.0 * DRAWER_CLEARANCE) / 2.0
+	var lowest := clear.x + DRAWER_CLEARANCE + half
+	var place := clampf(centre, lowest, maxf(clear.y - DRAWER_CLEARANCE - half, lowest))
+	var shift := place - viewport.get_visible_rect().get_center().x
+	if is_equal_approx(shift, _shift):
+		return
+	_shift = shift
+	if _shift_tween and _shift_tween.is_valid():
+		_shift_tween.kill()
+	if not _bar_shown:
+		_backdrop.offset_transform_position.x = shift
+		return
+	_shift_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_shift_tween.tween_property(_backdrop, "offset_transform_position:x", shift, SHIFT_DURATION)
+
+
+## `span` narrowed by the shown OBSTACLES in it: one right of `centre` ends it there, one left
+## of it starts it. Each obstacle refits the bar when it shows or hides.
+func _clear_span(viewport: Viewport, span: Vector2, centre: float) -> Vector2:
+	var clear := span
+	for node in get_tree().get_nodes_in_group(OBSTACLES):
+		var control := node as Control
+		if control == null or control.get_viewport() != viewport:
+			continue
+		if not control.visibility_changed.is_connected(on_drawers_moved):
+			control.visibility_changed.connect(on_drawers_moved)
+		if not control.is_visible_in_tree():
+			continue
+		var rect := control.get_global_rect()
+		if rect.end.x <= span.x or rect.position.x >= span.y:
+			continue
+		if rect.get_center().x >= centre:
+			clear.y = minf(clear.y, rect.position.x)
+		else:
+			clear.x = maxf(clear.x, rect.end.x)
+	return clear
+
+
+## Hold the backdrop to the row's one-line width, or to `room` when that is narrower (the
+## flow then wraps), and return that width. A width, not an animation: it changes with the
+## chips or the span.
+func _fit_row(room: float) -> float:
+	var chips := 0
+	var line := 0.0
+	for chip in hints_container.get_children():
+		line += (chip as Control).get_combined_minimum_size().x
+		chips += 1
+	if chips > 1:
+		line += float(hints_container.get_theme_constant(&"h_separation")) * float(chips - 1)
+	line += _backdrop.get_theme_stylebox(&"panel").get_minimum_size().x
+	_backdrop.custom_minimum_size.x = minf(line, maxf(room, 0.0))
+	return _backdrop.custom_minimum_size.x
 
 
 ## Set hints to display. Each hint is a dictionary with "key" and "action".
@@ -123,6 +211,7 @@ func _sync() -> void:
 	var previous: Control = null
 	for hint in _current_hints:
 		previous = _sync_chip(hint, previous, animate)
+	on_drawers_moved()
 	_show_bar(true)
 
 
@@ -186,6 +275,7 @@ func _drop_chip(key: String) -> void:
 		return
 	hints_container.remove_child(chip)
 	chip.queue_free()
+	on_drawers_moved()
 
 
 func _show_bar(on: bool) -> void:

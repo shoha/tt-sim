@@ -304,6 +304,8 @@ func _on_panel_ready() -> void:
 	foliage_density_slider.value_changed.connect(_on_foliage_density_changed)
 	InterfaceSize.fill_option(interface_size_option, get_tree().root, UIManager.get_interface_size())
 	interface_size_option.item_selected.connect(_on_interface_size_selected)
+	# Each fixed size is named against Auto on this window, which Fullscreen can change.
+	get_tree().root.size_changed.connect(_refill_interface_size)
 
 	# Grid visuals
 	cell_tint_opacity_slider.value_changed.connect(_on_cell_tint_opacity_changed)
@@ -783,6 +785,12 @@ func _on_reset_pressed() -> void:
 
 func _on_interface_size_selected(index: int) -> void:
 	UIManager.set_interface_size(interface_size_option.get_item_id(index))
+
+
+func _refill_interface_size() -> void:
+	InterfaceSize.fill_option(
+		interface_size_option, get_tree().root, interface_size_option.get_selected_id()
+	)
 
 
 ## Puts every Settings control except those three on its default without a sound: the

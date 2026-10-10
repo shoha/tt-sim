@@ -315,6 +315,16 @@ Contextual keybinding hints in a bar at the bottom centre of the screen (`InputH
   0), a draw offset that never touches anchors or offsets; tweening `position` instead rewrote
   the offsets against the top anchor and parked the bar at the top of the screen until
   2026-10-09. The bar slides only when it appears (first hint) or empties (last hint gone).
+- **Beside drawers and buttons**: the bar never lies under an open drawer or a bottom-corner
+  button. It centres in the board span the open drawers leave free
+  (`DrawerContainer.free_span`; every drawer is in `DrawerContainer.GROUP` and calls
+  `on_drawers_moved` on `DrawerContainer.WATCHERS` when it starts to open or close), sliding
+  there with the drawer by `%BackdropPanel`'s `offset_transform_position.x`. Controls in
+  `InputHints.OBSTACLES` (the play HUD's Add Token and Save Level, by scene group) end the span
+  where they stand, and the bar moves aside only as far as they need. The row (`%HintRow`, a
+  centred `HFlowContainer`) is held to the clear span less 12 px each side, so a longer row
+  wraps onto a second line growing up from the bottom edge (the measure tool's keys at 720p
+  Auto) instead of running past the canvas.
 - **Diffing**: hint changes are diffed by key, never rebuilt. A kept key's chip stays the same
   node (a new action relabels it in place), a new key's chip fades in, a removed key's chip
   fades out where it stands and is freed, and a key re-added while its chip is still fading out

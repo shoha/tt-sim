@@ -7,8 +7,15 @@ extends GutTest
 ## entrance tweens run to their end, and no visible control may lie outside the canvas. A
 ## ScrollContainer must fit, while what it holds may run past it: the player scrolls to that.
 ## The room (RoomScreen) and the room drawer over a table are walked from a sample summary.
+##
+## On the canvas is not enough where panels overlap: the input hint bar must never lie under
+## an open drawer (_assert_uncovered), and the title's column must stay clear of the version
+## label at the bottom of the canvas, on 1366x768 at Auto (1.35, an 800 px canvas) too.
 
 const CANVAS := Vector2(1280.0, 720.0)
+## The canvas of 720p at Auto (1.40) and of 1366x768 at Auto (1.35).
+const CANVAS_720P_AUTO := Vector2i(1371, 771)
+const CANVAS_768P_AUTO := Vector2i(1423, 800)
 ## Layout rounding.
 const SLACK_PX := 0.5
 ## Longer than any entrance: the panel fade and the last staggered row.
@@ -22,6 +29,18 @@ const PAUSE_SCENE := preload("res://scenes/states/paused/pause_overlay.tscn")
 const CONFIRM_SCENE := preload("res://scenes/ui/confirmation_dialog.tscn")
 const TOASTS_SCENE := preload("res://scenes/ui/toast_container.tscn")
 const HELP_SCENE := preload("res://scenes/ui/help_overlay.tscn")
+const HINTS_SCENE := preload("res://scenes/ui/input_hints.tscn")
+## A saved level, so the title shows every caption it can (Host's "with ...", Play Solo's).
+const LEVEL := {
+	"path": "user://x/_fit_mossy/",
+	"folder": "_fit_mossy",
+	"is_folder_based": true,
+	"name": "Mossy Hollow",
+	"token_count": 3,
+	"modified_at": 1,
+	"environment_preset": "",
+	"thumbnail": "",
+}
 const RECIPE := {
 	"format": 1,
 	"parts": {"body": "body_a", "head": "head_round", "hair": "hair_bun"},
@@ -58,20 +77,52 @@ func after_each() -> void:
 
 
 func test_title_screen_fits() -> void:
-	var title := TITLE_SCENE.instantiate() as TitleScreen
-	_host.add_child(title)
+	var title := _title()
 	await _assert_fits("title screen", title.quit_button)
+	_assert_clear_of_version_label("title screen", title)
 
 
 ## A resize while the rows lift in (a saved fullscreen applying just after the title appears
 ## changes the Interface size) still settles every row where the new layout puts it.
 func test_title_screen_fits_after_a_resize_mid_entrance() -> void:
 	_host.size = Vector2i(1920, 1080)
-	var title := TITLE_SCENE.instantiate() as TitleScreen
-	_host.add_child(title)
+	var title := _title()
 	await wait_process_frames(4)
 	_host.size = Vector2i(CANVAS)
 	await _assert_fits("title screen resized mid-entrance", title.quit_button)
+	_assert_clear_of_version_label("title screen resized mid-entrance", title)
+
+
+## The column is measured against its canvas, not switched at a threshold: on 1366x768 at Auto
+## (exactly 800 px tall), 720p at Auto and 1080p it fits above the version label, and every
+## caption sits 4 px under its own button and 12 px above the next control.
+func test_title_column_fits_by_measurement() -> void:
+	for canvas in [CANVAS_768P_AUTO, CANVAS_720P_AUTO, Vector2i(1920, 1080)]:
+		_host.size = canvas
+		var title := _title()
+		var what := "title screen on a %s canvas" % str(canvas)
+		await _assert_fits(what, title.quit_button, Vector2(canvas))
+		_assert_clear_of_version_label(what, title)
+		var caption := _next_shown(title.host_button)
+		assert_almost_eq(_gap(title.host_button, caption), 4.0, SLACK_PX, "%s: caption" % what)
+		var subtitle := _next_shown(caption)
+		assert_eq(subtitle, title.host_subtitle, "%s: with Mossy Hollow under it" % what)
+		assert_almost_eq(_gap(subtitle, title.join_button), 12.0, SLACK_PX, "%s: Join" % what)
+		var play_caption := _next_shown(title.play_button)
+		assert_eq(play_caption, title.play_subtitle)
+		assert_almost_eq(_gap(play_caption, title.editor_button), 12.0, SLACK_PX, what)
+		var stack := _gap(title.editor_button, title.build_map_button)
+		assert_true(stack >= TitleScreen.STACK_GAP - SLACK_PX, "%s: stack %.1f" % [what, stack])
+		title.free()
+
+
+## At 1080p the column has room for its roomy stack.
+func test_title_column_is_roomy_at_1080p() -> void:
+	_host.size = Vector2i(1920, 1080)
+	var title := _title()
+	await _assert_fits("title at 1080p", title.quit_button, Vector2(1920, 1080))
+	var stack := _gap(title.editor_button, title.build_map_button)
+	assert_almost_eq(stack, TitleScreen.STACK_GAP_ROOMY, SLACK_PX)
 
 
 func test_every_settings_section_fits() -> void:
@@ -116,6 +167,33 @@ func test_new_map_dialog_needs_no_scroll_at_720p_auto() -> void:
 	assert_almost_eq(scroll.size.y, fields.get_combined_minimum_size().y, SLACK_PX)
 
 
+## On either sheet the three fields share one track: a size tile is a biome tile's width and
+## starts at the same left edge, and on the 960 sheet the landforms fill one line of it.
+func test_new_map_fields_share_one_track() -> void:
+	for canvas in [CANVAS_720P_AUTO, Vector2i(1920, 1080)]:
+		_host.size = canvas
+		var dialog := NEW_MAP_SCENE.instantiate() as NewMapDialog
+		_host.add_child(dialog)
+		var what := "new map dialog on %s" % str(canvas)
+		await _assert_fits(what, dialog.create_button, Vector2(canvas))
+		var sizes := _tiles(dialog.size_field)
+		var biomes := _tiles(dialog.biome_field)
+		var landforms := _tiles(dialog.landform_field)
+		for i in sizes.size():
+			assert_almost_eq(sizes[i].size.x, biomes[i].size.x, SLACK_PX, "%s: size tile" % what)
+			assert_almost_eq(
+				sizes[i].global_position.x, biomes[i].global_position.x, SLACK_PX, what
+			)
+		if canvas == CANVAS_720P_AUTO:
+			assert_almost_eq(landforms[0].size.x, biomes[0].size.x, SLACK_PX, "%s: landform" % what)
+			var first_line := 0
+			for tile in biomes:
+				if is_equal_approx(tile.position.y, biomes[0].position.y):
+					first_line += 1
+			assert_eq(first_line, NewMapDialog.BIOME_COLUMNS_WIDE, "%s: biome line" % what)
+		dialog.free()
+
+
 func test_join_screen_fits() -> void:
 	var lobby := CLIENT_SCENE.instantiate()
 	lobby.connect_network = false
@@ -146,8 +224,10 @@ func test_room_drawer_fits() -> void:
 	drawer.panel.set_code(LobbyCode.encode(109775244321098765))
 	drawer.panel.show_session(_room_summary("mill"), "enet-1", true)
 	drawer.panel.select("hollow")
+	var hints := _play_hints()
 	drawer.open()
 	await _assert_fits("room drawer", drawer.panel.action_button)
+	_assert_uncovered("hint bar beside the room drawer", hints)
 
 
 func _room_summary(table: String) -> Dictionary:
@@ -178,6 +258,7 @@ func test_authoring_drawer_fits() -> void:
 	panel.theme = ThemeColors.glass_theme()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layer.add_child(panel)
+	var hints := _play_hints()
 	for pane in [
 		AuthoringPanel.TOOL_BIOME,
 		AuthoringPanel.TOOL_THIN,
@@ -190,6 +271,7 @@ func test_authoring_drawer_fits() -> void:
 		if pane != panel._rail.selected or not panel.is_open:
 			panel._on_rail_item_pressed(pane)
 		await _assert_fits("authoring drawer on %s" % pane, panel.tool_pane(pane))
+		_assert_uncovered("hint bar beside the authoring drawer on %s" % pane, hints)
 
 
 func test_play_hud_visuals_drawer_and_asset_browser_fit() -> void:
@@ -198,16 +280,41 @@ func test_play_hud_visuals_drawer_and_asset_browser_fit() -> void:
 	var menu: Node = play.get_node("GameplayMenu")
 	var drawer := menu.get("level_edit_panel") as LevelEditPanel
 	drawer.initialize(LevelData.new())
+	var hints := _play_hints()
 	for pane in LevelEditPanel.PANE_IDS:
 		if pane != drawer._rail.selected or not drawer.is_open:
 			drawer._on_rail_item_pressed(pane)
 		await _assert_fits("play HUD, visuals drawer on %s" % pane, drawer)
 		assert_eq(drawer._rail.selected, pane)
+		_assert_uncovered("hint bar beside the visuals drawer on %s" % pane, hints)
 	drawer.mark_clean()
 	drawer.close()
 	(menu.get("toggle_asset_browser_button") as Button).button_pressed = true
 	var browser := menu.get_node("AssetBrowserContainer") as Control
 	await _assert_fits("play HUD with the asset browser", browser)
+
+
+## At 720p Auto the hint bar slides into the board the Visuals drawer leaves free, centred
+## there and whole, and comes back to the window's centre when the drawer closes.
+func test_hint_bar_centres_beside_the_visuals_drawer_at_720p_auto() -> void:
+	_host.size = CANVAS_720P_AUTO
+	var play := PLAY_SCENE.instantiate()
+	_host.add_child(play)
+	var drawer := play.get_node("GameplayMenu").get("level_edit_panel") as LevelEditPanel
+	drawer.initialize(LevelData.new())
+	var hints := _play_hints()
+	drawer._on_rail_item_pressed(&"sun")
+	await _assert_fits("hint bar beside the drawer", drawer, Vector2(CANVAS_720P_AUTO))
+	_assert_uncovered("hint bar beside the drawer at 720p Auto", hints)
+	var bar := _drawn_rect(_backdrop(hints))
+	assert_almost_eq(_drawn_alpha(_backdrop(hints)), 1.0, 0.01, "the bar shows whole")
+	var free_centre := drawer.covered_span().x / 2.0
+	assert_almost_eq(bar.get_center().x, free_centre, 1.0, "centred in the free board")
+	drawer.mark_clean()
+	drawer.close()
+	await _assert_fits("hint bar, drawer closed", _backdrop(hints), Vector2(CANVAS_720P_AUTO))
+	bar = _drawn_rect(_backdrop(hints))
+	assert_almost_eq(bar.get_center().x, CANVAS_720P_AUTO.x / 2.0, 1.0, "back in the centre")
 
 
 func test_pause_menu_fits() -> void:
@@ -268,9 +375,147 @@ func test_help_overlay_fits() -> void:
 	await _assert_fits("help overlay", _sheet(help))
 
 
+## The measure tool's row (ten chips) is wider than the canvas at 150%: it wraps onto a second
+## line inside the canvas, whole and clear of the Add Token button, rather than running past
+## both edges; beside an open drawer it wraps inside the free board.
+func test_a_long_hint_row_wraps_inside_the_canvas() -> void:
+	var play := PLAY_SCENE.instantiate()
+	_host.add_child(play)
+	var drawer := play.get_node("GameplayMenu").get("level_edit_panel") as LevelEditPanel
+	drawer.initialize(LevelData.new())
+	var hints := _play_hints()
+	# As MeasureTool._update_hints: its own keys replace Measure and Grid.
+	hints.remove_hint(InputProfile.label(&"measure"))
+	hints.remove_hint(InputProfile.label(&"grid"))
+	for spec in [
+		[&"place_point", "Place Point"],
+		[&"snap_token", "Snap Token"],
+		[&"undo_cancel", "Undo / Cancel"],
+		[&"cycle_mode", "Sphere"],
+		[&"done", "Done"],
+	]:
+		hints.add_hint(InputProfile.label(spec[0]), spec[1])
+	await _assert_fits("the measure hint row", _backdrop(hints))
+	var bar := _drawn_rect(_backdrop(hints))
+	assert_true(Rect2(Vector2.ZERO, CANVAS).encloses(bar), "the row on the canvas: %s" % bar)
+	assert_almost_eq(_drawn_alpha(_backdrop(hints)), 1.0, 0.01, "and shown")
+	_assert_uncovered("the measure hint row beside Add Token", hints)
+	drawer._on_rail_item_pressed(&"sun")
+	await _assert_fits("the measure hint row beside the drawer", drawer)
+	_assert_uncovered("the measure hint row beside the drawer", hints)
+	var room := drawer.covered_span().x - 2.0 * InputHints.DRAWER_CLEARANCE
+	assert_lte(_backdrop(hints).size.x, room + SLACK_PX, "held to the free board")
+
+
 ## An AnimatedCanvasLayerPanel's sheet.
 func _sheet(layer: Node) -> Control:
 	return layer.get_node("CenterContainer/PanelContainer") as Control
+
+
+## The title with one saved level selected, so Host and Play Solo show their captions.
+func _title() -> TitleScreen:
+	var title := TITLE_SCENE.instantiate() as TitleScreen
+	title.level_provider = func() -> Array[Dictionary]: return [LEVEL.duplicate()]
+	_host.add_child(title)
+	return title
+
+
+## The bottom-left version label stays SPACE_3 or more below the left column's last button.
+func _assert_clear_of_version_label(what: String, title: TitleScreen) -> void:
+	var version := (title.get("_version_label") as Control).get_global_rect()
+	var quit := _drawn_rect(title.quit_button)
+	assert_lte(quit.end.y + 12.0, version.position.y, "%s: Quit clears the version" % what)
+
+
+## The next shown sibling after `control` that is not a spacer (a bare Control).
+func _next_shown(control: Control) -> Control:
+	var parent := control.get_parent()
+	for i in range(control.get_index() + 1, parent.get_child_count()):
+		var next := parent.get_child(i) as Control
+		if next.visible and next.get_class() != "Control":
+			return next
+	return null
+
+
+## The vertical space between `upper`'s bottom and `lower`'s top.
+func _gap(upper: Control, lower: Control) -> float:
+	return lower.get_global_rect().position.y - upper.get_global_rect().end.y
+
+
+func _tiles(field: TileField) -> Array[Control]:
+	var out: Array[Control] = []
+	for child in field.tiles.get_children():
+		if child is Button:
+			out.append(child as Control)
+	return out
+
+
+## A hint bar in the host with the play HUD's hints (GameplayMenuController's defaults).
+func _play_hints() -> InputHints:
+	var hints := HINTS_SCENE.instantiate() as InputHints
+	_host.add_child(hints)
+	hints.set_hints(
+		[
+			{"key": InputProfile.label(&"pause"), "action": "Pause"},
+			{"key": InputProfile.label(&"wasd"), "action": "Pan"},
+			{"key": InputProfile.label(&"zoom"), "action": "Zoom"},
+			{"key": InputProfile.label(&"reset_camera"), "action": "Reset Camera"},
+			{"key": InputProfile.label(&"measure"), "action": "Measure"},
+			{"key": InputProfile.label(&"grid"), "action": "Grid"},
+			{"key": "F1", "action": "Help"},
+		]
+	)
+	return hints
+
+
+func _backdrop(hints: InputHints) -> Control:
+	return hints.get_node("%BackdropPanel") as Control
+
+
+## No open drawer's panel or handle, and no bottom-corner button (InputHints.OBSTACLES), lies
+## over the hint bar where it draws (offset transforms included); a bar that is not showing
+## is out of the way.
+func _assert_uncovered(what: String, hints: InputHints) -> void:
+	var backdrop := _backdrop(hints)
+	assert_true(backdrop.is_visible_in_tree(), "%s is in the tree" % what)
+	if _drawn_alpha(backdrop) < 0.01:
+		return
+	var rect := _drawn_rect(backdrop)
+	var covers: Array[Control] = []
+	for node in get_tree().get_nodes_in_group(DrawerContainer.GROUP):
+		var drawer := node as DrawerContainer
+		if _host.is_ancestor_of(drawer) and drawer.is_open:
+			covers.append_array([drawer._panel, drawer._tab_control])
+	for node in get_tree().get_nodes_in_group(InputHints.OBSTACLES):
+		if _host.is_ancestor_of(node):
+			covers.append(node as Control)
+	var under := PackedStringArray()
+	for part in covers:
+		if part.is_visible_in_tree() and _drawn_rect(part).intersects(rect):
+			under.append("%s under %s" % [str(rect), _host.get_path_to(part)])
+	assert_eq(under.size(), 0, "%s is clear of drawers and buttons: %s" % [what, "; ".join(under)])
+
+
+## Where `control` draws: its rect moved by every offset transform on it and its ancestors.
+func _drawn_rect(control: Control) -> Rect2:
+	var rect := control.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, control.size)
+	var node: Node = control
+	while node is Control:
+		var each := node as Control
+		if each.offset_transform_enabled:
+			rect.position += each.offset_transform_position
+		node = node.get_parent()
+	return rect
+
+
+## The alpha `control` draws with: its modulate times its ancestors' up to the canvas layer.
+func _drawn_alpha(control: Control) -> float:
+	var alpha := control.self_modulate.a
+	var node: Node = control
+	while node is CanvasItem:
+		alpha *= (node as CanvasItem).modulate.a
+		node = node.get_parent()
+	return alpha
 
 
 ## Run the entrance tweens to their end, let the containers sort, and assert that every visible

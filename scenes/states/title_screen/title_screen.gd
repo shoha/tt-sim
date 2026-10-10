@@ -18,11 +18,21 @@ const SettingsMenuScene := preload("res://scenes/ui/settings_menu.tscn")
 const ENTRANCE_STAGGER := Constants.ANIM_ENTRANCE_STAGGER
 const ENTRANCE_DURATION := Constants.ANIM_ENTRANCE
 const EMPTY_CAPTION := "Build a map, or make a level in the Level Editor"
-## A canvas shorter than this (720p at Interface size Auto, or 140% and up at 1080p) closes
-## the left column's gaps from BoxContainerSpaced (12) to BoxContainerTight (4): its six
-## 40 px buttons then stand on a 44 px pitch, and the column needs 546 px instead of 666, so
-## the hub fits the 720 px canvas of 150% (docs/THEME_GUIDE.md, Interface size).
-const COMPACT_BELOW_PX := 800.0
+## The left column's rhythm. Its own separation (BoxContainerTight, 4) puts a caption under
+## its button; every other gap is a spacer before a row, sized by _fit_to_canvas. A caption
+## stands AFTER_CAPTION_GAP above the next control, so it reads with its own button; stacked
+## buttons stand STACK_GAP_ROOMY apart, or STACK_GAP when the canvas is short; the three
+## section gaps (under the wordmark, above and below the divider) take what is left, from
+## their SECTION_GAPS size down to SECTION_GAP_MIN. The column is measured against the room
+## the hub's margins leave it (they keep the bottom-left version label clear), and tightens
+## only by what that room needs: the stacked gaps first, then the sections, evenly
+## (docs/THEME_GUIDE.md, Interface size).
+const AFTER_CAPTION_GAP := 12.0
+const STACK_GAP := 8.0
+const STACK_GAP_ROOMY := 12.0
+## Under the wordmark, above the divider, below it.
+const SECTION_GAPS: Array[float] = [36.0, 32.0, 32.0]
+const SECTION_GAP_MIN := 12.0
 
 ## Returns the level info list; tests inject a fake before the node enters the tree.
 var level_provider: Callable = LevelManager.get_saved_levels
@@ -40,7 +50,12 @@ var play_subtitle: Label
 var heading_count: Label
 var empty_caption: Label
 var grid: LevelGrid
+## The left column's spacers: the three section gaps in order, and the gap before each
+## button after Host's.
+var _section_gaps: Array[Control] = []
+var _row_gaps: Array[Control] = []
 
+@onready var _hub: MarginContainer = %Hub
 @onready var _left: VBoxContainer = %LeftColumn
 @onready var _right: VBoxContainer = %RightZone
 @onready var _version_label: Label = %VersionLabel
@@ -76,10 +91,50 @@ func selected_level() -> Dictionary:
 	return grid.selected_info()
 
 
-## The left column's gaps for the canvas height: spaced, or tight under COMPACT_BELOW_PX.
+## Fit the left column to the canvas height: roomy when it fits, else stacked buttons at
+## STACK_GAP, then the section gaps shrunk evenly by what is still over.
 func _fit_to_canvas() -> void:
-	var short := get_viewport().get_visible_rect().size.y < COMPACT_BELOW_PX
-	_left.theme_type_variation = &"BoxContainerTight" if short else &"BoxContainerSpaced"
+	if _section_gaps.is_empty():
+		return
+	var margins := (
+		_hub.get_theme_constant(&"margin_top") + _hub.get_theme_constant(&"margin_bottom")
+	)
+	var room := get_viewport().get_visible_rect().size.y - margins
+	_set_gaps(STACK_GAP_ROOMY, 0.0)
+	if _left.get_combined_minimum_size().y <= room:
+		return
+	_set_gaps(STACK_GAP, 0.0)
+	var over := _left.get_combined_minimum_size().y - room
+	if over <= 0.0:
+		return
+	var slack := 0.0
+	for gap in SECTION_GAPS:
+		slack += gap - SECTION_GAP_MIN
+	_set_gaps(STACK_GAP, clampf(over / slack, 0.0, 1.0))
+
+
+## Size every spacer: a row's gap is AFTER_CAPTION_GAP after a caption, else `stack`; each
+## section gap gives up the share `squeeze` of its way down to SECTION_GAP_MIN. A spacer's
+## height is its gap less the column's separation above and below it.
+func _set_gaps(stack: float, squeeze: float) -> void:
+	var separation := float(_left.get_theme_constant(&"separation"))
+	for i in _section_gaps.size():
+		var gap := lerpf(SECTION_GAPS[i], SECTION_GAP_MIN, squeeze)
+		_section_gaps[i].custom_minimum_size.y = maxf(gap - 2.0 * separation, 0.0)
+	for spacer in _row_gaps:
+		var row := _left.get_child(spacer.get_index() + 1) as Control
+		spacer.visible = row.visible
+		var gap := AFTER_CAPTION_GAP if _follows_caption(spacer) else stack
+		spacer.custom_minimum_size.y = maxf(gap - 2.0 * separation, 0.0)
+
+
+## Whether the nearest shown control above `spacer` is a caption line.
+func _follows_caption(spacer: Control) -> bool:
+	for i in range(spacer.get_index() - 1, -1, -1):
+		var control := _left.get_child(i) as Control
+		if control.visible:
+			return control is Label
+	return false
 
 
 func _build_left_column() -> void:
@@ -88,35 +143,42 @@ func _build_left_column() -> void:
 	wordmark.text = "TTSim"
 	wordmark.theme_type_variation = &"Wordmark"
 	_left.add_child(wordmark)
-	UiActions.spacer(12, _left)
+	_section_gaps.append(UiActions.spacer(0, _left))
 	host_button = UiActions.primary(
 		"Host Game", "network", "Start a table and invite players", _left
 	)
 	host_subtitle = UiActions.subtitle_of(host_button)
 	host_button.pressed.connect(_on_host_pressed)
 	# One persimmon fill per screen (C5): Host is the primary, Join stands beside it quietly.
+	_row_gaps.append(UiActions.spacer(0, _left))
 	join_button = UiActions.primary(
 		"Join Game", "users", "Enter a room code", _left, &"Secondary"
 	)
 	join_button.pressed.connect(_on_join_pressed)
-	UiActions.spacer(8, _left)
+	_section_gaps.append(UiActions.spacer(0, _left))
 	_left.add_child(HSeparator.new())
-	UiActions.spacer(8, _left)
+	_section_gaps.append(UiActions.spacer(0, _left))
 	play_button = UiActions.secondary("Play Solo", "map", _left)
 	play_subtitle = UiActions.subtitle_of(play_button)
 	play_button.pressed.connect(_on_play_pressed)
-	editor_button = UiActions.secondary("Level Editor", "wand", _left)
+	editor_button = _stacked("Level Editor", "wand")
 	editor_button.pressed.connect(_on_editor_pressed)
-	build_map_button = UiActions.secondary("Build Map", "brush", _left)
+	build_map_button = _stacked("Build Map", "brush")
 	build_map_button.pressed.connect(_on_build_map_pressed)
-	avatars_button = UiActions.secondary("Avatars", "mood-smile", _left)
+	avatars_button = _stacked("Avatars", "mood-smile")
 	avatars_button.tooltip_text = "Make your characters ahead of time; place them in any game"
 	avatars_button.pressed.connect(_on_avatars_pressed)
 	avatars_button.visible = DevFeatures.avatars
-	settings_button = UiActions.secondary("Settings", "settings", _left)
+	settings_button = _stacked("Settings", "settings")
 	settings_button.pressed.connect(_on_settings_pressed)
-	quit_button = UiActions.secondary("Quit", "x", _left)
+	quit_button = _stacked("Quit", "x")
 	quit_button.pressed.connect(_on_quit_pressed)
+
+
+## A Secondary button in the lower stack, after its row gap.
+func _stacked(label: String, icon: String) -> Button:
+	_row_gaps.append(UiActions.spacer(0, _left))
+	return UiActions.secondary(label, icon, _left)
 
 
 func _build_right_zone() -> void:
@@ -177,10 +239,16 @@ func _refresh_actions() -> void:
 	var name := String(info.get("name", ""))
 	host_subtitle.text = "with %s" % name if has_level else ""
 	play_subtitle.text = name
+	# A caption shown or hidden changes the column's height and the gap after it.
+	_fit_to_canvas()
 
 
+## The rows lift in one after another; the spacers between them are skipped (M4).
 func _play_entrance_animation() -> void:
-	var targets := UiMotion.visible_children(_left)
+	var targets: Array[Control] = []
+	for control in UiMotion.visible_children(_left):
+		if not (_section_gaps.has(control) or _row_gaps.has(control)):
+			targets.append(control)
 	targets.append_array(UiMotion.visible_children(_right))
 	await UiMotion.stagger_in(targets, self)
 	if not is_instance_valid(self):

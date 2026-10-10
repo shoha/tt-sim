@@ -12,8 +12,9 @@ static func apply(menu: SettingsMenu) -> void:
 	menu.ui_slider.tooltip_text = "UI sounds (clicks, hover, panel open/close)"
 	menu.fullscreen_check.tooltip_text = "Toggle fullscreen mode (F11)"
 	menu.interface_size_option.tooltip_text = (
-		"How large menus and text draw. Auto enlarges them on small windows so text stays "
-		+ "readable; the board is not scaled. Applies at once."
+		"How large menus and text draw. Auto picks the size that keeps text readable on this "
+		+ "screen. A percent is a fixed size, the same on every screen: one smaller than Auto "
+		+ "makes text small here. The board is not scaled. Applies at once."
 	)
 	menu.vsync_check.tooltip_text = "Sync frame rate to monitor refresh rate"
 	menu.lofi_check.tooltip_text = "Apply a lo-fi pixel filter to the 3D view"
