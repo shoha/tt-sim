@@ -495,6 +495,30 @@ Field notes:
   Since P4b-3 stepping stones in a `temperate` or `cold` climate also sample the ground
   surface named `moss` on their upward facets (a palette without it gives bare stones).
   Still no new field.
+- Fire (added 2026-10-10 for terrain events in play; no new field, same format 1). A GM's
+  fire is a surface op (scorched ground), a mask op (a clear, or the burnt biome) and a
+  parametric effect; the palette supplies the first two:
+  - **`ash`**, a surface with kind `ash` and role `ground`: scorched ground, warm grey-umber
+    ash with soft charcoal patches. Being `ground` it keeps the plants under it like any
+    painted ground (it covers walkable ground only and yields to the automatic rock), so a
+    fire pairs it with a clear or with the burnt biome; it never clears plants itself.
+  - **`burnt_forest`**, a biome (package `burnt_forest_summer_s1`, name "Burnt Forest",
+    climate `temperate`, `ground_surface` `ash`): charred standing snags with a few broken
+    limbs, charred stumps, fallen charred logs and branches, char litter and sooty stones.
+    Nothing in it is green and it lists no flowers. The snags are trees without a canopy
+    (`wind_category` `tree`, a slow trunk sway, like the badlands' dead snags); the
+    deadwood and stones are static; the litter is `grass` with zero weights, as every
+    litter asset. It carries the usual ground accents and path surfaces, and no water
+    fields (the consumer's "any other biome key" defaults apply).
+
+  What tt-sim may assume: a palette from this version on holds both names with those
+  roles. An older palette lacks them, which is never an error: a fire op falls back to a
+  ground surface it has (`dirt_peat` is the judged stand-in) and to a clear. The burnt
+  biome is the last entry of `biomes`: the producer lists the landscape biomes first,
+  sorted by key, and event biomes after them, so the biome indices and the first entries
+  the authoring pickers show do not move. Biome order is otherwise not part of the
+  contract, and neither are the burnt biome's species keys or asset ids beyond the asset
+  id rule below.
 - `geoscatter_pattern` holds Geoscatter's `s_pattern1_*` settings verbatim with the
   prefix stripped (texture dict, sample method, influences, revert flags), minus the
   datablock plumbing (`allow`, `texture_ptr`, `texture_is_unique`). tt-sim's
