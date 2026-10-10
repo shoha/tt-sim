@@ -213,3 +213,6 @@ that conflicts with one stops and asks. Add each new verdict here with its date.
   Keep one pill with the two colours, but the seam between Host and Join is a crisp
   hand-painted edge with a thin paper line: no soft bleed, no blur. The washes may keep a
   gentle tone inside each half. Soft blur on a control edge reads as out of focus, not painted.
+  Follow-up the same day: each colour runs solid right up to the seam line; any lighter
+  watercolour tone sits in the open middle of each half, away from the seam, so nothing soft
+  frames the middle.
