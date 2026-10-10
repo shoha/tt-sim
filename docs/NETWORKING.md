@@ -458,8 +458,8 @@ it is set out (`TableStates.overlay()`), so every peer and every late joiner get
 the look in the level broadcast and snapshot, and its op log goes to
 `LevelPlayController.replay_log`: the host's `LiveEdits` applies it before the tokens land and
 keeps it as its log, so clients and late joiners catch up on it as on any table's log. The
-state is memory only (a session file keeps it later) and is forgotten when a session begins or
-ends. A restored token comes back under its placement id, so a token placed in play returns
+session file keeps it across nights (see "Session file and Resume" below); in memory it is
+forgotten when a session begins or ends, and Resume puts it back. A restored token comes back under its placement id, so a token placed in play returns
 with a new network id (the party keeps theirs).
 
 Saving and discarding are the shelf rows' (`changed_maps()`, `ask_save()`, `ask_discard()`;
@@ -478,6 +478,67 @@ the map is set out (`note_table_out`), so a client prefetching it in the room me
 the old hash.
 
 A client that loses the host in the room gets the same "Disconnected" dialog as at a table.
+
+#### Session file and Resume
+
+A session remembers its tables across nights (user decision 2026-10-09): the GM ends a session
+tonight and resumes it tomorrow with the same shelf, each map's kept state, the party's avatars
+and grants, and the live terrain edits. `SessionKeeper` (`scenes/session_keeper.gd`,
+`TableMover.keeper`, host only) writes it and restores it; `SessionFile`
+(`utils/session_file.gd`) is the files. The store is `Paths.SESSIONS_DIR`
+(`user://sessions/<id>/`, a test root's in tests and scenarios); nothing in it is written into
+`user://levels/`.
+
+- *Files.* `session.json`: `format` (1), `id` (`SessionFile.new_id()`: the UTC start time and a
+  salt), `name` (the first map shelved), `created`, `last_played`, `gm` (the host's session id),
+  `shelf` [{`folder`, `map_path`, `name`, `hashes` {map, ttmap}, `revision` (level.json's
+  `modified_at`)}], `table` (the map out, or null in the room), `selected`, `players` {session
+  id: {`name`, `role` gm or player}}, `party` [{`state` TokenState dict, `owners` [session
+  ids]}] (`SessionParty.snapshot()`: the members at the table and those waiting), `grants`
+  {session id: [network ids]}, `tables` {shelf key: file stem}. `tables/<stem>.json` for each
+  map with a kept state (`TableStates.to_data()`): `key`, `base` {`hashes`, `revision`} (the map
+  files it was kept against: the shelf ref's hashes, which `note_table_out` set when it went
+  out), `tokens` (the placements that replace the template's), `look`
+  (`LevelVisualState.to_data()`, LevelData's own keys), `events` (the op log, each op base64),
+  and when its terrain changed on a map with a folder `document` (the stem of
+  `tables/<stem>.ttmap`, the edited `MapDocument`, for Save into map from the shelf after
+  Resume) with `document_log` (`SessionFile.log_signature()` of the log it matches). The stem
+  is the level folder, or `map_` and a hash for a res:// map. Floats are written at full
+  precision, so a look read back equals the look written.
+- *Atomic.* Every file goes to `<name>.tmp` and is renamed over the old one
+  (`SessionFile.write_text()`, `write_document()`; the rename replaces an existing file on
+  Windows, checked 2026-10-10), so a failed write or a process that dies part way never leaves
+  a partial file where a good one was; a leftover `.tmp` is never read.
+- *When.* Hosting gives the session an id; nothing is written until the shelf has a map. Then
+  after every table move and every change to the shelf, the table pointer or the players
+  (`changes_changed`, `session_changed`, at most one write a frame), every `SAVE_EVERY_S` (120 s)
+  while hosting, when Root leaves a table (`TableMover.table_closing()`, before the teardown: a
+  session ended at a table keeps the table as it stands, its recorded edits made ops first), and
+  on the window's close request. The table out now is read as it stands (`table_entry()`: the
+  placements synced from their tokens, the look, the ops since its map was last saved, and the
+  document when the editor has settled and no regrowth runs). A table file is rewritten only
+  when its text changed and a document only when its log did; a map whose state went (saved
+  into its map, discarded) loses its files.
+- *Resume* (`SessionKeeper.resume(id)`; the title's entry is a later card). The file is read
+  first (a missing or damaged one says so and starts nothing), then `host_requested` has Root
+  host as Host does, with a new lobby and room code (Steam lobby ids do not persist). On
+  `HOSTING` (after `TableMover`, which forgets every kept state there) `restore()` lays the
+  session over the one that began, and the room opens with its shelf. Each shelf map is
+  compared with its folder in this host's library: a map whose files hash as its table file's
+  base comes back whole (its op log replayed when it is set out, its document when that
+  matches the log); a map whose files changed ("the map changed since") keeps its tokens and
+  look but drops its op log and document, which were made on the old terrain; a map whose folder
+  is gone stays on the shelf with no hashes (so no client fetches it) and its state as it was,
+  its base kept for the next save. `notes()` lists the changed and missing maps for the room to
+  say so (not shown yet). Players come back as away (peer 0) until they rejoin; the party waits
+  for the next table and each grant maps a session id to the peer id that player has when it
+  joins (`SessionParty.restore()`, `SessionChannel.restore()`). The selected map is the one that
+  was out.
+- *Not built.* Past a size cap the sketch bakes the event log into a session copy of the map
+  document; that needs the table set out from the session copy (served to clients in place of
+  the folder's `map.ttmap`) or the log compacted into one op per layer, so every op is kept for
+  now. A whole-map sculpt is about 240 KB before ZSTD, so a long night of large strokes makes
+  megabytes of base64.
 
 ---
 
@@ -871,6 +932,20 @@ log and one `NET_RESULT {json}` line to `--out` and quits 0 on a pass; extending
   the host's (0.599 m, from 0.0) and one op in its live edits' log; client4 joins there as a
   late joiner and gets the same, without ever seeing the room. The host ends with five session
   players. Passed on 2026-10-10 in about 8.9 s on the host.
+- `enet_session_file` (`--peers=2 --timeout-s=300`): the session file and Resume across
+  processes. The host plays table A (`enet_session_room`'s: Hero A granted to client, Bystander
+  A moved, one raise) and ends the session from the table as Pause > Return to Title does; the
+  session file it left has table A out, Bystander A and one op kept, the edited document, and
+  the party Hero A owned by `enet-client` with its grant. It then starts a fresh host process
+  (this scene with `--role=resume` on the same `--data-root`, logs `resume.log` and
+  `resume.godot.log`), which resumes the session (`prepare_resume()`, then hosting): the same
+  session id, no notes, the room with the shelf, A's kept state, the party and the grant, and
+  client as away. client, back on the title after the "Disconnected" dialog, rejoins the room;
+  the resumer sets A out, and on both peers Bystander A is where it was moved (0.0 m off), the
+  ground at the raise is the first host's height (0.599 m) with one op, and Hero A is on the
+  board under client's control (its new peer id). The first host waits for the resumer and folds
+  its `NET_RESULT` into its own. Every peer passed on 2026-10-10 in about 7.7 s on the host
+  (the resumer 1.2 s).
 - `enet_live_edits` (`--peers=3 --timeout-s=300`): live map edits (see "Live map edits"
   below). The host builds a 120 ft authored level (forest west of a river, a plank bridge) in
   its own test root before it opens the room, so both clients download its `map.ttmap`. With
@@ -1027,6 +1102,8 @@ func note_holdings(session_id: String, keys: Variant) -> void  # a client's repo
 func admit_peer(peer_id: int, reported: Dictionary = {}) -> StringName
                                           # from _rpc_send_player_info() with the reported info;
                                           # restores a returning player's grants; &"room" or &"table"
+func restore(shelf: Array, players: Dictionary, selected: String) -> void
+                                          # Resume: the shelf, players as away, the selection
 var party: SessionParty
 var prefetch: SessionPrefetch
 ```
@@ -1066,6 +1143,8 @@ func get_grants() -> Dictionary           # session id -> network ids it control
 func owners_of(network_id: String) -> Array[String]
 func get_members() -> Array[Dictionary]   # between tables: {"state": TokenState dict, "owners"}
 func take() -> int                        # before a table goes
+func snapshot() -> Array[Dictionary]      # the party as it stands, not taken (the session file)
+func restore(members: Array, grants: Dictionary) -> void      # Resume: waiting members, grants
 func set_out() -> int                     # once the next map has loaded
 func restore_grants(session_id: String, peer_id: int) -> int   # from admit_peer()
 func revoke_all(network_id: String) -> void                    # the GM's Revoke control

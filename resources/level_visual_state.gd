@@ -4,9 +4,10 @@ extends RefCounted
 ## Transient bundle of every live-editable visual field on a LevelData. It is
 ## the one unit the Visuals drawer snapshots on open, restores on Cancel, writes
 ## on Save and broadcasts to clients, and the one unit the client receive path
-## patches and re-applies. It is never persisted: LevelData is the on-disk shape,
-## this is a copy of the editable subset with independent ownership of every
-## dictionary and resource, so holding one across edits cannot alias live data.
+## patches and re-applies. LevelData is the on-disk shape, this is a copy of the
+## editable subset with independent ownership of every dictionary and resource, so
+## holding one across edits cannot alias live data. A session file keeps a map's look
+## as plain data in LevelData's own keys (to_data(), from_data()).
 ##
 ## Adding a live-synced visual property means: a field here, one line in
 ## from_level_data(), apply_to_level_data(), copy(), to_broadcast_dict() and
@@ -38,6 +39,22 @@ const LEVEL_DICT_MIRROR_KEYS: Array[String] = [
 	"foliage_overrides",
 	"water_style",
 	"water_overrides",
+]
+## The LevelData.to_dict() keys this state covers: its plain-data form (to_data()).
+const DATA_KEYS: Array[String] = [
+	"format_version",
+	"light_intensity_scale",
+	"environment_preset",
+	"environment_overrides",
+	"water_style",
+	"water_overrides",
+	"lofi_overrides",
+	"weather_overrides",
+	"foliage_overrides",
+	"visual_settings",
+	"grid_cell_size",
+	"display_unit",
+	"display_unit_per_cell",
 ]
 
 var light_intensity_scale: float = 1.0
@@ -89,6 +106,28 @@ func apply_to_level_data(level_data: LevelData) -> void:
 	level_data.grid_cell_size = grid_cell_size
 	level_data.display_unit = display_unit
 	level_data.display_unit_per_cell = display_unit_per_cell
+
+
+## This state as plain data a JSON file can hold: the DATA_KEYS of a LevelData.to_dict()
+## carrying it, so it is written exactly as level.json writes a look.
+func to_data() -> Dictionary:
+	var level := LevelData.new()
+	apply_to_level_data(level)
+	var full := level.to_dict()
+	var out := {}
+	for key in DATA_KEYS:
+		out[key] = full[key]
+	return out
+
+
+## The state to_data() wrote, read as LevelData.from_dict() reads a level (any key missing or
+## malformed falls back as it does there).
+static func from_data(data: Dictionary) -> LevelVisualState:
+	var keys := {}
+	for key in DATA_KEYS:
+		if data.has(key):
+			keys[key] = data[key]
+	return from_level_data(LevelData.from_dict(keys))
 
 
 func copy() -> LevelVisualState:

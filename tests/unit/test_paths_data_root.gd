@@ -26,6 +26,7 @@ const SHIPPED := {
 	"USER_ASSETS_DIR": "user://user_assets/",
 	"AVATARS_DIR": "user://avatars/",
 	"UPDATES_DIR": "user://updates/",
+	"SESSIONS_DIR": "user://sessions/",
 }
 
 
@@ -53,6 +54,7 @@ func _stores() -> Dictionary:
 		"USER_ASSETS_DIR": Paths.USER_ASSETS_DIR,
 		"AVATARS_DIR": Paths.AVATARS_DIR,
 		"UPDATES_DIR": Paths.UPDATES_DIR,
+		"SESSIONS_DIR": Paths.SESSIONS_DIR,
 	}
 
 

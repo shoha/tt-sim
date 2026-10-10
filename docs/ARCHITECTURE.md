@@ -86,7 +86,7 @@ These are `class_name` scripts (not autoloads) that provide globally accessible 
 | Class                | File                              | Purpose                              |
 | -------------------- | --------------------------------- | ------------------------------------ |
 | `Constants`          | `autoloads/constants.gd`         | Shared constants (lo-fi defaults, canvas layers, network intervals, asset priorities) |
-| `Paths`              | `autoloads/paths.gd`             | Path constants (`SETTINGS_PATH`, level dirs) and static path utilities |
+| `Paths`              | `autoloads/paths.gd`             | Path constants (`SETTINGS_PATH`, level dirs, the session store) and static path utilities |
 | `NodeUtils`          | `autoloads/node_utils.gd`        | Static node manipulation utilities   |
 | `TokenPermissions`   | `autoloads/token_permissions.gd` | Per-token, per-player permission management (query, grant, revoke, serialize) |
 | `SerializationUtils` | `utils/serialization_utils.gd`   | Vector3/Color/Dictionary conversion helpers for network and file I/O |
@@ -1084,6 +1084,26 @@ when it saves (it does not create documents).
 **Autosave:** `user://levels/_autosave/level.json` (cleared after manual save).
 
 See [CONVENTIONS.md](CONVENTIONS.md) for the full `level.json` schema and path resolution details.
+
+### Session store (Resume)
+
+A hosted session is kept beside the levels, never inside them, so the GM can end it tonight
+and resume it tomorrow (`Paths.SESSIONS_DIR`, a store of its own in `Paths.store_paths()`):
+
+```
+user://sessions/{id}/
+├── session.json          # name, times, GM, shelf, table pointer, players, party, grants
+└── tables/
+    ├── {folder}.json     # one map's kept state: tokens, look, live-edit op log, base
+    └── {folder}.ttmap    # its edited map document, when its terrain changed
+```
+
+`SessionFile` (`utils/session_file.gd`) owns the shape, the atomic write (each file to
+`<name>.tmp`, then renamed over the old one) and reading it back as untrusted; `SessionKeeper`
+(`scenes/session_keeper.gd`, a child of Root's `TableMover`) decides what goes in and when, and
+restores it on Resume. Nothing in the session store writes into `user://levels/`; a map's
+folder is only read, to compare its files with the base its state was kept against. Format,
+triggers and the Resume rules: [NETWORKING.md](NETWORKING.md) "Session file and Resume".
 
 ### Map document (map.ttmap)
 

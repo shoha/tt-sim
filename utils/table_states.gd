@@ -4,8 +4,9 @@ extends RefCounted
 ## Per-map session state: what a session did to each map it set out, kept so that returning
 ## to a map restores it (docs/plans/2026-10-09-v0.2-evaluation/design/flow_recommendation_v2.md,
 ## "The model"). A map is a template, a level folder nothing in a session changes unless the GM
-## picks Save into map; this is the session's side of it, by shelf key (SessionChannel.ref_key()),
-## in memory until a session file keeps it. Host only (TableMover owns one).
+## picks Save into map; this is the session's side of it, by shelf key (SessionChannel.ref_key()).
+## Host only (TableMover owns one). The session file keeps each entry as plain data
+## (to_data(), from_data(); SessionKeeper writes it), so a resumed session has it again.
 ##
 ## An entry is what a table had become when it left: its token placements (TokenPlacement
 ## dicts, each synced from its live token as a save would), its look (a LevelVisualState) and
@@ -96,6 +97,54 @@ static func op_log_of(entry: Dictionary) -> Array[PackedByteArray]:
 	var ops: Array[PackedByteArray] = []
 	ops.assign(entry.get("op_log", []))
 	return ops
+
+
+## `entry` as plain data a JSON file can hold: "tokens" (its placements as TokenPlacement
+## dicts, which replace the template's), "look" (LevelVisualState.to_data(), or none) and
+## "events" (its op log, each op base64). The document is the caller's to keep. Pure.
+static func to_data(entry: Dictionary) -> Dictionary:
+	var look := entry.get("look") as LevelVisualState
+	var events: Array = []
+	for op: PackedByteArray in op_log_of(entry):
+		events.append(Marshalls.raw_to_base64(op))
+	return {
+		"tokens": (entry.get("placements", []) as Array).duplicate(true),
+		"look": look.to_data() if look != null else {},
+		"events": events,
+	}
+
+
+## The entry to_data() wrote, read as a file anyone could have edited: placements that are
+## not dictionaries and events that are not base64 strings are dropped, and no look is laid
+## over the template when there is none. Pure.
+static func from_data(data: Dictionary) -> Dictionary:
+	var placements: Array[Dictionary] = []
+	var tokens: Variant = data.get("tokens", [])
+	if tokens is Array:
+		for placement: Variant in tokens:
+			if placement is Dictionary:
+				placements.append(TokenPlacement.from_dict(placement).to_dict())
+	var ops: Array[PackedByteArray] = []
+	var events: Variant = data.get("events", [])
+	if events is Array:
+		for event: Variant in events:
+			var op := Marshalls.base64_to_raw(event) if event is String else PackedByteArray()
+			if not op.is_empty():
+				ops.append(op)
+	var entry := {"placements": placements, "op_log": ops}
+	var look: Variant = data.get("look", {})
+	if look is Dictionary and not (look as Dictionary).is_empty():
+		entry["look"] = LevelVisualState.from_data(look)
+	return entry
+
+
+## `entry` without its terrain: the op log and the edited document dropped, the placements and
+## the look kept (Resume, when the map changed since the session last saw it). Pure.
+static func without_terrain(entry: Dictionary) -> Dictionary:
+	var kept := entry.duplicate()
+	kept["op_log"] = [] as Array[PackedByteArray]
+	kept.erase("document")
+	return kept
 
 
 ## What `level` looks like, for telling whether its look changed: every live-synced visual

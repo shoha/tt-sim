@@ -159,6 +159,7 @@ func _setup_level_play_controller() -> void:
 	_table_mover.setup(_level_play_controller)
 	_table_mover.level_chosen.connect(_on_table_level_chosen)
 	_table_mover.room_chosen.connect(_open_room)
+	_table_mover.keeper.host_requested.connect(host_session.bind(null))
 
 	# Connect loading signals for the loading overlay
 	_level_play_controller.level_loading_started.connect(_on_level_loading_started)
@@ -425,9 +426,9 @@ func _exit_playing_state() -> void:
 		NetworkManager.level_data_received.disconnect(_on_level_data_received)
 	_disconnect_client_state_signals()
 
-	# A move still being asked about or counted down goes with the table.
+	# The session file keeps the table as it stands; a move counting down goes with it.
 	if _table_mover:
-		_table_mover.cancel()
+		_table_mover.table_closing()
 
 	# Clear the level and reset loading state
 	if _level_play_controller:

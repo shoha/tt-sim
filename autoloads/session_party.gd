@@ -18,9 +18,10 @@ extends Node
 ## (adopted: saving the map no longer writes it); when its last owner loses it, it is the
 ## map's again. Before a table goes (Return everyone to the room, or a map change in play)
 ## Root calls take(): each member as a TokenState dict and its owners' session ids, plain data
-## a session file can write. Once the next map has loaded Root calls set_out(): each member is
-## rebuilt under its own network id outside that map's placements, set down around the map's
-## spawn point (LevelData.spawn_point) or, without one, the camera's ground point, grounded
+## the session file keeps (snapshot(); restore() puts it back on Resume). Once the next map
+## has loaded Root calls set_out(): each member is rebuilt under its own network id outside
+## that map's placements, set down around the map's spawn point (LevelData.spawn_point) or,
+## without one, the camera's ground point, grounded
 ## (TokenGrounding), granted again to each owner connected now (an owner who is away gets it
 ## on rejoining), and sent to every peer in one full state. A client that was already
 ## connected gets that full state again once it reports its table loaded: a state that lands
@@ -98,14 +99,48 @@ func reset() -> void:
 func take() -> int:
 	if not NetworkManager.is_host():
 		return 0
-	var taken := members_of(GameState.get_all_token_states(), _grants)
-	var ids := taken.map(func(m: Dictionary) -> String: return str(m.state.get("network_id")))
-	for member in _members:
-		if str(member.state.get("network_id")) not in ids:
-			taken.append(member)
-	_members = taken
+	_members = snapshot()
 	_awaiting.clear()
 	return _members.size()
+
+
+## The party as it stands, without taking it (a copy): the members at the table, then those
+## not yet set out. What a session file keeps (SessionKeeper), at a table or between tables.
+func snapshot() -> Array[Dictionary]:
+	var members := members_of(GameState.get_all_token_states(), _grants)
+	var ids := members.map(func(m: Dictionary) -> String: return str(m.state.get("network_id")))
+	for member in _members:
+		if str(member.state.get("network_id")) not in ids:
+			members.append(member.duplicate(true))
+	return members
+
+
+## Host: the party and its grants as a session file kept them (Resume, SessionKeeper): the
+## members wait for the next table as if just taken, and the grants come back by session id,
+## so each player gets its avatar when it is set out or when the player joins. Read as a file
+## anyone could have edited: a member that is not an avatar with a network id, and owners or
+## network ids that are not strings, are dropped.
+func restore(members: Array, grants: Dictionary) -> void:
+	reset()
+	for member: Variant in members:
+		if not member is Dictionary or not member.get("state") is Dictionary:
+			continue
+		var state := TokenState.from_dict(member.state)
+		if state.network_id == "" or state.avatar_recipe.is_empty():
+			continue
+		var owned_by: Array[String] = []
+		var raw_owners: Variant = member.get("owners", [])
+		if raw_owners is Array:
+			for owner: Variant in raw_owners:
+				if owner is String and owner != "":
+					owned_by.append(owner)
+		_members.append({"state": state.to_dict(), "owners": owned_by})
+	for session_id: Variant in grants:
+		var ids: Variant = grants[session_id]
+		if session_id is String and ids is Array:
+			for network_id: Variant in ids:
+				if network_id is String and network_id != "":
+					_add_grant(session_id, network_id)
 
 
 ## Host: set the party out on the map that has just loaded (Root, on level_loaded). Returns

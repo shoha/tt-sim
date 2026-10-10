@@ -28,6 +28,7 @@
 		"res://tests/unit/test_room_panel.gd",
 		"res://tests/unit/test_root_room.gd",
 		"res://tests/unit/test_session_channel.gd",
+		"res://tests/unit/test_session_file.gd",
 		"res://tests/unit/test_session_party.gd",
 		"res://tests/unit/test_session_prefetch.gd",
 		"res://tests/unit/test_steam_launch_detection.gd",
