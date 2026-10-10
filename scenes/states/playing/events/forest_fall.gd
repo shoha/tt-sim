@@ -10,6 +10,13 @@ extends Node3D
 ## first, each eased in like a falling trunk, with a small rebound where it lands and a soft
 ## dust puff over its crown, then they settle into the ground under the dust.
 ##
+## A falling tree goes still: the stand-in's instance colour multiplies the mesh's authored
+## wind weights (vertex COLOR: R sway, G flutter), and calm_weight() takes both to 0 over the
+## first part of its fall. That stops its sway and flutter, and the canopy fade, which always
+## keeps a trunk (flutter under CANOPY_LIMB_FLUTTER), keeps the whole tree: a crown lying in
+## front of the view centre stays whole instead of dissolving card by card, which left bare
+## logs. A tree waiting for the ripple keeps colour 1, so it matches the tree it replaced.
+##
 ## The map change follows as a Clear over the area (TerrainEvents), and its rebuild drops the
 ## hidden instances; ScatterShrink holds their origins meanwhile, so that rebuild lets them go
 ## at once instead of shrinking them away from upright. When the rebuild never comes (the op
@@ -39,8 +46,11 @@ const LIE_S := 0.15
 const SETTLE_S := 0.45
 ## Spread of each tree's direction around "away from the centre".
 const SWAY_DEG := 16.0
-## Warm sunlit dust: golden cream, half see-through (white read as smoke in the first look).
-const DUST := Color(0.95, 0.83, 0.6, 0.55)
+## The share of its fall over which a tree's wind weights go to 0 (calm_weight).
+const CALM := 0.4
+## Warm sunlit dust: golden ochre, well see-through, so overlapping puffs stay dust rather than
+## the cream mass that read as cotton in the third look.
+const DUST := Color(0.9, 0.76, 0.52, 0.4)
 const TREE_CATEGORY := "tree"
 
 var duration: float = 2.8
@@ -149,8 +159,10 @@ func setup(editor: AuthoringEditor, event: TerrainEvent) -> bool:
 ## Plays the fall `elapsed` seconds in (after `delta` more seconds of puffs).
 func step(elapsed: float, delta: float) -> void:
 	for tree in _trees:
-		var stand_in: MultiMeshInstance3D = tree.stand_in
-		stand_in.multimesh.set_instance_transform(tree.slot, _tree_transform(tree, elapsed))
+		var multimesh := (tree.stand_in as MultiMeshInstance3D).multimesh
+		multimesh.set_instance_transform(tree.slot, _tree_transform(tree, elapsed))
+		var calm := calm_weight(elapsed - float(tree.start), float(tree.fall))
+		multimesh.set_instance_color(tree.slot, Color(calm, calm, 1.0, 1.0))
 	_puffs.step(delta)
 	if elapsed >= duration and not _ended:
 		_ended = true
@@ -196,7 +208,17 @@ func _stand_in(mesh: Mesh, trees: Array, event: TerrainEvent) -> void:
 		transforms.append(tree.base)
 	var node := MultiMeshInstance3D.new()
 	node.name = "Fallen%d" % get_child_count()
-	node.multimesh = ScatterGlbUtils.build_multimesh(mesh, transforms)
+	# Instance colours (white: the authored wind weights as they are) let a falling tree go
+	# still (calm_weight); use_colors is set before the count, as MultiMesh requires.
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.use_colors = true
+	multimesh.mesh = mesh
+	multimesh.instance_count = transforms.size()
+	for i in transforms.size():
+		multimesh.set_instance_transform(i, transforms[i])
+		multimesh.set_instance_color(i, Color.WHITE)
+	node.multimesh = multimesh
 	node.set_meta("wind_foliage_category", TREE_CATEGORY)
 	# A falling crown sweeps well past the standing tree's box.
 	node.extra_cull_margin = maxf(mesh.get_aabb().size.y, 4.0)
@@ -248,6 +270,16 @@ static func rest_angle(box: AABB, scale: Vector3) -> float:
 	return clampf(angle, deg_to_rad(REST_DEG.x), deg_to_rad(REST_DEG.y))
 
 
+## The multiplier on a tree's wind weights `t` seconds after it starts a fall of `fall`
+## seconds: 1 until it starts (it matches the standing tree it replaced), easing to 0 by CALM
+## of the fall, so it goes still and the canopy fade keeps its whole crown (see the header).
+## Pure.
+static func calm_weight(t: float, fall: float) -> float:
+	if t <= 0.0:
+		return 1.0
+	return 1.0 - smoothstep(0.0, maxf(fall * CALM, 0.01), t)
+
+
 ## A tree `elapsed` seconds into the fall: standing, falling (accelerating like a trunk that
 ## tips past its balance), rebounding where it lands, lying, then settling into the ground.
 func _tree_transform(tree: Dictionary, elapsed: float) -> Transform3D:
@@ -291,15 +323,20 @@ func _dust(tree: Dictionary) -> void:
 	var base: Transform3D = tree.base
 	var dir: Vector3 = tree.dir
 	var height := float(tree.height)
-	# Kicked up along the trunk where it lands, the biggest under the crown.
+	# Kicked out low along the trunk where it lands, the biggest under the crown: wider than
+	# tall and rolling out to either side over the ground, as dust from an impact does,
+	# rather than rising as a cloud.
 	var side := Vector3.UP.cross(dir)
 	for k in 3:
 		var along := 0.35 + 0.22 * k
-		var at := base.origin + dir * height * along + side * _rng.randf_range(-0.6, 0.6)
+		var out := 1.0 if k % 2 == 0 else -1.0
+		var at := base.origin + dir * height * along + side * out * _rng.randf_range(0.1, 0.5)
 		_puffs.emit(
-			at + Vector3(0.0, height * 0.05, 0.0),
-			side * _rng.randf_range(-0.8, 0.8) + Vector3(0.0, _rng.randf_range(0.4, 0.8), 0.0),
-			height * (0.2 + 0.08 * k) * _rng.randf_range(0.9, 1.2),
-			_rng.randf_range(0.9, 1.2),
-			DUST
+			at + Vector3(0.0, height * 0.03, 0.0),
+			side * out * _rng.randf_range(0.9, 1.4) + Vector3(0.0, _rng.randf_range(0.15, 0.35), 0.0),
+			height * (0.13 + 0.05 * k) * _rng.randf_range(0.9, 1.15),
+			_rng.randf_range(1.0, 1.3),
+			DUST,
+			0.0,
+			EventPuffs.SQUAT
 		)

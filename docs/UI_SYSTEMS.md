@@ -243,6 +243,11 @@ UIManager.show_undo_toast('Removed "Marigold"', undo_callable)
 
 - A toast with an action (Undo) stays 6 s (`ToastContainer.ACTION_DURATION`); pressing it runs
   the action once and dismisses the toast
+- A toast hugs its one line: as wide as its icon, words and any action need, up to 360 px
+  (`ToastContainer.WIDTH`; 520 with an action, `ACTION_MAX_WIDTH`), wrapping past that
+  (`_fit_one_line`). There is no floor: "Raise undone" is no wider than its words (a 360 px
+  chip around two words read as an empty box), and "Cleared for everyone at the table" with
+  Undo keeps one line at 720p
 - Auto-dismiss after 3 seconds (configurable)
 - Maximum 5 visible at once (oldest dismissed)
 - Animated slide-in/out
@@ -922,6 +927,8 @@ func _on_ready() -> void:
 
 Set `rail_items` in `_on_ready()` to replace the single tab with an `IconRail` showing one icon per pane instead of one icon for the whole drawer. Clicking an item opens the drawer and emits `pane_requested(id)`; clicking the active item closes it; `open()` with nothing selected reopens the last pane. Badge a single item with `set_rail_badge(id, true)`; `set_tab_tooltip()` only applies in single-tab mode. See [THEME_GUIDE.md's Rail Mode section](THEME_GUIDE.md#rail-mode) for the full example.
 
+`IconRail.set_item_active(id, on)` tints an item as active without selecting it (footer toggles; the Visuals drawer's Events item while a GM's brush or preset is out). The tint is held (`_held_active`) through `select()` and `deselect()`: a drawer that closes deselects its rail, and before this the close (the GM's first press on the board sends the drawer aside) cleared the Events tint, so the item that reopens the brush's pane showed nothing. Only `set_item_active(id, false)` clears it (PlayEvents' `armed_changed` when the brush is put away).
+
 ### Exports
 
 | Property          | Type       | Default | Description                           |
@@ -1238,11 +1245,13 @@ stone is easy to hit, `PropRows.pick_radius`); for Sculpt,
 sand to raise or build a tier, blue-grey to lower or cut, the accent to flatten, pale green to
 smooth; for Paint, the surface's swatch colour lifted toward white
 (`AuthoringController.surface_tint`), red to erase (Ctrl); for Water, a light blue, red to
-erase (Ctrl). A faint fill shows the reach (a fan from the centre drawn with explicit indices: a
-triangulated outline failed with "Invalid polygon data, triangulation failed" whenever the
-conformed ring projected to a self-intersecting outline, over raised ground or a Blender map's
-collision), and while a stroke is held an inner ring at half strength brightens as dwell
-builds. Tier and Flatten add a small readout under the ring in the level's units
+erase (Ctrl). The ring is an outline only, in authoring and in play: its faint fill, drawn on
+the 2D layer, veiled the tree crowns standing in front of the ground it covered (the GM Events
+2a critic), so it went. `BrushCursor.fan_indices` stays for the Bridge tool's stone ghosts,
+filled as fans from the centre because a conformed outline can cross itself (a triangulated
+outline failed with "Invalid polygon data, triangulation failed" over raised ground or a
+Blender map's collision). While a stroke is held an inner ring at half strength brightens as
+dwell builds. Tier and Flatten add a small readout under the ring in the level's units
 (`BrushTool.tier_readout`: "Tier 1  +5 ft", "Tier -1  -5 ft", "Ground  0 ft"; "Flatten  +3
 ft"), shown while hovering too, so the author sees what a press will build before pressing. The ring hides over the drawer. While Thin / Clear (or Sculpt, Paint or Water) is the tool, the tree
 crowns between the camera and the ring drop out card by card with the trunks kept (the ring is

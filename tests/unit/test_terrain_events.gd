@@ -213,6 +213,24 @@ func test_a_bridge_collapse_and_a_forest_fall_play_on_every_board_then_change_th
 	assert_eq(client.edits.events.active_count(), 0, "dropped without a word")
 
 
+func test_a_falling_tree_goes_still_and_rests_on_its_crown() -> void:
+	# Wind weights: whole while it waits for the ripple, gone by CALM of its fall.
+	assert_eq(ForestFall.calm_weight(-0.2, 0.9), 1.0, "a waiting tree matches the standing one")
+	assert_eq(ForestFall.calm_weight(0.0, 0.9), 1.0)
+	var mid := ForestFall.calm_weight(0.9 * ForestFall.CALM * 0.5, 0.9)
+	assert_between(mid, 0.1, 0.9, "it calms as it tips")
+	assert_eq(ForestFall.calm_weight(0.9 * ForestFall.CALM, 0.9), 0.0, "still before it lands")
+	assert_eq(ForestFall.calm_weight(2.0, 0.9), 0.0)
+	# Rest angles: a broad crown props the trunk higher than a slim one, within REST_DEG.
+	var low := deg_to_rad(ForestFall.REST_DEG.x) - 0.001
+	var high := deg_to_rad(ForestFall.REST_DEG.y) + 0.001
+	var broad := ForestFall.rest_angle(AABB(Vector3(-3, 0, -3), Vector3(6, 8, 6)), Vector3.ONE)
+	var slim := ForestFall.rest_angle(AABB(Vector3(-1, 0, -1), Vector3(2, 12, 2)), Vector3.ONE)
+	assert_between(broad, low, high)
+	assert_between(slim, low, high)
+	assert_lt(broad, slim, "the broad crown holds its trunk further from the ground")
+
+
 func test_a_client_never_starts_an_event() -> void:
 	var doc := MapDocument.create_flat(Vector2i(4, 4), "grass", "v", 1)
 	var root := Node3D.new()

@@ -182,7 +182,8 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 The GM's terrain events during play (a bridge collapsing, a forest falling, fire, biome and
 terrain changes with the authoring brushes; user decision, 2026-10-09) replicate as one side
 of authoring history entries. The codec, the apply side and the transport exist
-(2026-10-09), and the GM's UI, the Events pane (2026-10-10). Probe and numbers:
+(2026-10-09), and the GM's UI, the Events pane, with its first two presets (2026-10-10).
+Probe and numbers:
 `docs/plans/2026-10-09-v0.2-evaluation/probes/live_edits_probe.md` (gitignored). Transport:
 [../NETWORKING.md](../NETWORKING.md) "Live map edits".
 
@@ -191,8 +192,8 @@ of authoring history entries. The codec, the apply side and the transport exist
   (`ToolRegistry.tools(PLAY)`) as toggling tiles, then the picked brush's controls built from
   the authoring panes' parts (Sculpt's shape tiles, the palette biome and surface tiles,
   `WaterToolPane` and `BridgeToolPane` with their headers hidden, one Advanced foldout with
-  size and strength); the presets with spectacle of later cards (bridge collapse, forest falls,
-  fire) take a field above the brushes. The look's Cancel and Save step out under it. A map
+  size and strength); the presets with spectacle (Collapse, Topple; fire is a later card) take
+  a Presets field above the brushes. The look's Cancel and Save step out under it. A map
   that takes no live edits says why in the pane (`PlayEvents.refusal_for`: a player, a Blender
   map without a document, the table still setting out, a client's side); a brush the map
   cannot take is a disabled tile with its descriptor's unavailable tooltip.
@@ -209,7 +210,70 @@ of authoring history entries. The codec, the apply side and the transport exist
   stroke whose entry holds 12 KB or more; one 4 m mound is about 4 KB, a 9 m Clear sweep 15
   KB) offers Undo in a toast while it is still the newest entry (`AuthoringHistory.is_newest`):
   "Cleared for everyone at the table" (`PlayEvents.done_phrase`), one line at 720p (a toast
-  with an action widens to its line, `ToastContainer.ACTION_MAX_WIDTH`).
+  hugs its line, up to 360 px, 520 with an action, `ToastContainer.ACTION_MAX_WIDTH`). A click
+  that never leaves its spot (within `DWELL_RADIUS`) gets at least `PLAY_CLICK_SECONDS` (0.6 s)
+  of exposure, topped up when the stroke ends (`BrushTool.min_stroke_seconds`, set on a pick
+  and cleared when the brush is put away; authoring keeps `CLICK_SECONDS`), so a GM's quick
+  Sculpt click raises a visible mound (over 0.12 m at radius 4; `CLICK_SECONDS` alone gives
+  about 0.05 m).
+- **Presets with spectacle** (`EventPresets`, play-only `ToolDescriptor`s outside
+  `ToolRegistry`; `CollapseMode`, `ToppleMode`, BrushModes with a `fired(event)` signal): the
+  Presets field's Collapse (bridge-plank icon) outlines the deck under the pointer in madder
+  with "Collapse plank bridge" and fires on a click; it is a disabled tile on a map with no
+  deck crossing (`PlayEvents.has_bridge`), and a click on stepping stones or a ford is refused
+  ("Only a bridge collapses"). Topple (tree icon) fires on a click within its ochre ring ("Topple
+  trees"; a drag widens the ring, Advanced shows its size); a spot with no tree is refused by
+  toast (`TerrainEvents.NO_TREES`), with no per-frame tree search on hover. Hint rows: Collapse
+  Click, Ctrl+Z, Esc; Topple Click, Left-drag, `[ ]`, Ctrl+Z, Esc. A fired event goes to
+  `TerrainEvents.start`; the drawer steps aside as it starts (`stroke_started`).
+- **Terrain events** (`TerrainEvent`, `utils/terrain_event.gd`; `TerrainEvents`,
+  `scenes/states/playing/events/terrain_events.gd`, a child of `LiveEdits` made in
+  `LiveEdits.create`, `LiveEdits.events`): an event is a few parameters (kind, table key,
+  centre, radius or crossing id, duration, the host's lead, a seed; 32 bytes), never document
+  state. The GM's side checks it (`refusal_for`: at most `MAX_ACTIVE` 4 at once, the bridge
+  still there and not already falling, a tree in the circle), stamps the table key and the
+  lead (0.1 s hosting, 0 solo), broadcasts it (NETWORKING.md "Live map edits") and plays it
+  after the lead; a client plays it on receipt. One clock, `advance(delta)` (`_process`, tests
+  and the render probe call it). Once the motion has played, the GM's side makes the change on
+  the live editor as one history entry labelled "Bridge collapse" or "Forest fall" with
+  `entry.preset` its kind (`_on_recorded` is connected before PlayEvents hears the history, so
+  the label is set first): the crossing removed (`crossings.remove`), or one CLEAR dab of 2 s
+  at 1.3x the radius (99.8 % of the density at the fall's radius). LiveEdits sends it as an
+  ordinary op, so a late joiner gets only the op and an undo restores the map without replaying
+  anything. The entry's toast always offers Undo (`PlayEvents.PRESET_DONE`: "The bridge fell
+  for everyone at the table", "The trees fell ..."). An effect stays, drawing nothing, until
+  its change lands (the crossing node freed, every held cell's scatter rebuilt) or
+  `RELEASE_AFTER_S` (8 s), then lets go of what it hid (`release()`).
+- **The effects** (`scenes/states/playing/events/`), bounded so a frame only sets transforms:
+  `BridgeCollapse` cuts the crossing node's own meshes into at most 10 pieces by triangle
+  centroid along the span (index-only per piece, sharing the vertex arrays and materials; the
+  cut runs once), hides the crossing, shudders it 0.35 s, breaks it from the middle out over
+  0.55 s, tips and drops each piece under gravity, throws spray where a piece meets the water
+  (`WaterGeometry.level_at`), and sinks and shrinks the pieces in the last 0.3 s (2.2 s).
+  `ForestFall` finds the drawn trees from AuthoredScatter's public API (`trees_near`:
+  `cell_rows`, `get_cell_node`, `get_growing_nodes`, `row_keys`,
+  `ScatterRows.instance_order`, the node's `visible_instance_count`), hides up to 48 instances
+  by a zero-scale transform in their chunk and animates stand-in MultiMeshes of the same
+  meshes: a ripple from the centre (0.6 s, 0.15 s jitter), a lean then an accelerating fall
+  (0.8-1.0 s) to a rest angle propped on the crown (`rest_angle`, 62-88 deg from the mesh's
+  bounds), a 5 deg rebound, then they settle into the ground (2.8 s). A falling tree goes
+  still: the stand-in's instance colours multiply the mesh's authored wind weights (vertex
+  COLOR R sway, G flutter) and `calm_weight` takes both to 0 over the first 40 % of its fall,
+  so it stops swaying and the canopy fade, which always keeps a trunk (flutter under
+  `CANOPY_LIMB_FLUTTER`), keeps its whole crown. Before, a crown lying toward the camera near
+  the view centre sat in the fade's depth band (about 70 % of its cards gone at zoom 16) and
+  read as a bare log; the render job's `fall_3_nofade` A/B shows the fallen crowns now match
+  with the fade off. `ScatterShrink.hold` keeps the Clear's rebuild from standing the held
+  instances up to shrink them. Puffs (`EventPuffs`, one pooled MultiMesh of 96 billboards,
+  optional gravity, an aspect per puff; `shaders/event_puff.gdshader`: an unshaded lobed soft
+  shape lit from above over a cool shade, stretched to its aspect, melting into the ground by
+  a depth proximity fade, in the graphics warm-up): dust is a see-through golden ochre, squat
+  puffs rolling out low to either side of each trunk; a splash is a crown of eight tall
+  tongues thrown up and out, a jet, both falling back and shrinking, and three squat foam
+  patches spreading on the water (round puffs read as cotton or steam in the looks). Headless,
+  `surface_get_arrays` may return nothing and MultiMesh transforms read identity, so the
+  effects compute from the document's rows and tolerate empty meshes; tests check behaviour,
+  not pixels (the render job `terrain_events` checks the look).
 - **The board is the GM's while they work** (UI_TASTE G11): the drawer stays open while a
   brush and its settings are picked, and the first press on the board sends it aside
   (`BrushTool.gesture_started` -> `PlayEvents.stroke_started`; GameplayMenuController closes
@@ -286,7 +350,10 @@ of authoring history entries. The codec, the apply side and the transport exist
   generated rows snap to the saved precision) and the documents equal. Hostile payloads, the
   undo side, chunks and pacing: `test_live_edit_codec.gd`. The table's service (a forest
   clear, a sculpt, a bridge removal and its undo reaching a client and a late joiner; dropped
-  repeats, gaps and foreign tables): `test_live_edits_table.gd`. Over ENet with three
+  repeats, gaps and foreign tables): `test_live_edits_table.gd`. Terrain events: the wire form
+  and its bounds and the RPC's checks `test_terrain_event.gd`; a collapse and a fall on a GM
+  and a client copy, the labelled entry, the undo and a late joiner `test_terrain_events.gd`;
+  the presets in the pane and the click minimum `test_play_events.gd`. Over ENet with three
   processes: `tests/net/enet_live_edits` ([../NETWORKING.md](../NETWORKING.md) "ENet
   scenarios").
 
