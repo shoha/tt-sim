@@ -3,11 +3,12 @@ extends DrawerContainer
 
 ## The room over the table: the RoomPanel in its drawer form, on glass at the left edge, the
 ## same players, shelf and code as the full-screen room, learned once. The GM selects a shelf
-## map and moves the table there; everyone sees who is here. Tab opens and closes it, only at
-## a table (tab_toggles()); its handle shows only in a hosted or joined session. The handle is
-## a one-item IconRail, like every other drawer's rail, so open reads in the rail's lake state
-## (never the ember of a do). A player arriving or leaving sounds as in the room (the panel's
-## own).
+## map and moves the table there, or saves or discards a changed map's changes from its row
+## (the table's own too, read again each time the drawer opens; TableMover.attach_panel());
+## everyone sees who is here. Tab opens and closes it, only at a table (tab_toggles()); its
+## handle shows only in a hosted or joined session. The handle is a one-item IconRail, like
+## every other drawer's rail, so open reads in the rail's lake state (never the ember of a do).
+## A player arriving or leaving sounds as in the room (the panel's own).
 
 signal move_table_requested(key: String)
 signal leave_requested
@@ -35,6 +36,13 @@ func _on_ready() -> void:
 	panel.leave_requested.connect(_on_leave_requested)
 	if connect_network:
 		NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
+
+
+## The table changes under the drawer (a token moved, the look): in a session its row reads
+## them again each time it opens.
+func _on_opened() -> void:
+	if connect_network and NetworkManager.is_networked():
+		panel.refresh()
 
 
 func _exit_tree() -> void:

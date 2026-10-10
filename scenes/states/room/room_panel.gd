@@ -23,6 +23,11 @@ extends Control
 ## the background (SessionPrefetch), so a row reads "Getting it · 40%" while one comes; the
 ## percent moves in place (show_progress()), not by rebuilding the rows.
 ##
+## A map the session changed says so on the GM's shelf row ("Changed this session", read from
+## changes_source, TableMover.changed_maps()), and its row, once selected, has Save into map
+## (for a map with a level folder here) and Discard changes on a line under it; TableMover asks
+## before either. Moving the table never asks: the table is kept as it is.
+##
 ## Everything shown comes from a session summary (show_session()); RoomModel holds the rules
 ## and RoomLayout builds the controls. With connect_network (the default) the panel reads
 ## NetworkManager.session on every change; tests and the UI tour clear it before adding the
@@ -36,6 +41,9 @@ signal leave_requested
 ## The selection changed: the selected map's environment preset ("" with none), for the
 ## room's backdrop mood.
 signal selection_shown(preset: String)
+## The GM pressed a changed map's Save into map or Discard changes (TableMover asks first).
+signal save_changes_requested(key: String)
+signal discard_changes_requested(key: String)
 
 const LEVEL_PICKER_SCENE := preload("res://scenes/ui/level_picker_dialog.tscn")
 ## The side column and the drawer share the drawer width token (UI_TASTE S5).
@@ -79,6 +87,9 @@ var readiness_label: Label
 ## The drawer's caption in its action's place when there is no move to make (null in the room).
 var hint_label: Label
 var action_button: Button
+## Where refresh() reads which shelf maps changed this session: a Callable returning
+## TableMover.changed_maps()' shape (key -> Save into map offered). Unset: none did.
+var changes_source: Callable
 
 var _local_id := ""
 var _is_gm := false
@@ -89,6 +100,8 @@ var _shelf: Array[Dictionary] = []
 ## folder -> {"texture": Texture2D or null, "mood": String}, read once per folder
 var _pictures: Dictionary = {}
 var _ready_ms := 0
+## The GM's changed maps, as show_changes() was last given them.
+var _changed: Dictionary = {}
 
 
 func _ready() -> void:
@@ -134,11 +147,23 @@ func _exit_tree() -> void:
 		NetworkManager.player_left.disconnect(_on_player_left)
 
 
-## Read the live session (NetworkManager.session) and show it.
+## Read the live session (NetworkManager.session), and the changed maps from changes_source,
+## and show them.
 func refresh() -> void:
 	var session := NetworkManager.session
 	var peer := multiplayer.get_unique_id() if multiplayer.multiplayer_peer else 0
+	if changes_source.is_valid():
+		_changed = changes_source.call()
 	show_session(session.summary(), session.session_id_of(peer), NetworkManager.is_host())
+
+
+## Show which shelf maps changed this session (`changed`: TableMover.changed_maps()' shape,
+## key -> Save into map offered), for the GM: their rows say so, and the selected one has its
+## Save into map and Discard changes under it.
+func show_changes(changed: Dictionary) -> void:
+	_changed = changed.duplicate()
+	_fill_shelf()
+	_show_selection()
 
 
 ## Show a session summary (SessionChannel.summary()) as the player `local_id` sees it, as the
@@ -266,9 +291,11 @@ func _fill_shelf() -> void:
 		empty.text = "No maps yet" if _is_gm else "The GM has not added a map yet"
 		shelf_rows.add_child(empty)
 	for entry in _shelf:
-		var caption := "On the table" if entry.on_table else ""
-		if caption == "":
-			caption = RoomModel.readiness_text(_players, entry.key)
+		var caption := RoomModel.shelf_caption(
+			entry.on_table,
+			_is_gm and _changed.has(entry.key),
+			RoomModel.readiness_text(_players, entry.key)
+		)
 		var picture := _picture_for(entry)
 		var row := RoomRows.shelf_row(entry, picture.texture, picture.mood, caption, true)
 		row.pressed.connect(select.bind(str(entry.key)))
@@ -281,6 +308,7 @@ func _show_selection() -> void:
 	for row: Node in shelf_rows.get_children():
 		if row is Button:
 			RoomRows.show_shelf_selected(row, row.name == "Map_%s" % _selected.validate_node_name())
+	_show_changes_line()
 	_fill_players()
 	var entry := {}
 	for candidate in _shelf:
@@ -306,6 +334,35 @@ func _show_selection() -> void:
 		# After the frame's layout, when the column knows whether it scrolls and how far.
 		if is_inside_tree() and not get_tree().process_frame.is_connected(_reveal_selected):
 			get_tree().process_frame.connect(_reveal_selected, CONNECT_ONE_SHOT)
+
+
+## The GM's Save into map and Discard changes, on a line right under the selected shelf row
+## when that map changed this session; no line otherwise.
+func _show_changes_line() -> void:
+	for child in shelf_rows.get_children():
+		if str(child.name).begins_with("Changes_"):
+			shelf_rows.remove_child(child)
+			child.queue_free()
+	if not _is_gm or not _changed.has(_selected):
+		return
+	var row := shelf_rows.get_node_or_null(NodePath("Map_%s" % _selected.validate_node_name()))
+	if row == null:
+		return
+	var line := RoomRows.changes_line(
+		_selected,
+		bool(_changed[_selected]),
+		save_changes_requested.emit,
+		discard_changes_requested.emit
+	)
+	shelf_rows.add_child(line)
+	shelf_rows.move_child(line, row.get_index() + 1)
+	# The line settles to one row once it has a width: fit the column to it again then.
+	line.minimum_size_changed.connect(_refit_column)
+
+
+func _refit_column() -> void:
+	_fit_side.call_deferred()
+	_fit_drawer.call_deferred()
 
 
 ## The room's centre: the selected map large with its name and readiness, or with none the

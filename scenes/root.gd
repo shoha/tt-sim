@@ -19,9 +19,10 @@ extends Node3D
 ##   refused with no map).
 ## - PLAYING > PLAYING: the drawer's Move the table here (move_table()).
 ## - PLAYING > ROOM: Return everyone to the room (return_to_room(), host).
-## Both moves are TableMover's: it asks how to settle a changed table, counts the move down
-## on every peer, keeps what the session did to each map and lays it over the map when it is
-## set out again; Root then carries the move out (_on_table_level_chosen(), _open_room()).
+## Both moves are TableMover's: it counts the move down on every peer, keeps what the session
+## did to each map and lays it over the map when it is set out again; Root then carries the
+## move out (_on_table_level_chosen(), _open_room()). Saving a changed map into its folder or
+## discarding its changes is the shelf rows' (the room's and the drawer's), through TableMover.
 ## Leaving a table, the host takes the party (the players' avatars, SessionParty) along, and
 ## sets it out on the next map once that map has loaded (_on_level_play_loaded()).
 ## - ROOM or PLAYING > TITLE: leave, or the host ends the session.
@@ -360,13 +361,15 @@ func _enter_playing_state() -> void:
 			push_error("Root: Failed to play level")
 
 
-## The room drawer over the table: Move the table here and Leave or End session.
+## The room drawer over the table: Move the table here, the shelf rows' Save into map and
+## Discard changes (TableMover), and Leave or End session.
 func _connect_room_drawer() -> void:
 	var menu = _game_map.gameplay_menu.get_node_or_null("GameplayMenu")
 	var drawer: RoomDrawer = menu.get("room_drawer") if menu else null
 	if drawer:
 		drawer.move_table_requested.connect(move_table)
 		drawer.leave_requested.connect(_on_pause_main_menu_requested)
+		_table_mover.attach_panel(drawer.panel)
 
 
 ## Connect client-side signals for receiving state updates
@@ -450,6 +453,7 @@ func _enter_room_state() -> void:
 	add_child(_room_screen)
 	_room_screen.panel.set_out_requested.connect(set_out)
 	_room_screen.panel.leave_requested.connect(_on_lobby_cancel)
+	_table_mover.attach_panel(_room_screen.panel)
 	if first != "":
 		_room_screen.panel.select(first)
 
@@ -466,8 +470,8 @@ func set_out(key: String) -> void:
 	_table_mover.set_out(key)
 
 
-## PLAYING > PLAYING (host): the room drawer's Move the table here (TableMover: the prompt
-## when the table changed, then the notice; the party goes along).
+## PLAYING > PLAYING (host): the room drawer's Move the table here (TableMover: the notice,
+## then the move; the table is kept as it is and the party goes along).
 func move_table(key: String) -> void:
 	_table_mover.request_move(key)
 
@@ -524,7 +528,7 @@ func _end_room_wait() -> void:
 
 
 ## PLAYING > ROOM (host): Return everyone to the room, the table move with the room as its
-## destination (TableMover: the prompt when the table changed, then the notice).
+## destination (TableMover: the notice, then the move; the table is kept as it is).
 func return_to_room() -> void:
 	if not NetworkManager.is_host() or State.PLAYING not in _state_stack:
 		return

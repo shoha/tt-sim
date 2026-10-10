@@ -431,8 +431,10 @@ there does):
 | TITLE > ROOM or PLAYING (client) | Join: the join form (`LobbyClient`) over the hidden title | Connect joins; the form stays locked ("Connected. Joining the room...") until ROOM on `room_opened`, or PLAYING on `game_starting` when a table is out; a rejected client stays on the form |
 | ROOM (host) | Entering with a map from Host | The map is shelved and selected in the room |
 | ROOM > PLAYING | The room's Set out this map: `set_out(key)`, then `_on_lobby_start_game()` | Refused with "Choose a map to set out first" when no map is pending; else `close()`, `notify_game_starting()`, PLAYING broadcasts the level |
-| PLAYING > ROOM | Pause > Return everyone to the room (host): `return_to_room()`, a table move to the room | After TableMover's prompt (only when the table changed) and notice: the table's state is kept, saved or discarded, the party is taken, `open()`, then the table (GameMap, tokens, GameState) is torn down on every peer |
-| PLAYING > PLAYING | The drawer's Move the table to the selected map (`move_table(key)`) | After the same prompt and notice: the party is taken; the next map comes with its kept state; the level broadcast moves the table pointer |
+| PLAYING > ROOM | Pause > Return everyone to the room (host): `return_to_room()`, a table move to the room | After TableMover's notice (nothing asked): the table's state is kept, the party is taken, `open()`, then the table (GameMap, tokens, GameState) is torn down on every peer |
+| PLAYING > PLAYING | The drawer's Move the table to the selected map (`move_table(key)`) | After the same notice: the party is taken; the next map comes with its kept state; the level broadcast moves the table pointer |
+| (any) > PLAYING, map loaded | `_on_level_play_loaded()` (host) | The party is set out on the new map |
+| ROOM or PLAYING > TITLE | Leave or End session (the room, the drawer), Return to Title | Title first, then `disconnect_game()`, so a voluntary leave is not read as a lost connection; the host leaving ends the session (End session asks first) |
 
 #### Table moves
 
@@ -442,24 +444,38 @@ template: nothing a session does changes its level folder unless the GM picks Sa
 (`LevelPlayController.has_unsaved_tokens()`, which counts only tokens with a placement, so the
 party never does), the look (`TableStates.look_of()`, every live-synced visual field and the
 grid scale, against the look the map loaded with; a save of the map moves it) and the live
-edits' op log. When anything changed the GM is asked once, Keep for this session (the
-default, focused), Save into map or Discard; Escape stays. Then `SessionChannel.announce_move()`
-(`_rpc_table_moving`, text clipped, seconds bounded to `MAX_NOTICE_S`) shows every peer the
-notice (`TableMoveNotice`, `NOTICE_S` = 3 s), and the GM's Stay here calls it off
-(`cancel_move()`). At its end `move_now()` settles the table: Keep stores `TableStates.capture()`
-(the placements synced from their tokens, the look, the op log) under the shelf key when the
-table differs from its map, else forgets it; Save into map writes the edited document
-(`MapDocumentIO.write`, when there were live edits) and then the level (the HUD's save path);
-Discard forgets it. Arriving at a map, its kept state is laid over the template's LevelData
-before it is set out (`TableStates.overlay()`), so every peer and every late joiner gets the
-tokens and the look in the level broadcast and snapshot, and its op log goes to
+edits' ops since the map was last saved (`_terrain_base`). A move asks nothing:
+`SessionChannel.announce_move(kind, map_name, seconds)` (`_rpc_table_moving`: the kind an int,
+checked against `TableMoveNotice.Kind` on arrival; the name clipped; the seconds bounded to
+`MAX_NOTICE_S`) shows every peer the notice (`TableMoveNotice`, `NOTICE_S` = 3 s), each client
+wording it in its own language with the GM's name from its session summary, and the GM's Stay
+here calls it off (`cancel_move()`). At its end `move_now()` keeps the table: it stores
+`TableStates.capture()` (the placements synced from their tokens, the look, the ops since the
+last save, and when the terrain changed on a map with a level folder the edited `MapDocument`
+as it stands once regrowth has landed) under the shelf key when the table differs from its map,
+else forgets it. Arriving at a map, its kept state is laid over the template's LevelData before
+it is set out (`TableStates.overlay()`), so every peer and every late joiner gets the tokens and
+the look in the level broadcast and snapshot, and its op log goes to
 `LevelPlayController.replay_log`: the host's `LiveEdits` applies it before the tokens land and
 keeps it as its log, so clients and late joiners catch up on it as on any table's log. The
 state is memory only (a session file keeps it later) and is forgotten when a session begins or
 ends. A restored token comes back under its placement id, so a token placed in play returns
 with a new network id (the party keeps theirs).
-| (any) > PLAYING, map loaded | `_on_level_play_loaded()` (host) | The party is set out on the new map |
-| ROOM or PLAYING > TITLE | Leave or End session (the room, the drawer), Return to Title | Title first, then `disconnect_game()`, so a voluntary leave is not read as a lost connection; the host leaving ends the session (End session asks first) |
+
+Saving and discarding are the shelf rows' (`changed_maps()`, `ask_save()`, `ask_discard()`;
+Root hands each room panel to `attach_panel()`), each behind a confirm. A map that is not out
+is saved from its kept state (`save_kept()`: the kept document to `map.ttmap`, then the
+placements and look laid over its template into `level.json`; the thumbnail stays as it was) or
+discarded by forgetting it. The table that is out is saved as the HUD saves it, the edited
+document first; when that document was written, the file the table was set out from changed
+under every client and late joiner, so the table is set out again from the saved map for
+everyone (a `RELOAD` move, no Stay here) and the live edits' log starts from it. Discard
+changes on the table sets it out again from its map as saved (a `RESET` move with Stay here,
+`move_now(key, DISCARD)` for the map already out). Not covered between real peers yet: the
+`enet_session_room` scenario moves and keeps, but saves and discards only in the unit tests
+(`test_table_mover.gd`). A save from the room does not refresh the shelf ref's map hashes until
+the map is set out (`note_table_out`), so a client prefetching it in the room meanwhile is told
+the old hash.
 
 A client that loses the host in the room gets the same "Disconnected" dialog as at a table.
 
@@ -849,7 +865,8 @@ log and one `NET_RESULT {json}` line to `--out` and quits 0 on a pass; extending
   its grant by session id), rejoins through the join screen with a new peer id, lands at table
   B and controls Hero A again. Table B, saved and with the party not counted, is unchanged, so
   the drawer's Move the table here (`Root.move_table`) asks nothing and counts down; client,
-  client2 and client3 get the notice ("Moving the table to Session table A"), and on table A
+  client2 and client3 show a player's notice naming the GM and the map ("host is moving the
+  table to Session table A in 3"), and on table A
   every peer has Bystander A where it was moved (0.0 m off), the ground at the raise as high as
   the host's (0.599 m, from 0.0) and one op in its live edits' log; client4 joins there as a
   late joiner and gets the same, without ever seeing the room. The host ends with five session
