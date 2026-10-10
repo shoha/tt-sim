@@ -10,14 +10,16 @@ extends Node
 ## the client receives the level, downloads the document and loads it through the same path.
 ##
 ## Host: plays --level (a saved authored level under user://levels whose folder starts with
-## "_nettest_"; built by tools/render_jobs/jobs/nettest_parity_build.json and kept), hosts,
+## "_nettest_"; built by tools/render_jobs/jobs/nettest_parity_build.json before the run and
+## deleted after it, since test levels never stay in the library), hosts,
 ## writes the room code to --rendezvous, starts the game once the client has joined, then
 ## places three tokens through the ordinary spawn path (which syncs them to clients): one on
 ## the arch's deck, one standing in the ford, one wading the river a few metres below the
 ## ford. Once they settle it writes its fingerprint (MapFingerprint) and the tokens to
 ## <rendezvous>.host.json. It finishes when the client leaves.
 ## Client: drops any cached copy of the level's map files (and any same-named local level),
-## joins, lets the game download and load the map, waits for the host's file and for the
+## joins, lets the game download the map (prefetched in the room) and load it, waits for the
+## host's file and for the
 ## three tokens to settle, fingerprints its own map and compares. Pass: the fingerprints
 ## match; every token's base Y within TOKEN_DY_M of the host's; the deck token stands on a
 ## surface above the water and is not submerged; the ford and wading tokens show the same
@@ -379,7 +381,23 @@ func _start_client() -> void:
 		return
 	NetworkManager.connection_failed.connect(func(reason: String): _finish(false, reason))
 	_lpc().map_download_completed.connect(func(_folder: String): _downloaded = true)
+	# Joining into the room, the client's SessionPrefetch fetches the shelved level's document
+	# before the host sets it out, so the table's load finds it cached and downloads nothing.
+	AssetManager.streamer.asset_received.connect(_on_asset_received)
 	_set_phase("join")
+
+
+## The level's map document arrived from the host (SessionPrefetch in the room, or the
+## table's load).
+func _on_asset_received(
+	pack_id: String, asset_id: String, variant_id: String, _local_path: String, _file_type := ""
+) -> void:
+	if (
+		pack_id == Paths.LEVEL_MAPS_PACK_ID
+		and asset_id == _level
+		and variant_id == Paths.LEVEL_MAP_DOCUMENT_VARIANT
+	):
+		_downloaded = true
 
 
 ## Drops any cached copy of the level's map files, so the client must download them.
