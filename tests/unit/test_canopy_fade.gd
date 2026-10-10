@@ -49,6 +49,22 @@ func test_strength_is_off_without_a_home_size() -> void:
 	assert_eq(CanopyFade.strength(6.0, 0.0), 0.0)
 
 
+func test_the_brush_window_opens_from_its_centre_and_closes_back_in() -> void:
+	CanopyFade.clear_brush()
+	CanopyFade.step_brush(1.0)
+	CanopyFade.set_brush(Vector3(2.0, 1.0, -3.0), 6.0)
+	var half := CanopyFade.step_brush(CanopyFade.BRUSH_OPEN_S * 0.5)
+	assert_eq(Vector3(half.x, half.y, half.z), Vector3(2.0, 1.0, -3.0), "at the ring")
+	assert_almost_eq(half.w, 3.0, 0.0001, "half open: half the radius (smoothstep at 0.5)")
+	var open := CanopyFade.step_brush(CanopyFade.BRUSH_OPEN_S)
+	assert_almost_eq(open.w, 6.0, 0.0001, "open")
+	CanopyFade.clear_brush()
+	var closing := CanopyFade.step_brush(CanopyFade.BRUSH_CLOSE_S * 0.25)
+	assert_eq(Vector3(closing.x, closing.y, closing.z), Vector3(2.0, 1.0, -3.0), "stays put")
+	assert_between(closing.w, 0.1, 6.0, "closing from its edge")
+	assert_eq(CanopyFade.step_brush(CanopyFade.BRUSH_CLOSE_S), Vector4.ZERO, "shut")
+
+
 func test_plane_hit_finds_the_ground_along_the_ray() -> void:
 	var dir := Vector3(-0.6574513, -BACK_Y, -0.6574513)
 	var hit := CanopyFade.plane_hit(Vector3(10.0, 8.0, 10.0), dir, 0.0)

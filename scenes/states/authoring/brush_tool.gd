@@ -48,6 +48,8 @@ signal toggled(active: bool)
 signal radius_changed(radius: float)
 ## A press or release made nothing; `reason` says why, for a toast.
 signal refused(reason: String)
+## A press on the board started the mode's gesture (the play brush's drawer steps aside).
+signal gesture_started
 
 enum Action { NONE, POINTER, BEGIN, END, CANCEL, DESELECT, GROW, SHRINK, REMOVE, SWALLOW }
 
@@ -72,8 +74,8 @@ const RAY_LENGTH := 500.0
 const DOWNCAST_HEIGHT := 200.0
 const TERRAIN_LAYER := 1
 ## Canopy fade radius as a multiple of the mode's reach (BrushMode.fade_focus; view-plane
-## metres). The fade falls off from the centre to this radius, so it has to reach past the
-## ring for the canopy over the ring's edge to open up.
+## metres). The fade falls off toward this radius, so it has to reach past the ring for the
+## canopy over the ring's edge to open up.
 const FADE_RADIUS_FACTOR := 1.35
 
 ## Remembered for the whole app session, like the Visuals drawer's last pane.
@@ -90,10 +92,11 @@ var unit_cell_m: float = LevelData.DEFAULT_GRID_CELL_SIZE
 var unit_per_cell: float = LevelData.DEFAULT_DISPLAY_UNIT_PER_CELL
 var unit_label: String = LevelData.DEFAULT_DISPLAY_UNIT
 var editor: AuthoringEditor = null
-## While a mode that `fades` is the tool, the cursor is this manager's focus (set_focus), so
-## canopies between the camera and the ground being worked fade like geometry over a token.
-## Set by GameMap.setup_brush_tool(); null for none.
-var occlusion_fade: OcclusionFadeManager = null
+## While a mode that `fades` is the tool, the cursor is the canopy fade's brush window
+## (CanopyFade.set_brush), so the crowns between the camera and the ground being worked open
+## up card by card, trunks kept. With `fade_held_only` (the play brush, PlayEvents) only while
+## a press is held: once it is let go the canopy closes again, so the GM reads the result.
+var fade_held_only: bool = false
 ## FADE_RADIUS_FACTOR, as a var so a tuning probe can change it in a running game.
 var fade_radius_factor: float = FADE_RADIUS_FACTOR
 ## The cursor's overlay and the drawing the modes share.
@@ -230,8 +233,7 @@ func deactivate() -> void:
 	finish_gesture()
 	_active = false
 	mode.leave(self)
-	if occlusion_fade != null:
-		occlusion_fade.clear_focus()
+	CanopyFade.clear_brush()
 	cursor.set_visible(false)
 	set_process(false)
 	toggled.emit(false)
@@ -390,6 +392,7 @@ func _start_gesture(click_seconds: float) -> void:
 		return
 	if not mode.press(self):
 		return
+	gesture_started.emit()
 	stroking = true
 	_hit_pointer = pointer
 	_last_dab = hit
@@ -457,18 +460,15 @@ func _resolve_hit() -> void:
 	hit_normal = result.normal
 
 
-## A mode that `fades` makes the cursor the occlusion fade's focus (BrushMode.fade_focus), so
-## the canopy over it opens up; any other mode, or no ground under the pointer, clears it.
+## A mode that `fades` makes the cursor the canopy fade's brush window (BrushMode.fade_focus),
+## so the canopy over it opens up; any other mode, no ground under the pointer, or no press
+## held under `fade_held_only`, lets it close.
 func _update_fade() -> void:
-	if occlusion_fade == null:
-		return
-	if _active and mode.fades and hit != Vector3.INF:
+	if _active and mode.fades and hit != Vector3.INF and (pressed or not fade_held_only):
 		var focus := mode.fade_focus(self)
-		occlusion_fade.set_focus(
-			Vector3(focus.x, focus.y, focus.z), focus.w * fade_radius_factor
-		)
+		CanopyFade.set_brush(Vector3(focus.x, focus.y, focus.z), focus.w * fade_radius_factor)
 	else:
-		occlusion_fade.clear_focus()
+		CanopyFade.clear_brush()
 
 
 ## A point bedded on the ground below `point`: DragPlaceController's downward terrain ray,

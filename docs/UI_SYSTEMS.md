@@ -1171,14 +1171,14 @@ height jump. They become placed props, so the author can turn, scale or remove t
 Place like any other; one undo puts them back as they were. Trees, shrubs, logs and plants
 still follow the slope rules.
 
-Sculpting ignores trees: canopies between the camera and the ring dither away (the same
-occlusion fade Thin / Clear uses), and the ring re-conforms to the moving ground every frame
+Sculpting ignores trees: canopies between the camera and the ring open up (the same canopy
+brush window Thin / Clear uses), and the ring re-conforms to the moving ground every frame
 while a stroke is held. A still pointer keeps its ground point during a stroke (the ray would
 otherwise walk a rising hill toward the camera).
 
 The cursor is a ring on the ground at the pointer with the brush radius, re-conformed to the
-ground by downward rays when it moves, drawn on `LAYER_MEASURE_OVERLAY` above the lo-fi pass
-with a dark under-stroke and a light over-stroke so it reads on any ground and in either lo-fi
+ground by downward rays when it moves, drawn on its own layer above the lo-fi pass and under
+every drawer and panel (`BrushCursor.OVERLAY_LAYER`, the hint bar's) with a dark under-stroke and a light over-stroke so it reads on any ground and in either lo-fi
 theme. Tint: the biome's thumbnail colour, warm white to thin, red to clear (Ctrl), the accent
 for Place (a small marker where a prop will go, red where the prop's base would straddle a
 drop of more than 0.25 m, such as a tier's rim, since it is sunk to the lowest ground under
@@ -1194,12 +1194,11 @@ conformed ring projected to a self-intersecting outline, over raised ground or a
 collision), and while a stroke is held an inner ring at half strength brightens as dwell
 builds. Tier and Flatten add a small readout under the ring in the level's units
 (`BrushTool.tier_readout`: "Tier 1  +5 ft", "Tier -1  -5 ft", "Ground  0 ft"; "Flatten  +3
-ft"), shown while hovering too, so the author sees what a press will build before pressing. The ring hides over the drawer. While Thin / Clear (or Sculpt, Paint or Water) is the tool, tree canopies between
-the camera and the ring dither away like geometry over a token (the ring is
-`OcclusionFadeManager.set_focus()`, radius 1.35x the brush), so the ground being thinned stays
-visible under a forest. It rides on the occlusion fade and so follows the player's Occlusion
-fade setting (on by default); it is not forced on in authoring, because turning the manager on
-also converts a dressed Blender map's materials. RMB never pans while the brush is active (MMB and the
+ft"), shown while hovering too, so the author sees what a press will build before pressing. The ring hides over the drawer. While Thin / Clear (or Sculpt, Paint or Water) is the tool, the tree
+crowns between the camera and the ring drop out card by card with the trunks kept (the ring is
+`CanopyFade.set_brush()`, radius 1.35x the brush; the window opens in 0.15 s and closes back
+in from its edge in 0.4 s), so the ground being thinned stays visible under a forest. The play
+brush (the GM's Events pane) opens it only while a press is held. RMB never pans while the brush is active (MMB and the
 keyboard still do). Ctrl+Z / Ctrl+Y (`ui_undo` / `ui_redo`) go to
 `AuthoringController.undo()` / `redo()`, which first ends a gesture in progress. The F1 help
 lists these under "Map building".

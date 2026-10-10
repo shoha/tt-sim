@@ -11,6 +11,7 @@ extends GutTest
 ## run's own data root), removed after each test.
 
 const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
+const TOASTS_SCENE := preload("res://scenes/ui/toast_container.tscn")
 const FOLDER := "_gm_events_gut"
 const MAP_CELLS := 8
 const LOAD_TIMEOUT := 30.0
@@ -141,14 +142,39 @@ func test_only_the_gm_side_of_a_document_table_may_change_the_map() -> void:
 	client.free()
 
 
-func test_each_brush_leads_the_hint_bar_with_at_most_five_keys() -> void:
+func test_each_brush_leads_the_hint_bar_and_ends_on_size_undo_and_its_name() -> void:
 	for tool in ToolRegistry.tools(ToolDescriptor.PLAY):
 		var hints := PlayEvents.hints_for(tool.id)
-		assert_lt(hints.size(), 6, "%s's hints fit one line" % tool.id)
+		assert_lte(hints.size(), 5, "%s: at most five keys beside Help, one line" % tool.id)
 		assert_eq(hints[0]["key"], "Left-drag")
+		assert_eq(hints[-3]["key"], PlayEvents.SIZE_KEY, "%s: the size key in one slot" % tool.id)
 		assert_eq(hints[-2]["action"], "Undo")
-		assert_eq(hints[-1]["action"], "Put away")
+		assert_eq(hints[-1]["action"], "Put away " + tool.label, "Esc names the brush")
+		for hint in hints:
+			assert_false(hint["key"].begins_with("Shift+scroll"), "no Shift size key: Sculpt's Smooth")
 	assert_eq(PlayEvents.hints_for(SculptTool.ID, HeightBrush.TIER)[0]["action"], "Tier")
+
+
+func test_a_large_edit_toast_says_what_was_done_on_one_line() -> void:
+	assert_eq(PlayEvents.done_phrase("Clear"), "Cleared")
+	assert_eq(PlayEvents.done_phrase("Thin"), "Thinned")
+	assert_eq(PlayEvents.done_phrase("Raise"), "Raised")
+	assert_eq(PlayEvents.done_phrase("Carve river"), "Carved river")
+	assert_eq(PlayEvents.done_phrase("Remove planks"), "Removed planks")
+	assert_eq(PlayEvents.UNDO_TOAST % "Cleared", "Cleared for everyone at the table")
+	var toasts: ToastContainer = TOASTS_SCENE.instantiate()
+	add_child_autofree(toasts)
+	var text := PlayEvents.UNDO_TOAST % PlayEvents.done_phrase("Erase water")
+	toasts.show_toast(text, ToastContainer.ToastType.INFO, 30.0, "Undo", func(): pass, "arrow-back-up")
+	await wait_process_frames(2)
+	var toast := toasts.toast_vbox.get_child(0) as Control
+	var label := toast.get_child(0).get_child(1) as Label
+	assert_eq(
+		label.get_line_count(),
+		1,
+		"'%s' beside Undo on one line (toast %.1f, label %.1f)" % [text, toast.size.x, label.size.x]
+	)
+	assert_lte(toast.size.x, ToastContainer.ACTION_MAX_WIDTH)
 
 
 func test_a_large_edit_offers_undo() -> void:
@@ -175,6 +201,7 @@ func test_a_pick_arms_the_board_brush_and_esc_or_the_tile_puts_it_away() -> void
 	esc.pressed = true
 	_events._unhandled_input(esc)
 	assert_false(brush.is_active(), "Esc puts it away")
+	assert_false(brush.fade_held_only, "GameMap's brush is authoring's again")
 	assert_eq(_events.armed, &"")
 	assert_false(_pane.tool_field.tiles.is_on(SculptTool.ID), "its tile is up")
 	_events._on_tool_toggled(ThinTool.ID, true)
@@ -206,7 +233,11 @@ func test_a_live_raise_undoes_through_the_live_history_and_regrounds_a_token() -
 
 	_events.pick(SculptTool.ID)
 	var brush := _game_map.get_brush_tool()
+	assert_true(brush.fade_held_only, "in play the canopy opens only under a held press")
+	var strokes := [0]
+	_events.stroke_started.connect(func() -> void: strokes[0] += 1)
 	await _drag(brush, [RAISE_AT, RAISE_AT + Vector3(0.5, 0.0, 0.0), RAISE_AT])
+	assert_eq(strokes[0], 1, "the press told the drawer to step aside")
 	await _settle()
 	var raised := _height_at(RAISE_AT)
 	assert_gt(raised, 0.2, "the brush raised the ground")

@@ -199,14 +199,28 @@ of authoring history entries. The codec, the apply side and the transport exist
 - **Arming** (`PlayEvents`): a pick arms GameMap's own `BrushTool` (`setup_brush_tool`, made
   on first use) with `editor` the live editor and the level's units, the mode set from the
   pane as `AuthoringController` sets it. The brush's tile again, Esc or a right click puts it
-  away; Biome waits for a biome. While it is out its keys lead the hint bar
-  (`PlayEvents.hints_for`, at most five, one line at 720p), token drag and the right-button
-  pan are off (GameMap's modal-tool rules), Ctrl+Z and Ctrl+Y undo and redo through
-  `live_edits.history` (GameMap leaves Ctrl+Z to the brush's owner while one is out), and an
-  edit that changed a lot (`PlayEvents.is_large`: a river, pond or crossing edit, or a stroke
-  whose entry holds 12 KB or more; one 4 m mound is about 4 KB, a 9 m Clear sweep 15 KB)
-  offers Undo in a toast while it is still the newest entry (`AuthoringHistory.is_newest`).
-  The drawer may close with the brush out; the Events rail item stays tinted.
+  away; Biome waits for a biome, and Paint takes the surface its pane opens on. While it is
+  out its keys lead the hint bar (`PlayEvents.hints_for`, at most five, one line at 720p with
+  the drawer open: the gestures, then for every brush `[ ]` Size or Width, Ctrl+Z Undo and Esc
+  "Put away Sculpt", which names it), token drag and the right-button pan are off (GameMap's
+  modal-tool rules), Ctrl+Z and Ctrl+Y undo and redo through `live_edits.history` (GameMap
+  leaves Ctrl+Z to the brush's owner while one is out; their toasts read "Raise undone"), and
+  an edit that changed a lot (`PlayEvents.is_large`: a river, pond or crossing edit, or a
+  stroke whose entry holds 12 KB or more; one 4 m mound is about 4 KB, a 9 m Clear sweep 15
+  KB) offers Undo in a toast while it is still the newest entry (`AuthoringHistory.is_newest`):
+  "Cleared for everyone at the table" (`PlayEvents.done_phrase`), one line at 720p (a toast
+  with an action widens to its line, `ToastContainer.ACTION_MAX_WIDTH`).
+- **The board is the GM's while they work** (UI_TASTE G11): the drawer stays open while a
+  brush and its settings are picked, and the first press on the board sends it aside
+  (`BrushTool.gesture_started` -> `PlayEvents.stroke_started`; GameplayMenuController closes
+  it, keeping any look changes), so no ring works on ground under the glass. Chosen over a
+  compact brush strip because the brushes' controls (biome and surface tiles, Water's shape,
+  depth and flow) do not fit a strip, and because the board, not the panel, is where the work
+  is judged. The brush stays out, named in the hint bar; the Events rail item stays tinted and
+  opens the pane again. The canopy over the ring opens only while a press is held
+  (`BrushTool.fade_held_only`, set by PlayEvents and cleared when it puts the brush away), so
+  the GM sees the result whole once they let go. Add token and Save map fade out while an
+  open drawer covers them (`GameplayMenuController.on_drawers_moved`).
 - **The ground follows** (`LiveEditGround`, a child of the service on every peer): once the
   edits have settled it refits the camera, pan and shadow bounds and the reflection probe
   (`LevelPlayController.refit_view_to_ground`), samples a Blender map's grid ground again when

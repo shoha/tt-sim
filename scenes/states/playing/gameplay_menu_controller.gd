@@ -26,6 +26,8 @@ var _original_state: LevelVisualState = LevelVisualState.new()
 
 ## Coalesces per-tick visual-settings RPCs from the drawer into one send per interval.
 var _visual_broadcast := VisualBroadcastThrottle.new()
+## The bottom-corner buttons' fade as a drawer covers or uncovers them (on_drawers_moved).
+var _buttons_tween: Tween
 
 @onready var save_level_button: Button = %SaveLevelButton
 @onready var toggle_asset_browser_button: Button = %ToggleAssetBrowserButton
@@ -69,6 +71,8 @@ func _ready() -> void:
 
 	# Connect to network state changes to show/hide host-only buttons
 	NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
+	# Add token and Save map step out while an open drawer's glass would lie over them.
+	add_to_group(DrawerContainer.WATCHERS)
 
 	# Initially hide buttons since no level is loaded yet
 	_update_asset_browser_button_state()
@@ -111,6 +115,13 @@ func setup(level_play_controller: LevelPlayController) -> void:
 		play_events.armed_changed.connect(
 			func(tool_id: StringName) -> void:
 				level_edit_panel.set_rail_item_active(LevelEditPanel.EVENTS_ID, tool_id != &"")
+		)
+		# The board is the GM's while they work: the first press sends the drawer aside (its
+		# look changes stay, as on any close; the rail item opens it again).
+		play_events.stroke_started.connect(
+			func() -> void:
+				if level_edit_panel.is_open:
+					level_edit_panel.close()
 		)
 
 	# Update UI state
@@ -413,6 +424,25 @@ func _on_edit_drawer_opened() -> void:
 ## Also deactivates the sun gizmo so it cannot outlive the drawer.
 func _on_edit_drawer_closed() -> void:
 	_deactivate_sun_gizmo()
+
+
+## A drawer started to open or close (DrawerContainer.WATCHERS): the bottom-corner buttons
+## (Add token, Save map) fade out while an open drawer covers them, rather than show through
+## its glass at about 1.2:1 (UI_TASTE C6), and come back as it leaves.
+func on_drawers_moved() -> void:
+	var buttons := save_level_button.get_parent() as Control
+	var span := DrawerContainer.free_span(get_viewport())
+	var rect := buttons.get_global_rect()
+	var covered := rect.end.x > span.y or rect.position.x < span.x
+	if _buttons_tween and _buttons_tween.is_valid():
+		_buttons_tween.kill()
+	_buttons_tween = buttons.create_tween()
+	if covered:
+		_buttons_tween.tween_property(buttons, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
+		_buttons_tween.tween_callback(buttons.hide)
+	else:
+		buttons.show()
+		_buttons_tween.tween_property(buttons, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
 
 
 ## The gizmo is an aiming mode, not a setting: it must not outlive the drawer

@@ -9,16 +9,21 @@ extends RefCounted
 ##   save        {"folder"}: the authoring map saved as that level (a _gm_events_ folder only)
 ##   window      {"size": "WxH"}: the window at that size, Interface size Auto for the run
 ##   open        the Visuals drawer open on its Events pane
-##   arm         {"tool"}: PlayEvents.pick(tool id), the Sculpt tile set to "tile" and the
-##               brush radius to "radius" (m) if given
+##   arm         {"tool"}: PlayEvents.pick(tool id), the Sculpt tile set to "tile", the
+##               brush radius to "radius" (m) and the palette's "biome"-th biome picked (its
+##               tile, as a click picks it) if given
+##   hover       {"at"} or {"screen"}: the brush's pointer there, not pressed (its ring)
 ##   press       {"at": [x, z]} or {"screen": [fx, fy]} (fractions of the board's viewport):
-##               the play brush's pointer there, pressed, with "ctrl" as given
+##               the play brush's pointer there, pressed, with "ctrl" as given (the drawer
+##               steps aside, PlayEvents.stroke_started)
 ##   move        the pointer moved there ("at" or "screen"), still pressed
 ##   release     the stroke ends (recorded, sent to the table), reporting its entry's size
+##   put_away    PlayEvents.put_away (Esc's path)
 ##   undo        PlayEvents.undo (Ctrl+Z's path), reporting the entry's size and is_large
 ##   redo        PlayEvents.redo (Ctrl+Y's path)
-##   player      staged player's view: the brush put away, the GM's Visuals drawer concealed
-##               and the GM's own HUD buttons hidden
+##   player      staged player's view: the brush put away, the GM's Visuals drawer concealed,
+##               the GM's own HUD buttons hidden and the GM's toasts dismissed
+##   dismiss     every toast on screen dismissed at once
 ##   cleanup     deletes every _gm_events_ level
 
 const PREFIX := "_gm_events_"
@@ -49,8 +54,16 @@ static func run(base: Node, step: Dictionary) -> String:
 				SculptTool.of(events.brush()).tile = int(step.get("tile"))
 			if step.has("radius") and events.brush() != null:
 				events.brush().set_radius(float(step.get("radius")))
+			if step.has("biome"):
+				var biome := StringName(String(PaletteLibrary.biomes()[int(step.get("biome"))]["id"]))
+				events.pane.biome_field.tiles.select(biome)
+				if events.armed == &"":
+					events._on_biome_selected(String(biome))
 			return "armed %s (refusal: '%s')" % [events.armed, events.refusal()]
-		"press", "move":
+		"put_away":
+			events.put_away()
+			return "put away; armed '%s'" % events.armed
+		"hover", "press", "move":
 			var brush := events.brush()
 			if brush == null or not brush.is_active():
 				return "no brush out"
@@ -100,8 +113,22 @@ static func run(base: Node, step: Dictionary) -> String:
 				var button := base.find_child(button_name, true, false) as Control
 				if button != null:
 					button.visible = false
-			return "staged a player's view"
+			# The GM's own toasts (the large edit's Undo, Undone) are not a player's.
+			return "staged a player's view (%d toasts dismissed)" % _dismiss_toasts()
+		"dismiss":
+			return "%d toasts dismissed" % _dismiss_toasts()
 	return "unknown action"
+
+
+## Dismisses every toast on screen at once; returns how many.
+static func _dismiss_toasts() -> int:
+	var toasts: ToastContainer = UIManager.get("_toast_container")
+	if toasts == null:
+		return 0
+	var shown: Array = toasts.get("_active_toasts").duplicate()
+	for toast: Control in shown:
+		toasts.call("_dismiss_toast", toast, true)
+	return shown.size()
 
 
 ## The window at `size` ([w, h] or "WxH") with the Interface size at Auto for the run, as
