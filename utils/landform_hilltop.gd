@@ -31,7 +31,9 @@ extends RefCounted
 ## radius out, past the crown's toe when there is a crown (STAGE_CROWN_TOE_M), at the foot of
 ## the ledge's face when there is a ledge (STAGE_LEDGE_TOE_M), within half the half extent
 ## of the centre. On a long map (LandformGrowth) the hill sits toward one end of its length
-## and, when it is long enough, a second hill toward the other.
+## and, when it is long enough, a second hill toward the other; on a wide one it stands well
+## toward one of eight sides. Every size draws its wood (round 3): how dense the groves are
+## and whether they gather on one side (see HILL_WIDE_OFFSET_SHARE).
 
 const HILL_HEIGHT_M := 4.5
 const HILL_RADIUS_SHARE := 0.45
@@ -51,10 +53,20 @@ const SECOND_HILL_HEIGHT_SHARE := 0.5
 ## A long map's hill sits this share of the way from the centre toward one end of its spare
 ## length (toward_end), the second hill as far toward the other.
 const HILL_LONG_SHARE := 0.55
-## On a big or long map the hill's upper slopes are open ground, this share of its radius
-## (LandformGrowth.grow opens and paints the recipe's "open" discs only on a map with room), so
-## the hill reads over the forest from the whole-map view.
-const HILL_OPEN_SHARE := 0.65
+## On a big or long map the hill's upper slopes are open ground, a share of its radius drawn
+## within HILL_OPEN_RANGE (LandformGrowth.grow opens and paints the recipe's "open" discs only
+## on a map with room), so the hill reads over the forest from the whole-map view: a wooded
+## hill with a bald top on one seed, a hill open to its foot on another.
+const HILL_OPEN_RANGE := Vector2(0.45, 0.95)
+## The setting (StartingLandform.STREAM_SETTING; round 3, where every seed read as a forest
+## diamond round a green hill): on a wide map (LandformGrowth.is_wide) the hill stands a share
+## of the half extent drawn within HILL_WIDE_OFFSET_SHARE toward its heading (any of eight
+## sides), the second hill as far toward the other; the wood (LandformPlacement.wood) keeps a
+## share of the groves drawn within WOOD_DENSITY and with WOOD_LEAN_CHANCE gathers them toward
+## one side, opening the other into meadow.
+const HILL_WIDE_OFFSET_SHARE := Vector2(0.3, 0.5)
+const WOOD_DENSITY := Vector2(0.4, 1.0)
+const WOOD_LEAN_CHANCE := 0.6
 ## Feature chances (the no-sameness palette). The crown 0.85 since P5-4b: a crownless hill
 ## read plainer than a crowned one even with its ledge.
 const CROWN_CHANCE := 0.85
@@ -104,11 +116,15 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 	var half := StartingLandform.half_extent(doc)
 	var scale := StartingLandform.size_scale(doc)
 	var tier := doc.tier_height_m
-	var frame := hilltop_frame(
-		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
-	)
-	var end_shift := toward_end(doc, half, seed_value)
-	var centre: Vector2 = frame.centre + end_shift
+	var setting := setting_of(doc, seed_value)
+	var frame: Dictionary = setting.frame
+	var end_shift: Vector2 = setting.end_shift
+	var wood: Dictionary = setting.wood
+	var wide_share: float = setting.wide_share
+	var open_share: float = setting.open_share
+	var wide: bool = setting.wide
+	var placed: Vector2 = setting.placed
+	var centre: Vector2 = setting.centre
 	var radius := half * HILL_RADIUS_SHARE
 	var draws := StartingLandform.stream(seed_value, StartingLandform.STREAM_FEATURES)
 	var wants_crown := draws.randf() < CROWN_CHANCE
@@ -141,8 +157,10 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 	)
 	# On a map long enough the second hill answers the first from the other end.
 	var apart := 2.0 * end_shift.length() >= half * (HILL_RADIUS_SHARE + SECOND_HILL_RADIUS_SHARE)
+	# On a wide map the second hill stands as far off centre the other way.
+	var away := 2.0 * wide_share if wide else SECOND_HILL_OFFSET_SHARE
 	var second_centre: Vector2 = (
-		frame.centre - end_shift if apart else centre - frame.dir * half * SECOND_HILL_OFFSET_SHARE
+		frame.centre - end_shift if apart else centre - frame.dir * half * away
 	)
 	var second_radius := half * SECOND_HILL_RADIUS_SHARE
 	var second_height := height * SECOND_HILL_HEIGHT_SHARE if wants_second else 0.0
@@ -189,7 +207,7 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 		[
 			(
 				"hilltop heading %d deg, %.1f m off centre, radius %.1f m"
-				% [frame.heading_deg, frame.offset, radius]
+				% [frame.heading_deg, placed.length(), radius]
 			),
 			(
 				"crown at %.2f m (tier %d) over a %.2f m hill" % [target, crown.level, height]
@@ -266,12 +284,43 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 	else:
 		report.append("dry")
 	report.append("stage (%.1f, %.1f)" % [stage.x, stage.y])
+	report.append(LandformPlacement.wood_report(wood))
 	var keepout: Array = [{"at": centre, "radius": radius}]
-	var open: Array = [{"at": centre, "radius": radius * HILL_OPEN_SHARE}]
+	var open: Array = [{"at": centre, "radius": radius * open_share}]
 	if wants_second:
 		keepout.append({"at": second_centre, "radius": second_radius})
-		open.append({"at": second_centre, "radius": second_radius * HILL_OPEN_SHARE})
-	return {"stage": stage, "report": "; ".join(report), "keepout": keepout, "open": open}
+		open.append({"at": second_centre, "radius": second_radius * open_share})
+	return {
+		"stage": stage, "report": "; ".join(report), "keepout": keepout, "open": open, "wood": wood
+	}
+
+
+## Where the hill of `seed_value` stands on `doc` and the setting it draws (see
+## HILL_WIDE_OFFSET_SHARE): {"frame" (hilltop_frame), "end_shift" (toward_end), "wood",
+## "wide_share", "open_share", "wide" (placed by the setting: a wide map that is not long),
+## "placed" (the centre before a long map's shift) and "centre"}.
+static func setting_of(doc: MapDocument, seed_value: int) -> Dictionary:
+	var half := StartingLandform.half_extent(doc)
+	var frame := hilltop_frame(
+		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
+	)
+	var end_shift := toward_end(doc, half, seed_value)
+	var setting := StartingLandform.stream(seed_value, StartingLandform.STREAM_SETTING)
+	var wood := LandformPlacement.wood(setting, WOOD_DENSITY, WOOD_LEAN_CHANCE)
+	var wide_share := setting.randf_range(HILL_WIDE_OFFSET_SHARE.x, HILL_WIDE_OFFSET_SHARE.y)
+	var open_share := setting.randf_range(HILL_OPEN_RANGE.x, HILL_OPEN_RANGE.y)
+	var wide := LandformGrowth.is_wide(doc) and end_shift == Vector2.ZERO
+	var placed: Vector2 = frame.dir * half * wide_share if wide else frame.centre
+	return {
+		"frame": frame,
+		"end_shift": end_shift,
+		"wood": wood,
+		"wide_share": wide_share,
+		"open_share": open_share,
+		"wide": wide,
+		"placed": placed,
+		"centre": placed + end_shift,
+	}
 
 
 ## On a long map (LandformGrowth.is_long) the hill moves HILL_LONG_SHARE of the way toward

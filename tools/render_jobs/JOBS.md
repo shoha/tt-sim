@@ -374,11 +374,12 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   320 ft and 320 x 160 ft (60 new temperate forest maps through `landform.gd new` with a
   `spec` such as `valley_3_320x160`), each saved as `_biglf_<spec>` (`landform.gd save`) and
   captured in authoring at full zoom-out (the whole map), then tiled six seeds to a sheet
-  (`probes/contact_sheet.gd`, `sheet_<landform>_<size>.png`). `biglf_base`: the sizes growth
-  leaves as they were, seeds 1-6 at 250 ft and 200 ft (60 maps, `sheet_<landform>_250` and
-  `_200`), plus two grassland meadow maps for the map edge (`_biglf_grass_<spec>`: a flat
-  300 ft one and a 200 ft hilltop, `sheet_grass_edge`: the cover's edge feather and the
-  skirt without accent patches). Build runs with `--full` took 766 s (`biglf_look`) and 620 s
+  (`probes/contact_sheet.gd`, `sheet_<landform>_<size>.png`). `biglf_base`: the sizes without
+  the big-map extras (greened, edged and set like the big ones since round 3), seeds 1-6 at
+  250 ft and 200 ft (60 maps, `sheet_<landform>_250` and `_200`), plus two grassland meadow
+  maps for the map edge (`_biglf_grass_<spec>`: a flat 300 ft one and a 200 ft hilltop,
+  `sheet_grass_edge`: the cover's edge feather, no accent patch on the rim and the skirt
+  without any). Build runs with `--full` took 766 s (`biglf_look`) and 620 s
   (`biglf_base`); `--saved` reloads the levels for a look-only run (`--full` for the
   verdict). `jobs/biglf_cleanup.json` (`landform.gd cleanup`) deletes every `_biglf_` level.
 - `jobs/grid_ground.json`: the grid on Blender maps' ground (P3-3c, about 50 s):

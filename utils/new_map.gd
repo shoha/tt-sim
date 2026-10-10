@@ -63,12 +63,20 @@ const CLEARING_WARP := 0.25
 ## EDGE_FEATHER_WOBBLE by the cover noise read at twice its feature size (EDGE_WOBBLE_OFFSET
 ## away), so the scatter ends in a ragged fringe that runs out onto the skirt's bare ground.
 ## Trees answer the density late (ScatterPlan.DENSITY_RESPONSE), so the groves keep their
-## edge and the ground cover thins first.
-const EDGE_FEATHER_SHARE := 0.1
-const EDGE_FEATHER_MIN_M := 2.0
-const EDGE_FEATHER_MAX_M := 6.0
+## edge and the ground cover thins first. A quarter of the half extent (8-12 m from 200 ft)
+## since round 3: at a tenth (2-6 m) the forest ran almost to the edge and stopped on a thin
+## brown rim; the band is greened (LandformPlacement.paint_sparse) and the ground accents
+## shrink away in it (the ground shader's accent_edge_m).
+const EDGE_FEATHER_SHARE := 0.25
+const EDGE_FEATHER_MIN_M := 3.0
+const EDGE_FEATHER_MAX_M := 12.0
 const EDGE_FEATHER_WOBBLE := 0.6
 const EDGE_WOBBLE_OFFSET := Vector2(911.0, -517.0)
+## A landform's wood (wood_density; the Hilltop's and the Lakeshore's per-seed cover): the
+## groves' density over the glade's is kept by `density`, and on the side away from `side`
+## by a further 1 - `lean`, eased across WOOD_LEAN_SPAN of the half extent either side of
+## the middle.
+const WOOD_LEAN_SPAN := 0.6
 
 
 static func cells_for_feet(feet: int) -> int:
@@ -102,8 +110,8 @@ static func is_big(width_ft: int, depth_ft: int = 0) -> bool:
 ## the starting cover is painted into its masks; with BARE_BIOME (or a biome the palette
 ## lacks) it is BARE_SURFACE and unpainted. With a `landform` other than
 ## StartingLandform.FLAT the recipe shapes the document first (heights, carved water, a
-## crossing, from the seed) and the glade is centred on its stage. A big or long map's thin
-## cover is then greened (LandformPlacement.paint_sparse). The scatter rows are left empty:
+## crossing, from the seed) and the glade is centred on its stage. The thin cover and the edge
+## band are then greened (LandformPlacement.paint_sparse). The scatter rows are left empty:
 ## they are generated from the masks once the map is shown. A size size_error() refuses gives
 ## null, with the error pushed.
 static func create(
@@ -128,13 +136,15 @@ static func create(
 	var stage := Vector2.ZERO
 	var glade := {}
 	var clearings: Array = []
+	var wood := {}
 	if landform != StartingLandform.FLAT:
 		var shaped := StartingLandform.apply(doc, landform, seed_value, biome_id, root)
 		stage = shaped.stage
 		glade = shaped.get("glade", {})
 		clearings = shaped.get("clearings", [])
+		wood = shaped.get("wood", {})
 	if not biome.is_empty():
-		paint_starting_cover(doc, biome_id, stage, glade, clearings)
+		paint_starting_cover(doc, biome_id, stage, glade, clearings, wood)
 		LandformPlacement.paint_sparse(doc, biome_id, root)
 	return doc
 
@@ -174,22 +184,22 @@ static func opening_status(spec: Dictionary) -> String:
 ## or long map's meadows and tarn shores, LandformGrowth) open more ground
 ## (clearing_density). On a map with room (LandformGrowth.room) the copses and clearings of
 ## the cover noise grow by up to COVER_FEATURE_GROWTH, so a big map's forest keeps a few bold
-## shapes instead of finer noise. Every map's cover feathers out at its edge (edge_feather).
+## shapes instead of finer noise. A landform's `wood` (wood_density) thins its groves by the
+## seed. Every map's cover feathers out at its edge (edge_feather).
 static func paint_starting_cover(
 	doc: MapDocument,
 	biome_id: String,
 	centre: Vector2 = Vector2.ZERO,
 	glade: Dictionary = {},
-	clearings: Array = []
+	clearings: Array = [],
+	wood: Dictionary = {}
 ) -> void:
 	var count := doc.sample_count()
 	var slots := PackedByteArray()
 	var density := PackedByteArray()
 	slots.resize(count)
 	density.resize(count)
-	var noise := _cover_noise(
-		doc.map_seed, COVER_FEATURE_M * (1.0 + COVER_FEATURE_GROWTH * LandformGrowth.room(doc))
-	)
+	var noise := cover_noise(doc)
 	var half := doc.extent_m() * 0.5
 	var feather := edge_feather_m(half)
 	var feather_reach := feather * (1.0 + EDGE_FEATHER_WOBBLE)
@@ -205,9 +215,10 @@ static func paint_starting_cover(
 			)
 			if not clearings.is_empty():
 				value = clearing_density(world, clearings, value, noise_value)
+			if not wood.is_empty():
+				value = wood_density(value, world, half, wood)
 			if minf(half.x - absf(world.x), half.y - absf(world.y)) < feather_reach:
-				var at := world * 0.5 + EDGE_WOBBLE_OFFSET
-				value *= edge_feather(world, half, feather, noise.get_noise_2d(at.x, at.y))
+				value *= edge_keep(world, half, feather, noise)
 				value = value if value >= COVER_MIN_DENSITY else 0.0
 			var byte := roundi(value * 255.0)
 			var index := doc.sample_index(x, z)
@@ -304,6 +315,36 @@ static func edge_feather_m(half: Vector2) -> float:
 	return clampf(
 		minf(half.x, half.y) * EDGE_FEATHER_SHARE, EDGE_FEATHER_MIN_M, EDGE_FEATHER_MAX_M
 	)
+
+
+## edge_feather at map point `world` with its wobble read from `noise` (cover_noise) as the
+## starting cover reads it, so LandformPlacement.paint_sparse greens the same ragged band.
+static func edge_keep(world: Vector2, half: Vector2, width: float, noise: FastNoiseLite) -> float:
+	var at := world * 0.5 + EDGE_WOBBLE_OFFSET
+	return edge_feather(world, half, width, noise.get_noise_2d(at.x, at.y))
+
+
+## The starting cover's noise on `doc`: its seed, its feature size grown with the room.
+static func cover_noise(doc: MapDocument) -> FastNoiseLite:
+	return _cover_noise(
+		doc.map_seed, COVER_FEATURE_M * (1.0 + COVER_FEATURE_GROWTH * LandformGrowth.room(doc))
+	)
+
+
+## The cover density `value` at map point `world` (half extent `half`) under a landform's
+## `wood` ({"density", optionally "side" and "lean"}; see WOOD_LEAN_SPAN): only the groves'
+## density over the glade's (COVER_CENTRE_DENSITY) is thinned, so an open wood still carries
+## the glade's ground cover. Pure.
+static func wood_density(value: float, world: Vector2, half: Vector2, wood: Dictionary) -> float:
+	var keep := float(wood.get("density", 1.0))
+	var side: Vector2 = wood.get("side", Vector2.ZERO)
+	if side != Vector2.ZERO:
+		var toward := world.dot(side) / maxf(minf(half.x, half.y), 1e-3)
+		var gather := smoothstep(-WOOD_LEAN_SPAN, WOOD_LEAN_SPAN, toward)
+		keep *= lerpf(1.0 - float(wood.get("lean", 0.0)), 1.0, gather)
+	var floor_value := minf(value, COVER_CENTRE_DENSITY)
+	var out := lerpf(floor_value, value, clampf(keep, 0.0, 1.0))
+	return out if out >= COVER_MIN_DENSITY else 0.0
 
 
 ## The cover density for `edge` (0 the glade, 1 the groves) and the noise there.

@@ -30,8 +30,9 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
 | `utils/landform_lakeshore.gd` | `LandformLakeshore` | The Lakeshore (`lakeshore`, `lakeshore_frame`, `allowed_corners`) |
 | `utils/landform_gorge.gd` | `LandformGorge` | The Gorge (`gorge`, `gorge_frame`, `gorge_stage`) |
 | `utils/landform_growth.gd` | `LandformGrowth` | Big and long maps: `room`, `is_long`, `long_dir`, `turned`, `grow` (the extras: tarn, meadow, knoll), `knoll`, `tarn` |
-| `utils/landform_placement.gd` | `LandformPlacement` | Where the extras stand and the open ground's paint: `find_spot`, `meadow_surface`, `paint_open`, `paint_sparse` (a big map's thin cover greened) |
-| `utils/new_map.gd` | `NewMap` | `create(..., landform, depth_ft)` runs the recipe before the cover; `from_spec(spec)`; `opening_status(spec)`; `paint_starting_cover(doc, biome, centre, glade, clearings)` centres the glade on the stage, opens the clearings and feathers the cover at the map edge (`edge_feather`) |
+| `utils/landform_placement.gd` | `LandformPlacement` | Where the extras stand and the open ground's paint: `find_spot`, `meadow_surface`, `paint_open`, `paint_sparse` (every new map's thin cover and edge band greened), `wood` (a recipe's per-seed wood) |
+| `utils/new_map.gd` | `NewMap` | `create(..., landform, depth_ft)` runs the recipe before the cover; `from_spec(spec)`; `opening_status(spec)`; `paint_starting_cover(doc, biome, centre, glade, clearings, wood)` centres the glade on the stage, opens the clearings, thins the groves by the recipe's wood (`wood_density`) and feathers the cover at the map edge (`edge_feather`, `edge_keep`) |
+| `scenes/terrain/terrain_skirt.gd` | `TerrainSkirt` | The skirt's material; `edge_surface` (the painted surface covering the map's edge, which the skirt continues instead of the base) |
 | `scenes/states/authoring/new_map_dialog.gd` | `NewMapDialog` | The Landform tile row and its caption; the spec's `landform` |
 | `scenes/states/authoring/authoring_controller.gd` | `AuthoringController` | Opens a new map from `NewMap.from_spec(spec)` under the loading line `NewMap.opening_status(spec)` |
 | `scenes/ui/help_overlay.gd` | | The F1 "New map" row |
@@ -90,7 +91,10 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   On a map with room the cover noise's copses grow by up to `COVER_FEATURE_GROWTH` 0.5, so a
   big forest keeps a few bold shapes, and after the cover is painted
   `LandformPlacement.paint_sparse` greens its thin parts (cover density 0.45 down to 0.18) in
-  bold noise-shaped patches, in proportion to the room. Why open ground: the first look
+  bold noise-shaped patches (`SPARSE_FEATURE_M` 14 m at 150 ft, never under 12 m) on every
+  new map with a meadow surface, whatever its size (round 3: on big maps only until then, and
+  the same landforms at 200 and 250 ft sat on brown forest floor and read muddy beside the
+  320 ft ones). Why open ground: the first look
   (`biglf_look`, half size) found that from the whole-map view a forest's trees hide a big
   map's relief (a 5 m knoll, the hill, the terraces' steps), so what reads is water and
   bright open ground; the second found the forest floor between thin cover (a valley's
@@ -98,13 +102,21 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   alike, and knolls lost under trees (hence the greening, more tarns and meadows, fewer
   knolls with wider crowns).
 - **The map edge** (2026-10-09; play shows the whole map). Every new map's cover feathers out
-  at its edge (`NewMap.edge_feather`: to none over a tenth of the shorter half extent, 2-6 m,
-  its depth ragged by the cover noise), so the scatter ends in a ragged fringe rather than a
-  straight line (a grassland's tall grass stopped dead at it). Trees answer the density late,
-  so a forest's groves keep their edge. Past the edge the ground skirt continues the base
-  surface, and its accent patches shrink away a few metres out (the skirt shader's
-  `skirt_accent_keep`): on a grass map nothing hides them there, and a grassland's savanna
-  patches floated in the haze as orange blotches.
+  at its edge (`NewMap.edge_feather`: to none over a quarter of the shorter half extent, 3-12
+  m, so 7.6 m at 200 ft, 9.5 m at 250 and 12 m at 320; its depth ragged by the cover noise),
+  so the scatter ends in a ragged fringe rather than a straight line (a grassland's tall grass
+  stopped dead at it). Trees answer the density late, so a forest's groves keep their edge.
+  On a biome with a meadow surface `paint_sparse` greens the band as the cover goes (whole
+  where the feather keeps under 0.35 of the cover, none from 0.9), so the edge itself is all
+  meadow, and the skirt continues the painted surface that covers the map's edge
+  (`TerrainSkirt.edge_surface`: a mean weight of at least 0.6 over the edge samples; the
+  shader's `skirt_ground_mask`), else the base: a forest map fades out on grass rather than
+  a brown forest-floor halo. The ground accents shrink away inside the same band (the ground
+  shader's `accent_edge_m`, ragged by its own noise) and the skirt draws none, so no
+  grassland savanna patch sits on a rim or floats in the haze as an orange blotch. History:
+  the first edge (round 2) feathered over a tenth (2-6 m) and shrank the skirt's accents a
+  few metres past the edge; round 3 found the forest maps ringed by a brown halo and orange
+  blobs at grassland rims and corners.
 - **Facing the camera** (P5-4, commit 0bcda1d): the fixed camera (`game_map.tscn`'s Camera3D)
   stands at +x, +z and looks along (-1, -1) in map XZ at a 45 degree yaw, pitched 21.6
   degrees down. `VIEW` (-0.707, -0.707) is that look direction and `NEAR` (0.707, 0.707) the
@@ -193,7 +205,14 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   95-105, a little past side-on). Stage: on the shoulder
   toward the camera, `STAGE_SHOULDER_SHARE` 0.55 of the radius out, past the crown's toe
   (`STAGE_CROWN_TOE_M` 1 m) or at the ledge's foot (`STAGE_LEDGE_TOE_M` 1.5 m), within half
-  the half extent of the centre.
+  the half extent of the centre. The setting (round 3, `STREAM_SETTING`; every seed had read
+  as a dense forest diamond round a green hill): on a wide map (`LandformGrowth.is_wide`, the
+  shorter side 60 m or more: 200 ft and up, not long) the hill stands
+  `HILL_WIDE_OFFSET_SHARE` 0.3-0.5 of the half extent toward its heading, the second hill as
+  far the other way; the open crown on a map with room covers `HILL_OPEN_RANGE` 0.45-0.95 of
+  the radius; and at every size the wood (`LandformPlacement.wood`, `NewMap.wood_density`)
+  keeps 0.4-1.0 of the groves' density over the glade's and with `WOOD_LEAN_CHANCE` 0.6
+  gathers them toward a seeded side, the far side opening by 0.55-0.9.
 - **Terraces** (`LandformTerraces.terraces`; "Tiers stepping down across the map"): two or
   three tiers (`THREE_CHANCE` 0.5) stepping down along one of eight headings, the lowest the
   base ground and each higher one a rounded-corner plateau (corners `CORNER_M` 4-8 m, edge
@@ -204,7 +223,11 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   river crossing the steps square on (`RIVER_CHANCE` 0.6), falling at each step; given the
   river, a plank bridge on the top terrace (`BRIDGE_CHANCE` 0.5) `BRIDGE_BACK_M` 5 m uphill of
   its edge. Stage: on the middle terrace, or `STAGE_DOWN_SHARE` 0.3 of the half extent down
-  the lower one when there are two, `STAGE_RIVER_M` 6 m from the river toward the axis.
+  the lower one when there are two, `STAGE_RIVER_M` 6 m from the river toward the axis. Over
+  three steps (a big map's extra step) the river jogs `JOG_SHARE` 0.16 of the half extent
+  across the heading at every other step, away from the axis and the stage, crossing each
+  step square on within `JOG_SQUARE_M` 3 m of its edge (`river_line`; round 3, where seed 5
+  at 320 ft ran straight up the map over three falls in a line).
 - **Lakeshore** (`LandformLakeshore.lakeshore`; "A deep lake over one corner, its shore the
   stage"): a deep pond over a disc of `LAKE_RADIUS_SHARE` 0.45 of the half extent centred
   `LAKE_CENTRE_SHARE` 0.5 of it toward a corner (0.55 before P5-4), its shore warped
@@ -227,7 +250,16 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   `STREAM_AZIMUTH_DEG` 35-70 degrees off the stage's line and ending `STREAM_IN_M` 1 m inside
   the shore, where `plan_river` joins it at the waterline; stepping stones over it
   (`STONES_CHANCE` 0.4) at least `STONES_SHORE_M` 5 m back from the shore. Stage: on the shore
-  nearest the map's centre, `STAGE_SHORE_M` 4 m back from the waterline.
+  nearest the map's centre, `STAGE_SHORE_M` 4 m back from the waterline. The setting (round
+  3, `STREAM_SETTING`; every seed had read as a lake at the back with forest elsewhere): on a
+  wide map (200 ft and up) the corner draw above gives way to `wide_frame`: the lake takes any
+  of `WIDE_PLACES` alike, the four corners and the four sides' middles (the home frame no
+  longer bounds it: the whole map is what reads), with `LARGE_LAKE_CHANCE` 0.35 a lake of
+  `LARGE_LAKE_SHARE` 0.6 of the half extent, its centre its radius plus `LAKE_EDGE_SHARE` 0.05
+  of the half extent in from each edge it lies toward, on a long map's own extent. At every
+  size: a shore meadow (`SHORE_MEADOW_CHANCE` 0.55), a clearing 0.85 of the lake's radius
+  across on the shore 20-80 degrees off the stage's line, returned in `clearings` and greened
+  by `paint_sparse`; and the wood as the Hilltop's (0.45-1.0, leaning with chance 0.5).
 - **Gorge** (`LandformGorge.gorge`; "A ravine with rock walls winding across the map"): a
   ravine one or two tiers deep (`TWO_TIERS_CHANCE` 0.5; two only on a map at least
   `TWO_TIERS_MIN_EXTENT_M` 45 m wide, 150 ft and up) cut downward with `tier_goal` from the
@@ -332,7 +364,12 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   chances, cost), `test_landform_gorge.gd` (determinism, heading, a dry floor tiers below the
   rim behind rock walls, 40-seed chances, cost), `test_authoring_open.gd` (a landform tile per
   kind, the default follows the biome, a pick sets the spec and caption, the icons load,
-  `opening_status` names the landform). Phase 5 took the suite from 1890 to 1929 tests.
+  `opening_status` names the landform), `test_landform_growth.gd` (room, the long map's turn
+  and spread, the extras, open ground; since round 3 the greening on every map with the edge
+  all meadow and the skirt continuing it, the band's depth, the wood, wide hills and lakes
+  toward any side, the terraces' jog), `test_ground_accents.gd` (the accents' edge band, the
+  skirt drawing none and continuing a painted edge). Phase 5 took the suite from 1890 to 1929
+  tests.
 - **Render jobs** (`tools/render_jobs/jobs/`, described in
   [../../tools/render_jobs/JOBS.md](../../tools/render_jobs/JOBS.md)): `landform_look.json`
   (P5-1 and P5-2: each landform in two biomes at home and zoom 8, water hidden and shown, the
@@ -381,6 +418,10 @@ this doc does not repeat it.
   no centre in the camera's quadrant, no stones refused over the drawn lake seeds at 100 and
   150 ft, no `no_water` over 40 valley seeds, the stream never crosses the bench over 40
   crownless seeds, the valley floor's centreline open and its rim dense.
+- Big landforms (381c39a, 3ac5d88; 2026-10-09): `LandformGrowth`, `LandformPlacement`, the
+  edge feather, `biglf_look` / `biglf_base`. Round 3: the greening at every size, the edge
+  band 3-12 m and greened, the skirt continuing the edge's surface, the accents out of the
+  band, the Hilltop's and Lakeshore's setting, the terraces' jog.
 - P5-8: the new-map document built on a worker under the loading screen (`NewMapBuild`); the
   thread-safety audit (only the palette cache and the global RNG were shared, both now touched
   on the main thread first); `test_new_map_build.gd` (threaded and synchronous builds

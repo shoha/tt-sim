@@ -296,7 +296,9 @@ func test_new_map_centres_the_glade_on_the_stage() -> void:
 			if (world + stage).length() / half.x < 0.3:
 				opposite += density
 				opposite_n += 1
-	assert_lt(glade / glade_n, 0.5 * edge / edge_n, "open at the stage, dense toward the edges")
+	# Round 3 (2026-10-09): 0.75, was 0.5. The Hilltop's wood thins this seed's groves to 0.41
+	# of their density over the glade's, and the edge band is a quarter of the half extent.
+	assert_lt(glade / glade_n, 0.75 * edge / edge_n, "open at the stage, denser toward the edges")
 	assert_lt(glade / glade_n, opposite / opposite_n, "the glade moved with the stage")
 	assert_eq(MapDocumentIO.serialize(doc).error, "")
 

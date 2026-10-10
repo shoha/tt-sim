@@ -14,7 +14,8 @@ extends RefCounted
 ## a plank bridge on the top terrace (BRIDGE_CHANCE). The stage is on the middle terrace,
 ## or the lower when there are two, away from the river. On a big or long map
 ## (LandformGrowth) the terraces step down along a long map's length, spread over it
-## (span_of), and may gain a step (EXTRA_STEP_CHANCE).
+## (span_of), and may gain a step (EXTRA_STEP_CHANCE); a river over three steps jogs aside at
+## every other one (river_line).
 
 const THREE_CHANCE := 0.5
 const RIVER_CHANCE := 0.6
@@ -43,6 +44,10 @@ const RIVER_HALF_WIDTH_M := 1.5
 const RIVER_SPACING_M := 5.0
 const RIVER_WOBBLE_M := 1.2
 const RIVER_OFFSET_SHARE := 0.3
+## Over three steps the river jogs this share of the half extent across the heading at every
+## other step, crossing each step square on within JOG_SQUARE_M of its edge (river_line).
+const JOG_SHARE := 0.16
+const JOG_SQUARE_M := 3.0
 ## The bridge stands on the top terrace at least this far back from its edge and this far
 ## inside the map.
 const BRIDGE_BACK_M := 5.0
@@ -64,7 +69,6 @@ static func terraces(doc: MapDocument, seed_value: int, biome_id: String) -> Dic
 		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME), doc
 	)
 	var dir: Vector2 = frame.dir
-	var normal: Vector2 = frame.normal
 	var span := span_of(doc, dir, half)
 	var draws := StartingLandform.stream(seed_value, StartingLandform.STREAM_FEATURES)
 	var wants_three := draws.randf() < THREE_CHANCE
@@ -104,12 +108,8 @@ static func terraces(doc: MapDocument, seed_value: int, biome_id: String) -> Dic
 		]
 	)
 	if wants_river:
-		var foot := normal * river_v
 		var line := StartingLandform.map_line(
-			doc,
-			PackedVector2Array([foot - dir * 4.0 * span, foot + dir * 4.0 * span]),
-			EDGE_MARGIN_M,
-			RIVER_SPACING_M
+			doc, river_line(plateaus, frame, river_v, span, half), EDGE_MARGIN_M, RIVER_SPACING_M
 		)
 		var course := StartingLandform.wobbled(
 			doc,
@@ -134,6 +134,33 @@ static func terraces(doc: MapDocument, seed_value: int, biome_id: String) -> Dic
 		report.append("dry")
 	report.append("stage (%.1f, %.1f)" % [stage.x, stage.y])
 	return {"stage": stage, "report": "; ".join(report)}
+
+
+## The river's line down the terraces, `river_v` across the heading of `frame`, reaching far
+## past the map both ways along `span`: straight over one or two steps; over three (a big
+## map's extra step) it jogs JOG_SHARE of `half` across the heading at every other step,
+## always away from the axis where the stage stands, and crosses each step square on within
+## JOG_SQUARE_M of its edge, so its falls step aside down the map instead of standing in one
+## line (round 3, 2026-10-09: seed 5 at 320 ft ran straight up the map over three falls).
+static func river_line(
+	plateaus: Array[Dictionary], frame: Dictionary, river_v: float, span: float, half: float
+) -> PackedVector2Array:
+	var dir: Vector2 = frame.dir
+	var normal: Vector2 = frame.normal
+	var far := dir * 4.0 * span
+	if plateaus.size() < 3:
+		return PackedVector2Array([normal * river_v - far, normal * river_v + far])
+	var jog := half * JOG_SHARE * (signf(river_v) if river_v != 0.0 else 1.0)
+	var points := PackedVector2Array([normal * river_v - far])
+	var across := river_v
+	# Highest first, so the edges run downhill in order.
+	for k in plateaus.size():
+		across = river_v + jog * float(k % 2)
+		var edge := float(plateaus[k].edge)
+		points.append(normal * across + dir * (edge - JOG_SQUARE_M))
+		points.append(normal * across + dir * (edge + JOG_SQUARE_M))
+	points.append(normal * across + far)
+	return points
 
 
 ## True when a big or long map draws the extra step (EXTRA_STEP_CHANCE scaled by

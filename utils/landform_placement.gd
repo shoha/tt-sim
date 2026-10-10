@@ -14,13 +14,14 @@ extends RefCounted
 ##
 ## The paint opens ground in the biome's meadow surface (meadow_surface: its grass accent,
 ## else its moss): paint_open over one feature (a meadow, a knoll's crown, a tarn's shore, a
-## recipe's "open" discs and bands), and paint_sparse over the thin parts of a big map's
-## starting cover. The 2026-10-09 looks found that from the whole-map view the trees hide a
-## big map's relief and what reads is water and open ground, and that the forest floor between
-## thin cover (a valley's camera-side slope, the uplands between groves) read as brown
-## dirt. Sunlit ground under thin cover is grass, so paint_sparse greens it in a few bold,
+## recipe's "open" discs and bands), and paint_sparse over the thin parts of every new map's
+## starting cover and its feathered edge. The 2026-10-09 looks found that from the whole-map
+## view the trees hide a big map's relief and what reads is water and open ground, and that
+## the forest floor between thin cover (a valley's camera-side slope, the uplands between
+## groves) and round the map's edge read as brown dirt, at 200 and 250 ft as much as at 320.
+## Sunlit ground under thin cover is grass, so paint_sparse greens it in a few bold,
 ## soft-edged patches that follow the cover the seed drew, which also gives every seed's map
-## its own glades.
+## its own glades, and greens the edge band so the map fades out on grass.
 
 ## The search: candidate spots drawn per feature; how far the ground under a tarn or a knoll
 ## may range (metres, over three quarters of its radius); the preferred distance from the
@@ -44,19 +45,26 @@ const OPEN_CORE_SHARE := 0.45
 const OPEN_WARP := 0.25
 ## The thin cover's paint (paint_sparse): a sample is thin from its cover density SPARSE_NONE
 ## down to wholly thin at SPARSE_FULL; SPARSE_NOISE of a noise SPARSE_FEATURE_M across (at
-## 150 ft, scaled by StartingLandform.size_scale) is added to that, and the sum turns to the
-## meadow over SPARSE_SOFT either side of SPARSE_THRESHOLD at full room (the threshold rises
-## past anything the sum reaches as the room falls to 0). Nothing in the cover's own feather
-## at the map edge (NewMap.edge_feather: thin there, but not open ground), easing in over
-## SPARSE_EDGE_M inside it. Judged on the 2026-10-09 whole-map captures.
+## 150 ft, scaled by StartingLandform.size_scale, never under SPARSE_FEATURE_MIN_M so a small
+## map gets bold shapes, not speckle) is added to that, and the sum turns to the meadow over
+## SPARSE_SOFT either side of SPARSE_THRESHOLD. In the cover's own feather at the map edge
+## (NewMap.edge_feather) the meadow takes the ground as the cover goes: whole where the
+## feather keeps less than EDGE_GREEN_FULL of the cover, none from EDGE_GREEN_NONE, so the
+## edge itself is all meadow and the skirt continues it (TerrainSkirt.edge_surface). Judged
+## on the 2026-10-09 whole-map captures (round 3: at every size, not only on big maps; the
+## 200 and 250 ft forests read muddy brown without it).
 const SPARSE_STREAM := 0x5C3E9
 const SPARSE_FULL := 0.18
 const SPARSE_NONE := 0.45
 const SPARSE_NOISE := 0.45
 const SPARSE_FEATURE_M := 14.0
+const SPARSE_FEATURE_MIN_M := 12.0
 const SPARSE_THRESHOLD := 0.6
 const SPARSE_SOFT := 0.12
-const SPARSE_EDGE_M := 5.0
+const EDGE_GREEN_FULL := 0.35
+const EDGE_GREEN_NONE := 0.9
+## A leaning wood (wood): how far the side away from the groves opens, drawn within this.
+const WOOD_LEAN := Vector2(0.55, 0.9)
 
 
 ## A seeded spot for a feature (see the header) described by `want` (LandformGrowth.SEARCH's
@@ -169,16 +177,15 @@ static func paint_open(
 
 
 ## Paints the meadow surface of `biome_id` over the thin parts of `doc`'s starting cover (its
-## painted biome density, NewMap.paint_starting_cover; see the header and the SPARSE
-## constants), in proportion to the map's room (LandformGrowth.room): nothing on a map without
-## room, so a square map up to 250 ft is left as it was. Only ever raises a sample's weight.
+## painted biome density, NewMap.paint_starting_cover) and over its feather at the map edge
+## (see the header and the SPARSE and EDGE_GREEN constants), on every map: nothing where the
+## biome has no meadow surface (a grass or sand ground). Only ever raises a sample's weight.
 static func paint_sparse(
 	doc: MapDocument, biome_id: String, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> void:
-	var r := LandformGrowth.room(doc)
 	var surface := meadow_surface(biome_id, root)
 	var count := doc.sample_count()
-	if r <= 0.0 or surface == "" or doc.biome_density.size() != count:
+	if surface == "" or doc.biome_density.size() != count:
 		return
 	var slot := doc.ensure_surface(surface)
 	if slot < 0:
@@ -186,22 +193,50 @@ static func paint_sparse(
 	var noise := FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	noise.seed = (doc.map_seed ^ SPARSE_STREAM) & 0x7fffffff
-	noise.frequency = 1.0 / (SPARSE_FEATURE_M * StartingLandform.size_scale(doc))
+	noise.frequency = (
+		1.0 / maxf(SPARSE_FEATURE_M * StartingLandform.size_scale(doc), SPARSE_FEATURE_MIN_M)
+	)
 	noise.fractal_type = FastNoiseLite.FRACTAL_FBM
 	noise.fractal_octaves = 2
-	var threshold := lerpf(1.0 + SPARSE_NOISE + SPARSE_SOFT, SPARSE_THRESHOLD, r)
+	var cover := NewMap.cover_noise(doc)
 	var half := doc.extent_m() * 0.5
-	var band := NewMap.edge_feather_m(half) * (1.0 + NewMap.EDGE_FEATHER_WOBBLE)
+	var width := NewMap.edge_feather_m(half)
+	var band := width * (1.0 + NewMap.EDGE_FEATHER_WOBBLE)
 	for z in doc.samples_z():
 		for x in doc.samples_x():
 			var i := doc.sample_index(x, z)
 			var p := doc.sample_to_world(Vector2(x, z))
-			var edge := minf(half.x - absf(p.x), half.y - absf(p.y))
 			var thin := 1.0 - smoothstep(SPARSE_FULL, SPARSE_NONE, doc.biome_density[i] / 255.0)
-			thin *= smoothstep(band, band + SPARSE_EDGE_M, edge)
 			var score := thin + SPARSE_NOISE * noise.get_noise_2d(p.x, p.y)
-			var t := smoothstep(threshold - SPARSE_SOFT, threshold + SPARSE_SOFT, score)
+			var t := smoothstep(SPARSE_THRESHOLD - SPARSE_SOFT, SPARSE_THRESHOLD + SPARSE_SOFT, score)
+			if minf(half.x - absf(p.x), half.y - absf(p.y)) < band:
+				var keep := NewMap.edge_keep(p, half, width, cover)
+				t = maxf(t, 1.0 - smoothstep(EDGE_GREEN_FULL, EDGE_GREEN_NONE, keep))
 			_raise(doc, i, slot, roundi(255.0 * t), count)
+
+
+## A landform's wood drawn from `rng` (NewMap.wood_density): the groves keep a share of their
+## density drawn within `density` (min, max), and with `lean_chance` they gather toward a
+## seeded side while the other side opens by a share drawn within WOOD_LEAN. Always draws
+## four numbers, so a change of chance shifts nothing after it.
+static func wood(rng: RandomNumberGenerator, density: Vector2, lean_chance: float) -> Dictionary:
+	var keep := rng.randf_range(density.x, density.y)
+	var leans := rng.randf() < lean_chance
+	var side := Vector2.RIGHT.rotated(rng.randf() * TAU)
+	var lean := rng.randf_range(WOOD_LEAN.x, WOOD_LEAN.y)
+	if not leans:
+		return {"density": keep}
+	return {"density": keep, "side": side, "lean": lean}
+
+
+## A wood's line in a recipe's report.
+static func wood_report(wood: Dictionary) -> String:
+	if not wood.has("side"):
+		return "wood %.2f" % float(wood.density)
+	return (
+		"wood %.2f, gathered toward %d deg, the far side %.2f open"
+		% [float(wood.density), LandformGrowth.degrees(wood.side), float(wood.lean)]
+	)
 
 
 ## The distance from `p` to the edge of `feature` (a disc {"at", "radius"} or a band
