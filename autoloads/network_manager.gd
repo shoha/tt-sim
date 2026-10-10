@@ -287,6 +287,9 @@ func host_game() -> void:
 
 func _on_lobby_created(result: int, lobby_id: int) -> void:
 	if _connection_state != ConnectionState.CONNECTING:
+		# Hosting was cancelled while Steam made the lobby: leave it rather than strand it.
+		if result == Steam.RESULT_OK:
+			Steam.leaveLobby(lobby_id)
 		return
 
 	if result != Steam.RESULT_OK:

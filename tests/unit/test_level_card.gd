@@ -65,23 +65,48 @@ func test_setup_fills_name_caption_and_placeholder() -> void:
 	assert_null(card._thumb.texture, "no picture: the well's paper-inset wash shows")
 	var well := card._thumb.get_parent() as Panel
 	assert_eq(well.theme_type_variation, &"CardThumb")
-	assert_eq(card._letter.theme_type_variation, &"CardInitial", "the initial is in Fraunces")
+	assert_true(card._placeholder.visible, "a painted placeholder, not a flat slab")
 
 
-func test_placeholder_shows_the_first_letter_and_a_real_thumbnail_hides_it() -> void:
+func test_placeholder_paints_the_map_and_a_real_thumbnail_hides_it() -> void:
 	var card := LevelCard.new()
 	add_child_autofree(card)
-	card.setup({"name": "sandy clearing", "thumbnail": "", "path": "user://x/a/"})
-	assert_true(card._letter.visible)
-	assert_eq(card._letter.text, "S")
+	card.setup(
+		{
+			"name": "sandy clearing",
+			"folder": "sandy_clearing",
+			"thumbnail": "",
+			"path": "user://x/a/",
+			"environment_preset": "outdoor_night",
+		}
+	)
+	assert_true(card._placeholder.visible)
+	var paint := card._placeholder.material as ShaderMaterial
+	assert_eq(paint.get_shader_parameter(&"palette"), MapPlaceholder.NIGHT, "the mood's palette")
+	assert_eq(paint.get_shader_parameter(&"seed"), MapPlaceholder.seed_of("sandy_clearing"))
 	# A real thumbnail: write a tiny PNG to user:// and point the card at it.
 	var image := Image.create(4, 4, false, Image.FORMAT_RGB8)
 	image.fill(Color.RED)
 	var path := "user://test_level_card_thumb.png"
 	image.save_png(path)
 	card.setup({"name": "Beta", "thumbnail": path, "path": "user://x/b/"})
-	assert_false(card._letter.visible)
+	assert_false(card._placeholder.visible)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+## Every map paints its own, the same every time: the key picks a day palette and the shapes,
+## a mood with a palette of its own wins.
+func test_the_placeholder_is_stable_per_map_and_varies_across_maps() -> void:
+	assert_eq(MapPlaceholder.seed_of("old_mill"), MapPlaceholder.seed_of("old_mill"))
+	assert_ne(MapPlaceholder.seed_of("old_mill"), MapPlaceholder.seed_of("fen_crossing"))
+	var palettes := {}
+	for key in ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]:
+		var palette := MapPlaceholder.palette_of(key, "")
+		assert_between(palette, 0, MapPlaceholder.DAY_PALETTES - 1, "no mood: a day palette")
+		palettes[palette] = true
+	assert_gt(palettes.size(), 1, "maps without a mood do not all paint alike")
+	assert_eq(MapPlaceholder.palette_of("a", "arctic"), MapPlaceholder.SNOW)
+	assert_eq(MapPlaceholder.palette_of("a", "outdoor_sunset"), MapPlaceholder.DUSK)
 
 
 func test_press_selects_and_double_press_activates() -> void:

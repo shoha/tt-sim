@@ -31,6 +31,7 @@ const COVERED_SHADERS := [
 	"res://shaders/submerged_marker.gdshader",
 	"res://shaders/texel_copy_blit.gdshader",
 	"res://shaders/ui_card_thumb.gdshader",
+	"res://shaders/ui_map_placeholder.gdshader",
 	"res://shaders/ui_scrim.gdshader",
 	"res://shaders/water.gdshader",
 	"res://shaders/waterfall.gdshader",

@@ -442,17 +442,24 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   against the window. The job deletes `_u1_ui_hud` at the end (`cleanup`).
 - `jobs/ui_tour.json`: the UI tour (about 145 s at half size, 160 s with `--full`), the
   capture set the `tt-sim-ui-critic` agent judges (`docs/UI_TASTE.md`). It saves a new
-  100 ft temperate forest map as `_ui_tour_room` (shown as Mossy Hollow), then at 1280x720
+  100 ft temperate forest map as `_ui_tour_room` (shown as Mossy Hollow) with a real
+  thumbnail of it (`ui_room.gd thumbnail`), then at 1280x720
   and 1920x1080 window sizes (`ui_primitives.gd window`; capture names start with the size):
   the title, keyboard focus on a quiet paper button and on the selected level card, Settings
   on each of its six sections, the new-map dialog, then the session screens, staged by
   `probes/ui_room.gd` with no network (nothing is hosted or joined): the "Opening a
-  room..." wait over the title (`opening_room`), a map load staged mid-load over the title
+  room..." wait over the title (`opening_room`) and with its Cancel offered
+  (`opening_room_cancel`), a map load staged mid-load over the title
   (`map_load_title`, Root's loading overlay on the backdrop sky; nothing is loaded), the
   room (RoomPanel, probes/ui_room.gd from a staged session summary) as the GM sees it with
-  four players and a shelf of three maps, Mossy Hollow selected (`room_host`), with no map at
-  all (`room_no_map`), the join screen as the title's Join Game opens it (`join`, Root's real
-  entry point), and the room as a player sees it (`room_player`); in play, the room drawer as
+  four players and a shelf of three maps, Mossy Hollow selected (`room_host`, its thumbnail
+  large; the two sample maps paint their placeholders) and End session's confirmation over
+  it (`room_end_confirm`), with no map at all (`room_no_map`: a placeholder and Add a map)
+  and the Add a map picker over it (`room_add_map`), with a shelf and nothing selected
+  (`room_shelf_none`), with a 24-character GM name and a long map name selected
+  (`room_long_names`), the join screen as the title's Join Game opens it (`join`, Root's real
+  entry point), and the room as a player sees it with Old Mill selected (`room_player`); in
+  play, the room drawer as
   the GM sees it with another map selected (`room_drawer`); then authoring with the tool
   drawer on Biome and focus on its picked tile (the probe lets a drawer tile take focus),
   then the real map load of the test map caught about 0.4 s after Play (`map_load_real`), and

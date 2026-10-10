@@ -37,7 +37,7 @@ var locked: bool = false:
 var _column: VBoxContainer
 var _strip: PanelContainer
 var _thumb: TextureRect
-var _letter: Label
+var _placeholder: MapPlaceholder
 var _name: Label
 var _caption: Label
 var _menu_button: IconButton
@@ -84,14 +84,11 @@ func _init() -> void:
 	_thumb.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_thumb.resized.connect(_update_thumb_pivot)
 	thumb_slot.add_child(_thumb)
-	_letter = Label.new()
-	_letter.name = "Letter"
-	_letter.theme_type_variation = &"CardInitial"
-	_letter.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_letter.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_letter.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_letter.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	thumb_slot.add_child(_letter)
+	# A map with no thumbnail yet paints its placeholder, a child of the picture so it zooms
+	# with it on hover.
+	_placeholder = MapPlaceholder.new()
+	_placeholder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_thumb.add_child(_placeholder)
 	thumb_slot.resized.connect(_on_thumb_slot_resized)
 
 	_menu_button = IconButton.new()
@@ -170,13 +167,18 @@ func setup(info: Dictionary) -> void:
 		var image := Image.load_from_file(ProjectSettings.globalize_path(thumbnail))
 		if image:
 			texture = ImageTexture.create_from_image(image)
-	# No picture yet: the well's paper-inset wash with the name's initial in Fraunces.
+	# No picture yet: the map's painted placeholder, keyed by its folder so a rename keeps it.
 	_thumb.texture = texture
-	_letter.text = initial_of(_name.text)
-	_letter.visible = texture == null
+	_placeholder.visible = texture == null
+	if texture == null:
+		var folder := String(info.get("folder", ""))
+		_placeholder.paint(
+			folder if folder != "" else _name.text, String(info.get("environment_preset", ""))
+		)
 
 
-## The well's initial: the name's first letter or digit, so "_camp" shows C, not "_".
+## A name's initial (a portrait's letter): its first letter or digit, so "_camp" shows C,
+## not "_".
 static func initial_of(level_name: String) -> String:
 	for i in range(level_name.length()):
 		var ch := level_name.substr(i, 1)
