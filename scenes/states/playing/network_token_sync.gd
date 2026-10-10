@@ -94,8 +94,8 @@ func setup(level_play_controller: Node) -> void:
 	if not game_sync.client_drag_lock_released.is_connected(_on_client_drag_lock_released):
 		game_sync.client_drag_lock_released.connect(_on_client_drag_lock_released)
 
-	# Every peer: drag lock grants (the host's own grant_drag_lock() emits here too), and
-	# the host's denial and release broadcasts on clients
+	# Every peer: drag lock grants and releases (the host's own grant_drag_lock() and
+	# release_drag_lock() emit here too), and the host's denials on clients
 	if not game_sync.drag_lock_granted.is_connected(_on_drag_lock_granted):
 		game_sync.drag_lock_granted.connect(_on_drag_lock_granted)
 	if not game_sync.drag_lock_denied.is_connected(_on_drag_lock_denied):
@@ -343,17 +343,14 @@ func _on_client_drag_lock_released(sender_id: int, network_id: String) -> void:
 	if not NetworkManager.is_host():
 		return
 
-	# Only the lock holder can release
-	if GameState.get_drag_lock(network_id) != sender_id:
+	# Only the lock holder can release. Released in GameState first, so the resting
+	# position below is broadcast for a free token; the host's own copy unlocks through
+	# _on_drag_lock_released, as every client's does.
+	if not NetworkManager.game_sync.release_drag_lock(network_id, sender_id):
 		return
 
-	GameState.release_drag_lock(network_id)
-
-	# Apply to host's local token
 	var token = _token_spawner._find_token_by_network_id(network_id)
 	if token:
-		token.clear_drag_lock()
-
 		# Snap the host's visual to GameState's authoritative position.
 		# GameState has the exact position from the client's last RPC,
 		# but the host's visual may still be interpolating toward it.
@@ -364,9 +361,6 @@ func _on_client_drag_lock_released(sender_id: int, network_id: String) -> void:
 		# Broadcast the final authoritative position to all clients so
 		# everyone converges to the same resting position.
 		NetworkStateSync.broadcast_token_transform(token)
-
-	# Broadcast release to all clients
-	NetworkManager.game_sync.broadcast_drag_lock_released(network_id)
 
 
 ## Every peer: a drag lock was granted (on the host, by its own grant_drag_lock()).
@@ -388,7 +382,8 @@ func _on_drag_lock_denied(network_id: String) -> void:
 		draggable.cancel_from_lock_denied()
 
 
-## Client-side: a drag lock has been released, token is free to drag again.
+## Every peer: a drag lock was released (on the host, by its own release_drag_lock(),
+## including for a client that left mid-drag). The token is free to drag again.
 func _on_drag_lock_released(network_id: String) -> void:
 	var token = _token_spawner._find_token_by_network_id(network_id)
 	if token:

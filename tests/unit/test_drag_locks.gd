@@ -52,6 +52,16 @@ func test_clear_for_peer_removes_only_that_peers_locks() -> void:
 	assert_eq(GameState.get_drag_lock("token_2"), 99)
 
 
+func test_locks_held_by_lists_only_that_peers_tokens() -> void:
+	GameState.claim_drag_lock("token_1", 42)
+	GameState.claim_drag_lock("token_2", 99)
+	GameState.claim_drag_lock("token_3", 42)
+	var held := GameState.get_drag_locks_held_by(42)
+	held.sort()
+	assert_eq(held, ["token_1", "token_3"] as Array[String])
+	assert_true(GameState.get_drag_locks_held_by(7).is_empty())
+
+
 func test_clear_all_locks_removes_everything() -> void:
 	GameState.claim_drag_lock("token_1", 42)
 	GameState.claim_drag_lock("token_2", 99)

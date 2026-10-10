@@ -37,7 +37,8 @@ signal visual_settings_received(settings: Dictionary)
 signal drag_lock_granted(network_id: String, locker_peer_id: int)
 ## Emitted on the denied client when its lock claim was rejected
 signal drag_lock_denied(network_id: String)
-## Emitted on clients when a drag lock is released (token is free again)
+## Emitted on every peer when a drag lock is released (the token is free again): on the
+## host by release_drag_lock(), on clients by the host's broadcast
 signal drag_lock_released(network_id: String)
 ## Emitted on the host for a client's token transform (CONTROL not yet checked)
 signal client_token_transform_received(
@@ -146,10 +147,22 @@ func send_drag_lock_denied(peer_id: int, network_id: String) -> void:
 	_rpc_drag_lock_denied.rpc_id(peer_id, network_id)
 
 
-## Host: tell every client a token's drag lock was released. Sends only: the caller has
-## already released the lock in GameState.
-func broadcast_drag_lock_released(network_id: String) -> void:
+## Host: free `peer_id`'s drag lock on `network_id`, the mirror of grant_drag_lock() -- the
+## GM dropping its own drag (peer 1), a client's release, or the host releasing for a
+## client that left mid-drag. Releases the lock in GameState, emits drag_lock_released here
+## (the host's own copy of the token unlocks through the same listener as every client's)
+## and broadcasts the release. Returns false, with nothing emitted or sent, when this peer
+## is not the host or `peer_id` does not hold the lock.
+func release_drag_lock(network_id: String, peer_id: int) -> bool:
+	if not NetworkManager.is_host():
+		return false
+	var holder := GameState.get_drag_lock(network_id)
+	if holder == 0 or holder != peer_id:
+		return false
+	GameState.release_drag_lock(network_id)
+	drag_lock_released.emit(network_id)
 	_rpc_drag_lock_released.rpc(network_id)
+	return true
 
 
 # =============================================================================

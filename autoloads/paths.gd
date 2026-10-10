@@ -2,13 +2,22 @@ class_name Paths
 
 ## Centralized path constants for the project.
 ## Accessible everywhere via the class_name (no autoload needed).
+##
+## Every per-user store (levels, settings, the asset cache and its index, user asset packs,
+## avatars, ...) lives under one data root: "user://" in the shipped game. A process started
+## with the user argument `--data-root=<name>` (after `--`) puts all of them under the
+## disposable test root user://_test_roots/<name>/ instead, so the local multi-process
+## scenarios in tests/net/ give each peer its own data and never read, evict or overwrite
+## the real user's. Nothing in the shipped game passes it. Not moved: Godot's own log (the
+## scenarios pass the engine's --log-file instead), and two files only an interactive
+## session writes, the Level Editor's autosave (LevelEditorHistory) and the update
+## installer's restart scripts.
 
-# User data directories
-const LEVELS_DIR: String = "user://levels/"
-const SETTINGS_PATH: String = "user://settings.cfg"
-## GraphicsWarmup's marker: the cache key of the last completed warm-up.
-const GRAPHICS_WARMUP_PATH: String = "user://graphics_warmup.cfg"
-const PERF_LOG_DIR: String = "user://perf_logs/"
+## The user argument that selects a test data root.
+const DATA_ROOT_ARG: String = "--data-root="
+const SHIPPED_DATA_ROOT: String = "user://"
+## Parent of every test data root; a scenario deletes its own roots when it ends.
+const TEST_ROOTS_DIR: String = "user://_test_roots/"
 
 # Special pack ID for map streaming (used by AssetStreamer)
 const LEVEL_MAPS_PACK_ID: String = "_level_maps"
@@ -34,6 +43,118 @@ const MAPS_DIR: String = "res://assets/models/maps/"
 # Scene directories
 const SCENES_DIR: String = "res://scenes/"
 const BOARD_TOKEN_DIR: String = "res://scenes/board_token/"
+
+# The per-user stores, each under the data root (user:// in the shipped game). Static
+# rather than const only so --data-root can move them when this class loads, and named like
+# the constants they were; nothing assigns them afterwards (tests that call use_data_root()
+# put the shipped root back).
+# gdlint: disable=class-variable-name
+## The data root itself, ending in "/".
+static var DATA_ROOT: String = ""
+static var LEVELS_DIR: String = ""
+static var SETTINGS_PATH: String = ""
+## GraphicsWarmup's marker: the cache key of the last completed warm-up.
+static var GRAPHICS_WARMUP_PATH: String = ""
+static var PERF_LOG_DIR: String = ""
+## AssetCacheManager's downloaded and streamed files, and the LRU index over them.
+static var ASSET_CACHE_DIR: String = ""
+static var ASSET_CACHE_INDEX_PATH: String = ""
+## Installed asset packs (AssetManager, AssetDownloader).
+static var USER_ASSETS_DIR: String = ""
+## The avatar library (AvatarLibrary).
+static var AVATARS_DIR: String = ""
+## Downloaded game updates (UpdateManager).
+static var UPDATES_DIR: String = ""
+# gdlint: enable=class-variable-name
+
+
+static func _static_init() -> void:
+	use_data_root(data_root_from_args(OS.get_cmdline_user_args()))
+
+
+## Point every per-user store at `root` (ending in "/"). Runs once when this class loads,
+## with the root the command line picks; a test may call it to check the redirect and must
+## call it again with SHIPPED_DATA_ROOT. Classes that copied a path when they loaded
+## (LevelManager.levels_dir, UIPreferences.settings_path, AuthoringAutosave.directory,
+## AvatarLibrary.directory) keep the root they loaded with.
+static func use_data_root(root: String) -> void:
+	var stores := store_paths(root)
+	DATA_ROOT = root
+	LEVELS_DIR = stores.LEVELS_DIR
+	SETTINGS_PATH = stores.SETTINGS_PATH
+	GRAPHICS_WARMUP_PATH = stores.GRAPHICS_WARMUP_PATH
+	PERF_LOG_DIR = stores.PERF_LOG_DIR
+	ASSET_CACHE_DIR = stores.ASSET_CACHE_DIR
+	ASSET_CACHE_INDEX_PATH = stores.ASSET_CACHE_INDEX_PATH
+	USER_ASSETS_DIR = stores.USER_ASSETS_DIR
+	AVATARS_DIR = stores.AVATARS_DIR
+	UPDATES_DIR = stores.UPDATES_DIR
+
+
+## Every per-user store's path under the data root `root`, keyed by the name of its static
+## variable here (folders end in "/"). Pure; the net launcher reads it to check that a run
+## left the shipped stores alone.
+static func store_paths(root: String) -> Dictionary:
+	return {
+		"LEVELS_DIR": root + "levels/",
+		"SETTINGS_PATH": root + "settings.cfg",
+		"GRAPHICS_WARMUP_PATH": root + "graphics_warmup.cfg",
+		"PERF_LOG_DIR": root + "perf_logs/",
+		"ASSET_CACHE_DIR": root + "asset_cache/",
+		"ASSET_CACHE_INDEX_PATH": root + "asset_cache_index.json",
+		"USER_ASSETS_DIR": root + "user_assets/",
+		"AVATARS_DIR": root + "avatars/",
+		"UPDATES_DIR": root + "updates/",
+	}
+
+
+## The data root that the user arguments `args` select: SHIPPED_DATA_ROOT without a
+## DATA_ROOT_ARG, else that argument's test root (test_data_root()).
+static func data_root_from_args(args: PackedStringArray) -> String:
+	for arg in args:
+		if arg.begins_with(DATA_ROOT_ARG):
+			return test_data_root(arg.substr(DATA_ROOT_ARG.length()))
+	return SHIPPED_DATA_ROOT
+
+
+## The test data root named `root_name`: TEST_ROOTS_DIR + the name + "/", keeping only
+## letters, digits, "_" and "-" so a name can never climb out of TEST_ROOTS_DIR or land on
+## the shipped root ("unnamed" when nothing is left).
+static func test_data_root(root_name: String) -> String:
+	var allowed := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
+	var safe := ""
+	for c in root_name:
+		if c in allowed:
+			safe += c
+	return TEST_ROOTS_DIR + (safe if safe != "" else "unnamed") + "/"
+
+
+## Delete the test data root `root` and everything in it, then TEST_ROOTS_DIR if that left
+## it empty. Refuses anything but a root test_data_root() names, so it can never reach the
+## real user's data. True when `root` is gone afterwards.
+static func remove_test_data_root(root: String) -> bool:
+	var root_name := root.trim_prefix(TEST_ROOTS_DIR).trim_suffix("/")
+	if not root.begins_with(TEST_ROOTS_DIR) or test_data_root(root_name) != root:
+		push_error("Paths: refusing to delete %s, not a test data root" % root)
+		return false
+	_remove_tree(root)
+	var parent := DirAccess.open(TEST_ROOTS_DIR)
+	if parent != null and parent.get_directories().is_empty() and parent.get_files().is_empty():
+		DirAccess.remove_absolute(TEST_ROOTS_DIR)
+	return not DirAccess.dir_exists_absolute(root)
+
+
+## Delete a folder (ending in "/") and everything below it.
+static func _remove_tree(folder: String) -> void:
+	var dir := DirAccess.open(folder)
+	if dir == null:
+		return
+	dir.include_hidden = true
+	for sub in dir.get_directories():
+		_remove_tree(folder + sub + "/")
+	for file_name in dir.get_files():
+		dir.remove(file_name)
+	DirAccess.remove_absolute(folder)
 
 
 ## Get the folder path for a level (where level.json and map.glb are stored)

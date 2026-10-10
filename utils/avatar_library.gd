@@ -6,7 +6,8 @@ extends RefCounted
 ## screen and place it in any game from the Add Token browser's Avatar tab. Local only
 ## (no Steam Cloud yet).
 ##
-## One JSON file per avatar in `directory` (user://avatars/), named by its id:
+## One JSON file per avatar in `directory` (Paths.AVATARS_DIR, user://avatars/), named by
+## its id:
 ##   {"format": 1, "id": "av_...", "name": "Plum", "recipe": {...},
 ##    "created": <unix seconds>, "updated": <unix seconds>}
 ## `recipe` is an avatar recipe (docs/ASSET_PIPELINE.md section 10 "Recipe"), normalised on
@@ -22,12 +23,12 @@ extends RefCounted
 signal changed
 
 const FORMAT := 1
-const DEFAULT_DIRECTORY := "user://avatars/"
 const ID_PREFIX := "av_"
 const DEFAULT_NAME := "Avatar"
 
-## Where avatars live; tests point it at a directory of their own and put it back.
-static var directory := DEFAULT_DIRECTORY
+## Where avatars live; tests point it at a directory of their own and put back
+## Paths.AVATARS_DIR.
+static var directory: String = Paths.AVATARS_DIR
 static var _events: AvatarLibrary = null
 static var _last_ms := 0
 

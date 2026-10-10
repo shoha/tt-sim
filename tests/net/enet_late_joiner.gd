@@ -9,8 +9,11 @@ extends Node
 ## sets its peer and state the way _on_lobby_created / join_game would (adapted from the
 ## session-room probe's tests/net/enet_session_room.gd).
 ##
-## Args after `--`: --role=host|client --rendezvous=<abs path prefix> --out=<abs path>
-##   --timeout-s=<n> (default 120) --port=<n> (default 28471)
+## Run it, and every scenario built on it, through tests/net/net_launcher.gd
+## (--scenario=enet_late_joiner), which starts each peer with its own test data root
+## (Paths) and passes these args after `--`: --role=host|client
+## --rendezvous=<abs path prefix> --out=<abs path> --timeout-s=<n> (default 120)
+## --port=<n> (default 28471) --data-root=<name>.
 ## Each process writes its log and one final `NET_RESULT {json}` line to --out and stdout,
 ## then quits with exit code 0 (pass) or 1 (fail).
 

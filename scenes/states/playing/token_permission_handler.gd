@@ -173,16 +173,10 @@ func _on_player_left_permissions(peer_id: int, _player_info: Dictionary) -> void
 	if not NetworkManager.is_host():
 		return
 
-	# Release any drag locks held by the disconnected player and broadcast releases
-	var locked_tokens: Array[String] = []
-	for network_id in GameState.get_all_token_states():
-		if GameState.get_drag_lock(network_id) == peer_id:
-			locked_tokens.append(network_id)
-
-	if not locked_tokens.is_empty():
-		GameState.clear_drag_locks_for_peer(peer_id)
-		for network_id in locked_tokens:
-			NetworkManager.game_sync.broadcast_drag_lock_released(network_id)
+	# A player who left mid-drag never sends its release. Free its locks the way every
+	# release goes, so the host's own token copies unlock along with every client's.
+	for network_id in GameState.get_drag_locks_held_by(peer_id):
+		NetworkManager.game_sync.release_drag_lock(network_id, peer_id)
 
 	# Check if the disconnected player had any permissions
 	var controlled = GameState.get_controlled_tokens(peer_id, TokenPermissions.Permission.CONTROL)

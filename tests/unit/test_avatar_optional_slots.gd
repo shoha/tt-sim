@@ -249,7 +249,7 @@ func test_the_parts_pane_offers_none_first_for_an_optional_slot() -> void:
 	assert_false((builder.recipe.parts as Dictionary).has("hat"), "None empties the slot")
 	assert_true(first.button_pressed)
 	builder.cancel()
-	AvatarLibrary.directory = AvatarLibrary.DEFAULT_DIRECTORY
+	AvatarLibrary.directory = Paths.AVATARS_DIR
 
 
 # --- older recipes ------------------------------------------------------------------------------

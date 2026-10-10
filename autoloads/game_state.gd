@@ -355,13 +355,20 @@ func get_drag_lock(network_id: String) -> int:
 	return _drag_locks.get(network_id, 0)
 
 
-## Release all locks held by a specific peer (called on disconnect).
-func clear_drag_locks_for_peer(peer_id: int) -> void:
-	var to_clear: Array[String] = []
+## The tokens whose drag lock `peer_id` holds.
+func get_drag_locks_held_by(peer_id: int) -> Array[String]:
+	var held: Array[String] = []
 	for network_id in _drag_locks:
 		if _drag_locks[network_id] == peer_id:
-			to_clear.append(network_id)
-	for network_id in to_clear:
+			held.append(network_id)
+	return held
+
+
+## Release all locks held by a specific peer, in GameState only (the host releases a
+## departed peer's locks through NetworkGameSync.release_drag_lock(), which also unlocks the
+## token copies).
+func clear_drag_locks_for_peer(peer_id: int) -> void:
+	for network_id in get_drag_locks_held_by(peer_id):
 		_drag_locks.erase(network_id)
 
 
