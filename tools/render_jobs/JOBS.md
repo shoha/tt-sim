@@ -369,6 +369,16 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (`play_whole`, MapViewFit). `authparity.gd report` logs each token's base against the
   ground, the zoom limit and the sun's shadow distance. `jobs/authparity_cleanup.json`
   deletes the level.
+- `jobs/biglf_look.json` and `jobs/biglf_base.json`: starting landforms on big and long maps
+  (LandformGrowth, 2026-10-09; build and look). `biglf_look`: every landform at seeds 1-6 at
+  320 ft and 320 x 160 ft (60 new temperate forest maps through `landform.gd new` with a
+  `spec` such as `valley_3_320x160`), each saved as `_biglf_<spec>` (`landform.gd save`) and
+  captured in authoring at full zoom-out (the whole map), then tiled six seeds to a sheet
+  (`probes/contact_sheet.gd`, `sheet_<landform>_<size>.png`). `biglf_base`: the sizes growth
+  leaves as they were, seeds 1-6 at 250 ft and seeds 1-2 at 200 ft (40 maps,
+  `sheet_<landform>_250`, `sheet_200`). Build runs took 655 s (`biglf_look`) and 387 s
+  (`biglf_base`); `--saved` reloads the levels for a look-only run (`--full` for the
+  verdict). `jobs/biglf_cleanup.json` (`landform.gd cleanup`) deletes every `_biglf_` level.
 - `jobs/grid_ground.json`: the grid on Blender maps' ground (P3-3c, about 50 s):
   `deciduous_clusters`, `river` and the built-in Oak's lab in play with G, the measure
   tool and a token drag's auto-show, the load's grid ground fit and a sampling survey

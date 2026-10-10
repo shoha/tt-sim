@@ -12,7 +12,9 @@ extends RefCounted
 ## corner or two shows on the map. The seed draws: a waist river (RIVER_CHANCE) crossing the
 ## terraces square to the steps (it falls at each one by the falls rule) and, given a river,
 ## a plank bridge on the top terrace (BRIDGE_CHANCE). The stage is on the middle terrace,
-## or the lower when there are two, away from the river.
+## or the lower when there are two, away from the river. On a big or long map
+## (LandformGrowth) the terraces step down along a long map's length, spread over it
+## (span_of), and may gain a step (EXTRA_STEP_CHANCE).
 
 const THREE_CHANCE := 0.5
 const RIVER_CHANCE := 0.6
@@ -21,6 +23,11 @@ const BRIDGE_CHANCE := 0.5
 ## (-1): the top terrace's edge a third of the way across, the next two thirds further.
 const TOP_EDGE_SHARE := -1.0 / 3.0
 const STEP_SHARE := 2.0 / 3.0
+## A big or long map (LandformGrowth) adds a step with EXTRA_STEP_CHANCE at full room
+## (scaled by the room); three steps spread evenly over this share of the span either side
+## of the centre.
+const EXTRA_STEP_CHANCE := 0.7
+const FOUR_TIER_REACH := 0.5
 ## The plateaus' corners, their edge wobble, how wide across the heading the lowest raised
 ## one is (a share of the half extent) and how much narrower each higher one, and how far the
 ## whole set may sit off the axis.
@@ -54,17 +61,19 @@ static func terraces(doc: MapDocument, seed_value: int, biome_id: String) -> Dic
 	var half := StartingLandform.half_extent(doc)
 	var tier := doc.tier_height_m
 	var frame := terraces_frame(
-		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
+		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME), doc
 	)
 	var dir: Vector2 = frame.dir
 	var normal: Vector2 = frame.normal
+	var span := span_of(doc, dir, half)
 	var draws := StartingLandform.stream(seed_value, StartingLandform.STREAM_FEATURES)
 	var wants_three := draws.randf() < THREE_CHANCE
 	var wants_river := draws.randf() < RIVER_CHANCE
 	var wants_bridge := draws.randf() < BRIDGE_CHANCE
 	var river_v := draws.randf_range(-1.0, 1.0) * half * RIVER_OFFSET_SHARE
 	var stage_v := draws.randf_range(-1.0, 1.0) * half * STAGE_OFFSET_SHARE
-	var plateaus := plateaus_of(frame, wants_three, half, draws)
+	var steps := (2 if wants_three else 1) + (1 if _wants_extra_step(doc, seed_value) else 0)
+	var plateaus := plateaus_of(frame, steps, half, draws, span)
 	var noise := StartingLandform.warp_noise(draws, WOBBLE_WAVE_M)
 	StartingLandform.write_heights(
 		doc,
@@ -98,7 +107,7 @@ static func terraces(doc: MapDocument, seed_value: int, biome_id: String) -> Dic
 		var foot := normal * river_v
 		var line := StartingLandform.map_line(
 			doc,
-			PackedVector2Array([foot - dir * 4.0 * half, foot + dir * 4.0 * half]),
+			PackedVector2Array([foot - dir * 4.0 * span, foot + dir * 4.0 * span]),
 			EDGE_MARGIN_M,
 			RIVER_SPACING_M
 		)
@@ -127,36 +136,63 @@ static func terraces(doc: MapDocument, seed_value: int, biome_id: String) -> Dic
 	return {"stage": stage, "report": "; ".join(report)}
 
 
+## True when a big or long map draws the extra step (EXTRA_STEP_CHANCE scaled by
+## LandformGrowth.room, from its own stream); never on a map without room.
+static func _wants_extra_step(doc: MapDocument, seed_value: int) -> bool:
+	var r := LandformGrowth.room(doc)
+	if r <= 0.0:
+		return false
+	var rng := StartingLandform.stream(seed_value, LandformGrowth.STREAM_SHAPES)
+	return rng.randf() < EXTRA_STEP_CHANCE * r
+
+
 ## The Terraces' frame from the seed, for a map of half extent `half`: the downhill heading
 ## `dir`, its `normal`, how far the set of plateaus sits off the axis, and the heading the
-## report quotes.
-static func terraces_frame(half: float, rng: RandomNumberGenerator) -> Dictionary:
+## report quotes. On `doc` (when given) a long map turns a heading across it to step down
+## along it (LandformGrowth.turned).
+static func terraces_frame(
+	half: float, rng: RandomNumberGenerator, doc: MapDocument = null
+) -> Dictionary:
 	var heading_index := rng.randi_range(0, 7)
 	var dir := Vector2(cos(heading_index * PI / 4.0), sin(heading_index * PI / 4.0))
+	if doc != null:
+		dir = LandformGrowth.turned(doc, dir)
 	var offset := rng.randf_range(-1.0, 1.0) * half * SET_OFFSET_SHARE
 	return {
 		"dir": dir,
 		"normal": Vector2(-dir.y, dir.x),
-		"heading_deg": heading_index * 45,
+		"heading_deg": LandformGrowth.degrees(dir),
 		"offset": offset,
 	}
 
 
+## How far the steps spread along heading `dir` (metres, the half extent the step shares are
+## of): `half` on a square map, up to the long half extent along a long map's length.
+static func span_of(doc: MapDocument, dir: Vector2, half: float) -> float:
+	var along := absf(dir.dot(LandformGrowth.long_dir(doc)))
+	return half + (LandformGrowth.long_half(doc) - half) * along
+
+
 ## The raised plateaus, highest first: each {"level" (tiers over the base), "edge" (the
 ## step's position along the heading, metres from the centre), "centre", "half_size" (along
-## the heading and across it), "corner"}. The top terrace's edge is at TOP_EDGE_SHARE of
-## `half`, the next STEP_SHARE further; each plateau runs from far uphill to its edge and is
-## WIDTH_STEP_M narrower across than the one below, drifting DRIFT_M off the set's offset.
+## the heading and across it), "corner"}. One or two steps: the top terrace's edge is at
+## TOP_EDGE_SHARE of `span` (the half extent, or more along a long map: span_of), the next
+## STEP_SHARE further; three (a big map's extra step): spread evenly over FOUR_TIER_REACH
+## either side of the centre. Each plateau runs from far uphill to its edge and is
+## WIDTH_STEP_M narrower across (a share of `half`) than the one below, drifting DRIFT_M off
+## the set's offset.
 static func plateaus_of(
-	frame: Dictionary, three: bool, half: float, rng: RandomNumberGenerator
+	frame: Dictionary, count: int, half: float, rng: RandomNumberGenerator, span: float = -1.0
 ) -> Array[Dictionary]:
 	var dir: Vector2 = frame.dir
 	var normal: Vector2 = frame.normal
-	var count := 2 if three else 1
+	span = half if span <= 0.0 else span
 	var out: Array[Dictionary] = []
-	var far := 4.0 * half
+	var far := 4.0 * span
 	for j in count:
-		var edge := half * (TOP_EDGE_SHARE + STEP_SHARE * j)
+		var edge := span * (TOP_EDGE_SHARE + STEP_SHARE * j)
+		if count > 2:
+			edge = span * FOUR_TIER_REACH * (-1.0 + 2.0 * j / (count - 1))
 		var width := half * WIDTH_SHARE - WIDTH_STEP_M * (count - 1 - j)
 		var drift := rng.randf_range(-1.0, 1.0) * DRIFT_M
 		var corner := rng.randf_range(CORNER_M.x, CORNER_M.y)

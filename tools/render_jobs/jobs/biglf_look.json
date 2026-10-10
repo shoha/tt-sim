@@ -1,0 +1,46 @@
+{
+ "out_dir": "render_jobs/biglf_look",
+ "timeout_s": 3000,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "expand", "values": [
+    "valley_1_320", "valley_2_320", "valley_3_320", "valley_4_320", "valley_5_320", "valley_6_320",
+    "valley_1_320x160", "valley_2_320x160", "valley_3_320x160", "valley_4_320x160", "valley_5_320x160", "valley_6_320x160",
+    "hilltop_1_320", "hilltop_2_320", "hilltop_3_320", "hilltop_4_320", "hilltop_5_320", "hilltop_6_320",
+    "hilltop_1_320x160", "hilltop_2_320x160", "hilltop_3_320x160", "hilltop_4_320x160", "hilltop_5_320x160", "hilltop_6_320x160",
+    "terraces_1_320", "terraces_2_320", "terraces_3_320", "terraces_4_320", "terraces_5_320", "terraces_6_320",
+    "terraces_1_320x160", "terraces_2_320x160", "terraces_3_320x160", "terraces_4_320x160", "terraces_5_320x160", "terraces_6_320x160",
+    "lakeshore_1_320", "lakeshore_2_320", "lakeshore_3_320", "lakeshore_4_320", "lakeshore_5_320", "lakeshore_6_320",
+    "lakeshore_1_320x160", "lakeshore_2_320x160", "lakeshore_3_320x160", "lakeshore_4_320x160", "lakeshore_5_320x160", "lakeshore_6_320x160",
+    "gorge_1_320", "gorge_2_320", "gorge_3_320", "gorge_4_320", "gorge_5_320", "gorge_6_320",
+    "gorge_1_320x160", "gorge_2_320x160", "gorge_3_320x160", "gorge_4_320x160", "gorge_5_320x160", "gorge_6_320x160"
+   ], "template": [
+   {"op": "saved", "folder": "_biglf_{value}"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "new", "biome": "temperate_forest_summer_s1", "spec": "{value}", "phase": "build"},
+   {"op": "wait_ready", "settle": 1.5, "phase": "build"},
+   {"op": "no_autosave"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "save", "folder": "_biglf_{value}", "replace": true, "phase": "build"},
+   {"op": "hide_ui"},
+   {"op": "home"},
+   {"op": "zoom"},
+   {"op": "wait", "s": 2.5},
+   {"op": "capture", "name": "{value}", "desc": "Temperate forest, {value} (landform, seed, size in ft), authoring at full zoom-out: the whole map. Judge the composition (the landform plus what a big or long map grows: a meander, a turned heading, an extra step, a tarn, a knoll, a meadow), sameness across seeds, and the map edge."},
+   {"op": "title"},
+   {"op": "wait", "s": 1.0}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_look", "out": "sheet_valley_320", "names": ["valley_1_320", "valley_2_320", "valley_3_320", "valley_4_320", "valley_5_320", "valley_6_320"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_look", "out": "sheet_valley_320x160", "names": ["valley_1_320x160", "valley_2_320x160", "valley_3_320x160", "valley_4_320x160", "valley_5_320x160", "valley_6_320x160"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_look", "out": "sheet_hilltop_320", "names": ["hilltop_1_320", "hilltop_2_320", "hilltop_3_320", "hilltop_4_320", "hilltop_5_320", "hilltop_6_320"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_look", "out": "sheet_hilltop_320x160", "names": ["hilltop_1_320x160", "hilltop_2_320x160", "hilltop_3_320x160", "hilltop_4_320x160", "hilltop_5_320x160", "hilltop_6_320x160"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_look", "out": "sheet_terraces_320", "names": ["terraces_1_320", "terraces_2_320", "terraces_3_320", "terraces_4_320", "terraces_5_320", "terraces_6_320"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_look", "out": "sheet_terraces_320x160", "names": ["terraces_1_320x160", "terraces_2_320x160", "terraces_3_320x160", "terraces_4_320x160", "terraces_5_320x160", "terraces_6_320x160"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_look", "out": "sheet_lakeshore_320", "names": ["lakeshore_1_320", "lakeshore_2_320", "lakeshore_3_320", "lakeshore_4_320", "lakeshore_5_320", "lakeshore_6_320"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_look", "out": "sheet_lakeshore_320x160", "names": ["lakeshore_1_320x160", "lakeshore_2_320x160", "lakeshore_3_320x160", "lakeshore_4_320x160", "lakeshore_5_320x160", "lakeshore_6_320x160"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_look", "out": "sheet_gorge_320", "names": ["gorge_1_320", "gorge_2_320", "gorge_3_320", "gorge_4_320", "gorge_5_320", "gorge_6_320"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_look", "out": "sheet_gorge_320x160", "names": ["gorge_1_320x160", "gorge_2_320x160", "gorge_3_320x160", "gorge_4_320x160", "gorge_5_320x160", "gorge_6_320x160"]},
+  {"op": "index", "title": "Big and long landforms (biglf)", "intro": "Produced by tools/render_jobs/jobs/biglf_look.json. New temperate forest maps through NewMap (probes/landform.gd new with a spec), every landform at seeds 1-6 at 320 ft and 320 x 160 ft, each saved as _biglf_<landform>_<seed>_<size> and captured in authoring at full zoom-out (the whole map). sheet_<landform>_<size>.png tiles the six seeds (probes/contact_sheet.gd). The baseline sizes (250 ft, and 200 ft for two seeds) are in biglf_base.json. Recipe reports are in log.txt (landform.gd new). Delete the levels with biglf_cleanup.json."},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0}
+ ]
+}

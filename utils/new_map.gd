@@ -49,6 +49,13 @@ const COVER_EDGE_RADIUS := 0.95
 ## A line glade's near bank (glade_density) counts whole once its direction from the line has
 ## this dot with the camera's direction (cos 45 degrees, less a margin).
 const GLADE_NEAR_FULL_DOT := 0.65
+## A big or long map's cover (LandformGrowth): the noise's feature size grows by this share
+## at full room; a clearing (clearing_density) is open within CLEARING_INNER of its radius, at
+## most CLEARING_OPEN_SHARE of the glade's density there, its outline warped by CLEARING_WARP.
+const COVER_FEATURE_GROWTH := 0.5
+const CLEARING_INNER := 0.55
+const CLEARING_OPEN_SHARE := 0.5
+const CLEARING_WARP := 0.25
 
 
 static func cells_for_feet(feet: int) -> int:
@@ -106,12 +113,14 @@ static func create(
 	)
 	var stage := Vector2.ZERO
 	var glade := {}
+	var clearings: Array = []
 	if landform != StartingLandform.FLAT:
 		var shaped := StartingLandform.apply(doc, landform, seed_value, biome_id, root)
 		stage = shaped.stage
 		glade = shaped.get("glade", {})
+		clearings = shaped.get("clearings", [])
 	if not biome.is_empty():
-		paint_starting_cover(doc, biome_id, stage, glade)
+		paint_starting_cover(doc, biome_id, stage, glade, clearings)
 	return doc
 
 
@@ -146,16 +155,26 @@ static func opening_status(spec: Dictionary) -> String:
 ## recipe's {"line": PackedVector2Array, "half_width", "rise", and optionally "near",
 ## "near_open", "near_edge"}; P5-7, the Valley's floor): the glade is then the ground within
 ## `half_width` of the line, the groves come back over the next `rise` metres, and the bank
-## facing the camera stays thinner (glade_density).
+## facing the camera stays thinner (glade_density). `clearings` ([{"at", "radius"}], a big
+## or long map's meadows and tarn shores, LandformGrowth) open more ground
+## (clearing_density). On a map with room (LandformGrowth.room) the copses and clearings of
+## the cover noise grow by up to COVER_FEATURE_GROWTH, so a big map's forest keeps a few bold
+## shapes instead of finer noise.
 static func paint_starting_cover(
-	doc: MapDocument, biome_id: String, centre: Vector2 = Vector2.ZERO, glade: Dictionary = {}
+	doc: MapDocument,
+	biome_id: String,
+	centre: Vector2 = Vector2.ZERO,
+	glade: Dictionary = {},
+	clearings: Array = []
 ) -> void:
 	var count := doc.sample_count()
 	var slots := PackedByteArray()
 	var density := PackedByteArray()
 	slots.resize(count)
 	density.resize(count)
-	var noise := _cover_noise(doc.map_seed)
+	var noise := _cover_noise(
+		doc.map_seed, COVER_FEATURE_M * (1.0 + COVER_FEATURE_GROWTH * LandformGrowth.room(doc))
+	)
 	var half := doc.extent_m() * 0.5
 	var line: PackedVector2Array = glade.get("line", PackedVector2Array())
 	for z in doc.samples_z():
@@ -167,6 +186,8 @@ static func paint_starting_cover(
 				if line.size() >= 2
 				else starting_density(world - centre, half, noise_value)
 			)
+			if not clearings.is_empty():
+				value = clearing_density(world, clearings, value, noise_value)
 			var byte := roundi(value * 255.0)
 			var index := doc.sample_index(x, z)
 			density[index] = byte
@@ -231,6 +252,24 @@ static func glade_density(world: Vector2, glade: Dictionary, noise_value: float)
 	return value
 
 
+## The cover density `value` at map point `world` opened by `clearings` ([{"at", "radius"}],
+## LandformGrowth's meadows and tarn shores): within CLEARING_INNER of a clearing's radius it
+## is at most CLEARING_OPEN_SHARE of the glade's density, easing back to `value` at the
+## radius, the outline pushed in and out by the cover noise (`noise_value`, CLEARING_WARP of
+## the radius) so it is not a circle. Pure.
+static func clearing_density(
+	world: Vector2, clearings: Array, value: float, noise_value: float
+) -> float:
+	for clearing: Dictionary in clearings:
+		var radius := maxf(float(clearing.radius), 1e-3)
+		var reach := world.distance_to(clearing.at) / radius + noise_value * CLEARING_WARP
+		var open := lerpf(
+			COVER_CENTRE_DENSITY * CLEARING_OPEN_SHARE, 1.0, smoothstep(CLEARING_INNER, 1.0, reach)
+		)
+		value = minf(value, open)
+	return value if value >= COVER_MIN_DENSITY else 0.0
+
+
 ## The cover density for `edge` (0 the glade, 1 the groves) and the noise there.
 static func _cover_value(edge: float, noise_value: float) -> float:
 	var value := lerpf(COVER_CENTRE_DENSITY, COVER_EDGE_DENSITY, edge)
@@ -239,11 +278,11 @@ static func _cover_value(edge: float, noise_value: float) -> float:
 	return value if value >= COVER_MIN_DENSITY else 0.0
 
 
-static func _cover_noise(seed_value: int) -> FastNoiseLite:
+static func _cover_noise(seed_value: int, feature_m: float = COVER_FEATURE_M) -> FastNoiseLite:
 	var noise := FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	noise.seed = seed_value & 0x7fffffff
-	noise.frequency = 1.0 / COVER_FEATURE_M
+	noise.frequency = 1.0 / feature_m
 	noise.fractal_type = FastNoiseLite.FRACTAL_FBM
 	noise.fractal_octaves = 3
 	return noise

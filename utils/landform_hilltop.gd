@@ -30,7 +30,8 @@ extends RefCounted
 ## stage is on the hill's shoulder toward the camera (NEAR): STAGE_SHOULDER_SHARE of the
 ## radius out, past the crown's toe when there is a crown (STAGE_CROWN_TOE_M), at the foot of
 ## the ledge's face when there is a ledge (STAGE_LEDGE_TOE_M), within half the half extent
-## of the centre.
+## of the centre. On a long map (LandformGrowth) the hill sits toward one end of its length
+## and, when it is long enough, a second hill toward the other.
 
 const HILL_HEIGHT_M := 4.5
 const HILL_RADIUS_SHARE := 0.45
@@ -47,6 +48,13 @@ const CROWN_WARP := 0.12
 const SECOND_HILL_RADIUS_SHARE := 0.3
 const SECOND_HILL_OFFSET_SHARE := 0.55
 const SECOND_HILL_HEIGHT_SHARE := 0.5
+## A long map's hill sits this share of the way from the centre toward one end of its spare
+## length (toward_end), the second hill as far toward the other.
+const HILL_LONG_SHARE := 0.55
+## On a big or long map the hill's upper slopes are open ground, this share of its radius
+## (LandformGrowth.grow opens and paints the recipe's "open" discs only on a map with room), so
+## the hill reads over the forest from the whole-map view.
+const HILL_OPEN_SHARE := 0.65
 ## Feature chances (the no-sameness palette). The crown 0.85 since P5-4b: a crownless hill
 ## read plainer than a crowned one even with its ledge.
 const CROWN_CHANCE := 0.85
@@ -99,7 +107,8 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 	var frame := hilltop_frame(
 		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
 	)
-	var centre: Vector2 = frame.centre
+	var end_shift := toward_end(doc, half, seed_value)
+	var centre: Vector2 = frame.centre + end_shift
 	var radius := half * HILL_RADIUS_SHARE
 	var draws := StartingLandform.stream(seed_value, StartingLandform.STREAM_FEATURES)
 	var wants_crown := draws.randf() < CROWN_CHANCE
@@ -130,7 +139,11 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 	var azimuth := StartingLandform.NEAR.rotated(
 		azimuth_sign * deg_to_rad(lerpf(window.x, window.y, azimuth_share))
 	)
-	var second_centre: Vector2 = centre - frame.dir * half * SECOND_HILL_OFFSET_SHARE
+	# On a map long enough the second hill answers the first from the other end.
+	var apart := 2.0 * end_shift.length() >= half * (HILL_RADIUS_SHARE + SECOND_HILL_RADIUS_SHARE)
+	var second_centre: Vector2 = (
+		frame.centre - end_shift if apart else centre - frame.dir * half * SECOND_HILL_OFFSET_SHARE
+	)
 	var second_radius := half * SECOND_HILL_RADIUS_SHARE
 	var second_height := height * SECOND_HILL_HEIGHT_SHARE if wants_second else 0.0
 	var target: float = crown.target
@@ -253,7 +266,25 @@ static func hilltop(doc: MapDocument, seed_value: int, biome_id: String) -> Dict
 	else:
 		report.append("dry")
 	report.append("stage (%.1f, %.1f)" % [stage.x, stage.y])
-	return {"stage": stage, "report": "; ".join(report)}
+	var keepout: Array = [{"at": centre, "radius": radius}]
+	var open: Array = [{"at": centre, "radius": radius * HILL_OPEN_SHARE}]
+	if wants_second:
+		keepout.append({"at": second_centre, "radius": second_radius})
+		open.append({"at": second_centre, "radius": second_radius * HILL_OPEN_SHARE})
+	return {"stage": stage, "report": "; ".join(report), "keepout": keepout, "open": open}
+
+
+## On a long map (LandformGrowth.is_long) the hill moves HILL_LONG_SHARE of the way toward
+## one end of the map's length (the end drawn from LandformGrowth.STREAM_SHAPES), leaving
+## the other end for a second hill or the extras; zero otherwise.
+static func toward_end(doc: MapDocument, half: float, seed_value: int) -> Vector2:
+	if not LandformGrowth.is_long(doc):
+		return Vector2.ZERO
+	var rng := StartingLandform.stream(seed_value, LandformGrowth.STREAM_SHAPES)
+	var end := 1.0 if rng.randf() < 0.5 else -1.0
+	return (
+		LandformGrowth.long_dir(doc) * end * (LandformGrowth.long_half(doc) - half) * HILL_LONG_SHARE
+	)
 
 
 ## The Hilltop's frame from the seed, for a map of half extent `half`: the hill's centre

@@ -1,0 +1,39 @@
+{
+ "out_dir": "render_jobs/biglf_base",
+ "timeout_s": 2400,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "expand", "values": [
+    "valley_1_250", "valley_2_250", "valley_3_250", "valley_4_250", "valley_5_250", "valley_6_250",
+    "hilltop_1_250", "hilltop_2_250", "hilltop_3_250", "hilltop_4_250", "hilltop_5_250", "hilltop_6_250",
+    "terraces_1_250", "terraces_2_250", "terraces_3_250", "terraces_4_250", "terraces_5_250", "terraces_6_250",
+    "lakeshore_1_250", "lakeshore_2_250", "lakeshore_3_250", "lakeshore_4_250", "lakeshore_5_250", "lakeshore_6_250",
+    "gorge_1_250", "gorge_2_250", "gorge_3_250", "gorge_4_250", "gorge_5_250", "gorge_6_250",
+    "valley_1_200", "valley_2_200", "hilltop_1_200", "hilltop_2_200", "terraces_1_200", "terraces_2_200",
+    "lakeshore_1_200", "lakeshore_2_200", "gorge_1_200", "gorge_2_200"
+   ], "template": [
+   {"op": "saved", "folder": "_biglf_{value}"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "new", "biome": "temperate_forest_summer_s1", "spec": "{value}", "phase": "build"},
+   {"op": "wait_ready", "settle": 1.5, "phase": "build"},
+   {"op": "no_autosave"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "save", "folder": "_biglf_{value}", "replace": true, "phase": "build"},
+   {"op": "hide_ui"},
+   {"op": "home"},
+   {"op": "zoom"},
+   {"op": "wait", "s": 2.5},
+   {"op": "capture", "name": "{value}", "desc": "Temperate forest, {value} (landform, seed, size in ft), authoring at full zoom-out: the whole map at a size the big-map growth leaves as it was (LandformGrowth.room is 0 at 250 ft and below)."},
+   {"op": "title"},
+   {"op": "wait", "s": 1.0}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_valley_250", "names": ["valley_1_250", "valley_2_250", "valley_3_250", "valley_4_250", "valley_5_250", "valley_6_250"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_hilltop_250", "names": ["hilltop_1_250", "hilltop_2_250", "hilltop_3_250", "hilltop_4_250", "hilltop_5_250", "hilltop_6_250"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_terraces_250", "names": ["terraces_1_250", "terraces_2_250", "terraces_3_250", "terraces_4_250", "terraces_5_250", "terraces_6_250"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_lakeshore_250", "names": ["lakeshore_1_250", "lakeshore_2_250", "lakeshore_3_250", "lakeshore_4_250", "lakeshore_5_250", "lakeshore_6_250"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_gorge_250", "names": ["gorge_1_250", "gorge_2_250", "gorge_3_250", "gorge_4_250", "gorge_5_250", "gorge_6_250"]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/biglf_base", "out": "sheet_200", "columns": 5, "names": ["valley_1_200", "hilltop_1_200", "terraces_1_200", "lakeshore_1_200", "gorge_1_200", "valley_2_200", "hilltop_2_200", "terraces_2_200", "lakeshore_2_200", "gorge_2_200"]},
+  {"op": "index", "title": "Big and long landforms: the baseline sizes (biglf)", "intro": "Produced by tools/render_jobs/jobs/biglf_base.json. New temperate forest maps through NewMap (probes/landform.gd new with a spec): every landform at seeds 1-6 at 250 ft and at seeds 1-2 at 200 ft, sizes the big-map growth leaves as they were, each saved as _biglf_<landform>_<seed>_<size> and captured in authoring at full zoom-out. sheet_<landform>_250.png tiles the six seeds, sheet_200.png the ten 200 ft maps (columns: valley, hilltop, terraces, lakeshore, gorge; rows: seeds 1 and 2). The big sizes are in biglf_look.json. Delete the levels with biglf_cleanup.json."},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0}
+ ]
+}

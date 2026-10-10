@@ -25,7 +25,9 @@ extends RefCounted
 ## (away from the stage) when it runs along the view (bluff_side_of). The stage is on the
 ## inner bank of
 ## the bend, within a quarter of the map of the centre, the bend's own bank when that fits
-## and otherwise as near the bend as fits.
+## and otherwise as near the bend as fits. On a big or long map (LandformGrowth) the valley
+## runs along a long map's length, may meander (a second bend upstream, the other way) and
+## carries a wider river.
 
 ## Valley: the trough's depth and its floor's fall along the axis at 150 ft; the floor's
 ## half-width and the rim's distance from the axis as shares of the half extent (a floor a
@@ -48,6 +50,15 @@ const VALLEY_CROSSING_CHANCE := 0.5
 const VALLEY_STONES_CHANCE := 0.4
 const VALLEY_WASH_CHANCE := 0.5
 const VALLEY_BLUFF_CHANCE := 0.5
+## A big or long map's valley (LandformGrowth): the meander's chance at full room, its turn
+## and how far above the first bend it lies (a share of the long half extent); the river
+## widens by RIVER_GROWTH of its half-width at full room.
+const MEANDER_CHANCE := 0.65
+const MEANDER_DEG := Vector2(30.0, 48.0)
+const MEANDER_REACH_SHARE := Vector2(0.35, 0.55)
+const RIVER_GROWTH := 0.4
+## A big or long map paints the floor within this share of its half-width as open meadow.
+const FLOOR_OPEN_SHARE := 0.9
 ## The bluff's outline wanders this far either side of the rim line, one wave per
 ## BLUFF_WOBBLE_WAVE_M (read over the map, as the terraces' edges are).
 const BLUFF_WOBBLE_M := 2.0
@@ -100,8 +111,10 @@ static func valley(doc: MapDocument, seed_value: int, biome_id: String, root: St
 	var half := StartingLandform.half_extent(doc)
 	var scale := StartingLandform.size_scale(doc)
 	var frame := valley_frame(
-		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
+		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME), doc
 	)
+	var meander := _meander(doc, frame, seed_value)
+	var river_half_width := RIVER_HALF_WIDTH_M * (1.0 + RIVER_GROWTH * LandformGrowth.room(doc))
 	var axis: PackedVector2Array = frame.axis
 	var floor_half := half * VALLEY_FLOOR_SHARE
 	var rim := half * VALLEY_RIM_SHARE
@@ -145,12 +158,13 @@ static func valley(doc: MapDocument, seed_value: int, biome_id: String, root: St
 	var report := PackedStringArray(
 		[
 			(
-				"valley heading %d deg, axis %.1f m off centre, bend %.0f deg %.1f m downstream%s"
+				"valley heading %d deg, axis %.1f m off centre, bend %.0f deg %.1f m downstream%s%s"
 				% [
 					frame.heading_deg,
 					frame.offset,
 					frame.bend_deg,
 					frame.bend_downstream,
+					", meander %.0f deg upstream" % meander if meander != 0.0 else "",
 					(
 						(
 							", bluff on the far bank"
@@ -172,7 +186,7 @@ static func valley(doc: MapDocument, seed_value: int, biome_id: String, root: St
 	)
 	if wants_river:
 		var river := StartingLandform.carve_river(
-			doc, course, RIVER_HALF_WIDTH_M, WaterBody.Depth.WAIST
+			doc, course, river_half_width, WaterBody.Depth.WAIST
 		)
 		if river.is_empty():
 			report.append("river: nothing could be planned")
@@ -224,6 +238,14 @@ static func valley(doc: MapDocument, seed_value: int, biome_id: String, root: St
 			"near_cap": GLADE_NEAR_CAP,
 			"near_edge": GLADE_NEAR_EDGE,
 		},
+		# A big or long map's floor is painted as open meadow (LandformGrowth.grow, only with
+		# room), unless the dry wash already dresses it.
+		"open":
+		(
+			[{"line": axis, "radius": floor_half * FLOOR_OPEN_SHARE}]
+			if wants_river or not wants_wash
+			else []
+		),
 	}
 
 
@@ -231,16 +253,23 @@ static func valley(doc: MapDocument, seed_value: int, biome_id: String, root: St
 ## (upstream end, bend, downstream end, each run long enough to leave the map), the
 ## downstream directions of its two runs, the turn's sign (+1: the second run turns toward
 ## the first's rotated(PI / 2) side, the inner bank), the arc positions of the centre's foot
-## and the bend along the axis, and the numbers the report quotes.
-static func valley_frame(half: float, rng: RandomNumberGenerator) -> Dictionary:
+## and the bend along the axis, and the numbers the report quotes. On `doc` (when given) a long
+## map turns a heading across it to run along it (LandformGrowth.turned) and the runs reach
+## its far ends.
+static func valley_frame(
+	half: float, rng: RandomNumberGenerator, doc: MapDocument = null
+) -> Dictionary:
 	var heading_index := rng.randi_range(0, 7)
 	var dir := Vector2(cos(heading_index * PI / 4.0), sin(heading_index * PI / 4.0))
+	var run := 2.5 * half
+	if doc != null:
+		dir = LandformGrowth.turned(doc, dir)
+		run = 2.5 * maxf(half, LandformGrowth.long_half(doc))
 	var normal := Vector2(-dir.y, dir.x)
 	var offset := rng.randf_range(-1.0, 1.0) * half * VALLEY_OFFSET_SHARE
 	var turn := 1.0 if rng.randf() < 0.5 else -1.0
 	var bend_deg := rng.randf_range(VALLEY_BEND_DEG.x, VALLEY_BEND_DEG.y)
 	var bend_downstream := rng.randf_range(0.0, half * VALLEY_BEND_REACH_SHARE)
-	var run := 2.5 * half
 	var foot := normal * offset
 	var bend := foot + dir * bend_downstream
 	var dir2 := dir.rotated(turn * deg_to_rad(bend_deg))
@@ -251,11 +280,40 @@ static func valley_frame(half: float, rng: RandomNumberGenerator) -> Dictionary:
 		"turn": turn,
 		"foot_arc": run - bend_downstream,
 		"bend_arc": run,
-		"heading_deg": heading_index * 45,
+		"heading_deg": LandformGrowth.degrees(dir),
 		"offset": offset,
 		"bend_deg": turn * bend_deg,
 		"bend_downstream": bend_downstream,
 	}
+
+
+## A big or long map's valley may meander (LandformGrowth): with MEANDER_CHANCE scaled by the
+## room, a second bend upstream of the first, MEANDER_REACH_SHARE of the long half extent
+## above it, turning the other way by MEANDER_DEG, so the floor swings in an S across the
+## map. Rewrites `frame`'s axis and arc positions; the bend's signed angle, or 0 without one.
+static func _meander(doc: MapDocument, frame: Dictionary, seed_value: int) -> float:
+	var r := LandformGrowth.room(doc)
+	if r <= 0.0:
+		return 0.0
+	var rng := StartingLandform.stream(seed_value, LandformGrowth.STREAM_SHAPES)
+	var wants := rng.randf() < MEANDER_CHANCE * r
+	var deg := rng.randf_range(MEANDER_DEG.x, MEANDER_DEG.y)
+	var reach := (
+		rng.randf_range(MEANDER_REACH_SHARE.x, MEANDER_REACH_SHARE.y)
+		* LandformGrowth.long_half(doc)
+	)
+	if not wants:
+		return 0.0
+	var axis: PackedVector2Array = frame.axis
+	var dir: Vector2 = frame.dir
+	var turn: float = frame.turn
+	var run := axis[0].distance_to(axis[1])
+	var upper := axis[1] - dir * reach
+	var dir0 := dir.rotated(turn * deg_to_rad(deg))
+	frame.axis = PackedVector2Array([upper - dir0 * run, upper, axis[1], axis[2]])
+	frame.foot_arc = float(frame.foot_arc) + reach
+	frame.bend_arc = float(frame.bend_arc) + reach
+	return -turn * deg
 
 
 ## The stage: the point of the inner-bank strip (STAGE_BANK_SHARE of `floor_half` from the

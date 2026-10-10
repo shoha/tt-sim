@@ -2,10 +2,12 @@ extends RefCounted
 
 ## Render-job probe (`call` op) for the starting landforms (phase 5, P5-1). Positions are
 ## map XZ metres. step.action:
-##   new {biome, size, seed, landform}  opens a new map through the controller as the
-##                               driver's `new_map` op does, with the landform in the spec
-##                               (AuthoringController passes it to NewMap.create). Logs the
-##                               recipe's report.
+##   new {biome, size, depth, seed, landform}  opens a new map through the controller as
+##                               the driver's `new_map` op does, with the landform in the spec
+##                               (AuthoringController passes it to NewMap.create); depth 0 is
+##                               square. Or {biome, spec}: "<landform>_<seed>_<w>[x<d>]" in
+##                               one string, for an `expand` over maps. Logs the recipe's
+##                               report.
 ##   report {landform}           the recipe's report for the open map (recomputed on a
 ##                               scratch document from the open one's seed and size, so a
 ##                               saved level answers too).
@@ -17,6 +19,14 @@ extends RefCounted
 ##                               "steepest" (the biggest height step between neighbours),
 ##                               "fall" (the first fall's lip, else the water) or "crossing"
 ##                               (the first crossing's middle, else the water).
+##   save {folder, replace}       saves the open authoring map as a test level, only into a
+##                               SAVE_PREFIXES folder (water.gd's save, for this probe's own
+##                               prefixes); an existing folder only with replace: true.
+##   cleanup                     deletes every SAVE_PREFIXES level.
+
+## The test-level prefixes `save` writes and `cleanup` deletes: the big-landform look
+## (jobs/biglf_look.json, 2026-10-09).
+const SAVE_PREFIXES: Array[String] = ["_biglf_"]
 
 ## Recipe results by seed, size and kind (see `report`).
 static var _shaped: Dictionary = {}
@@ -24,9 +34,13 @@ static var _shaped: Dictionary = {}
 
 static func run(base: Node, step: Dictionary) -> String:
 	match String(step.get("action", "")):
+		"save":
+			return _save(base, step)
+		"cleanup":
+			return _cleanup()
 		"new":
 			var biome := String(step.get("biome", ""))
-			var landform := String(step.get("landform", StartingLandform.VALLEY))
+			var spec := _spec(step)
 			(
 				base
 				. call(
@@ -35,20 +49,29 @@ static func run(base: Node, step: Dictionary) -> String:
 						"level": null,
 						"new_map":
 						{
-							"size_ft": int(step.get("size", 150)),
+							"size_ft": spec.size,
+							"depth_ft": spec.depth,
 							"biome_id": biome,
-							"seed": int(step.get("seed", 1234)),
-							"landform": landform,
+							"seed": spec.seed,
+							"landform": spec.landform,
 						},
 						"return_to": &"title"
 					}
 				)
 			)
-			var scratch := NewMap.create(int(step.get("size", 150)), NewMap.BARE_BIOME, 0)
-			var shaped := StartingLandform.apply(
-				scratch, landform, int(step.get("seed", 1234)), biome
+			var scratch := NewMap.create(
+				spec.size,
+				NewMap.BARE_BIOME,
+				0,
+				PaletteLibrary.DEFAULT_ROOT,
+				StartingLandform.FLAT,
+				spec.depth
 			)
-			return "new %s %s: %s" % [landform, biome, shaped.report]
+			var shaped := StartingLandform.apply(scratch, spec.landform, spec.seed, biome)
+			return (
+				"new %s %s %dx%d s%d: %s"
+				% [spec.landform, biome, spec.size, spec.depth, spec.seed, shaped.report]
+			)
 		"report":
 			var shaped := _shape(base, step)
 			return String(shaped.get("report", "no open map"))
@@ -83,6 +106,26 @@ static func _parallax(gm: GameMap, at: Vector2) -> Vector2:
 	if flat.length() < 1e-3 or absf(forward.y) < 1e-3:
 		return Vector2.ZERO
 	return flat.normalized() * (hit.y * flat.length() / -forward.y)
+
+
+## The new map `step` asks for: {"landform", "seed", "size", "depth"} from its "spec"
+## ("<landform>_<seed>_<width>" or "<landform>_<seed>_<width>x<depth>", feet) when given, else
+## its own "landform", "seed", "size" and "depth" keys (depth 0: square).
+static func _spec(step: Dictionary) -> Dictionary:
+	var out := {
+		"landform": String(step.get("landform", StartingLandform.VALLEY)),
+		"seed": int(step.get("seed", 1234)),
+		"size": int(step.get("size", 150)),
+		"depth": int(step.get("depth", 0)),
+	}
+	var parts := String(step.get("spec", "")).split("_")
+	if parts.size() == 3:
+		var sides := parts[2].split("x")
+		out.landform = parts[0]
+		out.seed = int(parts[1])
+		out.size = int(sides[0])
+		out.depth = int(sides[1]) if sides.size() > 1 else 0
+	return out
 
 
 ## The recipe rerun on a flat document of the open map's size with its seed (the stage is
@@ -190,3 +233,48 @@ static func _extreme(doc: MapDocument, reach: float, low: bool) -> Vector2:
 				extreme = h
 				best = p
 	return best
+
+
+## Saves the open authoring map into `step.folder` (a SAVE_PREFIXES test level), as water.gd's
+## save does.
+static func _save(base: Node, step: Dictionary) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	var folder := String(step.get("folder", ""))
+	if ctrl == null or not SAVE_PREFIXES.any(func(p: String) -> bool: return folder.begins_with(p)):
+		return "no authoring controller, or not a %s folder" % " / ".join(SAVE_PREFIXES)
+	var path := LevelManager.folder_path(folder)
+	if DirAccess.dir_exists_absolute(path) and not bool(step.get("replace", false)):
+		return "folder %s exists; not touching it (replace: true overwrites)" % folder
+	_remove_tree(path)
+	DirAccess.make_dir_recursive_absolute(path)
+	var saved := ctrl.level.duplicate(true) as LevelData
+	saved.level_name = folder
+	saved.level_folder = folder
+	ctrl.call("_sync_document")
+	var ok := AuthoringController.write_level(saved, ctrl.document, null)
+	return "saved %s: %s" % [folder, str(ok)]
+
+
+## Deletes every SAVE_PREFIXES level under the levels folder, nothing else.
+static func _cleanup() -> String:
+	var dir := DirAccess.open(LevelManager.levels_dir)
+	if dir == null:
+		return "no levels folder"
+	var removed := PackedStringArray()
+	for folder in dir.get_directories():
+		if not SAVE_PREFIXES.any(func(p: String) -> bool: return folder.begins_with(p)):
+			continue
+		_remove_tree(LevelManager.folder_path(folder))
+		removed.append(folder)
+	return "removed %d: %s" % [removed.size(), str(removed)]
+
+
+static func _remove_tree(path: String) -> void:
+	var dir := DirAccess.open(path)
+	if dir == null:
+		return
+	for file in dir.get_files():
+		dir.remove(file)
+	for sub in dir.get_directories():
+		_remove_tree(path.path_join(sub))
+	DirAccess.remove_absolute(path)

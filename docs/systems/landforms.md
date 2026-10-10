@@ -29,13 +29,15 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
 | `utils/landform_terraces.gd` | `LandformTerraces` | The Terraces (`terraces`, `terraces_frame`, `plateaus_of`, `terraces_stage`) |
 | `utils/landform_lakeshore.gd` | `LandformLakeshore` | The Lakeshore (`lakeshore`, `lakeshore_frame`, `allowed_corners`) |
 | `utils/landform_gorge.gd` | `LandformGorge` | The Gorge (`gorge`, `gorge_frame`, `gorge_stage`) |
-| `utils/new_map.gd` | `NewMap` | `create(..., landform)` runs the recipe before the cover; `from_spec(spec)`; `opening_status(spec)`; `paint_starting_cover(doc, biome, centre)` centres the glade on the stage |
+| `utils/landform_growth.gd` | `LandformGrowth` | Big and long maps: `room`, `is_long`, `long_dir`, `turned`, `grow` (the extras: tarn, knoll, meadow), `find_spot` |
+| `utils/new_map.gd` | `NewMap` | `create(..., landform, depth_ft)` runs the recipe before the cover; `from_spec(spec)`; `opening_status(spec)`; `paint_starting_cover(doc, biome, centre, glade, clearings)` centres the glade on the stage and opens the clearings |
 | `scenes/states/authoring/new_map_dialog.gd` | `NewMapDialog` | The Landform tile row and its caption; the spec's `landform` |
 | `scenes/states/authoring/authoring_controller.gd` | `AuthoringController` | Opens a new map from `NewMap.from_spec(spec)` under the loading line `NewMap.opening_status(spec)` |
 | `scenes/ui/help_overlay.gd` | | The F1 "New map" row |
 | `assets/icons/ui/landform-<kind>.svg` | | Six glyphs in the house 24 px white-stroke style |
-| `tools/render_jobs/probes/landform.gd` | | Render-job probe: `new`, `report`, `look` (stage, water, floor, summit, steepest, fall, crossing) |
-| `tools/render_jobs/jobs/landform_*.json`, `phase5_*.json`, `p5_perf_*.json` | | The look, dialog, judgment-set and performance jobs (Verification) |
+| `tools/render_jobs/probes/landform.gd` | | Render-job probe: `new` (with `depth` or a `spec` string), `report`, `look` (stage, water, floor, summit, steepest, fall, crossing), `save` and `cleanup` of `_biglf_` levels |
+| `tools/render_jobs/probes/contact_sheet.gd` | | Tiles a job's captures into one sheet (seeds side by side) |
+| `tools/render_jobs/jobs/landform_*.json`, `phase5_*.json`, `p5_perf_*.json`, `biglf_*.json` | | The look, dialog, judgment-set, performance and big-map jobs (Verification) |
 
 ## Model
 
@@ -57,7 +59,37 @@ task). The tiers a recipe writes are the Sculpt tool's own (`HeightBrush.tier_go
   so a landform keeps its proportions without a small map becoming a pit; widths and
   positions are shares of the half extent. `heading(rng)` is one of eight 45 degree headings.
   The seed varies the shape too (heading, offset, bend, the hill's side, the lake's corner)
-  within bounds that keep the recipe recognisable.
+  within bounds that keep the recipe recognisable. `size_scale()` is capped at 1.7 (about
+  1.68 at 320 ft; the cap was 1.5, reached at 275 ft, until big maps grew). A map that is not
+  square composes on its shorter side (`half_extent()`, `size_scale()`).
+- **Big and long maps** (`LandformGrowth`, 2026-10-09). The recipes compose one place on the
+  square of the shorter side, sized for maps up to 250 ft; past that, or longer than wide, a
+  map has room (`room()`: 0 for a square map of 250 ft or less, so those draw exactly as
+  before; 1 at 320 ft or at 2:1). The recipes spend it on their own shapes, from
+  `STREAM_SHAPES`: a long map's Valley, Gorge and Terraces run along it (`turned()` turns a
+  heading within 60 degrees of square to the length a quarter), the Valley may meander
+  (`MEANDER_CHANCE` 0.65 at full room: a second bend upstream, the other way, 30-48 degrees)
+  and its river widens (`RIVER_GROWTH` 0.4 of its half-width), the Gorge draws its second bend
+  again (`SECOND_BEND_GROWTH` 0.6) and spreads it over the long half, the Terraces may gain a
+  step (`EXTRA_STEP_CHANCE` 0.7; three steps spread over half the span either side) and
+  spread their steps along a long map (`span_of`), the Hilltop sits toward one end of a long
+  map with its second hill toward the other (`toward_end`), and the Lakeshore's far-corner
+  lake sits in a long map's own corner. Then `apply()` runs `grow()`: one extra with chance
+  `room`, a second with 0.55 `room`, drawn by weight from the landform's palette (`PALETTES`:
+  a tarn, a knoll, a meadow) from `STREAM_EXTRAS` salted by the landform, each placed by
+  `find_spot` (48 seeded candidates; clear of the stage, the crossings, the water, the
+  recipe's `keepout` and the other extras, on ground flat within 0.6 m; scored about midway
+  from the stage to the edge, well inside the edge, near the recipe's features and rivers by
+  its tie, high or low by its lean, toward a long map's ends). Open ground (a meadow, a
+  knoll's crown, a tarn's shore, and the recipe's own `open` features: the Hilltop's upper
+  slopes, the Lakeshore's shore, the Valley's floor unless a dry wash dresses it) is painted
+  with the biome's meadow surface (`meadow_surface`: its grass or moss accent; none on a
+  grass or sand ground) and, as discs, comes back as `clearings`, which
+  `NewMap.paint_starting_cover` opens (`clearing_density`). On a map with room the cover
+  noise's copses grow by up to `COVER_FEATURE_GROWTH` 0.5, so a big forest keeps a few bold
+  shapes. Why open ground: the first look (`biglf_look`, half size) found that from the
+  whole-map view a forest's trees hide a big map's relief (a 5 m knoll, the hill, the
+  terraces' steps), so what reads is water and bright open ground.
 - **Facing the camera** (P5-4, commit 0bcda1d): the fixed camera (`game_map.tscn`'s Camera3D)
   stands at +x, +z and looks along (-1, -1) in map XZ at a 45 degree yaw, pitched 21.6
   degrees down. `VIEW` (-0.707, -0.707) is that look direction and `NEAR` (0.707, 0.707) the
