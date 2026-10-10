@@ -315,8 +315,8 @@ one, its res:// map path; the name is what the room lists. The GM adds a map fro
 leaves the room open. `broadcast_level_data()` calls `note_table_out()` with the payload (map
 hashes added), so every map that goes out, from the room or by a map change in play, lands on
 the shelf too; setting a shelved map out again refreshes its hashes. Root sets a shelf map out
-by key (`Root.set_out(key)` from the room, `Root.move_table(key)` from the drawer), and its
-TableMover loads the level from the host's library by its folder and lays over it what this
+by key (its TableMover's `set_out(key)` from the room, `request_move(key)` from the drawer;
+the panels' signals are connected to them), and the TableMover loads the level from the host's library by its folder and lays over it what this
 session did to that map (see "Table moves" below). `get_table()` is that key, `""` in the room. Only the host changes any of it; it sends
 clients a summary (`_rpc_session_summary`, sanitized on arrival by `sanitize_summary()`: known
 keys, typed values, bounded sizes) after every change, so clients read the same getters and
@@ -430,9 +430,9 @@ there does):
 | TITLE > ROOM (host) | Host with a map: `host_session(level)` | `host_game()` with an "Opening a room..." wait; ROOM on `HOSTING`; on `connection_failed` the title stays, with the reason |
 | TITLE > ROOM or PLAYING (client) | Join: the join form (`LobbyClient`) over the hidden title | Connect joins; the form stays locked ("Connected. Joining the room...") until ROOM on `room_opened`, or PLAYING on `game_starting` when a table is out; a rejected client stays on the form |
 | ROOM (host) | Entering with a map from Host | The map is shelved and selected in the room |
-| ROOM > PLAYING | The room's Set out this map: `set_out(key)`, then `_on_lobby_start_game()` | Refused with "Choose a map to set out first" when no map is pending; else `close()`, `notify_game_starting()`, PLAYING broadcasts the level |
+| ROOM > PLAYING | The room's Set out this map: `TableMover.set_out(key)`, then `_on_lobby_start_game()` | Refused with "Choose a map to set out first" when no map is pending; else `close()`, `notify_game_starting()`, PLAYING broadcasts the level |
 | PLAYING > ROOM | Pause > Return everyone to the room (host): `return_to_room()`, a table move to the room | After TableMover's notice (nothing asked): the table's state is kept, the party is taken, `open()`, then the table (GameMap, tokens, GameState) is torn down on every peer |
-| PLAYING > PLAYING | The drawer's Move the table to the selected map (`move_table(key)`) | After the same notice: the party is taken; the next map comes with its kept state; the level broadcast moves the table pointer |
+| PLAYING > PLAYING | The drawer's Move the table to the selected map (`TableMover.request_move(key)`) | After the same notice: the party is taken; the next map comes with its kept state; the level broadcast moves the table pointer |
 | (any) > PLAYING, map loaded | `_on_level_play_loaded()` (host) | The party is set out on the new map |
 | ROOM or PLAYING > TITLE | Leave or End session (the room, the drawer), Return to Title | Title first, then `disconnect_game()`, so a voluntary leave is not read as a lost connection; the host leaving ends the session (End session asks first) |
 
@@ -910,7 +910,7 @@ log and one `NET_RESULT {json}` line to `--out` and quits 0 on a pass; extending
   table moves (TableMover). Each client reports its role as its session key. Table A is a flat
   authored map the host builds in its own test root (the clients download its `map.ttmap`);
   table B is the shipped map under a level folder of its own. client and client2 join at the
-  start and land in the room; the host sets table A out from the shelf (`Root.set_out`), places
+  start and land in the room; the host sets table A out from the shelf (`TableMover.set_out`), places
   Hero A (granted to client, so it leaves A's placements) and Bystander A (nobody's), raises the
   ground with the play-side editor (one live edit) and moves Bystander A; table A then counts as
   changed in tokens and terrain, not look. The host moves the table to the room
@@ -925,7 +925,7 @@ log and one `NET_RESULT {json}` line to `--out` and quits 0 on a pass; extending
   pause menu does, with no "connection lost" dialog (the host keeps its entry with no peer and
   its grant by session id), rejoins through the join screen with a new peer id, lands at table
   B and controls Hero A again. Table B, saved and with the party not counted, is unchanged, so
-  the drawer's Move the table here (`Root.move_table`) asks nothing and counts down; client,
+  the drawer's Move the table here (`TableMover.request_move`) asks nothing and counts down; client,
   client2 and client3 show a player's notice naming the GM and the map ("host is moving the
   table to Session table A in 3"), and on table A
   every peer has Bystander A where it was moved (0.0 m off), the ground at the raise as high as

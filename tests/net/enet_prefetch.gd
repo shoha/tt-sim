@@ -14,7 +14,7 @@ extends "res://tests/net/enet_late_joiner.gd"
 ##   report progress on it (each is fetching it, one at a time at the host), shelves Mill then
 ##   Pond and selects Pond (the GM's pick), so the clients' next pick is made with all three
 ##   known. It records every progress report it relays. Once both clients hold all three (its
-##   own holdings), it sets Fen out from the shelf (Root.set_out); once Fen is up, client3 may
+##   own holdings), it sets Fen out from the shelf (TableMover.set_out); once Fen is up, client3 may
 ##   join. It finishes when every client has reported.
 ## client, client2: join at the start and land in the room; record the order their map files
 ##   arrive (Fen, then Pond, the GM's pick, before Mill, first on the shelf), wait until the
@@ -125,7 +125,7 @@ func _process_host() -> void:
 			if ROOM_CLIENTS.all(_holds_all):
 				_result["held_after_ms"] = Time.get_ticks_msec() - _shelved_ms
 				_result["holdings_before_set_out"] = NetworkManager.session.get_holdings()
-				_main.call("set_out", FEN.folder)
+				(_main.get("_table_mover") as TableMover).set_out(FEN.folder)
 				_set_phase("table_load")
 		"table_load":
 			if _fen_up():

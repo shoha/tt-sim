@@ -15,9 +15,9 @@ extends Node3D
 ## drawer (RoomDrawer, Tab). Both name shelf maps by key (SessionChannel.ref_key()).
 ## - TITLE > ROOM: Host (host_session(): ROOM once hosting), or Join (the join screen over
 ##   the title: ROOM on room_opened, or PLAYING on game_starting when a table is out).
-## - ROOM > PLAYING: the room's Set out this map (set_out(), then _on_lobby_start_game():
-##   refused with no map).
-## - PLAYING > PLAYING: the drawer's Move the table here (move_table()).
+## - ROOM > PLAYING: the room's Set out this map (TableMover.set_out(), then
+##   _on_lobby_start_game(): refused with no map).
+## - PLAYING > PLAYING: the drawer's Move the table here (TableMover.request_move()).
 ## - PLAYING > ROOM: Return everyone to the room (return_to_room(), host).
 ## Both moves are TableMover's: it counts the move down on every peer, keeps what the session
 ## did to each map and lays it over the map when it is set out again; Root then carries the
@@ -368,7 +368,7 @@ func _connect_room_drawer() -> void:
 	var menu = _game_map.gameplay_menu.get_node_or_null("GameplayMenu")
 	var drawer: RoomDrawer = menu.get("room_drawer") if menu else null
 	if drawer:
-		drawer.move_table_requested.connect(move_table)
+		drawer.move_table_requested.connect(_table_mover.request_move)
 		drawer.leave_requested.connect(_on_pause_main_menu_requested)
 		_table_mover.attach_panel(drawer.panel)
 
@@ -452,7 +452,7 @@ func _enter_room_state() -> void:
 		first = NetworkManager.session.shelve(_pending_level_data.to_dict())
 	_room_screen = RoomScreen.new()
 	add_child(_room_screen)
-	_room_screen.panel.set_out_requested.connect(set_out)
+	_room_screen.panel.set_out_requested.connect(_table_mover.set_out)
 	_room_screen.panel.leave_requested.connect(_on_lobby_cancel)
 	_table_mover.attach_panel(_room_screen.panel)
 	if first != "":
@@ -463,18 +463,6 @@ func _exit_room_state() -> void:
 	if _room_screen:
 		_room_screen.queue_free()
 		_room_screen = null
-
-
-## ROOM > PLAYING (host): set the shelf map `key` out, the room's Set out this map, with what
-## this session did to it before (TableMover).
-func set_out(key: String) -> void:
-	_table_mover.set_out(key)
-
-
-## PLAYING > PLAYING (host): the room drawer's Move the table here (TableMover: the notice,
-## then the move; the table is kept as it is and the party goes along).
-func move_table(key: String) -> void:
-	_table_mover.request_move(key)
 
 
 ## The level TableMover chose for the table: set out from the room, or the table moved to it

@@ -678,8 +678,9 @@ lobby, the client's waiting view, the lobby's Change and the in-play `PlayerList
 - **Wiring.** The panel reads `NetworkManager.session` on every `session_changed`;
   `connect_network = false` (on `RoomScreen`, `RoomDrawer` or the panel) keeps tests and the UI
   tour off the network, and they feed `show_session(summary, local_id, is_gm)` directly. Signals
-  to Root: `set_out_requested(key)` (`Root.set_out`), `move_table_requested(key)`
-  (`Root.move_table`), `leave_requested`; `map_picked(level_info)` reports an Add.
+  to Root, which connects the moves to its TableMover: `set_out_requested(key)`
+  (`TableMover.set_out`), `move_table_requested(key)` (`TableMover.request_move`),
+  `leave_requested`; `map_picked(level_info)` reports an Add.
 - **Tab.** `RoomDrawer.tab_toggles()` (pure) opens or closes the drawer on a bare Tab press only
   at a table (Root `PLAYING`, nothing paused over it), with its tab shown (a session), and
   nothing else taking Tab: no `UIManager` overlay, no `AnimatedCanvasLayerPanel` up
