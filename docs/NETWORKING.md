@@ -317,10 +317,48 @@ keys, typed values, bounded sizes) after every change, so clients read the same 
 
 **Players by Steam id.** `get_players()` is session id -> `{"name", "peer_id"}`. The session id
 is the Steam id as a decimal string (`SteamMultiplayerPeer.get_steam_id_for_peer_id`, and
-`Steam.getSteamID()` for the host itself), or `"enet-<peer id>"` on a transport without Steam
-ids (the ENet scenarios, GUT). A player who leaves keeps its entry with `peer_id` 0, so later
-work (the party, grants) can map a Steam id to whatever peer id it has now (`peer_for()`,
-`session_id_of()`). The Steam path is not verified yet: real Steam could not run on 2026-10-09.
+`Steam.getSteamID()` for the host itself). A transport without Steam ids (the ENet scenarios,
+GUT) has no identity of its own, so there it is `"enet-"` plus the `session_key` the joiner
+reports in its player info (`SessionChannel.SESSION_KEY`, cleaned by `clean_key()`: 1 to 32
+letters, digits, `-` or `_`), or plus its peer id when it reports none; a key held by a player
+still connected is not taken. Steam ignores the key, so a client cannot claim another player's
+identity there, and a stale connection of the same Steam id gives its entry to the new one. A player who leaves keeps its entry with `peer_id` 0, and a rejoin (a new peer
+id, the same session id) reuses it, so the party and its grants map a session id to whatever
+peer id it has now (`peer_for()`, `session_id_of()`). The Steam path is not verified yet: real
+Steam could not run on 2026-10-09.
+
+**The party** (`NetworkManager.session.party`, `SessionParty`, `autoloads/session_party.gd`,
+host only). Players' avatars belong to the session, not to a map.
+
+- *Grants by session id.* GameState keeps CONTROL grants by the peer ids at the table, and
+  `TokenPermissionHandler` clears a leaver's. The party keeps every deliberate grant and revoke
+  (`GameState.token_permission_granted` / `token_permission_revoked`, which the clears never
+  emit) as session id -> network ids (`get_grants()`), and drops a token's when the token is
+  removed (`token_removed`, which a table's teardown emits for every token). `admit_peer()`
+  calls `restore_grants()` before any table state goes out, so a player who rejoins controls
+  its tokens again under its new peer id; the late joiner's full state carries the grant. The
+  GM's Revoke control also drops the grants of players who are away (`revoke_all()`).
+- *Members.* A member is an avatar token a session player controls; an avatar nobody controls
+  and every prop stay with the map. Granting a player an avatar adopts it: it leaves the
+  active level's placements (`TokenSpawner.release_placement`), so saving the map no longer
+  writes it; when its last owner loses it, it gets a placement again (`restore_placement`).
+- *Travel.* Root calls `take()` before a table goes (Return everyone to the room, or a map
+  change in play): each member as `{"state": TokenState dict, "owners": [session ids]}`, plain
+  data a session file can write (`get_members()`). Once the next map has loaded
+  (`Root._on_level_play_loaded`), `set_out()` rebuilds each member under its own network id
+  outside that map's placements (`TokenSpawner.place_session_token`), on a block one 5 ft
+  square apart around the map's spawn point (`LevelData.spawn_point`, optional, written only
+  when `has_spawn_point`; no authoring tool sets it yet) or, without one, the camera's ground
+  point; grants it again to each owner connected now (an owner who is away gets it on
+  rejoining); and a physics frame later sets each down with `TokenGrounding.reground` (cast
+  from above the map when it starts buried), shows it with its arrival, and sends the full
+  state. A client that was connected then gets the full state again on its table-loaded report,
+  since a state that lands before its loader's `clear_level()` is wiped (see Late Joiner
+  Support). A member the new map already has (a placement saved before it was adopted) is not
+  placed twice; its owners get it back where the map put it.
+- *Known gap.* An avatar the GM spawns in play and saves into the map before granting it is
+  saved under its placement id, which differs from its network id; if the session returns to
+  that map, the map's copy and the party's member both appear.
 
 **Where a joiner lands.** `NetworkManager._rpc_send_player_info()` calls `admit_peer()` once for
 each new peer that passed the version gate. In the room the joiner gets `_rpc_room_opened` and
@@ -336,8 +374,9 @@ there does):
 | TITLE > ROOM (host) | Host with a map: `host_session(level)` | `host_game()` with an "Opening a room..." wait; ROOM on `HOSTING`; on `connection_failed` the title stays, with the reason |
 | TITLE > ROOM or PLAYING (client) | Join: the join screen (`LobbyClient`) over the hidden title | Connect joins; ROOM on `room_opened`, PLAYING on `game_starting` when a table is out; a rejected client stays on the join screen |
 | ROOM > PLAYING | Start (Set out): `_on_lobby_start_game()` | Refused with "Choose a map to set out first" when no map is pending; else `close()`, `notify_game_starting()`, PLAYING broadcasts the level |
-| PLAYING > ROOM | Pause > Return everyone to the room (host): `return_to_room()` | `open()`, then the table (GameMap, tokens, GameState) is torn down on every peer |
-| PLAYING > PLAYING | Change Level in play | The level broadcast moves the table pointer |
+| PLAYING > ROOM | Pause > Return everyone to the room (host): `return_to_room()` | The party is taken, `open()`, then the table (GameMap, tokens, GameState) is torn down on every peer |
+| PLAYING > PLAYING | Change Level in play | The party is taken; the level broadcast moves the table pointer |
+| (any) > PLAYING, map loaded | `_on_level_play_loaded()` (host) | The party is set out on the new map |
 | ROOM or PLAYING > TITLE | Leave, Cancel, Return to Title | Title first, then `disconnect_game()`, so a voluntary leave is not read as a lost connection; the host leaving ends the session |
 
 A client that loses the host in the room gets the same "Disconnected" dialog as at a table.
@@ -679,18 +718,28 @@ log and one `NET_RESULT {json}` line to `--out` and quits 0 on a pass; extending
   leave path the host's copy stayed locked to the departed peer (`host_token_unlocked_ok` and
   `host_drag_allowed_ok` false).
 
-- `enet_session_room` (`--peers=5 --timeout-s=240`): the session room. client and client2 join
-  at the start and land in the room; the host sets out table A, returns everyone to the room
-  (host and clients check no tokens, nothing served, the session open with no table), client3
-  joins in the room, the host sets out table B, and client4 joins at table B and gets its token
-  without ever seeing the room. Both tables are the shipped map under two level folders, so the
+- `enet_session_room` (`--peers=5 --timeout-s=300`): the session room and its party. Each
+  client reports its role as its session key. client and client2 join at the start and land in
+  the room; the host sets out table A with Hero A (granted to client, so it leaves A's
+  placements) and Bystander A (nobody's), returns everyone to the room (host and clients check
+  no tokens, nothing served, the session open with no table; the host's party is Hero A, owned
+  by `enet-client`), client3 joins in the room, the host sets out table B, and client4 joins at
+  table B and gets its tokens without ever seeing the room. On table B Hero A is back under its
+  network id, grounded (within 5 cm of where a drop there lands), controlled by client only,
+  and absent from the placements a save of table B writes (the host saves and reloads it);
+  Bystander A stayed behind. Both tables are the shipped map under two level folders, so the
   shelf ends as both folders and the pointer on table B. Every client keeps its peer id with no
-  offline event; the host keeps one peer object and room code; client then leaves the way the
-  pause menu does, with no "connection lost" dialog, and keeps its session entry with no peer.
+  offline event; the host keeps one peer object and room code. client then leaves the way the
+  pause menu does, with no "connection lost" dialog (the host keeps its entry with no peer and
+  its grant by session id), rejoins through the join screen with a new peer id, lands at table
+  B and controls Hero A again; the host ends with five session players.
 
 All three earlier ones passed through the launcher on 2026-10-09, each in about 1.4 s on the
 host, with no shipped store file changed (31,435 files watched) and every test root removed;
-`enet_session_room` passed the same way in about 4.9 s on the host.
+`enet_session_room` passed the same way in about 4.9 s on the host. With the party and the
+rejoin it passed on every peer later on 2026-10-09 in about 5.5 s on the host (three runs); the
+launcher's store check flagged only level folders other sessions were writing into the real
+store at the time (`_biglf_*`, `_p4b3_*`), never the scenario's own.
 
 The launcher fails a run at once (killing every peer) when a peer has not opened its scenario
 log 60 s after the start (`STARTUP_S`): a scenario script that fails to parse leaves a bare scene
@@ -794,7 +843,30 @@ signal session_changed                    # shelf, table pointer or players chan
 func open() -> void                       # Return everyone to the room
 func close() -> void                      # just before game_starting
 func note_table_out(level_dict: Dictionary) -> void   # from broadcast_level_data()
-func admit_peer(peer_id: int) -> StringName           # from _rpc_send_player_info(); &"room" or &"table"
+func admit_peer(peer_id: int, reported: Dictionary = {}) -> StringName
+                                          # from _rpc_send_player_info() with the reported info;
+                                          # restores a returning player's grants; &"room" or &"table"
+var party: SessionParty
+```
+
+### SessionParty
+
+`NetworkManager.session.party`, node `/root/NetworkManager/Session/Party`,
+`autoloads/session_party.gd`. Host only. The model is in
+[Sessions](#sessions-the-room-and-the-table) ("The party").
+
+```gdscript
+func attach(controller: LevelPlayController) -> void  # Root, once: the table the party lands on
+func get_grants() -> Dictionary           # session id -> network ids it controls
+func owners_of(network_id: String) -> Array[String]
+func get_members() -> Array[Dictionary]   # between tables: {"state": TokenState dict, "owners"}
+func take() -> int                        # before a table goes
+func set_out() -> int                     # once the next map has loaded
+func restore_grants(session_id: String, peer_id: int) -> int   # from admit_peer()
+func revoke_all(network_id: String) -> void                    # the GM's Revoke control
+static func members_of(states: Dictionary, grants: Dictionary) -> Array[Dictionary]
+static func landing_spots(centre: Vector3, count: int, spacing := SPACING_M) -> Array[Vector3]
+static func landing_point(level: LevelData, game_map: GameMap) -> Vector3   # spawn point, else camera
 ```
 
 ### NetworkGameSync

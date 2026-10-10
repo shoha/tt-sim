@@ -37,12 +37,21 @@ signal state_batch_complete
 ## Emitted when a token permission is granted or revoked
 signal permissions_changed(network_id: String, peer_id: int)
 
+## Emitted by a deliberate grant or revoke only (grant_token_permission,
+## revoke_token_permission), never by the clears a leave, a token removal or a level change
+## make. The session keeps a player's grants by session id from these (SessionParty), so a
+## grant outlives the peer id it was made to.
+signal token_permission_granted(network_id: String, peer_id: int, permission: int)
+signal token_permission_revoked(network_id: String, peer_id: int, permission: int)
+
 ## Dictionary of all token states: network_id -> TokenState
 var _token_states: Dictionary = {}
 
 ## Per-token, per-player permissions: managed by TokenPermissions static class.
 ## Structure: { network_id -> { peer_id -> Array[TokenPermissions.Permission] } }
-## Session-only -- not saved to level files.
+## Session-only -- not saved to level files. Keyed by the peer ids at this table; the host's
+## session keeps each grant by session id (SessionParty) and grants it again to the peer id a
+## returning player has now.
 var _token_permissions: Dictionary = {}
 
 ## Active drag locks: network_id -> peer_id. Ephemeral -- not serialized.
@@ -259,6 +268,7 @@ func grant_token_permission(
 	var changed = TokenPermissions.grant(_token_permissions, network_id, peer_id, permission)
 	if changed:
 		permissions_changed.emit(network_id, peer_id)
+		token_permission_granted.emit(network_id, peer_id, permission)
 	return changed
 
 
@@ -270,6 +280,7 @@ func revoke_token_permission(
 	var changed = TokenPermissions.revoke(_token_permissions, network_id, peer_id, permission)
 	if changed:
 		permissions_changed.emit(network_id, peer_id)
+		token_permission_revoked.emit(network_id, peer_id, permission)
 	return changed
 
 

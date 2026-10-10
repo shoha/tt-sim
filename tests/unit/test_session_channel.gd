@@ -52,6 +52,16 @@ func test_session_ids_are_steam_ids_or_a_test_id() -> void:
 	)
 
 
+func test_without_steam_a_reported_key_is_the_session_id() -> void:
+	assert_eq(SessionChannel.session_id(0, 3, "ana"), SessionChannel.TEST_ID_PREFIX + "ana")
+	assert_eq(SessionChannel.session_id(76561198000000001, 3, "ana"), "76561198000000001")
+	assert_eq(SessionChannel.clean_key("Ana-2_b"), "Ana-2_b")
+	assert_eq(SessionChannel.clean_key(""), "")
+	assert_eq(SessionChannel.clean_key("a b"), "", "only letters, digits, - and _")
+	assert_eq(SessionChannel.clean_key("x".repeat(SessionChannel.MAX_SESSION_KEY + 1)), "")
+	assert_eq(SessionChannel.clean_key(5), "")
+
+
 func test_a_map_ref_is_keyed_by_its_folder_else_its_map_path() -> void:
 	var ref := SessionChannel.map_ref(_level_dict("camp", HASH))
 	assert_eq(ref, {"folder": "camp", "map_path": "", "hashes": {"map": HASH}})

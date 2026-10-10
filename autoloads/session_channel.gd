@@ -25,11 +25,13 @@ extends Node
 ## The shelf is the session's maps, each a MapRef {"folder", "map_path", "hashes"}: the level
 ## folder (or, for a level without one, its res:// map path) and the content hashes the
 ## clients checked. The table pointer is the ref_key() of the map on the table, "" in the
-## room. Players are keyed by session id, the Steam id as a decimal string (TEST_ID_PREFIX
-## plus the peer id when the transport is not Steam, as in the ENet scenarios), each with a
-## name and the peer id it has now (0 once it left), so later work (the party, grants) can
-## outlive a peer id. The host owns all of it and sends clients a summary on every change;
-## clients read their copy through the same getters.
+## room. Players are keyed by session id, the Steam id as a decimal string, each with a name
+## and the peer id it has now (0 once it left), so the party and its grants (`party`,
+## SessionParty) outlive a peer id: a player who rejoins gets a new peer id and the same
+## session id. A transport without Steam ids (the ENet scenarios, GUT) has no identity of its
+## own, so there the session id is TEST_ID_PREFIX plus the SESSION_KEY the joiner reports in
+## its player info, or plus its peer id when it reports none. The host owns all of it and
+## sends clients a summary on every change; clients read their copy through the same getters.
 ##
 ## Accessed via NetworkManager.session; do not add as a standalone autoload. Its RPCs live at
 ## /root/NetworkManager/Session on every peer.
@@ -41,10 +43,19 @@ signal session_changed
 
 ## Session id prefix for a peer on a transport without Steam ids (ENet scenarios, tests).
 const TEST_ID_PREFIX := "enet-"
+## Player info key a joiner on a transport without Steam ids reports as its identity, so a
+## rejoin keeps its session id there. Ignored over Steam, where the transport's Steam id is
+## the identity and a client cannot claim another's.
+const SESSION_KEY := "session_key"
+const MAX_SESSION_KEY := 32
+const SESSION_KEY_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
 ## Bounds on a summary from the host (it is untrusted input like any RPC payload).
 const MAX_SHELF := 64
 const MAX_SESSION_PLAYERS := 64
 const MAX_TEXT := 256
+
+## The players' avatars and their grants by session id (host; see SessionParty).
+var party: SessionParty
 
 var _open := false
 var _shelf: Array[Dictionary] = []
@@ -58,6 +69,9 @@ func _ready() -> void:
 	var manager := get_parent()
 	manager.connection_state_changed.connect(_on_connection_state_changed)
 	manager.player_left.connect(_on_player_left)
+	party = SessionParty.new()
+	party.name = "Party"
+	add_child(party)
 
 
 # =============================================================================
@@ -145,14 +159,27 @@ func note_table_out(level_dict: Dictionary) -> void:
 	_publish()
 
 
-## Host: a new peer passed the version gate (NetworkManager._rpc_send_player_info). Records
-## it under its session id and sends it to the session's phase, the room or the table;
-## returns that phase (join_phase()).
-func admit_peer(peer_id: int) -> StringName:
+## Host: a new peer passed the version gate (NetworkManager._rpc_send_player_info, with the
+## player info it reported). Records it under its session id, gives a returning player its
+## grants back (SessionParty.restore_grants, before any table state goes out) and sends it
+## to the session's phase, the room or the table; returns that phase (join_phase()).
+func admit_peer(peer_id: int, reported: Dictionary = {}) -> StringName:
 	if not NetworkManager.is_host():
 		return &""
 	var info: Dictionary = NetworkManager.get_players().get(peer_id, {})
-	_add_player(session_id_for_peer(peer_id), str(info.get("name", "")), peer_id)
+	var id := session_id_for_peer(peer_id, clean_key(reported.get(SESSION_KEY)))
+	# A reported key (no Steam) that a player still connected holds is not this joiner's. A
+	# Steam id is the transport's own: a stale connection of the same player gives way to it.
+	var holder := peer_for(id)
+	if (
+		not multiplayer.multiplayer_peer is SteamMultiplayerPeer
+		and holder > 0
+		and holder != peer_id
+		and NetworkManager.get_players().has(holder)
+	):
+		id = session_id(0, peer_id)
+	_add_player(id, str(info.get("name", "")), peer_id)
+	party.restore_grants(id, peer_id)
 	_publish()
 	var phase := join_phase(_open, _table)
 	# Only a connected remote peer is sent anywhere: a direct call outside a real RPC (peer
@@ -179,8 +206,8 @@ static func join_phase(room_open: bool, table: String) -> StringName:
 
 
 ## The session id of `peer_id`: its Steam id when the transport is Steam, else
-## TEST_ID_PREFIX plus the peer id.
-func session_id_for_peer(peer_id: int) -> String:
+## TEST_ID_PREFIX plus `key` (a clean_key() the joiner reported) or, without one, the peer id.
+func session_id_for_peer(peer_id: int, key: String = "") -> String:
 	var steam_id := 0
 	var transport := multiplayer.multiplayer_peer
 	if transport is SteamMultiplayerPeer:
@@ -188,12 +215,29 @@ func session_id_for_peer(peer_id: int) -> String:
 			steam_id = Steam.getSteamID()
 		else:
 			steam_id = (transport as SteamMultiplayerPeer).get_steam_id_for_peer_id(peer_id)
-	return session_id(steam_id, peer_id)
+	return session_id(steam_id, peer_id, key)
 
 
-## A player's session id from its Steam id (0 when there is none) and peer id. Pure.
-static func session_id(steam_id: int, peer_id: int) -> String:
-	return str(steam_id) if steam_id > 0 else TEST_ID_PREFIX + str(peer_id)
+## A player's session id from its Steam id (0 when there is none), peer id and reported key
+## (used only without a Steam id). Pure.
+static func session_id(steam_id: int, peer_id: int, key: String = "") -> String:
+	if steam_id > 0:
+		return str(steam_id)
+	return TEST_ID_PREFIX + (key if key != "" else str(peer_id))
+
+
+## A reported SESSION_KEY as the session may use it: 1 to MAX_SESSION_KEY letters, digits,
+## "-" or "_", else "" (untrusted player info). Pure.
+static func clean_key(raw: Variant) -> String:
+	if not raw is String:
+		return ""
+	var key := raw as String
+	if key.is_empty() or key.length() > MAX_SESSION_KEY:
+		return ""
+	for character in key:
+		if not SESSION_KEY_CHARS.contains(character):
+			return ""
+	return key
 
 
 ## The MapRef of a level dictionary: its folder, its map path when it has no folder, and its
@@ -214,12 +258,15 @@ static func ref_key(ref: Dictionary) -> String:
 	return folder if folder != "" else str(ref.get("map_path", ""))
 
 
-## Forget the session (NetworkManager went offline, or this peer joined someone else's).
+## Forget the session, its party included (NetworkManager went offline, or this peer joined
+## someone else's).
 func reset() -> void:
 	_open = false
 	_shelf.clear()
 	_table = ""
 	_players.clear()
+	if party:
+		party.reset()
 
 
 func _begin() -> void:

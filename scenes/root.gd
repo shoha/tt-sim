@@ -16,6 +16,8 @@ extends Node3D
 ## - ROOM > PLAYING: Set out (_on_lobby_start_game(): refused with no map).
 ## - PLAYING > ROOM: return_to_room() (host: the table is torn down, the room opens for all).
 ## - PLAYING > PLAYING: a map change in play (_on_play_level_requested()).
+## Leaving a table, the host takes the party (the players' avatars, SessionParty) along, and
+## sets it out on the next map once that map has loaded (_on_level_play_loaded()).
 ## - ROOM or PLAYING > TITLE: leave, or the host ends the session.
 
 signal state_changed(old_state: State, new_state: State)
@@ -138,6 +140,8 @@ func _on_asset_download_failed(
 func _setup_level_play_controller() -> void:
 	_level_play_controller = LevelPlayController.new()
 	add_child(_level_play_controller)
+	# The party (players' avatars) lands on this table after each map change (SessionParty).
+	NetworkManager.session.party.attach(_level_play_controller)
 	_level_play_controller.level_loaded.connect(_on_level_play_loaded)
 	_level_play_controller.level_cleared.connect(_on_level_cleared)
 
@@ -196,6 +200,8 @@ func _on_play_level_requested(level_data: LevelData) -> void:
 		# Set pending data to prevent level_cleared from triggering title screen
 		# Note: Don't clear this until loading completes (play_level is async)
 		_pending_level_data = level_data
+		# The party leaves with the session before the load clears the table.
+		NetworkManager.session.party.take()
 		_level_play_controller.play_level(level_data)
 		# _pending_level_data is cleared in _on_level_play_loaded() when loading completes
 
@@ -464,11 +470,13 @@ func _end_room_wait() -> void:
 
 ## PLAYING > ROOM (host): put the table away for everyone. The connection, the players and
 ## the Steam lobby stay; GameMap is torn down as on any move, and every client is sent to
-## the room (SessionChannel.open). The next map is chosen in the room.
+## the room (SessionChannel.open). The party (the players' avatars) is taken first and set
+## out on the next map (SessionParty). The next map is chosen in the room.
 func return_to_room() -> void:
 	if not NetworkManager.is_host() or State.PLAYING not in _state_stack:
 		return
 	_pending_level_data = null
+	NetworkManager.session.party.take()
 	NetworkManager.session.open()
 	change_state(State.ROOM)
 
@@ -845,6 +853,8 @@ func _on_level_play_loaded(_level_data: LevelData) -> void:
 	# Already in PLAYING state, no need to transition
 	# Clear pending data now that loading is complete
 	_pending_level_data = null
+	# The party that left the last table with the session lands on this one (host).
+	NetworkManager.session.party.set_out()
 
 
 func _on_level_cleared() -> void:

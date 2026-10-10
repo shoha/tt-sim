@@ -103,6 +103,65 @@ func untrack_network_token(network_id: String) -> void:
 	_network_id_to_placement.erase(network_id)
 
 
+# =============================================================================
+# SESSION TOKENS (the party, SessionParty)
+# =============================================================================
+
+
+## Put a party member on the board from `state`, under its own network id and outside the
+## active level's placements, so saving the map never writes it. Tracked, wired to the
+## context menu and the state broadcasts, and registered in GameState like a level token;
+## the caller grounds it and broadcasts. Returns the token, or null without a GameMap or
+## authority, or when it cannot be built.
+func place_session_token(state: TokenState) -> BoardToken:
+	if not _game_map or not GameState.has_authority():
+		return null
+	var token := RootNetworkHandler.create_token_from_state(state)
+	if token == null:
+		return null
+	_game_map.drag_and_drop_node.add_child(token)
+	track_network_token(token)
+	_connect_token_context_menu(token)
+	GameState.register_token(state)
+	_connect_token_state_signals(token)
+	return token
+
+
+## A token that became a player's (SessionParty adopts it) leaves the active level's
+## placements but stays on the board and tracked, so saving the map no longer writes it.
+## Returns true when a placement was removed.
+func release_placement(network_id: String) -> bool:
+	var active_level_data := _active_level()
+	var placement_id: String = _network_id_to_placement.get(network_id, "")
+	if active_level_data == null or placement_id == "":
+		return false
+	return active_level_data.remove_token_placement(placement_id)
+
+
+## A token no player owns any more is the map's again: it gets a placement in the active
+## level (under the id it is tracked by), so saving the map writes it. Returns true when a
+## placement was added.
+func restore_placement(network_id: String) -> bool:
+	var active_level_data := _active_level()
+	var token := _find_token_by_network_id(network_id)
+	if active_level_data == null or token == null:
+		return false
+	var placement_id: String = _network_id_to_placement[network_id]
+	if active_level_data.get_token_placement(placement_id) != null:
+		return false
+	var placement := TokenPlacement.from_board_token(
+		token, token.pack_id, token.asset_id, token.variant_id
+	)
+	placement.placement_id = placement_id
+	active_level_data.add_token_placement(placement)
+	return true
+
+
+## The active level, or null before setup().
+func _active_level() -> LevelData:
+	return _get_active_level_data_fn.call() if _get_active_level_data_fn.is_valid() else null
+
+
 ## Connect to token signals for broadcasting state changes over network.
 ## Stores callables so they can be disconnected later (prevents lambda accumulation).
 func _connect_token_state_signals(token: BoardToken) -> void:

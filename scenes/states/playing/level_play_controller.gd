@@ -341,6 +341,23 @@ func untrack_network_token(network_id: String) -> void:
 	_token_spawner.untrack_network_token(network_id)
 
 
+## Put a party member on the board outside the level's placements (SessionParty). Forwards
+## to TokenSpawner.place_session_token.
+func place_session_token(state: TokenState) -> BoardToken:
+	return _token_spawner.place_session_token(state)
+
+
+## A player's token leaves the level's placements (SessionParty adopts it). Forwards to
+## TokenSpawner.release_placement.
+func release_placement(network_id: String) -> bool:
+	return _token_spawner.release_placement(network_id)
+
+
+## A token no player owns is the map's again. Forwards to TokenSpawner.restore_placement.
+func restore_placement(network_id: String) -> bool:
+	return _token_spawner.restore_placement(network_id)
+
+
 ## O(1) lookup by network id through TokenSpawner's reverse index. Use this
 ## rather than reading spawned_tokens, which is keyed by placement id.
 func find_token_by_network_id(network_id: String) -> BoardToken:

@@ -127,6 +127,13 @@ const DEFAULT_DISPLAY_UNIT_PER_CELL := 5.0
 ## Reserved for future hex support: "hex_flat", "hex_pointy".
 @export var grid_type: String = "square"
 
+## Where the session's party (the players' avatars, SessionParty) lands when this map is set
+## out, when has_spawn_point; without one it lands at the camera's ground point. Optional and
+## written only when set; authors have no tool for it yet.
+@export_group("Party")
+@export var has_spawn_point: bool = false
+@export var spawn_point: Vector3 = Vector3.ZERO
+
 ## Token placements
 @export_group("Tokens")
 @export var token_placements: Array[TokenPlacement] = []
@@ -388,6 +395,8 @@ func to_dict() -> Dictionary:
 		data["map_scale"] = SerializationUtils.vec3_to_dict(map_scale)
 	if map_offset != Vector3.ZERO:
 		data["map_offset"] = SerializationUtils.vec3_to_dict(map_offset)
+	if has_spawn_point:
+		data["spawn_point"] = SerializationUtils.vec3_to_dict(spawn_point)
 	return data
 
 
@@ -413,6 +422,9 @@ static func from_dict(data: Dictionary) -> LevelData:
 
 	level.map_scale = SerializationUtils.dict_to_vec3(data.get("map_scale", {}), Vector3.ONE)
 	level.map_offset = SerializationUtils.dict_to_vec3(data.get("map_offset", {}))
+	var spawn: Variant = spawn_point_from(data.get("spawn_point"))
+	level.has_spawn_point = spawn is Vector3
+	level.spawn_point = spawn if spawn is Vector3 else Vector3.ZERO
 
 	level.light_intensity_scale = data.get("light_intensity_scale", 1.0)
 	level.environment_preset = data.get("environment_preset", "")
@@ -472,3 +484,17 @@ static func from_dict(data: Dictionary) -> LevelData:
 			level.token_placements.append(TokenPlacement.from_dict(placement_data))
 
 	return level
+
+
+## The spawn point a level dictionary holds ({"x", "y", "z"}, each a finite number), or null
+## when it has none or it is malformed (a level dictionary from the host is untrusted). Pure.
+static func spawn_point_from(raw: Variant) -> Variant:
+	if not raw is Dictionary:
+		return null
+	var axes: Array[float] = []
+	for axis in ["x", "y", "z"]:
+		var value: Variant = (raw as Dictionary).get(axis)
+		if not (value is float or value is int) or not is_finite(float(value)):
+			return null
+		axes.append(float(value))
+	return Vector3(axes[0], axes[1], axes[2])
