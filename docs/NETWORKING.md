@@ -865,7 +865,45 @@ the client in the box.
   allow `--timeout-s` of about 240. `--level` must start with `_nettest_`; the host
   copies the map into that level and deletes it afterwards, and the client clears its
   own cached copy, so no manual cache cleanup is needed. Each side writes one
-  `NET_RESULT {json}` line.
+  `NET_RESULT {json}` line. Passed on both sides on 2026-10-10: the 20.5 MB map (12.9 MB
+  compressed, 394 chunks) in 13.1 s, 961 KiB/s, hashes equal.
+- Map parity: `tests/net/steam_authored_parity.tscn` (MAP_AUTHORING.md, "Open work"), same
+  arguments with `--level=_nettest_parity`. It plays a level the render job
+  `nettest_parity_build` saves into the real library, so run that job first and delete
+  `_nettest_parity` afterwards (test levels never stay in the library). With the room join the
+  client's `SessionPrefetch` fetches the level's `map.ttmap` in the room before the host sets
+  it out, so the table's load finds it cached; the scenario counts that arrival as the
+  download. Passed on both sides on 2026-10-10 (fingerprints equal, the deck, ford and wading
+  tokens at the host's heights, the wading token's ring shown).
+- Session: `tests/net/steam_session.tscn`, the hosted session over real Steam (the ENet
+  scenarios' flow with the game's own Steam path). Run the host unsandboxed and the client in
+  the box with the same `--rendezvous` prefix (its files are `<prefix>.*`; the host deletes an
+  earlier run's at start), each with its own `--out`, `--data-root` (required: the host
+  builds `_nettest_session_a`, a flat authored map, and `_nettest_session_b`, the shipped GLB in
+  a folder of its own, there; each peer deletes its root when it finishes) and
+  `--engine-log`, passed to Godot as `--log-file` too, in the box's OpenFilePath folder; allow
+  `--timeout-s` of about 300. The host hosts from the title (`host_game()`, a Steam lobby); the
+  client joins in place on the title's card with the real room code
+  (`SessionFlow.join_session()`) and lands in the room; the host shelves A and B, and once the
+  session's holdings show the client holding both (prefetch in the room) sets A out, places
+  Hero and grants it to the client, moves the table to B (Hero travels with the party) and
+  then to the room. The client leaves from the room (the room's Leave), rejoins on the card
+  with the same code (`--rejoin-delay-s` waits on the title first), lands in the room under a
+  new peer id and the same session id, its Steam id, and controls Hero again when the host
+  sets A out; the host then ends the session at the table (Pause > Return to Title). Each side
+  reads its own engine log for the teardown errors `net_log_check.gd` names and writes one
+  `NET_RESULT {json}` line; the host folds in the client's. Passed on both sides on
+  2026-10-10, twice (once rejoining at once, once after 15 s), in about 44 and 51 s on the
+  host: the client's session id was its Steam id on both connections
+  (`get_steam_id_for_peer_id()` on the host agreed), B's 394 chunks arrived in the room 13.0 s
+  after shelving, neither table downloaded anything, no teardown errors on either side.
+- What Steam does differently from ENet (the session runs): a voluntary leave
+  (`disconnect_game()`) reaches the host 8.0 and 9.0 s later, where ENet reports it at once,
+  and the map download scenario's client quitting was seen 6.6 s late. A rejoin started at once
+  is held until then: its connection arrived 0.55 s after the host dropped the old one (8.5 s
+  after the leave), so the session's stale-connection handover (`admit_peer()` keeping a Steam
+  id's entry for a new peer while the old one is still connected) was not reached; after a
+  15 s wait the rejoin took 0.4 s.
 
 #### ENet scenarios (no Steam)
 
