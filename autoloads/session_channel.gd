@@ -37,9 +37,13 @@ extends Node
 ##
 ## Holdings are readiness as download state (there is no manual Ready): each client reports
 ## which shelf maps it already holds at the host's content (holds_map(): its own level folder
-## or the download cache), after every summary and on returning to the room, and the host
-## counts itself as holding every shelf map. The room shows them ("3 of 4 have it"); Set out
-## never waits for them. There is no partial progress yet: a map is downloaded at the table.
+## or the download cache), after every summary, on returning to the room and when a fetch
+## finishes, and the host counts itself as holding every shelf map. Clients fetch the shelf
+## maps they lack in the background (`prefetch`, SessionPrefetch: the table's map, the GM's
+## selected map (select_map()), then shelf order) and report their progress, so the room shows
+## "Getting it · 40%" and "3 of 4 have it"; Set out never waits for them. The host serves map
+## files only for the map on the table and the shelf maps (servable_folders(), the whitelist
+## AssetStreamer checks); unshelve() takes a map off the shelf and stops its transfers.
 ##
 ## A table move is announced before it happens: the host's TableMover counts it down on
 ## every peer (announce_move(), cancel_move()), and the move itself is the level broadcast or
@@ -75,10 +79,14 @@ const MAX_NOTICE_S := 10.0
 
 ## The players' avatars and their grants by session id (host; see SessionParty).
 var party: SessionParty
+## The background fetch of shelf maps and every player's progress (see SessionPrefetch).
+var prefetch: SessionPrefetch
 
 var _open := false
 var _shelf: Array[Dictionary] = []
 var _table := ""
+## The GM's selected shelf map (its ref key), which clients fetch right after the table's
+var _selected := ""
 ## session id -> {"name": String, "peer_id": int}
 var _players: Dictionary = {}
 ## session id -> Array of the ref_key()s that client holds (host: as reported; clients: the
@@ -96,6 +104,9 @@ func _ready() -> void:
 	party = SessionParty.new()
 	party.name = "Party"
 	add_child(party)
+	prefetch = SessionPrefetch.new()
+	prefetch.name = "Prefetch"
+	add_child(prefetch)
 
 
 # =============================================================================
@@ -111,6 +122,11 @@ func is_open() -> bool:
 ## The ref_key() of the map on the table, or "" in the room.
 func get_table() -> String:
 	return _table
+
+
+## The ref_key() of the GM's selected shelf map, or "".
+func get_selected() -> String:
+	return _selected
 
 
 ## The maps set out this session, oldest first (MapRef copies).
@@ -227,6 +243,58 @@ func shelve(level_dict: Dictionary) -> String:
 	return key
 
 
+## Host: the GM selected the shelf map `key` ("" for none) in the room or the drawer; clients
+## fetch it right after the map on the table. A key not on the shelf selects nothing.
+func select_map(key: String) -> void:
+	if not NetworkManager.is_host():
+		return
+	var selected := key if _shelf_keys().has(key) else ""
+	if selected != _selected:
+		_selected = selected
+		_publish()
+
+
+## Host: take the map `key` off the shelf. The map on the table stays. Its holdings,
+## progress and selection go, the host stops sending its files to anyone (it is no longer
+## served), and each client drops its fetch of it on the summary. Returns whether it was
+## taken off.
+func unshelve(key: String) -> bool:
+	if not NetworkManager.is_host() or key == "" or key == _table:
+		return false
+	var index := _shelf.find_custom(func(r: Dictionary) -> bool: return ref_key(r) == key)
+	if index < 0:
+		return false
+	var folder := str(_shelf[index].get("folder", ""))
+	_shelf.remove_at(index)
+	for id: String in _holdings:
+		(_holdings[id] as Array).erase(key)
+	if _selected == key:
+		_selected = ""
+	prefetch.forget_map(key)
+	if folder != "" and AssetManager.streamer:
+		AssetManager.streamer.drop_level_transfers(folder)
+	_publish()
+	return true
+
+
+## Host: the level folders whose map files the host serves (the whitelist AssetStreamer
+## checks every level map request against): the map on the table and every shelf map.
+func servable_folders() -> Array:
+	return servable(NetworkManager.get_current_level_folder(), _shelf)
+
+
+## The folders `table_folder` and the folder maps of `shelf` (MapRefs), each once. Pure.
+static func servable(table_folder: String, shelf: Array) -> Array:
+	var out: Array = []
+	if table_folder != "":
+		out.append(table_folder)
+	for ref: Dictionary in shelf:
+		var folder := str(ref.get("folder", ""))
+		if folder != "" and not out.has(folder):
+			out.append(folder)
+	return out
+
+
 ## Host: a new peer passed the version gate (NetworkManager._rpc_send_player_info, with the
 ## player info it reported). Records it under its session id, gives a returning player its
 ## grants back (SessionParty.restore_grants, before any table state goes out) and sends it
@@ -325,12 +393,23 @@ static func map_ref(level_dict: Dictionary) -> Dictionary:
 ## hash or in the download cache (`cached_file`, AssetStreamer.get_cached_map_file's
 ## signature). A folder map the host sent no hashes for is not counted as held.
 static func holds_map(ref: Dictionary, cached_file: Callable) -> bool:
-	var folder := str(ref.get("folder", ""))
-	if folder == "":
+	if str(ref.get("folder", "")) == "":
 		return true
-	var hashes: Dictionary = ref.get("hashes", {})
-	if hashes.is_empty():
+	if (ref.get("hashes", {}) as Dictionary).is_empty():
 		return false
+	return missing_variants(ref, cached_file).is_empty()
+
+
+## The map files (variant ids) of `ref` this peer lacks at the host's content: each hashed
+## file not in its own level folder with the same hash nor in the download cache
+## (`cached_file`, as for holds_map()). None for a map that ships with the game or one the
+## host sent no hashes for (nothing to fetch).
+static func missing_variants(ref: Dictionary, cached_file: Callable) -> Array:
+	var folder := str(ref.get("folder", ""))
+	var missing: Array = []
+	if folder == "":
+		return missing
+	var hashes: Dictionary = ref.get("hashes", {})
 	for variant: String in hashes:
 		var expected := str(hashes[variant])
 		var local := Paths.get_level_map_file_for_variant(folder, variant)
@@ -338,8 +417,8 @@ static func holds_map(ref: Dictionary, cached_file: Callable) -> bool:
 			if MapFileHash.hash_file_cached(local) == expected:
 				continue
 		if str(cached_file.call(folder, variant, expected)) == "":
-			return false
-	return true
+			missing.append(variant)
+	return missing
 
 
 ## What identifies a MapRef on the shelf and in the table pointer: the folder, else the map
@@ -355,11 +434,14 @@ func reset() -> void:
 	_open = false
 	_shelf.clear()
 	_table = ""
+	_selected = ""
 	_players.clear()
 	_holdings.clear()
 	_reported = []
 	if party:
 		party.reset()
+	if prefetch:
+		prefetch.reset()
 
 
 func _begin() -> void:
@@ -391,6 +473,7 @@ func _on_player_left(peer_id: int, _info: Dictionary) -> void:
 	if session_id_value == "":
 		return
 	_players[session_id_value]["peer_id"] = 0
+	prefetch.forget_player(session_id_value)
 	_publish()
 
 
@@ -398,8 +481,8 @@ func _can_send() -> bool:
 	return multiplayer.multiplayer_peer != null and NetworkManager.is_host()
 
 
-## The summary clients keep: the phase, the table pointer, the shelf, the players and what
-## each holds of the shelf.
+## The summary clients keep: the phase, the table pointer, the shelf, the players, what each
+## holds of the shelf, the GM's selected map and what each is getting (percent per map).
 func summary() -> Dictionary:
 	return {
 		"open": _open,
@@ -407,6 +490,8 @@ func summary() -> Dictionary:
 		"shelf": get_shelf(),
 		"players": get_players(),
 		"holdings": get_holdings(),
+		"selected": _selected,
+		"progress": prefetch.get_progress() if prefetch else {},
 	}
 
 
@@ -419,12 +504,22 @@ func _publish() -> void:
 ## A host's summary as a client may keep it: known keys and types only, bounded sizes,
 ## hashes through MapFileHash.sanitize. Pure.
 static func sanitize_summary(raw: Variant) -> Dictionary:
-	var out := {"open": false, "table": "", "shelf": [], "players": {}, "holdings": {}}
+	var out := {
+		"open": false,
+		"table": "",
+		"shelf": [],
+		"players": {},
+		"holdings": {},
+		"selected": "",
+		"progress": {},
+	}
 	if not raw is Dictionary:
 		return out
 	var summary_in: Dictionary = raw
 	out.open = summary_in.get("open") is bool and bool(summary_in.open)
 	out.table = _clip(summary_in.get("table", ""))
+	out.selected = _clip(summary_in.get("selected", ""))
+	out.progress = SessionPrefetch.sanitize_progress(summary_in.get("progress", {}))
 	var shelf: Variant = summary_in.get("shelf", [])
 	if shelf is Array:
 		for ref: Variant in (shelf as Array).slice(0, MAX_SHELF):
@@ -477,7 +572,7 @@ func _rpc_room_opened() -> void:
 	_table = ""
 	# Back in the room the map just left is in the cache: say so even if nothing else changed.
 	_reported = []
-	_report_holdings()
+	report_holdings()
 	room_opened.emit()
 
 
@@ -509,13 +604,15 @@ func _rpc_session_summary(raw: Dictionary) -> void:
 	_shelf.assign(clean.shelf)
 	_players = clean.players
 	_holdings = clean.holdings
-	_report_holdings()
+	_selected = clean.selected
+	prefetch.set_progress(clean.progress)
+	report_holdings()
 	session_changed.emit()
 
 
 ## Client: tell the host which shelf maps this peer holds, when that changed since the last
-## report.
-func _report_holdings() -> void:
+## report (after a summary, back in the room, and when a fetch finishes).
+func report_holdings() -> void:
 	if NetworkManager.is_host():
 		return
 	var streamer: Node = AssetManager.streamer

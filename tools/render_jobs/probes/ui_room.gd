@@ -32,7 +32,7 @@ extends RefCounted
 ## - `client_room` (`folder`; `shelf`, default true; `select`, default 0): a player's room
 ##   with the same players and shelf, the local player one of them, the SAMPLE_MAPS entry at
 ##   index `select` selected to look at (their own download state first: 0 is Old Mill, which
-##   they have, 1 Fen Crossing, which they get at the table; -1 selects nothing, as a player
+##   they have, 1 Fen Crossing, which they are getting at 40%; -1 selects nothing, as a player
 ##   who just joined sees it). `shelf` false is a room with no map yet.
 ## - `add_map`: on the staged room, the GM's Add a map picker over the library (closed with
 ##   the room by `close_room`).
@@ -156,7 +156,9 @@ static func _stage(base: Node, room: Node) -> void:
 ## A sample session summary (SessionChannel.summary()'s shape): the GM and SAMPLE_PLAYERS
 ## here, and with `with_shelf` the test level `folder` and SAMPLE_MAPS on the shelf, `table` on
 ## the table. Everyone holds the test level, three of four the first sample, the GM alone the
-## second. `long` gives the GM and the second sample map their long names.
+## second. The players fetch what they lack in the background ("progress"): Starling is
+## getting the first sample, Wren the second, and the others wait their turn for it. `long`
+## gives the GM and the second sample map their long names.
 static func _summary(folder: String, with_shelf: bool, table: String, long := false) -> Dictionary:
 	var shelf: Array = []
 	if with_shelf:
@@ -176,8 +178,22 @@ static func _summary(folder: String, with_shelf: bool, table: String, long := fa
 		players[id] = {"name": SAMPLE_PLAYERS[id], "peer_id": peer}
 		holdings[id] = keys.slice(0, 1 if id == "enet-starling" else 2)
 		peer += 1
+	var progress := {}
+	if with_shelf:
+		var mill: String = SAMPLE_MAPS.keys()[0]
+		var fen: String = SAMPLE_MAPS.keys()[1]
+		progress = {
+			"enet-starling": {mill: 72, fen: 0},
+			"enet-wren": {fen: 40},
+			"enet-ranger": {fen: 0},
+		}
 	return {
-		"open": table == "", "table": table, "shelf": shelf, "players": players, "holdings": holdings
+		"open": table == "",
+		"table": table,
+		"shelf": shelf,
+		"players": players,
+		"holdings": holdings,
+		"progress": progress,
 	}
 
 

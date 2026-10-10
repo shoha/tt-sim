@@ -25,6 +25,14 @@ extends Node
 ##     (StreamPeerQueue), so its upload stays near one connection's send rate whatever
 ##     the player count. A head with no ack progress for STALL_TIMEOUT_MS goes to the
 ##     back of the queue and later resumes from its last ack.
+##   - Table first: a host transfer is a prefetch (is_prefetch_transfer(): a level map file
+##     of a shelf map that is not on the table, SessionPrefetch) or a table transfer
+##     (everything else). Peers with a table transfer are served before peers with only
+##     prefetches, and within one peer the table's transfers take the window first, so a
+##     prefetch yields to the table and resumes after. The class is read at every send,
+##     so a prefetch of the map just set out is a table transfer from then on. On the
+##     client a prefetch request takes none of the MAX_CONCURRENT_TRANSFERS slots, and
+##     cancel_download() drops one (a map that left the shelf).
 
 ## Signals
 ## Every listener must declare all five parameters, file_type included. Godot 4.7
@@ -116,8 +124,10 @@ func request_map_from_host(level_folder: String, priority: int = 50) -> void:
 
 ## Request one map file of a level from the host: variant "map" (map.glb) or "ttmap" (the
 ## authored map.ttmap). Any other variant fails at once, as the host would refuse it.
+## `prefetch` marks a background fetch of a shelf map (SessionPrefetch): it starts at once,
+## outside the concurrent download slots, and the host serves it after every table transfer.
 func request_map_file_from_host(
-	level_folder: String, variant_id: String, priority: int = 50
+	level_folder: String, variant_id: String, priority: int = 50, prefetch := false
 ) -> void:
 	var file_type := Paths.get_level_map_file_type(variant_id)
 	if file_type == "":
@@ -125,19 +135,24 @@ func request_map_file_from_host(
 			Paths.LEVEL_MAPS_PACK_ID, level_folder, variant_id, "Unknown map file", "model"
 		)
 		return
-	request_from_host(Paths.LEVEL_MAPS_PACK_ID, level_folder, variant_id, file_type, priority)
+	request_from_host(
+		Paths.LEVEL_MAPS_PACK_ID, level_folder, variant_id, file_type, priority, prefetch
+	)
 
 
 ## Request an asset from the host
 ## Called by AssetDownloader when no URL is available
 ## @param file_type: "model" or "icon" — determines which path/URL the host resolves
 ## and which cache slot the client stores the result under.
+## @param prefetch: a background fetch (see request_map_file_from_host). A table request for
+## a file already being prefetched takes that download over as a table download.
 func request_from_host(
 	pack_id: String,
 	asset_id: String,
 	variant_id: String,
 	file_type: String = "model",
 	priority: int = Constants.ASSET_PRIORITY_DEFAULT,
+	prefetch := false,
 ) -> void:
 	if not _enabled:
 		asset_failed.emit(pack_id, asset_id, variant_id, "P2P streaming disabled", file_type)
@@ -154,8 +169,10 @@ func request_from_host(
 
 	var key = "%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type]
 
-	# Already downloading?
+	# Already downloading? A table request takes a prefetch of the same file over.
 	if _client_downloads.has(key):
+		if not prefetch:
+			_client_downloads[key]["prefetch"] = false
 		return
 
 	# Already queued?
@@ -163,27 +180,40 @@ func request_from_host(
 		if req.key == key:
 			return
 
-	# Queue the request
-	_request_queue.append(
-		{
-			"key": key,
-			"pack_id": pack_id,
-			"asset_id": asset_id,
-			"variant_id": variant_id,
-			"file_type": file_type,
-			"priority": priority
-		}
-	)
+	var request := {
+		"key": key,
+		"pack_id": pack_id,
+		"asset_id": asset_id,
+		"variant_id": variant_id,
+		"file_type": file_type,
+		"priority": priority,
+		"prefetch": prefetch,
+	}
+	# A prefetch waits at the host, not here: it takes no download slot.
+	if prefetch:
+		_start_request(request)
+		return
 
+	_request_queue.append(request)
 	_request_queue.sort_custom(func(a, b): return a.priority < b.priority)
 	_process_request_queue()
 
 
-## Process the request queue
+## Process the request queue: start table requests while a slot is free (prefetches take
+## none).
 func _process_request_queue() -> void:
-	while _client_downloads.size() < MAX_CONCURRENT_TRANSFERS and _request_queue.size() > 0:
+	while _table_download_count() < MAX_CONCURRENT_TRANSFERS and _request_queue.size() > 0:
 		var request = _request_queue.pop_front()
 		_start_request(request)
+
+
+## The client downloads in progress that are not prefetches.
+func _table_download_count() -> int:
+	var count := 0
+	for download: Dictionary in _client_downloads.values():
+		if not bool(download.get("prefetch", false)):
+			count += 1
+	return count
 
 
 ## Start a request to the host
@@ -210,8 +240,15 @@ func _start_request(request: Dictionary) -> void:
 			"original_size": 0,
 			"started_at": Time.get_ticks_msec()
 		}
+	_client_downloads[key]["prefetch"] = bool(request.get("prefetch", false))
 
-	# Send request to host (peer_id 1) with resume info
+	_send_request(request, resume_from)
+	print("AssetStreamer: Requesting %s from host (resume_from=%d)" % [key, resume_from])
+
+
+## Sends a request to the host (peer_id 1) with resume info. Separate so tests can capture
+## it.
+func _send_request(request: Dictionary, resume_from: int) -> void:
 	rpc_id(
 		1,
 		"_rpc_request_asset",
@@ -221,7 +258,36 @@ func _start_request(request: Dictionary) -> void:
 		request.file_type,
 		resume_from
 	)
-	print("AssetStreamer: Requesting %s from host (resume_from=%d)" % [key, resume_from])
+
+
+## Client: stop downloading `key` ("pack/asset/variant/file_type"), queued or under way, and
+## forget any partial copy; the host is told to drop its transfer. Returns whether a download
+## was under way. For a prefetch whose map left the shelf (SessionPrefetch).
+func cancel_download(key: String) -> bool:
+	_request_queue = _request_queue.filter(func(r: Dictionary) -> bool: return r.key != key)
+	_partial_transfers.erase(key)
+	if not _client_downloads.has(key):
+		return false
+	var download: Dictionary = _client_downloads[key]
+	_client_downloads.erase(key)
+	_send_cancel(download)
+	print("AssetStreamer: Cancelled %s" % key)
+	_process_request_queue()
+	return true
+
+
+## Tells the host to drop the transfer of `download`. Separate so tests can capture it.
+func _send_cancel(download: Dictionary) -> void:
+	if multiplayer.multiplayer_peer == null or multiplayer.get_unique_id() == 1:
+		return
+	rpc_id(
+		1,
+		"_rpc_cancel_asset",
+		download.pack_id,
+		download.asset_id,
+		download.variant_id,
+		download.get("file_type", "model")
+	)
 
 
 ## The index of the first chunk not yet received (null), or the chunk count when every
@@ -248,17 +314,30 @@ static func is_level_request_authorized(
 
 
 ## The file the host serves for a level map request, or "" to refuse it: the level must be
-## authorized (is_level_request_authorized) and the variant one of the two map files
-## (Paths.get_level_map_file_for_variant), so neither client-controlled value can name any
-## other file. Pure and static for the same reason as is_level_request_authorized.
+## authorized (is_level_request_authorized) against one of `servable_folders` (the whitelist:
+## the map on the table and the session's shelf maps, SessionChannel.servable_folders()) and
+## the variant one of the two map files (Paths.get_level_map_file_for_variant), so neither
+## client-controlled value can name any other file. Pure and static for the same reason as
+## is_level_request_authorized.
 static func level_map_file_for_request(
-	requested_name: String, variant_id: String, active_level_folder: String
+	requested_name: String, variant_id: String, servable_folders: Array
 ) -> String:
-	if not is_level_request_authorized(requested_name, active_level_folder):
-		return ""
-	return Paths.get_level_map_file_for_variant(
-		Paths.sanitize_level_name(requested_name), variant_id
-	)
+	for folder: Variant in servable_folders:
+		if folder is String and is_level_request_authorized(requested_name, folder):
+			return Paths.get_level_map_file_for_variant(
+				Paths.sanitize_level_name(requested_name), variant_id
+			)
+	return ""
+
+
+## Whether a host transfer (`parts`: [pack_id, asset_id, variant_id, file_type]) is a
+## prefetch: a level map file of a folder other than the one on the table (`table_folder`,
+## "" in the room). Everything else, token assets and the table's own map files, is a table
+## transfer, which the host always serves first. Pure.
+static func is_prefetch_transfer(parts: Array, table_folder: String) -> bool:
+	if parts.size() < 2 or str(parts[0]) != Paths.LEVEL_MAPS_PACK_ID:
+		return false
+	return table_folder == "" or Paths.sanitize_level_name(str(parts[1])) != table_folder
 
 
 ## RPC: Client requests an asset from host (with optional resume)
@@ -287,20 +366,20 @@ func _rpc_request_asset(
 		print("AssetStreamer: Peer %d requesting asset %s" % [peer_id, key])
 
 	# Level map assets: asset_id is a client-controlled level folder name. Only ever serve
-	# the level the host currently has loaded — never an arbitrary saved level, and never a
-	# path-traversal escape out of user://levels/. Extracted into a static helper (rather
-	# than left inline) so this security-critical decision is unit-testable without a real
-	# multiplayer peer -- see is_level_request_authorized() and its tests.
+	# the level on the table or one on the session's shelf — never an arbitrary saved level,
+	# and never a path-traversal escape out of user://levels/. Extracted into a static helper
+	# (rather than left inline) so this security-critical decision is unit-testable without
+	# a real multiplayer peer -- see is_level_request_authorized() and its tests.
 	# The variant names which map file (whitelist: "map" -> map.glb, "ttmap" -> map.ttmap).
 	if pack_id == Paths.LEVEL_MAPS_PACK_ID:
 		var file_path := level_map_file_for_request(
-			asset_id, variant_id, NetworkManager.get_current_level_folder()
+			asset_id, variant_id, NetworkManager.session.servable_folders()
 		)
 		if file_path == "":
 			push_warning(
 				(
 					"AssetStreamer: Peer %d requested map file '%s' of level '%s' -- %s"
-					% [peer_id, variant_id, asset_id, "not a map file of the active level, denied"]
+					% [peer_id, variant_id, asset_id, "not on the table or the shelf, denied"]
 				)
 			)
 			rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id, file_type)
@@ -417,22 +496,39 @@ func _begin_host_transfer(
 	_pump()
 
 
-## Serves the head of the queue: drops its finished transfers, moves on to the next peer
-## once it has none, and sends what the window allows to the peer it settles on.
+## Drops finished transfers and the peers left with none, then serves the first peer in the
+## queue with a table transfer, else the head (StreamPeerQueue.served), sending what the
+## window allows. A peer passed over keeps its place and its acknowledged chunks.
 func _pump() -> void:
-	while true:
-		var peer_id := StreamPeerQueue.head(_host_queue)
-		if peer_id == 0:
-			_active_peer = 0
-			return
-		if peer_id != _active_peer:
-			_active_peer = peer_id
-			_active_progress_ms = _now_ms()
+	for peer_id: int in _host_queue.duplicate():
 		_drop_finished_transfers(peer_id)
-		if _host_transfers.has(peer_id):
-			_send_window(peer_id)
-			return
-		_host_queue = StreamPeerQueue.without_peer(_host_queue, peer_id)
+		if not _host_transfers.has(peer_id):
+			_host_queue = StreamPeerQueue.without_peer(_host_queue, peer_id)
+	var table_folder := _table_folder()
+	var urgent := _host_queue.filter(
+		func(peer: int) -> bool: return _has_table_transfer(peer, table_folder)
+	)
+	var served := StreamPeerQueue.served(_host_queue, urgent)
+	if served == 0:
+		_active_peer = 0
+		return
+	if served != _active_peer:
+		_active_peer = served
+		_active_progress_ms = _now_ms()
+	_send_window(served)
+
+
+## Whether `peer_id` has a transfer that is not a prefetch (is_prefetch_transfer).
+func _has_table_transfer(peer_id: int, table_folder: String) -> bool:
+	for state: Dictionary in _host_transfers.get(peer_id, {}).values():
+		if not is_prefetch_transfer(state.parts, table_folder):
+			return true
+	return false
+
+
+## The level folder on the table, "" with none (the room). Separate so tests can set it.
+func _table_folder() -> String:
+	return NetworkManager.get_current_level_folder()
 
 
 ## Drops the transfers a peer has fully acknowledged, and the peer's entry once none are
@@ -469,7 +565,7 @@ func _check_stall(now_ms: int) -> void:
 	)
 	for state in _host_transfers.get(peer_id, {}).values():
 		state.next_chunk = state.acked_chunks
-	_host_queue = StreamPeerQueue.rotated(_host_queue)
+	_host_queue = StreamPeerQueue.to_back(_host_queue, peer_id)
 	_active_peer = 0
 	_pump()
 
@@ -479,8 +575,8 @@ func _now_ms() -> int:
 	return Time.get_ticks_msec()
 
 
-## Sends every chunk the window has room for, across the peer's transfers in the order
-## they started.
+## Sends every chunk the window has room for, across the peer's transfers: its table
+## transfers first, then its prefetches, each in the order they started.
 func _send_window(peer_id: int) -> void:
 	var transfers: Dictionary = _host_transfers.get(peer_id, {})
 	var in_flight := 0
@@ -488,7 +584,16 @@ func _send_window(peer_id: int) -> void:
 		in_flight += StreamSendWindow.bytes_in_flight(
 			state.next_chunk, state.acked_chunks, state.data.size(), CHUNK_SIZE
 		)
-	for state in transfers.values():
+	var table_folder := _table_folder()
+	var ordered: Array = transfers.values().filter(
+		func(state: Dictionary) -> bool: return not is_prefetch_transfer(state.parts, table_folder)
+	)
+	ordered.append_array(
+		transfers.values().filter(
+			func(state: Dictionary) -> bool: return is_prefetch_transfer(state.parts, table_folder)
+		)
+	)
+	for state in ordered:
 		var count := StreamSendWindow.chunks_to_send(
 			in_flight, SEND_WINDOW_BYTES, CHUNK_SIZE, state.total_chunks - state.next_chunk
 		)
@@ -533,6 +638,50 @@ func _rpc_asset_chunk_ack(
 		return
 	var key = "%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type]
 	_on_chunk_ack(multiplayer.get_remote_sender_id(), key, received)
+
+
+## RPC: Client no longer wants a transfer (client -> host; cancel_download). Only the sender's
+## own transfer is dropped.
+@rpc("any_peer", "reliable")
+func _rpc_cancel_asset(
+	pack_id: String, asset_id: String, variant_id: String, file_type: String
+) -> void:
+	if not NetworkManager.is_host():
+		return
+	var key = "%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type]
+	drop_transfer(multiplayer.get_remote_sender_id(), key)
+
+
+## Host: stop sending `key` to `peer_id` and serve whoever is next.
+func drop_transfer(peer_id: int, key: String) -> void:
+	var transfers: Dictionary = _host_transfers.get(peer_id, {})
+	if not transfers.has(key):
+		return
+	transfers.erase(key)
+	if transfers.is_empty():
+		_host_transfers.erase(peer_id)
+	print("AssetStreamer: Dropped %s for peer %d" % [key, peer_id])
+	_pump()
+
+
+## Host: stop sending every map file of `level_folder` to every peer (it left the shelf, so
+## it is no longer served).
+func drop_level_transfers(level_folder: String) -> void:
+	var dropped := false
+	for peer_id: int in _host_transfers.keys():
+		var transfers: Dictionary = _host_transfers[peer_id]
+		for key: String in transfers.keys():
+			var parts: Array = transfers[key].parts
+			if (
+				str(parts[0]) == Paths.LEVEL_MAPS_PACK_ID
+				and Paths.sanitize_level_name(str(parts[1])) == level_folder
+			):
+				transfers.erase(key)
+				dropped = true
+		if transfers.is_empty():
+			_host_transfers.erase(peer_id)
+	if dropped:
+		_pump()
 
 
 ## Client side of an ack, sent for every chunk stored. Separate so tests can capture it.
@@ -769,7 +918,8 @@ func is_enabled() -> bool:
 
 
 ## Progress of one client download by key ("pack/asset/variant/file_type"):
-## {"received_chunks", "total_chunks", "received_bytes"}, or {} when none is active.
+## {"received_chunks", "total_chunks", "received_bytes", "original_size" (the file's size
+## once its header is in, else 0), "prefetch"}, or {} when none is active.
 func get_download_status(key: String) -> Dictionary:
 	if not _client_downloads.has(key):
 		return {}
@@ -778,6 +928,8 @@ func get_download_status(key: String) -> Dictionary:
 		"received_chunks": int(download.get("received_count", 0)),
 		"total_chunks": int(download.get("total_chunks", 0)),
 		"received_bytes": int(download.get("received_bytes", 0)),
+		"original_size": int(download.get("original_size", 0)),
+		"prefetch": bool(download.get("prefetch", false)),
 	}
 
 

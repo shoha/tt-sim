@@ -10,6 +10,12 @@ class_name StreamPeerQueue
 ## acknowledging for the stall timeout goes to the back so one stuck peer cannot block the
 ## others. Pure and static so the order is tested without a network; the queue is an Array
 ## of peer ids and every function returns a new one.
+##
+## The table comes first: a peer with a table transfer (a token asset, or a file of the map
+## on the table) is served before any peer that has only prefetches (shelf maps fetched in the
+## background, SessionPrefetch), whatever their places in the queue (served()). The waiting
+## prefetch keeps its place and its acknowledged chunks, and is served again once no table
+## transfer is left.
 
 
 ## The queue with `peer_id` at the back, unless it is already waiting.
@@ -34,9 +40,28 @@ static func rotated(queue: Array) -> Array:
 	return result
 
 
+## The queue with `peer_id` moved to the back (a stalled peer gives up its turn, wherever it
+## stands), or unchanged when it is not waiting.
+static func to_back(queue: Array, peer_id: int) -> Array:
+	if not queue.has(peer_id):
+		return queue.duplicate()
+	var result := without_peer(queue, peer_id)
+	result.append(peer_id)
+	return result
+
+
 ## The peer being served, or 0 when nobody waits.
 static func head(queue: Array) -> int:
 	return int(queue[0]) if not queue.is_empty() else 0
+
+
+## The peer to serve: the first in the queue with a table transfer (`urgent`, peer ids), else
+## the head; 0 when nobody waits.
+static func served(queue: Array, urgent: Array) -> int:
+	for peer_id: Variant in queue:
+		if urgent.has(peer_id):
+			return int(peer_id)
+	return head(queue)
 
 
 ## Whether the served peer has made no ack progress for `timeout_ms`.

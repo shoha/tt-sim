@@ -215,6 +215,63 @@ func test_selecting_a_shelf_map_shows_it_with_the_one_fill_under_it() -> void:
 	assert_signal_emitted_with_parameters(panel, "set_out_requested", [MAP_B])
 
 
+func _words(panel: RoomPanel) -> Array:
+	return panel.player_rows.get_children().map(
+		func(row: Node) -> String: return (row.find_child("Word", true, false) as Label).text
+	)
+
+
+## Progress is lake and a word, never a bar (C5, C7, W4): Getting it with its percent while a
+## map comes, Waiting to get it while it waits its turn, and the player's own first.
+func test_a_map_on_its_way_reads_getting_it_with_its_percent() -> void:
+	var panel := _panel()
+	var summary := _sample()
+	summary["progress"] = {WREN: {MAP_C: 40}, "enet-ranger": {MAP_C: 0}}
+	panel.show_session(summary, WREN, false)
+	panel.select(MAP_C)
+	var getting := RoomRows.GETTING_IT % 40
+	assert_eq(getting, "Getting it · 40%")
+	assert_eq(_words(panel), [RoomRows.HAS_IT, RoomRows.WAITING, RoomRows.GETS_IT, getting])
+	assert_eq(panel.readiness_label.text, "You are getting it · 40% · 1 of 4 have it")
+	assert_eq(panel.find_children("*", "ProgressBar", true, false), [], "no bars")
+	summary.progress = {WREN: {MAP_C: 0}}
+	panel.show_session(summary, WREN, false)
+	assert_eq(panel.readiness_label.text, "You are waiting to get it · 1 of 4 have it")
+
+
+## The percent moves in place: the rows are not rebuilt, so a hovered or focused control
+## keeps its state, and the lake tint follows the state.
+func test_progress_moves_in_place() -> void:
+	var panel := _panel()
+	var summary := _sample()
+	summary["progress"] = {WREN: {MAP_C: 0}}
+	panel.show_session(summary, WREN, false)
+	panel.select(MAP_C)
+	var row := panel.player_rows.get_child(3)
+	var icon := row.find_child("Icon", true, false) as TextureRect
+	assert_eq(icon.get_meta(&"role"), ThemeColors.TEXT_SOFT, "waiting is not yet state")
+	summary.progress = {WREN: {MAP_C: 72}}
+	panel.show_progress(summary)
+	assert_eq(panel.player_rows.get_child(3), row, "the same row")
+	assert_eq((row.find_child("Word", true, false) as Label).text, "Getting it · 72%")
+	assert_eq(icon.get_meta(&"role"), ThemeColors.STATE, "lake while it comes")
+	assert_eq(panel.readiness_label.text, "You are getting it · 72% · 1 of 4 have it")
+	summary.holdings[WREN] = [MAP_A, MAP_B, MAP_C]
+	summary.progress = {}
+	panel.show_progress(summary)
+	assert_eq((row.find_child("Word", true, false) as Label).text, RoomRows.HAS_IT)
+
+
+func test_download_states_from_holdings_and_progress() -> void:
+	var player := {"holds": [MAP_A], "progress": {MAP_B: 12, MAP_C: 0}}
+	assert_eq(RoomModel.download_state(player, MAP_A).state, RoomModel.HAS)
+	assert_eq(RoomModel.download_state(player, MAP_B), {"state": RoomModel.GETTING, "percent": 12})
+	assert_eq(RoomModel.download_state(player, MAP_C).state, RoomModel.WAITING)
+	assert_eq(RoomModel.download_state(player, "elsewhere").state, RoomModel.TABLE)
+	player.holds = [MAP_A, MAP_B]
+	assert_eq(RoomModel.download_state(player, MAP_B).state, RoomModel.HAS, "held wins")
+
+
 func test_a_map_without_a_thumbnail_paints_its_placeholder() -> void:
 	var panel := _panel()
 	panel.show_session(_sample(), GM, true)

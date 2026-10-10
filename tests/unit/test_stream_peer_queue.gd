@@ -32,10 +32,24 @@ func test_rotation_sends_the_head_to_the_back() -> void:
 	assert_eq(StreamPeerQueue.rotated([]), [])
 
 
+func test_a_stalled_peer_goes_to_the_back_wherever_it_stands() -> void:
+	assert_eq(StreamPeerQueue.to_back([5, 9, 3], 9), [5, 3, 9])
+	assert_eq(StreamPeerQueue.to_back([5, 9, 3], 5), [9, 3, 5], "the head: a rotation")
+	assert_eq(StreamPeerQueue.to_back([5, 9], 4), [5, 9], "not waiting")
+
+
+func test_the_first_peer_with_a_table_transfer_is_served() -> void:
+	assert_eq(StreamPeerQueue.served([5, 9, 3], [3, 9]), 9, "the first in queue order")
+	assert_eq(StreamPeerQueue.served([5, 9, 3], []), 5, "only prefetches: the head")
+	assert_eq(StreamPeerQueue.served([5, 9], [4]), 5, "an urgent peer must be waiting")
+	assert_eq(StreamPeerQueue.served([], [4]), 0)
+
+
 func test_functions_leave_their_input_alone() -> void:
 	var queue := [5, 9]
 	StreamPeerQueue.with_peer(queue, 3)
 	StreamPeerQueue.rotated(queue)
+	StreamPeerQueue.to_back(queue, 5)
 	StreamPeerQueue.without_peer(queue, 5)
 	assert_eq(queue, [5, 9])
 
