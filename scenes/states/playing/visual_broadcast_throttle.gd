@@ -12,7 +12,8 @@ extends Node
 const DEFAULT_INTERVAL: float = 0.1  # Seconds between sends while edits keep coming
 
 var interval: float = DEFAULT_INTERVAL
-## Called with the merged settings Dictionary. Typically NetworkManager.broadcast_visual_settings.
+## Called with the merged settings Dictionary. Typically
+## NetworkManager.game_sync.broadcast_visual_settings.
 var send: Callable
 
 var _pending: Dictionary[String, Variant] = {}

@@ -122,8 +122,8 @@ For nodes that persist across states (like `Root`), disconnect when exiting the 
 ```gdscript
 func _exit_playing_state() -> void:
     # Disconnect signals that were connected in _enter_playing_state()
-    if NetworkManager.token_transform_received.is_connected(_on_token_transform):
-        NetworkManager.token_transform_received.disconnect(_on_token_transform)
+    if NetworkManager.game_sync.token_transform_received.is_connected(_on_token_transform):
+        NetworkManager.game_sync.token_transform_received.disconnect(_on_token_transform)
 ```
 
 `RootNetworkHandler` provides static helpers `connect_client_signals()` / `disconnect_client_signals()` for this pattern.

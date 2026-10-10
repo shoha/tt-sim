@@ -13,32 +13,30 @@ static func connect_client_signals(handler: Node) -> void:
 	if not NetworkStateSync.full_state_received.is_connected(handler._on_full_state_received):
 		NetworkStateSync.full_state_received.connect(handler._on_full_state_received)
 
-	if not NetworkManager.token_transform_received.is_connected(
-		handler._on_token_transform_received
-	):
-		NetworkManager.token_transform_received.connect(handler._on_token_transform_received)
-	if not NetworkManager.transform_batch_received.is_connected(
-		handler._on_transform_batch_received
-	):
-		NetworkManager.transform_batch_received.connect(handler._on_transform_batch_received)
-	if not NetworkManager.token_state_received.is_connected(handler._on_token_state_received):
-		NetworkManager.token_state_received.connect(handler._on_token_state_received)
-	if not NetworkManager.token_removed_received.is_connected(handler._on_token_removed_received):
-		NetworkManager.token_removed_received.connect(handler._on_token_removed_received)
+	var game_sync := NetworkManager.game_sync
+	if not game_sync.token_transform_received.is_connected(handler._on_token_transform_received):
+		game_sync.token_transform_received.connect(handler._on_token_transform_received)
+	if not game_sync.transform_batch_received.is_connected(handler._on_transform_batch_received):
+		game_sync.transform_batch_received.connect(handler._on_transform_batch_received)
+	if not game_sync.token_state_received.is_connected(handler._on_token_state_received):
+		game_sync.token_state_received.connect(handler._on_token_state_received)
+	if not game_sync.token_removed_received.is_connected(handler._on_token_removed_received):
+		game_sync.token_removed_received.connect(handler._on_token_removed_received)
 
 
 ## Disconnect client-side state signals
 static func disconnect_client_signals(handler: Node) -> void:
 	if NetworkStateSync.full_state_received.is_connected(handler._on_full_state_received):
 		NetworkStateSync.full_state_received.disconnect(handler._on_full_state_received)
-	if NetworkManager.token_transform_received.is_connected(handler._on_token_transform_received):
-		NetworkManager.token_transform_received.disconnect(handler._on_token_transform_received)
-	if NetworkManager.transform_batch_received.is_connected(handler._on_transform_batch_received):
-		NetworkManager.transform_batch_received.disconnect(handler._on_transform_batch_received)
-	if NetworkManager.token_state_received.is_connected(handler._on_token_state_received):
-		NetworkManager.token_state_received.disconnect(handler._on_token_state_received)
-	if NetworkManager.token_removed_received.is_connected(handler._on_token_removed_received):
-		NetworkManager.token_removed_received.disconnect(handler._on_token_removed_received)
+	var game_sync := NetworkManager.game_sync
+	if game_sync.token_transform_received.is_connected(handler._on_token_transform_received):
+		game_sync.token_transform_received.disconnect(handler._on_token_transform_received)
+	if game_sync.transform_batch_received.is_connected(handler._on_transform_batch_received):
+		game_sync.transform_batch_received.disconnect(handler._on_transform_batch_received)
+	if game_sync.token_state_received.is_connected(handler._on_token_state_received):
+		game_sync.token_state_received.disconnect(handler._on_token_state_received)
+	if game_sync.token_removed_received.is_connected(handler._on_token_removed_received):
+		game_sync.token_removed_received.disconnect(handler._on_token_removed_received)
 
 
 ## Handle individual token transform update (unreliable channel, high frequency)

@@ -31,9 +31,20 @@ The networking system uses a **host-authoritative architecture** where one playe
 
 | Autoload           | Purpose                                            |
 | ------------------ | -------------------------------------------------- |
-| `NetworkManager`   | Connection lifecycle, player tracking, RPC routing |
+| `NetworkManager`   | Connection lifecycle, player tracking, level start, late-joiner level snapshot |
 | `NetworkStateSync` | State broadcasting, rate limiting, batching        |
 | `GameState`        | Authoritative game state storage                   |
+
+`NetworkManager` creates two child nodes in its `_ready` that carry the rest of the RPCs. They
+are not autoloads; reach them through the manager:
+
+| Child (node path) | Class | Carries |
+| ----------------- | ----- | ------- |
+| `NetworkManager.game_sync` (`/root/NetworkManager/GameSync`) | `NetworkGameSync` (`autoloads/network_game_sync.gd`) | Table play: token transforms, state and removal, drag locks, live visual settings (see [NetworkGameSync](#networkgamesync)) |
+| `NetworkManager.permissions` (`/root/NetworkManager/Permissions`) | `NetworkPermissions` (`autoloads/network_permissions.gd`) | Token permission requests, responses and broadcasts; avatar recipe edits |
+
+Callers send through each node's typed `send_*` / `broadcast_*` methods and listen to its
+signals; nothing outside a node calls its `_rpc_*` methods.
 
 ### Dependencies
 
@@ -76,16 +87,10 @@ signal level_data_received(level_dict: Dictionary)
 signal late_joiner_connected(peer_id: int)
 signal game_state_received(state_dict: Dictionary)
 signal table_loaded(peer_id: int)  # host: a client's level load completed
-
-# Token updates (clients)
-signal token_transform_received(network_id, position, rotation, scale)
-signal token_state_received(network_id, token_dict)
-signal token_removed_received(network_id)
-signal transform_batch_received(batch: Dictionary)
-
-# Visual settings (clients)
-signal visual_settings_received(settings: Dictionary)
 ```
+
+Token, drag-lock and visual-settings signals live on `NetworkManager.game_sync`
+(`NetworkGameSync`); see [its API](#networkgamesync).
 
 ---
 
@@ -156,6 +161,15 @@ including a dev-build suffix, is a mismatch. The rules live in `VersionGate`
 |-------|-------|-------------|
 | Lobby data (fast path) | Client, `_on_lobby_joined()`, before `create_client` | `_handle_connection_error(VersionGate.mismatch_message(...))`: leaves the lobby, never connects |
 | Player info (authoritative) | Host, `_rpc_send_player_info()` via `VersionGate.is_player_info_accepted()` | Peer is not added to `_players`; host sends `_rpc_version_rejected(host_version)`, then force-disconnects the peer after `VERSION_REJECT_DISCONNECT_DELAY` (1 s) |
+
+The gate is also what lets the RPC layout change freely between versions. Godot addresses an
+RPC by its node path and by the method's index among that node's RPC names, sorted, so adding,
+removing or moving an RPC changes what an older peer would send and expect. Moving the table-play
+RPCs from `/root/NetworkManager` to `/root/NetworkManager/GameSync` (2026-10-09) is one such
+change. It is safe because both peers always run the same build. The gate RPCs themselves stay
+on `NetworkManager`, but their indices shift with every change to its RPC list too. Two builds
+that report the same version (two dev checkouts) pass both checks, so nothing catches an RPC
+layout difference between them: test two peers on the same commit.
 
 Clients send their version under `"version"` in `_local_player_info`. A host from before the
 gate publishes no lobby version, which the client reads as `""` and reports as "an older
@@ -278,8 +292,11 @@ var players = NetworkManager.get_players()
 
 When a player joins mid-game, they automatically receive (`autoloads/late_joiner_sync.gd`):
 
-1. `_rpc_game_starting`, which moves them into `PLAYING`
-2. Current level data (the `_current_level_dict` snapshot)
+1. `_rpc_game_starting` (`send_game_starting_to_peer()`), which moves them into `PLAYING`
+2. Current level data (`send_level_snapshot_to_peer()`): the `_current_level_dict` snapshot
+   `broadcast_level_data()` stored, with every live visual edit since folded in through
+   `update_level_snapshot()`. NetworkManager treats the snapshot as opaque; the caller's patch
+   knows the keys (`LevelVisualState.patch_level_dict()` for visual settings)
 3. Full game state (all tokens, avatars, permissions and drag locks), held by the host until
    the client reports its table loaded
 
@@ -431,7 +448,7 @@ Clients use interpolation for smooth movement:
 
 ```gdscript
 # In token handler
-NetworkManager.token_transform_received.connect(func(id, pos, rot, scale):
+NetworkManager.game_sync.token_transform_received.connect(func(id, pos, rot, scale):
     var token = get_token_by_network_id(id)
     if token:
         token.set_interpolation_target(pos, rot, scale)
@@ -558,6 +575,26 @@ the client in the box.
   own cached copy, so no manual cache cleanup is needed. Each side writes one
   `NET_RESULT {json}` line.
 
+#### ENet scenarios (no Steam)
+
+Two headless processes on 127.0.0.1 run the whole game over `ENetMultiplayerPeer` (the
+scenario sets NetworkManager's peer and state the way the Steam lobby callbacks would), on the
+shipped res:// map, so nothing downloads and no second Steam account is needed. Both share
+`user://`. Start the host in the background, then the client, with the same `--rendezvous`
+path prefix and each with its own `--out` log:
+
+`godot --headless --path D:/dev/tt-sim res://tests/net/<scenario>.tscn -- --role=host|client --rendezvous=<abs prefix> --out=<abs log> --timeout-s=180`
+
+Each side writes one `NET_RESULT {json}` line and exits 0 on a pass.
+
+- `enet_late_joiner.tscn`: the client joins after the host placed an avatar and must see it
+  once its table has loaded (`LateJoinerSync`'s hold).
+- `enet_game_sync.tscn`: after that late join, the client moves a token it was given CONTROL
+  of (drag-lock claim, transform, release) and receives its resting position; the host renames
+  it, removes a second token and changes the light intensity. Both logs show each message
+  arriving with the right sender, and the host's copy of the token locked through
+  `grant_drag_lock()`. Passed on 2026-10-09 (about 4 s on the host).
+
 #### Limitations
 
 - Both instances share the same machine's resources (CPU, GPU, network). Performance profiling should use separate machines.
@@ -620,8 +657,103 @@ func get_local_role() -> PlayerRole
 func notify_game_starting() -> void
 func broadcast_level_data(level_dict: Dictionary) -> void
 func broadcast_game_state(state_dict: Dictionary) -> void
-func broadcast_visual_settings(settings: Dictionary) -> void
+func send_game_state_to_peer(peer_id: int, state_dict: Dictionary) -> void
+func send_game_starting_to_peer(peer_id: int) -> void   # late joiner (LateJoinerSync)
+func send_level_snapshot_to_peer(peer_id: int) -> void  # late joiner (LateJoinerSync)
+func update_level_snapshot(patch: Callable) -> void     # patch: func(Dictionary) -> Dictionary
 ```
+
+`update_level_snapshot()` is a no-op while no level is active, so a patch never fabricates a
+snapshot.
+
+#### Client Methods
+
+```gdscript
+func report_table_loaded() -> void  # after a level load; releases a late joiner's state
+```
+
+### NetworkGameSync
+
+`NetworkManager.game_sync`, node `/root/NetworkManager/GameSync`, `autoloads/network_game_sync.gd`.
+Table play once a level is loaded. Every inbound client RPC only acts on the host and takes the
+sender from the transport; the listeners (`NetworkTokenSync` on the host) check CONTROL and lock
+ownership.
+
+#### Host Methods
+
+```gdscript
+func broadcast_token_transform(network_id: String, pos: Vector3, rot: Vector3, scl: Vector3) -> void
+func send_token_transform_to_peer(peer_id: int, network_id: String, pos: Vector3, rot: Vector3, scl: Vector3) -> void
+func broadcast_transform_batch(batch: Dictionary) -> void
+func broadcast_token_state(network_id: String, token_dict: Dictionary) -> void
+func broadcast_token_removed(network_id: String) -> void
+func broadcast_visual_settings(settings: Dictionary) -> void
+func grant_drag_lock(network_id: String, peer_id: int) -> bool
+func send_drag_lock_denied(peer_id: int, network_id: String) -> void
+func broadcast_drag_lock_released(network_id: String) -> void
+```
+
+`NetworkStateSync` decides when the token sends go out (throttling, batching, keeping
+`GameState` in step); call it, not these, for token updates.
+
+`grant_drag_lock()` is the one place the host hands out a drag lock, both to itself (peer 1,
+from `DraggableToken` when the GM starts a drag) and to a client whose claim passed its CONTROL
+check (`NetworkTokenSync`). It claims the lock in `GameState`, emits `drag_lock_granted` on the
+host as well (so the host's copy of the token locks through the same listener as every
+client's), and broadcasts the grant. It returns false, sending nothing, when another peer holds
+the lock; the claim path then sends `send_drag_lock_denied()`. Releases are not merged: each
+caller releases in `GameState` and on its own token, then calls `broadcast_drag_lock_released()`.
+
+#### Client Methods
+
+```gdscript
+func send_client_token_transform(network_id: String, pos: Vector3, rot: Vector3, scl: Vector3) -> void
+func send_drag_lock_claim(network_id: String) -> void
+func send_drag_lock_release(network_id: String) -> void
+```
+
+#### Signals
+
+```gdscript
+# Clients, from the host
+signal token_transform_received(network_id, position, rotation, scale)
+signal token_state_received(network_id, token_dict)
+signal token_removed_received(network_id)
+signal transform_batch_received(batch: Dictionary)
+signal visual_settings_received(settings: Dictionary)
+signal drag_lock_denied(network_id)      # the denied client only
+signal drag_lock_released(network_id)
+
+# Every peer: the host's own grant_drag_lock() emits it too
+signal drag_lock_granted(network_id, locker_peer_id)
+
+# Host, from a client (sender from the transport)
+signal client_token_transform_received(sender_id, network_id, position, rotation, scale)
+signal client_drag_lock_claimed(sender_id, network_id)
+signal client_drag_lock_released(sender_id, network_id)
+```
+
+#### RPCs
+
+| RPC | Direction | Channel | Emits |
+|-----|-----------|---------|-------|
+| `_rpc_receive_token_transform` | host -> clients | unreliable | `token_transform_received` |
+| `_rpc_receive_transform_batch` | host -> clients | unreliable | `transform_batch_received` |
+| `_rpc_receive_token_state` | host -> clients | reliable | `token_state_received` |
+| `_rpc_receive_token_removed` | host -> clients | reliable | `token_removed_received` |
+| `_rpc_receive_visual_settings` | host -> clients | reliable | `visual_settings_received` |
+| `_rpc_drag_lock_granted` | host -> clients | reliable | `drag_lock_granted` |
+| `_rpc_drag_lock_denied` | host -> one client | reliable | `drag_lock_denied` |
+| `_rpc_drag_lock_released` | host -> clients | reliable | `drag_lock_released` |
+| `_rpc_client_token_transform` | client -> host | unreliable, dropped when a token's updates arrive faster than `CLIENT_TRANSFORM_RATE_LIMIT` (0.05 s) | `client_token_transform_received` |
+| `_rpc_client_claim_drag_lock` | client -> host | reliable | `client_drag_lock_claimed` |
+| `_rpc_client_release_drag_lock` | client -> host | reliable | `client_drag_lock_released` |
+
+The client used to ACK every full state (`_rpc_state_sync_ack`, `state_sync_complete`); nothing
+listened, and both were removed on 2026-10-09. A late joiner's state is released by
+`report_table_loaded()` instead.
+
+#### Visual settings
 
 `broadcast_visual_settings()`'s `settings` payload is `LevelVisualState.to_broadcast_dict()`
 (`resources/level_visual_state.gd`) -- full snapshot from `GameplayMenuController` Save/Cancel, or a
@@ -633,11 +765,10 @@ rebuilds a `LevelVisualState` from the current level, patches it with `patch_fro
 writes it back with `apply_to_level_data()`, and re-applies the *whole* state via
 `apply_visual_state()` -- not just the changed fields -- for every (throttled) broadcast.
 
-#### Client Methods
-
-```gdscript
-func report_table_loaded() -> void  # after a level load; releases a late joiner's state
-```
+On the host, the same broadcast also patches the late-joiner snapshot through
+`NetworkManager.update_level_snapshot()` with `LevelVisualState.patch_level_dict()`, which maps
+each broadcast key onto the `LevelData.to_dict()` field it stands for (`light_intensity` to
+`light_intensity_scale`, `sun_settings` nested under `visual_settings.sun`, the rest 1:1).
 
 ### NetworkStateSync
 

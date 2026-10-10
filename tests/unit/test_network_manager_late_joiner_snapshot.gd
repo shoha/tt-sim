@@ -4,8 +4,9 @@ extends GutTest
 ##
 ## NetworkManager._current_level_dict is the level snapshot replayed via
 ## broadcast_level_data() to clients that connect after a level is already
-## loaded. Live visual-settings edits (broadcast_visual_settings) also patch
-## this snapshot via _patch_current_level_dict() -- otherwise a client joining
+## loaded. Live visual-settings edits (NetworkGameSync.broadcast_visual_settings)
+## also patch this snapshot, through NetworkManager.update_level_snapshot() with
+## LevelVisualState.patch_level_dict() -- otherwise a client joining
 ## after a live edit (but before the next full level load) sees stale values
 ## until the next full level broadcast. This mirrors the existing precedent in
 ## test_network_manager_security.gd
@@ -21,12 +22,21 @@ extends GutTest
 ## The sun mirror writes into visual_settings.sun (not a top-level key) because
 ## _current_level_dict is a LevelData.to_dict()-shaped dictionary and
 ## LevelData.from_dict() only looks for the sun nested there -- see
-## NetworkManager._patch_current_level_dict().
+## LevelVisualState.patch_level_dict().
 
 
 func after_each() -> void:
 	NetworkManager._connection_state = NetworkManager.ConnectionState.OFFLINE
 	NetworkManager._current_level_dict.clear()
+
+
+## Patch the late-joiner snapshot with a visual-settings broadcast, the way
+## NetworkGameSync.broadcast_visual_settings() does.
+func _patch_snapshot(net_settings: Dictionary) -> void:
+	NetworkManager.update_level_snapshot(
+		func(level_dict: Dictionary) -> Dictionary:
+			return LevelVisualState.patch_level_dict(level_dict, net_settings)
+	)
 
 
 func test_late_joiner_snapshot_reflects_live_sun_settings_edit() -> void:
@@ -36,7 +46,7 @@ func test_late_joiner_snapshot_reflects_live_sun_settings_edit() -> void:
 		"visual_settings": {"sun": {"mode": "auto", "time_of_day": 14.0}},
 	}
 
-	NetworkManager._patch_current_level_dict({"sun_settings": {"mode": "on", "time_of_day": 8.0}})
+	_patch_snapshot({"sun_settings": {"mode": "on", "time_of_day": 8.0}})
 
 	assert_eq(
 		NetworkManager._current_level_dict["visual_settings"]["sun"],
@@ -52,8 +62,8 @@ func test_late_joiner_snapshot_reflects_live_sun_settings_edit() -> void:
 
 ## GameplayMenuController broadcasts these exact keys (see its
 ## _on_edit_*_changed handlers and _on_edit_save_requested) -- every one of
-## them needs a corresponding branch in _patch_current_level_dict(), or a late
-## joiner sees a stale value for whichever key was forgotten. This
+## them needs a corresponding branch in LevelVisualState.patch_level_dict(), or a
+## late joiner sees a stale value for whichever key was forgotten. This
 ## generalizes the regression beyond the sun alone: an identical gap for any of
 ## these keys would have the same symptom.
 func test_patch_current_level_dict_mirrors_every_broadcast_visual_settings_key() -> void:
@@ -70,7 +80,7 @@ func test_patch_current_level_dict_mirrors_every_broadcast_visual_settings_key()
 		"sun_settings": {"mode": "off"},
 		"water_style": "realistic",
 	}
-	NetworkManager._patch_current_level_dict(net_settings)
+	_patch_snapshot(net_settings)
 
 	# "light_intensity" is special-cased to the LevelData field name it
 	# actually corresponds to; "sun_settings" nests under visual_settings.sun

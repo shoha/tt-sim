@@ -818,18 +818,16 @@ func cancel_from_lock_denied() -> void:
 		drag_and_drop.cancel_drag()
 
 
-## Send a drag lock claim to the host (client) or claim directly (host).
+## Send a drag lock claim to the host (client) or grant it to ourselves (host). The host's
+## grant goes through the same NetworkGameSync.grant_drag_lock() a client's claim does, so
+## this token locks through the drag_lock_granted listener like every other peer's copy.
 func _send_drag_lock_claim(network_id: String) -> void:
 	if not NetworkManager.is_networked():
 		return
 	if NetworkManager.is_host():
-		var board_token := get_parent() as BoardToken
-		if GameState.claim_drag_lock(network_id, 1):
-			if board_token:
-				board_token.set_drag_lock(1)
-				NetworkManager._rpc_drag_lock_granted.rpc(network_id, 1)
+		NetworkManager.game_sync.grant_drag_lock(network_id, 1)
 	else:
-		NetworkManager.send_drag_lock_claim(network_id)
+		NetworkManager.game_sync.send_drag_lock_claim(network_id)
 
 
 ## Send a drag lock release to the host (client) or release directly (host).
@@ -841,6 +839,6 @@ func _send_drag_lock_release(network_id: String) -> void:
 		var board_token := get_parent() as BoardToken
 		if board_token:
 			board_token.clear_drag_lock()
-		NetworkManager._rpc_drag_lock_released.rpc(network_id)
+		NetworkManager.game_sync.broadcast_drag_lock_released(network_id)
 	else:
-		NetworkManager.send_drag_lock_release(network_id)
+		NetworkManager.game_sync.send_drag_lock_release(network_id)

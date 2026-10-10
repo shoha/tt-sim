@@ -1,12 +1,17 @@
 extends Node
 
 ## Centralized network manager for multiplayer functionality.
-## Handles Steam lobby creation/joining, SteamMultiplayerPeer, and player tracking.
+## Handles Steam lobby creation/joining, SteamMultiplayerPeer, player tracking, the
+## level start and the level snapshot served to late joiners.
 ##
 ## Usage:
 ##   NetworkManager.host_game()
 ##   NetworkManager.join_game("ROOMCODE")
 ##   NetworkManager.disconnect_game()
+##
+## Two child nodes carry the rest of the RPCs: token permissions on `permissions`
+## (NetworkPermissions) and table play -- token transforms, state and removal, drag
+## locks, live visual settings -- on `game_sync` (NetworkGameSync).
 
 ## Signals
 signal connection_state_changed(old_state: ConnectionState, new_state: ConnectionState)
@@ -20,25 +25,6 @@ signal level_data_received(level_dict: Dictionary)
 signal late_joiner_connected(peer_id: int)  ## Emitted when a player joins mid-game
 signal game_state_received(state_dict: Dictionary)
 signal table_loaded(peer_id: int)  ## Host: a client's level load completed (LateJoinerSync)
-signal state_sync_complete(peer_id: int)  ## Emitted when state sync ACK received from client
-signal token_transform_received(
-	network_id: String, position: Vector3, rotation: Vector3, scale: Vector3
-)
-signal token_state_received(network_id: String, token_dict: Dictionary)
-signal token_removed_received(network_id: String)
-signal transform_batch_received(batch: Dictionary)
-signal visual_settings_received(settings: Dictionary)
-## Emitted on clients when a drag lock is granted (another peer is now dragging)
-signal drag_lock_granted(network_id: String, locker_peer_id: int)
-## Emitted on the denied client when its lock claim was rejected
-signal drag_lock_denied(network_id: String)
-## Emitted on clients when a drag lock is released (token is free again)
-signal drag_lock_released(network_id: String)
-signal client_token_transform_received(
-	sender_id: int, network_id: String, position: Vector3, rotation: Vector3, scale: Vector3
-)
-signal client_drag_lock_claimed(sender_id: int, network_id: String)
-signal client_drag_lock_released(sender_id: int, network_id: String)
 
 ## Connection states
 enum ConnectionState {
@@ -63,11 +49,6 @@ const MAX_PLAYERS := 8
 ## Connection timeout (seconds)
 const CONNECTION_TIMEOUT := 15.0
 
-## Rate limiting for inbound client-sent token transform RPCs (mirrors
-## NetworkStateSync.TRANSFORM_SEND_INTERVAL). Bounds how often a single token's
-## transform is processed regardless of how fast a client sends updates.
-const CLIENT_TRANSFORM_RATE_LIMIT := 0.05
-
 ## Grace period between the host telling a client its version was rejected and the
 ## host dropping that peer (seconds). Disconnecting in the same frame could drop the
 ## reliable rejection RPC before delivery, leaving the client with a generic "Host
@@ -77,6 +58,9 @@ const VERSION_REJECT_DISCONNECT_DELAY := 1.0
 
 ## Permission request/response sub-component
 var permissions: NetworkPermissions
+
+## Table-play sub-component: token, drag-lock and live visual RPCs
+var game_sync: NetworkGameSync
 
 # =============================================================================
 # PUBLIC PROPERTIES
@@ -109,7 +93,8 @@ var _local_player_info: Dictionary = {
 	VersionGate.PLAYER_INFO_KEY: UpdateVersion.get_current(),
 }
 
-## Current level data (for late joiners)
+## The level snapshot served to late joiners (host side). Opaque here: it is whatever
+## broadcast_level_data() was given, changed only through update_level_snapshot().
 var _current_level_dict: Dictionary = {}
 
 ## Timer tracking CONNECTION_TIMEOUT
@@ -117,9 +102,6 @@ var _connection_timer: Timer = null
 
 ## Game state tracking (for late joiner detection)
 var _game_in_progress: bool = false
-
-## Last-received timestamp per token, checked against CLIENT_TRANSFORM_RATE_LIMIT
-var _client_transform_throttle: Dictionary = {}  # network_id -> last_received_time (float)
 
 ## Steam initialization state
 var _steam_initialized: bool = false
@@ -196,6 +178,11 @@ func _ready() -> void:
 	permissions = NetworkPermissions.new()
 	permissions.name = "Permissions"
 	add_child(permissions)
+
+	# Setup table-play sub-component
+	game_sync = NetworkGameSync.new()
+	game_sync.name = "GameSync"
+	add_child(game_sync)
 
 	# Load player name from settings
 	_load_player_name()
@@ -404,7 +391,7 @@ func disconnect_game() -> void:
 	_lobby_id = 0
 	_game_in_progress = false
 	_current_level_dict.clear()
-	_client_transform_throttle.clear()
+	game_sync.reset()
 	_stop_connection_timeout()
 
 
@@ -592,114 +579,9 @@ func _rpc_table_loaded() -> void:
 	table_loaded.emit(peer_id)
 
 
-## RPC: Client acknowledges state sync complete
-@rpc("any_peer", "reliable")
-func _rpc_state_sync_ack() -> void:
-	if not is_host():
-		return
-	var peer_id = multiplayer.get_remote_sender_id()
-	state_sync_complete.emit(peer_id)
-
-
 @rpc("authority", "reliable")
 func _rpc_receive_game_state(state_dict: Dictionary) -> void:
 	game_state_received.emit(state_dict)
-
-
-@rpc("authority", "unreliable")
-func _rpc_receive_token_transform(
-	network_id: String, pos_arr: Array, rot_arr: Array, scale_arr: Array
-) -> void:
-	var pos := SerializationUtils.array_to_vec3(pos_arr)
-	var rot := SerializationUtils.array_to_vec3(rot_arr)
-	var scl := SerializationUtils.array_to_vec3(scale_arr, Vector3.ONE)
-	token_transform_received.emit(network_id, pos, rot, scl)
-
-
-@rpc("authority", "unreliable")
-func _rpc_receive_transform_batch(batch: Dictionary) -> void:
-	transform_batch_received.emit(batch)
-
-
-@rpc("authority", "reliable")
-func _rpc_receive_token_state(network_id: String, token_dict: Dictionary) -> void:
-	token_state_received.emit(network_id, token_dict)
-
-
-@rpc("authority", "reliable")
-func _rpc_receive_token_removed(network_id: String) -> void:
-	token_removed_received.emit(network_id)
-
-
-@rpc("authority", "reliable")
-func _rpc_receive_visual_settings(settings: Dictionary) -> void:
-	# Deserialize environment overrides (Color from hex)
-	if settings.has("environment_overrides"):
-		settings["environment_overrides"] = EnvironmentPresets.overrides_from_json(
-			settings["environment_overrides"]
-		)
-	visual_settings_received.emit(settings)
-
-
-## RPC: Player sends token transform to host for validation (client -> host)
-@rpc("any_peer", "unreliable")
-func _rpc_client_token_transform(
-	network_id: String, pos_arr: Array, rot_arr: Array, scale_arr: Array
-) -> void:
-	if not is_host():
-		return
-
-	# Rate limit: drop (don't error) inbound updates for a token that arrive
-	# faster than the host's own broadcast interval. Prevents a misbehaving or
-	# malicious client from flooding the host with more transform updates than
-	# the game ever needs to process.
-	var now = Time.get_ticks_msec() / 1000.0
-	var last_received = _client_transform_throttle.get(network_id, 0.0)
-	if now - last_received < CLIENT_TRANSFORM_RATE_LIMIT:
-		return
-	_client_transform_throttle[network_id] = now
-
-	var sender_id = multiplayer.get_remote_sender_id()
-	var pos := SerializationUtils.array_to_vec3(pos_arr)
-	var rot := SerializationUtils.array_to_vec3(rot_arr)
-	var scl := SerializationUtils.array_to_vec3(scale_arr, Vector3.ONE)
-	client_token_transform_received.emit(sender_id, network_id, pos, rot, scl)
-
-
-## RPC: Client claims a drag lock for a token (client -> host)
-@rpc("any_peer", "reliable")
-func _rpc_client_claim_drag_lock(network_id: String) -> void:
-	if not is_host():
-		return
-	var sender_id = multiplayer.get_remote_sender_id()
-	client_drag_lock_claimed.emit(sender_id, network_id)
-
-
-## RPC: Client releases a drag lock (client -> host)
-@rpc("any_peer", "reliable")
-func _rpc_client_release_drag_lock(network_id: String) -> void:
-	if not is_host():
-		return
-	var sender_id = multiplayer.get_remote_sender_id()
-	client_drag_lock_released.emit(sender_id, network_id)
-
-
-## RPC: Host broadcasts that a token is now locked by a peer (host -> all clients)
-@rpc("authority", "reliable")
-func _rpc_drag_lock_granted(network_id: String, locker_peer_id: int) -> void:
-	drag_lock_granted.emit(network_id, locker_peer_id)
-
-
-## RPC: Host tells a specific client its claim was denied (host -> requester)
-@rpc("authority", "reliable")
-func _rpc_drag_lock_denied(network_id: String) -> void:
-	drag_lock_denied.emit(network_id)
-
-
-## RPC: Host broadcasts that a token's lock has been released (host -> all clients)
-@rpc("authority", "reliable")
-func _rpc_drag_lock_released(network_id: String) -> void:
-	drag_lock_released.emit(network_id)
 
 
 # =============================================================================
@@ -719,6 +601,21 @@ func notify_game_starting() -> void:
 	for peer_id in _players:
 		if peer_id != 1:
 			_rpc_game_starting.rpc_id(peer_id)
+
+
+## Host: move one peer (a late joiner) into PLAYING.
+func send_game_starting_to_peer(peer_id: int) -> void:
+	if not is_host():
+		return
+	_rpc_game_starting.rpc_id(peer_id)
+
+
+## Host: send one peer (a late joiner) the level snapshot, as broadcast_level_data() last
+## stored it and update_level_snapshot() has kept it since.
+func send_level_snapshot_to_peer(peer_id: int) -> void:
+	if not is_host():
+		return
+	_rpc_receive_level_data.rpc_id(peer_id, _current_level_dict)
 
 
 ## Called by host to send level data to all clients. Adds the content hash of each map
@@ -764,81 +661,15 @@ func send_game_state_to_peer(peer_id: int, state_dict: Dictionary) -> void:
 	_rpc_receive_game_state.rpc_id(peer_id, state_dict)
 
 
-## Called by host to broadcast visual settings to all clients.
-## Accepts a dictionary with any subset of keys: "map_scale", "light_intensity",
-## "environment_preset", "environment_overrides", "lofi_overrides", "weather_overrides",
-## "foliage_overrides", "sun_settings", "water_style", "water_overrides".
-func broadcast_visual_settings(settings: Dictionary) -> void:
-	if not is_host():
-		return
-	# Serialize environment overrides (Color to hex) for network transmission
-	var net_settings = settings.duplicate()
-	if net_settings.has("environment_overrides"):
-		net_settings["environment_overrides"] = EnvironmentPresets.overrides_to_json(
-			net_settings["environment_overrides"]
-		)
-	_rpc_receive_visual_settings.rpc(net_settings)
-
-	# Keep the late-joiner snapshot in sync -- broadcast_level_data() only runs at
-	# level start, so without this a client joining after a live visual-settings
-	# edit (before the next full level broadcast) would see stale values.
-	_patch_current_level_dict(net_settings)
-
-
-## Patch the fields of _current_level_dict that correspond to live
-## visual-settings broadcasts. No-op if no level is currently active.
-## net_settings must already be network-serialized (e.g. environment_overrides
-## as produced by EnvironmentPresets.overrides_to_json), matching the format
-## LevelData.to_dict() uses for the same keys.
-func _patch_current_level_dict(net_settings: Dictionary) -> void:
+## Host: replace the level snapshot served to late joiners with `patch` applied to it, so
+## a live edit (visual settings today) survives into a later join. `patch` takes the
+## snapshot and returns the new one; what the keys mean is the caller's business (for
+## visual settings, LevelVisualState.patch_level_dict()). No-op while no level is active,
+## so a patch never fabricates a snapshot.
+func update_level_snapshot(patch: Callable) -> void:
 	if _current_level_dict.is_empty():
 		return
-	if net_settings.has("light_intensity"):
-		_current_level_dict["light_intensity_scale"] = net_settings["light_intensity"]
-	if net_settings.has("environment_preset"):
-		_current_level_dict["environment_preset"] = net_settings["environment_preset"]
-	if net_settings.has("environment_overrides"):
-		_current_level_dict["environment_overrides"] = net_settings["environment_overrides"]
-	if net_settings.has("lofi_overrides"):
-		_current_level_dict["lofi_overrides"] = net_settings["lofi_overrides"]
-	if net_settings.has("weather_overrides"):
-		_current_level_dict["weather_overrides"] = net_settings["weather_overrides"]
-	if net_settings.has("foliage_overrides"):
-		_current_level_dict["foliage_overrides"] = net_settings["foliage_overrides"]
-	if net_settings.has("sun_settings"):
-		var visual: Dictionary = _current_level_dict.get("visual_settings", {})
-		visual["sun"] = net_settings["sun_settings"]
-		_current_level_dict["visual_settings"] = visual
-		_current_level_dict["format_version"] = LevelData.FORMAT_VERSION
-	if net_settings.has("water_style"):
-		_current_level_dict["water_style"] = net_settings["water_style"]
-	if net_settings.has("water_overrides"):
-		_current_level_dict["water_overrides"] = net_settings["water_overrides"]
-
-
-## Called by client to send a token transform to the host
-func send_client_token_transform(
-	network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
-) -> void:
-	if not is_client() or not multiplayer.multiplayer_peer:
-		return
-	_rpc_client_token_transform.rpc_id(
-		1, network_id, [pos.x, pos.y, pos.z], [rot.x, rot.y, rot.z], [scl.x, scl.y, scl.z]
-	)
-
-
-## Client sends a drag lock claim to the host.
-func send_drag_lock_claim(network_id: String) -> void:
-	if not is_client() or not multiplayer.multiplayer_peer:
-		return
-	_rpc_client_claim_drag_lock.rpc_id(1, network_id)
-
-
-## Client sends a drag lock release to the host.
-func send_drag_lock_release(network_id: String) -> void:
-	if not is_client() or not multiplayer.multiplayer_peer:
-		return
-	_rpc_client_release_drag_lock.rpc_id(1, network_id)
+	_current_level_dict = patch.call(_current_level_dict)
 
 
 # =============================================================================
