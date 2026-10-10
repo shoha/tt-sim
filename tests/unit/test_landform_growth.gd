@@ -297,13 +297,18 @@ func test_a_river_over_three_steps_jogs_aside() -> void:
 	var frame := {"dir": Vector2.RIGHT, "normal": Vector2.DOWN}
 	var plateaus: Array[Dictionary] = [{"edge": -10.0}, {"edge": 0.0}, {"edge": 10.0}]
 	var line := LandformTerraces.river_line(plateaus, frame, 4.0, 30.0, 30.0)
-	var jog := 30.0 * LandformTerraces.JOG_SHARE
+	var jog := maxf(30.0 * LandformTerraces.JOG_SHARE, LandformTerraces.JOG_MIN_M)
 	assert_almost_eq(line[1].y, 4.0, 0.001, "the first step crossed at the river's line")
 	assert_almost_eq(line[3].y, 4.0 + jog, 0.001, "the next jogged away from the axis")
 	assert_almost_eq(line[5].y, 4.0, 0.001, "and back")
 	assert_almost_eq(line[3].x, -LandformTerraces.JOG_SQUARE_M, 0.001, "square over the edge")
 	var two: Array[Dictionary] = [{"edge": -10.0}, {"edge": 10.0}]
 	assert_eq(LandformTerraces.river_line(two, frame, 4.0, 30.0, 30.0).size(), 2, "straight")
+	# On a wide or long map two steps already jog: the second step stands aside.
+	var jogged := LandformTerraces.river_line(two, frame, 4.0, 30.0, 30.0, 2)
+	assert_almost_eq(jogged[1].y, 4.0, 0.001, "the top step crossed at the river's line")
+	assert_almost_eq(jogged[3].y, 4.0 + jog, 0.001, "the second jogged aside")
+	assert_almost_eq(jogged[jogged.size() - 1].y, 4.0 + jog, 0.001, "and runs on from there")
 
 
 ## `doc` with BIOME painted: thin (0.1) west of x = 0, groves (0.8) east of it.

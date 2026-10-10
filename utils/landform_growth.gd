@@ -11,8 +11,9 @@ extends RefCounted
 ##
 ## Their own shapes grow and turn: a long map's Valley, Gorge and Terraces run along its
 ## length (turned()), the Valley may meander and its river widens, the Gorge bends twice
-## more often, the Terraces may gain a step, and the Hilltop and the Lakeshore sit toward one
-## end of a long map, leaving the other for what follows.
+## more often, the Terraces may gain a step, the Hilltop sits toward one end of a long map,
+## leaving the other for what follows, and the Lakeshore's lake takes any corner or side of
+## it (LandformLakeshore.wide_frame).
 ##
 ## And grow() adds one or two features drawn from a small palette by the seed (no sameness:
 ## a big map draws one, usually two, and which ones differs by seed and by landform): a tarn

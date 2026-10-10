@@ -16,10 +16,10 @@ extends RefCounted
 ## of the map, approaching off the stage's line by STREAM_AZIMUTH_DEG, ending just inside the
 ## shore (plan_river joins it at the waterline); stepping stones over the stream
 ## (STONES_CHANCE). The stage is on the shore nearest the map's centre, STAGE_SHORE_M back
-## from the waterline. The lake is the water: a dry draw has it too. On a long map the lake
-## sits in the map's own far corner (lakeshore_frame); on a wide one at any corner or side,
-## sometimes larger (wide_frame). Every size draws its wood and often a shore meadow (round
-## 3; see WIDE_PLACES).
+## from the waterline. The lake is the water: a dry draw has it too. On a wide or long map the
+## lake sits at any corner or side of the map's own extent, sometimes larger (wide_frame;
+## a long map since 2026-10-10, where the far corner kept it at the back on most seeds).
+## Every size draws its wood and often a shore meadow (round 3; see WIDE_PLACES).
 
 const LAKE_RADIUS_SHARE := 0.45
 ## 0.5 since P5-4 (0.55 sat the lake at the home view's edge): more water in the home view.
@@ -72,8 +72,9 @@ const EDGE_MARGIN_M := 0.5
 ## (a clearing easing back to the forest at its outline, NewMap.clearing_density).
 const LAKE_OPEN_SHARE := 1.6
 ## The setting (StartingLandform.STREAM_SETTING; round 3, where every seed read as a lake at
-## the back with forest everywhere else). On a wide map (LandformGrowth.is_wide; the whole map
-## is what reads, not the home frame) the lake takes any of WIDE_PLACES, the four corners and
+## the back with forest everywhere else). On a wide or long map (LandformGrowth.is_wide or
+## is_long: the whole map is what reads, not the home frame; a 320 x 160 ft map's shorter side
+## is under the wide threshold) the lake takes any of WIDE_PLACES, the four corners and
 ## the four sides' middles, alike; with LARGE_LAKE_CHANCE it is LARGE_LAKE_SHARE of the half
 ## extent across instead of LAKE_RADIUS_SHARE; its centre stands its radius plus
 ## LAKE_EDGE_SHARE of the half extent in from each edge it lies toward (a corner lake as before).
@@ -114,7 +115,7 @@ static func lakeshore(doc: MapDocument, seed_value: int, biome_id: String) -> Di
 	)
 	var frame := (
 		wide_frame(doc, half, setting)
-		if LandformGrowth.is_wide(doc)
+		if LandformGrowth.is_wide(doc) or LandformGrowth.is_long(doc)
 		else lakeshore_frame(
 			half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME), doc
 		)
@@ -281,7 +282,7 @@ static func lakeshore_frame(
 	}
 
 
-## A wide map's lake frame (see WIDE_PLACES) from `rng` (the setting stream, after the wood
+## A wide or long map's lake frame (see WIDE_PLACES) from `rng` (the setting stream, after the wood
 ## and the shore meadow): the place ("corner": each axis -1, 0 or +1), the centre on the map's
 ## own extent, the radius and the direction toward the map's middle. Always draws two numbers.
 static func wide_frame(doc: MapDocument, half: float, rng: RandomNumberGenerator) -> Dictionary:
