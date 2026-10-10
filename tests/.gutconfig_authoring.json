@@ -40,6 +40,7 @@
 		"res://tests/unit/test_level_manager_map_document.gd",
 		"res://tests/unit/test_level_map_streaming.gd",
 		"res://tests/unit/test_live_edit_codec.gd",
+		"res://tests/unit/test_live_edits_table.gd",
 		"res://tests/unit/test_live_map_edits.gd",
 		"res://tests/unit/test_map_document.gd",
 		"res://tests/unit/test_map_document_crossings.gd",

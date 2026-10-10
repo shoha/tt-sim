@@ -22,6 +22,12 @@ class_name LateJoinerSync
 ## TABLE_LOADED_TIMEOUT with the state sent anyway, since by then the client is long past
 ## its clear.
 ##
+## Live edits. A table changed during play (LiveEdits) is the map file plus its op log. The
+## joiner's live edits ask for the log as its map is installed, before its load completes and
+## it reports; the host queues the catch-up then, and the full state goes behind it through
+## the same outbox (NetworkGameSync.after_live_edits), so the joiner applies the log before the
+## state places its tokens, and they land on the edited ground.
+##
 ## Static helpers in the RootNetworkHandler style; the RPCs stay on NetworkManager.
 
 ## How long the host holds a late joiner's state waiting for its table-loaded report
@@ -33,7 +39,17 @@ const TABLE_LOADED_TIMEOUT := 300.0
 static func sync_peer(peer_id: int) -> void:
 	NetworkManager.send_game_starting_to_peer(peer_id)
 	NetworkManager.send_level_snapshot_to_peer(peer_id)
-	await send_state_once_table_loaded(peer_id, NetworkStateSync.send_full_state_to_peer)
+	await send_state_once_table_loaded(peer_id, send_state_after_live_edits)
+
+
+## Host: `peer_id`'s full state, sent once every live edit message queued before it has left
+## (the table's op log its live edits asked for; see the class doc), unless it left meanwhile.
+static func send_state_after_live_edits(peer_id: int) -> void:
+	NetworkManager.game_sync.after_live_edits(
+		func() -> void:
+			if _is_joining(peer_id):
+				NetworkStateSync.send_full_state_to_peer(peer_id)
+	)
 
 
 ## Host: wait for `peer_id`'s table-loaded report, then call `send_state` with the peer id

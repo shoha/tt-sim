@@ -28,7 +28,8 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 | `scenes/states/authoring/brush_tool.gd` | `BrushTool` | Gestures and the ring cursor; `decide()`, `Mode`, `sculpt_op()` |
 | `scenes/states/authoring/authoring_editor.gd` | `AuthoringEditor` | One per opened map; owns the edits |
 | `scenes/states/authoring/height_editor.gd` | `HeightEditor` | `AuthoringEditor.heights`: sculpt strokes and the height work they, water edits and live edits share |
-| `utils/live_edit_codec.gd`, `utils/live_edit_reader.gd` | `LiveEditCodec`, `LiveEditReader` | Live edits: a history entry's after side as bytes, the decode checks, the peer's queue |
+| `utils/live_edit_codec.gd`, `utils/live_edit_reader.gd` | `LiveEditCodec`, `LiveEditReader` | Live edits: a history entry's redo or undo side as bytes, the decode checks, the peer's queue, chunks and the sender's pacing |
+| `scenes/states/playing/live_edits.gd` | `LiveEdits` | A table's live edits on every peer: the play-side editor, the op log, sending (GM) and catching up (clients) |
 | `utils/mask_stroke.gd`, `utils/mask_brush.gd` | `MaskStroke`, `MaskBrush` | Mask strokes and their pure rules |
 | `utils/surface_stroke.gd` | `SurfaceStroke` | The Paint tool's stroke |
 | `utils/height_brush.gd` | `HeightBrush` | Sculpt rules: `tier_target_level`, `tier_goal()` |
@@ -151,20 +152,36 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 ## Live edits
 
 The GM's terrain events during play (a bridge collapsing, a forest falling, fire, biome and
-terrain changes with the authoring brushes; user decision, 2026-10-09) replicate as the after
-states of authoring history entries. The codec and the apply side exist (2026-10-09); the
-networking and the GM's UI do not yet. Probe and numbers:
-`docs/plans/2026-10-09-v0.2-evaluation/probes/live_edits_probe.md` (gitignored).
+terrain changes with the authoring brushes; user decision, 2026-10-09) replicate as one side
+of authoring history entries. The codec, the apply side and the transport exist
+(2026-10-09); the GM's UI (an Events pane) does not yet. Probe and numbers:
+`docs/plans/2026-10-09-v0.2-evaluation/probes/live_edits_probe.md` (gitignored). Transport:
+[../NETWORKING.md](../NETWORKING.md) "Live map edits".
 
-- **Op format** (`LiveEditCodec`): `{"v": 1, "kind", "args"}`, one op per history entry, at
-  most `MAX_BYTES` (256 KB). The six kinds and the public methods they go through, which are
-  the redo methods history binds: `mask` `AuthoringEditor.apply_mask_diff`, `surface`
-  `apply_surface_diff`, `props` `set_prop_cell`, `height` `HeightEditor.apply_diff`, `water`
-  `WaterEditor.apply_edit`, `crossings` `CrossingEditor.apply_list`. Only the after side
-  travels (surface diffs keep `ids_before`, which `SurfaceStroke.changes_plants` reads); an
-  undo is the before side sent as one more op. Water bodies and crossings travel as the
-  document's JSON (`MapWaterIO.body_json`, `MapCrossingIO.crossing_json`). `op_of(entry,
-  editor)` reads the entry's redo Callable; it finishes the host's height work first, since a
+- **The table's service** (`LiveEdits`, `scenes/states/playing/live_edits.gd`): every peer
+  of a table set out from a map document has one, a play-side `AuthoringEditor` (no UI,
+  `water.use_worker` on) over its own loaded copy (`LevelPlayController.live_edits`, made by
+  `start_live_edits()` once the map is installed, freed with it). The GM's side runs the
+  brushes on `live_edits.editor`, which records into `live_edits.history`; the history's
+  `recorded`, `undone` and `redone` signals turn each entry into one op once the editor's
+  height work has drained, appended to `op_log` (plain bytes, the table's events for a session
+  file). A client checks and applies ops in order through a `LiveEditCodec.Queue`; a catch-up
+  (a late joiner's) is applied at once (`Queue.drain()`). A Blender map with no document takes
+  none (`LiveEdits.refusal()`). Live edits change the session's copy, never `map.ttmap`; a
+  later "Save into map" would.
+- **Op format** (`LiveEditCodec`): `{"v": 1, "kind", "args", "redo"}`, one op per history
+  entry's redo or undo, at most `MAX_BYTES` (4 MB, crossing in 64 KB chunks). The six kinds
+  and the public methods they go through, which are the methods history binds: `mask`
+  `AuthoringEditor.apply_mask_diff`, `surface` `apply_surface_diff`, `props` `set_prop_cell`,
+  `height` `HeightEditor.apply_diff`, `water` `WaterEditor.apply_edit`, `crossings`
+  `CrossingEditor.apply_list`. One side travels: a record or redo its after side, an undo its
+  before side (`"redo": false`: diffs with their before blocks, records with their `*_before`
+  fields, applied with `redo` false, so a kept rock goes back into the scatter and a mask the
+  stroke allocated is dropped as the host's undo does); both id lists of a diff travel either
+  way (`SurfaceStroke.changes_plants` reads both). A props or crossings undo is the same method
+  with the before rows or list. Water bodies and crossings travel as the document's JSON
+  (`MapWaterIO.body_json`, `MapCrossingIO.crossing_json`). `op_of(entry, editor, undo)` reads
+  the entry's redo or undo Callable; it finishes the host's height work first, since a
   sculpt's record is complete only once its kept rocks land. Payloads on a 200 ft map: 0.1 to
   10 KB.
 - **Checks** (`LiveEditReader`, run by `decode(bytes, doc, palette_root)`): the byte cap
@@ -177,7 +194,8 @@ networking and the GM's UI do not yet. Probe and numbers:
   accepts, in their own cell, that cell on the map, at most 200k an op; palette biome, surface
   and asset ids (tables cached per palette, `palette_ids`). A fresh op is built from the
   checked values. Malformed bytes and over-inflating ZSTD are refused but print an engine
-  error first: rate-limit the sender.
+  error first, so a client's `LiveEdits` stops taking ops after the first refusal (the map is
+  out of step from there; `problem` says why) and only the host sends.
 - **Order and frame cost:** `apply(op, editor)` finishes whatever height work an earlier op
   left first (a props op must see the rocks a sculpt kept; a later op's regeneration must not
   be snapped twice), so order holds whoever calls it. A `height` or `water` op passes `spread`:
@@ -195,8 +213,12 @@ networking and the GM's UI do not yet. Probe and numbers:
   paint, clear, bridge and pond ops 7-12 ms as before.
 - **Identity** (`test_live_map_edits.gd`): nine ops on a saved 200 ft level reach a peer, and
   a reload of the host's saved document, with every `MapFingerprint` key equal (rows exactly:
-  generated rows snap to the saved precision) and the documents equal. Hostile payloads:
-  `test_live_edit_codec.gd`.
+  generated rows snap to the saved precision) and the documents equal. Hostile payloads, the
+  undo side, chunks and pacing: `test_live_edit_codec.gd`. The table's service (a forest
+  clear, a sculpt, a bridge removal and its undo reaching a client and a late joiner; dropped
+  repeats, gaps and foreign tables): `test_live_edits_table.gd`. Over ENet with three
+  processes: `tests/net/enet_live_edits` ([../NETWORKING.md](../NETWORKING.md) "ENet
+  scenarios").
 
 ## Verification
 
@@ -204,7 +226,8 @@ Unit tests in `tests/unit/`: `test_authoring_open.gd`, `test_authoring_session.g
 `test_authoring_save.gd`, `test_authoring_history_cap.gd`, `test_authoring_editor.gd`,
 `test_authoring_sculpt.gd`, `test_brush_tool_input.gd`, `test_mask_brush.gd`,
 `test_mask_stroke.gd`, `test_prop_rows.gd`, `test_new_map.gd`, `test_new_map_build.gd`,
-`test_live_edit_codec.gd`, `test_live_map_edits.gd`, `test_tool_registry.gd` (every
+`test_live_edit_codec.gd`, `test_live_edits_table.gd`, `test_live_map_edits.gd`,
+`test_tool_registry.gd` (every
 registered tool on the rail, with a pane and in help; unique ids, shortcuts and brush modes).
 The render job `tool_panes` captures the rail, each tool's pane and the help rows.
 
@@ -217,5 +240,8 @@ See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work".
 - 2026-10-09: map and rules moved here from `AGENTS.md` Key Conventions.
 - 2026-10-09: `HeightEditor` split out of `AuthoringEditor`; live edits (`LiveEditCodec`,
   public apply entry points, spread height work, the peer's queue).
+- 2026-10-09: live edits transport: `AuthoringHistory` signals, undo as the before side, the
+  table's `LiveEdits` service, chunked and paced over `NetworkGameSync` with a catch-up log
+  for late joiners; play keeps a document's props apart (`keep_props_apart`).
 - 2026-10-09: the tool registry (`ToolRegistry`, one `ToolDescriptor` per tool); the panel's
   `RAIL_ITEMS` and the controller's per-tool select and mode tables are gone.

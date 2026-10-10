@@ -2,14 +2,20 @@ class_name NetworkGameSync
 extends Node
 
 ## Table-play sub-component of NetworkManager: the RPCs that move tokens, hand out drag
-## locks and carry live visual settings once a level is loaded.
+## locks and carry live visual settings and live map edits once a level is loaded.
 ##
 ## Host -> clients: token transforms (one token, or a batch; unreliable), a token's full
-## state and its removal (reliable), drag-lock grants, denials and releases, and live visual
-## settings. Client -> host: a controlled token's transform (dropped when it arrives faster
-## than CLIENT_TRANSFORM_RATE_LIMIT for that token) and drag-lock claims and releases. Each
-## RPC re-emits as a typed signal; callers send through the methods here, never through
-## the RPCs themselves.
+## state and its removal (reliable), drag-lock grants, denials and releases, live visual
+## settings, and live map edits (LiveEdits; reliable). Client -> host: a controlled token's
+## transform (dropped when it arrives faster than CLIENT_TRANSFORM_RATE_LIMIT for that
+## token), drag-lock claims and releases, and a request for the table's live edit log (one
+## answered per LIVE_EDIT_LOG_REQUEST_INTERVAL a peer). Each RPC re-emits as a typed signal;
+## callers send through the methods here, never through the RPCs themselves.
+##
+## Live edits travel as chunks (LiveEditCodec.chunks) queued in one outbox that sends at most
+## LIVE_EDIT_BYTES_PER_SECOND, in order, whoever they go to; a client reassembles them
+## (LiveEditCodec.Assembler, capped at LiveEditCodec.MAX_BYTES) and emits each whole op. Only
+## the host sends them (the RPCs are authority-only).
 ##
 ## The inbound client RPCs only act on the host and take the sender from the transport, so
 ## a client can only speak for itself. What a client may do with a token (CONTROL, who holds
@@ -48,20 +54,49 @@ signal client_token_transform_received(
 signal client_drag_lock_claimed(sender_id: int, network_id: String)
 ## Emitted on the host when a client releases a token's drag lock
 signal client_drag_lock_released(sender_id: int, network_id: String)
+## Emitted on clients when a live map edit has arrived whole (not yet checked): the host's
+## table key, the op's index in that table's log, and its bytes
+signal live_edit_received(table_key: int, index: int, bytes: PackedByteArray)
+## Emitted on clients when the header of the host's live edit log arrives: its table key and
+## how many ops follow it
+signal live_edit_log_received(table_key: int, count: int)
+## Emitted on the host when a client asks for the table's live edit log (rate-limited)
+signal live_edit_log_requested(sender_id: int)
 
 ## Rate limiting for inbound client-sent token transform RPCs (mirrors
 ## NetworkStateSync.TRANSFORM_SEND_INTERVAL). Bounds how often a single token's
 ## transform is processed regardless of how fast a client sends updates.
 const CLIENT_TRANSFORM_RATE_LIMIT := 0.05
+## Live edits leave at most this many bytes a second (a broadcast counted once), in chunks of
+## at most LiveEditCodec.CHUNK_BYTES: Steam drops reliable messages past about 512 KB queued,
+## so a whole-map sculpt or a long catch-up is spread over a fraction of a second or more.
+const LIVE_EDIT_BYTES_PER_SECOND := 512 * 1024
+## A peer's request for the live edit log is answered at most once in this many seconds; the
+## answer can be megabytes, so a client cannot make the host resend it in a loop.
+const LIVE_EDIT_LOG_REQUEST_INTERVAL := 2.0
 
 ## Last-received timestamp per token, checked against CLIENT_TRANSFORM_RATE_LIMIT
 var _client_transform_throttle: Dictionary = {}  # network_id -> last_received_time (float)
+## Host: live edit messages waiting to leave
+var _live_outbox := LiveEditCodec.Outbox.new(LIVE_EDIT_BYTES_PER_SECOND)
+## Client: the op being reassembled from its chunks
+var _live_assembler := LiveEditCodec.Assembler.new()
+## Host: peer id -> when its last live edit log request was answered (seconds)
+var _live_log_requests: Dictionary = {}
 
 
-## Forget per-connection state (the inbound transform throttle). NetworkManager calls this
-## when the game disconnects.
+## Forget per-connection state (the inbound transform throttle, live edits queued or half
+## received, log request times). NetworkManager calls this when the game disconnects.
 func reset() -> void:
 	_client_transform_throttle.clear()
+	_live_outbox = LiveEditCodec.Outbox.new(LIVE_EDIT_BYTES_PER_SECOND)
+	_live_assembler = LiveEditCodec.Assembler.new()
+	_live_log_requests.clear()
+
+
+func _process(delta: float) -> void:
+	if _live_outbox.size() > 0:
+		_live_outbox.drain(delta)
 
 
 # =============================================================================
@@ -165,6 +200,64 @@ func release_drag_lock(network_id: String, peer_id: int) -> bool:
 	return true
 
 
+## Host: send live edit op `bytes`, index `index` of table `table_key`'s log, to every client,
+## behind whatever live edit traffic is already queued (reliable).
+func broadcast_live_edit(table_key: int, index: int, bytes: PackedByteArray) -> void:
+	if not NetworkManager.is_host():
+		return
+	_queue_live_edit(0, table_key, index, bytes)
+	_live_outbox.drain(0.0)
+
+
+## Host: send `peer_id` (0: every client) the header of table `table_key`'s live edit log and
+## every op in `ops` (indices from 0), queued as one run so an op broadcast later reaches the
+## peer after them (reliable).
+func send_live_edit_log(peer_id: int, table_key: int, ops: Array[PackedByteArray]) -> void:
+	if not NetworkManager.is_host():
+		return
+	var count := ops.size()
+	_live_outbox.push(
+		func() -> void:
+			if peer_id == 0:
+				_rpc_live_edit_log.rpc(table_key, count)
+			elif peer_id in multiplayer.get_peers():
+				_rpc_live_edit_log.rpc_id(peer_id, table_key, count),
+		0
+	)
+	for index in count:
+		_queue_live_edit(peer_id, table_key, index, ops[index])
+	_live_outbox.drain(0.0)
+
+
+## Host: call `then` once every live edit message queued before it has been sent, at once when
+## none is waiting. LateJoinerSync sends a late joiner's full state this way, behind the
+## catch-up its table's live edits asked for, so its tokens land on the edited ground.
+func after_live_edits(then: Callable) -> void:
+	_live_outbox.push(then, 0)
+	_live_outbox.drain(0.0)
+
+
+## Live edit messages still waiting to leave (the outbox; for tests and measurement).
+func live_edits_waiting() -> int:
+	return _live_outbox.size()
+
+
+## Queues the chunks of one op for `peer_id` (0: every client).
+func _queue_live_edit(peer_id: int, table_key: int, index: int, bytes: PackedByteArray) -> void:
+	var parts := LiveEditCodec.chunks(bytes)
+	var count := parts.size()
+	for part in count:
+		var data: PackedByteArray = parts[part]
+		_live_outbox.push(
+			func() -> void:
+				if peer_id == 0:
+					_rpc_live_edit_chunk.rpc(table_key, index, part, count, data)
+				elif peer_id in multiplayer.get_peers():
+					_rpc_live_edit_chunk.rpc_id(peer_id, table_key, index, part, count, data),
+			data.size()
+		)
+
+
 # =============================================================================
 # CLIENT -> HOST
 # =============================================================================
@@ -193,6 +286,13 @@ func send_drag_lock_release(network_id: String) -> void:
 	if not NetworkManager.is_client() or not multiplayer.multiplayer_peer:
 		return
 	_rpc_client_release_drag_lock.rpc_id(1, network_id)
+
+
+## Client: ask the host for its table's live edit log (LiveEdits, once its map is installed).
+func request_live_edit_log() -> void:
+	if not NetworkManager.is_client() or not multiplayer.multiplayer_peer:
+		return
+	_rpc_request_live_edit_log.rpc_id(1)
 
 
 # =============================================================================
@@ -294,6 +394,52 @@ func _rpc_drag_lock_denied(network_id: String) -> void:
 @rpc("authority", "reliable")
 func _rpc_drag_lock_released(network_id: String) -> void:
 	drag_lock_released.emit(network_id)
+
+
+## RPC: one chunk of a live map edit (host -> clients). A refused chunk drops its op; the
+## receiving LiveEdits then sees a gap and takes no later op until a log fills it.
+@rpc("authority", "reliable")
+func _rpc_live_edit_chunk(
+	table_key: int, index: int, part: int, parts: int, data: PackedByteArray
+) -> void:
+	if NetworkManager.is_host():
+		return
+	var whole := _live_assembler.add(table_key, index, part, parts, data)
+	if _live_assembler.problem != "":
+		push_warning("NetworkGameSync: live edit %d refused: %s" % [index, _live_assembler.problem])
+	elif not whole.is_empty():
+		live_edit_received.emit(table_key, index, whole)
+
+
+## RPC: the header of the host's live edit log, its ops following (host -> client or all)
+@rpc("authority", "reliable")
+func _rpc_live_edit_log(table_key: int, count: int) -> void:
+	if NetworkManager.is_host():
+		return
+	live_edit_log_received.emit(table_key, count)
+
+
+## RPC: Client asks for the table's live edit log (client -> host), answered at most once a
+## LIVE_EDIT_LOG_REQUEST_INTERVAL per peer, for players past the version gate only.
+@rpc("any_peer", "reliable")
+func _rpc_request_live_edit_log() -> void:
+	_take_log_request(multiplayer.get_remote_sender_id())
+
+
+## Host: emits live_edit_log_requested for `sender_id` unless it is no player or asked less
+## than LIVE_EDIT_LOG_REQUEST_INTERVAL ago. True when it did.
+func _take_log_request(sender_id: int) -> bool:
+	if not NetworkManager.is_host() or not NetworkManager.get_players().has(sender_id):
+		return false
+	var now := Time.get_ticks_msec() / 1000.0
+	if (
+		_live_log_requests.has(sender_id)
+		and now - float(_live_log_requests[sender_id]) < LIVE_EDIT_LOG_REQUEST_INTERVAL
+	):
+		return false
+	_live_log_requests[sender_id] = now
+	live_edit_log_requested.emit(sender_id)
+	return true
 
 
 ## Vector3 as the compact [x, y, z] array the transform RPCs carry.

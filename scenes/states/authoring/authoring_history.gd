@@ -16,8 +16,18 @@ extends RefCounted
 ## stroke's compressed mask diff, typically 2 to 20 KB). The oldest entries are dropped
 ## while the stack holds more than MAX_ENTRIES entries or more than max_bytes in total, so
 ## a long session of huge strokes cannot grow without bound. The newest entry always stays.
+##
+## Observers. recorded, undone and redone carry the entry itself, after its action has run:
+## the table's live edits (LiveEdits) turn each into one op (LiveEditCodec.op_of, the before
+## side for an undo) without reaching into the stacks.
 
 signal changed
+## A new entry went onto the undo stack (record()).
+signal recorded(entry: Dictionary)
+## `entry`'s undo has run (undo()).
+signal undone(entry: Dictionary)
+## `entry`'s redo has run (redo()).
+signal redone(entry: Dictionary)
 
 const MAX_ENTRIES := 100
 ## Default memory cap across both stacks.
@@ -36,6 +46,7 @@ func record(entry: Dictionary) -> void:
 	_redo.clear()
 	while _undo.size() > 1 and (_undo.size() > MAX_ENTRIES or held_bytes() > max_bytes):
 		_undo.pop_front()
+	recorded.emit(entry)
 	changed.emit()
 
 
@@ -69,6 +80,7 @@ func undo() -> String:
 	if action.is_valid():
 		action.call()
 	_redo.append(entry)
+	undone.emit(entry)
 	changed.emit()
 	return String(entry.get("label", ""))
 
@@ -82,6 +94,7 @@ func redo() -> String:
 	if action.is_valid():
 		action.call()
 	_undo.append(entry)
+	redone.emit(entry)
 	changed.emit()
 	return String(entry.get("label", ""))
 

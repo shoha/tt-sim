@@ -412,8 +412,12 @@ instead, see [Sessions](#sessions-the-room-and-the-table)):
    `broadcast_level_data()` stored, with every live visual edit since folded in through
    `update_level_snapshot()`. NetworkManager treats the snapshot as opaque; the caller's patch
    knows the keys (`LevelVisualState.patch_level_dict()` for visual settings)
-3. Full game state (all tokens, avatars, permissions and drag locks), held by the host until
-   the client reports its table loaded
+3. The table's live edit log, when the map has a document: the joiner's `LiveEdits` asks for
+   it as its map is installed, and applies it at once when its last op is in (see
+   [Live map edits](#live-map-edits))
+4. Full game state (all tokens, avatars, permissions and drag locks), held by the host until
+   the client reports its table loaded, then sent behind any live edit messages still queued
+   (`NetworkGameSync.after_live_edits()`), so the tokens land on the edited ground
 
 The hold matters. The client's `LevelPlayLoader` yields three frames and then
 `clear_level()` resets `GameState`, so a state that lands inside that yield is wiped.
@@ -751,6 +755,16 @@ log and one `NET_RESULT {json}` line to `--out` and quits 0 on a pass; extending
   pause menu does, with no "connection lost" dialog (the host keeps its entry with no peer and
   its grant by session id), rejoins through the join screen with a new peer id, lands at table
   B and controls Hero A again; the host ends with five session players.
+- `enet_live_edits` (`--peers=3 --timeout-s=300`): live map edits (see "Live map edits"
+  below). The host builds a 120 ft authored level (forest west of a river, a plank bridge) in
+  its own test root before it opens the room, so both clients download its `map.ttmap`. With
+  client at the table, the host runs five ops on the table's play-side editor: a sculpt raise,
+  a forest clear, the bridge removed, a sculpt lower, and an undo of the lower (a height op's
+  before side). client's `MapFingerprint` equals the host's after each. The host drops Hero
+  onto the raised ground; client2 then joins at the table, downloads the original map, takes
+  the log and matches the host's final fingerprint, with Hero resting on its own ground at the
+  host's height (0.65 m above the original flat ground). Passed on 2026-10-09 in about 7.4 s on
+  the host.
 
 All three earlier ones passed through the launcher on 2026-10-09, each in about 1.4 s on the
 host, with no shipped store file changed (31,435 files watched) and every test root removed;
@@ -911,6 +925,10 @@ func broadcast_visual_settings(settings: Dictionary) -> void
 func grant_drag_lock(network_id: String, peer_id: int) -> bool
 func send_drag_lock_denied(peer_id: int, network_id: String) -> void
 func release_drag_lock(network_id: String, peer_id: int) -> bool
+func broadcast_live_edit(table_key: int, index: int, bytes: PackedByteArray) -> void
+func send_live_edit_log(peer_id: int, table_key: int, ops: Array[PackedByteArray]) -> void  # 0: every client
+func after_live_edits(then: Callable) -> void   # behind every live edit message queued
+func live_edits_waiting() -> int
 ```
 
 `NetworkStateSync` decides when the token sends go out (throttling, batching, keeping
@@ -939,6 +957,7 @@ departed peer, so the GM could not drag that token again.
 func send_client_token_transform(network_id: String, pos: Vector3, rot: Vector3, scl: Vector3) -> void
 func send_drag_lock_claim(network_id: String) -> void
 func send_drag_lock_release(network_id: String) -> void
+func request_live_edit_log() -> void
 ```
 
 #### Signals
@@ -952,6 +971,8 @@ signal transform_batch_received(batch: Dictionary)
 signal visual_settings_received(settings: Dictionary)
 signal drag_lock_denied(network_id)      # the denied client only
 signal drag_lock_released(network_id)
+signal live_edit_received(table_key, index, bytes)   # one op, whole, not yet checked
+signal live_edit_log_received(table_key, count)      # a log header; `count` ops follow
 
 # Every peer: the host's own grant_drag_lock() emits it too
 signal drag_lock_granted(network_id, locker_peer_id)
@@ -960,6 +981,7 @@ signal drag_lock_granted(network_id, locker_peer_id)
 signal client_token_transform_received(sender_id, network_id, position, rotation, scale)
 signal client_drag_lock_claimed(sender_id, network_id)
 signal client_drag_lock_released(sender_id, network_id)
+signal live_edit_log_requested(sender_id)            # rate-limited, players only
 ```
 
 #### RPCs
@@ -977,6 +999,9 @@ signal client_drag_lock_released(sender_id, network_id)
 | `_rpc_client_token_transform` | client -> host | unreliable, dropped when a token's updates arrive faster than `CLIENT_TRANSFORM_RATE_LIMIT` (0.05 s) | `client_token_transform_received` |
 | `_rpc_client_claim_drag_lock` | client -> host | reliable | `client_drag_lock_claimed` |
 | `_rpc_client_release_drag_lock` | client -> host | reliable | `client_drag_lock_released` |
+| `_rpc_live_edit_chunk` | host -> clients or one client | reliable, paced by the outbox (`LIVE_EDIT_BYTES_PER_SECOND`, 512 KB/s); reassembled, capped at `LiveEditCodec.MAX_BYTES` | `live_edit_received` once an op is whole |
+| `_rpc_live_edit_log` | host -> clients or one client | reliable, in the outbox's order | `live_edit_log_received` |
+| `_rpc_request_live_edit_log` | client -> host | reliable, one answered per `LIVE_EDIT_LOG_REQUEST_INTERVAL` (2 s) a player | `live_edit_log_requested` |
 
 The client used to ACK every full state (`_rpc_state_sync_ack`, `state_sync_complete`); nothing
 listened, and both were removed on 2026-10-09. A late joiner's state is released by
@@ -998,6 +1023,58 @@ On the host, the same broadcast also patches the late-joiner snapshot through
 `NetworkManager.update_level_snapshot()` with `LevelVisualState.patch_level_dict()`, which maps
 each broadcast key onto the `LevelData.to_dict()` field it stands for (`light_intensity` to
 `light_intensity_scale`, `sun_settings` nested under `visual_settings.sun`, the rest 1:1).
+
+#### Live map edits
+
+The GM changes the map during play with the authoring brushes (sculpt, paint, biome, clear,
+water, crossings, props; a bridge collapsing, a forest falling, fire) and every peer, a late
+joiner included, ends with the same map. The ops and their checks are
+[systems/authoring.md](systems/authoring.md) "Live edits"; this is their transport.
+
+- **One service a table, every peer** (`LiveEdits`, `scenes/states/playing/live_edits.gd`):
+  `LevelPlayController.start_live_edits()` makes it once a map built from a map document is
+  installed (`LevelPlayLoader._finalize_map_loading`, the download path too) and frees it
+  with the map, so the log clears when the table changes. A map with no document (a Blender
+  map played as it is) gets none: `LevelPlayController.live_edits` is null and
+  `LiveEdits.refusal(null)` says why. Play loads a document's map with its props apart
+  (`MapSourceLoader.keep_props_apart`) on every peer so the play-side editor can edit it.
+- **Only the host sends.** The GM's side records into `LiveEdits.history`; each entry
+  recorded, undone or redone becomes one op once the editor's height work has drained, is
+  appended to `LiveEdits.op_log` (a plain `Array[PackedByteArray]`, the table's events for a
+  session file) and goes out through `broadcast_live_edit()`. The chunk and header RPCs are
+  authority-only; clients only receive.
+- **Order.** Every live edit message (chunks of at most `LiveEditCodec.CHUNK_BYTES`, 64 KB;
+  log headers; `after_live_edits()` callbacks) leaves through one outbox, in order, at most
+  512 KB a second (a broadcast counted once): Steam drops reliable messages past about 512 KB
+  queued. A client reassembles each op (`LiveEditCodec.Assembler`: parts in order, at most
+  `MAX_CHUNKS`, at most `MAX_BYTES`, 4 MB) and its `LiveEdits` applies ops in index order
+  through a `LiveEditCodec.Queue` stepped once a frame.
+- **Catching up.** A client's `LiveEdits` calls `request_live_edit_log()` as soon as it exists;
+  the host answers with `send_live_edit_log()`: a header (the table key, a random number drawn
+  when the host's service starts, and the op count) and every op so far. A service takes ops
+  only of the table whose header it has and only at the next index, so ops broadcast before
+  the header or twice are dropped and the log fills the gap. When the catch-up's last op is
+  in, the queue applies it all at once (`Queue.drain()`). A host whose service starts after a
+  client's announces its header to every client (`send_live_edit_log(0, ...)`). A client with a
+  level queued behind the one loading starts no service for the doomed table.
+- **Late joiners.** `LateJoinerSync.sync_peer` sends the full state through
+  `after_live_edits()`, behind the catch-up the joiner's service asked for while its map was
+  installing (before its load completed and it reported), so the joiner's ground is edited
+  before its tokens are placed. A joiner that downloads the map reports before the map is in;
+  it gets the state first and the log once the map arrives, and its tokens (host positions,
+  no gravity) stand on the edited ground once the catch-up drains.
+- **Hostile bytes.** `LiveEditCodec.decode` checks every op against the receiver's document
+  and palette; a refused op stops that table taking any more (`LiveEdits.problem`, one
+  warning), so a misbehaving host cannot make a client print an engine error for every op.
+  A request for the log is answered at most once in two seconds a player, since the answer
+  can be megabytes.
+- **Saving.** Live edits change the session's copy of the map (the loaded document and
+  nodes), never `map.ttmap`.
+
+ENet scenario: `tests/net/enet_live_edits` (three peers: the host builds an authored level in
+its test root, a client follows five ops with an equal `MapFingerprint` after each, a late
+joiner downloads the original map, catches up and matches, its token resting on the raised
+ground at the host's height).
 
 ### NetworkStateSync
 

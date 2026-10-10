@@ -26,6 +26,8 @@ func after_each() -> void:
 	GameState.clear_all_drag_locks()
 	GameState.clear_permissions_for_peer(CLIENT_PEER)
 	GameState.remove_token_state(LEFT_TOKEN)
+	(NetworkManager.get("_players") as Dictionary).erase(CLIENT_PEER)
+	NetworkManager.game_sync.reset()
 
 
 ## The host's copy of a token, tracked the way TokenSpawner tracks a spawned token, with a
@@ -182,3 +184,61 @@ func test_player_left_mid_drag_unlocks_the_host_copy() -> void:
 	assert_eq(GameState.get_drag_lock(LEFT_TOKEN), 0, "GameState frees the departed peer's lock")
 	assert_eq(token._drag_locked_by, 0, "The host's copy is no longer locked to the departed peer")
 	assert_true(token._dragging_object.dragging_allowed, "The GM can drag the token again")
+
+
+# --- live edits ------------------------------------------------------------------------------
+
+
+func test_a_client_puts_a_live_edit_back_together_from_its_chunks() -> void:
+	NetworkManager._connection_state = NetworkManager.ConnectionState.JOINED
+	var game_sync := NetworkManager.game_sync
+	watch_signals(game_sync)
+	var bytes := PackedByteArray()
+	bytes.resize(LiveEditCodec.CHUNK_BYTES + 10)
+	bytes.fill(3)
+	var parts := LiveEditCodec.chunks(bytes)
+	game_sync._rpc_live_edit_log(41, 2)
+	game_sync._rpc_live_edit_chunk(41, 0, 0, parts.size(), parts[0])
+	assert_signal_not_emitted(game_sync, "live_edit_received", "half an op is not an op")
+	game_sync._rpc_live_edit_chunk(41, 0, 1, parts.size(), parts[1])
+	assert_signal_emitted_with_parameters(game_sync, "live_edit_log_received", [41, 2])
+	assert_signal_emitted_with_parameters(game_sync, "live_edit_received", [41, 0, bytes])
+
+
+func test_the_host_ignores_live_edits_sent_to_it() -> void:
+	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
+	var game_sync := NetworkManager.game_sync
+	watch_signals(game_sync)
+	game_sync._rpc_live_edit_log(41, 0)
+	game_sync._rpc_live_edit_chunk(41, 0, 0, 1, PackedByteArray([1]))
+	assert_signal_not_emitted(game_sync, "live_edit_log_received")
+	assert_signal_not_emitted(game_sync, "live_edit_received")
+
+
+func test_a_log_request_is_answered_once_an_interval_and_only_for_players() -> void:
+	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
+	var game_sync := NetworkManager.game_sync
+	watch_signals(game_sync)
+	assert_false(game_sync._take_log_request(CLIENT_PEER), "a peer past no version gate")
+	(NetworkManager.get("_players") as Dictionary)[CLIENT_PEER] = {"name": "client"}
+	assert_true(game_sync._take_log_request(CLIENT_PEER))
+	assert_false(game_sync._take_log_request(CLIENT_PEER), "asked again at once")
+	assert_signal_emit_count(game_sync, "live_edit_log_requested", 1)
+	NetworkManager._connection_state = NetworkManager.ConnectionState.JOINED
+	game_sync.reset()
+	assert_false(game_sync._take_log_request(CLIENT_PEER), "a client answers no requests")
+
+
+func test_the_full_state_waits_behind_queued_live_edits() -> void:
+	var game_sync := NetworkManager.game_sync
+	game_sync.reset()
+	var sent: Array = []
+	for k in 2:
+		game_sync._live_outbox.push(func() -> void: sent.append(k), LiveEditCodec.CHUNK_BYTES)
+	game_sync.after_live_edits(func() -> void: sent.append("state"))
+	assert_eq(sent, [0], "one chunk leaves; the state waits behind the second")
+	assert_eq(game_sync.live_edits_waiting(), 2)
+	game_sync._live_outbox.drain(1.0)
+	assert_eq(sent, [0, 1, "state"], "then the state follows it at once")
+	game_sync.after_live_edits(func() -> void: sent.append("next"))
+	assert_eq(sent.back(), "next", "with nothing queued it goes at once")
