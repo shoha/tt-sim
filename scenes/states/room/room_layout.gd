@@ -101,6 +101,10 @@ static func _build_room(panel: RoomPanel, layout: VBoxContainer) -> void:
 	side.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	body.add_child(side)
 	panel.side = side
+	# The heading's plaque is the sheet's heading: on the same margin and as wide as the sheet
+	# under it (wider only when its words need it), not a narrower slip floating above it.
+	heading_plaque.custom_minimum_size.x = RoomPanel.SIDE_WIDTH
+	side.resized.connect(func() -> void: heading_plaque.custom_minimum_size.x = side.size.x)
 	var side_box := _vbox("SideBox", &"BoxContainerSpaced")
 	side.add_child(side_box)
 	side_box.add_child(_build_players(panel))

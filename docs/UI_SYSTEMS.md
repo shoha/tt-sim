@@ -436,39 +436,73 @@ where the painting is the whole picture: the d20 that turned there went with the
 
 `PaintedBackdrop` (`scenes/ui/primitives/painted_backdrop.gd`, `shaders/ui_backdrop.gdshader`)
 is the world every screen outside play stands on: the title, the room (`RoomScreen`) and a map
-load (`LoadingOverlay`'s `%Sky`). One full-screen shader pass in the map placeholder's language
-(`MapPlaceholder`): a sky in two washes with a near-white sun in a warmer halo (a moon in a
-cool ring at night), four flat-based cumulus clouds, a pale distant range and a rolling far
-ridge in the mood's atmospheric tint (`RANGE`, `FAR`: blue-green by day; a flat teal band read
-as sea), a round near hill with three poplars (tall flames, lit on their sunward side) in the
-dip left of centre, and a meadow rising to the right. No textures and no noise. The suns sit
-toward the right, clear of the range and under the big cloud; the poplars stand in the gap
-the room leaves between its side sheet and its stage, so neither hides behind the room.
+load (`LoadingOverlay`'s `%Sky`), and, in a small rect, the picture of a map with no thumbnail
+(`MapPlaceholder`), so a card and the screen behind it paint the same place in the same light.
+One shader pass: a sky in two washes with one near-white sun in a warmer halo (at night a
+smaller, cooler crescent moon and a scatter of stars), four cumulus clouds with soft bases that
+round up toward their ends (a ruled base read as a card's edge), a pale distant range and a
+rolling far ridge in the mood's atmospheric tint (blue-green by day; a flat teal band read as
+sea), a round near hill with none to four poplars (tall flames in cool shade, lit down the side
+facing the sun), and a meadow rising to the right. No textures and no noise.
 
-- **Moods.** Six curated palettes (`PaintedBackdrop.Mood`: morning, midday, golden hour, dusk,
-  overcast, night), chosen by the selected map's environment preset (`mood_of`,
-  `MOOD_OF_PRESET`; an unknown preset or none is morning). The mood sets only the backdrop
-  (UI_TASTE verdict 2026-10-09): controls and semantic colours never change with it.
-- **Cross-fade.** `show_mood` mixes every colour from the old mood to the new over
-  `FADE_S` (1.2 s, sine in-out) and fades the two suns into each other; the first mood a
-  backdrop shows comes at once. `last_mood` carries the mood to the next backdrop, so the room
-  opens in the title's light and a map load in whatever was last shown.
+The shader paints one look; `BackdropPaint` (`backdrop_paint.gd`) works out everything it is
+told on the CPU, and `BackdropLayout` (`backdrop_layout.gd`) where the screen's paper is.
+
+- **Moods.** Six curated palettes (`BackdropPaint.MOODS`, `PaintedBackdrop.Mood`: morning,
+  midday, golden hour, dusk, overcast, night), chosen by the selected map's environment preset
+  through one table (`PaintedBackdrop.mood_of`, `MOOD_OF_PRESET`; an unknown preset or none is
+  morning) that the placeholders read too. The mood sets only the backdrop (UI_TASTE verdict
+  2026-10-09): controls and semantic colours never change with it. The palette is paint data
+  (sRGB `Vector3`s, the shader's vec3), not theme roles. The poplars stand apart from the hill
+  in every mood: shade toward a cool teal (deep navy at night), light toward gold-green (coral
+  at dusk, a moonlit edge at night).
+- **Each map its own sky.** The map's key (its folder, as its card's picture) seeds the land and
+  the weather (`BackdropPaint.compose`): the skyline's phase and swell, how many poplars stand
+  (none in one map in ten) and where on the crest, four clouds' places, sizes and shapes, and
+  which side the sun favours. Two forest maps get their own skies; the moods stay curated.
+- **Making way for the paper.** A screen calls `fit_around(self)` and `refit()` when its layout
+  changes (a resize refits by itself). `BackdropLayout.paper_of` walks the screen for the
+  controls that draw an opaque fill or a picture (sheets, plaques, cards, buttons, clipped by
+  their scroll view) and marks them, 12 px wider, on a grid of cells a seventy-second of the
+  height. The sun or moon then stands in the largest open square above the lowest 30% of the
+  screen (nearest its usual place, smaller in a small square), so no card, sheet or stage hides
+  it; each cloud moves to the nearest place where its base and lower puffs, through its sway,
+  are open (its crown may tuck behind a card; a base in the band of cards read as a ghost
+  card), or stays away; the poplars move along the crest to the nearest stretch no paper
+  covers, losing a tree at a time when the stretch is short.
+- **A change is one picture changing.** `show_map(preset, key)` (and `show_mood`) fades over
+  `FADE_S` (0.6 s, sine in-out, inside M1's overlay band) by mixing the values, never two
+  pictures: colours in OKLCH (`BackdropPaint.mix_looks`; lightness and chroma straight across,
+  the hue the short way round, between hues within about 11 degrees of opposite the way through
+  red and magenta, since a wider warm band sent a hill one way and its meadow the other; a
+  colour past the gamut gives up chroma, not hue), so golden hour to night passes through rose
+  and violet; the one disc moves, shrinks and turns into a crescent;
+  a new map's skyline rolls into place and its clouds and poplars slide, grow or shrink
+  (`mix_compositions`). A change part way through a fade starts from what is on screen. The
+  first look a backdrop shows comes at once. `last_mood` and `last_key` carry the picture to
+  the next backdrop (`show_last`), so the room opens in the title's light and land and a map
+  load in whatever was last shown.
 - **Drift.** The clouds sway about their places over 64-88 s each (`DRIFT_S`, the shader's
-  `TIME`; no `_process`). Reduce motion (`UiMotion.reduced()`) holds them (`drift` 0); the
-  cross-fade stays (M5). A hidden backdrop draws nothing (M6).
+  `TIME`; no `_process`). Reduce motion (`UiMotion.reduced()`) holds them (`hold_drift`); a
+  change of light still fades (M5). A placeholder's clouds hold still. A hidden backdrop draws
+  nothing (M6).
 - **No words on the painting.** A screen on the backdrop puts its words on paper, so every
   caption reads 4.5:1 in every mood and nothing hazes the painting under them: the title's
   column on a `Sheet` that ends at its content (the version a caption beside the wordmark),
   "Your maps" with its count and the empty library's caption on a `Plaque`; the room's
-  heading and code row each on a plaque that ends at its words, and the selected map's name
+  heading on a plaque on the side sheet's margin and as wide as the sheet (the sheet's
+  heading, not a narrower slip above it), the code row on a plaque that ends at its words,
+  and the selected map's name
   and readiness on a plaque as wide as its picture (`RoomLayout`). `Plaque` is the sheet's
   paper and trim at a card's radius with 16 x 8 padding (glass: the rim, 12 x 8).
   `test_painted_backdrop` walks every word on the title and the room in each mood and fails
   one that has no opaque fill under it or reads under 4.5:1 on it. (Round 1 lifted dark
   painting toward a haze under registered words; it read as a milky band and blurred
   smudges, and went.)
-- **Cost.** One full-screen fragment pass (about 30 smoothsteps, 14 sines, 4 exps).
-  Measured indicatively in `docs/PERFORMANCE.md`.
+- **Cost.** One full-screen fragment pass (about 30 smoothsteps, 14 sines, 4 exps, and at
+  night one hash per pixel for the stars). Measured indicatively in `docs/PERFORMANCE.md`. The
+  CPU side mixes about 13 colours and sets about 30 uniforms per frame of a 0.6 s change, and
+  measures the layout (a few thousand cells) once per refit.
 
 ### Left Column
 
@@ -491,17 +525,21 @@ selected it opens on a new map, the way to bring in a Blender map); New map carr
 new-map dialog and then [authoring mode](#authoring-mode). A card's overflow menu and the pause
 menu use the same name, Set up tokens (`TitleScreen.SET_UP_TOKENS`), and so does the editor's
 own header. Avatars opens the [avatar roster](#avatar-library).
-Host game ("Open a room and invite players") and Play solo are disabled until a card is
-selected; once one is, the three map actions name it one way, the bare name leading the line
-under the button: "<name> goes on the shelf" under Host (Host opens a room; the map is what
-goes on its shelf), the name alone under Play solo and Set up tokens. "Your maps" carries its
-count as a bare number beside the heading.
+Play solo is disabled until a card is selected. Host game is never disabled: a room needs no
+map (room first, user verdict 2026-10-09), so over an empty library Host stays the screen's
+fill with the caption "Open a room; add maps there" and opens a room with an empty shelf
+(`Root._on_host_game_requested` with no path: `host_session(null)`). Once a card is selected,
+the three map actions name it one way, the bare name leading the line under the button:
+"<name> goes on the shelf" under Host's "Open a room and invite players" (Host opens a room;
+the map is what goes on its shelf), the name alone under Play solo and Set up tokens. "Your
+maps" carries its count as a bare number beside the heading.
 
 ### Right Zone
 
 A "Your maps" heading with a live count on a paper plaque (`heading_plaque`, the `Plaque`
-variation, its top edge in line with the column's sheet; the empty library's caption sits on it
-too), and a 3-column `LevelGrid` populated from
+variation, its top edge in line with the column's sheet; over an empty library it carries one
+short line, "No maps yet. Paint your first one", and one quiet action, Start a new map, which
+opens New map), and a 3-column `LevelGrid` populated from
 `level_provider` (defaults to `LevelManager.get_saved_levels`; tests inject a fake before the node
 enters the tree). The most recently modified level is preselected on `_ready()`
 (`_preselect_most_recent()`). With no saved levels the grid is empty and an empty-state caption

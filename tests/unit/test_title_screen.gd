@@ -1,7 +1,7 @@
 extends GutTest
 
-## Title hub: Host and Play Solo follow the selected card, are disabled with no
-## levels, and the signals carry the selection. Join never needs a level.
+## Title hub: Host and Play Solo follow the selected card, and the signals carry the
+## selection. Play Solo is disabled with no levels; Host and Join never need one.
 
 const SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
 
@@ -28,13 +28,28 @@ func _title() -> TitleScreen:
 	return title
 
 
-func test_no_levels_disables_host_and_play_and_explains() -> void:
+## Room first: a room needs no map, so Host stays the screen's fill over an empty library and
+## says maps are added there; the plaque offers New map, in fewer words than a line.
+func test_no_levels_keeps_host_and_offers_a_new_map() -> void:
 	_levels = []
 	var title := _title()
-	assert_true(title.host_button.disabled)
+	watch_signals(title)
+	assert_false(title.host_button.disabled, "a room needs no map")
+	assert_eq(title.host_button.theme_type_variation, &"Primary")
+	assert_eq(title.host_caption.text, TitleScreen.HOST_EMPTY_LINE)
+	assert_false(title.host_subtitle.visible, "one line under Host")
+	title._on_host_pressed()
+	assert_signal_emitted_with_parameters(title, "host_game_requested", [{}])
 	assert_true(title.play_button.disabled)
 	assert_false(title.join_button.disabled)
 	assert_true(title.empty_caption.visible)
+	assert_lt(title.empty_caption.text.length(), 60, "a short line")
+	assert_false(title.empty_caption.text.contains(TitleScreen.SET_UP_TOKENS))
+	assert_true(title.empty_action.visible)
+	assert_eq(title.empty_action.text, TitleScreen.EMPTY_ACTION)
+	assert_true(title.heading_plaque.is_ancestor_of(title.empty_action))
+	title.empty_action.pressed.emit()
+	assert_signal_emitted(title, "build_map_requested")
 	assert_eq(title.heading_count.text, "0")
 	# Set up tokens stays open with nothing selected (a new map, a Blender file), unnamed.
 	assert_false(title.editor_button.disabled)
@@ -71,8 +86,10 @@ func test_the_backdrop_takes_the_selected_maps_mood() -> void:
 	_levels = [_info("old", "Old Camp", 100), night]
 	var title := _title()
 	assert_eq(title.backdrop.mood(), PaintedBackdrop.Mood.NIGHT, "the preselected newest map")
+	assert_eq(title.backdrop.key(), "night", "over its own land, keyed as its card's picture")
 	title.grid._cards[0]._on_pressed()
 	assert_eq(title.backdrop.mood(), PaintedBackdrop.Mood.MORNING, "a map with no preset")
+	assert_eq(title.backdrop.key(), "old")
 	title.grid.provider = func() -> Array: return []
 	title.grid.refresh()
 	assert_eq(title.backdrop.mood(), PaintedBackdrop.Mood.MORNING, "an empty library")
@@ -86,7 +103,13 @@ func test_the_backdrop_takes_the_selected_maps_mood() -> void:
 func test_the_words_stand_on_paper() -> void:
 	_levels = [_info("new", "New Camp", 200)]
 	var title := _title()
-	await wait_frames(3)
+	# Past the entrance (UiMotion.stagger_in lifts each target 12 px in after two process
+	# frames; wait_frames counts physics frames, several of which can pass in one process frame
+	# headless): the measures are of the screen at rest.
+	await wait_process_frames(4)
+	for tween in get_tree().get_processed_tweens():
+		tween.custom_step(10.0)
+	await wait_process_frames(2)
 	var sheet := title.get_node("%ColumnSheet") as PanelContainer
 	assert_eq(sheet.theme_type_variation, &"Sheet")
 	assert_true(title.get_node("%LeftColumn").is_ancestor_of(title.version_label))
@@ -147,7 +170,9 @@ func test_grid_refresh_notifies_actions_when_the_list_changes() -> void:
 	title.grid.refresh()
 	assert_eq(title.heading_count.text, "0")
 	assert_true(title.empty_caption.visible)
-	assert_true(title.host_button.disabled)
+	assert_true(title.empty_action.visible)
+	assert_false(title.host_button.disabled, "a room needs no map")
+	assert_eq(title.host_caption.text, TitleScreen.HOST_EMPTY_LINE)
 	assert_true(title.play_button.disabled)
 
 

@@ -48,37 +48,126 @@ func test_every_preset_paints_a_known_mood() -> void:
 			assert_between(int(mood), 0, PaintedBackdrop.Mood.size() - 1, preset)
 
 
-func test_the_first_mood_shows_at_once_and_a_change_cross_fades() -> void:
+func test_the_first_mood_shows_at_once_and_a_change_fades() -> void:
 	var backdrop := _backdrop()
 	backdrop.show_mood(PaintedBackdrop.Mood.GOLDEN_HOUR)
-	assert_eq(_param(backdrop, &"mood_to"), int(PaintedBackdrop.Mood.GOLDEN_HOUR))
-	assert_eq(_param(backdrop, &"blend"), 1.0)
+	assert_eq(backdrop.mood(), PaintedBackdrop.Mood.GOLDEN_HOUR)
+	assert_eq(backdrop.blend(), 1.0)
+	var golden: Vector3 = BackdropPaint.look_of(PaintedBackdrop.Mood.GOLDEN_HOUR).sky_low
+	assert_eq(_param(backdrop, &"sky_low"), golden)
 	backdrop.show_mood(PaintedBackdrop.Mood.NIGHT)
 	assert_eq(backdrop.mood(), PaintedBackdrop.Mood.NIGHT)
 	assert_eq(PaintedBackdrop.last_mood, PaintedBackdrop.Mood.NIGHT)
-	assert_eq(_param(backdrop, &"mood_from"), int(PaintedBackdrop.Mood.GOLDEN_HOUR))
-	assert_eq(_param(backdrop, &"mood_to"), int(PaintedBackdrop.Mood.NIGHT))
-	assert_lt(float(_param(backdrop, &"blend")), 0.1, "fading, not cut")
+	assert_lt(backdrop.blend(), 0.1, "fading, not cut")
 	await wait_seconds(PaintedBackdrop.FADE_S + 0.2)
-	assert_eq(_param(backdrop, &"blend"), 1.0)
+	assert_eq(backdrop.blend(), 1.0)
+	var night: Vector3 = BackdropPaint.look_of(PaintedBackdrop.Mood.NIGHT).sky_low
+	assert_eq(_param(backdrop, &"sky_low"), night)
+	assert_eq((_param(backdrop, &"sun_look") as Vector2).y, 1.0, "the moon")
 	PaintedBackdrop.last_mood = PaintedBackdrop.Mood.MORNING
 
 
-## A new mood part way through a fade starts from the mood that dominated the picture.
-func test_an_interrupted_fade_starts_from_what_dominated() -> void:
+## A new mood part way through a fade starts from what is on screen: the colours do not jump.
+func test_an_interrupted_fade_starts_from_what_is_on_screen() -> void:
 	var backdrop := _backdrop()
 	backdrop.show_mood(PaintedBackdrop.Mood.MORNING)
 	backdrop.show_mood(PaintedBackdrop.Mood.DUSK)
+	backdrop._set_blend(0.5)
+	var shown: Vector3 = _param(backdrop, &"sky_top")
+	var sun: Vector4 = _param(backdrop, &"sun_at")
 	backdrop.show_mood(PaintedBackdrop.Mood.OVERCAST)
-	assert_eq(_param(backdrop, &"mood_from"), int(PaintedBackdrop.Mood.MORNING))
-	assert_eq(_param(backdrop, &"mood_to"), int(PaintedBackdrop.Mood.OVERCAST))
+	assert_eq(backdrop.mood(), PaintedBackdrop.Mood.OVERCAST)
+	assert_almost_eq(_param(backdrop, &"sky_top") as Vector3, shown, Vector3.ONE * 0.002)
+	assert_almost_eq(_param(backdrop, &"sun_at") as Vector4, sun, Vector4.ONE * 0.002)
 	PaintedBackdrop.last_mood = PaintedBackdrop.Mood.MORNING
+
+
+## A change of light is one picture changing: every colour keeps its saturation through the
+## mix (OKLCH), the hills between golden hour and night pass through rose and violet rather
+## than khaki, and the one disc moves and shrinks from sun to moon.
+func test_a_change_of_light_keeps_its_saturation_and_moves_one_disc() -> void:
+	for a in PaintedBackdrop.Mood.size():
+		for b in PaintedBackdrop.Mood.size():
+			var from := BackdropPaint.look_of(a)
+			var to := BackdropPaint.look_of(b)
+			for k: float in [0.25, 0.37, 0.5, 0.75]:
+				var mixed := BackdropPaint.mix_looks(from, to, k)
+				# About as saturated as the greyer end, short of what the screen can show at
+				# that lightness (a mix in RGB dipped to grey part way: golden hour to night's
+				# sky held a third of the chroma).
+				for key: String in ["sky_top", "sky_low", "far_col", "near_col", "meadow_col"]:
+					var want := minf(_chroma(from[key]), _chroma(to[key]))
+					var what := "%s %d -> %d at %.2f" % [key, a, b, k]
+					assert_gte(_chroma(mixed[key]), want * 0.75, what)
+	var golden := BackdropPaint.look_of(PaintedBackdrop.Mood.GOLDEN_HOUR)
+	var night := BackdropPaint.look_of(PaintedBackdrop.Mood.NIGHT)
+	var hill: Vector3 = BackdropPaint.mix_looks(golden, night, 0.37).near_col
+	var hue := rad_to_deg(fposmod(BackdropPaint.to_oklch(hill).z, TAU))
+	assert_false(hue > 95.0 and hue < 150.0, "the hill passes through rose, not olive: %d" % hue)
+	var composition := BackdropPaint.compose(0.3, Vector2(1920, 1080), null)
+	var sun := BackdropPaint.sun_of(BackdropPaint.mix_looks(golden, night, 0.5), composition)
+	assert_between(sun.z, night.sun_r, golden.sun_r, "the disc shrinks toward the moon's")
+	assert_between(sun.y, golden.sun_y, night.sun_y, "and rises")
+
+
+## The sun or moon stands in the sky the paper leaves open, and every cloud and poplar clear of
+## it: here a column sheet on the left and a row of cards across the top right.
+func test_the_painting_makes_way_for_the_paper() -> void:
+	var size := Vector2(1280, 720)
+	var paper: Array[Rect2] = [Rect2(24, 24, 380, 672), Rect2(428, 24, 828, 300)]
+	var layout := BackdropLayout.new(size, paper)
+	for seed: float in [0.05, 0.31, 0.62, 0.9]:
+		var composition := BackdropPaint.compose(seed, size, layout)
+		for mood in PaintedBackdrop.Mood.size():
+			var sun := BackdropPaint.sun_of(BackdropPaint.look_of(mood), composition)
+			var disc := Rect2(sun.x - sun.z, sun.y - sun.z, sun.z * 2.0, sun.z * 2.0)
+			assert_true(layout.is_open(_pixels(disc, size)), "seed %.2f mood %d sun" % [seed, mood])
+		# A cloud's base never in the band of cards (its crown may tuck behind one).
+		for cloud: Vector4 in composition.clouds:
+			if cloud.z > 0.0:
+				var z := cloud.z
+				var base := Rect2(cloud.x - 0.85 * z, cloud.y - 0.1 * z, 1.7 * z, 0.3 * z)
+				assert_true(layout.is_open(_pixels(base, size)), "seed %.2f cloud %s" % [seed, cloud])
+		for tree: Vector4 in composition.poplars:
+			if tree.y > 0.0:
+				var foot := BackdropPaint.near_line(tree.x, size.x / size.y, composition.ridges.z)
+				var rect := Rect2(tree.x - tree.z, foot, tree.z * 2.0, tree.y)
+				assert_true(layout.is_open(_pixels(rect, size)), "seed %.2f poplar" % seed)
+
+
+## Two maps in the same mood get their own land and weather; the same map always the same.
+func test_each_map_draws_its_own_sky() -> void:
+	var backdrop := _backdrop()
+	backdrop.show_map("forest", "willow_green", true)
+	var ridges: Vector4 = _param(backdrop, &"ridges")
+	var cloud: Vector4 = _param(backdrop, &"cloud0")
+	backdrop.show_map("forest", "mossy_hollow", true)
+	assert_eq(backdrop.mood(), PaintedBackdrop.Mood.MORNING)
+	assert_ne(_param(backdrop, &"ridges"), ridges)
+	assert_ne(_param(backdrop, &"cloud0"), cloud)
+	backdrop.show_map("forest", "willow_green", true)
+	assert_eq(_param(backdrop, &"ridges"), ridges)
+	PaintedBackdrop.last_mood = PaintedBackdrop.Mood.MORNING
+	PaintedBackdrop.last_key = ""
 
 
 func test_drift_follows_reduce_motion() -> void:
 	var backdrop := _backdrop()
 	var expected := 0.0 if UiMotion.reduced() else 1.0
 	assert_eq(_param(backdrop, &"drift"), expected)
+	backdrop.hold_drift(true)
+	assert_eq(_param(backdrop, &"drift"), 0.0, "held")
+
+
+func _chroma(color: Vector3) -> float:
+	return BackdropPaint.to_oklch(color).y
+
+
+## A rect in heights (y up from the foot) as pixels.
+func _pixels(rect: Rect2, size: Vector2) -> Rect2:
+	return Rect2(
+		rect.position.x * size.y, (1.0 - rect.end.y) * size.y, rect.size.x * size.y, rect.size.y * size.y
+	)
 
 
 ## No word stands straight on the painting: every word the title and the room show (a label's,

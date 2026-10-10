@@ -81,6 +81,9 @@ func _refresh_icon() -> void:
 		theme_type_variation = &"IconButtonActive"
 	else:
 		theme_type_variation = &"IconButtonDisc" if disc else &"IconButton"
+	# A flat button draws no stylebox at all, so the disc never showed: a disc button is not
+	# flat, and its paper shows at rest.
+	flat = not disc
 	var filled_path := ICON_DIR + icon_name + "-filled.svg"
 	if active and not icon_name.is_empty() and ResourceLoader.exists(filled_path):
 		icon = load(filled_path)
