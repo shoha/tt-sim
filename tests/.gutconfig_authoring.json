@@ -68,6 +68,7 @@
 		"res://tests/unit/test_starting_landform.gd",
 		"res://tests/unit/test_submerged_cue.gd",
 		"res://tests/unit/test_terrain_rules.gd",
+		"res://tests/unit/test_token_grounding.gd",
 		"res://tests/unit/test_water_carve.gd",
 		"res://tests/unit/test_water_fall_mesh.gd",
 		"res://tests/unit/test_water_falls.gd",

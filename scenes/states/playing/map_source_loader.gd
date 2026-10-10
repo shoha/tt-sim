@@ -395,6 +395,72 @@ func fit_grid_ground_async(map: Node3D, game_map: GameMap) -> Dictionary:
 	}
 
 
+## Samples a dressed GLB's ground into its document's heights (DressingGround), a slice per
+## frame, after one physics frame so the map's collision is in the space, so the Biome brush
+## generates plants on the GLB ground instead of at Y = 0; then sets the generated rows that
+## no longer stand on it (a document saved before this existed, or a GLB re-exported since)
+## down onto it (DressingGround.settle). Authoring and a play-time load both call it, so
+## play shows the same repair authoring does. The grid overlay draws on the same ground, or,
+## where the map has water, on the surface: sampled again with the water surfaces, since the
+## plants need the bed. Returns {"samples", "ray_ms", "missed", "settled_rows", "wall_ms"},
+## or {} when superseded (the map left the container, or is_superseded()).
+func fit_dressing_ground_async(map: Node3D, game_map: GameMap, doc: MapDocument) -> Dictionary:
+	var started := Time.get_ticks_usec()
+	await tree.physics_frame
+	if not _still_installed(map, game_map):
+		return {}
+	var top := (
+		LevelEnvironmentManager.compute_map_bounds(map).end.y
+		+ DragPlaceController.TERRAIN_DOWNCAST_HEIGHT
+	)
+	var sampler := DressingGround.begin(
+		doc, map.get_world_3d(), map.global_transform, top, AuthoredCrossings.exclude_of(map)
+	)
+	while not sampler.step(FRAME_BUDGET_USEC):
+		await tree.process_frame
+		if not _still_installed(map, game_map):
+			return {}
+	var scatter := map.get_node_or_null(NodePath(SCATTER_NODE)) as AuthoredScatter
+	var moved := DressingGround.settle(
+		doc, sampler.heights, scatter, DressingGround.aligned_assets(doc.biome_ids)
+	)
+	var grid := sampler
+	if WaterGlbUtils.has_water(map):
+		grid = DressingGround.begin_grid(
+			map.get_world_3d(),
+			map.global_transform,
+			top,
+			-doc.extent_m() * 0.5,
+			doc.sample_step(),
+			doc.samples_x(),
+			doc.samples_z(),
+			WaterSurface.WALKABLE_MASK
+		)
+		while not grid.step(FRAME_BUDGET_USEC):
+			await tree.process_frame
+			if not _still_installed(map, game_map):
+				return {}
+	game_map.set_grid_ground(
+		GroundHeightField.for_glb(
+			map,
+			grid.heights,
+			grid.hits,
+			doc.samples_x(),
+			doc.samples_z(),
+			-doc.extent_m() * 0.5,
+			doc.sample_step(),
+			grid.water
+		)
+	)
+	return {
+		"samples": sampler.heights.size(),
+		"ray_ms": sampler.usec / 1000.0,
+		"missed": sampler.miss_count(),
+		"settled_rows": moved,
+		"wall_ms": (Time.get_ticks_usec() - started) / 1000.0,
+	}
+
+
 func _still_installed(map: Node3D, game_map: GameMap) -> bool:
 	return (
 		not is_superseded.call()

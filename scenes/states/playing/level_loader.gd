@@ -179,6 +179,14 @@ func _play_level_async(level_data: LevelData) -> void:
 	# Now spawn tokens - this is fast since models are already cached
 	var spawned_count = 0
 	level_loading_progress.emit(0.6, "Spawning tokens...")
+	var cast_top := 0.0
+	if total_tokens > 0:
+		# Each token is set down on ground that moved since it was saved (TokenGrounding),
+		# which needs the map's collision in the physics space.
+		await _level_play_controller.get_tree().physics_frame
+		if _should_abort_load(generation):
+			return
+		cast_top = TokenGrounding.cast_top(_level_play_controller._game_map)
 
 	for placement in level_data.token_placements:
 		# Check validity before spawning each batch
@@ -188,6 +196,8 @@ func _play_level_async(level_data: LevelData) -> void:
 		var token = BoardTokenFactory.create_from_placement_async(placement).token
 		if token and is_instance_valid(drag_and_drop):
 			drag_and_drop.add_child(token)
+			# Before tracking, so GameState and every peer get the grounded position.
+			TokenGrounding.reground(token, cast_top)
 			_level_play_controller._token_spawner._track_token(token, placement)
 			_level_play_controller._connect_token_context_menu(token)
 			# Staggered pop-in animation — sequential cascade instead of random

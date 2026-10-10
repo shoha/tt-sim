@@ -5,11 +5,12 @@ extends Node
 ## players see, so every stroke is judged under the real camera, lighting, sky and weather.
 ## Offline only; Root refuses entry while hosting or joined.
 ##
-## Owns what LevelPlayController owns in play, minus everything about tokens and peers: its
-## own LevelEnvironmentManager, the GameMap setup it needs (authoring mode, measure tool,
-## grid overlay; weather comes with MapSourceLoader.install), and the map, loaded through the
-## same MapSourceLoader the play-time load uses (with props kept in their own node, since
-## the tools edit scatter and props apart). The MapDocument is the source of truth for
+## Owns what LevelPlayController owns in play, minus peers and the token tools: its own
+## LevelEnvironmentManager, the GameMap setup it needs (authoring mode, measure tool, grid
+## overlay; weather comes with MapSourceLoader.install), the level's tokens as play spawns
+## them (AuthoringTokens: draggable, saved back as its placements), and the map, loaded
+## through the same MapSourceLoader the play-time load uses (with props kept in their own
+## node, since the tools edit scatter and props apart). The MapDocument is the source of truth for
 ## everything authored: masks and heights are edited in it in place, and the scatter and
 ## props rows are copied back from their AuthoredScatter nodes whenever the document is
 ## written (_sync_document).
@@ -19,8 +20,8 @@ extends Node
 ## GLB is the base and an empty document covering it is made in memory, written on the
 ## first save. A leftover autosave is offered first (AuthoringAutosave). Every dressed map
 ## (has_base_map) has its document heights sampled from the GLB's collision as it opens
-## (_fit_dressing_to_ground), so painted plants stand on the GLB ground and the grid overlay
-## draws on it.
+## (MapSourceLoader.fit_dressing_ground_async, which a play-time load runs too), so painted
+## plants stand on the GLB ground and the grid overlay draws on it.
 ##
 ## Saving writes map.ttmap atomically (MapDocumentIO), then level.json with map_document
 ## set (LevelManager), then a thumbnail of the current view. Unsaved edits are counted by
@@ -65,7 +66,9 @@ var panel: AuthoringPanel = null
 var selected_biome: String = ""
 var brush: BrushTool = null
 var editor: AuthoringEditor = null
-## The last dressing ground fit (_fit_dressing_to_ground), for measurement: {"samples",
+## The level's tokens, as play spawns them.
+var tokens: AuthoringTokens = null
+## The last dressing ground fit (fit_dressing_ground_async), for measurement: {"samples",
 ## "ray_ms", "missed", "settled_rows", "wall_ms"}; {} for a map that is not a dressing.
 var ground_fit: Dictionary = {}
 
@@ -100,6 +103,8 @@ func setup(game_map: GameMap) -> void:
 	game_map.setup_measure_tool()
 	game_map.setup_grid_overlay()
 	brush = game_map.setup_brush_tool()
+	tokens = AuthoringTokens.new(game_map, history)
+	tokens.edited.connect(mark_edited)
 	_build_ui()
 	brush.toggled.connect(_on_brush_toggled)
 	brush.paint_refused.connect(_on_paint_refused)
@@ -238,10 +243,16 @@ func _open_async(
 	_install(root, loader.document)
 	var settled_rows := 0
 	if document.has_base_map:
+		# Rows settled onto the ground are an edit the author saves; not an undoable history
+		# entry, since undoing it would only put the plants back in the air.
 		loading_progress.emit(0.85, "Fitting to the ground...")
-		settled_rows = await _fit_dressing_to_ground(generation)
+		ground_fit = await loader.fit_dressing_ground_async(map_root, _game_map, document)
 		if _superseded(generation):
 			return
+		settled_rows = ground_fit.get("settled_rows", 0)
+	await tokens.spawn_async(level, func() -> bool: return _superseded(generation))
+	if _superseded(generation):
+		return
 	loading_progress.emit(0.9, "Preparing the palette...")
 	for biome in PaletteLibrary.biomes(scatter.palette_root):
 		scatter.prepare_biome(String(biome.get("id", "")))
@@ -250,7 +261,6 @@ func _open_async(
 	await _await_palette_warm(generation)
 	if _superseded(generation):
 		return
-	# Rows settled onto the ground are an edit the author saves (see _fit_dressing_to_ground).
 	var unsaved := not spec.is_empty() or recovered or settled_rows > 0
 	session = AuthoringSession.unsaved() if unsaved else AuthoringSession.new()
 	session.dirty_changed.connect(_on_dirty_changed)
@@ -350,79 +360,6 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 		editor.terrain.refresh_skirt()
 
 
-## Samples a dressed GLB's ground into the document's heights (DressingGround), a slice per
-## frame under the loading screen, so the Biome brush generates plants on the GLB ground
-## instead of at Y = 0. Waits one physics frame first so the map's collision is in the
-## physics space. A document saved before this existed has its generated rows at Y = 0;
-## they are set down onto the ground here (DressingGround.settle) and the session starts
-## unsaved so the author saves the fix. It is not an undoable history entry: undoing it
-## would only put the plants back in the air. Returns how many rows moved (0 when the
-## document already matched its ground, which a save after this fix guarantees unless the
-## GLB was re-exported).
-func _fit_dressing_to_ground(generation: int) -> int:
-	var started := Time.get_ticks_usec()
-	await get_tree().physics_frame
-	if _superseded(generation):
-		return 0
-	var top := (
-		LevelEnvironmentManager.compute_map_bounds(map_root).end.y
-		+ DragPlaceController.TERRAIN_DOWNCAST_HEIGHT
-	)
-	var sampler := DressingGround.begin(
-		document,
-		map_root.get_world_3d(),
-		map_root.global_transform,
-		top,
-		AuthoredCrossings.exclude_of(map_root)
-	)
-	while not sampler.step(MapSourceLoader.FRAME_BUDGET_USEC):
-		await get_tree().process_frame
-		if _superseded(generation):
-			return 0
-	var moved := DressingGround.settle(
-		document, sampler.heights, scatter, DressingGround.aligned_assets(document.biome_ids)
-	)
-	# The grid overlay draws on the same sampled ground (a play-time load samples its own,
-	# MapSourceLoader.fit_grid_ground_async), or, where the map has water, on the surface:
-	# sampled again with the water surfaces, since the plants need the bed.
-	var grid := sampler
-	if WaterGlbUtils.has_water(map_root):
-		grid = DressingGround.begin_grid(
-			map_root.get_world_3d(),
-			map_root.global_transform,
-			top,
-			-document.extent_m() * 0.5,
-			document.sample_step(),
-			document.samples_x(),
-			document.samples_z(),
-			WaterSurface.WALKABLE_MASK
-		)
-		while not grid.step(MapSourceLoader.FRAME_BUDGET_USEC):
-			await get_tree().process_frame
-			if _superseded(generation):
-				return moved
-	_game_map.set_grid_ground(
-		GroundHeightField.for_glb(
-			map_root,
-			grid.heights,
-			grid.hits,
-			document.samples_x(),
-			document.samples_z(),
-			-document.extent_m() * 0.5,
-			document.sample_step(),
-			grid.water
-		)
-	)
-	ground_fit = {
-		"samples": sampler.heights.size(),
-		"ray_ms": sampler.usec / 1000.0,
-		"missed": sampler.miss_count(),
-		"settled_rows": moved,
-		"wall_ms": (Time.get_ticks_usec() - started) / 1000.0,
-	}
-	return moved
-
-
 ## Zoom-out reaches a view of the whole map (never less than the play camera's), and panning
 ## is bounded by the map's extent even where nothing has been painted yet. Heights follow the
 ## terrain's real range (sculpted ground can rise above or sink below Y = 0; a dressed GLB
@@ -464,17 +401,15 @@ func _ground_range() -> Vector2:
 
 
 ## After a sculpt stroke, undo or redo has settled (its chunks rebuilt, so their AABBs are
-## exact again): refits the camera and shadow bounds and resizes the reflection probe to
-## the new ground, when its range changed.
+## exact again): sets the tokens down on the ground it left, and refits the camera and
+## shadow bounds and resizes the reflection probe to the new ground, when its range changed.
 func _refresh_bounds_after_edit() -> void:
 	var terrain := _terrain()
-	if terrain == null:
-		_bounds_stale = false
-		return
-	if (editor and editor.has_height_work()) or terrain.has_unsettled_chunks():
+	if terrain != null and ((editor and editor.has_height_work()) or terrain.has_unsettled_chunks()):
 		return
 	_bounds_stale = false
-	if terrain.world_height_range().is_equal_approx(_fitted_ground):
+	tokens.reground_after_physics()
+	if terrain == null or terrain.world_height_range().is_equal_approx(_fitted_ground):
 		return
 	_fit_camera()
 	_environment.apply_reflection_probe(_game_map.world_viewport)
@@ -837,12 +772,14 @@ static func surface_tint(surface: String, root: String = PaletteLibrary.DEFAULT_
 
 
 ## Copies what the scene holds back into the document and the level: the scatter and props
-## rows (their AuthoredScatter nodes hold the current rows), and the map name.
+## rows (their AuthoredScatter nodes hold the current rows), the tokens' placements, and the
+## map name.
 func _sync_document() -> void:
 	if is_instance_valid(scatter):
 		document.scatter = scatter.rows_by_asset()
 	if is_instance_valid(props):
 		document.props = props.rows_by_asset()
+	tokens.write_placements(level)
 	level.level_name = panel.get_map_name()
 
 
@@ -864,8 +801,11 @@ func save_async() -> bool:
 		editor.finish_height_work()
 	while is_instance_valid(scatter) and scatter.is_regenerating():
 		await get_tree().process_frame
+	# Every token is saved standing on the ground as it is now (TokenGrounding).
+	await get_tree().physics_frame
 	if not is_inside_tree():
 		return false
+	tokens.reground_all()
 	_sync_document()
 	var ok := write_level(level, document, capture_thumbnail())
 	_saving = false
@@ -988,6 +928,8 @@ func teardown() -> void:
 	if editor:
 		editor.water.release()
 		editor.rock_keeper.release()
+	if tokens:
+		tokens.clear()
 	if _autosave_timer:
 		_autosave_timer.stop()
 	if panel:

@@ -20,6 +20,8 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 | `scenes/states/authoring/authoring_session.gd` | `AuthoringSession` | The dirty state |
 | `scenes/states/authoring/authoring_autosave.gd` | `AuthoringAutosave` | Autosave |
 | `scenes/states/authoring/authoring_history.gd` | `AuthoringHistory` | The undo seam |
+| `scenes/states/authoring/authoring_tokens.gd` | `AuthoringTokens` | The level's tokens, spawned as play does, saved back as placements |
+| `utils/token_grounding.gd` | `TokenGrounding` | Sets saved tokens down on ground that moved (authoring and play load) |
 | `scenes/states/authoring/brush_tool.gd` | `BrushTool` | Gestures and the ring cursor; `decide()`, `Mode`, `sculpt_op()` |
 | `scenes/states/authoring/authoring_editor.gd` | `AuthoringEditor` | One per opened map; owns the edits |
 | `utils/mask_stroke.gd`, `utils/mask_brush.gd` | `MaskStroke`, `MaskBrush` | Mask strokes and their pure rules |
@@ -34,7 +36,21 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 - `Root.State.AUTHORING` is appended to the state enum and is offline only:
   `Root.request_authoring(level, return_to)` is the one entry, refused while networked. It
   builds or dresses a map inside the real `GameMap` (`setup_authoring()`: GameplayMenu hidden
-  and disabled, token drag off).
+  and disabled; token drag stays on while no brush is active).
+- Authoring is a faithful preview of play (2026-10-09; there is no "Try" step). The level's
+  tokens spawn as play spawns them (`AuthoringTokens`: models preloaded, then
+  `BoardTokenFactory.create_from_placement_async` into the same DragAndDrop3D), so occlusion
+  fade, drag landing, the float rule and grid snap come from `GameMap` as in play. A move,
+  turn or resize is one `AuthoringHistory` entry and marks the session unsaved; a save
+  copies every token back into its placement (`write_placements`). Authoring adds and
+  removes no tokens.
+- Tokens follow their ground (`TokenGrounding`): a token that no longer stands where a drop
+  at its spot would land (ground sculpted, carved or filled under it, a dressed GLB
+  re-exported) is set straight down there, from its own top, or from above the map when
+  raised ground buried it. Authoring re-grounds after each edit settles (one physics frame
+  on) and before each save; a play-time load re-grounds every placement as it spawns
+  (`LevelPlayLoader`, before tracking, so GameState and peers get the grounded position).
+  Props have no collision, so a token inside a placed prop stays there; authoring shows it.
 - `AuthoringController` (`scenes/states/authoring/`) owns its own `LevelEnvironmentManager`,
   loads through `MapSourceLoader` (shared with `LevelPlayLoader`; `separate_props` keeps props
   in `AuthoredProps`) and `MapSourceLoader.install()`, and treats the `MapDocument` as the

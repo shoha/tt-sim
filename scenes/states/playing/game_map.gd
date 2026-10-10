@@ -34,7 +34,7 @@ extends Node3D
 const DRAG_GROUND_CAST_CLEARANCE_M := 1.0
 
 ## True in authoring mode (Root.State.AUTHORING, see setup_authoring()): the GameplayMenu is
-## hidden and never set up, and tokens cannot be dragged.
+## hidden and never set up. Tokens drag as in play while no brush is active.
 var authoring_mode: bool = false
 ## Set by an owner that loads a map without a LevelPlayController (AuthoringController), so
 ## input and the camera wait during that load exactly as they do during a play-time load.
@@ -156,9 +156,10 @@ func setup(level_play_controller: LevelPlayController) -> void:
 
 
 ## Authoring mode's counterpart of setup(): there is no LevelPlayController, so the
-## GameplayMenu (whose controller needs one) is hidden and disabled instead of set up, token
-## drag is off, and the current camera pose becomes Home. The authoring owner calls the
-## setup_* functions it needs itself.
+## GameplayMenu (whose controller needs one) is hidden and disabled instead of set up, and
+## the current camera pose becomes Home. Token drag stays on while no brush is active
+## (AuthoringTokens spawns the level's tokens). The authoring owner calls the setup_*
+## functions it needs itself.
 func setup_authoring() -> void:
 	authoring_mode = true
 	if gameplay_menu:
@@ -551,8 +552,8 @@ func _update_dragging_enabled() -> void:
 		or (_sun_gizmo != null and _sun_gizmo.is_active())
 		or (_brush_tool != null and _brush_tool.is_active())
 	)
-	# Authoring has no tokens to drag, and a drag there would only fight the brushes.
-	drag_and_drop_node.dragging_enabled = not tool_active and not authoring_mode
+	# Authoring shows the level's tokens and lets them be moved while no brush is out.
+	drag_and_drop_node.dragging_enabled = not tool_active
 
 
 ## Create and configure the GridOverlay.
@@ -696,7 +697,7 @@ func set_ground_terrain(terrain: AuthoredTerrain, has_water: bool = false) -> vo
 
 ## The ground the grid overlay draws on (GridOverlay.set_ground): authored terrain's field
 ## (set_ground_terrain), a Blender map's ground sampled from its collision
-## (MapSourceLoader.fit_grid_ground_async, AuthoringController._fit_dressing_to_ground), or
+## (MapSourceLoader.fit_grid_ground_async, or fit_dressing_ground_async for a dressed one), or
 ## null for the fixed Y = 0 band.
 func set_grid_ground(field: GroundHeightField) -> void:
 	_grid_ground = field

@@ -19,7 +19,7 @@ extends RefCounted
 ##
 ## Before this existed a dressed document's heights stayed flat 0, so everything painted
 ## was generated at Y = 0, floating over dips and buried under rises. snap_rows() moves such
-## rows onto the sampled ground (see AuthoringController._fit_dressing_to_ground).
+## rows onto the sampled ground (see MapSourceLoader.fit_dressing_ground_async).
 ##
 ## The same sampler, over any regular grid (begin_grid), gives a Blender map's grid overlay
 ## its ground at play time (GroundHeightField, MapSourceLoader.fit_grid_ground_async).

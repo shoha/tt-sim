@@ -51,6 +51,12 @@ other committed home.
   grid or tokens past the edge. A pond or lake painted against the edge continues too (P6-4):
   its basin runs on as a rounded lobe with the water at its level in it, a cove at a narrow
   touch, a bay or an open lake into the haze at a wide one.
+- **Authoring is the preview of play (2026-10-09, v0.2 evaluation):** there is no "Try"
+  step, so what play would show must show while authoring. The level's tokens stand on the
+  map in authoring, draggable while no brush is out, and save back as its placements; a
+  token whose ground was sculpted, carved or filled under it is set back down on it, in
+  authoring and at every play load (`systems/authoring.md`). Survey and reasons:
+  `docs/plans/2026-10-09-v0.2-evaluation/design/parity.md` (gitignored).
 
 ## Where each system is documented
 
