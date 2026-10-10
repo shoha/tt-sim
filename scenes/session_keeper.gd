@@ -27,8 +27,9 @@ extends Node
 ## kept state is compared with its folder in this host's library: the map files it was kept
 ## against restore everything; changed files ("the map changed since") keep its tokens and look
 ## but drop the op log and the kept document, made against the old terrain; a missing folder
-## keeps the shelf entry (with no hashes, so no client fetches it) and the kept state as it
-## was. notes() says which maps changed or went missing, for the room to say so. The players
+## keeps the shelf entry (with no hashes, so no client fetches it, and not in the host's own
+## holdings, so every room says the GM no longer has it) and the kept state as it was.
+## notes() says which maps changed or went missing, for the room to say so. The players
 ## come back as away until they rejoin, the party waits for the next table, and its grants
 ## map each session id to whatever peer id that player has when it joins (SessionParty).
 ##
@@ -309,7 +310,7 @@ func restore(data: Dictionary) -> Dictionary:
 			_restore_table(id, key, table, status)
 	var session := NetworkManager.session
 	var selected: String = data.table if data.table != "" else data.selected
-	session.restore(shelf, data.players, selected)
+	session.restore(shelf, data.players, selected, _missing.keys())
 	session.party.restore(data.party, data.grants)
 	_mover.changes_changed.emit()
 	return notes()

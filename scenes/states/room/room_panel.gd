@@ -32,7 +32,10 @@ extends Control
 ## "Changed since last time" (its map files changed, so its live edits were dropped) or
 ## "Missing from your library" (its folder is gone; it stays on the shelf as it was kept, its
 ## picture faded, it cannot be set out, and selected it has Remove from shelf on a line under
-## it, SessionChannel.unshelve()). Selecting a row never moves the table (the
+## it, SessionChannel.unshelve()). Such a map is gone for everyone (RoomModel.shelf()'s
+## "gone": the GM's own holdings lack it): every player row says nobody can get it, and a
+## player's row and the line under its picture say the GM no longer has it, its picture faded
+## too. Selecting a row never moves the table (the
 ## action does), and moving the table never asks: the table is kept as it is. A full shelf
 ## scrolls, in the room's
 ## side sheet as in the drawer's column, the selected row and its line scrolled into view.
@@ -225,12 +228,13 @@ func refresh_progress() -> void:
 ## hovered or focused control keeps its state).
 func show_progress(summary: Dictionary) -> void:
 	_players = RoomModel.players(summary, _local_id)
+	var gone := _is_gone(_selected)
 	for player in _players:
 		var row_name := "Player_%s" % str(player.id).validate_node_name()
 		var row := player_rows.get_node_or_null(NodePath(row_name))
 		var box := row.find_child("Download", true, false) as Control if row else null
 		if box:
-			RoomRows.show_download_state(box, RoomModel.download_state(player, _selected))
+			RoomRows.show_download_state(box, RoomModel.download_state(player, _selected, gone))
 	if not in_drawer and _selected != "":
 		for entry in _shelf:
 			if entry.key == _selected:
@@ -305,8 +309,11 @@ func _fill_players() -> void:
 	for child in player_rows.get_children():
 		player_rows.remove_child(child)
 		child.queue_free()
+	var gone := _is_gone(_selected)
 	for player in _players:
-		player_rows.add_child(RoomRows.player_row(player, _selected, _on_choose_avatar_pressed))
+		player_rows.add_child(
+			RoomRows.player_row(player, _selected, _on_choose_avatar_pressed, gone)
+		)
 
 
 func _fill_shelf() -> void:
@@ -328,6 +335,8 @@ func _fill_shelf() -> void:
 			RoomModel.readiness_text(_players, entry.key),
 			note
 		)
+		if entry.gone and not _is_gm:
+			caption = RoomModel.GM_LACKS
 		var picture := _picture_for(entry)
 		var row := RoomRows.shelf_row(
 			entry,
@@ -336,7 +345,7 @@ func _fill_shelf() -> void:
 			caption,
 			true,
 			RoomModel.note_text(note),
-			note == SessionFile.MISSING
+			_is_gone(entry.key)
 		)
 		row.pressed.connect(select.bind(str(entry.key)))
 		shelf_rows.add_child(row)
@@ -362,8 +371,8 @@ func _show_selection() -> void:
 		in_drawer, _is_gm, _selected, _table, _shelf.size(), str(entry.get("name", ""))
 	)
 	# A map missing from the GM's library cannot be set out or moved to: its line under the
-	# row offers the one step there is.
-	if _note_of(_selected) == SessionFile.MISSING and not action.add:
+	# row offers the ways on.
+	if _is_gone(_selected) and not action.add:
 		action.enabled = false
 	action_button.visible = action.shown
 	action_button.text = action.text
@@ -402,7 +411,7 @@ func _show_changes_line() -> void:
 		if line_name.begins_with("Changes_") or line_name.begins_with("Missing_"):
 			shelf_rows.remove_child(child)
 			child.queue_free()
-	var missing := _note_of(_selected) == SessionFile.MISSING
+	var missing := _is_gone(_selected)
 	if not _is_gm or not (_changed.has(_selected) or missing):
 		return
 	var row := shelf_rows.get_node_or_null(NodePath("Map_%s" % _selected.validate_node_name()))
@@ -433,7 +442,7 @@ func _refit_column() -> void:
 ## painted placeholder under what goes there.
 func _show_stage(entry: Dictionary) -> void:
 	# A missing map's picture is faded here as on its row.
-	RoomRows.mute_well(preview, not entry.is_empty() and _note_of(entry.key) == SessionFile.MISSING)
+	RoomRows.mute_well(preview, not entry.is_empty() and _is_gone(entry.key))
 	if entry.is_empty():
 		RoomRows.set_map_well(preview, null, "", "")
 		var empty := RoomModel.empty_stage(_is_gm, _shelf.size())
@@ -456,8 +465,8 @@ func _show_stage(entry: Dictionary) -> void:
 func _readiness(entry: Dictionary) -> String:
 	var changed := _is_gm and _changed.has(entry.key)
 	var note: StringName = _note_of(entry.key)
-	if note == SessionFile.MISSING:
-		return RoomModel.MISSING
+	if _is_gone(entry.key):
+		return RoomModel.MISSING if _is_gm else RoomModel.GM_LACKS
 	var line := ""
 	if entry.on_table:
 		line = RoomModel.shelf_caption(true, true, "") if changed else "On the table now"
@@ -471,9 +480,24 @@ func _readiness(entry: Dictionary) -> String:
 	return said if line == "" else "%s · %s" % [said, line]
 
 
-## What Resume found of the map `key`, for the GM alone (a player's library is their own).
+## What Resume found of the map `key`, for the GM alone (a player's library is their own). A
+## map the GM's holdings lack is missing to the GM whatever the notes say.
 func _note_of(key: String) -> StringName:
-	return _notes.get(key, &"") if _is_gm else &""
+	if not _is_gm:
+		return &""
+	if _shelf.any(func(entry: Dictionary) -> bool: return entry.key == key and entry.gone):
+		return SessionFile.MISSING
+	return _notes.get(key, &"")
+
+
+## Whether the map `key` is gone from the GM's library (what Resume found, for the GM; the
+## GM's holdings lack it, for everyone): nobody can get it and it cannot be set out.
+func _is_gone(key: String) -> bool:
+	if key == "":
+		return false
+	if _note_of(key) == SessionFile.MISSING:
+		return true
+	return _shelf.any(func(entry: Dictionary) -> bool: return entry.key == key and entry.gone)
 
 
 ## Remove from shelf on a missing map's line: off the shelf (with connect_network, through the
@@ -569,8 +593,9 @@ func _fit_drawer() -> void:
 		(layout as Container).queue_sort()
 
 
-## Scroll the drawer's column, or the room's shelf, to the selected shelf row and the changes
-## line under it when it scrolls, so the map the action names, and its own actions, are in view.
+## Scroll the drawer's column, or the room's shelf, to the selected shelf row and the changes or
+## missing line under it when it scrolls, so the map the action names, and its own actions, are
+## in view.
 func _reveal_selected() -> void:
 	var scroll := column_scroll if in_drawer else shelf_scroll
 	if scroll == null or not is_inside_tree() or _selected == "":
@@ -578,9 +603,10 @@ func _reveal_selected() -> void:
 	if scroll.vertical_scroll_mode == ScrollContainer.SCROLL_MODE_DISABLED:
 		return
 	var key := _selected.validate_node_name()
-	var line := shelf_rows.get_node_or_null(NodePath("Changes_%s" % key))
-	if line is Control:
-		scroll.ensure_control_visible(line)
+	for prefix in ["Changes_", "Missing_"]:
+		var line := shelf_rows.get_node_or_null(NodePath(prefix + key))
+		if line is Control:
+			scroll.ensure_control_visible(line)
 	var row := shelf_rows.get_node_or_null(NodePath("Map_%s" % key))
 	if row is Control:
 		scroll.ensure_control_visible(row)

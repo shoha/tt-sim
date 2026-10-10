@@ -361,7 +361,11 @@ again on `_rpc_room_opened`, a client works out which shelf maps it already hold
 content (`holds_map()`: a map that ships with the game, or every hashed file in its own level
 folder with the same hash or in the download cache) and reports the keys when they changed
 (`_rpc_report_holdings`, `any_peer`: the host keeps only shelf keys, under the sender's own
-session id, `note_holdings()`). The host counts itself as holding every shelf map.
+session id, `note_holdings()`). The host counts itself as holding every shelf map whose files
+it has: a map Resume found gone from its library (`restore()`'s `gone`, from SessionKeeper)
+stays on the shelf with no hashes but out of the host's own holdings, so every peer's room
+reads "gone" from the summary (`RoomModel.shelf()`): no row says Has it or waits for it, a
+player reads "The GM no longer has this map", and it cannot be set out.
 `get_holdings()` (session id -> keys) rides in the summary, and the room shows it ("3 of 4 have
 it"). Set out never waits for it: a player without the map downloads it at the table as before.
 A host that sent no hashes for a folder map leaves it counted as not held.

@@ -27,7 +27,7 @@ extends RefCounted
 ## - `crop` (`name`): save the window's last frame cut to the card, at the window's pixels,
 ##   as CROPS/<name>.png (the card up close; follow a capture or a wait).
 ## - `sessions` (`count`, default 2): Resume lists `count` sample sessions, the newest played
-##   yesterday evening; 0 reads the real list again.
+##   yesterday evening; -1 lists none (a first run); 0 reads the real list again.
 
 ## Sample saved sessions, newest first: name, maps, days before now.
 const SAMPLE_SESSIONS := [
@@ -192,7 +192,10 @@ static func _luminance(color: Color) -> float:
 
 static func _sessions(title: TitleScreen, count: int) -> String:
 	var entry := title.resume_entry
-	if count <= 0:
+	if count < 0:
+		var none: Array[Dictionary] = []
+		entry.provider = func() -> Array[Dictionary]: return none
+	elif count == 0:
 		entry.provider = SessionFile.list
 	else:
 		var now := int(Time.get_unix_time_from_system())

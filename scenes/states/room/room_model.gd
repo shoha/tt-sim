@@ -19,6 +19,10 @@ extends RefCounted
 ##   for a map (download_state()) is has it, getting it with a percent, waiting (behind another
 ##   map or for their turn at the host), or at the table (not fetching it). Set out never
 ##   waits for it.
+## - A shelf map the GM's own holdings lack is gone: the host counts itself as holding every
+##   shelf map it has the files of (SessionChannel.get_holdings()), so one it lacks is a map
+##   Resume found missing from its library. Nobody can get it (GONE on every row), a player's
+##   room says the GM no longer has it, and it cannot be set out.
 
 const SET_OUT := "Set out this map"
 ## The drawer's action, naming the map the table moves to (W6: one sentence, a placeholder).
@@ -32,11 +36,15 @@ const CHANGED := "Changed this session"
 ## The GM's row says it on a line of its own (note_text()), over the caption.
 const SINCE_CHANGED := "Changed since last time"
 const MISSING := "Missing from your library"
+## A player's room for a map gone from the GM's library: its shelf caption and the line under
+## its picture.
+const GM_LACKS := "The GM no longer has this map"
 ## A player's download state for one map (download_state()).
 const HAS := &"has"
 const GETTING := &"getting"
 const WAITING := &"waiting"
 const TABLE := &"table"
+const GONE := &"gone"
 
 
 ## The players here, GM first then by name: {"id", "name", "gm", "you", "holds", "progress"},
@@ -72,10 +80,12 @@ static func players(summary: Dictionary, local_id: String) -> Array[Dictionary]:
 	return out
 
 
-## The shelf, oldest first: {"key", "folder", "name", "on_table"}. A map with no name shows
-## its folder.
+## The shelf, oldest first: {"key", "folder", "name", "on_table", "gone"}. A map with no name
+## shows its folder; "gone" is a map the GM's own holdings lack (see the class doc), false
+## when the summary has no holdings of the GM's.
 static func shelf(summary: Dictionary) -> Array[Dictionary]:
 	var table := str(summary.get("table", ""))
+	var gm_holds: Variant = _gm_holdings(summary)
 	var out: Array[Dictionary] = []
 	for ref: Dictionary in summary.get("shelf", []):
 		var key := SessionChannel.ref_key(ref)
@@ -89,9 +99,20 @@ static func shelf(summary: Dictionary) -> Array[Dictionary]:
 				"folder": folder,
 				"name": map_name if map_name != "" else (folder if folder != "" else key.get_file()),
 				"on_table": key == table,
+				"gone": gm_holds is Array and not (gm_holds as Array).has(key),
 			}
 		)
 	return out
+
+
+## The GM's own holdings in `summary` (the player on peer 1), or null when it has none.
+static func _gm_holdings(summary: Dictionary) -> Variant:
+	var listed: Dictionary = summary.get("players", {})
+	var holdings: Dictionary = summary.get("holdings", {})
+	for id: String in listed:
+		if int((listed[id] as Dictionary).get("peer_id", 0)) == 1 and holdings.has(id):
+			return holdings[id]
+	return null
 
 
 ## The GM's name, or "" when the GM is not listed.
@@ -170,10 +191,14 @@ static func readiness_text(player_list: Array[Dictionary], key: String) -> Strin
 
 
 ## One player's download state for the map `key` (`player` a players() entry): {"state",
-## "percent"}, the state HAS (in their holdings), GETTING (a percent above 0 of it here),
-## WAITING (reported at 0: behind another map, or waiting for their turn at the host) or
-## TABLE (not fetching it, so the table's load gets it).
-static func download_state(player: Dictionary, key: String) -> Dictionary:
+## "percent"}, the state GONE (`gone`: the GM no longer has it, so nobody gets it), HAS
+## (in their holdings), GETTING (a percent above 0 of it here), WAITING (reported at 0:
+## behind another map, or waiting for their turn at the host) or TABLE (not fetching it, so
+## the table's load gets it). GONE also says whether the player is the GM ("gm"), whose row
+## words it as the one who lacks it.
+static func download_state(player: Dictionary, key: String, gone := false) -> Dictionary:
+	if gone:
+		return {"state": GONE, "percent": 0, "gm": bool(player.get("gm", false))}
 	if key in player.get("holds", []):
 		return {"state": HAS, "percent": 100}
 	var progress: Dictionary = player.get("progress", {})

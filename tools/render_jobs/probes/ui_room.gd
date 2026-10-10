@@ -30,14 +30,17 @@ extends RefCounted
 ##   false is a room with no map at all, as after Host a session. `long` names the GM with
 ##   LONG_GM_NAME (24 characters) and the second sample map LONG_MAP_NAME, and selects it.
 ##   `notes` stages what Resume found: Old Mill's files changed since the session was kept and
-##   Fen Crossing missing from the library (RoomPanel.show_notes()), Old Mill selected
-##   (`missing`: Fen Crossing, with its Remove from shelf); with `notes` the folder may be "",
-##   the resumed session's shelf alone: Old Mill and 2 more maps (RESUMED_MAPS).
-## - `client_room` (`folder`; `shelf`, default true; `select`, default 0): a player's room
-##   with the same players and shelf, the local player one of them, the SAMPLE_MAPS entry at
-##   index `select` selected to look at (their own download state first: 0 is Old Mill, which
-##   they have, 1 Fen Crossing, which they are getting at 40%; -1 selects nothing, as a player
-##   who just joined sees it). `shelf` false is a room with no map yet.
+##   Fen Crossing missing from the library (RoomPanel.show_notes(); the host does not hold it,
+##   so nobody has it or waits for it), Old Mill selected (`missing`: Fen Crossing, with its
+##   Remove from shelf); with `notes` the folder may be "", the resumed session's shelf alone:
+##   Old Mill and 2 more maps (RESUMED_MAPS).
+## - `client_room` (`folder`; `shelf`, default true; `select`, default 0; `notes`, default
+##   false): a player's room with the same players and shelf, the local player one of them,
+##   the SAMPLE_MAPS entry at index `select` selected to look at (their own download state
+##   first: 0 is Old Mill, which they have, 1 Fen Crossing, which they are getting at 40%; -1
+##   selects nothing, as a player who just joined sees it). `shelf` false is a room with no
+##   map yet. `notes` is the resumed session of host_room's `notes`, Fen Crossing gone from the
+##   GM's library.
 ## - `add_map`: on the staged room, the GM's Add a map picker over the library (closed with
 ##   the room by `close_room`).
 ## - `end_confirm`: on the staged GM's room, End session's confirmation (dismiss it with
@@ -202,6 +205,12 @@ static func _summary(
 			"enet-wren": {fen: 40},
 			"enet-ranger": {fen: 0},
 		}
+		if resumed:
+			# Fen Crossing is gone from the GM's library: the host does not hold it, so nobody
+			# has it or waits for it (SessionChannel.get_holdings()).
+			for id: String in holdings:
+				holdings[id] = (holdings[id] as Array).filter(func(key: String) -> bool: return key != fen)
+			progress = {"enet-starling": {mill: 72}}
 	return {
 		"open": table == "",
 		"table": table,
@@ -252,7 +261,9 @@ static func _host_room(base: Node, folder: String, step: Dictionary) -> String:
 
 static func _client_room(base: Node, folder: String, step: Dictionary) -> String:
 	var with_shelf := bool(step.get("shelf", true))
-	var room := _room(base, _summary(folder, with_shelf, ""), SAMPLE_LOCAL_PLAYER)
+	var resumed := bool(step.get("notes", false))
+	var summary := _summary(folder, with_shelf, "", false, resumed)
+	var room := _room(base, summary, SAMPLE_LOCAL_PLAYER)
 	var index := int(step.get("select", 0))
 	if with_shelf and index >= 0:
 		room.panel.select(SAMPLE_MAPS.keys()[index])

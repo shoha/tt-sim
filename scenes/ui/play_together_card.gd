@@ -27,10 +27,10 @@ extends VBoxContainer
 ## show_error()); going back while a join is under way drops it (join_cancelled). In Join mode
 ## the control with focus rings itself in paper, and the card's lake ring is gone: one ring.
 ##
-## Under the pill is one reserved slot (slot, set_under()): the title's Resume and the join's
-## line trade places in it, and it is as tall as the taller of Resume with its caption and a
-## RESERVE_LINES line failure, so entering Join or a failure never moves the card or anything
-## below it.
+## Under the pill is one slot (PlayTogetherSlot, set_under()): the title's Resume and the
+## join's line trade places in it. With Resume showing, or in Join mode, it holds the taller of
+## Resume and a three-line failure, so entering Join or a failure never moves the card or
+## anything below it; at rest with no saved session it takes no height, and Join eases it open.
 ##
 ## Discipline from the theme probe: an instant state set kills every easing still running (an
 ## easing that lands after it undid it), LineEdit.grab_focus() does not start editing in 4.7
@@ -94,9 +94,6 @@ const FIELD_GAP := 8.0
 const FIELD_LEFT := CARD_SIZE.y * 0.5 + DISC_SIZE * 0.5 + FIELD_GAP
 const FIELD_RIGHT_PAD := 16.0
 const JOIN_MIN_WIDTH := 64.0
-## The slot under the pill holds a failure this many lines long (the version gate's message,
-## the longest, wraps to three at the card's width).
-const RESERVE_LINES := 3
 ## The field and the back disc fade in after the wash has started to move.
 const FIELD_FADE := 0.18
 const FIELD_DELAY := 0.12
@@ -121,9 +118,9 @@ var join_face: Button
 var code_edit: LineEdit
 var join_button: Button
 var disc_button: Button
-## The reserved slot under the pill: the join's line, or the control set_under() gave it.
-var slot: VBoxContainer
-## The line under the pill: the join's progress or why it failed.
+## The slot under the pill: the join's line, or the control set_under() gave it.
+var slot: PlayTogetherSlot
+## The line under the pill (the slot's): the join's progress or why it failed.
 var status_row: HBoxContainer
 var status_label: Label
 var status_icon: TextureRect
@@ -135,8 +132,6 @@ var _icons := {}
 var _titles := {}
 var _captions := {}
 var _field_row: HBoxContainer
-var _under: Control
-var _measure: Label
 var _wash_tween: Tween
 var _colour_tween: Tween
 var _press_tween: Tween
@@ -155,13 +150,13 @@ func _ready() -> void:
 	_refresh_texts()
 	_apply_wash(0.0)
 	_fit_text_rects()
-	_fit_slot()
+	slot.fit()
 
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_THEME_CHANGED and slot != null:
 		_fit_text_rects()
-		_fit_slot()
+		slot.fit()
 
 
 # =============================================================================
@@ -179,6 +174,8 @@ func reset() -> void:
 	_material.set_shader_parameter("press", 0.0)
 	_refresh_texts()
 	_apply_wash(0.0)
+	for word in _join_words():
+		word.modulate.a = 1.0
 
 
 ## Picks a face (hover or keys): the seam swings away from it and it deepens.
@@ -206,13 +203,9 @@ func step_back(on: bool) -> void:
 
 
 ## Puts `control` (the title's Resume) in the slot under the pill, where it trades places with
-## the join's line. The slot keeps the taller of the two's height.
+## the join's line (PlayTogetherSlot.set_under()).
 func set_under(control: Control) -> void:
-	_under = control
-	slot.add_child(control)
-	slot.move_child(control, 0)
-	control.minimum_size_changed.connect(_fit_slot)
-	_fit_slot()
+	slot.set_under(control)
 
 
 ## Presses a face as a click or Accept does.
@@ -222,34 +215,57 @@ func press(face: Face) -> void:
 	_squash()
 	if face == Face.HOST:
 		hot = Face.HOST
+		var flood_s := _motion(MOTION_WASH * 1.4)
 		_set_colours(ThemeColors.PERSIMMON_PRESS, ThemeColors.LAKE, 0.0)
-		var flood := _tween_wash(1.0, 0.0, _motion(MOTION_WASH * 1.4))
+		var flood := _tween_wash(1.0, 0.0, flood_s)
 		if flood == null:
 			_host_flooded()
-		else:
-			flood.finished.connect(_host_flooded)
+			return
+		# The pigment holds its press depth through the press, then eases back toward the
+		# bloom's lighter step as it floods; Join's words fade as the flood passes over them.
+		_colour_tween = create_tween()
+		_colour_tween.tween_property(
+			_material, "shader_parameter/warm", ThemeColors.PERSIMMON_HOVER, flood_s - PRESS_IN
+		).set_delay(PRESS_IN)
+		for word in _join_words():
+			flood.tween_property(word, "modulate:a", 0.0, flood_s * 0.55).set_delay(flood_s * 0.15)
+		flood.finished.connect(_host_flooded)
 	else:
 		open_join()
 
 
-## The flood has filled the card: ask for the room, and let the wash settle back under the
-## "Opening a room..." wait, so a failed or cancelled hosting finds the card at rest.
+## The flood has filled the card: ask for the room, and let the wash and Join's words settle
+## back under the "Opening a room..." wait, so a failed or cancelled hosting finds the card at
+## rest.
 func _host_flooded() -> void:
 	host_pressed.emit()
-	if is_inside_tree():
-		_apply_wash(_motion(MOTION_WASH))
+	if not is_inside_tree():
+		return
+	_apply_wash(_motion(MOTION_WASH))
+	for word in _join_words():
+		if _wash_tween != null and _wash_tween.is_valid():
+			_wash_tween.tween_property(word, "modulate:a", 1.0, MOTION_WASH)
+		else:
+			word.modulate.a = 1.0
+
+
+## Join's words on its face: its icon, title and caption.
+func _join_words() -> Array[Control]:
+	return [_icons[Face.JOIN], _titles[Face.JOIN], _captions[Face.JOIN]]
 
 
 ## Join in place: the lake takes the card, Host's wash dries away under the back disc, the
 ## code field takes focus and starts editing.
 func open_join() -> void:
 	var was_open := joining
+	var duration := _motion(MOTION_WASH)
 	joining = true
 	hot = Face.JOIN
+	# The slot opens before Resume steps aside, so it never drops to nothing in between.
+	slot.set_open(true, duration)
 	if not was_open:
 		join_mode_changed.emit(true)
 	_refresh_texts()
-	var duration := _motion(MOTION_WASH)
 	_set_colours(ThemeColors.PERSIMMON, ThemeColors.LAKE, duration)
 	_tween_wash(0.25, 1.0, duration)
 	_field_row.visible = true
@@ -274,7 +290,7 @@ func close_join() -> void:
 	if not joining:
 		return
 	var was_busy := busy
-	_close_join_mode()
+	_close_join_mode(_motion(MOTION_WASH))
 	hot = Face.JOIN
 	_refresh_texts()
 	_apply_wash(_motion(MOTION_WASH))
@@ -452,7 +468,7 @@ func _mouse_over_face() -> bool:
 
 func _on_code_changed(_text: String) -> void:
 	if not busy:
-		status_row.visible = false
+		slot.hide_status()
 
 
 # =============================================================================
@@ -618,58 +634,14 @@ func _build_join_field() -> void:
 	disc_button.focus_previous = disc_button.get_path_to(join_button)
 
 
-## The reserved slot under the pill and the join's line in it.
+## The slot under the pill and the join's line in it.
 func _build_slot() -> void:
-	slot = VBoxContainer.new()
-	slot.name = "Slot"
-	slot.theme_type_variation = &"BoxContainerTight"
+	slot = PlayTogetherSlot.new()
+	slot.build(CARD_SIZE.x, IconButton.load_icon(ERROR_ICON))
 	add_child(slot)
-	status_row = HBoxContainer.new()
-	status_row.name = "Status"
-	status_row.theme_type_variation = &"BoxContainerSpaced"
-	status_row.custom_minimum_size.x = CARD_SIZE.x
-	status_row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	status_row.visible = false
-	slot.add_child(status_row)
-	status_icon = TextureRect.new()
-	status_icon.name = "Icon"
-	status_icon.texture = IconButton.load_icon(ERROR_ICON)
-	status_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	status_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	status_icon.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	status_row.add_child(status_icon)
-	status_label = Label.new()
-	status_label.name = "Message"
-	status_label.theme_type_variation = &"Caption"
-	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	status_row.add_child(status_label)
-	# Never shown: RESERVE_LINES lines of body type, measured as a label lays them out (each
-	# line's height is the shaped line's, a little over the font's own height).
-	_measure = Label.new()
-	_measure.name = "Measure"
-	_measure.theme_type_variation = &"Body"
-	var lines := PackedStringArray()
-	for i in RESERVE_LINES:
-		lines.append("Mg")
-	_measure.text = "\n".join(lines)
-	_measure.visible = false
-	slot.add_child(_measure)
-
-
-## The slot's height: the taller of the control under the pill (Resume with its caption) and a
-## RESERVE_LINES line failure in body type. The alert icon takes the body line's height.
-func _fit_slot() -> void:
-	if slot == null:
-		return
-	var font := status_label.get_theme_font(&"font", &"Body")
-	var font_size := status_label.get_theme_font_size(&"font_size", &"Body")
-	var line := font.get_height(font_size) if font else 22.0
-	status_icon.custom_minimum_size = Vector2.ONE * roundf(line)
-	var reserve := _measure.get_minimum_size().y
-	if _under != null:
-		reserve = maxf(reserve, _under.get_combined_minimum_size().y)
-	slot.custom_minimum_size.y = ceilf(reserve)
+	status_row = slot.status_row
+	status_label = slot.status_label
+	status_icon = slot.status_icon
 
 
 ## Tell the shader where each face's words are, so it never lightens a wash under them.
@@ -722,11 +694,7 @@ func _refresh_ring() -> void:
 ## The line under the pill: `text`, as an error (the alert icon, body ink) or as progress (a
 ## soft caption).
 func _show_status(text: String, error: bool) -> void:
-	status_row.visible = true
-	status_label.text = text
-	status_label.theme_type_variation = &"Body" if error else &"Caption"
-	status_icon.visible = error
-	status_icon.self_modulate = ThemeColors.of(status_icon, ThemeColors.DANGER)
+	slot.show_status(text, error, ThemeColors.of(status_icon, ThemeColors.DANGER))
 
 
 func _set_busy(on: bool) -> void:
@@ -735,16 +703,18 @@ func _set_busy(on: bool) -> void:
 	join_button.disabled = on
 
 
-func _close_join_mode() -> void:
+## Join mode's controls go; the slot settles to what rest needs over `duration`.
+func _close_join_mode(duration := 0.0) -> void:
 	var was_open := joining
 	joining = false
 	_set_busy(false)
 	_kill(_field_tween)
 	_field_row.visible = false
 	disc_button.visible = false
-	status_row.visible = false
+	slot.hide_status()
 	if was_open:
 		join_mode_changed.emit(false)
+	slot.set_open(false, duration)
 
 
 ## Seam and colours for the current pick, eased over `duration` (0: at once).
@@ -814,7 +784,7 @@ func _squash() -> void:
 ## holds a transition part way for a filmstrip.
 func easings() -> Array[Tween]:
 	var running: Array[Tween] = []
-	for tween: Tween in [_wash_tween, _colour_tween, _press_tween, _field_tween]:
+	for tween: Tween in [_wash_tween, _colour_tween, _press_tween, _field_tween, slot.easing()]:
 		if tween != null and tween.is_valid():
 			running.append(tween)
 	return running
