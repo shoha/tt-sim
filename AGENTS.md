@@ -125,6 +125,7 @@ After making architectural or API changes, update the relevant documentation. Ch
 - **Scene tree changes** (new nodes, reparenting) – update the Scene Hierarchy in `docs/ARCHITECTURE.md`
 - **Asset/model loading changes** – update `docs/ASSET_MANAGEMENT.md`
 - **UI system changes** – update `docs/UI_SYSTEMS.md`
+- **UI look changes** – judge against `docs/UI_TASTE.md` (rule ids, anti-patterns, the user's verdicts; `tt-sim-ui-critic` reviews the `ui_tour` captures) and add each new user verdict there
 - **Environment/lighting/weather changes** – update `docs/lighting-and-environment.md`
 - **New conventions or patterns** – update this file (`AGENTS.md`) and `.cursor/rules/project-overview.mdc`
 - **New gotchas or coding patterns** – update `docs/CONVENTIONS.md`

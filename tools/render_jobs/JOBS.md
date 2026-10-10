@@ -419,6 +419,17 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (the input hint bar). `probes/ui_primitives.gd report` logs the underline against the
   selected item's centre, the chevron's rect against its title and the hint bar's rect
   against the window. The job deletes `_u1_ui_hud` at the end (`cleanup`).
+- `jobs/ui_tour.json`: the UI tour (about 110 s), the capture set the `tt-sim-ui-critic`
+  agent judges (`docs/UI_TASTE.md`). It saves a new 100 ft temperate forest map as
+  `_ui_tour_room` (shown as Mossy Hollow), then at 1280x720 and 1920x1080 window sizes
+  (`ui_primitives.gd window`; capture names start with the size): the title, Settings on
+  each of its six sections, the new-map dialog, the host lobby (shown without hosting, with
+  a sample room code and three sample players), the join screen, authoring with the tool
+  drawer on Biome, then in play the Visuals drawer on Sun, the pause menu, the Remove token
+  danger confirmation, one toast of each kind, the Add Token browser and the avatar builder.
+  Last, one probe capture of the title at 1720x720 (ultrawide). 35 captures and `INDEX.md`;
+  the level is deleted at the end. Half size makes the 720p captures 640x360, smaller than
+  any player sees: judge 720p legibility on a `--full` run.
 
 ## Caveats
 

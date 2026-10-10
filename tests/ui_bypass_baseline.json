@@ -1,0 +1,251 @@
+{
+	"about": "Theme-bypass ratchet baseline: per file, today's count of each rule (colour literals, theme overrides, literal font sizes). A count may only fall. tests/unit/test_ui_theme_bypass.gd checks it; tools/ui_audit/bypass_baseline.gd lowers it after a migration.",
+	"files": {
+		"res://autoloads/constants.gd": {
+			"colour": 3
+		},
+		"res://scenes/level_editor/level_editor.gd": {
+			"colour": 2,
+			"override": 1
+		},
+		"res://scenes/level_editor/level_editor.tscn": {
+			"colour": 1,
+			"override": 4
+		},
+		"res://scenes/states/authoring/authoring_controller.gd": {
+			"colour": 3
+		},
+		"res://scenes/states/authoring/authoring_panel.gd": {
+			"override": 6
+		},
+		"res://scenes/states/authoring/bridge_brush.gd": {
+			"colour": 21
+		},
+		"res://scenes/states/authoring/bridge_tool_pane.gd": {
+			"override": 1
+		},
+		"res://scenes/states/authoring/brush_tool.gd": {
+			"colour": 13
+		},
+		"res://scenes/states/authoring/new_map_dialog.gd": {
+			"override": 3
+		},
+		"res://scenes/states/authoring/new_map_dialog.tscn": {
+			"colour": 1
+		},
+		"res://scenes/states/authoring/water_brush.gd": {
+			"colour": 10
+		},
+		"res://scenes/states/authoring/water_tool_pane.gd": {
+			"override": 1
+		},
+		"res://scenes/states/lobby/lobby_client.gd": {
+			"colour": 1
+		},
+		"res://scenes/states/lobby/lobby_client.tscn": {
+			"override": 9
+		},
+		"res://scenes/states/lobby/lobby_host.gd": {
+			"colour": 1
+		},
+		"res://scenes/states/lobby/lobby_host.tscn": {
+			"override": 11
+		},
+		"res://scenes/states/paused/pause_overlay.tscn": {
+			"colour": 1
+		},
+		"res://scenes/states/playing/avatar_builder.gd": {
+			"override": 4
+		},
+		"res://scenes/states/playing/avatar_builder.tscn": {
+			"colour": 1,
+			"override": 1
+		},
+		"res://scenes/states/playing/avatar_builder_preview.gd": {
+			"colour": 6
+		},
+		"res://scenes/states/playing/avatar_face_icons.gd": {
+			"colour": 3
+		},
+		"res://scenes/states/playing/avatar_save_choice.gd": {
+			"override": 1
+		},
+		"res://scenes/states/playing/avatar_stance_tiles.gd": {
+			"override": 1
+		},
+		"res://scenes/states/playing/avatar_swatch_row.gd": {
+			"override": 7
+		},
+		"res://scenes/states/playing/drag_place_controller.gd": {
+			"colour": 2
+		},
+		"res://scenes/states/playing/drag_ruler.gd": {
+			"colour": 3
+		},
+		"res://scenes/states/playing/game_map.gd": {
+			"override": 1
+		},
+		"res://scenes/states/playing/game_map.tscn": {
+			"colour": 1
+		},
+		"res://scenes/states/playing/grid_overlay.gd": {
+			"colour": 1
+		},
+		"res://scenes/states/playing/level_edit_panel.gd": {
+			"override": 4
+		},
+		"res://scenes/states/playing/level_edit_panel.tscn": {
+			"override": 1
+		},
+		"res://scenes/states/playing/measure_tool.gd": {
+			"colour": 4
+		},
+		"res://scenes/states/playing/occlusion_fade_manager.gd": {
+			"colour": 6
+		},
+		"res://scenes/states/playing/performance_overlay.gd": {
+			"colour": 1
+		},
+		"res://scenes/states/playing/player_list_drawer.gd": {
+			"colour": 1,
+			"override": 2
+		},
+		"res://scenes/states/playing/sun_gizmo_tool.gd": {
+			"colour": 3
+		},
+		"res://scenes/states/playing/token_context_menu.gd": {
+			"colour": 2,
+			"override": 1
+		},
+		"res://scenes/states/playing/visual_panes/level_edit_pane.gd": {
+			"override": 1
+		},
+		"res://scenes/states/playing/visual_panes/sky_pane.gd": {
+			"colour": 3
+		},
+		"res://scenes/states/playing/volume_overlay.gd": {
+			"colour": 4
+		},
+		"res://scenes/states/title_screen/title_screen.gd": {
+			"font_size": 1,
+			"override": 2
+		},
+		"res://scenes/states/title_screen/title_screen.tscn": {
+			"colour": 4,
+			"override": 7
+		},
+		"res://scenes/ui/add_pack_dialog.tscn": {
+			"colour": 1,
+			"override": 1
+		},
+		"res://scenes/ui/avatar_roster.tscn": {
+			"colour": 1
+		},
+		"res://scenes/ui/confirmation_dialog.tscn": {
+			"colour": 1,
+			"override": 1
+		},
+		"res://scenes/ui/disconnect_indicator.gd": {
+			"override": 2
+		},
+		"res://scenes/ui/disconnect_indicator.tscn": {
+			"override": 1
+		},
+		"res://scenes/ui/download_queue.gd": {
+			"colour": 8,
+			"font_size": 1,
+			"override": 8
+		},
+		"res://scenes/ui/download_queue.tscn": {
+			"override": 6
+		},
+		"res://scenes/ui/drawer_container.gd": {
+			"colour": 5,
+			"override": 13
+		},
+		"res://scenes/ui/help_overlay.gd": {
+			"override": 6
+		},
+		"res://scenes/ui/help_overlay.tscn": {
+			"colour": 1
+		},
+		"res://scenes/ui/input_hints.gd": {
+			"override": 1
+		},
+		"res://scenes/ui/input_hints.tscn": {
+			"colour": 1,
+			"override": 2
+		},
+		"res://scenes/ui/level_picker_dialog.tscn": {
+			"colour": 1,
+			"override": 1
+		},
+		"res://scenes/ui/loading_overlay.gd": {
+			"colour": 1
+		},
+		"res://scenes/ui/loading_overlay.tscn": {
+			"colour": 1
+		},
+		"res://scenes/ui/player_selection_dialog.tscn": {
+			"colour": 1
+		},
+		"res://scenes/ui/primitives/avatar_card.gd": {
+			"override": 2
+		},
+		"res://scenes/ui/primitives/avatar_grid.gd": {
+			"override": 2
+		},
+		"res://scenes/ui/primitives/foldout.gd": {
+			"override": 2
+		},
+		"res://scenes/ui/primitives/icon_button.gd": {
+			"override": 1
+		},
+		"res://scenes/ui/primitives/icon_rail.gd": {
+			"override": 2
+		},
+		"res://scenes/ui/primitives/level_card.gd": {
+			"colour": 1,
+			"override": 3
+		},
+		"res://scenes/ui/primitives/level_grid.gd": {
+			"override": 2
+		},
+		"res://scenes/ui/primitives/menu_header.gd": {
+			"override": 2
+		},
+		"res://scenes/ui/primitives/property_row.gd": {
+			"override": 3
+		},
+		"res://scenes/ui/primitives/tile_field.gd": {
+			"override": 2
+		},
+		"res://scenes/ui/primitives/tile_row.gd": {
+			"override": 4
+		},
+		"res://scenes/ui/primitives/ui_actions.gd": {
+			"override": 2
+		},
+		"res://scenes/ui/settings_menu.tscn": {
+			"colour": 1,
+			"override": 1
+		},
+		"res://scenes/ui/toast_container.gd": {
+			"colour": 6,
+			"override": 10
+		},
+		"res://scenes/ui/toast_container.tscn": {
+			"override": 1
+		},
+		"res://scenes/ui/transition_overlay.gd": {
+			"colour": 1
+		},
+		"res://scenes/ui/transition_overlay.tscn": {
+			"colour": 1
+		},
+		"res://scenes/ui/update_dialog.tscn": {
+			"colour": 1,
+			"override": 1
+		}
+	}
+}

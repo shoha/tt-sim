@@ -11,7 +11,11 @@ On the user's portrait monitor the `--resolution` flag alone produced odd window
 window was clamped or rescaled to fit the screen), so captures from different runs did not
 match. `run.gd` sets the window to 1920x1080 on the primary screen after the scene loads,
 and every capture log line records the actual image sizes so a wrong size is visible.
-Captures are then halved to 960x540 unless the run passes `--full`.
+Captures are then halved to 960x540 unless the run passes `--full`. A job that needs another
+size resizes the window in a step after that (`ui_primitives.gd` or `avatar_builder.gd`
+`window`); 1280x720 and 1720x720 both took on the primary screen (`ui_tour`, 2026-10-09).
+The UI scales with the window (stretch mode `canvas_items`, aspect `expand`), so the 1080p
+virtual canvas stays 1080 high: a 1720x720 window is a 2580x1080 canvas.
 
 ## Tagging a job for build and look
 
@@ -157,6 +161,7 @@ In `probes/`. Each is a static `run(base, step)`; every field is optional.
 | `avatar_token.gd` | `action` plus its fields (see the script header) | Avatar tokens in play: `pair` spawns a preset under a canopy and a selected one in sun (a ring search when the listed sunny points are shaded), `spawn_at` drops one onto whatever is under a point (water too), `look` (a token by name, index or the pair's midpoint), `hide` (hidden from players, by name or index), `report` (capsule, shade, submerged cue, occlusion fade entries), `timing` (spawn and shade-ray medians, walked and cached), `profile` (build and `set_recipe` medians per change type, off the board); `save` / `cleanup` for `_avatartoken_` levels. |
 | `avatar_library.gd` | `action` plus its fields (see the script header) | The avatar library: `use` points the running game's library at a `user://_avatarlib_<dir>/` test directory (and seeds it from presets), `roster` opens the title screen's roster, `edit` opens the builder from it, `close`, `browser` opens the Add Token browser, `place` presses a saved avatar's card in the Avatar tab, `report`, `cleanup` deletes every `_avatarlib_` directory and points the library back at `user://avatars/`. |
 | `avatar_builder.gd` | `action` plus its fields (see the script header) | The avatar builder in play: `window` resizes the game window, `open` opens the builder on a preset, `pane` selects a rail pane, `report` (panel, preview and pane sizes, measured bounds and view, stance tile sizes), `timing` (preview `set_recipe` and face-tile repaint medians), `close`, `spawn` (the preset as a token turned to the camera). |
+| `ui_primitives.gd` | `action` plus its fields (see the script header) | UI captures (card U1 and the UI tour): `settings` (`section`), `foldout`, `close_settings`, `report` (rail underline, Foldout chevron, hint bar rects); `window` (`size` [w, h] or `"WxH"`, `content_scale`) resizes the window and logs the size it took; `host_lobby` shows the host lobby without hosting (sample code and players) and `close_host_lobby`; `drawer` (`which` `authoring` or `visuals`, `pane`, `open`); `toasts`; `danger`; `dismiss`; `browser` (`open`); `save` (`folder`, `name`) and `cleanup` for `_u1_ui_` and `_ui_tour_` levels. |
 
 ## Capture readers
 
