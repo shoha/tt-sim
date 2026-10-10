@@ -167,6 +167,15 @@ func test_a_bridge_collapse_and_a_forest_fall_play_on_every_board_then_change_th
 	# The forest.
 	var gm_trees := ForestFall.trees_near(gm.edits.editor.scatter, FALL_CENTRE, FALL_RADIUS)
 	assert_gt(gm_trees.size(), 2, "trees stand where the forest falls")
+	# Topple's cursor marks exactly the trees the fall takes, a blaze on each trunk.
+	var editor := gm.edits.editor
+	var marks := ToppleMode.trunk_marks(
+		editor,
+		editor.to_world(Vector3(FALL_CENTRE.x, 0.0, FALL_CENTRE.y)),
+		FALL_RADIUS * editor.map_scale()
+	)
+	assert_eq(marks.size(), gm_trees.size() * 2, "one mark per tree that falls")
+	assert_gt(marks[1].y, marks[0].y, "a mark gives the trunk's direction up")
 	var labels := []
 	gm.edits.history.recorded.connect(
 		func(entry: Dictionary) -> void: labels.append([entry.label, entry.get("preset", 0)])

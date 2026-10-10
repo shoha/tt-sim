@@ -17,17 +17,21 @@ extends VBoxContainer
 ## (thumbnails and labels as AuthoringPanel draws them), WaterToolPane and BridgeToolPane as
 ## they are (their own headers hidden: the tile above names the brush), and one Advanced
 ## foldout with the exact size and strength. The presets with spectacle (EventPresets: a bridge
-## collapsing, trees toppling) have their own field above Brushes; a picked preset shows its
-## gesture line, and Topple the Advanced size.
+## dropping, trees toppling) have their own field above Brushes, under EventPresets.HEADING;
+## the picked tool's controls stand directly under its own field (show_tool moves them), so a
+## picked preset's gesture line, and Topple's Advanced size, sit under the preset tiles rather
+## than two rows away under the Brushes grid.
 ##
-## The Presets and Brushes tiles toggle: pressing the armed one's tile again puts it away, so
-## they are multi-select TileRows kept to one pressed tile across both by hand.
+## The preset and Brushes tiles toggle: pressing the armed one's tile again puts it away, so
+## they are multi-select TileRows kept to one pressed tile across both by hand. A preset put
+## away takes its controls with it (PlayEvents forgets the pick), so the pane is as fresh;
+## a brush put away keeps its controls, whose picks arm it again.
 ##
 ## Spacing (UI_TASTE S4): a group's heading has more room above it than below. The groups,
 ## and a brush's gesture line and its own tiles' heading, stand BoxContainerSpaced apart
 ## (SPACE_3); every heading sits SPACE_1 above its tiles (TileField).
 
-## A Presets or Brushes tile was pressed: `on` picks the tool, off puts it away.
+## A preset or Brushes tile was pressed: `on` picks the tool, off puts it away.
 signal tool_toggled(tool_id: StringName, on: bool)
 signal sculpt_selected(op: int)
 signal biome_selected(biome_id: String)
@@ -61,7 +65,7 @@ const TOOL_HINTS := {
 	"Drag a line across a river or pond, bank to bank. Hold Ctrl and click a crossing to remove it.",
 	EventPresets.COLLAPSE: "Click a bridge: it breaks and falls into the water for everyone.",
 	EventPresets.TOPPLE:
-	"Click in a forest: the trees fall away from the click. Drag out for a wider stand.",
+	"Click in a forest: the marked trees fall away from the click. Drag out for a wider stand.",
 }
 
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT
@@ -75,8 +79,9 @@ var paint_fields: Dictionary = {}
 var water_pane: WaterToolPane
 var bridge_pane: BridgeToolPane
 
-## Each brush's controls by tool id; only the picked brush's show.
+## Each brush's controls by tool id; only the picked brush's show, in _options_holder.
 var _options: Dictionary = {}
+var _options_holder: VBoxContainer
 var _advanced: Foldout
 var _size_row: PropertyRow
 var _strength_row: PropertyRow
@@ -97,7 +102,7 @@ func _ready() -> void:
 	notice = _caption("EventsNotice", "")
 	notice.visible = false
 	add_child(notice)
-	preset_field = _tiles_field("EventsPresetField", "Presets", EventPresets.all())
+	preset_field = _tiles_field("EventsPresetField", EventPresets.HEADING, EventPresets.all())
 	add_child(preset_field)
 	tool_field = _tiles_field("EventsToolField", "Brushes", ToolRegistry.tools(ToolDescriptor.PLAY))
 	add_child(tool_field)
@@ -123,8 +128,9 @@ func preset_ids() -> Array[StringName]:
 	return ids
 
 
-## Shows `tool_id`'s controls (&"" for none; a brush or a preset), its tile pressed while
-## `pressed` (it is out, or waits on a pick in its controls). Silent.
+## Shows `tool_id`'s controls (&"" for none; a brush or a preset) directly under its own
+## field, its tile pressed while `pressed` (it is out, or waits on a pick in its controls).
+## A preset's Advanced holds the size alone (no strength: an event has none). Silent.
 func show_tool(tool_id: StringName, pressed: bool = true) -> void:
 	for id in tool_ids():
 		tool_field.tiles.set_tile_on(id, pressed and id == tool_id)
@@ -132,8 +138,13 @@ func show_tool(tool_id: StringName, pressed: bool = true) -> void:
 		preset_field.tiles.set_tile_on(id, pressed and id == tool_id)
 	for id: StringName in _options:
 		(_options[id] as Control).visible = id == tool_id
+	var preset := EventPresets.find(tool_id) != null
+	var field := preset_field if preset else tool_field
+	move_child(_options_holder, field.get_index() + 1)
+	move_child(_advanced, _options_holder.get_index() + 1)
 	var sized := tool_id != &"" and not tool_id in [WaterTool.ID, BridgeTool.ID]
 	_advanced.visible = sized and tool_id != EventPresets.COLLAPSE
+	_strength_row.visible = not preset
 	if tool_id == PaintTool.ID:
 		ensure_paint_tiles()
 
@@ -158,7 +169,8 @@ func set_available(available: Dictionary) -> void:
 		var on := bool(available.get(tool.id, false))
 		tile.disabled = not on
 		var why := tool.unavailable_tooltip if tool.unavailable_tooltip != "" else tool.summary
-		tile.tooltip_text = tool.summary if on else why
+		# Through the row, so a refit (the drawer opening) keeps it.
+		field.tiles.set_tile_tooltip(tool.id, tool.summary if on else why)
 
 
 ## Shows the brush's size and strength in the Advanced rows, without signals.
@@ -231,6 +243,7 @@ func _build_options() -> void:
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.theme_type_variation = &"BoxContainerSpaced"
 	add_child(holder)
+	_options_holder = holder
 	var listed: Array[ToolDescriptor] = EventPresets.all().duplicate()
 	listed.append_array(ToolRegistry.tools(ToolDescriptor.PLAY))
 	for tool in listed:

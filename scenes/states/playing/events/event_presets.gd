@@ -1,15 +1,26 @@
 class_name EventPresets
 extends RefCounted
 
-## The Events pane's presets with spectacle: terrain events the GM sets off with one gesture
-## (a bridge collapsing, a stand of trees toppling), each a ToolDescriptor whose BrushMode
-## (CollapseMode, ToppleMode) fires a TerrainEvent instead of editing the map stroke by stroke.
-## They are play's alone and not map tools, so they stay out of ToolRegistry (authoring's rail
-## and help never list them); PlayEvents arms them on GameMap's brush as it arms a brush, and
-## EventsPane shows them in their own field above Brushes.
+## The Events pane's presets with spectacle: one-shot terrain events the GM sets off with one
+## gesture (a bridge dropping into the water, a stand of trees toppling), each a ToolDescriptor
+## whose BrushMode (CollapseMode, ToppleMode) fires a TerrainEvent instead of editing the map
+## stroke by stroke. They are play's alone and not map tools, so they stay out of ToolRegistry
+## (authoring's rail and help never list them); PlayEvents arms them on GameMap's brush as it
+## arms a brush, and EventsPane shows them in their own field (HEADING) above Brushes.
+##
+## Their labels are what they do, as the cursor pills say it ("Drop bridge", "Topple trees"),
+## so they read as events beside the Brushes' nouns, and their icons show the break (a span
+## broken over the water, a tree leaning as it falls) so they never repeat a brush's picture.
 
 const COLLAPSE := &"collapse"
 const TOPPLE := &"topple"
+## The pane's heading over the presets: one-shot happenings on the table, beside the Brushes
+## that build the map ("Events" is the pane's own title).
+const HEADING := "Happenings"
+const DROP_LABEL := CollapseMode.DROP
+const TOPPLE_LABEL := ToppleMode.TEXT
+## The Drop bridge tile's tooltip while the map has no bridge to drop.
+const NO_BRIDGE_TOOLTIP := "No bridge stands on this map. Lay one with the Bridge brush first."
 
 static var _presets: Array[ToolDescriptor] = []
 
@@ -17,19 +28,21 @@ static var _presets: Array[ToolDescriptor] = []
 ## Every preset, in tile order.
 static func all() -> Array[ToolDescriptor]:
 	if _presets.is_empty():
+		var drop := _make(
+			COLLAPSE,
+			DROP_LABEL,
+			"bridge-broken",
+			"A bridge breaks and falls into the water for everyone. Click a bridge.",
+			CollapseMode
+		)
+		drop.unavailable_tooltip = NO_BRIDGE_TOOLTIP
 		_presets = [
-			_make(
-				COLLAPSE,
-				"Collapse",
-				"bridge-plank",
-				"A bridge breaks and falls into the water. Click a bridge.",
-				CollapseMode
-			),
+			drop,
 			_make(
 				TOPPLE,
-				"Topple",
-				"tree",
-				"Trees fall away from where you click. Drag out for a wider stand.",
+				TOPPLE_LABEL,
+				"tree-falling",
+				"Trees fall away from where you click, for everyone. Drag out for a wider stand.",
 				ToppleMode
 			),
 		]

@@ -48,6 +48,37 @@ static func create_label_panel(font_size: int = CAPTION_SIZE) -> Dictionary:
 	return {"panel": panel, "label": lbl}
 
 
+## The size of `text` drawn as a glass chip on `canvas` (draw_chip): the caption's line inside
+## the Chip variation's margins. `canvas` wears the glass theme (create_overlay's control).
+static func chip_size(canvas: Control, text: String) -> Vector2:
+	var font := canvas.get_theme_font(&"font", &"Caption")
+	var size := canvas.get_theme_font_size(&"font_size", &"Caption")
+	var box := canvas.get_theme_stylebox(&"panel", &"Chip")
+	var line := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size)
+	return Vector2(line.x, font.get_height(size)) + box.get_minimum_size()
+
+
+## Draws `text` as a glass chip with its top-left corner at `at` on `canvas`, the cursor's
+## readouts over the board: the hint bar's and the rulers' Chip (plum glass with its top rim)
+## and caption text (14, the floor, T2) in `color`, chalk (the glass TEXT role) by default.
+## Drawn, not a node, so it follows a cursor every frame without a layout pass.
+static func draw_chip(
+	canvas: Control, at: Vector2, text: String, color: Color = Color.TRANSPARENT
+) -> void:
+	var font := canvas.get_theme_font(&"font", &"Caption")
+	var size := canvas.get_theme_font_size(&"font_size", &"Caption")
+	var box := canvas.get_theme_stylebox(&"panel", &"Chip")
+	var rect := Rect2(at, chip_size(canvas, text))
+	canvas.draw_style_box(box, rect)
+	var ink := color if color.a > 0.0 else ThemeColors.of(canvas, ThemeColors.TEXT)
+	var baseline := (
+		at
+		+ Vector2(box.get_margin(SIDE_LEFT), box.get_margin(SIDE_TOP))
+		+ Vector2(0.0, font.get_ascent(size))
+	)
+	canvas.draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, ink)
+
+
 ## Create a glass chip PanelContainer + VBoxContainer of CheckBox rows, one per label in
 ## [param labels], in order. Unlike create_label_panel, neither the panel nor its
 ## checkboxes set MOUSE_FILTER_IGNORE -- these controls need real mouse input to be

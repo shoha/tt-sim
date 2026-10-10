@@ -523,7 +523,8 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   step uses `p6.gd preset` and `avatar_kit.gd sun`) deletes `_gm_events_table` at the end.
 - `jobs/terrain_events.json`: the GM's presets with spectacle (card gm-events-2b; about 49 s
   with `--saved --full`, 20 captures). The build phase makes a new 150 ft temperate forest map
-  (seed 1234) with a curved waist river and a plank bridge (`crossing.gd place`), saves it as
+  (seed 1234) with a curved waist river, a plank bridge and stepping stones downstream
+  (`crossing.gd place`), saves it as
   `_gm_events_spectacle` (`events_pane.gd save`) and plays it; `--saved` loads it in play.
   Its probe (`probes/terrain_events.gd`: look, fire, advance, free, arm, hover, report) fires
   each event on the GM's side with the TerrainEvents clock held, so the filmstrips step it to
@@ -536,13 +537,19 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   cursor and left the bridge 2 m off centre). Then the densest stand within 18 m of the
   bridge at zoom 16 (`fall_0_before`, then 0.45, 0.95, 1.45, 1.95 and 2.45 s: `fall_1_tip` to
   `fall_5_clear`, and `fall_6_after`); at 1.45 s also `fall_3_nofade`, the canopy fade off (`close_zoom.gd
-  fade`), an A/B in which the fallen crowns must match `fall_3_down`. Both events are then
-  undone through `events_pane.gd undo` (Ctrl+Z's path: the trees and the bridge back, no
-  effect played), and the Events pane is captured at 1280x720 and 1920x1080 with its Presets
-  field, the preset put away first (`{size}_presets`; at 1920 the pane still shows Topple's
-  gesture line, the put-away state) and with Topple armed and hovering the stand
-  (`{size}_presets_topple`: the tile pressed, the ochre ring with no fill over the crowns,
-  Topple's keys in the hint bar). The level is
+  fade`), an A/B in which the fallen crowns must match `fall_3_down`. The pane captures
+  (card presets-pane-fix; 29 captures in all, about 72 s with `--saved --full`): with no
+  bridge left, `pane_nobridge` (Drop bridge disabled; `events_pane.gd tile` logs its tooltip);
+  both events then undone through `events_pane.gd undo` (Ctrl+Z's path: the trees and the
+  bridge back, no effect played), the camera's near plane logged (`eval`, -61.8 m at zoom 11
+  at either yaw: pulled back over the canopies, so it cuts no tree); at 1280x720 and 1920x1080
+  the pane fresh, with Topple trees armed at 6 m over the stand (its blazes, chip and keys)
+  and put away again (`{size}_pane_fresh`, `_topple`, `_putaway`); Drop bridge over the bridge
+  and over the build's stepping stones at map x 14 (`pane_drop_bridge`, `pane_drop_stones`,
+  `events_pane.gd hover_crossing`); the presets' toasts at 720p (`pane_toasts_720`,
+  `events_pane.gd toasts`); both cursors at dusk (`pane_dusk_topple`, `pane_dusk_drop`,
+  `ui_primitives.gd dusk`); and a player's view after an event, with no toast
+  (`pane_player_720`). The level is
   kept for look runs; `jobs/gm_events_cleanup.json` (`events_pane.gd cleanup` alone, a few
   seconds) deletes every `_gm_events_` level when the task is done.
 

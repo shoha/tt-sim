@@ -44,7 +44,7 @@ const CLEAR_SECONDS := 2.0
 const RELEASE_AFTER_S := 8.0
 const BUSY := "Something is already happening there."
 const TOO_MANY := "Let the last events finish first."
-const NO_BRIDGE := "Click a bridge to collapse it."
+const NO_BRIDGE := "Click a bridge to drop it."
 const NO_TREES := "No trees stand there. Click in a forest."
 const NOT_GM := "Only the GM starts events."
 
