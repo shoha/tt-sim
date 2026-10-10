@@ -42,7 +42,7 @@ func before_each() -> void:
 
 
 func after_each() -> void:
-	AvatarLibrary.directory = AvatarLibrary.DEFAULT_DIRECTORY
+	AvatarLibrary.directory = Paths.AVATARS_DIR
 	for entry in AvatarLibrary.list(LIBRARY_DIR):
 		AvatarLibrary.delete(String(entry.id), LIBRARY_DIR)
 	get_tree().current_scene = _old_scene

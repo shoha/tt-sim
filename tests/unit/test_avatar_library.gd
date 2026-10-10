@@ -33,7 +33,7 @@ func before_each() -> void:
 func after_each() -> void:
 	get_tree().current_scene = _old_scene
 	_scene.free()
-	AvatarLibrary.directory = AvatarLibrary.DEFAULT_DIRECTORY
+	AvatarLibrary.directory = Paths.AVATARS_DIR
 	var dir := DirAccess.open(DIR)
 	if dir != null:
 		for file in dir.get_files():

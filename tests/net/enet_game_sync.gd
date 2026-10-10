@@ -10,9 +10,9 @@ extends "res://tests/net/enet_late_joiner.gd"
 ## copy of the token locking through the merged grant path (grant_drag_lock ->
 ## drag_lock_granted).
 ##
-## Run like enet_late_joiner.tscn, one process per role with the same args; allow
-## --timeout-s of about 180. The host waits on the client's ".client.json" stages and the
-## client on the host's ".host.json" phase, as there.
+## Run through tests/net/net_launcher.gd with --scenario=enet_game_sync (its default
+## --timeout-s of 180 is enough). The host waits on the client's ".client.json" stages and
+## the client on the host's ".host.json" phase, as in enet_late_joiner.gd.
 
 const MOVE_TARGET := Vector3(1.5, 0.25, -2.0)
 const NEW_NAME := "Moved Hero"

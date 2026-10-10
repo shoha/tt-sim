@@ -830,15 +830,13 @@ func _send_drag_lock_claim(network_id: String) -> void:
 		NetworkManager.game_sync.send_drag_lock_claim(network_id)
 
 
-## Send a drag lock release to the host (client) or release directly (host).
+## Send a drag lock release to the host (client) or release our own lock (host), through
+## the same NetworkGameSync.release_drag_lock() as a client's release, so this token unlocks
+## through the drag_lock_released listener like every other peer's copy.
 func _send_drag_lock_release(network_id: String) -> void:
 	if not NetworkManager.is_networked():
 		return
 	if NetworkManager.is_host():
-		GameState.release_drag_lock(network_id)
-		var board_token := get_parent() as BoardToken
-		if board_token:
-			board_token.clear_drag_lock()
-		NetworkManager.game_sync.broadcast_drag_lock_released(network_id)
+		NetworkManager.game_sync.release_drag_lock(network_id, 1)
 	else:
 		NetworkManager.game_sync.send_drag_lock_release(network_id)

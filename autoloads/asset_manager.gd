@@ -50,8 +50,6 @@ const AssetResolverScript = preload("res://autoloads/asset_resolver.gd")
 const AssetPackClass = preload("res://resources/asset_pack.gd")
 
 const USER_ASSETS_DIR: String = "res://user_assets/"
-const USER_ASSETS_USER_DIR: String = "user://user_assets/"
-const CACHE_DIR: String = "user://asset_cache/"
 const MANIFEST_FETCH_TIMEOUT: float = 30.0
 
 # =========================================================================
@@ -159,7 +157,7 @@ func _discover_packs() -> void:
 	_discover_packs_in_dir(USER_ASSETS_DIR, true)
 
 	# 2. User-installed packs (user://user_assets/) — cannot overwrite built-ins
-	_discover_packs_in_dir(USER_ASSETS_USER_DIR, false)
+	_discover_packs_in_dir(Paths.USER_ASSETS_DIR, false)
 
 	packs_loaded.emit()
 
@@ -227,7 +225,7 @@ func _load_pack(manifest_path: String, pack_path: String) -> Variant:
 
 ## Save manifest to user://user_assets/ for pack discovery on next game launch
 func _save_pack_to_user_assets(pack_id: String, manifest_data: Dictionary) -> bool:
-	var pack_dir = USER_ASSETS_USER_DIR + pack_id + "/"
+	var pack_dir = Paths.USER_ASSETS_DIR + pack_id + "/"
 	if not DirAccess.dir_exists_absolute(pack_dir):
 		var err = DirAccess.make_dir_recursive_absolute(pack_dir)
 		if err != OK:
@@ -250,7 +248,7 @@ func _save_pack_to_user_assets(pack_id: String, manifest_data: Dictionary) -> bo
 ## This file's presence signals that the user initiated a full pack download
 ## (vs on-demand streaming) and that the download should be resumable.
 func _save_download_state(pack_id: String, manifest_url: String, total_variants: int) -> void:
-	var state_path := USER_ASSETS_USER_DIR + pack_id + "/download_state.json"
+	var state_path := Paths.USER_ASSETS_DIR + pack_id + "/download_state.json"
 	var state := {
 		"manifest_url": manifest_url,
 		"started_at": Time.get_datetime_string_from_system(true),
@@ -267,7 +265,7 @@ func _save_download_state(pack_id: String, manifest_url: String, total_variants:
 ## Delete download_state.json for a pack (called on completion or user dismiss).
 ## Caller must ensure the pack directory exists.
 func _delete_download_state(pack_id: String) -> void:
-	var state_path := USER_ASSETS_USER_DIR + pack_id + "/download_state.json"
+	var state_path := Paths.USER_ASSETS_DIR + pack_id + "/download_state.json"
 	if FileAccess.file_exists(state_path):
 		var err := DirAccess.remove_absolute(state_path)
 		if err != OK:
@@ -451,7 +449,7 @@ func register_remote_pack(manifest: Dictionary) -> bool:
 ## {pack_id, display_name, manifest_url, total_variants, downloaded_variants}
 func get_incomplete_downloads() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	var dir := DirAccess.open(USER_ASSETS_USER_DIR)
+	var dir := DirAccess.open(Paths.USER_ASSETS_DIR)
 	if not dir:
 		return result
 
@@ -459,7 +457,7 @@ func get_incomplete_downloads() -> Array[Dictionary]:
 	var folder_name := dir.get_next()
 	while folder_name != "":
 		if dir.current_is_dir() and not folder_name.begins_with("."):
-			var pack_dir := USER_ASSETS_USER_DIR + folder_name + "/"
+			var pack_dir := Paths.USER_ASSETS_DIR + folder_name + "/"
 			var state_path := pack_dir + "download_state.json"
 			if FileAccess.file_exists(state_path):
 				var info := _check_incomplete_pack(folder_name, pack_dir, state_path)
@@ -685,7 +683,7 @@ func _inject_base_url_from_manifest_url(manifest: Dictionary, manifest_url: Stri
 
 
 func _finalize_pack_download(pack_id: String, manifest: Dictionary) -> bool:
-	var pack_path = USER_ASSETS_USER_DIR + pack_id + "/"
+	var pack_path = Paths.USER_ASSETS_DIR + pack_id + "/"
 	if not _save_pack_to_user_assets(pack_id, manifest):
 		pack_download_failed.emit("", "Failed to create user_assets directory")
 		return false
@@ -711,7 +709,7 @@ func _queue_pack_downloads(
 		pack_download_failed.emit(pack_id, "Pack not found after registration")
 		return
 
-	var pack_path := USER_ASSETS_USER_DIR + pack_id + "/"
+	var pack_path := Paths.USER_ASSETS_DIR + pack_id + "/"
 
 	# -- Phase 1: build candidate list on main thread (no I/O) --
 	var candidates: Array[Dictionary] = []

@@ -22,6 +22,7 @@
 		"res://tests/unit/test_network_manager_late_joiner_snapshot.gd",
 		"res://tests/unit/test_network_manager_security.gd",
 		"res://tests/unit/test_network_reconciliation.gd",
+		"res://tests/unit/test_paths_data_root.gd",
 		"res://tests/unit/test_network_state_sync_queue.gd",
 		"res://tests/unit/test_steam_launch_detection.gd",
 		"res://tests/unit/test_stream_peer_queue.gd",

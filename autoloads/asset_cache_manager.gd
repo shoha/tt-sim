@@ -5,7 +5,8 @@ extends Node
 ## Provides LRU eviction to prevent unbounded disk growth.
 ##
 ## Architecture:
-##   - Manages cache at user://asset_cache/
+##   - Manages the cache at Paths.ASSET_CACHE_DIR (user://asset_cache/), indexed in
+##     Paths.ASSET_CACHE_INDEX_PATH; a test data root (Paths) moves both
 ##   - Tracks file sizes and access times for LRU eviction
 ##   - Emits signals when cache is updated
 ##   - Thread-safe cache operations
@@ -24,9 +25,7 @@ signal cache_evicted(cache_keys: Array[String])
 ## Emitted when cache is cleared
 signal cache_cleared
 
-const CACHE_DIR := "user://asset_cache/"
 const MAX_CACHE_SIZE_MB := 500
-const CACHE_INDEX_FILE := "user://asset_cache_index.json"
 
 ## Cache index: cache_key -> CacheEntry
 var _cache_index: Dictionary = {}
@@ -261,7 +260,7 @@ func clear_cache() -> void:
 	_save_cache_index()
 
 	# Clean up empty directories
-	_cleanup_empty_dirs(CACHE_DIR)
+	_cleanup_empty_dirs(Paths.ASSET_CACHE_DIR)
 
 	print("AssetCacheManager: Cache cleared")
 	cache_cleared.emit()
@@ -297,7 +296,10 @@ func _make_key(pack_id: String, asset_id: String, variant_id: String, file_type:
 func _get_cache_path(
 	pack_id: String, asset_id: String, variant_id: String, file_type: String
 ) -> String:
-	return CACHE_DIR + "%s/%s/%s%s" % [pack_id, asset_id, variant_id, extension_for(file_type)]
+	return (
+		Paths.ASSET_CACHE_DIR
+		+ "%s/%s/%s%s" % [pack_id, asset_id, variant_id, extension_for(file_type)]
+	)
 
 
 ## Cache file extension per file type: a streamed map document is a .ttmap (MapDocumentIO
@@ -314,8 +316,8 @@ static func extension_for(file_type: String) -> String:
 
 ## Ensure the cache directory exists
 func _ensure_cache_dir() -> void:
-	if not DirAccess.dir_exists_absolute(CACHE_DIR):
-		DirAccess.make_dir_recursive_absolute(CACHE_DIR)
+	if not DirAccess.dir_exists_absolute(Paths.ASSET_CACHE_DIR):
+		DirAccess.make_dir_recursive_absolute(Paths.ASSET_CACHE_DIR)
 
 
 ## Add an entry to the cache index
@@ -423,7 +425,7 @@ func _save_cache_index() -> void:
 		data[key] = entry.to_dict()
 	_cache_mutex.unlock()
 
-	var file = FileAccess.open(CACHE_INDEX_FILE, FileAccess.WRITE)
+	var file = FileAccess.open(Paths.ASSET_CACHE_INDEX_PATH, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(data, "  "))
 		file.close()
@@ -431,10 +433,10 @@ func _save_cache_index() -> void:
 
 ## Load cache index from disk
 func _load_cache_index() -> void:
-	if not FileAccess.file_exists(CACHE_INDEX_FILE):
+	if not FileAccess.file_exists(Paths.ASSET_CACHE_INDEX_PATH):
 		return
 
-	var file = FileAccess.open(CACHE_INDEX_FILE, FileAccess.READ)
+	var file = FileAccess.open(Paths.ASSET_CACHE_INDEX_PATH, FileAccess.READ)
 	if not file:
 		return
 

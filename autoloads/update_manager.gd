@@ -36,10 +36,6 @@ const GITHUB_API_URL: String = "https://api.github.com/repos/shoha/tt-sim/releas
 const GITHUB_RELEASES_URL: String = "https://github.com/shoha/tt-sim/releases"
 const UPDATE_CHECK_TIMEOUT: float = 15.0
 const DOWNLOAD_TIMEOUT: float = 300.0  # 5 minutes for large downloads
-const UPDATES_DIR: String = "user://updates/"
-const PENDING_UPDATE_FILE: String = "user://updates/pending_update.json"
-const UPDATE_SUCCESS_FILE: String = "user://updates/update_success.txt"
-const UPDATE_LOG_FILE: String = "user://updates/update_log.txt"
 
 ## Latest available release info (populated after check)
 var latest_release: Dictionary = {}
@@ -61,13 +57,19 @@ var _http_check: HTTPRequest
 var _http_download: HTTPRequest
 var _download_path: String = ""
 
+## The update files, in Paths.UPDATES_DIR (user://updates/). A test data root moves it, so
+## a test process never applies or consumes the real user's pending update.
+var _pending_update_file: String = Paths.UPDATES_DIR + "pending_update.json"
+var _update_success_file: String = Paths.UPDATES_DIR + "update_success.txt"
+var _update_log_file: String = Paths.UPDATES_DIR + "update_log.txt"
+
 
 func _ready() -> void:
 	set_process(false)
 
 	# Ensure updates directory exists
-	if not DirAccess.dir_exists_absolute(UPDATES_DIR):
-		DirAccess.make_dir_recursive_absolute(UPDATES_DIR)
+	if not DirAccess.dir_exists_absolute(Paths.UPDATES_DIR):
+		DirAccess.make_dir_recursive_absolute(Paths.UPDATES_DIR)
 
 	# Clean up old executables from previous updates (Windows)
 	_cleanup_old_executables()
@@ -101,21 +103,21 @@ func _show_deferred_toast() -> void:
 
 ## Load a persisted update success toast from a previous restart
 func _load_update_success_toast() -> void:
-	if not FileAccess.file_exists(UPDATE_SUCCESS_FILE):
+	if not FileAccess.file_exists(_update_success_file):
 		return
-	var file = FileAccess.open(UPDATE_SUCCESS_FILE, FileAccess.READ)
+	var file = FileAccess.open(_update_success_file, FileAccess.READ)
 	if file:
 		var version = file.get_as_text().strip_edges()
 		file.close()
 		if not version.is_empty():
 			_pending_toast_message = "Updated to v%s" % version
 			_pending_toast_is_error = false
-	DirAccess.remove_absolute(UPDATE_SUCCESS_FILE)
+	DirAccess.remove_absolute(_update_success_file)
 
 
 ## Persist the update success version to disk so the toast survives a restart
 func _save_update_success_toast(version: String) -> void:
-	var file = FileAccess.open(UPDATE_SUCCESS_FILE, FileAccess.WRITE)
+	var file = FileAccess.open(_update_success_file, FileAccess.WRITE)
 	if file:
 		file.store_string(version)
 		file.close()
@@ -145,7 +147,7 @@ func _show_translocation_dialog() -> void:
 		message,
 		"Open Downloads",
 		"OK",
-		func(): OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR)),
+		func(): OS.shell_open(ProjectSettings.globalize_path(Paths.UPDATES_DIR)),
 		Callable(),
 		"Primary"
 	)
@@ -156,9 +158,9 @@ func _log(message: String) -> void:
 	print("UpdateManager: " + message)
 
 	# Also write to log file for debugging (especially useful on macOS)
-	var file = FileAccess.open(UPDATE_LOG_FILE, FileAccess.READ_WRITE)
+	var file = FileAccess.open(_update_log_file, FileAccess.READ_WRITE)
 	if not file:
-		file = FileAccess.open(UPDATE_LOG_FILE, FileAccess.WRITE)
+		file = FileAccess.open(_update_log_file, FileAccess.WRITE)
 	if file:
 		file.seek_end()
 		var timestamp = Time.get_datetime_string_from_system()
@@ -194,15 +196,15 @@ func set_prerelease_enabled(enabled: bool) -> void:
 
 ## Check if there's a pending update waiting to be applied
 func has_pending_update() -> bool:
-	return FileAccess.file_exists(PENDING_UPDATE_FILE)
+	return FileAccess.file_exists(_pending_update_file)
 
 
 ## Get info about the pending update, or empty dict if none
 func get_pending_update_info() -> Dictionary:
-	if not FileAccess.file_exists(PENDING_UPDATE_FILE):
+	if not FileAccess.file_exists(_pending_update_file):
 		return {}
 
-	var file = FileAccess.open(PENDING_UPDATE_FILE, FileAccess.READ)
+	var file = FileAccess.open(_pending_update_file, FileAccess.READ)
 	if not file:
 		return {}
 
@@ -405,7 +407,7 @@ func download_update() -> void:
 
 	# Prepare download path
 	var filename = "TTSim-%s-%s.zip" % [UpdateVersion.get_platform_name(), latest_release.version]
-	_download_path = UPDATES_DIR + filename
+	_download_path = Paths.UPDATES_DIR + filename
 
 	# Clean up any existing partial download
 	if FileAccess.file_exists(_download_path):
@@ -489,7 +491,7 @@ func _create_pending_update_marker(zip_path: String, version: String) -> void:
 		"created_at": Time.get_datetime_string_from_system()
 	}
 
-	var file = FileAccess.open(PENDING_UPDATE_FILE, FileAccess.WRITE)
+	var file = FileAccess.open(_pending_update_file, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(pending_info, "\t"))
 		file.close()
@@ -500,7 +502,7 @@ func _create_pending_update_marker(zip_path: String, version: String) -> void:
 
 ## Check for and apply any pending update on startup
 func _apply_pending_update() -> void:
-	if not FileAccess.file_exists(PENDING_UPDATE_FILE):
+	if not FileAccess.file_exists(_pending_update_file):
 		return
 
 	_log("Found pending update marker, checking...")
@@ -508,7 +510,7 @@ func _apply_pending_update() -> void:
 	_log("Executable path: %s" % OS.get_executable_path())
 
 	# Read the pending update info
-	var file = FileAccess.open(PENDING_UPDATE_FILE, FileAccess.READ)
+	var file = FileAccess.open(_pending_update_file, FileAccess.READ)
 	if not file:
 		_log("ERROR: Could not open pending update file")
 		_cleanup_pending_update()
@@ -650,14 +652,14 @@ func _extract_update_macos(zip_path: String) -> bool:
 
 ## Clean up pending update marker and related files
 func _cleanup_pending_update() -> void:
-	if FileAccess.file_exists(PENDING_UPDATE_FILE):
-		DirAccess.remove_absolute(PENDING_UPDATE_FILE)
+	if FileAccess.file_exists(_pending_update_file):
+		DirAccess.remove_absolute(_pending_update_file)
 		print("UpdateManager: Cleaned up pending update marker")
 
 
 ## Cancel a pending update (removes the marker and downloaded zip)
 func cancel_pending_update() -> void:
-	if not FileAccess.file_exists(PENDING_UPDATE_FILE):
+	if not FileAccess.file_exists(_pending_update_file):
 		return
 
 	var pending = get_pending_update_info()
@@ -772,7 +774,7 @@ func open_releases_page() -> void:
 
 ## Open the downloads folder in the file manager
 func open_downloads_folder() -> void:
-	OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR))
+	OS.shell_open(ProjectSettings.globalize_path(Paths.UPDATES_DIR))
 
 
 ## Cancel an in-progress download

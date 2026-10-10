@@ -577,23 +577,51 @@ the client in the box.
 
 #### ENet scenarios (no Steam)
 
-Two headless processes on 127.0.0.1 run the whole game over `ENetMultiplayerPeer` (the
-scenario sets NetworkManager's peer and state the way the Steam lobby callbacks would), on the
-shipped res:// map, so nothing downloads and no second Steam account is needed. Both share
-`user://`. Start the host in the background, then the client, with the same `--rendezvous`
-path prefix and each with its own `--out` log:
+Headless processes on 127.0.0.1 run the whole game over `ENetMultiplayerPeer` (the scenario
+sets NetworkManager's peer and state the way the Steam lobby callbacks would), on the shipped
+res:// map, so nothing downloads and no second Steam account is needed. One launcher runs any
+scenario, with one command form (allowlist it once):
 
-`godot --headless --path D:/dev/tt-sim res://tests/net/<scenario>.tscn -- --role=host|client --rendezvous=<abs prefix> --out=<abs log> --timeout-s=180`
+`godot --headless --path D:/dev/tt-sim res://tests/net/net_launcher.tscn -- --data-root=net_launcher --scenario=<name> [--peers=2] [--timeout-s=180] [--port=28471]`
 
-Each side writes one `NET_RESULT {json}` line and exits 0 on a pass.
+It starts `tests/net/<name>.tscn` as N peer processes (`host`, `client`, then `client2`...),
+waits for them, kills any still running 30 s past the timeout, and exits 0 only when every
+peer exited 0 with a passing `NET_RESULT {json}` line and the real user's data is untouched.
+It prints each peer's `NET_RESULT` and a final `NET_LAUNCH {json}` line. Logs stay in
+`.godot/net_runs/<name>/` until the next run of that scenario: `<role>.log` (the scenario's
+log), `<role>.godot.log` (the engine's, through `--log-file`) and the `rv.*` rendezvous files.
 
-- `enet_late_joiner.tscn`: the client joins after the host placed an avatar and must see it
-  once its table has loaded (`LateJoinerSync`'s hold).
-- `enet_game_sync.tscn`: after that late join, the client moves a token it was given CONTROL
-  of (drag-lock claim, transform, release) and receives its resting position; the host renames
+The processes never share `user://` stores. Each peer starts with `--data-root=net_<name>_<role>`
+and the launcher with its own `--data-root` (it refuses to start peers without one), so
+`Paths` puts every per-user store of that process (levels, settings, the asset cache and its
+index, user asset packs, avatars, updates, perf logs, the warm-up marker) under
+`user://_test_roots/<root>/` instead of where the shipped game keeps it. Before this, local
+clients wrote one shared asset cache index at once and each evicted a real cached model to fit
+its download. The launcher also records the modification time of every file in the shipped
+stores before the peers start and fails the run if any was added, removed or changed, and it
+deletes every test root of the run at the end, pass or fail.
+
+A scenario is a scene whose script reads `--role`, `--rendezvous` (an absolute path prefix
+for the files the roles coordinate through), `--out`, `--timeout-s` and `--port`, writes its
+log and one `NET_RESULT {json}` line to `--out` and quits 0 on a pass; extending
+`enet_late_joiner.gd` gives the boot, ENet setup and rendezvous.
+
+- `enet_late_joiner`: the client joins after the host placed an avatar and must see it once
+  its table has loaded (`LateJoinerSync`'s hold).
+- `enet_game_sync`: after that late join, the client moves a token it was given CONTROL of
+  (drag-lock claim, transform, release) and receives its resting position; the host renames
   it, removes a second token and changes the light intensity. Both logs show each message
   arriving with the right sender, and the host's copy of the token locked through
-  `grant_drag_lock()`. Passed on 2026-10-09 (about 4 s on the host).
+  `grant_drag_lock()` and unlocked through `release_drag_lock()`.
+- `enet_leave_mid_drag`: the client claims the drag lock on a token it controls, sends a
+  transform and leaves (`disconnect_game()`) without releasing it. After `player_left` the
+  host's lock is free, `drag_lock_released` fired on the host, its copy of the token is
+  unlocked with dragging allowed, and a GM drag claims and releases the lock. With the old
+  leave path the host's copy stayed locked to the departed peer (`host_token_unlocked_ok` and
+  `host_drag_allowed_ok` false).
+
+All three passed through the launcher on 2026-10-09, each in about 1.4 s on the host, with no
+shipped store file changed (31,435 files watched) and every test root removed.
 
 #### Limitations
 
@@ -690,7 +718,7 @@ func broadcast_token_removed(network_id: String) -> void
 func broadcast_visual_settings(settings: Dictionary) -> void
 func grant_drag_lock(network_id: String, peer_id: int) -> bool
 func send_drag_lock_denied(peer_id: int, network_id: String) -> void
-func broadcast_drag_lock_released(network_id: String) -> void
+func release_drag_lock(network_id: String, peer_id: int) -> bool
 ```
 
 `NetworkStateSync` decides when the token sends go out (throttling, batching, keeping
@@ -701,8 +729,17 @@ from `DraggableToken` when the GM starts a drag) and to a client whose claim pas
 check (`NetworkTokenSync`). It claims the lock in `GameState`, emits `drag_lock_granted` on the
 host as well (so the host's copy of the token locks through the same listener as every
 client's), and broadcasts the grant. It returns false, sending nothing, when another peer holds
-the lock; the claim path then sends `send_drag_lock_denied()`. Releases are not merged: each
-caller releases in `GameState` and on its own token, then calls `broadcast_drag_lock_released()`.
+the lock; the claim path then sends `send_drag_lock_denied()`.
+
+`release_drag_lock()` is its mirror and the one place a lock is freed: the GM's drop (peer 1,
+`DraggableToken`), a client's release (`NetworkTokenSync`, which then snaps the host's copy to
+the last received position and broadcasts it), and a client that left mid-drag
+(`TokenPermissionHandler` on `player_left`, for every lock `GameState.get_drag_locks_held_by()`
+lists). It releases the lock in `GameState`, emits `drag_lock_released` on the host as well, so
+the host's copy unlocks through the same listener as every client's, and broadcasts the release.
+It returns false, sending nothing, unless the given peer holds the lock. Before it, the
+leave path cleared `GameState` and told the clients but left the host's copy locked to the
+departed peer, so the GM could not drag that token again.
 
 #### Client Methods
 
@@ -823,8 +860,12 @@ func merge_full_state_dict(data: Dictionary) -> void
 func claim_drag_lock(network_id: String, peer_id: int) -> bool
 func release_drag_lock(network_id: String) -> void
 func get_drag_lock(network_id: String) -> int
+func get_drag_locks_held_by(peer_id: int) -> Array[String]
 func clear_drag_locks_for_peer(peer_id: int) -> void
 ```
+
+These change `GameState` only. Table play frees locks through
+`NetworkGameSync.release_drag_lock()`, which also unlocks the token copies.
 
 Drag locks are included in `get_full_state_dict()` (when non-empty) so late joiners know which tokens are currently being dragged. They are preserved by `merge_full_state_dict()` and restored by `apply_full_state_dict()`.
 
