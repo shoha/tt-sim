@@ -102,8 +102,10 @@ func define_fields() -> void:
 	)
 
 
-## CheckBox and CheckButton (the switch): drawn icons in the state role when on and the
-## soft text role when off, so the off state still reads on paper (3:1 for glyphs, C6).
+## CheckBox and CheckButton (the switch): drawn icons in the state role when on; off is the
+## soft text outline (the check) or the filled track role (the switch), so the off state
+## still reads at 3:1 (C6). icon_max_width is 0 here: both inherit Button's 20 px cap,
+## which CheckButton applies to its switch and drew it as a 20x11 hairline.
 func define_toggles() -> void:
 	var plain := box(Color(c(ThemeColors.SURFACE), 0.0), RADIUS_CONTROL, SPACE_1, SPACE_1)
 	var hover: Dictionary = inherit(plain, {bg_color = c(ThemeColors.SURFACE_HOVER)})
@@ -123,6 +125,7 @@ func define_toggles() -> void:
 		font_focus_color = c(ThemeColors.TEXT),
 		font_disabled_color = c(ThemeColors.TEXT_SOFT),
 		h_separation = SPACE_2,
+		icon_max_width = 0,
 	}
 	var on := _switch(true, 1.0)
 	var off := _switch(false, 1.0)
@@ -166,10 +169,11 @@ func define_toggles() -> void:
 	)
 
 
-## Sliders, progress bars and scroll bars: a pill track in the inset role, the fill and the
-## knob in the state role (lake shows state, C5).
+## Sliders, progress bars and scroll bars: a slider's pill track in the track role (3:1, so
+## the unfilled part still reads), the fill and the knob in the state role (lake shows
+## state, C5).
 func define_ranges() -> void:
-	var track := box(c(ThemeColors.SURFACE_INSET), RADIUS_PILL, 0, 3)
+	var track := box(c(ThemeColors.TRACK), RADIUS_PILL, 0, 3)
 	var fill := box(c(ThemeColors.STATE), RADIUS_PILL, 0, 3)
 	var slider := {
 		slider = track,
@@ -180,7 +184,7 @@ func define_ranges() -> void:
 		grabber_disabled = _knob(ThemeColors.TEXT_SOFT, 0.5),
 	}
 	define_style("HSlider", slider)
-	var vertical_track := box(c(ThemeColors.SURFACE_INSET), RADIUS_PILL, 3, 0)
+	var vertical_track := box(c(ThemeColors.TRACK), RADIUS_PILL, 3, 0)
 	define_style("VSlider", inherit(slider, {slider = vertical_track}))
 	define_style(
 		"ProgressBar",
@@ -310,9 +314,9 @@ func define_popups() -> void:
 	)
 
 
-## Tree and ItemList: an inset well; selection is the state fill with its on-colour text.
+## Tree and ItemList: an inset well; selection is the selected fill with its on-colour text.
 func define_lists() -> void:
-	var selected := box(c(ThemeColors.STATE), RADIUS_CHIP)
+	var selected := box(c(ThemeColors.SELECTED), RADIUS_CHIP)
 	var hovered := box(c(ThemeColors.SURFACE_HOVER), RADIUS_CHIP)
 	var well := box(c(ThemeColors.SURFACE_INSET), RADIUS_CONTROL, SPACE_2, SPACE_2)
 	var empty := {type = "stylebox_empty"}
@@ -328,7 +332,7 @@ func define_lists() -> void:
 			hovered_selected_focus = selected,
 			font_color = c(ThemeColors.TEXT),
 			font_hovered_color = c(ThemeColors.TEXT),
-			font_selected_color = c(ThemeColors.ON_STATE),
+			font_selected_color = c(ThemeColors.ON_SELECTED),
 			guide_color = Color(c(ThemeColors.TEXT_SOFT), 0.3),
 			relationship_line_color = Color(c(ThemeColors.TEXT_SOFT), 0.5),
 			parent_hl_line_color = c(ThemeColors.TEXT_SOFT),
@@ -347,8 +351,8 @@ func define_lists() -> void:
 			hovered_selected_focus = selected,
 			font_color = c(ThemeColors.TEXT),
 			font_hovered_color = c(ThemeColors.TEXT),
-			font_selected_color = c(ThemeColors.ON_STATE),
-			font_hovered_selected_color = c(ThemeColors.ON_STATE),
+			font_selected_color = c(ThemeColors.ON_SELECTED),
+			font_hovered_selected_color = c(ThemeColors.ON_SELECTED),
 		}
 	)
 
@@ -368,27 +372,22 @@ func check_icon(checked: bool, radio: bool, alpha: float) -> ImageTexture:
 	return svg_icon(20, 20, body)
 
 
-## The 40x22 switch: on is a state-filled track with an on-colour knob at the right; off an
-## inset track with a soft outline and knob at the left.
+## The 36x20 switch, a filled pill in both states so each holds 3:1 against the surface:
+## on is the state role with the knob at the right, off the track role with the knob at the
+## left. The knob is the on-state colour either way, so only its place and the track change.
 func _switch(checked: bool, alpha: float) -> ImageTexture:
-	if checked:
-		var track := '<rect x="1" y="1" width="38" height="20" rx="10" %s/>'
-		var knob := '<circle cx="29" cy="11" r="7" %s/>'
-		return svg_icon(
-			40,
-			22,
-			(
-				track % paint("fill", ThemeColors.STATE, alpha)
-				+ knob % paint("fill", ThemeColors.ON_STATE, alpha)
-			)
+	var track_role := ThemeColors.STATE if checked else ThemeColors.TRACK
+	var track := '<rect x="0" y="0" width="36" height="20" rx="10" %s/>'
+	var knob := '<circle cx="%d" cy="10" r="7" %s/>'
+	var knob_x := 26 if checked else 10
+	return svg_icon(
+		36,
+		20,
+		(
+			track % paint("fill", track_role, alpha)
+			+ knob % [knob_x, paint("fill", ThemeColors.ON_STATE, alpha)]
 		)
-	var outline := '<rect x="1.75" y="1.75" width="36.5" height="18.5" rx="9.25" %s %s'
-	var colours := [
-		paint("fill", ThemeColors.SURFACE_INSET, alpha),
-		paint("stroke", ThemeColors.TEXT_SOFT, alpha),
-	]
-	var knob := '<circle cx="11" cy="11" r="6" %s/>' % paint("fill", ThemeColors.TEXT_SOFT, alpha)
-	return svg_icon(40, 22, outline % colours + ' stroke-width="1.5"/>' + knob)
+	)
 
 
 ## The 20 px slider knob: a raised disc with a ring in `role`.

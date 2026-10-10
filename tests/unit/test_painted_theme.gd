@@ -2,9 +2,10 @@ extends GutTest
 
 ## The Painted Table themes (themes/painted_theme_base.gd) against docs/UI_TASTE.md: every role
 ## on both leaves, contrast for every text pair at the sizes used (C6: 4.5:1 for text, 3:1 for
-## focus rings), glass checked composited over white and over black (C2), the quiet default
-## Button with the fill only on Primary (C5, G2), the type scale (T1-T4) and tinted neutrals
-## (C3).
+## focus rings, slider tracks and switches), glass checked composited over white and over
+## black (C2), focus in the state hue, glass selection darker than the board, the quiet
+## default Button with the fill only on Primary (C5, G2), the type scale (T1-T4) and tinted
+## neutrals (C3).
 
 const TEXT := 4.5
 const GLYPH := 3.0
@@ -68,6 +69,78 @@ func test_every_interactive_type_has_a_drawn_focus_ring() -> void:
 		assert_not_null(focus, "%s focus is a drawn ring, not StyleBoxEmpty (I1)" % type)
 
 
+## Focus is a state: lake on paper, lake_light on glass. A persimmon ring read as a
+## validation error and as a second primary.
+func test_focus_is_the_state_hue_never_the_fill() -> void:
+	for theme: Theme in [paper, glass]:
+		var roles := ThemeColors.PAPER_ROLES if theme == paper else ThemeColors.GLASS_ROLES
+		var focus: Color = roles[ThemeColors.FOCUS]
+		assert_ne(focus, roles[ThemeColors.ACCENT], "focus is not the primary fill")
+		assert_eq(focus, roles[ThemeColors.STATE], "focus takes the state hue")
+		for type in ["Button", "Primary", "LineEdit", "Card"]:
+			var ring := theme.get_stylebox("focus", type) as StyleBoxFlat
+			assert_eq(ring.border_color, focus, "%s ring" % type)
+	var on_paper := _contrast(ThemeColors.PAPER_ROLES[ThemeColors.FOCUS], ThemeColors.PAPER)
+	assert_gt(on_paper, 5.5, "the paper ring is about 6:1 on paper: %.2f" % on_paper)
+	var on_sky := _contrast(ThemeColors.PAPER_ROLES[ThemeColors.FOCUS], ThemeColors.SKY_TOP)
+	assert_gt(on_sky, GLYPH, "the paper ring on the title's sky: %.2f" % on_sky)
+	# A glass button can sit on the bare board: its ring carries a dark halo, outside only.
+	var glass_ring := glass.get_stylebox("focus", "Button") as StyleBoxFlat
+	assert_gt(glass_ring.shadow_size, 0, "the glass ring has a halo")
+	assert_false(glass_ring.draw_center, "the halo never fills over the control")
+
+
+## The unfilled slider track and both switch states hold 3:1 on the surfaces they sit on
+## (sheets, raised rows, hovered rows), and the knob holds 3:1 on either track.
+func test_tracks_and_switches_hold_glyph_contrast() -> void:
+	for roles: Dictionary in [ThemeColors.PAPER_ROLES, ThemeColors.GLASS_ROLES]:
+		var grounds := [WHITE] if roles == ThemeColors.PAPER_ROLES else [WHITE, BLACK]
+		for ground: Color in grounds:
+			for surface in [
+				ThemeColors.SURFACE, ThemeColors.SURFACE_RAISED, ThemeColors.SURFACE_HOVER
+			]:
+				var back := _over(roles[surface], ground)
+				for track in [ThemeColors.TRACK, ThemeColors.STATE]:
+					var ratio := _contrast(roles[track], back)
+					assert_gt(ratio, GLYPH, "%s on %s: %.2f" % [track, surface, ratio])
+		for track in [ThemeColors.TRACK, ThemeColors.STATE]:
+			var knob := _contrast(roles[ThemeColors.ON_STATE], roles[track])
+			assert_gt(knob, GLYPH, "switch knob on %s: %.2f" % [track, knob])
+	for theme: Theme in [paper, glass]:
+		var roles := ThemeColors.PAPER_ROLES if theme == paper else ThemeColors.GLASS_ROLES
+		var slider := theme.get_stylebox("slider", "HSlider") as StyleBoxFlat
+		assert_eq(slider.bg_color, roles[ThemeColors.TRACK], "the slider track is the track role")
+		assert_eq(theme.get_constant("icon_max_width", "CheckButton"), 0, "no 20 px cap")
+		var switch := theme.get_icon("unchecked", "CheckButton")
+		assert_eq(switch.get_size(), Vector2(36, 20), "the switch is 36x20")
+
+
+## Selected tiles and rows fill with SELECTED. On glass that is deep lake, darker than the
+## board, with its lake_light ring at 3:1 around it, not a lake_light fill brighter than
+## anything on the table.
+func test_selected_fills_stay_under_the_board() -> void:
+	for theme: Theme in [paper, glass]:
+		var roles := ThemeColors.PAPER_ROLES if theme == paper else ThemeColors.GLASS_ROLES
+		var picked := theme.get_stylebox("pressed", "Tile") as StyleBoxFlat
+		assert_eq(picked.bg_color, roles[ThemeColors.SELECTED])
+		assert_eq(picked.border_color, roles[ThemeColors.STATE])
+		assert_eq(theme.get_color("font_pressed_color", "Tile"), roles[ThemeColors.ON_SELECTED])
+		var row := theme.get_stylebox("selected", "ItemList") as StyleBoxFlat
+		assert_eq(row.bg_color, roles[ThemeColors.SELECTED])
+	var glass_fill: Color = ThemeColors.GLASS_ROLES[ThemeColors.SELECTED]
+	assert_lt(_luminance(glass_fill), 0.25, "a glass selected fill stays under the board's 0.40")
+	var ring := _contrast(ThemeColors.GLASS_ROLES[ThemeColors.STATE], glass_fill)
+	assert_gt(ring, GLYPH, "the glass selected ring on its fill: %.2f" % ring)
+
+
+func test_the_room_code_reads_aloud() -> void:
+	var code := paper.get_font("font", "Code") as FontVariation
+	assert_eq(code.base_font, load("res://assets/fonts/Inter-VariableFont_opsz,wght.ttf"))
+	var ts := TextServerManager.get_primary_interface()
+	for feature in ["tnum", "zero"]:
+		assert_eq(code.opentype_features.get(ts.name_to_tag(feature)), 1, feature)
+
+
 func test_type_scale() -> void:
 	assert_eq(paper.default_font_size, 16, "the default Label is body 16 (T4)")
 	assert_eq(paper.get_font_size("font_size", "Label"), 16)
@@ -108,6 +181,8 @@ func _check_pairs(roles: Dictionary, grounds: Array) -> void:
 		[ThemeColors.ON_STATE, ThemeColors.STATE],
 		[ThemeColors.ON_STATE, ThemeColors.STATE_HOVER],
 		[ThemeColors.ON_STATE, ThemeColors.STATE_PRESS],
+		[ThemeColors.ON_SELECTED, ThemeColors.SELECTED],
+		[ThemeColors.ON_SELECTED, ThemeColors.SELECTED_HOVER],
 		[ThemeColors.ON_DANGER, ThemeColors.DANGER_FILL],
 	]
 	for pair: Array in fills:

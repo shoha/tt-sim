@@ -6,7 +6,11 @@ extends HFlowContainer
 ## multi_select] makes every tile an independent toggle. Signals fire only for
 ## user clicks; [method select] and [method set_tile_on] are silent so panes can
 ## sync from state without feedback. Set [member columns] to fill the row width
-## with a fixed number of tiles per line.
+## with up to that many tiles per line. Labels are never clipped mid-letter
+## (docs/UI_TASTE.md T6): a row too narrow for its longest label at that count
+## takes fewer, balanced columns (six landforms become two lines of three), and a
+## label that still does not fit ends in an ellipsis with the full name in its
+## tooltip.
 
 signal selection_changed(id: StringName)
 signal tile_toggled(id: StringName, on: bool)
@@ -17,12 +21,16 @@ signal tile_toggled(id: StringName, on: bool)
 signal tile_hovered(id: StringName)
 signal tile_unhovered(id: StringName)
 
+## The host's own tooltip, kept so a truncated label can put its full name in front.
+const TOOLTIP_META := &"tile_tooltip"
+
 @export var multi_select: bool = false
 @export var tile_min_size := Vector2(64, 56)
 
 ## Tiles per line when greater than zero: every tile is widened to an equal
-## share of the row, so the row wraps at exactly this count and fills its
-## width. Zero keeps the natural flow (tile_min_size widths).
+## share of the row, so the row wraps at this count (fewer when the longest
+## label would not fit, see fitted_columns) and fills its width. Zero keeps the
+## natural flow (tile_min_size widths).
 @export var columns: int = 0:
 	set(value):
 		columns = value
@@ -66,6 +74,7 @@ func add_tile(
 	tile.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tile.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
 	tile.tooltip_text = tooltip
+	tile.set_meta(TOOLTIP_META, tooltip)
 	tile.focus_mode = Control.FOCUS_NONE
 	tile.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	tile.set_meta("ui_silent", true)
@@ -148,22 +157,68 @@ func _on_tile_hover(id: StringName, entered: bool) -> void:
 	_tweens[id] = UiMotion.scale_to(tile, _tweens.get(id), target, duration, trans)
 
 
-## Size every tile to an equal share of the row so exactly `columns` fit per
-## line. Setting an unchanged custom_minimum_size is a no-op in Godot, so the
-## resized -> fit -> relayout path settles without looping.
+## The column count for `count` tiles in a row `width` wide with `gap` between
+## tiles, when the widest tile needs `need` px: `wanted`, or fewer when a share
+## would be narrower than `need`, then balanced so no line is left nearly empty
+## (six that fit five per line become three and three). Never fewer than two
+## (one when one is wanted): a picker of one long column is worse than an
+## ellipsis.
+static func fitted_columns(wanted: int, count: int, width: float, gap: float, need: float) -> int:
+	var fit := wanted
+	while fit > 1 and floorf((width - gap * float(fit - 1)) / float(fit)) < need:
+		fit -= 1
+	fit = maxi(fit, mini(wanted, 2))
+	if fit < wanted and count > fit:
+		var lines := ceili(float(count) / float(fit))
+		fit = ceili(float(count) / float(lines))
+	return fit
+
+
+## Size every tile to an equal share of the row so `columns` (or the fitted
+## count) fit per line. Setting an unchanged custom_minimum_size is a no-op in
+## Godot, so the resized -> fit -> relayout path settles without looping.
 func _fit_columns() -> void:
 	if columns <= 0:
 		for id in _tiles:
-			_tiles[id].clip_text = false
-			_tiles[id].custom_minimum_size = tile_min_size
+			var tile: Button = _tiles[id]
+			tile.clip_text = false
+			tile.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+			tile.tooltip_text = tile.get_meta(TOOLTIP_META, "")
+			tile.custom_minimum_size = tile_min_size
 		return
-	if size.x <= 0.0:
+	if size.x <= 0.0 or _tiles.is_empty():
 		return
 	var gap := float(get_theme_constant("h_separation"))
-	var width := floorf((size.x - gap * float(columns - 1)) / float(columns))
+	var need := 0.0
+	for id in _tiles:
+		need = maxf(need, _natural_width(_tiles[id]))
+	var count := fitted_columns(columns, _tiles.size(), size.x, gap, need)
+	var width := floorf((size.x - gap * float(count - 1)) / float(count))
 	for id in _tiles:
 		var tile: Button = _tiles[id]
 		tile.custom_minimum_size = Vector2(width, tile_min_size.y)
 		# A label wider than its share would widen the tile and break the wrap
-		# count; clip instead. Hosts keep labels short enough to fit.
+		# count; it ends in an ellipsis instead, with its full name in the tooltip.
 		tile.clip_text = true
+		tile.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		var tooltip: String = tile.get_meta(TOOLTIP_META, "")
+		if _natural_width(tile) > width and not tooltip.contains(tile.text):
+			tooltip = tile.text if tooltip.is_empty() else "%s\n%s" % [tile.text, tooltip]
+		tile.tooltip_text = tooltip
+
+
+## The width `tile` needs to show its label and icon whole: the wider of the two
+## plus the Tile style's side padding.
+func _natural_width(tile: Button) -> float:
+	var font := tile.get_theme_font(&"font")
+	var font_size := tile.get_theme_font_size(&"font_size")
+	var text_width := font.get_string_size(tile.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	var icon_width := 0.0
+	if tile.icon:
+		var cap := tile.get_theme_constant(&"icon_max_width")
+		icon_width = float(tile.icon.get_width())
+		if cap > 0:
+			icon_width = minf(icon_width, float(cap))
+	var style := tile.get_theme_stylebox(&"normal")
+	var sides := style.get_margin(SIDE_LEFT) + style.get_margin(SIDE_RIGHT) if style else 0.0
+	return ceilf(maxf(text_width, icon_width) + sides)

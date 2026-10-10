@@ -24,7 +24,7 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="PanelContainer" type="PanelContainer" parent="CenterContainer"]
-custom_minimum_size = Vector2(520, 400)
+custom_minimum_size = Vector2(600, 400)
 layout_mode = 2
 
 [node name="MarginContainer" type="MarginContainer" parent="CenterContainer/PanelContainer"]
@@ -79,7 +79,7 @@ theme_type_variation = &"KeyChip"
 [node name="RoomCodeValue" type="Label" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/RoomCodeSection/RoomCodeRow/RoomCodeChip"]
 unique_name_in_owner = true
 layout_mode = 2
-theme_type_variation = &"H2"
+theme_type_variation = &"Code"
 text = "------"
 
 [node name="CopyCodeButton" type="Button" parent="CenterContainer/PanelContainer/MarginContainer/VBoxContainer/RoomCodeSection/RoomCodeRow"]

@@ -1,6 +1,6 @@
 {
  "out_dir": "render_jobs/ui_tour",
- "timeout_s": 480,
+ "timeout_s": 540,
  "hang_s": 90,
  "steps": [
   {"op": "wait_title"},
@@ -17,6 +17,10 @@
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "window", "size": "{value}"},
    {"op": "wait", "s": 2.0},
    {"op": "capture", "name": "{value}_title", "desc": "{value}: the title screen with the test map Mossy Hollow in the level list"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "focus", "target": "title_join"},
+   {"op": "wait", "s": 0.4},
+   {"op": "capture", "name": "{value}_focus_paper", "desc": "{value}: keyboard focus on a quiet paper button (the title's Join Game)"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "blur"},
 
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "settings", "section": "Audio"},
    {"op": "wait", "s": 1.2},
@@ -74,6 +78,10 @@
    {"op": "capture", "name": "{value}_play_drawer", "desc": "{value}: the play HUD on the test map with the Visuals drawer open on Sun"},
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "drawer", "which": "visuals", "open": false},
    {"op": "wait", "s": 0.8},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "focus", "target": "add_token"},
+   {"op": "wait", "s": 0.4},
+   {"op": "capture", "name": "{value}_focus_glass", "desc": "{value}: keyboard focus on a quiet glass button (the play HUD's Add Token)"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "blur"},
 
    {"op": "eval", "expr": "push_state(4)"},
    {"op": "wait", "s": 1.2},
@@ -103,6 +111,24 @@
    {"op": "capture", "name": "{value}_avatar_builder", "desc": "{value}: the avatar builder over play on a preset, Pose pane"},
    {"op": "call", "script": "res://tools/render_jobs/probes/avatar_builder.gd", "action": "close"},
    {"op": "wait", "s": 1.0},
+
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "drawer", "which": "visuals", "pane": "sun"},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "dusk", "hour": 19.0},
+   {"op": "wait", "s": 1.5},
+   {"op": "capture", "name": "{value}_dusk_play_drawer", "desc": "{value}: dusk (19:00 through the Sun pane): the play HUD with the Visuals drawer open on Sun over a dark board"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "drawer", "which": "visuals", "open": false},
+   {"op": "wait", "s": 0.8},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "browser"},
+   {"op": "wait", "s": 1.5},
+   {"op": "capture", "name": "{value}_dusk_asset_browser", "desc": "{value}: dusk: the Add Token asset browser over play"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "browser", "open": false},
+   {"op": "wait", "s": 0.8},
+   {"op": "eval", "expr": "push_state(4)"},
+   {"op": "wait", "s": 1.2},
+   {"op": "capture", "name": "{value}_dusk_pause", "desc": "{value}: dusk: the pause menu over play"},
+   {"op": "eval", "expr": "pop_state()"},
+   {"op": "wait", "s": 0.5},
    {"op": "title"},
    {"op": "wait", "s": 1.0}
   ]},
@@ -113,7 +139,7 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "window", "size": "1920x1080"},
   {"op": "wait", "s": 1.0},
 
-  {"op": "index", "title": "UI tour", "intro": "Produced by tools/render_jobs/jobs/ui_tour.json with probes/ui_primitives.gd: every top screen at 1280x720 and 1920x1080 window sizes (names start with the size), for the tt-sim-ui-critic agent (docs/UI_TASTE.md). A 100 ft temperate forest map is saved as the test level _ui_tour_room (shown as Mossy Hollow) for authoring, play and the host lobby, and deleted at the end. The host lobby is shown without hosting, with a sample code and players. Last, one ultrawide probe capture."},
+  {"op": "index", "title": "UI tour", "intro": "Produced by tools/render_jobs/jobs/ui_tour.json with probes/ui_primitives.gd: every top screen at 1280x720 and 1920x1080 window sizes (names start with the size), for the tt-sim-ui-critic agent (docs/UI_TASTE.md). A 100 ft temperate forest map is saved as the test level _ui_tour_room (shown as Mossy Hollow) for authoring, play and the host lobby, and deleted at the end. The host lobby is shown without hosting, with a sample code and players. focus_paper and focus_glass show keyboard focus on a quiet button of each theme leaf; the dusk_ captures repeat the in-play screens with the time of day set to 19:00 through the Sun pane. Last, one ultrawide probe capture."},
   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "cleanup"}
  ]
 }

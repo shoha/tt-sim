@@ -36,6 +36,9 @@ const PAPER_INSET := Color("#F0E5CC")
 const PAPER_HOVER := Color("#F5ECD7")
 ## Decorative pencil borders only (1.78:1 on paper); it never carries meaning.
 const PAPER_EDGE := Color("#CDB68C")
+## The pencil edge pressed harder: an unfilled slider or switch track, 3:1 on every paper
+## surface it sits on (C6), where the edge itself would vanish.
+const PAPER_TRACK := Color("#978160")
 const INK := Color("#2B2335")
 const INK_SOFT := Color("#5C5066")
 const PERSIMMON := Color("#B4452A")
@@ -58,7 +61,9 @@ const GLASS_RAISED := Color("#332C40", 0.92)
 const GLASS_RIM := Color("#FAF3E3", 0.14)
 const CHALK := Color("#FAF3E3")
 const CHALK_SOFT := Color("#CFC5D6")
-## The glass primary fill (ink text on it), focus ring and inline action.
+## An unfilled track on glass: 3:1 on glass over a white or a black board.
+const GLASS_TRACK := Color("#958DA0")
+## The glass primary fill (ink text on it) and inline action.
 const EMBER := Color("#F08C5C")
 ## Ember deepened at the same hue: ink on these stays above 4.5:1 (5.5 and 4.6).
 const EMBER_HOVER := Color("#E8814F")
@@ -91,18 +96,28 @@ const SURFACE_INSET := &"surface_inset"
 const SURFACE_HOVER := &"surface_hover"
 const SURFACE_PRESS := &"surface_press"
 const EDGE := &"edge"
+## An unfilled slider or switch track: unlike EDGE it carries meaning, so it holds 3:1.
+const TRACK := &"track"
 const TEXT := &"text"
 const TEXT_SOFT := &"text_soft"
-## Warm means do: the primary action's fill, focus rings, the unsaved dot.
+## Warm means do: the primary action's fill and the unsaved dot. Never focus (FOCUS).
 const ACCENT := &"accent"
 const ACCENT_HOVER := &"accent_hover"
 const ACCENT_PRESS := &"accent_press"
 const ON_ACCENT := &"on_accent"
-## Cool means is: selection, on-states, the rail indicator, a value changed from default.
+## Cool means is: on-states, the rail indicator, a value changed from default, and on glass
+## the text and lines of state (the selected ring). Small glyphs (checks, switches) fill
+## with it; a large selected surface fills with SELECTED instead.
 const STATE := &"state"
 const STATE_HOVER := &"state_hover"
 const STATE_PRESS := &"state_press"
 const ON_STATE := &"on_state"
+## A selected tile or list row. Lake on both leaves: on glass lake_light as a fill outshone
+## the board (a 0.49 luminance tile over a board peaking at 0.40), so glass fills deep lake
+## with chalk text and draws its STATE ring around it.
+const SELECTED := &"selected"
+const SELECTED_HOVER := &"selected_hover"
+const ON_SELECTED := &"on_selected"
 const SUCCESS := &"success"
 ## The warning chip's fill (ink text on it); on glass it also reads as text.
 const WARNING := &"warning"
@@ -110,6 +125,9 @@ const WARNING := &"warning"
 const DANGER := &"danger"
 const DANGER_FILL := &"danger_fill"
 const ON_DANGER := &"on_danger"
+## The keyboard focus ring. Focus is a state, so it is lake (about 6:1 on paper) or
+## lake_light on glass, never a control's fill hue: a persimmon ring read as a validation
+## error and as a second primary.
 const FOCUS := &"focus"
 const SHADOW := &"shadow"
 ## A solid backdrop that replaces the table rather than dims it (the lobbies).
@@ -122,6 +140,7 @@ const PAPER_ROLES := {
 	SURFACE_HOVER: PAPER_HOVER,
 	SURFACE_PRESS: PAPER_INSET,
 	EDGE: PAPER_EDGE,
+	TRACK: PAPER_TRACK,
 	TEXT: INK,
 	TEXT_SOFT: INK_SOFT,
 	ACCENT: PERSIMMON,
@@ -132,12 +151,15 @@ const PAPER_ROLES := {
 	STATE_HOVER: LAKE_HOVER,
 	STATE_PRESS: LAKE_PRESS,
 	ON_STATE: PAPER,
+	SELECTED: LAKE,
+	SELECTED_HOVER: LAKE_HOVER,
+	ON_SELECTED: PAPER,
 	SUCCESS: MOSS,
 	WARNING: OCHRE,
 	DANGER: MADDER,
 	DANGER_FILL: MADDER,
 	ON_DANGER: PAPER,
-	FOCUS: PERSIMMON,
+	FOCUS: LAKE,
 	SHADOW: SHADOW_REST,
 	BACKDROP: SKY_TOP,
 }
@@ -149,6 +171,7 @@ const GLASS_ROLES := {
 	SURFACE_HOVER: Color("#2A2436", 0.94),
 	SURFACE_PRESS: Color("#211C2C", 0.96),
 	EDGE: GLASS_RIM,
+	TRACK: GLASS_TRACK,
 	TEXT: CHALK,
 	TEXT_SOFT: CHALK_SOFT,
 	ACCENT: EMBER,
@@ -159,12 +182,15 @@ const GLASS_ROLES := {
 	STATE_HOVER: LAKE_LIGHT_HOVER,
 	STATE_PRESS: LAKE_LIGHT_PRESS,
 	ON_STATE: INK,
+	SELECTED: LAKE,
+	SELECTED_HOVER: LAKE_HOVER,
+	ON_SELECTED: CHALK,
 	SUCCESS: MOSS_LIGHT,
 	WARNING: OCHRE_LIGHT,
 	DANGER: MADDER_LIGHT,
 	DANGER_FILL: MADDER,
 	ON_DANGER: CHALK,
-	FOCUS: EMBER,
+	FOCUS: LAKE_LIGHT,
 	SHADOW: SHADOW_GLASS,
 	BACKDROP: Color("#1E1A28"),
 }

@@ -33,10 +33,13 @@ and each theme maps them to its own token (`PAPER_ROLES`, `GLASS_ROLES`):
 | `SURFACE`, `SURFACE_RAISED`, `SURFACE_INSET` | paper, raised, inset | glass, glass raised | sheets, secondary buttons, fields and tracks |
 | `SURFACE_HOVER`, `SURFACE_PRESS` | deeper paper steps | deeper glass steps | hover and press washes (only ever deeper) |
 | `TEXT`, `TEXT_SOFT` | ink, ink_soft | chalk, chalk_soft | text and captions (solid, never dimmed) |
-| `ACCENT` (+ `_HOVER`, `_PRESS`), `ON_ACCENT` | persimmon, paper text | ember, ink text | the one primary fill per screen, focus ring |
-| `STATE` (+ steps), `ON_STATE` | lake, paper text | lake_light, ink text | selection, on-states, rail indicator, a changed value |
+| `ACCENT` (+ `_HOVER`, `_PRESS`), `ON_ACCENT` | persimmon, paper text | ember, ink text | the one primary fill per screen, the unsaved dot |
+| `STATE` (+ steps), `ON_STATE` | lake, paper text | lake_light, ink text | on-states, checks and switches, rail indicator, a changed value; on glass the text and lines of state |
+| `SELECTED` (+ `_HOVER`), `ON_SELECTED` | lake, paper text | lake, chalk text | a selected tile or list row (glass adds a lake_light ring: a lake_light fill outshone the board) |
+| `FOCUS` | lake (about 6:1 on paper) | lake_light | the keyboard focus ring: a state, never a control's fill hue |
 | `SUCCESS`, `WARNING`, `DANGER`, `DANGER_FILL` | moss, ochre, madder | light variants; madder fill | text and icons; madder fills only a danger confirm |
-| `EDGE`, `SHADOW`, `BACKDROP` | pencil edge, ink 16%, sky | top rim, plum-black 25%, glass | decoration, shadows, a solid backdrop |
+| `TRACK` | pencil pressed hard `#978160` | `#958DA0` | an unfilled slider or switch track, 3:1 on every surface |
+| `EDGE`, `SHADOW`, `BACKDROP` | pencil edge, ink 16%, sky | top rim, plum-black 25%, glass | decoration, shadows (ink-tinted, never brown or black), a solid backdrop |
 
 Prefer a theme variation (`Caption`, `BodyState`, `Primary` ...) over reading a role. Read a
 role only to draw or tint by hand, through the control being drawn:
@@ -47,7 +50,7 @@ role only to draw or tint by hand, through the control being drawn:
 
 | Type | Variations |
 |---|---|
-| `Label` (default: Inter body 16, text) | `Wordmark` (Fraunces 56), `Title` / `H1` (Fraunces 26), `Heading` / `H2` / `SectionHeader` / `PanelHeader` (Fraunces 19), `Eyebrow` (Fraunces italic 19), `H3` (Inter 16 semibold), `Body`, `Caption` / `RailLabel` (14, soft), `BodyState`, `CaptionState` |
+| `Label` (default: Inter body 16, text) | `Wordmark` (Fraunces 56), `Title` / `H1` (Fraunces 26), `Heading` / `H2` / `SectionHeader` / `PanelHeader` (Fraunces 19), `Eyebrow` (Fraunces italic 19), `H3` (Inter 16 semibold), `Body`, `Caption` / `RailLabel` (14, soft), `BodyState`, `CaptionState`, `Code` (Inter 19 semibold, tabular figures, slashed zero, tailed l: a code read aloud) |
 | `Button` (default: the quiet secondary) | `Primary` (one per screen), `Danger` (danger confirm only), `Ghost` (no fill, soft text), `Secondary` (alias of the default), `IconButton`, `IconButtonActive`, `Tile`, `Card`, `FoldoutHeader` |
 | `PanelContainer` (default: a `Sheet`) | `Sheet`, `Inset` / `PanelInset`, `PanelElevated`, `PanelBordered`, `KeyChip`; `Panel`: `Badge` (the unsaved dot) |
 
@@ -233,6 +236,7 @@ theme_type_variation = &"BoxContainerSpaced"
 | ------------------ | -------------------- | ---------------------------------- |
 | (default)          | 8px all sides        | General-purpose inner padding      |
 | `TabContentMargin` | 16px h / 12px v      | Content area inside TabContainer tabs |
+| `CardText`         | 8px h and bottom, 4px top | A card's name and caption, inside the card's 4px inset (12px from its edge) |
 
 Use `TabContentMargin` on the `MarginContainer` that wraps content inside each tab:
 

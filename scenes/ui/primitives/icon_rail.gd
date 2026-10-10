@@ -16,6 +16,9 @@ signal selection_changed(id: StringName)
 
 const ITEM_SIZE := 36.0
 const ITEM_GAP := 4
+## Between the labelled items of a horizontal rail (the Settings tabs): the labels are
+## wider than their icons, so ITEM_GAP left about 4 px between two words.
+const LABEL_GAP := 24
 const INDICATOR_THICKNESS := 3.0
 
 ## Show each item's tooltip text as a caption under its icon.
@@ -40,7 +43,8 @@ var _indicator_pos: float = -1.0:
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_theme_constant_override("separation", ITEM_GAP)
+	var gap := LABEL_GAP if show_labels and not vertical else ITEM_GAP
+	add_theme_constant_override("separation", gap)
 	sort_children.connect(_on_children_sorted)
 
 
