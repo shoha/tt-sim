@@ -25,9 +25,13 @@ const DUPLICATE_OFFSET_FALLBACK := 1.5
 var active_level_data: LevelData = null
 var loaded_map_instance: Node3D = null
 ## The authored map document of the loaded level (map.ttmap), or null when it has none. Its
-## scatter and props rows are merged into LevelMap's AuthoredScatter at load; the document
-## keeps them apart, and holds the erase and biome masks, for the authoring tools.
+## scatter and props rows load into LevelMap's AuthoredScatter and AuthoredProps, kept apart
+## so the table's live edits can edit them (MapSourceLoader.keep_props_apart); the document
+## holds the erase and biome masks too. Live edits change this copy, never the map file.
 var loaded_map_document: MapDocument = null
+## The table's live map edits, over loaded_map_instance and loaded_map_document, or null when
+## no map is out or it has no document (LiveEdits.refusal() says why).
+var live_edits: LiveEdits = null
 var is_editor_preview: bool = false  # True when playing a level from the level editor
 
 ## Read-only view onto TokenSpawner's storage (placement_id -> BoardToken) so
@@ -572,6 +576,27 @@ func clear_level_tokens() -> void:
 ## scenes/root.gd calls this directly.
 func clear_level_map() -> void:
 	_level_loader.clear_level_map()
+
+
+## Starts the table's live map edits over the installed map: LevelPlayLoader calls it once
+## the map is in, on every peer. A map with no document gets none (LiveEdits.refusal()).
+func start_live_edits() -> void:
+	stop_live_edits()
+	if loaded_map_document == null or not is_instance_valid(loaded_map_instance):
+		return
+	live_edits = LiveEdits.create(
+		loaded_map_instance, loaded_map_document, not NetworkManager.is_client()
+	)
+	add_child(live_edits)
+
+
+## Ends the table's live edits (the map is going): they stop taking ops at once.
+func stop_live_edits() -> void:
+	if is_instance_valid(live_edits):
+		if live_edits.get_parent() == self:
+			remove_child(live_edits)
+		live_edits.queue_free()
+	live_edits = null
 
 
 ## Clear everything from the current level

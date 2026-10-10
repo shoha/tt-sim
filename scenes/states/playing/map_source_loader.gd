@@ -52,6 +52,12 @@ var foliage_overrides: Dictionary = {}
 ## fit_dressing_ground_async() settles the scatter node's rows onto the sampled ground, and
 ## props, bedded on the GLB's collision when placed, must not move with them.
 var separate_props: bool = false
+## Play of a map built from a document keeps it editable for the table's live edits
+## (LiveEdits, a play-side AuthoringEditor): props in their own node and both scatter nodes
+## made even empty, as separate_props does, at the cost of the props' own MultiMeshes. The
+## water and crossing nodes stay as play makes them; an edit that needs one makes it
+## (AuthoredWater.refresh_map, AuthoredCrossings.of_map).
+var keep_props_apart: bool = false
 ## func() -> bool: true when a newer load or a reset replaced this one while it waited;
 ## everything built is freed and the load returns null.
 var is_superseded: Callable = func() -> bool: return false
@@ -79,7 +85,7 @@ func load_async(glb_path: String, document_path: String) -> Node3D:
 	var cells := {}
 	if document_path != "":
 		var work := {}
-		var separate := separate_props
+		var separate := _apart()
 		var task := WorkerThreadPool.add_task(
 			func() -> void: read_document_work(document_path, separate, work),
 			false,
@@ -109,8 +115,13 @@ func build_async(glb_path: String, doc: MapDocument) -> Node3D:
 	document = doc
 	var cells := {}
 	if doc != null:
-		cells = cells_of_document(doc, props_apart(doc, separate_props))
+		cells = cells_of_document(doc, props_apart(doc, _apart()))
 	return await _build_async(glb_path, cells)
+
+
+## True when props go in their own node and both scatter nodes are made even empty.
+func _apart() -> bool:
+	return separate_props or keep_props_apart
 
 
 func _build_async(glb_path: String, cells: Dictionary) -> Node3D:
@@ -145,11 +156,11 @@ func _build_async(glb_path: String, cells: Dictionary) -> Node3D:
 		add_authored_crossings(root, document, separate_props)
 
 	var groups: Array = [[SCATTER_NODE, cells.get(SCATTER_NODE, {})]]
-	if separate_props or cells.has(PROPS_NODE):
+	if _apart() or cells.has(PROPS_NODE):
 		groups.append([PROPS_NODE, cells.get(PROPS_NODE, {})])
 	for group in groups:
 		var rows_by_cell: Dictionary = group[1]
-		if rows_by_cell.is_empty() and not separate_props:
+		if rows_by_cell.is_empty() and not _apart():
 			continue
 		var scatter := AuthoredScatter.create(PaletteLibrary.DEFAULT_ROOT, foliage_overrides)
 		scatter.name = group[0]

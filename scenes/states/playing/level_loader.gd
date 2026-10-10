@@ -246,7 +246,8 @@ func _play_level_async(level_data: LevelData) -> void:
 ## MapDownloadCoordinator finishes the load once every file has arrived. A host missing
 ## its GLB fails; a host missing only its document loads the GLB and says so.
 func _load_level_map_async(level_data: LevelData) -> bool:
-	# Remove previous level map if exists
+	# Remove previous level map if exists, its live edits first
+	_level_play_controller.stop_live_edits()
 	if is_instance_valid(_level_play_controller.loaded_map_instance):
 		_level_play_controller.loaded_map_instance.queue_free()
 		_level_play_controller.loaded_map_instance = null
@@ -351,6 +352,8 @@ func load_map_sources_async(glb_path: String, document_path: String) -> Node3D:
 	loader.light_intensity_scale = _get_light_intensity_scale()
 	loader.foliage_overrides = _get_foliage_overrides()
 	loader.is_superseded = func() -> bool: return _superseded(generation)
+	# Every peer builds a document's map the same editable way, for the table's live edits.
+	loader.keep_props_apart = document_path != ""
 	var root := await loader.load_async(glb_path, document_path)
 	if root != null:
 		_level_play_controller.loaded_map_document = loader.document
@@ -379,7 +382,8 @@ func _report_document_problem(message: String) -> void:
 ## that no longer stand on the GLB set down onto it, the grid on the document's grid), any
 ## other GLB's for the grid alone (fit_grid_ground_async). The direct load awaits it under the
 ## loading screen; the client download path calls it without awaiting, so there the grid
-## keeps the fixed band for those frames.
+## keeps the fixed band for those frames. Last, the table's live edits start over the map
+## (LevelPlayController.start_live_edits), unless another level is queued to replace it.
 func _finalize_map_loading(map: Node3D) -> void:
 	# Check if game map is still valid (might have been freed during async loading)
 	if not is_instance_valid(_level_play_controller._game_map):
@@ -406,6 +410,12 @@ func _finalize_map_loading(map: Node3D) -> void:
 		)
 	else:
 		grid_ground_fit = await loader.fit_grid_ground_async(map, _level_play_controller._game_map)
+	if (
+		not _superseded(generation)
+		and _level_play_controller.loaded_map_instance == map
+		and _queued_level_data == null
+	):
+		_level_play_controller.start_live_edits()
 
 
 ## Applies the player's foliage density setting to a freshly loaded map, and tells them
@@ -588,6 +598,7 @@ func clear_level_map() -> void:
 	if _level_play_controller._game_map:
 		_level_play_controller._game_map.notify_map_clearing()
 
+	_level_play_controller.stop_live_edits()
 	if is_instance_valid(_level_play_controller.loaded_map_instance):
 		_level_play_controller.loaded_map_instance.queue_free()
 		_level_play_controller.loaded_map_instance = null

@@ -45,6 +45,8 @@ var _cells_on_map: Rect2i = Rect2i()
 var _ids: Dictionary = {}
 ## Row floats read so far, against MAX_OP_ROWS.
 var _floats: int = 0
+## The side the op carries: "after", or "before" for an undo (read()).
+var _side: String = "after"
 
 
 func _init(doc: MapDocument, palette_root: String = PaletteLibrary.DEFAULT_ROOT) -> void:
@@ -84,16 +86,17 @@ static func palette_ids(root: String) -> Dictionary:
 	return cached
 
 
-## The checked arguments of an op of `kind` (one of LiveEditCodec.KINDS), or [] with `problem`
-## set when refused.
-func read(kind: String, args: Array) -> Array:
+## The checked arguments of an op of `kind` (one of LiveEditCodec.KINDS) carrying the side
+## `redo` names (after, or before for an undo), or [] with `problem` set when refused.
+func read(kind: String, args: Array, redo: bool = true) -> Array:
 	if args.size() != ARITY[kind]:
 		_fail("%s takes %d arguments" % [kind, ARITY[kind]])
 		return []
+	_side = LiveEditCodec.side_name(redo)
 	var out: Array = []
 	match kind:
 		"mask":
-			out = [_mask_diff(args[0])]
+			out = [_mask_diff(args[0], redo)]
 		"surface":
 			out = [_surface_diff(args[0])]
 		"height":
@@ -130,8 +133,8 @@ func _unpack(packed: Variant, size: int) -> PackedByteArray:
 	return raw
 
 
-## The fields every stroke diff has: "blocks" (each {"rect", "after"}, `after` read by
-## `read_after` from the block's rectangle) and "rect" (the union).
+## The fields every stroke diff has: "blocks" (each {"rect", side}, the side the op carries
+## read by `read_after` from the block's rectangle) and "rect" (the union).
 func _blocks(diff: Variant, read_after: Callable) -> Dictionary:
 	if not diff is Dictionary or not diff.get("blocks") is Array:
 		_fail("a diff needs a block list")
@@ -147,10 +150,10 @@ func _blocks(diff: Variant, read_after: Callable) -> Dictionary:
 		var rect := _rect(block.get("rect") if block is Dictionary else null)
 		if problem != "":
 			return {}
-		var after: Variant = read_after.call(rect, block.get("after"))
+		var after: Variant = read_after.call(rect, block.get(_side))
 		if problem != "":
 			return {}
-		blocks.append({"rect": rect, "after": after})
+		blocks.append({"rect": rect, _side: after})
 	var whole := _rect(diff.get("rect")) if not blocks.is_empty() else Rect2i()
 	return {"blocks": blocks, "rect": whole}
 
@@ -179,27 +182,32 @@ static func _flag(value: Variant) -> bool:
 	return value is bool and value
 
 
-func _mask_diff(value: Variant) -> Dictionary:
+## A mask diff; `redo` false: its before side, whose slots name biomes of ids_before.
+func _mask_diff(value: Variant, redo: bool) -> Dictionary:
 	var biomes: Dictionary = _ids.biomes
 	var ids_after := _id_list(
 		value.get("ids_after") if value is Dictionary else null, biomes, MapDocument.MAX_BIOMES
 	)
-	var read_after := func(rect: Rect2i, after: Variant) -> Dictionary:
+	var ids_before := _id_list(
+		value.get("ids_before") if value is Dictionary else null, biomes, MapDocument.MAX_BIOMES
+	)
+	var slot_ids := ids_after if redo else ids_before
+	var read_side := func(rect: Rect2i, side: Variant) -> Dictionary:
 		var out := {}
-		if not after is Dictionary or (after as Dictionary).size() > MASKS.size():
+		if not side is Dictionary or (side as Dictionary).size() > MASKS.size():
 			_fail("a mask block is not a table of masks")
 			return out
-		for mask: Variant in after:
+		for mask: Variant in side:
 			var mask_name := _mask_name(mask)
 			if problem != "":
 				return out
-			var raw := _unpack(after[mask], rect.size.x * rect.size.y)
+			var raw := _unpack(side[mask], rect.size.x * rect.size.y)
 			if mask_name == MaskStroke.SLOTS and raw.size() > 0:
-				if int(Array(raw).max()) > ids_after.size():
+				if int(Array(raw).max()) > slot_ids.size():
 					_fail("a slot names a biome past the list")
-			out[mask_name] = after[mask]
+			out[mask_name] = side[mask]
 		return out
-	var out := _blocks(value, read_after)
+	var out := _blocks(value, read_side)
 	if problem != "":
 		return {}
 	var listed: Variant = value.get("allocated", [])
@@ -210,7 +218,7 @@ func _mask_diff(value: Variant) -> Dictionary:
 	for mask: Variant in listed:
 		allocated.append(_mask_name(mask))
 	out["ids_after"] = ids_after
-	out["ids_before"] = _id_list(value.get("ids_before"), biomes, MapDocument.MAX_BIOMES)
+	out["ids_before"] = ids_before
 	out["allocated"] = allocated
 	return out if problem == "" else {}
 
@@ -251,32 +259,33 @@ func _height_diff(value: Variant, may_be_empty: bool) -> Dictionary:
 	return out if problem == "" else {}
 
 
-## A sculpt (`water` false) or water edit record's after side.
+## A sculpt (`water` false) or water edit record's side the op carries (its *_after fields, or
+## *_before for an undo).
 func _record(value: Variant, water: bool) -> Dictionary:
 	if not value is Dictionary:
 		_fail("a record is not an object")
 		return {}
 	var out := {
-		"props_after": _cells(value.get("props_after")),
+		"props_" + _side: _cells(value.get("props_" + _side)),
 		"kept": _cells(value.get("kept")),
 		"crossings": {},
 	}
 	var followed: Variant = value.get("crossings")
 	if followed is Dictionary and not (followed as Dictionary).is_empty():
 		out.crossings = {
-			"after": _crossing_list(followed.get("after")), "area": _area(followed.get("area"))
+			_side: _crossing_list(followed.get(_side)), "area": _area(followed.get("area"))
 		}
 	elif not followed is Dictionary:
 		_fail("followed crossings are not an object")
 	if water:
-		out["water_after"] = _water_model(value.get("water_after"))
-		var dressing: Variant = value.get("dressing_after")
+		out["water_" + _side] = _water_model(value.get("water_" + _side))
+		var dressing: Variant = value.get("dressing_" + _side)
 		var size: Variant = dressing.get("size") if dressing is Dictionary else null
 		if size is int and size == 0:
-			out["dressing_after"] = {"data": PackedByteArray(), "size": 0}
+			out["dressing_" + _side] = {"data": PackedByteArray(), "size": 0}
 		elif size is int and size == _doc.sample_count() * DRESSING_BYTES:
 			_unpack(dressing.get("data"), size)
-			out["dressing_after"] = {"data": dressing.get("data"), "size": size}
+			out["dressing_" + _side] = {"data": dressing.get("data"), "size": size}
 		else:
 			_fail("the wet dressing is not the grid's size")
 		out["region"] = _rect(value.get("region"))

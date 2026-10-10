@@ -108,7 +108,9 @@ func test_document_only_map_gets_terrain_and_authored_lighting() -> void:
 	var root := await _loader.load_map_sources_async("", _write_document())
 	assert_not_null(root)
 	assert_not_null(root.get_node_or_null("AuthoredTerrain"))
-	assert_null(root.get_node_or_null("AuthoredScatter"), "no rows, no scatter node")
+	# Empty, but there for the table's live edits (MapSourceLoader.keep_props_apart).
+	assert_not_null(root.get_node_or_null(MapSourceLoader.SCATTER_NODE), "a scatter node")
+	assert_not_null(root.get_node_or_null(MapSourceLoader.PROPS_NODE), "a props node")
 	var extras: Dictionary = root.get_meta(GlbUtils.SCENE_EXTRAS_META, {})
 	assert_eq(extras, LevelPlayLoader.AUTHORED_MAP_LIGHTING)
 	var lighting := GlbUtils.extract_lighting_config(root)
