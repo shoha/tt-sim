@@ -624,7 +624,7 @@ drawer.is_open   # Current state (bool)
 ### File Reference
 
 - **Base class**: `scenes/ui/drawer_container.gd`
-- **Example usage**: `scenes/states/playing/player_list_drawer.gd` (connected player roster)
+- **Example usage**: `scenes/states/room/room_drawer.gd` (the room over the table)
 
 ---
 

@@ -18,7 +18,6 @@ const IN_PLAY_SCENES := [
 const STOPS_PLAY_SCENES := [
 	"res://scenes/states/authoring/new_map_dialog.tscn",
 	"res://scenes/states/lobby/lobby_client.tscn",
-	"res://scenes/states/lobby/lobby_host.tscn",
 	"res://scenes/states/paused/pause_overlay.tscn",
 	"res://scenes/states/playing/avatar_builder.tscn",
 	"res://scenes/states/title_screen/title_screen.tscn",

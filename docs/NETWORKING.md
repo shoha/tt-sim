@@ -297,8 +297,10 @@ A hosted session is a room of people that can exist with no map (Room first, use
 2026-10-09). It begins when hosting starts and ends when the host leaves; the GM sets maps out
 from a shelf, and leaving a map returns everyone to the room. Nobody reconnects in between: the
 Steam lobby, the multiplayer peer, the room code and every client's peer id outlive every map.
-`SessionChannel` (`NetworkManager.session`) holds it; `Root.State.ROOM` is its screen (the lobby
-screens until the RoomPanel replaces them).
+`SessionChannel` (`NetworkManager.session`) holds it; `Root.State.ROOM` is its screen, the
+RoomPanel full screen (`RoomScreen`), and at a table the same panel is the room drawer
+(`RoomDrawer`, Tab). Both read the session summary; see [UI_SYSTEMS.md](UI_SYSTEMS.md) "The
+room".
 
 **Phases.** The host's session is in the room (`is_open()`, no table) or at a table (one map
 out). Hosting starts in the room (`SessionChannel` begins on `HOSTING`). `open()` (host) clears
@@ -306,11 +308,15 @@ the late-joiner level snapshot (`clear_level_data()`: nothing is served, `is_gam
 is false) and sends every client `_rpc_room_opened`; `close()` comes just before
 `notify_game_starting()`, and the level broadcast that follows sets the table pointer.
 
-**Shelf and table pointer.** `broadcast_level_data()` calls `note_table_out()` with the payload
-(map hashes added), so every map that goes out, from the room or by a map change in play, lands
-on the shelf: a MapRef `{"folder", "map_path", "hashes"}` keyed by `ref_key()`, the level folder
-or, for a level without one, its res:// map path. Setting a shelved map out again refreshes its
-hashes. `get_table()` is that key, `""` in the room. Only the host changes any of it; it sends
+**Shelf and table pointer.** The shelf is the session's maps, each a MapRef `{"folder",
+"map_path", "hashes", "name"}` keyed by `ref_key()`, the level folder or, for a level without
+one, its res:// map path; the name is what the room lists. The GM adds a map from the room
+(Add a map, a picker over the library) through `shelve(level_dict)`, which hashes its files and
+leaves the room open. `broadcast_level_data()` calls `note_table_out()` with the payload (map
+hashes added), so every map that goes out, from the room or by a map change in play, lands on
+the shelf too; setting a shelved map out again refreshes its hashes. Root sets a shelf map out
+by key (`Root.set_out(key)` from the room, `Root.move_table(key)` from the drawer), loading the
+level from the host's library by its folder. `get_table()` is that key, `""` in the room. Only the host changes any of it; it sends
 clients a summary (`_rpc_session_summary`, sanitized on arrival by `sanitize_summary()`: known
 keys, typed values, bounded sizes) after every change, so clients read the same getters and
 `session_changed` fires on every peer.
@@ -326,6 +332,17 @@ identity there, and a stale connection of the same Steam id gives its entry to t
 id, the same session id) reuses it, so the party and its grants map a session id to whatever
 peer id it has now (`peer_for()`, `session_id_of()`). The Steam path is not verified yet: real
 Steam could not run on 2026-10-09.
+
+**Holdings: readiness is download state.** There is no manual Ready. After every summary, and
+again on `_rpc_room_opened`, a client works out which shelf maps it already holds at the host's
+content (`holds_map()`: a map that ships with the game, or every hashed file in its own level
+folder with the same hash or in the download cache) and reports the keys when they changed
+(`_rpc_report_holdings`, `any_peer`: the host keeps only shelf keys, under the sender's own
+session id, `note_holdings()`). The host counts itself as holding every shelf map.
+`get_holdings()` (session id -> keys) rides in the summary, and the room shows it ("3 of 4 have
+it"). Set out never waits for it: a player without the map downloads it at the table as before.
+There is no partial progress yet (no download in the room); a host that sent no hashes for a
+folder map leaves it counted as not held.
 
 **The party** (`NetworkManager.session.party`, `SessionParty`, `autoloads/session_party.gd`,
 host only). Players' avatars belong to the session, not to a map.
@@ -372,12 +389,13 @@ there does):
 | From > to | Action | What happens |
 |-----------|--------|--------------|
 | TITLE > ROOM (host) | Host with a map: `host_session(level)` | `host_game()` with an "Opening a room..." wait; ROOM on `HOSTING`; on `connection_failed` the title stays, with the reason |
-| TITLE > ROOM or PLAYING (client) | Join: the join screen (`LobbyClient`) over the hidden title | Connect joins; ROOM on `room_opened`, PLAYING on `game_starting` when a table is out; a rejected client stays on the join screen |
-| ROOM > PLAYING | Start (Set out): `_on_lobby_start_game()` | Refused with "Choose a map to set out first" when no map is pending; else `close()`, `notify_game_starting()`, PLAYING broadcasts the level |
+| TITLE > ROOM or PLAYING (client) | Join: the join form (`LobbyClient`) over the hidden title | Connect joins; the form stays locked ("Connected. Joining the room...") until ROOM on `room_opened`, or PLAYING on `game_starting` when a table is out; a rejected client stays on the form |
+| ROOM (host) | Entering with a map from Host | The map is shelved and selected in the room |
+| ROOM > PLAYING | The room's Set out this map: `set_out(key)`, then `_on_lobby_start_game()` | Refused with "Choose a map to set out first" when no map is pending; else `close()`, `notify_game_starting()`, PLAYING broadcasts the level |
 | PLAYING > ROOM | Pause > Return everyone to the room (host): `return_to_room()` | The party is taken, `open()`, then the table (GameMap, tokens, GameState) is torn down on every peer |
-| PLAYING > PLAYING | Change Level in play | The party is taken; the level broadcast moves the table pointer |
+| PLAYING > PLAYING | The drawer's Move the table here (`move_table(key)`), or Pause > Change Level | The party is taken; the level broadcast moves the table pointer (the table-moves card adds its notice and the Keep/Save/Discard prompt) |
 | (any) > PLAYING, map loaded | `_on_level_play_loaded()` (host) | The party is set out on the new map |
-| ROOM or PLAYING > TITLE | Leave, Cancel, Return to Title | Title first, then `disconnect_game()`, so a voluntary leave is not read as a lost connection; the host leaving ends the session |
+| ROOM or PLAYING > TITLE | Leave or End session (the room, the drawer), Return to Title | Title first, then `disconnect_game()`, so a voluntary leave is not read as a lost connection; the host leaving ends the session (End session asks first) |
 
 A client that loses the host in the room gets the same "Disconnected" dialog as at a table.
 
@@ -832,17 +850,22 @@ The model is in [Sessions](#sessions-the-room-and-the-table).
 # Every peer (clients read the host's summary)
 func is_open() -> bool                    # in the room
 func get_table() -> String                # ref_key of the map on the table, "" in the room
-func get_shelf() -> Array[Dictionary]     # MapRefs {"folder", "map_path", "hashes"}, oldest first
+func get_shelf() -> Array[Dictionary]     # MapRefs {"folder", "map_path", "hashes", "name"}
 func get_players() -> Dictionary          # session id -> {"name", "peer_id"}
+func get_holdings() -> Dictionary         # session id -> ref keys of the shelf maps it holds
+func summary() -> Dictionary              # {"open", "table", "shelf", "players", "holdings"}
 func peer_for(session_id: String) -> int
 func session_id_of(peer_id: int) -> String
+static func holds_map(ref: Dictionary, cached_file: Callable) -> bool
 signal room_opened                        # client: the host opened the room
-signal session_changed                    # shelf, table pointer or players changed
+signal session_changed                    # shelf, table pointer, players or holdings changed
 
 # Host
 func open() -> void                       # Return everyone to the room
 func close() -> void                      # just before game_starting
+func shelve(level_dict: Dictionary) -> String         # the room's Add a map; returns its key
 func note_table_out(level_dict: Dictionary) -> void   # from broadcast_level_data()
+func note_holdings(session_id: String, keys: Variant) -> void  # a client's report, shelf keys only
 func admit_peer(peer_id: int, reported: Dictionary = {}) -> StringName
                                           # from _rpc_send_player_info() with the reported info;
                                           # restores a returning player's grants; &"room" or &"table"
@@ -1061,10 +1084,10 @@ When the host disconnects, clients receive a `connection_failed("Host disconnect
 ### Where `connection_failed` reaches the player
 
 `LobbyClient._on_connection_failed()` shows `"Connection failed: <reason>"` in the join
-screen's status label. While hosting is starting from the title, `Root` shows the reason as an
-error toast (`UIManager.show_error`) and stays on the title; `LobbyHost` in the room does the
-same and leaves. Once in `ROOM` or `PLAYING`, a client's drop shows `Root`'s generic
-"Disconnected" dialog instead, which does not include the reason.
+form's status label. While hosting is starting from the title, `Root` shows the reason as an
+error toast (`UIManager.show_error`) and stays on the title. Once in `ROOM` or `PLAYING`, a
+client's drop shows `Root`'s generic "Disconnected" dialog instead, which does not include the
+reason.
 
 ---
 

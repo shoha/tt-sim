@@ -1,0 +1,276 @@
+extends GutTest
+
+## The room (RoomPanel, RoomModel, RoomDrawer): the GM's and a player's view of one session
+## summary, the shelf's add and select, the one-fill rule (only a live action takes the accent),
+## Set out held back with nothing selected, the drawer's Move the table here, the Tab that opens
+## the drawer only at a table, and the room laid out on the 1280x720 canvas. Every panel here
+## has connect_network false and is fed summaries directly.
+
+const MAP_A := "_room_panel_a"
+const MAP_B := "_room_panel_b"
+const MAP_C := "_room_panel_c"
+const GM := "enet-1"
+const WREN := "enet-wren"
+const CANVAS := Vector2(1280.0, 720.0)
+
+
+func _sample(table := "") -> Dictionary:
+	return {
+		"open": table == "",
+		"table": table,
+		"shelf": [
+			{"folder": MAP_A, "map_path": "", "hashes": {}, "name": "Mossy Hollow"},
+			{"folder": MAP_B, "map_path": "", "hashes": {}, "name": "Old Mill"},
+			{"folder": MAP_C, "map_path": "", "hashes": {}, "name": "Fen Crossing"},
+		],
+		"players": {
+			GM: {"name": "Marigold", "peer_id": 1},
+			"enet-ranger": {"name": "Ranger", "peer_id": 2},
+			WREN: {"name": "Wren", "peer_id": 3},
+			"enet-starling": {"name": "Starling", "peer_id": 4},
+			"enet-gone": {"name": "Gone", "peer_id": 0},
+		},
+		"holdings":
+		{
+			GM: [MAP_A, MAP_B, MAP_C],
+			"enet-ranger": [MAP_A],
+			WREN: [MAP_A, MAP_B],
+			"enet-starling": [MAP_A],
+		},
+	}
+
+
+func _panel(in_drawer := false) -> RoomPanel:
+	var panel := RoomPanel.new()
+	panel.connect_network = false
+	panel.in_drawer = in_drawer
+	add_child_autofree(panel)
+	return panel
+
+
+func _row_names(panel: RoomPanel) -> Array:
+	return panel.player_rows.get_children().map(
+		func(row: Node) -> String: return (row.find_child("Name", true, false) as Label).text
+	)
+
+
+## Visible, live buttons wearing the accent fill.
+func _fills(root: Node) -> Array:
+	return root.find_children("*", "Button", true, false).filter(
+		func(b: Button) -> bool:
+			return b.is_visible_in_tree() and not b.disabled and b.theme_type_variation == &"Primary"
+	)
+
+
+func _tab(shift := false) -> InputEventKey:
+	var event := InputEventKey.new()
+	event.keycode = KEY_TAB
+	event.pressed = true
+	event.shift_pressed = shift
+	return event
+
+
+func test_the_gm_sees_the_players_here_gm_first_and_the_shelf() -> void:
+	var panel := _panel()
+	panel.show_session(_sample(), GM, true)
+	assert_eq(_row_names(panel), ["Marigold", "Ranger", "Starling", "Wren"], "who left is not here")
+	var gm_row := panel.player_rows.get_child(0)
+	assert_not_null(gm_row.find_child("GmBadge", true, false), "the GM chip")
+	assert_not_null(gm_row.find_child("ChooseAvatar", true, false), "your row: Choose avatar")
+	assert_null(panel.player_rows.get_child(1).find_child("ChooseAvatar", true, false))
+	assert_eq(panel.shelf_rows.get_child_count(), 3)
+	assert_true(panel.add_button.visible, "the GM adds maps")
+	assert_eq(panel.leave_button.text, "End session")
+	assert_eq(panel.title_label.text, "Your room")
+	assert_true(panel.action_button.visible)
+	assert_eq(panel.action_button.text, "Set out this map")
+
+
+func test_a_player_sees_the_shelf_read_only_and_no_action() -> void:
+	var panel := _panel()
+	panel.show_session(_sample(), WREN, false)
+	assert_eq(panel.title_label.text, "Marigold's room")
+	assert_false(panel.add_button.visible)
+	assert_eq(panel.leave_button.text, "Leave")
+	assert_false(panel.action_button.visible)
+	var wren_row := panel.player_rows.get_child(3)
+	assert_not_null(wren_row.find_child("ChooseAvatar", true, false), "your row is Wren's")
+	panel.select(MAP_B)
+	assert_eq(panel.map_name_label.text, "Old Mill", "a player can look at a shelf map")
+	assert_eq(_fills(panel).size(), 0, "and has no action to fill")
+
+
+func test_header_copy_never_names_a_level_or_a_lobby() -> void:
+	for is_gm in [true, false]:
+		for shelf_size in [0, 3]:
+			var text := RoomModel.header(false, is_gm, "Marigold", shelf_size, "")
+			var copy := ("%s %s" % [text.title, text.caption]).to_lower()
+			assert_false(copy.contains("level") or copy.contains("lobby") or copy.contains("host a"))
+	var drawer := RoomModel.header(true, true, "Marigold", 3, "Old Mill")
+	assert_eq(drawer.caption, "On the table: Old Mill")
+
+
+func test_set_out_is_held_back_and_quiet_with_no_map_selected() -> void:
+	var panel := _panel()
+	panel.show_session(_sample(), GM, true)
+	assert_eq(panel.selected_key(), "")
+	assert_true(panel.action_button.disabled)
+	assert_ne(panel.action_button.theme_type_variation, &"Primary", "no fill with no map")
+	assert_eq(_fills(panel).size(), 0)
+	assert_false(panel.preview.visible, "no empty picture box")
+	assert_eq(panel.map_name_label.text, "Choose a map from the shelf")
+	watch_signals(panel)
+	panel._on_action_pressed()
+	assert_signal_not_emitted(panel, "set_out_requested")
+
+
+func test_selecting_a_shelf_map_shows_it_with_the_one_fill_under_it() -> void:
+	var panel := _panel()
+	panel.show_session(_sample(), GM, true)
+	(panel.shelf_rows.get_child(1) as Button).pressed.emit()
+	assert_eq(panel.selected_key(), MAP_B)
+	assert_true(panel.preview.visible)
+	assert_eq(panel.map_name_label.text, "Old Mill")
+	assert_eq(panel.readiness_label.text, "2 of 4 have it")
+	var states: Array = panel.player_rows.get_children().map(
+		func(row: Node) -> bool: return row.find_child("Download", true, false) is ProgressBar
+	)
+	assert_eq(states, [true, false, false, true], "a bar for who has it, a caption for who not")
+	assert_eq(_fills(panel), [panel.action_button], "exactly one fill, the action")
+	assert_true((panel.shelf_rows.get_child(1) as Button).button_pressed, "the row shows selected")
+	watch_signals(panel)
+	panel.action_button.pressed.emit()
+	assert_signal_emitted_with_parameters(panel, "set_out_requested", [MAP_B])
+
+
+func test_a_map_without_a_thumbnail_shows_the_well_and_its_initial() -> void:
+	var panel := _panel()
+	panel.show_session(_sample(), GM, true)
+	panel.select(MAP_A)
+	var letter := panel.preview.get_node("Letter") as Label
+	assert_eq(panel.preview.theme_type_variation, &"CardThumb")
+	assert_true(letter.visible)
+	assert_eq(letter.text, "M")
+	var shelf_letter := panel.shelf_rows.get_child(0).find_child("Letter", true, false) as Label
+	assert_eq(shelf_letter.text, "M")
+
+
+func test_adding_a_map_reports_the_pick_and_the_new_map_can_be_selected() -> void:
+	var panel := _panel()
+	var summary := _sample()
+	summary.shelf = summary.shelf.slice(0, 2)
+	panel.show_session(summary, GM, true)
+	watch_signals(panel)
+	var info := {"path": "user://levels/%s/" % MAP_C, "folder": MAP_C, "name": "Fen Crossing"}
+	panel._on_level_picked(info)
+	assert_signal_emitted_with_parameters(panel, "map_picked", [info])
+	panel.show_session(_sample(), GM, true)
+	panel.select(MAP_C)
+	assert_eq(panel.shelf_rows.get_child_count(), 3)
+	assert_eq(panel.map_name_label.text, "Fen Crossing")
+	assert_false(panel.action_button.disabled)
+
+
+func test_the_selection_survives_a_refresh_while_its_map_is_on_the_shelf() -> void:
+	var panel := _panel()
+	panel.show_session(_sample(), GM, true)
+	panel.select(MAP_C)
+	panel.show_session(_sample(), GM, true)
+	assert_eq(panel.selected_key(), MAP_C)
+	var summary := _sample()
+	summary.shelf = summary.shelf.slice(0, 2)
+	panel.show_session(summary, GM, true)
+	assert_eq(panel.selected_key(), "", "a map gone from the shelf is no longer selected")
+
+
+func test_the_drawer_starts_on_the_table_and_moves_it_elsewhere() -> void:
+	var panel := _panel(true)
+	panel.show_session(_sample(MAP_A), GM, true)
+	assert_eq(panel.selected_key(), MAP_A, "the map on the table")
+	assert_eq(panel.action_button.text, "Move the table here")
+	assert_true(panel.action_button.disabled, "the table is already here")
+	assert_eq(panel.readiness_label.text, "On the table now")
+	assert_eq(_fills(panel).size(), 0)
+	panel.select(MAP_C)
+	assert_eq(_fills(panel), [panel.action_button])
+	watch_signals(panel)
+	panel.action_button.pressed.emit()
+	assert_signal_emitted_with_parameters(panel, "move_table_requested", [MAP_C])
+
+
+func test_tab_opens_the_drawer_only_at_a_table() -> void:
+	assert_true(RoomDrawer.tab_toggles(_tab(), true, true, false), "at a table")
+	assert_false(RoomDrawer.tab_toggles(_tab(), false, true, false), "not in the room or paused")
+	assert_false(RoomDrawer.tab_toggles(_tab(), true, false, false), "not offline (no tab)")
+	assert_false(RoomDrawer.tab_toggles(_tab(), true, true, true), "not under a sheet or a tool")
+	assert_false(RoomDrawer.tab_toggles(_tab(true), true, true, false), "Shift+Tab is focus")
+	var released := _tab()
+	released.pressed = false
+	assert_false(RoomDrawer.tab_toggles(released, true, true, false))
+	var m_key := InputEventKey.new()
+	m_key.keycode = KEY_M
+	m_key.pressed = true
+	assert_false(RoomDrawer.tab_toggles(m_key, true, true, false))
+
+
+func test_the_drawer_toggles_on_tab_at_a_table() -> void:
+	var drawer := RoomDrawer.new()
+	drawer.connect_network = false
+	drawer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child_autofree(drawer)
+	# Shown in a session, without the reveal slide (open() waits out a running slide).
+	drawer.is_revealed = true
+	# Nothing over the board: set aside what earlier tests in the run may have left registered.
+	var saved_overlays: Array[Control] = UIManager._overlay_stack.duplicate()
+	var saved_panels: Array[AnimatedCanvasLayerPanel] = (
+		AnimatedCanvasLayerPanel._trap_stack.duplicate()
+	)
+	UIManager._overlay_stack.clear()
+	AnimatedCanvasLayerPanel._trap_stack.clear()
+	get_viewport().gui_release_focus()
+	assert_false(drawer._board_busy(), "nothing over the board")
+	var saved: int = UIManager._current_state
+	UIManager._current_state = UIManager.ROOT_STATE_PLAYING
+	drawer._input(_tab())
+	assert_true(drawer.is_open, "Tab at a table opens it")
+	UIManager._current_state = UIManager.ROOT_STATE_PAUSED
+	drawer._input(_tab())
+	UIManager._current_state = saved
+	UIManager._overlay_stack.assign(saved_overlays)
+	AnimatedCanvasLayerPanel._trap_stack.assign(saved_panels)
+	assert_true(drawer.is_open, "paused, Tab leaves it alone")
+	assert_eq(drawer.drawer_width, RoomPanel.SIDE_WIDTH)
+
+
+func test_the_room_fits_the_1280x720_canvas() -> void:
+	var host := SubViewport.new()
+	host.size = Vector2i(CANVAS)
+	host.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	add_child_autofree(host)
+	var screen := RoomScreen.new()
+	screen.connect_network = false
+	host.add_child(screen)
+	screen.panel.set_code(LobbyCode.encode(109775244321098765))
+	screen.panel.show_session(_sample(), GM, true)
+	screen.panel.select(MAP_B)
+	await wait_process_frames(4)
+	var canvas := Rect2(Vector2.ZERO, CANVAS).grow(0.5)
+	var outside := PackedStringArray()
+	for control: Control in screen.find_children("*", "Control", true, false):
+		if not control.is_visible_in_tree() or _in_scroll(control, screen):
+			continue
+		var rect := control.get_global_rect()
+		if rect.size.x > 0.0 and rect.size.y > 0.0 and not canvas.encloses(rect):
+			outside.append("%s at %s" % [screen.get_path_to(control), rect])
+	assert_eq(outside.size(), 0, "the room lies on the canvas: %s" % "; ".join(outside))
+	assert_gte(screen.panel.preview.size.x, RoomPanel.PREVIEW_MIN_WIDTH, "a large preview")
+
+
+## Inside a scroll region (what it holds may run past it; the player scrolls to it).
+func _in_scroll(control: Control, stop: Node) -> bool:
+	var node := control.get_parent()
+	while node != null and node != stop:
+		if node is ScrollContainer:
+			return true
+		node = node.get_parent()
+	return false

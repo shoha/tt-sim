@@ -54,7 +54,7 @@ Root (Node3D)
 │   ├── GameplayMenu (CanvasLayer)
 │   │   └── GameplayMenuController - token list, context menus
 │   ├── LevelEditPanel (DrawerContainer) - slide-out editing drawer (right edge)
-│   └── PlayerListDrawer (DrawerContainer) - connected players (left edge)
+│   └── RoomDrawer (DrawerContainer) - the room over the table: players, shelf (left edge, Tab)
 │
 ├── [Dynamic] PauseOverlay (CanvasLayer) - shown in PAUSED state
 │

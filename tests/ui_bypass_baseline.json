@@ -36,17 +36,8 @@
 		"res://scenes/states/authoring/water_tool_pane.gd": {
 			"override": 1
 		},
-		"res://scenes/states/lobby/lobby_client.gd": {
-			"colour": 1
-		},
 		"res://scenes/states/lobby/lobby_client.tscn": {
-			"override": 9
-		},
-		"res://scenes/states/lobby/lobby_host.gd": {
-			"colour": 1
-		},
-		"res://scenes/states/lobby/lobby_host.tscn": {
-			"override": 11
+			"override": 8
 		},
 		"res://scenes/states/playing/avatar_builder.gd": {
 			"override": 4
@@ -95,10 +86,6 @@
 		},
 		"res://scenes/states/playing/occlusion_fade_manager.gd": {
 			"colour": 6
-		},
-		"res://scenes/states/playing/player_list_drawer.gd": {
-			"colour": 1,
-			"override": 2
 		},
 		"res://scenes/states/playing/sun_gizmo_tool.gd": {
 			"colour": 3

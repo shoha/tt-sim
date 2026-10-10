@@ -22,7 +22,7 @@ var _visual_broadcast := VisualBroadcastThrottle.new()
 @onready var save_level_button: Button = %SaveLevelButton
 @onready var toggle_asset_browser_button: Button = %ToggleAssetBrowserButton
 @onready var level_edit_panel: LevelEditPanel = %LevelEditPanel
-@onready var player_list_drawer: PlayerListDrawer = %PlayerListDrawer
+@onready var room_drawer: RoomDrawer = %RoomDrawer
 
 
 func _ready() -> void:
@@ -66,7 +66,7 @@ func _ready() -> void:
 	_update_asset_browser_button_state()
 	_update_save_level_button_visibility()
 	_update_edit_mode_drawer()
-	_update_player_list_drawer()
+	_update_room_drawer()
 
 
 func _exit_tree() -> void:
@@ -110,7 +110,7 @@ func _on_connection_state_changed(
 	_update_asset_browser_button_state()
 	_update_save_level_button_visibility()
 	_update_edit_mode_drawer()
-	_update_player_list_drawer()
+	_update_room_drawer()
 
 
 # --- Save Functionality ---
@@ -670,17 +670,10 @@ func request_level_change(on_ready: Callable) -> void:
 # --- Player List ---
 
 
-## Show/hide the player list drawer based on network state.
-## The drawer manages its own reveal/conceal animation internally;
-## we just need to ensure the node is in the tree and trigger visibility.
-func _update_player_list_drawer() -> void:
-	if not player_list_drawer:
-		return
-	if NetworkManager.is_networked():
-		player_list_drawer.visible = true
-		player_list_drawer.reveal()
-	else:
-		player_list_drawer.conceal()
+## Show the room drawer's tab in a session, hide it offline (its own reveal and conceal).
+func _update_room_drawer() -> void:
+	if room_drawer:
+		room_drawer.update_visibility()
 
 
 ## Clear the current level (exposed for external use)

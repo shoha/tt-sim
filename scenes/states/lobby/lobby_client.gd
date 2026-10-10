@@ -1,12 +1,13 @@
 class_name LobbyClient
 extends AnimatedCanvasLayerPanel
 
-## Lobby screen for clients: enter a room code, then wait for the host. Root shows it twice
-## until the RoomPanel replaces it: as the join screen over the title (its form), and as the
-## client's view of the room (Root.State.ROOM), which opens on the waiting view because the
-## connection already exists.
-## Root frees this node directly on state exit, so _on_after_animate_out() is a
-## no-op here: a stray animate_out() must never free the lobby a second time.
+## The join form over the title (the title's Join), until the library title's Join in place
+## replaces it: a name and a room code, then Connect. Once connected the form stays locked
+## with "Connected. Joining the room..." until Root moves on (ROOM on room_opened, or PLAYING
+## when a table is out), which frees it; the room itself is the RoomPanel. A failure or a lost
+## connection unlocks the form with the reason.
+## Root frees this node directly, so _on_after_animate_out() is a no-op here: a stray
+## animate_out() must never free the form a second time.
 
 signal leave_requested
 
@@ -17,9 +18,6 @@ signal leave_requested
 var header: MenuHeader
 
 var _is_connected: bool = false
-## Suppresses join sounds/flash during the initial player list sync so only
-## the "you connected" sound plays, not an extra sound for every existing player.
-var _suppressing_join_sounds: bool = false
 
 @onready var player_name_input: LineEdit = %PlayerNameInput
 @onready var room_code_input: LineEdit = %RoomCodeInput
@@ -27,8 +25,6 @@ var _suppressing_join_sounds: bool = false
 @onready var paste_button: Button = %PasteButton
 @onready var leave_button: Button = %LeaveButton
 @onready var status_label: Label = %StatusLabel
-@onready var player_list: ItemList = %PlayerList
-@onready var waiting_container: Control = %WaitingContainer
 @onready var input_container: Control = %InputContainer
 
 
@@ -49,20 +45,12 @@ func _on_panel_ready() -> void:
 	room_code_input.text_submitted.connect(_on_room_code_submitted)
 
 	if connect_network:
-		NetworkManager.player_joined.connect(_on_player_joined)
-		NetworkManager.player_left.connect(_on_player_left)
 		NetworkManager.connection_failed.connect(_on_connection_failed)
 		NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
 
 	# Load saved player name
 	player_name_input.text = NetworkManager.get_player_name()
-
-	# Initialize UI; in the room the connection already exists (and was announced on the
-	# join screen)
-	if connect_network and NetworkManager.is_client():
-		_show_connected_state(false)
-	else:
-		_show_input_state()
+	_show_input_state()
 
 
 func _stagger_targets() -> Array[Control]:
@@ -76,11 +64,6 @@ func _on_after_animate_out() -> void:
 
 func _exit_tree() -> void:
 	super()
-	# Disconnect network signals
-	if NetworkManager.player_joined.is_connected(_on_player_joined):
-		NetworkManager.player_joined.disconnect(_on_player_joined)
-	if NetworkManager.player_left.is_connected(_on_player_left):
-		NetworkManager.player_left.disconnect(_on_player_left)
 	if NetworkManager.connection_failed.is_connected(_on_connection_failed):
 		NetworkManager.connection_failed.disconnect(_on_connection_failed)
 	if NetworkManager.connection_state_changed.is_connected(_on_connection_state_changed):
@@ -88,46 +71,35 @@ func _exit_tree() -> void:
 
 
 func _show_input_state() -> void:
-	input_container.visible = true
-	waiting_container.visible = false
 	status_label.text = ""
-	connect_button.disabled = false
-	room_code_input.editable = true
-	player_name_input.editable = true
+	_lock_form(false)
 	_set_footer_action("Back", "arrow-left")
 	player_name_input.grab_focus()
-	_cross_fade(input_container)
 	rebuild_focus_trap()
 
 
 func _show_connecting_state() -> void:
 	status_label.text = "Connecting..."
-	connect_button.disabled = true
-	room_code_input.editable = false
-	player_name_input.editable = false
+	_lock_form(true)
 	_set_footer_action("Leave", "logout")
 	rebuild_focus_trap()
 
 
-## The waiting view; `announce` plays the connected sound (not when the room view opens on
-## a connection the join screen already announced).
-func _show_connected_state(announce := true) -> void:
-	input_container.visible = false
-	waiting_container.visible = true
-	status_label.text = "Connected! Waiting for host to start..."
+## Connected: the form stays locked until Root moves this client into the room or to the
+## table.
+func _show_connected_state() -> void:
+	status_label.text = "Connected. Joining the room..."
+	_lock_form(true)
 	_set_footer_action("Leave", "logout")
 	_is_connected = true
-	_suppressing_join_sounds = true
-	_update_player_list()
-	_cross_fade(waiting_container)
-	if announce:
-		AudioManager.play(&"success")
-	# Allow the initial player list sync from the host to complete before
-	# treating subsequent player_joined signals as new-player events.
-	get_tree().create_timer(1.0).timeout.connect(
-		func(): _suppressing_join_sounds = false, CONNECT_ONE_SHOT
-	)
+	AudioManager.play(&"success")
 	rebuild_focus_trap()
+
+
+func _lock_form(locked: bool) -> void:
+	connect_button.disabled = locked
+	room_code_input.editable = not locked
+	player_name_input.editable = not locked
 
 
 func _on_connect_pressed() -> void:
@@ -162,21 +134,6 @@ func _on_leave_pressed() -> void:
 	leave_requested.emit()
 
 
-func _on_player_joined(_peer_id: int, _player_info: Dictionary) -> void:
-	if _is_connected:
-		_update_player_list()
-		if not _suppressing_join_sounds:
-			_flash_player_list()
-			AudioManager.play(&"success")
-
-
-func _on_player_left(_peer_id: int, _player_info: Dictionary) -> void:
-	if _is_connected:
-		_update_player_list()
-		_flash_player_list()
-		AudioManager.play(&"tick")
-
-
 ## NetworkManager emits connection_failed before it goes OFFLINE, so the reason is
 ## written after _show_input_state() (which clears the label) and _is_connected is
 ## dropped here, keeping the OFFLINE branch below from overwriting the reason with a
@@ -204,40 +161,6 @@ func _on_connection_state_changed(
 				# When a failure reason was shown, the form is already unlocked and the
 				# reason stays on screen.
 				_show_input_state()
-
-
-func _update_player_list() -> void:
-	player_list.clear()
-	var players = NetworkManager.get_players()
-	if players.is_empty():
-		player_list.add_item("No players yet")
-		player_list.set_item_disabled(0, true)
-		player_list.set_item_selectable(0, false)
-		return
-	for peer_id in players:
-		var info = players[peer_id]
-		var player_name = info.get("name", "Player %d" % peer_id)
-		if peer_id == 1:
-			player_name += " (Host)"
-		elif peer_id == multiplayer.get_unique_id():
-			player_name += " (You)"
-		player_list.add_item(player_name)
-
-
-## Brief highlight flash on the player list when someone joins or leaves
-func _flash_player_list() -> void:
-	var tw = player_list.create_tween()
-	tw.tween_property(player_list, "self_modulate", Color(1.3, 1.2, 1.0, 1.0), 0.1)
-	tw.tween_property(player_list, "self_modulate", Color.WHITE, 0.3)
-
-
-## Quick cross-fade when switching between lobby states
-func _cross_fade(container: Control) -> void:
-	container.modulate.a = 0.0
-	var tw = create_tween()
-	tw.set_ease(Tween.EASE_OUT)
-	tw.set_trans(Tween.TRANS_CUBIC)
-	tw.tween_property(container, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
 
 
 ## The footer action is Back while the form is still up and Leave once a

@@ -349,7 +349,7 @@ UIManager.clear_hints()
 
 ## Menu Design Language
 
-Every menu screen -- the title, the pause menu, both lobby screens, Settings, the confirmation
+Every menu screen -- the title, the pause menu, the join form, Settings, the confirmation
 dialog, and the help overlay -- shares one structure, built from three primitives in
 `scenes/ui/primitives/`:
 
@@ -474,36 +474,60 @@ Saved levels are three primitives under `scenes/ui/primitives/`:
   `AnimatedCanvasLayerPanel`) -- a modal level chooser wrapping a two-column `LevelGrid`.
   `setup(title, locked_path = "")` sets the dialog title and an optional locked card. Choose
   confirms the selected card (double-click chooses directly); Cancel closes without choosing.
-  Signals: `level_chosen(level_info)`, `closed`. Used by the host lobby's Change button and the
-  pause menu's Change Level (see below).
+  Signals: `level_chosen(level_info)`, `closed`. Used by the room's Add a map and the pause
+  menu's Change Level (see below).
 
-### Lobby
+### The room
 
-`LobbyHost` and `LobbyClient` (`scenes/states/lobby/lobby_host.gd` /
-`scenes/states/lobby/lobby_client.gd`) are the room's two views (`Root.State.ROOM`) until the
-RoomPanel replaces them, and `LobbyClient` is also the join screen over the title. Neither
-connects: `LobbyHost` opens on a session already hosted and shows its code, and `LobbyClient`
-opens on its waiting view when the connection exists. Both extend `AnimatedCanvasLayerPanel` with
-`play_sounds = false` and a no-op `_on_after_animate_out()` -- `Root` frees them directly on state
-exit, so a stray `animate_out()` must never free the lobby a second time.
+One `RoomPanel` (`scenes/states/room/room_panel.gd`), learned once, shown two ways: full screen
+on paper between maps (`RoomScreen`, Root's `ROOM` state, over the default sky backdrop until
+painted backdrops land) and as a glass drawer over the table (`RoomDrawer`, left edge, the
+drawer width token 396, `RoomPanel.SIDE_WIDTH`, opened by its tab or Tab). It replaced the host
+lobby, the client's waiting view, the lobby's Change and the in-play `PlayerListDrawer`.
 
-The host screen opens with its `MenuHeader` ("Host a game"), then Your Name and Room Code fields,
-the room code in a `CodeChip` with a copy button (`DisplayServer.clipboard_set()`, toast "Code
-copied") and an invite button beside it, a framed thumbnail strip showing the pending level --
-thumbnail, name, token-count caption, set via `set_level(level)` -- with a Change button that opens
-a `LevelPickerDialog` and emits `level_change_requested(level_info)` when a different level is
-chosen, the Players list, and an end-aligned footer with Cancel and Start (Start is the only accent
-action).
+- **Layout.** The room: the heading (title and caption) top left, the room code in a `CodeChip`
+  with Copy (toast "Code copied") and Invite top right; a 396 px paper sheet on the left with
+  Players, the Shelf below them (it scrolls) and Leave (a player) or End session (the GM, asks
+  first) at its foot; the selected map large in the centre (16:9, up to 720 px wide), its name in
+  Fraunces, how many have it, and its one action directly under it. The drawer stacks the same
+  parts in one column, the code on the heading's line and the selected map as a strip (a
+  128x72 picture beside the name) so its action stays on screen at 720p.
+- **Rows** (`RoomRows`). A player: a `CardThumb` portrait well with the name's initial, the
+  name, You, a `KeyChip` GM tag, the selected map's download state (a full `ProgressSuccess`
+  bar, or "Gets it at the table"), and Choose avatar on your own row (opens the `AvatarRoster`;
+  the session does not carry avatar choices yet). A shelf map: a `Tile` toggle with a 64x36
+  `CardThumb` well and its name and caption ("On the table" in the drawer, how many have it in
+  the room). Every picture sits in a `CardThumb` well, so a map without a thumbnail shows the
+  well's wash and the Fraunces initial, never a grey box.
+- **Rules** (`RoomModel`, pure, from a `SessionChannel.summary()`). Players here only (peer 0 is
+  away), the GM first then by name. The one action is the GM's: Set out this map in the room,
+  Move the table here in the drawer (live only for a map other than the one out). Only a live
+  action takes `Primary`, so a screen has at most one accent fill and none with nothing
+  selected. Readiness is download state ("3 of 4 have it", from the session's holdings); Set
+  out never waits. The heading is computed from the current state every refresh (never "Host a
+  game" or "pick a level" after a return). Copy says map, room, table, shelf, GM, party.
+- **Selection.** Everyone can select a shelf map to look at it; players have no action. The
+  selection survives a refresh while its map stays on the shelf; the drawer selects the map on
+  the table when nothing is. The GM's Add a map opens a `LevelPickerDialog` ("Add a map to the
+  shelf"); the pick is shelved (`SessionChannel.shelve()`) and selected.
+- **Wiring.** The panel reads `NetworkManager.session` on every `session_changed`;
+  `connect_network = false` (on `RoomScreen`, `RoomDrawer` or the panel) keeps tests and the UI
+  tour off the network, and they feed `show_session(summary, local_id, is_gm)` directly. Signals
+  to Root: `set_out_requested(key)` (`Root.set_out`), `move_table_requested(key)`
+  (`Root.move_table`), `leave_requested`; `map_picked(level_info)` reports an Add.
+- **Tab.** `RoomDrawer.tab_toggles()` (pure) opens or closes the drawer on a bare Tab press only
+  at a table (Root `PLAYING`, nothing paused over it), with its tab shown (a session), and
+  nothing else taking Tab: no `UIManager` overlay, no `AnimatedCanvasLayerPanel` up
+  (`any_open()`), no focused text field, and not the measure tool, which cycles its mode on Tab.
 
-The join screen opens with its `MenuHeader` ("Join a game"), captioned Your Name and Room Code
-fields, a full-width Connect button, and a footer button that reads "Back" while the form is up and
-"Leave" once a connection attempt is under way or connected (`_set_footer_action()`) -- the same
-button, renamed with the situation.
-
-Both screens guard their network calls for tests: `LobbyHost.connect_network` and
-`LobbyClient.connect_network` (default `true`) gate their `NetworkManager` signal connections and
-session reads. Tests set these `false` before adding the screen to the tree so headless runs
-never reach the network layer.
+The join form (`LobbyClient`, `scenes/states/lobby/lobby_client.gd`) stays over the title until
+the library title's Join in place replaces it: its `MenuHeader` ("Join a game"), Your Name and
+Room Code fields, a full-width Connect, and a footer button that reads "Back" while the form is
+up and "Leave" once a connection is under way. Connected, the form stays locked with one status
+line, "Connected. Joining the room...", until Root moves the client into the room or to the
+table. It extends `AnimatedCanvasLayerPanel` with `play_sounds = false` and a no-op
+`_on_after_animate_out()` (Root frees it), and `connect_network = false` keeps tests off the
+network.
 
 The pause menu offers the host one quiet extra row, **Return everyone to the room** (`users`
 icon, Secondary, `ui_silent`, visible only while hosting); its confirmation emits
@@ -800,7 +824,7 @@ Set `rail_items` in `_on_ready()` to replace the single tab with an `IconRail` s
 
 | Drawer | Edge | Tab | Purpose |
 |--------|------|-----|---------|
-| `PlayerListDrawer` | LEFT | `users.svg` icon | Shows connected players during networked games |
+| `RoomDrawer` | LEFT | `users.svg` icon (and Tab) | The room over the table in a session: players, the shelf, Move the table here (see [The room](#the-room)) |
 | `LevelEditPanel` | RIGHT | rail of seven icons | Real-time level editing during gameplay (see below) |
 | `AuthoringPanel` | LEFT | rail of three tools + four footer actions | Authoring mode's tools, save and leave (see [Authoring Mode](#authoring-mode)) |
 

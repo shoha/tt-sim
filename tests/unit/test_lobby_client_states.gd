@@ -1,9 +1,10 @@
 extends GutTest
 
-## The join screen swaps between entering a code and waiting for the host. The
-## footer button is Back while the form is up and Leave once a connection is
-## under way, and Connect is the screen's only accent action. Network calls are
-## guarded off the same way the host lobby guards hosting.
+## The join form: a name and a room code, then Connect, locked once a connection is under way
+## until Root moves the client into the room (there is no waiting view of its own any more:
+## the room is the RoomPanel). The footer button is Back while the form is up and Leave once
+## a connection is under way, and Connect is the screen's only accent action. Network calls
+## are guarded off with connect_network.
 
 const SCENE := preload("res://scenes/states/lobby/lobby_client.tscn")
 
@@ -24,8 +25,17 @@ func test_header_reads_as_a_sentence() -> void:
 func test_input_state_offers_back() -> void:
 	var lobby := _lobby()
 	assert_true(lobby.input_container.visible)
-	assert_false(lobby.waiting_container.visible)
+	assert_false(lobby.connect_button.disabled)
 	assert_eq(lobby.leave_button.text, "Back")
+
+
+func test_connected_keeps_the_form_locked_with_one_status_line() -> void:
+	var lobby := _lobby()
+	lobby._show_connected_state()
+	assert_eq(lobby.status_label.text, "Connected. Joining the room...")
+	assert_true(lobby.connect_button.disabled)
+	assert_eq(lobby.leave_button.text, "Leave")
+	assert_null(lobby.get_node_or_null("%WaitingContainer"), "no waiting view of its own")
 
 
 func test_connecting_state_offers_leave_and_locks_the_form() -> void:
@@ -94,4 +104,4 @@ func test_returning_to_input_state_rebuilds_the_focus_trap() -> void:
 	lobby._show_connected_state()
 	lobby._show_input_state()
 	assert_true(lobby._focusable_controls.has(lobby.connect_button))
-	assert_false(lobby._focusable_controls.has(lobby.player_list))
+	assert_false(lobby.connect_button.disabled)

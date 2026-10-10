@@ -447,10 +447,11 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   `probes/ui_room.gd` with no network (nothing is hosted or joined): the "Opening a
   room..." wait over the title (`opening_room`), a map load staged mid-load over the title
   (`map_load_title`, Root's loading overlay on the backdrop sky; nothing is loaded), the
-  host's room as it opens after Host with Mossy Hollow to set out (`room_host`) and after
-  Return everyone to the room with no map yet (`room_host_returned`), each with a sample room code and three sample players, the join
-  screen as the title's Join Game opens it (`join`, Root's real entry point), and a client's
-  room, the waiting view with sample players (`room_client`); then authoring with the tool
+  room (RoomPanel, probes/ui_room.gd from a staged session summary) as the GM sees it with
+  four players and a shelf of three maps, Mossy Hollow selected (`room_host`), with no map at
+  all (`room_no_map`), the join screen as the title's Join Game opens it (`join`, Root's real
+  entry point), and the room as a player sees it (`room_player`); in play, the room drawer as
+  the GM sees it with another map selected (`room_drawer`); then authoring with the tool
   drawer on Biome and focus on its picked tile (the probe lets a drawer tile take focus),
   then the real map load of the test map caught about 0.4 s after Play (`map_load_real`), and
   in play the same staged map load over the live table (`map_load_table`), the Visuals drawer
