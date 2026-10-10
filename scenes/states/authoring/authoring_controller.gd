@@ -808,6 +808,10 @@ func save_async() -> bool:
 	if not is_inside_tree():
 		return false
 	tokens.reground_all()
+	var terrain := _terrain()
+	if terrain:
+		# A reload plans the ground layer slots afresh; past 8 that can differ, so show it now.
+		terrain.replan_ground_layers()
 	_sync_document()
 	var ok := write_level(level, document, capture_thumbnail())
 	_saving = false

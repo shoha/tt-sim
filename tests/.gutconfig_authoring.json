@@ -9,6 +9,7 @@
 		"res://tests/unit/test_authoring_history_cap.gd",
 		"res://tests/unit/test_authoring_open.gd",
 		"res://tests/unit/test_authoring_save.gd",
+		"res://tests/unit/test_authoring_save_reload.gd",
 		"res://tests/unit/test_authoring_sculpt.gd",
 		"res://tests/unit/test_authoring_session.gd",
 		"res://tests/unit/test_base_scatter_eraser.gd",

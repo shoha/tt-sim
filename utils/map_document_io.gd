@@ -117,6 +117,8 @@ const MAX_WARNINGS := 50
 ## Decimals written per row component: 1 um in position, far below float32 noise in the
 ## quaternion, and the reason a row costs ~90 bytes of JSON instead of ~170.
 const ROW_DECIMALS := 6
+## The step ROW_DECIMALS rounds to (snap_rows).
+const ROW_STEP := 0.000001
 
 const _PNG_SIGNATURE := [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
 
@@ -252,6 +254,16 @@ static func _manifest(doc: MapDocument) -> Dictionary:
 		"base_surface": doc.base_surface,
 		"has_base_map": doc.has_base_map,
 	}
+
+
+## Rounds every value of `rows`, in place, to ROW_DECIMALS decimals, as writing and reading
+## map.ttmap does: ScatterGenerator snaps the rows it generates, so a cell regenerated in a
+## session and the same cell loaded from the saved file are equal bit for bit (no 1 um
+## difference to flip MapFingerprint's 1 mm rounding). Each value is the float32 the array
+## holds, as when it is written.
+static func snap_rows(rows: PackedFloat32Array) -> void:
+	for i in rows.size():
+		rows[i] = snappedf(rows[i], ROW_STEP)
 
 
 ## Rows as compact JSON, built as text rather than through JSON.stringify so a large
