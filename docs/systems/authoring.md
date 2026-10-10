@@ -338,9 +338,11 @@ Probe and numbers:
   as it catches, sized by the crown's width (0.85 of it, within 0.22-0.38 of the tree's
   height; sized by height a narrow pine's stood as a beam), a smaller second beside it
   (across the view) on half the trees, a spark on a third; half the trees and a two-billow
-  column over the middle throw up smoke: painted cumulus billows of seven lobes melted into
-  one outline, a grey-violet body over a dark violet underside with each lobe's upper rim in
-  cream gold, nearly opaque, spreading as they rise, their lobes breaking apart late
+  column over the middle throw up smoke: painted cumulus billows of five large lobes melted
+  into one outline on a flattish base (one lobe while a billow is under 2.5 m across, parting
+  into all five by 6 m), a grey-violet body over a dark violet underside with a soft cream
+  gold crescent wrapping each lobe's top, the lobes' shading blended where they meet, nearly
+  opaque, spreading as they rise, their side lobes shrinking into the body late
   (the billow's age rides in its custom data) and their alpha held to 85 % of their life
   (`smoke_fade`). No ground glow. The snags shrink away about their feet over the last
   0.6 s (`snag_transform`) as the change lands. Two pools sized so one fire's every puff fits
