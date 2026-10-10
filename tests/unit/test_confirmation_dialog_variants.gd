@@ -1,7 +1,7 @@
 extends GutTest
 
-## The confirmation dialog is the one place semantic fills survive: confirm
-## takes Success by default and Danger when the caller asks for it, cancel is
+## The confirmation dialog's confirm takes the Primary fill by default and the
+## Danger fill (madder, a danger confirm) when the caller asks for it; cancel is
 ## always quiet and sits before confirm in an end-aligned footer.
 
 const SCENE := preload("res://scenes/ui/confirmation_dialog.tscn")
@@ -13,10 +13,10 @@ func _dialog() -> ConfirmationDialogUI:
 	return dialog
 
 
-func test_default_confirm_is_success() -> void:
+func test_default_confirm_is_primary() -> void:
 	var dialog := _dialog()
 	dialog.setup("Save changes?", "Your level has unsaved edits.")
-	assert_eq(dialog.confirm_button.theme_type_variation, &"Success")
+	assert_eq(dialog.confirm_button.theme_type_variation, &"Primary")
 	assert_eq(dialog.cancel_button.theme_type_variation, &"Secondary")
 	assert_eq(dialog.title_label.text, "Save changes?")
 	assert_eq(dialog.message_label.text, "Your level has unsaved edits.")

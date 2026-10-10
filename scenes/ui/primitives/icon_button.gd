@@ -82,10 +82,7 @@ func _build_badge() -> void:
 	_badge = Panel.new()
 	_badge.name = "Badge"
 	_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var style := StyleBoxFlat.new()
-	style.bg_color = ThemeColors.ACCENT
-	style.set_corner_radius_all(int(BADGE_SIZE / 2.0))
-	_badge.add_theme_stylebox_override("panel", style)
+	_badge.theme_type_variation = &"Badge"
 	_badge.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_badge.offset_left = -BADGE_SIZE - BADGE_MARGIN
 	_badge.offset_top = BADGE_MARGIN

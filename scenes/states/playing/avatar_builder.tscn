@@ -100,4 +100,5 @@ text = "Cancel"
 unique_name_in_owner = true
 script = ExtResource("2_animated_btn")
 layout_mode = 2
+theme_type_variation = &"Primary"
 text = "Add to board"

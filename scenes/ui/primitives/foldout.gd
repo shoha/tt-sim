@@ -59,6 +59,12 @@ func _ready() -> void:
 	_apply_state_immediately()
 
 
+func _notification(what: int) -> void:
+	# The chevron is a white icon tinted by hand, so it follows a paper or glass parent here.
+	if what == NOTIFICATION_THEME_CHANGED and _chevron:
+		_chevron.self_modulate = ThemeColors.of(self, ThemeColors.TEXT_SOFT)
+
+
 func toggle() -> void:
 	expanded = not expanded
 	AudioManager.play(&"tick")
@@ -96,7 +102,7 @@ func _build_header() -> void:
 	_chevron.texture = IconButton.load_icon("chevron-right")
 	_chevron.size = Vector2(CHEVRON_SIZE, CHEVRON_SIZE)
 	_chevron.pivot_offset = Vector2(CHEVRON_SIZE, CHEVRON_SIZE) / 2.0
-	_chevron.self_modulate = ThemeColors.TEXT_MUTED
+	_chevron.self_modulate = ThemeColors.of(self, ThemeColors.TEXT_SOFT)
 	_chevron.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	chevron_holder.add_child(_chevron)
 

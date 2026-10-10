@@ -147,7 +147,7 @@ func _show_translocation_dialog() -> void:
 		"OK",
 		func(): OS.shell_open(ProjectSettings.globalize_path(UPDATES_DIR)),
 		Callable(),
-		"Warning"
+		"Primary"
 	)
 
 

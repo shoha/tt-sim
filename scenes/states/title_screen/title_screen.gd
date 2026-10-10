@@ -4,7 +4,7 @@ extends CanvasLayer
 ## Title hub. Host and Join lead; the saved levels sit beside them as cards and
 ## the selected card is the level a host starts with (or Play Solo opens). Avatars opens
 ## the player's saved avatars (AvatarRoster).
-## The d20 sub-viewport stays as a dimmed backdrop.
+## The d20 sub-viewport stays over a sky-coloured backdrop.
 
 signal host_game_requested(level_info: Dictionary)
 signal join_game_requested
@@ -42,6 +42,11 @@ var grid: LevelGrid
 
 
 func _ready() -> void:
+	# The hub's text sits straight on the backdrop, so the backdrop takes the paper theme's
+	# sky role (ink reads 9:1 on it) until the painted backdrop lands; the dark dim goes.
+	var backdrop := $ColorRect as ColorRect
+	backdrop.color = ThemeColors.of(backdrop, ThemeColors.BACKDROP)
+	($Dim as CanvasItem).visible = false
 	_build_left_column()
 	_build_right_zone()
 	_version_label.text = "v" + UpdateVersion.get_current()
@@ -66,10 +71,7 @@ func _build_left_column() -> void:
 	var wordmark := Label.new()
 	wordmark.name = "Wordmark"
 	wordmark.text = "TTSim"
-	wordmark.theme_type_variation = &"H1"
-	# H1 is 18 px in this theme; the wordmark is the one place a display size
-	# is wanted, so override rather than add a variation for a single label.
-	wordmark.add_theme_font_size_override("font_size", 36)
+	wordmark.theme_type_variation = &"Wordmark"
 	_left.add_child(wordmark)
 	UiActions.spacer(12, _left)
 	host_button = UiActions.primary(
@@ -77,7 +79,10 @@ func _build_left_column() -> void:
 	)
 	host_subtitle = UiActions.subtitle_of(host_button)
 	host_button.pressed.connect(_on_host_pressed)
-	join_button = UiActions.primary("Join Game", "users", "Enter a room code", _left)
+	# One persimmon fill per screen (C5): Host is the primary, Join stands beside it quietly.
+	join_button = UiActions.primary(
+		"Join Game", "users", "Enter a room code", _left, &"Secondary"
+	)
 	join_button.pressed.connect(_on_join_pressed)
 	UiActions.spacer(8, _left)
 	_left.add_child(HSeparator.new())
@@ -111,7 +116,6 @@ func _build_right_zone() -> void:
 	heading_count = Label.new()
 	heading_count.name = "Count"
 	heading_count.theme_type_variation = &"Caption"
-	heading_count.add_theme_color_override("font_color", ThemeColors.TEXT_MUTED)
 	heading_row.add_child(heading_count)
 	_right.add_child(heading_row)
 	empty_caption = Label.new()

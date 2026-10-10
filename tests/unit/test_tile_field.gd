@@ -34,7 +34,11 @@ func test_overridden_tints_caption_and_right_click_resets() -> void:
 	var field := _field()
 	watch_signals(field)
 	field.overridden = true
-	assert_eq(field._caption.get_theme_color("font_color"), ThemeColors.ACCENT)
+	assert_eq(
+		field._caption.get_theme_color("font_color"),
+		ThemeColors.of(field._caption, ThemeColors.STATE),
+		"a changed value reads as state"
+	)
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_RIGHT
 	click.pressed = true

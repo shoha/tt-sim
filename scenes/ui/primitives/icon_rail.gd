@@ -184,4 +184,4 @@ func _draw() -> void:
 	else:
 		var y := size.y - INDICATOR_THICKNESS if indicator_at_end else 0.0
 		rect = Rect2(_indicator_pos - half, y, ITEM_SIZE, INDICATOR_THICKNESS)
-	draw_rect(rect, ThemeColors.ACCENT)
+	draw_rect(rect, ThemeColors.of(self, ThemeColors.STATE))

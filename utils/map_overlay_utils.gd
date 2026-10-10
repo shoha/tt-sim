@@ -3,7 +3,8 @@ extends RefCounted
 
 ## Shared utilities for 2D overlay tools (MeasureTool, DragRuler, etc.).
 ## Provides factory methods for creating CanvasLayer overlays and styled
-## label panels so each tool doesn't duplicate the boilerplate.
+## label panels so each tool doesn't duplicate the boilerplate. Everything made
+## here sits over the live table, so it wears the glass theme.
 
 
 ## Create a CanvasLayer + full-rect Control for 2D drawing overlays.
@@ -16,6 +17,7 @@ static func create_overlay(parent: Node, layer: int, draw_callback: Callable) ->
 	parent.add_child(canvas_layer)
 
 	var draw_control := Control.new()
+	draw_control.theme = ThemeColors.glass_theme()
 	draw_control.set_anchors_preset(Control.PRESET_FULL_RECT)
 	draw_control.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	draw_control.draw.connect(draw_callback)
@@ -32,6 +34,7 @@ static func create_label_panel(
 	font_color: Color = Color(1.0, 0.95, 0.6),
 ) -> Dictionary:
 	var panel := PanelContainer.new()
+	panel.theme = ThemeColors.glass_theme()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.visible = false
 
@@ -70,6 +73,7 @@ static func create_checkbox_panel(
 	font_color: Color = Color(0.8, 1.0, 0.8),
 ) -> Dictionary:
 	var panel := PanelContainer.new()
+	panel.theme = ThemeColors.glass_theme()
 	panel.visible = false
 
 	var stylebox := StyleBoxFlat.new()

@@ -51,12 +51,9 @@ func _ready() -> void:
 func _refresh_override() -> void:
 	if not _caption:
 		return
-	if overridden:
-		_caption.add_theme_color_override("font_color", ThemeColors.ACCENT)
-		_caption.tooltip_text = OVERRIDE_TOOLTIP
-	else:
-		_caption.remove_theme_color_override("font_color")
-		_caption.tooltip_text = ""
+	# A value changed from its default is a state, so it reads in the state colour.
+	_caption.theme_type_variation = &"CaptionState" if overridden else &"Caption"
+	_caption.tooltip_text = OVERRIDE_TOOLTIP if overridden else ""
 
 
 func _on_caption_gui_input(event: InputEvent) -> void:

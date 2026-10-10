@@ -330,12 +330,9 @@ func _on_color_changed(new_color: Color) -> void:
 func _refresh_override() -> void:
 	if not _label:
 		return
-	if overridden:
-		_label.add_theme_color_override("font_color", ThemeColors.ACCENT)
-		_label.tooltip_text = OVERRIDE_TOOLTIP
-	else:
-		_label.remove_theme_color_override("font_color")
-		_label.tooltip_text = ""
+	# A value changed from its default is a state, so it reads in the state colour.
+	_label.theme_type_variation = &"BodyState" if overridden else &"Body"
+	_label.tooltip_text = OVERRIDE_TOOLTIP if overridden else ""
 
 
 func _on_label_gui_input(event: InputEvent) -> void:
@@ -366,6 +363,7 @@ func _sync_ticks_rect() -> void:
 
 
 func _on_ticks_draw() -> void:
+	var soft := ThemeColors.of(_ticks, ThemeColors.TEXT_SOFT)
 	var left := _slider.position.x
 	var width := _slider.size.x
 	for i in range(ticks.size()):
@@ -374,7 +372,7 @@ func _on_ticks_draw() -> void:
 			continue
 		var x := left + width * _tick_fraction(float(ticks[i].get("value", 0.0)))
 		var rect := Rect2(x - TICK_SIZE / 2.0, 0.0, TICK_SIZE, TICK_SIZE)
-		_ticks.draw_texture_rect(texture, rect, false, ThemeColors.TEXT_MUTED)
+		_ticks.draw_texture_rect(texture, rect, false, soft)
 	if _hint_font == null:
 		return
 	var baseline := TICK_SIZE - 2.0
@@ -386,7 +384,7 @@ func _on_ticks_draw() -> void:
 			HORIZONTAL_ALIGNMENT_LEFT,
 			-1,
 			_hint_font_size,
-			ThemeColors.TEXT_MUTED
+			soft
 		)
 	if not hint_high.is_empty():
 		var text_width := (
@@ -399,5 +397,5 @@ func _on_ticks_draw() -> void:
 			HORIZONTAL_ALIGNMENT_LEFT,
 			-1,
 			_hint_font_size,
-			ThemeColors.TEXT_MUTED
+			soft
 		)

@@ -418,7 +418,7 @@ utils/                      # GlbUtils, SerializationUtils, EnvironmentPresets, 
 assets/palette/             # Built-in treecube palette (Git LFS; installed by treecube's build_palette.py, see docs/MAP_AUTHORING.md)
 tools/render_jobs/          # 1920x1080 scripted render jobs for look judgments (README inside)
 shaders/                    # GLSL shaders (lo-fi, occlusion fade, selection glow)
-themes/                     # dark_theme.gd → generated/dark_theme.tres
+themes/                     # painted_theme_base.gd + paper/glass leaves → generated/*.tres
 tests/                      # GUT unit tests + runnable test scenes (F6 in editor)
 tools/                      # Python scripts (audio normalization, hooks, manifest generation)
 tools/mcp/                  # TypeScript MCP server for agent validation bridge

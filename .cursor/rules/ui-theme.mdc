@@ -8,15 +8,21 @@ alwaysApply: false
 
 Read `docs/THEME_GUIDE.md` and `docs/UI_SYSTEMS.md` for full details.
 
-## Theme Variants
+## Painted Table theme
 
-Use semantic theme variants from `dark_theme.gd`:
-
-- **Surfaces**: `color_background`, `color_surface1`–`color_surface4`
-- **Interactive**: `color_accent`, `color_accent_lighter`, `color_accent_darker`, `color_secondary`, `color_success`, `color_warning`, `color_danger`
-- **Text**: `color_text_on_dark`, `color_text_on_accent`
-- **Typography**: `H1`, `H2`, `H3`, `SectionHeader`, `PanelHeader`, `Body`, `Caption`
-- **Spacing**: `spacing_sm`, `spacing_md`, `spacing_lg`, `spacing_xl`
+- **Paper or glass**: paper (`themes/generated/paper_theme.tres`) is the project default for
+  anything that stops play; every UI root shown while play continues sets
+  `ThemeColors.glass_theme()`. `tests/unit/test_glass_roots.gd` lists both kinds.
+- **Colours**: roles from `ThemeColors` (`TEXT`, `TEXT_SOFT`, `ACCENT`, `STATE`, `DANGER` ...),
+  read with `ThemeColors.of(control, role)` only when drawing by hand; never a `Color(` literal.
+- **Buttons**: the default is the quiet secondary; `Primary` (one per screen), `Danger` (danger
+  confirm only), `Ghost`, `IconButton`, `Tile`, `Card`.
+- **Typography**: `Wordmark`, `Title`/`H1`, `Heading`/`H2`, `H3`, `Body` (the default),
+  `Caption` (14, the floor), `BodyState`/`CaptionState`; Fraunces only for wordmark, titles,
+  headings.
+- **Panels**: the default PanelContainer is a `Sheet`; `Inset`, `KeyChip`, `Badge`.
+- **Theme scripts**: `themes/painted_theme_base.gd` and its leaves; regenerate both with
+  `tools/regen_theme.gd`.
 
 ## UI Primitives
 

@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://scenes/states/playing/level_edit_panel.tscn" id="6_edit_panel"]
 [ext_resource type="Script" path="res://scenes/states/playing/player_list_drawer.gd" id="7_player_list"]
 [ext_resource type="Script" path="res://scenes/ui/animated_button.gd" id="animated_btn"]
+[ext_resource type="Theme" path="res://themes/generated/glass_theme.tres" id="9_glass"]
 
 [node name="GameplayMenu" type="CanvasLayer" unique_id=977478588]
 layer = 2
@@ -18,6 +19,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+theme = ExtResource("9_glass")
 script = ExtResource("4_controller")
 
 [node name="BottomButtons" type="HBoxContainer" parent="GameplayMenu" unique_id=1268848480]

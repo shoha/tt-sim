@@ -28,7 +28,7 @@
 			"colour": 13
 		},
 		"res://scenes/states/authoring/new_map_dialog.gd": {
-			"override": 3
+			"override": 1
 		},
 		"res://scenes/states/authoring/new_map_dialog.tscn": {
 			"colour": 1
@@ -126,10 +126,6 @@
 		"res://scenes/states/playing/volume_overlay.gd": {
 			"colour": 4
 		},
-		"res://scenes/states/title_screen/title_screen.gd": {
-			"font_size": 1,
-			"override": 2
-		},
 		"res://scenes/states/title_screen/title_screen.tscn": {
 			"colour": 4,
 			"override": 7
@@ -161,7 +157,7 @@
 		},
 		"res://scenes/ui/drawer_container.gd": {
 			"colour": 5,
-			"override": 13
+			"override": 12
 		},
 		"res://scenes/ui/help_overlay.gd": {
 			"override": 6
@@ -190,7 +186,7 @@
 			"colour": 1
 		},
 		"res://scenes/ui/primitives/avatar_card.gd": {
-			"override": 2
+			"override": 1
 		},
 		"res://scenes/ui/primitives/avatar_grid.gd": {
 			"override": 2
@@ -198,33 +194,27 @@
 		"res://scenes/ui/primitives/foldout.gd": {
 			"override": 2
 		},
-		"res://scenes/ui/primitives/icon_button.gd": {
-			"override": 1
-		},
 		"res://scenes/ui/primitives/icon_rail.gd": {
 			"override": 2
 		},
 		"res://scenes/ui/primitives/level_card.gd": {
 			"colour": 1,
-			"override": 3
+			"override": 2
 		},
 		"res://scenes/ui/primitives/level_grid.gd": {
 			"override": 2
 		},
 		"res://scenes/ui/primitives/menu_header.gd": {
-			"override": 2
+			"override": 1
 		},
 		"res://scenes/ui/primitives/property_row.gd": {
-			"override": 3
+			"override": 2
 		},
 		"res://scenes/ui/primitives/tile_field.gd": {
-			"override": 2
+			"override": 1
 		},
 		"res://scenes/ui/primitives/tile_row.gd": {
 			"override": 4
-		},
-		"res://scenes/ui/primitives/ui_actions.gd": {
-			"override": 2
 		},
 		"res://scenes/ui/settings_menu.tscn": {
 			"colour": 1,

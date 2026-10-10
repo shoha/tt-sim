@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://cdisconnect_indicator"]
+[gd_scene load_steps=3 format=3 uid="uid://cdisconnect_indicator"]
 
 [ext_resource type="Script" path="res://scenes/ui/disconnect_indicator.gd" id="1_script"]
+[ext_resource type="Theme" path="res://themes/generated/glass_theme.tres" id="2_glass"]
 
 [node name="DisconnectIndicator" type="CanvasLayer"]
 layer = 90
@@ -13,6 +14,7 @@ anchor_right = 1.0
 offset_bottom = 40.0
 grow_horizontal = 2
 mouse_filter = 2
+theme = ExtResource("2_glass")
 theme_override_constants/margin_top = 12
 
 [node name="PanelContainer" type="PanelContainer" parent="MarginContainer"]

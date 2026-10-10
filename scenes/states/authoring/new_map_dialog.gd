@@ -103,7 +103,6 @@ func _on_panel_ready() -> void:
 	ground_caption = Label.new()
 	ground_caption.name = "GroundCaption"
 	ground_caption.theme_type_variation = &"Caption"
-	ground_caption.add_theme_color_override("font_color", ThemeColors.TEXT_MUTED)
 	_body.add_child(ground_caption)
 	_refresh_ground_caption()
 
@@ -128,7 +127,6 @@ func _on_panel_ready() -> void:
 	landform_caption = Label.new()
 	landform_caption.name = "LandformCaption"
 	landform_caption.theme_type_variation = &"Caption"
-	landform_caption.add_theme_color_override("font_color", ThemeColors.TEXT_MUTED)
 	_body.add_child(landform_caption)
 	_refresh_landform_caption()
 
@@ -139,7 +137,7 @@ func _on_panel_ready() -> void:
 	footer.add_theme_constant_override("separation", 12)
 	cancel_button = _footer_button("CancelButton", "Cancel", &"Secondary", footer)
 	cancel_button.pressed.connect(_on_cancel_pressed)
-	create_button = _footer_button("CreateButton", "Create map", &"", footer)
+	create_button = _footer_button("CreateButton", "Create map", &"Primary", footer)
 	create_button.pressed.connect(_on_create_pressed)
 	_body.add_child(HSeparator.new())
 	_body.add_child(footer)

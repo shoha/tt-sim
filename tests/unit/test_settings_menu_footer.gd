@@ -14,7 +14,7 @@ func before_each() -> void:
 
 
 func test_apply_is_the_only_accent_action() -> void:
-	assert_eq(_menu.apply_button.theme_type_variation, &"")
+	assert_eq(_menu.apply_button.theme_type_variation, &"Primary")
 	assert_eq(_menu.reset_button.theme_type_variation, &"Secondary")
 	assert_eq(_menu.reset_button.text, "Reset to Defaults")
 	assert_eq(_menu.apply_button.text, "Apply")

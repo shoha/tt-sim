@@ -116,7 +116,6 @@ func _init() -> void:
 	_caption = Label.new()
 	_caption.name = "Caption"
 	_caption.theme_type_variation = &"Caption"
-	_caption.add_theme_color_override("font_color", ThemeColors.TEXT_MUTED)
 	_caption.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_column.add_child(_caption)
