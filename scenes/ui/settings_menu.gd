@@ -327,6 +327,7 @@ func _on_panel_ready() -> void:
 	# Sections are chosen from the labelled rail; the native tab bar is hidden.
 	tab_container.tabs_visible = false
 	_populate_section_rail()
+	_fit_tab_rows()
 
 	# Apply tooltips to settings controls
 	SettingsTooltips.apply(self)
@@ -350,6 +351,16 @@ func _on_before_animate_out() -> void:
 func _on_after_animate_out() -> void:
 	closed.emit()
 	queue_free()
+
+
+## Every tab's label-and-control rows share one label column and gap (PropertyRow), and a
+## tab whose rows run past its bottom fades there instead of cutting a row (ScrollFade).
+func _fit_tab_rows() -> void:
+	for tab in tab_container.get_children():
+		if tab is ScrollContainer:
+			tab.add_child(ScrollFade.new())
+	for node in tab_container.find_children("*", "HBoxContainer", true, false):
+		PropertyRow.fit_sheet_row(node as HBoxContainer)
 
 
 func _populate_controls_list() -> void:
@@ -379,7 +390,6 @@ func _populate_controls_list() -> void:
 		var key_label := Label.new()
 		key_label.text = control[0]
 		key_label.theme_type_variation = "Body"
-		key_label.custom_minimum_size = Vector2(180, 0)
 		hbox.add_child(key_label)
 
 		var action_label := Label.new()
@@ -387,6 +397,7 @@ func _populate_controls_list() -> void:
 		action_label.theme_type_variation = "Caption"
 		hbox.add_child(action_label)
 
+		PropertyRow.fit_sheet_row(hbox)
 		controls_list.add_child(hbox)
 
 

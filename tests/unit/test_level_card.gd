@@ -28,6 +28,13 @@ func _card(info: Dictionary) -> LevelCard:
 	return card
 
 
+func test_the_initial_is_the_first_letter_or_digit() -> void:
+	assert_eq(LevelCard.initial_of("mossy Hollow"), "M")
+	assert_eq(LevelCard.initial_of("_nettest_parity"), "N")
+	assert_eq(LevelCard.initial_of("  3 Rivers"), "3")
+	assert_eq(LevelCard.initial_of("___"), "")
+
+
 func test_caption_grammar_and_relative_times() -> void:
 	assert_eq(
 		LevelCard.caption_for(_info({"token_count": 1, "modified_at": NOW - 5}), NOW),

@@ -67,6 +67,7 @@ grow_vertical = 2
 script = ExtResource("1_v7vxt")
 
 [node name="PanelContainer" type="PanelContainer" parent="GameplayMenu/AssetBrowserContainer" unique_id=2020775875]
+custom_minimum_size = Vector2(600, 0)
 layout_mode = 2
 
 [node name="VBox" type="VBoxContainer" parent="GameplayMenu/AssetBrowserContainer/PanelContainer" unique_id=1796072533]

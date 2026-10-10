@@ -116,21 +116,24 @@ func test_tracks_and_switches_hold_glyph_contrast() -> void:
 
 
 ## Selected tiles and rows fill with SELECTED. On glass that is deep lake, darker than the
-## board, with its lake_light ring at 3:1 around it, not a lake_light fill brighter than
-## anything on the table.
+## board, not a lake_light fill brighter than anything on the table. A picked tile has no ring
+## of its own: the ring is focus, drawn 4 px outside on the glass, where it holds 3:1 over
+## any board.
 func test_selected_fills_stay_under_the_board() -> void:
 	for theme: Theme in [paper, glass]:
 		var roles := ThemeColors.PAPER_ROLES if theme == paper else ThemeColors.GLASS_ROLES
 		var picked := theme.get_stylebox("pressed", "Tile") as StyleBoxFlat
 		assert_eq(picked.bg_color, roles[ThemeColors.SELECTED])
-		assert_eq(picked.border_color, roles[ThemeColors.STATE])
+		assert_eq(picked.border_color, roles[ThemeColors.SELECTED], "no ring: the ring is focus")
 		assert_eq(theme.get_color("font_pressed_color", "Tile"), roles[ThemeColors.ON_SELECTED])
 		var row := theme.get_stylebox("selected", "ItemList") as StyleBoxFlat
 		assert_eq(row.bg_color, roles[ThemeColors.SELECTED])
 	var glass_fill: Color = ThemeColors.GLASS_ROLES[ThemeColors.SELECTED]
 	assert_lt(_luminance(glass_fill), 0.25, "a glass selected fill stays under the board's 0.40")
-	var ring := _contrast(ThemeColors.GLASS_ROLES[ThemeColors.STATE], glass_fill)
-	assert_gt(ring, GLYPH, "the glass selected ring on its fill: %.2f" % ring)
+	for ground: Color in [WHITE, BLACK]:
+		var back := _over(ThemeColors.GLASS_ROLES[ThemeColors.SURFACE], ground)
+		var ring := _contrast(ThemeColors.GLASS_ROLES[ThemeColors.FOCUS], back)
+		assert_gt(ring, GLYPH, "the glass focus ring around a picked tile: %.2f" % ring)
 
 
 func test_the_room_code_reads_aloud() -> void:

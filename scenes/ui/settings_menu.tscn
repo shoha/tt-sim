@@ -560,7 +560,7 @@ layout_mode = 2
 custom_minimum_size = Vector2(200, 0)
 layout_mode = 2
 theme_type_variation = &"Body"
-text = "Enable P2P Asset Streaming"
+text = "P2P Asset Streaming"
 
 [node name="P2PEnabledCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Network/Margin/Content/P2PEnabled"]
 unique_name_in_owner = true

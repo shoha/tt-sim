@@ -105,6 +105,95 @@ func test_board_labels_are_glass_chips() -> void:
 	assert_gt(chip.border_width_top, 0, "the glass top rim")
 
 
+## Focus and selection never share a mark: a selected card keeps its edge (no ring; the ring
+## is focus) and says so in its caption strip, the selected fill under ON_SELECTED text.
+func test_a_selected_card_fills_its_strip_and_leaves_the_ring_to_focus() -> void:
+	var leaves := [
+		[ThemeColors.paper_theme(), ThemeColors.PAPER_ROLES],
+		[ThemeColors.glass_theme(), ThemeColors.GLASS_ROLES],
+	]
+	for leaf: Array in leaves:
+		var theme: Theme = leaf[0]
+		var roles: Dictionary = leaf[1]
+		var normal := theme.get_stylebox("normal", "Card") as StyleBoxFlat
+		var pressed := theme.get_stylebox("pressed", "Card") as StyleBoxFlat
+		assert_eq(pressed.border_color, normal.border_color, "no state ring on a selected card")
+		assert_eq(pressed.border_width_top, normal.border_width_top)
+		var strip := theme.get_stylebox("panel", "CardStripSelected") as StyleBoxFlat
+		assert_eq(strip.bg_color, roles[ThemeColors.SELECTED])
+		assert_eq(theme.get_stylebox("panel", "CardStrip").bg_color.a, 0.0, "clear at rest")
+		for label in ["BodyOnSelected", "CaptionOnSelected"]:
+			assert_eq(theme.get_color("font_color", label), roles[ThemeColors.ON_SELECTED], label)
+	var card := LevelCard.new()
+	add_child_autofree(card)
+	card.setup({"name": "Mossy Hollow", "path": "user://x/"})
+	card.set_selected(true)
+	assert_true(card.button_pressed)
+	assert_eq(card._strip.theme_type_variation, &"CardStripSelected")
+	assert_eq(card._name.theme_type_variation, &"BodyOnSelected")
+	assert_eq(card._caption.theme_type_variation, &"CaptionOnSelected")
+	card.set_selected(false)
+	assert_eq(card._strip.theme_type_variation, &"CardStrip")
+	assert_eq(card._name.theme_type_variation, &"Body")
+
+
+## The slider's unfilled track is a 3 px rail under the 6 px fill: Godot draws both at the
+## track's minimum height, and the fill's expand margins widen it.
+func test_the_slider_track_is_thinner_than_its_fill() -> void:
+	var theme := ThemeColors.paper_theme()
+	for type in ["HSlider", "VSlider"]:
+		var track := theme.get_stylebox("slider", type) as StyleBoxFlat
+		var fill := theme.get_stylebox("grabber_area", type) as StyleBoxFlat
+		var across := track.get_minimum_size().y if type == "HSlider" else track.get_minimum_size().x
+		var widen := (
+			fill.expand_margin_top + fill.expand_margin_bottom
+			if type == "HSlider"
+			else fill.expand_margin_left + fill.expand_margin_right
+		)
+		assert_eq(across, 3.0, "%s rail" % type)
+		assert_eq(across + widen, 6.0, "%s fill" % type)
+
+
+## A divider is at least one physical pixel at 1280x720 (the canvas draws at 0.667 there).
+func test_dividers_survive_the_smallest_window() -> void:
+	for theme: Theme in [ThemeColors.paper_theme(), ThemeColors.glass_theme()]:
+		for item: Array in [
+			["separator", "HSeparator"], ["separator", "VSeparator"], ["separator", "PopupMenu"]
+		]:
+			var line := theme.get_stylebox(item[0], item[1]) as StyleBoxLine
+			assert_gte(line.thickness * 1280.0 / 1920.0, 1.0, "%s at 720p" % item[1])
+
+
+## Settings rows share one label column and the PropertyRow gap.
+func test_sheet_rows_share_one_label_column() -> void:
+	var gap := ThemeColors.paper_theme().get_constant("separation", "PropertyRow")
+	assert_eq(gap, 16)
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(label)
+	row.add_child(Button.new())
+	autofree(row)
+	PropertyRow.fit_sheet_row(row)
+	assert_eq(row.theme_type_variation, &"PropertyRow")
+	assert_eq(label.custom_minimum_size.x, PropertyRow.SHEET_LABEL_WIDTH)
+	assert_eq(label.size_flags_horizontal, Control.SIZE_FILL, "the control sits on the edge")
+	var bare := HBoxContainer.new()
+	bare.add_child(Control.new())
+	autofree(bare)
+	PropertyRow.fit_sheet_row(bare)
+	assert_eq(bare.theme_type_variation, &"", "a row that does not start with a label is left")
+
+
+func test_copy_counts_and_tells_gestures_apart() -> void:
+	assert_eq(LobbyHost.players_connected_text(1), "1 player connected")
+	assert_eq(LobbyHost.players_connected_text(4), "4 players connected")
+	for i in range(2):
+		var pan: String = InputProfile.LABELS[&"pan"][i]
+		var rotate: String = InputProfile.LABELS[&"rotate"][i]
+		assert_ne(pan, rotate, "pan and rotate read differently")
+
+
 func _over(color: Color, ground: Color) -> Color:
 	return Color(
 		lerpf(ground.r, color.r, color.a),

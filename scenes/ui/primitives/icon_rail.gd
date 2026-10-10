@@ -71,6 +71,13 @@ func add_item(id: StringName, icon_name: String, tooltip: String = "") -> IconBu
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		column.add_child(label)
+		if not vertical and indicator_at_end:
+			# Room for the underline under the label, so it clears the descenders.
+			var underline_room := Control.new()
+			underline_room.name = "UnderlineRoom"
+			underline_room.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			underline_room.custom_minimum_size = Vector2(0, INDICATOR_THICKNESS + 4.0)
+			column.add_child(underline_room)
 		item = column
 	add_child(item)
 	_buttons[id] = button

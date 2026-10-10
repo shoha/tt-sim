@@ -21,6 +21,10 @@
    {"op": "wait", "s": 0.4},
    {"op": "capture", "name": "{value}_focus_paper", "desc": "{value}: keyboard focus on a quiet paper button (the title's Join Game)"},
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "blur"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "focus", "target": "title_card"},
+   {"op": "wait", "s": 0.4},
+   {"op": "capture", "name": "{value}_focus_selected_card", "desc": "{value}: keyboard focus on the selected level card: the focus ring around the card, the selection in its caption strip"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "blur"},
 
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "settings", "section": "Audio"},
    {"op": "wait", "s": 1.2},
@@ -67,6 +71,10 @@
    {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "drawer", "which": "authoring", "pane": "biome"},
    {"op": "wait", "s": 1.0},
    {"op": "capture", "name": "{value}_authoring_drawer", "desc": "{value}: authoring on the test map, the tool drawer open on Biome"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "focus", "target": "glass_tile"},
+   {"op": "wait", "s": 0.4},
+   {"op": "capture", "name": "{value}_focus_selected_tile", "desc": "{value}: keyboard focus on the drawer's picked tile (the probe lets a tile take focus): the lake fill with the focus ring 4 px outside it"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "blur"},
    {"op": "title"},
    {"op": "wait", "s": 1.0},
 
@@ -139,7 +147,7 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "window", "size": "1920x1080"},
   {"op": "wait", "s": 1.0},
 
-  {"op": "index", "title": "UI tour", "intro": "Produced by tools/render_jobs/jobs/ui_tour.json with probes/ui_primitives.gd: every top screen at 1280x720 and 1920x1080 window sizes (names start with the size), for the tt-sim-ui-critic agent (docs/UI_TASTE.md). A 100 ft temperate forest map is saved as the test level _ui_tour_room (shown as Mossy Hollow) for authoring, play and the host lobby, and deleted at the end. The host lobby is shown without hosting, with a sample code and players. focus_paper and focus_glass show keyboard focus on a quiet button of each theme leaf; the dusk_ captures repeat the in-play screens with the time of day set to 19:00 through the Sun pane. Last, one ultrawide probe capture."},
+  {"op": "index", "title": "UI tour", "intro": "Produced by tools/render_jobs/jobs/ui_tour.json with probes/ui_primitives.gd: every top screen at 1280x720 and 1920x1080 window sizes (names start with the size), for the tt-sim-ui-critic agent (docs/UI_TASTE.md). A 100 ft temperate forest map is saved as the test level _ui_tour_room (shown as Mossy Hollow) for authoring, play and the host lobby, and deleted at the end. The host lobby is shown without hosting, with a sample code and players. focus_paper and focus_glass show keyboard focus on a quiet button of each theme leaf, and focus_selected_card and focus_selected_tile focus on a selected item, where the focus ring and the selection must both read (drawer tiles take no focus in the game; the probe lets the picked one); the dusk_ captures repeat the in-play screens with the time of day set to 19:00 through the Sun pane. Last, one ultrawide probe capture."},
   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "cleanup"}
  ]
 }

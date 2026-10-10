@@ -14,6 +14,9 @@ enum ToastType { INFO, SUCCESS, WARNING, ERROR }
 const MAX_VISIBLE_TOASTS := 5
 const DEFAULT_DURATION := 3.0
 const ICON_SIZE := 20
+## Every toast's width: a stack of equal chips, and room for a two-line warning ("Maps are
+## built offline. Leave the game to build or edit a map.") rather than three.
+const WIDTH := 360.0
 ## Per kind: the panel's theme variation, the icon and the role that tints it.
 const KINDS := {
 	ToastType.INFO: [&"ToastInfo", "info-circle", ThemeColors.STATE],
@@ -52,7 +55,7 @@ func _create_toast(message: String, type: ToastType) -> Control:
 	var kind: Array = KINDS.get(type, KINDS[ToastType.INFO])
 	var panel = PanelContainer.new()
 	panel.theme_type_variation = kind[0]
-	panel.custom_minimum_size = Vector2(250, 0)
+	panel.custom_minimum_size = Vector2(WIDTH, 0)
 	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 
 	var hbox = HBoxContainer.new()

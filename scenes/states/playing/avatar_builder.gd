@@ -86,10 +86,11 @@ const FACE_ICON_ROOM := 14.0
 const FACE_FIT_SPARE := Vector2(24.0, 16.0)
 const PART_TILE := Vector2(84, 96)
 const PART_ICON_PX := 56
-## The panel's share of the window, its size limits, and the window margin it keeps.
+## The panel's share of the window, its size limits, and the window margin it keeps. The
+## widest is the declared wide sheet token, 1280 (docs/UI_TASTE.md S5): rail, panes, preview.
 const PANEL_SHARE := Vector2(0.86, 0.86)
 const PANEL_MIN := Vector2(860, 600)
-const PANEL_MAX := Vector2(1640, 1400)
+const PANEL_MAX := Vector2(1280, 1400)
 const WINDOW_MARGIN := 24.0
 ## The preview's width as a share of the panel's height, and its least size.
 const PREVIEW_ASPECT := 0.5

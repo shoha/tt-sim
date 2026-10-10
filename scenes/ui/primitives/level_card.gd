@@ -2,7 +2,8 @@ class_name LevelCard
 extends Button
 
 ## A saved level as a card: thumbnail, name, and a caption with the token count
-## and when it was last edited. Press selects, double-click activates, and the
+## and when it was last edited. Press selects (the caption strip takes the selected fill;
+## the ring stays focus's), double-click activates, and the
 ## overflow menu in the thumbnail corner offers Edit, Edit map (authoring mode), Rename
 ## (inline), Duplicate and Delete. Delete is disabled while the card is locked (the level
 ## being played).
@@ -34,6 +35,7 @@ var locked: bool = false:
 			_menu.set_item_disabled(_menu.get_item_index(ACTION_DELETE), locked)
 
 var _column: VBoxContainer
+var _strip: PanelContainer
 var _thumb: TextureRect
 var _letter: Label
 var _name: Label
@@ -111,11 +113,19 @@ func _init() -> void:
 	_menu.id_pressed.connect(_on_menu_id_pressed)
 	add_child(_menu)
 
+	# The caption strip: clear at rest, the selected fill under ON_SELECTED text when the card
+	# is selected. It runs to the card's bottom inset, so the fill is concentric with the card.
+	_strip = PanelContainer.new()
+	_strip.name = "Strip"
+	_strip.theme_type_variation = &"CardStrip"
+	_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_strip.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_column.add_child(_strip)
 	var text_margin := MarginContainer.new()
 	text_margin.name = "TextMargin"
 	text_margin.theme_type_variation = &"CardText"
 	text_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_column.add_child(text_margin)
+	_strip.add_child(text_margin)
 	var text_column := VBoxContainer.new()
 	text_column.name = "Text"
 	text_column.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -142,6 +152,7 @@ func _init() -> void:
 	text_column.add_child(_caption)
 
 	pressed.connect(_on_pressed)
+	toggled.connect(_show_selected)
 	gui_input.connect(_on_gui_input)
 	mouse_entered.connect(_on_hover.bind(true))
 	mouse_exited.connect(_on_hover.bind(false))
@@ -161,8 +172,23 @@ func setup(info: Dictionary) -> void:
 			texture = ImageTexture.create_from_image(image)
 	# No picture yet: the well's paper-inset wash with the name's initial in Fraunces.
 	_thumb.texture = texture
-	_letter.text = _name.text.substr(0, 1).to_upper()
+	_letter.text = initial_of(_name.text)
 	_letter.visible = texture == null
+
+
+## The well's initial: the name's first letter or digit, so "_camp" shows C, not "_".
+static func initial_of(level_name: String) -> String:
+	for i in range(level_name.length()):
+		var ch := level_name.substr(i, 1)
+		if ch.to_upper() != ch.to_lower() or ch.is_valid_int():
+			return ch.to_upper()
+	return ""
+
+
+## Select or clear the card without emitting: the toggle state and its caption strip.
+func set_selected(on: bool) -> void:
+	set_pressed_no_signal(on)
+	_show_selected(on)
 
 
 ## "1 token, edited 3 h ago"; "No tokens" alone when the level is empty and has
@@ -224,6 +250,12 @@ func _on_rename_submitted(new_name: String) -> void:
 
 func _on_pressed() -> void:
 	selected.emit(level_info)
+
+
+func _show_selected(on: bool) -> void:
+	_strip.theme_type_variation = &"CardStripSelected" if on else &"CardStrip"
+	_name.theme_type_variation = &"BodyOnSelected" if on else &"Body"
+	_caption.theme_type_variation = &"CaptionOnSelected" if on else &"Caption"
 
 
 func _on_gui_input(event: InputEvent) -> void:
@@ -294,7 +326,7 @@ func _update_thumb_pivot() -> void:
 ## (0.06s) and button_up regrew it over ANIM_HOVER_SOFT_IN (0.24s), each killing the
 ## other's tween. A double-click lands well inside 240ms, so the slow regrow was
 ## interrupted twice and the thumbnail pumped instead of reading as a press. A single
-## click's real feedback is the selection highlight (Card's pressed style), which is
+## click's real feedback is the selection highlight (the selected caption strip), which is
 ## state rather than motion, and Host Game / Play Solo act on that selection.
 func _on_hover(entered: bool) -> void:
 	if _rename.visible:

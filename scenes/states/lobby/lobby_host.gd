@@ -105,16 +105,21 @@ func _on_room_code_received(code: String) -> void:
 	start_button.disabled = false
 
 
+## "1 player connected", "3 players connected".
+static func players_connected_text(count: int) -> String:
+	return ("%d player connected" if count == 1 else "%d players connected") % count
+
+
 func _on_player_joined(_peer_id: int, _player_info: Dictionary) -> void:
 	_update_player_list()
-	status_label.text = "%d player(s) connected" % NetworkManager.get_player_count()
+	status_label.text = players_connected_text(NetworkManager.get_player_count())
 	_flash_player_list()
 	AudioManager.play(&"success")
 
 
 func _on_player_left(_peer_id: int, _player_info: Dictionary) -> void:
 	_update_player_list()
-	status_label.text = "%d player(s) connected" % NetworkManager.get_player_count()
+	status_label.text = players_connected_text(NetworkManager.get_player_count())
 	_flash_player_list()
 	AudioManager.play(&"tick")
 

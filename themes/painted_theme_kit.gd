@@ -27,6 +27,9 @@ const SHEET_PADDING := 24
 const GLASS_PADDING := 16
 const ROW_HEIGHT := 44
 const CONTROL_HEIGHT := 40
+## A divider line: at least one physical pixel at the smallest window, 1280x720, where the
+## 1080p canvas draws at 0.667.
+const DIVIDER := 2
 
 # Radii
 const RADIUS_CHIP := 6

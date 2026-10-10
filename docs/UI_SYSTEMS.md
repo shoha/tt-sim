@@ -484,7 +484,7 @@ opens on its waiting view when the connection exists. Both extend `AnimatedCanva
 exit, so a stray `animate_out()` must never free the lobby a second time.
 
 The host screen opens with its `MenuHeader` ("Host a game"), then Your Name and Room Code fields,
-the room code in a `KeyChip` with a copy button (`DisplayServer.clipboard_set()`, toast "Code
+the room code in a `CodeChip` with a copy button (`DisplayServer.clipboard_set()`, toast "Code
 copied") and an invite button beside it, a framed thumbnail strip showing the pending level --
 thumbnail, name, token-count caption, set via `set_level(level)` -- with a Change button that opens
 a `LevelPickerDialog` and emits `level_change_requested(level_info)` when a different level is

@@ -17,6 +17,9 @@ const CHIP_WIDTH_FORMATTED := 100.0
 const TICK_SIZE := 14.0
 const TICKS_HEIGHT := 16.0
 const OVERRIDE_TOOLTIP := "Overridden. Right-click to reset to the preset value."
+## The label column of a row on a sheet (Settings), so every tab's controls line up on one
+## edge. A drawer row keeps the narrower label_min_width.
+const SHEET_LABEL_WIDTH := 184.0
 
 @export var label: String = "":
 	set(value):
@@ -138,6 +141,18 @@ func set_color_no_signal(new_color: Color) -> void:
 func set_checked_no_signal(on: bool) -> void:
 	if _check:
 		_check.set_pressed_no_signal(on)
+
+
+## Lay out a sheet's label-and-control [param row] as a property row: the label in the
+## SHEET_LABEL_WIDTH column and the PropertyRow gap (16 px) to its control. The label no
+## longer expands, so the control sits on the shared edge rather than at the row's end.
+static func fit_sheet_row(row: HBoxContainer) -> void:
+	if row.get_child_count() == 0 or not row.get_child(0) is Label:
+		return
+	row.theme_type_variation = &"PropertyRow"
+	var row_label := row.get_child(0) as Label
+	row_label.custom_minimum_size.x = SHEET_LABEL_WIDTH
+	row_label.size_flags_horizontal = Control.SIZE_FILL
 
 
 ## Put [param control] where the slider would go (for an OptionButton row).

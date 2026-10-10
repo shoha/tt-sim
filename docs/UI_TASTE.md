@@ -71,7 +71,9 @@ sizes per file against `tests/ui_bypass_baseline.json`, and a count may only fal
 - **S4** More space above a heading than below it, carried by `MenuHeader` and the theme, not
   set per scene.
 - **S5** Width tokens (sheets 420 / 600 / 960, drawer 396) and a max content width; nothing
-  stretched to the window, no full-width form fields.
+  stretched to the window, no full-width form fields. One declared wide token, 1280, for the
+  avatar builder's three columns (rail, panes, preview). Pause and confirms are 420, Settings
+  and the new-map dialog 600; a card grid adds columns rather than stretch a card past 400.
 - **S6** Targets about 44: rows 44, controls and footer buttons 40.
 
 ## Motion
