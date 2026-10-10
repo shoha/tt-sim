@@ -17,6 +17,7 @@
 		"res://tests/unit/test_map_download_coordinator.gd",
 		"res://tests/unit/test_map_file_hash.gd",
 		"res://tests/unit/test_map_fingerprint.gd",
+		"res://tests/unit/test_net_launcher_store_check.gd",
 		"res://tests/unit/test_network_game_sync.gd",
 		"res://tests/unit/test_network_manager_late_joiner_snapshot.gd",
 		"res://tests/unit/test_network_manager_security.gd",
