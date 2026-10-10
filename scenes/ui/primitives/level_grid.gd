@@ -44,6 +44,8 @@ func _init() -> void:
 	horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	# The CardGrid panel's margins keep a focused card's ring inside the scroll clip.
 	theme_type_variation = &"CardGrid"
+	# Over the painted backdrop the bar stands on a paper strip of its own (3:1 in every mood).
+	get_v_scroll_bar().theme_type_variation = &"CardGridBar"
 	_flow = HFlowContainer.new()
 	_flow.name = "Flow"
 	_flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -89,10 +91,19 @@ func content_height() -> float:
 	return _flow.get_combined_minimum_size().y + get_theme_stylebox(&"panel").get_minimum_size().y
 
 
-## Silent selection by level path; an unknown path clears the selection.
+## Silent selection by level path; an unknown path clears the selection. The selected card
+## scrolls into view once the grid has laid it out (the newest map may sit past the fold).
 func select(path: String) -> void:
 	_selected_path = path
 	_apply_selection()
+	if is_inside_tree() and not get_tree().process_frame.is_connected(_reveal_selected):
+		get_tree().process_frame.connect(_reveal_selected, CONNECT_ONE_SHOT)
+
+
+func _reveal_selected() -> void:
+	for card in _cards:
+		if card.level_info.get("path", "") == _selected_path and card.is_inside_tree():
+			ensure_control_visible(card)
 
 
 func selected_info() -> Dictionary:

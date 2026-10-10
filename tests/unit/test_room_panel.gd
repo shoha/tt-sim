@@ -279,6 +279,11 @@ func test_a_map_without_a_thumbnail_paints_its_placeholder() -> void:
 	var placeholder := panel.preview.get_node("Placeholder") as MapPlaceholder
 	assert_eq(panel.preview.theme_type_variation, &"CardThumb")
 	assert_true(placeholder.visible)
+	# On a card of its own with its name, a picture on paper rather than a hole in the sky.
+	var card := panel.find_child("PreviewCard", true, false) as PanelContainer
+	assert_eq(card.theme_type_variation, &"PictureCard")
+	assert_true(card.is_ancestor_of(panel.preview))
+	assert_true(card.is_ancestor_of(panel.map_name_label))
 	var paint := placeholder.material as ShaderMaterial
 	assert_eq(paint.get_shader_parameter(&"seed"), MapPlaceholder.seed_of(MAP_A))
 	var row := panel.shelf_rows.get_child(0)
@@ -286,6 +291,20 @@ func test_a_map_without_a_thumbnail_paints_its_placeholder() -> void:
 	assert_eq(row_paint.get_shader_parameter(&"seed"), paint.get_shader_parameter(&"seed"))
 	assert_null(row.find_child("Letter", true, false), "no initial over a map")
 	assert_eq((row as Button).theme_type_variation, &"ListRow", "a plain row, not a tile")
+
+
+## A shelf row's picture is in its map's light whenever the map is selected: what is known of
+## the map now (its preset read after the row was built), the same as the preview's.
+func test_a_shelf_row_takes_its_maps_mood_with_the_preview() -> void:
+	var panel := _panel()
+	panel.show_session(_sample(), GM, true)
+	panel._pictures[MAP_C] = {"texture": null, "mood": "outdoor_night"}
+	panel.select(MAP_C)
+	var preview := panel.preview.get_node("Placeholder") as MapPlaceholder
+	assert_eq(preview.mood(), PaintedBackdrop.Mood.NIGHT)
+	var row := panel.shelf_rows.get_node("Map_%s" % MAP_C)
+	var picture := row.find_child("Placeholder", true, false) as MapPlaceholder
+	assert_eq(picture.mood(), PaintedBackdrop.Mood.NIGHT, "the row in the preview's light")
 
 
 func test_adding_a_map_reports_the_pick_and_the_new_map_can_be_selected() -> void:

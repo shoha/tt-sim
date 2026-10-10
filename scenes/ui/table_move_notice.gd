@@ -11,9 +11,10 @@ extends CanvasLayer
 ##
 ## Each sentence is one translated template with named placeholders ({map}, {gm}, {n}), so a
 ## translation may order them as its language does. The count is drawn on its own, in semibold
-## tabular figures, so the chip's width never moves as it counts; the sentence is cut at {n}
-## into the words before and after it. A long name is shortened with an ellipsis until the
-## sentence fits MAX_SENTENCE_WIDTH, the whole name in the chip's tooltip.
+## tabular figures (the Count variation), so the chip's width never moves as it counts; the
+## sentence is cut at {n} into the words before and after it. A long name is shortened with an
+## ellipsis until the sentence fits MAX_SENTENCE_WIDTH, the whole name in the chip's tooltip.
+## Stay here wears the Framed variation, its frame at 3:1 against the chip.
 
 ## The seconds ran out (the move goes ahead).
 signal elapsed
@@ -163,7 +164,8 @@ func _build(can_cancel: bool) -> void:
 	words.add_child(before_label)
 	count_label = Label.new()
 	count_label.name = "Count"
-	count_label.theme_type_variation = &"H3"
+	# Semibold with tabular figures, so 3, 2 and 1 take one width.
+	count_label.theme_type_variation = &"Count"
 	words.add_child(count_label)
 	after_label = _words_label("After")
 	words.add_child(after_label)
@@ -172,7 +174,9 @@ func _build(can_cancel: bool) -> void:
 		stay_button.name = "StayHere"
 		stay_button.text = STAY_HERE
 		stay_button.icon = IconButton.load_icon("arrow-back-up")
-		stay_button.theme_type_variation = &"Secondary"
+		# Framed at 3:1 against the chip (the track role) in every state, where the quiet
+		# button's own edge is a faint rim.
+		stay_button.theme_type_variation = &"Framed"
 		stay_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		stay_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		stay_button.pressed.connect(_on_stay_pressed)
@@ -189,13 +193,8 @@ func _words_label(node_name: String) -> Label:
 func _ready() -> void:
 	# Information is cool (lake), resolved against the glass theme the chip carries.
 	_icon.self_modulate = ThemeColors.of(_chip, ThemeColors.STATE)
-	# No theme variation carries tabular figures at body size: the count's own font is the
-	# H3 face with tnum switched on (a ratcheted override, tests/ui_bypass_baseline.json).
-	count_label.add_theme_font_override(&"font", tabular(count_label.get_theme_font(&"font")))
 	var font := before_label.get_theme_font(&"font")
 	_fit_words(font, before_label.get_theme_font_size(&"font_size"))
-	if stay_button:
-		_outline(stay_button)
 	_show_count()
 	_chip.modulate.a = 0.0
 	create_tween().tween_property(_chip, "modulate:a", 1.0, Constants.ANIM_FADE_IN_DURATION)
@@ -268,32 +267,6 @@ func _parts(names: Array) -> PackedStringArray:
 	if cut.size() < 2:
 		cut.append("")
 	return PackedStringArray([cut[0].strip_edges(), cut[1].strip_edges()])
-
-
-## `font` with tabular figures switched on, so every digit takes the same width.
-static func tabular(font: Font) -> Font:
-	var variation := font as FontVariation
-	var copy := variation.duplicate() as FontVariation if variation else FontVariation.new()
-	if variation == null:
-		copy.base_font = font
-	var features := copy.opentype_features.duplicate()
-	features[TextServerManager.get_primary_interface().name_to_tag("tnum")] = 1
-	copy.opentype_features = features
-	return copy
-
-
-## Stay here's frame at 3:1 against the chip (the glass track role) in every state, where the
-## quiet button's own edge is a faint rim.
-static func _outline(button: Button) -> void:
-	var edge := ThemeColors.of(button, ThemeColors.TRACK)
-	for state: StringName in [&"normal", &"hover", &"pressed", &"hover_pressed"]:
-		var box := button.get_theme_stylebox(state) as StyleBoxFlat
-		if box == null:
-			continue
-		var framed := box.duplicate() as StyleBoxFlat
-		framed.border_color = edge
-		framed.set_border_width_all(maxi(framed.border_width_left, 1))
-		button.add_theme_stylebox_override(state, framed)
 
 
 func _on_stay_pressed() -> void:

@@ -474,17 +474,24 @@ told on the CPU, and `BackdropLayout` (`backdrop_layout.gd`) where the screen's 
   their scroll view) and marks them, 12 px wider, on a grid of cells a seventy-second of the
   height. The sun or moon then stands in the largest open square above the lowest 30% of the
   screen (nearest its usual place, smaller in a small square), so no card, sheet or stage hides
-  it; each cloud moves to the nearest place where its base and lower puffs, through its sway,
-  are open (its crown may tuck behind a card; a base in the band of cards read as a ghost
-  card), or stays away; the poplars move along the crest to the nearest stretch no paper
-  covers, losing a tree at a time when the stretch is short.
+  it. A low sun (golden hour, dusk) keeps low: it takes the largest open square in the band of
+  sky up to 0.64 of the height, shrinking to fit, and with none there (a 1280 title full of
+  cards) it sets behind the paper at its own place, its glow round the paper's edges, rather
+  than climbing to the top edge (`BackdropPaint.LOW_SUN`). Each cloud moves whole, crown and
+  all, through its sway, to the nearest open sky (a base in the band of cards read as a ghost
+  card, a crown tucked behind them as a stray lozenge), a quarter smaller when it must, or
+  stays away; the poplars move along the crest to the nearest stretch no paper covers, losing a
+  tree at a time when the stretch is short.
 - **A change is one picture changing.** `show_map(preset, key)` (and `show_mood`) fades over
-  `FADE_S` (0.6 s, sine in-out, inside M1's overlay band) by mixing the values, never two
-  pictures: colours in OKLCH (`BackdropPaint.mix_looks`; lightness and chroma straight across,
-  the hue the short way round, between hues within about 11 degrees of opposite the way through
-  red and magenta, since a wider warm band sent a hill one way and its meadow the other; a
-  colour past the gamut gives up chroma, not hue), so golden hour to night passes through rose
-  and violet; the one disc moves, shrinks and turns into a crescent;
+  `FADE_S` (0.6 s, sine in-out; the world changing, not chrome, so M1's named exception past
+  the overlay band) by mixing the values, never two pictures: colours in OKLCH
+  (`BackdropPaint.mix_looks`; lightness and chroma straight across; a colour past the gamut
+  gives up chroma, not hue). The hue turns on one route for the whole land and one for the sky
+  (`hue_route`: each colour votes for its short way by how far it turns and how colourful it
+  is, and every colour of the group follows unless that is past five sixths of the circle),
+  since each colour taking its own short way sent a hill one way and its meadow the other. So
+  golden hour to night passes through a rose sky over hills going teal into blue; the one disc
+  moves, shrinks and turns into a crescent;
   a new map's skyline rolls into place and its clouds and poplars slide, grow or shrink
   (`mix_compositions`). A change part way through a fade starts from what is on screen. The
   first look a backdrop shows comes at once. `last_mood` and `last_key` carry the picture to
@@ -500,8 +507,10 @@ told on the CPU, and `BackdropLayout` (`backdrop_layout.gd`) where the screen's 
   "Your maps" with its count and the empty library's caption on a `Plaque`; the room's
   heading on a plaque on the side sheet's margin and as wide as the sheet (the sheet's
   heading, not a narrower slip above it), the code row on a plaque that ends at its words,
-  and the selected map's name
-  and readiness on a plaque as wide as its picture (`RoomLayout`). `Plaque` is the sheet's
+  and the selected map's picture on a card of its own with its name and readiness under it
+  (`PictureCard`, a card's paper and trim at rest, so the picture reads as a picture on paper,
+  not a hole in the sky; `RoomLayout`). A shelf row's picture is repainted with the preview on
+  every selection, so it is always in its map's light. `Plaque` is the sheet's
   paper and trim at a card's radius with 16 x 8 padding (glass: the rim, 12 x 8).
   `test_painted_backdrop` walks every word on the title and the room in each mood and fails
   one that has no opaque fill under it or reads under 4.5:1 on it. (Round 1 lifted dark
@@ -527,8 +536,9 @@ menu's words and icon (`TitleScreen.QUIT`, `QUIT_ICON`). The two map actions nam
 differs: Set up tokens is the Level Editor by what it does (starting tokens, the map's details
 and its Blender file), with its own icon (a chess pawn, `SET_UP_TOKENS_ICON`; the wand is the
 Events rail item's and Surprise me's), and opens it on the selected map, captioned with its
-name (with none
-selected it opens on a new map, the way to bring in a Blender map); New map carries the caption
+name (with none selected it opens on a new map, the way to bring in a Blender map, and its
+caption says so, "Bring in a map from Blender": it stays enabled over an empty library, where
+Play solo is disabled, since that is how a Blender map comes in); New map carries the caption
 "Pick a landform, then paint it" and emits `build_map_requested`, which Root turns into the
 new-map dialog and then [authoring mode](#authoring-mode). A card's overflow menu and the pause
 menu use the same name, Set up tokens (`TitleScreen.SET_UP_TOKENS`), and so does the editor's
@@ -545,13 +555,16 @@ maps" carries its count as a bare number beside the heading.
 ### Right Zone
 
 A "Your maps" heading with a live count on a paper plaque (`heading_plaque`, the `Plaque`
-variation, its top edge in line with the column's sheet; over an empty library it carries one
-short line, "No maps yet. Paint your first one", and one quiet action, Start a new map, which
-opens New map), and a 3-column `LevelGrid` populated from
+variation, its top edge in line with the column's sheet; over an empty library it says so once,
+with no count of 0: a small painted picture of a map to come (a `MapPlaceholder` in a
+`CardThumb` well, I5) beside one short line, "No maps yet. Paint your first one", and one quiet
+action, Start a new map, which opens New map), and a 3-column `LevelGrid` populated from
 `level_provider` (defaults to `LevelManager.get_saved_levels`; tests inject a fake before the node
 enters the tree). The most recently modified level is preselected on `_ready()`
-(`_preselect_most_recent()`). With no saved levels the grid is empty and an empty-state caption
-reads "Make a level in the Level Editor first".
+(`_preselect_most_recent()`), and a card selected by code (`LevelGrid.select`) scrolls into view
+once the grid has laid it out. The grid's scroll bar stands on the painted backdrop, so it wears
+`CardGridBar`: its grabber on a paper strip of its own, 3:1 in every mood (every other scroll
+bar's grabber is opaque in the track role).
 
 ### Signals
 

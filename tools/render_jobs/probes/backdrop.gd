@@ -5,12 +5,16 @@ extends RefCounted
 ## map whose environment preset paints it, over a staged library. Nothing is written to disk:
 ## the title's grid reads a staged list (the tour's test level and six sample maps with no
 ## folder, which paint their placeholders) until `restore`. `action`:
-## - `stage` (`folder`): the title's grid shows `folder` (the tour's test level, read from
-##   disk) and SAMPLE_MAPS, each edited a day or more before the last.
+## - `stage` (`folder`, `count`): the title's grid shows `folder` (the tour's test level, read
+##   from disk) and SAMPLE_MAPS (the first `count` of them in their order, all six by
+##   default), each edited a day or more before the last. Three cards leave the clouds open
+##   sky on a 1920 title; seven leave none.
 ## - `select` (`mood`): click the staged card whose preset paints `mood` (morning, midday,
 ##   golden_hour, dusk, overcast or night), as a player's click does; the backdrop fades to it.
 ## - `fade` (`from`, `to`, `at`): select the card of mood `from` at once, then click the card of
 ##   mood `to` and hold the change at `at` (0 to 1) of the way, for a capture of the mix.
+## - `settle`: end a change held part way by `fade`, the backdrop at rest in the mood it was
+##   changing to (a held change otherwise stays held through every later select of that map).
 ## - `drift` (`held`): hold the clouds still as Reduce motion does (PaintedBackdrop.hold_drift),
 ##   or let them drift again.
 ## - `empty`: the title over an empty library.
@@ -41,7 +45,10 @@ static func run(base: Node, step: Dictionary) -> String:
 	var title: TitleScreen = base.get("_title_screen")
 	match String(step.get("action", "")):
 		"stage":
-			return _stage(title, String(step.get("folder", "")))
+			return _stage(title, String(step.get("folder", "")), int(step.get("count", 6)))
+		"settle":
+			title.backdrop.show_mood(title.backdrop.mood(), true)
+			return "settled; %s" % _report(title)
 		"select":
 			return _select(title, String(step.get("mood", "")))
 		"fade":
@@ -100,7 +107,7 @@ static func _gpu_stop(base: Node, label: String) -> String:
 	]
 
 
-static func _stage(title: TitleScreen, folder: String) -> String:
+static func _stage(title: TitleScreen, folder: String, count: int) -> String:
 	if title == null:
 		return "no title"
 	var levels: Array[Dictionary] = []
@@ -109,7 +116,7 @@ static func _stage(title: TitleScreen, folder: String) -> String:
 		levels.append(real)
 	# Edited over the last week or so, a day or more apart (the newest first), never 1970.
 	var modified := int(Time.get_unix_time_from_system()) - DAY_S
-	for mood: String in SAMPLE_MAPS:
+	for mood: String in SAMPLE_MAPS.keys().slice(0, count):
 		var sample: Array = SAMPLE_MAPS[mood]
 		var key := SAMPLE_PREFIX + mood
 		levels.append(

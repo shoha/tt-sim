@@ -34,7 +34,8 @@ extends ColorRect
 enum Mood { MORNING, MIDDAY, GOLDEN_HOUR, DUSK, OVERCAST, NIGHT }
 
 const SHADER := preload("res://shaders/ui_backdrop.gdshader")
-## A change of light: an overlay's pace (M1), quick enough to follow a click.
+## A change of light, quick enough to follow a click: the world changing, not chrome, so past
+## the overlay band (UI_TASTE M1's named exception); no control waits on it.
 const FADE_S := 0.6
 ## Environment presets by the mood they paint, for the backdrop and the placeholders alike.
 ## Any other preset, or none, is morning.

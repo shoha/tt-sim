@@ -197,9 +197,6 @@
 		"res://scenes/ui/settings_menu.tscn": {
 			"override": 1
 		},
-		"res://scenes/ui/table_move_notice.gd": {
-			"override": 2
-		},
 		"res://scenes/ui/toast_container.tscn": {
 			"override": 1
 		},

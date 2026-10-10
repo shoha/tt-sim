@@ -313,6 +313,7 @@ func _show_selection() -> void:
 	for row: Node in shelf_rows.get_children():
 		if row is Button:
 			RoomRows.show_shelf_selected(row, row.name == "Map_%s" % _selected.validate_node_name())
+	_repaint_shelf()
 	_show_changes_line()
 	_fill_players()
 	var entry := {}
@@ -339,6 +340,18 @@ func _show_selection() -> void:
 	# After the frame's layout, when the column knows whether it scrolls and how far.
 	if is_inside_tree() and not get_tree().process_frame.is_connected(_reveal_selected):
 		get_tree().process_frame.connect(_reveal_selected, CONNECT_ONE_SHOT)
+
+
+## Paint every shelf row's picture from what is known of its map now, so a row shows the same
+## mood as the preview and the backdrop when the map is selected (a picture first read before
+## its map's details arrived is not left in the wrong light).
+func _repaint_shelf() -> void:
+	for entry in _shelf:
+		var row := shelf_rows.get_node_or_null(NodePath("Map_%s" % str(entry.key).validate_node_name()))
+		var well := row.get_node_or_null("Inner/Well") as Panel if row else null
+		if well:
+			var picture := _picture_for(entry)
+			RoomRows.set_map_well(well, picture.texture, _picture_key(entry), picture.mood)
 
 
 ## The GM's Save into map and Discard changes, on a line right under the selected shelf row

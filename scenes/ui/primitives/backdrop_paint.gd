@@ -7,18 +7,20 @@ extends RefCounted
 ##
 ## A picture is a look and a composition. The look is the light: one of six curated moods
 ## (MOODS), or a mix of two while the light changes. Two looks mix in OKLCH (mix_looks): the
-## lightness and the chroma run straight across and the hue takes the short way round (between
-## hues all but opposite, the way through red and magenta), so golden hour to night passes
-## through rose and violet rather than grey and khaki. The sun's place,
+## lightness and the chroma run straight across, so no mix greys, and the hue turns round the
+## circle on one route for the whole land and one for the sky (hue_route), so a hill and the
+## meadow under it never pass through opposite hues. The sun's place,
 ## size and moonness mix with it, so one disc moves and changes; there are never two.
 ##
 ## The composition is the land and the weather, drawn from the map's seed (compose): the phase
 ## and the swell of the skyline, how many poplars stand and where, and four clouds' places and
 ## shapes. Two forest maps get their own skies while the moods stay curated. On a screen the
-## composition then makes way for the screen's paper (BackdropLayout): each cloud moves to open
-## sky (a cloud's base in the band of cards read as a ghost card), the poplars to a stretch of
-## crest no sheet covers, and the open square the sun or moon sits in is the largest the layout
-## leaves. Two compositions mix too (mix_compositions), so a new map's land rolls into place.
+## composition then makes way for the screen's paper (BackdropLayout): each cloud moves whole
+## to open sky (a cloud's base in the band of cards read as a ghost card, its crown tucked
+## behind them as a stray lozenge), smaller when it must, the poplars to a stretch of crest no
+## sheet covers, and the sun or moon to the largest open square the layout leaves (a low sun to
+## the largest low in the sky). Two compositions mix too (mix_compositions), so a new map's land
+## rolls into place.
 
 ## A mood: its colours (sRGB paint values as the shader's vec3, not theme roles: the painting's
 ## palette is its own, and the interface's colours never change with it), then the sun's
@@ -169,19 +171,36 @@ const MOODS: Array[Dictionary] = [
 	},
 ]
 
-## Between hues this close to opposite (radians), the mix goes through red and magenta. Narrow:
-## a wider band sent a hill the warm way while the meadow under it went the cool way, an
-## orange hill on a teal meadow half way from dusk to morning.
-const WARM_ROUTE := 0.2
+## The colours of the land, which turn round the hue circle together in a change of light; the
+## rest (the sky, the sun and the clouds) turn together too, on a route of their own.
+const LAND_COLOURS: Array[String] = [
+	"range_col", "far_col", "near_col", "meadow_col", "rim_col", "tree_shade", "tree_lit"
+]
+## The furthest a colour turns round the hue circle (radians) to keep to its group's route; a
+## colour that would turn further takes its own short way, which is then a small turn. Each
+## colour taking its own short way sent a hill the warm way while the meadow under it went the
+## cool way: an orange hill on a teal meadow half way from dusk to morning. Two thirds of the
+## circle still split the crest's rim from the poplars' lit side from morning to dusk.
+const MAX_TURN := TAU * 5.0 / 6.0
 ## Below this chroma a colour has no hue worth keeping; it takes the other colour's.
 const GREY_CHROMA := 0.03
 ## How far each cloud sways about its place, in heights (the shader's SWAY).
 const SWAY := 0.045
+## A cloud with no open sky at its size tries again at these shares of it before it stays away.
+const CLOUD_SHRINK: Array[float] = [1.0, 0.75]
 ## How much of the screen the sun's open square is sought in: above this many heights from the
 ## foot, so the sun or moon stands in the sky, not over the meadow.
 const SKY_FLOOR := 0.30
 ## The open square is sought nearest this point (x as a share of the width, y in heights).
 const SUN_TOWARD := Vector2(0.84, 0.60)
+## A low sun (golden hour, dusk: a look whose sun stands under LOW_SUN.x heights; above
+## LOW_SUN.y it is high, between part way) keeps low: its square is sought in the band of sky
+## up to LOW_SKY_TOP heights, and the disc shrinks to fit there rather than climbing to the
+## top edge. A band whose square is under LOW_SQUARE_MIN heights counts as none: the sun then
+## sets behind the paper at its own place, its glow showing round the paper's edges.
+const LOW_SUN := Vector2(0.52, 0.58)
+const LOW_SKY_TOP := 0.64
+const LOW_SQUARE_MIN := 0.10
 ## The poplar group's preferred places on the crest, as shares of the width; the seed picks.
 const GROVE_AT: Array[float] = [0.30, 0.56, 0.64, 0.44]
 ## The draw (0 to 1) past which the group has one, two, three and four poplars: none in one map
@@ -194,44 +213,74 @@ static func look_of(mood: int) -> Dictionary:
 	return MOODS[clampi(mood, 0, MOODS.size() - 1)]
 
 
-## The look part way, `k`, from `from` to `to`: colours in OKLCH, everything else straight.
+## The look part way, `k`, from `from` to `to`: colours in OKLCH, everything else straight. The
+## land's colours turn round the hue circle one way (hue_route), and the sky's one way.
 static func mix_looks(from: Dictionary, to: Dictionary, k: float) -> Dictionary:
 	if k <= 0.0:
 		return from
 	if k >= 1.0:
 		return to
+	var land_route := hue_route(from, to, true)
+	var sky_route := hue_route(from, to, false)
 	var mixed := {}
 	for key: String in to:
 		var a: Variant = from.get(key, to[key])
 		if a is Vector3:
-			mixed[key] = mix_oklch(a, to[key], k)
+			var route := land_route if LAND_COLOURS.has(key) else sky_route
+			mixed[key] = mix_oklch(a, to[key], k, route)
 		else:
 			mixed[key] = lerpf(float(a), float(to[key]), k)
 	return mixed
 
 
-## The sRGB colour `a` mixed `k` of the way to `b` in OKLCH, so the mix keeps its saturation.
-static func mix_oklch(a: Vector3, b: Vector3, k: float) -> Vector3:
+## The way round the hue circle the land's colours (`land`) or the sky's take from `from` to
+## `to`: 1.0 up, -1.0 down. Each colour votes for its short way by how far it turns and how
+## colourful it is, so the colours that change the most decide, and the rest follow them.
+static func hue_route(from: Dictionary, to: Dictionary, land: bool) -> float:
+	var vote := 0.0
+	for key: String in to:
+		if not (to[key] is Vector3) or LAND_COLOURS.has(key) != land:
+			continue
+		var hues := _hues(from.get(key, to[key]), to[key])
+		var up := fposmod(hues[1].z - hues[0].z, TAU)
+		var turn := up if up <= PI else up - TAU
+		vote += turn * minf(hues[0].y, hues[1].y)
+	return 1.0 if vote >= 0.0 else -1.0
+
+
+## The sRGB colour `a` mixed `k` of the way to `b` in OKLCH, so the mix keeps its saturation;
+## its hue turns the way `route` says (1.0 up, -1.0 down) unless that is past MAX_TURN, and
+## the short way with no route (0.0).
+static func mix_oklch(a: Vector3, b: Vector3, k: float, route := 0.0) -> Vector3:
+	var hues := _hues(a, b)
+	var one: Vector3 = hues[0]
+	var two: Vector3 = hues[1]
+	var hue := _mix_hue(one.z, two.z, k, route)
+	return from_oklch(Vector3(lerpf(one.x, two.x, k), lerpf(one.y, two.y, k), hue))
+
+
+## `a` and `b` as OKLCH, a grey taking the other colour's hue (it has none worth keeping).
+static func _hues(a: Vector3, b: Vector3) -> Array[Vector3]:
 	var one := to_oklch(a)
 	var two := to_oklch(b)
 	if one.y < GREY_CHROMA:
 		one.z = two.z
 	if two.y < GREY_CHROMA:
 		two.z = one.z
-	var lch := Vector3(lerpf(one.x, two.x, k), lerpf(one.y, two.y, k), _mix_hue(one.z, two.z, k))
-	return from_oklch(lch)
+	return [one, two]
 
 
-## The hue `k` of the way from `from` to `to` (radians): the short way round, except between
-## near-opposite hues, where the way through red and magenta (hue 0) is taken, since the other
-## way runs through olive.
-static func _mix_hue(from: float, to: float, k: float) -> float:
+## The hue `k` of the way from `from` to `to` (radians), turning the way `route` says unless
+## that is past MAX_TURN; the short way with no route.
+static func _mix_hue(from: float, to: float, k: float, route: float) -> float:
 	var start := fposmod(from, TAU)
 	var up := fposmod(to - start, TAU)
 	var down := TAU - up
 	var go_up := up <= down
-	if absf(up - down) < WARM_ROUTE:
-		go_up = start + up >= TAU
+	if route > 0.0 and up <= MAX_TURN:
+		go_up = true
+	elif route < 0.0 and down <= MAX_TURN:
+		go_up = false
 	return start + (up if go_up else -down) * k
 
 
@@ -312,14 +361,25 @@ static func compose(seed: float, size: Vector2, layout: BackdropLayout) -> Dicti
 	# The sun's open square: the largest the paper leaves in the sky, nearest the sun's usual
 	# place; none over a placeholder, where the sun stands where its mood puts it.
 	var box := Rect2()
+	var low_box := Rect2()
 	if layout:
+		var floor_y := size.y * (1.0 - SKY_FLOOR)
 		var toward := Vector2(SUN_TOWARD.x * size.x, (1.0 - SUN_TOWARD.y) * size.y)
-		box = _to_heights(layout.largest_square(size.y * (1.0 - SKY_FLOOR), toward), size)
+		box = _to_heights(layout.largest_square(floor_y, toward), size)
+		var low_toward := Vector2(toward.x, (1.0 - LOW_SUN.x) * size.y)
+		var ceiling_y := size.y * (1.0 - LOW_SKY_TOP)
+		low_box = _to_heights(layout.largest_square(floor_y, low_toward, ceiling_y), size)
+		if low_box.size.x < LOW_SQUARE_MIN:
+			low_box = Rect2()
 	composition["sun_box"] = box
+	composition["low_box"] = low_box
 	composition["sun_side"] = 1.0 if _rand(seed, 5) < 0.7 else -1.0
-	var sun := sun_of(look_of(0), composition)
+	# The clouds keep clear of the sun where it stands high and where it stands low.
+	var suns: Array[Vector3] = [
+		sun_of(look_of(0), composition), sun_of(look_of(PaintedBackdrop.Mood.DUSK), composition)
+	]
 	composition["poplars"] = _grove(seed, size, layout)
-	composition["clouds"] = _clouds(seed, size, layout, sun)
+	composition["clouds"] = _clouds(seed, size, layout, suns)
 	return composition
 
 
@@ -350,7 +410,8 @@ static func mix_compositions(from: Dictionary, to: Dictionary, k: float) -> Dict
 
 ## Where the sun or moon of `look` stands in `composition`, and its radius: Vector3(x, y, r) in
 ## heights. Its mood's place (on the seed's side), pulled into the open square when there is
-## one, and smaller when the square is small.
+## one, and smaller when the square is small; a low sun into the low square (LOW_SUN), so
+## golden hour and dusk keep their sun near the hills.
 static func sun_of(look: Dictionary, composition: Dictionary) -> Vector3:
 	var aspect: float = composition.aspect
 	var share: float = look.sun_x
@@ -358,7 +419,19 @@ static func sun_of(look: Dictionary, composition: Dictionary) -> Vector3:
 		share = 1.0 - share
 	var at := Vector2(share * aspect, look.sun_y)
 	var radius: float = look.sun_r
-	var box: Rect2 = composition.sun_box
+	var high := _sun_in(at, radius, composition.sun_box)
+	var low := 1.0 - smoothstep(LOW_SUN.x, LOW_SUN.y, float(look.sun_y))
+	if low <= 0.0:
+		return high
+	# With no open sky low down (a 1280 title full of cards), a low sun sets behind the paper
+	# at its own place, its glow round the paper's edges, rather than climbing to the top edge.
+	var low_box: Rect2 = composition.get("low_box", Rect2())
+	return high.lerp(_sun_in(at, radius, low_box), low)
+
+
+## The disc of `radius` at `at` pulled into `box` (heights), smaller when the box is small; as
+## it is with no box.
+static func _sun_in(at: Vector2, radius: float, box: Rect2) -> Vector3:
 	if box.size.x <= 0.0:
 		return Vector3(at.x, at.y, radius)
 	# The disc and its bloom need about 2.4 radii each way.
@@ -457,11 +530,16 @@ static func _open_crest(
 
 
 ## Four clouds spread across the sky at heights and sizes the seed draws; on a screen each
-## moves to the nearest open sky clear of the sun, or stays away when there is none.
-static func _clouds(seed: float, size: Vector2, layout: BackdropLayout, sun: Vector3) -> Array:
+## moves to the nearest open sky clear of the `suns` (where the sun stands high and low), or
+## stays away when there is none.
+static func _clouds(
+	seed: float, size: Vector2, layout: BackdropLayout, suns: Array[Vector3]
+) -> Array:
 	var aspect := size.x / maxf(size.y, 1.0)
 	var clouds: Array[Vector4] = []
-	var sun_rect := Rect2(sun.x - sun.z * 2.2, sun.y - sun.z * 2.2, sun.z * 4.4, sun.z * 4.4)
+	var sun_rects: Array[Rect2] = []
+	for sun in suns:
+		sun_rects.append(Rect2(sun.x - sun.z * 2.2, sun.y - sun.z * 2.2, sun.z * 4.4, sun.z * 4.4))
 	var order := [0, 2, 1, 3]
 	for i in 4:
 		var x := (float(order[i]) + 0.2 + 0.6 * _rand(seed, 50 + i)) / 4.0 * aspect
@@ -471,17 +549,24 @@ static func _clouds(seed: float, size: Vector2, layout: BackdropLayout, sun: Vec
 		var scale := lerpf(0.17, 0.30, _rand(seed, 70 + i))
 		var cloud := Vector4(x, y, scale, _rand(seed, 80 + i))
 		if layout:
-			cloud = _open_sky(cloud, size, layout, sun_rect)
+			var placed := Vector4(cloud.x, cloud.y, 0.0, cloud.w)
+			for shrink: float in CLOUD_SHRINK:
+				var smaller := Vector4(cloud.x, cloud.y, cloud.z * shrink, cloud.w)
+				placed = _open_sky(smaller, size, layout, sun_rects)
+				if placed.z > 0.0:
+					break
+			cloud = placed
 		clouds.append(cloud)
 	return clouds
 
 
-## `cloud` moved to the nearest place where its base and lower puffs, through its sway and at
-## its overcast size, stand clear of the paper, and all of it clear of the sun (up or down
-## first, then sideways); or with no width when there is none. Its crown may tuck behind a
-## card: a cloud passing behind the screen's paper reads as sky, its base in the band of cards
-## as a ghost card.
-static func _open_sky(cloud: Vector4, size: Vector2, layout: BackdropLayout, sun: Rect2) -> Vector4:
+## `cloud` moved to the nearest place where all of it, through its sway and at its overcast
+## size, stands clear of the paper and of the `suns` (up or down first, then sideways); or with
+## no width when there is none. The whole cloud, crown and all: a crown tucked behind a card
+## left its base under the row of cards as a stray lozenge.
+static func _open_sky(
+	cloud: Vector4, size: Vector2, layout: BackdropLayout, suns: Array[Rect2]
+) -> Vector4:
 	var aspect := size.x / maxf(size.y, 1.0)
 	var s := cloud.z * 1.15
 	for dx: float in [0.0, -0.12, 0.12, -0.24, 0.24, -0.36, 0.36]:
@@ -492,10 +577,9 @@ static func _open_sky(cloud: Vector4, size: Vector2, layout: BackdropLayout, sun
 			if y < 0.44 or y + 0.62 * s > 1.0:
 				continue
 			var whole := Rect2(x - 0.85 * s - SWAY, y - 0.14 * s, 1.8 * s + 2.0 * SWAY, 0.76 * s)
-			if whole.intersects(sun):
+			if suns.any(func(sun: Rect2) -> bool: return whole.intersects(sun)):
 				continue
-			var base := Rect2(whole.position, Vector2(whole.size.x, 0.36 * s))
-			if layout.is_open(_to_pixels(base, size)):
+			if layout.is_open(_to_pixels(whole, size)):
 				return Vector4(x, y, cloud.z, cloud.w)
 	return Vector4(cloud.x, cloud.y, 0.0, cloud.w)
 

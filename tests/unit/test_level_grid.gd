@@ -81,6 +81,26 @@ func test_select_and_selection_signal() -> void:
 	assert_eq(grid.selected_info()["name"], "Charlie")
 
 
+## A card selected by code past the fold scrolls into view once the grid has laid it out (the
+## title preselects the newest map, which may sit below the first rows).
+func test_a_card_selected_by_code_scrolls_into_view() -> void:
+	for i in 9:
+		_levels.append(_info("x%d" % i, "Extra %d" % i, 50 - i))
+	var grid := _grid()
+	grid.size = Vector2(900, 260)
+	await wait_process_frames(3)
+	assert_eq(grid.scroll_vertical, 0)
+	var last := grid._cards[-1]
+	grid.select(String(last.level_info.path))
+	await wait_process_frames(3)
+	assert_gt(grid.scroll_vertical, 0, "scrolled down to it")
+	var shown := Rect2(Vector2.ZERO, grid.size)
+	var at := last.get_global_rect()
+	at.position -= grid.global_position
+	assert_true(shown.encloses(at.grow(-1.0)), "the whole card in view: %s in %s" % [at, shown])
+	assert_eq(grid.get_v_scroll_bar().theme_type_variation, &"CardGridBar")
+
+
 func test_activation_relays_the_card() -> void:
 	var grid := _grid()
 	watch_signals(grid)

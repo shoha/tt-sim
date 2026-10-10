@@ -224,19 +224,24 @@ static func _build_stage(panel: RoomPanel) -> VBoxContainer:
 		stage.add_child(panel.action_button)
 		return stage
 	stage.alignment = BoxContainer.ALIGNMENT_CENTER
+	# The picture on a card of its own, as a library card holds its map: the paper round it
+	# and its name and readiness under it, so it reads as a picture on paper, not a hole in
+	# the sky (the backdrop makes way for the whole card).
+	var card := _vbox("Picture", &"BoxContainerTight")
+	var frame := _plaque("PreviewCard", card)
+	frame.theme_type_variation = &"PictureCard"
+	frame.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	stage.add_child(frame)
 	panel.preview = RoomRows.map_well(Vector2.ZERO, null, "", "")
 	panel.preview.name = "Preview"
-	panel.preview.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	stage.add_child(panel.preview)
-	# The name and readiness on a plaque as wide as the picture: its caption plate.
+	card.add_child(panel.preview)
 	var words := _vbox("Words", &"BoxContainerTight")
-	var plate := _plaque("NamePlaque", words)
-	plate.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	stage.add_child(plate)
-	var preview := panel.preview
-	preview.minimum_size_changed.connect(
-		func() -> void: plate.custom_minimum_size.x = preview.custom_minimum_size.x
-	)
+	var caption := MarginContainer.new()
+	caption.name = "Caption"
+	caption.theme_type_variation = &"CardText"
+	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	caption.add_child(words)
+	card.add_child(caption)
 	panel.map_name_label = Label.new()
 	panel.map_name_label.name = "MapName"
 	panel.map_name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
