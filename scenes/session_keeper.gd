@@ -37,7 +37,8 @@ extends Node
 
 ## Emitted after each write of the session file.
 signal saved(id: String)
-## Resume read a session: Root starts hosting (host_session) and the room opens with it.
+## Resume read a session: Root's SessionFlow starts hosting (host_session) and the room opens
+## with it.
 signal host_requested
 
 ## Seconds between saves while hosting.

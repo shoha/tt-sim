@@ -15,10 +15,10 @@ extends RefCounted
 ##   save from authoring does, so the test map shows a real picture in the library and the
 ##   room. Run it while authoring the map, after ui_primitives.gd `save`.
 ## - `opening` (`open`, default true; `cancel`, default false): the "Opening a room..." wait
-##   Root.host_session shows over the title while hosting starts, on Root's own loading
-##   overlay, its step caption in Cancel's band; `cancel` offers its Cancel at once rather
-##   than after LoadingOverlay.CANCEL_AFTER_S. `open` false hides it as Root does when the
-##   room opens.
+##   SessionFlow.host_session shows over the title while hosting starts, on Root's loading
+##   overlay (LevelFlow's), its step caption in Cancel's band; `cancel` offers its Cancel at
+##   once rather than after LoadingOverlay.CANCEL_AFTER_S. `open` false hides it as
+##   SessionFlow does when the room opens.
 ## - `map_load` (`folder`, `open`, default true): Root's loading overlay as a map load shows
 ##   it mid-load, titled as Root titles it for that test level and held at a sample step;
 ##   nothing is loaded. Over the title or over a table, wherever the job is. `open` false
@@ -110,8 +110,14 @@ static func _thumbnail(base: Node, folder: String) -> String:
 	return "thumbnail saved for %s" % folder
 
 
+## Root's loading overlay (LevelFlow's).
+static func _overlay(base: Node) -> LoadingOverlay:
+	var flow := base.get("_level_flow") as LevelFlow
+	return flow.loading_overlay if flow else null
+
+
 static func _opening(base: Node, open: bool, cancel: bool) -> String:
-	var overlay := base.get("_loading_overlay") as LoadingOverlay
+	var overlay := _overlay(base)
 	if overlay == null:
 		return "no loading overlay"
 	if open:
@@ -125,7 +131,7 @@ static func _opening(base: Node, open: bool, cancel: bool) -> String:
 
 
 static func _map_load(base: Node, folder: String, open: bool) -> String:
-	var overlay := base.get("_loading_overlay") as LoadingOverlay
+	var overlay := _overlay(base)
 	if overlay == null:
 		return "no loading overlay"
 	if not open:
@@ -307,12 +313,18 @@ static func _join(base: Node, open: bool) -> String:
 			return "no title Join Game button"
 		button.pressed.emit()
 	else:
-		var screen: Variant = base.get("_join_screen")
+		var screen: Variant = _join_screen(base)
 		if not is_instance_valid(screen):
 			return "no join screen"
 		(screen as LobbyClient).leave_button.pressed.emit()
-	var shown: Variant = base.get("_join_screen")
+	var shown: Variant = _join_screen(base)
 	return "join screen %s" % ("open" if is_instance_valid(shown) else "closed")
+
+
+## The join screen over the title (SessionFlow's), or null.
+static func _join_screen(base: Node) -> Variant:
+	var flow := base.get("_session_flow") as SessionFlow
+	return flow.get("_join_screen") if flow else null
 
 
 static func _pause_overlay(base: Node) -> PauseOverlay:

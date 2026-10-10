@@ -344,8 +344,8 @@ func _set_out_a() -> void:
 
 ## Set out from the room, as the room's Start does.
 func _set_out(table: Dictionary, next_phase: String) -> void:
-	_main.set("_pending_level_data", _level(table))
-	_main.call("_on_lobby_start_game")
+	_main.set("pending_level", _level(table))
+	_flow().set_out_pending()
 	_set_phase(next_phase)
 
 
@@ -670,7 +670,7 @@ func _process_client() -> void:
 				_join_session()
 		"wait_room0":
 			if _state() == STATE_ROOM:
-				_mark("room0", {"join_screen_freed": _main.get("_join_screen") == null})
+				_mark("room0", {"join_screen_freed": _flow().get("_join_screen") == null})
 				_set_phase("table_a")
 		"table_a":
 			_client_at_table_a()
@@ -723,7 +723,7 @@ func _may_join(host_phase: String) -> bool:
 ## over ENet as its Connect would over Steam, with the role as the session key. Root moves on
 ## when the host places this client.
 func _join_session() -> void:
-	_main.call("_on_join_game_requested")
+	_flow().open_join_screen()
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client("127.0.0.1", int(_args.get("port", DEFAULT_PORT)))
 	if err != OK:
@@ -790,7 +790,7 @@ func _client_in_room() -> void:
 		"joined": NetworkManager.is_client(),
 		"session_open": NetworkManager.session.is_open(),
 		"table": NetworkManager.session.get_table(),
-		"join_screen_freed": _main.get("_join_screen") == null,
+		"join_screen_freed": _flow().get("_join_screen") == null,
 	}
 	_log("in the room: %s" % str(_result.room))
 	_mark("room")
@@ -836,7 +836,7 @@ func _client_report_b() -> void:
 		"session_table": _result.session_table == TABLE_B.folder,
 		"shelf": _result.shelf == [TABLE_A.folder, TABLE_B.folder],
 		"room": room_ok,
-		"join_screen_freed": _main.get("_join_screen") == null,
+		"join_screen_freed": _flow().get("_join_screen") == null,
 	}
 	_result["checks"] = checks
 	var ok := true

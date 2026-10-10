@@ -299,7 +299,7 @@ func _may_join(host_phase: String) -> bool:
 ## over Steam, with the role as the session key. Root moves on when the host places this
 ## client (the room, or the table for client3).
 func _join_session() -> void:
-	_main.call("_on_join_game_requested")
+	_flow().open_join_screen()
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_client("127.0.0.1", int(_args.get("port", DEFAULT_PORT)))
 	if err != OK:

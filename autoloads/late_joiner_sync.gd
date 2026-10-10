@@ -11,7 +11,7 @@ class_name LateJoinerSync
 ## The client used to ACK on mere receipt of the level data and the host sent the state on
 ## that ACK, about two frames later: every late joiner lost the table, and reconciliation
 ## (token positions only) never brought it back. The client now reports when its load
-## completes (Root._on_level_loading_completed -> NetworkManager.report_table_loaded),
+## completes (LevelFlow._on_level_loading_completed -> NetworkManager.report_table_loaded),
 ## after the clear; a state that lands then fills GameState, and the client applies it to
 ## its tokens on arrival.
 ##

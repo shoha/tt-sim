@@ -47,7 +47,7 @@ await UIManager.fade_out()
 await UIManager.fade_in()
 await UIManager.transition(func(): change_scene())
 
-# Loading screen -- owned by Root, not UIManager (see Loading Screen section below)
+# Loading screen -- owned by Root's LevelFlow, not UIManager (see Loading Screen section below)
 loading_overlay.show_loading("Setting out Mossy Hollow")
 loading_overlay.set_progress(0.5, "Spawning tokens...")
 await loading_overlay.hide_loading()
@@ -87,6 +87,12 @@ use the numbers. `ROOM` replaced `LOBBY_HOST` and `LOBBY_CLIENT` on 2026-10-09. 
 never connects: Host starts hosting from the title and Root enters `ROOM` once hosting; Join
 opens the join screen over the title and Root enters `ROOM` (or `PLAYING`, when a table is out)
 when the host places the client.
+
+Root is the state machine and the wiring; the session's steps are its `SessionFlow`
+(`scenes/session_flow.gd`: Host, Join and the join screen, the room full screen in `ROOM`, Set
+out, leaving, and the network events that change state), the table's loads its `LevelFlow`
+(`scenes/level_flow.gd`: the loading overlay, a client's level and state stream) and the table
+moves its `TableMover` ([ARCHITECTURE.md](ARCHITECTURE.md#root-state-machine)).
 
 ### State Transitions
 
@@ -297,13 +303,15 @@ painted backdrop the title, the room and a map load stand on, never a dark fill
 ## Loading Screen
 
 Progress indicator for async operations. `LoadingOverlay` (`scenes/ui/loading_overlay.gd`) is not a
-UIManager-registered dialog -- `Root` instantiates and owns one directly (`_loading_overlay`) and
-calls it during level loading. There is no `UIManager.show_loading()`/`hide_loading()` wrapper.
+UIManager-registered dialog -- Root's `LevelFlow` (`scenes/level_flow.gd`) instantiates and owns
+one directly (`loading_overlay`) and calls it during level loading and AUTHORING's builds;
+`SessionFlow` shows the room's "Opening a room..." wait on it. There is no
+`UIManager.show_loading()`/`hide_loading()` wrapper.
 
 ### Usage
 
 ```gdscript
-# A map load: name the real operation (UI_TASTE.md W4); Root names the map it sets out
+# A map load: name the real operation (UI_TASTE.md W4); LevelFlow names the map it sets out
 loading_overlay.show_loading(LoadingOverlay.setting_out_text(level))
 
 # Update progress (0.0 to 1.0) and name the step in the caption
@@ -528,7 +536,7 @@ own header. Avatars opens the [avatar roster](#avatar-library).
 Play solo is disabled until a card is selected. Host game is never disabled: a room needs no
 map (room first, user verdict 2026-10-09), so over an empty library Host stays the screen's
 fill with the caption "Open a room; add maps there" and opens a room with an empty shelf
-(`Root._on_host_game_requested` with no path: `host_session(null)`). Once a card is selected,
+(`SessionFlow.host_from_title` with no path: `host_session(null)`). Once a card is selected,
 the three map actions name it one way, the bare name leading the line under the button:
 "<name> goes on the shelf" under Host's "Open a room and invite players" (Host opens a room;
 the map is what goes on its shelf), the name alone under Play solo and Set up tokens. "Your
@@ -678,9 +686,9 @@ lobby, the client's waiting view, the lobby's Change and the in-play `PlayerList
 - **Wiring.** The panel reads `NetworkManager.session` on every `session_changed`;
   `connect_network = false` (on `RoomScreen`, `RoomDrawer` or the panel) keeps tests and the UI
   tour off the network, and they feed `show_session(summary, local_id, is_gm)` directly. Signals
-  to Root, which connects the moves to its TableMover: `set_out_requested(key)`
-  (`TableMover.set_out`), `move_table_requested(key)` (`TableMover.request_move`),
-  `leave_requested`; `map_picked(level_info)` reports an Add.
+  to Root (the drawer) and its SessionFlow (the room screen), which connect the moves to Root's
+  TableMover: `set_out_requested(key)` (`TableMover.set_out`), `move_table_requested(key)`
+  (`TableMover.request_move`), `leave_requested`; `map_picked(level_info)` reports an Add.
 - **Tab.** `RoomDrawer.tab_toggles()` (pure) opens or closes the drawer on a bare Tab press only
   at a table (Root `PLAYING`, nothing paused over it), with its tab shown (a session), and
   nothing else taking Tab: no `UIManager` overlay, no `AnimatedCanvasLayerPanel` up
@@ -692,8 +700,8 @@ Room Code fields, a full-width Connect, and a footer button that reads "Back" wh
 up and "Leave" once a connection is under way. Connected, the form stays locked with one status
 line, "Connected. Joining the room...", until Root moves the client into the room or to the
 table. It extends `AnimatedCanvasLayerPanel` with `play_sounds = false` and a no-op
-`_on_after_animate_out()` (Root frees it), and `connect_network = false` keeps tests off the
-network.
+`_on_after_animate_out()` (Root's SessionFlow opens and frees it), and `connect_network = false`
+keeps tests off the network.
 
 The pause menu offers the host one quiet extra row, **Return everyone to the room** (`users`
 icon, Secondary, `ui_silent`, visible only while hosting); its confirmation emits

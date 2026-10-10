@@ -8,7 +8,7 @@ extends GutTest
 ## two frames after the level data, which is the first case: every late joiner lost the
 ## table's tokens and avatars. The second case runs LateJoinerSync's real hold in the same
 ## process, with the transport replaced by direct calls: the report is table_loaded emitted
-## on level_loading_completed (Root._on_level_loading_completed calls
+## on level_loading_completed (LevelFlow._on_level_loading_completed calls
 ## NetworkManager.report_table_loaded there), and the send is
 ## NetworkStateSync._on_game_state_received, the client's receive path.
 ##

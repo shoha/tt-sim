@@ -401,7 +401,7 @@ host only). Players' avatars belong to the session, not to a map.
 - *Travel.* Root calls `take()` before a table goes (Return everyone to the room, or a map
   change in play): each member as `{"state": TokenState dict, "owners": [session ids]}`, plain
   data a session file can write (`get_members()`). Once the next map has loaded
-  (`Root._on_level_play_loaded`), `set_out()` rebuilds each member under its own network id
+  (Root's `LevelFlow`, on `level_loaded`), `set_out()` rebuilds each member under its own network id
   outside that map's placements (`TokenSpawner.place_session_token`), on a block one 5 ft
   square apart around the map's spawn point (`LevelData.spawn_point`, optional, written only
   when `has_spawn_point`; no authoring tool sets it yet) or, without one, the camera's ground
@@ -422,18 +422,18 @@ Root enters `ROOM`; at a table it gets `LateJoinerSync.sync_peer()` (game_starti
 then the state after its table-loaded report, below). Only a peer that is still connected is
 sent anything.
 
-**Root's transitions** (`scenes/root.gd`; entering ROOM never connects, the action that leads
-there does):
+**Root's transitions** (`scenes/root.gd`, the session's steps in its `SessionFlow`,
+`scenes/session_flow.gd`; entering ROOM never connects, the action that leads there does):
 
 | From > to | Action | What happens |
 |-----------|--------|--------------|
 | TITLE > ROOM (host) | Host with a map: `host_session(level)` | `host_game()` with an "Opening a room..." wait; ROOM on `HOSTING`; on `connection_failed` the title stays, with the reason |
 | TITLE > ROOM or PLAYING (client) | Join: the join form (`LobbyClient`) over the hidden title | Connect joins; the form stays locked ("Connected. Joining the room...") until ROOM on `room_opened`, or PLAYING on `game_starting` when a table is out; a rejected client stays on the form |
 | ROOM (host) | Entering with a map from Host | The map is shelved and selected in the room |
-| ROOM > PLAYING | The room's Set out this map: `TableMover.set_out(key)`, then `_on_lobby_start_game()` | Refused with "Choose a map to set out first" when no map is pending; else `close()`, `notify_game_starting()`, PLAYING broadcasts the level |
+| ROOM > PLAYING | The room's Set out this map: `TableMover.set_out(key)`, then `SessionFlow.set_out_pending()` | Refused with "Choose a map to set out first" when no map is pending; else `close()`, `notify_game_starting()`, PLAYING broadcasts the level |
 | PLAYING > ROOM | Pause > Return everyone to the room (host): `return_to_room()`, a table move to the room | After TableMover's notice (nothing asked): the table's state is kept, the party is taken, `open()`, then the table (GameMap, tokens, GameState) is torn down on every peer |
 | PLAYING > PLAYING | The drawer's Move the table to the selected map (`TableMover.request_move(key)`) | After the same notice: the party is taken; the next map comes with its kept state; the level broadcast moves the table pointer |
-| (any) > PLAYING, map loaded | `_on_level_play_loaded()` (host) | The party is set out on the new map |
+| (any) > PLAYING, map loaded | `LevelFlow` on `level_loaded` (host) | The party is set out on the new map |
 | ROOM or PLAYING > TITLE | Leave or End session (the room, the drawer), Return to Title | Title first, then `disconnect_game()`, so a voluntary leave is not read as a lost connection; the host leaving ends the session (End session asks first) |
 
 #### Table moves
@@ -564,7 +564,7 @@ The hold matters. The client's `LevelPlayLoader` yields three frames and then
 `clear_level()` resets `GameState`, so a state that lands inside that yield is wiped.
 Until 2026-10-09 the client ACKed on mere receipt of the level data and the host sent the
 state on that ACK, which put it inside the yield: every late joiner lost the table, and
-reconciliation (positions only) never repaired it. Now `Root._on_level_loading_completed()`
+reconciliation (positions only) never repaired it. Now `LevelFlow._on_level_loading_completed()`
 calls `NetworkManager.report_table_loaded()` (`_rpc_table_loaded`, sender taken from the
 transport) after the load, and the host's `table_loaded(peer_id)` releases the state.
 

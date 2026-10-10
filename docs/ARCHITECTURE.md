@@ -34,10 +34,18 @@ The project follows a hierarchical scene structure with centralized state manage
 ```
 Root (Node3D)
 ├── LevelPlayController (Node) - manages active level gameplay
+├── LevelFlow (Node) - a table's load; the level and state stream a client receives
+│   └── LoadingOverlay (CanvasLayer, LAYER_LOADING) - every map load and the room's wait
+├── TableMover (Node) - table moves and each map's session state
+│   └── SessionKeeper (Node) - the session file and Resume (host)
 ├── AppMenu (CanvasLayer) - always-visible UI buttons
 │   └── AppMenu (Control) - Level Editor button, etc.
+├── SessionFlow (Node) - Host, Join, the room, leaving; the network events that change state
+│   └── DisconnectIndicator (CanvasLayer)
 │
 ├── [Dynamic] TitleScreen (CanvasLayer) - shown in TITLE_SCREEN state
+├── [Dynamic] LobbyClient (CanvasLayer) - the join screen over the title (SessionFlow)
+├── [Dynamic] RoomScreen (CanvasLayer) - the room full screen in ROOM state (SessionFlow)
 │
 ├── [Dynamic] GameMap (Node3D) - shown in PLAYING state
 │   ├── WorldViewportLayer (CanvasLayer, layer=-1)
@@ -72,7 +80,10 @@ Root (Node3D)
 | Scene        | Lifecycle          | Managed By                   |
 | ------------ | ------------------ | ---------------------------- |
 | AppMenu      | Always present     | Root.\_setup_app_menu()      |
+| LoadingOverlay | Always present   | LevelFlow.setup()            |
 | TitleScreen  | TITLE_SCREEN state | Root.\_enter_state()         |
+| LobbyClient (join screen) | Over TITLE_SCREEN, Join | SessionFlow.open_join_screen() |
+| RoomScreen   | ROOM state         | SessionFlow.enter_room()     |
 | GameMap      | PLAYING state      | Root.\_enter_playing_state() |
 | PauseOverlay | PAUSED state       | Root.\_enter_paused_state()  |
 | GameMap + AuthoringController | AUTHORING state | Root.\_enter_authoring_state() |
@@ -271,13 +282,30 @@ stack (the AuthoringPanel), never the pause menu.
 
 A hosted session is a room first (`NetworkManager.session`, `SessionChannel`): TITLE > ROOM
 (Host, once hosting; Join, when the host places the client), ROOM > PLAYING (Set out, refused
-with no map), PLAYING > ROOM (`return_to_room()`, host), PLAYING > PLAYING (`TableMover.request_move()`), ROOM
-or PLAYING > TITLE (leave). Entering ROOM never connects; GameMap is torn down on every move.
-Both table moves are Root's `TableMover` (`scenes/table_mover.gd`): the notice every peer sees
-(a move asks nothing and keeps the table), each map's session state (`TableStates`), laid over
-the map when it is set out again, and the shelf rows' Save into map and Discard changes.
-The table of transitions is in
+with no map), PLAYING > ROOM (`return_to_room()`, host), PLAYING > PLAYING
+(`TableMover.request_move()`), ROOM or PLAYING > TITLE (leave). Entering ROOM never connects;
+GameMap is torn down on every move. Both table moves are Root's `TableMover`
+(`scenes/table_mover.gd`): the notice every peer sees (a move asks nothing and keeps the
+table), each map's session state (`TableStates`), laid over the map when it is set out again,
+and the shelf rows' Save into map and Discard changes. The table of transitions is in
 [NETWORKING.md](NETWORKING.md#sessions-the-room-and-the-table).
+
+Root is the state machine and the wiring; three helpers, each a child Root sets up once in
+`_ready()`, carry the flows (split out of `root.gd` on 2026-10-10, behaviour unchanged):
+
+| Helper | File | What it owns |
+|--------|------|--------------|
+| `SessionFlow` | `scenes/session_flow.gd` | The way into a hosted session and out of it: Host (`host_from_title()`, `host_session()`, the "Opening a room..." wait and its Cancel), Join (`open_join_screen()`, the join screen over the title), the room full screen (`enter_room()`, `exit_room()`), Set out (`set_out_pending()`, refused with no map), Leave, and the network events that change Root's state (hosting started or failed, `room_opened`, `game_starting`, a lost connection's "Disconnected" dialog). It also opens the room when TableMover moves the table there, and hosts for SessionKeeper's Resume. |
+| `TableMover` | `scenes/table_mover.gd` | Table moves (`set_out()`, `request_move()`, `move_now()`), each map's session state, the shelf rows' Save into map and Discard changes, and the session file (`keeper`, SessionKeeper). |
+| `LevelFlow` | `scenes/level_flow.gd` | A table's load: the loading overlay (`loading_overlay`) over every map load and AUTHORING's builds (`track_authoring()`), the level a client receives and its state stream (`start_client_table()`, `stop_client_table()`, through `RootNetworkHandler`), the client's `report_table_loaded()`, and the party set out on each loaded table. |
+
+The helpers change state through Root (`change_state()`, `get_current_state()`,
+`is_in_state()`, which looks through the whole stack so PAUSED does not hide PLAYING) and share
+one slot with it, `Root.pending_level`: the level every path into play (host, client, solo, a
+table move) hands over, set until LevelFlow sees its load complete or fail. While it is set, the
+table clearing is part of the load; a table cleared without one sends Root to the title. The
+helpers add their screens (the join screen, the room) to Root, as every state's view is, so the
+draw order is the order the states open them.
 
 ### State Transitions
 
@@ -688,10 +716,10 @@ Client Flow:
 | `RootNetworkHandler` (static helpers) | Client-side state → token visual mapping — active during PLAYING only |
 
 ```gdscript
-# Root._enter_playing_state()
-RootNetworkHandler.connect_client_signals(self)
+# Root._enter_playing_state() (client) -> LevelFlow.start_client_table()
+RootNetworkHandler.connect_client_signals(self)  # self: the LevelFlow
 
-# Root._exit_playing_state()
+# Root._exit_playing_state() -> LevelFlow.stop_client_table()
 RootNetworkHandler.disconnect_client_signals(self)
 ```
 
@@ -2152,6 +2180,9 @@ project/
 │   └── asset_pack.gd        # Asset pack metadata and entries
 ├── scenes/
 │   ├── root.gd / root.tscn  # Root controller, state stack
+│   ├── session_flow.gd      # Root's helper: Host, Join, the room, leaving
+│   ├── level_flow.gd        # Root's helper: a table's load, the loading overlay
+│   ├── table_mover.gd       # Root's helper: table moves, each map's session state
 │   ├── board_token/     # Token system (BoardToken, Factory, animations, drag)
 │   ├── effects/         # Visual effects (WeatherRenderer)
 │   ├── states/          # Application states

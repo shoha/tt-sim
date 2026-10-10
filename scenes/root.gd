@@ -7,25 +7,22 @@ extends Node3D
 ## - push_state(): Adds overlay state on top of current state
 ## - pop_state(): Removes top overlay state, returning to previous
 ##
-## A hosted session is a room first (NetworkManager.session, SessionChannel): a room of
-## people that can exist with no map, where the GM sets maps out and everyone returns
-## between them, on one connection throughout. Entering ROOM never connects; the action that
-## leads there does:
-## ROOM shows the RoomPanel full screen (RoomScreen); at a table the same panel is the room
-## drawer (RoomDrawer, Tab). Both name shelf maps by key (SessionChannel.ref_key()).
-## - TITLE > ROOM: Host (host_session(): ROOM once hosting), or Join (the join screen over
-##   the title: ROOM on room_opened, or PLAYING on game_starting when a table is out).
-## - ROOM > PLAYING: the room's Set out this map (TableMover.set_out(), then
-##   _on_lobby_start_game(): refused with no map).
-## - PLAYING > PLAYING: the drawer's Move the table here (TableMover.request_move()).
-## - PLAYING > ROOM: Return everyone to the room (return_to_room(), host).
-## Both moves are TableMover's: it counts the move down on every peer, keeps what the session
-## did to each map and lays it over the map when it is set out again; Root then carries the
-## move out (_on_table_level_chosen(), _open_room()). Saving a changed map into its folder or
-## discarding its changes is the shelf rows' (the room's and the drawer's), through TableMover.
-## Leaving a table, the host takes the party (the players' avatars, SessionParty) along, and
-## sets it out on the next map once that map has loaded (_on_level_play_loaded()).
-## - ROOM or PLAYING > TITLE: leave, or the host ends the session.
+## Root is the state machine and the wiring between the states' views and its helpers, each a
+## child it sets up once:
+## - SessionFlow (scenes/session_flow.gd): the way into a hosted session and out of it. Host,
+##   Join (the join screen over the title), the room full screen in ROOM (RoomScreen), Set out,
+##   leaving, and the network events that move Root between TITLE_SCREEN, ROOM and PLAYING.
+## - TableMover (scenes/table_mover.gd): moving the table between the session's maps (the
+##   drawer's Move the table here, return_to_room()) and what each map keeps of the session;
+##   Root carries a move out (_on_table_level_chosen()), or SessionFlow opens the room.
+## - LevelFlow (scenes/level_flow.gd): a table's load and the loading overlay, the level and
+##   the state stream a client receives, and the party set out on each new table.
+## Every path into play (host, client, solo, a table move) hands its level over in
+## pending_level, which LevelFlow clears once the load completes or fails.
+## A hosted session goes TITLE > ROOM (Host or Join), ROOM > PLAYING (Set out), PLAYING >
+## PLAYING (Move the table here), PLAYING > ROOM (Return everyone to the room), and ROOM or
+## PLAYING > TITLE (leave, or the host ends the session); the table of transitions is in
+## docs/NETWORKING.md ("Sessions, the room and the table").
 
 signal state_changed(old_state: State, new_state: State)
 
@@ -45,35 +42,30 @@ const TITLE_SCREEN_SCENE := preload("res://scenes/states/title_screen/title_scre
 const APP_MENU_SCENE := preload("res://scenes/ui/app_menu.tscn")
 const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
 const PAUSE_OVERLAY_SCENE := preload("res://scenes/states/paused/pause_overlay.tscn")
-const LOBBY_CLIENT_SCENE := preload("res://scenes/states/lobby/lobby_client.tscn")
 const UPDATE_DIALOG_SCENE := preload("res://scenes/ui/update_dialog.tscn")
-const LOADING_OVERLAY_SCENE := preload("res://scenes/ui/loading_overlay.tscn")
-const DISCONNECT_INDICATOR_SCENE := preload("res://scenes/ui/disconnect_indicator.tscn")
 const NEW_MAP_DIALOG_SCENE := preload("res://scenes/states/authoring/new_map_dialog.tscn")
 const GRAPHICS_WARMUP_SCENE := preload("res://scenes/states/warmup/graphics_warmup_screen.tscn")
 ## Where leaving authoring returns to.
 const RETURN_TO_TITLE := &"title"
 const RETURN_TO_EDITOR := &"editor"
 
+## The level the next table sets out, on every path into play (host, client and solo), from the
+## request until its load completes or fails (LevelFlow); null otherwise. Entering ROOM, the
+## host's is the map it opened the room with, shelved and selected (SessionFlow).
+var pending_level: LevelData = null
+
 var _state_stack: Array[State] = []
 var _title_screen: CanvasLayer = null
 var _app_menu: CanvasLayer = null
 var _game_map: GameMap = null
 var _pause_overlay: CanvasLayer = null
-## The room's view in ROOM (the RoomPanel full screen)
-var _room_screen: RoomScreen = null
-## The join screen over the title, until the host places this client in the room or a table
-var _join_screen: LobbyClient = null
-## True from host_session() until hosting starts (ROOM) or fails (back to the title)
-var _hosting_requested := false
-## True after the player cancelled the "Opening a room..." wait, until a late HOSTING is closed
-var _host_cancelled := false
 var _level_play_controller: LevelPlayController = null
+## A table's load and the loading overlay, and a client's level and state stream
+var _level_flow: LevelFlow = null
 ## Moves the table between the session's maps and keeps each map's session state
 var _table_mover: TableMover = null
-var _pending_level_data: LevelData = null
-var _loading_overlay: LoadingOverlay = null
-var _disconnect_indicator: Node = null
+## Host, Join, the room and leaving a session
+var _session_flow: SessionFlow = null
 var _startup_update_check_pending: bool = false
 var _authoring_controller: AuthoringController = null
 ## What the next AUTHORING state opens: {"level": LevelData or null, "new_map": spec,
@@ -100,17 +92,11 @@ func _ready() -> void:
 	_setup_level_play_controller()
 	_setup_app_menu()
 	_setup_download_notifications()
-	_setup_disconnect_indicator()
+	# Network signals (hosting, the room, disconnects and player events while in-game)
+	_setup_session_flow()
 
 	# Connect to level manager signals
 	LevelManager.level_loaded.connect(_on_level_loaded)
-
-	# Connect network signals (for handling disconnects and player events while in-game)
-	NetworkManager.connection_state_changed.connect(_on_network_state_changed)
-	NetworkManager.connection_failed.connect(_on_network_connection_failed)
-	NetworkManager.player_left.connect(_on_network_player_left)
-	NetworkManager.game_starting.connect(_on_network_game_starting)
-	NetworkManager.session.room_opened.connect(_on_session_room_opened)
 
 	# Connect EventBus signals — allows UIManager and other systems to request
 	# state changes without importing this script.
@@ -151,38 +137,31 @@ func _setup_level_play_controller() -> void:
 	add_child(_level_play_controller)
 	# The party (players' avatars) lands on this table after each map change (SessionParty).
 	NetworkManager.session.party.attach(_level_play_controller)
-	_level_play_controller.level_loaded.connect(_on_level_play_loaded)
-	_level_play_controller.level_cleared.connect(_on_level_cleared)
+	# The loads and the loading overlay (always available). Set up before TableMover, so the
+	# party is set out on a loaded table before TableMover's own level_loaded handler runs.
+	_level_flow = LevelFlow.new()
+	_level_flow.name = "LevelFlow"
+	add_child(_level_flow)
+	_level_flow.setup(self, _level_play_controller)
 	_table_mover = TableMover.new()
 	_table_mover.name = "TableMover"
 	add_child(_table_mover)
 	_table_mover.setup(_level_play_controller)
 	_table_mover.level_chosen.connect(_on_table_level_chosen)
-	_table_mover.room_chosen.connect(_open_room)
-	_table_mover.keeper.host_requested.connect(host_session.bind(null))
-
-	# Connect loading signals for the loading overlay
-	_level_play_controller.level_loading_started.connect(_on_level_loading_started)
-	_level_play_controller.level_loading_progress.connect(_on_level_loading_progress)
-	_level_play_controller.level_loading_completed.connect(_on_level_loading_completed)
-
-	# Create loading overlay (always available)
-	_loading_overlay = LOADING_OVERLAY_SCENE.instantiate()
-	add_child(_loading_overlay)
-	_loading_overlay.cancel_requested.connect(_on_room_wait_cancelled)
 
 
-func _setup_disconnect_indicator() -> void:
-	_disconnect_indicator = DISCONNECT_INDICATOR_SCENE.instantiate()
-	add_child(_disconnect_indicator)
-
-
-func _show_disconnect_indicator(text: String) -> void:
-	_disconnect_indicator.show_message(text)
-
-
-func _hide_disconnect_indicator() -> void:
-	_disconnect_indicator.hide_indicator()
+## After TableMover's setup: the flow's network handlers run after the mover's and the
+## keeper's (SessionFlow._ready()).
+func _setup_session_flow() -> void:
+	_session_flow = SessionFlow.new()
+	_session_flow.name = "SessionFlow"
+	_session_flow.setup(self, _table_mover, _level_flow.loading_overlay)
+	add_child(_session_flow)
+	_session_flow.join_screen_shown.connect(
+		func(shown: bool) -> void:
+			if _title_screen:
+				_title_screen.visible = not shown
+	)
 
 
 func _setup_app_menu() -> void:
@@ -208,19 +187,19 @@ func _on_open_editor_requested(level_path: String = "") -> void:
 func _on_play_level_requested(level_data: LevelData) -> void:
 	# In the room a map only goes out through Set out, so the clients follow it.
 	if get_current_state() == State.ROOM and NetworkManager.is_host():
-		_pending_level_data = level_data
-		_on_lobby_start_game()
+		pending_level = level_data
+		_session_flow.set_out_pending()
 		return
 
 	# If already in PLAYING state, reload the level directly
 	if get_current_state() == State.PLAYING and _level_play_controller:
 		# Set pending data to prevent level_cleared from triggering title screen
 		# Note: Don't clear this until loading completes (play_level is async)
-		_pending_level_data = level_data
+		pending_level = level_data
 		# The party leaves with the session before the load clears the table.
 		NetworkManager.session.party.take()
 		_level_play_controller.play_level(level_data)
-		# _pending_level_data is cleared in _on_level_play_loaded() when loading completes
+		# pending_level is cleared by LevelFlow when loading completes
 
 		# Broadcast level data to clients if we're the host
 		if NetworkManager.is_host():
@@ -228,7 +207,7 @@ func _on_play_level_requested(level_data: LevelData) -> void:
 		return
 
 	# Otherwise, store level data and transition to PLAYING state
-	_pending_level_data = level_data
+	pending_level = level_data
 	change_state(State.PLAYING)
 
 
@@ -237,6 +216,16 @@ func get_current_state() -> State:
 	if _state_stack.size() > 0:
 		return _state_stack[-1]
 	return State.TITLE_SCREEN
+
+
+## True when `state` is anywhere on the stack: PLAYING stays under a PAUSED pushed over it.
+func is_in_state(state: State) -> bool:
+	return state in _state_stack
+
+
+## The table's GameMap in PLAYING and AUTHORING, else null.
+func get_game_map() -> GameMap:
+	return _game_map
 
 
 ## Push a new state onto the stack (for overlay states like PAUSED)
@@ -298,9 +287,9 @@ func _enter_state(state: State) -> void:
 			add_child(_title_screen)
 			# Connect title screen signals
 			if _title_screen.has_signal("host_game_requested"):
-				_title_screen.host_game_requested.connect(_on_host_game_requested)
+				_title_screen.host_game_requested.connect(_session_flow.host_from_title)
 			if _title_screen.has_signal("join_game_requested"):
-				_title_screen.join_game_requested.connect(_on_join_game_requested)
+				_title_screen.join_game_requested.connect(_session_flow.open_join_screen)
 			if _title_screen.has_signal("play_solo_requested"):
 				_title_screen.play_solo_requested.connect(_on_play_solo_requested)
 			if _title_screen.has_signal("build_map_requested"):
@@ -315,7 +304,7 @@ func _enter_state(state: State) -> void:
 			if _take_startup_update_check():
 				_check_for_updates_on_startup()
 		State.ROOM:
-			_enter_room_state()
+			_session_flow.enter_room()
 		State.PLAYING:
 			_enter_playing_state()
 		State.PAUSED:
@@ -343,22 +332,21 @@ func _enter_playing_state() -> void:
 		app_ctrl.hide_editor_button()
 
 	# Handle networked vs local play
-	# Note: Don't clear _pending_level_data until loading completes (play_level is async)
-	# It will be cleared in _on_level_play_loaded or _on_level_loading_completed
-	if NetworkManager.is_host() and _pending_level_data:
+	# Note: Don't clear pending_level until loading completes (play_level is async)
+	# LevelFlow clears it once the table has loaded or the load ends
+	if NetworkManager.is_host() and pending_level:
 		# Host: Load level and broadcast to clients
-		if not _level_play_controller.play_level(_pending_level_data):
+		if not _level_play_controller.play_level(pending_level):
 			push_error("Root: Failed to play level")
 		else:
 			# Broadcast level data to all clients
-			NetworkManager.broadcast_level_data(_pending_level_data.to_dict())
+			NetworkManager.broadcast_level_data(pending_level.to_dict())
 	elif NetworkManager.is_client():
 		# Client: Listen for level data and state updates from host
-		NetworkManager.level_data_received.connect(_on_level_data_received)
-		_connect_client_state_signals()
-	elif _pending_level_data:
+		_level_flow.start_client_table()
+	elif pending_level:
 		# Local play: Just load the level
-		if not _level_play_controller.play_level(_pending_level_data):
+		if not _level_play_controller.play_level(pending_level):
 			push_error("Root: Failed to play level")
 
 
@@ -373,25 +361,15 @@ func _connect_room_drawer() -> void:
 		_table_mover.attach_panel(drawer.panel)
 
 
-## Connect client-side signals for receiving state updates
-func _connect_client_state_signals() -> void:
-	RootNetworkHandler.connect_client_signals(self)
-
-
-## Disconnect client-side state signals
-func _disconnect_client_state_signals() -> void:
-	RootNetworkHandler.disconnect_client_signals(self)
-
-
 func _exit_state(state: State) -> void:
 	match state:
 		State.TITLE_SCREEN:
 			if _title_screen:
 				_title_screen.queue_free()
 				_title_screen = null
-			_close_join_screen()
+			_session_flow.close_join_screen()
 		State.ROOM:
-			_exit_room_state()
+			_session_flow.exit_room()
 		State.PLAYING:
 			_exit_playing_state()
 		State.PAUSED:
@@ -422,9 +400,7 @@ func _exit_warming_up_state() -> void:
 
 func _exit_playing_state() -> void:
 	# Disconnect network signals
-	if NetworkManager.level_data_received.is_connected(_on_level_data_received):
-		NetworkManager.level_data_received.disconnect(_on_level_data_received)
-	_disconnect_client_state_signals()
+	_level_flow.stop_client_table()
 
 	# The session file keeps the table as it stands; a move counting down goes with it.
 	if _table_mover:
@@ -442,81 +418,12 @@ func _exit_playing_state() -> void:
 		_game_map = null
 
 
-## The room, full screen (RoomScreen), the same for the GM and the players. A map the GM
-## hosted with (Host with this map) goes on the shelf, selected, ready to set out. Entering
-## never connects; hosting or joining has already happened.
-func _enter_room_state() -> void:
-	_end_room_wait()
-	var first := ""
-	if NetworkManager.is_host() and _pending_level_data:
-		first = NetworkManager.session.shelve(_pending_level_data.to_dict())
-	_room_screen = RoomScreen.new()
-	add_child(_room_screen)
-	_room_screen.panel.set_out_requested.connect(_table_mover.set_out)
-	_room_screen.panel.leave_requested.connect(_on_lobby_cancel)
-	_table_mover.attach_panel(_room_screen.panel)
-	if first != "":
-		_room_screen.panel.select(first)
-
-
-func _exit_room_state() -> void:
-	if _room_screen:
-		_room_screen.queue_free()
-		_room_screen = null
-
-
 ## The level TableMover chose for the table: set out from the room, or the table moved to it
 ## in play (over the pause menu too).
 func _on_table_level_chosen(level: LevelData) -> void:
 	if get_current_state() == State.PAUSED:
 		pop_state()
 	_on_play_level_requested(level)
-
-
-## The title hands over the level the host picked; it goes on the shelf when the room opens,
-## selected for Set out. With none (an empty library) the room opens with an empty shelf.
-func _on_host_game_requested(level_info: Dictionary) -> void:
-	if String(level_info.get("path", "")) == "":
-		host_session(null)
-		return
-	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
-	if level == null:
-		UIManager.show_error(MapLoadError.for_info(level_info))
-		return
-	host_session(level)
-
-
-## TITLE > ROOM for the host: start hosting with `level` (null: none chosen yet) as the map
-## to set out first. Root enters ROOM once NetworkManager is HOSTING, or stays on the title
-## with the reason when hosting fails (_on_network_connection_failed).
-func host_session(level: LevelData) -> void:
-	if NetworkManager.connection_state != NetworkManager.ConnectionState.OFFLINE:
-		return
-	_pending_level_data = level
-	_hosting_requested = true
-	_host_cancelled = false
-	if _loading_overlay:
-		_loading_overlay.show_indeterminate(RoomScreen.OPENING, true, RoomScreen.OPENING_STEP)
-	NetworkManager.host_game()
-
-
-## The "Opening a room..." wait's Cancel: stop hosting and stay on the title. Hosting may
-## still finish after this (Steam answers late); _on_network_state_changed drops it then.
-func _on_room_wait_cancelled() -> void:
-	if not _hosting_requested:
-		return
-	_hosting_requested = false
-	_host_cancelled = true
-	_pending_level_data = null
-	_end_room_wait()
-	NetworkManager.disconnect_game()
-
-
-## Hide the "Opening a room..." wait (and any level loading a client had under way when the
-## room opened). The next map load lays its own sky and bar (LoadingOverlay.show_loading).
-func _end_room_wait() -> void:
-	if _loading_overlay and _loading_overlay.visible:
-		_loading_overlay.hide_loading()
 
 
 ## PLAYING > ROOM (host): Return everyone to the room, the table move with the room as its
@@ -527,31 +434,17 @@ func return_to_room() -> void:
 	_table_mover.request_move(TableMover.ROOM)
 
 
-## Put the table away for everyone, once TableMover has settled it. The connection, the
-## players and the Steam lobby stay; GameMap is torn down as on any move, and every client is
-## sent to the room (SessionChannel.open). The party (the players' avatars) is taken first and
-## set out on the next map (SessionParty). The next map is chosen in the room.
-func _open_room() -> void:
-	if not NetworkManager.is_host() or State.PLAYING not in _state_stack:
-		return
-	_pending_level_data = null
-	NetworkManager.session.party.take()
-	NetworkManager.session.open()
-	change_state(State.ROOM)
-
-
-## Client: the host opened the room, from the table or as this client joined it.
-func _on_session_room_opened() -> void:
-	if NetworkManager.is_client() and get_current_state() != State.ROOM:
-		change_state(State.ROOM)
-
-
 func _on_play_solo_requested(level_info: Dictionary) -> void:
 	var level := LevelManager.load_level(String(level_info.get("path", "")), false)
 	if level == null:
 		UIManager.show_error(MapLoadError.for_info(level_info))
 		return
 	_on_play_level_requested(level)
+
+
+func _on_level_loaded(_level_data: LevelData) -> void:
+	pending_level = _level_data
+	change_state(State.PLAYING)
 
 
 # ============================================================================
@@ -614,9 +507,7 @@ func _enter_authoring_state() -> void:
 	_authoring_controller = AuthoringController.new()
 	_authoring_controller.name = "AuthoringController"
 	add_child(_authoring_controller)
-	_authoring_controller.loading_started.connect(_on_authoring_loading_started)
-	_authoring_controller.loading_progress.connect(_on_level_loading_progress)
-	_authoring_controller.loading_completed.connect(_on_authoring_loading_completed)
+	_level_flow.track_authoring(_authoring_controller)
 	_authoring_controller.exit_requested.connect(_on_authoring_exit_requested)
 	_authoring_controller.setup(_game_map)
 	var app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
@@ -630,21 +521,10 @@ func _exit_authoring_state() -> void:
 		_authoring_controller.teardown()
 		_authoring_controller.queue_free()
 		_authoring_controller = null
-	if _loading_overlay and _loading_overlay.visible:
-		_loading_overlay.hide_loading()
+	_level_flow.end_loading()
 	if _game_map:
 		_game_map.queue_free()
 		_game_map = null
-
-
-func _on_authoring_loading_started() -> void:
-	if _loading_overlay:
-		_loading_overlay.show_loading("Building the map...")
-
-
-func _on_authoring_loading_completed() -> void:
-	if _loading_overlay:
-		_loading_overlay.hide_loading()
 
 
 ## Back to where authoring was opened from: the title (its level list is rebuilt on entry,
@@ -660,174 +540,9 @@ func _on_authoring_exit_requested(level: LevelData) -> void:
 		app_ctrl.open_level_editor_with_level(level)
 
 
-## Title > Join: the join screen opens over the hidden title, and its Connect joins. Root
-## moves on when the host places this client: ROOM on room_opened, or PLAYING on
-## game_starting when a table is out. A client the host rejects stays here with the reason.
-func _on_join_game_requested() -> void:
-	if is_instance_valid(_join_screen):
-		return
-	_join_screen = LOBBY_CLIENT_SCENE.instantiate() as LobbyClient
-	_join_screen.leave_requested.connect(_on_join_screen_left)
-	add_child(_join_screen)
-	if _title_screen:
-		_title_screen.hide()
-
-
-## The join screen's Back or Leave: drop any connection under way and show the title again.
-func _on_join_screen_left() -> void:
-	_close_join_screen()
-	if _title_screen:
-		_title_screen.show()
-	NetworkManager.disconnect_game()
-
-
-func _close_join_screen() -> void:
-	if is_instance_valid(_join_screen):
-		_join_screen.queue_free()
-	_join_screen = null
-
-
-## ROOM > PLAYING (host): set the pending map out. Refused with no map, which used to enter
-## an empty PLAYING where clients waited for a level that never came.
-func _on_lobby_start_game() -> void:
-	if _pending_level_data == null:
-		UIManager.show_warning("Choose a map to set out first")
-		return
-	NetworkManager.session.close()
-	NetworkManager.notify_game_starting()
-	change_state(State.PLAYING)
-
-
-## ROOM > TITLE: a client leaves the session, the host ends it for everyone. The title
-## comes first, so the disconnect that follows is not read as a lost connection.
-func _on_lobby_cancel() -> void:
-	_pending_level_data = null
-	change_state(State.TITLE_SCREEN)
-	NetworkManager.disconnect_game()
-
-
-## Client: the host set a map out from the room, or this client joined while one is out.
-func _on_network_game_starting() -> void:
-	if NetworkManager.is_client() and State.PLAYING not in _state_stack:
-		change_state(State.PLAYING)
-
-
-func _on_network_state_changed(
-	old_state: NetworkManager.ConnectionState, new_state: NetworkManager.ConnectionState
-) -> void:
-	# Hosting started from the title: the session opens in the room.
-	if new_state == NetworkManager.ConnectionState.HOSTING and _hosting_requested:
-		_hosting_requested = false
-		change_state(State.ROOM)
-		return
-	# Hosting the player cancelled finished late: close it again.
-	if new_state == NetworkManager.ConnectionState.HOSTING and _host_cancelled:
-		_host_cancelled = false
-		NetworkManager.disconnect_game.call_deferred()
-		return
-	# Handle a disconnect at a table or in the room.
-	# PAUSED is pushed on top of PLAYING (not swapped), so check the whole
-	# stack rather than just the top — otherwise pausing hides this branch.
-	if new_state != NetworkManager.ConnectionState.OFFLINE:
-		return
-	if State.PLAYING in _state_stack or State.ROOM in _state_stack:
-		_hide_disconnect_indicator()
-		# Show disconnect dialog if we were in any networked state.
-		# Exclude OFFLINE→OFFLINE (redundant) and HOSTING (the host only goes offline by
-		# leaving, and every leave path changes to the title first).
-		if (
-			old_state != NetworkManager.ConnectionState.OFFLINE
-			and old_state != NetworkManager.ConnectionState.HOSTING
-		):
-			_show_disconnect_dialog()
-
-
-## Hosting from the title failed (Steam not running, no lobby): the title stays, with the
-## reason.
-func _on_network_connection_failed(reason: String) -> void:
-	if not _hosting_requested:
-		return
-	_hosting_requested = false
-	_pending_level_data = null
-	_end_room_wait()
-	UIManager.show_error(reason)
-
-
-func _on_network_player_left(_peer_id: int, player_info: Dictionary) -> void:
-	var player_name: String = player_info.get("name", "A player")
-	UIManager.show_warning("%s disconnected" % player_name)
-
-
-func _show_disconnect_dialog() -> void:
-	var go_to_title := func(): change_state(State.TITLE_SCREEN)
-	var dialog = (
-		UIManager
-		. show_confirmation(
-			"Disconnected",
-			"The connection to the host was lost.",
-			"Return to Title",
-			"",  # No cancel text
-			go_to_title,
-			go_to_title,  # ESC also returns to title — can't continue without host
-		)
-	)
-	# Hide the cancel button since there's only one valid action
-	if dialog:
-		var cancel_btn = dialog.get_node_or_null("%CancelButton")
-		if cancel_btn:
-			cancel_btn.hide()
-
-
-func _on_level_data_received(level_dict: Dictionary) -> void:
-	# Client received level data from host
-	var level_data = LevelData.from_dict(level_dict)
-	if _level_play_controller and _game_map:
-		# Set pending data to prevent _on_level_cleared from returning to title
-		# Don't clear until loading completes (play_level is async)
-		_pending_level_data = level_data
-		if not _level_play_controller.play_level(level_data):
-			push_error("Root: Failed to load networked level")
-
-
-## Handle full state sync (initial sync or reconciliation)
-func _on_full_state_received(_state_dict: Dictionary) -> void:
-	if _level_play_controller and _level_play_controller.is_loading():
-		return
-	RootNetworkHandler.apply_game_state_to_tokens(_level_play_controller, _game_map)
-
-
-## Handle individual token transform update (unreliable channel, high frequency)
-func _on_token_transform_received(
-	network_id: String, pos: Vector3, rot: Vector3, scl: Vector3
-) -> void:
-	if not _level_play_controller or not _game_map:
-		return
-	RootNetworkHandler.on_token_transform_received(
-		_level_play_controller, network_id, pos, rot, scl
-	)
-
-
-## Handle batch transform update (unreliable channel)
-func _on_transform_batch_received(batch: Dictionary) -> void:
-	if not _level_play_controller or not _game_map:
-		return
-	RootNetworkHandler.on_transform_batch_received(_level_play_controller, batch)
-
-
-## Handle individual token property update (reliable channel, low frequency)
-func _on_token_state_received(network_id: String, token_dict: Dictionary) -> void:
-	if not _level_play_controller or not _game_map:
-		return
-	RootNetworkHandler.on_token_state_received(
-		_level_play_controller, _game_map, network_id, token_dict
-	)
-
-
-## Handle token removal (reliable channel)
-func _on_token_removed_received(network_id: String) -> void:
-	if not _level_play_controller:
-		return
-	RootNetworkHandler.on_token_removed_received(_level_play_controller, network_id)
+# ============================================================================
+# Paused
+# ============================================================================
 
 
 func _enter_paused_state() -> void:
@@ -882,68 +597,6 @@ func _exit_paused_state() -> void:
 	# Resume the game tree (only needed for local games that were actually paused)
 	if not NetworkManager.is_networked():
 		get_tree().paused = false
-
-
-func _on_level_loaded(_level_data: LevelData) -> void:
-	_pending_level_data = _level_data
-	change_state(State.PLAYING)
-
-
-func _on_level_play_loaded(_level_data: LevelData) -> void:
-	# Already in PLAYING state, no need to transition
-	# Clear pending data now that loading is complete
-	_pending_level_data = null
-	# The party that left the last table with the session lands on this one (host).
-	NetworkManager.session.party.set_out()
-
-
-func _on_level_cleared() -> void:
-	# Don't transition if we're in the middle of loading a new level
-	# (play_level() calls clear_level() internally before loading)
-	if _pending_level_data:
-		return
-	change_state(State.TITLE_SCREEN)
-
-
-# ============================================================================
-# Loading Overlay
-# ============================================================================
-
-
-## A map load names its map (UI_TASTE.md W4): the pending level is the one being set out on
-## every path into play (host, client and solo), or null after a queued load's handover.
-func _on_level_loading_started() -> void:
-	if _loading_overlay:
-		_loading_overlay.show_loading(LoadingOverlay.setting_out_text(_pending_level_data))
-
-
-func _on_level_loading_progress(progress: float, status: String) -> void:
-	if _loading_overlay:
-		_loading_overlay.set_progress(progress, status)
-
-
-func _on_level_loading_completed() -> void:
-	# Don't hide loading overlay if there's another level queued - it will start loading immediately
-	# This prevents a visual flash between levels
-	if (
-		_loading_overlay
-		and not (_level_play_controller and _level_play_controller.has_queued_level())
-	):
-		_loading_overlay.hide_loading()
-
-	# Apply any GameState updates that arrived during async loading
-	# This syncs token properties and creates any tokens added by host during loading
-	if NetworkManager.is_client():
-		RootNetworkHandler.apply_game_state_to_tokens(_level_play_controller, _game_map)
-		# Tell the host the table is built, unless a queued level is about to clear it again:
-		# a late joiner's full state is held until now, since the loader's clear_level()
-		# wipes any state that lands before it (LateJoinerSync).
-		if not (_level_play_controller and _level_play_controller.has_queued_level()):
-			NetworkManager.report_table_loaded()
-
-	# Clear pending data in case loading was aborted
-	# (successful loads clear this in _on_level_play_loaded via level_loaded signal)
-	_pending_level_data = null
 
 
 # ============================================================================
