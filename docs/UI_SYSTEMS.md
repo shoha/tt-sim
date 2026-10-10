@@ -303,6 +303,9 @@ await loading_overlay.hide_loading()
 
 # A wait over a live screen with no known progress ("Opening a room..." over the title)
 loading_overlay.show_indeterminate("Opening a room...")
+
+# The same, cancellable: its step caption fills Cancel's band until Cancel is offered (4 s)
+loading_overlay.show_indeterminate(RoomScreen.OPENING, true, RoomScreen.OPENING_STEP)
 ```
 
 ### Features
@@ -514,7 +517,11 @@ Saved levels are three primitives under `scenes/ui/primitives/`:
   `setup(title, locked_path = "")` sets the dialog title and an optional locked card. Choose
   confirms the selected card (double-click chooses directly); Cancel closes without choosing.
   Signals: `level_chosen(level_info)`, `closed`. Used by the room's Add a map and the pause
-  menu's Change Level (see below).
+  menu's Change map (see below). Its grid is `manageable = false`, so its cards drop the
+  library's overflow menu, and it grows with the canvas (`_fit_grid()`): as tall as its cards
+  (`LevelGrid.content_height()`), between 240 and 760 px and never past the canvas less the
+  sheet's chrome and 32 px above and below, so a short library shows whole at 1080 and a long
+  one scrolls.
 
 ### The room
 
@@ -529,22 +536,31 @@ lobby, the client's waiting view, the lobby's Change and the in-play `PlayerList
   Players, the Shelf below them (it scrolls) and Leave (a player) or End session (the GM, asks
   first) at its foot; the selected map large in the centre (16:9, up to 720 px wide), its name in
   Fraunces, how many have it, and its one action directly under it. The drawer stacks the same
-  parts in one column, the code on the heading's line and the selected map as a strip (a
-  128x72 picture beside the name) so its action stays on screen at 720p.
+  parts in one column with the code on its own line under the heading, and no second picture
+  of the selected map (its shelf row shows the picture, name and state): the action, "Move the
+  table to Old Mill", sits directly under the shelf, and pins to the foot only when the column
+  runs past the drawer and scrolls (`RoomPanel._fit_drawer()`, which also scrolls the selected
+  row into view). With no move to make, a caption takes the action's place
+  (`RoomModel.drawer_hint()`: choose a map, add one, or for a player, the GM moves the table).
 - **Rows** (`RoomRows`). A player: a `CardThumb` portrait well with the name's initial, the
-  name, You, a `KeyChip` GM tag, the selected map's download state (a full `ProgressSuccess`
-  bar, or "Gets it at the table"), and Choose avatar on your own row (opens the `AvatarRoster`;
-  the session does not carry avatar choices yet). A shelf map: a `Tile` toggle with a 64x36
-  `CardThumb` well and its name and caption ("On the table" in the drawer, how many have it in
-  the room). Every picture sits in a `CardThumb` well, so a map without a thumbnail shows the
-  well's wash and the Fraunces initial, never a grey box.
+  name on its own line, and a caption line (a `KeyChip` GM tag, You, the selected map's
+  download state as an icon and a word: Has it or Gets it at the table), and on your own row
+  a framed Avatar button (opens the `AvatarRoster`; the session does not carry avatar choices
+  yet). A shelf map: a `ListRow` toggle with a 64x36 `CardThumb` well and its name and caption
+  ("On the table", or how many have it). Both rows hold their content 8 px (`ROW_INSET`) in
+  from the column, so portraits and map pictures share one left edge. A map without a
+  thumbnail paints its `MapPlaceholder`, never a grey box.
 - **Rules** (`RoomModel`, pure, from a `SessionChannel.summary()`). Players here only (peer 0 is
   away), the GM first then by name. The one action is the GM's: Set out this map in the room,
-  Move the table here in the drawer (live only for a map other than the one out). Only a live
-  action takes `Primary`, so a screen has at most one accent fill and none with nothing
-  selected. Readiness is download state ("3 of 4 have it", from the session's holdings); Set
-  out never waits. The heading is computed from the current state every refresh (never "Host a
-  game" or "pick a level" after a return). Copy says map, room, table, shelf, GM, party.
+  Move the table to the map by name in the drawer (shown only for a map other than the one
+  out). Only a live action takes `Primary`, so a screen has at most one accent fill and none
+  with nothing selected. Readiness is download state ("3 of 4 have it", from the session's
+  holdings), and a player reads their own first ("You and 2 others have it", "You get it at
+  the table · 1 of 4 have it"); Set out never waits. A player never reads the GM's copy: with
+  nothing selected the centre says to look over the shelf, and with an empty shelf that the GM
+  is choosing the maps. The heading is computed from the current state every refresh (never
+  "Host a game" or "pick a level" after a return). Copy says map, room, table, shelf, GM,
+  party.
 - **Selection.** Everyone can select a shelf map to look at it; players have no action. The
   selection survives a refresh while its map stays on the shelf; the drawer selects the map on
   the table when nothing is. The GM's Add a map opens a `LevelPickerDialog` ("Add a map to the
@@ -882,7 +898,7 @@ Set `rail_items` in `_on_ready()` to replace the single tab with an `IconRail` s
 
 | Drawer | Edge | Tab | Purpose |
 |--------|------|-----|---------|
-| `RoomDrawer` | LEFT | `users.svg` icon (and Tab) | The room over the table in a session: players, the shelf, Move the table here (see [The room](#the-room)) |
+| `RoomDrawer` | LEFT | `users.svg` icon (and Tab) | The room over the table in a session: players, the shelf, Move the table to the selected map (see [The room](#the-room)) |
 | `LevelEditPanel` | RIGHT | rail of seven icons | Real-time level editing during gameplay (see below) |
 | `AuthoringPanel` | LEFT | rail of three tools + four footer actions | Authoring mode's tools, save and leave (see [Authoring Mode](#authoring-mode)) |
 

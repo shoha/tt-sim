@@ -7,17 +7,19 @@ extends Control
 ## sets one out, and where everyone sees who is here.
 ##
 ## Players are listed on the left (portrait, name, and a caption line: the GM chip, You, and
-## the selected map's download state as an icon and a word; your own row ends in Choose
-## avatar) with the shelf below them. A selected shelf map shows large in the centre with its
-## one action directly under it: Set out this map in the room, Move the table here in the
-## drawer. With an empty shelf the centre shows a painted placeholder over what goes there,
-## and its action is Add a map; with maps but none selected it says to choose one, and offers
-## nothing. That action is the screen's one accent fill, and only while it is live. The room
-## code with Copy and Invite sits top right (in the drawer, on its own line under the
-## heading); Leave session (a player) or End session (the GM) bottom left. The GM adds maps
-## to the shelf through a picker over the library; players see the shelf read-only but can
-## select a map to look at it, and read their own download state first. There is no manual
-## Ready: readiness is download state ("3 of 4 have it"), and Set out never waits.
+## the selected map's download state as an icon and a word; your own row ends in the Avatar
+## button) with the shelf below them. In the room a selected shelf map shows large in the
+## centre with its one action directly under it, Set out this map. With an empty shelf the
+## centre shows a painted placeholder over what goes there, and its action is Add a map; with
+## maps but none selected it says to choose one, and offers nothing. In the drawer the
+## selected shelf row is the selection's only picture, and the action, Move the table to the
+## map by name, follows the shelf directly (pinned to the foot only when the column scrolls).
+## That action is the screen's one accent fill, and only while it is live. The room code with
+## Copy and Invite sits top right (in the drawer, on its own line under the heading); Leave
+## session (a player) or End session (the GM) bottom left. The GM adds maps to the shelf
+## through a picker over the library; players see the shelf read-only but can select a map to
+## look at it, and read their own download state first. There is no manual Ready: readiness
+## is download state ("3 of 4 have it"), and Set out never waits.
 ##
 ## Everything shown comes from a session summary (show_session()); RoomModel holds the rules
 ## and RoomLayout builds the controls. With connect_network (the default) the panel reads
@@ -59,12 +61,18 @@ var shelf_rows: VBoxContainer
 var shelf_scroll: ScrollContainer
 var side: PanelContainer
 var body: HBoxContainer
+## The drawer's column scroll and the spacer under its action (null in the room).
+var column_scroll: ScrollContainer
+var drawer_rest: Control
 var add_button: Button
 var leave_button: Button
 var stage: VBoxContainer
+## The room's picture, name and readiness of the selected map (null in the drawer).
 var preview: Panel
 var map_name_label: Label
 var readiness_label: Label
+## The drawer's caption in its action's place when there is no move to make (null in the room).
+var hint_label: Label
 var action_button: Button
 
 var _local_id := ""
@@ -91,7 +99,9 @@ func _ready() -> void:
 	add_button.pressed.connect(_on_add_pressed)
 	leave_button.pressed.connect(_on_leave_pressed)
 	action_button.pressed.connect(_on_action_pressed)
-	if not in_drawer:
+	if in_drawer:
+		resized.connect(_fit_drawer)
+	else:
 		stage.resized.connect(_fit_preview)
 		body.resized.connect(_fit_side)
 	if connect_network:
@@ -230,6 +240,7 @@ func _fill_shelf() -> void:
 		row.pressed.connect(select.bind(str(entry.key)))
 		shelf_rows.add_child(row)
 	_fit_side.call_deferred()
+	_fit_drawer.call_deferred()
 
 
 func _show_selection() -> void:
@@ -241,29 +252,44 @@ func _show_selection() -> void:
 	for candidate in _shelf:
 		if candidate.key == _selected:
 			entry = candidate
-	# The drawer shows only a selected map; the room paints the placeholder when none is.
-	preview.visible = not (entry.is_empty() and in_drawer)
+	if not in_drawer:
+		_show_stage(entry)
+	var action := RoomModel.action(
+		in_drawer, _is_gm, _selected, _table, _shelf.size(), str(entry.get("name", ""))
+	)
+	action_button.visible = action.shown
+	action_button.text = action.text
+	action_button.tooltip_text = action.text if in_drawer else ""
+	action_button.disabled = not action.enabled
+	action_button.set_meta(&"adds", action.add)
+	# The one accent fill, and only while the action is live.
+	action_button.theme_type_variation = &"Primary" if action.enabled else &""
+	if in_drawer:
+		hint_label.text = RoomModel.drawer_hint(_is_gm, _selected, _table, _shelf.size())
+		hint_label.visible = hint_label.text != ""
+		_fit_drawer.call_deferred()
+		# After the frame's layout, when the column knows whether it scrolls and how far.
+		if is_inside_tree() and not get_tree().process_frame.is_connected(_reveal_selected):
+			get_tree().process_frame.connect(_reveal_selected, CONNECT_ONE_SHOT)
+
+
+## The room's centre: the selected map large with its name and readiness, or with none the
+## painted placeholder under what goes there.
+func _show_stage(entry: Dictionary) -> void:
 	if entry.is_empty():
 		RoomRows.set_map_well(preview, null, "", "")
 		var empty := RoomModel.empty_stage(_is_gm, _shelf.size())
 		map_name_label.text = empty.title
-		map_name_label.theme_type_variation = &"Body" if in_drawer else &"Heading"
-		readiness_label.text = "" if in_drawer else empty.caption
+		map_name_label.theme_type_variation = &"Heading"
+		readiness_label.text = empty.caption
 	else:
 		var picture := _picture_for(entry)
 		RoomRows.set_map_well(preview, picture.texture, _picture_key(entry), picture.mood)
 		map_name_label.text = entry.name
-		map_name_label.theme_type_variation = &"Heading" if in_drawer else &"Title"
+		map_name_label.theme_type_variation = &"Title"
 		readiness_label.text = _readiness(entry)
 	map_name_label.tooltip_text = map_name_label.text
 	readiness_label.visible = readiness_label.text != ""
-	var action := RoomModel.action(in_drawer, _is_gm, _selected, _table, _shelf.size())
-	action_button.visible = action.shown
-	action_button.text = action.text
-	action_button.disabled = not action.enabled
-	action_button.set_meta(&"adds", action.add)
-	# The one accent fill, and only while the action is live: a held-back Move stays quiet.
-	action_button.theme_type_variation = &"Primary" if action.enabled else &""
 
 
 ## The line under the selected map: on the table, or its readiness, a player's own first.
@@ -323,6 +349,43 @@ func _fit_side() -> void:
 	var flags := Control.SIZE_SHRINK_BEGIN if fits else Control.SIZE_FILL
 	if side.size_flags_vertical != flags:
 		side.size_flags_vertical = flags
+
+
+## The drawer's action follows its content: while the players and the shelf fit, the column is
+## as tall as they are and the action sits right under the shelf, the rest of the height below
+## it; when they run past the drawer, the column takes that height and scrolls, and the action
+## pins to the foot. Measured against the panel (which the drawer sizes), never the layout
+## inside it, which a column too tall for the drawer would stretch.
+func _fit_drawer() -> void:
+	if not in_drawer or column_scroll == null or not is_inside_tree():
+		return
+	var layout := column_scroll.get_parent() as Control
+	var column := column_scroll.get_child(0) as Control
+	var others := layout.get_combined_minimum_size().y - column_scroll.get_combined_minimum_size().y
+	if not drawer_rest.visible:
+		# The spacer and its separation come back when the column fits again.
+		others += layout.get_theme_constant(&"separation")
+	var fits := column.get_combined_minimum_size().y <= size.y - others
+	var mode := ScrollContainer.SCROLL_MODE_DISABLED if fits else ScrollContainer.SCROLL_MODE_AUTO
+	if column_scroll.vertical_scroll_mode != mode:
+		column_scroll.vertical_scroll_mode = mode
+	var flags := Control.SIZE_FILL if fits else Control.SIZE_EXPAND_FILL
+	if column_scroll.size_flags_vertical != flags:
+		column_scroll.size_flags_vertical = flags
+	if drawer_rest.visible != fits:
+		drawer_rest.visible = fits
+
+
+## Scroll the drawer's column to the selected shelf row when the column scrolls, so the map the
+## action names is in view.
+func _reveal_selected() -> void:
+	if column_scroll == null or not is_inside_tree() or _selected == "":
+		return
+	if column_scroll.vertical_scroll_mode == ScrollContainer.SCROLL_MODE_DISABLED:
+		return
+	var row := shelf_rows.get_node_or_null(NodePath("Map_%s" % _selected.validate_node_name()))
+	if row is Control:
+		column_scroll.ensure_control_visible(row)
 
 
 # -- Actions -------------------------------------------------------------------

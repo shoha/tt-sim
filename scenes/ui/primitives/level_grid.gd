@@ -14,6 +14,8 @@ signal level_edit_requested(level_info: Dictionary)
 ## The card's "Edit map": open the level's map in authoring mode (forwarded like Edit).
 signal level_map_edit_requested(level_info: Dictionary)
 signal levels_changed
+## The cards' laid-out height changed (content_height()).
+signal content_resized
 
 const GAP := 12
 ## The widest a card grows; past it the grid adds a column.
@@ -30,6 +32,8 @@ var provider: Callable = LevelManager.get_saved_levels
 var confirm_delete: Callable = _default_confirm_delete
 ## The level being played: its card cannot be deleted.
 var locked_path: String = ""
+## False for a grid that only chooses (a picker): its cards drop the overflow menu.
+var manageable: bool = true
 
 var _flow: HFlowContainer
 var _cards: Array[LevelCard] = []
@@ -46,6 +50,7 @@ func _init() -> void:
 	_flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_flow.add_theme_constant_override("h_separation", GAP)
 	_flow.add_theme_constant_override("v_separation", GAP)
+	_flow.resized.connect(content_resized.emit)
 	add_child(_flow)
 
 
@@ -62,6 +67,7 @@ func refresh() -> void:
 		var card := LevelCard.new()
 		card.setup(info)
 		card.locked = not locked_path.is_empty() and info.get("path", "") == locked_path
+		card.manageable = manageable
 		card.selected.connect(_on_card_selected)
 		card.activated.connect(_on_card_activated)
 		card.action_requested.connect(_on_card_action)
@@ -75,6 +81,12 @@ func refresh() -> void:
 
 func card_count() -> int:
 	return _cards.size()
+
+
+## The height the cards take laid out at the grid's width, with the grid's own margins: how
+## tall the grid must be to show them all without scrolling.
+func content_height() -> float:
+	return _flow.get_combined_minimum_size().y + get_theme_stylebox(&"panel").get_minimum_size().y
 
 
 ## Silent selection by level path; an unknown path clears the selection.

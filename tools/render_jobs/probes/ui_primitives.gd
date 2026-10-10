@@ -386,6 +386,9 @@ static func _save(base: Node, step: Dictionary) -> String:
 	if ctrl == null or not _is_test_folder(folder):
 		return "no authoring controller, or not a test folder %s" % str(PREFIXES)
 	var path := LevelManager.folder_path(folder)
+	# Never a relative path: Godot resolves one against the working directory, the repo root.
+	if not path.begins_with("user://"):
+		return "levels folder %s is not under user://; not saving" % path
 	if DirAccess.dir_exists_absolute(path) and not bool(step.get("replace", false)):
 		return "folder %s exists; not touching it (replace: true overwrites)" % folder
 	_remove_tree(path)

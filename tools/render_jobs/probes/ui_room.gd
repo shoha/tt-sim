@@ -16,8 +16,9 @@ extends RefCounted
 ##   room. Run it while authoring the map, after ui_primitives.gd `save`.
 ## - `opening` (`open`, default true; `cancel`, default false): the "Opening a room..." wait
 ##   Root.host_session shows over the title while hosting starts, on Root's own loading
-##   overlay; `cancel` offers its Cancel at once rather than after
-##   LoadingOverlay.CANCEL_AFTER_S. `open` false hides it as Root does when the room opens.
+##   overlay, its step caption in Cancel's band; `cancel` offers its Cancel at once rather
+##   than after LoadingOverlay.CANCEL_AFTER_S. `open` false hides it as Root does when the
+##   room opens.
 ## - `map_load` (`folder`, `open`, default true): Root's loading overlay as a map load shows
 ##   it mid-load, titled as Root titles it for that test level and held at a sample step;
 ##   nothing is loaded. Over the title or over a table, wherever the job is. `open` false
@@ -28,15 +29,20 @@ extends RefCounted
 ##   for Set out, as after Host with this map (`select` false: nothing selected yet); `shelf`
 ##   false is a room with no map at all, as after Host a session. `long` names the GM with
 ##   LONG_GM_NAME (24 characters) and the second sample map LONG_MAP_NAME, and selects it.
-## - `client_room` (`folder`): a player's room with the same players and shelf, the local
-##   player one of them, Old Mill selected to look at (their own download state first).
+## - `client_room` (`folder`; `shelf`, default true; `select`, default 0): a player's room
+##   with the same players and shelf, the local player one of them, the SAMPLE_MAPS entry at
+##   index `select` selected to look at (their own download state first: 0 is Old Mill, which
+##   they have, 1 Fen Crossing, which they get at the table; -1 selects nothing, as a player
+##   who just joined sees it). `shelf` false is a room with no map yet.
 ## - `add_map`: on the staged room, the GM's Add a map picker over the library (closed with
 ##   the room by `close_room`).
 ## - `end_confirm`: on the staged GM's room, End session's confirmation (dismiss it with
 ##   ui_primitives.gd `dismiss`).
-## - `drawer` (`folder`, `open`, default true): over a table, the room drawer open as the GM
-##   sees it, `folder` on the table and the next sample map selected (Move the table here
-##   live); `open` false closes it.
+## - `drawer` (`folder`, `open`, default true; `player`, default false; `long`, default
+##   false): over a table, the room drawer open as the GM sees it, `folder` on the table and
+##   the next sample map selected (Move the table to Old Mill live); `open` false closes it.
+##   `player` shows it as the local player sees it, opened on the map on the table; `long`
+##   gives the GM and the second sample map their long names and selects that map.
 ## - `close_room`: free the staged room and show the title again.
 ## - `join` (`open`, default true): press the title's Join Game, which opens Root's join
 ##   screen over the hidden title; `open` false presses the join screen's Back.
@@ -47,8 +53,6 @@ extends RefCounted
 
 ## The staged room's node name under Root.
 const STAGED := "UiTourRoom"
-## The copy Root.host_session shows while hosting starts.
-const OPENING_TEXT := "Opening a room..."
 ## The step a staged map load is held at: a share of the bar and the loader's own caption.
 const MAP_LOAD_PROGRESS := 0.35
 const MAP_LOAD_STATUS := "Loading token models..."
@@ -76,13 +80,13 @@ static func run(base: Node, step: Dictionary) -> String:
 		"host_room":
 			return _host_room(base, String(step.get("folder", "")), step)
 		"client_room":
-			return _client_room(base, String(step.get("folder", "")))
+			return _client_room(base, String(step.get("folder", "")), step)
 		"add_map":
 			return _add_map(base)
 		"end_confirm":
 			return _end_confirm(base)
 		"drawer":
-			return _drawer(base, String(step.get("folder", "")), bool(step.get("open", true)))
+			return _drawer(base, String(step.get("folder", "")), step)
 		"close_room":
 			return _close_room(base)
 		"join":
@@ -111,10 +115,11 @@ static func _opening(base: Node, open: bool, cancel: bool) -> String:
 	if overlay == null:
 		return "no loading overlay"
 	if open:
-		overlay.show_indeterminate(OPENING_TEXT, true)
+		overlay.show_indeterminate(RoomScreen.OPENING, true, RoomScreen.OPENING_STEP)
 		if cancel:
 			overlay.offer_cancel()
-		return "showing %s%s" % [OPENING_TEXT, " with Cancel" if cancel else ""]
+		var shown := "Cancel" if cancel else RoomScreen.OPENING_STEP
+		return "showing %s with %s" % [RoomScreen.OPENING, shown]
 	overlay.hide_loading()
 	return "room wait hidden"
 
@@ -205,12 +210,16 @@ static func _host_room(base: Node, folder: String, step: Dictionary) -> String:
 	]
 
 
-static func _client_room(base: Node, folder: String) -> String:
-	var room := _room(base, _summary(folder, true, ""), SAMPLE_LOCAL_PLAYER)
-	room.panel.select(SAMPLE_MAPS.keys()[0])
-	return "player's room: %s, %d players, reading %s" % [
+static func _client_room(base: Node, folder: String, step: Dictionary) -> String:
+	var with_shelf := bool(step.get("shelf", true))
+	var room := _room(base, _summary(folder, with_shelf, ""), SAMPLE_LOCAL_PLAYER)
+	var index := int(step.get("select", 0))
+	if with_shelf and index >= 0:
+		room.panel.select(SAMPLE_MAPS.keys()[index])
+	return "player's room: %s, %d players, %s: %s" % [
 		room.panel.title_label.text,
 		room.panel.player_rows.get_child_count(),
+		room.panel.map_name_label.text,
 		room.panel.readiness_label.text,
 	]
 
@@ -236,21 +245,33 @@ static func _end_confirm(base: Node) -> String:
 	return "asked to end the session"
 
 
-static func _drawer(base: Node, folder: String, open: bool) -> String:
+static func _drawer(base: Node, folder: String, step: Dictionary) -> String:
 	var map: GameMap = base.get("_game_map")
 	var menu: Node = map.gameplay_menu.get_node_or_null("GameplayMenu") if map else null
 	var drawer: RoomDrawer = menu.get("room_drawer") if menu else null
 	if drawer == null:
 		return "no room drawer (not at a table)"
-	if not open:
+	if not bool(step.get("open", true)):
 		drawer.close()
 		return "room drawer closed"
+	var player := bool(step.get("player", false))
+	var long := bool(step.get("long", false))
 	drawer.visible = true
 	drawer.panel.set_code(LobbyCode.encode(SAMPLE_LOBBY_ID))
-	drawer.panel.show_session(_summary(folder, true, folder), SAMPLE_GM, true)
-	drawer.panel.select(SAMPLE_MAPS.keys()[0])
+	var local_id := SAMPLE_LOCAL_PLAYER if player else SAMPLE_GM
+	drawer.panel.show_session(_summary(folder, true, folder, long), local_id, not player)
+	# The drawer keeps its selection between openings; a player's is staged as on their first.
+	if long:
+		drawer.panel.select(SAMPLE_MAPS.keys()[1])
+	else:
+		drawer.panel.select(folder if player else SAMPLE_MAPS.keys()[0])
 	drawer.open()
-	return "room drawer open, %s on the table" % folder
+	var action := drawer.panel.action_button
+	return "room drawer open as %s, %s on the table; %s" % [
+		"a player" if player else "the GM",
+		folder,
+		action.text if action.visible else drawer.panel.hint_label.text,
+	]
 
 
 static func _close_room(base: Node) -> String:

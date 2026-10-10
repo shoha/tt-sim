@@ -23,9 +23,19 @@ const AUTOSAVE_FOLDER := "_autosave"
 ## The fields update_meta() edits: change key -> LevelData property.
 const META_FIELDS := {"name": "level_name", "description": "level_description", "author": "author"}
 
-## Root of the saved-level folders. Tests point this at a temp directory so no
-## real save is touched (the same pattern as UiPreferences.settings_path).
-static var levels_dir: String = Paths.LEVELS_DIR
+## Root of the saved-level folders: the data root's levels folder (Paths.LEVELS_DIR), read
+## live rather than copied when this script loads. The copy once read Paths before Paths had
+## set its stores (a UI tour started while another session's edit left scripts failing to
+## compile, and they compiled again mid-run), so it was "" and every level path was relative:
+## Godot resolves that against the working directory, which --path makes the repo root, and
+## the tour wrote its test level there. Tests point this at a temp directory so no real save
+## is touched (the same pattern as UiPreferences.settings_path).
+static var levels_dir: String:
+	get:
+		return _levels_dir if _levels_dir != "" else Paths.LEVELS_DIR
+	set(value):
+		_levels_dir = value
+static var _levels_dir := ""
 
 ## Current loaded level
 var current_level: LevelData = null

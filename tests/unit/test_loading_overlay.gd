@@ -99,6 +99,24 @@ func test_a_cancellable_wait_offers_cancel_later_without_moving_the_sheet() -> v
 	assert_signal_emitted(_overlay, "cancel_requested")
 
 
+## Given its step, a cancellable wait names it in Cancel's band until Cancel is offered, and
+## the sheet keeps its height when Cancel takes the band (W4).
+func test_a_cancellable_wait_names_its_step_in_the_cancel_band() -> void:
+	_overlay.show_indeterminate("Opening a room...", true, "Asking Steam for a lobby")
+	var cancel := _overlay.cancel_button
+	assert_true(_overlay.status_label.visible)
+	assert_eq(_overlay.status_label.text, "Asking Steam for a lobby")
+	assert_false(cancel.visible, "the caption holds the band")
+	var band := cancel.get_combined_minimum_size().y
+	assert_eq(_overlay.status_label.custom_minimum_size.y, band, "as tall as Cancel's band")
+	_overlay.offer_cancel()
+	assert_true(_overlay.is_cancel_offered())
+	assert_false(_overlay.status_label.visible, "Cancel takes its place")
+	_overlay.show_loading("Setting out Mossy Hollow")
+	_overlay.set_progress(0.3, "Loading token models...")
+	assert_eq(_overlay.status_label.custom_minimum_size.y, 0.0, "a map load's caption is plain")
+
+
 func test_other_waits_and_map_loads_offer_no_cancel() -> void:
 	_overlay.show_indeterminate("Opening a room...")
 	assert_false(_overlay.cancel_button.visible)

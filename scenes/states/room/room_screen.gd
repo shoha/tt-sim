@@ -6,6 +6,12 @@ extends CanvasLayer
 ## frees it on leaving ROOM. Copy, Invite, Choose avatar and adding to the shelf are the
 ## panel's own; Set out and Leave go to Root through the panel's signals.
 
+## The wait Root shows over the title while hosting starts, before this screen opens: the
+## operation, and its one step (Steam answers with a lobby), the caption in Cancel's band until
+## Cancel is offered (LoadingOverlay.show_indeterminate()).
+const OPENING := "Opening a room..."
+const OPENING_STEP := "Asking Steam for a lobby"
+
 ## Cleared by tests and the UI tour before adding, so the panel never reads NetworkManager.
 @export var connect_network := true
 

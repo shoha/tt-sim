@@ -11,15 +11,16 @@ extends RefCounted
 ## a full-height sheet (RoomPanel._fit_side()).
 ##
 ## The drawer, over a table: the heading with the full width for "On the table: ...", the code
-## row on its own line under it, then one scrolling column (players and shelf), the selected
-## map under it as a strip (a small picture beside its name) with its action, and the foot.
+## row on its own line under it, then one column (players and shelf) and directly under the
+## shelf its action, Move the table to the selected map (or a caption saying what moves it),
+## then the foot. There is no second picture of the selected map: its shelf row already shows
+## the picture, the name and the state. The action follows the content and pins to the foot
+## only when the column runs past the drawer, which then scrolls (RoomPanel._fit_drawer()).
 ##
 ## The Shelf heading has more space above it than below (S4): a gap the height of one more
 ## separation sits between the players and the shelf.
 
-## The drawer's picture of the selected map, beside its name.
-const DRAWER_PREVIEW := Vector2(128, 72)
-## Copy and Choose avatar: compact, framed buttons (S6 controls 40).
+## Copy: a compact, framed icon button (S6 controls 40).
 const COMPACT := Vector2(40, 40)
 ## The width the room's action takes at least, so Set out reads as the screen's one fill.
 const ACTION_MIN_WIDTH := 280.0
@@ -41,20 +42,27 @@ static func _build_drawer(panel: RoomPanel, layout: VBoxContainer) -> void:
 	# The code row has its own line, so the caption ("On the table: ...") gets the full width.
 	layout.add_child(_build_heading(panel))
 	layout.add_child(_build_code_row(panel))
+	# The column scrolls only when it runs past the drawer (RoomPanel._fit_drawer()); until
+	# then it is as tall as its content and the action sits right under the shelf.
 	var scroll := ScrollContainer.new()
 	scroll.name = "Scroll"
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	layout.add_child(scroll)
+	panel.column_scroll = scroll
 	var column := _vbox("Column", &"BoxContainerSpaced")
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(column)
 	column.add_child(_build_players(panel))
 	column.add_child(_spacer(Vector2.ZERO))
 	column.add_child(_build_shelf(panel))
-	# The selected map and its action stay under the scroll, so Move the table here is on
-	# screen at 720p however long the players and the shelf run.
 	layout.add_child(_build_stage(panel))
+	# What is left of the drawer's height, between the action and the foot, while the column
+	# fits; hidden when it scrolls, so the action pins to the foot.
+	panel.drawer_rest = _spacer(Vector2.ZERO)
+	panel.drawer_rest.name = "Rest"
+	panel.drawer_rest.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(panel.drawer_rest)
 	layout.add_child(_build_footer(panel))
 
 
@@ -182,50 +190,43 @@ static func _build_shelf(panel: RoomPanel) -> VBoxContainer:
 	return box
 
 
-## The selected map and its action. The room shows it large in the centre; the drawer, where
-## the column is narrow and the action must stay on screen, as a strip (a small picture beside
-## the name) with the action directly under it. With no map selected the picture is the
-## painted placeholder under what goes there.
+## The selected map and its action. The room shows it large in the centre (with no map
+## selected the picture is the painted placeholder under what goes there). The drawer has only
+## the action, full width and named for the map (it ellipsizes, its tooltip the whole), or in
+## its place a caption saying what moves the table (RoomModel.drawer_hint()).
 static func _build_stage(panel: RoomPanel) -> VBoxContainer:
 	var stage := _vbox("Stage", &"BoxContainerSpaced")
-	stage.alignment = BoxContainer.ALIGNMENT_CENTER
 	panel.stage = stage
-	var well_size := DRAWER_PREVIEW if panel.in_drawer else Vector2.ZERO
-	panel.preview = RoomRows.map_well(well_size, null, "", "")
+	panel.action_button = Button.new()
+	panel.action_button.name = "Action"
+	if panel.in_drawer:
+		panel.action_button.custom_minimum_size = Vector2(0, ACTION_HEIGHT)
+		panel.action_button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		panel.hint_label = Label.new()
+		panel.hint_label.name = "Hint"
+		panel.hint_label.theme_type_variation = &"Caption"
+		panel.hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		stage.add_child(panel.hint_label)
+		stage.add_child(panel.action_button)
+		return stage
+	stage.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.preview = RoomRows.map_well(Vector2.ZERO, null, "", "")
 	panel.preview.name = "Preview"
+	panel.preview.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	stage.add_child(panel.preview)
 	panel.map_name_label = Label.new()
 	panel.map_name_label.name = "MapName"
 	panel.map_name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	panel.map_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stage.add_child(panel.map_name_label)
 	panel.readiness_label = Label.new()
 	panel.readiness_label.name = "Readiness"
 	panel.readiness_label.theme_type_variation = &"Caption"
 	panel.readiness_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	if panel.in_drawer:
-		var strip := HBoxContainer.new()
-		strip.name = "Strip"
-		strip.theme_type_variation = &"BoxContainerSpaced"
-		strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		stage.add_child(strip)
-		strip.add_child(panel.preview)
-		var text := _vbox("Text", &"")
-		text.alignment = BoxContainer.ALIGNMENT_CENTER
-		text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		strip.add_child(text)
-		text.add_child(panel.map_name_label)
-		text.add_child(panel.readiness_label)
-	else:
-		panel.preview.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-		panel.map_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		panel.readiness_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		stage.add_child(panel.preview)
-		stage.add_child(panel.map_name_label)
-		stage.add_child(panel.readiness_label)
-	panel.action_button = Button.new()
-	panel.action_button.name = "Action"
-	var min_width := 0.0 if panel.in_drawer else ACTION_MIN_WIDTH
-	panel.action_button.custom_minimum_size = Vector2(min_width, ACTION_HEIGHT)
-	if not panel.in_drawer:
-		panel.action_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	panel.readiness_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stage.add_child(panel.readiness_label)
+	panel.action_button.custom_minimum_size = Vector2(ACTION_MIN_WIDTH, ACTION_HEIGHT)
+	panel.action_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	stage.add_child(panel.action_button)
 	return stage
 

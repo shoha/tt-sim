@@ -393,7 +393,7 @@ there does):
 | ROOM (host) | Entering with a map from Host | The map is shelved and selected in the room |
 | ROOM > PLAYING | The room's Set out this map: `set_out(key)`, then `_on_lobby_start_game()` | Refused with "Choose a map to set out first" when no map is pending; else `close()`, `notify_game_starting()`, PLAYING broadcasts the level |
 | PLAYING > ROOM | Pause > Return everyone to the room (host): `return_to_room()` | The party is taken, `open()`, then the table (GameMap, tokens, GameState) is torn down on every peer |
-| PLAYING > PLAYING | The drawer's Move the table here (`move_table(key)`), or Pause > Change Level | The party is taken; the level broadcast moves the table pointer (the table-moves card adds its notice and the Keep/Save/Discard prompt) |
+| PLAYING > PLAYING | The drawer's Move the table to the selected map (`move_table(key)`), or Pause > Change Level | The party is taken; the level broadcast moves the table pointer (the table-moves card adds its notice and the Keep/Save/Discard prompt) |
 | (any) > PLAYING, map loaded | `_on_level_play_loaded()` (host) | The party is set out on the new map |
 | ROOM or PLAYING > TITLE | Leave or End session (the room, the drawer), Return to Title | Title first, then `disconnect_game()`, so a voluntary leave is not read as a lost connection; the host leaving ends the session (End session asks first) |
 
