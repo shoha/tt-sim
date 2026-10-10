@@ -411,7 +411,10 @@ func _forest_doc() -> MapDocument:
 	return doc
 
 
-func test_terrain_binds_accents_and_the_skirt_carries_the_base_ones() -> void:
+## Round 3 (2026-10-09): the accents shrink away in the map's edge band and the skirt draws
+## none (it carried the base's until then: accent_components was the base bit and
+## layer_count the slots).
+func test_terrain_binds_accents_with_an_edge_band_and_the_skirt_draws_none() -> void:
 	_inject_forest_accents([_accent("moss", 0.25, 8.0), _accent("grass", 0.15, 5.0)])
 	var terrain := AuthoredTerrain.create(_forest_doc())
 	add_child_autofree(terrain)
@@ -420,17 +423,40 @@ func test_terrain_binds_accents_and_the_skirt_carries_the_base_ones() -> void:
 	var material := terrain.get_material()
 	var base_bit := 1 << GroundLayerTable.MAX_LAYERS
 	assert_eq(material.get_shader_parameter("accent_components"), base_bit)
+	var half := terrain.document.extent_m() * 0.5
+	assert_eq(material.get_shader_parameter("accent_edge_half"), half)
+	assert_eq(material.get_shader_parameter("accent_edge_m"), NewMap.edge_feather_m(half))
 	var skirt := terrain.get_skirt().mesh.surface_get_material(0) as ShaderMaterial
-	assert_eq(skirt.get_shader_parameter("accent_components"), base_bit)
-	assert_eq(skirt.get_shader_parameter("layer_count"), layers.size())
+	assert_eq(skirt.get_shader_parameter("accent_components"), 0, "no patches past the edge")
+	assert_eq(skirt.get_shader_parameter("layer_count"), 0, "the base: no slot sampled")
+	assert_eq(skirt.get_shader_parameter("skirt_ground_mask"), 0)
 	assert_eq(skirt.get_shader_parameter("layer_ground_mask"), 0, "the skirt reads no weights")
-	assert_eq(
-		skirt.get_shader_parameter("accent_params"), material.get_shader_parameter("accent_params")
-	)
 	assert_eq(material.get_shader_parameter("accent_noise"), GroundAccents.noise_texture())
-	assert_eq(skirt.get_shader_parameter("accent_noise"), GroundAccents.noise_texture())
 	var paths := AuthoredTerrain.texture_paths(terrain.document)
 	assert_true(Array(paths).any(func(p: String) -> bool: return p.contains("/moss/")))
+	PaletteLibrary.clear_cache()
+
+
+func test_the_skirt_continues_a_surface_painted_over_the_map_edge() -> void:
+	_inject_forest_accents([_accent("moss", 0.25, 8.0)])
+	var doc := _forest_doc()
+	var slot := doc.ensure_surface("grass")
+	assert_eq(TerrainSkirt.edge_surface(doc), -1, "nothing painted yet")
+	var last_x := doc.samples_x() - 1
+	var last_z := doc.samples_z() - 1
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			if x == 0 or z == 0 or x == last_x or z == last_z:
+				doc.set_surface_weight(doc.sample_index(x, z), slot, 255)
+	assert_eq(TerrainSkirt.edge_surface(doc), slot)
+	var terrain := AuthoredTerrain.create(doc)
+	add_child_autofree(terrain)
+	var skirt := terrain.get_skirt().mesh.surface_get_material(0) as ShaderMaterial
+	var mask: int = skirt.get_shader_parameter("skirt_ground_mask")
+	var layers := terrain.ground_layers()
+	assert_ne(mask, 0, "the skirt draws the edge's surface")
+	assert_eq(layers[int(log(float(mask)) / log(2.0) + 0.5)], "grass", str(layers))
+	assert_eq(skirt.get_shader_parameter("layer_count"), layers.size())
 	PaletteLibrary.clear_cache()
 
 

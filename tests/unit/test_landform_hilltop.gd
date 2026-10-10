@@ -251,13 +251,8 @@ func test_a_stream_never_crosses_the_flank_ledge() -> void:
 		var half := StartingLandform.half_extent(doc)
 		var radius := half * LandformHilltop.HILL_RADIUS_SHARE
 		var height := LandformHilltop.HILL_HEIGHT_M * StartingLandform.size_scale(doc)
-		var centre: Vector2 = (
-			LandformHilltop
-			. hilltop_frame(
-				half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
-			)
-			. centre
-		)
+		# Where the recipe stood the hill (round 3: a wide map places it by its setting).
+		var centre: Vector2 = LandformHilltop.setting_of(doc, seed_value).centre
 		var ledge := LandformHilltop.ledge_of(height, doc.tier_height_m, radius)
 		var line_r: float = ledge.line_r
 		var target: float = ledge.target

@@ -246,23 +246,23 @@ static func bind(material: ShaderMaterial, plan: Dictionary, map_seed: int) -> v
 	material.set_shader_parameter("accent_noise", noise_texture())
 
 
-## Brings the ground skirt's material up to the ground's: the skirt continues the base
-## surface, and with it the base's accent patches for a few metres, so they do not stop in a
-## straight line at the map edge (the skirt shader shrinks them away as its fade begins; see
-## SKIRT in authored_ground.gdshaderinc). It gets the slot textures (`layer_count` of them)
-## and the accent uniforms, but only the base's accents, and never any weights (its painted
-## and ground masks stay 0; the skirt shader reads no weight maps and runs no rules). Without
-## base accents it samples no slot at all (layer_count 0).
-static func sync_skirt(skirt: ShaderMaterial, ground: ShaderMaterial, layer_count: int) -> void:
+## Brings the ground skirt's material up to the ground's slot textures, so it can draw the
+## surface covering the map's edge (TerrainSkirt.sync_ground sets which, and its layer_count).
+## The skirt draws no accent patches (they shrink away inside the map's edge band, bind_edge)
+## and never any weights (its painted and ground masks stay 0; the skirt shader reads no
+## weight maps and runs no rules).
+static func sync_skirt(skirt: ShaderMaterial, ground: ShaderMaterial) -> void:
 	for uniform in ["layer_albedo", "layer_normal", "layer_orm", "layer_height", "layer_tile_m"]:
 		skirt.set_shader_parameter(uniform, ground.get_shader_parameter(uniform))
-	for uniform in ["accent_layer", "accent_params", "accent_noise"]:
-		skirt.set_shader_parameter(uniform, ground.get_shader_parameter(uniform))
-	var bound: Variant = ground.get_shader_parameter("accent_components")
-	var base_bit := 1 << GroundLayerTable.MAX_LAYERS
-	var base_accented := bound is int and (int(bound) & base_bit) != 0
-	skirt.set_shader_parameter("accent_components", base_bit if base_accented else 0)
-	skirt.set_shader_parameter("layer_count", layer_count if base_accented else 0)
+	skirt.set_shader_parameter("accent_components", 0)
+
+
+## Binds the map's edge band on ground `material` for a map of half extent `half` (metres):
+## the accent patches shrink away over the starting cover's feather depth
+## (NewMap.edge_feather_m), so no patch sits on the rim where the cover has thinned out.
+static func bind_edge(material: ShaderMaterial, half: Vector2) -> void:
+	material.set_shader_parameter("accent_edge_half", half)
+	material.set_shader_parameter("accent_edge_m", NewMap.edge_feather_m(half))
 
 
 ## The ground accents of base surface `base` where no painted biome says otherwise: those of

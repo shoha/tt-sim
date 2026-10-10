@@ -1417,8 +1417,11 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   re-claim their old slot when it is still free, so their textures stay bound. When slots run
   out an accent is not drawn (no nearest-colour fallback: a patch of the wrong surface is not
   an accent), dropped by entry index, then least coverage, then component (base first), one
-  warning per surface. The skirt draws the base's accents too, so patches carry across the
-  map edge (`GroundAccents.sync_skirt`). **Plants:** do not read accents (the contract says
+  warning per surface. In the map's edge band (`accent_edge_m`, the starting cover's feather
+  depth `NewMap.edge_feather_m`, bound by `GroundAccents.bind_edge`) the patches shrink away,
+  so none sits on the rim; the skirt draws none (`GroundAccents.sync_skirt`), and continues
+  the base or the painted surface covering the map's edge (`TerrainSkirt.edge_surface`,
+  `skirt_ground_mask`; 2026-10-09). **Plants:** do not read accents (the contract says
   the scatter does not; a moss patch under a forest is still forest floor), so there is no
   `TerrainRules` / `ScatterGround` twin. **Cost:** see `PERFORMANCE.md` "Ground accents".
 - **Automatic dressing (P3-4):** always on, no toggle; the user's decisions are tier edges

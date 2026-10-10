@@ -46,11 +46,12 @@
  * shore), routed to the base's bed and shore surfaces like the map's; within
  * SKIRT_EDGE_DRESSING_M of the edge the map's own dressing (water_weights, clamped at its
  * edge texel) takes over, so the two meet without a seam.
- *   The base's accent patches continue a few metres past the edge, so they do not stop in a
- * straight line, and shrink away as the fade begins (skirt_accent_keep(): their threshold
- * rises until no patch is left by SKIRT_ACCENT_LOW of the fade, about 7 m out at 24 m). Past
- * that the skirt is the plain base surface: on a grass map nothing hides the patches there,
- * and they read as loose blotches floating in the haze (2026-10-09).
+ *   The skirt draws no accent patches: they shrink away inside the map's edge band (see
+ * GROUND ACCENTS), so the skirt is a plain surface (on a grass map nothing hides patches past
+ * the edge, and a grassland's savanna patches floated in the haze as orange blotches;
+ * 2026-10-09). That surface is the base, or the painted surface that covers the map's edge
+ * when one does (skirt_ground_mask, TerrainSkirt.edge_surface): a new forest map's edge band
+ * is greened, and the skirt fades out on that green instead of the brown forest floor.
  *
  * ANTI-TILING (the live port of terrain-paint's Mosaic tiling breakup):
  * terrain-paint breaks a repeating texture by cutting UV space into a grid of cells, giving
@@ -157,8 +158,10 @@
  * Accents are drawn in order, each taking its share of what the earlier ones left, from
  * the component's weight after the rules took theirs (keep): painted surfaces and the
  * automatic cliff and scree cover them. The patch weight then goes through the same height
- * blend as every surface, so its edge frays along texture detail. The skirt draws the
- * base's accents too, so patches carry across the map edge.
+ * blend as every surface, so its edge frays along texture detail. In the map's edge band
+ * (accent_edge_m, the starting cover's feather depth, ragged by ACCENT_EDGE_WOBBLE) the
+ * threshold rises until no patch is left at the edge itself, so no patch sits on the rim or
+ * crosses into the skirt, which draws none.
  *
  * AUTOMATIC RULES (rule_weights; formulas and defaults in utils/terrain_rules.gd, whose
  * constants are mirrored below and checked by tests/unit/test_terrain_rules.gd):
@@ -302,6 +305,15 @@ uniform vec4 accent_params[27];
 // The accent noise lattice (GroundAccents.noise_image): random values per cell, one octave
 // per channel, tiling every ACCENT_NOISE_CELLS cells.
 uniform sampler2D accent_noise : hint_default_black, filter_linear, repeat_enable;
+// The map's edge band (see GROUND ACCENTS): the map's half extent and the band's depth in
+// metres (0: no band). The patches' threshold rises by up to ACCENT_EDGE_SHRINK across it, past
+// the noise's whole range, so they shrink rather than turn translucent; the depth is pushed in
+// and out by ACCENT_EDGE_WOBBLE by a value noise ACCENT_EDGE_WAVE_M across.
+uniform vec2 accent_edge_half = vec2(0.0);
+uniform float accent_edge_m = 0.0;
+const float ACCENT_EDGE_SHRINK = 1.2;
+const float ACCENT_EDGE_WOBBLE = 0.5;
+const float ACCENT_EDGE_WAVE_M = 9.0;
 
 #ifdef GROUND_SKIRT
 // The fade, the backdrop and the fog (skirt_alpha_seeded, skirt_backdrop_color, skirt_fog_at).
@@ -310,11 +322,8 @@ uniform sampler2D accent_noise : hint_default_black, filter_linear, repeat_enabl
 uniform int skirt_channel = 0;
 // Within this of the map edge the map's own wet dressing takes over the channel's.
 const float SKIRT_EDGE_DRESSING_M = 2.0;
-// The skirt's accent patches (see SKIRT): whole at the edge, none left where the fade has
-// reached SKIRT_ACCENT_LOW; their threshold rises by up to SKIRT_ACCENT_SHRINK as they go,
-// past the noise's whole range, so they shrink rather than turn translucent.
-const float SKIRT_ACCENT_LOW = 0.8;
-const float SKIRT_ACCENT_SHRINK = 1.2;
+// The slot the skirt draws as its ground instead of the base (one bit; 0: the base; see SKIRT).
+uniform int skirt_ground_mask = 0;
 #endif
 
 // Map-frame normal, position and the per-vertex rule fields (UV2: curvature, steepness).
@@ -826,6 +835,15 @@ vec4 accent_octave(vec2 p) {
 	return textureLod(accent_noise, (i + f + 0.5) / ACCENT_NOISE_CELLS, 0.0);
 }
 
+// How much of the accent patches the map keeps at map-frame XZ (see GROUND ACCENTS): none on
+// the map edge, all from accent_edge_m in, that depth ragged by ACCENT_EDGE_WOBBLE.
+float accent_edge_keep(vec2 world_xz) {
+	vec2 inside = accent_edge_half - abs(world_xz);
+	float wobble = value_noise(world_xz / ACCENT_EDGE_WAVE_M + vec2(13.7, -41.3)) * 2.0 - 1.0;
+	float depth = accent_edge_m * (1.0 + ACCENT_EDGE_WOBBLE * wobble);
+	return smoothstep(0.0, depth, min(inside.x, inside.y));
+}
+
 // One accent's patch weight 0..1 at map-frame XZ (GroundAccents.mask): params are
 // (threshold, 1 / scale_m, domain offset). Each finer octave is only fetched where it can
 // still change the result, which is exact since the ramp clamps (fetching all three with
@@ -921,12 +939,6 @@ float blend_score(float weight, float height) {
 float skirt_alpha(vec2 world_xz) {
 	return skirt_alpha_seeded(world_xz, breakup_seed);
 }
-
-// How much of the base's accent patches the skirt keeps where its fade is `a` (see SKIRT):
-// 1 at the edge, 0 from SKIRT_ACCENT_LOW out, so the patches follow the fade's own wobble.
-float skirt_accent_keep(float a) {
-	return smoothstep(SKIRT_ACCENT_LOW, 1.0, a);
-}
 #endif
 
 void vertex() {
@@ -949,7 +961,6 @@ void fragment() {
 	if (skirt_a <= 0.0) {
 		discard;
 	}
-	float accent_keep = skirt_accent_keep(skirt_a);
 	if (skirt_backdrop_mode == 2) {
 		// No colour to fade to: the fade as an interleaved-gradient dither (see SKIRT).
 		if (skirt_a < fract(52.9829189 * fract(dot(FRAGCOORD.xy, vec2(0.06711056, 0.00583715))))) {
@@ -982,6 +993,10 @@ void fragment() {
 			painted_weights(world_xz, painted_a, painted_b);
 		}
 	}
+#else
+	// The surface covering the map's edge, when one does, in place of the base (see SKIRT).
+	ground_a = mask_channels(skirt_ground_mask, 0);
+	ground_b = mask_channels(skirt_ground_mask, 4);
 #endif
 	float painted_total = dot(painted_a, vec4(1.0)) + dot(painted_b, vec4(1.0));
 	// Painted cliff-role surfaces hold their weight; painted ground and built surfaces yield
@@ -1044,11 +1059,12 @@ void fragment() {
 	}
 	int components = accent_components;
 	float accent_rise = 0.0;
-#ifdef GROUND_SKIRT
-	// The skirt's patches shrink away past the edge (see SKIRT).
-	components = accent_keep > 0.0 ? components : 0;
-	accent_rise = (1.0 - accent_keep) * SKIRT_ACCENT_SHRINK;
-#endif
+	if (components != 0 && accent_edge_m > 0.0) {
+		// The patches shrink away in the map's edge band (see GROUND ACCENTS).
+		float edge_keep = accent_edge_keep(world_xz);
+		components = edge_keep > 0.0 ? components : 0;
+		accent_rise = (1.0 - edge_keep) * ACCENT_EDGE_SHRINK;
+	}
 	if (components != 0 && keep > WEIGHT_EPSILON) {
 		// Accent patches take their share of each component's kept ground, in order (see
 		// GROUND ACCENTS). Constant indices into w[] only, as below.

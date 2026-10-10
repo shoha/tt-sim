@@ -82,6 +82,8 @@ const KNOLL_WARP := 0.2
 ## its radius, so the hill reads as a green dome above the trees round its foot (0.6 until
 ## the round 2 look, where the trees closed over it).
 const KNOLL_OPEN_SHARE := 0.95
+## A map whose shorter side is at least this (metres; 200 ft is 60.96) is wide (is_wide).
+const WIDE_FROM_M := 60.0
 ## The clear ground the search keeps round the stage and a crossing, and between extras.
 const STAGE_CLEAR_M := 8.0
 const CROSSING_CLEAR_M := 5.0
@@ -111,6 +113,14 @@ static func aspect(doc: MapDocument) -> float:
 ## True when the map is at least LONG_ASPECT longer than wide.
 static func is_long(doc: MapDocument) -> bool:
 	return aspect(doc) >= LONG_ASPECT
+
+
+## True when the map's shorter side is at least WIDE_FROM_M (200 ft and up): wide enough
+## that the whole-map view, not the home frame, is what a recipe composes for, so the Hilltop
+## and the Lakeshore may stand their hill or lake toward any side.
+static func is_wide(doc: MapDocument) -> bool:
+	var extent := doc.extent_m()
+	return minf(extent.x, extent.y) >= WIDE_FROM_M
 
 
 ## The unit direction of the map's longer side (+x when square).

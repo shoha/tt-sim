@@ -256,9 +256,8 @@ func _build_skirt(parts: Dictionary = {}) -> void:
 	if old != null:
 		old.free()
 	if _skirt_material == null:
-		var layers: int = _plan.get("layers", []).size()
 		_skirt_material = TerrainSkirt.material(
-			_material, layers, document, SKIRT_FADE_M, SKIRT_WOBBLE
+			_material, _plan, document, SKIRT_FADE_M, SKIRT_WOBBLE
 		)
 	if parts.is_empty():
 		parts = RiverExitMesh.skirt_parts(document, skirt_width_m(), SKIRT_FADE_M, SKIRT_WOBBLE)
@@ -654,8 +653,10 @@ func _bind_layers(previous: Array) -> void:
 		"rule_shore_layer", GroundLayerTable.shader_routing(_plan.shore_of)
 	)
 	GroundAccents.bind(_material, _plan, document.map_seed)
+	GroundAccents.bind_edge(_material, document.extent_m() * 0.5)
 	if _skirt_material != null:
-		GroundAccents.sync_skirt(_skirt_material, _material, layers.size())
+		GroundAccents.sync_skirt(_skirt_material, _material)
+		TerrainSkirt.sync_ground(_skirt_material, document, _plan)
 		_sync_skirt_water()
 
 

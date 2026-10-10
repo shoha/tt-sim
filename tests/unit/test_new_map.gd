@@ -87,9 +87,11 @@ func test_cover_is_open_in_the_middle_and_denser_at_the_edges() -> void:
 func test_the_cover_feathers_out_at_the_map_edge() -> void:
 	var half := Vector2(30.0, 20.0)
 	var width := NewMap.edge_feather_m(half)
-	assert_almost_eq(width, 2.0, 0.001, "a tenth of the shorter half, at least the minimum")
+	assert_almost_eq(width, 5.0, 0.001, "a quarter of the shorter half")
 	var big := NewMap.edge_feather_m(Vector2(48.8, 48.8))
-	assert_almost_eq(big, NewMap.EDGE_FEATHER_SHARE * 48.8, 0.001, "320 ft")
+	assert_almost_eq(big, NewMap.EDGE_FEATHER_MAX_M, 0.001, "320 ft: the most")
+	var small := NewMap.edge_feather_m(Vector2(10.0, 10.0))
+	assert_almost_eq(small, NewMap.EDGE_FEATHER_MIN_M, 0.001, "a small map: the least")
 	assert_eq(NewMap.edge_feather(Vector2(30.0, 0.0), half, width, 0.0), 0.0, "none at the edge")
 	assert_eq(NewMap.edge_feather(Vector2(0.0, 0.0), half, width, 1.0), 1.0, "all inside")
 	var deep := NewMap.edge_feather(Vector2(0.0, 19.0), half, width, 1.0)

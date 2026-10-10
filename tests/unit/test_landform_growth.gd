@@ -193,32 +193,117 @@ func test_open_ground_is_painted_with_the_biomes_meadow_surface() -> void:
 	assert_eq(_weight(doc, slot, Vector2(8.0, 9.0)), 0, "nothing past the warped outline")
 
 
-func test_thin_cover_is_greened_only_on_a_map_with_room() -> void:
+## Round 3 (2026-10-09): the greening runs on every map, not only one with room, and the edge
+## band is greened too. Changed assertions: the 250 ft square is now painted like the long map
+## (was: no surface at all), and the map edge is all meadow (was: nothing on the feather).
+func test_thin_cover_and_the_edge_are_greened_on_every_map() -> void:
 	var surface := LandformPlacement.meadow_surface(BIOME)
 	if surface == "":
 		pass_test("palette without a grass accent in %s" % BIOME)
 		return
-	# Thin cover west of x = 0, groves east of it.
-	var long := _covered(_doc(LONG))
-	LandformPlacement.paint_sparse(long, BIOME)
-	var slot := long.surface_ids.find(surface)
-	assert_gte(slot, 0)
-	var greened := 0
-	var thin := 0
-	for z in range(-5, 6):
-		for x in range(-20, -10):
-			thin += 1
-			greened += 1 if _weight(long, slot, Vector2(x, z)) > 128 else 0
-	assert_between(float(greened) / thin, 0.25, 1.0, "thin cover is greened in patches")
-	for z in range(-5, 6):
-		for x in range(10, 20):
-			assert_eq(_weight(long, slot, Vector2(x, z)), 0, "the groves keep their floor")
-	var half := long.extent_m() * 0.5
-	for z in range(-5, 6):
-		assert_eq(_weight(long, slot, Vector2(-half.x, z)), 0, "nothing on the edge feather")
-	var square := _covered(_doc(Vector2i(50, 50)))
-	LandformPlacement.paint_sparse(square, BIOME)
-	assert_true(square.surface_ids.is_empty(), "250 ft square: no room, nothing painted")
+	# Thin cover west of x = 0, groves east of it; a long map and a 250 ft square alike.
+	for cells in [LONG, Vector2i(50, 50)]:
+		var doc := _covered(_doc(cells))
+		LandformPlacement.paint_sparse(doc, BIOME)
+		var slot := doc.surface_ids.find(surface)
+		assert_gte(slot, 0, "%s: the meadow surface is painted" % cells)
+		var greened := 0
+		var thin := 0
+		for z in range(-5, 6):
+			for x in range(-20, -10):
+				thin += 1
+				greened += 1 if _weight(doc, slot, Vector2(x, z)) > 128 else 0
+		assert_between(float(greened) / thin, 0.25, 1.0, "%s: thin cover greened" % cells)
+		for z in range(-5, 6):
+			for x in range(10, 20):
+				assert_eq(_weight(doc, slot, Vector2(x, z)), 0, "%s: groves keep their floor" % cells)
+		var half := doc.extent_m() * 0.5
+		for z in range(-5, 6):
+			for x in [-half.x, half.x]:
+				assert_eq(_weight(doc, slot, Vector2(x, z)), 255, "%s: the edge is meadow" % cells)
+		assert_eq(TerrainSkirt.edge_surface(doc), slot, "%s: the skirt continues it" % cells)
+
+
+func test_the_edge_band_greens_over_the_feather_depth() -> void:
+	var surface := LandformPlacement.meadow_surface(BIOME)
+	if surface == "":
+		pass_test("palette without a grass accent in %s" % BIOME)
+		return
+	# Groves everywhere: only the edge band is greened.
+	var doc := _doc(Vector2i(50, 50))
+	_covered(doc)
+	doc.biome_density.fill(204)
+	LandformPlacement.paint_sparse(doc, BIOME)
+	var slot := doc.surface_ids.find(surface)
+	var half := doc.extent_m() * 0.5
+	var width := NewMap.edge_feather_m(half)
+	var reach := width * (1.0 + NewMap.EDGE_FEATHER_WOBBLE)
+	for z in range(-10, 11, 5):
+		assert_eq(_weight(doc, slot, Vector2(half.x - 0.1, z)), 255, "full at the edge")
+		assert_eq(_weight(doc, slot, Vector2(half.x - reach - 1.0, z)), 0, "none past the band")
+
+
+func test_a_wood_thins_the_groves_toward_the_open_side() -> void:
+	var half := Vector2(30.0, 30.0)
+	var grove := 0.6
+	var drawn := NewMap.wood_density(grove, Vector2.ZERO, half, {"density": 1.0})
+	assert_almost_eq(drawn, grove, 0.001, "as drawn")
+	var thin := NewMap.wood_density(grove, Vector2.ZERO, half, {"density": 0.5})
+	assert_almost_eq(thin, lerpf(NewMap.COVER_CENTRE_DENSITY, grove, 0.5), 0.001, "thinned")
+	var glade := NewMap.wood_density(0.1, Vector2.ZERO, half, {"density": 0.0})
+	assert_eq(glade, 0.1, "the glade's own cover stays")
+	var wood := {"density": 1.0, "side": Vector2.RIGHT, "lean": 0.8}
+	var gathered := NewMap.wood_density(grove, Vector2(25.0, 0.0), half, wood)
+	var opened := NewMap.wood_density(grove, Vector2(-25.0, 0.0), half, wood)
+	assert_almost_eq(gathered, grove, 0.001, "the groves gather on their side")
+	assert_lt(opened, grove * 0.5, "the far side opens")
+
+
+func test_wide_hills_and_lakes_stand_toward_any_side_and_draw_their_wood() -> void:
+	var places := {}
+	var hill_sides := {}
+	var woods := {}
+	var large := 0
+	for seed_value in range(1, 25):
+		var rng := StartingLandform.stream(seed_value, StartingLandform.STREAM_SETTING)
+		var wood := LandformPlacement.wood(rng, Vector2(0.4, 1.0), 0.5)
+		woods["%.2f %s" % [float(wood.density), wood.has("side")]] = true
+		rng.randf()
+		rng.randf()
+		rng.randf()
+		var wide := _doc(Vector2i(50, 50), seed_value)
+		var frame := LandformLakeshore.wide_frame(wide, StartingLandform.half_extent(wide), rng)
+		places[frame.corner] = true
+		large += 1 if float(frame.radius) > 0.5 * StartingLandform.half_extent(wide) else 0
+		var reach := (frame.centre as Vector2).abs() + Vector2.ONE * float(frame.radius)
+		var half := wide.extent_m() * 0.5
+		assert_lte(reach.x, half.x + 0.01, "seed %d on the map" % seed_value)
+		assert_lte(reach.y, half.y + 0.01, "seed %d on the map" % seed_value)
+	assert_gte(places.size(), 6, "the lake takes most of the eight places over 24 seeds")
+	assert_between(large, 3, 16, "a larger lake sometimes")
+	assert_gte(woods.size(), 20, "the wood differs seed to seed")
+	for seed_value in range(1, 7):
+		var doc := _doc(Vector2i(50, 50), seed_value)
+		var shaped := StartingLandform.apply(doc, StartingLandform.HILLTOP, seed_value, BIOME)
+		assert_true(shaped.has("wood"), "the hilltop draws a wood")
+		var off := float(shaped.report.split(", ")[1].split(" m")[0])
+		var half := StartingLandform.half_extent(doc)
+		assert_gte(off, half * LandformHilltop.HILL_WIDE_OFFSET_SHARE.x - 0.1, "well off centre")
+		hill_sides[shaped.report.split(" deg")[0]] = true
+	assert_gt(hill_sides.size(), 2, "the hill stands toward several sides")
+
+
+func test_a_river_over_three_steps_jogs_aside() -> void:
+	var frame := {"dir": Vector2.RIGHT, "normal": Vector2.DOWN}
+	var plateaus: Array[Dictionary] = [{"edge": -10.0}, {"edge": 0.0}, {"edge": 10.0}]
+	var line := LandformTerraces.river_line(plateaus, frame, 4.0, 30.0, 30.0)
+	var jog := 30.0 * LandformTerraces.JOG_SHARE
+	assert_almost_eq(line[1].y, 4.0, 0.001, "the first step crossed at the river's line")
+	assert_almost_eq(line[3].y, 4.0 + jog, 0.001, "the next jogged away from the axis")
+	assert_almost_eq(line[5].y, 4.0, 0.001, "and back")
+	assert_almost_eq(line[3].x, -LandformTerraces.JOG_SQUARE_M, 0.001, "square over the edge")
+	var two: Array[Dictionary] = [{"edge": -10.0}, {"edge": 10.0}]
+	assert_eq(LandformTerraces.river_line(two, frame, 4.0, 30.0, 30.0).size(), 2, "straight")
 
 
 ## `doc` with BIOME painted: thin (0.1) west of x = 0, groves (0.8) east of it.

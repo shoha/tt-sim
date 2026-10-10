@@ -60,6 +60,9 @@ const STREAM_FEATURES := 0x2B7E1
 const STREAM_RIVER := 0x3C9D7
 const STREAM_TRIBUTARY := 0x4D1E3
 const STREAM_CROSSING := 0x5E2F9
+## The Hilltop's and the Lakeshore's setting (round 3, 2026-10-09: their seeds read alike):
+## the wood (LandformPlacement.wood) and, on a wide map, where the hill or lake stands.
+const STREAM_SETTING := 0x6F4A3
 
 ## The extent the recipes' metres are written for (150 ft); size_scale() is 0.8 / 1.0 / 1.2
 ## at 100 / 150 / 200 ft.

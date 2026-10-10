@@ -17,7 +17,9 @@ extends RefCounted
 ## shore (plan_river joins it at the waterline); stepping stones over the stream
 ## (STONES_CHANCE). The stage is on the shore nearest the map's centre, STAGE_SHORE_M back
 ## from the waterline. The lake is the water: a dry draw has it too. On a long map the lake
-## sits in the map's own far corner (lakeshore_frame).
+## sits in the map's own far corner (lakeshore_frame); on a wide one at any corner or side,
+## sometimes larger (wide_frame). Every size draws its wood and often a shore meadow (round
+## 3; see WIDE_PLACES).
 
 const LAKE_RADIUS_SHARE := 0.45
 ## 0.5 since P5-4 (0.55 sat the lake at the home view's edge): more water in the home view.
@@ -69,14 +71,53 @@ const EDGE_MARGIN_M := 0.5
 ## On a big or long map the ground within this share of the lake's radius is open shore
 ## (a clearing easing back to the forest at its outline, NewMap.clearing_density).
 const LAKE_OPEN_SHARE := 1.6
+## The setting (StartingLandform.STREAM_SETTING; round 3, where every seed read as a lake at
+## the back with forest everywhere else). On a wide map (LandformGrowth.is_wide; the whole map
+## is what reads, not the home frame) the lake takes any of WIDE_PLACES, the four corners and
+## the four sides' middles, alike; with LARGE_LAKE_CHANCE it is LARGE_LAKE_SHARE of the half
+## extent across instead of LAKE_RADIUS_SHARE; its centre stands its radius plus
+## LAKE_EDGE_SHARE of the half extent in from each edge it lies toward (a corner lake as before).
+## At every size: a shore meadow (SHORE_MEADOW_CHANCE), a clearing SHORE_MEADOW_SHARE of the
+## lake's radius across on the shore, SHORE_MEADOW_AZIMUTH_DEG either side of the stage's line,
+## and the wood (LandformPlacement.wood), the groves keeping a share drawn within WOOD_DENSITY
+## and with WOOD_LEAN_CHANCE gathering toward one side.
+const WIDE_PLACES: Array[Vector2i] = [
+	Vector2i(-1, -1),
+	Vector2i(1, -1),
+	Vector2i(-1, 1),
+	Vector2i(1, 1),
+	Vector2i(-1, 0),
+	Vector2i(1, 0),
+	Vector2i(0, -1),
+	Vector2i(0, 1),
+]
+const LARGE_LAKE_CHANCE := 0.35
+const LARGE_LAKE_SHARE := 0.6
+const LAKE_EDGE_SHARE := 0.05
+const SHORE_MEADOW_CHANCE := 0.55
+const SHORE_MEADOW_SHARE := 0.85
+const SHORE_MEADOW_AZIMUTH_DEG := Vector2(20.0, 80.0)
+const WOOD_DENSITY := Vector2(0.45, 1.0)
+const WOOD_LEAN_CHANCE := 0.5
 
 
 ## The Lakeshore on `doc` with `seed_value` (see the header). {"stage", "report"}.
 static func lakeshore(doc: MapDocument, seed_value: int, biome_id: String) -> Dictionary:
 	var half := StartingLandform.half_extent(doc)
 	var scale := StartingLandform.size_scale(doc)
-	var frame := lakeshore_frame(
-		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME), doc
+	var setting := StartingLandform.stream(seed_value, StartingLandform.STREAM_SETTING)
+	var wood := LandformPlacement.wood(setting, WOOD_DENSITY, WOOD_LEAN_CHANCE)
+	var wants_meadow := setting.randf() < SHORE_MEADOW_CHANCE
+	var meadow_turn := (
+		(1.0 if setting.randf() < 0.5 else -1.0)
+		* deg_to_rad(setting.randf_range(SHORE_MEADOW_AZIMUTH_DEG.x, SHORE_MEADOW_AZIMUTH_DEG.y))
+	)
+	var frame := (
+		wide_frame(doc, half, setting)
+		if LandformGrowth.is_wide(doc)
+		else lakeshore_frame(
+			half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME), doc
+		)
 	)
 	var centre: Vector2 = frame.centre
 	var radius: float = frame.radius
@@ -172,12 +213,22 @@ static func lakeshore(doc: MapDocument, seed_value: int, biome_id: String) -> Di
 	if not doc.water_bodies.is_empty():
 		doc.water_dressing = WaterDressing.refresh(doc)
 	report.append("stage (%.1f, %.1f)" % [stage.x, stage.y])
+	var clearings: Array = []
+	if wants_meadow:
+		# On the shore beside the stage's line, reaching back from the water.
+		var meadow_radius := radius * SHORE_MEADOW_SHARE
+		var at := centre + toward.rotated(meadow_turn) * (radius + meadow_radius * 0.5)
+		clearings.append({"at": at, "radius": meadow_radius})
+		report.append("shore meadow at (%.1f, %.1f)" % [at.x, at.y])
+	report.append(LandformPlacement.wood_report(wood))
 	return {
 		"stage": stage,
 		"report": "; ".join(report),
 		"keepout": [{"at": centre, "radius": radius * (1.0 + LAKE_WARP)}],
 		# A big or long map's shore is open ground (LandformGrowth.grow, only with room).
 		"open": [{"at": centre, "radius": radius * LAKE_OPEN_SHARE}],
+		"clearings": clearings,
+		"wood": wood,
 	}
 
 
@@ -224,6 +275,24 @@ static func lakeshore_frame(
 		radius = half * LAKE_SIDE_RADIUS_SHARE
 	return {
 		"corner": corner,
+		"centre": centre,
+		"radius": radius,
+		"toward": (-centre).normalized(),
+	}
+
+
+## A wide map's lake frame (see WIDE_PLACES) from `rng` (the setting stream, after the wood
+## and the shore meadow): the place ("corner": each axis -1, 0 or +1), the centre on the map's
+## own extent, the radius and the direction toward the map's middle. Always draws two numbers.
+static func wide_frame(doc: MapDocument, half: float, rng: RandomNumberGenerator) -> Dictionary:
+	var place: Vector2i = WIDE_PLACES[rng.randi_range(0, WIDE_PLACES.size() - 1)]
+	var large := rng.randf() < LARGE_LAKE_CHANCE
+	var radius := half * (LARGE_LAKE_SHARE if large else LAKE_RADIUS_SHARE)
+	var inward := radius + half * LAKE_EDGE_SHARE
+	var extent := doc.extent_m() * 0.5
+	var centre := Vector2(place) * (extent - Vector2(inward, inward))
+	return {
+		"corner": place,
 		"centre": centre,
 		"radius": radius,
 		"toward": (-centre).normalized(),
