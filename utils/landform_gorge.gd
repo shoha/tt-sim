@@ -21,11 +21,13 @@ extends RefCounted
 ## middle (ARCH_CHANCE), standing on the rims ARCH_FOOT_M back from the lip
 ## (StartingLandform.span_crossing: the Bridge tool's waterline anchors would stand on the
 ## floor beside the stream). The stage is on the rim on the camera's side
-## (StartingLandform.NEAR) by the arch, or by the middle of the ravine.
+## (StartingLandform.NEAR) by the arch, or by the middle of the ravine. On a big or long map
+## (LandformGrowth) the ravine winds along a long map's length and more often bends twice
+## (SECOND_BEND_GROWTH). Two tiers need the shorter side TWO_TIERS_MIN_EXTENT_M wide.
 
 const TWO_TIERS_CHANCE := 0.5
-## Two tiers only on a map at least this wide (150 ft; P5-4): on a 100 ft map a two-tier
-## ravine's walls and floor took half the ground.
+## Two tiers only on a map at least this wide on its shorter side (150 ft; P5-4): on a 100 ft
+## map a two-tier ravine's walls and floor took half the ground.
 const TWO_TIERS_MIN_EXTENT_M := 45.0
 ## The heading indices (45 degree steps from +x) the frame draws from: every heading but
 ## the two along the camera's diagonal, 45 and 225 degrees (StartingLandform.VIEW; P5-4, see
@@ -33,6 +35,9 @@ const TWO_TIERS_MIN_EXTENT_M := 45.0
 ## square on.
 const HEADINGS: Array[int] = [0, 2, 3, 4, 6, 7]
 const SECOND_BEND_CHANCE := 0.5
+## A big or long map (LandformGrowth) draws the second bend again with this chance at full
+## room (scaled by the room), so a long ravine more often winds.
+const SECOND_BEND_GROWTH := 0.6
 const STREAM_CHANCE := 0.7
 const ARCH_CHANCE := 0.4
 ## The ravine's rim-to-rim width range, its floor's fall along the map at 150 ft, how far
@@ -82,8 +87,12 @@ static func gorge(doc: MapDocument, seed_value: int, biome_id: String, root: Str
 	var scale := StartingLandform.size_scale(doc)
 	var tier := doc.tier_height_m
 	var draws := StartingLandform.stream(seed_value, StartingLandform.STREAM_FEATURES)
-	var wants_two := draws.randf() < TWO_TIERS_CHANCE and doc.extent_m().x >= TWO_TIERS_MIN_EXTENT_M
+	var wants_two := draws.randf() < TWO_TIERS_CHANCE and 2.0 * half >= TWO_TIERS_MIN_EXTENT_M
 	var wants_second_bend := draws.randf() < SECOND_BEND_CHANCE
+	var room := LandformGrowth.room(doc)
+	if room > 0.0:
+		var growth := StartingLandform.stream(seed_value, LandformGrowth.STREAM_SHAPES)
+		wants_second_bend = wants_second_bend or growth.randf() < SECOND_BEND_GROWTH * room
 	var wants_stream := draws.randf() < STREAM_CHANCE
 	var wants_arch := draws.randf() < ARCH_CHANCE
 	var floor_half := (
@@ -92,7 +101,10 @@ static func gorge(doc: MapDocument, seed_value: int, biome_id: String, root: Str
 		* scale
 	)
 	var frame := gorge_frame(
-		half, wants_second_bend, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
+		half,
+		wants_second_bend,
+		StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME),
+		doc
 	)
 	var axis: PackedVector2Array = frame.axis
 	var centreline := StartingLandform.map_line(doc, axis, EDGE_MARGIN_M, STREAM_SPACING_M)
@@ -179,25 +191,38 @@ static func gorge(doc: MapDocument, seed_value: int, biome_id: String, root: Str
 			report.append("dry wash of %s: %d samples" % [surface, painted])
 	var stage := gorge_stage(centreline, stage_at, rim_half, half)
 	report.append("stage (%.1f, %.1f)" % [stage.x, stage.y])
-	return {"stage": stage, "report": "; ".join(report)}
+	return {
+		"stage": stage,
+		"report": "; ".join(report),
+		"keepout": [{"line": centreline, "radius": rim_half}],
+	}
 
 
 ## The Gorge's frame from the seed, for a map of half extent `half`: the axis polyline (the
 ## upstream end, one or two bends, the downstream end, each run long enough to leave the
 ## map), the arc position of the centre's foot along it, and the numbers the report quotes.
 ## `two_bends` adds the second bend, turning back the other way. The heading is one of
-## HEADINGS (one draw, so the later draws stand whatever the list holds).
-static func gorge_frame(half: float, two_bends: bool, rng: RandomNumberGenerator) -> Dictionary:
+## HEADINGS (one draw, so the later draws stand whatever the list holds). On `doc` (when
+## given) a long map turns a heading across it to wind along it (LandformGrowth.turned; a
+## turned heading is never along the view, so it stays among HEADINGS), the second bend lies
+## its share of the long half extent on, and the runs reach the far ends.
+static func gorge_frame(
+	half: float, two_bends: bool, rng: RandomNumberGenerator, doc: MapDocument = null
+) -> Dictionary:
 	var heading_index: int = HEADINGS[rng.randi_range(0, HEADINGS.size() - 1)]
 	var dir := Vector2(cos(heading_index * PI / 4.0), sin(heading_index * PI / 4.0))
+	var reach := half
+	if doc != null:
+		dir = LandformGrowth.turned(doc, dir)
+		reach = maxf(half, LandformGrowth.long_half(doc))
 	var normal := Vector2(-dir.y, dir.x)
 	var offset := rng.randf_range(-1.0, 1.0) * half * OFFSET_SHARE
 	var turn := 1.0 if rng.randf() < 0.5 else -1.0
 	var first_deg := rng.randf_range(BEND_DEG.x, BEND_DEG.y)
 	var first_at := rng.randf_range(FIRST_BEND_SHARE.x, FIRST_BEND_SHARE.y) * half
 	var second_deg := rng.randf_range(BEND_DEG.x, BEND_DEG.y)
-	var second_on := rng.randf_range(SECOND_BEND_SHARE.x, SECOND_BEND_SHARE.y) * half
-	var run := 3.0 * half
+	var second_on := rng.randf_range(SECOND_BEND_SHARE.x, SECOND_BEND_SHARE.y) * reach
+	var run := 3.0 * reach
 	var foot := normal * offset
 	var first := foot + dir * first_at
 	var dir2 := dir.rotated(turn * deg_to_rad(first_deg))
@@ -212,7 +237,7 @@ static func gorge_frame(half: float, two_bends: bool, rng: RandomNumberGenerator
 	return {
 		"axis": points,
 		"foot_arc": run - first_at,
-		"heading_deg": heading_index * 45,
+		"heading_deg": LandformGrowth.degrees(dir),
 		"offset": offset,
 		"bends": 2 if two_bends else 1,
 	}

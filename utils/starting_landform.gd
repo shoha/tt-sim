@@ -18,7 +18,8 @@ extends RefCounted
 ## recipe's plateau is the Sculpt tool's own terrace, a river or a pond carved through the
 ## water tools' pure path, the walls put back where a river's bank reach slumped them, a
 ## crossing placed (or spanned between chosen anchors) and given an id, a surface painted
-## along a line.
+## along a line. A big or long map grows past the recipe's one place (LandformGrowth): the
+## recipes turn and widen their shapes on it, and apply() adds the extras it draws.
 ##
 ## Seeds. Every draw comes from a RandomNumberGenerator seeded from the map seed xor one
 ## constant per feature (stream()), as CrossingFord does for its stones, so the frame, the
@@ -83,8 +84,10 @@ const CROSSING_DRAW_M := 3.5
 ## Runs the recipe for `kind` on `doc` (a flat document of the map's size) with `seed_value`.
 ## Returns {"stage": Vector2 (map XZ metres, where the glade goes), "report": String (what
 ## was drawn, with any refusal in plain words)}, and optionally "glade" (a line glade for
-## NewMap.paint_starting_cover; the Valley's floor). FLAT and an unknown kind change nothing.
-## `biome_id` is the starting biome (the crossing's style and the dry wash's surface).
+## NewMap.paint_starting_cover; the Valley's floor) and "clearings" (open ground for the
+## cover: LandformGrowth's meadows and tarn shores on a big or long map). FLAT and an unknown
+## kind change nothing. `biome_id` is the starting biome (the crossing's style and the dry
+## wash's surface).
 static func apply(
 	doc: MapDocument,
 	kind: String,
@@ -92,18 +95,22 @@ static func apply(
 	biome_id: String = "",
 	root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> Dictionary:
+	var shaped := {}
 	match kind:
 		VALLEY:
-			return LandformRecipes.valley(doc, seed_value, biome_id, root)
+			shaped = LandformRecipes.valley(doc, seed_value, biome_id, root)
 		HILLTOP:
-			return LandformHilltop.hilltop(doc, seed_value, biome_id)
+			shaped = LandformHilltop.hilltop(doc, seed_value, biome_id)
 		TERRACES:
-			return LandformTerraces.terraces(doc, seed_value, biome_id)
+			shaped = LandformTerraces.terraces(doc, seed_value, biome_id)
 		LAKESHORE:
-			return LandformLakeshore.lakeshore(doc, seed_value, biome_id)
+			shaped = LandformLakeshore.lakeshore(doc, seed_value, biome_id)
 		GORGE:
-			return LandformGorge.gorge(doc, seed_value, biome_id, root)
-	return {"stage": Vector2.ZERO, "report": "flat"}
+			shaped = LandformGorge.gorge(doc, seed_value, biome_id, root)
+		_:
+			return {"stage": Vector2.ZERO, "report": "flat"}
+	LandformGrowth.grow(doc, kind, seed_value, shaped, biome_id, root)
+	return shaped
 
 
 ## The generator of one feature's draws: seeded from `seed_value` xor the feature's stream
@@ -120,10 +127,11 @@ static func half_extent(doc: MapDocument) -> float:
 
 
 ## How the recipes' depths and falls scale with the map: 0.8 at 100 ft, 1.0 at 150, 1.2 at
-## 200, so a landform keeps its proportions without a small map becoming a pit. A map that
-## is not square scales by its smaller side, the one half_extent() composes on.
+## 200, about 1.68 at 320 (NewMap.MAX_FT; the cap was 1.5, reached at 275 ft, until big maps
+## grew, LandformGrowth), so a landform keeps its proportions without a small map becoming a
+## pit. A map that is not square scales by its smaller side, the one half_extent() composes on.
 static func size_scale(doc: MapDocument) -> float:
-	return clampf(0.4 + 0.6 * 2.0 * half_extent(doc) / REFERENCE_EXTENT_M, 0.5, 1.5)
+	return clampf(0.4 + 0.6 * 2.0 * half_extent(doc) / REFERENCE_EXTENT_M, 0.5, 1.7)
 
 
 ## One of eight headings (45 degree steps) as a unit direction.

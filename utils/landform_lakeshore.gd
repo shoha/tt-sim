@@ -16,7 +16,8 @@ extends RefCounted
 ## of the map, approaching off the stage's line by STREAM_AZIMUTH_DEG, ending just inside the
 ## shore (plan_river joins it at the waterline); stepping stones over the stream
 ## (STONES_CHANCE). The stage is on the shore nearest the map's centre, STAGE_SHORE_M back
-## from the waterline. The lake is the water: a dry draw has it too.
+## from the waterline. The lake is the water: a dry draw has it too. On a long map the lake
+## sits in the map's own far corner (lakeshore_frame).
 
 const LAKE_RADIUS_SHARE := 0.45
 ## 0.5 since P5-4 (0.55 sat the lake at the home view's edge): more water in the home view.
@@ -65,6 +66,9 @@ const STONES_SHORE_M := 5.0
 const STONES_EDGE_M := 4.0
 const STAGE_SHORE_M := 4.0
 const EDGE_MARGIN_M := 0.5
+## On a big or long map the ground within this share of the lake's radius is open shore
+## (a clearing easing back to the forest at its outline, NewMap.clearing_density).
+const LAKE_OPEN_SHARE := 1.6
 
 
 ## The Lakeshore on `doc` with `seed_value` (see the header). {"stage", "report"}.
@@ -72,7 +76,7 @@ static func lakeshore(doc: MapDocument, seed_value: int, biome_id: String) -> Di
 	var half := StartingLandform.half_extent(doc)
 	var scale := StartingLandform.size_scale(doc)
 	var frame := lakeshore_frame(
-		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME)
+		half, StartingLandform.stream(seed_value, StartingLandform.STREAM_FRAME), doc
 	)
 	var centre: Vector2 = frame.centre
 	var radius: float = frame.radius
@@ -168,7 +172,13 @@ static func lakeshore(doc: MapDocument, seed_value: int, biome_id: String) -> Di
 	if not doc.water_bodies.is_empty():
 		doc.water_dressing = WaterDressing.refresh(doc)
 	report.append("stage (%.1f, %.1f)" % [stage.x, stage.y])
-	return {"stage": stage, "report": "; ".join(report)}
+	return {
+		"stage": stage,
+		"report": "; ".join(report),
+		"keepout": [{"at": centre, "radius": radius * (1.0 + LAKE_WARP)}],
+		# A big or long map's shore is open ground (LandformGrowth.grow, only with room).
+		"open": [{"at": centre, "radius": radius * LAKE_OPEN_SHARE}],
+	}
 
 
 ## The Lakeshore's frame from the seed, for a map of half extent `half`: the corner (each
@@ -179,8 +189,12 @@ static func lakeshore(doc: MapDocument, seed_value: int, biome_id: String) -> Di
 ## axis and LAKE_RADIUS_SHARE, for a side corner inside the home frame (LAKE_SIDE_SCREEN_M
 ## across the view toward the corner's side, LAKE_SIDE_DEPTH_SHARE up it,
 ## LAKE_SIDE_RADIUS_SHARE); and the unit direction from the centre toward the map's middle
-## (the stage's line).
-static func lakeshore_frame(half: float, rng: RandomNumberGenerator) -> Dictionary:
+## (the stage's line). On `doc` (when given) a long map's far-corner lake sits in the map's
+## own corner, as far from its two edges as on a square map, not in the corner of the square
+## of its shorter side (LandformGrowth).
+static func lakeshore_frame(
+	half: float, rng: RandomNumberGenerator, doc: MapDocument = null
+) -> Dictionary:
 	var corners := allowed_corners()
 	var weights := corner_weights(corners)
 	# Two draws as before (the frame stream's count stays): the corner from the first by its
@@ -197,6 +211,9 @@ static func lakeshore_frame(half: float, rng: RandomNumberGenerator) -> Dictiona
 	var corner := corners[index]
 	var centre := Vector2(corner) * half * LAKE_CENTRE_SHARE
 	var radius := half * LAKE_RADIUS_SHARE
+	if doc != null and LandformGrowth.is_long(doc) and _is_far(corner):
+		var inward := half * (1.0 - LAKE_CENTRE_SHARE)
+		centre = Vector2(corner) * (doc.extent_m() * 0.5 - Vector2(inward, inward))
 	if not _is_far(corner):
 		# Across the view toward the corner's side, capped; up the view.
 		var lateral := centre.dot(ACROSS)

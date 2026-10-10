@@ -31,6 +31,7 @@
 		"res://tests/unit/test_ground_layers.gd",
 		"res://tests/unit/test_height_sculpt.gd",
 		"res://tests/unit/test_landform_gorge.gd",
+		"res://tests/unit/test_landform_growth.gd",
 		"res://tests/unit/test_landform_hilltop.gd",
 		"res://tests/unit/test_landform_lakeshore.gd",
 		"res://tests/unit/test_landform_terraces.gd",
