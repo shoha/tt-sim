@@ -66,6 +66,10 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/terrain_events.gd", "action": "advance", "s": 0.5, "phase": "look", "for": "fall_*"},
   {"op": "wait", "s": 0.3, "phase": "look", "for": "fall_*"},
   {"op": "capture", "name": "fall_3_down", "desc": "1.45 s: most trees down, dust over the crowns"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": false, "phase": "look", "for": "fall_3_nofade"},
+  {"op": "wait", "s": 0.3, "phase": "look", "for": "fall_3_nofade"},
+  {"op": "capture", "name": "fall_3_nofade", "desc": "1.45 s with the canopy fade off (A/B with fall_3_down): the fallen crowns should match, only the standing crowns in the window differ"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": true, "phase": "look", "for": "fall_3_nofade"},
   {"op": "call", "script": "res://tools/render_jobs/probes/terrain_events.gd", "action": "advance", "s": 0.5, "phase": "look", "for": "fall_*"},
   {"op": "wait", "s": 0.3, "phase": "look", "for": "fall_*"},
   {"op": "capture", "name": "fall_4_settle", "desc": "1.95 s: the fallen trees settling into the ground under the dust"},
@@ -78,7 +82,12 @@
   {"op": "capture", "name": "fall_6_after", "desc": "After: the area cleared (the live edit), the 'trees fell' toast with Undo"},
 
   {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "dismiss"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "undo", "phase": "look", "for": "*_presets*"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "undo", "phase": "look", "for": "*_presets*"},
+  {"op": "wait", "s": 2.0, "phase": "look", "for": "*_presets*"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "dismiss", "phase": "look", "for": "*_presets*"},
   {"op": "expand", "values": ["1280x720", "1920x1080"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "put_away", "phase": "look", "for": "{value}_presets*"},
    {"op": "call", "script": "res://tools/render_jobs/probes/events_pane.gd", "action": "window", "size": "{value}", "phase": "look", "for": "{value}_presets*"},
    {"op": "wait", "s": 1.5, "phase": "look", "for": "{value}_presets*"},
    {"op": "call", "script": "res://tools/render_jobs/probes/terrain_events.gd", "action": "look", "at": "forest", "zoom": 16.0, "phase": "look", "for": "{value}_presets*"},

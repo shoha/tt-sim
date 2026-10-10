@@ -82,13 +82,13 @@
 			"colour": 2
 		},
 		"res://scenes/states/playing/events/bridge_collapse.gd": {
-			"colour": 2
+			"colour": 3
 		},
 		"res://scenes/states/playing/events/event_puffs.gd": {
 			"colour": 1
 		},
 		"res://scenes/states/playing/events/forest_fall.gd": {
-			"colour": 1
+			"colour": 2
 		},
 		"res://scenes/states/playing/events/topple_mode.gd": {
 			"colour": 1

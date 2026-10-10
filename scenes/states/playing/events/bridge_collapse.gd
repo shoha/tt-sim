@@ -28,11 +28,17 @@ const GRAVITY := 9.8
 const SINK_M := 1.0
 const SINK_SPEED := 1.1
 ## Spray: cool white with the river's blue in it, a little see-through (pure white read as a
-## cotton cut-out in the first look).
-const SPLASH := Color(0.84, 0.94, 1.0, 0.72)
-const DUST := Color(0.95, 0.83, 0.6, 0.55)
+## cotton cut-out in the first look). Foam: the ring it leaves lying on the water.
+const SPLASH := Color(0.86, 0.95, 1.0, 0.8)
+const FOAM := Color(0.9, 0.97, 1.0, 0.6)
+const DUST := Color(0.9, 0.76, 0.52, 0.4)
 ## Spray is thrown up and falls back to the water (rising puffs alone read as steam).
 const SPRAY_GRAVITY := 9.0
+## A splash: a crown of this many tongues thrown up and out, one jet in the middle, and a few
+## squat foam patches spreading on the water (a few big round puffs read as a cloud in the
+## third look, rising or not).
+const TONGUES := 8
+const FOAM_PATCHES := 3
 
 ## The crossing it takes down, and its node (hidden while this plays).
 var crossing_id: int = -1
@@ -137,28 +143,58 @@ func _piece_transform(piece: Dictionary, elapsed: float) -> Transform3D:
 func _splash(at: Vector3, piece: Dictionary) -> void:
 	var at_water := Vector3(at.x, _water_y, at.z)
 	var width: float = piece.width
-	var color := SPLASH if _wet else DUST
-	# A crown of spray: small bold shapes thrown up and out, the middle one highest.
-	for k in 4:
-		var angle := TAU * (float(k) + _rng.randf_range(0.0, 0.6)) / 4.0
-		var side := Vector3(cos(angle), 0.0, sin(angle)) * _rng.randf_range(0.5, 0.9)
-		var up := _rng.randf_range(2.4, 3.4) if _wet else _rng.randf_range(0.4, 0.8)
+	if not _wet:
+		# A dry bed: dust rolling out low from where the piece lands.
+		for k in 4:
+			var angle := TAU * (float(k) + _rng.randf_range(0.0, 0.6)) / 4.0
+			var side := Vector3(cos(angle), 0.0, sin(angle))
+			_puffs.emit(
+				at_water + side * 0.2 + Vector3(0.0, 0.1, 0.0),
+				side * _rng.randf_range(0.8, 1.2) + Vector3(0.0, _rng.randf_range(0.2, 0.4), 0.0),
+				width * _rng.randf_range(0.5, 0.7),
+				_rng.randf_range(0.9, 1.2),
+				DUST,
+				0.0,
+				EventPuffs.SQUAT
+			)
+		return
+	# The crown: tall tongues of spray thrown up and out all round, arcing back down to the
+	# water and breaking up (shrinking) as they fall.
+	for k in TONGUES:
+		var angle := TAU * (float(k) + _rng.randf_range(0.0, 0.7)) / float(TONGUES)
+		var side := Vector3(cos(angle), 0.0, sin(angle))
 		_puffs.emit(
-			at_water + side * 0.2 + Vector3(0.0, 0.1, 0.0),
-			side * 1.5 + Vector3(0.0, up, 0.0),
-			width * _rng.randf_range(0.5, 0.8),
-			_rng.randf_range(0.6, 0.85),
-			color,
-			SPRAY_GRAVITY if _wet else 0.0
+			at_water + side * width * _rng.randf_range(0.12, 0.25) + Vector3(0.0, 0.05, 0.0),
+			side * _rng.randf_range(1.4, 2.2) + Vector3(0.0, _rng.randf_range(2.6, 3.6), 0.0),
+			width * _rng.randf_range(0.16, 0.24),
+			_rng.randf_range(0.6, 0.8),
+			SPLASH,
+			SPRAY_GRAVITY,
+			EventPuffs.TALL
 		)
+	# The jet: one taller tongue straight up from the middle, the last to fall back.
 	_puffs.emit(
-		at_water + Vector3(0.0, 0.2, 0.0),
-		Vector3(0.0, 4.0 if _wet else 0.9, 0.0),
-		width * 0.7,
-		0.8,
-		color,
-		SPRAY_GRAVITY if _wet else 0.0
+		at_water + Vector3(0.0, 0.1, 0.0),
+		Vector3(0.0, _rng.randf_range(4.2, 4.8), 0.0),
+		width * 0.24,
+		0.95,
+		SPLASH,
+		SPRAY_GRAVITY,
+		EventPuffs.TALL
 	)
+	# Foam: squat patches spreading slowly on the water where it fell.
+	for k in FOAM_PATCHES:
+		var angle := TAU * (float(k) + _rng.randf_range(0.0, 0.8)) / float(FOAM_PATCHES)
+		var side := Vector3(cos(angle), 0.0, sin(angle))
+		_puffs.emit(
+			at_water + side * width * 0.15 + Vector3(0.0, 0.04, 0.0),
+			side * _rng.randf_range(0.5, 0.8),
+			width * _rng.randf_range(0.5, 0.7),
+			_rng.randf_range(1.1, 1.4),
+			FOAM,
+			0.0,
+			EventPuffs.SQUAT * 0.75
+		)
 
 
 ## Cuts the crossing node's meshes across the span into pieces (see the header).

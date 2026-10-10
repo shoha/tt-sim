@@ -6,12 +6,21 @@ extends MultiMeshInstance3D
 ## MultiMesh, so an event costs one draw and allocates nothing while it plays. emit() takes the
 ## next slot, overwriting the oldest puff when every slot is busy; step() moves each live puff
 ## (it rises or spreads and slows), grows it (an ease-out from a third of its size) and fades
-## it (a quick swell in, a long fade out), and hides a spent one by scaling it to nothing.
+## it (a quick swell in, a long fade out), and hides a spent one by scaling it to nothing. A
+## thrown puff (gravity) is a body of water flying apart instead: it starts at its size and
+## shrinks as it falls back. A puff's aspect (height over width on screen) shapes it: squat
+## for dust rolling over the ground or foam lying on the water, tall for a tongue of spray.
 
 const CAPACITY := 96
 const SHADER := preload("res://shaders/event_puff.gdshader")
 ## Fraction of its life a puff takes to swell in.
 const SWELL := 0.12
+## How much of its size a thrown puff has lost when it ends.
+const THROWN_SHRINK := 0.45
+## Aspects (height over width): round, squat (dust, foam), tall (a tongue of spray).
+const ROUND := 1.0
+const SQUAT := 0.6
+const TALL := 1.7
 
 static var _material: ShaderMaterial = null
 
@@ -60,8 +69,15 @@ func _init() -> void:
 ## ages), `size` metres across when grown, living `life` seconds, in `color` (alpha its peak).
 ## With `gravity` (metres a second squared) it is thrown: it rises, falls back and never goes
 ## below where it started (spray falling back to the water; dust leaves it 0 and hangs).
+## `aspect` is its height over its width on screen (ROUND, SQUAT, TALL).
 func emit(
-	at: Vector3, velocity: Vector3, size: float, life: float, color: Color, gravity: float = 0.0
+	at: Vector3,
+	velocity: Vector3,
+	size: float,
+	life: float,
+	color: Color,
+	gravity: float = 0.0,
+	aspect: float = ROUND
 ) -> void:
 	var slot := _next
 	_gravity[slot] = gravity
@@ -74,7 +90,8 @@ func emit(
 	_velocity[slot] = velocity
 	_size[slot] = size
 	_colors[slot] = color
-	multimesh.set_instance_custom_data(slot, Color(fmod(_clock * 7.31 + slot * 0.618, 1.0), 0, 0, 0))
+	var puff_seed := fmod(_clock * 7.31 + slot * 0.618, 1.0)
+	multimesh.set_instance_custom_data(slot, Color(puff_seed, maxf(aspect, 0.2), 0, 0))
 
 
 ## Advances every live puff `delta` seconds.
@@ -100,6 +117,8 @@ func step(delta: float) -> void:
 			at.y = maxf(at.y - 0.5 * _gravity[slot] * age * age, _from[slot].y)
 		var grown := 1.0 - pow(1.0 - k, 3.0)
 		var size := _size[slot] * (0.35 + 0.65 * grown)
+		if _gravity[slot] > 0.0:
+			size = _size[slot] * (1.0 - THROWN_SHRINK * k)
 		var alpha := k / SWELL if k < SWELL else 1.0 - smoothstep(0.35, 1.0, k)
 		var color := _colors[slot]
 		color.a *= alpha

@@ -814,17 +814,19 @@ log and one `NET_RESULT {json}` line to `--out` and quits 0 on a pass; extending
 - `enet_live_edits` (`--peers=3 --timeout-s=300`): live map edits (see "Live map edits"
   below). The host builds a 120 ft authored level (forest west of a river, a plank bridge) in
   its own test root before it opens the room, so both clients download its `map.ttmap`. With
-  client at the table, the host stands Scout where the raise will go and runs five ops as the
+  client at the table, the host stands Scout where the raise will go and runs six ops as the
   GM's Events pane does: the sculpt raise, a forest clear (Thin with Ctrl) and a sculpt lower
   are strokes of GameMap's play brush armed by `PlayEvents.pick` and driven over the board,
-  the bridge removal is a direct editor call, and the undo of the lower (a height op's before
-  side) is `PlayEvents.undo`, Ctrl+Z's path. client's `MapFingerprint` equals the host's after
-  each, and its Scout stands where the host's does (the host's `LiveEditGround` set it down on
-  the raised ground and sent it). The host drops Hero onto the raised ground; client2 then
-  joins at the table, downloads the original map, takes the log and matches the host's final
-  fingerprint, with Hero and Scout resting on its own ground at the host's heights. Passed on
-  2026-10-10 in about 13.8 s on the host (Scout 0.047 m before the raise, 0.303 m after on
-  every peer; Hero 0.622 m).
+  a forest fall and a bridge collapse are terrain events (`TerrainEvents.start`: the event
+  travels, both boards play it, then its labelled op), and the undo of the lower (a height
+  op's before side) is `PlayEvents.undo`, Ctrl+Z's path. client's `MapFingerprint` equals the
+  host's after each, and its Scout stands where the host's does (the host's `LiveEditGround`
+  set it down on the raised ground and sent it); client played both events. The host drops
+  Hero onto the raised ground; client2 then joins at the table, downloads the original map,
+  takes the log (six ops, no motion) and matches the host's final fingerprint, with Hero and
+  Scout resting on its own ground at the host's heights. Passed on 2026-10-10 in about 20.8 s
+  on the host (Scout 0.041 m before the raise, 0.294 m after on every peer; Hero 0.628 m;
+  client events_played 2; no shipped file changed).
 
 All three earlier ones passed through the launcher on 2026-10-09, each in about 1.4 s on the
 host, with no shipped store file changed (31,435 files watched) and every test root removed;
@@ -992,6 +994,7 @@ func broadcast_live_edit(table_key: int, index: int, bytes: PackedByteArray) -> 
 func send_live_edit_log(peer_id: int, table_key: int, ops: Array[PackedByteArray]) -> void  # 0: every client
 func after_live_edits(then: Callable) -> void   # behind every live edit message queued
 func live_edits_waiting() -> int
+func broadcast_terrain_event(bytes: PackedByteArray) -> void  # TerrainEvent.encode, through the outbox
 ```
 
 `NetworkStateSync` decides when the token sends go out (throttling, batching, keeping
@@ -1036,6 +1039,7 @@ signal drag_lock_denied(network_id)      # the denied client only
 signal drag_lock_released(network_id)
 signal live_edit_received(table_key, index, bytes)   # one op, whole, not yet checked
 signal live_edit_log_received(table_key, count)      # a log header; `count` ops follow
+signal terrain_event_received(bytes)                 # 32 bytes, not yet decoded
 
 # Every peer: the host's own grant_drag_lock() emits it too
 signal drag_lock_granted(network_id, locker_peer_id)
@@ -1065,6 +1069,7 @@ signal live_edit_log_requested(sender_id)            # rate-limited, players onl
 | `_rpc_live_edit_chunk` | host -> clients or one client | reliable, paced by the outbox (`LIVE_EDIT_BYTES_PER_SECOND`, 512 KB/s); reassembled, capped at `LiveEditCodec.MAX_BYTES` | `live_edit_received` once an op is whole |
 | `_rpc_live_edit_log` | host -> clients or one client | reliable, in the outbox's order | `live_edit_log_received` |
 | `_rpc_request_live_edit_log` | client -> host | reliable, one answered per `LIVE_EDIT_LOG_REQUEST_INTERVAL` (2 s) a player | `live_edit_log_requested` |
+| `_rpc_terrain_event` | host -> clients | reliable, in the outbox's order; authority-only, a host ignores it, any length but `TerrainEvent.EVENT_BYTES` (32) is dropped | `terrain_event_received` |
 
 The client used to ACK every full state (`_rpc_state_sync_ack`, `state_sync_complete`); nothing
 listened, and both were removed on 2026-10-09. A late joiner's state is released by
@@ -1138,13 +1143,28 @@ joiner included, ends with the same map. The ops and their checks are
   `NetworkStateSync.broadcast_token_properties` (reliable, GameState kept in step), so a token
   on raised ground stands on it on every peer and one on a bridge that went sits in the water.
   Clients take the host's positions and never re-ground on their own.
+- **Terrain events** (a bridge collapsing, a forest falling; `TerrainEvents`, a child of the
+  service). An event is not document state: the host sends its few parameters (`TerrainEvent`,
+  32 bytes: version, kind, crossing id, table key, centre, radius, duration, lead, seed) with
+  `broadcast_terrain_event()` through the same outbox, so it never overtakes an op queued
+  before it (the crossing it takes down is on the client when it arrives). Every peer plays
+  the motion from the event alone. There is no shared clock: the host waits the event's lead
+  (`TerrainEvent.LEAD_S`, 0.1 s, a typical hop; 0 in solo play) before it plays, a client plays
+  on receipt. Once the motion has played, the host makes the change it ends in on its live
+  editor as one ordinary history entry (the crossing removed, or a Clear over the area), which
+  goes out as an op; it reaches a client after the client's motion when latency is near the
+  lead. A client takes an event only through `TerrainEvent.decode` (wrong length or version,
+  unknown kind, non-finite or out-of-range values refused), only for its own table key and
+  only while its service takes ops, and drops anything else without a word. A late joiner
+  never sees the motion: it gets the op in its catch-up like any other.
 - **Saving.** Live edits change the session's copy of the map (the loaded document and
   nodes), never `map.ttmap`.
 
 The GM's UI is the Events pane (`PlayEvents`, [systems/authoring.md](systems/authoring.md)
 "Live edits"). ENet scenario: `tests/net/enet_live_edits` (three peers: the host builds an
-authored level in its test root and changes it through the play brush, a client follows five
-ops with an equal `MapFingerprint` and a re-grounded token after each, a late joiner downloads
+authored level in its test root and changes it through the play brush and two terrain events,
+a client follows six ops with an equal `MapFingerprint` and a re-grounded token after each and
+plays both events, a late joiner downloads
 the original map, catches up and matches, its tokens resting on the raised ground at the
 host's heights).
 
