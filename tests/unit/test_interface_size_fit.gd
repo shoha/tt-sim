@@ -110,7 +110,7 @@ func test_title_column_fits_by_measurement() -> void:
 		_assert_column_on_its_sheet(what, title, Vector2(canvas))
 		_assert_card_whole(what, title)
 		var resume := title.resume_entry
-		assert_almost_eq(_gap(title.play_together, resume), 4.0, SLACK_PX, "%s: Resume" % what)
+		assert_almost_eq(_gap(title.play_together.pill, resume), 4.0, SLACK_PX, "%s: Resume" % what)
 		var play_caption := _next_shown(title.play_button)
 		assert_eq(play_caption, title.play_subtitle)
 		assert_almost_eq(_gap(play_caption, title.editor_button), 12.0, SLACK_PX, what)
@@ -228,6 +228,35 @@ func test_join_in_place_fits() -> void:
 		_assert_card_whole(what, title)
 		var field := _drawn_rect(title.play_together.code_edit)
 		assert_true(_drawn_rect(title.play_together.pill).encloses(field), "%s: field" % what)
+		title.free()
+
+
+## Entering Join, a failure and the longest failure never move the card or anything below it:
+## Resume and the join's line trade places in one slot under the card, as tall as the taller.
+func test_join_in_place_moves_nothing() -> void:
+	for canvas in [Vector2i(CANVAS), CANVAS_720P_AUTO, Vector2i(1920, 1080)]:
+		_host.size = canvas
+		var title := _title()
+		var what := "the column on a %s canvas" % str(canvas)
+		await _assert_fits(what, title.quit_button, Vector2(canvas))
+		var card := title.play_together
+		var rest := [card.pill.get_global_rect(), title.play_button.get_global_rect()]
+		var version := VersionGate.mismatch_message("0.2.9", "0.2.10")
+		var steps := [
+			func() -> void: card.open_join(),
+			func() -> void: title.show_join_status(SessionFlow.JOIN_CONNECTING),
+			func() -> void: title.show_join_status(SessionFlow.JOIN_FAILED, SessionFlow.NO_ROOM),
+			func() -> void: title.show_join_status(SessionFlow.JOIN_FAILED, version),
+			func() -> void: card.close_join(),
+		]
+		for i in steps.size():
+			(steps[i] as Callable).call()
+			await wait_process_frames(3)
+			var now := [card.pill.get_global_rect(), title.play_button.get_global_rect()]
+			assert_eq(now[0], rest[0], "%s, step %d: the card stays" % [what, i])
+			assert_eq(now[1], rest[1], "%s, step %d: Play solo stays" % [what, i])
+		var slot := card.slot.get_global_rect()
+		assert_true(slot.encloses(title.resume_entry.get_global_rect()), "%s: Resume" % what)
 		title.free()
 
 

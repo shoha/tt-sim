@@ -395,8 +395,9 @@ adds them, while it waits in the room or plays at a table:
   dropped: the host stops sending its files to everyone (`drop_level_transfers`), and each
   client cancels its fetch on the summary (`AssetStreamer.cancel_download`, which tells the host
   through `_rpc_cancel_asset`), never a download the table's load took over. A map whose fetch
-  fails is left for the table's load. The room has no Remove control yet; `unshelve()` is the
-  engine's.
+  fails is left for the table's load. The room's one Remove control is for a map Resume found
+  missing from the GM's library: selected, its row has Remove from shelf under it
+  (`RoomPanel.remove_requested`, which calls `unshelve()`); any other map has none yet.
 - *Progress.* Each client reports `{ref key: percent}` for the map it is getting and 0 for each
   waiting behind it (`_rpc_report_progress`, at most every 0.25 s and only on a change); the
   host keeps shelf keys only, by the sender's session id (`note_progress()`), and sends every

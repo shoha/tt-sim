@@ -35,7 +35,7 @@ static func mismatch_message(host_version: String, local_version: String) -> Str
 		)
 	var advice := "Both of you need the same version to play together."
 	if UpdateVersion.is_newer(host_version, local_version):
-		advice = "Update TTSim to join this game."
+		advice = "Update TTSim to join this room."
 	elif UpdateVersion.is_newer(local_version, host_version):
 		advice = "The host needs to update TTSim before you can join."
 	return (

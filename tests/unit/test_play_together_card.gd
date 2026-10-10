@@ -209,6 +209,138 @@ func test_an_instant_set_kills_running_easings() -> void:
 	assert_eq(card.code_edit.text, "")
 
 
+## Keyboard focus marks the picked face with a soft ring inside it (more than the seam's
+## swing): on Host, then on Join after Right; not with the pointer alone, nor in Join mode.
+func test_focus_rings_the_picked_face() -> void:
+	var card := _card()
+	card.set_hot(PlayTogetherCard.Face.HOST)
+	assert_eq(card.wash().focus, 0.0, "a hover alone has no ring")
+	card.reset()
+	card.pill.grab_focus()
+	assert_eq(card.wash().focus, 1.0)
+	assert_eq(card.wash().focus_side, -1.0, "on Host")
+	card.pill.gui_input.emit(_key(KEY_RIGHT))
+	assert_eq(card.wash().focus_side, 1.0, "on Join")
+	card.open_join()
+	assert_eq(card.wash().focus, 0.0, "one ring in Join mode: the field's")
+
+
+## The shader never lightens a wash under a face's words: the rects it reads hold each face's
+## icon, title and caption as drawn, inside the face's block; and paper words on every step of
+## both washes (rest, hover, press) keep 4.5:1, so a wash at or below its step keeps them.
+func test_the_words_keep_their_contrast() -> void:
+	var card := _card()
+	var rects := card.text_rects()
+	for face: PlayTogetherCard.Face in [PlayTogetherCard.Face.HOST, PlayTogetherCard.Face.JOIN]:
+		var words: Rect2 = rects[face]
+		var prefix := "Host" if face == PlayTogetherCard.Face.HOST else "Join"
+		for part: String in ["Icon", "Title", "Caption"]:
+			var control := card.pill.get_node(prefix + part) as Control
+			var drawn := Rect2(control.position, control.size)
+			if control is Label:
+				var label := control as Label
+				var font := label.get_theme_font(&"font")
+				var size := label.get_theme_font_size(&"font_size")
+				var width := font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+				drawn.size.x = minf(width, label.size.x)
+				if label.horizontal_alignment == HORIZONTAL_ALIGNMENT_RIGHT:
+					drawn.position.x += label.size.x - drawn.size.x
+			assert_true(words.grow(0.5).encloses(drawn), "%s%s in %s" % [prefix, part, words])
+		assert_gt(words.size.x, 40.0, "%s: the words have width" % prefix)
+	var host: Rect2 = rects[PlayTogetherCard.Face.HOST]
+	var join: Rect2 = rects[PlayTogetherCard.Face.JOIN]
+	var seam_reach := PlayTogetherCard.CARD_SIZE.x * PlayTogetherCard.SWING
+	assert_lt(host.end.x, PlayTogetherCard.CARD_SIZE.x * 0.5 - seam_reach - 5.0, "Host clear")
+	assert_gt(join.position.x, PlayTogetherCard.CARD_SIZE.x * 0.5 + seam_reach + 5.0, "Join clear")
+	var steps := [
+		ThemeColors.PERSIMMON,
+		ThemeColors.PERSIMMON_HOVER,
+		ThemeColors.PERSIMMON_PRESS,
+		ThemeColors.LAKE,
+		ThemeColors.LAKE_HOVER,
+		ThemeColors.LAKE_PRESS,
+	]
+	for step: Color in steps:
+		var ratio := _contrast(ThemeColors.PAPER, step)
+		assert_gt(ratio, 4.5, "paper on %s: %.2f" % [step.to_html(false), ratio])
+
+
+## Hovers only deepen (C6), built in OKLCH (C8): each hover step is darker than rest and
+## lighter than press, at the same hue within a degree.
+func test_hover_steps_deepen_at_the_same_hue() -> void:
+	var ramps := [
+		[ThemeColors.PERSIMMON, ThemeColors.PERSIMMON_HOVER, ThemeColors.PERSIMMON_PRESS],
+		[ThemeColors.LAKE, ThemeColors.LAKE_HOVER, ThemeColors.LAKE_PRESS],
+	]
+	for ramp: Array in ramps:
+		var rest := _lch(ramp[0])
+		var hover := _lch(ramp[1])
+		var press := _lch(ramp[2])
+		assert_lt(hover.x, rest.x, "hover darker than rest")
+		assert_gt(hover.x, press.x, "hover lighter than press")
+		assert_almost_eq(hover.z, rest.z, deg_to_rad(1.0), "hover at rest's hue")
+
+
+## Join mode: Join is the one fill (persimmon), the back disc steps back to paper with a
+## persimmon arrow, one 8 px step from the code field.
+func test_join_mode_has_one_fill_and_a_quiet_disc() -> void:
+	var card := _card()
+	card.open_join()
+	assert_eq(card.join_button.theme_type_variation, &"WashJoin")
+	assert_eq(card.disc_button.theme_type_variation, &"WashDisc")
+	var join_fill := card.join_button.get_theme_stylebox(&"normal") as StyleBoxFlat
+	assert_eq(join_fill.bg_color, ThemeColors.PERSIMMON, "Join is the fill")
+	var disc := card.disc_button.get_theme_stylebox(&"normal") as StyleBoxFlat
+	assert_eq(disc.bg_color, ThemeColors.PAPER_RAISED, "the disc steps back to paper")
+	assert_eq(card.disc_button.get_theme_color(&"icon_normal_color"), ThemeColors.PERSIMMON)
+	var disc_end := card.disc_button.position.x + card.disc_button.size.x
+	var field_x := (card.code_edit.get_parent() as Control).position.x
+	assert_almost_eq(field_x - disc_end, PlayTogetherCard.FIELD_GAP, 0.01, "8 px apart")
+	_settle()
+	assert_almost_eq(card.disc_button.modulate.a, 1.0, 0.001, "the disc faded in")
+
+
+## The version gate's failure is not the code's: the field keeps it as typed, unselected.
+func test_a_failure_the_code_did_not_cause_leaves_it_unselected() -> void:
+	var card := _card()
+	card.open_join()
+	card.code_edit.text = "2kq9xw"
+	card.show_error("The host is running TTSim 0.2.9, but you have 0.2.10.", false)
+	assert_eq(card.code_edit.get_selected_text(), "")
+	assert_eq(card.code_edit.caret_column, 6)
+
+
+## The slot under the pill holds a three-line failure, so a failure never grows the card; the
+## alert icon is the body line's height.
+func test_the_slot_holds_the_longest_failure() -> void:
+	var card := _card()
+	var version := VersionGate.mismatch_message("0.2.9", "0.2.10")
+	var reserved := card.slot.custom_minimum_size.y
+	var before := card.get_combined_minimum_size().y
+	card.show_error(version)
+	await wait_process_frames(2)
+	assert_lte(card.status_row.get_combined_minimum_size().y, reserved + 0.5, "the message fits")
+	assert_eq(card.get_combined_minimum_size().y, before, "the card did not grow")
+	var font := card.status_label.get_theme_font(&"font")
+	var line := font.get_height(card.status_label.get_theme_font_size(&"font_size"))
+	assert_almost_eq(card.status_icon.custom_minimum_size.y, line, 1.0, "the icon is a line tall")
+
+
+func _lch(color: Color) -> Vector3:
+	return BackdropPaint.to_oklch(Vector3(color.r, color.g, color.b))
+
+
+func _contrast(a: Color, b: Color) -> float:
+	var la := _luminance(a)
+	var lb := _luminance(b)
+	return (maxf(la, lb) + 0.05) / (minf(la, lb) + 0.05)
+
+
+func _luminance(color: Color) -> float:
+	var linear := color.srgb_to_linear()
+	return 0.2126 * linear.r + 0.7152 * linear.g + 0.0722 * linear.b
+
+
 ## Long words never reflow the faces: each caption ends in an ellipsis inside its block.
 func test_captions_keep_to_their_blocks() -> void:
 	var card := _card()

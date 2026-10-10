@@ -1,13 +1,15 @@
 class_name ResumeEntry
 extends VBoxContainer
 
-## The title's quiet Resume, under the Play together card (a session remembers its tables
-## across nights, user verdict 2026-10-09). It shows only when saved sessions exist
+## The title's quiet Resume, in the slot under the Play together card (a session remembers its
+## tables across nights, user verdict 2026-10-09). It shows only when saved sessions exist
 ## (SessionFile.list(), the last played first): the newest is named in a quiet Ghost button by
 ## the day it was last played ("Resume Friday's session"), over a caption naming its maps
-## ("Old Mill and 2 more"); the older ones, named the same way, are in a small menu beside it.
-## Choosing one asks Root to resume it (resume_requested; SessionKeeper.resume()), which opens
-## a new room with the session's shelf, its kept tables and its party.
+## ("Old Mill and 2 more maps") that starts where the button's words do; the older ones, named
+## the same way, are in a small menu beside it, headed by its name ("Older sessions", also the
+## icon button's tooltip and accessible name, W7). Choosing one asks Root to resume it
+## (resume_requested; SessionKeeper.resume()), which opens a new room with the session's
+## shelf, its kept tables and its party.
 
 ## Resume the saved session `id`.
 signal resume_requested(id: String)
@@ -23,7 +25,8 @@ const RESUME_UNDATED := "Resume your last session"
 const RESUME_DATED := "Resume the session from %s"
 ## A session's maps: its name (the first map it shelved) and how many more.
 const MAPS_ONE := "%s"
-const MAPS_MORE := "%s and %d more"
+const MAPS_MORE_ONE := "%s and 1 more map"
+const MAPS_MORE := "%s and %d more maps"
 const MONTHS := [
 	"January",
 	"February",
@@ -53,6 +56,8 @@ var caption: Label
 var older_button: MenuButton
 
 var _sessions: Array[Dictionary] = []
+var _caption_row: HBoxContainer
+var _indent: Control
 ## Held out of the way while Join in place is open (hold()).
 var _held := false
 
@@ -84,12 +89,50 @@ func _ready() -> void:
 	older_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	older_button.get_popup().id_pressed.connect(_on_older_chosen)
 	row.add_child(older_button)
+	# The caption sits after a spacer as wide as the button's padding, icon and gap, so its
+	# words start where the button's do.
+	_caption_row = HBoxContainer.new()
+	_caption_row.name = "MapsRow"
+	_caption_row.theme_type_variation = &"BoxContainerTight"
+	add_child(_caption_row)
+	_indent = Control.new()
+	_indent.name = "Indent"
+	_indent.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_caption_row.add_child(_indent)
 	caption = Label.new()
 	caption.name = "Maps"
 	caption.theme_type_variation = &"Caption"
 	caption.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	add_child(caption)
+	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_caption_row.add_child(caption)
+	_indent_caption()
 	refresh()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_THEME_CHANGED and _indent != null:
+		_indent_caption()
+
+
+## Where the button's words start, in its own pixels: past its padding, its icon and the gap.
+func words_start() -> float:
+	var style := resume_button.get_theme_stylebox(&"normal")
+	var icon_width := float(resume_button.icon.get_width()) if resume_button.icon else 0.0
+	var icon_max := float(resume_button.get_theme_constant(&"icon_max_width"))
+	if icon_max > 0.0:
+		icon_width = minf(icon_width, icon_max)
+	var start := icon_width + resume_button.get_theme_constant(&"h_separation")
+	return start + (style.get_margin(SIDE_LEFT) if style else 0.0)
+
+
+## Where the caption's words start, in the entry's pixels.
+func caption_indent() -> float:
+	return _indent.custom_minimum_size.x + _caption_row.get_theme_constant(&"separation")
+
+
+func _indent_caption() -> void:
+	var gap := _caption_row.get_theme_constant(&"separation")
+	_indent.custom_minimum_size.x = maxf(words_start() - gap, 0.0)
 
 
 ## Read the saved sessions again and show the newest (hidden with none).
@@ -104,8 +147,11 @@ func refresh() -> void:
 	resume_button.tooltip_text = resume_button.text
 	caption.text = maps_line(newest)
 	caption.visible = caption.text != ""
+	_caption_row.visible = caption.visible
 	var popup := older_button.get_popup()
 	popup.clear()
+	# The open menu names itself (W7): the button is an icon alone.
+	popup.add_separator(OLDER)
 	var older := _sessions.slice(1, 1 + MAX_OLDER)
 	for i in older.size():
 		popup.add_item(menu_text(older[i], now, bias_minutes), i + 1)
@@ -168,13 +214,15 @@ static func when_of(last_played: int, now: int, bias: int) -> String:
 
 
 ## The session's maps: its name (the first map it shelved) and how many more, "Old Mill and
-## 2 more"; "" with no name. Pure.
+## 2 more maps"; "" with no name. Pure.
 static func maps_line(session: Dictionary) -> String:
 	var name := str(session.get("name", "")).strip_edges()
 	if name == "":
 		return ""
 	var more := int(session.get("maps", 0)) - 1
-	return MAPS_MORE % [name, more] if more > 0 else MAPS_ONE % name
+	if more <= 0:
+		return MAPS_ONE % name
+	return MAPS_MORE_ONE % name if more == 1 else MAPS_MORE % [name, more]
 
 
 func _on_resume_pressed() -> void:

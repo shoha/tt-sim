@@ -441,6 +441,19 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (the input hint bar). `probes/ui_primitives.gd report` logs the underline against the
   selected item's centre, the chevron's rect against its title and the hint bar's rect
   against the window. The job deletes `_u1_ui_hud` at the end (`cleanup`).
+- `jobs/play_together.json`: the title's Play together card and Resume (50 captures, about 60
+  s), over a staged library and staged saved sessions (`probes/ui_play_together.gd`; nothing
+  is hosted, joined or written), at 1280x720 and 1920x1080: rest, both hovers and keyboard
+  focus; Host's press and flood as a filmstrip held at 0, 50, 70 (`card_press`, the squash's
+  deepest), 100 and 200 ms, and Join in place opening at 50, 120, 200 and 300 ms; Join with
+  the field empty (its placeholder) and with a code, connecting, a bad code and the version
+  gate's failure in the slot under the card; Resume's older-sessions menu open; Host stepped
+  back under Settings; dusk rest, hover and error; and the GM's room after Resume, the session
+  Resume names (Old Mill and 2 more maps), with Old Mill and with the missing Fen Crossing
+  selected (`ui_room.gd host_room` with `notes` and `missing`). After rest and each hover the
+  faces' words are hidden for a frame and `contrast` logs paper against the lightest wash
+  pixel under them (the bar is 4.5:1; rest reads 4.97 and 5.60). `crop` saves the card up
+  close at the window's pixels to `play_together/crops/` beside the captures.
 - `jobs/ui_tour.json`: the UI tour (106 captures; about 235 s at half size and 240 s with
   `--full`, timed on `--only` runs, which still run every step but the skipped captures),
   the capture set the `tt-sim-ui-critic` agent judges (`docs/UI_TASTE.md`). It saves a new

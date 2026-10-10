@@ -7,22 +7,30 @@ extends VBoxContainer
 ## Host is the persimmon face on the left, "Open a room": a room needs no map (room first, user
 ## verdict 2026-10-09), so it acts on nothing selected. Join is the lake face on the right,
 ## "Enter a code". Two transparent face Buttons over the wash take the mouse and carry the
-## tooltips; the pill itself is the one focus stop.
+## tooltips; the pill itself is the one focus stop. Each wash lightens only away from its words
+## (the shader reads their rects, text_rects()), so paper words keep their contrast.
 ##
 ## Picking a face (hover, or Left and Right on the focused pill: keys, D-pad or stick) swings
 ## the seam SWING of the width away from it over MOTION_WASH (sine out), deepens that face to
-## its hover colour, lifts its icon 2 px and lifts the card's shadow. On an end face Left or
+## its hover colour, lifts its icon 2 px and lifts the card's shadow; with keyboard focus a soft
+## paper ring also marks the picked face inside the card's own ring. On an end face Left or
 ## Right is not consumed, so focus moves on and nothing traps it. Accept (Enter, Space, pad A)
 ## presses the picked face: the pill squashes to PRESS_SCALE; Host floods the card with
 ## persimmon and then asks for a room (host_pressed); Join opens Join in place.
 ##
 ## Join in place (user verdict 2026-10-09: there is no join screen): the lake widens to the
-## whole card and becomes a room-code field and a Join button, and Host shrinks to a persimmon
-## disc at the left; the disc, or Esc or pad B anywhere in the card, goes back. Join (or Enter
-## in the field) asks to join with the code (join_submitted). The join's progress and its
+## whole card and becomes a room-code field and a Join button, the one persimmon fill there
+## (C5), and Host's wash draws into a blot at the left and dries away under a paper back disc
+## with a persimmon arrow; the disc, or Esc or pad B anywhere in the card, goes back. Join (or
+## Enter in the field) asks to join with the code (join_submitted). The join's progress and its
 ## failure show in place, on a line under the pill (show_connecting(), show_joining(),
 ## show_error()); going back while a join is under way drops it (join_cancelled). In Join mode
 ## the control with focus rings itself in paper, and the card's lake ring is gone: one ring.
+##
+## Under the pill is one reserved slot (slot, set_under()): the title's Resume and the join's
+## line trade places in it, and it is as tall as the taller of Resume with its caption and a
+## RESERVE_LINES line failure, so entering Join or a failure never moves the card or anything
+## below it.
 ##
 ## Discipline from the theme probe: an instant state set kills every easing still running (an
 ## easing that lands after it undid it), LineEdit.grab_focus() does not start editing in 4.7
@@ -67,7 +75,11 @@ const CARD_SIZE := Vector2(336, 112)
 ## never reflows them; a longer caption ends in an ellipsis.
 const TEXT_BLOCK := 118.0
 const TEXT_PAD := 20.0
+const TITLE_Y := 22.0
+const CAPTION_Y := 62.0
+const CAPTION_HEIGHT := 22.0
 const ICON_SIZE := 20.0
+const ICON_Y := 33.0
 const ICON_LIFT := 2.0
 const SWING := 0.06
 const SEAM_AMP := 5.0
@@ -76,9 +88,18 @@ const PRESS_SCALE := 0.97
 const PRESS_IN := 0.07
 const PRESS_OUT := 0.14
 const FIELD_HEIGHT := 40.0
-const FIELD_LEFT := 92.0
+const DISC_SIZE := 48.0
+## The back disc's edge to the code field: one 8 px step.
+const FIELD_GAP := 8.0
+const FIELD_LEFT := CARD_SIZE.y * 0.5 + DISC_SIZE * 0.5 + FIELD_GAP
 const FIELD_RIGHT_PAD := 16.0
 const JOIN_MIN_WIDTH := 64.0
+## The slot under the pill holds a failure this many lines long (the version gate's message,
+## the longest, wraps to three at the card's width).
+const RESERVE_LINES := 3
+## The field and the back disc fade in after the wash has started to move.
+const FIELD_FADE := 0.18
+const FIELD_DELAY := 0.12
 
 ## The face picked (hover or keys), NONE at rest.
 var hot: Face = Face.NONE
@@ -100,6 +121,8 @@ var join_face: Button
 var code_edit: LineEdit
 var join_button: Button
 var disc_button: Button
+## The reserved slot under the pill: the join's line, or the control set_under() gave it.
+var slot: VBoxContainer
 ## The line under the pill: the join's progress or why it failed.
 var status_row: HBoxContainer
 var status_label: Label
@@ -112,6 +135,8 @@ var _icons := {}
 var _titles := {}
 var _captions := {}
 var _field_row: HBoxContainer
+var _under: Control
+var _measure: Label
 var _wash_tween: Tween
 var _colour_tween: Tween
 var _press_tween: Tween
@@ -126,9 +151,17 @@ func _ready() -> void:
 	eyebrow.theme_type_variation = &"Eyebrow"
 	add_child(eyebrow)
 	_build_pill()
-	_build_status()
+	_build_slot()
 	_refresh_texts()
 	_apply_wash(0.0)
+	_fit_text_rects()
+	_fit_slot()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_THEME_CHANGED and slot != null:
+		_fit_text_rects()
+		_fit_slot()
 
 
 # =============================================================================
@@ -172,6 +205,16 @@ func step_back(on: bool) -> void:
 	_apply_wash(0.0)
 
 
+## Puts `control` (the title's Resume) in the slot under the pill, where it trades places with
+## the join's line. The slot keeps the taller of the two's height.
+func set_under(control: Control) -> void:
+	_under = control
+	slot.add_child(control)
+	slot.move_child(control, 0)
+	control.minimum_size_changed.connect(_fit_slot)
+	_fit_slot()
+
+
 ## Presses a face as a click or Accept does.
 func press(face: Face) -> void:
 	if joining or face == Face.NONE:
@@ -197,8 +240,8 @@ func _host_flooded() -> void:
 		_apply_wash(_motion(MOTION_WASH))
 
 
-## Join in place: the lake takes the card, Host becomes a disc, the code field takes focus
-## and starts editing.
+## Join in place: the lake takes the card, Host's wash dries away under the back disc, the
+## code field takes focus and starts editing.
 func open_join() -> void:
 	var was_open := joining
 	joining = true
@@ -212,10 +255,13 @@ func open_join() -> void:
 	_field_row.visible = true
 	disc_button.visible = true
 	_kill(_field_tween)
-	_field_row.modulate.a = 0.0 if duration > 0.0 else 1.0
+	var shown := 0.0 if duration > 0.0 else 1.0
+	_field_row.modulate.a = shown
+	disc_button.modulate.a = shown
 	if duration > 0.0:
-		_field_tween = create_tween()
-		_field_tween.tween_property(_field_row, "modulate:a", 1.0, 0.18).set_delay(0.12)
+		_field_tween = create_tween().set_parallel(true)
+		for faded: Control in [_field_row, disc_button]:
+			_field_tween.tween_property(faded, "modulate:a", 1.0, FIELD_FADE).set_delay(FIELD_DELAY)
 	code_edit.grab_focus()
 	# Focus from code does not start editing in 4.7; without edit() typing goes nowhere.
 	code_edit.edit()
@@ -250,15 +296,21 @@ func show_joining() -> void:
 
 
 ## The join failed with `message` (W3: what failed and how to recover): Join mode stays open
-## with the code to correct, the message under the pill.
-func show_error(message: String) -> void:
+## with the field focused and the message under the pill. `code_wrong` selects the code to
+## correct (no room has it); a failure the code did not cause (the versions differ, the room
+## did not answer) leaves it as typed, the caret at its end.
+func show_error(message: String, code_wrong := true) -> void:
 	_set_busy(false)
 	if not joining:
 		open_join()
 	_show_status(message, true)
 	code_edit.grab_focus()
 	code_edit.edit()
-	code_edit.select_all()
+	if code_wrong:
+		code_edit.select_all()
+	else:
+		code_edit.deselect()
+		code_edit.caret_column = code_edit.text.length()
 
 
 ## Submits the code in the field: an empty one says what to type instead.
@@ -281,7 +333,34 @@ func wash() -> Dictionary:
 		"disc": float(_material.get_shader_parameter("disc")),
 		"warm": _material.get_shader_parameter("warm"),
 		"cool": _material.get_shader_parameter("cool"),
+		"focus": float(_material.get_shader_parameter("focus")),
+		"focus_side": float(_material.get_shader_parameter("focus_side")),
 	}
+
+
+## The rects (in the pill's own pixels) the shader never lightens: each face's words and icon,
+## Face.HOST and Face.JOIN to a Rect2.
+func text_rects() -> Dictionary:
+	var rects := {}
+	for face: Face in [Face.HOST, Face.JOIN]:
+		var key := "text_warm" if face == Face.HOST else "text_cool"
+		var r: Vector4 = _material.get_shader_parameter(key)
+		rects[face] = Rect2(r.x, r.y, r.z - r.x, r.w - r.y)
+	return rects
+
+
+## The words' own extent on a face (icon, title and caption as drawn, not their blocks), in
+## the pill's pixels.
+func words_rect(face: Face) -> Rect2:
+	var icon := _icons[face] as Control
+	var rect := Rect2(icon.position.x, ICON_Y - ICON_LIFT, ICON_SIZE, ICON_SIZE + ICON_LIFT)
+	for label: Label in [_titles[face], _captions[face]]:
+		var width := minf(_text_width(label), label.size.x)
+		var x := label.position.x
+		if label.horizontal_alignment == HORIZONTAL_ALIGNMENT_RIGHT:
+			x += label.size.x - width
+		rect = rect.merge(Rect2(x, label.position.y, width, label.size.y))
+	return rect
 
 
 ## Whether the card's own ring shows (the pill has focus, Join closed).
@@ -290,7 +369,8 @@ func ring_shown() -> bool:
 
 
 ## The wash colour under `control` when it is a face's words or icon (the colour its words are
-## read against); transparent for anything else, whose ground is its own or the sheet's.
+## read against); transparent for anything else, whose ground is its own or the sheet's. The
+## shader keeps each wash at or below this colour under its words.
 func wash_under(control: Control) -> Color:
 	var colours := wash()
 	for node: Control in [_titles[Face.HOST], _captions[Face.HOST], _icons[Face.HOST]]:
@@ -401,6 +481,7 @@ func _build_pill() -> void:
 	_material.set_shader_parameter("seam_amp", SEAM_AMP)
 	_material.set_shader_parameter("paper", ThemeColors.PAPER)
 	_material.set_shader_parameter("drift", 0.0 if UiMotion.reduced() else 1.0)
+	_material.set_shader_parameter("focus", 0.0)
 	wash_rect.material = _material
 	pill.add_child(wash_rect)
 	host_face = _build_face(Face.HOST)
@@ -447,7 +528,7 @@ func _build_face(face: Face) -> Button:
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.size = Vector2.ONE * ICON_SIZE
-	icon.position = Vector2(block_x if left else block_x + TEXT_BLOCK - ICON_SIZE, 33.0)
+	icon.position = Vector2(block_x if left else block_x + TEXT_BLOCK - ICON_SIZE, ICON_Y)
 	icon.self_modulate = ThemeColors.PAPER
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pill.add_child(icon)
@@ -455,14 +536,14 @@ func _build_face(face: Face) -> Button:
 
 	var title := _label(HOST_TITLE if left else JOIN_TITLE, &"WashTitle", left)
 	title.name = "HostTitle" if left else "JoinTitle"
-	title.position = Vector2(block_x + (ICON_SIZE + 8.0 if left else 0.0), 22.0)
+	title.position = Vector2(block_x + (ICON_SIZE + 8.0 if left else 0.0), TITLE_Y)
 	title.size = Vector2(TEXT_BLOCK - ICON_SIZE - 8.0, 36.0)
 	_titles[face] = title
 
 	var caption := _label(HOST_CAPTION if left else JOIN_CAPTION, &"WashCaption", left)
 	caption.name = "HostCaption" if left else "JoinCaption"
-	caption.position = Vector2(block_x, 62.0)
-	caption.size = Vector2(TEXT_BLOCK, 22.0)
+	caption.position = Vector2(block_x, CAPTION_Y)
+	caption.size = Vector2(TEXT_BLOCK, CAPTION_HEIGHT)
 	caption.clip_text = true
 	caption.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_captions[face] = caption
@@ -483,10 +564,9 @@ func _build_join_field() -> void:
 	_field_row = HBoxContainer.new()
 	_field_row.name = "JoinField"
 	_field_row.theme_type_variation = &"BoxContainerSpaced"
-	# From just past the disc to 16 px short of the right end: a 13-character code fits whole.
-	var left := FIELD_LEFT
-	_field_row.position = Vector2(left, (CARD_SIZE.y - FIELD_HEIGHT) * 0.5)
-	_field_row.size = Vector2(CARD_SIZE.x - left - FIELD_RIGHT_PAD, FIELD_HEIGHT)
+	# From one step past the disc to 16 px short of the right end: a 13-character code fits.
+	_field_row.position = Vector2(FIELD_LEFT, (CARD_SIZE.y - FIELD_HEIGHT) * 0.5)
+	_field_row.size = Vector2(CARD_SIZE.x - FIELD_LEFT - FIELD_RIGHT_PAD, FIELD_HEIGHT)
 	_field_row.visible = false
 	pill.add_child(_field_row)
 
@@ -519,12 +599,14 @@ func _build_join_field() -> void:
 	disc_button.tooltip_text = BACK_TIP
 	disc_button.accessibility_name = BACK_TIP
 	disc_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	var middle := CARD_SIZE.y * 0.5
-	disc_button.position = Vector2(middle - 24.0, middle - 24.0)
-	disc_button.size = Vector2(48, 48)
 	disc_button.visible = false
 	disc_button.pressed.connect(close_join)
+	# Sized once in the tree: sized before, the default theme's wider minimum (its icon
+	# unbounded) stuck, and the disc stood 52 wide.
 	pill.add_child(disc_button)
+	var middle := CARD_SIZE.y * 0.5
+	disc_button.position = Vector2.ONE * (middle - DISC_SIZE * 0.5)
+	disc_button.size = Vector2.ONE * DISC_SIZE
 
 	for inner: Control in [code_edit, join_button, disc_button]:
 		inner.gui_input.connect(_on_inner_input.bind(inner))
@@ -536,20 +618,24 @@ func _build_join_field() -> void:
 	disc_button.focus_previous = disc_button.get_path_to(join_button)
 
 
-func _build_status() -> void:
+## The reserved slot under the pill and the join's line in it.
+func _build_slot() -> void:
+	slot = VBoxContainer.new()
+	slot.name = "Slot"
+	slot.theme_type_variation = &"BoxContainerTight"
+	add_child(slot)
 	status_row = HBoxContainer.new()
 	status_row.name = "Status"
 	status_row.theme_type_variation = &"BoxContainerSpaced"
 	status_row.custom_minimum_size.x = CARD_SIZE.x
 	status_row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	status_row.visible = false
-	add_child(status_row)
+	slot.add_child(status_row)
 	status_icon = TextureRect.new()
 	status_icon.name = "Icon"
 	status_icon.texture = IconButton.load_icon(ERROR_ICON)
 	status_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	status_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	status_icon.custom_minimum_size = Vector2(16, 16)
 	status_icon.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	status_row.add_child(status_icon)
 	status_label = Label.new()
@@ -558,6 +644,49 @@ func _build_status() -> void:
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	status_row.add_child(status_label)
+	# Never shown: RESERVE_LINES lines of body type, measured as a label lays them out (each
+	# line's height is the shaped line's, a little over the font's own height).
+	_measure = Label.new()
+	_measure.name = "Measure"
+	_measure.theme_type_variation = &"Body"
+	var lines := PackedStringArray()
+	for i in RESERVE_LINES:
+		lines.append("Mg")
+	_measure.text = "\n".join(lines)
+	_measure.visible = false
+	slot.add_child(_measure)
+
+
+## The slot's height: the taller of the control under the pill (Resume with its caption) and a
+## RESERVE_LINES line failure in body type. The alert icon takes the body line's height.
+func _fit_slot() -> void:
+	if slot == null:
+		return
+	var font := status_label.get_theme_font(&"font", &"Body")
+	var font_size := status_label.get_theme_font_size(&"font_size", &"Body")
+	var line := font.get_height(font_size) if font else 22.0
+	status_icon.custom_minimum_size = Vector2.ONE * roundf(line)
+	var reserve := _measure.get_minimum_size().y
+	if _under != null:
+		reserve = maxf(reserve, _under.get_combined_minimum_size().y)
+	slot.custom_minimum_size.y = ceilf(reserve)
+
+
+## Tell the shader where each face's words are, so it never lightens a wash under them.
+func _fit_text_rects() -> void:
+	for face: Face in [Face.HOST, Face.JOIN]:
+		var rect := words_rect(face)
+		var key := "text_warm" if face == Face.HOST else "text_cool"
+		var corners := Vector4(rect.position.x, rect.position.y, rect.end.x, rect.end.y)
+		_material.set_shader_parameter(key, corners)
+
+
+static func _text_width(label: Label) -> float:
+	var font := label.get_theme_font(&"font")
+	if font == null:
+		return label.size.x
+	var font_size := label.get_theme_font_size(&"font_size")
+	return font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 
 
 # =============================================================================
@@ -572,16 +701,22 @@ func _refresh_texts() -> void:
 		(_titles[face] as Control).visible = shown
 		(_captions[face] as Control).visible = shown
 		(_icons[face] as Control).visible = shown
-		(_icons[face] as Control).position.y = 33.0 - (ICON_LIFT if face == hot else 0.0)
+		(_icons[face] as Control).position.y = ICON_Y - (ICON_LIFT if face == hot else 0.0)
 	host_face.visible = not joining
 	join_face.visible = not joining
 	_shadow.theme_type_variation = &"WashShadowLifted" if hot != Face.NONE else &"WashShadow"
 	_refresh_ring()
 
 
+## The card's ring with the pill focused (Join closed), and inside it the soft ring on the
+## picked face.
 func _refresh_ring() -> void:
-	if _ring:
-		_ring.visible = pill.has_focus() and not joining
+	if _ring == null:
+		return
+	_ring.visible = pill.has_focus() and not joining
+	var marked := _ring.visible and hot != Face.NONE
+	_material.set_shader_parameter("focus", 1.0 if marked else 0.0)
+	_material.set_shader_parameter("focus_side", -1.0 if hot == Face.HOST else 1.0)
 
 
 ## The line under the pill: `text`, as an error (the alert icon, body ink) or as progress (a
@@ -673,6 +808,16 @@ func _squash() -> void:
 	_press_tween.parallel().tween_property(_material, "shader_parameter/press", 1.0, PRESS_IN)
 	_press_tween.tween_property(pill, "offset_transform_scale", Vector2.ONE, PRESS_OUT)
 	_press_tween.parallel().tween_property(_material, "shader_parameter/press", 0.0, PRESS_OUT)
+
+
+## The easings under way (the seam, the colours, the press, the field's fade), for a probe that
+## holds a transition part way for a filmstrip.
+func easings() -> Array[Tween]:
+	var running: Array[Tween] = []
+	for tween: Tween in [_wash_tween, _colour_tween, _press_tween, _field_tween]:
+		if tween != null and tween.is_valid():
+			running.append(tween)
+	return running
 
 
 ## `duration`, or 0 under Reduce motion (the seam moves at once).

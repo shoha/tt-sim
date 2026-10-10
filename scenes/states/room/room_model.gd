@@ -29,6 +29,7 @@ const ON_TABLE := "On the table"
 const CHANGED := "Changed this session"
 ## What Resume found of a shelf map (SessionKeeper.notes()): its map files changed since the
 ## session was kept (its live edits were dropped), or its folder is gone from this library.
+## The GM's row says it on a line of its own (note_text()), over the caption.
 const SINCE_CHANGED := "Changed since last time"
 const MISSING := "Missing from your library"
 ## A player's download state for one map (download_state()).
@@ -127,26 +128,34 @@ static func action(
 
 
 ## A shelf row's caption (the GM's view): the map on the table first ("On the table"), then
-## what Resume found of it (`note`: SessionFile.CHANGED, "Changed since last time", or
-## SessionFile.MISSING, "Missing from your library", which says all there is), then whether it
-## changed this session (`changed`, TableMover.changed_maps()), then `readiness`
+## whether it changed this session (`changed`, TableMover.changed_maps()), then `readiness`
 ## (readiness_text()), joined by middots, the first clause capitalized: "Changed this session
-## · 3 of 4 have it", "On the table · changed this session". Pure.
+## · 3 of 4 have it", "On the table · changed this session". What Resume found of it (`note`)
+## is on its own line (note_text()); a map missing from the library has no caption under that
+## line, since nobody can get it from the GM. Pure.
 static func shelf_caption(
 	on_table: bool, changed: bool, readiness: String, note: StringName = &""
 ) -> String:
 	if note == SessionFile.MISSING:
-		return MISSING
+		return ""
 	var parts: Array[String] = []
 	if on_table:
 		parts.append(ON_TABLE)
-	if note == SessionFile.CHANGED:
-		parts.append(SINCE_CHANGED if parts.is_empty() else SINCE_CHANGED.to_lower())
 	if changed:
 		parts.append(CHANGED if parts.is_empty() else CHANGED.to_lower())
 	if not on_table and readiness != "":
 		parts.append(readiness)
 	return " · ".join(PackedStringArray(parts))
+
+
+## What Resume found of a shelf map, as its row's own line: SessionFile.CHANGED is "Changed
+## since last time", SessionFile.MISSING "Missing from your library", anything else "". Pure.
+static func note_text(note: StringName) -> String:
+	if note == SessionFile.CHANGED:
+		return SINCE_CHANGED
+	if note == SessionFile.MISSING:
+		return MISSING
+	return ""
 
 
 ## How many of the players here have the map `key`: "Everyone has it", "3 of 4 have it", or

@@ -30,8 +30,9 @@ extends RefCounted
 ##   false is a room with no map at all, as after Host a session. `long` names the GM with
 ##   LONG_GM_NAME (24 characters) and the second sample map LONG_MAP_NAME, and selects it.
 ##   `notes` stages what Resume found: Old Mill's files changed since the session was kept and
-##   Fen Crossing missing from the library (RoomPanel.show_notes()), Old Mill selected; with
-##   `notes` the folder may be "", a shelf of the two sample maps alone.
+##   Fen Crossing missing from the library (RoomPanel.show_notes()), Old Mill selected
+##   (`missing`: Fen Crossing, with its Remove from shelf); with `notes` the folder may be "",
+##   the resumed session's shelf alone: Old Mill and 2 more maps (RESUMED_MAPS).
 ## - `client_room` (`folder`; `shelf`, default true; `select`, default 0): a player's room
 ##   with the same players and shelf, the local player one of them, the SAMPLE_MAPS entry at
 ##   index `select` selected to look at (their own download state first: 0 is Old Mill, which
@@ -65,6 +66,9 @@ const SAMPLE_PLAYERS := {"enet-ranger": "Ranger", "enet-starling": "Starling", "
 const SAMPLE_LOCAL_PLAYER := "enet-wren"
 ## Sample shelf maps after the test level, with no thumbnail anywhere.
 const SAMPLE_MAPS := {"_ui_tour_sample_mill": "Old Mill", "_ui_tour_sample_fen": "Fen Crossing"}
+## The third map of the resumed session (`notes`): Old Mill and 2 more maps, as ui_play_together
+## names it on the title's Resume.
+const RESUMED_MAPS := {"_ui_tour_sample_willow": "Willow Green"}
 ## Long real copy (T6): a 24-character GM name and a long map name.
 const LONG_GM_NAME := "Marigold Thistlewood-Ash"
 const LONG_MAP_NAME := "The Drowned Lanterns of Upper Fenwick Mire"
@@ -164,14 +168,20 @@ static func _stage(base: Node, room: Node) -> void:
 ## second. The players fetch what they lack in the background ("progress"): Starling is
 ## getting the first sample, Wren the second, and the others wait their turn for it. `long`
 ## gives the GM and the second sample map their long names.
-static func _summary(folder: String, with_shelf: bool, table: String, long := false) -> Dictionary:
+static func _summary(
+	folder: String, with_shelf: bool, table: String, long := false, resumed := false
+) -> Dictionary:
 	var shelf: Array = []
 	if with_shelf:
-		var level := LevelManager.load_level_folder(folder, false) if folder != "" else null
-		var level_name := level.level_name if level else folder
-		shelf.append({"folder": folder, "map_path": "", "hashes": {}, "name": level_name})
-		for key: String in SAMPLE_MAPS:
-			var map_name: String = SAMPLE_MAPS[key]
+		if folder != "":
+			var level := LevelManager.load_level_folder(folder, false)
+			var level_name := level.level_name if level else folder
+			shelf.append({"folder": folder, "map_path": "", "hashes": {}, "name": level_name})
+		var maps := SAMPLE_MAPS.duplicate()
+		if resumed:
+			maps.merge(RESUMED_MAPS)
+		for key: String in maps:
+			var map_name: String = maps[key]
 			if long and key == SAMPLE_MAPS.keys()[1]:
 				map_name = LONG_MAP_NAME
 			shelf.append({"folder": key, "map_path": "", "hashes": {}, "name": map_name})
@@ -216,16 +226,17 @@ static func _host_room(base: Node, folder: String, step: Dictionary) -> String:
 	var with_shelf := bool(step.get("shelf", true))
 	var long := bool(step.get("long", false))
 	var notes := bool(step.get("notes", false))
-	# With `notes` the test level may be left out (folder ""): the two sample maps carry them.
+	# With `notes` the test level may be left out (folder ""): the resumed session's three
+	# sample maps carry them.
 	var needs_level := with_shelf and not (notes and folder == "")
 	if needs_level and LevelManager.load_level_folder(folder, false) == null:
 		return "no level %s" % folder
-	var room := _room(base, _summary(folder, with_shelf, "", long), SAMPLE_GM)
+	var room := _room(base, _summary(folder, with_shelf, "", long, notes), SAMPLE_GM)
 	var keys: Array = SAMPLE_MAPS.keys()
 	if long:
 		room.panel.select(keys[1])
 	elif notes:
-		room.panel.select(keys[0])
+		room.panel.select(keys[1] if bool(step.get("missing", false)) else keys[0])
 	elif with_shelf and bool(step.get("select", true)):
 		room.panel.select(folder)
 	var panel := room.panel

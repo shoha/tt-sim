@@ -28,9 +28,11 @@ extends Control
 ## row, once selected, has Save into map (for a map with a level folder here) and Discard
 ## changes on a line under it, or with no folder a caption saying why Discard is all there is;
 ## TableMover asks before either. After Resume a GM's row also says what Resume found of its
-## map (read from notes_source, SessionKeeper.notes()): "Changed since last time" (its map
-## files changed, so its live edits were dropped) or "Missing from your library" (its folder is
-## gone; it stays on the shelf as it was kept). Selecting a row never moves the table (the
+## map (read from notes_source, SessionKeeper.notes()), on a line of its own over the caption:
+## "Changed since last time" (its map files changed, so its live edits were dropped) or
+## "Missing from your library" (its folder is gone; it stays on the shelf as it was kept, its
+## picture faded, it cannot be set out, and selected it has Remove from shelf on a line under
+## it, SessionChannel.unshelve()). Selecting a row never moves the table (the
 ## action does), and moving the table never asks: the table is kept as it is. A full shelf
 ## scrolls, in the room's
 ## side sheet as in the drawer's column, the selected row and its line scrolled into view.
@@ -51,6 +53,9 @@ signal selection_shown(preset: String)
 ## The GM pressed a changed map's Save into map or Discard changes (TableMover asks first).
 signal save_changes_requested(key: String)
 signal discard_changes_requested(key: String)
+## The GM pressed Remove from shelf on a map missing from the library (with connect_network,
+## it is taken off).
+signal remove_requested(key: String)
 
 const LEVEL_PICKER_SCENE := preload("res://scenes/ui/level_picker_dialog.tscn")
 ## The side column and the drawer share the drawer width token (UI_TASTE S5).
@@ -316,14 +321,23 @@ func _fill_shelf() -> void:
 		empty.text = "No maps yet" if _is_gm else "The GM has not added a map yet"
 		shelf_rows.add_child(empty)
 	for entry in _shelf:
+		var note: StringName = _note_of(entry.key)
 		var caption := RoomModel.shelf_caption(
 			entry.on_table,
 			_is_gm and _changed.has(entry.key),
 			RoomModel.readiness_text(_players, entry.key),
-			_notes.get(entry.key, &"") if _is_gm else &""
+			note
 		)
 		var picture := _picture_for(entry)
-		var row := RoomRows.shelf_row(entry, picture.texture, picture.mood, caption, true)
+		var row := RoomRows.shelf_row(
+			entry,
+			picture.texture,
+			picture.mood,
+			caption,
+			true,
+			RoomModel.note_text(note),
+			note == SessionFile.MISSING
+		)
 		row.pressed.connect(select.bind(str(entry.key)))
 		shelf_rows.add_child(row)
 	_fit_side.call_deferred()
@@ -347,6 +361,10 @@ func _show_selection() -> void:
 	var action := RoomModel.action(
 		in_drawer, _is_gm, _selected, _table, _shelf.size(), str(entry.get("name", ""))
 	)
+	# A map missing from the GM's library cannot be set out or moved to: its line under the
+	# row offers the one step there is.
+	if _note_of(_selected) == SessionFile.MISSING and not action.add:
+		action.enabled = false
 	action_button.visible = action.shown
 	action_button.text = action.text
 	action_button.tooltip_text = action.text if in_drawer else ""
@@ -376,23 +394,30 @@ func _repaint_shelf() -> void:
 
 
 ## The GM's Save into map and Discard changes, on a line right under the selected shelf row
-## when that map changed this session; no line otherwise.
+## when that map changed this session, or Remove from shelf when it is missing from the
+## library; no line otherwise.
 func _show_changes_line() -> void:
 	for child in shelf_rows.get_children():
-		if str(child.name).begins_with("Changes_"):
+		var line_name := str(child.name)
+		if line_name.begins_with("Changes_") or line_name.begins_with("Missing_"):
 			shelf_rows.remove_child(child)
 			child.queue_free()
-	if not _is_gm or not _changed.has(_selected):
+	var missing := _note_of(_selected) == SessionFile.MISSING
+	if not _is_gm or not (_changed.has(_selected) or missing):
 		return
 	var row := shelf_rows.get_node_or_null(NodePath("Map_%s" % _selected.validate_node_name()))
 	if row == null:
 		return
-	var line := RoomRows.changes_line(
-		_selected,
-		bool(_changed[_selected]),
-		save_changes_requested.emit,
-		discard_changes_requested.emit
-	)
+	var line: Control
+	if missing:
+		line = RoomRows.missing_line(_selected, _on_remove_pressed)
+	else:
+		line = RoomRows.changes_line(
+			_selected,
+			bool(_changed[_selected]),
+			save_changes_requested.emit,
+			discard_changes_requested.emit
+		)
 	shelf_rows.add_child(line)
 	shelf_rows.move_child(line, row.get_index() + 1)
 	# The line settles to one row once it has a width: fit the column to it again then.
@@ -407,6 +432,8 @@ func _refit_column() -> void:
 ## The room's centre: the selected map large with its name and readiness, or with none the
 ## painted placeholder under what goes there.
 func _show_stage(entry: Dictionary) -> void:
+	# A missing map's picture is faded here as on its row.
+	RoomRows.mute_well(preview, not entry.is_empty() and _note_of(entry.key) == SessionFile.MISSING)
 	if entry.is_empty():
 		RoomRows.set_map_well(preview, null, "", "")
 		var empty := RoomModel.empty_stage(_is_gm, _shelf.size())
@@ -424,14 +451,37 @@ func _show_stage(entry: Dictionary) -> void:
 
 
 ## The line under the selected map: on the table, or its readiness, a player's own first; for
-## the GM, a map that changed this session says so first, as its shelf row does.
+## the GM, what Resume found of it leads (a missing map says that alone), and a map that
+## changed this session says so first, as its shelf row does.
 func _readiness(entry: Dictionary) -> String:
 	var changed := _is_gm and _changed.has(entry.key)
+	var note: StringName = _note_of(entry.key)
+	if note == SessionFile.MISSING:
+		return RoomModel.MISSING
+	var line := ""
 	if entry.on_table:
-		return RoomModel.shelf_caption(true, true, "") if changed else "On the table now"
-	if _is_gm:
-		return RoomModel.shelf_caption(false, changed, RoomModel.readiness_text(_players, entry.key))
-	return RoomModel.own_readiness_text(_players, entry.key)
+		line = RoomModel.shelf_caption(true, true, "") if changed else "On the table now"
+	elif _is_gm:
+		line = RoomModel.shelf_caption(false, changed, RoomModel.readiness_text(_players, entry.key))
+	else:
+		line = RoomModel.own_readiness_text(_players, entry.key)
+	var said := RoomModel.note_text(note)
+	if said == "":
+		return line
+	return said if line == "" else "%s · %s" % [said, line]
+
+
+## What Resume found of the map `key`, for the GM alone (a player's library is their own).
+func _note_of(key: String) -> StringName:
+	return _notes.get(key, &"") if _is_gm else &""
+
+
+## Remove from shelf on a missing map's line: off the shelf (with connect_network, through the
+## session; the map on the table never goes).
+func _on_remove_pressed(key: String) -> void:
+	remove_requested.emit(key)
+	if connect_network:
+		NetworkManager.session.unshelve(key)
 
 
 ## The placeholder's key for a shelf entry: its folder, or its name without one.
