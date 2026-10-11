@@ -119,12 +119,15 @@ static func slot_refusal(document: MapDocument, surface: String) -> String:
 
 
 ## True when a finish() diff involves a surface whose paint changes what grows (a built or
-## cliff-role surface in the slot list before or after), so the scatter must follow it.
-## `surfaces` is the palette's surface table (PaletteLibrary.surfaces()).
+## cliff-role surface, or ash, ScatterGround.SCORCHED_SURFACES, in the slot list before or
+## after), so the scatter must follow it. `surfaces` is the palette's surface table
+## (PaletteLibrary.surfaces()).
 static func changes_plants(diff: Dictionary, surfaces: Dictionary) -> bool:
 	var ids := PackedStringArray(diff.get("ids_before", PackedStringArray()))
 	ids.append_array(PackedStringArray(diff.get("ids_after", PackedStringArray())))
 	for surface in ids:
+		if surface in ScatterGround.SCORCHED_SURFACES:
+			return true
 		if String(surfaces.get(surface, {}).get("role", "ground")) in PLANT_ROLES:
 			return true
 	return false

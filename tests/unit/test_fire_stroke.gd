@@ -166,6 +166,85 @@ func test_a_cancelled_stroke_leaves_nothing() -> void:
 	assert_eq(editor.history.undo_count(), count)
 
 
+## [plants, rocks] of `scatter` within `radius` of the segment `from`-`to` (map XZ).
+func _count(editor: AuthoringEditor, from: Vector2, to: Vector2, radius: float) -> Vector2i:
+	var out := Vector2i.ZERO
+	var rows_by_asset: Dictionary = editor.scatter.rows_by_asset()
+	for asset_id in rows_by_asset:
+		var role := ScatterGround.plan_role(editor.rule_for_asset(asset_id))
+		var flat: PackedFloat32Array = rows_by_asset[asset_id]
+		for r in flat.size() / MapDocument.ROW_STRIDE:
+			var p := Vector2(flat[r * MapDocument.ROW_STRIDE], flat[r * MapDocument.ROW_STRIDE + 2])
+			if Geometry2D.get_closest_point_to_segment(p, from, to).distance_to(p) > radius:
+				continue
+			if role == ScatterGround.ROLE_ROCK:
+				out.y += 1
+			elif ScatterGround.scorches(role):
+				out.x += 1
+	return out
+
+
+func _settle(editor: AuthoringEditor) -> void:
+	var frames := 0
+	while editor.scatter.is_regenerating() and frames < 600:
+		await get_tree().process_frame
+		frames += 1
+	assert_false(editor.scatter.is_regenerating(), "the scatter settled")
+
+
+func test_a_lay_burns_away_the_plants_under_it_and_undo_brings_them_back() -> void:
+	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 11)
+	var root := MapSourceLoader.create_authored_root(doc)
+	var scatter := AuthoredScatter.create()
+	scatter.name = MapSourceLoader.SCATTER_NODE
+	scatter.budget = 1_000_000_000
+	scatter.grow_seconds = 0.0
+	root.add_child(scatter)
+	MapSourceLoader.add_fire_field(root, doc)
+	add_child_autofree(root)
+	var editor := AuthoringEditor.create(doc, root, AuthoringHistory.new())
+	editor.scatter.attach_document(doc)
+	_paint_biome(editor, MEADOW, Vector3(-8, 0, -6), Vector3(8, 0, 6))
+	await _settle(editor)
+	var from := Vector2(-5, 0)
+	var to := Vector2(5, 0)
+	# Well inside the fire's core, where the ash is full.
+	var before := _count(editor, from, to, 1.0)
+	assert_gt(before.x, 20, "grass and flowers grow there")
+	assert_gt(before.y, 0, "and some stones")
+	assert_true(_lay(editor, Vector3(from.x, 0, from.y), Vector3(to.x, 0, to.y)))
+	await _settle(editor)
+	var after := _count(editor, from, to, 1.0)
+	assert_eq(after.x, 0, "the plants under the fire are burnt away")
+	assert_eq(after.y, before.y, "the rocks stay")
+	assert_true(_lay(editor, Vector3(from.x, 0, from.y), Vector3(to.x, 0, to.y), true))
+	await _settle(editor)
+	assert_eq(_count(editor, from, to, 1.0).x, 0, "putting the fire out brings no plant back")
+	editor.history.undo()
+	editor.history.undo()
+	await _settle(editor)
+	assert_eq(_count(editor, from, to, 1.0), before, "undoing the lay brings them back")
+	_allow_layer_warnings()
+
+
+func test_ash_clears_small_plants_and_spares_rocks_trees_and_snags() -> void:
+	var doc := MapDocument.create_flat(Vector2i(4, 4), "grass", "v", 3)
+	doc.ensure_surface("ash")
+	for i in doc.sample_count():
+		doc.set_surface_weight(i, 0, 255)
+	var grid := Rect2i(0, 0, doc.samples_x(), doc.samples_z())
+	var ground := ScatterGround.sampler(doc, doc.heights, grid, PackedStringArray())
+	var at := Vector2(0.3, -0.2)
+	for role in [ScatterGround.ROLE_COVER, ScatterGround.ROLE_TALL_COVER, ScatterGround.ROLE_SHRUB]:
+		assert_eq(ground.call(at, role).x, 0.0, "role %d burns away" % role)
+	assert_eq(ground.call(at, ScatterGround.ROLE_ROCK).x, 1.0, "a rock stays")
+	assert_eq(ground.call(at, ScatterGround.ROLE_TREE).x, 1.0, "a tree stays (snags replace it)")
+	var charred := ScatterGround.plan_role({"key": "stump", "size_class": "medium"})
+	assert_eq(ground.call(at, charred).x, 1.0, "the burnt forest's stumps live on ash")
+	var diff := {"ids_before": PackedStringArray(), "ids_after": PackedStringArray(["ash"])}
+	assert_true(SurfaceStroke.changes_plants(diff, PaletteLibrary.surfaces()), "ash regrows")
+
+
 func test_forest_slots_are_the_dense_woods_only() -> void:
 	var biomes := PaletteLibrary.biomes()
 	var ids := PackedStringArray([FOREST, MEADOW, "burnt_forest_summer_s1", "no_such_biome"])

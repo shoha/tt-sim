@@ -8,6 +8,8 @@ extends RefCounted
 ##   - Under a painted built surface (role "built": a road, a courtyard) nothing grows, nor
 ##     on painted rock (role "cliff"): the paved share (the painted weights shaped as the
 ##     shader shapes them) clears plants through a steep response (PAVED_CLEAR_*).
+##   - Under painted ash (SCORCHED_SURFACES, the Fire tool's scorch) the same response clears
+##     ground cover, tall cover and shrubs, but rocks, trees and charred species stay.
 ##   - On scree, rock species gather (density times 1 + SCREE_ROCK_BOOST * scree share,
 ##     capped at full) and everything else thins (times 1 - SCREE_THIN * scree share), so
 ##     boulders collect at a cliff's foot, per the user's cliff decision.
@@ -125,6 +127,16 @@ const FLOWER_BIT := 32
 ## reads wrong. Kinds, their role bit, and the shore weight over which they clear.
 const ARID_KINDS := ["cactus"]
 const ARID_BIT := 64
+## Fire (2026-10-11, user: fire burns away the small plants under it). Painted ash (the
+## surfaces named here) clears ground cover, tall cover and shrubs through the paved response,
+## as built paint does, but never rocks or trees: trees under a fire become the burnt forest's
+## snags instead (FireEditor), and a rock stays. The burnt forest's own charred species live on
+## ash and carry CHARRED_BIT (by key, as the edge species are), so the ash leaves them.
+const SCORCHED_SURFACES := ["ash"]
+const CHARRED_KEYS := [
+	"snag", "snag_conifer", "high_stump", "stump", "branches", "log", "char_litter"
+]
+const CHARRED_BIT := 128
 const ARID_SHORE_START := 0.05
 const ARID_SHORE_FULL := 0.35
 
@@ -145,7 +157,18 @@ static func plan_role(rule: Dictionary) -> int:
 		role |= FLOWER_BIT
 	if rule.get("kind", "") in ARID_KINDS:
 		role |= ARID_BIT
+	if key in CHARRED_KEYS:
+		role |= CHARRED_BIT
 	return role
+
+
+## True when painted ash clears a species of plan role `role` (see SCORCHED_SURFACES): ground
+## cover, tall cover and shrubs, not rocks, trees or the charred species.
+static func scorches(role: int) -> bool:
+	if (role & CHARRED_BIT) != 0:
+		return false
+	var base := role & ROLE_BITS
+	return base == ROLE_COVER or base == ROLE_TALL_COVER or base == ROLE_SHRUB
 
 
 ## The role (ROLE_*) of a species rule for the ground rules: rock kind, then by size class
@@ -197,6 +220,7 @@ static func sampler(
 	var painted_total: PackedFloat32Array = painted.total
 	var built: PackedFloat32Array = painted.built
 	var rock: PackedFloat32Array = painted.rock
+	var ash: PackedFloat32Array = painted.ash
 	var paints := not painted_total.is_empty()
 	var fringe := _built_fringe(doc, rect, built_surfaces) if paints else PackedFloat32Array()
 	var wet := doc.water_dressing
@@ -210,6 +234,7 @@ static func sampler(
 		var y := ScatterGenerator.triangle_height(heights, columns, rows, s)
 		var rule := TerrainRules.weights(n.y, fields, p, y, seed_value)
 		var built_weight := 0.0
+		var ash_weight := 0.0
 		var held := 0.0
 		var yielding := 0.0
 		if paints:
@@ -219,13 +244,16 @@ static func sampler(
 				var shaped := TerrainRules.shape_painted(total, p, seed_value)
 				var scale := shaped / total
 				built_weight = ScatterGenerator.bilinear(built, columns, rows, lookup) * scale
+				if scorches(role):
+					ash_weight = ScatterGenerator.bilinear(ash, columns, rows, lookup) * scale
 				held = ScatterGenerator.bilinear(rock, columns, rows, lookup) * scale
 				yielding = maxf(shaped - held, 0.0)
 		var water := WaterDressing.sample(wet, columns, rows, s) if wet_on else Vector3.ZERO
 		var shares := TerrainRules.compose_water(
 			yielding, held, rule, Vector2(water.x, water.y), water.z
 		)
-		var paved := built_weight * shares[3] + held
+		# Ash is ground paint: like built paint it covers walkable ground only (shares[3]).
+		var paved := (built_weight + ash_weight) * shares[3] + held
 		var open := 1.0 - shares[1] - smoothstep(PAVED_CLEAR_START, PAVED_CLEAR_FULL, paved)
 		if base == ROLE_TREE or base == ROLE_SHRUB:
 			var face := ScatterGenerator.bilinear(near_face, columns, rows, s)
@@ -347,18 +375,23 @@ static func _painted_fields(
 	var total_field := PackedFloat32Array()
 	var built := PackedFloat32Array()
 	var rock := PackedFloat32Array()
+	var ash := PackedFloat32Array()
 	if doc.surface_ids.is_empty() or doc.surface_weights.size() != count * MapDocument.MAX_SURFACES:
-		return {"total": total_field, "built": built, "rock": rock}
+		return {"total": total_field, "built": built, "rock": rock, "ash": ash}
 	total_field.resize(count)
 	built.resize(count)
 	rock.resize(count)
+	ash.resize(count)
 	var built_slots := PackedInt32Array()
 	var rock_slots := PackedInt32Array()
+	var ash_slots := PackedInt32Array()
 	for s in doc.surface_ids.size():
 		if built_surfaces.has(doc.surface_ids[s]):
 			built_slots.append(s)
 		elif cliff_surfaces.has(doc.surface_ids[s]):
 			rock_slots.append(s)
+		elif doc.surface_ids[s] in SCORCHED_SURFACES:
+			ash_slots.append(s)
 	var weights := doc.surface_weights
 	var columns := doc.samples_x()
 	for z in range(rect.position.y, rect.end.y):
@@ -378,7 +411,11 @@ static func _painted_fields(
 			for s in rock_slots:
 				r += weights[MapDocument.surface_offset(i, s, count)]
 			rock[i] = r / 255.0
-	return {"total": total_field, "built": built, "rock": rock}
+			var a := 0
+			for s in ash_slots:
+				a += weights[MapDocument.surface_offset(i, s, count)]
+			ash[i] = a / 255.0
+	return {"total": total_field, "built": built, "rock": rock, "ash": ash}
 
 
 ## Painted density `value` as a species of ground role `role` reads it, given the sampler's
