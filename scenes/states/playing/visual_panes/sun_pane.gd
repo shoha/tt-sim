@@ -42,6 +42,8 @@ const TIME_TICKS: Array[Dictionary] = [
 const SHADOW_TILES := [
 	["off", "Off", "circle-off"], ["hard", "Hard", "contrast"], ["soft", "Soft", "cloud"]
 ]
+## A Shadows tile's tooltip while Sunlight is Off (shadows_live).
+const SHADOWS_NO_SUN := "Shadows are the sun's: turn Sunlight on to cast them"
 const SHADOW_SOFT_SOFTNESS := 1.5
 const SHADOW_HARD_MAX_SOFTNESS := 0.25
 const COMPASS := ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
@@ -208,9 +210,8 @@ func _sync_controls() -> void:
 	_energy_row.set_value_no_signal(_sun.energy)
 	_shadow_field.tiles.select(shadow_tile_for(_sun))
 	_softness_row.set_value_no_signal(_sun.softness)
-	_softness_row.editable = _sun.shadows_enabled
 	_darkness_row.set_value_no_signal(_sun.shadow_darkness)
-	_darkness_row.editable = _sun.shadows_enabled
+	_refresh_shadow_state()
 	_time_row.set_value_no_signal(_sun.time_of_day)
 
 
@@ -238,6 +239,26 @@ func _promote_auto_to_on() -> void:
 ## Say what the picked Sunlight mode does, in the caption under its tiles.
 func _show_mode_note() -> void:
 	_mode_caption.text = String(MODE_NOTES.get(_sun.mode, ""))
+	_refresh_shadow_state()
+
+
+## Whether the sun's shadow controls act: Shadows are the sun's alone (DefaultSun gives them to
+## its light, never to the map's lamps), so with Sunlight Off there is nothing to cast them and
+## the tiles are drawn disabled, their tooltip saying why; softness and darkness need shadows on.
+func shadows_live() -> bool:
+	return _sun.mode != "off"
+
+
+func _refresh_shadow_state() -> void:
+	if _shadow_field == null or _softness_row == null:
+		return
+	var live := shadows_live()
+	for spec: Array in SHADOW_TILES:
+		var id := StringName(spec[0])
+		_shadow_field.tiles.set_tile_disabled(id, not live)
+		_shadow_field.tiles.set_tile_tooltip(id, "" if live else SHADOWS_NO_SUN)
+	_softness_row.editable = live and _sun.shadows_enabled
+	_darkness_row.editable = live and _sun.shadows_enabled
 
 
 func _emit_changed() -> void:
@@ -308,8 +329,7 @@ func _on_shadow_tile_selected(id: StringName) -> void:
 			_sun.shadows_enabled = true
 			_sun.softness = SHADOW_SOFT_SOFTNESS
 	_softness_row.set_value_no_signal(_sun.softness)
-	_softness_row.editable = _sun.shadows_enabled
-	_darkness_row.editable = _sun.shadows_enabled
+	_refresh_shadow_state()
 	_promote_auto_to_on()
 	_emit_changed()
 

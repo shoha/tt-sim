@@ -744,8 +744,29 @@ cannot all fit (`LevelGrid.reveal_scroll`, repeated over `REVEAL_FRAMES` 3 while
 it out). The grid clips at its own edge, a hard edge (cut cards faded to `CUT_ALPHA` 0.35 until
 the title-coherent card: a fade read as a half-finished edge under the top bar). In the title the
 grid runs to the window's left and bottom edges with its room inside it (`LibraryGrid`), so the
-only clip a card meets is the hard edge under the sticky heading; a picker keeps `CardGrid`'s
-6 px ring room.
+only clip a card meets is the edge under the sticky heading; a picker keeps `CardGrid`'s
+6 px ring room. Since the ui-polish card that edge is no straight cut: the title's grid carries a
+`ScrollFade` with `at_top` (and `at_bottom` off, the foot being the window's edge), which fades
+the top `TOP_HEIGHT` 20 px of the scroll area to clear once the grid has scrolled, coming in
+with the first 20 px of scroll (`ScrollFade.top_alpha`), so the grid at rest is untouched and a
+card scrolled up to the heading thins out.
+
+With no map of the player's own, New map and the Bundled offer under it centre on the window's
+middle line rather than the left column's (`LevelGrid.alone_centre`, set by the title's
+`_centre_empty_library`; the grid pads its flow by `LevelGrid.alone_pad`), and New map takes
+`NewMapCard.empty_width_for(canvas)` (0.29 of the canvas, 420 to 560 px). Its face is a two-tone
+paper wash (raised paper at the top left to inset paper at the foot, a `GradientTexture2D` the
+well clips), not a flat tan block.
+
+The map panel (same card): no tooltip covers a field's words at rest (the well and the text
+cursor say they can be typed in); an open field's well spans the column and holds, under the
+field, the keys `MapPanel.EDIT_HINT` ("Enter saves, Escape puts it back"), shown only while it is
+open. At rest a field's well is as wide as its words' widest line (`MapPanel.well_width`), so it
+reaches out the same on both sides. Edit map and Reload from Blender are sized to their words
+from the left edge, the same on every map. The date ends the facts' chip line when the line
+fits the words' width, else stands on a line of its own a body step under it
+(`MapPanel._place_when`). Dates spell their units ("3 hours ago", "1 minute ago":
+`LevelCard.relative_time`).
 
 The scroll bar is its handle alone, on the default bar's clear lane, with no track (user verdict
 2026-10-10, UI_TASTE: content scroll bars are a hover-only fading handle): one helper,
@@ -1706,18 +1727,26 @@ Save no longer closes the drawer — it clears the flag so tuning can continue �
 Switching the Sky pane's preset dropdown (`_on_preset_selected()`) keeps whatever environment
 overrides are already set on the shared `EnvironmentEditModel` — it re-emits `environment_changed`
 with the new preset and the same overrides, and shows an info toast ("Preset changed. N
-override(s) kept.") whenever there is at least one override to keep. The Sky pane's header "restore"
-icon button ("Revert to the map's own lighting", visible only when the map has defaults) is the one
-action that clears both together, resetting preset and overrides via `apply_environment_state("",
-{})`.
+override(s) kept.") whenever there is at least one override to keep. The map's own lighting is
+the dropdown's first entry; the header "restore" button that reset preset and overrides together
+was removed in the ui-polish card (two reset icons side by side read as one action twice, and the
+dropdown plus the eraser do the same), and the field under the heading is captioned Sky picture,
+no longer Sky under the heading Sky.
 
 Each overridden property is surfaced on its own `PropertyRow`: the Sky and Color panes tint that
 row's label with the theme accent color (`overridden = true`), set a tooltip ("Overridden.
 Right-click to reset to the preset value."), and wire `PropertyRow.reset_requested` — a right-click
 handler — to erase just that row's key(s) from the model's overrides (dropping
-`adjustment_enabled` too if that was the last remaining `adjustment_*` override). The Sky pane's
-"eraser" header button is disabled whenever the model has no overrides and otherwise clears every
-override at once (with its own "Overrides cleared." toast).
+`adjustment_enabled` too if that was the last remaining `adjustment_*` override). The Sky and
+Color panes share one heading action, the "eraser" (`LevelEditPane._add_look_heading()`, tooltip
+`LOOK_CLEAR_TIP` "Undo every change to Sky and Color, keeping the Look"), disabled whenever the
+model has no overrides and otherwise clearing every override at once (toast `LOOK_CLEARED`).
+
+A toggle row (Fog, Glow) draws its slider off while its check is off: the slider takes no input
+and wears `SliderOff` (`PropertyRow.slider_live()`), so a switched-off effect never shows a live
+value; its check is `CheckInline`, so its label line has a plain stacked row's height. With
+Sunlight Off the Sun pane's Shadows tiles are disabled with the tooltip `SunPane.SHADOWS_NO_SUN`
+(shadows are the sun's light alone, `DefaultSun.apply`), and softness and darkness take no input.
 
 A Sky override survives a preset switch like every other override, by design; the per-row reset and
 the "eraser" header button are the way back to the preset's own sky.

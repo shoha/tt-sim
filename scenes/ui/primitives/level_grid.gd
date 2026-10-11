@@ -17,7 +17,8 @@ extends ScrollContainer
 ## section size, a step more room above than below, S4): "Your maps" over New map and the
 ## player's maps, "Bundled with TTSim" over the Bundled maps (LibraryFacts.is_bundled), which
 ## come after every other. With no map of the player's own the lead stands alone, larger and
-## centred, and the heading under it offers the Bundled maps instead (EMPTY_HEADING). A picker
+## centred (on alone_centre when the owner gives one: the title's window middle), and the
+## heading under it offers the Bundled maps instead (EMPTY_HEADING). A picker
 ## shows the Bundled heading alone, and only when other maps come before it. With
 ## `sticky_headings` (the title) "Your maps" is not in the flow: the owner shows top_section(),
 ## the heading of the section at the grid's top, over the clip, so a section stays named while
@@ -75,8 +76,17 @@ var select_before_activate: bool = false
 var max_card_width: float = MAX_CARD_WIDTH
 ## The owner names the section at the top (top_section()), so "Your maps" stays out of the flow.
 var sticky_headings: bool = false
+## Where a lone lead and the Bundled maps under it centre, in the grid's own x (the title: the
+## window's middle, so the empty library stands in the middle of the screen and not of its
+## column); a negative value centres them in the grid.
+var alone_centre: float = -1.0:
+	set(value):
+		alone_centre = value
+		_fit_columns()
 
 var _flow: HFlowContainer
+## Pushes the flow right of the grid's middle while the lead stands alone (alone_centre).
+var _alone_pad: Control
 var _cards: Array[LevelCard] = []
 var _selected_path: String = ""
 ## Cards per line at the current width (_fit_columns).
@@ -98,6 +108,18 @@ func _init() -> void:
 	# The bar is its handle alone (the theme's lane is clear), shown only while it is wanted.
 	ScrollBarFade.attach(self)
 	get_v_scroll_bar().value_changed.connect(_check_top_section.unbind(1))
+	# The flow beside a pad that is empty but for a lone lead (alone_centre).
+	var room := HBoxContainer.new()
+	room.name = "Room"
+	room.theme_type_variation = &"BoxContainerFlush"
+	room.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	room.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	add_child(room)
+	_alone_pad = Control.new()
+	_alone_pad.name = "AlonePad"
+	_alone_pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_alone_pad.visible = false
+	room.add_child(_alone_pad)
 	_flow = HFlowContainer.new()
 	_flow.name = "Flow"
 	_flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -106,7 +128,7 @@ func _init() -> void:
 	_flow.add_theme_constant_override("v_separation", GAP)
 	_flow.resized.connect(content_resized.emit)
 	_flow.resized.connect(_check_top_section)
-	add_child(_flow)
+	room.add_child(_flow)
 
 
 func _ready() -> void:
@@ -371,9 +393,29 @@ func _fit_columns() -> void:
 	if lead != null and lead.has_method(&"fit_row"):
 		lead.call(&"fit_row", 0.0 if alone or _cards.is_empty() else _cards[0].height_for(width))
 	_flow.alignment = FlowContainer.ALIGNMENT_CENTER if alone else FlowContainer.ALIGNMENT_BEGIN
+	var pad := 0.0
+	if alone and alone_centre >= 0.0:
+		var left := get_theme_stylebox(&"panel").get_margin(SIDE_LEFT)
+		var narrowest := lead.get_combined_minimum_size().x if lead != null else 0.0
+		# The room the scroll gives the flow: its bar takes a lane only while it shows.
+		var bar := get_v_scroll_bar()
+		var room := size.x - get_theme_stylebox(&"panel").get_minimum_size().x
+		room -= bar.get_combined_minimum_size().x if bar.visible else 0.0
+		pad = alone_pad(alone_centre - left, room, narrowest)
+	_alone_pad.custom_minimum_size.x = pad
+	_alone_pad.visible = pad > 0.0
 	for wide: Control in [_own_heading, _bundled_heading]:
 		if wide != null:
-			wide.custom_minimum_size.x = size.x - reserved
+			wide.custom_minimum_size.x = size.x - reserved - pad
+
+
+## The pad before a flow `span` wide whose centred lines should centre on `centre` (both from
+## the flow's left): twice the distance from the flow's middle, so the narrowed flow's middle
+## is `centre`; none when `centre` is left of the middle, and never so much that the flow is
+## narrower than `narrowest`. Pure.
+static func alone_pad(centre: float, span: float, narrowest: float) -> float:
+	var pad := 2.0 * (centre - span * 0.5)
+	return clampf(floorf(pad), 0.0, maxf(span - narrowest, 0.0))
 
 
 ## Cards per line at the current width.

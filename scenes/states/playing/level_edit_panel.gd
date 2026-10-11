@@ -31,7 +31,6 @@ signal weather_changed(overrides: Dictionary)
 signal foliage_changed(overrides: Dictionary)
 signal sun_changed(settings: SunSettings)
 signal water_changed(overrides: Dictionary)
-signal revert_to_map_defaults_requested
 
 ## Emitted when the user toggles "Aim on map". GameplayMenuController owns the
 ## GameMap reference, so it toggles the actual tool.
@@ -166,7 +165,6 @@ func _build_panes() -> void:
 	sun_pane.sun_changed.connect(sun_changed.emit)
 	sun_pane.aim_toggled.connect(aim_sun_toggled.emit)
 	color_pane.intensity_changed.connect(intensity_changed.emit)
-	sky_pane.revert_to_map_defaults_requested.connect(revert_to_map_defaults_requested.emit)
 	weather_pane.weather_changed.connect(weather_changed.emit)
 	film_pane.lofi_changed.connect(lofi_changed.emit)
 	world_pane.scale_config_changed.connect(scale_config_changed.emit)
@@ -362,7 +360,7 @@ func _on_discard_confirmed() -> void:
 ## drawer_opened, before the panel animates in. [param map_defaults] is the
 ## environment config extracted from the map's embedded WorldEnvironment
 ## (empty dict if none); it is the base layer when the preset is "" and it
-## enables the "Map Defaults" preset and the revert button.
+## enables the "Map Defaults" preset.
 func initialize(
 	level_data: LevelData, map_defaults: Dictionary = {}, has_map_sky: bool = false
 ) -> void:
@@ -375,8 +373,8 @@ func initialize(
 	sun_pane.set_aim_pressed(false)
 
 
-## Apply new environment state from outside (e.g. after reverting to map
-## defaults) and refresh the Sky and Color panes without re-broadcasting.
+## Apply new environment state from outside and refresh the Sky and Color panes without
+## re-broadcasting.
 func apply_environment_state(preset: String, overrides: Dictionary) -> void:
 	_env_model.load_from(preset, overrides, _env_model.map_defaults)
 

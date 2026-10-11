@@ -134,6 +134,13 @@ func set_tile_visible(id: StringName, tile_visible: bool) -> void:
 		_tiles[id].visible = tile_visible
 
 
+## Disables tile `id` (true) or enables it: a disabled tile is drawn off and cannot be picked;
+## give it a tooltip that says why (set_tile_tooltip).
+func set_tile_disabled(id: StringName, off: bool) -> void:
+	if _tiles.has(id):
+		(_tiles[id] as Button).disabled = off
+
+
 ## Replaces tile `id`'s tooltip (a disabled tile's says why). Kept as the tile's own, so a
 ## refit (a resize) keeps it rather than restoring the one add_tile gave.
 func set_tile_tooltip(id: StringName, tooltip: String) -> void:

@@ -18,8 +18,11 @@ extends PanelContainer
 ## over the pinned actions, the bar the handle alone (ScrollBarFade).
 ##
 ## The words read as text. On a map of the player's own they edit in place: the pointer over a
-## field, or the focus on it, shows its well; a click or Accept opens it for typing (the hint
-## shows only then, never a grey placeholder at rest). Enter saves the one field through
+## field, or the focus on it, shows its well, as wide as the words' widest line so it reaches
+## out the same on both sides (_fit_well); no tooltip covers the words. A click or Accept opens
+## it for typing: the well spans the column and holds the field and, under it, the keys
+## (EDIT_HINT), shown only while it is open, as the field's hint is (never a grey placeholder at
+## rest). Enter saves the one field through
 ## LevelManager.update_meta (an empty name is refused and reverts, so a card never goes blank);
 ## Escape reverts it and gives the focus back to its words; leaving a field without Enter
 ## reverts it too, as a card's rename does. An empty description or author takes no line: one
@@ -68,7 +71,9 @@ const DESCRIPTION_HINT := "A line about this place"
 const AUTHOR_HINT := "Who made it"
 const ADD_DETAILS := "Add details"
 const ADD_DETAILS_TIP := "Add a description and who made it"
-const EDIT_TIP := "Click to edit; Enter saves, Escape puts it back"
+## Under an open field, inside its well. At rest the well under the pointer and the text cursor
+## say the words can be typed in; no tooltip covers them.
+const EDIT_HINT := "Enter saves, Escape puts it back"
 const NO_FOLDER_TIP := "This older map cannot be renamed here"
 const HOST_TIP := "Open a room with this map on its shelf"
 const RELOAD := "Reload from Blender"
@@ -137,6 +142,7 @@ var _actions: VBoxContainer
 var _labels := {}
 var _edits := {}
 var _cues := {}
+var _hints := {}
 var _editable := false
 ## The fields under the pointer.
 var _hovered := {}
@@ -233,9 +239,16 @@ func _field(key: String, label_type: StringName, edit_type: StringName, parent: 
 	cue.name = key.capitalize() + "Cue"
 	cue.theme_type_variation = &"FieldCue"
 	cue.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# At rest the well is as wide as its words' widest line (_fit_wells), so it reaches out the
+	# same on both sides; open, it is the column's width.
+	cue.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	parent.add_child(cue)
 	_cues[key] = cue
-	parent = cue
+	parent = VBoxContainer.new()
+	parent.name = "Stack"
+	parent.theme_type_variation = &"BoxContainerTight"
+	parent.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cue.add_child(parent)
 	var label := Label.new()
 	label.name = key.capitalize()
 	label.theme_type_variation = label_type
@@ -257,13 +270,24 @@ func _field(key: String, label_type: StringName, edit_type: StringName, parent: 
 	edit.focus_exited.connect(_on_edit_left.bind(key))
 	edit.gui_input.connect(_on_field_input.bind(edit))
 	parent.add_child(edit)
+	# The keys, inside the well under the open field and only while it is open, so no tooltip
+	# covers the words it is about.
+	var hint := Label.new()
+	hint.name = key.capitalize() + "Hint"
+	hint.text = EDIT_HINT
+	hint.theme_type_variation = &"Caption"
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint.visible = false
+	parent.add_child(hint)
 	_labels[key] = label
 	_edits[key] = edit
+	_hints[key] = hint
 	return label
 
 
 func _build_facts(body: VBoxContainer) -> void:
-	# The facts flow onto a second line when they do not fit the panel's width.
+	# The source chip, the size and the tokens on one line; the date ends it or stands on its own
+	# line under it (_place_when).
 	var facts := HFlowContainer.new()
 	facts.name = "Facts"
 	facts.theme_type_variation = &"FactsFlow"
@@ -322,10 +346,13 @@ func _build_actions(actions: VBoxContainer) -> void:
 	reload_button.name = "Reload"
 	reload_button.tooltip_text = RELOAD_TIP
 	reload_button.pressed.connect(func() -> void: action_requested.emit(info, ACTION_RELOAD))
-	for button: Button in [play_button, host_button, edit_button, reload_button]:
+	# The first line fills the panel's width; the second is sized to its words from the left
+	# edge, Edit map the same width on every map whether Reload stands beside it or not.
+	for button: Button in [play_button, host_button]:
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for button: Button in [edit_button, reload_button]:
+		button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	host_button.size_flags_stretch_ratio = 1.8
-	reload_button.size_flags_stretch_ratio = 1.6
 	for button: Button in [play_button, host_button, edit_button, reload_button, more_button]:
 		button.custom_minimum_size.y = ACTION_HEIGHT
 	more_button.custom_minimum_size.x = ACTION_HEIGHT
@@ -351,20 +378,42 @@ func show_map(level_info: Dictionary) -> void:
 		edit.visible = false
 		edit.text = String(info.get(key, ""))
 		_refresh_label(key)
-	name_label.tooltip_text = EDIT_TIP if _editable else ""
-	if String(info.get("folder", "")) == "":
-		name_label.tooltip_text = NO_FOLDER_TIP
+	name_label.tooltip_text = NO_FOLDER_TIP if String(info.get("folder", "")) == "" else ""
 	_show_picture()
 	source_label.text = String(LibraryFacts.SOURCE_LABELS[source])
 	size_label.text = LibraryFacts.size_text(footprint.call(info))
 	size_label.visible = size_label.text != ""
 	tokens_label.text = LibraryFacts.tokens_text(int(info.get("token_count", 0)))
 	played_label.text = LibraryFacts.when_text(info, clock.call())
+	_place_when()
 	edit_button.visible = source != LibraryFacts.SOURCE_BUNDLED
 	reload_button.visible = can_reload() and bool(is_updated.call(String(info.get("folder", ""))))
 	_second_row.visible = edit_button.visible or reload_button.visible
 	_scroll.scroll_vertical = 0
 	fit_height()
+
+
+## The date at the end of the chip's line when the whole line fits the words' width, else on a
+## line of its own a body step under it (the words' rhythm), never a lone item wrapped onto the
+## chip line's tight second row.
+func _place_when() -> void:
+	var gap := float(_facts.get_theme_constant(&"h_separation"))
+	var line := 0.0
+	for child in _facts.get_children():
+		var fact := child as Control
+		if fact != played_label and fact.visible:
+			line += fact.get_combined_minimum_size().x + gap
+	line += played_label.get_combined_minimum_size().x
+	var target: Container = _facts if line <= words_width() else _body
+	if played_label.get_parent() == target:
+		return
+	played_label.get_parent().remove_child(played_label)
+	target.add_child(played_label)
+
+
+## Whether the date stands on a line of its own under the chip's line (_place_when).
+func when_on_own_line() -> bool:
+	return played_label.get_parent() == _body
 
 
 ## Whether the map shown has a Blender source to reload: a folder map from Blender, edited
@@ -392,8 +441,7 @@ func _refresh_label(key: String) -> void:
 	label.mouse_filter = Control.MOUSE_FILTER_STOP if _editable else Control.MOUSE_FILTER_IGNORE
 	label.focus_mode = Control.FOCUS_ALL if _editable else Control.FOCUS_NONE
 	label.mouse_default_cursor_shape = (Control.CURSOR_IBEAM if _editable else Control.CURSOR_ARROW)
-	if key != "name":
-		label.tooltip_text = EDIT_TIP if _editable else ""
+	_fit_well(key)
 	_show_cue(key)
 	var empty := String(info.get("description", "")) == "" or String(info.get("author", "")) == ""
 	add_details_button.visible = _editable and empty
@@ -405,6 +453,8 @@ func _refresh_label(key: String) -> void:
 func _show_cue(key: String) -> void:
 	var label: Label = _labels[key]
 	var lit := _editable and label.visible and (label.has_focus() or _hovered.has(key))
+	# An open field keeps its well round it and its keys.
+	lit = lit or (_edits[key] as LineEdit).visible
 	(_cues[key] as PanelContainer).theme_type_variation = &"FieldCueLit" if lit else &"FieldCue"
 
 
@@ -431,9 +481,12 @@ func begin_edit(key: String) -> void:
 	edit.text = String(info.get(key, ""))
 	edit.placeholder_text = String(HINTS[key])
 	label.visible = false
+	# Open, the well holds the field and the keys under it, the column's width.
 	var cue: PanelContainer = _cues[key]
 	cue.visible = true
-	cue.theme_type_variation = &"FieldCue"
+	cue.theme_type_variation = &"FieldCueLit"
+	cue.size_flags_horizontal = Control.SIZE_FILL
+	(_hints[key] as Label).visible = true
 	# The open field takes Add details' place: it is what Add details opens.
 	add_details_button.visible = false
 	edit.visible = true
@@ -441,10 +494,47 @@ func begin_edit(key: String) -> void:
 	edit.edit()
 
 
+## Whether field `key`'s keys hint shows (only while it is open).
+func hint_shown(key: String) -> bool:
+	return (_hints[key] as Label).visible
+
+
 ## Closes field `key`: its label again, as the saved text says.
 func _end_edit(key: String) -> void:
 	(_edits[key] as LineEdit).visible = false
+	(_hints[key] as Label).visible = false
+	(_cues[key] as Control).size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_refresh_label(key)
+
+
+## Field `key`'s label as wide as its widest line at the words' width, so its well (the cue, at
+## that width) reaches out round the words by the same on the left and the right.
+func _fit_well(key: String) -> void:
+	var label: Label = _labels[key]
+	label.custom_minimum_size.x = well_width(label, words_width())
+
+
+## The width the words wrap at: the panel's, less its paper and the words' inset.
+func words_width() -> float:
+	var paper := get_theme_stylebox(&"panel").get_minimum_size().x
+	var inset := (_body.get_parent() as MarginContainer).get_theme_constant(&"margin_left") * 2
+	return WIDTH - paper - float(inset)
+
+
+## The width of `label`'s widest line when its text wraps at `width` (its own face and size),
+## rounded up; `width` for an empty one.
+static func well_width(label: Label, width: float) -> float:
+	if label.text == "":
+		return 0.0
+	var font := label.get_theme_font(&"font")
+	var font_size := label.get_theme_font_size(&"font_size")
+	var flags := (
+		TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE
+	)
+	var lines := font.get_multiline_string_size(
+		label.text, HORIZONTAL_ALIGNMENT_LEFT, width, font_size, -1, flags
+	)
+	return minf(ceilf(lines.x) + 1.0, width)
 
 
 func _on_label_input(event: InputEvent, key: String) -> void:
@@ -523,8 +613,9 @@ func words_reserve() -> float:
 	var words_gap := float(_words.get_theme_constant(&"separation"))
 	var words := _lines(name_label, 1) + _lines(description_label, 2) + 2.0 * words_gap
 	words += maxf(_lines(author_label, 1), add_details_button.get_combined_minimum_size().y)
+	# The chip's line, then the date on a line of its own a body step under it (_place_when).
 	var facts := _source_chip.get_combined_minimum_size().y + _lines(size_label, 1)
-	facts += float(_facts.get_theme_constant(&"v_separation"))
+	facts += float(_body.get_theme_constant(&"separation"))
 	var actions := 2.0 * ACTION_HEIGHT + float(_actions.get_theme_constant(&"separation"))
 	actions += float((_actions.get_parent() as Control).get_theme_constant(&"margin_bottom"))
 	var gaps := float(_column.get_theme_constant(&"separation"))

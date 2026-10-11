@@ -75,6 +75,8 @@ const DRAWER_WIDTH := 396.0
 const BIOME_TILE_SIZE := Vector2(64, 84)
 const BIOME_THUMB_PX := 52
 const BIOME_COLUMNS := 2
+## The extra step over a section label after a hint paragraph (_section_gap).
+const SECTION_ABOVE := 8
 const PLACE_TILE_SIZE := Vector2(64, 56)
 const PLACE_COLUMNS := 3
 ## Species size classes the Place picker offers; ground cover is only ever painted.
@@ -313,6 +315,7 @@ func _build_biome_pane(tool: ToolDescriptor) -> Control:
 			)
 		)
 	)
+	pane.add_child(_section_gap("BiomeGap"))
 	biome_field = TileField.new()
 	biome_field.name = "BiomeField"
 	biome_field.caption = "Biomes"
@@ -429,6 +432,7 @@ func _build_sculpt_pane(tool: ToolDescriptor) -> Control:
 			)
 		)
 	)
+	pane.add_child(_section_gap("SculptGap"))
 	sculpt_field = TileField.new()
 	sculpt_field.name = "SculptField"
 	sculpt_field.caption = "Brush"
@@ -752,6 +756,17 @@ func _hint(hint_name: String, text: String) -> Label:
 	label.custom_minimum_size = Vector2(1, 0)
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return label
+
+
+## The step a section label (Biomes, Brush) keeps over and above the pane's gap, so it reads
+## as the start of its tiles and not as a last line of the hint paragraph above it (S4: more
+## room above a label than below it).
+func _section_gap(gap_name: String) -> Control:
+	var gap := Control.new()
+	gap.name = gap_name
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	gap.custom_minimum_size = Vector2(0, SECTION_ABOVE)
+	return gap
 
 
 ## The Advanced foldout of a brush pane: exact size and strength, values hidden by default.

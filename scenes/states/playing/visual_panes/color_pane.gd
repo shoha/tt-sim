@@ -6,7 +6,8 @@ extends LevelEditPane
 ## control is an environment override on the shared EnvironmentEditModel; the
 ## Sky pane writes those overrides into the state on Save. This pane
 ## additionally owns light_intensity_scale ("Light energy"), which is not
-## part of the model and is the only field its own write_state carries.
+## part of the model and is the only field its own write_state carries. Its heading carries
+## the Sky pane's eraser (undo every change to the look), so the two panes act alike.
 
 signal intensity_changed(new_scale: float)
 
@@ -31,6 +32,8 @@ const ADVANCED_ROWS := [
 const GLOW_KEYS := ["glow_enabled", "glow_intensity"]
 
 var light_intensity_scale: float = 1.0
+## Undo every change to the look (the Sky pane's eraser too: _add_look_heading).
+var clear_button: IconButton
 
 var _model: EnvironmentEditModel
 var _rows: Dictionary = {}
@@ -48,7 +51,8 @@ func set_model(model: EnvironmentEditModel) -> void:
 
 
 func _build() -> void:
-	_add_heading("Color")
+	clear_button = _add_look_heading("Color")
+	clear_button.pressed.connect(_on_clear_pressed)
 	for spec in ROWS:
 		_add_override_row(spec, self)
 
@@ -142,6 +146,14 @@ func _sync_from_model() -> void:
 	var tm_mode: int = config.get("tonemap_mode", Environment.TONE_MAPPER_FILMIC)
 	OptionButtonUtils.select_by_metadata(_tonemap_dropdown, tm_mode)
 	_tonemap_row.overridden = _model.is_overridden(["tonemap_mode"])
+	clear_button.disabled = _model.overrides.is_empty()
+
+
+## The eraser shared with the Sky pane: one look, one way to undo its changes.
+func _on_clear_pressed() -> void:
+	if _model.clear_all():
+		UIManager.show_info(LOOK_CLEARED)
+		changed.emit()
 
 
 func _on_model_changed(_preset: String, _overrides: Dictionary) -> void:

@@ -65,7 +65,6 @@ func _ready() -> void:
 		level_edit_panel.sun_changed.connect(_on_edit_sun_changed)
 		level_edit_panel.aim_sun_toggled.connect(_on_edit_aim_sun_toggled)
 		level_edit_panel.water_changed.connect(_on_edit_water_changed)
-		level_edit_panel.revert_to_map_defaults_requested.connect(_on_revert_to_map_defaults)
 		level_edit_panel.save_requested.connect(_on_edit_save_requested)
 		level_edit_panel.cancel_requested.connect(_on_edit_cancel_requested)
 
@@ -531,33 +530,6 @@ func _on_edit_environment_changed(preset: String, overrides: Dictionary) -> void
 	# Broadcast to clients so they see the same environment
 	if NetworkManager.is_networked() and NetworkManager.is_host():
 		_visual_broadcast.queue({"environment_preset": preset, "environment_overrides": overrides})
-
-
-## Revert environment to the map's original embedded settings.
-## Clears preset and overrides so the map defaults layer takes effect.
-func _on_revert_to_map_defaults() -> void:
-	if not _level_play_controller:
-		return
-	var map_config = _level_play_controller.get_map_environment_config()
-	if map_config.is_empty():
-		return
-
-	# Apply with empty preset and overrides — map defaults layer does the work
-	_level_play_controller.apply_environment_settings("", {})
-
-	# Keep level_data in sync
-	if _level_play_controller.active_level_data:
-		_level_play_controller.active_level_data.environment_preset = ""
-		_level_play_controller.active_level_data.environment_overrides = {}
-
-	# Broadcast to clients so they also revert to map defaults
-	if NetworkManager.is_networked() and NetworkManager.is_host():
-		_visual_broadcast.queue({"environment_preset": "", "environment_overrides": {}})
-
-	# Update the panel's internal state and controls to match
-	level_edit_panel.apply_environment_state("", {})
-
-	UIManager.show_info("Environment reset to the map's defaults; overrides cleared.")
 
 
 ## Real-time lo-fi shader change from the edit panel

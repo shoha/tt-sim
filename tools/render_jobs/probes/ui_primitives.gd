@@ -39,6 +39,9 @@ extends RefCounted
 ## - `hover_rail` (`which`, `pane`): hover a drawer's rail item with a synthetic pointer
 ##   event, so its tooltip shows after the tooltip delay (the OS cursor is not moved);
 ##   `unhover` moves the synthetic pointer to the window's top-left corner.
+## - `look_dropdown`: with the Visuals drawer open on Sky, pick the Look dropdown's longest
+##   preset name and hover the dropdown, so its tooltip shows the name the pane ellipsizes.
+##   The pick is a change: `revert` after it.
 ## - `focus` (`target` "title_play", "add_token", "title_card" or "glass_tile"): give
 ##   keyboard focus to a quiet button, the title's Play solo (paper) or the play HUD's Add
 ##   Token (glass), or to a selected item, the title's selected level card (paper) or the
@@ -89,6 +92,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return "visuals edits reverted"
 		"hover_rail":
 			return _hover_rail(base, step)
+		"look_dropdown":
+			return _look_dropdown(base)
 		"unhover":
 			_pointer_to(Vector2.ONE)
 			return "pointer at the corner"
@@ -284,6 +289,27 @@ static func _hover_rail(base: Node, step: Dictionary) -> String:
 	var centre := button.get_global_rect().get_center()
 	_pointer_to(base.get_viewport().get_final_transform() * centre)
 	return "hovering %s: %s" % [pane, button.tooltip_text]
+
+
+## The Sky pane's Look dropdown on its longest preset name (ellipsized in the pane), the pointer
+## over it so its tooltip shows the whole name. The Visuals drawer must be open on Sky.
+static func _look_dropdown(base: Node) -> String:
+	var panel := _find_drawer(base, "visuals") as LevelEditPanel
+	if panel == null or not panel.is_open:
+		return "the visuals drawer is not open"
+	var dropdown: OptionButton = panel.sky_pane._preset_dropdown
+	var longest := -1
+	for index in dropdown.item_count:
+		if dropdown.is_item_separator(index):
+			continue
+		var text := dropdown.get_item_text(index)
+		if longest < 0 or text.length() > dropdown.get_item_text(longest).length():
+			longest = index
+	dropdown.select(longest)
+	dropdown.item_selected.emit(longest)
+	var centre := dropdown.get_global_rect().get_center()
+	_pointer_to(base.get_viewport().get_final_transform() * centre)
+	return "Look on %s, tooltip: %s" % [dropdown.get_item_text(longest), dropdown.tooltip_text]
 
 
 ## A synthetic pointer move to `window_pos` (window pixels); the OS cursor stays put.
