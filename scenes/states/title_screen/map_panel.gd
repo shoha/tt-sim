@@ -14,15 +14,21 @@ extends PanelContainer
 ## max_height set (the room its column leaves), the picture is 16:9 where the longest map of
 ## the player's own fits under it and shorter, down to WIDE_ASPECT, where it would not
 ## (words_reserve()). The picture follows the canvas, never the map, so a Bundled map's panel
-## and the player's own have one shape. Only past that floor do the picture and words scroll
-## over the pinned actions, the bar the handle alone (ScrollBarFade).
+## and the player's own have one shape. The description stands on DESCRIPTION_LINES lines at
+## most, the last ending in an ellipsis (the whole text in its tooltip and in the open field),
+## so the by-line, the facts and the date are always in view. Words past the reserve (a long
+## name on two lines; an open field, whose keys take a line) take their room from the picture
+## (down to TIGHT_ASPECT), so the action rows never cover the facts. Only past those floors do
+## the picture and words scroll over the pinned actions, the bar the handle alone
+## (ScrollBarFade).
 ##
 ## The words read as text. On a map of the player's own they edit in place: the pointer over a
 ## field, or the focus on it, shows its well, as wide as the words' widest line so it reaches
 ## out the same on both sides (_fit_well); no tooltip covers the words. A click or Accept opens
-## it for typing: the well spans the column and holds the field and, under it, the keys
-## (EDIT_HINT), shown only while it is open, as the field's hint is (never a grey placeholder at
-## rest). Enter saves the one field through
+## it for typing: the well spans the column round the field, and under the well, on plain
+## paper, the keys (EDIT_HINT), shown only while it is open, as the field's hint is (never a
+## grey placeholder at rest). Showing another map closes any open field. Enter saves the one
+## field through
 ## LevelManager.update_meta (an empty name is refused and reverts, so a card never goes blank);
 ## Escape reverts it and gives the focus back to its words; leaving a field without Enter
 ## reverts it too, as a card's rename does. An empty description or author takes no line: one
@@ -36,7 +42,8 @@ extends PanelContainer
 ## written the source since, Reload from Blender on the second, which a Bundled map has none
 ## of. "Updated in Blender" is said on the map's card; here Reload says it. "..." holds Set up
 ## tokens (the Level Editor), Duplicate, Replace map file... (not for a Bundled map: the file
-## picker, then the import check and Replace, as a drop on the card) and Delete.
+## picker, then the import check and Replace, as a drop on the card) and Delete (not for a
+## Bundled map either: it ships with the game).
 
 signal play_requested(info: Dictionary)
 signal host_requested(info: Dictionary)
@@ -61,6 +68,11 @@ const WIDTH := 368.0
 const PICTURE_ASPECT := 16.0 / 9.0
 ## The widest the picture gets on a short canvas (its width over its height), shortened to fit.
 const WIDE_ASPECT := 2.4
+## The widest the picture gets when the words need more than words_reserve() (a long name on
+## two lines, an open field's keys): it gives that room back, so the facts stay in view.
+const TIGHT_ASPECT := 4.0
+## The most lines the description stands on at rest; past them it ends in an ellipsis.
+const DESCRIPTION_LINES := 3
 ## The words' and actions' inset from the inside of the paper (the picture's 4 px inset, as a
 ## card's): room for a field's well to reach out round its words.
 const TEXT_INSET := 12
@@ -217,6 +229,8 @@ func _build_words(body: VBoxContainer) -> void:
 	name_label = _field("name", &"Title", &"TitleField", words)
 	name_edit = _edits.name
 	description_label = _field("description", &"Body", &"InlineField", words)
+	description_label.max_lines_visible = DESCRIPTION_LINES
+	description_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	description_edit = _edits.description
 	author_label = _field("author", &"Caption", &"InlineField", words)
 	author_edit = _edits.author
@@ -244,6 +258,15 @@ func _field(key: String, label_type: StringName, edit_type: StringName, parent: 
 	cue.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	parent.add_child(cue)
 	_cues[key] = cue
+	# The keys, under the open field's well on plain paper and only while it is open, so no
+	# tooltip covers the words it is about and no tan strip runs on under the field.
+	var hint := Label.new()
+	hint.name = key.capitalize() + "Hint"
+	hint.text = EDIT_HINT
+	hint.theme_type_variation = &"Caption"
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint.visible = false
+	parent.add_child(hint)
 	parent = VBoxContainer.new()
 	parent.name = "Stack"
 	parent.theme_type_variation = &"BoxContainerTight"
@@ -270,15 +293,6 @@ func _field(key: String, label_type: StringName, edit_type: StringName, parent: 
 	edit.focus_exited.connect(_on_edit_left.bind(key))
 	edit.gui_input.connect(_on_field_input.bind(edit))
 	parent.add_child(edit)
-	# The keys, inside the well under the open field and only while it is open, so no tooltip
-	# covers the words it is about.
-	var hint := Label.new()
-	hint.name = key.capitalize() + "Hint"
-	hint.text = EDIT_HINT
-	hint.theme_type_variation = &"Caption"
-	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hint.visible = false
-	parent.add_child(hint)
 	_labels[key] = label
 	_edits[key] = edit
 	_hints[key] = hint
@@ -373,10 +387,13 @@ func show_map(level_info: Dictionary) -> void:
 	info = level_info.duplicate()
 	var source := LibraryFacts.source_of(info)
 	_editable = String(info.get("folder", "")) != "" and source != LibraryFacts.SOURCE_BUNDLED
+	# Any field left open (its keys, its well across the column) closes with the map it was on.
 	for key: String in FIELDS:
 		var edit: LineEdit = _edits[key]
 		edit.visible = false
 		edit.text = String(info.get(key, ""))
+		(_hints[key] as Label).visible = false
+		(_cues[key] as Control).size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		_refresh_label(key)
 	name_label.tooltip_text = NO_FOLDER_TIP if String(info.get("folder", "")) == "" else ""
 	_show_picture()
@@ -438,7 +455,12 @@ func _refresh_label(key: String) -> void:
 	label.text = ("by " + words) if key == "author" and words != "" else words
 	label.visible = words != "" or key == "name"
 	(_cues[key] as Control).visible = label.visible
-	label.mouse_filter = Control.MOUSE_FILTER_STOP if _editable else Control.MOUSE_FILTER_IGNORE
+	# A description past DESCRIPTION_LINES ends in an ellipsis; its tooltip gives it whole.
+	var clamped := key == "description" and description_clamped()
+	if key == "description":
+		label.tooltip_text = words if clamped else ""
+	var takes_pointer := _editable or clamped
+	label.mouse_filter = Control.MOUSE_FILTER_STOP if takes_pointer else Control.MOUSE_FILTER_IGNORE
 	label.focus_mode = Control.FOCUS_ALL if _editable else Control.FOCUS_NONE
 	label.mouse_default_cursor_shape = (Control.CURSOR_IBEAM if _editable else Control.CURSOR_ARROW)
 	_fit_well(key)
@@ -481,7 +503,7 @@ func begin_edit(key: String) -> void:
 	edit.text = String(info.get(key, ""))
 	edit.placeholder_text = String(HINTS[key])
 	label.visible = false
-	# Open, the well holds the field and the keys under it, the column's width.
+	# Open, the well holds the field, the column's width; the keys stand under it on paper.
 	var cue: PanelContainer = _cues[key]
 	cue.visible = true
 	cue.theme_type_variation = &"FieldCueLit"
@@ -535,6 +557,23 @@ static func well_width(label: Label, width: float) -> float:
 		label.text, HORIZONTAL_ALIGNMENT_LEFT, width, font_size, -1, flags
 	)
 	return minf(ceilf(lines.x) + 1.0, width)
+
+
+## Whether the description runs past DESCRIPTION_LINES at the words' width, so its last
+## visible line ends in an ellipsis (and its tooltip gives the whole text).
+func description_clamped() -> bool:
+	var label := description_label
+	if label.text == "":
+		return false
+	var font := label.get_theme_font(&"font")
+	var font_size := label.get_theme_font_size(&"font_size")
+	var paragraph := TextParagraph.new()
+	paragraph.add_string(label.text, font, font_size)
+	paragraph.width = words_width()
+	paragraph.break_flags = (
+		TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE
+	)
+	return paragraph.get_line_count() > DESCRIPTION_LINES
 
 
 func _on_label_input(event: InputEvent, key: String) -> void:
@@ -596,6 +635,10 @@ func _fit_picture() -> void:
 	if max_height > 0.0:
 		var room := floorf(max_height - words_reserve())
 		height = clampf(room, floorf(width / WIDE_ASPECT), height)
+		# Words past the reserve (a name on two lines, an open field's keys) take the picture's
+		# height, never the facts': the actions never cover them.
+		room = floorf(max_height - _height_past_picture())
+		height = clampf(room, floorf(width / TIGHT_ASPECT), height)
 	if not is_equal_approx(_picture_box.custom_minimum_size.y, height):
 		_picture_box.custom_minimum_size.y = height
 
@@ -605,13 +648,31 @@ func picture_height() -> float:
 	return _picture_box.custom_minimum_size.y
 
 
+## The panel's height as it now stands, less its picture: the words, facts and actions with
+## every gap, margin and the paper.
+func _height_past_picture() -> float:
+	var column := _column.get_combined_minimum_size().y - _picture_box.custom_minimum_size.y
+	return _panel_height(column)
+
+
+## The panel's height for a scrolled column `column` tall: the column, the frame's gap, the
+## pinned actions and the paper.
+func _panel_height(column: float) -> float:
+	var frame := _scroll.get_parent() as BoxContainer
+	var height := column + float(frame.get_theme_constant(&"separation"))
+	height += (_actions.get_parent() as Control).get_combined_minimum_size().y
+	return height + get_theme_stylebox(&"panel").get_minimum_size().y
+
+
 ## The panel's height less its picture for the longest map of the player's own: its name, a
-## description on two lines, an author (or Add details, the taller), the facts on two lines and
-## both lines of actions, with every gap and margin, read from the theme. The picture is
-## shortened by this, so by the canvas alone: every map's panel keeps one shape.
+## description on its DESCRIPTION_LINES lines, an author (or Add details, the taller), the
+## facts on two lines and both lines of actions, with every gap and margin, read from the
+## theme. The picture is shortened by this, so by the canvas alone: every map's panel keeps one
+## shape.
 func words_reserve() -> float:
 	var words_gap := float(_words.get_theme_constant(&"separation"))
-	var words := _lines(name_label, 1) + _lines(description_label, 2) + 2.0 * words_gap
+	var words := _lines(name_label, 1) + _lines(description_label, DESCRIPTION_LINES)
+	words += 2.0 * words_gap
 	words += maxf(_lines(author_label, 1), add_details_button.get_combined_minimum_size().y)
 	# The chip's line, then the date on a line of its own a body step under it (_place_when).
 	var facts := _source_chip.get_combined_minimum_size().y + _lines(size_label, 1)
@@ -638,25 +699,24 @@ func fit_height() -> void:
 	if _actions == null:
 		return
 	_fit_picture()
-	var frame := _scroll.get_parent() as BoxContainer
-	var want := _column.get_combined_minimum_size().y + frame.get_theme_constant(&"separation")
-	want += (_actions.get_parent() as Control).get_combined_minimum_size().y
-	want += get_theme_stylebox(&"panel").get_minimum_size().y
+	var want := _panel_height(_column.get_combined_minimum_size().y)
 	var height := minf(want, max_height) if max_height > 0.0 else want
 	if not is_equal_approx(custom_minimum_size.y, height):
 		custom_minimum_size.y = height
 
 
-## The "..." items for the map shown: Set up tokens, Duplicate and Replace map file... (a
-## folder map that is not Bundled), Delete.
+## The "..." items for the map shown: Set up tokens, Duplicate (a folder map), Replace map
+## file... and Delete (not for a Bundled map, which ships with the game).
 func menu_items() -> Array[int]:
 	var items: Array[int] = [MENU_SET_UP]
 	var folder := String(info.get("folder", ""))
+	var bundled := LibraryFacts.is_bundled(info)
 	if folder != "":
 		items.append(MENU_DUPLICATE)
-		if not LibraryFacts.is_bundled(info):
+		if not bundled:
 			items.append(MENU_REPLACE)
-	items.append(MENU_DELETE)
+	if not bundled:
+		items.append(MENU_DELETE)
 	return items
 
 

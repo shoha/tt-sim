@@ -44,6 +44,11 @@ const SHADOW_TILES := [
 ]
 ## A Shadows tile's tooltip while Sunlight is Off (shadows_live).
 const SHADOWS_NO_SUN := "Shadows are the sun's: turn Sunlight on to cast them"
+## The caption under the Shadows tiles while Sunlight is Off.
+const SHADOWS_NEED_SUN := "Shadows need sunlight"
+const AIM_TIP := "Drag the sun on the ground compass"
+## Aim on map's tooltip while Sunlight is Off.
+const AIM_NO_SUN := "There is no sun to aim: turn Sunlight on first"
 const SHADOW_SOFT_SOFTNESS := 1.5
 const SHADOW_HARD_MAX_SOFTNESS := 0.25
 const COMPASS := ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
@@ -58,6 +63,8 @@ var _mode_field: TileField
 var _mode_tiles: TileRow
 var _mode_caption: Label
 var _shadow_field: TileField
+var _shadow_note: Label
+var _shadow_note_gap: Control
 var _aim_button: IconButton
 var _azimuth_row: PropertyRow
 var _elevation_row: PropertyRow
@@ -97,6 +104,9 @@ func _build() -> void:
 	_shadow_field = _add_tile_field("Shadows", SHADOW_TILES)
 	_shadow_field.tiles.columns = 3
 	_shadow_field.tiles.selection_changed.connect(_on_shadow_tile_selected)
+	# Said under the tiles while Sunlight is Off, not only in their tooltip.
+	_shadow_note = _add_note(SHADOWS_NEED_SUN)
+	_shadow_note_gap = get_child(get_child_count() - 1)
 
 	var aim_row := HBoxContainer.new()
 	aim_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -110,7 +120,7 @@ func _build() -> void:
 	_aim_button = IconButton.new()
 	_aim_button.icon_name = "target"
 	_aim_button.toggle_mode = true
-	_aim_button.tooltip_text = "Drag the sun on the ground compass"
+	_aim_button.tooltip_text = AIM_TIP
 	_aim_button.toggled.connect(_on_aim_toggled)
 	aim_row.add_child(_aim_button)
 
@@ -152,6 +162,7 @@ func _build() -> void:
 	_regenerate_button.visible = false
 	_regenerate_button.pressed.connect(_on_regenerate_pressed)
 	body.add_child(_regenerate_button)
+	_refresh_shadow_state()
 
 
 func load_state(state: LevelVisualState) -> void:
@@ -244,21 +255,30 @@ func _show_mode_note() -> void:
 
 ## Whether the sun's shadow controls act: Shadows are the sun's alone (DefaultSun gives them to
 ## its light, never to the map's lamps), so with Sunlight Off there is nothing to cast them and
-## the tiles are drawn disabled, their tooltip saying why; softness and darkness need shadows on.
+## the tiles are drawn disabled, the picked one still marked (muted), with SHADOWS_NEED_SUN
+## under them and their tooltip saying why; softness and darkness need shadows on, and Aim on
+## map has no sun to aim.
 func shadows_live() -> bool:
 	return _sun.mode != "off"
 
 
 func _refresh_shadow_state() -> void:
-	if _shadow_field == null or _softness_row == null:
+	if _shadow_field == null or _softness_row == null or _aim_button == null:
 		return
 	var live := shadows_live()
 	for spec: Array in SHADOW_TILES:
 		var id := StringName(spec[0])
 		_shadow_field.tiles.set_tile_disabled(id, not live)
 		_shadow_field.tiles.set_tile_tooltip(id, "" if live else SHADOWS_NO_SUN)
+	_shadow_note.visible = not live
+	_shadow_note_gap.visible = not live
 	_softness_row.editable = live and _sun.shadows_enabled
 	_darkness_row.editable = live and _sun.shadows_enabled
+	if not live and _aim_button.button_pressed:
+		set_aim_pressed(false)
+		aim_toggled.emit(false)
+	_aim_button.disabled = not live
+	_aim_button.tooltip_text = AIM_TIP if live else AIM_NO_SUN
 
 
 func _emit_changed() -> void:

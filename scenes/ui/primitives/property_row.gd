@@ -204,8 +204,12 @@ static func fit_sheet_row(row: HBoxContainer) -> void:
 
 
 ## Put [param control] where the slider would go (for an OptionButton row).
-## Hides the slider and chip.
+## Hides the slider and chip. The label stands at its words' width and the control takes the
+## rest of the line, so a dropdown ellipsizes only a name that does not fit the row.
 func set_control(control: Control) -> void:
+	_label.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+	_label.custom_minimum_size.x = 0.0
+	_label.size_flags_horizontal = Control.SIZE_FILL
 	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_row.add_child(control)
 	_row.move_child(control, _slider.get_index())

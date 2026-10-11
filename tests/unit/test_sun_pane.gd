@@ -38,6 +38,40 @@ func test_sunlight_off_disables_the_shadows() -> void:
 	assert_true(pane._softness_row.editable)
 
 
+## With Sunlight Off the picked Shadows tile keeps its mark, muted (TileChosenOff), a caption
+## under the tiles says why, and Aim on map is off too (no sun to aim), released if it was on.
+func test_sunlight_off_keeps_the_shadows_mark_and_says_why() -> void:
+	var pane := _pane()
+	var tiles := pane._shadow_field.tiles
+	assert_eq(tiles.selected, &"soft")
+	assert_false(pane._shadow_note.visible, "no caption while the sun shines")
+	assert_false(pane._shadow_note_gap.visible)
+	assert_false(pane._aim_button.disabled)
+	pane._aim_button.button_pressed = true
+	watch_signals(pane)
+	pane._mode_tiles.get_node("off").set_pressed(true)
+	assert_true(tiles.is_chosen_off(&"soft"), "the picked tile stays marked, muted")
+	assert_false(tiles.is_chosen_off(&"hard"), "only the picked one")
+	var soft := tiles.get_node("soft") as Button
+	assert_true(soft.disabled and soft.button_pressed)
+	assert_true(pane._shadow_note.visible, "the caption under the tiles")
+	assert_eq(pane._shadow_note.text, SunPane.SHADOWS_NEED_SUN)
+	assert_true(pane._aim_button.disabled, "Aim on map needs the sun too")
+	assert_eq(pane._aim_button.tooltip_text, SunPane.AIM_NO_SUN)
+	assert_false(pane._aim_button.button_pressed, "the aim tool let go")
+	assert_signal_emitted_with_parameters(pane, "aim_toggled", [false])
+	# The variation exists in the theme, so the mark is drawn, not a fallback.
+	var theme := ThemeDB.get_project_theme()
+	if theme != null:
+		assert_true(theme.has_stylebox(&"disabled", &"TileChosenOff"))
+	pane._mode_tiles.get_node("on").set_pressed(true)
+	assert_false(tiles.is_chosen_off(&"soft"))
+	assert_eq(soft.theme_type_variation, &"Tile", "its own look again")
+	assert_false(pane._shadow_note.visible)
+	assert_false(pane._aim_button.disabled)
+	assert_eq(pane._aim_button.tooltip_text, SunPane.AIM_TIP)
+
+
 ## The pane says Sun once (its heading); the mode field names what it switches, and Auto is
 ## not a rayed glyph that reads as the Settings cog at 720p.
 func test_the_mode_field_names_sunlight_and_auto_is_no_cog() -> void:

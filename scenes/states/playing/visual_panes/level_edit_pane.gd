@@ -10,8 +10,10 @@ extends VBoxContainer
 signal changed
 
 const ROW_SEPARATION := 6
-## The eraser on the Sky and Color panes (_add_look_heading): both edit one look.
-const LOOK_CLEAR_TIP := "Undo every change to Sky and Color, keeping the Look"
+## The eraser on the Sky and Color panes (_add_look_heading): both edit one look. It takes
+## Sky and Color back to the Look picked (the drawer's Revert look puts every pane back as
+## last saved), so its words say what it undoes and to what.
+const LOOK_CLEAR_TIP := "Back to the Look: clear the changes made over it in Sky and Color"
 const LOOK_CLEARED := "Sky and Color changes undone."
 
 
@@ -48,8 +50,9 @@ func _add_heading(text: String) -> Label:
 
 ## The heading of a pane on the shared EnvironmentEditModel (Sky, Color) with the one way to
 ## undo the look's changes at its end: the eraser, the same on both panes (LOOK_CLEAR_TIP).
-## Returns the eraser; the pane wires it to its model and keeps it disabled while nothing is
-## changed.
+## Returns the eraser; the pane wires it to its model and shows it only while something is
+## changed over the Look (show_look_clear), so a clean pane offers no second revert beside the
+## drawer's Revert look. The heading's line keeps the eraser's height either way.
 func _add_look_heading(text: String) -> IconButton:
 	var header := HBoxContainer.new()
 	header.name = "Header"
@@ -62,9 +65,16 @@ func _add_look_heading(text: String) -> IconButton:
 	clear.name = "ClearLook"
 	clear.icon_name = "eraser"
 	clear.tooltip_text = LOOK_CLEAR_TIP
-	clear.disabled = true
 	header.add_child(clear)
+	header.custom_minimum_size.y = clear.get_combined_minimum_size().y
+	show_look_clear(clear, false)
 	return clear
+
+
+## The eraser `clear` shown (and able) while `changed`, hidden while the pane matches its Look.
+static func show_look_clear(clear: IconButton, changed: bool) -> void:
+	clear.visible = changed
+	clear.disabled = not changed
 
 
 ## A muted caption: a subhead over the rows it names (Water's Advanced groups), or with

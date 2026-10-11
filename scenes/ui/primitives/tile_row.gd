@@ -23,6 +23,8 @@ signal tile_unhovered(id: StringName)
 
 ## The host's own tooltip, kept so a truncated label can put its full name in front.
 const TOOLTIP_META := &"tile_tooltip"
+## A tile's own variation while it is marked TileChosenOff (_mark_chosen_off).
+const OWN_VARIATION_META := &"tile_own_variation"
 
 @export var multi_select: bool = false
 @export var tile_min_size := Vector2(64, 56)
@@ -117,6 +119,7 @@ func select(id: StringName) -> void:
 	selected = id
 	for tile_id in _tiles:
 		_tiles[tile_id].set_pressed_no_signal(tile_id == id)
+		_mark_chosen_off(_tiles[tile_id])
 
 
 ## Multi-select sync without signals.
@@ -135,10 +138,29 @@ func set_tile_visible(id: StringName, tile_visible: bool) -> void:
 
 
 ## Disables tile `id` (true) or enables it: a disabled tile is drawn off and cannot be picked;
-## give it a tooltip that says why (set_tile_tooltip).
+## give it a tooltip that says why (set_tile_tooltip). The picked tile keeps its mark while
+## disabled, muted (TileChosenOff), so the choice that comes back still reads.
 func set_tile_disabled(id: StringName, off: bool) -> void:
 	if _tiles.has(id):
 		(_tiles[id] as Button).disabled = off
+		_mark_chosen_off(_tiles[id])
+
+
+## Tile `tile` in TileChosenOff while it is both picked and disabled, else in its own
+## variation (Tile, or one a pane gave it), kept in its meta while it is marked.
+static func _mark_chosen_off(tile: Button) -> void:
+	var chosen_off := tile.disabled and tile.button_pressed
+	var marked := tile.theme_type_variation == &"TileChosenOff"
+	if chosen_off and not marked:
+		tile.set_meta(OWN_VARIATION_META, tile.theme_type_variation)
+		tile.theme_type_variation = &"TileChosenOff"
+	elif marked and not chosen_off:
+		tile.theme_type_variation = tile.get_meta(OWN_VARIATION_META, &"Tile")
+
+
+## Whether tile `id` is drawn as the picked tile of a disabled row (TileChosenOff).
+func is_chosen_off(id: StringName) -> bool:
+	return _tiles.has(id) and (_tiles[id] as Button).theme_type_variation == &"TileChosenOff"
 
 
 ## Replaces tile `id`'s tooltip (a disabled tile's says why). Kept as the tile's own, so a

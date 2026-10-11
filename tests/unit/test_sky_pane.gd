@@ -93,12 +93,48 @@ func test_one_clear_in_the_heading() -> void:
 	assert_eq(buttons.size(), 1, "one action in the heading, not two resets side by side")
 	assert_eq(pane._clear_button.tooltip_text, LevelEditPane.LOOK_CLEAR_TIP)
 	assert_ne(pane._sky_field.caption, "Sky", "the field does not repeat the heading")
-	assert_true(pane._clear_button.disabled)
+	# Hidden while nothing is changed over the Look, so a clean pane shows no second revert
+	# beside the drawer's Revert look; the heading's line keeps its height either way.
+	await wait_process_frames(1)
+	var line := header.size.y
+	assert_false(pane._clear_button.visible, "no eraser while clean")
 	_model.set_override("fog_density", 0.05)
+	assert_true(pane._clear_button.visible)
 	assert_false(pane._clear_button.disabled)
+	await wait_process_frames(1)
+	assert_almost_eq(header.size.y, line, 0.5, "the heading does not jump")
 	pane._on_clear_pressed()
 	assert_true(_model.overrides.is_empty())
-	assert_true(pane._clear_button.disabled)
+	assert_false(pane._clear_button.visible)
+
+
+## The Look dropdown takes the row's free width: the label stands at its words, so a name that
+## fits (Outdoor Day) is never ellipsized with room left beside it.
+func test_the_look_dropdown_takes_the_free_width() -> void:
+	var holder := Control.new()
+	holder.size = Vector2(300, 800)
+	add_child_autofree(holder)
+	_model = EnvironmentEditModel.new()
+	_model.load_from("outdoor_day", {}, {})
+	var pane := SkyPane.new()
+	pane.set_model(_model)
+	holder.add_child(pane)
+	pane.load_state(LevelVisualState.new())
+	pane.size.x = 300
+	await wait_process_frames(3)
+	var row := pane._preset_dropdown.get_parent() as HBoxContainer
+	var label := pane._preset_row._label
+	var gap := float(row.get_theme_constant(&"separation"))
+	assert_almost_eq(label.size.x, label.get_combined_minimum_size().x, 0.5, "the label's words")
+	assert_almost_eq(
+		label.size.x + gap + pane._preset_dropdown.size.x, row.size.x, 1.0, "the rest is the list's"
+	)
+	var font := pane._preset_dropdown.get_theme_font(&"font")
+	var font_size := pane._preset_dropdown.get_theme_font_size(&"font_size")
+	var words := font.get_string_size("Outdoor Day", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	assert_gt(
+		pane._preset_dropdown.size.x, words + 64.0, "room for the whole name, swatch and arrow"
+	)
 
 
 func test_load_selects_preset_and_shows_its_description() -> void:

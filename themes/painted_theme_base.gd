@@ -269,6 +269,17 @@ func _define_flat_buttons() -> void:
 	tile_style.icon_max_width = 24
 	tile_style.h_separation = SPACE_1
 	define_variant_style("Tile", "Button", tile_style)
+	# The picked tile of a row that cannot act now (Shadows while Sunlight is Off): still marked,
+	# in a muted wash of the selected fill with its edge and the state role's words, so the
+	# choice that comes back reads; TileRow puts it on the picked tile only while disabled.
+	var muted := c(ThemeColors.SELECTED)
+	var chosen_off := tile_style.duplicate()
+	chosen_off.disabled = inherit(
+		tile, {bg_color = Color(muted, 0.22), border_color = Color(muted, 0.7)}
+	)
+	chosen_off.font_disabled_color = c(ThemeColors.STATE)
+	chosen_off.icon_disabled_color = c(ThemeColors.STATE)
+	define_variant_style("TileChosenOff", "Button", chosen_off)
 	# A list row (the room's shelf maps): a row like a player row, not a tile, so no edge at
 	# rest; the hover wash, and the selected fill edge to edge when picked.
 	var list_row := box(Color(c(ThemeColors.SURFACE), 0.0), RADIUS_CONTROL, SPACE_1, SPACE_1)

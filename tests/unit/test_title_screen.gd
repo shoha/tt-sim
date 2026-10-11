@@ -361,3 +361,61 @@ func test_the_sticky_heading_follows_the_scroll() -> void:
 	title.grid.scroll_vertical = 0
 	await wait_process_frames(2)
 	assert_eq(title.sticky_heading.text, LevelGrid.OWN_HEADING)
+
+
+## The map panel's facts stand whole above its action rows at the smallest canvas the game
+## gives (1280x720): with a long name, a description past three lines (clamped, its tooltip the
+## whole text) and an author, at rest and with the name open (its keys line given back by the
+## picture), and the panel inside the window.
+func test_the_panels_facts_stay_in_view_at_1280x720() -> void:
+	var long := _info("fen", "The Drowned Lanterns of Upper Fenwick Mire", 300)
+	long.description = (
+		"A drowned village under the fen, its lanterns still lit below the water; the causeway"
+		+ " floods at dusk and the old bell tower leans over the reeds, and the ferry runs"
+		+ " only when the mist lifts off the mere"
+	)
+	long.author = "Marigold Thistlewood-Ash"
+	long.played_at = 1000
+	_levels = [long]
+	var host := SubViewport.new()
+	host.size = Vector2i(1280, 720)
+	add_child_autofree(host)
+	var title: TitleScreen = SCENE.instantiate()
+	title.level_provider = func() -> Array[Dictionary]: return _levels
+	title.plays_provider = func() -> Dictionary: return _plays
+	title.session_provider = func() -> Array[Dictionary]: return _sessions
+	host.add_child(title)
+	var panel := title.map_panel
+	panel.footprint = func(_info: Dictionary) -> Vector2: return Vector2(150, 150)
+	panel.show_map(long)
+	await wait_process_frames(4)
+	assert_true(panel.description_clamped(), "past three lines")
+	assert_eq(panel.description_label.max_lines_visible, MapPanel.DESCRIPTION_LINES)
+	assert_eq(panel.description_label.tooltip_text, long.description, "whole in its tooltip")
+	assert_false(panel.hint_shown("name"), "no keys while no field is open")
+	_assert_facts_in_view(panel, "at rest")
+	var rest_picture := panel.picture_height()
+	panel.begin_edit("name")
+	await wait_process_frames(4)
+	assert_true(panel.hint_shown("name"))
+	assert_lt(panel.picture_height(), rest_picture, "the picture gives the keys' line back")
+	_assert_facts_in_view(panel, "with the name open")
+	# Showing a map closes the field and its keys with it.
+	panel.show_map(long)
+	await wait_process_frames(2)
+	assert_false(panel.hint_shown("name"), "the keys close with the field")
+	assert_almost_eq(panel.picture_height(), rest_picture, 0.5, "the picture back")
+
+
+func _assert_facts_in_view(panel: MapPanel, when: String) -> void:
+	var scroll := panel.get_node("Frame/Scroll") as ScrollContainer
+	var view := scroll.get_global_rect()
+	assert_eq(scroll.scroll_vertical, 0, "nothing scrolled away %s" % when)
+	var actions_top := panel.play_button.get_global_rect().position.y
+	for fact: Control in [panel.author_label, panel.source_label, panel.played_label]:
+		var rect := fact.get_global_rect()
+		assert_true(fact.is_visible_in_tree(), "%s shows %s" % [fact.name, when])
+		assert_lte(rect.end.y, view.end.y + 0.5, "%s inside the words' view %s" % [fact.name, when])
+		assert_lte(rect.end.y, actions_top, "%s above the actions %s" % [fact.name, when])
+	var panel_rect := panel.get_global_rect()
+	assert_lte(panel_rect.end.y, 720.5, "the panel inside the window %s" % when)
