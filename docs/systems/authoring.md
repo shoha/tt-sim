@@ -332,21 +332,39 @@ Probe and numbers:
   (height plus slow noise): hot yellow only along the leading edge, then ember red-orange
   with deep red patches (a second, finer noise; emission), dimming as it goes to charcoal,
   the leaf cards burning away from a glowing edge until a bare charred snag stands. Bark
-  never glows, it only chars (a glowing trunk read as a thin orange beam). One painted
-  flame (`FlameAtlas`: a 4-frame flipbook of three tongues in red, amber and pale gold bands,
-  painted once into an RG8 texture, cross-faded on the shader's clock) stands on each crown
-  as it catches, sized by the crown's width (0.85 of it, within 0.22-0.38 of the tree's
-  height; sized by height a narrow pine's stood as a beam), a smaller second beside it
-  (across the view) on half the trees, a spark on a third; half the trees and a two-billow
-  column over the middle throw up smoke: painted cumulus billows of five large lobes melted
-  into one outline on a flattish base (one lobe while a billow is under 2.5 m across, parting
-  into all five by 6 m), a grey-violet body over a dark violet underside with a soft cream
-  gold crescent wrapping each lobe's top, the lobes' shading blended where they meet, nearly
-  opaque, spreading as they rise, their side lobes shrinking into the body late
-  (the billow's age rides in its custom data) and their alpha held to 85 % of their life
-  (`smoke_fade`). No ground glow. The snags shrink away about their feet over the last
-  0.6 s (`snag_transform`) as the change lands. Two pools sized so one fire's every puff fits
-  at once (`EventPuffs.new(capacity, priority)`: smoke 50 at priority 3, flames 144 at 4).
+  never glows, it only chars (a glowing trunk read as a thin orange beam). User verdict
+  (2026-10-11): "the smoke effect after a tree burns is pretty bad and does not match the
+  style of our plants; we probably want some fire on the ground as well while the trees
+  burn", widened the same day: the crown flames, the ground fire and the smoke should be one
+  consistent set built from the same technique family. So (card fire-look-3) they share one
+  noise and one erosion rule (`shaders/fire_noise.gdshaderinc`: a shape eaten by bold value
+  noise as it ages, its edge a crisp step a pixel wide, never an alpha fade) and one palette
+  (stepped flame bands, the ember glow, warm charcoal smoke going pale as it rises). A banded
+  tongue (EventPuffs' flame with `band_flames`: three tongues swaying on the noise, cut into
+  flat rim, amber, gold and core bands, eroded from 45 % of its life; the `FlameAtlas`
+  flipbook stays as the other branch) stands on each crown as it catches, sized by the
+  crown's width (0.85 of it, within 0.22-0.38 of the tree's height; sized by height a narrow
+  pine's stood as a beam), a smaller second beside it (across the view) on half the trees, a
+  spark on a third. On the ground `GroundBurn`, a Decal with a painted ring (stepped red,
+  orange and gold arcs with cool breaks, ember spots behind, charred ground inside; painted
+  once, 256 px), is sized each frame so its front runs from the nearest tree's distance to
+  the rim over `SPREAD_S` (the trees now catch on that same front, `front_reaches`), its glow
+  dying 0.35-1.15 s after it reaches the rim and its char going from 0.2 s before the ash
+  lands to 0.6 s after; 28 small banded tongues (`FRONT_TONGUES`, places and times drawn in
+  setup on `WaterGeometry.ground_at`) rise on it as it passes. Smoke (`SmokePuffs`,
+  `shaders/fire_smoke.gdshader`) rises from half the trees over 2.5 m and in a two-billow
+  column over the middle: opaque spherical-normal billboards (a heap of four balls, each pixel
+  given its ball's normal and depth, the normal tipped by the noise), lit by the scene's sun
+  through a soft two-tone ramp with a cooler underside, alpha scissor with alpha to coverage
+  as the foliage is, eroded from 20 % of its life. Probed side by side on the same stand
+  (half size, 1.2, 2.6 and 3.8 s): those balls, low-poly lumpy sphere meshes, and tall curling
+  columns for the smoke; the flipbook and banded tongues for the flames; tongues alone and the
+  ring plus tongues for the ground. Verdict captures (fire-look-3, --full): the balls read as
+  smooth mauve plastic balloons, and the last eroded pieces linger as lone floating spheres;
+  the smoke is not yet in the plants' style (see the handoff for the next round). The snags
+  shrink away about their feet over the last 0.6 s (`snag_transform`) as the change lands.
+  Two pools sized so one fire's every flame and billow fits at once (`SmokePuffs.new(50)`;
+  `EventPuffs.new(172, priority 4)`: three a tree and the ground's 28).
   Puff and shader colours are linear and the scene's filmic tonemap (white 1.0) shows a low
   value lighter still than raising it to 1/2.2 does, so each is picked through that curve
   (measured in a capture: linear 0.147, 0.124, 0.172 shows 0.54, 0.5, 0.57; 0.85, 0.58, 0.265
@@ -355,8 +373,8 @@ Probe and numbers:
   fire-look card (2026-10-10) probed three approaches side by side (bold opaque tongues, the
   trees burning, a painted flipbook): the burning trees read as a fire at tabletop zoom and
   the sprites alone did not, and the painted flame read as a flame where the procedural
-  tongue read as an egg, so it is the trees plus painted flames. Fire's kinds hold their
-  alpha to 65 % of their life (`fire_fade`). Headless,
+  tongue read as an egg, so it was the trees plus painted flames until fire-look-3 banded
+  them. Fire's kinds hold their alpha to 65 % of their life (`fire_fade`). Headless,
   `surface_get_arrays` may return nothing and MultiMesh transforms read identity, so the
   effects compute from the document's rows and tolerate empty meshes; tests check behaviour,
   not pixels (the render job `terrain_events` checks the look).

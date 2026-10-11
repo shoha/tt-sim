@@ -11,14 +11,20 @@ extends ForestFall
 ## whose surfaces use shaders/wind_foliage_burn.gdshader, and each tree's burn (burn_progress,
 ## the instance's custom data) runs its crown through the burn in bold patches: hot yellow
 ## along the leading edge, ember red-orange, then charcoal, the leaf cards burning away from a
-## glowing edge until the charred trunk and limbs stand bare (the bark only chars). A painted
-## flame (EventPuffs' flame, FlameAtlas) stands on each crown as it catches, sized by the
-## crown's width so a narrow pine's is a tongue on its crown rather than a beam down it, a
-## second beside it on some, a spark drifts up from a few, and billows of smoke rise slowly
-## from half the trees and in a short column over the middle: painted cumulus, grey-violet
-## with cream-gold tops and darker undersides. No ground glow and no mist: a few bold shapes,
-## the forest visibly changing under them. Over the event's last SNAG_GO_S the charred snags
-## shrink away (snag_transform) as the change lands.
+## glowing edge until the charred trunk and limbs stand bare (the bark only chars).
+##
+## Its flames, its ground fire and its smoke are one family: one noise, one erosion rule
+## (shaders/fire_noise.gdshaderinc: a shape eaten by the noise as it ages, its edge a crisp
+## step, never an alpha fade) and one palette running from the flames' stepped bands (a deep
+## red rim, amber, gold, a pale core) through the ember glow to warm charcoal smoke going pale
+## as it rises. A banded tongue (EventPuffs' flame) stands on each crown as it catches, sized by
+## the crown's width so a narrow pine's is a tongue on its crown rather than a beam down it, a
+## second beside it on some, a spark drifts up from a few. On the ground a glowing ring runs out
+## with the front (GroundBurn), small tongues standing on it where it passes (FRONT_TONGUES),
+## charred ground left inside it until the ash lands. Billows of smoke (SmokePuffs) rise from
+## half the trees and in a short column over the middle: solid heaps of lit balls in the
+## crowns' soft two-tone read, breaking up as they age. Over the event's last SNAG_GO_S the
+## charred snags shrink away (snag_transform) as the change lands.
 ##
 ## Colours are linear, as every puff's and shader constant's is: each is picked as the colour
 ## it should show through the scene's filmic tonemap, which shows low values lighter still
@@ -31,10 +37,10 @@ extends ForestFall
 ## that change rebuilds it, as a fallen one is.
 ##
 ## Bounded: at most MAX_TREES trees, one stand-in mesh copy per species made in setup, two
-## pools of fixed size made once (every puff of one fire fits at once, so none is
-## overwritten), every random draw made in setup, so a frame only sets transforms, colours and
-## custom data; no allocation while it plays. The burn shader's noise runs only on the
-## stand-ins.
+## pools of fixed size made once (every flame and billow of one fire fits at once, so none is
+## overwritten), one ground ring, every random draw and every ground tongue's place made in
+## setup, so a frame only sets transforms, colours and custom data; no allocation while it
+## plays. The burn shader's noise runs only on the stand-ins.
 
 ## The palette biome a fire leaves (its "biome" key) and the ground it lays, or the stand-in
 ## an older palette has (ASSET_PIPELINE.md "Fire").
@@ -49,7 +55,7 @@ const BURN_SECONDS := 3.0
 const ASH_REACH := 1.25
 const ASH_SECONDS := 2.5
 ## The front: the nearest tree catches at once, the farthest SPREAD_S later, each plus up to
-## SPREAD_JITTER.
+## SPREAD_JITTER (the ring on the ground runs just ahead of the crowns).
 const SPREAD_S := 2.0
 const SPREAD_JITTER := 0.25
 ## How long a tree burns, from catching to a bare charred snag.
@@ -74,36 +80,40 @@ const SIDE_CHANCE := 0.5
 const SIDE_SIZE := 0.65
 ## The share of trees that throw up a spark as they catch.
 const EMBER_CHANCE := 0.35
-## When a tree's smoke rises (a share of its burn), the share of trees that smoke, a billow's
-## size against the crown and how fast it climbs (metres a second).
+## The ground fire's tongues: how many stand on the ring as it passes (their places drawn over
+## the burning area in setup), their width (metres), height over width and life (seconds).
+const FRONT_TONGUES := 28
+const FRONT_WIDE := Vector2(0.45, 0.8)
+const FRONT_TALL := 1.3
+const FRONT_LIFE := Vector2(0.8, 1.15)
+## When a tree's smoke rises (a share of its burn), the share of trees that smoke (none under
+## SMOKE_MIN_TALL metres), a billow's size against the crown and how fast it climbs (metres a
+## second).
 const SMOKE_AT := 0.65
 const SMOKE_CHANCE := 0.5
-const SMOKE_SIZE := 1.4
+const SMOKE_MIN_TALL := 2.5
+const SMOKE_SIZE := 1.15
 const SMOKE_RISE := 0.6
 ## The column over the centre: its billows' start times (seconds).
 const COLUMN_AT: Array[float] = [0.8, 1.9]
-## Pools: every puff of one fire at once (flames: two tongues and a spark a tree).
+## Pools: every puff of one fire at once (flames: two tongues and a spark a tree, and the
+## ground's tongues; smoke: a billow a tree and the column's).
 const FLAMES_PER_TREE := 3
-const FLAME_POOL := FLAMES_PER_TREE * MAX_TREES
+const FLAME_POOL := FLAMES_PER_TREE * MAX_TREES + FRONT_TONGUES
 const SMOKE_POOL := MAX_TREES + 2
-## Draw order: the smoke, then the flames over it.
-const SMOKE_PRIORITY := EventPuffs.RENDER_PRIORITY + 1
+## Draw order: the flames over the water and the ring.
 const FLAME_PRIORITY := EventPuffs.RENDER_PRIORITY + 2
-## Colours (linear, see the header): a flame's rim (shows a deep red-orange; its body burns
-## amber and its core pale gold, the puff shader's), the second tongue's redder; a spark;
-## the body of the trees' smoke (shows a warm grey-violet, about 0.45, 0.4, 0.48; the shader
-## lights its lobes' tops cream-gold and shades its underside; a plum body lit rust underneath
-## read as salmon-pink mist, and a body showing 0.54 as a pile of pale balls) and the
-## column's, a little darker. Nearly opaque: a billow is a body, not a haze.
+## Colours (linear, see the header): a flame's rim (shows a deep red-orange; its bands burn
+## amber, gold and a pale core inside it, the puff shader's), the second tongue's redder; a
+## spark. The smoke's palette is its shader's.
 const FLAME := Color(0.75, 0.047, 0.006, 1.0)
 const FLAME_LATE := Color(0.61, 0.018, 0.004, 1.0)
 const EMBER := Color(1.0, 0.35, 0.036, 1.0)
-const SMOKE := Color(0.102, 0.081, 0.119, 0.95)
-const SMOKE_COLUMN := Color(0.085, 0.069, 0.102, 0.95)
 const BURN_SHADER := preload("res://shaders/wind_foliage_burn.gdshader")
 
 var _flames: EventPuffs = null
-var _smoke: EventPuffs = null
+var _smoke: SmokePuffs = null
+var _ground: GroundBurn = null
 ## The way the smoke drifts (map frame, horizontal, metres a second), the stand's middle on
 ## the ground and its trees' mean height, drawn in setup.
 var _drift := Vector3.ZERO
@@ -115,6 +125,11 @@ var _nearest := 0.0
 ## The camera's right, flat, in the map frame: a second tongue stands beside the first across
 ## the view, not behind it.
 var _across := Vector3.RIGHT
+## The ground's tongues, in the order the ring reaches them: where each stands (xyz) and when
+## (w, seconds), its draw, and how many have risen.
+var _front: Array[Vector4] = []
+var _front_draws := PackedFloat32Array()
+var _front_next := 0
 
 
 ## The id of the palette's burnt biome under `root`, or "" when it has none.
@@ -170,6 +185,12 @@ static func snag_transform(base: Transform3D, elapsed: float, duration: float) -
 	return Transform3D(base.basis * Basis.from_scale(Vector3.ONE * keep), base.origin)
 
 
+## When the ring on the ground reaches `distance` metres from the centre, the nearest tree
+## `nearest` out and the rim `radius` (GroundBurn.front_radius run backwards). Pure.
+static func front_reaches(distance: float, nearest: float, radius: float) -> float:
+	return SPREAD_S * clampf((distance - nearest) / maxf(radius - nearest, 0.1), 0.0, 1.0)
+
+
 ## Prepares the fire `event` describes on `editor`'s map; false when no forest stands there.
 ## Starts loading the burnt biome and the ash on every board, so the change lands warm.
 func setup(editor: AuthoringEditor, event: TerrainEvent) -> bool:
@@ -198,6 +219,16 @@ func setup(editor: AuthoringEditor, event: TerrainEvent) -> bool:
 		editor.prepare_biome(plan.biome)
 	if plan.surface != "" and is_instance_valid(editor.terrain):
 		editor.terrain.warm_surface(plan.surface)
+	_ground = GroundBurn.new()
+	add_child(_ground)
+	_ground.setup(
+		Vector3(event.centre.x, _middle.y, event.centre.y),
+		_nearest,
+		event.radius_m,
+		SPREAD_S,
+		duration
+	)
+	_place_front(editor.document, event)
 	return true
 
 
@@ -213,20 +244,25 @@ func step(elapsed: float, delta: float) -> void:
 		var calm := calm_weight(t, burn)
 		multimesh.set_instance_color(tree.slot, Color(calm, calm, 1.0, 1.0))
 		_kindle(tree, t)
+	while _front_next < _front.size() and elapsed >= _front[_front_next].w:
+		_front_tongue(_front_next)
+		_front_next += 1
 	while _columns < COLUMN_AT.size() and elapsed >= COLUMN_AT[_columns]:
 		_column(_columns)
 		_columns += 1
 	_smoke.step(delta)
 	_flames.step(delta)
+	_ground.step(elapsed)
 	if elapsed >= duration and not _ended:
 		_ended = true
 		for tree in _trees:
 			(tree.stand_in as Node3D).visible = false
 
 
-## True once the fire has burnt out and its smoke has cleared.
+## True once the fire has burnt out, its smoke has cleared and its char has gone under the ash.
 func is_played(elapsed: float) -> bool:
-	return elapsed >= duration and _flames.is_idle() and _smoke.is_idle()
+	var charred := GroundBurn.char_at(elapsed, duration) > 0.0
+	return elapsed >= duration and _flames.is_idle() and _smoke.is_idle() and not charred
 
 
 ## The trees `event` burns (burnable).
@@ -236,13 +272,13 @@ func _find(editor: AuthoringEditor, event: TerrainEvent) -> Array[Dictionary]:
 	return found
 
 
-## The fire's two pools (see the header), its flames painted.
+## The fire's two pools (see the header), its flames banded.
 func _make_puffs() -> void:
-	_smoke = EventPuffs.new(SMOKE_POOL, SMOKE_PRIORITY)
+	_smoke = SmokePuffs.new(SMOKE_POOL)
 	_flames = EventPuffs.new(FLAME_POOL, FLAME_PRIORITY)
 	add_child(_smoke)
 	add_child(_flames)
-	_flames.paint_flames()
+	_flames.band_flames(true)
 	_puffs = _flames
 
 
@@ -266,7 +302,6 @@ func _stand_in_mesh(mesh: Mesh) -> Mesh:
 ## flames, spark and smoke take (made here, so a frame draws nothing).
 func _tree_entry(tree: Dictionary, event: TerrainEvent, box: AABB, height: float) -> Dictionary:
 	var base: Transform3D = tree.base
-	var reach := (float(tree.distance) - _nearest) / maxf(event.radius_m - _nearest, 0.1)
 	var scale := base.basis.get_scale()
 	var width := maxf(box.size.x * scale.x, box.size.z * scale.z)
 	var draws := PackedFloat32Array()
@@ -275,12 +310,51 @@ func _tree_entry(tree: Dictionary, event: TerrainEvent, box: AABB, height: float
 	return {
 		"height": height,
 		"width": clampf(width, height * 0.3, height),
-		"start": SPREAD_S * reach + _rng.randf_range(0.0, SPREAD_JITTER),
+		"start":
+		(
+			front_reaches(float(tree.distance), _nearest, event.radius_m)
+			+ _rng.randf_range(0.0, SPREAD_JITTER)
+		),
 		"burn": _rng.randf_range(BURN_S.x, BURN_S.y),
 		"draws": draws,
 		"lit": false,
 		"smoked": false,
 	}
+
+
+## The ground's FRONT_TONGUES places over `event`'s area on `document`'s ground, spread evenly
+## over it (from the nearest tree out to the rim), each timed for when the ring reaches it and
+## sorted by that time.
+func _place_front(document: MapDocument, event: TerrainEvent) -> void:
+	var places: Array[Vector4] = []
+	var reach := maxf(event.radius_m * 0.95, _nearest + 0.1)
+	for i in FRONT_TONGUES:
+		var angle := _rng.randf_range(0.0, TAU)
+		var near_sq := _nearest * _nearest
+		var distance := sqrt(lerpf(near_sq, reach * reach, _rng.randf()))
+		var xz := event.centre + Vector2(cos(angle), sin(angle)) * distance
+		var y := WaterGeometry.ground_at(document, xz) if document != null else _middle.y
+		places.append(Vector4(xz.x, y, xz.y, front_reaches(distance, _nearest, event.radius_m)))
+	places.sort_custom(func(a: Vector4, b: Vector4) -> bool: return a.w < b.w)
+	_front = places
+	_front_draws.resize(FRONT_TONGUES)
+	for i in FRONT_TONGUES:
+		_front_draws[i] = _rng.randf()
+
+
+## The ground's tongue `index` rising where the ring has reached.
+func _front_tongue(index: int) -> void:
+	var place := _front[index]
+	var draw := _front_draws[index]
+	var wide := lerpf(FRONT_WIDE.x, FRONT_WIDE.y, draw)
+	_flames.emit_flame(
+		Vector3(place.x, place.y, place.z),
+		Vector3.ZERO,
+		wide,
+		wide * FRONT_TALL,
+		lerpf(FRONT_LIFE.x, FRONT_LIFE.y, fmod(draw * 7.3, 1.0)),
+		FLAME if draw < 0.6 else FLAME_LATE
+	)
 
 
 ## Emits what `tree` throws up by `t` seconds after catching: its flame (and a second beside
@@ -321,23 +395,24 @@ func _kindle(tree: Dictionary, t: float) -> void:
 			)
 	if not tree.smoked and t >= SMOKE_AT * burn:
 		tree.smoked = true
-		if draws[3] < SMOKE_CHANCE:
-			_smoke.emit_smoke(
+		# Bushes smoulder: a billow from one stood low as a pebble.
+		if draws[3] < SMOKE_CHANCE and height >= SMOKE_MIN_TALL:
+			_smoke.emit(
 				origin + Vector3(0.0, height * 0.85, 0.0),
 				_drift * 1.5 + Vector3(0.0, SMOKE_RISE + 0.3 * draws[5], 0.0),
 				maxf(width, height * 0.5) * SMOKE_SIZE,
 				2.6 + 0.5 * draws[4],
-				SMOKE
+				Color.WHITE
 			)
 
 
 ## The column's billow `index`: a large billow climbing slowly over the stand's middle, higher
 ## each time.
 func _column(index: int) -> void:
-	_smoke.emit_smoke(
+	_smoke.emit(
 		_middle + Vector3(0.0, _tall * (1.0 + 0.35 * index), 0.0),
 		_drift * 2.0 + Vector3(0.0, 0.7, 0.0),
 		_tall * (0.8 + 0.15 * index),
 		3.4,
-		SMOKE_COLUMN
+		Color.WHITE
 	)

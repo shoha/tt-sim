@@ -85,10 +85,16 @@
 			"colour": 1
 		},
 		"res://scenes/states/playing/events/fire_sweep.gd": {
-			"colour": 7
+			"colour": 5
 		},
 		"res://scenes/states/playing/events/forest_fall.gd": {
 			"colour": 2
+		},
+		"res://scenes/states/playing/events/ground_burn.gd": {
+			"colour": 9
+		},
+		"res://scenes/states/playing/events/smoke_puffs.gd": {
+			"colour": 1
 		},
 		"res://scenes/states/playing/events/topple_mode.gd": {
 			"colour": 1

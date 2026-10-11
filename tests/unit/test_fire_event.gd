@@ -135,7 +135,9 @@ func _settle(copies: Array) -> void:
 
 
 func _same(a: Copy, b: Copy, label: String) -> void:
-	var diff := MapFingerprint.diff(MapFingerprint.of(a.root, a.doc), MapFingerprint.of(b.root, b.doc))
+	var diff := MapFingerprint.diff(
+		MapFingerprint.of(a.root, a.doc), MapFingerprint.of(b.root, b.doc)
+	)
 	assert_true(diff.is_empty(), "%s: the maps differ in %s" % [label, str(diff)])
 
 
@@ -203,7 +205,9 @@ func test_a_fire_burns_the_forest_on_every_board_then_changes_the_map() -> void:
 	gm.edits.events.started.connect(client.edits.events.receive)
 	client.edits.receive_log(key, 0)
 	var told := []
-	client.edits.events.announced.connect(func(event: TerrainEvent) -> void: told.append(event.kind))
+	client.edits.events.announced.connect(
+		func(event: TerrainEvent) -> void: told.append(event.kind)
+	)
 	var scatter := gm.edits.editor.scatter
 	var standing := FireSweep.burnable(scatter, FIRE_CENTRE, RADIUS)
 	assert_gt(standing.size(), 2, "a forest stands where the fire starts")
@@ -302,7 +306,8 @@ func test_a_history_group_is_one_entry() -> void:
 
 func test_a_fire_fits_its_pools() -> void:
 	# Every puff of a fire at its most trees at once, so none is overwritten.
-	assert_lte(FireSweep.FLAMES_PER_TREE * FireSweep.MAX_TREES, FireSweep.FLAME_POOL)
+	var flames := FireSweep.FLAMES_PER_TREE * FireSweep.MAX_TREES + FireSweep.FRONT_TONGUES
+	assert_lte(flames, FireSweep.FLAME_POOL, "every crown's flames and the ground's tongues")
 	assert_lte(FireSweep.MAX_TREES + FireSweep.COLUMN_AT.size(), FireSweep.SMOKE_POOL)
 	assert_lte(
 		TerrainEvent.DURATIONS[TerrainEvent.Kind.FIRE], TerrainEvent.MAX_DURATION_S, "in bounds"
@@ -316,8 +321,7 @@ func test_a_fire_fits_its_pools() -> void:
 	assert_eq(puffs.capacity, 8)
 	puffs.emit_flame(Vector3.ZERO, Vector3.UP, 1.0, 2.0, 0.8, FireSweep.FLAME)
 	puffs.emit_ember(Vector3.ZERO, Vector3(0.2, 1.5, 0.0), 0.3, 1.2, FireSweep.EMBER)
-	puffs.emit_smoke(Vector3.ZERO, Vector3(0.0, 0.6, 0.0), 2.0, 1.0, FireSweep.SMOKE)
-	puffs.paint_flames()
+	puffs.band_flames(true)
 	puffs.step(0.3)
 	assert_false(puffs.is_idle())
 	puffs.step(1.5)
@@ -335,15 +339,56 @@ func test_a_fire_fits_its_pools() -> void:
 	assert_almost_eq(FireSweep.snag_transform(base, 4.0, 4.0).basis.y.length(), 0.0, 0.001, "gone")
 
 
-func test_smoke_holds_its_body() -> void:
-	# A billow swells in, holds its full body most of its life (the shader breaks its lobes
-	# apart late), and thins only at the very end.
-	assert_lt(EventPuffs.smoke_fade(0.05), 1.0, "swelling in")
-	assert_almost_eq(EventPuffs.smoke_fade(0.6), 1.0, 0.001, "holding its body")
-	assert_almost_eq(EventPuffs.smoke_fade(EventPuffs.SMOKE_FADE_FROM), 1.0, 0.001)
-	assert_lt(EventPuffs.smoke_fade(0.95), 0.5, "thinning only at the very end")
-	assert_almost_eq(EventPuffs.smoke_fade(1.0), 0.0, 0.001)
-	assert_gt(EventPuffs.SMOKE_FADE_FROM, EventPuffs.FIRE_FADE_FROM, "smoke outlasts a flame's hold")
+func test_the_smoke_pool() -> void:
+	# A fixed pool: a billow grows from half its size and keeps spreading, the pool plays it
+	# out and empties, and a full pool overwrites its oldest rather than growing.
+	assert_almost_eq(SmokePuffs.billow_size(0.0), SmokePuffs.START, 0.001, "born at half size")
+	assert_gt(SmokePuffs.billow_size(1.0), 1.0, "still spreading at its end")
+	assert_gt(SmokePuffs.billow_size(0.6), SmokePuffs.billow_size(0.3), "growing all its life")
+	var smoke := SmokePuffs.new(2)
+	add_child_autofree(smoke)
+	assert_eq(smoke.multimesh.instance_count, 2)
+	for i in 3:
+		smoke.emit(Vector3.ZERO, Vector3(0.0, 0.6, 0.0), 2.0, 1.0, Color.WHITE)
+	assert_eq(smoke.live_count(), 2, "the oldest overwritten, the pool kept to its size")
+	assert_eq(smoke.multimesh.instance_count, 2)
+	smoke.step(0.5)
+	assert_false(smoke.is_idle())
+	smoke.step(0.6)
+	assert_true(smoke.is_idle(), "every billow spent")
+
+
+func test_the_ground_fire() -> void:
+	# The ring runs out with the front: the nearest tree's distance at once, the rim at
+	# SPREAD_S, held there.
+	var near := 1.0
+	var rim := 7.0
+	var spread := FireSweep.SPREAD_S
+	assert_almost_eq(GroundBurn.front_radius(0.0, near, rim, spread), near, 0.001)
+	assert_almost_eq(GroundBurn.front_radius(spread, near, rim, spread), rim, 0.001)
+	assert_lte(GroundBurn.front_radius(spread * 3.0, near, rim, spread), rim * 1.06, "held")
+	# The ground's tongues rise where the ring is: when it reaches a distance is the inverse.
+	var at := FireSweep.front_reaches(4.0, near, rim)
+	assert_almost_eq(GroundBurn.front_radius(at, near, rim, spread), 4.0, 0.001)
+	assert_eq(FireSweep.front_reaches(rim + 2.0, near, rim), spread, "never past the front's end")
+	# Its glow comes in at once, holds while the front runs and dies soon after it reaches the
+	# rim; the char stays until the ash lands at the event's end, then goes.
+	var duration: float = TerrainEvent.DURATIONS[TerrainEvent.Kind.FIRE]
+	assert_almost_eq(GroundBurn.glow_at(spread * 0.5, spread), 1.0, 0.001, "burning")
+	assert_almost_eq(GroundBurn.glow_at(spread + 1.5, spread), 0.0, 0.001, "out")
+	var glow_out := spread + GroundBurn.GLOW_HOLD_S + GroundBurn.GLOW_OUT_S
+	assert_lte(glow_out, duration, "the glow is out before the ash lands")
+	assert_almost_eq(GroundBurn.char_at(duration - 0.5, duration), 1.0, 0.001, "charred")
+	assert_almost_eq(GroundBurn.char_at(duration + 1.0, duration), 0.0, 0.001, "under the ash")
+	# Its paint: the front's bands glow, the ground inside is charred, outside is bare.
+	# (the painted front wanders out to about 0.92 of the texture's half size at angle 0)
+	var front := GroundBurn.ring_paint(Vector2(0.92, 0.0), 0.5)
+	var inside := GroundBurn.ring_paint(Vector2(0.2, 0.1), 0.5)
+	var outside := GroundBurn.ring_paint(Vector2(0.99, 0.0), 0.5)
+	assert_gt(front[1].r + front[1].g, 0.5, "the front glows")
+	assert_gt(inside[0].a, 0.5, "the ground inside is charred")
+	assert_eq(inside[1].r, 0.0, "and cold")
+	assert_eq(outside[0].a, 0.0, "the ground outside is untouched")
 
 
 func test_the_painted_flame() -> void:
