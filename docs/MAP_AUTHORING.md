@@ -76,10 +76,11 @@ other committed home.
   - *Persistent ground fire*, painted like other terrain (a brush, erasable): it keeps burning
     where painted and scorches its ground (the ground under it turns to ash or a burnt
     surface, which stays after the fire is erased). It does not spread into nearby forest.
-  - *Fire along a path*: the same brush laid as a line, persistent; and a quick one-shot
-    "burn this line" in the GM's Events that behaves like Start a fire along the stroke:
-    the fire races along it, trees on it burn to snags and it leaves ash ground, one history
-    entry.
+  - *Fire along a path*: the same brush laid as a line, persistent; and the existing Start a
+    fire in the GM's Events, with a hotkey that toggles its shape between the circle and a
+    path (no new event: user, 2026-10-11). Along a path it behaves as it does in a circle:
+    the fire races along the stroke, trees on it burn to snags and it leaves ash ground, one
+    history entry.
   Both reuse the fire look of card fire-look-3 (flames, ground fire, smoke as one family).
   Design before code: `docs/plans/2026-10-11-fire-features/` (gitignored).
 
