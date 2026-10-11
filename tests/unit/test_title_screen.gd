@@ -42,16 +42,23 @@ func before_each() -> void:
 	_plays = {}
 
 
-## The top bar: the wordmark at the left with Avatars, Settings and Quit game beside it in one
-## row of quiet labelled tools on the sky, and the Play together card on its paper at the right
-## end, Quit well away from Host; no plaque under the wordmark or the tools.
-func test_the_top_bar_holds_the_card_and_the_tools() -> void:
+## Two columns from the top: at the left the wordmark with Avatars, Settings and Quit game beside
+## it in one row of quiet labelled tools on the sky, then the sticky heading and the grid; at the
+## right the Play together card on its paper, then the map panel, one width; Quit well away from
+## Host; no plaque under the wordmark or the tools.
+func test_two_columns_hold_the_tools_the_grid_the_card_and_the_panel() -> void:
 	_levels = [_info("new", "New Camp", 200)]
 	var title := _title()
 	var bar := title.get_node("%TopBar") as HBoxContainer
-	assert_eq(bar.get_child(bar.get_child_count() - 1), title.play_plaque, "at the right end")
+	var library := title.get_node("%LibraryColumn") as Control
+	var side := title.get_node("%SideColumn") as Control
+	assert_eq(side.get_child(0), title.play_plaque, "the card at the top of the right column")
+	assert_eq(side.get_child(1), title.panel_column, "the panel under it")
 	assert_true(title.play_plaque.is_ancestor_of(title.play_together))
 	assert_eq(bar.get_child(0), title.masthead)
+	assert_true(library.is_ancestor_of(bar) and library.is_ancestor_of(title.grid))
+	assert_true(library.is_ancestor_of(title.sticky_heading))
+	assert_eq(side.custom_minimum_size.x, MapPanel.WIDTH, "one width")
 	for button: Button in [title.avatars_button, title.settings_button, title.quit_button]:
 		assert_true(title.masthead.is_ancestor_of(button), "%s by the wordmark" % button.text)
 		assert_eq(button.theme_type_variation, &"SkyButton", "%s: a quiet tool" % button.text)
@@ -82,7 +89,8 @@ func test_an_empty_library_is_the_new_map_card_alone() -> void:
 	assert_eq(title.new_map_card.caption.text, NewMapCard.EMPTY_CAPTION)
 	assert_eq(title.new_map_card.custom_minimum_size.x, NewMapCard.EMPTY_WIDTH, "larger")
 	assert_false(title.map_panel.is_visible_in_tree(), "no map, no panel")
-	assert_false(title.panel_column.visible, "the grid takes the width")
+	assert_false(title.panel_column.visible, "nothing under the card")
+	assert_false(title.sticky_heading.is_visible_in_tree(), "no sticky heading over no maps")
 	var flow := title.new_map_card.get_parent() as HFlowContainer
 	assert_eq(flow.alignment, FlowContainer.ALIGNMENT_CENTER)
 	var face := title.new_map_card.picture
@@ -93,7 +101,8 @@ func test_an_empty_library_is_the_new_map_card_alone() -> void:
 	assert_true(title.new_map_card.caption.visible, "the first-map line, alone")
 	await wait_process_frames(3)
 	var picture := face.size
-	assert_almost_eq(picture.x / picture.y, LevelCard.THUMB_ASPECT, 0.02, "16:9, as a map's")
+	assert_almost_eq(picture.x / picture.y, NewMapCard.EMPTY_FACE_ASPECT, 0.02, "a low face")
+	assert_eq(title.new_map_card.caption.get_line_count(), 1, "the first-map line on one line")
 	title.new_map_card.generate()
 	assert_signal_emitted(title, "build_map_requested")
 
@@ -119,17 +128,18 @@ func test_a_library_of_bundled_maps_offers_them_under_new_map() -> void:
 	assert_false(title.map_panel.is_visible_in_tree())
 
 
-## The New map card leads the grid under "Your maps"; the maps follow the most recently played
-## or edited first, and the head of the library is selected, shown in the panel pinned at the
-## right of the grid (not in the grid, not a modal).
+## The New map card leads the grid under "Your maps" (the sticky heading over the grid's clip);
+## the maps follow the most recently played or edited first, and the head of the library is
+## selected, shown in the panel under the Play together card (not in the grid, not a modal).
 func test_the_library_orders_by_play_and_opens_the_head() -> void:
 	_levels = [_info("old", "Old Camp", 100), _info("mid", "Mid Camp", 200)]
 	_plays = {"old": 300}
 	var title := _title()
 	var flow := title.new_map_card.get_parent()
-	assert_eq(title.grid._own_heading.get_index(), 0, "Your maps first")
-	assert_eq(title.new_map_card.get_index(), 1, "then New map")
-	assert_eq(title.grid.headings()[0].text, LevelGrid.OWN_HEADING)
+	assert_false(title.grid._own_heading.visible, "Your maps is not in the flow")
+	assert_eq(title.sticky_heading.text, LevelGrid.OWN_HEADING, "it stands over the grid")
+	assert_true(title.sticky_heading.is_visible_in_tree())
+	assert_eq(title.new_map_card.get_index(), 1, "New map first")
 	assert_eq(title.grid._cards[0].level_info.name, "Old Camp", "played last, so first")
 	assert_eq(title.selected_level()["name"], "Old Camp")
 	assert_true(title.map_panel.is_visible_in_tree())
@@ -193,6 +203,11 @@ func test_a_bundled_map_shows_the_same_panel_with_no_edit_actions() -> void:
 	assert_false(panel.menu_items().has(MapPanel.MENU_REPLACE), "no Replace map file...")
 	assert_eq(panel.source_label.text, "Bundled")
 	assert_true(panel.play_button.visible and panel.host_button.visible)
+	assert_eq(panel.more_button.get_parent(), panel.play_button.get_parent(), "... on Play's line")
+	assert_false(panel._second_row.visible, "no line of its own for ...")
+	var card := title.grid.card_for(String(bundled.path))
+	assert_eq(card._caption.text, LibraryFacts.NEVER_PLAYED, "not the day it was edited")
+	assert_eq(panel.played_label.text, card._caption.text, "the card and the panel agree")
 
 
 ## The hub stands on the painted backdrop in the selected map's mood, morning with none and
@@ -275,7 +290,7 @@ func test_level_saved_refreshes_the_grid() -> void:
 	assert_eq(title.selected_level()["name"], "New Camp", "the newest selected")
 
 
-## The grid sits under the top bar once the entrance has run.
+## The grid sits under the wordmark row once the entrance has run.
 func test_grid_lands_below_the_top_bar_after_the_entrance() -> void:
 	_levels = [_info("new", "New Camp", 200)]
 	var title := _title()
@@ -283,3 +298,35 @@ func test_grid_lands_below_the_top_bar_after_the_entrance() -> void:
 	await wait_seconds(settle)
 	var bar := title.get_node("%TopBar") as Control
 	assert_gt(title.grid.global_position.y, bar.global_position.y + bar.size.y - 1.0)
+
+
+## The sticky heading names the section at the grid's top: Your maps, then Bundled with TTSim
+## once that heading's words have scrolled up to the clip.
+func test_the_sticky_heading_follows_the_scroll() -> void:
+	_levels = []
+	for i in 9:
+		_levels.append(_info("own_%d" % i, "Camp %d" % i, 100 + i))
+	for i in 24:
+		var bundled := _info("ship_%d" % i, "Ship %d" % i, 10 + i)
+		bundled.map_path = "res://maps/ship_%d.glb" % i
+		_levels.append(bundled)
+	var host := SubViewport.new()
+	host.size = Vector2i(1280, 720)
+	add_child_autofree(host)
+	var title: TitleScreen = SCENE.instantiate()
+	title.level_provider = func() -> Array[Dictionary]: return _levels
+	title.session_provider = func() -> Array[Dictionary]: return _sessions
+	host.add_child(title)
+	await wait_process_frames(4)
+	assert_eq(title.sticky_heading.text, LevelGrid.OWN_HEADING)
+	var heading := title.grid._bundled_heading
+	var words := heading.get_node("Words") as Control
+	var past := int(heading.position.y + words.position.y) + 1
+	title.grid.scroll_vertical = past
+	await wait_process_frames(2)
+	assert_eq(title.grid.scroll_vertical, past, "scrolled past the heading")
+	assert_eq(title.grid.top_section(), LevelGrid.BUNDLED_HEADING)
+	assert_eq(title.sticky_heading.text, LevelGrid.BUNDLED_HEADING)
+	title.grid.scroll_vertical = 0
+	await wait_process_frames(2)
+	assert_eq(title.sticky_heading.text, LevelGrid.OWN_HEADING)

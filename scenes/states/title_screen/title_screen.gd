@@ -2,30 +2,38 @@ class_name TitleScreen
 extends CanvasLayer
 
 ## The title is the library, in one material: paper cards on the sky, and ink words where they
-## stand on the sky itself (every mood keeps ink at 4.5:1: BackdropPaint.ink_reads_on). A top
-## bar holds the wordmark (the version a caption on its baseline) and, in one row beside it,
-## Avatars, Settings and Quit game as quiet labelled tools (SkyButton); at the right end, on a
-## paper plaque, the Play together card (PlayTogetherCard: Host and Join as two sides of one
-## question, the screen's one persimmon fill, C5) with Resume under it when saved sessions exist
-## (ResumeEntry), Quit well away from Host.
+## stand on the sky itself (every mood keeps ink at 4.5:1: BackdropPaint.ink_reads_on). Two
+## columns from the top of the window.
 ##
-## Under the bar, the library's grid (LevelGrid) at the left and the selected map's panel
-## (MapPanel) pinned at the right, the grid's cards and the panel lined up with the bar's ends.
-## The grid: "Your maps", then New map (NewMapCard: Generate and Import..., Advanced for size
-## and seed in a popover) and the maps most recently played or edited first; "Bundled with
-## TTSim" and the Bundled maps last (LibraryFacts.ordered, LibraryPlays). Each card's caption is
-## the date that order uses, and a Blender map whose source is newer says "Updated in Blender".
-## With no map of the player's own nothing is selected and the grid takes the whole width: New
-## map stands alone, larger and centred, and the Bundled maps are offered under it ("Or play one
-## that comes with TTSim"); selecting one of them brings the panel in.
+## The left column: the wordmark (the version a caption on its baseline) with Avatars, Settings
+## and Quit game beside it in one row of quiet labelled tools (SkyButton); under it the heading
+## of the section at the grid's top, which stays while the cards scroll (LevelGrid.top_section:
+## "Your maps", then "Bundled with TTSim" once its own heading has scrolled up to it); then the
+## library's grid (LevelGrid), its hard clip just under that heading and its scroll area running
+## to the window's left and bottom edges, the room for the cards' shadows inside it (the theme's
+## LibraryGrid), so a shadow never meets the clip. The grid: New map (NewMapCard: Generate and
+## Import..., Advanced for size and seed in a popover) and the maps most recently played or
+## edited first; "Bundled with TTSim" and the Bundled maps last (LibraryFacts.ordered,
+## LibraryPlays). Each card's caption is LibraryFacts.when_text, as the panel's is, and a
+## Blender map whose source is newer says "Updated in Blender" on its picture. With no map of
+## the player's own nothing is selected: New map stands alone, larger and centred, and the
+## Bundled maps are offered under it ("Or play one that comes with TTSim"); selecting one of
+## them brings the panel in.
+##
+## The right column, one width (MapPanel.WIDTH, the Play together plaque's) and one left edge:
+## the Play together card on its paper plaque (PlayTogetherCard: Host and Join as two sides of
+## one question, the screen's one persimmon fill, C5) with Resume under it when saved sessions
+## exist (ResumeEntry), Quit well away from Host; then, a step under the plaque, the selected
+## map's panel (MapPanel), at most the height left above the window's foot (_fit_panel), which
+## it fills on a short canvas by shortening its picture rather than scrolling.
 ##
 ## The panel shows any map the same way in the same place: its picture large, its name,
 ## description and author (edited in place on the player's own maps, plain text on a Bundled
-## one), its source, size, tokens and when it was last played (and Reload from Blender when its
-## source is newer), then Play (solo), Host with this map (a room with this map on its shelf:
-## the Host control beside what it acts on), Edit map and "..." (Set up tokens, Duplicate,
-## Replace map file..., Delete). Accept on a card selects it first and plays it on a second
-## Accept; a double click plays.
+## one), its source, size, tokens and date, then Play (solo), Host with this map (a room with
+## this map on its shelf: the Host control beside what it acts on) and "..." (Set up tokens,
+## Duplicate, Replace map file..., Delete); Edit map and Reload from Blender (when its source is
+## newer) on a line under them on a map of the player's own. Accept on a card selects it first
+## and plays it on a second Accept; a double click plays.
 ##
 ## A Blender map comes in through Import..., or a .glb dropped anywhere on the library (a new
 ## map) or on a map's card (Replace for that map); LibraryImports shows the import check
@@ -66,10 +74,6 @@ const QUIT := "Quit game"
 const QUIT_ICON := "logout"
 ## The fewest cards to a line beside the map panel (three on a 1280x720 canvas).
 const GRID_COLUMNS := 3
-## The grid's clear margin (the CardGrid panel's ring room): the bar and the panel are inset
-## by it too (the theme's RingRoomStart and RingRoomEnds), so the cards' edges line up with the
-## wordmark's and the panel's top and foot with theirs.
-const RING_ROOM := 6
 
 ## Returns the level info list; tests inject a fake before the node enters the tree.
 var level_provider: Callable = LevelManager.get_saved_levels
@@ -90,20 +94,27 @@ var quit_button: Button
 var grid: LevelGrid
 var new_map_card: NewMapCard
 var map_panel: MapPanel
-## The map panel's column at the right of the grid (hidden with nothing selected).
-var panel_column: MarginContainer
+## The map panel's place in the right column, under the Play together plaque (hidden with
+## nothing selected).
+var panel_column: VBoxContainer
 var imports: LibraryImports
 var backdrop: PaintedBackdrop
 ## The version, a caption on the wordmark's baseline.
 var version_label: Label
-## The wordmark and the tools in one row at the bar's left, on the sky.
+## The wordmark and the tools in one row at the top of the left column, on the sky.
 var masthead: HBoxContainer
-## The Play together card on its paper, at the bar's right end.
+## The heading of the section at the grid's top, over the grid's clip (LevelGrid.top_section);
+## its row is hidden over an empty library, whose one heading scrolls with the cards.
+var sticky_heading: Label
+## The Play together card on its paper, at the top of the right column.
 var play_plaque: PanelContainer
+
+var _sticky_row: MarginContainer
 
 @onready var _hub: MarginContainer = %Hub
 @onready var _top_bar: HBoxContainer = %TopBar
-@onready var _stack: VBoxContainer = %Stack
+@onready var _library_column: VBoxContainer = %LibraryColumn
+@onready var _side_column: VBoxContainer = %SideColumn
 
 
 func _ready() -> void:
@@ -180,18 +191,15 @@ func _build_top_bar() -> void:
 	settings_button.pressed.connect(_on_settings_pressed)
 	quit_button = _tool(QUIT, QUIT_ICON, tools)
 	quit_button.pressed.connect(_on_quit_pressed)
-	var open_sky := Control.new()
-	open_sky.name = "OpenSky"
-	open_sky.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	open_sky.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_top_bar.add_child(open_sky)
 	# Host and Join as two sides of one question; its persimmon is the screen's one fill (C5).
-	# The card's eyebrow and Resume are soft words, so the card stands on paper of its own.
+	# The card's eyebrow and Resume are soft words, so the card stands on paper of its own, at
+	# the top of the right column, the panel's width.
+	_side_column.custom_minimum_size.x = MapPanel.WIDTH
 	play_plaque = PanelContainer.new()
 	play_plaque.name = "PlayPlaque"
 	play_plaque.theme_type_variation = &"Plaque"
 	play_plaque.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	_top_bar.add_child(play_plaque)
+	_side_column.add_child(play_plaque)
 	play_together = PlayTogetherCard.new()
 	play_together.name = "PlayTogether"
 	play_together.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
@@ -238,8 +246,10 @@ func _build_library() -> void:
 	grid.columns = GRID_COLUMNS
 	grid.manageable = false
 	grid.select_before_activate = true
+	grid.sticky_headings = true
 	grid.lead = new_map_card
 	grid.provider = library
+	grid.theme_type_variation = &"LibraryGrid"
 	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	# The headings are sized to the grid's width; a disabled horizontal scroll would make that
@@ -250,36 +260,48 @@ func _build_library() -> void:
 	grid.level_edit_requested.connect(_open_editor)
 	grid.level_map_edit_requested.connect(edit_map_requested.emit)
 	grid.levels_changed.connect(_refresh_actions)
-	var body := HBoxContainer.new()
-	body.name = "Body"
-	body.theme_type_variation = &"BoxContainerRoomy"
-	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_stack.add_child(body)
-	body.add_child(grid)
-	# The panel's top and foot in line with the cards' (the grid's ring room).
-	panel_column = MarginContainer.new()
+	grid.top_section_changed.connect(_show_top_section)
+	# The heading of the section at the grid's top, on the cards' left edge, over the clip.
+	_sticky_row = MarginContainer.new()
+	_sticky_row.name = "StickyRow"
+	_sticky_row.theme_type_variation = &"HubHeading"
+	_sticky_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_library_column.add_child(_sticky_row)
+	sticky_heading = Label.new()
+	sticky_heading.name = "StickyHeading"
+	sticky_heading.theme_type_variation = &"Heading"
+	_sticky_row.add_child(sticky_heading)
+	_show_top_section("")
+	_library_column.add_child(grid)
+	# The panel a step under the plaque, the column's width.
+	panel_column = VBoxContainer.new()
 	panel_column.name = "PanelColumn"
 	panel_column.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel_column.theme_type_variation = &"RingRoomEnds"
-	panel_column.custom_minimum_size.x = MapPanel.WIDTH
-	body.add_child(panel_column)
+	panel_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_side_column.add_child(panel_column)
 	panel_column.add_child(map_panel)
-	_top_bar.resized.connect(_fit_panel)
+	play_plaque.resized.connect(_fit_panel)
 	get_viewport().size_changed.connect(_fit_panel)
 	_fit_panel()
 
 
-## The panel as tall as what it shows, at most the height under the top bar (its words scroll
-## inside past it). Read from the canvas and the bar alone, never from the column, whose height
-## the panel itself would hold up.
+## The panel at most the height left under the plaque above the window's foot; it shortens its
+## picture to fit there (MapPanel.fit_height). Read from the canvas and the plaque alone, never
+## from the column, whose height the panel itself would hold up.
 func _fit_panel() -> void:
-	var above := (_top_bar.get_parent() as Control).get_combined_minimum_size().y
-	above += _stack.get_theme_constant(&"separation")
-	above += _hub.get_theme_constant(&"margin_top") + _hub.get_theme_constant(&"margin_bottom")
-	var canvas := _hub.get_viewport_rect().size.y
-	map_panel.max_height = canvas - above - 2.0 * RING_ROOM
+	var taken := float(_hub.get_theme_constant(&"margin_top"))
+	taken += _hub.get_theme_constant(&"margin_bottom")
+	taken += (_side_column.get_parent() as Control).get_theme_constant(&"margin_bottom")
+	taken += play_plaque.get_combined_minimum_size().y
+	taken += _side_column.get_theme_constant(&"separation")
+	map_panel.max_height = _hub.get_viewport_rect().size.y - taken
 	map_panel.fit_height()
+
+
+## The sticky heading says the section at the grid's top; its row takes no room with none.
+func _show_top_section(words: String) -> void:
+	sticky_heading.text = words
+	_sticky_row.visible = words != ""
 
 
 ## The library's maps in its order (LibraryFacts.ordered), each with when it was last played
@@ -321,9 +343,9 @@ func _refresh_actions() -> void:
 	backdrop.refit()
 
 
-## The top bar lifts in, then the library and the panel (M4).
+## The wordmark row lifts in, then the plaque, the library and the panel (M4).
 func _play_entrance_animation() -> void:
-	var targets: Array[Control] = [masthead, play_plaque, grid, panel_column]
+	var targets: Array[Control] = [masthead, play_plaque, _sticky_row, grid, panel_column]
 	await UiMotion.stagger_in(targets, self)
 	if not is_instance_valid(self):
 		return

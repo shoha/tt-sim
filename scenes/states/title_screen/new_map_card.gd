@@ -29,9 +29,13 @@ extends PanelContainer
 ## "seed"}) that Root hands to the new-map dialog, which asks the rest (starting place and
 ## landform) and opens authoring.
 ##
-## In an empty library the card is the library: alone, larger (set_empty()), its glyph bigger
-## and a caption line (EMPTY_CAPTION) over its buttons, with the Bundled maps offered under it
-## (LevelGrid).
+## Beside map cards it is a map card's height (LevelGrid asks, fit_row()): its name line and
+## buttons are taller than a map's caption band, so its face gives up the difference and is
+## shorter than 16:9; no card in the line is stretched to meet it.
+##
+## In an empty library the card is the library: alone, larger (set_empty()), its face 2:1,
+## its glyph bigger and a caption line (EMPTY_CAPTION, one line) over its buttons, with the
+## Bundled maps offered under it (LevelGrid).
 
 signal generate_requested(spec: Dictionary)
 signal import_requested
@@ -40,7 +44,7 @@ const SIZE_ANY := &"any"
 const SIZE_CUSTOM := &"custom"
 const TITLE := "New map"
 const CAPTION := "Generate a place, or import one"
-const EMPTY_CAPTION := "Make your first map: generate a place, or bring one in from Blender"
+const EMPTY_CAPTION := "Generate your first map, or bring one in from Blender"
 const GENERATE_TIP := "Draw a new map from a seed, then choose where it starts"
 const IMPORT_TIP := "Bring in a map exported from Blender as .glb (or drop one anywhere here)"
 const ANY_TIP := "The seed picks the size: 100, 150 or 200 ft"
@@ -50,10 +54,15 @@ const PICTURE_ASPECT := LevelCard.THUMB_ASPECT
 const GLYPH := "plus"
 const GLYPH_SIZE := 40.0
 const EMPTY_GLYPH_SIZE := 56.0
-## The card's width alone in an empty library.
-const EMPTY_WIDTH := 440.0
+## The card's width alone in an empty library, and its face's width over its height there (no
+## map card beside it to match; low enough that a Bundled map's name shows under it unscrolled
+## on a 1280x720 canvas).
+const EMPTY_WIDTH := 420.0
+const EMPTY_FACE_ASPECT := 2.0
 ## The popover's narrowest.
 const POPOVER_MIN_WIDTH := 360.0
+## The face's shortest, however short the line it fits (fit_row()).
+const FACE_MIN_HEIGHT := 64.0
 ## Above this side the size line warns that the map builds more slowly.
 const WARN_ABOVE_FT := 200
 const SLOW_LINE := "Over %d ft a side the map takes longer to build."
@@ -95,6 +104,9 @@ var size_line: Label
 
 var _empty := false
 var _anchor_parent: Control = null
+var _column: VBoxContainer
+## The line's height to fit (fit_row()), or 0 for the card's own (a 16:9 face).
+var _row_height := 0.0
 
 
 ## A side in feet: its number in a field between minus and plus targets that step a 5 ft square
@@ -154,6 +166,7 @@ func _init() -> void:
 	column.name = "Column"
 	column.theme_type_variation = &"BoxContainerTight"
 	add_child(column)
+	_column = column
 	# A solid paper face with one ink glyph: a map still to come, not a map's picture.
 	picture = Panel.new()
 	picture.name = "Face"
@@ -556,9 +569,23 @@ func _tint_note() -> void:
 		size_icon.self_modulate = ThemeColors.of(size_icon, size_icon.get_meta(&"role"))
 
 
-## The face at a map picture's 16:9, the glyph centred on it.
+## Fit a line `height` tall (a map card's, LevelGrid): the face takes up the difference between
+## that and the rest of the card. 0 gives the card its own height, the face at 16:9.
+func fit_row(height: float) -> void:
+	if is_equal_approx(height, _row_height):
+		return
+	_row_height = height
+	_fit_picture()
+
+
+## The face at a map picture's 16:9 (EMPTY_FACE_ASPECT alone), or what a fitted line leaves it
+## (fit_row()), the glyph centred on it.
 func _fit_picture() -> void:
-	var height := floorf(picture.size.x / PICTURE_ASPECT)
+	var height := floorf(picture.size.x / (EMPTY_FACE_ASPECT if _empty else PICTURE_ASPECT))
+	if _row_height > 0.0 and not _empty:
+		var rest := _column.get_combined_minimum_size().y - picture.custom_minimum_size.y
+		rest += get_theme_stylebox(&"panel").get_minimum_size().y
+		height = maxf(floorf(_row_height - rest), FACE_MIN_HEIGHT)
 	if height > 0.0 and not is_equal_approx(picture.custom_minimum_size.y, height):
 		picture.custom_minimum_size.y = height
 	var side := EMPTY_GLYPH_SIZE if _empty else GLYPH_SIZE

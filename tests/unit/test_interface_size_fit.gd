@@ -296,9 +296,11 @@ func _assert_card_whole(what: String, title: TitleScreen) -> void:
 	assert_true(plaque.encloses(pill), "%s: the card on its plaque" % what)
 
 
-## The selected map's card lies inside the grid's view as it opens (the grid scrolls to it); its
-## panel stands at the grid's right, MapPanel.WIDTH wide, its right edge on the Play together
-## plaque's, its top on the cards', its Play in view; three columns of cards or more beside it.
+## The selected map's card lies inside the grid's view as it opens (the grid scrolls to it); the
+## right column is one width and one left edge: the panel MapPanel.WIDTH wide under the Play
+## together plaque, a step under it, right of the grid, its Play in view; the grid starts right
+## under the wordmark row and its sticky heading, and runs to the canvas's foot; three columns of
+## cards or more.
 func _assert_library_shows(what: String, title: TitleScreen) -> void:
 	var view := _drawn_rect(title.grid).grow(SLACK_PX)
 	var card := title.grid.card_for(String(title.selected_level().get("path", "")))
@@ -309,13 +311,92 @@ func _assert_library_shows(what: String, title: TitleScreen) -> void:
 	var panel_rect := _drawn_rect(title.map_panel)
 	assert_true(title.map_panel.is_visible_in_tree(), "%s: its panel" % what)
 	assert_almost_eq(panel_rect.size.x, MapPanel.WIDTH, SLACK_PX, "%s: the panel's width" % what)
-	assert_gt(panel_rect.position.x, view.end.x - SLACK_PX, "%s: right of the grid" % what)
+	assert_gte(panel_rect.position.x, view.end.x - 2.0 * SLACK_PX, "%s: right of the grid" % what)
 	var plaque := _drawn_rect(title.play_plaque)
-	assert_almost_eq(panel_rect.end.x, plaque.end.x, SLACK_PX, "%s: under the card's end" % what)
-	var cards_top := view.position.y + TitleScreen.RING_ROOM + SLACK_PX
-	assert_almost_eq(panel_rect.position.y, cards_top, 1.0, "%s: on the cards' top" % what)
+	assert_almost_eq(panel_rect.position.x, plaque.position.x, SLACK_PX, "%s: one edge" % what)
+	assert_almost_eq(panel_rect.size.x, plaque.size.x, SLACK_PX, "%s: one width" % what)
+	assert_almost_eq(panel_rect.position.y, plaque.end.y + 12.0, 1.0, "%s: under it" % what)
 	var play := _drawn_rect(title.map_panel.play_button)
 	assert_true(panel_rect.grow(SLACK_PX).encloses(play), "%s: Play in the panel" % what)
+	var heading := _drawn_rect(title.sticky_heading)
+	assert_lt(heading.position.y, _drawn_rect(title.masthead).end.y + 24.0, "%s: no gap" % what)
+	assert_almost_eq(view.position.y, heading.end.y + 4.0, 1.0, "%s: the clip under it" % what)
+	var canvas_foot := title.get_viewport().get_visible_rect().size.y
+	assert_almost_eq(view.end.y, canvas_foot + SLACK_PX, 1.0, "%s: to the foot" % what)
+
+
+## Over an empty library New map stands alone with its first-map line on one line, and the
+## Bundled map under it shows its name with no scroll at 1280x720 and on 720p at Auto.
+func test_an_empty_library_shows_the_bundled_name_unscrolled() -> void:
+	for canvas in [Vector2i(CANVAS), CANVAS_720P_AUTO]:
+		_host.size = canvas
+		var bundled := LEVEL.duplicate()
+		bundled.name = "Old Mill"
+		bundled.map_path = "res://maps/old_mill.glb"
+		var title := TITLE_SCENE.instantiate() as TitleScreen
+		title.level_provider = func() -> Array[Dictionary]: return [bundled]
+		title.session_provider = func() -> Array[Dictionary]: return SESSIONS.duplicate(true)
+		_host.add_child(title)
+		var what := "an empty library on a %s canvas" % str(canvas)
+		await _assert_fits(what, title.new_map_card, Vector2(canvas))
+		assert_true(title.new_map_card.is_empty_library(), what)
+		assert_eq(title.new_map_card.caption.get_line_count(), 1, "%s: one line" % what)
+		var name := _drawn_rect(title.grid._cards[0]._name)
+		var view := _drawn_rect(title.grid).grow(SLACK_PX)
+		assert_eq(title.grid.scroll_vertical, 0, what)
+		assert_true(view.encloses(name), "%s: Old Mill's name %s in %s" % [what, name, view])
+		assert_lte(name.end.y, canvas.y - 24.0, "%s: above the foot's room" % what)
+		title.free()
+
+
+## The panel needs no scroll on any canvas the game gives for the longest map of the player's
+## own (a two-line description, an author, facts on two lines, Edit map and Reload from
+## Blender), and a Bundled map's panel keeps its shape in the same place: the same picture and
+## no taller.
+func test_the_panel_fits_with_no_scroll() -> void:
+	for canvas in [Vector2i(CANVAS), CANVAS_720P_AUTO, CANVAS_768P_AUTO, Vector2i(1920, 1080)]:
+		_host.size = canvas
+		var own := LEVEL.duplicate()
+		own.description = "A ford under old willows, where the road meets the river"
+		own.author = "Hannah"
+		own.map_path = "map.glb"
+		own.map_document = "map.ttmap"
+		own.modified_at = 500
+		var bundled := LEVEL.duplicate()
+		bundled.folder = "_fit_mill"
+		bundled.path = "user://x/_fit_mill/"
+		bundled.name = "Old Mill"
+		bundled.map_path = "res://maps/old_mill.glb"
+		var title := TITLE_SCENE.instantiate() as TitleScreen
+		title.level_provider = func() -> Array[Dictionary]: return [own, bundled]
+		title.updated_provider = func(_folder: String) -> bool: return true
+		title.session_provider = func() -> Array[Dictionary]: return SESSIONS.duplicate(true)
+		_host.add_child(title)
+		title.map_panel.is_updated = func(_folder: String) -> bool: return true
+		title.map_panel.footprint = func(_info: Dictionary) -> Vector2: return Vector2(150, 100)
+		title.map_panel.show_map(title.selected_level())
+		var what := "the panel on a %s canvas" % str(canvas)
+		await _assert_fits(what, title.map_panel.reload_button, Vector2(canvas))
+		_assert_library_shows(what, title)
+		var panel := title.map_panel
+		assert_eq(panel.description_label.get_line_count(), 2, "%s: two lines" % what)
+		assert_true(panel.author_label.is_visible_in_tree(), "%s: the author" % what)
+		assert_false(panel._scroll.get_v_scroll_bar().visible, "%s: no scroll" % what)
+		var scroll := _drawn_rect(panel._scroll).grow(SLACK_PX)
+		assert_true(scroll.encloses(_drawn_rect(panel.played_label)), "%s: the facts" % what)
+		var rect := _drawn_rect(panel)
+		assert_lte(rect.end.y, canvas.y - 24.0 + SLACK_PX, "%s: clear of the foot" % what)
+		var picture := panel.picture_height()
+		var width := panel.picture_well.size.x
+		assert_lte(width / picture, MapPanel.WIDE_ASPECT + 0.02, "%s: picture %d" % [what, picture])
+		title.grid.card_for(String(bundled.path))._on_pressed()
+		await wait_process_frames(4)
+		var shipped := _drawn_rect(panel)
+		assert_eq(shipped.position, rect.position, "%s: in the same place" % what)
+		assert_eq(panel.picture_height(), picture, "%s: the same picture" % what)
+		assert_lte(shipped.size.y, rect.size.y, "%s: no taller" % what)
+		assert_false(panel._scroll.get_v_scroll_bar().visible, "%s: Bundled, no scroll" % what)
+		title.free()
 
 
 ## The room as the GM sees it: four players, three maps (one long name), one selected.

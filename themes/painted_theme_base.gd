@@ -175,6 +175,15 @@ func _define_buttons() -> void:
 			ThemeColors.TEXT
 		)
 	)
+	# A quiet action set in a column of words (the map panel's Add details): no pad at its sides,
+	# so its icon stands on the words' left edge, the caption size, soft ink at rest and ink under
+	# the pointer; the focus ring still draws outside it.
+	var inline := box(clear, RADIUS_CHIP, 0, 2)
+	var inline_style := _button(inline, inline, inline, ThemeColors.TEXT_SOFT, ThemeColors.TEXT)
+	inline_style.font_size = SIZE_CAPTION
+	inline_style.icon_max_width = 16
+	inline_style.h_separation = SPACE_1
+	define_variant_style("InlineAction", "Button", inline_style)
 	# A labelled tool standing on the sky (the title's Avatars, Settings and Quit game): no fill
 	# at rest and ink words and icon, which keep 4.5:1 anywhere on every mood's sky
 	# (BackdropPaint.ink_reads_on); the pointer puts paper under them, the press a step deeper.
@@ -410,9 +419,13 @@ func _define_containers() -> void:
 	define_style("BoxContainer", {separation = SPACE_1})
 	define_variant_style("BoxContainerTight", "BoxContainer", {separation = SPACE_1})
 	define_variant_style("BoxContainerSpaced", "BoxContainer", {separation = SPACE_3})
-	# The title's wider steps: the grid and the map panel apart, the wordmark and its tools apart.
-	define_variant_style("BoxContainerRoomy", "BoxContainer", {separation = SPACE_4})
+	# A step between Tight and Spaced: the map panel's picture to its words to its facts, close
+	# enough that the longest map fits a 1280x720 canvas with no scroll.
+	define_variant_style("BoxContainerSnug", "BoxContainer", {separation = SPACE_2})
+	# The title's wider step: the wordmark and its tools apart.
 	define_variant_style("BoxContainerApart", "BoxContainer", {separation = SPACE_6})
+	# Siblings that keep their own room (the title's two columns: the grid's margin is the step).
+	define_variant_style("BoxContainerFlush", "BoxContainer", {separation = 0})
 	# Facts on a line that flows onto the next when it is full (the map panel's source, size,
 	# tokens and last played).
 	define_variant_style(
@@ -453,20 +466,29 @@ func _define_containers() -> void:
 			margin_bottom = SPACE_2
 		}
 	)
-	# The card grid's ring room (CardGrid's margins, below) given to what lines up with its
-	# cards: the title's top bar at its start, the map panel's column above and below.
+	# The title's hub margin where the library grid runs to the window's left and bottom edges
+	# (LibraryGrid, below): the wordmark and the sticky heading stand in from the left by it, on
+	# the cards' edge; the right column stands clear of the bottom by it.
 	define_variant_style(
-		"RingRoomStart",
+		"HubStart",
 		"MarginContainer",
-		{margin_left = RING_ROOM, margin_top = 0, margin_right = 0, margin_bottom = 0}
+		{margin_left = SPACE_5, margin_top = 0, margin_right = 0, margin_bottom = 0}
 	)
 	define_variant_style(
-		"RingRoomEnds",
+		"HubFoot",
 		"MarginContainer",
-		{margin_left = 0, margin_top = RING_ROOM, margin_right = 0, margin_bottom = RING_ROOM}
+		{margin_left = 0, margin_top = 0, margin_right = 0, margin_bottom = SPACE_5}
 	)
-	# The map panel's words and actions in from the paper's sides, room for a field's well to
-	# reach out round its words; the foot under the actions.
+	# The library's sticky heading: on the cards' edge, a step under the wordmark row (more room
+	# above it than below, S4).
+	define_variant_style(
+		"HubHeading",
+		"MarginContainer",
+		{margin_left = SPACE_5, margin_top = SPACE_3, margin_right = 0, margin_bottom = 0}
+	)
+	# The map panel's words in from the paper's sides, room for a field's well and ring to reach
+	# out round its words inside the panel's scroll clip; its actions a step nearer the paper's
+	# edge (the button's own pad puts its words inside the words' column), the foot under them.
 	define_variant_style(
 		"PanelText",
 		"MarginContainer",
@@ -475,7 +497,7 @@ func _define_containers() -> void:
 	define_variant_style(
 		"PanelTextFoot",
 		"MarginContainer",
-		{margin_left = SPACE_3, margin_top = 0, margin_right = SPACE_3, margin_bottom = SPACE_3}
+		{margin_left = SPACE_2, margin_top = 0, margin_right = SPACE_2, margin_bottom = SPACE_3}
 	)
 	# Dividers are DIVIDER thick: a 1 px line at 1280x720 falls under a physical pixel.
 	var line := {type = "stylebox_line", color = c(ThemeColors.EDGE), thickness = DIVIDER}
@@ -488,6 +510,14 @@ func _define_containers() -> void:
 	# edge far enough for a focus ring (4 px outside a card) to draw whole.
 	var ring_room := box(Color(c(ThemeColors.SURFACE), 0.0), 0, RING_ROOM, RING_ROOM)
 	define_variant_style("CardGrid", "ScrollContainer", {panel = ring_room})
+	# The title's library grid runs to the window's left and bottom edges, so its clip is the
+	# window's edge there; inside, room for a hovered card's shadow (18 px, 8 px down) and its
+	# focus ring on every side, the hub's 24 px at the left and the foot, the step to the map
+	# panel at the right. Its top is the hard clip under the sticky heading.
+	var library_room := box(
+		Color(c(ThemeColors.SURFACE), 0.0), 0, SPACE_5, SPACE_3, {content_margin_bottom = SPACE_6}
+	)
+	define_variant_style("LibraryGrid", "ScrollContainer", {panel = library_room})
 
 
 ## Small status surfaces: chips that label the board (a ruler's distance, the input hints),

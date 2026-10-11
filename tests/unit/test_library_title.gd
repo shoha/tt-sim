@@ -115,6 +115,15 @@ func test_a_card_caption_is_the_date_the_order_uses() -> void:
 	assert_eq(LibraryFacts.touched_text(edited, now), "Edited 3 days ago")
 	assert_eq(LevelCard.caption_for(edited, now), "Edited 3 days ago", "a library entry")
 	assert_eq(LevelCard.caption_for({"token_count": 1}, now), "1 token", "a picker's card")
+	# One formatter for the card and the panel: a Bundled map is never edited here, so it says
+	# when it was played.
+	var shipped := {"played_at": 0, "modified_at": now - 30 * 86400, "map_path": "res://m.glb"}
+	assert_eq(LibraryFacts.when_text(shipped, now), LibraryFacts.NEVER_PLAYED)
+	assert_eq(LevelCard.caption_for(shipped, now), LibraryFacts.NEVER_PLAYED)
+	shipped.played_at = now - 3 * 86400
+	assert_eq(LevelCard.caption_for(shipped, now), "Played 3 days ago")
+	assert_eq(LibraryFacts.when_text(edited, now), "Edited 3 days ago", "own: the sort's date")
+	assert_eq(LibraryFacts.when_text({"played_at": 0}, now), LibraryFacts.NEVER_PLAYED)
 
 
 func test_a_made_maps_size_is_read_from_its_manifest() -> void:
@@ -179,8 +188,11 @@ func test_the_panels_actions_follow_the_source() -> void:
 	assert_false(blender.reload_button.visible, "its source is not newer")
 	var updated := _panel(_info("harbour", "map.glb", "map.ttmap"), true)
 	assert_eq(updated.source_label.text, "Blender, edited here")
-	assert_true(updated.updated_chip.visible, "Updated in Blender, in words")
 	assert_true(updated.reload_button.visible, "Reload from Blender without the menu")
+	assert_eq(updated.reload_button.get_parent(), updated.edit_button.get_parent(), "beside Edit")
+	assert_eq(updated.more_button.get_parent(), updated.play_button.get_parent(), "... after Host")
+	for child in updated.find_children("*", "Label", true, false):
+		assert_ne((child as Label).text, LibraryFacts.UPDATED, "said once, by Reload")
 	watch_signals(updated)
 	updated.reload_button.pressed.emit()
 	assert_signal_emitted_with_parameters(
@@ -219,6 +231,15 @@ func test_the_panels_placeholder_shows_the_names_initial() -> void:
 	await wait_process_frames(3)
 	var picture := panel.picture_well.size
 	assert_almost_eq(picture.x / picture.y, MapPanel.PICTURE_ASPECT, 0.02, "16:9")
+	var share := roundi(picture.y * MapPlaceholder.INITIAL_SHARE)
+	assert_eq(initial.label_settings.font_size, share, "the initial scales with the picture")
+	# A short column shortens the picture, never past WIDE_ASPECT; the rest of the panel fits.
+	panel.max_height = 380.0
+	panel.fit_height()
+	await wait_process_frames(3)
+	picture = panel.picture_well.size
+	assert_lt(picture.y, picture.x / MapPanel.PICTURE_ASPECT - 1.0, "shorter than 16:9")
+	assert_gte(picture.y, floorf(picture.x / MapPanel.WIDE_ASPECT), "no shorter than its floor")
 
 
 func test_a_field_saves_on_enter_through_update_meta_and_escape_reverts() -> void:
@@ -277,8 +298,15 @@ func test_the_panels_menu_author_and_quiet_empty_fields() -> void:
 	assert_false(bare.description_label.visible, "no description, no line")
 	assert_eq(bare.description_edit.placeholder_text, "", "no hint at rest")
 	assert_true(bare.add_details_button.visible)
+	assert_eq(bare.add_details_button.theme_type_variation, &"InlineAction")
+	await wait_process_frames(2)
+	var words_edge := bare.name_label.get_global_rect().position.x
+	var glyph_edge := bare.add_details_button.get_global_rect().position.x
+	var pad := bare.add_details_button.get_theme_stylebox(&"normal").get_margin(SIDE_LEFT)
+	assert_almost_eq(glyph_edge + pad, words_edge, 0.5, "Add details on the words' edge")
 	bare.add_details_button.pressed.emit()
 	assert_true(bare.description_edit.visible, "Add details opens the description")
+	assert_false(bare.add_details_button.visible, "the open field takes its place")
 
 
 # --- New map -----------------------------------------------------------------------------------
@@ -517,8 +545,14 @@ func test_accept_selects_a_card_first_and_tab_reaches_the_panel() -> void:
 	assert_eq(title.selected_level().folder, "b")
 	second.gui_input.emit(accept)
 	assert_signal_emitted(title.grid, "level_activated", "Accept on the selected card plays")
-	# The panel follows the grid in the tree, so Tab from the last card enters it, at the map's
-	# name (its words take the focus on a map of the player's own).
+	# The right column follows the grid in the tree: Tab from the last card reaches the Play
+	# together card and Resume, then the panel at the map's name (its words take the focus on a
+	# map of the player's own); Right from a card at the line's end reaches the column too.
 	await wait_process_frames(2)
 	var next := second.find_next_valid_focus()
+	for _step in 4:
+		if next == null or title.map_panel.is_ancestor_of(next):
+			break
+		next = next.find_next_valid_focus()
 	assert_true(title.map_panel.is_ancestor_of(next), "Tab enters the panel: %s" % next)
+	assert_eq(next, title.map_panel.name_label, "at the map's name")

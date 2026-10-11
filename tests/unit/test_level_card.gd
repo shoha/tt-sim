@@ -114,15 +114,36 @@ func test_the_placeholder_is_a_gradient_with_the_maps_initial() -> void:
 	assert_eq(initial.text, "F", "the name's initial")
 	assert_eq(initial.theme_type_variation, &"Title", "the heading face (Fraunces)")
 	placeholder.size = Vector2(320, 180)
-	assert_eq(initial.label_settings.font_size, MapPlaceholder.INITIAL_SIZE, "a heading's size")
-	assert_between(MapPlaceholder.INITIAL_SIZE, 28, 32)
+	var share := roundi(180 * MapPlaceholder.INITIAL_SHARE)
+	assert_eq(initial.label_settings.font_size, share, "scales with the picture")
+	placeholder.size = Vector2(480, 270)
+	var larger := roundi(270 * MapPlaceholder.INITIAL_SHARE)
+	assert_eq(initial.label_settings.font_size, larger, "a larger picture, a larger initial")
 	placeholder.size = Vector2(64, 36)
-	assert_lt(initial.label_settings.font_size, MapPlaceholder.INITIAL_SIZE, "smaller in a row")
+	assert_eq(initial.label_settings.font_size, MapPlaceholder.INITIAL_MIN, "never too small")
 	placeholder.paint("old_mill", "outdoor_sunset")
 	assert_eq(placeholder.mood(), PaintedBackdrop.Mood.GOLDEN_HOUR)
 	assert_eq(initial.text, "O", "the key's initial with no name")
 	var golden := BackdropPaint.uniforms(MapPlaceholder.look_for(PaintedBackdrop.Mood.GOLDEN_HOUR))
 	assert_eq(paint.get_shader_parameter(&"low_lch"), golden.low_lch)
+
+
+## A selected card's caption band: its name and caption in the on-selected role on the lake
+## fill keep 4.5:1 (C6), on paper and on glass, read from the colours the card draws with.
+func test_the_selected_caption_band_reads() -> void:
+	var card := LevelCard.new()
+	add_child_autofree(card)
+	card.setup({"name": "Alpha", "path": "user://x/a/", "played_at": 0, "modified_at": 1})
+	card.set_selected(true)
+	var fill := (card._strip.get_theme_stylebox(&"panel") as StyleBoxFlat).bg_color
+	for label: Label in [card._name, card._caption]:
+		var ink := label.get_theme_color(&"font_color")
+		assert_gte(BackdropPaint.contrast(ink, fill), 4.5, "%s on the band" % label.name)
+	for roles: Dictionary in [ThemeColors.PAPER_ROLES, ThemeColors.GLASS_ROLES]:
+		var ratio := BackdropPaint.contrast(
+			roles[ThemeColors.ON_SELECTED], roles[ThemeColors.SELECTED]
+		)
+		assert_gte(ratio, 4.5, "on-selected on selected")
 
 
 ## A placeholder is never a hole in the sky: every stop is the sky's own hue at least DEEPEN

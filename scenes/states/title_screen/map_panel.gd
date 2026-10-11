@@ -1,15 +1,21 @@
 class_name MapPanel
 extends PanelContainer
 
-## The selected map's panel, pinned at the right of the library (TitleScreen): one place and
-## one shape for every map, whatever its source (UI_TASTE verdict 2026-10-10). It is a paper
-## card as the map cards are, always WIDTH wide, as tall as what it shows (scrolling inside when
-## a short canvas cannot hold it), and not a modal: Tab, arrows and the pad reach it like any
-## card. Top to bottom: the map's picture, large at 16:9 (its thumbnail, or its placeholder);
-## its name in the title face; its description; "by" its author; the facts derived from disk
-## (LibraryFacts: the source chip, the size, the tokens, when it was last played here, and
-## "Updated in Blender" on a lake chip when Blender has written its source since); then what can
-## be done with it.
+## The selected map's panel, under the Play together card in the library's right column
+## (TitleScreen): one place and one shape for every map, whatever its source (UI_TASTE verdict
+## 2026-10-10). It is a paper card as the map cards are, WIDTH wide (the plaque's), as tall as
+## what it shows, and not a modal: Tab, arrows and the pad reach it like any card. Top to
+## bottom: the map's picture (its thumbnail, or its placeholder); its name in the title face;
+## its description; "by" its author; the facts derived from disk (LibraryFacts: the source chip,
+## the size, the tokens, and LibraryFacts.when_text, the words its card says); then what can be
+## done with it.
+##
+## The panel never scrolls on a canvas the game gives (1280x720 is the smallest): with
+## max_height set (the room its column leaves), the picture is 16:9 where the longest map of
+## the player's own fits under it and shorter, down to WIDE_ASPECT, where it would not
+## (words_reserve()). The picture follows the canvas, never the map, so a Bundled map's panel
+## and the player's own have one shape. Only past that floor do the picture and words scroll
+## over the pinned actions, the bar the handle alone (ScrollBarFade).
 ##
 ## The words read as text. On a map of the player's own they edit in place: the pointer over a
 ## field, or the focus on it, shows its well; a click or Accept opens it for typing (the hint
@@ -20,13 +26,14 @@ extends PanelContainer
 ## quiet "Add details" opens the first empty one. A Bundled map, and an old single-file level
 ## with no folder, show the same fields in the same order as plain text, the empty ones absent.
 ##
-## The actions, every one a control of one height: Play (solo; the panel's lead, Framed: Host on
-## the Play together card is the screen's one fill, C5) and Host with this map (a room with this
-## map on its shelf) on the first line; Edit map (authoring; absent for a Bundled map) and "..."
-## at its end on the second; Reload from Blender on a line of its own, only while the source is
-## newer. "..." holds Set up tokens
-## (the Level Editor), Duplicate, Replace map file... (not for a Bundled map: the file picker,
-## then the import check and Replace, as a drop on the card) and Delete.
+## The actions, every one a control of one height, after the facts: Play (solo; the panel's
+## lead, marked by its Framed edge as Generate is New map's: Host on the Play together card is
+## the screen's one fill, C5), Host with this map (a room with this map on its shelf) and "..."
+## on the first line, the same for every map; Edit map (authoring) and, only while Blender has
+## written the source since, Reload from Blender on the second, which a Bundled map has none
+## of. "Updated in Blender" is said on the map's card; here Reload says it. "..." holds Set up
+## tokens (the Level Editor), Duplicate, Replace map file... (not for a Bundled map: the file
+## picker, then the import check and Replace, as a drop on the card) and Delete.
 
 signal play_requested(info: Dictionary)
 signal host_requested(info: Dictionary)
@@ -44,10 +51,13 @@ const ACTION_DUPLICATE := &"duplicate"
 const ACTION_DELETE := &"delete"
 const ACTION_RELOAD := &"reload"
 const ACTION_REPLACE := &"replace_file"
-## The panel's width on every canvas (TitleScreen keeps at least three columns of cards beside
-## it on a 1280x720 canvas).
-const WIDTH := 360.0
+## The panel's width on every canvas, the Play together plaque's (its 336 px card and 16 px
+## sides), so the right column has one width; TitleScreen keeps at least three columns of cards
+## beside it on a 1280x720 canvas.
+const WIDTH := 368.0
 const PICTURE_ASPECT := 16.0 / 9.0
+## The widest the picture gets on a short canvas (its width over its height), shortened to fit.
+const WIDE_ASPECT := 2.4
 ## The words' and actions' inset from the inside of the paper (the picture's 4 px inset, as a
 ## card's): room for a field's well to reach out round its words.
 const TEXT_INSET := 12
@@ -105,9 +115,9 @@ var add_details_button: Button
 var source_label: Label
 var size_label: Label
 var tokens_label: Label
+## The when fact (LibraryFacts.when_text, as the map's card says it).
 var played_label: Label
-## "Updated in Blender" and Reload from Blender, shown while the source is newer.
-var updated_chip: PanelContainer
+## Reload from Blender, shown while the source is newer.
 var reload_button: Button
 var play_button: Button
 var host_button: Button
@@ -118,8 +128,11 @@ var menu: PopupMenu
 var _scroll: ScrollContainer
 var _column: VBoxContainer
 var _picture_box: Control
+var _body: VBoxContainer
+var _words: VBoxContainer
+var _facts: HFlowContainer
+var _source_chip: PanelContainer
 var _second_row: HBoxContainer
-var _push: Control
 var _actions: VBoxContainer
 var _labels := {}
 var _edits := {}
@@ -135,8 +148,8 @@ func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	custom_minimum_size.x = WIDTH
 	size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	# The picture and the words scroll when a short canvas cannot hold them; the actions stay
-	# pinned at the foot, always in view.
+	# The picture and the words scroll only where even the shortened picture leaves no room
+	# (past every canvas the game gives); the actions stay pinned at the foot, always in view.
 	var frame := VBoxContainer.new()
 	frame.name = "Frame"
 	frame.theme_type_variation = &"BoxContainerSpaced"
@@ -147,10 +160,11 @@ func _init() -> void:
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_scroll.follow_focus = true
+	ScrollBarFade.attach(_scroll)
 	frame.add_child(_scroll)
 	_column = VBoxContainer.new()
 	_column.name = "Column"
-	_column.theme_type_variation = &"BoxContainerSpaced"
+	_column.theme_type_variation = &"BoxContainerSnug"
 	_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_column.minimum_size_changed.connect(fit_height)
@@ -161,13 +175,13 @@ func _init() -> void:
 	_picture_box.resized.connect(_fit_picture)
 	_column.add_child(_picture_box)
 	# The words stand TEXT_INSET in from the paper's edge, room for a field's well to reach out.
-	var body := VBoxContainer.new()
-	body.name = "Body"
-	body.theme_type_variation = &"BoxContainerSpaced"
-	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_column.add_child(_inset(body, &"PanelText"))
-	_build_words(body)
-	_build_facts(body)
+	_body = VBoxContainer.new()
+	_body.name = "Body"
+	_body.theme_type_variation = &"BoxContainerSnug"
+	_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_column.add_child(_inset(_body, &"PanelText"))
+	_build_words(_body)
+	_build_facts(_body)
 	_actions = VBoxContainer.new()
 	_actions.name = "Actions"
 	_actions.theme_type_variation = &"BoxContainerTight"
@@ -193,17 +207,19 @@ func _build_words(body: VBoxContainer) -> void:
 	words.theme_type_variation = &"BoxContainerTight"
 	words.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	body.add_child(words)
+	_words = words
 	name_label = _field("name", &"Title", &"TitleField", words)
 	name_edit = _edits.name
 	description_label = _field("description", &"Body", &"InlineField", words)
 	description_edit = _edits.description
 	author_label = _field("author", &"Caption", &"InlineField", words)
 	author_edit = _edits.author
+	# In the words' column, its glyph on their left edge (InlineAction has no side pad).
 	add_details_button = Button.new()
 	add_details_button.name = "AddDetails"
 	add_details_button.text = ADD_DETAILS
 	add_details_button.icon = IconButton.load_icon("plus")
-	add_details_button.theme_type_variation = &"Ghost"
+	add_details_button.theme_type_variation = &"InlineAction"
 	add_details_button.tooltip_text = ADD_DETAILS_TIP
 	add_details_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	add_details_button.pressed.connect(_on_add_details)
@@ -253,23 +269,22 @@ func _build_facts(body: VBoxContainer) -> void:
 	facts.theme_type_variation = &"FactsFlow"
 	facts.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	body.add_child(facts)
+	_facts = facts
 	var chip := PanelContainer.new()
 	chip.name = "Source"
 	chip.theme_type_variation = &"Chip"
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	facts.add_child(chip)
+	_source_chip = chip
 	source_label = _caption("SourceLabel", chip)
 	size_label = _caption("Size", facts)
 	tokens_label = _caption("Tokens", facts)
 	played_label = _caption("Played", facts)
-	updated_chip = LevelCard.state_chip(LibraryFacts.UPDATED, LibraryFacts.UPDATED_ICON)
-	updated_chip.name = "Updated"
-	updated_chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	facts.add_child(updated_chip)
 
 
 func _build_actions(actions: VBoxContainer) -> void:
+	# The first line is every map's: Play, Host with this map and "..." at its end.
 	var first := HBoxContainer.new()
 	first.name = "First"
 	first.theme_type_variation = &"BoxContainerTight"
@@ -282,19 +297,6 @@ func _build_actions(actions: VBoxContainer) -> void:
 	host_button.name = "HostWithThisMap"
 	host_button.tooltip_text = HOST_TIP
 	host_button.pressed.connect(func() -> void: host_requested.emit(info))
-	_second_row = HBoxContainer.new()
-	_second_row.name = "Second"
-	_second_row.theme_type_variation = &"BoxContainerTight"
-	actions.add_child(_second_row)
-	edit_button = UiActions.secondary("Edit map", "brush", _second_row)
-	edit_button.tooltip_text = "Shape, paint and dress this map"
-	edit_button.pressed.connect(func() -> void: edit_map_requested.emit(info))
-	# With no Edit map (a Bundled map) "..." keeps its place at the line's end.
-	var push := Control.new()
-	push.name = "Push"
-	push.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	push.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_second_row.add_child(push)
 	more_button = Button.new()
 	more_button.name = "More"
 	more_button.icon = IconButton.load_icon("dots-vertical")
@@ -302,20 +304,28 @@ func _build_actions(actions: VBoxContainer) -> void:
 	more_button.tooltip_text = "More"
 	more_button.theme_type_variation = &"Secondary"
 	more_button.pressed.connect(open_menu)
-	_second_row.add_child(more_button)
+	first.add_child(more_button)
 	menu = PopupMenu.new()
 	menu.name = "Menu"
 	menu.id_pressed.connect(_on_menu_id)
 	more_button.add_child(menu)
-	_push = push
-	# Reload from Blender on a line of its own, only while the source is newer.
-	reload_button = UiActions.secondary(RELOAD, LibraryFacts.UPDATED_ICON, actions)
+	# The second line only on a map of the player's own: Edit map, and Reload from Blender
+	# beside it while the source is newer.
+	_second_row = HBoxContainer.new()
+	_second_row.name = "Second"
+	_second_row.theme_type_variation = &"BoxContainerTight"
+	actions.add_child(_second_row)
+	edit_button = UiActions.secondary("Edit map", "brush", _second_row)
+	edit_button.tooltip_text = "Shape, paint and dress this map"
+	edit_button.pressed.connect(func() -> void: edit_map_requested.emit(info))
+	reload_button = UiActions.secondary(RELOAD, LibraryFacts.UPDATED_ICON, _second_row)
 	reload_button.name = "Reload"
 	reload_button.tooltip_text = RELOAD_TIP
 	reload_button.pressed.connect(func() -> void: action_requested.emit(info, ACTION_RELOAD))
 	for button: Button in [play_button, host_button, edit_button, reload_button]:
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	host_button.size_flags_stretch_ratio = 1.8
+	reload_button.size_flags_stretch_ratio = 1.6
 	for button: Button in [play_button, host_button, edit_button, reload_button, more_button]:
 		button.custom_minimum_size.y = ACTION_HEIGHT
 	more_button.custom_minimum_size.x = ACTION_HEIGHT
@@ -349,12 +359,10 @@ func show_map(level_info: Dictionary) -> void:
 	size_label.text = LibraryFacts.size_text(footprint.call(info))
 	size_label.visible = size_label.text != ""
 	tokens_label.text = LibraryFacts.tokens_text(int(info.get("token_count", 0)))
-	played_label.text = LibraryFacts.played_text(int(info.get("played_at", 0)), clock.call())
+	played_label.text = LibraryFacts.when_text(info, clock.call())
 	edit_button.visible = source != LibraryFacts.SOURCE_BUNDLED
-	var updated := can_reload() and bool(is_updated.call(String(info.get("folder", ""))))
-	updated_chip.visible = updated
-	reload_button.visible = updated
-	_push.visible = not edit_button.visible
+	reload_button.visible = can_reload() and bool(is_updated.call(String(info.get("folder", ""))))
+	_second_row.visible = edit_button.visible or reload_button.visible
 	_scroll.scroll_vertical = 0
 	fit_height()
 
@@ -426,6 +434,8 @@ func begin_edit(key: String) -> void:
 	var cue: PanelContainer = _cues[key]
 	cue.visible = true
 	cue.theme_type_variation = &"FieldCue"
+	# The open field takes Add details' place: it is what Add details opens.
+	add_details_button.visible = false
 	edit.visible = true
 	edit.grab_focus()
 	edit.edit()
@@ -486,18 +496,57 @@ func _show_picture() -> void:
 	_fit_picture()
 
 
-## The picture at 16:9 across the panel's width.
+## The picture across the panel's width: 16:9, or shorter (to WIDE_ASPECT) where max_height
+## leaves the longest map of the player's own too little room under it (words_reserve()).
 func _fit_picture() -> void:
-	var height := floorf(_picture_box.size.x / PICTURE_ASPECT)
-	if height > 0.0 and not is_equal_approx(_picture_box.custom_minimum_size.y, height):
+	var width := _picture_box.size.x
+	if width <= 0.0:
+		return
+	var height := floorf(width / PICTURE_ASPECT)
+	if max_height > 0.0:
+		var room := floorf(max_height - words_reserve())
+		height = clampf(room, floorf(width / WIDE_ASPECT), height)
+	if not is_equal_approx(_picture_box.custom_minimum_size.y, height):
 		_picture_box.custom_minimum_size.y = height
 
 
+## The picture's height as laid out.
+func picture_height() -> float:
+	return _picture_box.custom_minimum_size.y
+
+
+## The panel's height less its picture for the longest map of the player's own: its name, a
+## description on two lines, an author (or Add details, the taller), the facts on two lines and
+## both lines of actions, with every gap and margin, read from the theme. The picture is
+## shortened by this, so by the canvas alone: every map's panel keeps one shape.
+func words_reserve() -> float:
+	var words_gap := float(_words.get_theme_constant(&"separation"))
+	var words := _lines(name_label, 1) + _lines(description_label, 2) + 2.0 * words_gap
+	words += maxf(_lines(author_label, 1), add_details_button.get_combined_minimum_size().y)
+	var facts := _source_chip.get_combined_minimum_size().y + _lines(size_label, 1)
+	facts += float(_facts.get_theme_constant(&"v_separation"))
+	var actions := 2.0 * ACTION_HEIGHT + float(_actions.get_theme_constant(&"separation"))
+	actions += float((_actions.get_parent() as Control).get_theme_constant(&"margin_bottom"))
+	var gaps := float(_column.get_theme_constant(&"separation"))
+	gaps += float(_body.get_theme_constant(&"separation"))
+	gaps += float((_scroll.get_parent() as BoxContainer).get_theme_constant(&"separation"))
+	return get_theme_stylebox(&"panel").get_minimum_size().y + words + facts + actions + gaps
+
+
+## The height of `count` lines of `label`'s face, as a wrapping label lays them out.
+static func _lines(label: Label, count: int) -> float:
+	var font := label.get_theme_font(&"font")
+	var height := font.get_height(label.get_theme_font_size(&"font_size"))
+	var spacing := float(label.get_theme_constant(&"line_spacing"))
+	return ceilf(count * height + (count - 1) * spacing)
+
+
 ## The panel's height: what it shows, but never past max_height (its column's, when one is
-## set), where it scrolls inside instead.
+## set), where it scrolls inside instead (past WIDE_ASPECT only).
 func fit_height() -> void:
 	if _actions == null:
 		return
+	_fit_picture()
 	var frame := _scroll.get_parent() as BoxContainer
 	var want := _column.get_combined_minimum_size().y + frame.get_theme_constant(&"separation")
 	want += (_actions.get_parent() as Control).get_combined_minimum_size().y
@@ -520,18 +569,24 @@ func menu_items() -> Array[int]:
 	return items
 
 
-## Opens "..." under its button, its right edge at the button's, inside the panel. Popups are
-## placed in the window's pixels (get_screen_position, as a card's own menu is), and its width
-## is known once shown.
+## Opens "..." under its button, its right edge at the button's, inside the panel; over the
+## button instead where the window ends first (the panel stands near the foot). Popups are
+## placed in the window's pixels (get_screen_position, as a card's own menu is), and the menu's
+## size is known once shown.
 func open_menu() -> void:
 	menu.clear()
 	for id in menu_items():
 		menu.add_item(String(MENU_LABELS[id]), id)
 	var corner := Vector2i(more_button.get_screen_position())
-	var below := corner.y + roundi(more_button.size.y * get_viewport().get_final_transform().y.y)
-	menu.popup(Rect2i(Vector2i(corner.x, below + 4), Vector2i.ZERO))
-	var right := corner.x + roundi(more_button.size.x * get_viewport().get_final_transform().x.x)
-	menu.position = Vector2i(right - menu.size.x, below + 4)
+	var to_window := get_viewport().get_final_transform()
+	var below := corner.y + roundi(more_button.size.y * to_window.y.y) + 4
+	menu.popup(Rect2i(Vector2i(corner.x, below), Vector2i.ZERO))
+	var right := corner.x + roundi(more_button.size.x * to_window.x.x)
+	# The canvas's foot in the same pixels: the room under the button, scaled as it is.
+	var room := get_viewport_rect().size.y - more_button.get_global_rect().position.y
+	var foot := corner.y + roundi(room * to_window.y.y)
+	var top := below if below + menu.size.y <= foot else corner.y - 4 - menu.size.y
+	menu.position = Vector2i(right - menu.size.x, top)
 
 
 func _on_menu_id(id: int) -> void:
