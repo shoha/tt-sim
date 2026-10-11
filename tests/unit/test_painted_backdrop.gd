@@ -1,8 +1,8 @@
 extends GutTest
 
 ## PaintedBackdrop: the curated moods by environment preset, each a luminous sky gradient with
-## no scenery, the cross-fade between them, and the title's and the room's words on paper of
-## their own, never on the sky.
+## no scenery and light enough for ink anywhere on it, the cross-fade between them, and every
+## word of the title and the room reading on what is under it (paper, a fill, or the sky).
 
 const TITLE_SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
 ## A saved level with no folder on disk, so the title shows its captions.
@@ -62,7 +62,9 @@ func test_the_backdrop_paints_a_gradient_and_no_scenery() -> void:
 		var look := BackdropPaint.look_of(mood)
 		assert_eq(look.keys().size(), STOPS.size(), "mood %d: its stops only" % mood)
 		var near := Vector3.ONE * 0.002
-		assert_almost_eq(BackdropPaint.colour_at(look, 0.0), look.sky_low, near, "horizon at the foot")
+		assert_almost_eq(
+			BackdropPaint.colour_at(look, 0.0), look.sky_low, near, "horizon at the foot"
+		)
 		assert_almost_eq(BackdropPaint.colour_at(look, 1.0), look.sky_top, near, "top at the head")
 
 
@@ -164,9 +166,12 @@ func test_a_change_of_light_turns_the_sky_one_way() -> void:
 					var colourful := [one, two].all(
 						func(key: String) -> bool: return _colourful(from[key], to[key])
 					)
-					var moved := absf(turns[0]) > deg_to_rad(15.0) and absf(turns[1]) > deg_to_rad(15.0)
+					var moved := (
+						absf(turns[0]) > deg_to_rad(15.0) and absf(turns[1]) > deg_to_rad(15.0)
+					)
 					var neighbours := (
-						absf(_turn(from[one], from[two])) < near and absf(_turn(to[one], to[two])) < near
+						absf(_turn(from[one], from[two])) < near
+						and absf(_turn(to[one], to[two])) < near
 					)
 					if colourful and moved and neighbours:
 						var what := "%s and %s, %d -> %d: %s" % [one, two, a, b, turns]
@@ -188,17 +193,37 @@ func _turn(from: Vector3, to: Vector3) -> float:
 	return up if up <= PI else up - TAU
 
 
-## No word stands straight on the sky: every word the title and the room show (a label's, a
-## button's) sits on opaque paper, a control's own fill or a placeholder's gradient, and reads
-## 4.5:1 or better on it, in every mood. The mood changes only the backdrop, so it never reaches
-## a word's ground.
+## Ink reads anywhere on every mood's sky, 4.5:1 or better from the horizon to the top, so the
+## title's wordmark, its labelled tools and its section headings can stand on the sky itself.
+func test_ink_reads_anywhere_on_every_moods_sky() -> void:
+	for mood in PaintedBackdrop.Mood.size():
+		var look := BackdropPaint.look_of(mood)
+		var ratio := BackdropPaint.worst_contrast(look, ThemeColors.INK)
+		assert_gte(ratio, 4.5, "mood %d: ink at %.2f:1 at the least" % [mood, ratio])
+		assert_true(BackdropPaint.ink_reads_on(look))
+	# Night is moonlit periwinkle, light enough that paper on it reads as lit, not deep navy.
+	var night_top := BackdropPaint.to_oklch(
+		BackdropPaint.look_of(PaintedBackdrop.Mood.NIGHT).sky_top
+	)
+	assert_gte(night_top.x, 0.62, "night's upper band is light")
+
+
+## Every word the title and the room show (a label's, a button's) reads 4.5:1 or better on what
+## is under it, in every mood: opaque paper, a control's own fill, a placeholder's gradient, or,
+## for the title's wordmark, tools and section headings ("Your maps", "Bundled with TTSim"),
+## the sky itself where the word stands.
 func test_every_word_on_the_title_and_the_room_reads_in_every_mood() -> void:
 	var host := SubViewport.new()
 	host.size = Vector2i(1280, 720)
 	host.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	add_child_autofree(host)
 	var title := TITLE_SCENE.instantiate() as TitleScreen
-	title.level_provider = func() -> Array[Dictionary]: return [LEVEL.duplicate()]
+	var bundled := LEVEL.duplicate()
+	bundled.path = "user://x/_backdrop_bundled/"
+	bundled.folder = "_backdrop_bundled"
+	bundled.name = "Old Mill"
+	bundled["map_path"] = "res://maps/old_mill.glb"
+	title.level_provider = func() -> Array[Dictionary]: return [LEVEL.duplicate(), bundled]
 	host.add_child(title)
 	var room := RoomScreen.new()
 	room.connect_network = false
@@ -207,6 +232,8 @@ func test_every_word_on_the_title_and_the_room_reads_in_every_mood() -> void:
 	room.panel.show_session(_room_summary(), "enet-1", true)
 	room.panel.select("hollow")
 	await wait_process_frames(3)
+	var headings := title.grid.headings()
+	assert_eq(headings.size(), 2, "Your maps and Bundled with TTSim")
 	for mood: int in PaintedBackdrop.Mood.values():
 		for screen: Node in [title, room]:
 			var backdrop: PaintedBackdrop = screen.get("backdrop")
@@ -214,12 +241,13 @@ func test_every_word_on_the_title_and_the_room_reads_in_every_mood() -> void:
 			var words := _words(screen)
 			assert_gt(words.size(), 5, "%s shows its words" % screen.name)
 			for control: Control in words:
-				var ground := _ground(control)
 				var what := "%s %s, mood %d" % [screen.name, screen.get_path_to(control), mood]
-				assert_ne(ground.a, 0.0, "%s stands on paper, not the sky" % what)
-				if ground.a > 0.0:
-					var ratio := _contrast(_ink(control), ground)
-					assert_gte(ratio, 4.5, "%s: %.2f:1" % [what, ratio])
+				var ratio := _worst_ratio(control, mood)
+				assert_gte(ratio, 4.5, "%s: %.2f:1" % [what, ratio])
+		# A section heading scrolls with the grid, so it must read wherever on the sky it goes.
+		for heading: Label in headings:
+			var ratio := BackdropPaint.worst_contrast(BackdropPaint.look_of(mood), _ink(heading))
+			assert_gte(ratio, 4.5, "%s, mood %d: %.2f:1" % [heading.text, mood, ratio])
 	title.free()
 	PaintedBackdrop.last_mood = PaintedBackdrop.Mood.MORNING
 
@@ -250,6 +278,20 @@ func _ink(control: Control) -> Color:
 	return control.get_theme_color(&"font_color")
 
 
+## The least contrast `control`'s words keep on what is under them in `mood`: its opaque ground
+## (_ground), or with none, the sky from the top of the words to their foot where they stand on
+## the canvas.
+func _worst_ratio(control: Control, mood: int) -> float:
+	var ground := _ground(control)
+	if ground.a > 0.0:
+		return _contrast(_ink(control), ground)
+	var rect := control.get_global_rect()
+	var height := control.get_viewport_rect().size.y
+	var top := clampf(1.0 - rect.position.y / height, 0.0, 1.0)
+	var foot := clampf(1.0 - rect.end.y / height, 0.0, 1.0)
+	return BackdropPaint.worst_contrast(BackdropPaint.look_of(mood), _ink(control), foot, top)
+
+
 ## The opaque fill under `control`'s words: its own (a button's state, a panel's), the Play
 ## together card's wash under a face's words, a placeholder's gradient where its initial stands
 ## (its middle), else the nearest ancestor's. Transparent (alpha 0) when nothing but the sky is
@@ -262,7 +304,7 @@ func _ground(control: Control) -> Color:
 			if wash.a >= 1.0:
 				return wash
 		if node is MapPlaceholder:
-			var look := BackdropPaint.look_of((node as MapPlaceholder).mood())
+			var look := MapPlaceholder.look_for((node as MapPlaceholder).mood())
 			var sky := BackdropPaint.colour_at(look, 0.5)
 			return Color(sky.x, sky.y, sky.z)
 		var fill := _fill(node as Control)

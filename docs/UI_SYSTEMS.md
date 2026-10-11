@@ -436,9 +436,11 @@ See [THEME_GUIDE.md's UI Primitives](THEME_GUIDE.md#ui-primitives) and
 ## Title Hub
 
 `TitleScreen` (`scenes/states/title_screen/title_screen.gd`) is the app's entry screen, and it is
-the library (card library-title, 2026-10-10): a top bar over a grid of the player's maps, over
-the backdrop's sky gradient in the selected map's mood (morning with none, and over an empty
-library).
+the library (card library-title, 2026-10-10): a top bar, then the grid of the player's maps at
+the left and the selected map's panel pinned at the right, over the backdrop's sky gradient in
+the selected map's mood (morning with none, and over an empty library). One material (card
+title-coherent, UI_TASTE verdict 2026-10-10, the once-over): paper cards on the sky, and ink
+words where words stand on the sky itself.
 
 ### Painted backdrop
 
@@ -461,9 +463,18 @@ until the UI's painterly side is revisited; the painted sun, clouds, hills and p
   (`BackdropPaint.uniforms` hands it the stops as lightness, chroma and unwrapped hue;
   `colour_at` is the same curve on the CPU), so the middle stop shapes the turn without a seam
   at it and a blue top over a warm horizon never greys part way (an sRGB blend did), then adds
-  half an 8-bit step of per-pixel dither so a long gradient does not band. A placeholder leans
-  the gradient part way to the diagonal (`tilt` 0.5) and sets the map's initial over it in ink
-  or paper, whichever reads better on the middle of its mood (`MapPlaceholder.ink_on`).
+  half an 8-bit step of per-pixel dither so a long gradient does not band. Every mood is light
+  enough all the way down for ink (`ThemeColors.INK`) to keep 4.5:1 anywhere on it
+  (`BackdropPaint.ink_reads_on`; the darkest, dusk's violet top and night's, about 4.8:1):
+  dusk's top was lifted and night is moonlit periwinkle over a lavender horizon, light enough
+  that paper on it reads as lit, not deep navy.
+- **Placeholders.** A map with no thumbnail paints its mood's gradient one step deeper than the
+  sky (`MapPlaceholder.look_for`: `DEEPEN` 0.12 darker in OKLCH lightness at the same hues,
+  deeper in 0.02 steps where neither ink nor paper would read, as dusk and night need), leaning
+  part way to the diagonal (`tilt` 0.5), so a card is a picture on paper and never a hole in
+  the sky. The initial is in the heading face (the `Title` role, Fraunces) at `INITIAL_SIZE` 30
+  (smaller only in a small well), in one solid role that keeps 4.5:1 across the stretch it
+  stands over (`MapPlaceholder.ink_on`: soft ink where it reads, else ink or paper).
 - **A change is one gradient changing.** `show_map(preset, key)` (and `show_mood`) fades over
   `FADE_S` (0.6 s, sine in-out; the world changing, not chrome, so M1's named exception past
   the overlay band) by mixing the stops in OKLCH (`BackdropPaint.mix_looks`; lightness and
@@ -473,11 +484,11 @@ until the UI's painterly side is revisited; the painted sun, clouds, hills and p
   the light to the next backdrop (`show_last`), so the room opens in the title's light and a
   map load in whatever was last shown. Nothing moves at rest; `fit_around`, `refit` and
   `hold_drift` remain for their callers and do nothing.
-- **No words on the backdrop.** A screen on the backdrop puts its words on paper, so every
-  caption reads 4.5:1 in every mood: the title's
-  wordmark (the version a caption beside it) and its tools with the Play together card each on
-  a `Plaque`, the Bundled heading on a plaque, the New map card and the detail strip on
-  `PictureCard` paper; the room's
+- **Words on the backdrop.** Soft words (captions, the soft text role) go on paper; only ink
+  stands on the sky. On the title the wordmark (the version a `SkyCaption` beside it), the
+  labelled tools (`SkyButton`) and the section headings ("Your maps", "Bundled with TTSim", in
+  the `Heading` role) stand on the sky in ink; the Play together card is on a `Plaque`, the
+  cards, New map and the map panel on card paper. The room's
   heading on a plaque on the side sheet's margin and as wide as the sheet (the sheet's
   heading, not a narrower slip above it), the code row on a plaque that ends at its words,
   and the selected map's picture on a card of its own with its name and readiness under it
@@ -486,41 +497,56 @@ until the UI's painterly side is revisited; the painted sun, clouds, hills and p
   every selection, so it is always in its map's light. `Plaque` is the sheet's
   paper and trim at a card's radius with 16 x 8 padding (glass: the rim, 12 x 8).
   `test_painted_backdrop` walks every word on the title and the room in each mood and fails
-  one that has no opaque fill under it or reads under 4.5:1 on it.
+  one that reads under 4.5:1 on what is under it (its opaque fill, or the sky from the word's
+  top to its foot), and checks each section heading against its mood's whole sky, since a
+  heading scrolls with the grid.
 - **Cost.** One full-screen fragment pass: an OKLCH-to-sRGB conversion and one hash per pixel
   (much cheaper than the painted pass it replaced, not re-measured). The CPU side mixes three
   colours and sets three uniforms per frame of a 0.6 s change, and nothing at rest.
 
 ### Top bar
 
-`%TopBar` in the hub (24 px margins): the wordmark on its plaque (`wordmark_plaque`, the version a
-caption on its baseline) at the left, open sky in the middle, and at the right end one plaque (`tools_plaque`) with **Avatars**, **Settings** and **Quit game** stacked as
-quiet `UiActions.secondary()` rows beside the **Play together card** (below) with **Resume**
-under it. Quit game has the pause menu's words and icon (`TitleScreen.QUIT`, `QUIT_ICON`);
+`%TopBar` in the hub (24 px margins, and the grid's 6 px ring room at its start, `RingRoomStart`,
+so the wordmark's left edge is the cards'): the `masthead` at the left, the wordmark in ink on the
+sky (the version a caption on its baseline) and, one row beside it (`BoxContainerApart`),
+**Avatars**, **Settings** and **Quit game** as quiet labelled tools (`SkyButton`: ink words and
+icon, paper under the pointer); open sky in the middle; and at the right end the **Play together
+card** (below) on its paper (`play_plaque`) with **Resume** under it, Quit well away from Host.
+Quit game has the pause menu's words and icon (`TitleScreen.QUIT`, `QUIT_ICON`);
 Avatars opens the [avatar roster](#avatar-library). The old left column (Play solo, Set up
 tokens, New map, Avatars, Settings, Quit) is gone: each action lives where it acts (UI_TASTE
 verdict 2026-10-09, no Host control far from what it acts on).
 
 ### The library
 
-`grid` is a `LevelGrid` (at least `GRID_COLUMNS` 4 to a line, so a row and its strip fit a
-1280x720 canvas) whose provider is `TitleScreen.library()`: `LibraryFacts.ordered()` over
-`level_provider` and `plays_provider` (`LibraryPlays.all()`), the latest of last played and last
-edited first, the Bundled maps (a `res://` map) last after a "Bundled with TTSim" heading (H2 on
-its plaque, more room above) on a line of its own. Every item fills its line, so a row's bottoms
-line up. A card's caption is the date the order uses ("Played yesterday", "Edited 3 days ago",
-`LibraryFacts.touched_text`), and a Blender map whose source file is newer than its import says
-"Updated in Blender" on a lake `StateChip` with its icon (C5, C7). With no map of the player's
-own, New map stands alone, larger and centred, with "Or play one that comes with TTSim" and the
-Bundled maps under it, nothing selected. `LibraryPlays` (`utils/library_plays.gd`, `Paths.library_plays_path()`, beside
+Under the bar a `Body` row (`BoxContainerRoomy`): the `grid` at the left and the `panel_column`
+(`RingRoomEnds`, so the panel's top is the grid's ring room in) holding the `map_panel` at the
+right, its right edge on the Play together plaque's. `grid` is a `LevelGrid` that fills its
+width (a column added rather than a card past `max_card_width` 400; never fewer than
+`GRID_COLUMNS` 3, which a 1280x720 canvas keeps beside the panel) and clips at its own edge, a
+hard edge under the top bar (cut cards no longer fade); its scroll bar is the handle alone,
+shown while the pointer is over the cards. Its provider is `TitleScreen.library()`:
+`LibraryFacts.ordered()` over `level_provider` and `plays_provider` (`LibraryPlays.all()`), the
+latest of last played and last edited first, under a "Your maps" heading, then the Bundled maps
+(a `res://` map) after a "Bundled with TTSim" heading. Both headings are words, not plaques: the
+`Heading` role (Fraunces, the section size) in ink on the sky, on a line of their own with more
+room above than below; a selection that reveals a card on a section's first line keeps its
+heading in view. Every item fills its line, so a row's bottoms line up. A card's caption is the
+date the order uses ("Played yesterday", "Edited 3 days ago", `LibraryFacts.touched_text`), and
+a Blender map whose source file is newer than its import says "Updated in Blender" on a lake
+`StateChip` with its icon (C5, C7). With no map of the player's own nothing is selected, the
+panel's column is hidden and the grid takes the whole width: New map stands alone, larger and
+centred, with "Or play one that comes with TTSim" and the Bundled maps under it; selecting one of
+those brings the panel in. `LibraryPlays` (`utils/library_plays.gd`, `Paths.library_plays_path()`, beside
 `levels/`, never in a level folder so a play never changes a level's revision) is written by
 `LevelFlow` when a table finishes loading, solo or hosted. The head of the library is selected on
 `_ready()` (`_preselect_most_recent()`).
 
-- **New map** (`NewMapCard`, the grid's `lead`): a pencil sketch on blank paper (not a map's
-  picture), "New map" in the heading face, **Generate** (the card's lead: `Framed`, not the
-  fill; Host is the screen's one persimmon, C5) and **Import...** side by side, and **Advanced**
-  at the heading line's end. Advanced opens a paper popover (`Sheet`) on the title's layer under
+- **New map** (`NewMapCard`, the grid's `lead`), in a map card's anatomy: a 16:9 picture that
+  is a solid paper face (`CardThumb`) with one ink glyph (`GLYPH`, the plus), the name line
+  "New map" (as a card's name) with **Advanced** at its end, and in its caption band
+  **Generate** (the card's lead: `Framed`, not the fill; Host is the screen's one persimmon, C5)
+  and **Import...** side by side, one height. Advanced opens a paper popover (`Sheet`) on the title's layer under
   the card, or beside it when the canvas ends first, closed by a click outside or Escape, so the
   card's height never changes. In it: Size (Any size, tooltip "the seed picks the size"; 100,
   150, 200 ft; Custom width and depth, each a `FeetField` between 40 px minus and plus
@@ -534,29 +560,37 @@ Bundled maps under it, nothing selected. `LibraryPlays` (`utils/library_plays.gd
   with `NewMapDialog.preset`, which hides its Size field and names the size in its header, then
   [authoring mode](#authoring-mode). No reroll: neighbouring seeds can draw the same coarse
   landform, so a fresh seed is drawn each time. In an empty library the card is larger
-  (`EMPTY_WIDTH` 520) and centred, captioned "Make your first map, or drop a map.glb from
-  Blender here".
-- **Detail strip** (`MapDetailStrip`, the grid's `detail`): a paper card on a line of its own
-  under the selected card's row (`LevelGrid.line_end()` finds the row's last item at the current
-  column count; not a modal), at most `DETAIL_MAX_WIDTH` 960 (S5), centred under its card and
-  clamped to the grid. The map's picture (its thumbnail, or its placeholder with the map's
-  initial), then one column: the name (`TitleField`, the heading's face) with "..." at its
-  right; the description with "by <author>" at its end (flat fields saved on Enter through
-  `LevelManager.update_meta`, an empty name refused, reverted by Escape or by leaving the field;
-  each shows its well under the pointer or with the focus); the facts (the source chip,
-  `LibraryFacts.source_of`: From Blender, Blender, edited here, Made here, Bundled; the size,
-  `LibraryFacts.footprint_ft`, from the map.glb's import check or the document's manifest;
-  tokens; when it was last played; Updated in Blender); then one row of actions, all 40 tall:
-  **Play** (solo, `Framed`), **Host with this map** (a room with this map on its shelf), **Edit
-  map** (authoring; none for a Bundled map) and **Reload from Blender** when
-  `MapImport.is_updated_in_blender`. "..." opens leftward inside the strip, clear of Edit map,
-  with Set up tokens (`TitleScreen.SET_UP_TOKENS`, the Level Editor), Duplicate, Replace map
-  file... (`LibraryImports.pick_replace`: the file picker, then the check and Replace as for a
-  file dropped on the card; not for a Bundled map) and Delete. The cards' own overflow disc is
-  off in the library (`manageable = false`).
-- **Keyboard and pad**: Accept on a card that is not selected selects it (opens its strip);
-  Accept on the selected card plays it (`LevelGrid.select_before_activate`); a double click
-  plays. The strip follows its row in the tree, so Tab and the D-pad reach it from the row.
+  (`EMPTY_WIDTH` 440, a bigger glyph) and centred, with a caption line over its buttons, "Make
+  your first map: generate a place, or bring one in from Blender".
+- **Map panel** (`MapPanel`, `scenes/states/title_screen/map_panel.gd`): one place and one shape
+  for a map's details, whatever its source. A `PictureCard` paper card `MapPanel.WIDTH` 360 wide
+  on every canvas and for every map, as tall as what it shows up to the height under the top bar
+  (`TitleScreen._fit_panel`, read from the canvas and the bar, never the column); past that its
+  picture and words scroll and the actions stay pinned at its foot (on a 1280x720 canvas the
+  facts line scrolls under them). Top to bottom: the picture large at 16:9 (the thumbnail, or the
+  placeholder); the name in the `Title` face; the description; "by <author>"; the facts
+  (`FactsFlow`: the source chip, `LibraryFacts.source_of`: From Blender, Blender, edited here,
+  Made here, Bundled; the size, `LibraryFacts.footprint_ft`; tokens; when it was last played;
+  Updated in Blender); then the actions, all 40 tall: **Play** (solo, `Framed`) and **Host with
+  this map** (a room with this map on its shelf), then **Edit map** (authoring) with "..." at
+  the line's end, then **Reload from Blender** on a line of its own when
+  `MapImport.is_updated_in_blender`. "..." opens under its button with Set up tokens
+  (`TitleScreen.SET_UP_TOKENS`, the Level Editor), Duplicate, Replace map file...
+  (`LibraryImports.pick_replace`: the file picker, then the check and Replace as for a file
+  dropped on the card) and Delete. The words read as text (wrapping labels); on a map of the
+  player's own each takes the pointer and the focus, its well reaching out round it then
+  (`FieldCue`/`FieldCueLit`, expand margins, so the words never move), and a click or Accept
+  opens it for typing in an `InlineField`/`TitleField` line edit in the same place, its hint
+  shown only then; Enter saves through `LevelManager.update_meta` (an empty name refused),
+  Escape or leaving the field reverts. An empty description or author takes no line: one quiet
+  **Add details** (`Ghost`) opens the first empty one. A Bundled map (and an old single-file
+  level) shows the same fields in the same order as plain text, the empty ones absent, and none
+  of Edit map, Reload from Blender or Replace map file.... The cards' own overflow disc is off in
+  the library (`manageable = false`).
+- **Keyboard and pad**: Accept on a card that is not selected selects it (shows it in the
+  panel); Accept on the selected card plays it (`LevelGrid.select_before_activate`); a double
+  click plays. The panel follows the grid in the tree, so Tab from the last card reaches it, at
+  the map's name.
 - **Import** (`LibraryImports`): Import... opens the system's file picker on `.glb`; a file
   dropped anywhere on the library is a new map, on a map's card Replace for that map
   (`TitleScreen.card_at`), ignored while a sheet is open. Each opens `ImportCheckPanel`
@@ -573,10 +607,12 @@ Bundled maps under it, nothing selected. `LibraryPlays` (`utils/library_plays.gd
   here, or Replace map with no edits (`MapImport.replace_map`). The written map is selected
   after.
 
-`test_title_screen` and `test_library_title` cover the library; `test_interface_size_fit` walks
-it at 1280x720, 1366x768 at Auto, 720p at Auto and 1080p with the selected row and its strip in
-view, Advanced open on a custom size, and empty. `jobs/library.json` (`probes/ui_library.gd`)
-captures it.
+`test_title_screen` and `test_library_title` cover the library (a Bundled selection showing the
+same panel with no edit actions among them); `test_interface_size_fit` walks it at 1280x720,
+1366x768 at Auto, 720p at Auto and 1080p with the selected card in view, the panel in place at
+its width with Play in view, three columns or more beside it, Advanced open on a custom size,
+and empty. `jobs/library.json` (`probes/ui_library.gd`) captures it, a Bundled map selected
+(`title_bundled_selected`) beside one of the player's own at both sizes.
 
 ### Play together card
 
@@ -665,11 +701,11 @@ the stage), no Set out, and once selected Remove from shelf on a line under it
 
 ### Grid scrolling
 
-A card selected by a click or by code (`LevelGrid.select`) scrolls so its row and its whole
-strip are in view, the row first when both cannot fit (`LevelGrid.reveal_scroll`, repeated over
-`REVEAL_FRAMES` 3 while the flow lays the strip out). Cards the grid's edge cuts fade by how much
-of them is out of view, down to `CUT_ALPHA` 0.35 (a `clip_children` mask was tried first and
-blanked the cards' clipped picture wells).
+A card selected by a click or by code (`LevelGrid.select`) scrolls so it is in view, with the
+section heading over its line when it stands on a section's first line, its top first when it
+cannot all fit (`LevelGrid.reveal_scroll`, repeated over `REVEAL_FRAMES` 3 while the flow lays
+it out). The grid clips at its own edge, a hard edge (cut cards faded to `CUT_ALPHA` 0.35 until
+the title-coherent card: a fade read as a half-finished edge under the top bar).
 
 The scroll bar is its handle alone, on the default bar's clear lane, with no track (user verdict
 2026-10-10, UI_TASTE: content scroll bars are a hover-only fading handle). It fades in

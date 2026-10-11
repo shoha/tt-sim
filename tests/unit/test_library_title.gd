@@ -1,12 +1,13 @@
 extends GutTest
 
-## The library's pieces (card library-title): the facts the strip shows (LibraryFacts), the
-## detail strip's row placement (LevelGrid.line_end) and its actions per map and source, its
-## fields saved through update_meta with Escape reverting, New map's Advanced (size and seed),
-## the import check panel on fixture GLBs, a .glb dropped on a card opening Replace and
-## elsewhere opening Import (written into a _test_library_title_ folder, deleted after each
-## test), and the pad's way into the strip. LevelManager.levels_dir, ImportSources.path and
-## LibraryPlays.path are put back after each test.
+## The library's pieces (cards library-title and title-coherent): the facts the map panel shows
+## (LibraryFacts), the grid's reveal of a selected card, the panel's actions per map and source,
+## its fields read as text, edited in place and saved through update_meta with Escape
+## reverting, New map's Advanced (size and seed), the import check panel on fixture GLBs, a .glb
+## dropped on a card opening Replace and elsewhere opening Import (written into a
+## _test_library_title_ folder, deleted after each test), and the pad's way into the panel.
+## LevelManager.levels_dir, ImportSources.path and LibraryPlays.path are put back after each
+## test.
 
 const Fixtures := preload("res://tests/unit/glb_fixtures.gd")
 const TITLE_SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
@@ -138,130 +139,149 @@ func test_plays_are_recorded_and_forgotten() -> void:
 	assert_eq(LibraryPlays.all(), {})
 
 
-# --- the strip's row ---------------------------------------------------------------------------
+# --- the grid's reveal -------------------------------------------------------------------------
 
 
-func test_the_strip_goes_after_the_last_item_of_the_selected_row() -> void:
-	var cards := [false, false, false, false, false, false, false]
-	assert_eq(LevelGrid.line_end(cards, 0, 4), 3, "the lead's row")
-	assert_eq(LevelGrid.line_end(cards, 5, 4), 6, "a short last row")
-	assert_eq(LevelGrid.line_end(cards, 4, 1), 4)
-	# A heading on its own line ends the row before it.
-	var with_heading := [false, false, true, false]
-	assert_eq(LevelGrid.line_end(with_heading, 0, 4), 1)
-	assert_eq(LevelGrid.line_end(with_heading, 3, 4), 3)
-
-
-## A selection scrolls as little as it can to show the row and its strip, the row first when
-## both cannot fit.
-func test_a_selection_scrolls_its_row_and_strip_into_view() -> void:
-	assert_eq(LevelGrid.reveal_scroll(0.0, 300.0, 700.0, 500.0), 200.0, "down to the strip")
-	assert_eq(LevelGrid.reveal_scroll(400.0, 100.0, 300.0, 500.0), 100.0, "up to the row")
+## A selection scrolls as little as it can to show its card, the card's top first when it
+## cannot all fit.
+func test_a_selection_scrolls_its_card_into_view() -> void:
+	assert_eq(LevelGrid.reveal_scroll(0.0, 300.0, 700.0, 500.0), 200.0, "down to the card")
+	assert_eq(LevelGrid.reveal_scroll(400.0, 100.0, 300.0, 500.0), 100.0, "up to the card")
 	assert_eq(LevelGrid.reveal_scroll(150.0, 200.0, 600.0, 500.0), 150.0, "already shown")
-	assert_eq(LevelGrid.reveal_scroll(0.0, 300.0, 900.0, 500.0), 300.0, "too tall: the row")
+	assert_eq(LevelGrid.reveal_scroll(0.0, 300.0, 900.0, 500.0), 300.0, "too tall: its top")
 
 
-# --- the strip ---------------------------------------------------------------------------------
+# --- the map panel -----------------------------------------------------------------------------
 
 
-func _strip(info: Dictionary, updated := false) -> MapDetailStrip:
-	var strip := MapDetailStrip.new()
-	strip.is_updated = func(_folder: String) -> bool: return updated
-	strip.footprint = func(_info: Dictionary) -> Vector2: return Vector2(150, 150)
-	add_child_autofree(strip)
-	strip.show_map(info)
-	return strip
+func _panel(info: Dictionary, updated := false) -> MapPanel:
+	var panel := MapPanel.new()
+	panel.is_updated = func(_folder: String) -> bool: return updated
+	panel.footprint = func(_info: Dictionary) -> Vector2: return Vector2(150, 150)
+	add_child_autofree(panel)
+	panel.show_map(info)
+	return panel
 
 
-func test_the_strips_actions_follow_the_source() -> void:
-	var blender := _strip(_info("harbour", "map.glb", ""))
+func test_the_panels_actions_follow_the_source() -> void:
+	var blender := _panel(_info("harbour", "map.glb", ""))
 	assert_true(blender.edit_button.visible)
 	assert_eq(blender.source_label.text, "From Blender")
 	assert_eq(blender.size_label.text, "150 × 150 ft")
 	assert_eq(blender.tokens_label.text, "2 tokens")
 	var items := [
-		MapDetailStrip.MENU_SET_UP,
-		MapDetailStrip.MENU_DUPLICATE,
-		MapDetailStrip.MENU_REPLACE,
-		MapDetailStrip.MENU_DELETE,
+		MapPanel.MENU_SET_UP,
+		MapPanel.MENU_DUPLICATE,
+		MapPanel.MENU_REPLACE,
+		MapPanel.MENU_DELETE,
 	]
 	assert_eq(blender.menu_items(), items)
 	assert_false(blender.reload_button.visible, "its source is not newer")
-	var updated := _strip(_info("harbour", "map.glb", "map.ttmap"), true)
+	var updated := _panel(_info("harbour", "map.glb", "map.ttmap"), true)
 	assert_eq(updated.source_label.text, "Blender, edited here")
 	assert_true(updated.updated_chip.visible, "Updated in Blender, in words")
 	assert_true(updated.reload_button.visible, "Reload from Blender without the menu")
 	watch_signals(updated)
 	updated.reload_button.pressed.emit()
 	assert_signal_emitted_with_parameters(
-		updated, "action_requested", [updated.info, MapDetailStrip.ACTION_RELOAD]
+		updated, "action_requested", [updated.info, MapPanel.ACTION_RELOAD]
 	)
-	var made := _strip(_info("made", "", "map.ttmap"), true)
+	var made := _panel(_info("made", "", "map.ttmap"), true)
 	assert_false(made.reload_button.visible, "nothing to reload")
-	var bundled := _strip(_info("ship", "res://maps/x.glb", ""))
+	var bundled := _panel(_info("ship", "res://maps/x.glb", ""), true)
 	assert_false(bundled.edit_button.visible, "a bundled map is not edited here")
-	assert_false(bundled.menu_items().has(MapDetailStrip.MENU_REPLACE))
+	assert_false(bundled.reload_button.visible)
+	assert_false(bundled.menu_items().has(MapPanel.MENU_REPLACE))
 	assert_eq(bundled.source_label.text, "Bundled")
 	assert_true(bundled.host_button.visible)
 	assert_eq(bundled.host_button.text, "Host with this map")
-	for button: Button in [blender.play_button, blender.host_button, blender.more_button]:
-		assert_eq(button.custom_minimum_size.y, MapDetailStrip.ACTION_HEIGHT, "one height")
+	assert_false(bundled.is_editable(), "its words are plain text")
+	assert_false(bundled.add_details_button.visible)
+	assert_eq(bundled.name_label.mouse_filter, Control.MOUSE_FILTER_IGNORE)
+	var buttons := [
+		blender.play_button, blender.host_button, blender.edit_button, blender.more_button
+	]
+	buttons.append(updated.reload_button)
+	for button: Button in buttons:
+		assert_eq(button.custom_minimum_size.y, MapPanel.ACTION_HEIGHT, "one height")
+	assert_eq(blender.custom_minimum_size.x, MapPanel.WIDTH, "one width for every map")
 
 
-## A map with no thumbnail shows its name's initial in the strip, as on its card, not its
-## folder's (a folder such as "b7_harbour" drew a "B").
-func test_the_strips_placeholder_shows_the_names_initial() -> void:
+## A map with no thumbnail shows its name's initial in the panel, as on its card, not its
+## folder's (a folder such as "b7_harbour" drew a "B"); the picture is 16:9.
+func test_the_panels_placeholder_shows_the_names_initial() -> void:
 	var info := _info("b7_harbour", "", "map.ttmap")
 	info.name = "Willow Green"
-	var strip := _strip(info)
-	var initial := strip.picture_well.get_node("Placeholder/Initial") as Label
+	var panel := _panel(info)
+	var initial := panel.picture_well.get_node("Placeholder/Initial") as Label
 	assert_eq(initial.text, LevelCard.initial_of("Willow Green"))
+	panel.size = Vector2(MapPanel.WIDTH, 600)
+	await wait_process_frames(3)
+	var picture := panel.picture_well.size
+	assert_almost_eq(picture.x / picture.y, MapPanel.PICTURE_ASPECT, 0.02, "16:9")
 
 
 func test_a_field_saves_on_enter_through_update_meta_and_escape_reverts() -> void:
 	var calls: Array = []
-	var strip := _strip(_info("harbour", "map.glb", ""))
-	strip.update_meta = func(folder: String, changes: Dictionary) -> bool:
+	var panel := _panel(_info("harbour", "map.glb", ""))
+	panel.update_meta = func(folder: String, changes: Dictionary) -> bool:
 		calls.append([folder, changes])
 		return changes.get("name", "x") != ""
-	watch_signals(strip)
-	strip.name_edit.text = "  Harbour at Dusk "
-	strip.name_edit.text_submitted.emit(strip.name_edit.text)
+	watch_signals(panel)
+	panel.begin_edit("name")
+	assert_true(panel.name_edit.visible, "open for typing")
+	assert_false(panel.name_label.visible)
+	panel.name_edit.text = "  Harbour at Dusk "
+	panel.name_edit.text_submitted.emit(panel.name_edit.text)
 	assert_eq(calls, [["harbour", {"name": "Harbour at Dusk"}]])
-	assert_eq(strip.info.name, "Harbour at Dusk")
-	assert_signal_emitted(strip, "meta_saved")
-	strip.description_edit.text = "A cove"
+	assert_eq(panel.info.name, "Harbour at Dusk")
+	assert_signal_emitted(panel, "meta_saved")
+	assert_false(panel.name_edit.visible, "closed again")
+	assert_eq(panel.name_label.text, "Harbour at Dusk", "reads as the saved text")
+	panel.begin_edit("description")
+	assert_eq(panel.description_edit.placeholder_text, MapPanel.DESCRIPTION_HINT, "while open")
+	panel.description_edit.text = "A cove"
 	var escape := InputEventAction.new()
 	escape.action = "ui_cancel"
 	escape.pressed = true
-	strip.description_edit.gui_input.emit(escape)
-	assert_eq(strip.description_edit.text, "", "Escape puts it back")
+	panel.description_edit.gui_input.emit(escape)
+	assert_eq(panel.description_edit.text, "", "Escape puts it back")
+	assert_false(panel.description_label.visible, "an empty field takes no line")
 	assert_eq(calls.size(), 1, "nothing saved")
-	strip.name_edit.text = "   "
-	strip.name_edit.text_submitted.emit(strip.name_edit.text)
-	assert_eq(strip.name_edit.text, "Harbour at Dusk", "an empty name is refused")
+	panel.name_edit.text = "   "
+	panel.name_edit.text_submitted.emit(panel.name_edit.text)
+	assert_eq(panel.name_edit.text, "Harbour at Dusk", "an empty name is refused")
+
+
+func test_the_panels_menu_author_and_quiet_empty_fields() -> void:
+	var info := _info("harbour", "map.glb", "")
+	info.author = "Hannah"
+	info.description = "A cove under the cliffs"
+	var panel := _panel(info)
+	assert_eq(panel.author_label.text, "by Hannah")
+	assert_false(panel.add_details_button.visible, "nothing left to add")
+	watch_signals(panel)
+	panel._on_menu_id(MapPanel.MENU_REPLACE)
+	assert_signal_emitted_with_parameters(
+		panel, "action_requested", [panel.info, MapPanel.ACTION_REPLACE]
+	)
+	assert_eq(MapPanel.MENU_LABELS[MapPanel.MENU_REPLACE], "Replace map file...")
+	assert_false(panel.cue_shown("description"), "reads as text at rest")
+	panel.description_label.mouse_entered.emit()
+	assert_true(panel.cue_shown("description"), "the field's well under the pointer")
+	panel.description_label.mouse_exited.emit()
+	assert_false(panel.cue_shown("description"))
+	# Empty fields stay quiet: no line and no grey placeholder, one Add details.
+	var bare := _panel(_info("x", "map.glb", ""))
+	assert_false(bare.author_label.visible, "no author, no by")
+	assert_false(bare.description_label.visible, "no description, no line")
+	assert_eq(bare.description_edit.placeholder_text, "", "no hint at rest")
+	assert_true(bare.add_details_button.visible)
+	bare.add_details_button.pressed.emit()
+	assert_true(bare.description_edit.visible, "Add details opens the description")
 
 
 # --- New map -----------------------------------------------------------------------------------
-
-
-func test_the_strips_menu_and_author() -> void:
-	var info := _info("harbour", "map.glb", "")
-	info.author = "Hannah"
-	var strip := _strip(info)
-	assert_true(strip.by_label.visible, "by Hannah")
-	watch_signals(strip)
-	strip._on_menu_id(MapDetailStrip.MENU_REPLACE)
-	assert_signal_emitted_with_parameters(
-		strip, "action_requested", [strip.info, MapDetailStrip.ACTION_REPLACE]
-	)
-	assert_eq(MapDetailStrip.MENU_LABELS[MapDetailStrip.MENU_REPLACE], "Replace map file...")
-	assert_true(strip.description_edit.flat, "reads as text at rest")
-	strip.description_edit.mouse_entered.emit()
-	assert_false(strip.description_edit.flat, "the field's well under the pointer")
-	strip.description_edit.mouse_exited.emit()
-	assert_true(strip.description_edit.flat)
-	assert_false(_strip(_info("x", "map.glb", "")).by_label.visible, "no author, no by")
 
 
 func test_new_map_advanced_sizes_and_seeds() -> void:
@@ -474,7 +494,7 @@ func test_the_title_routes_a_drop_by_the_card_under_it() -> void:
 # --- the pad's way in --------------------------------------------------------------------------
 
 
-func test_accept_selects_a_card_first_and_tab_reaches_the_strip() -> void:
+func test_accept_selects_a_card_first_and_tab_reaches_the_panel() -> void:
 	var title: TitleScreen = TITLE_SCENE.instantiate()
 	title.level_provider = func() -> Array[Dictionary]:
 		return [_info("a", "map.glb", "", 300), _info("b", "map.glb", "", 200)]
@@ -497,7 +517,8 @@ func test_accept_selects_a_card_first_and_tab_reaches_the_strip() -> void:
 	assert_eq(title.selected_level().folder, "b")
 	second.gui_input.emit(accept)
 	assert_signal_emitted(title.grid, "level_activated", "Accept on the selected card plays")
-	# The strip follows the selected row in the tree, so Tab from the row's last item enters it.
+	# The panel follows the grid in the tree, so Tab from the last card enters it, at the map's
+	# name (its words take the focus on a map of the player's own).
 	await wait_process_frames(2)
 	var next := second.find_next_valid_focus()
-	assert_true(title.strip.is_ancestor_of(next), "Tab enters the strip: %s" % next)
+	assert_true(title.map_panel.is_ancestor_of(next), "Tab enters the panel: %s" % next)

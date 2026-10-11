@@ -298,10 +298,10 @@ static func _focus(base: Node, target: String) -> String:
 	var button: Button = null
 	match target:
 		"title_play":
-			# The selected map's detail strip's Play, a quiet paper button.
+			# The selected map's panel's Play, a quiet paper button.
 			var title: CanvasLayer = base.get("_title_screen")
-			var strip: MapDetailStrip = title.get("strip") if title else null
-			button = strip.play_button if strip else null
+			var panel: MapPanel = title.get("map_panel") if title else null
+			button = panel.play_button if panel else null
 		"add_token":
 			button = base.find_child("ToggleAssetBrowserButton", true, false) as Button
 		"title_card":

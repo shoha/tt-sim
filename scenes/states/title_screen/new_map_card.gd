@@ -1,14 +1,15 @@
 class_name NewMapCard
 extends PanelContainer
 
-## The library's first card, "New map": a pencil sketch on blank paper (a map still to come,
-## never a map's picture) over its heading, Advanced at that line's end, and Generate and
-## Import... as siblings (user verdict 2026-10-09: no Try step, "From image" never in the
-## default view, custom dimensions under Advanced). Generate leads: it is the wider, taller of
-## the two and wears the
-## wand, but it is paper, since Host on the Play together card is the screen's one persimmon
-## fill (C5) in an empty library too (Room first). Import... picks a map exported from Blender
-## (a file dropped anywhere on the library does the same; the title runs both).
+## The library's first card, "New map", in the anatomy every map card has: a 16:9 picture, a
+## name line and a caption band. The picture is a solid paper face with one ink glyph (a map
+## still to come, never a map's picture); the name line says New map with Advanced at its end;
+## the caption band holds Generate and Import... as siblings (user verdict 2026-10-09: no Try
+## step, "From image" never in the default view, custom dimensions under Advanced). Generate
+## leads: it is the wider of the two and wears the wand, but it is paper (Framed), since Host
+## on the Play together card is the screen's one persimmon fill (C5) in an empty library too
+## (Room first). Import... picks a map exported from Blender (a file dropped anywhere on the
+## library does the same; the title runs both).
 ##
 ## Advanced opens a paper popover anchored under the card (coordinator decision 2026-10-10):
 ## it lies over the cards below, so opening it, typing in it and a refusal never change the
@@ -28,8 +29,9 @@ extends PanelContainer
 ## "seed"}) that Root hands to the new-map dialog, which asks the rest (starting place and
 ## landform) and opens authoring.
 ##
-## In an empty library the card is the library: alone, larger (set_empty()), its sketch bigger
-## and its caption EMPTY_CAPTION, with the Bundled maps offered under it (LevelGrid).
+## In an empty library the card is the library: alone, larger (set_empty()), its glyph bigger
+## and a caption line (EMPTY_CAPTION) over its buttons, with the Bundled maps offered under it
+## (LevelGrid).
 
 signal generate_requested(spec: Dictionary)
 signal import_requested
@@ -42,11 +44,14 @@ const EMPTY_CAPTION := "Make your first map: generate a place, or bring one in f
 const GENERATE_TIP := "Draw a new map from a seed, then choose where it starts"
 const IMPORT_TIP := "Bring in a map exported from Blender as .glb (or drop one anywhere here)"
 const ANY_TIP := "The seed picks the size: 100, 150 or 200 ft"
-## The sketch's width over its height: a band beside cards, a wider picture alone.
-const PICTURE_ASPECT := 4.0
-const EMPTY_PICTURE_ASPECT := 3.2
+## The face's width over its height, a map card's picture's.
+const PICTURE_ASPECT := LevelCard.THUMB_ASPECT
+## The glyph on the face, beside cards and alone.
+const GLYPH := "plus"
+const GLYPH_SIZE := 40.0
+const EMPTY_GLYPH_SIZE := 56.0
 ## The card's width alone in an empty library.
-const EMPTY_WIDTH := 520.0
+const EMPTY_WIDTH := 440.0
 ## The popover's narrowest.
 const POPOVER_MIN_WIDTH := 360.0
 ## Above this side the size line warns that the map builds more slowly.
@@ -68,6 +73,8 @@ var advanced_open := false
 ## The Size tile chosen (SIZE_ANY, SIZE_CUSTOM or &"size_<ft>").
 var size_choice: StringName = SIZE_ANY
 var picture: Panel
+## The ink glyph on the face.
+var glyph: TextureRect
 var heading: Label
 var caption: Label
 var generate_button: Button
@@ -142,21 +149,30 @@ func _init() -> void:
 	name = "NewMapCard"
 	theme_type_variation = &"PictureCard"
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	# A map card's column: the picture, then the words inside its text margin.
 	var column := VBoxContainer.new()
 	column.name = "Column"
-	column.theme_type_variation = &"BoxContainerSpaced"
+	column.theme_type_variation = &"BoxContainerTight"
 	add_child(column)
-	# Blank paper with a pencil sketch on it: a map still to come, not a map's picture.
+	# A solid paper face with one ink glyph: a map still to come, not a map's picture.
 	picture = Panel.new()
-	picture.name = "Sketch"
+	picture.name = "Face"
 	picture.theme_type_variation = &"CardThumb"
 	picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	picture.custom_minimum_size = Vector2(0, 64)
 	picture.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	picture.resized.connect(_fit_picture)
-	picture.draw.connect(_draw_sketch)
 	column.add_child(picture)
-	# The words and buttons sit inside the card's text margin, as a map card's caption does.
+	glyph = TextureRect.new()
+	glyph.name = "Glyph"
+	glyph.texture = IconButton.load_icon(GLYPH)
+	glyph.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glyph.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	glyph.theme_changed.connect(
+		func() -> void: glyph.self_modulate = ThemeColors.of(glyph, ThemeColors.TEXT)
+	)
+	picture.add_child(glyph)
 	var text_margin := MarginContainer.new()
 	text_margin.name = "TextMargin"
 	text_margin.theme_type_variation = &"CardText"
@@ -164,31 +180,29 @@ func _init() -> void:
 	column.add_child(text_margin)
 	var inner := VBoxContainer.new()
 	inner.name = "Inner"
-	inner.theme_type_variation = &"BoxContainerSpaced"
+	inner.theme_type_variation = &"BoxContainerTight"
 	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	text_margin.add_child(inner)
-	var words := VBoxContainer.new()
-	words.theme_type_variation = &"BoxContainerTight"
-	words.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	inner.add_child(words)
-	# The heading's face in both states, Advanced at the end of its line (the card stays a map
-	# card's height); only the caption changes over an empty library.
+	# The name line, as a map card's (Advanced at its end); a caption line over the buttons
+	# only over an empty library, where the card stands alone.
 	var heading_row := HBoxContainer.new()
 	heading_row.name = "HeadingRow"
 	heading_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	words.add_child(heading_row)
+	inner.add_child(heading_row)
 	heading = Label.new()
 	heading.name = "Heading"
 	heading.text = TITLE
-	heading.theme_type_variation = &"H2"
+	heading.theme_type_variation = &"Body"
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	heading_row.add_child(heading)
 	caption = Label.new()
 	caption.name = "Caption"
 	caption.text = CAPTION
 	caption.theme_type_variation = &"Caption"
 	caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	words.add_child(caption)
+	caption.visible = false
+	inner.add_child(caption)
 	_build_actions(inner)
 	_build_advanced(heading_row)
 	_refresh_size()
@@ -197,14 +211,14 @@ func _init() -> void:
 func _build_actions(column: VBoxContainer) -> void:
 	var row := HBoxContainer.new()
 	row.name = "Actions"
-	row.theme_type_variation = &"BoxContainerSpaced"
+	row.theme_type_variation = &"BoxContainerTight"
 	column.add_child(row)
 	# Framed: the card's lead reads first without taking the screen's one fill.
 	generate_button = UiActions.primary("Generate", "wand", "", row, &"Framed")
 	generate_button.tooltip_text = GENERATE_TIP
 	generate_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	generate_button.size_flags_stretch_ratio = 1.4
-	generate_button.custom_minimum_size.y = UiActions.SECONDARY_HEIGHT + 8
+	generate_button.custom_minimum_size.y = UiActions.SECONDARY_HEIGHT
 	generate_button.pressed.connect(generate)
 	import_button = UiActions.secondary("Import...", "folder", row)
 	import_button.name = "Import"
@@ -327,11 +341,12 @@ func _notification(what: int) -> void:
 					advanced_popover.queue_free()
 
 
-## Alone in an empty library: larger, a bigger sketch and the first-map caption; beside cards:
-## a card's width (LevelGrid sets it) with the sketch a band.
+## Alone in an empty library: larger, a bigger glyph and the first-map caption over the
+## buttons; beside cards: a card's width (LevelGrid sets it), its name line and buttons only.
 func set_empty(on: bool) -> void:
 	_empty = on
 	caption.text = EMPTY_CAPTION if on else CAPTION
+	caption.visible = on
 	if on:
 		custom_minimum_size.x = EMPTY_WIDTH
 	_fit_picture()
@@ -373,6 +388,7 @@ func _place_popover() -> void:
 		return
 	var card := get_global_rect()
 	var width := maxf(card.size.x, POPOVER_MIN_WIDTH)
+	width = maxf(width, advanced_popover.get_combined_minimum_size().x)
 	advanced_popover.size = Vector2(width, 0.0)
 	var height := advanced_popover.get_combined_minimum_size().y
 	var canvas := get_viewport_rect().size
@@ -540,50 +556,11 @@ func _tint_note() -> void:
 		size_icon.self_modulate = ThemeColors.of(size_icon, size_icon.get_meta(&"role"))
 
 
+## The face at a map picture's 16:9, the glyph centred on it.
 func _fit_picture() -> void:
-	var aspect := EMPTY_PICTURE_ASPECT if _empty else PICTURE_ASPECT
-	var height := floorf(picture.size.x / aspect)
+	var height := floorf(picture.size.x / PICTURE_ASPECT)
 	if height > 0.0 and not is_equal_approx(picture.custom_minimum_size.y, height):
 		picture.custom_minimum_size.y = height
-	picture.queue_redraw()
-
-
-## The sketch: graph-paper dots, a hill drawn in three wobbling pencil contours and a stream
-## winding past it, in the soft text role, over the well's blank paper.
-func _draw_sketch() -> void:
-	var area := picture.size
-	if area.x <= 0.0 or area.y <= 0.0:
-		return
-	var pencil := ThemeColors.of(picture, ThemeColors.TEXT_SOFT)
-	var dots := _faded(ThemeColors.of(picture, ThemeColors.EDGE), 0.7)
-	var step := clampf(area.y / 5.0, 12.0, 24.0)
-	var y := step * 0.5
-	while y < area.y:
-		var x := step * 0.5
-		while x < area.x:
-			picture.draw_circle(Vector2(x, y), 1.2, dots)
-			x += step
-		y += step
-	var centre := Vector2(area.x * 0.62, area.y * 0.55)
-	var radius := Vector2(area.y * 0.95, area.y * 0.34)
-	for ring in 3:
-		var scale := 1.0 - ring * 0.3
-		var points := PackedVector2Array()
-		for i in 49:
-			var angle := TAU * i / 48.0
-			var wobble := 1.0 + 0.08 * sin(angle * 3.0 + ring * 1.7) + 0.05 * sin(angle * 5.0)
-			points.append(centre + Vector2(cos(angle), sin(angle)) * radius * scale * wobble)
-		picture.draw_polyline(points, _faded(pencil, 0.55 - ring * 0.1), 1.6, true)
-	var stream := PackedVector2Array()
-	for i in 33:
-		var t := i / 32.0
-		var bend := sin(t * PI * 2.2 + 0.6) * area.y * 0.16
-		stream.append(Vector2(area.x * (0.04 + 0.34 * t), area.y * (0.1 + 0.8 * t) + bend))
-	picture.draw_polyline(stream, _faded(pencil, 0.5), 2.0, true)
-
-
-## `colour` at `alpha`: the pencil pressed lighter. Pure.
-static func _faded(colour: Color, alpha: float) -> Color:
-	var out := colour
-	out.a = alpha
-	return out
+	var side := EMPTY_GLYPH_SIZE if _empty else GLYPH_SIZE
+	glyph.size = Vector2(side, side)
+	glyph.position = ((picture.size - glyph.size) * 0.5).floor()

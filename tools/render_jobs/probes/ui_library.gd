@@ -1,8 +1,9 @@
 extends RefCounted
 
-## Render-job probe (`call` op) for the library title (jobs/library.json, cards library-title
-## and library-title-fix): the title as the library, its detail strip, New map's Advanced
-## popover, the import check and the Replace prompt. Nothing is written under the real library:
+## Render-job probe (`call` op) for the library title (jobs/library.json, cards library-title,
+## library-title-fix and title-coherent): the title as the library, its map panel, New map's
+## Advanced popover, the import check and the Replace prompt. Nothing is written under the real
+## library:
 ## the staged maps are infos with no folder on disk, and the thumbnails, the import and Replace
 ## files and the level they replace live under PROBE_ROOT, with LevelManager.levels_dir and
 ## ImportSources.path pointed there until `cleanup`. `action`:
@@ -10,11 +11,11 @@ extends RefCounted
 ##   maps made here from a seed and a landform) into PROBE_ROOT/thumbs/; `stage` uses those
 ##   written by then. `thumbs_status` says how many are done.
 ## - `stage`: the library shows STAGED (seven maps of every source, one Bundled, played and
-##   edited over the last fortnight; Willow Green's source newer in Blender), each strip's
-##   size and Blender check staged as well.
+##   edited over the last fortnight; Willow Green's source newer in Blender), the panel's sizes
+##   and Blender check staged as well.
 ## - `select` (`name`): click that map's card, as a player's click does (the grid scrolls the
-##   row and its strip into view).
-## - `menu` (`open`): the strip's "..." menu open or closed.
+##   card into view; the panel shows the map).
+## - `menu` (`open`): the panel's "..." menu open or closed.
 ## - `advanced` (`width`, `depth`, `open`): New map's Advanced open on a custom size, or closed.
 ## - `import`: write a 150 x 100 ft map.glb whose ground floats 1.5 m above Y = 0 and open the
 ##   import check on it (one warning).
@@ -22,10 +23,10 @@ extends RefCounted
 ##   smaller map dropped on its card (keeping the edits removes the prop).
 ## - `close_panel`: close the open check.
 ## - `empty`: a first run: only the Bundled map, New map alone and larger over it.
-## - `focus` (`target`: "card" or "name"): the keyboard focus on Willow Green's card, or in the
-##   strip's name field.
+## - `focus` (`target`: "card" or "name"): the keyboard focus on Willow Green's card, or the
+##   panel's name open for typing.
 ## - `hover` (`target`: "card" or "description"): the pointer over Lantern Bay's card, or over
-##   the strip's description field.
+##   the panel's description.
 ## - `delete`: Delete's confirm for the selected map; `cancel` closes it with Escape.
 ## - `cleanup`: close any check, delete PROBE_ROOT, put the paths back and show the real library.
 
@@ -73,10 +74,11 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _select(title, String(step.get("name", "")))
 		"menu":
 			if bool(step.get("open", true)):
-				title.strip.open_menu()
+				title.map_panel.open_menu()
 			else:
-				title.strip.menu.hide()
-			return "menu %s at %s" % [title.strip.menu.visible, title.strip.menu.position]
+				title.map_panel.menu.hide()
+			var menu := title.map_panel.menu
+			return "menu %s at %s" % [menu.visible, menu.position]
 		"advanced":
 			return _advanced(title, step)
 		"import":
@@ -92,8 +94,8 @@ static func run(base: Node, step: Dictionary) -> String:
 		"hover":
 			return _hover(base, title, String(step.get("target", "card")))
 		"delete":
-			title._on_strip_action(title.strip.info, MapDetailStrip.ACTION_DELETE)
-			return "delete confirm for %s" % title.strip.info.get("name", "")
+			title._on_panel_action(title.map_panel.info, MapPanel.ACTION_DELETE)
+			return "delete confirm for %s" % title.map_panel.info.get("name", "")
 		"cancel":
 			for pressed in [true, false]:
 				var escape := InputEventAction.new()
@@ -126,7 +128,9 @@ static func _render_thumbs(tree: SceneTree) -> void:
 		if entry.size() == 2:
 			image = await LevelThumbnail.render_glb_async(String(entry[1]), tree)
 		else:
-			var doc := NewMap.create(100, entry[1], int(entry[3]), PaletteLibrary.DEFAULT_ROOT, entry[2])
+			var doc := NewMap.create(
+				100, entry[1], int(entry[3]), PaletteLibrary.DEFAULT_ROOT, entry[2]
+			)
 			if doc != null:
 				var root := await MapSourceLoader.new(tree).build_async("", doc)
 				if root != null:
@@ -143,36 +147,41 @@ static func _stage(title: TitleScreen) -> String:
 		var folder := _folder_of(sample[0])
 		var words: Array = DESCRIPTIONS.get(sample[0], ["", ""])
 		var thumb := THUMB_DIR + folder + ".png"
-		levels.append(
-			{
-				"path": "user://levels/%s/" % folder,
-				"folder": folder,
-				"is_folder_based": true,
-				"name": sample[0],
-				"description": words[0],
-				"author": words[1],
-				"token_count": sample[6],
-				"modified_at": now - int(sample[5]) * DAY_S,
-				"played_at": now - int(sample[4]) * DAY_S if int(sample[4]) >= 0 else 0,
-				"environment_preset": sample[1],
-				"thumbnail": thumb if FileAccess.file_exists(thumb) else "",
-				"map_path": sample[2],
-				"map_document": sample[3],
-				LibraryFacts.UPDATED_KEY: folder.ends_with("willow_green"),
-			}
+		(
+			levels
+			. append(
+				{
+					"path": "user://levels/%s/" % folder,
+					"folder": folder,
+					"is_folder_based": true,
+					"name": sample[0],
+					"description": words[0],
+					"author": words[1],
+					"token_count": sample[6],
+					"modified_at": now - int(sample[5]) * DAY_S,
+					"played_at": now - int(sample[4]) * DAY_S if int(sample[4]) >= 0 else 0,
+					"environment_preset": sample[1],
+					"thumbnail": thumb if FileAccess.file_exists(thumb) else "",
+					"map_path": sample[2],
+					"map_document": sample[3],
+					LibraryFacts.UPDATED_KEY: folder.ends_with("willow_green"),
+				}
+			)
 		)
 		sizes[folder] = sample[7]
 	var ordered := LibraryFacts.ordered(levels, {})
-	title.strip.footprint = func(info: Dictionary) -> Vector2:
+	title.map_panel.footprint = func(info: Dictionary) -> Vector2:
 		return sizes.get(info.folder, Vector2.ZERO)
-	title.strip.is_updated = func(folder: String) -> bool: return folder.ends_with("willow_green")
+	title.map_panel.is_updated = func(folder: String) -> bool:
+		return folder.ends_with("willow_green")
 	title.grid.provider = func() -> Array[Dictionary]: return ordered
 	title.grid.refresh()
 	title._preselect_most_recent()
 	title._refresh_actions()
-	return "staged %d maps (%d with real thumbnails), %s selected" % [
-		title.grid.card_count(), _thumbs_done(), title.selected_level().get("name", "none")
-	]
+	return (
+		"staged %d maps (%d with real thumbnails), %s selected"
+		% [title.grid.card_count(), _thumbs_done(), title.selected_level().get("name", "none")]
+	)
 
 
 static func _card(title: TitleScreen, map_name: String) -> LevelCard:
@@ -187,15 +196,19 @@ static func _select(title: TitleScreen, map_name: String) -> String:
 	if card == null:
 		return "no card %s (stage first)" % map_name
 	card._on_pressed()
-	var strip := title.strip
-	return "selected %s: %s, %s, %s, %s; grid scrolled to %d" % [
-		map_name,
-		strip.source_label.text,
-		strip.size_label.text,
-		strip.tokens_label.text,
-		strip.played_label.text,
-		title.grid.scroll_vertical,
-	]
+	var panel := title.map_panel
+	return (
+		"selected %s: %s, %s, %s, %s; grid scrolled to %d; panel at %s"
+		% [
+			map_name,
+			panel.source_label.text,
+			panel.size_label.text,
+			panel.tokens_label.text,
+			panel.played_label.text,
+			title.grid.scroll_vertical,
+			panel.get_global_rect(),
+		]
+	)
 
 
 static func _advanced(title: TitleScreen, step: Dictionary) -> String:
@@ -211,9 +224,10 @@ static func _advanced(title: TitleScreen, step: Dictionary) -> String:
 	else:
 		card.size_field.tiles.select(NewMapCard.SIZE_ANY)
 		card._on_size_selected(NewMapCard.SIZE_ANY)
-	return "advanced %s: %s; generate %s" % [
-		open, card.size_line.text, "waits" if card.generate_button.disabled else "ready"
-	]
+	return (
+		"advanced %s: %s; generate %s"
+		% [open, card.size_line.text, "waits" if card.generate_button.disabled else "ready"]
+	)
 
 
 static func _empty(title: TitleScreen) -> String:
@@ -224,17 +238,20 @@ static func _empty(title: TitleScreen) -> String:
 	title.grid.provider = func() -> Array[Dictionary]: return shipped
 	title.grid.refresh()
 	title._refresh_actions()
-	return "first run: %d Bundled, New map alone %s, %s selected" % [
-		title.grid.card_count(),
-		title.new_map_card.is_empty_library(),
-		title.selected_level().get("name", "none"),
-	]
+	return (
+		"first run: %d Bundled, New map alone %s, %s selected"
+		% [
+			title.grid.card_count(),
+			title.new_map_card.is_empty_library(),
+			title.selected_level().get("name", "none"),
+		]
+	)
 
 
 static func _focus(title: TitleScreen, target: String) -> String:
 	if target == "name":
-		title.strip.name_edit.grab_focus()
-		return "focus in the strip's name"
+		title.map_panel.begin_edit("name")
+		return "the panel's name open for typing"
 	var card := _card(title, "Willow Green")
 	if card == null:
 		return "no card"
@@ -243,7 +260,7 @@ static func _focus(title: TitleScreen, target: String) -> String:
 
 
 static func _hover(base: Node, title: TitleScreen, target: String) -> String:
-	var control: Control = title.strip.description_edit
+	var control: Control = title.map_panel.description_label
 	if target == "card":
 		control = _card(title, "Lantern Bay")
 	if control == null:
@@ -274,9 +291,10 @@ static func _import(title: TitleScreen) -> String:
 	var panel := title.imports.check_import(path)
 	if panel == null:
 		return "no panel (written %s)" % error_string(err)
-	return "import check: %d warnings, %s" % [
-		(panel.report.warnings as Array).size(), panel.confirm_button.text
-	]
+	return (
+		"import check: %d warnings, %s"
+		% [(panel.report.warnings as Array).size(), panel.confirm_button.text]
+	)
 
 
 static func _replace(title: TitleScreen) -> String:
@@ -291,8 +309,7 @@ static func _replace(title: TitleScreen) -> String:
 	var doc := NewMap.create_dressing(bounds, 3)
 	var rock := "birch_woodland_summer_s1/Rock_Small"
 	doc.props = {
-		rock:
-		PackedFloat32Array([18, 0, 18, 0, 0, 0, 1, 1, 1, 1, 2, 0, 1, 0, 0, 0, 1, 1, 1, 1])
+		rock: PackedFloat32Array([18, 0, 18, 0, 0, 0, 1, 1, 1, 1, 2, 0, 1, 0, 0, 0, 1, 1, 1, 1])
 	}
 	MapDocumentIO.write(doc, LevelManager.map_document_path(folder))
 	var level := LevelManager.load_level_folder(folder, false)
@@ -305,11 +322,14 @@ static func _replace(title: TitleScreen) -> String:
 	var panel := title.imports.drop(PackedStringArray([smaller]), folder)
 	if panel == null:
 		return "no panel"
-	return "replace prompt: %s / %s; %s" % [
-		panel.confirm_button.text,
-		panel.fresh_button.text if panel.fresh_button else "-",
-		panel.choice_line.text,
-	]
+	return (
+		"replace prompt: %s / %s; %s"
+		% [
+			panel.confirm_button.text,
+			panel.fresh_button.text if panel.fresh_button else "-",
+			panel.choice_line.text,
+		]
+	)
 
 
 static func _close_panel(title: TitleScreen) -> String:
@@ -329,8 +349,8 @@ static func _cleanup(title: TitleScreen) -> String:
 		ImportSources.path = held[1]
 		Engine.remove_meta(&"library_probe_paths")
 	_remove_tree(PROBE_ROOT)
-	title.strip.footprint = LibraryFacts.footprint_ft
-	title.strip.is_updated = MapImport.is_updated_in_blender
+	title.map_panel.footprint = LibraryFacts.footprint_ft
+	title.map_panel.is_updated = MapImport.is_updated_in_blender
 	title.grid.provider = title.library
 	title.grid.refresh()
 	title._preselect_most_recent()

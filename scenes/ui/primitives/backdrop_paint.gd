@@ -18,7 +18,9 @@ extends RefCounted
 ## middle stop is curated: its hue is the way the gradient turns from the top to the horizon
 ## (morning's lavender sends it through a blush rather than through mint). The shader blends
 ## the three on one smooth curve in OKLCH (uniforms, colour_at), so the middle stop shapes the
-## gradient without a seam at it.
+## gradient without a seam at it. Every mood is light enough all the way down for ink words
+## (the title's wordmark, its labelled tools and its section headings stand on the sky) to keep
+## 4.5:1 (ink_reads_on; the darkest, dusk's top and night's, about 4.8:1).
 const MOODS: Array[Dictionary] = [
 	{  # Morning: clear blue through a lavender blush to a warm cream horizon.
 		"sky_top": Vector3(0.55, 0.79, 0.94),
@@ -36,7 +38,7 @@ const MOODS: Array[Dictionary] = [
 		"sky_low": Vector3(1.00, 0.82, 0.57),
 	},
 	{  # Dusk: violet over rose over coral.
-		"sky_top": Vector3(0.45, 0.44, 0.76),
+		"sky_top": Vector3(0.56, 0.56, 0.84),
 		"sky_mid": Vector3(0.88, 0.54, 0.68),
 		"sky_low": Vector3(0.99, 0.67, 0.53),
 	},
@@ -45,10 +47,10 @@ const MOODS: Array[Dictionary] = [
 		"sky_mid": Vector3(0.80, 0.82, 0.96),
 		"sky_low": Vector3(0.96, 0.89, 0.95),
 	},
-	{  # Night: deep navy over a moonlit blue.
-		"sky_top": Vector3(0.19, 0.25, 0.51),
-		"sky_mid": Vector3(0.29, 0.37, 0.68),
-		"sky_low": Vector3(0.44, 0.52, 0.80),
+	{  # Night: moonlit periwinkle over a lavender horizon (lit, so paper reads as lit on it).
+		"sky_top": Vector3(0.49, 0.56, 0.82),
+		"sky_mid": Vector3(0.60, 0.62, 0.86),
+		"sky_low": Vector3(0.77, 0.69, 0.88),
 	},
 ]
 
@@ -86,8 +88,51 @@ static func colour_at(look: Dictionary, t: float) -> Vector3:
 	var low: Vector3 = stops.low_lch
 	var mid: Vector3 = stops.mid_lch
 	var top: Vector3 = stops.top_lch
-	var lin := _linear_of(low.lerp(mid, t).lerp(mid.lerp(top, t), t)).clamp(Vector3.ZERO, Vector3.ONE)
+	var lin := _linear_of(low.lerp(mid, t).lerp(mid.lerp(top, t), t)).clamp(
+		Vector3.ZERO, Vector3.ONE
+	)
 	return Vector3(_to_srgb(lin.x), _to_srgb(lin.y), _to_srgb(lin.z))
+
+
+## `look` with every stop `step` darker in OKLCH lightness at its own hue and chroma: the same
+## light a step deeper (a map's placeholder, so a card never reads as a hole in the sky).
+static func deepened(look: Dictionary, step: float) -> Dictionary:
+	var out := {}
+	for key: String in look:
+		var lch := to_oklch(look[key])
+		out[key] = from_oklch(Vector3(maxf(lch.x - step, 0.0), lch.y, lch.z))
+	return out
+
+
+## The least contrast `colour` keeps over `look`'s gradient from `low` to `high` (0 the horizon,
+## 1 the top), sampled every twentieth of the way.
+static func worst_contrast(look: Dictionary, colour: Color, low := 0.0, high := 1.0) -> float:
+	var worst := INF
+	var words := luminance(colour)
+	for i in 21:
+		var sky := colour_at(look, lerpf(low, high, i / 20.0))
+		var lin := Vector3(_to_linear(sky.x), _to_linear(sky.y), _to_linear(sky.z))
+		var ground := 0.2126 * lin.x + 0.7152 * lin.y + 0.0722 * lin.z
+		worst = minf(worst, (maxf(words, ground) + 0.05) / (minf(words, ground) + 0.05))
+	return worst
+
+
+## Whether ink words (ThemeColors.INK) keep 4.5:1 anywhere on `look`'s sky.
+static func ink_reads_on(look: Dictionary) -> bool:
+	return worst_contrast(look, ThemeColors.INK) >= 4.5
+
+
+## WCAG 2.x contrast ratio of two opaque colours.
+static func contrast(a: Color, b: Color) -> float:
+	var la := luminance(a)
+	var lb := luminance(b)
+	return (maxf(la, lb) + 0.05) / (minf(la, lb) + 0.05)
+
+
+## The relative luminance of an opaque sRGB colour.
+static func luminance(color: Color) -> float:
+	var linear := color.srgb_to_linear()
+	return 0.2126 * linear.r + 0.7152 * linear.g + 0.0722 * linear.b
 
 
 ## The signed turn from hue `from` to hue `to` the short way (radians).

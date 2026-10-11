@@ -62,17 +62,36 @@ func define_fields() -> void:
 			focus = ring(RADIUS_CHIP),
 		}
 	)
-	# A click-to-edit title (the library strip's map name): the heading's face, standing on the
-	# paper it sits on until it is edited, then the ring (a flat LineEdit draws no well).
+	# An inline field (the library map panel's description and author, edited in place): no
+	# content margins, so its words stand exactly where its label's stand at rest, and a well
+	# that reaches out round them (expand margins) while it is pointed at, focused or typed in;
+	# the ring reaches out with it.
+	var reach := {
+		expand_margin_left = SPACE_2,
+		expand_margin_right = SPACE_2,
+		expand_margin_top = 3,
+		expand_margin_bottom = 3,
+	}
+	var inline_well := box(c(ThemeColors.SURFACE_INSET), RADIUS_CONTROL, 0, 0, reach)
+	var inline_ring: Dictionary = inherit(
+		ring(),
+		{
+			expand_margin_left = SPACE_2 + 4,
+			expand_margin_right = SPACE_2 + 4,
+			expand_margin_top = 7,
+			expand_margin_bottom = 7,
+		}
+	)
+	define_variant_style("InlineField", "LineEdit", {normal = inline_well, focus = inline_ring})
+	# The cue behind a field's words while they read as text: nothing at rest, the same well
+	# reaching out round them under the pointer or with the focus.
+	define_variant_style("FieldCue", "PanelContainer", {panel = {type = "stylebox_empty"}})
+	define_variant_style("FieldCueLit", "PanelContainer", {panel = inline_well})
+	# The map's name, the same inline field in the title's face and size.
 	define_variant_style(
 		"TitleField",
 		"LineEdit",
-		{
-			font = font_heading,
-			font_size = SIZE_HEADING,
-			normal = box(c(ThemeColors.SURFACE_INSET), RADIUS_CONTROL, 12, 2),
-			focus = ring(),
-		}
+		{font = font_title, font_size = SIZE_TITLE, normal = inline_well, focus = inline_ring}
 	)
 	# A field whose value is refused (New map's custom size past the format's range): the well
 	# outlined in the danger role, always beside the alert icon and the sentence (C7).
