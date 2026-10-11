@@ -85,7 +85,11 @@ other committed home.
   burns them to snags (the burnt forest biome, as Start a fire leaves), in the same history
   entry; Tab means "the brush's other shape" for every tool with two (Start a fire: Circle and
   Path; Fire: Area and Line; Water: River and Pond); along a path, snags stand only where trees
-  stood, while the ash runs the whole path.
+  stood, while the ash runs the whole path. Drawing a fire line (the Fire tool's Line, Start a
+  fire's Path) uses the same affordance as drawing a river: the river's ribbon at the brush
+  width with its chevrons, tinted fire orange instead of the water tint (user, 2026-10-11). Drawing a fire line (the Fire tool's Line, Start a
+  fire's Path) shows the same ribbon as driving a river, coloured ember orange for fire (user,
+  2026-10-11).
   Both reuse the fire look of card fire-look-3 (flames, ground fire, smoke as one family).
   Design before code: `docs/plans/2026-10-11-fire-features/` (gitignored).
 
