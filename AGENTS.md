@@ -2,6 +2,11 @@
 
 **TTSim** is a Godot 4.7 tabletop simulator (GDScript). This file helps AI agents understand the project quickly.
 
+**Before editing or committing, read [CLAUDE.md](CLAUDE.md)** (any harness, not only Claude Code): the
+file editing rules (CRLF working copies, `.uid` sidecars), the Godot CLI forms and the
+**Pre-Push Gate**, which is required before every push. This file is long; read the section
+you need rather than all of it.
+
 ## Essential Reading
 
 | Document | Purpose |
