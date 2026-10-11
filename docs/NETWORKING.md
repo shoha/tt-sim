@@ -868,13 +868,21 @@ the client in the box.
   `NET_RESULT {json}` line. Passed on both sides on 2026-10-10: the 20.5 MB map (12.9 MB
   compressed, 394 chunks) in 13.1 s, 961 KiB/s, hashes equal.
 - Map parity: `tests/net/steam_authored_parity.tscn` (MAP_AUTHORING.md, "Open work"), same
-  arguments with `--level=_nettest_parity`. It plays a level the render job
-  `nettest_parity_build` saves into the real library, so run that job first and delete
-  `_nettest_parity` afterwards (test levels never stay in the library). With the room join the
+  arguments with `--level=_nettest_parity` and a `--data-root` for each peer (required; nothing
+  goes into the real stores). The host plays a level the render job `nettest_parity_build`
+  saves into the host's test root, so build it first with the same root after the job name
+  (`... run.gd -- nettest_parity_build --data-root=<host root>`; the runner ignores the flag,
+  `Paths` reads it). Each peer deletes its root when it finishes, pass or fail, which takes the
+  level, the sessions and play entry hosting saved, and the caches with it; a run killed before
+  its end leaves `user://_test_roots/<root>/` to delete by hand. With the room join the
   client's `SessionPrefetch` fetches the level's `map.ttmap` in the room before the host sets
   it out, so the table's load finds it cached; the scenario counts that arrival as the
   download. Passed on both sides on 2026-10-10 (fingerprints equal, the deck, ford and wading
-  tokens at the host's heights, the wading token's ring shown).
+  tokens at the host's heights, the wading token's ring shown). Since the test root, whose
+  asset cache is empty, the three tokens are avatars (the kit ships in the game): an avatar
+  swims, so its ring shows only when at most `SWIM_SUBMERGED_SHARE` of it stands clear, and
+  the check is that each wet token's ring is what `WaterSurface.is_submerged` gives for its
+  depth (a waist-deep avatar shows none). Passed so on both sides on 2026-10-10 (run p4).
 - Session: `tests/net/steam_session.tscn`, the hosted session over real Steam (the ENet
   scenarios' flow with the game's own Steam path). Run the host unsandboxed and the client in
   the box with the same `--rendezvous` prefix (its files are `<prefix>.*`; the host deletes an
@@ -903,7 +911,11 @@ the client in the box.
   is held until then: its connection arrived 0.55 s after the host dropped the old one (8.5 s
   after the leave), so the session's stale-connection handover (`admit_peer()` keeping a Steam
   id's entry for a new peer while the old one is still connected) was not reached; after a
-  15 s wait the rejoin took 0.4 s.
+  15 s wait the rejoin took 0.4 s. The scenario's `connection_events` show why: the client's
+  connection closes at once with end reason 1000 ("Disconnect requested by application"), and
+  the host's side of it reports that close 8.0-8.2 s later, so the delay is Steam's delivery of
+  the close. Closing the multiplayer peer before leaving the lobby changed nothing (8.0 s
+  against 8.2 s, 2026-10-10) and was not kept.
 
 #### ENet scenarios (no Steam)
 

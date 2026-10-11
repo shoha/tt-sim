@@ -456,11 +456,13 @@ version goes up (user, 2026-09-27). The two-account Steam test passed on 2026-10
 now automated: `tests/net/steam_authored_parity.tscn` (two accounts on one machine, see
 `NETWORKING.md` "Automated runs") builds `_nettest_parity` (Terraces, seed 3: two falls, a
 plank bridge, an arch, a ford, a deep pond, the river past both edges; job
-`nettest_parity_build`), downloads its `map.ttmap` to the client over real Steam, and
-compares `MapFingerprint` (`utils/map_fingerprint.gd`) on both peers: every key matched in
-three runs, a deck token and a wading token matched to the millimetre, and the wading token
-showed the submerged ring on the client. (A ford is 0.17 m deep, so a token on it is
-correctly not submerged.) Host and client captures matched.
+`nettest_parity_build`, into the host's test data root, never the real library), downloads
+its `map.ttmap` to the client over real Steam, and compares `MapFingerprint`
+(`utils/map_fingerprint.gd`) on both peers: every key matched in three runs, a deck token and
+a wading token matched to the millimetre, and the wading token showed the submerged ring on
+the client. (A ford is 0.17 m deep, so a token on it is correctly not submerged.) Host and
+client captures matched. Since 2026-10-10 the tokens are avatars, whose ring follows the
+swimmer's rule (NETWORKING.md "Automated runs"); passed on both sides.
 
 Water follow-ups (phase 4 judgment pass, 2026-09-27):
 - In the wetland the ankle stream is so thick with reeds it can read as a reed bed rather

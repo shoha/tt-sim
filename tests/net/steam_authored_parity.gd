@@ -9,11 +9,15 @@ extends Node
 ## lobby, client lobby, Start), so the host plays the saved level through LevelPlayLoader and
 ## the client receives the level, downloads the document and loads it through the same path.
 ##
-## Host: plays --level (a saved authored level under user://levels whose folder starts with
-## "_nettest_"; built by tools/render_jobs/jobs/nettest_parity_build.json before the run and
-## deleted after it, since test levels never stay in the library), hosts,
+## Both roles run in a test data root (--data-root, Paths) and never touch the real stores: the
+## host's level, the sessions and play entries hosting saves, and both caches go there, and
+## each peer deletes its root when it finishes, pass or fail.
+##
+## Host: plays --level (a saved authored level in its test root whose folder starts with
+## "_nettest_"; built there before the run by tools/render_jobs/jobs/nettest_parity_build.json
+## given the same --data-root), hosts,
 ## writes the room code to --rendezvous, starts the game once the client has joined, then
-## places three tokens through the ordinary spawn path (which syncs them to clients): one on
+## places three avatar tokens through the ordinary spawn path (which syncs them to clients): one on
 ## the arch's deck, one standing in the ford, one wading the river a few metres below the
 ## ford. Once they settle it writes its fingerprint (MapFingerprint) and the tokens to
 ## <rendezvous>.host.json. It finishes when the client leaves.
@@ -22,10 +26,13 @@ extends Node
 ## host's file and for the
 ## three tokens to settle, fingerprints its own map and compares. Pass: the fingerprints
 ## match; every token's base Y within TOKEN_DY_M of the host's; the deck token stands on a
-## surface above the water and is not submerged; the ford and wading tokens show the same
-## submerged cue as on the host, and the wading token's cue shows.
+## surface above the water and is not submerged; the ford and wading tokens stand in the water
+## and show the same submerged cue as on the host, the one the water rule gives an avatar at
+## their depth (WaterSurface.is_submerged with the swimmer's share; a waist-deep avatar shows
+## none, since its chest and head stand clear).
 ##
 ## Args after `--`: --role=host|client --rendezvous=<abs path> --out=<abs path>
+##   --data-root=<name> (required; the host's must be the one the build job saved into)
 ##   --level=<_nettest_ folder> (default _nettest_parity) --timeout-s=<n> (default 420)
 ##   --capture-dir=<abs path>: in a windowed run, after the measurement, save the home view,
 ##   the arch and the ford (camera zoom CLOSE_ZOOM) at 960x540 as <role>_<name>.png (window)
@@ -97,6 +104,9 @@ func _ready() -> void:
 		return
 	if _role != "host" and _role != "client":
 		_finish(false, "unknown role")
+		return
+	if Paths.DATA_ROOT == Paths.SHIPPED_DATA_ROOT:
+		_finish(false, "run with --data-root=<name>; the scenario never uses the real stores")
 		return
 	if not _init_steam():
 		_finish(false, "steam init failed")
@@ -236,14 +246,12 @@ func _host_place_tokens() -> void:
 	if points.is_empty():
 		_finish(false, "no arch or ford in the map")
 		return
-	var asset := _token_asset()
-	if asset.is_empty():
-		_finish(false, "no cached token asset")
-		return
-	_result["asset"] = "%s/%s" % asset
+	# Avatars, built from the parts kit that ships in the game, so both peers have the model in
+	# any data root (a test root has no pack models cached).
+	_result["asset"] = "avatar"
 	for label in points:
 		var at: Vector3 = points[label]
-		var token := _lpc().spawn_asset(asset[0], asset[1], "default", at, true)
+		var token := _lpc().spawn_avatar({"format": 1}, label, at, true)
 		if token == null:
 			_finish(false, "spawn failed: " + label)
 			return
@@ -328,24 +336,6 @@ func _downstream_of(at: Vector3, distance: float) -> Vector3:
 		if walked >= distance:
 			break
 	return map.global_transform * Vector3(point.x, 0, point.y)
-
-
-## The first locally cached token asset that is not a light (as probes/water.gd picks one):
-## [pack id, asset id], or [].
-func _token_asset() -> Array:
-	for pack in AssetManager.get_packs():
-		var ids: Array = (pack as AssetPack).assets.keys()
-		ids.sort()
-		for id in ids:
-			if String(id).to_lower().contains("light"):
-				continue
-			var path := AssetManager.get_model_path(pack.pack_id, id)
-			if (
-				(path != "" and FileAccess.file_exists(path))
-				or AssetManager.cache.has_cached(pack.pack_id, id, "default")
-			):
-				return [pack.pack_id, id]
-	return []
 
 
 # --- Client ------------------------------------------------------------------
@@ -521,9 +511,24 @@ func _compare() -> void:
 			problems.append("deck token not above the water")
 		if absf(float(deck.y) - float(deck.ground_y)) > TOKEN_DY_M:
 			problems.append("deck token not on the deck surface")
-	var wade: Dictionary = mine.get("wade", {})
-	if not wade.is_empty() and not bool(wade.submerged):
-		problems.append("wading token shows no submerged ring")
+	# The tokens are avatars, which swim: the ring shows only when the water leaves at most
+	# SWIM_SUBMERGED_SHARE of the figure above it, so a waist-deep wader shows none. Each
+	# wet token's ring must be what the water rule says for its depth, on this peer.
+	for label: String in ["ford", "wade"]:
+		var wet: Dictionary = mine.get(label, {})
+		if wet.is_empty() or wet.water_y == null:
+			problems.append("%s token has no water under it" % label)
+			continue
+		if float(wet.y) >= float(wet.water_y):
+			problems.append("%s token stands above the water" % label)
+		var expected := WaterSurface.is_submerged(
+			float(wet.y),
+			float(wet.y) + float(wet.height),
+			float(wet.water_y),
+			WaterSurface.submerged_share_for(true)
+		)
+		if bool(wet.submerged) != expected:
+			problems.append("%s ring %s, the water rule says %s" % [label, wet.submerged, expected])
 	_result["problems"] = problems
 	await _maybe_capture()
 	_finish(problems.is_empty(), "compared" if problems.is_empty() else "; ".join(problems))
@@ -632,6 +637,8 @@ func _finish(ok: bool, reason: String) -> void:
 	NetworkManager.disconnect_game()
 	if _role == "client":
 		_drop_cached_map()
+	if Paths.DATA_ROOT != Paths.SHIPPED_DATA_ROOT:
+		_result["data_root_removed"] = Paths.remove_test_data_root(Paths.DATA_ROOT)
 	_log("NET_RESULT " + JSON.stringify(_result))
 	if _out:
 		_out.close()
