@@ -20,7 +20,7 @@ func _pane() -> SunPane:
 
 ## The pane says Sun once (its heading); the mode field names what it switches, and Auto is
 ## not a rayed glyph that reads as the Settings cog at 720p.
-func test_the_mode_field_names_daylight_and_auto_is_no_cog() -> void:
+func test_the_mode_field_names_sunlight_and_auto_is_no_cog() -> void:
 	var pane := _pane()
 	assert_eq(pane._mode_field.caption, SunPane.MODE_CAPTION)
 	assert_ne(SunPane.MODE_CAPTION, "Sun")
@@ -178,8 +178,56 @@ func test_formatters() -> void:
 	assert_eq(SunPane.format_bearing(360.0), "0° N")
 	assert_eq(SunPane.format_degrees(43.4), "43°")
 	var pane := _pane()
-	assert_eq(pane._time_row.hint_low, "Dawn")
+	assert_eq(pane._time_row.hint_low, "", "Dawn is a word at 06:00, not the slider's end")
 	assert_eq(pane._energy_row.hint_high, "Blazing")
+
+
+## Time of day is stacked: the label on its own line with the hour at its end (shown at all
+## times, in the 24 h form), the slider the pane's full width under it, and Dawn, Noon and
+## Dusk as words at their hours, at least 8 px apart, at the 720p drawer's pane width.
+func test_time_of_day_reads_its_hour_over_a_full_width_slider() -> void:
+	var host := Control.new()
+	host.theme = load("res://themes/generated/glass_theme.tres")
+	host.size = Vector2(300, 800)
+	add_child_autofree(host)
+	var pane := SunPane.new()
+	host.add_child(pane)
+	pane.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	var state := LevelVisualState.new()
+	state.sun = DefaultSun.settings_for_time(17.75)
+	pane.load_state(state)
+	await wait_process_frames(3)
+	var row := pane._time_row
+	assert_true(row.stacked)
+	assert_eq(row.readout_text(), "17:45")
+	assert_true(row._readout.is_visible_in_tree(), "the hour shows without the values toggle")
+	assert_eq(row._readout.get_parent(), row._label.get_parent(), "on the label's line")
+	assert_almost_eq(row._slider.size.x, pane.size.x, 1.0, "the slider is the pane's width")
+	var words := row.strip_words()
+	assert_eq(words.map(func(w: Dictionary) -> String: return w.text), ["Dawn", "Noon", "Dusk"])
+	for i in range(1, words.size()):
+		var gap: float = (
+			float(words[i].x) - (float(words[i - 1].x) + row._word_width(words[i - 1].text))
+		)
+		assert_gte(
+			gap, PropertyRow.TICK_LABEL_GAP, "%s and %s apart" % [words[i - 1].text, words[i].text]
+		)
+	for tick in row.ticks:
+		assert_false(tick.has("icon"), "words only, no icons")
+
+
+## The mode field says what it switches: the game's sunlight, with what the picked mode does
+## at the end of its caption (Auto: unless the map has its own lights).
+func test_the_sunlight_field_says_what_each_mode_does() -> void:
+	var pane := _pane()
+	assert_eq(SunPane.MODE_CAPTION, "Sunlight")
+	assert_eq(pane._mode_field.note.text, SunPane.MODE_NOTES["auto"])
+	pane._on_mode_selected(&"off")
+	assert_eq(pane._mode_field.note.text, SunPane.MODE_NOTES["off"])
+	pane._on_energy_changed(2.0)
+	pane._on_mode_selected(&"auto")
+	pane._on_energy_changed(1.0)
+	assert_eq(pane._mode_field.note.text, SunPane.MODE_NOTES["on"], "promoted to on, and says so")
 
 
 func test_sun_and_shadow_tiles_fill_the_row_in_three_columns() -> void:

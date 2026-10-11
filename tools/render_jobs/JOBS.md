@@ -490,15 +490,16 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   under the shelf (`room_drawer`), as a player sees it on opening (`room_drawer_player`) and
   with the long GM and map names, the long map selected (`room_drawer_long`); then authoring
   with the tool drawer on Biome and focus on its picked tile (the probe lets a drawer tile
-  take focus), then the real map load of the test map caught about 0.4 s after Play
+  take focus) and the drawer on Sculpt and Water (`authoring_sculpt`, `authoring_water`),
+  then the real map load of the test map caught about 0.4 s after Play
   (`map_load_real`), and in play the same staged map load over the live table (`map_load_table`), the Visuals drawer
   on Sun with nothing changed (no foot) and the same with an unsaved change
   (`play_drawer_unsaved`: the time of day moved 45 minutes, the lake dot, the Sun rail item's
   tooltip shown by a synthetic pointer event, the foot with Revert look and Save look the one
   Primary; the probe then presses Revert look), focus on a quiet glass button, the pause menu, the
-  pause menu as the host sees it (`pause_host`: the host-only Return everyone to the room row,
-  shown on a solo pause) and the confirmation that row asks (`return_room_confirm`, nothing
-  unsaved), the pause menu's Return to title danger confirmation with an unsaved token move
+  pause menu as the host sees it (`pause_host`: the host-only Move everyone to the room row in
+  its own group between separators, shown on a solo pause; it asks nothing, so it is not
+  pressed), the pause menu's Return to title danger confirmation with an unsaved token move
   staged, Save first and Cancel focused (`danger`; both confirmations stand on the pause
   menu's scrim in place of its sheet), one toast
   of each kind, the toast a removed token shows with its Undo (`undo_toast`), the Add token
@@ -509,7 +510,8 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   Graphics, the new-map dialog as it opens and scrolled to its end, and in play the Visuals
   drawer on Sun and the play hint row between the room drawer and Add token
   (`hints_room_drawer`, wrapping at 150%); at 1280x720 (Auto 1.40) the Interface size
-  dropdown open, a staged two-segment measure line over the board with the measure tool's
+  dropdown open, the Visuals drawer on each pane after Sun (`1280x720_visuals_sky` to
+  `_world`), a staged two-segment measure line over the board with the measure tool's
   own keys leading the hint bar (`1280x720_measure`) and the bar just after the tool ends
   (`1280x720_measure_done`). Last, one probe capture of the title at 1720x720 (ultrawide). The
   captures and `INDEX.md`; the level is deleted at the end. Half size makes the 720p captures

@@ -61,15 +61,18 @@ static func players(summary: Dictionary, local_id: String) -> Array[Dictionary]:
 		if peer <= 0:
 			continue
 		var player_name := str(entry.get("name", "")).strip_edges()
-		out.append(
-			{
-				"id": id,
-				"name": player_name if player_name != "" else "Player",
-				"gm": peer == 1,
-				"you": id == local_id,
-				"holds": holdings.get(id, []),
-				"progress": progress.get(id, {}),
-			}
+		(
+			out
+			. append(
+				{
+					"id": id,
+					"name": player_name if player_name != "" else "Player",
+					"gm": peer == 1,
+					"you": id == local_id,
+					"holds": holdings.get(id, []),
+					"progress": progress.get(id, {}),
+				}
+			)
 		)
 	out.sort_custom(
 		func(a: Dictionary, b: Dictionary) -> bool:
@@ -93,14 +96,18 @@ static func shelf(summary: Dictionary) -> Array[Dictionary]:
 			continue
 		var map_name := str(ref.get("name", "")).strip_edges()
 		var folder := str(ref.get("folder", ""))
-		out.append(
-			{
-				"key": key,
-				"folder": folder,
-				"name": map_name if map_name != "" else (folder if folder != "" else key.get_file()),
-				"on_table": key == table,
-				"gone": gm_holds is Array and not (gm_holds as Array).has(key),
-			}
+		(
+			out
+			. append(
+				{
+					"key": key,
+					"folder": folder,
+					"name":
+					map_name if map_name != "" else (folder if folder != "" else key.get_file()),
+					"on_table": key == table,
+					"gone": gm_holds is Array and not (gm_holds as Array).has(key),
+				}
+			)
 		)
 	return out
 
@@ -234,22 +241,31 @@ static func own_readiness_text(player_list: Array[Dictionary], key: String) -> S
 
 
 ## The heading: {"title", "caption"}, from the current state every time, so it never goes stale
-## after a return to the room.
+## after a return to the room. The title is the room's one name for this viewer, the same in
+## the room and the drawer (room_title()); only the caption differs by form.
 static func header(
 	in_drawer: bool, is_gm: bool, gm: String, shelf_size: int, table_name: String
 ) -> Dictionary:
+	var title := room_title(is_gm, gm)
 	if in_drawer:
 		var on_table := "On the table: %s" % table_name if table_name != "" else ""
-		return {"title": "The room", "caption": on_table}
+		return {"title": title, "caption": on_table}
 	if is_gm:
 		var caption := (
 			"Add a map to the shelf, then set it out"
 			if shelf_size == 0
 			else "Choose a map from the shelf and set it out"
 		)
-		return {"title": "Your room", "caption": caption}
-	var title := "%s's room" % gm if gm != "" else "The room"
+		return {"title": title, "caption": caption}
 	return {"title": title, "caption": "The GM sets out the next map"}
+
+
+## The room's name: Your room for the GM, the GM's room for a player (The room before the
+## roster names a GM).
+static func room_title(is_gm: bool, gm: String) -> String:
+	if is_gm:
+		return "Your room"
+	return "%s's room" % gm if gm != "" else "The room"
 
 
 ## What the centre says with no map selected, over its painted placeholder: {"title",

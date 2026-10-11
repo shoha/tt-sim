@@ -5,19 +5,23 @@ extends RefCounted
 ## panel fills and shows them (RoomPanel "Showing").
 ##
 ## The room, full screen: the heading top left with the room code, Copy and Invite top right;
-## below, the side sheet (players, then the shelf with Add a map, then Leave or End session)
-## and the stage in the centre (the selected map large, its name, its readiness and the one
-## action). The side sheet ends at its content; a shelf too long for the screen scrolls inside
-## a full-height sheet (RoomPanel._fit_side()). No word stands straight on the painted
-## backdrop: the heading and the code row each sit on a paper plaque that ends at them, and
-## the map's name and readiness on a plaque as wide as its picture, like a caption plate.
+## below, the side sheet (players, then the shelf with Add a map) and the stage in the centre
+## (the selected map large, its name, its readiness and the one action); the foot, Leave or
+## End session, bottom left under the sheet. The side sheet ends at its content; a shelf too
+## long for the screen scrolls inside a full-height sheet (RoomPanel._fit_side()). No word
+## stands straight on the painted backdrop: the heading and the code row each sit on a paper
+## plaque that ends at them, and the map's name and readiness on a plaque as wide as its
+## picture, like a caption plate.
 ##
 ## The drawer, over a table: the heading with the full width for "On the table: ...", the code
 ## row on its own line under it, then one column (players and shelf) and directly under the
 ## shelf its action, Move the table to the selected map (or a caption saying what moves it),
-## then the foot. There is no second picture of the selected map: its shelf row already shows
-## the picture, the name and the state. The action follows the content and pins to the foot
-## only when the column runs past the drawer, which then scrolls (RoomPanel._fit_drawer()).
+## then the foot. Both forms share the heading's words (RoomModel.header()), the code row
+## (captioned Room code) and the foot apart from the lists (2026-10-10 once-over: one kind of
+## thing behaves one way). There is no second picture of the selected map: its shelf row
+## already shows the picture, the name and the state. The action follows the content and pins
+## to the foot only when the column runs past the drawer, which then scrolls
+## (RoomPanel._fit_drawer()).
 ##
 ## The Shelf heading has more space above it than below (S4): a gap the height of one more
 ## separation sits between the players and the shelf.
@@ -27,6 +31,8 @@ const COMPACT := Vector2(40, 40)
 ## The width the room's action takes at least, so Set out reads as the screen's one fill.
 const ACTION_MIN_WIDTH := 280.0
 const ACTION_HEIGHT := 44.0
+## The code row's caption, in the room and the drawer alike.
+const CODE_CAPTION := "Room code"
 
 
 ## Build `panel`'s controls into it, as a drawer when `panel.in_drawer`.
@@ -55,6 +61,8 @@ static func _build_drawer(panel: RoomPanel, layout: VBoxContainer) -> void:
 	var column := _vbox("Column", &"BoxContainerSpaced")
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(column)
+	# After the column: RoomPanel reads the column as the scroll's first child.
+	ScrollBarFade.attach(scroll)
 	column.add_child(_build_players(panel))
 	column.add_child(_spacer(Vector2.ZERO))
 	column.add_child(_build_shelf(panel))
@@ -112,11 +120,13 @@ static func _build_room(panel: RoomPanel, layout: VBoxContainer) -> void:
 	var shelf := _build_shelf(panel)
 	shelf.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	side_box.add_child(shelf)
-	side_box.add_child(_build_footer(panel))
 	body.add_child(_spacer(Vector2(RoomPanel.GAP, 0)))
 	var stage_box := _build_stage(panel)
 	stage_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_child(stage_box)
+	# The foot, apart from the lists as in the drawer: End session (or Leave session) bottom
+	# left, under the side sheet rather than inside it after the last shelf row.
+	layout.add_child(_build_footer(panel))
 
 
 static func _build_heading(panel: RoomPanel) -> VBoxContainer:
@@ -134,24 +144,28 @@ static func _build_heading(panel: RoomPanel) -> VBoxContainer:
 	return box
 
 
-## The room code in its chip, Copy (a compact framed icon button, named in its tooltip) and
-## Invite (a quiet button with its word).
-static func _build_code_row(panel: RoomPanel) -> HBoxContainer:
+## The code row, the same in the room and the drawer: the caption Room code over the code in
+## its chip, Copy (a compact framed icon button, named in its tooltip) and Invite (a quiet
+## button with its word), as a field's caption sits over its field. The caption over the row,
+## not beside it, keeps the row inside the 396 drawer (beside it, the drawer's panel grew
+## past its width and under its rail).
+static func _build_code_row(panel: RoomPanel) -> VBoxContainer:
+	var block := _vbox("CodeBlock", &"BoxContainerTight")
+	block.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	var caption := Label.new()
+	caption.name = "CodeCaption"
+	caption.text = CODE_CAPTION
+	caption.theme_type_variation = &"Caption"
+	block.add_child(caption)
 	var row := HBoxContainer.new()
 	row.name = "CodeRow"
 	row.theme_type_variation = &"BoxContainerSpaced"
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	if not panel.in_drawer:
-		var caption := Label.new()
-		caption.text = "Room code"
-		caption.theme_type_variation = &"Caption"
-		caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(caption)
+	block.add_child(row)
 	var chip := PanelContainer.new()
 	chip.name = "CodeChip"
 	chip.theme_type_variation = &"CodeChip"
-	chip.tooltip_text = "Room code"
+	chip.tooltip_text = CODE_CAPTION
 	chip.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(chip)
 	panel.code_label = Label.new()
@@ -168,7 +182,7 @@ static func _build_code_row(panel: RoomPanel) -> HBoxContainer:
 	panel.invite_button = _button("Invite", "share", "Invite")
 	panel.invite_button.tooltip_text = "Invite friends through Steam"
 	row.add_child(panel.invite_button)
-	return row
+	return block
 
 
 static func _build_players(panel: RoomPanel) -> VBoxContainer:
@@ -201,6 +215,7 @@ static func _build_shelf(panel: RoomPanel) -> VBoxContainer:
 	panel.shelf_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(panel.shelf_scroll)
 	panel.shelf_scroll.add_child(panel.shelf_rows)
+	ScrollBarFade.attach(panel.shelf_scroll)
 	return box
 
 

@@ -171,6 +171,8 @@ func _advanced() -> Foldout:
 	_width_row = PropertyRow.new()
 	_width_row.name = "WaterWidth"
 	_width_row.label = "Width"
+	# Stacked as every drawer slider row is: the label over a full-width slider.
+	_width_row.stacked = true
 	_width_row.min_value = 2.0 * WaterBody.MIN_HALF_WIDTH_M
 	_width_row.max_value = 2.0 * WaterBody.MAX_HALF_WIDTH_M
 	_width_row.step = 0.1
@@ -183,6 +185,7 @@ func _advanced() -> Foldout:
 	_speed_row = PropertyRow.new()
 	_speed_row.name = "WaterFlow"
 	_speed_row.label = "Flow"
+	_speed_row.stacked = true
 	_speed_row.min_value = 0.0
 	_speed_row.max_value = WaterBody.MAX_SPEED
 	_speed_row.step = 0.05

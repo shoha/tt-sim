@@ -35,6 +35,21 @@ class RailDrawer:
 		]
 
 
+class EdgeRailDrawer:
+	extends DrawerContainer
+
+	var rail_edge := DrawerEdge.LEFT
+
+	func _on_ready() -> void:
+		edge = rail_edge
+		tab_width = 40.0
+		drawer_width = 320.0
+		rail_items = [
+			{"id": &"a", "icon": "trees", "tooltip": "A"},
+			{"id": &"b", "icon": "eraser", "tooltip": "B"},
+		]
+
+
 class VetoRailDrawer:
 	extends RailDrawer
 
@@ -153,3 +168,38 @@ func test_footer_items_press_without_selecting_or_opening() -> void:
 	assert_eq(drawer._rail.selected, &"")
 	drawer.set_footer_item_active(&"values", true)
 	assert_true(drawer._footer_rail._buttons[&"values"].active)
+
+
+## Every item and the selected item's indicator lie inside the rail panel, within its padding,
+## on either edge and under the glass theme, and the indicator sits on the side facing the
+## panel (the authoring rail's selected Biome ran to the rail's outer rim and read as cut).
+## A tab_width too narrow for the items grows to fit them.
+func test_rail_items_and_indicator_sit_inside_the_rail() -> void:
+	for edge_case in [DrawerContainer.DrawerEdge.LEFT, DrawerContainer.DrawerEdge.RIGHT]:
+		var host := Control.new()
+		host.theme = load("res://themes/generated/glass_theme.tres")
+		host.size = Vector2(1371, 771)
+		add_child_autofree(host)
+		var drawer := EdgeRailDrawer.new()
+		drawer.rail_edge = edge_case
+		host.add_child(drawer)
+		drawer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		drawer._on_rail_item_pressed(&"a")
+		await wait_process_frames(3)
+		var panel: PanelContainer = drawer._rail_panel
+		assert_gte(drawer.tab_width, IconRail.ITEM_SIZE + 8.0, "the rail fits its items")
+		var frame := panel.get_global_rect()
+		var inner := Rect2(frame.position + Vector2(4, 0), frame.size - Vector2(8, 0))
+		for id in [&"a", &"b"]:
+			var item: Control = drawer._rail._buttons[id]
+			assert_true(inner.grow(0.5).encloses(item.get_global_rect()), "%s inside" % id)
+		var rail := drawer._rail
+		var indicator := rail.get_global_transform() * rail.indicator_rect()
+		assert_true(indicator.has_area(), "the selected item shows its indicator")
+		assert_true(inner.grow(0.5).encloses(indicator), "the indicator is inside the rail")
+		var faces_panel := (
+			indicator.position.x < frame.get_center().x
+			if edge_case == DrawerContainer.DrawerEdge.LEFT
+			else indicator.position.x > frame.get_center().x
+		)
+		assert_true(faces_panel, "the indicator is on the side facing the panel")

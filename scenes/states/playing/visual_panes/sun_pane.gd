@@ -7,17 +7,33 @@ extends LevelEditPane
 ## carried across. Editing any sun property while the mode is "auto" promotes
 ## it to "on", because an auto sun may be hidden by a map that brings its own
 ## lights and the edit would otherwise be a silent no-op.
+##
+## Layout: Time of day on its own line with the hour (17:45, the 24 h form the game uses) at
+## its end, the slider the pane's full width under it with Dawn, Noon and Dusk at their
+## hours; the Sunlight mode tiles with what the picked mode does at the end of their caption.
 
 signal sun_changed(settings: SunSettings)
 signal aim_toggled(active: bool)
 
 ## [mode value, label, icon]. Auto is an A in a ring: brightness-auto's rayed octagon read as
 ## the Settings cog at 720p.
-const MODES := [
-	["auto", "Auto", "circle-letter-a"], ["on", "On", "sun"], ["off", "Off", "sun-off"]
+const MODES := [["auto", "Auto", "circle-letter-a"], ["on", "On", "sun"], ["off", "Off", "sun-off"]]
+## The mode field's caption: whether the game's sunlight shines (LevelEnvironmentManager
+## _configure_sun_light). Daylight Auto / On / Off did not say what it switched (W1).
+const MODE_CAPTION := "Sunlight"
+## What each mode does, at the end of the caption's line for the picked one and as its
+## tile's tooltip: Auto lights the map unless it brought its own lights.
+const MODE_NOTES := {
+	"auto": "Unless the map has its own lights",
+	"on": "Always, with the map's lights",
+	"off": "Only the map's own lights",
+}
+## The time of day's markers: words at their hours, no icons.
+const TIME_TICKS: Array[Dictionary] = [
+	{"value": 6.0, "label": "Dawn"},
+	{"value": 12.0, "label": "Noon"},
+	{"value": 18.0, "label": "Dusk"},
 ]
-## The mode field's caption: the pane's heading already says Sun.
-const MODE_CAPTION := "Daylight"
 ## [tile id, label, icon]
 const SHADOW_TILES := [
 	["off", "Off", "circle-off"], ["hard", "Hard", "contrast"], ["soft", "Soft", "cloud"]
@@ -48,30 +64,27 @@ var _regenerate_button: Button
 func _build() -> void:
 	_add_heading("Sun")
 
+	# The label on its own line with the hour at its end, the slider the pane's width under
+	# it, and three words at their hours under that (2026-10-10: the label, a 200 px slider,
+	# Dawn and Dusk at its ends and three icons between them crowded one line).
 	_time_row = _add_row(
 		"Time of day",
 		0.0,
 		24.0,
 		0.5,
 		14.0,
-		{
-			"tooltip": TIME_TOOLTIP,
-			"hint_low": "Dawn",
-			"hint_high": "Dusk",
-			"formatter": SunPane.format_time,
-		}
+		{"tooltip": TIME_TOOLTIP, "formatter": SunPane.format_time, "show_readout": true}
 	)
-	_time_row.ticks = [
-		{"value": 6.0, "icon": "sunrise"},
-		{"value": 12.0, "icon": "sun"},
-		{"value": 18.0, "icon": "sunset"},
-	]
+	_time_row.ticks = TIME_TICKS
 	_time_row.value_changed.connect(_on_time_changed)
 
 	_mode_field = _add_tile_field(MODE_CAPTION, MODES)
 	_mode_field.tiles.columns = 3
 	_mode_tiles = _mode_field.tiles
+	for mode: Array in MODES:
+		_mode_tiles.set_tile_tooltip(StringName(mode[0]), MODE_NOTES[mode[0]])
 	_mode_tiles.selection_changed.connect(_on_mode_selected)
+	_show_mode_note()
 
 	_shadow_field = _add_tile_field("Shadows", SHADOW_TILES)
 	_shadow_field.tiles.columns = 3
@@ -182,6 +195,7 @@ static func format_degrees(degrees: float) -> String:
 
 func _sync_controls() -> void:
 	_mode_tiles.select(StringName(_sun.mode))
+	_show_mode_note()
 	_azimuth_row.set_value_no_signal(_sun.azimuth_degrees)
 	_elevation_row.set_value_no_signal(_sun.elevation_degrees)
 	_color_row.set_color_no_signal(_sun.color)
@@ -212,6 +226,12 @@ func _promote_auto_to_on() -> void:
 		return
 	_sun.mode = "on"
 	_mode_tiles.select(&"on")
+	_show_mode_note()
+
+
+## Say what the picked Sunlight mode does, at the end of its caption's line.
+func _show_mode_note() -> void:
+	_mode_field.show_note(String(MODE_NOTES.get(_sun.mode, "")))
 
 
 func _emit_changed() -> void:
@@ -223,6 +243,7 @@ func _emit_changed() -> void:
 ## The one control that must NOT promote auto to on: it chooses the mode.
 func _on_mode_selected(id: StringName) -> void:
 	_sun.mode = String(id)
+	_show_mode_note()
 	_emit_changed()
 
 

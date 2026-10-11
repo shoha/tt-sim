@@ -3,7 +3,8 @@ extends Control
 
 ## Hosts several panes at the same full-rect position and shows one at a time.
 ## Each pane is wrapped in a vertical ScrollContainer so tall content scrolls
-## while the host's header and footer stay pinned. Swaps crossfade: the
+## while the host's header and footer stay pinned; its bar shows only while wanted
+## (ScrollBarFade). Swaps crossfade: the
 ## outgoing pane fades out while the incoming one fades in and slides a few
 ## pixels from the rail side.
 
@@ -35,6 +36,7 @@ func add_pane(id: StringName, pane: Control) -> void:
 	wrapper.offset_transform_enabled = true
 	pane.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	wrapper.add_child(pane)
+	ScrollBarFade.attach(wrapper)
 	add_child(wrapper)
 	_wrappers[id] = wrapper
 	_panes[id] = pane

@@ -192,15 +192,21 @@ func _slide_indicator_to(target: float) -> void:
 	_indicator_tween.tween_property(self, "_indicator_pos", target, Constants.ANIM_PANE_SWAP)
 
 
-func _draw() -> void:
+## The indicator's rect in the rail's own coordinates, where it is drawn now (mid-slide too);
+## empty with nothing selected. It always lies inside the rail's rect, so a host that keeps the
+## rail inside its frame keeps the indicator there too.
+func indicator_rect() -> Rect2:
 	if _indicator_pos < 0.0:
-		return
+		return Rect2()
 	var half := ITEM_SIZE / 2.0
-	var rect: Rect2
 	if vertical:
 		var x := size.x - INDICATOR_THICKNESS if indicator_at_end else 0.0
-		rect = Rect2(x, _indicator_pos - half, INDICATOR_THICKNESS, ITEM_SIZE)
-	else:
-		var y := size.y - INDICATOR_THICKNESS if indicator_at_end else 0.0
-		rect = Rect2(_indicator_pos - half, y, ITEM_SIZE, INDICATOR_THICKNESS)
-	draw_rect(rect, ThemeColors.of(self, ThemeColors.STATE))
+		return Rect2(x, _indicator_pos - half, INDICATOR_THICKNESS, ITEM_SIZE)
+	var y := size.y - INDICATOR_THICKNESS if indicator_at_end else 0.0
+	return Rect2(_indicator_pos - half, y, ITEM_SIZE, INDICATOR_THICKNESS)
+
+
+func _draw() -> void:
+	var rect := indicator_rect()
+	if rect.has_area():
+		draw_rect(rect, ThemeColors.of(self, ThemeColors.STATE))

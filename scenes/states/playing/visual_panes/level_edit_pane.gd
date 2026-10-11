@@ -54,8 +54,10 @@ func _add_caption(text: String, parent: Node = self) -> Label:
 
 ## opts: exp_edit, allow_greater, allow_lesser, show_color, show_check,
 ## show_slider (default true), tooltip, hint_low, hint_high, formatter
-## (Callable), parent (default self; pass a Foldout's body to place the row
-## inside it).
+## (Callable), show_readout (the value always at the label line's end), parent
+## (default self; pass a Foldout's body to place the row inside it). A slider row is
+## stacked (PropertyRow.stacked): the label and its value on one line, the slider the
+## pane's full width under it, since the drawer is too narrow for both on one line.
 func _add_row(
 	label: String,
 	min_value: float,
@@ -69,6 +71,8 @@ func _add_row(
 	row.show_slider = opts.get("show_slider", true)
 	row.show_color = opts.get("show_color", false)
 	row.show_check = opts.get("show_check", false)
+	row.stacked = row.show_slider
+	row.show_readout = opts.get("show_readout", false)
 	row.min_value = min_value
 	row.max_value = max_value
 	row.step = step

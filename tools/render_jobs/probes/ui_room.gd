@@ -51,10 +51,10 @@ extends RefCounted
 ##   `player` shows it as the local player sees it, opened on the map on the table; `long`
 ##   gives the GM and the second sample map their long names and selects that map.
 ## - `close_room`: free the staged room and show the title again.
-## - `pause_host`: on the open pause menu, show the host-only Return everyone to the room
-##   row (a solo pause hides it).
-## - `return_room`: press that row, which asks its confirmation. Dismiss it with
-##   ui_primitives.gd `dismiss`; confirming would do nothing, since this is no hosted session.
+## - `pause_host`: on the open pause menu, show the host-only Move everyone to the room
+##   group (a solo pause hides it).
+## - `return_room`: press that row. It asks nothing (a table move); on a solo pause there is no
+##   room to move to, so nothing happens.
 
 ## The staged room's node name under Root.
 const STAGED := "UiTourRoom"
@@ -209,7 +209,9 @@ static func _summary(
 			# Fen Crossing is gone from the GM's library: the host does not hold it, so nobody
 			# has it or waits for it (SessionChannel.get_holdings()).
 			for id: String in holdings:
-				holdings[id] = (holdings[id] as Array).filter(func(key: String) -> bool: return key != fen)
+				holdings[id] = (holdings[id] as Array).filter(
+					func(key: String) -> bool: return key != fen
+				)
 			progress = {"enet-starling": {mill: 72}}
 	return {
 		"open": table == "",
@@ -251,12 +253,15 @@ static func _host_room(base: Node, folder: String, step: Dictionary) -> String:
 	var panel := room.panel
 	if notes:
 		panel.show_notes({keys[0]: SessionFile.CHANGED, keys[1]: SessionFile.MISSING})
-	return "GM's room: %s; %d maps, %s selected; action %s" % [
-		panel.title_label.text,
-		panel.shelf_rows.get_child_count(),
-		panel.selected_key(),
-		panel.action_button.text if panel.action_button.visible else "none",
-	]
+	return (
+		"GM's room: %s; %d maps, %s selected; action %s"
+		% [
+			panel.title_label.text,
+			panel.shelf_rows.get_child_count(),
+			panel.selected_key(),
+			panel.action_button.text if panel.action_button.visible else "none",
+		]
+	)
 
 
 static func _client_room(base: Node, folder: String, step: Dictionary) -> String:
@@ -267,12 +272,15 @@ static func _client_room(base: Node, folder: String, step: Dictionary) -> String
 	var index := int(step.get("select", 0))
 	if with_shelf and index >= 0:
 		room.panel.select(SAMPLE_MAPS.keys()[index])
-	return "player's room: %s, %d players, %s: %s" % [
-		room.panel.title_label.text,
-		room.panel.player_rows.get_child_count(),
-		room.panel.map_name_label.text,
-		room.panel.readiness_label.text,
-	]
+	return (
+		"player's room: %s, %d players, %s: %s"
+		% [
+			room.panel.title_label.text,
+			room.panel.player_rows.get_child_count(),
+			room.panel.map_name_label.text,
+			room.panel.readiness_label.text,
+		]
+	)
 
 
 static func _staged_panel(base: Node) -> RoomPanel:
@@ -318,11 +326,14 @@ static func _drawer(base: Node, folder: String, step: Dictionary) -> String:
 		drawer.panel.select(folder if player else SAMPLE_MAPS.keys()[0])
 	drawer.open()
 	var action := drawer.panel.action_button
-	return "room drawer open as %s, %s on the table; %s" % [
-		"a player" if player else "the GM",
-		folder,
-		action.text if action.visible else drawer.panel.hint_label.text,
-	]
+	return (
+		"room drawer open as %s, %s on the table; %s"
+		% [
+			"a player" if player else "the GM",
+			folder,
+			action.text if action.visible else drawer.panel.hint_label.text,
+		]
+	)
 
 
 static func _close_room(base: Node) -> String:
@@ -343,7 +354,7 @@ static func _pause_host(base: Node) -> String:
 	var pause := _pause_overlay(base)
 	if pause == null:
 		return "the pause menu is not open"
-	pause.room_button.visible = true
+	pause.show_room_row(true)
 	pause.rebuild_focus_trap()
 	return "pause menu with %s" % pause.room_button.text
 
@@ -351,6 +362,6 @@ static func _pause_host(base: Node) -> String:
 static func _return_room(base: Node) -> String:
 	var pause := _pause_overlay(base)
 	if pause == null or not pause.room_button.visible:
-		return "no Return everyone to the room row"
+		return "no Move everyone to the room row"
 	pause.room_button.pressed.emit()
-	return "asked to return everyone to the room"
+	return "asked to move everyone to the room"

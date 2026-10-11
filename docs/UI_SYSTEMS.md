@@ -677,6 +677,14 @@ The scroll bar is its handle alone, on the default bar's clear lane, with no tra
 after a wheel, pad or drag scroll, then out; hidden, it still takes a click or a drag where it
 stands, and the pad scrolls by focus. Horizontal scrolling is disabled.
 
+That behaviour is also one helper, `ScrollBarFade` (`scenes/ui/primitives/scroll_bar_fade.gd`,
+`LINGER_S` 0.8 s), a `Node` added to any `ScrollContainer` (`ScrollBarFade.attach(scroll)`):
+every drawer pane (`PaneStack` wraps each pane in a scroll that carries one: the authoring
+tool drawer, the Visuals drawer, the avatar builder), the Settings tabs, and the room's shelf
+and drawer column. A content list gets it, not its own bar code. The library grid still has
+its own copy (`LevelGrid._show_bar`), to be swapped for `ScrollBarFade.attach(self)` once the
+title redesign that is rewriting `level_grid.gd` lands.
+
 ### Signals
 
 - `host_game_requested(level_info: Dictionary)` -- the card's Host (`{}`: a room needs no map),
@@ -770,12 +778,17 @@ selected shelf map's mood, `RoomPanel.selection_shown`) and as a glass drawer ov
 drawer width token 396, `RoomPanel.SIDE_WIDTH`, opened by its tab or Tab). It replaced the host
 lobby, the client's waiting view, the lobby's Change and the in-play `PlayerListDrawer`.
 
-- **Layout.** The room: the heading (title and caption) top left, the room code in a `CodeChip`
-  with Copy (toast "Code copied") and Invite top right; a 396 px paper sheet on the left with
-  Players, the Shelf below them (it scrolls) and Leave (a player) or End session (the GM, asks
-  first) at its foot; the selected map large in the centre (16:9, up to 720 px wide), its name in
-  Fraunces, how many have it, and its one action directly under it. The drawer stacks the same
-  parts in one column with the code on its own line under the heading, and no second picture
+- **Layout.** The room: the heading (title and caption) top left, the code row (the caption
+  Room code, the code in a `CodeChip`, Copy (toast "Code copied") and Invite) top right; a 396 px
+  paper sheet on the left with Players and the Shelf below them (it scrolls); the selected map
+  large in the centre (16:9, up to 720 px wide), its name in Fraunces, how many have it, and its
+  one action directly under it; and the foot, Leave session (a player) or End session (the GM,
+  asks first), bottom left under the sheet, apart from the lists. The two forms share one name
+  for the room (`RoomModel.room_title()`: Your room for the GM, Marigold's room for a player;
+  only the caption differs, "On the table: ..." in the drawer), one code row with its caption,
+  and one placement for End session, the foot (2026-10-10 once-over: it sat inside the shelf
+  sheet in the room and at the foot in the drawer, under two names). The drawer stacks the same
+  parts in one column with the code row on its own line under the heading, and no second picture
   of the selected map (its shelf row shows the picture, name and state): the action, "Move the
   table to Old Mill", sits directly under the shelf, and pins to the foot only when the column
   runs past the drawer and scrolls (`RoomPanel._fit_drawer()`, which also scrolls the selected
@@ -841,9 +854,10 @@ when Steam starts (`NetworkManager._name_from_steam()`).
   caption reach 4.5:1 on the lake fill on both leaves (`ON_SELECTED`; chalk_soft would be
   3.7:1).
 
-The pause menu offers the host one quiet extra row, **Return everyone to the room** (`users`
-icon, Secondary, `ui_silent`, visible only while hosting); its confirmation emits
-`room_requested`, which `Root.return_to_room()` answers.
+The pause menu offers the host one quiet extra row, **Move everyone to the room** (`users`
+icon, Secondary, `ui_silent`, visible only while hosting, in a group of its own between
+separators, apart from Return to title); it emits `room_requested`, which
+`Root.return_to_room()` answers.
 
 ---
 
@@ -932,12 +946,16 @@ resume") and the rows through `UiActions`. **Resume** is the only accent action,
 **Set up tokens** is still GM-gated (`NetworkManager.has_gm_access()`): it resumes and opens the
 level editor on the map on the table (the title's name for it, `TitleScreen.SET_UP_TOKENS`).
 There is no Change map: the table moves to another map from the room drawer (see Table moves
-below). **Settings** opens the settings menu. **Return to title** and **Quit game** are
-`Secondary` and still confirm before acting.
+below). **Settings** opens the settings menu. For the host only, **Move everyone to the room**
+stands in a session group of its own, a separator above and below it (`room_separator`,
+`show_room_row()`), so it never reads as a sibling of leaving: it moves every player at once,
+and its first word is not Return to title's (2026-10-10 once-over: as "Return everyone to the
+room" directly above "Return to title", with the same weight, the two read as one kind of
+action). **Return to title** and **Quit game** are `Secondary` and still confirm before acting.
 
 ### Leaving the table
 
-Return everyone to the room (the host's) asks nothing in the menu: it emits `room_requested`,
+Move everyone to the room (the host's) asks nothing in the menu: it emits `room_requested`,
 and Root resumes and moves the table to the room (see Table moves below). Return to title and
 Quit game confirm through
 `_confirm_leaving()`, the question naming the action as its button does ("Return to title?" /
@@ -965,7 +983,7 @@ pause menu each confirm stands on the pause menu's scrim in place of its sheet (
 
 ### Table moves
 
-The room drawer's Move the table here and the pause menu's Return everyone to the room are one
+The room drawer's Move the table here and the pause menu's Move everyone to the room are one
 operation (`TableMover`, `scenes/table_mover.gd`; the engine side is in NETWORKING.md "Table
 moves"). A move asks nothing (direct gestures, not forms): the table is kept for the session as
 it is, and every peer sees `TableMoveNotice`, a glass chip (the `Toast` variation) at the top
@@ -1174,6 +1192,14 @@ func _on_ready() -> void:
 
 Set `rail_items` in `_on_ready()` to replace the single tab with an `IconRail` showing one icon per pane instead of one icon for the whole drawer. Clicking an item opens the drawer and emits `pane_requested(id)`; clicking the active item closes it; `open()` with nothing selected reopens the last pane. Badge a single item with `set_rail_badge(id, true)`; `set_tab_tooltip()` only applies in single-tab mode. See [THEME_GUIDE.md's Rail Mode section](THEME_GUIDE.md#rail-mode) for the full example.
 
+The rail panel is `tab_width` wide (44: 36 px items and 4 px padding each side; a narrower
+`tab_width` grows to fit the items), and every item and the selected item's indicator lie
+inside it (`IconRail.indicator_rect()`, `test_drawer_container`). The indicator sits on the
+rail's side facing the panel, joining the selected item to the pane it opened, as the avatar
+builder's rail does: on the outer side it ran to the rail's rim at the authoring drawer's top
+item and read as cut (2026-10-10 once-over). Each pane scrolls with a hover-only fading bar
+(`ScrollBarFade`, through `PaneStack`).
+
 `IconRail.set_item_active(id, on)` tints an item as active without selecting it (footer toggles; the Visuals drawer's Events item while a GM's brush or preset is out). The tint is held (`_held_active`) through `select()` and `deselect()`: a drawer that closes deselects its rail, and before this the close (the GM's first press on the board sends the drawer aside) cleared the Events tint, so the item that reopens the brush's pane showed nothing. Only `set_item_active(id, false)` clears it (PlayEvents' `armed_changed` when the brush is put away).
 
 ### Exports
@@ -1243,7 +1269,10 @@ emit nothing. It registers its backdrop as an overlay like `LevelPickerDialog`.
 
 ### Tool drawer
 
-`AuthoringPanel` extends `DrawerContainer` (LEFT, rail mode, 320 px). Rail items: Biome
+`AuthoringPanel` extends `DrawerContainer` (LEFT, rail mode, 396 px, the drawer width token
+of UI_TASTE S5 as the room drawer; at 320 the two-column Biome tiles' longest labels ran
+within a few px of the tile edges at 720p). The Advanced rows (size, strength; the Water
+pane's width and flow) are stacked `PropertyRow`s, as the Visuals drawer's. Rail items: Biome
 (`trees`), Thin / Clear (`eraser`), Place (`tree`), Sculpt (`mountain`), Paint (`brush`),
 Water (`droplet`), Bridge (`building-bridge`).
 Footer items: Undo
@@ -1335,7 +1364,7 @@ and nothing numeric in the main flow:
   "Stream" / "River") and Flow (the river's flow speed 0 to 2, "Still" / "Rushing"), values
   hidden.
 - **Bridge** (P4b-2, P4d-3, `BridgeToolPane`, `bridge_tool_pane.gd`): a Crossing `TileField`
-  (`BridgeKindField`, four columns, one row of 64 px tiles in the 320 px drawer) with Planks
+  (`BridgeKindField`, four columns, one row of 64 px tiles in the drawer) with Planks
   (`bridge-plank`, "A plank footbridge: arched boards on posts, bank to bank"), Stones
   (`stepping-stones`, "Stepping stones: flat rocks one stride apart, just above the water"),
   Arch (`building-bridge`, "A stone arch: a barrel of the biome's rock with a paved deck and
@@ -1539,7 +1568,7 @@ The drawer is a rail of seven panes (`SunPane`, `SkyPane`, `ColorPane`, `Weather
 
 | Rail item | Primary | Advanced |
 |---|---|---|
-| Sun | time of day (dawn/dusk hints, 14:30 format), Sun tiles Auto/On/Off, Shadows tiles Off/Hard/Soft, aim on map | direction (bearing), height, colour, energy, softness, darkness, back to generated |
+| Sun | time of day (its hour at the label line's end, 17:45 24 h format; Dawn, Noon and Dusk as words at 06:00, 12:00, 18:00), Sunlight tiles Auto/On/Off with what the picked one does at the end of the caption, Shadows tiles Off/Hard/Soft, aim on map | direction (bearing), height, colour, energy, softness, darkness, back to generated |
 | Sky | sky tiles with thumbnails (ten, two rows of five), preview strip and caption for the hovered or selected sky, Look picker (grouped, swatches, description), fog on/off + amount | background, ambient, fog colour, fog energy, fog height, fog falloff |
 | Color | brightness (exposure), contrast, saturation, glow | light energy, fine brightness, tonemap, white point, glow strength, bloom |
 | Weather | rain/snow/fog/wind tiles with Light..Heavy intensity | none |
@@ -1547,7 +1576,9 @@ The drawer is a rail of seven panes (`SunPane`, `SkyPane`, `ColorPane`, `Weather
 | Film | Style tiles Off/Subtle/Retro/Heavy (+Custom), pixelate, vignette, grain | colours, dither, colour fade |
 | World | scale tiles, cell size (m and ft), Wind tiles Still/Breeze/Gusty (+Custom) | tree/grass speed and amount |
 
-Style tiles set several fields at once and show `Custom` when the values match no preset; every slider shows end hints; raw values appear only with the rail footer toggle (persisted in `[ui] show_values`). Hovering a sky tile previews it in the strip without touching the model; HDRI skies rotate with the sun (see lighting-and-environment.md).
+Style tiles set several fields at once and show `Custom` when the values match no preset; every slider shows end hints; raw values appear only with the rail footer toggle (persisted in `[ui] show_values`).
+
+Every slider row is stacked (`PropertyRow.stacked`, set by `LevelEditPane._add_row()`): the label on a line of its own with the value (the chip, with the values toggle) at that line's end, and the slider the pane's full width under it, its hints and worded ticks under that, each word kept at least `PropertyRow.TICK_LABEL_GAP` (8 px) from the next (`PropertyRow.strip_words()`). A label beside its slider left the slider about 200 px at 720p, and the Sun pane's Time of day crowded its label, a short slider, Dawn and Dusk at the ends and three icons between them (2026-10-10 once-over). Time of day also shows its hour at all times (`show_readout`). Sunlight (was Daylight, which did not say what it switched) is whether the game's sun shines: Auto unless the map brought its own lights, On always, Off only the map's own lights (`LevelEnvironmentManager._configure_sun_light()`); the picked mode's words sit at the end of the caption's line (`SunPane.MODE_NOTES`) and in each tile's tooltip. Hovering a sky tile previews it in the strip without touching the model; HDRI skies rotate with the sun (see lighting-and-environment.md).
 
 The Sky and Color panes share an `EnvironmentEditModel` (preset + overrides + map defaults); its `changed` signal is the single `environment_changed` broadcast. Every pane emits `changed` on a user edit, which marks the drawer dirty and badges that rail item; `mark_clean()` clears both. Override rows tint their label accent and reset on right-click via `PropertyRow.reset_requested`. Public signals and controller-facing methods (`initialize`, `apply_environment_state`, `set_sun_direction_from_gizmo`, `set_aim_sun_pressed`, `mark_clean`, `is_dirty`, `request_close`) are unchanged. A `Foldout`'s clip re-measures a wrapping body mid-animation, so its first expand is never clipped short.
 

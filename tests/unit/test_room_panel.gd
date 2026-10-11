@@ -18,12 +18,14 @@ func _sample(table := "") -> Dictionary:
 	return {
 		"open": table == "",
 		"table": table,
-		"shelf": [
+		"shelf":
+		[
 			{"folder": MAP_A, "map_path": "", "hashes": {}, "name": "Mossy Hollow"},
 			{"folder": MAP_B, "map_path": "", "hashes": {}, "name": "Old Mill"},
 			{"folder": MAP_C, "map_path": "", "hashes": {}, "name": "Fen Crossing"},
 		],
-		"players": {
+		"players":
+		{
 			GM: {"name": "Marigold", "peer_id": 1},
 			"enet-ranger": {"name": "Ranger", "peer_id": 2},
 			WREN: {"name": "Wren", "peer_id": 3},
@@ -58,7 +60,9 @@ func _row_names(panel: RoomPanel) -> Array:
 func _fills(root: Node) -> Array:
 	return root.find_children("*", "Button", true, false).filter(
 		func(b: Button) -> bool:
-			return b.is_visible_in_tree() and not b.disabled and b.theme_type_variation == &"Primary"
+			return (
+				b.is_visible_in_tree() and not b.disabled and b.theme_type_variation == &"Primary"
+			)
 	)
 
 
@@ -155,12 +159,41 @@ func test_the_caption_line_is_gm_you_then_the_download_state() -> void:
 	assert_eq(letter.theme_type_variation, &"H3", "a portrait initial in Inter semibold (T3)")
 
 
+## The room and the drawer are one panel shown two ways, so they share one name for the room,
+## one code row (captioned Room code) and one placement for End session: a foot apart from
+## the lists, the layout's last row, never inside the side sheet after the last shelf row.
+func test_the_room_and_the_drawer_share_name_code_row_and_foot() -> void:
+	for is_gm in [true, false]:
+		var titles: Array[String] = []
+		for in_drawer in [false, true]:
+			var panel := _panel(in_drawer)
+			panel.show_session(_sample(), GM if is_gm else WREN, is_gm)
+			titles.append(panel.title_label.text)
+			var block := panel.find_child("CodeBlock", true, false)
+			var caption := block.find_child("CodeCaption", true, false) as Label
+			assert_not_null(caption, "the code row is captioned (drawer: %s)" % in_drawer)
+			assert_eq(caption.text, RoomLayout.CODE_CAPTION)
+			assert_not_null(block.find_child("CodeRow", true, false))
+			var footer := panel.leave_button.get_parent()
+			var layout := panel.get_node("Layout")
+			assert_eq(
+				footer.get_parent(), layout, "End session is the foot (drawer: %s)" % in_drawer
+			)
+			assert_eq(footer.get_index(), layout.get_child_count() - 1, "the layout's last row")
+			assert_eq(panel.leave_button.text, "End session" if is_gm else "Leave session")
+		assert_eq(titles[0], titles[1], "one name in both forms")
+	assert_eq(RoomModel.room_title(true, "Marigold"), "Your room")
+	assert_eq(RoomModel.room_title(false, "Marigold"), "Marigold's room")
+
+
 func test_header_copy_never_names_a_level_or_a_lobby() -> void:
 	for is_gm in [true, false]:
 		for shelf_size in [0, 3]:
 			var text := RoomModel.header(false, is_gm, "Marigold", shelf_size, "")
 			var copy := ("%s %s" % [text.title, text.caption]).to_lower()
-			assert_false(copy.contains("level") or copy.contains("lobby") or copy.contains("host a"))
+			assert_false(
+				copy.contains("level") or copy.contains("lobby") or copy.contains("host a")
+			)
 	var drawer := RoomModel.header(true, true, "Marigold", 3, "Old Mill")
 	assert_eq(drawer.caption, "On the table: Old Mill")
 
@@ -399,7 +432,9 @@ func test_the_drawer_action_follows_the_shelf_and_pins_only_on_overflow() -> voi
 		var view := Rect2(Vector2.ZERO, Vector2(host.size))
 		assert_true(view.encloses(action), "%d: the action is on screen" % height)
 		if height == 1080:
-			assert_eq(panel.column_scroll.vertical_scroll_mode, ScrollContainer.SCROLL_MODE_DISABLED)
+			assert_eq(
+				panel.column_scroll.vertical_scroll_mode, ScrollContainer.SCROLL_MODE_DISABLED
+			)
 			assert_lt(action.position.y - shelf.end.y, 40.0, "1080: the action follows the shelf")
 			assert_gt(foot.position.y - action.end.y, 200.0, "the rest of the height is below it")
 		else:
@@ -538,7 +573,9 @@ func test_resumed_shelf_rows_say_changed_or_missing() -> void:
 		row_b.custom_minimum_size.y, row_a.custom_minimum_size.y + RoomRows.NOTE_LINE, "a note line"
 	)
 	var faded := _row(panel, MAP_C).get_node("Inner/Well/Placeholder") as Control
-	assert_almost_eq(faded.modulate.a, RoomRows.MUTED_PICTURE, 0.001, "a missing map's picture faded")
+	assert_almost_eq(
+		faded.modulate.a, RoomRows.MUTED_PICTURE, 0.001, "a missing map's picture faded"
+	)
 	assert_eq((row_a.get_node("Inner/Well/Placeholder") as Control).modulate.a, 1.0)
 	panel.show_changes({MAP_B: true})
 	assert_eq(_caption_of(panel, MAP_B), "Changed this session · 2 of 4 have it")
