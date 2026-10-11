@@ -174,8 +174,10 @@ func _on_body_entered(body: Node3D) -> void:
 ## still unregister from WaterRippleRegistry so it doesn't leak an entry for a token
 ## that's gone. The registry is refcounted, so exiting one of several overlapping zones
 ## is also a no-op here unless this was the token's last active zone (true 1->0
-## transition). When the zone itself is leaving the tree (the table's teardown) the token
-## surfaces without a splash or a sound.
+## transition). The exit splash waits for the end of the frame (_splash_out): body_exited
+## also fires from inside a removal (the table's teardown: the zone leaving, or the tokens
+## leaving while the zone stays), where the viewport is busy and add_child() fails, and a
+## token removed from the water should not splash at all.
 func _on_body_exited(body: Node3D) -> void:
 	if not is_instance_valid(body):
 		return
@@ -186,6 +188,16 @@ func _on_body_exited(body: Node3D) -> void:
 	if token:
 		token.set_submerged(false)
 	if _leaving_tree or not is_inside_tree():
+		return
+	_splash_out.call_deferred(body)
+
+
+## The exit splash and its sound, once the frame's removals are done: only for a token that
+## walked out, still in the world with this zone.
+func _splash_out(body: Node3D) -> void:
+	if not is_instance_valid(body) or not body.is_inside_tree() or not is_inside_tree():
+		return
+	if body.is_queued_for_deletion():
 		return
 	var splash := SplashBurst.create_at(
 		Vector3(body.global_position.x, global_position.y, body.global_position.z), false

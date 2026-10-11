@@ -124,6 +124,37 @@ func test_leaving_the_tree_with_a_token_inside_spawns_no_splash() -> void:
 	)
 
 
+## The other teardown order (seen on a real-Steam host, 2026-10-10): the tokens leave the tree
+## while the water zone stays. A token taken out of the water makes no splash, now or once
+## the frame's removals are done.
+func test_a_token_removed_from_the_water_spawns_no_splash() -> void:
+	var water := Node3D.new()
+	var tiles: Array[Rect2] = [Rect2(-5.0, -5.0, 10.0, 10.0)]
+	water.add_child(WaterZone.create_for_footprint("Zone", 0.0, tiles))
+	var tokens := Node3D.new()
+	var token := _make_token_with_rigid_body()
+	token.rigid_body.collision_layer = WaterZone.TOKEN_COLLISION_LAYER_MASK
+	token.rigid_body.freeze = true
+	token.position = Vector3(0.0, -1.0, 0.0)
+	tokens.add_child(token)
+	get_tree().root.add_child(water)
+	get_tree().root.add_child(tokens)
+	await wait_physics_frames(4)
+	assert_true(token.water.submerged, "the zone saw the token")
+	var children := get_tree().root.get_child_count()
+	var orphans := Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)
+
+	get_tree().root.remove_child(tokens)
+	await wait_process_frames(2)
+
+	assert_eq(get_tree().root.get_child_count(), children - 1, "no splash added to the root")
+	tokens.free()
+	assert_eq(
+		Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT), orphans, "no orphan splash"
+	)
+	water.queue_free()
+
+
 func test_creates_a_box_shape_matching_the_mesh_footprint() -> void:
 	var mesh_node := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
