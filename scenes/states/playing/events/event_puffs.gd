@@ -19,16 +19,14 @@ extends MultiMeshInstance3D
 ## - A ring (emit_ring) lies flat on the surface and spreads, thinning as it goes: the foam a
 ##   splash leaves on the water.
 ##
-## And three for fire (FireSweep):
+## And two for fire (FireSweep; its smoke is SmokePuffs'):
 ##
-## - A flame (emit_flame) stands on its base: the painted flame (FlameAtlas, set on the pool
-##   by paint_flames), three tongues in a red rim, an amber body and a pale gold core, licking
-##   on the shader's clock, swelling in fast and narrowing as it rises and dies.
+## - A flame (emit_flame) stands on its base, swelling in fast and narrowing as it rises and
+##   dies: three tongues in a red rim, an amber body and a pale gold core, either the painted
+##   flipbook (FlameAtlas, set on the pool by paint_flames) licking on the shader's clock, or
+##   banded tongues (band_flames) swaying on the fire's noise, cut into flat stepped bands and
+##   eroded by it as they age (the flame's age rides in its custom data), as the smoke is.
 ## - An ember (emit_ember) is a small glowing spark drifting up and weaving as it goes.
-## - A billow of smoke (emit_smoke) is a painted cumulus of round lobes lit from above (a
-##   cream-gold top, a grey-violet body, a darker underside), rising slowly and spreading all
-##   its life. It holds its body until near its end (smoke_fade): the shader breaks its lobes
-##   apart as it ages (its age rides in the custom data), so it thins only at the very end.
 ##
 ## Fire's kinds hold their full alpha longer than the others (fire_fade), so a flame burns
 ## rather than flickers out.
@@ -38,7 +36,7 @@ extends MultiMeshInstance3D
 ## higher priority draws after one with a lower (a fire's flames over its smoke), and with a
 ## larger capacity holds one event's every puff at once.
 
-enum Kind { BLOB, PLUME, RING, FLAME, EMBER, SMOKE }
+enum Kind { BLOB, PLUME, RING, FLAME, EMBER }
 
 const CAPACITY := 96
 const SHADER := preload("res://shaders/event_puff.gdshader")
@@ -49,13 +47,8 @@ const RENDER_PRIORITY := 2
 const FLAME_NARROW := 0.4
 const EMBER_WEAVE := 0.35
 const EMBER_WEAVE_RATE := 3.2
-## Where a fire puff's fade out starts (fire_fade), and smoke's (smoke_fade).
+## Where a fire puff's fade out starts (fire_fade).
 const FIRE_FADE_FROM := 0.65
-const SMOKE_FADE_FROM := 0.85
-## A billow's size as it rises (a share of its full size), and how much more it has spread by
-## its end.
-const SMOKE_START := 0.5
-const SMOKE_SPREAD := 0.2
 ## Fraction of its life a puff takes to swell in, and where its fade out starts.
 const SWELL := 0.12
 const FADE_FROM := 0.4
@@ -181,17 +174,18 @@ func emit_ember(at: Vector3, velocity: Vector3, size: float, life: float, color:
 	_take(Kind.EMBER, at, velocity, Vector3.ZERO, size, ROUND, life, color, 0.0)
 
 
-## A billow of smoke at `at` drifting at `velocity` (slowing as it ages), `size` metres across
-## when grown, living `life` seconds, in `color` (its top; the shader warms its underside).
-func emit_smoke(at: Vector3, velocity: Vector3, size: float, life: float, color: Color) -> void:
-	_take(Kind.SMOKE, at, velocity, Vector3.ZERO, size, ROUND, life, color, 0.0)
-
-
 ## Draws this pool's flames with the painted flipbook (FlameAtlas), set on its material (shared
 ## by every pool of its render priority). Paints the flipbook on the first call.
 func paint_flames() -> void:
 	var material := (multimesh.mesh as QuadMesh).material as ShaderMaterial
 	material.set_shader_parameter("flame_atlas", FlameAtlas.texture())
+
+
+## Draws this pool's flames as banded tongues eroded by age (`on`) instead of the flipbook; set
+## on its material, shared by every pool of its render priority.
+func band_flames(on: bool) -> void:
+	var material := (multimesh.mesh as QuadMesh).material as ShaderMaterial
+	material.set_shader_parameter("flame_banded", on)
 
 
 ## Advances every live puff `delta` seconds.
@@ -212,9 +206,7 @@ func step(delta: float) -> void:
 		var keep := 1.0
 		var kind := _kind[slot]
 		var alpha := fade(k)
-		if kind == Kind.SMOKE:
-			alpha = smoke_fade(k)
-		elif kind >= Kind.FLAME:
+		if kind >= Kind.FLAME:
 			alpha = fire_fade(k)
 		match kind:
 			Kind.PLUME:
@@ -225,8 +217,6 @@ func step(delta: float) -> void:
 				_place_flame(slot, age, k)
 			Kind.EMBER:
 				_place_ember(slot, age)
-			Kind.SMOKE:
-				_place_smoke(slot, age, k)
 			_:
 				keep = _place_blob(slot, age, k)
 		var color := _colors[slot]
@@ -253,15 +243,6 @@ static func fire_fade(k: float) -> float:
 	if k < SWELL:
 		return k / SWELL
 	return 1.0 - smoothstep(FIRE_FADE_FROM, 1.0, k)
-
-
-## A billow of smoke's alpha `k` of the way through its life: a quick swell in, its body held
-## until SMOKE_FADE_FROM (the shader thins it before that by breaking its lobes apart), then
-## gone. Pure.
-static func smoke_fade(k: float) -> float:
-	if k < SWELL:
-		return k / SWELL
-	return 1.0 - smoothstep(SMOKE_FADE_FROM, 1.0, k)
 
 
 ## A plume's height, as a share of its full height, `k` of the way through its life: it
@@ -306,12 +287,12 @@ func _take(
 
 ## Hands puff `slot`'s seed, `shape` (a blob's or plume's length over its width, a ring's
 ## hole), kind and boldness to the shader (INSTANCE_CUSTOM). Water (a plume, a ring, a thrown
-## drop) draws bolder than drifting dust; smoke's slot holds its `age` (0..1 of its life)
-## instead.
+## drop) draws bolder than drifting dust; a flame's slot holds its `age` (0..1 of its life)
+## instead, for its erosion.
 func _shape(slot: int, shape: float, age: float = 0.0) -> void:
 	var kind := _kind[slot]
 	var bold := 0.0 if kind == Kind.BLOB and _gravity[slot] <= 0.0 else 1.0
-	if kind == Kind.SMOKE:
+	if kind == Kind.FLAME:
 		bold = age
 	multimesh.set_instance_custom_data(slot, Color(_seed[slot], shape, kind, bold))
 
@@ -346,17 +327,6 @@ func _place_blob(slot: int, age: float, k: float) -> float:
 	return keep
 
 
-## Billow `slot` `age` seconds (`k` of its life) in: drifting as dust does, slowing, grown from
-## SMOKE_START of its size and still spreading to its end; its age goes to the shader, which
-## breaks its lobes apart late in its life.
-func _place_smoke(slot: int, age: float, k: float) -> void:
-	var at := _from[slot] + _velocity[slot] * age * (1.0 - 0.5 * k)
-	var grown := 1.0 - pow(1.0 - k, 3.0)
-	var size := _size[slot] * (SMOKE_START + (1.0 - SMOKE_START) * grown) * (1.0 + SMOKE_SPREAD * k)
-	multimesh.set_instance_transform(slot, Transform3D(basis_along(Vector3.UP, size), at))
-	_shape(slot, ROUND, k)
-
-
 ## A plume `k` of its life in: standing on its point, its height rising and falling back while
 ## it spreads a little.
 func _place_plume(slot: int, k: float) -> void:
@@ -376,7 +346,7 @@ func _place_flame(slot: int, age: float, k: float) -> void:
 	var width := _size[slot] * (1.0 - FLAME_NARROW * k) * (0.55 + 0.45 * swell)
 	var height := _size[slot] * _aspect[slot] * (0.7 + 0.3 * swell)
 	multimesh.set_instance_transform(slot, Transform3D(basis_along(Vector3.UP, width), at))
-	_shape(slot, height / maxf(width, 0.01))
+	_shape(slot, height / maxf(width, 0.01), k)
 
 
 ## Ember `slot` `age` seconds in: drifting along its velocity and weaving across it.
