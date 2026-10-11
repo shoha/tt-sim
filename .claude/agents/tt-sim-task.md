@@ -68,6 +68,10 @@ A command off the allowlist costs a classifier check, or a user prompt outside a
 - Captures: the render job's default size (half) for look iterations, `--full` for the
   final verdict. Read each PNG once and write down what it showed; never re-read an image
   already read in this agent. Say plainly what a capture shows, including anything ugly.
+  Write each capture's note in the same message that reads it, and append it to the card's
+  handoff or a notes file as you go: images drop out of a long context, and a probe whose
+  comparison was not written down is lost (fire-look-3, 2026-10-11). Prefer one contact sheet
+  over many full frames when comparing.
 
 ## Budget
 
