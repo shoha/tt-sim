@@ -94,6 +94,36 @@ func test_second_zone_entry_does_not_resubmerge_or_double_splash() -> void:
 	assert_true(token.water.submerged)
 
 
+## The table's teardown removes the map with a token still in the water: the zone leaving
+## the tree reports the token leaving from inside the removal, where the viewport is busy, so
+## a splash added then failed ("Parent node is busy setting up children", on both peers of a
+## session) and stayed an orphan. Real physics here, so the Area3D itself reports the body:
+## a frozen token inside the slab, the holder removed from the root viewport.
+func test_leaving_the_tree_with_a_token_inside_spawns_no_splash() -> void:
+	var holder := Node3D.new()
+	var token := _make_token_with_rigid_body()
+	token.rigid_body.collision_layer = WaterZone.TOKEN_COLLISION_LAYER_MASK
+	token.rigid_body.freeze = true
+	token.position = Vector3(0.0, -1.0, 0.0)
+	holder.add_child(token)
+	var tiles: Array[Rect2] = [Rect2(-5.0, -5.0, 10.0, 10.0)]
+	holder.add_child(WaterZone.create_for_footprint("Zone", 0.0, tiles))
+	get_tree().root.add_child(holder)
+	await wait_physics_frames(4)
+	assert_true(token.water.submerged, "the zone saw the token")
+	var children := get_tree().root.get_child_count()
+	var orphans := Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)
+
+	get_tree().root.remove_child(holder)
+
+	assert_eq(get_tree().root.get_child_count(), children - 1, "nothing added to the root")
+	assert_false(token.water.submerged, "the token surfaces")
+	holder.free()
+	assert_eq(
+		Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT), orphans, "no orphan splash"
+	)
+
+
 func test_creates_a_box_shape_matching_the_mesh_footprint() -> void:
 	var mesh_node := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
