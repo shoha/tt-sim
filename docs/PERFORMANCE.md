@@ -2833,3 +2833,19 @@ run-to-run spread is wider than the old one's; read +13 to +48 % as the range an
 the likely value. Birch woodland's twin reads +33 % at both zooms, but with 70 % more visible
 primitives from its changed ground cover that is not the crowns' cost. Absolute frame times
 stay small: the forest at zoom 20 at 4.4 ms GPU median (about 225 fps).
+
+**Foliage shadow caster push (stable palette install, 2026-10-11).** The clump crowns' large
+lit cards showed a fine regular dot pattern at home zoom. Toggled one suspect at a time on the
+same crown (temperate forest new map, seed 1234, home): it stayed with the lo-fi pass out (the
+raw SubViewport), with alpha to coverage off (the no_aa variant; the game SubViewport runs
+MSAA 0), with backlight 0 (already 0), with the canopy fade off, without normal maps (the
+crowns carry none) and with mipmapped textures (the embedded atlases carry none); it went
+with sun shadows off and faded with the sun's bias doubled and quadrupled. It is shadow acne:
+the crown's cards shadowing themselves on the shadow map's texel grid (sun bias 0.02, normal
+bias 0.1, four splits, 4096 atlas). `wind_foliage_include.gdshaderinc`
+`shadow_caster_offset()` now pushes every foliage vertex except bark `shadow_caster_push`
+(0.6 m) away from the light in any pass whose view axis is not the camera's, a shadow bias
+for foliage alone (0.15 m still dotted, 0.3 m left patches, 0.6 m as clean as shadows off).
+Shadows land where they did, since a directional light's push runs along its own rays; only
+casters within 0.6 m of a receiver along the ray stop shadowing it. Cost: one branch and a
+3x3 inverse per vertex in the shadow pass only, not measured.

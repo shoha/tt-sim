@@ -14,7 +14,7 @@ extends GutTest
 
 const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
 const FOLDER := "_authparity_dressed_gut"
-const ROCK := "temperate_forest_summer_s1/Rock_Boulder_summer_04"
+const ROCK := "temperate_forest_summer_s1/Rock_Boulder_summer_08"
 const GROUND_Y := 2.0
 const LOAD_TIMEOUT := 30.0
 

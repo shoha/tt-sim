@@ -101,6 +101,7 @@ void vertex() {
 	burn_s = INSTANCE_CUSTOM.x;
 	VERTEX += wind_sway_vertex_offset(VERTEX, COLOR, MODEL_MATRIX, TIME);
 	VERTEX *= grow;
+	VERTEX += shadow_caster_offset(MODEL_MATRIX, INV_VIEW_MATRIX);
 }
 
 

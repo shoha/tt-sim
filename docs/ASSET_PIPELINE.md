@@ -677,7 +677,18 @@ new GLB before the first import (otherwise Godot extracts its textures), then
 `assets/`, `surfaces/` and `thumbnails/` directories wholesale and so deletes every
 committed sidecar: restore them straight after with
 `git checkout -- ":(glob)assets/palette/**/*.import"` and check `git status` shows only
-binaries and `palette.json` changed (palette v2, 2026-09-26, was installed this way).
+binaries and `palette.json` changed (palette v2, 2026-09-26, was installed this way); run it
+again if a sidecar is still missing, since once it restored only part of the files.
+**When asset ids change** (treecube renumbers variants, or a species gains or loses one),
+reconcile the sidecars before the first import: delete every restored `.glb.import` whose
+GLB is gone, and give every GLB without one a minimal sidecar holding the three settings
+above (`[remap]` with `importer="scene"` and `importer_version=1`, then `[params]` with
+`meshes/generate_lods=false`, `meshes/create_shadow_meshes=false`,
+`meshes/force_disable_compression=false` and `gltf/embedded_image_handling=3`); the import
+fills in the rest and the uid. A GLB imported without one gets Godot's defaults (extracted
+textures, LODs, shadow meshes), and its `.godot/imported` copy must then be deleted with its
+`.md5` before a corrected sidecar takes. Then grep `tests/` for pinned asset ids
+(`_summer_\d\d`) and move them to ids the new palette has.
 Before committing, `git lfs status` must list every GLB/PNG/JPG as LFS and only
 `palette.json` as Git. Changing a setting in an existing sidecar does not
 trigger a reimport on its own; delete the matching `.godot/imported/*.md5` first.
@@ -685,7 +696,11 @@ trigger a reimport on its own; delete the matching `.godot/imported/*.md5` first
 Refreshed 2026-10-11 with treecube f03e63f (the A2 broadleaf clump crowns; `palette_version`
 `0e0b6d6-dirty`), which also replaced 20 ground-cover ids in alpine meadow and birch
 woodland: new GLBs got the three settings in a minimal sidecar before the import, and the
-removed ids' sidecars were deleted (PERFORMANCE.md "Broadleaf clump crowns").
+removed ids' sidecars were deleted (PERFORMANCE.md "Broadleaf clump crowns"). Refreshed
+again 2026-10-11 with treecube 1c3904c (stable garden ids, every listed species present, the
+same A2 crowns; `palette_version` `7bcc4f6-dirty`, 201 assets, 26 surfaces unchanged): every
+asset id changed once, so 131 sidecars were deleted and 133 minimal ones written before the
+import, as the step above describes. No saved map was migrated.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 

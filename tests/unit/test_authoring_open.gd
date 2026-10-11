@@ -6,7 +6,7 @@ extends GutTest
 ## refusal, and the entry points on the level card, level grid and title.
 
 const DIR := "user://test_authoring_open/"
-const ROCK := "temperate_forest_summer_s1/Rock_Boulder_summer_04"
+const ROCK := "temperate_forest_summer_s1/Rock_Boulder_summer_08"
 const TITLE_SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
 const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
 const ROOT_SCRIPT := preload("res://scenes/root.gd")

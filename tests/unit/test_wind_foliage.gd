@@ -506,6 +506,26 @@ func test_get_shader_no_aa_differs_from_the_antialiased_shader() -> void:
 	assert_ne(WindFoliage.get_shader_no_aa(), WindFoliage.get_shader())
 
 
+func test_every_shipped_wind_variant_pushes_its_shadow_casters() -> void:
+	# The foliage-only shadow bias (shadow_caster_offset in wind_foliage_include) keeps a
+	# crown's leaf cards from dotting themselves with shadow acne; each variant a map can
+	# draw must apply it in vertex() and expose the push as a uniform.
+	var paths := [
+		"res://shaders/wind_foliage.gdshader",
+		"res://shaders/wind_foliage_no_aa.gdshader",
+		"res://shaders/wind_foliage_burn.gdshader",
+	]
+	for path: String in paths:
+		var shader := load(path) as Shader
+		assert_string_contains(
+			shader.code, "VERTEX += shadow_caster_offset(MODEL_MATRIX, INV_VIEW_MATRIX);"
+		)
+		var names: Array[String] = []
+		for uniform: Dictionary in shader.get_shader_uniform_list():
+			names.append(String(uniform.name))
+		assert_has(names, "shadow_caster_push", path)
+
+
 func test_collect_wind_foliage_multimeshes_gathers_tree_and_grass() -> void:
 	var root := Node3D.new()
 	var tree_mm := MultiMeshInstance3D.new()
