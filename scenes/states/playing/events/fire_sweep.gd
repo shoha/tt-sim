@@ -73,10 +73,13 @@ const SNAG_GO_S := 0.6
 ## burn), where its foot stands (TONGUE_FOOT, a share of the tree's height, and up to
 ## TONGUE_SPREAD of the crown's width out from the trunk), its width (TONGUE_WIDE of the
 ## crown's, within TONGUE_BOUNDS of the tree's height) and its height over its width. One big
-## tongue on a crown's flank read as a clip-art sticker (fire-look-4).
+## tongue on a crown's flank read as a clip-art sticker (fire-look-4). No tongue reaches past
+## TONGUE_TOP of the tree's height (its tip is held under it): the tongues at a crown's narrow
+## top stood against the sky as flame icons (fire-look-5); the top burns through its patches.
 const CROWN_TONGUES := 7
 const TONGUE_LIFE := Vector2(0.3, 0.45)
-const TONGUE_FOOT := Vector2(0.42, 0.9)
+const TONGUE_FOOT := Vector2(0.4, 0.74)
+const TONGUE_TOP := 0.84
 const TONGUE_SPREAD := 0.38
 const TONGUE_WIDE := 0.25
 const TONGUE_BOUNDS := Vector2(0.06, 0.11)
@@ -446,15 +449,17 @@ func _crown_tongue(
 	width: float,
 	burn: float
 ) -> void:
+	var wide := clampf(width * TONGUE_WIDE, height * TONGUE_BOUNDS.x, height * TONGUE_BOUNDS.y)
+	wide *= lerpf(0.75, 1.15, fmod(draws[at_draw + 2] * 5.7, 1.0))
+	# Its tip held under the crown's top (TONGUE_TOP), so none stands against the sky.
 	var up := lerpf(TONGUE_FOOT.x, TONGUE_FOOT.y, draws[at_draw + 1])
+	up = minf(up, TONGUE_TOP - wide * TONGUE_TALL / maxf(height, 0.01))
 	var angle := draws[at_draw + 2] * TAU
 	var out := sqrt(draws[at_draw + 3]) * TONGUE_SPREAD * width
 	var deep := Vector3(-_across.z, 0.0, _across.x)
 	var round_trunk := _across * cos(angle) + deep * sin(angle)
 	# The crown narrows toward its top, so a high tongue stands nearer the trunk.
 	var at := origin + Vector3(0.0, height * up, 0.0) + round_trunk * out * (1.3 - up)
-	var wide := clampf(width * TONGUE_WIDE, height * TONGUE_BOUNDS.x, height * TONGUE_BOUNDS.y)
-	wide *= lerpf(0.75, 1.15, fmod(draws[at_draw + 2] * 5.7, 1.0))
 	# A tongue climbs slowly, so it stays in its crown (a fast one rose off as a beam).
 	var rise := Vector3(0.0, height * 0.03, 0.0) + _drift * 0.3
 	var life := burn * lerpf(TONGUE_LIFE.x, TONGUE_LIFE.y, fmod(draws[at_draw + 3] * 3.1, 1.0))

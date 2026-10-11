@@ -316,6 +316,11 @@ func test_a_fire_fits_its_pools() -> void:
 	assert_gt(FireSweep.burn_progress(low, 1.0), FireSweep.CATCH_HEIGHT * FireSweep.TONGUE_FOOT.x)
 	assert_lt(low, high, "low tongues first")
 	assert_lte(high + FireSweep.TONGUE_LIFE.y, 1.2, "a tongue gone soon after its crown has burnt")
+	# None stands in the crown's top (its tip held under TONGUE_TOP), and the cap leaves the
+	# widest tongue room above the lowest foot.
+	assert_lte(FireSweep.TONGUE_TOP, 0.86, "no tongue against the sky at a crown's top")
+	var tallest := FireSweep.TONGUE_BOUNDS.y * 1.15 * FireSweep.TONGUE_TALL
+	assert_lt(FireSweep.TONGUE_FOOT.x + tallest, FireSweep.TONGUE_TOP)
 	assert_lte(FireSweep.MAX_TREES + FireSweep.COLUMN_AT.size(), FireSweep.SMOKE_POOL)
 	assert_lte(
 		TerrainEvent.DURATIONS[TerrainEvent.Kind.FIRE], TerrainEvent.MAX_DURATION_S, "in bounds"
