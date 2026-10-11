@@ -2748,7 +2748,9 @@ time, so absolute times are indicative. GPU median ms (p10 / p90, frames):
 
 **About 0.14 ms of GPU for the whole screen at 1080p**, steady across the two shown windows;
 **about 0.16 ms** with round 2's shapes (the distant range, the halo's bloom and three poplars,
-the legibility zones gone; same procedure, 2026-10-10).
+the legibility zones gone; same procedure, 2026-10-10). Since card calm-gradients (2026-10-10)
+the backdrop is a plain three-stop gradient with no scenery, so these numbers are an upper
+bound; it has not been re-measured.
 It draws only outside play (a hidden backdrop draws nothing), so it never costs the table a
 frame; during a map load the loading overlay's backdrop and the title's under it both draw
 until the title is freed.

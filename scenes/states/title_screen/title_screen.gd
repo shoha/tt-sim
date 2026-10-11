@@ -107,8 +107,7 @@ func _ready() -> void:
 	_preselect_most_recent()
 	_refresh_actions()
 	_play_entrance_animation()
-	# The painting makes way for the plaques, the cards and the strip: its sun, clouds and
-	# poplars stand in the sky they leave open.
+	# The backdrop's layout hooks (no-ops while it is a plain gradient).
 	backdrop.fit_around(self)
 	grid.resized.connect(backdrop.refit)
 	grid.content_resized.connect(backdrop.refit)
@@ -211,7 +210,9 @@ func _build_library() -> void:
 	imports.name = "LibraryImports"
 	add_child(imports)
 	imports.imported.connect(_on_imported)
-	imports.replaced.connect(func(folder: String, _result: Dictionary) -> void: _on_imported(folder))
+	imports.replaced.connect(
+		func(folder: String, _result: Dictionary) -> void: _on_imported(folder)
+	)
 	new_map_card.import_requested.connect(imports.pick)
 	grid = LevelGrid.new()
 	grid.name = "Grid"
@@ -240,7 +241,9 @@ func library() -> Array[Dictionary]:
 	for info in levels:
 		var folder := String(info.get("folder", ""))
 		var source := LibraryFacts.source_of(info)
-		var blender := source == LibraryFacts.SOURCE_BLENDER or source == LibraryFacts.SOURCE_DRESSED
+		var blender := (
+			source == LibraryFacts.SOURCE_BLENDER or source == LibraryFacts.SOURCE_DRESSED
+		)
 		info[LibraryFacts.UPDATED_KEY] = folder != "" and blender and updated_provider.call(folder)
 	return levels
 
@@ -262,9 +265,7 @@ func _refresh_actions() -> void:
 		strip.show_map(info)
 	var name := String(info.get("name", ""))
 	var folder := String(info.get("folder", ""))
-	backdrop.show_map(
-		String(info.get("environment_preset", "")), folder if folder != "" else name
-	)
+	backdrop.show_map(String(info.get("environment_preset", "")), folder if folder != "" else name)
 	backdrop.refit()
 
 

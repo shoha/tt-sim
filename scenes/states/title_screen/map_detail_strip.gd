@@ -303,7 +303,11 @@ func _show_picture() -> void:
 	var folder := String(info.get("folder", ""))
 	var key := folder if folder != "" else String(info.get("name", ""))
 	picture_well = RoomRows.map_well(
-		PICTURE_SIZE, texture, key, String(info.get("environment_preset", ""))
+		PICTURE_SIZE,
+		texture,
+		key,
+		String(info.get("environment_preset", "")),
+		String(info.get("name", ""))
 	)
 	picture_well.name = "Picture"
 	_picture_box.add_child(picture_well)

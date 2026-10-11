@@ -83,9 +83,10 @@ func test_placeholder_paints_the_map_and_a_real_thumbnail_hides_it() -> void:
 	assert_true(card._placeholder.visible)
 	var paint := card._placeholder.material as ShaderMaterial
 	assert_eq(card._placeholder.mood(), PaintedBackdrop.Mood.NIGHT, "the backdrop's own mood")
-	var night: Vector3 = BackdropPaint.look_of(PaintedBackdrop.Mood.NIGHT).sky_top
-	assert_eq(paint.get_shader_parameter(&"sky_top"), night)
-	assert_eq(paint.get_shader_parameter(&"seed"), MapPlaceholder.seed_of("sandy_clearing"))
+	var night := BackdropPaint.uniforms(BackdropPaint.look_of(PaintedBackdrop.Mood.NIGHT))
+	assert_eq(paint.get_shader_parameter(&"top_lch"), night.top_lch)
+	var initial := card._placeholder.get_node("Initial") as Label
+	assert_eq(initial.text, "S", "the map's initial, from its name")
 	# A real thumbnail: write a tiny PNG to user:// and point the card at it.
 	var image := Image.create(4, 4, false, Image.FORMAT_RGB8)
 	image.fill(Color.RED)
@@ -96,28 +97,41 @@ func test_placeholder_paints_the_map_and_a_real_thumbnail_hides_it() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
-## Every map paints its own, the same every time: the key draws the land and the weather (the
-## skyline, the poplars, the clouds), and the mood is the backdrop's for the map's preset.
-func test_the_placeholder_is_stable_per_map_and_varies_across_maps() -> void:
-	assert_eq(MapPlaceholder.seed_of("old_mill"), MapPlaceholder.seed_of("old_mill"))
-	assert_ne(MapPlaceholder.seed_of("old_mill"), MapPlaceholder.seed_of("fen_crossing"))
-	var lands := {}
-	var groves := {}
-	for key in ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]:
-		var composition := BackdropPaint.compose(MapPlaceholder.seed_of(key), Vector2(160, 90), null)
-		lands[composition.ridges] = true
-		var trees := 0
-		for tree: Vector4 in composition.poplars:
-			trees += 1 if tree.y > 0.0 else 0
-		groves[trees] = true
-	assert_eq(lands.size(), 12, "every map its own skyline")
-	assert_gt(groves.size(), 1, "maps do not all stand the same poplars")
+## A placeholder is its mood's gradient, leaning gently, with the map's initial: from its name,
+## or its key without one. The mood is the backdrop's for the map's preset (one table).
+func test_the_placeholder_is_a_gradient_with_the_maps_initial() -> void:
 	var placeholder := MapPlaceholder.new()
-	placeholder.paint("a", "arctic")
+	placeholder.paint("old_mill", "arctic", "Fen Crossing")
 	assert_eq(placeholder.mood(), PaintedBackdrop.mood_of("arctic"), "one table for both")
-	placeholder.paint("a", "outdoor_sunset")
+	var paint := placeholder.material as ShaderMaterial
+	assert_gt(float(paint.get_shader_parameter(&"tilt")), 0.0, "a gentle diagonal")
+	var initial := placeholder.get_node("Initial") as Label
+	assert_eq(initial.text, "F", "the name's initial")
+	assert_eq(initial.theme_type_variation, &"H3", "Inter semibold, as a portrait's")
+	placeholder.paint("old_mill", "outdoor_sunset")
 	assert_eq(placeholder.mood(), PaintedBackdrop.Mood.GOLDEN_HOUR)
+	assert_eq(initial.text, "O", "the key's initial with no name")
+	var golden := BackdropPaint.uniforms(BackdropPaint.look_of(PaintedBackdrop.Mood.GOLDEN_HOUR))
+	assert_eq(paint.get_shader_parameter(&"low_lch"), golden.low_lch)
 	placeholder.free()
+
+
+## The initial reads on its picture in every mood: ink on the light skies, paper on the dark,
+## 4.5:1 or better at the middle and 3:1 at the edge of the stretch it stands over.
+func test_the_placeholder_initial_reads_in_every_mood() -> void:
+	for mood in PaintedBackdrop.Mood.size():
+		var look := BackdropPaint.look_of(mood)
+		var ink := MapPlaceholder.ink_on(look)
+		for t: float in MapPlaceholder.INITIAL_SPAN:
+			var sky := BackdropPaint.colour_at(look, t)
+			var ratio := MapPlaceholder.contrast(ink, Color(sky.x, sky.y, sky.z))
+			var want := 4.5 if is_equal_approx(t, 0.5) else 3.0
+			assert_gte(ratio, want, "mood %d at %.1f: %.2f:1" % [mood, t, ratio])
+	var night := MapPlaceholder.new()
+	night.paint("moonwell", "outdoor_night", "Moonwell")
+	var letter := night.get_node("Initial") as Label
+	assert_eq(letter.label_settings.font_color, ThemeColors.PAPER, "paper on the night sky")
+	night.free()
 
 
 func test_press_selects_and_double_press_activates() -> void:

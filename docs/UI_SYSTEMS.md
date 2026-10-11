@@ -437,72 +437,44 @@ See [THEME_GUIDE.md's UI Primitives](THEME_GUIDE.md#ui-primitives) and
 
 `TitleScreen` (`scenes/states/title_screen/title_screen.gd`) is the app's entry screen, and it is
 the library (card library-title, 2026-10-10): a top bar over a grid of the player's maps, over
-the painted backdrop in the selected map's mood (morning with none, and over an empty library,
-where the painting is the whole picture: the d20 that turned there went with the flat sky).
+the backdrop's sky gradient in the selected map's mood (morning with none, and over an empty
+library).
 
 ### Painted backdrop
 
 `PaintedBackdrop` (`scenes/ui/primitives/painted_backdrop.gd`, `shaders/ui_backdrop.gdshader`)
-is the world every screen outside play stands on: the title, the room (`RoomScreen`) and a map
+is the sky every screen outside play stands on: the title, the room (`RoomScreen`) and a map
 load (`LoadingOverlay`'s `%Sky`), and, in a small rect, the picture of a map with no thumbnail
-(`MapPlaceholder`), so a card and the screen behind it paint the same place in the same light.
-One shader pass: a sky in two washes with one near-white sun in a warmer halo (at night a
-smaller, cooler crescent moon and a scatter of stars), four cumulus clouds with soft bases that
-round up toward their ends (a ruled base read as a card's edge), a pale distant range and a
-rolling far ridge in the mood's atmospheric tint (blue-green by day; a flat teal band read as
-sea), a round near hill with none to four poplars (tall flames in cool shade, lit down the side
-facing the sun), and a meadow rising to the right. No textures and no noise.
+(`MapPlaceholder`), so a card and the screen behind it share one light. It is one soft
+gradient, no scenery (user direction 2026-10-10, UI_TASTE: solid colours and subtle gradients
+until the UI's painterly side is revisited; the painted sun, clouds, hills and poplars, and
+`BackdropLayout`, which moved them clear of a screen's paper, are gone). The names keep
+"painted" so callers did not change.
 
-The shader paints one look; `BackdropPaint` (`backdrop_paint.gd`) works out everything it is
-told on the CPU, and `BackdropLayout` (`backdrop_layout.gd`) where the screen's paper is.
-
-- **Moods.** Six curated palettes (`BackdropPaint.MOODS`, `PaintedBackdrop.Mood`: morning,
+- **Moods.** Six curated skies (`BackdropPaint.MOODS`, `PaintedBackdrop.Mood`: morning,
   midday, golden hour, dusk, overcast, night), chosen by the selected map's environment preset
   through one table (`PaintedBackdrop.mood_of`, `MOOD_OF_PRESET`; an unknown preset or none is
   morning) that the placeholders read too. The mood sets only the backdrop (UI_TASTE verdict
-  2026-10-09): controls and semantic colours never change with it. The palette is paint data
-  (sRGB `Vector3`s, the shader's vec3), not theme roles. The poplars stand apart from the hill
-  in every mood: shade toward a cool teal (deep navy at night), light toward gold-green (coral
-  at dusk, a moonlit edge at night).
-- **Each map its own sky.** The map's key (its folder, as its card's picture) seeds the land and
-  the weather (`BackdropPaint.compose`): the skyline's phase and swell, how many poplars stand
-  (none in one map in ten) and where on the crest, four clouds' places, sizes and shapes, and
-  which side the sun favours. Two forest maps get their own skies; the moods stay curated.
-- **Making way for the paper.** A screen calls `fit_around(self)` and `refit()` when its layout
-  changes (a resize refits by itself). `BackdropLayout.paper_of` walks the screen for the
-  controls that draw an opaque fill or a picture (sheets, plaques, cards, buttons, clipped by
-  their scroll view) and marks them, 12 px wider, on a grid of cells a seventy-second of the
-  height. The sun or moon then stands in the largest open square above the lowest 30% of the
-  screen (nearest its usual place, smaller in a small square), so no card, sheet or stage hides
-  it. A low sun (golden hour, dusk) keeps low: it takes the largest open square in the band of
-  sky up to 0.64 of the height, shrinking to fit, and with none there (a 1280 title full of
-  cards) it sets behind the paper at its own place, its glow round the paper's edges, rather
-  than climbing to the top edge (`BackdropPaint.LOW_SUN`). Each cloud moves whole, crown and
-  all, through its sway, to the nearest open sky (a base in the band of cards read as a ghost
-  card, a crown tucked behind them as a stray lozenge), a quarter smaller when it must, or
-  stays away; the poplars move along the crest to the nearest stretch no paper covers, losing a
-  tree at a time when the stretch is short.
-- **A change is one picture changing.** `show_map(preset, key)` (and `show_mood`) fades over
+  2026-10-09): controls and semantic colours never change with it. Each sky is three stops,
+  top to horizon, in sRGB paint values (`Vector3`, the shader's vec3), not theme roles.
+- **The gradient.** The shader blends the three stops on one quadratic curve in OKLCH
+  (`BackdropPaint.uniforms` hands it the stops as lightness, chroma and unwrapped hue;
+  `colour_at` is the same curve on the CPU), so the middle stop shapes the turn without a seam
+  at it and a blue top over a warm horizon never greys part way (an sRGB blend did), then adds
+  half an 8-bit step of per-pixel dither so a long gradient does not band. A placeholder leans
+  the gradient part way to the diagonal (`tilt` 0.5) and sets the map's initial over it in ink
+  or paper, whichever reads better on the middle of its mood (`MapPlaceholder.ink_on`).
+- **A change is one gradient changing.** `show_map(preset, key)` (and `show_mood`) fades over
   `FADE_S` (0.6 s, sine in-out; the world changing, not chrome, so M1's named exception past
-  the overlay band) by mixing the values, never two pictures: colours in OKLCH
-  (`BackdropPaint.mix_looks`; lightness and chroma straight across; a colour past the gamut
-  gives up chroma, not hue). The hue turns on one route for the whole land and one for the sky
-  (`hue_route`: each colour votes for its short way by how far it turns and how colourful it
-  is, and every colour of the group follows unless that is past five sixths of the circle),
-  since each colour taking its own short way sent a hill one way and its meadow the other. So
-  golden hour to night passes through a rose sky over hills going teal into blue; the one disc
-  moves, shrinks and turns into a crescent;
-  a new map's skyline rolls into place and its clouds and poplars slide, grow or shrink
-  (`mix_compositions`). A change part way through a fade starts from what is on screen. The
-  first look a backdrop shows comes at once. `last_mood` and `last_key` carry the picture to
-  the next backdrop (`show_last`), so the room opens in the title's light and land and a map
-  load in whatever was last shown.
-- **Drift.** The clouds sway about their places over 64-88 s each (`DRIFT_S`, the shader's
-  `TIME`; no `_process`). Reduce motion (`UiMotion.reduced()`) holds them (`hold_drift`); a
-  change of light still fades (M5). A placeholder's clouds hold still. A hidden backdrop draws
-  nothing (M6).
-- **No words on the painting.** A screen on the backdrop puts its words on paper, so every
-  caption reads 4.5:1 in every mood and nothing hazes the painting under them: the title's
+  the overlay band) by mixing the stops in OKLCH (`BackdropPaint.mix_looks`; lightness and
+  chroma straight across, a colour past the gamut gives up chroma, not hue; every stop's hue
+  turns the same way round, `hue_route`). A change part way through a fade starts from what is
+  on screen. The first look a backdrop shows comes at once. `last_mood` and `last_key` carry
+  the light to the next backdrop (`show_last`), so the room opens in the title's light and a
+  map load in whatever was last shown. Nothing moves at rest; `fit_around`, `refit` and
+  `hold_drift` remain for their callers and do nothing.
+- **No words on the backdrop.** A screen on the backdrop puts its words on paper, so every
+  caption reads 4.5:1 in every mood: the title's
   wordmark (the version a caption beside it) and its tools with the Play together card each on
   a `Plaque`, the Bundled heading on a plaque, the New map card and the detail strip on
   `PictureCard` paper; the room's
@@ -514,13 +486,10 @@ told on the CPU, and `BackdropLayout` (`backdrop_layout.gd`) where the screen's 
   every selection, so it is always in its map's light. `Plaque` is the sheet's
   paper and trim at a card's radius with 16 x 8 padding (glass: the rim, 12 x 8).
   `test_painted_backdrop` walks every word on the title and the room in each mood and fails
-  one that has no opaque fill under it or reads under 4.5:1 on it. (Round 1 lifted dark
-  painting toward a haze under registered words; it read as a milky band and blurred
-  smudges, and went.)
-- **Cost.** One full-screen fragment pass (about 30 smoothsteps, 14 sines, 4 exps, and at
-  night one hash per pixel for the stars). Measured indicatively in `docs/PERFORMANCE.md`. The
-  CPU side mixes about 13 colours and sets about 30 uniforms per frame of a 0.6 s change, and
-  measures the layout (a few thousand cells) once per refit.
+  one that has no opaque fill under it or reads under 4.5:1 on it.
+- **Cost.** One full-screen fragment pass: an OKLCH-to-sRGB conversion and one hash per pixel
+  (much cheaper than the painted pass it replaced, not re-measured). The CPU side mixes three
+  colours and sets three uniforms per frame of a 0.6 s change, and nothing at rest.
 
 ### Top bar
 

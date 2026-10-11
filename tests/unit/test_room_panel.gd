@@ -287,11 +287,14 @@ func test_a_map_without_a_thumbnail_paints_its_placeholder() -> void:
 	assert_true(card.is_ancestor_of(panel.preview))
 	assert_true(card.is_ancestor_of(panel.map_name_label))
 	var paint := placeholder.material as ShaderMaterial
-	assert_eq(paint.get_shader_parameter(&"seed"), MapPlaceholder.seed_of(MAP_A))
 	var row := panel.shelf_rows.get_child(0)
-	var row_paint := row.find_child("Placeholder", true, false).material as ShaderMaterial
-	assert_eq(row_paint.get_shader_parameter(&"seed"), paint.get_shader_parameter(&"seed"))
-	assert_null(row.find_child("Letter", true, false), "no initial over a map")
+	var row_picture := row.find_child("Placeholder", true, false) as MapPlaceholder
+	var row_paint := row_picture.material as ShaderMaterial
+	assert_eq(row_paint.get_shader_parameter(&"top_lch"), paint.get_shader_parameter(&"top_lch"))
+	var initial := (placeholder.get_node("Initial") as Label).text
+	assert_ne(initial, "", "the map's initial on its picture")
+	assert_eq((row_picture.get_node("Initial") as Label).text, initial, "the row's the same")
+	assert_null(row.find_child("Letter", true, false), "a map's picture, not a portrait")
 	assert_eq((row as Button).theme_type_variation, &"ListRow", "a plain row, not a tile")
 
 

@@ -208,6 +208,16 @@ func test_the_strips_actions_follow_the_source() -> void:
 		assert_eq(button.custom_minimum_size.y, MapDetailStrip.ACTION_HEIGHT, "one height")
 
 
+## A map with no thumbnail shows its name's initial in the strip, as on its card, not its
+## folder's (a folder such as "b7_harbour" drew a "B").
+func test_the_strips_placeholder_shows_the_names_initial() -> void:
+	var info := _info("b7_harbour", "", "map.ttmap")
+	info.name = "Willow Green"
+	var strip := _strip(info)
+	var initial := strip.picture_well.get_node("Placeholder/Initial") as Label
+	assert_eq(initial.text, LevelCard.initial_of("Willow Green"))
+
+
 func test_a_field_saves_on_enter_through_update_meta_and_escape_reverts() -> void:
 	var calls: Array = []
 	var strip := _strip(_info("harbour", "map.glb", ""))
@@ -368,8 +378,10 @@ func test_the_checks_words_and_the_floor_thresholds() -> void:
 	var above := GlbCheck.FLOOR_ABOVE_M
 	var below := GlbCheck.FLOOR_BELOW_M
 	for case: Array in [
-		[above - 0.1, 1.0, false], [above + 0.1, 1.0, true],
-		[-below + 0.5, 1.0, false], [-below - 0.5, 1.0, true],
+		[above - 0.1, 1.0, false],
+		[above + 0.1, 1.0, true],
+		[-below + 0.5, 1.0, false],
+		[-below - 0.5, 1.0, true],
 	]:
 		var report := {
 			"has_bounds": true,
