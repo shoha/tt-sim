@@ -8,10 +8,11 @@ extends AnimatedCanvasLayerPanel
 ## the host's leaving ends the session for everyone, and token moves not yet saved to the map
 ## are lost, which is said only when there are some (tokens_unsaved). A confirm that loses
 ## something is a danger confirm with Cancel focused and, when this player can save
-## (save_map), offers Save first beside it. Return everyone to the room asks nothing here: it
-## is a table move (TableMover), which asks nothing either and keeps the table's changes for
-## the session, and its notice's Stay here undoes it. There is no
-## Change map: the table moves to another map from the room drawer (Tab).
+## (save_map), offers Save first beside it. Move everyone to the room (the host's, in a group
+## of its own between separators, apart from leaving) asks nothing here: it is a table move
+## (TableMover), which asks nothing either and keeps the table's changes for the session, and
+## its notice's Stay here undoes it. There is no Change map: the table moves to another map
+## from the room drawer (Tab).
 
 signal resume_requested
 signal main_menu_requested
@@ -22,6 +23,8 @@ signal room_requested
 const TOKENS_LOST := "Token moves you have not saved to the map will be lost."
 ## The leave confirm's save offer: save the tokens to the map, then leave.
 const SAVE_FIRST := "Save first"
+## The host's session row: the table moves to the room for every player.
+const MOVE_TO_ROOM := "Move everyone to the room"
 
 ## Returns whether the table's tokens differ from the map as saved; Root sets it
 ## (LevelPlayController.has_unsaved_tokens). Unset, there are none.
@@ -35,6 +38,8 @@ var resume_button: Button
 var edit_level_button: Button
 var settings_button: Button
 var room_button: Button
+## The separator over the session group, shown with it.
+var room_separator: HSeparator
 var main_menu_button: Button
 var quit_game_button: Button
 
@@ -56,12 +61,18 @@ func _on_panel_ready() -> void:
 	edit_level_button.pressed.connect(_on_edit_level_pressed)
 	settings_button = UiActions.secondary("Settings", "settings", box)
 	settings_button.pressed.connect(_on_settings_pressed)
-	box.add_child(HSeparator.new())
-	# Leaving is quiet here; the confirmation that follows carries the red.
-	room_button = UiActions.secondary("Return everyone to the room", "users", box)
+	# The session group, the host's alone: it moves every player at once, so it stands apart
+	# from leaving, between separators, and its first word is not Return to title's.
+	room_separator = HSeparator.new()
+	room_separator.name = "RoomSeparator"
+	box.add_child(room_separator)
+	room_button = UiActions.secondary(MOVE_TO_ROOM, "users", box)
+	room_button.name = "MoveToRoom"
 	room_button.set_meta("ui_silent", true)
 	room_button.pressed.connect(_on_room_pressed)
-	room_button.visible = NetworkManager.is_host()
+	show_room_row(NetworkManager.is_host())
+	box.add_child(HSeparator.new())
+	# Leaving is quiet here; the confirmation that follows carries the red.
 	main_menu_button = UiActions.secondary("Return to title", "home", box)
 	main_menu_button.set_meta("ui_silent", true)
 	main_menu_button.pressed.connect(_on_main_menu_pressed)
@@ -92,6 +103,12 @@ func _save_table(table: LevelPlayController) -> bool:
 			preload("res://scenes/states/playing/gameplay_menu_controller.gd").SAVE_ERROR
 		)
 	return saved
+
+
+## Show or hide the session group (Move everyone to the room and the separator over it).
+func show_room_row(on: bool) -> void:
+	room_button.visible = on
+	room_separator.visible = on
 
 
 func _stagger_targets() -> Array[Control]:
@@ -159,15 +176,18 @@ func _confirm_leaving(
 	leave: Callable,
 	sound: StringName,
 ) -> Node:
-	var dialog: Node = UIManager.show_confirmation(
-		title,
-		message,
-		action,
-		"Cancel",
-		leave,
-		Callable(),
-		"Danger" if loses_work else "Primary",
-		sound,
+	var dialog: Node = (
+		UIManager
+		. show_confirmation(
+			title,
+			message,
+			action,
+			"Cancel",
+			leave,
+			Callable(),
+			"Danger" if loses_work else "Primary",
+			sound,
+		)
 	)
 	if _unsaved() and save_map.is_valid():
 		dialog.add_alternate_action(SAVE_FIRST, _save_then.bind(leave))

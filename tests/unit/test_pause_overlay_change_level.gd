@@ -1,7 +1,7 @@
 extends GutTest
 
 ## The pause menu has no Change map (the table moves from the room drawer, TableMover),
-## offers the host Return everyone to the room as a table move that asks nothing here, and
+## offers the host Move everyone to the room as a table move that asks nothing here, and
 ## its buttons are built on the shared menu design language.
 
 const SCENE := preload("res://scenes/states/paused/pause_overlay.tscn")
@@ -101,7 +101,7 @@ func test_return_to_title_with_everything_saved_is_not_a_danger() -> void:
 	_close_dialogs()
 
 
-## Return everyone to the room is a table move: nothing is lost (the session keeps the
+## Move everyone to the room is a table move: nothing is lost (the session keeps the
 ## changes), so the menu asks nothing and hands it to Root, whose TableMover asks only when
 ## the table changed.
 func test_return_to_room_asks_nothing_here() -> void:
@@ -143,13 +143,35 @@ func test_every_row_carries_an_icon() -> void:
 		assert_not_null(button.icon, button.text)
 
 
-func test_only_the_host_can_return_everyone_to_the_room() -> void:
+func test_only_the_host_can_move_everyone_to_the_room() -> void:
 	var offline = SCENE.instantiate()
 	add_child_autofree(offline)
 	assert_false(offline.room_button.visible, "solo play has no room")
+	assert_false(offline.room_separator.visible, "nor its group's separator")
 	NetworkManager._connection_state = NetworkManager.ConnectionState.HOSTING
 	var hosting = SCENE.instantiate()
 	add_child_autofree(hosting)
 	NetworkManager._connection_state = NetworkManager.ConnectionState.OFFLINE
 	assert_true(hosting.room_button.visible)
+	assert_true(hosting.room_separator.visible)
 	assert_true(hosting.room_button.get_meta("ui_silent", false), "a quiet item")
+
+
+## The host's room row moves every player at once, so it stands in a group of its own,
+## between separators, apart from Return to title, and its first word is not Return's.
+func test_the_room_row_is_its_own_group_and_does_not_read_as_leaving() -> void:
+	var overlay = SCENE.instantiate()
+	add_child_autofree(overlay)
+	overlay.show_room_row(true)
+	assert_eq(overlay.room_button.text, "Move everyone to the room")
+	assert_eq(overlay.room_button.text, PauseOverlay.MOVE_TO_ROOM)
+	var first_word: String = overlay.room_button.text.split(" ")[0]
+	assert_ne(first_word, overlay.main_menu_button.text.split(" ")[0])
+	# The rows and separators in order, without each row's hidden subtitle label.
+	var rows: Array = overlay.room_button.get_parent().get_children().filter(
+		func(node: Node) -> bool: return not node is Label
+	)
+	var room_at := rows.find(overlay.room_button)
+	assert_true(rows[room_at - 1] is HSeparator, "a separator above it")
+	assert_true(rows[room_at + 1] is HSeparator, "a separator between it and leaving")
+	assert_eq(rows[room_at + 2], overlay.main_menu_button)

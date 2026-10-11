@@ -69,7 +69,9 @@ signal water_speed_changed(speed: float)
 ## A Bridge tile was picked: the crossing kind (Crossing.Kind).
 signal bridge_kind_selected(kind: int)
 
-const DRAWER_WIDTH := 320.0
+## The drawer width token (UI_TASTE S5), as the room drawer: at 320 the two-column biome
+## tiles' longest labels (Riverside Wetland) ran within a few px of the tile edges at 720p.
+const DRAWER_WIDTH := 396.0
 const BIOME_TILE_SIZE := Vector2(64, 84)
 const BIOME_THUMB_PX := 52
 const BIOME_COLUMNS := 2
@@ -759,6 +761,8 @@ func _build_advanced(prefix: String) -> Foldout:
 	var size_row := PropertyRow.new()
 	size_row.name = prefix + "BrushSize"
 	size_row.label = "Size"
+	# Stacked as every drawer slider row is: the label over a full-width slider.
+	size_row.stacked = true
 	size_row.min_value = BrushTool.MIN_RADIUS
 	size_row.max_value = BrushTool.MAX_RADIUS
 	size_row.step = 0.1
@@ -771,6 +775,7 @@ func _build_advanced(prefix: String) -> Foldout:
 	var strength_row := PropertyRow.new()
 	strength_row.name = prefix + "BrushStrength"
 	strength_row.label = "Strength"
+	strength_row.stacked = true
 	strength_row.min_value = BrushTool.MIN_FLOW
 	strength_row.max_value = BrushTool.MAX_FLOW
 	strength_row.step = 0.05

@@ -44,6 +44,8 @@ const WATCHERS := &"drawer_watchers"
 # Standard insets for icon-mode tabs so all icon tabs look consistent.
 const _TAB_ICON_PAD_H := 6  # Horizontal (left + right) padding
 const _TAB_ICON_PAD_V := 14  # Vertical (top + bottom) padding
+## Rail mode: the rail panel's padding each side of its items (tab_width 44 fits 36 px items).
+const _RAIL_PAD_H := 4.0
 
 # -- Tab badge ---------------------------------------------------------------
 # Small accent dot drawn at the tab's top-right corner, e.g. for unsaved changes.
@@ -461,6 +463,9 @@ func _build_tab_button() -> void:
 
 
 func _build_rail() -> void:
+	# The rail is its items and the panel's side padding, never narrower: the sled places the
+	# panel by tab_width, so a rail wider than it would hang past its own frame.
+	tab_width = maxf(tab_width, IconRail.ITEM_SIZE + _RAIL_PAD_H * 2.0)
 	_rail_panel = PanelContainer.new()
 	_rail_panel.name = "RailPanel"
 	_rail_panel.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -471,8 +476,10 @@ func _build_rail() -> void:
 	_rail.name = "Rail"
 	_rail.vertical = true
 	_rail.auto_select = false
-	# The indicator sits on the edge facing away from the panel.
-	_rail.indicator_at_end = edge == DrawerEdge.LEFT
+	# The indicator sits on the edge facing the panel, joining the item to the pane it opened,
+	# as the avatar builder's rail does. On the outer edge it ran to the rail's rim and read as
+	# cut there (2026-10-10 once-over).
+	_rail.indicator_at_end = edge == DrawerEdge.RIGHT
 	for item in rail_items:
 		_rail.add_item(item["id"], item["icon"], item.get("tooltip", ""))
 	_rail.item_pressed.connect(_on_rail_item_pressed)
@@ -551,8 +558,8 @@ func _apply_tab_style() -> void:
 		_tab_button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	if _rail_panel:
 		var rail_style: StyleBoxFlat = style_normal.duplicate()
-		rail_style.content_margin_left = 4
-		rail_style.content_margin_right = 4
+		rail_style.content_margin_left = _RAIL_PAD_H
+		rail_style.content_margin_right = _RAIL_PAD_H
 		rail_style.content_margin_top = 8
 		rail_style.content_margin_bottom = 8
 		_rail_panel.add_theme_stylebox_override("panel", rail_style)

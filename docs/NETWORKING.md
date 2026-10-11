@@ -425,7 +425,7 @@ host only). Players' avatars belong to the session, not to a map.
   and every prop stay with the map. Granting a player an avatar adopts it: it leaves the
   active level's placements (`TokenSpawner.release_placement`), so saving the map no longer
   writes it; when its last owner loses it, it gets a placement again (`restore_placement`).
-- *Travel.* Root calls `take()` before a table goes (Return everyone to the room, or a map
+- *Travel.* Root calls `take()` before a table goes (Move everyone to the room, or a map
   change in play): each member as `{"state": TokenState dict, "owners": [session ids]}`, plain
   data a session file can write (`get_members()`). Once the next map has loaded
   (Root's `LevelFlow`, on `level_loaded`), `set_out()` rebuilds each member under its own network id
@@ -458,7 +458,7 @@ sent anything.
 | TITLE > ROOM or PLAYING (client) | Join in place on the title's Play together card: `SessionFlow.join_session(code)` | `begin_join()`, then `join_game(code)`; `join_status` tells the card: connecting, then joined ("Connected. Joining the room...") until ROOM on `room_opened`, or PLAYING on `game_starting` when a table is out; a failure (`connection_failed`, or `OFFLINE` with no reason) comes back to the card in W3 words (`join_error_text()`), the code kept to correct; the card's back (disc, Esc, pad B) while connecting is `cancel_join()`, `disconnect_game()` |
 | ROOM (host) | Entering with a map from Host | The map is shelved and selected in the room |
 | ROOM > PLAYING | The room's Set out this map: `TableMover.set_out(key)`, then `SessionFlow.set_out_pending()` | Refused with "Choose a map to set out first" when no map is pending; else `close()`, `notify_game_starting()`, PLAYING broadcasts the level |
-| PLAYING > ROOM | Pause > Return everyone to the room (host): `return_to_room()`, a table move to the room | After TableMover's notice (nothing asked): the table's state is kept, the party is taken, `open()`, then the table (GameMap, tokens, GameState) is torn down on every peer |
+| PLAYING > ROOM | Pause > Move everyone to the room (host): `return_to_room()`, a table move to the room | After TableMover's notice (nothing asked): the table's state is kept, the party is taken, `open()`, then the table (GameMap, tokens, GameState) is torn down on every peer |
 | PLAYING > PLAYING | The drawer's Move the table to the selected map (`TableMover.request_move(key)`) | After the same notice: the party is taken; the next map comes with its kept state; the level broadcast moves the table pointer |
 | (any) > PLAYING, map loaded | `LevelFlow` on `level_loaded` (host) | The party is set out on the new map |
 | ROOM or PLAYING > TITLE | Leave or End session (the room, the drawer), Return to Title | Title first, then `disconnect_game()`, so a voluntary leave is not read as a lost connection; the host leaving ends the session (End session asks first) |
@@ -1188,7 +1188,7 @@ signal session_changed                    # shelf, table pointer, players or hol
 func report_holdings() -> void            # client: after a summary, in the room, a fetch done
 
 # Host
-func open() -> void                       # Return everyone to the room
+func open() -> void                       # Move everyone to the room
 func close() -> void                      # just before game_starting
 func shelve(level_dict: Dictionary) -> String         # the room's Add a map; returns its key
 func unshelve(key: String) -> bool        # off the shelf (never the table's); stops its transfers

@@ -302,7 +302,9 @@ func _on_panel_ready() -> void:
 	# Apply reads and applies them (_apply_settings). Interface size is the exception: it saves
 	# and applies the moment it is picked, so the menu itself shows the new size.
 	foliage_density_slider.value_changed.connect(_on_foliage_density_changed)
-	InterfaceSize.fill_option(interface_size_option, get_tree().root, UIManager.get_interface_size())
+	InterfaceSize.fill_option(
+		interface_size_option, get_tree().root, UIManager.get_interface_size()
+	)
 	interface_size_option.item_selected.connect(_on_interface_size_selected)
 	# Each fixed size is named against Auto on this window, which Fullscreen can change.
 	get_tree().root.size_changed.connect(_refill_interface_size)
@@ -360,11 +362,13 @@ func _on_after_animate_out() -> void:
 
 
 ## Every tab's label-and-control rows share one label column and gap (PropertyRow), and a
-## tab whose rows run past its bottom fades there instead of cutting a row (ScrollFade).
+## tab whose rows run past its bottom fades there instead of cutting a row (ScrollFade). Its
+## scroll bar is the handle alone, shown only while wanted (ScrollBarFade).
 func _fit_tab_rows() -> void:
 	for tab in tab_container.get_children():
 		if tab is ScrollContainer:
 			tab.add_child(ScrollFade.new())
+			ScrollBarFade.attach(tab)
 	for node in tab_container.find_children("*", "HBoxContainer", true, false):
 		PropertyRow.fit_sheet_row(node as HBoxContainer)
 

@@ -5,7 +5,13 @@ extends VBoxContainer
 ## chip is an inline LineEdit (commit on Enter or focus loss) instead of a
 ## SpinBox, which recovers about 40 px per row. [member overridden] tints the
 ## label accent and enables right-click reset. [member ticks] draws small
-## muted icons under the slider at given values (time of day markers).
+## muted icons or words under the slider at given values (time of day markers).
+##
+## [member stacked] puts the label on a line of its own with the value at that line's end
+## (the chip, or with [member show_readout] a plain readout shown at all times) and the
+## slider the row's full width under it: a drawer is too narrow for a label beside its
+## slider (2026-10-10 once-over: the Sun pane's time of day had about 200 px of slider and
+## its markers clumped). The Visuals drawer's slider rows are stacked.
 
 signal value_changed(value: float)
 signal color_changed(color: Color)
@@ -20,6 +26,8 @@ const OVERRIDE_TOOLTIP := "Overridden. Right-click to reset to the preset value.
 ## The label column of a row on a sheet (Settings), so every tab's controls line up on one
 ## edge. A drawer row keeps the narrower label_min_width.
 const SHEET_LABEL_WIDTH := 184.0
+## The least gap between two words under the slider (tick labels and end hints).
+const TICK_LABEL_GAP := 8.0
 
 @export var label: String = "":
 	set(value):
@@ -59,7 +67,14 @@ const SHEET_LABEL_WIDTH := 184.0
 	set(value):
 		overridden = value
 		_refresh_override()
-## Each entry: {"value": float, "icon": String}.
+## The label on its own line above a full-width slider (see the class header). Set before
+## the row is added.
+@export var stacked: bool = false
+## Stacked rows only: show the formatted value at the end of the label's line at all times,
+## not only with the values toggle (the chip takes its place while values show).
+@export var show_readout: bool = false
+## Each entry: {"value": float, "icon": String} or {"value": float, "label": String}; a word
+## is centred on its value and kept inside the slider's span.
 @export var ticks: Array[Dictionary] = []:
 	set(value):
 		ticks = value
@@ -105,6 +120,9 @@ var checked: bool:
 			_check.set_pressed_no_signal(on)
 
 var _row: HBoxContainer
+## Stacked rows: the label's line (label, readout, chip) over _row.
+var _head: HBoxContainer
+var _readout: Label
 var _label: Label
 var _check: CheckBox
 var _picker: ColorPickerButton
@@ -167,21 +185,31 @@ func set_control(control: Control) -> void:
 
 
 func _build_row() -> void:
-	_row = HBoxContainer.new()
-	_row.name = "Row"
-	_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_row.add_theme_constant_override("separation", 6)
-	add_child(_row)
+	# A row with no slider has nothing to stack.
+	stacked = stacked and show_slider
+	if stacked:
+		_head = _line("Head")
+	_row = _line("Row")
 
 	_label = Label.new()
 	_label.name = "Label"
 	_label.text = label
 	_label.theme_type_variation = &"Body"
-	_label.custom_minimum_size = Vector2(label_min_width, 0)
+	_label.custom_minimum_size = Vector2(0.0 if stacked else label_min_width, 0)
 	_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_label.mouse_filter = Control.MOUSE_FILTER_STOP
 	_label.gui_input.connect(_on_label_gui_input)
-	_row.add_child(_label)
+	if stacked:
+		_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_head.add_child(_label)
+		_readout = Label.new()
+		_readout.name = "Readout"
+		_readout.theme_type_variation = &"Body"
+		_readout.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_head.add_child(_readout)
+	else:
+		_row.add_child(_label)
 
 	if show_check:
 		_check = CheckBox.new()
@@ -211,7 +239,7 @@ func _build_row() -> void:
 	_chip.context_menu_enabled = false
 	_chip.text_submitted.connect(_on_chip_submitted)
 	_chip.focus_exited.connect(_commit_chip)
-	_row.add_child(_chip)
+	(_head if stacked else _row).add_child(_chip)
 	_sync_chip_width()
 
 	if not show_slider:
@@ -219,6 +247,16 @@ func _build_row() -> void:
 		if not show_color and not show_check:
 			_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_refresh_chip_visibility()
+
+
+## One line of the row (the stacked label's line, or the controls), added under the last.
+func _line(line_name: String) -> HBoxContainer:
+	var line := HBoxContainer.new()
+	line.name = line_name
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_theme_constant_override("separation", 6)
+	add_child(line)
+	return line
 
 
 func _build_ticks() -> void:
@@ -251,6 +289,8 @@ func _sync_range() -> void:
 	_syncing = false
 	_chip.editable = editable
 	_chip.text = _display(value)
+	if _readout:
+		_readout.text = _display(value)
 	_slider.tooltip_text = _display(value) if show_slider else ""
 	_ticks.queue_redraw()
 
@@ -278,6 +318,8 @@ func _display(number: float) -> String:
 func _refresh_chip_visibility() -> void:
 	if _chip:
 		_chip.visible = values_visible and show_slider
+	if _readout:
+		_readout.visible = show_readout and not _chip.visible
 
 
 ## Formatted values ("1.52 m (5.0 ft)") need more room than the plain
@@ -362,7 +404,8 @@ func _refresh_ticks() -> void:
 		return
 	_tick_textures.clear()
 	for tick in ticks:
-		_tick_textures.append(IconButton.load_icon(String(tick.get("icon", ""))))
+		var icon_name := String(tick.get("icon", ""))
+		_tick_textures.append(IconButton.load_icon(icon_name) if icon_name != "" else null)
 	_refresh_strip()
 
 
@@ -377,6 +420,41 @@ func _sync_ticks_rect() -> void:
 		_ticks.queue_redraw()
 
 
+## The formatted value the readout shows (stacked rows; "" otherwise).
+func readout_text() -> String:
+	return _readout.text if _readout else ""
+
+
+## The words under the slider in left-to-right order, each {"text", "x"} with x where it
+## starts in the row's coordinates: the low hint at the slider's start, each worded tick
+## centred on its value but kept inside the slider's span, the high hint ending at the
+## slider's end. Read by the strip's draw and by tests that keep the words apart.
+func strip_words() -> Array[Dictionary]:
+	var words: Array[Dictionary] = []
+	if _hint_font == null or _slider == null:
+		return words
+	var left := _slider.position.x
+	var width := _slider.size.x
+	if not hint_low.is_empty():
+		words.append({"text": hint_low, "x": left})
+	for tick in ticks:
+		var text := String(tick.get("label", ""))
+		if text.is_empty():
+			continue
+		var text_width := _word_width(text)
+		var centre := left + width * _tick_fraction(float(tick.get("value", 0.0)))
+		var x := clampf(centre - text_width / 2.0, left, maxf(left, left + width - text_width))
+		words.append({"text": text, "x": x})
+	if not hint_high.is_empty():
+		words.append({"text": hint_high, "x": left + width - _word_width(hint_high)})
+	return words
+
+
+## The width `text` takes under the slider.
+func _word_width(text: String) -> float:
+	return _hint_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, _hint_font_size).x
+
+
 func _on_ticks_draw() -> void:
 	var soft := ThemeColors.of(_ticks, ThemeColors.TEXT_SOFT)
 	var left := _slider.position.x
@@ -388,27 +466,12 @@ func _on_ticks_draw() -> void:
 		var x := left + width * _tick_fraction(float(ticks[i].get("value", 0.0)))
 		var rect := Rect2(x - TICK_SIZE / 2.0, 0.0, TICK_SIZE, TICK_SIZE)
 		_ticks.draw_texture_rect(texture, rect, false, soft)
-	if _hint_font == null:
-		return
 	var baseline := TICK_SIZE - 2.0
-	if not hint_low.is_empty():
+	for word in strip_words():
 		_ticks.draw_string(
 			_hint_font,
-			Vector2(left, baseline),
-			hint_low,
-			HORIZONTAL_ALIGNMENT_LEFT,
-			-1,
-			_hint_font_size,
-			soft
-		)
-	if not hint_high.is_empty():
-		var text_width := (
-			_hint_font.get_string_size(hint_high, HORIZONTAL_ALIGNMENT_LEFT, -1, _hint_font_size).x
-		)
-		_ticks.draw_string(
-			_hint_font,
-			Vector2(left + width - text_width, baseline),
-			hint_high,
+			Vector2(float(word.x), baseline),
+			String(word.text),
 			HORIZONTAL_ALIGNMENT_LEFT,
 			-1,
 			_hint_font_size,
