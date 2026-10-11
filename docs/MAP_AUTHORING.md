@@ -83,7 +83,8 @@ other committed home.
     history entry.
   Answers to the design's questions (user, 2026-10-11): painting persistent fire over trees
   burns them to snags (the burnt forest biome, as Start a fire leaves), in the same history
-  entry; Tab means "the brush's other shape" for every tool with two (Start a fire: Circle and
+  entry, and burns away the small plants under it on open ground (grass, flowers, bushes
+  cleared to bare ash; rocks stay; user, 2026-10-11); Tab means "the brush's other shape" for every tool with two (Start a fire: Circle and
   Path; Fire: Area and Line; Water: River and Pond); along a path, snags stand only where trees
   stood, while the ash runs the whole path. Drawing a fire line (the Fire tool's Line, Start a
   fire's Path) uses the same affordance as drawing a river: the river's ribbon at the brush
