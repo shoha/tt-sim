@@ -9,9 +9,9 @@ extends GutTest
 
 const BIOME := "temperate_forest_summer_s1"
 const OAK := BIOME + "/Tree_Oak_summer_01"
-const PINE := BIOME + "/Tree_Pine_summer_00"
-const GRASS := BIOME + "/Grass_Short_summer_19"
-const BOULDER := BIOME + "/Rock_Boulder_summer_04"
+const PINE := BIOME + "/Tree_Pine_summer_03"
+const GRASS := BIOME + "/Grass_Short_summer_18"
+const BOULDER := BIOME + "/Rock_Boulder_summer_08"
 const BIG_BUDGET := 1_000_000_000
 
 var _map: Node3D = null
@@ -329,7 +329,9 @@ func test_regenerating_a_dab_with_its_halo_matches_regenerating_the_whole_map() 
 	# the regenerated species reproduce a whole-map generation of the edited document.
 	# Filling a hole in painted forest changes relation-driven instances in the next cell
 	# over (checked below), so the halo is exercised, not just the painted cells.
-	var dab := Rect2(1.0, 1.0, 5.0, 5.0)
+	# The dab fills nearly its whole cell so relation reaches cross into the neighbours (with
+	# the stable palette, 2026-10-11, a 5 m dab at 1..6 m or 4.5..9.5 m changed no neighbour).
+	var dab := Rect2(0.5, 0.5, 9.1, 9.1)
 	var after := _flat_doc(Vector2i(20, 20))
 	_paint(after, Rect2(-16.0, -16.0, 32.0, 32.0))
 	var before := _flat_doc(Vector2i(20, 20))

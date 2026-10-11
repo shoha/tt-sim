@@ -141,6 +141,16 @@ const float CANOPY_BRUSH_BAND = 1.2;
 // Bark flutter weight above which a fragment belongs to a limb rather than the trunk.
 const float CANOPY_LIMB_FLUTTER = 0.04;
 
+// Shadow caster push, in metres: in the sun's shadow pass every foliage vertex moves this far
+// away from the light, a shadow bias for foliage alone. Without it a crown's leaf cards
+// shadow themselves and their neighbours a few centimetres off on the shadow map's texel
+// grid (acne), which reads as a fine regular dot pattern over the lit cards; the A2 clump
+// crowns' large cards made it plain (2026-10-11). Raising the sun's own bias instead would
+// float every token's and rock's shadow. Probed on a temperate forest crown at home zoom:
+// 0.15 m still dotted, 0.3 m left dotted patches, 0.6 m as clean as shadows off while the
+// crown keeps its lit and shaded masses. 0 disables it.
+uniform float shadow_caster_push : hint_range(0.0, 2.0) = 0.6;
+
 
 // Gust envelope in 0..1 at a world XZ position: two sines travelling along the wind
 // direction, softly thresholded so gusts arrive as bursts with calm between them
@@ -201,6 +211,22 @@ vec3 wind_sway_vertex_offset(vec3 vertex, vec4 color, mat4 model_matrix, float t
 	float horizontal_sq = offset.x * offset.x + offset.z * offset.z;
 	offset.y -= horizontal_sq / (2.0 * max(vertex.y, 0.3));
 	return offset;
+}
+
+
+// The model-space offset that pushes a vertex shadow_caster_push metres away from the light
+// in a shadow pass, zero in the camera's passes. A pass is the camera's when its view axis is
+// the camera's back axis (canopy_fade_view, published once a frame by CameraController), as
+// apply_canopy_fade tells them apart. The light's view looks down its -Z, so away from the
+// light is -inv_view_matrix[2] in world space, taken into model space through the inverse of
+// the model (instance) basis. Bark (canopy_part 1) stays put: its solid limbs take the sun's
+// own bias, and a pushed trunk would lose the contact shadow at its foot.
+vec3 shadow_caster_offset(mat4 model_matrix, mat4 inv_view_matrix) {
+	if (shadow_caster_push <= 0.0 || canopy_part == 1
+			|| dot(inv_view_matrix[2].xyz, canopy_fade_view.xyz) >= 0.999) {
+		return vec3(0.0);
+	}
+	return inverse(mat3(model_matrix)) * (-inv_view_matrix[2].xyz * shadow_caster_push);
 }
 
 
