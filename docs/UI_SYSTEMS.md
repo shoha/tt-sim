@@ -494,8 +494,7 @@ until the UI's painterly side is revisited; the painted sun, clouds, hills and p
 ### Top bar
 
 `%TopBar` in the hub (24 px margins): the wordmark on its plaque (`wordmark_plaque`, the version a
-caption on its baseline) at the left, open sky in the middle for the backdrop's sun, and at the
-right end one plaque (`tools_plaque`) with **Avatars**, **Settings** and **Quit game** stacked as
+caption on its baseline) at the left, open sky in the middle, and at the right end one plaque (`tools_plaque`) with **Avatars**, **Settings** and **Quit game** stacked as
 quiet `UiActions.secondary()` rows beside the **Play together card** (below) with **Resume**
 under it. Quit game has the pause menu's words and icon (`TitleScreen.QUIT`, `QUIT_ICON`);
 Avatars opens the [avatar roster](#avatar-library). The old left column (Play solo, Set up
@@ -507,36 +506,53 @@ verdict 2026-10-09, no Host control far from what it acts on).
 `grid` is a `LevelGrid` (at least `GRID_COLUMNS` 4 to a line, so a row and its strip fit a
 1280x720 canvas) whose provider is `TitleScreen.library()`: `LibraryFacts.ordered()` over
 `level_provider` and `plays_provider` (`LibraryPlays.all()`), the latest of last played and last
-edited first, the Bundled maps (a `res://` map) last after a "Bundled with TTSim" heading on a
-line of its own. `LibraryPlays` (`utils/library_plays.gd`, `Paths.library_plays_path()`, beside
+edited first, the Bundled maps (a `res://` map) last after a "Bundled with TTSim" heading (H2 on
+its plaque, more room above) on a line of its own. Every item fills its line, so a row's bottoms
+line up. A card's caption is the date the order uses ("Played yesterday", "Edited 3 days ago",
+`LibraryFacts.touched_text`), and a Blender map whose source file is newer than its import says
+"Updated in Blender" on a lake `StateChip` with its icon (C5, C7). With no map of the player's
+own, New map stands alone, larger and centred, with "Or play one that comes with TTSim" and the
+Bundled maps under it, nothing selected. `LibraryPlays` (`utils/library_plays.gd`, `Paths.library_plays_path()`, beside
 `levels/`, never in a level folder so a play never changes a level's revision) is written by
 `LevelFlow` when a table finishes loading, solo or hosted. The head of the library is selected on
 `_ready()` (`_preselect_most_recent()`).
 
-- **New map** (`NewMapCard`, the grid's `lead`): a painted band, **Generate** (the card's lead:
-  `Framed`, not the fill; Host is the screen's one persimmon, C5) and **Import...** side by side,
-  and a closed **Advanced** disclosure (a `FoldoutHeader` button, focusable) with Size (Drawn,
-  100, 150, 200 ft, Custom width x depth in ft) and Seed. Drawn lets the seed draw the size
-  (`NewMapCard.draw_size`); a custom size past `NewMap.size_error`'s range says so in one line
-  and Generate waits; above 200 ft a side a quiet line says it builds more slowly, past
-  `NewMap.RECOMMENDED_MAX_FT` (250) that it builds, opens and saves slowly. No From image, no
-  Try. Generate emits `build_map_requested(preset)` ({"size_ft", "depth_ft", "seed"}); Root opens
-  the new-map dialog with `NewMapDialog.preset`, which hides its Size field and names the size
-  in its header, then [authoring mode](#authoring-mode). No reroll: neighbouring seeds can draw
-  the same coarse landform, so a fresh seed is drawn each time. An empty library shows only this
-  card, larger (`EMPTY_WIDTH` 520) and centred, its picture bigger, captioned "Make your first
-  map, or drop a map.glb from Blender here".
+- **New map** (`NewMapCard`, the grid's `lead`): a pencil sketch on blank paper (not a map's
+  picture), "New map" in the heading face, **Generate** (the card's lead: `Framed`, not the
+  fill; Host is the screen's one persimmon, C5) and **Import...** side by side, and **Advanced**
+  at the heading line's end. Advanced opens a paper popover (`Sheet`) on the title's layer under
+  the card, or beside it when the canvas ends first, closed by a click outside or Escape, so the
+  card's height never changes. In it: Size (Any size, tooltip "the seed picks the size"; 100,
+  150, 200 ft; Custom width and depth, each a `FeetField` between 40 px minus and plus
+  targets) and Seed. Any size lets the seed draw the size (`NewMapCard.draw_size`); a custom side
+  past `NewMap.size_error`'s range is outlined (`FieldError`) beside the alert icon and a W3
+  sentence naming the side and what to set, and Generate waits, keeping its frame (`Framed`'s
+  disabled style is clear paper with the frame) with a tooltip saying why; above 200 ft a side a
+  line with the warning icon says it builds more slowly, past `NewMap.RECOMMENDED_MAX_FT` (250)
+  that it builds, opens and saves slowly. No From image, no Try. Generate emits
+  `build_map_requested(preset)` ({"size_ft", "depth_ft", "seed"}); Root opens the new-map dialog
+  with `NewMapDialog.preset`, which hides its Size field and names the size in its header, then
+  [authoring mode](#authoring-mode). No reroll: neighbouring seeds can draw the same coarse
+  landform, so a fresh seed is drawn each time. In an empty library the card is larger
+  (`EMPTY_WIDTH` 520) and centred, captioned "Make your first map, or drop a map.glb from
+  Blender here".
 - **Detail strip** (`MapDetailStrip`, the grid's `detail`): a paper card on a line of its own
-  directly under the selected card's row (`LevelGrid.line_end()` finds the row's last item at the
-  current column count; not a modal). The map's picture; its name (`TitleField`, the heading's
-  face), description and author, flat fields saved on Enter through `LevelManager.update_meta`
-  (an empty name is refused), reverted by Escape or by leaving the field; the source chip
-  (`LibraryFacts.source_of`: From Blender, Blender dressed here, Made here, Bundled), the size
-  (`LibraryFacts.footprint_ft`: the map.glb's import check, or the document's manifest), tokens
-  and when it was last played. Actions: **Play** (solo, `Framed`), **Host with this map** (a
-  room with this map on its shelf), **Edit map** (authoring; none for a Bundled map), and "..."
-  with Set up tokens (`TitleScreen.SET_UP_TOKENS`, the Level Editor), Duplicate, Delete, and
-  Reload from Blender when `MapImport.is_updated_in_blender`. The cards' own overflow disc is
+  under the selected card's row (`LevelGrid.line_end()` finds the row's last item at the current
+  column count; not a modal), at most `DETAIL_MAX_WIDTH` 960 (S5), centred under its card and
+  clamped to the grid. The map's picture (its thumbnail, or its placeholder with the map's
+  initial), then one column: the name (`TitleField`, the heading's face) with "..." at its
+  right; the description with "by <author>" at its end (flat fields saved on Enter through
+  `LevelManager.update_meta`, an empty name refused, reverted by Escape or by leaving the field;
+  each shows its well under the pointer or with the focus); the facts (the source chip,
+  `LibraryFacts.source_of`: From Blender, Blender, edited here, Made here, Bundled; the size,
+  `LibraryFacts.footprint_ft`, from the map.glb's import check or the document's manifest;
+  tokens; when it was last played; Updated in Blender); then one row of actions, all 40 tall:
+  **Play** (solo, `Framed`), **Host with this map** (a room with this map on its shelf), **Edit
+  map** (authoring; none for a Bundled map) and **Reload from Blender** when
+  `MapImport.is_updated_in_blender`. "..." opens leftward inside the strip, clear of Edit map,
+  with Set up tokens (`TitleScreen.SET_UP_TOKENS`, the Level Editor), Duplicate, Replace map
+  file... (`LibraryImports.pick_replace`: the file picker, then the check and Replace as for a
+  file dropped on the card; not for a Bundled map) and Delete. The cards' own overflow disc is
   off in the library (`manageable = false`).
 - **Keyboard and pad**: Accept on a card that is not selected selects it (opens its strip);
   Accept on the selected card plays it (`LevelGrid.select_before_activate`); a double click
@@ -544,13 +560,18 @@ line of its own. `LibraryPlays` (`utils/library_plays.gd`, `Paths.library_plays_
 - **Import** (`LibraryImports`): Import... opens the system's file picker on `.glb`; a file
   dropped anywhere on the library is a new map, on a map's card Replace for that map
   (`TitleScreen.card_at`), ignored while a sheet is open. Each opens `ImportCheckPanel`
-  before anything is written: file, MB, footprint in m and ft, floor, what the extras hold, and
-  each warning with its icon (warnings never block); `.gltf` and `.tscn` are refused in one
-  sentence with Close alone. Import has a Name field and Add to library
-  (`MapImport.import_glb`); Replace offers Keep dressing (captioned with the props and plants it
-  drops, a dry run of `DressingReconcile.keep`) beside Start fresh, Start fresh alone over a map
-  made here, or Replace map with no dressing (`MapImport.replace_map`). The written map is
-  selected after.
+  before anything is written, its facts in a `FactsGrid`: file size ("under 0.1 MB" for a tiny
+  one), the size as "150 × 100 ft (45.7 × 30.5 m)" (Replace shows "Map size now" and "New map
+  size"), the ground said the same way above and below ("lowest point 1.5 m above Y = 0"), the
+  contents in plain words, and each warning with its icon (warnings never block; the floor
+  warnings end with what to do in Blender). No file names in the copy. `.gltf` and `.tscn` are
+  refused in one sentence with Close alone. Import has a Name field and Add to library
+  (`MapImport.import_glb`). "Edited" is the one word for tt-sim's painting, props and plants
+  over a Blender map: Replace offers **Replace, keep edits** (captioned with what it drops, "1
+  prop sits outside the new map and will be removed", props and plants counted apart: a dry run
+  of `DressingReconcile.keep`) beside **Replace, start fresh**, Start fresh alone over a map made
+  here, or Replace map with no edits (`MapImport.replace_map`). The written map is selected
+  after.
 
 `test_title_screen` and `test_library_title` cover the library; `test_interface_size_fit` walks
 it at 1280x720, 1366x768 at Auto, 720p at Auto and 1080p with the selected row and its strip in
@@ -644,12 +665,17 @@ the stage), no Set out, and once selected Remove from shelf on a line under it
 
 ### Grid scrolling
 
-A card selected by code (`LevelGrid.select`) scrolls into view with its strip once the grid has
-laid it out. The grid's scroll bar stands on the painted backdrop, so it wears `CardGridBar`:
-its grabber on a paper strip of its own, 3:1 in every mood (every other scroll bar's grabber is
-opaque in the track role). Its horizontal scroll is `SHOW_NEVER`, not disabled: the strip is
-sized to the grid's width, and a disabled horizontal scroll makes that the grid's minimum, which
-held the grid at its old width when the window shrank.
+A card selected by a click or by code (`LevelGrid.select`) scrolls so its row and its whole
+strip are in view, the row first when both cannot fit (`LevelGrid.reveal_scroll`, repeated over
+`REVEAL_FRAMES` 3 while the flow lays the strip out). Cards the grid's edge cuts fade by how much
+of them is out of view, down to `CUT_ALPHA` 0.35 (a `clip_children` mask was tried first and
+blanked the cards' clipped picture wells).
+
+The scroll bar is its handle alone, on the default bar's clear lane, with no track (user verdict
+2026-10-10, UI_TASTE: content scroll bars are a hover-only fading handle). It fades in
+(`Constants.ANIM_HOVER_SOFT_IN`) while the pointer is over the cards and for `BAR_LINGER_S` (0.8 s)
+after a wheel, pad or drag scroll, then out; hidden, it still takes a click or a drag where it
+stands, and the pad scrolls by focus. Horizontal scrolling is disabled.
 
 ### Signals
 
