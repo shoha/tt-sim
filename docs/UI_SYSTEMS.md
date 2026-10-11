@@ -1767,8 +1767,9 @@ Sunlight Off the Sun pane's Shadows tiles are disabled with the tooltip `SunPane
 (shadows are the sun's light alone, `DefaultSun.apply`), the picked one still marked in a muted
 wash of the selected fill (`TileChosenOff`, which `TileRow.set_tile_disabled` puts on the picked
 tile of a disabled row; `TileRow.is_chosen_off`), a caption under them says
-`SunPane.SHADOWS_NEED_SUN` ("Shadows need sunlight"), softness and darkness take no input, and
-Aim on map is disabled too (`SunPane.AIM_NO_SUN`; an active aim is let go).
+`SunPane.SHADOWS_NEED_SUN` ("Shadows and aiming need sunlight"), softness and darkness take no
+input, and Aim on map is disabled too (`SunPane.AIM_NO_SUN`; an active aim is let go), its icon
+and its label (`BodyOff`) in the soft text role so the row reads off.
 
 A row with its own control instead of a slider (`PropertyRow.set_control`: the Look and Tonemap
 dropdowns) stands its label at its words' width and gives the control the rest of the line, so

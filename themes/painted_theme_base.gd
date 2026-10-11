@@ -85,6 +85,11 @@ func _define_labels() -> void:
 		"Eyebrow", "Label", {font = font_eyebrow, font_size = SIZE_HEADING, font_color = soft}
 	)
 	define_variant_style("Body", "Label", {font = font_body, font_size = SIZE_BODY})
+	# A row's label while its control is off (Aim on map with Sunlight Off): the soft role, as a
+	# disabled button's words are, so the row reads off with its control.
+	define_variant_style(
+		"BodyOff", "Label", {font = font_body, font_size = SIZE_BODY, font_color = soft}
+	)
 	define_variant_style("Caption", "Label", caption)
 	# A caption standing on the sky (the title's version): the caption's size in ink, since the
 	# soft role reads on paper but not on every mood's sky.
