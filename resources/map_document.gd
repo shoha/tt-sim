@@ -57,6 +57,9 @@ extends RefCounted
 ## Crossings. crossings holds the plank bridges and stepping stones (Crossing, stable ids),
 ## built from their fields alone (CrossingGeometry). Summary: docs/systems/crossings.md.
 ##
+## Fire. fire_mask is the persistent ground fire, one intensity byte per sample (fire.png);
+## where flames may stand (not wet, not steep) is derived by FireField, never saved.
+##
 ## The fields are plain vars because authoring mutates one document for a whole session;
 ## every helper here is pure except the surface_* mutators, which edit the fields.
 
@@ -137,6 +140,10 @@ var water_flow: PackedByteArray = PackedByteArray()
 var water_flow_size: Vector2i = Vector2i.ZERO
 ## Plank bridges and stepping stones over the water (Crossing), at most MAX_CROSSINGS.
 var crossings: Array[Crossing] = []
+## One byte per sample: the persistent ground fire's intensity 0..255 (0 = no fire), painted by
+## the Fire tool and drawn by FireField. Empty = no fire. The ash it leaves is a painted
+## surface, a separate layer, so putting fire out never touches it.
+var fire_mask: PackedByteArray = PackedByteArray()
 ## Derived, never saved: the wet dressing field (WaterDressing.compute(), RGBA8 per sample:
 ## bed, shore, depth) of the current heights and water, kept here so scatter jobs and the
 ## ground read one copy. Empty when there is no wet sample. Whoever changes the water or the

@@ -154,6 +154,7 @@ func _build_async(glb_path: String, cells: Dictionary) -> Node3D:
 	# GLB's root gets them here.
 	if root.get_node_or_null(NodePath(AuthoredCrossings.NODE_NAME)) == null:
 		add_authored_crossings(root, document, separate_props)
+	add_fire_field(root, document)
 
 	var groups: Array = [[SCATTER_NODE, cells.get(SCATTER_NODE, {})]]
 	if _apart() or cells.has(PROPS_NODE):
@@ -214,6 +215,18 @@ static func add_authored_crossings(
 	var crossings := AuthoredCrossings.create(doc, built)
 	root.add_child(crossings)
 	return crossings
+
+
+## Adds the document's persistent fire (FireField) to a map root whose ground is the
+## document's (the Fire tool works there only), even with no fire yet, so the Fire tool and an
+## undo always have it. Nothing without a document or on a dressed GLB. Returns the node or
+## null.
+static func add_fire_field(root: Node3D, doc: MapDocument) -> FireField:
+	if doc == null or doc.has_base_map:
+		return null
+	var field := FireField.create(doc)
+	root.add_child(field)
+	return field
 
 
 static func authored_root_shell() -> Node3D:

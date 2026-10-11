@@ -176,6 +176,24 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   (the GM's Events pane over `LiveEdits.editor`) can run the same modes. A new tool with
   gestures adds its `BrushMode` subclass beside `water_brush.gd` and names it in its
   descriptor; it edits no brush code.
+- Fire (2026-10-11, card F1; design `docs/plans/2026-10-11-fire-features/design.md`): the
+  first tool added through the registry alone. `FireTool` (rail after Paint, Tabler
+  `campfire` icon, authoring only until F2; the document's own ground, as Paint),
+  `FireBrush` (Area only; Line and Tab come in F5), `FireToolPane` (Embers 96, Flames 176,
+  Blaze 255, and the panel's `build_advanced` rows), and `FireEditor` behind
+  `AuthoringEditor.begin_fire_stroke(target, erase)`. A lay is a `MaskStroke` in
+  `MaskBrush.FIRE` writing only `fire_mask`; its dabs are recorded, and at release they are
+  replayed inside one history group, so one entry "Lay fire" holds three parts: the fire,
+  the burnt forest biome (`FireSweep.plan_for`) painted only over forest (`MaskStroke.only_slots`
+  from `FireEditor.forest_slots`: biomes with at least 0.04 trees per square metre, never the
+  burnt biome itself), and ash at 1.1x the radius (fallback `dirt_peat`). A part with nothing
+  to change is left out; ash refused (every paint slot holds paint) still lays the fire. Ctrl
+  puts fire out: one plain entry "Put out fire", the ash and snags stay. The burnt-biome and
+  ash parts mirror `TerrainEvents._burn` (which is not called: its dabs are one circle, these
+  follow the stroke). `FireField` draws the mask (placeholder look: FlameAtlas cards on a
+  0.9 m jittered lattice, a MultiMesh per 10 m block, at most 1536 on a map; no LOD, lights,
+  glow or smoke) and is refreshed by `AuthoringEditor.refresh_fire`. Render job
+  `tools/render_jobs/jobs/fire_mask.json`.
 
 ## Live edits
 

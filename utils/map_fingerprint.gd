@@ -15,6 +15,7 @@ extends RefCounted
 ##
 ## Keys:
 ##   heights        the document's height samples: "<count> <sha prefix>".
+##   fire           the document's fire mask: "<burning samples> <sha prefix>", "" for none.
 ##   water          per body, by id: "<id> <kind> <depth> <level>".
 ##   falls          per fall (the falls mesh's curtain vertices grouped by the fall's height
 ##                  and lower level, which its UV2 carries): "<verts> <aabb>", sorted.
@@ -46,6 +47,7 @@ const CURTAIN_G_MAX := 0.25
 static func of(root: Node, doc: MapDocument) -> Dictionary:
 	var out := {
 		"heights": "",
+		"fire": "",
 		"water": [],
 		"falls": [],
 		"falls_count": 0,
@@ -57,6 +59,7 @@ static func of(root: Node, doc: MapDocument) -> Dictionary:
 	}
 	if doc != null:
 		out.heights = _heights(doc)
+		out.fire = _fire(doc)
 		out.water = _water(doc)
 	if root == null:
 		return out
@@ -133,6 +136,16 @@ static func hash_floats(values: PackedFloat32Array) -> String:
 
 static func _heights(doc: MapDocument) -> String:
 	return "%d %s" % [doc.heights.size(), hash_floats(doc.heights)]
+
+
+static func _fire(doc: MapDocument) -> String:
+	if not MapDocumentIO.has_fire(doc.fire_mask):
+		return ""
+	var burning := doc.fire_mask.size() - doc.fire_mask.count(0)
+	var ctx := HashingContext.new()
+	ctx.start(HashingContext.HASH_SHA256)
+	ctx.update(doc.fire_mask)
+	return "%d %s" % [burning, ctx.finish().hex_encode().substr(0, HASH_CHARS)]
 
 
 static func _water(doc: MapDocument) -> Array:

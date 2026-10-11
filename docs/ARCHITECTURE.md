@@ -1150,8 +1150,10 @@ rather than in `ASSET_PIPELINE.md`.
   and `props.json` (palette asset id -> `[lx, ly, lz, qx, qy, qz, qw, sx, sy, sz]` Y-up
   rows, the `tt_scatter_instances` format), optional `erase.png` (L8, > 127 = erased),
   optional `authoring/biomes.png` (R = biome slot, 0 none / index + 1; G = density) with
-  `authoring/biomes.json` (`{"biomes": [palette biome id, ...]}`), and optional painted
-  surfaces (below), and optional water (below). Unknown entries are ignored, so later
+  `authoring/biomes.json` (`{"biomes": [palette biome id, ...]}`), optional painted
+  surfaces (below), optional water (below), and optional `fire.png` (L8 persistent ground
+  fire intensity, 0 none, never all zero; drawn by `FireField`, painted by the Fire tool;
+  `docs/systems/map_document.md`). Unknown entries are ignored, so later
   phases add entries without a format bump.
 - **Size (measured 2026-10-09, 200 ft maps):** a fresh starting-cover map is 0.2-0.26 MB
   (about 3.7K scatter rows); a full-density grassland map is 1.37-1.48 MB (43K rows),

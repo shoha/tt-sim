@@ -29,6 +29,8 @@ extends RefCounted
 ##
 ## Water (P4-3, P4-4): `water` (WaterEditor) carves, paints and erases water (stroke_dab etc.);
 ## crossings (P4b-1): `crossings` (CrossingEditor), following sculpt and water edits (P4b-2).
+## Fire: `fire` (FireEditor) lays and puts out persistent ground fire (begin_fire_stroke, then
+## stroke_dab etc.), drawn by the map's FireField (refresh_fire).
 
 ## Emitted after every change to the map (strokes, props, undo, redo), for dirty tracking.
 signal edited
@@ -53,6 +55,9 @@ var rock_keeper: RockKeeper = null
 var heights: HeightEditor = null
 var water: WaterEditor = null
 var crossings: CrossingEditor = null
+## The fire edits, and the map's fire drawing (null without one).
+var fire: FireEditor = null
+var fire_field: FireField = null
 
 var _stroke: MaskStroke = null
 var _stroke_label: String = ""
@@ -76,6 +81,7 @@ static func create(
 		editor.terrain = root.get_node_or_null("AuthoredTerrain") as AuthoredTerrain
 		editor.scatter = root.get_node_or_null(MapSourceLoader.SCATTER_NODE) as AuthoredScatter
 		editor.props = root.get_node_or_null(MapSourceLoader.PROPS_NODE) as AuthoredScatter
+		editor.fire_field = root.get_node_or_null(FireField.NODE_NAME) as FireField
 		if doc.has_base_map:
 			editor.eraser = BaseScatterEraser.create(root, doc)
 		if is_instance_valid(editor.scatter) and is_instance_valid(editor.props):
@@ -85,6 +91,7 @@ static func create(
 	editor.heights = HeightEditor.create(editor)
 	editor.water = WaterEditor.create(editor)
 	editor.crossings = CrossingEditor.create(editor)
+	editor.fire = FireEditor.create(editor)
 	editor._rng.randomize()
 	return editor
 
@@ -123,7 +130,11 @@ func begin_stroke(mode: int, biome_id: String = "") -> bool:
 
 func is_stroking() -> bool:
 	return (
-		_stroke != null or heights.is_sculpting() or _surface != null or water.is_stroking()
+		_stroke != null
+		or heights.is_sculpting()
+		or _surface != null
+		or water.is_stroking()
+		or fire.is_stroking()
 	)
 
 
@@ -133,6 +144,9 @@ func is_stroking() -> bool:
 func stroke_dab(from: Vector3, to: Vector3, radius: float, seconds: float) -> void:
 	if water.is_stroking():
 		water.dab(from, to, radius)
+		return
+	if fire.is_stroking():
+		fire.dab(from, to, radius, seconds)
 		return
 	if heights.is_sculpting():
 		heights.dab(from, to, radius, seconds)
@@ -152,6 +166,9 @@ func stroke_dab(from: Vector3, to: Vector3, radius: float, seconds: float) -> vo
 ## Pushes this frame's changes to their consumers: mask changes to the ground, the scatter
 ## and the Blender scatter; height changes to the terrain, collision, plants and props.
 func flush() -> void:
+	if fire.is_stroking():
+		fire.flush()
+		return
 	if heights.is_sculpting():
 		heights.flush()
 		return
@@ -167,6 +184,8 @@ func flush() -> void:
 func end_stroke() -> bool:
 	if water.is_stroking():
 		return water.end_stroke()
+	if fire.is_stroking():
+		return fire.end()
 	if heights.is_sculpting():
 		return heights.end_stroke()
 	if _surface != null:
@@ -198,6 +217,9 @@ func cancel_stroke() -> void:
 	if water.is_stroking():
 		water.cancel_stroke()
 		return
+	if fire.is_stroking():
+		fire.cancel()
+		return
 	if heights.is_sculpting():
 		heights.cancel_stroke()
 		return
@@ -216,6 +238,27 @@ func cancel_stroke() -> void:
 ## Undo (`redo` false) or redo of a mask stroke (its MaskStroke diff), and a live mask edit.
 func apply_mask_diff(diff: Dictionary, redo: bool) -> void:
 	_refresh(MaskStroke.apply_diff(document, diff, redo))
+
+
+## Starts a Fire stroke (FireEditor): laying fire toward `target` (0..1 of the mask's 255), or
+## with `erase` putting it out. False when the map's ground is not the document's.
+func begin_fire_stroke(target: float, erase: bool) -> bool:
+	commit_prop_edit()
+	if is_stroking():
+		end_stroke()
+	finish_height_work()
+	return fire.begin(target, erase)
+
+
+## Undo (`redo` false) or redo of a fire stroke's mask diff (FireEditor).
+func apply_fire_diff(diff: Dictionary, redo: bool) -> void:
+	refresh_fire(MaskStroke.apply_diff(document, diff, redo))
+
+
+## Redraws the fire over the samples of `sample_rect` (nothing else reads the fire mask).
+func refresh_fire(sample_rect: Rect2i) -> void:
+	if is_instance_valid(fire_field):
+		fire_field.refresh(sample_rect)
 
 
 ## One update of every consumer for the samples of `sample_rect`.
@@ -400,7 +443,9 @@ func ground_height_at(point: Vector3) -> float:
 	var local := to_map(point)
 	var at := document.world_to_sample(Vector2(local.x, local.z))
 	var ground := TerrainMeshBuilder.collision_heights(document)
-	var y := ScatterGenerator.triangle_height(ground, document.samples_x(), document.samples_z(), at)
+	var y := ScatterGenerator.triangle_height(
+		ground, document.samples_x(), document.samples_z(), at
+	)
 	return to_world(Vector3(local.x, y, local.z)).y
 
 

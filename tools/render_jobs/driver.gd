@@ -390,6 +390,15 @@ func _stroke(step: Dictionary) -> bool:
 			# Again in the Water mode, whose brush may be narrower than the others'.
 			brush.set_radius(float(step.get("radius", 4.0)))
 			_state.ctrl = bool(step.get("ctrl", false))
+		elif mode == "fire":
+			# The Fire tool at an intensity tile ("embers", "flames", "blaze"); Ctrl at the
+			# press puts fire out.
+			var tiles := {
+				"embers": FireBrush.EMBERS, "flames": FireBrush.FLAMES, "blaze": FireBrush.BLAZE
+			}
+			c.call("_select_tool", FireTool.ID)
+			FireTool.of(brush).intensity = int(tiles.get(String(step.get("tile", "flames")), 176))
+			_state.ctrl = bool(step.get("ctrl", false))
 		else:
 			c.call("_select_tool", AuthoringPanel.TOOL_THIN)
 		_state.phase = 1

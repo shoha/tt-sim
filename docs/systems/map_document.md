@@ -28,6 +28,15 @@ system's map and the rules the code keeps (moved from `AGENTS.md` Key Convention
   that first. Unknown entries are ignored.
 - `LevelData.map_document` (`""` or `"map.ttmap"`) sits beside `map_path`. Use `has_map()`
   rather than testing `map_path` for "is this level playable".
+- Fire (2026-10-11, card F1): `MapDocument.fire_mask`, one intensity byte per height sample
+  (0 none), saved as `fire.png` (8-bit greyscale, cap 4 MB, no format bump). Read as untrusted:
+  the size is checked before the read, a wrong-sized or broken image is skipped with a warning
+  (the map loads without fire), any format is taken as greyscale, and an all-zero mask is
+  dropped on read and never written (`MapDocumentIO.has_fire`). The ash it leaves is a painted
+  surface (`surface_weights`), a separate layer. `MapFingerprint` carries a `fire` key. Drawn by
+  `FireField` (`scenes/terrain/fire_field.gd`), which `MapSourceLoader` adds to every map root
+  whose ground is the document's; where flames may stand (not wet, not steep) is derived there,
+  never saved.
 
 ## Runtime
 
@@ -53,7 +62,8 @@ Networking:
 
 Unit tests in `tests/unit/`: `test_map_document.gd`, `test_map_document_io.gd`,
 `test_map_document_validation.gd`, `test_map_document_surfaces.gd`,
-`test_map_document_water.gd`, `test_map_document_crossings.gd`, `test_level_map_streaming.gd`.
+`test_map_document_water.gd`, `test_map_document_crossings.gd`, `test_map_document_fire.gd`,
+`test_level_map_streaming.gd`.
 
 ## Open work
 

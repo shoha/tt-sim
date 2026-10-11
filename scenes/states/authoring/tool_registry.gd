@@ -11,7 +11,7 @@ extends RefCounted
 ## Contexts: a descriptor says whether it exists in authoring, in play, or in both
 ## (ToolDescriptor.AUTHORING, PLAY), and every list query takes the context it is for. Play
 ## lists Biome, Thin / Clear, Sculpt, Paint, Water and Bridge, the GM's live brushes in the
-## Events pane (PlayEvents); Place is authoring's alone.
+## Events pane (PlayEvents); Place and Fire (until card F2) are authoring's alone.
 ##
 ## The descriptors are stateless, so one set is made on first use and shared.
 
@@ -73,6 +73,7 @@ static func _make() -> Array[ToolDescriptor]:
 		PlaceTool.new(),
 		SculptTool.new(),
 		PaintTool.new(),
+		FireTool.new(),
 		WaterTool.new(),
 		BridgeTool.new(),
 	]
