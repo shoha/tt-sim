@@ -22,8 +22,9 @@ extends ForestFall
 ## second beside it on some, a spark drifts up from a few. On the ground a glowing ring runs out
 ## with the front (GroundBurn), small tongues standing on it where it passes (FRONT_TONGUES),
 ## charred ground left inside it until the ash lands. Billows of smoke (SmokePuffs) rise from
-## half the trees and in a short column over the middle: solid heaps of lit balls in the
-## crowns' soft two-tone read, breaking up as they age. Over the event's last SNAG_GO_S the
+## half the trees and in a short column over the middle: smoke crowns, each a cluster of small
+## painted puff cards built and lit the way the trees' crowns are, born about a crown across,
+## breaking up card by card as they age. Over the event's last SNAG_GO_S the
 ## charred snags shrink away (snag_transform) as the change lands.
 ##
 ## Colours are linear, as every puff's and shader constant's is: each is picked as the colour
@@ -87,15 +88,18 @@ const FRONT_WIDE := Vector2(0.45, 0.8)
 const FRONT_TALL := 1.3
 const FRONT_LIFE := Vector2(0.8, 1.15)
 ## When a tree's smoke rises (a share of its burn), the share of trees that smoke (none under
-## SMOKE_MIN_TALL metres), a billow's size against the crown and how fast it climbs (metres a
-## second).
+## SMOKE_MIN_TALL metres), a billow's size against the crown's width (it is born a little
+## smaller and spreads to about twice the crown, SmokePuffs.billow_size) and how fast it climbs
+## (metres a second).
 const SMOKE_AT := 0.65
 const SMOKE_CHANCE := 0.5
 const SMOKE_MIN_TALL := 2.5
-const SMOKE_SIZE := 1.15
+const SMOKE_SIZE := 1.0
 const SMOKE_RISE := 0.6
-## The column over the centre: its billows' start times (seconds).
+## The column over the centre: its billows' start times (seconds) and size against the trees'
+## mean height (about a crown's width; at four times the crowns it hung as balloons).
 const COLUMN_AT: Array[float] = [0.8, 1.9]
+const COLUMN_SIZE := 0.45
 ## Pools: every puff of one fire at once (flames: two tongues and a spark a tree, and the
 ## ground's tongues; smoke: a billow a tree and the column's).
 const FLAMES_PER_TREE := 3
@@ -400,7 +404,7 @@ func _kindle(tree: Dictionary, t: float) -> void:
 			_smoke.emit(
 				origin + Vector3(0.0, height * 0.85, 0.0),
 				_drift * 1.5 + Vector3(0.0, SMOKE_RISE + 0.3 * draws[5], 0.0),
-				maxf(width, height * 0.5) * SMOKE_SIZE,
+				width * SMOKE_SIZE,
 				2.6 + 0.5 * draws[4],
 				Color.WHITE
 			)
@@ -412,7 +416,7 @@ func _column(index: int) -> void:
 	_smoke.emit(
 		_middle + Vector3(0.0, _tall * (1.0 + 0.35 * index), 0.0),
 		_drift * 2.0 + Vector3(0.0, 0.7, 0.0),
-		_tall * (0.8 + 0.15 * index),
+		_tall * (COLUMN_SIZE + 0.08 * index),
 		3.4,
 		Color.WHITE
 	)
