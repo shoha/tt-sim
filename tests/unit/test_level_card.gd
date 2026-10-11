@@ -71,19 +71,22 @@ func test_setup_fills_name_caption_and_placeholder() -> void:
 func test_placeholder_paints_the_map_and_a_real_thumbnail_hides_it() -> void:
 	var card := LevelCard.new()
 	add_child_autofree(card)
-	card.setup(
-		{
-			"name": "sandy clearing",
-			"folder": "sandy_clearing",
-			"thumbnail": "",
-			"path": "user://x/a/",
-			"environment_preset": "outdoor_night",
-		}
+	(
+		card
+		. setup(
+			{
+				"name": "sandy clearing",
+				"folder": "sandy_clearing",
+				"thumbnail": "",
+				"path": "user://x/a/",
+				"environment_preset": "outdoor_night",
+			}
+		)
 	)
 	assert_true(card._placeholder.visible)
 	var paint := card._placeholder.material as ShaderMaterial
 	assert_eq(card._placeholder.mood(), PaintedBackdrop.Mood.NIGHT, "the backdrop's own mood")
-	var night := BackdropPaint.uniforms(BackdropPaint.look_of(PaintedBackdrop.Mood.NIGHT))
+	var night := BackdropPaint.uniforms(MapPlaceholder.look_for(PaintedBackdrop.Mood.NIGHT))
 	assert_eq(paint.get_shader_parameter(&"top_lch"), night.top_lch)
 	var initial := card._placeholder.get_node("Initial") as Label
 	assert_eq(initial.text, "S", "the map's initial, from its name")
@@ -97,40 +100,60 @@ func test_placeholder_paints_the_map_and_a_real_thumbnail_hides_it() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
-## A placeholder is its mood's gradient, leaning gently, with the map's initial: from its name,
-## or its key without one. The mood is the backdrop's for the map's preset (one table).
+## A placeholder is its mood's gradient a step deeper than the sky, leaning gently, with the
+## map's initial in the heading face at a heading's size: from its name, or its key without
+## one. The mood is the backdrop's for the map's preset (one table).
 func test_the_placeholder_is_a_gradient_with_the_maps_initial() -> void:
 	var placeholder := MapPlaceholder.new()
+	add_child_autofree(placeholder)
 	placeholder.paint("old_mill", "arctic", "Fen Crossing")
 	assert_eq(placeholder.mood(), PaintedBackdrop.mood_of("arctic"), "one table for both")
 	var paint := placeholder.material as ShaderMaterial
 	assert_gt(float(paint.get_shader_parameter(&"tilt")), 0.0, "a gentle diagonal")
 	var initial := placeholder.get_node("Initial") as Label
 	assert_eq(initial.text, "F", "the name's initial")
-	assert_eq(initial.theme_type_variation, &"H3", "Inter semibold, as a portrait's")
+	assert_eq(initial.theme_type_variation, &"Title", "the heading face (Fraunces)")
+	placeholder.size = Vector2(320, 180)
+	assert_eq(initial.label_settings.font_size, MapPlaceholder.INITIAL_SIZE, "a heading's size")
+	assert_between(MapPlaceholder.INITIAL_SIZE, 28, 32)
+	placeholder.size = Vector2(64, 36)
+	assert_lt(initial.label_settings.font_size, MapPlaceholder.INITIAL_SIZE, "smaller in a row")
 	placeholder.paint("old_mill", "outdoor_sunset")
 	assert_eq(placeholder.mood(), PaintedBackdrop.Mood.GOLDEN_HOUR)
 	assert_eq(initial.text, "O", "the key's initial with no name")
-	var golden := BackdropPaint.uniforms(BackdropPaint.look_of(PaintedBackdrop.Mood.GOLDEN_HOUR))
+	var golden := BackdropPaint.uniforms(MapPlaceholder.look_for(PaintedBackdrop.Mood.GOLDEN_HOUR))
 	assert_eq(paint.get_shader_parameter(&"low_lch"), golden.low_lch)
-	placeholder.free()
 
 
-## The initial reads on its picture in every mood: ink on the light skies, paper on the dark,
-## 4.5:1 or better at the middle and 3:1 at the edge of the stretch it stands over.
+## A placeholder is never a hole in the sky: every stop is the sky's own hue at least DEEPEN
+## darker in OKLCH lightness (deeper still where neither ink nor paper would read on it).
+func test_the_placeholder_is_a_step_deeper_than_the_sky() -> void:
+	for mood in PaintedBackdrop.Mood.size():
+		var sky := BackdropPaint.look_of(mood)
+		var picture := MapPlaceholder.look_for(mood)
+		for stop: String in sky:
+			var one := BackdropPaint.to_oklch(sky[stop])
+			var two := BackdropPaint.to_oklch(picture[stop])
+			var what := "mood %d %s" % [mood, stop]
+			assert_gte(one.x - two.x, MapPlaceholder.DEEPEN - 0.005, "%s: deeper" % what)
+			assert_lte(one.x - two.x, MapPlaceholder.DEEPEN_MAX + 0.005, "%s: not black" % what)
+			assert_almost_eq(two.z, one.z, 0.15, "%s: its hue" % what)
+
+
+## The initial reads on its picture in every mood, 4.5:1 or better across the stretch it
+## stands over, in one solid role: soft ink, ink or paper, never a dimmed colour.
 func test_the_placeholder_initial_reads_in_every_mood() -> void:
 	for mood in PaintedBackdrop.Mood.size():
-		var look := BackdropPaint.look_of(mood)
+		var look := MapPlaceholder.look_for(mood)
 		var ink := MapPlaceholder.ink_on(look)
-		for t: float in MapPlaceholder.INITIAL_SPAN:
-			var sky := BackdropPaint.colour_at(look, t)
-			var ratio := MapPlaceholder.contrast(ink, Color(sky.x, sky.y, sky.z))
-			var want := 4.5 if is_equal_approx(t, 0.5) else 3.0
-			assert_gte(ratio, want, "mood %d at %.1f: %.2f:1" % [mood, t, ratio])
+		assert_true(MapPlaceholder.INITIAL_INKS.has(ink), "mood %d: a solid role" % mood)
+		var span := MapPlaceholder.INITIAL_SPAN
+		var ratio := BackdropPaint.worst_contrast(look, ink, span[0], span[1])
+		assert_gte(ratio, 4.5, "mood %d: %.2f:1" % [mood, ratio])
 	var night := MapPlaceholder.new()
 	night.paint("moonwell", "outdoor_night", "Moonwell")
 	var letter := night.get_node("Initial") as Label
-	assert_eq(letter.label_settings.font_color, ThemeColors.PAPER, "paper on the night sky")
+	assert_eq(letter.label_settings.font_color, ThemeColors.PAPER, "paper on the deep night")
 	night.free()
 
 
@@ -270,8 +293,10 @@ func test_the_overflow_menu_sits_on_a_paper_disc() -> void:
 	# sky the placeholder paints under the corner the disc sits in).
 	var ink := card._menu_button.get_theme_color(&"icon_normal_color")
 	assert_gte(_contrast(ink, disc.bg_color), 4.5, "the dots on the disc")
-	var night: Vector3 = BackdropPaint.look_of(PaintedBackdrop.Mood.NIGHT).sky_top
-	assert_gte(_contrast(disc.bg_color, Color(night.x, night.y, night.z)), 3.0, "on a night picture")
+	var night: Vector3 = MapPlaceholder.look_for(PaintedBackdrop.Mood.NIGHT).sky_top
+	assert_gte(
+		_contrast(disc.bg_color, Color(night.x, night.y, night.z)), 3.0, "on a night picture"
+	)
 
 
 func _contrast(a: Color, b: Color) -> float:

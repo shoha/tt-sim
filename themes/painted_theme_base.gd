@@ -19,6 +19,10 @@ extends "res://themes/painted_theme_controls.gd"
 ## danger-confirm fill, `Ghost` the tertiary with no fill. Panels: the default PanelContainer
 ## is a `Sheet`; `Inset` is a recessed well.
 
+## A card grid's clear margin: room for a focus ring (4 px outside a card) to draw whole inside
+## the scroll clip.
+const RING_ROOM := 6
+
 
 func define_theme() -> void:
 	build_fonts()
@@ -82,6 +86,9 @@ func _define_labels() -> void:
 	)
 	define_variant_style("Body", "Label", {font = font_body, font_size = SIZE_BODY})
 	define_variant_style("Caption", "Label", caption)
+	# A caption standing on the sky (the title's version): the caption's size in ink, since the
+	# soft role reads on paper but not on every mood's sky.
+	define_variant_style("SkyCaption", "Label", inherit(caption, {font_color = text}))
 	# A value that differs from its default reads in the state role (lake: cool means is).
 	var in_state := {font_color = c(ThemeColors.STATE)}
 	define_variant_style(
@@ -146,14 +153,15 @@ func _define_buttons() -> void:
 	)
 	define_variant_style("Framed", "Button", framed)
 	var primary := _filled(
-		ThemeColors.ACCENT, ThemeColors.ACCENT_HOVER, ThemeColors.ACCENT_PRESS, ThemeColors.ON_ACCENT
+		ThemeColors.ACCENT,
+		ThemeColors.ACCENT_HOVER,
+		ThemeColors.ACCENT_PRESS,
+		ThemeColors.ON_ACCENT
 	)
 	define_variant_style("Primary", "Button", primary)
 	# Madder has one step: the press reads through the dropped shadow.
 	var danger := ThemeColors.DANGER_FILL
-	define_variant_style(
-		"Danger", "Button", _filled(danger, danger, danger, ThemeColors.ON_DANGER)
-	)
+	define_variant_style("Danger", "Button", _filled(danger, danger, danger, ThemeColors.ON_DANGER))
 	var clear := Color(c(ThemeColors.SURFACE), 0.0)
 	var bare := box(clear, RADIUS_CONTROL, CONTROL_PAD_H, CONTROL_PAD_V)
 	define_variant_style(
@@ -164,6 +172,19 @@ func _define_buttons() -> void:
 			inherit(bare, {bg_color = c(ThemeColors.SURFACE_HOVER)}),
 			inherit(bare, {bg_color = c(ThemeColors.SURFACE_PRESS)}),
 			ThemeColors.TEXT_SOFT,
+			ThemeColors.TEXT
+		)
+	)
+	# A labelled tool standing on the sky (the title's Avatars, Settings and Quit game): no fill
+	# at rest and ink words and icon, which keep 4.5:1 anywhere on every mood's sky
+	# (BackdropPaint.ink_reads_on); the pointer puts paper under them, the press a step deeper.
+	define_variant_style(
+		"SkyButton",
+		"Button",
+		_button(
+			bare,
+			inherit(bare, {bg_color = c(ThemeColors.SURFACE)}),
+			inherit(bare, {bg_color = c(ThemeColors.SURFACE_HOVER)}),
 			ThemeColors.TEXT
 		)
 	)
@@ -199,9 +220,7 @@ func _define_flat_buttons() -> void:
 	)
 	# On a picture (a level card's overflow menu): the same button on a small raised disc with a
 	# pencil edge, so its glyph reads over a dark thumbnail as over a light one.
-	var disc := box(
-		c(ThemeColors.SURFACE_RAISED), RADIUS_PILL, 4, 4, edge(1, c(ThemeColors.EDGE))
-	)
+	var disc := box(c(ThemeColors.SURFACE_RAISED), RADIUS_PILL, 4, 4, edge(1, c(ThemeColors.EDGE)))
 	define_variant_style(
 		"IconButtonDisc",
 		"Button",
@@ -217,7 +236,11 @@ func _define_flat_buttons() -> void:
 	# the ring is focus (I1), so a picked tile that also has focus shows both, the fill and the
 	# focus ring 4 px outside it.
 	var tile := box(
-		c(ThemeColors.SURFACE_RAISED), RADIUS_CONTROL, SPACE_1, SPACE_1, edge(1, c(ThemeColors.EDGE))
+		c(ThemeColors.SURFACE_RAISED),
+		RADIUS_CONTROL,
+		SPACE_1,
+		SPACE_1,
+		edge(1, c(ThemeColors.EDGE))
 	)
 	var picked: Dictionary = inherit(
 		tile, {bg_color = c(ThemeColors.SELECTED), border_color = c(ThemeColors.SELECTED)}
@@ -230,7 +253,9 @@ func _define_flat_buttons() -> void:
 	for key: String in ["icon_pressed_color", "icon_hover_pressed_color"]:
 		tile_style[key] = c(ThemeColors.ON_SELECTED)
 	var picked_hover := c(ThemeColors.SELECTED_HOVER)
-	tile_style.hover_pressed = inherit(picked, {bg_color = picked_hover, border_color = picked_hover})
+	tile_style.hover_pressed = inherit(
+		picked, {bg_color = picked_hover, border_color = picked_hover}
+	)
 	tile_style.font_size = SIZE_CAPTION
 	tile_style.icon_max_width = 24
 	tile_style.h_separation = SPACE_1
@@ -328,7 +353,7 @@ func _define_panels() -> void:
 	define_style("PanelContainer", {panel = sheet})
 	define_variant_style("Sheet", "PanelContainer", {panel = sheet})
 	# A plaque: a few words that stand on the painted backdrop (the room's heading and code row,
-	# the map's name under its picture, the title's "Your maps") on paper of their own, the
+	# the map's name under its picture, the title's Play together card) on paper of their own, the
 	# sheet's surface and trim at a card's radius with a control's padding. Crisp, so the words
 	# hold their contrast in every mood without a haze over the painting.
 	var paper_trim: Dictionary = inherit(edge(1, c(ThemeColors.EDGE)), lift())
@@ -385,6 +410,14 @@ func _define_containers() -> void:
 	define_style("BoxContainer", {separation = SPACE_1})
 	define_variant_style("BoxContainerTight", "BoxContainer", {separation = SPACE_1})
 	define_variant_style("BoxContainerSpaced", "BoxContainer", {separation = SPACE_3})
+	# The title's wider steps: the grid and the map panel apart, the wordmark and its tools apart.
+	define_variant_style("BoxContainerRoomy", "BoxContainer", {separation = SPACE_4})
+	define_variant_style("BoxContainerApart", "BoxContainer", {separation = SPACE_6})
+	# Facts on a line that flows onto the next when it is full (the map panel's source, size,
+	# tokens and last played).
+	define_variant_style(
+		"FactsFlow", "HFlowContainer", {h_separation = SPACE_3, v_separation = SPACE_1}
+	)
 	# Label and value pairs (the import check's facts): the labels' column a clear step from
 	# the values, the rows a little apart.
 	define_variant_style(
@@ -392,18 +425,57 @@ func _define_containers() -> void:
 	)
 	define_style(
 		"MarginContainer",
-		{margin_left = SPACE_2, margin_top = SPACE_2, margin_right = SPACE_2, margin_bottom = SPACE_2}
+		{
+			margin_left = SPACE_2,
+			margin_top = SPACE_2,
+			margin_right = SPACE_2,
+			margin_bottom = SPACE_2
+		}
 	)
 	define_variant_style(
 		"TabContentMargin",
 		"MarginContainer",
-		{margin_left = SPACE_4, margin_top = SPACE_3, margin_right = SPACE_4, margin_bottom = SPACE_3}
+		{
+			margin_left = SPACE_4,
+			margin_top = SPACE_3,
+			margin_right = SPACE_4,
+			margin_bottom = SPACE_3
+		}
 	)
 	# A card's text block, inside the card's own 4 px inset: 12 px from its sides and bottom.
 	define_variant_style(
 		"CardText",
 		"MarginContainer",
-		{margin_left = SPACE_2, margin_top = SPACE_1, margin_right = SPACE_2, margin_bottom = SPACE_2}
+		{
+			margin_left = SPACE_2,
+			margin_top = SPACE_1,
+			margin_right = SPACE_2,
+			margin_bottom = SPACE_2
+		}
+	)
+	# The card grid's ring room (CardGrid's margins, below) given to what lines up with its
+	# cards: the title's top bar at its start, the map panel's column above and below.
+	define_variant_style(
+		"RingRoomStart",
+		"MarginContainer",
+		{margin_left = RING_ROOM, margin_top = 0, margin_right = 0, margin_bottom = 0}
+	)
+	define_variant_style(
+		"RingRoomEnds",
+		"MarginContainer",
+		{margin_left = 0, margin_top = RING_ROOM, margin_right = 0, margin_bottom = RING_ROOM}
+	)
+	# The map panel's words and actions in from the paper's sides, room for a field's well to
+	# reach out round its words; the foot under the actions.
+	define_variant_style(
+		"PanelText",
+		"MarginContainer",
+		{margin_left = SPACE_3, margin_top = 0, margin_right = SPACE_3, margin_bottom = 0}
+	)
+	define_variant_style(
+		"PanelTextFoot",
+		"MarginContainer",
+		{margin_left = SPACE_3, margin_top = 0, margin_right = SPACE_3, margin_bottom = SPACE_3}
 	)
 	# Dividers are DIVIDER thick: a 1 px line at 1280x720 falls under a physical pixel.
 	var line := {type = "stylebox_line", color = c(ThemeColors.EDGE), thickness = DIVIDER}
@@ -414,7 +486,7 @@ func _define_containers() -> void:
 	define_variant_style("PropertyRow", "HBoxContainer", {separation = SPACE_4})
 	# A card grid scrolls, so it clips: its clear panel's margins keep the cards in from that
 	# edge far enough for a focus ring (4 px outside a card) to draw whole.
-	var ring_room := box(Color(c(ThemeColors.SURFACE), 0.0), 0, 6, 6)
+	var ring_room := box(Color(c(ThemeColors.SURFACE), 0.0), 0, RING_ROOM, RING_ROOM)
 	define_variant_style("CardGrid", "ScrollContainer", {panel = ring_room})
 
 
@@ -467,9 +539,7 @@ func _define_wash_card() -> void:
 		"WashTitleQuiet", "Label", {font = font_title, font_size = SIZE_TITLE, font_color = quiet}
 	)
 	define_variant_style(
-		"WashCaptionQuiet",
-		"Label",
-		{font = font_label, font_size = SIZE_LABEL, font_color = quiet}
+		"WashCaptionQuiet", "Label", {font = font_label, font_size = SIZE_LABEL, font_color = quiet}
 	)
 	var empty := {type = "stylebox_empty"}
 	var bare := {
@@ -532,9 +602,7 @@ func _define_wash_card() -> void:
 	)
 	# Join is the one fill in Join mode: persimmon with paper words, its paper rim parting it
 	# from the lake (the two fills are close in value; the rim and the hue carry the edge).
-	var join := box(
-		c(ThemeColors.ACCENT), RADIUS_PILL, CONTROL_PAD_H, CONTROL_PAD_V, edge(2, on)
-	)
+	var join := box(c(ThemeColors.ACCENT), RADIUS_PILL, CONTROL_PAD_H, CONTROL_PAD_V, edge(2, on))
 	var join_style := _button(
 		join,
 		inherit(join, {bg_color = c(ThemeColors.ACCENT_HOVER)}),
@@ -566,7 +634,9 @@ func _button(
 	hover_text: StringName = &""
 ) -> Dictionary:
 	var flat_disabled: Dictionary = inherit(
-		normal, edge(0, c(ThemeColors.EDGE)), {bg_color = c(ThemeColors.SURFACE_INSET), shadow_size = 0}
+		normal,
+		edge(0, c(ThemeColors.EDGE)),
+		{bg_color = c(ThemeColors.SURFACE_INSET), shadow_size = 0}
 	)
 	var style := {
 		normal = normal,

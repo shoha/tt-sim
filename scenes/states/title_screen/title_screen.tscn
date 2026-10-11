@@ -24,7 +24,12 @@ layout_mode = 2
 mouse_filter = 2
 theme_type_variation = &"BoxContainerSpaced"
 
-[node name="TopBar" type="HBoxContainer" parent="Hub/Stack"]
+[node name="TopMargin" type="MarginContainer" parent="Hub/Stack"]
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"RingRoomStart"
+
+[node name="TopBar" type="HBoxContainer" parent="Hub/Stack/TopMargin"]
 unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 2

@@ -1,10 +1,11 @@
 extends GutTest
 
-## The title is the library: the Play together card at the top bar's right end with Avatars,
-## Settings and Quit beside it; the maps as cards, the most recently played first, after the
-## New map card; the selected map's detail strip under its row, whose Play, Host with this map
-## and Edit map reach Root through the title's signals. Host on the card opens a room with
-## nothing on its shelf, over an empty library too, where New map is the only card.
+## The title is the library: the wordmark and its tools at the top bar's left, the Play together
+## card at its right end; the maps as cards, the most recently played first, after the New map
+## card; the selected map in the panel pinned at the grid's right, the same panel for a Bundled
+## map, whose Play, Host with this map and Edit map reach Root through the title's signals. Host
+## on the card opens a room with nothing on its shelf, over an empty library too, where New map
+## is the only card.
 
 const SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
 
@@ -41,25 +42,34 @@ func before_each() -> void:
 	_plays = {}
 
 
-## The top bar: the wordmark at the left, and at the right end Avatars, Settings, Quit and the
-## Play together card on one plaque (the card moved out of the old column); no left column.
+## The top bar: the wordmark at the left with Avatars, Settings and Quit game beside it in one
+## row of quiet labelled tools on the sky, and the Play together card on its paper at the right
+## end, Quit well away from Host; no plaque under the wordmark or the tools.
 func test_the_top_bar_holds_the_card_and_the_tools() -> void:
 	_levels = [_info("new", "New Camp", 200)]
 	var title := _title()
 	var bar := title.get_node("%TopBar") as HBoxContainer
-	assert_eq(bar.get_child(bar.get_child_count() - 1), title.tools_plaque, "at the right end")
-	assert_true(title.tools_plaque.is_ancestor_of(title.play_together))
-	assert_true(title.tools_plaque.is_ancestor_of(title.quit_button))
-	assert_true(title.tools_plaque.is_ancestor_of(title.settings_button))
-	assert_eq(bar.get_child(0), title.wordmark_plaque)
-	assert_true(title.wordmark_plaque.is_ancestor_of(title.version_label))
+	assert_eq(bar.get_child(bar.get_child_count() - 1), title.play_plaque, "at the right end")
+	assert_true(title.play_plaque.is_ancestor_of(title.play_together))
+	assert_eq(bar.get_child(0), title.masthead)
+	for button: Button in [title.avatars_button, title.settings_button, title.quit_button]:
+		assert_true(title.masthead.is_ancestor_of(button), "%s by the wordmark" % button.text)
+		assert_eq(button.theme_type_variation, &"SkyButton", "%s: a quiet tool" % button.text)
+	assert_eq(title.settings_button.get_parent(), title.quit_button.get_parent(), "one row")
+	assert_true(title.masthead.is_ancestor_of(title.version_label))
 	assert_null(title.get_node_or_null("%LeftColumn"), "the column is gone")
 	assert_eq(title.quit_button.text, TitleScreen.QUIT)
 	assert_eq(title.quit_button.icon, IconButton.load_icon(TitleScreen.QUIT_ICON))
+	await wait_process_frames(3)
+	var gap := title.play_together.get_global_rect().position.x
+	gap -= title.quit_button.get_global_rect().end.x
+	assert_gt(gap, 200.0, "Quit away from Host")
 
 
 ## Room first: Host opens a room over an empty library, where New map is the only card,
-## larger, centred, and captioned to make a first map or drop one in; no strip.
+## larger, centred, and captioned to make a first map or drop one in; no panel, the grid takes
+## the whole width. New map has a map card's anatomy: a solid paper face with one ink glyph,
+## its name line, and Generate and Import... in its caption band.
 func test_an_empty_library_is_the_new_map_card_alone() -> void:
 	_levels = []
 	var title := _title()
@@ -71,12 +81,19 @@ func test_an_empty_library_is_the_new_map_card_alone() -> void:
 	assert_true(title.new_map_card.is_empty_library())
 	assert_eq(title.new_map_card.caption.text, NewMapCard.EMPTY_CAPTION)
 	assert_eq(title.new_map_card.custom_minimum_size.x, NewMapCard.EMPTY_WIDTH, "larger")
-	assert_false(title.strip.is_visible_in_tree(), "no map, no strip")
+	assert_false(title.map_panel.is_visible_in_tree(), "no map, no panel")
+	assert_false(title.panel_column.visible, "the grid takes the width")
 	var flow := title.new_map_card.get_parent() as HFlowContainer
 	assert_eq(flow.alignment, FlowContainer.ALIGNMENT_CENTER)
-	var sketch := title.new_map_card.picture
-	assert_null(sketch.get_node_or_null("Placeholder"), "a sketch on blank paper, not a map")
-	assert_eq(title.new_map_card.heading.theme_type_variation, &"H2", "the heading's face")
+	var face := title.new_map_card.picture
+	assert_null(face.get_node_or_null("Placeholder"), "a paper face, not a map")
+	assert_eq(face.get_child_count(), 1, "one glyph on it")
+	assert_eq(title.new_map_card.glyph.texture, IconButton.load_icon(NewMapCard.GLYPH))
+	assert_eq(title.new_map_card.heading.theme_type_variation, &"Body", "a card's name line")
+	assert_true(title.new_map_card.caption.visible, "the first-map line, alone")
+	await wait_process_frames(3)
+	var picture := face.size
+	assert_almost_eq(picture.x / picture.y, LevelCard.THUMB_ASPECT, 0.02, "16:9, as a map's")
 	title.new_map_card.generate()
 	assert_signal_emitted(title, "build_map_requested")
 
@@ -94,52 +111,88 @@ func test_a_library_of_bundled_maps_offers_them_under_new_map() -> void:
 	var heading := title.grid._bundled_heading
 	assert_true(heading.visible)
 	assert_eq(title.grid._heading_words.text, LevelGrid.EMPTY_HEADING)
-	assert_eq(title.grid._heading_words.theme_type_variation, &"H2", "a heading, not a pill")
+	assert_eq(title.grid._heading_words.theme_type_variation, &"Heading", "words, not a pill")
+	assert_null(heading.get_node_or_null("Plaque"), "no plaque under the words")
+	assert_eq(title.grid.headings().size(), 1, "no Your maps over an empty library")
 	assert_gt(heading.get_index(), title.new_map_card.get_index())
 	assert_eq(title.selected_level(), {}, "New map leads; nothing selected")
-	assert_false(title.strip.is_visible_in_tree())
+	assert_false(title.map_panel.is_visible_in_tree())
 
 
-## The New map card leads the grid; the maps follow the most recently played or edited first,
-## and the head of the library is selected with its strip open directly under its row.
+## The New map card leads the grid under "Your maps"; the maps follow the most recently played
+## or edited first, and the head of the library is selected, shown in the panel pinned at the
+## right of the grid (not in the grid, not a modal).
 func test_the_library_orders_by_play_and_opens_the_head() -> void:
 	_levels = [_info("old", "Old Camp", 100), _info("mid", "Mid Camp", 200)]
 	_plays = {"old": 300}
 	var title := _title()
 	var flow := title.new_map_card.get_parent()
-	assert_eq(title.new_map_card.get_index(), 0, "New map first")
+	assert_eq(title.grid._own_heading.get_index(), 0, "Your maps first")
+	assert_eq(title.new_map_card.get_index(), 1, "then New map")
+	assert_eq(title.grid.headings()[0].text, LevelGrid.OWN_HEADING)
 	assert_eq(title.grid._cards[0].level_info.name, "Old Camp", "played last, so first")
 	assert_eq(title.selected_level()["name"], "Old Camp")
-	assert_true(title.strip.is_visible_in_tree())
-	assert_eq(title.strip.name_edit.text, "Old Camp")
-	assert_eq(title.strip.played_label.text.begins_with("Played"), true)
-	var line := title.strip.get_parent()
-	assert_eq(line.get_parent(), flow, "on a line of the grid, not a modal")
-	assert_gt(line.get_index(), title.grid._cards[0].get_index())
+	assert_true(title.map_panel.is_visible_in_tree())
+	assert_eq(title.map_panel.name_label.text, "Old Camp")
+	assert_eq(title.map_panel.played_label.text.begins_with("Played"), true)
+	assert_false(flow.is_ancestor_of(title.map_panel), "not in the grid")
+	assert_eq(title.map_panel.get_parent(), title.panel_column)
 	assert_eq(title.grid._cards[0]._caption.text.begins_with("Played"), true, "the sort's date")
 
 
-## The strip's actions reach Root as the column's did: Play solo with the map, Host with this
+## The panel's actions reach Root as the strip's did: Play solo with the map, Host with this
 ## map with it (a room with the map on its shelf), Edit map with it.
-func test_the_strip_acts_on_the_selected_map() -> void:
+func test_the_panel_acts_on_the_selected_map() -> void:
 	_levels = [_info("old", "Old Camp", 100), _info("new", "New Camp", 200)]
 	var title := _title()
 	watch_signals(title)
 	title.grid._cards[1]._on_pressed()
 	var info := title.selected_level()
 	assert_eq(info.name, "Old Camp")
-	title.strip.play_button.pressed.emit()
-	assert_signal_emitted_with_parameters(title, "play_solo_requested", [title.strip.info])
-	title.strip.host_button.pressed.emit()
-	assert_signal_emitted_with_parameters(title, "host_game_requested", [title.strip.info])
-	title.strip.edit_button.pressed.emit()
-	assert_signal_emitted_with_parameters(title, "edit_map_requested", [title.strip.info])
+	var panel := title.map_panel
+	panel.play_button.pressed.emit()
+	assert_signal_emitted_with_parameters(title, "play_solo_requested", [panel.info])
+	panel.host_button.pressed.emit()
+	assert_signal_emitted_with_parameters(title, "host_game_requested", [panel.info])
+	panel.edit_button.pressed.emit()
+	assert_signal_emitted_with_parameters(title, "edit_map_requested", [panel.info])
 	var opened: Array[String] = []
 	var on_open := func(path: String) -> void: opened.append(path)
 	EventBus.open_editor_requested.connect(on_open)
-	title.strip.action_requested.emit(title.strip.info, MapDetailStrip.ACTION_SET_UP)
+	panel.action_requested.emit(panel.info, MapPanel.ACTION_SET_UP)
 	EventBus.open_editor_requested.disconnect(on_open)
 	assert_eq(opened, [String(info.path)] as Array[String], "Set up tokens from its menu")
+
+
+## One place and one shape for a map's details, whatever its source: a Bundled map selected
+## shows the same panel in the same place and width, the same fields in the same order as plain
+## text (no empty field, no Add details), and none of the actions it cannot take.
+func test_a_bundled_map_shows_the_same_panel_with_no_edit_actions() -> void:
+	var bundled := _info("ship", "Ship", 100)
+	bundled.map_path = "res://maps/ship.glb"
+	_levels = [_info("camp", "Camp", 300), bundled]
+	var title := _title()
+	await wait_seconds(TitleScreen.ENTRANCE_DURATION + 6 * TitleScreen.ENTRANCE_STAGGER + 0.1)
+	var panel := title.map_panel
+	assert_true(panel.is_editable(), "the player's own map")
+	var own := panel.get_global_rect()
+	title.grid.card_for(String(bundled.path))._on_pressed()
+	await wait_process_frames(4)
+	assert_eq(title.selected_level().folder, "ship")
+	assert_true(panel.is_visible_in_tree(), "the same panel")
+	assert_eq(panel.get_global_rect().position, own.position, "in the same place")
+	assert_eq(panel.size.x, own.size.x, "at the same width")
+	assert_eq(panel.size.x, MapPanel.WIDTH)
+	assert_false(panel.is_editable())
+	assert_eq(panel.name_label.text, "Ship")
+	assert_eq(panel.name_label.focus_mode, Control.FOCUS_NONE, "plain text")
+	assert_false(panel.description_label.visible, "no empty field")
+	assert_false(panel.add_details_button.visible, "nothing to add to")
+	assert_false(panel.edit_button.visible, "no Edit map")
+	assert_false(panel.reload_button.visible, "no Reload from Blender")
+	assert_false(panel.menu_items().has(MapPanel.MENU_REPLACE), "no Replace map file...")
+	assert_eq(panel.source_label.text, "Bundled")
+	assert_true(panel.play_button.visible and panel.host_button.visible)
 
 
 ## The hub stands on the painted backdrop in the selected map's mood, morning with none and

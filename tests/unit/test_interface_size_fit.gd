@@ -9,8 +9,9 @@ extends GutTest
 ## The room (RoomScreen) and the room drawer over a table are walked from a sample summary.
 ##
 ## On the canvas is not enough where panels overlap: the input hint bar must never lie under
-## an open drawer (_assert_uncovered), and the library's selected map and its detail strip must
-## be in the grid's view as it opens, on 1366x768 at Auto (1.35, an 800 px canvas) too.
+## an open drawer (_assert_uncovered), and the library's selected map must be in the grid's view
+## as it opens, with its panel pinned at the grid's right, Play in view, at least three columns
+## of cards beside it, on 1366x768 at Auto (1.35, an 800 px canvas) too.
 
 const CANVAS := Vector2(1280.0, 720.0)
 ## The canvas of 720p at Auto (1.40) and of 1366x768 at Auto (1.35).
@@ -99,9 +100,9 @@ func test_title_screen_fits_after_a_resize_mid_entrance() -> void:
 
 ## The library on 1280x720 (150% on 1080p), 1366x768 at Auto (exactly 800 px tall), 720p at
 ## Auto and 1080p: the top bar on the canvas with the Play together card at its full size on
-## its plaque and Resume 4 px under it, and the selected map's row and its detail strip in view
-## in the grid without scrolling; with Advanced open on New map and a custom size, and over an
-## empty library, everything still lies on the canvas.
+## its plaque and Resume 4 px under it, the selected map's card in view in the grid and its
+## panel in place; with Advanced open on New map and a custom size, and over an empty library,
+## everything still lies on the canvas.
 func test_the_library_fits_by_measurement() -> void:
 	for canvas in [Vector2i(CANVAS), CANVAS_768P_AUTO, CANVAS_720P_AUTO, Vector2i(1920, 1080)]:
 		_host.size = canvas
@@ -115,17 +116,19 @@ func test_the_library_fits_by_measurement() -> void:
 		title.new_map_card.set_advanced(true)
 		title.new_map_card.size_field.tiles.selection_changed.emit(NewMapCard.SIZE_CUSTOM)
 		title.new_map_card.width_box.value = 300
-		await _assert_fits("%s, Advanced open" % what, title.new_map_card.size_line, Vector2(canvas))
+		await _assert_fits(
+			"%s, Advanced open" % what, title.new_map_card.size_line, Vector2(canvas)
+		)
 		title.grid.provider = func() -> Array: return []
 		title.grid.refresh()
 		await _assert_fits("%s, empty" % what, title.new_map_card, Vector2(canvas))
 		title.free()
 
 
-## At 720p (Auto) and 1280x720 a click on a map in the second row scrolls the grid so that row
-## and its whole strip are in view, Play among them; the strip is at most 960 wide and stands
-## under its card inside the grid. Opening Advanced and typing in it moves no card.
-func test_a_second_row_selection_shows_its_strip() -> void:
+## At 720p (Auto) and 1280x720 a click on a map in the second row scrolls the grid so its card
+## is in view, and its details show in the panel, which stays where it stood. Opening Advanced
+## and typing in it moves no card.
+func test_a_second_row_selection_shows_in_the_panel() -> void:
 	for canvas in [CANVAS_720P_AUTO, Vector2i(CANVAS)]:
 		_host.size = canvas
 		var title := TITLE_SCENE.instantiate() as TitleScreen
@@ -142,16 +145,13 @@ func test_a_second_row_selection_shows_its_strip() -> void:
 		_host.add_child(title)
 		var what := "a second-row map on a %s canvas" % str(canvas)
 		await _assert_fits(what, title.quit_button, Vector2(canvas))
+		var panel := _drawn_rect(title.map_panel)
 		var card := title.grid._cards[4]
 		card._on_pressed()
 		await wait_process_frames(6)
 		_assert_library_shows(what, title)
-		var strip := _drawn_rect(title.strip)
-		var grid := _drawn_rect(title.grid).grow(SLACK_PX)
-		assert_true(strip.size.x <= LevelGrid.DETAIL_MAX_WIDTH + SLACK_PX, "%s: 960" % what)
-		assert_true(grid.encloses(strip), "%s: the strip inside the grid" % what)
-		var centre := _drawn_rect(card).get_center().x
-		assert_true(strip.position.x <= centre and centre <= strip.end.x, "%s: under it" % what)
+		assert_eq(title.map_panel.name_label.text, "Map 4")
+		assert_eq(_drawn_rect(title.map_panel).position, panel.position, "%s: in place" % what)
 		var rests := title.grid._cards.map(func(c: LevelCard) -> Rect2: return c.get_global_rect())
 		title.new_map_card.set_advanced(true)
 		title.new_map_card.size_field.tiles.selection_changed.emit(NewMapCard.SIZE_CUSTOM)
@@ -292,20 +292,30 @@ func _assert_card_whole(what: String, title: TitleScreen) -> void:
 	var pill := _drawn_rect(title.play_together.pill)
 	assert_almost_eq(pill.size.x, PlayTogetherCard.CARD_SIZE.x, SLACK_PX, "%s: card width" % what)
 	assert_almost_eq(pill.size.y, PlayTogetherCard.CARD_SIZE.y, SLACK_PX, "%s: card height" % what)
-	var plaque := _drawn_rect(title.tools_plaque)
+	var plaque := _drawn_rect(title.play_plaque)
 	assert_true(plaque.encloses(pill), "%s: the card on its plaque" % what)
 
 
-## The selected map's card and its detail strip lie inside the grid's view as it opens (the
-## grid scrolls to them), the strip's Play among them.
+## The selected map's card lies inside the grid's view as it opens (the grid scrolls to it); its
+## panel stands at the grid's right, MapPanel.WIDTH wide, its right edge on the Play together
+## plaque's, its top on the cards', its Play in view; three columns of cards or more beside it.
 func _assert_library_shows(what: String, title: TitleScreen) -> void:
 	var view := _drawn_rect(title.grid).grow(SLACK_PX)
 	var card := title.grid.card_for(String(title.selected_level().get("path", "")))
 	assert_not_null(card, "%s: a map selected" % what)
-	assert_true(title.strip.is_visible_in_tree(), "%s: its strip" % what)
-	for part: Control in [card, title.strip, title.strip.play_button]:
-		var shown := _drawn_rect(part)
-		assert_true(view.encloses(shown), "%s: %s in view %s of %s" % [what, part.name, shown, view])
+	var shown := _drawn_rect(card)
+	assert_true(view.encloses(shown), "%s: the card in view %s of %s" % [what, shown, view])
+	assert_gte(title.grid.per_line(), 3, "%s: three columns or more" % what)
+	var panel_rect := _drawn_rect(title.map_panel)
+	assert_true(title.map_panel.is_visible_in_tree(), "%s: its panel" % what)
+	assert_almost_eq(panel_rect.size.x, MapPanel.WIDTH, SLACK_PX, "%s: the panel's width" % what)
+	assert_gt(panel_rect.position.x, view.end.x - SLACK_PX, "%s: right of the grid" % what)
+	var plaque := _drawn_rect(title.play_plaque)
+	assert_almost_eq(panel_rect.end.x, plaque.end.x, SLACK_PX, "%s: under the card's end" % what)
+	var cards_top := view.position.y + TitleScreen.RING_ROOM + SLACK_PX
+	assert_almost_eq(panel_rect.position.y, cards_top, 1.0, "%s: on the cards' top" % what)
+	var play := _drawn_rect(title.map_panel.play_button)
+	assert_true(panel_rect.grow(SLACK_PX).encloses(play), "%s: Play in the panel" % what)
 
 
 ## The room as the GM sees it: four players, three maps (one long name), one selected.
@@ -519,7 +529,9 @@ func test_toasts_fit() -> void:
 	var toasts := TOASTS_SCENE.instantiate()
 	_host.add_child(toasts)
 	toasts.show_toast("Map saved", ToastContainer.ToastType.SUCCESS, 30.0)
-	toasts.show_toast("Removed “Marigold”", ToastContainer.ToastType.INFO, 30.0, "Undo", func(): pass)
+	toasts.show_toast(
+		"Removed “Marigold”", ToastContainer.ToastType.INFO, 30.0, "Undo", func(): pass
+	)
 	var refusal: String = preload("res://scenes/root.gd").authoring_refusal(null, true)
 	toasts.show_toast(refusal, ToastContainer.ToastType.WARNING, 30.0)
 	toasts.show_toast(MapLoadError.text("", "Mossy Hollow"), ToastContainer.ToastType.ERROR, 30.0)
@@ -559,7 +571,9 @@ func test_a_long_hint_row_wraps_inside_the_canvas() -> void:
 	var drawer := play.get_node("GameplayMenu").get("level_edit_panel") as LevelEditPanel
 	drawer.initialize(LevelData.new())
 	var hints := _play_hints()
-	hints.set_tool_hints(MeasureTool.hints_for(MeasureTool.Mode.LINE, MeasureTool.State.PLACING_START))
+	hints.set_tool_hints(
+		MeasureTool.hints_for(MeasureTool.Mode.LINE, MeasureTool.State.PLACING_START)
+	)
 	await _assert_fits("the measure hint row", _backdrop(hints))
 	var bar := _drawn_rect(_backdrop(hints))
 	assert_true(Rect2(Vector2.ZERO, CANVAS).encloses(bar), "the row on the canvas: %s" % bar)
@@ -587,7 +601,7 @@ func _sheet(layer: Node) -> Control:
 	return layer.get_node("CenterContainer/PanelContainer") as Control
 
 
-## The title with one saved level selected, so its detail strip shows, and two saved
+## The title with one saved level selected, so its map panel shows, and two saved
 ## sessions, so the Resume entry shows with its older-sessions menu.
 func _title() -> TitleScreen:
 	var title := TITLE_SCENE.instantiate() as TitleScreen
@@ -624,16 +638,19 @@ func _tiles(field: TileField) -> Array[Control]:
 func _play_hints() -> InputHints:
 	var hints := HINTS_SCENE.instantiate() as InputHints
 	_host.add_child(hints)
-	hints.set_hints(
-		[
-			{"key": InputProfile.label(&"pause"), "action": "Pause"},
-			{"key": InputProfile.label(&"wasd"), "action": "Pan"},
-			{"key": InputProfile.label(&"zoom"), "action": "Zoom"},
-			{"key": InputProfile.label(&"reset_camera"), "action": "Reset camera"},
-			{"key": InputProfile.label(&"measure"), "action": "Measure"},
-			{"key": InputProfile.label(&"grid"), "action": "Grid"},
-			{"key": "F1", "action": "Help"},
-		]
+	(
+		hints
+		. set_hints(
+			[
+				{"key": InputProfile.label(&"pause"), "action": "Pause"},
+				{"key": InputProfile.label(&"wasd"), "action": "Pan"},
+				{"key": InputProfile.label(&"zoom"), "action": "Zoom"},
+				{"key": InputProfile.label(&"reset_camera"), "action": "Reset camera"},
+				{"key": InputProfile.label(&"measure"), "action": "Measure"},
+				{"key": InputProfile.label(&"grid"), "action": "Grid"},
+				{"key": "F1", "action": "Help"},
+			]
+		)
 	)
 	return hints
 
@@ -700,7 +717,9 @@ func _assert_fits(what: String, subject: Control, canvas: Vector2 = CANVAS) -> v
 		assert_gt(subject.size.x * subject.size.y, 0.0, "%s has a size" % what)
 	var outside := PackedStringArray()
 	_walk(_host, Rect2(Vector2.ZERO, canvas).grow(SLACK_PX), outside)
-	assert_eq(outside.size(), 0, "%s lies on the %s canvas: %s" % [what, canvas, "; ".join(outside)])
+	assert_eq(
+		outside.size(), 0, "%s lies on the %s canvas: %s" % [what, canvas, "; ".join(outside)]
+	)
 
 
 func _walk(node: Node, canvas: Rect2, outside: PackedStringArray) -> void:

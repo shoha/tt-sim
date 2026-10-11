@@ -152,11 +152,11 @@ func test_card_edit_map_reaches_the_title() -> void:
 	title.plays_provider = func() -> Dictionary: return {}
 	add_child_autofree(title)
 	watch_signals(title)
-	# The library's Edit map is on the selected map's detail strip.
-	assert_eq(title.strip.edit_button.text, "Edit map")
-	title.strip.edit_button.pressed.emit()
-	assert_signal_emitted_with_parameters(title, "edit_map_requested", [title.strip.info])
-	assert_eq(title.strip.info.path, info.path)
+	# The library's Edit map is on the selected map's panel.
+	assert_eq(title.map_panel.edit_button.text, "Edit map")
+	title.map_panel.edit_button.pressed.emit()
+	assert_signal_emitted_with_parameters(title, "edit_map_requested", [title.map_panel.info])
+	assert_eq(title.map_panel.info.path, info.path)
 	title.new_map_card.generate()
 	assert_signal_emitted(title, "build_map_requested")
 
