@@ -399,7 +399,9 @@ func _repaint_shelf() -> void:
 		var well := row.get_node_or_null("Inner/Well") as Panel if row else null
 		if well:
 			var picture := _picture_for(entry)
-			RoomRows.set_map_well(well, picture.texture, _picture_key(entry), picture.mood)
+			RoomRows.set_map_well(
+				well, picture.texture, _picture_key(entry), picture.mood, str(entry.name)
+			)
 
 
 ## The GM's Save into map and Discard changes, on a line right under the selected shelf row
@@ -451,7 +453,9 @@ func _show_stage(entry: Dictionary) -> void:
 		readiness_label.text = empty.caption
 	else:
 		var picture := _picture_for(entry)
-		RoomRows.set_map_well(preview, picture.texture, _picture_key(entry), picture.mood)
+		RoomRows.set_map_well(
+			preview, picture.texture, _picture_key(entry), picture.mood, str(entry.name)
+		)
 		map_name_label.text = entry.name
 		map_name_label.theme_type_variation = &"Title"
 		readiness_label.text = _readiness(entry)

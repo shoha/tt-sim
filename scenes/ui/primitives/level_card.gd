@@ -187,7 +187,9 @@ func setup(info: Dictionary) -> void:
 	if texture == null:
 		var folder := String(info.get("folder", ""))
 		_placeholder.paint(
-			folder if folder != "" else _name.text, String(info.get("environment_preset", ""))
+			folder if folder != "" else _name.text,
+			String(info.get("environment_preset", "")),
+			_name.text
 		)
 	_show_updated(bool(info.get(LibraryFacts.UPDATED_KEY, false)))
 

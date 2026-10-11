@@ -7,16 +7,15 @@ extends RefCounted
 ## folder, which paint their placeholders) until `restore`. `action`:
 ## - `stage` (`folder`, `count`): the title's grid shows `folder` (the tour's test level, read
 ##   from disk) and SAMPLE_MAPS (the first `count` of them in their order, all six by
-##   default), each edited a day or more before the last. Three cards leave the clouds open
-##   sky on a 1920 title; seven leave none.
+##   default), each edited a day or more before the last.
 ## - `select` (`mood`): click the staged card whose preset paints `mood` (morning, midday,
 ##   golden_hour, dusk, overcast or night), as a player's click does; the backdrop fades to it.
 ## - `fade` (`from`, `to`, `at`): select the card of mood `from` at once, then click the card of
 ##   mood `to` and hold the change at `at` (0 to 1) of the way, for a capture of the mix.
 ## - `settle`: end a change held part way by `fade`, the backdrop at rest in the mood it was
 ##   changing to (a held change otherwise stays held through every later select of that map).
-## - `drift` (`held`): hold the clouds still as Reduce motion does (PaintedBackdrop.hold_drift),
-##   or let them drift again.
+## - `drift` (`held`): PaintedBackdrop.hold_drift, as Reduce motion calls it (the gradient does
+##   not move, so the captures either side show the same sky).
 ## - `empty`: the title over an empty library.
 ## - `restore`: the title's grid reads the real library again, the newest map selected.
 ## - `report`: log the backdrop's mood, its map and how far its change has run.
@@ -102,9 +101,10 @@ static func _gpu_stop(base: Node, label: String) -> String:
 		return "no samples"
 	samples.sort()
 	var at := func(share: float) -> float: return samples[int(share * (samples.size() - 1))]
-	return "gpu %s: median %.3f ms, p10 %.3f, p90 %.3f, %d frames" % [
-		label, at.call(0.5), at.call(0.1), at.call(0.9), samples.size()
-	]
+	return (
+		"gpu %s: median %.3f ms, p10 %.3f, p90 %.3f, %d frames"
+		% [label, at.call(0.5), at.call(0.1), at.call(0.9), samples.size()]
+	)
 
 
 static func _stage(title: TitleScreen, folder: String, count: int) -> String:
@@ -119,17 +119,20 @@ static func _stage(title: TitleScreen, folder: String, count: int) -> String:
 	for mood: String in SAMPLE_MAPS.keys().slice(0, count):
 		var sample: Array = SAMPLE_MAPS[mood]
 		var key := SAMPLE_PREFIX + mood
-		levels.append(
-			{
-				"path": key + "/",
-				"folder": key.get_file(),
-				"is_folder_based": true,
-				"name": sample[0],
-				"token_count": 0,
-				"modified_at": modified,
-				"environment_preset": sample[1],
-				"thumbnail": "",
-			}
+		(
+			levels
+			. append(
+				{
+					"path": key + "/",
+					"folder": key.get_file(),
+					"is_folder_based": true,
+					"name": sample[0],
+					"token_count": 0,
+					"modified_at": modified,
+					"environment_preset": sample[1],
+					"thumbnail": "",
+				}
+			)
 		)
 		modified -= DAY_S + 3600 * (levels.size() * 5 % 11)
 	return _provide(title, func() -> Array[Dictionary]: return levels)
@@ -166,17 +169,18 @@ static func _fade(title: TitleScreen, step: Dictionary) -> String:
 	if backdrop._fade and backdrop._fade.is_valid():
 		backdrop._fade.kill()
 	backdrop._set_blend(float(step.get("at", 0.5)))
-	var sun: Vector4 = (backdrop.material as ShaderMaterial).get_shader_parameter(&"sun_at")
-	return "%s; sun at %.3f, %.3f r %.3f" % [_report(title), sun.x, sun.y, sun.z]
+	var mid: Vector3 = (backdrop.material as ShaderMaterial).get_shader_parameter(&"mid_lch")
+	return "%s; middle stop L %.3f C %.3f h %.3f" % [_report(title), mid.x, mid.y, mid.z]
 
 
 static func _report(title: TitleScreen) -> String:
 	if title == null:
 		return "no title"
 	var backdrop := title.backdrop
-	return "backdrop %s, map %s, at %.2f" % [
-		PaintedBackdrop.Mood.keys()[backdrop.mood()], backdrop.key(), backdrop.blend()
-	]
+	return (
+		"backdrop %s, map %s, at %.2f"
+		% [PaintedBackdrop.Mood.keys()[backdrop.mood()], backdrop.key(), backdrop.blend()]
+	)
 
 
 static func _room_mood(base: Node, preset: String) -> String:
@@ -188,6 +192,4 @@ static func _room_mood(base: Node, preset: String) -> String:
 	panel._pictures[sample] = {"texture": null, "mood": preset}
 	panel.select(sample)
 	var mood: int = room.backdrop.mood()
-	return "room selects %s (%s): backdrop %s" % [
-		sample, preset, PaintedBackdrop.Mood.keys()[mood]
-	]
+	return "room selects %s (%s): backdrop %s" % [sample, preset, PaintedBackdrop.Mood.keys()[mood]]

@@ -50,9 +50,12 @@ static var _thumb_material: ShaderMaterial
 
 
 ## A CardThumb well of `well_size` (x 0: fills its width) holding a map's thumbnail, or its
-## painted placeholder when `texture` is null. `key` and `mood` paint the placeholder
-## (MapPlaceholder.paint()). The well clips the picture to its shape.
-static func map_well(well_size: Vector2, texture: Texture2D, key: String, mood: String) -> Panel:
+## placeholder when `texture` is null. `key`, `mood` and `title` (the map's name, for its
+## initial) paint the placeholder (MapPlaceholder.paint()). The well clips the picture to its
+## shape.
+static func map_well(
+	well_size: Vector2, texture: Texture2D, key: String, mood: String, title := ""
+) -> Panel:
 	var well := _well(well_size)
 	var picture := TextureRect.new()
 	picture.name = "Picture"
@@ -65,17 +68,20 @@ static func map_well(well_size: Vector2, texture: Texture2D, key: String, mood: 
 	var placeholder := MapPlaceholder.new()
 	placeholder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	well.add_child(placeholder)
-	set_map_well(well, texture, key, mood)
+	set_map_well(well, texture, key, mood, title)
 	return well
 
 
-## Show `texture` in a map well, or the placeholder painted for `key` in `mood`.
-static func set_map_well(well: Panel, texture: Texture2D, key: String, mood: String) -> void:
+## Show `texture` in a map well, or the placeholder painted for `key` in `mood` with the
+## initial of `title`.
+static func set_map_well(
+	well: Panel, texture: Texture2D, key: String, mood: String, title := ""
+) -> void:
 	(well.get_node("Picture") as TextureRect).texture = texture
 	var placeholder := well.get_node("Placeholder") as MapPlaceholder
 	placeholder.visible = texture == null
 	if texture == null:
-		placeholder.paint(key, mood)
+		placeholder.paint(key, mood, title)
 
 
 ## Fade a map well's picture into the well (`on`: a map missing from the library), or not.
@@ -272,7 +278,7 @@ static func shelf_row(
 	inner.offset_right = -ROW_INSET
 	row.add_child(inner)
 	var key := str(entry.folder) if str(entry.folder) != "" else str(entry.name)
-	var well := map_well(SHELF_THUMB, texture, key, mood)
+	var well := map_well(SHELF_THUMB, texture, key, mood, str(entry.name))
 	well.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	mute_well(well, muted)
 	inner.add_child(well)
