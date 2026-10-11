@@ -219,23 +219,6 @@ func define_ranges() -> void:
 	}
 	define_style("VScrollBar", bar)
 	define_style("HScrollBar", bar)
-	# A bar over the painted backdrop (the title's card list) sits on a strip of paper of its
-	# own, so its grabber holds 3:1 against the paper in every mood rather than against a sky
-	# that runs from midday white to night blue. Godot draws the grabber the bar's full width,
-	# so its paper border is what keeps it in from the strip's sides.
-	var strip := box(c(ThemeColors.SURFACE), RADIUS_PILL, 5, 5, edge(1, c(ThemeColors.EDGE)))
-	var inked := edge(3, c(ThemeColors.SURFACE))
-	define_variant_style(
-		"CardGridBar",
-		"VScrollBar",
-		{
-			scroll = strip,
-			scroll_focus = strip,
-			grabber = inherit(thumb, inked),
-			grabber_highlight = inherit(thumb, inked, {bg_color = c(ThemeColors.TEXT_SOFT)}),
-			grabber_pressed = inherit(thumb, inked, {bg_color = c(ThemeColors.TEXT)}),
-		}
-	)
 
 
 ## Tabs: label type, the soft text role at rest, and the selected tab underlined in the
@@ -398,7 +381,7 @@ func check_icon(checked: bool, radio: bool, alpha: float) -> ImageTexture:
 	if checked and radio:
 		body += '<circle cx="10" cy="10" r="3.5" %s/>' % paint("fill", ThemeColors.ON_STATE, alpha)
 	elif checked:
-		body += '%s %s/>' % [_TICK, paint("stroke", ThemeColors.ON_STATE, alpha)]
+		body += "%s %s/>" % [_TICK, paint("stroke", ThemeColors.ON_STATE, alpha)]
 	return svg_icon(20, 20, body)
 
 
