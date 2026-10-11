@@ -2,14 +2,16 @@ class_name PlayTogetherCard
 extends VBoxContainer
 
 ## The title's Play together card: the one question "Play together?" (an italic eyebrow, the
-## card's own question and never a category over a heading) answered on a pill where two
-## watercolour washes meet at a crisp hand-painted seam with a thin paper line along it, never a
-## soft bleed (user verdict 2026-10-10; shaders/ui_wash_split.gdshader on a ColorRect).
+## card's own question and never a category over a heading) answered on a pill where two solid
+## colour faces, each with a subtle vertical gradient, meet at a clean straight seam with a thin
+## crisp paper line along it (user direction 2026-10-10: solid colours and subtle gradients for
+## now, painterly later; shaders/ui_wash_split.gdshader on a ColorRect).
 ## Host is the persimmon face on the left, "Open a room": a room needs no map (room first, user
 ## verdict 2026-10-09), so it acts on nothing selected. Join is the lake face on the right,
 ## "Enter a code". Two transparent face Buttons over the wash take the mouse and carry the
-## tooltips; the pill itself is the one focus stop. Each wash lightens only away from its words
-## (the shader reads their rects, text_rects()), so paper words keep their contrast.
+## tooltips; the pill itself is the one focus stop. No face is ever lighter than its token (the
+## gradient only darkens), so paper words keep their contrast; the words' rects are still handed
+## to the shader (text_rects()) for the contrast checks.
 ##
 ## Picking a face (hover, or Left and Right on the focused pill: keys, D-pad or stick) swings
 ## the seam SWING of the width away from it over MOTION_WASH (sine out), deepens that face to
@@ -68,9 +70,9 @@ const BACK_ICON := "arrow-left"
 const ERROR_ICON := "alert-circle"
 
 ## 336 wide, not the recommendation's 304: at 304 an 8% swing put the seam over the end of a
-## 118 px text block. At 336 with a 6% swing and a 5 px wander the seam stays clear of both
-## (theme probe section 2: the seam reaches 143 against Host's text end at 127, and 193
-## against Join's text start at 198).
+## 118 px text block. At 336 with a 6% swing the seam stays clear of both (theme probe section
+## 2, measured with a 5 px wander the seam no longer has: the seam reached 143 against Host's
+## text end at 127, and 193 against Join's text start at 198).
 const CARD_SIZE := Vector2(336, 112)
 ## Each face's words sit in a fixed block anchored to its outer edge, so the seam's travel
 ## never reflows them; a longer caption ends in an ellipsis.
@@ -83,7 +85,6 @@ const ICON_SIZE := 20.0
 const ICON_Y := 33.0
 const ICON_LIFT := 2.0
 const SWING := 0.06
-const SEAM_AMP := 5.0
 const MOTION_WASH := 0.28
 const PRESS_SCALE := 0.97
 const PRESS_IN := 0.07
@@ -222,8 +223,8 @@ func press(face: Face) -> void:
 		if flood == null:
 			_host_flooded()
 			return
-		# The pigment holds its press depth through the press, then eases back toward the
-		# bloom's lighter step as it floods; Join's words fade as the flood passes over them.
+		# The colour holds its press depth through the press, then eases back to the hover
+		# step as it floods; Join's words fade as the flood passes over them.
 		_colour_tween = create_tween()
 		_colour_tween.tween_property(
 			_material, "shader_parameter/warm", ThemeColors.PERSIMMON_HOVER, flood_s - PRESS_IN
@@ -495,9 +496,7 @@ func _build_pill() -> void:
 	_material = ShaderMaterial.new()
 	_material.shader = preload("res://shaders/ui_wash_split.gdshader")
 	_material.set_shader_parameter("rect_size", CARD_SIZE)
-	_material.set_shader_parameter("seam_amp", SEAM_AMP)
 	_material.set_shader_parameter("paper", ThemeColors.PAPER)
-	_material.set_shader_parameter("drift", 0.0 if UiMotion.reduced() else 1.0)
 	_material.set_shader_parameter("focus", 0.0)
 	wash_rect.material = _material
 	pill.add_child(wash_rect)
@@ -645,7 +644,7 @@ func _build_slot() -> void:
 	status_icon = slot.status_icon
 
 
-## Tell the shader where each face's words are, so it never lightens a wash under them.
+## Hand the shader each face's words' rect, for the contrast checks (text_rects()).
 func _fit_text_rects() -> void:
 	for face: Face in [Face.HOST, Face.JOIN]:
 		var rect := words_rect(face)

@@ -352,8 +352,8 @@ func test_the_slot_takes_no_height_at_rest_with_nothing_under_it() -> void:
 	assert_almost_eq(card.slot.custom_minimum_size.y, card.slot.reserved(), 0.5, "unmoved")
 
 
-## The flood holds the press depth only through the press, then eases back toward the bloom's
-## lighter step; Join's words fade as it covers them and come back with the wash after it.
+## The flood holds the press depth only through the press, then eases back to the hover step;
+## Join's words fade as it covers them and come back with the wash after it.
 func test_the_flood_covers_joins_words_and_eases_its_pigment() -> void:
 	var card := _card()
 	var join_title := card.pill.get_node("JoinTitle") as Control
