@@ -23,10 +23,12 @@ extends RefCounted
 ##   ponds.png              8-bit pond ids on the sample grid           (MapWaterIO)
 ##   water_flow.png         the baked flow map, RG8 as RGB              (MapWaterIO)
 ##   crossings.json         plank bridges and stepping stones           (MapCrossingIO)
+##   fire.png               8-bit greyscale fire intensity on the sample grid, 0 = no fire;
+##                          never written all zero, and an all-zero one reads as none
 ## Unknown entries are ignored (_known_entries and _extract_entries only look at
-## KNOWN_ENTRIES), so the surfaces, water and crossings entries needed no format bump: an
-## older build reads a painted document as if unpainted, one with water as if it had none,
-## and one with crossings as if it had none.
+## KNOWN_ENTRIES), so the surfaces, water, crossings and fire entries needed no format bump:
+## an older build reads a painted document as if unpainted, one with water as if it had none,
+## and one with crossings or fire as if it had none.
 ##
 ## Documents arrive from a host peer, so everything read is untrusted input, validated in
 ## the style of PaletteLibrary.validate_palette(): caps are checked before anything is
@@ -56,6 +58,7 @@ const BIOMES_JSON_ENTRY := "authoring/biomes.json"
 const SURFACES_JSON_ENTRY := "surfaces.json"
 const SURFACES_PNG_ENTRY := "surfaces.png"
 const SURFACES_B_PNG_ENTRY := "surfaces_b.png"
+const FIRE_ENTRY := "fire.png"
 ## Every entry this format reads, in the order they are written and read.
 const KNOWN_ENTRIES: Array[String] = [
 	MANIFEST_ENTRY,
@@ -72,6 +75,7 @@ const KNOWN_ENTRIES: Array[String] = [
 	MapWaterIO.PONDS_ENTRY,
 	MapWaterIO.FLOW_ENTRY,
 	MapCrossingIO.ENTRY,
+	FIRE_ENTRY,
 ]
 const TEMP_SUFFIX := ".tmp"
 
@@ -97,6 +101,7 @@ const ENTRY_CAPS := {
 	MapWaterIO.PONDS_ENTRY: 4 * 1024 * 1024,
 	MapWaterIO.FLOW_ENTRY: 4 * 1024 * 1024,
 	MapCrossingIO.ENTRY: 256 * 1024,
+	FIRE_ENTRY: 4 * 1024 * 1024,
 }
 const MAX_TOTAL_BYTES := 64 * 1024 * 1024
 ## The archive file itself, checked before it is opened.
@@ -206,6 +211,8 @@ static func serialize(doc: MapDocument) -> Dictionary:
 		_serialize_surfaces(doc, entries)
 	MapWaterIO.serialize(doc, entries)
 	MapCrossingIO.serialize(doc, entries)
+	if has_fire(doc.fire_mask):
+		entries[FIRE_ENTRY] = _png(doc.fire_mask, doc, Image.FORMAT_L8)
 	var total := 0
 	for entry_name in entries:
 		var size := entries[entry_name].size()
@@ -341,6 +348,8 @@ static func _writable_problem(doc: MapDocument) -> String:
 		return "heights hold a NaN, Inf or out-of-range value"
 	if not doc.erase_mask.is_empty() and doc.erase_mask.size() != count:
 		return "erase_mask does not match the sample grid"
+	if not doc.fire_mask.is_empty() and doc.fire_mask.size() != count:
+		return "fire_mask does not match the sample grid"
 	var biomes := _biomes_problem(doc, count)
 	if biomes != "":
 		return biomes
@@ -519,7 +528,16 @@ static func _parse_document(entries: Dictionary, log: _WarningLog) -> MapDocumen
 	_parse_surfaces(blobs, doc, log)
 	MapWaterIO.parse(blobs, doc, log)
 	MapCrossingIO.parse(blobs, doc, log)
+	if blobs.has(FIRE_ENTRY):
+		var fire := _parse_mask(blobs[FIRE_ENTRY], doc, Image.FORMAT_L8, FIRE_ENTRY, log)
+		doc.fire_mask = fire if has_fire(fire) else PackedByteArray()
 	return doc
+
+
+## True when `fire_mask` holds any burning sample (a mask that is all zero is no fire: it is
+## never written, and reads as empty). Pure.
+static func has_fire(fire_mask: PackedByteArray) -> bool:
+	return not fire_mask.is_empty() and fire_mask.count(0) != fire_mask.size()
 
 
 ## The known entries of `entries` that are byte buffers within their caps, in

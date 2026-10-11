@@ -1,15 +1,20 @@
 class_name MaskStroke
 extends RefCounted
 
-## One stroke of the Biome or Thin / Clear brush on a MapDocument: applies MaskBrush's rules
-## to the document's masks in place, sample by sample, and records what it changed so the
-## stroke can be undone, redone or cancelled.
+## One stroke of the Biome, Thin / Clear or Fire brush on a MapDocument: applies MaskBrush's
+## rules to the document's masks in place, sample by sample, and records what it changed so
+## the stroke can be undone, redone or cancelled.
 ##
 ## Masks written. Paint and thin write biome_slots / biome_density; on a document that
-## dresses a map.glb (has_base_map) every mode also writes erase_mask, so painting a biome
-## over Blender scatter replaces it by the same contest as over another biome, and thinning
-## thins it (MaskBrush header). A mask the stroke needs and the document lacks is allocated
-## (a new array, never a resize in place, since worker jobs may hold the old one).
+## dresses a map.glb (has_base_map) every mode but FIRE also writes erase_mask, so painting a
+## biome over Blender scatter replaces it by the same contest as over another biome, and
+## thinning thins it (MaskBrush header). FIRE writes fire_mask alone, its intensity
+## approaching `target` (0 puts fire out). A mask the stroke needs and the document lacks is
+## allocated (a new array, never a resize in place, since worker jobs may hold the old one).
+##
+## Paint filter. With `only_slots` set (one byte per slot value, 1 = may be painted over),
+## paint touches only samples whose owner is listed or already its own biome: the Fire tool
+## paints the burnt forest only where forest stood (FireEditor).
 ##
 ## Working values. Densities and thin amounts are tracked as floats for the samples the
 ## stroke touched (initialised from the bytes on first touch), and written back as bytes
@@ -31,6 +36,7 @@ const BLOCK := 40
 const SLOTS := &"biome_slots"
 const DENSITY := &"biome_density"
 const ERASE := &"erase_mask"
+const FIRE := &"fire_mask"
 const COMPRESSION := FileAccess.COMPRESSION_ZSTD
 ## Weight steps of the per-dab amount table (see _amount_table).
 const AMOUNT_STEPS := 256
@@ -39,8 +45,10 @@ var doc: MapDocument = null
 var mode: int = MaskBrush.PAINT
 ## Biome slot the paint mode writes (index into biome_ids + 1); 0 in thin and clear.
 var slot: int = 0
-## Target density (0..1) paint approaches.
+## Target density (0..1) paint approaches; in FIRE the intensity (0..1 of 255).
 var target: float = 1.0
+## Paint only over these owners (see the header); empty = everywhere. Size MAX_BIOMES + 1.
+var only_slots := PackedByteArray()
 ## Samples changed since the last take_pending().
 var pending: Rect2i = Rect2i()
 ## Samples changed during the whole stroke.
@@ -48,6 +56,7 @@ var changed: Rect2i = Rect2i()
 
 var _writes_biomes: bool = false
 var _writes_erase: bool = false
+var _writes_fire: bool = false
 var _density := PackedFloat32Array()
 var _challenger := PackedFloat32Array()
 var _thinned := PackedFloat32Array()
@@ -85,11 +94,15 @@ static func begin(document: MapDocument, stroke_mode: int, biome_id: String = ""
 			index = ids.size() - 1
 		stroke.slot = index + 1
 		stroke._writes_biomes = true
+	elif stroke_mode == MaskBrush.FIRE:
+		stroke._writes_fire = true
 	else:
 		stroke._writes_biomes = (
 			document.biome_slots.size() == count and document.biome_density.size() == count
 		)
-	stroke._writes_erase = document.has_base_map
+	stroke._writes_erase = document.has_base_map and stroke_mode != MaskBrush.FIRE
+	if stroke._writes_fire:
+		stroke._ensure_mask(FIRE)
 	if stroke._writes_biomes:
 		stroke._ensure_mask(SLOTS)
 		stroke._ensure_mask(DENSITY)
@@ -108,7 +121,7 @@ static func begin(document: MapDocument, stroke_mode: int, biome_id: String = ""
 ## True when the stroke writes anything at all (thin on an unpainted map without a base
 ## writes nothing).
 func writes_anything() -> bool:
-	return _writes_biomes or _writes_erase
+	return _writes_biomes or _writes_erase or _writes_fire
 
 
 func _ensure_mask(mask: StringName) -> void:
@@ -141,6 +154,10 @@ func dab(from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
 	var slots := doc.biome_slots
 	var density := doc.biome_density
 	var erase := doc.erase_mask
+	var fire := doc.fire_mask
+	var burning := _writes_fire
+	var allowed := only_slots
+	var gated := mode == MaskBrush.PAINT and allowed.size() == MapDocument.MAX_BIOMES + 1
 	var values := _density
 	var challengers := _challenger
 	var thinned := _thinned
@@ -175,14 +192,25 @@ func dab(from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
 			if a <= 0.0:
 				continue
 			var i := row + x
+			if gated and slots[i] != mine and allowed[slots[i]] == 0:
+				continue
 			if loaded[i] == 0:
 				loaded[i] = 1
 				if biomes:
 					values[i] = density[i] / 255.0
+				if burning:
+					values[i] = fire[i] / 255.0
 				if erasing:
 					thinned[i] = MaskBrush.erase_amount(erase[i])
 					noise[i] = MaskBrush.sample_noise(doc.map_seed, i)
 			var touched := false
+			if burning:
+				var heat: float = values[i] + (goal - values[i]) * a
+				values[i] = heat
+				var heat_byte := clampi(roundi(heat * 255.0), 0, 255)
+				if heat_byte != fire[i]:
+					fire[i] = heat_byte
+					touched = true
 			if biomes:
 				var owner := slots[i]
 				var value: float = values[i]
@@ -230,7 +258,8 @@ func dab(from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
 ## MaskBrush.amount() for `seconds` at AMOUNT_STEPS evenly spaced weights, index 0 = weight
 ## 0; one exp() per entry instead of one per sample.
 func _amount_table(seconds: float) -> PackedFloat32Array:
-	var rate := MaskBrush.RATE * (MaskBrush.CLEAR_GAIN if mode == MaskBrush.CLEAR else 1.0)
+	var clearing := mode == MaskBrush.CLEAR or (mode == MaskBrush.FIRE and target <= 0.0)
+	var rate := MaskBrush.RATE * (MaskBrush.CLEAR_GAIN if clearing else 1.0)
 	var table := PackedFloat32Array()
 	table.resize(AMOUNT_STEPS)
 	for q in AMOUNT_STEPS:
@@ -265,6 +294,8 @@ func _written_masks() -> Array[StringName]:
 		masks.append_array([SLOTS, DENSITY])
 	if _writes_erase:
 		masks.append(ERASE)
+	if _writes_fire:
+		masks.append(FIRE)
 	return masks
 
 

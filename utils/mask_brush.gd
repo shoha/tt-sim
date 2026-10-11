@@ -1,7 +1,7 @@
 class_name MaskBrush
 extends RefCounted
 
-## The pure rules behind authoring's Biome and Thin / Clear brushes: the falloff profile,
+## The pure rules behind authoring's Biome, Thin / Clear and Fire brushes: the falloff profile,
 ## how much one frame under the brush moves a sample, the replacement rule where a new
 ## biome is painted over another, and how the erase mask of a dressed Blender map thins.
 ## MaskStroke applies them to a MapDocument; everything here is a pure function so each
@@ -43,6 +43,9 @@ extends RefCounted
 const PAINT := 0
 const THIN := 1
 const CLEAR := 2
+## The Fire tool's mode: writes only the fire mask, its intensity approaching the stroke's
+## target (0 puts fire out, at CLEAR_GAIN so one pass does it).
+const FIRE := 3
 
 ## Remaining-way fraction per second at the brush centre (see amount()). At 3 a sample
 ## that spends a third of a second under the centre of a passing brush reaches about 0.6 of

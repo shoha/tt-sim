@@ -335,7 +335,7 @@ func _build_biome_pane(tool: ToolDescriptor) -> Control:
 		func(id: StringName) -> void: biome_selected.emit(String(id))
 	)
 	pane.add_child(biome_field)
-	pane.add_child(_build_advanced("Biome"))
+	pane.add_child(build_advanced("Biome"))
 	return pane
 
 
@@ -357,7 +357,7 @@ func _build_thin_pane(tool: ToolDescriptor) -> Control:
 			)
 		)
 	)
-	pane.add_child(_build_advanced("Thin"))
+	pane.add_child(build_advanced("Thin"))
 	return pane
 
 
@@ -453,7 +453,7 @@ func _build_sculpt_pane(tool: ToolDescriptor) -> Control:
 				sculpt_selected.emit(op)
 	)
 	pane.add_child(sculpt_field)
-	pane.add_child(_build_advanced("Sculpt"))
+	pane.add_child(build_advanced("Sculpt"))
 	return pane
 
 
@@ -488,7 +488,7 @@ func _build_paint_pane(tool: ToolDescriptor) -> Control:
 		field.tiles.selection_changed.connect(_on_paint_tile.bind(field.tiles))
 		pane.add_child(field)
 		paint_fields[group.role] = field
-	pane.add_child(_build_advanced("Paint"))
+	pane.add_child(build_advanced("Paint"))
 	return pane
 
 
@@ -770,7 +770,8 @@ func _section_gap(gap_name: String) -> Control:
 
 
 ## The Advanced foldout of a brush pane: exact size and strength, values hidden by default.
-func _build_advanced(prefix: String) -> Foldout:
+## Its rows follow the brush (set_brush_values); a tool's own pane (FireToolPane) adds one too.
+func build_advanced(prefix: String) -> Foldout:
 	var foldout := Foldout.new()
 	foldout.name = prefix + "Advanced"
 	foldout.title = "Advanced"
