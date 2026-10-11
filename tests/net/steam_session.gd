@@ -67,6 +67,7 @@ var _phase_ms := 0
 var _code := ""
 var _hero := ""
 var _states: Array = []
+var _connection_events: Array = []
 
 # Host state.
 var _client_sid := ""
@@ -75,6 +76,7 @@ var _rejoin_peer := 0
 var _joins: Array = []
 var _leaves: Array = []
 var _ended_ms := 0
+var _client_table_loaded := false
 
 # Client state.
 var _arrived: Array = []
@@ -141,7 +143,24 @@ func _init_steam() -> bool:
 	_result["steam_id"] = str(Steam.getSteamID())
 	_result["steam_ok"] = true
 	NetworkManager.set_player_name(_role)
+	Steam.network_connection_status_changed.connect(_on_steam_connection_status)
 	return true
+
+
+## Every Steam connection state change this process sees, with Steam's end reason: how a
+## leave reached the host (closed by the peer, or a timeout).
+func _on_steam_connection_status(handle: int, info: Dictionary, old_state: int) -> void:
+	var entry := {
+		"handle": handle,
+		"old": old_state,
+		"state": info.get("connection_state"),
+		"end_reason": info.get("end_reason"),
+		"end_debug": info.get("end_debug"),
+		"phase": _phase,
+		"unix_ms": _unix_ms(),
+	}
+	_connection_events.append(entry)
+	_log("steam connection %s" % str(entry))
 
 
 func _unix_ms() -> int:
@@ -260,7 +279,9 @@ func _process_host() -> void:
 				_mover().set_out(MAP_A.folder)
 				_set_phase("a_load")
 		"a_load":
-			if _table_up(MAP_A):
+			# A spawn that reaches the client before it has switched to the table is lost
+			# (seen once, 2026-10-10), so Hero waits for the client's table_loaded report.
+			if _table_up(MAP_A) and _client_table_loaded:
 				_host_place_hero()
 		"a":
 			if _has("a"):
@@ -328,6 +349,7 @@ func _open_session() -> void:
 	NetworkManager.room_code_received.connect(_on_room_code)
 	NetworkManager.player_joined.connect(_on_host_player_joined)
 	NetworkManager.player_left.connect(_on_host_player_left)
+	NetworkManager.table_loaded.connect(func(_peer: int): _client_table_loaded = true)
 	NetworkManager.connection_failed.connect(
 		func(reason: String): _finish(false, "connection failed: " + reason)
 	)
@@ -486,6 +508,7 @@ func _host_collect() -> void:
 	_result["joins"] = _joins
 	_result["leaves"] = _leaves
 	_result["states"] = _states
+	_result["connection_events"] = _connection_events
 	_result["engine_log"] = _engine_log_check()
 	var sid := _client_sid
 	var grant := {sid: [_hero]}
@@ -736,6 +759,7 @@ func _client_session_ended() -> void:
 	_result["engine_log"] = _engine_log_check()
 	_result["arrived"] = _arrived
 	_result["states"] = _states
+	_result["connection_events"] = _connection_events
 	_result["offline_events"] = _offline_events
 	var room0: Dictionary = _result.get("room0", {})
 	var room: Dictionary = _result.get("room", {})

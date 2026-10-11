@@ -17,6 +17,9 @@ const SUBMERSION_DEPTH := 4.0  # how far below the surface the detection box rea
 const SURFACE_MARGIN := 0.05  # thin slab above the surface, so grazing it still counts
 const MIN_FOOTPRINT_SIZE := 0.0001  # below this, treat the mesh AABB as degenerate
 
+## True while this zone is leaving the scene tree (see _exit_tree()).
+var _leaving_tree := false
+
 
 ## Build a WaterZone sized to mesh_node's AABB, or null if the mesh's XZ footprint is
 ## degenerate (zero/near-zero size -- an authoring mistake; there's nothing useful to
@@ -125,6 +128,18 @@ func _ready() -> void:
 	body_exited.connect(_on_body_exited)
 
 
+## An Area3D leaving the tree reports every body it holds as leaving, from inside the removal
+## (the table's teardown): no splash then, since the viewport may be busy removing children,
+## where add_child() fails ("Parent node is busy setting up children") and orphans the splash.
+## Runs before the Area3D's own exit handling, which emits those body_exited signals.
+func _exit_tree() -> void:
+	_leaving_tree = true
+
+
+func _enter_tree() -> void:
+	_leaving_tree = false
+
+
 ## Handle a token's collision shape entering the water zone -- registers it for the
 ## persistent ripple, sinks its visuals, and spawns an entry splash. See the design
 ## spec's "Token water detection" section for why this is safe to key purely off
@@ -159,7 +174,8 @@ func _on_body_entered(body: Node3D) -> void:
 ## still unregister from WaterRippleRegistry so it doesn't leak an entry for a token
 ## that's gone. The registry is refcounted, so exiting one of several overlapping zones
 ## is also a no-op here unless this was the token's last active zone (true 1->0
-## transition).
+## transition). When the zone itself is leaving the tree (the table's teardown) the token
+## surfaces without a splash or a sound.
 func _on_body_exited(body: Node3D) -> void:
 	if not is_instance_valid(body):
 		return
@@ -169,6 +185,8 @@ func _on_body_exited(body: Node3D) -> void:
 	var token := body.get_parent() as DraggableToken
 	if token:
 		token.set_submerged(false)
+	if _leaving_tree or not is_inside_tree():
+		return
 	var splash := SplashBurst.create_at(
 		Vector3(body.global_position.x, global_position.y, body.global_position.z), false
 	)
