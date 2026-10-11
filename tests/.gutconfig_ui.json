@@ -13,6 +13,7 @@
 		"res://tests/unit/test_color_pane.gd",
 		"res://tests/unit/test_confirmation_dialog_variants.gd",
 		"res://tests/unit/test_drawer_container.gd",
+		"res://tests/unit/test_drawer_pane_width.gd",
 		"res://tests/unit/test_environment_edit_model.gd",
 		"res://tests/unit/test_film_pane.gd",
 		"res://tests/unit/test_focus_trap_stacking.gd",

@@ -235,6 +235,7 @@ func _on_ready() -> void:
 	_stack = PaneStack.new()
 	_stack.name = "PaneStack"
 	_stack.slide_from_right = false
+	_stack.bar_in_margin = true
 	_stack.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content_container.add_child(_stack)
 	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):

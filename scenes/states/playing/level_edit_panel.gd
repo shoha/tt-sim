@@ -115,6 +115,7 @@ func _on_ready() -> void:
 	_stack = PaneStack.new()
 	_stack.name = "PaneStack"
 	_stack.slide_from_right = true
+	_stack.bar_in_margin = true
 	content_container.add_child(_stack)
 	_build_panes()
 

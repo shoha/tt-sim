@@ -10,7 +10,9 @@ extends LevelEditPane
 ##
 ## Layout: Time of day on its own line with the hour (17:45, the 24 h form the game uses) at
 ## its end, the slider the pane's full width under it with Dawn, Noon and Dusk at their
-## hours; the Sunlight mode tiles with what the picked mode does at the end of their caption.
+## hours; the Sunlight mode tiles with a whole sentence under them saying what the picked mode
+## does, placed as the Sky pane places its captions (2026-10-10 round 2: a note at the end of
+## the caption's line sat just under Dawn, Noon and Dusk and read as one paragraph with them).
 
 signal sun_changed(settings: SunSettings)
 signal aim_toggled(active: bool)
@@ -21,12 +23,14 @@ const MODES := [["auto", "Auto", "circle-letter-a"], ["on", "On", "sun"], ["off"
 ## The mode field's caption: whether the game's sunlight shines (LevelEnvironmentManager
 ## _configure_sun_light). Daylight Auto / On / Off did not say what it switched (W1).
 const MODE_CAPTION := "Sunlight"
-## What each mode does, at the end of the caption's line for the picked one and as its
-## tile's tooltip: Auto lights the map unless it brought its own lights.
+## What each mode does (LevelEnvironmentManager._configure_sun_light), under the tiles for the
+## picked one and as its tile's tooltip. Each fits one line of the drawer: "unless the map has
+## its own lights" wrapped one word onto a second line, and the rows under it jumped a line as
+## the mode changed.
 const MODE_NOTES := {
-	"auto": "Unless the map has its own lights",
-	"on": "Always, with the map's lights",
-	"off": "Only the map's own lights",
+	"auto": "Auto: the sun shines if the map has no lights",
+	"on": "On: the sun shines with the map's own lights",
+	"off": "Off: no sun, only the map's own lights",
 }
 ## The time of day's markers: words at their hours, no icons.
 const TIME_TICKS: Array[Dictionary] = [
@@ -50,6 +54,7 @@ var _sun: SunSettings = SunSettings.default()
 var _time_row: PropertyRow
 var _mode_field: TileField
 var _mode_tiles: TileRow
+var _mode_caption: Label
 var _shadow_field: TileField
 var _aim_button: IconButton
 var _azimuth_row: PropertyRow
@@ -84,6 +89,7 @@ func _build() -> void:
 	for mode: Array in MODES:
 		_mode_tiles.set_tile_tooltip(StringName(mode[0]), MODE_NOTES[mode[0]])
 	_mode_tiles.selection_changed.connect(_on_mode_selected)
+	_mode_caption = _add_note("")
 	_show_mode_note()
 
 	_shadow_field = _add_tile_field("Shadows", SHADOW_TILES)
@@ -229,9 +235,9 @@ func _promote_auto_to_on() -> void:
 	_show_mode_note()
 
 
-## Say what the picked Sunlight mode does, at the end of its caption's line.
+## Say what the picked Sunlight mode does, in the caption under its tiles.
 func _show_mode_note() -> void:
-	_mode_field.show_note(String(MODE_NOTES.get(_sun.mode, "")))
+	_mode_caption.text = String(MODE_NOTES.get(_sun.mode, ""))
 
 
 func _emit_changed() -> void:

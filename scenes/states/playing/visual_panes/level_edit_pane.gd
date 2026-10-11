@@ -43,13 +43,29 @@ func _add_heading(text: String) -> Label:
 	return heading
 
 
+## A muted caption: a subhead over the rows it names (Water's Advanced groups), or with
+## _add_note a sentence under a control. Captions wrap (docs/UI_TASTE.md), so a long one never
+## widens the pane.
 func _add_caption(text: String, parent: Node = self) -> Label:
 	var caption := Label.new()
 	caption.text = text
 	caption.theme_type_variation = &"Caption"
+	caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(caption)
 	return caption
+
+
+## A sentence under the control above it (what the picked sky, look or Sunlight mode does),
+## with a stacked row's gap under it, so it reads with its control rather than the next one.
+func _add_note(text: String, parent: Node = self) -> Label:
+	var note := _add_caption(text, parent)
+	var gap := Control.new()
+	gap.name = "NoteGap"
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	gap.custom_minimum_size = Vector2(0, PropertyRow.STACKED_ROW_GAP)
+	parent.add_child(gap)
+	return note
 
 
 ## opts: exp_edit, allow_greater, allow_lesser, show_color, show_check,
