@@ -331,8 +331,9 @@ func test_grid_lands_below_the_top_bar_after_the_entrance() -> void:
 	assert_gt(title.grid.global_position.y, bar.global_position.y + bar.size.y - 1.0)
 
 
-## The sticky heading names the section at the grid's top: Your maps, then Bundled with TTSim
-## once that heading's words have scrolled up to the clip.
+## The sticky heading names the section at the grid's top: Your maps while a line of them is
+## under the clip, Bundled with TTSim once the last has scrolled past it (the in-flow heading's
+## words then hidden, so it is not said twice), and Your maps again on the way back.
 func test_the_sticky_heading_follows_the_scroll() -> void:
 	_levels = []
 	for i in 9:
@@ -358,9 +359,22 @@ func test_the_sticky_heading_follows_the_scroll() -> void:
 	assert_eq(title.grid.scroll_vertical, past, "scrolled past the heading")
 	assert_eq(title.grid.top_section(), LevelGrid.BUNDLED_HEADING)
 	assert_eq(title.sticky_heading.text, LevelGrid.BUNDLED_HEADING)
+	assert_false(title.grid.bundled_words_shown(), "the sticky heading says it, once")
+	# The last own line just past the clip, the Bundled heading's words still well in view.
+	var own_end := int(heading.position.y) - LevelGrid.GAP
+	title.grid.scroll_vertical = own_end - 1
+	await wait_process_frames(2)
+	assert_eq(title.grid.scroll_vertical, own_end - 1)
+	assert_eq(title.sticky_heading.text, LevelGrid.OWN_HEADING, "a sliver of own maps shows")
+	assert_true(title.grid.bundled_words_shown())
+	title.grid.scroll_vertical = own_end
+	await wait_process_frames(2)
+	assert_eq(title.sticky_heading.text, LevelGrid.BUNDLED_HEADING, "the view is Bundled")
+	assert_false(title.grid.bundled_words_shown())
 	title.grid.scroll_vertical = 0
 	await wait_process_frames(2)
 	assert_eq(title.sticky_heading.text, LevelGrid.OWN_HEADING)
+	assert_true(title.grid.bundled_words_shown())
 
 
 ## The map panel's facts stand whole above its action rows at the smallest canvas the game

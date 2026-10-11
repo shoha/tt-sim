@@ -15,10 +15,10 @@ extends VBoxContainer
 ##
 ## Picking a face (hover, or Left and Right on the focused pill: keys, D-pad or stick) swings
 ## the seam SWING of the width away from it over MOTION_WASH (sine out), deepens that face to
-## its hover colour, lifts its icon 2 px and lifts the card's shadow; with keyboard focus a thin
-## paper ring also marks the picked face inside the card's own ring. On an end face Left or
-## Right is not consumed, so focus moves on and nothing traps it. Accept (Enter, Space, pad A)
-## presses the picked face: the pill squashes to PRESS_SCALE; Host floods the card with
+## its hover colour and lifts the card's shadow (the icons stay put: a 2 px icon lift read as
+## a twitch, user verdict 2026-10-11); with keyboard focus a thin paper ring also marks the
+## picked face inside the card's own ring. On an end face Left or Right is not consumed, so
+## focus moves on and nothing traps it. Accept (Enter, Space, pad A) presses the picked face: the pill squashes to PRESS_SCALE; Host floods the card with
 ## persimmon and then asks for a room (host_pressed); Join opens Join in place.
 ##
 ## Join in place (user verdict 2026-10-09: there is no join screen): the lake widens to the
@@ -83,7 +83,6 @@ const CAPTION_Y := 62.0
 const CAPTION_HEIGHT := 22.0
 const ICON_SIZE := 20.0
 const ICON_Y := 33.0
-const ICON_LIFT := 2.0
 const SWING := 0.06
 const MOTION_WASH := 0.28
 const PRESS_SCALE := 0.97
@@ -194,9 +193,7 @@ func step_back(on: bool) -> void:
 	if on == stepped_back:
 		return
 	stepped_back = on
-	(_titles[Face.HOST] as Label).theme_type_variation = (
-		&"WashTitleQuiet" if on else &"WashTitle"
-	)
+	(_titles[Face.HOST] as Label).theme_type_variation = (&"WashTitleQuiet" if on else &"WashTitle")
 	(_captions[Face.HOST] as Label).theme_type_variation = (
 		&"WashCaptionQuiet" if on else &"WashCaption"
 	)
@@ -226,9 +223,13 @@ func press(face: Face) -> void:
 		# The colour holds its press depth through the press, then eases back to the hover
 		# step as it floods; Join's words fade as the flood passes over them.
 		_colour_tween = create_tween()
-		_colour_tween.tween_property(
-			_material, "shader_parameter/warm", ThemeColors.PERSIMMON_HOVER, flood_s - PRESS_IN
-		).set_delay(PRESS_IN)
+		(
+			_colour_tween
+			. tween_property(
+				_material, "shader_parameter/warm", ThemeColors.PERSIMMON_HOVER, flood_s - PRESS_IN
+			)
+			. set_delay(PRESS_IN)
+		)
 		for word in _join_words():
 			flood.tween_property(word, "modulate:a", 0.0, flood_s * 0.55).set_delay(flood_s * 0.15)
 		flood.finished.connect(_host_flooded)
@@ -371,7 +372,7 @@ func text_rects() -> Dictionary:
 ## the pill's pixels.
 func words_rect(face: Face) -> Rect2:
 	var icon := _icons[face] as Control
-	var rect := Rect2(icon.position.x, ICON_Y - ICON_LIFT, ICON_SIZE, ICON_SIZE + ICON_LIFT)
+	var rect := Rect2(icon.position.x, ICON_Y, ICON_SIZE, ICON_SIZE)
 	for label: Label in [_titles[face], _captions[face]]:
 		var width := minf(_text_width(label), label.size.x)
 		var x := label.position.x
@@ -666,14 +667,13 @@ static func _text_width(label: Label) -> float:
 # =============================================================================
 
 
-## The faces' words, the picked face's icon lift, and Join mode's field, disc and words.
+## The faces' words, the picked face's shadow lift, and Join mode's field, disc and words.
 func _refresh_texts() -> void:
 	for face: Face in [Face.HOST, Face.JOIN]:
 		var shown := not joining
 		(_titles[face] as Control).visible = shown
 		(_captions[face] as Control).visible = shown
 		(_icons[face] as Control).visible = shown
-		(_icons[face] as Control).position.y = ICON_Y - (ICON_LIFT if face == hot else 0.0)
 	host_face.visible = not joining
 	join_face.visible = not joining
 	_shadow.theme_type_variation = &"WashShadowLifted" if hot != Face.NONE else &"WashShadow"

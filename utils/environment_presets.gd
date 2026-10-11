@@ -176,7 +176,7 @@ const PRESETS = {
 	# ========== OUTDOOR PRESETS ==========
 	"outdoor_day":
 	{
-		"description": "Bright outdoor daytime - clear sky, neutral lighting",
+		"description": "Bright outdoor daytime: clear sky, neutral lighting",
 		"background_mode": Environment.BG_SKY,
 		"sky_preset": "clear_day",
 		"ambient_light_source": Environment.AMBIENT_SOURCE_SKY,
@@ -189,7 +189,7 @@ const PRESETS = {
 	},
 	"outdoor_overcast":
 	{
-		"description": "Cloudy outdoor day - soft diffuse lighting",
+		"description": "Cloudy outdoor day: soft diffuse lighting",
 		"background_mode": Environment.BG_SKY,
 		"sky_preset": "overcast",
 		"ambient_light_source": Environment.AMBIENT_SOURCE_SKY,
@@ -205,7 +205,7 @@ const PRESETS = {
 	},
 	"outdoor_sunset":
 	{
-		"description": "Golden hour - warm orange/pink lighting",
+		"description": "Golden hour: warm orange and pink lighting",
 		"background_mode": Environment.BG_SKY,
 		"sky_preset": "sunset",
 		"ambient_light_source": Environment.AMBIENT_SOURCE_SKY,
@@ -226,7 +226,7 @@ const PRESETS = {
 	},
 	"outdoor_night":
 	{
-		"description": "Moonlit night - cool blue tones, low visibility",
+		"description": "Moonlit night: cool blue tones, low visibility",
 		"background_mode": Environment.BG_SKY,
 		"sky_preset": "night_sky",
 		"ambient_light_source": Environment.AMBIENT_SOURCE_SKY,
@@ -246,7 +246,7 @@ const PRESETS = {
 	# ========== INDOOR/DUNGEON PRESETS ==========
 	"indoor_neutral":
 	{
-		"description": "Standard indoor lighting - neutral, well-lit",
+		"description": "Standard indoor lighting: neutral, well-lit",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.15, 0.15, 0.15),
 		"ambient_light_color": Color(0.5, 0.48, 0.45),
@@ -257,7 +257,7 @@ const PRESETS = {
 	},
 	"dungeon_dark":
 	{
-		"description": "Dark dungeon - minimal ambient, torch-lit atmosphere",
+		"description": "Dark dungeon: minimal ambient, torch-lit atmosphere",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.02, 0.02, 0.03),
 		"ambient_light_color": Color(0.1, 0.08, 0.06),
@@ -275,7 +275,7 @@ const PRESETS = {
 	},
 	"dungeon_crypt":
 	{
-		"description": "Eerie crypt - cold, deathly atmosphere",
+		"description": "Eerie crypt: cold, deathly atmosphere",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.01, 0.02, 0.03),
 		"ambient_light_color": Color(0.08, 0.1, 0.15),
@@ -294,7 +294,7 @@ const PRESETS = {
 	},
 	"cave":
 	{
-		"description": "Natural cave - damp, earthy tones",
+		"description": "Natural cave: damp, earthy tones",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.02, 0.02, 0.02),
 		"ambient_light_color": Color(0.12, 0.1, 0.08),
@@ -310,7 +310,7 @@ const PRESETS = {
 	# ========== SPECIAL ATMOSPHERE PRESETS ==========
 	"tavern":
 	{
-		"description": "Cozy tavern - warm firelit interior",
+		"description": "Cozy tavern: warm firelit interior",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.08, 0.05, 0.03),
 		"ambient_light_color": Color(0.8, 0.5, 0.3),
@@ -328,7 +328,7 @@ const PRESETS = {
 	},
 	"forest":
 	{
-		"description": "Dense forest - dappled green light",
+		"description": "Dense forest: dappled green light",
 		"background_mode": Environment.BG_SKY,
 		"sky_preset": "clear_day",
 		"ambient_light_source": Environment.AMBIENT_SOURCE_SKY,
@@ -345,7 +345,7 @@ const PRESETS = {
 	},
 	"swamp":
 	{
-		"description": "Murky swamp - thick fog, sickly green",
+		"description": "Murky swamp: thick fog, sickly green",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.08, 0.1, 0.05),
 		"ambient_light_color": Color(0.25, 0.3, 0.15),
@@ -364,7 +364,7 @@ const PRESETS = {
 	},
 	"underwater":
 	{
-		"description": "Underwater - blue-green murky depths",
+		"description": "Underwater: blue-green murky depths",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.02, 0.08, 0.12),
 		"ambient_light_color": Color(0.1, 0.25, 0.35),
@@ -382,7 +382,7 @@ const PRESETS = {
 	},
 	"hell":
 	{
-		"description": "Infernal realm - fiery red/orange glow",
+		"description": "Infernal realm: fiery red and orange glow",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.15, 0.02, 0.0),
 		"ambient_light_color": Color(0.6, 0.15, 0.05),
@@ -401,7 +401,7 @@ const PRESETS = {
 	},
 	"ethereal":
 	{
-		"description": "Ethereal/fey realm - soft magical glow",
+		"description": "Ethereal fey realm: soft magical glow",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.15, 0.1, 0.2),
 		"ambient_light_color": Color(0.5, 0.4, 0.7),
@@ -419,7 +419,7 @@ const PRESETS = {
 	},
 	"arctic":
 	{
-		"description": "Frozen tundra - cold blue-white",
+		"description": "Frozen tundra: cold blue-white",
 		"background_mode": Environment.BG_SKY,
 		"sky_preset": "overcast",
 		"ambient_light_source": Environment.AMBIENT_SOURCE_SKY,
@@ -436,7 +436,7 @@ const PRESETS = {
 	},
 	"desert":
 	{
-		"description": "Harsh desert - bright, warm, hazy",
+		"description": "Harsh desert: bright, warm, hazy",
 		"background_mode": Environment.BG_SKY,
 		"sky_preset": "clear_day",
 		"ambient_light_source": Environment.AMBIENT_SOURCE_SKY,
@@ -454,7 +454,7 @@ const PRESETS = {
 	# ========== UTILITY PRESETS ==========
 	"none":
 	{
-		"description": "No environment effects - use map's embedded lighting only",
+		"description": "No environment effects: use map's embedded lighting only",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.2, 0.2, 0.2),
 		"ambient_light_color": Color(0.3, 0.3, 0.3),
@@ -462,7 +462,7 @@ const PRESETS = {
 	},
 	"bright_editor":
 	{
-		"description": "Bright editing mode - maximum visibility",
+		"description": "Bright editing mode: maximum visibility",
 		"background_mode": Environment.BG_COLOR,
 		"background_color": Color(0.4, 0.4, 0.45),
 		"ambient_light_color": Color(0.8, 0.8, 0.85),

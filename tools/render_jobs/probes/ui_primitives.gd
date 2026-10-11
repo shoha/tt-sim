@@ -42,6 +42,8 @@ extends RefCounted
 ## - `look_dropdown`: with the Visuals drawer open on Sky, pick the Look dropdown's longest
 ##   preset name and hover the dropdown, so its tooltip shows the name the pane ellipsizes.
 ##   The pick is a change: `revert` after it.
+## - `sky_change`: with the Visuals drawer open on Sky, turn Fog on with its row's check as a
+##   player's click does: a change to the look, so the pane's eraser shows. `revert` after it.
 ## - `focus` (`target` "title_play", "add_token", "title_card" or "glass_tile"): give
 ##   keyboard focus to a quiet button, the title's Play solo (paper) or the play HUD's Add
 ##   Token (glass), or to a selected item, the title's selected level card (paper) or the
@@ -94,6 +96,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _hover_rail(base, step)
 		"look_dropdown":
 			return _look_dropdown(base)
+		"sky_change":
+			return _sky_change(base)
 		"unhover":
 			_pointer_to(Vector2.ONE)
 			return "pointer at the corner"
@@ -310,6 +314,18 @@ static func _look_dropdown(base: Node) -> String:
 	var centre := dropdown.get_global_rect().get_center()
 	_pointer_to(base.get_viewport().get_final_transform() * centre)
 	return "Look on %s, tooltip: %s" % [dropdown.get_item_text(longest), dropdown.tooltip_text]
+
+
+## Fog turned on on the Sky pane through its row's check (a toggle signal, as a click sends):
+## the look's first change, so the eraser shows. The Visuals drawer must be open on Sky.
+static func _sky_change(base: Node) -> String:
+	var panel := _find_drawer(base, "visuals") as LevelEditPanel
+	if panel == null or not panel.is_open:
+		return "the visuals drawer is not open"
+	var check: CheckBox = panel.sky_pane._fog_row._check
+	check.button_pressed = not check.button_pressed
+	var clear: IconButton = panel.sky_pane._clear_button
+	return "fog %s, eraser shown %s" % [check.button_pressed, clear.visible]
 
 
 ## A synthetic pointer move to `window_pos` (window pixels); the OS cursor stays put.

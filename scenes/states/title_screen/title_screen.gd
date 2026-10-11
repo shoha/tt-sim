@@ -8,7 +8,8 @@ extends CanvasLayer
 ## The left column: the wordmark (the version a caption on its baseline) with Avatars, Settings
 ## and Quit game beside it in one row of quiet labelled tools (SkyButton); under it the heading
 ## of the section at the grid's top, which stays while the cards scroll (LevelGrid.top_section:
-## "Your maps", then "Bundled with TTSim" once its own heading has scrolled up to it); then the
+## "Your maps", then "Bundled with TTSim" once no line of the player's own maps is left under
+## the clip, the in-flow Bundled heading's words hidden meanwhile); then the
 ## library's grid (LevelGrid), its clip just under that heading (no ScrollFade mask on it: the
 ## cards' picture wells clip with clip_children, and inside a masked scroll they draw blank,
 ## measured twice on 2026-10-10) and its scroll area running

@@ -331,8 +331,10 @@ func test_the_edit_hint_shows_under_the_well_only_while_open() -> void:
 	panel.begin_edit("description")
 	assert_true(panel.hint_shown("description"), "the keys while the field is open")
 	assert_true(panel.cue_shown("description"), "the open field shows its well")
-	var hint := panel.find_child("DescriptionHint", true, false) as Label
-	assert_eq(hint.text, MapPanel.EDIT_HINT)
+	var hint := panel.find_child("DescriptionHint", true, false) as MarginContainer
+	assert_eq((hint.get_node("Keys") as Label).text, MapPanel.EDIT_HINT)
+	# About 8 px clear of the open field's ring: the words' 4 px step alone left about 4.
+	assert_eq(hint.get_theme_constant(&"margin_top"), 4, "a step clear of the ring")
 	var cue := panel.find_child("DescriptionCue", true, false) as Control
 	assert_false(cue.is_ancestor_of(hint), "on plain paper, not inside the well")
 	assert_eq(hint.get_parent(), cue.get_parent())

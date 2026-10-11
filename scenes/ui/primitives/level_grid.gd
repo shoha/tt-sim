@@ -244,21 +244,33 @@ func _place_own_heading() -> void:
 
 
 ## The heading of the section at the grid's top, for an owner that shows it over the clip
-## (sticky_headings): "Your maps" until the Bundled heading's words have scrolled up to the
-## clip, then that heading's; "" over an empty library (its one heading scrolls with the cards)
-## and in a picker.
+## (sticky_headings): the section whose content meets the clip. "Your maps" while any line of
+## the player's own maps is still under the clip, then "Bundled with TTSim" once the last of
+## them has scrolled up past it, even with the Bundled heading's own words still in view (the
+## critic's title_bundled_menu, 2026-10-11: a revealed Bundled map filled the view under a
+## sticky "Your maps"). "" over an empty library (its one heading scrolls with the cards) and
+## in a picker.
 func top_section() -> String:
 	if lead == null or own_card_count() == 0:
 		return ""
 	if _bundled_heading != null and _bundled_heading.visible:
-		var words := _bundled_heading.get_node("Words") as Control
-		if _bundled_heading.position.y + words.position.y <= float(scroll_vertical):
+		# The flow's gap before the heading is the end of the player's own section.
+		if _bundled_heading.position.y - float(GAP) <= float(scroll_vertical):
 			return BUNDLED_HEADING
 	return OWN_HEADING
 
 
+## Whether the Bundled heading's words in the flow are drawn: not while the sticky heading
+## names their section (they would say it twice, a line apart). They keep their room, so no
+## card moves.
+func bundled_words_shown() -> bool:
+	return _heading_words != null and _heading_words.modulate.a > 0.0
+
+
 func _check_top_section() -> void:
 	var words := top_section()
+	if _heading_words != null:
+		_heading_words.modulate.a = 0.0 if words == BUNDLED_HEADING else 1.0
 	if words != _top_words:
 		_top_words = words
 		top_section_changed.emit(words)

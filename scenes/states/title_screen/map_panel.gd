@@ -259,14 +259,20 @@ func _field(key: String, label_type: StringName, edit_type: StringName, parent: 
 	parent.add_child(cue)
 	_cues[key] = cue
 	# The keys, under the open field's well on plain paper and only while it is open, so no
-	# tooltip covers the words it is about and no tan strip runs on under the field.
-	var hint := Label.new()
+	# tooltip covers the words it is about and no tan strip runs on under the field. Their
+	# margin (FieldHint) stands them 8 px clear of the open field's ring.
+	var hint := MarginContainer.new()
 	hint.name = key.capitalize() + "Hint"
-	hint.text = EDIT_HINT
-	hint.theme_type_variation = &"Caption"
+	hint.theme_type_variation = &"FieldHint"
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hint.visible = false
 	parent.add_child(hint)
+	var keys := Label.new()
+	keys.name = "Keys"
+	keys.text = EDIT_HINT
+	keys.theme_type_variation = &"Caption"
+	keys.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint.add_child(keys)
 	parent = VBoxContainer.new()
 	parent.name = "Stack"
 	parent.theme_type_variation = &"BoxContainerTight"
@@ -392,7 +398,7 @@ func show_map(level_info: Dictionary) -> void:
 		var edit: LineEdit = _edits[key]
 		edit.visible = false
 		edit.text = String(info.get(key, ""))
-		(_hints[key] as Label).visible = false
+		(_hints[key] as Control).visible = false
 		(_cues[key] as Control).size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		_refresh_label(key)
 	name_label.tooltip_text = NO_FOLDER_TIP if String(info.get("folder", "")) == "" else ""
@@ -508,7 +514,7 @@ func begin_edit(key: String) -> void:
 	cue.visible = true
 	cue.theme_type_variation = &"FieldCueLit"
 	cue.size_flags_horizontal = Control.SIZE_FILL
-	(_hints[key] as Label).visible = true
+	(_hints[key] as Control).visible = true
 	# The open field takes Add details' place: it is what Add details opens.
 	add_details_button.visible = false
 	edit.visible = true
@@ -518,13 +524,13 @@ func begin_edit(key: String) -> void:
 
 ## Whether field `key`'s keys hint shows (only while it is open).
 func hint_shown(key: String) -> bool:
-	return (_hints[key] as Label).visible
+	return (_hints[key] as Control).visible
 
 
 ## Closes field `key`: its label again, as the saved text says.
 func _end_edit(key: String) -> void:
 	(_edits[key] as LineEdit).visible = false
-	(_hints[key] as Label).visible = false
+	(_hints[key] as Control).visible = false
 	(_cues[key] as Control).size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_refresh_label(key)
 

@@ -136,6 +136,23 @@ func test_selected_fills_stay_under_the_board() -> void:
 		assert_gt(ring, GLYPH, "the glass focus ring around a picked tile: %.2f" % ring)
 
 
+## Selected text in a field sits on the SELECTION role: opaque, so the well cannot muddy it,
+## a pale tint at lake's own hue on paper (lake at 0.3 over the cream well read grey-green,
+## user verdict 2026-10-11), and the field's text holds 4.5:1 on it on both leaves.
+func test_text_selection_is_a_clear_lake_tint() -> void:
+	for theme: Theme in [paper, glass]:
+		var roles := ThemeColors.PAPER_ROLES if theme == paper else ThemeColors.GLASS_ROLES
+		var selection: Color = roles[ThemeColors.SELECTION]
+		assert_eq(selection.a, 1.0, "opaque")
+		assert_almost_eq(selection.h, ThemeColors.LAKE.h, 0.02, "lake's hue")
+		for type in ["LineEdit", "TextEdit"]:
+			assert_eq(theme.get_color("selection_color", type), selection, type)
+		var ratio := _contrast(roles[ThemeColors.TEXT], selection)
+		assert_gt(ratio, TEXT, "text on the selection: %.2f" % ratio)
+	var tint: Color = ThemeColors.PAPER_ROLES[ThemeColors.SELECTION]
+	assert_gt(_luminance(tint), 0.6, "pale on paper")
+
+
 func test_the_room_code_reads_aloud() -> void:
 	var code := paper.get_font("font", "Code") as FontVariation
 	assert_eq(code.base_font, load("res://assets/fonts/Inter-VariableFont_opsz,wght.ttf"))

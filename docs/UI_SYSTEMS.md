@@ -545,9 +545,14 @@ latest of last played and last edited first, then the Bundled maps (a `res://` m
 "Bundled with TTSim" heading. The headings are words, not plaques: the `Heading` role (Fraunces,
 the section size) in ink on the sky. **Sticky headings** (`LevelGrid.sticky_headings`): "Your
 maps" is not in the flow; the title's `sticky_heading` over the clip says
-`LevelGrid.top_section()`, "Your maps" until the Bundled heading's words scroll up to the clip,
-then "Bundled with TTSim" (`top_section_changed`), so a section stays named while its cards
-scroll; its row is hidden over an empty library, whose one heading scrolls with the cards. A
+`LevelGrid.top_section()`, the section whose content meets the clip: "Your maps" while any
+line of the player's maps is still under the clip, then "Bundled with TTSim" once the last has
+scrolled past it (`top_section_changed`), so a section stays named while its cards scroll. Until
+2026-10-11 it flipped only when the Bundled heading's words reached the clip, so a revealed
+Bundled map could fill the view under "Your maps" (critic, title_bundled_menu). While the sticky
+heading names the Bundled section, the in-flow Bundled heading's words are hidden (they keep
+their room, so no card moves; `bundled_words_shown()`), so the name is never said twice a line
+apart. Its row is hidden over an empty library, whose one heading scrolls with the cards. A
 line is a map card's height (`LevelCard.height_for`): cards keep their own height
 (`SIZE_SHRINK_BEGIN`) and the lead fits the line (`NewMapCard.fit_row`, its face giving up the
 difference), so a selected card's lake caption band hugs its two lines (ON_SELECTED paper on
@@ -683,7 +688,8 @@ offset) and its ring `WashRing`.
 - **Pick and press.** Hover, or Left and Right on the focused pill (keys, D-pad, stick), picks
   a face: the seam swings 6% away from it over `MOTION_WASH` (0.28 s, sine out), the face
   deepens to its hover step (persimmon and lake hovers are a step deeper than rest in OKLCH,
-  C6 and C8: `#A93F25`, `#266177`), its icon lifts 2 px and the shadow lifts. With keyboard
+  C6 and C8: `#A93F25`, `#266177`) and the shadow lifts. The icons never move (user verdict
+  2026-10-11: a 2 px icon lift on hover read as a twitch and was removed). With keyboard
   focus a thin paper ring (1.5 px at 0.6, crisp) 5 px inside the picked face marks it too,
   inside the card's lake ring (the shader's `focus`, `focus_side`). On an end face Left or
   Right is not consumed, so focus moves on. Accept (Enter, Space, pad A) presses: the pill
@@ -763,7 +769,11 @@ The map panel (same card): no tooltip covers a field's words at rest (the well a
 cursor say they can be typed in); an open field's well spans the column round the field, and
 under the well, on plain paper (inside it the well ran on as a tan strip under the field and
 read as a leftover hover), the keys `MapPanel.EDIT_HINT` ("Enter saves, Escape puts it back"),
-shown only while it is open; showing another map closes any open field and its keys (a field
+shown only while it is open, in a `FieldHint` margin (4 px over the words' 4 px step) that
+stands them about 8 px clear of the open field's ring (about 4 before, ui-polish-3). Text
+selected in a field (here, and in every `LineEdit` and `TextEdit`) sits on the `SELECTION` role:
+opaque, a pale lake tint (`LAKE_TINT`, `#C4E2EE`) on paper and deep lake on glass; lake at 0.3
+over the cream well had mixed to a muddy grey-green (user verdict 2026-10-11); showing another map closes any open field and its keys (a field
 left open by one map had its keys showing over the next, ui-polish-2). The description stands
 on `MapPanel.DESCRIPTION_LINES` (3) lines at most, the last ending in an ellipsis, its tooltip
 the whole text (only then: `description_clamped()`), the whole text in the open field. Words past

@@ -53,6 +53,10 @@ const PERSIMMON_PRESS := Color("#983621")
 const LAKE := Color("#2A6880")
 const LAKE_HOVER := Color("#266177")
 const LAKE_PRESS := Color("#22566B")
+## Lake washed nearly to paper at lake's own hue: selected text in a field. Lake at 0.3 over
+## the cream well mixed to a muddy grey-green (user verdict 2026-10-11); this stays clear and
+## cool, with ink on it above 12:1.
+const LAKE_TINT := Color("#C4E2EE")
 ## Fills only the confirming button of a danger dialog.
 const MADDER := Color("#A12F3A")
 ## Success text and icons; never a fill.
@@ -131,6 +135,10 @@ const ON_STATE := &"on_state"
 const SELECTED := &"selected"
 const SELECTED_HOVER := &"selected_hover"
 const ON_SELECTED := &"on_selected"
+## The highlight behind selected text in a LineEdit or TextEdit, under the field's own TEXT
+## (text keeps its colour). Opaque, so the well under it cannot muddy it: a pale lake tint
+## on paper, deep lake on glass (chalk on it 5.6:1).
+const SELECTION := &"selection"
 const SUCCESS := &"success"
 ## The warning chip's fill (ink text on it); on glass it also reads as text.
 const WARNING := &"warning"
@@ -167,6 +175,7 @@ const PAPER_ROLES := {
 	SELECTED: LAKE,
 	SELECTED_HOVER: LAKE_HOVER,
 	ON_SELECTED: PAPER,
+	SELECTION: LAKE_TINT,
 	SUCCESS: MOSS,
 	WARNING: OCHRE,
 	DANGER: MADDER,
@@ -198,6 +207,7 @@ const GLASS_ROLES := {
 	SELECTED: LAKE,
 	SELECTED_HOVER: LAKE_HOVER,
 	ON_SELECTED: CHALK,
+	SELECTION: LAKE,
 	SUCCESS: MOSS_LIGHT,
 	WARNING: OCHRE_LIGHT,
 	DANGER: MADDER_LIGHT,

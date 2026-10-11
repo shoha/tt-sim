@@ -79,6 +79,25 @@ func test_hover_swings_the_seam_away_from_the_face() -> void:
 	assert_almost_eq(card.wash().split, 0.5, 0.001)
 
 
+## Hover deepens the face and lifts the card's shadow but never moves an icon (user verdict
+## 2026-10-11: the 2 px icon lift read as a twitch).
+func test_hover_lifts_the_shadow_and_leaves_the_icons_still() -> void:
+	var card := _card()
+	var rest := {}
+	for face: PlayTogetherCard.Face in [PlayTogetherCard.Face.HOST, PlayTogetherCard.Face.JOIN]:
+		rest[face] = (card._icons[face] as Control).position
+	assert_eq(card._shadow.theme_type_variation, &"WashShadow")
+	for face: PlayTogetherCard.Face in [PlayTogetherCard.Face.HOST, PlayTogetherCard.Face.JOIN]:
+		card.set_hot(face)
+		_settle()
+		assert_eq(card._shadow.theme_type_variation, &"WashShadowLifted", "hover lifts the shadow")
+		for each: PlayTogetherCard.Face in rest:
+			assert_eq((card._icons[each] as Control).position, rest[each], "icons stay put")
+	card.set_hot(PlayTogetherCard.Face.NONE)
+	_settle()
+	assert_eq(card._shadow.theme_type_variation, &"WashShadow")
+
+
 ## The seam eases over MOTION_WASH, not at once.
 func test_the_seam_eases() -> void:
 	var card := _card()
