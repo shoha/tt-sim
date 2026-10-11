@@ -19,13 +19,17 @@ extends MultiMeshInstance3D
 ## - A ring (emit_ring) lies flat on the surface and spreads, thinning as it goes: the foam a
 ##   splash leaves on the water.
 ##
-## And two for fire (FireSweep; its smoke is SmokePuffs'):
+## And three for fire (FireSweep; its smoke is SmokePuffs'):
 ##
 ## - A flame (emit_flame) stands on its base, swelling in fast and narrowing as it rises and
 ##   dies: three tongues in a red rim, an amber body and a pale gold core, either the painted
 ##   flipbook (FlameAtlas, set on the pool by paint_flames) licking on the shader's clock, or
 ##   banded tongues (band_flames) swaying on the fire's noise, cut into flat stepped bands and
 ##   eroded by it as they age (the flame's age rides in its custom data), as the smoke is.
+## - A crown tongue (emit_crown_flame) is a flame tucked into a burning crown: the same banded
+##   tongues, drawn small and among the leaf cards (barely drawn toward the camera, so the cards
+##   in front of it hide part of it) in red, orange and amber only, no pale core, so a crown
+##   burns from within rather than wearing a flame on its flank.
 ## - An ember (emit_ember) is a small glowing spark drifting up and weaving as it goes.
 ##
 ## Fire's kinds hold their full alpha longer than the others (fire_fade), so a flame burns
@@ -36,7 +40,7 @@ extends MultiMeshInstance3D
 ## higher priority draws after one with a lower (a fire's flames over its smoke), and with a
 ## larger capacity holds one event's every puff at once.
 
-enum Kind { BLOB, PLUME, RING, FLAME, EMBER }
+enum Kind { BLOB, PLUME, RING, FLAME, EMBER, CROWN_FLAME }
 
 const CAPACITY := 96
 const SHADER := preload("res://shaders/event_puff.gdshader")
@@ -168,6 +172,15 @@ func emit_flame(
 	_take(Kind.FLAME, at, velocity, Vector3.UP, size, height / maxf(size, 0.01), life, color, 0.0)
 
 
+## A tongue tucked into a burning crown at `at`, as emit_flame's but drawn among the leaf cards
+## and without the pale core (see the header).
+func emit_crown_flame(
+	at: Vector3, velocity: Vector3, size: float, height: float, life: float, color: Color
+) -> void:
+	var aspect := height / maxf(size, 0.01)
+	_take(Kind.CROWN_FLAME, at, velocity, Vector3.UP, size, aspect, life, color, 0.0)
+
+
 ## A spark at `at` drifting at `velocity` (it weaves from side to side as it goes), `size`
 ## metres across, living `life` seconds, its halo `color`.
 func emit_ember(at: Vector3, velocity: Vector3, size: float, life: float, color: Color) -> void:
@@ -213,7 +226,7 @@ func step(delta: float) -> void:
 				_place_plume(slot, k)
 			Kind.RING:
 				_place_ring(slot, k)
-			Kind.FLAME:
+			Kind.FLAME, Kind.CROWN_FLAME:
 				_place_flame(slot, age, k)
 			Kind.EMBER:
 				_place_ember(slot, age)
@@ -292,7 +305,7 @@ func _take(
 func _shape(slot: int, shape: float, age: float = 0.0) -> void:
 	var kind := _kind[slot]
 	var bold := 0.0 if kind == Kind.BLOB and _gravity[slot] <= 0.0 else 1.0
-	if kind == Kind.FLAME:
+	if kind == Kind.FLAME or kind == Kind.CROWN_FLAME:
 		bold = age
 	multimesh.set_instance_custom_data(slot, Color(_seed[slot], shape, kind, bold))
 

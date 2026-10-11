@@ -353,9 +353,14 @@ Probe and numbers:
   of its tree's mesh whose surfaces use `wind_foliage_burn.gdshader` (the wind material
   duplicated, its shader swapped), and over its 1.2-1.5 s burn the instance's custom data
   (`burn_progress`) takes its crown through the burn in bold patches about a metre across
-  (height plus slow noise): hot yellow only along the leading edge, then ember red-orange
-  with deep red patches (a second, finer noise; emission), dimming as it goes to charcoal,
-  the leaf cards burning away from a glowing edge until a bare charred snag stands. Bark
+  (height plus slow noise): hot yellow only along the leading edge (at 0.7 of HOT), then
+  three bold patches a second noise lays about a metre across (fire-look-5): glowing ember
+  red-orange, burnt autumn orange and deep red lit by the sun as the leaves were (a low ember
+  under it), and char that comes early, each times the leaf's own painted tone so the crown's
+  light and dark cards, and its lit and shade sides, still read while it burns (one flat
+  emission read as an orange cut-out crown and a bush as an orange ball with holes); dimming
+  as it goes to charcoal, the leaf cards burning away from a glowing edge until a bare
+  charred snag stands. Bark
   never glows, it only chars (a glowing trunk read as a thin orange beam). User verdict
   (2026-10-11): "the smoke effect after a tree burns is pretty bad and does not match the
   style of our plants; we probably want some fire on the ground as well while the trees
@@ -366,10 +371,16 @@ Probe and numbers:
   (stepped flame bands, the ember glow, warm charcoal smoke going pale as it rises). A banded
   tongue (EventPuffs' flame with `band_flames`: three tongues swaying on the noise, cut into
   flat rim, amber, gold and core bands, eroded from 45 % of its life; the `FlameAtlas`
-  flipbook stays as the other branch) stands on each crown as it catches, sized by the
-  crown's width (0.85 of it, within 0.22-0.38 of the tree's height; sized by height a narrow
-  pine's stood as a beam), a smaller second beside it (across the view) on half the trees, a
-  spark on a third. On the ground `GroundBurn`, a Decal with a painted ring (stepped red,
+  flipbook stays as the other branch) rises on the ground ring. On a crown (fire-look-5) seven
+  small ones (`CROWN_TONGUES`, EventPuffs' crown flame) rise among the leaf cards as the burn
+  climbs it (up 0.42-0.9 of the height, out to 0.38 of the crown's width round the trunk,
+  each once the burn's patches there glow, `tongue_at`: a tongue on a pine still green there
+  stood as a sticker; 0.25 of the crown's width, within 0.06-0.11 of the tree's height),
+  drawn only a quarter as far toward the camera as a flame, so the cards in front
+  hide part of each, and banded red, orange and a narrow amber heart with no pale core, so
+  nothing on a crown is brighter than the ring's hot band; a spark on a third of the trees.
+  One big cream-cored tongue on a crown's flank read as a clip-art sticker (fire-look-4). On
+  the ground `GroundBurn`, a Decal with a painted ring (stepped red,
   orange and gold arcs with cool breaks, ember spots behind, charred ground inside; painted
   once, 256 px), is sized each frame so its front runs from the nearest tree's distance to
   the rim over `SPREAD_S` (the trees now catch on that same front, `front_reaches`), its glow
@@ -383,8 +394,12 @@ Probe and numbers:
   camera in the shader (`skip_vertex_transform`), drawing a lobed painted puff cut out with
   alpha scissor and alpha to coverage, carrying the crown's volume normal rounded over the
   puff, lit by the sun through a two-tone step (the sun's colour at 0.4, its brightness in
-  full: a warm afternoon sun on a grey smoke showed mauve-pink in the raw frame). Charcoal-brown
-  (0.05, 0.036, 0.026) paling to a neutral light grey (0.47, 0.49, 0.49). Born about a crown
+  full: a warm afternoon sun on a grey smoke showed mauve-pink in the raw frame; 0.2 since
+  fire-look-5). Charcoal-brown (0.05, 0.036, 0.026) paling to a pale neutral grey (0.6, 0.6,
+  0.58; at 0.47 the lit side read as muted grey paper), the sky's blue fill on its shade side
+  held to half (AO 0.5) and a warm fill of its own colour added (emission ALBEDO * (0.2, 0.185,
+  0.16)), so the shade reads warm grey, not slate (fire_5_smoke raw: lit about 203, 200, 197,
+  shade about 149, 144, 141 at half size). Born about a crown
   across (tree billows at the crown's width, the column's at 0.45 of the trees' mean height;
   round 3's column at 0.8 hung as balloons four crowns wide), spreading to about twice that;
   the fire's erosion rule eats the cards' edges with one noise across the billow and each
@@ -400,7 +415,7 @@ Probe and numbers:
   mauve plastic balloons whose last pieces lingered as lone spheres) and curling columns. The snags
   shrink away about their feet over the last 0.6 s (`snag_transform`) as the change lands.
   Two pools sized so one fire's every flame and billow fits at once (`SmokePuffs.new(50)`;
-  `EventPuffs.new(172, priority 4)`: three a tree and the ground's 28).
+  `EventPuffs.new(412, priority 4)`: seven tongues and a spark a tree and the ground's 28).
   Puff and shader colours are linear and the scene's filmic tonemap (white 1.0) shows a low
   value lighter still than raising it to 1/2.2 does, so each is picked through that curve
   (measured in a capture: linear 0.147, 0.124, 0.172 shows 0.54, 0.5, 0.57; 0.85, 0.58, 0.265

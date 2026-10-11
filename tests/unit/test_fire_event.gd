@@ -308,6 +308,14 @@ func test_a_fire_fits_its_pools() -> void:
 	# Every puff of a fire at its most trees at once, so none is overwritten.
 	var flames := FireSweep.FLAMES_PER_TREE * FireSweep.MAX_TREES + FireSweep.FRONT_TONGUES
 	assert_lte(flames, FireSweep.FLAME_POOL, "every crown's flames and the ground's tongues")
+	assert_gte(FireSweep.FLAMES_PER_TREE, FireSweep.CROWN_TONGUES + 1, "a crown's tongues, a spark")
+	# A crown tongue rises once the burn has reached its height, the high ones later, and is
+	# gone soon after its crown has burnt.
+	var low := FireSweep.tongue_at(FireSweep.TONGUE_FOOT.x, 0.0)
+	var high := FireSweep.tongue_at(FireSweep.TONGUE_FOOT.y, 1.0)
+	assert_gt(FireSweep.burn_progress(low, 1.0), FireSweep.CATCH_HEIGHT * FireSweep.TONGUE_FOOT.x)
+	assert_lt(low, high, "low tongues first")
+	assert_lte(high + FireSweep.TONGUE_LIFE.y, 1.2, "a tongue gone soon after its crown has burnt")
 	assert_lte(FireSweep.MAX_TREES + FireSweep.COLUMN_AT.size(), FireSweep.SMOKE_POOL)
 	assert_lte(
 		TerrainEvent.DURATIONS[TerrainEvent.Kind.FIRE], TerrainEvent.MAX_DURATION_S, "in bounds"
@@ -321,6 +329,7 @@ func test_a_fire_fits_its_pools() -> void:
 	assert_eq(puffs.capacity, 8)
 	puffs.emit_flame(Vector3.ZERO, Vector3.UP, 1.0, 2.0, 0.8, FireSweep.FLAME)
 	puffs.emit_ember(Vector3.ZERO, Vector3(0.2, 1.5, 0.0), 0.3, 1.2, FireSweep.EMBER)
+	puffs.emit_crown_flame(Vector3.UP, Vector3.UP * 0.1, 0.4, 0.5, 0.6, FireSweep.FLAME_LATE)
 	puffs.band_flames(true)
 	puffs.step(0.3)
 	assert_false(puffs.is_idle())

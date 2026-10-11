@@ -26,8 +26,11 @@ shader_type spatial;
 // fire's noise sways them and cuts them into crisp stepped bands, and erodes them as they age,
 // the rule the fire's smoke breaks up by, fire_noise.gdshaderinc) or the painted flipbook
 // (FlameAtlas), its frames cross-faded on the shader's clock. Both are seeded, so neighbours
-// never lick together. An ember is a small spark with a soft halo that flickers. (A fire's
-// smoke is fire_smoke.gdshader's.)
+// never lick together. A crown flame is the same tongues tucked into a burning crown: barely
+// drawn toward the camera, so the leaf cards in front of it hide part of it, melting into them
+// over a shorter depth, and banded red, orange and a narrow amber heart with no pale core, so
+// nothing on a crown burns brighter than the ground ring's hot band. An ember is a small spark
+// with a soft halo that flickers. (A fire's smoke is fire_smoke.gdshader's.)
 //
 // Colours here and in the instance colours are linear, so they show far lighter than their
 // numbers: a mid value (0.4) shows pale, which is why the first fire's amber and lilac read as
@@ -58,6 +61,15 @@ const float PLUME = 1.0;
 const float RING = 2.0;
 const float FLAME = 3.0;
 const float EMBER = 4.0;
+const float CROWN_FLAME = 5.0;
+// A crown flame: how far toward the camera it is drawn (a share of toward_camera) and the depth
+// it melts into the leaf cards over (a share of proximity_fade); its bands (the rim colour,
+// then orange from CROWN_BANDS.x of its depth, a narrow amber heart from CROWN_BANDS.y).
+const float CROWN_TOWARD = 0.25;
+const float CROWN_MELT = 0.4;
+const vec2 CROWN_BANDS = vec2(0.1, 0.5);
+const vec3 CROWN_ORANGE = vec3(0.92, 0.14, 0.008);
+const vec3 CROWN_AMBER = vec3(1.0, 0.25, 0.012);
 // The painted flame flipbook (FlameAtlas, set by EventPuffs.paint_flames): FLAME_FRAMES frames
 // side by side, red the heat, green the coverage, row 0 the tips. Cross-faded at FLAME_FPS.
 uniform sampler2D flame_atlas : filter_linear, repeat_disable;
@@ -129,9 +141,10 @@ void vertex() {
 		vec2 right = vec2(up.y, -up.x);
 		vec3 centre = (VIEW_MATRIX * vec4(MODEL_MATRIX[3].xyz, 1.0)).xyz;
 		// A plume stands on its point, a flame on its base.
-		float lift = is_kind(puff_kind, PLUME) || is_kind(puff_kind, FLAME) ? 0.5 : 0.0;
+		bool crown = is_kind(puff_kind, CROWN_FLAME);
+		float lift = is_kind(puff_kind, PLUME) || is_kind(puff_kind, FLAME) || crown ? 0.5 : 0.0;
 		centre.xy += up * length_m * lift;
-		centre.z += toward_camera * 0.5 * max(scale, length_m);
+		centre.z += toward_camera * (crown ? CROWN_TOWARD : 1.0) * 0.5 * max(scale, length_m);
 		MODELVIEW_MATRIX = mat4(
 			vec4(right * scale, 0.0, 0.0),
 			vec4(up * length_m, 0.0, 0.0),
@@ -154,11 +167,20 @@ void fragment() {
 	float shape;
 	// Fire's kinds: how hot this fragment is (0 its rim colour, 1 FIRE_CORE).
 	float heat = -1.0;
-	if (is_kind(puff_kind, FLAME) && flame_banded) {
+	bool crown = is_kind(puff_kind, CROWN_FLAME);
+	// A crown flame's colour, when it is one (its bands are its own, not heat's).
+	vec3 crown_fire = vec3(-1.0);
+	if (crown && flame_banded) {
+		float inside = banded_flame(UV, puff_seed, puff_bold);
+		shape = fire_cut(inside);
+		crown_fire = mix(COLOR.rgb, CROWN_ORANGE, fire_cut(inside - CROWN_BANDS.x));
+		crown_fire = mix(crown_fire, CROWN_AMBER, fire_cut(inside - CROWN_BANDS.y));
+		heat = 0.0;
+	} else if (is_kind(puff_kind, FLAME) && flame_banded) {
 		float inside = banded_flame(UV, puff_seed, puff_bold);
 		shape = fire_cut(inside);
 		heat = 0.45 * fire_cut(inside - FLAME_BANDS.x) + 0.35 * fire_cut(inside - FLAME_BANDS.y) + 0.2 * fire_cut(inside - FLAME_BANDS.z);
-	} else if (is_kind(puff_kind, FLAME)) {
+	} else if (is_kind(puff_kind, FLAME) || crown) {
 		// The painted flame: the flipbook's frames cross-faded on the clock (a quick blend
 		// between held frames, so a band's edge licks rather than smears).
 		float clock = TIME * FLAME_FPS + puff_seed * FLAME_FRAMES;
@@ -199,10 +221,12 @@ void fragment() {
 	float rim = (1.0 - clamp(shape, 0.0, 1.0)) * puff_bold;
 	vec3 fire = mix(COLOR.rgb, FIRE_AMBER, smoothstep(0.0, 0.6, heat));
 	fire = mix(fire, FIRE_CORE, smoothstep(0.6, 1.0, heat));
+	fire = crown_fire.r >= 0.0 ? crown_fire : fire;
 	ALBEDO = heat >= 0.0 ? fire : mix(body, body * RIM_WATER, rim);
 	float depth_tex = textureLod(depth_texture, SCREEN_UV, 0.0).r;
 	vec4 behind = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, depth_tex, 1.0);
 	behind.xyz /= behind.w;
-	float melt = clamp(1.0 - smoothstep(behind.z + proximity_fade, behind.z, VERTEX.z), 0.0, 1.0);
+	float fade_m = proximity_fade * (crown ? CROWN_MELT : 1.0);
+	float melt = clamp(1.0 - smoothstep(behind.z + fade_m, behind.z, VERTEX.z), 0.0, 1.0);
 	ALPHA = COLOR.a * clamp(shape, 0.0, 1.0) * melt;
 }
