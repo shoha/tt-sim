@@ -3,8 +3,9 @@ extends GutTest
 ## Save equals reload: a map edited through AuthoringEditor (a sculpted hill, a Paint stroke,
 ## a biome stroke whose plants generate, a fire laid over its edge, a placed prop), written
 ## to map.ttmap and loaded back through MapSourceLoader the way play loads it, matches the
-## session on every MapFingerprint key. Generated rows are snapped to the saved precision (MapDocumentIO.snap_rows), so a
-## regenerated cell and the same cell read back are bit-equal. Uses the built-in palette's
+## session on every MapFingerprint key. Generated rows are snapped to the saved precision
+## (MapDocumentIO.snap_rows), so a regenerated cell and the same cell read back are
+## bit-equal. Uses the built-in palette's
 ## temperate forest, like test_authoring_sculpt.gd.
 
 const BIOME := "temperate_forest_summer_s1"

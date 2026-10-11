@@ -18,8 +18,9 @@ extends VBoxContainer
 ## its hover colour and lifts the card's shadow (the icons stay put: a 2 px icon lift read as
 ## a twitch, user verdict 2026-10-11); with keyboard focus a thin paper ring also marks the
 ## picked face inside the card's own ring. On an end face Left or Right is not consumed, so
-## focus moves on and nothing traps it. Accept (Enter, Space, pad A) presses the picked face: the pill squashes to PRESS_SCALE; Host floods the card with
-## persimmon and then asks for a room (host_pressed); Join opens Join in place.
+## focus moves on and nothing traps it. Accept (Enter, Space, pad A) presses the picked face:
+## the pill squashes to PRESS_SCALE; Host floods the card with persimmon and then asks for a
+## room (host_pressed); Join opens Join in place.
 ##
 ## Join in place (user verdict 2026-10-09: there is no join screen): the lake widens to the
 ## whole card and becomes a room-code field and a Join button, the one persimmon fill there
