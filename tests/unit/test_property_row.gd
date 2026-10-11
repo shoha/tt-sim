@@ -108,6 +108,73 @@ func test_check_and_color_slots() -> void:
 	assert_signal_emitted_with_parameters(row, "toggled", [false])
 
 
+func _stacked(label: String, opts: Dictionary = {}) -> PropertyRow:
+	var row := PropertyRow.new()
+	row.label = label
+	row.stacked = true
+	row.show_check = opts.get("check", false)
+	row.show_color = opts.get("color", false)
+	row.hint_low = "Thin"
+	row.hint_high = "Thick"
+	return row
+
+
+## The toggle variant (Fog, Glow): stacked, the check ends the label's line where other rows
+## show their value, and the slider starts and ends where a plain stacked row's does. A colour
+## swatch goes there too.
+func test_a_stacked_check_ends_the_label_line_and_leaves_the_slider_full_width() -> void:
+	var box := VBoxContainer.new()
+	box.size = Vector2(300, 400)
+	add_child_autofree(box)
+	var plain := _stacked("Ambient")
+	var toggled := _stacked("Fog", {"check": true})
+	var swatch := _stacked("Ambient", {"color": true})
+	for row in [plain, toggled, swatch]:
+		box.add_child(row)
+	await wait_process_frames(2)
+	assert_eq(toggled._check.get_parent(), toggled._head, "the check is on the label's line")
+	assert_eq(toggled._check.get_index(), toggled._head.get_child_count() - 1, "at its end")
+	assert_eq(swatch._picker.get_parent(), swatch._head, "the swatch is on the label's line")
+	for row: PropertyRow in [toggled, swatch]:
+		var slider := row._slider.get_global_rect()
+		var reference := plain._slider.get_global_rect()
+		assert_almost_eq(slider.position.x, reference.position.x, 0.5, "%s starts" % row.label)
+		assert_almost_eq(slider.end.x, reference.end.x, 0.5, "%s ends" % row.label)
+	watch_signals(toggled)
+	toggled._check.button_pressed = true
+	assert_signal_emitted_with_parameters(toggled, "toggled", [true])
+
+
+## Beside its label (a sheet row), the check still sits before the slider.
+func test_an_unstacked_check_sits_before_the_slider() -> void:
+	var row := PropertyRow.new()
+	row.label = "Fog"
+	row.show_check = true
+	add_child_autofree(row)
+	assert_eq(row._check.get_parent(), row._row)
+	assert_lt(row._check.get_index(), row._slider.get_index())
+
+
+## Stacked rows read apart: the space from one row's hint line to the next row's label is one
+## spacing step (8 px) more than the space inside a row, from its slider to its hint line.
+func test_stacked_rows_keep_a_step_more_between_them_than_inside() -> void:
+	var box := VBoxContainer.new()
+	box.size = Vector2(300, 400)
+	box.add_theme_constant_override("separation", LevelEditPane.ROW_SEPARATION)
+	add_child_autofree(box)
+	var first := _stacked("Energy")
+	var second := _stacked("Softness")
+	box.add_child(first)
+	box.add_child(second)
+	await wait_process_frames(2)
+	var inside := first._ticks.get_global_rect().position.y - first._slider.get_global_rect().end.y
+	var between := second._label.get_global_rect().position.y - first._ticks.get_global_rect().end.y
+	assert_eq(PropertyRow.STACKED_ROW_GAP, 8.0)
+	assert_gte(between - inside, PropertyRow.STACKED_ROW_GAP, "a step more between rows")
+	var unstacked := _row()
+	assert_null(unstacked.get_node_or_null("Gap"), "a sheet row keeps its own pitch")
+
+
 func test_checked_property_setter_is_silent() -> void:
 	var row := PropertyRow.new()
 	row.label = "Fog"

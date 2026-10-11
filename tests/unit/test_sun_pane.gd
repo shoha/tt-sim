@@ -216,18 +216,51 @@ func test_time_of_day_reads_its_hour_over_a_full_width_slider() -> void:
 		assert_false(tick.has("icon"), "words only, no icons")
 
 
-## The mode field says what it switches: the game's sunlight, with what the picked mode does
-## at the end of its caption (Auto: unless the map has its own lights).
+## The mode field says what it switches: the game's sunlight, with a whole sentence under its
+## tiles saying what the picked mode does, as the Sky pane captions its tiles; nothing sits at
+## the end of the caption's line, where it read as one paragraph with Dawn, Noon and Dusk.
 func test_the_sunlight_field_says_what_each_mode_does() -> void:
 	var pane := _pane()
 	assert_eq(SunPane.MODE_CAPTION, "Sunlight")
-	assert_eq(pane._mode_field.note.text, SunPane.MODE_NOTES["auto"])
+	assert_null(pane._mode_field.note, "no note on the caption's line")
+	var caption := pane._mode_caption
+	assert_eq(caption.get_index(), pane._mode_field.get_index() + 1, "right under the tiles")
+	assert_eq(caption.theme_type_variation, &"Caption")
+	assert_ne(caption.autowrap_mode, TextServer.AUTOWRAP_OFF, "a sentence wraps")
+	var gap := pane.get_child(caption.get_index() + 1) as Control
+	assert_eq(
+		gap.custom_minimum_size.y,
+		PropertyRow.STACKED_ROW_GAP,
+		"a row's gap under it, so it reads with its tiles, not with Shadows"
+	)
+	assert_eq(caption.text, "Auto: the sun shines if the map has no lights")
 	pane._on_mode_selected(&"off")
-	assert_eq(pane._mode_field.note.text, SunPane.MODE_NOTES["off"])
-	pane._on_energy_changed(2.0)
+	assert_eq(caption.text, "Off: no sun, only the map's own lights")
+	pane._on_mode_selected(&"on")
+	assert_eq(caption.text, "On: the sun shines with the map's own lights")
 	pane._on_mode_selected(&"auto")
 	pane._on_energy_changed(1.0)
-	assert_eq(pane._mode_field.note.text, SunPane.MODE_NOTES["on"], "promoted to on, and says so")
+	assert_eq(caption.text, SunPane.MODE_NOTES["on"], "promoted to on, and says so")
+	for mode: String in SunPane.MODE_NOTES:
+		var note: String = SunPane.MODE_NOTES[mode]
+		assert_true(note.begins_with(mode.capitalize() + ": "), "%s names its mode" % note)
+
+
+## Each mode's sentence takes one line of the Visuals drawer's column (350 less its 16 px
+## margins), so nothing under it moves as the mode changes and no word sits alone on a line.
+func test_each_sunlight_sentence_fits_one_line_of_the_drawer() -> void:
+	var host := Control.new()
+	host.theme = ThemeColors.glass_theme()
+	host.size = Vector2(318, 800)
+	add_child_autofree(host)
+	var pane := SunPane.new()
+	host.add_child(pane)
+	pane.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	pane.load_state(LevelVisualState.new())
+	for mode: String in SunPane.MODE_NOTES:
+		pane._on_mode_selected(StringName(mode))
+		await wait_process_frames(2)
+		assert_eq(pane._mode_caption.get_line_count(), 1, "%s on one line" % mode)
 
 
 func test_sun_and_shadow_tiles_fill_the_row_in_three_columns() -> void:

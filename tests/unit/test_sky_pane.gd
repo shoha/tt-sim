@@ -120,6 +120,18 @@ func test_picker_has_a_separator_per_group_and_swatches() -> void:
 	assert_eq(swatches, EnvironmentPresets.PRESETS.size())
 
 
+## The Look dropdown is sized by the pane, not by its longest preset (fitted, it widened the
+## pane past the drawer's margin at 720p), and Fog is the toggle variant: its check ends the
+## label's line and the slider runs the row's width.
+func test_the_look_dropdown_never_widens_the_pane_and_fog_is_a_toggle_row() -> void:
+	var pane := _pane()
+	assert_false(pane._preset_dropdown.fit_to_longest_item)
+	assert_true(pane._preset_dropdown.clip_text)
+	assert_true(pane._fog_row.stacked)
+	assert_eq(pane._fog_row._check.get_parent(), pane._fog_row._head)
+	assert_eq(pane._fog_row._slider.get_index(), 0, "nothing before the slider")
+
+
 func test_sky_tiles_are_ten_in_order_five_per_row_with_thumbnails() -> void:
 	var pane := _pane()
 	assert_true(pane._sky_field is TileField)

@@ -11,7 +11,10 @@ extends VBoxContainer
 ## (the chip, or with [member show_readout] a plain readout shown at all times) and the
 ## slider the row's full width under it: a drawer is too narrow for a label beside its
 ## slider (2026-10-10 once-over: the Sun pane's time of day had about 200 px of slider and
-## its markers clumped). The Visuals drawer's slider rows are stacked.
+## its markers clumped). The Visuals drawer's slider rows are stacked. A stacked row's check
+## ([member show_check], the toggle variant: Fog, Glow) and colour swatch end the label's line
+## too, so its slider starts on the same edge as its neighbours', and the row keeps
+## STACKED_ROW_GAP under itself so rows read apart.
 
 signal value_changed(value: float)
 signal color_changed(color: Color)
@@ -28,6 +31,10 @@ const OVERRIDE_TOOLTIP := "Overridden. Right-click to reset to the preset value.
 const SHEET_LABEL_WIDTH := 184.0
 ## The least gap between two words under the slider (tick labels and end hints).
 const TICK_LABEL_GAP := 8.0
+## What a stacked row adds under itself: one spacing step (UI_TASTE S1) more between rows
+## than between a row's own lines, which sit flush (2026-10-10 round 2: at a 24 px pitch a
+## hint line sat as close to the next label as to its own slider).
+const STACKED_ROW_GAP := 8.0
 
 @export var label: String = "":
 	set(value):
@@ -140,6 +147,8 @@ func _ready() -> void:
 	add_theme_constant_override("separation", 0)
 	_build_row()
 	_build_ticks()
+	if stacked:
+		_build_gap()
 	_sync_range()
 	_refresh_override()
 	_refresh_ticks()
@@ -215,14 +224,17 @@ func _build_row() -> void:
 		_check = CheckBox.new()
 		_check.name = "Check"
 		_check.toggled.connect(_on_check_toggled)
-		_row.add_child(_check)
 
 	if show_color:
 		_picker = ColorPickerButton.new()
 		_picker.name = "Color"
 		_picker.custom_minimum_size = Vector2(28, 0)
 		_picker.color_changed.connect(_on_color_changed)
-		_row.add_child(_picker)
+
+	# Beside the label, the check and swatch sit before the slider; stacked, they end the
+	# label's line, so the slider starts on the same edge as every other row's.
+	if not stacked:
+		_add_switches(_row)
 
 	_slider = HSlider.new()
 	_slider.name = "Slider"
@@ -241,12 +253,21 @@ func _build_row() -> void:
 	_chip.focus_exited.connect(_commit_chip)
 	(_head if stacked else _row).add_child(_chip)
 	_sync_chip_width()
+	if stacked:
+		_add_switches(_head)
 
 	if not show_slider:
 		_slider.visible = false
 		if not show_color and not show_check:
 			_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_refresh_chip_visibility()
+
+
+## Add the check and the colour swatch, those the row has, to `line`.
+func _add_switches(line: HBoxContainer) -> void:
+	for control: Control in [_check, _picker]:
+		if control != null:
+			line.add_child(control)
 
 
 ## One line of the row (the stacked label's line, or the controls), added under the last.
@@ -269,6 +290,16 @@ func _build_ticks() -> void:
 	add_child(_ticks)
 	_hint_font = _label.get_theme_font("font")
 	_hint_font_size = _label.get_theme_font_size("font_size") - 2
+
+
+## The space a stacked row keeps under its last line: one spacing step more between rows
+## than inside one, so a hint line reads with its own slider, not the next row's label.
+func _build_gap() -> void:
+	var gap := Control.new()
+	gap.name = "Gap"
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	gap.custom_minimum_size = Vector2(0, STACKED_ROW_GAP)
+	add_child(gap)
 
 
 func _sync_range() -> void:

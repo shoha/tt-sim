@@ -96,13 +96,18 @@ func _build() -> void:
 	_sky_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_sky_preview.resized.connect(_on_preview_resized)
 	add_child(_sky_preview)
-	_sky_caption = _add_caption("")
+	_sky_caption = _add_note("")
 
 	_preset_row = _add_row("Look", 0.0, 1.0, 1.0, 0.0, {"show_slider": false})
 	_preset_dropdown = OptionButton.new()
+	# Sized to the pane, not to its longest preset: fitted, "Outdoor Day" and its swatch
+	# widened the whole pane 14 px past the drawer's margin at 720p (2026-10-10 round 2).
+	_preset_dropdown.fit_to_longest_item = false
+	_preset_dropdown.clip_text = true
+	_preset_dropdown.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_preset_dropdown.item_selected.connect(_on_preset_selected)
 	_preset_row.set_control(_preset_dropdown)
-	_preset_caption = _add_caption("")
+	_preset_caption = _add_note("")
 	_populate_presets(false)
 
 	_fog_row = _add_row(
