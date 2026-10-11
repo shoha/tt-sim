@@ -19,10 +19,12 @@ extends ForestFall
 ## red rim, amber, gold, a pale core) through the ember glow to warm charcoal smoke going pale
 ## as it rises. Small banded tongues (EventPuffs' crown flame, red, orange and amber, no pale
 ## core) rise among each crown's leaf cards as the burn climbs it, sized by the crown's width
-## so a narrow pine's stay in its crown, and a spark drifts up from a few. On the ground a
-## glowing ring runs out
-## with the front (GroundBurn), small tongues standing on it where it passes (FRONT_TONGUES),
-## charred ground left inside it until the ash lands. Billows of smoke (SmokePuffs) rise from
+## so a narrow pine's stay in its crown, and a spark drifts up from a few. On the ground the
+## front runs out as a lobed line of the fire's noise (GroundBurn): the grass drying ahead of
+## it, a broken hot band on it, char with smouldering specks behind it until the ash lands.
+## Small tongues stand on it where it passes (FRONT_TONGUES, timed by the same line, as the
+## trees' catching is; low smoke wisps from them read as white cotton balls, fire-look-7).
+## Billows of smoke (SmokePuffs) rise from
 ## half the trees and in a short column over the middle: smoke crowns, each a cluster of small
 ## painted puff cards built and lit the way the trees' crowns are, born about a crown across,
 ## breaking up card by card as they age. Over the event's last SNAG_GO_S the
@@ -40,7 +42,7 @@ extends ForestFall
 ##
 ## Bounded: at most MAX_TREES trees, one stand-in mesh copy per species made in setup, two
 ## pools of fixed size made once (every flame and billow of one fire fits at once, so none is
-## overwritten), one ground ring, every random draw and every ground tongue's place made in
+## overwritten), one ground burn, every random draw and every ground tongue's place made in
 ## setup, so a frame only sets transforms, colours and custom data; no allocation while it
 ## plays. The burn shader's noise runs only on the stand-ins.
 
@@ -80,7 +82,7 @@ const CROWN_TONGUES := 7
 const TONGUE_LIFE := Vector2(0.3, 0.45)
 const TONGUE_FOOT := Vector2(0.4, 0.74)
 const TONGUE_TOP := 0.84
-const TONGUE_SPREAD := 0.38
+const TONGUE_SPREAD := 0.28
 const TONGUE_WIDE := 0.25
 const TONGUE_BOUNDS := Vector2(0.06, 0.11)
 const TONGUE_TALL := 1.25
@@ -252,7 +254,8 @@ func setup(editor: AuthoringEditor, event: TerrainEvent) -> bool:
 		_nearest,
 		event.radius_m,
 		SPREAD_S,
-		duration
+		duration,
+		event.seed_value
 	)
 	_place_front(editor.document, event)
 	return true
@@ -353,7 +356,7 @@ func _tree_entry(tree: Dictionary, event: TerrainEvent, box: AABB, height: float
 		"width": clampf(width, height * 0.3, height),
 		"start":
 		(
-			front_reaches(float(tree.distance), _nearest, event.radius_m)
+			front_reaches(_reach(base.origin, event), _nearest, event.radius_m)
 			+ _rng.randf_range(0.0, SPREAD_JITTER)
 		),
 		"burn": _rng.randf_range(BURN_S.x, BURN_S.y),
@@ -376,7 +379,8 @@ func _place_front(document: MapDocument, event: TerrainEvent) -> void:
 		var distance := sqrt(lerpf(near_sq, reach * reach, _rng.randf()))
 		var xz := event.centre + Vector2(cos(angle), sin(angle)) * distance
 		var y := WaterGeometry.ground_at(document, xz) if document != null else _middle.y
-		places.append(Vector4(xz.x, y, xz.y, front_reaches(distance, _nearest, event.radius_m)))
+		var when := front_reaches(_reach(Vector3(xz.x, y, xz.y), event), _nearest, event.radius_m)
+		places.append(Vector4(xz.x, y, xz.y, when))
 	places.sort_custom(func(a: Vector4, b: Vector4) -> bool: return a.w < b.w)
 	_front = places
 	_front_draws.resize(FRONT_TONGUES)
@@ -384,7 +388,14 @@ func _place_front(document: MapDocument, event: TerrainEvent) -> void:
 		_front_draws[i] = _rng.randf()
 
 
-## The ground's tongue `index` rising where the ring has reached.
+## The reach of map point `at` in `event` (GroundBurn.reach): when the front gets there, a
+## lobe of it running ahead or a bay lagging, as the ground shows it.
+func _reach(at: Vector3, event: TerrainEvent) -> float:
+	var p := Vector2(at.x - event.centre.x, at.z - event.centre.y)
+	return GroundBurn.reach(p, event.radius_m, event.seed_value)
+
+
+## The ground's tongue `index` rising where the front has reached.
 func _front_tongue(index: int) -> void:
 	var place := _front[index]
 	var draw := _front_draws[index]

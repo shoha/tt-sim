@@ -385,13 +385,21 @@ Probe and numbers:
   hide part of each, and banded red, orange and a narrow amber heart with no pale core, so
   nothing on a crown is brighter than the ring's hot band; a spark on a third of the trees.
   One big cream-cored tongue on a crown's flank read as a clip-art sticker (fire-look-4). On
-  the ground `GroundBurn`, a Decal with a painted ring (stepped red,
-  orange and gold arcs with cool breaks, ember spots behind, charred ground inside; painted
-  once, 256 px), is sized each frame so its front runs from the nearest tree's distance to
-  the rim over `SPREAD_S` (the trees now catch on that same front, `front_reaches`), its glow
-  dying 0.35-1.15 s after it reaches the rim and its char going from 0.2 s before the ash
-  lands to 0.6 s after; 28 small banded tongues (`FRONT_TONGUES`, places and times drawn in
-  setup on `WaterGeometry.ground_at`) rise on it as it passes. Smoke (`SmokePuffs`,
+  the ground `GroundBurn` (fire-look-7; it was a Decal whose painted ring could only scale, and
+  read as a neon circle) is a box drawn with `shaders/ground_burn.gdshader`, which rebuilds the
+  ground's position from the depth buffer and reworks the opaque frame under it (render priority
+  -1, before the water). Its front is a level line of a lobe field (the fire's noise, painted
+  once into a 64 px wrapping L8 texture): a point burns once the front's radius, running from
+  the nearest tree's distance to the rim over `SPREAD_S`, passes its `reach` (its distance moved
+  by up to 0.55 of the rim by the field), and `GroundBurn.reach` reads the same bytes, so the
+  trees' catching (`front_reaches` of the reach) and the ground tongues follow the line the
+  ground shows. Ahead of it the grass dries in a mottled band (olive, straw, brown; the frame's
+  brightness times a tint), on it a hot band 0.3-1.1 m wide in red, orange and gold patches,
+  broken into crawling segments, behind it char with ash blotches, a red smoulder and pulsing
+  specks; steep faces under 1 m (the grass tufts) take the same paint, so the tufts go straw,
+  flame-lit, then black. Its glow dies 0.35-1.15 s after the front reaches the rim and its char
+  goes from 0.2 s before the ash lands to 0.6 s after; 28 small banded tongues
+  (`FRONT_TONGUES`, places drawn in setup on `WaterGeometry.ground_at`) rise on it as it passes. Smoke (`SmokePuffs`,
   `shaders/fire_smoke.gdshader`) rises from half the trees over 2.5 m and in a two-billow
   column over the middle (fire-look-4): smoke crowns, built as the trees' crowns are. A billow
   is one shared mesh of 44 small puff cards in a low dome (`SmokePuffs.crown_mesh`, large
