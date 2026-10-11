@@ -643,6 +643,15 @@ This is checked before processing camera zoom and edge panning.
 - Pure layout containers with `mouse_filter = IGNORE` do **not** block 3D input (their children might, but the container itself doesn't)
 - If a new panel should **not** block 3D input (e.g., a transparent HUD overlay), set all its controls to `mouse_filter = PASS` or `IGNORE`
 
+### Nested clip masks draw blank
+
+A control that clips with `clip_children` (a `LevelCard`'s or `RoomRows` map well, a
+`CardThumb`) draws nothing in a real render when an ancestor is a `clip_children` mask too
+(`ScrollFade` makes its ScrollContainer one). The library grid's pictures went blank twice on
+2026-10-10, once with a hand-made mask and once with `ScrollFade` on the grid; headless GUT runs
+pass either way, so only a render job shows it. Fade or round such content another way (a
+shader on the content, a gradient drawn over it), and check a capture.
+
 ---
 
 ## Token Animation System
