@@ -81,6 +81,11 @@ other committed home.
     path (no new event: user, 2026-10-11). Along a path it behaves as it does in a circle:
     the fire races along the stroke, trees on it burn to snags and it leaves ash ground, one
     history entry.
+  Answers to the design's questions (user, 2026-10-11): painting persistent fire over trees
+  burns them to snags (the burnt forest biome, as Start a fire leaves), in the same history
+  entry; Tab means "the brush's other shape" for every tool with two (Start a fire: Circle and
+  Path; Fire: Area and Line; Water: River and Pond); along a path, snags stand only where trees
+  stood, while the ash runs the whole path.
   Both reuse the fire look of card fire-look-3 (flames, ground fire, smoke as one family).
   Design before code: `docs/plans/2026-10-11-fire-features/` (gitignored).
 
