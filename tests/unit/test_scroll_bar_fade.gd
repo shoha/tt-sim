@@ -27,6 +27,20 @@ func test_the_bar_rests_clear() -> void:
 	assert_false(fade.is_shown())
 
 
+## A list taken out of the tree under the pointer (the title's grid on a state change) still
+## reports the pointer leaving: nothing starts on a timer out of the tree.
+func test_leaving_out_of_the_tree_starts_nothing() -> void:
+	var scroll := _scroll()
+	var fade := ScrollBarFade.attach(scroll)
+	await wait_process_frames(1)
+	scroll.mouse_entered.emit()
+	remove_child(scroll)
+	scroll.mouse_exited.emit()
+	scroll.get_v_scroll_bar().value_changed.emit(10.0)
+	assert_true(fade._linger.is_stopped(), "no timer started out of the tree")
+	scroll.free()
+
+
 func test_the_pointer_over_the_list_fades_it_in_and_leaving_fades_it_out() -> void:
 	var scroll := _scroll()
 	var fade := ScrollBarFade.attach(scroll)

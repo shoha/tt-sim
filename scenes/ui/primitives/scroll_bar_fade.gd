@@ -74,13 +74,15 @@ func show_bar(on: bool) -> void:
 
 func _on_scrolled(_value: float) -> void:
 	show_bar(true)
-	if not _pointer_over:
+	if not _pointer_over and _linger.is_inside_tree():
 		_linger.start()
 
 
+## A list leaving the tree under the pointer (the title's grid on a state change) still reports
+## the pointer leaving; its timer is out of the tree then, so nothing starts.
 func _on_pointer(inside: bool) -> void:
 	_pointer_over = inside
 	if inside:
 		show_bar(true)
-	else:
+	elif _linger.is_inside_tree():
 		_linger.start()
