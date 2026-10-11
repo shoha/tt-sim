@@ -35,7 +35,9 @@ Do not read the maker's code, diff or reasoning; judge the pictures. Write your 
 before you look at any audit output (`test_ui_theme_bypass.gd` counts); only then say
 where the audit agrees with you and which of its hits are false positives.
 
-Budget your images, the largest token cost: read each capture once, at the half size the
+Budget your images, the largest token cost: every call resends every image read so far, so read
+only the captures the brief names, in two or three batches (several reads in one message),
+and write the report as soon as the last is read. Read each capture once, at the half size the
 job writes by default (640x360 and 960x540). Half of 720p is smaller than any player sees,
 so judge text size and legibility at 720p only on a `--full` run, where the 1280x720
 captures are true size. Ask for a `--full` capture of a named screen only when a finding
