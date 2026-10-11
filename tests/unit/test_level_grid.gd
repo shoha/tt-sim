@@ -187,8 +187,9 @@ func test_a_wide_grid_adds_columns_instead_of_stretching_cards() -> void:
 	assert_lte(grid._cards[0].custom_minimum_size.x, float(LevelGrid.MAX_CARD_WIDTH))
 	assert_eq(grid._cards[0].position.y, grid._cards[2].position.y, "three cards in one row")
 	var ring_out := 4.0
-	assert_gte(grid._flow.position.x, ring_out, "a focus ring fits inside the clip on the left")
-	assert_gte(grid._flow.position.y, ring_out, "and on the top")
+	var room := grid._flow.get_parent() as Control
+	assert_gte(room.position.x, ring_out, "a focus ring fits inside the clip on the left")
+	assert_gte(room.position.y, ring_out, "and on the top")
 	grid.size = Vector2(500, 600)
 	await wait_frames(2)
 	assert_gt(grid._cards[0].custom_minimum_size.x, 200.0, "a narrow grid keeps its two columns")

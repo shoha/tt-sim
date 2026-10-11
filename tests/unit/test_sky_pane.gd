@@ -62,12 +62,10 @@ func test_sky_tile_sets_sky_preset() -> void:
 	assert_true(pane._sky_field.overridden)
 
 
-func test_map_options_toggle_revert_and_map_default_tile() -> void:
+func test_map_options_toggle_the_map_default_tile() -> void:
 	var pane := _pane()
-	assert_false(pane._revert_button.visible)
 	assert_false(pane._sky_tiles._tiles[&"map_default"].visible)
 	pane.set_map_options(true, true)
-	assert_true(pane._revert_button.visible)
 	assert_true(pane._sky_tiles._tiles[&"map_default"].visible)
 	assert_ne(_index_of_preset(pane, ""), -1, "Map Defaults entry present")
 
@@ -86,12 +84,16 @@ func test_no_map_defaults_offers_no_preset_and_an_honest_caption() -> void:
 	assert_eq(pane._preset_caption.text, "The map's own lighting")
 
 
-func test_revert_and_clear() -> void:
+## One reset in the heading, the eraser, said the same on the Sky and Color panes; the field
+## under the heading is not called "Sky" again.
+func test_one_clear_in_the_heading() -> void:
 	var pane := _pane()
-	watch_signals(pane)
+	var header := pane.get_node("Header") as HBoxContainer
+	var buttons := header.find_children("*", "IconButton", true, false)
+	assert_eq(buttons.size(), 1, "one action in the heading, not two resets side by side")
+	assert_eq(pane._clear_button.tooltip_text, LevelEditPane.LOOK_CLEAR_TIP)
+	assert_ne(pane._sky_field.caption, "Sky", "the field does not repeat the heading")
 	assert_true(pane._clear_button.disabled)
-	pane._on_revert_pressed()
-	assert_signal_emitted(pane, "revert_to_map_defaults_requested")
 	_model.set_override("fog_density", 0.05)
 	assert_false(pane._clear_button.disabled)
 	pane._on_clear_pressed()

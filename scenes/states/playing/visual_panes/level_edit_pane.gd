@@ -10,6 +10,9 @@ extends VBoxContainer
 signal changed
 
 const ROW_SEPARATION := 6
+## The eraser on the Sky and Color panes (_add_look_heading): both edit one look.
+const LOOK_CLEAR_TIP := "Undo every change to Sky and Color, keeping the Look"
+const LOOK_CLEARED := "Sky and Color changes undone."
 
 
 func _ready() -> void:
@@ -41,6 +44,27 @@ func _add_heading(text: String) -> Label:
 	heading.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(heading)
 	return heading
+
+
+## The heading of a pane on the shared EnvironmentEditModel (Sky, Color) with the one way to
+## undo the look's changes at its end: the eraser, the same on both panes (LOOK_CLEAR_TIP).
+## Returns the eraser; the pane wires it to its model and keeps it disabled while nothing is
+## changed.
+func _add_look_heading(text: String) -> IconButton:
+	var header := HBoxContainer.new()
+	header.name = "Header"
+	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(header)
+	var heading := _add_heading(text)
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.reparent(header)
+	var clear := IconButton.new()
+	clear.name = "ClearLook"
+	clear.icon_name = "eraser"
+	clear.tooltip_text = LOOK_CLEAR_TIP
+	clear.disabled = true
+	header.add_child(clear)
+	return clear
 
 
 ## A muted caption: a subhead over the rows it names (Water's Advanced groups), or with

@@ -145,6 +145,41 @@ func test_a_stacked_check_ends_the_label_line_and_leaves_the_slider_full_width()
 	assert_signal_emitted_with_parameters(toggled, "toggled", [true])
 
 
+## A toggle row's slider is drawn off and takes no input while its check is off (Fog off with a
+## live slider read as fog on), and its label line is a plain row's height (the check is no
+## taller than the label).
+func test_a_toggle_rows_slider_is_off_with_its_check_and_its_line_is_plain() -> void:
+	var box := VBoxContainer.new()
+	box.size = Vector2(300, 400)
+	add_child_autofree(box)
+	var plain := _stacked("Ambient")
+	var toggled := _stacked("Fog", {"check": true})
+	box.add_child(plain)
+	box.add_child(toggled)
+	await wait_process_frames(2)
+	toggled.set_checked_no_signal(false)
+	assert_false(toggled._slider.editable, "no input while off")
+	assert_eq(toggled._slider.theme_type_variation, &"SliderOff", "drawn off")
+	assert_false(toggled.slider_live())
+	toggled._check.button_pressed = true
+	assert_true(toggled._slider.editable, "live once checked")
+	assert_eq(toggled._slider.theme_type_variation, &"", "drawn live")
+	toggled.checked = false
+	assert_eq(toggled._slider.theme_type_variation, &"SliderOff", "the silent setter too")
+	toggled.set_value_no_signal(0.5)
+	assert_false(toggled._slider.editable, "a value sync keeps it off")
+	assert_eq(plain._slider.theme_type_variation, &"", "a plain row is never off")
+	await wait_process_frames(1)
+	assert_almost_eq(
+		toggled._head.size.y, plain._head.size.y, 0.5, "a checked row's line is a plain row's"
+	)
+	var to_slider := toggled._slider.get_global_rect().position.y
+	to_slider -= toggled._label.get_global_rect().position.y
+	var plain_to_slider := plain._slider.get_global_rect().position.y
+	plain_to_slider -= plain._label.get_global_rect().position.y
+	assert_almost_eq(to_slider, plain_to_slider, 0.5, "the same label to slider")
+
+
 ## Beside its label (a sheet row), the check still sits before the slider.
 func test_an_unstacked_check_sits_before_the_slider() -> void:
 	var row := PropertyRow.new()

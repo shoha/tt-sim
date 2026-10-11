@@ -309,6 +309,107 @@ func test_the_panels_menu_author_and_quiet_empty_fields() -> void:
 	assert_false(bare.add_details_button.visible, "the open field takes its place")
 
 
+## The keys hint covers nothing: no tooltip on the words at rest, and the hint inside the open
+## field's well, under the field, only while it is open.
+func test_the_edit_hint_shows_in_the_well_only_while_open() -> void:
+	var info := _info("harbour", "map.glb", "")
+	info.description = "A ford under old willows, where the road meets the river"
+	var panel := _panel(info)
+	for label: Label in [panel.name_label, panel.description_label]:
+		assert_eq(label.tooltip_text, "", "no tooltip over the words it is about")
+	assert_false(panel.hint_shown("description"), "no hint at rest")
+	panel.begin_edit("description")
+	assert_true(panel.hint_shown("description"), "the keys while the field is open")
+	assert_true(panel.cue_shown("description"), "inside the open field's well")
+	var hint := panel.find_child("DescriptionHint", true, false) as Label
+	assert_eq(hint.text, MapPanel.EDIT_HINT)
+	assert_eq(hint.get_parent(), panel.description_edit.get_parent(), "in the field's own stack")
+	assert_gt(hint.get_index(), panel.description_edit.get_index(), "under the field")
+	var escape := InputEventAction.new()
+	escape.action = "ui_cancel"
+	escape.pressed = true
+	panel.description_edit.gui_input.emit(escape)
+	await wait_process_frames(2)
+	assert_false(panel.hint_shown("description"), "gone with the field")
+
+
+## Edit map is sized to its words from the left edge on every map, Reload beside it or not;
+## the description's well reaches out the same on both sides of its widest line.
+func test_edit_map_keeps_its_width_and_the_well_hugs_the_words() -> void:
+	var made := _panel(_info("made", "", "map.ttmap"))
+	var updated := _panel(_info("harbour", "map.glb", "map.ttmap"), true)
+	await wait_process_frames(3)
+	assert_false(made.reload_button.visible)
+	assert_true(updated.reload_button.visible)
+	assert_almost_eq(made.edit_button.size.x, updated.edit_button.size.x, 0.5, "one width")
+	assert_almost_eq(
+		made.edit_button.size.x, made.edit_button.get_combined_minimum_size().x, 0.5, "its words'"
+	)
+	assert_lt(made.edit_button.size.x, MapPanel.WIDTH * 0.5, "never the panel's full width")
+	assert_almost_eq(made.edit_button.position.x, 0.0, 0.5, "on the left edge")
+	var info := _info("words", "map.glb", "")
+	info.description = "A cove"
+	var panel := _panel(info)
+	await wait_process_frames(3)
+	var words := panel.description_label
+	var widest := MapPanel.well_width(words, panel.words_width())
+	assert_almost_eq(words.size.x, widest, 1.0, "the well is the words' width")
+	assert_lt(words.size.x, panel.words_width() * 0.5, "a short line's well stops short too")
+	assert_almost_eq(panel._words.size.x, panel.words_width(), 0.5, "words_width is the column")
+
+
+## The date ends the chip's line when it fits, else stands on a line of its own a body step
+## under it, never a lone item wrapped tight under the chip.
+func test_the_date_fits_the_chip_line_or_takes_its_own() -> void:
+	var panel := _panel(_info("harbour", "map.glb", "map.ttmap"))
+	await wait_process_frames(2)
+	var line := 0.0
+	var gap := float(panel._facts.get_theme_constant(&"h_separation"))
+	for fact: Control in [panel._source_chip, panel.size_label, panel.tokens_label]:
+		line += fact.get_combined_minimum_size().x + gap
+	line += panel.played_label.get_combined_minimum_size().x
+	assert_eq(panel.when_on_own_line(), line > panel.words_width(), "own line only past the width")
+	if panel.when_on_own_line():
+		assert_eq(panel.played_label.get_parent(), panel._body, "a line in the words' rhythm")
+	panel.footprint = func(_info: Dictionary) -> Vector2: return Vector2.ZERO
+	var short := _info("x", "", "map.ttmap")
+	short.token_count = 0
+	panel.show_map(short)
+	assert_false(panel.when_on_own_line(), "a short chip line takes the date at its end")
+
+
+## Disabled Generate (a refused size) keeps its words at 4.5:1 or better on the card's paper
+## (C6: words read at 4.5:1).
+func test_disabled_generate_words_read() -> void:
+	var card := NewMapCard.new()
+	add_child_autofree(card)
+	card.set_advanced(true)
+	card.size_field.tiles.selection_changed.emit(NewMapCard.SIZE_CUSTOM)
+	card.width_box.value = 400
+	assert_true(card.generate_button.disabled)
+	var words := card.generate_button.get_theme_color(&"font_disabled_color")
+	var paper := ThemeColors.of(card, ThemeColors.SURFACE)
+	assert_gte(MapPlaceholder.contrast(words, paper), 4.5, "disabled Generate's words read")
+	card.set_advanced(false)
+
+
+## The empty library: New map grows with the canvas, its face in two paper tones, and the grid
+## centres it on the line the owner gives (the title: the window's middle).
+func test_the_empty_library_is_centred_and_its_face_lit() -> void:
+	assert_eq(NewMapCard.empty_width_for(1280.0), NewMapCard.EMPTY_WIDTH, "1280x720 as before")
+	assert_gt(NewMapCard.empty_width_for(1920.0), NewMapCard.EMPTY_WIDTH, "wider on 1080p")
+	assert_eq(NewMapCard.empty_width_for(4000.0), NewMapCard.EMPTY_WIDTH_MAX)
+	assert_eq(LevelGrid.alone_pad(500.0, 1000.0, 400.0), 0.0, "on the middle already")
+	assert_eq(LevelGrid.alone_pad(600.0, 1000.0, 400.0), 200.0, "twice the distance")
+	assert_eq(LevelGrid.alone_pad(900.0, 1000.0, 400.0), 600.0, "never narrower than the lead")
+	var card := NewMapCard.new()
+	add_child_autofree(card)
+	var tones := NewMapCard.face_tones(card)
+	assert_ne(tones[0], tones[1], "two tones")
+	assert_gt(tones[0].get_luminance(), tones[1].get_luminance(), "lighter at the top")
+	assert_not_null(card.face_wash.texture, "the wash is painted")
+
+
 # --- New map -----------------------------------------------------------------------------------
 
 

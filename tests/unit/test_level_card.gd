@@ -41,9 +41,14 @@ func test_caption_grammar_and_relative_times() -> void:
 		"1 token, edited just now"
 	)
 	assert_eq(
-		LevelCard.caption_for(_info({"modified_at": NOW - 120}), NOW), "2 tokens, edited 2 min ago"
+		LevelCard.caption_for(_info({"modified_at": NOW - 120}), NOW),
+		"2 tokens, edited 2 minutes ago"
 	)
-	assert_eq(LevelCard.caption_for(_info(), NOW), "2 tokens, edited 3 h ago")
+	assert_eq(LevelCard.caption_for(_info(), NOW), "2 tokens, edited 3 hours ago")
+	# Every unit spelt out as "days" is, one of each in the singular.
+	assert_eq(LevelCard.relative_time(60, NOW - 60), "1 minute ago")
+	assert_eq(LevelCard.relative_time(3600, NOW - 3600), "1 hour ago")
+	assert_eq(LibraryFacts.touched_text({"modified_at": NOW - 3 * 3600}, NOW), "Edited 3 hours ago")
 	assert_eq(
 		LevelCard.caption_for(_info({"modified_at": NOW - 30 * 3600}), NOW),
 		"2 tokens, edited yesterday"

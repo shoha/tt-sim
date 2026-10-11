@@ -250,7 +250,7 @@ func set_selected(on: bool) -> void:
 	_show_selected(on)
 
 
-## "1 token, edited 3 h ago"; "No tokens" alone when the level is empty and has
+## "1 token, edited 3 hours ago"; "No tokens" alone when the level is empty and has
 ## never been saved with a time. A library entry (it carries "played_at") says what the map
 ## panel says, in the one formatter both use (LibraryFacts.when_text): the date the library's
 ## order uses for the player's own maps ("Played yesterday", "Edited 3 days ago"), when it was
@@ -266,19 +266,25 @@ static func caption_for(info: Dictionary, now_unix: int) -> String:
 	return "%s, edited %s" % [tokens, relative_time(now_unix - modified, modified)]
 
 
+## How long ago, every unit spelt out as "days" is ("3 hours ago", "1 minute ago"), so a card
+## and the panel never mix "3 h" with "4 days". Pure.
 static func relative_time(seconds_ago: int, modified_unix: int) -> String:
 	if seconds_ago < 60:
 		return "just now"
 	if seconds_ago < 3600:
-		return "%d min ago" % (seconds_ago / 60)
+		return _units_ago(seconds_ago / 60, "minute")
 	if seconds_ago < 86400:
-		return "%d h ago" % (seconds_ago / 3600)
+		return _units_ago(seconds_ago / 3600, "hour")
 	if seconds_ago < 2 * 86400:
 		return "yesterday"
 	if seconds_ago < 14 * 86400:
 		return "%d days ago" % (seconds_ago / 86400)
 	var date := Time.get_datetime_dict_from_unix_time(modified_unix)
 	return "%d %s %d" % [date["day"], MONTHS[int(date["month"]) - 1], date["year"]]
+
+
+static func _units_ago(count: int, unit: String) -> String:
+	return "%d %s%s ago" % [count, unit, "" if count == 1 else "s"]
 
 
 func begin_rename() -> void:

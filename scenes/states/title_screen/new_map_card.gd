@@ -2,7 +2,8 @@ class_name NewMapCard
 extends PanelContainer
 
 ## The library's first card, "New map", in the anatomy every map card has: a 16:9 picture, a
-## name line and a caption band. The picture is a solid paper face with one ink glyph (a map
+## name line and a caption band. The picture is a paper face in two tones (raised paper to inset
+## paper on a gentle diagonal, the well clipping it) with one ink glyph (a map
 ## still to come, never a map's picture); the name line says New map with Advanced at its end;
 ## the caption band holds Generate and Import... as siblings (user verdict 2026-10-09: no Try
 ## step, "From image" never in the default view, custom dimensions under Advanced). Generate
@@ -33,7 +34,8 @@ extends PanelContainer
 ## buttons are taller than a map's caption band, so its face gives up the difference and is
 ## shorter than 16:9; no card in the line is stretched to meet it.
 ##
-## In an empty library the card is the library: alone, larger (set_empty()), its face 2:1,
+## In an empty library the card is the library: alone, larger (set_empty(), wider on a larger
+## canvas: empty_width_for), centred on the window with what is under it (LevelGrid), its face 2:1,
 ## its glyph bigger and a caption line (EMPTY_CAPTION, one line) over its buttons, with the
 ## Bundled maps offered under it (LevelGrid).
 
@@ -59,6 +61,9 @@ const EMPTY_GLYPH_SIZE := 56.0
 ## on a 1280x720 canvas).
 const EMPTY_WIDTH := 420.0
 const EMPTY_FACE_ASPECT := 2.0
+## On a larger canvas the lone card grows with it (empty_width_for), up to EMPTY_WIDTH_MAX.
+const EMPTY_SHARE := 0.29
+const EMPTY_WIDTH_MAX := 560.0
 ## The popover's narrowest.
 const POPOVER_MIN_WIDTH := 360.0
 ## The face's shortest, however short the line it fits (fit_row()).
@@ -101,6 +106,11 @@ var seed_edit: LineEdit
 var size_note_row: HBoxContainer
 var size_icon: TextureRect
 var size_line: Label
+
+## Its width alone in an empty library (set_empty_width; EMPTY_WIDTH until its owner sets it).
+var empty_width := EMPTY_WIDTH
+## The face's two paper tones, lighter at the top (_paint_face).
+var face_wash: TextureRect
 
 var _empty := false
 var _anchor_parent: Control = null
@@ -167,15 +177,25 @@ func _init() -> void:
 	column.theme_type_variation = &"BoxContainerTight"
 	add_child(column)
 	_column = column
-	# A solid paper face with one ink glyph: a map still to come, not a map's picture.
+	# A paper face in two tones with one ink glyph: a map still to come, not a map's picture.
+	# The well clips the wash to its corners.
 	picture = Panel.new()
 	picture.name = "Face"
 	picture.theme_type_variation = &"CardThumb"
 	picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	picture.custom_minimum_size = Vector2(0, 64)
 	picture.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	picture.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 	picture.resized.connect(_fit_picture)
+	picture.theme_changed.connect(_paint_face)
 	column.add_child(picture)
+	face_wash = TextureRect.new()
+	face_wash.name = "Wash"
+	face_wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	face_wash.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	face_wash.stretch_mode = TextureRect.STRETCH_SCALE
+	face_wash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	picture.add_child(face_wash)
 	glyph = TextureRect.new()
 	glyph.name = "Glyph"
 	glyph.texture = IconButton.load_icon(GLYPH)
@@ -369,8 +389,22 @@ func set_empty(on: bool) -> void:
 	caption.text = EMPTY_CAPTION if on else CAPTION
 	caption.visible = on
 	if on:
-		custom_minimum_size.x = EMPTY_WIDTH
+		custom_minimum_size.x = empty_width
 	_fit_picture()
+
+
+## Its width alone in an empty library on a canvas `canvas_width` wide: EMPTY_SHARE of it,
+## never under EMPTY_WIDTH (1280x720) or over EMPTY_WIDTH_MAX, so the first map's card holds
+## the middle of a large window as it does a small one. Pure.
+static func empty_width_for(canvas_width: float) -> float:
+	return clampf(floorf(canvas_width * EMPTY_SHARE), EMPTY_WIDTH, EMPTY_WIDTH_MAX)
+
+
+## Sets the width alone (empty_width_for), applied at once while the library is empty.
+func set_empty_width(width: float) -> void:
+	empty_width = width
+	if _empty:
+		custom_minimum_size.x = width
 
 
 func is_empty_library() -> bool:
@@ -575,6 +609,30 @@ func _refresh_size() -> void:
 func _tint_note() -> void:
 	if size_icon.is_inside_tree():
 		size_icon.self_modulate = ThemeColors.of(size_icon, size_icon.get_meta(&"role"))
+
+
+## The face's wash: the raised paper at its top left to the inset paper at its foot, leaning to
+## the diagonal as a map's placeholder does, so the face reads as a lit sheet, not a flat block.
+func _paint_face() -> void:
+	var tones := Gradient.new()
+	tones.colors = face_tones(picture)
+	var wash := GradientTexture2D.new()
+	wash.gradient = tones
+	wash.width = 64
+	wash.height = 64
+	wash.fill_from = Vector2.ZERO
+	wash.fill_to = Vector2(0.5, 1.0)
+	face_wash.texture = wash
+
+
+## The face's two tones in `control`'s theme: raised paper over inset paper.
+static func face_tones(control: Control) -> PackedColorArray:
+	return PackedColorArray(
+		[
+			ThemeColors.of(control, ThemeColors.SURFACE_RAISED),
+			ThemeColors.of(control, ThemeColors.SURFACE_INSET),
+		]
+	)
 
 
 ## Fit a line `height` tall (a map card's, LevelGrid): the face takes up the difference between

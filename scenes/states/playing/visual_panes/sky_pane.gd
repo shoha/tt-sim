@@ -5,9 +5,9 @@ extends LevelEditPane
 ## under Advanced. Environment fields live on the shared EnvironmentEditModel;
 ## this pane is the one that writes preset + overrides into the state on
 ## Save. Sky tiles show a thumbnail; a preview strip and caption under them
-## show the hovered or selected sky before it is applied.
-
-signal revert_to_map_defaults_requested
+## show the hovered or selected sky before it is applied. The heading's one action is the
+## eraser it shares with the Color pane (_add_look_heading): undo every change to the look,
+## keeping the Look; the map's own lighting is the Look dropdown's first entry.
 
 const AMBIENT_KEYS := ["ambient_light_color", "ambient_light_energy"]
 const FOG_KEYS := ["fog_enabled", "fog_light_color", "fog_density"]
@@ -32,12 +32,12 @@ const SKY_TILES := [
 const PREVIEW_HEIGHT := 70
 const CAPTION_NONE := "No sky: background colour only"
 const CAPTION_MAP := "The map's own sky"
+const SKY_FIELD := "Sky picture"
 
 var _model: EnvironmentEditModel
 var _has_map_defaults: bool = false
 var _preset_row: PropertyRow
 var _preset_dropdown: OptionButton
-var _revert_button: IconButton
 var _clear_button: IconButton
 var _preset_caption: Label
 var _sky_field: TileField
@@ -62,9 +62,11 @@ func set_model(model: EnvironmentEditModel) -> void:
 
 
 func _build() -> void:
-	_build_header()
+	_clear_button = _add_look_heading("Sky")
+	_clear_button.pressed.connect(_on_clear_pressed)
 
-	_sky_field = _add_tile_field("Sky", [])
+	# Not "Sky" again under the heading: the tiles pick the picture overhead.
+	_sky_field = _add_tile_field(SKY_FIELD, [])
 	# Ten tiles as two even rows of five.
 	_sky_field.tiles.tile_min_size = Vector2(52, 52)
 	_sky_field.tiles.columns = 5
@@ -206,30 +208,6 @@ func _build() -> void:
 	)
 
 
-func _build_header() -> void:
-	var header := HBoxContainer.new()
-	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(header)
-	var heading := Label.new()
-	heading.text = "Sky"
-	heading.theme_type_variation = &"SectionHeader"
-	heading.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(heading)
-	_revert_button = IconButton.new()
-	_revert_button.icon_name = "restore"
-	_revert_button.tooltip_text = "Revert to the map's own lighting"
-	_revert_button.visible = false
-	_revert_button.pressed.connect(_on_revert_pressed)
-	header.add_child(_revert_button)
-	_clear_button = IconButton.new()
-	_clear_button.icon_name = "eraser"
-	_clear_button.tooltip_text = "Clear every override"
-	_clear_button.disabled = true
-	_clear_button.pressed.connect(_on_clear_pressed)
-	header.add_child(_clear_button)
-
-
 func _populate_presets(has_map_defaults: bool) -> void:
 	_has_map_defaults = has_map_defaults
 	_preset_dropdown.clear()
@@ -258,10 +236,9 @@ func _populate_presets(has_map_defaults: bool) -> void:
 
 
 ## Called by the panel from initialize(): the map may carry its own
-## environment (revert button, "Map Defaults" preset) and its own sky.
+## environment ("Map Defaults" preset) and its own sky.
 func set_map_options(has_map_defaults: bool, has_map_sky: bool) -> void:
 	_populate_presets(has_map_defaults)
-	_revert_button.visible = has_map_defaults
 	_sky_tiles.set_tile_visible(&"map_default", has_map_sky)
 	_sync_from_model()
 
@@ -279,6 +256,9 @@ func _sync_from_model() -> void:
 	if not _model or not is_node_ready():
 		return
 	OptionButtonUtils.select_by_metadata(_preset_dropdown, _model.preset)
+	# The dropdown ellipsizes a long name in the pane; its tooltip says it whole.
+	var picked := _preset_dropdown.selected
+	_preset_dropdown.tooltip_text = _preset_dropdown.get_item_text(picked) if picked >= 0 else ""
 	if _model.preset.is_empty():
 		_preset_caption.text = (
 			"The map's own lighting" if _has_map_defaults else "No preset: engine defaults"
@@ -382,15 +362,7 @@ func _on_reset_requested(keys: Array) -> void:
 		changed.emit()
 
 
-## Reverting is an edit like any other: the controller rewrites the live level
-## data and then calls apply_environment_state(), so the drawer has unsaved
-## work afterwards.
-func _on_revert_pressed() -> void:
-	revert_to_map_defaults_requested.emit()
-	changed.emit()
-
-
 func _on_clear_pressed() -> void:
 	if _model.clear_all():
-		UIManager.show_info("Overrides cleared.")
+		UIManager.show_info(LOOK_CLEARED)
 		changed.emit()

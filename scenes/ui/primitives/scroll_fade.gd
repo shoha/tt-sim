@@ -14,9 +14,22 @@ extends Node
 ## the last whole row, when the edge falls between rows): a row in full view is never dimmed,
 ## since a half-faded row reads as a disabled one. A row is a shown control laid out by a
 ## VBoxContainer inside the scroll.
+##
+## With `at_top` (the title's library grid, whose top is a hard clip under its sticky heading)
+## the top edge fades too, over TOP_HEIGHT, once the content has scrolled: the ramp comes in
+## with the first TOP_HEIGHT px of scroll (top_alpha), so the grid at rest is untouched and a
+## card scrolled under the heading thins out instead of being cut by a straight line.
+## `at_bottom` off leaves the foot alone (a grid that runs to the window's edge).
 
 ## The fade's height in virtual px at most: about half a row.
 const HEIGHT := 24.0
+## The top fade's height: the grid's 12 px room over its first line and a little of the card.
+const TOP_HEIGHT := 20.0
+
+## Fade the top edge once scrolled.
+var at_top := false
+## Fade the bottom edge while more waits below.
+var at_bottom := true
 
 var _scroll: ScrollContainer
 
@@ -48,16 +61,34 @@ func _on_scrolled(_value: float) -> void:
 
 func _on_draw() -> void:
 	var size := _scroll.size
-	if not more_below():
-		_scroll.draw_rect(Rect2(Vector2.ZERO, size), Color.WHITE)
-		return
-	var top := fade_top(_row_spans(), size.y)
-	_scroll.draw_rect(Rect2(0.0, 0.0, size.x, top), Color.WHITE)
-	var ramp := PackedVector2Array(
-		[Vector2(0.0, top), Vector2(size.x, top), Vector2(size.x, size.y), Vector2(0.0, size.y)]
+	# The opaque middle runs from under the top ramp (if any) to over the bottom one (if any).
+	var start := 0.0
+	var edge := top_alpha(float(_scroll.scroll_vertical)) if at_top else 1.0
+	if edge < 1.0:
+		start = minf(TOP_HEIGHT, size.y)
+		var faded := Color.WHITE
+		faded.a = edge
+		_ramp(0.0, start, faded, Color.WHITE)
+	var end := size.y
+	if at_bottom and more_below():
+		end = maxf(fade_top(_row_spans(), size.y), start)
+		_ramp(end, size.y, Color.WHITE, Color.TRANSPARENT)
+	_scroll.draw_rect(Rect2(0.0, start, size.x, end - start), Color.WHITE)
+
+
+## A band of the mask from `from` to `to`, its alpha running from `upper` to `lower`.
+func _ramp(from: float, to: float, upper: Color, lower: Color) -> void:
+	var width := _scroll.size.x
+	var band := PackedVector2Array(
+		[Vector2(0.0, from), Vector2(width, from), Vector2(width, to), Vector2(0.0, to)]
 	)
-	var alpha := PackedColorArray([Color.WHITE, Color.WHITE, Color.TRANSPARENT, Color.TRANSPARENT])
-	_scroll.draw_polygon(ramp, alpha)
+	_scroll.draw_polygon(band, PackedColorArray([upper, upper, lower, lower]))
+
+
+## The mask's alpha at the very top edge after `scrolled` px of scroll: whole at rest, clear
+## from TOP_HEIGHT on, so the top fade comes in with the scroll rather than at once. Pure.
+static func top_alpha(scrolled: float) -> float:
+	return 1.0 - clampf(scrolled / TOP_HEIGHT, 0.0, 1.0)
 
 
 ## Where the fade starts for a view `bottom` tall over rows spanning `spans` (Vector2(top,

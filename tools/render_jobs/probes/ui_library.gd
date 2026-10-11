@@ -25,6 +25,8 @@ extends RefCounted
 ## - `empty`: a first run: only the Bundled map, New map alone and larger over it.
 ## - `focus` (`target`: "card", "play" or "name"): the keyboard focus on Willow Green's card or
 ##   on the panel's Play, or the panel's name open for typing.
+## - `long_words`: the panel (only) shows the selected map with a long name, a three-line
+##   description and a long author (LONG_NAME, LONG_DESCRIPTION, LONG_AUTHOR).
 ## - `add_details`: the panel's Add details pressed (the first empty field open for typing).
 ## - `hover` (`target`: "card" or "description"): the pointer over Lantern Bay's card, or over
 ##   the panel's description.
@@ -46,6 +48,13 @@ const STAGED := [
 	["Moonwell", "outdoor_night", "", "map.ttmap", 12, 14, 3, Vector2(300, 120)],
 	["Old Mill", "", "res://maps/old_mill.glb", "", -1, 30, 5, Vector2(100, 100)],
 ]
+## `long_words`: the panel alone shows the selected map with these (the grid keeps its own).
+const LONG_NAME := "The Drowned Lanterns of Upper Fenwick Mire"
+const LONG_DESCRIPTION := (
+	"A drowned village under the fen, its lanterns still lit below the water; the causeway"
+	+ " floods at dusk and the old bell tower leans over the reeds"
+)
+const LONG_AUTHOR := "Marigold Thistlewood-Ash"
 const DESCRIPTIONS := {
 	"Willow Green": ["A ford under old willows, where the road meets the river", "Hannah"],
 	"Violet Fen": ["Reed beds and a sunken causeway at dusk", ""],
@@ -97,6 +106,13 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _hover(base, title, String(step.get("target", "card")))
 		"park":
 			return _park(base, title)
+		"long_words":
+			var info := title.map_panel.info.duplicate()
+			info.name = LONG_NAME
+			info.description = LONG_DESCRIPTION
+			info.author = LONG_AUTHOR
+			title.map_panel.show_map(info)
+			return "panel shows %s" % LONG_NAME
 		"add_details":
 			title.map_panel.add_details_button.pressed.emit()
 			return "add details: description open %s" % title.map_panel.description_edit.visible

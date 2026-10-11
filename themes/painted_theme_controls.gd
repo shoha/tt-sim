@@ -205,6 +205,28 @@ func define_toggles() -> void:
 			}
 		)
 	)
+	# A check at the end of a label's line (a stacked PropertyRow's toggle: Fog, Glow): no room
+	# above or below its box, so the line is the label's height, as a plain row's; its hover
+	# wash reaches out round it instead.
+	var flat := {
+		content_margin_top = 0,
+		content_margin_bottom = 0,
+		expand_margin_top = 2,
+		expand_margin_bottom = 2,
+	}
+	var inline_plain: Dictionary = inherit(plain, flat)
+	var inline_hover: Dictionary = inherit(inline_plain, {bg_color = c(ThemeColors.SURFACE_HOVER)})
+	define_variant_style(
+		"CheckInline",
+		"CheckBox",
+		{
+			normal = inline_plain,
+			hover = inline_hover,
+			pressed = inline_plain,
+			hover_pressed = inline_hover,
+			disabled = inline_plain,
+		}
+	)
 
 
 ## Sliders, progress bars and scroll bars: a slider's pill track in the track role (3:1, so
@@ -215,6 +237,20 @@ func define_toggles() -> void:
 func define_ranges() -> void:
 	define_style("HSlider", _slider(false))
 	define_style("VSlider", _slider(true))
+	# A slider whose effect is switched off (a toggle row with its check off: Fog, Glow): the
+	# fill and the knob in the soft text role, so it reads as waiting, not live.
+	var off_widen := {expand_margin_top = 1.5, expand_margin_bottom = 1.5}
+	var off_fill := box(Color(c(ThemeColors.TEXT_SOFT), 0.6), RADIUS_PILL, 0, 0, off_widen)
+	define_variant_style(
+		"SliderOff",
+		"HSlider",
+		{
+			grabber_area = off_fill,
+			grabber_area_highlight = off_fill,
+			grabber = _knob(ThemeColors.TEXT_SOFT, 0.5),
+			grabber_highlight = _knob(ThemeColors.TEXT_SOFT, 0.5),
+		}
+	)
 	define_style(
 		"ProgressBar",
 		{

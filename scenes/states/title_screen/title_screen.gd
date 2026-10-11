@@ -9,14 +9,16 @@ extends CanvasLayer
 ## and Quit game beside it in one row of quiet labelled tools (SkyButton); under it the heading
 ## of the section at the grid's top, which stays while the cards scroll (LevelGrid.top_section:
 ## "Your maps", then "Bundled with TTSim" once its own heading has scrolled up to it); then the
-## library's grid (LevelGrid), its hard clip just under that heading and its scroll area running
+## library's grid (LevelGrid), its clip just under that heading (cards scrolled up to it thin out
+## over the grid's top room: ScrollFade.at_top) and its scroll area running
 ## to the window's left and bottom edges, the room for the cards' shadows inside it (the theme's
 ## LibraryGrid), so a shadow never meets the clip. The grid: New map (NewMapCard: Generate and
 ## Import..., Advanced for size and seed in a popover) and the maps most recently played or
 ## edited first; "Bundled with TTSim" and the Bundled maps last (LibraryFacts.ordered,
 ## LibraryPlays). Each card's caption is LibraryFacts.when_text, as the panel's is, and a
 ## Blender map whose source is newer says "Updated in Blender" on its picture. With no map of
-## the player's own nothing is selected: New map stands alone, larger and centred, and the
+## the player's own nothing is selected: New map stands alone, larger and centred on the window
+## (_centre_empty_library), and the
 ## Bundled maps are offered under it ("Or play one that comes with TTSim"); selecting one of
 ## them brings the panel in.
 ##
@@ -92,6 +94,8 @@ var avatars_button: Button
 var settings_button: Button
 var quit_button: Button
 var grid: LevelGrid
+## The grid's top fade under the sticky heading (ScrollFade.at_top).
+var grid_fade: ScrollFade
 var new_map_card: NewMapCard
 var map_panel: MapPanel
 ## The map panel's place in the right column, under the Play together plaque (hidden with
@@ -255,6 +259,14 @@ func _build_library() -> void:
 	# The headings are sized to the grid's width; a disabled horizontal scroll would make that
 	# its minimum too and hold the grid at its old width when the window shrinks.
 	grid.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	# Cards scrolled under the sticky heading thin out over the grid's top room instead of
+	# meeting a straight cut; the foot is the window's edge and keeps its clip.
+	grid_fade = ScrollFade.new()
+	grid_fade.name = "TopFade"
+	grid_fade.at_top = true
+	grid_fade.at_bottom = false
+	grid.add_child(grid_fade)
+	grid.resized.connect(_centre_empty_library)
 	grid.selection_changed.connect(_on_selection_changed)
 	grid.level_activated.connect(play_solo_requested.emit)
 	grid.level_edit_requested.connect(_open_editor)
@@ -296,6 +308,16 @@ func _fit_panel() -> void:
 	taken += _side_column.get_theme_constant(&"separation")
 	map_panel.max_height = _hub.get_viewport_rect().size.y - taken
 	map_panel.fit_height()
+
+
+## The empty library stands in the middle of the window, not of its column (the Play together
+## plaque is the top bar's right end, not a column there): New map takes its width for the
+## canvas (NewMapCard.empty_width_for) and centres, with the Bundled offer under it, on the
+## window's middle line (LevelGrid.alone_centre).
+func _centre_empty_library() -> void:
+	var canvas := _hub.get_viewport_rect().size
+	new_map_card.set_empty_width(NewMapCard.empty_width_for(canvas.x))
+	grid.alone_centre = canvas.x * 0.5 - grid.get_global_rect().position.x
 
 
 ## The sticky heading says the section at the grid's top; its row takes no room with none.

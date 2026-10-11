@@ -14,7 +14,9 @@ extends VBoxContainer
 ## its markers clumped). The Visuals drawer's slider rows are stacked. A stacked row's check
 ## ([member show_check], the toggle variant: Fog, Glow) and colour swatch end the label's line
 ## too, so its slider starts on the same edge as its neighbours', and the row keeps
-## STACKED_ROW_GAP under itself so rows read apart.
+## STACKED_ROW_GAP under itself so rows read apart. The check there is CheckInline, no taller
+## than the label, so a toggle row has a plain row's pitch; while it is off the slider takes no
+## input and is drawn off (SliderOff), so a switched-off effect never shows a live value.
 
 signal value_changed(value: float)
 signal color_changed(color: Color)
@@ -125,6 +127,7 @@ var checked: bool:
 	set(on):
 		if _check:
 			_check.set_pressed_no_signal(on)
+			_refresh_slider_state()
 
 var _row: HBoxContainer
 ## Stacked rows: the label's line (label, readout, chip) over _row.
@@ -168,6 +171,24 @@ func set_color_no_signal(new_color: Color) -> void:
 func set_checked_no_signal(on: bool) -> void:
 	if _check:
 		_check.set_pressed_no_signal(on)
+		_refresh_slider_state()
+
+
+## Whether the slider takes input: the row is editable and, on a toggle row, its check is on.
+func slider_live() -> bool:
+	return editable and (_check == null or _check.button_pressed)
+
+
+## A toggle row's slider is drawn off (SliderOff) and takes no input while its check is off, so
+## a switched-off effect never shows a live value.
+func _refresh_slider_state() -> void:
+	if _slider == null:
+		return
+	var live := slider_live()
+	_slider.editable = live
+	_slider.theme_type_variation = &"" if live or not editable else &"SliderOff"
+	if _chip:
+		_chip.editable = live
 
 
 ## Lay out a sheet's label-and-control [param row] as a property row: the label in the
@@ -224,6 +245,9 @@ func _build_row() -> void:
 		_check = CheckBox.new()
 		_check.name = "Check"
 		_check.toggled.connect(_on_check_toggled)
+		# At the end of the label's line, a check no taller than the label (CheckInline).
+		if stacked:
+			_check.theme_type_variation = &"CheckInline"
 
 	if show_color:
 		_picker = ColorPickerButton.new()
@@ -315,10 +339,9 @@ func _sync_range() -> void:
 	_slider.max_value = max_value
 	_slider.step = step
 	_slider.exp_edit = exp_edit
-	_slider.editable = editable
 	_slider.set_value_no_signal(clampf(value, min_value, max_value))
 	_syncing = false
-	_chip.editable = editable
+	_refresh_slider_state()
 	_chip.text = _display(value)
 	if _readout:
 		_readout.text = _display(value)
@@ -408,6 +431,7 @@ func _commit_chip() -> void:
 
 
 func _on_check_toggled(on: bool) -> void:
+	_refresh_slider_state()
 	toggled.emit(on)
 
 

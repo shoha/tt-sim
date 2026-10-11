@@ -42,6 +42,30 @@ func before_each() -> void:
 	_plays = {}
 
 
+## Cards scrolled up under the sticky heading thin out over the grid's top room (ScrollFade's top
+## edge), not cut by a straight line; the grid's foot is the window's edge and keeps its clip.
+func test_the_library_grid_fades_at_its_top_only() -> void:
+	_levels = [_info("new", "New Camp", 200)]
+	var title := _title()
+	assert_eq(title.grid_fade.get_parent(), title.grid)
+	assert_true(title.grid_fade.at_top)
+	assert_false(title.grid_fade.at_bottom)
+
+
+## The empty library stands in the middle of the window, not of its column: New map's centre on
+## the window's middle line.
+func test_the_empty_library_centres_on_the_window() -> void:
+	_levels = []
+	var title := _title()
+	await wait_process_frames(4)
+	assert_true(title.new_map_card.is_empty_library())
+	var canvas := title.grid.get_viewport_rect().size
+	var centre := title.new_map_card.get_global_rect().get_center().x
+	assert_almost_eq(centre, canvas.x * 0.5, 2.0, "on the window's middle")
+	var width := NewMapCard.empty_width_for(canvas.x)
+	assert_almost_eq(title.new_map_card.size.x, width, 0.5, "its width for the canvas")
+
+
 ## Two columns from the top: at the left the wordmark with Avatars, Settings and Quit game beside
 ## it in one row of quiet labelled tools on the sky, then the sticky heading and the grid; at the
 ## right the Play together card on its paper, then the map panel, one width; Quit well away from
@@ -75,7 +99,7 @@ func test_two_columns_hold_the_tools_the_grid_the_card_and_the_panel() -> void:
 
 ## Room first: Host opens a room over an empty library, where New map is the only card,
 ## larger, centred, and captioned to make a first map or drop one in; no panel, the grid takes
-## the whole width. New map has a map card's anatomy: a solid paper face with one ink glyph,
+## the whole width. New map has a map card's anatomy: a two-tone paper face with one ink glyph,
 ## its name line, and Generate and Import... in its caption band.
 func test_an_empty_library_is_the_new_map_card_alone() -> void:
 	_levels = []
@@ -87,7 +111,13 @@ func test_an_empty_library_is_the_new_map_card_alone() -> void:
 	assert_eq(title.grid.card_count(), 0)
 	assert_true(title.new_map_card.is_empty_library())
 	assert_eq(title.new_map_card.caption.text, NewMapCard.EMPTY_CAPTION)
-	assert_eq(title.new_map_card.custom_minimum_size.x, NewMapCard.EMPTY_WIDTH, "larger")
+	var canvas_width := title.grid.get_viewport_rect().size.x
+	assert_eq(
+		title.new_map_card.custom_minimum_size.x,
+		NewMapCard.empty_width_for(canvas_width),
+		"larger, for the canvas"
+	)
+	assert_gte(title.new_map_card.custom_minimum_size.x, NewMapCard.EMPTY_WIDTH)
 	assert_false(title.map_panel.is_visible_in_tree(), "no map, no panel")
 	assert_false(title.panel_column.visible, "nothing under the card")
 	assert_false(title.sticky_heading.is_visible_in_tree(), "no sticky heading over no maps")
@@ -95,7 +125,8 @@ func test_an_empty_library_is_the_new_map_card_alone() -> void:
 	assert_eq(flow.alignment, FlowContainer.ALIGNMENT_CENTER)
 	var face := title.new_map_card.picture
 	assert_null(face.get_node_or_null("Placeholder"), "a paper face, not a map")
-	assert_eq(face.get_child_count(), 1, "one glyph on it")
+	assert_eq(face.get_child_count(), 2, "its paper wash and one glyph on it")
+	assert_eq(face.get_child(0), title.new_map_card.face_wash, "the wash under the glyph")
 	assert_eq(title.new_map_card.glyph.texture, IconButton.load_icon(NewMapCard.GLYPH))
 	assert_eq(title.new_map_card.heading.theme_type_variation, &"Body", "a card's name line")
 	assert_true(title.new_map_card.caption.visible, "the first-map line, alone")

@@ -18,6 +18,26 @@ func _pane() -> SunPane:
 	return pane
 
 
+## Shadows are the sun's alone: with Sunlight Off the Shadows tiles are drawn disabled and say
+## why, and softness and darkness take no input; Auto and On bring them back.
+func test_sunlight_off_disables_the_shadows() -> void:
+	var pane := _pane()
+	var hard := pane._shadow_field.tiles.get_node("hard") as Button
+	assert_true(pane.shadows_live())
+	assert_false(hard.disabled)
+	pane._mode_tiles.get_node("off").set_pressed(true)
+	assert_false(pane.shadows_live())
+	for id: String in ["off", "hard", "soft"]:
+		var tile := pane._shadow_field.tiles.get_node(id) as Button
+		assert_true(tile.disabled, "%s drawn disabled" % id)
+		assert_string_contains(tile.tooltip_text, SunPane.SHADOWS_NO_SUN, "and says why")
+	assert_false(pane._softness_row.editable)
+	assert_false(pane._darkness_row.editable)
+	pane._mode_tiles.get_node("on").set_pressed(true)
+	assert_false(hard.disabled, "back with the sun")
+	assert_true(pane._softness_row.editable)
+
+
 ## The pane says Sun once (its heading); the mode field names what it switches, and Auto is
 ## not a rayed glyph that reads as the Settings cog at 720p.
 func test_the_mode_field_names_sunlight_and_auto_is_no_cog() -> void:
