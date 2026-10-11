@@ -436,11 +436,13 @@ See [THEME_GUIDE.md's UI Primitives](THEME_GUIDE.md#ui-primitives) and
 ## Title Hub
 
 `TitleScreen` (`scenes/states/title_screen/title_screen.gd`) is the app's entry screen, and it is
-the library (card library-title, 2026-10-10): a top bar, then the grid of the player's maps at
-the left and the selected map's panel pinned at the right, over the backdrop's sky gradient in
-the selected map's mood (morning with none, and over an empty library). One material (card
-title-coherent, UI_TASTE verdict 2026-10-10, the once-over): paper cards on the sky, and ink
-words where words stand on the sky itself.
+the library (card library-title, 2026-10-10): two columns from the top of the window, at the
+left the wordmark and its tools over the grid of the player's maps, at the right the Play
+together card over the selected map's panel, on the backdrop's sky gradient in the selected
+map's mood (morning with none, and over an empty library). One material (card title-coherent,
+UI_TASTE verdict 2026-10-10, the once-over): paper cards on the sky, and ink words where words
+stand on the sky itself. One place and one shape for a map's details at every size (card
+title-coherent-2): the panel never scrolls on a canvas the game gives.
 
 ### Painted backdrop
 
@@ -504,46 +506,67 @@ until the UI's painterly side is revisited; the painted sun, clouds, hills and p
   (much cheaper than the painted pass it replaced, not re-measured). The CPU side mixes three
   colours and sets three uniforms per frame of a 0.6 s change, and nothing at rest.
 
-### Top bar
+### Two columns
 
-`%TopBar` in the hub (24 px margins, and the grid's 6 px ring room at its start, `RingRoomStart`,
-so the wordmark's left edge is the cards'): the `masthead` at the left, the wordmark in ink on the
-sky (the version a caption on its baseline) and, one row beside it (`BoxContainerApart`),
-**Avatars**, **Settings** and **Quit game** as quiet labelled tools (`SkyButton`: ink words and
-icon, paper under the pointer); open sky in the middle; and at the right end the **Play together
-card** (below) on its paper (`play_plaque`) with **Resume** under it, Quit well away from Host.
-Quit game has the pause menu's words and icon (`TitleScreen.QUIT`, `QUIT_ICON`);
-Avatars opens the [avatar roster](#avatar-library). The old left column (Play solo, Set up
-tokens, New map, Avatars, Settings, Quit) is gone: each action lives where it acts (UI_TASTE
-verdict 2026-10-09, no Host control far from what it acts on).
+`%Hub` (24 px at the top and right, none at the left and foot, where the grid runs to the
+window's edge) holds `%Columns` (`BoxContainerFlush`): `%LibraryColumn` at the left, expanding,
+and `%SideColumn` at the right (in `SideFoot`, `HubFoot`: 24 px clear of the foot), one width,
+`MapPanel.WIDTH` 368 (the Play together plaque's: its 336 px card and 16 px sides), so the plaque
+and the panel share one left edge and width.
+
+- **The left column**: `%TopBar` (in `HubStart`, 24 px in, on the cards' left edge) holds the
+  `masthead`, the wordmark in ink on the sky (the version a caption on its baseline) and, one row
+  beside it (`BoxContainerApart`), **Avatars**, **Settings** and **Quit game** as quiet
+  labelled tools (`SkyButton`: ink words and icon, paper under the pointer). Quit game has the
+  pause menu's words and icon (`TitleScreen.QUIT`, `QUIT_ICON`); Avatars opens the [avatar
+  roster](#avatar-library). Under it, 12 px down (`HubHeading`), the `sticky_heading` (below),
+  then the `grid` directly, its hard clip 4 px under the heading.
+- **The right column**: the **Play together card** (below) on its paper (`play_plaque`) with
+  **Resume** under it, Quit well away from Host; then, 12 px under the plaque (the panel's top
+  aligns to the plaque's foot, not to the cards), `panel_column` holding the `map_panel`.
+  `TitleScreen._fit_panel` sets the panel's `max_height` from the canvas, the hub's top margin,
+  the foot's 24 px and the plaque alone (never from the column, whose height the panel holds up).
+
+The old left column (Play solo, Set up tokens, New map, Avatars, Settings, Quit) is gone: each
+action lives where it acts (UI_TASTE verdict 2026-10-09, no Host control far from what it acts
+on).
 
 ### The library
 
-Under the bar a `Body` row (`BoxContainerRoomy`): the `grid` at the left and the `panel_column`
-(`RingRoomEnds`, so the panel's top is the grid's ring room in) holding the `map_panel` at the
-right, its right edge on the Play together plaque's. `grid` is a `LevelGrid` that fills its
-width (a column added rather than a card past `max_card_width` 400; never fewer than
-`GRID_COLUMNS` 3, which a 1280x720 canvas keeps beside the panel) and clips at its own edge, a
-hard edge under the top bar (cut cards no longer fade); its scroll bar is the handle alone,
-shown while the pointer is over the cards. Its provider is `TitleScreen.library()`:
+`grid` is a `LevelGrid` that fills its width (a column added rather than a card past
+`max_card_width` 400; never fewer than `GRID_COLUMNS` 3, which a 1280x720 canvas keeps beside the
+panel). Its scroll area runs to the window's left and bottom edges and its room is inside it
+(`LibraryGrid`: 24 px at the left, right and top 12, foot 32), so a hovered card's shadow (18 px,
+8 px down) and the focus ring never meet the clip: the window's edge is the clip there, and the
+top is a hard edge under the sticky heading (cut cards do not fade). Its scroll bar is the
+handle alone (`ScrollBarFade`). Its provider is `TitleScreen.library()`:
 `LibraryFacts.ordered()` over `level_provider` and `plays_provider` (`LibraryPlays.all()`), the
-latest of last played and last edited first, under a "Your maps" heading, then the Bundled maps
-(a `res://` map) after a "Bundled with TTSim" heading. Both headings are words, not plaques: the
-`Heading` role (Fraunces, the section size) in ink on the sky, on a line of their own with more
-room above than below; a selection that reveals a card on a section's first line keeps its
-heading in view. Every item fills its line, so a row's bottoms line up. A card's caption is the
-date the order uses ("Played yesterday", "Edited 3 days ago", `LibraryFacts.touched_text`), and
-a Blender map whose source file is newer than its import says "Updated in Blender" on a lake
-`StateChip` with its icon (C5, C7). With no map of the player's own nothing is selected, the
-panel's column is hidden and the grid takes the whole width: New map stands alone, larger and
-centred, with "Or play one that comes with TTSim" and the Bundled maps under it; selecting one of
-those brings the panel in. `LibraryPlays` (`utils/library_plays.gd`, `Paths.library_plays_path()`, beside
+latest of last played and last edited first, then the Bundled maps (a `res://` map) after a
+"Bundled with TTSim" heading. The headings are words, not plaques: the `Heading` role (Fraunces,
+the section size) in ink on the sky. **Sticky headings** (`LevelGrid.sticky_headings`): "Your
+maps" is not in the flow; the title's `sticky_heading` over the clip says
+`LevelGrid.top_section()`, "Your maps" until the Bundled heading's words scroll up to the clip,
+then "Bundled with TTSim" (`top_section_changed`), so a section stays named while its cards
+scroll; its row is hidden over an empty library, whose one heading scrolls with the cards. A
+line is a map card's height (`LevelCard.height_for`): cards keep their own height
+(`SIZE_SHRINK_BEGIN`) and the lead fits the line (`NewMapCard.fit_row`, its face giving up the
+difference), so a selected card's lake caption band hugs its two lines (ON_SELECTED paper on
+lake, 5.6:1). A card's caption and the panel's when fact are one formatter,
+`LibraryFacts.when_text`: the date the order uses for the player's own maps ("Played
+yesterday", "Edited 3 days ago"), when it was last played for a Bundled map ("Not played yet":
+it is never edited here); a Blender map whose source file is newer than its import says
+"Updated in Blender" on a lake `StateChip` on its card's picture (C5, C7), and the panel says it
+once, as Reload from Blender. With no map of the player's own nothing is selected and the panel's
+column is empty under the plaque: New map stands alone, larger and centred in the left column,
+with "Or play one that comes with TTSim" and the Bundled maps under it (a Bundled name in view
+unscrolled at 1280x720); selecting one of those brings the panel in. `LibraryPlays` (`utils/library_plays.gd`, `Paths.library_plays_path()`, beside
 `levels/`, never in a level folder so a play never changes a level's revision) is written by
 `LevelFlow` when a table finishes loading, solo or hosted. The head of the library is selected on
 `_ready()` (`_preselect_most_recent()`).
 
-- **New map** (`NewMapCard`, the grid's `lead`), in a map card's anatomy: a 16:9 picture that
-  is a solid paper face (`CardThumb`) with one ink glyph (`GLYPH`, the plus), the name line
+- **New map** (`NewMapCard`, the grid's `lead`), in a map card's anatomy and a map card's
+  height: a picture that is a solid paper face (`CardThumb`, shorter than 16:9 by what its
+  buttons add, `fit_row`) with one ink glyph (`GLYPH`, the plus), the name line
   "New map" (as a card's name) with **Advanced** at its end, and in its caption band
   **Generate** (the card's lead: `Framed`, not the fill; Host is the screen's one persimmon, C5)
   and **Import...** side by side, one height. Advanced opens a paper popover (`Sheet`) on the title's layer under
@@ -560,21 +583,31 @@ those brings the panel in. `LibraryPlays` (`utils/library_plays.gd`, `Paths.libr
   with `NewMapDialog.preset`, which hides its Size field and names the size in its header, then
   [authoring mode](#authoring-mode). No reroll: neighbouring seeds can draw the same coarse
   landform, so a fresh seed is drawn each time. In an empty library the card is larger
-  (`EMPTY_WIDTH` 440, a bigger glyph) and centred, with a caption line over its buttons, "Make
-  your first map: generate a place, or bring one in from Blender".
+  (`EMPTY_WIDTH` 420, a 2:1 face, a bigger glyph) and centred, with a caption line over its
+  buttons on one line, "Generate your first map, or bring one in from Blender".
 - **Map panel** (`MapPanel`, `scenes/states/title_screen/map_panel.gd`): one place and one shape
-  for a map's details, whatever its source. A `PictureCard` paper card `MapPanel.WIDTH` 360 wide
-  on every canvas and for every map, as tall as what it shows up to the height under the top bar
-  (`TitleScreen._fit_panel`, read from the canvas and the bar, never the column); past that its
-  picture and words scroll and the actions stay pinned at its foot (on a 1280x720 canvas the
-  facts line scrolls under them). Top to bottom: the picture large at 16:9 (the thumbnail, or the
-  placeholder); the name in the `Title` face; the description; "by <author>"; the facts
-  (`FactsFlow`: the source chip, `LibraryFacts.source_of`: From Blender, Blender, edited here,
-  Made here, Bundled; the size, `LibraryFacts.footprint_ft`; tokens; when it was last played;
-  Updated in Blender); then the actions, all 40 tall: **Play** (solo, `Framed`) and **Host with
-  this map** (a room with this map on its shelf), then **Edit map** (authoring) with "..." at
-  the line's end, then **Reload from Blender** on a line of its own when
-  `MapImport.is_updated_in_blender`. "..." opens under its button with Set up tokens
+  for a map's details, whatever its source. A `PictureCard` paper card `MapPanel.WIDTH` 368 wide
+  on every canvas and for every map, as tall as what it shows, at most its `max_height`. It never
+  scrolls on a canvas the game gives: the picture is 16:9 where the longest map of the player's
+  own (a two-line description, an author, two lines of facts, both lines of actions) fits under
+  it, and shorter down to `WIDE_ASPECT` 2.4:1 where it would not (`words_reserve()`, from the
+  theme's faces and gaps). The picture follows the canvas, never the map, so a Bundled map's panel
+  has the same picture in the same place, only shorter for its absent lines. Measured: 2.4:1 on a
+  1280x720 canvas (the panel 432 of 436 px), 16:9 from 720p at Auto (1371x771) up. Only past
+  that floor would the picture and words scroll over the pinned actions, the bar the handle alone
+  (`ScrollBarFade`). Top to bottom: the picture (the thumbnail, or the placeholder, its initial
+  scaled to the picture: `MapPlaceholder.INITIAL_SHARE` 0.3 of its height); the name in the
+  `Title` face; the description; "by <author>"; the facts (`FactsFlow`: the source chip,
+  `LibraryFacts.source_of`: From Blender, Blender, edited here, Made here, Bundled; the size,
+  `LibraryFacts.footprint_ft`; tokens; `LibraryFacts.when_text`, the words its card says);
+  then the actions, all 40 tall, always after the facts: **Play** (solo; `Framed`, the lead marker
+  as on New map's Generate: the panel's first action without taking the screen's one fill),
+  **Host with this map** (a room with this map on its shelf) and "..." on the first line, the
+  same for every map; on a map of the player's own **Edit map** (authoring) and, when
+  `MapImport.is_updated_in_blender`, **Reload from Blender** beside it on a second line (a Bundled
+  map has no second line). The actions stand 8 px in from the paper's inside (`PanelTextFoot`),
+  the words 12 (`PanelText`, room for a field's well and ring inside the scroll clip). "..."
+  opens under its button with Set up tokens
   (`TitleScreen.SET_UP_TOKENS`, the Level Editor), Duplicate, Replace map file...
   (`LibraryImports.pick_replace`: the file picker, then the check and Replace as for a file
   dropped on the card) and Delete. The words read as text (wrapping labels); on a map of the
@@ -583,14 +616,16 @@ those brings the panel in. `LibraryPlays` (`utils/library_plays.gd`, `Paths.libr
   opens it for typing in an `InlineField`/`TitleField` line edit in the same place, its hint
   shown only then; Enter saves through `LevelManager.update_meta` (an empty name refused),
   Escape or leaving the field reverts. An empty description or author takes no line: one quiet
-  **Add details** (`Ghost`) opens the first empty one. A Bundled map (and an old single-file
+  **Add details** (`InlineAction`: no side pad, so its plus stands on the words' left edge)
+  opens the first empty one and gives that field its place while it is open. A Bundled map (and
+  an old single-file
   level) shows the same fields in the same order as plain text, the empty ones absent, and none
   of Edit map, Reload from Blender or Replace map file.... The cards' own overflow disc is off in
   the library (`manageable = false`).
 - **Keyboard and pad**: Accept on a card that is not selected selects it (shows it in the
   panel); Accept on the selected card plays it (`LevelGrid.select_before_activate`); a double
-  click plays. The panel follows the grid in the tree, so Tab from the last card reaches it, at
-  the map's name.
+  click plays. The right column follows the grid in the tree, so Tab from the last card reaches
+  the Play together card and Resume, then the panel at the map's name.
 - **Import** (`LibraryImports`): Import... opens the system's file picker on `.glb`; a file
   dropped anywhere on the library is a new map, on a map's card Replace for that map
   (`TitleScreen.card_at`), ignored while a sheet is open. Each opens `ImportCheckPanel`
@@ -608,11 +643,13 @@ those brings the panel in. `LibraryPlays` (`utils/library_plays.gd`, `Paths.libr
   after.
 
 `test_title_screen` and `test_library_title` cover the library (a Bundled selection showing the
-same panel with no edit actions among them); `test_interface_size_fit` walks it at 1280x720,
-1366x768 at Auto, 720p at Auto and 1080p with the selected card in view, the panel in place at
-its width with Play in view, three columns or more beside it, Advanced open on a custom size,
-and empty. `jobs/library.json` (`probes/ui_library.gd`) captures it, a Bundled map selected
-(`title_bundled_selected`) beside one of the player's own at both sizes.
+same panel with no edit actions and its card's words, the sticky heading following the scroll);
+`test_interface_size_fit` walks it at 1280x720, 1366x768 at Auto, 720p at Auto and 1080p with
+the selected card in view, the two columns' one edge and width, the grid from under the sticky
+heading to the foot, three columns or more, the panel with no scroll for the longest own map and
+a Bundled one in the same place with the same picture, Advanced open on a custom size, and empty
+(the Bundled name unscrolled). `jobs/library.json` (`probes/ui_library.gd`) captures every state
+in this layout at both sizes (the pointer parked on the sky first, so no tooltip shows).
 
 ### Play together card
 
@@ -705,21 +742,22 @@ A card selected by a click or by code (`LevelGrid.select`) scrolls so it is in v
 section heading over its line when it stands on a section's first line, its top first when it
 cannot all fit (`LevelGrid.reveal_scroll`, repeated over `REVEAL_FRAMES` 3 while the flow lays
 it out). The grid clips at its own edge, a hard edge (cut cards faded to `CUT_ALPHA` 0.35 until
-the title-coherent card: a fade read as a half-finished edge under the top bar).
+the title-coherent card: a fade read as a half-finished edge under the top bar). In the title the
+grid runs to the window's left and bottom edges with its room inside it (`LibraryGrid`), so the
+only clip a card meets is the hard edge under the sticky heading; a picker keeps `CardGrid`'s
+6 px ring room.
 
 The scroll bar is its handle alone, on the default bar's clear lane, with no track (user verdict
-2026-10-10, UI_TASTE: content scroll bars are a hover-only fading handle). It fades in
-(`Constants.ANIM_HOVER_SOFT_IN`) while the pointer is over the cards and for `BAR_LINGER_S` (0.8 s)
-after a wheel, pad or drag scroll, then out; hidden, it still takes a click or a drag where it
-stands, and the pad scrolls by focus. Horizontal scrolling is disabled.
-
-That behaviour is also one helper, `ScrollBarFade` (`scenes/ui/primitives/scroll_bar_fade.gd`,
-`LINGER_S` 0.8 s), a `Node` added to any `ScrollContainer` (`ScrollBarFade.attach(scroll)`):
-every drawer pane (`PaneStack` wraps each pane in a scroll that carries one: the authoring
-tool drawer, the Visuals drawer, the avatar builder), the Settings tabs, and the room's shelf
-and drawer column. A content list gets it, not its own bar code. The library grid still has
-its own copy (`LevelGrid._show_bar`), to be swapped for `ScrollBarFade.attach(self)` once the
-title redesign that is rewriting `level_grid.gd` lands.
+2026-10-10, UI_TASTE: content scroll bars are a hover-only fading handle): one helper,
+`ScrollBarFade` (`scenes/ui/primitives/scroll_bar_fade.gd`, `LINGER_S` 0.8 s), a `Node` added to
+any `ScrollContainer` (`ScrollBarFade.attach(scroll)`). It fades in
+(`Constants.ANIM_HOVER_SOFT_IN`) while the pointer is over the list and for `LINGER_S` after a
+wheel, pad or drag scroll, then out; hidden, it still takes a click or a drag where it stands,
+and the pad scrolls by focus. Horizontal scrolling is disabled. It is on the library grid
+(`LevelGrid` attaches it to itself, in the title and in `LevelPickerDialog`), the map panel's
+words, every drawer pane (`PaneStack` wraps each pane in a scroll that carries one: the
+authoring tool drawer, the Visuals drawer, the avatar builder), the Settings tabs, and the
+room's shelf and drawer column. A content list gets it, not its own bar code.
 
 ### Signals
 

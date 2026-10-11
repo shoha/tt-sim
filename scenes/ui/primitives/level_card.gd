@@ -251,12 +251,13 @@ func set_selected(on: bool) -> void:
 
 
 ## "1 token, edited 3 h ago"; "No tokens" alone when the level is empty and has
-## never been saved with a time. A library entry (it carries "played_at") says the date the
-## library's order uses instead, as its detail strip does: "Played yesterday", "Edited 3 days
-## ago" (LibraryFacts.touched_text).
+## never been saved with a time. A library entry (it carries "played_at") says what the map
+## panel says, in the one formatter both use (LibraryFacts.when_text): the date the library's
+## order uses for the player's own maps ("Played yesterday", "Edited 3 days ago"), when it was
+## last played for a Bundled one ("Not played yet").
 static func caption_for(info: Dictionary, now_unix: int) -> String:
 	if info.has("played_at"):
-		return LibraryFacts.touched_text(info, now_unix)
+		return LibraryFacts.when_text(info, now_unix)
 	var count := int(info.get("token_count", 0))
 	var tokens := "No tokens" if count == 0 else ("1 token" if count == 1 else "%d tokens" % count)
 	var modified := int(info.get("modified_at", 0))
@@ -366,6 +367,15 @@ func _update_minimum_size_from_content() -> void:
 	if _column == null:
 		return
 	custom_minimum_size.y = _column.get_combined_minimum_size().y + INSET * 2.0
+
+
+## The card's height at `width`: its 16:9 picture across the width inside its inset, then its
+## caption band (the name and caption lines), as it lays itself out. Every map card at one width
+## is this tall, so LevelGrid sizes a line by it.
+func height_for(width: float) -> float:
+	var picture := (width - INSET * 2.0) / THUMB_ASPECT
+	var gap := float(_column.get_theme_constant(&"separation"))
+	return picture + gap + _strip.get_combined_minimum_size().y + INSET * 2.0
 
 
 func _on_thumb_slot_resized() -> void:

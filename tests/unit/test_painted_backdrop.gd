@@ -232,7 +232,9 @@ func test_every_word_on_the_title_and_the_room_reads_in_every_mood() -> void:
 	room.panel.show_session(_room_summary(), "enet-1", true)
 	room.panel.select("hollow")
 	await wait_process_frames(3)
+	# Your maps stands over the grid (the sticky heading); Bundled with TTSim scrolls in it.
 	var headings := title.grid.headings()
+	headings.append(title.sticky_heading)
 	assert_eq(headings.size(), 2, "Your maps and Bundled with TTSim")
 	for mood: int in PaintedBackdrop.Mood.values():
 		for screen: Node in [title, room]:

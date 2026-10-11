@@ -8,7 +8,8 @@ extends ColorRect
 ## backdrop reads (PaintedBackdrop.mood_of of LevelData.environment_preset), so a map's card,
 ## its row in the room and the screen behind it when it is selected share one light.
 ##
-## Over it the map's initial in the heading face (Fraunces, the Title role) at INITIAL_SIZE, in
+## Over it the map's initial in the heading face (Fraunces, the Title role) at a share of the
+## picture's height, in
 ## one solid role that keeps 4.5:1 on the stretch of the gradient it stands over (ink_on): soft
 ## ink where it reads, else ink or paper. Where the mood's step leaves neither ink nor paper at
 ## 4.5:1 (dusk and night sit in the middle of the lightness range), the picture deepens on
@@ -22,10 +23,13 @@ const TILT := 0.5
 const DEEPEN := 0.12
 const DEEPEN_STEP := 0.02
 const DEEPEN_MAX := 0.32
-## The initial's size: the heading face at a heading's size, smaller only in a small well.
+## The initial's size scales with the picture: INITIAL_SHARE of its height (45 px on a 150 px
+## card picture, 54 in the map panel's, 67 on a 1080p card), never under INITIAL_MIN (a room
+## row's small well) or over INITIAL_MAX; INITIAL_SIZE until the picture is laid out.
 const INITIAL_SIZE := 30
-const INITIAL_SHARE := 0.45
+const INITIAL_SHARE := 0.3
 const INITIAL_MIN := 14
+const INITIAL_MAX := 96
 ## The stretch of the gradient (0 the horizon, 1 the top) the initial stands over.
 const INITIAL_SPAN: Array[float] = [0.35, 0.65]
 ## The initial's roles, softest first.
@@ -129,4 +133,4 @@ func _set_look(look: Dictionary) -> void:
 
 func _on_resized() -> void:
 	var fit := roundi(size.y * INITIAL_SHARE)
-	_initial.label_settings.font_size = clampi(fit, INITIAL_MIN, INITIAL_SIZE)
+	_initial.label_settings.font_size = clampi(fit, INITIAL_MIN, INITIAL_MAX)

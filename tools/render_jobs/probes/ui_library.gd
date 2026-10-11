@@ -23,10 +23,12 @@ extends RefCounted
 ##   smaller map dropped on its card (keeping the edits removes the prop).
 ## - `close_panel`: close the open check.
 ## - `empty`: a first run: only the Bundled map, New map alone and larger over it.
-## - `focus` (`target`: "card" or "name"): the keyboard focus on Willow Green's card, or the
-##   panel's name open for typing.
+## - `focus` (`target`: "card", "play" or "name"): the keyboard focus on Willow Green's card or
+##   on the panel's Play, or the panel's name open for typing.
+## - `add_details`: the panel's Add details pressed (the first empty field open for typing).
 ## - `hover` (`target`: "card" or "description"): the pointer over Lantern Bay's card, or over
 ##   the panel's description.
+## - `park`: the pointer on open sky right of the tools, no tooltip up, nothing hovered.
 ## - `delete`: Delete's confirm for the selected map; `cancel` closes it with Escape.
 ## - `cleanup`: close any check, delete PROBE_ROOT, put the paths back and show the real library.
 
@@ -93,6 +95,11 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _focus(title, String(step.get("target", "card")))
 		"hover":
 			return _hover(base, title, String(step.get("target", "card")))
+		"park":
+			return _park(base, title)
+		"add_details":
+			title.map_panel.add_details_button.pressed.emit()
+			return "add details: description open %s" % title.map_panel.description_edit.visible
 		"delete":
 			title._on_panel_action(title.map_panel.info, MapPanel.ACTION_DELETE)
 			return "delete confirm for %s" % title.map_panel.info.get("name", "")
@@ -252,6 +259,9 @@ static func _focus(title: TitleScreen, target: String) -> String:
 	if target == "name":
 		title.map_panel.begin_edit("name")
 		return "the panel's name open for typing"
+	if target == "play":
+		title.map_panel.play_button.grab_focus()
+		return "focus on the panel's Play"
 	var card := _card(title, "Willow Green")
 	if card == null:
 		return "no card"
@@ -269,6 +279,18 @@ static func _hover(base: Node, title: TitleScreen, target: String) -> String:
 	base.get_viewport().warp_mouse(point)
 	control.mouse_entered.emit()
 	return "pointer over %s at %s" % [control.name, point]
+
+
+## The pointer on the sky between the tools and the Play together plaque: no tooltip, no hover.
+static func _park(base: Node, title: TitleScreen) -> String:
+	var tools := title.masthead.get_global_rect()
+	var point := Vector2(tools.end.x + 48.0, tools.get_center().y)
+	base.get_viewport().warp_mouse(point)
+	for card: LevelCard in title.grid._cards:
+		card.mouse_exited.emit()
+	for key: String in MapPanel.FIELDS:
+		(title.map_panel.get("%s_label" % key) as Control).mouse_exited.emit()
+	return "pointer parked at %s" % point
 
 
 static func _paths() -> void:

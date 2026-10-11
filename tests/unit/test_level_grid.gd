@@ -194,6 +194,31 @@ func test_a_wide_grid_adds_columns_instead_of_stretching_cards() -> void:
 	assert_gt(grid._cards[0].custom_minimum_size.x, 200.0, "a narrow grid keeps its two columns")
 
 
+## The scroll bar is ScrollBarFade's, clear at rest; a line is a map card's height: the lead
+## fits it (New map's face takes up the difference), no card is stretched, so a selected card's
+## caption band hugs its two lines.
+func test_the_bar_fades_and_a_line_is_a_cards_height() -> void:
+	var grid := LevelGrid.new()
+	grid.provider = func() -> Array[Dictionary]: return _levels
+	var lead := NewMapCard.new()
+	grid.lead = lead
+	grid.size = Vector2(900, 600)
+	add_child_autofree(grid)
+	grid.refresh()
+	await wait_frames(4)
+	assert_not_null(grid.get_node_or_null("ScrollBarFade"), "the shared fade")
+	assert_eq(grid.get_v_scroll_bar().modulate.a, 0.0, "clear at rest")
+	var card := grid._cards[0]
+	assert_almost_eq(card.size.y, card.height_for(card.size.x), 1.0, "a card at its own height")
+	assert_almost_eq(lead.size.y, card.size.y, 1.0, "New map fits the line")
+	var face := lead.picture.size
+	assert_lt(face.y, face.x / NewMapCard.PICTURE_ASPECT - 1.0, "its face takes the difference")
+	grid.select(String(card.level_info.path))
+	await wait_frames(2)
+	var strip := card._strip
+	assert_almost_eq(strip.size.y, strip.get_combined_minimum_size().y, 0.5, "a tight band")
+
+
 func test_rename_of_a_legacy_level_reselects_by_the_new_path() -> void:
 	var level := LevelData.new()
 	level.level_name = "Old Camp"

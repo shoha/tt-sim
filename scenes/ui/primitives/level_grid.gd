@@ -8,9 +8,9 @@ extends ScrollContainer
 ##
 ## The grid fills its width: it adds a column rather than stretch a card past max_card_width,
 ## and never shows fewer than `columns`. Selecting a card, by a click or select(), scrolls the
-## grid so the card is in view. The grid clips at its own edge (a hard edge under the title's top
-## bar); its scroll bar is the handle alone, shown only while the pointer is over the cards or
-## for a moment after a scroll (user verdict 2026-10-10).
+## grid so the card is in view. The grid clips at its own edge (a hard edge under the title's
+## sticky heading); its scroll bar is the handle alone, shown only while the pointer is over the
+## cards or for a moment after a scroll (ScrollBarFade, user verdict 2026-10-10).
 ##
 ## The title's library adds `lead`, the New map card, first in the flow at a card's width (null
 ## in a picker), and section headings in text on lines of their own (the heading face at the
@@ -18,7 +18,14 @@ extends ScrollContainer
 ## player's maps, "Bundled with TTSim" over the Bundled maps (LibraryFacts.is_bundled), which
 ## come after every other. With no map of the player's own the lead stands alone, larger and
 ## centred, and the heading under it offers the Bundled maps instead (EMPTY_HEADING). A picker
-## shows the Bundled heading alone, and only when other maps come before it.
+## shows the Bundled heading alone, and only when other maps come before it. With
+## `sticky_headings` (the title) "Your maps" is not in the flow: the owner shows top_section(),
+## the heading of the section at the grid's top, over the clip, so a section stays named while
+## its cards scroll.
+##
+## A line is as tall as a map card (every map card at one width is one height): the lead is
+## asked to fit that height (its fit_row(), where New map's face takes up the difference), so no
+## card is stretched and a selected card's caption band hugs its two lines.
 
 signal selection_changed(level_info: Dictionary)
 signal level_activated(level_info: Dictionary)
@@ -30,12 +37,12 @@ signal level_map_edit_requested(level_info: Dictionary)
 signal levels_changed
 ## The cards' laid-out height changed (content_height()).
 signal content_resized
+## The section at the grid's top changed (top_section(): its heading's words, or "").
+signal top_section_changed(words: String)
 
 const GAP := 12
 ## The widest a card grows by default; past it the grid adds a column.
 const MAX_CARD_WIDTH := 400
-## How long the scroll bar stays after a scroll with the pointer elsewhere.
-const BAR_LINGER_S := 0.8
 ## Frames a reveal is repeated over, while the flow lays the selected card out.
 const REVEAL_FRAMES := 3
 const OWN_HEADING := "Your maps"
@@ -66,6 +73,8 @@ var lead: Control = null
 var select_before_activate: bool = false
 ## The widest a card grows before the grid adds a column.
 var max_card_width: float = MAX_CARD_WIDTH
+## The owner names the section at the top (top_section()), so "Your maps" stays out of the flow.
+var sticky_headings: bool = false
 
 var _flow: HFlowContainer
 var _cards: Array[LevelCard] = []
@@ -78,30 +87,17 @@ var _bundled_heading: VBoxContainer = null
 var _heading_words: Label = null
 ## Frames left in the current reveal.
 var _reveal_frames := 0
-## The scroll bar's fade (_show_bar), whether the pointer is over the cards, and the time the
-## bar stays after a scroll.
-var _bar_tween: Tween = null
-var _pointer_over := false
-var _linger: Timer
+## The words top_section() last reported.
+var _top_words := ""
 
 
 func _init() -> void:
 	horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	# The CardGrid panel's margins keep a focused card's ring inside the scroll clip.
 	theme_type_variation = &"CardGrid"
-	# The bar is its handle alone (the theme's lane is clear), shown only while it is wanted
-	# (user verdict 2026-10-10): _show_bar().
-	var bar := get_v_scroll_bar()
-	bar.modulate.a = 0.0
-	bar.value_changed.connect(_on_scrolled)
-	mouse_entered.connect(_on_pointer.bind(true))
-	mouse_exited.connect(_on_pointer.bind(false))
-	_linger = Timer.new()
-	_linger.name = "BarLinger"
-	_linger.one_shot = true
-	_linger.wait_time = BAR_LINGER_S
-	_linger.timeout.connect(_show_bar.bind(false))
-	add_child(_linger)
+	# The bar is its handle alone (the theme's lane is clear), shown only while it is wanted.
+	ScrollBarFade.attach(self)
+	get_v_scroll_bar().value_changed.connect(_check_top_section.unbind(1))
 	_flow = HFlowContainer.new()
 	_flow.name = "Flow"
 	_flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -109,36 +105,8 @@ func _init() -> void:
 	_flow.add_theme_constant_override("h_separation", GAP)
 	_flow.add_theme_constant_override("v_separation", GAP)
 	_flow.resized.connect(content_resized.emit)
+	_flow.resized.connect(_check_top_section)
 	add_child(_flow)
-
-
-func _on_scrolled(_value: float) -> void:
-	_show_bar(true)
-	if not _pointer_over:
-		_linger.start()
-
-
-func _on_pointer(inside: bool) -> void:
-	_pointer_over = inside
-	if inside:
-		_show_bar(true)
-	elif _linger.is_inside_tree():
-		_linger.start()
-
-
-## The scroll bar fades in while the pointer is over the cards and for BAR_LINGER_S after a
-## wheel, pad or drag scrolls them, then out (M1). Hidden, it still takes a click or a drag
-## where it stands, so a pointer always finds it; the pad scrolls by focus.
-func _show_bar(on: bool) -> void:
-	if not on and _pointer_over:
-		return
-	if not is_inside_tree():
-		return
-	if _bar_tween != null and _bar_tween.is_valid():
-		_bar_tween.kill()
-	var duration := Constants.ANIM_HOVER_SOFT_IN if on else Constants.ANIM_HOVER_SOFT_OUT
-	_bar_tween = create_tween()
-	_bar_tween.tween_property(get_v_scroll_bar(), "modulate:a", 1.0 if on else 0.0, duration)
 
 
 func _ready() -> void:
@@ -164,9 +132,8 @@ func refresh() -> void:
 		card.locked = not locked_path.is_empty() and info.get("path", "") == locked_path
 		card.manageable = manageable
 		card.accept_selects_first = select_before_activate
-		# Every item fills its line's height, so a row's bottoms line up (the New map card is
-		# taller than a map's).
-		card.size_flags_vertical = Control.SIZE_FILL
+		# A card keeps its own height; the line is that tall (the lead fits it, _fit_columns).
+		card.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		card.selected.connect(_on_card_selected)
 		card.activated.connect(_on_card_activated)
 		card.action_requested.connect(_on_card_action)
@@ -177,6 +144,7 @@ func refresh() -> void:
 	_place_bundled_heading(first_bundled)
 	_fit_columns()
 	_apply_selection()
+	_check_top_section()
 	levels_changed.emit()
 
 
@@ -239,8 +207,9 @@ func _heading(node_name: String) -> VBoxContainer:
 	return heading
 
 
-## "Your maps" first in the library, over New map and the player's maps; none in a picker or
-## over an empty library. The first line of the grid needs no room above it.
+## "Your maps" first in the library, over New map and the player's maps; none in a picker, over
+## an empty library, or with sticky_headings (the owner shows it over the clip). The first line
+## of the grid needs no room above it.
 func _place_own_heading() -> void:
 	if lead == null:
 		return
@@ -248,8 +217,29 @@ func _place_own_heading() -> void:
 		_own_heading = _heading("OwnHeading")
 		(_own_heading.get_node("Words") as Label).text = OWN_HEADING
 		(_own_heading.get_node("Above") as Control).visible = false
-	_own_heading.visible = own_card_count() > 0
+	_own_heading.visible = own_card_count() > 0 and not sticky_headings
 	_flow.move_child(_own_heading, 0)
+
+
+## The heading of the section at the grid's top, for an owner that shows it over the clip
+## (sticky_headings): "Your maps" until the Bundled heading's words have scrolled up to the
+## clip, then that heading's; "" over an empty library (its one heading scrolls with the cards)
+## and in a picker.
+func top_section() -> String:
+	if lead == null or own_card_count() == 0:
+		return ""
+	if _bundled_heading != null and _bundled_heading.visible:
+		var words := _bundled_heading.get_node("Words") as Control
+		if _bundled_heading.position.y + words.position.y <= float(scroll_vertical):
+			return BUNDLED_HEADING
+	return OWN_HEADING
+
+
+func _check_top_section() -> void:
+	var words := top_section()
+	if words != _top_words:
+		_top_words = words
+		top_section_changed.emit(words)
 
 
 ## The heading before the first Bundled card, or hidden with none, or in a picker when every
@@ -377,6 +367,9 @@ func _fit_columns() -> void:
 	var alone := lead != null and own_card_count() == 0
 	if lead != null and not alone:
 		lead.custom_minimum_size.x = width
+	# A line is a map card's height: the lead fits it (0: its own height, alone).
+	if lead != null and lead.has_method(&"fit_row"):
+		lead.call(&"fit_row", 0.0 if alone or _cards.is_empty() else _cards[0].height_for(width))
 	_flow.alignment = FlowContainer.ALIGNMENT_CENTER if alone else FlowContainer.ALIGNMENT_BEGIN
 	for wide: Control in [_own_heading, _bundled_heading]:
 		if wide != null:

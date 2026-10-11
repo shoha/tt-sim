@@ -2,7 +2,7 @@ class_name LibraryFacts
 extends RefCounted
 
 ## What the library says about a map, derived from its files on disk and the local indexes,
-## never stored in the level: where it came from (the detail strip's source chip), how big it
+## never stored in the level: where it came from (the map panel's source chip), how big it
 ## is, how many tokens it sets out and when it was last played here, and the library's order.
 ##
 ## The source is read from which map files the level names (LevelManager's info carries
@@ -26,7 +26,8 @@ const SOURCE_LABELS := {
 }
 const NEVER_PLAYED := "Not played yet"
 ## A Blender map whose source file is newer than its copy (MapImport.is_updated_in_blender):
-## on its card and in the strip's facts, with UPDATED_ICON.
+## on its card's picture, with UPDATED_ICON (the map panel says it once, as Reload from
+## Blender).
 const UPDATED := "Updated in Blender"
 const UPDATED_ICON := "rotate-clockwise"
 ## The library entry's key for UPDATED (TitleScreen.library sets it).
@@ -92,6 +93,17 @@ static func touched_text(info: Dictionary, now_unix: int) -> String:
 	if edited <= 0:
 		return ""
 	return "Edited " + LevelCard.relative_time(now_unix - edited, edited)
+
+
+## What a map's card and its panel both say about when (one formatter, so they never disagree):
+## the date the library's order uses for the player's own maps (touched_text), when it was
+## last played for a Bundled map, which is never edited here ("Not played yet", "Played 3 days
+## ago"); NEVER_PLAYED for an own map with neither date. Pure.
+static func when_text(info: Dictionary, now_unix: int) -> String:
+	if is_bundled(info):
+		return played_text(int(info.get("played_at", 0)), now_unix)
+	var touched := touched_text(info, now_unix)
+	return touched if touched != "" else NEVER_PLAYED
 
 
 ## "No tokens", "1 token", "4 tokens". Pure.
