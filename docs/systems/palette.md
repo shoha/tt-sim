@@ -36,10 +36,15 @@ rules, shipped inside tt-sim under `assets/palette/` (Git LFS) and installed by 
   meshes.
 - After a palette refresh, write those sidecars before the first import (contract section 9
   "Import path").
+- Surface maps are uniform per kind (contract section 9 "Surface map uniformity"): every
+  albedo, normal, ORM and height map is 1024x1024 with full mips in one imported format per
+  kind (BC7, BC5, BC1, uncompressed L8), so a map's surfaces stack into `Texture2DArray`s
+  as they are. treecube's `build_palette.py` refuses a surface that breaks it.
 
 ## Verification
 
-- `tests/unit/test_palette_builtin.gd` guards the `.glb.import` sidecars.
+- `tests/unit/test_palette_builtin.gd` guards the `.glb.import` sidecars and the surface
+  maps' `.png.import` sidecars (one compression and mip setting per map kind).
 - `tests/unit/test_palette_library.gd`.
 
 ## Open work

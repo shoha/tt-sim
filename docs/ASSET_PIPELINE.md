@@ -644,6 +644,32 @@ session cannot switch it to VRAM compression. Thumbnails keep the default (lossl
 mipmaps). The authored ground shader (`shaders/authored_ground.gdshaderinc`) samples the
 surface maps; see `docs/MAP_AUTHORING.md`.
 
+### Surface map uniformity (decided 2026-10-11)
+
+**Every palette surface's maps of one kind have the same size, the same mip chain and the
+same imported format**, because the index-based ground (`docs/plans/2026-10-11-ground-layers/`)
+stacks one map's surfaces into four `Texture2DArray`s (albedo, normal, ORM, height), and an
+array layer must match the others in size, mip count and format. Today, measured on all 26
+surfaces (2026-10-11):
+
+| Map | Producer PNG (treecube) | Imported (tt-sim sidecar) | VRAM per surface |
+|-----|-------------------------|---------------------------|------------------|
+| albedo | 1024x1024, 8-bit RGB | BC7 (`BPTC_RGBA`), full mips | 1.40 MB |
+| normal | 1024x1024, 8-bit RGB | BC5 (`RGTC_RG`), full mips | 1.40 MB |
+| orm | 1024x1024, 8-bit RGB | BC1 (`DXT1`), full mips | 0.70 MB |
+| height | 1024x1024, 16-bit greyscale | uncompressed L8, full mips | 1.40 MB |
+
+`Texture2DArray.create_from_images` takes the imported images as they are, so no conversion
+runs at load. Who checks what: the producer writes every map square at 1024 with the PNG
+layout above, and treecube's `build_palette.py` refuses a palette whose surface breaks it
+(`surface_map_problems()`, run before `--install`); the consumer owns the import, and
+`tests/unit/test_palette_builtin.gd` fails on a sidecar whose compression or mipmap settings
+differ from the committed ones. A change of size or format is a contract change: all
+surfaces move together, in one palette install. `PaletteLibrary` will resize a stray map
+to the array's size with a warning rather than reject it (planned with the ground-layers
+binding, card G3), so a map
+still draws, but a shipped palette never relies on that.
+
 **Refreshing the palette:** copy treecube's output over `assets/palette/`, keep the
 existing sidecars, write the three sidecar settings above into a `.glb.import` for every
 new GLB before the first import (otherwise Godot extracts its textures), then

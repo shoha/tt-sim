@@ -32,6 +32,7 @@
 		"res://tests/unit/test_grid_ground.gd",
 		"res://tests/unit/test_ground_accents.gd",
 		"res://tests/unit/test_ground_layers.gd",
+		"res://tests/unit/test_ground_layers_index.gd",
 		"res://tests/unit/test_height_sculpt.gd",
 		"res://tests/unit/test_landform_gorge.gd",
 		"res://tests/unit/test_landform_growth.gd",
