@@ -15,11 +15,13 @@ extends Node
 ## since a half-faded row reads as a disabled one. A row is a shown control laid out by a
 ## VBoxContainer inside the scroll.
 ##
-## With `at_top` (the title's library grid, whose top is a hard clip under its sticky heading)
-## the top edge fades too, over TOP_HEIGHT, once the content has scrolled: the ramp comes in
-## with the first TOP_HEIGHT px of scroll (top_alpha), so the grid at rest is untouched and a
-## card scrolled under the heading thins out instead of being cut by a straight line.
-## `at_bottom` off leaves the foot alone (a grid that runs to the window's edge).
+## With `at_top` the top edge fades too, over TOP_HEIGHT, once the content has scrolled: the
+## ramp comes in with the first TOP_HEIGHT px of scroll (top_alpha), so the content at rest is
+## untouched. `at_bottom` off leaves the foot alone.
+##
+## Never over content that clips with clip_children itself (a LevelCard's picture well): a
+## clip_children child inside this mask draws blank in a real render (the library grid's
+## pictures all went blank, 2026-10-10; headless runs cannot show it).
 
 ## The fade's height in virtual px at most: about half a row.
 const HEIGHT := 24.0

@@ -745,11 +745,11 @@ it out). The grid clips at its own edge, a hard edge (cut cards faded to `CUT_AL
 the title-coherent card: a fade read as a half-finished edge under the top bar). In the title the
 grid runs to the window's left and bottom edges with its room inside it (`LibraryGrid`), so the
 only clip a card meets is the edge under the sticky heading; a picker keeps `CardGrid`'s
-6 px ring room. Since the ui-polish card that edge is no straight cut: the title's grid carries a
-`ScrollFade` with `at_top` (and `at_bottom` off, the foot being the window's edge), which fades
-the top `TOP_HEIGHT` 20 px of the scroll area to clear once the grid has scrolled, coming in
-with the first 20 px of scroll (`ScrollFade.top_alpha`), so the grid at rest is untouched and a
-card scrolled up to the heading thins out.
+6 px ring room. That edge stays a hard clip: the ui-polish card faded it with a `ScrollFade`
+(`at_top`), but `ScrollFade` is a `clip_children` mask and the cards' picture wells clip their
+pictures with `clip_children` too, and inside the mask every picture drew blank in a real
+render (a headless test cannot see it; `test_title_screen` now asserts the grid has no mask).
+A fade there needs a way that is not a clip mask.
 
 With no map of the player's own, New map and the Bundled offer under it centre on the window's
 middle line rather than the left column's (`LevelGrid.alone_centre`, set by the title's
