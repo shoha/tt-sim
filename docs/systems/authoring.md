@@ -360,7 +360,10 @@ Probe and numbers:
   light and dark cards, and its lit and shade sides, still read while it burns (one flat
   emission read as an orange cut-out crown and a bush as an orange ball with holes); dimming
   as it goes to charcoal, the leaf cards burning away from a glowing edge until a bare
-  charred snag stands. Bark
+  charred snag stands. A small crown (a bush: treecube's round bushes are 2.6-2.8 m tall, its
+  trees 10-15 m; `SMALL` 4-7 m on `mesh_height`) gets patches twice as fine, its char patches
+  lose their cards sooner and its rim is bitten in by char and lost cards in a few bold bites
+  (fire-look-6), so it no longer burns as a round orange ball. Bark
   never glows, it only chars (a glowing trunk read as a thin orange beam). User verdict
   (2026-10-11): "the smoke effect after a tree burns is pretty bad and does not match the
   style of our plants; we probably want some fire on the ground as well while the trees
@@ -373,7 +376,9 @@ Probe and numbers:
   flat rim, amber, gold and core bands, eroded from 45 % of its life; the `FlameAtlas`
   flipbook stays as the other branch) rises on the ground ring. On a crown (fire-look-5) seven
   small ones (`CROWN_TONGUES`, EventPuffs' crown flame) rise among the leaf cards as the burn
-  climbs it (up 0.42-0.9 of the height, out to 0.38 of the crown's width round the trunk,
+  climbs it (up 0.4-0.74 of the height, its tip held under 0.84, `TONGUE_TOP`: tongues at a
+  crown's narrow top stood against the sky as flame icons, fire-look-6; out to 0.38 of the
+  crown's width round the trunk,
   each once the burn's patches there glow, `tongue_at`: a tongue on a pine still green there
   stood as a sticker; 0.25 of the crown's width, within 0.06-0.11 of the tree's height),
   drawn only a quarter as far toward the camera as a flame, so the cards in front
@@ -399,7 +404,11 @@ Probe and numbers:
   0.58; at 0.47 the lit side read as muted grey paper), the sky's blue fill on its shade side
   held to half (AO 0.5) and a warm fill of its own colour added (emission ALBEDO * (0.2, 0.185,
   0.16)), so the shade reads warm grey, not slate (fire_5_smoke raw: lit about 203, 200, 197,
-  shade about 149, 144, 141 at half size). Born about a crown
+  shade about 149, 144, 141 at half size). Each card is painted in three tones (0.64, 0.92 and
+  1.12 of its colour, soft-edged shapes stepped by one broad noise, fire-look-6; two tones
+  read as smooth grey discs), and the fire's warm underlight touches only the lowest cards'
+  undersides of a young billow, gone by 0.18 of its life (whole tan cards read as orange
+  leaves beside a burning crown). Born about a crown
   across (tree billows at the crown's width, the column's at 0.45 of the trees' mean height;
   round 3's column at 0.8 hung as balloons four crowns wide), spreading to about twice that;
   the fire's erosion rule eats the cards' edges with one noise across the billow and each

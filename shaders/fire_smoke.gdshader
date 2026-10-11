@@ -39,7 +39,15 @@ const float SUN_TINT = 0.2;
 // grey rather than slate blue.
 const float SHADE_AO = 0.5;
 const vec3 SHADE_FILL = vec3(0.2, 0.185, 0.16);
+// The fire's underlight on young smoke: its colour, strength and the share of the billow's life
+// it lasts.
 const vec3 SMOKE_GLOW = vec3(0.9, 0.22, 0.03);
+const float GLOW_STRENGTH = 0.5;
+const float GLOW_LIFE = 0.18;
+// A card's painted tones (dark patch, body, light patch) and where the noise steps between
+// them.
+const vec3 PAINT_TONES = vec3(0.64, 0.92, 1.12);
+const vec2 PAINT_STEPS = vec2(0.38, 0.62);
 // The two-tone step: lit from where the wrapped light crosses RAMP.x to RAMP.y.
 const vec2 RAMP = vec2(0.46, 0.54);
 // The erosion starts this far through a billow's life and is done by ERODE_DONE.
@@ -95,16 +103,26 @@ void fragment() {
 	vec3 round = vec3(corner / 0.75, sqrt(max(1.0 - dot(corner, corner) / 0.56, 0.0)));
 	vec2 tip = vec2(fire_noise(corner * 2.0 + card_draw * 9.0), fire_noise(corner * 2.0 + 3.7)) - 0.5;
 	NORMAL = normalize(NORMAL + round * ROUND + vec3(tip * TIP, 0.0));
-	// The palette over its life (its top a little ahead of its foot), a stepped painted patch
-	// inside each puff and a tone of its own for each card, so the crown reads as many pieces.
+	// The palette over its life (its top a little ahead of its foot), painted patches inside
+	// each puff and a tone of its own for each card, so the crown reads as many pieces.
 	float high = crown_at.y / 0.27;
 	float pale = smoothstep(0.05, 0.6, puff_age + 0.12 * high);
-	float patch = smoothstep(0.42, 0.58, fire_noise(corner * 2.4 + card_draw * 31.0));
-	float paint = mix(0.82, 1.06, patch) * mix(0.86, 1.08, fract(card_draw * 7.3));
+	// Three tones a card, bold soft-edged shapes as a leaf card's paint is: a dark patch, the
+	// body and a light patch, stepped by one broad noise (a two-tone patch from 0.82 to 1.06
+	// read as smooth grey discs, fire-look-5).
+	float shapes = fire_cloud(corner * 1.6 + card_draw * 31.0 + puff_seed * 3.0);
+	float body = smoothstep(PAINT_STEPS.x - 0.05, PAINT_STEPS.x + 0.05, shapes);
+	float bright = smoothstep(PAINT_STEPS.y - 0.05, PAINT_STEPS.y + 0.05, shapes);
+	float paint = (PAINT_TONES.x + (PAINT_TONES.y - PAINT_TONES.x) * body
+		+ (PAINT_TONES.z - PAINT_TONES.y) * bright) * mix(0.9, 1.06, fract(card_draw * 7.3));
 	ALBEDO = mix(SMOKE_DARK, SMOKE_PALE, pale) * paint;
 	AO = SHADE_AO;
-	float glow = (1.0 - smoothstep(0.0, 0.3, puff_age)) * smoothstep(0.1, -0.6, high);
-	EMISSION = SMOKE_GLOW * glow * 0.8 + ALBEDO * SHADE_FILL;
+	// The fire's light under the young smoke: a thin warm underlight on the lowest cards'
+	// undersides only, gone early in its life (whole cards glowing tan read as orange leaves
+	// beside a burning crown).
+	float young = 1.0 - smoothstep(0.0, GLOW_LIFE, puff_age);
+	float glow = young * smoothstep(-0.25, -0.55, high) * smoothstep(-0.1, -0.7, corner.y);
+	EMISSION = SMOKE_GLOW * glow * GLOW_STRENGTH + ALBEDO * SHADE_FILL;
 }
 
 // The crowns' two-tone read: a lit side and a shade side with a short step.

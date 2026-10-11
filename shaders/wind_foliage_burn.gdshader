@@ -60,6 +60,18 @@ const float CHAR_FROM = 0.3;
 const float CHAR_TO = 0.6;
 const float GONE_FROM = 0.45;
 const float GONE_EDGE = 0.1;
+// A small crown (a bush, mesh_height under SMALL.y metres, fully below SMALL.x; treecube's round
+// bushes are 2.6 to 2.8 tall and 3.2 wide, its trees 10 to 15 tall) burnt as a round orange
+// ball (fire-look-5). On it the patches come SMALL_PATCHES times finer, its char patches drop
+// their leaf cards DROP_EARLY sooner, and its rim (past BUSH_RIM of BUSH_BALL.y of its height
+// from a middle BUSH_BALL.x of its height up) is bitten into by char and lost cards RIM_EARLY
+// sooner in a few bold bites, so its outline breaks as it burns.
+const vec2 SMALL = vec2(4.0, 7.0);
+const float SMALL_PATCHES = 2.0;
+const vec2 BUSH_BALL = vec2(0.35, 0.6);
+const float DROP_EARLY = 0.25;
+const vec2 BUSH_RIM = vec2(0.45, 0.85);
+const float RIM_EARLY = 0.5;
 
 varying float burn_s;
 varying vec3 burn_local;
@@ -110,11 +122,19 @@ void fragment() {
 		float up = clamp(local_vertex_y / max(mesh_height, 0.01), 0.0, 1.0);
 		float catch_at = 0.55 * up + 0.45 * noise(burn_local * 0.9 + vec3(3.1, 0.0, 1.7));
 		float since = burn_s - catch_at;
+		float small = 1.0 - smoothstep(SMALL.x, SMALL.y, mesh_height);
 		// The burn's bold patches: ember (glowing), burnt leaf (lit by the sun) and char.
-		float patch = noise(burn_local * PATCH_SCALE + vec3(11.0, 4.3, 2.9));
+		float patch_scale = PATCH_SCALE * mix(1.0, SMALL_PATCHES, small);
+		float patch = noise(burn_local * patch_scale + vec3(11.0, 4.3, 2.9));
 		float ember_patch = smoothstep(PATCH_EMBER - 0.03, PATCH_EMBER + 0.03, patch);
 		float char_patch = 1.0 - smoothstep(PATCH_CHAR - 0.03, PATCH_CHAR + 0.03, patch);
-		float chars = since + CHAR_EARLY * char_patch;
+		// A small crown's rim bitten into (see SMALL).
+		vec3 from_middle = burn_local - vec3(0.0, BUSH_BALL.x * mesh_height, 0.0);
+		float ball = max(BUSH_BALL.y * mesh_height, 0.01);
+		float rim = smoothstep(BUSH_RIM.x, BUSH_RIM.y, length(from_middle) / ball);
+		float bite = rim * smoothstep(0.42, 0.52, noise(burn_local * 3.0 / max(mesh_height, 0.3) + vec3(5.3, 1.1, 8.7)));
+		float early = small * (RIM_EARLY * bite + DROP_EARLY * char_patch);
+		float chars = since + CHAR_EARLY * char_patch + small * RIM_EARLY * bite;
 		float charred = smoothstep(CHAR_FROM, CHAR_TO, chars);
 		// The leaf's own painted tone (its light and dark cards), carried into the burn.
 		float tone = clamp(dot(pbr_albedo, vec3(0.2126, 0.7152, 0.0722)) / TONE_REF, TONE_RANGE.x, TONE_RANGE.y);
@@ -129,7 +149,7 @@ void fragment() {
 		}
 		albedo = mix(albedo, CHARCOAL, charred);
 		if (canopy_part == 2) {
-			float gone = since - GONE_FROM;
+			float gone = since + early - GONE_FROM;
 			if (gone > GONE_EDGE) {
 				pbr_alpha = 0.0;
 			} else if (gone > 0.0) {
