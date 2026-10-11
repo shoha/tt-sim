@@ -21,3 +21,13 @@ func test_group_lookup_and_display_names() -> void:
 	assert_eq(EnvironmentPresets.get_preset_group("nope"), "Other")
 	assert_eq(EnvironmentPresets.display_name("outdoor_day"), "Outdoor Day")
 	assert_eq(EnvironmentPresets.display_name(""), "Map defaults")
+
+
+## A Look's description is a sentence on a tile's tooltip (UI_TASTE W5): a colon or a comma
+## where a dash would go, never a hyphen standing in for one, and no slash for "and".
+func test_descriptions_use_no_hyphen_dash_or_slash() -> void:
+	for preset_name in EnvironmentPresets.PRESETS:
+		var words := String(EnvironmentPresets.PRESETS[preset_name].get("description", ""))
+		assert_ne(words, "", preset_name + " has a description")
+		assert_false(words.contains(" - "), "%s: %s" % [preset_name, words])
+		assert_false(words.contains("/"), "%s: %s" % [preset_name, words])

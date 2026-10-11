@@ -25,7 +25,7 @@ func define_fields() -> void:
 		font_selected_color = c(ThemeColors.TEXT),
 		font_placeholder_color = c(ThemeColors.TEXT_SOFT),
 		caret_color = c(ThemeColors.TEXT),
-		selection_color = Color(c(ThemeColors.STATE), 0.3),
+		selection_color = c(ThemeColors.SELECTION),
 	}
 	define_style(
 		"LineEdit",

@@ -524,6 +524,13 @@ func _define_containers() -> void:
 		"MarginContainer",
 		{margin_left = SPACE_3, margin_top = 0, margin_right = SPACE_3, margin_bottom = 0}
 	)
+	# An open field's keys line (the map panel's "Enter saves, Escape puts it back"): a step more
+	# under the words' 4 px, so it stands about 8 px clear of the field's ring, not about 4.
+	define_variant_style(
+		"FieldHint",
+		"MarginContainer",
+		{margin_left = 0, margin_top = SPACE_1, margin_right = 0, margin_bottom = 0}
+	)
 	define_variant_style(
 		"PanelTextFoot",
 		"MarginContainer",

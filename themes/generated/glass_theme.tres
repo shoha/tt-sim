@@ -1,4 +1,4 @@
-[gd_resource type="Theme" format=3]
+[gd_resource type="Theme" format=3 uid="uid://sf1i15kexj5i"]
 
 [ext_resource type="FontFile" path="res://assets/fonts/Inter-VariableFont_opsz,wght.ttf" id="1_4kvjf"]
 [ext_resource type="FontFile" path="res://assets/fonts/fraunces/Fraunces-Italic-Variable.ttf" id="2_8j30l"]
@@ -3840,6 +3840,11 @@ FieldCueLit/styles/panel = SubResource("StyleBoxFlat_1vxb0")
 FieldError/base_type = &"LineEdit"
 FieldError/styles/focus = SubResource("StyleBoxFlat_nrcpc")
 FieldError/styles/normal = SubResource("StyleBoxFlat_iahll")
+FieldHint/base_type = &"MarginContainer"
+FieldHint/constants/margin_bottom = 0
+FieldHint/constants/margin_left = 0
+FieldHint/constants/margin_right = 0
+FieldHint/constants/margin_top = 4
 FoldoutHeader/base_type = &"Button"
 FoldoutHeader/colors/font_color = Color(0.8117647, 0.77254903, 0.8392157, 1)
 FoldoutHeader/colors/font_disabled_color = Color(0.8117647, 0.77254903, 0.8392157, 1)
@@ -4065,7 +4070,7 @@ LineEdit/colors/font_color = Color(0.98039216, 0.9529412, 0.8901961, 1)
 LineEdit/colors/font_placeholder_color = Color(0.8117647, 0.77254903, 0.8392157, 1)
 LineEdit/colors/font_selected_color = Color(0.98039216, 0.9529412, 0.8901961, 1)
 LineEdit/colors/font_uneditable_color = Color(0.8117647, 0.77254903, 0.8392157, 1)
-LineEdit/colors/selection_color = Color(0.4862745, 0.7764706, 0.8666667, 0.3)
+LineEdit/colors/selection_color = Color(0.16470589, 0.40784314, 0.5019608, 1)
 LineEdit/font_sizes/font_size = 16
 LineEdit/fonts/font = SubResource("FontVariation_mgayn")
 LineEdit/styles/focus = SubResource("StyleBoxFlat_u05ak")
@@ -4290,7 +4295,7 @@ TextEdit/colors/font_color = Color(0.98039216, 0.9529412, 0.8901961, 1)
 TextEdit/colors/font_placeholder_color = Color(0.8117647, 0.77254903, 0.8392157, 1)
 TextEdit/colors/font_readonly_color = Color(0.8117647, 0.77254903, 0.8392157, 1)
 TextEdit/colors/font_selected_color = Color(0.98039216, 0.9529412, 0.8901961, 1)
-TextEdit/colors/selection_color = Color(0.4862745, 0.7764706, 0.8666667, 0.3)
+TextEdit/colors/selection_color = Color(0.16470589, 0.40784314, 0.5019608, 1)
 TextEdit/font_sizes/font_size = 16
 TextEdit/fonts/font = SubResource("FontVariation_mgayn")
 TextEdit/styles/focus = SubResource("StyleBoxFlat_e22ro")
@@ -4310,6 +4315,7 @@ ThemeColors/colors/on_selected = Color(0.98039216, 0.9529412, 0.8901961, 1)
 ThemeColors/colors/on_state = Color(0.16862746, 0.13725491, 0.20784314, 1)
 ThemeColors/colors/selected = Color(0.16470589, 0.40784314, 0.5019608, 1)
 ThemeColors/colors/selected_hover = Color(0.14901961, 0.38039216, 0.46666667, 1)
+ThemeColors/colors/selection = Color(0.16470589, 0.40784314, 0.5019608, 1)
 ThemeColors/colors/shadow = Color(0.05490196, 0.043137256, 0.078431375, 0.25)
 ThemeColors/colors/state = Color(0.4862745, 0.7764706, 0.8666667, 1)
 ThemeColors/colors/state_hover = Color(0.42745098, 0.7294118, 0.8235294, 1)
