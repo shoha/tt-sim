@@ -204,6 +204,14 @@ func test_the_panels_actions_follow_the_source() -> void:
 	assert_false(bundled.edit_button.visible, "a bundled map is not edited here")
 	assert_false(bundled.reload_button.visible)
 	assert_false(bundled.menu_items().has(MapPanel.MENU_REPLACE))
+	# A Bundled map ships with the game: no Delete, only what is meaningful for it.
+	assert_eq(bundled.menu_items(), [MapPanel.MENU_SET_UP, MapPanel.MENU_DUPLICATE] as Array[int])
+	bundled.open_menu()
+	var labels: Array[String] = []
+	for index in bundled.menu.item_count:
+		labels.append(bundled.menu.get_item_text(index))
+	bundled.menu.hide()
+	assert_false(labels.has(MapPanel.MENU_LABELS[MapPanel.MENU_DELETE]), "no Delete in its menu")
 	assert_eq(bundled.source_label.text, "Bundled")
 	assert_true(bundled.host_button.visible)
 	assert_eq(bundled.host_button.text, "Host with this map")
@@ -233,13 +241,15 @@ func test_the_panels_placeholder_shows_the_names_initial() -> void:
 	assert_almost_eq(picture.x / picture.y, MapPanel.PICTURE_ASPECT, 0.02, "16:9")
 	var share := roundi(picture.y * MapPlaceholder.INITIAL_SHARE)
 	assert_eq(initial.label_settings.font_size, share, "the initial scales with the picture")
-	# A short column shortens the picture, never past WIDE_ASPECT; the rest of the panel fits.
+	# A short column shortens the picture, past WIDE_ASPECT only where the words need it (they
+	# take the picture's room, never the facts'), never past TIGHT_ASPECT.
 	panel.max_height = 380.0
 	panel.fit_height()
 	await wait_process_frames(3)
 	picture = panel.picture_well.size
 	assert_lt(picture.y, picture.x / MapPanel.PICTURE_ASPECT - 1.0, "shorter than 16:9")
-	assert_gte(picture.y, floorf(picture.x / MapPanel.WIDE_ASPECT), "no shorter than its floor")
+	assert_gte(picture.y, floorf(picture.x / MapPanel.TIGHT_ASPECT), "no shorter than its floor")
+	assert_lte(panel.custom_minimum_size.y, 380.0, "the panel within its column")
 
 
 func test_a_field_saves_on_enter_through_update_meta_and_escape_reverts() -> void:
@@ -309,9 +319,9 @@ func test_the_panels_menu_author_and_quiet_empty_fields() -> void:
 	assert_false(bare.add_details_button.visible, "the open field takes its place")
 
 
-## The keys hint covers nothing: no tooltip on the words at rest, and the hint inside the open
-## field's well, under the field, only while it is open.
-func test_the_edit_hint_shows_in_the_well_only_while_open() -> void:
+## The keys hint covers nothing: no tooltip on the words at rest, and the hint under the open
+## field's well, on plain paper, only while it is open.
+func test_the_edit_hint_shows_under_the_well_only_while_open() -> void:
 	var info := _info("harbour", "map.glb", "")
 	info.description = "A ford under old willows, where the road meets the river"
 	var panel := _panel(info)
@@ -320,11 +330,13 @@ func test_the_edit_hint_shows_in_the_well_only_while_open() -> void:
 	assert_false(panel.hint_shown("description"), "no hint at rest")
 	panel.begin_edit("description")
 	assert_true(panel.hint_shown("description"), "the keys while the field is open")
-	assert_true(panel.cue_shown("description"), "inside the open field's well")
+	assert_true(panel.cue_shown("description"), "the open field shows its well")
 	var hint := panel.find_child("DescriptionHint", true, false) as Label
 	assert_eq(hint.text, MapPanel.EDIT_HINT)
-	assert_eq(hint.get_parent(), panel.description_edit.get_parent(), "in the field's own stack")
-	assert_gt(hint.get_index(), panel.description_edit.get_index(), "under the field")
+	var cue := panel.find_child("DescriptionCue", true, false) as Control
+	assert_false(cue.is_ancestor_of(hint), "on plain paper, not inside the well")
+	assert_eq(hint.get_parent(), cue.get_parent())
+	assert_eq(hint.get_index(), cue.get_index() + 1, "right under the well")
 	var escape := InputEventAction.new()
 	escape.action = "ui_cancel"
 	escape.pressed = true

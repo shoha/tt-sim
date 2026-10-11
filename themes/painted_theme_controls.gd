@@ -238,17 +238,19 @@ func define_ranges() -> void:
 	define_style("HSlider", _slider(false))
 	define_style("VSlider", _slider(true))
 	# A slider whose effect is switched off (a toggle row with its check off: Fog, Glow): the
-	# fill and the knob in the soft text role, so it reads as waiting, not live.
+	# fill and the knob in the soft text role, so it reads as waiting, not live. The knob is
+	# hollowed to the inset paper with a faint rim, no brighter than the empty check beside it.
 	var off_widen := {expand_margin_top = 1.5, expand_margin_bottom = 1.5}
 	var off_fill := box(Color(c(ThemeColors.TEXT_SOFT), 0.6), RADIUS_PILL, 0, 0, off_widen)
+	var off_knob := _knob(ThemeColors.TEXT_SOFT, 0.4, ThemeColors.SURFACE_INSET)
 	define_variant_style(
 		"SliderOff",
 		"HSlider",
 		{
 			grabber_area = off_fill,
 			grabber_area_highlight = off_fill,
-			grabber = _knob(ThemeColors.TEXT_SOFT, 0.5),
-			grabber_highlight = _knob(ThemeColors.TEXT_SOFT, 0.5),
+			grabber = off_knob,
+			grabber_highlight = off_knob,
 		}
 	)
 	define_style(
@@ -479,7 +481,9 @@ func _slider(vertical: bool) -> Dictionary:
 
 
 ## The 20 px slider knob: a raised disc with a ring in `role`.
-func _knob(role: StringName, alpha: float) -> ImageTexture:
+func _knob(
+	role: StringName, alpha: float, fill_role: StringName = ThemeColors.SURFACE_RAISED
+) -> ImageTexture:
 	var disc := '<circle cx="10" cy="10" r="7.5" %s %s stroke-width="3"/>'
-	var fill := paint("fill", ThemeColors.SURFACE_RAISED, 1.0)
+	var fill := paint("fill", fill_role, 1.0)
 	return svg_icon(20, 20, disc % [fill, paint("stroke", role, alpha)])

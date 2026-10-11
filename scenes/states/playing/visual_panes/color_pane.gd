@@ -146,7 +146,7 @@ func _sync_from_model() -> void:
 	var tm_mode: int = config.get("tonemap_mode", Environment.TONE_MAPPER_FILMIC)
 	OptionButtonUtils.select_by_metadata(_tonemap_dropdown, tm_mode)
 	_tonemap_row.overridden = _model.is_overridden(["tonemap_mode"])
-	clear_button.disabled = _model.overrides.is_empty()
+	show_look_clear(clear_button, not _model.overrides.is_empty())
 
 
 ## The eraser shared with the Sky pane: one look, one way to undo its changes.

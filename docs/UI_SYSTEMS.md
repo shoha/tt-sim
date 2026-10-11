@@ -589,11 +589,12 @@ unscrolled at 1280x720); selecting one of those brings the panel in. `LibraryPla
   for a map's details, whatever its source. A `PictureCard` paper card `MapPanel.WIDTH` 368 wide
   on every canvas and for every map, as tall as what it shows, at most its `max_height`. It never
   scrolls on a canvas the game gives: the picture is 16:9 where the longest map of the player's
-  own (a two-line description, an author, two lines of facts, both lines of actions) fits under
+  own (a three-line description, an author, two lines of facts, both lines of actions) fits under
   it, and shorter down to `WIDE_ASPECT` 2.4:1 where it would not (`words_reserve()`, from the
   theme's faces and gaps). The picture follows the canvas, never the map, so a Bundled map's panel
-  has the same picture in the same place, only shorter for its absent lines. Measured: 2.4:1 on a
-  1280x720 canvas (the panel 432 of 436 px), 16:9 from 720p at Auto (1371x771) up. Only past
+  has the same picture in the same place, only shorter for its absent lines. Measured with the
+  two-line reserve (before ui-polish-2): 2.4:1 on a 1280x720 canvas (the panel 432 of 436 px),
+  16:9 from 720p at Auto (1371x771) up; not re-measured with the three-line reserve. Only past
   that floor would the picture and words scroll over the pinned actions, the bar the handle alone
   (`ScrollBarFade`). Top to bottom: the picture (the thumbnail, or the placeholder, its initial
   scaled to the picture: `MapPlaceholder.INITIAL_SHARE` 0.3 of its height); the name in the
@@ -610,7 +611,7 @@ unscrolled at 1280x720); selecting one of those brings the panel in. `LibraryPla
   opens under its button with Set up tokens
   (`TitleScreen.SET_UP_TOKENS`, the Level Editor), Duplicate, Replace map file...
   (`LibraryImports.pick_replace`: the file picker, then the check and Replace as for a file
-  dropped on the card) and Delete. The words read as text (wrapping labels); on a map of the
+  dropped on the card) and Delete (neither for a Bundled map). The words read as text (wrapping labels); on a map of the
   player's own each takes the pointer and the focus, its well reaching out round it then
   (`FieldCue`/`FieldCueLit`, expand margins, so the words never move), and a click or Accept
   opens it for typing in an `InlineField`/`TitleField` line edit in the same place, its hint
@@ -759,9 +760,18 @@ paper wash (raised paper at the top left to inset paper at the foot, a `Gradient
 well clips), not a flat tan block.
 
 The map panel (same card): no tooltip covers a field's words at rest (the well and the text
-cursor say they can be typed in); an open field's well spans the column and holds, under the
-field, the keys `MapPanel.EDIT_HINT` ("Enter saves, Escape puts it back"), shown only while it is
-open. At rest a field's well is as wide as its words' widest line (`MapPanel.well_width`), so it
+cursor say they can be typed in); an open field's well spans the column round the field, and
+under the well, on plain paper (inside it the well ran on as a tan strip under the field and
+read as a leftover hover), the keys `MapPanel.EDIT_HINT` ("Enter saves, Escape puts it back"),
+shown only while it is open; showing another map closes any open field and its keys (a field
+left open by one map had its keys showing over the next, ui-polish-2). The description stands
+on `MapPanel.DESCRIPTION_LINES` (3) lines at most, the last ending in an ellipsis, its tooltip
+the whole text (only then: `description_clamped()`), the whole text in the open field. Words past
+the reserve (a long name on two lines, an open field's keys line) take their room from the
+picture, down to `MapPanel.TIGHT_ASPECT` 4:1, never from the facts: the action rows never cover
+the chip line or the date (test_title_screen measures this at 1280x720). A Bundled map's "..."
+holds Set up tokens and Duplicate only: no Replace map file... and no Delete, since it ships
+with the game. At rest a field's well is as wide as its words' widest line (`MapPanel.well_width`), so it
 reaches out the same on both sides. Edit map and Reload from Blender are sized to their words
 from the left edge, the same on every map. The date ends the facts' chip line when the line
 fits the words' width, else stands on a line of its own a body step under it
@@ -1739,14 +1749,31 @@ Right-click to reset to the preset value."), and wire `PropertyRow.reset_request
 handler — to erase just that row's key(s) from the model's overrides (dropping
 `adjustment_enabled` too if that was the last remaining `adjustment_*` override). The Sky and
 Color panes share one heading action, the "eraser" (`LevelEditPane._add_look_heading()`, tooltip
-`LOOK_CLEAR_TIP` "Undo every change to Sky and Color, keeping the Look"), disabled whenever the
-model has no overrides and otherwise clearing every override at once (toast `LOOK_CLEARED`).
+`LOOK_CLEAR_TIP` "Back to the Look: clear the changes made over it in Sky and Color"), hidden
+whenever the model has no overrides (`LevelEditPane.show_look_clear`; the heading's line keeps
+the eraser's height, so nothing moves) and otherwise clearing every override at once (toast
+`LOOK_CLEARED`). The drawer's foot Revert look is the other way back and its tooltip says the
+other thing: "Revert to saved: put every pane back as the look was last saved, and close the
+drawer". A clean pane offered both side by side and they read as two reverts (ui-polish-2). The
+Sun pane has no eraser: it has no Look to go back to, and its own way back, Back to generated
+under Advanced, puts the sun back to what its hour generates, a different thing that keeps its
+own words.
 
 A toggle row (Fog, Glow) draws its slider off while its check is off: the slider takes no input
-and wears `SliderOff` (`PropertyRow.slider_live()`), so a switched-off effect never shows a live
-value; its check is `CheckInline`, so its label line has a plain stacked row's height. With
+and wears `SliderOff` (`PropertyRow.slider_live()`; its knob hollowed to the inset paper with a
+faint rim, no brighter than the empty check beside it), so a switched-off effect never shows a
+live value; its check is `CheckInline`, so its label line has a plain stacked row's height. With
 Sunlight Off the Sun pane's Shadows tiles are disabled with the tooltip `SunPane.SHADOWS_NO_SUN`
-(shadows are the sun's light alone, `DefaultSun.apply`), and softness and darkness take no input.
+(shadows are the sun's light alone, `DefaultSun.apply`), the picked one still marked in a muted
+wash of the selected fill (`TileChosenOff`, which `TileRow.set_tile_disabled` puts on the picked
+tile of a disabled row; `TileRow.is_chosen_off`), a caption under them says
+`SunPane.SHADOWS_NEED_SUN` ("Shadows need sunlight"), softness and darkness take no input, and
+Aim on map is disabled too (`SunPane.AIM_NO_SUN`; an active aim is let go).
+
+A row with its own control instead of a slider (`PropertyRow.set_control`: the Look and Tonemap
+dropdowns) stands its label at its words' width and gives the control the rest of the line, so
+the Look dropdown ellipsizes only a name that does not fit the row (it split the row with the
+label and cut "Outdoor ..." with about 150 px empty beside it).
 
 A Sky override survives a preset switch like every other override, by design; the per-row reset and
 the "eraser" header button are the way back to the preset's own sky.

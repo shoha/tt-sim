@@ -26,7 +26,7 @@ script = ExtResource("animated_btn")
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-tooltip_text = "Put the look back as it was saved and close the drawer"
+tooltip_text = "Revert to saved: put every pane back as the look was last saved, and close the drawer"
 theme_type_variation = &"Secondary"
 text = "Revert look"
 

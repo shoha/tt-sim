@@ -285,7 +285,7 @@ func _sync_from_model() -> void:
 	_fog_height_row.overridden = _model.is_overridden(["fog_height"])
 	_fog_height_density_row.set_value_no_signal(config.get("fog_height_density", 0.0))
 	_fog_height_density_row.overridden = _model.is_overridden(["fog_height_density"])
-	_clear_button.disabled = _model.overrides.is_empty()
+	show_look_clear(_clear_button, not _model.overrides.is_empty())
 
 
 func _on_model_changed(_preset: String, _overrides: Dictionary) -> void:
