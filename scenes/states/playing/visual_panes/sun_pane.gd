@@ -44,8 +44,9 @@ const SHADOW_TILES := [
 ]
 ## A Shadows tile's tooltip while Sunlight is Off (shadows_live).
 const SHADOWS_NO_SUN := "Shadows are the sun's: turn Sunlight on to cast them"
-## The caption under the Shadows tiles while Sunlight is Off.
-const SHADOWS_NEED_SUN := "Shadows need sunlight"
+## The caption under the Shadows tiles while Sunlight is Off (it covers Aim on map too, the next
+## row, which is off for the same reason).
+const SHADOWS_NEED_SUN := "Shadows and aiming need sunlight"
 const AIM_TIP := "Drag the sun on the ground compass"
 ## Aim on map's tooltip while Sunlight is Off.
 const AIM_NO_SUN := "There is no sun to aim: turn Sunlight on first"
@@ -66,6 +67,7 @@ var _shadow_field: TileField
 var _shadow_note: Label
 var _shadow_note_gap: Control
 var _aim_button: IconButton
+var _aim_label: Label
 var _azimuth_row: PropertyRow
 var _elevation_row: PropertyRow
 var _color_row: PropertyRow
@@ -111,12 +113,12 @@ func _build() -> void:
 	var aim_row := HBoxContainer.new()
 	aim_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(aim_row)
-	var aim_label := Label.new()
-	aim_label.text = "Aim on map"
-	aim_label.theme_type_variation = &"Body"
-	aim_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	aim_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	aim_row.add_child(aim_label)
+	_aim_label = Label.new()
+	_aim_label.text = "Aim on map"
+	_aim_label.theme_type_variation = &"Body"
+	_aim_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_aim_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	aim_row.add_child(_aim_label)
 	_aim_button = IconButton.new()
 	_aim_button.icon_name = "target"
 	_aim_button.toggle_mode = true
@@ -279,6 +281,8 @@ func _refresh_shadow_state() -> void:
 		aim_toggled.emit(false)
 	_aim_button.disabled = not live
 	_aim_button.tooltip_text = AIM_TIP if live else AIM_NO_SUN
+	# The row reads off with its button: the label in the soft role, as the icon is.
+	_aim_label.theme_type_variation = &"Body" if live else &"BodyOff"
 
 
 func _emit_changed() -> void:

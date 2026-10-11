@@ -59,6 +59,7 @@ func test_sunlight_off_keeps_the_shadows_mark_and_says_why() -> void:
 	assert_true(pane._aim_button.disabled, "Aim on map needs the sun too")
 	assert_eq(pane._aim_button.tooltip_text, SunPane.AIM_NO_SUN)
 	assert_false(pane._aim_button.button_pressed, "the aim tool let go")
+	assert_eq(pane._aim_label.theme_type_variation, &"BodyOff", "its label reads off with it")
 	assert_signal_emitted_with_parameters(pane, "aim_toggled", [false])
 	# The variation exists in the theme, so the mark is drawn, not a fallback.
 	var theme := ThemeDB.get_project_theme()
@@ -70,6 +71,7 @@ func test_sunlight_off_keeps_the_shadows_mark_and_says_why() -> void:
 	assert_false(pane._shadow_note.visible)
 	assert_false(pane._aim_button.disabled)
 	assert_eq(pane._aim_button.tooltip_text, SunPane.AIM_TIP)
+	assert_eq(pane._aim_label.theme_type_variation, &"Body")
 
 
 ## The pane says Sun once (its heading); the mode field names what it switches, and Auto is
