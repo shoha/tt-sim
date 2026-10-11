@@ -1,82 +1,94 @@
 class_name GroundBurn
-extends Decal
+extends MeshInstance3D
 
-## The fire on the ground (FireSweep): a decal over the burning stand whose painted ring is the
-## burn front, glowing in the flames' own stepped bands (deep red outside, orange, gold, a few
-## ember spots behind), with charred ground inside it. It is sized every frame so the ring runs
-## out with the front (front_radius: the nearest tree's distance at once, the rim SPREAD_S
-## later), its glow dies once the front has reached the rim (glow_at), and the char under it
-## stays until the ash lands at the end of the event, then goes (char_at), so the charred
-## ground hands over to the ash rather than popping.
+## The fire on the ground (FireSweep): a box over the burning stand whose shader
+## (shaders/ground_burn.gdshader) paints the ground seen through it from the depth buffer. The
+## front is not a circle but a level line of the fire's noise: a point burns once the front's
+## radius (front_radius: the nearest tree's distance at once, the rim SPREAD_S later) passes
+## its reach, its distance from the centre pulled in or pushed out by the lobe field (reach), so
+## lobes run ahead and bays lag as it grows. Ahead of it the grass dries in a mottled band, on it
+## a hot band of varying width burns, broken into crawling segments, and behind it the ground is
+## charred with glowing specks that cool as the front leaves them. Its glow dies once the front
+## has reached the rim (glow_at), and the char stays until the ash lands at the end of the
+## event, then goes (char_at), so the charred ground hands over to the ash rather than popping.
 ##
-## Painted once (texture pair, kept for the session); a frame only sets its size, energy and
-## alpha, so it allocates nothing while it plays. Its normal fade keeps it off the trunks.
+## The lobe field is one small wrapping texture of the fire's noise (fire_noise.gdshaderinc's
+## two octaves, made periodic), painted once for the session; the shader samples it and reach
+## reads the same bytes, so the ground tongues and the trees (FireSweep) are timed by the very
+## line the ground shows. A frame only sets a few uniforms, so it allocates nothing while it
+## plays.
 
-## The ring's mean radius in the texture (a share of its half size), how far the painted front
-## wanders from it, and the texture's size in pixels.
-const RING_AT := 0.86
-const RING_WANDER := 0.08
-const PAINT_PX := 256
-## The decal's height (metres) about the stand's ground.
-const DEPTH_M := 3.0
+## The lobe field: its size in pixels, its period in noise units (one blob a unit across), and
+## how far it moves the front (metres, a share of the rim) at what scale (a blob's width,
+## metres, a share of the rim, at least LOBE_MIN_M).
+const LOBE_PX := 64
+const LOBE_PERIOD := 8
+const LOBE_SHARE := 0.55
+const LOBE_SCALE := 0.4
+const LOBE_MIN_M := 1.5
+## The box: its half height (metres about the stand's ground) and how far past the furthest
+## lobe it reaches (the dry band and the ragged edge).
+const HALF_HEIGHT_M := 1.5
+const PAD_M := 2.6
 ## Glow: how fast it comes in, how long it holds past the front reaching the rim, how long it
 ## takes to die; and the char's going about the end of the event.
 const GLOW_IN_S := 0.15
 const GLOW_HOLD_S := 0.35
 const GLOW_OUT_S := 0.8
 const CHAR_OUT_S := Vector2(-0.2, 0.6)
-const ENERGY := 2.4
-## The stepped bands (sRGB, as the decal's textures are): the front's deep red outer edge,
-## orange, gold behind it, the ember spots; the charred ground and the band once it has
-## cooled, dark warm brown.
-const BAND_RED := Color(0.75, 0.12, 0.04)
-const BAND_ORANGE := Color(1.0, 0.45, 0.08)
-const BAND_GOLD := Color(1.0, 0.78, 0.3)
-const EMBER := Color(0.8, 0.2, 0.04)
-const CHAR := Color(0.11, 0.08, 0.07, 0.88)
-const CHAR_ASH := Color(0.3, 0.27, 0.25, 0.8)
-const BAND_COOL := Color(0.13, 0.08, 0.06, 0.92)
+const SHADER := preload("res://shaders/ground_burn.gdshader")
 
-static var _albedo: ImageTexture = null
-static var _emission: ImageTexture = null
+static var _lobe_bytes := PackedByteArray()
+static var _lobe_texture: ImageTexture = null
 
+var _material: ShaderMaterial = null
 var _nearest := 0.0
 var _radius := 1.0
 var _spread := 1.0
 var _duration := 1.0
 
 
-## The ring set up over map point `centre` (ground height), the nearest tree `nearest` metres
+## The burn set up over map point `centre` (ground height), the nearest tree `nearest` metres
 ## out and the rim `radius`, the front taking `spread` seconds between them, the event lasting
-## `duration`.
-func setup(centre: Vector3, nearest: float, radius: float, spread: float, duration: float) -> void:
+## `duration`, its lobes drawn by `event_seed`.
+func setup(
+	centre: Vector3, nearest: float, radius: float, spread: float, duration: float, event_seed: int
+) -> void:
 	name = "GroundBurn"
 	_nearest = nearest
 	_radius = maxf(radius, 0.5)
 	_spread = maxf(spread, 0.05)
 	_duration = duration
 	position = centre
-	paint()
-	texture_albedo = _albedo
-	texture_emission = _emission
-	normal_fade = 0.45
-	upper_fade = 0.2
-	lower_fade = 0.2
-	emission_energy = 0.0
-	cull_mask = 0xFFFFF
-	_size_to(front_radius(0.0, _nearest, _radius, _spread))
+	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var across := 2.0 * (_radius * (1.05 + 0.5 * LOBE_SHARE) + PAD_M)
+	var box := BoxMesh.new()
+	box.size = Vector3(across, 2.0 * HALF_HEIGHT_M, across)
+	mesh = box
+	_material = ShaderMaterial.new()
+	_material.shader = SHADER
+	# Below the water's transparent pass: the ground is reworked before anything is drawn over it.
+	_material.render_priority = -1
+	_material.set_shader_parameter(&"lobe_texture", lobe_texture())
+	_material.set_shader_parameter(&"lobe_m", lobe_m(_radius))
+	_material.set_shader_parameter(&"lobe_scale", lobe_scale(_radius))
+	_material.set_shader_parameter(&"lobe_offset", lobe_offset(event_seed))
+	_material.set_shader_parameter(&"lobe_period", float(LOBE_PERIOD))
+	_material.set_shader_parameter(&"half_height", HALF_HEIGHT_M)
+	material_override = _material
+	step(0.0)
 
 
-## Plays the ring `elapsed` seconds into the fire.
+## Plays the burn `elapsed` seconds into the fire.
 func step(elapsed: float) -> void:
 	var gone := char_at(elapsed, _duration)
 	visible = gone > 0.0
 	if not visible:
 		return
-	_size_to(front_radius(elapsed, _nearest, _radius, _spread))
-	var flicker := 0.88 + 0.12 * sin(elapsed * 13.0)
-	emission_energy = ENERGY * glow_at(elapsed, _spread) * flicker
-	modulate = Color(1.0, 1.0, 1.0, gone)
+	_material.set_shader_parameter(&"front", front_radius(elapsed, _nearest, _radius, _spread))
+	_material.set_shader_parameter(&"glow", glow_at(elapsed, _spread))
+	_material.set_shader_parameter(&"fade", gone)
+	_material.set_shader_parameter(&"elapsed", elapsed)
 
 
 ## The front's radius `t` seconds in: the nearest tree's distance at once, the rim `spread`
@@ -86,7 +98,7 @@ static func front_radius(t: float, nearest: float, radius: float, spread: float)
 	return lerpf(nearest, radius, x)
 
 
-## The ring's glow `t` seconds in, 0..1: in over GLOW_IN_S, held until GLOW_HOLD_S after the
+## The burn's glow `t` seconds in, 0..1: in over GLOW_IN_S, held until GLOW_HOLD_S after the
 ## front reaches the rim, dying over GLOW_OUT_S. Pure.
 static func glow_at(t: float, spread: float) -> float:
 	var rise := clampf(t / GLOW_IN_S, 0.0, 1.0)
@@ -100,55 +112,89 @@ static func char_at(t: float, duration: float) -> float:
 	return 1.0 - smoothstep(duration + CHAR_OUT_S.x, duration + CHAR_OUT_S.y, t)
 
 
-## Paints the ring's albedo and emission once for the session.
-static func paint() -> void:
-	if _albedo != null:
-		return
-	var noise := FastNoiseLite.new()
-	noise.noise_type = FastNoiseLite.TYPE_VALUE
-	noise.frequency = 0.05
-	noise.seed = 11
-	var albedo := Image.create(PAINT_PX, PAINT_PX, false, Image.FORMAT_RGBA8)
-	var emission := Image.create(PAINT_PX, PAINT_PX, false, Image.FORMAT_RGBA8)
-	var half := PAINT_PX * 0.5
-	for y in PAINT_PX:
-		for x in PAINT_PX:
-			var p := Vector2(x + 0.5 - half, y + 0.5 - half) / half
-			var paint_at := ring_paint(p, noise.get_noise_2d(x, y) * 0.5 + 0.5)
-			albedo.set_pixel(x, y, paint_at[0])
-			emission.set_pixel(x, y, paint_at[1])
-	_albedo = ImageTexture.create_from_image(albedo)
-	_emission = ImageTexture.create_from_image(emission)
+## How far the lobe field moves the front for a rim of `radius` metres, and its blobs' width.
+static func lobe_m(radius: float) -> float:
+	return LOBE_SHARE * radius
 
 
-## The ring's paint at `p` (the texture's -1..1) with the noise there `blot` (0..1): [albedo,
-## emission]. Stepped bands about a front that wanders round the ring. Pure.
-static func ring_paint(p: Vector2, blot: float) -> Array[Color]:
-	var a := p.angle()
-	var wander := 0.5 * sin(5.0 * a + 1.0) + 0.3 * sin(9.0 * a + 2.0) + 0.2 * sin(17.0 * a + 0.5)
-	var front := RING_AT + RING_WANDER * wander
-	var d := p.length() - front
-	var none := Color(0.0, 0.0, 0.0, 0.0)
-	if d > 0.04:
-		return [none, none]
-	# The front burns in arcs of varying depth with a few cool breaks between them, not as one
-	# even line (an even ring read as a drawn outline).
-	var arc := 0.5 + 0.5 * sin(7.0 * a + 2.0 * sin(3.0 * a + 0.7))
-	if arc < 0.16:
-		return [BAND_COOL, none]
-	var deep := 0.55 + 0.75 * arc
-	if d > 0.018:
-		return [BAND_COOL, BAND_RED]
-	if d > -0.012 * deep:
-		return [BAND_COOL, BAND_ORANGE]
-	if d > -0.04 * deep:
-		return [BAND_COOL, BAND_GOLD]
-	var ground := CHAR_ASH if blot > 0.68 else CHAR
-	if d > -0.22 and blot < 0.3:
-		return [BAND_COOL, EMBER]
-	return [ground, none]
+static func lobe_scale(radius: float) -> float:
+	return maxf(LOBE_SCALE * radius, LOBE_MIN_M)
 
 
-func _size_to(front: float) -> void:
-	var across := 2.0 * front / RING_AT
-	size = Vector3(across, DEPTH_M, across)
+## Where in the lobe field a fire of `event_seed` reads (noise units).
+static func lobe_offset(event_seed: int) -> Vector2:
+	var a := fposmod(float(event_seed) * 0.7548777, 1.0)
+	var b := fposmod(float(event_seed) * 0.5698403, 1.0)
+	return Vector2(a, b) * float(LOBE_PERIOD)
+
+
+## The reach of map point `p` (metres from the centre, the burn's frame) in a fire of rim
+## `radius` and seed `event_seed`: its distance pulled in where the lobe field is high and
+## pushed out where it is low, so the front (front_radius) reaches it once it passes this.
+## The shader's line, less its fine ragging. Pure but for the field, painted once.
+static func reach(p: Vector2, radius: float, event_seed: int) -> float:
+	var at := p / lobe_scale(radius) + lobe_offset(event_seed)
+	return p.length() - lobe_m(radius) * (lobe_at(at / float(LOBE_PERIOD)) - 0.5)
+
+
+## The lobe field at `uv` (wrapping, a period across), 0..1, bilinear as the GPU samples it.
+static func lobe_at(uv: Vector2) -> float:
+	lobe_texture()
+	var f := uv * float(LOBE_PX) - Vector2(0.5, 0.5)
+	var x0 := floori(f.x)
+	var y0 := floori(f.y)
+	var tx := f.x - x0
+	var ty := f.y - y0
+	var a := _lobe_byte(x0, y0) * (1.0 - tx) + _lobe_byte(x0 + 1, y0) * tx
+	var b := _lobe_byte(x0, y0 + 1) * (1.0 - tx) + _lobe_byte(x0 + 1, y0 + 1) * tx
+	return (a * (1.0 - ty) + b * ty) / 255.0
+
+
+## The lobe field's texture, painted once for the session: fire_noise.gdshaderinc's two
+## octaves on a lattice wrapped every LOBE_PERIOD units.
+static func lobe_texture() -> ImageTexture:
+	if _lobe_texture != null:
+		return _lobe_texture
+	_lobe_bytes.resize(LOBE_PX * LOBE_PX)
+	for y in LOBE_PX:
+		for x in LOBE_PX:
+			var q := Vector2(x + 0.5, y + 0.5) * float(LOBE_PERIOD) / float(LOBE_PX)
+			var v := 0.68 * fire_noise(q, LOBE_PERIOD)
+			v += 0.32 * fire_noise(q * 2.0 + Vector2(7.0, 3.0), LOBE_PERIOD * 2)
+			_lobe_bytes[y * LOBE_PX + x] = clampi(roundi(v * 255.0), 0, 255)
+	var image := Image.create_from_data(LOBE_PX, LOBE_PX, false, Image.FORMAT_L8, _lobe_bytes)
+	_lobe_texture = ImageTexture.create_from_image(image)
+	return _lobe_texture
+
+
+## fire_noise.gdshaderinc's value noise at `p`, its lattice wrapped every `period` units, so
+## the field tiles. Pure.
+static func fire_noise(p: Vector2, period: int) -> float:
+	var i := Vector2(floorf(p.x), floorf(p.y))
+	var f := p - i
+	var u := f * f * (Vector2(3.0, 3.0) - 2.0 * f)
+	var a := fire_hash(_wrap(i, period))
+	var b := fire_hash(_wrap(i + Vector2(1.0, 0.0), period))
+	var c := fire_hash(_wrap(i + Vector2(0.0, 1.0), period))
+	var d := fire_hash(_wrap(i + Vector2(1.0, 1.0), period))
+	return lerpf(lerpf(a, b, u.x), lerpf(c, d, u.x), u.y)
+
+
+## fire_noise.gdshaderinc's hash, 0..1. Pure.
+static func fire_hash(p: Vector2) -> float:
+	var q := Vector2(_fract(p.x * 123.34), _fract(p.y * 456.21))
+	var d := q.dot(q + Vector2(45.32, 45.32))
+	q += Vector2(d, d)
+	return _fract(q.x * q.y)
+
+
+static func _fract(v: float) -> float:
+	return v - floorf(v)
+
+
+static func _wrap(i: Vector2, period: int) -> Vector2:
+	return Vector2(fposmod(i.x, period), fposmod(i.y, period))
+
+
+static func _lobe_byte(x: int, y: int) -> float:
+	return float(_lobe_bytes[posmod(y, LOBE_PX) * LOBE_PX + posmod(x, LOBE_PX)])

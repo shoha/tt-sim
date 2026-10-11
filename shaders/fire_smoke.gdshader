@@ -47,7 +47,9 @@ const float GLOW_LIFE = 0.18;
 // A card's painted tones (dark patch, body, light patch) and where the noise steps between
 // them.
 const vec3 PAINT_TONES = vec3(0.64, 0.92, 1.12);
-const vec2 PAINT_STEPS = vec2(0.38, 0.62);
+// (The dark step at 0.38 on a noise at corner * 1.6 left small round dark spots, fire-look-6:
+// 0.34 on a broader noise keeps the dark tone to a few larger patches.)
+const vec2 PAINT_STEPS = vec2(0.34, 0.62);
 // The two-tone step: lit from where the wrapped light crosses RAMP.x to RAMP.y.
 const vec2 RAMP = vec2(0.46, 0.54);
 // The erosion starts this far through a billow's life and is done by ERODE_DONE.
@@ -110,7 +112,7 @@ void fragment() {
 	// Three tones a card, bold soft-edged shapes as a leaf card's paint is: a dark patch, the
 	// body and a light patch, stepped by one broad noise (a two-tone patch from 0.82 to 1.06
 	// read as smooth grey discs, fire-look-5).
-	float shapes = fire_cloud(corner * 1.6 + card_draw * 31.0 + puff_seed * 3.0);
+	float shapes = fire_cloud(corner * 1.3 + card_draw * 31.0 + puff_seed * 3.0);
 	float body = smoothstep(PAINT_STEPS.x - 0.05, PAINT_STEPS.x + 0.05, shapes);
 	float bright = smoothstep(PAINT_STEPS.y - 0.05, PAINT_STEPS.y + 0.05, shapes);
 	float paint = (PAINT_TONES.x + (PAINT_TONES.y - PAINT_TONES.x) * body
@@ -121,7 +123,10 @@ void fragment() {
 	// undersides only, gone early in its life (whole cards glowing tan read as orange leaves
 	// beside a burning crown).
 	float young = 1.0 - smoothstep(0.0, GLOW_LIFE, puff_age);
-	float glow = young * smoothstep(-0.25, -0.55, high) * smoothstep(-0.1, -0.7, corner.y);
+	// Broken into a few warm patches by the puff's own lump noise and the card's draw (one
+	// even band along every low card read as a straight line, fire-look-6).
+	float patches = smoothstep(0.5, 0.6, lump) * step(0.45, fract(card_draw * 5.3));
+	float glow = young * smoothstep(-0.25, -0.55, high) * smoothstep(-0.1, -0.7, corner.y) * patches;
 	EMISSION = SMOKE_GLOW * glow * GLOW_STRENGTH + ALBEDO * SHADE_FILL;
 }
 

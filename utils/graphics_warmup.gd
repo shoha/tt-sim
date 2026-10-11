@@ -27,6 +27,7 @@ const COVERED_SHADERS := [
 	"res://shaders/event_puff.gdshader",
 	"res://shaders/fire_smoke.gdshader",
 	"res://shaders/grid_overlay.gdshader",
+	"res://shaders/ground_burn.gdshader",
 	"res://shaders/lofi_canvas.gdshader",
 	"res://shaders/occlusion_fade.gdshader",
 	"res://shaders/selection_glow.gdshader",

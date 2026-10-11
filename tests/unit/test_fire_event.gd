@@ -420,15 +420,20 @@ func test_the_ground_fire() -> void:
 	assert_lte(glow_out, duration, "the glow is out before the ash lands")
 	assert_almost_eq(GroundBurn.char_at(duration - 0.5, duration), 1.0, 0.001, "charred")
 	assert_almost_eq(GroundBurn.char_at(duration + 1.0, duration), 0.0, 0.001, "under the ash")
-	# Its paint: the front's bands glow, the ground inside is charred, outside is bare.
-	# (the painted front wanders out to about 0.92 of the texture's half size at angle 0)
-	var front := GroundBurn.ring_paint(Vector2(0.92, 0.0), 0.5)
-	var inside := GroundBurn.ring_paint(Vector2(0.2, 0.1), 0.5)
-	var outside := GroundBurn.ring_paint(Vector2(0.99, 0.0), 0.5)
-	assert_gt(front[1].r + front[1].g, 0.5, "the front glows")
-	assert_gt(inside[0].a, 0.5, "the ground inside is charred")
-	assert_eq(inside[1].r, 0.0, "and cold")
-	assert_eq(outside[0].a, 0.0, "the ground outside is untouched")
+	# The front is lobed: a point's reach is its distance moved by the lobe field, never by
+	# more than half the lobe reach, and the field varies round the ring (lobes and bays).
+	var lobe := GroundBurn.lobe_m(rim)
+	var reaches: Array[float] = []
+	for i in 24:
+		var p := Vector2.from_angle(TAU * i / 24.0) * 5.0
+		var r := GroundBurn.reach(p, rim, 7)
+		assert_between(r, 5.0 - lobe * 0.5, 5.0 + lobe * 0.5)
+		reaches.append(r)
+	assert_gt(reaches.max() - reaches.min(), lobe * 0.2, "lobes and bays, not a circle")
+	# The field wraps (its lattice is periodic, so the texture tiles without a seam).
+	var here := GroundBurn.lobe_at(Vector2(0.3, 0.7))
+	assert_almost_eq(here, GroundBurn.lobe_at(Vector2(1.3, -0.3)), 0.001)
+	assert_between(here, 0.0, 1.0)
 
 
 func test_the_painted_flame() -> void:
