@@ -592,23 +592,20 @@ captures it.
 
 `PlayTogetherCard` (`scenes/ui/play_together_card.gd`) answers one question, the italic
 Fraunces eyebrow **Play together?** (`Eyebrow`, the card's own question, never a category over
-a heading), on a 336x112 pill where two watercolour washes meet at a crisp hand-painted seam
-(`shaders/ui_wash_split.gdshader` on a `ColorRect`, worked in OKLab lightness at each wash's
-own hue: a lighter bloom, up to +0.14 L, in the open band between the words and the seam,
-swelling and thinning along it but kept 4 px clear of the seam; a pooled darker edge along the
-rim (-0.06 L); +-0.025 L mottle in 55 px blots and the faintest granulation). The seam is a
-clean curve wandering +-5 px with a thin paper line along it (2 px, +-0.3 px along its
-length), and every edge on the card (the pill, the seam, its line, the blot of Join's opening,
-the focus ring) is drawn with one screen px of anti-aliasing measured along its own gradient:
-soft tone stays inside a face and never crosses an edge (user verdict 2026-10-10, "blurry
-down the middle": a soft bleed with fingers and a soft light line read as out of focus). The
-noise is hashed as integers, so a lattice corner has one value from every cell (a sine hash
-tore the seam sideways at one row). A slow drift of the seam's curve is held under Reduce
-motion. Nothing lightens a wash under its words: the card hands the shader each face's words
-rect (`words_rect()`, `text_rects()`: icon, title and caption as drawn), where the wash stays
-at or below its own step, so paper words keep 4.5:1 (rest 4.97 and 5.60, hover 5.55 and 6.21;
+a heading), on a 336x112 pill where two solid colour faces meet at a clean straight seam
+(`shaders/ui_wash_split.gdshader` on a `ColorRect`). Each face is its token colour with one
+subtle, smooth vertical gradient in OKLab lightness at its own hue: the token at the top,
+0.04 L darker at the bottom (user direction 2026-10-10: the UI goes to solid colours and subtle
+gradients for now; the painterly bloom, mottle, granulation, pooled rim and wandering seam
+landed sloppy and come back only when painterly is revisited). A thin crisp paper line (2 px)
+runs along the seam, and every edge on the card (the pill, the seam, its line, the round blot
+of Join's opening, the focus ring) is drawn with one screen px of anti-aliasing measured along
+its own gradient (user verdict 2026-10-10, "blurry down the middle": a soft bleed read as out
+of focus). No face is ever lighter than its token, so paper words keep 4.5:1 (rest 4.97 and
+5.60, hover 5.55 and 6.21); the card still hands the shader each face's words rect
+(`words_rect()`, `text_rects()`: icon, title and caption as drawn) for the contrast checks, and
 the `contrast` step of `jobs/play_together.json` reads the lightest pixel under them in the
-real frame). **Host** is the persimmon
+real frame. **Host** is the persimmon
 face on the left, "Open a room": a room needs no map (room first, user verdict 2026-10-09), so
 it acts on nothing selected (`host_game_requested({})`, `SessionFlow.host_from_title` with no
 path: `host_session(null)`) and maps are added in the room. **Join** is the lake face on the
