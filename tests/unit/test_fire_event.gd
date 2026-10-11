@@ -340,14 +340,18 @@ func test_a_fire_fits_its_pools() -> void:
 
 
 func test_the_smoke_pool() -> void:
-	# A fixed pool: a billow grows from half its size and keeps spreading, the pool plays it
-	# out and empties, and a full pool overwrites its oldest rather than growing.
-	assert_almost_eq(SmokePuffs.billow_size(0.0), SmokePuffs.START, 0.001, "born at half size")
+	# A fixed pool: a billow is born no larger than the crown it rises from and spreads to at
+	# most about twice that while it shows (its erosion is done by 0.8 of its life), the pool
+	# plays it out and empties, and a full pool overwrites its oldest rather than growing.
+	assert_almost_eq(SmokePuffs.billow_size(0.0), SmokePuffs.START, 0.001, "born at START")
+	assert_lte(SmokePuffs.billow_size(0.0), 1.0, "no larger than its crown at first")
+	assert_lte(SmokePuffs.billow_size(0.8), 2.0 * SmokePuffs.START, "at most twice by 0.8")
 	assert_gt(SmokePuffs.billow_size(1.0), 1.0, "still spreading at its end")
 	assert_gt(SmokePuffs.billow_size(0.6), SmokePuffs.billow_size(0.3), "growing all its life")
 	var smoke := SmokePuffs.new(2)
 	add_child_autofree(smoke)
 	assert_eq(smoke.multimesh.instance_count, 2)
+	assert_eq(smoke.multimesh.mesh, SmokePuffs.crown_mesh(), "every pool shares one crown")
 	for i in 3:
 		smoke.emit(Vector3.ZERO, Vector3(0.0, 0.6, 0.0), 2.0, 1.0, Color.WHITE)
 	assert_eq(smoke.live_count(), 2, "the oldest overwritten, the pool kept to its size")
@@ -356,6 +360,28 @@ func test_the_smoke_pool() -> void:
 	assert_false(smoke.is_idle())
 	smoke.step(0.6)
 	assert_true(smoke.is_idle(), "every billow spent")
+
+
+func test_the_smoke_crown() -> void:
+	# A billow is a crown of small puff cards in a low dome: four corners a card, each card's
+	# centre inside the dome, its half-size between the rim's and the middle's, its erosion rank
+	# 0..1; the shader has eaten every card by 0.8 of the billow's life.
+	var mesh := SmokePuffs.crown_mesh()
+	var arrays := mesh.surface_get_arrays(0)
+	var centres: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var cards: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
+	assert_eq(centres.size(), SmokePuffs.CARDS * 4)
+	assert_eq((arrays[Mesh.ARRAY_INDEX] as PackedInt32Array).size(), SmokePuffs.CARDS * 6)
+	for i in centres.size():
+		var c := centres[i] / SmokePuffs.CROWN
+		assert_lte(c.length(), 1.001, "card %d inside the dome" % i)
+		assert_between(cards[i].x, SmokePuffs.CARD_HALF.y * 0.84, SmokePuffs.CARD_HALF.x * 1.16)
+		assert_between(cards[i].y, 0.0, 1.0)
+	var code := (load("res://shaders/fire_smoke.gdshader") as Shader).code
+	var done := RegEx.create_from_string("ERODE_DONE = ([0-9.]+);").search(code)
+	assert_not_null(done)
+	if done != null:
+		assert_lte(float(done.get_string(1)), 0.8, "no billow lingers past 0.8 of its life")
 
 
 func test_the_ground_fire() -> void:

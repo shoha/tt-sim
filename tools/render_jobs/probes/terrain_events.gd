@@ -15,7 +15,7 @@ extends RefCounted
 ##   fire     {"kind": "collapse" | "fall" | "fire", "radius": m, "seed": n}: starts the event
 ##            on the table's TerrainEvents (the bridge, or the forest spot `look` found), its
 ##            clock held so `advance` steps it
-##   advance  {"s": seconds}: the events' clock that much further
+##   advance  {"s": seconds}: the events' clock that much further, in frame-sized slices
 ##   free     the clock back to the frame loop (the change lands, the effects let go)
 ##   abort    every playing event stopped without its change (its trees stood back up), the
 ##            clock back to the frame loop: look iterations fire again on the same stand
@@ -26,6 +26,8 @@ extends RefCounted
 const FIND_RADIUS := 6.0
 const FIND_STEP := 3.0
 const FIND_REACH := 18.0
+## `advance` steps the clock in slices this long (a frame at 30 fps).
+const SLICE_S := 1.0 / 30.0
 
 static var _forest := Vector2.INF
 
@@ -76,7 +78,13 @@ static func run(base: Node, step: Dictionary) -> String:
 			var why := edits.events.start(event)
 			return "fired %s: %s" % [step.get("kind"), why if why != "" else "playing"]
 		"advance":
-			edits.events.advance(float(step.get("s", 0.1)))
+			# In frame-sized slices, as the frame loop steps it: one long step emitted every
+			# puff of that span at once, all born at its end.
+			var left := float(step.get("s", 0.1))
+			while left > 0.0:
+				var slice := minf(left, SLICE_S)
+				edits.events.advance(slice)
+				left -= slice
 			return "%d playing" % edits.events.active_count()
 		"free":
 			edits.events.set_process(true)
@@ -109,9 +117,10 @@ static func run(base: Node, step: Dictionary) -> String:
 			var bridges := []
 			for crossing in edits.editor.document.crossings:
 				bridges.append([crossing.id, crossing.kind, (crossing.start + crossing.end) * 0.5])
-			return "bridges %s, forest %s, %d playing" % [
-				str(bridges), str(_point(edits, "forest")), edits.events.active_count()
-			]
+			return (
+				"bridges %s, forest %s, %d playing"
+				% [str(bridges), str(_point(edits, "forest")), edits.events.active_count()]
+			)
 	return "unknown action"
 
 

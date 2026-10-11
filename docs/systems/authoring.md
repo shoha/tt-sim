@@ -188,7 +188,13 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   from `FireEditor.forest_slots`: biomes with at least 0.04 trees per square metre, never the
   burnt biome itself), and ash at 1.1x the radius (fallback `dirt_peat`). A part with nothing
   to change is left out; ash refused (every paint slot holds paint) still lays the fire. Ctrl
-  puts fire out: one plain entry "Put out fire", the ash and snags stay. The burnt-biome and
+  puts fire out: one plain entry "Put out fire", the ash and snags stay. The ash burns away
+  the small plants under it (user, 2026-10-11): `ScatterGround` reads painted ash
+  (`SCORCHED_SURFACES`) through Paint's paved response, as built paint, but clears only ground
+  cover, tall cover and shrubs (`ScatterGround.scorches`): rocks and trees stay, and the burnt
+  forest's charred species (`CHARRED_KEYS`) live on it. So the clearing has the ash's
+  footprint (1.1x the fire's radius, its faint rim keeping plants), is undone with the ash
+  part, and putting fire out brings nothing back. Start a fire's ash clears the same way. The burnt-biome and
   ash parts mirror `TerrainEvents._burn` (which is not called: its dabs are one circle, these
   follow the stroke). `FireField` draws the mask (placeholder look: FlameAtlas cards on a
   0.9 m jittered lattice, a MultiMesh per 10 m block, at most 1536 on a map; no LOD, lights,
@@ -371,15 +377,27 @@ Probe and numbers:
   lands to 0.6 s after; 28 small banded tongues (`FRONT_TONGUES`, places and times drawn in
   setup on `WaterGeometry.ground_at`) rise on it as it passes. Smoke (`SmokePuffs`,
   `shaders/fire_smoke.gdshader`) rises from half the trees over 2.5 m and in a two-billow
-  column over the middle: opaque spherical-normal billboards (a heap of four balls, each pixel
-  given its ball's normal and depth, the normal tipped by the noise), lit by the scene's sun
-  through a soft two-tone ramp with a cooler underside, alpha scissor with alpha to coverage
-  as the foliage is, eroded from 20 % of its life. Probed side by side on the same stand
-  (half size, 1.2, 2.6 and 3.8 s): those balls, low-poly lumpy sphere meshes, and tall curling
-  columns for the smoke; the flipbook and banded tongues for the flames; tongues alone and the
-  ring plus tongues for the ground. Verdict captures (fire-look-3, --full): the balls read as
-  smooth mauve plastic balloons, and the last eroded pieces linger as lone floating spheres;
-  the smoke is not yet in the plants' style (see the handoff for the next round). The snags
+  column over the middle (fire-look-4): smoke crowns, built as the trees' crowns are. A billow
+  is one shared mesh of 44 small puff cards in a low dome (`SmokePuffs.crown_mesh`, large
+  cards in the middle, small at the rim, so the outline breaks), each card turned to face the
+  camera in the shader (`skip_vertex_transform`), drawing a lobed painted puff cut out with
+  alpha scissor and alpha to coverage, carrying the crown's volume normal rounded over the
+  puff, lit by the sun through a two-tone step (the sun's colour at 0.4, its brightness in
+  full: a warm afternoon sun on a grey smoke showed mauve-pink in the raw frame). Charcoal-brown
+  (0.05, 0.036, 0.026) paling to a neutral light grey (0.47, 0.49, 0.49). Born about a crown
+  across (tree billows at the crown's width, the column's at 0.45 of the trees' mean height;
+  round 3's column at 0.8 hung as balloons four crowns wide), spreading to about twice that;
+  the fire's erosion rule eats the cards' edges with one noise across the billow and each
+  card's rank (the rim's first) takes whole cards, done by 0.8 of its life, so no piece
+  lingers. One instance a billow: the pool's CPU cost is a transform a billow, its GPU cost 44
+  cards a billow (`SmokePuffs.new(50)`: 2200 cards at most). Probed against lumpy low-poly
+  meshes (four flat-shaded 9x5 spheres, stepped light, painted noise, same erosion) on the
+  same stand: their facets read as stones, the cards as part of the forest. Verdict
+  (fire-look-4, --full): in build and scale the smoke matches the crowns; its lit side is
+  still muted (a slight mauve cast, not as luminous as the foliage's) and the crown flames'
+  big banded tongues read as flat stickers beside the painterly trees, while the ground ring
+  with its small tongues reads well. Round 3 probed spherical-normal ball billboards (smooth
+  mauve plastic balloons whose last pieces lingered as lone spheres) and curling columns. The snags
   shrink away about their feet over the last 0.6 s (`snag_transform`) as the change lands.
   Two pools sized so one fire's every flame and billow fits at once (`SmokePuffs.new(50)`;
   `EventPuffs.new(172, priority 4)`: three a tree and the ground's 28).
