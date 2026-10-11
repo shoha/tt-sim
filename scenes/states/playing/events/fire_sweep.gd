@@ -17,9 +17,10 @@ extends ForestFall
 ## (shaders/fire_noise.gdshaderinc: a shape eaten by the noise as it ages, its edge a crisp
 ## step, never an alpha fade) and one palette running from the flames' stepped bands (a deep
 ## red rim, amber, gold, a pale core) through the ember glow to warm charcoal smoke going pale
-## as it rises. A banded tongue (EventPuffs' flame) stands on each crown as it catches, sized by
-## the crown's width so a narrow pine's is a tongue on its crown rather than a beam down it, a
-## second beside it on some, a spark drifts up from a few. On the ground a glowing ring runs out
+## as it rises. Small banded tongues (EventPuffs' crown flame, red, orange and amber, no pale
+## core) rise among each crown's leaf cards as the burn climbs it, sized by the crown's width
+## so a narrow pine's stay in its crown, and a spark drifts up from a few. On the ground a
+## glowing ring runs out
 ## with the front (GroundBurn), small tongues standing on it where it passes (FRONT_TONGUES),
 ## charred ground left inside it until the ash lands. Billows of smoke (SmokePuffs) rise from
 ## half the trees and in a short column over the middle: smoke crowns, each a cluster of small
@@ -66,19 +67,29 @@ const BURN_S := Vector2(1.2, 1.5)
 const BURN_RATE := 1.7
 ## The charred snags shrink away over the event's last this many seconds.
 const SNAG_GO_S := 0.6
-## A crown's flame: when it rises (a share of the tree's burn) and how long it lives, where its
-## foot stands (a share of the tree's height), its width (TONGUE_WIDE of the crown's, held
-## within TONGUE_BOUNDS of the tree's height) and its height over its width; a second beside it
-## on SIDE_CHANCE of the trees, SIDE_SIZE of its size. Sized by the tree's height alone, a
-## narrow pine's flame stood as a tall thin beam down its trunk.
-const TONGUE_AT := 0.12
-const TONGUE_LIFE := 0.55
-const TONGUE_FOOT := 0.5
-const TONGUE_WIDE := 0.85
-const TONGUE_BOUNDS := Vector2(0.22, 0.38)
-const TONGUE_TALL := 1.15
-const SIDE_CHANCE := 0.5
-const SIDE_SIZE := 0.65
+## A crown's flames: CROWN_TONGUES small tongues tucked among its leaf cards (EventPuffs'
+## crown flame), each rising once the burn has reached its height (tongue_at; a tongue on a
+## crown still green there stood as a sticker): how long it lives (a share of the tree's
+## burn), where its foot stands (TONGUE_FOOT, a share of the tree's height, and up to
+## TONGUE_SPREAD of the crown's width out from the trunk), its width (TONGUE_WIDE of the
+## crown's, within TONGUE_BOUNDS of the tree's height) and its height over its width. One big
+## tongue on a crown's flank read as a clip-art sticker (fire-look-4).
+const CROWN_TONGUES := 7
+const TONGUE_LIFE := Vector2(0.3, 0.45)
+const TONGUE_FOOT := Vector2(0.42, 0.9)
+const TONGUE_SPREAD := 0.38
+const TONGUE_WIDE := 0.25
+const TONGUE_BOUNDS := Vector2(0.06, 0.11)
+const TONGUE_TALL := 1.25
+## The burn shader's moment for a patch at height `up`: 0.55 * up plus its noise's 0.45 share
+## (CATCH_NOISE the part of it a tongue waits for, plus up to CATCH_JITTER more).
+const CATCH_HEIGHT := 0.55
+const CATCH_NOISE := 0.25
+const CATCH_JITTER := 0.15
+## When a tree throws its spark, a share of its burn.
+const SPARK_AT := 0.08
+## A tree's draws before its tongues' (the side, the spark, the smoke).
+const DRAWS_PER_TREE := 6
 ## The share of trees that throw up a spark as they catch.
 const EMBER_CHANCE := 0.35
 ## The ground fire's tongues: how many stand on the ring as it passes (their places drawn over
@@ -100,9 +111,9 @@ const SMOKE_RISE := 0.6
 ## mean height (about a crown's width; at four times the crowns it hung as balloons).
 const COLUMN_AT: Array[float] = [0.8, 1.9]
 const COLUMN_SIZE := 0.45
-## Pools: every puff of one fire at once (flames: two tongues and a spark a tree, and the
+## Pools: every puff of one fire at once (flames: a crown's tongues and a spark a tree, and the
 ## ground's tongues; smoke: a billow a tree and the column's).
-const FLAMES_PER_TREE := 3
+const FLAMES_PER_TREE := CROWN_TONGUES + 1
 const FLAME_POOL := FLAMES_PER_TREE * MAX_TREES + FRONT_TONGUES
 const SMOKE_POOL := MAX_TREES + 2
 ## Draw order: the flames over the water and the ring.
@@ -177,6 +188,14 @@ static func burnable(
 ## seconds: 0 until it catches, BURN_RATE at the end of its burn, on past it. Pure.
 static func burn_progress(t: float, burn: float) -> float:
 	return maxf(t, 0.0) / maxf(burn, 0.01) * BURN_RATE
+
+
+## When a crown tongue at `up` (a share of its tree's height) rises, as a share of the tree's
+## burn: once the burn shader's patches there are glowing (burn_progress past CATCH_HEIGHT * up
+## plus CATCH_NOISE), up to CATCH_JITTER later by `jitter` (0..1). Pure.
+static func tongue_at(up: float, jitter: float) -> float:
+	var progress := CATCH_HEIGHT * up + CATCH_NOISE + CATCH_JITTER * clampf(jitter, 0.0, 1.0)
+	return progress / BURN_RATE
 
 
 ## A tree standing at `base`, `elapsed` seconds into a fire of `duration`: where it stands,
@@ -308,9 +327,24 @@ func _tree_entry(tree: Dictionary, event: TerrainEvent, box: AABB, height: float
 	var base: Transform3D = tree.base
 	var scale := base.basis.get_scale()
 	var width := maxf(box.size.x * scale.x, box.size.z * scale.z)
+	# Six for the spark and the smoke, then four for each crown tongue (when, how high, where
+	# round the trunk, how far out), its rising times sorted low first.
 	var draws := PackedFloat32Array()
-	for i in 6:
+	for i in DRAWS_PER_TREE + 4 * CROWN_TONGUES:
 		draws.append(_rng.randf())
+	# Each tongue's time is when the burn reaches its height (tongue_at); held in the first
+	# draw, the tongues sorted by it.
+	var tongues: Array[Vector4] = []
+	for i in CROWN_TONGUES:
+		var at := DRAWS_PER_TREE + 4 * i
+		var up := lerpf(TONGUE_FOOT.x, TONGUE_FOOT.y, draws[at + 1])
+		tongues.append(
+			Vector4(tongue_at(up, draws[at]), draws[at + 1], draws[at + 2], draws[at + 3])
+		)
+	tongues.sort_custom(func(a: Vector4, b: Vector4) -> bool: return a.x < b.x)
+	for i in CROWN_TONGUES:
+		for j in 4:
+			draws[DRAWS_PER_TREE + 4 * i + j] = tongues[i][j]
 	return {
 		"height": height,
 		"width": clampf(width, height * 0.3, height),
@@ -321,6 +355,7 @@ func _tree_entry(tree: Dictionary, event: TerrainEvent, box: AABB, height: float
 		),
 		"burn": _rng.randf_range(BURN_S.x, BURN_S.y),
 		"draws": draws,
+		"tongues": 0,
 		"lit": false,
 		"smoked": false,
 	}
@@ -361,8 +396,8 @@ func _front_tongue(index: int) -> void:
 	)
 
 
-## Emits what `tree` throws up by `t` seconds after catching: its flame (and a second beside
-## it, and a spark, on some trees) as its crown catches, and its smoke (on some).
+## Emits what `tree` throws up by `t` seconds after catching: its crown's tongues as the burn
+## climbs to each, a spark (on some trees) as it catches, and its smoke (on some).
 func _kindle(tree: Dictionary, t: float) -> void:
 	if t < 0.0:
 		return
@@ -371,24 +406,14 @@ func _kindle(tree: Dictionary, t: float) -> void:
 	var width := float(tree.width)
 	var origin := (tree.base as Transform3D).origin
 	var draws: PackedFloat32Array = tree.draws
-	if not tree.lit and t >= TONGUE_AT * burn:
+	while int(tree.tongues) < CROWN_TONGUES:
+		var at_draw := DRAWS_PER_TREE + 4 * int(tree.tongues)
+		if t < draws[at_draw] * burn:
+			break
+		_crown_tongue(draws, at_draw, origin, height, width, burn)
+		tree.tongues = int(tree.tongues) + 1
+	if not tree.lit and t >= SPARK_AT * burn:
 		tree.lit = true
-		# A flame climbs slowly, so it stays on its crown (a fast one rose off as a beam).
-		var rise := Vector3(0.0, height * 0.04, 0.0) + _drift * 0.3
-		var side := _across * (1.0 if draws[0] < 0.5 else -1.0)
-		var at := origin + Vector3(0.0, height * TONGUE_FOOT, 0.0) + side * width * 0.1
-		var wide := clampf(width * TONGUE_WIDE, height * TONGUE_BOUNDS.x, height * TONGUE_BOUNDS.y)
-		var size := Vector2(wide, wide * TONGUE_TALL)
-		_flames.emit_flame(at, rise, size.x, size.y, burn * TONGUE_LIFE, FLAME)
-		if draws[1] < SIDE_CHANCE:
-			_flames.emit_flame(
-				at - side * width * 0.35 - Vector3(0.0, height * 0.08, 0.0),
-				rise,
-				size.x * SIDE_SIZE,
-				size.y * SIDE_SIZE,
-				burn * TONGUE_LIFE * 0.75,
-				FLAME_LATE
-			)
 		if draws[2] < EMBER_CHANCE:
 			_flames.emit_ember(
 				origin + Vector3(0.0, height * 0.95, 0.0),
@@ -408,6 +433,33 @@ func _kindle(tree: Dictionary, t: float) -> void:
 				2.6 + 0.5 * draws[4],
 				Color.WHITE
 			)
+
+
+## One of a tree's crown tongues, its draws from `at_draw` in `draws`: a small tongue standing
+## at a point in the crown (up its height, round the trunk, part way out), tucked among the
+## leaf cards (EventPuffs.emit_crown_flame), redder on some.
+func _crown_tongue(
+	draws: PackedFloat32Array,
+	at_draw: int,
+	origin: Vector3,
+	height: float,
+	width: float,
+	burn: float
+) -> void:
+	var up := lerpf(TONGUE_FOOT.x, TONGUE_FOOT.y, draws[at_draw + 1])
+	var angle := draws[at_draw + 2] * TAU
+	var out := sqrt(draws[at_draw + 3]) * TONGUE_SPREAD * width
+	var deep := Vector3(-_across.z, 0.0, _across.x)
+	var round_trunk := _across * cos(angle) + deep * sin(angle)
+	# The crown narrows toward its top, so a high tongue stands nearer the trunk.
+	var at := origin + Vector3(0.0, height * up, 0.0) + round_trunk * out * (1.3 - up)
+	var wide := clampf(width * TONGUE_WIDE, height * TONGUE_BOUNDS.x, height * TONGUE_BOUNDS.y)
+	wide *= lerpf(0.75, 1.15, fmod(draws[at_draw + 2] * 5.7, 1.0))
+	# A tongue climbs slowly, so it stays in its crown (a fast one rose off as a beam).
+	var rise := Vector3(0.0, height * 0.03, 0.0) + _drift * 0.3
+	var life := burn * lerpf(TONGUE_LIFE.x, TONGUE_LIFE.y, fmod(draws[at_draw + 3] * 3.1, 1.0))
+	var color := FLAME if fmod(draws[at_draw] * 9.7, 1.0) < 0.6 else FLAME_LATE
+	_flames.emit_crown_flame(at, rise, wide, wide * TONGUE_TALL, life, color)
 
 
 ## The column's billow `index`: a large billow climbing slowly over the stand's middle, higher

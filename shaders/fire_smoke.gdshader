@@ -8,8 +8,8 @@ shader_type spatial;
 // Its light is the crowns' read: every card carries the crown's volume normal (from the dome's
 // heart out through the card), tipped a little by the puff's own roundness and the fire's
 // noise, and the sun lights it through a two-tone step (a lit side and a shade side the sky
-// fills), so the billow has a luminous lit flank and a cool shade side in patches, card by
-// card.
+// fills, held down and warmed by a fill of the smoke's own colour), so the billow has a
+// luminous lit flank and a warm grey shade side in patches, card by card.
 //
 // Opaque with an antialiased edge (alpha scissor with alpha to coverage, as the foliage cards
 // are), it thins by erosion, never by fading: the fire's one rule (fire_noise.gdshaderinc) eats
@@ -18,7 +18,7 @@ shader_type spatial;
 // ERODE_DONE of its life.
 //
 // Its palette runs on from the flames' (event_puff.gdshader): a warm dark charcoal-brown with
-// an ember glow at its foot while young and close to the fire, paling to a cool light grey as
+// an ember glow at its foot while young and close to the fire, paling to a pale neutral grey as
 // it rises and ages. INSTANCE_CUSTOM: x the seed, z its age (0..1). Card attributes: VERTEX the
 // card's centre, UV its corner, UV2 its half-size and rank, COLOR.r its draw. Colours are
 // linear and shown through the filmic tonemap (FireSweep's header).
@@ -28,11 +28,17 @@ render_mode skip_vertex_transform, cull_disabled, depth_draw_opaque, specular_di
 
 // Young smoke close to the fire, and its old body.
 const vec3 SMOKE_DARK = vec3(0.05, 0.036, 0.026);
-// A light neutral grey (the sky's fill cools its shade side). The sun's colour reaches it at SUN_TINT only: an afternoon sun at
+// A pale neutral grey, high enough to read luminous beside the crowns' lit sides (at 0.47 it
+// read as grey cut paper). The sun's colour reaches it at SUN_TINT only: an afternoon sun at
 // full colour turned a cool grey's lit side a pink-mauve (measured 175, 161, 159 in the raw
-// frame), so the smoke takes the sun's brightness and a share of its warmth.
-const vec3 SMOKE_PALE = vec3(0.47, 0.49, 0.49);
-const float SUN_TINT = 0.4;
+// frame), so the smoke takes the sun's brightness and a small share of its warmth.
+const vec3 SMOKE_PALE = vec3(0.6, 0.6, 0.58);
+const float SUN_TINT = 0.2;
+// The shade side: the sky's blue fill held down (SHADE_AO, ambient only) and a warm neutral
+// fill of the smoke's own colour in its place (SHADE_FILL, emission), so the shade reads a warm
+// grey rather than slate blue.
+const float SHADE_AO = 0.5;
+const vec3 SHADE_FILL = vec3(0.2, 0.185, 0.16);
 const vec3 SMOKE_GLOW = vec3(0.9, 0.22, 0.03);
 // The two-tone step: lit from where the wrapped light crosses RAMP.x to RAMP.y.
 const vec2 RAMP = vec2(0.46, 0.54);
@@ -96,8 +102,9 @@ void fragment() {
 	float patch = smoothstep(0.42, 0.58, fire_noise(corner * 2.4 + card_draw * 31.0));
 	float paint = mix(0.82, 1.06, patch) * mix(0.86, 1.08, fract(card_draw * 7.3));
 	ALBEDO = mix(SMOKE_DARK, SMOKE_PALE, pale) * paint;
+	AO = SHADE_AO;
 	float glow = (1.0 - smoothstep(0.0, 0.3, puff_age)) * smoothstep(0.1, -0.6, high);
-	EMISSION = SMOKE_GLOW * glow * 0.8;
+	EMISSION = SMOKE_GLOW * glow * 0.8 + ALBEDO * SHADE_FILL;
 }
 
 // The crowns' two-tone read: a lit side and a shade side with a short step.
