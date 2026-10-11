@@ -71,6 +71,12 @@ A command off the allowlist costs a classifier check, or a user prompt outside a
 
 ## Budget
 
+The budget ends with verification, never with building. At about 120 tool calls (80% of the
+150, or 80% of the card's own number) stop building and spend what is left on the gate and the
+card's verification captures, read and judged. Fix what a capture shows broken if that is
+quick, else revert it, before the commit. If even that does not fit, the handoff names exactly
+what is unverified.
+
 At about 150 tool calls, or after two capture rounds (a round: captures you read and
 judge, then a change), stop. Commit only what passes the gate, write a handoff to
 `D:/dev/tt-sim/docs/plans/handoffs/<card-slug>.md` (gitignored; never commit it): what is
