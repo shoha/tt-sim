@@ -71,6 +71,12 @@ other committed home.
   dressed GLB's plants are set down on its ground at every play load, as authoring does when
   it opens (`ARCHITECTURE.md` "Dressing ground"). Survey and reasons:
   `docs/plans/2026-10-09-v0.2-evaluation/design/parity.md` (gitignored).
+- **Ground layers without an 8-surface limit (user, 2026-10-11):** the authored ground moves to
+  index-based layers over per-map Texture2DArrays (up to 64 surfaces a map, 4 candidates per
+  pixel), the map format bumps to 2 (an older build refuses a newer map; a newer build
+  migrates an old one), and the build hunts for optimizations to win back its measured
+  +0.28 ms GPU at home on a one-biome map. Probe and plan:
+  `docs/plans/2026-10-11-ground-layers/design.md` (gitignored), cards G1-G5.
 - **Fire as a map feature (user, 2026-10-11):** two new capabilities, both in the level
   builder and for the GM live in a session (synced to every peer, undoable):
   - *Persistent ground fire*, painted like other terrain (a brush, erasable): it keeps burning
