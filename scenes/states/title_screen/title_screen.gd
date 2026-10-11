@@ -9,8 +9,9 @@ extends CanvasLayer
 ## and Quit game beside it in one row of quiet labelled tools (SkyButton); under it the heading
 ## of the section at the grid's top, which stays while the cards scroll (LevelGrid.top_section:
 ## "Your maps", then "Bundled with TTSim" once its own heading has scrolled up to it); then the
-## library's grid (LevelGrid), its clip just under that heading (cards scrolled up to it thin out
-## over the grid's top room: ScrollFade.at_top) and its scroll area running
+## library's grid (LevelGrid), its clip just under that heading (no ScrollFade mask on it: the
+## cards' picture wells clip with clip_children, and inside a masked scroll they draw blank,
+## measured twice on 2026-10-10) and its scroll area running
 ## to the window's left and bottom edges, the room for the cards' shadows inside it (the theme's
 ## LibraryGrid), so a shadow never meets the clip. The grid: New map (NewMapCard: Generate and
 ## Import..., Advanced for size and seed in a popover) and the maps most recently played or
@@ -94,8 +95,6 @@ var avatars_button: Button
 var settings_button: Button
 var quit_button: Button
 var grid: LevelGrid
-## The grid's top fade under the sticky heading (ScrollFade.at_top).
-var grid_fade: ScrollFade
 var new_map_card: NewMapCard
 var map_panel: MapPanel
 ## The map panel's place in the right column, under the Play together plaque (hidden with
@@ -259,13 +258,6 @@ func _build_library() -> void:
 	# The headings are sized to the grid's width; a disabled horizontal scroll would make that
 	# its minimum too and hold the grid at its old width when the window shrinks.
 	grid.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
-	# Cards scrolled under the sticky heading thin out over the grid's top room instead of
-	# meeting a straight cut; the foot is the window's edge and keeps its clip.
-	grid_fade = ScrollFade.new()
-	grid_fade.name = "TopFade"
-	grid_fade.at_top = true
-	grid_fade.at_bottom = false
-	grid.add_child(grid_fade)
 	grid.resized.connect(_centre_empty_library)
 	grid.selection_changed.connect(_on_selection_changed)
 	grid.level_activated.connect(play_solo_requested.emit)

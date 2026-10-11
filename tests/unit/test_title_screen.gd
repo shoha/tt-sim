@@ -42,14 +42,14 @@ func before_each() -> void:
 	_plays = {}
 
 
-## Cards scrolled up under the sticky heading thin out over the grid's top room (ScrollFade's top
-## edge), not cut by a straight line; the grid's foot is the window's edge and keeps its clip.
-func test_the_library_grid_fades_at_its_top_only() -> void:
+## The library grid carries no ScrollFade: its mask is clip_children, and the cards' picture
+## wells clip their pictures the same way, which draws every picture blank inside the mask (seen
+## in real renders twice on 2026-10-10; a headless run cannot show it).
+func test_the_library_grid_has_no_clip_mask() -> void:
 	_levels = [_info("new", "New Camp", 200)]
 	var title := _title()
-	assert_eq(title.grid_fade.get_parent(), title.grid)
-	assert_true(title.grid_fade.at_top)
-	assert_false(title.grid_fade.at_bottom)
+	assert_eq(title.grid.find_children("*", "ScrollFade", true, false).size(), 0)
+	assert_eq(title.grid.clip_children, CanvasItem.CLIP_CHILDREN_DISABLED)
 
 
 ## The empty library stands in the middle of the window, not of its column: New map's centre on
