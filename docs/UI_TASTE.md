@@ -223,3 +223,10 @@ that conflicts with one stops and asks. Add each new verdict here with its date.
   initial). The board itself (the 3D world) is not affected.
 - **2026-10-10** Scroll bars over content lists (the library grid first): only the handle,
   visible only while the pointer is over the list, fading in and out; no bare track.
+- **2026-10-10** UI once-over. Nothing clips or crowds: icons fit their rail or panel (the
+  authoring tool rail clipped), and no label crowds or overlaps its control (choosing the time
+  of day was crowded). One kind of thing behaves one way: selecting a map you made and
+  selecting a Bundled map showed their details in different places and in different forms;
+  a map's details have one place and one shape, whatever its source. The main menu's mix of
+  painterly, paper and gradient reads half-baked: make it beautiful, functional and clear,
+  one coherent material language within the solid-colour-and-subtle-gradient direction.
