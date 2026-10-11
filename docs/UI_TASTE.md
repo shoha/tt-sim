@@ -230,6 +230,13 @@ that conflicts with one stops and asks. Add each new verdict here with its date.
   a map's details have one place and one shape, whatever its source. The main menu's mix of
   painterly, paper and gradient reads half-baked: make it beautiful, functional and clear,
   one coherent material language within the solid-colour-and-subtle-gradient direction.
+- **2026-10-11** Fewer UI and UX primitives, reused: a tool should be easy to pick up for
+  anyone who knows another. When two tools do the same kind of thing, they use the same
+  primitive the same way, not a lookalike: drawing a line of fire uses the river's ribbon
+  (tinted fire orange), and choosing Area or Line for Fire uses the same Shape field as Water's
+  River and Pond (and Start a fire's Circle and Path), with the same Tab key, tile layout, icons
+  for line and area, and wording. Before adding a control, find the one that already does this
+  job and use it; a new primitive needs a reason the existing one cannot serve.
 - **2026-10-11** The small offset applied to the Host and Join icons on hover (the 2 px lift)
   reads weird and inconsistent: no other control's icon moves on hover. Hover changes colour
   and shadow, never an icon's position.

@@ -87,7 +87,10 @@ other committed home.
   Path; Fire: Area and Line; Water: River and Pond); along a path, snags stand only where trees
   stood, while the ash runs the whole path. Drawing a fire line (the Fire tool's Line, Start a
   fire's Path) uses the same affordance as drawing a river: the river's ribbon at the brush
-  width with its chevrons, tinted fire orange instead of the water tint (user, 2026-10-11). Drawing a fire line (the Fire tool's Line, Start a
+  width with its chevrons, tinted fire orange instead of the water tint (user, 2026-10-11).
+  Choosing a two-shape brush's shape is one primitive too: Fire's Area / Line and Start a
+  fire's Circle / Path use Water's River / Pond Shape field (same tiles, icons, order, Tab and
+  wording), lifted into a shared helper (UI_TASTE "Fewer UI and UX primitives", 2026-10-11). Drawing a fire line (the Fire tool's Line, Start a
   fire's Path) shows the same ribbon as driving a river, coloured ember orange for fire (user,
   2026-10-11).
   Both reuse the fire look of card fire-look-3 (flames, ground fire, smoke as one family).
