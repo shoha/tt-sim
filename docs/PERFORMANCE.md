@@ -2754,3 +2754,82 @@ bound; it has not been re-measured.
 It draws only outside play (a hidden backdrop draws nothing), so it never costs the table a
 frame; during a map load the loading overlay's backdrop and the title's under it both draw
 until the title is freed.
+
+## Broadleaf clump crowns (A2, 2026-10-11)
+
+treecube f03e63f made the A2 crowns the broadleaf default: fewer, larger clump-painted cards,
+folded along a diagonal, with per-limb shading. Oak, birch, poplar and bush lose 11-17 % of
+their triangles, but each crown carries about 1.3x (bush) to 1.65x (oak) more alpha-tested
+card area, so the question was whether fill outweighs the triangles saved. The palette went in
+as `palette_version` `0e0b6d6-dirty` (the f03e63f crowns, built before that commit).
+
+**How.** The pinned procedure ("How to measure without fooling yourself"): RTX 3080, render-job
+harness at a real 1920x1080 window, `override.cfg` pinning the viewport (deleted by each job at
+startup), `vsync_off`, `perf.gd` sampling every frame, the user's graphics settings unchanged,
+debug build. Before every job no other Godot or Blender was running (one wait of about 15
+minutes for another session's two full GUT runs) and `nvidia-smi` read 7-38 %, P5-P8, 40-44 C,
+desktop processes only; `gpu_state` in each run read P3 before the frames. Two 200 ft new maps
+at seed 1234, saved once on the old palette and played on each palette: `_looks_a2_forest`
+(temperate forest, 4,901 instances in 582 nodes) and `_looks_a2_birch` (birch woodland, 5,032
+in 554). Each run plays the levels in the order forest, birch, birch, forest; per level 8 s
+windows at home (zoom 13.85) and zoom 20, each with scatter shown and then hidden (`perf.gd
+scatter`), so every window has an in-run reference. Foliage cost = shown minus hidden GPU
+median. Runs: old palette (old 1), new palette, old palette again by `git checkout` (old 2,
+the drift check), new palette again (new 3, the quiet run the verdict uses). All levels
+deleted afterwards.
+
+**The birch level could not be replayed on the new palette.** The A2 palette is not the same
+asset set: alpine meadow and birch woodland each lose and gain ground-cover ids (birch loses
+six Grass_Short, two Fern_Small, a daisy, a litter and a stone cluster and gains bluebells, a
+daisy, litter and stones; 20 ids each way, 199 assets as before), apparently because the
+crown change shifts each package's later random variant draws. A saved document keeps asset
+ids, so `_looks_a2_birch` played on the new palette with 1,234 of its 5,032 instances. Birch
+was measured on a twin built on the new palette (`_looks_a2_birch_new`, same size and seed,
+4,935 instances in 544 nodes, whole-map scatter 1.25M primitives against 0.65M), so its
+numbers mix the crowns with a different ground cover. Temperate forest keeps every id and is
+the clean comparison.
+
+GPU ms, median / p95, both rounds of a run (r1; r2):
+
+| Level, zoom | Palette (run) | Draws, prims (shadow draws, prims) | Shown | Hidden median | Foliage |
+| --- | --- | --- | --- | --- | --- |
+| forest, home | old (1) | 509, 454,870 (238, 316,405) | 3.258 / 4.560; 3.469 / 5.030 | 2.300; 2.339 | 0.958; 1.130 |
+| forest, home | old (2) | same | 3.286 / 4.581; 3.488 / 4.355 | 2.315; 2.362 | 0.971; 1.126 |
+| forest, home | new (3) | 509, 435,942 (240, 295,929) | 3.511 / 4.302; 3.674 / 4.564 | 2.343; 2.384 | 1.168; 1.290 |
+| forest, home | new (first run) | same | 3.463 / 5.163; 3.922 / 5.538 | 2.317; 2.370 | 1.146; 1.552 |
+| forest, zoom 20 | old (1) | 744, 677,148 (302, 363,313) | 4.169 / 5.624; 4.194 / 5.738 | 2.837; 2.879 | 1.332; 1.315 |
+| forest, zoom 20 | old (2) | same | 4.133 / 5.675; 4.200 / 5.128 | 2.861; 2.907 | 1.272; 1.293 |
+| forest, zoom 20 | new (3) | 746, 655,472 (302, 335,713) | 4.364 / 5.586; 4.422 / 5.428 | 2.910; 2.922 | 1.454; 1.500 |
+| forest, zoom 20 | new (first run) | same | 4.766 / 6.321; 4.868 / 6.353 | 2.865; 2.891 | 1.901; 1.977 |
+| birch, home | old (1) | 430, 412,644 (226, 312,616) | 3.157 / 4.573; 3.137 / 4.542 | 2.324; 2.338 | 0.833; 0.799 |
+| birch, home | old (2) | same | 3.189 / 4.027; 3.143 / 3.967 | 2.344; 2.349 | 0.845; 0.794 |
+| birch twin, home | new (3) | 483, 702,782 (234, 331,362) | 3.465 / 4.318; 3.454 / 4.306 | 2.366; 2.367 | 1.099; 1.087 |
+| birch, zoom 20 | old (1) | 601 / 630, 581,608 / 624,176 | 3.917 / 5.422; 3.983 / 5.455 | 2.637; 2.690 | 1.280; 1.293 |
+| birch, zoom 20 | old (2) | 630, 624,176 (270, 384,574) | 3.991 / 4.998; 3.948 / 4.884 | 2.687; 2.714 | 1.304; 1.234 |
+| birch twin, zoom 20 | new (3) | 712, 1,093,816 (290, 396,981) | 4.391 / 5.340; 4.434 / 5.381 | 2.723; 2.717 | 1.668; 1.717 |
+
+The first new-palette run's birch numbers are left out: it played the old birch level with
+three quarters of its instances gone, then the twin with the 20 new GLBs imported under
+Godot's defaults (extracted textures, LODs, shadow meshes; corrected before new 3). Old 1's
+birch zoom 20 framed two different views (601 and 630 draws) in its two rounds.
+
+**Primitives and draws as expected.** On the same forest level primitives fall 4.2 % at home
+(454,870 to 435,942), 3.2 % at zoom 20 and 6.5 % in the shadow pass (316,405 to 295,929);
+the whole-map scatter falls 736,726 to 706,058. Draws stay at 509 at home and move 744 to 746
+at zoom 20. The fall is small because grass and flowers carry most of a forest's primitives.
+
+**Drift check.** Old 1 and old 2 agree on the forest's foliage cost within 0.013 ms at home
+and 0.06 ms at zoom 20; the hidden references of all runs sit within 0.09 ms. The old/new
+difference in the quiet run is 0.18 ms at home and 0.17 ms at zoom 20, larger than the
+drift, so the result stands, though not by a wide margin.
+
+**Verdict: the clump crowns cost a little more GPU than they save, about 15 % of the
+forest's foliage cost.** In the quiet run temperate forest's foliage cost rises from 1.05 to
+1.23 ms at home (+17.5 %) and from 1.30 to 1.48 ms at zoom 20 (+13 %): about 0.2 ms, while
+drawing 3-4 % fewer primitives, so the larger alpha-tested card area costs more fill than
+the triangles saved. The first new-palette run read higher (+29 % and +48 %, the zoom 20 shown
+window 0.4 ms slower than in run 3 with the same hidden reference), so the new palette's
+run-to-run spread is wider than the old one's; read +13 to +48 % as the range and +15 % as
+the likely value. Birch woodland's twin reads +33 % at both zooms, but with 70 % more visible
+primitives from its changed ground cover that is not the crowns' cost. Absolute frame times
+stay small: the forest at zoom 20 at 4.4 ms GPU median (about 225 fps).

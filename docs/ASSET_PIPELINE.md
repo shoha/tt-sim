@@ -682,6 +682,10 @@ Before committing, `git lfs status` must list every GLB/PNG/JPG as LFS and only
 `palette.json` as Git. Changing a setting in an existing sidecar does not
 trigger a reimport on its own; delete the matching `.godot/imported/*.md5` first.
 `tests/unit/test_palette_builtin.gd` checks the sidecars and fails on a missed one.
+Refreshed 2026-10-11 with treecube f03e63f (the A2 broadleaf clump crowns; `palette_version`
+`0e0b6d6-dirty`), which also replaced 20 ground-cover ids in alpine meadow and birch
+woodland: new GLBs got the three settings in a minimal sidecar before the import, and the
+removed ids' sidecars were deleted (PERFORMANCE.md "Broadleaf clump crowns").
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 
