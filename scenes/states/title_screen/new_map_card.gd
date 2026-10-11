@@ -186,9 +186,10 @@ func _init() -> void:
 		func() -> void: glyph.self_modulate = ThemeColors.of(glyph, ThemeColors.TEXT)
 	)
 	picture.add_child(glyph)
+	# The words in a map card's text margin, its foot taken by the buttons' own margin below.
 	var text_margin := MarginContainer.new()
 	text_margin.name = "TextMargin"
-	text_margin.theme_type_variation = &"CardText"
+	text_margin.theme_type_variation = &"CardTextHead"
 	text_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(text_margin)
 	var inner := VBoxContainer.new()
@@ -216,16 +217,23 @@ func _init() -> void:
 	caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	caption.visible = false
 	inner.add_child(caption)
-	_build_actions(inner)
+	_build_actions(column)
 	_build_advanced(heading_row)
 	_refresh_size()
 
 
+## The buttons in their own margin (CardActions): nearer the card's edge than the words, as the
+## map panel's actions are, so the card needs no more than a grid column at a 1280x720 canvas.
 func _build_actions(column: VBoxContainer) -> void:
+	var margin := MarginContainer.new()
+	margin.name = "ActionsMargin"
+	margin.theme_type_variation = &"CardActions"
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_child(margin)
 	var row := HBoxContainer.new()
 	row.name = "Actions"
 	row.theme_type_variation = &"BoxContainerTight"
-	column.add_child(row)
+	margin.add_child(row)
 	# Framed: the card's lead reads first without taking the screen's one fill.
 	generate_button = UiActions.primary("Generate", "wand", "", row, &"Framed")
 	generate_button.tooltip_text = GENERATE_TIP

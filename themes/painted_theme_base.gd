@@ -466,6 +466,20 @@ func _define_containers() -> void:
 			margin_bottom = SPACE_2
 		}
 	)
+	# A card whose words stand over a row of buttons (New map): the words without CardText's
+	# foot, and the buttons in their own margin a step nearer the card's sides (8 px from them,
+	# as the map panel's actions stand from its paper), the words' foot under them. Nearer the
+	# edge, the card needs no more than a grid column on a 1280x720 canvas.
+	define_variant_style(
+		"CardTextHead",
+		"MarginContainer",
+		{margin_left = SPACE_2, margin_top = SPACE_1, margin_right = SPACE_2, margin_bottom = 0}
+	)
+	define_variant_style(
+		"CardActions",
+		"MarginContainer",
+		{margin_left = SPACE_1, margin_top = 0, margin_right = SPACE_1, margin_bottom = SPACE_2}
+	)
 	# The title's hub margin where the library grid runs to the window's left and bottom edges
 	# (LibraryGrid, below): the wordmark and the sticky heading stand in from the left by it, on
 	# the cards' edge; the right column stands clear of the bottom by it.

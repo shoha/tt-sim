@@ -131,18 +131,7 @@ func test_the_library_fits_by_measurement() -> void:
 func test_a_second_row_selection_shows_in_the_panel() -> void:
 	for canvas in [CANVAS_720P_AUTO, Vector2i(CANVAS)]:
 		_host.size = canvas
-		var title := TITLE_SCENE.instantiate() as TitleScreen
-		var levels: Array[Dictionary] = []
-		for i in 8:
-			var level := LEVEL.duplicate()
-			level.folder = "_fit_%d" % i
-			level.path = "user://x/_fit_%d/" % i
-			level.name = "Map %d" % i
-			level.modified_at = 1000 - i
-			levels.append(level)
-		title.level_provider = func() -> Array[Dictionary]: return levels
-		title.session_provider = func() -> Array[Dictionary]: return SESSIONS.duplicate(true)
-		_host.add_child(title)
+		var title := _title_with_maps(8)
 		var what := "a second-row map on a %s canvas" % str(canvas)
 		await _assert_fits(what, title.quit_button, Vector2(canvas))
 		var panel := _drawn_rect(title.map_panel)
@@ -160,6 +149,51 @@ func test_a_second_row_selection_shows_in_the_panel() -> void:
 		var now := title.grid._cards.map(func(c: LevelCard) -> Rect2: return c.get_global_rect())
 		assert_eq(now, rests, "%s: Advanced and a refusal move no card" % what)
 		title.free()
+
+
+## Measured where the cards lie, not computed: on every canvas the game gives, New map needs no
+## more than a column, so the first line holds it and per_line() - 1 maps on its y, and the next
+## map starts the second line. (Its buttons once needed 272 px of a 269 px column at 1280x720,
+## and the third item wrapped while per_line() still said 3.)
+func test_new_map_keeps_to_one_column_of_the_first_line() -> void:
+	for canvas in [Vector2i(CANVAS), CANVAS_720P_AUTO, CANVAS_768P_AUTO, Vector2i(1920, 1080)]:
+		_host.size = canvas
+		var title := _title_with_maps(8)
+		var what := "the first line on a %s canvas" % str(canvas)
+		await _assert_fits(what, title.quit_button, Vector2(canvas))
+		var lead := _drawn_rect(title.new_map_card)
+		var cards := title.grid._cards
+		var column := cards[0].size.x
+		# Its own need, under the column width the grid gives it.
+		var needs := title.new_map_card.get_minimum_size().x
+		assert_lte(
+			needs, column + SLACK_PX, "%s: New map needs %.0f of %.0f" % [what, needs, column]
+		)
+		assert_almost_eq(lead.size.x, column, SLACK_PX, "%s: New map one column" % what)
+		var per_line := title.grid.per_line()
+		for i in per_line - 1:
+			var top := _drawn_rect(cards[i]).position.y
+			assert_almost_eq(top, lead.position.y, SLACK_PX, "%s: map %d on it" % [what, i])
+		var next := _drawn_rect(cards[per_line - 1]).position.y
+		assert_gt(next, lead.end.y, "%s: map %d starts the next line" % [what, per_line - 1])
+		title.free()
+
+
+## The title with `count` saved maps, the newest first.
+func _title_with_maps(count: int) -> TitleScreen:
+	var title := TITLE_SCENE.instantiate() as TitleScreen
+	var levels: Array[Dictionary] = []
+	for i in count:
+		var level := LEVEL.duplicate()
+		level.folder = "_fit_%d" % i
+		level.path = "user://x/_fit_%d/" % i
+		level.name = "Map %d" % i
+		level.modified_at = 1000 - i
+		levels.append(level)
+	title.level_provider = func() -> Array[Dictionary]: return levels
+	title.session_provider = func() -> Array[Dictionary]: return SESSIONS.duplicate(true)
+	_host.add_child(title)
+	return title
 
 
 func test_every_settings_section_fits() -> void:
