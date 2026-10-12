@@ -144,6 +144,7 @@ func test_apply_material_extracts_the_shared_orm_texture_from_a_standard_materia
 	assert_not_null(wind_material)
 	assert_eq(wind_material.get_shader_parameter("albedo_texture"), albedo)
 	assert_eq(wind_material.get_shader_parameter("orm_texture"), shared_orm)
+	assert_true(wind_material.get_shader_parameter("has_orm_texture"))
 
 
 func _make_colored_surface_mesh(material: Material) -> ArrayMesh:

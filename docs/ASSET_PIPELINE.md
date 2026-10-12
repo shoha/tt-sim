@@ -202,10 +202,13 @@ Scatter instances contract in full:
 - **Packed ORM.** Occlusion (R), roughness (G), metallic (B) share one image referenced
   by both `metallicRoughnessTexture` and `occlusionTexture`, the convention Godot's
   `ORMMaterial3D` expects. `WindFoliage._build_shader_material()` harvests
-  `StandardMaterial3D.metallic_texture` as the packed ORM; a material without one gets
-  the shader's `hint_default_white`, which reads as metallic 1.0. treecube therefore
-  embeds a constant ORM texture (roughness 0.85, metallic 0, occlusion 1) on every
-  material.
+  `StandardMaterial3D.metallic_texture` as the packed ORM and sets the shader's
+  `has_orm_texture`. A material without one gets the sampler's `hint_default_white`
+  (occlusion 1, roughness 1), but since 2026-10-12 the wind shaders take metallic 0 when
+  `has_orm_texture` is off; before that the white read as metallic 1.0 and such an asset
+  rendered black (found by treecube's kit probe). treecube still embeds a constant ORM
+  texture (roughness 0.85, metallic 0, occlusion 1) on every material, so its assets
+  render as before.
 - **Foliage AO is baked flat.** Per-asset ray-traced AO darkened every card; terrain-paint
   uses `bake_orm(bake_ao=False)` for foliage and tt-sim only multiplies ambient light by
   the AO channel anyway.
@@ -710,6 +713,11 @@ again 2026-10-11 with treecube 1c3904c (stable garden ids, every listed species 
 same A2 crowns; `palette_version` `7bcc4f6-dirty`, 201 assets, 26 surfaces unchanged): every
 asset id changed once, so 131 sidecars were deleted and 133 minimal ones written before the
 import, as the step above describes. No saved map was migrated.
+Refreshed 2026-10-12 with treecube 51318f0 (the round 6 broadleaf crowns, whose shade is a deep
+saturated green; `palette_version` `970777b-dirty`, 201 assets, ids and files unchanged, every
+sidecar restored), together with round 6's four painted-light defaults in
+`shaders/wind_foliage_include.gdshaderinc` (`foliage_shade_tint`, `foliage_shade_add`,
+`foliage_paint_shade`, `foliage_paint_band`), which the crowns are painted for.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 
