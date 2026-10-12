@@ -18,6 +18,9 @@
 
 uniform sampler2D albedo_texture : source_color, filter_linear_mipmap;
 uniform sampler2D orm_texture : hint_default_white, filter_linear_mipmap;
+// Set by WindFoliage when the source material has an ORM texture. Without one the white
+// default would read as metallic 1.0 and render the asset black, so metallic is 0 then.
+uniform bool has_orm_texture = false;
 uniform sampler2D normal_texture : hint_normal, filter_linear_mipmap;
 uniform bool has_normal_texture = false;
 uniform float alpha_scissor_threshold : hint_range(0.0, 1.0) = 0.5;
@@ -167,10 +170,10 @@ global uniform vec4 foliage_sun;
 // The albedo ramp: tinted from foliage_shade_tint where the card's smooth (clump) normal
 // faces away from the sun to foliage_lit_tint where it faces it, toward the sun lifted by
 // FOLIAGE_RAMP_UP so a crown's top reads lit at a low sun; foliage_shade_add lifts the shade
-// side's blue a little more.
+// side a little. The shade stays a deep, saturated green (treecube round 6), not teal.
 uniform vec3 foliage_lit_tint = vec3(1.0, 1.03, 1.1);
-uniform vec3 foliage_shade_tint = vec3(0.7, 1.0, 1.5);
-uniform vec3 foliage_shade_add = vec3(0.0, 0.015, 0.06);
+uniform vec3 foliage_shade_tint = vec3(0.78, 1.0, 0.9);
+uniform vec3 foliage_shade_add = vec3(0.0, 0.015, 0.01);
 const float FOLIAGE_RAMP_UP = 0.5;
 // Darkens a card's feathered alpha edge where its normal turns away from the camera (a
 // clump's silhouette), and not where it faces the camera (card edges inside a clump).
@@ -184,8 +187,8 @@ uniform vec2 foliage_edge_on_band = vec2(0.12, 0.2);
 // shade tone (a tinted floor) to the lit tone; a cast shadow pulls the lit tone only
 // foliage_paint_shadow of the way down; no direct specular. Other lights stay Lambert.
 uniform vec3 foliage_paint_lit = vec3(1.9, 2.4, 2.8);
-uniform vec3 foliage_paint_shade = vec3(0.09, 0.22, 0.32);
-uniform vec2 foliage_paint_band = vec2(-0.35, 1.0);
+uniform vec3 foliage_paint_shade = vec3(0.065, 0.19, 0.1);
+uniform vec2 foliage_paint_band = vec2(0.0, 1.0);
 uniform float foliage_paint_shadow : hint_range(0.0, 1.0) = 0.7;
 // The share of ambient light the cards keep under a full sun (the sun term carries their
 // floor instead); it eases back to 1 as foliage_sun.w falls, so a sunless crown is not black.
@@ -409,7 +412,7 @@ void apply_wind_foliage_pbr(
 	out_ao *= mix(1.0, foliage_ambient, clamp(foliage_sun.w, 0.0, 1.0));
 #endif
 	out_roughness = orm.g;
-	out_metallic = orm.b;
+	out_metallic = has_orm_texture ? orm.b : 0.0;
 
 	if (has_normal_texture) {
 		out_normal_map = texture(normal_texture, uv).rgb;
