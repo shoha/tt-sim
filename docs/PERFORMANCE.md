@@ -2849,3 +2849,74 @@ for foliage alone (0.15 m still dotted, 0.3 m left patches, 0.6 m as clean as sh
 Shadows land where they did, since a directional light's push runs along its own rays; only
 casters within 0.6 m of a receiver along the ray stop shadowing it. Cost: one branch and a
 3x3 inverse per vertex in the shadow pass only, not measured.
+
+## Painted foliage light and round 5 crowns (2026-10-12)
+
+Treecube's round 5 palette (clump crowns with each clump's cards painted one flat tone) went in
+together with the painted foliage light that shades them: `shaders/wind_foliage_painted.gdshader`
+and its no-AA twin, picked per leaf material by the glTF extra `tt_foliage_light: "painted"`
+(`docs/ASSET_PIPELINE.md` section 6, `utils/foliage_light.gd`). The variant adds a sun-ward
+albedo ramp, an edge-on cut and silhouette ink in the fragment, replaces the engine's diffuse
+and specular with a two-tone `light()`, and cuts the cards' ambient by the sun's weight. The
+round 5 palette keeps every asset id, so saved levels replay on it unchanged. Every tree's
+alpha-scissor leaf cards, painted or not, also take `FoliageLight.LEAF_SHADOW_PUSH` (2 m
+instead of the shader's 0.6 m), which costs nothing measurable.
+
+**How.** The pinned procedure, as for the A2 crowns above: RTX 3080, a real 1920x1080 window,
+`override.cfg` pinning the viewport (deleted by each job at startup), `vsync_off`, `perf.gd`
+sampling every frame, debug build, no other Godot or Blender running, `nvidia-smi` at 21-27 %,
+P8, 41-43 C before each run. Two 200 ft new maps at seed 1234, saved once: `_looks_r5_forest`
+(temperate forest, 4,893 instances in 586 nodes) and `_looks_r5_birch` (birch woodland, 4,917
+in 543), played in the order forest, birch, birch, forest with 8 s windows at home (zoom 13.85)
+and zoom 20, scatter shown then hidden. Foliage cost = shown minus hidden GPU median. Runs: old
+1 (HEAD 4b62cdf: the previous palette and the previous shaders), new (round 5 palette and the
+painted light), old 3 (HEAD again, from a clean git worktree, the drift check). The levels were
+deleted afterwards.
+
+GPU ms, median, both rounds of a run (r1; r2):
+
+| Level, zoom | Run | Draws, prims (shadow draws, prims) | Shown | Hidden | Foliage |
+| --- | --- | --- | --- | --- | --- |
+| forest, home | old 1 | 491, 414,731 (271, 289,374) | 3.789; 3.840 | 2.294; 2.307 | 1.495; 1.533 |
+| forest, home | old 3 | same | 3.880; 3.889 | 2.322; 2.336 | 1.558; 1.553 |
+| forest, home | new | 493, 413,121 (261, 270,606) | 3.154; 3.238 | 2.299; 2.323 | 0.855; 0.915 |
+| forest, zoom 20 | old 1 | 706, 616,932 (342, 326,732) | 4.693; 4.781 | 2.818; 2.829 | 1.875; 1.952 |
+| forest, zoom 20 | old 3 | same | 4.694; 4.625 | 2.856; 2.868 | 1.838; 1.757 |
+| forest, zoom 20 | new | 706, 610,054 (342, 316,982) | 3.815; 3.768 | 2.838; 2.844 | 0.977; 0.924 |
+| birch, home | old 1 | 476, 639,835 (225, 271,618) | 3.296; 3.266 | 2.295; 2.304 | 1.001; 0.962 |
+| birch, home | old 3 | same | 3.327; 3.336 | 2.325; 2.334 | 1.002; 1.002 |
+| birch, home | new | 480, 657,549 (223, 280,374) | 3.040; 3.014 | 2.304; 2.304 | 0.736; 0.710 |
+| birch, zoom 20 | old 1 | 711, 1,017,965 (283, 329,435) | 4.263; 4.276 | 2.627; 2.629 | 1.636; 1.647 |
+| birch, zoom 20 | old 3 | same | 4.252; 4.319 | 2.670; 2.673 | 1.582; 1.646 |
+| birch, zoom 20 | new | 705, 1,022,953 (281, 339,073) | 3.790; 3.819 | 2.646; 2.654 | 1.144; 1.165 |
+
+**Drift check.** Old 1 and old 3 agree on foliage cost within 0.06 ms at forest home, 0.12 ms
+at forest zoom 20 and 0.03 ms on birch; every hidden reference sits within 0.05 ms of its
+counterparts. The old/new differences (0.27 to 0.90 ms) are several times the drift.
+
+**Primitives** barely move: -0.4 % (forest home) to +2.8 % (birch home) in the camera pass, -6.5
+% to +3.2 % in the shadow pass, draws within 6. So the saving is per-pixel: the round 5 cards
+cover less alpha-tested area than the A2 cards, and the painted `light()` is cheaper than
+Burley plus GGX. These runs change both at once and do not separate the two.
+
+**Verdict: the round 5 crowns with the painted light cost about 40 % less foliage GPU time than
+the A2 crowns they replace.** Forest foliage falls from 1.53 to 0.89 ms at home (-42 %) and
+from 1.86 to 0.95 ms at zoom 20 (-49 %); birch from 0.99 to 0.72 ms (-27 %) and 1.63 to 1.15 ms
+(-29 %); the forest at zoom 20 now draws in 3.8 ms GPU median against 4.7, more than paying
+back the A2 crowns' +15 %.
+
+**A burning broadleaf tree loses the painted light** (for the fire work). `FireSweep` swaps a
+burning tree's materials to `wind_foliage_burn.gdshader`, which keeps its own `vertex()` and
+`fragment()`, does not define `FOLIAGE_PAINTED_LIGHT` and was left untouched by this change
+(its output is unchanged: the shared include's new uniforms and functions sit inside
+`#ifdef FOLIAGE_PAINTED_LIGHT` blocks). So when a painted crown catches, it switches from the
+lime-to-teal painted shading to the ordinary Burley shading of its flat-toned cards in the same
+frame, a visible step in its colour. Giving the burn shader a painted twin (or the define) is
+the fire owner's call.
+
+**Low sun.** `FoliageLight.sun_value()` scales the sun's weight (`foliage_sun.w`, which sets how
+much ambient the painted cards give up) by `smoothstep(0, 0.5, height)`, so a sun near the
+horizon no longer starves the crowns: under the `outdoor_sunset` look at 18:30 (3.8 degrees up,
+energy 0.47) the crowns read dark olive and muddy before (weight 0.47) and teal-green after
+(weight 0.02). Noon and the overcast look at 13:00 are unchanged (the sun stands above 30
+degrees).

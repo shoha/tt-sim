@@ -181,8 +181,7 @@ func _start_build() -> void:
 	_enter_phase(Phase.BUILD)
 	# Lazily created statics the worker's material builds read: create them here so the
 	# worker never races a main-thread first use.
-	WindFoliage.get_shader()
-	WindFoliage.get_shader_no_aa()
+	WindFoliage.wind_shaders()
 	_thread = Thread.new()
 	var err := _thread.start(_build)
 	assert(err == OK, "GraphicsWarmupScreen: could not start the worker: %s" % error_string(err))

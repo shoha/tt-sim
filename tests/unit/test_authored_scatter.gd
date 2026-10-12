@@ -671,7 +671,11 @@ func test_a_species_first_painted_mid_session_gets_the_load_time_bookkeeping() -
 	var materials := scatter.species_materials(OAK)
 	assert_gt(materials.size(), 0)
 	for material in materials:
-		assert_eq(material.shader, WindFoliage.get_shader_no_aa(), "AA variant")
+		# The oak's leaf cards are painted (FoliageLight), its bark plain: each takes the
+		# no-AA shader of its own form.
+		assert_eq(material.shader, WindFoliage.shader_for(material, false), "AA variant")
+		assert_ne(material.shader, WindFoliage.get_shader(), "not the AA shader")
+		assert_ne(material.shader, FoliageLight.get_shader(), "not the painted AA shader")
 		assert_true(material in fade._tree_materials, "occlusion fade")
 		assert_true(material.get_shader_parameter("enable_occlusion"))
 		assert_true(material in environment._wind_materials["tree"], "wind re-tuning")

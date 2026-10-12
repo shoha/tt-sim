@@ -619,6 +619,15 @@ frame on a dense forest map, but PCF filter quality is only 0.6 ms of it and sho
 `directional_shadow_max_distance` changes nothing at all (every caster is already inside
 30 units). Grass no longer casts shadows for this reason. See `docs/PERFORMANCE.md`.
 
+The painted foliage light (treecube's round 5 broadleaf crowns, `docs/ASSET_PIPELINE.md`
+section 6) follows the sun through the global shader parameter `foliage_sun`
+(`project.godot` `[shader_globals]`): `_configure_sun_light()` calls
+`FoliageLight.publish_sun()` with the level's sun, or the map's first visible directional
+light while the level's sun is off, on every load and every live or networked sun change, so
+all painted crowns turn at once. Its `w` is the sun's energy clamped to 0..1 times how high
+the sun stands (0 at the horizon, full from about 30 degrees), so a dusk sun leaves the crowns
+their ambient. `utils/foliage_light.gd` has the model.
+
 ### Key Files
 
 | File | Purpose |
