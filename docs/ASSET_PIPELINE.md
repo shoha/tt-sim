@@ -212,6 +212,15 @@ Scatter instances contract in full:
 - Albedo, alpha, and normal bakes are 8-bit PNG. Normal maps are OpenGL tangent space,
   no swizzle.
 - Leaf cards: glTF `alphaMode MASK`, cutoff 0.5, double-sided.
+- **Painted foliage light (decided 2026-10-12).** The leaf material (`<asset>_Tree_Leaf`) of
+  treecube's clump-style broadleaf trees and bushes (oak, birch, bush, poplar and their
+  saplings: round 5 crowns, cells painted one flat tone) carries the glTF material extra
+  `{"tt_foliage_light": "painted"}`: tt-sim shades those leaf cards with its painted light
+  (the clump normals carry the value). Absent means today's shading; pines, willow, acacia
+  and every non-leaf material carry no extra. Godot 4.7 keeps it as the material's
+  `extras` metadata through both the palette's editor import (sidecars as in section 9)
+  and a runtime `GLTFDocument` load (headless probe, 2026-10-12). No GLB structure
+  changes: same nodes, meshes, attributes and material count.
 - **Water planes:** the exported material is ignored. Its `emissiveTexture` (Emission
   Strength 0, no `emissiveFactor`) is the flow map: R and G hold the flow direction in
   the plane's local Blender XY times a 0..1 speed factor, packed `v * 0.5 + 0.5`, sampled
