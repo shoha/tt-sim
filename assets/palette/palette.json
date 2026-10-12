@@ -1,6 +1,6 @@
 {
  "format": 1,
- "palette_version": "970777b-dirty",
+ "palette_version": "c53993a-dirty",
  "surfaces": {
   "ash": {
    "albedo": "surfaces/ash/ash_albedo.png",
@@ -6516,9 +6516,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    4.439972877502441,
-    4.4389848709106445,
-    4.55191707611084
+    4.757925510406494,
+    5.134366035461426,
+    4.916050910949707
    ]
   },
   "alpine_meadow_summer_s1/Rock_Boulder_summer_01": {
@@ -7033,9 +7033,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    6.2633867263793945,
-    11.577409744262695,
-    6.103198051452637
+    5.232122421264648,
+    11.524055480957031,
+    4.724896430969238
    ]
   },
   "boreal_taiga_summer_s1/Tree_Pine_summer_01": {
@@ -7044,9 +7044,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    6.844114780426025,
-    13.47377872467041,
-    6.795891284942627
+    5.601960182189941,
+    13.472679138183594,
+    5.236945152282715
    ]
   },
   "boreal_taiga_summer_s1/Tree_Pine_summer_02": {
@@ -7055,9 +7055,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    5.7923736572265625,
-    14.039328575134277,
-    5.721658706665039
+    4.670001029968262,
+    14.007820129394531,
+    4.680735111236572
    ]
   },
   "boreal_taiga_summer_s1/Tree_Pine_summer_03": {
@@ -7066,9 +7066,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    5.646305561065674,
-    15.83542251586914,
-    5.44602108001709
+    4.438832759857178,
+    16.032995223999023,
+    5.0903191566467285
    ]
   },
   "boreal_taiga_summer_s1/Tree_Birch_summer_04": {
@@ -7110,9 +7110,9 @@
    "wind_category": "tree",
    "size_class": "medium",
    "dimensions_m": [
-    3.4221031665802,
-    3.3514816761016846,
-    3.3736777305603027
+    1.708929419517517,
+    2.6463987827301025,
+    1.6708424091339111
    ]
   },
   "boreal_taiga_summer_s1/Tree_Pine_Young_summer_06": {
@@ -7121,9 +7121,9 @@
    "wind_category": "tree",
    "size_class": "medium",
    "dimensions_m": [
-    3.645350456237793,
-    3.3631749153137207,
-    3.512739896774292
+    2.033674716949463,
+    2.708737850189209,
+    1.992418885231018
    ]
   },
   "boreal_taiga_summer_s1/Rock_Medium_summer_09": {
@@ -8012,9 +8012,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    6.446721076965332,
-    15.119707107543945,
-    6.431324481964111
+    5.4844441413879395,
+    15.203444480895996,
+    6.266809463500977
    ]
   },
   "temperate_forest_summer_s1/Bush_Round_summer_05": {

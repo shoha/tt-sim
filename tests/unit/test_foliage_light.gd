@@ -64,10 +64,12 @@ func test_tree_leaf_cutouts_take_the_leaf_shadow_push_and_blended_cards_do_not()
 	)
 
 
-func test_the_installed_palette_flags_broadleaf_leaves_and_nothing_else() -> void:
+func test_the_installed_palette_flags_broadleaf_and_pine_leaves_and_nothing_else() -> void:
 	# docs/ASSET_PIPELINE.md section 6: oak, birch, bush, poplar and their saplings carry the
-	# extra on their leaf material; pines and every non-leaf material do not.
+	# extra on their leaf material, and so does every pine with a canopy (treecube 12fee28);
+	# dead trees, charred snags and every non-leaf material do not.
 	var painted := PackedStringArray()
+	var pines := 0
 	var seen := {}
 	for biome in PaletteLibrary.biomes():
 		for rule in PaletteLibrary.species(String(biome.id)):
@@ -84,9 +86,13 @@ func test_the_installed_palette_flags_broadleaf_leaves_and_nothing_else() -> voi
 						continue
 					var file := String(asset_id).get_file()
 					painted.append(file)
-					assert_false(file.begins_with("Tree_Pine"), "%s is a pine" % file)
+					if file.begins_with("Tree_Pine"):
+						pines += 1
+					assert_false(file.begins_with("Tree_Dead"), "%s has no canopy" % file)
+					assert_false(file.begins_with("Snag_"), "%s has no canopy" % file)
 					assert_true(WindFoliage.is_leaf_cutout(source), "%s: a leaf cutout" % file)
 	assert_gt(painted.size(), 10, "the round 5 broadleaf crowns are flagged: %s" % str(painted))
+	assert_eq(pines, 8, "every pine's frond crown is flagged: %s" % str(painted))
 
 
 func test_the_antialiasing_swap_keeps_painted_and_plain_apart() -> void:
