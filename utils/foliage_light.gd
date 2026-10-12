@@ -5,7 +5,8 @@ extends RefCounted
 ## reaches it. The model and contract are docs/ASSET_PIPELINE.md section 6 "Painted foliage
 ## light": treecube writes the glTF material extra {"tt_foliage_light": "painted"} on the leaf
 ## material of its round 5 clump-style broadleaf trees and bushes (each clump's cards painted
-## one flat tone, the clump's light carried by its normals), and Godot keeps it as the
+## one flat tone, the clump's light carried by its normals) and of its pines' drooping roof
+## fronds (treecube 12fee28), and Godot keeps it as the
 ## material's "extras" metadata through both the palette's editor import and a runtime
 ## GLTFDocument load. WindFoliage.apply_material() builds such a surface's wind material on
 ## the painted variant (shaders/wind_foliage_painted.gdshader, or its no-AA twin under

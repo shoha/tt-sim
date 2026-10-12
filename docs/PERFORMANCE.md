@@ -2920,3 +2920,15 @@ horizon no longer starves the crowns: under the `outdoor_sunset` look at 18:30 (
 energy 0.47) the crowns read dark olive and muddy before (weight 0.47) and teal-green after
 (weight 0.02). Noon and the overcast look at 13:00 are unchanged (the sun stands above 30
 degrees).
+
+**Tiered pines (treecube 12fee28, 2026-10-12; indicative, not the pinned procedure).** The
+pines' frond crowns (about 80 % fewer triangles per pine) now carry the painted extra, so they
+take the painted variant as well as the 2 m shadow push they already had. One quick same-session
+comparison on a 200 ft boreal taiga new map at seed 1234 (3,176 instances in 536 nodes), home
+zoom, `vsync_off`, 8 s `perf.gd` windows, scatter shown then hidden, twice, the old palette and
+then the new one installed: camera primitives 525,662 to 274,532 and shadow primitives 559,150
+to 258,322 (-48 % and -54 %); GPU median 3.37 and 3.68 ms shown before, 2.18 and 2.39 ms after
+(about -1.2 ms, -35 %), with the hidden reference at 2.40/2.46 before and 2.46/2.49 after (drift
+under 0.06 ms). With the new pines the shown frame is cheaper than the hidden one, because the
+crowns cover ground whose shader costs more per pixel than theirs, so a "foliage cost"
+subtraction no longer means much on this map.
