@@ -170,6 +170,10 @@ figure_ambient={
 "type": "vec3",
 "value": Vector3(0.22, 0.22, 0.2475)
 }
+foliage_sun={
+"type": "vec4",
+"value": Vector4(0, 1, 0, 1)
+}
 
 [steam]
 

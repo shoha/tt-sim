@@ -510,15 +510,20 @@ func test_every_shipped_wind_variant_pushes_its_shadow_casters() -> void:
 	# The foliage-only shadow bias (shadow_caster_offset in wind_foliage_include) keeps a
 	# crown's leaf cards from dotting themselves with shadow acne; each variant a map can
 	# draw must apply it in vertex() and expose the push as a uniform.
+	# The source checked is the variant with its includes (the four real variants share
+	# vertex() through wind_foliage_main.gdshaderinc).
 	var paths := [
 		"res://shaders/wind_foliage.gdshader",
 		"res://shaders/wind_foliage_no_aa.gdshader",
+		"res://shaders/wind_foliage_painted.gdshader",
+		"res://shaders/wind_foliage_painted_no_aa.gdshader",
 		"res://shaders/wind_foliage_burn.gdshader",
 	]
 	for path: String in paths:
 		var shader := load(path) as Shader
+		var sources := GraphicsWarmup.shader_sources_for([path], FileAccess.get_file_as_string)
 		assert_string_contains(
-			shader.code, "VERTEX += shadow_caster_offset(MODEL_MATRIX, INV_VIEW_MATRIX);"
+			"\n".join(sources), "VERTEX += shadow_caster_offset(MODEL_MATRIX, INV_VIEW_MATRIX);"
 		)
 		var names: Array[String] = []
 		for uniform: Dictionary in shader.get_shader_uniform_list():

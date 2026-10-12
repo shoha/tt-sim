@@ -242,21 +242,17 @@ func adopt_foliage_materials(materials: Array[ShaderMaterial]) -> void:
 	_apply_antialiasing_variant(materials)
 
 
-## Points `materials` at the antialiased or plain-cutout wind shader for the current level.
+## Points `materials` at the antialiased or plain-cutout wind shader for the current level,
+## each keeping its plain or painted-light form (WindFoliage.shader_for).
 func _apply_antialiasing_variant(materials: Array[ShaderMaterial]) -> void:
-	if _foliage_antialiasing_level == Viewport.MSAA_DISABLED:
-		var no_aa_shader := WindFoliage.get_shader_no_aa()
-		if not no_aa_shader:
-			push_warning(
-				(
-					"VisualEffectsController: wind_foliage_no_aa.gdshader failed to load -- "
-					+ "foliage antialiasing setting has no effect on shader selection"
-				)
+	var antialiased := _foliage_antialiasing_level != Viewport.MSAA_DISABLED
+	if not antialiased and not WindFoliage.get_shader_no_aa():
+		push_warning(
+			(
+				"VisualEffectsController: wind_foliage_no_aa.gdshader failed to load -- "
+				+ "foliage antialiasing setting has no effect on shader selection"
 			)
-			return
-		for mat in materials:
-			mat.shader = no_aa_shader
-	else:
-		var aa_shader := WindFoliage.get_shader()
-		for mat in materials:
-			mat.shader = aa_shader
+		)
+		return
+	for mat in materials:
+		mat.shader = WindFoliage.shader_for(mat, antialiased)

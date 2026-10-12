@@ -18,42 +18,11 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
  *
  * MANAGED BY: WindFoliage.get_shader_no_aa() (utils/wind_foliage.gd) loads this once
  * and reuses the compiled Shader resource, mirroring get_shader()'s own caching.
+ * Used for real (not only the debug toggle) when the player's Antialiasing setting is None:
+ * VisualEffectsController.apply_foliage_antialiasing().
+ *
+ * BODY: wind_foliage_main.gdshaderinc, with WIND_FOLIAGE_NO_AA dropping the edge built-ins.
  */
 
-#include "res://shaders/wind_foliage_include.gdshaderinc"
-
-
-void vertex() {
-	local_vertex_y = VERTEX.y;
-	VERTEX += wind_sway_vertex_offset(VERTEX, COLOR, MODEL_MATRIX, TIME);
-	VERTEX *= grow;
-	VERTEX += shadow_caster_offset(MODEL_MATRIX, INV_VIEW_MATRIX);
-}
-
-
-void fragment() {
-	NORMAL = two_sided_foliage_normal(NORMAL, FRONT_FACING);
-	vec3 pbr_albedo;
-	float pbr_alpha;
-	float pbr_ao;
-	float pbr_roughness;
-	float pbr_metallic;
-	vec3 pbr_normal_map;
-
-	apply_wind_foliage_pbr(UV, INV_VIEW_MATRIX, NORMAL, VERTEX, VIEW_MATRIX, FRAGCOORD.xy, VIEWPORT_SIZE, local_vertex_y, COLOR.gb,
-		pbr_albedo, pbr_alpha, pbr_ao, pbr_roughness, pbr_metallic, pbr_normal_map);
-
-	ALBEDO = pbr_albedo;
-	ALPHA = pbr_alpha;
-	AO = pbr_ao;
-	ROUGHNESS = pbr_roughness;
-	METALLIC = pbr_metallic;
-	SPECULAR = specular_reflectance;
-	BACKLIGHT = vec3(backlight);
-	if (has_normal_texture) {
-		NORMAL_MAP = pbr_normal_map;
-		NORMAL_MAP_DEPTH = 1.0;
-	}
-
-	ALPHA_SCISSOR_THRESHOLD = alpha_scissor_threshold;
-}
+#define WIND_FOLIAGE_NO_AA
+#include "res://shaders/wind_foliage_main.gdshaderinc"

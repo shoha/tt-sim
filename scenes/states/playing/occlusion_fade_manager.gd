@@ -334,8 +334,7 @@ func _collect_tree_materials() -> void:
 			var shader_mat := mat as ShaderMaterial
 			# Either antialiasing variant: re-enabling the fade mid-session runs this after
 			# the Antialiasing setting has already swapped trees to the no-AA shader.
-			var shader := shader_mat.shader
-			if shader != WindFoliage.get_shader() and shader != WindFoliage.get_shader_no_aa():
+			if not WindFoliage.is_wind_shader(shader_mat.shader):
 				continue
 			_register_tree_material(shader_mat)
 
@@ -352,8 +351,7 @@ func register_tree_materials(materials: Array[ShaderMaterial]) -> void:
 	for material in materials:
 		if material.get_meta("wind_category", "") != "tree":
 			continue
-		var shader := material.shader
-		if shader != WindFoliage.get_shader() and shader != WindFoliage.get_shader_no_aa():
+		if not WindFoliage.is_wind_shader(material.shader):
 			continue
 		_register_tree_material(material)
 

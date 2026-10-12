@@ -123,8 +123,10 @@ func test_foliage_samples_cover_both_wind_shaders_with_the_real_layouts() -> voi
 		layouts[format][shader] = true
 	assert_true(shaders.has(WindFoliage.get_shader()), "the AA shader")
 	assert_true(shaders.has(WindFoliage.get_shader_no_aa()), "the no-AA shader")
+	assert_true(shaders.has(FoliageLight.get_shader()), "the painted AA shader")
+	assert_true(shaders.has(FoliageLight.get_shader_no_aa()), "the painted no-AA shader")
 	for format in layouts:
-		assert_eq(layouts[format].size(), 2, "layout %d is warmed on both shaders" % format)
+		assert_eq(layouts[format].size(), 4, "layout %d is warmed on all four shaders" % format)
 
 
 func test_unwarmed_formats_names_only_new_layouts() -> void:
@@ -176,5 +178,7 @@ func test_collect_samples_has_every_owner_once() -> void:
 		"res://shaders/waterfall.gdshader",
 		"res://shaders/wind_foliage.gdshader",
 		"res://shaders/wind_foliage_no_aa.gdshader",
+		"res://shaders/wind_foliage_painted.gdshader",
+		"res://shaders/wind_foliage_painted_no_aa.gdshader",
 	]:
 		assert_true(shaders.has(path), "a sample draws %s" % path)

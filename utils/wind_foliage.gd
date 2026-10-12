@@ -250,6 +250,9 @@ static func _build_shader_material(
 ) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = get_shader()
+	if FoliageLight.is_painted(source):
+		material.shader = FoliageLight.get_shader()
+		material.set_meta(FoliageLight.META_PAINTED, true)
 	# Tagged so LevelEnvironmentManager.store_wind_materials() can find and re-tune
 	# this exact material instance later without re-walking or reloading the scene.
 	material.set_meta("wind_category", category)
@@ -317,6 +320,10 @@ static func apply_material(mesh: Mesh, category: String, overrides: Dictionary =
 		wind_material.set_shader_parameter("mesh_height", mesh_height)
 		if category == "tree":
 			wind_material.set_shader_parameter("canopy_part", canopy_part(source_material))
+			if is_leaf_cutout(source_material):
+				wind_material.set_shader_parameter(
+					"shadow_caster_push", FoliageLight.LEAF_SHADOW_PUSH
+				)
 		if category == "grass":
 			wind_material.set_shader_parameter("blade_height", blade_height)
 			wind_material.set_shader_parameter("base_darken", _GRASS_BASE_DARKEN)
@@ -333,6 +340,35 @@ static func canopy_part(source: BaseMaterial3D) -> int:
 	if source.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
 		return CANOPY_CARD
 	return CANOPY_BARK
+
+
+## True for a tree's alpha-scissor leaf cards (treecube's glTF MASK leaf material), which take
+## FoliageLight.LEAF_SHADOW_PUSH. A Blender map's baked scatter imports every surface, bark
+## included, as alpha blended, so it keeps the shader's default push and its trunks their
+## contact shadows.
+static func is_leaf_cutout(source: BaseMaterial3D) -> bool:
+	return source.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+
+
+## The wind shader `material` should use for the Antialiasing setting: the alpha-to-coverage
+## variant when `antialiased`, else the plain cutout, each in its painted-light form when the
+## material was built painted (FoliageLight.META_PAINTED).
+static func shader_for(material: ShaderMaterial, antialiased: bool) -> Shader:
+	if material.has_meta(FoliageLight.META_PAINTED):
+		return FoliageLight.get_shader() if antialiased else FoliageLight.get_shader_no_aa()
+	return get_shader() if antialiased else get_shader_no_aa()
+
+
+## True for any of the four real wind shaders (plain or painted, either antialiasing variant).
+static func is_wind_shader(shader: Shader) -> bool:
+	return shader != null and wind_shaders().has(shader)
+
+
+## The four real wind shaders: plain AA, plain no-AA, painted AA, painted no-AA.
+static func wind_shaders() -> Array[Shader]:
+	return [
+		get_shader(), get_shader_no_aa(), FoliageLight.get_shader(), FoliageLight.get_shader_no_aa()
+	]
 
 
 ## True when surface `index` of `mesh` carries a per-vertex colour array (glTF COLOR_0
@@ -382,8 +418,9 @@ static func pick_representatives(wind_ids: Array[String]) -> Array[String]:
 	return picked
 
 
-## GraphicsWarmup samples: for each of the antialiased wind shader and the no-AA variant (the
-## swap VisualEffectsController.apply_foliage_antialiasing() makes), the wind-material surfaces
+## GraphicsWarmup samples: for each of the four wind shaders (wind_shaders(): the antialiased
+## one and the no-AA variant VisualEffectsController.apply_foliage_antialiasing() swaps to, each
+## plain and painted, FoliageLight), the wind-material surfaces
 ## of the representative assets, with each surface's own layout flags. The first representative
 ## gives all its wind surfaces, a later one only surfaces with a layout none of the earlier ones
 ## has. Names are "foliage<representative>_<surface>_<shader>". Runs on the warm-up's worker
@@ -424,7 +461,7 @@ static func warmup_samples() -> Array[Dictionary]:
 		}
 		samples.append(empty_sample)
 		return samples
-	for shader: Shader in [get_shader(), get_shader_no_aa()]:
+	for shader: Shader in wind_shaders():
 		for source in sources:
 			var mesh: ArrayMesh = source.mesh
 			for i in source.surfaces:

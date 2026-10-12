@@ -471,6 +471,17 @@ func _configure_sun_light(settings: SunSettings) -> void:
 	_sun_light.visible = enabled
 	if enabled:
 		DefaultSun.apply(_sun_light, settings)
+	FoliageLight.publish_sun(_sun_light if enabled else _first_map_sun())
+
+
+## The first visible directional light the map brought (the painted foliage light follows it
+## while the level's own sun is off), or null.
+func _first_map_sun() -> DirectionalLight3D:
+	for instance_id in _original_light_energies:
+		var light = instance_from_id(instance_id)
+		if is_instance_valid(light) and light is DirectionalLight3D and light.visible:
+			return light as DirectionalLight3D
+	return null
 
 
 ## The sky key the resolved config selected, so rotation can be recomputed when

@@ -151,6 +151,47 @@ const float CANOPY_LIMB_FLUTTER = 0.04;
 // crown keeps its lit and shaded masses. 0 disables it.
 uniform float shadow_caster_push : hint_range(0.0, 2.0) = 0.6;
 
+#ifdef FOLIAGE_PAINTED_LIGHT
+// Painted foliage light (docs/ASSET_PIPELINE.md section 6; the treecube probe is
+// docs/looks/soft_crowns_probe.md, rounds 4 and 5). Only the variants that define
+// FOLIAGE_PAINTED_LIGHT (wind_foliage_painted and its no-AA twin) see anything in these
+// blocks, so wind_foliage, wind_foliage_no_aa and wind_foliage_burn compile exactly as
+// before. WindFoliage.apply_material picks the variant for a leaf material that carries the
+// glTF extra tt_foliage_light "painted" (treecube's round 5 clump crowns: every clump card
+// painted one flat tone, the clump's light carried by its normals). The defaults are the
+// shipped look; no material sets them.
+//
+// The sun, published by FoliageLight.publish_sun whenever the level's sun changes: xyz the
+// unit direction toward it (world), w its weight, 0 (no sun) to 1 (full sun).
+global uniform vec4 foliage_sun;
+// The albedo ramp: tinted from foliage_shade_tint where the card's smooth (clump) normal
+// faces away from the sun to foliage_lit_tint where it faces it, toward the sun lifted by
+// FOLIAGE_RAMP_UP so a crown's top reads lit at a low sun; foliage_shade_add lifts the shade
+// side's blue a little more.
+uniform vec3 foliage_lit_tint = vec3(1.0, 1.03, 1.1);
+uniform vec3 foliage_shade_tint = vec3(0.7, 1.0, 1.5);
+uniform vec3 foliage_shade_add = vec3(0.0, 0.015, 0.06);
+const float FOLIAGE_RAMP_UP = 0.5;
+// Darkens a card's feathered alpha edge where its normal turns away from the camera (a
+// clump's silhouette), and not where it faces the camera (card edges inside a clump).
+uniform float foliage_view_ink : hint_range(0.0, 1.0) = 0.2;
+// A card's alpha falls away as its own face (screen derivatives, not the smooth normal)
+// turns edge-on to the camera, across this band of |dot(view, face)|, so a card seen
+// side-on is cut out instead of drawing a streak. Narrow on purpose: a wide band leaves many
+// cards at partial alpha, which alpha-to-coverage draws as a fine checker. Camera pass only.
+uniform vec2 foliage_edge_on_band = vec2(0.12, 0.2);
+// light(): the sun lights a card by a soft ramp of N.L across foliage_paint_band, from the
+// shade tone (a tinted floor) to the lit tone; a cast shadow pulls the lit tone only
+// foliage_paint_shadow of the way down; no direct specular. Other lights stay Lambert.
+uniform vec3 foliage_paint_lit = vec3(1.9, 2.4, 2.8);
+uniform vec3 foliage_paint_shade = vec3(0.09, 0.22, 0.32);
+uniform vec2 foliage_paint_band = vec2(-0.35, 1.0);
+uniform float foliage_paint_shadow : hint_range(0.0, 1.0) = 0.7;
+// The share of ambient light the cards keep under a full sun (the sun term carries their
+// floor instead); it eases back to 1 as foliage_sun.w falls, so a sunless crown is not black.
+uniform float foliage_ambient : hint_range(0.0, 2.0) = 0.25;
+#endif
+
 
 // Gust envelope in 0..1 at a world XZ position: two sines travelling along the wind
 // direction, softly thresholded so gusts arrive as bursts with calm between them
@@ -299,6 +340,29 @@ void apply_canopy_fade(
 }
 
 
+#ifdef FOLIAGE_PAINTED_LIGHT
+// The painted light's fragment terms (see the uniforms above): the sun-ward albedo ramp, the
+// edge-on cut in the camera's pass, and the silhouette ink. `normal` is the view-space
+// shading normal, `vertex_view` the view-space position.
+void apply_painted_albedo(
+	mat4 inv_view_matrix, vec3 normal, vec3 vertex_view, inout vec3 albedo, inout float alpha
+) {
+	vec3 ramp_dir = normalize(foliage_sun.xyz + vec3(0.0, FOLIAGE_RAMP_UP, 0.0));
+	float t = smoothstep(-0.5, 0.8, dot(normalize(mat3(inv_view_matrix) * normal), ramp_dir));
+	albedo *= mix(foliage_shade_tint, foliage_lit_tint, t);
+	albedo += foliage_shade_add * (1.0 - t);
+	if (dot(inv_view_matrix[2].xyz, canopy_fade_view.xyz) >= 0.999) {
+		vec3 face = normalize(cross(dFdx(vertex_view), dFdy(vertex_view)));
+		float facing = abs(dot(face, normalize(-vertex_view)));
+		alpha *= smoothstep(foliage_edge_on_band.x, foliage_edge_on_band.y, facing);
+	}
+	float edge = 1.0 - smoothstep(alpha_scissor_threshold, min(1.0, alpha_scissor_threshold + 0.4), alpha);
+	float turned = 1.0 - smoothstep(0.25, 0.65, abs(normalize(normal).z));
+	albedo *= 1.0 - 0.6 * foliage_view_ink * edge * turned;
+}
+#endif
+
+
 // Computes PBR and occlusion-fade fragment values. Uses out-parameters to pass
 // results back to the caller (which then assigns them to built-ins) -- a workaround
 // for Godot's limitation that output built-ins can only be assigned directly inside
@@ -335,9 +399,15 @@ void apply_wind_foliage_pbr(
 	// 1.0) == 1.0, a pure no-op on out_albedo.
 	float h = blade_height > 0.0 ? clamp(vertex_local_y / blade_height, 0.0, 1.0) : 1.0;
 	out_albedo *= mix(base_darken, 1.0, h);
+#ifdef FOLIAGE_PAINTED_LIGHT
+	apply_painted_albedo(inv_view_matrix, normal, vertex_view, out_albedo, out_alpha);
+#endif
 
 	vec3 orm = texture(orm_texture, uv).rgb;
 	out_ao = mix(1.0, orm.r, baked_ao_strength);
+#ifdef FOLIAGE_PAINTED_LIGHT
+	out_ao *= mix(1.0, foliage_ambient, clamp(foliage_sun.w, 0.0, 1.0));
+#endif
 	out_roughness = orm.g;
 	out_metallic = orm.b;
 
@@ -350,3 +420,18 @@ void apply_wind_foliage_pbr(
 	vec3 world_normal = mat3(inv_view_matrix) * normal;
 	apply_occlusion_fade(world_normal, vertex_view, view_matrix, frag_coord, viewport_size);
 }
+
+
+#ifdef FOLIAGE_PAINTED_LIGHT
+// The painted crown light (see the uniforms above). Replaces the engine's diffuse and direct
+// specular for every light; directional lights get the painted ramp, the rest Lambert.
+void light() {
+	if (LIGHT_IS_DIRECTIONAL) {
+		float lit = smoothstep(foliage_paint_band.x, foliage_paint_band.y, dot(NORMAL, LIGHT));
+		float k = lit * mix(1.0 - foliage_paint_shadow, 1.0, ATTENUATION);
+		DIFFUSE_LIGHT += LIGHT_COLOR / PI * mix(foliage_paint_shade, foliage_paint_lit, k);
+	} else {
+		DIFFUSE_LIGHT += LIGHT_COLOR / PI * max(dot(NORMAL, LIGHT), 0.0) * ATTENUATION;
+	}
+}
+#endif
