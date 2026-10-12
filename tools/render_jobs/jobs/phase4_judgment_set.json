@@ -336,23 +336,9 @@
   {"op": "capture", "name": "wetland_play_floating", "desc": "Riverside wetland in play, zoom 10: tokens floating in the deep pool, one in the ankle stream"},
   {"op": "title"},
   {"op": "wait", "s": 1.0},
-
-  {"op": "play", "folder": "river"},
-  {"op": "wait", "s": 3.0},
-  {"op": "wait_ready", "settle": 2.0},
-  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
-  {"op": "home"},
-  {"op": "wait", "s": 1.5},
-  {"op": "capture", "name": "ref_river_home", "desc": "Blender reference, river in play (read-only): home zoom"},
-  {"op": "call", "script": "res://tools/render_jobs/probes/grid_ground.gd", "action": "key_g"},
-  {"op": "wait", "s": 0.8},
-  {"op": "capture", "name": "ref_river_home_grid", "desc": "Blender reference, river in play: home zoom, grid on the water surface"},
-  {"op": "call", "script": "res://tools/render_jobs/probes/grid_ground.gd", "action": "key_g"},
-  {"op": "title"},
-  {"op": "wait", "s": 1.0},
   {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "cleanup"},
 
-  {"op": "index", "title": "Phase 4 judgment set (water)", "intro": "Produced by tools/render_jobs/jobs/phase4_judgment_set.json at 1920x1080. For temperate forest, grassland meadow, rocky badlands and riverside wetland, a new 150 ft map (seed 1234) tilted 2 % west to east, built with the real tools at human speed: a tier north of the middle (Sculpt's Tier twice: a terrace to the nearest whole tier, then one tier, 5 ft, on it), a winding waist-deep river drawn west to east that passes below the tier's face, an ankle stream joining it from the south-west, a deep pool (west), a pond painted in two strokes (south-east), a path in the biome's first path surface crossing the river from south to north, and three placed props. Captured at home zoom, zoom 26 and full zoom-out with the grid off and on, and at zoom 9 on the crossing; then saved as a _p45_ test level and played with tokens wading the river, floating in the pool and standing in the stream. Last, the Blender river level in play for reference (read-only). The test levels are deleted at the end."},
+  {"op": "index", "title": "Phase 4 judgment set (water)", "intro": "Produced by tools/render_jobs/jobs/phase4_judgment_set.json at 1920x1080. For temperate forest, grassland meadow, rocky badlands and riverside wetland, a new 150 ft map (seed 1234) tilted 2 % west to east, built with the real tools at human speed: a tier north of the middle (Sculpt's Tier twice: a terrace to the nearest whole tier, then one tier, 5 ft, on it), a winding waist-deep river drawn west to east that passes below the tier's face, an ankle stream joining it from the south-west, a deep pool (west), a pond painted in two strokes (south-east), a path in the biome's first path surface crossing the river from south to north, and three placed props. Captured at home zoom, zoom 26 and full zoom-out with the grid off and on, and at zoom 9 on the crossing; then saved as a _p45_ test level and played with tokens wading the river, floating in the pool and standing in the stream. The test levels are deleted at the end."},
   {"op": "title"},
   {"op": "wait", "s": 1.0}
  ]

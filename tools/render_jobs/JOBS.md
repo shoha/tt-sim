@@ -9,12 +9,13 @@ and which test levels it keeps. How to run one, the flags and the build / look l
 ## Jobs
 
 - `jobs/authoring_judgment_set.json`: the authoring judgment set: two captures per palette
-  biome plus seven, each as a window and a raw PNG (23 captures, 46 PNGs, with the 8-biome
-  palette installed in September 2026; about 4 to 6 minutes). Every palette biome as a new 200 ft map (seed 1234) at home
+  biome plus three, each as a window and a raw PNG (21 captures, 42 PNGs, with the 9-biome
+  palette installed in October 2026). Every palette biome as a new 200 ft map (seed 1234) at home
   and full zoom-out; a hand-painted composition on bare ground (grassland meadow and
   temperate forest strokes, a thinned path, a cleared glade, placed props) at home, zoom 26
-  and full zoom-out; the Blender reference levels `river` and `deciduous_clusters` opened in
-  authoring at home and full zoom-out; then `INDEX.md`.
+  and full zoom-out; then `INDEX.md`. The Blender reference levels `river` and
+  `deciduous_clusters` were dropped on 2026-10-12 (the user's call: obsolete, and the set
+  ran into its 900 s timeout); the phase 3 and phase 4 sets lost them the same day.
 - `jobs/sculpt_pipeline.json`: the sculpt pipeline check (P3-3a, about 100 s): a new temperate
   forest map with three placed props; a 6-7 m hill (8 m brush), a hollow, smooth, flatten, a
   tier stub and an edge raise, each followed by its regeneration; the rebuild / in-place
@@ -44,8 +45,8 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   biome's first path surface, a path across a tier edge and a courtyard on the top tier in
   its first stone path surface (`PaletteLibrary.path_surfaces`; badlands: `dirt_road_caliche`
   and `flagstone_sandstone`), three placed props), captured at home zoom, home zoom on the plateau, zoom 26 and full zoom-out, each
-  with the grid off and on; then `deciduous_clusters` and `river` in play (read-only) at home
-  (grid off and on) and full zoom-out. 38 captures and `INDEX.md`.
+  with the grid off and on. 32 captures and `INDEX.md` (the Blender reference levels it played
+  last were dropped on 2026-10-12).
 - `jobs/rocks_survive.json`: rocks survive terrain changes (P3-7, about 80 s): on new 150 ft
   alpine meadow and rocky badlands maps, a Tier stroke through the densest boulder field near
   the centre (before, still pressed, after, close up), on alpine a Flatten back over the new
@@ -93,9 +94,9 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   it, a deep pool, a pond painted in two strokes, a path in the biome's first path surface
   crossing the river, three placed props; captured at home zoom, zoom 26 and full zoom-out
   with the grid off and on and at zoom 9 on the crossing, then saved as a `_p45_` test level
-  and played with tokens wading, floating and standing in the stream; then the Blender
-  `river` level in play (read-only). The test levels are deleted at the end. 42 captures and
-  `INDEX.md`.
+  and played with tokens wading, floating and standing in the stream (the Blender `river`
+  level it played last was dropped on 2026-10-12). The test levels are deleted at the end. 40
+  captures and `INDEX.md`.
 - `jobs/p4b_badlands.json`: the badlands follow-ups (P4b-0, about 1 minute): a new 150 ft
   rocky badlands map built like the phase 4 judgment set (river, stream, deep pool, caliche
   path; no tier, pond or props), captured at home, on the crossing at zoom 9 and 7 and on the
@@ -599,5 +600,7 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   the unknown id to the brush, so after a palette change check the log and the composition
   images, and update the ids in the job. The per-biome captures follow whatever palette is installed, so
   the capture count changes with the palette.
-- **The Blender reference levels must exist** as `user://levels/river` and
-  `user://levels/deciduous_clusters`; the `dress` steps only read them.
+- **No judgment set loads a Blender reference level any more** (2026-10-12). `grid_ground`,
+  `mobile_maps`, `p4b_cue` and `pol_trees` still play `user://levels/river` or
+  `user://levels/deciduous_clusters` and need them to exist; their `play` and `dress` steps
+  only read them.
