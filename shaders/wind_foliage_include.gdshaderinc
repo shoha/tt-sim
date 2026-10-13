@@ -412,7 +412,10 @@ void apply_wind_foliage_pbr(
 	out_ao *= mix(1.0, foliage_ambient, clamp(foliage_sun.w, 0.0, 1.0));
 #endif
 	out_roughness = orm.g;
-	out_metallic = has_orm_texture ? orm.b : 0.0;
+	// A product, never a ternary on the bool uniform: the ternary form crashed the process
+	// from a background thread (no backtrace, exit 139) whenever a saved authored map was
+	// opened, on Godot 4.7.2 with Vulkan on an RTX 3080 (2026-10-13; test_wind_foliage_orm).
+	out_metallic = orm.b * float(has_orm_texture);
 
 	if (has_normal_texture) {
 		out_normal_map = texture(normal_texture, uv).rgb;
