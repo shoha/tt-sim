@@ -230,6 +230,23 @@ Scatter instances contract in full:
   `extras` metadata through both the palette's editor import (sidecars as in section 9)
   and a runtime `GLTFDocument` load (headless probe, 2026-10-12). No GLB structure
   changes: same nodes, meshes, attributes and material count.
+- **Painted shade floor (decided 2026-10-12; treecube writes it, tt-sim honours it from
+  the card that implements it).** A leaf material that carries `tt_foliage_light` "painted"
+  may also carry the glTF material extra `{"tt_foliage_shade": [r, g, b]}`: three linear
+  floats, 0 to 1, not sRGB and not a colour, which tt-sim sets as that material's
+  `foliage_paint_shade` uniform (`shaders/wind_foliage_include.gdshaderinc`, default
+  `(0.065, 0.19, 0.1)`). That uniform is the painted light's shade floor: the shade end of
+  the sun ramp, a per-channel multiplier of the sun's colour on the side of the crown that
+  faces away from it (`DIFFUSE_LIGHT += LIGHT_COLOR / PI * mix(foliage_paint_shade,
+  foliage_paint_lit, k)`), so the shade the player sees is the albedo times
+  `foliage_shade_tint` times this floor, plus the quarter of the ambient the cards keep. It
+  lets a warm species (the savanna shrub, the badlands sage shrub, later autumn leaves) keep a
+  warm or grey shade instead of the shared green one. Absent by default, and absent means
+  the uniform's default; it is ignored on a material without `tt_foliage_light` "painted"
+  (the plain wind shader has no painted light), and treecube never writes it on one. No
+  other uniform changes with it; the value treecube writes is the one its runtime probe
+  judged (`treecube/out/looks/colour_fix/shade_probe.gd`, values listed in treecube
+  `docs/looks/colour_plan.md`).
 - **Water planes:** the exported material is ignored. Its `emissiveTexture` (Emission
   Strength 0, no `emissiveFactor`) is the flow map: R and G hold the flow direction in
   the plane's local Blender XY times a 0..1 speed factor, packed `v * 0.5 + 0.5`, sampled
