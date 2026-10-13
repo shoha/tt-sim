@@ -16,7 +16,10 @@ Conventions on 2026-10-09).
 | `shaders/authored_ground.gdshader` | | The opaque ground: tiles the palette `base_surface` with triangle-grid anti-tiling |
 | `shaders/authored_ground.gdshaderinc` | | The shader body, shared by the opaque ground and the skirt |
 | `shaders/authored_ground_skirt.gdshader`, `scenes/terrain/terrain_skirt.gd` | `TerrainSkirt` | The transparent skirt that fades the map into the backdrop |
-| `utils/ground_layer_table.gd` | `GroundLayerTable` | The table of up to 8 layer slots |
+| `utils/ground_layers.gd` | `GroundLayers` | Pure rules of the index ground: the per-map layer list (stable append, compaction, overflow past 64), the routing table by biome slot, per-layer flags and tiles |
+| `scenes/terrain/ground_layer_binding.gd` | `GroundLayerBinding` | Binds the layer arrays, the routing rows, the four index maps and the broad edge on the ground material (`AuthoredTerrain.layer_binding()`) |
+| `utils/ground_layer_arrays.gd` | `GroundLayerArrays` | The four `Texture2DArray`s (albedo, normal, ORM, height) of a map's layers, capacity 16 / 32 / 64 |
+| `utils/ground_layer_table.gd` | `GroundLayerTable` | The old 8-slot table; since G3 only its weight planes and `broad_image` feed the broad edge (removed in ground layers card G5) |
 | `utils/terrain_rules.gd` | `TerrainRules` | The self-dressing rules; `compose_paint`, `PAINT_CLIFF_YIELD` |
 | `utils/ground_accents.gd` | `GroundAccents` | Broad patches of each biome's `ground_accents` |
 | `utils/scatter_ground.gd` | `ScatterGround` | The same rules for the plants |
@@ -31,15 +34,29 @@ Conventions on 2026-10-09).
 - Collision: a layer-1 `StaticBody3D` with a `HeightMapShape3D` scaled by the sample step.
 - Scatter row identity is X, Z and scale, never Y (`ScatterRows.row_keys`), and the generator
   reads heights on the terrain's triangles (`ScatterGenerator.triangle_height`).
-- Ground layers: one table of up to 8 layer slots (`GroundLayerTable`: painted surfaces,
-  painted biomes' ground, each biome's cliff and scree) blends over the base from two RGBA8
-  `DrawableTexture2D` weight maps.
+- Ground layers (index form since ground layers G3, 2026-10-13; design in
+  `docs/plans/2026-10-11-ground-layers/design.md`): every palette surface the map uses (the
+  base at layer 0, painted surfaces, each biome's ground, cliff, scree, bed, shore and accents)
+  is one layer of four per-map `Texture2DArray`s. The order is stable for a session (new
+  surfaces append; painting never rebinds) and compacted at the next load; capacity grows 16,
+  32, 64 (`GroundLayers.MAX_LAYERS`), so no surface or accent is dropped for want of a slot.
+  The shader reads the document's own bytes as index maps (biome slots and density, R8; the
+  painted surfaces' top-4 index and weight planes, RGBA8) with `textureGather` at the texel
+  corner, weights each corner bilinearly, and keeps the four strongest (layer, weight)
+  candidates per pixel. A routing table by biome slot (row 0 the base) names each biome's
+  ground, rule and accent layers; a biome on the base surface draws as the base, and the base
+  row takes the most covered such biome's rules and accents (the slot table's rule, kept for
+  parity). `update_ground_region` replaces the index maps whole (native copies) and appends
+  layers for a new biome or surface. The broad edge keeps the slot table's two-map form, fed by
+  `GroundLayerTable.weight_planes` over up to 8 broad slots (biome grounds and painted built
+  surfaces), until the one-map tint of card G4. Cost: `PERFORMANCE.md` "Ground shader: index
+  layers".
 - The terrain dresses itself, always on: rock on steep faces, scree at concave feet, a grassy
   lip (`TerrainRules`, mirrored as shader constants and kept in sync by
   `test_terrain_rules.gd`; per-vertex curvature and steepness in UV2), and side projections
   below n.y 0.72.
 - Each biome's ground carries broad patches of its palette `ground_accents` (`GroundAccents`:
-  a lattice-texture noise mask, slots after every other surface; the plants ignore them).
+  a lattice-texture noise mask, up to three per biome row; the plants ignore them).
 - Painted weight wins, except that painted ground and built surfaces yield to the rock on
   faces (`TerrainRules.compose_paint`, `PAINT_CLIFF_YIELD`; painted cliff-role rock holds).
   Plants follow the same rules (`ScatterGround`).
@@ -55,14 +72,15 @@ Conventions on 2026-10-09).
 - Sculpt strokes are `AuthoringEditor.begin_height_stroke()` (`HeightStroke`, rules in
   `HeightBrush`); plants and props follow through `GroundSnap` + `AuthoredScatter.move_rows`.
   The Sculpt tool's operations are in [authoring.md](authoring.md).
-- After a mask or paint edit call `update_ground_region(sample_rect)`, which blits only those
-  texels and never rebuilds the material.
+- After a mask or paint edit call `update_ground_region(sample_rect)`, which replaces the index
+  maps, recomputes the broad weights of that rectangle and never rebuilds the material. The
+  Paint tool claims up to `MapDocument.PAINT_SURFACE_LIMIT` (= `MAX_SURFACES`, 64) surfaces.
 
 ## Verification
 
 Unit tests in `tests/unit/`: `test_authored_terrain.gd`, `test_terrain_rules.gd` (keeps
 `TerrainRules` and the shader constants in sync), `test_ground_layers.gd`,
-`test_ground_accents.gd`, `test_scatter_ground_rules.gd`, `test_height_sculpt.gd`,
+`test_ground_layer_binding.gd`, `test_ground_layers_index.gd`, `test_ground_accents.gd`, `test_scatter_ground_rules.gd`, `test_height_sculpt.gd`,
 `test_authoring_sculpt.gd`.
 
 ## Open work
@@ -72,3 +90,6 @@ See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work".
 ## History
 
 - 2026-10-09: map and rules moved here from `AGENTS.md` Key Conventions.
+- 2026-10-13: ground layers G3, the index ground: per-map layer arrays and the document's
+  index maps replace the eight weight-map slots; parity with the slot table's look checked by
+  today-against-G3 captures (identical where the slot table could draw everything).

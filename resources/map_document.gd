@@ -49,9 +49,8 @@ extends RefCounted
 ## it in proportion to its weight. set_surface_weight() keeps all of that; painting a fifth
 ## surface over a sample drops its weakest entry, whose weight returns to the ground.
 ## Format 1 stored one channel per slot (8 slots); the reader migrates it
-## (entries_from_slots()). Today's 8-slot renderer reads the entries through
-## GroundLayerTable.weight_planes(), the adapter the index ground shader (G3) removes, and
-## the authoring tools claim at most PAINT_SURFACE_LIMIT slots until then.
+## (entries_from_slots()). The index ground shader (ground layers G3) uploads the two planes
+## as they are, so the authoring tools claim up to PAINT_SURFACE_LIMIT (= MAX_SURFACES) slots.
 ##
 ## Water. water_bodies holds the rivers and ponds (WaterBody, flat water per body, stable
 ## ids); pond_mask is one byte per sample naming the pond whose area holds it (0 = none);
@@ -103,9 +102,9 @@ const SURFACE_CHANNELS := 4
 const SURFACE_INDEX_PLANE := 0
 const SURFACE_WEIGHT_PLANE := 1
 const SURFACE_BYTES := SURFACE_CHANNELS * 2
-## Slots the authoring tools claim (ensure_surface): today's ground shader draws 8 painted
-## surfaces. The index ground shader (G3) raises it to MAX_SURFACES.
-const PAINT_SURFACE_LIMIT := 8
+## Slots the authoring tools claim (ensure_surface): every surface a document can list, since
+## the index ground shader (ground layers G3) draws them all.
+const PAINT_SURFACE_LIMIT := MAX_SURFACES
 ## Painted slots a format 1 document stored, one weight channel each.
 const FORMAT_1_SLOTS := 8
 ## Water bodies per document, rivers among them, and control points per river. The flow
@@ -383,7 +382,7 @@ func surface_plane(plane: int) -> PackedByteArray:
 ## The slot painting `surface` uses: its existing slot, else a new one (allocating the
 ## entries for the first) while fewer than `limit` are listed, else the first slot with no
 ## weight anywhere, renamed. -1 when `surface` is empty or all `limit` slots hold paint.
-## `limit` defaults to PAINT_SURFACE_LIMIT, the slots today's renderer draws.
+## `limit` defaults to PAINT_SURFACE_LIMIT, every slot the renderer draws.
 func ensure_surface(surface: String, limit: int = PAINT_SURFACE_LIMIT) -> int:
 	if surface == "":
 		return -1

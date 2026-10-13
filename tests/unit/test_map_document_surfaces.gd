@@ -126,16 +126,18 @@ func test_ensure_surface_appends_and_reuses_slots() -> void:
 	assert_eq(doc.ensure_surface(NAMES[1]), 1)
 	assert_eq(doc.ensure_surface(NAMES[0]), 0, "an existing surface keeps its slot")
 	for slot in range(2, MapDocument.PAINT_SURFACE_LIMIT):
-		assert_eq(doc.ensure_surface(NAMES[slot]), slot)
+		var name: String = NAMES[slot] if slot < NAMES.size() else "surface_%d" % slot
+		assert_eq(doc.ensure_surface(name), slot)
 	for slot in MapDocument.PAINT_SURFACE_LIMIT:
 		doc.set_surface_weight(slot, slot, 10)
-	assert_eq(doc.ensure_surface("sand_red"), -1, "the paint limit with paint: none free")
-	assert_eq(doc.ensure_surface("sand_red", MapDocument.MAX_SURFACES), 8, "the document cap")
-	doc.surface_ids.resize(8)
+	# The index ground (G3) draws every slot a document can list: the paint limit is the cap.
+	assert_eq(MapDocument.PAINT_SURFACE_LIMIT, MapDocument.MAX_SURFACES)
+	assert_eq(doc.ensure_surface("not_listed"), -1, "the paint limit with paint: none free")
+	assert_eq(doc.ensure_surface("not_listed", 8), -1, "a lower limit, all eight painted")
 	doc.set_surface_weight(5, 5, 0)
 	assert_true(doc.surface_slot_unused(5))
-	assert_eq(doc.ensure_surface("sand_red"), 5, "a slot with no paint is reused")
-	assert_eq(doc.surface_ids[5], "sand_red")
+	assert_eq(doc.ensure_surface("not_listed"), 5, "a slot with no paint is reused")
+	assert_eq(doc.surface_ids[5], "not_listed")
 	assert_eq(doc.surface_ids.size(), MapDocument.PAINT_SURFACE_LIMIT)
 	assert_eq(MapDocument.MAX_SURFACES, 64)
 

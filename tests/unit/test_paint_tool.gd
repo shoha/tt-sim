@@ -40,6 +40,21 @@ func _editor() -> AuthoringEditor:
 	return editor
 
 
+## Every paint slot (64, the index ground's) taken: EIGHT painted by strokes, then names the
+## palette does not have, each with a little paint in the map's last sample row.
+func _fill_slots() -> void:
+	for k in EIGHT.size():
+		_paint(EIGHT[k], Vector2(-8 + 2 * k, -6), Vector2(-8 + 2 * k, -4), 1.0)
+	var ids := _doc.surface_ids.duplicate()
+	var first := ids.size()
+	while ids.size() < MapDocument.PAINT_SURFACE_LIMIT:
+		ids.append("filler_%d" % ids.size())
+	_doc.surface_ids = ids
+	var row := _doc.samples_z() - 1
+	for slot in range(first, ids.size()):
+		_doc.set_surface_weight(_doc.sample_index(slot, row), slot, 10)
+
+
 func _weight_at(world: Vector2, slot: int) -> int:
 	var s := _doc.world_to_sample(world).round()
 	return _doc.surface_weight(_doc.sample_index(int(s.x), int(s.y)), slot)
@@ -72,31 +87,34 @@ func test_the_first_dab_claims_a_slot_and_allocates_the_weights() -> void:
 	assert_eq(_doc.surface_ids.size(), 1, "the same surface keeps its slot")
 
 
-func test_a_ninth_surface_is_refused_until_one_is_erased_completely() -> void:
-	for k in EIGHT.size():
-		_paint(EIGHT[k], Vector2(-8 + 2 * k, -6), Vector2(-8 + 2 * k, -4), 1.0)
+func test_a_surface_past_the_limit_is_refused_until_one_is_erased_completely() -> void:
+	assert_eq(MapDocument.PAINT_SURFACE_LIMIT, 64, "the index ground draws every slot")
+	_fill_slots()
 	assert_eq(_doc.surface_ids.size(), MapDocument.PAINT_SURFACE_LIMIT)
 	assert_null(SurfaceStroke.begin(_doc, "mud", false), "every slot holds paint")
 	var before := _snapshot()
-	assert_eq(before.ids.size(), 8, "a refused begin changes nothing")
+	assert_eq(before.ids.size(), 64, "a refused begin changes nothing")
 	# Erase the whole map for a long time: every slot empties. The trailing ones are trimmed.
 	var erase := SurfaceStroke.begin(_doc, "", true)
 	erase.dab(Vector2(-8, -5), Vector2(8, -5), 3.0, 8.0)
+	var row := _doc.samples_z() - 1
+	erase.dab(
+		_doc.sample_to_world(Vector2(0, row)), _doc.sample_to_world(Vector2(64, row)), 3.0, 8.0
+	)
 	erase.finish()
 	assert_true(_doc.surface_ids.is_empty(), "fully erased slots are freed")
 	assert_true(_doc.surface_weights.is_empty(), "and the weights with the last one")
 
 
 func test_a_fully_erased_middle_slot_is_reused() -> void:
-	for k in EIGHT.size():
-		_paint(EIGHT[k], Vector2(-8 + 2 * k, -6), Vector2(-8 + 2 * k, -4), 1.0)
+	_fill_slots()
 	# Erase around the third surface's patch (x = -4), long enough to clear it; its
 	# neighbours reach further out and keep some paint.
 	var erase := SurfaceStroke.begin(_doc, "", true)
 	erase.dab(Vector2(-4, -6), Vector2(-4, -4), 3.0, 8.0)
 	erase.finish()
 	assert_true(_doc.surface_slot_unused(2), "its slot has no paint left")
-	assert_eq(_doc.surface_ids.size(), 8, "a middle slot is not trimmed")
+	assert_eq(_doc.surface_ids.size(), 64, "a middle slot is not trimmed")
 	var stroke := SurfaceStroke.begin(_doc, "mud", false)
 	assert_not_null(stroke, "the empty slot is taken")
 	assert_eq(stroke.slot, 2)
@@ -197,8 +215,7 @@ func test_a_cancelled_paint_stroke_leaves_no_trace() -> void:
 
 func test_the_refusal_says_why_when_every_slot_holds_paint() -> void:
 	var editor := _editor()
-	for k in EIGHT.size():
-		_paint(EIGHT[k], Vector2(-8 + 2 * k, -6), Vector2(-8 + 2 * k, -4), 1.0)
+	_fill_slots()
 	assert_eq(editor.surface_refusal("mud"), SurfaceStroke.FULL_REASON)
 	assert_eq(editor.surface_refusal("moss"), "", "a surface already painted can be painted")
 	assert_false(editor.begin_surface_stroke("mud", false))

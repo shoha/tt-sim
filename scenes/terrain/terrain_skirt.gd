@@ -8,45 +8,57 @@ extends RefCounted
 ## The skirt continues one surface: the base, or a painted surface that covers the map's edge
 ## (edge_surface), so a new forest map whose edge band is greened
 ## (LandformPlacement.paint_sparse) fades out on grass rather than a brown forest-floor halo
-## (2026-10-09). The choice is made when the ground's slots are bound (a build, a replan); a
-## later stroke that paints the edge without changing the slots shows on the skirt at the next.
+## (2026-10-09). The choice is made when the ground's tables are bound (a build, a new biome or
+## surface); a later stroke that paints the edge without changing them shows on the skirt at
+## the next.
 
 ## The mean weight over the map's edge samples a painted surface must reach for the skirt to
 ## continue it instead of the base.
 const EDGE_SURFACE_SHARE := 0.6
 
 
-## The skirt's material for ground material `ground` (slots planned in `plan`,
-## GroundLayerTable.plan) on map `doc`, whose skirt fades over `fade_m` stretched by `wobble`:
-## the base surface's textures and seed, so the texture continues across the edge, or the
-## edge's own surface (sync_ground); no layer weights (they clamp at the edge and would streak
-## outward), no rules (the skirt shader compiles them out) and no accent patches.
+## The skirt's material for ground material `ground` (its layers bound by `layers`) on map
+## `doc`, whose skirt fades over `fade_m` stretched by `wobble`: the ground's layer arrays and
+## seed, so the texture continues across the edge, drawing the base or the edge's own surface
+## (sync_ground); no index maps (they clamp at the edge and would streak outward; the skirt
+## shader compiles them out), no rules and no accent patches.
 static func material(
-	ground: ShaderMaterial, plan: Dictionary, doc: MapDocument, fade_m: float, wobble: float
+	ground: ShaderMaterial,
+	layers: GroundLayerBinding,
+	doc: MapDocument,
+	fade_m: float,
+	wobble: float
 ) -> ShaderMaterial:
 	var skirt := ground.duplicate() as ShaderMaterial
 	skirt.shader = AuthoredTerrain.SKIRT_SHADER
-	skirt.set_shader_parameter("layer_painted_mask", 0)
-	skirt.set_shader_parameter("layer_ground_mask", 0)
+	skirt.set_shader_parameter("biome_present", 0)
+	skirt.set_shader_parameter("paint_present", 0)
 	GroundAccents.sync_skirt(skirt, ground)
-	sync_ground(skirt, doc, plan)
+	sync_ground(skirt, doc, layers)
 	skirt.set_shader_parameter("skirt_half_extent", doc.extent_m() * 0.5)
 	skirt.set_shader_parameter("skirt_fade_m", fade_m)
 	skirt.set_shader_parameter("skirt_wobble", wobble)
 	return skirt
 
 
-## Points `skirt` at the surface it continues: the shader slot `plan` gives the edge_surface of
-## `doc` (skirt_ground_mask, with every slot sampled), else the base (mask 0, no slot sampled).
-static func sync_ground(skirt: ShaderMaterial, doc: MapDocument, plan: Dictionary) -> void:
-	var painted: PackedInt32Array = plan.get("painted_layers", PackedInt32Array())
-	var slot := edge_surface(doc)
-	var shader_slot := painted[slot] if slot >= 0 and slot < painted.size() else -1
-	var mask := 1 << shader_slot if shader_slot >= 0 else 0
-	skirt.set_shader_parameter("skirt_ground_mask", mask)
-	skirt.set_shader_parameter(
-		"layer_count", (plan.get("layers", []) as Array).size() if mask != 0 else 0
-	)
+## Points `skirt` at the surface it continues: the layer of `doc`'s edge_surface, whose
+## channel dressing stays with it (as a painted surface's always did), else the base, whose
+## channel takes the base row's water bed and shore (skirt_ground_layer, skirt_bed_layer,
+## skirt_shore_layer).
+static func sync_ground(
+	skirt: ShaderMaterial, doc: MapDocument, layers: GroundLayerBinding
+) -> void:
+	var edge_layer := layers.painted_layer(edge_surface(doc))
+	var bed := -1
+	var shore := -1
+	if edge_layer < 0:
+		edge_layer = 0
+		var routing := layers.routing
+		bed = (routing.get("bed", PackedInt32Array([-1])) as PackedInt32Array)[0]
+		shore = (routing.get("shore", PackedInt32Array([-1])) as PackedInt32Array)[0]
+	skirt.set_shader_parameter("skirt_ground_layer", edge_layer)
+	skirt.set_shader_parameter("skirt_bed_layer", bed)
+	skirt.set_shader_parameter("skirt_shore_layer", shore)
 
 
 ## The painted surface (an index into `doc`'s surface_ids) whose weight averages at least

@@ -27,16 +27,16 @@ extends Node3D
 ## heights into the collision shape (about 0.4 ms for a 200 ft map); refresh_skirt()
 ## follows an edit on the map edge.
 ##
-## Ground layers (phase 3, P3-4). One table of up to eight shader layers blends over the
-## base: painted surfaces, painted biomes' ground, the automatic cliff and scree, and ground
-## accents (GroundAccents) (the table, its allocation and overflow rule are
-## GroundLayerTable's; the rules are TerrainRules' and the shader's). Two RGBA8 weight maps
-## on the sample grid (slots 0-3 and 4-7) are DrawableTexture2Ds so a brush stroke uploads
-## only the samples it changed: a brush edits the document's masks in place, then calls
-## update_ground_region() with the changed sample rectangle, which recomputes those texels
-## and blits them in (a texel-exact copy, shaders/texel_copy_blit.gdshader). A biome or
-## surface first painted mid-session takes a free slot by setting uniforms; the material is
-## never rebuilt. CPU mirrors of the textures (get_ground_weights()) are kept for tests.
+## Ground layers (ground layers card G3; phase 3's eight-slot table before it). Every surface
+## the map uses is a layer of the ground's Texture2DArrays, the base at layer 0, and the
+## shader finds the few around each pixel from the document's own index maps (biome slots
+## and density, the painted surfaces' top-4 entries) and a routing table per biome
+## (GroundLayerBinding binds it all; GroundLayers holds the rules, TerrainRules and the
+## shader the automatic dressing). A brush edits the document in place, then calls
+## update_ground_region() with the changed sample rectangle, which replaces the index maps
+## (native copies) and the broad edge's weights there. A biome or surface first painted
+## mid-session appends a layer and sets uniforms; the material is never rebuilt. The broad
+## edge's slot weight mirrors (get_ground_weights()) are kept for tests.
 ##
 ## Wet dressing (P4-3). On a map with water the ground also draws each biome's water bed
 ## and wet shore where MapDocument.water_dressing says (WaterDressing: bed, shore, wet line
@@ -66,29 +66,15 @@ const SKIRT_AABB_HALF_HEIGHT_M := 200.0
 ## A chunk whose heights span no more than this is flat and casts no shadow
 ## (chunk_shadow_casting).
 const FLAT_CHUNK_M := 0.02
-const TEXEL_COPY_SHADER := preload("res://shaders/texel_copy_blit.gdshader")
-## Ground shader uniforms of the layer slots; each map is a sampler array of
-## GroundLayerTable.MAX_LAYERS.
-const LAYER_MAPS := {
-	"albedo": "layer_albedo", "normal": "layer_normal", "orm": "layer_orm", "height": "layer_height"
-}
+## The palette maps of a ground surface, keyed as in the palette, and the ground shader's
+## layer array of each (GroundLayerArrays).
+const LAYER_MAPS := GroundLayerArrays.UNIFORMS
 ## Albedo and ORM for a map whose surface is missing from the palette: a neutral earth so
 ## the map still reads as ground, fully rough, never metallic.
 const FALLBACK_ALBEDO := Color(0.36, 0.33, 0.26)
 const FALLBACK_ORM := Color(1.0, 0.9, 0.0)
 ## Set on a ground material built without palette textures.
 const FALLBACK_META := &"authored_ground_fallback"
-## Solid stand-ins for a layer map that is missing: fallback earth, flat normal, rough,
-## mid height.
-const LAYER_DEFAULTS := {
-	"albedo": FALLBACK_ALBEDO,
-	"normal": Color(0.5, 0.5, 1.0),
-	"orm": FALLBACK_ORM,
-	"height": Color(0.5, 0.5, 0.5),
-}
-const DEFAULT_LAYER_TILE_M := 2.0
-
-static var _texel_copy: ShaderMaterial = null
 
 var document: MapDocument = null
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT
@@ -107,21 +93,10 @@ var _material: ShaderMaterial = null
 var _chunks: Dictionary[Vector2i, MeshInstance3D] = {}
 var _body: StaticBody3D = null
 var _shape: HeightMapShape3D = null
-## The current GroundLayerTable.plan().
-var _plan: Dictionary = {}
-## Biome ids and painted surface ids the current plan covers; a change means a re-plan.
-var _planned_biomes: int = -1
-var _planned_surfaces: PackedStringArray = PackedStringArray()
-## Whether the current plan gave the water bed and shore surfaces slots.
-var _planned_water: bool = false
+## The ground's layers, index maps, routing and broad edge.
+var _layers := GroundLayerBinding.new()
 ## The wet dressing texture (MapDocument.water_dressing; WaterDressing), null without water.
 var _water_texture: ImageTexture = null
-## Overflowed surfaces already warned about (surface -> true).
-var _warned_fallbacks: Dictionary = {}
-## The weight maps' CPU mirrors (slots 0-3, 4-7), their textures and their broad scales.
-var _weights: Array[Image] = []
-var _weight_textures: Array[DrawableTexture2D] = []
-var _broad_textures: Array[ImageTexture] = []
 ## Whole-grid rule fields: {"curvature", "steep"} (TerrainMeshBuilder.grid_fields).
 var _fields: Dictionary = {}
 ## cell -> chunk mesh arrays a loader's worker built (AuthoredLoadPrep), used once each.
@@ -210,12 +185,13 @@ func build(
 	_fields_dirty = Rect2i()
 	_skirt_material = null
 	_material = GroundPalette.build_ground_material(doc.base_surface, doc.map_seed, root)
-	# The wet dressing first: whether the map has water decides the layer plan.
+	# The wet dressing first: whether the map has water decides the layer list.
 	if prepared.has(AuthoredLoadPrep.DRESSING):
 		doc.water_dressing = prepared[AuthoredLoadPrep.DRESSING]
 	else:
 		WaterDressing.refresh(doc)
-	_build_ground_layers()
+	_layers = GroundLayerBinding.new()
+	_layers.build(doc, _material, root, _has_water())
 	_bind_water_dressing()
 	_fields = prepared.get(AuthoredLoadPrep.FIELDS, {})
 	if _fields.is_empty():
@@ -257,7 +233,7 @@ func _build_skirt(parts: Dictionary = {}) -> void:
 		old.free()
 	if _skirt_material == null:
 		_skirt_material = TerrainSkirt.material(
-			_material, _plan, document, SKIRT_FADE_M, SKIRT_WOBBLE
+			_material, _layers, document, SKIRT_FADE_M, SKIRT_WOBBLE
 		)
 	if parts.is_empty():
 		parts = RiverExitMesh.skirt_parts(document, skirt_width_m(), SKIRT_FADE_M, SKIRT_WOBBLE)
@@ -288,8 +264,7 @@ func river_exits() -> Dictionary:
 func _sync_skirt_water() -> void:
 	if _skirt_material != null:
 		var channel := not _exits.is_empty() and _has_water()
-		var layers: int = _plan.get("layers", []).size()
-		SkirtExits.sync_water(_skirt_material, _material, layers, channel)
+		SkirtExits.sync_water(_skirt_material, _material, channel)
 
 
 ## Brings the skirt's geometry up to the current boundary heights (a sculpt edit on the map
@@ -330,23 +305,20 @@ func refresh_skirt() -> void:
 	last_skirt_usec = Time.get_ticks_usec() - started
 
 
-## The palette surface of each layer slot, in slot (weight channel) order.
+## The palette surface of each ground layer, in layer order (the base first).
 func ground_layers() -> PackedStringArray:
-	var surfaces := PackedStringArray()
-	for layer in _plan.get("layers", []):
-		surfaces.append(layer.surface)
-	return surfaces
+	return _layers.layers()
 
 
-## The current layer plan (GroundLayerTable.plan()). Do not modify.
-func layer_plan() -> Dictionary:
-	return _plan
+## The ground's binding (layer list, routing, index maps, broad edge). Do not modify.
+func layer_binding() -> GroundLayerBinding:
+	return _layers
 
 
-## The CPU mirror of weight image `plane` (0: slots 0-3, 1: slots 4-7; RGBA8, one texel per
-## sample). Do not modify.
+## The broad edge's CPU weight mirror `plane` (0: broad slots 0-3, 1: slots 4-7; RGBA8, one
+## texel per sample; GroundLayerBinding). Do not modify.
 func get_ground_weights(plane: int = 0) -> Image:
-	return _weights[plane]
+	return _layers.weights[plane]
 
 
 ## The whole-grid rule fields {"curvature", "steep"} the chunks carry in UV2
@@ -355,47 +327,41 @@ func get_rule_fields() -> Dictionary:
 	return _fields
 
 
-## Recomputes the layer weights of the samples in `sample_rect` (sample coordinates,
-## position = first sample, size in samples; clipped to the grid) from the document's
-## biome masks and painted surfaces and uploads just those texels. Call it after every
-## mask or paint edit with a rectangle covering every sample changed since the last call.
-## A biome or painted surface added to the document since the last call is given a slot
-## first (a free one, one already drawing it, or its overflow fallback), which only sets
-## uniforms; in the rare case a painted surface forces a re-plan (GroundLayerTable), every
-## texel is rewritten.
+## Brings the ground up to the document's biome masks and painted surfaces after an edit of
+## the samples in `sample_rect` (sample coordinates, position = first sample, size in
+## samples; clipped to the grid): the index maps are replaced whole (the document's bytes,
+## native copies) and the broad edge's weights recomputed over the rectangle. Call it after
+## every mask or paint edit with a rectangle covering every sample changed since the last
+## call. A biome or painted surface added to the document since the last call first gets its
+## layers (appended; only uniforms and new array layers are set).
 func update_ground_region(sample_rect: Rect2i) -> void:
 	var start := Time.get_ticks_usec()
 	var grid := Rect2i(0, 0, document.samples_x(), document.samples_z())
-	var rect := sample_rect.intersection(grid)
-	if (
-		document.biome_ids.size() != _planned_biomes
-		or document.surface_ids != _planned_surfaces
-		or _has_water() != _planned_water
-	):
-		if _plan_layers():
-			rect = grid
-	if rect.has_area():
-		var planes := _weight_planes(rect)
-		for plane in GroundLayerTable.PLANES:
-			var region := Image.create_from_data(
-				rect.size.x, rect.size.y, false, Image.FORMAT_RGBA8, planes[plane]
-			)
-			_weights[plane].blit_rect(region, Rect2i(Vector2i.ZERO, rect.size), rect.position)
-			_upload(plane, region, rect.position)
-		_refresh_broad()
+	var retabled := _layers.needs_retable(_has_water())
+	_layers.update_region(sample_rect.intersection(grid), _has_water())
+	if retabled:
+		_sync_skirt_tables()
+	last_broad_update_usec = _layers.last_broad_usec
 	last_biome_update_usec = Time.get_ticks_usec() - start
 
 
 ## Brings the ground's wet dressing up to the document's water_dressing (WaterDressing
-## .refresh(), which the caller runs after a water or height edit): re-plans the layers when
-## the map gains or loses water (the bed and shore surfaces take slots only with water) and
+## .refresh(), which the caller runs after a water or height edit): re-tables the layers when
+## the map gains or loses water (the bed and shore surfaces are layers only with water) and
 ## uploads the field (the whole texture: about 0.25 MB on a 200 ft map).
 func refresh_water_dressing() -> void:
-	if _has_water() != _planned_water:
-		if _plan_layers():
-			update_ground_region(Rect2i(0, 0, document.samples_x(), document.samples_z()))
+	if _layers.needs_retable(_has_water()):
+		update_ground_region(Rect2i())
 	_bind_water_dressing()
 	_sync_skirt_water()
+
+
+## The skirt follows the ground's layer arrays and its edge surface after a re-table.
+func _sync_skirt_tables() -> void:
+	if _skirt_material != null:
+		GroundAccents.sync_skirt(_skirt_material, _material)
+		TerrainSkirt.sync_ground(_skirt_material, document, _layers)
+		_sync_skirt_water()
 
 
 ## The wet dressing texture (WaterDressing layout), or null with no water. Do not modify.
@@ -482,214 +448,21 @@ func _exit_tree() -> void:
 	_warm_held.clear()
 
 
-## Replans the ground layers from scratch, as every load does, when the session's plan ran out
-## of slots (past GroundLayerTable.MAX_LAYERS kept slots can drop other accents or fall back
-## differently from a fresh plan). Called on save. Returns true when it rebuilt.
+## Rebuilds the ground layers from scratch, as every load does, when the session's list ran
+## past GroundLayers.MAX_LAYERS (a fresh, compacted list may hold every surface again).
+## Called on save. Returns true when it rebuilt.
 func replan_ground_layers() -> bool:
-	if _plan.get("dropped_accents", []).is_empty() and _plan.get("fallbacks", {}).is_empty():
+	if not _layers.overflowed():
 		return false
-	_build_ground_layers()
+	_layers.build(document, _material, palette_root, _has_water())
+	_sync_skirt_tables()
 	return true
 
 
-func _build_ground_layers() -> void:
-	_plan = {}
-	_planned_biomes = -1
-	_planned_surfaces = PackedStringArray()
-	_warned_fallbacks.clear()
-	_plan_layers()
-	var size := Vector2i(document.samples_x(), document.samples_z())
-	var planes := _weight_planes(Rect2i(Vector2i.ZERO, size))
-	_weights.clear()
-	_weight_textures.clear()
-	_broad_textures.clear()
-	for plane in GroundLayerTable.PLANES:
-		var image := Image.create_from_data(
-			size.x, size.y, false, Image.FORMAT_RGBA8, planes[plane]
-		)
-		_weights.append(image)
-		var texture := DrawableTexture2D.new()
-		texture.setup(
-			size.x, size.y, DrawableTexture2D.DRAWABLE_FORMAT_RGBA8, Color(0, 0, 0, 0), false
-		)
-		_weight_textures.append(texture)
-		if planes[plane].count(0) != planes[plane].size():
-			_upload(plane, image, Vector2i.ZERO)
-		_broad_textures.append(ImageTexture.create_from_image(GroundLayerTable.broad_image(image)))
-	_material.set_shader_parameter("layer_weights_a", _weight_textures[0])
-	_material.set_shader_parameter("layer_weights_b", _weight_textures[1])
-	_material.set_shader_parameter("layer_broad_a", _broad_textures[0])
-	_material.set_shader_parameter("layer_broad_b", _broad_textures[1])
-	_material.set_shader_parameter("layer_grid_origin", -document.extent_m() * 0.5)
-	_material.set_shader_parameter("layer_grid_step", document.sample_step())
-
-
-## (Re)plans the layer table for the document's current biomes and painted surfaces,
-## keeping every slot already assigned (unless a painted surface forces a re-plan), and
-## binds the textures of the slots. Returns true when slots moved, so every weight texel
-## must be rewritten.
-func _plan_layers() -> bool:
-	var root := palette_root
-	var available := func(surface: String) -> bool:
-		return surface != "" and GroundPalette.surface_available(surface, root)
-	var pick := func(biome: Dictionary, key: String) -> String:
-		var surface: String = biome.get(key, "")
-		return surface if available.call(surface) else ""
-	var grounds := PackedStringArray()
-	var cliffs := PackedStringArray()
-	var screes := PackedStringArray()
-	var beds := PackedStringArray()
-	var shores := PackedStringArray()
-	var accents: Array = []
-	for biome_id in document.biome_ids:
-		var biome := PaletteLibrary.biome(biome_id, root)
-		grounds.append(pick.call(biome, "ground_surface"))
-		cliffs.append(pick.call(biome, "cliff_surface"))
-		screes.append(pick.call(biome, "scree_surface"))
-		beds.append(pick.call(biome, "water_bed_surface"))
-		shores.append(pick.call(biome, "shore_surface"))
-		accents.append(GroundAccents.drawable(biome.get("ground_accents", []), available))
-	var painted := PackedStringArray()
-	for surface in document.surface_ids:
-		painted.append(surface if available.call(surface) else "")
-	var base_rules := GroundPalette.base_rule_surfaces(document.base_surface, root)
-	base_rules.append_array(GroundPalette.base_water_surfaces(document.base_surface, root))
-	for i in base_rules.size():
-		if not available.call(base_rules[i]):
-			base_rules[i] = ""
-	var water := _has_water()
-	var surfaces := PaletteLibrary.surfaces(root)
-	var inputs := {
-		"base": document.base_surface,
-		"biome_ground": grounds,
-		"biome_cliff": cliffs,
-		"biome_scree": screes,
-		"biome_bed": beds,
-		"biome_shore": shores,
-		"water": water,
-		"biome_coverage":
-		GroundLayerTable.biome_coverage(
-			document.biome_slots, document.biome_density, document.biome_ids.size()
-		),
-		"painted": painted,
-		"base_rules": base_rules,
-		"role_of":
-		func(surface: String) -> String: return surfaces.get(surface, {}).get("role", "ground"),
-		"color_of":
-		func(surface: String) -> Variant: return GroundPalette.surface_mean_albedo(surface, root),
-		"biome_accents": accents,
-		"base_accents":
-		GroundAccents.drawable(GroundAccents.base_accents(document.base_surface, root), available),
-	}
-	var previous: Array = _plan.get("layers", [])
-	var result := GroundLayerTable.plan(inputs, previous)
-	for surface in result.dropped_accents:
-		if not _warned_fallbacks.has("accent:" + surface):
-			_warned_fallbacks["accent:" + surface] = true
-			push_warning("AuthoredTerrain: ground accent '%s' did not fit the layers" % surface)
-	var fallbacks: Dictionary = result.fallbacks
-	for surface in fallbacks:
-		if not _warned_fallbacks.has(surface):
-			_warned_fallbacks[surface] = true
-			var drawn: String = fallbacks[surface]
-			push_warning(
-				(
-					"AuthoredTerrain: more than %d ground layer surfaces; '%s' is drawn as '%s'"
-					% [
-						GroundLayerTable.MAX_LAYERS,
-						surface,
-						drawn if drawn != "" else document.base_surface
-					]
-				)
-			)
-	var moved: bool = result.replanned
-	_plan = result
-	_planned_biomes = document.biome_ids.size()
-	_planned_surfaces = document.surface_ids.duplicate()
-	_planned_water = water
-	_bind_layers(previous)
-	return moved
-
-
-## Binds every slot's textures and tile size, the slot masks and the rule routing. Only
-## slots whose surface changed are reloaded. Unused array entries (and a slot surface
-## missing a map) get small solid textures: they are never sampled (an unused slot's
-## weight is 0), but every sampler stays valid.
-func _bind_layers(previous: Array) -> void:
-	var layers: Array = _plan.layers
-	var same := previous.size() == layers.size()
-	for j in mini(previous.size(), layers.size()):
-		same = same and previous[j].surface == layers[j].surface
-	if not same or _material.get_shader_parameter("layer_albedo") == null:
-		var maps := {}
-		for key in LAYER_MAPS:
-			maps[key] = []
-		var tiles := PackedFloat32Array()
-		var surfaces := PaletteLibrary.surfaces(palette_root)
-		for index in GroundLayerTable.MAX_LAYERS:
-			var surface: Dictionary = (
-				surfaces.get(layers[index].surface, {}) if index < layers.size() else {}
-			)
-			for key in LAYER_MAPS:
-				var texture := GroundPalette.load_texture(palette_root, surface.get(key, ""))
-				maps[key].append(
-					texture if texture else GroundPalette.solid_texture(LAYER_DEFAULTS[key])
-				)
-			tiles.append(float(surface.get("tile_m", DEFAULT_LAYER_TILE_M)))
-		for key in LAYER_MAPS:
-			_material.set_shader_parameter(LAYER_MAPS[key], maps[key])
-		_material.set_shader_parameter("layer_tile_m", tiles)
-	_material.set_shader_parameter("layer_count", layers.size())
-	var masks := GroundLayerTable.shader_masks(_plan)
-	for uniform in masks:
-		_material.set_shader_parameter(uniform, masks[uniform])
-	var cliff_of := GroundLayerTable.shader_routing(_plan.cliff_of)
-	_material.set_shader_parameter("rule_cliff_layer", cliff_of)
-	_material.set_shader_parameter(
-		"rule_scree_layer", GroundLayerTable.shader_routing(_plan.scree_of)
-	)
-	_material.set_shader_parameter("rule_bed_layer", GroundLayerTable.shader_routing(_plan.bed_of))
-	_material.set_shader_parameter(
-		"rule_shore_layer", GroundLayerTable.shader_routing(_plan.shore_of)
-	)
-	GroundAccents.bind(_material, _plan, document.map_seed)
-	GroundAccents.bind_edge(_material, document.extent_m() * 0.5)
-	if _skirt_material != null:
-		GroundAccents.sync_skirt(_skirt_material, _material)
-		TerrainSkirt.sync_ground(_skirt_material, document, _plan)
-		_sync_skirt_water()
-
-
-func _weight_planes(rect: Rect2i) -> Array[PackedByteArray]:
-	return GroundLayerTable.weight_planes(document, _plan.biome_layers, _plan.painted_layers, rect)
-
-
-## Rebuilds the broad weight textures from the CPU mirrors (whole map; native resize, a
-## fraction of a millisecond each on a 200 ft map) and uploads them in place.
-func _refresh_broad() -> void:
-	var start := Time.get_ticks_usec()
-	for plane in GroundLayerTable.PLANES:
-		_broad_textures[plane].update(GroundLayerTable.broad_image(_weights[plane]))
-	last_broad_update_usec = Time.get_ticks_usec() - start
-
-
-## The broad weight texture of `plane` (see GroundLayerTable.broad_image). Do not modify.
+## The broad edge's weight texture of `plane` (see GroundLayerTable.broad_image). Do not
+## modify.
 func get_broad_texture(plane: int = 0) -> ImageTexture:
-	return _broad_textures[plane]
-
-
-## Copies `region` into weight texture `plane` at `at`, texel for texel.
-func _upload(plane: int, region: Image, at: Vector2i) -> void:
-	if _texel_copy == null:
-		_texel_copy = ShaderMaterial.new()
-		_texel_copy.shader = TEXEL_COPY_SHADER
-	_weight_textures[plane].blit_rect(
-		Rect2i(at, region.get_size()),
-		ImageTexture.create_from_image(region),
-		Color.WHITE,
-		0,
-		_texel_copy
-	)
+	return _layers.broad_textures[plane]
 
 
 ## Every chunk cell that currently has a mesh.

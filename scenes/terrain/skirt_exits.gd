@@ -162,16 +162,12 @@ static func ribbon_material(doc: MapDocument, fade_m: float, wobble: float) -> S
 	return water
 
 
-## Brings skirt material `skirt` up to ground material `ground` (`layer_count` slots) for a
-## river's channel, when `channel`: the layer slots (the bed and shore surfaces among them),
-## their routing and the map's dressing texture (SKIRT in the ground shader). Without a channel
-## the skirt draws no dressing.
-static func sync_water(
-	skirt: ShaderMaterial, ground: ShaderMaterial, layer_count: int, channel: bool
-) -> void:
+## Brings skirt material `skirt` up to ground material `ground` for a river's channel, when
+## `channel`: the map's dressing texture (SKIRT in the ground shader; the layers its bed and
+## shore go to are TerrainSkirt.sync_ground's). Without a channel the skirt draws no dressing.
+static func sync_water(skirt: ShaderMaterial, ground: ShaderMaterial, channel: bool) -> void:
 	skirt.set_shader_parameter("skirt_channel", 1 if channel else 0)
 	if not channel:
 		return
-	skirt.set_shader_parameter("layer_count", layer_count)
-	for uniform in ["rule_bed_layer", "rule_shore_layer", "water_weights", "water_present"]:
+	for uniform in ["water_weights", "water_present"]:
 		skirt.set_shader_parameter(uniform, ground.get_shader_parameter(uniform))

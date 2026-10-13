@@ -267,10 +267,9 @@ func test_a_fire_burns_the_forest_on_every_board_then_changes_the_map() -> void:
 	assert_eq(joiner.edits.events.active_count(), 0, "the late joiner sees no motion")
 	await _settle([gm, joiner])
 	_same(gm, joiner, "late joiner")
-	# The forest, the birch base and the burnt forest with its ash fill the eight ground layers
-	# (treecube 1c05fb0's grass_forest accent took the last one): the burnt forest's dirt accent
-	# finds no slot on each of the three boards. AuthoredTerrain's documented behaviour.
-	assert_engine_error(3, "the burnt forest's dirt accent dropped once per board")
+	# The forest, the birch base and the burnt forest with its ash draw every accent on every
+	# board (the index ground, G3; the eight-slot table dropped the burnt forest's dirt here).
+	assert_engine_error(0, "no accent dropped")
 
 
 func test_the_fire_plan_follows_the_palette() -> void:

@@ -1,10 +1,11 @@
 extends GutTest
 
-## The ground shader's layer table (GroundLayerTable, bound by AuthoredTerrain): which
-## surfaces get the eight slots (painted, biome ground, automatic cliff and scree), how
-## each biome's rock and scree are routed, the overflow fallback, the two RGBA8 weight
-## maps and their partial updates, and that updates never replace the material. Weights are
-## checked on the CPU mirrors: headless runs cannot read GPU textures back.
+## The slot table (GroundLayerTable: which surfaces get the eight slots, the routing, the
+## overflow fallback, the weight planes; until its removal in ground layers card G5 its weight
+## planes feed the broad edge) and the index ground's binding on a real terrain (G3,
+## GroundLayerBinding): the layer list with the base first, the routing rows, the index maps
+## as the document's bytes, partial updates of the broad weights, and that updates never
+## replace the material. Weights are checked on the CPU mirrors.
 
 const BIRCH := "birch_woodland_summer_s1"
 const FOREST := "temperate_forest_summer_s1"
@@ -263,23 +264,37 @@ func test_terrain_binds_the_table_and_its_routing() -> void:
 	_paint_surface(doc, "cobblestone", Rect2i(60, 0, 20, 5), 255)
 	var terrain := _terrain(doc)
 	var layers := terrain.ground_layers()
-	assert_eq(layers[0], "cobblestone", "painted first")
+	# The index ground (G3): the base is layer 0, then painted surfaces, then the biomes'.
+	assert_eq(layers[0], "grass", "the base first")
+	assert_eq(layers[1], "cobblestone", "then the painted surfaces")
 	for surface in ["forest_floor", "grass_alpine", "cliff", "cliff_basalt", "gravel"]:
-		assert_true(layers.has(surface), "%s has a slot" % surface)
+		assert_true(layers.has(surface), "%s has a layer" % surface)
 	var material := terrain.get_material()
-	assert_eq(material.get_shader_parameter("layer_count"), layers.size())
-	assert_eq((material.get_shader_parameter("layer_albedo") as Array).size(), 8)
-	assert_eq((material.get_shader_parameter("layer_tile_m") as PackedFloat32Array).size(), 8)
-	assert_eq(material.get_shader_parameter("layer_painted_mask"), 1)
-	var the_plan := terrain.layer_plan()
-	var alpine := layers.find("grass_alpine")
-	var routing: PackedInt32Array = material.get_shader_parameter("rule_cliff_layer")
-	assert_eq(layers[routing[alpine]], "cliff_basalt", "alpine ground dressed with basalt")
-	assert_eq(layers[routing[8]], "cliff", "grass (the base) dressed like the wetland: cliff")
-	assert_eq(the_plan.biome_layers[1], layers.find("forest_floor"))
-	assert_eq(_texel(terrain, 0, 70, 2)[0], 255, "cobblestone painted in its channel")
-	# Eight slots: the base's mud and the forest's grass_forest accents find none left.
-	assert_engine_error(2, "one warning per dropped accent")
+	var albedo: Texture2DArray = material.get_shader_parameter("layer_albedo_array")
+	assert_eq(albedo.get_layers(), GroundLayers.capacity(layers.size()))
+	assert_eq((material.get_shader_parameter("layer_tile_m") as PackedFloat32Array).size(), 64)
+	var paint_layer: PackedInt32Array = material.get_shader_parameter("paint_layer")
+	assert_eq(paint_layer[0], 1, "document surface 0 draws as layer 1")
+	var flags: PackedInt32Array = material.get_shader_parameter("layer_flags")
+	assert_eq(flags[layers.find("cliff")], GroundLayers.FLAG_CLIFF)
+	assert_eq(flags[1], GroundLayers.FLAG_BUILT)
+	# Rows by biome slot: (ground, cliff, scree, bed); row 0 the base.
+	var rules: PackedInt32Array = material.get_shader_parameter("biome_rules")
+	assert_eq(layers[rules[2 * 4 + 1]], "cliff_basalt", "alpine ground dressed with basalt")
+	assert_eq(layers[rules[1]], "cliff", "grass (the base) dressed like the wetland: cliff")
+	assert_eq(rules[0], GroundLayerBinding.AS_BASE, "row 0 draws as the base")
+	assert_eq(layers[rules[1 * 4]], "forest_floor", "the forest's ground")
+	var binding := terrain.layer_binding()
+	var index := binding.index_image("paint_index_map").get_data()
+	assert_eq(index, doc.surface_plane(MapDocument.SURFACE_INDEX_PLANE), "the document's bytes")
+	assert_not_null(binding.index_texture("paint_index_map"), "bound as a texture")
+	var slots := binding.index_image("biome_slots_map").get_data()
+	assert_eq(slots, doc.biome_slots, "uploaded verbatim")
+	assert_eq(material.get_shader_parameter("biome_present"), 1)
+	assert_eq(material.get_shader_parameter("paint_present"), 1)
+	var cobble := binding.broad_surfaces.find("cobblestone")
+	assert_eq(_texel(terrain, cobble >> 2, 70, 2)[cobble & 3], 255, "a trampled broad slot")
+	assert_engine_error(0, "every accent drawn")
 
 
 func test_partial_update_touches_only_the_rect_and_matches_full() -> void:
@@ -312,10 +327,14 @@ func test_partial_update_touches_only_the_rect_and_matches_full() -> void:
 					)
 		assert_true(inside_ok, "plane %d: the rect matches a full recompute" % plane)
 		assert_true(outside_ok, "plane %d: nothing outside the rect changed" % plane)
+	# The index maps are the document's, whole, after any update.
+	var weights := terrain.layer_binding().index_image("paint_weight_map")
+	assert_eq(weights.get_data(), doc.surface_plane(MapDocument.SURFACE_WEIGHT_PLANE))
+	var density := terrain.layer_binding().index_image("biome_density_map")
+	assert_eq(density.get_data(), doc.biome_density, "even outside the rect")
 	terrain.update_ground_region(Rect2i(-10, -10, 1000, 1000))
 	assert_eq(terrain.get_ground_weights(0).get_data(), fresh.get_ground_weights(0).get_data())
-	# The base's grass_alpine and the forest's grass_forest accents find no slot, once per terrain.
-	assert_engine_error(4, "one warning per dropped accent and terrain")
+	assert_engine_error(0, "every accent drawn")
 
 
 func test_new_biome_or_surface_mid_session_keeps_every_slot() -> void:
@@ -323,38 +342,36 @@ func test_new_biome_or_surface_mid_session_keeps_every_slot() -> void:
 	_paint_biome(doc, Rect2i(0, 0, 10, 10), 1, 255)
 	var terrain := _terrain(doc)
 	var material := terrain.get_material()
-	var weights: Texture2D = material.get_shader_parameter("layer_weights_a")
+	var albedo: Texture2DArray = material.get_shader_parameter("layer_albedo_array")
+	var index: Texture2D = material.get_shader_parameter("paint_index_map")
 	var first := terrain.ground_layers()
-	var first_accent: Array = terrain.layer_plan().layers.map(
-		func(layer: Dictionary) -> bool: return layer.source == GroundLayerTable.Source.ACCENT
-	)
 	doc.biome_ids.append(TAIGA)
 	_paint_biome(doc, Rect2i(50, 50, 30, 30), 2, 255)
 	terrain.update_ground_region(Rect2i(50, 50, 30, 30))
 	_paint_surface(doc, "planks", Rect2i(5, 60, 5, 5), 255)
 	terrain.update_ground_region(Rect2i(5, 60, 5, 5))
 	var now := terrain.ground_layers()
-	# Ground accents (palette v5) yield their slots to weight surfaces, the forest's and the
-	# base's alike (base grass: the wetland's mud and grass_alpine since treecube 1c05fb0);
-	# every slot that holds weights stays put. Two accents find no slot left: one warning each.
-	for j in first.size():
-		if not first_accent[j]:
-			assert_eq(now[j], first[j], "slot %d kept" % j)
-	assert_engine_error(2, "grass_forest and grass_alpine dropped, one warning each")
-	assert_true(now.has("pine_duff"))
-	assert_true(now.has("planks"))
+	# Every layer stays put (painting never rebinds); the new surfaces append, and within the
+	# arrays' capacity they go in as new layers of the same textures.
+	assert_eq(now.slice(0, first.size()), first, "every layer kept")
+	assert_true(now.find("pine_duff") >= first.size(), "the taiga's ground appended")
+	assert_true(now.find("planks") >= first.size(), "the planks appended")
+	assert_engine_error(0, "every accent drawn")
 	assert_eq(terrain.get_material(), material, "same material")
-	assert_eq(material.get_shader_parameter("layer_weights_a"), weights, "same weight texture")
-	var taiga := now.find("pine_duff")
-	var planks := now.find("planks")
+	assert_eq(material.get_shader_parameter("layer_albedo_array"), albedo, "same layer arrays")
+	assert_eq(material.get_shader_parameter("paint_index_map"), index, "same index texture")
+	var broad := terrain.layer_binding().broad_surfaces
+	var taiga := broad.find("pine_duff")
+	var planks := broad.find("planks")
 	assert_eq(_texel(terrain, taiga >> 2, 60, 60)[taiga & 3], 255)
 	assert_eq(_texel(terrain, planks >> 2, 6, 61)[planks & 3], 255)
 	for cell in terrain.chunk_cells():
 		assert_eq(terrain.get_chunk(cell).mesh.surface_get_material(0), material)
 
 
-func test_overflow_in_a_real_document_warns_once() -> void:
-	# Grass base; six biomes with distinct grounds plus their rock and scree: too many.
+func test_six_biomes_draw_every_surface_without_a_warning() -> void:
+	# Grass base; six biomes with distinct grounds plus their rock, scree and accents: the
+	# eight-slot table overflowed here (ten warnings); the index ground draws them all.
 	var biomes := [FOREST, TAIGA, ALPINE, BADLANDS, SAVANNA, BIRCH]
 	var doc := _doc("grass", biomes)
 	for index in biomes.size():
@@ -362,19 +379,16 @@ func test_overflow_in_a_real_document_warns_once() -> void:
 	_paint_surface(doc, "cobblestone", Rect2i(0, 100, 5, 5), 255)
 	_paint_surface(doc, "flagstone", Rect2i(10, 100, 5, 5), 255)
 	var terrain := _terrain(doc)
-	# A biome added later re-plans the table; the overflowed surfaces do not warn again.
 	doc.biome_ids.append("wetland_riparian_summer_s1")
 	terrain.update_ground_region(Rect2i(0, 0, 40, 40))
-	# grass_birch (ground, drawn as grass_alpine), cliff_basalt and cliff_sandstone (cliff: drawn
-	# as cliff) and gravel_sandstone (scree, drawn as sand_red): one warning each. Six ground
-	# accents find no slot left (treecube 1c05fb0 gave the grasslands their own accent grasses):
-	# one warning each too.
-	assert_engine_error(10, "one warning per overflowed surface or dropped accent")
-	assert_eq(terrain.ground_layers().size(), GroundLayerTable.MAX_LAYERS)
-	assert_eq(terrain.ground_layers()[0], "cobblestone", "painted surfaces keep their slots")
-	assert_eq(terrain.ground_layers()[1], "flagstone")
-	for surface in terrain.layer_plan().fallbacks:
-		assert_false(terrain.ground_layers().has(surface), "%s fell back" % surface)
+	assert_engine_error(0, "no surface falls back, no accent drops")
+	var layers := terrain.ground_layers()
+	assert_eq(layers[1], "cobblestone", "painted surfaces keep their layers")
+	assert_eq(layers[2], "flagstone")
+	var binding := terrain.layer_binding()
+	assert_false(binding.overflowed())
+	for surface in ["grass_birch", "cliff_basalt", "cliff_sandstone", "gravel_sandstone"]:
+		assert_true(layers.has(surface), "%s drawn as itself" % surface)
 
 
 func test_broad_textures_follow_the_weights() -> void:
@@ -385,7 +399,7 @@ func test_broad_textures_follow_the_weights() -> void:
 	_paint_biome(doc, Rect2i(0, 0, 40, 40), 1, 255)
 	terrain.update_ground_region(Rect2i(0, 0, 40, 40))
 	assert_eq(terrain.get_material().get_shader_parameter("layer_broad_a"), broad, "in place")
-	var forest := terrain.ground_layers().find("forest_floor")
+	var forest := terrain.layer_binding().broad_surfaces.find("forest_floor")
 	var expected := GroundLayerTable.broad_image(terrain.get_ground_weights(forest >> 2))
 	assert_gt(expected.get_pixel(1, 1)[forest & 3], 0.9, "the painted corner reads broad")
 	var f := GroundLayerTable.BROAD_FACTOR
