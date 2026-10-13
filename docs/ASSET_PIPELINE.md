@@ -818,6 +818,21 @@ texture was extracted. No test pinned a changed id. Birch woodland's ground weig
 (`wind_category` `grass`), not the painted light. Home captures at seed 1234 (canopy fade off,
 grassland also at zoom 26) match the maker's frames in mean colour and darkest and brightest tenth
 within 0.5 of 255 (PERFORMANCE.md "Flowers"). No saved map was migrated.
+Refreshed 2026-10-12 with treecube f06aa49 (looks refinement 7, rocks: stacked-slab boulders,
+planar-cut medium rocks and stones with no crack lines and faint moss, warm sandstone in the
+badlands and savanna, and a thicker dead tree without twig fuzz; `palette_version`
+`9b8118e-dirty`, 201 assets, ids unchanged, 26 surfaces byte-identical; treecube
+`docs/looks/rocks.md`). A script checked before the install that every asset, biome and surface
+record kept its id and that the GLBs that differ are exactly every landscape biome's `Rock_*` and
+`Stone_*` (41) and the badlands and savanna `Tree_Dead` (2): 43 files, where rocks.md counts 40
+for the same set. The 19 burnt forest GLBs are byte-identical. Every sidecar was restored by the
+first checkout; `git status` checked twice, the same 43 GLBs, `palette.json` and the 9 thumbnails
+both times; the import touched those 52 files and extracted no texture. The rocks keep the
+standard shader (no wind) and carry no new extra (rocks.md's proposed `tt_rock_shade` is not in
+these GLBs). No test pinned a rock's bounds. Home captures at seed 1234 (canopy fade off) for
+alpine meadow, rocky badlands and savanna match the maker's frames in mean colour and darkest and
+brightest tenth within 0.2 of 255; the badlands map at seed 1234 scatters seven dead trees (the
+savanna none), and one seen at home zoom reads as a lone leaning snag. No code change.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 
