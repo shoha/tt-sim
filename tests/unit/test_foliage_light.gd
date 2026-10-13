@@ -167,11 +167,14 @@ func test_tree_leaf_cutouts_take_the_leaf_shadow_push_and_blended_cards_do_not()
 
 
 func test_the_installed_palette_flags_broadleaf_and_pine_leaves_and_nothing_else() -> void:
-	# docs/ASSET_PIPELINE.md section 6: oak, birch, bush, poplar and their saplings carry the
-	# extra on their leaf material, and so does every pine with a canopy (treecube 12fee28);
-	# dead trees, charred snags and every non-leaf material do not.
+	# docs/ASSET_PIPELINE.md section 6: oak, birch, bush, poplar, acacia, willow and their
+	# saplings and young trees carry the extra on their leaf material (acacia and willow from
+	# treecube 1a9c552), and so does every pine with a canopy (treecube 12fee28); dead trees,
+	# charred snags and every non-leaf material do not.
 	var painted := PackedStringArray()
 	var pines := 0
+	var acacias := 0
+	var willows := 0
 	var seen := {}
 	for biome in PaletteLibrary.biomes():
 		for rule in PaletteLibrary.species(String(biome.id)):
@@ -190,20 +193,31 @@ func test_the_installed_palette_flags_broadleaf_and_pine_leaves_and_nothing_else
 					painted.append(file)
 					if file.begins_with("Tree_Pine"):
 						pines += 1
+					if file.begins_with("Tree_Acacia"):
+						acacias += 1
+					if file.begins_with("Tree_Willow"):
+						willows += 1
 					assert_false(file.begins_with("Tree_Dead"), "%s has no canopy" % file)
 					assert_false(file.begins_with("Snag_"), "%s has no canopy" % file)
 					assert_true(WindFoliage.is_leaf_cutout(source), "%s: a leaf cutout" % file)
 	assert_gt(painted.size(), 10, "the round 5 broadleaf crowns are flagged: %s" % str(painted))
 	assert_eq(pines, 8, "every pine's frond crown is flagged: %s" % str(painted))
+	assert_eq(acacias, 3, "both savanna acacias and the badlands one: %s" % str(painted))
+	assert_eq(willows, 3, "the wetland's three willows: %s" % str(painted))
 
 
 func test_the_installed_palette_carries_the_judged_shade_floors() -> void:
 	# treecube 83d9e06 (docs/looks/colour_plan.md "Fix round"): the savanna and badlands
-	# shrubs and every birch carry their own floor through the editor import; other painted
-	# crowns keep the default.
+	# shrubs and every birch carry their own floor through the editor import; treecube 1a9c552
+	# (docs/looks/biome_identity.md) adds the acacias and willows and cools the savanna shrub's.
+	# Other painted crowns keep the default.
 	var expected := {
-		"savanna_summer_s1/Bush_Round_summer_04": Vector3(0.2, 0.15, 0.06),
+		"savanna_summer_s1/Bush_Round_summer_04": Vector3(0.1, 0.17, 0.14),
 		"rocky_badlands_summer_s1/Bush_Round_summer_04": Vector3(0.15, 0.13, 0.19),
+		"savanna_summer_s1/Tree_Acacia_summer_00": Vector3(0.15, 0.16, 0.06),
+		"savanna_summer_s1/Tree_Acacia_Young_summer_03": Vector3(0.15, 0.16, 0.06),
+		"rocky_badlands_summer_s1/Tree_Acacia_summer_01": Vector3(0.15, 0.13, 0.19),
+		"wetland_riparian_summer_s1/Tree_Willow_summer_00": Vector3(0.12, 0.24, 0.22),
 		"birch_woodland_summer_s1/Tree_Birch_summer_00": Vector3(0.12, 0.28, 0.1),
 		"birch_woodland_summer_s1/Tree_Birch_Sapling_summer_05": Vector3(0.12, 0.28, 0.1),
 		"boreal_taiga_summer_s1/Tree_Birch_summer_04": Vector3(0.12, 0.28, 0.1),

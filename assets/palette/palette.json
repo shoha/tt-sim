@@ -1,6 +1,6 @@
 {
  "format": 1,
- "palette_version": "e9bb6cc-dirty",
+ "palette_version": "26e031a-dirty",
  "surfaces": {
   "ash": {
    "albedo": "surfaces/ash/ash_albedo.png",
@@ -6824,9 +6824,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    9.885969161987305,
-    9.490313529968262,
-    10.538318634033203
+    8.589397430419922,
+    9.566407203674316,
+    10.766355514526367
    ]
   },
   "birch_woodland_summer_s1/Tree_Birch_Sapling_summer_05": {
@@ -7286,9 +7286,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    9.15517807006836,
-    9.145723342895508,
-    10.665837287902832
+    8.941065788269043,
+    7.585580348968506,
+    8.983044624328613
    ]
   },
   "grassland_meadow_summer_s1/Bush_Round_summer_01": {
@@ -7539,9 +7539,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    7.597909450531006,
-    7.865028381347656,
-    7.7401862144470215
+    5.2821760177612305,
+    7.9294233322143555,
+    5.539529323577881
    ]
   },
   "rocky_badlands_summer_s1/Rock_Boulder_summer_02": {
@@ -7748,9 +7748,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    8.703826904296875,
-    9.484134674072266,
-    8.214193344116211
+    8.89753532409668,
+    7.026057720184326,
+    7.870608806610107
    ]
   },
   "savanna_summer_s1/Tree_Dead_summer_01": {
@@ -7781,9 +7781,9 @@
    "wind_category": "tree",
    "size_class": "medium",
    "dimensions_m": [
-    4.360042095184326,
-    4.152895450592041,
-    4.667186737060547
+    3.5736875534057617,
+    2.6317427158355713,
+    3.624767303466797
    ]
   },
   "savanna_summer_s1/Rock_Boulder_summer_05": {
@@ -7979,9 +7979,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    8.62175178527832,
-    9.138263702392578,
-    9.837095260620117
+    8.928321838378906,
+    7.537353038787842,
+    8.430580139160156
    ]
   },
   "temperate_forest_summer_s1/Tree_Oak_summer_01": {
@@ -7990,9 +7990,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    8.305961608886719,
-    7.25598669052124,
-    7.426629066467285
+    7.934903144836426,
+    7.474483013153076,
+    6.74759578704834
    ]
   },
   "temperate_forest_summer_s1/Tree_Birch_summer_02": {
@@ -8056,9 +8056,9 @@
    "wind_category": "tree",
    "size_class": "medium",
    "dimensions_m": [
-    4.837458610534668,
-    4.476529598236084,
-    4.918729305267334
+    4.461849689483643,
+    4.159297943115234,
+    4.010091781616211
    ]
   },
   "temperate_forest_summer_s1/Rock_Boulder_summer_08": {
@@ -8254,9 +8254,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    6.531371116638184,
-    7.7731804847717285,
-    6.902682304382324
+    6.8035383224487305,
+    8.386981010437012,
+    6.915820121765137
    ]
   },
   "wetland_riparian_summer_s1/Tree_Willow_summer_01": {
@@ -8265,9 +8265,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    8.234131813049316,
-    7.342831611633301,
-    6.605109214782715
+    7.314008712768555,
+    7.498619556427002,
+    6.793239593505859
    ]
   },
   "wetland_riparian_summer_s1/Tree_Willow_summer_02": {
@@ -8276,9 +8276,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    7.891541004180908,
-    7.571080207824707,
-    8.309347152709961
+    8.136667251586914,
+    6.9399871826171875,
+    7.838696002960205
    ]
   },
   "wetland_riparian_summer_s1/Tree_Poplar_summer_03": {
