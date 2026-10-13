@@ -1,6 +1,6 @@
 {
  "format": 1,
- "palette_version": "cca5604-dirty",
+ "palette_version": "9b8118e-dirty",
  "surfaces": {
   "ash": {
    "albedo": "surfaces/ash/ash_albedo.png",
@@ -7227,9 +7227,9 @@
    "wind_category": "",
    "size_class": "medium",
    "dimensions_m": [
-    2.9718704223632812,
-    1.8213814496994019,
-    2.736234426498413
+    3.1205878257751465,
+    1.7509856224060059,
+    2.7102346420288086
    ]
   },
   "alpine_meadow_summer_s1/Rock_Boulder_summer_02": {
@@ -7238,9 +7238,9 @@
    "wind_category": "",
    "size_class": "medium",
    "dimensions_m": [
-    2.161844253540039,
-    1.3181184530258179,
-    1.7084336280822754
+    2.005577564239502,
+    1.2791309356689453,
+    1.7790348529815674
    ]
   },
   "alpine_meadow_summer_s1/Rock_Boulder_summer_03": {
@@ -7249,9 +7249,9 @@
    "wind_category": "",
    "size_class": "medium",
    "dimensions_m": [
-    2.352519989013672,
-    1.42100191116333,
-    1.866817593574524
+    2.0528080463409424,
+    1.300960898399353,
+    1.9419505596160889
    ]
   },
   "alpine_meadow_summer_s1/Bush_Round_summer_04": {
@@ -7271,9 +7271,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.8903785943984985,
-    0.5530456900596619,
-    0.7666292190551758
+    0.8742963075637817,
+    0.5314046740531921,
+    0.7857496738433838
    ]
   },
   "alpine_meadow_summer_s1/Rock_Medium_summer_06": {
@@ -7282,9 +7282,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.7074005603790283,
-    0.47807392477989197,
-    0.6151991486549377
+    0.7072944641113281,
+    0.4290050268173218,
+    0.6105531454086304
    ]
   },
   "alpine_meadow_summer_s1/Rock_Medium_summer_07": {
@@ -7293,9 +7293,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.6602166891098022,
-    0.3712652921676636,
-    0.5325519442558289
+    0.6435070037841797,
+    0.34399721026420593,
+    0.5250515937805176
    ]
   },
   "alpine_meadow_summer_s1/Rock_Medium_summer_08": {
@@ -7304,9 +7304,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.619461715221405,
-    0.34780174493789673,
-    0.45559781789779663
+    0.6002199053764343,
+    0.3304823637008667,
+    0.45838820934295654
    ]
   },
   "alpine_meadow_summer_s1/Stone_Cluster_summer_09": {
@@ -7315,9 +7315,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.8903906345367432,
-    0.35297322273254395,
-    1.031054139137268
+    0.8895711898803711,
+    0.3282299339771271,
+    1.0230989456176758
    ]
   },
   "alpine_meadow_summer_s1/Stone_Cluster_summer_10": {
@@ -7326,9 +7326,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.9621295928955078,
-    0.3256414532661438,
-    0.8256927728652954
+    0.9626091718673706,
+    0.30804526805877686,
+    0.8253905177116394
    ]
   },
   "alpine_meadow_summer_s1/Stone_Cluster_summer_11": {
@@ -7337,9 +7337,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.7867399454116821,
-    0.25471261143684387,
-    0.6706422567367554
+    0.7841796278953552,
+    0.239410862326622,
+    0.6688836812973022
    ]
   },
   "alpine_meadow_summer_s1/Grass_Clump_summer_12": {
@@ -7579,9 +7579,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.75136399269104,
-    0.35297322273254395,
-    1.031054139137268
+    0.7495441436767578,
+    0.3282299339771271,
+    1.0230989456176758
    ]
   },
   "birch_woodland_summer_s1/Stone_Small_summer_10": {
@@ -7590,9 +7590,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.19601552188396454,
-    0.11670158803462982,
-    0.14219751954078674
+    0.17687948048114777,
+    0.1077866479754448,
+    0.14780229330062866
    ]
   },
   "birch_woodland_summer_s1/Fern_Small_summer_11": {
@@ -7788,9 +7788,9 @@
    "wind_category": "",
    "size_class": "medium",
    "dimensions_m": [
-    2.652456760406494,
-    1.8750323057174683,
-    2.4891014099121094
+    2.8759751319885254,
+    1.6706275939941406,
+    2.918491840362549
    ]
   },
   "boreal_taiga_summer_s1/Rock_Boulder_summer_08": {
@@ -7799,9 +7799,9 @@
    "wind_category": "",
    "size_class": "medium",
    "dimensions_m": [
-    2.642557144165039,
-    1.6445952653884888,
-    2.519920587539673
+    2.747478485107422,
+    1.5863535404205322,
+    2.7638652324676514
    ]
   },
   "boreal_taiga_summer_s1/Tree_Pine_Young_summer_05": {
@@ -7832,9 +7832,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.6769407987594604,
-    0.4071277379989624,
-    0.5202172994613647
+    0.6742684841156006,
+    0.3832871913909912,
+    0.5517538785934448
    ]
   },
   "boreal_taiga_summer_s1/Stone_Cluster_summer_10": {
@@ -7843,9 +7843,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    1.0497000217437744,
-    0.35528045892715454,
-    0.9008451700210571
+    1.0502233505249023,
+    0.3360827565193176,
+    0.9005154371261597
    ]
   },
   "boreal_taiga_summer_s1/Fern_Small_summer_11": {
@@ -8019,9 +8019,9 @@
    "wind_category": "",
    "size_class": "medium",
    "dimensions_m": [
-    1.2680379152297974,
-    0.7263946533203125,
-    1.0051705837249756
+    1.2891759872436523,
+    0.7169655561447144,
+    1.0678223371505737
    ]
   },
   "grassland_meadow_summer_s1/Stone_Small_summer_04": {
@@ -8030,9 +8030,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.19185081124305725,
-    0.1161535382270813,
-    0.1534687578678131
+    0.1836729347705841,
+    0.10695269703865051,
+    0.14273864030838013
    ]
   },
   "grassland_meadow_summer_s1/Stone_Small_summer_05": {
@@ -8041,9 +8041,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.23684924840927124,
-    0.14060917496681213,
-    0.1762581169605255
+    0.23518413305282593,
+    0.13012871146202087,
+    0.17578481137752533
    ]
   },
   "grassland_meadow_summer_s1/Stone_Cluster_summer_06": {
@@ -8052,9 +8052,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.7252434492111206,
-    0.27768653631210327,
-    0.6317272186279297
+    0.7131520509719849,
+    0.26906532049179077,
+    0.6402561664581299
    ]
   },
   "grassland_meadow_summer_s1/Stone_Cluster_summer_07": {
@@ -8063,9 +8063,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.898872971534729,
-    0.311987042427063,
-    0.440868079662323
+    0.8942533731460571,
+    0.2952711880207062,
+    0.4560154676437378
    ]
   },
   "grassland_meadow_summer_s1/Grass_Clump_summer_08": {
@@ -8228,9 +8228,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    3.4009690284729004,
-    6.356881141662598,
-    5.361349105834961
+    3.5223894119262695,
+    6.468077659606934,
+    4.711913585662842
    ]
   },
   "rocky_badlands_summer_s1/Tree_Acacia_summer_01": {
@@ -8250,9 +8250,9 @@
    "wind_category": "",
    "size_class": "medium",
    "dimensions_m": [
-    2.318565845489502,
-    1.5807771682739258,
-    1.809633493423462
+    2.2481141090393066,
+    1.4114351272583008,
+    1.9626368284225464
    ]
   },
   "rocky_badlands_summer_s1/Rock_Boulder_summer_03": {
@@ -8261,9 +8261,9 @@
    "wind_category": "",
    "size_class": "medium",
    "dimensions_m": [
-    2.4090962409973145,
-    1.4997810125350952,
-    2.020318031311035
+    2.142251968383789,
+    1.5350069999694824,
+    1.9857509136199951
    ]
   },
   "rocky_badlands_summer_s1/Bush_Round_summer_04": {
@@ -8305,9 +8305,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.6901413202285767,
-    0.3880930542945862,
-    0.5566900968551636
+    0.6726742386817932,
+    0.35958901047706604,
+    0.5488497614860535
    ]
   },
   "rocky_badlands_summer_s1/Rock_Medium_summer_08": {
@@ -8316,9 +8316,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.637296199798584,
-    0.35781505703926086,
-    0.4687145948410034
+    0.6175004243850708,
+    0.3399970531463623,
+    0.47158533334732056
    ]
   },
   "rocky_badlands_summer_s1/Stone_Cluster_summer_09": {
@@ -8327,9 +8327,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.9679876565933228,
-    0.3837346136569977,
-    1.1209099292755127
+    0.9670968055725098,
+    0.35683494806289673,
+    1.1122612953186035
    ]
   },
   "rocky_badlands_summer_s1/Stone_Cluster_summer_10": {
@@ -8338,9 +8338,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    1.0386104583740234,
-    0.3515271246433258,
-    0.8913282752037048
+    1.039128303527832,
+    0.33253222703933716,
+    0.8910019397735596
    ]
   },
   "rocky_badlands_summer_s1/Stone_Small_summer_11": {
@@ -8349,9 +8349,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.22540238499641418,
-    0.12178339809179306,
-    0.1702519804239273
+    0.1975221335887909,
+    0.1169460117816925,
+    0.1622486114501953
    ]
   },
   "rocky_badlands_summer_s1/Cactus_Barrel_summer_12": {
@@ -8459,9 +8459,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    4.183783054351807,
-    6.9307780265808105,
-    5.31329870223999
+    3.7606143951416016,
+    7.020129680633545,
+    5.123570442199707
    ]
   },
   "savanna_summer_s1/Palm_Tall_summer_02": {
@@ -8492,9 +8492,9 @@
    "wind_category": "",
    "size_class": "medium",
    "dimensions_m": [
-    2.4428446292877197,
-    1.4115080833435059,
-    1.7651547193527222
+    2.1441900730133057,
+    1.3541433811187744,
+    2.3011691570281982
    ]
   },
   "savanna_summer_s1/Bush_Round_summer_04": {
@@ -8514,9 +8514,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.7074005603790283,
-    0.47807392477989197,
-    0.6151991486549377
+    0.7072944641113281,
+    0.4290050268173218,
+    0.6105531454086304
    ]
   },
   "savanna_summer_s1/Rock_Medium_summer_07": {
@@ -8525,9 +8525,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.6602166891098022,
-    0.3712652921676636,
-    0.5325519442558289
+    0.6435070037841797,
+    0.34399721026420593,
+    0.5250515937805176
    ]
   },
   "savanna_summer_s1/Stone_Cluster_summer_08": {
@@ -8536,9 +8536,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.6591168642044067,
-    0.24346870183944702,
-    0.7685238122940063
+    0.6614834070205688,
+    0.23110762238502502,
+    0.7694740295410156
    ]
   },
   "savanna_summer_s1/Stone_Cluster_summer_09": {
@@ -8547,9 +8547,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.75136399269104,
-    0.35297322273254395,
-    1.031054139137268
+    0.7495441436767578,
+    0.3282299339771271,
+    1.0230989456176758
    ]
   },
   "savanna_summer_s1/Stone_Cluster_summer_10": {
@@ -8558,9 +8558,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.9621295928955078,
-    0.3256414532661438,
-    0.8256927728652954
+    0.9626091718673706,
+    0.30804526805877686,
+    0.8253905177116394
    ]
   },
   "savanna_summer_s1/Grass_Tall_summer_11": {
@@ -8767,9 +8767,9 @@
    "wind_category": "",
    "size_class": "medium",
    "dimensions_m": [
-    2.1538290977478027,
-    1.34043550491333,
-    2.0538735389709473
+    2.2393455505371094,
+    1.2929651737213135,
+    2.252701759338379
    ]
   },
   "temperate_forest_summer_s1/Rock_Medium_summer_09": {
@@ -8778,9 +8778,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.7715482115745544,
-    0.4640268087387085,
-    0.5929214954376221
+    0.768502414226532,
+    0.43685436248779297,
+    0.6288654804229736
    ]
   },
   "temperate_forest_summer_s1/Stone_Cluster_summer_10": {
@@ -8789,9 +8789,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    1.1261811256408691,
-    0.38116613030433655,
-    0.9664806127548218
+    1.1267423629760742,
+    0.36056968569755554,
+    0.9661267399787903
    ]
   },
   "temperate_forest_summer_s1/Stone_Small_summer_11": {
@@ -8800,9 +8800,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.273223876953125,
-    0.1476210355758667,
-    0.20637273788452148
+    0.23942852020263672,
+    0.14175733923912048,
+    0.19667138159275055
    ]
   },
   "temperate_forest_summer_s1/Fern_summer_12": {
@@ -9009,9 +9009,9 @@
    "wind_category": "",
    "size_class": "medium",
    "dimensions_m": [
-    1.2502233982086182,
-    0.7349461913108826,
-    0.9022650122642517
+    0.9099695682525635,
+    0.5512747168540955,
+    0.7950426340103149
    ]
   },
   "wetland_riparian_summer_s1/Palm_Short_summer_06": {
@@ -9031,9 +9031,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.898872971534729,
-    0.311987042427063,
-    0.6444537043571472
+    0.8942533731460571,
+    0.2952711880207062,
+    0.6545998454093933
    ]
   },
   "wetland_riparian_summer_s1/Stone_Small_summer_08": {
@@ -9042,9 +9042,9 @@
    "wind_category": "",
    "size_class": "small",
    "dimensions_m": [
-    0.19524602591991425,
-    0.09522294998168945,
-    0.1488485336303711
+    0.17031733691692352,
+    0.09469156712293625,
+    0.1326514482498169
    ]
   },
   "wetland_riparian_summer_s1/Fern_summer_09": {
