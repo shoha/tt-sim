@@ -2932,3 +2932,13 @@ to 258,322 (-48 % and -54 %); GPU median 3.37 and 3.68 ms shown before, 2.18 and
 under 0.06 ms). With the new pines the shown frame is cheaper than the hidden one, because the
 crowns cover ground whose shader costs more per pixel than theirs, so a "foliage cost"
 subtraction no longer means much on this map.
+
+**Grass variety (treecube 958dbbe, 2026-10-12; indicative, not the pinned procedure).** The new
+grass card styles raise the grassland's card area by about 10 % (19.3 m2 of card per m2 of
+ground, was 17.5; treecube `docs/looks/grass.md`) at about the same instance count. One
+same-session sample on a 200 ft grassland meadow new map at seed 1234 (6,515 instances in 583
+nodes, 717,025 camera primitives), home zoom, canopy fade off, `vsync_off`, 5 s `perf.gd`
+windows: GPU median 2.457 ms shown, 2.312 ms with the scatter hidden, 2.666 ms shown again
+(p95 3.209 / 3.075 / 3.460). Foliage over the hidden reference is 0.15 / 0.35 ms, against the
+maker's 0.10 / 0.37 for the same palette and today's 0.13 / 0.30 in their own sessions; the two
+shown samples differ by 0.21 ms, so no change is measurable at this frame time.

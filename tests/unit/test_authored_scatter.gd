@@ -10,7 +10,7 @@ extends GutTest
 const BIOME := "temperate_forest_summer_s1"
 const OAK := BIOME + "/Tree_Oak_summer_01"
 const PINE := BIOME + "/Tree_Pine_summer_03"
-const GRASS := BIOME + "/Grass_Short_summer_18"
+const GRASS := BIOME + "/Grass_Clump_summer_17"
 const BOULDER := BIOME + "/Rock_Boulder_summer_08"
 const BIG_BUDGET := 1_000_000_000
 

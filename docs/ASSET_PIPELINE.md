@@ -783,6 +783,24 @@ sapling, birch woodland's and grassland's). The acacias and willows now carry
 `tt_foliage_light` "painted" and a `tt_foliage_shade` floor (section 6), the shrub's floor
 changed; the acacias and willows are cheaper (a willow about 5,100 triangles, was about 6,200),
 the oaks within about 250 triangles of before. No code change.
+Refreshed 2026-10-12 with treecube 958dbbe (looks refinement 5, grass variety: the `clump`,
+`sprig`, `seed` and `fine` card styles, per-species drift patterns, a summer-lime grassland and a
+cool wetland; `palette_version` `88f407e-dirty`, 201 assets, 26 surfaces byte-identical). 46
+grass asset ids changed in eight biomes (treecube `docs/looks/grass.md` "Ids"; a script checked
+that every changed id is a grass species' asset and that no surface, biome or palette rule key
+changed), so the renamed-ids step ran: the first checkout restored every sidecar, the 46 removed
+ids' sidecars were deleted and 46 minimal ones written before the import, and stale
+`.godot/imported` copies of the new names from the maker's scratch installs were deleted with
+their `.md5` first. `git status` checked twice: 46 GLBs and sidecars removed, 46 of each added,
+22 GLBs modified (8 in their binary chunk, the savanna's fine grass and the wetland's reeds; 14 in
+their JSON chunk only), 9 thumbnails and `palette.json`. After the import every new sidecar had
+its uid and the three settings, and no texture was extracted. Three tests pinned temperate
+forest's `Grass_Short_summer_18` and now pin `Grass_Clump_summer_17`. The grassland's folded
+clumps (`grass`) now stand about 1 m, past `ScatterGround.TALL_COVER_M`, so they are tall cover
+and thin beside paths like its seed grass; `test_scatter_ground_rules.gd` now expects that and
+takes the `sprig` as the meadow's short cover. Home captures at seed 1234
+(canopy fade off) match the maker's frames in mean colour and darkest and brightest tenth within
+about 2 of 255 (PERFORMANCE.md "Grass variety"). No saved map was migrated.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 
