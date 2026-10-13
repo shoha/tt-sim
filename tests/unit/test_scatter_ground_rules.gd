@@ -194,12 +194,15 @@ func test_tall_cover_and_shrubs_thin_beside_paths_and_short_cover_stays() -> voi
 	assert_almost_eq(at.call(shoulder, ScatterGround.ROLE_COVER), base, 1e-6, "short cover")
 	assert_almost_eq(at.call(shoulder, ScatterGround.ROLE_TREE), base, 1e-6, "trees stay")
 	assert_almost_eq(at.call(clear, ScatterGround.ROLE_TALL_COVER), base, 1e-6, "3 m out")
-	# The real meadow: tall grass is tall cover, flowers and short grass are not.
+	# The real meadow: tall grass is tall cover, flowers and short grass are not. Since
+	# treecube 958dbbe the meadow's folded clumps ("grass") stand about 1 m and count as tall
+	# cover too; the sprig is its short grass.
 	var roles := {}
 	for rule in PaletteLibrary.species("grassland_meadow_summer_s1"):
 		roles[rule.key] = ScatterPlan.build("g", [rule], 1).species[0].ground_role
 	assert_eq(roles.get("tall_grass"), ScatterGround.ROLE_TALL_COVER)
-	assert_eq(roles.get("grass"), ScatterGround.ROLE_COVER)
+	assert_eq(roles.get("grass"), ScatterGround.ROLE_TALL_COVER)
+	assert_eq(roles.get("sprig"), ScatterGround.ROLE_COVER)
 	# Flowers carry the water rules' flower bit (P4-3) on top of their ground role.
 	assert_eq(roles.get("daisy"), ScatterGround.ROLE_COVER | ScatterGround.FLOWER_BIT)
 	assert_eq(roles.get("bush"), ScatterGround.ROLE_SHRUB)
