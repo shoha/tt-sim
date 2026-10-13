@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://doauk3j83piqp"
-path="res://.godot/imported/Flower_Bluebell_summer_19.glb-efaa371654a54c5f7930eea8d920af65.scn"
+uid="uid://ci1j7kser6n4p"
+path="res://.godot/imported/Flower_Poppy_summer_17.glb-9b02cafe6b180268522121dd9de49681.scn"
 
 [deps]
 
-source_file="res://assets/palette/assets/birch_woodland_summer_s1/Flower_Bluebell_summer_19.glb"
-dest_files=["res://.godot/imported/Flower_Bluebell_summer_19.glb-efaa371654a54c5f7930eea8d920af65.scn"]
+source_file="res://assets/palette/assets/grassland_meadow_summer_s1/Flower_Poppy_summer_17.glb"
+dest_files=["res://.godot/imported/Flower_Poppy_summer_17.glb-9b02cafe6b180268522121dd9de49681.scn"]
 
 [params]
 

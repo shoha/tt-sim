@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://cpisxwqpy1kgy"
-path="res://.godot/imported/Flower_Daisy_summer_20.glb-bafc7993adcc8ec7e1603b6e1b99cd36.scn"
+uid="uid://cfglbmq5lnwlj"
+path="res://.godot/imported/Flower_Carpet_Marigold_summer_23.glb-992201ef801ec9af339d09c63c200288.scn"
 
 [deps]
 
-source_file="res://assets/palette/assets/birch_woodland_summer_s1/Flower_Daisy_summer_20.glb"
-dest_files=["res://.godot/imported/Flower_Daisy_summer_20.glb-bafc7993adcc8ec7e1603b6e1b99cd36.scn"]
+source_file="res://assets/palette/assets/wetland_riparian_summer_s1/Flower_Carpet_Marigold_summer_23.glb"
+dest_files=["res://.godot/imported/Flower_Carpet_Marigold_summer_23.glb-992201ef801ec9af339d09c63c200288.scn"]
 
 [params]
 

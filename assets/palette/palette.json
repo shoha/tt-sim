@@ -1,6 +1,6 @@
 {
  "format": 1,
- "palette_version": "88f407e-dirty",
+ "palette_version": "cca5604-dirty",
  "surfaces": {
   "ash": {
    "albedo": "surfaces/ash/ash_albedo.png",
@@ -749,7 +749,7 @@
      "key": "gentian",
      "kind": "flower",
      "size_class": "ground",
-     "density_per_m2": 1.7777777777777777,
+     "density_per_m2": 0.8888888888888888,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -814,8 +814,7 @@
      "avoid": [],
      "assets": [
       "alpine_meadow_summer_s1/Flower_Gentian_summer_20",
-      "alpine_meadow_summer_s1/Flower_Gentian_summer_21",
-      "alpine_meadow_summer_s1/Flower_Gentian_summer_22"
+      "alpine_meadow_summer_s1/Flower_Gentian_summer_21"
      ]
     },
     {
@@ -879,7 +878,78 @@
      "near": [],
      "avoid": [],
      "assets": [
-      "alpine_meadow_summer_s1/Flower_Poppy_Alpine_summer_23"
+      "alpine_meadow_summer_s1/Flower_Poppy_Alpine_summer_22"
+     ]
+    },
+    {
+     "key": "carpet",
+     "kind": "flower",
+     "size_class": "ground",
+     "density_per_m2": 0.8888888888888888,
+     "min_spacing_m": 0.12,
+     "slope_max_deg": 50.0,
+     "scale_spread": 0.3,
+     "scale_floor": 0.5,
+     "yaw_random_deg": 360.0,
+     "align": "normal",
+     "pattern": {
+      "influence": 1.0,
+      "scale_influence": 0.2,
+      "geoscatter_pattern": {
+       "texture_dict": {
+        "texture_type": "noise_",
+        "scale": 1.2,
+        "detail": 1.0,
+        "distorsion": 0.0,
+        "out_type": "Color",
+        "contrast": 3.0,
+        "use_color_ramp": false,
+        "mapping_projection": "global",
+        "mapping_location": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_rotation": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_scale": [
+         0.1,
+         0.1,
+         0.1
+        ],
+        "mapping_random_allow": true,
+        "mapping_random_seed": 141,
+        "mapping_random_loc": true
+       },
+       "color_sample_method": "id_greyscale",
+       "dist_infl_allow": true,
+       "dist_influence": 100.0,
+       "dist_revert": true,
+       "scale_infl_allow": true,
+       "scale_influence": 20.0,
+       "scale_revert": true
+      }
+     },
+     "clump": {
+      "parents_per_m2": 0.06,
+      "radius_m": 2.2,
+      "transition_m": 1.2,
+      "children_spacing_m": 0.12
+     },
+     "near": [
+      {
+       "species": "boulder",
+       "distance_m": 2.5,
+       "transition_m": 2.5,
+       "influence": 0.4
+      }
+     ],
+     "avoid": [],
+     "assets": [
+      "alpine_meadow_summer_s1/Flower_Carpet_Magenta_summer_23"
      ]
     }
    ]
@@ -1332,7 +1402,7 @@
      "key": "grass",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 3.2,
+     "density_per_m2": 2.909090909090909,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -1399,7 +1469,7 @@
      "key": "bluebell",
      "kind": "flower",
      "size_class": "ground",
-     "density_per_m2": 2.4,
+     "density_per_m2": 1.4545454545454546,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -1457,15 +1527,14 @@
      "avoid": [],
      "assets": [
       "birch_woodland_summer_s1/Flower_Bluebell_summer_17",
-      "birch_woodland_summer_s1/Flower_Bluebell_summer_18",
-      "birch_woodland_summer_s1/Flower_Bluebell_summer_19"
+      "birch_woodland_summer_s1/Flower_Bluebell_summer_18"
      ]
     },
     {
      "key": "daisy",
      "kind": "flower",
      "size_class": "ground",
-     "density_per_m2": 0.8,
+     "density_per_m2": 0.7272727272727273,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -1522,14 +1591,78 @@
      "near": [],
      "avoid": [],
      "assets": [
-      "birch_woodland_summer_s1/Flower_Daisy_summer_20"
+      "birch_woodland_summer_s1/Flower_Daisy_summer_19"
+     ]
+    },
+    {
+     "key": "carpet",
+     "kind": "flower",
+     "size_class": "ground",
+     "density_per_m2": 1.4545454545454546,
+     "min_spacing_m": 0.12,
+     "slope_max_deg": 50.0,
+     "scale_spread": 0.3,
+     "scale_floor": 0.5,
+     "yaw_random_deg": 360.0,
+     "align": "normal",
+     "pattern": {
+      "influence": 1.0,
+      "scale_influence": 0.2,
+      "geoscatter_pattern": {
+       "texture_dict": {
+        "texture_type": "noise_",
+        "scale": 1.1,
+        "detail": 1.0,
+        "distorsion": 0.0,
+        "out_type": "Color",
+        "contrast": 3.0,
+        "use_color_ramp": false,
+        "mapping_projection": "global",
+        "mapping_location": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_rotation": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_scale": [
+         0.1,
+         0.1,
+         0.1
+        ],
+        "mapping_random_allow": true,
+        "mapping_random_seed": 142,
+        "mapping_random_loc": true
+       },
+       "color_sample_method": "id_greyscale",
+       "dist_infl_allow": true,
+       "dist_influence": 100.0,
+       "dist_revert": true,
+       "scale_infl_allow": true,
+       "scale_influence": 20.0,
+       "scale_revert": true
+      }
+     },
+     "clump": {
+      "parents_per_m2": 0.05,
+      "radius_m": 2.4,
+      "transition_m": 1.3,
+      "children_spacing_m": 0.12
+     },
+     "near": [],
+     "avoid": [],
+     "assets": [
+      "birch_woodland_summer_s1/Flower_Carpet_Yellow_summer_20"
      ]
     },
     {
      "key": "litter_birch",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 1.6,
+     "density_per_m2": 1.4545454545454546,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -1565,7 +1698,7 @@
          0.1
         ],
         "mapping_random_allow": true,
-        "mapping_random_seed": 142,
+        "mapping_random_seed": 143,
         "mapping_random_loc": true
        },
        "color_sample_method": "id_greyscale",
@@ -2562,7 +2695,7 @@
      "key": "grass",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 2.756923076923077,
+     "density_per_m2": 2.715151515151515,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -2628,7 +2761,7 @@
      "key": "tall_grass",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 1.0338461538461539,
+     "density_per_m2": 1.018181818181818,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -2693,7 +2826,7 @@
      "key": "sprig",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 1.0338461538461539,
+     "density_per_m2": 1.018181818181818,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -2757,7 +2890,7 @@
      "key": "dry_drift",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 0.5169230769230769,
+     "density_per_m2": 0.509090909090909,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -2821,7 +2954,7 @@
      "key": "daisy",
      "kind": "flower",
      "size_class": "ground",
-     "density_per_m2": 2.0676923076923077,
+     "density_per_m2": 1.3575757575757574,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -2879,15 +3012,14 @@
      "avoid": [],
      "assets": [
       "grassland_meadow_summer_s1/Flower_Daisy_summer_15",
-      "grassland_meadow_summer_s1/Flower_Daisy_summer_16",
-      "grassland_meadow_summer_s1/Flower_Daisy_summer_17"
+      "grassland_meadow_summer_s1/Flower_Daisy_summer_16"
      ]
     },
     {
      "key": "poppy",
      "kind": "flower",
      "size_class": "ground",
-     "density_per_m2": 1.3784615384615384,
+     "density_per_m2": 0.8484848484848485,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -2944,14 +3076,14 @@
      "near": [],
      "avoid": [],
      "assets": [
-      "grassland_meadow_summer_s1/Flower_Poppy_summer_18"
+      "grassland_meadow_summer_s1/Flower_Poppy_summer_17"
      ]
     },
     {
      "key": "lavender",
      "kind": "flower",
      "size_class": "ground",
-     "density_per_m2": 1.0338461538461539,
+     "density_per_m2": 1.018181818181818,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -3008,14 +3140,14 @@
      "near": [],
      "avoid": [],
      "assets": [
-      "grassland_meadow_summer_s1/Flower_Lavender_summer_19"
+      "grassland_meadow_summer_s1/Flower_Lavender_summer_18"
      ]
     },
     {
      "key": "buttercup",
      "kind": "flower",
      "size_class": "ground",
-     "density_per_m2": 1.3784615384615384,
+     "density_per_m2": 1.018181818181818,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -3072,8 +3204,72 @@
      "near": [],
      "avoid": [],
      "assets": [
-      "grassland_meadow_summer_s1/Flower_Buttercup_summer_20",
-      "grassland_meadow_summer_s1/Flower_Buttercup_summer_21"
+      "grassland_meadow_summer_s1/Flower_Buttercup_summer_19"
+     ]
+    },
+    {
+     "key": "carpet",
+     "kind": "flower",
+     "size_class": "ground",
+     "density_per_m2": 1.696969696969697,
+     "min_spacing_m": 0.12,
+     "slope_max_deg": 50.0,
+     "scale_spread": 0.3,
+     "scale_floor": 0.5,
+     "yaw_random_deg": 360.0,
+     "align": "normal",
+     "pattern": {
+      "influence": 1.0,
+      "scale_influence": 0.2,
+      "geoscatter_pattern": {
+       "texture_dict": {
+        "texture_type": "noise_",
+        "scale": 1.0,
+        "detail": 1.0,
+        "distorsion": 0.0,
+        "out_type": "Color",
+        "contrast": 3.0,
+        "use_color_ramp": false,
+        "mapping_projection": "global",
+        "mapping_location": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_rotation": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_scale": [
+         0.1,
+         0.1,
+         0.1
+        ],
+        "mapping_random_allow": true,
+        "mapping_random_seed": 144,
+        "mapping_random_loc": true
+       },
+       "color_sample_method": "id_greyscale",
+       "dist_infl_allow": true,
+       "dist_influence": 100.0,
+       "dist_revert": true,
+       "scale_infl_allow": true,
+       "scale_influence": 20.0,
+       "scale_revert": true
+      }
+     },
+     "clump": {
+      "parents_per_m2": 0.04,
+      "radius_m": 2.0,
+      "transition_m": 1.0,
+      "children_spacing_m": 0.12
+     },
+     "near": [],
+     "avoid": [],
+     "assets": [
+      "grassland_meadow_summer_s1/Flower_Carpet_Pink_summer_20",
+      "grassland_meadow_summer_s1/Flower_Carpet_Pink_summer_21"
      ]
     }
    ]
@@ -5412,16 +5608,16 @@
      "yaw_random_deg": 360.0,
      "align": "normal",
      "pattern": {
-      "influence": 0.7,
+      "influence": 1.0,
       "scale_influence": 0.2,
       "geoscatter_pattern": {
        "texture_dict": {
         "texture_type": "noise_",
-        "scale": 3.0,
+        "scale": 1.0,
         "detail": 1.0,
         "distorsion": 0.0,
         "out_type": "Color",
-        "contrast": 2.0,
+        "contrast": 3.0,
         "use_color_ramp": false,
         "mapping_projection": "global",
         "mapping_location": [
@@ -5445,7 +5641,7 @@
        },
        "color_sample_method": "id_greyscale",
        "dist_infl_allow": true,
-       "dist_influence": 70.0,
+       "dist_influence": 100.0,
        "dist_revert": true,
        "scale_infl_allow": true,
        "scale_influence": 20.0,
@@ -5468,7 +5664,7 @@
      ],
      "avoid": [],
      "assets": [
-      "temperate_forest_summer_s1/Flower_Bluebell_summer_22"
+      "temperate_forest_summer_s1/Flower_Carpet_Bluebell_summer_22"
      ]
     },
     {
@@ -6370,7 +6566,7 @@
      ]
     },
     {
-     "key": "daisy",
+     "key": "carpet",
      "kind": "flower",
      "size_class": "ground",
      "density_per_m2": 0.9904761904761905,
@@ -6381,16 +6577,16 @@
      "yaw_random_deg": 360.0,
      "align": "normal",
      "pattern": {
-      "influence": 0.7,
+      "influence": 1.0,
       "scale_influence": 0.2,
       "geoscatter_pattern": {
        "texture_dict": {
         "texture_type": "noise_",
-        "scale": 3.0,
+        "scale": 1.2,
         "detail": 1.0,
         "distorsion": 0.0,
         "out_type": "Color",
-        "contrast": 2.0,
+        "contrast": 3.0,
         "use_color_ramp": false,
         "mapping_projection": "global",
         "mapping_location": [
@@ -6414,7 +6610,7 @@
        },
        "color_sample_method": "id_greyscale",
        "dist_infl_allow": true,
-       "dist_influence": 70.0,
+       "dist_influence": 100.0,
        "dist_revert": true,
        "scale_infl_allow": true,
        "scale_influence": 20.0,
@@ -6422,15 +6618,15 @@
       }
      },
      "clump": {
-      "parents_per_m2": 0.2,
-      "radius_m": 1.2,
-      "transition_m": 0.6,
+      "parents_per_m2": 0.05,
+      "radius_m": 2.4,
+      "transition_m": 1.3,
       "children_spacing_m": 0.12
      },
      "near": [],
      "avoid": [],
      "assets": [
-      "wetland_riparian_summer_s1/Flower_Daisy_summer_23"
+      "wetland_riparian_summer_s1/Flower_Carpet_Marigold_summer_23"
      ]
     }
    ]
@@ -7218,9 +7414,9 @@
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.2757285237312317,
-    0.2527475655078888,
-    0.4823024868965149
+    0.3181408643722534,
+    0.3058197796344757,
+    0.44951292872428894
    ]
   },
   "alpine_meadow_summer_s1/Flower_Daisy_summer_19": {
@@ -7229,9 +7425,9 @@
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.43413013219833374,
-    0.2780269384384155,
-    0.39320075511932373
+    0.3235550820827484,
+    0.34866538643836975,
+    0.33641618490219116
    ]
   },
   "alpine_meadow_summer_s1/Flower_Gentian_summer_20": {
@@ -7240,9 +7436,9 @@
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.4983268976211548,
-    0.17899392545223236,
-    0.6090524792671204
+    0.507323145866394,
+    0.24219447374343872,
+    0.5057908892631531
    ]
   },
   "alpine_meadow_summer_s1/Flower_Gentian_summer_21": {
@@ -7251,31 +7447,31 @@
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.5279486179351807,
-    0.1814931482076645,
-    0.5971130728721619
+    0.6134508848190308,
+    0.2533309757709503,
+    0.49008122086524963
    ]
   },
-  "alpine_meadow_summer_s1/Flower_Gentian_summer_22": {
-   "file": "assets/alpine_meadow_summer_s1/Flower_Gentian_summer_22.glb",
-   "node": "Flower_Gentian_summer_22",
+  "alpine_meadow_summer_s1/Flower_Poppy_Alpine_summer_22": {
+   "file": "assets/alpine_meadow_summer_s1/Flower_Poppy_Alpine_summer_22.glb",
+   "node": "Flower_Poppy_Alpine_summer_22",
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.5867448449134827,
-    0.17808841168880463,
-    0.631951630115509
+    0.4063868522644043,
+    0.2987951636314392,
+    0.4268983006477356
    ]
   },
-  "alpine_meadow_summer_s1/Flower_Poppy_Alpine_summer_23": {
-   "file": "assets/alpine_meadow_summer_s1/Flower_Poppy_Alpine_summer_23.glb",
-   "node": "Flower_Poppy_Alpine_summer_23",
+  "alpine_meadow_summer_s1/Flower_Carpet_Magenta_summer_23": {
+   "file": "assets/alpine_meadow_summer_s1/Flower_Carpet_Magenta_summer_23.glb",
+   "node": "Flower_Carpet_Magenta_summer_23",
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.3775143623352051,
-    0.29902902245521545,
-    0.47988712787628174
+    1.296278953552246,
+    0.19463051855564117,
+    1.296278953552246
    ]
   },
   "birch_woodland_summer_s1/Tree_Birch_summer_00": {
@@ -7471,9 +7667,9 @@
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.4602696895599365,
-    0.3477512300014496,
-    0.372094988822937
+    0.45431220531463623,
+    0.4630183279514313,
+    0.3068237900733948
    ]
   },
   "birch_woodland_summer_s1/Flower_Bluebell_summer_18": {
@@ -7482,31 +7678,31 @@
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.500016450881958,
-    0.46781817078590393,
-    0.3065822124481201
+    0.4627475440502167,
+    0.6214599013328552,
+    0.2592705488204956
    ]
   },
-  "birch_woodland_summer_s1/Flower_Bluebell_summer_19": {
-   "file": "assets/birch_woodland_summer_s1/Flower_Bluebell_summer_19.glb",
-   "node": "Flower_Bluebell_summer_19",
+  "birch_woodland_summer_s1/Flower_Daisy_summer_19": {
+   "file": "assets/birch_woodland_summer_s1/Flower_Daisy_summer_19.glb",
+   "node": "Flower_Daisy_summer_19",
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.4909784197807312,
-    0.40033721923828125,
-    0.35331594944000244
+    0.39422622323036194,
+    0.4947187602519989,
+    0.3136829733848572
    ]
   },
-  "birch_woodland_summer_s1/Flower_Daisy_summer_20": {
-   "file": "assets/birch_woodland_summer_s1/Flower_Daisy_summer_20.glb",
-   "node": "Flower_Daisy_summer_20",
+  "birch_woodland_summer_s1/Flower_Carpet_Yellow_summer_20": {
+   "file": "assets/birch_woodland_summer_s1/Flower_Carpet_Yellow_summer_20.glb",
+   "node": "Flower_Carpet_Yellow_summer_20",
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.37696629762649536,
-    0.4302704632282257,
-    0.3687119483947754
+    1.5577818155288696,
+    0.20819002389907837,
+    1.5577818155288696
    ]
   },
   "birch_woodland_summer_s1/Litter_Birch_summer_21": {
@@ -7779,9 +7975,9 @@
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.2773245573043823,
-    0.2492430955171585,
-    0.25444135069847107
+    0.45157429575920105,
+    0.3761551082134247,
+    0.2937885522842407
    ]
   },
   "grassland_meadow_summer_s1/Tree_Oak_summer_00": {
@@ -7955,9 +8151,9 @@
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.30226069688796997,
-    0.3750734031200409,
-    0.4663502275943756
+    0.445472776889801,
+    0.5526037216186523,
+    0.5194419622421265
    ]
   },
   "grassland_meadow_summer_s1/Flower_Daisy_summer_16": {
@@ -7966,64 +8162,64 @@
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.43611687421798706,
-    0.532333254814148,
-    0.45857611298561096
+    0.5510213971138,
+    0.7155877947807312,
+    0.4911681115627289
    ]
   },
-  "grassland_meadow_summer_s1/Flower_Daisy_summer_17": {
-   "file": "assets/grassland_meadow_summer_s1/Flower_Daisy_summer_17.glb",
-   "node": "Flower_Daisy_summer_17",
+  "grassland_meadow_summer_s1/Flower_Poppy_summer_17": {
+   "file": "assets/grassland_meadow_summer_s1/Flower_Poppy_summer_17.glb",
+   "node": "Flower_Poppy_summer_17",
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.3386526107788086,
-    0.4673365652561188,
-    0.45938995480537415
+    0.3712195158004761,
+    0.7768381237983704,
+    0.4378458261489868
    ]
   },
-  "grassland_meadow_summer_s1/Flower_Poppy_summer_18": {
-   "file": "assets/grassland_meadow_summer_s1/Flower_Poppy_summer_18.glb",
-   "node": "Flower_Poppy_summer_18",
+  "grassland_meadow_summer_s1/Flower_Lavender_summer_18": {
+   "file": "assets/grassland_meadow_summer_s1/Flower_Lavender_summer_18.glb",
+   "node": "Flower_Lavender_summer_18",
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.5895805358886719,
-    0.7082456946372986,
-    0.5851107835769653
+    0.45463377237319946,
+    0.7664451599121094,
+    0.5035829544067383
    ]
   },
-  "grassland_meadow_summer_s1/Flower_Lavender_summer_19": {
-   "file": "assets/grassland_meadow_summer_s1/Flower_Lavender_summer_19.glb",
-   "node": "Flower_Lavender_summer_19",
+  "grassland_meadow_summer_s1/Flower_Buttercup_summer_19": {
+   "file": "assets/grassland_meadow_summer_s1/Flower_Buttercup_summer_19.glb",
+   "node": "Flower_Buttercup_summer_19",
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.48487746715545654,
-    0.5603678226470947,
-    0.4109087586402893
+    0.21797746419906616,
+    0.45313918590545654,
+    0.40766510367393494
    ]
   },
-  "grassland_meadow_summer_s1/Flower_Buttercup_summer_20": {
-   "file": "assets/grassland_meadow_summer_s1/Flower_Buttercup_summer_20.glb",
-   "node": "Flower_Buttercup_summer_20",
+  "grassland_meadow_summer_s1/Flower_Carpet_Pink_summer_20": {
+   "file": "assets/grassland_meadow_summer_s1/Flower_Carpet_Pink_summer_20.glb",
+   "node": "Flower_Carpet_Pink_summer_20",
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.42699700593948364,
-    0.42596596479415894,
-    0.41630202531814575
+    1.82920503616333,
+    0.22763390839099884,
+    1.82920503616333
    ]
   },
-  "grassland_meadow_summer_s1/Flower_Buttercup_summer_21": {
-   "file": "assets/grassland_meadow_summer_s1/Flower_Buttercup_summer_21.glb",
-   "node": "Flower_Buttercup_summer_21",
+  "grassland_meadow_summer_s1/Flower_Carpet_Pink_summer_21": {
+   "file": "assets/grassland_meadow_summer_s1/Flower_Carpet_Pink_summer_21.glb",
+   "node": "Flower_Carpet_Pink_summer_21",
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.3636777102947235,
-    0.4018484055995941,
-    0.4291800260543823
+    1.71499502658844,
+    0.2616412341594696,
+    1.71499502658844
    ]
   },
   "rocky_badlands_summer_s1/Tree_Dead_summer_00": {
@@ -8472,9 +8668,9 @@
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.3891901969909668,
-    0.40805530548095703,
-    0.3671225309371948
+    0.3109869658946991,
+    0.4745320677757263,
+    0.4009805917739868
    ]
   },
   "temperate_forest_summer_s1/Tree_Oak_summer_00": {
@@ -8714,20 +8910,20 @@
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.332447350025177,
-    0.32508477568626404,
-    0.26353719830513
+    0.38761311769485474,
+    0.5702669024467468,
+    0.2987799346446991
    ]
   },
-  "temperate_forest_summer_s1/Flower_Bluebell_summer_22": {
-   "file": "assets/temperate_forest_summer_s1/Flower_Bluebell_summer_22.glb",
-   "node": "Flower_Bluebell_summer_22",
+  "temperate_forest_summer_s1/Flower_Carpet_Bluebell_summer_22": {
+   "file": "assets/temperate_forest_summer_s1/Flower_Carpet_Bluebell_summer_22.glb",
+   "node": "Flower_Carpet_Bluebell_summer_22",
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.39975398778915405,
-    0.37936142086982727,
-    0.40853482484817505
+    1.2036657333374023,
+    0.24963892996311188,
+    1.2036657333374023
    ]
   },
   "temperate_forest_summer_s1/Litter_Oak_summer_23": {
@@ -8989,9 +9185,9 @@
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.44870465993881226,
-    0.6620227694511414,
-    0.49584469199180603
+    0.37465688586235046,
+    0.7297912240028381,
+    0.3306528329849243
    ]
   },
   "wetland_riparian_summer_s1/Flower_Poppy_summer_22": {
@@ -9000,20 +9196,20 @@
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.5998194217681885,
-    0.6612150073051453,
-    0.44374316930770874
+    0.5352287888526917,
+    0.7205802202224731,
+    0.4912651777267456
    ]
   },
-  "wetland_riparian_summer_s1/Flower_Daisy_summer_23": {
-   "file": "assets/wetland_riparian_summer_s1/Flower_Daisy_summer_23.glb",
-   "node": "Flower_Daisy_summer_23",
+  "wetland_riparian_summer_s1/Flower_Carpet_Marigold_summer_23": {
+   "file": "assets/wetland_riparian_summer_s1/Flower_Carpet_Marigold_summer_23.glb",
+   "node": "Flower_Carpet_Marigold_summer_23",
    "wind_category": "grass",
    "size_class": "ground",
    "dimensions_m": [
-    0.3578367233276367,
-    0.43884173035621643,
-    0.377832293510437
+    1.5274440050125122,
+    0.26612380146980286,
+    1.5274440050125122
    ]
   },
   "burnt_forest_summer_s1/Snag_Charred_summer_00": {

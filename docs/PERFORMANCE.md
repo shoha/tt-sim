@@ -2942,3 +2942,13 @@ windows: GPU median 2.457 ms shown, 2.312 ms with the scatter hidden, 2.666 ms s
 (p95 3.209 / 3.075 / 3.460). Foliage over the hidden reference is 0.15 / 0.35 ms, against the
 maker's 0.10 / 0.37 for the same palette and today's 0.13 / 0.30 in their own sessions; the two
 shown samples differ by 0.21 ms, so no change is measurable at this frame time.
+
+**Flowers (treecube e30c00a, 2026-10-12; indicative, not the pinned procedure).** The new
+stemless `flower_carpet` cards have the largest alpha-tested area per plant of any ground species
+(a grassland carpet is about 1.1 to 1.6 m across). One same-session sample on a 200 ft grassland
+meadow new map at seed 1234 (6,429 scatter instances in 582 nodes; `perf.gd info`: 245,309 camera
+primitives in 476 draws, 73,074 shadow primitives), home zoom, canopy fade off, `vsync_off`, 5 s
+`perf.gd` windows: GPU median 2.400 ms shown, 2.342 ms with the scatter hidden, 2.478 ms shown
+again (p95 2.838 / 2.796 / 2.913). Foliage over the hidden reference is 0.06 / 0.14 ms, below the
+grass-variety sample's 0.15 / 0.35 and within its 0.2 ms run-to-run spread: the carpets add no
+measurable cost at this frame time.

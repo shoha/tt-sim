@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://diwws8weojmbf"
-path="res://.godot/imported/Flower_Poppy_summer_18.glb-8d516bdb635302366a73b1b63bc99bdc.scn"
+uid="uid://cvafy3yec71cg"
+path="res://.godot/imported/Flower_Buttercup_summer_19.glb-4d03e4f7ac3fce14f7df8a118ba2b57d.scn"
 
 [deps]
 
-source_file="res://assets/palette/assets/grassland_meadow_summer_s1/Flower_Poppy_summer_18.glb"
-dest_files=["res://.godot/imported/Flower_Poppy_summer_18.glb-8d516bdb635302366a73b1b63bc99bdc.scn"]
+source_file="res://assets/palette/assets/grassland_meadow_summer_s1/Flower_Buttercup_summer_19.glb"
+dest_files=["res://.godot/imported/Flower_Buttercup_summer_19.glb-4d03e4f7ac3fce14f7df8a118ba2b57d.scn"]
 
 [params]
 

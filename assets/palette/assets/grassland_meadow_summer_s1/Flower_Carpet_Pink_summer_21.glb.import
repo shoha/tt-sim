@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://c6hvfyfkcuxcy"
-path="res://.godot/imported/Flower_Buttercup_summer_20.glb-96b359220c9aed09333dc2e55ce1e9b6.scn"
+uid="uid://mk04kbeqa6ry"
+path="res://.godot/imported/Flower_Carpet_Pink_summer_21.glb-923a3ed4d562c58cf0a1876145faffbc.scn"
 
 [deps]
 
-source_file="res://assets/palette/assets/grassland_meadow_summer_s1/Flower_Buttercup_summer_20.glb"
-dest_files=["res://.godot/imported/Flower_Buttercup_summer_20.glb-96b359220c9aed09333dc2e55ce1e9b6.scn"]
+source_file="res://assets/palette/assets/grassland_meadow_summer_s1/Flower_Carpet_Pink_summer_21.glb"
+dest_files=["res://.godot/imported/Flower_Carpet_Pink_summer_21.glb-923a3ed4d562c58cf0a1876145faffbc.scn"]
 
 [params]
 
