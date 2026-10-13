@@ -217,16 +217,17 @@ Scatter instances contract in full:
 - Leaf cards: glTF `alphaMode MASK`, cutoff 0.5, double-sided.
 - **Painted foliage light (decided 2026-10-12).** treecube writes the glTF material extra
   `{"tt_foliage_light": "painted"}` on the leaf material (`<asset>_Tree_Leaf`) of trees whose
-  leaf cells are flat-painted: broadleaf clump cells (oak, birch, bush, poplar and their
-  saplings) and conifer frond cells (`canopy.mode` "conifer": every pine-based species with a
+  leaf cells are flat-painted: broadleaf clump cells (oak, birch, bush, poplar, acacia and
+  willow, and their saplings and young trees; acacia and willow from treecube 1a9c552) and
+  conifer frond cells (`canopy.mode` "conifer": every pine-based species with a
   canopy, i.e. the boreal and temperate pines, the young pine and the alpine dwarf pine).
   Trees with the canopy off (dead trees, the burnt forest's charred snag) never carry it. A
   conifer frond is a 14-triangle drooping roof strip whose normals rise from facing out at
   its root to facing the sky at its tip; the painted light's ramp is what turns those into
   lit skirt edges over darker bands. tt-sim shades flagged leaf cards with its painted light
-  (the normals carry the value). Absent means today's shading; willow, acacia and every
-  non-leaf material carry no extra (pines carried none until treecube 12fee28,
-  2026-10-12). Godot 4.7 keeps it as the material's
+  (the normals carry the value). Absent means today's shading; every non-leaf material carries
+  no extra (pines carried none until treecube 12fee28, acacias and willows none until treecube
+  1a9c552, both 2026-10-12). Godot 4.7 keeps it as the material's
   `extras` metadata through both the palette's editor import (sidecars as in section 9)
   and a runtime `GLTFDocument` load (headless probe, 2026-10-12). No GLB structure
   changes: same nodes, meshes, attributes and material count.
@@ -246,7 +247,11 @@ Scatter instances contract in full:
   (the plain wind shader has no painted light), and treecube never writes it on one. No
   other uniform changes with it; the value treecube writes is the one its runtime probe
   judged (`treecube/out/looks/colour_fix/shade_probe.gd`, values listed in treecube
-  `docs/looks/colour_plan.md`). tt-sim treats it as untrusted input: anything but a list of
+  `docs/looks/colour_plan.md` and `docs/looks/biome_identity.md`). Shipped values (palette
+  treecube 26e031a): the savanna shrub (0.1, 0.17, 0.14), the badlands sage shrub (0.15, 0.13,
+  0.19), every birch (0.12, 0.28, 0.1), the savanna acacia and young acacia (0.15, 0.16,
+  0.06), the badlands acacia (0.15, 0.13, 0.19) and the wetland willow (0.12, 0.24, 0.22).
+  tt-sim treats it as untrusted input: anything but a list of
   exactly three finite numbers is ignored with a warning, and a channel outside 0..1 is
   clamped with one. The floor is a per-material shader parameter on the wind
   `ShaderMaterial` that `WindFoliage.apply_material()` builds for each source material, so it
@@ -766,6 +771,18 @@ savanna shrub 0.2, 0.15, 0.06, the badlands sage shrub 0.15, 0.13, 0.19, and eve
 0.1, which `FoliageLight.shade_floor()` honours from the same commit. Home captures at seed
 1234 match treecube's runtime-probe frames (`treecube/out/looks/colour_fix/after_*.png`) in
 mean colour and darkest and brightest tenth within about 2 of 255.
+Refreshed 2026-10-12 with treecube 26e031a (looks refinement 4, biome identity: treecube
+1a9c552's umbrella acacias, painted willow curtain, crooked oak limbs and blue-sage savanna
+shrub, with 1a9c552's wind-bent alpine dwarf pine reverted; `palette_version`
+`26e031a-dirty`, 201 assets, ids unchanged, 26 surfaces byte-identical, every sidecar restored
+by the first checkout; `git status` checked twice, the same 12 GLBs, `palette.json` (version
+and 11 asset bounds) and the 9 thumbnails both times). The alpine dwarf pine GLB is
+byte-identical to the one it replaced. The 12 GLBs: the savanna acacia, young acacia and shrub,
+the badlands acacia, the wetland's three willows, and the oaks (temperate forest's two and its
+sapling, birch woodland's and grassland's). The acacias and willows now carry
+`tt_foliage_light` "painted" and a `tt_foliage_shade` floor (section 6), the shrub's floor
+changed; the acacias and willows are cheaper (a willow about 5,100 triangles, was about 6,200),
+the oaks within about 250 triangles of before. No code change.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 
