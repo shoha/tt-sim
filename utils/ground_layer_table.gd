@@ -63,7 +63,9 @@ extends RefCounted
 ## slots whose surface has role cliff (any slot if there is none), a scree among ground-role
 ## slots and the base. The caller warns once per surface. A painted surface never falls
 ## back: when one finds no free slot, the table is replanned from scratch with painted
-## surfaces first (at most MAX_LAYERS are painted, MapDocument.MAX_SURFACES).
+## surfaces first (the authoring tools paint at most MAX_LAYERS,
+## MapDocument.PAINT_SURFACE_LIMIT; a received document listing more draws the rest as
+## nothing, painted_layers NONE, until the index ground shader).
 
 enum Source { PAINTED, GROUND, RULE, ACCENT }
 
@@ -575,8 +577,10 @@ static func painted_role_mask(the_plan: Dictionary, role: String) -> int:
 ## clipped to the grid by the caller): [plane A (slots 0-3), plane B (slots 4-7)], each
 ## row-major, 4 bytes per sample. A GROUND slot's channel holds the density of the sample's
 ## biome when that biome is routed to it; a PAINTED slot's channel the painted weight of
-## the document slots routed to it (MapDocument.surface_weights layout); a RULE slot's
-## channel is 0. Masks shorter than the grid read as unpainted.
+## the document slots routed to it; a RULE slot's channel is 0. Masks shorter than the grid
+## read as unpainted. This is the CPU adapter from the document's format 2 entries
+## (MapDocument's header) to the 8-slot shader's channels; the index ground shader (ground
+## layers card G3) uploads the entry planes verbatim and removes it.
 static func weight_planes(
 	doc: MapDocument, biome_layers: PackedInt32Array, painted_layers: PackedInt32Array, rect: Rect2i
 ) -> Array[PackedByteArray]:
@@ -594,7 +598,7 @@ static func weight_planes(
 	var painted := PackedInt32Array()
 	for s in mini(painted_layers.size(), doc.surface_ids.size()):
 		painted.append(painted_layers[s])
-	var paints := not weights.is_empty() and weights.size() == count * CHANNELS * PLANES
+	var paints := doc.has_surface_entries()
 	var plane := count * CHANNELS
 	var out := 0
 	for z in range(rect.position.y, rect.end.y):
@@ -611,12 +615,16 @@ static func weight_planes(
 						else:
 							b[out + layer - CHANNELS] = density[i]
 			if paints:
-				for s in painted.size():
+				# The format 2 adapter: each entry's weight goes to its slot's channel.
+				for e in MapDocument.SURFACE_ENTRIES:
+					var value := weights[plane + i * CHANNELS + e]
+					if value == 0:
+						break
+					var s := weights[i * CHANNELS + e]
+					if s >= painted.size():
+						continue
 					var layer := painted[s]
 					if layer < 0:
-						continue
-					var value := weights[(s >> 2) * plane + i * CHANNELS + (s & 3)]
-					if value == 0:
 						continue
 					if layer < CHANNELS:
 						a[out + layer] = mini(a[out + layer] + value, 255)

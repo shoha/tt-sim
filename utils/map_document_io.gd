@@ -6,8 +6,8 @@ extends RefCounted
 ## format is tt-sim-internal, not a producer contract; it is summarised in
 ## docs/ARCHITECTURE.md "Map document (map.ttmap)".
 ##
-## Format 1 entries:
-##   manifest.json          {"format": 1, "palette_version", "map_seed", "size_cells": [w, h],
+## Format 2 entries (format 1 differs only in its painted surfaces, below):
+##   manifest.json          {"format": 2, "palette_version", "map_seed", "size_cells": [w, h],
 ##                          "cell_size_m", "sample_spacing_m", "tier_height_m",
 ##                          "base_surface", "has_base_map"}                        required
 ##   height.bin             float32 little-endian heights on the sample grid        required
@@ -16,9 +16,10 @@ extends RefCounted
 ##   erase.png              8-bit greyscale on the sample grid, > 127 = erased
 ##   authoring/biomes.png   R = biome slot (0 none, else index + 1), G = density
 ##   authoring/biomes.json  {"biomes": [palette biome id, ...]}; required with biomes.png
-##   surfaces.json          {"surfaces": [palette surface name, ...]}, at most 8
-##   surfaces.png           RGBA8 weights of surface slots 0-3 on the sample grid
-##   surfaces_b.png         RGBA8 weights of slots 4-7; written only with 5+ surfaces
+##   surfaces.json          {"surfaces": [palette surface name, ...]}, at most 64
+##   surfaces_index.png     RGBA8 on the sample grid: four indices into surfaces.json
+##   surfaces_weight.png    RGBA8 on the sample grid: their four weights, high to low, 0 =
+##                          unused (MapDocument's header has the canonical form)
 ##   splines.json           water bodies and flow map metadata         (MapWaterIO)
 ##   ponds.png              8-bit pond ids on the sample grid           (MapWaterIO)
 ##   water_flow.png         the baked flow map, RG8 as RGB              (MapWaterIO)
@@ -27,8 +28,12 @@ extends RefCounted
 ##                          never written all zero, and an all-zero one reads as none
 ## Unknown entries are ignored (_known_entries and _extract_entries only look at
 ## KNOWN_ENTRIES), so the surfaces, water, crossings and fire entries needed no format bump:
-## an older build reads a painted document as if unpainted, one with water as if it had none,
-## and one with crossings or fire as if it had none.
+## an older build reads a document with water as if it had none, and one with crossings or
+## fire as if it had none. Format 2 replaced format 1's surfaces.png (slots 0-3 in R, G, B,
+## A) and surfaces_b.png (slots 4-7, at most 8 surfaces) with the entry pair, so it is a
+## bump: a format 1 build refuses a format 2 document rather than read it as unpainted and
+## lose the paint on its next save. The reader accepts both and migrates format 1
+## (MapSurfacesIO, which reads and writes the surface entries); it never writes format 1.
 ##
 ## Documents arrive from a host peer, so everything read is untrusted input, validated in
 ## the style of PaletteLibrary.validate_palette(): caps are checked before anything is
@@ -56,6 +61,9 @@ const ERASE_ENTRY := "erase.png"
 const BIOMES_PNG_ENTRY := "authoring/biomes.png"
 const BIOMES_JSON_ENTRY := "authoring/biomes.json"
 const SURFACES_JSON_ENTRY := "surfaces.json"
+const SURFACES_INDEX_ENTRY := "surfaces_index.png"
+const SURFACES_WEIGHT_ENTRY := "surfaces_weight.png"
+## Format 1's painted surfaces, read (and migrated) only from a format 1 document.
 const SURFACES_PNG_ENTRY := "surfaces.png"
 const SURFACES_B_PNG_ENTRY := "surfaces_b.png"
 const FIRE_ENTRY := "fire.png"
@@ -69,6 +77,8 @@ const KNOWN_ENTRIES: Array[String] = [
 	BIOMES_JSON_ENTRY,
 	BIOMES_PNG_ENTRY,
 	SURFACES_JSON_ENTRY,
+	SURFACES_INDEX_ENTRY,
+	SURFACES_WEIGHT_ENTRY,
 	SURFACES_PNG_ENTRY,
 	SURFACES_B_PNG_ENTRY,
 	MapWaterIO.SPLINES_ENTRY,
@@ -95,6 +105,8 @@ const ENTRY_CAPS := {
 	BIOMES_PNG_ENTRY: 4 * 1024 * 1024,
 	BIOMES_JSON_ENTRY: 64 * 1024,
 	SURFACES_JSON_ENTRY: 64 * 1024,
+	SURFACES_INDEX_ENTRY: 4 * 1024 * 1024,
+	SURFACES_WEIGHT_ENTRY: 4 * 1024 * 1024,
 	SURFACES_PNG_ENTRY: 4 * 1024 * 1024,
 	SURFACES_B_PNG_ENTRY: 4 * 1024 * 1024,
 	MapWaterIO.SPLINES_ENTRY: 2 * 1024 * 1024,
@@ -208,7 +220,7 @@ static func serialize(doc: MapDocument) -> Dictionary:
 		var interleaved := _interleave(doc.biome_slots, doc.biome_density)
 		entries[BIOMES_PNG_ENTRY] = _png(interleaved, doc, Image.FORMAT_RG8)
 	if not doc.surface_ids.is_empty():
-		_serialize_surfaces(doc, entries)
+		MapSurfacesIO.serialize(doc, entries)
 	MapWaterIO.serialize(doc, entries)
 	MapCrossingIO.serialize(doc, entries)
 	if has_fire(doc.fire_mask):
@@ -300,23 +312,6 @@ static func _png(data: PackedByteArray, doc: MapDocument, format: Image.Format) 
 	return image.save_png_to_buffer()
 
 
-## surfaces.json, surfaces.png and (with slots 4+ in use) surfaces_b.png. The weights
-## are normalised on the way out (paint in unused slots zeroed, over-full samples scaled
-## to 255) so the reader never has to fix what it reads; the document is not touched.
-static func _serialize_surfaces(doc: MapDocument, entries: Dictionary) -> void:
-	var used := doc.surface_ids.size()
-	var count := doc.sample_count()
-	var plane := count * MapDocument.SURFACE_CHANNELS
-	var weights: PackedByteArray = (
-		MapDocument.normalized_surface_weights(doc.surface_weights, count, used)["weights"]
-	)
-	var surfaces := {"surfaces": Array(doc.surface_ids)}
-	entries[SURFACES_JSON_ENTRY] = JSON.stringify(surfaces, "\t").to_utf8_buffer()
-	entries[SURFACES_PNG_ENTRY] = _png(weights.slice(0, plane), doc, Image.FORMAT_RGBA8)
-	if used > MapDocument.SURFACE_CHANNELS:
-		entries[SURFACES_B_PNG_ENTRY] = _png(weights.slice(plane), doc, Image.FORMAT_RGBA8)
-
-
 static func _interleave(first: PackedByteArray, second: PackedByteArray) -> PackedByteArray:
 	var out := PackedByteArray()
 	out.resize(first.size() * 2)
@@ -353,7 +348,7 @@ static func _writable_problem(doc: MapDocument) -> String:
 	var biomes := _biomes_problem(doc, count)
 	if biomes != "":
 		return biomes
-	var surfaces := _surfaces_problem(doc, count)
+	var surfaces := MapSurfacesIO.problem(doc, count)
 	if surfaces != "":
 		return surfaces
 	var water := MapWaterIO.problem(doc)
@@ -388,35 +383,6 @@ static func _biomes_problem(doc: MapDocument, count: int) -> String:
 	for slot in doc.biome_slots:
 		if slot > doc.biome_ids.size():
 			return "a biome slot names biome %d of %d" % [slot, doc.biome_ids.size()]
-	return ""
-
-
-static func _surfaces_problem(doc: MapDocument, count: int) -> String:
-	var problem := _surface_ids_problem(Array(doc.surface_ids))
-	if problem != "":
-		return problem
-	if doc.surface_ids.is_empty() != doc.surface_weights.is_empty():
-		return "surface_ids and surface_weights must both be empty or both set"
-	if (
-		not doc.surface_weights.is_empty()
-		and doc.surface_weights.size() != count * MapDocument.MAX_SURFACES
-	):
-		return "surface_weights do not match the sample grid"
-	return ""
-
-
-## "" when `ids` is a valid surface list (at most MAX_SURFACES distinct ids), else what
-## is wrong. Shared by the writer and the reader.
-static func _surface_ids_problem(ids: Array) -> String:
-	if ids.size() > MapDocument.MAX_SURFACES:
-		return "more than %d surfaces" % MapDocument.MAX_SURFACES
-	var seen := {}
-	for surface in ids:
-		if not _is_id(surface):
-			return "surface id '%s' is malformed, empty or too long" % _label(surface)
-		if seen.has(surface):
-			return "surface id '%s' is listed twice" % _label(surface)
-		seen[surface] = true
 	return ""
 
 
@@ -508,7 +474,8 @@ static func _parse_document(entries: Dictionary, log: _WarningLog) -> MapDocumen
 	if not blobs.has(MANIFEST_ENTRY):
 		log.add("no usable manifest.json")
 		return null
-	var doc := _parse_manifest(blobs[MANIFEST_ENTRY], log)
+	var meta := {}
+	var doc := _parse_manifest(blobs[MANIFEST_ENTRY], log, meta)
 	if doc == null:
 		return null
 	if not blobs.has(HEIGHT_ENTRY):
@@ -525,7 +492,7 @@ static func _parse_document(entries: Dictionary, log: _WarningLog) -> MapDocumen
 	if blobs.has(ERASE_ENTRY):
 		doc.erase_mask = _parse_mask(blobs[ERASE_ENTRY], doc, Image.FORMAT_L8, ERASE_ENTRY, log)
 	_parse_biomes(blobs, doc, log)
-	_parse_surfaces(blobs, doc, log)
+	MapSurfacesIO.parse(blobs, doc, log, meta["format"])
 	MapWaterIO.parse(blobs, doc, log)
 	MapCrossingIO.parse(blobs, doc, log)
 	if blobs.has(FIRE_ENTRY):
@@ -559,15 +526,20 @@ static func _known_entries(entries: Dictionary, log: _WarningLog) -> Dictionary:
 	return blobs
 
 
-static func _parse_manifest(bytes: PackedByteArray, log: _WarningLog) -> MapDocument:
+## The document's geometry and scalars from manifest.json, or null; `meta` receives the
+## "format" read (MIN_FORMAT..FORMAT).
+static func _parse_manifest(
+	bytes: PackedByteArray, log: _WarningLog, meta: Dictionary
+) -> MapDocument:
 	var data: Variant = _json(bytes, MANIFEST_ENTRY, log)
 	if not data is Dictionary:
 		log.add("manifest.json is not a JSON object")
 		return null
-	var format: Variant = _integer(data.get("format"), 0, 1000000)
-	if format != MapDocument.FORMAT:
+	var format: Variant = _integer(data.get("format"), MapDocument.MIN_FORMAT, MapDocument.FORMAT)
+	if format == null:
 		log.add("unsupported map document format %s" % _label(data.get("format")))
 		return null
+	meta["format"] = format
 	var cells: Variant = data.get("size_cells")
 	var width: Variant = null
 	var height: Variant = null
@@ -831,63 +803,6 @@ static func _parse_biome_ids(bytes: PackedByteArray, log: _WarningLog) -> Varian
 			return null
 		ids.append(biome_id)
 	return ids
-
-
-## Fills the surface fields from surfaces.json, surfaces.png and surfaces_b.png. They
-## render on every peer, but a problem still only drops them with a warning: without
-## them the map is whole, just dressed by automatic ground. Unknown surface names are
-## kept; they resolve against the palette at load.
-static func _parse_surfaces(blobs: Dictionary, doc: MapDocument, log: _WarningLog) -> void:
-	var has_png := blobs.has(SURFACES_PNG_ENTRY) or blobs.has(SURFACES_B_PNG_ENTRY)
-	var ids: Variant = null
-	if blobs.has(SURFACES_JSON_ENTRY):
-		ids = _parse_surface_ids(blobs[SURFACES_JSON_ENTRY], log)
-	elif has_png:
-		log.add("surfaces.png without surfaces.json; ignored")
-	if ids == null or ids.is_empty():
-		if ids != null and has_png:
-			log.add("surfaces.json lists no surfaces; its images are ignored")
-		return
-	if not blobs.has(SURFACES_PNG_ENTRY):
-		log.add("surfaces.json without surfaces.png; painted surfaces dropped")
-		return
-	var rgba := Image.FORMAT_RGBA8
-	var plane_a := _parse_mask(blobs[SURFACES_PNG_ENTRY], doc, rgba, SURFACES_PNG_ENTRY, log)
-	if plane_a.is_empty():
-		return
-	var plane_b := PackedByteArray()
-	if ids.size() > MapDocument.SURFACE_CHANNELS:
-		if blobs.has(SURFACES_B_PNG_ENTRY):
-			var b_bytes: PackedByteArray = blobs[SURFACES_B_PNG_ENTRY]
-			plane_b = _parse_mask(b_bytes, doc, rgba, SURFACES_B_PNG_ENTRY, log)
-		if plane_b.is_empty():
-			log.add("surfaces 5-%d have no usable surfaces_b.png; dropped" % ids.size())
-			ids = ids.slice(0, MapDocument.SURFACE_CHANNELS)
-	elif blobs.has(SURFACES_B_PNG_ENTRY):
-		log.add("surfaces_b.png with %d surfaces listed; ignored" % ids.size())
-	if plane_b.is_empty():
-		plane_b.resize(plane_a.size())
-	var count := doc.sample_count()
-	var fixed := MapDocument.normalized_surface_weights(plane_a + plane_b, count, ids.size())
-	if fixed["stray"] > 0:
-		log.add("surfaces: %d samples paint an unlisted slot, cleared" % fixed["stray"])
-	if fixed["over"] > 0:
-		log.add("surfaces: %d samples sum past 255, scaled down" % fixed["over"])
-	doc.surface_ids = ids
-	doc.surface_weights = fixed["weights"]
-
-
-static func _parse_surface_ids(bytes: PackedByteArray, log: _WarningLog) -> Variant:
-	var data: Variant = _json(bytes, SURFACES_JSON_ENTRY, log)
-	var list: Variant = data.get("surfaces") if data is Dictionary else null
-	if not list is Array:
-		log.add("surfaces.json needs a surfaces list; painted surfaces dropped")
-		return null
-	var problem := _surface_ids_problem(list)
-	if problem != "":
-		log.add("surfaces.json: %s; painted surfaces dropped" % problem)
-		return null
-	return PackedStringArray(list)
 
 
 # --- small pure helpers ---------------------------------------------------------------

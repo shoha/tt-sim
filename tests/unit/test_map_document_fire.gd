@@ -31,7 +31,7 @@ func _burning_doc() -> MapDocument:
 func test_the_entry_is_known_and_capped() -> void:
 	assert_true(MapDocumentIO.FIRE_ENTRY in MapDocumentIO.KNOWN_ENTRIES)
 	assert_eq(MapDocumentIO.ENTRY_CAPS[MapDocumentIO.FIRE_ENTRY], 4 * 1024 * 1024)
-	assert_eq(MapDocument.FORMAT, 1, "no format bump for fire")
+	assert_eq(MapDocument.MIN_FORMAT, 1, "fire needed no bump: format 1 documents keep it")
 
 
 func test_fire_round_trips_through_a_file() -> void:

@@ -110,7 +110,7 @@ static func _paint(terrain: AuthoredTerrain, doc: MapDocument, mode: String) -> 
 	else:
 		doc.surface_ids = PackedStringArray(SURFACES)
 		var weights := PackedByteArray()
-		weights.resize(count * MapDocument.SURFACE_CHANNELS * 2)
+		weights.resize(count * MapDocument.SURFACE_BYTES)
 		for z in doc.samples_z():
 			for x in doc.samples_x():
 				var p := doc.sample_to_world(Vector2(x, z))
@@ -122,7 +122,8 @@ static func _paint(terrain: AuthoredTerrain, doc: MapDocument, mode: String) -> 
 				else:
 					slot = posmod(floori(p.x) + 3 * floori(p.y), 8)
 					value = 128
-				weights[MapDocument.surface_offset(i, slot, count)] = value
+				weights[MapDocument.surface_offset(i, 0, MapDocument.SURFACE_INDEX_PLANE, count)] = slot
+				weights[MapDocument.surface_offset(i, 0, MapDocument.SURFACE_WEIGHT_PLANE, count)] = (value)
 		doc.surface_weights = weights
 	var started := Time.get_ticks_usec()
 	terrain.update_ground_region(Rect2i(0, 0, doc.samples_x(), doc.samples_z()))

@@ -165,7 +165,6 @@ static func paint_open(
 	box = box.grow(reach)
 	var lo := doc.world_to_sample(box.position).floor()
 	var hi := doc.world_to_sample(box.end).ceil()
-	var count := doc.sample_count()
 	for z in range(maxi(int(lo.y), 0), mini(int(hi.y) + 1, doc.samples_z())):
 		for x in range(maxi(int(lo.x), 0), mini(int(hi.x) + 1, doc.samples_x())):
 			var p := doc.sample_to_world(Vector2(x, z))
@@ -173,7 +172,7 @@ static func paint_open(
 			if inside <= 0.0:
 				continue
 			var t := smoothstep(0.0, radius * (1.0 - OPEN_CORE_SHARE), inside)
-			_raise(doc, doc.sample_index(x, z), slot, roundi(255.0 * t), count)
+			_raise(doc, doc.sample_index(x, z), slot, roundi(255.0 * t))
 
 
 ## Paints the meadow surface of `biome_id` over the thin parts of `doc`'s starting cover (its
@@ -208,11 +207,13 @@ static func paint_sparse(
 			var p := doc.sample_to_world(Vector2(x, z))
 			var thin := 1.0 - smoothstep(SPARSE_FULL, SPARSE_NONE, doc.biome_density[i] / 255.0)
 			var score := thin + SPARSE_NOISE * noise.get_noise_2d(p.x, p.y)
-			var t := smoothstep(SPARSE_THRESHOLD - SPARSE_SOFT, SPARSE_THRESHOLD + SPARSE_SOFT, score)
+			var t := smoothstep(
+				SPARSE_THRESHOLD - SPARSE_SOFT, SPARSE_THRESHOLD + SPARSE_SOFT, score
+			)
 			if minf(half.x - absf(p.x), half.y - absf(p.y)) < band:
 				var keep := NewMap.edge_keep(p, half, width, cover)
 				t = maxf(t, 1.0 - smoothstep(EDGE_GREEN_FULL, EDGE_GREEN_NONE, keep))
-			_raise(doc, i, slot, roundi(255.0 * t), count)
+			_raise(doc, i, slot, roundi(255.0 * t))
 
 
 ## A landform's wood drawn from `rng` (NewMap.wood_density): the groves keep a share of their
@@ -267,8 +268,8 @@ static func widest(body: WaterBody) -> float:
 
 
 ## Raises sample `i`'s weight of `slot` to `value` when it is below it.
-static func _raise(doc: MapDocument, i: int, slot: int, value: int, count: int) -> void:
-	if value > doc.surface_weights[MapDocument.surface_offset(i, slot, count)]:
+static func _raise(doc: MapDocument, i: int, slot: int, value: int) -> void:
+	if value > doc.surface_weight(i, slot):
 		doc.set_surface_weight(i, slot, value)
 
 

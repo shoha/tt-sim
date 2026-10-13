@@ -35,7 +35,10 @@ static func run(base: Node, step: Dictionary) -> String:
 			return "mark %s" % step.get("name", "")
 		"since":
 			var start := int(Engine.get_meta(_meta_key(step), 0))
-			return "since %s: %.0f ms" % [step.get("name", ""), (Time.get_ticks_usec() - start) / 1000.0]
+			return (
+				"since %s: %.0f ms"
+				% [step.get("name", ""), (Time.get_ticks_usec() - start) / 1000.0]
+			)
 		"fit_zoom":
 			return _fit_zoom(base)
 	if ctrl == null:
@@ -118,7 +121,7 @@ static func _paint(ctrl: AuthoringController) -> String:
 		slots.append(slot)
 	var count := doc.sample_count()
 	var weights := PackedByteArray()
-	weights.resize(count * MapDocument.SURFACE_CHANNELS * 2)
+	weights.resize(count * MapDocument.SURFACE_BYTES)
 	var noise := FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
 	noise.seed = doc.map_seed & 0x7fffffff
@@ -131,8 +134,9 @@ static func _paint(ctrl: AuthoringController) -> String:
 			var a := floori(t)
 			var share := roundi((t - a) * 255.0)
 			var i := doc.sample_index(x, z)
-			weights[MapDocument.surface_offset(i, slots[a], count)] = 255 - share
-			weights[MapDocument.surface_offset(i, slots[(a + 1) % n], count)] = share
+			var pair := PackedInt32Array([slots[a], slots[(a + 1) % n]])
+			var shares := PackedInt32Array([255 - share, share])
+			SurfaceEntries.write_sample(weights, i, count, pair, shares)
 	doc.surface_weights = weights
 	ctrl.editor.call("_refresh", Rect2i(0, 0, doc.samples_x(), doc.samples_z()))
 	return "painted %d samples with %d surfaces" % [count, n]

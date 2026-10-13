@@ -13,6 +13,8 @@ system's map and the rules the code keeps (moved from `AGENTS.md` Key Convention
 |------|-------|------|
 | `resources/map_document.gd` | `MapDocument` | The document: geometry, flat `PackedFloat32Array` rows per palette asset id, `PackedByteArray` masks on the height grid; `erase_filter()` |
 | `utils/map_document_io.gd` | `MapDocumentIO` | Reads and writes `map.ttmap`: `write()`, `read()`, `parse()` |
+| `utils/map_surfaces_io.gd` | `MapSurfacesIO` | The painted-surface entries: format 2 read and write, format 1 read and migration |
+| `utils/surface_entries.gd` | `SurfaceEntries` | The entry byte rules: `canonical()`, `from_slots()` (format 1), `read_sample()`, `write_sample()`, `used_slots()` |
 | `resources/level_data.gd` | `LevelData` | `map_document` (`""` or `"map.ttmap"`) beside `map_path`; `has_map()` |
 | `scenes/states/playing/level_loader.gd` | `LevelPlayLoader` | `load_map_sources_async`, the play-time load shared by the host and the client download path |
 | `utils/glb_utils.gd` | `GlbUtils` | `load_map_async(..., scatter_filter)` |
@@ -38,6 +40,53 @@ system's map and the rules the code keeps (moved from `AGENTS.md` Key Convention
   whose ground is the document's; where flames may stand (not wet, not steep) is derived there,
   never saved.
 
+## Painted surfaces (format 2)
+
+Format 2 (2026-10-13, ground-layers card G2) stores hand-painted surfaces as entries, so the
+index ground shader (G3) can upload the paint maps verbatim and a map can paint every surface
+the palette has.
+
+- Entries. `surfaces.json` lists up to `MapDocument.MAX_SURFACES` = 64 palette surfaces; a
+  slot is a position in that list. Each sample keeps up to `SURFACE_ENTRIES` = 4 (index,
+  weight) pairs: `surfaces_index.png` holds the four indices (RGBA8 on the sample grid),
+  `surfaces_weight.png` their weights. In memory `MapDocument.surface_weights` is the two
+  planes back to back (`sample_count() * 8` bytes: the index plane, then the weight plane),
+  so a plane uploads or saves as a native slice (`surface_plane()`); `surface_offset(sample,
+  entry, plane, count)` is the byte of one entry.
+- Canonical form, which every writer keeps and the reader restores: weights high to low (ties
+  in any order), each index with weight below `surface_ids.size()`, no slot twice in a sample,
+  an unused entry (0, 0), and the weights of a sample summing to at most 255. The remainder is
+  automatic ground.
+- Painting. `set_surface_weight()` keeps the form: the newest paint wins (the other entries
+  scale down to fit), and painting a fifth surface over a sample drops its weakest entry, whose
+  weight returns to the automatic ground. `SurfaceStroke` (the Paint tool) inlines the same
+  rule per dab. `surface_weight(sample, slot)` reads one slot back; `used_surface_slots()`
+  tells which slots carry paint anywhere (one pass), behind `ensure_surface()`,
+  `surface_slot_unused()` and `trim_unused_surfaces()`.
+- Authoring cap. The tools claim at most `PAINT_SURFACE_LIMIT` = 8 slots (`ensure_surface()`'s
+  default limit, the Paint tool's refusal) because today's ground shader draws 8 painted
+  layers. `GroundLayerTable.weight_planes()` is the CPU adapter from the entries to those slot
+  channels; a received document listing more than 8 draws the rest as nothing. G3 removes the
+  adapter and raises the cap to 64.
+- Format bump. The manifest `format` is 2, and the reader accepts 1 and 2. A format 1 build
+  refuses a format 2 document instead of reading it as unpainted and dropping the paint on its
+  next save (the additive-entry route of the water, crossings and fire entries would do exactly
+  that here, since the format 1 entries are no longer written).
+- Format 1 migration (`MapSurfacesIO`, `SurfaceEntries.from_slots`): `surfaces.png` (slots 0-3
+  in R, G, B, A) and `surfaces_b.png` (slots 4-7), at most 8 surfaces. Per sample, the non-zero
+  listed slots high to low, the strongest four kept and scaled to keep the sample's painted
+  total (capped at 255); one warning counts the samples that painted five or more. The old
+  fixes stay: paint in an unlisted slot cleared, an over-full sample scaled, a missing
+  `surfaces_b.png` keeps slots 0-3. A format 1 document saves as format 2.
+- Validation of a format 2 document, caps before allocation: both images within 4 MB and the
+  size of the sample grid (from the PNG header, before decoding), else the paint is dropped
+  with a warning, as it is when one of the pair is missing or `surfaces.json` is malformed
+  (more than 64, repeated or malformed ids). Then `SurfaceEntries.canonical()`: an entry naming
+  an unlisted slot is dropped with a warning, a slot named twice is merged with a warning, the
+  weights are re-sorted quietly, a sum over 255 is scaled with a warning, and loose unused
+  entries become (0, 0). Unknown palette surface names stay readable and draw as the fallback
+  earth. Format 1 entries in a format 2 document (and the reverse) are ignored.
+
 ## Runtime
 
 The play-time load, `LevelPlayLoader.load_map_sources_async`, is shared by the host and the
@@ -61,8 +110,9 @@ Networking:
 ## Verification
 
 Unit tests in `tests/unit/`: `test_map_document.gd`, `test_map_document_io.gd`,
-`test_map_document_validation.gd`, `test_map_document_surfaces.gd`,
-`test_map_document_water.gd`, `test_map_document_crossings.gd`, `test_map_document_fire.gd`,
+`test_map_document_validation.gd`, `test_map_document_surfaces.gd` (format 2: entries, the
+fifth-surface rule, round trips, hostile input), `test_map_document_surfaces_format1.gd` (the
+migration), `test_map_document_water.gd`, `test_map_document_crossings.gd`, `test_map_document_fire.gd`,
 `test_level_map_streaming.gd`.
 
 ## Open work
@@ -72,3 +122,5 @@ See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work".
 ## History
 
 - 2026-10-09: map and rules moved here from `AGENTS.md` Key Conventions.
+- 2026-10-13: format 2, painted surfaces as top-4 (index, weight) entries with up to 64
+  surfaces (ground-layers card G2); format 1 migrates on read.

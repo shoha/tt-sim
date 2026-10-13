@@ -77,9 +77,12 @@ func test_bad_json_manifest() -> void:
 
 
 func test_unsupported_format() -> void:
-	var result := _parse(_with_manifest({"format": 2}))
-	assert_null(result["document"])
-	assert_true(Fixtures.has_warning(result, "unsupported"))
+	for format in [0, MapDocument.FORMAT + 1, 1.5, "2"]:
+		var result := _parse(_with_manifest({"format": format}))
+		assert_null(result["document"], "format %s" % str(format))
+		assert_true(Fixtures.has_warning(result, "unsupported"))
+	for format in [1, 2]:
+		assert_not_null(_parse(_with_manifest({"format": format}))["document"], str(format))
 
 
 func test_geometry_out_of_range_is_rejected() -> void:

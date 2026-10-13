@@ -63,7 +63,18 @@ const BANK_M := 1.6
 const POND := {"id": 20, "at": [13, -17], "r": 6.0, "depth": "deep"}
 ## Folders `save` may write: test levels (`cleanup` skips _p42_) and NET_PREFIX's net levels.
 const TEST_PREFIXES: Array[String] = [
-	"_p42_", "_p43_", "_p44_", "_p45_", "_p4b_", "_p4c_", "_p4d_", "_p5_", "_p5j_", "_p6_", "_pol_"
+	"_p42_",
+	"_p43_",
+	"_p44_",
+	"_p45_",
+	"_p4b_",
+	"_p4c_",
+	"_p4d_",
+	"_p5_",
+	"_p5j_",
+	"_p6_",
+	"_pol_",
+	"_g2_"
 ]
 const NET_PREFIX := "_nettest_"
 const BASIN := {"id": 21, "at": [-17, -14], "r": 4.0, "depth": "waist"}
@@ -577,17 +588,16 @@ static func _check(base: Node) -> String:
 	var shore := 0
 	var painted_wet := 0
 	var count := doc.sample_count()
-	var paints := doc.surface_weights.size() == count * MapDocument.MAX_SURFACES
+	var paints := doc.has_surface_entries()
+	var strongest := count * MapDocument.SURFACE_CHANNELS
 	for i in count:
 		if field.size() != count * WaterDressing.CHANNELS:
 			break
 		if field[i * 4] > 128:
 			bed += 1
-			if paints:
-				for s in doc.surface_ids.size():
-					if doc.surface_weights[MapDocument.surface_offset(i, s, count)] > 64:
-						painted_wet += 1
-						break
+			# Entry 0 is the sample's strongest painted surface.
+			if paints and doc.surface_weights[strongest + i * MapDocument.SURFACE_CHANNELS] > 64:
+				painted_wet += 1
 		elif field[i * 4 + 1] > 128:
 			shore += 1
 	var wet_rows := {}

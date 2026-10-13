@@ -52,6 +52,7 @@
 		"res://tests/unit/test_map_document_fire.gd",
 		"res://tests/unit/test_map_document_io.gd",
 		"res://tests/unit/test_map_document_surfaces.gd",
+		"res://tests/unit/test_map_document_surfaces_format1.gd",
 		"res://tests/unit/test_map_document_validation.gd",
 		"res://tests/unit/test_map_document_water.gd",
 		"res://tests/unit/test_map_download_coordinator.gd",

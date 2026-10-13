@@ -109,8 +109,10 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
 - Removed scatter shrinks out (`ScatterShrink`).
 - The Paint tool's mode is `PaintBrush`:
   `AuthoringEditor.begin_surface_stroke(surface, erase)` runs a `SurfaceStroke` (the
-  MaskStroke pattern on `MapDocument.surface_weights`: slot claim through `ensure_surface()`,
-  trailing empty slots trimmed at stroke end, per-block diffs), blits the ground per frame,
+  MaskStroke pattern on `MapDocument.surface_weights`, the format 2 entries of
+  [map_document.md](map_document.md) "Painted surfaces": slot claim through `ensure_surface()`,
+  a fifth surface over a sample dropping its weakest entry, trailing empty slots trimmed at
+  stroke end, per-block diffs), blits the ground per frame,
   and regenerates scatter at stroke end only for built or cliff-role surfaces.
 - The Sculpt tool's mode is `SculptBrush`: the press's operation is the pure
   `SculptBrush.sculpt_op(tile, ctrl, shift)`; Tier's target is `AuthoringEditor.tier_target()`
