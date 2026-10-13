@@ -12,7 +12,11 @@ extends RefCounted
 ## the painted variant (shaders/wind_foliage_painted.gdshader, or its no-AA twin under
 ## Antialiasing None) instead of the plain one; every other surface keeps today's shader. The
 ## variant's terms and defaults live in wind_foliage_include.gdshaderinc's
-## FOLIAGE_PAINTED_LIGHT blocks; no material sets them.
+## FOLIAGE_PAINTED_LIGHT blocks; no material sets them, except the shade floor: a painted
+## material may also carry {"tt_foliage_shade": [r, g, b]} (section 6 "Painted shade floor",
+## treecube 83d9e06), which shade_floor() validates as untrusted input and the wind material
+## takes as its own foliage_paint_shade. Each source material gets its own ShaderMaterial, so
+## two species with different floors keep them apart.
 ##
 ## The variant's albedo ramp and ambient follow the sun through one global shader parameter,
 ## foliage_sun (project.godot [shader_globals]): the direction toward the sun and its weight.
@@ -26,6 +30,12 @@ extends RefCounted
 ## The material extra and its value (docs/ASSET_PIPELINE.md section 6).
 const EXTRA_KEY := "tt_foliage_light"
 const PAINTED := "painted"
+## The optional painted shade floor extra (section 6 "Painted shade floor"): three linear 0-1
+## floats a painted material takes as its foliage_paint_shade uniform, the shade end of the
+## sun ramp, so a warm or grey species keeps its own shade instead of the shared green one.
+const SHADE_KEY := "tt_foliage_shade"
+## The uniform the shade floor sets (wind_foliage_include.gdshaderinc, FOLIAGE_PAINTED_LIGHT).
+const SHADE_UNIFORM := &"foliage_paint_shade"
 ## Metadata on a wind ShaderMaterial built on the painted variant, so the antialiasing swap
 ## (WindFoliage.shader_for) keeps it painted.
 const META_PAINTED := "foliage_painted"
@@ -74,6 +84,40 @@ static func is_painted(source: Material) -> bool:
 	if not extras is Dictionary:
 		return false
 	return String((extras as Dictionary).get(EXTRA_KEY, "")) == PAINTED
+
+
+## The shade floor `source` asks for: its tt_foliage_shade extra as a Vector3 clamped to 0..1,
+## or null when it has none, is not painted (the plain shader has no painted light), or the
+## value is not exactly three finite numbers (ignored with a warning; out-of-range channels
+## are clamped with one). The extra is untrusted input: a palette or a shared map GLB.
+static func shade_floor(source: Material) -> Variant:
+	if not is_painted(source):
+		return null
+	var extras := source.get_meta("extras") as Dictionary
+	if not extras.has(SHADE_KEY):
+		return null
+	var value: Variant = extras[SHADE_KEY]
+	var where := source.resource_name if source.resource_name != "" else str(source)
+	if not (value is Array or value is PackedFloat32Array or value is PackedFloat64Array):
+		push_warning("FoliageLight: %s on %s is not a list; ignored" % [SHADE_KEY, where])
+		return null
+	var channels: Array = Array(value)
+	if channels.size() != 3:
+		push_warning("FoliageLight: %s on %s needs 3 numbers; ignored" % [SHADE_KEY, where])
+		return null
+	var shade := Vector3.ZERO
+	for i in 3:
+		var channel: Variant = channels[i]
+		if not (channel is float or channel is int) or not is_finite(float(channel)):
+			push_warning(
+				"FoliageLight: %s on %s is not 3 finite numbers; ignored" % [SHADE_KEY, where]
+			)
+			return null
+		shade[i] = float(channel)
+	var clamped := shade.clamp(Vector3.ZERO, Vector3.ONE)
+	if clamped != shade:
+		push_warning("FoliageLight: %s on %s clamped to 0..1" % [SHADE_KEY, where])
+	return clamped
 
 
 ## The foliage_sun value for `light`: the unit direction toward it (its +Z axis in world

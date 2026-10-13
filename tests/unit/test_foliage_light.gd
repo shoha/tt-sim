@@ -44,6 +44,108 @@ func test_a_material_without_the_extra_keeps_todays_shader() -> void:
 		assert_false(material.has_meta(FoliageLight.META_PAINTED))
 
 
+func _painted_with_shade(shade: Variant) -> ShaderMaterial:
+	var mesh := _leaf_mesh(
+		{FoliageLight.EXTRA_KEY: FoliageLight.PAINTED, FoliageLight.SHADE_KEY: shade}
+	)
+	WindFoliage.apply_material(mesh, "tree")
+	return mesh.surface_get_material(0) as ShaderMaterial
+
+
+func test_the_shade_floor_extra_sets_the_uniform_on_a_painted_material() -> void:
+	var material := _painted_with_shade([0.2, 0.15, 0.06])
+	assert_eq(material.shader, FoliageLight.get_shader())
+	var shade: Variant = material.get_shader_parameter(FoliageLight.SHADE_UNIFORM)
+	assert_true(shade is Vector3, "the uniform is a vec3")
+	assert_almost_eq(shade as Vector3, Vector3(0.2, 0.15, 0.06), Vector3.ONE * 0.0001)
+	var ints := _painted_with_shade([0, 1, 0])
+	assert_eq(ints.get_shader_parameter(FoliageLight.SHADE_UNIFORM), Vector3(0.0, 1.0, 0.0))
+
+
+func test_no_shade_floor_extra_leaves_the_shader_default() -> void:
+	var mesh := _leaf_mesh({FoliageLight.EXTRA_KEY: FoliageLight.PAINTED})
+	WindFoliage.apply_material(mesh, "tree")
+	var material := mesh.surface_get_material(0) as ShaderMaterial
+	assert_null(material.get_shader_parameter(FoliageLight.SHADE_UNIFORM), "the default stands")
+
+
+func test_a_malformed_shade_floor_is_ignored() -> void:
+	var bad: Array = [
+		[0.1, 0.2],
+		[0.1, 0.2, 0.3, 0.4],
+		[],
+		[NAN, 0.2, 0.3],
+		[0.1, INF, 0.3],
+		["0.1", 0.2, 0.3],
+		[true, 0.2, 0.3],
+		[null, 0.2, 0.3],
+		"0.1, 0.2, 0.3",
+		0.5,
+		{"r": 0.1, "g": 0.2, "b": 0.3},
+		null,
+	]
+	for value: Variant in bad:
+		var material := _painted_with_shade(value)
+		assert_eq(material.shader, FoliageLight.get_shader(), "still painted: %s" % str(value))
+		assert_null(
+			material.get_shader_parameter(FoliageLight.SHADE_UNIFORM), "ignored: %s" % str(value)
+		)
+	assert_engine_error(bad.size(), "one warning per malformed floor")
+
+
+func test_an_out_of_range_shade_floor_is_clamped() -> void:
+	var material := _painted_with_shade([-0.5, 1.5, 0.3])
+	assert_almost_eq(
+		material.get_shader_parameter(FoliageLight.SHADE_UNIFORM) as Vector3,
+		Vector3(0.0, 1.0, 0.3),
+		Vector3.ONE * 0.0001
+	)
+	assert_engine_error("clamped to 0..1")
+
+
+func test_the_shade_floor_on_a_plain_material_does_nothing() -> void:
+	for extras: Variant in [
+		{FoliageLight.SHADE_KEY: [0.2, 0.15, 0.06]},
+		{FoliageLight.EXTRA_KEY: "flat", FoliageLight.SHADE_KEY: [0.2, 0.15, 0.06]},
+	]:
+		var mesh := _leaf_mesh(extras)
+		WindFoliage.apply_material(mesh, "tree")
+		var material := mesh.surface_get_material(0) as ShaderMaterial
+		assert_eq(material.shader, WindFoliage.get_shader())
+		assert_null(material.get_shader_parameter(FoliageLight.SHADE_UNIFORM))
+		assert_null(FoliageLight.shade_floor(mesh.surface_get_material(0)))
+
+
+func test_two_materials_with_different_shade_floors_keep_their_own() -> void:
+	var box := BoxMesh.new()
+	var mesh := ArrayMesh.new()
+	var shades := [[0.2, 0.15, 0.06], [0.12, 0.28, 0.1]]
+	for shade: Array in shades:
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, box.get_mesh_arrays())
+		var source := StandardMaterial3D.new()
+		source.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		source.set_meta(
+			"extras", {FoliageLight.EXTRA_KEY: FoliageLight.PAINTED, FoliageLight.SHADE_KEY: shade}
+		)
+		mesh.surface_set_material(mesh.get_surface_count() - 1, source)
+	WindFoliage.apply_material(mesh, "tree")
+	var first := mesh.surface_get_material(0) as ShaderMaterial
+	var second := mesh.surface_get_material(1) as ShaderMaterial
+	assert_ne(first, second, "one wind material per source material")
+	var tolerance := Vector3.ONE * 0.0001
+	var first_shade := first.get_shader_parameter(FoliageLight.SHADE_UNIFORM) as Vector3
+	var second_shade := second.get_shader_parameter(FoliageLight.SHADE_UNIFORM) as Vector3
+	assert_almost_eq(first_shade, Vector3(0.2, 0.15, 0.06), tolerance)
+	assert_almost_eq(second_shade, Vector3(0.12, 0.28, 0.1), tolerance)
+	# The antialiasing swap changes the shader, never the per-material floor.
+	first.shader = WindFoliage.shader_for(first, false)
+	assert_almost_eq(
+		first.get_shader_parameter(FoliageLight.SHADE_UNIFORM) as Vector3,
+		Vector3(0.2, 0.15, 0.06),
+		tolerance
+	)
+
+
 func test_tree_leaf_cutouts_take_the_leaf_shadow_push_and_blended_cards_do_not() -> void:
 	var leaf := _leaf_mesh(null)
 	WindFoliage.apply_material(leaf, "tree")
@@ -93,6 +195,36 @@ func test_the_installed_palette_flags_broadleaf_and_pine_leaves_and_nothing_else
 					assert_true(WindFoliage.is_leaf_cutout(source), "%s: a leaf cutout" % file)
 	assert_gt(painted.size(), 10, "the round 5 broadleaf crowns are flagged: %s" % str(painted))
 	assert_eq(pines, 8, "every pine's frond crown is flagged: %s" % str(painted))
+
+
+func test_the_installed_palette_carries_the_judged_shade_floors() -> void:
+	# treecube 83d9e06 (docs/looks/colour_plan.md "Fix round"): the savanna and badlands
+	# shrubs and every birch carry their own floor through the editor import; other painted
+	# crowns keep the default.
+	var expected := {
+		"savanna_summer_s1/Bush_Round_summer_04": Vector3(0.2, 0.15, 0.06),
+		"rocky_badlands_summer_s1/Bush_Round_summer_04": Vector3(0.15, 0.13, 0.19),
+		"birch_woodland_summer_s1/Tree_Birch_summer_00": Vector3(0.12, 0.28, 0.1),
+		"birch_woodland_summer_s1/Tree_Birch_Sapling_summer_05": Vector3(0.12, 0.28, 0.1),
+		"boreal_taiga_summer_s1/Tree_Birch_summer_04": Vector3(0.12, 0.28, 0.1),
+		"temperate_forest_summer_s1/Tree_Birch_summer_02": Vector3(0.12, 0.28, 0.1),
+		"temperate_forest_summer_s1/Tree_Oak_summer_00": null,
+	}
+	for asset_id: String in expected:
+		var mesh := PaletteLibrary.resolve(asset_id).get("mesh") as Mesh
+		assert_not_null(mesh, asset_id)
+		if mesh == null:
+			continue
+		WindFoliage.apply_material(mesh, "tree")
+		var found: Variant = null
+		for i in mesh.get_surface_count():
+			var material := mesh.surface_get_material(i) as ShaderMaterial
+			if material != null and material.has_meta(FoliageLight.META_PAINTED):
+				found = material.get_shader_parameter(FoliageLight.SHADE_UNIFORM)
+		if expected[asset_id] == null:
+			assert_null(found, "%s keeps the default floor" % asset_id)
+		else:
+			assert_almost_eq(found as Vector3, expected[asset_id] as Vector3, Vector3.ONE * 1e-4)
 
 
 func test_the_antialiasing_swap_keeps_painted_and_plain_apart() -> void:

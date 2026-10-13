@@ -230,8 +230,8 @@ Scatter instances contract in full:
   `extras` metadata through both the palette's editor import (sidecars as in section 9)
   and a runtime `GLTFDocument` load (headless probe, 2026-10-12). No GLB structure
   changes: same nodes, meshes, attributes and material count.
-- **Painted shade floor (decided 2026-10-12; treecube writes it, tt-sim honours it from
-  the card that implements it).** A leaf material that carries `tt_foliage_light` "painted"
+- **Painted shade floor (decided 2026-10-12; treecube writes it from 83d9e06, tt-sim honours
+  it from the same palette install, `FoliageLight.shade_floor()`).** A leaf material that carries `tt_foliage_light` "painted"
   may also carry the glTF material extra `{"tt_foliage_shade": [r, g, b]}`: three linear
   floats, 0 to 1, not sRGB and not a colour, which tt-sim sets as that material's
   `foliage_paint_shade` uniform (`shaders/wind_foliage_include.gdshaderinc`, default
@@ -246,7 +246,13 @@ Scatter instances contract in full:
   (the plain wind shader has no painted light), and treecube never writes it on one. No
   other uniform changes with it; the value treecube writes is the one its runtime probe
   judged (`treecube/out/looks/colour_fix/shade_probe.gd`, values listed in treecube
-  `docs/looks/colour_plan.md`).
+  `docs/looks/colour_plan.md`). tt-sim treats it as untrusted input: anything but a list of
+  exactly three finite numbers is ignored with a warning, and a channel outside 0..1 is
+  clamped with one. The floor is a per-material shader parameter on the wind
+  `ShaderMaterial` that `WindFoliage.apply_material()` builds for each source material, so it
+  survives the antialiasing swap and two species never share it. Godot keeps the list as an
+  `Array` of floats through the editor import (`test_foliage_light.gd` reads the installed
+  palette's values back).
 - **Water planes:** the exported material is ignored. Its `emissiveTexture` (Emission
   Strength 0, no `emissiveFactor`) is the flow map: R and G hold the flow direction in
   the plane's local Blender XY times a 0..1 speed factor, packed `v * 0.5 + 0.5`, sampled
@@ -749,6 +755,17 @@ triangles and narrower bounds (a taiga pine about 5 m across instead of 6, the y
 1.7 m instead of 3.4). The other 37 tree GLBs changed only in their node's
 `extras.treecube.canopy` parameter record, which gained the new `conifer_*` keys; their
 binary chunks (geometry and textures) and materials are byte-identical. No code change.
+Refreshed 2026-10-12 with treecube 83d9e06 (the species-colour pass and its fix round;
+`palette_version` `e9bb6cc-dirty`, 201 assets, ids unchanged, 26 surfaces byte-identical, every
+sidecar restored by the first checkout; `git status` checked twice, the same 103 GLBs,
+`palette.json` and the 9 thumbnails both times). The 103 GLBs differ by colour only (leaf and
+grass albedo, materials) and the burnt forest's are byte-identical. Nine painted leaf
+materials carry the new `tt_foliage_shade` extra (section 6 "Painted shade floor"): the
+savanna shrub 0.2, 0.15, 0.06, the badlands sage shrub 0.15, 0.13, 0.19, and every birch
+(birch woodland's four and its sapling, the taiga's and the temperate forest's) 0.12, 0.28,
+0.1, which `FoliageLight.shade_floor()` honours from the same commit. Home captures at seed
+1234 match treecube's runtime-probe frames (`treecube/out/looks/colour_fix/after_*.png`) in
+mean colour and darkest and brightest tenth within about 2 of 255.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 
