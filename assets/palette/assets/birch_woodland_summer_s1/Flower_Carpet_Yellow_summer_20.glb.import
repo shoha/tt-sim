@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://dmkv43ahirjue"
-path="res://.godot/imported/Flower_Gentian_summer_22.glb-46e0209257d7804e57db8b2e3e3c9afe.scn"
+uid="uid://br8h5lw8ygccq"
+path="res://.godot/imported/Flower_Carpet_Yellow_summer_20.glb-47feea0c8ce4cc06e39f497644bfa43f.scn"
 
 [deps]
 
-source_file="res://assets/palette/assets/alpine_meadow_summer_s1/Flower_Gentian_summer_22.glb"
-dest_files=["res://.godot/imported/Flower_Gentian_summer_22.glb-46e0209257d7804e57db8b2e3e3c9afe.scn"]
+source_file="res://assets/palette/assets/birch_woodland_summer_s1/Flower_Carpet_Yellow_summer_20.glb"
+dest_files=["res://.godot/imported/Flower_Carpet_Yellow_summer_20.glb-47feea0c8ce4cc06e39f497644bfa43f.scn"]
 
 [params]
 

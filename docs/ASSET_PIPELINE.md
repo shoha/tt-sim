@@ -801,6 +801,23 @@ and thin beside paths like its seed grass; `test_scatter_ground_rules.gd` now ex
 takes the `sprig` as the meadow's short cover. Home captures at seed 1234
 (canopy fade off) match the maker's frames in mean colour and darkest and brightest tenth within
 about 2 of 255 (PERFORMANCE.md "Grass variety"). No saved map was migrated.
+Refreshed 2026-10-12 with treecube e30c00a (looks refinement 6, flowers: painted flower heads on
+crossed cards and the stemless `flower_carpet` ground cover placed in drifts; `palette_version`
+`cca5604-dirty`, 201 assets, 26 surfaces byte-identical; treecube `docs/looks/flowers.md`). 11
+flower asset ids changed in five biomes (alpine meadow, birch woodland, grassland meadow, temperate
+forest, wetland); a script checked that no other id changed, that only flower GLBs differ in
+content, and that `biomes` gained no new key (temperate forest's species key `bluebell` is kept,
+now a carpet, because `test_authored_scatter.gd` pins it). The renamed-ids step ran: the first
+checkout restored every sidecar, the 11 removed ids' sidecars were deleted and 11 minimal ones
+written before the import, and 26 stale `.godot/imported` files of the new names (scene and
+`.md5`, from the maker's scratch installs) were deleted first. `git status` checked twice: 11
+GLBs and sidecars removed, 11 of each added, 13 flower GLBs modified, 9 thumbnails and
+`palette.json`. After the import every new sidecar had its uid and the three settings, and no
+texture was extracted. No test pinned a changed id. Birch woodland's ground weight total rose by
+1, so its grass and litter densities drop slightly. The carpets take the standard wind shader
+(`wind_category` `grass`), not the painted light. Home captures at seed 1234 (canopy fade off,
+grassland also at zoom 26) match the maker's frames in mean colour and darkest and brightest tenth
+within 0.5 of 255 (PERFORMANCE.md "Flowers"). No saved map was migrated.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 

@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://d4k0mi53ia1qp"
-path="res://.godot/imported/Flower_Daisy_summer_23.glb-b06982986f214f8fc01bd9e6421cd051.scn"
+uid="uid://c2wbebj53dhkk"
+path="res://.godot/imported/Flower_Lavender_summer_18.glb-33f22c607e7f048f9a6b22c1d101f759.scn"
 
 [deps]
 
-source_file="res://assets/palette/assets/wetland_riparian_summer_s1/Flower_Daisy_summer_23.glb"
-dest_files=["res://.godot/imported/Flower_Daisy_summer_23.glb-b06982986f214f8fc01bd9e6421cd051.scn"]
+source_file="res://assets/palette/assets/grassland_meadow_summer_s1/Flower_Lavender_summer_18.glb"
+dest_files=["res://.godot/imported/Flower_Lavender_summer_18.glb-33f22c607e7f048f9a6b22c1d101f759.scn"]
 
 [params]
 

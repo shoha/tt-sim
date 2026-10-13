@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://byjd00j2wmsfj"
-path="res://.godot/imported/Flower_Lavender_summer_19.glb-15dde61e7774f2927cae85b20e7427e6.scn"
+uid="uid://cjbdf5lbpy0gu"
+path="res://.godot/imported/Flower_Poppy_Alpine_summer_22.glb-623ee13766e7f69f821534217727902a.scn"
 
 [deps]
 
-source_file="res://assets/palette/assets/grassland_meadow_summer_s1/Flower_Lavender_summer_19.glb"
-dest_files=["res://.godot/imported/Flower_Lavender_summer_19.glb-15dde61e7774f2927cae85b20e7427e6.scn"]
+source_file="res://assets/palette/assets/alpine_meadow_summer_s1/Flower_Poppy_Alpine_summer_22.glb"
+dest_files=["res://.godot/imported/Flower_Poppy_Alpine_summer_22.glb-623ee13766e7f69f821534217727902a.scn"]
 
 [params]
 

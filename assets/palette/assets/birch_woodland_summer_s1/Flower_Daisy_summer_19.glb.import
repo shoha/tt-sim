@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://b4lq0ec2ub5s5"
-path="res://.godot/imported/Flower_Poppy_Alpine_summer_23.glb-872e591ce96649bcb402727c47b39264.scn"
+uid="uid://dw3pbg5wfppdq"
+path="res://.godot/imported/Flower_Daisy_summer_19.glb-2735242604353a84219cafee96078823.scn"
 
 [deps]
 
-source_file="res://assets/palette/assets/alpine_meadow_summer_s1/Flower_Poppy_Alpine_summer_23.glb"
-dest_files=["res://.godot/imported/Flower_Poppy_Alpine_summer_23.glb-872e591ce96649bcb402727c47b39264.scn"]
+source_file="res://assets/palette/assets/birch_woodland_summer_s1/Flower_Daisy_summer_19.glb"
+dest_files=["res://.godot/imported/Flower_Daisy_summer_19.glb-2735242604353a84219cafee96078823.scn"]
 
 [params]
 

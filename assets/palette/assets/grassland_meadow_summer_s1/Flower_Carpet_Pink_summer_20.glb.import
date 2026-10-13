@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://bpyt5w5ukcdq5"
-path="res://.godot/imported/Flower_Daisy_summer_17.glb-2fcf7a316b25f31004684e5038544975.scn"
+uid="uid://l4hkvpuifyhe"
+path="res://.godot/imported/Flower_Carpet_Pink_summer_20.glb-1893f19c2e2186c8b7f92408c2b7bb64.scn"
 
 [deps]
 
-source_file="res://assets/palette/assets/grassland_meadow_summer_s1/Flower_Daisy_summer_17.glb"
-dest_files=["res://.godot/imported/Flower_Daisy_summer_17.glb-2fcf7a316b25f31004684e5038544975.scn"]
+source_file="res://assets/palette/assets/grassland_meadow_summer_s1/Flower_Carpet_Pink_summer_20.glb"
+dest_files=["res://.godot/imported/Flower_Carpet_Pink_summer_20.glb-1893f19c2e2186c8b7f92408c2b7bb64.scn"]
 
 [params]
 
