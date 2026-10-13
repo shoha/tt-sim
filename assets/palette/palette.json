@@ -1,6 +1,6 @@
 {
  "format": 1,
- "palette_version": "9b8118e-dirty",
+ "palette_version": "4d48c81-dirty",
  "surfaces": {
   "ash": {
    "albedo": "surfaces/ash/ash_albedo.png",
@@ -128,6 +128,33 @@
    "kind": "grass",
    "role": "ground"
   },
+  "grass_birch": {
+   "albedo": "surfaces/grass_birch/grass_birch_albedo.png",
+   "normal": "surfaces/grass_birch/grass_birch_normal.png",
+   "orm": "surfaces/grass_birch/grass_birch_orm.png",
+   "height": "surfaces/grass_birch/grass_birch_height.png",
+   "tile_m": 2.0,
+   "kind": "grass",
+   "role": "ground"
+  },
+  "grass_forest": {
+   "albedo": "surfaces/grass_forest/grass_forest_albedo.png",
+   "normal": "surfaces/grass_forest/grass_forest_normal.png",
+   "orm": "surfaces/grass_forest/grass_forest_orm.png",
+   "height": "surfaces/grass_forest/grass_forest_height.png",
+   "tile_m": 2.0,
+   "kind": "grass",
+   "role": "ground"
+  },
+  "grass_meadow": {
+   "albedo": "surfaces/grass_meadow/grass_meadow_albedo.png",
+   "normal": "surfaces/grass_meadow/grass_meadow_normal.png",
+   "orm": "surfaces/grass_meadow/grass_meadow_orm.png",
+   "height": "surfaces/grass_meadow/grass_meadow_height.png",
+   "tile_m": 2.0,
+   "kind": "grass",
+   "role": "ground"
+  },
   "grass_savanna": {
    "albedo": "surfaces/grass_savanna/grass_savanna_albedo.png",
    "normal": "surfaces/grass_savanna/grass_savanna_normal.png",
@@ -251,9 +278,9 @@
    "scree_surface": "gravel",
    "ground_accents": [
     {
-     "surface": "gravel",
-     "coverage": 0.09,
-     "scale_m": 4.0
+     "surface": "grass_birch",
+     "coverage": 0.14,
+     "scale_m": 11.0
     }
    ],
    "path_surfaces": [
@@ -962,14 +989,19 @@
    "name": "Birch Woodland",
    "climate": "temperate",
    "thumbnail": "thumbnails/birch_woodland_summer_s1.jpg",
-   "ground_surface": "grass",
+   "ground_surface": "grass_birch",
    "cliff_surface": "cliff",
    "scree_surface": "gravel",
    "ground_accents": [
     {
-     "surface": "forest_floor",
+     "surface": "grass_forest",
      "coverage": 0.14,
-     "scale_m": 6.0
+     "scale_m": 11.0
+    },
+    {
+     "surface": "forest_floor",
+     "coverage": 0.08,
+     "scale_m": 10.0
     }
    ],
    "path_surfaces": [
@@ -2387,19 +2419,19 @@
    "name": "Grassland Meadow",
    "climate": "temperate",
    "thumbnail": "thumbnails/grassland_meadow_summer_s1.jpg",
-   "ground_surface": "grass",
+   "ground_surface": "grass_meadow",
    "cliff_surface": "cliff",
    "scree_surface": "gravel",
    "ground_accents": [
     {
-     "surface": "grass_alpine",
-     "coverage": 0.1,
-     "scale_m": 8.0
+     "surface": "grass",
+     "coverage": 0.16,
+     "scale_m": 11.0
     },
     {
-     "surface": "grass_savanna",
-     "coverage": 0.06,
-     "scale_m": 6.0
+     "surface": "grass_alpine",
+     "coverage": 0.08,
+     "scale_m": 8.0
     }
    ],
    "path_surfaces": [
@@ -3950,8 +3982,8 @@
    "ground_accents": [
     {
      "surface": "dirt",
-     "coverage": 0.12,
-     "scale_m": 6.0
+     "coverage": 0.1,
+     "scale_m": 9.0
     }
    ],
    "path_surfaces": [
@@ -4692,7 +4724,7 @@
      "scale_m": 5.0
     },
     {
-     "surface": "grass",
+     "surface": "grass_forest",
      "coverage": 0.06,
      "scale_m": 8.0
     }

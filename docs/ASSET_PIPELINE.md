@@ -833,6 +833,29 @@ these GLBs). No test pinned a rock's bounds. Home captures at seed 1234 (canopy 
 alpine meadow, rocky badlands and savanna match the maker's frames in mean colour and darkest and
 brightest tenth within 0.2 of 255; the badlands map at seed 1234 scatters seven dead trees (the
 savanna none), and one seen at home zoom reads as a lone leaning snag. No code change.
+Refreshed 2026-10-13 with treecube 1c05fb0 (looks refinement 8, ground surfaces: treecube
+`docs/looks/surfaces_pass.md`; `palette_version` `4d48c81-dirty`, 201 assets, ids and GLBs
+unchanged, 29 surfaces). Three new ground surfaces, `grass_meadow`, `grass_forest` and
+`grass_birch`, and a fresher `grass_alpine` (its albedo only; normal, ORM and height
+byte-identical). Biome records: grassland ground `grass_meadow` with accents `grass` 0.16 @ 11 m
+and `grass_alpine` 0.08 @ 8 m; birch ground `grass_birch` with `grass_forest` 0.14 @ 11 m and
+`forest_floor` 0.08 @ 10 m; alpine accent `grass_birch` 0.14 @ 11 m; savanna `dirt` 0.10 @ 9 m;
+temperate forest's grass accent `grass_forest`. A script checked all of that before the install,
+and that the burnt forest's record, its 19 GLBs and `ash`, `dirt`, `dirt_peat` are
+byte-identical. Every sidecar was restored by the first checkout; `git status` checked twice,
+the same `palette.json`, `grass_alpine_albedo.png`, 9 thumbnails and 12 new PNGs both times.
+The 12 new maps got sidecars holding the committed `[params]` (from `grass`'s) before the first
+import, after stale `.godot/imported/grass_{meadow,forest,birch}_*` copies from the maker's
+scratch rounds were deleted; they import as BC7, BC5, BC1 and L8, 1024 square, 10 mips, like
+every other surface. `test_palette_builtin.gd` now counts 29 surfaces. Two consequences until
+the index ground (card G3): each new accent is a surface of its own, so on the eight-slot
+`GroundLayerTable` a map with two or more biomes drops accents it used to draw (one-biome new
+maps still fit; `test_ground_layers.gd` and `test_fire_event.gd` now expect the drops, and the
+fire and live-edit fixtures moved from base `grass` to `grass_birch`, birch's ground), and with no biome on `grass` a saved map on base `grass` takes the wetland's base
+dressing. Home captures at seed 1234 (canopy fade off) for grassland meadow, birch woodland and
+alpine meadow match the maker's frames in mean colour and darkest and brightest tenth within 0.7
+of 255. No saved map was migrated. The pass's accent-edge proposals for G3 are filed in
+`docs/plans/2026-10-11-ground-layers/design.md`.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 

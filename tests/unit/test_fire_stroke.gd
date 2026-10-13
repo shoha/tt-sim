@@ -25,7 +25,8 @@ func _allow_layer_warnings() -> void:
 
 
 func _editor() -> AuthoringEditor:
-	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 11)
+	# Birch's ground (treecube 1c05fb0): a base whose rules and accents the forest shares.
+	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass_birch", "v", 11)
 	var root := MapSourceLoader.create_authored_root(doc)
 	MapSourceLoader.add_fire_field(root, doc)
 	add_child_autofree(root)
@@ -106,6 +107,7 @@ func test_a_lay_over_a_meadow_only_is_fire_and_ash() -> void:
 	var entry: Dictionary = editor.history.get("_undo").back()
 	assert_eq((entry.parts as Array).size(), 2, "no forest to burn")
 	assert_eq(_biome_at(editor, MEADOW_AT), MEADOW)
+	_allow_layer_warnings()
 
 
 func test_putting_fire_out_keeps_the_ash_and_the_snags() -> void:
