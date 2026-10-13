@@ -856,6 +856,23 @@ dressing. Home captures at seed 1234 (canopy fade off) for grassland meadow, bir
 alpine meadow match the maker's frames in mean colour and darkest and brightest tenth within 0.7
 of 255. No saved map was migrated. The pass's accent-edge proposals for G3 are filed in
 `docs/plans/2026-10-11-ground-layers/design.md`.
+Refreshed 2026-10-13 with treecube 3adda15 (the reworked rocks, reviewed over three rounds;
+`palette_version` `c37bda0-dirty`, 201 assets, ids unchanged, 29 surfaces byte-identical). A
+script checked before the install that the asset, biome and surface records kept their ids, that
+`biomes` and `surfaces` are equal to the installed ones, and that the 41 GLBs that differ are
+exactly every landscape biome's `Rock_*` and `Stone_*` (alpine meadow 10, rocky badlands 7,
+savanna 6, grassland meadow 5, boreal taiga 4, temperate forest 4, wetland 3, birch woodland 2);
+the 19 burnt forest GLBs are byte-identical (its thumbnail is re-rendered with the other eight).
+In `palette.json` 35 asset records changed, only in their bounds (`dimensions_m`). Every sidecar was
+restored by the first checkout; `git status` checked twice, the same 41 GLBs, `palette.json` and
+the 9 thumbnails both times; the import touched those 51 files and extracted no texture. The rocks
+keep the standard shader and carry no new extra. `assets/palette/assets` went from 24.17 MB to
+22.90 MB, smaller although the faceted forms carry a real chamfer (the maker counts a faceted
+medium rock at about 310 triangles, was about 90). Home captures at seed 1234 (canopy fade off) for
+alpine meadow, rocky badlands and savanna match the maker's frames
+(`treecube/out/looks/rocks_rework3/new_*.png`) in mean colour and darkest and brightest tenth
+within 0.001 of 1.0; the placed rocks sit where they did, rotated differently per run, and the
+foliage sways. No code change, no saved map migrated.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 
