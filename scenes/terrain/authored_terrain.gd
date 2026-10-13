@@ -34,9 +34,9 @@ extends Node3D
 ## (GroundLayerBinding binds it all; GroundLayers holds the rules, TerrainRules and the
 ## shader the automatic dressing). A brush edits the document in place, then calls
 ## update_ground_region() with the changed sample rectangle, which replaces the index maps
-## (native copies) and the broad edge's weights there. A biome or surface first painted
-## mid-session appends a layer and sets uniforms; the material is never rebuilt. The broad
-## edge's slot weight mirrors (get_ground_weights()) are kept for tests.
+## (native copies) and the broad edge's tint there (GroundBroadTint). A biome or surface first
+## painted mid-session appends a layer and sets uniforms; the material is never rebuilt. The
+## broad tint's CPU mirror (get_broad_tint()) is kept for tests.
 ##
 ## Wet dressing (P4-3). On a map with water the ground also draws each biome's water bed
 ## and wet shore where MapDocument.water_dressing says (WaterDressing: bed, shore, wet line
@@ -315,10 +315,10 @@ func layer_binding() -> GroundLayerBinding:
 	return _layers
 
 
-## The broad edge's CPU weight mirror `plane` (0: broad slots 0-3, 1: slots 4-7; RGBA8, one
-## texel per sample; GroundLayerBinding). Do not modify.
-func get_ground_weights(plane: int = 0) -> Image:
-	return _layers.weights[plane]
+## The broad edge's CPU tint mirror (GroundBroadTint.tint_plane: RGBAF, one texel per sample,
+## premultiplied colour and weight). Do not modify.
+func get_broad_tint() -> Image:
+	return _layers.tint_mirror
 
 
 ## The whole-grid rule fields {"curvature", "steep"} the chunks carry in UV2
@@ -330,7 +330,7 @@ func get_rule_fields() -> Dictionary:
 ## Brings the ground up to the document's biome masks and painted surfaces after an edit of
 ## the samples in `sample_rect` (sample coordinates, position = first sample, size in
 ## samples; clipped to the grid): the index maps are replaced whole (the document's bytes,
-## native copies) and the broad edge's weights recomputed over the rectangle. Call it after
+## native copies) and the broad edge's tint recomputed over the rectangle. Call it after
 ## every mask or paint edit with a rectangle covering every sample changed since the last
 ## call. A biome or painted surface added to the document since the last call first gets its
 ## layers (appended; only uniforms and new array layers are set).
@@ -459,10 +459,9 @@ func replan_ground_layers() -> bool:
 	return true
 
 
-## The broad edge's weight texture of `plane` (see GroundLayerTable.broad_image). Do not
-## modify.
-func get_broad_texture(plane: int = 0) -> ImageTexture:
-	return _layers.broad_textures[plane]
+## The broad edge's tint map (see GroundBroadTint.broad_image). Do not modify.
+func get_broad_texture() -> ImageTexture:
+	return _layers.broad_texture
 
 
 ## Every chunk cell that currently has a mesh.

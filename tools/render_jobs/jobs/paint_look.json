@@ -82,10 +82,10 @@
     {"op": "home"},
     {"op": "wait", "s": 1.5},
     {"op": "capture", "name": "p10_home", "desc": "Home view"},
-    {"op": "call", "script": "res://tools/render_jobs/probes/ground_params.gd", "params": {"paint_broad_strength": 0.0}},
+    {"op": "call", "script": "res://tools/render_jobs/probes/ground_params.gd", "params": {"biome_broad_strength": 0.0}},
     {"op": "wait", "s": 0.5},
-    {"op": "capture", "name": "p11_home_no_fringe", "desc": "Home view, A/B: no trampled fringe around built paint (paint_broad_strength 0)"},
-    {"op": "call", "script": "res://tools/render_jobs/probes/ground_params.gd", "params": {"paint_broad_strength": 0.35}},
+    {"op": "capture", "name": "p11_home_no_fringe", "desc": "Home view, A/B: no broad edge, so no trampled fringe around built paint (biome_broad_strength 0; one tint map since ground layers G4)"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/ground_params.gd", "params": {"biome_broad_strength": 0.8}},
 
     {"op": "eval", "expr": "_authoring_controller.history.undo_count()"},
     {"op": "eval", "expr": "_authoring_controller.document.surface_ids"},

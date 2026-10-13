@@ -205,19 +205,22 @@
  * BROAD EDGE (the second scale of a two-scale edge, added after T7 renders beside the
  * river map): the frayed edge above is a few decimetres wide and on its own reads like a
  * decal laid on the lawn, where a hand-painted Blender layer fades over several metres.
- * layer_broad_a/b hold one channel per broad slot (up to BROAD_SLOTS: the non-base biome
- * grounds and the painted built surfaces, GroundLayerBinding.broad_slots; broad_layer[i] is
- * slot i's layer), the slot weights box-filtered to GroundLayerTable.BROAD_FACTOR samples per
- * texel (3.5 m at the default 0.25 m step) and read with a cubic B-spline, so around each
- * painted biome its ground's mean colour (the last mip of its albedo) recolours the ground in
- * a gradient about 7 m wide. This is the slot table's two-map form, kept as it was until the
- * one-map broad tint (ground layers card G4). Painted built slots (broad_trample_mask, P3-6)
- * get the same halo at paint_broad_strength, a faint trodden fringe that seats a path in
- * the grass instead of leaving it a clean-edged decal; other painted surfaces get none.
- * It recolours by luminance (layer mean x the pixel's luminance relative to the base
- * mean), so the base texture keeps its detail and no hue is amplified. The tint fades out
- * where the fine edge already shows the layer itself (the biome corners' weight on that
- * ground, or the painted weight of that built surface).
+ * broad_tint_map is one tint map (ground layers card G4, GroundBroadTint): the tinted
+ * components (the biome grounds, and the painted built surfaces at a lower weight, the
+ * trodden fringe of P3-6 that seats a path in the grass instead of leaving a clean-edged
+ * decal), premultiplied (rgb = the sum of weight x coverage x mean colour, a = the sum of
+ * weight x coverage), box-filtered to GroundBroadTint.BROAD_FACTOR samples per texel (3.5 m
+ * at the default 0.25 m step) and read with one cubic B-spline whatever their number. The
+ * pixel takes away its own components (each biome corner and painted built entry: its weight
+ * x a smoothstep of its fine weight, times its colour from layer_tint), and recolours toward
+ * the mean colour of what is left by biome_broad_strength x smoothstep(0, biome_broad_full,
+ * what is left): a biome's ground fades a gradient about 7 m wide into the base beside it, a
+ * path tints the forest it crosses, and two fully painted biomes cancel each other, so their
+ * border is the fine frayed edge alone. Painted weight wins here as everywhere: a painted
+ * stroke (the same smoothstep of the pixel's painted total) holds its own colour, so snow
+ * painted beside the taiga stays white instead of taking a cream cast. It recolours by luminance (the mean x the pixel's
+ * luminance relative to the base mean), so the base texture keeps its detail and no hue is
+ * amplified.
  *
  * COST: 12 fetches plus 26 small integer hashes per pixel for the base alone; measured
  * about 1.4x a StandardMaterial3D ground with the same textures. The rules add one
@@ -297,23 +300,19 @@ uniform float biome_edge_scale_m : hint_range(0.5, 20.0) = 3.0;
 uniform float biome_edge_noise : hint_range(0.0, 1.0) = 0.3;
 uniform float biome_height_contrast : hint_range(0.0, 2.0) = 1.2;
 uniform float biome_blend_width : hint_range(0.01, 0.5) = 0.2;
-// Broad scale of the two-scale edge (see BROAD EDGE): the broad slots' weights box-filtered to
-// a few metres per texel (GroundLayerTable.broad_image), read with a B-spline so they are
-// smooth; broad_count slots, slot i drawn as layer broad_layer[i], a trampled fringe when bit
-// i of broad_trample_mask is set.
-uniform int broad_count = 0;
-uniform int broad_layer[8];
-uniform int broad_trample_mask = 0;
-uniform sampler2D layer_broad_a : hint_default_black, filter_linear, repeat_disable;
-uniform sampler2D layer_broad_b : hint_default_black, filter_linear, repeat_disable;
-// Most a layer's colour tints the ground around its painted area (0.5 was too faint to
-// read at the game camera; 0.8 reads as woodland floor fading into lawn).
+// Broad scale of the two-scale edge (see BROAD EDGE): the tinted components premultiplied and
+// box-filtered to a few metres per texel (GroundBroadTint.broad_image, RGBA half floats), read
+// with a B-spline so they are smooth; broad_present 0: the map has none. layer_tint[j]: layer
+// j's mean colour (linear) when it is a tinted surface, and as w its tint weight as a painted
+// surface (GroundBroadTint.TRAMPLE_WEIGHT for role built, else 0; a biome ground's is 1).
+uniform int broad_present = 0;
+uniform sampler2D broad_tint_map : hint_default_black, filter_linear, repeat_disable;
+uniform vec4 layer_tint[64];
+// Most the ground recolours toward what is left of the tint (0.5 was too faint to read at the
+// game camera; 0.8 reads as woodland floor fading into lawn; GroundBroadTint.STRENGTH).
 uniform float biome_broad_strength : hint_range(0.0, 1.0) = 0.8;
-// Broad weight at which the tint reaches full strength.
+// Weight left at which the tint reaches full strength (GroundBroadTint.FULL).
 uniform float biome_broad_full : hint_range(0.05, 1.0) = 0.4;
-// Most a painted built surface's colour tints the ground around it (worn, trodden grass
-// beside a path; P3-6, judged at the game camera).
-uniform float paint_broad_strength : hint_range(0.0, 1.0) = 0.35;
 // Ground accents (see GROUND ACCENTS). accent_present 0: no row has accents. Entry
 // row * ACCENTS_PER_COMPONENT + i is accent i of biome row `row` (its layer in
 // biome_extra[row]): (threshold, 1 / scale_m, domain offset).
@@ -357,8 +356,10 @@ const float WEIGHT_EPSILON = 0.002;
 // The base surface's layer, and the last valid document surface index (paint_layer's size).
 const int BASE_LAYER = 0;
 const int LAST_PAINT_INDEX = 63;
-// Broad slots (broad_layer's size).
-const int BROAD_SLOTS = 8;
+// Fine weight over which a pixel's own component cancels its share of the broad tint
+// (GroundBroadTint.OWN_START / OWN_END).
+const float BROAD_OWN_START = 0.2;
+const float BROAD_OWN_END = 0.8;
 // Score of a surface not sampled at this pixel: far below any real score, so it never
 // comes within biome_blend_width of the top.
 const float ABSENT_SCORE = -1e6;
@@ -1000,47 +1001,51 @@ vec4 texture_bspline(sampler2D tex, vec2 uv) {
 		+ s1.y * (s0.x * texture(tex, vec2(uv0.x, uv1.y)) + s1.x * texture(tex, uv1));
 }
 
-// The broad scale of the two-scale edge: around each broad slot's painted area its layer's
-// mean colour tints the surface in a wide, soft gradient, fading out where the fine, frayed
-// edge already shows the layer itself: the weight of the ground corners (`slots`, `g`) on
-// that layer, or for a trampled slot the painted weight of that layer (`pl`, `pw`).
+// One of the pixel's own components for the broad edge: layer `layer` with tint weight
+// `weight` shown at fine weight `fine`; (its colour x what it takes away, what it takes away).
+vec4 broad_own(int layer, float weight, float fine) {
+	if (layer < 0 || weight <= 0.0 || fine <= WEIGHT_EPSILON) {
+		return vec4(0.0);
+	}
+	float shown = weight * smoothstep(BROAD_OWN_START, BROAD_OWN_END, fine);
+	return vec4(layer_tint[layer].rgb * shown, shown);
+}
+
+// The broad scale of the two-scale edge (see BROAD EDGE; GroundBroadTint.tint_at is the CPU
+// twin): the tint map less the pixel's own components, the ground corners (`slots`, `g`: a
+// biome ground, weight 1) and the painted entries (`pl`, `pw`: weight layer_tint[layer].w),
+// recolours the surface toward the mean colour of what is left.
 vec3 apply_broad_edge(vec3 albedo, vec2 world_xz, ivec4 slots, vec4 g, ivec4 pl, vec4 pw) {
 	vec2 st = weight_uv(world_xz, vec2(textureSize(biome_slots_map, 0)));
-	vec4 broad[2];
-	broad[0] = texture_bspline(layer_broad_a, st);
-	broad[1] = vec4(0.0);
-	if (broad_count > 4) {
-		broad[1] = texture_bspline(layer_broad_b, st);
+	vec4 broad = texture_bspline(broad_tint_map, st);
+	if (broad.a <= WEIGHT_EPSILON) {
+		return albedo;
 	}
-	ivec4 grounds = ivec4(
-		biome_rules[slots.x].x, biome_rules[slots.y].x, biome_rules[slots.z].x, biome_rules[slots.w].x
-	);
-	// Recolour rather than paint over: the layer's mean colour, carrying the ground's own
-	// luminance detail relative to the base surface's mean.
+	vec4 own = broad_own(biome_rules[slots.x].x, 1.0, g.x)
+		+ broad_own(biome_rules[slots.y].x, 1.0, g.y)
+		+ broad_own(biome_rules[slots.z].x, 1.0, g.z)
+		+ broad_own(biome_rules[slots.w].x, 1.0, g.w)
+		+ broad_own(pl.x, layer_tint[max(pl.x, 0)].w, pw.x)
+		+ broad_own(pl.y, layer_tint[max(pl.y, 0)].w, pw.y)
+		+ broad_own(pl.z, layer_tint[max(pl.z, 0)].w, pw.z)
+		+ broad_own(pl.w, layer_tint[max(pl.w, 0)].w, pw.w);
+	float left = broad.a - own.a;
+	if (left <= WEIGHT_EPSILON) {
+		return albedo;
+	}
+	vec3 mean = clamp((broad.rgb - own.rgb) / left, vec3(0.0), vec3(1.0));
+	// Recolour rather than paint over: the mean colour, carrying the ground's own luminance
+	// detail relative to the base surface's mean.
 	const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 	float base_luma = max(
 		dot(textureLod(layer_albedo_array, vec3(0.5, 0.5, float(BASE_LAYER)), 16.0).rgb, LUMA), 0.02
 	);
 	float detail = dot(albedo, LUMA) / base_luma;
-	for (int i = 0; i < BROAD_SLOTS; i++) {
-		float w = broad[i / 4][i % 4];
-		int layer = broad_layer[i];
-		if (i >= broad_count || w <= WEIGHT_EPSILON || layer < 0) {
-			continue;
-		}
-		bool trample = ((broad_trample_mask >> i) & 1) != 0;
-		float strength = trample ? paint_broad_strength : biome_broad_strength;
-		float fine = trample ? dot(mix(vec4(0.0), pw, equal(pl, ivec4(layer))), vec4(1.0))
-			: dot(mix(vec4(0.0), g, equal(grounds, ivec4(layer))), vec4(1.0));
-		float tint = strength * smoothstep(0.0, biome_broad_full, w);
-		tint *= 1.0 - smoothstep(0.2, 0.8, fine);
-		if (tint > 0.001) {
-			vec3 mean = textureLod(layer_albedo_array, vec3(0.5, 0.5, float(layer)), 16.0).rgb;
-			vec3 recoloured = clamp(mean * detail, vec3(0.0), vec3(1.0));
-			albedo = mix(albedo, recoloured, tint);
-		}
-	}
-	return albedo;
+	// Painted weight wins: the tint recolours the automatic ground, not a painted stroke.
+	float tint = biome_broad_strength * smoothstep(0.0, biome_broad_full, left)
+		* (1.0 - smoothstep(BROAD_OWN_START, BROAD_OWN_END, dot(pw, vec4(1.0))));
+	vec3 recoloured = clamp(mean * detail, vec3(0.0), vec3(1.0));
+	return mix(albedo, recoloured, tint);
 }
 
 float blend_score(float weight, float height) {
@@ -1265,7 +1270,7 @@ void fragment() {
 	ground.orm *= inv_total;
 	ground.height *= inv_total;
 #ifndef GROUND_SKIRT
-	if (broad_count > 0) {
+	if (broad_present != 0) {
 		ground.albedo = apply_broad_edge(
 			ground.albedo, world_xz, slots, g, painted_layers, painted_w
 		);

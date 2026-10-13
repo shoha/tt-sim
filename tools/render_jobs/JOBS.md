@@ -35,7 +35,7 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   still pressed and after release), a flagstone courtyard on tier 2, a cobblestone path
   across tier 1's south edge (it stops at the face and resumes on top), tier 1's east face
   restyled with basalt, part of the track erased with Ctrl; close-ups at zoom 10, the grid,
-  the home view (with an A/B of the trampled fringe, `paint_broad_strength` 0 vs 0.35), undo /
+  the home view (with an A/B of the broad edge and so the trampled fringe, `biome_broad_strength` 0 vs 0.8), undo /
   redo of the last stroke. Frame times per stroke (`record`). `jobs/paint_shoulder.json` (about
   30 s) paints the same track alone and runs `paint_check.gd` along it with a zoom-8 capture.
 - `jobs/phase3_judgment_set.json`: the phase 3 judgment set (P3-7, about 7 minutes): for

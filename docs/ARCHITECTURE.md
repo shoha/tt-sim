@@ -1522,7 +1522,9 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   undergrowth keep their crisp fine edge inside that halo. GPU cost (2026-09-26, idle GPU,
   in-run with and without the call): 0.04-0.11 ms on four painted layers, 0.19 ms on a
   synthetic every-metre checker of four layers; 4 bilinear fetches of a small texture per
-  pixel with any layer bound, plus one lowest-mip fetch per layer present.
+  pixel with any layer bound, plus one lowest-mip fetch per layer present. (History: since
+  ground layers G4 the broad scale is one premultiplied tint map with no slot limit,
+  `GroundBroadTint`; its model is in `docs/systems/authored_terrain.md`, "Broad edge".)
 - **Ground layer updates:** a brush edits the masks or painted weights, then calls
   `update_ground_region(sample_rect)` (was `update_biome_region`); that recomputes those
   texels of both planes into CPU mirrors (`get_ground_weights(plane)`) and blits just that

@@ -19,7 +19,8 @@ Conventions on 2026-10-09).
 | `utils/ground_layers.gd` | `GroundLayers` | Pure rules of the index ground: the per-map layer list (stable append, compaction, overflow past 64), the routing table by biome slot, per-layer flags and tiles |
 | `scenes/terrain/ground_layer_binding.gd` | `GroundLayerBinding` | Binds the layer arrays, the routing rows, the four index maps and the broad edge on the ground material (`AuthoredTerrain.layer_binding()`) |
 | `utils/ground_layer_arrays.gd` | `GroundLayerArrays` | The four `Texture2DArray`s (albedo, normal, ORM, height) of a map's layers, capacity 16 / 32 / 64 |
-| `utils/ground_layer_table.gd` | `GroundLayerTable` | The old 8-slot table; since G3 only its weight planes and `broad_image` feed the broad edge (removed in ground layers card G5) |
+| `utils/ground_broad_tint.gd` | `GroundBroadTint` | The broad edge's one tint map (ground layers G4): the premultiplied tint plane, its filtered map, and the shader's CPU twin |
+| `utils/ground_layer_table.gd` | `GroundLayerTable` | The old 8-slot table; nothing draws from it since G4 (its overflow and coverage helpers are still used; removed in ground layers card G5) |
 | `utils/terrain_rules.gd` | `TerrainRules` | The self-dressing rules; `compose_paint`, `PAINT_CLIFF_YIELD` |
 | `utils/ground_accents.gd` | `GroundAccents` | Broad patches of each biome's `ground_accents` |
 | `utils/scatter_ground.gd` | `ScatterGround` | The same rules for the plants |
@@ -47,10 +48,28 @@ Conventions on 2026-10-09).
   ground, rule and accent layers; a biome on the base surface draws as the base, and the base
   row takes the most covered such biome's rules and accents (the slot table's rule, kept for
   parity). `update_ground_region` replaces the index maps whole (native copies) and appends
-  layers for a new biome or surface. The broad edge keeps the slot table's two-map form, fed by
-  `GroundLayerTable.weight_planes` over up to 8 broad slots (biome grounds and painted built
-  surfaces), until the one-map tint of card G4. Cost: `PERFORMANCE.md` "Ground shader: index
-  layers".
+  layers for a new biome or surface. Cost: `PERFORMANCE.md` "Ground shader: index layers".
+- Broad edge (one tint map since ground layers G4, `GroundBroadTint`): the soft few-metre
+  recolouring that fades a biome's ground into the base beside it and seats a trampled path.
+  The tinted components are the biome grounds (weight 1; not a biome drawn as the base) and
+  the painted built surfaces (`TRAMPLE_WEIGHT` 0.55), with no slot limit. Per sample a CPU
+  mirror (RGBAF) holds them premultiplied (rgb = the sum of weight x coverage x the surface's
+  linear mean colour, the last mip of its albedo; a = the sum of weight x coverage); it is
+  box-filtered by `BROAD_FACTOR` 14 (3.5 m per texel) into `broad_tint_map` (RGBA half floats)
+  and read with one cubic B-spline. The shader takes away the pixel's own components (each
+  biome corner and painted built entry: weight x smoothstep(0.2, 0.8, its fine weight), its
+  colour from `layer_tint[64]`) and recolours toward the mean colour of what is left by
+  `biome_broad_strength` 0.8 x smoothstep(0, `biome_broad_full` 0.4, what is left), by
+  luminance as before. So a biome tints the base beside it but not itself, a path tints the
+  forest it crosses, and where two non-base biomes both fully cover their broad tints cancel
+  (their border is the fine frayed edge; the slot table cast each biome's colour a few metres
+  onto the other, which one premultiplied map cannot represent). Painted weight wins here
+  too: the tint fades out by the same smoothstep of the pixel's painted total, so a painted
+  stroke keeps its colour (painted snow beside the taiga stays white; under G3 the taiga's
+  halo, recoloured by the snow's luminance, cast it cream). `update_ground_region` recomputes
+  the mirror over the edited rectangle and refilters it whole (native); a table change that
+  recolours a component already drawn recomputes it whole. `GroundBroadTint.tint_at` is the
+  shader's CPU twin; `test_ground_broad_tint.gd` checks both and the shader's constants.
 - The terrain dresses itself, always on: rock on steep faces, scree at concave feet, a grassy
   lip (`TerrainRules`, mirrored as shader constants and kept in sync by
   `test_terrain_rules.gd`; per-vertex curvature and steepness in UV2), and side projections

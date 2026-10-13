@@ -1,11 +1,11 @@
 extends GutTest
 
 ## The slot table (GroundLayerTable: which surfaces get the eight slots, the routing, the
-## overflow fallback, the weight planes; until its removal in ground layers card G5 its weight
-## planes feed the broad edge) and the index ground's binding on a real terrain (G3,
-## GroundLayerBinding): the layer list with the base first, the routing rows, the index maps
-## as the document's bytes, partial updates of the broad weights, and that updates never
-## replace the material. Weights are checked on the CPU mirrors.
+## overflow fallback, the weight planes; removed in ground layers card G5) and the index
+## ground's binding on a real terrain (G3, GroundLayerBinding): the layer list with the base
+## first, the routing rows, the index maps as the document's bytes, partial updates of the
+## broad tint (G4), and that updates never replace the material. The tint is checked on its
+## CPU mirror.
 
 const BIRCH := "birch_woodland_summer_s1"
 const FOREST := "temperate_forest_summer_s1"
@@ -227,10 +227,9 @@ func _paint_surface(doc: MapDocument, surface: String, rect: Rect2i, weight: int
 			doc.set_surface_weight(doc.sample_index(x, z), slot, weight)
 
 
-func _texel(terrain: AuthoredTerrain, plane: int, x: int, z: int) -> PackedByteArray:
-	var data := terrain.get_ground_weights(plane).get_data()
-	var offset := (z * terrain.document.samples_x() + x) * 4
-	return data.slice(offset, offset + 4)
+## The broad tint's weight at sample (x, z) (the CPU mirror's alpha).
+func _tint_weight(terrain: AuthoredTerrain, x: int, z: int) -> float:
+	return terrain.get_broad_tint().get_pixel(x, z).a
 
 
 func _terrain(doc: MapDocument) -> AuthoredTerrain:
@@ -292,8 +291,9 @@ func test_terrain_binds_the_table_and_its_routing() -> void:
 	assert_eq(slots, doc.biome_slots, "uploaded verbatim")
 	assert_eq(material.get_shader_parameter("biome_present"), 1)
 	assert_eq(material.get_shader_parameter("paint_present"), 1)
-	var cobble := binding.broad_surfaces.find("cobblestone")
-	assert_eq(_texel(terrain, cobble >> 2, 70, 2)[cobble & 3], 255, "a trampled broad slot")
+	var trample := GroundBroadTint.TRAMPLE_WEIGHT
+	assert_almost_eq(_tint_weight(terrain, 70, 2), trample, 1e-6, "a trampled path tints")
+	assert_almost_eq(_tint_weight(terrain, 10, 10), 1.0, 1e-6, "the forest's ground tints")
 	assert_engine_error(0, "every accent drawn")
 
 
@@ -302,38 +302,36 @@ func test_partial_update_touches_only_the_rect_and_matches_full() -> void:
 	_paint_biome(doc, Rect2i(0, 0, 40, 40), 1, 180)
 	_paint_surface(doc, "flagstone", Rect2i(0, 0, 2, 2), 255)
 	var terrain := _terrain(doc)
-	var before := [
-		terrain.get_ground_weights(0).get_data(), terrain.get_ground_weights(1).get_data()
-	]
+	var before := terrain.get_broad_tint().get_data()
+	var texture := terrain.get_broad_texture()
 	var rect := Rect2i(20, 20, 13, 13)
 	_paint_biome(doc, Rect2i(25, 25, 20, 20), 2, 255)
 	_paint_biome(doc, Rect2i(80, 80, 5, 5), 1, 90)
 	_paint_surface(doc, "flagstone", Rect2i(30, 30, 3, 3), 128)
 	terrain.update_ground_region(rect)
+	assert_eq(terrain.get_broad_texture(), texture, "the map is updated in place")
 	var fresh := _terrain(doc)
-	for plane in 2:
-		var after := terrain.get_ground_weights(plane).get_data()
-		var full := fresh.get_ground_weights(plane).get_data()
-		var inside_ok := true
-		var outside_ok := true
-		for z in doc.samples_z():
-			for x in doc.samples_x():
-				var o := (z * doc.samples_x() + x) * 4
-				if rect.has_point(Vector2i(x, z)):
-					inside_ok = inside_ok and after.slice(o, o + 4) == full.slice(o, o + 4)
-				else:
-					outside_ok = (
-						outside_ok and after.slice(o, o + 4) == before[plane].slice(o, o + 4)
-					)
-		assert_true(inside_ok, "plane %d: the rect matches a full recompute" % plane)
-		assert_true(outside_ok, "plane %d: nothing outside the rect changed" % plane)
+	var after := terrain.get_broad_tint().get_data()
+	var full := fresh.get_broad_tint().get_data()
+	var inside_ok := true
+	var outside_ok := true
+	var bytes := GroundBroadTint.CHANNELS * 4
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			var o := (z * doc.samples_x() + x) * bytes
+			if rect.has_point(Vector2i(x, z)):
+				inside_ok = inside_ok and after.slice(o, o + bytes) == full.slice(o, o + bytes)
+			else:
+				outside_ok = outside_ok and after.slice(o, o + bytes) == before.slice(o, o + bytes)
+	assert_true(inside_ok, "the rect matches a full recompute")
+	assert_true(outside_ok, "nothing outside the rect changed")
 	# The index maps are the document's, whole, after any update.
 	var weights := terrain.layer_binding().index_image("paint_weight_map")
 	assert_eq(weights.get_data(), doc.surface_plane(MapDocument.SURFACE_WEIGHT_PLANE))
 	var density := terrain.layer_binding().index_image("biome_density_map")
 	assert_eq(density.get_data(), doc.biome_density, "even outside the rect")
 	terrain.update_ground_region(Rect2i(-10, -10, 1000, 1000))
-	assert_eq(terrain.get_ground_weights(0).get_data(), fresh.get_ground_weights(0).get_data())
+	assert_eq(terrain.get_broad_tint().get_data(), fresh.get_broad_tint().get_data())
 	assert_engine_error(0, "every accent drawn")
 
 
@@ -360,11 +358,10 @@ func test_new_biome_or_surface_mid_session_keeps_every_slot() -> void:
 	assert_eq(terrain.get_material(), material, "same material")
 	assert_eq(material.get_shader_parameter("layer_albedo_array"), albedo, "same layer arrays")
 	assert_eq(material.get_shader_parameter("paint_index_map"), index, "same index texture")
-	var broad := terrain.layer_binding().broad_surfaces
-	var taiga := broad.find("pine_duff")
-	var planks := broad.find("planks")
-	assert_eq(_texel(terrain, taiga >> 2, 60, 60)[taiga & 3], 255)
-	assert_eq(_texel(terrain, planks >> 2, 6, 61)[planks & 3], 255)
+	var planks: Color = terrain.layer_binding().paint_tints[doc.surface_ids.find("planks")]
+	assert_gt(planks.a, 0.0, "planks are built: a trodden fringe")
+	assert_almost_eq(_tint_weight(terrain, 60, 60), 1.0, 1e-6, "the taiga tints")
+	assert_almost_eq(_tint_weight(terrain, 6, 61), planks.a, 1e-6, "the planks tint")
 	for cell in terrain.chunk_cells():
 		assert_eq(terrain.get_chunk(cell).mesh.surface_get_material(0), material)
 
@@ -394,17 +391,20 @@ func test_six_biomes_draw_every_surface_without_a_warning() -> void:
 func test_broad_textures_follow_the_weights() -> void:
 	var doc := _doc("grass", [FOREST])
 	var terrain := _terrain(doc)
-	var broad := terrain.get_broad_texture(0)
-	assert_eq(terrain.get_material().get_shader_parameter("layer_broad_a"), broad)
+	var broad := terrain.get_broad_texture()
+	var material := terrain.get_material()
+	assert_eq(material.get_shader_parameter("broad_tint_map"), broad)
+	assert_eq(material.get_shader_parameter("broad_present"), 1, "the forest is a tint")
 	_paint_biome(doc, Rect2i(0, 0, 40, 40), 1, 255)
 	terrain.update_ground_region(Rect2i(0, 0, 40, 40))
-	assert_eq(terrain.get_material().get_shader_parameter("layer_broad_a"), broad, "in place")
-	var forest := terrain.layer_binding().broad_surfaces.find("forest_floor")
-	var expected := GroundLayerTable.broad_image(terrain.get_ground_weights(forest >> 2))
-	assert_gt(expected.get_pixel(1, 1)[forest & 3], 0.9, "the painted corner reads broad")
-	var f := GroundLayerTable.BROAD_FACTOR
-	assert_eq(GroundLayerTable.broad_size(Vector2i(10 * f + 1, 3 * f)), Vector2i(11, 3))
-	assert_eq(GroundLayerTable.broad_size(Vector2i(3, 3)), Vector2i.ONE, "never empty")
+	assert_eq(material.get_shader_parameter("broad_tint_map"), broad, "in place")
+	var expected := GroundBroadTint.broad_image(terrain.get_broad_tint())
+	assert_eq(expected.get_format(), Image.FORMAT_RGBAH)
+	assert_eq(broad.get_format(), Image.FORMAT_RGBAH)
+	assert_gt(expected.get_pixel(1, 1).a, 0.9, "the painted corner reads broad")
+	var f := GroundBroadTint.BROAD_FACTOR
+	assert_eq(GroundBroadTint.broad_size(Vector2i(10 * f + 1, 3 * f)), Vector2i(11, 3))
+	assert_eq(GroundBroadTint.broad_size(Vector2i(3, 3)), Vector2i.ONE, "never empty")
 
 
 func test_biome_coverage_sums_density_per_biome() -> void:
