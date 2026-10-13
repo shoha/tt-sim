@@ -1296,6 +1296,31 @@ cells (scratch jobs `docs/plans/2026-10-11-ground-layers/_g3_perf.json`).
   `update_ground_region` uploads all four index maps whole on every dab (a native copy, 0.6 MB
   on a 200 ft map; region blits would do on the largest maps).
 
+### Broad edge: one tint map (2026-10-13, ground layers G4)
+
+G4 replaced the broad edge's two RGBA8 slot maps (two B-spline fetches, then per slot a
+`textureLod` of its layer's last mip) with one RGBA half-float tint map (one B-spline fetch)
+and a per-layer colour uniform. Indicative, same session, same harness as above (RTX 3080, 1920x1080, vsync off,
+scatter hidden), on `_g4_multi` (the `_g3_multi` recipe: forest + taiga + 14 painted
+surfaces) at home zoom, G3 (df389b1, a `git worktree`) against G4, two samples per run, runs
+alternated G3, G4, G3, G4 (scratch job `docs/plans/2026-10-11-ground-layers/_g4_perf.json`):
+
+| Run | Multi home GPU median (ms) | Ground hidden (ms) |
+|---|---|---|
+| G3 #1 | 3.248 / 3.514 | 0.339 / 0.343 |
+| G4 #1 | 3.087 / 3.317 | 0.337 / 0.340 |
+| G3 #2 | 19.754 / 20.296 (GPU contended: discarded) | 0.343 / 0.319 |
+| G4 #2 | 3.234 / 3.334 | 0.328 / 0.339 |
+
+- In the clean pair G4 is 0.16-0.20 ms cheaper; G4's second run (CPU times 20 % higher than
+  its first, so partly contended) still sits at or under G3's first. Not slower, as the card
+  required; a pinned measurement belongs to G3b.
+- The CPU side of a stroke is unchanged in shape: the tint plane is recomputed over the dab's
+  rectangle in GDScript (as the slot weights were) and the mirror refiltered whole in native
+  code; the mirror is RGBAF (16 bytes per sample, 10 MB on a 200 ft map, against the two
+  RGBA8 mirrors' 5 MB). The refilter of an 801 x 801 mirror measured 0.08 ms headless (RGBAF
+  resize plus the half-float convert) against 0.06 ms for each of the two RGBA8 maps.
+
 ## In-game authoring phase 3: pinned performance pass (2026-09-27)
 
 The phase 3 pass: authored maps with relief in play, the ground shader with the whole phase 3

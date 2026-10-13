@@ -24,13 +24,15 @@ extends RefCounted
 ## it a surface falls back to the nearest by mean albedo and an accent is dropped, each with
 ## one warning.
 ##
-## The broad edge (the two-scale edge's wide tint, BROAD EDGE in the shader) keeps the slot
-## table's two-map form until the one-map tint of card G4: up to BROAD_SLOTS broad slots (the
-## non-base biome grounds and the painted built surfaces, appended in first-use order), their
-## weights per sample from GroundLayerTable.weight_planes over a CPU mirror, box-filtered by
-## GroundLayerTable.broad_image.
+## The broad edge (the two-scale edge's wide tint, BROAD EDGE in the shader; card G4) is one
+## tint map, GroundBroadTint's: per biome slot and per painted surface a tint (mean colour and
+## weight; no slot limit), the premultiplied tint per sample in a CPU mirror (tint_mirror),
+## box-filtered into broad_texture, and per layer its colour and painted tint weight
+## (layer_tint) for the shader to take away the pixel's own components. An edit recomputes the
+## mirror over its rectangle and refilters it whole (native); a table change that recolours a
+## component already drawn (a layer list compacted, a biome's ground replaced) recomputes it
+## whole.
 
-const BROAD_SLOTS := 8
 ## Rows of the shader's routing table and its accent entries.
 const ROWS := GroundLayers.MAX_BIOMES
 const ACCENT_ENTRIES := GroundLayers.MAX_BIOMES * GroundLayers.ACCENTS_PER_BIOME
@@ -49,15 +51,16 @@ var arrays := GroundLayerArrays.new()
 var table: Dictionary = {}
 var routing: Dictionary = {}
 var inputs: Dictionary = {}
-## The broad slots' surfaces, their CPU weight mirrors (slots 0-3, 4-7) and textures.
-var broad_surfaces := PackedStringArray()
-var weights: Array[Image] = []
-var broad_textures: Array[ImageTexture] = []
+## The broad tint (see the header): per biome slot (0: none) and per document surface its
+## GroundBroadTint.component(), the CPU mirror (RGBAF, one texel per sample) and the map.
+var biome_tints := PackedColorArray()
+var paint_tints := PackedColorArray()
+var tint_mirror: Image = null
+var broad_texture: ImageTexture = null
 ## Microseconds the last broad refresh took.
 var last_broad_usec: int = 0
 
-var _broad_biomes := PackedInt32Array()
-var _broad_painted := PackedInt32Array()
+var _tint_stale: bool = true
 var _index: Dictionary = {}
 var _index_images: Dictionary = {}
 var _planned_biomes := PackedStringArray()
@@ -73,7 +76,8 @@ func build(doc: MapDocument, ground: ShaderMaterial, root: String, water: bool) 
 	palette_root = root
 	table = {}
 	arrays = GroundLayerArrays.new()
-	broad_surfaces = PackedStringArray()
+	biome_tints = PackedColorArray()
+	paint_tints = PackedColorArray()
 	_index.clear()
 	_warned.clear()
 	retable(water)
@@ -94,17 +98,20 @@ func needs_retable(water: bool) -> bool:
 
 ## Brings the bindings up to the document after an edit of the samples in `rect` (clipped to
 ## the grid): the tables first when needs_retable(), then the index maps (whole) and the
-## broad weights of `rect`.
+## broad tint of `rect` (whole when the tables recoloured a component already drawn).
 func update_region(rect: Rect2i, water: bool) -> void:
 	if needs_retable(water):
 		retable(water)
 	upload_index()
-	if rect.has_area():
+	var size := Vector2i(document.samples_x(), document.samples_z())
+	if _tint_stale or tint_mirror == null or tint_mirror.get_size() != size:
+		_build_broad()
+	elif rect.has_area():
 		_update_broad(rect)
 
 
 ## Recomputes the layer list (appending to the bound one), the routing table and the broad
-## slots, and binds them. Returns true when the arrays were created anew.
+## tints, and binds them. Returns true when the arrays were created anew.
 func retable(water: bool) -> bool:
 	inputs = gather_inputs(document, palette_root, water)
 	var surfaces := PaletteLibrary.surfaces(palette_root)
@@ -137,7 +144,7 @@ func retable(water: bool) -> bool:
 		material.set_shader_parameter(uniform, tables[uniform])
 	material.set_shader_parameter("accent_noise", GroundAccents.noise_texture())
 	GroundAccents.bind_edge(material, document.extent_m() * 0.5)
-	_plan_broad(role_of)
+	_plan_tints(role_of)
 	_planned_biomes = document.biome_ids.duplicate()
 	_planned_surfaces = document.surface_ids.duplicate()
 	_planned_water = water
@@ -251,19 +258,38 @@ static func padded_tiles(layers: PackedStringArray, tile_of: Callable) -> Packed
 	return tiles
 
 
-## The broad slots after an edit: `previous` kept in place, then the surfaces of `grounds`
-## (per document biome its ground, "" for none or the base) and `built` (per painted surface,
-## "" unless role built) that have none, while fewer than BROAD_SLOTS. Pure.
-static func broad_slots(
-	previous: PackedStringArray, grounds: PackedStringArray, built: PackedStringArray
-) -> PackedStringArray:
-	var out := previous.duplicate()
-	var wanted := grounds.duplicate()
-	wanted.append_array(built)
-	for surface in wanted:
-		if surface != "" and not surface in out and out.size() < BROAD_SLOTS:
-			out.append(surface)
-	return out
+## The broad tints for `grounds` (per document biome its ground, "" for none or one drawn as
+## the base) and `painted` (per document surface, "" for one not drawable): {"biome" (by biome
+## slot, slot 0 untinted), "paint" (by document surface; only role built tints, at
+## GroundBroadTint.TRAMPLE_WEIGHT)} as GroundBroadTint.component() Colors, and "layer"
+## (MAX_LAYERS Vector4s: per layer drawing a tinted surface its colour, and as w its painted
+## tint weight). `layer_of` maps a surface to its layer, `color_of` to its mean colour. Pure.
+static func tint_tables(
+	grounds: PackedStringArray,
+	painted: PackedStringArray,
+	role_of: Callable,
+	layer_of_surface: Callable,
+	color_of: Callable
+) -> Dictionary:
+	var biomes := PackedColorArray([Color(0, 0, 0, 0)])
+	var paints := PackedColorArray()
+	var per_layer := PackedVector4Array()
+	per_layer.resize(GroundLayers.MAX_LAYERS)
+	for surface in grounds:
+		var tint := GroundBroadTint.component(surface, 1.0, color_of)
+		biomes.append(tint)
+		var layer: int = layer_of_surface.call(surface) if surface != "" else -1
+		if layer >= 0 and layer < per_layer.size():
+			per_layer[layer] = Vector4(tint.r, tint.g, tint.b, per_layer[layer].w)
+	for surface in painted:
+		var built := surface != "" and String(role_of.call(surface)) == "built"
+		var weight := GroundBroadTint.TRAMPLE_WEIGHT if built else 0.0
+		var tint := GroundBroadTint.component(surface, weight, color_of)
+		paints.append(tint)
+		var layer: int = layer_of_surface.call(surface) if built else -1
+		if layer >= 0 and layer < per_layer.size():
+			per_layer[layer] = Vector4(tint.r, tint.g, tint.b, weight)
+	return {"biome": biomes, "paint": paints, "layer": per_layer}
 
 
 ## The GroundLayers inputs for `doc` (see GroundLayers.wanted), surfaces the palette at `root`
@@ -376,63 +402,56 @@ static func _zeros(count: int) -> PackedByteArray:
 	return out
 
 
-## Appends new broad slots and binds their layers and kinds (see the header).
-func _plan_broad(role_of: Callable) -> void:
-	var grounds: PackedStringArray = inputs.get("biome_ground", PackedStringArray())
-	var painted: PackedStringArray = inputs.get("painted", PackedStringArray())
-	var built := PackedStringArray()
-	for surface in painted:
-		built.append(surface if String(role_of.call(surface)) == "built" else "")
-	broad_surfaces = broad_slots(broad_surfaces, grounds, built)
-	_broad_biomes = PackedInt32Array([GroundLayerTable.NONE])
-	for surface in grounds:
-		_broad_biomes.append(
-			broad_surfaces.find(surface) if surface != "" else GroundLayerTable.NONE
-		)
-	_broad_painted = PackedInt32Array()
-	for surface in built:
-		_broad_painted.append(
-			broad_surfaces.find(surface) if surface != "" else GroundLayerTable.NONE
-		)
-	var layer_ids := PackedInt32Array()
-	layer_ids.resize(BROAD_SLOTS)
-	layer_ids.fill(-1)
-	var trample := 0
-	for i in broad_surfaces.size():
-		layer_ids[i] = layer_of(broad_surfaces[i])
-		if not broad_surfaces[i] in grounds:
-			trample |= 1 << i
-	material.set_shader_parameter("broad_count", broad_surfaces.size())
-	material.set_shader_parameter("broad_layer", layer_ids)
-	material.set_shader_parameter("broad_trample_mask", trample)
-
-
-func _broad_planes(rect: Rect2i) -> Array[PackedByteArray]:
-	return GroundLayerTable.weight_planes(document, _broad_biomes, _broad_painted, rect)
+## Recomputes the broad tints and binds them; marks the mirror stale when a component already
+## drawn changed colour or weight (see the header).
+func _plan_tints(role_of: Callable) -> void:
+	var drawn := layers()
+	var root := palette_root
+	var layer_of_surface := func(surface: String) -> int: return layer_of(surface)
+	var color_of := func(surface: String) -> Color:
+		var layer := layer_of(surface)
+		return GroundBroadTint.mean_color(drawn[layer] if layer >= 0 else surface, root)
+	var tables := tint_tables(
+		inputs.get("biome_ground", PackedStringArray()),
+		inputs.get("painted", PackedStringArray()),
+		role_of,
+		layer_of_surface,
+		color_of
+	)
+	var biomes: PackedColorArray = tables.biome
+	var paints: PackedColorArray = tables.paint
+	if (
+		biomes.slice(0, biome_tints.size()) != biome_tints
+		or paints.slice(0, paint_tints.size()) != paint_tints
+	):
+		_tint_stale = true
+	biome_tints = biomes
+	paint_tints = paints
+	var present := 0
+	for tint in biomes + paints:
+		if tint.a > 0.0:
+			present = 1
+	material.set_shader_parameter("layer_tint", tables.layer)
+	material.set_shader_parameter("broad_present", present)
 
 
 func _build_broad() -> void:
+	var start := Time.get_ticks_usec()
 	var size := Vector2i(document.samples_x(), document.samples_z())
-	var planes := _broad_planes(Rect2i(Vector2i.ZERO, size))
-	weights.clear()
-	broad_textures.clear()
-	for plane in GroundLayerTable.PLANES:
-		var image := Image.create_from_data(
-			size.x, size.y, false, Image.FORMAT_RGBA8, planes[plane]
-		)
-		weights.append(image)
-		broad_textures.append(ImageTexture.create_from_image(GroundLayerTable.broad_image(image)))
-	material.set_shader_parameter("layer_broad_a", broad_textures[0])
-	material.set_shader_parameter("layer_broad_b", broad_textures[1])
+	var plane := GroundBroadTint.tint_plane(
+		document, biome_tints, paint_tints, Rect2i(Vector2i.ZERO, size)
+	)
+	tint_mirror = GroundBroadTint.plane_image(size, plane)
+	broad_texture = ImageTexture.create_from_image(GroundBroadTint.broad_image(tint_mirror))
+	material.set_shader_parameter("broad_tint_map", broad_texture)
+	_tint_stale = false
+	last_broad_usec = Time.get_ticks_usec() - start
 
 
 func _update_broad(rect: Rect2i) -> void:
 	var start := Time.get_ticks_usec()
-	var planes := _broad_planes(rect)
-	for plane in GroundLayerTable.PLANES:
-		var region := Image.create_from_data(
-			rect.size.x, rect.size.y, false, Image.FORMAT_RGBA8, planes[plane]
-		)
-		weights[plane].blit_rect(region, Rect2i(Vector2i.ZERO, rect.size), rect.position)
-		broad_textures[plane].update(GroundLayerTable.broad_image(weights[plane]))
+	var plane := GroundBroadTint.tint_plane(document, biome_tints, paint_tints, rect)
+	var region := GroundBroadTint.plane_image(rect.size, plane)
+	tint_mirror.blit_rect(region, Rect2i(Vector2i.ZERO, rect.size), rect.position)
+	broad_texture.update(GroundBroadTint.broad_image(tint_mirror))
 	last_broad_usec = Time.get_ticks_usec() - start

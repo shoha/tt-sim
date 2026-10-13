@@ -1,7 +1,7 @@
 extends GutTest
 
 ## The index ground's binding (ground layers card G3): GroundLayerArrays' stable appends and
-## capacity steps, GroundLayerBinding's pure packing (the shader's routing rows, broad slots,
+## capacity steps, GroundLayerBinding's pure packing (the shader's routing rows, broad tints,
 ## padded tiles) and its parity rules, and a crowded real map (three biomes and a burnt forest
 ## patch with ash) on which every accent is drawn.
 
@@ -100,20 +100,30 @@ func test_shader_tables_pack_rows_and_accents() -> void:
 	assert_eq(GroundLayerBinding.shader_tables({}, PackedByteArray(), 0).accent_present, 0)
 
 
-func test_broad_slots_append_in_place_up_to_eight() -> void:
-	var first := GroundLayerBinding.broad_slots(
-		PackedStringArray(),
-		PackedStringArray(["forest_floor", "", "pine_duff"]),
-		PackedStringArray(["", "cobblestone"])
+func test_tint_tables_tint_biome_grounds_and_built_paint_without_a_slot_limit() -> void:
+	var grounds := _names(12)
+	grounds[1] = ""
+	var layer_of := func(surface: String) -> int: return 20 if surface == "planks" else 3
+	var tables := GroundLayerBinding.tint_tables(
+		grounds,
+		PackedStringArray(["moss", "planks"]),
+		func(surface: String) -> String: return "built" if surface == "planks" else "ground",
+		layer_of,
+		func(surface: String) -> Color:
+			return Color(0.5, 0.25, 0.1) if surface == "planks" else Color(0.2, 0.4, 0.1)
 	)
-	assert_eq(first, PackedStringArray(["forest_floor", "pine_duff", "cobblestone"]))
-	var later := GroundLayerBinding.broad_slots(
-		first, PackedStringArray(["grass_alpine", "pine_duff"]), PackedStringArray(["planks"])
-	)
-	assert_eq(later.slice(0, 3), first, "kept in place")
-	assert_eq(later.slice(3), PackedStringArray(["grass_alpine", "planks"]))
-	var many := GroundLayerBinding.broad_slots(PackedStringArray(), _names(12), PackedStringArray())
-	assert_eq(many.size(), GroundLayerBinding.BROAD_SLOTS)
+	var biomes: PackedColorArray = tables.biome
+	assert_eq(biomes.size(), 13, "slot 0 and every biome: no slot limit")
+	assert_eq(biomes[0].a, 0.0, "no biome, no tint")
+	assert_eq(biomes[1], Color(0.2, 0.4, 0.1, 1.0), "a biome ground tints at weight 1")
+	assert_eq(biomes[2].a, 0.0, "a biome drawn as the base does not")
+	var paints: PackedColorArray = tables.paint
+	assert_eq(paints[0].a, 0.0, "painted ground does not tint")
+	assert_eq(paints[1], Color(0.5, 0.25, 0.1, GroundBroadTint.TRAMPLE_WEIGHT), "built does")
+	var per_layer: PackedVector4Array = tables.layer
+	assert_eq(per_layer.size(), GroundLayers.MAX_LAYERS)
+	assert_eq(per_layer[20], Vector4(0.5, 0.25, 0.1, GroundBroadTint.TRAMPLE_WEIGHT))
+	assert_eq(per_layer[3], Vector4(0.2, 0.4, 0.1, 0.0), "a ground: its colour, no paint weight")
 
 
 func test_padded_tiles_fill_the_shader_array() -> void:

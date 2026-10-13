@@ -13,16 +13,13 @@ static func run(base: Node, step: Dictionary) -> String:
 		mat.set_shader_parameter(String(key), params[key])
 	if step.has("broad_factor"):
 		var f := int(step.broad_factor)
-		for plane in 2:
-			var w: Image = terrain.get_ground_weights(plane)
-			var img := w.duplicate() as Image
-			img.resize(
-				maxi(1, ceili(float(w.get_width()) / f)),
-				maxi(1, ceili(float(w.get_height()) / f)),
-				Image.INTERPOLATE_TRILINEAR
-			)
-			mat.set_shader_parameter(
-				"layer_broad_a" if plane == 0 else "layer_broad_b",
-				ImageTexture.create_from_image(img)
-			)
+		var w: Image = terrain.get_broad_tint()
+		var img := w.duplicate() as Image
+		img.resize(
+			maxi(1, ceili(float(w.get_width()) / f)),
+			maxi(1, ceili(float(w.get_height()) / f)),
+			Image.INTERPOLATE_TRILINEAR
+		)
+		img.convert(Image.FORMAT_RGBAH)
+		mat.set_shader_parameter("broad_tint_map", ImageTexture.create_from_image(img))
 	return "ok %s" % str(params)
