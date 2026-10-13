@@ -73,4 +73,13 @@ func test_every_wind_shader_gates_its_metallic_on_the_flag() -> void:
 		assert_has(names, "has_orm_texture", shader.resource_path)
 	var include := FileAccess.get_file_as_string(INCLUDE_PATH)
 	assert_true(include.contains("uniform bool has_orm_texture = false;"))
-	assert_true(include.contains("out_metallic = has_orm_texture ? orm.b : 0.0;"))
+	assert_true(include.contains("out_metallic = orm.b * float(has_orm_texture);"))
+
+
+func test_the_flag_is_never_read_through_a_ternary() -> void:
+	# `has_orm_texture ? orm.b : 0.0` (0fe3d41) segfaulted the game from a background thread,
+	# with no backtrace, every time a saved authored map was opened in authoring on
+	# Godot 4.7.2 / Vulkan; the product form does not (bisected and A/B-tested 2026-10-13).
+	var include := FileAccess.get_file_as_string(INCLUDE_PATH)
+	var ternary := RegEx.create_from_string("has_orm_texture\\s*\\?")
+	assert_null(ternary.search(include), "has_orm_texture must not drive a ternary")

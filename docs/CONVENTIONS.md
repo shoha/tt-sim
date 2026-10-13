@@ -582,6 +582,8 @@ func _load_icons_worker():
 
 6. **No background resource loads under `--headless`**: Godot 4.7.1's dummy renderer (what `--headless` runs: GUT, CI, CLI tools) keeps textures and materials in RID owners that are not thread-safe, so a texture or material created on a worker thread races every other one being created (on another worker or the main thread): "Parameter "t" is null" in `texture_2d_initialize`, "Parameter "material" is null" in `material_set_shader`, and a segfault in a stress probe (2026-09-27; the real renderers were clean). It made GUT runs flaky ("Unexpected Errors" in whichever test was loading). Any threaded load of a GLB, scene or texture (`ResourceLoader.load_threaded_request`, GLTF generation on `WorkerThreadPool`) checks `GlbUtils.threaded_loads_safe()` and loads in place when it is false. Pure data work (scatter generation, rock keeping, document parsing) stays on workers everywhere.
 
+7. **A crash with no backtrace is off the main thread**: Godot's Windows crash handler wraps only the main thread, so a segfault on a worker (pipeline compilation, a loader thread, a driver thread) exits 139 with nothing in the log or `user://logs/`, at a different script line each run. Bisect and A/B the suspect instead of chasing the last printed line. The case that taught it (2026-10-13): `out_metallic = has_orm_texture ? orm.b : 0.0;` in `shaders/wind_foliage_include.gdshaderinc` (0fe3d41) crashed every opening of a saved authored map in authoring (the render jobs' `dress`) on Godot 4.7.2 / Vulkan, while a new map drew fine; `orm.b * float(has_orm_texture)` does not, and `test_wind_foliage_orm.gd` keeps the ternary out.
+
 ---
 
 ## Input Actions
