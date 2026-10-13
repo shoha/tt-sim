@@ -499,6 +499,16 @@ the client. (A ford is 0.17 m deep, so a token on it is correctly not submerged.
 client captures matched. Since 2026-10-10 the tokens are avatars, whose ring follows the
 swimmer's rule (NETWORKING.md "Automated runs"); passed on both sides.
 
+Path direction (user, 2026-10-13): paths and roads have a direction, but the ground samples
+built surfaces (cobblestone, flagstone, planks, dirt roads) with the same per-cell rotation and
+sampling that breaks up repetition on soft ground, so a path's courses, planks and ruts turn
+every which way and the path reads unnatural. Done looks like: a painted path's texture
+follows its stroke (the stroke's tangent carried per sample, or derived from the paint's
+gradient, orients the UV of built surfaces; soft grounds keep the rotation), with curves that
+bend the courses smoothly and junctions that blend two directions. Needs a design card first
+(where the direction lives in the document, how the ground shader reads it under the index
+layers, how crossings and the skirt treat it), then a look pass at the game camera.
+
 Water follow-ups (phase 4 judgment pass, 2026-09-27):
 - In the wetland the ankle stream is so thick with reeds it can read as a reed bed rather
   than water from the home view. (The foam outlines along submerged reed blades went with
