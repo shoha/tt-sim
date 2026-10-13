@@ -265,6 +265,9 @@ static func _build_shader_material(
 	if FoliageLight.is_painted(source):
 		material.shader = FoliageLight.get_shader()
 		material.set_meta(FoliageLight.META_PAINTED, true)
+		var shade: Variant = FoliageLight.shade_floor(source)
+		if shade != null:
+			material.set_shader_parameter(FoliageLight.SHADE_UNIFORM, shade)
 	# Tagged so LevelEnvironmentManager.store_wind_materials() can find and re-tune
 	# this exact material instance later without re-walking or reloading the scene.
 	material.set_meta("wind_category", category)
