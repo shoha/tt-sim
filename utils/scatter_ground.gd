@@ -376,44 +376,56 @@ static func _painted_fields(
 	var built := PackedFloat32Array()
 	var rock := PackedFloat32Array()
 	var ash := PackedFloat32Array()
-	if doc.surface_ids.is_empty() or doc.surface_weights.size() != count * MapDocument.MAX_SURFACES:
+	if not doc.has_surface_entries():
 		return {"total": total_field, "built": built, "rock": rock, "ash": ash}
 	total_field.resize(count)
 	built.resize(count)
 	rock.resize(count)
 	ash.resize(count)
-	var built_slots := PackedInt32Array()
-	var rock_slots := PackedInt32Array()
-	var ash_slots := PackedInt32Array()
+	# Per slot what its weight counts toward: 0 only the total, 1 built, 2 rock, 3 ash.
+	var kind := PackedByteArray()
+	kind.resize(MapDocument.MAX_SURFACES)
 	for s in doc.surface_ids.size():
 		if built_surfaces.has(doc.surface_ids[s]):
-			built_slots.append(s)
+			kind[s] = 1
 		elif cliff_surfaces.has(doc.surface_ids[s]):
-			rock_slots.append(s)
+			kind[s] = 2
 		elif doc.surface_ids[s] in SCORCHED_SURFACES:
-			ash_slots.append(s)
+			kind[s] = 3
 	var weights := doc.surface_weights
+	var plane := count * MapDocument.SURFACE_CHANNELS
+	var used := doc.surface_ids.size()
 	var columns := doc.samples_x()
 	for z in range(rect.position.y, rect.end.y):
 		for x in range(rect.position.x, rect.end.x):
 			var i := z * columns + x
+			var at := i * MapDocument.SURFACE_CHANNELS
+			if weights[plane + at] == 0:
+				continue
 			var total := 0
-			for s in doc.surface_ids.size():
-				total += weights[MapDocument.surface_offset(i, s, count)]
+			var b := 0
+			var r := 0
+			var a := 0
+			for e in MapDocument.SURFACE_ENTRIES:
+				var weight := weights[plane + at + e]
+				if weight == 0:
+					break
+				var slot := weights[at + e]
+				if slot >= used:
+					continue
+				total += weight
+				match kind[slot]:
+					1:
+						b += weight
+					2:
+						r += weight
+					3:
+						a += weight
 			if total == 0:
 				continue
 			total_field[i] = total / 255.0
-			var b := 0
-			for s in built_slots:
-				b += weights[MapDocument.surface_offset(i, s, count)]
 			built[i] = b / 255.0
-			var r := 0
-			for s in rock_slots:
-				r += weights[MapDocument.surface_offset(i, s, count)]
 			rock[i] = r / 255.0
-			var a := 0
-			for s in ash_slots:
-				a += weights[MapDocument.surface_offset(i, s, count)]
 			ash[i] = a / 255.0
 	return {"total": total_field, "built": built, "rock": rock, "ash": ash}
 

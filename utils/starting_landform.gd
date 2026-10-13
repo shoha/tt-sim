@@ -511,7 +511,6 @@ static func paint_line(
 	if slot < 0 or points.size() < 2:
 		return 0
 	var half_width := width * 0.5
-	var count := doc.sample_count()
 	var painted := 0
 	var box := Rect2(points[0], Vector2.ZERO)
 	for p in points:
@@ -528,7 +527,7 @@ static func paint_line(
 			var t := clampf(1.0 - d / maxf(soft, 1e-3), 0.0, 1.0) if d > 0.0 else 1.0
 			var value := roundi(255.0 * t * t * (3.0 - 2.0 * t))
 			var i := doc.sample_index(x, z)
-			if value > doc.surface_weights[MapDocument.surface_offset(i, slot, count)]:
+			if value > doc.surface_weight(i, slot):
 				doc.set_surface_weight(i, slot, value)
 				painted += 1
 	return painted

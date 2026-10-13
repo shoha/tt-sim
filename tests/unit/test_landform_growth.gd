@@ -217,7 +217,9 @@ func test_thin_cover_and_the_edge_are_greened_on_every_map() -> void:
 		assert_between(float(greened) / thin, 0.25, 1.0, "%s: thin cover greened" % cells)
 		for z in range(-5, 6):
 			for x in range(10, 20):
-				assert_eq(_weight(doc, slot, Vector2(x, z)), 0, "%s: groves keep their floor" % cells)
+				assert_eq(
+					_weight(doc, slot, Vector2(x, z)), 0, "%s: groves keep their floor" % cells
+				)
 		var half := doc.extent_m() * 0.5
 		for z in range(-5, 6):
 			for x in [-half.x, half.x]:
@@ -390,7 +392,7 @@ func _covered(doc: MapDocument) -> MapDocument:
 func _weight(doc: MapDocument, slot: int, p: Vector2) -> int:
 	var s := doc.world_to_sample(p).round()
 	var i := doc.sample_index(int(s.x), int(s.y))
-	return doc.surface_weights[MapDocument.surface_offset(i, slot, doc.sample_count())]
+	return doc.surface_weight(i, slot)
 
 
 func test_a_clearing_opens_the_cover_and_leaves_the_rest() -> void:

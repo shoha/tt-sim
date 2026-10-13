@@ -606,9 +606,9 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   slot lists (`SurfaceStroke.changes_plants()`): `AuthoredScatter.request_region()` over the
   stroke's area grown by a step and the painted edge warp, so covered plants shrink out and
   uncovered ones grow back. Ground-role paint changes no plants (it yields to the rock on
-  faces and is ground elsewhere), so it regenerates nothing. `slot_refusal()` walks each
-  slot's weights only when all eight are taken (`MapDocument.surface_slot_unused`, a strided
-  loop, about 3 ms per empty slot on a 200 ft map).
+  faces and is ground elsewhere), so it regenerates nothing. `slot_refusal()` walks the
+  entries only when all `MapDocument.PAINT_SURFACE_LIMIT` (8) slots are taken
+  (`MapDocument.used_surface_slots`, one pass that stops at each sample's first unused entry).
 - **Water (P4-3):** `water.carve_river()`, pond strokes and water erases (`WaterEditor`),
   one history entry each, with the ground, water surface, wet dressing and plants
   following; see [docs/systems/water.md](systems/water.md) (Authoring).
@@ -1201,30 +1201,16 @@ rather than in `ASSET_PIPELINE.md`.
   (`MapCrossingIO.problem`, `utils/map_crossing_io.gd`). An older build loads a map with
   crossings as a map without them. The model is in
   [docs/systems/crossings.md](systems/crossings.md) (Model).
-- **Painted surfaces:** `surfaces.json` (`{"surfaces": [palette surface name, ...]}`, at
-  most 8, distinct) names the slots; `surfaces.png` (RGBA8 on the sample grid) holds the
-  weights of slots 0-3 in R, G, B, A, and `surfaces_b.png` slots 4-7, written only when
-  more than four surfaces are listed. A weight is that surface's coverage 0..255 at the
-  sample; the weights of all slots at a sample sum to at most 255, and the remainder is
-  automatic ground. The renderer (phase 3, P3-4) lets painted surfaces override the
-  automatic rules (cliff, scree, height) and the biome ground in proportion to their
-  weight; the automatic rules are code, not document data. These entries render on
-  every peer; they are not authoring-only. In memory,
-  `MapDocument.surface_ids` and `surface_weights` (`sample_count() * 8` bytes as two
-  planes, each exactly one weight texture's RGBA8 pixel data, so an upload or save is a
-  native slice rather than a per-sample split); `surface_offset()`,
-  `set_surface_weight()` (the newest paint wins: other slots scale down to keep the
-  sum), `ensure_surface()` (existing slot, else a new one, else a slot with no paint
-  renamed) and `trim_unused_surfaces()` (drops trailing empty slots). The writer
-  normalises on the way out (paint in unlisted slots zeroed, over-full samples scaled to
-  255); the reader does the same with a warning. Any other problem (more than 8 or
-  malformed or repeated ids, ids without `surfaces.png`, a PNG without `surfaces.json`,
-  a PNG not matching the grid, over its 4 MB cap) drops the surfaces with a warning; a
-  missing or bad `surfaces_b.png` keeps slots 0-3. Unknown surface names are kept; they
-  resolve against the palette at load. No format bump: an older build reads only its own
-  `KNOWN_ENTRIES` from the archive (`_extract_entries`, `_known_entries`), so it loads a
-  painted document as unpainted, base and biome ground only. Peers must run the same
-  version anyway. An older build that re-saves such a document drops the paint.
+- **Painted surfaces (format 2, 2026-10-13):** `surfaces.json` (`{"surfaces": [palette
+  surface name, ...]}`, at most 64, distinct) names the slots; `surfaces_index.png` and
+  `surfaces_weight.png` (RGBA8 on the sample grid) hold up to four (index, weight) entries
+  per sample, the weights high to low and 0 meaning unused. A weight is that surface's
+  coverage 0..255 at the sample; the entries of a sample sum to at most 255, and the
+  remainder is automatic ground. The renderer (phase 3, P3-4) lets painted surfaces override
+  the automatic rules and the biome ground in proportion to their weight; these entries
+  render on every peer. The rules, the format 1 migration and the validation are in
+  [docs/systems/map_document.md](systems/map_document.md) "Painted surfaces"
+  (`MapSurfacesIO`, `SurfaceEntries`).
 - **Geometry:** the map is `w * cell_size_m` by `h * cell_size_m`, centred on the origin,
   floor at Y = 0. Heights and masks share one row-major grid (Z rows, X columns) of
   `round(extent / sample_spacing_m) + 1` samples per axis whose outermost samples sit on

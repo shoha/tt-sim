@@ -144,9 +144,7 @@ func _build_ui() -> void:
 	panel.paint_selected.connect(_on_paint_selected)
 	panel.water_shape_selected.connect(_on_water_shape_selected)
 	panel.water_depth_selected.connect(_on_water_depth_selected)
-	panel.water_speed_changed.connect(
-		func(speed: float) -> void: WaterTool.of(brush).speed = speed
-	)
+	panel.water_speed_changed.connect(func(speed: float) -> void: WaterTool.of(brush).speed = speed)
 	panel.bridge_kind_selected.connect(_on_bridge_kind_selected)
 	panel.brush_size_changed.connect(func(radius: float) -> void: brush.set_radius(radius))
 	panel.brush_strength_changed.connect(func(flow: float) -> void: brush.set_flow(flow))
@@ -332,7 +330,7 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 	scatter.attach_document(document)
 	FoliageDensityController.apply(root, FoliageDensityController.budget_from_settings())
 	_view_fit.fit(root, document)
-	editor =AuthoringEditor.create(document, root, history)
+	editor = AuthoringEditor.create(document, root, history)
 	editor.edited.connect(mark_edited)
 	editor.edited.connect(func() -> void: _bounds_stale = true)
 	editor.edited.connect(_refresh_tools)
@@ -373,7 +371,10 @@ func _terrain() -> AuthoredTerrain:
 ## range changed.
 func _refresh_bounds_after_edit() -> void:
 	var terrain := _terrain()
-	if terrain != null and ((editor and editor.has_height_work()) or terrain.has_unsettled_chunks()):
+	if (
+		terrain != null
+		and ((editor and editor.has_height_work()) or terrain.has_unsettled_chunks())
+	):
 		return
 	_bounds_stale = false
 	tokens.reground_after_physics()
@@ -609,7 +610,7 @@ func refresh_paint_limits() -> void:
 	if editor == null or panel == null:
 		return
 	var reason := ""
-	if document.surface_ids.size() >= MapDocument.MAX_SURFACES:
+	if document.surface_ids.size() >= MapDocument.PAINT_SURFACE_LIMIT:
 		reason = editor.surface_refusal("")
 	panel.set_paint_limits(reason, document.surface_ids)
 	_refresh_paint_order()

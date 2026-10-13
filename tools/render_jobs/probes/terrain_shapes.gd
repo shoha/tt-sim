@@ -154,7 +154,6 @@ static func _paint(editor: AuthoringEditor, doc: MapDocument, step: Dictionary) 
 		distance = func(p: Vector2) -> float:
 			return _rect_distance(p, (low + high) * 0.5, (high - low) * 0.5, corner)
 	var changed := Rect2i()
-	var count := doc.sample_count()
 	for z in doc.samples_z():
 		for x in doc.samples_x():
 			var d: float = distance.call(doc.sample_to_world(Vector2(x, z)))
@@ -163,7 +162,7 @@ static func _paint(editor: AuthoringEditor, doc: MapDocument, step: Dictionary) 
 			var t := clampf(1.0 - d / maxf(soft, 1e-3), 0.0, 1.0) if d > 0.0 else 1.0
 			var value := roundi(255.0 * t * t * (3.0 - 2.0 * t))
 			var i := doc.sample_index(x, z)
-			if value > doc.surface_weights[MapDocument.surface_offset(i, slot, count)]:
+			if value > doc.surface_weight(i, slot):
 				doc.set_surface_weight(i, slot, value)
 				changed = MaskBrush.merge_rect(changed, Rect2i(x, z, 1, 1))
 	if changed.has_area():

@@ -137,11 +137,11 @@ func test_ash_refused_still_lays_the_fire() -> void:
 	var doc := editor.document
 	var names: Array = []
 	for surface in PaletteLibrary.surfaces(editor.palette_root):
-		if not surface in ["ash", "dirt_peat"] and names.size() < MapDocument.MAX_SURFACES:
+		if not surface in ["ash", "dirt_peat"] and names.size() < MapDocument.PAINT_SURFACE_LIMIT:
 			names.append(surface)
 	doc.surface_ids = PackedStringArray(names)
 	var weights := PackedByteArray()
-	weights.resize(doc.sample_count() * MapDocument.SURFACE_CHANNELS * 2)
+	weights.resize(doc.sample_count() * MapDocument.SURFACE_BYTES)
 	doc.surface_weights = weights
 	for slot in names.size():
 		doc.set_surface_weight(slot, slot, 40)

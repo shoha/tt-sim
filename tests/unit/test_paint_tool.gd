@@ -65,7 +65,7 @@ func test_the_first_dab_claims_a_slot_and_allocates_the_weights() -> void:
 	assert_true(_doc.surface_weights.is_empty())
 	_paint("cobblestone", Vector2(-5, 0), Vector2(5, 0))
 	assert_eq(_doc.surface_ids, PackedStringArray(["cobblestone"]))
-	assert_eq(_doc.surface_weights.size(), _doc.sample_count() * MapDocument.MAX_SURFACES)
+	assert_eq(_doc.surface_weights.size(), _doc.sample_count() * MapDocument.SURFACE_BYTES)
 	assert_gt(_weight_at(Vector2(0, 0), 0), 240, "the core is covered after a long dwell")
 	assert_eq(_weight_at(Vector2(0, 3), 0), 0, "nothing past the brush")
 	_paint("cobblestone", Vector2(-5, 4), Vector2(5, 4))
@@ -75,7 +75,7 @@ func test_the_first_dab_claims_a_slot_and_allocates_the_weights() -> void:
 func test_a_ninth_surface_is_refused_until_one_is_erased_completely() -> void:
 	for k in EIGHT.size():
 		_paint(EIGHT[k], Vector2(-8 + 2 * k, -6), Vector2(-8 + 2 * k, -4), 1.0)
-	assert_eq(_doc.surface_ids.size(), MapDocument.MAX_SURFACES)
+	assert_eq(_doc.surface_ids.size(), MapDocument.PAINT_SURFACE_LIMIT)
 	assert_null(SurfaceStroke.begin(_doc, "mud", false), "every slot holds paint")
 	var before := _snapshot()
 	assert_eq(before.ids.size(), 8, "a refused begin changes nothing")

@@ -5,23 +5,26 @@ extends RefCounted
 ## surface_weights; phase 3, P3-6): paints one palette surface, or erases every painted
 ## surface back toward the automatic ground, with MaskBrush's soft falloff and exposure, and
 ## records what it changed so the stroke can be undone, redone or cancelled. The MaskStroke
-## pattern, on the eight weight channels.
+## pattern, on the per-sample (index, weight) entries (MapDocument's header).
 ##
 ## Paint. The painted slot's coverage v (0..1, a float per touched sample, started from its
-## byte) approaches 1 by MaskBrush.amount() each dab, faster than a biome by SURFACE_GAIN. The
-## newest paint wins, as MapDocument.set_surface_weight() says: the other slots keep their
-## weights from the stroke's start while they fit in 255 - the painted weight, and scale down
-## together once they do not. Computing them from the start bytes every dab (not from last
-## dab's rounded bytes) keeps a long dwell from eroding them by rounding.
+## entry's weight) approaches 1 by MaskBrush.amount() each dab, faster than a biome by
+## SURFACE_GAIN. The newest paint wins, as MapDocument.set_surface_weight() says: the other
+## entries keep their weights from the stroke's start while they fit in 255 - the painted
+## weight, and scale down together once they do not; a sample that started with
+## SURFACE_ENTRIES other surfaces drops its weakest for the painted one. Computing them from
+## the start bytes every dab (not from last dab's rounded bytes) keeps a long dwell from
+## eroding them by rounding. Each dab writes the sample's entries in canonical order.
 ##
-## Erase (Ctrl at the press). Every slot at a touched sample fades toward 0 by the same
+## Erase (Ctrl at the press). Every entry at a touched sample fades toward 0 by the same
 ## factor: a remaining fraction f per sample (1 at the start) is multiplied by 1 - amount()
-## and each slot's weight is its start byte times f. The ground returns to the automatic
+## and each entry's weight is its start byte times f. The ground returns to the automatic
 ## dressing and the biome ground as the paint fades.
 ##
 ## Slots. A paint stroke claims its surface's slot on begin (MapDocument.ensure_surface():
 ## the surface's slot, a new one, or a slot whose paint was fully erased, renamed); begin()
-## returns null when all MAX_SURFACES slots hold paint, and the caller tells the author why.
+## returns null when all PAINT_SURFACE_LIMIT slots hold paint, and the caller tells the
+## author why.
 ## finish() drops trailing slots left without paint (trim_unused_surfaces), so erasing a
 ## surface completely frees its slot. The slot list before and after, and whether the
 ## weights existed, are part of the diff. The list and the weights are replaced by new arrays
@@ -36,7 +39,8 @@ const BLOCK := MaskStroke.BLOCK
 const COMPRESSION := FileAccess.COMPRESSION_ZSTD
 const AMOUNT_STEPS := 256
 const CHANNELS := MapDocument.SURFACE_CHANNELS
-const SLOTS := MapDocument.MAX_SURFACES
+const ENTRIES := MapDocument.SURFACE_ENTRIES
+const BYTES := MapDocument.SURFACE_BYTES
 ## Paint rate over MaskBrush.RATE. A surface is a single layer rather than a density that
 ## thins trees, and a path should read after one pass at a natural speed: about 0.75 of full
 ## cover under the centre of a brush that crosses a point in a third of a second.
@@ -60,7 +64,8 @@ var changed: Rect2i = Rect2i()
 
 ## Paint: the slot's coverage; erase: the remaining fraction. Per sample, once loaded.
 var _value := PackedFloat32Array()
-## Every slot's weight when the sample was first touched (sample * SLOTS + slot).
+## Each sample's entries when it was first touched: its four indices, then its four
+## weights (sample * BYTES).
 var _start := PackedByteArray()
 var _loaded := PackedByteArray()
 var _captured := PackedByteArray()
@@ -90,7 +95,7 @@ static func begin(document: MapDocument, surface: String, erase: bool) -> Surfac
 			return null
 		if not stroke._had_weights:
 			var fresh := PackedByteArray()
-			fresh.resize(count * CHANNELS * 2)
+			fresh.resize(count * BYTES)
 			document.surface_weights = fresh
 		document.surface_ids = document.surface_ids.duplicate()
 		stroke.slot = document.ensure_surface(surface)
@@ -98,7 +103,7 @@ static func begin(document: MapDocument, surface: String, erase: bool) -> Surfac
 			stroke._restore_list()
 			return null
 	stroke._value.resize(count)
-	stroke._start.resize(count * SLOTS)
+	stroke._start.resize(count * BYTES)
 	stroke._loaded.resize(count)
 	stroke._blocks_x = ceili(float(document.samples_x()) / BLOCK)
 	stroke._captured.resize(stroke._blocks_x * ceili(float(document.samples_z()) / BLOCK))
@@ -107,14 +112,13 @@ static func begin(document: MapDocument, surface: String, erase: bool) -> Surfac
 
 ## "" when `surface` can take a slot on `document` (it has one, a slot is free, or a slot's
 ## paint was fully erased), else FULL_REASON. The walk over each slot's weights
-## (MapDocument.surface_slot_unused) only runs when all MAX_SURFACES slots are taken.
+## (MapDocument.used_surface_slots) only runs when all PAINT_SURFACE_LIMIT slots are taken.
 static func slot_refusal(document: MapDocument, surface: String) -> String:
 	var ids := document.surface_ids
-	if surface in ids or ids.size() < MapDocument.MAX_SURFACES:
+	if surface in ids or ids.size() < MapDocument.PAINT_SURFACE_LIMIT:
 		return ""
-	for s in ids.size():
-		if document.surface_slot_unused(s):
-			return ""
+	if document.used_surface_slots().has(0):
+		return ""
 	return FULL_REASON
 
 
@@ -153,7 +157,8 @@ func dab(from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
 	var length_sq := segment.length_squared()
 	var radius_sq := radius * radius
 	var weights := doc.surface_weights
-	var used := doc.surface_ids.size()
+	var out_index := PackedInt32Array([0, 0, 0, 0])
+	var out_weight := PackedInt32Array([0, 0, 0, 0])
 	var values := _value
 	var start := _start
 	var loaded := _loaded
@@ -180,43 +185,80 @@ func dab(from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
 			if a <= 0.0:
 				continue
 			var i := row + x
-			var base := i * SLOTS
+			var base := i * BYTES
+			var at := i * CHANNELS
+			var weight_at := plane + at
 			if loaded[i] == 0:
 				loaded[i] = 1
-				for s in used:
-					start[base + s] = weights[(s >> 2) * plane + i * CHANNELS + (s & 3)]
-				values[i] = 1.0 if erase else start[base + mine] / 255.0
-			var touched := false
+				var own := 0
+				for e in ENTRIES:
+					start[base + e] = weights[at + e]
+					start[base + ENTRIES + e] = weights[weight_at + e]
+					if weights[weight_at + e] != 0 and weights[at + e] == mine:
+						own = weights[weight_at + e]
+				values[i] = 1.0 if erase else own / 255.0
+			# The sample's new entries, high to low: n of them in out_index / out_weight.
+			var n := 0
 			if erase:
 				var f: float = values[i] * (1.0 - a)
 				values[i] = f
-				for s in used:
-					var at := (s >> 2) * plane + i * CHANNELS + (s & 3)
-					var byte := roundi(start[base + s] * f)
-					if byte != weights[at]:
-						weights[at] = byte
-						touched = true
+				for e in ENTRIES:
+					var byte := roundi(start[base + ENTRIES + e] * f)
+					if byte > 0:
+						out_index[n] = start[base + e]
+						out_weight[n] = byte
+						n += 1
 			else:
 				var v: float = values[i]
 				v += (1.0 - v) * a
 				values[i] = v
 				var painted := clampi(roundi(v * 255.0), 0, 255)
+				# The other entries come from the stroke's start, high to low. A sample
+				# full of other surfaces drops its weakest (the last) for this one.
+				var has_mine := false
+				for e in ENTRIES:
+					if start[base + ENTRIES + e] != 0 and start[base + e] == mine:
+						has_mine = true
+				var keep := ENTRIES
+				if not has_mine and painted > 0 and start[base + BYTES - 1] != 0:
+					keep = ENTRIES - 1
 				var others := 0
-				for s in used:
-					if s != mine:
-						others += start[base + s]
+				for e in keep:
+					if start[base + e] != mine:
+						others += start[base + ENTRIES + e]
 				var room := 255 - painted
-				for s in used:
-					var at := (s >> 2) * plane + i * CHANNELS + (s & 3)
-					var byte := painted
-					if s != mine:
-						byte = start[base + s]
-						if others > room:
-							@warning_ignore("integer_division")
-							byte = byte * room / others
-					if byte != weights[at]:
-						weights[at] = byte
-						touched = true
+				var placed := painted == 0
+				for e in keep:
+					var byte := start[base + ENTRIES + e]
+					if byte == 0 or start[base + e] == mine:
+						continue
+					if others > room:
+						@warning_ignore("integer_division")
+						byte = byte * room / others
+					if byte == 0:
+						continue
+					if not placed and painted >= byte:
+						out_index[n] = mine
+						out_weight[n] = painted
+						n += 1
+						placed = true
+					out_index[n] = start[base + e]
+					out_weight[n] = byte
+					n += 1
+				if not placed:
+					out_index[n] = mine
+					out_weight[n] = painted
+					n += 1
+			var touched := false
+			for e in ENTRIES:
+				var index := out_index[e] if e < n else 0
+				var weight := out_weight[e] if e < n else 0
+				if weights[at + e] != index:
+					weights[at + e] = index
+					touched = true
+				if weights[weight_at + e] != weight:
+					weights[weight_at + e] = weight
+					touched = true
 			if touched:
 				low = low.min(Vector2i(x, z))
 				high = high.max(Vector2i(x, z))
