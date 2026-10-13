@@ -79,10 +79,11 @@ static func base_water_surfaces(
 	return out
 
 
-## The ground material for palette surface `surface_name`: the authored ground shader
-## with the surface's albedo, normal and ORM bound at its tile size. A surface the palette
-## does not have, or whose albedo does not load, gets flat fallback textures and a
-## warning, and the material carries AuthoredTerrain.FALLBACK_META so callers can tell.
+## The ground material for a map on base surface `surface_name`: the authored ground shader
+## with the map's seed. Its surfaces, the base among them as layer 0, are bound by
+## GroundLayerBinding. A surface the palette does not have, or whose albedo does not load,
+## draws as flat fallback earth (GroundLayerArrays' stand-ins) with a warning, and the
+## material carries AuthoredTerrain.FALLBACK_META so callers can tell.
 static func build_ground_material(
 	surface_name: String, map_seed: int = 0, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> ShaderMaterial:
@@ -90,30 +91,14 @@ static func build_ground_material(
 	material.shader = AuthoredTerrain.GROUND_SHADER
 	material.set_shader_parameter("breakup_seed", map_seed & 0x7fffffff)
 	var surface: Dictionary = PaletteLibrary.surfaces(root).get(surface_name, {})
-	var albedo := load_texture(root, surface.get("albedo", ""))
-	if albedo == null:
+	if load_texture(root, surface.get("albedo", "")) == null:
 		push_warning(
 			(
 				"AuthoredTerrain: surface '%s' is not in the palette at %s; using a plain ground"
 				% [surface_name, root]
 			)
 		)
-		material.set_shader_parameter("albedo_tex", solid_texture(AuthoredTerrain.FALLBACK_ALBEDO))
-		material.set_shader_parameter("orm_tex", solid_texture(AuthoredTerrain.FALLBACK_ORM))
 		material.set_meta(AuthoredTerrain.FALLBACK_META, true)
-		return material
-	material.set_shader_parameter("albedo_tex", albedo)
-	material.set_shader_parameter("tile_m", float(surface["tile_m"]))
-	var normal := load_texture(root, surface.get("normal", ""))
-	if normal != null:
-		material.set_shader_parameter("normal_tex", normal)
-	var orm := load_texture(root, surface.get("orm", ""))
-	material.set_shader_parameter(
-		"orm_tex", orm if orm != null else solid_texture(AuthoredTerrain.FALLBACK_ORM)
-	)
-	var height := load_texture(root, surface.get("height", ""))
-	if height != null:
-		material.set_shader_parameter("height_tex", height)
 	return material
 
 

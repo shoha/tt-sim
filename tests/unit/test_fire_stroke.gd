@@ -14,14 +14,10 @@ const FOREST_AT := Vector3(-5, 0, 0)
 const MEADOW_AT := Vector3(5, 0, 0)
 
 
-## Two biomes, their accents, the burnt forest and ash overflow the ground's eight layers on
-## this small map; AuthoredTerrain warns and draws the extras as their neighbours, which is
-## its own documented behaviour (test_ground_layers.gd), not this test's subject. Called at
-## the end of each test that paints both biomes.
-func _allow_layer_warnings() -> void:
-	for e in get_errors():
-		if "AuthoredTerrain:" in str(e.code) + str(e.rationale):
-			e.handled = true
+## Two biomes, their accents, the burnt forest and ash: the index ground (G3) draws every
+## surface, so no test here expects a layer warning (the eight-slot table warned on each).
+func _no_layer_warnings() -> void:
+	assert_engine_error(0, "every ground surface and accent drawn")
 
 
 func _editor() -> AuthoringEditor:
@@ -98,7 +94,7 @@ func test_a_lay_is_one_entry_of_three_strokes_and_one_undo_takes_it_back() -> vo
 	assert_eq(_layers(doc), before, "one undo restores every layer")
 	editor.history.redo()
 	assert_eq(_layers(doc), after, "redo lays it all again")
-	_allow_layer_warnings()
+	_no_layer_warnings()
 
 
 func test_a_lay_over_a_meadow_only_is_fire_and_ash() -> void:
@@ -107,7 +103,7 @@ func test_a_lay_over_a_meadow_only_is_fire_and_ash() -> void:
 	var entry: Dictionary = editor.history.get("_undo").back()
 	assert_eq((entry.parts as Array).size(), 2, "no forest to burn")
 	assert_eq(_biome_at(editor, MEADOW_AT), MEADOW)
-	_allow_layer_warnings()
+	_no_layer_warnings()
 
 
 func test_putting_fire_out_keeps_the_ash_and_the_snags() -> void:
@@ -129,16 +125,20 @@ func test_putting_fire_out_keeps_the_ash_and_the_snags() -> void:
 	assert_eq(doc.surface_weights, weights, "the ash stays")
 	editor.history.undo()
 	assert_eq(_fire_at(editor, FOREST_AT), hot, "undo relights it")
-	_allow_layer_warnings()
+	_no_layer_warnings()
 
 
 func test_ash_refused_still_lays_the_fire() -> void:
 	var editor := _editor()
 	var doc := editor.document
+	# Every paint slot (64) taken: the palette's surfaces but ash, then names it does not have
+	# (listed and painted, drawn as nothing).
 	var names: Array = []
 	for surface in PaletteLibrary.surfaces(editor.palette_root):
-		if not surface in ["ash", "dirt_peat"] and names.size() < MapDocument.PAINT_SURFACE_LIMIT:
+		if not surface in ["ash", "dirt_peat"]:
 			names.append(surface)
+	while names.size() < MapDocument.PAINT_SURFACE_LIMIT:
+		names.append("filler_%d" % names.size())
 	doc.surface_ids = PackedStringArray(names)
 	var weights := PackedByteArray()
 	weights.resize(doc.sample_count() * MapDocument.SURFACE_BYTES)
@@ -151,7 +151,7 @@ func test_ash_refused_still_lays_the_fire() -> void:
 	assert_eq((entry.parts as Array).size(), 2, "fire and burnt forest, no ash")
 	assert_gt(_fire_at(editor, MEADOW_AT), 200, "the fire is laid")
 	assert_false("ash" in doc.surface_ids)
-	_allow_layer_warnings()
+	_no_layer_warnings()
 
 
 func test_a_cancelled_stroke_leaves_nothing() -> void:
@@ -226,7 +226,7 @@ func test_a_lay_burns_away_the_plants_under_it_and_undo_brings_them_back() -> vo
 	editor.history.undo()
 	await _settle(editor)
 	assert_eq(_count(editor, from, to, 1.0), before, "undoing the lay brings them back")
-	_allow_layer_warnings()
+	_no_layer_warnings()
 
 
 func test_ash_clears_small_plants_and_spares_rocks_trees_and_snags() -> void:

@@ -603,9 +603,10 @@ func warm_crossings() -> void:
 	)
 
 
-## Disables the Paint tiles that cannot take a slot (all eight hold paint) with the reason
-## in their tooltips; enables them all otherwise. The slot walk only runs when all eight
-## are taken (AuthoringEditor.surface_refusal). Then orders the Built tiles for the map.
+## Disables the Paint tiles that cannot take a slot (all MapDocument.PAINT_SURFACE_LIMIT, 64,
+## hold paint) with the reason in their tooltips; enables them all otherwise. The slot walk
+## only runs when all are taken (AuthoringEditor.surface_refusal). Then orders the Built
+## tiles for the map.
 func refresh_paint_limits() -> void:
 	if editor == null or panel == null:
 		return

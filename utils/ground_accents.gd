@@ -6,10 +6,11 @@ extends RefCounted
 ## temperate forest read as one flat brown at the game camera; the Blender maps it came from
 ## carry moss, grass and bare patches). The palette lists them per biome (`ground_accents`,
 ## docs/ASSET_PIPELINE.md section 9: surface, coverage, scale_m, in priority order);
-## GroundLayerTable gives each drawn accent a layer slot and says which ground component
-## (a GROUND slot or the base) it belongs to; this class turns that into the shader's accent
-## uniforms and is the CPU twin of the shader's patch mask, so the coverage calibration is
-## testable headless.
+## GroundLayers gives each drawn accent a layer and its routing table says which biome row (or
+## the base) it belongs to (ground layers card G3; the slot table's shader_uniforms stays for
+## GroundLayerTable until its removal in G5); this class turns that into the shader's accent
+## uniforms (row_params) and is the CPU twin of the shader's patch mask, so the coverage
+## calibration is testable headless.
 ##
 ## The mask. Per accent, three octaves of smooth value noise on a lattice of scale_m metres,
 ## the domain rotated (ROTATION) so the lattice's axes do not show and offset per surface and
@@ -238,6 +239,26 @@ static func shader_uniforms(accents: Array, map_seed: int) -> Dictionary:
 	return {"accent_components": components, "accent_layer": layers, "accent_params": params}
 
 
+## The index ground's accent parameters of one routing row (GroundLayers.routing's
+## "accent_entries" for that row: {layer, surface, coverage, scale_m} in order, at most
+## PER_COMPONENT) on map seed `map_seed`: per entry (threshold, 1 / scale_m, domain offset),
+## each threshold set for its drawn coverage (drawn_coverages), as shader_uniforms does.
+static func row_params(entries: Array, map_seed: int) -> PackedVector4Array:
+	var count := mini(entries.size(), PER_COMPONENT)
+	var coverages := PackedFloat32Array()
+	for i in count:
+		coverages.append(float(entries[i].coverage))
+	var drawn := drawn_coverages(coverages)
+	var params := PackedVector4Array()
+	for i in count:
+		var entry: Dictionary = entries[i]
+		var offset := surface_offset(String(entry.surface), map_seed)
+		params.append(
+			Vector4(threshold(drawn[i]), 1.0 / maxf(float(entry.scale_m), 0.01), offset.x, offset.y)
+		)
+	return params
+
+
 ## Binds a plan's accents (shader_uniforms) and the noise lattice on ground `material`.
 static func bind(material: ShaderMaterial, plan: Dictionary, map_seed: int) -> void:
 	var uniforms := shader_uniforms(plan.get("accents", []), map_seed)
@@ -246,15 +267,16 @@ static func bind(material: ShaderMaterial, plan: Dictionary, map_seed: int) -> v
 	material.set_shader_parameter("accent_noise", noise_texture())
 
 
-## Brings the ground skirt's material up to the ground's slot textures, so it can draw the
-## surface covering the map's edge (TerrainSkirt.sync_ground sets which, and its layer_count).
-## The skirt draws no accent patches (they shrink away inside the map's edge band, bind_edge)
-## and never any weights (its painted and ground masks stay 0; the skirt shader reads no
-## weight maps and runs no rules).
+## Brings the ground skirt's material up to the ground's layer arrays, so it can draw the
+## surface covering the map's edge (TerrainSkirt.sync_ground sets which). The skirt draws no
+## accent patches (they shrink away inside the map's edge band, bind_edge) and reads no index
+## maps (the skirt shader compiles them out and runs no rules).
 static func sync_skirt(skirt: ShaderMaterial, ground: ShaderMaterial) -> void:
-	for uniform in ["layer_albedo", "layer_normal", "layer_orm", "layer_height", "layer_tile_m"]:
+	var uniforms: Array = GroundLayerArrays.UNIFORMS.values()
+	uniforms.append_array(["layer_tile_m", "layer_flags"])
+	for uniform in uniforms:
 		skirt.set_shader_parameter(uniform, ground.get_shader_parameter(uniform))
-	skirt.set_shader_parameter("accent_components", 0)
+	skirt.set_shader_parameter("accent_present", 0)
 
 
 ## Binds the map's edge band on ground `material` for a map of half extent `half` (metres):

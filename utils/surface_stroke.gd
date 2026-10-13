@@ -49,7 +49,7 @@ const SURFACE_GAIN := 1.5
 const ERASE_GAIN := 2.0
 ## Why a surface cannot be painted when every slot holds paint (slot_refusal()).
 const FULL_REASON := (
-	"All 8 paint slots hold paint. Erase one surface completely" + " (Ctrl+drag) to free a slot."
+	"All 64 paint slots hold paint. Erase one surface completely" + " (Ctrl+drag) to free a slot."
 )
 ## Surface roles whose paint changes what grows (ScatterGround): built and painted rock.
 const PLANT_ROLES := ["built", "cliff"]

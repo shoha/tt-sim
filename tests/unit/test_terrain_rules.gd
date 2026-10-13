@@ -303,4 +303,4 @@ func test_shader_composes_paint_like_compose_water() -> void:
 	]:
 		assert_true(text.contains("float" + line + ";"), "the shader has: %s" % line)
 		assert_true(cpu.contains(line), "compose_water has: %s" % line)
-	assert_true(text.contains("w[i]=held_a[i]+(painted_a[i]-held_a[i])*paint_scale;"))
+	assert_true(text.contains("vec4cw=held_w+(pw-held_w)*paint_scale;"), "per candidate")

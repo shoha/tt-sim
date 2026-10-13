@@ -375,10 +375,14 @@ func test_the_shader_mirrors_the_accent_constants() -> void:
 			assert_true((found[pair[0]] as Vector2).is_equal_approx(value), pair[0])
 		else:
 			assert_almost_eq(float(found[pair[0]]), float(value), 1e-6, pair[0])
-	var arrays := GroundAccents.COMPONENTS * GroundAccents.PER_COMPONENT
+	# The index ground (G3): one row of accents per biome slot, their layers in biome_extra.
+	var entries := GroundLayers.MAX_BIOMES * GroundAccents.PER_COMPONENT
+	assert_eq(GroundAccents.PER_COMPONENT, GroundLayers.ACCENTS_PER_BIOME)
+	assert_eq(GroundLayerBinding.ACCENT_ENTRIES, entries)
 	var compact := text.replace(" ", "")
-	assert_true(compact.contains("uniformintaccent_layer[%d];" % arrays), "accent_layer size")
-	assert_true(compact.contains("uniformvec4accent_params[%d];" % arrays), "accent_params size")
+	assert_true(compact.contains("uniformvec4accent_params[%d];" % entries), "accent_params size")
+	var rows := "uniformivec4biome_extra[%d];" % GroundLayers.MAX_BIOMES
+	assert_true(compact.contains(rows), "a row per biome slot")
 
 
 # --- the terrain --------------------------------------------------------------------------
@@ -421,16 +425,23 @@ func test_terrain_binds_accents_with_an_edge_band_and_the_skirt_draws_none() -> 
 	var layers := terrain.ground_layers()
 	assert_true(layers.has("moss") and layers.has("grass"), str(layers))
 	var material := terrain.get_material()
-	var base_bit := 1 << GroundLayerTable.MAX_LAYERS
-	assert_eq(material.get_shader_parameter("accent_components"), base_bit)
+	# The forest is on the base surface, so it draws as the base row (0), which carries its
+	# accents in order.
+	assert_eq(material.get_shader_parameter("accent_present"), 1)
+	var extra: PackedInt32Array = material.get_shader_parameter("biome_extra")
+	assert_eq(layers[extra[1]], "moss", "row 0, accent 0")
+	assert_eq(layers[extra[2]], "grass", "row 0, accent 1")
+	assert_eq(extra[3], -1, "no third accent")
+	var rules: PackedInt32Array = material.get_shader_parameter("biome_rules")
+	assert_eq(rules[4], GroundLayerBinding.AS_BASE, "the forest (slot 1) draws as the base")
 	var half := terrain.document.extent_m() * 0.5
 	assert_eq(material.get_shader_parameter("accent_edge_half"), half)
 	assert_eq(material.get_shader_parameter("accent_edge_m"), NewMap.edge_feather_m(half))
 	var skirt := terrain.get_skirt().mesh.surface_get_material(0) as ShaderMaterial
-	assert_eq(skirt.get_shader_parameter("accent_components"), 0, "no patches past the edge")
-	assert_eq(skirt.get_shader_parameter("layer_count"), 0, "the base: no slot sampled")
-	assert_eq(skirt.get_shader_parameter("skirt_ground_mask"), 0)
-	assert_eq(skirt.get_shader_parameter("layer_ground_mask"), 0, "the skirt reads no weights")
+	assert_eq(skirt.get_shader_parameter("accent_present"), 0, "no patches past the edge")
+	assert_eq(skirt.get_shader_parameter("skirt_ground_layer"), 0, "the base")
+	assert_eq(skirt.get_shader_parameter("biome_present"), 0, "the skirt reads no biomes")
+	assert_eq(skirt.get_shader_parameter("paint_present"), 0, "and no paint")
 	assert_eq(material.get_shader_parameter("accent_noise"), GroundAccents.noise_texture())
 	var paths := AuthoredTerrain.texture_paths(terrain.document)
 	assert_true(Array(paths).any(func(p: String) -> bool: return p.contains("/moss/")))
@@ -452,11 +463,16 @@ func test_the_skirt_continues_a_surface_painted_over_the_map_edge() -> void:
 	var terrain := AuthoredTerrain.create(doc)
 	add_child_autofree(terrain)
 	var skirt := terrain.get_skirt().mesh.surface_get_material(0) as ShaderMaterial
-	var mask: int = skirt.get_shader_parameter("skirt_ground_mask")
+	var layer: int = skirt.get_shader_parameter("skirt_ground_layer")
 	var layers := terrain.ground_layers()
-	assert_ne(mask, 0, "the skirt draws the edge's surface")
-	assert_eq(layers[int(log(float(mask)) / log(2.0) + 0.5)], "grass", str(layers))
-	assert_eq(skirt.get_shader_parameter("layer_count"), layers.size())
+	assert_ne(layer, 0, "the skirt draws the edge's surface")
+	assert_eq(layers[layer], "grass", str(layers))
+	assert_eq(skirt.get_shader_parameter("skirt_bed_layer"), -1, "its own dressing")
+	assert_eq(
+		skirt.get_shader_parameter("layer_albedo_array"),
+		terrain.get_material().get_shader_parameter("layer_albedo_array"),
+		"the ground's layers"
+	)
 	PaletteLibrary.clear_cache()
 
 
@@ -481,7 +497,7 @@ func test_without_accents_the_terrain_binds_none() -> void:
 	_inject_forest_accents([], [])
 	var terrain := AuthoredTerrain.create(_forest_doc())
 	add_child_autofree(terrain)
-	assert_eq(terrain.get_material().get_shader_parameter("accent_components"), 0)
+	assert_eq(terrain.get_material().get_shader_parameter("accent_present"), 0)
 	var skirt := terrain.get_skirt().mesh.surface_get_material(0) as ShaderMaterial
-	assert_eq(skirt.get_shader_parameter("layer_count"), 0)
+	assert_eq(skirt.get_shader_parameter("skirt_ground_layer"), 0)
 	PaletteLibrary.clear_cache()

@@ -267,14 +267,17 @@ func test_material_binds_the_palette_surface() -> void:
 	add_child_autofree(terrain)
 	var material := terrain.get_material()
 	assert_eq(material.shader.resource_path, "res://shaders/authored_ground.gdshader")
-	for key in ["albedo", "normal", "orm", "height"]:
-		var texture: Texture2D = material.get_shader_parameter(key + "_tex")
-		assert_not_null(texture, "%s bound" % key)
-		if texture != null:
-			assert_eq(texture.resource_path, PaletteLibrary.DEFAULT_ROOT.path_join(surface[key]))
-	assert_almost_eq(
-		float(material.get_shader_parameter("tile_m")), float(surface["tile_m"]), EPSILON
-	)
+	# The base is layer 0 of the layer arrays (ground layers G3), at its own tile size.
+	assert_eq(terrain.ground_layers()[0], GRASS)
+	assert_eq(terrain.layer_binding().arrays.layers[0], GRASS, "the arrays' layer 0")
+	for key in GroundLayerArrays.KINDS:
+		var array: Texture2DArray = material.get_shader_parameter(GroundLayerArrays.UNIFORMS[key])
+		assert_not_null(array, "%s array bound" % key)
+		if array != null:
+			var palette := load(PaletteLibrary.DEFAULT_ROOT.path_join(surface[key])) as Texture2D
+			assert_eq(array.get_format(), palette.get_image().get_format(), "%s as imported" % key)
+	var tiles: PackedFloat32Array = material.get_shader_parameter("layer_tile_m")
+	assert_almost_eq(tiles[0], float(surface["tile_m"]), EPSILON)
 	assert_false(material.has_meta(AuthoredTerrain.FALLBACK_META))
 	for cell in terrain.chunk_cells():
 		assert_eq(terrain.get_chunk(cell).mesh.surface_get_material(0), material)
@@ -288,9 +291,14 @@ func test_missing_surface_falls_back_to_a_plain_ground() -> void:
 	assert_engine_error(1, "one warning naming the missing surface")
 	var material := terrain.get_material()
 	assert_true(material.get_meta(AuthoredTerrain.FALLBACK_META, false), "flagged as fallback")
-	var albedo: Texture2D = material.get_shader_parameter("albedo_tex")
-	assert_true(albedo is ImageTexture, "flat fallback albedo")
-	var pixel := albedo.get_image().get_pixel(0, 0)
+	var albedo: Texture2DArray = material.get_shader_parameter("layer_albedo_array")
+	assert_eq(terrain.ground_layers()[0], "no_such_surface", "still layer 0")
+	# The arrays go uncompressed with a solid stand-in of the fallback earth for it.
+	assert_eq(albedo.get_format(), Image.FORMAT_RGBA8)
+	assert_eq(GroundLayerArrays.DEFAULTS.albedo, AuthoredTerrain.FALLBACK_ALBEDO)
+	assert_eq(GroundLayerArrays.DEFAULTS.orm, AuthoredTerrain.FALLBACK_ORM)
+	var stand_in := GroundLayerArrays.stand_in(Vector2i(4, 4), "albedo")
+	var pixel := stand_in.get_pixel(0, 0)
 	var expected := AuthoredTerrain.FALLBACK_ALBEDO
 	# One 8-bit step of slack for the byte round-trip.
 	for channel in 3:
@@ -356,11 +364,11 @@ func test_skirt_is_decoration_outside_the_map_bounds() -> void:
 	# Round 3 (2026-10-09): the skirt draws no accent patches (they shrink away inside the map's
 	# edge band) and, with nothing painted over the edge, continues the base alone: no slot is
 	# sampled (it carried the grass base's accents, and every slot for them, until then).
-	assert_eq(material.get_shader_parameter("accent_components"), 0, "no accents")
-	assert_eq(material.get_shader_parameter("layer_count"), 0, "the base alone")
+	assert_eq(material.get_shader_parameter("accent_present"), 0, "no accents")
+	assert_eq(material.get_shader_parameter("skirt_ground_layer"), 0, "the base alone")
 	assert_eq(
-		material.get_shader_parameter("albedo_tex"),
-		terrain.get_material().get_shader_parameter("albedo_tex"),
+		material.get_shader_parameter("layer_albedo_array"),
+		terrain.get_material().get_shader_parameter("layer_albedo_array"),
 		"the base surface continues"
 	)
 	var bounds := LevelEnvironmentManager.compute_map_bounds(terrain)

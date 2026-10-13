@@ -76,7 +76,11 @@ other committed home.
   pixel), the map format bumps to 2 (an older build refuses a newer map; a newer build
   migrates an old one), and the build hunts for optimizations to win back its measured
   +0.28 ms GPU at home on a one-biome map. Probe and plan:
-  `docs/plans/2026-10-11-ground-layers/design.md` (gitignored), cards G1-G5.
+  `docs/plans/2026-10-11-ground-layers/design.md` (gitignored), cards G1-G5. G3 (2026-10-13)
+  switched the ground over: per-map layer arrays, the document's index maps uploaded as they
+  are, every accent drawn, the Paint tool's limit raised to 64, at today's look and +0.23 /
+  +0.28 ms on a one-biome map (`systems/authored_terrain.md` "Model", `PERFORMANCE.md` "Ground
+  shader: index layers"). Next: G3b (win the cost back), G4 (one-map broad tint), G5 (cleanup).
 - **Fire as a map feature (user, 2026-10-11):** two new capabilities, both in the level
   builder and for the GM live in a session (synced to every peer, undoable):
   - *Persistent ground fire*, painted like other terrain (a brush, erasable): it keeps burning

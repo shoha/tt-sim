@@ -1258,6 +1258,44 @@ grass 0.14 at 5 m; palette v5 was not installed yet), toggled with `accent_compo
   or slightly slower (+0.60 / +0.60), so the early-outs stay. Dynamic indexing of the
   per-component weights was checked too (a constant-index variant: same cost).
 
+## Ground shader: index layers (2026-10-13, ground layers G3)
+
+The authored ground moved from eight weight-map slots to per-map Texture2DArrays read through
+the document's own index maps (docs/systems/authored_terrain.md "Ground layers"). Measured
+against the commit before it (09ec4bf, a `git worktree`), because the two shaders bind
+different uniforms and cannot be hot-swapped in one run.
+
+Setup: RTX 3080 (`nvidia-smi` at the start of each run: 26-42 %, P5-P8, 40-42 C), 1920x1080
+window and SubViewport through the render harness, vsync off, world-viewport GPU time
+(`perf.gd start` / `stop`, 4 s per sample, medians), scatter hidden (bare ground, the case the
+shader owns). Runs alternated today, G3, today, G3, two samples each; every run also measured
+the same view with the terrain hidden as its in-run reference (0.333-0.343 ms in all four
+runs: no clock drift between them). Maps: a new 200 ft temperate forest (seed 1234), and
+`_g3_multi`: forest with boreal taiga east of x = 0 and 14 surfaces painted in 5 m Voronoi
+cells (scratch jobs `docs/plans/2026-10-11-ground-layers/_g3_perf.json`).
+
+| Map, view | Today (ms) | G3 (ms) | Delta |
+|---|---|---|---|
+| One biome, home | 2.093 / 2.287 / 2.098 / 2.262 | 2.310 / 2.504 / 2.331 / 2.530 | +0.23 |
+| One biome, zoom 5 | 1.948 / 1.943 / 1.929 / 1.954 | 2.217 / 2.220 / 2.224 / 2.238 | +0.28 |
+| Two biomes + 14 painted, home | 2.811 / 2.809 / 2.843 / 2.831 | 3.503 / 3.481 / 3.519 / 3.501 | +0.68 |
+| Two biomes + 14 painted, zoom 5 | 2.292 / 2.286 / 2.304 / 2.317 | 2.695 / 2.699 / 2.703 / 2.720 | +0.40 |
+
+- The one-biome map is within the card's +0.3 ms target at both views (the probe measured
+  +0.28 at home).
+- The crowded map is not like for like: today drew 8 of its 14 painted surfaces and fell
+  back cliff, gravel, pine_duff and cliff_basalt to other slots (warnings in its log); G3 draws
+  every surface, so it samples more of them at the many multi-surface pixels.
+- Hot spots for G3b (not optimised in G3): the candidate loops are unrolled over four entries
+  with dynamic `layer_tile_m[cl[k]]` and `layer_flags[...]` reads and a compare-and-select merge
+  per contribution (five per ground component, up to five components); the two ground
+  gathers and the paint gather run at every pixel even where one biome and no paint cover
+  the whole 2x2 (an early-out when the four corners agree); the accent loop now reads its
+  layers and parameters by biome row (dynamic uniform indexing) instead of a bitmask over
+  constant slots; the broad edge reads `biome_rules` again for its fine weights; and
+  `update_ground_region` uploads all four index maps whole on every dab (a native copy, 0.6 MB
+  on a 200 ft map; region blits would do on the largest maps).
+
 ## In-game authoring phase 3: pinned performance pass (2026-09-27)
 
 The phase 3 pass: authored maps with relief in play, the ground shader with the whole phase 3
