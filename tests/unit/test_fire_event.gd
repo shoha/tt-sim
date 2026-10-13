@@ -69,7 +69,8 @@ func _restore_palette() -> void:
 
 
 func _make_level() -> void:
-	var doc := MapDocument.create_flat(Vector2i(MAP_CELLS, MAP_CELLS), "grass", "fire", SEED)
+	# Birch's ground (treecube 1c05fb0): a base whose rules and accents the forest shares.
+	var doc := MapDocument.create_flat(Vector2i(MAP_CELLS, MAP_CELLS), "grass_birch", "fire", SEED)
 	doc.biome_ids = PackedStringArray([FOREST])
 	var slots := PackedByteArray()
 	slots.resize(doc.sample_count())
@@ -266,6 +267,10 @@ func test_a_fire_burns_the_forest_on_every_board_then_changes_the_map() -> void:
 	assert_eq(joiner.edits.events.active_count(), 0, "the late joiner sees no motion")
 	await _settle([gm, joiner])
 	_same(gm, joiner, "late joiner")
+	# The forest, the birch base and the burnt forest with its ash fill the eight ground layers
+	# (treecube 1c05fb0's grass_forest accent took the last one): the burnt forest's dirt accent
+	# finds no slot on each of the three boards. AuthoredTerrain's documented behaviour.
+	assert_engine_error(3, "the burnt forest's dirt accent dropped once per board")
 
 
 func test_the_fire_plan_follows_the_palette() -> void:

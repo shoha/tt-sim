@@ -73,7 +73,8 @@ func _forest(doc: MapDocument) -> void:
 
 ## Builds the level with the editor (forest, river, pond, bridge, boulders) and saves it.
 func _make_level() -> void:
-	var doc := MapDocument.create_flat(Vector2i(MAP_CELLS, MAP_CELLS), "grass", "probe", SEED)
+	# Birch's ground (treecube 1c05fb0): a base whose rules and accents the forest shares.
+	var doc := MapDocument.create_flat(Vector2i(MAP_CELLS, MAP_CELLS), "grass_birch", "probe", SEED)
 	_forest(doc)
 	var loader := MapSourceLoader.new(get_tree())
 	loader.separate_props = true
@@ -200,17 +201,20 @@ func _settle(copy: Copy, started: int = -1, queue: LiveEditCodec.Queue = null) -
 			out.chunks += chunks
 			out.chunks_max = maxi(out.chunks_max, chunks)
 			if chunks > 0 or heights.last_snap_rows > 0 or heights.last_collision_usec > 100:
-				(out.trace as Array).append(
-					(
-						"%d: %d chunks %.1f, %d rows %.1f, collision %.1f"
-						% [
-							out.frames,
-							chunks,
-							heights.last_terrain_usec / 1000.0,
-							heights.last_snap_rows,
-							heights.last_snap_usec / 1000.0,
-							heights.last_collision_usec / 1000.0,
-						]
+				(
+					(out.trace as Array)
+					. append(
+						(
+							"%d: %d chunks %.1f, %d rows %.1f, collision %.1f"
+							% [
+								out.frames,
+								chunks,
+								heights.last_terrain_usec / 1000.0,
+								heights.last_snap_rows,
+								heights.last_snap_usec / 1000.0,
+								heights.last_collision_usec / 1000.0,
+							]
+						)
 					)
 				)
 		await get_tree().process_frame
@@ -452,25 +456,28 @@ func test_live_ops_reach_a_peer_identical_to_the_host_and_a_reload() -> void:
 		var host_doc := _digest(host.doc)
 		assert_eq(_digest(peer.doc), host_doc, label + ": the peer's document")
 		assert_eq(reload.doc, host_doc, label + ": the reloaded document")
-		report.append(
-			(
-				"%s | %d | %d | %d | %.1f | %.1f | %.1f (%s) | %.1f / %.1f / %.1f | %d | %d | %.0f"
-				% [
-					label,
-					entries.size(),
-					sizes,
-					record_bytes,
-					decoded_usec / 1000.0,
-					settled.apply_usec / 1000.0,
-					settled.worst_usec / 1000.0,
-					settled.worst_parts,
-					settled.terrain_usec / 1000.0,
-					settled.snap_usec / 1000.0,
-					settled.collision_usec / 1000.0,
-					settled.height_frames,
-					settled.frames,
-					settled.wall_usec / 1000.0,
-				]
+		(
+			report
+			. append(
+				(
+					"%s | %d | %d | %d | %.1f | %.1f | %.1f (%s) | %.1f / %.1f / %.1f | %d | %d | %.0f"
+					% [
+						label,
+						entries.size(),
+						sizes,
+						record_bytes,
+						decoded_usec / 1000.0,
+						settled.apply_usec / 1000.0,
+						settled.worst_usec / 1000.0,
+						settled.worst_parts,
+						settled.terrain_usec / 1000.0,
+						settled.snap_usec / 1000.0,
+						settled.collision_usec / 1000.0,
+						settled.height_frames,
+						settled.frames,
+						settled.wall_usec / 1000.0,
+					]
+				)
 			)
 		)
 	for line in report:

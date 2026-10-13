@@ -275,9 +275,11 @@ func test_terrain_binds_the_table_and_its_routing() -> void:
 	var alpine := layers.find("grass_alpine")
 	var routing: PackedInt32Array = material.get_shader_parameter("rule_cliff_layer")
 	assert_eq(layers[routing[alpine]], "cliff_basalt", "alpine ground dressed with basalt")
-	assert_eq(layers[routing[8]], "cliff", "grass (the base) dressed like birch: cliff")
+	assert_eq(layers[routing[8]], "cliff", "grass (the base) dressed like the wetland: cliff")
 	assert_eq(the_plan.biome_layers[1], layers.find("forest_floor"))
 	assert_eq(_texel(terrain, 0, 70, 2)[0], 255, "cobblestone painted in its channel")
+	# Eight slots: the base's mud and the forest's grass_forest accents find none left.
+	assert_engine_error(2, "one warning per dropped accent")
 
 
 func test_partial_update_touches_only_the_rect_and_matches_full() -> void:
@@ -312,6 +314,8 @@ func test_partial_update_touches_only_the_rect_and_matches_full() -> void:
 		assert_true(outside_ok, "plane %d: nothing outside the rect changed" % plane)
 	terrain.update_ground_region(Rect2i(-10, -10, 1000, 1000))
 	assert_eq(terrain.get_ground_weights(0).get_data(), fresh.get_ground_weights(0).get_data())
+	# The base's grass_alpine and the forest's grass_forest accents find no slot, once per terrain.
+	assert_engine_error(4, "one warning per dropped accent and terrain")
 
 
 func test_new_biome_or_surface_mid_session_keeps_every_slot() -> void:
@@ -321,18 +325,22 @@ func test_new_biome_or_surface_mid_session_keeps_every_slot() -> void:
 	var material := terrain.get_material()
 	var weights: Texture2D = material.get_shader_parameter("layer_weights_a")
 	var first := terrain.ground_layers()
+	var first_accent: Array = terrain.layer_plan().layers.map(
+		func(layer: Dictionary) -> bool: return layer.source == GroundLayerTable.Source.ACCENT
+	)
 	doc.biome_ids.append(TAIGA)
 	_paint_biome(doc, Rect2i(50, 50, 30, 30), 2, 255)
 	terrain.update_ground_region(Rect2i(50, 50, 30, 30))
 	_paint_surface(doc, "planks", Rect2i(5, 60, 5, 5), 255)
 	terrain.update_ground_region(Rect2i(5, 60, 5, 5))
 	var now := terrain.ground_layers()
-	# The forest's ground accents (palette v5) may yield their slots to weight surfaces; every
-	# slot that holds weights stays put.
-	var accents := GroundAccents.surface_names(PaletteLibrary.ground_accents(FOREST))
+	# Ground accents (palette v5) yield their slots to weight surfaces, the forest's and the
+	# base's alike (base grass: the wetland's mud and grass_alpine since treecube 1c05fb0);
+	# every slot that holds weights stays put. Two accents find no slot left: one warning each.
 	for j in first.size():
-		if not first[j] in accents:
+		if not first_accent[j]:
 			assert_eq(now[j], first[j], "slot %d kept" % j)
+	assert_engine_error(2, "grass_forest and grass_alpine dropped, one warning each")
 	assert_true(now.has("pine_duff"))
 	assert_true(now.has("planks"))
 	assert_eq(terrain.get_material(), material, "same material")
@@ -357,10 +365,11 @@ func test_overflow_in_a_real_document_warns_once() -> void:
 	# A biome added later re-plans the table; the overflowed surfaces do not warn again.
 	doc.biome_ids.append("wetland_riparian_summer_s1")
 	terrain.update_ground_region(Rect2i(0, 0, 40, 40))
-	# grass_savanna (ground), cliff_basalt and cliff_sandstone (cliff: drawn as cliff) and
-	# gravel_sandstone (scree): one warning each. Two palette v5 ground accents (moss,
-	# gravel_sandstone) find no slot left: one warning each too.
-	assert_engine_error(6, "one warning per overflowed surface or dropped accent")
+	# grass_birch (ground, drawn as grass_alpine), cliff_basalt and cliff_sandstone (cliff: drawn
+	# as cliff) and gravel_sandstone (scree, drawn as sand_red): one warning each. Six ground
+	# accents find no slot left (treecube 1c05fb0 gave the grasslands their own accent grasses):
+	# one warning each too.
+	assert_engine_error(10, "one warning per overflowed surface or dropped accent")
 	assert_eq(terrain.ground_layers().size(), GroundLayerTable.MAX_LAYERS)
 	assert_eq(terrain.ground_layers()[0], "cobblestone", "painted surfaces keep their slots")
 	assert_eq(terrain.ground_layers()[1], "flagstone")

@@ -11,9 +11,10 @@ extends GutTest
 ## imports the project before running tests, so the imported resources exist there.
 
 ## Palette v7 (2026-10-10) adds the fire entries (section 9 "Fire"): the burnt_forest
-## biome, listed last, and the ash ground surface.
+## biome, listed last, and the ash ground surface. treecube 1c05fb0 (2026-10-13) adds three
+## ground surfaces: grass_meadow, grass_forest and grass_birch.
 const BIOME_COUNT := 9
-const SURFACE_COUNT := 26
+const SURFACE_COUNT := 29
 ## Surfaces per role (section 9 "Surface role"); the rest of SURFACE_COUNT is ground.
 const CLIFF_SURFACE_COUNT := 3
 const BUILT_SURFACE_COUNT := 7
