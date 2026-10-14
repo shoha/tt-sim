@@ -277,8 +277,9 @@ Scatter instances contract in full:
   0.06), the badlands acacia (0.15, 0.13, 0.19) and the wetland willow (0.12, 0.24, 0.22).
   The palms-ferns branch adds the savanna palm (round 3b: 0.12, 0.22, 0.08, a warm deep green
   under its warm-lit lime, set apart from the acacia's warmer floor; round 3 was 0.09, 0.17, 0.16
-  and fell to a grey-olive) and the wetland short palm (round 3b: 0.03, 0.14, 0.17, a deep teal
-  under its saturated teal, darker and bluer than the willow; round 3 was 0.07, 0.2, 0.19); its
+  and fell to a grey-olive) and the wetland short palm (round 3c, as approved: 0.07, 0.16, 0.1, a
+  warm deep olive-teal under its deep teal-green, which reads green first and stays darker and
+  more saturated than the willow; round 3b's 0.03, 0.14, 0.17 under a blue teal read navy); its
   ferns carry none.
   tt-sim treats it as untrusted input: anything but a list of
   exactly three finite numbers is ignored with a warning, and a channel outside 0..1 is
