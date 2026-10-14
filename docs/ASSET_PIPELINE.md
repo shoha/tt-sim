@@ -224,7 +224,31 @@ Scatter instances contract in full:
   Trees with the canopy off (dead trees, the burnt forest's charred snag) never carry it. A
   conifer frond is a 14-triangle drooping roof strip whose normals rise from facing out at
   its root to facing the sky at its tip; the painted light's ramp is what turns those into
-  lit skirt edges over darker bands. tt-sim shades flagged leaf cards with its painted light
+  lit skirt edges over darker bands. **Palms and ferns (treecube `palms-ferns`, rounds 1 to 3c,
+  2026-10-13 to 14, approved by the user 2026-10-14; palette treecube 66866b3):** treecube also writes the extra on
+  the palm frond material (`<asset>_Palm_Frond`: the savanna palm and the wetland short palm)
+  and the fern frond material (`<asset>_Fern_Frond`: the temperate forest and wetland fern and
+  the birch woodland and boreal taiga small fern), whose fronds are then painted as leaflet
+  strokes on a lighter rib that merge into one body near it and part into soft, rounded-notched
+  fingers at the margin (round 3), one flat tone with a feathered edge (`frond_style`
+  "painted"). Each frond carries "tilt" normals, as the conifer fronds do (round 2,
+  2026-10-13): facing the frond's heading, rising from the root to the tip, each edge leaning
+  toward its own side, so every frond has a lit and a shaded side. A palm (round 3, 2026-10-13:
+  a full head of 8 to 12 broad fronds set by the golden angle plus 1 to 4 old fronds hanging under
+  it, each three vertices across with its two wings hanging below the rib) rises from facing up
+  at the root (60 degrees) to facing out at the tip (10 to 14), so the crown's top reads lit over
+  darker hanging tips; its old fronds face out and a little up (round 3b: 35 to 5 degrees) and
+  take the right half of the frond texture (two fronds side by side on U: the live frond on 0 to
+  0.5, the old one on 0.5 to 1; one material, one texture, 512 x 512). A fern (round 3: a big
+  fern's crown of fronds rising steeply and arching over; round 3b: a small fern's low, flat
+  rosette of 4 to 6 fronds evenly round its centre) from 15 or 20 degrees at the root to 70 at
+  the tip. Ferns stay in the "grass" wind category, so
+  tt-sim's grass `base_darken` still applies to them; treecube paints a quarter of it out of the
+  fern texture (round 2: half), so the fern keeps a darker heart under lit tips. Palms stay
+  "tree" and carry a shade floor (below). Same nodes, meshes, attributes and material count as
+  before; the fuller crowns cost triangles (the savanna palm 394 against 301 before, the
+  wetland short palm 312 against 268), the ferns stay at or under their old counts.
+  tt-sim shades flagged leaf cards with its painted light
   (the normals carry the value). Absent means today's shading; every non-leaf material carries
   no extra (pines carried none until treecube 12fee28, acacias and willows none until treecube
   1a9c552, both 2026-10-12). Godot 4.7 keeps it as the material's
@@ -251,6 +275,12 @@ Scatter instances contract in full:
   treecube 26e031a): the savanna shrub (0.1, 0.17, 0.14), the badlands sage shrub (0.15, 0.13,
   0.19), every birch (0.12, 0.28, 0.1), the savanna acacia and young acacia (0.15, 0.16,
   0.06), the badlands acacia (0.15, 0.13, 0.19) and the wetland willow (0.12, 0.24, 0.22).
+  Palette treecube 66866b3 adds the savanna palm (round 3b: 0.12, 0.22, 0.08, a warm deep green
+  under its warm-lit lime, set apart from the acacia's warmer floor; round 3 was 0.09, 0.17, 0.16
+  and fell to a grey-olive) and the wetland short palm (round 3c, as approved: 0.07, 0.16, 0.1, a
+  warm deep olive-teal under its deep teal-green, which reads green first and stays darker and
+  more saturated than the willow; round 3b's 0.03, 0.14, 0.17 under a blue teal read navy); its
+  ferns carry none.
   tt-sim treats it as untrusted input: anything but a list of
   exactly three finite numbers is ignored with a warning, and a channel outside 0..1 is
   clamped with one. The floor is a per-material shader parameter on the wind
@@ -903,6 +933,34 @@ and show the darkest and brightest tenth up to 8 apart; the gap is the maker's, 
 install's: its round 4 swapped only the `Grass_*` and `Flower_*` GLBs into a worktree with the old
 `palette.json` and old ground maps and the old rocks, so flower drifts, the ground and the rocks
 differ by design. No saved map was migrated.
+Refreshed 2026-10-14 with treecube 66866b3 (palms and ferns in the painted style, rounds 1 to
+3c, approved by the user 2026-10-14: treecube `docs/looks/palms_ferns.md`; built from main
+f67d3bb, `palette_version` `f67d3bb-dirty`, 201 assets, 29 surfaces, ids unchanged). A script
+checked before the install that the asset, biome and surface ids are identical, that the 8 GLBs
+that differ are exactly the palms and ferns (the savanna's `Palm_Tall`, the wetland's
+`Palm_Short` and two `Fern`, the temperate forest's `Fern`, and the `Fern_Small` of birch
+woodland (one) and the taiga (two)), that the only `palette.json` change is those 8 records'
+`dimensions_m`, and that every other GLB, the burnt forest's 19 GLBs and biome record, and every
+surface map are byte-identical (the thumbnails are re-rendered). The first build took its
+surfaces from treecube's default `out/surfaces/`, which held later, unshipped ground work: all
+24 maps of the six grass grounds differed. The palette was rebuilt with `--surfaces` pointed at
+the installed `assets/palette/surfaces/` (the same `<name>/<name>_<channel>.png` layout), and
+then every map matched; build from the shipped maps whenever `out/surfaces/` may hold work in
+progress. Every sidecar was restored by the first checkout; `git status` checked twice, the same
+8 GLBs, `palette.json` and 9 thumbnails (18 files) both times; the import reimported those 17
+binaries and extracted no texture, and `git lfs status` lists every GLB and JPG as LFS and only
+`palette.json` as Git. The frond materials carry `tt_foliage_light` "painted" and the palms their
+shade floors (section 6; the savanna palm 394 triangles, the wetland short palm 312, the ferns 35
+to 81). The palms stand lower (the savanna palm 7.86 to 7.04 m, the wetland short palm 4.52 to
+4.09 m) and the ferns spread wider and flatter (the big ferns 1.4 to 1.8 m across, were about
+0.75, and 0.52 to 0.62 m high; the small ferns 0.15 to 0.22 m high, were 0.24 to 0.30), all
+under `ScatterGround.TALL_COVER_M`, so no fern changes role; no test pinned their bounds.
+Captures at seed 1234 (canopy fade off, and at zoom 9 and 5 the close-zoom canopy fade too): the
+savanna's one palm at that seed (near the east edge) draws whole, a leaning scaled trunk under
+broad lime fronds lit on top over darker undersides with an olive old frond hanging; the
+wetland's short palms read teal-green, not navy, among the pale willows, as in the maker's frame
+(`treecube/out/looks/palms_ferns3c/new_palm_wetland.png`, compared by eye); the ferns draw as
+teal frond strokes; no texture is missing. No code change, no saved map migrated.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 

@@ -1,6 +1,6 @@
 {
  "format": 1,
- "palette_version": "3cd0fc3-dirty",
+ "palette_version": "f67d3bb-dirty",
  "surfaces": {
   "ash": {
    "albedo": "surfaces/ash/ash_albedo.png",
@@ -7638,9 +7638,9 @@
    "wind_category": "grass",
    "size_class": "small",
    "dimensions_m": [
-    0.4463199973106384,
-    0.30092838406562805,
-    0.41405871510505676
+    0.7679916620254517,
+    0.20642976462841034,
+    0.8880549669265747
    ]
   },
   "birch_woodland_summer_s1/Log_Small_summer_12": {
@@ -7891,9 +7891,9 @@
    "wind_category": "grass",
    "size_class": "small",
    "dimensions_m": [
-    0.4463199973106384,
-    0.30092838406562805,
-    0.41405871510505676
+    0.7980003356933594,
+    0.21455223858356476,
+    0.9228349924087524
    ]
   },
   "boreal_taiga_summer_s1/Fern_Small_summer_12": {
@@ -7902,9 +7902,9 @@
    "wind_category": "grass",
    "size_class": "small",
    "dimensions_m": [
-    0.41870546340942383,
-    0.2378762811422348,
-    0.4491879940032959
+    0.866031289100647,
+    0.14573462307453156,
+    0.7823710441589355
    ]
   },
   "boreal_taiga_summer_s1/Log_Fallen_summer_13": {
@@ -8507,9 +8507,9 @@
    "wind_category": "tree",
    "size_class": "large",
    "dimensions_m": [
-    7.222404479980469,
-    7.862176418304443,
-    7.112373352050781
+    7.031636714935303,
+    7.039283752441406,
+    6.339688301086426
    ]
   },
   "savanna_summer_s1/Tree_Acacia_Young_summer_03": {
@@ -8848,9 +8848,9 @@
    "wind_category": "grass",
    "size_class": "small",
    "dimensions_m": [
-    0.770869255065918,
-    0.5106168985366821,
-    0.751690149307251
+    1.8301608562469482,
+    0.5245092511177063,
+    1.3555257320404053
    ]
   },
   "temperate_forest_summer_s1/Log_Fallen_summer_13": {
@@ -9057,9 +9057,9 @@
    "wind_category": "tree",
    "size_class": "medium",
    "dimensions_m": [
-    5.741724014282227,
-    4.517175674438477,
-    4.737007141113281
+    4.779506683349609,
+    4.090756416320801,
+    4.607653617858887
    ]
   },
   "wetland_riparian_summer_s1/Stone_Cluster_summer_07": {
@@ -9090,9 +9090,9 @@
    "wind_category": "grass",
    "size_class": "small",
    "dimensions_m": [
-    0.7569694519042969,
-    0.5281311869621277,
-    0.7707436680793762
+    1.7331839799880981,
+    0.6181141138076782,
+    1.6228001117706299
    ]
   },
   "wetland_riparian_summer_s1/Fern_summer_10": {
@@ -9101,9 +9101,9 @@
    "wind_category": "grass",
    "size_class": "small",
    "dimensions_m": [
-    0.7843629121780396,
-    0.5233794450759888,
-    0.6808726787567139
+    1.5066425800323486,
+    0.5926586985588074,
+    1.434584617614746
    ]
   },
   "wetland_riparian_summer_s1/Log_Fallen_summer_11": {
