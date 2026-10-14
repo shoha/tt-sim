@@ -17,7 +17,10 @@ const MAP_CELLS := 24
 const SEED := 77
 const FOREST_EDGE_X := 2.0
 const RIVER: Array[Vector2] = [Vector2(8, -20), Vector2(9, 0), Vector2(10, 20)]
-const SETTLE_FRAMES := 900
+## The longest a wait may take, in wall time. Not a frame count: the frames scatter regeneration
+## takes (WorkerThreadPool jobs) grow with a slower, narrower machine, so a frame cap fails a
+## slow CI runner (the measurements are at test_live_map_edits.gd's SETTLE_S).
+const SETTLE_S := 45.0
 const FALL_CENTRE := Vector2(-9.0, 6.0)
 const FALL_RADIUS := 5.0
 
@@ -38,7 +41,9 @@ func after_all() -> void:
 	DirAccess.remove_absolute(DIR.trim_suffix("/"))
 
 
-func _make_level() -> void:
+## Builds the level (test_live_edits_table's) and saves it once its scatter has landed; false if
+## it never did, since a level saved early holds rows its own masks would not grow.
+func _make_level() -> bool:
 	var doc := MapDocument.create_flat(Vector2i(MAP_CELLS, MAP_CELLS), "grass", "net", SEED)
 	doc.biome_ids = PackedStringArray([FOREST])
 	var slots := PackedByteArray()
@@ -66,15 +71,14 @@ func _make_level() -> void:
 	assert_gt(river, 0, "the river is carved")
 	assert_gt(e.crossings.place(Crossing.Kind.PLANK, Vector3(5, 0, 0), Vector3(13, 0, 0)), 0)
 	e.finish_height_work()
-	var frames := 0
-	while frames < SETTLE_FRAMES and (e.scatter.is_regenerating() or e.scatter.is_growing()):
-		await get_tree().process_frame
-		frames += 1
+	var growing := func() -> bool: return e.scatter.is_regenerating() or e.scatter.is_growing()
+	var settled: bool = await _wait(growing, "the level's scatter")
 	doc.scatter = e.scatter.rows_by_asset()
 	doc.props = e.props.rows_by_asset()
 	assert_eq(MapDocumentIO.write(doc, LEVEL), OK)
 	remove_child(root)
 	root.free()
+	return settled
 
 
 func _load(sends: bool) -> Copy:
@@ -101,12 +105,23 @@ func _busy(copy: Copy) -> bool:
 	)
 
 
-func _settle(copies: Array) -> void:
+## Frames until `busy` says no work is left, at most SETTLE_S; false, with `what` failing to
+## settle, past it.
+func _wait(busy: Callable, what: String) -> bool:
+	var begin := Time.get_ticks_msec()
 	var frames := 0
-	while frames < SETTLE_FRAMES and copies.any(_busy):
+	while busy.call() and Time.get_ticks_msec() - begin < SETTLE_S * 1000.0:
 		await get_tree().process_frame
 		frames += 1
-	assert_lt(frames, SETTLE_FRAMES, "settled within %d frames" % SETTLE_FRAMES)
+	var settled: bool = not busy.call()
+	var took := "%d frames, %d ms" % [frames, Time.get_ticks_msec() - begin]
+	assert_true(settled, "%s: settled within %.0f s (%s)" % [what, SETTLE_S, took])
+	return settled
+
+
+## Frames until every copy has nothing left to do, at most SETTLE_S (_wait).
+func _settle(copies: Array, what: String) -> void:
+	await _wait(func() -> bool: return copies.any(_busy), what)
 	await get_tree().process_frame
 
 
@@ -126,10 +141,12 @@ func _crossing_node(copy: Copy, id: int) -> Node3D:
 
 
 func test_a_bridge_collapse_and_a_forest_fall_play_on_every_board_then_change_the_map() -> void:
-	await _make_level()
+	var made: bool = await _make_level()
+	if not made:
+		return
 	var gm := await _load(true)
 	var client := await _load(false)
-	await _settle([gm, client])
+	await _settle([gm, client], "the loads")
 	var key := gm.edits.table_key
 	gm.edits.op_logged.connect(
 		func(index: int, bytes: PackedByteArray) -> void: client.edits.receive_op(key, index, bytes)
@@ -176,7 +193,7 @@ func test_a_bridge_collapse_and_a_forest_fall_play_on_every_board_then_change_th
 	_advance([gm, client], collapse.duration_s)
 	assert_eq(gm.doc.crossings.size(), 0, "then the crossing is removed")
 	assert_eq(gm.edits.history.undo_count(), 1, "as one history entry")
-	await _settle([gm, client])
+	await _settle([gm, client], "the collapse")
 	assert_eq(gm.edits.op_log.size(), 1, "one op")
 	assert_eq(client.doc.crossings.size(), 0, "the client has it")
 	assert_eq(client.edits.events.active_count(), 0, "every effect is gone")
@@ -211,7 +228,7 @@ func test_a_bridge_collapse_and_a_forest_fall_play_on_every_board_then_change_th
 	assert_eq(labels, [[topple, TerrainEvent.Kind.FOREST_FALL]], "labelled as its tile")
 	assert_eq(announced.client.back(), TerrainEvent.Kind.FOREST_FALL)
 	assert_eq(announced.gm, [], "never on the GM's side")
-	await _settle([gm, client])
+	await _settle([gm, client], "the fall")
 	assert_eq(gm.edits.op_log.size(), 2)
 	assert_eq(client.edits.op_log.size(), 2)
 	for copy: Copy in [gm, client]:
@@ -222,7 +239,7 @@ func test_a_bridge_collapse_and_a_forest_fall_play_on_every_board_then_change_th
 	# Undo: the trees come back and nothing plays.
 	assert_eq(gm.edits.history.undo(), EventPresets.TOPPLE_LABEL)
 	assert_eq(gm.edits.events.active_count(), 0, "an undo plays no effect")
-	await _settle([gm, client])
+	await _settle([gm, client], "the undo")
 	assert_eq(client.edits.events.active_count(), 0)
 	var back := ForestFall.trees_near(gm.edits.editor.scatter, FALL_CENTRE, FALL_RADIUS)
 	assert_eq(back.size(), gm_trees.size(), "the undo stands every tree up again")
@@ -230,12 +247,12 @@ func test_a_bridge_collapse_and_a_forest_fall_play_on_every_board_then_change_th
 
 	# A late joiner gets only the ops.
 	var joiner := await _load(false)
-	await _settle([joiner])
+	await _settle([joiner], "the late joiner's load")
 	joiner.edits.receive_log(key, gm.edits.op_log.size())
 	for index in gm.edits.op_log.size():
 		joiner.edits.receive_op(key, index, gm.edits.op_log[index])
 	assert_eq(joiner.edits.events.active_count(), 0, "the late joiner sees no motion")
-	await _settle([gm, joiner])
+	await _settle([gm, joiner], "the late joiner's catch-up")
 	_same(gm, joiner, "late joiner")
 
 	# Another table's event, or bytes that are no event, play nothing.

@@ -11,8 +11,11 @@ extends GutTest
 const BIOME := "temperate_forest_summer_s1"
 const FOLDER := "user://_authparity_save_reload/"
 const PATH := FOLDER + "map.ttmap"
-## Frames the biome stroke's regeneration may take before the test gives up.
-const REGEN_FRAMES := 600
+## How long the biome stroke's regeneration may take before the test gives up, in wall time.
+## Not a frame count: the frames regeneration takes (WorkerThreadPool jobs) grow with a slower,
+## narrower machine, so a frame cap fails a slow CI runner (the measurements are at
+## test_live_map_edits.gd's SETTLE_S).
+const REGEN_S := 45.0
 
 
 func after_all() -> void:
@@ -58,11 +61,16 @@ func test_a_saved_map_reloads_as_the_session_showed_it() -> void:
 	editor.flush()
 	assert_true(editor.end_stroke())
 	assert_gt(editor.fire_field.flame_count(), 0, "the session draws the fire")
+	var begin := Time.get_ticks_msec()
 	var frames := 0
-	while editor.scatter.is_regenerating() and frames < REGEN_FRAMES:
+	while editor.scatter.is_regenerating() and Time.get_ticks_msec() - begin < REGEN_S * 1000.0:
 		await get_tree().process_frame
 		frames += 1
-	assert_false(editor.scatter.is_regenerating(), "the biome's plants generated")
+	var took := "%d frames, %d ms" % [frames, Time.get_ticks_msec() - begin]
+	var regenerated := not editor.scatter.is_regenerating()
+	assert_true(regenerated, "the biome's plants generated within %.0f s (%s)" % [REGEN_S, took])
+	if not regenerated:
+		return
 	var rule := editor.species_rule(BIOME, "boulder")
 	assert_false(editor.place_prop(rule, Vector3(-4, 0, 3), Vector3.UP).is_empty())
 	editor.commit_prop_edit()
