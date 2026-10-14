@@ -1599,20 +1599,22 @@ triangles, see below) and `generate_for_document()` wires both together.
   `smoothstep(0.02, 0.08)` and shrubs over `smoothstep(0.08, 0.13)`, so the rock step and the
   edge of each top show from the game camera instead of an unbroken canopy (a trunk a metre
   from a lip spread its crown over the whole face). Ground cover still grows to the rock.
-  Paths read under tall cover: ground cover whose tallest asset is at least
-  `TALL_COVER_M` (0.75 m; `PaletteLibrary.species()` adds each rule's `height_m` from the
-  manifest's `dimensions_m`), or a grass clump (kind `grass`, size class `ground`) at least
-  `GRASS_TALL_COVER_M` (0.34 m), is tall cover, and it and shrubs thin beside built paint (the
-  built weight box-averaged over `FRINGE_RADIUS_M` 1.5 m, cleared over
+  Paths read under tall cover: ground cover other than a flower whose tallest asset is at
+  least `TALL_COVER_M` (0.75 m; `PaletteLibrary.species()` adds each rule's `height_m` from
+  the manifest's `dimensions_m`), or a grass clump (kind `grass`, size class `ground`) at
+  least `GRASS_TALL_COVER_M` (0.34 m), is tall cover, and it and shrubs thin beside built
+  paint (the built weight box-averaged over `FRINGE_RADIUS_M` 1.5 m, cleared over
   `smoothstep(0.02, 0.2)`: about a metre clear, thinning out by 1.5 m), so grass rooted on a
   path's shoulder no longer lies over a narrow path from the game camera; sprigs, low grass,
-  short flowers and trees stay. Grass has its own line since the grass rework (treecube
-  20d9451) halved its height and left the flowers' alone (user, 2026-10-14): the meadow's
-  clumps, tall grass and gold drift, the temperate forest's tall grass, the wetland's sedge and
-  reeds, and every savanna and badlands grass are tall cover; the sprigs, the alpine turf and
-  the woodland and wetland grass (0.23 to 0.33 m) are not; the meadow's poppy, lavender and
-  daisy (0.75 to 0.82 m) are, by `TALL_COVER_M`. A built-paint stroke regenerates 1.5 m
-  further out for it.
+  flowers and trees stay. Grass has its own line since the grass rework (treecube 20d9451)
+  halved its height and left the flowers' alone (user, 2026-10-14): the meadow's clumps, tall
+  grass and gold drift, the temperate forest's tall grass, the wetland's sedge and reeds, and
+  every savanna and badlands grass are tall cover; the sprigs, the alpine turf and the
+  woodland and wetland grass (0.23 to 0.33 m) are not. Flowers (kind `flower`) are never tall
+  cover, however tall (flowered verges, user 2026-10-14: the meadow's daisy, poppy and
+  lavender, 0.75 to 0.82 m, stand right up to a road's edge while its grass thins), so on a
+  river bank every flower thins by half (`FLOWER_SHORE_THIN`) rather than the tallest
+  clearing as tall cover does. A built-paint stroke regenerates 1.5 m further out for it.
 - **Footing (P3-7):** a row stands at the ground height under its one origin, so a tree or a
   boulder whose origin lay on a tier's rim hung over the drop. `GroundSnap.footing_radius(rule)`
   gives a base radius (trees 8 % of the widest asset, 0.3..0.6 m; shrubs 15 %, up to 0.5 m;

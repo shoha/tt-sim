@@ -13,6 +13,7 @@
     {"op": "eval", "expr": "_authoring_controller.brush.cursor.set_visible(false)"},
     {"op": "wait_ready", "settle": 1.5},
     {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+    {"op": "hide_ui"},
     {"op": "home"},
     {"op": "wait", "s": 1.5},
     {"op": "capture", "name": "ps01_home", "desc": "Grassland meadow 200 ft, seed 1234, home view: a dirt road (dirt_road_packed, radius 1.3) across the map; canopy fade off, cursor hidden"},
