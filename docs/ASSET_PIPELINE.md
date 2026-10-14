@@ -224,7 +224,20 @@ Scatter instances contract in full:
   Trees with the canopy off (dead trees, the burnt forest's charred snag) never carry it. A
   conifer frond is a 14-triangle drooping roof strip whose normals rise from facing out at
   its root to facing the sky at its tip; the painted light's ramp is what turns those into
-  lit skirt edges over darker bands. tt-sim shades flagged leaf cards with its painted light
+  lit skirt edges over darker bands. **Palms and ferns (treecube branch `palms-ferns`, round 1,
+  2026-10-13; not installed until the user approves it):** treecube also writes the extra on
+  the palm frond material (`<asset>_Palm_Frond`: the savanna palm and the wetland short palm)
+  and the fern frond material (`<asset>_Fern_Frond`: the temperate forest and wetland fern and
+  the birch woodland and boreal taiga small fern), whose fronds are then painted one flat tone
+  with a feathered edge (`frond_style` "painted"). A palm's frond vertices carry one dome normal
+  field for the crown, from a point half a frond length below the trunk top, blended a little
+  toward up, so its young upright fronds face the sky and its hanging old ones face out and
+  down; a fern's carry a dome field from a point about half its height below its root, as the
+  painted grass cards do. Ferns stay in the "grass" wind category, so tt-sim's grass
+  `base_darken` still applies to them; treecube paints the fern texture divided by it, as it does
+  the painted grass. Palms stay "tree" and carry a shade floor (below). Same nodes, meshes,
+  attributes and material count as before; triangles at or under before.
+  tt-sim shades flagged leaf cards with its painted light
   (the normals carry the value). Absent means today's shading; every non-leaf material carries
   no extra (pines carried none until treecube 12fee28, acacias and willows none until treecube
   1a9c552, both 2026-10-12). Godot 4.7 keeps it as the material's
@@ -251,6 +264,8 @@ Scatter instances contract in full:
   treecube 26e031a): the savanna shrub (0.1, 0.17, 0.14), the badlands sage shrub (0.15, 0.13,
   0.19), every birch (0.12, 0.28, 0.1), the savanna acacia and young acacia (0.15, 0.16,
   0.06), the badlands acacia (0.15, 0.13, 0.19) and the wetland willow (0.12, 0.24, 0.22).
+  The palms-ferns branch adds the savanna palm (0.15, 0.16, 0.06, the acacia's) and the
+  wetland short palm (0.12, 0.24, 0.22, the willow's); its ferns carry none.
   tt-sim treats it as untrusted input: anything but a list of
   exactly three finite numbers is ignored with a warning, and a channel outside 0..1 is
   clamped with one. The floor is a per-material shader parameter on the wind
