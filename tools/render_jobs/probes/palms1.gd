@@ -13,6 +13,14 @@ static func run(root: Node, step: Dictionary) -> String:
 	var action := String(step.get("action", "hide_scatter"))
 	if action == "look_up":
 		return _look_up(root, step.get("at", [0.0, 0.0]), float(step.get("height", 0.0)))
+	if action == "clear":
+		return _clear(
+			root,
+			step.get("at", [0.0, 0.0]),
+			float(step.get("radius", 6.0)),
+			float(step.get("min_height", 1.2)),
+			float(step.get("toward_camera", 0.0))
+		)
 	var ctrl := root.get("_authoring_controller") as AuthoringController
 	if ctrl == null or ctrl.scatter == null:
 		return "no authoring map"
@@ -33,6 +41,41 @@ static func run(root: Node, step: Dictionary) -> String:
 		else:
 			hidden += 1
 	return "%s: %d scatter nodes shown, %d hidden" % [action, shown, hidden]
+
+
+## `action: "clear"`, `at` ([x, z]), `radius`, `min_height`, `toward_camera`: a glade for a fixed
+## view (round 2's fern beds): every scatter instance whose mesh is at least `min_height` metres
+## tall (trees, saplings, bushes) and stands within `radius` of `at`, or of the ground line from
+## `at` running `toward_camera` metres toward the camera (tall trees on the camera's side hide
+## the bed), is moved 500 m under the map, so a bed of props placed there is not hidden under the
+## canopy with the canopy fade off. Ground plants stay.
+static func _clear(
+	root: Node, at: Array, radius: float, min_height: float, toward_camera: float
+) -> String:
+	var ctrl := root.get("_authoring_controller") as AuthoringController
+	var gm := root.get("_game_map") as GameMap
+	if ctrl == null or ctrl.scatter == null or gm == null:
+		return "no authoring map"
+	var centre := Vector2(float(at[0]), float(at[1]))
+	var forward := -gm.world_viewport.get_camera_3d().global_basis.z
+	var back := -Vector2(forward.x, forward.z).normalized()
+	var far := centre + back * toward_camera
+	var cleared := 0
+	for node in ctrl.scatter.find_children("*", "MultiMeshInstance3D", true, false):
+		var mmi := node as MultiMeshInstance3D
+		var mm := mmi.multimesh
+		if mm == null or mm.mesh == null or mm.mesh.get_aabb().size.y < min_height:
+			continue
+		for i in mm.instance_count:
+			var local := mm.get_instance_transform(i)
+			var origin := mmi.global_transform * local.origin
+			var ground := Vector2(origin.x, origin.z)
+			var nearest := Geometry2D.get_closest_point_to_segment(ground, centre, far)
+			if ground.distance_to(nearest) < radius:
+				local.origin.y -= 500.0
+				mm.set_instance_transform(i, local)
+				cleared += 1
+	return "clear: %d instances within %.1f m of %s" % [cleared, radius, centre]
 
 
 ## `action: "look_up"`, `at` ([x, z]), `height`: pan (as the driver's `look_at` does) so the
