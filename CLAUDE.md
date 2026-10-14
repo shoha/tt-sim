@@ -46,7 +46,7 @@ Supplementary detail is in `.cursor/rules/` and `docs/`.
   `Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64.exe`). `godot` on PATH is a
   wrapper that picks the newest (`~/.local/bin/godot` for bash, `~/scoop/shims/godot.cmd`
   for PowerShell); the validator MCP server gets an explicit path through `GODOT_PATH` in
-  `.mcp.json` (both this repo's and `D:/dev`'s pin 4.7.1). Always pass `--headless` for CLI
+  `.mcp.json` (both this repo's and `D:/dev`'s pin 4.7.2, as CI's image does). Always pass `--headless` for CLI
   and agent use unless real pixels are needed.
 - Commands use absolute paths (`--path D:/dev/tt-sim`, `git -C D:/dev/tt-sim`), because
   sessions usually start in `D:/dev`. The allowlist (`git`, `godot`, `gdformat`, `gdlint`)
