@@ -46,9 +46,10 @@ extends RefCounted
 ## tall ground cover (ROLE_TALL_COVER: at least TALL_COVER_M high, or a grass clump at least
 ## GRASS_TALL_COVER_M, the meadow's grass) and shrubs thin out in a fringe beside built paint
 ## (the built weight box-averaged over FRINGE_RADIUS_M), so grass rooted on a path's shoulder
-## no longer lies over a narrow path from the game camera; sprigs, low grass and short
-## flowers stay, so the edge stays soft. Callers pass the species' role (role_of) with each
-## point. Pure statics.
+## no longer lies over a narrow path from the game camera; sprigs, low grass and every flower
+## stay, so the edge stays soft and flowered (flowers are never tall cover: a few slender
+## stems do not hide a path). Callers pass the species' role (role_of) with each point. Pure
+## statics.
 
 ## Species rule kind that gathers at cliff feet.
 const ROCK_KIND := "rock"
@@ -60,8 +61,9 @@ const ROLE_TREE := 2
 const ROLE_SHRUB := 3
 const ROLE_TALL_COVER := 4
 ## Ground cover whose tallest asset stands at least this high (metres, the rule's height_m,
-## PaletteLibrary.species) is tall cover: the savanna's dry and seed grass, reeds, the tallest
-## flowers (meadow poppy and lavender, 0.75 to 0.82 m), not buttercups or carpets.
+## PaletteLibrary.species) is tall cover: the savanna's dry and seed grass, reeds, and the
+## badlands' barrel cactus. Flowers never are, however tall (the meadow's lavender, 0.82 m):
+## flowered verges, user 2026-10-14.
 const TALL_COVER_M := 0.75
 ## A grass clump (GRASS_KIND, size class ground) is tall cover from this height. The grass
 ## rework (treecube 20d9451) brought every biome's grass to one scale, about half its old
@@ -122,6 +124,9 @@ const EMERGENT_DEPTH_FULL_M := 0.4
 ## The bank band (the shore weight, WaterDressing G): edge species gather (density times
 ## 1 + EDGE_BOOST * shore, capped at full); trees keep off the waterline, shrubs and tall
 ## cover thin to short cover, flowers thin by FLOWER_SHORE_THIN; ground cover and rocks stay.
+## Since flowers are never tall cover (role_of), the tallest flowers (meadow poppy, lavender,
+## daisy) thin by half on the bank like the rest instead of clearing: a few stems do not hide
+## the waterline as tall grass does, and a flowered bank is the look wanted.
 const EDGE_BOOST := 1.5
 const TREE_SHORE_START := 0.3
 const TREE_SHORE_FULL := 0.8
@@ -183,8 +188,9 @@ static func scorches(role: int) -> bool:
 
 
 ## The role (ROLE_*) of a species rule for the ground rules: rock kind, then by size class
-## (large: tree, medium: shrub), else tall cover or ground cover by its height_m (against
-## GRASS_TALL_COVER_M for a grass clump, TALL_COVER_M for anything else).
+## (large: tree, medium: shrub), then a flower is ground cover, else tall cover or ground
+## cover by its height_m (against GRASS_TALL_COVER_M for a grass clump, TALL_COVER_M for
+## anything else).
 static func role_of(rule: Dictionary) -> int:
 	if rule.get("kind", "") == ROCK_KIND:
 		return ROLE_ROCK
@@ -194,6 +200,8 @@ static func role_of(rule: Dictionary) -> int:
 			return ROLE_TREE
 		"medium":
 			return ROLE_SHRUB
+	if rule.get("kind", "") == FLOWER_KIND:
+		return ROLE_COVER
 	var tall := TALL_COVER_M
 	if rule.get("kind", "") == GRASS_KIND and size_class == "ground":
 		tall = GRASS_TALL_COVER_M

@@ -206,15 +206,23 @@ func test_tall_cover_and_shrubs_thin_beside_paths_and_short_cover_stays() -> voi
 	assert_eq(meadow.get("tall_grass"), tall, "meadow tall grass")
 	assert_eq(meadow.get("dry_drift"), tall, "meadow gold drift")
 	assert_eq(meadow.get("sprig"), cover, "meadow sprig")
-	# Flowers carry the water rules' flower bit (P4-3) on top of their ground role, and keep
-	# TALL_COVER_M: the poppy and lavender were tall cover before the rework too; the daisy
-	# (0.72 then, 0.77 now) crossed the line in the rework, not here.
-	assert_eq(meadow.get("buttercup"), cover | flower)
-	assert_eq(meadow.get("carpet"), cover | flower)
-	assert_eq(meadow.get("daisy"), tall | flower)
-	assert_eq(meadow.get("poppy"), tall | flower)
-	assert_eq(meadow.get("lavender"), tall | flower)
+	# Flowers carry the water rules' flower bit (P4-3) on top of their ground role, and are
+	# never tall cover (flowered verges, user 2026-10-14): the daisy, poppy and lavender (0.75 to
+	# 0.82 m) stay beside a path with the buttercups and carpets, while the grass thins.
+	for key in ["buttercup", "carpet", "daisy", "poppy", "lavender"]:
+		assert_eq(meadow.get(key), cover | flower, "meadow %s" % key)
+	assert_almost_eq(at.call(shoulder, meadow.lavender), base, 1e-6, "lavender on the verge")
+	assert_lt(at.call(shoulder, meadow.grass), 0.01, "the meadow's grass is not")
 	assert_eq(meadow.get("bush"), ScatterGround.ROLE_SHRUB)
+	# Every flower of every biome: ground cover with the flower bit.
+	var flowers := 0
+	for entry in PaletteLibrary.biomes():
+		for rule in PaletteLibrary.species(entry.id):
+			if rule.kind == ScatterGround.FLOWER_KIND:
+				flowers += 1
+				var role: int = ScatterPlan.build("g", [rule], 1).species[0].ground_role
+				assert_eq(role, cover | flower, "%s %s" % [entry.id, rule.key])
+	assert_gt(flowers, 10, "the palette's flowers (18 in seven biomes)")
 	# Temperate forest: the tall grass (0.47 m) thins again, the clumps (0.33) and sprig stay,
 	# as before the rework; the fern stays a bank species.
 	var forest := _roles(FOREST)
@@ -222,7 +230,6 @@ func test_tall_cover_and_shrubs_thin_beside_paths_and_short_cover_stays() -> voi
 	assert_eq(forest.get("grass"), cover, "forest clumps")
 	assert_eq(forest.get("sprig"), cover, "forest sprig")
 	assert_eq(forest.get("fern"), cover | ScatterGround.EDGE_BANK, "fern")
-	assert_eq(forest.get("daisy"), cover | flower, "forest daisy")
 	# Wetland: the sedge (0.53 m) thins again, the grass (0.31) and sprig stay.
 	var wetland := _roles("wetland_riparian_summer_s1")
 	assert_eq(wetland.get("sedge"), tall | ScatterGround.EDGE_EMERGENT, "sedge")
@@ -233,7 +240,6 @@ func test_tall_cover_and_shrubs_thin_beside_paths_and_short_cover_stays() -> voi
 	var savanna := _roles("savanna_summer_s1")
 	for key in ["dry_grass", "seed_grass", "short_grass", "rust_grass"]:
 		assert_eq(savanna.get(key), tall, "savanna %s" % key)
-	assert_eq(savanna.get("flower"), cover | flower, "savanna flower")
 	var badlands := _roles("rocky_badlands_summer_s1")
 	assert_eq(badlands.get("dry_grass"), tall, "badlands dry grass")
 	assert_eq(badlands.get("dry_tall"), tall, "badlands tall grass")
@@ -248,14 +254,19 @@ func test_tall_cover_and_shrubs_thin_beside_paths_and_short_cover_stays() -> voi
 		var roles := _roles(biome_id)
 		for key in low[biome_id]:
 			assert_eq(roles.get(key), cover, "%s %s" % [biome_id, key])
-	# The line itself: grass clumps against GRASS_TALL_COVER_M, the rest against TALL_COVER_M.
+	# The lines themselves: grass clumps against GRASS_TALL_COVER_M, the rest against
+	# TALL_COVER_M, and a flower never, however tall.
 	var line := ScatterGround.GRASS_TALL_COVER_M
 	var grass := {"kind": "grass", "size_class": "ground", "height_m": line}
 	assert_eq(ScatterGround.role_of(grass), tall)
 	grass.height_m = line - 0.01
 	assert_eq(ScatterGround.role_of(grass), cover)
+	var high := ScatterGround.TALL_COVER_M + 0.5
 	assert_eq(
-		ScatterGround.role_of({"kind": "flower", "size_class": "ground", "height_m": 0.7}), cover
+		ScatterGround.role_of({"kind": "flower", "size_class": "ground", "height_m": high}), cover
+	)
+	assert_eq(
+		ScatterGround.role_of({"kind": "cactus", "size_class": "small", "height_m": high}), tall
 	)
 	assert_eq(
 		ScatterGround.role_of({"kind": "grass", "size_class": "small", "height_m": 0.5}), cover
