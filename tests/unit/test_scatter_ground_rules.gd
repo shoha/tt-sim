@@ -194,24 +194,91 @@ func test_tall_cover_and_shrubs_thin_beside_paths_and_short_cover_stays() -> voi
 	assert_almost_eq(at.call(shoulder, ScatterGround.ROLE_COVER), base, 1e-6, "short cover")
 	assert_almost_eq(at.call(shoulder, ScatterGround.ROLE_TREE), base, 1e-6, "trees stay")
 	assert_almost_eq(at.call(clear, ScatterGround.ROLE_TALL_COVER), base, 1e-6, "3 m out")
-	# The real meadow. Since treecube 20d9451 (the grass rework) the meadow's grasses all stand
-	# under TALL_COVER_M (the tall grass about 0.6 m, the folded clumps 0.4 m), so they are short
-	# cover, and its daisy (0.77 m) is the one species over the line. The savanna's seed grass
-	# and dry grass (about 0.78 m) are the grass that still counts as tall cover.
+	# The real meadow. Since treecube 20d9451 (the grass rework) its grass stands 0.35 to 0.58 m,
+	# under TALL_COVER_M, so grass clumps have their own line (GRASS_TALL_COVER_M, user
+	# 2026-10-14): the clumps, the tall grass and the gold drift thin beside paths again, the
+	# sprig (0.25 m) stays.
+	var tall := ScatterGround.ROLE_TALL_COVER
+	var cover := ScatterGround.ROLE_COVER
+	var flower := ScatterGround.FLOWER_BIT
+	var meadow := _roles("grassland_meadow_summer_s1")
+	assert_eq(meadow.get("grass"), tall, "meadow clumps")
+	assert_eq(meadow.get("tall_grass"), tall, "meadow tall grass")
+	assert_eq(meadow.get("dry_drift"), tall, "meadow gold drift")
+	assert_eq(meadow.get("sprig"), cover, "meadow sprig")
+	# Flowers carry the water rules' flower bit (P4-3) on top of their ground role, and are
+	# never tall cover (flowered verges, user 2026-10-14): the daisy, poppy and lavender (0.75 to
+	# 0.82 m) stay beside a path with the buttercups and carpets, while the grass thins.
+	for key in ["buttercup", "carpet", "daisy", "poppy", "lavender"]:
+		assert_eq(meadow.get(key), cover | flower, "meadow %s" % key)
+	assert_almost_eq(at.call(shoulder, meadow.lavender), base, 1e-6, "lavender on the verge")
+	assert_lt(at.call(shoulder, meadow.grass), 0.01, "the meadow's grass is not")
+	assert_eq(meadow.get("bush"), ScatterGround.ROLE_SHRUB)
+	# Every flower of every biome: ground cover with the flower bit.
+	var flowers := 0
+	for entry in PaletteLibrary.biomes():
+		for rule in PaletteLibrary.species(entry.id):
+			if rule.kind == ScatterGround.FLOWER_KIND:
+				flowers += 1
+				var role: int = ScatterPlan.build("g", [rule], 1).species[0].ground_role
+				assert_eq(role, cover | flower, "%s %s" % [entry.id, rule.key])
+	assert_gt(flowers, 10, "the palette's flowers (18 in seven biomes)")
+	# Temperate forest: the tall grass (0.47 m) thins again, the clumps (0.33) and sprig stay,
+	# as before the rework; the fern stays a bank species.
+	var forest := _roles(FOREST)
+	assert_eq(forest.get("tall_grass"), tall, "forest tall grass")
+	assert_eq(forest.get("grass"), cover, "forest clumps")
+	assert_eq(forest.get("sprig"), cover, "forest sprig")
+	assert_eq(forest.get("fern"), cover | ScatterGround.EDGE_BANK, "fern")
+	# Wetland: the sedge (0.53 m) thins again, the grass (0.31) and sprig stay.
+	var wetland := _roles("wetland_riparian_summer_s1")
+	assert_eq(wetland.get("sedge"), tall | ScatterGround.EDGE_EMERGENT, "sedge")
+	assert_eq(wetland.get("reeds"), tall | ScatterGround.EDGE_EMERGENT, "reeds")
+	assert_eq(wetland.get("grass"), cover, "wetland grass")
+	assert_eq(wetland.get("sprig"), cover, "wetland sprig")
+	# Savanna and badlands: their tall grass as before, and now their short grass too.
+	var savanna := _roles("savanna_summer_s1")
+	for key in ["dry_grass", "seed_grass", "short_grass", "rust_grass"]:
+		assert_eq(savanna.get(key), tall, "savanna %s" % key)
+	var badlands := _roles("rocky_badlands_summer_s1")
+	assert_eq(badlands.get("dry_grass"), tall, "badlands dry grass")
+	assert_eq(badlands.get("dry_tall"), tall, "badlands tall grass")
+	# The low grass of the woodland, alpine and burnt biomes stays, as before.
+	var low := {
+		"birch_woodland_summer_s1": ["grass"],
+		"boreal_taiga_summer_s1": ["grass"],
+		"alpine_meadow_summer_s1": ["turf", "tundra_sprig"],
+		"burnt_forest_summer_s1": ["burnt_stubble"],
+	}
+	for biome_id in low:
+		var roles := _roles(biome_id)
+		for key in low[biome_id]:
+			assert_eq(roles.get(key), cover, "%s %s" % [biome_id, key])
+	# The lines themselves: grass clumps against GRASS_TALL_COVER_M, the rest against
+	# TALL_COVER_M, and a flower never, however tall.
+	var line := ScatterGround.GRASS_TALL_COVER_M
+	var grass := {"kind": "grass", "size_class": "ground", "height_m": line}
+	assert_eq(ScatterGround.role_of(grass), tall)
+	grass.height_m = line - 0.01
+	assert_eq(ScatterGround.role_of(grass), cover)
+	var high := ScatterGround.TALL_COVER_M + 0.5
+	assert_eq(
+		ScatterGround.role_of({"kind": "flower", "size_class": "ground", "height_m": high}), cover
+	)
+	assert_eq(
+		ScatterGround.role_of({"kind": "cactus", "size_class": "small", "height_m": high}), tall
+	)
+	assert_eq(
+		ScatterGround.role_of({"kind": "grass", "size_class": "small", "height_m": 0.5}), cover
+	)
+
+
+## Each species key of `biome_id` to its plan ground_role.
+func _roles(biome_id: String) -> Dictionary:
 	var roles := {}
-	for rule in PaletteLibrary.species("grassland_meadow_summer_s1"):
+	for rule in PaletteLibrary.species(biome_id):
 		roles[rule.key] = ScatterPlan.build("g", [rule], 1).species[0].ground_role
-	assert_eq(roles.get("tall_grass"), ScatterGround.ROLE_COVER)
-	assert_eq(roles.get("grass"), ScatterGround.ROLE_COVER)
-	assert_eq(roles.get("sprig"), ScatterGround.ROLE_COVER)
-	# Flowers carry the water rules' flower bit (P4-3) on top of their ground role.
-	assert_eq(roles.get("daisy"), ScatterGround.ROLE_TALL_COVER | ScatterGround.FLOWER_BIT)
-	assert_eq(roles.get("bush"), ScatterGround.ROLE_SHRUB)
-	var savanna := {}
-	for rule in PaletteLibrary.species("savanna_summer_s1"):
-		savanna[rule.key] = ScatterPlan.build("g", [rule], 1).species[0].ground_role
-	assert_eq(savanna.get("seed_grass"), ScatterGround.ROLE_TALL_COVER)
-	assert_eq(savanna.get("dry_grass"), ScatterGround.ROLE_TALL_COVER)
+	return roles
 
 
 func test_trees_keep_back_from_tier_faces_and_ground_cover_does_not() -> void:

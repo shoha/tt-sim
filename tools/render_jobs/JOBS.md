@@ -38,6 +38,12 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   the home view (with an A/B of the broad edge and so the trampled fringe, `biome_broad_strength` 0 vs 0.8), undo /
   redo of the last stroke. Frame times per stroke (`record`). `jobs/paint_shoulder.json` (about
   30 s) paints the same track alone and runs `paint_check.gd` along it with a zoom-8 capture.
+- `jobs/path_shoulder_look.json` (about 40 s): which grasses and flowers stay beside a path. A
+  new 200 ft grassland meadow at seed 1234, a dirt road (`dirt_road_packed`, radius 1.3)
+  painted across it, canopy fade off, the brush cursor and the tool rail (`hide_ui`) hidden;
+  captures at home zoom and at zoom 10 on
+  the road (the zoom pinned to the screen centre, so runs frame alike). Run it with `--out`
+  before and after a ground-role change and compare. Saves no level.
 - `jobs/phase3_judgment_set.json`: the phase 3 judgment set (P3-7, about 7 minutes): for
   temperate forest, alpine meadow, rocky badlands and grassland meadow, a new 150 ft map
   (seed 1234) built with the real Sculpt and Paint tools at human speed (a raised hill, a

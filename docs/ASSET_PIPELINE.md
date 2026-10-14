@@ -921,7 +921,9 @@ every GLB, PNG and JPG as LFS and only `palette.json` as Git. The grass is much 
 meadow's tall grass 1.45 to 0.58 m, its clumps 1.06 to 0.38 m, the savanna's dry grass 1.30 to
 0.76 m), so `ScatterGround.TALL_COVER_M` (0.75 m) now makes the meadow's grasses short cover and
 its daisy (0.77 m) tall cover: `test_scatter_ground_rules.gd` expects that, with the savanna's seed
-grass and dry grass as the tall grass. The stemmed flowers keep a surface in the uncompressed
+grass and dry grass as the tall grass. (Since then a grass clump has its own line,
+`ScatterGround.GRASS_TALL_COVER_M` 0.34 m, so the meadow's grass thins beside paths again;
+ARCHITECTURE.md "Terraces and paths stay legible".) The stemmed flowers keep a surface in the uncompressed
 vertex layout, but the stemless `Flower_Carpet_*` no longer has it, so
 `WindFoliage.pick_representatives()` now takes the first stemmed flower (a carpet only when there
 is none) for the graphics warm-up. Home captures at seed 1234 (canopy fade off) for grassland

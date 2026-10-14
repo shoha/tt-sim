@@ -15,7 +15,10 @@ const FOREST := "temperate_forest_summer_s1"
 const MAP_CELLS := 24
 const SEED := 91
 const FOREST_EDGE_X := 2.0
-const SETTLE_FRAMES := 900
+## The longest a wait may take, in wall time. Not a frame count: the frames scatter regeneration
+## takes (WorkerThreadPool jobs) grow with a slower, narrower machine, so a frame cap fails a
+## slow CI runner (the measurements are at test_live_map_edits.gd's SETTLE_S).
+const SETTLE_S := 45.0
 const OLD_CENTRE := Vector2(-9.0, -8.0)
 const FIRE_CENTRE := Vector2(-9.0, 8.0)
 const RADIUS := 5.0
@@ -68,7 +71,9 @@ func _restore_palette() -> void:
 	_palette_saved = {}
 
 
-func _make_level() -> void:
+## Builds the forest level and saves it once its scatter has landed; false if it never did,
+## since a level saved early holds rows its own masks would not grow.
+func _make_level() -> bool:
 	# Birch's ground (treecube 1c05fb0): a base whose rules and accents the forest shares.
 	var doc := MapDocument.create_flat(Vector2i(MAP_CELLS, MAP_CELLS), "grass_birch", "fire", SEED)
 	doc.biome_ids = PackedStringArray([FOREST])
@@ -91,15 +96,14 @@ func _make_level() -> void:
 	scatter.attach_document(doc)
 	var e := AuthoringEditor.create(doc, root, AuthoringHistory.new())
 	e.scatter.request_region(Rect2(-doc.extent_m() * 0.5, doc.extent_m()))
-	var frames := 0
-	while frames < SETTLE_FRAMES and (e.scatter.is_regenerating() or e.scatter.is_growing()):
-		await get_tree().process_frame
-		frames += 1
+	var growing := func() -> bool: return e.scatter.is_regenerating() or e.scatter.is_growing()
+	var settled: bool = await _wait(growing, "the level's scatter")
 	doc.scatter = e.scatter.rows_by_asset()
 	doc.props = e.props.rows_by_asset()
 	assert_eq(MapDocumentIO.write(doc, LEVEL), OK)
 	remove_child(root)
 	root.free()
+	return settled
 
 
 func _load(sends: bool) -> Copy:
@@ -126,12 +130,23 @@ func _busy(copy: Copy) -> bool:
 	)
 
 
-func _settle(copies: Array) -> void:
+## Frames until `busy` says no work is left, at most SETTLE_S; false, with `what` failing to
+## settle, past it.
+func _wait(busy: Callable, what: String) -> bool:
+	var begin := Time.get_ticks_msec()
 	var frames := 0
-	while frames < SETTLE_FRAMES and copies.any(_busy):
+	while busy.call() and Time.get_ticks_msec() - begin < SETTLE_S * 1000.0:
 		await get_tree().process_frame
 		frames += 1
-	assert_lt(frames, SETTLE_FRAMES, "settled within %d frames" % SETTLE_FRAMES)
+	var settled: bool = not busy.call()
+	var took := "%d frames, %d ms" % [frames, Time.get_ticks_msec() - begin]
+	assert_true(settled, "%s: settled within %.0f s (%s)" % [what, SETTLE_S, took])
+	return settled
+
+
+## Frames until every copy has nothing left to do, at most SETTLE_S (_wait).
+func _settle(copies: Array, what: String) -> void:
+	await _wait(func() -> bool: return copies.any(_busy), what)
 	await get_tree().process_frame
 
 
@@ -190,15 +205,17 @@ func _burn(gm: Copy, client: Copy, centre: Vector2, seed_value: int) -> Dictiona
 	assert_eq(entry.get("label"), EventPresets.IGNITE_LABEL, "labelled as its tile")
 	assert_eq(entry.get("preset"), TerrainEvent.Kind.FIRE)
 	assert_eq((entry.get("parts", []) as Array).size(), 2, "of two strokes")
-	await _settle([gm, client])
+	await _settle([gm, client], "the fire at %s" % str(centre))
 	return entry
 
 
 func test_a_fire_burns_the_forest_on_every_board_then_changes_the_map() -> void:
-	await _make_level()
+	var made: bool = await _make_level()
+	if not made:
+		return
 	var gm := await _load(true)
 	var client := await _load(false)
-	await _settle([gm, client])
+	await _settle([gm, client], "the loads")
 	var key := gm.edits.table_key
 	gm.edits.op_logged.connect(
 		func(index: int, bytes: PackedByteArray) -> void: client.edits.receive_op(key, index, bytes)
@@ -251,7 +268,7 @@ func test_a_fire_burns_the_forest_on_every_board_then_changes_the_map() -> void:
 	assert_true(gm.edits.history.is_newest(entry))
 	assert_eq(gm.edits.history.undo(), EventPresets.IGNITE_LABEL)
 	assert_eq(gm.edits.events.active_count(), 0, "an undo plays no effect")
-	await _settle([gm, client])
+	await _settle([gm, client], "the undo")
 	assert_eq(_kinds(gm, 4), ["surface", "mask"], "the ash first, then the forest")
 	assert_eq(_biome_at(gm.doc, FIRE_CENTRE), FOREST, "the forest is back")
 	var back := FireSweep.burnable(gm.edits.editor.scatter, FIRE_CENTRE, RADIUS)
@@ -260,12 +277,12 @@ func test_a_fire_burns_the_forest_on_every_board_then_changes_the_map() -> void:
 
 	# A late joiner gets only the ops.
 	var joiner := await _load(false)
-	await _settle([joiner])
+	await _settle([joiner], "the late joiner's load")
 	joiner.edits.receive_log(key, gm.edits.op_log.size())
 	for index in gm.edits.op_log.size():
 		joiner.edits.receive_op(key, index, gm.edits.op_log[index])
 	assert_eq(joiner.edits.events.active_count(), 0, "the late joiner sees no motion")
-	await _settle([gm, joiner])
+	await _settle([gm, joiner], "the late joiner's catch-up")
 	_same(gm, joiner, "late joiner")
 	# The forest, the birch base and the burnt forest with its ash draw every accent on every
 	# board (the index ground, G3; the eight-slot table dropped the burnt forest's dirt here).
