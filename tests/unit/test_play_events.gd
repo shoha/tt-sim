@@ -15,7 +15,10 @@ const TOASTS_SCENE := preload("res://scenes/ui/toast_container.tscn")
 const FOLDER := "_gm_events_gut"
 const MAP_CELLS := 8
 const LOAD_TIMEOUT := 30.0
-const SETTLE_FRAMES := 600
+## The longest a wait may take, in wall time. Not a frame count: the frames a live edit's work
+## takes grow with a slower, narrower machine, so a frame cap fails a slow CI runner (the
+## measurements are at test_live_map_edits.gd's SETTLE_S).
+const SETTLE_S := 45.0
 const RECIPE := {
 	"format": 1,
 	"parts": {"body": "body_a", "head": "head_round", "hair": "hair_bun"},
@@ -72,10 +75,7 @@ func _play(cells: int = MAP_CELLS) -> void:
 	level.map_document = Paths.LEVEL_MAP_DOCUMENT_NAME
 	_controller.play_level(level)
 	assert_true(await wait_for_signal(_controller.level_loading_completed, LOAD_TIMEOUT))
-	var frames := 0
-	while _controller.live_edits == null and frames < SETTLE_FRAMES:
-		await get_tree().process_frame
-		frames += 1
+	await _wait(func() -> bool: return _controller.live_edits == null, "the live edits' start")
 	assert_not_null(_controller.live_edits, "the table's live edits started")
 	_pane = EventsPane.new()
 	add_child_autofree(_pane)
@@ -84,14 +84,26 @@ func _play(cells: int = MAP_CELLS) -> void:
 	_events.setup(_controller, _pane)
 
 
-## Frames until the live edits are sent and the ground follower has caught up.
-func _settle() -> void:
-	var ground := _controller.live_edits.get_node("LiveEditGround") as LiveEditGround
+## Frames until `busy` says no work is left, at most SETTLE_S; false, with `what` failing to
+## settle, past it.
+func _wait(busy: Callable, what: String) -> bool:
+	var begin := Time.get_ticks_msec()
 	var frames := 0
-	while frames < SETTLE_FRAMES and not (_controller.live_edits.is_settled() and ground.is_idle()):
+	while busy.call() and Time.get_ticks_msec() - begin < SETTLE_S * 1000.0:
 		await get_tree().process_frame
 		frames += 1
-	assert_lt(frames, SETTLE_FRAMES, "settled within %d frames" % SETTLE_FRAMES)
+	var settled: bool = not busy.call()
+	var took := "%d frames, %d ms" % [frames, Time.get_ticks_msec() - begin]
+	assert_true(settled, "%s: settled within %.0f s (%s)" % [what, SETTLE_S, took])
+	return settled
+
+
+## Frames until the live edits are sent and the ground follower has caught up, at most
+## SETTLE_S (_wait).
+func _settle(what: String) -> void:
+	var ground := _controller.live_edits.get_node("LiveEditGround") as LiveEditGround
+	var edits := _controller.live_edits
+	await _wait(func() -> bool: return not (edits.is_settled() and ground.is_idle()), what)
 
 
 ## A held drag of the play brush along `points` (world XZ), as the render driver drives it.
@@ -251,7 +263,7 @@ func test_a_live_raise_undoes_through_the_live_history_and_regrounds_a_token() -
 	_events.stroke_started.connect(func() -> void: strokes[0] += 1)
 	await _drag(brush, [RAISE_AT, RAISE_AT + Vector3(0.5, 0.0, 0.0), RAISE_AT])
 	assert_eq(strokes[0], 1, "the press told the drawer to step aside")
-	await _settle()
+	await _settle("the raise")
 	var raised := _height_at(RAISE_AT)
 	assert_gt(raised, 0.2, "the brush raised the ground")
 	assert_eq(_controller.live_edits.op_log.size(), 1, "one op logged")
@@ -268,7 +280,7 @@ func test_a_live_raise_undoes_through_the_live_history_and_regrounds_a_token() -
 	ctrl_z.action = &"ui_undo"
 	ctrl_z.pressed = true
 	_events._unhandled_input(ctrl_z)
-	await _settle()
+	await _settle("the undo")
 	assert_almost_eq(_height_at(RAISE_AT), 0.0, 0.01, "undone")
 	assert_eq(_controller.live_edits.op_log.size(), 2, "the undo went out as an op")
 	assert_almost_eq(token.rigid_body.global_position.y, before, 0.05, "back down with it")
@@ -400,7 +412,7 @@ func test_a_preset_stays_armed_after_it_fires_until_no_bridge_is_left() -> void:
 		_controller.live_edits.events.advance(
 			TerrainEvent.bridge_collapse(bridge.id, middle, 1).duration_s
 		)
-		await _settle()
+		await _settle("the bridge's fall with %d left" % left)
 		assert_eq(editor.document.crossings.size(), left, "the bridge fell")
 		# The entry is named as the tile is (W5); its toast offers Undo in the event's icon.
 		var newest_entry: Dictionary = (_controller.live_edits.history.get("_undo") as Array).back()
@@ -480,6 +492,6 @@ func test_a_quick_click_in_play_shows_on_the_board() -> void:
 	release.pressed = false
 	release.position = brush.pointer
 	brush.handle_input(release)
-	await _settle()
+	await _settle("the click's mound")
 	var raised := _height_at(RAISE_AT)
 	assert_gt(raised, 0.12, "one click raises a mound a GM can see (%.3f m)" % raised)

@@ -16,8 +16,9 @@ extends GutTest
 ##
 ## Each op's payload size, decode and apply time, worst frame, the most one frame spent on
 ## chunks, snapping and the collision, and the settle time are printed on "P-LIVE" lines
-## (headless: no GPU upload in any frame; indicative only). Hostile payloads are refused in
-## test_live_edit_codec.gd.
+## (headless: no GPU upload in any frame; indicative only), and every copy's settle on a
+## "P-LIVE-SETTLE" line, so a slow runner shows which wait ran long. Hostile payloads are
+## refused in test_live_edit_codec.gd.
 
 const DIR := "user://_p_live_probe/"
 const LEVEL := DIR + "map.ttmap"
@@ -32,7 +33,13 @@ const FOREST_EDGE_X := 6.0
 const RIVER: Array[Vector2] = [Vector2(12, -34), Vector2(13, 0), Vector2(14, 34)]
 const POND := Vector2(-13, 16)
 const CRATER := Vector3(-6, 0, 22)
-const SETTLE_FRAMES := 900
+## The longest a copy may take to settle, in wall time. Not a frame count: a headless frame
+## lasts about 7 ms here and on CI alike, while the scatter regenerates on WorkerThreadPool
+## jobs (at most half the cores), so the frames a settle takes grow with a slower, narrower
+## machine. The level's own regeneration took 278 frames here, 833 pinned to one core, and
+## more than 900 on CI's runner (2026-10-14), whose cap then saved the level with part of its
+## scatter; the slowest settles CI finished ran about 6 s.
+const SETTLE_S := 45.0
 
 
 ## One built copy of the level.
@@ -71,8 +78,11 @@ func _forest(doc: MapDocument) -> void:
 	doc.biome_density = density
 
 
-## Builds the level with the editor (forest, river, pond, bridge, boulders) and saves it.
-func _make_level() -> void:
+## Builds the level with the editor (forest, river, pond, bridge, boulders) and saves it once
+## its scatter has landed, as authoring's save waits for it; false if it never settled. A level
+## saved early holds rows its own masks would not grow, so a peer regenerating a cell the host
+## did not regenerate (a stroke's bounds against its dabs) would differ for that reason alone.
+func _make_level() -> bool:
 	# Birch's ground (treecube 1c05fb0): a base whose rules and accents the forest shares.
 	var doc := MapDocument.create_flat(Vector2i(MAP_CELLS, MAP_CELLS), "grass_birch", "probe", SEED)
 	_forest(doc)
@@ -99,12 +109,13 @@ func _make_level() -> void:
 	for at: Vector3 in [Vector3(21, 0, -12), Vector3(23, 0, 9)]:
 		assert_false(e.place_prop(boulder, at, Vector3.UP).is_empty())
 	e.commit_prop_edit()
-	await _settle(setup)
+	var settled: bool = (await _settle(setup, "the level")).settled
 	doc.scatter = e.scatter.rows_by_asset()
 	doc.props = e.props.rows_by_asset()
 	assert_eq(MapDocumentIO.write(doc, LEVEL), OK)
 	remove_child(setup.root)
 	setup.root.free()
+	return settled
 
 
 ## The saved level loaded as a play map with props kept apart (not in the tree).
@@ -144,15 +155,18 @@ func _busy(copy: Copy) -> bool:
 
 ## Frames until `copy` has no work left (height work, a water edit's landing, regeneration,
 ## grow-in, the water surface's refresh), driving the editor's per-frame step as a play-side
-## driver would, or `queue` (a peer's LiveEditCodec.Queue), which also applies its ops.
-## `started` (usec): when the op began on this frame. {"frames", "worst_usec" (the longest
+## driver would, or `queue` (a peer's LiveEditCodec.Queue), which also applies its ops; at most
+## SETTLE_S, past which `what` fails to settle. `started` (usec): when the op began on this
+## frame. {"settled" (no work left), "frames", "worst_usec" (the longest
 ## frame, the op's own included), "worst_parts" (what that frame spent on the step, scatter
 ## cells applied and the water surface's swap), "wall_usec", "apply_usec" (the longest step
 ## that applied an op), "queued" (an applied op left terrain chunks queued), "height_frames"
 ## (frames that updated chunks), "chunks" and "chunks_max" (chunks updated in all, and in one
 ## frame), "terrain_usec", "snap_usec", "collision_usec" (the most one frame spent on each),
 ## "trace" (a line per frame of height work)}.
-func _settle(copy: Copy, started: int = -1, queue: LiveEditCodec.Queue = null) -> Dictionary:
+func _settle(
+	copy: Copy, what: String, started: int = -1, queue: LiveEditCodec.Queue = null
+) -> Dictionary:
 	var begin := Time.get_ticks_usec() if started < 0 else started
 	var last := begin
 	var out := {
@@ -174,7 +188,9 @@ func _settle(copy: Copy, started: int = -1, queue: LiveEditCodec.Queue = null) -
 	var applied := [0]
 	var on_applied := func(_cells: Array) -> void: applied[0] += e.scatter.last_apply_usec
 	e.scatter.cells_applied.connect(on_applied)
-	while out.frames < SETTLE_FRAMES and (_busy(copy) or (queue != null and queue.size() > 0)):
+	var pending := func() -> bool: return _busy(copy) or (queue != null and queue.size() > 0)
+	var deadline := begin + int(SETTLE_S * 1000000.0)
+	while pending.call() and Time.get_ticks_usec() < deadline:
 		var water := copy.root.get_node_or_null(AuthoredWater.NODE_NAME) as AuthoredWater
 		var version := water.version if water != null else 0
 		heights.last_terrain_usec = 0
@@ -236,7 +252,10 @@ func _settle(copy: Copy, started: int = -1, queue: LiveEditCodec.Queue = null) -
 		last = now
 		out.frames += 1
 	e.scatter.cells_applied.disconnect(on_applied)
-	assert_false(_busy(copy), "settled within %d frames" % SETTLE_FRAMES)
+	out["settled"] = not pending.call()
+	var took := "%d frames, %.0f ms" % [out.frames, (last - begin) / 1000.0]
+	assert_true(out.settled, "%s: settled within %.0f s (%s)" % [what, SETTLE_S, took])
+	print("P-LIVE-SETTLE %s: %s" % [what, took])
 	# Freed nodes (a removed crossing's, shrunk-out instances) leave at the end of a frame.
 	await get_tree().process_frame
 	out["wall_usec"] = last - begin
@@ -391,12 +410,19 @@ func _ops() -> Array:
 # --- tests -----------------------------------------------------------------------------------
 
 
+## A copy that has not settled has failed already (_settle), and every comparison after it
+## would measure work still landing rather than a difference, so the test stops there: the
+## peer is compared only once it and the host have both settled.
 func test_live_ops_reach_a_peer_identical_to_the_host_and_a_reload() -> void:
-	await _make_level()
+	var made: bool = await _make_level()
+	if not made:
+		return
 	var host := _editable(await _load())
 	var peer := _editable(await _load())
-	await _settle(host)
-	await _settle(peer)
+	if not (await _settle(host, "the host's load")).settled:
+		return
+	if not (await _settle(peer, "the peer's load")).settled:
+		return
 	var host_loaded := MapFingerprint.of(host.root, host.doc)
 	var loads := MapFingerprint.diff(host_loaded, MapFingerprint.of(peer.root, peer.doc))
 	assert_true(loads.is_empty(), "two loads agree: %s" % str(loads))
@@ -414,7 +440,8 @@ func test_live_ops_reach_a_peer_identical_to_the_host_and_a_reload() -> void:
 		var label: String = step[0]
 		var count := host.history.undo_count()
 		(step[1] as Callable).call(host.editor)
-		await _settle(host)
+		if not (await _settle(host, label + " on the host")).settled:
+			return
 		var entries: Array = (host.history.get("_undo") as Array).slice(count)
 		assert_false(entries.is_empty(), label + ": recorded")
 		var payloads: Array[PackedByteArray] = []
@@ -434,7 +461,9 @@ func test_live_ops_reach_a_peer_identical_to_the_host_and_a_reload() -> void:
 			var problem := queue.push(bytes)
 			decoded_usec += Time.get_ticks_usec() - decode_started
 			assert_eq(problem, "", label + ": the payload reads back")
-		var settled := await _settle(peer, started, queue)
+		var settled := await _settle(peer, label + " on the peer", started, queue)
+		if not settled.settled:
+			return
 		if label.begins_with("sculpt"):
 			assert_true(settled.queued, label + ": the apply returned with its chunks queued")
 			var spread := "chunks, the collision and the settling on frames of their own"

@@ -416,7 +416,7 @@ The bridge only activates when Godot is launched with `-- --validation-bridge`. 
 
 ## CI/CD
 
-- **GitHub Actions** – `.github/workflows/build.yml` exports Windows, macOS, and Linux builds on push to `main` or version tags (`v*`). Uses the `barichello/godot-ci:4.7` container (`GODOT_VERSION` in the workflow).
+- **GitHub Actions** – `.github/workflows/build.yml` exports Windows, macOS, and Linux builds on push to `main` or version tags (`v*`). Uses the `barichello/godot-ci:4.7.2` container, the same engine as local testing (`GODOT_VERSION` in the workflow, and both job images, kept in step; 4.7.0 until 2026-10-14).
 - **Releases** – Tagged pushes (`v*`) create GitHub releases with build artifacts. `UpdateManager` checks for new releases and prompts in-app updates.
 - **Versioning rule** – `project.godot config/version` is the single source of truth. It always holds the version being worked *toward*, not the one last shipped. CI reads it for every build; for tagged builds it validates the tag matches and fails the build if not.
 - **Cutting a release** – Ensure `project.godot config/version` is set to the intended release version (e.g. `0.1.2`). Tag: `git tag v0.1.2 && git push origin v0.1.2`. CI validates tag == project.godot version. **Immediately after**: bump `project.godot` to the next version (e.g. `0.1.3`) and push — this ensures subsequent builds are correctly versioned as pre-releases of `0.1.3`.
