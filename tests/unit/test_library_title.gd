@@ -2,10 +2,11 @@ extends GutTest
 
 ## The library's pieces (cards library-title and title-coherent): the facts the map panel shows
 ## (LibraryFacts), the grid's reveal of a selected card, the panel's actions per map and source,
-## its fields read as text, edited in place and saved through update_meta with Escape
-## reverting, New map's Advanced (size and seed), the import check panel on fixture GLBs, a .glb
-## dropped on a card opening Replace and elsewhere opening Import (written into a
-## _test_library_title_ folder, deleted after each test), and the pad's way into the panel.
+## its picture's height (which the scroll bar never changes), its fields read as text, edited in
+## place and saved through update_meta with Escape reverting, New map's Advanced (size and seed),
+## the import check panel on fixture GLBs, a .glb dropped on a card opening Replace and elsewhere
+## opening Import (written into a _test_library_title_ folder, deleted after each test), and the
+## pad's way into the panel.
 ## LevelManager.levels_dir, ImportSources.path and LibraryPlays.path are put back after each
 ## test.
 
@@ -250,6 +251,30 @@ func test_the_panels_placeholder_shows_the_names_initial() -> void:
 	assert_lt(picture.y, picture.x / MapPanel.PICTURE_ASPECT - 1.0, "shorter than 16:9")
 	assert_gte(picture.y, floorf(picture.x / MapPanel.TIGHT_ASPECT), "no shorter than its floor")
 	assert_lte(panel.custom_minimum_size.y, 380.0, "the panel within its column")
+
+
+## The picture's height is read from the scroll's width, which the bar never changes
+## (MapPanel.picture_width): a picture that followed its column shortened as the bar took its
+## lane, which ended the overflow that showed the bar, and on Godot 4.7.0 the panel resized
+## without end (test_interface_size_fit's settle test). With the bar shown, the picture keeps the
+## height it has without it, at 16:9 and where a short column shortens it.
+func test_the_panels_picture_does_not_follow_the_scroll_bar() -> void:
+	var panel := _panel(_info("harbour", "", "map.ttmap"))
+	panel.size = Vector2(MapPanel.WIDTH, 600)
+	var bar := panel._scroll.get_v_scroll_bar()
+	for max_height in [0.0, 436.0]:
+		var what := "max_height %d" % max_height
+		panel.max_height = max_height
+		panel._scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		panel.fit_height()
+		await wait_process_frames(3)
+		assert_false(bar.visible, "%s: no bar at rest" % what)
+		var rest := panel.picture_height()
+		panel._scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
+		await wait_process_frames(3)
+		assert_true(bar.visible, "%s: the bar shows" % what)
+		assert_lt(panel._column.size.x, panel.picture_width() - 1.0, "%s: in its lane" % what)
+		assert_eq(panel.picture_height(), rest, "%s: the picture keeps its height" % what)
 
 
 func test_a_field_saves_on_enter_through_update_meta_and_escape_reverts() -> void:

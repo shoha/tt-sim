@@ -601,7 +601,11 @@ unscrolled at 1280x720); selecting one of those brings the panel in. `LibraryPla
   two-line reserve (before ui-polish-2): 2.4:1 on a 1280x720 canvas (the panel 432 of 436 px),
   16:9 from 720p at Auto (1371x771) up; not re-measured with the three-line reserve. Only past
   that floor would the picture and words scroll over the pinned actions, the bar the handle alone
-  (`ScrollBarFade`). Top to bottom: the picture (the thumbnail, or the placeholder, its initial
+  (`ScrollBarFade`). The picture's height is read from the scroll's width (`picture_width()`),
+  never the column's: the bar takes its lane from the column only while the words overflow, and
+  a picture that shortened with it ended the overflow, hid the bar and grew back, a layout loop
+  Godot 4.7.0 (CI's engine and the export templates') never settled; it flooded the message queue
+  and crashed the run (`test_the_title_settles_in_a_few_layout_passes`). Top to bottom: the picture (the thumbnail, or the placeholder, its initial
   scaled to the picture: `MapPlaceholder.INITIAL_SHARE` 0.3 of its height); the name in the
   `Title` face; the description; "by <author>"; the facts (`FactsFlow`: the source chip,
   `LibraryFacts.source_of`: From Blender, Blender, edited here, Made here, Bundled; the size,
