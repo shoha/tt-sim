@@ -393,9 +393,9 @@ static func surface_has_vertex_colors(mesh: Mesh, index: int) -> bool:
 
 
 ## The palette assets the graphics warm-up builds its foliage samples from: the first wind
-## asset in palette order, then the first wind asset named "Flower_*" (unless the first is
-## itself a flower). The flowers carry one surface Godot imports without vertex compression, a
-## layout no tree or grass has, and a pipeline is keyed by the layout; see
+## asset in palette order, then the first stemmed wind flower named "Flower_*" (unless the first
+## is itself one). The stemmed flowers carry one surface Godot imports without vertex
+## compression, a layout no tree, grass or carpet has, and a pipeline is keyed by the layout; see
 ## docs/ASSET_PIPELINE.md section 5. Reads manifests only (no mesh load), so check_layout() can
 ## call it from inside a resolve. Returns a copy of the cached list.
 static func representative_assets() -> Array[String]:
@@ -413,19 +413,31 @@ static func representative_assets() -> Array[String]:
 
 
 ## The representatives among `wind_ids` (wind assets in palette order): the first, plus the
-## first "Flower_*" unless the first is one already. Pure.
+## first stemmed "Flower_*" unless the first is one already. A stemless "Flower_Carpet_*"
+## draws with the common layout (since treecube 20d9451), so it is not the flower to take
+## while a stemmed one exists; with only carpets, the first carpet is taken. Pure.
 static func pick_representatives(wind_ids: Array[String]) -> Array[String]:
 	var picked: Array[String] = []
 	if wind_ids.is_empty():
 		return picked
 	picked.append(wind_ids[0])
-	if wind_ids[0].get_file().begins_with("Flower_"):
+	if _is_stemmed_flower(wind_ids[0]):
 		return picked
+	for id in wind_ids:
+		if _is_stemmed_flower(id):
+			picked.append(id)
+			return picked
 	for id in wind_ids:
 		if id.get_file().begins_with("Flower_"):
 			picked.append(id)
 			break
 	return picked
+
+
+## True for a "Flower_*" asset that is not a stemless "Flower_Carpet_*" ground cover.
+static func _is_stemmed_flower(id: String) -> bool:
+	var file := id.get_file()
+	return file.begins_with("Flower_") and not file.begins_with("Flower_Carpet")
 
 
 ## GraphicsWarmup samples: for each of the four wind shaders (wind_shaders(): the antialiased
