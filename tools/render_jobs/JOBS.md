@@ -38,7 +38,8 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   the home view (with an A/B of the broad edge and so the trampled fringe, `biome_broad_strength` 0 vs 0.8), undo /
   redo of the last stroke. Frame times per stroke (`record`). `jobs/paint_shoulder.json` (about
   30 s) paints the same track alone and runs `paint_check.gd` along it with a zoom-8 capture.
-- `jobs/path_shoulder_look.json` (about 40 s): which grasses and flowers stay beside a path. A
+- `jobs/path_shoulder_look.json` (about 65 s): which grasses thin and which flowers gather
+  beside a path, on the grassland meadow and then the alpine meadow (`ps03_alpine_home`). A
   new 200 ft grassland meadow at seed 1234, a dirt road (`dirt_road_packed`, radius 1.3)
   painted across it, canopy fade off, the brush cursor and the tool rail (`hide_ui`) hidden;
   captures at home zoom and at zoom 10 on

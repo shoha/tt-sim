@@ -1614,7 +1614,15 @@ triangles, see below) and `generate_for_document()` wires both together.
   cover, however tall (flowered verges, user 2026-10-14: the meadow's daisy, poppy and
   lavender, 0.75 to 0.82 m, stand right up to a road's edge while its grass thins), so on a
   river bank every flower thins by half (`FLOWER_SHORE_THIN`) rather than the tallest
-  clearing as tall cover does. A built-paint stroke regenerates 1.5 m further out for it.
+  clearing as tall cover does. Over the same fringe smoothstep flowers gather: their density
+  times 1 + `FLOWER_VERGE_GATHER` (5), the excess over 1 kept up to `FLOWER_VERGE_FILL`
+  (0.15; `ScatterGround.species_density`), and since every palette flower is clumped the
+  excess lets it grow between its beds (`ScatterGenerator._evaluate`, the bank species' rule),
+  so a road gets a loose, broken band of the biome's own flowers where its grass thinned. The
+  gather is strong because a new map's cover is light (0.14 at the centre) and ground cover
+  answers it late (d^1.6): times 1.3 added one poppy, times 9 with a fill of 0.3 made the
+  meadow's verge a planted border (`path_shoulder_look`, 2026-10-14). A built-paint stroke
+  regenerates 1.5 m further out for both.
 - **Footing (P3-7):** a row stands at the ground height under its one origin, so a tree or a
   boulder whose origin lay on a tier's rim hung over the drop. `GroundSnap.footing_radius(rule)`
   gives a base radius (trees 8 % of the widest asset, 0.3..0.6 m; shrubs 15 %, up to 0.5 m;

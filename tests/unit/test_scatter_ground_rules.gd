@@ -208,10 +208,11 @@ func test_tall_cover_and_shrubs_thin_beside_paths_and_short_cover_stays() -> voi
 	assert_eq(meadow.get("sprig"), cover, "meadow sprig")
 	# Flowers carry the water rules' flower bit (P4-3) on top of their ground role, and are
 	# never tall cover (flowered verges, user 2026-10-14): the daisy, poppy and lavender (0.75 to
-	# 0.82 m) stay beside a path with the buttercups and carpets, while the grass thins.
+	# 0.82 m) stay beside a path with the buttercups and carpets, while the grass thins (and
+	# gather there: test_flowers_gather_on_a_paths_verge).
 	for key in ["buttercup", "carpet", "daisy", "poppy", "lavender"]:
 		assert_eq(meadow.get(key), cover | flower, "meadow %s" % key)
-	assert_almost_eq(at.call(shoulder, meadow.lavender), base, 1e-6, "lavender on the verge")
+	assert_gt(at.call(shoulder, meadow.lavender), base, "lavender on the verge")
 	assert_lt(at.call(shoulder, meadow.grass), 0.01, "the meadow's grass is not")
 	assert_eq(meadow.get("bush"), ScatterGround.ROLE_SHRUB)
 	# Every flower of every biome: ground cover with the flower bit.
@@ -270,6 +271,35 @@ func test_tall_cover_and_shrubs_thin_beside_paths_and_short_cover_stays() -> voi
 	)
 	assert_eq(
 		ScatterGround.role_of({"kind": "grass", "size_class": "small", "height_m": 0.5}), cover
+	)
+
+
+func test_flowers_gather_on_a_paths_verge() -> void:
+	# Flowered verges (user 2026-10-14): where the grass thins beside built paint, flowers read
+	# their density times 1 + FLOWER_VERGE_GATHER, the excess over 1 kept up to
+	# FLOWER_VERGE_FILL, so a clumped flower also grows between its beds there.
+	var doc := _doc()
+	_paint(doc, "cobblestone", Vector2(-12, -0.5), Vector2(-4, 0.5))
+	var fields := ScatterGenerator.document_fields(
+		doc, FOREST, Rect2(), PackedStringArray(["cobblestone"])
+	)
+	var at: Callable = fields.species_density_at
+	var base := DENSITY / 255.0
+	var flower := ScatterGround.ROLE_COVER | ScatterGround.FLOWER_BIT
+	var shoulder := Vector2(-8.0, 1.0)
+	var fill := 1.0 + ScatterGround.FLOWER_VERGE_FILL
+	assert_almost_eq(at.call(shoulder, flower), fill, 1e-6, "gathered to its cap")
+	assert_almost_eq(at.call(Vector2(-8.0, 3.0), flower), base, 1e-6, "3 m out as before")
+	assert_lt(at.call(Vector2(-8.0, 0.0), flower), 0.01, "none on the road")
+	assert_almost_eq(at.call(shoulder, ScatterGround.ROLE_COVER), base, 1e-6, "cover unchanged")
+	assert_lt(at.call(shoulder, ScatterGround.ROLE_TALL_COVER), 0.01, "the grass still thins")
+	# The gather multiplies a light paint and caps a heavy one; nothing else passes 1.
+	var gathered := Vector3(1.0 + ScatterGround.FLOWER_VERGE_GATHER, 0.0, 0.0)
+	var light := 0.1 * gathered.x
+	assert_almost_eq(ScatterGround.species_density(0.1, gathered, flower), light, 1e-6)
+	assert_almost_eq(ScatterGround.species_density(0.9, gathered, flower), fill, 1e-6)
+	assert_almost_eq(
+		ScatterGround.species_density(0.9, gathered, ScatterGround.ROLE_COVER), 1.0, 1e-6
 	)
 
 

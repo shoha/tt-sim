@@ -47,9 +47,10 @@ extends RefCounted
 ## GRASS_TALL_COVER_M, the meadow's grass) and shrubs thin out in a fringe beside built paint
 ## (the built weight box-averaged over FRINGE_RADIUS_M), so grass rooted on a path's shoulder
 ## no longer lies over a narrow path from the game camera; sprigs, low grass and every flower
-## stay, so the edge stays soft and flowered (flowers are never tall cover: a few slender
-## stems do not hide a path). Callers pass the species' role (role_of) with each point. Pure
-## statics.
+## stay, so the edge stays soft (flowers are never tall cover: a few slender stems do not hide
+## a path), and flowers gather in the same fringe (FLOWER_VERGE_GATHER), so a road gets a
+## broken band of the biome's flowers where its grass thinned. Callers pass the species' role
+## (role_of) with each point. Pure statics.
 
 ## Species rule kind that gathers at cliff feet.
 const ROCK_KIND := "rock"
@@ -82,6 +83,21 @@ const GRASS_KIND := "grass"
 const FRINGE_RADIUS_M := 1.5
 const FRINGE_START := 0.02
 const FRINGE_FULL := 0.2
+## Flowered verges (user, 2026-10-14): over the same smoothstep flowers gather instead, their
+## density times 1 + FLOWER_VERGE_GATHER, as bank species gather on a shore, and the excess
+## over 1 is kept up to FLOWER_VERGE_FILL (species_density). Every palette flower is clumped,
+## so the excess lets it grow between its beds (ScatterGenerator._evaluate: the clump keep
+## becomes at least the excess) at that share of its bed density, still through its own
+## pattern: a loose, broken band of the biome's own flowers along a road where the grass has
+## thinned, not a planted border. The gather is strong because a new map's cover is light
+## (NewMap: 0.14 at the centre to 0.6 at the edge) and ground cover answers it late
+## (ScatterPlan.DENSITY_RESPONSE): times 1.3 left a road through the centre with one more
+## poppy; times 9 with a fill of 0.3 packed the meadow's verge into a planted border, and
+## times 4 with 0.1 left it two beds. Times 6 brings the verge to the excess from a painted
+## 0.17 up (a Thin pass below that still thins it) and a fill of 0.15 keeps it loose. Judged
+## at the game camera on grassland and alpine meadow roads (path_shoulder_look).
+const FLOWER_VERGE_GATHER := 5.0
+const FLOWER_VERGE_FILL := 0.15
 ## Face proximity: half-width (metres) of the second box mean over the steepness nearby, and
 ## the smoothstep over which it clears trees and shrubs. Along a straight tier face the
 ## proximity is about 0.14 at the face, 0.08 two metres out and 0 by 3.7 m: trees are gone
@@ -285,9 +301,11 @@ static func sampler(
 				open *= 1.0 - smoothstep(TREE_FACE_START, TREE_FACE_FULL, face)
 			else:
 				open *= 1.0 - smoothstep(SHRUB_FACE_START, SHRUB_FACE_FULL, face)
-		if (base == ROLE_TALL_COVER or base == ROLE_SHRUB) and not fringe.is_empty():
+		var flower := (role & FLOWER_BIT) != 0
+		if (base == ROLE_TALL_COVER or base == ROLE_SHRUB or flower) and not fringe.is_empty():
 			var beside := ScatterGenerator.bilinear(fringe, columns, rows, s)
-			open *= 1.0 - smoothstep(FRINGE_START, FRINGE_FULL, beside)
+			var verge := smoothstep(FRINGE_START, FRINGE_FULL, beside)
+			open *= 1.0 + FLOWER_VERGE_GATHER * verge if flower else 1.0 - verge
 		if water != Vector3.ZERO:
 			open *= wet_factor(role, water)
 		if not crossings.is_empty():
@@ -459,11 +477,15 @@ static func _painted_fields(
 ## (EDGE_BANK) keeps its gathering on the wet shore above 1 (P4-4): the generator reads the
 ## excess to let a clumped one (ferns) fill the bank beyond its clumps
 ## (ScatterGenerator._evaluate), and the size-class response clamps the rest to 1 as before.
+## A flower (FLOWER_BIT) keeps its gathering on a path's verge the same way, up to
+## 1 + FLOWER_VERGE_FILL; nowhere else does its sampler value pass 1.
 static func species_density(value: float, g: Vector3, role: int) -> float:
 	if role == ROLE_ROCK:
 		return rock_density(value, g)
 	if (role & EDGE_BANK) != 0:
 		return maxf(value * g.x * (1.0 - SCREE_THIN * g.z), 0.0)
+	if (role & FLOWER_BIT) != 0:
+		return clampf(value * g.x * (1.0 - SCREE_THIN * g.z), 0.0, 1.0 + FLOWER_VERGE_FILL)
 	return density(value, g)
 
 
