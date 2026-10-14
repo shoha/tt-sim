@@ -21,6 +21,8 @@ const CANVAS_768P_AUTO := Vector2i(1423, 800)
 const SLACK_PX := 0.5
 ## Longer than any entrance: the panel fade and the last staggered row.
 const SETTLE_S := 3.0
+## The most times the map panel may resize as the title opens and settles (it takes a handful).
+const SETTLE_PASSES := 30
 const TITLE_SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
 const SETTINGS_SCENE := preload("res://scenes/ui/settings_menu.tscn")
 const NEW_MAP_SCENE := preload("res://scenes/states/authoring/new_map_dialog.tscn")
@@ -85,6 +87,26 @@ func test_title_screen_fits() -> void:
 	var title := _title()
 	await _assert_fits("title screen", title.quit_button)
 	_assert_library_shows("title screen", title)
+
+
+## On Godot 4.7.0 (CI's engine, and the shipped game's) this title once never settled: the map
+## panel's picture, read from its column's width, shortened when the scroll bar took its lane,
+## which ended the overflow that showed the bar, and the panel resized without end until the
+## message queue ran out and the run crashed (MapPanel.picture_width). Opened on the canvas that
+## looped, it settles in a few passes; past SETTLE_PASSES the bar's lane is fixed, so a loop
+## fails here rather than taking the run down.
+func test_the_title_settles_in_a_few_layout_passes() -> void:
+	var title := _title()
+	var panel := title.map_panel
+	var passes := [0]
+	panel.resized.connect(
+		func() -> void:
+			passes[0] += 1
+			if passes[0] == SETTLE_PASSES:
+				panel._scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_RESERVE
+	)
+	await _assert_fits("title screen", title.quit_button)
+	assert_lt(passes[0], SETTLE_PASSES, "the map panel resized %d times" % passes[0])
 
 
 ## A resize while the rows lift in (a saved fullscreen applying just after the title appears

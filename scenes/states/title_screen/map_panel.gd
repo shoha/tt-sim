@@ -634,7 +634,7 @@ func _show_picture() -> void:
 ## The picture across the panel's width: 16:9, or shorter (to WIDE_ASPECT) where max_height
 ## leaves the longest map of the player's own too little room under it (words_reserve()).
 func _fit_picture() -> void:
-	var width := _picture_box.size.x
+	var width := picture_width()
 	if width <= 0.0:
 		return
 	var height := floorf(width / PICTURE_ASPECT)
@@ -647,6 +647,15 @@ func _fit_picture() -> void:
 		height = clampf(room, floorf(width / TIGHT_ASPECT), height)
 	if not is_equal_approx(_picture_box.custom_minimum_size.y, height):
 		_picture_box.custom_minimum_size.y = height
+
+
+## The width the picture's height is read from: the scroll's, less its panel's sides, which is
+## the column's width with no bar beside it. Never the column's own width: the bar takes its lane
+## from the column only while the words overflow, so a picture read from the column would
+## shorten as the bar shows, end the overflow, hide the bar, grow back and overflow again. That
+## loop re-queued the layout without end and crashed Godot 4.7.0 on the title (CI, 2026-10-11).
+func picture_width() -> float:
+	return _scroll.size.x - _scroll.get_theme_stylebox(&"panel").get_minimum_size().x
 
 
 ## The picture's height as laid out.
