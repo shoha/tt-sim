@@ -237,16 +237,17 @@ Scatter instances contract in full:
   a full head of 8 to 12 broad fronds set by the golden angle plus 1 to 4 old fronds hanging under
   it, each three vertices across with its two wings hanging below the rib) rises from facing up
   at the root (60 degrees) to facing out at the tip (10 to 14), so the crown's top reads lit over
-  darker hanging tips; its old fronds face out and down (15 to -25 degrees) and take the right
-  half of the frond texture (two fronds side by side on U: the live frond on 0 to 0.5, the old one
-  on 0.5 to 1; one material, one texture, 512 x 512). A fern (round 3: a big fern's crown of
-  fronds rising steeply and arching over, a small fern's sprig fanned to one side) from 20 or 30
-  degrees at the root to 60 or 70 at the tip. Ferns stay in the "grass" wind category, so
+  darker hanging tips; its old fronds face out and a little up (round 3b: 35 to 5 degrees) and
+  take the right half of the frond texture (two fronds side by side on U: the live frond on 0 to
+  0.5, the old one on 0.5 to 1; one material, one texture, 512 x 512). A fern (round 3: a big
+  fern's crown of fronds rising steeply and arching over; round 3b: a small fern's low, flat
+  rosette of 4 to 6 fronds evenly round its centre) from 15 or 20 degrees at the root to 70 at
+  the tip. Ferns stay in the "grass" wind category, so
   tt-sim's grass `base_darken` still applies to them; treecube paints a quarter of it out of the
   fern texture (round 2: half), so the fern keeps a darker heart under lit tips. Palms stay
   "tree" and carry a shade floor (below). Same nodes, meshes, attributes and material count as
   before; the fuller crowns cost triangles (the savanna palm about 394 against 301 today, the
-  wetland short palm about 294 against 268), the ferns stay at or under today's.
+  wetland short palm about 312 against 268), the ferns stay at or under today's.
   tt-sim shades flagged leaf cards with its painted light
   (the normals carry the value). Absent means today's shading; every non-leaf material carries
   no extra (pines carried none until treecube 12fee28, acacias and willows none until treecube
@@ -274,10 +275,11 @@ Scatter instances contract in full:
   treecube 26e031a): the savanna shrub (0.1, 0.17, 0.14), the badlands sage shrub (0.15, 0.13,
   0.19), every birch (0.12, 0.28, 0.1), the savanna acacia and young acacia (0.15, 0.16,
   0.06), the badlands acacia (0.15, 0.13, 0.19) and the wetland willow (0.12, 0.24, 0.22).
-  The palms-ferns branch adds the savanna palm (round 3: 0.09, 0.17, 0.16, a deep olive-teal
-  under its warm-lit lime, set apart from the acacia's warm floor; round 2 was 0.06, 0.18, 0.08)
-  and the wetland short palm (round 3: 0.07, 0.2, 0.19, a luminous deep teal under its teal-green;
-  round 2 was 0.05, 0.17, 0.19); its ferns carry none.
+  The palms-ferns branch adds the savanna palm (round 3b: 0.12, 0.22, 0.08, a warm deep green
+  under its warm-lit lime, set apart from the acacia's warmer floor; round 3 was 0.09, 0.17, 0.16
+  and fell to a grey-olive) and the wetland short palm (round 3b: 0.03, 0.14, 0.17, a deep teal
+  under its saturated teal, darker and bluer than the willow; round 3 was 0.07, 0.2, 0.19); its
+  ferns carry none.
   tt-sim treats it as untrusted input: anything but a list of
   exactly three finite numbers is ignored with a warning, and a channel outside 0..1 is
   clamped with one. The floor is a per-material shader parameter on the wind
