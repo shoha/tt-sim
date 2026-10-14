@@ -194,18 +194,24 @@ func test_tall_cover_and_shrubs_thin_beside_paths_and_short_cover_stays() -> voi
 	assert_almost_eq(at.call(shoulder, ScatterGround.ROLE_COVER), base, 1e-6, "short cover")
 	assert_almost_eq(at.call(shoulder, ScatterGround.ROLE_TREE), base, 1e-6, "trees stay")
 	assert_almost_eq(at.call(clear, ScatterGround.ROLE_TALL_COVER), base, 1e-6, "3 m out")
-	# The real meadow: tall grass is tall cover, flowers and short grass are not. Since
-	# treecube 958dbbe the meadow's folded clumps ("grass") stand about 1 m and count as tall
-	# cover too; the sprig is its short grass.
+	# The real meadow. Since treecube 20d9451 (the grass rework) the meadow's grasses all stand
+	# under TALL_COVER_M (the tall grass about 0.6 m, the folded clumps 0.4 m), so they are short
+	# cover, and its daisy (0.77 m) is the one species over the line. The savanna's seed grass
+	# and dry grass (about 0.78 m) are the grass that still counts as tall cover.
 	var roles := {}
 	for rule in PaletteLibrary.species("grassland_meadow_summer_s1"):
 		roles[rule.key] = ScatterPlan.build("g", [rule], 1).species[0].ground_role
-	assert_eq(roles.get("tall_grass"), ScatterGround.ROLE_TALL_COVER)
-	assert_eq(roles.get("grass"), ScatterGround.ROLE_TALL_COVER)
+	assert_eq(roles.get("tall_grass"), ScatterGround.ROLE_COVER)
+	assert_eq(roles.get("grass"), ScatterGround.ROLE_COVER)
 	assert_eq(roles.get("sprig"), ScatterGround.ROLE_COVER)
 	# Flowers carry the water rules' flower bit (P4-3) on top of their ground role.
-	assert_eq(roles.get("daisy"), ScatterGround.ROLE_COVER | ScatterGround.FLOWER_BIT)
+	assert_eq(roles.get("daisy"), ScatterGround.ROLE_TALL_COVER | ScatterGround.FLOWER_BIT)
 	assert_eq(roles.get("bush"), ScatterGround.ROLE_SHRUB)
+	var savanna := {}
+	for rule in PaletteLibrary.species("savanna_summer_s1"):
+		savanna[rule.key] = ScatterPlan.build("g", [rule], 1).species[0].ground_role
+	assert_eq(savanna.get("seed_grass"), ScatterGround.ROLE_TALL_COVER)
+	assert_eq(savanna.get("dry_grass"), ScatterGround.ROLE_TALL_COVER)
 
 
 func test_trees_keep_back_from_tier_faces_and_ground_cover_does_not() -> void:

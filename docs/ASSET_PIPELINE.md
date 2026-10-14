@@ -873,6 +873,34 @@ alpine meadow, rocky badlands and savanna match the maker's frames
 (`treecube/out/looks/rocks_rework3/new_*.png`) in mean colour and darkest and brightest tenth
 within 0.001 of 1.0; the placed rocks sit where they did, rotated differently per run, and the
 foliage sways. No code change, no saved map migrated.
+Refreshed 2026-10-13 with treecube 20d9451 (the grass rework, flowers and grass grounds, four
+review rounds: treecube `docs/looks/grass_flowers.md`; `palette_version` `3cd0fc3-dirty`, 201
+assets, 29 surfaces, ids unchanged). A script checked before the install that the asset, biome and
+surface ids are identical, that no species, biome or asset key is new (only each rule's `clump`,
+`near`, `pattern`, `density_per_m2` and `min_spacing_m` values changed, in six biomes), that all
+every `Rock_*`, `Stone_*` and `Tree_Dead` GLB is byte-identical, that the 19 burnt forest GLBs, its
+biome record and `ash`, `dirt` and `dirt_peat` are byte-identical (its thumbnail is re-rendered
+with the other eight), and that the 78 GLBs that differ are exactly the `Grass_*` (54) and
+`Flower_*` (24) of eight biomes. The six grass grounds (`grass`, `grass_meadow`, `grass_savanna`,
+`grass_forest`, `grass_birch`, `grass_alpine`) got new maps (all four of each) and `tile_m` 4
+instead of 2; nothing in tt-sim assumed 2 m (the shader, `GroundLayerBinding` and the crossings
+read `tile_m` from the palette). Every sidecar was restored by the first checkout; `git status`
+checked twice, the same 78 GLBs, 24 surface PNGs, `palette.json` and 9 thumbnails (112 files) both
+times; the import reimported those 111 binaries and extracted no texture, `git lfs status` lists
+every GLB, PNG and JPG as LFS and only `palette.json` as Git. The grass is much shorter (the
+meadow's tall grass 1.45 to 0.58 m, its clumps 1.06 to 0.38 m, the savanna's dry grass 1.30 to
+0.76 m), so `ScatterGround.TALL_COVER_M` (0.75 m) now makes the meadow's grasses short cover and
+its daisy (0.77 m) tall cover: `test_scatter_ground_rules.gd` expects that, with the savanna's seed
+grass and dry grass as the tall grass. The stemmed flowers keep a surface in the uncompressed
+vertex layout, but the stemless `Flower_Carpet_*` no longer has it, so
+`WindFoliage.pick_representatives()` now takes the first stemmed flower (a carpet only when there
+is none) for the graphics warm-up. Home captures at seed 1234 (canopy fade off) for grassland
+meadow, savanna, wetland and alpine meadow match the maker's frames
+(`treecube/out/looks/grass_flowers4/new_*.png`) in mean colour within 4.5 of 255 (two within 1.2),
+and show the darkest and brightest tenth up to 8 apart; the gap is the maker's, not the
+install's: its round 4 swapped only the `Grass_*` and `Flower_*` GLBs into a worktree with the old
+`palette.json` and old ground maps and the old rocks, so flower drifts, the ground and the rocks
+differ by design. No saved map was migrated.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 
