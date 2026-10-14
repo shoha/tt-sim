@@ -27,7 +27,7 @@ extends RefCounted
 ## water up to EMERGENT_DEPTH_* and gather at the waterline; in the bank band (the shore
 ## weight) bank species (willow, poplar, ferns) gather, trees keep off the waterline, shrubs
 ## and tall cover thin to short cover, flowers thin, cacti keep out of it altogether, and
-## grass, ground cover and rocks stay.
+## short grass, ground cover and rocks stay.
 ## Which species are edge species is a key rule (EMERGENT_KEYS, BANK_KEYS; plan_role() puts
 ## it in the plan's ground_role as bits): the palette has no field for it yet.
 ##
@@ -43,11 +43,12 @@ extends RefCounted
 ## face proximity: the steepness nearby (TerrainRules' 1.5 m box mean of the slope tail)
 ## box-averaged again over FACE_NEAR_RADIUS_M, so it fades out smoothly about 3.5 m from a
 ## face and grows where faces gather (a corner, a stack of tiers). Paths under tall cover:
-## tall ground cover (ROLE_TALL_COVER: at least TALL_COVER_M high, meadow tall grass) and
-## shrubs thin out in a fringe beside built paint (the built weight box-averaged over
-## FRINGE_RADIUS_M), so grass rooted on a path's shoulder no longer lies over a narrow path
-## from the game camera; short grass and flowers stay, so the edge stays soft. Callers pass
-## the species' role (role_of) with each point. Pure statics.
+## tall ground cover (ROLE_TALL_COVER: at least TALL_COVER_M high, or a grass clump at least
+## GRASS_TALL_COVER_M, the meadow's grass) and shrubs thin out in a fringe beside built paint
+## (the built weight box-averaged over FRINGE_RADIUS_M), so grass rooted on a path's shoulder
+## no longer lies over a narrow path from the game camera; sprigs, low grass and short
+## flowers stay, so the edge stays soft. Callers pass the species' role (role_of) with each
+## point. Pure statics.
 
 ## Species rule kind that gathers at cliff feet.
 const ROCK_KIND := "rock"
@@ -59,9 +60,19 @@ const ROLE_TREE := 2
 const ROLE_SHRUB := 3
 const ROLE_TALL_COVER := 4
 ## Ground cover whose tallest asset stands at least this high (metres, the rule's height_m,
-## PaletteLibrary.species) is tall cover: meadow tall grass (1.0 to 1.2 m), not short grass
-## or flowers (0.4 to 0.6 m).
+## PaletteLibrary.species) is tall cover: the savanna's dry and seed grass, reeds, the tallest
+## flowers (meadow poppy and lavender, 0.75 to 0.82 m), not buttercups or carpets.
 const TALL_COVER_M := 0.75
+## A grass clump (GRASS_KIND, size class ground) is tall cover from this height. The grass
+## rework (treecube 20d9451) brought every biome's grass to one scale, about half its old
+## height, while the flowers kept theirs, so grass has its own line (user, 2026-10-14: the
+## meadow's grass thins beside paths again). It sits between the low layer (sprigs 0.23 to
+## 0.25 m, alpine turf 0.28, the woodland grasses 0.30 to 0.33) and the meadow's clumps and
+## drift (0.35 to 0.58), which reproduces the pre-rework split in seven of the nine biomes;
+## the savanna's short and rust grass (0.48, 0.50) and the badlands' dry grass (0.44) join
+## their tall grass. Ferns (size class small) stay short cover.
+const GRASS_TALL_COVER_M := 0.34
+const GRASS_KIND := "grass"
 ## Path fringe: half-width (metres) of the box mean of the built weight, and the smoothstep
 ## over which it clears tall cover and shrubs: beside a road about a metre is clear and the
 ## rest thins out by 1.5 m (tall grass leans a metre over the ground it stands on as the
@@ -172,16 +183,21 @@ static func scorches(role: int) -> bool:
 
 
 ## The role (ROLE_*) of a species rule for the ground rules: rock kind, then by size class
-## (large: tree, medium: shrub), else tall cover or ground cover by its height_m.
+## (large: tree, medium: shrub), else tall cover or ground cover by its height_m (against
+## GRASS_TALL_COVER_M for a grass clump, TALL_COVER_M for anything else).
 static func role_of(rule: Dictionary) -> int:
 	if rule.get("kind", "") == ROCK_KIND:
 		return ROLE_ROCK
-	match rule.get("size_class", ""):
+	var size_class: String = rule.get("size_class", "")
+	match size_class:
 		"large":
 			return ROLE_TREE
 		"medium":
 			return ROLE_SHRUB
-	if float(rule.get("height_m", 0.0)) >= TALL_COVER_M:
+	var tall := TALL_COVER_M
+	if rule.get("kind", "") == GRASS_KIND and size_class == "ground":
+		tall = GRASS_TALL_COVER_M
+	if float(rule.get("height_m", 0.0)) >= tall:
 		return ROLE_TALL_COVER
 	return ROLE_COVER
 
