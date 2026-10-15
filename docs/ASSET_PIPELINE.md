@@ -479,7 +479,8 @@ Field notes:
 - `dimensions_m` is Y-up, in metres: `[x, height, depth]`.
 - `min_spacing_m` is the clump's children spacing for a clumped species (the class limit
   distance never applies to clumped layers) and the class limit distance for a random
-  species.
+  species. A rule clumped only through a palette-only species block (Ground look and grass
+  masses, below) keeps its Geoscatter-derived value, as round 20 did.
 - `name` is the plain biome display name; the season is its own field.
 - Surface `role` says what the surface is for (added 2026-09-26, phase 3; same format 1,
   since every field is optional to the consumer):
@@ -735,7 +736,7 @@ angle is in radians.
 | Key | r20 name | Type | Range | Base |
 |---|---|---|---|---|
 | `ref_surface` | `ref_surface` | string | a `ground` surface | required |
-| `zones.colors_linear` | `zone_color_0` .. `zone_color_3` | [4][3] float | 0..1 | required |
+| `zones.colors_linear` | `zone_color_0` .. `zone_color_3` | [3][3] or [4][3] float | 0..1 | required |
 | `zones.strength` | `zone_strength` | float | 0..1 | 1.0 |
 | `zones.cover` | `zone_cover` | [3] float | 0..1 | [0.0, 0.0, 0.0] (shader) |
 | `zones.scale_m` | `zone_scale_m` | [3] float | > 0 m | [12.0, 9.0, 6.0] (shader) |
@@ -858,7 +859,9 @@ rejects out-of-range values):
 | `zone_core`, `zone_share`, `zone_fill` | 0..1 | 0 (off) | the family weight a parent needs, the family weight a child needs, and the share of a swathe's fill points on its family (the core ring strict in openings) |
 
 `zone_keep` and `zone_family` are four-element arrays (the probe's `zone_keep0..3` and
-`zone_kin0..3`). The swathe fields, on which the rules of one `parent_group` must agree, are
+`zone_kin0..3`). A field that is present means its value: `edge_shrink` or `radius_jitter`
+0 is 0, not the default (the probe read 0 as "use the default"; no round 20 rule sets
+either to 0). The swathe fields, on which the rules of one `parent_group` must agree, are
 `parents_per_m2`, `radius_m`, `stretch`, `angle_deg`, `angle_jitter_deg`, `follow`,
 `radius_jitter`, `mass`, `bare`, `parent_spacing_m`, `shoulder_m`, `zone_keep`,
 `zone_family`, `zone_core`, `zone_share` and `zone_fill`. The probe's `core_thin`,
@@ -879,9 +882,11 @@ imported texture when absent. It is read as a biome's light reference through
 
 **Saved levels: mass anchors.** A level gains one optional entry (like the erase and fire
 entries): per asset id, one (dx, dz) offset in metres per instance row of that asset, in row
-order, from the row to its mass anchor. It is validated on load: the count must equal the
-asset's rows and every offset must lie within the rule's reach; an entry that fails is
-dropped with a warning. A level without it (an older level) loads with each tuft taking its
+order, from the row to its mass anchor; a row with no anchor in an anchored asset is
+written (0, 0), its own anchor. It is validated on load: the count must equal the asset's
+rows and every offset must lie within the rule's reach (checked where the palette is known,
+in the map loader, with 0.01 m slack for float32 rounding; the level parser only bounds
+offsets at 1000 m); an entry that fails is dropped with a warning. A level without it (an older level) loads with each tuft taking its
 zone's hue where it stands and no mass shading. Anchors are saved rather than recomputed on
 load, so a saved level does not depend on today's placement rules.
 
