@@ -690,11 +690,12 @@ static func surface_tint(surface: String, root: String = PaletteLibrary.DEFAULT_
 
 
 ## Copies what the scene holds back into the document and the level: the scatter and props
-## rows (their AuthoredScatter nodes hold the current rows), the tokens' placements, and the
-## map name.
+## rows (their AuthoredScatter nodes hold the current rows) with the grass-mass anchors, the
+## tokens' placements, and the map name.
 func _sync_document() -> void:
 	if is_instance_valid(scatter):
 		document.scatter = scatter.rows_by_asset()
+		document.mass_anchors = ScatterMass.anchors_entry(scatter.mass_anchors, document.scatter)
 	if is_instance_valid(props):
 		document.props = props.rows_by_asset()
 	tokens.write_placements(level)

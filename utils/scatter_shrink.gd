@@ -74,7 +74,8 @@ static func shrinks_by_shader(mesh: Mesh) -> bool:
 ## and returns the temporary node, or null when there is nothing to animate. `stem`,
 ## `suffix` and `wind_category` are the chunk's (see ScatterGlbUtils.build_chunk; the node
 ## is named after it plus INFIX and a serial); `sink_depth` is how far a sinking species
-## travels down (its height).
+## travels down (its height). A grass mass's tufts keep their anchors (`anchors`, the owner's
+## ScatterMass table) in custom data while they shrink, so they keep their mass's hue.
 static func start(
 	parent: Node3D,
 	mesh: Mesh,
@@ -83,14 +84,15 @@ static func start(
 	transforms: Array[Transform3D],
 	wind_category: String,
 	sink_depth: float,
-	seconds: float = SECONDS
+	seconds: float = SECONDS,
+	anchors: Dictionary = {}
 ) -> MultiMeshInstance3D:
 	transforms = unheld(parent, transforms)
 	if transforms.is_empty() or mesh == null or seconds <= 0.0 or not parent.is_inside_tree():
 		return null
 	_serial += 1
 	var node := ScatterGlbUtils.build_chunk(
-		parent, mesh, stem, transforms, wind_category, suffix + INFIX + str(_serial)
+		parent, mesh, stem, transforms, wind_category, suffix + INFIX + str(_serial), anchors
 	)
 	if node == null:
 		return null

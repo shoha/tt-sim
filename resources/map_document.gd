@@ -163,6 +163,12 @@ var crossings: Array[Crossing] = []
 ## the Fire tool and drawn by FireField. Empty = no fire. The ash it leaves is a painted
 ## surface, a separate layer, so putting fire out never touches it.
 var fire_mask: PackedByteArray = PackedByteArray()
+## The grass-mass anchors of the scatter rows (contract section 9, "Saved levels: mass
+## anchors"): per scatter asset id, (dx, dz) metres per row of scatter[asset id], in row order,
+## from the row to its mass anchor (ScatterMass.anchors_entry). Saved rather than recomputed so a
+## level does not depend on today's placement rules. Empty = none (an older level: each tuft takes
+## its zone's hue where it stands).
+var mass_anchors: Dictionary[String, PackedFloat32Array] = {}
 ## Derived, never saved: the wet dressing field (WaterDressing.compute(), RGBA8 per sample:
 ## bed, shore, depth) of the current heights and water, kept here so scatter jobs and the
 ## ground read one copy. Empty when there is no wet sample. Whoever changes the water or the

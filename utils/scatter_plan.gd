@@ -40,6 +40,55 @@ const CLUMP_COVERAGE_GAIN_SLOPE := 0.1
 ## clump over it divided by this, capped at 1, so up to this many overlapping clumps add
 ## density the way Geoscatter's per-parent children do.
 const CLUMP_SATURATION := 3.0
+## Grass masses (contract: docs/ASSET_PIPELINE.md section 9, "Species clump, mass fields";
+## ScatterMass). Optional clump fields, read only with `mass` 1, so every other rule plans and
+## places exactly as before. PaletteLibrary keeps a field only when given, clamped to its range
+## here ([low, high]); an absent one takes its contract default:
+##   mass             1: the clumps are masses: a child keeps the union of the clumps over it
+##                    (never the additive sum) and carries its clump parent, the mass anchor.
+##   stretch          >= 1: each clump an ellipse of the same area, stretch times longer than wide.
+##   angle_deg        the long axis' direction in world XZ (degrees from +X toward +Z), and
+##   angle_jitter_deg each parent's own turn from it, uniform in +-this.
+##   edge_shrink      the scale lost at the clump rim (ScatterGenerator.CLUMP_SCALE_SHRINK).
+##   radius_jitter    each parent's radius spread (CLUMP_RADIUS_JITTER).
+##   core_scale       a tuft's width at the clump centre, times its own scale, easing to 1 at the
+##                    rim as 1 - edge^2 (ScatterMass.append_scale); core_height its height there
+##                    (core_scale when absent); core_height_m caps a grown tuft's height in
+##                    metres (0: no cap); core_hold holds the core's growth out to this share of
+##                    the reach (ScatterMass.held_edge).
+##   follow           1: each parent's long axis runs along the nearest zone edge's contour
+##                    (GroundZones.zone_flow; needs the biome's ground_look).
+##   parent_group     > 0: the rules of one group share their parents (a field named for the
+##                    group, not the species); they agree on the swathe fields.
+##   parent_spacing_m the parents' own spacing when larger than CLUMP_PARENT_SPACING of the radius.
+##   bare             > 0: the biome's grass keeps off its ground-accent openings, fading out over
+##                    this many accent-noise units (ScatterMass.bare_keep).
+##   shoulder_m       > 0: a child stands back this far from where its ground thins.
+##   zone_core, zone_share, zone_fill and the arrays zone_keep and zone_family: whole swathes
+##                    dropped by the drawn zones (ScatterMass.zone_kept, zone_share_keep, filled).
+const MASS_FIELDS := {
+	"mass": [0.0, 1.0],
+	"stretch": [1.0, 1000.0],
+	"angle_deg": [-360.0, 360.0],
+	"angle_jitter_deg": [0.0, 180.0],
+	"edge_shrink": [0.0, 1.0],
+	"radius_jitter": [0.0, 0.9],
+	"core_scale": [1.0, 1000.0],
+	"core_height": [0.0001, 1000.0],
+	"core_height_m": [0.0, 1000.0],
+	"core_hold": [0.0, 0.95],
+	"follow": [0.0, 1.0],
+	"parent_group": [0.0, 1000000.0],
+	"parent_spacing_m": [0.0, 1000.0],
+	"bare": [0.0, 1000.0],
+	"shoulder_m": [0.0, 1000.0],
+	"zone_core": [0.0, 1.0],
+	"zone_share": [0.0, 1.0],
+	"zone_fill": [0.0, 1.0],
+}
+## The four-element mass fields and their ranges: zone_keep (the share of parents kept in each
+## zone) and zone_family (each zone's family; integers).
+const MASS_ARRAYS := {"zone_keep": [0.0, 1.0], "zone_family": [0.0, 3.0]}
 ## Spaced parents overlap more evenly than Poisson ones, so fewer points see no clump and
 ## the mean keep runs above the Poisson estimate by up to this share (additive_coverage).
 ## Measured 2026-09-26 with the calibration test: without it, dense ground cover delivered
@@ -175,6 +224,7 @@ static func build(biome_id: String, species: Array[Dictionary], map_seed: int) -
 	_plan_clearance(entries)
 	var fields: Array[Dictionary] = []
 	_plan_groups(biome_id, map_seed, entries, fields)
+	_plan_masses(biome_id, map_seed, entries)
 	for entry in entries:
 		if entry.clumped:
 			_plan_clump_fields(biome_id, map_seed, entry, fields)
@@ -248,6 +298,7 @@ static func _plan_species(species: Array[Dictionary], i: int, index_of: Dictiona
 	if clumped:
 		clump = {"transition_m": 0.0, "children_spacing_m": 0.0}.merged(clump, true)
 		rule.clump = clump
+	var mass: Dictionary = _mass_of(rule, clump if clumped else {})
 	var spacing: float = rule.min_spacing_m
 	if clumped and clump.children_spacing_m > 0.0:
 		spacing = clump.children_spacing_m
@@ -309,7 +360,65 @@ static func _plan_species(species: Array[Dictionary], i: int, index_of: Dictiona
 		"asset_count": rule.assets.size(),
 		"response_lead": float(response.get("lead", 1.0)),
 		"response_lag": float(response.get("lag", 1.0)),
+	}.merged(mass)
+
+
+## A rule's mass entries (ScatterMass reads them; MASS_FIELDS has the fields): with clump `mass`
+## 1, its stretch, core growth, follow, zone rule, radius jitter and edge shrink; otherwise the
+## values every other rule plans with (mass_bare and mass_zones are set by _plan_masses).
+static func _mass_of(rule: Dictionary, clump: Dictionary) -> Dictionary:
+	var out := {
+		"mass": false,
+		"mass_stretch": 1.0,
+		"mass_core": 1.0,
+		"mass_core_y": 1.0,
+		"mass_core_y_max": 0.0,
+		"mass_core_hold": 0.0,
+		"mass_follow": false,
+		"mass_zone": {},
+		"mass_zones": {},
+		"mass_bare": [],
+		"clump_jitter": CLUMP_RADIUS_JITTER,
+		"clump_shrink": ScatterGenerator.CLUMP_SCALE_SHRINK,
 	}
+	if float(clump.get("mass", 0.0)) < 0.5:
+		return out
+	var core := maxf(1.0, float(clump.get("core_scale", 1.0)))
+	# The height cap as a height scale over the rule's tallest ungrown asset (0 = none).
+	var cap_m := float(clump.get("core_height_m", 0.0))
+	var tallest := float(rule.get("base_height_m", rule.get("height_m", 0.0)))
+	out.mass = true
+	out.mass_stretch = maxf(1.0, float(clump.get("stretch", 1.0)))
+	out.mass_core = core
+	out.mass_core_y = maxf(float(clump.get("core_height", core)), 0.1)
+	out.mass_core_y_max = cap_m / tallest if cap_m > 0.0 and tallest > 0.0 else 0.0
+	out.mass_core_hold = clampf(float(clump.get("core_hold", 0.0)), 0.0, 0.95)
+	out.mass_follow = float(clump.get("follow", 0.0)) > 0.0
+	out.mass_zone = ScatterMass.zone_rule(clump)
+	out.clump_jitter = float(clump.get("radius_jitter", CLUMP_RADIUS_JITTER))
+	out.clump_shrink = float(clump.get("edge_shrink", ScatterGenerator.CLUMP_SCALE_SHRINK))
+	return out
+
+
+## Gives every mass entry the biome's zone record (GroundZones.record of its ground_look on
+## `map_seed`, shared read-only) and, when a mass rule sets clump `bare`, every grass entry the
+## biome's bare openings (ScatterMass.bare_params with the largest `bare`), so no lone tuft
+## stands in a clearing. Nothing for a biome without a mass rule.
+static func _plan_masses(biome_id: String, map_seed: int, entries: Array[Dictionary]) -> void:
+	if not entries.any(func(entry: Dictionary) -> bool: return entry.mass):
+		return
+	var zones := GroundZones.record(GroundLook.for_biome(biome_id), map_seed)
+	var bare := 0.0
+	for entry in entries:
+		if entry.mass:
+			entry.mass_zones = zones
+			bare = maxf(bare, float(entry.rule.clump.get("bare", 0.0)))
+	if bare <= 0.0:
+		return
+	var records := ScatterMass.bare_params(biome_id, map_seed, bare, zones)
+	for entry in entries:
+		if entry.rule.kind == ScatterGround.GRASS_KIND:
+			entry.mass_bare = records
 
 
 ## Expected share of the ground inside a clump. Clumps are a union of discs of radius
@@ -320,7 +429,7 @@ static func _clump_coverage(clump: Dictionary, parent_keep: float) -> float:
 	var reach: float = radius + clump.transition_m * 0.5
 	var disc := PI * (reach * reach + pow(CLUMP_RADIUS_JITTER * radius, 2.0) / 3.0)
 	var x: float = clump.parents_per_m2 * parent_keep * disc
-	if additive_clumps:
+	if additive_clumps and float(clump.get("mass", 0.0)) < 0.5:
 		return additive_coverage(x)
 	return 1.0 - exp(-(CLUMP_COVERAGE_GAIN_BASE + CLUMP_COVERAGE_GAIN_SLOPE * x) * x)
 
@@ -477,10 +586,15 @@ static func _plan_clump_fields(
 	var owners := PackedInt32Array([entry.index])
 	var cdf := PackedFloat64Array([1.0])
 	var parent_spacing: float = clump.radius_m * CLUMP_PARENT_SPACING
+	if entry.mass:  # a mass rule's swathes keep their own spacing
+		parent_spacing = maxf(parent_spacing, float(clump.get("parent_spacing_m", 0.0)))
 	var parents := _packing(clump.parents_per_m2, parent_spacing)
 	entry.parent_field = fields.size()
+	# Mass rules of one parent_group share their parents (the field's seed is its name).
+	var group := int(clump.get("parent_group", 0.0)) if entry.mass else 0
+	var name: String = "group:%d" % group if group > 0 else String(entry.key)
 	fields.append(
-		_field(biome_id, map_seed, "parents:" + entry.key, parents.x, parent_spacing, owners, cdf)
+		_field(biome_id, map_seed, "parents:" + name, parents.x, parent_spacing, owners, cdf)
 	)
 	var children := _packing(entry.rule.density_per_m2 / entry.keep, entry.spacing)
 	entry.reachable = children.y

@@ -249,7 +249,8 @@ static func _build_multimesh_from_transforms(
 	node_stem: String,
 	valid_transforms: Array[Transform3D],
 	wind_category: String = "",
-	name_suffix: String = ""
+	name_suffix: String = "",
+	anchors: Dictionary = {}
 ) -> MultiMeshInstance3D:
 	# Defensive for build_scatter, which builds valid_transforms from
 	# ScatterChunker.bucket_by_cell and so only hands over occupied cells; build_chunk()
@@ -260,7 +261,7 @@ static func _build_multimesh_from_transforms(
 
 	var multimesh_instance := MultiMeshInstance3D.new()
 	multimesh_instance.name = node_stem + "_MultiMesh" + name_suffix
-	multimesh_instance.multimesh = build_multimesh(mesh, valid_transforms)
+	multimesh_instance.multimesh = build_multimesh(mesh, valid_transforms, anchors)
 	# Tags the node itself (not the Mesh resource) with its wind category so
 	# OcclusionFadeManager._collect_tree_materials() can find tree-category instances
 	# without re-deriving WindFoliage.classify_category()'s result.
@@ -292,29 +293,43 @@ static func _build_multimesh_from_transforms(
 ## their own species (resolved mesh with its wind material already applied) and cells.
 ## Same node, name, meta, shadow and cull settings as the GLB path builds; see
 ## _build_multimesh_from_transforms. Returns null (adding nothing) for no transforms.
+## `anchors` is the owner's grass-mass anchor table (build_multimesh).
 static func build_chunk(
 	parent: Node3D,
 	mesh: Mesh,
 	node_stem: String,
 	transforms: Array[Transform3D],
 	wind_category: String = "",
-	name_suffix: String = ""
+	name_suffix: String = "",
+	anchors: Dictionary = {}
 ) -> MultiMeshInstance3D:
 	return _build_multimesh_from_transforms(
-		parent, mesh, node_stem, transforms, wind_category, name_suffix
+		parent, mesh, node_stem, transforms, wind_category, name_suffix, anchors
 	)
 
 
 ## A MultiMesh of `mesh` holding `transforms` in order, one set_instance_transform() per
 ## instance (the measured-faster upload; see docs/PERFORMANCE.md "Known dead ends").
 ## visible_instance_count is left at -1 (all); FoliageDensityController sets it.
-static func build_multimesh(mesh: Mesh, transforms: Array[Transform3D]) -> MultiMesh:
+## Instances placed as part of a grass mass (found in `anchors`, the caller's ScatterMass table)
+## carry the offset to their clump parent in custom data, Color(0, dx, dz, 1); .x stays 0 (the
+## slot wind_foliage_burn.gdshader reads on burning trees) and an instance of the same MultiMesh
+## without an anchor keeps Color(0, 0, 0, 0). Without any anchored instance there is no custom
+## data, as before.
+static func build_multimesh(
+	mesh: Mesh, transforms: Array[Transform3D], anchors: Dictionary = {}
+) -> MultiMesh:
 	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	var data := ScatterMass.custom_data(anchors, transforms)
+	multimesh.use_custom_data = not data.is_empty()
 	multimesh.mesh = mesh
 	multimesh.instance_count = transforms.size()
 	for i in transforms.size():
 		multimesh.set_instance_transform(i, transforms[i])
+	for i in data.size():
+		if data[i] != null:
+			multimesh.set_instance_custom_data(i, data[i])
 	return multimesh
 
 

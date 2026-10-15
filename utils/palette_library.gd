@@ -100,7 +100,8 @@ static func palette_version(root: String = DEFAULT_ROOT) -> String:
 
 ## Every valid biome, in file order. Each is {id, biome, season, seed, name, climate,
 ## thumbnail, ground_surface, cliff_surface, scree_surface, water_bed_surface,
-## shore_surface, ground_accents, path_surfaces, species}; paths are relative to the palette
+## shore_surface, ground_accents, path_surfaces, ground_look (GroundLook.validate's merged look,
+## {} when the biome has none), species}; paths are relative to the palette
 ## root. cliff_surface names a role-cliff surface or is "" when the palette has none;
 ## scree_surface names a role-ground surface or is "" (keep the ground);
 ## water_bed_surface and shore_surface name role-ground surfaces (the palette's, else
@@ -140,6 +141,15 @@ static func species(biome_id: String, root: String = DEFAULT_ROOT) -> Array[Dict
 			if size is Vector3:
 				tallest = maxf(tallest, size.y)
 				widest = maxf(widest, maxf(size.x, size.z))
+		# A grass mass grown in its core (ScatterPlan.MASS_FIELDS) is as tall as its tallest core
+		# tuft, held under core_height_m; base_height_m keeps the ungrown height (the cap's base).
+		rule["base_height_m"] = tallest
+		var clump: Variant = rule.get("clump")
+		if clump is Dictionary and float(clump.get("mass", 0.0)) >= 0.5:
+			var core := maxf(1.0, float(clump.get("core_scale", 1.0)))
+			var grown := tallest * maxf(1.0, float(clump.get("core_height", core)))
+			var cap := float(clump.get("core_height_m", 0.0))
+			tallest = minf(grown, maxf(cap, tallest)) if cap > 0.0 else grown
 		rule["height_m"] = tallest
 		rule["width_m"] = widest
 		rules.append(rule)
@@ -152,6 +162,15 @@ static func species(biome_id: String, root: String = DEFAULT_ROOT) -> Array[Dict
 ## the treecube surface kind ("grass" for "grass_alpine"), "" when the palette omits it.
 static func surfaces(root: String = DEFAULT_ROOT) -> Dictionary:
 	return (get_palette(root)["surfaces"] as Dictionary).duplicate(true)
+
+
+## A biome's merged ground look (GroundLook.validate: every contract key, the biome's overrides
+## over GroundLook.BASE), or {} when the biome has none or is unknown.
+static func ground_look(biome_id: String, root: String = DEFAULT_ROOT) -> Dictionary:
+	for entry in get_palette(root)["biomes"]:
+		if entry["id"] == biome_id:
+			return (entry.get("ground_look", {}) as Dictionary).duplicate(true)
+	return {}
 
 
 ## The names of the surfaces with `role` ("ground", "cliff" or "built"), in file order.
@@ -619,6 +638,8 @@ static func _validate_biomes(
 					_water_surface_of(entry, id, "shore_surface", 1, surfaces, warnings),
 					"ground_accents": _ground_accents_of(entry, id, ground, surfaces, warnings),
 					"path_surfaces": _path_surfaces_of(entry, id, surfaces, warnings),
+					"ground_look":
+					GroundLook.validate(entry.get("ground_look"), id, ground, surfaces, warnings),
 					"species": species_rules,
 				}
 			)
@@ -772,6 +793,29 @@ static func _validate_clump(raw: Variant, label: String, warnings: Array[String]
 	var clump := {}
 	for field in ["parents_per_m2", "radius_m", "transition_m", "children_spacing_m"]:
 		clump[field] = _optional_number(raw, field, 0.0, 1000.0, 0.0, label, warnings)
+	# The grass-mass fields (ScatterPlan.MASS_FIELDS), read only with mass 1 and kept only when
+	# given, clamped; zone_keep and zone_family are four-element arrays.
+	if _optional_number(raw, "mass", 0.0, 1.0, 0.0, label, warnings) < 0.5:
+		return clump
+	for field: String in ScatterPlan.MASS_FIELDS:
+		var range: Array = ScatterPlan.MASS_FIELDS[field]
+		var value: Variant = _optional_number(raw, field, range[0], range[1], null, label, warnings)
+		if value != null:
+			clump[field] = value
+	for field: String in ScatterPlan.MASS_ARRAYS:
+		var range: Array = ScatterPlan.MASS_ARRAYS[field]
+		var items: Variant = raw.get(field)
+		if items == null:
+			continue
+		var values := []
+		for item: Variant in items if items is Array and items.size() == 4 else []:
+			var number: Variant = _number(item, range[0], range[1])
+			if number != null:
+				values.append(roundf(number) if field == "zone_family" else number)
+		if values.size() == 4:
+			clump[field] = values
+		else:
+			warnings.append("%s: %s is not four numbers, using the default" % [label, field])
 	return clump
 
 
