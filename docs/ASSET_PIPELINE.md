@@ -424,7 +424,8 @@ and cacti carry no COLOR_0.
                   "orm": ..., "height": ...,
                   "tile_m": <world size of one texture repeat, metres>,
                   "kind": "<treecube surface kind: grass, cliff, gravel, dirt_road, ...>",
-                  "role": "ground" | "cliff" | "built"}
+                  "role": "ground" | "cliff" | "built",
+                  "albedo_mean_linear": [r, g, b]}
   },
   "biomes": [
     {
@@ -440,6 +441,9 @@ and cacti carry no COLOR_0.
       "ground_accents": [{"surface": "<surface with role ground>", "coverage": <0..1>,
                           "scale_m": <patch size, metres>}, ...],
       "path_surfaces": ["<surface with role built>", ...],
+      "ground_look": {"ref_surface": "<surface with role ground>", "zones": {...},
+                      "strokes": {...}, "brush": {...}, "light": {...}, "tuft": {...},
+                      "mass": {...}, "rim": {...}, "accent_shape": {...}},
       "species": [
         {
           "key": "<species key>", "kind": "<tree|grass|flower|rock|deadwood|...>",
@@ -454,7 +458,7 @@ and cacti carry no COLOR_0.
           "pattern": {"influence": <0..1>, "scale_influence": <0..1>,
                       "geoscatter_pattern": {<s_pattern1_* settings, prefix stripped>}} | null,
           "clump": {"parents_per_m2": ..., "radius_m": ..., "transition_m": ...,
-                    "children_spacing_m": ...} | null,
+                    "children_spacing_m": ..., "mass": 0 | 1, <mass fields>} | null,
           "near":  [{"species": "<key>", "distance_m": ..., "transition_m": ..., "influence": <0..1>}],
           "avoid": [ ...same shape... ],
           "assets": ["<asset id>", ...]
@@ -604,6 +608,10 @@ Field notes:
   each falling back to treecube's defaults (2, 0.1, 1, 2) when absent. Everything else
   in it is kept for calibration only. The share removed and the shrink are the
   top-level `influence` and `scale_influence`.
+- Ground look and grass masses (added 2026-10-15, the ground ship; same format 1, every field
+  optional): a biome's `ground_look`, a species `clump`'s mass fields and a surface's
+  `albedo_mean_linear`, specified in "Ground look and grass masses" below. Zones are drawn
+  per biome from `ground_look` and the map seed; a level stores no zone field.
 
 Rules both sides rely on:
 
@@ -650,8 +658,232 @@ Rules both sides rely on:
   surface warns and is dropped, coverage is clamped to 0..1 and a missing or
   non-positive `scale_m` becomes 6; a `path_surfaces` name that is absent or not
   `built` warns and is dropped, and a duplicate is ignored.
+- **Ground looks and mass fields degrade, never fail.** The producer rejects
+  (`palette_problems()`) a `ground_look` key that is not in the key table below (the
+  run-time keys and the probe's dropped fields included), a value of the wrong type or
+  array length or outside its range, a `ground_look` without `ref_surface` or
+  `zones.colors_linear`, a `ref_surface` or `zones.layers` name that is missing or not a
+  `ground` surface, a `rim.surfaces` name that is missing or is neither `ground` nor `built`,
+  a clump mass field out of its range, a `parent_group` whose rules disagree on the swathe
+  fields, and `follow` or a `zone_*` clump field in a biome without a `ground_look`; and a
+  surface whose `albedo_mean_linear` is not three values in 0..1. The consumer is lenient,
+  so an older or partial palette still loads: an unknown key or a value of the wrong type
+  warns and takes the base value, an out-of-range value is clamped, a missing
+  `ref_surface` (or one that names an absent or non-ground surface) warns and takes the
+  biome's `ground_surface`, a `ground_look` without `zones.colors_linear` warns and is
+  ignored (the biome draws today's ground), a `zones.layers` or `rim.surfaces` name that
+  does not resolve warns and is dropped, a mass field is ignored without `mass` 1, and
+  `follow` or a `zone_*` clump field is ignored in a biome without a `ground_look`. A
+  missing `albedo_mean_linear` is computed from the imported albedo silently.
 - Budgets: palette assets obey section 7's triangle targets; the foliage budget applies
   unchanged, since palette scatter builds the same chunked MultiMeshes.
+
+### Ground look and grass masses (contract 2026-10-15)
+
+The ground ship (branches `ground-ship` in treecube and tt-sim) adds three optional pieces to
+format 1: a biome's `ground_look` (colour zones, painted light, grass-mass shading), mass
+fields on a species `clump`, and a surface's `albedo_mean_linear`. Absent means today's
+behaviour exactly: a palette without them draws today's ground and grass, and a biome
+without a `ground_look` keeps today's ground. The values are round 20 of the ground looks
+pass, preserved in treecube `docs/looks/ground20/` (`ground_look_r20.json`, written by
+`dump20.py`; its README says how).
+
+**Where the values live.** tt-sim holds the base values (`GroundLook.BASE`, the Base column
+below). The palette's `ground_look` holds only the biome's own overrides of them, so every
+value lives once. Colours are linear, as the shaders take them. Event biomes
+(`burnt_forest`) carry no `ground_look`, and the records of `rocky_badlands`,
+`boreal_taiga` and `burnt_forest` stay byte-identical to the palette before the ground ship.
+
+**Biome `ground_look`** (object; absent = today's ground and grass for that biome). Its keys
+are grouped in sub-objects; a key is the probe's shader uniform name without its prefix.
+
+- `ref_surface`: the `ground` surface whose mean albedo (`albedo_mean_linear`) is the
+  biome's light reference: the zone colours and the light are multipliers over it.
+- `zones`: three or four turf colours (`colors_linear`: zone 0 the base, 1 to 3 laid over it
+  in order) in low-frequency, domain-warped world-space shapes, `scale_m` across, covering
+  `cover` of the map, drawn `stretch` times longer along `angle`, with ragged edges whose
+  width varies along the boundary. The triples are per zone 1 to 3. `layers` names the
+  ground surfaces the zones colour; empty colours the biome's ground surface.
+- `strokes`: zone edges resolved as interleaved brush strokes (a hue jump) rather than a
+  crossfade.
+- `brush`: what a zoned ground layer keeps of its own texture: its luminance over its mean,
+  raised to `contrast`, and `hue` of its own hue (`mean` 0 is the plain brush).
+- `light`: the painted light: soft lit and shaded pools about `scale_m` across with their
+  tints, broad soft streaks (the savanna's ripples with `streak_ripple` 1), eased above
+  `knee` toward `cap` with the saturation held under `sat_cap`.
+- `tuft`: each grass tuft takes its zone's hue at its own luminance, `step` over its ground.
+- `mass`: a tuft placed as part of a grass mass (a `clump` with `mass` 1) steps over fine
+  cover and reads as one body, darker at its base and lit at its top and on its sunward
+  side (`contrast` below 0 keeps `tuft.contrast`); the ground under a mass takes a soft
+  shade and lift.
+- `rim`: a soft dark rim where the biome ground meets the listed accent and path surfaces
+  (`surfaces`, up to four; none draws no rim).
+- `accent_shape`: the shape of the biome's `ground_accents` patches.
+
+Zones are drawn per biome from `ground_look` and the map seed: the level's `map_seed` shifts
+the zones and the light by an offset of a few hundred metres, so two maps of one biome
+differ, and a level stores no zone field. The scatter reads the same zones as the ground (a
+mass rule's `follow`, `zone_keep` and `zone_family`), so the masses follow the ground.
+
+The key table is generated from `ground_look_r20.json`, never typed by hand. Key is the
+contract key (sub-object and name); r20 name is the uniform or setting the probe used; Base
+is the consumer's value when a biome's `ground_look` omits the key. A Base marked (shader) is
+not in round 20's base settings but the shader's own default, which leaves that feature off;
+"required" keys have no base. Triples are RGB colours or per-zone values (zones 1 to 3); an
+angle is in radians.
+
+| Key | r20 name | Type | Range | Base |
+|---|---|---|---|---|
+| `ref_surface` | `ref_surface` | string | a `ground` surface | required |
+| `zones.colors_linear` | `zone_color_0` .. `zone_color_3` | [4][3] float | 0..1 | required |
+| `zones.strength` | `zone_strength` | float | 0..1 | 1.0 |
+| `zones.cover` | `zone_cover` | [3] float | 0..1 | [0.0, 0.0, 0.0] (shader) |
+| `zones.scale_m` | `zone_scale_m` | [3] float | > 0 m | [12.0, 9.0, 6.0] (shader) |
+| `zones.edge` | `zone_edge` | [3] float | > 0 | [0.045, 0.04, 0.035] |
+| `zones.stretch` | `zone_stretch` | float | >= 1 | 1.0 |
+| `zones.stretch_k` | `zone_stretch_k` | [3] float | > 0 | [1.0, 1.0, 1.0] |
+| `zones.angle` | `zone_angle` | float | any, rad | 0.0 |
+| `zones.angle_k` | `zone_angle_k` | [3] float | any, rad | [0.0, 0.0, 0.0] |
+| `zones.warp` | `zone_warp` | float | >= 0 | 0.55 |
+| `zones.rag` | `zone_rag` | float | 0..1 | 0.12 |
+| `zones.rag_m` | `zone_rag_m` | float | > 0 m | 2.2 |
+| `zones.nest` | `zone_nest` | float | 0..1 | 0.0 |
+| `zones.edge_vary` | `zone_edge_vary` | float | 0..1 | 0.4 |
+| `zones.edge_vary_m` | `zone_edge_vary_m` | float | > 0 m | 24.0 (shader) |
+| `zones.shade_warm` | `zone_shade_warm` | [3] float | > 0 | [1.04, 0.92, 0.84] |
+| `zones.oklab` | `zone_oklab` | float | 0, 1 or 2 | 2.0 |
+| `zones.layers` | `zone_layers` | [<= 4] string | `ground` surfaces | [] |
+| `strokes.on` | `zone_stroke` | float | 0..1 | 1.0 |
+| `strokes.m` | `zone_stroke_m` | float | > 0 m | 1.6 |
+| `strokes.len` | `zone_stroke_len` | float | >= 1 | 3.5 |
+| `strokes.edge` | `zone_stroke_edge` | float | >= 1 | 5.0 |
+| `strokes.soft_lo` | `zone_stroke_soft_lo` | float | 0..1 | 0.08 |
+| `strokes.soft_hi` | `zone_stroke_soft_hi` | float | 0..1 | 0.3 |
+| `strokes.soft_m` | `zone_stroke_soft_m` | float | > 0 m | 9.0 |
+| `brush.contrast` | `zone_brush_contrast` | float | >= 0 | 0.4 |
+| `brush.hue` | `zone_brush_hue` | float | 0..1 | 0.08 |
+| `brush.key` | `zone_brush_key` | float | >= 0 | 0.85 |
+| `brush.mean` | `zone_brush_mean` | float | >= 0 | 0.0 (shader) |
+| `light.strength` | `light_field_strength` | float | 0..1 | 1.0 |
+| `light.key` | `light_field_key` | float | > 0 | 1.0 |
+| `light.scale_m` | `light_field_scale_m` | float | > 0 m | 6.0 |
+| `light.cover` | `light_field_cover` | float | 0..1 | 0.32 |
+| `light.lift` | `light_field_lift` | float | >= 0 | 0.36 |
+| `light.lit_tint` | `light_field_lit_tint` | [3] float | > 0 | [1.03, 1.0, 0.86] |
+| `light.shade` | `light_field_shade` | float | 0..1 | 0.36 |
+| `light.shade_tint` | `light_field_shade_tint` | [3] float | > 0 | [0.96, 0.99, 0.98] |
+| `light.streak` | `light_field_streak` | float | >= 0 | 0.04 |
+| `light.streak_m` | `light_field_streak_m` | float | > 0 m | 2.2 |
+| `light.streak_stretch` | `light_field_streak_stretch` | float | >= 1 | 3.0 |
+| `light.streak_angle` | `light_field_streak_angle` | float | any, rad | 0.5 |
+| `light.streak_ripple` | `light_field_streak_ripple` | float | 0..1 | 0.0 |
+| `light.streak_cover` | `light_field_streak_cover` | float | 0..1 | 0.6 |
+| `light.knee` | `light_field_knee` | float | 0..1 | 0.5 |
+| `light.cap` | `light_field_cap` | float | 0..1 | 0.85 |
+| `light.sat_cap` | `light_field_sat_cap` | float | 0..1 | 0.88 |
+| `light.broad` | `light_field_broad` | float | 0..1 | 0.35 |
+| `light.stretch` | `light_field_stretch` | float | >= 1 | 1.0 |
+| `light.crisp` | `light_field_crisp` | float | 0..1 | 0.35 |
+| `light.ripple_curve` | `light_field_ripple_curve` | float | 0..1 | 0.0 |
+| `tuft.strength` | `zone_tuft_strength` | float | 0..1 | 1.0 |
+| `tuft.step` | `zone_tuft_step` | float | > 0 | 2.35 |
+| `tuft.contrast` | `zone_tuft_contrast` | float | >= 0 | 0.7 |
+| `tuft.hue` | `zone_tuft_hue` | float | 0..1 | 0.3 |
+| `tuft.knee` | `zone_tuft_knee` | float | 0..1 | 0.55 |
+| `tuft.cap` | `zone_tuft_cap` | float | 0..1 | 0.82 |
+| `tuft.capped` | `zone_tuft_capped` | float | 0 or 1 | 1.0 |
+| `mass.step` | `zone_mass_step` | float | > 0 | 1.18 |
+| `mass.sat` | `zone_mass_sat` | float | > 0 | 1.25 |
+| `mass.lit` | `zone_mass_lit` | float | 0..1 | 0.25 |
+| `mass.lit_m` | `zone_mass_lit_m` | float | > 0 m | 2.0 |
+| `mass.contrast` | `zone_mass_contrast` | float | any | 0.3 |
+| `mass.base` | `zone_mass_base` | float | > 0 | 0.7 |
+| `mass.tip` | `zone_mass_tip` | float | > 0 | 1.25 |
+| `mass.h_m` | `zone_mass_h_m` | float | > 0 m | 0.8 |
+| `mass.own` | `zone_mass_own` | float | 0..1 | 0.0 |
+| `mass.up_pow` | `zone_mass_up_pow` | float | > 0 | 1.0 |
+| `mass.shade` | `mass_shade` | float | 0..0.9 | 0.12 |
+| `mass.shade_size` | `mass_shade_size` | float | > 0 | 0.9 |
+| `mass.shade_push` | `mass_shade_push` | float | >= 0 | 0.9 |
+| `mass.lift` | `mass_lift` | float | 0..0.2 | 0.03 |
+| `mass.lift_size` | `mass_lift_size` | float | > 0 | 1.0 |
+| `mass.lift_push` | `mass_lift_push` | float | >= 0 | 0.25 |
+| `rim.surfaces` | `rim_surfaces` | [<= 4] string | `ground` or `built` surfaces | [] (no rim) |
+| `rim.accent_rim_m` | `accent_rim_m` | float | >= 0 m | 0.15 |
+| `rim.path_rim_m` | `path_rim_m` | float | >= 0 m | 0.2 |
+| `rim.strength` | `rim_strength` | float | 0..1 | 0.6 |
+| `rim.wobble` | `rim_wobble` | float | 0..1 | 0.6 |
+| `rim.gap` | `rim_gap` | float | 0..1 | 0.45 |
+| `rim.path_blend_width` | `path_blend_width` | float | >= 0 | 0.06 |
+| `rim.color_linear` | `rim_color` | [3] float | 0..1 | [0.1789, 0.0835, 0.0174] |
+| `rim.accent_core_m` | `accent_core_m` | float | >= 0 m | 0.0 (shader) |
+| `rim.core_dark` | `core_dark` | float | 0..1 | 0.0 (shader) |
+| `rim.accent_tint` | `accent_tint` | [3] float | > 0 | [1.0, 1.0, 1.0] (shader) |
+| `accent_shape.stretch` | `accent_stretch` | float | >= 1 | 1.8 |
+| `accent_shape.stretch_angle` | `accent_stretch_angle` | float | any, rad | 0.6 |
+| `accent_shape.break` | `accent_break` | float | 0..1 | 0.4 |
+| `accent_shape.edge_scale` | `accent_edge_scale` | float | > 0 | 1.0 (shader) |
+
+Set by the consumer at run time, not contract keys: the baked texture, its rect and the
+baked flag (`light_field_tex`, `light_field_rect`, `light_field_baked`); the zoned flag
+(`light_field_zoned`, on for every biome with a `ground_look`); the bake's density
+(`texels_per_m`, 10 in round 20); the seed offset (`zone_seed_m`, from `map_seed`); the
+mass light direction (`zone_mass_lit_dir`, from the sun); the tuft reference
+(`zone_tuft_ref`, each grass material's mean); and the light reference (`light_field_ref`,
+the `albedo_mean_linear` of `ref_surface`). The probe's dry drift (`light_field_dry`,
+`light_field_dry_scale_m`, `light_field_dry_tint`: off in all six zoned biomes) and its
+other dead uniforms are not part of the format.
+
+**Species `clump`, mass fields** (read only with `mass` 1; the consumer clamps, the producer
+rejects out-of-range values):
+
+| Field | Type, range | Absent | Meaning |
+|---|---|---|---|
+| `mass` | 0 or 1 | 0 | the rule's clumps join into masses; each row carries its parent (the mass anchor) |
+| `stretch` | >= 1 | 1 | each clump an ellipse of the same area, `stretch` times longer than wide |
+| `angle_deg`, `angle_jitter_deg` | degrees; jitter 0..180 | 0, 0 | the long axis, and each parent's turn from it |
+| `edge_shrink` | 0..1 | 0.2 (`ScatterGenerator.CLUMP_SCALE_SHRINK`) | scale lost at the rim |
+| `radius_jitter` | 0..0.9 | 0.25 (`ScatterPlan.CLUMP_RADIUS_JITTER`) | each parent's radius spread |
+| `core_scale` | >= 1 | 1 | tuft width at the centre (a dome falling to the rim) |
+| `core_height` | > 0 | `core_scale` | tuft height at the centre |
+| `core_height_m` | >= 0 m | 0 (no cap) | cap on a grown tuft's height |
+| `core_hold` | 0..0.95 | 0 | the core's growth held over this share of the reach |
+| `follow` | 0 or 1 | 0 | the long axis runs along the nearest zone edge (needs a `ground_look`) |
+| `parent_group` | int >= 0 | 0 (own parents) | the rules of one group share their parents |
+| `parent_spacing_m` | >= 0 m | 0 | the parents' own spacing |
+| `bare` | >= 0, accent-noise units | 0 | the biome's grass keeps off the ground-accent openings |
+| `shoulder_m` | >= 0 m | 0 | a mass stands back from where its ground thins |
+| `zone_keep` | [4] float 0..1 | [1, 1, 1, 1] | the share of parents kept in each zone |
+| `zone_family` | [4] int 0..3 | [0, 1, 2, 3] | each zone's family; the zones of one family count as one hue |
+| `zone_core`, `zone_share`, `zone_fill` | 0..1 | 0 (off) | the family weight a parent needs, the family weight a child needs, and the share of a swathe's fill points on its family (the core ring strict in openings) |
+
+`zone_keep` and `zone_family` are four-element arrays (the probe's `zone_keep0..3` and
+`zone_kin0..3`). The swathe fields, on which the rules of one `parent_group` must agree, are
+`parents_per_m2`, `radius_m`, `stretch`, `angle_deg`, `angle_jitter_deg`, `follow`,
+`radius_jitter`, `mass`, `bare`, `parent_spacing_m`, `shoulder_m`, `zone_keep`,
+`zone_family`, `zone_core`, `zone_share` and `zone_fill`. The probe's `core_thin`,
+`core_keep`, `zone_hue`, `zone_depth_m`, `zone_clip` and `zone_stroked` are not part of the
+format (the zone tests always use the stroked zones).
+
+The producer writes the in-game placement (a mass rule's `clump`, and `density_per_m2` and
+`pattern.influence` where the in-game look differs from the Blender one) from a palette-only
+species block in its biome file, applied over the Geoscatter-derived entry, so Geoscatter
+presets and Blender maps are unchanged. In `palette.json` they are the species' ordinary
+fields.
+
+**Surface `albedo_mean_linear`** (optional, [3] float 0..1): the mean linear albedo of the
+surface's albedo map (each texel decoded from sRGB, RGB averaged over the whole map, as
+treecube `docs/looks/ground20/refs8.py` measured it). The consumer computes it from the
+imported texture when absent. It is read as a biome's light reference through
+`ground_look.ref_surface`.
+
+**Saved levels: mass anchors.** A level gains one optional entry (like the erase and fire
+entries): per asset id, one (dx, dz) offset in metres per instance row of that asset, in row
+order, from the row to its mass anchor. It is validated on load: the count must equal the
+asset's rows and every offset must lie within the rule's reach; an entry that fails is
+dropped with a warning. A level without it (an older level) loads with each tuft taking its
+zone's hue where it stands and no mass shading. Anchors are saved rather than recomputed on
+load, so a saved level does not depend on today's placement rules.
 
 ### Import path (decided 2026-09-26, measured on Godot 4.7.1)
 
