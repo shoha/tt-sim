@@ -16,6 +16,10 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
 | `utils/authored_scatter.gd` | `AuthoredScatter` | Node3D under `LevelMap` that builds an authored map's palette scatter: `build_all(rows)`, `set_cells(rows_by_cell)`, `attach_document()`, `request_region(rect)`, `species_added` |
 | `utils/scatter_regen.gd` | `ScatterRegen` | Regenerates the touched cells on `WorkerThreadPool` |
 | `utils/pipeline_warmer.gd` | `PipelineWarmer` | Draws each resolved species once, invisibly |
+| `utils/scatter_mass.gd` | `ScatterMass` | Grass masses (a clump with `mass` 1, `ScatterPlan.MASS_FIELDS`): ellipse membership, core growth, zone keeps, bare openings, shoulders, and the mass anchors (collect, custom data, the level's anchors entry) |
+| `utils/ground_look.gd` | `GroundLook` | A biome's `ground_look`: `BASE` (every contract key) and the lenient merge `PaletteLibrary` keeps on the biome |
+| `utils/ground_zones.gd` | `GroundZones` | The per-biome, per-seed zone record (read-only, carried on each mass plan entry) and the CPU twin of the ground shader's zone functions |
+| `utils/map_anchors_io.gd` | `MapAnchorsIO` | The optional `mass_anchors.json` entry of `map.ttmap` |
 
 ## Model
 
@@ -29,6 +33,20 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
   ground cover lags, and all are exactly 1 at full paint so the palette calibration holds.
 - Overlapping clumps add up (`ScatterPlan.additive_clumps`, capped at `CLUMP_SATURATION`
   overlaps), so dense ground cover forms drifts.
+- Grass masses (ground ship, contract section 9 "Ground look and grass masses"): a clump with
+  `mass` 1 keeps the union of its clumps, may be an ellipse turned per parent (or along the
+  zone edges with `follow`), grows its core tufts into one mound, and drops whole swathes by
+  the zones the ground draws. The zones come from the biome's `ground_look` and the map seed
+  (`GroundZones.record`, `seed_offset`), built once per plan and read by the workers; no level
+  stores a zone field. A palette without the mass fields grows exactly the rows it grew before
+  (`test_scatter_mass.gd` pins every built-in biome's rows at seed 1234 against main's).
+- Each mass row carries its anchor (the clump parent) beside the rows, keyed by the row's saved
+  (x, z): the generator fills `ScatterRegen.run`'s "anchors", `AuthoredScatter.mass_anchors`
+  merges them and every MultiMesh it builds (settled, growing and shrinking nodes) writes
+  `Color(0, dx, dz, 1)` into the instance's custom data (`.x` stays free for the burn shader).
+  A level saves them as the optional `mass_anchors.json` entry; `MapSourceLoader` validates it
+  against the rows and each rule's reach and drops a bad asset's anchors with a warning. GLB
+  scatter (`BaseScatterEraser`) and the pipeline warm-up never carry anchors.
 
 ## Runtime
 

@@ -26,11 +26,12 @@ extends RefCounted
 ##   crossings.json         plank bridges and stepping stones           (MapCrossingIO)
 ##   fire.png               8-bit greyscale fire intensity on the sample grid, 0 = no fire;
 ##                          never written all zero, and an all-zero one reads as none
+##   mass_anchors.json      grass-mass anchors, (dx, dz) per scatter row   (MapAnchorsIO)
 ## Unknown entries are ignored (_known_entries and _extract_entries only look at
-## KNOWN_ENTRIES), so the surfaces, water, crossings and fire entries needed no format bump:
-## an older build reads a document with water as if it had none, and one with crossings or
-## fire as if it had none. Format 2 replaced format 1's surfaces.png (slots 0-3 in R, G, B,
-## A) and surfaces_b.png (slots 4-7, at most 8 surfaces) with the entry pair, so it is a
+## KNOWN_ENTRIES), so the surfaces, water, crossings, fire and anchors entries needed no
+## format bump: an older build reads a document with water as if it had none, and one with
+## crossings, fire or anchors as if it had none. Format 2 replaced format 1's surfaces.png
+## (slots 0-3 in R, G, B, A) and surfaces_b.png (slots 4-7, at most 8 surfaces) with the entry pair, so it is a
 ## bump: a format 1 build refuses a format 2 document rather than read it as unpainted and
 ## lose the paint on its next save. The reader accepts both and migrates format 1
 ## (MapSurfacesIO, which reads and writes the surface entries); it never writes format 1.
@@ -86,6 +87,7 @@ const KNOWN_ENTRIES: Array[String] = [
 	MapWaterIO.FLOW_ENTRY,
 	MapCrossingIO.ENTRY,
 	FIRE_ENTRY,
+	MapAnchorsIO.ENTRY,
 ]
 const TEMP_SUFFIX := ".tmp"
 
@@ -114,6 +116,7 @@ const ENTRY_CAPS := {
 	MapWaterIO.FLOW_ENTRY: 4 * 1024 * 1024,
 	MapCrossingIO.ENTRY: 256 * 1024,
 	FIRE_ENTRY: 4 * 1024 * 1024,
+	MapAnchorsIO.ENTRY: 16 * 1024 * 1024,
 }
 const MAX_TOTAL_BYTES := 64 * 1024 * 1024
 ## The archive file itself, checked before it is opened.
@@ -225,6 +228,7 @@ static func serialize(doc: MapDocument) -> Dictionary:
 	MapCrossingIO.serialize(doc, entries)
 	if has_fire(doc.fire_mask):
 		entries[FIRE_ENTRY] = _png(doc.fire_mask, doc, Image.FORMAT_L8)
+	MapAnchorsIO.serialize(doc, entries)
 	var total := 0
 	for entry_name in entries:
 		var size := entries[entry_name].size()
@@ -498,6 +502,7 @@ static func _parse_document(entries: Dictionary, log: _WarningLog) -> MapDocumen
 	if blobs.has(FIRE_ENTRY):
 		var fire := _parse_mask(blobs[FIRE_ENTRY], doc, Image.FORMAT_L8, FIRE_ENTRY, log)
 		doc.fire_mask = fire if has_fire(fire) else PackedByteArray()
+	MapAnchorsIO.parse(blobs, doc, log)
 	return doc
 
 

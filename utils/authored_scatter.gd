@@ -98,6 +98,11 @@ var last_worker_usec: int = 0
 var warm_pipelines: bool = true
 ## Props (AuthoredProps) whose rocks regeneration grows no twin inside (RockKeep.blockers_of).
 var blocker_source: AuthoredScatter = null
+## The grass-mass anchors of the rows (ScatterMass: saved (x, z) -> offset to the clump parent):
+## merged from each applied job on the main thread, set from a level's anchors entry by
+## MapSourceLoader after begin_build(), saved through ScatterMass.anchors_entry(), and handed to
+## every MultiMesh this node builds. clear() forgets them.
+var mass_anchors: Dictionary = {}
 
 ## asset id -> {"mesh", "wind_category", "stem", "materials", "grow_mode", "height"}, or {}
 ## for an id that did not resolve (its rows are kept, nothing is built).
@@ -291,7 +296,8 @@ func move_rows(
 			var visible := growing_node.multimesh.visible_instance_count
 			growing_node.multimesh = ScatterGlbUtils.build_multimesh(
 				growing_node.multimesh.mesh,
-				_ordered_transforms(asset_id, cell, rows, keys, indices)
+				_ordered_transforms(asset_id, cell, rows, keys, indices),
+				mass_anchors
 			)
 			growing_node.multimesh.visible_instance_count = visible
 	return true
@@ -310,6 +316,7 @@ func clear() -> void:
 	_nodes.clear()
 	_orders.clear()
 	_cells.clear()
+	mass_anchors.clear()
 	_known_total = -1
 
 
@@ -548,7 +555,7 @@ func _dispatch_jobs() -> void:
 		var job := _regen.take_job()
 		if snapshot == null:
 			# One copy serves every job dispatched this frame; they only read it.
-			snapshot = _snapshot(_document)
+			snapshot = ScatterRegen.snapshot(_document)
 		var work: Dictionary = RockKeep.with_blockers(job.work, blockers)
 		var result := {}
 		var task := func() -> void: result.merge(ScatterRegen.run(snapshot, work))
@@ -587,6 +594,7 @@ func _apply_ready_jobs() -> void:
 			continue
 		_finished.erase(entry)
 		var job: Dictionary = entry.job
+		ScatterMass.merge_into(mass_anchors, entry.result.get("anchors", {}))
 		var fresh: Dictionary = entry.result.get("rows_by_cell", {})
 		for cell in _regen.accept(job):
 			var base: Dictionary = rows_by_cell.get(cell, _cells.get(cell, {}))
@@ -595,27 +603,6 @@ func _apply_ready_jobs() -> void:
 			)
 	if not rows_by_cell.is_empty():
 		set_cells(rows_by_cell)
-
-
-## A copy of what generation reads of `doc` (wet dressing and crossings too), for a worker:
-## packed arrays are shared by reference (4.7), so without the copy a worker would read masks
-## while the brush writes them or lose a buffer an append reallocates (crossings are replaced
-## whole, never edited in place). About 0.1 ms for a 200 ft map.
-static func _snapshot(doc: MapDocument) -> MapDocument:
-	var copy := MapDocument.new()
-	copy.map_seed = doc.map_seed
-	copy.size_cells = doc.size_cells
-	copy.cell_size_m = doc.cell_size_m
-	copy.sample_spacing_m = doc.sample_spacing_m
-	copy.heights = doc.heights.duplicate()
-	copy.biome_ids = doc.biome_ids.duplicate()
-	copy.biome_slots = doc.biome_slots.duplicate()
-	copy.biome_density = doc.biome_density.duplicate()
-	copy.surface_ids = doc.surface_ids.duplicate()
-	copy.surface_weights = doc.surface_weights.duplicate()
-	copy.water_dressing = doc.water_dressing.duplicate()
-	copy.crossings = doc.crossings.duplicate()
-	return copy
 
 
 func _rebuild_cell(cell: Vector2i, fresh: Dictionary, grow: bool) -> void:
@@ -708,7 +695,9 @@ func _refresh_growing(
 					indices.append(i)
 			var node: MultiMeshInstance3D = entry.node
 			node.multimesh = ScatterGlbUtils.build_multimesh(
-				node.multimesh.mesh, _ordered_transforms(asset_id, cell, rows, keys, indices)
+				node.multimesh.mesh,
+				_ordered_transforms(asset_id, cell, rows, keys, indices),
+				mass_anchors
 			)
 			_touched.append(node)
 		growing_keys.merge(surviving)
@@ -749,7 +738,9 @@ func _set_settled(
 			_nodes[cell] = {}
 		_nodes[cell][asset_id] = node
 	else:
-		node.multimesh = ScatterGlbUtils.build_multimesh(node.multimesh.mesh, transforms)
+		node.multimesh = ScatterGlbUtils.build_multimesh(
+			node.multimesh.mesh, transforms, mass_anchors
+		)
 	_touched.append(node)
 	if visible >= 0:
 		node.multimesh.visible_instance_count = mini(visible, node.multimesh.instance_count)
@@ -814,7 +805,8 @@ func _shrink_out(
 		transforms,
 		species.wind_category,
 		ScatterShrink.sink_depth_for(species.mesh, transforms),
-		grow_seconds
+		grow_seconds,
+		mass_anchors
 	)
 
 
@@ -869,7 +861,8 @@ func _new_chunk_node(
 		species.stem,
 		transforms,
 		species.wind_category,
-		ScatterChunker.cell_suffix(cell) + extra
+		ScatterChunker.cell_suffix(cell) + extra,
+		mass_anchors
 	)
 
 

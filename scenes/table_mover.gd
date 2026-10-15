@@ -518,6 +518,7 @@ static func document_of(editor: AuthoringEditor) -> MapDocument:
 	var doc := editor.document
 	if is_instance_valid(editor.scatter) and is_instance_valid(editor.props):
 		doc.scatter = editor.scatter.rows_by_asset()
+		doc.mass_anchors = ScatterMass.anchors_entry(editor.scatter.mass_anchors, doc.scatter)
 		doc.props = editor.props.rows_by_asset()
 	return doc
 

@@ -172,14 +172,38 @@ func accept(job: Dictionary) -> Array[Vector2i]:
 	return current
 
 
+## A copy of what generation reads of `doc` (wet dressing and crossings too), for a worker:
+## packed arrays are shared by reference (4.7), so without the copy a worker would read masks
+## while the brush writes them or lose a buffer an append reallocates (crossings are replaced
+## whole, never edited in place). About 0.1 ms for a 200 ft map. (Moved here from
+## AuthoredScatter, which the mass anchors put over the line cap.)
+static func snapshot(doc: MapDocument) -> MapDocument:
+	var copy := MapDocument.new()
+	copy.map_seed = doc.map_seed
+	copy.size_cells = doc.size_cells
+	copy.cell_size_m = doc.cell_size_m
+	copy.sample_spacing_m = doc.sample_spacing_m
+	copy.heights = doc.heights.duplicate()
+	copy.biome_ids = doc.biome_ids.duplicate()
+	copy.biome_slots = doc.biome_slots.duplicate()
+	copy.biome_density = doc.biome_density.duplicate()
+	copy.surface_ids = doc.surface_ids.duplicate()
+	copy.surface_weights = doc.surface_weights.duplicate()
+	copy.water_dressing = doc.water_dressing.duplicate()
+	copy.crossings = doc.crossings.duplicate()
+	return copy
+
+
 ## Runs a job's work on a snapshot of the document. Pure and thread-safe: it reads only
 ## its arguments (the snapshot must not be mutated while it runs; AuthoredScatter hands
 ## over a copy). A work entry's optional "blockers" (RockKeep.blockers) are the footprints
 ## of kept rocks no generated rock, tree or shrub grows inside. Returns {"rows_by_cell":
-## {cell: {asset id: PackedFloat32Array}}, "usec": int}.
+## {cell: {asset id: PackedFloat32Array}}, "anchors": the grass-mass anchors of those rows
+## (ScatterMass.collect's table, this job's own), "usec": int}.
 static func run(snapshot: MapDocument, work: Dictionary) -> Dictionary:
 	var started := Time.get_ticks_usec()
 	var rows_by_cell := {}
+	var anchors := {}
 	for biome_id in work:
 		var entry: Dictionary = work[biome_id]
 		var fields := ScatterGenerator.document_fields(
@@ -201,7 +225,8 @@ static func run(snapshot: MapDocument, work: Dictionary) -> Dictionary:
 			entry.cells_by_species,
 			fields.bounds,
 			fields.species_density_at,
-			entry.get("blockers", PackedFloat32Array())
+			entry.get("blockers", PackedFloat32Array()),
+			anchors
 		)
 		for asset_id in rows:
 			var split := split_by_cell(rows[asset_id])
@@ -212,7 +237,11 @@ static func run(snapshot: MapDocument, work: Dictionary) -> Dictionary:
 				var joined: PackedFloat32Array = cell_rows.get(asset_id, PackedFloat32Array())
 				joined.append_array(split[cell])
 				cell_rows[asset_id] = joined
-	return {"rows_by_cell": rows_by_cell, "usec": Time.get_ticks_usec() - started}
+	return {
+		"rows_by_cell": rows_by_cell,
+		"anchors": anchors,
+		"usec": Time.get_ticks_usec() - started,
+	}
 
 
 ## One cell's new asset rows: `existing` without the `regenerated` assets, plus `fresh`

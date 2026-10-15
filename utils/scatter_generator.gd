@@ -66,6 +66,8 @@ const _BUCKET_OFFSET := 1 << 20
 const _BUCKET_SPAN := 1 << 21
 ## Candidate record in a bucket: x, z, priority (32-bit hash), owner species, id, hash.
 const _STRIDE := 6
+## Kept clump parent record: x, z, radius, long-axis angle (radians).
+const _PARENT_STRIDE := 4
 ## Salts for the independent hashed values of one candidate.
 const _SALT_X := 0x68E31DA4
 const _SALT_Z := 0x3C6EF372
@@ -80,6 +82,7 @@ const _SALT_TILT_DIRECTION := 0x7A4D3B1F
 const _SALT_RADIUS := 0x0B4E0EF3
 const _SALT_CANDIDATE := 0x632BE5AB
 const _SALT_NOISE := 0x2F6B1C3D
+const _SALT_ANGLE := 0x3A8F05C5
 
 
 ## Rows for `cells` of one biome. `species` is PaletteLibrary.species(biome_id) (or any
@@ -115,6 +118,7 @@ static func generate(
 ## `species_density_at`, when valid, replaces `density_at`: Callable(p, ScatterGround role)
 ## -> float, per species' ground_role (boulders gather at cliff feet, trees keep back from
 ## tier faces). No rock, tree or shrub row lands in `blockers` (RockKeep.blockers_for).
+## A grass mass's rows add their anchors to the caller's `anchors_out` (ScatterMass.collect).
 static func generate_species_cells(
 	biome_id: String,
 	species: Array[Dictionary],
@@ -125,13 +129,15 @@ static func generate_species_cells(
 	cells_by_species: Array,
 	bounds: Rect2,
 	species_density_at: Callable = Callable(),
-	blockers: PackedFloat32Array = PackedFloat32Array()
+	blockers: PackedFloat32Array = PackedFloat32Array(),
+	anchors_out: Dictionary = {}
 ) -> Dictionary[String, PackedFloat32Array]:
 	var the_plan := ScatterPlan.build(biome_id, species, map_seed)
 	var ctx := _context(the_plan, density_at, height_at, normal_at, bounds)
 	if species_density_at.is_valid():
 		ctx["species_density_at"] = species_density_at
 	ctx["blockers"] = blockers
+	ctx["anchors_out"] = anchors_out
 	var result: Dictionary[String, PackedFloat32Array] = {}
 	for s in the_plan.species.size():
 		var cells: Array[Vector2i] = []
@@ -183,7 +189,7 @@ static func _reach_of(the_plan: Dictionary, s: int, reach: PackedFloat32Array) -
 	var through := 0.0
 	if entry.clumped:
 		var clump: Dictionary = entry.rule.clump
-		through = clump.radius_m * (1.0 + ScatterPlan.CLUMP_RADIUS_JITTER) + clump.transition_m
+		through = clump.radius_m * (1.0 + entry.clump_jitter) + clump.transition_m
 	for relation in entry.near:
 		r = maxf(r, through + relation.distance + relation.transition + reach[relation.target])
 	for field_index in entry.clearance:
@@ -368,6 +374,7 @@ static func _context(
 		"normal_at": normal_at,
 		"bounds": bounds,
 		"edge": 1.0,
+		"anchor": Vector2.ZERO,
 	}
 
 
@@ -435,6 +442,8 @@ static func _generate_species(
 	var size: float = field.bucket
 	var rows := PackedFloat32Array()
 	var assets := PackedInt32Array()
+	var mass: bool = entry.mass
+	var anchors := PackedFloat32Array()
 	for cell in cells:
 		var area := Rect2(Vector2(cell) * chunk, Vector2(chunk, chunk)).intersection(bounds)
 		if area.size.x <= 0.0 or area.size.y <= 0.0:
@@ -457,10 +466,16 @@ static func _generate_species(
 					if not placed or RockKeep.blocked(blockers, Vector2(x, z)):
 						continue
 					var edge: float = ctx.edge
-					if edge_needed and referenced:
+					if (edge_needed or mass) and referenced:
 						edge = _membership(ctx, s, x, z).y
 					assets.append(_append_row(ctx, entry, cands, c, edge, rows))
+					if mass:
+						var anchor: Vector2 = ctx.anchor
+						anchors.append(anchor.x)
+						anchors.append(anchor.y)
 	_split_rows(entry.rule.assets, rows, assets, result)
+	if mass:
+		ScatterMass.collect(rows, anchors, ctx.anchors_out)
 
 
 static func _split_rows(
@@ -544,7 +559,7 @@ static func _evaluate(
 	var u := _unit(int(cands[c + 5]), _SALT_ACCEPT)
 	# Painted density through the size class's response (ScatterPlan.DENSITY_RESPONSE).
 	var painted: float = ctx.species_density_at.call(p, entry.ground_role)
-	var keep := ScatterPlan.respond(painted, entry.response_lead, entry.response_lag)
+	var keep := ScatterMass.respond_bare(entry, painted, x, z)  # grass off the bare openings
 	if u >= keep:
 		return false
 	var s: int = entry.index
@@ -677,41 +692,19 @@ static func _higher_neighbours(
 	return ordered
 
 
-## Clump membership at a point: x = 0..1 (1 inside a kept parent's radius, smoothly to 0
-## across the transition), y = the distance to that parent over its reach (0 at the
-## centre, 1 at the outer edge), for the clump scale falloff. With additive clumps
-## (ScatterPlan.additive_clumps) x is the summed membership of every clump over the point
-## over ScatterPlan.CLUMP_SATURATION, capped at 1, and y the nearest centre's.
+## Clump membership at a point (ScatterMass.membership; the parent goes to ctx.anchor): x = 0..1
+## (1 inside a kept parent's radius, smoothly to 0 across the transition), y = the distance to
+## that parent over its reach (0 at the centre, 1 at the outer edge), for the clump scale
+## falloff. With additive clumps (ScatterPlan.additive_clumps) x is the summed membership of
+## every clump over the point over ScatterPlan.CLUMP_SATURATION, capped at 1, y the nearest's.
 static func _membership(ctx: Dictionary, s: int, x: float, z: float) -> Vector2:
 	var entry: Dictionary = ctx.plan.species[s]
 	var size: float = ctx.fields[entry.field].bucket
 	var parents := _parents_near_bucket(ctx, s, floori(x / size), floori(z / size))
-	var transition: float = entry.rule.clump.transition_m
-	var best := Vector2(0.0, 1.0)
-	var additive := ScatterPlan.additive_clumps
-	var total := 0.0
-	for i in range(0, parents.size(), 3):
-		var dx := parents[i] - x
-		var dz := parents[i + 1] - z
-		var radius := parents[i + 2]
-		var d := sqrt(dx * dx + dz * dz)
-		var inside := 1.0
-		if d > radius:
-			if transition <= 0.0 or d >= radius + transition:
-				continue
-			inside = 1.0 - smoothstep(radius, radius + transition, d)
-		var edge := d / (radius + transition)
-		total += inside
-		if additive:
-			best.y = minf(best.y, edge)
-		elif inside > best.x or (inside == best.x and edge < best.y):
-			best = Vector2(inside, edge)
-	if additive:
-		best.x = minf(1.0, total / ScatterPlan.CLUMP_SATURATION)
-	return best
+	return ScatterMass.membership(ctx, entry, parents, x, z)
 
 
-## Kept clump parents whose reach overlaps one children bucket, as [x, z, radius]
+## Kept clump parents whose reach overlaps one children bucket, as [x, z, radius, angle]
 ## records (memoized per bucket, so each child checks only the few that matter).
 static func _parents_near_bucket(ctx: Dictionary, s: int, bi: int, bj: int) -> PackedFloat64Array:
 	var memo: Dictionary = ctx.parent_lists[s]
@@ -725,7 +718,8 @@ static func _parents_near_bucket(ctx: Dictionary, s: int, bi: int, bj: int) -> P
 	var rect := Rect2(bi * child_size, bj * child_size, child_size, child_size)
 	var size: float = ctx.fields[entry.parent_field].bucket
 	var transition: float = clump.transition_m
-	var reach: float = clump.radius_m * (1.0 + ScatterPlan.CLUMP_RADIUS_JITTER) + transition
+	var root := sqrt(float(entry.mass_stretch))  # an ellipse's long half-axis
+	var reach: float = (clump.radius_m * (1.0 + entry.clump_jitter) + transition) * root
 	var out := PackedFloat64Array()
 	var low_x := floori((rect.position.x - reach) / size)
 	var high_x := floori((rect.end.x + reach) / size)
@@ -736,22 +730,25 @@ static func _parents_near_bucket(ctx: Dictionary, s: int, bi: int, bj: int) -> P
 	for parent_j in range(low_z, high_z + 1):
 		for parent_i in range(low_x, high_x + 1):
 			var kept := _kept_parents(ctx, s, parent_i, parent_j)
-			for c in range(0, kept.size(), 3):
+			for c in range(0, kept.size(), _PARENT_STRIDE):
 				var px := kept[c]
 				var pz := kept[c + 1]
 				var radius := kept[c + 2]
 				var dx := maxf(0.0, maxf(rect.position.x - px, px - rect.end.x))
 				var dz := maxf(0.0, maxf(rect.position.y - pz, pz - rect.end.y))
-				if dx * dx + dz * dz > (radius + transition) * (radius + transition):
+				var parent_reach := (radius + transition) * root
+				if dx * dx + dz * dz > parent_reach * parent_reach:
 					continue
 				out.append(px)
 				out.append(pz)
 				out.append(radius)
+				out.append(kept[c + 3])
 	memo[key] = out
 	return out
 
 
-## The kept parents of one parent bucket as [x, z, radius] records (memoized per bucket).
+## The kept parents of one parent bucket as [x, z, radius, angle] records (memoized per
+## bucket; the angle is a mass's long axis, ScatterMass.parent_spin).
 static func _kept_parents(ctx: Dictionary, s: int, bi: int, bj: int) -> PackedFloat64Array:
 	var memo: Dictionary = ctx.parent_buckets[s]
 	var key := (bi + _BUCKET_OFFSET) * _BUCKET_SPAN + (bj + _BUCKET_OFFSET)
@@ -767,7 +764,9 @@ static func _kept_parents(ctx: Dictionary, s: int, bi: int, bj: int) -> PackedFl
 			var jitter := 2.0 * _unit(int(cands[c + 5]), _SALT_RADIUS) - 1.0
 			out.append(cands[c])
 			out.append(cands[c + 1])
-			out.append(radius * (1.0 + ScatterPlan.CLUMP_RADIUS_JITTER * jitter))
+			out.append(radius * (1.0 + entry.clump_jitter * jitter))
+			var turn := 2.0 * _unit(int(cands[c + 5]), _SALT_ANGLE) - 1.0
+			out.append(ScatterMass.parent_spin(entry, cands[c], cands[c + 1], turn))
 	memo[key] = out
 	return out
 
@@ -788,6 +787,7 @@ static func _parent_kept(ctx: Dictionary, s: int, cands: PackedFloat64Array, c: 
 			var near := _proximity(ctx, relation, cands[c], cands[c + 1])
 			keep *= 1.0 - relation.influence * (1.0 - near)
 		kept = _unit(int(cands[c + 5]), _SALT_ACCEPT) < keep
+	kept = kept and ScatterMass.zone_kept(entry, cands, c)  # a mass's swathes, by zone
 	memo[id] = kept
 	return kept
 
@@ -877,7 +877,7 @@ static func _append_row(
 		var pattern := _pattern_value(ctx.noise[s], ctx.contrast[s], x, z)
 		scale *= 1.0 - scale_influence * (1.0 - pattern)
 	if entry.clump_scale:
-		scale *= 1.0 - CLUMP_SCALE_SHRINK * edge
+		scale *= 1.0 - float(entry.clump_shrink) * edge
 	scale = maxf(scale, entry.scale_floor)
 	var asset_count: int = entry.asset_count
 	var asset := mini(floori(_unit(h, _SALT_ASSET) * asset_count), asset_count - 1)
@@ -888,9 +888,7 @@ static func _append_row(
 	rows.append(rotation.y)
 	rows.append(rotation.z)
 	rows.append(rotation.w)
-	rows.append(scale)
-	rows.append(scale)
-	rows.append(scale)
+	ScatterMass.append_scale(rows, scale, entry, edge)  # a mass's core tufts grow
 	return asset
 
 

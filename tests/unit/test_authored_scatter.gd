@@ -495,7 +495,7 @@ func test_worker_snapshots_do_not_share_the_document_masks() -> void:
 	doc.biome_slots = mask
 	doc.biome_density = mask.duplicate()
 	doc.biome_ids = PackedStringArray([BIOME])
-	var snapshot := AuthoredScatter._snapshot(doc)
+	var snapshot := ScatterRegen.snapshot(doc)
 	doc.biome_density[5] = 200
 	doc.biome_slots[5] = 1
 	doc.biome_ids.append("another")

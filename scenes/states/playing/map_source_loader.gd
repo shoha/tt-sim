@@ -168,7 +168,8 @@ func _build_async(glb_path: String, cells: Dictionary) -> Node3D:
 		root.add_child(scatter)
 		if rows_by_cell.is_empty():
 			continue
-		if not await _build_authored_scatter_async(scatter, rows_by_cell):
+		var anchors := mass_anchor_table(document) if group[0] == SCATTER_NODE else {}
+		if not await _build_authored_scatter_async(scatter, rows_by_cell, anchors):
 			scatter.release_prepared()
 			root.free()
 			return null
@@ -341,9 +342,26 @@ static func cells_of_document(doc: MapDocument, separate: bool) -> Dictionary:
 	return {SCATTER_NODE: AuthoredScatter.rows_by_cell_of(rows)}
 
 
+## The grass-mass anchor table of `doc`'s saved anchors entry (ScatterMass.table_of against the
+## mass rules of its biomes), warning about any asset's anchors it drops; {} for none (an older
+## level, whose tufts take their zone's hue where they stand).
+static func mass_anchor_table(doc: MapDocument) -> Dictionary:
+	if doc == null or doc.mass_anchors.is_empty():
+		return {}
+	var warnings: Array[String] = []
+	var reach := ScatterMass.reach_by_asset(doc.biome_ids)
+	var table := ScatterMass.table_of(doc.mass_anchors, doc.scatter, reach, warnings)
+	for warning in warnings:
+		push_warning("MapSourceLoader: " + warning)
+	return table
+
+
 ## Preloads the species `rows_by_cell` uses off the main thread, then builds its cells a
-## few per frame. Returns false when superseded mid-way.
-func _build_authored_scatter_async(scatter: AuthoredScatter, rows_by_cell: Dictionary) -> bool:
+## few per frame, the scatter node with the grass-mass `anchors` (mass_anchor_table). Returns
+## false when superseded mid-way.
+func _build_authored_scatter_async(
+	scatter: AuthoredScatter, rows_by_cell: Dictionary, anchors: Dictionary = {}
+) -> bool:
 	var assets := {}
 	for cell_rows in rows_by_cell.values():
 		for asset_id in cell_rows:
@@ -355,6 +373,7 @@ func _build_authored_scatter_async(scatter: AuthoredScatter, rows_by_cell: Dicti
 		if is_superseded.call():
 			return false
 	scatter.begin_build()
+	scatter.mass_anchors = anchors
 	var keys := rows_by_cell.keys()
 	var next := 0
 	while next < keys.size():
