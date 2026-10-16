@@ -3,8 +3,11 @@ extends RefCounted
 ## The golden digest of every built-in biome's generated rows (test_scatter_mass.gd): each
 ## biome of the installed palette generated at GOLDEN_SEED over a square of GOLDEN_HALF_M with
 ## a varying painted density, and per asset id its row count and the MD5 of its rows' bytes.
-## FIXTURE was written from main's code path (94e18825, before the ground ship's mass port) by
-## running dump() once; a palette without the mass fields must still grow exactly those rows.
+## FIXTURE was first written from main's code path (94e18825, before the ground ship's mass
+## port) by running dump() once, and re-pinned when the ship palette (treecube 020bbdc) was
+## installed (ground ship card 4): only the grass of the six zoned biomes moved (their mass,
+## clump and density fields), while boreal_taiga, rocky_badlands and burnt_forest, which carry
+## no mass fields, still grow exactly main's rows. Re-pin only after checking that.
 
 const GOLDEN_SEED := 1234
 const GOLDEN_HALF_M := 12.0
@@ -53,7 +56,7 @@ static func digest_all() -> Dictionary:
 	return out
 
 
-## Writes digest_all() to FIXTURE (run once, on main's code path).
+## Writes digest_all() to FIXTURE (tests/fixtures/dump_scatter_golden.gd).
 static func dump() -> void:
 	var file := FileAccess.open(FIXTURE, FileAccess.WRITE)
 	file.store_string(JSON.stringify(digest_all(), "\t", true))

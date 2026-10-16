@@ -20,6 +20,21 @@ const CLUMP_BAND := Vector2(0.55, 1.45)
 const MIN_EXPECTED := 150.0
 const MAX_TIER_AREA := 160000.0
 const EPSILON := 1e-4
+## The ship palette (treecube 020bbdc, ground ship card 4): in the grassland and the savanna the
+## massed grass delivers about a third to a half of its palette density, because the zones drop
+## whole swathes of it (zone_keep) and the bare openings keep none, and the sprig and short
+## grass between the masses about 0.7 (their density was retuned with the masses). The other
+## zoned biomes stay inside the audit bands. These are pinned to the ratio measured at the
+## install on this test's flat, fully painted 200 ft map, +-MASS_PIN.
+const MASS_DELIVERED := {
+	"grassland_meadow_summer_s1 grass": 0.472,
+	"grassland_meadow_summer_s1 tall_grass": 0.462,
+	"grassland_meadow_summer_s1 sprig": 0.701,
+	"savanna_summer_s1 dry_grass": 0.308,
+	"savanna_summer_s1 seed_grass": 0.330,
+	"savanna_summer_s1 short_grass": 0.683,
+}
+const MASS_PIN := 0.15
 
 
 func before_all() -> void:
@@ -188,9 +203,12 @@ func test_every_biome_delivers_the_palette_density() -> void:
 					)
 				)
 			)
-			assert_between(
-				ratio, band.x * minf(entry.reachable, 1.0), band.y, "%s %s" % [biome.id, rule.key]
-			)
+			var label := "%s %s" % [biome.id, rule.key]
+			if MASS_DELIVERED.has(label):
+				var pinned: float = MASS_DELIVERED[label]
+				assert_between(ratio, pinned * (1.0 - MASS_PIN), pinned * (1.0 + MASS_PIN), label)
+				continue
+			assert_between(ratio, band.x * minf(entry.reachable, 1.0), band.y, label)
 	for line in table:
 		gut.p(line)
 	for line in timings:

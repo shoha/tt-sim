@@ -1,0 +1,37 @@
+{
+ "out_dir": "D:/dev/treecube/out/looks/ground_ship/install",
+ "timeout_s": 600,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait_title"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "adopt", "from": "_gm_events_gship4_old", "to": "_gship4_old_"},
+
+  {"op": "dress", "folder": "_gship4_old_"},
+  {"op": "wait_ready", "settle": 3.0}, {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": false},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "nocursor"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "home"}, {"op": "wait", "s": 2.3},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "rows"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "report"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "freeze"},
+  {"op": "capture", "name": "old_branch_reopened", "desc": "branch: the grassland seed 1234 level main saved (no mass anchors), reopened here: main's grass rows, the ground zoned"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "thaw"},
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+
+  {"op": "dress", "folder": "_gship4_glb_"},
+  {"op": "wait_ready", "settle": 3.0}, {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": false},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "home"}, {"op": "wait", "s": 2.3},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "freeze"},
+  {"op": "capture", "name": "glb_branch", "desc": "branch: deciduous_clusters.glb imported as _gship4_glb_, opened, home, clock frozen near 0 (compare glb_main)"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "thaw"},
+
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "cleanup"}
+ ]
+}

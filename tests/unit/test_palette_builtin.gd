@@ -12,9 +12,11 @@ extends GutTest
 
 ## Palette v7 (2026-10-10) adds the fire entries (section 9 "Fire"): the burnt_forest
 ## biome, listed last, and the ash ground surface. treecube 1c05fb0 (2026-10-13) adds three
-## ground surfaces: grass_meadow, grass_forest and grass_birch.
+## ground surfaces: grass_meadow, grass_forest and grass_birch. The ground ship (treecube
+## 020bbdc, 2026-10-15) adds seven: dirt_mud, dirt_opening, forest_floor_litter, grass_glade,
+## grass_wetland, gravel_scree and sand_savanna.
 const BIOME_COUNT := 9
-const SURFACE_COUNT := 29
+const SURFACE_COUNT := 36
 ## Surfaces per role (section 9 "Surface role"); the rest of SURFACE_COUNT is ground.
 const CLIFF_SURFACE_COUNT := 3
 const BUILT_SURFACE_COUNT := 7

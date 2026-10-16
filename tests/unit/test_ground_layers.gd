@@ -378,7 +378,10 @@ func test_six_biomes_draw_every_surface_without_a_warning() -> void:
 	var terrain := _terrain(doc)
 	doc.biome_ids.append("wetland_riparian_summer_s1")
 	terrain.update_ground_region(Rect2i(0, 0, 40, 40))
-	assert_engine_error(0, "no surface falls back, no accent drops")
+	# The ship palette zones five of these (forest, alpine, savanna, birch, wetland): the bake has
+	# four look slots, so the wetland, listed last, draws today's ground with the one warning.
+	# Nothing else warns: no surface falls back, no accent drops.
+	assert_engine_error(1, "only GroundLookBake's fifth-look warning")
 	var layers := terrain.ground_layers()
 	assert_eq(layers[1], "cobblestone", "painted surfaces keep their layers")
 	assert_eq(layers[2], "flagstone")

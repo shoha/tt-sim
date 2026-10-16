@@ -39,7 +39,9 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
   the zones the ground draws. The zones come from the biome's `ground_look` and the map seed
   (`GroundZones.record`, `seed_offset`), built once per plan and read by the workers; no level
   stores a zone field. A palette without the mass fields grows exactly the rows it grew before
-  (`test_scatter_mass.gd` pins every built-in biome's rows at seed 1234 against main's).
+  (`test_scatter_mass.gd` pins every built-in biome's rows at seed 1234: first written on main's
+  code path; re-pinned at the ship palette's install, where the six zoned biomes' grass moved
+  and the taiga, badlands and burnt forest, which carry no mass fields, kept main's rows).
 - Each mass row carries its anchor (the clump parent) beside the rows, keyed by the row's saved
   (x, z): the generator fills `ScatterRegen.run`'s "anchors", `AuthoredScatter.mass_anchors`
   merges them and every MultiMesh it builds (settled, growing and shrinking nodes) writes

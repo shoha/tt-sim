@@ -619,6 +619,21 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   `probes/parity_diff.gd` (standalone, a manifest of pairs) prints mean colour, the darkest
   and brightest tenth, the pixels over 2/255 and whether they sit on scatter or ground, and
   writes the diff images.
+- `jobs/ground_install.json` and `jobs/ground_install_levels.json`: the ground ship's install
+  captures (card 4, 2026-10-15) on the committed ship palette, written straight into treecube
+  `out/looks/ground_ship/install/`. `ground_install` imports `D:/dev/terrain-paint/
+  deciduous_clusters.glb` as `_gship4_glb_` first, then takes ground_parity's views with the
+  clean ids (grassland home, zoom 26 and the road on `dirt_road_packed`, seed 2, birch) and the
+  zoned biomes seen at home and zoom 26 (savanna, wetland, alpine meadow, temperate forest:
+  `{value}` and `{value}_z26`, named by biome id), a grassland with a savanna band painted
+  down the middle (`twobiome`, `twobiome_z26`), and a fire in play on a saved grassland
+  (`_gship4_fire_`: `fire_before`, `fire_after`, through `probes/terrain_events.gd`). Then a
+  job on main's checkout saves a grassland at seed 1234 through main's own `events_pane.gd`
+  (`_gm_events_gship4_old`), reopens it and captures it and `_gship4_glb_`;
+  `ground_install_levels` adopts that level as `_gship4_old_` (`ground_parity.gd adopt`),
+  reopens it here with `rows` (open, saved and live rows and a grass MD5) and `report`,
+  captures it and `_gship4_glb_` again, and deletes every `_gship4_` level (`cleanup`, which
+  also takes `_gm_events_gship4_old` when `adopt` never ran). Run with `--full`.
 
 ## Caveats
 

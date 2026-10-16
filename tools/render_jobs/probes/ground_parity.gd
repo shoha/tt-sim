@@ -13,13 +13,23 @@ extends RefCounted
 ##   every run. Swaying blades then hold the same pose in two runs, and the lo-fi grain the same
 ##   pattern. The driver's `wait` runs on scaled time: `thaw` before any wait.
 ## - `thaw`: restores the rollover and time scale 1.
-## - `save` (`folder`, must start with PREFIX): writes the open map as that test level,
+## - `save` (`folder`, must start with one of PREFIXES): writes the open map as that test level,
 ##   replacing an earlier one (the authoring save path, mass anchors included).
-## - `cleanup`: deletes every PREFIX level folder, and nothing else.
+## - `cleanup`: deletes every level folder starting with one of PREFIXES (and the card 4 level
+##   main's build saved under MAIN_SAVED, when `adopt` never ran), and nothing else.
 ## - `report`: the scatter's MultiMesh nodes, how many carry custom data (the massed grass, its
 ##   anchors), and whether the terrain material has a ground look.
+## - `adopt` (`from`, `to`; card 4): renames a level main's build saved through its own
+##   events_pane.gd probe (whose prefix is `_gm_events_`; `from` must be MAIN_SAVED) to `to`
+##   (a `_gship4_` folder), so this probe's cleanup owns it.
+## - `import_glb` (`path`, `name`, a `_gship4_` name; card 4): starts MapImport.import_glb, a
+##   coroutine: follow it with a wait.
+## - `rows` (card 4): the open document's scatter rows (all, and the assets named Grass_) with
+##   an MD5 of the grass rows, beside the same read back from the level's saved map.ttmap, and
+##   the live MultiMesh rows: an older level whose open regrew nothing shows them all equal.
 
-const PREFIX := "_gship3c_"
+const PREFIXES := ["_gship3c_", "_gship4_"]
+const MAIN_SAVED := "_gm_events_gship4_old"
 const ROLLOVER := "rendering/limits/time/time_rollover_secs"
 
 static var _rollover: Variant = null
@@ -50,6 +60,12 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _cleanup()
 		"report":
 			return _report(base)
+		"adopt":
+			return _adopt(String(step.get("from", "")), String(step.get("to", "")))
+		"import_glb":
+			return _import_glb(base, String(step.get("path", "")), String(step.get("name", "")))
+		"rows":
+			return _rows(base)
 		"uniforms":
 			return _uniforms(base, step)
 	return "unknown action %s" % step.get("action", "")
@@ -230,8 +246,8 @@ static func _report(base: Node) -> String:
 
 static func _save(base: Node, folder: String) -> String:
 	var ctrl: AuthoringController = base.get("_authoring_controller")
-	if ctrl == null or not folder.begins_with(PREFIX):
-		return "no authoring controller, or not a %s folder" % PREFIX
+	if ctrl == null or not _is_test(folder):
+		return "no authoring controller, or not a %s folder" % str(PREFIXES)
 	var path := LevelManager.folder_path(folder)
 	_remove_tree(path)
 	DirAccess.make_dir_recursive_absolute(path)
@@ -251,10 +267,83 @@ static func _cleanup() -> String:
 		return "no levels folder"
 	var removed := PackedStringArray()
 	for folder in dir.get_directories():
-		if folder.begins_with(PREFIX):
-			_remove_tree(LevelManager.folder_path(folder))
+		if _is_test(folder) or folder == MAIN_SAVED:
+			# delete_level_folder also forgets an imported level's source.
+			if not LevelManager.delete_level_folder(LevelManager.folder_path(folder)):
+				_remove_tree(LevelManager.folder_path(folder))
 			removed.append(folder)
+	var index := ConfigFile.new()
+	if index.load(ImportSources.path) == OK and index.get_sections().is_empty():
+		DirAccess.remove_absolute(ImportSources.path)
 	return "removed %s" % str(removed)
+
+
+static func _is_test(folder: String) -> bool:
+	for prefix: String in PREFIXES:
+		if folder.begins_with(prefix):
+			return true
+	return false
+
+
+static func _adopt(from: String, to: String) -> String:
+	if from != MAIN_SAVED or not to.begins_with("_gship4_"):
+		return "refused: from must be %s and to a _gship4_ folder" % MAIN_SAVED
+	var source := LevelManager.folder_path(from)
+	if not DirAccess.dir_exists_absolute(source):
+		return "no %s" % from
+	_remove_tree(LevelManager.folder_path(to))
+	var err := DirAccess.rename_absolute(source, LevelManager.folder_path(to))
+	return "adopted %s as %s: %s" % [from, to, error_string(err)]
+
+
+static func _import_glb(base: Node, path: String, level_name: String) -> String:
+	if not Paths.sanitize_level_name(level_name).begins_with("_gship4_"):
+		return "refused: the name must start with _gship4_"
+	_run_import(path, level_name, base.get_tree())
+	return "import of %s as %s started" % [path, level_name]
+
+
+static func _run_import(path: String, level_name: String, tree: SceneTree) -> void:
+	var result: Dictionary = await MapImport.import_glb(path, level_name, tree)
+	print("RJ| import_glb result ok %s folder %s error '%s'" % [
+		str(result.get("ok")), result.get("folder", ""), result.get("error", "")
+	])
+
+
+static func _rows(base: Node) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	if ctrl == null or ctrl.document == null or ctrl.level == null:
+		return "no open document"
+	var saved_path := LevelManager.folder_path(ctrl.level.level_folder).path_join("map.ttmap")
+	var saved: MapDocument = MapDocumentIO.read(saved_path).get("document")
+	var live := 0
+	for mmi in _scatter_nodes(base):
+		live += mmi.multimesh.instance_count if mmi.multimesh != null else 0
+	return (
+		"open %s; saved %s; live MultiMesh rows %d; anchors %d"
+		% [
+			_rows_digest(ctrl.document.scatter),
+			_rows_digest(saved.scatter) if saved != null else "unreadable",
+			live,
+			ctrl.document.mass_anchors.size(),
+		]
+	)
+
+
+static func _rows_digest(rows_by_asset: Dictionary[String, PackedFloat32Array]) -> String:
+	var hashing := HashingContext.new()
+	hashing.start(HashingContext.HASH_MD5)
+	var grass := 0
+	var ids := rows_by_asset.keys()
+	ids.sort()
+	for asset_id: String in ids:
+		if asset_id.contains("/Grass_"):
+			grass += rows_by_asset[asset_id].size() / MapDocument.ROW_STRIDE
+			hashing.update(rows_by_asset[asset_id].to_byte_array())
+	return (
+		"rows %d, grass %d md5 %s"
+		% [MapDocument.row_count(rows_by_asset), grass, hashing.finish().hex_encode().left(12)]
+	)
 
 
 static func _remove_tree(path: String) -> void:
