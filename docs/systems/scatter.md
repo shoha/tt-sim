@@ -59,8 +59,9 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
   shrinking) draws on `LevelEnvironmentManager.SCATTER_RENDER_LAYER`, which the level's
   reflection probe leaves out: the probe captures once when a map opens, before a new map's
   cover grows in but after a reopened level's is built, and a probe that saw the scatter drew
-  reopened ground and grass 3-6 levels darker (2026-10-15). A Blender map's own scatter stays
-  on layer 1.
+  reopened ground and grass 3-6 levels darker (2026-10-15). A side effect: the probe's
+  reflections, water's among them, no longer show an authored map's scatter on a reopened
+  level; a new map's never did. A Blender map's own scatter stays on layer 1.
 
 ## Runtime
 
