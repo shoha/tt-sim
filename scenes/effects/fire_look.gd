@@ -52,8 +52,11 @@ const LIGHT_COLOR := Color(1.0, 0.56, 0.24)
 ## the cluster's size against LIGHT_FULL_SIZE square metres of flame, FireClusters). (The F3
 ## probe found energy 3 invisible against the dusk ambient; 2 read as nothing and 6 as very
 ## little at the home zoom in this card's first rounds, since most of it falls on dark char.
-## With FireLights' broad flat falloff, 6 washed the burn warm in the dark probe.)
-const LIGHT_ENERGY := 8.0
+## With FireLights' broad flat falloff, 6 washed the burn warm in the dark probe. Under the
+## game's outdoor_night preset, 8 warmed the ash and logs only a little and 14 warms the ash,
+## logs and stumps across the burn with no blown patch; the burnt bark itself, linear albedo
+## about 0.035, stays dark either way.)
+const LIGHT_ENERGY := 14.0
 const LIGHT_SMALL := 0.6
 const LIGHT_FULL_SIZE := 60.0
 ## The flicker: how deep it dips, and its two slow rates (radians a second).

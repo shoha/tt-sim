@@ -1,13 +1,14 @@
 class_name FireFieldSmoke
 extends MultiMeshInstance3D
 
-## The persistent fire's smoke (FireField; design section 4 "Smoke"): a slow leaning column of
-## soft billows over each of up to FireClusters.MAX_SMOKE of the largest blaze clusters
+## The persistent fire's smoke (FireField; design section 4 "Smoke"): a leaning plume of a few
+## bold billows over each of up to FireClusters.MAX_SMOKE of the largest blaze clusters
 ## (FireClusters.smoke). The billows are camera-facing quads drawn by
 ## shaders/fire_field_smoke.gdshader (the header there holds the look), which moves each one up
 ## its column on its own clock: PER_SITE billows a column, a life of LIFE_S each, their phases
-## spread over the life, so a column runs continuously from the flame tips up to two or three
-## flame heights, leaning down the map's wind.
+## spread over the life, so a column of three or four billows, small at the base and biggest near
+## the top, runs from the flame tips up to about three flame heights, leaning down the map's
+## wind, and a new billow rises from the fire every LIFE_S / PER_SITE seconds.
 ##
 ## A column's size is its cluster's: the unit (column_unit) is the cluster's tallest flame,
 ## scaled down for a smaller cluster, so the biggest fire is the biggest smoker. place() writes
@@ -18,19 +19,22 @@ extends MultiMeshInstance3D
 const NODE_NAME := "FireSmoke"
 const SHADER := preload("res://shaders/fire_field_smoke.gdshader")
 ## Billows a column and a billow's life (seconds; each column's own within LIFE_VARY of it).
-const PER_SITE := 6
-const LIFE_S := 12.0
+## (Round 2's six billows over 12 s blended into one smooth smear that barely moved between
+## frames 1.6 s apart; five over 10 s show three or four billows at a time, climbing visibly.)
+const PER_SITE := 5
+const LIFE_S := 10.0
 const LIFE_VARY := 0.1
 ## How far a billow's phase is moved off its even share of the life (a share of the spacing),
 ## so a column's billows are not evenly strung.
 const PHASE_JITTER := 0.3
-## The column, in its unit: billows are born BORN_AT up (the tips of the tallest flames), climb
-## RISE over a life and lean LEAN of that down the wind, BILLOW across when born and when grown
-## (the shader's uniforms are set from these).
-const BORN_AT := 0.9
-const RISE := 1.5
-const LEAN := 0.55
-const BILLOW := Vector2(0.8, 1.45)
+## The column, in its unit: billows are born BORN_AT up (among the tips of the tallest flames),
+## climb RISE over a life and lean LEAN of that down the wind, BILLOW across when born and when
+## grown (the shader's uniforms are set from these): a column about twice as tall as wide,
+## rising over the trees.
+const BORN_AT := 0.95
+const RISE := 2.4
+const LEAN := 0.5
+const BILLOW := Vector2(0.6, 1.6)
 ## The unit is the cluster's tallest flame times UNIT_SMALL over the smallest clusters, rising
 ## to 1 at FULL_SIZE square metres of flame (FireClusters' size).
 const UNIT_SMALL := 0.75

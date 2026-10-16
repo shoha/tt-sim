@@ -7,11 +7,14 @@ extends RefCounted
 ##   extras {show, what}  shows or hides the fire's lights and smoke (FireLights,
 ##                     FireFieldSmoke; `what` "lights", "smoke" or "both"), so a capture can
 ##                     show the field as round 4 drew it
-##   lights {energy, range, rise, decay}  re-tunes the lights in place (harness only)
-##   shot {key}        "<day|dusk|night|dark>_<view>": the sun (DefaultSun at 14:00, DUSK_HOUR or
-##                     NIGHT_HOUR, through the level's sun as the Sun pane's time of day
-##                     does; dark is the night with the scene's ambient and sky energy cut to
-##                     DARK, the harness's own, to judge the lights), the view (home; z8,
+##   lights {energy, range, rise, decay, toward}  re-tunes the lights in place (harness only;
+##                     `toward` moves each that many metres toward the camera, level)
+##   shot {key}        "<day|dusk|sunset|night|dark>_<view>": the sky (SKIES: the sun at 14:00,
+##                     DUSK_HOUR or NIGHT_HOUR through the level's sun as the Sun pane's time of
+##                     day does, and the level's environment or the game's outdoor_sunset or
+##                     outdoor_night preset as the Sky pane applies it; dark is the level's night
+##                     with the scene's ambient and sky energy cut to DARK, the harness's own
+##                     diagnostic for the lights), the view (home; z8,
 ##                     zoom 8 over a point on the blaze; z20, zoom 20 over the fire's middle; z30,
 ##                     zoom 30 there, past the LOD zoom; zs, zoom 12 framing the largest smoke
 ##                     column) and an on-screen label, `label` (default
@@ -22,7 +25,8 @@ extends RefCounted
 ##   flames {show}     shows or hides the flames (not the lights or smoke), to judge the
 ##                     ground's glow or the lights alone
 ##   param {target, name, value}  sets a shader parameter on the "ground" (the map's ground
-##                     material) or the "flames" (FireLook's material), for look comparisons
+##                     material), the "flames" (FireLook's material) or the "smoke"
+##                     (FireFieldSmoke's), for look comparisons
 ##   shadows {on}      turns every directional light's shadow on or off
 ##   time              the engine clock and frames drawn, to measure a motion strip's spacing
 ##   burst {dir, name, count, every}  grabs `count` frames of the window `every` seconds apart
@@ -45,6 +49,16 @@ const FIRE_AT := Vector2(0.0, -3.0)
 const AUTHOR_AT := Vector2(3.0, 17.0)
 const DUSK_HOUR := 19.0
 const NIGHT_HOUR := 23.0
+## A shot key's sky: the hour (-1: the default time of day) and the environment preset ("": the
+## level's own). Sunset and night are the game's own dark presets with a low and a set sun (the
+## look is judged there); dusk is the level's own sky at the dusk hour, dark the harness's.
+const SKIES := {
+	"day": [-1.0, ""],
+	"dusk": [DUSK_HOUR, ""],
+	"sunset": [DUSK_HOUR, "outdoor_sunset"],
+	"night": [NIGHT_HOUR, "outdoor_night"],
+	"dark": [NIGHT_HOUR, ""],
+}
 ## The smoke view (zs) centres this share of the largest column's height above where its
 ## billows are born.
 const SMOKE_VIEW_RISE := 0.35
@@ -160,13 +174,15 @@ static func _tune_lights(field: FireField, step: Dictionary) -> String:
 	var clusters := FireClusters.lights(FireClusters.merge(field.get("_cells")))
 	var slots: Array[Vector2i] = lights.get("_cells")
 	var energies: PackedFloat32Array = lights.get("_energy")
+	var forward := FireLook.DEFAULT_FORWARD
+	var toward := -Vector3(forward.x, 0.0, forward.z).normalized() * float(step.get("toward", 0.0))
 	for slot in slots.size():
 		for cluster in clusters:
 			if cluster["cell"] != slots[slot]:
 				continue
 			var light: OmniLight3D = lights.lights()[slot]
 			var at: Vector3 = cluster["at"]
-			light.position = at + Vector3(0.0, float(step.get("rise", 1.6)), 0.0)
+			light.position = at + Vector3(0.0, float(step.get("rise", 1.6)), 0.0) + toward
 			light.omni_range = float(step.get("range", FireLights.RANGE_M))
 			light.omni_attenuation = float(step.get("decay", 1.0))
 			energies[slot] = float(step.get("energy", FireLook.LIGHT_ENERGY))
@@ -178,7 +194,9 @@ static func _param(field: FireField, step: Dictionary) -> String:
 	var target := String(step.get("target", "flames"))
 	var key := String(step.get("name", ""))
 	var material: ShaderMaterial = FireLook.material()
-	if target == "ground":
+	if target == "smoke":
+		material = FireFieldSmoke.material()
+	elif target == "ground":
 		material = null
 		for child in field.get_parent().get_children():
 			if child is AuthoredTerrain and (child as AuthoredTerrain).get_material() != null:
@@ -262,19 +280,34 @@ static func _shot(
 		return "bad key %s" % key
 	var out := PackedStringArray()
 	if parts[0] != _sun_key:
-		var hour := DefaultSun.DEFAULT_TIME_OF_DAY
-		if parts[0] == "dusk":
-			hour = DUSK_HOUR
-		elif parts[0] == "night" or parts[0] == "dark":
-			hour = NIGHT_HOUR
-		out.append(_sun(ctrl, hour))
-		out.append(_dark(base, parts[0] == "dark"))
+		if not SKIES.has(parts[0]):
+			return "bad key %s" % key
+		var sky: Array = SKIES[parts[0]]
+		out.append(_dark(base, false))
+		out.append(_environment(ctrl, String(sky[1])))
+		out.append(_sun(ctrl, DefaultSun.DEFAULT_TIME_OF_DAY if sky[0] < 0.0 else float(sky[0])))
+		if parts[0] == "dark":
+			out.append(_dark(base, true))
 		_sun_key = parts[0]
 	if parts[1] != _view_key:
 		out.append(_view(gm, parts[1], ctrl.editor.fire_field))
 		_view_key = parts[1]
 	out.append(_label(base, "%s   |   %s, %s" % [label, parts[0], VIEWS[parts[1]]]))
 	return "; ".join(out)
+
+
+## Applies environment preset `preset` as the Sky pane does, or the level's own ("").
+static func _environment(ctrl: AuthoringController, preset: String) -> String:
+	var manager: LevelEnvironmentManager = ctrl.get("_environment")
+	if manager == null:
+		return "no environment manager"
+	if preset == "":
+		manager.apply_environment_settings(
+			ctrl.level.environment_preset, ctrl.level.environment_overrides
+		)
+		return "the level's environment (%s)" % ctrl.level.environment_preset
+	manager.apply_environment_settings(preset, {})
+	return "preset %s" % preset
 
 
 static func _sun(ctrl: AuthoringController, hour: float) -> String:
