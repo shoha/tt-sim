@@ -123,6 +123,8 @@ static func generate(
 ## `density_ceiling_at`, when valid, is Callable(p, role) -> float, at least what
 ## species_density_at gives there (document_fields' density_ceiling_at): a candidate whose
 ## uniform clears the response to it is rejected without asking species_density_at.
+## Once `cancel` is posted (cancelled()) generation stops between rows of buckets and hands back
+## what it has; the caller drops it.
 static func generate_species_cells(
 	biome_id: String,
 	species: Array[Dictionary],
@@ -135,7 +137,8 @@ static func generate_species_cells(
 	species_density_at: Callable = Callable(),
 	blockers: PackedFloat32Array = PackedFloat32Array(),
 	anchors_out: Dictionary = {},
-	density_ceiling_at: Callable = Callable()
+	density_ceiling_at: Callable = Callable(),
+	cancel: Semaphore = null
 ) -> Dictionary[String, PackedFloat32Array]:
 	var the_plan := ScatterPlan.build(biome_id, species, map_seed)
 	var ctx := _context(the_plan, density_at, height_at, normal_at, bounds)
@@ -144,14 +147,26 @@ static func generate_species_cells(
 	ctx["density_ceiling_at"] = density_ceiling_at
 	ctx["blockers"] = blockers
 	ctx["anchors_out"] = anchors_out
+	ctx["cancel"] = cancel
 	var result: Dictionary[String, PackedFloat32Array] = {}
 	for s in the_plan.species.size():
+		if cancelled(cancel):
+			break
 		var cells: Array[Vector2i] = []
 		if s < cells_by_species.size() and cells_by_species[s] is Array:
 			cells.assign(cells_by_species[s])
 		if not cells.is_empty():
 			_generate_species(ctx, s, cells, result)
 	return result
+
+
+## True once `cancel` (a job's, or null) has been posted. Thread-safe; the post is put back, so
+## every later check, here or in the caller, sees it too.
+static func cancelled(cancel: Semaphore) -> bool:
+	if cancel == null or not cancel.try_wait():
+		return false
+	cancel.post()
+	return true
 
 
 ## How far, in metres, the painted density can reach into each species' instances: an
@@ -468,11 +483,14 @@ static func _generate_species(
 	var assets := PackedInt32Array()
 	var mass: bool = entry.mass
 	var anchors := PackedFloat32Array()
+	var cancel: Semaphore = ctx.get("cancel")
 	for cell in cells:
 		var area := Rect2(Vector2(cell) * chunk, Vector2(chunk, chunk)).intersection(bounds)
 		if area.size.x <= 0.0 or area.size.y <= 0.0:
 			continue
 		for bj in range(floori(area.position.y / size), floori(area.end.y / size) + 1):
+			if cancel != null and cancelled(cancel):
+				break
 			for bi in range(floori(area.position.x / size), floori(area.end.x / size) + 1):
 				var cands := _bucket(field, bi, bj)
 				for c in range(0, cands.size(), _STRIDE):

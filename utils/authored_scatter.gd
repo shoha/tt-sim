@@ -65,9 +65,11 @@ const GROW_UNIFORM := &"grow"
 ## How long a new instance takes to grow in. Long enough to read as growth rather than a
 ## pop at the game camera, short enough that a stroke does not trail a wave behind it.
 const GROW_SECONDS := 0.35
-## At most this many regeneration jobs run at once (and never more than half the cores),
-## so a stroke cannot flood the pool that GLB loading and the renderer also use.
-const MAX_JOBS := 4
+## At most this many regeneration jobs run at once (and never more than half the cores). The pool
+## runs low-priority tasks on at most low_priority_thread_ratio (0.3) of its threads, 7 of 24, so 6
+## leaves one for GLB loads; a new map's 64 one-cell jobs and a dab's nine are bound by it (4 before
+## ground-opt-cpu2).
+const MAX_JOBS := 6
 ## Species resolved per frame by _process (see _warm_species; measured cost in
 ## docs/PERFORMANCE.md "Authored scatter").
 const SPECIES_PER_FRAME := 1
@@ -206,7 +208,9 @@ func set_budget(value: int) -> void:
 
 
 func _exit_tree() -> void:
-	# A task handed to WorkerThreadPool must be waited on; the results are dropped.
+	# A task handed to WorkerThreadPool must be waited on; the results are dropped (stop them).
+	for entry in _jobs:
+		(entry.cancel as Semaphore).post()
 	for entry in _jobs:
 		WorkerThreadPool.wait_for_task_completion(entry.id)
 	_jobs.clear()
@@ -399,6 +403,7 @@ func request_region(rect: Rect2) -> void:
 		return
 	_register_biomes()
 	_regen.request_region(rect)
+	_regen.cancel_stale(_jobs)
 	_dispatch_jobs()
 	set_process(true)
 
@@ -558,9 +563,10 @@ func _dispatch_jobs() -> void:
 			snapshot = ScatterRegen.snapshot(_document)
 		var work: Dictionary = RockKeep.with_blockers(job.work, blockers)
 		var result := {}
-		var task := func() -> void: result.merge(ScatterRegen.run(snapshot, work))
+		var cancel := Semaphore.new()
+		var task := func() -> void: result.merge(ScatterRegen.run(snapshot, work, cancel))
 		var id := WorkerThreadPool.add_task(task, false, "AuthoredScatter regeneration")
-		_jobs.append({"id": id, "job": job, "result": result})
+		_jobs.append({"id": id, "job": job, "result": result, "cancel": cancel})
 
 
 ## Moves jobs whose worker task has completed to _finished, noting the species their rows

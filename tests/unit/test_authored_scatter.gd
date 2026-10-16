@@ -294,6 +294,28 @@ func test_a_newer_request_discards_an_older_in_flight_job() -> void:
 	assert_eq(regen.accept(first), [] as Array[Vector2i], "the stale job is dropped")
 
 
+func test_a_stale_job_is_told_to_stop_and_hands_back_no_rows() -> void:
+	# ground-opt-cpu2: a stroke re-requests its cells every frame, so a job whose cells are all
+	# stale is cancelled (AuthoredScatter._cancel_stale_jobs) instead of holding its slot.
+	var doc := _flat_doc(Vector2i(40, 40))
+	_paint(doc, Rect2(0.0, 0.0, 10.0, 10.0))
+	var regen := _regen(doc)
+	regen.request_region(Rect2(2.0, 2.0, 1.0, 1.0))
+	var job := regen.take_job(100)
+	assert_false(regen.is_stale(job), "current while nothing touched its cells")
+	var snapshot := ScatterRegen.snapshot(doc)
+	var full := ScatterRegen.run(snapshot, job.work)
+	assert_false((full.rows_by_cell as Dictionary).is_empty(), "the job places rows uncancelled")
+	regen.request_region(Rect2(2.0, 2.0, 1.0, 1.0))
+	assert_true(regen.is_stale(job), "a newer request touched every one of its cells")
+	var cancel := Semaphore.new()
+	cancel.post()
+	var stopped := ScatterRegen.run(snapshot, job.work, cancel)
+	assert_true((stopped.rows_by_cell as Dictionary).is_empty(), "a posted cancel stops it")
+	assert_true(ScatterGenerator.cancelled(cancel), "the post stays for every later check")
+	assert_eq(regen.accept(job), [] as Array[Vector2i], "and its rows would be dropped anyway")
+
+
 func test_a_stale_job_keeps_its_work_for_the_next_one() -> void:
 	var regen := _regen(_flat_doc(Vector2i(40, 40)))
 	# First request: a big dab dirties every species in cell (0, 0).
