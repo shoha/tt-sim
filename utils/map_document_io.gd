@@ -31,10 +31,11 @@ extends RefCounted
 ## KNOWN_ENTRIES), so the surfaces, water, crossings, fire and anchors entries needed no
 ## format bump: an older build reads a document with water as if it had none, and one with
 ## crossings, fire or anchors as if it had none. Format 2 replaced format 1's surfaces.png
-## (slots 0-3 in R, G, B, A) and surfaces_b.png (slots 4-7, at most 8 surfaces) with the entry pair, so it is a
-## bump: a format 1 build refuses a format 2 document rather than read it as unpainted and
-## lose the paint on its next save. The reader accepts both and migrates format 1
-## (MapSurfacesIO, which reads and writes the surface entries); it never writes format 1.
+## (slots 0-3 in R, G, B, A) and surfaces_b.png (slots 4-7, at most 8 surfaces) with the
+## entry pair, so it is a bump: a format 1 build refuses a format 2 document rather than
+## read it as unpainted and lose the paint on its next save. The reader accepts both and
+## migrates format 1 (MapSurfacesIO, which reads and writes the surface entries); it never
+## writes format 1.
 ##
 ## Documents arrive from a host peer, so everything read is untrusted input, validated in
 ## the style of PaletteLibrary.validate_palette(): caps are checked before anything is
