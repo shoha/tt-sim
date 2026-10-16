@@ -234,10 +234,10 @@
  * index layers").
  *
  * FIRE (fire card F4a, 2026-10-16): persistent ground fire (MapDocument.fire_mask) chars the
- * ground and glows on it, embers and hot patches, from fire_glow.gdshaderinc (its header holds
- * the model). The map's ground only, plain and looked; the skirt pair compiles none of it (a
- * skirt never burns). One fetch and a branch per pixel where the map has a fire mask, nothing
- * where it has none (fire_present 0).
+ * ground and glows on it, ember beds with hot cores, from fire_glow.gdshaderinc (its header
+ * holds the model). The map's ground only, plain and looked; the skirt pair compiles none of it
+ * (a skirt never burns). Five plain fetches and a branch per pixel where the map has a fire
+ * mask, nothing where it has none (fire_present 0).
  *
  * LIGHTING matches the StandardMaterial3D terrain of a Blender-made map: burley diffuse,
  * schlick GGX specular at the default 0.5, AO from ORM.r affecting ambient only
@@ -1663,13 +1663,21 @@ void fragment() {
 	ROUGHNESS = mix(ground.orm.g, WET_ROUGHNESS, WET_GLOSS * gloss);
 	METALLIC = ground.orm.b;
 #ifndef GROUND_SKIRT
-	// FIRE (fire_glow.gdshaderinc): the burn darkens the ground to char and glows on it.
-	vec4 fire = fire_glow(world_xz, TIME);
-	ALBEDO *= mix(vec3(1.0), FIRE_CHAR, fire.a);
-	EMISSION = fire.rgb;
+	// FIRE (fire_glow.gdshaderinc): the burn turns the ground to matte char and glows on it (a
+	// sheen on a near-black ground read as grey and showed every facet of its normals).
+	vec3 fire_albedo = ALBEDO;
+	float charred = 0.0;
+	EMISSION = fire_glow(world_xz, TIME, fire_albedo, charred);
+	ALBEDO = fire_albedo;
+	ROUGHNESS = mix(ROUGHNESS, 1.0, charred);
+	SPECULAR = 0.5 - 0.45 * charred;
 #endif
 
 	vec3 n_map = normalize(ground.normal + n_geom * 1e-4);
+#ifndef GROUND_SKIRT
+	// Char's normals lean up, so the ground's facets do not show through its even near-black.
+	n_map = normalize(mix(n_map, vec3(0.0, 1.0, 0.0), FIRE_FLATTEN * charred));
+#endif
 	NORMAL = normalize(mat3(VIEW_MATRIX) * (mat3(MODEL_MATRIX) * n_map));
 #ifdef GROUND_SKIRT
 	// The fade in colour (see SKIRT): lit ground * a + backdrop * (1 - a), and the fog the map's

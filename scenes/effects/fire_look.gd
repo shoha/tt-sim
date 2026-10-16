@@ -25,16 +25,17 @@ extends RefCounted
 const SHADER := preload("res://shaders/fire_field.gdshader")
 ## Floats per instance in a MultiMesh buffer: a 3x4 transform, then the custom data.
 const INSTANCE_FLOATS := 16
-## How far the wind leans a flame's top (a share of its half width).
-const WIND_LEAN := 0.45
+## How far the wind leans a flame's tip to the side on screen (a share of its height).
+const WIND_LEAN := 0.25
 ## Past the LOD zoom the kept half grows by this, to cover the hidden half.
 const FAR_GROW := 1.25
 ## The camera's forward axis when there is none (tests, a field built before the camera): the
 ## game camera's fixed yaw and about its pitch.
 const DEFAULT_FORWARD := Vector3(-0.67, -0.33, -0.67)
-## Room a chunk's bounds keep around its flames: sideways and down, and up (a spark rises about
-## 1.8 m above its ember, and a breakoff above its tongue).
-const BOUNDS_MARGIN_M := 1.0
+## Room a chunk's bounds keep around its flames: sideways (a big flame's half width and its
+## lean) and down, and up (a spark rises about 1.8 m above its ember, and a breakoff above its
+## tongue).
+const BOUNDS_MARGIN_M := 2.0
 const BOUNDS_RISE_M := 2.4
 
 static var _mesh: QuadMesh = null

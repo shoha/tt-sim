@@ -17,10 +17,12 @@ extends Node3D
 ##
 ## What stands there depends on the band (the look card F4a): the ember band gets no flames
 ## (the ground's glow draws it), only a spark at about one point in SPARK_EVERY. Flames and
-## the blaze are gathered by a low-frequency clump noise (clump, about CLUMP_CELL_M across):
-## it drops the points where it is lowest and scales the rest from CLUMP_SCALE.x at a clump's
-## edge to .y in its middle, so flames stand in bonfire-sized clumps with open ground between
-## (the weaker the fire, the wider the gaps). In a blaze the point whose clump value tops its
+## the blaze are gathered by a low-frequency clump noise (clump, about CLUMP_CELL_M across, its
+## lattices turned and warped off the map's axes so clumps are blobs, not hedges): it drops the
+## points where it is lowest and scales the rest from CLUMP_SCALE.x at a clump's edge to .y in
+## its middle, each flame moved a little in that range by its own draw (SCALE_JITTER), so flames
+## stand in bonfire-sized clumps of uneven heights with open ground between (the weaker the
+## fire, the wider the gaps). In a blaze the point whose clump value tops its
 ## eight lattice neighbours is a big flame (BIG_SCALE) and the blaze points beside it shrink to
 ## licks at its feet (LICK_SCALE).
 ## Intensity changes the shape too: it picks the tongue layout (weak flames one or two tongues,
@@ -38,7 +40,7 @@ const NODE_NAME := "FireField"
 ## Lattice spacing of the flames, and how far each is moved off its lattice point (a share of
 ## the spacing, either way).
 const FLAME_SPACING_M := 0.9
-const JITTER := 0.35
+const JITTER := 0.45
 ## Intensity bands (mask bytes): below EMBER_MIN nothing burns.
 const EMBER_MIN := 40
 const FLAME_MIN := 110
@@ -68,7 +70,14 @@ const BLAZE_WIDTH_FROM := 0.55
 ## The clump noise: its cell, how it scales a flame, below what value a flame point drops (at
 ## the flames band's start and end), and below what a blaze point does.
 const CLUMP_CELL_M := 3.0
+## The clump noise's warp: the broad noise's cell and how far (metres) it moves a point; and
+## the turns (radians) of its two octaves' lattices off the map's axes.
+const CLUMP_WARP := Vector2(6.0, 3.0)
+const CLUMP_TURN := Vector2(0.56, 1.21)
 const CLUMP_SCALE := Vector2(0.6, 1.6)
+## How far a flame's own draw moves its place in the clump's scale range (either way), so a
+## clump's neighbours are not one height.
+const SCALE_JITTER := 0.25
 const FLAME_GAP := Vector2(0.42, 0.26)
 const BLAZE_GAP := 0.14
 ## A blaze clump's big flame and the licks at its feet (scales).
@@ -214,10 +223,18 @@ static func base_height(t: float) -> float:
 
 
 ## The clump noise at document point `p` (metres) of map seed `map_seed`, 0..1: two octaves of
-## value noise about CLUMP_CELL_M across, spread so both ends occur. Pure.
+## value noise about CLUMP_CELL_M across, spread so both ends occur. Its lattices are turned off
+## the map's axes and the point is first moved by a broad noise (CLUMP_WARP), so a clump is a
+## blob whose edge follows no lattice line: on the axes, clumps stood as hedges along the game
+## camera's diagonals. Pure.
 static func clump(map_seed: int, p: Vector2) -> float:
-	var q := p / CLUMP_CELL_M
-	var v := 0.7 * _value_noise(map_seed + 7, q) + 0.3 * _value_noise(map_seed + 8, q * 2.3)
+	var wq := p / CLUMP_WARP.x
+	var warp := Vector2(
+		_value_noise(map_seed + 9, wq) - 0.5, _value_noise(map_seed + 10, wq + Vector2(5.3, 1.7)) - 0.5
+	)
+	var q := (p + warp * CLUMP_WARP.y).rotated(CLUMP_TURN.x) / CLUMP_CELL_M
+	var fine := q.rotated(CLUMP_TURN.y) * 2.3
+	var v := 0.7 * _value_noise(map_seed + 7, q) + 0.3 * _value_noise(map_seed + 8, fine)
 	return smoothstep(0.22, 0.78, v)
 
 
@@ -328,6 +345,7 @@ static func _flame(
 		return PackedFloat32Array([0, 0, 0, t, seed, SPARK_SIZE_M, SPARK_SIZE_M, SPARK])
 	var size := pick
 	var width_share := lerpf(WIDTH_SHARE.x, WIDTH_SHARE.y, MaskBrush.sample_noise(map_seed + 4, key))
+	var own := (MaskBrush.sample_noise(map_seed + 5, key) - 0.5) * 2.0 * SCALE_JITTER
 	var layout: int
 	var scale: float
 	if heat < BLAZE_MIN:
@@ -335,8 +353,8 @@ static func _flame(
 		var gap := lerpf(FLAME_GAP.x, FLAME_GAP.y, strength)
 		if c < gap:
 			return PackedFloat32Array()
-		# Small at a clump's edge, big in its middle.
-		scale = lerpf(CLUMP_SCALE.x, CLUMP_SCALE.y, (c - gap) / (1.0 - gap))
+		# Small at a clump's edge, big in its middle, each flame a little off its neighbours.
+		scale = lerpf(CLUMP_SCALE.x, CLUMP_SCALE.y, clampf((c - gap) / (1.0 - gap) + own, 0.0, 1.0))
 		layout = floori(size * (2.0 if strength < 0.4 else 3.0))
 	elif window.big(i):
 		scale = lerpf(BIG_SCALE.x, BIG_SCALE.y, c)
@@ -347,7 +365,8 @@ static func _flame(
 			scale = lerpf(LICK_SCALE.x, LICK_SCALE.y, size)
 			layout = LAYOUT_ONE if size < 0.5 else LAYOUT_TWO
 		else:
-			scale = lerpf(CLUMP_SCALE.x, CLUMP_SCALE.y, (c - BLAZE_GAP) / (1.0 - BLAZE_GAP))
+			var place := (c - BLAZE_GAP) / (1.0 - BLAZE_GAP) + own
+			scale = lerpf(CLUMP_SCALE.x, CLUMP_SCALE.y, clampf(place, 0.0, 1.0))
 			layout = LAYOUT_THREE if size < 0.65 else LAYOUT_CROWN
 			width_share = lerpf(BLAZE_WIDTH_FROM, WIDTH_SHARE.y, size)
 	else:
