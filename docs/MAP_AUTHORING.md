@@ -106,7 +106,10 @@ other committed home.
   2026-10-11).
   Both reuse the fire look of card fire-look-3 (flames, ground fire, smoke as one family).
   Fire look (user, 2026-10-16): a base fire unifies the flames; the burning ground bridges
-  them, and overlapping flames combine as stronger fire.
+  them, and overlapping flames combine as stronger fire. Card F4a's round 4 is good enough for
+  now (user, 2026-10-16): dark crusted char glowing in lobes round the flames' feet, the flames
+  always the brightest thing. Still open for a later look pass: by day the beds under big clumps
+  read as flat orange plates.
   Design before code: `docs/plans/2026-10-11-fire-features/` (gitignored).
 
 ## Where each system is documented
