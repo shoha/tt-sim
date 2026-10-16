@@ -1,0 +1,47 @@
+{
+ "out_dir": "render_jobs/ground_timing",
+ "timeout_s": 900,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "build start"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "author", "biome": "grassland_meadow_summer_s1", "seed": 1234},
+  {"op": "wait", "s": 2.0}, {"op": "wait_ready", "settle": 2.0}, {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "save", "name": "grassland"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "bake_info"},
+  {"op": "title"}, {"op": "wait", "s": 1.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "author", "biome": "savanna_summer_s1", "seed": 1234},
+  {"op": "wait", "s": 2.0}, {"op": "wait_ready", "settle": 2.0}, {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "save", "name": "savanna"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "bake_info"},
+  {"op": "title"}, {"op": "wait", "s": 1.5},
+
+  {"op": "expand", "values": ["grassland_meadow_summer_s1", "savanna_summer_s1", "grassland_meadow_summer_s1", "savanna_summer_s1"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "author", "biome": "{value}", "seed": 1234},
+   {"op": "wait", "s": 2.0}, {"op": "wait_ready", "settle": 2.0}, {"op": "no_autosave"},
+   {"op": "title"}, {"op": "wait", "s": 1.5}
+  ]},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "dress", "name": "grassland"},
+  {"op": "wait", "s": 2.0}, {"op": "wait_ready", "settle": 2.0}, {"op": "no_autosave"},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "vsync_off"},
+  {"op": "home"}, {"op": "wait", "s": 1.5},
+  {"op": "expand", "values": ["1", "2"], "template": [
+   {"op": "record", "name": "dab_a{value}"},
+   {"op": "stroke", "mode": "paint", "biome": "rocky_badlands_summer_s1", "points": [[2.0, 2.0], [2.1, 2.0]], "radius": 3.0, "speed": 1.0, "hold": 0.2},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "regen_watch", "name": "a{value} badlands dab r3 at 2,2"},
+   {"op": "wait", "s": 4.0}, {"op": "wait_ready", "settle": 1.0},
+   {"op": "record", "on": false, "name": "dab_a{value}"},
+   {"op": "record", "name": "dab_b{value}"},
+   {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "points": [[2.0, 2.0], [2.1, 2.0]], "radius": 3.0, "speed": 1.0, "hold": 0.2},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "regen_watch", "name": "b{value} grassland dab r3 at 2,2"},
+   {"op": "wait", "s": 4.0}, {"op": "wait_ready", "settle": 1.0},
+   {"op": "record", "on": false, "name": "dab_b{value}"}
+  ]},
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "build end"}
+ ]
+}
