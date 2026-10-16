@@ -1198,6 +1198,38 @@ broad lime fronds lit on top over darker undersides with an olive old frond hang
 wetland's short palms read teal-green, not navy, among the pale willows, as in the maker's frame
 (`treecube/out/looks/palms_ferns3c/new_palm_wetland.png`, compared by eye); the ferns draw as
 teal frond strokes; no texture is missing. No code change, no saved map migrated.
+Refreshed 2026-10-15 with treecube 020bbdc (the ground ship: round 20's ground look and grass
+masses, this section's `ground_look`, mass fields and `albedo_mean_linear`; `palette_version`
+`020bbdc`, 9 packages, 201 assets, 36 surfaces). Six biomes are zoned (carry a `ground_look`):
+grassland meadow, savanna, birch woodland, wetland riparian, alpine meadow and temperate
+forest; the boreal taiga, rocky badlands and burnt forest carry none and draw as before. The
+pre-install check (treecube `out/ground_ship_card2b_tools/parity.py`) found no asset id change;
+51 GLBs differ from the previous install (Grass 41, Rock 7, Stone 3, all in the zoned packages,
+each byte-identical to round 20's palette) and every other GLB is byte-identical; the burnt
+forest, taiga and badlands records are identical. Seven surfaces are new (`dirt_mud`,
+`dirt_opening`, `forest_floor_litter`, `grass_glade`, `grass_wetland`, `gravel_scree`,
+`sand_savanna`, all of role ground) and six keep their ids with new maps
+(`dirt_road_caliche`, `dirt_road_packed`, `grass_alpine`, `grass_birch`, `grass_meadow`,
+`grass_savanna`); every surface gains `albedo_mean_linear`. The zoned biomes' accents moved to
+the clean ids (grassland `dirt_opening`, savanna `sand_savanna`, birch `forest_floor_litter`,
+wetland `dirt_mud`, alpine `gravel_scree`, temperate forest `moss` and `grass_glade`) and the
+wetland's ground is `grass_wetland` (was `grass`), so no biome's ground is `grass` any more (a
+saved map on base `grass` no longer borrows the wetland's base dressing). Install: `build_palette.py --no-build
+--install`, the tracked sidecars restored by checkout, a sidecar for each of the 28 new maps
+with `grass`'s `[params]` per channel, then the import; the three untouched biomes' re-rendered
+thumbnails were left at their committed copies. `git lfs status` lists every PNG, GLB and JPG
+as LFS and only `palette.json` and the new `.import` sidecars as Git. At seed 1234 only the
+six zoned biomes' grass rows moved (`tests/fixtures/scatter_golden_1234.json` re-pinned: 34
+assets; the taiga, badlands and burnt forest digests unchanged). In the grassland and the
+savanna the massed grass now delivers about a third to a half of its palette density
+(`test_scatter_generator_calibration.gd` pins those six ratios), and generating a whole flat
+200 ft map on one thread takes 19.3 s for the savanna and 11.9 s for the grassland (the taiga
+1.0 s), past that test's 15 s regression guard, which was left failing for a decision. Captures
+(treecube `out/looks/ground_ship/install/`, `jobs/ground_install.json` and
+`ground_install_levels.json`): the round 20 look holds against round 20's frames (mean colour
+within 6.5 levels, mostly where the renamed accents moved; birch within 0.2), a level saved by
+main's build reopens with its rows and takes the zones, and a Blender GLB level draws as on
+main.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 

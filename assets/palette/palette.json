@@ -1,6 +1,6 @@
 {
  "format": 1,
- "palette_version": "f67d3bb-dirty",
+ "palette_version": "020bbdc",
  "surfaces": {
   "ash": {
    "albedo": "surfaces/ash/ash_albedo.png",
@@ -9,7 +9,12 @@
    "height": "surfaces/ash/ash_height.png",
    "tile_m": 4.0,
    "kind": "ash",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.1745,
+    0.1338,
+    0.0959
+   ]
   },
   "cliff": {
    "albedo": "surfaces/cliff/cliff_albedo.png",
@@ -18,7 +23,12 @@
    "height": "surfaces/cliff/cliff_height.png",
    "tile_m": 3.0,
    "kind": "cliff",
-   "role": "cliff"
+   "role": "cliff",
+   "albedo_mean_linear": [
+    0.1599,
+    0.1354,
+    0.1075
+   ]
   },
   "cliff_basalt": {
    "albedo": "surfaces/cliff_basalt/cliff_basalt_albedo.png",
@@ -27,7 +37,12 @@
    "height": "surfaces/cliff_basalt/cliff_basalt_height.png",
    "tile_m": 3.0,
    "kind": "cliff",
-   "role": "cliff"
+   "role": "cliff",
+   "albedo_mean_linear": [
+    0.0567,
+    0.0605,
+    0.074
+   ]
   },
   "cliff_sandstone": {
    "albedo": "surfaces/cliff_sandstone/cliff_sandstone_albedo.png",
@@ -36,7 +51,12 @@
    "height": "surfaces/cliff_sandstone/cliff_sandstone_height.png",
    "tile_m": 3.0,
    "kind": "cliff",
-   "role": "cliff"
+   "role": "cliff",
+   "albedo_mean_linear": [
+    0.3949,
+    0.1722,
+    0.0705
+   ]
   },
   "cobblestone": {
    "albedo": "surfaces/cobblestone/cobblestone_albedo.png",
@@ -45,7 +65,12 @@
    "height": "surfaces/cobblestone/cobblestone_height.png",
    "tile_m": 2.0,
    "kind": "cobblestone",
-   "role": "built"
+   "role": "built",
+   "albedo_mean_linear": [
+    0.1398,
+    0.1208,
+    0.0987
+   ]
   },
   "dirt": {
    "albedo": "surfaces/dirt/dirt_albedo.png",
@@ -54,7 +79,40 @@
    "height": "surfaces/dirt/dirt_height.png",
    "tile_m": 3.0,
    "kind": "dirt",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.2187,
+    0.1213,
+    0.0557
+   ]
+  },
+  "dirt_mud": {
+   "albedo": "surfaces/dirt_mud/dirt_mud_albedo.png",
+   "normal": "surfaces/dirt_mud/dirt_mud_normal.png",
+   "orm": "surfaces/dirt_mud/dirt_mud_orm.png",
+   "height": "surfaces/dirt_mud/dirt_mud_height.png",
+   "tile_m": 4.0,
+   "kind": "dirt",
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.1089,
+    0.0744,
+    0.0474
+   ]
+  },
+  "dirt_opening": {
+   "albedo": "surfaces/dirt_opening/dirt_opening_albedo.png",
+   "normal": "surfaces/dirt_opening/dirt_opening_normal.png",
+   "orm": "surfaces/dirt_opening/dirt_opening_orm.png",
+   "height": "surfaces/dirt_opening/dirt_opening_height.png",
+   "tile_m": 4.0,
+   "kind": "dirt",
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.4644,
+    0.2918,
+    0.0725
+   ]
   },
   "dirt_peat": {
    "albedo": "surfaces/dirt_peat/dirt_peat_albedo.png",
@@ -63,7 +121,12 @@
    "height": "surfaces/dirt_peat/dirt_peat_height.png",
    "tile_m": 3.0,
    "kind": "dirt",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.0465,
+    0.0269,
+    0.0115
+   ]
   },
   "dirt_road_caliche": {
    "albedo": "surfaces/dirt_road_caliche/dirt_road_caliche_albedo.png",
@@ -72,7 +135,12 @@
    "height": "surfaces/dirt_road_caliche/dirt_road_caliche_height.png",
    "tile_m": 4.0,
    "kind": "dirt_road",
-   "role": "built"
+   "role": "built",
+   "albedo_mean_linear": [
+    0.5699,
+    0.4291,
+    0.1992
+   ]
   },
   "dirt_road_packed": {
    "albedo": "surfaces/dirt_road_packed/dirt_road_packed_albedo.png",
@@ -81,7 +149,12 @@
    "height": "surfaces/dirt_road_packed/dirt_road_packed_height.png",
    "tile_m": 4.0,
    "kind": "dirt_road",
-   "role": "built"
+   "role": "built",
+   "albedo_mean_linear": [
+    0.4042,
+    0.2352,
+    0.0574
+   ]
   },
   "flagstone": {
    "albedo": "surfaces/flagstone/flagstone_albedo.png",
@@ -90,7 +163,12 @@
    "height": "surfaces/flagstone/flagstone_height.png",
    "tile_m": 3.0,
    "kind": "flagstone",
-   "role": "built"
+   "role": "built",
+   "albedo_mean_linear": [
+    0.1542,
+    0.1338,
+    0.1086
+   ]
   },
   "flagstone_sandstone": {
    "albedo": "surfaces/flagstone_sandstone/flagstone_sandstone_albedo.png",
@@ -99,7 +177,12 @@
    "height": "surfaces/flagstone_sandstone/flagstone_sandstone_height.png",
    "tile_m": 3.0,
    "kind": "flagstone",
-   "role": "built"
+   "role": "built",
+   "albedo_mean_linear": [
+    0.4701,
+    0.2875,
+    0.1449
+   ]
   },
   "forest_floor": {
    "albedo": "surfaces/forest_floor/forest_floor_albedo.png",
@@ -108,7 +191,26 @@
    "height": "surfaces/forest_floor/forest_floor_height.png",
    "tile_m": 3.0,
    "kind": "forest_floor",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.1426,
+    0.1115,
+    0.0516
+   ]
+  },
+  "forest_floor_litter": {
+   "albedo": "surfaces/forest_floor_litter/forest_floor_litter_albedo.png",
+   "normal": "surfaces/forest_floor_litter/forest_floor_litter_normal.png",
+   "orm": "surfaces/forest_floor_litter/forest_floor_litter_orm.png",
+   "height": "surfaces/forest_floor_litter/forest_floor_litter_height.png",
+   "tile_m": 4.0,
+   "kind": "forest_floor",
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.3681,
+    0.22,
+    0.0604
+   ]
   },
   "grass": {
    "albedo": "surfaces/grass/grass_albedo.png",
@@ -117,7 +219,12 @@
    "height": "surfaces/grass/grass_height.png",
    "tile_m": 4.0,
    "kind": "grass",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.0801,
+    0.1981,
+    0.0258
+   ]
   },
   "grass_alpine": {
    "albedo": "surfaces/grass_alpine/grass_alpine_albedo.png",
@@ -126,7 +233,12 @@
    "height": "surfaces/grass_alpine/grass_alpine_height.png",
    "tile_m": 4.0,
    "kind": "grass",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.1886,
+    0.3986,
+    0.0661
+   ]
   },
   "grass_birch": {
    "albedo": "surfaces/grass_birch/grass_birch_albedo.png",
@@ -135,7 +247,12 @@
    "height": "surfaces/grass_birch/grass_birch_height.png",
    "tile_m": 4.0,
    "kind": "grass",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.2708,
+    0.3839,
+    0.0803
+   ]
   },
   "grass_forest": {
    "albedo": "surfaces/grass_forest/grass_forest_albedo.png",
@@ -144,7 +261,26 @@
    "height": "surfaces/grass_forest/grass_forest_height.png",
    "tile_m": 4.0,
    "kind": "grass",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.0634,
+    0.144,
+    0.027
+   ]
+  },
+  "grass_glade": {
+   "albedo": "surfaces/grass_glade/grass_glade_albedo.png",
+   "normal": "surfaces/grass_glade/grass_glade_normal.png",
+   "orm": "surfaces/grass_glade/grass_glade_orm.png",
+   "height": "surfaces/grass_glade/grass_glade_height.png",
+   "tile_m": 4.0,
+   "kind": "grass",
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.2722,
+    0.3812,
+    0.0499
+   ]
   },
   "grass_meadow": {
    "albedo": "surfaces/grass_meadow/grass_meadow_albedo.png",
@@ -153,7 +289,12 @@
    "height": "surfaces/grass_meadow/grass_meadow_height.png",
    "tile_m": 4.0,
    "kind": "grass",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.2711,
+    0.3928,
+    0.0485
+   ]
   },
   "grass_savanna": {
    "albedo": "surfaces/grass_savanna/grass_savanna_albedo.png",
@@ -162,7 +303,26 @@
    "height": "surfaces/grass_savanna/grass_savanna_height.png",
    "tile_m": 4.0,
    "kind": "grass",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.5043,
+    0.2885,
+    0.0607
+   ]
+  },
+  "grass_wetland": {
+   "albedo": "surfaces/grass_wetland/grass_wetland_albedo.png",
+   "normal": "surfaces/grass_wetland/grass_wetland_normal.png",
+   "orm": "surfaces/grass_wetland/grass_wetland_orm.png",
+   "height": "surfaces/grass_wetland/grass_wetland_height.png",
+   "tile_m": 4.0,
+   "kind": "grass",
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.162,
+    0.3127,
+    0.0435
+   ]
   },
   "gravel": {
    "albedo": "surfaces/gravel/gravel_albedo.png",
@@ -171,7 +331,12 @@
    "height": "surfaces/gravel/gravel_height.png",
    "tile_m": 2.0,
    "kind": "gravel",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.1988,
+    0.1727,
+    0.1416
+   ]
   },
   "gravel_sandstone": {
    "albedo": "surfaces/gravel_sandstone/gravel_sandstone_albedo.png",
@@ -180,7 +345,26 @@
    "height": "surfaces/gravel_sandstone/gravel_sandstone_height.png",
    "tile_m": 2.0,
    "kind": "gravel",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.3915,
+    0.1505,
+    0.0545
+   ]
+  },
+  "gravel_scree": {
+   "albedo": "surfaces/gravel_scree/gravel_scree_albedo.png",
+   "normal": "surfaces/gravel_scree/gravel_scree_normal.png",
+   "orm": "surfaces/gravel_scree/gravel_scree_orm.png",
+   "height": "surfaces/gravel_scree/gravel_scree_height.png",
+   "tile_m": 3.0,
+   "kind": "gravel",
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.4888,
+    0.431,
+    0.3285
+   ]
   },
   "moss": {
    "albedo": "surfaces/moss/moss_albedo.png",
@@ -189,7 +373,12 @@
    "height": "surfaces/moss/moss_height.png",
    "tile_m": 3.0,
    "kind": "moss",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.085,
+    0.1857,
+    0.0198
+   ]
   },
   "mud": {
    "albedo": "surfaces/mud/mud_albedo.png",
@@ -198,7 +387,12 @@
    "height": "surfaces/mud/mud_height.png",
    "tile_m": 4.0,
    "kind": "mud",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.0978,
+    0.0624,
+    0.0368
+   ]
   },
   "pine_duff": {
    "albedo": "surfaces/pine_duff/pine_duff_albedo.png",
@@ -207,7 +401,12 @@
    "height": "surfaces/pine_duff/pine_duff_height.png",
    "tile_m": 3.0,
    "kind": "pine_duff",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.1478,
+    0.104,
+    0.0515
+   ]
   },
   "planks": {
    "albedo": "surfaces/planks/planks_albedo.png",
@@ -216,7 +415,12 @@
    "height": "surfaces/planks/planks_height.png",
    "tile_m": 2.0,
    "kind": "planks",
-   "role": "built"
+   "role": "built",
+   "albedo_mean_linear": [
+    0.2617,
+    0.1618,
+    0.0843
+   ]
   },
   "riverbed": {
    "albedo": "surfaces/riverbed/riverbed_albedo.png",
@@ -225,7 +429,12 @@
    "height": "surfaces/riverbed/riverbed_height.png",
    "tile_m": 3.0,
    "kind": "riverbed",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.1656,
+    0.1428,
+    0.1171
+   ]
   },
   "sand": {
    "albedo": "surfaces/sand/sand_albedo.png",
@@ -234,7 +443,12 @@
    "height": "surfaces/sand/sand_height.png",
    "tile_m": 3.0,
    "kind": "sand",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.6025,
+    0.4312,
+    0.1855
+   ]
   },
   "sand_red": {
    "albedo": "surfaces/sand_red/sand_red_albedo.png",
@@ -243,7 +457,26 @@
    "height": "surfaces/sand_red/sand_red_height.png",
    "tile_m": 3.0,
    "kind": "sand",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.4746,
+    0.1609,
+    0.0463
+   ]
+  },
+  "sand_savanna": {
+   "albedo": "surfaces/sand_savanna/sand_savanna_albedo.png",
+   "normal": "surfaces/sand_savanna/sand_savanna_normal.png",
+   "orm": "surfaces/sand_savanna/sand_savanna_orm.png",
+   "height": "surfaces/sand_savanna/sand_savanna_height.png",
+   "tile_m": 4.0,
+   "kind": "sand",
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.6397,
+    0.3877,
+    0.1399
+   ]
   },
   "snow": {
    "albedo": "surfaces/snow/snow_albedo.png",
@@ -252,7 +485,12 @@
    "height": "surfaces/snow/snow_height.png",
    "tile_m": 8.0,
    "kind": "snow",
-   "role": "ground"
+   "role": "ground",
+   "albedo_mean_linear": [
+    0.7092,
+    0.7638,
+    0.857
+   ]
   },
   "stone_tiles": {
    "albedo": "surfaces/stone_tiles/stone_tiles_albedo.png",
@@ -261,7 +499,12 @@
    "height": "surfaces/stone_tiles/stone_tiles_height.png",
    "tile_m": 1.5,
    "kind": "stone_tiles",
-   "role": "built"
+   "role": "built",
+   "albedo_mean_linear": [
+    0.2075,
+    0.1889,
+    0.1721
+   ]
   }
  },
  "biomes": [
@@ -278,9 +521,9 @@
    "scree_surface": "gravel",
    "ground_accents": [
     {
-     "surface": "grass_birch",
-     "coverage": 0.14,
-     "scale_m": 11.0
+     "surface": "gravel_scree",
+     "coverage": 0.08,
+     "scale_m": 7.0
     }
    ],
    "path_surfaces": [
@@ -288,6 +531,98 @@
     "dirt_road_packed",
     "cobblestone"
    ],
+   "ground_look": {
+    "ref_surface": "grass_alpine",
+    "zones": {
+     "colors_linear": [
+      [
+       0.1625,
+       0.2991,
+       0.0806
+      ],
+      [
+       0.0494,
+       0.194,
+       0.0885
+      ],
+      [
+       0.6519,
+       0.2215,
+       0.0844
+      ],
+      [
+       0.2813,
+       0.1766,
+       0.3573
+      ]
+     ],
+     "angle_k": [
+      0.0,
+      0.8,
+      -0.4
+     ],
+     "cover": [
+      0.3,
+      0.16,
+      0.0
+     ],
+     "edge": [
+      0.04,
+      0.045,
+      0.03
+     ],
+     "edge_vary_m": 8.0,
+     "rag": 0.14,
+     "rag_m": 1.2,
+     "scale_m": [
+      5.0,
+      8.0,
+      5.0
+     ],
+     "stretch": 1.2,
+     "stretch_k": [
+      1.0,
+      1.6,
+      1.0
+     ],
+     "warp": 0.5
+    },
+    "strokes": {
+     "len": 2.5,
+     "m": 1.2
+    },
+    "brush": {
+     "mean": 3.2
+    },
+    "light": {
+     "cap": 0.95,
+     "knee": 0.68,
+     "lit_tint": [
+      1.03,
+      1.0,
+      0.88
+     ],
+     "shade": 0.38,
+     "shade_tint": [
+      0.95,
+      1.0,
+      1.0
+     ]
+    },
+    "mass": {
+     "lit_m": 0.9,
+     "step": 1.04
+    },
+    "rim": {
+     "color_linear": [
+      0.2738,
+      0.2957,
+      0.1329
+     ],
+     "strength": 0.35,
+     "surfaces": []
+    }
+   },
    "species": [
     {
      "key": "dwarf_pine",
@@ -587,7 +922,7 @@
      "yaw_random_deg": 360.0,
      "align": "normal",
      "pattern": {
-      "influence": 1.0,
+      "influence": 0.25,
       "scale_influence": 0.2,
       "geoscatter_pattern": {
        "texture_dict": {
@@ -627,7 +962,17 @@
        "scale_revert": true
       }
      },
-     "clump": null,
+     "clump": {
+      "parents_per_m2": 0.09,
+      "radius_m": 0.9,
+      "transition_m": 0.5,
+      "children_spacing_m": 0.0,
+      "mass": 1,
+      "stretch": 1.2,
+      "angle_deg": 0,
+      "angle_jitter_deg": 90,
+      "edge_shrink": 0.5
+     },
      "near": [],
      "avoid": [],
      "assets": [
@@ -1003,14 +1348,9 @@
    "scree_surface": "gravel",
    "ground_accents": [
     {
-     "surface": "grass_forest",
-     "coverage": 0.14,
-     "scale_m": 11.0
-    },
-    {
-     "surface": "forest_floor",
-     "coverage": 0.08,
-     "scale_m": 10.0
+     "surface": "forest_floor_litter",
+     "coverage": 0.06,
+     "scale_m": 12.0
     }
    ],
    "path_surfaces": [
@@ -1019,6 +1359,94 @@
     "planks",
     "cobblestone"
    ],
+   "ground_look": {
+    "ref_surface": "grass_birch",
+    "zones": {
+     "colors_linear": [
+      [
+       0.2967,
+       0.3448,
+       0.0275
+      ],
+      [
+       0.1693,
+       0.3272,
+       0.0552
+      ],
+      [
+       0.472,
+       0.3034,
+       0.0179
+      ],
+      [
+       0.4937,
+       0.1531,
+       0.0096
+      ]
+     ],
+     "angle_k": [
+      0.0,
+      0.6,
+      -0.5
+     ],
+     "cover": [
+      0.3,
+      0.26,
+      0.0
+     ],
+     "edge": [
+      0.05,
+      0.045,
+      0.045
+     ],
+     "edge_vary_m": 10.0,
+     "nest": 0.0,
+     "rag": 0.08,
+     "rag_m": 1.6,
+     "scale_m": [
+      8.0,
+      7.0,
+      7.0
+     ],
+     "stretch_k": [
+      1.0,
+      1.4,
+      1.2
+     ],
+     "warp": 0.35
+    },
+    "strokes": {
+     "m": 1.4
+    },
+    "brush": {
+     "mean": 3.35
+    },
+    "light": {
+     "key": 0.94,
+     "lit_tint": [
+      1.04,
+      1.02,
+      0.86
+     ],
+     "scale_m": 5.5,
+     "shade": 0.34
+    },
+    "mass": {
+     "base": 1.0,
+     "contrast": -1.0,
+     "lit": 0.15,
+     "lit_m": 1.5,
+     "own": 0.0,
+     "sat": 1.15,
+     "step": 1.12,
+     "tip": 1.0
+    },
+    "rim": {
+     "surfaces": [
+      "forest_floor_litter"
+     ]
+    }
+   },
    "species": [
     {
      "key": "birch",
@@ -1451,7 +1879,7 @@
      "yaw_random_deg": 360.0,
      "align": "normal",
      "pattern": {
-      "influence": 1.0,
+      "influence": 0.25,
       "scale_influence": 0.2,
       "geoscatter_pattern": {
        "texture_dict": {
@@ -1491,7 +1919,17 @@
        "scale_revert": true
       }
      },
-     "clump": null,
+     "clump": {
+      "parents_per_m2": 0.04,
+      "radius_m": 1.5,
+      "transition_m": 0.9,
+      "children_spacing_m": 0.0,
+      "mass": 1,
+      "stretch": 1.4,
+      "angle_deg": 0,
+      "angle_jitter_deg": 90,
+      "edge_shrink": 0.4
+     },
      "near": [],
      "avoid": [],
      "assets": [
@@ -2442,14 +2880,9 @@
    "scree_surface": "gravel",
    "ground_accents": [
     {
-     "surface": "grass",
-     "coverage": 0.16,
-     "scale_m": 11.0
-    },
-    {
-     "surface": "grass_alpine",
-     "coverage": 0.08,
-     "scale_m": 8.0
+     "surface": "dirt_opening",
+     "coverage": 0.06,
+     "scale_m": 14.0
     }
    ],
    "path_surfaces": [
@@ -2458,6 +2891,91 @@
     "flagstone",
     "stone_tiles"
    ],
+   "ground_look": {
+    "ref_surface": "grass_meadow",
+    "zones": {
+     "colors_linear": [
+      [
+       0.2339,
+       0.3318,
+       0.0537
+      ],
+      [
+       0.1423,
+       0.2711,
+       0.0272
+      ],
+      [
+       0.4986,
+       0.4346,
+       0.041
+      ],
+      [
+       0.6418,
+       0.3278,
+       0.0403
+      ]
+     ],
+     "angle": 0.5,
+     "angle_k": [
+      -0.45,
+      0.2,
+      0.0
+     ],
+     "cover": [
+      0.42,
+      0.24,
+      0.22
+     ],
+     "edge": [
+      0.045,
+      0.045,
+      0.045
+     ],
+     "edge_vary_m": 30.0,
+     "nest": 0.0,
+     "rag_m": 2.6,
+     "scale_m": [
+      9.0,
+      10.0,
+      14.0
+     ],
+     "shade_warm": [
+      1.04,
+      0.95,
+      0.88
+     ],
+     "stretch": 2.2,
+     "stretch_k": [
+      0.65,
+      1.1,
+      1.0
+     ]
+    },
+    "strokes": {
+     "len": 4.0,
+     "m": 2.0
+    },
+    "brush": {
+     "mean": 3.2
+    },
+    "light": {
+     "cap": 0.94,
+     "cover": 0.4,
+     "knee": 0.64,
+     "lift": 0.4,
+     "shade": 0.4
+    },
+    "mass": {
+     "lit_m": 2.5
+    },
+    "rim": {
+     "surfaces": [
+      "dirt_opening",
+      "dirt_road_packed"
+     ]
+    }
+   },
    "species": [
     {
      "key": "oak",
@@ -2745,7 +3263,7 @@
      "key": "grass",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 6.5163636363636375,
+     "density_per_m2": 20.722,
      "min_spacing_m": 0.0,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -2753,7 +3271,7 @@
      "yaw_random_deg": 360.0,
      "align": "normal",
      "pattern": {
-      "influence": 1.0,
+      "influence": 0.25,
       "scale_influence": 0.2,
       "geoscatter_pattern": {
        "texture_dict": {
@@ -2793,7 +3311,42 @@
        "scale_revert": true
       }
      },
-     "clump": null,
+     "clump": {
+      "parents_per_m2": 0.05,
+      "radius_m": 4.2,
+      "transition_m": 0.3,
+      "children_spacing_m": 0.0,
+      "mass": 1,
+      "stretch": 1.4,
+      "angle_deg": 0,
+      "angle_jitter_deg": 14,
+      "edge_shrink": 0.45,
+      "core_scale": 2.4,
+      "core_height": 2.4,
+      "radius_jitter": 0.5,
+      "follow": 1,
+      "parent_group": 1,
+      "bare": 0.08,
+      "parent_spacing_m": 4.0,
+      "shoulder_m": 1.2,
+      "zone_fill": 0.35,
+      "zone_core": 0.6,
+      "zone_share": 0.6,
+      "core_height_m": 0.8,
+      "core_hold": 0.6,
+      "zone_keep": [
+       0.45,
+       0.45,
+       0.9,
+       0.9
+      ],
+      "zone_family": [
+       0,
+       0,
+       2,
+       2
+      ]
+     },
      "near": [],
      "avoid": [],
      "assets": [
@@ -2806,7 +3359,7 @@
      "key": "tall_grass",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 2.443636363636364,
+     "density_per_m2": 8.103,
      "min_spacing_m": 0.0,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -2814,7 +3367,7 @@
      "yaw_random_deg": 360.0,
      "align": "normal",
      "pattern": {
-      "influence": 1.0,
+      "influence": 0.25,
       "scale_influence": 0.2,
       "geoscatter_pattern": {
        "texture_dict": {
@@ -2854,7 +3407,42 @@
        "scale_revert": true
       }
      },
-     "clump": null,
+     "clump": {
+      "parents_per_m2": 0.05,
+      "radius_m": 4.2,
+      "transition_m": 0.3,
+      "children_spacing_m": 0.0,
+      "mass": 1,
+      "stretch": 1.4,
+      "angle_deg": 0,
+      "angle_jitter_deg": 14,
+      "edge_shrink": 0.4,
+      "core_scale": 1.6,
+      "core_height": 2.0,
+      "core_height_m": 0.8,
+      "core_hold": 0.6,
+      "follow": 1,
+      "parent_group": 1,
+      "radius_jitter": 0.5,
+      "bare": 0.08,
+      "parent_spacing_m": 4.0,
+      "shoulder_m": 1.2,
+      "zone_core": 0.6,
+      "zone_share": 0.6,
+      "zone_fill": 0.35,
+      "zone_keep": [
+       0.45,
+       0.45,
+       0.9,
+       0.9
+      ],
+      "zone_family": [
+       0,
+       0,
+       2,
+       2
+      ]
+     },
      "near": [],
      "avoid": [],
      "assets": [
@@ -2866,7 +3454,7 @@
      "key": "sprig",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 2.443636363636364,
+     "density_per_m2": 0.7,
      "min_spacing_m": 0.0,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -2925,7 +3513,7 @@
      "key": "dry_drift",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 1.221818181818182,
+     "density_per_m2": 0.5,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -4012,9 +4600,9 @@
    "scree_surface": "gravel_sandstone",
    "ground_accents": [
     {
-     "surface": "dirt",
-     "coverage": 0.1,
-     "scale_m": 9.0
+     "surface": "sand_savanna",
+     "coverage": 0.12,
+     "scale_m": 10.0
     }
    ],
    "path_surfaces": [
@@ -4023,6 +4611,112 @@
     "dirt_road_packed",
     "planks"
    ],
+   "ground_look": {
+    "ref_surface": "grass_savanna",
+    "zones": {
+     "colors_linear": [
+      [
+       0.458,
+       0.503,
+       0.1224
+      ],
+      [
+       0.1901,
+       0.686,
+       0.0826
+      ],
+      [
+       0.4047,
+       0.2587,
+       0.0822
+      ],
+      [
+       0.3851,
+       0.1803,
+       0.0831
+      ]
+     ],
+     "angle": 0.3,
+     "angle_k": [
+      0.0,
+      -0.5,
+      0.45
+     ],
+     "cover": [
+      0.24,
+      0.26,
+      0.22
+     ],
+     "edge": [
+      0.045,
+      0.05,
+      0.035
+     ],
+     "edge_vary_m": 20.0,
+     "rag_m": 2.0,
+     "scale_m": [
+      12.0,
+      10.0,
+      9.0
+     ],
+     "shade_warm": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "stretch": 2.0,
+     "stretch_k": [
+      1.0,
+      1.0,
+      1.3
+     ],
+     "warp": 0.5
+    },
+    "strokes": {
+     "len": 4.0,
+     "m": 1.8
+    },
+    "brush": {
+     "mean": 3.29
+    },
+    "light": {
+     "cap": 0.97,
+     "knee": 0.72,
+     "lift": 0.36,
+     "lit_tint": [
+      1.04,
+      1.0,
+      0.88
+     ],
+     "ripple_curve": 1.0,
+     "scale_m": 7.0,
+     "shade": 0.38,
+     "shade_tint": [
+      1.0,
+      0.93,
+      1.1
+     ],
+     "streak": 0.05,
+     "streak_angle": 0.3,
+     "streak_cover": 0.55,
+     "streak_m": 1.3,
+     "streak_ripple": 1.0,
+     "streak_stretch": 4.0
+    },
+    "mass": {
+     "lit_m": 1.6
+    },
+    "rim": {
+     "path_rim_m": 0.08,
+     "color_linear": [
+      0.3931,
+      0.214,
+      0.055
+     ],
+     "strength": 0.4,
+     "surfaces": []
+    }
+   },
    "species": [
     {
      "key": "acacia",
@@ -4414,7 +5108,7 @@
      "key": "dry_grass",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 4.5,
+     "density_per_m2": 23.688,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -4422,7 +5116,7 @@
      "yaw_random_deg": 360.0,
      "align": "normal",
      "pattern": {
-      "influence": 1.0,
+      "influence": 0.35,
       "scale_influence": 0.2,
       "geoscatter_pattern": {
        "texture_dict": {
@@ -4463,10 +5157,40 @@
       }
      },
      "clump": {
-      "parents_per_m2": 0.28,
-      "radius_m": 3.0,
-      "transition_m": 1.8,
-      "children_spacing_m": 0.12
+      "parents_per_m2": 0.04,
+      "radius_m": 4.4,
+      "transition_m": 0.3,
+      "children_spacing_m": 0.12,
+      "mass": 1,
+      "stretch": 2.8,
+      "angle_deg": 0,
+      "angle_jitter_deg": 10,
+      "edge_shrink": 0.4,
+      "core_scale": 1.6,
+      "core_height": 2.3,
+      "radius_jitter": 0.5,
+      "follow": 1,
+      "parent_group": 1,
+      "bare": 0.08,
+      "parent_spacing_m": 4.5,
+      "shoulder_m": 1.2,
+      "zone_fill": 0.5,
+      "zone_core": 0.6,
+      "zone_share": 0.6,
+      "core_height_m": 0.9,
+      "core_hold": 0.6,
+      "zone_keep": [
+       0.8,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "zone_family": [
+       0,
+       1,
+       2,
+       2
+      ]
      },
      "near": [],
      "avoid": [],
@@ -4481,7 +5205,7 @@
      "key": "seed_grass",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 3.0,
+     "density_per_m2": 11.844,
      "min_spacing_m": 0.0,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -4489,7 +5213,7 @@
      "yaw_random_deg": 360.0,
      "align": "normal",
      "pattern": {
-      "influence": 1.0,
+      "influence": 0.35,
       "scale_influence": 0.2,
       "geoscatter_pattern": {
        "texture_dict": {
@@ -4529,7 +5253,42 @@
        "scale_revert": true
       }
      },
-     "clump": null,
+     "clump": {
+      "parents_per_m2": 0.04,
+      "radius_m": 4.4,
+      "transition_m": 0.3,
+      "children_spacing_m": 0.0,
+      "mass": 1,
+      "stretch": 2.8,
+      "angle_deg": 0,
+      "angle_jitter_deg": 10,
+      "edge_shrink": 0.4,
+      "core_scale": 1.4,
+      "core_height": 2.0,
+      "core_height_m": 0.9,
+      "core_hold": 0.6,
+      "follow": 1,
+      "parent_group": 1,
+      "radius_jitter": 0.5,
+      "bare": 0.08,
+      "parent_spacing_m": 4.5,
+      "shoulder_m": 1.2,
+      "zone_core": 0.6,
+      "zone_share": 0.6,
+      "zone_fill": 0.5,
+      "zone_keep": [
+       0.8,
+       1.0,
+       1.0,
+       1.0
+      ],
+      "zone_family": [
+       0,
+       1,
+       2,
+       2
+      ]
+     },
      "near": [],
      "avoid": [],
      "assets": [
@@ -4541,7 +5300,7 @@
      "key": "short_grass",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 3.0,
+     "density_per_m2": 0.9,
      "min_spacing_m": 0.0,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -4601,7 +5360,7 @@
      "key": "rust_grass",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 1.5,
+     "density_per_m2": 1.0,
      "min_spacing_m": 0.12,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -4745,7 +5504,7 @@
      "scale_m": 5.0
     },
     {
-     "surface": "grass_forest",
+     "surface": "grass_glade",
      "coverage": 0.06,
      "scale_m": 8.0
     }
@@ -4757,6 +5516,83 @@
     "cobblestone",
     "stone_tiles"
    ],
+   "ground_look": {
+    "ref_surface": "grass_glade",
+    "zones": {
+     "colors_linear": [
+      [
+       0.1024,
+       0.2478,
+       0.0217
+      ],
+      [
+       0.2218,
+       0.3296,
+       0.0099
+      ],
+      [
+       0.0422,
+       0.2001,
+       0.0541
+      ],
+      [
+       0.3495,
+       0.2243,
+       0.0089
+      ]
+     ],
+     "angle_k": [
+      0.0,
+      0.7,
+      -0.6
+     ],
+     "cover": [
+      0.3,
+      0.24,
+      0.08
+     ],
+     "edge": [
+      0.06,
+      0.045,
+      0.035
+     ],
+     "edge_vary_m": 14.0,
+     "layers": [
+      "grass_glade",
+      "moss"
+     ],
+     "scale_m": [
+      12.0,
+      7.0,
+      5.0
+     ],
+     "stretch_k": [
+      1.0,
+      1.3,
+      1.0
+     ],
+     "warp": 0.45
+    },
+    "strokes": {
+     "m": 1.4
+    },
+    "brush": {
+     "mean": 3.36
+    },
+    "light": {
+     "key": 0.95,
+     "lift": 0.36,
+     "scale_m": 5.0,
+     "shade": 0.38,
+     "streak": 0.03
+    },
+    "mass": {
+     "lit_m": 2.2
+    },
+    "rim": {
+     "surfaces": []
+    }
+   },
    "species": [
     {
      "key": "oak",
@@ -5394,7 +6230,7 @@
      "key": "grass",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 3.8399999999999994,
+     "density_per_m2": 4.76,
      "min_spacing_m": 0.0,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -5402,7 +6238,7 @@
      "yaw_random_deg": 360.0,
      "align": "normal",
      "pattern": {
-      "influence": 1.0,
+      "influence": 0.3,
       "scale_influence": 0.2,
       "geoscatter_pattern": {
        "texture_dict": {
@@ -5442,7 +6278,17 @@
        "scale_revert": true
       }
      },
-     "clump": null,
+     "clump": {
+      "parents_per_m2": 0.018,
+      "radius_m": 2.3,
+      "transition_m": 1.2,
+      "children_spacing_m": 0.0,
+      "mass": 1,
+      "stretch": 1.6,
+      "angle_deg": 0,
+      "angle_jitter_deg": 90,
+      "edge_shrink": 0.45
+     },
      "near": [],
      "avoid": [],
      "assets": [
@@ -5463,7 +6309,7 @@
      "yaw_random_deg": 360.0,
      "align": "normal",
      "pattern": {
-      "influence": 1.0,
+      "influence": 0.3,
       "scale_influence": 0.2,
       "geoscatter_pattern": {
        "texture_dict": {
@@ -5503,7 +6349,17 @@
        "scale_revert": true
       }
      },
-     "clump": null,
+     "clump": {
+      "parents_per_m2": 0.035,
+      "radius_m": 1.1,
+      "transition_m": 0.6,
+      "children_spacing_m": 0.0,
+      "mass": 1,
+      "stretch": 1.3,
+      "angle_deg": 0,
+      "angle_jitter_deg": 90,
+      "edge_shrink": 0.4
+     },
      "near": [],
      "avoid": [],
      "assets": [
@@ -5514,7 +6370,7 @@
      "key": "sprig",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 1.9199999999999997,
+     "density_per_m2": 1.0,
      "min_spacing_m": 0.0,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -5787,19 +6643,14 @@
    "name": "Riverside Wetland",
    "climate": "temperate",
    "thumbnail": "thumbnails/wetland_riparian_summer_s1.jpg",
-   "ground_surface": "grass",
+   "ground_surface": "grass_wetland",
    "cliff_surface": "cliff",
    "scree_surface": "gravel",
    "ground_accents": [
     {
-     "surface": "mud",
+     "surface": "dirt_mud",
      "coverage": 0.1,
      "scale_m": 5.0
-    },
-    {
-     "surface": "grass_alpine",
-     "coverage": 0.08,
-     "scale_m": 7.0
     }
    ],
    "path_surfaces": [
@@ -5807,6 +6658,116 @@
     "dirt_road_packed",
     "flagstone"
    ],
+   "ground_look": {
+    "ref_surface": "grass_wetland",
+    "zones": {
+     "colors_linear": [
+      [
+       0.115,
+       0.3425,
+       0.0864
+      ],
+      [
+       0.0334,
+       0.3073,
+       0.3251
+      ],
+      [
+       0.303,
+       0.3852,
+       0.0227
+      ],
+      [
+       0.6078,
+       0.4777,
+       0.031
+      ]
+     ],
+     "angle": 0.25,
+     "angle_k": [
+      0.0,
+      0.12,
+      -0.15
+     ],
+     "cover": [
+      0.34,
+      0.3,
+      0.12
+     ],
+     "edge": [
+      0.04,
+      0.035,
+      0.03
+     ],
+     "edge_vary_m": 12.0,
+     "rag": 0.1,
+     "rag_m": 1.6,
+     "scale_m": [
+      8.0,
+      6.0,
+      6.0
+     ],
+     "stretch": 6.0,
+     "stretch_k": [
+      1.0,
+      1.0,
+      0.8
+     ],
+     "warp": 0.35
+    },
+    "strokes": {
+     "len": 5.0,
+     "m": 1.2
+    },
+    "brush": {
+     "contrast": 0.3,
+     "key": 0.6,
+     "mean": 4.15
+    },
+    "light": {
+     "cap": 0.86,
+     "knee": 0.62,
+     "lift": 0.34,
+     "shade": 0.36,
+     "shade_tint": [
+      0.96,
+      1.0,
+      0.97
+     ],
+     "streak": 0.03
+    },
+    "tuft": {
+     "step": 1.75
+    },
+    "mass": {
+     "lit_m": 1.6
+    },
+    "rim": {
+     "accent_core_m": 0.3,
+     "accent_rim_m": 0.3,
+     "accent_tint": [
+      1.0,
+      0.86,
+      0.55
+     ],
+     "core_dark": 0.4,
+     "color_linear": [
+      0.055,
+      0.0331,
+      0.0153
+     ],
+     "gap": 0.2,
+     "strength": 0.65,
+     "surfaces": [
+      "dirt_mud"
+     ]
+    },
+    "accent_shape": {
+     "break": 0.5,
+     "edge_scale": 0.6,
+     "stretch": 1.0
+    }
+   },
    "species": [
     {
      "key": "willow",
@@ -6363,7 +7324,7 @@
      "yaw_random_deg": 360.0,
      "align": "normal",
      "pattern": {
-      "influence": 1.0,
+      "influence": 0.3,
       "scale_influence": 0.2,
       "geoscatter_pattern": {
        "texture_dict": {
@@ -6403,7 +7364,17 @@
        "scale_revert": true
       }
      },
-     "clump": null,
+     "clump": {
+      "parents_per_m2": 0.03,
+      "radius_m": 1.6,
+      "transition_m": 0.9,
+      "children_spacing_m": 0.0,
+      "mass": 1,
+      "stretch": 2.6,
+      "angle_deg": 14,
+      "angle_jitter_deg": 20,
+      "edge_shrink": 0.45
+     },
      "near": [],
      "avoid": [],
      "assets": [
@@ -6423,7 +7394,7 @@
      "yaw_random_deg": 360.0,
      "align": "normal",
      "pattern": {
-      "influence": 1.0,
+      "influence": 0.3,
       "scale_influence": 0.2,
       "geoscatter_pattern": {
        "texture_dict": {
@@ -6463,7 +7434,17 @@
        "scale_revert": true
       }
      },
-     "clump": null,
+     "clump": {
+      "parents_per_m2": 0.045,
+      "radius_m": 1.2,
+      "transition_m": 0.7,
+      "children_spacing_m": 0.0,
+      "mass": 1,
+      "stretch": 1.4,
+      "angle_deg": 0,
+      "angle_jitter_deg": 90,
+      "edge_shrink": 0.4
+     },
      "near": [],
      "avoid": [],
      "assets": [

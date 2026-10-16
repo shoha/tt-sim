@@ -5,6 +5,16 @@ extends GutTest
 ## off, and a map of several biomes gives each its own slot and values.
 
 const FIXTURE := "res://tests/fixtures/ground_look_r20_grassland.json"
+const TAIGA := "boreal_taiga_summer_s1"
+## The installed palette's biomes that carry a ground_look (ASSET_PIPELINE section 9).
+const ZONED := [
+	"grassland_meadow_summer_s1",
+	"savanna_summer_s1",
+	"birch_woodland_summer_s1",
+	"wetland_riparian_summer_s1",
+	"alpine_meadow_summer_s1",
+	"temperate_forest_summer_s1",
+]
 const SURFACES := {
 	"grass_meadow_r5": {"role": "ground"},
 	"dirt_opening_r5": {"role": "ground"},
@@ -141,13 +151,16 @@ func test_a_biome_without_a_look_leaves_every_gate_off() -> void:
 	assert_eq(Array(the_plan.layer_slots).count(-1), GroundLookUniforms.LAYER_SLOTS)
 	var tables := GroundLookUniforms.ground_tables(the_plan, [], [], [], Vector4.ZERO)
 	assert_eq(tables, {"look_present": 0})
-	# The installed palette carries no ground_look: a map of it makes no bake and binds nothing.
-	var palette := PaletteLibrary.biomes()
-	assert_false(palette.is_empty(), "the installed palette")
-	var biome: Dictionary = palette[0]
+	# The installed ship palette (treecube 020bbdc) zones six biomes; the boreal taiga carries no
+	# ground_look: a map of it makes no bake and binds nothing.
+	var root := PaletteLibrary.DEFAULT_ROOT
+	assert_true(PaletteLibrary.ground_look(TAIGA, root).is_empty(), "taiga: no look")
+	for zoned in ZONED:
+		assert_false(PaletteLibrary.ground_look(zoned, root).is_empty(), "%s is zoned" % zoned)
+	var biome := PaletteLibrary.biome(TAIGA)
 	var doc := MapDocument.create_flat(Vector2i(8, 8), String(biome.ground_surface), "", 1234)
-	doc.biome_ids = PackedStringArray([String(biome.id)])
-	assert_false(GroundLookBake.has_look(doc, PaletteLibrary.DEFAULT_ROOT), "no look")
+	doc.biome_ids = PackedStringArray([TAIGA])
+	assert_false(GroundLookBake.has_look(doc, root), "no look")
 	var terrain := AuthoredTerrain.create(doc)
 	assert_null(terrain.ground_look(), "no bake node")
 	var present: Variant = terrain.get_material().get_shader_parameter("look_present")

@@ -3015,3 +3015,10 @@ primitives in 476 draws, 73,074 shadow primitives), home zoom, canopy fade off, 
 again (p95 2.838 / 2.796 / 2.913). Foliage over the hidden reference is 0.06 / 0.14 ms, below the
 grass-variety sample's 0.15 / 0.35 and within its 0.2 ms run-to-run spread: the carpets add no
 measurable cost at this frame time.
+
+## Ground look and grass masses (ground ship, 2026-10-15): untimed
+
+The round 20 ground look (`GroundLookBake`, the zoned ground and the tuft shading) and the grass
+masses ship with the ground ship palette (treecube 020bbdc, ASSET_PIPELINE section 9) without a
+frame-time measurement, by the user's choice: the pinned timing of the bake, the ground shader's
+look path and the massed grass is scheduled for a card after the push.

@@ -1,8 +1,8 @@
 extends GutTest
 
 ## Grass masses (ScatterMass), the zone record they read (GroundLook, GroundZones), the saved
-## anchors (MapAnchorsIO) and the golden rows: a palette without the mass fields grows exactly
-## main's rows (scatter_golden.gd).
+## anchors (MapAnchorsIO) and the golden rows of every built-in biome (scatter_golden.gd): the
+## biomes without mass fields grow exactly main's rows, the zoned ones their pinned masses.
 
 const Golden := preload("res://tests/unit/scatter_golden.gd")
 const GRASS := "test_biome/Grass_Tuft"
@@ -290,7 +290,7 @@ func test_ground_look_merges_over_base() -> void:
 	assert_eq(warnings.size(), 1, "no colours: ignored with a warning")
 
 
-func test_golden_rows_equal_mains() -> void:
+func test_golden_rows_equal_pinned() -> void:
 	var pinned: Dictionary = Golden.pinned()
 	assert_false(pinned.is_empty(), "the fixture reads")
 	var now: Dictionary = Golden.digest_all()
