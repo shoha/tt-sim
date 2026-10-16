@@ -46,6 +46,13 @@ extends Node3D
 ## function of all the plans, so a peer that rebuilt once and one that refreshed stroke by
 ## stroke show the same flames. LOD: past LOD_ZOOM half the flames hide and the rest grow
 ## (FireLook.set_far: one uniform when the zoom crosses it). Nothing runs per flame per frame.
+##
+## Lights and smoke (look card F4b-1): each re-planned block's flames are summed on the
+## clusters' grid (FireClusters.cells_of, kept per block), and every refresh finds the hot spots
+## from those sums: FireLights stands up to four warm lights over the largest burning clusters
+## (shown only while the sun is low) and FireFieldSmoke puffs slow billows over up to eight of
+## the largest blaze clusters. Both are children, made with the first fire and freed with the
+## map; their per-frame work is the lights' flicker and the smoke's pool of 24.
 
 const NODE_NAME := "FireField"
 ## Lattice spacing of the flames, and how far each is moved off its lattice point (a share of
@@ -145,6 +152,11 @@ var _heat := PackedFloat32Array()
 var _pools := PackedFloat32Array()
 var _heat_size := Vector2i.ZERO
 var _heat_texture: ImageTexture = null
+## block Vector2i -> its flames' sums on the clusters' grid (FireClusters.cells_of), for
+## burning blocks only; the lights and the smoke (null until the first fire).
+var _cells: Dictionary = {}
+var _lights: FireLights = null
+var _smoke: FireFieldSmoke = null
 
 
 ## A field for `doc`, already planned and drawn.
@@ -181,7 +193,9 @@ func rebuild() -> void:
 	_chunks.clear()
 	_counts.clear()
 	_plans.clear()
+	_cells.clear()
 	if document == null:
+		_place_lights_and_smoke()
 		return
 	refresh(Rect2i(0, 0, document.samples_x(), document.samples_z()))
 
@@ -199,8 +213,10 @@ func refresh(sample_rect: Rect2i) -> void:
 		var plan := plan_block(document, block)
 		if plan.is_empty():
 			_plans.erase(block)
+			_cells.erase(block)
 		else:
 			_plans[block] = plan
+			_cells[block] = FireClusters.cells_of(plan)
 	var planned := {}
 	for block in _plans:
 		@warning_ignore("integer_division")
@@ -217,6 +233,7 @@ func refresh(sample_rect: Rect2i) -> void:
 		if _beside(block, touched) or share != int(_counts.get(block, 0)):
 			_show(block, share)
 	_bind_glow()
+	_place_lights_and_smoke()
 
 
 ## Flames (and sparks) shown on the whole map.
@@ -225,6 +242,16 @@ func flame_count() -> int:
 	for block in _counts:
 		total += int(_counts[block])
 	return total
+
+
+## The fire's lights (null before the first fire), for probes and tests.
+func lights() -> FireLights:
+	return _lights
+
+
+## The fire's smoke (null before the first fire), for probes and tests.
+func smoke() -> FireFieldSmoke:
+	return _smoke
 
 
 ## The diff blocks the samples of `sample_rect` touch, row by row.
@@ -595,6 +622,26 @@ func _bind_glow() -> void:
 			_glow_texture = FireLook.glow_texture(document, _glow_texture)
 			FireLook.bind_glow(terrain.get_material(), _glow_texture, _heat_texture)
 			return
+
+
+## Stands the lights over the largest burning clusters and the smoke over the largest blaze
+## ones (FireClusters, from the kept per-block sums); both are made with the first fire and
+## kept, empty, after it goes out.
+func _place_lights_and_smoke() -> void:
+	var cells := FireClusters.merge(_cells)
+	var lit := FireClusters.lights(cells)
+	var smoky := FireClusters.smoke(cells)
+	if _lights == null:
+		if lit.is_empty() and smoky.is_empty():
+			return
+		_lights = FireLights.new()
+		add_child(_lights)
+		_smoke = FireFieldSmoke.new()
+		add_child(_smoke)
+	if document != null:
+		_smoke.drift = FireLook.smoke_drift(document.map_seed)
+	_lights.place(lit)
+	_smoke.place(smoky)
 
 
 ## The lattice around one block (WINDOW_MARGIN points past it on every side): each point's
