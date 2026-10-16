@@ -390,6 +390,9 @@ const float RIM_PROBE_M = 0.06;
 const float RIM_REACH = 0.3;
 const float RIM_WOBBLE_M = 0.7;
 const float RIM_GAP_M = 1.3;
+// What accent_mask_rim_m's skip test adds to each octave it reads: far above the rounding of
+// the field (about 1e-7), so the test only skips a pixel whose whole field is below the ramp.
+const float RIM_EXIT_MARGIN = 1e-4;
 #endif
 // The accent shape of a row without a look: today's patches.
 const vec4 PLAIN_SHAPE = vec4(1.0, 0.0, 0.0, 1.0);
@@ -1077,12 +1080,28 @@ float rim_width_at(vec2 world_xz, float width_m, float wobble) {
 }
 
 // GROUND LOOK: a rim-listed accent's (weight, rim, wet core), the rim (`rim_m` wide, wobbled by
-// `wobble`) and the core (from `core_m` in) measured in metres from the ramp's top.
+// `wobble`) and the core (from `core_m` in) measured in metres from the ramp's top. Outside the
+// patch the finer octaves are skipped where the coarser ones already rule it out, as in
+// accent_mask. The test runs on its own arithmetic, the octaves raised by RIM_EXIT_MARGIN (a
+// bound, never a product the field shares), and the field itself is then taken whole as before:
+// sharing the field's partial sums moved single pixels by one level (a GPU compiler contracts a
+// product used twice differently), and the field and its two probes must round alike.
 vec3 accent_mask_rim_m(
 	vec2 world_xz, vec4 params, vec4 shape, float rim_m, float wobble, float core_m
 ) {
 	float low = params.x - ACCENT_EDGE * shape.w;
 	float high = params.x + ACCENT_EDGE * shape.w;
+	vec2 p = accent_domain(world_xz, params, shape);
+	float coarse = accent_octave(p).r + RIM_EXIT_MARGIN;
+	if (coarse * (1.0 - ACCENT_DETAIL - ACCENT_FINE) + ACCENT_DETAIL + ACCENT_FINE < low) {
+		return vec3(0.0);
+	}
+	float detail = accent_octave(p * ACCENT_DETAIL_SCALE + ACCENT_DETAIL_OFFSET).g + RIM_EXIT_MARGIN;
+	if (
+		coarse * (1.0 - ACCENT_DETAIL - ACCENT_FINE) + detail * ACCENT_DETAIL + ACCENT_FINE < low
+	) {
+		return vec3(0.0);
+	}
 	float n = accent_field(world_xz, params, shape);
 	if (n <= low) {
 		return vec3(0.0);
