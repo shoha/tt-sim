@@ -389,8 +389,7 @@ static func zone_share_keep(ctx: Dictionary, entry: Dictionary, x: float, z: flo
 	if home == null:
 		home = family[_strongest(GroundZones.zone_weights(zones, anchor.x, anchor.y))]
 		memo[anchor] = home
-	var w := GroundZones.zone_weights(zones, x, z)
-	return 1.0 if family_share(w, family, int(home)) >= share else 0.0
+	return 1.0 if GroundZones.share_reaches(zones, x, z, family, int(home), share) else 0.0
 
 
 ## Whether at least clump zone_fill of a mass parent's swathe at (x, z) stands on ground its zone
@@ -424,8 +423,7 @@ static func filled(entry: Dictionary, family: int, x: float, z: float) -> bool:
 				if ring < FILL_CORE_RING:
 					return false
 				continue
-			var w := GroundZones.zone_weights(zones, p.x, p.y)
-			if family_share(w, rule.family, family) >= float(rule.share):
+			if GroundZones.share_reaches(zones, p.x, p.y, rule.family, family, float(rule.share)):
 				hits += 1
 	return hits >= fill * total
 
