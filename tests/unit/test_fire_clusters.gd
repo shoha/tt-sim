@@ -4,7 +4,8 @@ extends GutTest
 ## deterministic whatever order the blocks were planned in, the four largest take the lights
 ## with ties in row order, a cluster keeps its light across a re-plan, the smoke rises over the
 ## blaze only and over at most eight, re-planning one block leaves far clusters exactly as they
-## were; the lights' gate follows the sun, and the smoke's pool is bounded.
+## were; the lights' gate follows the sun; each smoke column spreads its billows over a life
+## with no gap, and the biggest fire raises the biggest column, taller than it is wide.
 
 var _sun := Vector4.ZERO
 
@@ -129,7 +130,16 @@ func test_the_smoke_rises_over_the_blaze_only_and_at_most_eight() -> void:
 	assert_eq(capped.size(), FireClusters.MAX_SMOKE)
 	assert_eq(float(capped[0]["size"]), 16.0, "the largest blaze first, the bigger flames not")
 	for cluster in capped:
-		assert_gte(float(cluster["size"]), FireClusters.SMOKE_MIN_SIZE)
+		assert_gte(float(cluster["blaze"]), FireClusters.SMOKE_MIN_SIZE)
+	# The biggest fire is the biggest smoker: ranked by all its flames, not by its blaze alone.
+	var mixed := {}
+	mixed[Vector2i(0, 0)] = _cell(Vector2i(0, 0), 40.0)
+	mixed[Vector2i(1, 0)] = _cell(Vector2i(1, 0), 10.0, true)
+	mixed[Vector2i(10, 0)] = _cell(Vector2i(10, 0), 20.0, true)
+	var ranked := FireClusters.smoke(mixed)
+	assert_eq(ranked.size(), 2)
+	assert_eq(ranked[0]["cell"], Vector2i(0, 0), "the big fire with a blaze in it first")
+	assert_eq(float(ranked[0]["size"]), 50.0)
 
 
 func test_a_replan_of_one_block_leaves_far_clusters_alone() -> void:
@@ -211,22 +221,52 @@ func test_the_fire_lights_are_not_the_maps_own() -> void:
 	assert_eq(environment.get("_original_light_energies").size(), 0)
 
 
-func test_the_smoke_pool_is_bounded_and_warms_only_its_own_billows() -> void:
+func test_each_smoke_column_spreads_its_billows_over_a_life() -> void:
 	var smoke := FireFieldSmoke.new()
 	autofree(smoke)
-	assert_eq(smoke.capacity, FireClusters.MAX_SMOKE * FireFieldSmoke.PER_SITE)
+	assert_eq(smoke.multimesh.instance_count, FireFieldSmoke.capacity())
 	var sites: Array[Dictionary] = []
-	for k in FireClusters.MAX_SMOKE:
-		sites.append({"cell": Vector2i(k * 3, 0), "size": 10.0, "at": Vector3(k * 8, 0, 0), "top": 2.0})
+	for k in 3:
+		sites.append(
+			{"cell": Vector2i(k * 3, 0), "size": 60.0 - k * 20.0, "at": Vector3(k * 8, 0, 0), "top": 3.0}
+		)
 	smoke.place(sites)
-	for frame in 300:
-		smoke._process(0.05)
-		assert_lte(smoke.live_count(), smoke.capacity)
-	assert_gt(smoke.live_count(), FireClusters.MAX_SMOKE, "every site keeps billows rising")
-	# The headless renderer keeps no MultiMesh data to read back, so the pools' own record is read.
-	for slot in smoke.capacity:
-		assert_eq(smoke._warmth[slot], FireFieldSmoke.WARMTH, "the fire warms its billows")
-	var event := SmokePuffs.new(2)
-	autofree(event)
-	event.emit(Vector3.ZERO, Vector3.UP, 1.0, 2.0, Color.WHITE)
-	assert_eq(event._warmth[0], 0.0, "a fire event's smoke is not")
+	assert_eq(smoke.live_count(), 3 * FireFieldSmoke.PER_SITE, "a column of billows per site")
+	# The headless renderer keeps no MultiMesh data to read back, so the pure buffer is read.
+	var buffer := FireFieldSmoke.instance_buffer(sites)
+	assert_eq(buffer.size(), FireFieldSmoke.capacity() * FireLook.INSTANCE_FLOATS)
+	for site in sites.size():
+		var phases: Array[float] = []
+		for k in FireFieldSmoke.PER_SITE:
+			var i := (site * FireFieldSmoke.PER_SITE + k) * FireLook.INSTANCE_FLOATS
+			var born := Vector3(buffer[i + 3], buffer[i + 7], buffer[i + 11])
+			assert_almost_eq(born, FireFieldSmoke.source(sites[site]), Vector3.ONE * 1e-4)
+			assert_almost_eq(buffer[i], FireFieldSmoke.column_unit(sites[site]), 1e-4)
+			assert_between(buffer[i + 14], 10.0, 14.0, "a slow climb of about 12 s")
+			phases.append(buffer[i + 12])
+		phases.sort()
+		phases.append(phases[0] + 1.0)
+		for k in FireFieldSmoke.PER_SITE:
+			assert_lt(phases[k + 1] - phases[k], 2.0 / FireFieldSmoke.PER_SITE, "no gap in the column")
+	var unused := 3 * FireFieldSmoke.PER_SITE * FireLook.INSTANCE_FLOATS
+	assert_eq(buffer[unused], 0.0, "the rest of the pool stays empty")
+	smoke.place([] as Array[Dictionary])
+	assert_eq(smoke.live_count(), 0)
+
+
+func test_the_biggest_fire_raises_the_biggest_column_taller_than_wide() -> void:
+	var big := {"cell": Vector2i.ZERO, "size": 80.0, "at": Vector3.ZERO, "top": 3.2}
+	var small := {"cell": Vector2i(4, 0), "size": 9.0, "at": Vector3(14, 0, 0), "top": 2.4}
+	assert_gt(FireFieldSmoke.column_unit(big), FireFieldSmoke.column_unit(small))
+	for cluster: Dictionary in [big, small]:
+		var extent := FireFieldSmoke.column_extent(cluster)
+		assert_gt(extent.x, extent.y * 1.5, "a column, not a squat puff")
+		assert_between(
+			FireFieldSmoke.source(cluster).y + extent.x,
+			2.0 * float(cluster["top"]),
+			3.2 * float(cluster["top"]),
+			"up to two or three flame heights"
+		)
+	var box := FireFieldSmoke.bounds([big, small] as Array[Dictionary])
+	assert_true(box.has_point(FireFieldSmoke.source(small)))
+	assert_gt(box.end.y, FireFieldSmoke.source(big).y + FireFieldSmoke.column_extent(big).x)

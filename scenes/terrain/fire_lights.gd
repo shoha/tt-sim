@@ -18,12 +18,17 @@ extends Node3D
 ## mesh beside up to four of a map's.
 
 const NODE_NAME := "FireLights"
-## How far a light reaches (metres).
-const RANGE_M := 7.0
+## How far a light reaches (metres) and its falloff (OmniLight3D.omni_attenuation; 1 is the
+## inverse distance). Broad and flat (round 2's dark probe, the harness's night with the ambient
+## cut): at range 7 and falloff 1 a light only warmed the logs right under it, a low strong
+## light blew out a yellow patch under itself, and range 12 at falloff 0.5 washed the ash, rock
+## and logs across the burn warm, the read of the fire as the scene's light.
+const RANGE_M := 12.0
+const DECAY := 0.5
 ## A light stands this share of its cluster's tallest flame above the cluster's centroid,
-## within RISE_M.
-const RISE_SHARE := 0.5
-const RISE_M := Vector2(1.2, 2.0)
+## within RISE_M (high enough to reach past the burn's edge without a hot spot under it).
+const RISE_SHARE := 0.7
+const RISE_M := Vector2(1.4, 2.4)
 ## An empty slot's cell.
 const NONE := Vector2i(2147483647, 2147483647)
 
@@ -42,6 +47,7 @@ func _init() -> void:
 		var light := OmniLight3D.new()
 		light.name = "FireLight%d" % slot
 		light.omni_range = RANGE_M
+		light.omni_attenuation = DECAY
 		light.shadow_enabled = false
 		light.light_color = FireLook.LIGHT_COLOR
 		light.light_specular = 0.0
