@@ -218,6 +218,31 @@ func test_a_fire_past_the_cap_fills_every_block_evenly() -> void:
 	assert_eq(field.get_child_count(), 0, "no chunk without fire")
 
 
+func test_the_heat_raster_sums_flames_into_one_bed() -> void:
+	var doc := _doc(20, 150)
+	var size := FireField.heat_size(doc)
+	var half := doc.extent_m() * 0.5
+	var whole := Rect2i(Vector2i.ZERO, size)
+	var heat := PackedFloat32Array()
+	heat.resize(size.x * size.y)
+	var one := PackedFloat32Array([0, 0, 0, 0.6, 0.5, 1.0, 0.5, FireField.FLAME])
+	FireField.splat_heat(heat, size, half, one, whole)
+	var lone := FireField.heat_at(heat, size, half, Vector2.ZERO)
+	# Read between texels, so a little under the kernel's peak.
+	assert_almost_eq(lone, 1.0 / FireField.HEAT_FULL_M, 0.035, "a lone flame: its height")
+	FireField.splat_heat(heat, size, half, one, whole)
+	var both := FireField.heat_at(heat, size, half, Vector2.ZERO)
+	assert_almost_eq(both, 2.0 * lone, 0.001, "two overlapping flames: twice as hot")
+	var far := half * 0.6
+	assert_eq(FireField.heat_at(heat, size, half, far), 0.0, "nothing past the kernel")
+	var spark := PackedFloat32Array([far.x, 0, far.y, 0.2, 0.5, 0.16, 0.16, FireField.SPARK])
+	FireField.splat_heat(heat, size, half, spark, whole)
+	assert_eq(FireField.heat_at(heat, size, half, far), 0.0, "a spark adds no heat")
+	var shown := FireLook.instance_buffer(one, 1, Vector3.FORWARD, PackedFloat32Array([0.5]))
+	assert_almost_eq(fmod(shown[14], 1.0), 0.5 * FireLook.FOOT_SHARE, 0.001, "the foot's heat")
+	assert_eq(floori(shown[14]), int(FireField.FLAME), "the kind")
+
+
 func test_lod_keeps_half_and_draws_back_to_front() -> void:
 	assert_eq(FireLook.far_count(7), 4)
 	assert_eq(FireLook.far_count(8), 4)

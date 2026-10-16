@@ -12,10 +12,19 @@ extends RefCounted
 ##   replay {path, text}  an earlier capture over the whole window under the caption `text`, so
 ##                     a capture re-labels it for a sheet (an empty path removes it)
 ##   flames {show}     shows or hides the flames, to judge the ground's glow alone
+##   param {target, name, value}  sets a shader parameter on the "ground" (the map's ground
+##                     material) or the "flames" (FireLook's material), for look comparisons
+##   shadows {on}      turns every directional light's shadow on or off
+##   time              the engine clock and frames drawn, to measure a motion strip's spacing
+##   burst {dir, name, count, every}  grabs `count` frames of the window `every` seconds apart
+##                     and saves them as <name>_<k>.png with their engine times in
+##                     <name>_times.txt (a capture step takes about 0.4 s, too slow for a strip
+##                     of held drawings); wait about count x 0.25 s after it
 ##   save {folder}     saves the open map as a PREFIX test level (replacing one there)
 ##   cleanup           deletes every PREFIX test level
 ## The views and the sun match the F3 probe's (docs/plans/2026-10-11-fire-features/probe.md), so
-## its frames can sit beside new ones in a sheet.
+## its frames can sit beside new ones in a sheet; ahome and az20 look at firefeat_build's second,
+## author-laid fire (a blob and a curving line) at the home zoom and zoom 20.
 
 const PREFIX := "_firefeat_"
 const LABEL := "FireProbeLabel"
@@ -24,8 +33,16 @@ const REPLAY := "FireProbeReplay"
 ## Where the zoomed views look: a point on the blaze, and the middle of the fire.
 const BLAZE_AT := Vector2(-2.0, -2.5)
 const FIRE_AT := Vector2(0.0, -3.0)
+const AUTHOR_AT := Vector2(3.0, 21.5)
 const DUSK_HOUR := 19.0
-const VIEWS := {"home": "home", "z8": "zoom 8", "z20": "zoom 20", "z30": "zoom 30"}
+const VIEWS := {
+	"home": "home",
+	"z8": "zoom 8",
+	"z20": "zoom 20",
+	"z30": "zoom 30",
+	"ahome": "author fire, home zoom",
+	"az20": "author fire, zoom 20",
+}
 
 static var _sun_key := ""
 static var _view_key := ""
@@ -39,6 +56,15 @@ static func run(base: Node, step: Dictionary) -> String:
 		return _label(base, String(step.get("text", "")))
 	if action == "replay":
 		return _replay(base, String(step.get("path", "")), String(step.get("text", "")))
+	if action == "time":
+		return "time %.3f s frames %d" % [Time.get_ticks_usec() / 1e6, Engine.get_frames_drawn()]
+	if action == "burst":
+		return _burst(base, step)
+	if action == "shadows":
+		var on := bool(step.get("on", true))
+		for light in base.get_tree().root.find_children("*", "DirectionalLight3D", true, false):
+			(light as DirectionalLight3D).shadow_enabled = on
+		return "shadows %s" % ("on" if on else "off")
 	var ctrl: AuthoringController = base.get("_authoring_controller")
 	if ctrl == null or ctrl.editor == null:
 		return "no authoring editor"
@@ -55,7 +81,53 @@ static func run(base: Node, step: Dictionary) -> String:
 			var show := bool(step.get("show", true))
 			ctrl.editor.fire_field.visible = show
 			return "flames %s" % ("shown" if show else "hidden")
+		"param":
+			return _param(ctrl.editor.fire_field, step)
 	return "unknown action %s" % action
+
+
+## Grabs step.count frames of the window step.every seconds apart, then saves them (see the
+## header's burst).
+static func _burst(base: Node, step: Dictionary) -> String:
+	var dir := String(step.get("dir", "user://render_jobs"))
+	var prefix := String(step.get("name", "burst"))
+	var count := int(step.get("count", 8))
+	var timer := Timer.new()
+	timer.wait_time = float(step.get("every", 0.1))
+	var frames: Array[Image] = []
+	var times: Array[String] = []
+	base.add_child(timer)
+	timer.timeout.connect(
+		func() -> void:
+			frames.append(base.get_viewport().get_texture().get_image())
+			times.append("%d %.3f" % [frames.size() - 1, Time.get_ticks_usec() / 1e6])
+			if frames.size() < count:
+				return
+			timer.stop()
+			for k in frames.size():
+				frames[k].save_png(dir.path_join("%s_%d.png" % [prefix, k]))
+			var file := FileAccess.open(dir.path_join(prefix + "_times.txt"), FileAccess.WRITE)
+			file.store_string("\n".join(PackedStringArray(times)))
+			file.close()
+			timer.queue_free()
+	)
+	timer.start()
+	return "burst %d frames every %.2f s into %s" % [count, timer.wait_time, dir]
+
+
+static func _param(field: FireField, step: Dictionary) -> String:
+	var target := String(step.get("target", "flames"))
+	var key := String(step.get("name", ""))
+	var material: ShaderMaterial = FireLook.material()
+	if target == "ground":
+		material = null
+		for child in field.get_parent().get_children():
+			if child is AuthoredTerrain and (child as AuthoredTerrain).get_material() != null:
+				material = (child as AuthoredTerrain).get_material()
+		if material == null:
+			return "no ground material"
+	material.set_shader_parameter(key, step.get("value"))
+	return "%s %s = %s" % [target, key, str(step.get("value"))]
 
 
 static func _info(doc: MapDocument, field: FireField) -> String:
@@ -122,6 +194,12 @@ static func _view(gm: GameMap, view: String) -> String:
 			cc.call("set_zoom_limits", float(cc.get("min_zoom")), 40.0)
 			cc.set("_target_zoom", 30.0)
 			_look(gm, FIRE_AT)
+		"ahome":
+			cc.set("_target_zoom", float(cc.get("_home_zoom")))
+			_look(gm, AUTHOR_AT)
+		"az20":
+			cc.set("_target_zoom", 20.0)
+			_look(gm, AUTHOR_AT)
 	return "view %s" % view
 
 

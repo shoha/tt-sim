@@ -9,15 +9,16 @@ extends RefCounted
 ## banded-tongue family, its shape, motion and colour all in the shader (the header there holds
 ## the model), so nothing runs per flame per frame. A chunk's instance data is one packed buffer
 ## (instance_buffer): a scale-only basis (the flame's width and height in metres) at its foot,
-## and (layout + seed, intensity, kind, keep) as custom data. The first `count` entries of the
+## and (layout + seed, intensity, kind + the bed's heat at the foot, keep) as custom
+## data. The first `count` entries of the
 ## plan are drawn (FireField emits each plan shuffled, so any prefix is an even thinning); every
 ## second of them by plan order keeps showing past the LOD zoom (keep 1), and the drawn ones are
 ## sorted back to front along the camera's fixed forward axis once, since alpha-blended
 ## instances draw in buffer order and the camera only pans and zooms.
 ##
 ## The glow is a term in the authored ground shader (fire_glow.gdshaderinc): the document's
-## fire_mask uploaded whole as an R8 texture on the sample grid (glow_texture) and bound to the
-## terrain's material (bind_glow).
+## fire_mask uploaded whole as an R8 texture on the sample grid (glow_texture) and FireField's
+## heat raster as another (heat_texture), both bound to the terrain's material (bind_glow).
 ##
 ## One map is shown at a time, so the material's per-map uniforms (the wind, the LOD switch) are
 ## set on the shared material by the map's FireField.
@@ -29,6 +30,8 @@ const INSTANCE_FLOATS := 16
 const WIND_LEAN := 0.25
 ## Past the LOD zoom the kept half grows by this, to cover the hidden half.
 const FAR_GROW := 1.25
+## The bed temperature at a flame's foot rides in its kind's fraction, scaled by this (under 1).
+const FOOT_SHARE := 0.99
 ## The camera's forward axis when there is none (tests, a field built before the camera): the
 ## game camera's fixed yaw and about its pitch.
 const DEFAULT_FORWARD := Vector3(-0.67, -0.33, -0.67)
@@ -96,11 +99,15 @@ static func make_chunk(chunk_name: String) -> MultiMeshInstance3D:
 
 
 ## Draws the first `count` entries of `plan` (FireField's STRIDE layout) in `chunk`, sorted
-## back to front along `forward`.
+## back to front along `forward`; `feet` holds each entry's bed temperature (0..1) at its foot.
 static func fill_chunk(
-	chunk: MultiMeshInstance3D, plan: PackedFloat32Array, count: int, forward: Vector3
+	chunk: MultiMeshInstance3D,
+	plan: PackedFloat32Array,
+	count: int,
+	forward: Vector3,
+	feet := PackedFloat32Array()
 ) -> void:
-	var buffer := instance_buffer(plan, count, forward)
+	var buffer := instance_buffer(plan, count, forward, feet)
 	var multimesh := chunk.multimesh
 	multimesh.instance_count = count
 	multimesh.buffer = buffer
@@ -108,9 +115,11 @@ static func fill_chunk(
 
 
 ## The MultiMesh buffer for the first `count` entries of `plan` (INSTANCE_FLOATS each), the
-## far ones first along `forward`; every second entry by plan order has keep 1. Pure.
+## far ones first along `forward`; every second entry by plan order has keep 1. The custom
+## data's z is the entry's kind plus, as its fraction, its bed temperature from `feet` (none: 0).
+## Pure.
 static func instance_buffer(
-	plan: PackedFloat32Array, count: int, forward: Vector3
+	plan: PackedFloat32Array, count: int, forward: Vector3, feet := PackedFloat32Array()
 ) -> PackedFloat32Array:
 	var stride := FireField.STRIDE
 	var order: Array = []
@@ -135,7 +144,8 @@ static func instance_buffer(
 		out[i + 11] = plan[o + 2]
 		out[i + 12] = plan[o + FireField.SEED]
 		out[i + 13] = plan[o + FireField.INTENSITY]
-		out[i + 14] = plan[o + FireField.KIND]
+		var foot := clampf(feet[k], 0.0, 1.0) if k < feet.size() else 0.0
+		out[i + 14] = plan[o + FireField.KIND] + foot * FOOT_SHARE
 		out[i + 15] = 1.0 if k % 2 == 0 else 0.0
 	return out
 
@@ -168,7 +178,28 @@ static func glow_texture(doc: MapDocument, texture: ImageTexture) -> ImageTextur
 	return ImageTexture.create_from_image(image)
 
 
-## Binds the glow's mask `texture` (null: no fire) to the ground material `ground`.
-static func bind_glow(ground: ShaderMaterial, texture: ImageTexture) -> void:
+## The flames' heat raster `heat` (`size` texels, FireField.HEAT_STEP_M apart) as an R8 texture
+## of its sums over `full`: `texture` updated in place when it has the size, else a new one.
+static func heat_texture(
+	heat: PackedFloat32Array, size: Vector2i, full: float, texture: ImageTexture
+) -> ImageTexture:
+	var bytes := PackedByteArray()
+	bytes.resize(size.x * size.y)
+	if heat.size() == bytes.size():
+		var scale := 255.0 / full
+		for i in bytes.size():
+			bytes[i] = mini(roundi(heat[i] * scale), 255)
+	var image := Image.create_from_data(size.x, size.y, false, Image.FORMAT_R8, bytes)
+	if texture != null and Vector2i(texture.get_size()) == size:
+		texture.update(image)
+		return texture
+	return ImageTexture.create_from_image(image)
+
+
+## Binds the glow's mask `texture` (null: no fire) and the flames' heat `heat` to the ground
+## material `ground`.
+static func bind_glow(ground: ShaderMaterial, texture: ImageTexture, heat: ImageTexture) -> void:
 	ground.set_shader_parameter("fire_mask_map", texture)
+	ground.set_shader_parameter("fire_heat_map", heat)
+	ground.set_shader_parameter("fire_heat_step", FireField.HEAT_STEP_M)
 	ground.set_shader_parameter("fire_present", 0 if texture == null else 1)
