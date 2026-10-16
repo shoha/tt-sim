@@ -233,6 +233,12 @@
  * pixel top-down and 4 per side plane on steep pixels (docs/PERFORMANCE.md "Ground shader:
  * index layers").
  *
+ * FIRE (fire card F4a, 2026-10-16): persistent ground fire (MapDocument.fire_mask) chars the
+ * ground and glows on it, embers and hot patches, from fire_glow.gdshaderinc (its header holds
+ * the model). The map's ground only, plain and looked; the skirt pair compiles none of it (a
+ * skirt never burns). One fetch and a branch per pixel where the map has a fire mask, nothing
+ * where it has none (fire_present 0).
+ *
  * LIGHTING matches the StandardMaterial3D terrain of a Blender-made map: burley diffuse,
  * schlick GGX specular at the default 0.5, AO from ORM.r affecting ambient only
  * (StandardMaterial3D's ao_light_affect = 0), roughness ORM.g, metallic ORM.b. Shadows and
@@ -1244,6 +1250,11 @@ float blend_score(float weight, float height) {
 	return weight + (height - 0.5) * biome_height_contrast;
 }
 
+#ifndef GROUND_SKIRT
+// FIRE: persistent ground fire's char and ember glow (the whole model is in the include).
+#include "res://shaders/fire_glow.gdshaderinc"
+#endif
+
 #ifdef GROUND_SKIRT
 // Skirt fade at a point: 1 on the map edge, 0 from skirt_fade_m out (skirt_fade.gdshaderinc;
 // the noise leaves the edge itself at exactly 1, so the skirt meets the map without a seam).
@@ -1651,6 +1662,12 @@ void fragment() {
 	AO_LIGHT_AFFECT = 0.0;
 	ROUGHNESS = mix(ground.orm.g, WET_ROUGHNESS, WET_GLOSS * gloss);
 	METALLIC = ground.orm.b;
+#ifndef GROUND_SKIRT
+	// FIRE (fire_glow.gdshaderinc): the burn darkens the ground to char and glows on it.
+	vec4 fire = fire_glow(world_xz, TIME);
+	ALBEDO *= mix(vec3(1.0), FIRE_CHAR, fire.a);
+	EMISSION = fire.rgb;
+#endif
 
 	vec3 n_map = normalize(ground.normal + n_geom * 1e-4);
 	NORMAL = normalize(mat3(VIEW_MATRIX) * (mat3(MODEL_MATRIX) * n_map));

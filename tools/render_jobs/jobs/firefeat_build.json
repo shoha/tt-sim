@@ -1,0 +1,33 @@
+{
+ "out_dir": "render_jobs/firefeat_build",
+ "timeout_s": 480,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 200, "seed": 1234},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "home"},
+  {"op": "wait", "s": 1.5},
+  {"op": "capture", "name": "b0_bare", "desc": "The bare temperate map at home, before any fire"},
+  {"op": "stroke", "mode": "fire", "tile": "flames", "points": [[-25, -10], [25, -10]], "speed": 4.0, "radius": 4.0},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "stroke", "mode": "fire", "tile": "flames", "points": [[25, -3], [-25, -3]], "speed": 4.0, "radius": 4.0},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "stroke", "mode": "fire", "tile": "flames", "points": [[-25, 4], [25, 4]], "speed": 4.0, "radius": 4.0},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "stroke", "mode": "fire", "tile": "flames", "points": [[11, 10.5], [-11, 10.5]], "speed": 4.0, "radius": 4.0},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "stroke", "mode": "fire", "tile": "blaze", "curve": true, "points": [[-26, -1], [-14, -4], [-2, -2.5], [10, 0], [26, -3]], "speed": 3.0, "radius": 2.0},
+  {"op": "wait_ready", "settle": 1.5},
+  {"op": "eval", "expr": "_game_map.get_brush_tool().deactivate()"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "info"},
+  {"op": "capture", "name": "b1_fire_home", "desc": "Fire over about a third of the map, a blaze line across it, at home"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "save", "folder": "_firefeat_look"},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0}
+ ]
+}
