@@ -23,6 +23,12 @@ const MIN_TUFTS := 6
 const ANCHOR_GRID := 20.0
 const GRADIENT_PX := 64
 
+## The stamps' materials, one per blend mode, kept for the life of the app. A CanvasItemMaterial
+## shares one shader per blend mode only while a material of it lives, so making them anew on
+## every restamp compiled two canvas pipelines each time: one 19 ms frame per brush stroke
+## (docs/PERFORMANCE.md "Ground look and grass masses").
+static var _materials: Dictionary = {}
+
 
 ## Per mass anchor the moments of its tufts' world XZ positions (count, sum x, sum z, sum xx,
 ## sum zz, sum xz), from every anchored MultiMesh under `root`.
@@ -149,9 +155,16 @@ static func _stamp_node(
 	tex.height = GRADIENT_PX
 	var node := Node2D.new()
 	node.name = node_name
-	var mat := CanvasItemMaterial.new()
-	mat.blend_mode = blend
-	node.material = mat
+	node.material = material(blend)
 	vp.add_child(node)
 	node.set_meta("texture", tex)
 	return node
+
+
+## The stamps' shared material drawing with `blend` (made on first use, then kept).
+static func material(blend: CanvasItemMaterial.BlendMode) -> CanvasItemMaterial:
+	if not _materials.has(blend):
+		var mat := CanvasItemMaterial.new()
+		mat.blend_mode = blend
+		_materials[blend] = mat
+	return _materials[blend]
