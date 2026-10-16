@@ -7,7 +7,9 @@ extends RefCounted
 ## port) by running dump() once, and re-pinned when the ship palette (treecube 020bbdc) was
 ## installed (ground ship card 4): only the grass of the six zoned biomes moved (their mass,
 ## clump and density fields), while boreal_taiga, rocky_badlands and burnt_forest, which carry
-## no mass fields, still grow exactly main's rows. Re-pin only after checking that.
+## no mass fields, still grow exactly main's rows. Re-pin only after checking that. The
+## digests are Windows' bytes (other platforms differ in the last bit), so the test runs there
+## only.
 
 const GOLDEN_SEED := 1234
 const GOLDEN_HALF_M := 12.0
