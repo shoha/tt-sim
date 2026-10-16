@@ -51,6 +51,9 @@ extends Node3D
 ## rebuild carries them into the chunks (mid-stroke only the vertices move).
 ## River exits (P6-1): rivers leaving the map run on into the skirt (RiverExitMesh, SkirtExits;
 ## apply_river_exits()). The opaque skirt's fade follows the environment (SkirtBackdrop).
+## Ground look (ground ship card 3b): when a biome of the map carries a ground_look, a
+## GroundLookBake child bakes its zones and painted light and binds the ground, the skirt and the
+## biome's grass; build() rebakes, a re-tabling update_ground_region() re-plans (ground_look()).
 
 const CHUNK_NAME_PREFIX := "TerrainChunk"
 const COLLISION_NAME := "TerrainCollision"
@@ -132,6 +135,8 @@ var _chunk_heights: Dictionary = {}
 ## get_height_texture(), and whether height edits made it stale since settle_heights().
 var _height_texture: ImageTexture = null
 var _height_texture_stale: bool = false
+## The ground look's bake, made once the map first has a biome with a look (null before).
+var _look_bake: GroundLookBake = null
 
 
 func _ready() -> void:
@@ -202,11 +207,34 @@ func build(
 	_build_collision()
 	_build_skirt(prepared.get(AuthoredLoadPrep.SKIRT, {}))
 	_refresh_height_texture()
+	_sync_ground_look(true)
 
 
 ## The shared ground material.
 func get_material() -> ShaderMaterial:
 	return _material
+
+
+## The skirt's material (a duplicate of the ground's, made by build()), or null.
+func get_skirt_material() -> ShaderMaterial:
+	return _skirt_material
+
+
+## The ground look's bake (GroundLookBake), or null while no biome of the map carries a look.
+func ground_look() -> GroundLookBake:
+	return _look_bake
+
+
+## Brings the ground look up to the document (see GroundLookBake.sync); makes its node when a
+## biome with a look first appears. Nothing at all for a map whose biomes carry none.
+func _sync_ground_look(rebake: bool) -> void:
+	if _look_bake == null:
+		if not GroundLookBake.has_look(document, palette_root):
+			return
+		_look_bake = GroundLookBake.new()
+		_look_bake.terrain = self
+		add_child(_look_bake)
+	_look_bake.sync(rebake)
 
 
 ## The ground skirt: the base surface continued past the map edge, fading into the backdrop
@@ -341,6 +369,7 @@ func update_ground_region(sample_rect: Rect2i) -> void:
 	_layers.update_region(sample_rect.intersection(grid), _has_water())
 	if retabled:
 		_sync_skirt_tables()
+		_sync_ground_look(false)
 	last_broad_update_usec = _layers.last_broad_usec
 	last_biome_update_usec = Time.get_ticks_usec() - start
 

@@ -27,6 +27,10 @@ Conventions on 2026-10-09).
 | `utils/height_stroke.gd`, `utils/height_brush.gd` | `HeightStroke`, `HeightBrush` | Sculpt strokes and their rules |
 | `utils/ground_snap.gd` | `GroundSnap` | Plants and props follow the ground |
 | `utils/scatter_rows.gd` | `ScatterRows` | `row_keys` |
+| `scenes/terrain/ground_look_bake.gd` | `GroundLookBake` | The ground look's owner (child of `AuthoredTerrain`, made only when a biome of the map carries a `ground_look`): one bake per looked biome, the ground's and skirt's look tables, the grass's tuft uniforms, the sun |
+| `utils/ground_look_uniforms.gd` | `GroundLookUniforms` | A merged look as uniforms: `NAMES` (the contract's r20 names), `bake_params`, `tuft_params`, `plan` (slots per biome row and layer), `ground_tables`, `ref_linear`, `opaque_mean_linear` |
+| `utils/ground_mass_stamps.gd` | `GroundMassStamps` | The grass masses' shade and lift stamped into the bake |
+| `shaders/ground_light_field.gdshaderinc`, `shaders/ground_light_field_bake.gdshader` | | The zones and painted light (bake only), the decode and cap (ground), the tuft shading (grass, `wind_foliage_main`) |
 
 ## Model
 
@@ -82,6 +86,55 @@ Conventions on 2026-10-09).
 - A mesh that decorates beyond the map sets `Constants.BOUNDS_EXEMPT_META` so the bounds walks
   skip it.
 
+### Ground look
+
+Round 20 of the treecube ground looks pass, ported in ground ship card 3b (contract:
+[ASSET_PIPELINE.md](../ASSET_PIPELINE.md) section 9 "Ground look and grass masses"). A biome
+whose palette entry carries a `ground_look` draws colour zones under a painted light, rims at
+its accent patches and paths, shaped accent patches, and tufts and grass masses that take the
+zone colour; a palette without one draws exactly today's ground and grass (checked: the bare
+ground of grassland and savanna at seed 1234 renders bit-identical to main's).
+
+- **Bake.** `GroundLookBake` gives each looked biome on the map a slot (at most
+  `GroundLookUniforms.SLOTS`, 4; a fifth draws today's ground with a warning) and bakes each
+  slot once into a SubViewport over the map plus 24 m at 10 texels per metre (max 2048 px,
+  square-root RGBA8): the zone colour times the light over the biome's light reference
+  (`ref_surface`'s `albedo_mean_linear`, measured from the texture when absent) and the light's
+  luminance. Zones and light are shifted by `GroundZones.seed_offset(map_seed)`. The grass
+  masses' shade and lift are stamped over it from the anchored instances (`GroundMassStamps`),
+  toward the sun.
+- **Several biomes.** Each biome is baked whole and on its own; the ground blends them by its
+  own biome weights. Per pixel, the share of its biome components that carry a look mixes
+  today's ground (variation, no cap) with the looked one (zones, cap), so a looked biome painted
+  on an unlooked base, or a fire's burnt forest (no look) on a looked one, keeps each side as it
+  should be. Per-sample values (brush, light reference, which layer is zoned) come from the
+  layer's slot (`look_layer_slots`: `zones.layers`, else the row's ground); pixel-wide values
+  (the cap, the rims' strength and colour, the path band) from the pixel's dominant looked
+  component; the accent shape and accent rim width from each accent's own row. Known limits:
+  a surface that is one looked biome's ground and another biome's accent is zoned everywhere;
+  a ground surface shared by two looked biomes takes the first's brush; a skirt whose edge is
+  painted is not zoned.
+- **When.** `AuthoredTerrain.build()` rebakes (map open, resize); a re-tabling
+  `update_ground_region()` (a new biome painted, a fire) re-plans the slots and bakes only when
+  the set of looked biomes changed (the bake does not depend on the biome maps); an applied
+  scatter regeneration restamps the masses after 0.5 s of quiet and once growth ends; a sun
+  direction change (the first `DirectionalLight3D`, polled per frame) reapplies the grass's lit
+  side and restamps. All of it in play and in authoring alike.
+- **Grass.** The materials of a looked biome's species of kind `grass` get the tuft and mass
+  uniforms, the biome's bake and rect, the sun and their own `zone_tuft_ref` (the texture's
+  opaque mean). The uniforms live in `wind_foliage_main.gdshaderinc`, not the shared include, so
+  `wind_foliage_burn.gdshader` gains none; `INSTANCE_CUSTOM.x` stays the burn slot. A Blender
+  map's grass is never bound (every gate stays 0).
+- **Accent noise.** The CPU's bare-opening noise (`ScatterMass.bare_keep`) keeps round 20's
+  form, without `accent_shape.edge_scale` (the GPU's patch ramp uses it): parity means doing
+  what round 20 did.
+- **Dropped from the probe:** the per-fragment light field and `light_field_follow`, the unbaked
+  path (`light_field_baked` 0), the dry drift, the 2B rim widths, `accent_blend_width`, and the
+  mass chroma, knee, straw and rust uniforms (none in the contract).
+- **Warm-up.** The bake shader is in `GraphicsWarmup.COVERED_SHADERS`. A mass MultiMesh's
+  `use_custom_data` is per-instance data in the instance buffer, not a pipeline variant, so the
+  warmer needs no custom-data twin (from the renderer's design; not timed, card 5 times warm-up).
+
 ## Authoring
 
 - After a height edit call `queue_heights(sample_rect)` + `process_heights(budget)` (in-place
@@ -100,7 +153,8 @@ Conventions on 2026-10-09).
 Unit tests in `tests/unit/`: `test_authored_terrain.gd`, `test_terrain_rules.gd` (keeps
 `TerrainRules` and the shader constants in sync), `test_ground_layers.gd`,
 `test_ground_layer_binding.gd`, `test_ground_layers_index.gd`, `test_ground_accents.gd`, `test_scatter_ground_rules.gd`, `test_height_sculpt.gd`,
-`test_authoring_sculpt.gd`.
+`test_authoring_sculpt.gd`, `test_ground_look.gd` (the round 20 uniforms, gates off without a
+look, two biomes' slots).
 
 ## Open work
 

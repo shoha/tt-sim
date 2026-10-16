@@ -409,6 +409,16 @@ static func _validate_surfaces(raw: Variant, warnings: Array[String]) -> Diction
 		}
 		for map_name in SURFACE_MAPS:
 			surface[map_name] = _path_or(entry.get(map_name), "")
+		# Optional (section 9): the albedo map's mean linear colour, a ground look's light
+		# reference (GroundLookUniforms.ref_linear measures it when absent or malformed).
+		var mean: Variant = entry.get("albedo_mean_linear")
+		var numeric := func(v: Variant) -> bool: return v is float or v is int
+		if mean is Array and mean.size() == 3 and mean.all(numeric):
+			surface["albedo_mean_linear"] = mean.map(
+				func(v: Variant) -> float: return clampf(float(v), 0.0, 1.0)
+			)
+		elif mean != null:
+			warnings.append("surface '%s': malformed albedo_mean_linear ignored" % name)
 		result[name] = surface
 	return result
 
