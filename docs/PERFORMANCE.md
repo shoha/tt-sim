@@ -3264,3 +3264,63 @@ was not isolated (no frame with stamps forced on at that state was taken). Captu
 `user://render_jobs/ground_opt_restamp/{reopen,fresh}_{0_before,1_dab1,2_dab2}{,_h}[_sub].png`;
 the home parity set is `user://render_jobs/ground_opt_home_bare/`. Open item:
 `docs/systems/authored_terrain.md` "Open work".
+
+**Scatter generation, CPU (ground-opt-cpu, 2026-10-16).** Four exact commits (cfedc6c2 zone
+share, afbc9727 bare openings, 9354c247 clump scan, and the evaluate commit after them): every row
+MD5 of the nine biomes at seed 1 on the whole flat 200 ft map unchanged after each, and the scatter
+golden rows pass. Located with an instrumented inclusive profile (call counts, us per call; savanna
+and grassland, then taiga and badlands), never committed:
+
+- *Zone share* (1.6-1.8 s of either massed biome instrumented): `GroundZones.share_reaches`
+  bounds the family's share after each mask and stops once the bound clears zone_share, so
+  grassland (families 0, 0, 2, 2) never finds its lowest mask. The masks themselves stay dear
+  (11-12 us each, 131 k of 138 k on grassland past the saturated-shape exit into the edge noise
+  and the strokes).
+- *Bare openings* (1.0 s grassland, 2.4-2.5 s savanna, 8.5-8.9 us per call): most of it was the
+  accent shape's warp (two value noises of four pcg2d hashes each), now memoized per lattice cell
+  (`TerrainRules.value_noise_memo`). The card's lead, the fine octave skipped where it cannot
+  cross the ramp, decides only about 3 % of the call: it is taken (exact) but is not the gain.
+- *Clump scan*: the per-bucket `kept_parents` call was most of an unmassed clumped species'
+  18-25 us per child bucket.
+- *Evaluate*: the pattern noise asked only past the density response, the response inlined with
+  `ScatterMass.off_bare` asked only with openings, a non-mass row's scale appended directly,
+  `ctx.anchor` written once per membership, and each kept parent's cosine and sine found once
+  (`ScatterClumps.PARENT_STRIDE` 6; the card's lead, worth about 1 %).
+
+Headless, one thread, whole flat 200 ft map, seed 1, ms; each state run twice in one session in
+the order after, 3, 2, 1, before, before, 1, 2, 3, after (state k: the first k commits):
+
+| Biome | Before (head 8c5f2202) | After 1 | After 2 | After 3 | After all four | Gain | Main [card 4b] |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| savanna | 9569, 9740 | 9578, 9517 | 8935, 8977 | 8851, 9047 | 8958, 8917 | -7.4 % | 3,700 |
+| grassland | 8188, 8225 | 7959, 7988 | 7598, 7716 | 7686, 7670 | 7551, 7543 | -8.0 % | 3,300 |
+| wetland | 5769, 5814 | 5791, 5785 | 5796, 5870 | 5635, 5713 | 5589, 5573 | -3.6 % | 5,300 |
+| alpine | 4246, 4250 | 4304, 4307 | 4265, 4264 | 4138, 4174 | 4006, 4021 | -5.5 % | 3,000 |
+| birch | 2497, 2511 | 2511, 2522 | 2517, 2507 | 2414, 2437 | 2376, 2391 | -4.8 % | 1,700 |
+| temperate | 2208, 2230 | 2218, 2229 | 2231, 2242 | 2158, 2150 | 2087, 2109 | -5.5 % | 1,150 |
+| taiga | 1052, 1065 | 1066, 1074 | 1065, 1073 | 1023, 1024 | 993, 992 | -6.2 % | 910 |
+| badlands | 551, 566 | 562, 557 | 548, 560 | 546, 538 | 516, 519 | -7.4 % | 470 |
+| burnt | 204.5, 208.6 | 210.7, 207.6 | 206.9, 209.2 | 194.3, 194.9 | 189.0, 190.7 | -8.1 % | 170 |
+
+Two runs of one state differ by up to 1.8 %; alpine's +57 ms after commit 1 is noise (commit 1
+never runs for it). The unmassed residual against main is now 9-12 % (taiga, badlands, burnt),
+from 16-24 %.
+
+In game (RTX 3080, debug build, `ground_timing_build.json`, the optimized and the head code
+alternated A B A B in one session; per run three new maps of each biome and four 3 m dabs on the
+saved grassland): a new map's scatter grows in **grassland 5.01-5.15 s against 5.30-5.51 s
+(-0.34 s), savanna 3.98-4.06 against 4.17-4.26 (-0.21 s)**; main's were 3.80-3.81 and 2.57-2.65
+(item 4 above), so the ship's extra shrinks from about 1.5-1.65 s to 1.2-1.4 s. A dab is applied
+**1.42-1.47 s after the release against 1.54-1.63 s (-0.14 s)**, last worker job 332-356 ms
+against 353-397 (main 1.15-1.18 s and 325-335 ms). The loading screen (805-856 ms) and the palette
+resolve (about 3.3 s) do not move: a play load reads its rows from the level and generates
+nothing, so these commits do not touch it (its 70-175 ms ship cost: item 6; not timed here).
+
+**What is left** (the profile before the last two commits; per-call costs barely moved since):
+the massed biomes stay about 2.4x main's. Per massed grass candidate: the membership with its
+parents (3.4 s grassland instrumented, of it 2.2 s the child-bucket misses), the zone masks of the
+zone share (each mask 11-12 us), the spacing of mass children (1.1 s savanna) and the row (8 us).
+Most of it is GDScript's per-call cost (dictionary lookups, static calls), so the next exact step
+is structural: per-entry constants hoisted out of the per-candidate calls, or the per-candidate
+loop moved to native code. **Inexact, not committed:** the zone weights asked once per 0.23 m child
+bucket instead of per child (the zones vary over metres; it would move some rows, so no).

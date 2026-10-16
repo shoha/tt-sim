@@ -217,8 +217,9 @@ static func _dome(edge: float) -> float:
 	return 1.0 - e * e
 
 
-## Clump membership at (x, z) over `parents` ([x, z, radius, angle] records): x = 0..1 (1
-## inside a parent's radius, smoothly to 0 across the transition), y = the distance to that
+## Clump membership at (x, z) over `parents` ([x, z, radius, angle] records, or with `stride` 6
+## ScatterClumps' records, the angle's cosine and sine after it, found once per parent): x = 0..1
+## (1 inside a parent's radius, smoothly to 0 across the transition), y = the distance to that
 ## parent over its reach (0 at the centre, 1 at the outer edge). Additive clumps
 ## (ScatterPlan.additive_clumps, never for a mass species) sum every clump over
 ## ScatterPlan.CLUMP_SATURATION and take the nearest centre's y. With `stretch` > 1 each clump
@@ -231,7 +232,8 @@ static func membership(
 	parents: PackedFloat64Array,
 	x: float,
 	z: float,
-	refine: bool = true
+	refine: bool = true,
+	stride: int = 4
 ) -> Vector2:
 	var transition: float = entry.rule.clump.transition_m
 	var best := Vector2(0.0, 1.0)
@@ -239,14 +241,16 @@ static func membership(
 	var root := sqrt(stretch)
 	var mass: bool = entry.get("mass", false)
 	var additive: bool = ScatterPlan.additive_clumps and not mass
+	var turned := stride >= 6
 	var total := 0.0
-	for i in range(0, parents.size(), 4):
+	var chosen := -1  # the parent ctx.anchor names, set once after the loop
+	for i in range(0, parents.size(), stride):
 		var dx := parents[i] - x
 		var dz := parents[i + 1] - z
 		if stretch > 1.0:
 			# Into the ellipse's frame: the long axis shrunk, the short one grown.
-			var ca := cos(parents[i + 3])
-			var sa := sin(parents[i + 3])
+			var ca := parents[i + 4] if turned else cos(parents[i + 3])
+			var sa := parents[i + 5] if turned else sin(parents[i + 3])
 			var along := (dx * ca + dz * sa) / root
 			dz = (dz * ca - dx * sa) * root
 			dx = along
@@ -262,10 +266,12 @@ static func membership(
 		if additive:
 			if edge < best.y:
 				best.y = edge
-				ctx.anchor = Vector2(parents[i], parents[i + 1])
+				chosen = i
 		elif inside > best.x or (inside == best.x and edge < best.y):
 			best = Vector2(inside, edge)
-			ctx.anchor = Vector2(parents[i], parents[i + 1])
+			chosen = i
+	if chosen >= 0:
+		ctx.anchor = Vector2(parents[chosen], parents[chosen + 1])
 	if additive:
 		best.x = minf(1.0, total / ScatterPlan.CLUMP_SATURATION)
 	elif mass:
@@ -470,10 +476,11 @@ static func parent_angle(entry: Dictionary, x: float, z: float, angle: float) ->
 ## ScatterPlan.respond (the painted density through the size class's response) times bare_keep
 ## over the entry's mass_bare: a biome whose mass rule sets clump `bare` keeps all its grass off
 ## the bare openings (ScatterPlan.build), not only the masses, so no lone tuft stands in a dirt
-## clearing. Called once per candidate (ScatterGenerator._evaluate) with the candidate's uniform
-## `u` and `shade`, the pattern keep the candidate meets next: where u >= the response times shade
-## the candidate is rejected whatever the openings say (bare_keep is 0..1), so that product comes
-## back, at most u, and the openings' noise is never evaluated.
+## clearing. With the candidate's uniform `u` and `shade`, the pattern keep the candidate meets
+## next: where u >= the response times shade the candidate is rejected whatever the openings say
+## (bare_keep is 0..1), so that product comes back, at most u, and the openings' noise is never
+## evaluated (off_bare). ScatterGenerator._evaluate runs the same steps itself, asking off_bare
+## only of a candidate the response keeps on an entry with openings.
 static func respond_bare(
 	entry: Dictionary, painted: float, x: float, z: float, u: float = -INF, shade: float = 1.0
 ) -> float:
@@ -481,6 +488,11 @@ static func respond_bare(
 	var bare: Array = entry.get("mass_bare", [])
 	if keep <= 0.0 or bare.is_empty():
 		return keep
+	return off_bare(bare, keep, x, z, u, shade)
+
+
+## respond_bare's tail for a response `keep` above 0 and openings `bare` (bare_params records).
+static func off_bare(bare: Array, keep: float, x: float, z: float, u: float, shade: float) -> float:
 	var bound := keep * shade
 	if u >= bound:
 		return bound

@@ -19,18 +19,20 @@ extends RefCounted
 ## species, and those nested evaluations write ctx.edge and ctx.anchor, so they must happen
 ## exactly where they always have.
 
-## Kept parent record: x, z, radius, long-axis angle (radians).
-const PARENT_STRIDE := 4
+## Kept parent record: x, z, radius, long-axis angle (radians), and the angle's cosine and sine,
+## found once per parent rather than once per child that tests it (ScatterMass.membership with
+## this stride; ground-opt-cpu).
+const PARENT_STRIDE := 6
 ## Listed parent record: the kept parent record, then its parent bucket's column and row.
-const _LISTED_STRIDE := 6
+const _LISTED_STRIDE := PARENT_STRIDE + 2
 ## The side of a gathering tile, in metres (a whole number of child buckets, at least one).
 const TILE_M := 4.0
 ## A child bucket whose reach spans fewer parent buckets than this scans them directly.
 const TILE_MIN_BUCKETS := 16
 
 
-## Kept clump parents whose reach overlaps one children bucket, as [x, z, radius, angle]
-## records (memoized per bucket, so each child checks only the few that matter).
+## Kept clump parents whose reach overlaps one children bucket, as kept parent records
+## (memoized per bucket, so each child checks only the few that matter).
 static func parents_near_bucket(
 	ctx: Dictionary, s: int, bi: int, bj: int
 ) -> PackedFloat64Array:
@@ -82,6 +84,8 @@ static func parents_near_bucket(
 					out.append(pz)
 					out.append(radius)
 					out.append(kept[c + 3])
+					out.append(kept[c + 4])
+					out.append(kept[c + 5])
 		memo[key] = out
 		return out
 	var listed := _tile(ctx, s, bi, bj, reach)
@@ -94,8 +98,8 @@ static func parents_near_bucket(
 	var near_z: float = rect.position.y
 	var far_z: float = rect.end.y
 	for c in range(0, listed.size(), _LISTED_STRIDE):
-		var parent_i := int(listed[c + 4])
-		var parent_j := int(listed[c + 5])
+		var parent_i := int(listed[c + PARENT_STRIDE])
+		var parent_j := int(listed[c + PARENT_STRIDE + 1])
 		if parent_i < first_i or parent_i > last_i or parent_j < first_j or parent_j > last_j:
 			continue
 		var px := listed[c]
@@ -110,12 +114,14 @@ static func parents_near_bucket(
 		out.append(pz)
 		out.append(radius)
 		out.append(listed[c + 3])
+		out.append(listed[c + 4])
+		out.append(listed[c + 5])
 	memo[key] = out
 	return out
 
 
-## The kept parents of one parent bucket as [x, z, radius, angle] records (memoized per
-## bucket; the angle is a mass's long axis, ScatterMass.parent_spin).
+## The kept parents of one parent bucket as kept parent records (memoized per bucket; the angle
+## is a mass's long axis, ScatterMass.parent_spin).
 static func kept_parents(ctx: Dictionary, s: int, bi: int, bj: int) -> PackedFloat64Array:
 	var memo: Dictionary = ctx.parent_buckets[s]
 	var key := _key(bi, bj)
@@ -134,11 +140,13 @@ static func kept_parents(ctx: Dictionary, s: int, bi: int, bj: int) -> PackedFlo
 			out.append(cands[c])
 			out.append(cands[c + 1])
 			out.append(radius * (1.0 + entry.clump_jitter * jitter))
-			if not mass:
-				out.append(0.0)  # parent_spin's angle for a rule that is not a mass
-				continue
-			var turn := 2.0 * ScatterGenerator._unit(h, ScatterGenerator._SALT_ANGLE) - 1.0
-			out.append(ScatterMass.parent_spin(entry, cands[c], cands[c + 1], turn))
+			var angle := 0.0  # parent_spin's angle for a rule that is not a mass
+			if mass:
+				var turn := 2.0 * ScatterGenerator._unit(h, ScatterGenerator._SALT_ANGLE) - 1.0
+				angle = ScatterMass.parent_spin(entry, cands[c], cands[c + 1], turn)
+			out.append(angle)
+			out.append(cos(angle))
+			out.append(sin(angle))
 	memo[key] = out
 	return out
 
