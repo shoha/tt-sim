@@ -473,7 +473,7 @@ static func warmup_document() -> MapDocument:
 
 ## GraphicsWarmup samples: one ground chunk and one skirt, built by the same functions as a
 ## real AuthoredTerrain (so a layout change here carries into the warm-up), on bare
-## ShaderMaterials of the real shaders.
+## ShaderMaterials of the real shaders, plain and looked (AuthoredTerrain.set_looked).
 static func warmup_samples() -> Array[Dictionary]:
 	var doc := warmup_document()
 	var chunk := build_chunk_arrays(doc, chunk_cells(doc)[0], grid_fields(doc))
@@ -484,6 +484,8 @@ static func warmup_samples() -> Array[Dictionary]:
 	for entry in [
 		["terrain_chunk", chunk, AuthoredTerrain.GROUND_SHADER],
 		["terrain_skirt", skirt, AuthoredTerrain.SKIRT_SHADER],
+		["terrain_chunk_looked", chunk, AuthoredTerrain.GROUND_LOOKED_SHADER],
+		["terrain_skirt_looked", skirt, AuthoredTerrain.SKIRT_LOOKED_SHADER],
 	]:
 		var sample := {
 			"name": entry[0],

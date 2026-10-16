@@ -22,6 +22,8 @@ extends Node
 ## not while growing); a species resolved later gets the grass uniforms; the sun's direction
 ## (the first DirectionalLight3D) is polled each frame and a change reapplies the grass's lit
 ## side and restamps. A map whose biomes carry no look binds look_present 0 and runs nothing.
+## Binding the ground also picks its shaders (AuthoredTerrain.set_looked): the looked twins only
+## while a look is bound, so a map without one draws shaders with no look code in them.
 
 const NODE_NAME := "GroundLookBake"
 const BAKE_SHADER := preload("res://shaders/ground_light_field_bake.gdshader")
@@ -292,12 +294,14 @@ func _on_baked() -> void:
 	_bind_grass()
 
 
-## The ground's and the skirt's GROUND LOOK uniforms (look_present 0 when nothing is bound).
+## The ground's and the skirt's GROUND LOOK uniforms (look_present 0 when nothing is bound), and
+## the shaders to match: the looked ones while a look is bound, else the plain ones.
 func _bind_ground() -> void:
 	var tables := GroundLookUniforms.OFF.duplicate()
 	if not biomes().is_empty() and _viewports.size() == biomes().size():
 		var textures := _viewports.map(func(vp: SubViewport) -> Texture2D: return vp.get_texture())
 		tables = GroundLookUniforms.ground_tables(_plan, _looks, _refs, textures, _rect)
+	terrain.set_looked(int(tables.get("look_present", 0)) != 0)
 	for mat in [terrain.get_material(), terrain.get_skirt_material()]:
 		if mat != null:
 			for key: String in tables:

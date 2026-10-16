@@ -54,12 +54,17 @@ extends Node3D
 ## Ground look (ground ship card 3b): when a biome of the map carries a ground_look, a
 ## GroundLookBake child bakes its zones and painted light and binds the ground, the skirt and the
 ## biome's grass; build() rebakes, a re-tabling update_ground_region() re-plans (ground_look()).
+## The ground and the skirt draw the plain shaders (no look code at all) until the bake binds a
+## look, which swaps in the looked twins (set_looked); losing the last looked biome swaps back.
 
 const CHUNK_NAME_PREFIX := "TerrainChunk"
 const COLLISION_NAME := "TerrainCollision"
 const SKIRT_NAME := "TerrainSkirt"
 const GROUND_SHADER := preload("res://shaders/authored_ground.gdshader")
 const SKIRT_SHADER := preload("res://shaders/authored_ground_skirt.gdshader")
+## The same with the GROUND LOOK path compiled in (bound by set_looked).
+const GROUND_LOOKED_SHADER := preload("res://shaders/authored_ground_looked.gdshader")
+const SKIRT_LOOKED_SHADER := preload("res://shaders/authored_ground_skirt_looked.gdshader")
 ## The skirt fades out this far past the map edge (skirt_fade_m), the distance stretched
 ## by up to +-SKIRT_WOBBLE with noise; the ring is wide enough for the longest stretch.
 const SKIRT_FADE_M := 24.0
@@ -223,6 +228,28 @@ func get_skirt_material() -> ShaderMaterial:
 ## The ground look's bake (GroundLookBake), or null while no biome of the map carries a look.
 func ground_look() -> GroundLookBake:
 	return _look_bake
+
+
+## The ground shader for the skirt (`skirt`) or the map, with the look path (`looked`) or not.
+static func ground_shader(skirt: bool, looked: bool) -> Shader:
+	if skirt:
+		return SKIRT_LOOKED_SHADER if looked else SKIRT_SHADER
+	return GROUND_LOOKED_SHADER if looked else GROUND_SHADER
+
+
+## True while the ground draws the looked shader (set_looked).
+func is_looked() -> bool:
+	return _material != null and _material.shader == GROUND_LOOKED_SHADER
+
+
+## Binds the looked shaders (`looked`) or the plain ones on the ground and the skirt, keeping
+## every uniform. GroundLookBake calls it with the tables it binds, so the variant follows the
+## map's looked biomes on every peer (each rebuilds and re-plans from its own document).
+func set_looked(looked: bool) -> void:
+	if _material != null and _material.shader != ground_shader(false, looked):
+		_material.shader = ground_shader(false, looked)
+	if _skirt_material != null and _skirt_material.shader != ground_shader(true, looked):
+		_skirt_material.shader = ground_shader(true, looked)
 
 
 ## Brings the ground look up to the document (see GroundLookBake.sync); makes its node when a

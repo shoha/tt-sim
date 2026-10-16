@@ -165,7 +165,60 @@ func test_a_biome_without_a_look_leaves_every_gate_off() -> void:
 	assert_null(terrain.ground_look(), "no bake node")
 	var present: Variant = terrain.get_material().get_shader_parameter("look_present")
 	assert_true(present == null or int(present) == 0, "look_present off")
+	assert_eq(terrain.get_material().shader, AuthoredTerrain.GROUND_SHADER, "the plain shader")
 	terrain.free()
+
+
+func test_the_looked_shaders_follow_the_maps_biomes() -> void:
+	var biome := PaletteLibrary.biome(TAIGA)
+	var doc := MapDocument.create_flat(Vector2i(8, 8), String(biome.ground_surface), "", 1234)
+	doc.biome_ids = PackedStringArray([TAIGA])
+	var terrain := AuthoredTerrain.create(doc)
+	add_child_autofree(terrain)
+	assert_eq(terrain.get_material().shader, AuthoredTerrain.GROUND_SHADER, "taiga: plain ground")
+	assert_eq(terrain.get_skirt_material().shader, AuthoredTerrain.SKIRT_SHADER, "and skirt")
+	# A looked biome painted in later: its bake binds the looked shaders once drawn (headless
+	# draws no frame, so the drawn callback is called here).
+	doc.biome_ids.append(ZONED[0])
+	terrain.update_ground_region(Rect2i(0, 0, 4, 4))
+	var bake := terrain.ground_look()
+	assert_not_null(bake, "the grassland makes a bake")
+	assert_false(terrain.is_looked(), "plain until the bake is drawn")
+	bake._on_baked()
+	assert_true(terrain.is_looked(), "looked once bound")
+	assert_eq(terrain.get_skirt_material().shader, AuthoredTerrain.SKIRT_LOOKED_SHADER)
+	assert_eq(int(terrain.get_material().get_shader_parameter("look_present")), 1)
+	var skirt := TerrainSkirt.material(terrain.get_material(), terrain.layer_binding(), doc, 24.0, 0.3)
+	assert_eq(skirt.shader, AuthoredTerrain.SKIRT_LOOKED_SHADER, "a new skirt follows the ground")
+	# The last looked biome gone: the plain shaders again.
+	doc.biome_ids = PackedStringArray([TAIGA])
+	bake.sync(false)
+	assert_false(terrain.is_looked(), "plain with no looked biome")
+	assert_eq(terrain.get_skirt_material().shader, AuthoredTerrain.SKIRT_SHADER)
+
+
+func test_mass_stamps_keep_their_materials_across_restamps() -> void:
+	var vp := SubViewport.new()
+	add_child_autofree(vp)
+	var sums := {Vector2i.ZERO: PackedFloat64Array([8.0, 0.0, 0.0, 2.0, 1.0, 0.2])}
+	var mass := {
+		"shade": 0.3, "lift": 0.1, "shade_size": 1.0, "shade_push": 0.2, "lift_size": 1.0,
+		"lift_push": 0.2
+	}
+	var rect := Vector4(-4.0, -4.0, 8.0, 8.0)
+	var px := Vector2i(32, 32)
+	assert_eq(GroundMassStamps.draw(vp, sums, rect, px, mass, Vector2(0.0, -1.0)), 1, "one mass")
+	var shade := vp.get_node(GroundMassStamps.SHADE_NODE) as Node2D
+	var lift := vp.get_node(GroundMassStamps.LIFT_NODE) as Node2D
+	var shade_mat := shade.material as CanvasItemMaterial
+	var lift_mat := lift.material as CanvasItemMaterial
+	assert_eq(shade_mat.blend_mode, CanvasItemMaterial.BLEND_MODE_MUL)
+	assert_eq(lift_mat.blend_mode, CanvasItemMaterial.BLEND_MODE_ADD)
+	GroundMassStamps.draw(vp, sums, rect, px, mass, Vector2(1.0, 0.0))
+	assert_false(is_instance_valid(shade), "the stamp nodes are made anew")
+	var shade_again := vp.get_node(GroundMassStamps.SHADE_NODE) as Node2D
+	assert_same(shade_again.material, shade_mat, "the shade's material is kept")
+	assert_same(vp.get_node(GroundMassStamps.LIFT_NODE).material, lift_mat, "and the lift's")
 
 
 func test_two_biome_map_gives_each_biome_its_values() -> void:
