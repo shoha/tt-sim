@@ -303,6 +303,55 @@ func test_flowers_gather_on_a_paths_verge() -> void:
 	)
 
 
+func test_density_ceiling_bounds_the_sampler_on_painted_wet_and_tiered_ground() -> void:
+	# ground-opt-cpu2: generation rejects a candidate against density_ceiling_at before it asks
+	# species_density_at, which is only the same as asking it while the ceiling bounds it
+	# everywhere: on the tier face and its scree, a path's verge, and wet dressing of every kind
+	# (random bytes in every channel), for every role and water bit.
+	var doc := _doc()
+	_paint(doc, "cobblestone", Vector2(-12, -0.5), Vector2(-4, 0.5))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7
+	var wet := PackedByteArray()
+	wet.resize(doc.sample_count() * WaterDressing.CHANNELS)
+	for i in wet.size():
+		wet[i] = rng.randi_range(0, 255)
+	doc.water_dressing = wet
+	var fields := ScatterGenerator.document_fields(
+		doc, FOREST, Rect2(), PackedStringArray(["cobblestone"])
+	)
+	var at: Callable = fields.species_density_at
+	var ceiling: Callable = fields.density_ceiling_at
+	var roles := PackedInt32Array()
+	for base in [
+		ScatterGround.ROLE_COVER,
+		ScatterGround.ROLE_ROCK,
+		ScatterGround.ROLE_TREE,
+		ScatterGround.ROLE_SHRUB,
+		ScatterGround.ROLE_TALL_COVER
+	]:
+		for bits in [
+			0,
+			ScatterGround.FLOWER_BIT,
+			ScatterGround.EDGE_BANK,
+			ScatterGround.EDGE_EMERGENT,
+			ScatterGround.ARID_BIT
+		]:
+			roles.append(base | bits)
+	var half := doc.extent_m() * 0.5
+	var worst := -INF
+	var checked := 0
+	for i in 4000:
+		var p := Vector2(rng.randf_range(-half.x, half.x), rng.randf_range(-half.y, half.y))
+		for role in roles:
+			var density: float = at.call(p, role)
+			var most: float = ceiling.call(p, role)
+			worst = maxf(worst, density - most)
+			checked += 1
+	assert_eq(checked, 4000 * roles.size())
+	assert_true(worst <= 0.0, "the ceiling is never below the density (worst excess %s)" % worst)
+
+
 ## Each species key of `biome_id` to its plan ground_role.
 func _roles(biome_id: String) -> Dictionary:
 	var roles := {}

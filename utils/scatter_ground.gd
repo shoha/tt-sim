@@ -233,12 +233,15 @@ static func role_of(rule: Dictionary) -> int:
 ## decoded for the samples of `samples` (grid rect, plus one sample around it) only;
 ## `built_surfaces` and `cliff_surfaces` name the palette surfaces with role "built" and
 ## "cliff". `heights` is the document's heights (or a flat field of the grid's size).
+## `facts`, when given, is filled with what density_ceiling needs to bound this sampler:
+## {"fringed": a path fringe is drawn, "wet": wet dressing is read}.
 static func sampler(
 	doc: MapDocument,
 	heights: PackedFloat32Array,
 	samples: Rect2i,
 	built_surfaces: PackedStringArray,
-	cliff_surfaces: PackedStringArray = PackedStringArray()
+	cliff_surfaces: PackedStringArray = PackedStringArray(),
+	facts: Dictionary = {}
 ) -> Callable:
 	var count := doc.sample_count()
 	var columns := doc.samples_x()
@@ -266,6 +269,8 @@ static func sampler(
 	var wet := doc.water_dressing
 	var wet_on := wet.size() == count * WaterDressing.CHANNELS
 	var crossings: Array[Crossing] = doc.crossings.duplicate()
+	facts["fringed"] = not fringe.is_empty()
+	facts["wet"] = wet_on
 	return func(p: Vector2, role: int) -> Vector3:
 		var base := role & ROLE_BITS
 		var s := (p + half) / step
@@ -487,6 +492,29 @@ static func species_density(value: float, g: Vector3, role: int) -> float:
 	if (role & FLOWER_BIT) != 0:
 		return clampf(value * g.x * (1.0 - SCREE_THIN * g.z), 0.0, 1.0 + FLOWER_VERGE_FILL)
 	return density(value, g)
+
+
+## The most species_density(value, g, role) can be for any sampler value `g` a sampler() whose
+## facts are `fringed` and `wet` gives, at a point whose painted density is `value` (0 or more).
+## ScatterGenerator asks it before the sampler itself, which is most of a candidate's cost on a
+## document: a candidate whose uniform clears the response to this ceiling is rejected whatever
+## the sampler would say (ground-opt-cpu2).
+##
+## The bound reads sampler()'s shape, so keep the two in step (test_scatter_ground_rules checks it
+## on painted, wet and crossed ground): the open share g.x is 1 less the cliff share and the paved
+## clearing (each 0 or more), times factors of at most 1 (tier faces, a tall cover's verge, the
+## water for most roles, crossings), except a flower's verge (at most 1 + FLOWER_VERGE_GATHER,
+## drawn only with a fringe) and an edge species' shore (wet_factor: at most 1 + EDGE_BOOST, read
+## only with wet dressing); the scree share g.z is 0..1.
+static func density_ceiling(value: float, role: int, fringed: bool, wet: bool) -> float:
+	var most := 1.0
+	if fringed and (role & FLOWER_BIT) != 0:
+		most *= 1.0 + FLOWER_VERGE_GATHER
+	if wet and (role & (EDGE_EMERGENT | EDGE_BANK)) != 0:
+		most *= 1.0 + EDGE_BOOST
+	if role == ROLE_ROCK:
+		return minf(value * (1.0 + SCREE_ROCK_BOOST), 1.0) * most
+	return value * most
 
 
 ## Painted density `density` as every species but rock reads it, given a sampler value `g`

@@ -81,6 +81,9 @@ const _SALT_RADIUS := 0x0B4E0EF3
 const _SALT_CANDIDATE := 0x632BE5AB
 const _SALT_NOISE := 0x2F6B1C3D
 const _SALT_ANGLE := 0x3A8F05C5
+## Slack over the rounding of ScatterPlan.respond (pow) between a density's ceiling and the
+## density: far above an ulp, a few steps of a candidate's 32-bit uniform.
+const _CEILING_SLACK := 1e-9
 
 
 ## Rows for `cells` of one biome. `species` is PaletteLibrary.species(biome_id) (or any
@@ -117,6 +120,9 @@ static func generate(
 ## -> float, per species' ground_role (boulders gather at cliff feet, trees keep back from
 ## tier faces). No rock, tree or shrub row lands in `blockers` (RockKeep.blockers_for).
 ## A grass mass's rows add their anchors to the caller's `anchors_out` (ScatterMass.collect).
+## `density_ceiling_at`, when valid, is Callable(p, role) -> float, at least what
+## species_density_at gives there (document_fields' density_ceiling_at): a candidate whose
+## uniform clears the response to it is rejected without asking species_density_at.
 static func generate_species_cells(
 	biome_id: String,
 	species: Array[Dictionary],
@@ -128,12 +134,14 @@ static func generate_species_cells(
 	bounds: Rect2,
 	species_density_at: Callable = Callable(),
 	blockers: PackedFloat32Array = PackedFloat32Array(),
-	anchors_out: Dictionary = {}
+	anchors_out: Dictionary = {},
+	density_ceiling_at: Callable = Callable()
 ) -> Dictionary[String, PackedFloat32Array]:
 	var the_plan := ScatterPlan.build(biome_id, species, map_seed)
 	var ctx := _context(the_plan, density_at, height_at, normal_at, bounds)
 	if species_density_at.is_valid():
 		ctx["species_density_at"] = species_density_at
+	ctx["density_ceiling_at"] = density_ceiling_at
 	ctx["blockers"] = blockers
 	ctx["anchors_out"] = anchors_out
 	var result: Dictionary[String, PackedFloat32Array] = {}
@@ -225,17 +233,23 @@ static func generate_for_document(
 		doc.map_seed,
 		cells_by_species,
 		fields.bounds,
-		fields.species_density_at
+		fields.species_density_at,
+		PackedFloat32Array(),
+		{},
+		fields.density_ceiling_at
 	)
 
 
 ## The sampling fields generate() takes, built from a MapDocument for one biome:
-## {density_at, rock_density_at, species_density_at, height_at, normal_at, bounds}. Density
+## {density_at, rock_density_at, species_density_at, density_ceiling_at, height_at, normal_at,
+## bounds}. Density
 ## is the biome's painted density (0 where another biome or none is painted), bilinear on
 ## the document's sample grid, times what the ground lets grow there for a ScatterGround
 ## role (species_density_at(p, role), ScatterGround.species_density; density_at and
 ## rock_density_at are its ROLE_COVER and ROLE_ROCK), `built_surfaces` and `cliff_surfaces`
-## naming the palette surfaces with role "built" and "cliff".
+## naming the palette surfaces with role "built" and "cliff". density_ceiling_at(p, role) is at
+## least species_density_at(p, role) for a bilinear sample's cost (ScatterGround.density_ceiling
+## over the painted density alone), which generation asks first.
 ## Heights and normals follow the terrain's own triangles (triangle_height,
 ## triangle_normal): the rendered chunks and the collision heightfield split every quad
 ## on the same diagonal, and a bilinear height differs from that surface by up to
@@ -287,9 +301,14 @@ static func document_fields(
 	# Only a biome with paint places anything, so only then are the rule fields worth their
 	# decode (DressingGround reads heights alone through biome "").
 	var ground_at := Callable()
+	var facts := {}
 	if painted:
 		var samples := Rect2i(low, high - low + Vector2i.ONE)
-		ground_at = ScatterGround.sampler(doc, heights, samples, built_surfaces, cliff_surfaces)
+		ground_at = ScatterGround.sampler(
+			doc, heights, samples, built_surfaces, cliff_surfaces, facts
+		)
+	var fringed: bool = facts.get("fringed", false)
+	var wet: bool = facts.get("wet", false)
 	var plain_at := func(p: Vector2) -> float:
 		var at := (p + half) / step
 		if at.x < 0.0 or at.y < 0.0 or at.x > columns - 1 or at.y > rows - 1:
@@ -298,6 +317,9 @@ static func document_fields(
 	var species_density_at := func(p: Vector2, role: int) -> float:
 		var d: float = plain_at.call(p)
 		return ScatterGround.species_density(d, ground_at.call(p, role), role) if d > 0.0 else d
+	var density_ceiling_at := func(p: Vector2, role: int) -> float:
+		var d: float = plain_at.call(p)
+		return ScatterGround.density_ceiling(d, role, fringed, wet) if d > 0.0 else d
 	var height_at := func(p: Vector2) -> float:
 		return triangle_height(heights, columns, rows, (p + half) / step)
 	var normal_at := func(p: Vector2) -> Vector3:
@@ -306,6 +328,7 @@ static func document_fields(
 		"density_at": species_density_at.bind(ScatterGround.ROLE_COVER),
 		"rock_density_at": species_density_at.bind(ScatterGround.ROLE_ROCK),
 		"species_density_at": species_density_at,
+		"density_ceiling_at": density_ceiling_at,
 		"height_at": height_at,
 		"normal_at": normal_at,
 		"bounds": Rect2(-half, doc.extent_m()),
@@ -561,6 +584,14 @@ static func _evaluate(
 	if not bounds.has_point(p):
 		return false
 	var u := _unit(int(cands[c + 5]), _SALT_ACCEPT)
+	# The response is monotone and clamped, so a uniform past the response to the density's
+	# ceiling is past it for the density too: rejected for a bilinear sample instead of the
+	# ground sampler, most of a document candidate's cost (ground-opt-cpu2).
+	var ceiling_at: Callable = ctx.density_ceiling_at
+	if ceiling_at.is_valid():
+		var most: float = ceiling_at.call(p, entry.ground_role)
+		if u >= ScatterPlan.respond(most, entry.response_lead, entry.response_lag) + _CEILING_SLACK:
+			return false
 	# Painted density through the size class's response (ScatterPlan.DENSITY_RESPONSE).
 	var painted: float = ctx.species_density_at.call(p, entry.ground_role)
 	var keep := ScatterPlan.respond(painted, entry.response_lead, entry.response_lag)

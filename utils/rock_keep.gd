@@ -344,7 +344,10 @@ static func _generate(
 		doc.map_seed,
 		cells_by_species,
 		fields.bounds,
-		fields.species_density_at
+		fields.species_density_at,
+		PackedFloat32Array(),
+		{},
+		fields.density_ceiling_at
 	)
 
 
