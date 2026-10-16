@@ -53,15 +53,28 @@ static func parents_near_bucket(
 	# overlaps it, so each child tests two or three parents, not a neighbourhood.
 	var buckets := (span[1] - span[0] + 1) * (span[3] - span[2] + 1)
 	if buckets < TILE_MIN_BUCKETS or not entry.near.is_empty():
+		# The scan reads kept_parents' memo itself (the call only on a miss), a column's key one
+		# _BUCKET_SPAN past its left neighbour's: the lookups are most of a scan's work, and every
+		# clumped species of every biome scans (ground-opt-cpu).
+		var kept_memo: Dictionary = ctx.parent_buckets[s]
+		var left: float = rect.position.x
+		var right: float = rect.end.x
+		var near_z: float = rect.position.y
+		var far_z: float = rect.end.y
 		for parent_j in range(span[2], span[3] + 1):
+			var bucket_key := _key(span[0], parent_j)
 			for parent_i in range(span[0], span[1] + 1):
-				var kept := kept_parents(ctx, s, parent_i, parent_j)
+				var known: Variant = kept_memo.get(bucket_key)
+				bucket_key += ScatterGenerator._BUCKET_SPAN
+				var kept: PackedFloat64Array = (
+					known if known != null else kept_parents(ctx, s, parent_i, parent_j)
+				)
 				for c in range(0, kept.size(), PARENT_STRIDE):
 					var px := kept[c]
 					var pz := kept[c + 1]
 					var radius := kept[c + 2]
-					var dx := maxf(0.0, maxf(rect.position.x - px, px - rect.end.x))
-					var dz := maxf(0.0, maxf(rect.position.y - pz, pz - rect.end.y))
+					var dx := maxf(0.0, maxf(left - px, px - right))
+					var dz := maxf(0.0, maxf(near_z - pz, pz - far_z))
 					var parent_reach := (radius + transition) * root
 					if dx * dx + dz * dz > parent_reach * parent_reach:
 						continue
@@ -72,16 +85,24 @@ static func parents_near_bucket(
 		memo[key] = out
 		return out
 	var listed := _tile(ctx, s, bi, bj, reach)
+	var first_i := span[0]
+	var last_i := span[1]
+	var first_j := span[2]
+	var last_j := span[3]
+	var left: float = rect.position.x
+	var right: float = rect.end.x
+	var near_z: float = rect.position.y
+	var far_z: float = rect.end.y
 	for c in range(0, listed.size(), _LISTED_STRIDE):
 		var parent_i := int(listed[c + 4])
 		var parent_j := int(listed[c + 5])
-		if parent_i < span[0] or parent_i > span[1] or parent_j < span[2] or parent_j > span[3]:
+		if parent_i < first_i or parent_i > last_i or parent_j < first_j or parent_j > last_j:
 			continue
 		var px := listed[c]
 		var pz := listed[c + 1]
 		var radius := listed[c + 2]
-		var dx := maxf(0.0, maxf(rect.position.x - px, px - rect.end.x))
-		var dz := maxf(0.0, maxf(rect.position.y - pz, pz - rect.end.y))
+		var dx := maxf(0.0, maxf(left - px, px - right))
+		var dz := maxf(0.0, maxf(near_z - pz, pz - far_z))
 		var parent_reach := (radius + transition) * root
 		if dx * dx + dz * dz > parent_reach * parent_reach:
 			continue
@@ -103,6 +124,7 @@ static func kept_parents(ctx: Dictionary, s: int, bi: int, bj: int) -> PackedFlo
 		return cached
 	var entry: Dictionary = ctx.plan.species[s]
 	var radius: float = entry.rule.clump.radius_m
+	var mass: bool = entry.mass
 	var cands := ScatterGenerator._bucket(ctx.fields[entry.parent_field], bi, bj)
 	var out := PackedFloat64Array()
 	for c in range(0, cands.size(), ScatterGenerator._STRIDE):
@@ -112,6 +134,9 @@ static func kept_parents(ctx: Dictionary, s: int, bi: int, bj: int) -> PackedFlo
 			out.append(cands[c])
 			out.append(cands[c + 1])
 			out.append(radius * (1.0 + entry.clump_jitter * jitter))
+			if not mass:
+				out.append(0.0)  # parent_spin's angle for a rule that is not a mass
+				continue
 			var turn := 2.0 * ScatterGenerator._unit(h, ScatterGenerator._SALT_ANGLE) - 1.0
 			out.append(ScatterMass.parent_spin(entry, cands[c], cands[c + 1], turn))
 	memo[key] = out
@@ -134,7 +159,8 @@ static func _parent_kept(ctx: Dictionary, s: int, cands: PackedFloat64Array, c: 
 			var near := ScatterGenerator._proximity(ctx, relation, cands[c], cands[c + 1])
 			keep *= 1.0 - relation.influence * (1.0 - near)
 		kept = ScatterGenerator._unit(int(cands[c + 5]), ScatterGenerator._SALT_ACCEPT) < keep
-	kept = kept and ScatterMass.zone_kept(entry, cands, c)  # a mass's swathes, by zone
+	# A mass's swathes, by zone (any other rule's zone record is empty: always kept).
+	kept = kept and (not entry.mass or ScatterMass.zone_kept(entry, cands, c))
 	memo[id] = kept
 	return kept
 
