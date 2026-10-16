@@ -610,8 +610,8 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   scatter hidden (`<view>_bare`), so a diff can tell blades from ground; `grassland_again`
   repeats the home view after 1 s of wind (equal when the freeze holds); grassland is saved
   as `_gship3c_grassland`, reopened (`dress`) and captured as `reload_grassland` (the same
-  masses and bake when the mass anchors survive; a reopened level draws its ground and grass
-  3-6 levels darker than the fresh map, on main too, so it is not pixel-equal), and the job
+  masses and bake when the mass anchors survive; it drew the ground and grass 3-6 levels
+  darker until `reopen_dark` found and fixed why), and the job
   deletes the level at its end (`jobs/ground_parity_cleanup.json` does it alone after a
   failed run). About 120 s with `--full`. `ground_parity.gd uniforms` (`ref`: a round 20 job,
   `index`: its `field` step) logs the bake's and the grass's uniforms that differ from round
@@ -634,6 +634,21 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   reopens it here with `rows` (open, saved and live rows and a grass MD5) and `report`,
   captures it and `_gship4_glb_` again, and deletes every `_gship4_` level (`cleanup`, which
   also takes `_gm_events_gship4_old` when `adopt` never ran). Run with `--full`.
+- `jobs/reopen_dark.json`: a fresh build against the same map saved and reopened (card
+  reopen-dark, 2026-10-15). Grassland seed 1234 at home: `fresh` and `fresh_bare`, then
+  `probes/render_state.gd dump` writes the render state to `user://render_jobs/reopen_dark/
+  fresh.json` (whatever `--out` says) with the look bake beside it (`.bake_rgb.png`,
+  `.bake_a.png`); `fresh_reprobe` after `reprobe` made the reflection probe capture the grown
+  scatter; saved as `_reopen_grassland` (`render_state.gd save`), reopened (`dress`):
+  `reopen`, `reopen_bare`, the same dump as `reopen.json`, and `reopen_bareprobe` after the
+  probe captured the map with its scatter hidden; `render_state.gd diff` writes every key
+  whose text differs to `diff.txt`. Then a savanna seed 1234 pair (`savanna_fresh`,
+  `savanna_reopen`, `_reopen_savanna`) and `render_state.gd cleanup`, which deletes every
+  `_reopen_` level. About 35 s at half size, 65 s with `--full`; compare the pairs with
+  `probes/parity_diff.gd`. The dump (environment, lights, camera, viewports, reflection
+  probe, global shader parameters, the terrain's chunks, skirt and bake, the scatter per
+  species and per node) is the tool for any "the same map draws differently" bug: diff first,
+  then bisect by swapping one differing piece.
 
 ## Caveats
 

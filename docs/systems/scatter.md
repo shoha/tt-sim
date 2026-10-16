@@ -51,6 +51,12 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
   A level saves them as the optional `mass_anchors.json` entry; `MapSourceLoader` validates it
   against the rows and each rule's reach and drops a bad asset's anchors with a warning. GLB
   scatter (`BaseScatterEraser`) and the pipeline warm-up never carry anchors.
+- Every chunk node an authored scatter builds (`ScatterGlbUtils.build_chunk`: settled, growing,
+  shrinking) draws on `LevelEnvironmentManager.SCATTER_RENDER_LAYER`, which the level's
+  reflection probe leaves out: the probe captures once when a map opens, before a new map's
+  cover grows in but after a reopened level's is built, and a probe that saw the scatter drew
+  reopened ground and grass 3-6 levels darker (2026-10-15). A Blender map's own scatter stays
+  on layer 1.
 
 ## Runtime
 

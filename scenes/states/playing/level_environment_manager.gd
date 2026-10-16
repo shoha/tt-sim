@@ -72,6 +72,19 @@ const PROBE_MARGIN_FACTOR: float = 0.1
 ## at runtime -- LightmapGI cannot follow that, and cannot bake user-supplied GLBs loaded
 ## from user:// anyway. VoxelGI's cost here is unmeasured.
 const PROBE_MIN_HEIGHT: float = 4.0
+## The render layer (its bit) an authored map's scatter and props draw on
+## (ScatterGlbUtils.build_chunk), and the probe's cull mask, which leaves that layer out.
+## The probe captures once, when a map opens. A new map's starting cover grows in after
+## that, while a reopened level's (and a peer's, which rebuilds it through the same load)
+## is built before it, so a probe that saw the scatter captured a fresh map bare and the
+## same map reopened from inside its grass: the ground and grass, inside the shallow box,
+## drew 3-6 levels darker reopened, the canopy above the box not at all (2026-10-15).
+## Without the scatter the capture is the sky and the ground, as PROBE_MIN_HEIGHT intends,
+## however the map was opened and whatever is painted after. Every camera and light still
+## sees the layer, so the scatter draws, is lit and casts shadows as before; a Blender
+## map's own scatter stays on layer 1, which its probe has always captured at load.
+const SCATTER_RENDER_LAYER: int = 1 << 1
+const PROBE_CULL_MASK: int = 0xFFFFF & ~SCATTER_RENDER_LAYER
 
 var _world_environment: WorldEnvironment = null
 var _sun_light: DirectionalLight3D = null
@@ -314,7 +327,9 @@ func apply_reflection_probe(world_viewport: Node) -> void:
 ## UPDATE_ONCE, not UPDATE_ALWAYS: the map is static once loaded, so the cubemap is
 ## captured a single time at level load rather than re-rendered per frame -- that is
 ## what keeps this affordable. interior stays false so the sky still reaches the
-## capture; it is the main ambient source in most outdoor presets.
+## capture; it is the main ambient source in most outdoor presets. The cull mask leaves
+## an authored map's scatter out (SCATTER_RENDER_LAYER), so when the capture happens does
+## not change what it sees.
 static func configure_reflection_probe(
 	probe: ReflectionProbe, map_bounds: AABB, skirt_m: float = 0.0
 ) -> void:
@@ -323,6 +338,7 @@ static func configure_reflection_probe(
 	probe.position = box.get_center()
 	probe.update_mode = ReflectionProbe.UPDATE_ONCE
 	probe.interior = false
+	probe.cull_mask = PROBE_CULL_MASK
 
 
 # ============================================================================

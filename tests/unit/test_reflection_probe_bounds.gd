@@ -104,6 +104,29 @@ func test_probe_does_not_cut_the_sky_out_of_the_capture() -> void:
 	assert_false(probe.interior)
 
 
+## The probe captures once, when a map opens: a new map's scatter grows in after that and a
+## reopened level's is built before it, so a probe that saw the scatter drew the reopened
+## ground and grass darker. It leaves the authored scatter's layer out and keeps the default
+## layer, where the ground, water and a Blender map's own scatter draw.
+func test_probe_leaves_the_authored_scatter_layer_out() -> void:
+	var probe := ReflectionProbe.new()
+	autofree(probe)
+
+	LevelEnvironmentManager.configure_reflection_probe(
+		probe, AABB(Vector3(-5.0, 0.0, -5.0), Vector3(10.0, 5.0, 10.0))
+	)
+
+	assert_eq(probe.cull_mask & LevelEnvironmentManager.SCATTER_RENDER_LAYER, 0)
+	assert_ne(probe.cull_mask & 1, 0, "the ground's default layer is captured")
+	var camera := Camera3D.new()
+	var sun := DirectionalLight3D.new()
+	assert_ne(camera.cull_mask & LevelEnvironmentManager.SCATTER_RENDER_LAYER, 0, "drawn")
+	assert_ne(sun.light_cull_mask & LevelEnvironmentManager.SCATTER_RENDER_LAYER, 0, "lit")
+	assert_ne(sun.shadow_caster_mask & LevelEnvironmentManager.SCATTER_RENDER_LAYER, 0, "shadows")
+	camera.free()
+	sun.free()
+
+
 func _rooted(node: Node3D) -> Node3D:
 	var root := Node3D.new()
 	add_child_autofree(root)
