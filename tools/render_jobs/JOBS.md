@@ -689,15 +689,18 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   persistent ground fire's look (fire cards F3 and F4a; `probes/fire.gd`). Build (about 100 s):
   a new 200 ft temperate forest (seed 1234), fire laid with the real Fire tool (three `flames`
   passes of radius 4 across the map and a shorter fourth, then a curved `blaze` line of radius 2
-  across the view), saved as `_firefeat_look`. Look (about 50 s): that level at home, zoom 8
-  over the blaze and zoom 20 over the fire's middle, by day (14:00) and at dusk (19:00), plus
-  zoom 30 past the LOD zoom, each labelled (`<key>_r2`); `sheet_<day|dusk>_<view>.png` puts the
-  F3 probe's frame of F1's placeholder (`render_jobs/firefeat_look/<view>_A.png`, kept from that
-  probe), round 1's frame (`<key>_new.png`, kept, re-framed with a ROUND 1 caption by the
-  probe's `replay` as `<key>_r1`) and the new one side by side; `sheet_z30` round 1 and new, day
-  over dusk; `sheet_motion` eight frames about 0.1 s apart at dusk, zoom 8 (the middle of the
-  frame), for the held drawings, breakoffs, breathing and sparks. Cleanup deletes every
-  `_firefeat_` level.
+  across the view; south of them an author-laid fire, a scrubbed blob and a curving line),
+  saved as `_firefeat_look`. Look (about 70 s): that level at home, zoom 8 over the blaze and
+  zoom 20 over the fire's middle, by day (14:00) and at dusk (19:00), zoom 30 past the LOD
+  zoom, and the author-laid fire at the home zoom and zoom 20 (`ahome`, `az20`), each labelled
+  (`<key>_r3`); `sheet_<day|dusk>_<view>.png` puts round 1's frame (`<key>_r1`), round 2's
+  (`<key>_r2.png`, kept, re-framed with a ROUND 2 caption by the probe's `replay` as
+  `<key>_r2l`) and the new one side by side; `sheet_z30` round 2 and new, day over dusk;
+  `sheet_author` the author-laid fire; `sheet_motion` eight frames grabbed by the probe's
+  `burst` (a `capture` step takes about 0.4 s, so a strip of captures is 0.5 s apart, not 0.1
+  s; measured 2026-10-16) at dusk, zoom 8, their engine times in `motion_times.txt`;
+  `sheet_seam` the middle of dusk zoom 8 beside the same with the flames' depth melt off.
+  Cleanup deletes every `_firefeat_` level.
 
 ## Caveats
 

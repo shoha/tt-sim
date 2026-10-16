@@ -105,6 +105,8 @@ other committed home.
   fire's Path) shows the same ribbon as driving a river, coloured ember orange for fire (user,
   2026-10-11).
   Both reuse the fire look of card fire-look-3 (flames, ground fire, smoke as one family).
+  Fire look (user, 2026-10-16): a base fire unifies the flames; the burning ground bridges
+  them, and overlapping flames combine as stronger fire.
   Design before code: `docs/plans/2026-10-11-fire-features/` (gitignored).
 
 ## Where each system is documented

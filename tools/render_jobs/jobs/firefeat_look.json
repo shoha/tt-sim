@@ -1,6 +1,6 @@
 {
  "out_dir": "render_jobs/fire_field_look",
- "timeout_s": 300,
+ "timeout_s": 400,
  "hang_s": 120,
  "steps": [
   {"op": "wait", "s": 1.0},
@@ -10,30 +10,35 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
   {"op": "hide_ui"},
   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "info"},
-  {"op": "expand", "values": ["day_home", "day_z8", "day_z20", "dusk_home", "dusk_z8", "dusk_z20", "dusk_z30", "day_z30"], "template": [
-   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "{value}", "label": "NEW  round 2", "phase": "look", "for": "{value}_r2"},
-   {"op": "wait", "s": 2.0, "phase": "look", "for": "{value}_r2"},
-   {"op": "capture", "name": "{value}_r2", "desc": "{value}: the field's look, round 2"}
+  {"op": "expand", "values": ["day_home", "day_z8", "day_z20", "day_ahome", "day_az20", "day_z30", "dusk_z30", "dusk_home", "dusk_z20", "dusk_ahome", "dusk_az20", "dusk_z8"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "{value}", "label": "NEW  round 3", "phase": "look", "for": "{value}_r3"},
+   {"op": "wait", "s": 2.5, "phase": "look", "for": "{value}_r3"},
+   {"op": "capture", "name": "{value}_r3", "desc": "{value}: the field's look, round 3"}
   ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": "NEW  motion   |   dusk, zoom 8", "phase": "look", "for": "motion_*"},
+  {"op": "wait", "s": 1.0, "phase": "look", "for": "motion_*"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "burst", "dir": "user://render_jobs/fire_field_look", "name": "motion", "count": 8, "every": 0.1, "phase": "look", "for": "motion_*"},
+  {"op": "wait", "s": 4.0, "phase": "look", "for": "motion_*"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "param", "target": "flames", "name": "debug_view", "value": 2, "phase": "look", "for": "dusk_z8_nomelt"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": "depth melt off   |   dusk, zoom 8", "phase": "look", "for": "dusk_z8_nomelt"},
+  {"op": "wait", "s": 0.3, "phase": "look", "for": "dusk_z8_nomelt"},
+  {"op": "capture", "name": "dusk_z8_nomelt", "desc": "dusk zoom 8 with the flames' depth melt off (the seam probe)"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "param", "target": "flames", "name": "debug_view", "value": 0},
   {"op": "expand", "values": ["day_home", "day_z8", "day_z20", "dusk_home", "dusk_z8", "dusk_z20", "dusk_z30", "day_z30"], "template": [
-   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "replay", "path": "user://render_jobs/fire_field_look/{value}_new.png", "text": "ROUND 1   |   {value}", "phase": "look", "for": "{value}_r1"},
-   {"op": "wait", "s": 0.3, "phase": "look", "for": "{value}_r1"},
-   {"op": "capture", "name": "{value}_r1", "desc": "{value}: round 1's frame, re-labelled"}
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "replay", "path": "user://render_jobs/fire_field_look/{value}_r2.png", "text": "ROUND 2   |   {value}", "phase": "look", "for": "{value}_r2l"},
+   {"op": "wait", "s": 0.3, "phase": "look", "for": "{value}_r2l"},
+   {"op": "capture", "name": "{value}_r2l", "desc": "{value}: round 2's frame, re-labelled"}
   ]},
   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "replay", "path": ""},
-  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "dusk_z8", "label": "NEW  motion", "phase": "look", "for": "motion_*"},
-  {"op": "wait", "s": 3.5, "phase": "look", "for": "motion_*"},
-  {"op": "expand", "values": ["0", "1", "2", "3", "4", "5", "6", "7"], "template": [
-   {"op": "capture", "name": "motion_{value}", "desc": "dusk zoom 8, frame {value} of a strip about 0.1 s apart"},
-   {"op": "wait", "s": 0.1}
-  ]},
   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
   {"op": "expand", "values": ["day_home", "day_z8", "day_z20", "dusk_home", "dusk_z8", "dusk_z20"], "template": [
-   {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/fire_field_look", "out": "sheet_{value}", "columns": 3, "names": ["user://render_jobs/firefeat_look/{value}_A", "{value}_r1", "{value}_r2"], "tile": [960, 540]}
+   {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/fire_field_look", "out": "sheet_{value}", "columns": 3, "names": ["{value}_r1", "{value}_r2l", "{value}_r3"], "tile": [960, 540]}
   ]},
-  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/fire_field_look", "out": "sheet_z30", "columns": 2, "names": ["day_z30_r1", "day_z30_r2", "dusk_z30_r1", "dusk_z30_r2"], "tile": [960, 540]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/fire_field_look", "out": "sheet_z30", "columns": 2, "names": ["day_z30_r2l", "day_z30_r3", "dusk_z30_r2l", "dusk_z30_r3"], "tile": [960, 540]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/fire_field_look", "out": "sheet_author", "columns": 2, "names": ["day_ahome_r3", "dusk_ahome_r3", "day_az20_r3", "dusk_az20_r3"], "tile": [960, 540]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/fire_field_look", "out": "sheet_seam", "columns": 2, "names": ["dusk_z8_r3", "dusk_z8_nomelt"], "tile": [960, 540], "crop": [0.25, 0.25, 0.5, 0.5]},
   {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/fire_field_look", "out": "sheet_motion", "columns": 4, "names": ["motion_0", "motion_1", "motion_2", "motion_3", "motion_4", "motion_5", "motion_6", "motion_7"], "tile": [480, 324], "crop": [0.3, 0.3, 0.4, 0.45]},
-  {"op": "index", "title": "Fire field look (card F4a, round 2)", "intro": "Produced by tools/render_jobs/jobs/firefeat_look.json on the saved _firefeat_look level (firefeat_build: a 200 ft temperate forest, seed 1234, fire laid with the real Fire tool over about a third of the map, a blaze line across it). Sheets sheet_<day|dusk>_<view>.png: column A is the F3 probe's frame of F1's placeholder (render_jobs/firefeat_look/<view>_A.png), ROUND 1 round 1's frame (<key>_new.png, re-labelled as <key>_r1), NEW this build (<key>_r2). sheet_z30: past the LOD zoom, round 1 and round 2, day over dusk. sheet_motion: eight frames about 0.1 s apart at dusk, zoom 8 (the middle of the frame)."},
+  {"op": "index", "title": "Fire field look (card F4a, round 3)", "intro": "Produced by tools/render_jobs/jobs/firefeat_look.json on the saved _firefeat_look level (firefeat_build: a 200 ft temperate forest, seed 1234, fire laid with the real Fire tool: three straight passes, a shorter fourth and a curved blaze line, plus an author-laid fire south of them, a blob and a curving line). Sheets sheet_<day|dusk>_<view>.png: ROUND 1 (<key>_r1), ROUND 2 (<key>_r2, re-labelled as <key>_r2l), NEW (<key>_r3). sheet_z30: round 2 and new past the LOD zoom, day over dusk. sheet_author: the author-laid fire at the home zoom and zoom 20, day and dusk. sheet_motion: eight frames grabbed by the probe's burst at dusk, zoom 8 (the middle of the frame); their engine times are in motion_times.txt. sheet_seam: dusk zoom 8 (the middle) beside the same frame with the flames' depth melt off."},
   {"op": "title"},
   {"op": "wait", "s": 1.0}
  ]

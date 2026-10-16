@@ -29,6 +29,14 @@ extends Node3D
 ## a blaze three or four) and the shader's bands and erosion. Each plan is emitted shuffled
 ## (ordered by its points' seeds), so any prefix of it is an even thinning.
 ##
+## A base fire unifies the flames (the user's 2026-10-16 verdict): the flames' heat raster
+## (HEAT_STEP_M) sums each planned flame's height under a soft kernel, re-splatted around the
+## blocks a refresh re-plans. The ground burns as a bed on that summed heat
+## (fire_glow.gdshaderinc), and each drawn flame carries the heat at its foot, which thins its
+## rim and widens its hot bands, so a crowded clump reads as one hotter body. The raster comes
+## from the whole plans (not the budget's prefix), so thinning does not dim the bed; a peer
+## that refreshed stroke by stroke and one that rebuilt hold the same raster.
+##
 ## Budget: the whole map shows at most MAX_FLAMES. Past it every burning block shows the same
 ## share of its plan (budget_shares: a uniform thinning in proportion to each block's burning
 ## area, as FoliageBudget.plan; the remainder by largest fraction, ties in block order), a pure
@@ -62,9 +70,10 @@ const KIND := 7
 const FLAME := 0.0
 const SPARK := 1.0
 ## A flame's height (metres) at the flames band's start and end, and a blaze's, before its clump
-## scale; its width as a share of its height (a blaze takes the upper part).
+## scale; its width as a share of its height (a blaze takes the upper part). A blaze stands two
+## to three times a field flame's height.
 const FLAME_HEIGHT_M := Vector2(0.55, 1.05)
-const BLAZE_HEIGHT_M := 1.2
+const BLAZE_HEIGHT_M := 1.8
 const WIDTH_SHARE := Vector2(0.35, 0.75)
 const BLAZE_WIDTH_FROM := 0.55
 ## The clump noise: its cell, how it scales a flame, below what value a flame point drops (at
@@ -80,17 +89,29 @@ const CLUMP_SCALE := Vector2(0.6, 1.6)
 const SCALE_JITTER := 0.25
 const FLAME_GAP := Vector2(0.42, 0.26)
 const BLAZE_GAP := 0.14
-## A blaze clump's big flame and the licks at its feet (scales).
-const BIG_SCALE := Vector2(1.6, 2.2)
+## A blaze clump's big flame and the licks at its feet (scales; a big flame's above the clump
+## range).
+const BIG_SCALE := Vector2(1.62, 1.8)
 const LICK_SCALE := Vector2(0.45, 0.7)
-## About one ember point in this many throws a spark, and its size (metres).
+## About one ember point in this many throws a spark, and its size (metres: it must read at
+## zoom 8).
 const SPARK_EVERY := 6
-const SPARK_SIZE_M := 0.07
+const SPARK_SIZE_M := 0.16
 ## Tongue layouts (fire_field.gdshader's tongue()): one tall with a side lick, two, three, four.
 const LAYOUT_ONE := 0
 const LAYOUT_TWO := 1
 const LAYOUT_THREE := 2
 const LAYOUT_CROWN := 3
+## The flames' heat raster (the ground's bed, fire_glow.gdshaderinc; the user's 2026-10-16
+## verdict: a base fire unifies the flames): a texel every HEAT_STEP_M from the document's first
+## sample; each flame adds its height (metres) times a soft kernel reaching HEAT_REACH.x plus
+## HEAT_REACH.y of its width, so a clump sums to a hot plateau and a lone flame to a dim pool; a
+## texel's sum over HEAT_FULL_M is the bed's temperature (0..1).
+const HEAT_STEP_M := 0.5
+const HEAT_FULL_M := 4.5
+const HEAT_REACH := Vector2(1.0, 1.0)
+## Texels the cleared rect of a refresh reaches past its blocks (more than any kernel's reach).
+const HEAT_GROW := 8
 ## Past this camera zoom (the orthographic size) half the flames hide.
 const LOD_ZOOM := 24.0
 ## Lattice points a block's window reaches past its own (a lick looks two points out).
@@ -105,6 +126,10 @@ var _chunks: Dictionary = {}
 var _counts: Dictionary = {}
 var _glow_texture: ImageTexture = null
 var _far := false
+## The flames' heat raster (see HEAT_STEP_M), its size in texels, and its texture.
+var _heat := PackedFloat32Array()
+var _heat_size := Vector2i.ZERO
+var _heat_texture: ImageTexture = null
 
 
 ## A field for `doc`, already planned and drawn.
@@ -162,6 +187,7 @@ func refresh(sample_rect: Rect2i) -> void:
 	for block in _plans:
 		@warning_ignore("integer_division")
 		planned[block] = (_plans[block] as PackedFloat32Array).size() / STRIDE
+	_update_heat(touched)
 	var shares := budget_shares(planned, MAX_FLAMES)
 	var stale: Array = _counts.keys()
 	for block in shares:
@@ -169,7 +195,8 @@ func refresh(sample_rect: Rect2i) -> void:
 			stale.append(block)
 	for block in stale:
 		var share := int(shares.get(block, 0))
-		if block in touched or share != int(_counts.get(block, 0)):
+		# A neighbour of a re-planned block is drawn again too: its flames' heat may have changed.
+		if _beside(block, touched) or share != int(_counts.get(block, 0)):
 			_show(block, share)
 	_bind_glow()
 
@@ -375,6 +402,60 @@ static func _flame(
 	return PackedFloat32Array([0, 0, 0, t, layout + seed, height, height * width_share, FLAME])
 
 
+## The heat raster's size for `doc` (texels; see HEAT_STEP_M). Pure.
+static func heat_size(doc: MapDocument) -> Vector2i:
+	var extent := doc.extent_m()
+	return Vector2i(ceili(extent.x / HEAT_STEP_M) + 1, ceili(extent.y / HEAT_STEP_M) + 1)
+
+
+## Adds the flames of `plan` (document metres; `half` the map's half extent) to the heat raster
+## `heat` of `size` texels, inside texel rect `clip` only (sparks add nothing).
+static func splat_heat(
+	heat: PackedFloat32Array, size: Vector2i, half: Vector2, plan: PackedFloat32Array, clip: Rect2i
+) -> void:
+	@warning_ignore("integer_division")
+	for k in plan.size() / STRIDE:
+		var o := k * STRIDE
+		if plan[o + KIND] == SPARK:
+			continue
+		var at := (Vector2(plan[o], plan[o + 2]) + half) / HEAT_STEP_M
+		var r := (HEAT_REACH.x + HEAT_REACH.y * plan[o + WIDTH]) / HEAT_STEP_M
+		var x0 := maxi(ceili(at.x - r), clip.position.x)
+		var x1 := mini(floori(at.x + r), clip.end.x - 1)
+		var z0 := maxi(ceili(at.y - r), clip.position.y)
+		var z1 := mini(floori(at.y + r), clip.end.y - 1)
+		var amount := plan[o + HEIGHT]
+		var inv := 1.0 / (r * r)
+		for z in range(z0, z1 + 1):
+			for x in range(x0, x1 + 1):
+				var d := 1.0 - (Vector2(x, z) - at).length_squared() * inv
+				if d > 0.0:
+					heat[z * size.x + x] += amount * d * d
+
+
+## The bed's temperature (0..1) in heat raster `heat` (`size` texels) at document point `p`
+## (`half` the map's half extent). Pure.
+static func heat_at(heat: PackedFloat32Array, size: Vector2i, half: Vector2, p: Vector2) -> float:
+	if heat.size() != size.x * size.y or size.x < 2 or size.y < 2:
+		return 0.0
+	var t := ((p + half) / HEAT_STEP_M).clamp(Vector2.ZERO, Vector2(size - Vector2i.ONE))
+	var x0 := mini(floori(t.x), size.x - 2)
+	var z0 := mini(floori(t.y), size.y - 2)
+	var f := t - Vector2(x0, z0)
+	var i := z0 * size.x + x0
+	var top := lerpf(heat[i], heat[i + 1], f.x)
+	var bottom := lerpf(heat[i + size.x], heat[i + size.x + 1], f.x)
+	return clampf(lerpf(top, bottom, f.y) / HEAT_FULL_M, 0.0, 1.0)
+
+
+## Whether `block` is one of `blocks` or next to one (eight ways).
+static func _beside(block: Vector2i, blocks: Array[Vector2i]) -> bool:
+	for other in blocks:
+		if absi(other.x - block.x) <= 1 and absi(other.y - block.y) <= 1:
+			return true
+	return false
+
+
 static func _key(ix: int, iz: int) -> int:
 	return (ix * 73856093) ^ (iz * 19349663)
 
@@ -416,8 +497,46 @@ func _show(block: Vector2i, shown: int) -> void:
 		chunk = FireLook.make_chunk("Fire_%d_%d" % [block.x, block.y])
 		add_child(chunk)
 		_chunks[block] = chunk
-	FireLook.fill_chunk(chunk, _plans[block], shown, _forward())
+	var plan: PackedFloat32Array = _plans[block]
+	var half := document.extent_m() * 0.5
+	var feet := PackedFloat32Array()
+	feet.resize(shown)
+	for k in shown:
+		var o := k * STRIDE
+		feet[k] = heat_at(_heat, _heat_size, half, Vector2(plan[o], plan[o + 2]))
+	FireLook.fill_chunk(chunk, plan, shown, _forward(), feet)
 	_counts[block] = shown
+
+
+## Re-splats the heat raster around the re-planned blocks `touched` (all of it when its size
+## changed) and uploads it.
+func _update_heat(touched: Array[Vector2i]) -> void:
+	var size := heat_size(document)
+	var clip := Rect2i(Vector2i.ZERO, size)
+	var whole := size != _heat_size
+	if whole:
+		_heat_size = size
+		_heat = PackedFloat32Array()
+		_heat.resize(size.x * size.y)
+	else:
+		var step := document.sample_step()
+		var grow := Vector2i(HEAT_GROW, HEAT_GROW)
+		var area := Rect2i()
+		for block in touched:
+			var r := MaskStroke.block_rect(document, block)
+			var lo := Vector2i((Vector2(r.position) * step / HEAT_STEP_M).floor()) - grow
+			var hi := Vector2i((Vector2(r.end) * step / HEAT_STEP_M).ceil()) + grow
+			var box := Rect2i(lo, hi - lo)
+			area = box if area.size == Vector2i.ZERO else area.merge(box)
+		clip = area.intersection(clip)
+		for z in range(clip.position.y, clip.end.y):
+			for x in range(clip.position.x, clip.end.x):
+				_heat[z * size.x + x] = 0.0
+	var half := document.extent_m() * 0.5
+	for block in _plans:
+		if whole or _beside(block, touched):
+			splat_heat(_heat, size, half, _plans[block], clip)
+	_heat_texture = FireLook.heat_texture(_heat, size, HEAT_FULL_M, _heat_texture)
 
 
 ## The camera's forward axis in this node's frame (the game camera never turns).
@@ -437,7 +556,7 @@ func _bind_glow() -> void:
 		var terrain := child as AuthoredTerrain
 		if terrain != null and terrain.get_material() != null:
 			_glow_texture = FireLook.glow_texture(document, _glow_texture)
-			FireLook.bind_glow(terrain.get_material(), _glow_texture)
+			FireLook.bind_glow(terrain.get_material(), _glow_texture, _heat_texture)
 			return
 
 
