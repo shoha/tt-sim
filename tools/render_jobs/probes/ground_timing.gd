@@ -38,6 +38,14 @@ extends RefCounted
 ## - `compile` (`path`, default the bake shader): a salted copy of a canvas_item shader (so no
 ##   cache holds it) drawn once in a 64 px SubViewport; logs get_rid() ms and the ms from there to
 ##   the end of the frame that drew it (wrap it in `record` for the frame times).
+## - `stamps_fresh`: drops GroundMassStamps' kept materials, so the next restamp makes new ones
+##   and compiles their canvas pipelines, as every restamp did before the optimization card.
+## - `restamp`: GroundLookBake._restamp() now (each slot redrawn on the next frame).
+## - `bake_bytes` (`name`): an MD5 of each slot's baked image, read back from the GPU.
+## - `restamp_none`: every slot's stamps removed and the bake redrawn (the bake with no masses).
+## - `rerender`: every slot redrawn as it stands (no new stamps).
+## The ground's shaders swapped by `code` are both variants (plain and looked) of the map's and
+## the skirt's: the optimization card compares them against the include at `base` in one run.
 
 const PREFIX := "_timing_"
 const SELF := "res://tools/render_jobs/probes/ground_timing.gd"
@@ -55,7 +63,10 @@ const FOLIAGE_INCLUDE := "shaders/wind_foliage_main.gdshaderinc"
 const GROUND_SHADERS := [
 	"res://shaders/authored_ground.gdshader",
 	"res://shaders/authored_ground_skirt.gdshader",
+	"res://shaders/authored_ground_looked.gdshader",
+	"res://shaders/authored_ground_skirt_looked.gdshader",
 ]
+const STAMPS := "res://utils/ground_mass_stamps.gd"
 const GROUND_INCLUDE := "shaders/authored_ground.gdshaderinc"
 const PLAIN_SHAPE := Vector4(1.0, 0.0, 0.0, 1.0)
 const WATCH := "TimingWatch"
@@ -207,7 +218,48 @@ static func run(base: Node, step: Dictionary) -> String:
 			return "watching regeneration %s" % watch.label
 		"compile":
 			return _compile(base, String(step.get("path", BAKE_SHADER)))
+		"stamps_fresh":
+			var kept: Variant = (load(STAMPS) as GDScript).get("_materials")
+			if not kept is Dictionary:
+				return "stamps_fresh: no kept materials in this build"
+			var n := (kept as Dictionary).size()
+			(kept as Dictionary).clear()
+			return "stamps_fresh: %d kept materials dropped" % n
+		"restamp":
+			var bake := _bake(base)
+			if bake == null:
+				return "no look bake"
+			bake.call("_restamp")
+			return "restamped, bakes %d" % bake.get("bakes")
+		"bake_bytes":
+			return _bake_bytes(base, String(step.get("name", "")))
+		"restamp_none", "rerender":
+			var bake := _bake(base)
+			if bake == null:
+				return "no look bake"
+			var viewports: Array = bake.get("_viewports")
+			for s in viewports.size():
+				if step.action == "restamp_none":
+					var mass: Dictionary = (bake.get("_looks")[s] as Dictionary).mass
+					var stamps := load(STAMPS) as GDScript
+					stamps.call("draw", viewports[s], {}, bake.get("_rect"), bake.get("_px"), mass, Vector2(0, -1))
+				(viewports[s] as SubViewport).render_target_update_mode = SubViewport.UPDATE_ONCE
+			return "%s on %d slots" % [step.action, viewports.size()]
 	return "unknown action %s" % step.get("action", "")
+
+
+static func _bake_bytes(base: Node, label: String) -> String:
+	var bake := _bake(base)
+	if bake == null:
+		return "no look bake"
+	var parts := PackedStringArray()
+	for vp: SubViewport in bake.get("_viewports"):
+		var image := vp.get_texture().get_image()
+		var ctx := HashingContext.new()
+		ctx.start(HashingContext.HASH_MD5)
+		ctx.update(image.get_data())
+		parts.append("%s %s md5 %s" % [vp.name, str(image.get_size()), ctx.finish().hex_encode()])
+	return "bake_bytes %s: %s" % [label, " | ".join(parts)]
 
 
 ## `head` where the look bake exists, `base` on main before the ship.
@@ -417,9 +469,10 @@ static func _looked_code(base: Node) -> String:
 	if terrain != null and terrain.get_material() != null:
 		var shader := terrain.get_material().shader
 		ground = (
-			"shared %s, new %s"
+			"%s, shared %s, new %s"
 			% [
-				str(shader == load(GROUND_SHADERS[0])),
+				shader.resource_path.get_file(),
+				str(GROUND_SHADERS.map(func(p: String) -> Shader: return load(p)).has(shader)),
 				str(shader.code.contains('#include "res://%s"' % GROUND_INCLUDE))
 			]
 		)

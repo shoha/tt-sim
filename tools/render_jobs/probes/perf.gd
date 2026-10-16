@@ -483,30 +483,49 @@ static func _terrains(gm: GameMap) -> Array:
 static func _ground_std(gm: GameMap, on: bool) -> String:
 	var n := 0
 	for terrain: AuthoredTerrain in _terrains(gm):
-		var mat := terrain.get_material()
 		if on and _std_material == null:
-			_std_material = StandardMaterial3D.new()
-			_std_material.albedo_texture = mat.get_shader_parameter("albedo_tex")
-			_std_material.normal_enabled = true
-			_std_material.normal_texture = mat.get_shader_parameter("normal_tex")
-			var orm: Texture2D = mat.get_shader_parameter("orm_tex")
-			_std_material.ao_enabled = true
-			_std_material.ao_texture = orm
-			_std_material.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
-			_std_material.roughness_texture = orm
-			_std_material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
-			_std_material.metallic = 1.0
-			_std_material.metallic_texture = orm
-			_std_material.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
-			var tile := float(mat.get_shader_parameter("tile_m"))
-			_std_material.uv1_scale = Vector3.ONE / maxf(tile, 0.01)
-			_std_material.texture_filter = (
-				BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-			)
+			_std_material = _std_from(terrain.get_material())
 		for cell in terrain.chunk_cells():
 			terrain.get_chunk(cell).material_override = _std_material if on else null
 			n += 1
 	return "ground_std %s on %d chunks" % [str(on), n]
+
+
+## The reference StandardMaterial3D: the base surface (layer 0 of the ground's layer arrays, read
+## back once) at its tile size. Built whole before it is kept: the old build read the
+## single-surface uniforms the layer arrays replaced (tile_m), threw on its first call and left a
+## half-built, untextured material that every later call applied (the ground timing card,
+## 2026-10-15, voided each run's first std window).
+static func _std_from(mat: ShaderMaterial) -> StandardMaterial3D:
+	var std := StandardMaterial3D.new()
+	std.albedo_texture = _layer_zero(mat, "layer_albedo_array")
+	std.normal_enabled = true
+	std.normal_texture = _layer_zero(mat, "layer_normal_array")
+	var orm := _layer_zero(mat, "layer_orm_array")
+	std.ao_enabled = true
+	std.ao_texture = orm
+	std.ao_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+	std.roughness_texture = orm
+	std.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_GREEN
+	std.metallic = 1.0
+	std.metallic_texture = orm
+	std.metallic_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_BLUE
+	var tiles: Variant = mat.get_shader_parameter("layer_tile_m")
+	var tile := 1.0
+	if (tiles is PackedFloat32Array or tiles is Array) and not tiles.is_empty():
+		tile = float(tiles[0])
+	std.uv1_scale = Vector3.ONE / maxf(tile, 0.01)
+	std.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return std
+
+
+## Layer 0 of the ground material's texture array uniform `uniform_name` as a Texture2D, or null.
+static func _layer_zero(mat: ShaderMaterial, uniform_name: String) -> Texture2D:
+	var layers := mat.get_shader_parameter(uniform_name) as TextureLayered
+	if layers == null or layers.get_layers() == 0:
+		return null
+	var image := layers.get_layer_data(0)
+	return ImageTexture.create_from_image(image) if image != null else null
 
 
 static func _broad(gm: GameMap, on: bool) -> String:

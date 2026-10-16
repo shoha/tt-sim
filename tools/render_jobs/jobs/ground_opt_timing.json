@@ -1,0 +1,67 @@
+{
+ "out_dir": "render_jobs/ground_opt_timing",
+ "timeout_s": 1500,
+ "hang_s": 90,
+ "remove_override": true,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "timing start"},
+
+  {"op": "expand", "values": ["kept", "fresh"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "dress", "name": "grassland"},
+   {"op": "wait", "s": 2.0}, {"op": "wait_ready", "settle": 2.0}, {"op": "no_autosave"},
+   {"op": "hide_ui"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+   {"op": "vsync_off"},
+   {"op": "home"}, {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "bake_bytes", "name": "{value} as loaded"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "stamps_{value}"},
+   {"op": "record", "name": "dab_{value}_a"},
+   {"op": "stroke", "mode": "paint", "biome": "rocky_badlands_summer_s1", "points": [[2.0, 2.0], [2.1, 2.0]], "radius": 3.0, "speed": 1.0, "hold": 0.2},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "regen_watch", "name": "{value} a badlands dab"},
+   {"op": "wait", "s": 4.0}, {"op": "wait_ready", "settle": 1.0},
+   {"op": "record", "on": false, "name": "dab_{value}_a"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "bake_bytes", "name": "{value} after the badlands dab"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "stamps_{value}"},
+   {"op": "record", "name": "dab_{value}_b"},
+   {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "points": [[2.0, 2.0], [2.1, 2.0]], "radius": 3.0, "speed": 1.0, "hold": 0.2},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "regen_watch", "name": "{value} b grassland dab"},
+   {"op": "wait", "s": 4.0}, {"op": "wait_ready", "settle": 1.0},
+   {"op": "record", "on": false, "name": "dab_{value}_b"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "bake_bytes", "name": "{value} after the grassland dab"},
+   {"op": "title"}, {"op": "wait", "s": 1.5}
+  ]},
+
+  {"op": "expand", "values": ["grassland", "taiga", "grassland", "taiga"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "play", "name": "{value}"},
+   {"op": "wait", "s": 2.0}, {"op": "wait_ready", "settle": 2.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+   {"op": "vsync_off"},
+   {"op": "home"}, {"op": "wait", "s": 2.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "{value} home"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "sweep", "name": "{value} home",
+    "shared": {"scatter": "all", "code": "new", "std": "off", "skirt": "on", "base": "D:/dev/worktrees/tt-sim-gopt-base"},
+    "configs": [
+     {"label": "std", "scatter": "none", "std": "on", "skirt": "off"},
+     {"label": "full"},
+     {"label": "full_old", "code": "old_ground"},
+     {"label": "bare", "scatter": "none"},
+     {"label": "bare_old", "scatter": "none", "code": "old_ground"},
+     {"label": "full_again"}
+    ]},
+   {"op": "zoom", "size": 26.0}, {"op": "wait", "s": 2.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "sweep", "name": "{value} z26",
+    "shared": {"scatter": "all", "code": "new", "std": "off", "skirt": "on", "base": "D:/dev/worktrees/tt-sim-gopt-base"},
+    "configs": [
+     {"label": "std", "scatter": "none", "std": "on", "skirt": "off"},
+     {"label": "full"},
+     {"label": "full_old", "code": "old_ground"},
+     {"label": "bare", "scatter": "none"},
+     {"label": "bare_old", "scatter": "none", "code": "old_ground"},
+     {"label": "full_again"}
+    ]},
+   {"op": "title"}, {"op": "wait", "s": 1.5}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "timing end"}
+ ]
+}

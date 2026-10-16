@@ -16,6 +16,7 @@ Conventions on 2026-10-09).
 | `shaders/authored_ground.gdshader` | | The opaque ground: tiles the palette `base_surface` with triangle-grid anti-tiling |
 | `shaders/authored_ground.gdshaderinc` | | The shader body, shared by the opaque ground and the skirt |
 | `shaders/authored_ground_skirt.gdshader`, `scenes/terrain/terrain_skirt.gd` | `TerrainSkirt` | The transparent skirt that fades the map into the backdrop |
+| `shaders/authored_ground_looked.gdshader`, `shaders/authored_ground_skirt_looked.gdshader` | | The ground and skirt with the GROUND LOOK path compiled in (`GROUND_LOOK`); `AuthoredTerrain.set_looked` binds them while a biome on the map carries a ground look, the plain pair otherwise |
 | `utils/ground_layers.gd` | `GroundLayers` | Pure rules of the index ground: the per-map layer list (stable append, compaction, overflow past 64), the routing table by biome slot, per-layer flags and tiles |
 | `scenes/terrain/ground_layer_binding.gd` | `GroundLayerBinding` | Binds the layer arrays, the routing rows, the four index maps and the broad edge on the ground material (`AuthoredTerrain.layer_binding()`) |
 | `utils/ground_layer_arrays.gd` | `GroundLayerArrays` | The four `Texture2DArray`s (albedo, normal, ORM, height) of a map's layers, capacity 16 / 32 / 64 |

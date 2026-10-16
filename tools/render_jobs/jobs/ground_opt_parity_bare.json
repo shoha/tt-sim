@@ -1,0 +1,42 @@
+{
+ "out_dir": "render_jobs/ground_opt_parity_bare",
+ "timeout_s": 1200,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "expand", "values": ["grassland", "road", "savanna", "taiga", "mixed"], "template": [
+   {"op": "title"}, {"op": "wait", "s": 1.0},
+   {"op": "dress", "folder": "_timing_head_{value}"},
+   {"op": "wait_ready", "settle": 3.0}, {"op": "no_autosave"},
+   {"op": "hide_ui"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "nocursor"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+   {"op": "home"}, {"op": "wait", "s": 2.3},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "only", "prefix": "NOSCATTER_"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "state", "code": "new"},
+   {"op": "zoom", "size": 26.0}, {"op": "wait", "s": 2.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "freeze"},
+   {"op": "capture", "name": "{value}_z26bare_new", "scale": 1.0, "desc": "{value} zoom 26, no scatter, new code"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "thaw"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "state", "code": "old_ground", "base": "D:/dev/worktrees/tt-sim-gopt-base"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "freeze"},
+   {"op": "capture", "name": "{value}_z26bare_old", "scale": 1.0, "desc": "the same with the 401bbf9e include"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "thaw"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "state", "code": "new"},
+   {"op": "wait", "s": 1.5},
+   {"op": "zoom", "size": 45.0}, {"op": "wait", "s": 2.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "freeze"},
+   {"op": "capture", "name": "{value}_z45bare_new", "scale": 1.0, "desc": "{value} zoom 45 (the skirt), no scatter, new code"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "thaw"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "state", "code": "old_ground", "base": "D:/dev/worktrees/tt-sim-gopt-base"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "freeze"},
+   {"op": "capture", "name": "{value}_z45bare_old", "scale": 1.0, "desc": "the same with the 401bbf9e include"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "thaw"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "state", "code": "new"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "all"}
+  ]},
+  {"op": "title"}, {"op": "wait", "s": 1.0}
+ ]
+}
