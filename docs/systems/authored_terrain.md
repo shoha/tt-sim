@@ -128,6 +128,16 @@ ground of grassland and savanna at seed 1234 renders bit-identical to main's).
 - **Accent noise.** The CPU's bare-opening noise (`ScatterMass.bare_keep`) keeps round 20's
   form, without `accent_shape.edge_scale` (the GPU's patch ramp uses it): parity means doing
   what round 20 did.
+- **Colours on the GPU as round 20 had them** (card 3c). Godot converts a `Color` set on a
+  spatial shader's plain `vec3` from sRGB to linear (a canvas shader takes it raw; measured on
+  an unshaded quad). Round 20's probes set the light reference (ground and grass), the grass's
+  `zone_tuft_ref` and the accent tint as `Color`s, so the approved look was tuned on the
+  converted values (grassland's brush mean of 3.2 is about its ground's luminance over the
+  converted reference). `GroundLookUniforms.as_r20_spatial` applies that conversion to those four;
+  the bake's uniforms and the rim colour (set as a plain vector in round 20) stay raw. The
+  contract's values are unchanged. Without it the ground drew about 45 levels brighter and paler
+  than round 20's frames; with it the bare ground of grassland at seed 1234 matches round 20's
+  raw viewport bit for bit (`tools/render_jobs/jobs/ground_parity.json`).
 - **Dropped from the probe:** the per-fragment light field and `light_field_follow`, the unbaked
   path (`light_field_baked` 0), the dry drift, the 2B rim widths, `accent_blend_width`, and the
   mass chroma, knee, straw and rust uniforms (none in the contract).
