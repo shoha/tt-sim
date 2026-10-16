@@ -3243,10 +3243,34 @@ equals main's worst in such windows (12.2-12.8 ms): the two canvas pipeline comp
 The 28.7 ms was the session's first badlands dab (the kept pass ran first, so its first
 badlands content drew there); its cause was not isolated.
 
-**Found, not fixed.** The first restamp after a level opens reads back without its mass stamps
-(the bake's MD5 equals the bake with no stamps) in both the old and the new code, whether its
-materials are fresh or kept; the next restamp draws them. Seen with `ground_timing.gd restamp`
-and after a real dab.
+**Found, then fixed (restamp-fixed, 2026-10-16).** The first restamp after a level opens reads
+back without its mass stamps (the bake's MD5 equals the bake with no stamps) in both the old and
+the new code, whether its materials are fresh or kept; the next restamp draws them. Seen with
+`ground_timing.gd restamp` and after a real dab.
+
+Cause, from evidence. `ground_timing.gd stamp_info` showed every restamp receiving the same
+input on the fresh and the reopened map (540 MultiMeshes, 163 with custom data, 4622 anchored
+tufts, 55 anchors, 47 masses drawn). Restamps alternate on both maps, not only after a load:
+fresh `7ca4361d` (stamped), `restamp_none` `a4b9ee7b`, `restamp` `a4b9ee7b` (none), `restamp`
+`7ca4361d`; reopened as loaded `e6d5a7ab`, `restamp` `a4b9ee7b`, then `rerender` (nothing
+changed) `e6d5a7ab`. So the draw commands were there and the render right after a restamp
+dropped them every other time; a load only shifts the phase so that the first dab lands on the
+dropping one. Each restamp freed the slot's `MassShade` / `MassLift` nodes and added new ones;
+with the nodes kept and their canvas items cleared and refilled, four restamps in a row drew
+the masses on both maps, and with kept nodes but new gradient textures every time as well, so
+it is the node churn, not the textures. Why Godot drops the new canvas items' first render was
+not traced into the engine. `GroundMassStamps` now keeps both nodes per slot (textures re-made
+only when the shade strength changes).
+
+After the fix (`restamp_verify`, same job and level both ways, `--full`, raw viewport, clock
+frozen, scatter hidden): the reopened level's first dab changes 26,357 pixels by 3 or more
+(was 493,231), mean +0.009 (was -0.490, 122.38 -> 121.89), max 7.7, all inside the dab's box
+(695, 690)..(1235, 808), as on the fresh map (27,686 pixels, +0.010). The fresh map's first dab
+bake equals, in the same run, the bake the pre-fix path (stamp nodes freed and remade, then
+`rerender`) draws from the same scatter (`b785...` both; a second run `dd40...` both, the value
+the pre-fix code gave too: the dab's regrown scatter varies between runs). Captures:
+`user://render_jobs/restamp_verify/` (fixed) and `restamp_verify_prefix/` (pre-fix), each with
+`diff_sheet.png` (fresh dab 1, reopened dab 1, reopened dab 2, each against its before frame).
 
 Checked 2026-10-16 (scatter-hidden raw viewport, home, full size, clock frozen, one run, a
 grassland dab of radius 3 at (2, 2) each time): a frame shows it, faintly. On the reopened
@@ -3262,8 +3286,12 @@ runs' later states differ). So the dab-1 bake equals the no-stamps bake and the 
 is the one with the mass shading missing; that the 0.49 darkening is exactly the mass shading
 was not isolated (no frame with stamps forced on at that state was taken). Captures:
 `user://render_jobs/ground_opt_restamp/{reopen,fresh}_{0_before,1_dab1,2_dab2}{,_h}[_sub].png`;
-the home parity set is `user://render_jobs/ground_opt_home_bare/`. Open item:
-`docs/systems/authored_terrain.md` "Open work".
+the home parity set is `user://render_jobs/ground_opt_home_bare/`. Fixed: see the cause above.
+
+**Harness guard (restamp-fixed).** `ground_timing.gd state` with an `old_*` code now fails the
+job (an error, and the driver stops after the step) when `base` is not an absolute path, the
+checkout or its include is missing, or the include is the same as the res:// one. It used to
+keep the new code with only a log line, so a parity check compared the new code with itself.
 
 **Scatter generation, CPU (ground-opt-cpu, 2026-10-16).** Four exact commits (cfedc6c2 zone
 share, afbc9727 bare openings, 9354c247 clump scan, and the evaluate commit after them): every row

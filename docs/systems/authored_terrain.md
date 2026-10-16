@@ -108,7 +108,12 @@ ground of grassland and savanna at seed 1234 renders bit-identical to main's).
   (`ref_surface`'s `albedo_mean_linear`, measured from the texture when absent) and the light's
   luminance. Zones and light are shifted by `GroundZones.seed_offset(map_seed)`. The grass
   masses' shade and lift are stamped over it from the anchored instances (`GroundMassStamps`),
-  toward the sun.
+  toward the sun. Each slot's two stamp nodes (`MassShade`, `MassLift`) are made on its first
+  stamp and kept; a restamp clears and refills their canvas items. A restamp that freed them and
+  added new ones drew none of its masses in the bake's next render every other time (a
+  re-render showed them), so the first dab on a reopened level darkened the whole frame by 0.49
+  level until the second dab (fixed 2026-10-16; `docs/PERFORMANCE.md` "Optimizations
+  (2026-10-15)").
 - **Several biomes.** Each biome is baked whole and on its own; the ground blends them by its
   own biome weights. Per pixel, the share of its biome components that carry a look mixes
   today's ground (variation, no cap) with the looked one (zones, cap), so a looked biome painted
@@ -175,17 +180,13 @@ Unit tests in `tests/unit/`: `test_authored_terrain.gd`, `test_terrain_rules.gd`
 `TerrainRules` and the shader constants in sync), `test_ground_layers.gd`,
 `test_ground_layer_binding.gd`, `test_ground_layers_index.gd`, `test_ground_accents.gd`, `test_scatter_ground_rules.gd`, `test_height_sculpt.gd`,
 `test_authoring_sculpt.gd`, `test_ground_look.gd` (the round 20 uniforms, gates off without a
-look, two biomes' slots).
+look, two biomes' slots, the mass stamps kept across restamps). Headless draws no frame, so the
+stamps' pixels are checked by render job: `ground_timing.gd` `bake_bytes` / `stamp_info` /
+`restamp_remade` beside captures (`docs/PERFORMANCE.md` "Optimizations (2026-10-15)").
 
 ## Open work
 
 See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work".
-
-- The first restamp after a level opens draws no mass stamps into the ground look bake (its
-  bake MD5 equals the no-stamps bake); the next restamp draws them. Seen as a faint rendered
-  difference too: the first dab on a reopened level darkens the whole frame by about 0.5 level
-  (max 14) until the second dab. Not fixed; same in the pre-optimization code.
-  `docs/PERFORMANCE.md` "Optimizations (2026-10-15)" has the numbers and capture paths.
 
 ## History
 
@@ -193,3 +194,5 @@ See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work".
 - 2026-10-13: ground layers G3, the index ground: per-map layer arrays and the document's
   index maps replace the eight weight-map slots; parity with the slot table's look checked by
   today-against-G3 captures (identical where the slot table could draw everything).
+- 2026-10-16: the ground look's mass stamps are kept between restamps (restamp-fixed): every
+  other restamp had drawn no masses, the first dab on a reopened level among them.

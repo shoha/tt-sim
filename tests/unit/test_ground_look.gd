@@ -214,11 +214,64 @@ func test_mass_stamps_keep_their_materials_across_restamps() -> void:
 	var lift_mat := lift.material as CanvasItemMaterial
 	assert_eq(shade_mat.blend_mode, CanvasItemMaterial.BLEND_MODE_MUL)
 	assert_eq(lift_mat.blend_mode, CanvasItemMaterial.BLEND_MODE_ADD)
+	var shade_tex: Texture2D = shade.get_meta("texture")
 	GroundMassStamps.draw(vp, sums, rect, px, mass, Vector2(1.0, 0.0))
-	assert_false(is_instance_valid(shade), "the stamp nodes are made anew")
-	var shade_again := vp.get_node(GroundMassStamps.SHADE_NODE) as Node2D
-	assert_same(shade_again.material, shade_mat, "the shade's material is kept")
-	assert_same(vp.get_node(GroundMassStamps.LIFT_NODE).material, lift_mat, "and the lift's")
+	assert_same(vp.get_node(GroundMassStamps.SHADE_NODE), shade, "the stamp nodes are kept")
+	assert_same(vp.get_node(GroundMassStamps.LIFT_NODE), lift, "both")
+	assert_same(shade.get_meta("texture"), shade_tex, "and the shade's texture (same strength)")
+	assert_same(shade.material, shade_mat, "the shade's material is kept")
+	assert_same(lift.material, lift_mat, "and the lift's")
+	assert_eq(GroundMassStamps.draw(vp, {}, rect, px, mass, Vector2(1.0, 0.0)), 0, "no masses")
+	assert_same(vp.get_node(GroundMassStamps.SHADE_NODE), shade, "drawn empty, still kept")
+	assert_eq(shade.get_meta("masses"), 0)
+	mass.shade = 0.5
+	GroundMassStamps.draw(vp, sums, rect, px, mass, Vector2(1.0, 0.0))
+	assert_ne(shade.get_meta("texture"), shade_tex, "a new strength makes the shade a new texture")
+
+
+## A loaded level's anchored grass is built after its terrain, so its masses come from the
+## scatter's first restamp; the first brush dab's restamp then has to redraw into the stamps the
+## bake rendered. Headless draws no frame, so this checks what the render needs: the restamp
+## keeps those stamp nodes and draws every mass into them. A restamp that made the nodes anew drew
+## none of them in the next render every other time (docs/systems/authored_terrain.md).
+func test_a_loaded_levels_first_dab_redraws_its_masses_into_the_kept_stamps() -> void:
+	var biome := PaletteLibrary.biome(ZONED[0])
+	var doc := MapDocument.create_flat(Vector2i(8, 8), String(biome.ground_surface), "", 1234)
+	doc.biome_ids = PackedStringArray([ZONED[0]])
+	var level := Node3D.new()
+	add_child_autofree(level)
+	var terrain := AuthoredTerrain.create(doc)
+	level.add_child(terrain)
+	var bake := terrain.ground_look()
+	assert_not_null(bake, "the grassland makes a bake")
+	level.add_child(_anchored_grass(Vector2(1.0, 1.0), 8))
+	bake._restamp()
+	var vp := bake._viewports[0] as SubViewport
+	var shade := vp.get_node(GroundMassStamps.SHADE_NODE) as Node2D
+	assert_eq(shade.get_meta("masses"), 1, "the load's restamp draws the mass")
+	var canvas_item := shade.get_canvas_item()
+	bake._restamp()
+	assert_true(is_instance_valid(shade), "the first dab's restamp keeps the rendered stamps")
+	assert_same(vp.get_node(GroundMassStamps.SHADE_NODE), shade, "the same node")
+	assert_eq(shade.get_canvas_item(), canvas_item, "and canvas item")
+	assert_eq(shade.get_meta("masses"), 1, "with the mass drawn into it")
+
+
+## A MultiMeshInstance3D of `count` tufts around `anchor` (world XZ), each anchored to it in its
+## custom data as AuthoredScatter's massed grass is (ScatterMass.custom_data).
+func _anchored_grass(anchor: Vector2, count: int) -> MultiMeshInstance3D:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	mm.mesh = BoxMesh.new()
+	mm.instance_count = count
+	for i in count:
+		var at := anchor + Vector2.from_angle(TAU * i / count) * (0.2 + 0.05 * i)
+		mm.set_instance_transform(i, Transform3D(Basis(), Vector3(at.x, 0.0, at.y)))
+		mm.set_instance_custom_data(i, Color(0.0, anchor.x - at.x, anchor.y - at.y, 1.0))
+	var node := MultiMeshInstance3D.new()
+	node.multimesh = mm
+	return node
 
 
 func test_two_biome_map_gives_each_biome_its_values() -> void:
