@@ -197,6 +197,33 @@ static func value_noise(p: Vector2, seed_value: int) -> float:
 	return lerpf(lerpf(a, b, u.x), lerpf(d, e, u.x), u.y) * INV_UINT_MAX
 
 
+## value_noise(p, seed_value) with each lattice cell's four corner hashes kept in `memo` (keyed by
+## the cell), so a caller that asks many points of one seed hashes each cell once: the same value
+## (ground-opt-cpu; ScatterMass's bare openings warp through it). One memo per seed, and never
+## shared between threads. Keep in step with value_noise.
+static func value_noise_memo(p: Vector2, seed_value: int, memo: Dictionary) -> float:
+	var ix := floori(p.x)
+	var iz := floori(p.y)
+	var u := Vector2(p.x - ix, p.y - iz)
+	u = u * u * (Vector2(3.0, 3.0) - 2.0 * u)
+	var cell := Vector2i(ix, iz)
+	var known: Variant = memo.get(cell)
+	if known == null:
+		var cx := (ix + seed_value) & _MASK32
+		var cz := (iz + ((seed_value * 7919) & _MASK32)) & _MASK32
+		known = PackedFloat64Array(
+			[
+				float(pcg2d_x(cx, cz)),
+				float(pcg2d_x((cx + 1) & _MASK32, cz)),
+				float(pcg2d_x(cx, (cz + 1) & _MASK32)),
+				float(pcg2d_x((cx + 1) & _MASK32, (cz + 1) & _MASK32)),
+			]
+		)
+		memo[cell] = known
+	var h: PackedFloat64Array = known
+	return lerpf(lerpf(h[0], h[1], u.x), lerpf(h[2], h[3], u.x), u.y) * INV_UINT_MAX
+
+
 ## Two-octave rule noise in [0, 1] at map-frame point (xz, y), the domain sheared by height
 ## so it varies up a face too.
 static func rule_noise(xz: Vector2, y: float, offset: Vector2, seed_value: int) -> float:
