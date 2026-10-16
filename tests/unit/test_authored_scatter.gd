@@ -411,6 +411,53 @@ func test_build_all_equals_set_cells_over_every_cell() -> void:
 	assert_eq(loaded.rows_by_asset(), painted.rows_by_asset())
 
 
+## The chunk nodes of `scatter` (growing and shrinking ones included) on a layer `mask` sees.
+func _seen_by(scatter: AuthoredScatter, mask: int) -> Array[String]:
+	var names: Array[String] = []
+	for child in scatter.get_children():
+		if child is MultiMeshInstance3D and (child as MultiMeshInstance3D).layers & mask != 0:
+			names.append(String(child.name))
+	names.sort()
+	return names
+
+
+## The level's reflection probe captures once, when a map opens. A new map's cover grows in
+## after that (set_cells: growing nodes, then settled ones) and a reopened level's, or a
+## peer's, is built before it (build_all), so a probe that saw the scatter drew the reopened
+## ground and grass darker than the fresh build. Either way the probe sees no scatter node,
+## growing, settled or shrinking, and the camera sees the same ones.
+func test_the_probe_sees_no_scatter_whether_it_grew_in_or_was_loaded() -> void:
+	var probe := ReflectionProbe.new()
+	autofree(probe)
+	LevelEnvironmentManager.configure_reflection_probe(
+		probe, AABB(Vector3(-20.0, 0.0, -20.0), Vector3(40.0, 1.0, 40.0))
+	)
+	var camera := Camera3D.new()
+	autofree(camera)
+	var cell := Vector2i(0, 0)
+	var rows: Dictionary = {OAK: _cell_rows(cell, 4), GRASS: _cell_rows(Vector2i(1, 0), 5)}
+	var reopened := _scatter()
+	reopened.build_all(rows)
+	var fresh := _scatter()
+	fresh.set_cells(AuthoredScatter.rows_by_cell_of(rows))
+	assert_true(fresh.is_growing(), "the fresh cover grows in")
+	assert_eq(_seen_by(fresh, probe.cull_mask), [], "growing nodes are out of the probe")
+	assert_eq(_seen_by(fresh, camera.cull_mask).size(), 2, "and drawn")
+
+	fresh.complete_growth()
+	assert_eq(_seen_by(reopened, probe.cull_mask), [], "a loaded scatter is out of the probe")
+	assert_eq(_seen_by(fresh, probe.cull_mask), _seen_by(reopened, probe.cull_mask))
+	assert_eq(_seen_by(fresh, camera.cull_mask), _seen_by(reopened, camera.cull_mask))
+	assert_eq(_seen_by(reopened, camera.cull_mask), _chunk_names(reopened))
+
+	fresh.set_cells({cell: {OAK: _cell_rows(cell, 2)}})
+	var shrinking := 0
+	for child in fresh.get_children():
+		shrinking += 1 if String(child.name).contains(ScatterShrink.INFIX) else 0
+	assert_gt(shrinking, 0, "removed oaks shrink out")
+	assert_eq(_seen_by(fresh, probe.cull_mask), [], "shrinking nodes are out of the probe")
+
+
 func test_rebuilding_one_cell_leaves_the_others_untouched() -> void:
 	var scatter := _scatter()
 	var a := Vector2i(0, 0)

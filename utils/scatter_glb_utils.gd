@@ -293,7 +293,10 @@ static func _build_multimesh_from_transforms(
 ## their own species (resolved mesh with its wind material already applied) and cells.
 ## Same node, name, meta, shadow and cull settings as the GLB path builds; see
 ## _build_multimesh_from_transforms. Returns null (adding nothing) for no transforms.
-## `anchors` is the owner's grass-mass anchor table (build_multimesh).
+## `anchors` is the owner's grass-mass anchor table (build_multimesh). The node draws on
+## LevelEnvironmentManager.SCATTER_RENDER_LAYER, which the reflection probe leaves out, so an
+## authored map's probe sees the same ground whether its scatter was built before the probe
+## captured (a reopened level, a peer) or grew in after (a new map, a brush).
 static func build_chunk(
 	parent: Node3D,
 	mesh: Mesh,
@@ -303,9 +306,12 @@ static func build_chunk(
 	name_suffix: String = "",
 	anchors: Dictionary = {}
 ) -> MultiMeshInstance3D:
-	return _build_multimesh_from_transforms(
+	var node := _build_multimesh_from_transforms(
 		parent, mesh, node_stem, transforms, wind_category, name_suffix, anchors
 	)
+	if node != null:
+		node.layers = LevelEnvironmentManager.SCATTER_RENDER_LAYER
+	return node
 
 
 ## A MultiMesh of `mesh` holding `transforms` in order, one set_instance_transform() per
