@@ -3016,20 +3016,174 @@ again (p95 2.838 / 2.796 / 2.913). Foliage over the hidden reference is 0.06 / 0
 grass-variety sample's 0.15 / 0.35 and within its 0.2 ms run-to-run spread: the carpets add no
 measurable cost at this frame time.
 
-## Ground look and grass masses (ground ship, 2026-10-15): untimed
+## Ground look and grass masses (ground ship, 2026-10-15)
 
 The round 20 ground look (`GroundLookBake`, the zoned ground and the tuft shading) and the grass
-masses ship with the ground ship palette (treecube 020bbdc, ASSET_PIPELINE section 9) without a
-frame-time measurement, by the user's choice: the pinned timing of the bake, the ground shader's
-look path and the massed grass is scheduled for a card after the push.
+masses shipped with the ground ship palette (treecube 020bbdc, ASSET_PIPELINE section 9) untimed;
+this is their timing, against main before the ship (94e18825), on grassland and savanna.
+**Verdict: the ship costs 0.6-0.9 ms GPU per frame on a looked map (+23-26 %), 4.4 ms GPU median
+at its heaviest view, inside every play figure of the pinned passes. Most of it is the ground
+shader, and a third to three fifths of that is paid with the look gated off, so by every
+authored map.** Per stroke, each restamp of the masses compiles two canvas pipelines (a 19 ms frame);
+a new map's scatter takes 1.5 s longer to grow.
 
-Scatter generation (CPU, one thread) was measured, because the mass placement first ran on real
-palette data at the install and broke the calibration guard (card 4b, 3608b429, exact speed-up: no
-row moved). Whole flat 200 ft map, two runs each, spread under 1.5 %, after the speed-up [main's
-old-palette code]: savanna 9.6 s [3.7], grassland 8.3 s [3.3], wetland 5.7 s [5.3], alpine 4.3 s
-[3.0], birch 2.5 s [1.7], temperate 2.2 s [1.15], taiga 1.06 s [0.91], badlands 0.56 s [0.47],
-burnt 0.21 s [0.17]. A grassland brush dab (3 m on a fully painted 200 ft map, nine one-cell
-jobs): slowest job 0.79 s [0.40], serial 3.8 s [3.1]. The massed biomes stay about 2.5x main's;
-the timing card after the push owns this too (remaining exact gains: each parent's cos and sin in
-`ScatterMass.membership`, the fine octave in `bare_keep`, the 2-8 % residual on the unmassed
-biomes).
+**How.** RTX 3080; `perf.gd gpu_state` (`nvidia-smi`) at the start of every job: 34-43 %, P8,
+42-46 C (desktop only). A real 1920x1080 window, `override.cfg` pinning the viewport (deleted by
+each job at startup), vsync off at runtime (`vsync_off`; `user://settings.cfg` untouched), the
+user's graphics settings, debug build, nothing else running. Each build made its own levels with
+its own code (new 200 ft flat maps, seed 1234: `grassland_meadow_summer_s1`, 7,018 instances in
+540 nodes on the ship, 8,926 in 560 on main; `savanna_summer_s1`, 7,313 in 437 on the ship) and
+played them (play mode) after one warm-up load each, in the order grassland, savanna, savanna,
+grassland. Each visit swept configurations at home (zoom 13.85) and at zoom 26: per
+configuration a 1.5 s settle, `perf.gd info` and 4 s of per-frame samples (world viewport GPU
+time, 790-2,950 samples per window; the medians below). Camera primitives and draws matched per
+configuration across visits and runs. Runs: ship (r1), main, ship again (r2). The in-run
+reference `std` (scatter and skirt hidden, every terrain chunk drawn with one
+StandardMaterial3D) read 0.836-0.879 ms in every valid window of all three runs, so the
+ship-against-main difference is not drift. (`perf.gd ground_std` throws at the removed `tile_m`
+uniform on its first call and leaves a half-built StandardMaterial3D, uv scale 1, that the later
+calls apply in both builds: each run's first `std` window is void.) The pre-ship code was
+hot-swapped in through `Shader.code` (`authored_ground.gdshaderinc` and
+`wind_foliage_main.gdshaderinc` read from a 94e18825 checkout); the probe confirmed that all 25
+(grassland) and 19 (savanna) scatter materials and the terrain draw the swapped shaders. Jobs
+`tools/render_jobs/jobs/ground_timing_{build,play,cleanup}.json`, probe
+`probes/ground_timing.gd` (JOBS.md); the levels were deleted afterwards.
+
+**Noise.** The first window of each run reads low (the clock coming up; dropped below), two
+`full` windows of one sweep differ by up to 0.17 ms, and the grassland zoom 26 `bare` window read
+0.35-0.4 ms higher in r1 than in r2, both visits, with identical primitives (every other
+configuration agreed within 0.1 ms). Differences under about 0.1 ms are not measurable here, and
+the grassland zoom 26 rows that use `bare` are indicative (their ranges show it).
+
+GPU ms, median: the full frame (every `full` and `full_again` window), the scatter hidden (`bare`:
+ground and skirt) and the reference. Main, two visits; ship, r1 and r2, two visits each:
+
+| View | Main: full; bare | Ship: full; bare | Ship - main, full | Full / std, main -> ship |
+| --- | --- | --- | --- | --- |
+| grassland, home | 2.60-2.67; 2.44-2.54 | 3.21-3.27; 3.16-3.36 | +0.60 | 3.08 -> 3.77 |
+| grassland, z26 | 3.30-3.44; 3.05-3.15 | 4.04-4.24; 3.54-3.95 | +0.79 | 3.92 -> 4.89 |
+| savanna, home | 2.65-2.67; 2.38-2.39 | 3.26-3.36; 2.92-3.05 | +0.64 | 3.09 -> 3.84 |
+| savanna, z26 | 3.45-3.49; 2.94 | 4.32-4.41; 3.53-3.63 | +0.90 | 4.08 -> 5.11 |
+
+Primitives barely move: grassland home draws 184,303 camera primitives in 416 draws on the ship
+against 182,659 in 408 on main, shadow 73,074 on both; the masses cast no shadow (shadow
+primitives are the same with them hidden). With the scatter hidden the ship's ground costs more
+than its grass saves: at grassland home `bare` is dearer than `full`.
+
+**Where it sits.** Ship toggles inside one sweep (configuration pairs, GPU ms, the four visits of
+r1 and r2 as a range):
+
+| Item (toggle pair) | grassland home | grassland z26 | savanna home | savanna z26 |
+| --- | --- | --- | --- | --- |
+| Ground, all the ship added, scatter hidden (`bare` - `bare_oldground`) | 0.81-0.99 | 0.62-1.06 | 0.53-0.65 | 0.54-0.66 |
+| of it, the look path gated off (`bare_off` - `bare_oldground`) | 0.30-0.34 | 0.33-0.44 | 0.32-0.36 | 0.39-0.44 |
+| of it, the look on (`bare` - `bare_off`) | 0.51-0.65 | 0.26-0.63 | 0.20-0.29 | 0.15-0.24 |
+| within the look, the rims (`bare` - `bare_norim`) | 0.32-0.54 | 0.12-0.51 | 0.00-0.02 | 0.02-0.05 |
+| within the look, the accent shape (`bare` - `bare_plain`) | 0.29-0.39 | 0.05-0.38 | 0.02-0.06 | 0.00-0.08 |
+| Ship shaders in the full frame (`full_again` - `all_oldcode`) | 0.62-0.67 | 0.49-0.60 | 0.45-0.52 | 0.38-0.42 |
+| of it, the gated-off ground code (`full_off` - `all_oldcode`) | 0.22-0.23 | 0.23-0.26 | 0.26-0.32 | 0.23-0.27 |
+| of it, the look and tuft gates on (`full_again` - `full_off`) | 0.40-0.45 | 0.25-0.36 | 0.13-0.26 | 0.15-0.17 |
+| the tuft gate alone (`full_again` - `tuft_off`) | 0.00-0.06 | -0.06-0.15 | -0.04-0.12 | -0.03-0.02 |
+| the foliage include's look code (`full_again` - `grass_oldcode`) | 0.02-0.04 | 0.02-0.03 | 0.00-0.02 | 0.02-0.04 |
+| Masses (`full_again` - `nomass`: every massed asset hidden) | -0.18-0.00 | 0.15-0.50 | 0.09-0.28 | 0.62-0.71 |
+| Scatter content against main (ship rows, pre-ship shaders, `all_oldcode` - main `full`; cross-run) | -0.04 | +0.24 | +0.18 | +0.51 |
+
+The parts add up: ship shaders plus scatter content give the ship-minus-main column of the first
+table within 0.03 ms. `bare_off` sets look_present 0 on the ground and skirt (what a map with no
+looked biome binds); `bare_oldground` swaps in the pre-ship ground include; `norim` zeroes the
+accent and path rim widths and the wet core (the rim path is skipped); `plain` sets every slot's
+accent shape to no stretch and no break; `tuft_off` sets zone_tuft_strength 0 (a Blender map's
+grass); `nomass` hides every MultiMesh with custom data (the massed assets, their unanchored rows
+included).
+
+**Ranked, largest first.**
+
+1. **The ground shader's look code: 0.38-0.67 ms of the full frame** (0.5-1.1 ms with the
+   scatter hidden). Two parts, each isolated by a toggle:
+   - *The look path gated off: 0.22-0.32 ms of the full frame, 0.30-0.44 ms bare*
+     (`full_off` / `bare_off` against the pre-ship include). It is paid with look_present 0, so
+     by every authored map, a map of taiga, badlands or burnt forest included, and by a looked
+     map's unlooked pixels. The gate is a uniform branch, so the cost is the code's presence
+     (registers, the reshaped accent and blend loops), not its work.
+   - *The look on: 0.13-0.45 ms of the full frame* (grassland 0.25-0.45, savanna 0.13-0.26),
+     0.15-0.65 bare (`full_again` / `bare` against the gate off). On grassland mostly the rims
+     (0.32-0.54 ms bare at home) and the accent shape's warp (0.29-0.39); the two overlap, since a
+     rim-listed accent's field runs through the warp three times (centre and two
+     finite-difference probes), so they do not add. The savanna draws no rims (its rims stay off),
+     so its 0.15-0.3 ms bare is the zones, the brush and the light.
+2. **Scatter content: up to 0.51 ms** (savanna z26; +0.24 grassland z26, +0.18 savanna home, none
+   at grassland home): the masses and round 20's grass drawn with the pre-ship shaders against
+   main's rows, cross-run against the matching reference. The masses toggle alone: 0.62-0.71 ms
+   at savanna z26, 0.09-0.5 elsewhere, below zero at grassland home (hiding them uncovers ground
+   that costs more than they do). Content, not code: nothing here is separable without changing
+   what is drawn. 3.3-3.5 % of the foliage primitive budget (below).
+3. **The restamp after each stroke: one 18.4-19.0 ms frame** (authoring, vsync off, median 3.7
+   ms), about 0.5 s after a stroke's regeneration lands (`DEBOUNCE_S`); main's worst frame in the
+   same windows is 12.2-12.8 ms. That frame compiles two canvas pipelines every time (the
+   recorder's pipeline counter goes 29, 31, 33, 35 over three strokes), because
+   `GroundMassStamps._stamp_node` makes new CanvasItemMaterials (multiply and add) on every
+   restamp, so their shaders are made anew; plus the CPU of collecting and drawing the stamps
+   (a forced `rebake`, which also re-plans, takes 5.4-7.5 ms in `sync`) and the bake's
+   re-render. A forced `rebake` shows the same, worst frame 25.4-28.6 ms.
+4. **A new map grows its scatter 1.5-1.65 s later** (authoring, `perf.gd author`, two or three
+   opens each): regeneration and growth done 5.28-5.42 s after the loading screen on the ship
+   against 3.80-3.81 s on main (grassland), 4.21-4.36 against 2.57-2.65 s (savanna); the loading
+   screen (805-856 ms) and the palette resolve (3.27-3.34 s) are equal. This is card 4b's scatter
+   generation (below), on workers.
+5. **A grassland brush dab: +0.4 s to land.** A 3 m dab at (2, 2) on the saved grassland, painted
+   with badlands and then grassland again, twice: applied 1.56-1.63 s after the release on the
+   ship against 1.15-1.18 s on main; the last worker job 360-394 ms against 325-335 ms; the worst
+   frame while it lands 12.7-13.0 ms against 12.2-12.8, so the regeneration adds no hitch of its
+   own (the restamp in item 3 is the hitch). Card 4b's headless slowest job (0.79 s against
+   0.40 s) is one job of nine run serially; in game they run in parallel.
+6. **The bake, once per map open (and per resize, restamp and sun turn).** GPU 0.43-0.54 ms per
+   slot at 1090 px (a 200 ft map: 61 m plus 48 m of margin at 10 texels per metre), 1.42-1.77 ms
+   at the 2048 px cap (maps over about 500 ft), measured by rendering the slot every frame with
+   measurement on (an UPDATE_ONCE viewport reads 0). CPU: `sync` 0.5-0.7 ms in a play load
+   (21-22 ms on a session's first new map); the session's first grass bind 22-49 ms (each grass
+   albedo read back once for `zone_tuft_ref`; 0.45 ms once cached). A play load takes 853-881 ms
+   on the ship against 784 ms on main (grassland) and 861-910 against 735-749 ms (savanna), worst
+   frame 215-231 ms in both builds: +70-175 ms, of which the bake and bind are under 55 ms.
+7. **The tuft shading: not measurable.** Its gate is 0.02 ms on average (-0.06 to 0.15 across
+   windows) and the foliage include's look code 0.00-0.04 ms, every foliage material included.
+
+**Shader warm-up.** A salted copy of `ground_light_field_bake.gdshader` (no cache holds it):
+`get_rid()` 5.5-5.8 ms on the main thread, then one 225 ms frame when first drawn (217-219 ms
+from `get_rid()` to drawn, one canvas pipeline). The bake shader stays in `COVERED_SHADERS`: in the
+warm-up it costs one COMPILE frame with a 6 ms `get_rid()`, while uncovered its cold compile
+would land in the first map open, whose worst frame is already 215-231 ms. How the 220 ms
+splits between the shader compile the warm-up does and the pipeline it never draws was not
+measured.
+
+**Memory.** Texture memory +4.9 MB per looked biome at 200 ft (1090 px RGBA8; `bake_free` returns
+exactly that, 1,455.6 to 1,450.7 MB, main's figure), buffers +2.0 MB (48.3-48.6 against
+46.3-46.4 MB: the masses' custom data); at the 2048 px cap 16 MB per slot, 64 MB with four looked
+biomes. Static memory about +2-3 MB.
+
+**Against the budgets.** The heaviest view, savanna at zoom 26, draws in 4.32-4.41 ms GPU median
+(CPU frame 4.9 ms, about 200 fps), at the top of the pinned passes' play range (2.5-4.6 ms) and
+far inside 16.7 ms. The foliage is 7,018 and 7,313 instances, 260K and 277K primitives if every
+instance drew, 3.3-3.5 % of the default 8M budget; camera primitives 184K-360K.
+
+**Exact or pixel-identical leads for the optimization card,** in the order above:
+
+1. Compile the look path behind a `#define` (a looked and a plain variant of the ground and
+   skirt shaders) and bind the looked one only when a biome on the map carries a look. A map
+   without a look then runs the pre-ship code exactly (0.22-0.44 ms back on every such map); a
+   looked map draws the same pixels with the same code.
+2. In the look itself: give `accent_mask_rim_m` the coarse-octave early exits `accent_mask`
+   already has (exact, since the ramp clamps), so the three-octave field and its two
+   finite-difference probes run only within reach of a patch edge, and evaluate the accent
+   shape's warp once per sample where a rim-listed and a plain accent read the same point.
+3. Keep the two stamp CanvasItemMaterials (or the stamp nodes) alive across restamps, so no
+   canvas pipeline compiles after the first; the stamps draw the same pixels.
+
+Scatter generation (CPU, one thread) was measured at the install, because the mass placement first
+ran on real palette data there and broke the calibration guard (card 4b, 3608b429, exact
+speed-up: no row moved). Whole flat 200 ft map, two runs each, spread under 1.5 %, after the
+speed-up [main's old-palette code]: savanna 9.6 s [3.7], grassland 8.3 s [3.3], wetland 5.7 s
+[5.3], alpine 4.3 s [3.0], birch 2.5 s [1.7], temperate 2.2 s [1.15], taiga 1.06 s [0.91],
+badlands 0.56 s [0.47], burnt 0.21 s [0.17]. A grassland brush dab (3 m on a fully painted 200 ft
+map, nine one-cell jobs): slowest job 0.79 s [0.40], serial 3.8 s [3.1]. The massed biomes stay
+about 2.5x main's (remaining exact gains: each parent's cos and sin in `ScatterMass.membership`,
+the fine octave in `bare_keep`, the 2-8 % residual on the unmassed biomes).

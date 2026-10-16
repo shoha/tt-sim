@@ -1,0 +1,82 @@
+{
+ "out_dir": "render_jobs/ground_timing",
+ "timeout_s": 1500,
+ "hang_s": 90,
+ "remove_override": true,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "play start"},
+  {"op": "expand", "values": ["grassland", "savanna"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "play", "name": "{value}"},
+   {"op": "wait", "s": 2.0}, {"op": "wait_ready", "settle": 2.0},
+   {"op": "title"}, {"op": "wait", "s": 1.5}
+  ]},
+
+  {"op": "expand", "values": ["grassland", "savanna", "savanna", "grassland"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "play", "name": "{value}"},
+   {"op": "wait", "s": 2.0}, {"op": "wait_ready", "settle": 2.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "bake_info"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+   {"op": "vsync_off"},
+   {"op": "home"}, {"op": "wait", "s": 2.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "{value} home"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "sweep", "name": "{value} home",
+    "shared": {"scatter": "all", "look": "on", "tuft": "on", "code": "new", "std": "off", "skirt": "on", "base": "D:/dev/worktrees/tt-sim-timing-base"},
+    "configs": [
+     {"label": "full"},
+     {"label": "bare", "scatter": "none"},
+     {"label": "bare_norim", "scatter": "none", "look": "norim", "head": true},
+     {"label": "bare_plain", "scatter": "none", "look": "plain", "head": true},
+     {"label": "bare_off", "scatter": "none", "look": "off", "head": true},
+     {"label": "std", "scatter": "none", "std": "on", "skirt": "off"},
+     {"label": "full_off", "look": "off", "tuft": "off", "head": true},
+     {"label": "tuft_off", "tuft": "off", "head": true},
+     {"label": "nomass", "scatter": "nomass", "head": true},
+     {"label": "bare_oldground", "scatter": "none", "code": "old_ground", "head": true},
+     {"label": "all_oldcode", "code": "old_both", "head": true},
+     {"label": "grass_oldcode", "code": "old_grass", "head": true},
+     {"label": "full_again"}
+    ]},
+   {"op": "zoom", "size": 26.0}, {"op": "wait", "s": 2.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "sweep", "name": "{value} z26",
+    "shared": {"scatter": "all", "look": "on", "tuft": "on", "code": "new", "std": "off", "skirt": "on", "base": "D:/dev/worktrees/tt-sim-timing-base"},
+    "configs": [
+     {"label": "full"},
+     {"label": "bare", "scatter": "none"},
+     {"label": "bare_norim", "scatter": "none", "look": "norim", "head": true},
+     {"label": "bare_plain", "scatter": "none", "look": "plain", "head": true},
+     {"label": "bare_off", "scatter": "none", "look": "off", "head": true},
+     {"label": "std", "scatter": "none", "std": "on", "skirt": "off"},
+     {"label": "full_off", "look": "off", "tuft": "off", "head": true},
+     {"label": "tuft_off", "tuft": "off", "head": true},
+     {"label": "nomass", "scatter": "nomass", "head": true},
+     {"label": "bare_oldground", "scatter": "none", "code": "old_ground", "head": true},
+     {"label": "all_oldcode", "code": "old_both", "head": true},
+     {"label": "grass_oldcode", "code": "old_grass", "head": true},
+     {"label": "full_again"}
+    ]},
+   {"op": "home"}, {"op": "wait", "s": 2.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "bake_gpu", "s": 2.0},
+   {"op": "wait", "s": 2.6},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "bake_gpu", "s": 2.0, "px": 2048},
+   {"op": "wait", "s": 3.0},
+   {"op": "record", "name": "rebake_{value}"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "rebake"},
+   {"op": "wait", "s": 1.0},
+   {"op": "record", "on": false, "name": "rebake_{value}"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "{value} play"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "bake_free"},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "{value} bake freed"},
+   {"op": "title"}, {"op": "wait", "s": 1.5}
+  ]},
+
+  {"op": "record", "name": "compile_bake"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "compile"},
+  {"op": "wait", "s": 1.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "compile"},
+  {"op": "wait", "s": 1.5},
+  {"op": "record", "on": false, "name": "compile_bake"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "play end"}
+ ]
+}

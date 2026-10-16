@@ -649,6 +649,25 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   probe, global shader parameters, the terrain's chunks, skirt and bake, the scatter per
   species and per node) is the tool for any "the same map draws differently" bug: diff first,
   then bisect by swapping one differing piece.
+- `jobs/ground_timing_build.json`, `jobs/ground_timing_play.json` and
+  `jobs/ground_timing_cleanup.json`: the ground ship's timing card (2026-10-15,
+  `PERFORMANCE.md` "Ground look and grass masses (ground ship, 2026-10-15)"), with
+  `probes/ground_timing.gd`. Each runs on main before the ship too (pass the job's absolute path
+  with `--path` at that checkout, the probe copied in): the probe names its levels
+  `_timing_head_` or `_timing_base_` by whether `GroundLookBake` exists and skips the look
+  configurations on the base. Build (about 90 s): new grassland and savanna maps at seed 1234
+  timed (`perf.gd author`) and saved, two more opens of each, then four 3 m dabs on the
+  grassland level (badlands, then grassland back, twice) in `record` windows with a
+  `regen_watch`. Play (about 11 minutes on the ship; run with the pinned `override.cfg`, which
+  it deletes): the levels played G, S, S, G after a warm-up load of each; per visit `bake_info`,
+  then a `sweep` at home and at zoom 26 (13 configurations: the look on, gated off, without rims,
+  plain accent shapes, the tuft gate off, masses hidden, scatter hidden, the half-built
+  `ground_std` reference, and the pre-ship ground and foliage includes swapped in from the
+  checkout at the sweep's `base` path), `bake_gpu` at the real size and at 2048 px, a `rebake`
+  in a `record` window, `mem` before and after `bake_free`; last, two salted cold compiles of
+  the bake shader. `perf.gd ground_std` throws at `tile_m` on its first call (the uniform is
+  gone) and leaves a half-built StandardMaterial3D that later calls apply: the first visit's
+  `std` window is not the reference, the rest are. Cleanup deletes every `_timing_` level.
 
 ## Caveats
 

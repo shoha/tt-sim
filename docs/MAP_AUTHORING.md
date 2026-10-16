@@ -517,8 +517,9 @@ anchors (each grass tuft's offset to its mass's parent) are saved in the level a
 optional entry; a level saved before it loads with each tuft taking its zone's hue where it
 stands and no mass shading. Open work: baking a map that holds several biomes has been checked
 on one pairing only (the install's `twobiome` capture, a savanna band painted down a
-grassland), and the frame cost of the zones, the light and the mass shading is untimed (a
-timing card follows the ship).
+grassland), and the frame cost (0.6-0.9 ms GPU on a looked map, a third or more of it paid by
+every authored map with the look gated off; `PERFORMANCE.md` "Ground look and grass masses") waits
+on an optimization card.
 
 Water follow-ups (phase 4 judgment pass, 2026-09-27):
 - In the wetland the ankle stream is so thick with reeds it can read as a reed bed rather
