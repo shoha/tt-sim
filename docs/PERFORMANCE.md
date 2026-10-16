@@ -3022,3 +3022,14 @@ The round 20 ground look (`GroundLookBake`, the zoned ground and the tuft shadin
 masses ship with the ground ship palette (treecube 020bbdc, ASSET_PIPELINE section 9) without a
 frame-time measurement, by the user's choice: the pinned timing of the bake, the ground shader's
 look path and the massed grass is scheduled for a card after the push.
+
+Scatter generation (CPU, one thread) was measured, because the mass placement first ran on real
+palette data at the install and broke the calibration guard (card 4b, 3608b429, exact speed-up: no
+row moved). Whole flat 200 ft map, two runs each, spread under 1.5 %, after the speed-up [main's
+old-palette code]: savanna 9.6 s [3.7], grassland 8.3 s [3.3], wetland 5.7 s [5.3], alpine 4.3 s
+[3.0], birch 2.5 s [1.7], temperate 2.2 s [1.15], taiga 1.06 s [0.91], badlands 0.56 s [0.47],
+burnt 0.21 s [0.17]. A grassland brush dab (3 m on a fully painted 200 ft map, nine one-cell
+jobs): slowest job 0.79 s [0.40], serial 3.8 s [3.1]. The massed biomes stay about 2.5x main's;
+the timing card after the push owns this too (remaining exact gains: each parent's cos and sin in
+`ScatterMass.membership`, the fine octave in `bare_keep`, the 2-8 % residual on the unmassed
+biomes).
