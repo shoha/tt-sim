@@ -561,16 +561,21 @@ static func _evaluate(
 	if not bounds.has_point(p):
 		return false
 	var u := _unit(int(cands[c + 5]), _SALT_ACCEPT)
+	# Painted density through the size class's response (ScatterPlan.DENSITY_RESPONSE).
+	var painted: float = ctx.species_density_at.call(p, entry.ground_role)
+	var keep := ScatterPlan.respond(painted, entry.response_lead, entry.response_lag)
+	if u >= keep:
+		return false
 	var s: int = entry.index
 	var influence: float = entry.influence
 	var shade := 1.0
-	if influence > 0.0:
+	if influence > 0.0:  # pure, so first asked here, past the response (ground-opt-cpu)
 		shade = 1.0 - influence * (1.0 - _pattern_value(ctx.noise[s], ctx.contrast[s], x, z))
-	# Painted density through the size class's response (ScatterPlan.DENSITY_RESPONSE).
-	var painted: float = ctx.species_density_at.call(p, entry.ground_role)
-	var keep := ScatterMass.respond_bare(entry, painted, x, z, u, shade)  # off the openings
-	if u >= keep:
-		return false
+	var bare: Array = entry.mass_bare
+	if not bare.is_empty():
+		keep = ScatterMass.off_bare(bare, keep, x, z, u, shade)  # ScatterMass.respond_bare
+		if u >= keep:
+			return false
 	if influence > 0.0:
 		keep *= shade
 		if u >= keep:
@@ -726,7 +731,7 @@ static func _membership(ctx: Dictionary, s: int, x: float, z: float, refine := t
 	)
 	if parents == null:
 		parents = ScatterClumps.parents_near_bucket(ctx, s, bi, bj)
-	return ScatterMass.membership(ctx, entry, parents, x, z, refine)
+	return ScatterMass.membership(ctx, entry, parents, x, z, refine, ScatterClumps.PARENT_STRIDE)
 
 
 ## How near (x, z) is to an instance of the relation's target: 1 within distance, falling
@@ -825,7 +830,12 @@ static func _append_row(
 	rows.append(rotation.y)
 	rows.append(rotation.z)
 	rows.append(rotation.w)
-	ScatterMass.append_scale(rows, scale, entry, edge)  # a mass's core tufts grow
+	if entry.mass:
+		ScatterMass.append_scale(rows, scale, entry, edge)  # a mass's core tufts grow
+	else:  # append_scale's rows for any other rule
+		rows.append(scale)
+		rows.append(scale)
+		rows.append(scale)
 	return asset
 
 
