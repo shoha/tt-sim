@@ -489,9 +489,13 @@ static func respond_bare(
 
 ## The biome's ground accents (PaletteLibrary.ground_accents, the bare openings the ground
 ## shader draws: GroundAccents' CPU twin of its patch mask) as [threshold, scale_m, offset,
-## margin, stretch, stretch angle, break, seed] records on map seed `map_seed`, each threshold set
-## for its drawn coverage as GroundAccents.row_params does; `margin` is the clump's `bare`. The
-## patch shape is the zone record's accent shape, or today's round patches without one.
+## margin, stretch, stretch angle, break, seed, the angle's cosine, its sine, lattice memo]
+## records on map seed `map_seed`, each threshold set for its drawn coverage as
+## GroundAccents.row_params does; `margin` is the clump's `bare`. The patch shape is the zone
+## record's accent shape, or today's round patches without one. The memo
+## (TerrainRules.value_noise_memo, for the warp) is the records' one mutable part, shared by them
+## since they share the seed; a plan makes its own (ScatterPlan.build), so no two threads ever
+## share it.
 static func bare_params(biome_id: String, map_seed: int, margin: float, zones: Dictionary) -> Array:
 	var accents := PaletteLibrary.ground_accents(biome_id)
 	var count := mini(accents.size(), GroundAccents.PER_COMPONENT)
@@ -504,6 +508,9 @@ static func bare_params(biome_id: String, map_seed: int, margin: float, zones: D
 		float(zones.get("accent_stretch_angle", 0.0)),
 		float(zones.get("accent_break", 0.0)),
 		map_seed & 0x7fffffff,
+		cos(float(zones.get("accent_stretch_angle", 0.0))),
+		sin(float(zones.get("accent_stretch_angle", 0.0))),
+		{},
 	]
 	var out := []
 	for i in count:
@@ -516,36 +523,68 @@ static func bare_params(biome_id: String, map_seed: int, margin: float, zones: D
 ## The share of a mass child kept at (x, z) under `bare` (bare_params): 0 inside a drawn accent
 ## patch, rising to 1 over `margin` accent-noise units outside its drawn edge, so a mass stops
 ## short of a bare opening instead of growing across it. 1 with no records.
+##
+## Speed (ground-opt-cpu; every grass candidate of a biome with openings asks). Each record's ramp
+## runs from `lo` to `t`, so its factor is exactly 1 for noise at or below `lo` and exactly 0 above
+## `t`: _accent_noise stops adding octaves once the ones still to come cannot carry the sum across
+## the ramp, and a factor of 0 ends the product. The same value as the full noise everywhere.
 static func bare_keep(bare: Array, x: float, z: float) -> float:
 	var keep := 1.0
 	for record: Array in bare:
 		var t: float = float(record[0]) - GroundAccents.EDGE
-		keep *= 1.0 - smoothstep(t - float(record[3]), t, _accent_noise(Vector2(x, z), record))
+		var lo: float = t - float(record[3])
+		var n := (
+			_accent_noise(Vector2(x, z), record, lo, t)
+			if lo <= t
+			else _accent_noise(Vector2(x, z), record)  # a reversed ramp: no bound
+		)
+		keep *= 1.0 - smoothstep(lo, t, n)
+		if keep == 0.0:
+			return keep
 	return keep
 
 
 ## The ground's accent noise (the accent domain with the look's stretch and break, then
-## GroundAccents' three octaves) at world `xz` for one bare_params record.
-static func _accent_noise(xz: Vector2, record: Array) -> float:
+## GroundAccents' three octaves) at world `xz` for one bare_params record. Given `below` and
+## `above`, a partial sum comes back as soon as the octaves still to add (each 0..1 times its
+## weight) cannot lift it above `below`, or once it is already above `above`: on the same side of
+## that range as the full sum, with ZONE_BOUND_SLACK over the rounding.
+static func _accent_noise(
+	xz: Vector2, record: Array, below: float = -INF, above: float = INF
+) -> float:
 	var rot := GroundAccents.ROTATION
 	var q := Vector2(rot.x * xz.x - rot.y * xz.y, rot.y * xz.x + rot.x * xz.y)
 	var stretch := float(record[4])
 	var warp := float(record[6])
-	var p: Vector2 = q / float(record[1]) + Vector2(record[2])
+	var p: Vector2
 	if stretch != 1.0 or warp > 0.0:
-		var cs := Vector2(cos(float(record[5])), sin(float(record[5])))
+		var made := record.size() > 10  # bare_params' angle and memo, else a hand-made record
+		var cs := (
+			Vector2(record[8], record[9])
+			if made
+			else Vector2(cos(float(record[5])), sin(float(record[5])))
+		)
 		var r := Vector2(cs.x * q.x - cs.y * q.y, cs.y * q.x + cs.x * q.y)
 		r.x /= maxf(stretch, 0.1)
 		p = r / float(record[1]) + Vector2(record[2])
 		var s := int(record[7])
+		var memo: Dictionary = record[10] if made else {}
 		var w := Vector2(
-			TerrainRules.value_noise(p * 2.7 + Vector2(5.3, 1.7), s),
-			TerrainRules.value_noise(p * 2.7 + Vector2(-8.1, 4.4), s)
+			TerrainRules.value_noise_memo(p * 2.7 + Vector2(5.3, 1.7), s, memo),
+			TerrainRules.value_noise_memo(p * 2.7 + Vector2(-8.1, 4.4), s, memo)
 		)
 		p += warp * (w - Vector2(0.5, 0.5))
+	else:
+		p = q / float(record[1]) + Vector2(record[2])
+	var slack := GroundZones.ZONE_BOUND_SLACK
 	var broad := GroundAccents.octave(p, 0) * (1.0 - GroundAccents.DETAIL - GroundAccents.FINE)
+	if broad + GroundAccents.DETAIL + GroundAccents.FINE + slack <= below or broad > above + slack:
+		return broad
 	var detail := GroundAccents.octave(
 		p * GroundAccents.DETAIL_SCALE + GroundAccents.DETAIL_OFFSET, 1
 	)
+	var sum := broad + detail * GroundAccents.DETAIL
+	if sum + GroundAccents.FINE + slack <= below or sum > above + slack:
+		return sum
 	var fine := GroundAccents.octave(p * GroundAccents.FINE_SCALE + GroundAccents.FINE_OFFSET, 2)
-	return broad + detail * GroundAccents.DETAIL + fine * GroundAccents.FINE
+	return sum + fine * GroundAccents.FINE
