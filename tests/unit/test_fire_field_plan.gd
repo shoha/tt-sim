@@ -321,5 +321,6 @@ func test_lod_keeps_half_and_draws_back_to_front() -> void:
 
 func test_the_warmup_covers_the_fire_shaders() -> void:
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_field.gdshader")
+	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_field_smoke.gdshader")
 	var sources := "\n".join(GraphicsWarmup.shader_sources())
 	assert_true(sources.contains("res://shaders/fire_glow.gdshaderinc\n"), "the ground's glow")

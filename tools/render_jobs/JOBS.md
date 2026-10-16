@@ -695,14 +695,20 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   at home by day (14:00), at dusk (19:00) and at night (23:00), at zoom 8 over the blaze and
   zoom 20 over the fire's middle at dusk, and at zoom 12 framing the largest smoke column (the
   probe's `zs` view) by day and at dusk, each twice a moment apart:
-  `<key>_r4` with the lights and smoke hidden (the probe's `extras`, captioned ROUND 4) and
-  `<key>_ls` with them, side by side in `sheet_<key>.png`, the probe's `info` (lights, gate,
-  smoke sites) logged after each; `sheet_motion` eight frames 0.5 s apart grabbed by the
-  probe's `burst` at dusk in the `zs` view (a `capture` step takes about 0.4 s, so a strip of captures
-  cannot be faster; measured 2026-10-16), their engine times in `smoke_times.txt`. It writes to
-  `render_jobs/fire_lights_smoke`. Mobile: the same job with `--rendering-method mobile --only
-  dusk_home_ls --out render_jobs/fire_lights_smoke_mobile`. Cleanup deletes every `_firefeat_`
-  level.
+  `<key>_r4` with the lights and smoke hidden (the probe's `extras`, captioned ROUND 4),
+  `<key>_r1` (card F4b-1's round 1, its capture kept in `render_jobs/fire_lights_smoke_round1`
+  and replayed by the probe) and `<key>_ls` with them, side by side in `sheet_<key>.png`, the
+  probe's `info` (lights, gate, smoke sites, the largest clusters) logged after each;
+  `sheet_motion` eight frames 1.6 s apart (a billow's whole climb) grabbed by the probe's
+  `burst` at dusk in the `zs` view (a `capture` step takes about 0.4 s, so a strip of captures
+  cannot be faster; measured 2026-10-16), their engine times in `smoke_times.txt`;
+  `sheet_dark` the probe's `dark` key (the harness's own night: a flat dim ambient, sky
+  reflections off, the sky a tenth, the sun hidden; the game's night is unchanged) at home with
+  the lights off and on; `sheet_dark_tune` that night with the flames and smoke hidden, the
+  lights off, then round 1's, round 2's and a stronger tuning (the probe's `lights` action). It
+  writes to `render_jobs/fire_lights_smoke`. Mobile: the same job with `--rendering-method
+  mobile --only dusk_home_ls --out render_jobs/fire_lights_smoke_mobile`. Cleanup deletes every
+  `_firefeat_` level.
 
 ## Caveats
 

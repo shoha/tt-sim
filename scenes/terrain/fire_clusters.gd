@@ -14,10 +14,9 @@ extends RefCounted
 ## size is that score, its place the flames' size-weighted centroid over the nine cells, its
 ## top the tallest flame there. A small separate fire is one cluster; a burn wider than the
 ## 3 x 3 cells has one per hot spot, at least two cells apart, so a map-wide fire spreads its
-## lights over its hottest
-## parts (connected components would make it one cluster with one light at its middle,
-## perhaps over a gap). The blaze (flames at BLAZE_MIN and up) keeps sums of its own, so smoke
-## rises over blaze clusters only.
+## lights over its hottest parts (connected components would make it one cluster with one light
+## at its middle, perhaps over a gap). The blaze (flames at BLAZE_MIN and up) keeps sums of its
+## own, so smoke rises only over clusters holding a blaze, ranked as the lights are.
 ##
 ## Locality: a cluster reads the cells within two of its own, so re-planning one block changes
 ## only the clusters within two cells of its flames; every other keeps its exact values (each
@@ -32,8 +31,8 @@ const FIELDS := 10
 const SIZE := 0
 const TOP := 4
 const BLAZE := 5
-## The lights stand over at most this many clusters, the smoke over at most this many blaze
-## clusters of at least SMOKE_MIN_SIZE (square metres: a blaze's big flame and its licks).
+## The lights stand over at most this many clusters, the smoke over at most this many clusters
+## holding at least SMOKE_MIN_SIZE of blaze (square metres: a blaze's big flame and its licks).
 const MAX_LIGHTS := 4
 const MAX_SMOKE := 8
 const SMOKE_MIN_SIZE := 8.0
@@ -85,8 +84,9 @@ static func merge(per_block: Dictionary) -> Dictionary:
 
 
 ## The clusters of `cells` (merge's map), the blaze's alone when `blaze`, largest first (ties in
-## the row order of their cells): each {"cell": Vector2i, "size": square metres of flame, "at":
-## Vector3 the centroid in document metres, "top": the tallest flame}. Pure.
+## the row order of their cells): each {"cell": Vector2i, "size": square metres of flame,
+## "blaze": the square metres of blaze among the nine cells, "at": Vector3 the centroid in
+## document metres, "top": the tallest flame}. Pure.
 static func find(cells: Dictionary, blaze: bool) -> Array[Dictionary]:
 	var o := BLAZE if blaze else 0
 	var scores := {}
@@ -111,14 +111,17 @@ static func lights(cells: Dictionary) -> Array[Dictionary]:
 	return find(cells, false).slice(0, MAX_LIGHTS)
 
 
-## The clusters the smoke rises over: the MAX_SMOKE largest blaze ones of at least
-## SMOKE_MIN_SIZE. Pure.
+## The clusters the smoke rises over: the MAX_SMOKE largest burning ones (ranked as the
+## lights are, by all their flames) holding at least SMOKE_MIN_SIZE of blaze, so the biggest
+## fire is the biggest smoker (ranked by the blaze alone, a big fire whose blaze flames sit in a
+## neighbouring cell lost its column to a smaller one). Pure.
 static func smoke(cells: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	for cluster in find(cells, true):
-		if out.size() >= MAX_SMOKE or float(cluster["size"]) < SMOKE_MIN_SIZE:
+	for cluster in find(cells, false):
+		if out.size() >= MAX_SMOKE:
 			break
-		out.append(cluster)
+		if float(cluster["blaze"]) >= SMOKE_MIN_SIZE:
+			out.append(cluster)
 	return out
 
 
@@ -184,6 +187,7 @@ static func _tops(scores: Dictionary, cell: Vector2i) -> bool:
 
 static func _cluster(cells: Dictionary, cell: Vector2i, o: int) -> Dictionary:
 	var size := 0.0
+	var blaze := 0.0
 	var at := Vector3.ZERO
 	var top := 0.0
 	for dz in range(-1, 2):
@@ -192,9 +196,10 @@ static func _cluster(cells: Dictionary, cell: Vector2i, o: int) -> Dictionary:
 			if sums.is_empty():
 				continue
 			size += sums[o + SIZE]
+			blaze += sums[BLAZE + SIZE]
 			at += Vector3(sums[o + 1], sums[o + 2], sums[o + 3])
 			top = maxf(top, sums[o + TOP])
-	return {"cell": cell, "size": size, "at": at / maxf(size, 1e-6), "top": top}
+	return {"cell": cell, "size": size, "blaze": blaze, "at": at / maxf(size, 1e-6), "top": top}
 
 
 static func _row_order(a: Vector2i, b: Vector2i) -> bool:

@@ -4,11 +4,14 @@ extends RefCounted
 ## cards' jobs firefeat_build, firefeat_look and firefeat_cleanup). Actions:
 ##   info              flames shown and planned (the cap), burning blocks, entries by band; the
 ##                     lights (place, energy, the sun's gate) and the smoke's sites
-##   extras {show}     shows or hides the fire's lights and smoke (FireLights, FireFieldSmoke),
-##                     so a capture can show the field as round 4 drew it
-##   shot {key}        "<day|dusk|night>_<view>": the sun (DefaultSun at 14:00, DUSK_HOUR or
+##   extras {show, what}  shows or hides the fire's lights and smoke (FireLights,
+##                     FireFieldSmoke; `what` "lights", "smoke" or "both"), so a capture can
+##                     show the field as round 4 drew it
+##   lights {energy, range, rise, decay}  re-tunes the lights in place (harness only)
+##   shot {key}        "<day|dusk|night|dark>_<view>": the sun (DefaultSun at 14:00, DUSK_HOUR or
 ##                     NIGHT_HOUR, through the level's sun as the Sun pane's time of day
-##                     does), the view (home; z8,
+##                     does; dark is the night with the scene's ambient and sky energy cut to
+##                     DARK, the harness's own, to judge the lights), the view (home; z8,
 ##                     zoom 8 over a point on the blaze; z20, zoom 20 over the fire's middle; z30,
 ##                     zoom 30 there, past the LOD zoom; zs, zoom 12 framing the largest smoke
 ##                     column) and an on-screen label, `label` (default
@@ -16,7 +19,8 @@ extends RefCounted
 ##   label {text}      an on-screen caption for captures ("" removes it)
 ##   replay {path, text}  an earlier capture over the whole window under the caption `text`, so
 ##                     a capture re-labels it for a sheet (an empty path removes it)
-##   flames {show}     shows or hides the flames, to judge the ground's glow alone
+##   flames {show}     shows or hides the flames (not the lights or smoke), to judge the
+##                     ground's glow or the lights alone
 ##   param {target, name, value}  sets a shader parameter on the "ground" (the map's ground
 ##                     material) or the "flames" (FireLook's material), for look comparisons
 ##   shadows {on}      turns every directional light's shadow on or off
@@ -41,8 +45,9 @@ const FIRE_AT := Vector2(0.0, -3.0)
 const AUTHOR_AT := Vector2(3.0, 17.0)
 const DUSK_HOUR := 19.0
 const NIGHT_HOUR := 23.0
-## The smoke view (zs) centres this far above where the largest column's billows are born.
-const SMOKE_VIEW_RISE := 1.5
+## The smoke view (zs) centres this share of the largest column's height above where its
+## billows are born.
+const SMOKE_VIEW_RISE := 0.35
 const VIEWS := {
 	"zs": "zoom 12 on the smoke",
 	"home": "home",
@@ -53,8 +58,14 @@ const VIEWS := {
 	"az20": "author fire, zoom 20",
 }
 
+## The dark key's share of the sky's energy, and its flat ambient (a moonlit blue, dim).
+const DARK := 0.1
+const DARK_AMBIENT := Color(0.05, 0.06, 0.1)
+
 static var _sun_key := ""
 static var _view_key := ""
+## While the dark key holds: Environment -> its saved properties, DirectionalLight3D -> visible.
+static var _env_saved := {}
 
 
 static func run(base: Node, step: Dictionary) -> String:
@@ -88,16 +99,23 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _save(ctrl, String(step.get("folder", PREFIX + "look")))
 		"flames":
 			var show := bool(step.get("show", true))
-			ctrl.editor.fire_field.visible = show
+			for chunk in ctrl.editor.fire_field.get_children():
+				if not (chunk is FireLights or chunk is FireFieldSmoke):
+					(chunk as Node3D).visible = show
 			return "flames %s" % ("shown" if show else "hidden")
 		"extras":
 			var field: FireField = ctrl.editor.fire_field
 			if field == null or field.lights() == null:
 				return "no lights or smoke"
 			var on := bool(step.get("show", true))
-			field.lights().visible = on
-			field.smoke().visible = on
-			return "lights and smoke %s" % ("shown" if on else "hidden")
+			var what := String(step.get("what", "both"))
+			if what != "smoke":
+				field.lights().visible = on
+			if what != "lights":
+				field.smoke().visible = on
+			return "%s %s" % [what, "shown" if on else "hidden"]
+		"lights":
+			return _tune_lights(ctrl.editor.fire_field, step)
 		"param":
 			return _param(ctrl.editor.fire_field, step)
 	return "unknown action %s" % action
@@ -130,6 +148,30 @@ static func _burst(base: Node, step: Dictionary) -> String:
 	)
 	timer.start()
 	return "burst %d frames every %.2f s into %s" % [count, timer.wait_time, dir]
+
+
+## Re-tunes the fire's lights in place for a look comparison (the harness only): each light in
+## use stands `rise` metres over its cluster's centroid with `energy` (before the gate and the
+## flicker), `range` and the falloff `decay` (OmniLight3D.omni_attenuation).
+static func _tune_lights(field: FireField, step: Dictionary) -> String:
+	if field == null or field.lights() == null:
+		return "no lights"
+	var lights := field.lights()
+	var clusters := FireClusters.lights(FireClusters.merge(field.get("_cells")))
+	var slots: Array[Vector2i] = lights.get("_cells")
+	var energies: PackedFloat32Array = lights.get("_energy")
+	for slot in slots.size():
+		for cluster in clusters:
+			if cluster["cell"] != slots[slot]:
+				continue
+			var light: OmniLight3D = lights.lights()[slot]
+			var at: Vector3 = cluster["at"]
+			light.position = at + Vector3(0.0, float(step.get("rise", 1.6)), 0.0)
+			light.omni_range = float(step.get("range", FireLights.RANGE_M))
+			light.omni_attenuation = float(step.get("decay", 1.0))
+			energies[slot] = float(step.get("energy", FireLook.LIGHT_ENERGY))
+	lights.set("_energy", energies)
+	return "lights tuned %s" % str(step)
 
 
 static func _param(field: FireField, step: Dictionary) -> String:
@@ -181,18 +223,35 @@ static func _info(doc: MapDocument, field: FireField) -> String:
 				"on" if light.visible else "off"
 			]
 		)
+	var cells := FireClusters.merge(field.get("_cells"))
 	return (
 		out
-		+ "; gate %.2f (sun weight %.3f); lights %d: %s; smoke sites %d, billows live %d"
+		+ (
+			"; gate %.2f (sun weight %.3f); lights %d: %s; smoke sites %d, billows %d: %s"
+			+ "; largest clusters: %s; largest blaze clusters: %s"
+		)
 		% [
 			gate,
 			FoliageLight.last_sun.w,
 			field.lights().count(),
 			", ".join(lit),
 			field.smoke().site_count(),
-			field.smoke().live_count()
+			field.smoke().live_count(),
+			_clusters_text(field.smoke().sites()),
+			_clusters_text(FireClusters.find(cells, false).slice(0, 6)),
+			_clusters_text(FireClusters.find(cells, true).slice(0, 6))
 		]
 	)
+
+
+static func _clusters_text(clusters: Array) -> String:
+	var parts := PackedStringArray()
+	for cluster: Dictionary in clusters:
+		var at: Vector3 = cluster["at"]
+		parts.append(
+			"(%.1f, %.1f) size %.0f top %.1f" % [at.x, at.z, cluster["size"], cluster["top"]]
+		)
+	return ", ".join(parts)
 
 
 static func _shot(
@@ -206,9 +265,10 @@ static func _shot(
 		var hour := DefaultSun.DEFAULT_TIME_OF_DAY
 		if parts[0] == "dusk":
 			hour = DUSK_HOUR
-		elif parts[0] == "night":
+		elif parts[0] == "night" or parts[0] == "dark":
 			hour = NIGHT_HOUR
 		out.append(_sun(ctrl, hour))
+		out.append(_dark(base, parts[0] == "dark"))
 		_sun_key = parts[0]
 	if parts[1] != _view_key:
 		out.append(_view(gm, parts[1], ctrl.editor.fire_field))
@@ -225,6 +285,47 @@ static func _sun(ctrl: AuthoringController, hour: float) -> String:
 	manager.apply_sun_settings(settings)
 	var elevation := settings.elevation_degrees
 	return "sun %.1f h: energy %.2f elevation %.1f" % [hour, settings.energy, elevation]
+
+
+## The harness's dark night (the "dark" sun key; never the game's own): every WorldEnvironment's
+## ambient made a flat DARK_AMBIENT colour (a sky ambient ignores the ambient energy), its sky
+## reflections off and its sky energy cut to DARK, so the fire's lights can be judged against a
+## genuinely dark scene; `on` false puts them back.
+static func _dark(base: Node, on: bool) -> String:
+	var keys := [
+		"ambient_light_source",
+		"ambient_light_color",
+		"ambient_light_energy",
+		"reflected_light_source",
+		"background_energy_multiplier"
+	]
+	for node in base.get_tree().root.find_children("*", "WorldEnvironment", true, false):
+		var env: Environment = (node as WorldEnvironment).environment
+		if env == null:
+			continue
+		if on and not _env_saved.has(env):
+			var saved := {}
+			for key: String in keys:
+				saved[key] = env.get(key)
+			_env_saved[env] = saved
+			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+			env.ambient_light_color = DARK_AMBIENT
+			env.ambient_light_energy = 1.0
+			env.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
+			env.background_energy_multiplier *= DARK
+		elif not on and _env_saved.has(env):
+			for key: String in keys:
+				env.set(key, _env_saved[env][key])
+			_env_saved.erase(env)
+	# The sun off too (it stands below the horizon at NIGHT_HOUR, but the scene stayed lit).
+	for light in base.get_tree().root.find_children("*", "DirectionalLight3D", true, false):
+		if on and not _env_saved.has(light):
+			_env_saved[light] = (light as DirectionalLight3D).visible
+			(light as DirectionalLight3D).visible = false
+		elif not on and _env_saved.has(light):
+			(light as DirectionalLight3D).visible = _env_saved[light]
+			_env_saved.erase(light)
+	return "dark %s" % ("on" if on else "off")
 
 
 static func _view(gm: GameMap, view: String, field: FireField = null) -> String:
@@ -254,16 +355,17 @@ static func _view(gm: GameMap, view: String, field: FireField = null) -> String:
 	return "view %s" % view
 
 
-## The ground point that frames the largest smoke column in the middle of the screen (about
-## SMOKE_VIEW_RISE metres above where its billows are born, carried down the camera's fixed
-## forward axis to the ground), or FIRE_AT without smoke.
+## The ground point that frames the largest smoke column in the middle of the screen
+## (SMOKE_VIEW_RISE of its height above where its billows are born, carried down the camera's
+## fixed forward axis to the ground), or FIRE_AT without smoke.
 static func _smoke_spot(field: FireField) -> Vector2:
 	if field == null or field.smoke() == null or field.smoke().site_count() == 0:
 		return FIRE_AT
 	var site: Dictionary = field.smoke().sites()[0]
-	var born: Vector3 = FireFieldSmoke.source(site)[0]
+	var born := FireFieldSmoke.source(site)
 	var forward := FireLook.DEFAULT_FORWARD.normalized()
-	var target := born + Vector3(0.0, SMOKE_VIEW_RISE, 0.0)
+	var rise := FireFieldSmoke.column_extent(site).x * SMOKE_VIEW_RISE
+	var target := born + Vector3(0.0, rise, 0.0)
 	var ground := target + forward * ((float(site["at"].y) - target.y) / forward.y)
 	return Vector2(ground.x, ground.z)
 

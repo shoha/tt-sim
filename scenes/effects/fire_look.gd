@@ -24,9 +24,9 @@ extends RefCounted
 ## One map is shown at a time, so the material's per-map uniforms (the wind, the LOD switch) are
 ## set on the shared material by the map's FireField.
 ##
-## The fire's lights (FireLights) and smoke (FireFieldSmoke) take their look from here: the
-## lights' warm colour, energy, slow flicker and the gate that shows them only while the sun is
-## low (light_gate), and the smoke's drift, rising slowly and leaning down the map's wind.
+## The fire's lights (FireLights) take their look from here: their warm colour, energy, slow
+## flicker and the gate that shows them only while the sun is low (light_gate). The smoke
+## (FireFieldSmoke, fire_field_smoke.gdshader) shares the flames' quad and leans down wind_for.
 
 const SHADER := preload("res://shaders/fire_field.gdshader")
 ## Floats per instance in a MultiMesh buffer: a 3x4 transform, then the custom data.
@@ -51,7 +51,8 @@ const LIGHT_COLOR := Color(1.0, 0.56, 0.24)
 ## A light's energy over the largest clusters, and the share it keeps over the smallest (by
 ## the cluster's size against LIGHT_FULL_SIZE square metres of flame, FireClusters). (The F3
 ## probe found energy 3 invisible against the dusk ambient; 2 read as nothing and 6 as very
-## little at the home zoom in this card's first rounds, since most of it falls on dark char.)
+## little at the home zoom in this card's first rounds, since most of it falls on dark char.
+## With FireLights' broad flat falloff, 6 washed the burn warm in the dark probe.)
 const LIGHT_ENERGY := 8.0
 const LIGHT_SMALL := 0.6
 const LIGHT_FULL_SIZE := 60.0
@@ -61,9 +62,6 @@ const FLICKER_RATES := Vector2(1.7, 4.3)
 ## The lights fade in as the published sun's weight (FoliageLight.sun_value: its energy times
 ## how high it stands) falls from LIGHT_GATE.y to .x: off by day, full at dusk and night.
 const LIGHT_GATE := Vector2(0.1, 0.35)
-## The smoke's drift (metres a second): up, and down the map's wind.
-const SMOKE_RISE := 0.75
-const SMOKE_LEAN := 0.35
 
 static var _mesh: QuadMesh = null
 static var _material: ShaderMaterial = null
@@ -125,13 +123,6 @@ static func flicker(t: float, slot: int) -> float:
 		+ 0.2 * sin(t * FLICKER_RATES.y + phase * 1.7)
 	)
 	return 1.0 - FLICKER_DEPTH * wave
-
-
-## The smoke's drift (metres a second) on the map of seed `map_seed`: SMOKE_RISE up and
-## SMOKE_LEAN down its wind (wind_for). Pure.
-static func smoke_drift(map_seed: int) -> Vector3:
-	var wind := wind_for(map_seed).normalized() * SMOKE_LEAN
-	return Vector3(wind.x, SMOKE_RISE, wind.y)
 
 
 ## How many of `count` drawn flames still show past the LOD zoom. Pure.

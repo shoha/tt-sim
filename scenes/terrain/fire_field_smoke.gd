@@ -1,102 +1,167 @@
 class_name FireFieldSmoke
-extends SmokePuffs
+extends MultiMeshInstance3D
 
-## The persistent fire's smoke (FireField; design section 4 "Smoke"): slow billows of the fire
-## events' family (SmokePuffs, shaders/fire_smoke.gdshader) over up to FireClusters.MAX_SMOKE
-## of the largest blaze clusters (FireClusters.smoke). Each site puffs a billow every EVERY_S
-## seconds, the sites staggered so they never puff together: born just above its tallest
-## flames, sized by its cluster, rising slowly and leaning down the map's wind
-## (FireLook.smoke_drift), its underside lit warm by the fire while it is low (WARMTH, the
-## shader's fire_below), so a blaze stands under a short leaning column of a few bold crowns.
+## The persistent fire's smoke (FireField; design section 4 "Smoke"): a slow leaning column of
+## soft billows over each of up to FireClusters.MAX_SMOKE of the largest blaze clusters
+## (FireClusters.smoke). The billows are camera-facing quads drawn by
+## shaders/fire_field_smoke.gdshader (the header there holds the look), which moves each one up
+## its column on its own clock: PER_SITE billows a column, a life of LIFE_S each, their phases
+## spread over the life, so a column runs continuously from the flame tips up to two or three
+## flame heights, leaning down the map's wind.
 ##
-## One pool of MAX_SMOKE x PER_SITE billows (24), sized so a site never takes a live billow's
-## slot (a billow lives at most PER_SITE puffs). Per frame: each site's clock counts down (at
-## most 8) and step() places the live billows (at most 24 transforms and custom data). Smoke
-## is a look only: its timing is each peer's own; where it rises is the plan's.
+## A column's size is its cluster's: the unit (column_unit) is the cluster's tallest flame,
+## scaled down for a smaller cluster, so the biggest fire is the biggest smoker. place() writes
+## one instance buffer when the blocks re-plan (instance_buffer, pure); nothing runs per frame,
+## and the shared material carries the map's wind (set_wind). Smoke is a look only: every peer
+## runs its own clock; where it rises is the plan's.
 
 const NODE_NAME := "FireSmoke"
-## Billows a site keeps alive at once, a billow's life (seconds) and a site's puff interval.
-const PER_SITE := 3
-const LIFE_S := 6.6
-const EVERY_S := LIFE_S / PER_SITE
-## A billow's size (metres) over the smallest and the largest clusters (by the cluster's size
-## against FULL_SIZE square metres of flame), and how far a puff's own size and speed vary
-## (either way, a share). Large, so the crown's cards read as a few bold shapes at the home
-## zoom (2.2 m read as a small crumpled grey ball there).
-const SIZE_M := Vector2(3.0, 4.6)
+const SHADER := preload("res://shaders/fire_field_smoke.gdshader")
+## Billows a column and a billow's life (seconds; each column's own within LIFE_VARY of it).
+const PER_SITE := 6
+const LIFE_S := 12.0
+const LIFE_VARY := 0.1
+## How far a billow's phase is moved off its even share of the life (a share of the spacing),
+## so a column's billows are not evenly strung.
+const PHASE_JITTER := 0.3
+## The column, in its unit: billows are born BORN_AT up (the tips of the tallest flames), climb
+## RISE over a life and lean LEAN of that down the wind, BILLOW across when born and when grown
+## (the shader's uniforms are set from these).
+const BORN_AT := 0.9
+const RISE := 1.5
+const LEAN := 0.55
+const BILLOW := Vector2(0.8, 1.45)
+## The unit is the cluster's tallest flame times UNIT_SMALL over the smallest clusters, rising
+## to 1 at FULL_SIZE square metres of flame (FireClusters' size).
+const UNIT_SMALL := 0.75
 const FULL_SIZE := 60.0
-const VARY := 0.15
-## A billow is born this share of its cluster's tallest flame above the centroid.
-const BORN_AT := 0.85
-## How strongly the fire lights the billows' undersides (the shader's fire_below).
-const WARMTH := 1.0
-## The crown: fewer, larger cards than a fire event's (SmokePuffs.CARDS of CARD_HALF), so a
-## slow billow reads as a few bold lumps rather than a crumpled ball of small pieces.
-const CARDS_FIELD := 16
-const CARD_HALF_FIELD := Vector2(0.28, 0.17)
-const CROWN_SEED_FIELD := 2311
 
-static var _field_crown: ArrayMesh = null
+static var _material: ShaderMaterial = null
 
-## The billows' drift (metres a second), set from the map's seed by FireField.
-var drift := Vector3(0.0, FireLook.SMOKE_RISE, 0.0)
 var _sites: Array[Dictionary] = []
-var _wait := PackedFloat32Array()
-var _puffs := 0
 
 
 func _init() -> void:
-	super(FireClusters.MAX_SMOKE * PER_SITE)
 	name = NODE_NAME
-	if _field_crown == null:
-		_field_crown = SmokePuffs.build_crown(CARDS_FIELD, CARD_HALF_FIELD, CROWN_SEED_FIELD)
-	multimesh.mesh = _field_crown
-	# A column rises several metres over its fire, so the cull box reaches past the pool's.
-	extra_cull_margin = 10.0
-	_wait.resize(FireClusters.MAX_SMOKE)
-	for site in _wait.size():
-		_wait[site] = fmod(site * 0.618, 1.0) * EVERY_S
+	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	material_override = material()
+	var billows := MultiMesh.new()
+	billows.transform_format = MultiMesh.TRANSFORM_3D
+	billows.use_custom_data = true
+	billows.mesh = FireLook.mesh()
+	billows.instance_count = capacity()
+	billows.visible_instance_count = 0
+	multimesh = billows
 
 
-## Puffs over `clusters` (FireClusters.smoke; document metres, this node's frame) from now on;
-## billows already rising keep rising.
+## The smoke's material (shared): the column's shape from this class's constants, drawn
+## before the flames.
+static func material() -> ShaderMaterial:
+	if _material == null:
+		_material = ShaderMaterial.new()
+		_material.shader = SHADER
+		_material.render_priority = -1
+		_material.set_shader_parameter("rise", RISE)
+		_material.set_shader_parameter("lean", LEAN)
+		_material.set_shader_parameter("billow_size", BILLOW)
+	return _material
+
+
+## Sets the map's wind (FireLook.wind_for of `map_seed`) on the shared material: the columns
+## lean down it.
+static func set_wind(map_seed: int) -> void:
+	material().set_shader_parameter("lean_dir", FireLook.wind_for(map_seed).normalized())
+
+
+## Billows the pool holds: every site's column.
+static func capacity() -> int:
+	return FireClusters.MAX_SMOKE * PER_SITE
+
+
+## Raises columns over `clusters` (FireClusters.smoke; document metres, this node's frame).
 func place(clusters: Array[Dictionary]) -> void:
 	_sites = clusters.duplicate()
+	var shown := mini(_sites.size(), FireClusters.MAX_SMOKE)
+	multimesh.visible_instance_count = 0
+	if shown > 0:
+		multimesh.buffer = instance_buffer(_sites)
+		custom_aabb = bounds(_sites)
+	multimesh.visible_instance_count = shown * PER_SITE
 
 
-## Sites puffing.
+## Sites smoking.
 func site_count() -> int:
 	return _sites.size()
 
 
-## The clusters puffing (FireClusters.smoke's records), largest first.
+## The clusters smoking (FireClusters.smoke's records), largest first.
 func sites() -> Array[Dictionary]:
 	return _sites
 
 
-## Where a site's billows are born (this node's frame) and how big they grow, for `cluster`.
-## Pure.
-static func source(cluster: Dictionary) -> Array:
+## Billows drawn (each column's PER_SITE).
+func live_count() -> int:
+	return mini(_sites.size(), FireClusters.MAX_SMOKE) * PER_SITE
+
+
+## A column's unit (metres) over `cluster`: its tallest flame, less over a small cluster. Pure.
+static func column_unit(cluster: Dictionary) -> float:
+	var share := clampf(float(cluster["size"]) / FULL_SIZE, 0.0, 1.0)
+	return float(cluster["top"]) * lerpf(UNIT_SMALL, 1.0, share)
+
+
+## Where a column's billows are born over `cluster` (this node's frame). Pure.
+static func source(cluster: Dictionary) -> Vector3:
 	var at: Vector3 = cluster["at"]
-	var size := lerpf(SIZE_M.x, SIZE_M.y, clampf(float(cluster["size"]) / FULL_SIZE, 0.0, 1.0))
-	return [at + Vector3(0.0, float(cluster["top"]) * BORN_AT + size * 0.2, 0.0), size]
+	return at + Vector3(0.0, float(cluster["top"]) * BORN_AT, 0.0)
 
 
-func _process(delta: float) -> void:
-	for site in _sites.size():
-		_wait[site] -= delta
-		if _wait[site] <= 0.0:
-			_wait[site] += EVERY_S
-			_puff(_sites[site])
-	step(delta)
+## A column's height above its source and its width (metres), billows grown, without the lean.
+## Pure.
+static func column_extent(cluster: Dictionary) -> Vector2:
+	var unit := column_unit(cluster)
+	return Vector2(unit * (RISE + BILLOW.y * 0.5), unit * BILLOW.y)
 
 
-func _puff(cluster: Dictionary) -> void:
-	_puffs += 1
-	var draw := fmod(_puffs * 0.618034, 1.0)
-	var turn := fmod(_puffs * 0.414214, 1.0)
-	var from: Array = source(cluster)
-	var size: float = from[1] * (1.0 + VARY * (draw * 2.0 - 1.0))
-	var velocity := drift * (1.0 + VARY * (turn * 2.0 - 1.0))
-	var life := LIFE_S * (1.0 - 0.12 * turn)
-	emit(from[0], velocity, size, life, Color.WHITE, WARMTH)
+## The MultiMesh buffer (capacity() instances of FireLook.INSTANCE_FLOATS) for columns over the
+## first MAX_SMOKE of `clusters`: site k's billows fill instances k x PER_SITE on, each a uniform
+## scale of the column's unit at its source, and (phase, seed, life, 1) as custom data; the rest
+## stay zero. Pure.
+static func instance_buffer(clusters: Array[Dictionary]) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(capacity() * FireLook.INSTANCE_FLOATS)
+	for site in mini(clusters.size(), FireClusters.MAX_SMOKE):
+		var cluster := clusters[site]
+		var unit := column_unit(cluster)
+		var at := source(cluster)
+		var life := LIFE_S * (1.0 + LIFE_VARY * (fmod(site * 0.618034 + 0.31, 1.0) * 2.0 - 1.0))
+		for k in PER_SITE:
+			var n := site * PER_SITE + k
+			var jitter := (fmod(n * 0.754877 + 0.17, 1.0) - 0.5) * PHASE_JITTER
+			var i := n * FireLook.INSTANCE_FLOATS
+			# Row-major 3x4: (basis x, y, z, origin) per row.
+			out[i] = unit
+			out[i + 3] = at.x
+			out[i + 5] = unit
+			out[i + 7] = at.y
+			out[i + 10] = unit
+			out[i + 11] = at.z
+			out[i + 12] = fmod((k + jitter) / PER_SITE + site * 0.381966 + 1.0, 1.0)
+			out[i + 13] = fmod(n * 0.618034 + 0.13, 1.0)
+			out[i + 14] = life
+			out[i + 15] = 1.0
+	return out
+
+
+## The bounds of the columns over `clusters`: every source, with room for a column's climb,
+## lean and its grown billows. Pure.
+static func bounds(clusters: Array[Dictionary]) -> AABB:
+	var box := AABB()
+	var reach := 0.0
+	for site in mini(clusters.size(), FireClusters.MAX_SMOKE):
+		var at := source(clusters[site])
+		box = AABB(at, Vector3.ZERO) if site == 0 else box.expand(at)
+		reach = maxf(reach, column_unit(clusters[site]))
+	var side := reach * (LEAN * RISE + BILLOW.y)
+	var room := Vector3(side, reach * BILLOW.y, side)
+	return AABB(box.position - room, box.size + room * 2.0 + Vector3(0.0, reach * RISE, 0.0))

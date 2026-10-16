@@ -233,7 +233,10 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   has one per hot spot at least two cells apart (connected components would make the look
   level's passes one cluster with one light at its middle); re-planning one block changes only
   the clusters within two cells of it. `FireLights` stands four shared `OmniLight3D` (no
-  shadows, range 7 m, `FireLook.LIGHT_COLOR`, energy by the cluster's size) over the four
+  shadows, range 12 m with a flat falloff, `omni_attenuation` 0.5, 0.7 x the tallest flame up,
+  `FireLook.LIGHT_COLOR`, energy 8 by the cluster's size; tuned in the harness's dark night,
+  where they light the trunks and warm the burn, though the game's own dusk and night keep the
+  day sky's ambient and wash them out) over the four
   largest clusters, a lit cluster keeping its light across a re-plan (`keep_slots`); they show
   only while the sun is low (`FireLook.light_gate` of `FoliageLight.last_sun`, the published
   sun's weight: off at 14:00, fading in from about 17:00, full at dusk, at night and with no
@@ -242,14 +245,17 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   Mobile renderer's eight per mesh; the env manager skips a `FireField` when it collects the
   map's own lights (counted, they turned the level's sun off in "auto" mode). A cluster's size
   is its flames' heights squared, summed (about their drawn area), so a blaze's big flames
-  outweigh a wide field of small ones. `FireFieldSmoke` (a `SmokePuffs` pool of 24, the fire
-  events' smoke crowns built with 16 larger cards and painted warm, umber to cream-rose) puffs
-  a billow every 2.2 s over each of up to eight of the largest blaze clusters (mask 200 and
-  up, at least 8 m2 of flame), born above its tallest flames,
-  rising 0.75 m/s and leaning down the map's wind (`FireLook.smoke_drift`), its low half lit
-  warm from below (`fire_smoke.gdshader`'s `fire_below`, INSTANCE_CUSTOM.y, 0 for a fire
-  event's billows); the shader keeps an omni light's full colour, so the fire's lights warm
-  the smoke at dusk. Per frame: up to 8 site clocks and 24 billows placed)
+  outweigh a wide field of small ones. `FireFieldSmoke` (one `MultiMesh` of camera-facing
+  quads, `fire_field_smoke.gdshader`) raises a leaning column over each of up to eight of the
+  largest clusters holding at least 8 m2 of blaze (ranked by all their flames, as the lights
+  are, so the biggest fire is the biggest smoker): six billows a column, each born at the tips
+  of the tallest flames, lifting and growing over about 12 s while it slows, leans down the
+  map's wind and thins away, the column's size the cluster's tallest flame (less for a small
+  cluster); each billow is one soft shape (three gaussian lobes warped by the fire's noise, a
+  wide alpha edge), taking light flat, painted by its climb from a fire-lit amber underside
+  through rose to a blue-grey top (paler by day, from `foliage_sun`), drawn before the flames.
+  The shader moves every billow on `TIME`; nothing runs per frame (one buffer written when the
+  blocks re-plan). The fire events' `SmokePuffs` crowns are unchanged)
   and is refreshed by `AuthoringEditor.refresh_fire`, which
   `apply_mask_diff` calls for any diff that writes `fire_mask` (the fire part records through
   it as every mask stroke does; a diff of `fire_mask` alone regenerates no scatter). Render jobs

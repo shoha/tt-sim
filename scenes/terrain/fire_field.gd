@@ -50,9 +50,10 @@ extends Node3D
 ## Lights and smoke (look card F4b-1): each re-planned block's flames are summed on the
 ## clusters' grid (FireClusters.cells_of, kept per block), and every refresh finds the hot spots
 ## from those sums: FireLights stands up to four warm lights over the largest burning clusters
-## (shown only while the sun is low) and FireFieldSmoke puffs slow billows over up to eight of
-## the largest blaze clusters. Both are children, made with the first fire and freed with the
-## map; their per-frame work is the lights' flicker and the smoke's pool of 24.
+## (shown only while the sun is low) and FireFieldSmoke raises a leaning column of soft billows
+## over up to eight of the largest blaze clusters. Both are children, made with the first fire
+## and freed with the map; their per-frame work is the lights' flicker (the smoke moves in its
+## shader).
 
 const NODE_NAME := "FireField"
 ## Lattice spacing of the flames, and how far each is moved off its lattice point (a share of
@@ -639,7 +640,7 @@ func _place_lights_and_smoke() -> void:
 		_smoke = FireFieldSmoke.new()
 		add_child(_smoke)
 	if document != null:
-		_smoke.drift = FireLook.smoke_drift(document.map_seed)
+		FireFieldSmoke.set_wind(document.map_seed)
 	_lights.place(lit)
 	_smoke.place(smoky)
 
