@@ -181,6 +181,12 @@ look, two biomes' slots).
 
 See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work".
 
+- The first restamp after a level opens draws no mass stamps into the ground look bake (its
+  bake MD5 equals the no-stamps bake); the next restamp draws them. Seen as a faint rendered
+  difference too: the first dab on a reopened level darkens the whole frame by about 0.5 level
+  (max 14) until the second dab. Not fixed; same in the pre-optimization code.
+  `docs/PERFORMANCE.md` "Optimizations (2026-10-15)" has the numbers and capture paths.
+
 ## History
 
 - 2026-10-09: map and rules moved here from `AGENTS.md` Key Conventions.
