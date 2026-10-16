@@ -140,8 +140,8 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   so a key is still free to give), its `brush_mode` (the `BrushMode` class its gestures run
   in), its own help rows, an unavailable tooltip, and its contexts
   (`ToolDescriptor.AUTHORING`, `PLAY`; every query takes one). Play lists Biome, Thin /
-  Clear, Sculpt, Paint, Water and Bridge, the GM's Events pane (see "Live edits"); Place is
-  authoring's alone. `works_on(editor)` is the map half of `can_select`, asked of an editor
+  Clear, Sculpt, Paint, Fire, Water and Bridge, the GM's Events pane (see "Live edits"); Place
+  is authoring's alone. `works_on(editor)` is the map half of `can_select`, asked of an editor
   alone, so play asks it of the live editor.
   A tool whose pane sets what its mode paints has a static `of(brush)` returning that mode,
   typed (`SculptTool.of(brush).tile`, `WaterTool.of(brush).depth`).
@@ -180,7 +180,8 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   descriptor; it edits no brush code.
 - Fire (2026-10-11, card F1; design `docs/plans/2026-10-11-fire-features/design.md`): the
   first tool added through the registry alone. `FireTool` (rail after Paint, Tabler
-  `campfire` icon, authoring only until F2; the document's own ground, as Paint),
+  `campfire` icon; the document's own ground, as Paint; a play brush too since card F2,
+  2026-10-16, see "Live edits"),
   `FireBrush` (Area only; Line and Tab come in F5), `FireToolPane` (Embers 96, Flames 176,
   Blaze 255, and the panel's `build_advanced` rows), and `FireEditor` behind
   `AuthoringEditor.begin_fire_stroke(target, erase)`. A lay is a `MaskStroke` in
@@ -200,7 +201,9 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   ash parts mirror `TerrainEvents._burn` (which is not called: its dabs are one circle, these
   follow the stroke). `FireField` draws the mask (placeholder look: FlameAtlas cards on a
   0.9 m jittered lattice, a MultiMesh per 10 m block, at most 1536 on a map; no LOD, lights,
-  glow or smoke) and is refreshed by `AuthoringEditor.refresh_fire`. Render job
+  glow or smoke) and is refreshed by `AuthoringEditor.refresh_fire`, which
+  `apply_mask_diff` calls for any diff that writes `fire_mask` (the fire part records through
+  it as every mask stroke does; a diff of `fire_mask` alone regenerates no scatter). Render job
   `tools/render_jobs/jobs/fire_mask.json`.
 
 ## Live edits
@@ -217,8 +220,8 @@ Probe and numbers:
   Visuals drawer's last rail item (wand), so the GM's alone. It lists the play brushes
   (`ToolRegistry.tools(PLAY)`) as toggling tiles, then the picked brush's controls built from
   the authoring panes' parts (Sculpt's shape tiles, the palette biome and surface tiles,
-  `WaterToolPane` and `BridgeToolPane` with their headers hidden, one Advanced foldout with
-  size and strength); the presets with spectacle (Drop bridge, Topple trees, Start a fire)
+  `FireToolPane` (its Embers, Flames and Blaze tiles), `WaterToolPane` and `BridgeToolPane`
+  with their headers hidden, one Advanced foldout with size and strength); the presets with spectacle (Drop bridge, Topple trees, Start a fire)
   take a field headed "Happenings" (`EventPresets.HEADING`), one row of three, above the
   brushes. The
   picked tool's controls stand directly under its own field (`show_tool` moves them), and a
@@ -240,7 +243,8 @@ Probe and numbers:
   an edit that changed a lot (`PlayEvents.is_large`: a river, pond or crossing edit, or a
   stroke whose entry holds 12 KB or more; one 4 m mound is about 4 KB, a 9 m Clear sweep 15
   KB) offers Undo in a toast while it is still the newest entry (`AuthoringHistory.is_newest`):
-  "Cleared for everyone at the table" (`PlayEvents.done_phrase`), one line at 720p (a toast
+  "Cleared for everyone at the table" (`PlayEvents.done_phrase`; a large Fire lay's reads "Fire
+  laid for everyone at the table", `DONE_PHRASES`), one line at 720p (a toast
   hugs its line, up to 360 px, 520 with an action, `ToastContainer.ACTION_MAX_WIDTH`). A click
   that never leaves its spot (within `DWELL_RADIUS`) gets at least `PLAY_CLICK_SECONDS` (0.6 s)
   of exposure, topped up when the stroke ends (`BrushTool.min_stroke_seconds`, set on a pick
@@ -474,7 +478,8 @@ Probe and numbers:
   `recorded`, `undone` and `redone` signals turn each entry into one op once the editor's
   height work has drained, appended to `op_log` (plain bytes, the table's events for a session
   file). A client checks and applies ops in order through a `LiveEditCodec.Queue`; a catch-up
-  (a late joiner's) is applied at once (`Queue.drain()`). A Blender map with no document takes
+  (a late joiner's) is applied at once (`Queue.drain()`), and its fire drawn again from the
+  whole document (`FireField.rebuild()`). A Blender map with no document takes
   none (`LiveEdits.refusal()`). Live edits change the session's copy, never `map.ttmap`; a
   later "Save into map" would.
 - **Op format** (`LiveEditCodec`): `{"v": 1, "kind", "args", "redo"}`, one op per history
@@ -491,10 +496,15 @@ Probe and numbers:
   (`MapWaterIO.body_json`, `MapCrossingIO.crossing_json`). `op_of(entry, editor, undo)` reads
   the entry's redo or undo Callable; it finishes the host's height work first, since a
   sculpt's record is complete only once its kept rocks land. Payloads on a 200 ft map: 0.1 to
-  10 KB.
+  10 KB. A Fire lay (card F2) is a group, so three ops: its fire (`mask`, `fire_mask` only,
+  which redraws the peer's `FireField`), its burnt forest (`mask`, `biome_slots`) and its ash
+  (`surface`); a put-out is one `mask` op. Measured in `test_live_map_edits.gd` (headless, one
+  run): a 3 m lay over 8 m held 8.7 KB of ops, its fire op applied in 1.2 ms (77 flames), the
+  burnt forest's in 58.6 ms and the ash's in 18.7 ms; a put-out 2.0 KB, 1.1 ms.
 - **Checks** (`LiveEditReader`, run by `decode(bytes, doc, palette_root)`): the byte cap
   before `bytes_to_var` (which refuses objects); version and kind; rectangles inside the grid;
-  mask names whitelisted (`MaskStroke.apply_diff` sets the property a diff names); every block
+  mask names whitelisted (`LiveEditReader.MASKS`: `biome_slots`, `biome_density`,
+  `erase_mask`, `fire_mask`; `MaskStroke.apply_diff` sets the property a diff names); every block
   decompressed to exactly its rectangle's size; slot bytes within the op's biome list; finite
   heights within `MAX_ABS_HEIGHT_M`; a pond mask of 0 or the grid's samples whose bytes all
   name ponds; a wet dressing of 0 or 4 bytes a sample; bodies and crossings through

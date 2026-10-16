@@ -6,6 +6,11 @@ extends Node
 ##
 ##   godot --headless --path D:/dev/tt-sim res://tests/net/net_launcher.tscn --
 ##     --data-root=net_launcher --scenario=<name> [--peers=2] [--timeout-s=180] [--port=28471]
+##     [--windowed=<role>]
+##
+## --windowed=<role> starts that one peer in a real window (WINDOW_ARGS) instead of headless,
+## for a scenario that films its own board (enet_live_edits' client: client_fire.png in the
+## logs folder). It uses the GPU, so it is for a look, not for every run.
 ##
 ## Peer 0 is the host (--role=host), peer 1 "client", peer i >= 2 "client<i>". Each is its
 ## own headless Godot process started with the scenario's args (--role, --rendezvous, --out,
@@ -64,6 +69,10 @@ const NEVER_WRITTEN := [
 const STAT_CHUNK := 512
 ## How many new paths the report lists (the count is always given)
 const ADDED_SAMPLE := 10
+## A --windowed peer's window, in place of --headless.
+const WINDOW_ARGS: Array[String] = [
+	"--windowed", "--resolution", "1920x1080", "--position", "320,120"
+]
 
 var _args: Dictionary = {}
 var _report: Dictionary = {}
@@ -152,9 +161,11 @@ func _fail(reason: String) -> bool:
 
 ## Start one peer process; its pid, or -1.
 func _start_peer(scene: String, peer: Dictionary, common: Array) -> int:
-	var args := PackedStringArray(
+	var args := PackedStringArray(["--headless"])
+	if str(_args.get("windowed", "")) == str(peer.role):
+		args = PackedStringArray(WINDOW_ARGS)
+	args.append_array(
 		[
-			"--headless",
 			"--path",
 			ProjectSettings.globalize_path("res://"),
 			"--log-file",

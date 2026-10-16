@@ -235,9 +235,16 @@ func cancel_stroke() -> void:
 	_refresh(rect)
 
 
-## Undo (`redo` false) or redo of a mask stroke (its MaskStroke diff), and a live mask edit.
+## Undo (`redo` false) or redo of a mask stroke (its MaskStroke diff), and a live mask edit. A
+## diff that writes the fire mask redraws the fire; one that writes any other mask refreshes
+## the ground and scatter, so a fire stroke's (fire_mask alone) regenerates no scatter.
 func apply_mask_diff(diff: Dictionary, redo: bool) -> void:
-	_refresh(MaskStroke.apply_diff(document, diff, redo))
+	var rect := MaskStroke.apply_diff(document, diff, redo)
+	var masks := MaskStroke.masks_of(diff)
+	if masks.has(MaskStroke.FIRE):
+		refresh_fire(rect)
+	if masks.size() != 1 or masks[0] != MaskStroke.FIRE:
+		_refresh(rect)
 
 
 ## Starts a Fire stroke (FireEditor): laying fire toward `target` (0..1 of the mask's 255), or
@@ -248,11 +255,6 @@ func begin_fire_stroke(target: float, erase: bool) -> bool:
 		end_stroke()
 	finish_height_work()
 	return fire.begin(target, erase)
-
-
-## Undo (`redo` false) or redo of a fire stroke's mask diff (FireEditor).
-func apply_fire_diff(diff: Dictionary, redo: bool) -> void:
-	refresh_fire(MaskStroke.apply_diff(document, diff, redo))
 
 
 ## Redraws the fire over the samples of `sample_rect` (nothing else reads the fire mask).

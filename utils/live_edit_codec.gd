@@ -10,7 +10,8 @@ extends RefCounted
 ## it (MapFingerprint and document equal for nine ops) is tests/unit/test_live_map_edits.gd.
 ##
 ## An op is {"v": VERSION, "kind": one of KINDS, "args": Array, "redo": bool}. Each kind goes
-## through one method: "mask" AuthoringEditor.apply_mask_diff, "surface" apply_surface_diff,
+## through one method: "mask" AuthoringEditor.apply_mask_diff (a fire stroke's fire_mask too,
+## which redraws the peer's fire), "surface" apply_surface_diff,
 ## "props" set_prop_cell, "height" HeightEditor.apply_diff, "water" WaterEditor.apply_edit,
 ## "crossings" CrossingEditor.apply_list. One side of an entry travels: a redo (and a fresh
 ## record) its after side, diffs with their "after" blocks and records with their *_after

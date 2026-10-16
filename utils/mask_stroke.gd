@@ -392,6 +392,20 @@ static func apply_diff(document: MapDocument, diff: Dictionary, redo: bool) -> R
 	return diff.get("rect", Rect2i())
 
 
+## The masks finish() diff `diff` writes: those it allocates and those either side of any block
+## holds (a live op carries one side), each once. Pure.
+static func masks_of(diff: Dictionary) -> Array[StringName]:
+	var out: Array[StringName] = []
+	var named: Array = diff.get("allocated", []).duplicate()
+	for block: Dictionary in diff.get("blocks", []):
+		for side in ["before", "after"]:
+			named.append_array((block.get(side, {}) as Dictionary).keys())
+	for mask: Variant in named:
+		if not StringName(mask) in out:
+			out.append(StringName(mask))
+	return out
+
+
 ## The grid rectangle of diff block `block`, clipped to the document.
 static func block_rect(document: MapDocument, block: Vector2i) -> Rect2i:
 	var rect := Rect2i(block * BLOCK, Vector2i(BLOCK, BLOCK))
