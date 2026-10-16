@@ -172,6 +172,26 @@ func accept(job: Dictionary) -> Array[Vector2i]:
 	return current
 
 
+## True when a request has touched every cell of `job` (take_job's) since it was taken, so
+## accept() would drop all of its rows; a newer request carries those cells' work.
+func is_stale(job: Dictionary) -> bool:
+	for cell in job.get("cells", []):
+		if _generation.get(cell, 0) == job.generations.get(cell, -1):
+			return false
+	return true
+
+
+## Posts the cancel of each of AuthoredScatter's in-flight `entries` ({"job", "cancel": Semaphore})
+## that is_stale: accept() would drop all its rows, and a stroke re-requests its cells every frame,
+## so such jobs would otherwise hold the slots the current ones wait for (ground-opt-cpu2). run()
+## then hands back what it has.
+func cancel_stale(entries: Array[Dictionary]) -> void:
+	for entry in entries:
+		if not entry.get("cancelled", false) and is_stale(entry.job):
+			(entry.cancel as Semaphore).post()
+			entry["cancelled"] = true
+
+
 ## A copy of what generation reads of `doc` (wet dressing and crossings too), for a worker:
 ## packed arrays are shared by reference (4.7), so without the copy a worker would read masks
 ## while the brush writes them or lose a buffer an append reallocates (crossings are replaced
@@ -199,12 +219,15 @@ static func snapshot(doc: MapDocument) -> MapDocument:
 ## over a copy). A work entry's optional "blockers" (RockKeep.blockers) are the footprints
 ## of kept rocks no generated rock, tree or shrub grows inside. Returns {"rows_by_cell":
 ## {cell: {asset id: PackedFloat32Array}}, "anchors": the grass-mass anchors of those rows
-## (ScatterMass.collect's table, this job's own), "usec": int}.
-static func run(snapshot: MapDocument, work: Dictionary) -> Dictionary:
+## (ScatterMass.collect's table, this job's own), "usec": int}. Once `cancel` is posted
+## (AuthoredScatter, for a job whose cells are all stale) it stops and returns what it has.
+static func run(snapshot: MapDocument, work: Dictionary, cancel: Semaphore = null) -> Dictionary:
 	var started := Time.get_ticks_usec()
 	var rows_by_cell := {}
 	var anchors := {}
 	for biome_id in work:
+		if ScatterGenerator.cancelled(cancel):
+			break
 		var entry: Dictionary = work[biome_id]
 		var fields := ScatterGenerator.document_fields(
 			snapshot,
@@ -227,7 +250,8 @@ static func run(snapshot: MapDocument, work: Dictionary) -> Dictionary:
 			fields.species_density_at,
 			entry.get("blockers", PackedFloat32Array()),
 			anchors,
-			fields.density_ceiling_at
+			fields.density_ceiling_at,
+			cancel
 		)
 		for asset_id in rows:
 			var split := split_by_cell(rows[asset_id])

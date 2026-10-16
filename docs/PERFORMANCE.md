@@ -3352,3 +3352,73 @@ Most of it is GDScript's per-call cost (dictionary lookups, static calls), so th
 is structural: per-entry constants hoisted out of the per-candidate calls, or the per-candidate
 loop moved to native code. **Inexact, not committed:** the zone weights asked once per 0.23 m child
 bucket instead of per child (the zones vary over metres; it would move some rows, so no).
+
+**Scatter generation, wall clock (ground-opt-cpu2, 2026-10-16).** Two approaches probed against
+each other. *A, the schedule:* in game a new map is 64 one-cell jobs (36 with rows; the edge ring is
+0.48 m strips) and a 3 m dab nine (four with every species, five halo cells with the six
+relation-driven ones), run at most `clampi(cores / 2, 1, AuthoredScatter.MAX_JOBS)` at once: 4 on
+the 24-thread Ryzen 9 5900X. Run one after another on one thread (a scratch harness taking the
+game's jobs from a real new-map document, `ScatterRegen.run` per job), grassland's 64 jobs sum to
+15.5 s (slowest 0.48 s) and the dab's nine to 3.0-3.1 s (slowest 0.41 s), so the new map's 5.0 s
+was the sum over 4 slots plus the 0.35 s growth, and the dab three rounds of jobs: both bound by
+the slot count, not by a slowest job. One-cell jobs also redo their neighbours' work (against one
+whole-map job: mass parents 5.1x, other species' candidates 2.3x, spacing misses 4.3x), and a
+stroke re-requests its cells every frame, so the jobs it started hold their slots until they
+finish and are then dropped. *B, the candidate:* counted per rejection stage, 140 k of the
+grassland dab's 157 k candidates (carpet alone 98 k) are rejected at the first test, the painted
+density's response: the starting cover paints 0.14 (centre) to 0.6, and ground cover's response
+lags. Each such reject paid one `ScatterGround` sampler call (normal, rule fields, heights, the
+rule weights, painted surfaces, water, crossings), which the headless bench (density 1, flat)
+never pays. Hoisting and inlining in the mass path (the round's original B) target the bench's
+per-candidate costs, a few percent each. Both paid; three exact commits:
+
+- *Density ceiling.* `ScatterGround.density_ceiling` bounds what `species_density` can give from
+  the bilinear painted density alone (the sampler's open share is at most 1 except a flower's verge
+  with a fringe and an edge species' shore with wet dressing; scree 0..1), and
+  `document_fields.density_ceiling_at` asks it first: a candidate whose uniform clears the response
+  to the ceiling (plus 1e-9) is rejected without the sampler. On the dab every reject moved there
+  except some rock ones; temperate's flowers keep a third (built paint in the window, verge x6).
+  The bound is pinned by `test_density_ceiling_bounds_the_sampler_on_painted_wet_and_tiered_ground`
+  (4,000 random points x 25 roles, random wet bytes, a path and a tier face).
+- *Six jobs.* `MAX_JOBS` 4 -> 6. Godot runs low-priority pool tasks on at most
+  `low_priority_thread_ratio` (0.3) of its threads, 7 of 24 here (a probe: 16 low-priority tasks
+  peaked at 7, high-priority at 16), so 6 leaves one for GLB loads; a 4-core machine stays at 2.
+- *Stale jobs stop.* `ScatterRegen.cancel_stale` posts a running job's `Semaphore` once a newer
+  request has touched all its cells (its rows would be dropped by `accept` anyway);
+  `ScatterGenerator.cancelled` is checked per species and per bucket row.
+
+Exact: the bench's row MD5s of the nine biomes (generate path) unchanged, every cell's rows of a
+new map of each of the nine biomes (one whole-map job, and the 64 one-cell jobs for grassland) and
+of a 3 m dab on each (9-25 jobs) unchanged with the ceiling, scatter golden rows pass. CPU, the
+harness, one thread, two runs each: grassland new map 64 jobs 15.5, 15.6 -> 12.5, 12.5 s, dab
+3.02, 3.09 -> 2.22, 2.23 s; savanna 11.7, 11.7 -> 9.9, 9.9 s, dab 1.47, 1.47 -> 1.26, 1.26 s.
+
+In game (`ground_timing_build.json`, one session, runs in the order head, all three, ceiling,
+ceiling and six jobs; three new maps of each biome and four dabs per run), regen and growth done
+after the loading screen, and a dab applied after the release, ms:
+
+| State | Grassland new map | Savanna new map | Dabs (badlands, grassland, x2) | Last job |
+| --- | --- | --- | --- | --- |
+| Head (44f22520 + bace3d11) | 4949, 5078, 5238 | 4000, 3991, 4039 | 1436, 1422, 1424, 1402 | 336-361 |
+| Ceiling | 4208, 4358, 4420 | 3506, 3575, 3506 | 1045, 1019, 1009, 1008 | 256-267 |
+| Ceiling, six jobs | 2936, 3073, 3091 | 2541, 2546, 2553 | 819, 767, 772, 790 | 272-313 |
+| All three | 2989, 3090, 3075 | 2586, 2594, 2586 | 688, 665, 663, 695 | 267-296 |
+| Main before the ship (item 4) | 3800-3810 | 2570-2650 | 1150-1180 | 325-335 |
+
+Frames while generating barely moved (median 14.2-16.0 ms over a new map's growth, worst 24-41 ms
+in every state; dab windows median 2.8-3.2 ms, worst 12.3-13.1 ms on the head and 12.2-14.5 with
+all three, two of its four windows at 14.0 and 14.5). The new maps now grow in
+0.7-0.8 s sooner than main's (grassland) and as fast (savanna); a dab lands in 0.66-0.70 s, about
+half main's. Not run: a second head run after the others (the states differ by 0.4-2.0 s, run to
+run spread is 0.1-0.3 s).
+
+**What is left.** A new map is still the job sum over the slots: 12.5 s of grassland CPU, of it
+the cross-job redundancy (a whole-map job does the same cells in about half; the mass parents'
+kept decisions are a pure function of biome and seed, so a per-biome cache handed to every job
+would remove most of it, exactly) and the per-job window decode (`document_fields` 25-32 ms per
+job, 64 times). The bench's per-candidate costs (zone masks, membership, rows) are unchanged:
+headless grassland and savanna stay about 2.4x main's. Native code: the bench's hot loop is
+dictionary and static-call bound in GDScript, which a GDExtension would run perhaps 10-30x faster
+(an estimate, not measured), the in-game wall clock now about half of that per-candidate work and
+half scheduling and window decode, so a port of `_evaluate` with the mass path would cut the new
+map perhaps to 1-1.5 s; it is a dependency and build decision, not taken.
