@@ -25,7 +25,9 @@ extends RefCounted
 ##   on every bound grass material, what a Blender map's grass has). `code`: `new` (the res://
 ##   shaders), `old_ground` / `old_grass` / `old_both` (the ground's or the foliage's include
 ##   swapped, through Shader.code, for the one in the pre-ship checkout at `base`, which has no
-##   look path at all). Logs what it set and how many scatter materials draw looked code.
+##   look path at all). Logs what it set and how many scatter materials draw looked code. An old
+##   code whose include is missing at `base`, or the same as the res:// one, fails the job with an
+##   error and swaps nothing (it once kept the new code, so a parity check passed against itself).
 ## - `bake_info`: slots, bake size, bakes so far, the last sync's CPU ms, and timed rebinds of the
 ##   ground and the grass, warm and with the tuft reference cache cleared (the open's cost).
 ## - `rebake`: GroundLookBake.sync(true) now and its CPU ms (wrap it in `record` for its frames).
@@ -41,9 +43,14 @@ extends RefCounted
 ## - `stamps_fresh`: drops GroundMassStamps' kept materials, so the next restamp makes new ones
 ##   and compiles their canvas pipelines, as every restamp did before the optimization card.
 ## - `restamp`: GroundLookBake._restamp() now (each slot redrawn on the next frame).
+## - `restamp_remade`: the same with every slot's stamp nodes freed first, so it makes them anew
+##   as every restamp did before restamp-fixed (whose next render dropped them every other time:
+##   follow it with `rerender` for the bytes those stamps draw).
 ## - `bake_bytes` (`name`): an MD5 of each slot's baked image, read back from the GPU.
 ## - `restamp_none`: every slot's stamps removed and the bake redrawn (the bake with no masses).
 ## - `rerender`: every slot redrawn as it stands (no new stamps).
+## - `stamp_info` (`name`): what a restamp would receive now (anchored MultiMeshes, anchors,
+##   masses) and the masses each slot's stamps drew last.
 ## The ground's shaders swapped by `code` are both variants (plain and looked) of the map's and
 ## the skirt's: the optimization card compares them against the include at `base` in one run.
 
@@ -225,14 +232,23 @@ static func run(base: Node, step: Dictionary) -> String:
 			var n := (kept as Dictionary).size()
 			(kept as Dictionary).clear()
 			return "stamps_fresh: %d kept materials dropped" % n
-		"restamp":
+		"restamp", "restamp_remade":
 			var bake := _bake(base)
 			if bake == null:
 				return "no look bake"
+			if step.action == "restamp_remade":
+				for vp: SubViewport in bake.get("_viewports"):
+					for stamp_name in ["MassShade", "MassLift"]:
+						var old := vp.get_node_or_null(stamp_name)
+						if old != null:
+							vp.remove_child(old)
+							old.free()
 			bake.call("_restamp")
-			return "restamped, bakes %d" % bake.get("bakes")
+			return "%s, bakes %d" % [step.action, bake.get("bakes")]
 		"bake_bytes":
 			return _bake_bytes(base, String(step.get("name", "")))
+		"stamp_info":
+			return _stamp_info(base, String(step.get("name", "")))
 		"restamp_none", "rerender":
 			var bake := _bake(base)
 			if bake == null:
@@ -260,6 +276,50 @@ static func _bake_bytes(base: Node, label: String) -> String:
 		ctx.update(image.get_data())
 		parts.append("%s %s md5 %s" % [vp.name, str(image.get_size()), ctx.finish().hex_encode()])
 	return "bake_bytes %s: %s" % [label, " | ".join(parts)]
+
+
+## What a restamp would receive now: the MultiMeshes under the bake's stamp root (those with
+## custom data, their anchored instances), the anchors collect() groups and those of MIN_TUFTS or
+## more, each slot's masses drawn by the last stamp, and the scatter's anchor table size.
+static func _stamp_info(base: Node, label: String) -> String:
+	var bake := _bake(base)
+	if bake == null:
+		return "no look bake"
+	var root: Node = bake.call("_stamp_root")
+	var counts := [0, 0, 0]
+	for node in root.find_children("*", "MultiMeshInstance3D", true, false):
+		var mm := (node as MultiMeshInstance3D).multimesh
+		counts[0] += 1
+		if mm == null or mm.mesh == null or not mm.use_custom_data:
+			continue
+		counts[1] += 1
+		for i in mm.instance_count:
+			counts[2] += 1 if mm.get_instance_custom_data(i).a >= 0.5 else 0
+	var stamps := load(STAMPS) as GDScript
+	var min_tufts: int = stamps.get_script_constant_map().get("MIN_TUFTS", 6)
+	var sums: Dictionary = stamps.call("collect", root)
+	var masses := 0
+	for key: Variant in sums:
+		masses += 1 if (sums[key] as PackedFloat64Array)[0] >= min_tufts else 0
+	var drawn := PackedStringArray()
+	for vp: SubViewport in bake.get("_viewports"):
+		var shade := vp.get_node_or_null("MassShade")
+		drawn.append(str(shade.get_meta("masses", -1)) if shade != null else "none")
+	var scatter: Node = bake.call("_find_scatter")
+	var table: Variant = scatter.get("mass_anchors") if scatter != null else null
+	return (
+		"stamp_info %s: mmi %d, with custom data %d, anchored instances %d, anchors %d, masses %d,"
+		% [label, counts[0], counts[1], counts[2], sums.size(), masses]
+		+ (
+			" drawn %s, scatter anchor table %s, rect %s px %s"
+			% [
+				",".join(drawn),
+				str((table as Dictionary).size()) if table is Dictionary else "none",
+				str(bake.get("_rect")),
+				str(bake.get("_px")),
+			]
+		)
+	)
 
 
 ## `head` where the look bake exists, `base` on main before the ship.
@@ -292,6 +352,8 @@ static func _bake(base: Node) -> Node:
 static func _scatter_nodes(base: Node) -> Array[MultiMeshInstance3D]:
 	var gm: GameMap = base.get("_game_map")
 	var out: Array[MultiMeshInstance3D] = []
+	if gm == null:
+		return out
 	for node in gm.map_container.find_children("*", "MultiMeshInstance3D", true, false):
 		if not String(node.name).contains("PipelineWarm"):
 			out.append(node as MultiMeshInstance3D)
@@ -309,10 +371,7 @@ static func _add_watch(base: Node, watch: Watch) -> void:
 
 ## Inserts the sweep's steps into the driver's list after the current step (as expand_ab does).
 static func _sweep(base: Node, step: Dictionary) -> String:
-	var driver: Node = null
-	for node in base.get_tree().root.get_children():
-		if node.has_method("log_line") and node.get("steps") is Array:
-			driver = node
+	var driver := _driver(base)
 	if driver == null:
 		return "sweep: no driver"
 	var steps: Array = driver.get("steps")
@@ -343,7 +402,10 @@ static func _sweep(base: Node, step: Dictionary) -> String:
 static func _state(base: Node, step: Dictionary) -> String:
 	var parts := PackedStringArray()
 	if step.has("code"):
-		parts.append(_set_code(String(step.code), String(step.get("base", ""))))
+		var coded := _set_code(base, String(step.code), String(step.get("base", "")))
+		if coded.begins_with("FAILED"):
+			return coded
+		parts.append(coded)
 	if step.has("scatter"):
 		parts.append(_set_scatter(base, String(step.scatter)))
 	var perf := load(PERF) as GDScript
@@ -408,13 +470,57 @@ static func _set_look(base: Node, bake: Node, mode: String) -> String:
 
 ## The foliage's and the ground's include, each either the res:// one or the pre-ship one read
 ## from `base_dir`, through Shader.code on the shared Shader resources.
-static func _set_code(code: String, base_dir: String) -> String:
+## An `old_*` code whose include cannot be read at `base_dir`, or reads the same as the res://
+## one, stops the job with an error (_fail) before anything is swapped: keeping the new code there
+## made a parity check compare the new code with itself and pass.
+static func _set_code(base: Node, code: String, base_dir: String) -> String:
 	var old_grass := code == "old_grass" or code == "old_both"
 	var old_ground := code == "old_ground" or code == "old_both"
+	if not code in ["new", "old_grass", "old_ground", "old_both"]:
+		return _fail(base, "code '%s' is none of new, old_grass, old_ground, old_both" % code)
+	for wanted: Array in [[old_grass, FOLIAGE_INCLUDE], [old_ground, GROUND_INCLUDE]]:
+		var problem := _old_include_problem(base_dir, String(wanted[1])) if wanted[0] else ""
+		if problem != "":
+			return _fail(base, "code %s: %s" % [code, problem])
 	var grass := _swap(FOLIAGE_SHADERS, FOLIAGE_INCLUDE, old_grass, base_dir)
 	var ground := _swap(GROUND_SHADERS, GROUND_INCLUDE, old_ground, base_dir)
 	_code = code
 	return "code %s: foliage %s, ground %s" % [code, grass, ground]
+
+
+## Why the pre-change include `include_rel` under `base_dir` cannot stand for the old code, or "".
+static func _old_include_problem(base_dir: String, include_rel: String) -> String:
+	if base_dir == "" or not base_dir.is_absolute_path():
+		return "`base` must be the absolute path of a pre-change checkout, got '%s'" % base_dir
+	if not DirAccess.dir_exists_absolute(base_dir):
+		return "the base checkout %s is missing" % base_dir
+	var path := base_dir.path_join(include_rel)
+	if not FileAccess.file_exists(path):
+		return "no %s in the base checkout %s" % [include_rel, base_dir]
+	var old := FileAccess.get_file_as_string(path)
+	if old == "":
+		return "%s is empty or unreadable" % path
+	if old == FileAccess.get_file_as_string("res://" + include_rel):
+		return "%s is the same as res://%s: old and new would be one code" % [path, include_rel]
+	return ""
+
+
+## Logs `message` as an error and ends the job after this step (the driver's own stop, as a call
+## that fails to load); returns the line the driver logs for the step.
+static func _fail(base: Node, message: String) -> String:
+	push_error("ground_timing: %s; stopping the job" % message)
+	var driver := _driver(base)
+	if driver != null:
+		driver.set("_i", (driver.get("steps") as Array).size())
+	return "FAILED: %s; stopping the job" % message
+
+
+## The render-job driver among the root's children, or null.
+static func _driver(base: Node) -> Node:
+	for node in base.get_tree().root.get_children():
+		if node.has_method("log_line") and node.get("steps") is Array:
+			return node
+	return null
 
 
 static func _swap(paths: Array, include_rel: String, old: bool, base_dir: String) -> String:
@@ -422,8 +528,6 @@ static func _swap(paths: Array, include_rel: String, old: bool, base_dir: String
 	var include := ""
 	if old:
 		include = FileAccess.get_file_as_string(base_dir.path_join(include_rel))
-		if include == "":
-			return "no %s under '%s'" % [include_rel, base_dir]
 	var changed := 0
 	for path: String in paths:
 		var shader := load(path) as Shader

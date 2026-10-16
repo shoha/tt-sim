@@ -67,37 +67,23 @@ static func collect(root: Node) -> Dictionary:
 static func draw(
 	vp: SubViewport, sums: Dictionary, rect_m: Vector4, px: Vector2i, mass: Dictionary, sun: Vector2
 ) -> int:
-	for stamp_name in [SHADE_NODE, LIFT_NODE]:
-		var old_stamp := vp.get_node_or_null(stamp_name)
-		if old_stamp != null:
-			vp.remove_child(old_stamp)
-			old_stamp.free()
 	var strength := clampf(float(mass.shade), 0.0, 0.9)
 	var lift_amount := clampf(float(mass.lift), 0.0, 0.2)
+	var shade := _stamp_node(vp, SHADE_NODE, CanvasItemMaterial.BLEND_MODE_MUL, strength)
+	var lift := _stamp_node(vp, LIFT_NODE, CanvasItemMaterial.BLEND_MODE_ADD, -1.0)
+	var ci := shade.get_canvas_item()
+	var lift_ci := lift.get_canvas_item()
+	RenderingServer.canvas_item_clear(ci)
+	RenderingServer.canvas_item_clear(lift_ci)
+	shade.set_meta("masses", 0)
 	if (strength <= 0.0 and lift_amount <= 0.0) or sums.is_empty():
 		return 0
 	var size := float(mass.shade_size)
 	var push := float(mass.shade_push)
-	var k := sqrt(1.0 - strength)
-	var gradient := Gradient.new()
-	gradient.set_offset(0, 0.0)
-	gradient.set_color(0, Color(k, k, k, k))
-	gradient.set_offset(1, 1.0)
-	gradient.set_color(1, Color(1, 1, 1, 1))
-	var k_mid := lerpf(k, 1.0, 0.25)
-	gradient.add_point(0.45, Color(k_mid, k_mid, k_mid, k_mid))
-	var shade := _stamp_node(vp, SHADE_NODE, gradient, CanvasItemMaterial.BLEND_MODE_MUL)
 	var lift_size := float(mass.lift_size)
 	var lift_push := float(mass.lift_push)
-	var lift_grad := Gradient.new()
-	lift_grad.set_color(0, Color(1, 1, 1, 1))
-	lift_grad.set_color(1, Color(1, 1, 1, 0))
-	lift_grad.add_point(0.55, Color(1, 1, 1, 0.75))
-	var lift := _stamp_node(vp, LIFT_NODE, lift_grad, CanvasItemMaterial.BLEND_MODE_ADD)
 	var tex_rid: RID = (shade.get_meta("texture") as Texture2D).get_rid()
 	var lift_rid: RID = (lift.get_meta("texture") as Texture2D).get_rid()
-	var ci := shade.get_canvas_item()
-	var lift_ci := lift.get_canvas_item()
 	var per_m := Vector2(px.x / rect_m.z, px.y / rect_m.w)
 	var origin := Vector2(rect_m.x, rect_m.y)
 	var drawn := 0
@@ -141,24 +127,57 @@ static func draw(
 	return drawn
 
 
-## A Node2D child of `vp` named `node_name`, drawing with `blend`, holding a radial texture of
-## `gradient` (as meta "texture", so it lives as long as the node).
+## The Node2D child of `vp` named `node_name`, drawing with `blend`, holding a radial texture (as
+## meta "texture", so it lives as long as the node): the shade's for `strength`, the lift's when
+## `strength` is negative, re-made only when that changes. The node is made on the slot's first
+## stamp and kept: a restamp only clears and refills its canvas item. A restamp that freed the
+## nodes and added new ones drew none of its masses in the bake's next render every other time
+## (on fresh and reopened maps alike; a re-render showed them, and new textures on kept nodes did
+## not do it), so the first brush dab on a reopened level dropped every mass's shade and lift
+## (docs/systems/authored_terrain.md "Ground look").
 static func _stamp_node(
-	vp: SubViewport, node_name: String, gradient: Gradient, blend: CanvasItemMaterial.BlendMode
+	vp: SubViewport, node_name: String, blend: CanvasItemMaterial.BlendMode, strength: float
 ) -> Node2D:
+	var node := vp.get_node_or_null(node_name) as Node2D
+	if node == null:
+		node = Node2D.new()
+		node.name = node_name
+		node.material = material(blend)
+		vp.add_child(node)
+	if node.get_meta("strength", NAN) == strength:
+		return node
 	var tex := GradientTexture2D.new()
-	tex.gradient = gradient
+	tex.gradient = _lift_gradient() if strength < 0.0 else _shade_gradient(strength)
 	tex.fill = GradientTexture2D.FILL_RADIAL
 	tex.fill_from = Vector2(0.5, 0.5)
 	tex.fill_to = Vector2(1.0, 0.5)
 	tex.width = GRADIENT_PX
 	tex.height = GRADIENT_PX
-	var node := Node2D.new()
-	node.name = node_name
-	node.material = material(blend)
-	vp.add_child(node)
 	node.set_meta("texture", tex)
+	node.set_meta("strength", strength)
 	return node
+
+
+## The shade's falloff: the texel multiplied by sqrt(1 - strength) at the centre, 1 at the rim.
+static func _shade_gradient(strength: float) -> Gradient:
+	var k := sqrt(1.0 - strength)
+	var gradient := Gradient.new()
+	gradient.set_offset(0, 0.0)
+	gradient.set_color(0, Color(k, k, k, k))
+	gradient.set_offset(1, 1.0)
+	gradient.set_color(1, Color(1, 1, 1, 1))
+	var k_mid := lerpf(k, 1.0, 0.25)
+	gradient.add_point(0.45, Color(k_mid, k_mid, k_mid, k_mid))
+	return gradient
+
+
+## The lift's falloff: full at the centre, none at the rim (its amount is the draw's alpha).
+static func _lift_gradient() -> Gradient:
+	var gradient := Gradient.new()
+	gradient.set_color(0, Color(1, 1, 1, 1))
+	gradient.set_color(1, Color(1, 1, 1, 0))
+	gradient.add_point(0.55, Color(1, 1, 1, 0.75))
+	return gradient
 
 
 ## The stamps' shared material drawing with `blend` (made on first use, then kept).

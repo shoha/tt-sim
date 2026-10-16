@@ -28,7 +28,7 @@ extends RefCounted
 ##   an MD5 of the grass rows, beside the same read back from the level's saved map.ttmap, and
 ##   the live MultiMesh rows: an older level whose open regrew nothing shows them all equal.
 
-const PREFIXES := ["_gship3c_", "_gship4_"]
+const PREFIXES := ["_gship3c_", "_gship4_", "_restamp_"]
 const MAIN_SAVED := "_gm_events_gship4_old"
 const ROLLOVER := "rendering/limits/time/time_rollover_secs"
 
