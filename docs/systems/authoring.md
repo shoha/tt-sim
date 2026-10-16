@@ -199,12 +199,18 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   footprint (1.1x the fire's radius, its faint rim keeping plants), is undone with the ash
   part, and putting fire out brings nothing back. Start a fire's ash clears the same way. The burnt-biome and
   ash parts mirror `TerrainEvents._burn` (which is not called: its dabs are one circle, these
-  follow the stroke). `FireField` draws the mask (placeholder look: FlameAtlas cards on a
-  0.9 m jittered lattice, a MultiMesh per 10 m block, at most 1536 on a map; no LOD, lights,
-  glow or smoke) and is refreshed by `AuthoringEditor.refresh_fire`, which
+  follow the stroke). `FireField` draws the mask (look card F4a: banded-tongue flames from
+  `shaders/fire_field.gdshader` on a 0.9 m jittered lattice gathered into clumps with open
+  ground between, a big flame with licks at its feet in each blaze clump, no flames in the
+  ember band, held drawings and one wind per map; a MultiMesh per 10 m block, at most 4096 on a
+  map shared in proportion to each block's burning area, half of them past zoom 24; the char
+  and ember glow are a term in the authored ground shader, `shaders/fire_glow.gdshaderinc`, fed
+  the mask as an R8 texture; `FireLook` in `scenes/effects/` owns the meshes, materials and the
+  glow binding; no lights or smoke yet) and is refreshed by `AuthoringEditor.refresh_fire`, which
   `apply_mask_diff` calls for any diff that writes `fire_mask` (the fire part records through
-  it as every mask stroke does; a diff of `fire_mask` alone regenerates no scatter). Render job
-  `tools/render_jobs/jobs/fire_mask.json`.
+  it as every mask stroke does; a diff of `fire_mask` alone regenerates no scatter). Render jobs
+  `tools/render_jobs/jobs/fire_mask.json`, and for the look `firefeat_build`, `firefeat_look`
+  and `firefeat_cleanup` (JOBS.md).
 
 ## Live edits
 

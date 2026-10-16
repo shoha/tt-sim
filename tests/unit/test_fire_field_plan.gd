@@ -2,7 +2,9 @@ extends GutTest
 
 ## FireField's placement (pure plan_block): deterministic, each lattice point in one block
 ## only, nothing below the ember band, nothing on wet or steep ground, heights from the
-## document's triangles; the bands; and the map-wide cap the drawn field keeps.
+## document's triangles; the look card's clumps (scale range, gaps, a blaze's big flames and
+## licks, no flames in the ember band); the bands; the budget shared in proportion past the
+## cap; the LOD half; and the warm-up covering the fire's shaders.
 
 
 func _doc(cells: int = 20, heat: int = 255) -> MapDocument:
@@ -12,6 +14,29 @@ func _doc(cells: int = 20, heat: int = 255) -> MapDocument:
 	mask.fill(heat)
 	doc.fire_mask = mask
 	return doc
+
+
+## Every planned entry of the whole map of `doc`.
+func _whole(doc: MapDocument) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for block in FireField.blocks_of(doc, Rect2i(0, 0, doc.samples_x(), doc.samples_z())):
+		out.append_array(FireField.plan_block(doc, block))
+	return out
+
+
+func _lattice_points(doc: MapDocument) -> float:
+	return doc.extent_m().x * doc.extent_m().y / pow(FireField.FLAME_SPACING_M, 2)
+
+
+## Each flame's height over its band's base height (its clump, big or lick scale).
+func _scales(plan: PackedFloat32Array) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for k in plan.size() / FireField.STRIDE:
+		var o := k * FireField.STRIDE
+		if plan[o + FireField.KIND] == FireField.FLAME:
+			var base := FireField.base_height(plan[o + FireField.INTENSITY])
+			out.append(plan[o + FireField.HEIGHT] / base)
+	return out
 
 
 func test_the_plan_is_deterministic_and_burns_where_painted() -> void:
@@ -38,9 +63,10 @@ func test_blocks_share_no_flame() -> void:
 			assert_false(seen.has(key), "a flame belongs to one block")
 			seen[key] = true
 			total += 1
-	# About one flame per FLAME_SPACING_M square over the whole map.
-	var expected := doc.extent_m().x * doc.extent_m().y / pow(FireField.FLAME_SPACING_M, 2)
-	assert_almost_eq(float(total), expected, expected * 0.1)
+	# A blaze everywhere: most lattice points stand, the clumps' gaps open the rest.
+	var expected := _lattice_points(doc)
+	assert_lt(float(total), expected * 1.05)
+	assert_gt(float(total), expected * 0.6)
 
 
 func test_nothing_burns_below_the_ember_band_or_without_a_mask() -> void:
@@ -86,6 +112,59 @@ func test_steep_ground_does_not_burn_and_flames_stand_on_the_ground() -> void:
 		assert_almost_eq(y, (x + half) * 0.2, 0.01, "on the ground")
 
 
+func test_clumps_scale_the_flames_and_leave_gaps() -> void:
+	var doc := _doc(30, 150)
+	var plan := _whole(doc)
+	var scales := _scales(plan)
+	assert_eq(scales.size() * FireField.STRIDE, plan.size(), "a flames band has no sparks")
+	var low := 99.0
+	var high := 0.0
+	for s in scales:
+		low = minf(low, s)
+		high = maxf(high, s)
+	assert_gte(low, FireField.CLUMP_SCALE.x - 0.001, "no flame under the clump range")
+	assert_lte(high, FireField.CLUMP_SCALE.y + 0.001, "no flame over it")
+	assert_gt(high / low, 1.8, "small flames and big ones")
+	var points := _lattice_points(doc)
+	assert_lt(float(scales.size()), points * 0.85, "open ground between the clumps")
+	assert_gt(float(scales.size()), points * 0.35, "but most of a flames band stands")
+
+
+func test_the_ember_band_draws_no_flames_only_sparks() -> void:
+	var doc := _doc(30, 80)
+	var plan := _whole(doc)
+	var sparks := plan.size() / FireField.STRIDE
+	assert_gt(sparks, 0, "a few sparks")
+	assert_lt(float(sparks), _lattice_points(doc) / FireField.SPARK_EVERY * 1.3, "sparse")
+	for k in sparks:
+		assert_eq(plan[k * FireField.STRIDE + FireField.KIND], FireField.SPARK, "no flame")
+
+
+func test_weak_flames_have_fewer_tongues_than_a_blaze() -> void:
+	var weak := _whole(_doc(20, FireField.FLAME_MIN + 5))
+	for k in weak.size() / FireField.STRIDE:
+		var layout := floori(weak[k * FireField.STRIDE + FireField.SEED])
+		assert_lte(layout, FireField.LAYOUT_TWO, "one or two tongues")
+	var blaze := _whole(_doc(20, 255))
+	var crowns := 0
+	for k in blaze.size() / FireField.STRIDE:
+		crowns += 1 if floori(blaze[k * FireField.STRIDE + FireField.SEED]) == 3 else 0
+	assert_gt(crowns, 0, "a blaze has crowns of four tongues")
+
+
+func test_a_blaze_has_big_flames_with_licks_at_their_feet() -> void:
+	var plan := _whole(_doc(30, 255))
+	var scales := _scales(plan)
+	var big := 0
+	var licks := 0
+	for s in scales:
+		big += 1 if s >= FireField.BIG_SCALE.x - 0.001 else 0
+		licks += 1 if s <= FireField.LICK_SCALE.y + 0.001 else 0
+	assert_gt(big, 0, "big flames")
+	assert_lt(big, scales.size() / 5, "one per clump, not everywhere")
+	assert_gt(licks, big, "licks around them")
+
+
 func test_bands() -> void:
 	assert_eq(FireField.band(0), 0)
 	assert_eq(FireField.band(FireField.EMBER_MIN - 1), 0)
@@ -93,28 +172,72 @@ func test_bands() -> void:
 	assert_eq(FireField.band(FireBrush.EMBERS), 1, "the Embers tile is embers")
 	assert_eq(FireField.band(FireBrush.FLAMES), 2, "the Flames tile is flames")
 	assert_eq(FireField.band(FireBrush.BLAZE), 3, "the Blaze tile is a blaze")
-	assert_lt(FireField.card_height(FireBrush.EMBERS / 255.0), FireField.card_height(1.0))
+	assert_eq(FireField.base_height(FireBrush.EMBERS / 255.0), 0.0, "embers stand no flame")
+	assert_lt(FireField.base_height(FireBrush.FLAMES / 255.0), FireField.base_height(1.0))
 
 
-func test_thin_keeps_an_even_share() -> void:
+func test_thin_keeps_the_shuffled_prefix() -> void:
 	var plan := PackedFloat32Array()
 	for k in 10:
-		plan.append_array([k, 0, 0, 1, 0])
+		plan.append_array([k, 0, 0, 1, 0, 1, 0.5, 0])
 	var kept := FireField.thin(plan, 5)
 	assert_eq(kept.size(), 5 * FireField.STRIDE)
-	assert_eq(kept[0], 0.0)
-	assert_eq(kept[FireField.STRIDE], 2.0, "every other one")
+	assert_eq(kept, plan.slice(0, 5 * FireField.STRIDE))
 	assert_eq(FireField.thin(plan, 20), plan)
 
 
-func test_the_field_keeps_the_map_wide_cap() -> void:
-	var doc := _doc(40)
+func test_budget_shares_are_proportional() -> void:
+	var under := FireField.budget_shares({Vector2i(0, 0): 10, Vector2i(1, 0): 20}, 100)
+	assert_eq(under, {Vector2i(0, 0): 10, Vector2i(1, 0): 20}, "all of each under the cap")
+	var over := FireField.budget_shares({Vector2i(0, 0): 100, Vector2i(1, 0): 300}, 200)
+	assert_eq(over, {Vector2i(0, 0): 50, Vector2i(1, 0): 150}, "the same fraction of each")
+	var ties := FireField.budget_shares(
+		{Vector2i(0, 1): 1, Vector2i(1, 0): 1, Vector2i(0, 0): 1}, 2
+	)
+	assert_eq(ties, {Vector2i(0, 1): 0, Vector2i(1, 0): 1, Vector2i(0, 0): 1}, "row order")
+
+
+func test_a_fire_past_the_cap_fills_every_block_evenly() -> void:
+	var doc := _doc(48)
 	var field := FireField.create(doc)
 	add_child_autofree(field)
-	assert_eq(field.flame_count(), FireField.MAX_FLAMES, "a whole 40-cell map at the cap")
+	var planned := 0
+	for block in field._plans:
+		planned += (field._plans[block] as PackedFloat32Array).size() / FireField.STRIDE
+	assert_gt(planned, FireField.MAX_FLAMES, "a whole 48-cell map past the cap")
+	assert_eq(field.flame_count(), FireField.MAX_FLAMES, "exactly the cap")
+	var ratio := float(FireField.MAX_FLAMES) / planned
+	for block in field._plans:
+		var own := (field._plans[block] as PackedFloat32Array).size() / FireField.STRIDE
+		assert_almost_eq(float(field._counts.get(block, 0)), own * ratio, 1.0, str(block))
 	var mask := doc.fire_mask.duplicate()
 	mask.fill(0)
 	doc.fire_mask = mask
 	field.rebuild()
 	assert_eq(field.flame_count(), 0)
 	assert_eq(field.get_child_count(), 0, "no chunk without fire")
+
+
+func test_lod_keeps_half_and_draws_back_to_front() -> void:
+	assert_eq(FireLook.far_count(7), 4)
+	assert_eq(FireLook.far_count(8), 4)
+	var plan := FireField.plan_block(_doc(), Vector2i(1, 1))
+	var count := plan.size() / FireField.STRIDE
+	var forward := FireLook.DEFAULT_FORWARD.normalized()
+	var buffer := FireLook.instance_buffer(plan, count, forward)
+	assert_eq(buffer.size(), count * FireLook.INSTANCE_FLOATS)
+	var kept := 0
+	var last := INF
+	for slot in count:
+		var i := slot * FireLook.INSTANCE_FLOATS
+		kept += int(buffer[i + 15])
+		var depth := Vector3(buffer[i + 3], buffer[i + 7], buffer[i + 11]).dot(forward)
+		assert_lte(depth, last + 0.0001, "the far flames first")
+		last = depth
+	assert_eq(kept, FireLook.far_count(count), "half show past the LOD zoom")
+
+
+func test_the_warmup_covers_the_fire_shaders() -> void:
+	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_field.gdshader")
+	var sources := "\n".join(GraphicsWarmup.shader_sources())
+	assert_true(sources.contains("res://shaders/fire_glow.gdshaderinc\n"), "the ground's glow")

@@ -27,6 +27,7 @@ const COVERED_SHADERS := [
 	"res://shaders/authored_ground_skirt.gdshader",
 	"res://shaders/authored_ground_skirt_looked.gdshader",
 	"res://shaders/event_puff.gdshader",
+	"res://shaders/fire_field.gdshader",
 	"res://shaders/fire_smoke.gdshader",
 	"res://shaders/grid_overlay.gdshader",
 	"res://shaders/ground_burn.gdshader",

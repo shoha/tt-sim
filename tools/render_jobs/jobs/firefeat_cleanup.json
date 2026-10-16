@@ -1,0 +1,9 @@
+{
+ "out_dir": "render_jobs/firefeat_cleanup",
+ "timeout_s": 60,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "cleanup"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

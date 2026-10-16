@@ -685,6 +685,15 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (`stamps_fresh`, the old behaviour), each in a `record` window with the bake's MD5 after it;
   then grassland, taiga, grassland, taiga played, a `sweep` at home and zoom 26 of the new and the
   base include, with and without scatter, and the `ground_std` reference.
+- `jobs/firefeat_build.json`, `jobs/firefeat_look.json` and `jobs/firefeat_cleanup.json`:
+  persistent ground fire's look (fire cards F3 and F4a; `probes/fire.gd`). Build (about 100 s):
+  a new 200 ft temperate forest (seed 1234), fire laid with the real Fire tool (three `flames`
+  passes of radius 4 across the map and a shorter fourth, then a curved `blaze` line of radius 2
+  across the view), saved as `_firefeat_look`. Look (about 40 s): that level at home, zoom 8
+  over the blaze and zoom 20 over the fire's middle, by day (14:00) and at dusk (19:00), plus
+  zoom 30 past the LOD zoom, each labelled; `sheet_<day|dusk>_<view>.png` puts the F3 probe's
+  frame of F1's placeholder (`render_jobs/firefeat_look/<view>_A.png`, kept from that probe)
+  beside the new one. Cleanup deletes every `_firefeat_` level.
 
 ## Caveats
 
