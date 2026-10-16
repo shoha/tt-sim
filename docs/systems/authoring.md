@@ -234,9 +234,10 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   level's passes one cluster with one light at its middle); re-planning one block changes only
   the clusters within two cells of it. `FireLights` stands four shared `OmniLight3D` (no
   shadows, range 12 m with a flat falloff, `omni_attenuation` 0.5, 0.7 x the tallest flame up,
-  `FireLook.LIGHT_COLOR`, energy 8 by the cluster's size; tuned in the harness's dark night,
-  where they light the trunks and warm the burn, though the game's own dusk and night keep the
-  day sky's ambient and wash them out) over the four
+  `FireLook.LIGHT_COLOR`, energy 14 by the cluster's size; judged under the game's
+  `outdoor_night` and `outdoor_sunset` presets, where they warm the ash, logs, stumps and rocks
+  across the burn and give the trunks a warm side, though the burnt bark's linear albedo of
+  about 0.035 keeps it dark-ish however strong the light) over the four
   largest clusters, a lit cluster keeping its light across a re-plan (`keep_slots`); they show
   only while the sun is low (`FireLook.light_gate` of `FoliageLight.last_sun`, the published
   sun's weight: off at 14:00, fading in from about 17:00, full at dusk, at night and with no
@@ -248,12 +249,16 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   outweigh a wide field of small ones. `FireFieldSmoke` (one `MultiMesh` of camera-facing
   quads, `fire_field_smoke.gdshader`) raises a leaning column over each of up to eight of the
   largest clusters holding at least 8 m2 of blaze (ranked by all their flames, as the lights
-  are, so the biggest fire is the biggest smoker): six billows a column, each born at the tips
-  of the tallest flames, lifting and growing over about 12 s while it slows, leans down the
-  map's wind and thins away, the column's size the cluster's tallest flame (less for a small
-  cluster); each billow is one soft shape (three gaussian lobes warped by the fire's noise, a
-  wide alpha edge), taking light flat, painted by its climb from a fire-lit amber underside
-  through rose to a blue-grey top (paler by day, from `foliage_sun`), drawn before the flames.
+  are, so the biggest fire is the biggest smoker): five billows a column, each born small at
+  the tips of the tallest flames, lifting and growing over about 10 s while it slows, leans down
+  the map's wind (at least 0.6 of the lean across the screen) and thins away, a new one every
+  2 s, the column's size the cluster's tallest flame (less for a small cluster), about twice
+  as tall as wide; each billow is a cluster of three round lobes (sphere-shaded with a fake
+  normal, the nearer lobe's surface winning where they overlap), painted in emission: at dusk
+  and night amber on the side facing down to the fire, strongest low on the column, and a cool
+  blue-grey on the sky side, by day cream on the sun side and cool in shade (from
+  `foliage_sun`); no fog or ambient light (the sky's ambient and reflections through the fake
+  normal washed every tone pale blue-lilac), thinner low on the column, drawn before the flames.
   The shader moves every billow on `TIME`; nothing runs per frame (one buffer written when the
   blocks re-plan). The fire events' `SmokePuffs` crowns are unchanged)
   and is refreshed by `AuthoringEditor.refresh_fire`, which

@@ -242,7 +242,7 @@ func test_each_smoke_column_spreads_its_billows_over_a_life() -> void:
 			var born := Vector3(buffer[i + 3], buffer[i + 7], buffer[i + 11])
 			assert_almost_eq(born, FireFieldSmoke.source(sites[site]), Vector3.ONE * 1e-4)
 			assert_almost_eq(buffer[i], FireFieldSmoke.column_unit(sites[site]), 1e-4)
-			assert_between(buffer[i + 14], 10.0, 14.0, "a slow climb of about 12 s")
+			assert_between(buffer[i + 14], 9.0, 11.0, "a climb of about 10 s")
 			phases.append(buffer[i + 12])
 		phases.sort()
 		phases.append(phases[0] + 1.0)
@@ -260,12 +260,12 @@ func test_the_biggest_fire_raises_the_biggest_column_taller_than_wide() -> void:
 	assert_gt(FireFieldSmoke.column_unit(big), FireFieldSmoke.column_unit(small))
 	for cluster: Dictionary in [big, small]:
 		var extent := FireFieldSmoke.column_extent(cluster)
-		assert_gt(extent.x, extent.y * 1.5, "a column, not a squat puff")
+		assert_gt(extent.x, extent.y * 1.8, "a column about twice as tall as wide")
 		assert_between(
 			FireFieldSmoke.source(cluster).y + extent.x,
-			2.0 * float(cluster["top"]),
-			3.2 * float(cluster["top"]),
-			"up to two or three flame heights"
+			2.5 * float(cluster["top"]),
+			4.5 * float(cluster["top"]),
+			"three or four flame heights, over the trees"
 		)
 	var box := FireFieldSmoke.bounds([big, small] as Array[Dictionary])
 	assert_true(box.has_point(FireFieldSmoke.source(small)))
