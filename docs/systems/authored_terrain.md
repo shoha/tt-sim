@@ -79,7 +79,12 @@ Conventions on 2026-10-09).
   `test_terrain_rules.gd`; per-vertex curvature and steepness in UV2), and side projections
   below n.y 0.72.
 - Each biome's ground carries broad patches of its palette `ground_accents` (`GroundAccents`:
-  a lattice-texture noise mask, up to three per biome row; the plants ignore them).
+  a lattice-texture noise mask, up to three per biome row; the plants ignore them, except that
+  a biome whose mass rule sets `bare` keeps its grass off them, [scatter.md](scatter.md)). An
+  accent's patches sit where its surface id hashes them (`GroundAccents.surface_offset(surface,
+  map_seed)`; `ScatterMass.bare_params` reads the same offset), so renaming an accent surface
+  moves its patches on every map, and the bare openings with them. The ground ship's clean ids
+  moved every zoned biome's accents this way (2026-10-15).
 - Painted weight wins, except that painted ground and built surfaces yield to the rock on
   faces (`TerrainRules.compose_paint`, `PAINT_CLIFF_YIELD`; painted cliff-role rock holds).
   Plants follow the same rules (`ScatterGround`).
@@ -144,6 +149,11 @@ ground of grassland and savanna at seed 1234 renders bit-identical to main's).
 - **Warm-up.** The bake shader is in `GraphicsWarmup.COVERED_SHADERS`. A mass MultiMesh's
   `use_custom_data` is per-instance data in the instance buffer, not a pipeline variant, so the
   warmer needs no custom-data twin (from the renderer's design; not timed, card 5 times warm-up).
+- **Timing the bake.** `RenderingServer.viewport_get_measured_render_time_gpu()` reads 0 for an
+  `UPDATE_ONCE` SubViewport (found twice in the 2026-10-14 probes, each with a bake of its own),
+  so the bake's GPU time needs a timestamp query or a forced synchronous render. A frozen
+  `ImageTexture` copy of a bake renders identically to the live `ViewportTexture` (round 7's
+  probe, 2026-10-14), should a later card want to free the viewports.
 
 ## Authoring
 

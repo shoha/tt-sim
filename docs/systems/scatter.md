@@ -43,7 +43,9 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
   code path; re-pinned at the ship palette's install, where the six zoned biomes' grass moved
   and the taiga, badlands and burnt forest, which carry no mass fields, kept main's rows).
 - Each mass row carries its anchor (the clump parent) beside the rows, keyed by the row's saved
-  (x, z): the generator fills `ScatterRegen.run`'s "anchors", `AuthoredScatter.mass_anchors`
+  (x, z): the generator fills `ScatterRegen.run`'s "anchors" (passed through the result, never
+  a static table: the round 10 probe kept one, written from `WorkerThreadPool` threads, and one
+  of its runs died silently; cause unconfirmed, 2026-10-14), `AuthoredScatter.mass_anchors`
   merges them and every MultiMesh it builds (settled, growing and shrinking nodes) writes
   `Color(0, dx, dz, 1)` into the instance's custom data (`.x` stays free for the burn shader).
   A level saves them as the optional `mass_anchors.json` entry; `MapSourceLoader` validates it
@@ -75,7 +77,13 @@ scatter shrinks out ([authoring.md](authoring.md)).
 Unit tests in `tests/unit/`: `test_scatter_generator.gd` (region independence, byte for byte),
 `test_scatter_generator_calibration.gd`, `test_scatter_build.gd`,
 `test_scatter_ground_rules.gd`, `test_scatter_chunker.gd`, `test_authored_scatter.gd`,
-`test_pipeline_warmer.gd`.
+`test_pipeline_warmer.gd`, `test_scatter_mass.gd`.
+
+`test_scatter_mass.gd`'s golden rows (`tests/fixtures/scatter_golden_1234.json`) run on Windows
+only, where the pre-push gate runs them; elsewhere the test is pending. The digest hashes raw
+float bytes and the platforms' maths libraries differ in the last bit: CI on Linux (run
+38845734590, after the ground ship's push on 2026-10-15) generated other bytes for six of nine
+biomes, the taiga and the trees included, though no mass field touches them (9980dfbc).
 
 ## Open work
 
