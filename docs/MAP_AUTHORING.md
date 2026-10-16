@@ -515,9 +515,10 @@ the palette's `ground_look`. Zones are drawn per biome from `ground_look` and th
 `map_seed`, so a level stores no zone field and two maps of one biome differ. The mass
 anchors (each grass tuft's offset to its mass's parent) are saved in the level as one
 optional entry; a level saved before it loads with each tuft taking its zone's hue where it
-stands and no mass shading. Open work: baking a map that holds several biomes is unprobed
-(round 20 baked single-biome maps), and the frame cost of the zones, the light and the mass
-shading is untimed.
+stands and no mass shading. Open work: baking a map that holds several biomes has been checked
+on one pairing only (the install's `twobiome` capture, a savanna band painted down a
+grassland), and the frame cost of the zones, the light and the mass shading is untimed (a
+timing card follows the ship).
 
 Water follow-ups (phase 4 judgment pass, 2026-09-27):
 - In the wetland the ankle stream is so thick with reeds it can read as a reed bed rather
