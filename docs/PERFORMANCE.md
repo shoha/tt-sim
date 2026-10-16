@@ -3208,8 +3208,12 @@ differ in 3-69 scattered pixels, so exactness is read off scatter-hidden capture
 viewport (`_sub`), new against old in one run: zoom 26 and 45 (the skirt) on all five levels with
 the committed code, byte-identical; home on all five, byte-identical, with a first version of the
 rim exits that reused the field's partial sums, which moved one pixel by one level at zoom 26 and
-45 on grassland and road (home was not recaptured with the committed version). The
-bake: the same two dabs on the grassland level with the stamp materials kept and with them made
+45 on grassland and road. Home was recaptured with the committed code (2026-10-16, scatter
+hidden, raw viewport, full size, clock frozen, one run, the 401bbf9e include swapped in for the
+old side): grassland, road, savanna, taiga and mixed all max channel diff 0, 0 changed pixels
+(`png_parity.gd`: 5 pairs, 0 differ). Variants bound: `authored_ground_looked` on grassland,
+road, savanna and mixed, plain `authored_ground` on taiga, and the swap recompiled 4 shaders each
+way. The bake: the same two dabs on the grassland level with the stamp materials kept and with them made
 anew before each stroke (the old behaviour) leave the same MD5 after each dab.
 
 | Item | View | Old -> new, GPU ms median (two visits) | Gain |
@@ -3242,4 +3246,21 @@ badlands content drew there); its cause was not isolated.
 **Found, not fixed.** The first restamp after a level opens reads back without its mass stamps
 (the bake's MD5 equals the bake with no stamps) in both the old and the new code, whether its
 materials are fresh or kept; the next restamp draws them. Seen with `ground_timing.gd restamp`
-and after a real dab. Whether a frame shows it, or only the readback, was not checked.
+and after a real dab.
+
+Checked 2026-10-16 (scatter-hidden raw viewport, home, full size, clock frozen, one run, a
+grassland dab of radius 3 at (2, 2) each time): a frame shows it, faintly. On the reopened
+grassland level the frame after the first dab is darker than the one before any dab by 0.49 mean
+level (122.37 -> 121.88), 495 k pixels by 3 or more levels, max channel diff 14, across the whole
+frame; after the second dab it is back within 0.01 of the first (122.38, 35 k pixels by 3 or
+more, the dab's own region). On a freshly built map the first dab changes only the dab region
+(26 k pixels by 3 or more, mean change 0.01). At half size the three reopened captures look the
+same. Bake MD5s, reopened: as loaded `e6d5a7ab`, after dab 1 `a4b9ee7b`, after dab 2 `d86d69fd`;
+a second run: after dab 1 `a4b9ee7b`, the same after `restamp_none` (no stamps) and after a
+direct `restamp`, then after dab 2 `0078142d` (the dab also regrows the scatter, so MD5s of two
+runs' later states differ). So the dab-1 bake equals the no-stamps bake and the rendered ground
+is the one with the mass shading missing; that the 0.49 darkening is exactly the mass shading
+was not isolated (no frame with stamps forced on at that state was taken). Captures:
+`user://render_jobs/ground_opt_restamp/{reopen,fresh}_{0_before,1_dab1,2_dab2}{,_h}[_sub].png`;
+the home parity set is `user://render_jobs/ground_opt_home_bare/`. Open item:
+`docs/systems/authored_terrain.md` "Open work".
