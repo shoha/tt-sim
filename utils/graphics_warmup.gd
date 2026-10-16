@@ -21,9 +21,11 @@ extends RefCounted
 ## and foliage); the rest are started only, which was enough in measurement.
 const COVERED_SHADERS := [
 	"res://shaders/authored_ground.gdshader",
+	"res://shaders/authored_ground_looked.gdshader",
 	"res://shaders/avatar_figure.gdshader",
 	"res://shaders/avatar_figure_double_sided.gdshader",
 	"res://shaders/authored_ground_skirt.gdshader",
+	"res://shaders/authored_ground_skirt_looked.gdshader",
 	"res://shaders/event_puff.gdshader",
 	"res://shaders/fire_smoke.gdshader",
 	"res://shaders/grid_overlay.gdshader",

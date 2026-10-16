@@ -19,7 +19,10 @@ func _assert_well_formed(samples: Array[Dictionary]) -> void:
 func test_terrain_samples_match_the_real_ground_and_skirt() -> void:
 	var samples := TerrainMeshBuilder.warmup_samples()
 	_assert_well_formed(samples)
-	assert_eq(samples.map(func(s): return s.name), ["terrain_chunk", "terrain_skirt"])
+	assert_eq(
+		samples.map(func(s): return s.name),
+		["terrain_chunk", "terrain_skirt", "terrain_chunk_looked", "terrain_skirt_looked"]
+	)
 	var doc := TerrainMeshBuilder.warmup_document()
 	var terrain := AuthoredTerrain.create(doc)
 	add_child_autofree(terrain)
@@ -33,6 +36,10 @@ func test_terrain_samples_match_the_real_ground_and_skirt() -> void:
 	)
 	assert_eq((samples[0].material as ShaderMaterial).shader, AuthoredTerrain.GROUND_SHADER)
 	assert_eq((samples[1].material as ShaderMaterial).shader, AuthoredTerrain.SKIRT_SHADER)
+	var looked := (samples[2].material as ShaderMaterial).shader
+	assert_eq(looked, AuthoredTerrain.GROUND_LOOKED_SHADER, "the looked twin is warmed")
+	assert_eq((samples[3].material as ShaderMaterial).shader, AuthoredTerrain.SKIRT_LOOKED_SHADER)
+	assert_eq(samples[2].arrays, samples[0].arrays, "on the same chunk")
 
 
 func test_the_water_sample_matches_the_real_water_surface() -> void:
@@ -174,6 +181,8 @@ func test_collect_samples_has_every_owner_once() -> void:
 	for path in [
 		"res://shaders/authored_ground.gdshader",
 		"res://shaders/authored_ground_skirt.gdshader",
+		"res://shaders/authored_ground_looked.gdshader",
+		"res://shaders/authored_ground_skirt_looked.gdshader",
 		"res://shaders/water.gdshader",
 		"res://shaders/waterfall.gdshader",
 		"res://shaders/wind_foliage.gdshader",

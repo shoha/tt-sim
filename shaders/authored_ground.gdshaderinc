@@ -15,7 +15,10 @@
  * FILES: this include is the whole shader. authored_ground.gdshader (the map) and
  * authored_ground_skirt.gdshader (GROUND_SKIRT defined) only declare the shader type and
  * render mode and include it, so the skirt continues the ground's exact texture, anti-tiling
- * and drifts across the map edge. Both are opaque.
+ * and drifts across the map edge. Both are opaque. Each has a looked twin
+ * (authored_ground_looked.gdshader, authored_ground_skirt_looked.gdshader: GROUND_LOOK defined)
+ * that compiles the GROUND LOOK path in; the plain pair has none of it, not even its gate, so a
+ * map whose biomes carry no look pays nothing for it (see GROUND LOOK).
  *
  * FRAME: "map frame" below is the terrain node's local space, which is the MapDocument's
  * frame (chunk vertices are written in it; UV = its XZ). The rules read the normal and
@@ -334,8 +337,11 @@ const float ACCENT_EDGE_WAVE_M = 9.0;
 // whose palette entry carries a ground_look draws its colour zones and painted light from a
 // texture GroundLookBake bakes once per map and look (ground_light_field.gdshaderinc): up to
 // LOOK_SLOTS looks per map, look_tex_N for slot N, all over look_rect (map-frame XZ origin, size
-// in metres). look_present 0 (no biome on the map carries a ground_look) skips every line of it
-// and draws today's ground. look_row_slots: per biome row (four rows per ivec4) its look slot, -1
+// in metres). All of it is compiled in only with GROUND_LOOK defined (the looked variants, which
+// AuthoredTerrain.set_looked binds while a biome on the map carries a look; the plain variants
+// drew 0.22-0.44 ms faster with the path present but gated off, docs/PERFORMANCE.md "Ground look
+// and grass masses"). look_present 0 (nothing bound yet) skips every line of it and draws today's
+// ground. look_row_slots: per biome row (four rows per ivec4) its look slot, -1
 // none; look_layer_slots: per layer (four per ivec4) the slot whose zones colour it, -1 none
 // (GroundLookUniforms.ground_tables). Per slot:
 //   look_light       (zones strength, light strength, light knee, light cap)
@@ -349,6 +355,7 @@ const float ACCENT_EDGE_WAVE_M = 9.0;
 // A pixel mixes today's ground and the looked one by the share of its biome components that
 // carry a look; the pixel-wide values (the cap, the rims, the path band) are its dominant looked
 // component's, the per-sample ones (brush, reference) the zoned layer's own.
+#ifdef GROUND_LOOK
 #include "res://shaders/ground_light_field.gdshaderinc"
 const int LOOK_SLOTS = 4;
 uniform int look_present = 0;
@@ -383,6 +390,7 @@ const float RIM_PROBE_M = 0.06;
 const float RIM_REACH = 0.3;
 const float RIM_WOBBLE_M = 0.7;
 const float RIM_GAP_M = 1.3;
+#endif
 // The accent shape of a row without a look: today's patches.
 const vec4 PLAIN_SHAPE = vec4(1.0, 0.0, 0.0, 1.0);
 
@@ -1053,6 +1061,7 @@ float accent_mask(vec2 world_xz, vec4 params, vec4 shape) {
 	return smoothstep(low, high, n);
 }
 
+#ifdef GROUND_LOOK
 // GROUND LOOK: one accent's three-octave noise at map-frame XZ, with no early exit.
 float accent_field(vec2 world_xz, vec4 params, vec4 shape) {
 	vec2 p = accent_domain(world_xz, params, shape);
@@ -1142,6 +1151,7 @@ vec3 look_albedo(vec3 a, vec4 zone, bool zoned, int s) {
 	vec3 z = ref * zone.rgb * brush * hue;
 	return mix(lit, z, look_light[s].x);
 }
+#endif
 
 // Cubic B-spline sample from four bilinear taps (Sigg and Hadwiger), so a coarse texture
 // reads as a smooth field instead of bilinear diamonds.
@@ -1332,6 +1342,7 @@ void fragment() {
 		accents_on = edge_keep > 0.0;
 		accent_rise = (1.0 - edge_keep) * ACCENT_EDGE_SHRINK;
 	}
+#ifdef GROUND_LOOK
 	// GROUND LOOK: the components' total weight, the part carrying a look, the dominant looked
 	// component's slot and weight, and the strongest rim-listed accent rim and wet core here.
 	float comp_w = 0.0;
@@ -1341,6 +1352,7 @@ void fragment() {
 	float rim_accent = 0.0;
 	float core_accent = 0.0;
 	int rim_accent_layer = -1;
+#endif
 	// Each ground component (the corners' distinct biomes, then the base at j = 4) hands its
 	// weight to its layers: its kept ground less the accent patches cut out of it, in order
 	// (see GROUND ACCENTS), then its cliff, scree, water bed and shore (-1: its ground keeps
@@ -1362,6 +1374,7 @@ void fragment() {
 		extra.x = skirt_shore_layer;
 		row_accents = false;
 #endif
+#ifdef GROUND_LOOK
 		int slot = look_present != 0 ? look_row_slot(row) : -1;
 		vec4 shape = slot >= 0 ? look_shape[slot] : PLAIN_SHAPE;
 		comp_w += weight;
@@ -1372,6 +1385,9 @@ void fragment() {
 				dom = slot;
 			}
 		}
+#else
+		vec4 shape = PLAIN_SHAPE;
+#endif
 		float kept = weight * keep;
 		float remaining = 1.0;
 		if (row_accents && kept > WEIGHT_EPSILON) {
@@ -1383,6 +1399,7 @@ void fragment() {
 				vec4 params = accent_params[row * ACCENTS_PER_COMPONENT + e];
 				params.x += accent_rise;
 				float patch_w;
+#ifdef GROUND_LOOK
 				if (
 					slot >= 0 && (look_rim[slot].x > 0.0 || look_rim_more[slot].z > 0.0)
 					&& any(equal(look_rim_layers[slot], ivec4(to)))
@@ -1403,6 +1420,9 @@ void fragment() {
 				} else {
 					patch_w = accent_mask(world_xz, params, shape);
 				}
+#else
+				patch_w = accent_mask(world_xz, params, shape);
+#endif
 				float share = remaining * patch_w;
 				remaining -= share;
 				add_candidate(to, kept * share, cl, cw);
@@ -1414,6 +1434,8 @@ void fragment() {
 		add_candidate(rules.w >= 0 ? rules.w : ground_layer, weight * bed, cl, cw);
 		add_candidate(extra.x >= 0 ? extra.x : ground_layer, weight * shore, cl, cw);
 	}
+	float band = biome_blend_width;
+#ifdef GROUND_LOOK
 	// GROUND LOOK: the share of the pixel whose biome carries a look (0: today's ground exactly,
 	// 1: the looked ground exactly), its dominant look's texel, and the strongest painted stroke
 	// here for its rim and its partial band (the height blend narrows to the look's
@@ -1421,7 +1443,6 @@ void fragment() {
 	bool look_any = dom >= 0;
 	float look_share = look_any ? look_w / max(comp_w, 1e-5) : 0.0;
 	vec4 zone_dom = look_any ? look_fetch(dom, world_xz) : vec4(1.0);
-	float band = biome_blend_width;
 	float rim_path = 0.0;
 	int rim_path_layer = -1;
 	if (look_present != 0) {
@@ -1452,6 +1473,7 @@ void fragment() {
 			}
 		}
 	}
+#endif
 
 	// A candidate is sampled only where it has weight. One (most of the ground) is drawn
 	// directly; several are height-blended in two passes, heights first to find the top
@@ -1487,11 +1509,13 @@ void fragment() {
 	ground.orm = vec3(0.0);
 	ground.height = 0.0;
 	float total = 0.0;
+#ifdef GROUND_LOOK
 	// GROUND LOOK: under a look ground.albedo carries the looked samples (look_albedo) and
 	// plain_albedo today's, for a pixel only partly looked; the rim surfaces' shares.
 	vec3 plain_albedo = vec3(0.0);
 	float rim_share_accent = 0.0;
 	float rim_share_path = 0.0;
+#endif
 	for (int k = 0; k < 4; k++) {
 		if (cw[k] > WEIGHT_EPSILON) {
 			float b = count > 1 ? scores[k] - (top - band) : 1.0;
@@ -1503,11 +1527,14 @@ void fragment() {
 					layer, tile, frame, world_xz, dx, dy, n_geom, v_position, dpx, dpy, proj,
 					false, h
 				);
+#ifdef GROUND_LOOK
 				vec3 before = ground.albedo;
+#endif
 				accumulate(
 					layer, tile, frame, world_xz, dx, dy, n_geom, v_position, dpx, dpy, pk, b,
 					ground
 				);
+#ifdef GROUND_LOOK
 				if (look_any) {
 					vec3 a = (ground.albedo - before) / b;
 					plain_albedo += b * a;
@@ -1517,6 +1544,7 @@ void fragment() {
 					rim_share_accent += (cl[k] == rim_accent_layer) ? b : 0.0;
 					rim_share_path += (cl[k] == rim_path_layer) ? b : 0.0;
 				}
+#endif
 				total += b;
 			}
 		}
@@ -1525,6 +1553,7 @@ void fragment() {
 	ground.albedo *= inv_total;
 	ground.orm *= inv_total;
 	ground.height *= inv_total;
+#ifdef GROUND_LOOK
 	float core_wet = 0.0;
 	if (look_any) {
 		plain_albedo *= inv_total;
@@ -1555,16 +1584,19 @@ void fragment() {
 			ground.albedo *= mix(vec3(1.0), tint, clamp(rim_share_accent * inv_total, 0.0, 1.0));
 		}
 	}
+#endif
 #ifndef GROUND_SKIRT
 	if (broad_present != 0) {
 		ground.albedo = apply_broad_edge(
 			ground.albedo, world_xz, slots, g, painted_layers, painted_w
 		);
+#ifdef GROUND_LOOK
 		if (look_any && look_share < 1.0) {
 			plain_albedo = apply_broad_edge(
 				plain_albedo, world_xz, slots, g, painted_layers, painted_w
 			);
 		}
+#endif
 	}
 #endif
 
@@ -1578,6 +1610,7 @@ void fragment() {
 	// capped; its zones replace the broad variation. A pixel only partly looked mixes it with
 	// today's by look_share.
 	vec3 lit_albedo;
+#ifdef GROUND_LOOK
 	if (!look_any) {
 		lit_albedo = apply_variation(ground.albedo * cavity, world_xz);
 	} else {
@@ -1588,11 +1621,16 @@ void fragment() {
 			? looked
 			: mix(apply_variation(plain_albedo * cavity, world_xz), looked, look_share);
 	}
+	float gloss = max(wet_line, core_wet * look_share);
+#else
+	lit_albedo = apply_variation(ground.albedo * cavity, world_xz);
+	float gloss = max(wet_line, 0.0);
+#endif
 	// The wet line (WET DRESSING): wet ground is darker and glossier, whatever its surface.
 	ALBEDO = lit_albedo * (1.0 - WET_DARKEN * wet_line);
 	AO = ground.orm.r;
 	AO_LIGHT_AFFECT = 0.0;
-	ROUGHNESS = mix(ground.orm.g, WET_ROUGHNESS, WET_GLOSS * max(wet_line, core_wet * look_share));
+	ROUGHNESS = mix(ground.orm.g, WET_ROUGHNESS, WET_GLOSS * gloss);
 	METALLIC = ground.orm.b;
 
 	vec3 n_map = normalize(ground.normal + n_geom * 1e-4);

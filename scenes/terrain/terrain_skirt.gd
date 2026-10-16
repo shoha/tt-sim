@@ -30,7 +30,9 @@ static func material(
 	wobble: float
 ) -> ShaderMaterial:
 	var skirt := ground.duplicate() as ShaderMaterial
-	skirt.shader = AuthoredTerrain.SKIRT_SHADER
+	skirt.shader = AuthoredTerrain.ground_shader(
+		true, ground.shader == AuthoredTerrain.GROUND_LOOKED_SHADER
+	)
 	skirt.set_shader_parameter("biome_present", 0)
 	skirt.set_shader_parameter("paint_present", 0)
 	GroundAccents.sync_skirt(skirt, ground)
