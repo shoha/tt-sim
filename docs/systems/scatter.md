@@ -50,7 +50,11 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
   `Color(0, dx, dz, 1)` into the instance's custom data (`.x` stays free for the burn shader).
   A level saves them as the optional `mass_anchors.json` entry; `MapSourceLoader` validates it
   against the rows and each rule's reach and drops a bad asset's anchors with a warning. GLB
-  scatter (`BaseScatterEraser`) and the pipeline warm-up never carry anchors.
+  scatter (`BaseScatterEraser`) and the pipeline warm-up never carry anchors. The generator
+  snaps each offset to the 0.1 mm the entry is written with (`ScatterMass.collect`,
+  `MapAnchorsIO.snap`), as it snaps the rows, so a session and the same level reopened (or a
+  peer) draw the same offsets bit for bit; unsnapped, a mass on a `GroundMassStamps` grid line
+  regrouped on reopening and its shade stamp moved (2026-10-15).
 - Every chunk node an authored scatter builds (`ScatterGlbUtils.build_chunk`: settled, growing,
   shrinking) draws on `LevelEnvironmentManager.SCATTER_RENDER_LAYER`, which the level's
   reflection probe leaves out: the probe captures once when a map opens, before a new map's

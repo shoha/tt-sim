@@ -14,8 +14,19 @@ extends RefCounted
 const ENTRY := "mass_anchors.json"
 ## Decimals written per offset: 0.1 mm, far below a tuft.
 const DECIMALS := 4
+## One unit of the last decimal written (snap()).
+const STEP := 0.0001
 ## No mass reaches this far; a larger offset is corrupt.
 const MAX_OFFSET_M := 1000.0
+
+
+## `offset` rounded to the DECIMALS written, as saving and reading the level does. The
+## generator snaps every offset it makes (ScatterMass.collect), as it snaps the rows, so a map
+## built in a session and the same map reopened carry the same offsets bit for bit: unsnapped,
+## a mass whose anchor lay within 0.05 mm of a GroundMassStamps.ANCHOR_GRID line split in two
+## on reopening and its shade stamp moved (2026-10-15).
+static func snap(offset: float) -> float:
+	return snappedf(offset, STEP)
 
 
 ## Adds the entry to `entries` when `doc` has anchors. An asset whose offsets do not match its

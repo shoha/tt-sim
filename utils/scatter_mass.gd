@@ -69,7 +69,8 @@ static func custom_data(table: Dictionary, transforms: Array[Transform3D]) -> Ar
 
 ## Adds each placed row's offset to its parent to `out` (caller-owned, never shared between
 ## threads): `anchors` holds one parent (x, z) per row of `placed`, keyed by the row's saved
-## position (MapDocumentIO.snap_rows, idempotent).
+## position (MapDocumentIO.snap_rows, idempotent), the offset snapped as the level saves it
+## (MapAnchorsIO.snap), so a reopened level's offsets equal the session's.
 @warning_ignore("integer_division")
 static func collect(
 	placed: PackedFloat32Array, anchors: PackedFloat32Array, out: Dictionary
@@ -80,7 +81,9 @@ static func collect(
 	for r in anchors.size() / 2:
 		var x := rows[r * stride]
 		var z := rows[r * stride + 2]
-		out[Vector2(x, z)] = Vector2(anchors[r * 2] - x, anchors[r * 2 + 1] - z)
+		out[Vector2(x, z)] = Vector2(
+			MapAnchorsIO.snap(anchors[r * 2] - x), MapAnchorsIO.snap(anchors[r * 2 + 1] - z)
+		)
 
 
 ## Merges a job's `fresh` anchors into a holder's `table`, starting over past MAX_ANCHORS.

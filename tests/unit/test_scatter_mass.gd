@@ -218,6 +218,24 @@ func test_anchors_round_trip_and_degrade() -> void:
 	assert_eq(warnings.size(), 1)
 
 
+## A level saves each offset to MapAnchorsIO.DECIMALS, and collect() snaps them the same way, so
+## the offsets a session draws with are the ones a reopened level (or a peer) reads back, bit
+## for bit. Unsnapped, a mass whose anchor lay on a GroundMassStamps.ANCHOR_GRID line split in
+## two on reopening and its shade stamp moved.
+func test_collected_offsets_equal_the_reopened_ones() -> void:
+	var doc := _doc()
+	var table := {}
+	var parents := PackedFloat32Array([1.123456, 2.987654, 3.000049, 2.250051])
+	ScatterMass.collect(doc.scatter[GRASS], parents, table)
+	doc.mass_anchors = ScatterMass.anchors_entry(table, doc.scatter)
+	var read: Dictionary = MapDocumentIO.parse(MapDocumentIO.serialize(doc).entries)
+	assert_eq(read.document.mass_anchors, doc.mass_anchors, "the offsets read back bit for bit")
+	var warnings: Array[String] = []
+	var back := ScatterMass.table_of(read.document.mass_anchors, doc.scatter, {GRASS: 2.0}, warnings)
+	assert_eq(back, table, "the reopened table equals the session's")
+	assert_almost_eq(float(table[Vector2(1.0, 2.0)].x), 0.1235, 1e-6, "snapped to 0.1 mm")
+
+
 func _palette(clump: Variant, look: Variant) -> Dictionary:
 	var biome := {
 		"id": "b",
