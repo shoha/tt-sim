@@ -1,0 +1,59 @@
+{
+ "about": "Round 20's grassland meadow (treecube docs/looks/ground20): ground_look is its overrides from ground_look_r20.json in the section 9 contract form; field, rim and shape are the uniforms job_final.json set on the ground and grass (the first 'field' step's params, the ground2b params steps).",
+ "ground_look": {
+  "ref_surface": "grass_meadow_r5",
+  "zones": {
+   "colors_linear": [[0.2339, 0.3318, 0.0537], [0.1423, 0.2711, 0.0272], [0.4986, 0.4346, 0.041], [0.6418, 0.3278, 0.0403]],
+   "cover": [0.42, 0.24, 0.22],
+   "scale_m": [9.0, 10.0, 14.0],
+   "edge": [0.045, 0.045, 0.045],
+   "stretch": 2.2,
+   "stretch_k": [0.65, 1.1, 1.0],
+   "angle": 0.5,
+   "angle_k": [-0.45, 0.2, 0.0],
+   "rag_m": 2.6,
+   "nest": 0.0,
+   "edge_vary_m": 30.0,
+   "shade_warm": [1.04, 0.95, 0.88]
+  },
+  "strokes": {"m": 2.0, "len": 4.0},
+  "brush": {"mean": 3.2},
+  "light": {"cover": 0.4, "lift": 0.4, "shade": 0.4, "knee": 0.64, "cap": 0.94},
+  "mass": {"lit_m": 2.5},
+  "rim": {"surfaces": ["dirt_opening_r5", "dirt_road_packed_r5"]}
+ },
+ "field": {
+  "light_field_strength": 1.0, "light_field_key": 1.0, "light_field_scale_m": 6.0,
+  "light_field_cover": 0.4, "light_field_lift": 0.4, "light_field_lit_tint": [1.03, 1.0, 0.86],
+  "light_field_shade": 0.4, "light_field_shade_tint": [0.96, 0.99, 0.98],
+  "light_field_dry_scale_m": 16.0, "light_field_dry": 0.0, "light_field_dry_tint": [1.08, 1.0, 0.85],
+  "light_field_streak": 0.04, "light_field_streak_m": 2.2, "light_field_streak_stretch": 3.0,
+  "light_field_streak_angle": 0.5, "light_field_streak_ripple": 0.0, "light_field_streak_cover": 0.6,
+  "light_field_knee": 0.64, "light_field_cap": 0.94, "light_field_sat_cap": 0.88,
+  "light_field_broad": 0.35, "light_field_stretch": 1.0, "light_field_crisp": 0.35,
+  "light_field_ripple_curve": 0.0, "light_field_ref": [0.2711, 0.3928, 0.0485],
+  "light_field_zoned": 1.0, "zone_strength": 1.0, "zone_brush_contrast": 0.4, "zone_brush_hue": 0.08,
+  "zone_warp": 0.55, "zone_edge": [0.045, 0.045, 0.045], "zone_rag": 0.12, "zone_rag_m": 2.6,
+  "zone_nest": 0.0, "zone_stretch": 2.2, "zone_angle": 0.5, "zone_layers": [],
+  "zone_angle_k": [-0.45, 0.2, 0.0], "zone_stretch_k": [0.65, 1.1, 1.0], "zone_edge_vary": 0.4,
+  "zone_shade_warm": [1.04, 0.95, 0.88], "zone_stroke": 1.0, "zone_stroke_m": 2.0,
+  "zone_stroke_len": 4.0, "zone_stroke_soft_lo": 0.08, "zone_stroke_soft_hi": 0.3,
+  "zone_stroke_soft_m": 9.0, "zone_stroke_edge": 5.0, "zone_oklab": 2.0, "zone_tuft_strength": 1.0,
+  "zone_tuft_step": 2.35, "zone_tuft_contrast": 0.7, "zone_tuft_hue": 0.3, "zone_tuft_knee": 0.55,
+  "zone_tuft_cap": 0.82, "zone_tuft_capped": 1.0, "zone_brush_key": 0.85, "zone_mass_step": 1.18,
+  "zone_mass_sat": 1.25, "zone_mass_lit": 0.25, "zone_mass_lit_m": 2.5, "mass_shade": 0.12,
+  "mass_shade_size": 0.9, "mass_shade_push": 0.9, "mass_lift": 0.03, "mass_lift_size": 1.0,
+  "mass_lift_push": 0.25, "zone_mass_contrast": 0.3, "zone_mass_base": 0.7, "zone_mass_tip": 1.25,
+  "zone_mass_h_m": 0.8, "zone_mass_own": 0.0, "zone_mass_up_pow": 1.0,
+  "zone_cover": [0.42, 0.24, 0.22], "zone_scale_m": [9.0, 10.0, 14.0], "zone_edge_vary_m": 30.0,
+  "zone_brush_mean": 3.2, "zone_color_0": [0.2339, 0.3318, 0.0537],
+  "zone_color_1": [0.1423, 0.2711, 0.0272], "zone_color_2": [0.4986, 0.4346, 0.041],
+  "zone_color_3": [0.6418, 0.3278, 0.0403]
+ },
+ "rim": {
+  "accent_rim_m": 0.15, "path_rim_m": 0.2, "rim_strength": 0.6, "rim_wobble": 0.6, "rim_gap": 0.45,
+  "path_blend_width": 0.06, "rim_color": [0.1789, 0.0835, 0.0174]
+ },
+ "shape": {"accent_stretch": 1.8, "accent_stretch_angle": 0.6, "accent_break": 0.4},
+ "rim_surfaces": ["dirt_opening_r5", "dirt_road_packed_r5"]
+}

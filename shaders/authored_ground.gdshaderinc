@@ -330,6 +330,61 @@ uniform float accent_edge_m = 0.0;
 const float ACCENT_EDGE_SHRINK = 1.2;
 const float ACCENT_EDGE_WOBBLE = 0.5;
 const float ACCENT_EDGE_WAVE_M = 9.0;
+// GROUND LOOK (ground ship card 3b; docs/systems/authored_terrain.md "Ground look"). A biome
+// whose palette entry carries a ground_look draws its colour zones and painted light from a
+// texture GroundLookBake bakes once per map and look (ground_light_field.gdshaderinc): up to
+// LOOK_SLOTS looks per map, look_tex_N for slot N, all over look_rect (map-frame XZ origin, size
+// in metres). look_present 0 (no biome on the map carries a ground_look) skips every line of it
+// and draws today's ground. look_row_slots: per biome row (four rows per ivec4) its look slot, -1
+// none; look_layer_slots: per layer (four per ivec4) the slot whose zones colour it, -1 none
+// (GroundLookUniforms.ground_tables). Per slot:
+//   look_light       (zones strength, light strength, light knee, light cap)
+//   look_ref         (the light reference rgb, linear: ref_surface's mean albedo; sat_cap)
+//   look_brush       (brush contrast, hue, key, mean): what a zoned layer keeps of its texture
+//   look_shape       (accent stretch, stretch angle, break, edge scale): the accent patches
+//   look_rim         (accent_rim_m, path_rim_m, strength, wobble)
+//   look_rim_more    (gap, path_blend_width, accent_core_m, core_dark)
+//   look_rim_color, look_accent_tint (rgb, linear)
+//   look_rim_layers  the layers that draw a rim, -1 none
+// A pixel mixes today's ground and the looked one by the share of its biome components that
+// carry a look; the pixel-wide values (the cap, the rims, the path band) are its dominant looked
+// component's, the per-sample ones (brush, reference) the zoned layer's own.
+#include "res://shaders/ground_light_field.gdshaderinc"
+const int LOOK_SLOTS = 4;
+uniform int look_present = 0;
+uniform ivec4 look_row_slots[64];
+uniform ivec4 look_layer_slots[16];
+uniform sampler2D look_tex_0 : hint_default_white, filter_linear, repeat_disable;
+uniform sampler2D look_tex_1 : hint_default_white, filter_linear, repeat_disable;
+uniform sampler2D look_tex_2 : hint_default_white, filter_linear, repeat_disable;
+uniform sampler2D look_tex_3 : hint_default_white, filter_linear, repeat_disable;
+uniform vec4 look_rect = vec4(-64.0, -64.0, 128.0, 128.0);
+uniform vec4 look_light[4];
+uniform vec4 look_ref[4];
+uniform vec4 look_brush[4];
+uniform vec4 look_shape[4];
+uniform vec4 look_rim[4];
+uniform vec4 look_rim_more[4];
+uniform vec4 look_rim_color[4];
+uniform vec4 look_accent_tint[4];
+uniform ivec4 look_rim_layers[4];
+// The painted rim: where a biome ground meets a rim-listed accent patch or painted path, that
+// surface's own share of the pixel moves toward the rim colour by the rim strength, in a band
+// accent_rim_m past the patch's ramp or path_rim_m past the stroke's half level, its width
+// wobbled (a value noise RIM_WOBBLE_M across), broken into ragged lengths (RIM_WAVE_M,
+// RIM_RAGGED) with no rim over about rim_gap of the edge (RIM_GAP_M). The depth into a patch is
+// its noise's distance past the ramp's top over its gradient, by finite differences RIM_PROBE_M
+// apart, only within RIM_REACH noise units of the ramp; a path's comes from the screen
+// derivatives of its weight. From accent_core_m inside a rim-listed patch its share darkens by
+// core_dark and turns glossier (a wet centre).
+const float RIM_WAVE_M = 0.9;
+const float RIM_RAGGED = 0.6;
+const float RIM_PROBE_M = 0.06;
+const float RIM_REACH = 0.3;
+const float RIM_WOBBLE_M = 0.7;
+const float RIM_GAP_M = 1.3;
+// The accent shape of a row without a look: today's patches.
+const vec4 PLAIN_SHAPE = vec4(1.0, 0.0, 0.0, 1.0);
 
 #ifdef GROUND_SKIRT
 // The fade, the backdrop and the fog (skirt_alpha_seeded, skirt_backdrop_color, skirt_fog_at).
@@ -954,14 +1009,32 @@ float accent_edge_keep(vec2 world_xz) {
 	return smoothstep(0.0, depth, min(inside.x, inside.y));
 }
 
+// The accent noise's lattice position at map-frame XZ. `shape` is the row's ground look
+// accent shape (stretch, stretch angle, break, edge scale; PLAIN_SHAPE: today's): a stretch draws
+// every patch that many times longer along the angle (radians), a break warps the noise's domain
+// by that many lattice cells at about a third of the patch size, so an edge breaks into fingers
+// and islands rather than one lobed blob. ScatterMass.bare_params is the CPU copy.
+vec2 accent_domain(vec2 world_xz, vec4 params, vec4 shape) {
+	vec2 q = rotate(world_xz, ACCENT_ROTATION);
+	if (shape.x == 1.0 && shape.z <= 0.0) {
+		return q * params.y + params.zw;
+	}
+	vec2 r = rotate(q, vec2(cos(shape.y), sin(shape.y)));
+	r.x /= max(shape.x, 0.1);
+	vec2 p = r * params.y + params.zw;
+	vec2 w = vec2(value_noise(p * 2.7 + vec2(5.3, 1.7)), value_noise(p * 2.7 + vec2(-8.1, 4.4))) - 0.5;
+	return p + shape.z * w;
+}
+
 // One accent's patch weight 0..1 at map-frame XZ (GroundAccents.mask): params are
-// (threshold, 1 / scale_m, domain offset). Each finer octave is only fetched where it can
-// still change the result, which is exact since the ramp clamps (fetching all three with
-// no branch between them measured the same or slightly slower).
-float accent_mask(vec2 world_xz, vec4 params) {
-	vec2 p = rotate(world_xz, ACCENT_ROTATION) * params.y + params.zw;
-	float low = params.x - ACCENT_EDGE;
-	float high = params.x + ACCENT_EDGE;
+// (threshold, 1 / scale_m, domain offset), `shape` as accent_domain's, its w the ramp's half
+// width in units of ACCENT_EDGE. Each finer octave is only fetched where it can still change
+// the result, which is exact since the ramp clamps (fetching all three with no branch between
+// them measured the same or slightly slower).
+float accent_mask(vec2 world_xz, vec4 params, vec4 shape) {
+	vec2 p = accent_domain(world_xz, params, shape);
+	float low = params.x - ACCENT_EDGE * shape.w;
+	float high = params.x + ACCENT_EDGE * shape.w;
 	float n = accent_octave(p).r * (1.0 - ACCENT_DETAIL - ACCENT_FINE);
 	if (n + ACCENT_DETAIL + ACCENT_FINE <= low) {
 		return 0.0;
@@ -978,6 +1051,96 @@ float accent_mask(vec2 world_xz, vec4 params) {
 	}
 	n += accent_octave(p * ACCENT_FINE_SCALE + ACCENT_FINE_OFFSET).b * ACCENT_FINE;
 	return smoothstep(low, high, n);
+}
+
+// GROUND LOOK: one accent's three-octave noise at map-frame XZ, with no early exit.
+float accent_field(vec2 world_xz, vec4 params, vec4 shape) {
+	vec2 p = accent_domain(world_xz, params, shape);
+	return accent_octave(p).r * (1.0 - ACCENT_DETAIL - ACCENT_FINE)
+		+ accent_octave(p * ACCENT_DETAIL_SCALE + ACCENT_DETAIL_OFFSET).g * ACCENT_DETAIL
+		+ accent_octave(p * ACCENT_FINE_SCALE + ACCENT_FINE_OFFSET).b * ACCENT_FINE;
+}
+
+// GROUND LOOK: the rim's width in metres at a point, wobbled along the edge by `wobble`.
+float rim_width_at(vec2 world_xz, float width_m, float wobble) {
+	float wob = value_noise(world_xz / RIM_WOBBLE_M + vec2(23.9, -71.3)) * 2.0 - 1.0;
+	return width_m * max(1.0 + wobble * wob, 0.1);
+}
+
+// GROUND LOOK: a rim-listed accent's (weight, rim, wet core), the rim (`rim_m` wide, wobbled by
+// `wobble`) and the core (from `core_m` in) measured in metres from the ramp's top.
+vec3 accent_mask_rim_m(
+	vec2 world_xz, vec4 params, vec4 shape, float rim_m, float wobble, float core_m
+) {
+	float low = params.x - ACCENT_EDGE * shape.w;
+	float high = params.x + ACCENT_EDGE * shape.w;
+	float n = accent_field(world_xz, params, shape);
+	if (n <= low) {
+		return vec3(0.0);
+	}
+	float w = smoothstep(low, high, n);
+	if (n >= high + RIM_REACH) {
+		return vec3(w, 0.0, core_m > 0.0 ? w : 0.0);
+	}
+	float nx = accent_field(world_xz + vec2(RIM_PROBE_M, 0.0), params, shape);
+	float nz = accent_field(world_xz + vec2(0.0, RIM_PROBE_M), params, shape);
+	float grad = length(vec2(nx - n, nz - n)) / RIM_PROBE_M;
+	float depth = (n - high) / max(grad, 1e-4);
+	float rim = 0.0;
+	if (rim_m > 0.0) {
+		rim = w * (1.0 - smoothstep(0.0, rim_width_at(world_xz, rim_m, wobble), depth));
+	}
+	float core = core_m > 0.0 ? w * smoothstep(core_m, core_m * 1.8, depth) : 0.0;
+	return vec3(w, rim, core);
+}
+
+// GROUND LOOK: biome row `row`'s look slot, and the slot whose zones colour layer `layer` (-1:
+// none).
+int look_row_slot(int row) {
+	return look_row_slots[row >> 2][row & 3];
+}
+
+int look_layer_slot(int layer) {
+	return layer < 0 ? -1 : look_layer_slots[layer >> 2][layer & 3];
+}
+
+// GROUND LOOK: slot `slot`'s baked texel at map-frame XZ, decoded (outside look_rect the edge
+// texel holds).
+vec4 look_fetch(int slot, vec2 world_xz) {
+	vec2 uv = (world_xz - look_rect.xy) / look_rect.zw;
+	vec4 t;
+	if (slot == 0) {
+		t = textureLod(look_tex_0, uv, 0.0);
+	} else if (slot == 1) {
+		t = textureLod(look_tex_1, uv, 0.0);
+	} else if (slot == 2) {
+		t = textureLod(look_tex_2, uv, 0.0);
+	} else {
+		t = textureLod(look_tex_3, uv, 0.0);
+	}
+	return zone_decode(t);
+}
+
+// GROUND LOOK: one ground sample's albedo `a` under slot `s`'s look, from its texel `zone`. A
+// zoned layer's sample (`zoned`) takes the zone colour and keeps its brush: its luminance over
+// the light reference, raised to the brush contrast (mean-preserving around the brush key when
+// the brush mean is set), and the brush hue of its own hue; any other surface takes the light's
+// luminance. Not capped here.
+vec3 look_albedo(vec3 a, vec4 zone, bool zoned, int s) {
+	vec3 lit = a * mix(1.0, zone.a, look_light[s].y);
+	if (!zoned) {
+		return lit;
+	}
+	vec3 ref = max(look_ref[s].rgb, vec3(1e-3));
+	vec4 brush_k = look_brush[s];
+	float ratio = max(dot(a, ZONE_LUMA), 1e-4) / dot(ref, ZONE_LUMA);
+	vec3 hue = mix(vec3(1.0), a / (ref * ratio), brush_k.y);
+	float brush = pow(ratio, brush_k.x);
+	if (brush_k.w > 0.0) {
+		brush = pow(brush_k.w, brush_k.z) * pow(ratio / brush_k.w, brush_k.x);
+	}
+	vec3 z = ref * zone.rgb * brush * hue;
+	return mix(lit, z, look_light[s].x);
 }
 
 // Cubic B-spline sample from four bilinear taps (Sigg and Hadwiger), so a coarse texture
@@ -1169,6 +1332,15 @@ void fragment() {
 		accents_on = edge_keep > 0.0;
 		accent_rise = (1.0 - edge_keep) * ACCENT_EDGE_SHRINK;
 	}
+	// GROUND LOOK: the components' total weight, the part carrying a look, the dominant looked
+	// component's slot and weight, and the strongest rim-listed accent rim and wet core here.
+	float comp_w = 0.0;
+	float look_w = 0.0;
+	int dom = -1;
+	float dom_w = 0.0;
+	float rim_accent = 0.0;
+	float core_accent = 0.0;
+	int rim_accent_layer = -1;
 	// Each ground component (the corners' distinct biomes, then the base at j = 4) hands its
 	// weight to its layers: its kept ground less the accent patches cut out of it, in order
 	// (see GROUND ACCENTS), then its cliff, scree, water bed and shore (-1: its ground keeps
@@ -1190,6 +1362,16 @@ void fragment() {
 		extra.x = skirt_shore_layer;
 		row_accents = false;
 #endif
+		int slot = look_present != 0 ? look_row_slot(row) : -1;
+		vec4 shape = slot >= 0 ? look_shape[slot] : PLAIN_SHAPE;
+		comp_w += weight;
+		if (slot >= 0) {
+			look_w += weight;
+			if (weight > dom_w) {
+				dom_w = weight;
+				dom = slot;
+			}
+		}
 		float kept = weight * keep;
 		float remaining = 1.0;
 		if (row_accents && kept > WEIGHT_EPSILON) {
@@ -1200,7 +1382,28 @@ void fragment() {
 				}
 				vec4 params = accent_params[row * ACCENTS_PER_COMPONENT + e];
 				params.x += accent_rise;
-				float share = remaining * accent_mask(world_xz, params);
+				float patch_w;
+				if (
+					slot >= 0 && (look_rim[slot].x > 0.0 || look_rim_more[slot].z > 0.0)
+					&& any(equal(look_rim_layers[slot], ivec4(to)))
+				) {
+					// A rim-listed accent: its rim and wet core, measured in metres.
+					vec3 mrc = accent_mask_rim_m(
+						world_xz, params, shape, look_rim[slot].x, look_rim[slot].w,
+						look_rim_more[slot].z
+					);
+					patch_w = mrc.x;
+					float r = mrc.y * remaining;
+					float c = mrc.z * remaining;
+					if (r > rim_accent || c > core_accent) {
+						rim_accent = max(rim_accent, r);
+						core_accent = max(core_accent, c);
+						rim_accent_layer = to;
+					}
+				} else {
+					patch_w = accent_mask(world_xz, params, shape);
+				}
+				float share = remaining * patch_w;
 				remaining -= share;
 				add_candidate(to, kept * share, cl, cw);
 			}
@@ -1210,6 +1413,44 @@ void fragment() {
 		add_candidate(rules.z >= 0 ? rules.z : ground_layer, weight * scree, cl, cw);
 		add_candidate(rules.w >= 0 ? rules.w : ground_layer, weight * bed, cl, cw);
 		add_candidate(extra.x >= 0 ? extra.x : ground_layer, weight * shore, cl, cw);
+	}
+	// GROUND LOOK: the share of the pixel whose biome carries a look (0: today's ground exactly,
+	// 1: the looked ground exactly), its dominant look's texel, and the strongest painted stroke
+	// here for its rim and its partial band (the height blend narrows to the look's
+	// path_blend_width where a stroke is partial).
+	bool look_any = dom >= 0;
+	float look_share = look_any ? look_w / max(comp_w, 1e-5) : 0.0;
+	vec4 zone_dom = look_any ? look_fetch(dom, world_xz) : vec4(1.0);
+	float band = biome_blend_width;
+	float rim_path = 0.0;
+	int rim_path_layer = -1;
+	if (look_present != 0) {
+		// Uniform control flow: the stroke's weight gradient in metres from its screen
+		// derivatives, solving dFdx = dot(dx, g), dFdy = dot(dy, g).
+		float top_w = 0.0;
+		for (int k = 0; k < 4; k++) {
+			if (painted_layers[k] >= 0 && holds[k] == 0.0 && painted_w[k] > top_w) {
+				top_w = painted_w[k];
+				rim_path_layer = painted_layers[k];
+			}
+		}
+		top_w = clamp(top_w, 0.0, 1.0);
+		float path_partial = 1.0 - abs(2.0 * top_w - 1.0);
+		vec2 gs = vec2(dFdx(top_w), dFdy(top_w));
+		float det = dx.x * dy.y - dx.y * dy.x;
+		det = sign(det) * max(abs(det), 1e-12);
+		vec2 gw = vec2(gs.x * dy.y - gs.y * dx.y, dx.x * gs.y - dy.x * gs.x) / det;
+		if (look_any) {
+			float path_rim_m = look_rim[dom].y;
+			if (path_rim_m > 0.0 && any(equal(look_rim_layers[dom], ivec4(rim_path_layer)))) {
+				float depth = (top_w - 0.5) / max(length(gw), 1e-3);
+				rim_path = smoothstep(0.4, 0.5, top_w)
+					* (1.0 - smoothstep(0.0, rim_width_at(world_xz, path_rim_m, look_rim[dom].w), depth));
+			}
+			if (look_rim_more[dom].y > 0.0) {
+				band = mix(band, look_rim_more[dom].y, path_partial * look_share);
+			}
+		}
 	}
 
 	// A candidate is sampled only where it has weight. One (most of the ground) is drawn
@@ -1246,9 +1487,14 @@ void fragment() {
 	ground.orm = vec3(0.0);
 	ground.height = 0.0;
 	float total = 0.0;
+	// GROUND LOOK: under a look ground.albedo carries the looked samples (look_albedo) and
+	// plain_albedo today's, for a pixel only partly looked; the rim surfaces' shares.
+	vec3 plain_albedo = vec3(0.0);
+	float rim_share_accent = 0.0;
+	float rim_share_path = 0.0;
 	for (int k = 0; k < 4; k++) {
 		if (cw[k] > WEIGHT_EPSILON) {
-			float b = count > 1 ? scores[k] - (top - biome_blend_width) : 1.0;
+			float b = count > 1 ? scores[k] - (top - band) : 1.0;
 			if (b > 0.0) {
 				float h;
 				float layer = float(cl[k]);
@@ -1257,10 +1503,20 @@ void fragment() {
 					layer, tile, frame, world_xz, dx, dy, n_geom, v_position, dpx, dpy, proj,
 					false, h
 				);
+				vec3 before = ground.albedo;
 				accumulate(
 					layer, tile, frame, world_xz, dx, dy, n_geom, v_position, dpx, dpy, pk, b,
 					ground
 				);
+				if (look_any) {
+					vec3 a = (ground.albedo - before) / b;
+					plain_albedo += b * a;
+					int zs = look_layer_slot(cl[k]);
+					vec4 zone = zs >= 0 && zs != dom ? look_fetch(zs, world_xz) : zone_dom;
+					ground.albedo = before + b * look_albedo(a, zone, zs >= 0, zs >= 0 ? zs : dom);
+					rim_share_accent += (cl[k] == rim_accent_layer) ? b : 0.0;
+					rim_share_path += (cl[k] == rim_path_layer) ? b : 0.0;
+				}
 				total += b;
 			}
 		}
@@ -1269,11 +1525,46 @@ void fragment() {
 	ground.albedo *= inv_total;
 	ground.orm *= inv_total;
 	ground.height *= inv_total;
+	float core_wet = 0.0;
+	if (look_any) {
+		plain_albedo *= inv_total;
+		vec4 rim_k = look_rim[dom];
+		vec4 rim_more = look_rim_more[dom];
+		if (rim_k.z > 0.0 && (rim_accent > 0.0 || rim_path > 0.0)) {
+			// The painted rim: only the rim surface's own share moves, in a ragged band.
+			float rim = max(rim_accent * rim_share_accent, rim_path * rim_share_path) * inv_total;
+			float rag = value_noise(world_xz / RIM_WAVE_M + vec2(-57.1, 33.7));
+			rim *= mix(1.0 - RIM_RAGGED, 1.0, rag);
+			if (rim_more.x > 0.0) {
+				// Lengths of edge with no rim at all.
+				float gap = value_noise(world_xz / RIM_GAP_M + vec2(31.3, 5.9));
+				rim *= smoothstep(rim_more.x - 0.08, rim_more.x + 0.08, gap);
+			}
+			ground.albedo = mix(
+				ground.albedo, look_rim_color[dom].rgb, clamp(rim * rim_k.z, 0.0, 1.0)
+			);
+		}
+		if (rim_more.w > 0.0 && core_accent > 0.0) {
+			// The wet core of a rim-listed patch, darker and glossier.
+			core_wet = clamp(core_accent * rim_share_accent * inv_total, 0.0, 1.0);
+			ground.albedo *= 1.0 - rim_more.w * core_wet;
+		}
+		vec3 tint = look_accent_tint[dom].rgb;
+		if (any(notEqual(tint, vec3(1.0))) && rim_share_accent > 0.0) {
+			// The rim-listed accent's own share takes the accent tint.
+			ground.albedo *= mix(vec3(1.0), tint, clamp(rim_share_accent * inv_total, 0.0, 1.0));
+		}
+	}
 #ifndef GROUND_SKIRT
 	if (broad_present != 0) {
 		ground.albedo = apply_broad_edge(
 			ground.albedo, world_xz, slots, g, painted_layers, painted_w
 		);
+		if (look_any && look_share < 1.0) {
+			plain_albedo = apply_broad_edge(
+				plain_albedo, world_xz, slots, g, painted_layers, painted_w
+			);
+		}
 	}
 #endif
 
@@ -1283,11 +1574,25 @@ void fragment() {
 	float cavity = mix(
 		1.0 - cavity_strength * clumpiness, 1.0, smoothstep(0.0, 0.8, ground.height)
 	);
+	// GROUND LOOK: the looked ground has its colour and light already (look_albedo) and is
+	// capped; its zones replace the broad variation. A pixel only partly looked mixes it with
+	// today's by look_share.
+	vec3 lit_albedo;
+	if (!look_any) {
+		lit_albedo = apply_variation(ground.albedo * cavity, world_xz);
+	} else {
+		vec3 looked = light_field_capped_by(
+			ground.albedo * cavity, look_light[dom].z, look_light[dom].w, look_ref[dom].w
+		);
+		lit_albedo = look_share >= 1.0
+			? looked
+			: mix(apply_variation(plain_albedo * cavity, world_xz), looked, look_share);
+	}
 	// The wet line (WET DRESSING): wet ground is darker and glossier, whatever its surface.
-	ALBEDO = apply_variation(ground.albedo * cavity, world_xz) * (1.0 - WET_DARKEN * wet_line);
+	ALBEDO = lit_albedo * (1.0 - WET_DARKEN * wet_line);
 	AO = ground.orm.r;
 	AO_LIGHT_AFFECT = 0.0;
-	ROUGHNESS = mix(ground.orm.g, WET_ROUGHNESS, WET_GLOSS * wet_line);
+	ROUGHNESS = mix(ground.orm.g, WET_ROUGHNESS, WET_GLOSS * max(wet_line, core_wet * look_share));
 	METALLIC = ground.orm.b;
 
 	vec3 n_map = normalize(ground.normal + n_geom * 1e-4);
