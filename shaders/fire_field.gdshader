@@ -23,25 +23,29 @@ shader_type spatial;
 // hotter body rising out of the ground's bed (fire_glow.gdshaderinc), whose ramp they share.
 // Painted, not cut out: the outer edge is soft and softer toward the tips, the bands bleed into
 // each other, the rim's deep red is broken by a noise so no outline runs round a flame, and the
-// outer orange dissolves into the bed at the foot while the hot inside stands. A blaze stands a
-// white-yellow heart in its core and two low licks at its foot.
+// outer orange dissolves into the bed at the foot while the hot inside stands. A blaze has two
+// low licks at its foot. However hot, a core is the inner third of a tongue and saturated yellow
+// (never white), and an orange band rims every tongue, so a crowd of tongues keeps its shapes.
 //
 // Motion is held drawings: a flame's clock steps at 3-4 drawings a second, offset by its seed,
 // and each drawing re-rolls its tongues (their heights, a minor tongue gone) and reads the noise
 // on that clock, so it snaps between genuinely different drawings like a painted animation
-// instead of smearing. On its own loop (about four drawings) the tallest tongue's tip tears off
-// above its top as a lick (a teardrop pointed upward, only the outer bands' colours), rises and
-// is eaten by the erosion rule. One wind per map (FireLook.wind_for) leans every flame the same
+// instead of smearing. On its own loop (about 1.1 s) the tallest tongue's tip tears off as a
+// lick, a whole tongue of its own (round below, pointed above, orange and amber), rises clear of
+// the flame and is eaten by the erosion rule within about 0.45 s. One wind per map (FireLook.wind_for) leans every flame the same
 // way on screen, its tip about `wind`'s length of the flame's height to the side (never less
 // than LEAN_MIN of that, so a wind toward the camera still shows); a gust noise in world space
 // makes the lean travel a little. The quad is widened toward the lean so the tip stays on it.
 //
-// The quad faces the camera, stands on its foot and is drawn a little toward the camera so the
-// ground does not cut it (a few centimetres and a share of its width: much more drew flames in
-// front of the stumps and logs before them); its foot melts into the ground over
-// proximity_fade (the depth texture), as the event puffs do. Colours are linear and picked for
-// the filmic tonemap (see event_puff.gdshader).
-render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled, fog_disabled;
+// The quad faces the camera, stands on its foot and is drawn a little toward the camera (a few
+// centimetres and a share of its width: much more drew flames in front of the stumps and logs
+// before them). It is not depth tested: a vertical quad cut by the ground rising in front of it
+// drew hard straight seams across the flames' lower parts (round 3's seam probe). The depth
+// texture alone occludes it instead: a flame fades out from occlude_tolerance behind the
+// scene's surface to proximity_fade in front of it, so the ground just in front of a foot melts
+// it softly while a log, a stump or a tree standing further in front still hides it. Colours are
+// linear and picked for the filmic tonemap (see event_puff.gdshader).
+render_mode unshaded, blend_mix, depth_draw_never, depth_test_disabled, cull_disabled, shadows_disabled, fog_disabled;
 
 #include "res://shaders/fire_noise.gdshaderinc"
 
@@ -52,26 +56,32 @@ uniform vec2 wind = vec2(0.25, 0.0);
 // 1 past FireField.LOD_ZOOM: instances with keep 0 hide and the others grow by far_grow.
 uniform float far_view = 0.0;
 uniform float far_grow = 1.25;
-// Metres over which a flame's foot melts into the ground behind it.
+// Metres over which a flame's foot melts into the ground behind it, and how far (metres) behind
+// the scene's surface a flame still draws, fading (the ground rising just in front of a foot).
 uniform float proximity_fade = 0.35;
+uniform float occlude_tolerance = 0.25;
 // How far toward the camera a flame is drawn: metres, plus a share of its half width.
 uniform float toward_camera_m = 0.12;
 uniform float toward_camera = 0.25;
 // How much the bed's heat at a flame's foot heats the flame (the look probe compares it off).
 uniform float heat_merge = 1.0;
 // The seam probe's views (render job firefeat_look): 1 every quad opaque in its own colour, 2
-// the depth melt off; 0 draws the flames.
+// the hard depth cut (as the depth test drew it, no melt); 0 draws the flames.
 uniform int debug_view = 0;
 
 // The tongues fill this share of the quad's height; the rest is room for a lick to rise.
 const float HEADROOM = 0.62;
-// Bands inward from the rim: orange, amber, then the pale core, each scaled per flame by a
-// factor in BAND_SPREAD's range (rim, amber, core).
-const vec3 FLAME_BANDS = vec3(0.12, 0.29, 0.54);
+// Bands inward from the rim: orange, amber, then the core, each scaled per flame by its seed
+// (rim, amber, core). The core is the inner third of a tongue and saturated yellow at most
+// (round 4: a pale core over half a blaze's tongues blew out to white and lost their shapes);
+// the orange band keeps at least AMBER_LEAST, so every tongue keeps an orange rim, even a blaze's.
+const vec3 FLAME_BANDS = vec3(0.12, 0.3, 0.66);
+const float AMBER_LEAST = 0.2;
 const vec3 FLAME_RIM = vec3(0.7, 0.05, 0.006);
 const vec3 FLAME_ORANGE = vec3(1.0, 0.17, 0.008);
 const vec3 FLAME_AMBER = vec3(1.0, 0.38, 0.03);
-const vec3 FLAME_CORE = vec3(1.0, 0.8, 0.34);
+const vec3 FLAME_CORE = vec3(1.0, 0.68, 0.1);
+// A spark's hot middle.
 const vec3 FLAME_WHITE = vec3(1.0, 0.95, 0.72);
 const vec3 SPARK_GOLD = vec3(1.0, 0.6, 0.16);
 // A spark's kind (FireField.SPARK), and the share of a kind's fraction the bed's heat takes
@@ -92,11 +102,12 @@ const vec2 HOT_FROM = vec2(0.35, 0.95);
 // The erosion rule's start, and a flame's age at the weakest and the strongest flames.
 const float ERODE_FROM = 0.45;
 const vec2 FLAME_AGE = vec2(0.62, 0.38);
-// Drawings a second (slowest, fastest), the share of drawings a minor tongue sits out, and the
-// lick's loops a second (about four drawings).
+// Drawings a second (slowest, fastest), the share of drawings a minor tongue sits out, the
+// lick's loops a second, and the share of a loop a lick lives (about 0.45 s, two drawings).
 const vec2 DRAWING_RATE = vec2(3.0, 4.2);
 const float TONGUE_GONE = 0.22;
 const float BREAKOFF_RATE = 0.9;
+const float LICK_LIFE = 0.42;
 // The lean's least share of its full amount on screen, and how far past the top a lick leans
 // (so the quad keeps room for it).
 const float LEAN_MIN = 0.65;
@@ -285,20 +296,27 @@ void fragment() {
 		vec3 bands = FLAME_BANDS * vec3(
 			mix(0.55, 1.5, fire_hash(vec2(seed * 61.0, 1.5))),
 			mix(0.7, 1.35, fire_hash(vec2(seed * 67.0, 2.5))),
-			mix(0.8, 1.3, fire_hash(vec2(seed * 71.0, 3.5)))
+			mix(0.92, 1.12, fire_hash(vec2(seed * 71.0, 3.5)))
 		);
-		bands *= vec3(1.0 - 0.75 * hot, mix(1.0, 0.75, hot), mix(1.0, 0.85, hot));
-		// The lick: the tallest tongue's tip tears off above its top (pointed up, round below),
-		// rises and is eaten over about four drawings; held below the amber band, so no rings.
-		float phase = fract(clock * BREAKOFF_RATE + seed * 3.7);
-		float lick_v = (v - top.y * (0.95 + 0.38 * phase)) / (0.24 * top.y);
-		float lick_t = clamp(lick_v, 0.0, 1.0);
-		float lick_x = top.x * (1.0 + 0.35 * v) + sway(seed, tallest, v, clock);
-		float lick_w = top.z * (1.2 - 0.5 * phase) * sqrt(lick_t) * (1.0 - lick_t);
-		// Past either end the field falls away steeply, so the erosion noise draws no hair there.
-		float lick = (lick_w - abs(x - lick_x)) / top.z - 4.0 * (max(0.0, -lick_v) + max(0.0, lick_v - 1.0));
-		lick = min(fire_erode(lick, cloud, ERODE_FROM + 0.55 * phase, ERODE_FROM), bands.y - 0.04);
-		inside = max(inside, lick);
+		bands *= vec3(1.0 - 0.7 * hot, mix(1.0, 0.85, hot), mix(1.0, 0.94, hot));
+		bands.y = max(bands.y, AMBER_LEAST);
+		// The lick: once a loop the tallest tongue's tip tears off as a whole tongue of its own
+		// (round below, pointed above), rises clear of the flame and is eaten over LICK_LIFE of
+		// the loop; orange and amber, never the core.
+		float life = fract(clock * BREAKOFF_RATE + seed * 3.7) / LICK_LIFE;
+		if (life < 1.0) {
+			float lick_h = top.y * 0.55 * (1.0 - 0.3 * life);
+			float u = (v - top.y * (0.78 + 0.42 * life)) / lick_h;
+			float body = u < 0.33
+				? sqrt(max(0.0, 1.0 - pow((0.33 - u) / 0.33, 2.0)))
+				: pow(max(0.0, (1.0 - u) / 0.67), 1.2);
+			float lick_x = top.x * (1.0 + 0.35 * v) + sway(seed, tallest, v, clock);
+			float lick_w = top.z * 0.9 * (1.0 - 0.35 * life);
+			// Past either end the field falls away steeply, so the erosion noise draws no hair there.
+			float lick = body - abs(x - lick_x) / lick_w - 4.0 * (max(0.0, -u) + max(0.0, u - 1.0));
+			lick = min(fire_erode(lick, cloud, 0.3 + 0.65 * life, ERODE_FROM), bands.z - 0.06);
+			inside = max(inside, lick);
+		}
 		// A soft outer edge, softer toward the tips; the bands bleed into each other.
 		float px = max(fwidth(inside), 1e-4);
 		float soft = mix(EDGE_SOFT.x, EDGE_SOFT.y, smoothstep(0.55, 1.05, v));
@@ -315,18 +333,18 @@ void fragment() {
 		float core_on = max(blaze, smoothstep(0.65, 1.0, hot));
 		float core = smoothstep(bands.z - bleed.z, bands.z + bleed.z, inside) * core_on;
 		colour = mix(colour, FLAME_CORE, core);
-		// A blaze's white-yellow heart.
-		colour = mix(colour, FLAME_WHITE, smoothstep(bands.z + 0.12, bands.z + 0.32, inside) * blaze);
-		colour *= 1.0 + 0.2 * hot;
+		colour *= 1.0 + 0.12 * hot;
 		// The outer orange dissolves into the bed at the foot; the hot inside stands.
 		shape *= smoothstep(0.0, 0.3, v + (cloud - 0.5) * 0.24 + max(inside - bands.x, 0.0) * 0.7);
 	}
 	float depth_tex = textureLod(depth_texture, SCREEN_UV, 0.0).r;
 	vec4 behind = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, depth_tex, 1.0);
 	behind.xyz /= behind.w;
-	float melt = clamp(1.0 - smoothstep(behind.z + proximity_fade, behind.z, VERTEX.z), 0.0, 1.0);
+	// How far this fragment stands in front of the scene's surface (metres; under 0 behind it).
+	float ahead = VERTEX.z - behind.z;
+	float melt = smoothstep(-occlude_tolerance, proximity_fade, ahead);
 	ALBEDO = colour;
-	ALPHA = clamp(shape, 0.0, 1.0) * (debug_view == 2 ? 1.0 : melt);
+	ALPHA = clamp(shape, 0.0, 1.0) * (debug_view == 2 ? step(0.0, ahead) : melt);
 	if (debug_view == 1) {
 		// The seam probe: each quad opaque in its own colour.
 		ALBEDO = vec3(fire_hash(vec2(seed * 7.0, 1.3)), fire_hash(vec2(seed * 11.0, 2.7)), fire_hash(vec2(seed * 13.0, 3.1)));

@@ -690,17 +690,20 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   a new 200 ft temperate forest (seed 1234), fire laid with the real Fire tool (three `flames`
   passes of radius 4 across the map and a shorter fourth, then a curved `blaze` line of radius 2
   across the view; south of them an author-laid fire, a scrubbed blob and a curving line),
-  saved as `_firefeat_look`. Look (about 70 s): that level at home, zoom 8 over the blaze and
-  zoom 20 over the fire's middle, by day (14:00) and at dusk (19:00), zoom 30 past the LOD
-  zoom, and the author-laid fire at the home zoom and zoom 20 (`ahome`, `az20`), each labelled
-  (`<key>_r3`); `sheet_<day|dusk>_<view>.png` puts round 1's frame (`<key>_r1`), round 2's
-  (`<key>_r2.png`, kept, re-framed with a ROUND 2 caption by the probe's `replay` as
-  `<key>_r2l`) and the new one side by side; `sheet_z30` round 2 and new, day over dusk;
-  `sheet_author` the author-laid fire; `sheet_motion` eight frames grabbed by the probe's
-  `burst` (a `capture` step takes about 0.4 s, so a strip of captures is 0.5 s apart, not 0.1
-  s; measured 2026-10-16) at dusk, zoom 8, their engine times in `motion_times.txt`;
-  `sheet_seam` the middle of dusk zoom 8 beside the same with the flames' depth melt off.
-  Cleanup deletes every `_firefeat_` level.
+  saved as `_firefeat_look`. Look (about 75 s half, 110 s `--full`): that level at home, zoom 8
+  over the blaze and zoom 20 over the fire's middle, by day (14:00) and at dusk (19:00), zoom 30
+  past the LOD zoom, and the author-laid fire at the home zoom and zoom 20 (`ahome`, `az20`),
+  each labelled (`<key>_r4`); `sheet_<day|dusk>_<view>.png` puts round 2's frame (`<key>_r2l`,
+  kept), round 3's (`<key>_r3.png`, kept, re-framed with a ROUND 3 caption by the probe's
+  `replay` as `<key>_r3l`) and the new one side by side; `sheet_z30` rounds 2, 3 and new, day
+  over dusk; `sheet_author_<day|dusk>` the author-laid fire, round 3 beside new; `sheet_motion`
+  eight frames grabbed by the probe's `burst` (a `capture` step takes about 0.4 s, so a strip
+  of captures is 0.5 s apart, not 0.1 s; measured 2026-10-16) at dusk, zoom 8, their engine
+  times in `motion4_times.txt`; `sheet_seam` the middle of dusk zoom 8 beside the same with the
+  flames cut hard at the scene's depth (as the depth test drew them); `sheet_bare` dusk zoom 8
+  and the author fire beside the ground alone (`perf.gd scatter` hides every MultiMesh, the
+  flames hidden too). Mobile: the same job with `--rendering-method mobile --only day_home_r4
+  --out render_jobs/fire_field_mobile`. Cleanup deletes every `_firefeat_` level.
 
 ## Caveats
 

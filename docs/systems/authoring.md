@@ -200,25 +200,33 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   part, and putting fire out brings nothing back. Start a fire's ash clears the same way. The burnt-biome and
   ash parts mirror `TerrainEvents._burn` (which is not called: its dabs are one circle, these
   follow the stroke). `FireField` draws the mask (look card F4a: banded-tongue flames from
-  `shaders/fire_field.gdshader` on a 0.9 m jittered lattice gathered into blob-shaped clumps
-  (a clump noise turned and warped off the map's axes) with open ground between, a big flame
-  with licks at its feet in each blaze clump, no flames in the ember band, soft-edged tongues
-  with a broken rim and bleeding bands, held drawings at 3-4 a second that re-draw the tongues,
-  licks torn off above the tip, and one wind per map leaning every tip about a quarter of its
-  flame's height; a MultiMesh per 10 m block, at most 4096 on a map shared in proportion to
-  each block's burning area, half of them past zoom 24). A base fire unifies the flames (the
-  user's verdict, 2026-10-16): `FireField` keeps a heat raster (`HEAT_STEP_M` 0.5 m) where each
-  flame adds its height times a soft kernel, so a clump sums to one hot plateau; the ground
-  burns as a bed on that summed heat (deep red, orange, gold, flame yellow) and each flame takes
-  the heat at its foot (in its instance data) to thin its rim and widen and brighten its amber
-  and core, so overlapping flames read as one hotter body. The bed, ember cores away from the
-  flames (flame yellow at the centre, a wide red fringe, coal lumps, a cluster of specks), and
-  the char at the outskirts and in the gaps (a painted umber-to-plum value field with dark
-  blotches and pale ash strokes, matte, its normals straight up so no ground facet shows; the
-  outline read through a bold warp, with a band of dying straw-yellow grass outside it) are a
-  term in the authored ground shader, `shaders/fire_glow.gdshaderinc`, fed the mask and the
-  heat as R8 textures; `FireLook` in `scenes/effects/` owns the meshes, materials and the glow
-  binding; no lights or smoke yet)
+  `shaders/fire_field.gdshader` on a 0.9 m jittered lattice, the mask read through a broad
+  warp so a straight pass's flames wander across its width, gathered into blob-shaped clumps
+  about 4 m across (a clump noise turned and warped off the map's axes) with open ground
+  between, a big flame with licks at its feet in each blaze clump, no flames in the ember band,
+  soft-edged tongues with a broken rim and bleeding bands, a saturated yellow core only in a
+  tongue's inner third and an orange band on every tongue, held drawings at 3-4 a second that
+  re-draw the tongues, a lick torn off the tip as a whole small tongue that rises clear and is
+  eaten in about 0.45 s, and one wind per map leaning every tip about a quarter of its flame's
+  height; a MultiMesh per 10 m block, at most 4096 on a map shared in proportion to each
+  block's burning area, half of them past zoom 24; not depth tested, the depth texture fading
+  a flame from 0.25 m behind the scene's surface, so rising ground in front of a foot melts it
+  instead of cutting it straight while logs and stumps further in front still hide it). A base
+  fire unifies the flames (the user's verdict, 2026-10-16): `FireField` keeps a heat raster
+  (`HEAT_STEP_M` 0.5 m) where each flame adds its height times a soft kernel, so a clump sums to
+  one hot plateau, and a second raster of the feet's pools (each flame adds 1 under a narrow
+  kernel); each flame takes the heat at its foot (in its instance data) to thin its rim and
+  widen its amber, so overlapping flames read as one hotter body. The ground (round 4, the
+  user's direction: dark crusted char with bold glowing patches and cracks under each clump,
+  brightest where flames overlap, the flames always the brightest thing) glows in soft-edged
+  lobes round the feet, red at their fringe, orange-gold only where the heat sums high and
+  never as bright as a flame's outer band, with dark crust plates and wandering cracks; ember
+  cores glow away from the clumps; the char (brown-black with near-black shapes and soft grey
+  ash between the clumps, matte, its normals straight up so no ground facet shows; the outline
+  read through a bold warp, the grass dried and browned outside it in a band of wandering
+  width). All of it is a term in the authored ground shader, `shaders/fire_glow.gdshaderinc`,
+  fed the mask (R8) and the two rasters (RG8); `FireLook` in `scenes/effects/` owns the meshes,
+  materials and the glow binding; no lights or smoke yet)
   and is refreshed by `AuthoringEditor.refresh_fire`, which
   `apply_mask_diff` calls for any diff that writes `fire_mask` (the fire part records through
   it as every mask stroke does; a diff of `fire_mask` alone regenerates no scatter). Render jobs

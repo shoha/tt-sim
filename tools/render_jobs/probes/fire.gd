@@ -33,7 +33,7 @@ const REPLAY := "FireProbeReplay"
 ## Where the zoomed views look: a point on the blaze, and the middle of the fire.
 const BLAZE_AT := Vector2(-2.0, -2.5)
 const FIRE_AT := Vector2(0.0, -3.0)
-const AUTHOR_AT := Vector2(3.0, 21.5)
+const AUTHOR_AT := Vector2(3.0, 17.0)
 const DUSK_HOUR := 19.0
 const VIEWS := {
 	"home": "home",

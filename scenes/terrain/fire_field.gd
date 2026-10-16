@@ -9,7 +9,8 @@ extends Node3D
 ## Placement is pure (plan_block): per diff block of the mask (MaskStroke.BLOCK samples, 10 m
 ## at the default spacing), a jittered lattice at FLAME_SPACING_M seeded by the map seed and
 ## the lattice point, so peers agree and re-planning one block moves nothing elsewhere. A
-## point burns where the bilinear mask is at least EMBER_MIN and the ground is neither wet
+## point burns where the bilinear mask, read through a broad warp (PLACE_WARP, so a straight
+## pass does not stand its flames in rows), is at least EMBER_MIN and the ground is neither wet
 ## (the wet dressing's wet line) nor steeper than the cliff rule (TerrainRules); its height is
 ## the document's own triangle (ScatterGenerator.triangle_height). Where flames may stand is
 ## derived here and never saved: a river carved through a fire puts it out on screen and the
@@ -33,7 +34,9 @@ extends Node3D
 ## (HEAT_STEP_M) sums each planned flame's height under a soft kernel, re-splatted around the
 ## blocks a refresh re-plans. The ground burns as a bed on that summed heat
 ## (fire_glow.gdshaderinc), and each drawn flame carries the heat at its foot, which thins its
-## rim and widens its hot bands, so a crowded clump reads as one hotter body. The raster comes
+## rim and widens its hot bands, so a crowded clump reads as one hotter body. A second raster on
+## the same grid, the feet's pools (POOL_REACH, round 4), marks where flames stand, so the
+## ground glows under every foot and stays dark crust between. The rasters come
 ## from the whole plans (not the budget's prefix), so thinning does not dim the bed; a peer
 ## that refreshed stroke by stroke and one that rebuilt hold the same raster.
 ##
@@ -78,7 +81,9 @@ const WIDTH_SHARE := Vector2(0.35, 0.75)
 const BLAZE_WIDTH_FROM := 0.55
 ## The clump noise: its cell, how it scales a flame, below what value a flame point drops (at
 ## the flames band's start and end), and below what a blaze point does.
-const CLUMP_CELL_M := 3.0
+## (Round 4: 3 m clumps of small flames over the whole burn shimmered like wallpaper at the home
+## zoom; fewer, larger clumps with wider gaps read as separate fires.)
+const CLUMP_CELL_M := 4.2
 ## The clump noise's warp: the broad noise's cell and how far (metres) it moves a point; and
 ## the turns (radians) of its two octaves' lattices off the map's axes.
 const CLUMP_WARP := Vector2(6.0, 3.0)
@@ -87,8 +92,12 @@ const CLUMP_SCALE := Vector2(0.6, 1.6)
 ## How far a flame's own draw moves its place in the clump's scale range (either way), so a
 ## clump's neighbours are not one height.
 const SCALE_JITTER := 0.25
-const FLAME_GAP := Vector2(0.42, 0.26)
-const BLAZE_GAP := 0.14
+const FLAME_GAP := Vector2(0.5, 0.36)
+const BLAZE_GAP := 0.2
+## The flames read the mask through a broad warp: its noise's cell and how far (metres) it can
+## move the read, so a straight pass's band of flames wanders across the brush's width instead
+## of standing in rows (a uniform mask is unaffected).
+const PLACE_WARP := Vector2(5.0, 2.0)
 ## A blaze clump's big flame and the licks at its feet (scales; a big flame's above the clump
 ## range).
 const BIG_SCALE := Vector2(1.62, 1.8)
@@ -110,6 +119,10 @@ const LAYOUT_CROWN := 3
 const HEAT_STEP_M := 0.5
 const HEAT_FULL_M := 4.5
 const HEAT_REACH := Vector2(1.0, 1.0)
+## The feet's pools, a second raster on the same grid (round 4: where the ground glows under the
+## flames, so every flame's foot stands in glow whatever its size): each flame adds 1 under a
+## narrow kernel reaching POOL_REACH.x plus POOL_REACH.y of its width; uploaded clamped to 1.
+const POOL_REACH := Vector2(0.45, 0.6)
 ## Texels the cleared rect of a refresh reaches past its blocks (more than any kernel's reach).
 const HEAT_GROW := 8
 ## Past this camera zoom (the orthographic size) half the flames hide.
@@ -126,8 +139,10 @@ var _chunks: Dictionary = {}
 var _counts: Dictionary = {}
 var _glow_texture: ImageTexture = null
 var _far := false
-## The flames' heat raster (see HEAT_STEP_M), its size in texels, and its texture.
+## The flames' heat raster (see HEAT_STEP_M), the feet's pools (POOL_REACH) on its grid, its
+## size in texels, and their texture.
 var _heat := PackedFloat32Array()
+var _pools := PackedFloat32Array()
 var _heat_size := Vector2i.ZERO
 var _heat_texture: ImageTexture = null
 
@@ -171,12 +186,15 @@ func rebuild() -> void:
 	refresh(Rect2i(0, 0, document.samples_x(), document.samples_z()))
 
 
-## Re-plans the blocks the samples of `sample_rect` touch (a stroke's frame, an undo), then
-## re-shares the budget: a block whose share changed is drawn again.
+## Re-plans the blocks the samples of `sample_rect` touch (a stroke's frame, an undo), and those
+## whose points read the mask there through the placement warp, then re-shares the budget: a
+## block whose share changed is drawn again.
 func refresh(sample_rect: Rect2i) -> void:
 	if document == null or not sample_rect.has_area():
 		return
-	var touched := blocks_of(document, sample_rect)
+	var step := document.sample_step()
+	var reach := PLACE_WARP.y + JITTER * FLAME_SPACING_M
+	var touched := blocks_of(document, sample_rect.grow(ceili(reach / minf(step.x, step.y)) + 1))
 	for block in touched:
 		var plan := plan_block(document, block)
 		if plan.is_empty():
@@ -409,28 +427,44 @@ static func heat_size(doc: MapDocument) -> Vector2i:
 
 
 ## Adds the flames of `plan` (document metres; `half` the map's half extent) to the heat raster
-## `heat` of `size` texels, inside texel rect `clip` only (sparks add nothing).
+## `heat` of `size` texels, and to the feet's pools `pools` when it has the same size, inside
+## texel rect `clip` only (sparks add nothing).
 static func splat_heat(
-	heat: PackedFloat32Array, size: Vector2i, half: Vector2, plan: PackedFloat32Array, clip: Rect2i
+	heat: PackedFloat32Array,
+	size: Vector2i,
+	half: Vector2,
+	plan: PackedFloat32Array,
+	clip: Rect2i,
+	pools := PackedFloat32Array()
 ) -> void:
+	var with_pools := pools.size() == heat.size()
 	@warning_ignore("integer_division")
 	for k in plan.size() / STRIDE:
 		var o := k * STRIDE
 		if plan[o + KIND] == SPARK:
 			continue
 		var at := (Vector2(plan[o], plan[o + 2]) + half) / HEAT_STEP_M
-		var r := (HEAT_REACH.x + HEAT_REACH.y * plan[o + WIDTH]) / HEAT_STEP_M
-		var x0 := maxi(ceili(at.x - r), clip.position.x)
-		var x1 := mini(floori(at.x + r), clip.end.x - 1)
-		var z0 := maxi(ceili(at.y - r), clip.position.y)
-		var z1 := mini(floori(at.y + r), clip.end.y - 1)
-		var amount := plan[o + HEIGHT]
-		var inv := 1.0 / (r * r)
-		for z in range(z0, z1 + 1):
-			for x in range(x0, x1 + 1):
-				var d := 1.0 - (Vector2(x, z) - at).length_squared() * inv
-				if d > 0.0:
-					heat[z * size.x + x] += amount * d * d
+		var width := plan[o + WIDTH]
+		var r := (HEAT_REACH.x + HEAT_REACH.y * width) / HEAT_STEP_M
+		_splat(heat, size, at, r, plan[o + HEIGHT], clip)
+		if with_pools:
+			_splat(pools, size, at, (POOL_REACH.x + POOL_REACH.y * width) / HEAT_STEP_M, 1.0, clip)
+
+
+## Adds `amount` under a soft kernel of radius `r` texels at texel point `at` to `raster`.
+static func _splat(
+	raster: PackedFloat32Array, size: Vector2i, at: Vector2, r: float, amount: float, clip: Rect2i
+) -> void:
+	var x0 := maxi(ceili(at.x - r), clip.position.x)
+	var x1 := mini(floori(at.x + r), clip.end.x - 1)
+	var z0 := maxi(ceili(at.y - r), clip.position.y)
+	var z1 := mini(floori(at.y + r), clip.end.y - 1)
+	var inv := 1.0 / (r * r)
+	for z in range(z0, z1 + 1):
+		for x in range(x0, x1 + 1):
+			var d := 1.0 - (Vector2(x, z) - at).length_squared() * inv
+			if d > 0.0:
+				raster[z * size.x + x] += amount * d * d
 
 
 ## The bed's temperature (0..1) in heat raster `heat` (`size` texels) at document point `p`
@@ -518,6 +552,8 @@ func _update_heat(touched: Array[Vector2i]) -> void:
 		_heat_size = size
 		_heat = PackedFloat32Array()
 		_heat.resize(size.x * size.y)
+		_pools = PackedFloat32Array()
+		_pools.resize(size.x * size.y)
 	else:
 		var step := document.sample_step()
 		var grow := Vector2i(HEAT_GROW, HEAT_GROW)
@@ -532,11 +568,12 @@ func _update_heat(touched: Array[Vector2i]) -> void:
 		for z in range(clip.position.y, clip.end.y):
 			for x in range(clip.position.x, clip.end.x):
 				_heat[z * size.x + x] = 0.0
+				_pools[z * size.x + x] = 0.0
 	var half := document.extent_m() * 0.5
 	for block in _plans:
 		if whole or _beside(block, touched):
-			splat_heat(_heat, size, half, _plans[block], clip)
-	_heat_texture = FireLook.heat_texture(_heat, size, HEAT_FULL_M, _heat_texture)
+			splat_heat(_heat, size, half, _plans[block], clip, _pools)
+	_heat_texture = FireLook.heat_texture(_heat, size, HEAT_FULL_M, _heat_texture, _pools)
 
 
 ## The camera's forward axis in this node's frame (the game camera never turns).
@@ -598,8 +635,16 @@ class LatticeWindow:
 				if absf(p.x) > half.x or absf(p.y) > half.y:
 					heat[i] = 0.0
 					continue
+				# The mask is read through a broad warp (PLACE_WARP), so a straight pass's flames
+				# wander across its width.
+				var wq := p / PLACE_WARP.x
+				var wander := Vector2(
+					FireField._value_noise(doc.map_seed + 12, wq) - 0.5,
+					FireField._value_noise(doc.map_seed + 13, wq + Vector2(2.9, 7.1)) - 0.5
+				)
+				var read := p + wander * 2.0 * PLACE_WARP.y
 				heat[i] = FireField._bilinear(
-					doc.fire_mask, doc.samples_x(), doc.samples_z(), (p + half) / step
+					doc.fire_mask, doc.samples_x(), doc.samples_z(), (read + half) / step
 				)
 
 	func index(ix: int, iz: int) -> int:

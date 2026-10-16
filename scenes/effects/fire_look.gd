@@ -18,7 +18,8 @@ extends RefCounted
 ##
 ## The glow is a term in the authored ground shader (fire_glow.gdshaderinc): the document's
 ## fire_mask uploaded whole as an R8 texture on the sample grid (glow_texture) and FireField's
-## heat raster as another (heat_texture), both bound to the terrain's material (bind_glow).
+## heat raster with the feet's pools as an RG8 one (heat_texture), both bound to the terrain's
+## material (bind_glow).
 ##
 ## One map is shown at a time, so the material's per-map uniforms (the wind, the LOD switch) are
 ## set on the shared material by the map's FireField.
@@ -178,18 +179,27 @@ static func glow_texture(doc: MapDocument, texture: ImageTexture) -> ImageTextur
 	return ImageTexture.create_from_image(image)
 
 
-## The flames' heat raster `heat` (`size` texels, FireField.HEAT_STEP_M apart) as an R8 texture
-## of its sums over `full`: `texture` updated in place when it has the size, else a new one.
+## The flames' heat raster `heat` (`size` texels, FireField.HEAT_STEP_M apart) as an RG8
+## texture: red its sums over `full`, green the feet's pools `pools` (clamped to 1; none: 0).
+## `texture` is updated in place when it has the size, else a new one.
 static func heat_texture(
-	heat: PackedFloat32Array, size: Vector2i, full: float, texture: ImageTexture
+	heat: PackedFloat32Array,
+	size: Vector2i,
+	full: float,
+	texture: ImageTexture,
+	pools := PackedFloat32Array()
 ) -> ImageTexture:
+	var count := size.x * size.y
 	var bytes := PackedByteArray()
-	bytes.resize(size.x * size.y)
-	if heat.size() == bytes.size():
+	bytes.resize(count * 2)
+	if heat.size() == count:
 		var scale := 255.0 / full
-		for i in bytes.size():
-			bytes[i] = mini(roundi(heat[i] * scale), 255)
-	var image := Image.create_from_data(size.x, size.y, false, Image.FORMAT_R8, bytes)
+		var with_pools := pools.size() == count
+		for i in count:
+			bytes[i * 2] = mini(roundi(heat[i] * scale), 255)
+			if with_pools:
+				bytes[i * 2 + 1] = mini(roundi(pools[i] * 255.0), 255)
+	var image := Image.create_from_data(size.x, size.y, false, Image.FORMAT_RG8, bytes)
 	if texture != null and Vector2i(texture.get_size()) == size:
 		texture.update(image)
 		return texture
