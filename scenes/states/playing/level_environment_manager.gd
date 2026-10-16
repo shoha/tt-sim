@@ -155,6 +155,10 @@ func store_original_light_energies(node: Node) -> void:
 
 
 func _collect_light_energies(node: Node) -> void:
+	# The persistent fire's lights (FireLights) are the game's, not the map's: counted, they
+	# would scale with the map's intensity and turn the level's sun off in "auto" mode.
+	if node is FireField:
+		return
 	if node is Light3D:
 		_original_light_energies[node.get_instance_id()] = node.light_energy
 	for child in node.get_children():

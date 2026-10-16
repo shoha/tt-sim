@@ -2,11 +2,16 @@ extends RefCounted
 
 ## Render-job probe (`call` op) for persistent ground fire's look (FireField, FireLook; the fire
 ## cards' jobs firefeat_build, firefeat_look and firefeat_cleanup). Actions:
-##   info              flames shown and planned (the cap), burning blocks, entries by band
-##   shot {key}        "<day|dusk>_<view>": the sun (DefaultSun at 14:00 or DUSK_HOUR, through
-##                     the level's sun as the Sun pane's time of day does), the view (home; z8,
+##   info              flames shown and planned (the cap), burning blocks, entries by band; the
+##                     lights (place, energy, the sun's gate) and the smoke's sites
+##   extras {show}     shows or hides the fire's lights and smoke (FireLights, FireFieldSmoke),
+##                     so a capture can show the field as round 4 drew it
+##   shot {key}        "<day|dusk|night>_<view>": the sun (DefaultSun at 14:00, DUSK_HOUR or
+##                     NIGHT_HOUR, through the level's sun as the Sun pane's time of day
+##                     does), the view (home; z8,
 ##                     zoom 8 over a point on the blaze; z20, zoom 20 over the fire's middle; z30,
-##                     zoom 30 there, past the LOD zoom) and an on-screen label, `label` (default
+##                     zoom 30 there, past the LOD zoom; zs, zoom 12 framing the largest smoke
+##                     column) and an on-screen label, `label` (default
 ##                     "NEW") before the key's words
 ##   label {text}      an on-screen caption for captures ("" removes it)
 ##   replay {path, text}  an earlier capture over the whole window under the caption `text`, so
@@ -35,7 +40,11 @@ const BLAZE_AT := Vector2(-2.0, -2.5)
 const FIRE_AT := Vector2(0.0, -3.0)
 const AUTHOR_AT := Vector2(3.0, 17.0)
 const DUSK_HOUR := 19.0
+const NIGHT_HOUR := 23.0
+## The smoke view (zs) centres this far above where the largest column's billows are born.
+const SMOKE_VIEW_RISE := 1.5
 const VIEWS := {
+	"zs": "zoom 12 on the smoke",
 	"home": "home",
 	"z8": "zoom 8",
 	"z20": "zoom 20",
@@ -81,6 +90,14 @@ static func run(base: Node, step: Dictionary) -> String:
 			var show := bool(step.get("show", true))
 			ctrl.editor.fire_field.visible = show
 			return "flames %s" % ("shown" if show else "hidden")
+		"extras":
+			var field: FireField = ctrl.editor.fire_field
+			if field == null or field.lights() == null:
+				return "no lights or smoke"
+			var on := bool(step.get("show", true))
+			field.lights().visible = on
+			field.smoke().visible = on
+			return "lights and smoke %s" % ("shown" if on else "hidden")
 		"param":
 			return _param(ctrl.editor.fire_field, step)
 	return "unknown action %s" % action
@@ -145,9 +162,36 @@ static func _info(doc: MapDocument, field: FireField) -> String:
 		for k in n:
 			var heat := roundi(plan[k * FireField.STRIDE + FireField.INTENSITY] * 255.0)
 			bands[FireField.band(heat)] += 1
-	return (
+	var out := (
 		"fire shown %d of planned %d (cap %d); blocks with flames %d; sparks %d flames %d blaze %d"
 		% [field.flame_count(), planned, FireField.MAX_FLAMES, burning, bands[1], bands[2], bands[3]]
+	)
+	if field.lights() == null:
+		return out + "; no lights or smoke"
+	var gate := FireLook.light_gate(FoliageLight.last_sun)
+	var lit := PackedStringArray()
+	for light in field.lights().lights():
+		lit.append(
+			"(%.1f, %.1f, %.1f) e %.2f %s"
+			% [
+				light.position.x,
+				light.position.y,
+				light.position.z,
+				light.light_energy,
+				"on" if light.visible else "off"
+			]
+		)
+	return (
+		out
+		+ "; gate %.2f (sun weight %.3f); lights %d: %s; smoke sites %d, billows live %d"
+		% [
+			gate,
+			FoliageLight.last_sun.w,
+			field.lights().count(),
+			", ".join(lit),
+			field.smoke().site_count(),
+			field.smoke().live_count()
+		]
 	)
 
 
@@ -159,11 +203,15 @@ static func _shot(
 		return "bad key %s" % key
 	var out := PackedStringArray()
 	if parts[0] != _sun_key:
-		var hour := DUSK_HOUR if parts[0] == "dusk" else DefaultSun.DEFAULT_TIME_OF_DAY
+		var hour := DefaultSun.DEFAULT_TIME_OF_DAY
+		if parts[0] == "dusk":
+			hour = DUSK_HOUR
+		elif parts[0] == "night":
+			hour = NIGHT_HOUR
 		out.append(_sun(ctrl, hour))
 		_sun_key = parts[0]
 	if parts[1] != _view_key:
-		out.append(_view(gm, parts[1]))
+		out.append(_view(gm, parts[1], ctrl.editor.fire_field))
 		_view_key = parts[1]
 	out.append(_label(base, "%s   |   %s, %s" % [label, parts[0], VIEWS[parts[1]]]))
 	return "; ".join(out)
@@ -179,9 +227,12 @@ static func _sun(ctrl: AuthoringController, hour: float) -> String:
 	return "sun %.1f h: energy %.2f elevation %.1f" % [hour, settings.energy, elevation]
 
 
-static func _view(gm: GameMap, view: String) -> String:
+static func _view(gm: GameMap, view: String, field: FireField = null) -> String:
 	var cc := gm.get_camera_controller()
 	match view:
+		"zs":
+			cc.set("_target_zoom", 12.0)
+			_look(gm, _smoke_spot(field))
 		"home":
 			cc.call("_reset_camera_to_home")
 		"z8":
@@ -201,6 +252,20 @@ static func _view(gm: GameMap, view: String) -> String:
 			cc.set("_target_zoom", 20.0)
 			_look(gm, AUTHOR_AT)
 	return "view %s" % view
+
+
+## The ground point that frames the largest smoke column in the middle of the screen (about
+## SMOKE_VIEW_RISE metres above where its billows are born, carried down the camera's fixed
+## forward axis to the ground), or FIRE_AT without smoke.
+static func _smoke_spot(field: FireField) -> Vector2:
+	if field == null or field.smoke() == null or field.smoke().site_count() == 0:
+		return FIRE_AT
+	var site: Dictionary = field.smoke().sites()[0]
+	var born: Vector3 = FireFieldSmoke.source(site)[0]
+	var forward := FireLook.DEFAULT_FORWARD.normalized()
+	var target := born + Vector3(0.0, SMOKE_VIEW_RISE, 0.0)
+	var ground := target + forward * ((float(site["at"].y) - target.y) / forward.y)
+	return Vector2(ground.x, ground.z)
 
 
 static func _look(gm: GameMap, at: Vector2) -> void:

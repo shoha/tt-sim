@@ -226,7 +226,30 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   read through a bold warp, the grass dried and browned outside it in a band of wandering
   width). All of it is a term in the authored ground shader, `shaders/fire_glow.gdshaderinc`,
   fed the mask (R8) and the two rasters (RG8); `FireLook` in `scenes/effects/` owns the meshes,
-  materials and the glow binding; no lights or smoke yet)
+  materials and the glow binding. Lights and smoke (card F4b-1): `FireClusters` (pure) sums each
+  re-planned block's flame heights on a 3.5 m grid (kept per block, merged in block row order,
+  so every peer and every refresh history agree) and finds the hot spots, a burning cell whose
+  3 x 3 sum tops every burning neighbour's, so a small fire is one cluster and a map-wide burn
+  has one per hot spot at least two cells apart (connected components would make the look
+  level's passes one cluster with one light at its middle); re-planning one block changes only
+  the clusters within two cells of it. `FireLights` stands four shared `OmniLight3D` (no
+  shadows, range 7 m, `FireLook.LIGHT_COLOR`, energy by the cluster's size) over the four
+  largest clusters, a lit cluster keeping its light across a re-plan (`keep_slots`); they show
+  only while the sun is low (`FireLook.light_gate` of `FoliageLight.last_sun`, the published
+  sun's weight: off at 14:00, fading in from about 17:00, full at dusk, at night and with no
+  sun) and flicker slowly (four energy sets a frame, the only per-frame light work). The game
+  adds no other omni light to a scene (only a Blender map's own lamps can), so the four fit the
+  Mobile renderer's eight per mesh; the env manager skips a `FireField` when it collects the
+  map's own lights (counted, they turned the level's sun off in "auto" mode). A cluster's size
+  is its flames' heights squared, summed (about their drawn area), so a blaze's big flames
+  outweigh a wide field of small ones. `FireFieldSmoke` (a `SmokePuffs` pool of 24, the fire
+  events' smoke crowns built with 16 larger cards and painted warm, umber to cream-rose) puffs
+  a billow every 2.2 s over each of up to eight of the largest blaze clusters (mask 200 and
+  up, at least 8 m2 of flame), born above its tallest flames,
+  rising 0.75 m/s and leaning down the map's wind (`FireLook.smoke_drift`), its low half lit
+  warm from below (`fire_smoke.gdshader`'s `fire_below`, INSTANCE_CUSTOM.y, 0 for a fire
+  event's billows); the shader keeps an omni light's full colour, so the fire's lights warm
+  the smoke at dusk. Per frame: up to 8 site clocks and 24 billows placed)
   and is refreshed by `AuthoringEditor.refresh_fire`, which
   `apply_mask_diff` calls for any diff that writes `fire_mask` (the fire part records through
   it as every mask stroke does; a diff of `fire_mask` alone regenerates no scatter). Render jobs

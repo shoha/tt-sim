@@ -1,0 +1,97 @@
+class_name FireLights
+extends Node3D
+
+## The persistent fire's lights (FireField; design section 4 "Light", the user's F3 decision
+## of 2026-10-16): at most FireClusters.MAX_LIGHTS shared OmniLight3D, no shadows, range
+## RANGE_M, in the flames' warm colour (FireLook.LIGHT_COLOR), over the largest burning clusters
+## (FireClusters.lights), each a little above its cluster's centroid. They carry the fire at
+## dusk and night only: their energy follows FireLook.light_gate of the published sun
+## (FoliageLight.last_sun, written whenever the level's sun changes), and they are hidden while
+## the gate is 0, so by day they cost nothing.
+##
+## place() runs when blocks re-plan; a cluster already lit keeps its light
+## (FireClusters.keep_slots), so a re-plan moves only the lights whose clusters changed. Per
+## frame, a slow flicker (FireLook.flicker) is the only work: one energy set per light shown.
+##
+## The game itself adds no other omni light to a play scene (only a Blender map's own
+## KHR_lights_punctual lamps can), so these four fit the Mobile renderer's eight omni lights per
+## mesh beside up to four of a map's.
+
+const NODE_NAME := "FireLights"
+## How far a light reaches (metres).
+const RANGE_M := 7.0
+## A light stands this share of its cluster's tallest flame above the cluster's centroid,
+## within RISE_M.
+const RISE_SHARE := 0.5
+const RISE_M := Vector2(1.2, 2.0)
+## An empty slot's cell.
+const NONE := Vector2i(2147483647, 2147483647)
+
+var _lights: Array[OmniLight3D] = []
+## Each slot's cluster cell (NONE: unused) and its energy before the gate and flicker.
+var _cells: Array[Vector2i] = []
+var _energy := PackedFloat32Array()
+var _shown := false
+var _clock := 0.0
+
+
+func _init() -> void:
+	name = NODE_NAME
+	_energy.resize(FireClusters.MAX_LIGHTS)
+	for slot in FireClusters.MAX_LIGHTS:
+		var light := OmniLight3D.new()
+		light.name = "FireLight%d" % slot
+		light.omni_range = RANGE_M
+		light.shadow_enabled = false
+		light.light_color = FireLook.LIGHT_COLOR
+		light.light_specular = 0.0
+		light.light_bake_mode = Light3D.BAKE_DISABLED
+		light.visible = false
+		add_child(light)
+		_lights.append(light)
+		_cells.append(NONE)
+
+
+## Stands the lights over `clusters` (FireClusters.lights; document metres, this node's frame),
+## a cluster already lit keeping its light.
+func place(clusters: Array[Dictionary]) -> void:
+	var wanted: Array[Vector2i] = []
+	for cluster in clusters:
+		wanted.append(cluster["cell"])
+	var slots := FireClusters.keep_slots(_cells, wanted)
+	for slot in _lights.size():
+		var k := slots[slot]
+		_cells[slot] = NONE if k < 0 else wanted[k]
+		_lights[slot].visible = _shown and k >= 0
+		if k < 0:
+			continue
+		var cluster := clusters[k]
+		var at: Vector3 = cluster["at"]
+		var rise := clampf(float(cluster["top"]) * RISE_SHARE, RISE_M.x, RISE_M.y)
+		_lights[slot].position = at + Vector3(0.0, rise, 0.0)
+		_energy[slot] = FireLook.light_energy(float(cluster["size"]))
+
+
+## Lights in use (over a cluster), shown or not.
+func count() -> int:
+	return _cells.size() - _cells.count(NONE)
+
+
+## The lights, for probes and tests.
+func lights() -> Array[OmniLight3D]:
+	return _lights
+
+
+func _process(delta: float) -> void:
+	_clock += delta
+	var gate := FireLook.light_gate(FoliageLight.last_sun)
+	var shown := gate > 0.0
+	if shown != _shown:
+		_shown = shown
+		for slot in _lights.size():
+			_lights[slot].visible = shown and _cells[slot] != NONE
+	if not shown:
+		return
+	for slot in _lights.size():
+		if _cells[slot] != NONE:
+			_lights[slot].light_energy = _energy[slot] * gate * FireLook.flicker(_clock, slot)

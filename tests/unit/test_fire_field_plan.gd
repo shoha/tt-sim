@@ -215,7 +215,12 @@ func test_a_fire_past_the_cap_fills_every_block_evenly() -> void:
 	doc.fire_mask = mask
 	field.rebuild()
 	assert_eq(field.flame_count(), 0)
-	assert_eq(field.get_child_count(), 0, "no chunk without fire")
+	var chunks := 0
+	for child in field.get_children():
+		chunks += 1 if child.name.begins_with("Fire_") else 0
+	assert_eq(chunks, 0, "no chunk without fire")
+	assert_eq(field.lights().count(), 0, "no light without fire")
+	assert_eq(field.smoke().site_count(), 0, "no smoke without fire")
 
 
 func test_the_heat_raster_sums_flames_into_one_bed() -> void:

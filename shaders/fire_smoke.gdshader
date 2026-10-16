@@ -19,9 +19,13 @@ shader_type spatial;
 //
 // Its palette runs on from the flames' (event_puff.gdshader): a warm dark charcoal-brown with
 // an ember glow at its foot while young and close to the fire, paling to a pale neutral grey as
-// it rises and ages. INSTANCE_CUSTOM: x the seed, z its age (0..1). Card attributes: VERTEX the
-// card's centre, UV its corner, UV2 its half-size and rank, COLOR.r its draw. Colours are
-// linear and shown through the filmic tonemap (FireSweep's header).
+// it rises and ages. Over a persistent fire (FireFieldSmoke) the fire lights the billows from
+// below: fire_below (0..1) warms the low half of a billow while it is young, in a few bold
+// patches, and a fire light (FireLights, an omni light) keeps its warm colour on the smoke where
+// the sun is held to SUN_TINT. INSTANCE_CUSTOM: x the seed, y fire_below (a fire event's
+// billows pass 0), z its age (0..1). Card attributes: VERTEX the card's centre, UV its corner,
+// UV2 its half-size and rank, COLOR.r its draw. Colours are linear and shown through the
+// filmic tonemap (FireSweep's header).
 render_mode skip_vertex_transform, cull_disabled, depth_draw_opaque, specular_disabled, alpha_to_coverage;
 
 #include "res://shaders/fire_noise.gdshaderinc"
@@ -44,6 +48,17 @@ const vec3 SHADE_FILL = vec3(0.2, 0.185, 0.16);
 const vec3 SMOKE_GLOW = vec3(0.9, 0.22, 0.03);
 const float GLOW_STRENGTH = 0.5;
 const float GLOW_LIFE = 0.18;
+// A persistent fire's light from below (fire_below): its colour and strength, the share of a
+// billow's life over which it fades (the billow rises off the fire), and how far up the
+// billow's downward-facing side it reaches (the world normal's down component, soft step).
+const vec3 FIRE_UNDER = vec3(1.0, 0.36, 0.07);
+const float UNDER_STRENGTH = 0.8;
+const vec2 UNDER_LIFE = vec2(0.2, 0.8);
+const vec2 UNDER_REACH = vec2(-0.35, 0.2);
+// A persistent fire's smoke paints warmer, by fire_below: a warm umber while young and a warm
+// cream-rose as it pales (the events' neutral grey read as grey cotton over a standing fire).
+const vec3 FIELD_DARK = vec3(0.075, 0.04, 0.03);
+const vec3 FIELD_PALE = vec3(0.8, 0.68, 0.6);
 // A card's painted tones (dark patch, body, light patch) and where the noise steps between
 // them.
 const vec3 PAINT_TONES = vec3(0.64, 0.92, 1.12);
@@ -70,9 +85,11 @@ varying float card_rank;
 varying float card_draw;
 varying float puff_seed;
 varying float puff_age;
+varying float fire_below;
 
 void vertex() {
 	puff_seed = INSTANCE_CUSTOM.x;
+	fire_below = INSTANCE_CUSTOM.y;
 	puff_age = INSTANCE_CUSTOM.z;
 	crown_at = VERTEX;
 	card_rank = UV2.y;
@@ -117,7 +134,8 @@ void fragment() {
 	float bright = smoothstep(PAINT_STEPS.y - 0.05, PAINT_STEPS.y + 0.05, shapes);
 	float paint = (PAINT_TONES.x + (PAINT_TONES.y - PAINT_TONES.x) * body
 		+ (PAINT_TONES.z - PAINT_TONES.y) * bright) * mix(0.9, 1.06, fract(card_draw * 7.3));
-	ALBEDO = mix(SMOKE_DARK, SMOKE_PALE, pale) * paint;
+	vec3 dark = mix(SMOKE_DARK, FIELD_DARK, fire_below);
+	ALBEDO = mix(dark, mix(SMOKE_PALE, FIELD_PALE, fire_below), pale) * paint;
 	AO = SHADE_AO;
 	// The fire's light under the young smoke: a thin warm underlight on the lowest cards'
 	// undersides only, gone early in its life (whole cards glowing tan read as orange leaves
@@ -128,12 +146,23 @@ void fragment() {
 	float patches = smoothstep(0.5, 0.6, lump) * step(0.45, fract(card_draw * 5.3));
 	float glow = young * smoothstep(-0.25, -0.55, high) * smoothstep(-0.1, -0.7, corner.y) * patches;
 	EMISSION = SMOKE_GLOW * glow * GLOW_STRENGTH + ALBEDO * SHADE_FILL;
+	// A persistent fire below: the billow's downward-facing half glows warm while it is low,
+	// broken by the puff's lump and the card's paint into a few bold patches.
+	if (fire_below > 0.0) {
+		float down = -(INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).y;
+		float reach = smoothstep(UNDER_REACH.x, UNDER_REACH.y, down + (lump - 0.5) * 0.5);
+		float low = 1.0 - smoothstep(UNDER_LIFE.x, UNDER_LIFE.y, puff_age);
+		float under = fire_below * low * reach * mix(0.7, 1.0, body);
+		EMISSION += FIRE_UNDER * under * UNDER_STRENGTH;
+	}
 }
 
-// The crowns' two-tone read: a lit side and a shade side with a short step.
+// The crowns' two-tone read: a lit side and a shade side with a short step. The sun reaches
+// the smoke at SUN_TINT of its colour; a fire's light (an omni light) keeps all of its warmth.
 void light() {
 	float wrapped = dot(NORMAL, LIGHT) * 0.5 + 0.5;
 	float lit = smoothstep(RAMP.x, RAMP.y, wrapped);
-	vec3 sun = mix(vec3(dot(LIGHT_COLOR, vec3(0.3333))), LIGHT_COLOR, SUN_TINT);
+	float tint = LIGHT_IS_DIRECTIONAL ? SUN_TINT : 1.0;
+	vec3 sun = mix(vec3(dot(LIGHT_COLOR, vec3(0.3333))), LIGHT_COLOR, tint);
 	DIFFUSE_LIGHT += lit * ATTENUATION * sun / PI;
 }
