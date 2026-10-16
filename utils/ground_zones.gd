@@ -115,6 +115,52 @@ static func zone_weights(zones: Dictionary, x: float, z: float) -> PackedFloat64
 	return w
 
 
+## Whether the weights of family `family` (`families`, a zone family per weight as zone_family
+## gives it) hold at least `share` of zone_weights(zones, x, z), the answer
+## ScatterMass.family_share(zone_weights(zones, x, z), families, family) >= share gives, found
+## from as few masks as decide it (ground-opt-cpu; a mass child's zone_share and its parent's fill
+## ask it).
+##
+## The masks are found top zone first, as zone_weights finds them. Once the masks above zone k are
+## known, the family holds `held` for certain, and the weight they leave below (`left`) is shared
+## among weights 0..k in some proportion the unknown masks set (each 0..1), so the family's share
+## lies between held + left times the least and held + left times the most of those weights that
+## are the family's. When that range clears `share` by ZONE_BOUND_SLACK (far above the rounding of
+## either sum) the answer is known and the lower masks are never found: a zone whose weight shares
+## a family with every zone below it, as grassland's two lower zones do, is never needed. With
+## every mask found and the share still within the slack of `share`, the full weights decide.
+static func share_reaches(
+	zones: Dictionary, x: float, z: float, families: PackedInt32Array, family: int, share: float
+) -> bool:
+	if zones.is_empty():
+		return ScatterMass.family_share(zone_weights(zones, x, z), families, family) >= share
+	var p := Vector2(x, z) + Vector2(zones.seed)
+	var cover: PackedFloat64Array = zones.cover
+	var held := 0.0
+	var left := 1.0
+	var top := 3
+	while true:
+		var least := 1.0
+		var most := 0.0
+		for j in top + 1:
+			var mine := 1.0 if families[j] == family else 0.0
+			least = minf(least, mine)
+			most = maxf(most, mine)
+		if held + left * least >= share + ZONE_BOUND_SLACK:
+			return true
+		if held + left * most < share - ZONE_BOUND_SLACK:
+			return false
+		if top == 0:
+			break
+		top -= 1  # zone `top`'s mask, weight top + 1
+		if cover[top] > 0.0:
+			var m := _zone_mask(zones, p, top)
+			if families[top + 1] == family:
+				held += left * m
+			left *= 1.0 - m
+	return ScatterMass.family_share(zone_weights(zones, x, z), families, family) >= share
+
+
 ## Zone k's (0..2) mask at `p` (the zone frame, seed added): its soft edge over its ragged shape,
 ## resolved per stroke. Where the shape lies further from the threshold than the widest edge
 ## _edge_at can draw (plus the ragged octave's half range) the mask is exactly 0 or 1 whatever
