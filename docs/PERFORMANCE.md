@@ -3187,3 +3187,59 @@ badlands 0.56 s [0.47], burnt 0.21 s [0.17]. A grassland brush dab (3 m on a ful
 map, nine one-cell jobs): slowest job 0.79 s [0.40], serial 3.8 s [3.1]. The massed biomes stay
 about 2.5x main's (remaining exact gains: each parent's cos and sin in `ScatterMass.membership`,
 the fine octave in `bare_keep`, the 2-8 % residual on the unmassed biomes).
+
+### Optimizations (2026-10-15)
+
+Three exact changes on the leads above, one commit each (f2fff8ef stamps, 2981a398 variants,
+bf3a1bb4 rims), and the `ground_std` reference repaired.
+
+**How.** Same machine; jobs `ground_opt_{build,parity,parity_bare,timing}.json` (JOBS.md) on
+`_timing_head_` levels of grassland, road (grassland plus round 20's road), savanna, taiga and
+mixed (taiga with a grassland stroke through the centre), seed 1234. The old code is the
+401bbf9e include swapped in through `Shader.code` from a checkout of that one file, inside the
+same run. Timing: no pinned `override.cfg` this time (the job deletes one), vsync off, GPU at P0
+and 97-98 % during the sweeps; the `std` reference read 0.928-0.949 ms in every window of the run,
+the first one included (the repaired `ground_std`: layer 0 of the layer arrays, built whole).
+Grassland and taiga were each played twice (G, T, G, T); figures are the two visits.
+
+**Exactness.** Captures of two runs are not comparable (two runs of the same levels and code
+differed in 37 of 40 views), and with the scatter shown two captures of one code in one run
+differ in 3-69 scattered pixels, so exactness is read off scatter-hidden captures of the raw 3D
+viewport (`_sub`), new against old in one run: zoom 26 and 45 (the skirt) on all five levels with
+the committed code, byte-identical; home on all five, byte-identical, with a first version of the
+rim exits that reused the field's partial sums, which moved one pixel by one level at zoom 26 and
+45 on grassland and road (home was not recaptured with the committed version). The
+bake: the same two dabs on the grassland level with the stamp materials kept and with them made
+anew before each stroke (the old behaviour) leave the same MD5 after each dab.
+
+| Item | View | Old -> new, GPU ms median (two visits) | Gain |
+| --- | --- | --- | --- |
+| Plain variant (no look code; every map without a looked biome) | taiga home, full | 2.785 -> 2.620, 2.805 -> 2.634 | 0.17 |
+| | taiga home, scatter hidden | 3.241 -> 2.871, 3.256 -> 2.884 | 0.37 |
+| | taiga z26, full | 3.164 -> 2.998, 3.261 -> 3.037 | 0.17-0.22 |
+| | taiga z26, scatter hidden | 3.465 -> 3.011, 3.545 -> 3.091 | 0.45 |
+| Rim early exits (a looked map with rim-listed accents) | grassland home, full | 2.769 -> 2.670, 2.808 -> 2.702 | 0.10 |
+| | grassland home, scatter hidden | 3.323 -> 3.157, 3.403 -> 3.081 | 0.17-0.32 |
+| | grassland z26, full | 3.565 -> 3.477, 3.571 -> 3.567 | 0.00-0.09 (not measurable) |
+| | grassland z26, scatter hidden | 3.603 -> 3.590, 3.664 -> 3.708 | none |
+
+The variant gives back the whole gated-off cost the timing card measured (0.22-0.32 ms full,
+0.30-0.44 bare) on maps without a look. On a looked map it changes nothing (the looked twin is
+the old code), so grassland's gain is the rim exits alone. Those skip only the finer octaves
+outside a rim-listed patch: inside it, out to RIM_REACH past the ramp, which is most of every
+patch, the field and its two probes still run, and that is where the rims' 0.3-0.5 ms is. The
+card's other lead, the accent warp once per sample where two accents read the same point, was not
+taken: a row's accents each have their own scale and offset, so within a row no two read the same
+point; only a base row and a biome row carrying the same accents would, at partial density
+(not measured, and not found on the levels above by reading the shader).
+
+**Restamp.** The worst frame of a 3 m dab's window (authoring, vsync off): badlands dab then
+grassland dab, kept materials 28.7 and 12.6 ms, made anew (old) 19.8 and 20.1 ms. The 12.6 ms
+equals main's worst in such windows (12.2-12.8 ms): the two canvas pipeline compiles are gone.
+The 28.7 ms was the session's first badlands dab (the kept pass ran first, so its first
+badlands content drew there); its cause was not isolated.
+
+**Found, not fixed.** The first restamp after a level opens reads back without its mass stamps
+(the bake's MD5 equals the bake with no stamps) in both the old and the new code, whether its
+materials are fresh or kept; the next restamp draws them. Seen with `ground_timing.gd restamp`
+and after a real dab. Whether a frame shows it, or only the readback, was not checked.

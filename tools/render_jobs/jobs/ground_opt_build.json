@@ -1,0 +1,29 @@
+{
+ "out_dir": "render_jobs/ground_opt",
+ "timeout_s": 900,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "grassland_meadow_summer_s1", "seed": 1234},
+  {"op": "wait_ready", "settle": 3.0}, {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "save", "name": "grassland"},
+  {"op": "stroke", "mode": "surface", "surface": "dirt_road_packed_r5", "points": [[-13.0, -2.5], [-6.0, 1.0], [1.0, -1.0], [7.0, 1.5], [14.0, 0.0]], "curve": true, "radius": 1.2, "speed": 5.0},
+  {"op": "wait_ready", "settle": 2.0}, {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "save", "name": "road"},
+
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "savanna_summer_s1", "seed": 1234},
+  {"op": "wait_ready", "settle": 3.0}, {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "save", "name": "savanna"},
+
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "boreal_taiga_summer_s1", "seed": 1234},
+  {"op": "wait_ready", "settle": 3.0}, {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "save", "name": "taiga"},
+  {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "points": [[-9.0, -3.0], [-3.0, 0.5], [4.0, -0.5], [9.0, 3.0]], "radius": 4.0, "speed": 4.0},
+  {"op": "wait_ready", "settle": 3.0}, {"op": "wait", "s": 1.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "save", "name": "mixed"},
+  {"op": "title"}, {"op": "wait", "s": 1.0}
+ ]
+}

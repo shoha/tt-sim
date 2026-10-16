@@ -665,9 +665,26 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   `ground_std` reference, and the pre-ship ground and foliage includes swapped in from the
   checkout at the sweep's `base` path), `bake_gpu` at the real size and at 2048 px, a `rebake`
   in a `record` window, `mem` before and after `bake_free`; last, two salted cold compiles of
-  the bake shader. `perf.gd ground_std` throws at `tile_m` on its first call (the uniform is
-  gone) and leaves a half-built StandardMaterial3D that later calls apply: the first visit's
-  `std` window is not the reference, the rest are. Cleanup deletes every `_timing_` level.
+  the bake shader. Until the optimization card `perf.gd ground_std` threw at `tile_m` on its
+  first call (the uniform was gone) and left a half-built, untextured StandardMaterial3D that
+  later calls applied: those runs' first `std` window was not the reference. It now builds the
+  base surface from layer 0 of the layer arrays, whole, on its first call. Cleanup deletes every
+  `_timing_` level.
+- `jobs/ground_opt_build.json`, `jobs/ground_opt_parity.json`, `jobs/ground_opt_parity_bare.json`
+  and `jobs/ground_opt_timing.json`: the ground optimization card (2026-10-15, `PERFORMANCE.md`
+  "Ground look and grass masses", "Optimizations"). Build (about 55 s): `_timing_head_` grassland,
+  road (grassland plus round 20's road), savanna, taiga and mixed (taiga with a grassland stroke)
+  levels. Parity: each level opened, each view captured at full size with the clock frozen, with
+  the res:// ground include and then with the include at the `base` checkout swapped in through
+  `Shader.code` (and again with the new one, the control), then `probes/png_parity.gd -- <folder>
+  _new _old` diffs the pairs. Compare captures of one run only: two runs of the same levels differ
+  in most views, and with the scatter shown two captures of one code differ in tens of scattered
+  pixels, so exactness is read off the scatter-hidden `_sub` captures (the `_bare` job). Timing:
+  two 3 m dabs on the grassland level (badlands, then grassland back) with the stamp materials
+  kept, then the level reopened and the same two with them dropped before each stroke
+  (`stamps_fresh`, the old behaviour), each in a `record` window with the bake's MD5 after it;
+  then grassland, taiga, grassland, taiga played, a `sweep` at home and zoom 26 of the new and the
+  base include, with and without scatter, and the `ground_std` reference.
 
 ## Caveats
 
