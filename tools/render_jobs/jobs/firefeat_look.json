@@ -11,16 +11,29 @@
   {"op": "hide_ui"},
   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "info"},
   {"op": "expand", "values": ["day_home", "day_z8", "day_z20", "dusk_home", "dusk_z8", "dusk_z20", "dusk_z30", "day_z30"], "template": [
-   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "{value}", "label": "NEW  flames + ember glow", "phase": "look", "for": "{value}_new"},
-   {"op": "wait", "s": 2.0, "phase": "look", "for": "{value}_new"},
-   {"op": "capture", "name": "{value}_new", "desc": "{value}: the field's look"}
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "{value}", "label": "NEW  round 2", "phase": "look", "for": "{value}_r2"},
+   {"op": "wait", "s": 2.0, "phase": "look", "for": "{value}_r2"},
+   {"op": "capture", "name": "{value}_r2", "desc": "{value}: the field's look, round 2"}
+  ]},
+  {"op": "expand", "values": ["day_home", "day_z8", "day_z20", "dusk_home", "dusk_z8", "dusk_z20", "dusk_z30", "day_z30"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "replay", "path": "user://render_jobs/fire_field_look/{value}_new.png", "text": "ROUND 1   |   {value}", "phase": "look", "for": "{value}_r1"},
+   {"op": "wait", "s": 0.3, "phase": "look", "for": "{value}_r1"},
+   {"op": "capture", "name": "{value}_r1", "desc": "{value}: round 1's frame, re-labelled"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "replay", "path": ""},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "dusk_z8", "label": "NEW  motion", "phase": "look", "for": "motion_*"},
+  {"op": "wait", "s": 3.5, "phase": "look", "for": "motion_*"},
+  {"op": "expand", "values": ["0", "1", "2", "3", "4", "5", "6", "7"], "template": [
+   {"op": "capture", "name": "motion_{value}", "desc": "dusk zoom 8, frame {value} of a strip about 0.1 s apart"},
+   {"op": "wait", "s": 0.1}
   ]},
   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
   {"op": "expand", "values": ["day_home", "day_z8", "day_z20", "dusk_home", "dusk_z8", "dusk_z20"], "template": [
-   {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/fire_field_look", "out": "sheet_{value}", "columns": 2, "names": ["user://render_jobs/firefeat_look/{value}_A", "{value}_new"], "tile": [960, 540]}
+   {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/fire_field_look", "out": "sheet_{value}", "columns": 3, "names": ["user://render_jobs/firefeat_look/{value}_A", "{value}_r1", "{value}_r2"], "tile": [960, 540]}
   ]},
-  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/fire_field_look", "out": "sheet_z30", "columns": 2, "names": ["day_z30_new", "dusk_z30_new"], "tile": [960, 540]},
-  {"op": "index", "title": "Fire field look (card F4a)", "intro": "Produced by tools/render_jobs/jobs/firefeat_look.json on the saved _firefeat_look level (firefeat_build: a 200 ft temperate forest, seed 1234, fire laid with the real Fire tool over about a third of the map, a blaze line across it). Sheets sheet_<day|dusk>_<view>.png: column A is the F3 probe's frame of F1's placeholder (render_jobs/firefeat_look/<view>_A.png, same views and sun), column NEW this build. sheet_z30: past the LOD zoom, day and dusk."},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/fire_field_look", "out": "sheet_z30", "columns": 2, "names": ["day_z30_r1", "day_z30_r2", "dusk_z30_r1", "dusk_z30_r2"], "tile": [960, 540]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/fire_field_look", "out": "sheet_motion", "columns": 4, "names": ["motion_0", "motion_1", "motion_2", "motion_3", "motion_4", "motion_5", "motion_6", "motion_7"], "tile": [480, 324], "crop": [0.3, 0.3, 0.4, 0.45]},
+  {"op": "index", "title": "Fire field look (card F4a, round 2)", "intro": "Produced by tools/render_jobs/jobs/firefeat_look.json on the saved _firefeat_look level (firefeat_build: a 200 ft temperate forest, seed 1234, fire laid with the real Fire tool over about a third of the map, a blaze line across it). Sheets sheet_<day|dusk>_<view>.png: column A is the F3 probe's frame of F1's placeholder (render_jobs/firefeat_look/<view>_A.png), ROUND 1 round 1's frame (<key>_new.png, re-labelled as <key>_r1), NEW this build (<key>_r2). sheet_z30: past the LOD zoom, round 1 and round 2, day over dusk. sheet_motion: eight frames about 0.1 s apart at dusk, zoom 8 (the middle of the frame)."},
   {"op": "title"},
   {"op": "wait", "s": 1.0}
  ]

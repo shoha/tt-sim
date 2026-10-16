@@ -9,6 +9,9 @@ extends RefCounted
 ##                     zoom 30 there, past the LOD zoom) and an on-screen label, `label` (default
 ##                     "NEW") before the key's words
 ##   label {text}      an on-screen caption for captures ("" removes it)
+##   replay {path, text}  an earlier capture over the whole window under the caption `text`, so
+##                     a capture re-labels it for a sheet (an empty path removes it)
+##   flames {show}     shows or hides the flames, to judge the ground's glow alone
 ##   save {folder}     saves the open map as a PREFIX test level (replacing one there)
 ##   cleanup           deletes every PREFIX test level
 ## The views and the sun match the F3 probe's (docs/plans/2026-10-11-fire-features/probe.md), so
@@ -16,6 +19,8 @@ extends RefCounted
 
 const PREFIX := "_firefeat_"
 const LABEL := "FireProbeLabel"
+const LABEL_MIN_W := 960.0
+const REPLAY := "FireProbeReplay"
 ## Where the zoomed views look: a point on the blaze, and the middle of the fire.
 const BLAZE_AT := Vector2(-2.0, -2.5)
 const FIRE_AT := Vector2(0.0, -3.0)
@@ -32,6 +37,8 @@ static func run(base: Node, step: Dictionary) -> String:
 		return _cleanup()
 	if action == "label":
 		return _label(base, String(step.get("text", "")))
+	if action == "replay":
+		return _replay(base, String(step.get("path", "")), String(step.get("text", "")))
 	var ctrl: AuthoringController = base.get("_authoring_controller")
 	if ctrl == null or ctrl.editor == null:
 		return "no authoring editor"
@@ -44,6 +51,10 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _shot(base, ctrl, gm, String(step.get("key", "")), label)
 		"save":
 			return _save(ctrl, String(step.get("folder", PREFIX + "look")))
+		"flames":
+			var show := bool(step.get("show", true))
+			ctrl.editor.fire_field.visible = show
+			return "flames %s" % ("shown" if show else "hidden")
 	return "unknown action %s" % action
 
 
@@ -135,8 +146,10 @@ static func _label(base: Node, text: String) -> String:
 		var panel := PanelContainer.new()
 		panel.name = "Panel"
 		panel.position = Vector2(28, 24)
+		# Wide and opaque, so a replayed capture's own caption does not show past it.
+		panel.custom_minimum_size = Vector2(LABEL_MIN_W, 0.0)
 		var box := StyleBoxFlat.new()
-		box.bg_color = Color(0.05, 0.05, 0.07, 0.78)
+		box.bg_color = Color(0.05, 0.05, 0.07, 1.0)
 		box.set_content_margin_all(14.0)
 		box.set_corner_radius_all(8)
 		panel.add_theme_stylebox_override("panel", box)
@@ -149,6 +162,34 @@ static func _label(base: Node, text: String) -> String:
 		root.add_child(layer)
 	(layer.get_node("Panel/Text") as Label).text = text
 	return "label %s" % text
+
+
+## Shows the earlier capture at `path` over the whole window (under the label), so a capture
+## step re-frames it with a new caption ("" removes it).
+static func _replay(base: Node, path: String, text: String) -> String:
+	var root := base.get_tree().root
+	var old := root.get_node_or_null(REPLAY)
+	if path == "":
+		if old != null:
+			old.free()
+		return "replay removed"
+	var image := Image.load_from_file(path)
+	if image == null or image.is_empty():
+		return "no capture at %s" % path
+	var layer := old as CanvasLayer
+	if layer == null:
+		layer = CanvasLayer.new()
+		layer.name = REPLAY
+		layer.layer = 110
+		var frame := TextureRect.new()
+		frame.name = "Frame"
+		frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+		frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		frame.stretch_mode = TextureRect.STRETCH_SCALE
+		layer.add_child(frame)
+		root.add_child(layer)
+	(layer.get_node("Frame") as TextureRect).texture = ImageTexture.create_from_image(image)
+	return "replay %s; %s" % [path.get_file(), _label(base, text)]
 
 
 static func _save(ctrl: AuthoringController, folder: String) -> String:

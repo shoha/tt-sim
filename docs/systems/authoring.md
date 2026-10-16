@@ -200,13 +200,18 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   part, and putting fire out brings nothing back. Start a fire's ash clears the same way. The burnt-biome and
   ash parts mirror `TerrainEvents._burn` (which is not called: its dabs are one circle, these
   follow the stroke). `FireField` draws the mask (look card F4a: banded-tongue flames from
-  `shaders/fire_field.gdshader` on a 0.9 m jittered lattice gathered into clumps with open
-  ground between, a big flame with licks at its feet in each blaze clump, no flames in the
-  ember band, held drawings and one wind per map; a MultiMesh per 10 m block, at most 4096 on a
-  map shared in proportion to each block's burning area, half of them past zoom 24; the char
-  and ember glow are a term in the authored ground shader, `shaders/fire_glow.gdshaderinc`, fed
-  the mask as an R8 texture; `FireLook` in `scenes/effects/` owns the meshes, materials and the
-  glow binding; no lights or smoke yet) and is refreshed by `AuthoringEditor.refresh_fire`, which
+  `shaders/fire_field.gdshader` on a 0.9 m jittered lattice gathered into blob-shaped clumps
+  (a clump noise turned and warped off the map's axes) with open ground between, a big flame
+  with licks at its feet in each blaze clump, no flames in the ember band, soft-edged tongues
+  with a broken rim and per-flame band widths, held drawings, torn-off licks, and one wind per
+  map leaning every tip about a quarter of its flame's height; a MultiMesh per 10 m block, at
+  most 4096 on a map shared in proportion to each block's burning area, half of them past zoom
+  24; the char (a matte near-black with ash drifts, its edge eroded by a broad noise, the mask
+  widened across a cool valley between strokes) and ember beds (bold hot cores fading out, coal
+  lumps, specks in the cores) are a term in the authored ground shader,
+  `shaders/fire_glow.gdshaderinc`, fed the mask as an R8 texture; `FireLook` in
+  `scenes/effects/` owns the meshes, materials and the glow binding; no lights or smoke yet)
+  and is refreshed by `AuthoringEditor.refresh_fire`, which
   `apply_mask_diff` calls for any diff that writes `fire_mask` (the fire part records through
   it as every mask stroke does; a diff of `fire_mask` alone regenerates no scatter). Render jobs
   `tools/render_jobs/jobs/fire_mask.json`, and for the look `firefeat_build`, `firefeat_look`
