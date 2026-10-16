@@ -226,7 +226,8 @@ static func run(snapshot: MapDocument, work: Dictionary) -> Dictionary:
 			fields.bounds,
 			fields.species_density_at,
 			entry.get("blockers", PackedFloat32Array()),
-			anchors
+			anchors,
+			fields.density_ceiling_at
 		)
 		for asset_id in rows:
 			var split := split_by_cell(rows[asset_id])
