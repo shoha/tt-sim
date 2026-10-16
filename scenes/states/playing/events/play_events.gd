@@ -69,6 +69,12 @@ const NEWER_EDITS := "Newer changes stand on that one: undo them first with Ctrl
 const SIZE_KEY := "[ ]"
 ## Past tenses an edit label's first word does not take by adding "d" or "ed".
 const IRREGULAR_PAST := {"Thin": "Thinned", "Cut": "Cut", "Lay": "Laid"}
+## Whole labels whose done phrase leads with the thing changed ("Fire laid for everyone at the
+## table" reads better than "Laid fire ...").
+const DONE_PHRASES := {
+	FireEditor.LAY_LABEL: "Fire laid",
+	FireEditor.PUT_OUT_LABEL: "Fire put out",
+}
 ## A preset's toast once its change is made (the history entry's "preset" kind).
 const PRESET_DONE := {
 	TerrainEvent.Kind.BRIDGE_COLLAPSE: "The bridge fell for everyone at the table",
@@ -142,6 +148,8 @@ static func hints_for(
 			rows = [["Left-drag", tile_label], ["Ctrl+left-drag", "Lower"]]
 		PaintTool.ID:
 			rows = [["Left-drag", "Lay surface"], ["Ctrl+left-drag", "Erase paint"]]
+		FireTool.ID:
+			rows = [["Left-drag", "Lay fire"], ["Ctrl+left-drag", "Put out fire"]]
 		WaterTool.ID:
 			var drag := "Paint pond" if water_shape == WaterBrush.Shape.POND else "Draw river"
 			rows = [["Left-drag", drag], ["Ctrl+left-drag", "Erase water"]]
@@ -174,10 +182,13 @@ static func find_tool(id: StringName) -> ToolDescriptor:
 
 
 ## History label `label` in the past tense, for the large-edit toast: its first word's past
-## ("Clear" -> "Cleared", "Carve river" -> "Carved river", "Thin" -> "Thinned"). Pure.
+## ("Clear" -> "Cleared", "Carve river" -> "Carved river", "Thin" -> "Thinned"), or its whole
+## phrase from DONE_PHRASES ("Lay fire" -> "Fire laid"). Pure.
 static func done_phrase(label: String) -> String:
 	if label == "":
 		return "Changed"
+	if DONE_PHRASES.has(label):
+		return DONE_PHRASES[label]
 	var words := label.split(" ", false, 1)
 	var verb := words[0]
 	var past: String = IRREGULAR_PAST.get(verb, "")
@@ -194,6 +205,9 @@ func setup(lpc: LevelPlayController, events_pane: EventsPane) -> void:
 	pane.sculpt_selected.connect(_on_sculpt_selected)
 	pane.biome_selected.connect(_on_biome_selected)
 	pane.paint_selected.connect(_on_paint_selected)
+	pane.fire_intensity_selected.connect(
+		func(intensity: int) -> void: _set_mode(FireTool.ID, "intensity", intensity)
+	)
 	pane.water_shape_selected.connect(
 		func(shape: int) -> void: _set_mode(WaterTool.ID, "shape", shape)
 	)
@@ -416,6 +430,8 @@ func _prepare(tool_id: StringName) -> void:
 			var terrain := _brush.editor.terrain
 			if is_instance_valid(terrain):
 				terrain.warm_surface(surface)
+		FireTool.ID:
+			FireTool.warm(_brush.editor)
 		WaterTool.ID:
 			AuthoredWater.warm_fall_material()
 			AuthoredWater.warm_flow_carrier()

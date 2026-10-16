@@ -5,8 +5,10 @@ extends ToolDescriptor
 ## to ash, burns forest under it to snags, and never spreads (FireBrush does the gestures,
 ## FireEditor the edit, FireField the drawing). Its pane is FireToolPane. A dressed Blender
 ## map's ground is the GLB's, so there the tool is disabled with a tooltip saying why, as
-## Paint is. Authoring only for now; the GM's live brush in play is card F2's (design:
-## docs/plans/2026-10-11-fire-features/design.md).
+## Paint is. A play brush too (card F2): the GM's Events pane lists it with the intensity tiles
+## and Advanced (EventsPane), and its "Lay fire" group reaches every peer as three ops, the
+## fire, the burnt forest and the ash (LiveEditCodec.ops_of). Design:
+## docs/plans/2026-10-11-fire-features/design.md.
 
 const ID := &"fire"
 const LABEL := "Fire"
@@ -19,7 +21,7 @@ func _init() -> void:
 	summary = "Ground fire that keeps burning and leaves ash."
 	icon = "campfire"
 	brush_mode = FireBrush
-	contexts = AUTHORING
+	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [
 		["Left Drag (Fire)", "Lay fire; trees under it burn to snags and the ground to ash"],
@@ -44,7 +46,12 @@ func works_on(editor: AuthoringEditor) -> bool:
 ## The burnt biome's assets and the ash's textures start loading, so the first lay's release
 ## binds them warm.
 func prepare(controller: AuthoringController) -> void:
-	var editor := controller.editor
+	warm(controller.editor)
+
+
+## What a lay's release binds (the burnt biome's assets, the ash's textures, the flame
+## material) starts loading on `editor`'s map: authoring's prepare(), and PlayEvents' pick.
+static func warm(editor: AuthoringEditor) -> void:
 	if editor == null:
 		return
 	var root := editor.palette_root

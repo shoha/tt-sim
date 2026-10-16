@@ -4,7 +4,7 @@ extends VBoxContainer
 ## The GM's Events pane: the Visuals drawer's "events" rail item (LevelEditPanel), so it is the
 ## GM's alone; players never see the drawer. It changes the map for everyone at the table,
 ## live and undoable (UI_TASTE I4), with the map-building brushes that exist in play
-## (ToolRegistry.tools(ToolDescriptor.PLAY): Biome, Thin / Clear, Sculpt, Paint, Water,
+## (ToolRegistry.tools(ToolDescriptor.PLAY): Biome, Thin / Clear, Sculpt, Paint, Fire, Water,
 ## Bridge). PlayEvents arms and puts away the brush and tells the pane what to show; the pane
 ## owns no map state.
 ##
@@ -14,8 +14,9 @@ extends VBoxContainer
 ## LiveEdits.refusal), the Brushes tiles, then the picked brush's own controls, built from
 ## the authoring panes'
 ## parts: the Sculpt tiles (AuthoringPanel.SCULPT_TILES), the palette biome and surface tiles
-## (thumbnails and labels as AuthoringPanel draws them), WaterToolPane and BridgeToolPane as
-## they are (their own headers hidden: the tile above names the brush), and one Advanced
+## (thumbnails and labels as AuthoringPanel draws them), FireToolPane, WaterToolPane and
+## BridgeToolPane as they are (their own headers hidden: the tile above names the brush), and
+## one Advanced
 ## foldout with the exact size and strength. The presets with spectacle (EventPresets: a bridge
 ## dropping, trees toppling, a fire) have their own field above Brushes, under
 ## EventPresets.HEADING, one row of three; the picked tool's controls stand directly under its
@@ -39,6 +40,8 @@ signal tool_toggled(tool_id: StringName, on: bool)
 signal sculpt_selected(op: int)
 signal biome_selected(biome_id: String)
 signal paint_selected(surface: String)
+## A Fire intensity tile was picked: its mask byte (FireBrush.EMBERS, FLAMES or BLAZE).
+signal fire_intensity_selected(intensity: int)
 signal water_shape_selected(shape: int)
 signal water_depth_selected(depth: int)
 signal water_speed_changed(speed: float)
@@ -61,6 +64,11 @@ const TOOL_HINTS := {
 	SculptTool.ID:
 	"Drag to shape the ground; linger to build. Hold Ctrl as you press to lower, Shift to smooth.",
 	PaintTool.ID: "Pick a surface, then drag on the board. Hold Ctrl as you press to erase paint.",
+	FireTool.ID:
+	(
+		"Drag to lay fire; it keeps burning and never spreads, trees under it burn to snags and"
+		+ " the ground to ash. Hold Ctrl as you press to put it out; the ash stays."
+	),
 	WaterTool.ID:
 	(
 		"Draw a river from where the water comes to where it goes, or paint a pond."
@@ -85,6 +93,7 @@ var biome_field: TileField
 var sculpt_field: TileField
 ## Paint tiles by role (AuthoringPanel.PAINT_GROUPS), filled on first show (ensure_paint_tiles).
 var paint_fields: Dictionary = {}
+var fire_pane: FireToolPane
 var water_pane: WaterToolPane
 var bridge_pane: BridgeToolPane
 
@@ -271,6 +280,13 @@ func _build_options() -> void:
 
 func _build_tool_options(tool_id: StringName) -> Control:
 	match tool_id:
+		FireTool.ID:
+			# No panel: the pane's own Advanced holds the size and strength.
+			fire_pane = FireToolPane.new()
+			fire_pane.get_node("FireHeader").visible = false
+			(fire_pane.get_node("FireHint") as Label).text = String(TOOL_HINTS[tool_id])
+			fire_pane.intensity_selected.connect(fire_intensity_selected.emit)
+			return fire_pane
 		WaterTool.ID:
 			water_pane = WaterToolPane.new()
 			water_pane.get_node("WaterHeader").visible = false

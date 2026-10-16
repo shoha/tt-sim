@@ -11,8 +11,11 @@ extends GutTest
 ## frame once the last one's height work has drained. The host's document is then saved and
 ## loaded a third time. After every op the three MapFingerprints match exactly (generated rows
 ## snap to the saved precision, so a reloaded cell and a regenerated one are bit-equal) and so
-## do the documents (masks, heights, water, crossings, flow). A sculpt's apply returns with its
-## chunks queued and the peer's per-frame step drains them over several frames.
+## do the documents (masks, the fire's among them, heights, water, crossings, flow), and the
+## three draw as many flames. A sculpt's apply returns with its chunks queued and the peer's
+## per-frame step drains them over several frames. A Fire lay is one entry of three parts that
+## crosses as three ops (the fire, the burnt forest, the ash that clears the small plants under
+## it: the peer's scatter is the host's); putting part of it out is one.
 ##
 ## Each op's payload size, decode and apply time, worst frame, the most one frame spent on
 ## chunks, snapping and the collision, and the settle time are printed on "P-LIVE" lines
@@ -269,9 +272,19 @@ func _reloaded(host: Copy) -> Dictionary:
 	host.doc.props = host.editor.props.rows_by_asset()
 	assert_eq(MapDocumentIO.write(host.doc, LEVEL), OK)
 	var third := await _load()
-	var out := {"fp": MapFingerprint.of(third.root, third.doc), "doc": _digest(third.doc)}
+	var out := {
+		"fp": MapFingerprint.of(third.root, third.doc),
+		"doc": _digest(third.doc),
+		"flames": _flames(third.root),
+	}
 	third.root.free()
 	return out
+
+
+## The flames map `root`'s FireField draws.
+func _flames(root: Node3D) -> int:
+	var field := root.get_node_or_null(FireField.NODE_NAME) as FireField
+	return field.flame_count() if field != null else -1
 
 
 ## The document's fields, hashed: masks, heights and flow exactly; water and crossings in
@@ -289,6 +302,7 @@ func _digest(doc: MapDocument) -> Dictionary:
 		"surface_weights",
 		"pond_mask",
 		"erase_mask",
+		"fire_mask",
 		"water_flow"
 	]:
 		var ctx := HashingContext.new()
@@ -393,6 +407,19 @@ func _crater(e: AuthoringEditor) -> void:
 	e.commit_prop_edit()
 
 
+## A blaze laid across the forest west of the pond; its release adds the burnt forest and the
+## ash (FireEditor).
+func _lay_fire(e: AuthoringEditor) -> void:
+	assert_true(e.begin_fire_stroke(FireBrush.BLAZE / 255.0, false))
+	_dabs(e, [Vector3(-26, 0, 10), Vector3(-22, 0, 11), Vector3(-18, 0, 10)], 3.0, 0.6)
+
+
+## Part of the fire put out; its ash and snags stay.
+func _put_out_fire(e: AuthoringEditor) -> void:
+	assert_true(e.begin_fire_stroke(0.0, true))
+	_dabs(e, [Vector3(-24, 0, 10), Vector3(-21, 0, 10)], 2.0, 0.5)
+
+
 func _ops() -> Array:
 	return [
 		["biome paint", _paint_birch],
@@ -404,6 +431,8 @@ func _ops() -> Array:
 		["pond erase", _drain_pond],
 		["river erase", _drain_river],
 		["crater", _crater],
+		["fire lay", _lay_fire],
+		["fire put out", _put_out_fire],
 	]
 
 
@@ -445,15 +474,24 @@ func test_live_ops_reach_a_peer_identical_to_the_host_and_a_reload() -> void:
 		var entries: Array = (host.history.get("_undo") as Array).slice(count)
 		assert_false(entries.is_empty(), label + ": recorded")
 		var payloads: Array[PackedByteArray] = []
+		var kinds: Array[String] = []
 		var sizes := 0
 		var record_bytes := 0
 		for entry: Dictionary in entries:
-			var op := LiveEditCodec.op_of(entry, host.editor)
-			assert_false(op.is_empty(), "%s: a redo the codec knows (%s)" % [label, entry.label])
-			payloads.append(LiveEditCodec.encode(op))
-			sizes += payloads[-1].size()
+			var ops := LiveEditCodec.ops_of(entry, host.editor)
+			var parts: int = (entry.get("parts", [entry]) as Array).size()
+			assert_eq(ops.size(), parts, "%s: every part a redo the codec knows" % label)
+			for op in ops:
+				kinds.append(String(op.kind))
+				payloads.append(LiveEditCodec.encode(op))
+				sizes += payloads[-1].size()
+				assert_lt(payloads[-1].size(), LiveEditCodec.MAX_BYTES, label + ": under 256 KB")
 			record_bytes += int(entry.get("bytes", 0))
-			assert_lt(payloads[-1].size(), LiveEditCodec.MAX_BYTES, label + ": under 256 KB")
+		match label:
+			"fire lay":
+				assert_eq(kinds, ["mask", "mask", "surface"], "the fire, the burnt forest, the ash")
+			"fire put out":
+				assert_eq(kinds, ["mask"], "the fire alone: the ash and snags stay")
 		var started := Time.get_ticks_usec()
 		var decoded_usec := 0
 		for bytes in payloads:
@@ -485,6 +523,11 @@ func test_live_ops_reach_a_peer_identical_to_the_host_and_a_reload() -> void:
 		var host_doc := _digest(host.doc)
 		assert_eq(_digest(peer.doc), host_doc, label + ": the peer's document")
 		assert_eq(reload.doc, host_doc, label + ": the reloaded document")
+		var flames := _flames(host.root)
+		assert_eq(_flames(peer.root), flames, label + ": the peer draws the host's fire")
+		assert_eq(reload.flames, flames, label + ": the reload draws it too")
+		if label.begins_with("fire"):
+			assert_gt(flames, 0, label + ": a fire burns")
 		(
 			report
 			. append(

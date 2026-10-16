@@ -5,7 +5,9 @@ extends GutTest
 ## sizes, slots, palette ids, heights, the pond mask, crossings, rows and their cells), the
 ## palette's id tables are cached, and apply() keeps ops in order: a sculpt returns with its
 ## height work queued, and the next op finishes it first. An undo travels as its entry's
-## before side and leaves the peer as the host's undo leaves it. The transport's pieces: ops
+## before side and leaves the peer as the host's undo leaves it. A Fire lay's fire_mask op reads
+## back and draws the peer's fire, while a forged mask name is still refused. The transport's
+## pieces: ops
 ## cut into chunks and put back together (refusing a run out of order or too big), and the
 ## sender's outbox pacing them. The nine-op identity check on a 200 ft map is
 ## test_live_map_edits.gd; the table's service, test_live_edits_table.gd.
@@ -260,6 +262,54 @@ func test_an_undo_travels_as_the_before_side() -> void:
 	assert_eq(peer.props.rows_by_asset(), host.props.rows_by_asset())
 	var backwards := LiveEditCodec._op("props", [Vector2i.ZERO, {}], false)
 	assert_ne(_refused(backwards, _small_doc()), "", "a props op has no before side to apply")
+
+
+## The ops of `entry` (recorded by `host`) read back against `peer`'s document and applied
+## there, as a client's queue does; the kinds, in order.
+func _cross(entry: Dictionary, host: AuthoringEditor, peer: AuthoringEditor, undo: bool) -> Array:
+	var kinds := []
+	for op in LiveEditCodec.ops_of(entry, host, undo):
+		var decoded := LiveEditCodec.decode(LiveEditCodec.encode(op), peer.document)
+		assert_eq(decoded.problem, "", "%s reads back" % op.kind)
+		LiveEditCodec.apply(decoded.op, peer)
+		kinds.append(op.kind)
+	return kinds
+
+
+## A Fire lay on a map without forest is a group of the fire and its ash: the fire crosses as a
+## mask op naming fire_mask, which the reader takes, and draws the peer's fire as it lands; the
+## undo crosses back in reverse and puts it out. A block naming a document byte field that is
+## no stroke's mask (the pond mask) is still refused.
+func test_a_fire_op_reads_back_and_draws_the_peers_fire() -> void:
+	var host := _editor(MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9))
+	var peer := _editor(MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9))
+	for editor: AuthoringEditor in [host, peer]:
+		editor.fire_field = MapSourceLoader.add_fire_field(editor.map_root, editor.document)
+	assert_true(host.begin_fire_stroke(FireBrush.FLAMES / 255.0, false))
+	host.stroke_dab(Vector3(-4, 0, 0), Vector3(4, 0, 2), 3.0, 2.0)
+	host.flush()
+	assert_true(host.end_stroke())
+	var entry: Dictionary = (host.history.get("_undo") as Array)[-1]
+	assert_eq(entry.label, FireEditor.LAY_LABEL)
+	var fire := LiveEditCodec.op_of(entry.parts[0], host)
+	var masks := MaskStroke.masks_of(fire.args[0])
+	assert_eq(masks.size(), 1, "the fire's op writes one mask")
+	assert_eq(masks[0], MaskStroke.FIRE)
+	assert_eq(_cross(entry, host, peer, false), ["mask", "surface"], "the fire, then its ash")
+	assert_eq(peer.document.fire_mask, host.document.fire_mask, "the peer burns where the host does")
+	assert_eq(peer.document.surface_weights, host.document.surface_weights, "and has its ash")
+	assert_gt(peer.fire_field.flame_count(), 0, "the peer's fire is drawn as the op lands")
+	assert_eq(peer.fire_field.flame_count(), host.fire_field.flame_count())
+	assert_ne(host.history.undo(), "")
+	assert_eq(_cross(entry, host, peer, true), ["surface", "mask"], "the undo in reverse")
+	assert_true(peer.document.fire_mask.is_empty(), "the mask the lay allocated is gone")
+	assert_eq(peer.fire_field.flame_count(), 0, "and its flames")
+	var blank := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
+	var forged := fire.duplicate(true)
+	var block: Dictionary = forged.args[0].blocks[0]
+	block.after = {&"pond_mask": block.after[MaskStroke.FIRE]}
+	assert_ne(_refused(forged, blank), "", "a forged mask name")
+	assert_eq(_refused(fire, blank), "", "the fire op itself reads back")
 
 
 func test_an_op_crosses_in_chunks_and_comes_back_whole() -> void:

@@ -924,7 +924,10 @@ sets NetworkManager's peer and state the way the Steam lobby callbacks would), o
 res:// map, so nothing downloads and no second Steam account is needed. One launcher runs any
 scenario, with one command form (allowlist it once):
 
-`godot --headless --path D:/dev/tt-sim res://tests/net/net_launcher.tscn -- --data-root=net_launcher --scenario=<name> [--peers=2] [--timeout-s=180] [--port=28471]`
+`godot --headless --path D:/dev/tt-sim res://tests/net/net_launcher.tscn -- --data-root=net_launcher --scenario=<name> [--peers=2] [--timeout-s=180] [--port=28471] [--windowed=<role>]`
+
+`--windowed=<role>` starts that one peer in a real 1920x1080 window instead of headless, for a
+scenario that films its own board (it uses the GPU: a look, not every run).
 
 It starts `tests/net/<name>.tscn` as N peer processes (`host`, `client`, then `client2`...),
 waits for them, kills any still running 30 s past the timeout, and exits 0 only when every
@@ -1046,19 +1049,27 @@ on every peer on 2026-10-10 with the card's path; the launcher flagged only anot
 - `enet_live_edits` (`--peers=3 --timeout-s=300`): live map edits (see "Live map edits"
   below). The host builds a 120 ft authored level (forest west of a river, a plank bridge) in
   its own test root before it opens the room, so both clients download its `map.ttmap`. With
-  client at the table, the host stands Scout where the raise will go and runs six ops as the
-  GM's Events pane does: the sculpt raise, a forest clear (Thin with Ctrl) and a sculpt lower
-  are strokes of GameMap's play brush armed by `PlayEvents.pick` and driven over the board,
-  a forest fall and a bridge collapse are terrain events (`TerrainEvents.start`: the event
-  travels, both boards play it, then its labelled op), and the undo of the lower (a height
-  op's before side) is `PlayEvents.undo`, Ctrl+Z's path. client's `MapFingerprint` equals the
-  host's after each, and its Scout stands where the host's does (the host's `LiveEditGround`
-  set it down on the raised ground and sent it); client played both events. The host drops
-  Hero onto the raised ground; client2 then joins at the table, downloads the original map,
-  takes the log (six ops, no motion) and matches the host's final fingerprint, with Hero and
-  Scout resting on its own ground at the host's heights. Passed on 2026-10-10 in about 20.8 s
-  on the host (Scout 0.041 m before the raise, 0.294 m after on every peer; Hero 0.628 m;
-  client events_played 2; no shipped file changed).
+  client at the table, the host stands Scout where the raise will go and runs nine edits as
+  the GM's Events pane does: the sculpt raise, a forest clear (Thin with Ctrl), a Fire lay, a
+  Ctrl stroke putting part of it out and a sculpt lower are strokes of GameMap's play brush
+  armed by `PlayEvents.pick` and driven over the board, a forest fall, a bridge collapse and
+  Start a fire are terrain events (`TerrainEvents.start`: the event travels, both boards play
+  it, then its labelled op; the fire's centre moves onto the nearest tree within 6 m of its
+  spot, since the level's forest has none within its radius there), and the undo of the
+  lower (a height op's before side) is `PlayEvents.undo`, Ctrl+Z's path. client's
+  `MapFingerprint` (its fire key included) and flame count equal the host's after each, and
+  its Scout stands where the host's does (the host's `LiveEditGround` set it down on the raised
+  ground and sent it); client played all three events. The host drops Hero onto the raised
+  ground; client2 then joins at the table, downloads the original map, takes the log (twelve
+  ops: the Start a fire's two and the Fire lay's three among them, no motion) and matches the
+  host's final fingerprint and flames, with Hero and Scout resting on its own ground at the
+  host's heights. Passed on 2026-10-16 in about 31.6 s on the host (Scout 0.035 m before the
+  raise, 0.294 m after on every peer; Hero 0.628 m; 71 flames after the lay, 34 after the
+  put-out, on every peer; client events_played 3; no shipped file changed). Before that day's
+  fix to the fire's centre the run failed at Start a fire ("Only a forest burns"), on the base
+  commit too. With `--windowed=client` the client films its board once the Fire lay has
+  landed (`client_fire.png`, half size, in the logs folder): on 2026-10-16 it showed the flames
+  on a bare ash patch with two charred snags where the host painted.
 - `enet_prefetch` (`--peers=4 --timeout-s=240`): prefetch from the room (see "Prefetch"
   under Sessions). The host builds Fen (the shipped GLB copied into a folder of its own, 20.5
   MB), Mill and Pond (flat authored maps) and Secret (never shelved) in its own test root.
@@ -1436,16 +1447,29 @@ joiner included, ends with the same map. The ops and their checks are
   unknown kind, non-finite or out-of-range values refused), only for its own table key and
   only while its service takes ops, and drops anything else without a word. A late joiner
   never sees the motion: it gets the op in its catch-up like any other.
+- **Persistent fire** (the Fire brush, card F2). A "Lay fire" entry is one history group of
+  three parts, so it travels as three ops in order: `mask` (the `fire_mask` blocks), `mask`
+  (the burnt forest in `biome_slots`, only where forest stood) and `surface` (the ash at 1.1x
+  the radius, which clears the small plants under it on every peer, since the scatter is
+  derived from the document); its undo sends them in reverse. "Put out fire" is one `mask` op;
+  the ash and snags stay. No new op kind: `LiveEditReader.MASKS` lists `fire_mask` beside the
+  other masks, and `AuthoringEditor.apply_mask_diff` redraws the peer's `FireField` over the
+  op's blocks (a diff writing only `fire_mask` regenerates no scatter), so a client's flames
+  appear when its op applies. A late joiner's catch-up drain ends with `FireField.rebuild()`
+  from the whole document. No player notice: a persistent edit is not an event.
 - **Saving.** Live edits change the session's copy of the map (the loaded document and
-  nodes), never `map.ttmap`.
+  nodes), never `map.ttmap`. The session file's kept `tables/<stem>.ttmap` and Save into map
+  write that document through `MapDocumentIO.write`, `fire.png` with it
+  (`test_live_edits_table.gd` checks the kept file), so a resumed or saved table burns where
+  it burned.
 
 The GM's UI is the Events pane (`PlayEvents`, [systems/authoring.md](systems/authoring.md)
 "Live edits"). ENet scenario: `tests/net/enet_live_edits` (three peers: the host builds an
-authored level in its test root and changes it through the play brush and two terrain events,
-a client follows six ops with an equal `MapFingerprint` and a re-grounded token after each and
-plays both events, a late joiner downloads
-the original map, catches up and matches, its tokens resting on the raised ground at the
-host's heights).
+authored level in its test root and changes it through the play brush and three terrain
+events, a Fire lay and a put-out among the brush strokes; a client follows nine edits (twelve
+ops) with an equal `MapFingerprint`, the same flame count and a re-grounded token after each
+and plays the three events, a late joiner downloads the original map, catches up and matches,
+fire included, its tokens resting on the raised ground at the host's heights).
 
 ### NetworkStateSync
 

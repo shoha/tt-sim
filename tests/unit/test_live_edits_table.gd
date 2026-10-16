@@ -4,12 +4,14 @@ extends GutTest
 ## (forest west of a river, a plank bridge over it) is loaded three times the way play loads a
 ## document's map (MapSourceLoader.keep_props_apart), as the GM's copy, a client's and a late
 ## joiner's, each with its own LiveEdits. The GM's ops (a forest clear, a sculpt, the bridge
-## removed, that removal undone) leave the GM's service as logged bytes and reach the client's
-## service in order, as NetworkGameSync would hand them over; after each the two
-## MapFingerprints match. The late joiner then takes the header and the whole log and has the
-## GM's map at once, before any frame passes (the catch-up is drained, so the tokens that
-## follow land on the edited ground). Ops of another table, repeated or past a gap are
-## dropped, and a refused op stops the table taking more.
+## removed, that removal undone, a fire laid and partly put out) leave the GM's service as
+## logged bytes and reach the client's service in order, as NetworkGameSync would hand them
+## over; after each the two MapFingerprints match and the two draw as many flames. The late
+## joiner then takes the header and the whole log and has the GM's map at once, before any
+## frame passes (the catch-up is drained, so the tokens that follow land on the edited ground),
+## its fire and ash included and its FireField drawn again. The kept document a session file
+## writes holds fire.png. Ops of another table, repeated or past a gap are dropped, and a
+## refused op stops the table taking more.
 
 const DIR := "user://_live_edits_table/"
 const LEVEL := DIR + "map.ttmap"
@@ -166,6 +168,21 @@ func _undo(e: AuthoringEditor) -> void:
 	assert_ne(e.history.undo(), "", "the bridge removal is undone")
 
 
+## A fire laid in the forest: one entry, three ops (the fire, the burnt forest, the ash).
+func _lay_fire(e: AuthoringEditor) -> void:
+	assert_true(e.begin_fire_stroke(FireBrush.FLAMES / 255.0, false))
+	_dabs(e, [Vector3(-14, 0, 0), Vector3(-11, 0, 1), Vector3(-8, 0, 2)], 3.0, 0.6)
+
+
+func _put_out_fire(e: AuthoringEditor) -> void:
+	assert_true(e.begin_fire_stroke(0.0, true))
+	_dabs(e, [Vector3(-13, 0, 0), Vector3(-11, 0, 1)], 2.0, 0.5)
+
+
+func _flames(copy: Copy) -> int:
+	return copy.edits.editor.fire_field.flame_count()
+
+
 func test_the_gm_edits_reach_a_client_and_a_late_joiner_in_order() -> void:
 	var made: bool = await _make_level()
 	if not made:
@@ -185,25 +202,36 @@ func test_the_gm_edits_reach_a_client_and_a_late_joiner_in_order() -> void:
 	assert_eq(client.edits.table_key, key)
 	var e := gm.edits.editor
 	for step: Array in [
-		["forest clear", _clear],
-		["sculpt raise", _raise],
-		["bridge removal", _remove_bridge],
-		["undo", _undo],
+		["forest clear", _clear, 1],
+		["sculpt raise", _raise, 1],
+		["bridge removal", _remove_bridge, 1],
+		["undo", _undo, 1],
+		["fire lay", _lay_fire, 3],
+		["fire put out", _put_out_fire, 1],
 	]:
 		var before := gm.edits.op_log.size()
 		(step[1] as Callable).call(e)
 		await _settle([gm, client], step[0])
-		assert_eq(gm.edits.op_log.size(), before + 1, "%s: one op logged" % step[0])
+		assert_eq(gm.edits.op_log.size(), before + step[2], "%s: its ops logged" % step[0])
 		assert_eq(client.edits.op_log.size(), gm.edits.op_log.size(), "%s: received" % step[0])
 		_same(gm, client, step[0])
+		assert_eq(_flames(client), _flames(gm), "%s: the client draws the GM's fire" % step[0])
 	assert_eq(gm.doc.crossings.size(), 1, "the undo put the bridge back")
 	var undo_op := LiveEditCodec.decode(gm.edits.op_log[3], gm.doc)
 	assert_eq(undo_op.op.kind, "crossings", "the undo travelled as the bridge list before")
+	assert_gt(_flames(gm), 0, "part of the fire still burns")
+	assert_eq(client.doc.fire_mask, gm.doc.fire_mask)
 
 	var joiner := await _load(false)
 	await _settle([joiner], "the late joiner's load")
+	assert_eq(_flames(joiner), 0, "the map file has no fire")
 	var heard := []
-	joiner.edits.caught_up.connect(func(count: int) -> void: heard.append(count))
+	var drawn := []
+	joiner.edits.caught_up.connect(
+		func(count: int) -> void:
+			heard.append(count)
+			drawn.append(_flames(joiner))
+	)
 	var ops := gm.edits.op_log
 	joiner.edits.receive_op(key, 0, ops[0])
 	assert_eq(joiner.edits.op_log.size(), 0, "an op before the header is dropped")
@@ -213,8 +241,23 @@ func test_the_gm_edits_reach_a_client_and_a_late_joiner_in_order() -> void:
 	assert_eq(heard, [ops.size()], "caught up once the last op is in")
 	assert_eq(joiner.doc.heights, gm.doc.heights, "the ground is edited at once")
 	assert_false(joiner.edits.editor.has_height_work(), "its height work is done at once")
+	assert_eq(drawn, [_flames(gm)], "its fire is drawn again from the document at the catch-up")
+	assert_eq(joiner.doc.fire_mask, gm.doc.fire_mask, "the fire is in its document")
+	assert_eq(joiner.doc.surface_weights, gm.doc.surface_weights, "and the ash")
 	await _settle([gm, joiner], "the late joiner's catch-up")
 	_same(gm, joiner, "late joiner")
+
+	# The session file's kept document (SessionKeeper) and Save into map (TableMover) both write
+	# the live document through MapDocumentIO.write, fire.png with it.
+	var kept := DIR + "kept.ttmap"
+	assert_eq(SessionFile.write_document(TableMover.document_of(gm.edits.editor), kept), OK)
+	var zip := ZIPReader.new()
+	assert_eq(zip.open(kept), OK)
+	assert_true(zip.get_files().has(MapDocumentIO.FIRE_ENTRY), "the kept document has fire.png")
+	zip.close()
+	var resumed := SessionFile.read_document(kept)
+	assert_eq(resumed.fire_mask, gm.doc.fire_mask, "a resumed table burns where it burned")
+	assert_eq(resumed.surface_weights, gm.doc.surface_weights, "on its ash")
 
 	joiner.edits.receive_op(key, 1, ops[1])
 	joiner.edits.receive_op(key + 2, ops.size(), ops[0])

@@ -21,7 +21,8 @@ extends Node
 ## whose header it has, and only in index order: ops that came before the header, or twice, are
 ## dropped, and the log fills every gap. When the catch-up's last op is in, the queue applies
 ## it all at once (Queue.drain), before the full state a late joiner gets behind it
-## (LateJoinerSync), so its tokens land on the edited ground. A host whose service starts after
+## (LateJoinerSync), so its tokens land on the edited ground, and its fire (FireField) is
+## drawn again from the whole document. A host whose service starts after
 ## a client's (a client that loaded first) announces its header to every client.
 ##
 ## The log is plain bytes, one PackedByteArray an op, so a session file can keep it as the
@@ -239,4 +240,8 @@ func receive_op(key: int, index: int, bytes: PackedByteArray) -> void:
 	if op_log.size() == _catch_up:
 		_catch_up = -1
 		_queue.drain()
+		# Each fire op redrew its own blocks as it landed; one plan of the whole document now
+		# draws the fire as any peer loading this map would.
+		if is_instance_valid(editor.fire_field):
+			editor.fire_field.rebuild()
 		caught_up.emit(op_log.size())

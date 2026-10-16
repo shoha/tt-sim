@@ -17,11 +17,13 @@ extends "res://tests/net/enet_late_joiner.gd"
 ##   (its pointer and press, as the render driver drives authoring's), the forest fall, the
 ##   bridge collapse and the fire terrain events the presets fire (TerrainEvents.start: every
 ##   board plays the motion, then the host's op lands, two for the fire: the burnt biome and
-##   the ash; client must have played all three, client2 none), and
-##   the undo (of the lower: the before side of a height op) is
+##   the ash; client must have played all three, client2 none), a Fire brush lay (three ops:
+##   the fire, the burnt forest, the ash) and a Ctrl stroke putting part of it out (one op),
+##   and the undo (of the lower: the before side of a height op) is
 ##   PlayEvents.undo, Ctrl+Z's path. After each it waits for its map to settle and its ground
-##   follower (LiveEditGround) to set the tokens down, and writes its MapFingerprint, log
-##   length and Scout's height; client compares. Then it drops Hero onto the raised ground,
+##   follower (LiveEditGround) to set the tokens down, and writes its MapFingerprint (with its
+##   fire key), log length, Scout's height and the flames its FireField draws; client compares
+##   them all. Then it drops Hero onto the raised ground,
 ##   writes the final fingerprint and the hero's resting position, and lets client2 join. It
 ##   finishes when both clients reported.
 ## client: joins at the start and lands in the room, then at the table; after each op, once
@@ -30,11 +32,13 @@ extends "res://tests/net/enet_late_joiner.gd"
 ##   raise: the host's re-grounding reached it).
 ## client2: joins at the table after every op (a late joiner: the map file is the original,
 ##   the log brings the edits); once its live edits have caught up and its map has settled,
-##   its MapFingerprint must equal the host's final one and Hero and Scout must rest on its
-##   ground where the host's do.
+##   its MapFingerprint and its flames must equal the host's final ones and Hero and Scout must
+##   rest on its ground where the host's do.
 ##
 ## Run: godot --headless --path D:/dev/tt-sim res://tests/net/net_launcher.tscn --
 ##   --data-root=net_launcher --scenario=enet_live_edits --peers=3 --timeout-s=300
+## Add --windowed=client for a look at a client's board: that client films the host's Fire lay
+## (_filmed_fire) to .godot/net_runs/enet_live_edits/client_fire.png.
 
 const LEVEL_FOLDER := "_live_edits_net"
 const TABLE_NAME := "Live edits table"
@@ -52,13 +56,27 @@ const FALL_RADIUS := 4.0
 ## Where the fire starts, and how far it burns (clear of the fall and the clear).
 const FIRE_AT := Vector2(-6, -13)
 const FIRE_RADIUS := 3.5
+## How far from FIRE_AT the fire may move to stand on a tree (_fire_centre).
+const FIRE_SEARCH_M := 6.0
+## Where the Fire brush lays a persistent fire, and puts part of it out (on the forest the
+## clear thinned, so its burnt-forest part has forest to burn).
+const LAY_FIRE_AT := Vector3(-17, 0, -5)
 const OPS: Array[String] = [
-	"sculpt raise", "forest clear", "forest fall", "bridge collapse", "fire", "sculpt lower", "undo"
+	"sculpt raise",
+	"forest clear",
+	"forest fall",
+	"bridge collapse",
+	"fire",
+	"lay fire",
+	"put out fire",
+	"sculpt lower",
+	"undo",
 ]
 ## The ops that are terrain events: every board plays their motion before the op lands.
 const EVENT_OPS: Array[String] = ["forest fall", "bridge collapse", "fire"]
-## Ops the log holds past one an op: the fire's second (its ash after its burnt biome).
-const EXTRA_OPS := 1
+## Ops the log holds past one an op: the fire event's second (its ash after its burnt biome),
+## and the Fire lay's second and third (its burnt forest and its ash, after the fire itself).
+const EXTRA_OPS := 3
 ## Frames a map must stay settled before it is fingerprinted.
 const STILL_FRAMES := 10
 ## How far Hero may rest off the host's height, and off its own ground (m).
@@ -74,7 +92,15 @@ const STROKES := {
 	"forest clear":
 	[ThinTool.ID, true, [Vector3(-18, 0, -2), Vector3(-10, 0, -3), Vector3(-4, 0, -4)]],
 	"sculpt lower": [SculptTool.ID, true, [LOWER_AT, LOWER_AT + Vector3(3, 0, 1)]],
+	"lay fire": [FireTool.ID, false, [LAY_FIRE_AT, LAY_FIRE_AT + Vector3(4, 0, 1)]],
+	"put out fire": [FireTool.ID, true, [LAY_FIRE_AT]],
 }
+## A windowed client's film of the Fire lay (_filmed_fire): the camera size, the frames it waits
+## for the board to draw, and the file it writes in the run's logs folder.
+const FILM_ZOOM := 16.0
+const FILM_FRAMES := 45
+const FILM_FILE := "client_fire.png"
+const TerrainEventsProbe := preload("res://tools/render_jobs/probes/terrain_events.gd")
 
 var _op := 0
 var _still := 0
@@ -87,6 +113,8 @@ var _stroke: Array = []
 var _stroke_ctrl := false
 var _stroke_until := 0
 var _events_playing := false
+## Frames left before a windowed client films the fire; -1 before it aims, -2 once filmed.
+var _film_frames := -1
 
 
 func _set_phase(phase: String) -> void:
@@ -149,6 +177,12 @@ func _fingerprint() -> Dictionary:
 	return MapFingerprint.of(_lpc().loaded_map_instance, _lpc().loaded_map_document)
 
 
+## The flames this peer's FireField draws (-1 without one).
+func _flames() -> int:
+	var field := _edits().editor.fire_field
+	return field.flame_count() if is_instance_valid(field) else -1
+
+
 ## Counts the terrain events this peer's board played (each start of one while none was).
 func _watch_events() -> void:
 	var playing := _edits().events.active_count() > 0
@@ -201,11 +235,18 @@ func _process_host() -> void:
 				var edits := _edits()
 				_mark(
 					"op%d" % _op,
-					{"fingerprint": _fingerprint(), "ops": edits.op_log.size(), "scout": _scout_y()}
+					{
+						"fingerprint": _fingerprint(),
+						"ops": edits.op_log.size(),
+						"scout": _scout_y(),
+						"flames": _flames(),
+					}
 				)
 				_log("op %d (%s) logged as %d ops" % [_op, OPS[_op], edits.op_log.size()])
 				if OPS[_op] == "sculpt raise":
 					_result["scout_raised_m"] = snappedf(_scout_y(), 0.001)
+				if OPS[_op] == "lay fire":
+					_result["flames_laid"] = _flames()
 				_set_phase("op_wait")
 		"op_wait":
 			if _has("client", "op%d" % _op):
@@ -333,7 +374,7 @@ func _run_op() -> void:
 			var middle := (bridge.start + bridge.end) * 0.5
 			why = events.start(TerrainEvent.bridge_collapse(bridge.id, middle, 9))
 		"fire":
-			why = events.start(TerrainEvent.fire(FIRE_AT, FIRE_RADIUS, 11))
+			why = events.start(TerrainEvent.fire(_fire_centre(), FIRE_RADIUS, 11))
 		"undo":
 			_result["undid"] = _events().undo()
 	if why != "":
@@ -341,6 +382,18 @@ func _run_op() -> void:
 		return
 	_still = 0
 	_set_phase("op")
+
+
+## FIRE_AT moved onto the nearest standing tree within FIRE_SEARCH_M (FIRE_AT itself when there
+## is none): the forest this level grows has no tree within FIRE_RADIUS of FIRE_AT, and the
+## event refused with "Only a forest burns" (found 2026-10-16, on the base commit as well).
+func _fire_centre() -> Vector2:
+	var scatter := _edits().editor.scatter
+	var trees := FireSweep.burnable(scatter, FIRE_AT, FIRE_SEARCH_M, PaletteLibrary.DEFAULT_ROOT, 1)
+	if trees.is_empty():
+		return FIRE_AT
+	var at := (trees[0].base as Transform3D).origin
+	return Vector2(at.x, at.z)
 
 
 ## Arms the stroke's brush through the Events pane's controller and starts driving it.
@@ -415,6 +468,7 @@ func _host_check_landing() -> void:
 			"ops": _edits().op_log.size(),
 			"hero": {"x": at.x, "y": at.y, "z": at.z},
 			"scout": _scout_y(),
+			"flames": _flames(),
 		}
 	)
 	_log("hero %s rests at %s; the late joiner may join" % [_hero_id, str(at)])
@@ -432,6 +486,7 @@ func _host_collect() -> void:
 		and bool(joiner.get("pass", false))
 		and _edits().op_log.size() == OPS.size() + EXTRA_OPS
 		and str(_result.get("undid", "")) != ""
+		and int(_result.get("flames_laid", 0)) > 0
 		# The host's ground follower set Scout down on the ground the brush raised.
 		and float(_result.get("scout_raised_m", 0.0)) > float(_result.get("scout_before_m", 0.0)) + 0.1
 	)
@@ -504,12 +559,16 @@ func _client_follow_op() -> void:
 		_scout_frames += 1
 		return
 	_scout_frames = 0
+	if OPS[_op] == "lay fire" and not _filmed_fire():
+		return
 	var mismatch := MapFingerprint.diff(host.get("fingerprint", {}), _fingerprint())
 	_result[OPS[_op]] = {
 		"ops": _edits().op_log.size(),
 		"mismatch": mismatch,
 		"scout_y": snappedf(_scout_y(), 0.001),
 		"scout_ok": scout_off <= GROUND_TOLERANCE_M,
+		"flames": _flames(),
+		"flames_ok": _flames() == int(host.get("flames", -2)),
 	}
 	_log("%s: %s" % [OPS[_op], str(_result[OPS[_op]])])
 	_mark(step)
@@ -519,11 +578,43 @@ func _client_follow_op() -> void:
 	var ok := _edits().problem == ""
 	for label in OPS:
 		ok = ok and (_result[label].mismatch as Array).is_empty() and bool(_result[label].scout_ok)
+		ok = ok and bool(_result[label].flames_ok)
 	# Every terrain event played on this board too, before its op landed.
 	ok = ok and int(_result.get("events_played", 0)) == EVENT_OPS.size()
 	_result["pass"] = ok
 	_mark("done", _result)
 	_set_phase("wait_done")
+
+
+## A client in a window (net_launcher --windowed=client) films its board once the host's Fire
+## lay has landed: the camera centred over the fire at FILM_ZOOM, FILM_FRAMES to draw, then the
+## window at half size to FILM_FILE beside the run's logs. True once filmed, and at once when
+## headless.
+func _filmed_fire() -> bool:
+	if DisplayServer.get_name() == "headless" or _film_frames == -2:
+		return true
+	var map := _lpc().get_game_map()
+	if _film_frames == -1:
+		var cc := map.get_camera_controller()
+		cc.set("_target_zoom", FILM_ZOOM)
+		map.camera_node.size = cc.call("_corrected_size", FILM_ZOOM)
+		cc.call("_update_camera_offset")
+		var at := LAY_FIRE_AT + Vector3(2, 0, 0.5)
+		at.y = _edits().editor.ground_height_at(at)
+		TerrainEventsProbe._centre_on(map, at)
+		_film_frames = FILM_FRAMES
+		return false
+	_film_frames -= 1
+	if _film_frames > 0:
+		return false
+	var path := _rv.get_base_dir().path_join(FILM_FILE)
+	var image := get_viewport().get_texture().get_image()
+	# Half size, as a render job's look captures are.
+	image.resize(image.get_width() / 2, image.get_height() / 2, Image.INTERPOLATE_LANCZOS)
+	var saved := image.save_png(path)
+	_log("filmed the fire: %s (%s)" % [path, error_string(saved)])
+	_film_frames = -2
+	return true
 
 
 ## The late joiner: its live edits caught up with the host's final log, its map still, Hero on
@@ -547,10 +638,12 @@ func _joiner_check() -> void:
 	_result["hero_rest_y"] = snappedf(rest.y, 0.001)
 	_result["host_hero_y"] = snappedf(host_y, 0.001)
 	_result["scout_y"] = snappedf(_scout_y(), 0.001)
+	_result["flames"] = _flames()
 	# A late joiner gets the events' ops only: no motion plays on its board.
 	_result["pass"] = (
 		mismatch.is_empty()
 		and edits.problem == ""
+		and _flames() == int(host.get("flames", -2))
 		and int(_result.get("events_played", 0)) == 0
 		and absf(_scout_y() - float(host.get("scout", NAN))) <= GROUND_TOLERANCE_M
 		and absf(at.y - host_y) <= GROUND_TOLERANCE_M

@@ -12,7 +12,8 @@ extends RefCounted
 ## approaching the pane's target. It records its dabs (world from, to, radius, seconds), and at
 ## its end replays them as two more strokes inside one AuthoringHistory group, so one undo
 ## takes all three back ("Lay fire"):
-##   1. the fire itself (the mask diff);
+##   1. the fire itself (the mask diff, applied through AuthoringEditor.apply_mask_diff as any
+##      mask stroke's, so in play it travels as a "mask" op and redraws the fire on every peer);
 ##   2. the palette's burnt forest biome (FireSweep.plan_for) painted only where forest stood
 ##      (a MaskStroke with only_slots: biomes whose trees reach FOREST_TREES_PER_M2), so trees
 ##      under the fire burn to snags as Start a fire leaves them and a meadow stays a meadow;
@@ -97,8 +98,8 @@ func end() -> bool:
 		return false
 	var part := {
 		"label": PUT_OUT_LABEL if _erase else LAY_LABEL,
-		"undo": editor.apply_fire_diff.bind(diff, false),
-		"redo": editor.apply_fire_diff.bind(diff, true),
+		"undo": editor.apply_mask_diff.bind(diff, false),
+		"redo": editor.apply_mask_diff.bind(diff, true),
 		"bytes": int(diff.bytes),
 	}
 	if _erase:

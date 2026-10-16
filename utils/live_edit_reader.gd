@@ -20,8 +20,11 @@ extends RefCounted
 
 ## Rows one op may carry, over all its cells.
 const MAX_OP_ROWS := 200000
-## The masks a MaskStroke writes; a diff naming any other property is refused.
-const MASKS: Array[StringName] = [MaskStroke.SLOTS, MaskStroke.DENSITY, MaskStroke.ERASE]
+## The masks a MaskStroke writes (the Fire tool's fire_mask among them); a diff naming any
+## other property is refused.
+const MASKS: Array[StringName] = [
+	MaskStroke.SLOTS, MaskStroke.DENSITY, MaskStroke.ERASE, MaskStroke.FIRE
+]
 ## Bytes per sample of a surface diff block (two RGBA8 planes), a heights block (float32)
 ## and the wet dressing (RGBA8).
 const SURFACE_BYTES := 8

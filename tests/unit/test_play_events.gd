@@ -149,8 +149,17 @@ func test_the_pane_lists_the_play_brushes_only() -> void:
 		assert_true(pane.tool_field.tiles.has_tile(tool.id), "%s has a tile" % tool.id)
 	assert_eq(pane.tool_ids(), ids)
 	assert_false(pane.tool_field.tiles.has_tile(PlaceTool.ID), "Place is authoring's alone")
-	for id in [SculptTool.ID, PaintTool.ID, BiomeTool.ID, ThinTool.ID, WaterTool.ID, BridgeTool.ID]:
+	for id in [
+		SculptTool.ID, PaintTool.ID, FireTool.ID, BiomeTool.ID, ThinTool.ID, WaterTool.ID, BridgeTool.ID
+	]:
 		assert_true(id in ids, "%s is a play brush" % id)
+	# Fire's controls are its authoring pane's intensity tiles, its header hidden.
+	assert_not_null(pane.fire_pane, "Fire has its controls")
+	assert_false(pane.fire_pane.get_node("FireHeader").visible, "the tile above names it")
+	var heard := []
+	pane.fire_intensity_selected.connect(func(value: int) -> void: heard.append(value))
+	pane.fire_pane.intensity_field.tiles.selection_changed.emit(&"fire_blaze")
+	assert_eq(heard, [FireBrush.BLAZE], "a tile sends its mask byte")
 
 
 func test_only_the_gm_side_of_a_document_table_may_change_the_map() -> void:
@@ -187,6 +196,12 @@ func test_a_large_edit_toast_says_what_was_done_on_one_line() -> void:
 	assert_eq(PlayEvents.done_phrase("Carve river"), "Carved river")
 	assert_eq(PlayEvents.done_phrase("Remove planks"), "Removed planks")
 	assert_eq(PlayEvents.UNDO_TOAST % "Cleared", "Cleared for everyone at the table")
+	assert_eq(
+		PlayEvents.UNDO_TOAST % PlayEvents.done_phrase(FireEditor.LAY_LABEL),
+		"Fire laid for everyone at the table"
+	)
+	assert_eq(PlayEvents.done_phrase(FireEditor.PUT_OUT_LABEL), "Fire put out")
+	assert_eq(PlayEvents.hints_for(FireTool.ID)[0], {"key": "Left-drag", "action": "Lay fire"})
 	var toasts: ToastContainer = TOASTS_SCENE.instantiate()
 	add_child_autofree(toasts)
 	var text := PlayEvents.UNDO_TOAST % PlayEvents.done_phrase("Erase water")
