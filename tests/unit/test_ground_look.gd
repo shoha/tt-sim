@@ -103,6 +103,35 @@ func test_material_params_are_typed_and_split() -> void:
 		assert_false(tuft.has(absent), "%s is not the grass's" % absent)
 
 
+## Card 3c: round 20's probes set the light reference, the tuft reference and the accent tint
+## on the ground and the grass (spatial materials) as a Color, which Godot converts from sRGB to
+## linear there; the bake (canvas) and the rim colour (a plain vector) took their values raw.
+## Parity with round 20's frames needs the same values on the GPU.
+func test_spatial_colours_reach_the_gpu_as_round_20s_did() -> void:
+	var look := _look(_fixture().ground_look)
+	var ref := Color(0.2711, 0.3928, 0.0485)
+	# What round 20's grass and ground got for grassland's reference (logged in the 3c run).
+	var r20_ref := Vector3(0.059736, 0.127878, 0.003802)
+	var gpu := GroundLookUniforms.as_r20_spatial(ref)
+	for i in 3:
+		assert_almost_eq(gpu[i], r20_ref[i], 1e-5, "srgb_to_linear, channel %d" % i)
+	var rect := Vector4(-50.0, -50.0, 100.0, 100.0)
+	var bake := GroundLookUniforms.bake_params(look, ref, Vector2.ZERO, rect)
+	assert_eq(bake.light_field_ref, Vector3(ref.r, ref.g, ref.b), "the bake takes it raw")
+	var tuft := GroundLookUniforms.tuft_params(look, ref, Vector2(0.0, -1.0), null, rect)
+	assert_eq(tuft.light_field_ref, gpu, "the grass takes it converted")
+	var tinted := _look({"zones": look.zones, "rim": {"accent_tint": [1.0, 0.86, 0.55]}})
+	var the_plan := GroundLookUniforms.plan([{"biome": "m", "ground": 0}], {"m": tinted}, _layer_of)
+	var tables := GroundLookUniforms.ground_tables(the_plan, [tinted], [ref], [null], rect)
+	assert_almost_eq(tables.look_ref[0].x, r20_ref.x, 1e-5, "the ground's reference converted")
+	assert_almost_eq(tables.look_ref[0].y, r20_ref.y, 1e-5)
+	var tint := GroundLookUniforms.as_r20_spatial(Color(1.0, 0.86, 0.55))
+	assert_almost_eq(tables.look_accent_tint[0].y, tint.y, 1e-6, "the accent tint converted")
+	assert_almost_eq(tables.look_accent_tint[0].x, 1.0, 1e-6, "white stays white")
+	var rim: Array = tinted.rim.color_linear
+	assert_almost_eq(tables.look_rim_color[0].x, float(rim[0]), 1e-6, "the rim colour raw")
+
+
 func test_a_biome_without_a_look_leaves_every_gate_off() -> void:
 	assert_eq(GroundLookUniforms.uniforms({}), {}, "no uniforms")
 	var rows := [{"biome": "plain", "ground": 0}, {"biome": "burnt", "ground": 2}]
@@ -176,7 +205,9 @@ func test_two_biome_map_gives_each_biome_its_values() -> void:
 	assert_almost_eq(tables.look_shape[1].z, 0.5, 1e-6)
 	assert_almost_eq(tables.look_shape[1].w, 0.6, 1e-6)
 	assert_almost_eq(tables.look_light[1].z, 0.72, 1e-6, "the forest's knee")
-	assert_almost_eq(tables.look_ref[1].y, 0.35, 1e-6)
+	assert_almost_eq(
+		tables.look_ref[1].y, GroundLookUniforms.as_r20_spatial(refs[1]).y, 1e-6, "the forest's ref"
+	)
 	assert_eq(tables.look_shape[2], Vector4(1, 0, 0, 1), "an unused slot draws today's patches")
 
 

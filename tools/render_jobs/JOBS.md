@@ -596,6 +596,29 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   `ui_primitives.gd dusk`). The level is
   kept for look runs; `jobs/gm_events_cleanup.json` (`events_pane.gd cleanup` alone, a few
   seconds) deletes every `_gm_events_` level when the task is done.
+- `jobs/ground_parity.json`: the ground ship's parity check (card 3c, 2026-10-15): round 20's
+  final views (treecube `docs/looks/ground20/run20.py`, `job_final.json`) drawn by the game's
+  own code from a palette carrying round 20's data (treecube `out/palette_parity`,
+  scratch-installed, never committed), with no look probe: grassland seed 1234 at home, zoom
+  26, the grass alone and with round 20's road (`dirt_road_packed_r5`, radius 1.2), grassland
+  seed 2, savanna at home and zoom 26, birch woodland at home; canopy fade off
+  (`close_zoom.gd fade`), cursor hidden and mouse centred as round 20. Its probe
+  (`probes/ground_parity.gd`) sets no look: `nocursor`, `only` / `all` (scatter visibility),
+  `freeze` / `thaw` (the shader clock held at TIME under 1e-6 through a tiny time rollover,
+  so swaying blades and the lo-fi grain take the same pose in every run), `save` / `cleanup`
+  (`_gship3c_` levels) and `report`. Every view is captured frozen and again with the
+  scatter hidden (`<view>_bare`), so a diff can tell blades from ground; `grassland_again`
+  repeats the home view after 1 s of wind (equal when the freeze holds); grassland is saved
+  as `_gship3c_grassland`, reopened (`dress`) and captured as `reload_grassland` (the same
+  masses and bake when the mass anchors survive; a reopened level draws its ground and grass
+  3-6 levels darker than the fresh map, on main too, so it is not pixel-equal), and the job
+  deletes the level at its end (`jobs/ground_parity_cleanup.json` does it alone after a
+  failed run). About 120 s with `--full`. `ground_parity.gd uniforms` (`ref`: a round 20 job,
+  `index`: its `field` step) logs the bake's and the grass's uniforms that differ from round
+  20's, the ground's slot vectors and tables, and can save the bake texture.
+  `probes/parity_diff.gd` (standalone, a manifest of pairs) prints mean colour, the darkest
+  and brightest tenth, the pixels over 2/255 and whether they sit on scatter or ground, and
+  writes the diff images.
 
 ## Caveats
 

@@ -323,7 +323,7 @@ func _bind_grass() -> void:
 					var albedo := mat.get_shader_parameter("albedo_texture") as Texture2D
 					var tuft_ref := GroundLookUniforms.opaque_mean_linear(albedo)
 					mat.set_shader_parameter(
-						"zone_tuft_ref", Vector3(tuft_ref.r, tuft_ref.g, tuft_ref.b)
+						"zone_tuft_ref", GroundLookUniforms.as_r20_spatial(tuft_ref)
 					)
 					bound.append(mat)
 	for mat in _grass_bound:

@@ -183,7 +183,7 @@ static func tuft_params(
 	var out := {
 		"light_field_tex": tex,
 		"light_field_rect": rect,
-		"light_field_ref": Vector3(ref.r, ref.g, ref.b),
+		"light_field_ref": as_r20_spatial(ref),
 		"zone_mass_lit_dir": lit_dir,
 	}
 	for name: String in TUFT_LIGHT:
@@ -271,20 +271,22 @@ static func ground_tables(
 			rim_color.append(Vector4.ZERO)
 			tint.append(Vector4(1.0, 1.0, 1.0, 0.0))
 			continue
-		var ref: Color = refs[s] if s < refs.size() else NO_REF
+		var ref := as_r20_spatial(refs[s] if s < refs.size() else NO_REF)
 		var z: Dictionary = look.zones
 		var lt: Dictionary = look.light
 		var b: Dictionary = look.brush
 		var a: Dictionary = look.accent_shape
 		var r: Dictionary = look.rim
 		light.append(Vector4(z.strength, lt.strength, lt.knee, lt.cap))
-		refs_out.append(Vector4(ref.r, ref.g, ref.b, lt.sat_cap))
+		refs_out.append(Vector4(ref.x, ref.y, ref.z, lt.sat_cap))
 		brush.append(Vector4(b.contrast, b.hue, b.key, b.mean))
 		shape.append(Vector4(a.stretch, a.stretch_angle, a["break"], a.edge_scale))
 		rim.append(Vector4(r.accent_rim_m, r.path_rim_m, r.strength, r.wobble))
 		rim_more.append(Vector4(r.gap, r.path_blend_width, r.accent_core_m, r.core_dark))
 		rim_color.append(_vec4(r.color_linear))
-		tint.append(_vec4(r.accent_tint))
+		var t: Array = r.accent_tint
+		var tint_gpu := as_r20_spatial(Color(float(t[0]), float(t[1]), float(t[2])))
+		tint.append(Vector4(tint_gpu.x, tint_gpu.y, tint_gpu.z, 0.0))
 	var out := {
 		"look_present": 1,
 		"look_row_slots": the_plan.row_slots,
@@ -357,6 +359,20 @@ static func _mean_linear(tex: Texture2D, opaque: bool) -> Color:
 		return NO_REF
 	sum /= float(n)
 	return Color(sum.x, sum.y, sum.z)
+
+
+## Colour `c` as round 20's GPU got it on a spatial material. The probe set the ground's and the
+## grass's light reference, the grass's tuft reference and the accent tint as a Color, and Godot
+## converts a Color set on a spatial shader's plain vec3 from sRGB to linear (a canvas shader,
+## the bake, takes it as is; measured 2026-10-15, ground ship card 3c: a Color of 0.2711, 0.3928,
+## 0.0485 drew 88, 129, 14 on an unshaded quad, the same Vector3 178, 202, 78). The approved look
+## was tuned on those converted values (grassland's brush mean, 3.2, is about its ground's
+## luminance over the converted reference, 3.3; over the raw one it is about 1), so those four
+## take the same conversion here; the bake's values and the rim colour (set as a plain vector)
+## reach the GPU raw.
+static func as_r20_spatial(c: Color) -> Vector3:
+	var lin := c.srgb_to_linear()
+	return Vector3(lin.r, lin.g, lin.b)
 
 
 ## A look value as the shader takes it: a three-number array as a Vector3 (raw, linear).
