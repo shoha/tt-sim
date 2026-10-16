@@ -243,6 +243,58 @@ func test_the_heat_raster_sums_flames_into_one_bed() -> void:
 	assert_eq(floori(shown[14]), int(FireField.FLAME), "the kind")
 
 
+func test_every_foot_stands_in_a_pool_narrower_than_its_heat() -> void:
+	var doc := _doc(20, 150)
+	var size := FireField.heat_size(doc)
+	var half := doc.extent_m() * 0.5
+	var whole := Rect2i(Vector2i.ZERO, size)
+	var heat := PackedFloat32Array()
+	heat.resize(size.x * size.y)
+	var pools := PackedFloat32Array()
+	pools.resize(size.x * size.y)
+	# A tall flame and a small one, each on a texel.
+	var foot := Vector2i((half / FireField.HEAT_STEP_M).round())
+	var o := Vector2(foot) * FireField.HEAT_STEP_M - half
+	var tall := PackedFloat32Array([o.x, 0, o.y, 0.9, 0.5, 2.0, 0.5, FireField.FLAME])
+	var small := PackedFloat32Array([o.x + 4.0, 0, o.y, 0.5, 0.5, 0.4, 0.5, FireField.FLAME])
+	FireField.splat_heat(heat, size, half, tall, whole, pools)
+	FireField.splat_heat(heat, size, half, small, whole, pools)
+	var at := func(p: Vector2) -> int:
+		var t := Vector2i(((p + half) / FireField.HEAT_STEP_M).round())
+		return t.y * size.x + t.x
+	assert_almost_eq(pools[at.call(o)], 1.0, 0.001, "a tall flame's foot: a full pool")
+	assert_almost_eq(pools[at.call(o + Vector2(4.0, 0.0))], 1.0, 0.001, "a small one's too")
+	var out := o + Vector2(1.0, 0.0)
+	assert_eq(pools[at.call(out)], 0.0, "the pool ends before the heat does")
+	assert_gt(heat[at.call(out)], 0.0)
+	var texture := FireLook.heat_texture(heat, size, FireField.HEAT_FULL_M, null, pools)
+	var image := texture.get_image()
+	assert_eq(image.get_format(), Image.FORMAT_RG8, "heat red, pools green")
+	assert_almost_eq(image.get_pixelv(foot).g, 1.0, 0.01)
+
+
+func test_a_straight_pass_stands_its_flames_off_its_axis() -> void:
+	var doc := _doc(30, 0)
+	var step := doc.sample_step()
+	var half := doc.extent_m() * 0.5
+	var mask := doc.fire_mask.duplicate()
+	for z in doc.samples_z():
+		var zm := -half.y + z * step.y
+		for x in doc.samples_x():
+			mask[doc.sample_index(x, z)] = 150 if absf(zm) < 1.5 else 0
+	doc.fire_mask = mask
+	var plan := _whole(doc)
+	var reach := 0.0
+	for k in plan.size() / FireField.STRIDE:
+		if plan[k * FireField.STRIDE + FireField.KIND] == FireField.FLAME:
+			reach = maxf(reach, absf(plan[k * FireField.STRIDE + 2]))
+	assert_gt(plan.size(), 0)
+	# Read straight, the band's flames stand within a sample step of its edge; the warp carries
+	# them further, at most PLACE_WARP.y.
+	assert_gt(reach, 1.5 + step.y + 0.3, "the band wanders")
+	assert_lt(reach, 1.5 + step.y + FireField.PLACE_WARP.y + 0.1, "but stays near its stroke")
+
+
 func test_lod_keeps_half_and_draws_back_to_front() -> void:
 	assert_eq(FireLook.far_count(7), 4)
 	assert_eq(FireLook.far_count(8), 4)
