@@ -66,8 +66,6 @@ const _BUCKET_OFFSET := 1 << 20
 const _BUCKET_SPAN := 1 << 21
 ## Candidate record in a bucket: x, z, priority (32-bit hash), owner species, id, hash.
 const _STRIDE := 6
-## Kept clump parent record: x, z, radius, long-axis angle (radians).
-const _PARENT_STRIDE := 4
 ## Salts for the independent hashed values of one candidate.
 const _SALT_X := 0x68E31DA4
 const _SALT_Z := 0x3C6EF372
@@ -184,7 +182,7 @@ static func _reach_of(the_plan: Dictionary, s: int, reach: PackedFloat32Array) -
 	var r := 0.0
 	for relation in entry.avoid:
 		r = maxf(r, relation.distance + relation.transition + reach[relation.target])
-	# Clump children take near relations through their parents (_parent_kept), whose
+	# Clump children take near relations through their parents (ScatterClumps), whose
 	# influence spreads over the clump; unclumped species take them directly.
 	var through := 0.0
 	if entry.clumped:
@@ -330,8 +328,8 @@ static func cells_in_bounds(
 
 
 ## A fresh evaluation context over a plan: per-field bucket and spacing memos, per-species
-## final-decision memos, clump-parent memos and pattern noises. "edge" carries the clump
-## edge distance of the candidate evaluated last to the row it becomes.
+## final-decision memos, clump-parent memos (ScatterClumps) and pattern noises. "edge" carries
+## the clump edge distance of the candidate evaluated last to the row it becomes.
 static func _context(
 	the_plan: Dictionary,
 	density_at: Callable,
@@ -349,6 +347,7 @@ static func _context(
 	var parents: Array[Dictionary] = []
 	var parent_buckets: Array[Dictionary] = []
 	var parent_lists: Array[Dictionary] = []
+	var parent_tiles: Array[Dictionary] = []
 	var noises: Array = []
 	var contrasts := PackedFloat64Array()
 	for entry in the_plan.species:
@@ -356,6 +355,7 @@ static func _context(
 		parents.append({})
 		parent_buckets.append({})
 		parent_lists.append({})
+		parent_tiles.append({})
 		var noise := _noise(entry, fields)
 		noises.append(noise)
 		contrasts.append(noise.get_meta("contrast") if noise != null else 0.0)
@@ -366,6 +366,7 @@ static func _context(
 		"parents": parents,
 		"parent_buckets": parent_buckets,
 		"parent_lists": parent_lists,
+		"parent_tiles": parent_tiles,
 		"noise": noises,
 		"contrast": contrasts,
 		"density_at": density_at,
@@ -467,7 +468,7 @@ static func _generate_species(
 						continue
 					var edge: float = ctx.edge
 					if (edge_needed or mass) and referenced:
-						edge = _membership(ctx, s, x, z).y
+						edge = _membership(ctx, s, x, z, false).y
 					assets.append(_append_row(ctx, entry, cands, c, edge, rows))
 					if mass:
 						var anchor: Vector2 = ctx.anchor
@@ -546,7 +547,10 @@ static func _final(ctx: Dictionary, s: int, cands: PackedFloat64Array, c: int) -
 
 ## Cheap thinning first, each test against the running keep product with one hashed
 ## uniform, then spacing, then the relation and clearance queries that may evaluate other
-## species. Leaves the clump edge distance in ctx.edge for the row.
+## species. Leaves the clump edge distance in ctx.edge for the row. A costly keep (the bare
+## openings, a mass's zone and shoulder keeps) is skipped where the keeps known so far already
+## reject the candidate: every keep is 0..1, so it could only lower the product, and the
+## product it would have made is left exactly as it was everywhere else.
 static func _evaluate(
 	ctx: Dictionary, entry: Dictionary, cands: PackedFloat64Array, c: int
 ) -> bool:
@@ -557,16 +561,18 @@ static func _evaluate(
 	if not bounds.has_point(p):
 		return false
 	var u := _unit(int(cands[c + 5]), _SALT_ACCEPT)
-	# Painted density through the size class's response (ScatterPlan.DENSITY_RESPONSE).
-	var painted: float = ctx.species_density_at.call(p, entry.ground_role)
-	var keep := ScatterMass.respond_bare(entry, painted, x, z)  # grass off the bare openings
-	if u >= keep:
-		return false
 	var s: int = entry.index
 	var influence: float = entry.influence
+	var shade := 1.0
 	if influence > 0.0:
-		var pattern := _pattern_value(ctx.noise[s], ctx.contrast[s], x, z)
-		keep *= 1.0 - influence * (1.0 - pattern)
+		shade = 1.0 - influence * (1.0 - _pattern_value(ctx.noise[s], ctx.contrast[s], x, z))
+	# Painted density through the size class's response (ScatterPlan.DENSITY_RESPONSE).
+	var painted: float = ctx.species_density_at.call(p, entry.ground_role)
+	var keep := ScatterMass.respond_bare(entry, painted, x, z, u, shade)  # off the openings
+	if u >= keep:
+		return false
+	if influence > 0.0:
+		keep *= shade
 		if u >= keep:
 			return false
 	var slope_cos: float = entry.slope_cos
@@ -579,13 +585,24 @@ static func _evaluate(
 				return false
 	if GroundSnap.unfooted(ctx.height_at, p, entry.footing_m):  # a trunk over a rim
 		return false
+	# Spacing is a pure memo, so it may be decided before the costly mass keeps it would follow:
+	# a candidate it removes is false either way, and one it keeps meets the same keeps.
+	var spaced: bool = entry.spacing <= 0.0
 	if entry.clumped:
-		var membership := _membership(ctx, s, x, z)
+		var membership := _membership(ctx, s, x, z, false)
 		ctx.edge = membership.y
-		keep *= maxf(membership.x, clampf(painted - 1.0, 0.0, 1.0))  # bank species, P4-4
+		var bank := clampf(painted - 1.0, 0.0, 1.0)  # bank species, P4-4
+		if entry.mass:
+			if u >= keep * maxf(membership.x, bank):
+				return false
+			if not spaced and not _spaced_survives(ctx.fields[entry.field], cands, c):
+				return false
+			spaced = true
+			membership = ScatterMass.refined(ctx, entry, membership, x, z)
+		keep *= maxf(membership.x, bank)
 		if u >= keep:
 			return false
-	if entry.spacing > 0.0 and not _spaced_survives(ctx.fields[entry.field], cands, c):
+	if not spaced and not _spaced_survives(ctx.fields[entry.field], cands, c):
 		return false
 	for relation in entry.avoid:
 		keep *= 1.0 - relation.influence * _proximity(ctx, relation, x, z)
@@ -697,99 +714,19 @@ static func _higher_neighbours(
 ## that parent over its reach (0 at the centre, 1 at the outer edge), for the clump scale
 ## falloff. With additive clumps (ScatterPlan.additive_clumps) x is the summed membership of
 ## every clump over the point over ScatterPlan.CLUMP_SATURATION, capped at 1, y the nearest's.
-static func _membership(ctx: Dictionary, s: int, x: float, z: float) -> Vector2:
+## `refine` false leaves out a mass's zone and shoulder keeps (ScatterMass.refined). The kept
+## parents near the child's bucket come from ScatterClumps, memoized per bucket.
+static func _membership(ctx: Dictionary, s: int, x: float, z: float, refine := true) -> Vector2:
 	var entry: Dictionary = ctx.plan.species[s]
 	var size: float = ctx.fields[entry.field].bucket
-	var parents := _parents_near_bucket(ctx, s, floori(x / size), floori(z / size))
-	return ScatterMass.membership(ctx, entry, parents, x, z)
-
-
-## Kept clump parents whose reach overlaps one children bucket, as [x, z, radius, angle]
-## records (memoized per bucket, so each child checks only the few that matter).
-static func _parents_near_bucket(ctx: Dictionary, s: int, bi: int, bj: int) -> PackedFloat64Array:
-	var memo: Dictionary = ctx.parent_lists[s]
-	var key := (bi + _BUCKET_OFFSET) * _BUCKET_SPAN + (bj + _BUCKET_OFFSET)
-	var cached: Variant = memo.get(key)
-	if cached != null:
-		return cached
-	var entry: Dictionary = ctx.plan.species[s]
-	var clump: Dictionary = entry.rule.clump
-	var child_size: float = ctx.fields[entry.field].bucket
-	var rect := Rect2(bi * child_size, bj * child_size, child_size, child_size)
-	var size: float = ctx.fields[entry.parent_field].bucket
-	var transition: float = clump.transition_m
-	var root := sqrt(float(entry.mass_stretch))  # an ellipse's long half-axis
-	var reach: float = (clump.radius_m * (1.0 + entry.clump_jitter) + transition) * root
-	var out := PackedFloat64Array()
-	var low_x := floori((rect.position.x - reach) / size)
-	var high_x := floori((rect.end.x + reach) / size)
-	var low_z := floori((rect.position.y - reach) / size)
-	var high_z := floori((rect.end.y + reach) / size)
-	# Parents sit in their own, larger buckets; a child bucket gathers the few whose reach
-	# overlaps it, so each child tests two or three parents, not a neighbourhood.
-	for parent_j in range(low_z, high_z + 1):
-		for parent_i in range(low_x, high_x + 1):
-			var kept := _kept_parents(ctx, s, parent_i, parent_j)
-			for c in range(0, kept.size(), _PARENT_STRIDE):
-				var px := kept[c]
-				var pz := kept[c + 1]
-				var radius := kept[c + 2]
-				var dx := maxf(0.0, maxf(rect.position.x - px, px - rect.end.x))
-				var dz := maxf(0.0, maxf(rect.position.y - pz, pz - rect.end.y))
-				var parent_reach := (radius + transition) * root
-				if dx * dx + dz * dz > parent_reach * parent_reach:
-					continue
-				out.append(px)
-				out.append(pz)
-				out.append(radius)
-				out.append(kept[c + 3])
-	memo[key] = out
-	return out
-
-
-## The kept parents of one parent bucket as [x, z, radius, angle] records (memoized per
-## bucket; the angle is a mass's long axis, ScatterMass.parent_spin).
-static func _kept_parents(ctx: Dictionary, s: int, bi: int, bj: int) -> PackedFloat64Array:
-	var memo: Dictionary = ctx.parent_buckets[s]
-	var key := (bi + _BUCKET_OFFSET) * _BUCKET_SPAN + (bj + _BUCKET_OFFSET)
-	var cached: Variant = memo.get(key)
-	if cached != null:
-		return cached
-	var entry: Dictionary = ctx.plan.species[s]
-	var radius: float = entry.rule.clump.radius_m
-	var cands := _bucket(ctx.fields[entry.parent_field], bi, bj)
-	var out := PackedFloat64Array()
-	for c in range(0, cands.size(), _STRIDE):
-		if _parent_kept(ctx, s, cands, c):
-			var jitter := 2.0 * _unit(int(cands[c + 5]), _SALT_RADIUS) - 1.0
-			out.append(cands[c])
-			out.append(cands[c + 1])
-			out.append(radius * (1.0 + entry.clump_jitter * jitter))
-			var turn := 2.0 * _unit(int(cands[c + 5]), _SALT_ANGLE) - 1.0
-			out.append(ScatterMass.parent_spin(entry, cands[c], cands[c + 1], turn))
-	memo[key] = out
-	return out
-
-
-## A clump parent survives its spacing and the species' near relations (Geoscatter's
-## affinity acts on clump parents: a clump whose parent is near its target survives whole).
-static func _parent_kept(ctx: Dictionary, s: int, cands: PackedFloat64Array, c: int) -> bool:
-	var memo: Dictionary = ctx.parents[s]
-	var id := int(cands[c + 4])
-	var known: Variant = memo.get(id)
-	if known != null:
-		return known
-	var entry: Dictionary = ctx.plan.species[s]
-	var kept := _spaced_survives(ctx.fields[entry.parent_field], cands, c)
-	if kept and not entry.near.is_empty():
-		var keep := 1.0
-		for relation in entry.near:
-			var near := _proximity(ctx, relation, cands[c], cands[c + 1])
-			keep *= 1.0 - relation.influence * (1.0 - near)
-		kept = _unit(int(cands[c + 5]), _SALT_ACCEPT) < keep
-	kept = kept and ScatterMass.zone_kept(entry, cands, c)  # a mass's swathes, by zone
-	memo[id] = kept
-	return kept
+	var bi := floori(x / size)
+	var bj := floori(z / size)
+	var parents: Variant = ctx.parent_lists[s].get(
+		(bi + _BUCKET_OFFSET) * _BUCKET_SPAN + (bj + _BUCKET_OFFSET)
+	)
+	if parents == null:
+		parents = ScatterClumps.parents_near_bucket(ctx, s, bi, bj)
+	return ScatterMass.membership(ctx, entry, parents, x, z, refine)
 
 
 ## How near (x, z) is to an instance of the relation's target: 1 within distance, falling

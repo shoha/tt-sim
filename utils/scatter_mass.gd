@@ -220,8 +220,15 @@ static func _dome(edge: float) -> float:
 ## (ScatterPlan.additive_clumps, never for a mass species) sum every clump over
 ## ScatterPlan.CLUMP_SATURATION and take the nearest centre's y. With `stretch` > 1 each clump
 ## is an ellipse of the same area along its parent's angle. The chosen parent goes to ctx.anchor.
+## A mass's x is then refined by its zone and shoulder keeps (refine_keep), unless `refine` is
+## false: the generator applies them itself only to a candidate they can still decide.
 static func membership(
-	ctx: Dictionary, entry: Dictionary, parents: PackedFloat64Array, x: float, z: float
+	ctx: Dictionary,
+	entry: Dictionary,
+	parents: PackedFloat64Array,
+	x: float,
+	z: float,
+	refine: bool = true
 ) -> Vector2:
 	var transition: float = entry.rule.clump.transition_m
 	var best := Vector2(0.0, 1.0)
@@ -260,10 +267,24 @@ static func membership(
 		best.x = minf(1.0, total / ScatterPlan.CLUMP_SATURATION)
 	elif mass:
 		best.y = held_edge(entry, best.y)
-		if best.x > 0.0:
-			best.x *= zone_share_keep(ctx, entry, x, z)
-		if best.x > 0.0:
-			best.x *= shoulder_keep(ctx, entry, x, z)
+		if refine:
+			best = refined(ctx, entry, best, x, z)
+	return best
+
+
+## A mass child's unrefined membership `best` with its x times the zone share and shoulder keeps
+## at (x, z), applied to the Vector2 as membership applies them (so the same float32 x); `best`
+## unchanged for any other species. Needs the ctx.anchor membership left. Each keep is 0..1, so x
+## never grows.
+static func refined(
+	ctx: Dictionary, entry: Dictionary, best: Vector2, x: float, z: float
+) -> Vector2:
+	if not entry.get("mass", false):
+		return best
+	if best.x > 0.0:
+		best.x *= zone_share_keep(ctx, entry, x, z)
+	if best.x > 0.0:
+		best.x *= shoulder_keep(ctx, entry, x, z)
 	return best
 
 
@@ -448,12 +469,20 @@ static func parent_angle(entry: Dictionary, x: float, z: float, angle: float) ->
 ## ScatterPlan.respond (the painted density through the size class's response) times bare_keep
 ## over the entry's mass_bare: a biome whose mass rule sets clump `bare` keeps all its grass off
 ## the bare openings (ScatterPlan.build), not only the masses, so no lone tuft stands in a dirt
-## clearing. Called once per candidate (ScatterGenerator._evaluate).
-static func respond_bare(entry: Dictionary, painted: float, x: float, z: float) -> float:
+## clearing. Called once per candidate (ScatterGenerator._evaluate) with the candidate's uniform
+## `u` and `shade`, the pattern keep the candidate meets next: where u >= the response times shade
+## the candidate is rejected whatever the openings say (bare_keep is 0..1), so that product comes
+## back, at most u, and the openings' noise is never evaluated.
+static func respond_bare(
+	entry: Dictionary, painted: float, x: float, z: float, u: float = -INF, shade: float = 1.0
+) -> float:
 	var keep := ScatterPlan.respond(painted, entry.response_lead, entry.response_lag)
 	var bare: Array = entry.get("mass_bare", [])
 	if keep <= 0.0 or bare.is_empty():
 		return keep
+	var bound := keep * shade
+	if u >= bound:
+		return bound
 	return keep * bare_keep(bare, x, z)
 
 
