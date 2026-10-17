@@ -46,6 +46,10 @@ Conventions on 2026-10-09).
   is one layer of four per-map `Texture2DArray`s. The order is stable for a session (new
   surfaces append; painting never rebinds) and compacted at the next load; capacity grows 16,
   32, 64 (`GroundLayers.MAX_LAYERS`), so no surface or accent is dropped for want of a slot.
+  A load also binds a reserve after the map's own layers, as many as its capacity step still
+  holds: the fire's surfaces (`AuthoredTerrain.fire_surfaces`: the burnt forest biome's and the
+  ash), which a fire's op brings to every peer at once; appended there they cost 55 ms of
+  texture reads in one frame (card F4b-2).
   The shader reads the document's own bytes as index maps (biome slots and density, R8; the
   painted surfaces' top-4 index and weight planes, RGBA8) with `textureGather` at the texel
   corner, weights each corner bilinearly, and keeps the four strongest (layer, weight)

@@ -714,6 +714,36 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   Mobile: the same job with `--rendering-method mobile` before `--script` and `--only
   sunset_home_new --out render_jobs/fire_lights_smoke_mobile` after `--`.
   Cleanup deletes every `_firefeat_` level.
+- `jobs/fire_perf_play.json`: the persistent fire's pinned performance pass (card F4b-2;
+  docs/PERFORMANCE.md "Fire (F4): pinned performance pass"; `probes/fire_perf.gd`). Drop the
+  pinned `override.cfg` in first (the job removes it at startup) and run on a quiet machine.
+  Build (tagged `build`, about 100 s): a new 200 ft temperate forest (seed 1234), three
+  `flames` passes of radius 4 across about a third of the map and a curved `blaze` line across
+  the view, saved as `_firefeat_perf`. Then, vsync off, an in-run A/B of 6 s windows per view
+  (home, zoom 8 over the blaze, zoom 20, the camera's own widest zoom, zoom 30 past the LOD) by
+  day and under `outdoor_night` (fire.gd's sun keys): the fire on and off (flames, ground term,
+  smoke and lights) on / off / on / off, and at home and zoom 20 each part off in turn
+  (`config no_flames`, `no_glow`, `no_smoke`, `no_lights`) in a palindrome; the field's
+  per-frame script time (`cpu`) and a 4 m brush dab's refresh (`refresh`); then five more
+  passes burn the rest of the map and home, zoom 20 and zoom 30 are measured again near the
+  cap, day and night. `--saved` skips the build. It deletes `_firefeat_perf` at the end.
+- `jobs/fire_first_burn.json`: the first burnt-forest op on a fresh map (card F4b-2;
+  `probes/fire_perf.gd first_burn`): a new 200 ft temperate map, the palette's burnt biome
+  painted over a 4 m disc with nothing armed (a peer's case), the dab's milliseconds, the ground
+  layers before and after and the layer arrays' sync; then a second map with the Fire tool's
+  warm-up (`warm`) first (the host's case). `perf.gd author` logs each load. About 30 s.
+- `jobs/fire_shards.json`: debug views of the grey shards and straight-edged wedges on burnt
+  ground (card F4b-2; `probes/fire_shards.gd`) on `_firefeat_look` (build it with
+  `firefeat_build` first) at the day zs view: everything, the ground alone (its chunks and
+  skirt), with the fire's ground term off, with shadows off, with the screen-space effects off,
+  and everything but the ground, tiled in `sheet_debug.png`; `chunks` logs the chunk meshes'
+  formats and their largest UV-to-XZ gap. Then the ground alone with its shader's code swapped in
+  memory for debug views of its outputs (`debug`: 1 lit grey, 2 unlit, 3 the shading normal, 4
+  the geometric normal, 5 the fire's char weight, 6 the mask and the two rasters as RGB, 7 the
+  ground's albedo before the fire, 8 the fire's emission alone; `sheet_debug2.png`, and
+  `sheet_debug3.png` the lower half of 2 and 5-8), and `sheet_before_after.png` from
+  `firefeat_look --only "day_zs_new,sunset_zs_new"` run into `render_jobs/fire_shards_before` and
+  `render_jobs/fire_shards_after` (left before, right after).
 
 ## Caveats
 

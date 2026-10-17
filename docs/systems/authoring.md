@@ -225,7 +225,11 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   ash between the clumps, matte, its normals straight up so no ground facet shows; the outline
   read through a bold warp, the grass dried and browned outside it in a band of wandering
   width). All of it is a term in the authored ground shader, `shaders/fire_glow.gdshaderinc`,
-  fed the mask (R8) and the two rasters (RG8); `FireLook` in `scenes/effects/` owns the meshes,
+  fed the mask (R8) and the two rasters (RG8); its value noise hashes lattice points in integer
+  arithmetic (`glow_hash`; card F4b-2: `fire_hash`'s float hash gave a lattice point shared by
+  two cells two values at map-sized coordinates, which broke every threshold on the noise into
+  the straight-edged grey shards and orange wedges seen on the burn; found with the
+  `fire_shards` job's debug views). `FireLook` in `scenes/effects/` owns the meshes,
   materials and the glow binding. Lights and smoke (card F4b-1): `FireClusters` (pure) sums each
   re-planned block's flame heights on a 3.5 m grid (kept per block, merged in block row order,
   so every peer and every refresh history agree) and finds the hot spots, a burning cell whose
@@ -576,7 +580,12 @@ Probe and numbers:
   which redraws the peer's `FireField`), its burnt forest (`mask`, `biome_slots`) and its ash
   (`surface`); a put-out is one `mask` op. Measured in `test_live_map_edits.gd` (headless, one
   run): a 3 m lay over 8 m held 8.7 KB of ops, its fire op applied in 1.2 ms (77 flames), the
-  burnt forest's in 58.6 ms and the ash's in 18.7 ms; a put-out 2.0 KB, 1.1 ms.
+  burnt forest's in 58.6 ms and the ash's in 18.7 ms; a put-out 2.0 KB, 1.1 ms. The burnt
+  forest's cost was its surfaces' first use (the ground's layer arrays appended in one frame,
+  on every peer, since a peer arms nothing): since card F4b-2 every map binds the fire's
+  surfaces at load (`AuthoredTerrain.fire_surfaces`, the layer binding's reserve, within the
+  arrays' capacity step), and the first burn's dab in the real renderer dropped from 78 ms
+  (arrays sync 55 ms) to 13-24 ms (sync 0; job `fire_first_burn`).
 - **Checks** (`LiveEditReader`, run by `decode(bytes, doc, palette_root)`): the byte cap
   before `bytes_to_var` (which refuses objects); version and kind; rectangles inside the grid;
   mask names whitelisted (`LiveEditReader.MASKS`: `biome_slots`, `biome_density`,

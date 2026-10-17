@@ -3422,3 +3422,89 @@ dictionary and static-call bound in GDScript, which a GDExtension would run perh
 (an estimate, not measured), the in-game wall clock now about half of that per-candidate work and
 half scheduling and window decode, so a port of `_evaluate` with the mass path would cut the new
 map perhaps to 1-1.5 s; it is a dependency and build decision, not taken.
+
+## Fire (F4): pinned performance pass (2026-10-16)
+
+What the persistent ground fire (FireField: flames, the ground's fire term, smoke, lights) costs
+in play, against the design's targets (docs/plans/2026-10-11-fire-features/design.md section 4:
+0.5 ms GPU at home and 0.3 ms at zoom 20 with the field at its cap, CPU under 0.1 ms a frame),
+and what a brush stroke's refresh costs. Card F4b-2; the look is F4a round 4 and F4b-1 round 5.
+
+**How.** Render job `jobs/fire_perf_play.json` (`probes/fire_perf.gd`), the pinned procedure:
+`override.cfg` 1920x1080 (removed by the job at startup), vsync off at runtime, the user's
+graphics settings, a debug build, RTX 3080, Forward+. `perf.gd gpu_state` at the start read
+36 %, 46 C, P8 at 345 MHz (the title at idle clocks; no Blender or other Godot process ran); 96 %,
+78 C, P0 at the end (the game). It builds `_firefeat_perf`: a 200 ft temperate forest (seed
+1234), three `flames` passes of radius 4 across about a third of the map and a curved `blaze`
+line across the view ("third": 579 shown, 53 sparks, 416 flames, 110 blaze, 18 blocks), then
+burns the rest with five more passes ("whole": 1,729 shown, 164 / 1,455 / 110, 43 blocks). A
+200 ft map cannot reach the cap of 4,096: the 0.9 m lattice and the clumps' gaps hold about 1,800
+on the whole map, so "whole" is the densest a view can hold (a larger map past the cap thins every
+block to its share and shows fewer per view). In-run A/B, 6 s windows: the fire on and off (off
+hides the flames, smoke and lights and sets the ground's `fire_present` 0) on / off / on / off,
+and at home and zoom 20 each part off in turn in a palindrome, by day (the level's sky at 14:00,
+the lights gated off) and under `outdoor_night` (23:00, the lights shown). Viewport 1920x1080 in
+every window but the last view (see the table). GPU median ms:
+
+| View | On | Off | Fire |
+| --- | --- | --- | --- |
+| Third, day, home (zoom 13.85; 471 draws, 305K prims) | 4.419 / 4.579 | 2.946 / 2.971 | +1.47 / +1.61 |
+| Third, day, zoom 8 over the blaze | 4.448 / 4.364 | 2.698 / 2.705 | +1.75 / +1.66 |
+| Third, day, zoom 20 (750 draws) | 5.094 / 5.116 | 3.705 / 3.708 | +1.39 / +1.41 |
+| Third, day, widest zoom (52.37, past the LOD) | 3.483 / 3.478 | 3.045 / 3.042 | +0.44 / +0.44 |
+| Third, day, zoom 30 (past the LOD) | 4.520 / 4.487 | 3.699 / 3.691 | +0.82 / +0.80 |
+| Third, night, home (3 lights) | 4.932 / 4.932 | 3.123 / 3.144 | +1.81 / +1.79 |
+| Third, night, zoom 8 | 4.770 / 4.830 | 2.829 / 2.804 | +1.94 / +2.03 |
+| Third, night, zoom 20 | 5.505 / 5.499 | 3.903 / 3.896 | +1.60 / +1.60 |
+| Third, night, widest zoom | 3.770 / 3.758 | 3.246 / 3.254 | +0.52 / +0.50 |
+| Third, night, zoom 30 | 4.834 / 4.818 | 3.880 / 3.888 | +0.95 / +0.93 |
+| Whole, day, home | 5.061 / 5.121 | 3.031 / 3.065 | +2.03 / +2.06 |
+| Whole, day, zoom 20 | 6.124 / 6.149 | 4.045 / 4.050 | +2.08 / +2.10 |
+| Whole, day, zoom 30 | 5.504 / 5.519 | 3.952 / 3.962 | +1.55 / +1.56 |
+| Whole, night, home (4 lights) | 5.605 / 5.600 | 3.248 / 3.255 | +2.36 / +2.35 |
+| Whole, night, zoom 20 | 6.605 | 4.205 | +2.40 (the second pair was disturbed: a CPU worst of 499 ms) |
+| Whole, night, zoom 30 (viewport 1745x981: the window changed size; indicative) | 6.111 / 6.117 | 4.538 / 4.519 | +1.57 / +1.60 |
+
+Split (each part off, two windows each, against the mean of the two "on" windows), GPU ms:
+
+| Third | Flames | Ground term | Smoke | Lights |
+| --- | --- | --- | --- | --- |
+| Day, home | 0.40 | 0.87 | 0.08 | (gated off) |
+| Day, zoom 20 | 0.34 | 0.89 | 0.17 | (gated off) |
+| Night, home | 0.46 | 0.95 | 0.15 | 0.15 |
+| Night, zoom 20 | 0.34 | 0.92 | 0.15 | 0.17 |
+
+The lights' cost includes the painted foliage's omni path (they are one light pass). CPU: the
+field's own script per frame is 0.30 us (the LOD check) plus the lights' flicker, 1.59 us with
+three lit and 2.07 us with four: 0.002 ms. The frame's CPU median tracks the GPU's plus about
+0.5 ms in every window, so the render thread's share of the fire cannot be separated from these
+windows. A brush dab's refresh (a 4 m square at the blaze, four blocks re-planned, median of
+nine): 19.98 ms on "third" (re-plan 14.90, heat re-splat and upload 3.41, the rest: budget,
+drawing, glow, lights 1.66) and 23.39 ms on "whole" (15.26 / 4.25 / 3.88).
+
+**Verdict: the fire misses every target, by about 3x at home and 5x at zoom 20 with well under
+half the cap, and a stroke frame's refresh is a 20-23 ms hitch.** No fix shipped in this card.
+The largest part is the ground's fire term (`fire_glow.gdshaderinc`, 0.87-0.95 ms): a burning
+pixel evaluates about thirteen warped two-octave value noises (each three to five noises) and
+three B-spline reads, and every ground pixel of the map pays the early-out's nine mask taps. Next
+the flames (0.34-0.46 ms for 579), then the smoke and lights (about 0.15 ms each). Directions
+for the next card, look-preserving first: bake the static noise fields of `fire_glow` (all but
+the bed's drift and the breathing) into a world-space texture on the heat grid or finer when the
+field refreshes, and read them with one or two fetches; a dilated mask for the early-out (one tap
+instead of nine); the flames' per-fragment cost (tongue layouts, bands, depth melt) measured per
+term the same way; for the refresh, the re-plan (15 ms for four blocks of 10 m) is GDScript per
+lattice point and would move to a worker or native code.
+
+### First-burn hitch (F4b-2)
+
+The first burnt-forest op on a map read the burnt biome's and the ash's ground textures back in
+one frame on every peer (a peer arms nothing). Job `jobs/fire_first_burn.json`, real renderer,
+a fresh 200 ft temperate map, the burnt biome painted over a 4 m disc: before, the dab 78 ms with
+the layer arrays' sync 55 ms (three new surfaces: ash, dirt_peat, dirt), 40-49 ms with the Fire
+tool's warm-up first (sync 27-36 ms: the GPU readback, `Texture2D.get_image`). Now every load
+binds them ahead (`AuthoredTerrain.fire_surfaces`, the layer binding's reserve, only within the
+arrays' capacity step, its textures loaded on the loader's threads): the dab 24 ms on the
+process's first map and 13 ms on the second (a plain biome paint's cost), the sync 0.0 ms. The
+load's arrays sync grew 8-9 ms (44 / 67 ms against 36 / 58), the loading screen did not move
+beyond its noise (3,761 / 1,307 ms against 3,909 and 3,648 / 1,343 and 1,307), video memory is
+unchanged.
