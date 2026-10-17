@@ -1,6 +1,6 @@
 {
  "format": 1,
- "palette_version": "020bbdc",
+ "palette_version": "6bc37ea-dirty",
  "surfaces": {
   "ash": {
    "albedo": "surfaces/ash/ash_albedo.png",

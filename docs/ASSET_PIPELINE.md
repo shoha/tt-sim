@@ -1140,6 +1140,16 @@ alpine meadow, rocky badlands and savanna match the maker's frames
 (`treecube/out/looks/rocks_rework3/new_*.png`) in mean colour and darkest and brightest tenth
 within 0.001 of 1.0; the placed rocks sit where they did, rotated differently per run, and the
 foliage sways. No code change, no saved map migrated.
+Refreshed 2026-10-16 with treecube 6bc37ea (the burnt forest's lighter charred wood, the user's
+"lighter brown wood" decision; 9 packages, 201 assets, 36 surfaces, ids unchanged). Exactly 15
+files changed against the installed tree, as the maker's parity listing said: the 13 charred wood
+GLBs (snags, conifer snags, high stumps, logs, branches and the stump), the burnt forest's
+thumbnail and `palette.json`, where only `palette_version` differs. Every sidecar was restored by
+the first checkout; `git status` showed only those 15 files before and after the import, and
+`git lfs status` listed the GLBs and the JPG as LFS and `palette.json` as Git. The label
+`6bc37ea-dirty` comes from untracked inspiration PNGs in the treecube checkout that do not reach
+the output; nothing in tt-sim compares `palette_version` (it is stamped into new maps and read
+back, and `test_palette_builtin.gd` only requires it non-empty). No code change, no saved map migrated.
 Refreshed 2026-10-13 with treecube 20d9451 (the grass rework, flowers and grass grounds, four
 review rounds: treecube `docs/looks/grass_flowers.md`; `palette_version` `3cd0fc3-dirty`, 201
 assets, 29 surfaces, ids unchanged). A script checked before the install that the asset, biome and
