@@ -10,14 +10,18 @@ extends RefCounted
 
 ## Resource paths of every palette texture AuthoredTerrain.build() binds for `doc`: the base
 ## surface's maps, each painted biome's ground, cliff and scree surface maps (and water bed
-## and shore on a map with water), the painted surfaces' and the base's rule surfaces. A
-## caller can load them on background threads first, so build() finds them in the resource
-## cache instead of loading on the main thread (about 35 ms cold for one surface).
+## and shore on a map with water), the painted surfaces' and the base's rule surfaces, and
+## the surfaces of `extra` (the binding's reserve). A caller can load them on background
+## threads first, so build() finds them in the resource cache instead of loading on the main
+## thread (about 35 ms cold for one surface).
 static func texture_paths(
-	doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT
+	doc: MapDocument,
+	root: String = PaletteLibrary.DEFAULT_ROOT,
+	extra: PackedStringArray = PackedStringArray()
 ) -> PackedStringArray:
 	var surfaces := PaletteLibrary.surfaces(root)
 	var names := [doc.base_surface]
+	names.append_array(Array(extra))
 	names.append_array(Array(base_rule_surfaces(doc.base_surface, root)))
 	var wet := not doc.water_bodies.is_empty()
 	if wet:

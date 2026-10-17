@@ -1,0 +1,24 @@
+{
+ "out_dir": "render_jobs/fire_first_burn",
+ "timeout_s": 240,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "author", "biome": "temperate_forest_summer_s1", "size": 200, "seed": 1234},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "first_burn", "at": [0, 0], "radius": 4.0},
+  {"op": "wait", "s": 2.0},
+  {"op": "title"},
+  {"op": "wait", "s": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "author", "biome": "temperate_forest_summer_s1", "size": 200, "seed": 77},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "warm"},
+  {"op": "wait", "s": 4.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "first_burn", "at": [0, 0], "radius": 4.0},
+  {"op": "wait", "s": 2.0},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0}
+ ]
+}

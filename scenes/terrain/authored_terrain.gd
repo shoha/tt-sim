@@ -166,11 +166,46 @@ static func create(
 
 
 ## Resource paths of every palette texture build() binds for `doc` (GroundPalette, where
-## the palette helpers live).
+## the palette helpers live), the fire's reserved surfaces included.
 static func texture_paths(
 	doc: MapDocument, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> PackedStringArray:
-	return GroundPalette.texture_paths(doc, root)
+	return GroundPalette.texture_paths(
+		doc, root, fire_surfaces(doc, root, not doc.water_bodies.is_empty())
+	)
+
+
+## The surfaces a fire's change brings to `doc` at once (FireSweep.plan_for: the palette's
+## burnt forest biome's ground, cliff, scree and accent surfaces, its water bed and shore on a
+## map with water, and the ash), drawable ones other than the base; none of the biome's when it
+## would draw as the base. build() binds them ahead of their first use
+## (GroundLayerBinding.reserve) and texture_paths() loads them with the map's own, because a
+## fire's op reaches every peer with nothing armed: binding them there read three surfaces'
+## textures from disk and back from the GPU in one frame (78 ms on a fresh 200 ft map, 55 ms
+## of it the layer arrays' sync, 27 to 36 ms with the textures already loaded; card F4b-2).
+static func fire_surfaces(doc: MapDocument, root: String, water: bool) -> PackedStringArray:
+	var available := func(surface: String) -> bool:
+		return surface != "" and GroundPalette.surface_available(surface, root)
+	var plan := FireSweep.plan_for(
+		PaletteLibrary.get_palette(root)["biomes"], PaletteLibrary.surfaces(root)
+	)
+	var names: Array = []
+	if String(plan.biome) != "":
+		var biome := PaletteLibrary.biome(String(plan.biome), root)
+		var ground := String(biome.get("ground_surface", ""))
+		if available.call(ground) and ground != doc.base_surface:
+			var keys := ["ground_surface", "cliff_surface", "scree_surface"]
+			if water:
+				keys.append_array(["water_bed_surface", "shore_surface"])
+			for key in keys:
+				names.append(String(biome.get(key, "")))
+			names.append_array(GroundAccents.surface_names(biome.get("ground_accents", [])))
+	names.append(String(plan.surface))
+	var out := PackedStringArray()
+	for surface: String in names:
+		if available.call(surface) and surface != doc.base_surface and not surface in out:
+			out.append(surface)
+	return out
 
 
 ## Builds (or rebuilds from scratch) everything for `doc`; the chunk meshes only with
@@ -201,6 +236,7 @@ func build(
 	else:
 		WaterDressing.refresh(doc)
 	_layers = GroundLayerBinding.new()
+	_layers.reserve = fire_surfaces(doc, root, _has_water())
 	_layers.build(doc, _material, root, _has_water())
 	_bind_water_dressing()
 	_fields = prepared.get(AuthoredLoadPrep.FIELDS, {})
