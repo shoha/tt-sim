@@ -118,6 +118,10 @@ other committed home.
   game (user, 2026-10-16); open for that pass besides the day beds: the smoke's colour (five
   critic rounds swung between muddy brown and candy pastel with no fixed reference) and a
   fire-facing side on lit trunks.
+  Performance comes before that pass (user, 2026-10-16): with the cost passes of F4b-2 to F4b-4
+  the fire still runs about 1.8x over its targets, so cheaper approaches are spiked and measured
+  next, and the look may change with them "as long as it looks good"; the user then gives visual
+  references, and the fire is steered to where a cheap approach and the references meet.
   Design before code: `docs/plans/2026-10-11-fire-features/` (gitignored).
 
 ## Where each system is documented
