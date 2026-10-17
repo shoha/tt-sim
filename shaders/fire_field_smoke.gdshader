@@ -6,44 +6,45 @@ shader_type spatial;
 // world depth against the trees), and the shader alone paints and moves it, so nothing runs per
 // column per frame.
 //
-// Round 4 compares two structures inside that one quad (`structure`; card F4b-1's probe, after
-// three rounds of separate billow quads read as faceted crowns, one oval haze, then a chain of
-// near-identical discs):
-//   0, the plume: a vertical strip widening upward and leaning down the map's wind, its edges
-//      broken into large round lobes that are born small at the base, grow as they climb and
-//      scroll up on the column's clock, a few more lobes rolling over its face, the whole warped
-//      by a broad noise carried up with them, so the rise reads as one mass rolling on itself;
-//   1, merged billows: a wide low base that stays over the fire and three billows a third of a
-//      life apart that climb out of it, narrow low on the column and broad near the crown, joined
-//      by a smooth union of their distances so the outline is one silhouette.
-// Either way the parts are joined in one distance field (a smooth minimum), so no single circle's
-// outline shows, and each takes a fake sphere normal (the body a cylinder); where parts overlap
-// the nearer surface wins softly, which draws the creases between lobes.
+// The plume (card F4b-1 round 4 chose it over merged billows, after three rounds of separate
+// billow quads read as faceted crowns, one oval haze, then a chain of near-identical discs): a
+// vertical strip widening upward and leaning down the map's wind, its edges broken into large
+// round lobes that are born small at the base, grow as they climb and scroll up on the column's
+// clock, a few more lobes rolling over its face, the whole warped by a broad noise carried up with
+// them, so the rise reads as one mass rolling on itself. The parts are joined in one distance
+// field (a smooth minimum), so no single circle's outline shows, and each takes a fake sphere
+// normal (the body a cylinder); where parts overlap the nearer surface wins softly, and the
+// contested band between them is shaded a little darker, so each lobe reads as its own rounded
+// stroke. The outline fades over about a quarter of the column's width.
 //
 // Painted, not lit (unshaded): every tone is the shader's own, graded up the column and split
-// into a lit and a shadow side by the fake normal. At dusk and night (foliage_sun's weight, the
-// gate the fire's lights use) the base glows a saturated amber lit from below, the brightest part
-// of the column; the waist turns a warm dusky rose and the crown a soft dark blue-grey, its
-// sky-facing side a little lifted, and it thins away at the top. By day the side facing the sun
-// (foliage_sun's direction) is cream and the shade side cool, the base still a little warm.
-// Round 3's lessons hold: the scene's sky ambient through the fake normal laid a pale blue-lilac
-// over every tone, and the presets' tonemaps lift cool tones far above their linear values, so
-// the cool tones are dark here. No fog, as the flames have none. The smoke draws before the
-// flames (render priority), so the flames stay the brightest thing in its frame.
+// into a lit and a shadow side by the fake normal. Blended premultiplied: the base is nearly
+// transparent where it stands among the flames, so they show at full strength, and its amber is
+// a glow added over whatever is behind, so it reads as lit by the fire; only the upper two
+// thirds carry real density. At dusk and night (foliage_sun's weight, the gate the fire's lights
+// use) the waist is a salmon rose and the crown a powder blue-grey, both keyed to the scene's
+// ambient (figure_ambient, which the environment publishes): under a bright sunset ambient the
+// crown is lighter than the land behind it, under a night ambient about the night's own value,
+// so nothing in the plume is a dark blot. By day it is a translucent grey-lavender, lighter on
+// the side facing the sun, blue-grey in shade, with a faint amber foot. Round 3's lessons hold:
+// the scene's sky ambient through the fake normal laid a pale blue-lilac over every tone, and the
+// presets' tonemaps (ACES at sunset, Filmic at night and by day) lift and desaturate bright
+// tones, so the bright tones here are more saturated than they show. No fog, as the flames have
+// none. The smoke draws before the flames (render priority), so the flames stay the brightest
+// thing in its frame.
 //
 // Per instance (FireFieldSmoke.instance_buffer): the origin is the column's source and the
 // basis's uniform scale its unit (metres, its cluster's tallest flame scaled by the cluster's
 // size); INSTANCE_CUSTOM is (phase 0..1, seed, life in seconds, unused). The column's shape is
 // set from FireFieldSmoke's constants, the wind's direction per map (lean_dir). Colours are linear
 // and shown through the scene's tonemap.
-render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabled, fog_disabled;
+render_mode unshaded, blend_premul_alpha, depth_draw_never, cull_disabled, shadows_disabled, fog_disabled;
 
 #include "res://shaders/fire_noise.gdshaderinc"
 
 global uniform vec4 foliage_sun;
+global uniform vec3 figure_ambient;
 uniform sampler2D depth_texture : hint_depth_texture, filter_linear;
-// 0: one plume; 1: merged billows (see the header).
-uniform float structure = 0.0;
 // The map's wind in world XZ (unit length): the column leans down it.
 uniform vec2 lean_dir = vec2(1.0, 0.0);
 // The column's height above its source, and its lean down the wind at the top (a share of the
@@ -55,74 +56,91 @@ uniform vec2 width = vec2(0.3, 0.64);
 // Metres over which the smoke melts into the scene behind it (soft where it meets a tree).
 uniform float soft_m = 0.9;
 
-// The sun's weight over which the night palette fades out (FireLook's light gate).
+// The sun's weight over which the night palette fades out (FireLook's light gate), and the
+// ambient's luminance over which the night tones turn to the sunset's.
 const vec2 NIGHT_GATE = vec2(0.1, 0.35);
+const vec2 DUSK_KEY = vec2(0.06, 0.3);
 // The least share of the lean that shows across the screen (a wind along the view still leans),
 // how the lean and the width grow up the column (powers of the height's share).
 const float LEAN_SCREEN = 0.6;
 const float LEAN_EASE = 1.5;
 const float WIDEN_EASE = 0.75;
 // Room in the quad below the source (the base sits among the tallest flames' tips) and above the
-// crown, in the column's unit.
+// crown, in the column's unit, and either side of the leaning centre line (a share of the crown's
+// half width: the crown's outer lobes, the warp and the soft edge; at 2.0 the lobes on the lean
+// side were cut by the quad's edge, a straight vertical seam).
 const float BASE_PAD = 0.45;
 const float CROWN_PAD = 0.75;
-// The plume's lobes: rows up the column, spaced by the height's logarithm from ROW_FROM up (so
-// they grow as they climb: about 0.3 units at the base, 1.3 at the crown); an edge lobe's radius
-// and a face lobe's (shares of the row's spacing), and how far a face lobe stands in front.
+const float ROOM = 2.9;
+// The lobes: rows up the column, spaced by the height's logarithm from ROW_FROM up (so they grow
+// as they climb: about 0.3 units at the base, 1.3 at the crown); the body's radius (a share of
+// the half width), where an edge lobe stands (a share of the half width out from the centre
+// line) and its radius (a share of the row's spacing), a face lobe's radius and how far it stands
+// in front.
 const float ROWS = 5.0;
 const float ROW_FROM = 1.0;
-const float EDGE_LOBE = 0.5;
+const float BODY = 0.8;
+const vec2 EDGE_AT = vec2(0.6, 0.88);
+const float EDGE_LOBE = 0.56;
 const float FACE_LOBE = 0.55;
 const float FACE_FRONT = 0.35;
-// The billows: the base's height and radii (wide and tall enough to reach the waist), the
-// climbing billows' radius low on the column (the waist) and near the crown, and how high their
-// climb ends (a share of the height).
-// (Three billows a third of a life apart left gaps the union could not bridge: separate balls.)
-const vec3 BASE = vec3(0.3, 0.56, 0.6);
-const vec2 BILLOW_R = vec2(0.42, 0.9);
-const int BILLOWS = 4;
-const float CLIMB_TOP = 0.95;
-const float CLIMB_EASE = 1.15;
-// The quad's room either side of the leaning centre line (the column's unit, a share of the
-// crown's half width).
-const float ROOM = 2.0;
-// How softly the parts' distances join (the smooth minimum's reach, units: the plume's, the
-// billows'), how softly the nearer surface takes over where they overlap (the crease), and the
-// soft but drawn outline's width.
-const vec2 JOIN = vec2(0.22, 0.4);
+// How softly the parts' distances join (the smooth minimum's reach, units: small, so the notches
+// between lobes stay), how softly the nearer surface takes over where they overlap (the crease),
+// and how much darker the contested band is.
+const float JOIN = 0.1;
 const float CREASE = 0.07;
-const float EDGE = 0.06;
+const float CREASE_DARK = 0.1;
+// The soft outline: its width as a share of the half width there (half of it a quarter of the
+// column's width), and the share of it outside the shape's distance zero.
+const float EDGE_SOFT = 0.5;
+const float EDGE_OUT = 0.3;
 // The broad noise's warp of the outline (units at the base and at the crown) and its climb.
 const vec2 WARP = vec2(0.08, 0.26);
 const float WARP_CLIMB = 0.8;
-// The grade at dusk and night: amber at the base (lit from below, LOW_SIDE of it on the side
-// facing up), warm rose at the waist, a dark blue-grey crown lifted SKY_LIFT on its sky side.
-// (Round 4's first try, the amber turning to rose by 0.42 of the height, showed no amber: the
-// flames draw over the column's foot, and the rest read pink-mauve. An amber of (1.3, 0.44,
-// 0.07) then read a pale cream-yellow through the tonemap, near the flames' own brightness, and a
-// bluer crown mixed with the rose into lilac; the rose is terracotta and the crown a near-neutral
-// slate so the grade passes through warm greys.)
-const vec3 FIRE_AMBER = vec3(0.9, 0.27, 0.035);
-const float LOW_SIDE = 0.5;
-const vec3 NIGHT_ROSE = vec3(0.22, 0.075, 0.045);
-const vec3 NIGHT_CROWN = vec3(0.03, 0.036, 0.05);
-const float SKY_LIFT = 1.7;
-const float ROSE_SHADE = 0.45;
-// Where the grade turns (shares of the column's height): to rose, to the crown.
-const vec2 TO_ROSE = vec2(0.2, 0.55);
-const vec2 TO_CROWN = vec2(0.5, 0.92);
-// By day: cream on the sun side, cool shade, a little warmer low on the column, the fire's glow at
-// the base a share of the night's.
-const vec3 DAY_LIT = vec3(0.56, 0.52, 0.45);
-const vec3 DAY_SHADE_LOW = vec3(0.22, 0.2, 0.19);
-const vec3 DAY_SHADE_TOP = vec3(0.2, 0.23, 0.29);
+// The fire's glow, added over the scene (premultiplied): its colour, where it rises from (units
+// above the source, so the flames below keep their own colour) and fades out (shares of the
+// height), how much more of it the underside takes, and its share by day.
+// (An amber of (1.3, 0.44, 0.07) read a pale cream-yellow through the sunset's ACES: bright
+// tones lose their saturation there, so the glow is a deep orange at a modest level.)
+const vec3 GLOW = vec3(0.7, 0.14, 0.0);
+const vec2 GLOW_FROM = vec2(-0.05, 0.4);
+const vec2 GLOW_TO = vec2(0.18, 0.55);
+const float GLOW_BELOW = 0.6;
 const float DAY_GLOW = 0.3;
-// Opacity at the base and above it, where the crown thins away (shares of the height), and how
-// much thinner a part is toward its edge.
-// (0.62 and 0.86 read as a translucent veil over the sunset's fog, mauve from the orange behind.)
-const vec2 OPACITY = vec2(0.78, 0.95);
-const vec2 CROWN_FADE = vec2(0.72, 1.12);
-const float EDGE_THIN = 0.2;
+// The tones at dusk and night, each lit and in shade: the foot over the glow (amber), the waist
+// (rose) and the crown (blue-grey), at night and under a sunset's ambient. The waist's lit side is
+// the one facing down toward the fire or toward the low sun.
+const vec3 FOOT_LIT = vec3(0.6, 0.17, 0.03);
+const vec3 FOOT_SHADE = vec3(0.38, 0.1, 0.03);
+const vec3 ROSE_LIT_NIGHT = vec3(0.4, 0.1, 0.08);
+const vec3 ROSE_SHADE_NIGHT = vec3(0.17, 0.065, 0.07);
+const vec3 CROWN_LIT_NIGHT = vec3(0.05, 0.062, 0.09);
+const vec3 CROWN_SHADE_NIGHT = vec3(0.036, 0.042, 0.062);
+const vec3 ROSE_LIT_DUSK = vec3(0.8, 0.19, 0.11);
+const vec3 ROSE_SHADE_DUSK = vec3(0.45, 0.13, 0.13);
+const vec3 CROWN_LIT_DUSK = vec3(0.26, 0.38, 0.66);
+const vec3 CROWN_SHADE_DUSK = vec3(0.15, 0.2, 0.36);
+// Where the grade turns (shares of the column's height): foot to rose, rose to the crown; and
+// how far up the fire below still lights the rose (fading over FIRE_REACH).
+const vec2 TO_ROSE = vec2(0.15, 0.42);
+const vec2 TO_CROWN = vec2(0.55, 0.85);
+const vec2 FIRE_REACH = vec2(0.25, 0.75);
+// By day: grey-lavender on the sun side, blue-grey in shade, a little warmer low on the column.
+const vec3 DAY_LIT = vec3(0.4, 0.35, 0.43);
+const vec3 DAY_SHADE = vec3(0.16, 0.18, 0.27);
+const vec3 DAY_FOOT = vec3(0.3, 0.16, 0.08);
+// The painted terminator between the lit and shadow sides (a band of the fake normal's cosine
+// toward the light).
+const vec2 TERMINATOR = vec2(-0.2, 0.35);
+// Opacity: the share kept at the foot among the flames, rising to full over TO_DENSE (units above
+// the source: from the tallest flames' tips to about 0.4 of the height); the most at dusk and
+// night and by day; where the crown thins away (shares of the height); how much thinner a part is
+// toward its edge.
+const float FOOT_OPACITY = 0.06;
+const vec2 TO_DENSE = vec2(0.05, 1.3);
+const vec2 OPACITY = vec2(0.92, 0.8);
+const vec2 CROWN_FADE = vec2(0.82, 1.15);
+const float EDGE_THIN = 0.25;
 
 // The quad's rectangle in the column's frame (x across the screen, y up the world, units, the
 // source at the origin), the lean at the crown, the seed and the clock (lives), and screen up.
@@ -178,17 +196,19 @@ float smooth_min(float a, float b, float k) {
 
 // Adds one round part (centre `c`, radius `r`, standing `front` toward the camera) to the union:
 // its distance into `dist`, its sphere normal weighted by how near its surface is into `acc`
-// (outside its circle the normal lies flat, pointing out, and falls off fast).
-void add_part(vec2 p, vec2 c, float r, float front, float join, inout float dist, inout vec4 acc) {
+// (outside its circle the normal lies flat, pointing out, and falls off fast), and the largest
+// weight so far into `top` (the crease is where no one part's weight dominates).
+void add_part(vec2 p, vec2 c, float r, float front, inout float dist, inout vec4 acc, inout float top) {
 	vec2 q = p - c;
 	float len = length(q);
-	dist = smooth_min(dist, len - r, join);
+	dist = smooth_min(dist, len - r, JOIN);
 	float inside = r * r - len * len;
 	float height = inside > 0.0 ? sqrt(inside) + front : (r - len) * 3.0 + front;
 	vec3 n = inside > 0.0 ? vec3(q / r, sqrt(inside) / r) : vec3(q / max(len, 1e-4), 0.0);
 	// Weighed against a height of 1, so the weights stay in a half float's range.
 	float w = exp((clamp(height, -1.0, 1.6) - 1.0) / CREASE);
 	acc += vec4(n * w, w);
+	top = max(top, w);
 }
 
 // The row coordinate of height `y` (rows from the source up) and its inverse.
@@ -205,12 +225,11 @@ float spacing_at(float y) {
 	return (ROW_FROM + max(y, 0.0)) * log(1.0 + rise / ROW_FROM) / ROWS;
 }
 
-// Structure 0: the plume's body (a cylinder across the strip) and its lobes.
-void plume(vec2 p, float lean_x, float seed, float clock, inout float dist, inout vec4 acc) {
+// The plume's body (a cylinder across the strip) and its lobes.
+void plume(vec2 p, float lean_x, float seed, float clock, inout float dist, inout vec4 acc, inout float top) {
 	float y = clamp(p.y, 0.0, rise);
-	// The body: a cylinder between rounded ends.
 	vec2 axis = vec2(centre_at(y, lean_x), y);
-	add_part(p, axis, half_at(y) * 0.92, 0.0, JOIN.x, dist, acc);
+	add_part(p, axis, half_at(y) * BODY, 0.0, dist, acc, top);
 	float scroll = clock * ROWS + seed * 17.0;
 	for (int s = 0; s < 2; s++) {
 		float side = s == 0 ? -1.0 : 1.0;
@@ -229,40 +248,15 @@ void plume(vec2 p, float lean_x, float seed, float clock, inout float dist, inou
 			float h2 = fire_hash(vec2(row * 0.71 + 5.3, side * 1.9 + seed * 11.0));
 			float lc = centre_at(ly, lean_x);
 			float lh = half_at(ly);
-			vec2 at = vec2(lc + side * lh * (0.55 + 0.25 * h1), ly + spacing * 0.15 * (h2 - 0.5));
-			add_part(p, at, spacing * EDGE_LOBE * (0.85 + 0.35 * h2), 0.0, JOIN.x, dist, acc);
+			vec2 at = vec2(lc + side * lh * mix(EDGE_AT.x, EDGE_AT.y, h1), ly + spacing * 0.15 * (h2 - 0.5));
+			add_part(p, at, spacing * EDGE_LOBE * (0.85 + 0.3 * h2), 0.0, dist, acc, top);
 			if (s == 0) {
 				// A lobe rolling over the face, between the edge rows.
 				vec2 face = vec2(lc + (h1 - 0.5) * lh * 0.9, ly + spacing * 0.5);
 				float fr = spacing * FACE_LOBE * (0.8 + 0.3 * h1);
-				add_part(p, face, fr, fr * FACE_FRONT, JOIN.x, dist, acc);
+				add_part(p, face, fr, fr * FACE_FRONT, dist, acc, top);
 			}
 		}
-	}
-}
-
-// Structure 1: the base and the climbing billows.
-void billows(vec2 p, float lean_x, float seed, float clock, inout float dist, inout vec4 acc) {
-	float breathe = 1.0 + 0.05 * sin(TIME * 0.9 + seed * 6.3);
-	vec2 base = vec2(centre_at(BASE.x, lean_x), BASE.x);
-	// The base is an ellipse: distances in its squashed frame.
-	vec2 squash = vec2(1.0, BASE.y / BASE.z);
-	vec2 ps = base + (p - base) * squash;
-	add_part(ps, base, BASE.y * breathe, 0.0, JOIN.y, dist, acc);
-	for (int i = 0; i < BILLOWS; i++) {
-		float own = clock + float(i) / float(BILLOWS);
-		float age = fract(own);
-		float climb = mod(floor(own), 251.0);
-		float roll = fire_hash(vec2(seed * 31.7 + float(i) * 0.37, climb * 0.137 + 0.5));
-		float y = mix(BASE.x, rise * CLIMB_TOP, 1.0 - pow(1.0 - age, CLIMB_EASE));
-		float r = mix(BILLOW_R.x, BILLOW_R.y, smoothstep(0.2, 0.85, age)) * (0.9 + 0.2 * roll);
-		// Born inside the base, so it swells out of it; it shrinks away as it thins at the top,
-		// so its end is not a pop.
-		r *= smoothstep(0.0, 0.18, age) * 0.35 + 0.65;
-		r *= 1.0 - smoothstep(0.7, 1.0, age);
-		float wander = (roll - 0.5) * 0.3 * age;
-		vec2 at = vec2(centre_at(y, lean_x) + wander, y);
-		add_part(p, at, r, 0.06 * r, JOIN.y, dist, acc);
 	}
 }
 
@@ -279,46 +273,63 @@ void fragment() {
 	vec2 pw = p + warp * mix(WARP.x, WARP.y, t) * 2.0;
 	float dist = 1e3;
 	vec4 acc = vec4(0.0);
-	if (structure < 0.5) {
-		plume(pw, lean_x, seed, clock, dist, acc);
-	} else {
-		billows(pw, lean_x, seed, clock, dist, acc);
-	}
-	vec3 n = acc.w > 0.0 ? acc.xyz / acc.w : vec3(0.0, 0.0, 1.0);
-	n = length(n) > 1e-4 ? normalize(n) : vec3(0.0, 0.0, 1.0);
-	float cover = smoothstep(0.0, EDGE, -dist);
+	float top = 0.0;
+	plume(pw, lean_x, seed, clock, dist, acc, top);
+	float soft = EDGE_SOFT * half_at(p.y);
+	float cover = smoothstep(-soft * EDGE_OUT, soft * (1.0 - EDGE_OUT), -dist);
 	if (cover <= 0.0) {
 		discard;
 	}
+	vec3 n = acc.w > 0.0 ? acc.xyz / acc.w : vec3(0.0, 0.0, 1.0);
+	n = length(n) > 1e-4 ? normalize(n) : vec3(0.0, 0.0, 1.0);
+	// 0 where one part's surface wins outright, toward 0.5 where two meet.
+	float crease = acc.w > 0.0 ? 1.0 - top / acc.w : 0.0;
 	// The fake normal in view space (the screen's right, up and toward the camera), then the world.
 	vec2 right = vec2(v_up.y, -v_up.x);
 	vec3 view_n = normalize(vec3(right * n.x + v_up * n.y, n.z));
 	vec3 world_n = mat3(INV_VIEW_MATRIX) * view_n;
-	float below = smoothstep(-0.6, 0.6, -world_n.y);
-	float above = smoothstep(-0.3, 0.8, world_n.y);
+	float below = smoothstep(-0.5, 0.7, -world_n.y);
 	float night = 1.0 - smoothstep(NIGHT_GATE.x, NIGHT_GATE.y, foliage_sun.w);
-	float patches = mix(0.9, 1.08, fire_noise(pw * 1.5 + vec2(seed * 3.0, -clock * rise * 0.6)));
-	// The grade up the column: amber lit from below, rose, a dark blue-grey crown.
+	float dusk = smoothstep(DUSK_KEY.x, DUSK_KEY.y, dot(figure_ambient, vec3(0.2126, 0.7152, 0.0722)));
+	// The key light's side: toward the sun along the ground and a little up (low at sunset).
+	vec3 key = normalize(vec3(foliage_sun.x, 0.35, foliage_sun.z) + vec3(0.0, 1e-3, 0.0));
+	float lit = smoothstep(TERMINATOR.x, TERMINATOR.y, dot(world_n, key));
+	float patches = mix(0.92, 1.08, fire_noise(pw * 1.5 + vec2(seed * 3.0, -clock * rise * 0.6)));
 	float to_rose = smoothstep(TO_ROSE.x, TO_ROSE.y, t);
 	float to_crown = smoothstep(TO_CROWN.x, TO_CROWN.y, t);
-	vec3 amber = FIRE_AMBER * mix(LOW_SIDE, 1.0, below);
-	vec3 rose = NIGHT_ROSE * mix(ROSE_SHADE, 1.0, max(below, above * 0.8));
-	vec3 crown = NIGHT_CROWN * mix(1.0, SKY_LIFT, above);
-	vec3 at_night = mix(mix(amber, rose, to_rose), crown, to_crown);
-	// By day: the sun's side cream, the shade cool, the fire's glow at the base.
-	float sun_side = smoothstep(-0.3, 0.9, dot(world_n, foliage_sun.xyz));
-	vec3 shade = mix(DAY_SHADE_LOW, DAY_SHADE_TOP, to_crown);
-	vec3 by_day = mix(shade, DAY_LIT, sun_side) + amber * DAY_GLOW * (1.0 - to_rose);
-	ALBEDO = mix(by_day, at_night, night) * patches;
-	// Thin at the base among the flames, thinning away at the crown, fading in below the source.
-	float opacity = mix(OPACITY.x, OPACITY.y, smoothstep(0.0, 0.3, t))
+	// Dusk and night: the foot amber, lit from below; the rose lit by the fire below (its lower
+	// part and its underside) or the low sun; the crown lit on its sun side.
+	vec3 foot = mix(FOOT_SHADE, FOOT_LIT, max(below, lit * 0.7));
+	vec3 rose_lit = mix(ROSE_LIT_NIGHT, ROSE_LIT_DUSK, dusk);
+	vec3 rose_shade = mix(ROSE_SHADE_NIGHT, ROSE_SHADE_DUSK, dusk);
+	float fire_lit = (1.0 - smoothstep(FIRE_REACH.x, FIRE_REACH.y, t)) * 0.7;
+	vec3 rose = mix(rose_shade, rose_lit, max(max(lit, below * 0.85), fire_lit));
+	vec3 crown_lit = mix(CROWN_LIT_NIGHT, CROWN_LIT_DUSK, dusk);
+	vec3 crown_shade = mix(CROWN_SHADE_NIGHT, CROWN_SHADE_DUSK, dusk);
+	vec3 crown = mix(crown_shade, crown_lit, lit);
+	vec3 at_night = mix(mix(foot, rose, to_rose), crown, to_crown);
+	// By day: the sun's side grey-lavender, the shade blue-grey, the foot warmer.
+	vec3 by_day = mix(DAY_SHADE, DAY_LIT, lit) + DAY_FOOT * (1.0 - to_rose) * 0.5;
+	vec3 tone = mix(by_day, at_night, night) * patches;
+	tone *= 1.0 - CREASE_DARK * smoothstep(0.08, 0.45, crease);
+	// Thin at the foot among the flames, dense in the upper two thirds, thinning away at the crown,
+	// fading in below the source; thinner toward each part's rim.
+	float profile = mix(FOOT_OPACITY, 1.0, smoothstep(TO_DENSE.x, TO_DENSE.y, p.y))
+		* mix(OPACITY.y, OPACITY.x, night)
 		* (1.0 - smoothstep(CROWN_FADE.x, CROWN_FADE.y, p.y / rise))
 		* smoothstep(-BASE_PAD, 0.15, p.y);
-	float density = cover * mix(1.0 - EDGE_THIN, 1.0, n.z);
+	// Thinner toward a part's rim only near the outline (inside, overlapping rims drew rings).
+	float rim = 1.0 - smoothstep(0.0, soft * 1.5, -dist);
+	float density = cover * mix(1.0, mix(1.0 - EDGE_THIN, 1.0, n.z), rim);
 	// Melts into the scene just behind it.
 	float depth_tex = textureLod(depth_texture, SCREEN_UV, 0.0).r;
 	vec4 behind = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, depth_tex, 1.0);
 	behind.xyz /= behind.w;
 	float melt = smoothstep(0.0, soft_m, VERTEX.z - behind.z);
-	ALPHA = clamp(density * opacity * melt, 0.0, 1.0);
+	float alpha = clamp(density * profile * melt, 0.0, 1.0);
+	// The fire's glow over the foot, added (premultiplied), more on the underside.
+	float glow = smoothstep(GLOW_FROM.x, GLOW_FROM.y, p.y) * (1.0 - smoothstep(GLOW_TO.x, GLOW_TO.y, t));
+	glow *= mix(1.0 - GLOW_BELOW, 1.0, below) * mix(DAY_GLOW, 1.0, night) * density * melt;
+	ALBEDO = tone * alpha + GLOW * glow;
+	ALPHA = alpha;
 }

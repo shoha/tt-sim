@@ -55,8 +55,9 @@ const LIGHT_COLOR := Color(1.0, 0.56, 0.24)
 ## With FireLights' broad flat falloff, 6 washed the burn warm in the dark probe. Under the
 ## game's outdoor_night preset, 8 warmed the ash and logs only a little and 14 warms the ash,
 ## logs and stumps across the burn with no blown patch; the burnt bark itself, linear albedo
-## about 0.035, stays dark either way.)
-const LIGHT_ENERGY := 14.0
+## about 0.035, stays dark either way. Round 5's steeper falloff, FireLights.DECAY 0.75, takes
+## 18 for the same light within 4 m.)
+const LIGHT_ENERGY := 18.0
 const LIGHT_SMALL := 0.6
 const LIGHT_FULL_SIZE := 60.0
 ## The flicker: how deep it dips, and its two slow rates (radians a second).

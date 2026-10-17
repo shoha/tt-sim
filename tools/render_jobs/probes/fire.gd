@@ -306,8 +306,9 @@ static func _burst(base: Node, step: Dictionary) -> String:
 
 
 ## Re-tunes the fire's lights in place for a look comparison (the harness only): each light in
-## use stands `rise` metres over its cluster's centroid with `energy` (before the gate and the
-## flicker), `range` and the falloff `decay` (OmniLight3D.omni_attenuation).
+## use stands `rise` metres over its cluster's centroid (where FireLights stood it, without one)
+## with `energy` (before the gate and the flicker), `range` and the falloff `decay`
+## (OmniLight3D.omni_attenuation).
 static func _tune_lights(field: FireField, step: Dictionary) -> String:
 	if field == null or field.lights() == null:
 		return "no lights"
@@ -323,9 +324,11 @@ static func _tune_lights(field: FireField, step: Dictionary) -> String:
 				continue
 			var light: OmniLight3D = lights.lights()[slot]
 			var at: Vector3 = cluster["at"]
-			light.position = at + Vector3(0.0, float(step.get("rise", 1.6)), 0.0) + toward
+			if step.has("rise"):
+				# Without a rise the light keeps the stand FireLights gave it.
+				light.position = at + Vector3(0.0, float(step["rise"]), 0.0) + toward
 			light.omni_range = float(step.get("range", FireLights.RANGE_M))
-			light.omni_attenuation = float(step.get("decay", 1.0))
+			light.omni_attenuation = float(step.get("decay", FireLights.DECAY))
 			energies[slot] = float(step.get("energy", FireLook.LIGHT_ENERGY))
 	lights.set("_energy", energies)
 	return "lights tuned %s" % str(step)

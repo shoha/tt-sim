@@ -185,7 +185,8 @@ uniform float foliage_view_ink : hint_range(0.0, 1.0) = 0.2;
 uniform vec2 foliage_edge_on_band = vec2(0.12, 0.2);
 // light(): the sun lights a card by a soft ramp of N.L across foliage_paint_band, from the
 // shade tone (a tinted floor) to the lit tone; a cast shadow pulls the lit tone only
-// foliage_paint_shadow of the way down; no direct specular. Other lights stay Lambert.
+// foliage_paint_shadow of the way down; no direct specular. Other lights stay Lambert, each
+// eased toward FOLIAGE_NEAR_CAP (see light()).
 uniform vec3 foliage_paint_lit = vec3(1.9, 2.4, 2.8);
 uniform vec3 foliage_paint_shade = vec3(0.065, 0.19, 0.1);
 uniform vec2 foliage_paint_band = vec2(0.0, 1.0);
@@ -193,6 +194,11 @@ uniform float foliage_paint_shadow : hint_range(0.0, 1.0) = 0.7;
 // The share of ambient light the cards keep under a full sun (the sun term carries their
 // floor instead); it eases back to 1 as foliage_sun.w falls, so a sunless crown is not black.
 uniform float foliage_ambient : hint_range(0.0, 2.0) = 0.25;
+// A non-directional light's diffuse (linear, its brightest channel) eases toward this cap, so a
+// crown a few metres from the fire's lights (FireLights) turns a golden olive on its fire side
+// instead of a flat neon yellow brighter than by day, and a far crown, lit weakly, is almost
+// untouched (card F4b-1 round 5).
+const float FOLIAGE_NEAR_CAP = 0.8;
 #endif
 
 
@@ -437,7 +443,9 @@ void light() {
 		float k = lit * mix(1.0 - foliage_paint_shadow, 1.0, ATTENUATION);
 		DIFFUSE_LIGHT += LIGHT_COLOR / PI * mix(foliage_paint_shade, foliage_paint_lit, k);
 	} else {
-		DIFFUSE_LIGHT += LIGHT_COLOR / PI * max(dot(NORMAL, LIGHT), 0.0) * ATTENUATION;
+		vec3 near = LIGHT_COLOR / PI * max(dot(NORMAL, LIGHT), 0.0) * ATTENUATION;
+		float peak = max(near.r, max(near.g, near.b));
+		DIFFUSE_LIGHT += near * (FOLIAGE_NEAR_CAP / (FOLIAGE_NEAR_CAP + peak));
 	}
 }
 #endif

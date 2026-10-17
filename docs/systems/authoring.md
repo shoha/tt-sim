@@ -233,13 +233,18 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   has one per hot spot at least two cells apart (connected components would make the look
   level's passes one cluster with one light at its middle); re-planning one block changes only
   the clusters within two cells of it. `FireLights` stands four shared `OmniLight3D` (no
-  shadows, range 20 m with a flat falloff, `omni_attenuation` 0.5, 0.7 x the tallest flame up,
-  `FireLook.LIGHT_COLOR`, energy 14 by the cluster's size; judged under the game's
+  shadows, range 15 m, `omni_attenuation` 0.75, 0.7 x the tallest flame up,
+  `FireLook.LIGHT_COLOR`, energy 18 by the cluster's size; judged under the game's
   `outdoor_night` and `outdoor_sunset` presets, where they warm the ash, logs, stumps and rocks
   across the burn, give the trunks a warm side and light the fire side of living canopies near
   the burn, though the burnt bark's linear albedo of about 0.035 keeps it dark-ish however
   strong the light; measured with pixel probes, range 12's window left 2 % of the light at
-  11 m, so the green beyond the burn's edge never moved) over the four
+  11 m, so the green beyond the burn's edge never moved, and range 20 at a decay of 0.5 still
+  held 8 % at 16 m, so night read as a dim sunset; range 15 at 0.75 keeps the near field, about
+  0.44 of range 20's light at the burn's edge and none from 15 m, a firelit pool that falls off
+  to the night's green; the painted foliage eases each such light toward a cap,
+  `FOLIAGE_NEAR_CAP` in `wind_foliage_include.gdshaderinc`, so a canopy beside the fire turns a
+  golden olive rather than neon) over the four
   largest clusters, a lit cluster keeping its light across a re-plan (`keep_slots`); they show
   only while the sun is low (`FireLook.light_gate` of `FoliageLight.last_sun`, the published
   sun's weight: off at 14:00, fading in from about 17:00, full at dusk, at night and with no
@@ -259,13 +264,17 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   with large round lobes along its edges and over its face, joined by a smooth minimum of their
   distances, the lobes in rows spaced by the height's logarithm (small at the base, big at the
   crown) climbing on the column's 10 s clock, all warped by a broad noise carried up with them,
-  so it rolls upward without a rebuild. Painted unshaded with a fake normal: at dusk and night a
-  saturated amber base lit from below, a terracotta rose waist and a dark slate crown lifted on
-  its sky side, by day cream on the sun side and cool in shade (from `foliage_sun`); no fog;
-  it thins away at the crown and is drawn before the flames. Round 4 compared this plume with
-  merged billows (a wide base and four climbing billows in the same quad, `structure` 1, kept
-  for the comparison) and three rounds of separate billow quads (faceted crowns, one oval haze,
-  a chain of discs). Nothing runs per frame (one buffer written when the blocks re-plan). The
+  so it rolls upward without a rebuild; its outline fades over about a quarter of its width.
+  Painted unshaded with a fake normal and blended premultiplied: the foot is nearly transparent
+  among the flames (they show at full strength) and its amber is a glow added over the scene;
+  only the upper two thirds carry real density. At dusk and night a salmon-rose waist lit by the
+  fire below and a powder blue-grey crown, keyed to the scene's ambient (`figure_ambient`): under
+  a sunset's ambient the crown is lighter than the land behind it, under a night's about the
+  night's own value; by day a translucent grey-lavender on the sun side and blue-grey in shade
+  (from `foliage_sun`); no fog; it thins away at the crown and is drawn before the flames. Round
+  4 compared this plume with merged billows (a wide base and four climbing billows in the same
+  quad; removed in round 5) and three rounds of separate billow quads (faceted crowns, one oval
+  haze, a chain of discs). Nothing runs per frame (one buffer written when the blocks re-plan). The
   fire events' `SmokePuffs` crowns are unchanged)
   and is refreshed by `AuthoringEditor.refresh_fire`, which
   `apply_mask_diff` calls for any diff that writes `fire_mask` (the fire part records through

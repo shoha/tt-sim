@@ -28,9 +28,14 @@ const NODE_NAME := "FireLights"
 ## the green beyond the burn's edge (10 m and more from a light) never moved; range 20 keeps the
 ## near field as it was (within 4 m the window is above 0.99) and leaves an attenuation of 0.24
 ## at 11 m (0.016 at range 12): green ground 8-11 m out now warms, canopies near the burn take a
-## lit fire side, with no blown patch.
-const RANGE_M := 20.0
-const DECAY := 0.5
+## lit fire side, with no blown patch. But at range 20 the light still held 0.08 at 16 m, and
+## the critic read night as a dim sunset, everything brown-orange. Round 5 compared four
+## falloffs at the home blaze's light (lights on against off, at 2 to 16 m): range 15 with a
+## decay of 0.75 and energy 18 (FireLook.LIGHT_ENERGY) keeps the near field (0.97 of range 20's
+## light at 4 m), the burn's edge at 11 m about 0.44 of it, 13 m 0.2 and nothing from 15 m, so
+## the firelit pool falls off to the night's green within a few trunk lengths of the burn.
+const RANGE_M := 15.0
+const DECAY := 0.75
 ## A light stands this share of its cluster's tallest flame above the cluster's centroid,
 ## within RISE_M (high enough to reach past the burn's edge without a hot spot under it).
 const RISE_SHARE := 0.7

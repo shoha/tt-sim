@@ -5,7 +5,7 @@ extends MultiMeshInstance3D
 ## each of up to FireClusters.MAX_SMOKE of the largest blaze clusters (FireClusters.smoke). Each
 ## column is one quad (PER_SITE instance) standing on its source and turning about the world's up
 ## axis to face the camera, drawn by shaders/fire_field_smoke.gdshader (the header there holds
-## the look and the two structures round 4 compared, STRUCTURE), which paints the whole column as
+## the look and the structures earlier rounds tried), which paints the whole column as
 ## one silhouette and moves its lobes up it on the column's own clock (a life of LIFE_S), from
 ## the flame tips to about four flame heights, leaning down the map's wind.
 ##
@@ -23,8 +23,6 @@ const SHADER := preload("res://shaders/fire_field_smoke.gdshader")
 const PER_SITE := 1
 const LIFE_S := 10.0
 const LIFE_VARY := 0.1
-## The shader's structure: 0 one plume, 1 merged billows.
-const STRUCTURE := 0.0
 ## The column, in its unit: its source BORN_AT up (among the tips of the tallest flames), RISE
 ## tall above it and leaning LEAN of that down the wind at the top, WIDTH its half width at the
 ## source and the crown (the shader's uniforms are set from these): a plume about twice as tall
@@ -35,7 +33,7 @@ const LEAN := 0.45
 const WIDTH := Vector2(0.3, 0.64)
 ## Room the quad keeps either side of the leaning centre line, above the crown and below the
 ## source (the shader's ROOM, CROWN_PAD and BASE_PAD), for the bounds.
-const ROOM := 2.0
+const ROOM := 2.9
 const CROWN_PAD := 0.75
 const BASE_ROOM := 0.45
 ## The unit is the cluster's tallest flame times UNIT_SMALL over the smallest clusters, rising
@@ -68,7 +66,6 @@ static func material() -> ShaderMaterial:
 		_material = ShaderMaterial.new()
 		_material.shader = SHADER
 		_material.render_priority = -1
-		_material.set_shader_parameter("structure", STRUCTURE)
 		_material.set_shader_parameter("rise", RISE)
 		_material.set_shader_parameter("lean", LEAN)
 		_material.set_shader_parameter("width", WIDTH)
