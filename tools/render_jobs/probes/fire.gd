@@ -123,7 +123,7 @@ static func run(base: Node, step: Dictionary) -> String:
 		"flames":
 			var show := bool(step.get("show", true))
 			for chunk in ctrl.editor.fire_field.get_children():
-				if not (chunk is FireLights or chunk is FireFieldSmoke):
+				if not (chunk is FireLights or chunk is FireFieldSmoke or chunk is FireNoiseBake):
 					(chunk as Node3D).visible = show
 			return "flames %s" % ("shown" if show else "hidden")
 		"extras":

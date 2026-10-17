@@ -60,7 +60,7 @@ static func _config(ctrl: AuthoringController, field: FireField, config: String)
 	var flames := not off and name != "no_flames"
 	var glow := not off and name != "no_glow"
 	for chunk in field.get_children():
-		if not (chunk is FireLights or chunk is FireFieldSmoke):
+		if not (chunk is FireLights or chunk is FireFieldSmoke or chunk is FireNoiseBake):
 			(chunk as Node3D).visible = flames
 	ctrl.editor.terrain.get_material().set_shader_parameter("fire_present", 1 if glow else 0)
 	field.smoke().visible = not off and name != "no_smoke"

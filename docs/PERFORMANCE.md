@@ -3495,6 +3495,59 @@ instead of nine); the flames' per-fragment cost (tongue layouts, bands, depth me
 term the same way; for the refresh, the re-plan (15 ms for four blocks of 10 m) is GDScript per
 lattice point and would move to a worker or native code.
 
+### Cost pass (F4b-3, 2026-10-16): about 40 % off, targets still missed
+
+**Where the cost was.** A same-run A/B of shader variants (`probes/fire_ab.gd patch`, main's
+shaders, "third" by day, 6 s windows twice each; JOBS.md "Per-term and before/after shader A/B")
+found the ground term at 1.48 ms at home, not F4b-2's 0.87: F4b-2's shards fix (the integer
+`glow_hash`) made it about 1.7x dearer after that pass was measured. Of it the value noise was
+0.95 ms (the noise cut to one `fract`), the rest of the burning path 0.48, the nine-tap early-out
+about 0.05 (so a dilated mask would save at most that; not done), the B-splines 0.06, the specks
+0.01. The flames' 0.45 ms: the noise (sways, erosion cloud, rim) 0.18, the extra tongues 0.07, the
+licks 0.08, the depth melt 0. At zoom 20: ground 0.70 (noise 0.43), flames 0.32.
+
+**What changed (look-neutral).** The ground term's broad fields (the mask read's warp, the char's
+edge, the dried band's width, the char's drift and blotches, the ash, the breathing's phase:
+about 27 of its 45 value noises) are a pure function of map XZ, so `FireNoiseBake` renders them
+once per map into an RGBA8 texture (`fire_glow_bake.gdshader`, 8 texels a metre, two halves), and
+`fire_glow` reads them with two fetches; the noises left (tufts, lobes, coal lumps, cracks, the
+drifting bed) run only where their result shows. The flames work out each drawing's tongues,
+bands, lick life, heat and age once per flame in `vertex()`, skip the noise where a noise-free
+upper bound of the field stays under -1.5 (most of a quad is the lean's and the lick's room), and
+discard every pixel the shape leaves empty before the depth read and the blend. Pixel diffs at
+firefeat_look's views (day zs, sunset zs, night home, sunset z20) with the clock held, main
+against the tree: mean 0.07-0.16 of 255, 0.3-0.6 % of pixels over 8; the ground shows no
+difference at 4x gain, and the rest is a handful of single flames on a different held drawing
+(a per-drawing roll now rounds in the vertex stage). The Mobile renderer draws it without errors.
+
+**Measured.** `fire_perf_play` before and after in one session (pinned `override.cfg`; GPU idle
+at both starts: 44 % P8 315 MHz, 37 % P8 420 MHz). The after run's "off" windows were uniformly
+slower, about 12 % on "third" and 4 % on "whole" (drift: identical scenes); the last column
+divides the after delta by that factor. GPU median ms, fire on minus off, two pairs each:
+
+| View | Before | After | After, drift-corrected | Target |
+| --- | --- | --- | --- | --- |
+| Third, day, home | +2.09 / +2.17 | +1.29 / +1.38 | +1.19 | 0.5 (at the cap) |
+| Third, day, zoom 20 | +1.16 / +1.17 | +0.81 / +0.82 | +0.73 | 0.3 (at the cap) |
+| Third, night, home | +2.49 / +2.44 | +1.66 / +1.65 | +1.47 | |
+| Third, night, zoom 20 | +1.34 / +1.33 | +1.30 / +1.32 | +1.17 | |
+| Whole, day, home (1,729 shown) | +3.00 / +3.06 | +1.78 / +1.80 | +1.70 | 0.5 |
+| Whole, day, zoom 20 | +3.02 / +2.97 | +1.52 / +1.54 | +1.49 | 0.3 |
+| Whole, night, home | +3.37 / +3.36 | +2.23 / +2.23 | +2.14 | |
+| Whole, night, zoom 20 | +3.31 / +3.35 | +2.00 / +2.01 | +1.92 | |
+
+Split after (third, each part off): day home ground 0.78, flames 0.31, smoke 0.10; day zoom 20
+ground 0.37, flames 0.26, smoke 0.18; night home ground 0.67, flames 0.36, smoke 0.16, lights
+0.26; night zoom 20 ground 0.75, flames 0.25, smoke 0.15, lights 0.52 (the parts overlap at
+night: their sum exceeds the whole). CPU unchanged (0.002 ms a frame); a 4 m dab's refresh
+unchanged (19.9 / 23.2 ms; re-plan 15.0 / 15.2: not moved off the main thread).
+
+**Verdict: the fire costs about 40 % less and still misses the targets by 2.5-5x.** Next, in
+order of measured cost: the ground's remaining burning path (about 0.4 ms of non-noise work and
+the lobe, lump and crack noises: bake the lobe noise too, it is the next broadest), the lights at
+night (0.26-0.52 ms), the flames' remaining fill (0.25-0.36 ms), then the re-plan off the main
+thread (deterministic per block; the save-reload parity test guards it).
+
 ### First-burn hitch (F4b-2)
 
 The first burnt-forest op on a map read the burnt biome's and the ash's ground textures back in

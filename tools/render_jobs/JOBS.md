@@ -727,6 +727,18 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   per-frame script time (`cpu`) and a 4 m brush dab's refresh (`refresh`); then five more
   passes burn the rest of the map and home, zoom 20 and zoom 30 are measured again near the
   cap, day and night. `--saved` skips the build. It deletes `_firefeat_perf` at the end.
+  Card F4b-3 ran it before and after its shader changes in one session (`--out
+  render_jobs/fire_perf_before`, `render_jobs/fire_perf_after`).
+- Per-term and before/after shader A/B (card F4b-3; `probes/fire_ab.gd`): a job written for the
+  task (kept out of `jobs/`, as its variant file is) builds `_firefeat_perf` with
+  fire_perf_play's build steps (or loads `_firefeat_look --saved`) and `patch`es variants of the
+  ground's fire term, the flames and the smoke from a JSON file, in a palindrome of perf.gd
+  windows; or holds the clock (`hold`), grabs the frame under main's sources and under the
+  working tree's (`grab`), and writes the pixel metrics and a before | after | diff x4 row
+  (`pdiff`, `sheet`). Main's sources for a "before" variant: `git -C D:/dev/tt-sim archive
+  --format=zip --output=<scratch>/before.zip HEAD <shader paths>`, read as
+  `<scratch>/before.zip:shaders/<file>` (`git show --output` writes no blob). The fragment
+  shader rejects `return`, so a variant cannot cut fragment() short that way.
 - `jobs/fire_first_burn.json`: the first burnt-forest op on a fresh map (card F4b-2;
   `probes/fire_perf.gd first_burn`): a new 200 ft temperate map, the palette's burnt biome
   painted over a 4 m disc with nothing armed (a peer's case), the dab's milliseconds, the ground

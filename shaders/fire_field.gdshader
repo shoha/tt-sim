@@ -45,6 +45,12 @@ shader_type spatial;
 // scene's surface to proximity_fade in front of it, so the ground just in front of a foot melts
 // it softly while a log, a stump or a tree standing further in front still hides it. Colours are
 // linear and picked for the filmic tonemap (see event_puff.gdshader).
+//
+// Cost (card F4b-3, docs/PERFORMANCE.md "Fire (F4)"): what is the same for every pixel of a
+// flame (this drawing's tongues, the bands, the lick's life, its heat and age) is worked out
+// once per flame in vertex(); a pixel whose field cannot reach the shape however the noise falls
+// (most of the quad is the lean's and the lick's room) skips the noise, and every pixel the shape
+// leaves empty is dropped before the depth read and the blend. The drawn pixels are as before.
 render_mode unshaded, blend_mix, depth_draw_never, depth_test_disabled, cull_disabled, shadows_disabled, fog_disabled;
 
 #include "res://shaders/fire_noise.gdshaderinc"
@@ -117,14 +123,29 @@ const float SPARK_RISE_M = 1.8;
 const float SPARK_RATE = 0.45;
 const float SPARK_DRIFT_M = 0.45;
 
+// The noise's reach: a tongue's sway moves it at most SWAY_REACH x v across, and the erosion
+// noise pushes a field out by at most CLOUD_PUSH (fire_erode: 0.55 x half the noise's range).
+// A pixel whose field stays below SKIP_BELOW however the noise falls skips the noise and is
+// dropped.
+const float SWAY_REACH = 0.275;
+const float CLOUD_PUSH = 0.275;
+const float SKIP_BELOW = -1.5;
+
 varying flat vec4 f_custom;
-// A flame's held clock (seconds), or a spark's life (0..1); its drawing's number (small).
-varying flat float f_clock;
-varying flat float f_draw;
-// The kind, and the bed's temperature at the foot.
-varying flat vec2 f_kind;
-// The quad across in the flame's half widths: (middle, half span, the tip's lean).
-varying flat vec3 f_frame;
+// The kind, the flame's held clock (seconds) or a spark's life (0..1), how hot the bed makes
+// the flame and its age (the erosion's).
+varying flat vec4 f_state;
+// The quad across in the flame's half widths (middle, half span, the tip's lean), and the
+// tallest tongue's index.
+varying flat vec4 f_frame;
+// This drawing's tongues (drawn_tongue), packed: t0.xyz t1.x, t1.yz t2.xy, t2.z t3.xyz.
+varying flat vec4 f_ta;
+varying flat vec4 f_tb;
+varying flat vec4 f_tc;
+// The bands (rim, amber, core) and the lick's life (a share of LICK_LIFE; 1 or more: none).
+varying flat vec4 f_bands;
+// A blaze's two foot licks' rolls (this drawing's).
+varying flat vec2 f_licks;
 
 // Tongue `i` of layout `layout`: (centre x, height, width), x and width shares of the quad's
 // half width, height a share of the tongues' room; a width of 0 ends the layout.
@@ -150,28 +171,81 @@ vec3 tongue(int layout, int i) {
 	return i == 1 ? vec3(0.22, 0.8, 0.36) : (i == 2 ? vec3(-0.52, 0.6, 0.3) : vec3(0.54, 0.56, 0.3));
 }
 
-// The sideways sway of tongue `i` at height `v` on `clock`.
+// Tongue `i` of layout `layout` as drawing `draw` of a flame of seed `seed` draws it: every held
+// drawing re-draws the tongues (a minor one sits some out, heights and places move), so the
+// drawings differ rather than drift, and each flame's own tongues are moved, stretched and
+// thinned by its seed, so no two crowns share a silhouette. A width of 0: none this drawing.
+vec3 drawn_tongue(int layout, int i, float seed, float draw, float mirror) {
+	vec3 t = tongue(layout, i);
+	if (t.z <= 0.0) {
+		return vec3(0.0);
+	}
+	float k = float(i);
+	float roll = fire_hash(vec2(seed * 19.0 + draw * 0.618, k + 6.5));
+	if (i > 0 && roll < TONGUE_GONE) {
+		return vec3(0.0);
+	}
+	t.x = t.x * mirror + (fire_hash(vec2(seed * 47.0, k + 2.5)) - 0.5) * 0.24 + (roll - 0.5) * 0.14;
+	float own = 1.0 + (fire_hash(vec2(seed * 31.0, k + 0.5)) - 0.5) * 0.6;
+	float drawn = mix(0.7, 1.12, fire_hash(vec2(seed * 23.0 + draw * 0.414, k + 8.5)));
+	t.y = min(t.y * own * drawn, 1.0);
+	t.z *= 0.8 + 0.4 * fire_hash(vec2(seed * 53.0, k + 4.5));
+	return t;
+}
+
+// The sideways sway of tongue `i` at height `v` on `clock` (at most SWAY_REACH x v either way).
 float sway(float seed, int i, float v, float clock) {
 	return (fire_noise(vec2(seed * 9.0 + float(i) * 3.1, v * 2.2 - clock * 2.4)) - 0.5) * 0.55 * v;
 }
 
-// One tongue's field at (x, v): 1 deep inside to 0 at its edge, rounded at the foot, falling
-// away steeply above its top (with the quad's headroom, a field held at 0 there let the erosion
-// noise draw thin hairs up to the quad's top). `t` is (centre x, height, width).
-float tongue_field(float x, float v, vec3 t, float bend) {
-	float vv = v / t.y;
-	float xx = (x - t.x * (1.0 + 0.35 * v) - bend) / t.z;
-	float profile = vv < 0.3
+// A tongue's profile at `vv` (heights of the tongue): 1 deep inside, rounded at the foot,
+// falling away steeply above its top (with the quad's headroom, a field held at 0 there let the
+// erosion noise draw thin hairs up to the quad's top).
+float tongue_profile(float vv) {
+	return vv < 0.3
 		? sqrt(max(0.0, 1.0 - pow((0.3 - vv) / 0.3, 2.0)))
 		: pow(max(0.0, (1.0 - vv) / 0.7), 1.1) - max(0.0, vv - 1.0) * 4.0;
-	return profile - abs(xx);
+}
+
+// One tongue's field at (x, v): 1 deep inside to 0 at its edge. `t` is (centre x, height,
+// width), `bend` its sway.
+float tongue_field(float x, float v, vec3 t, float bend) {
+	float xx = (x - t.x * (1.0 + 0.35 * v) - bend) / t.z;
+	return tongue_profile(v / t.y) - abs(xx);
+}
+
+// The most tongue_field can be at (x, v) for any bend within `most` either way (none: -1).
+float tongue_most(float x, float v, vec3 t, float most) {
+	if (t.z <= 0.0) {
+		return -1.0;
+	}
+	float off = max(0.0, abs(x - t.x * (1.0 + 0.35 * v)) - most) / t.z;
+	return tongue_profile(v / t.y) - off;
+}
+
+// The lick's body at `u` (0 at its foot, 1 at its tip): round below, pointed above.
+float lick_body(float u) {
+	return u < 0.33
+		? sqrt(max(0.0, 1.0 - pow((0.33 - u) / 0.33, 2.0)))
+		: pow(max(0.0, (1.0 - u) / 0.67), 1.2);
 }
 
 void vertex() {
 	f_custom = INSTANCE_CUSTOM;
 	float kind = floor(INSTANCE_CUSTOM.z + 1e-4);
-	f_kind = vec2(kind, clamp((INSTANCE_CUSTOM.z - kind) / FOOT_SHARE, 0.0, 1.0));
+	float foot = clamp((INSTANCE_CUSTOM.z - kind) / FOOT_SHARE, 0.0, 1.0);
 	float seed = fract(INSTANCE_CUSTOM.x);
+	// What fragment() reads per flame (see the varyings); a spark keeps the defaults.
+	vec3 frame = vec3(0.0, 1.0, 0.0);
+	vec3 t0 = vec3(0.0);
+	vec3 t1 = vec3(0.0);
+	vec3 t2 = vec3(0.0);
+	vec3 t3 = vec3(0.0);
+	float tallest = 0.0;
+	vec4 bands = vec4(0.0, 0.0, 0.0, 1.0);
+	vec2 licks = vec2(0.0);
+	float hot = 0.0;
+	float age = 0.0;
 	float w = length(MODEL_MATRIX[0].xyz);
 	float h = length(MODEL_MATRIX[1].xyz);
 	float grow = 1.0;
@@ -189,15 +263,14 @@ void vertex() {
 	lean_m *= (0.85 + 0.3 * gust) * (0.9 + 0.2 * fract(seed * 29.3));
 	float rate = mix(DRAWING_RATE.x, DRAWING_RATE.y, fract(seed * 13.7));
 	float drawing = floor(TIME * rate + seed * 17.0);
-	f_clock = drawing / rate;
-	f_draw = mod(drawing, 97.0);
+	float clock = drawing / rate;
+	float draw = mod(drawing, 97.0);
 	float tall = h / HEADROOM;
 	float across_w = w;
 	vec3 centre;
 	if (abs(kind - KIND_SPARK) < 0.5) {
 		float life = fract(TIME * SPARK_RATE * (0.7 + 0.6 * fract(seed * 7.1)) + seed * 5.0);
-		f_clock = life;
-		f_frame = vec3(0.0, 1.0, 0.0);
+		clock = life;
 		vec2 drift = length(wind) > 1e-4 ? normalize(wind) * SPARK_DRIFT_M : vec2(0.0);
 		vec3 rise = vec3(drift.x, 0.0, drift.y) * life;
 		rise.y = life * SPARK_RISE_M;
@@ -212,11 +285,54 @@ void vertex() {
 		float reach = lean_m * LEAN_REACH;
 		float lo = -half_w + min(0.0, reach);
 		float hi = half_w + max(0.0, reach);
-		f_frame = vec3(0.5 * (lo + hi), 0.5 * (hi - lo), lean_m) / half_w;
+		frame = vec3(0.5 * (lo + hi), 0.5 * (hi - lo), lean_m) / half_w;
 		across_w = hi - lo;
 		centre = (VIEW_MATRIX * vec4(origin, 1.0)).xyz;
 		centre.xy += (up * tall * 0.5 + right * 0.5 * (lo + hi)) * grow;
+		// This drawing's tongues and the tallest of them (the lick tears off its tip).
+		int layout = int(INSTANCE_CUSTOM.x);
+		float mirror = fract(seed * 5.3) < 0.5 ? -1.0 : 1.0;
+		t0 = drawn_tongue(layout, 0, seed, draw, mirror);
+		t1 = drawn_tongue(layout, 1, seed, draw, mirror);
+		t2 = drawn_tongue(layout, 2, seed, draw, mirror);
+		t3 = drawn_tongue(layout, 3, seed, draw, mirror);
+		float top = t0.y;
+		if (t1.y > top) {
+			top = t1.y;
+			tallest = 1.0;
+		}
+		if (t2.y > top) {
+			top = t2.y;
+			tallest = 2.0;
+		}
+		if (t3.y > top) {
+			tallest = 3.0;
+		}
+		float heat = INSTANCE_CUSTOM.y;
+		hot = smoothstep(HOT_FROM.x, HOT_FROM.y, foot) * heat_merge;
+		age = mix(FLAME_AGE.x, FLAME_AGE.y, max(smoothstep(0.43, 0.75, heat), hot));
+		// This flame's bands: each width scaled by its seed; where the bed is hot the rim thins
+		// away and the amber and the core widen, so crowded flames read as one hotter body.
+		vec3 widths = FLAME_BANDS * vec3(
+			mix(0.55, 1.5, fire_hash(vec2(seed * 61.0, 1.5))),
+			mix(0.7, 1.35, fire_hash(vec2(seed * 67.0, 2.5))),
+			mix(0.92, 1.12, fire_hash(vec2(seed * 71.0, 3.5)))
+		);
+		widths *= vec3(1.0 - 0.7 * hot, mix(1.0, 0.85, hot), mix(1.0, 0.94, hot));
+		widths.y = max(widths.y, AMBER_LEAST);
+		// The lick's place in its loop (see fragment()).
+		bands = vec4(widths, fract(clock * BREAKOFF_RATE + seed * 3.7) / LICK_LIFE);
+		licks = vec2(
+			fire_hash(vec2(seed * 29.0 + draw * 0.37, 11.5)), fire_hash(vec2(seed * 29.0 + draw * 0.37, 12.5))
+		);
 	}
+	f_state = vec4(kind, clock, hot, age);
+	f_frame = vec4(frame, tallest);
+	f_ta = vec4(t0, t1.x);
+	f_tb = vec4(t1.yz, t2.xy);
+	f_tc = vec4(t2.z, t3);
+	f_bands = bands;
+	f_licks = licks;
 	centre.z += toward_camera_m + toward_camera * 0.5 * w;
 	MODELVIEW_MATRIX = mat4(
 		vec4(right * across_w * grow, 0.0, 0.0),
@@ -232,95 +348,100 @@ void fragment() {
 	float heat = f_custom.y;
 	vec3 colour;
 	float shape;
-	if (abs(f_kind.x - KIND_SPARK) < 0.5) {
+	if (abs(f_state.x - KIND_SPARK) < 0.5) {
 		// A spark: a soft hot dot, white-gold in the middle, cooling to orange as it rises, gone
 		// by the end of its loop.
 		float r = length(UV * 2.0 - 1.0);
-		float life = f_clock;
+		float life = f_state.y;
 		shape = (1.0 - smoothstep(0.25, 1.0, r)) * (1.0 - smoothstep(0.55, 0.95, life));
 		colour = mix(FLAME_WHITE, SPARK_GOLD, smoothstep(0.0, 0.6, r));
 		colour = mix(colour, FLAME_ORANGE, smoothstep(0.3, 0.9, life));
 	} else {
-		int layout = int(f_custom.x);
-		float clock = f_clock;
-		float hot = smoothstep(HOT_FROM.x, HOT_FROM.y, f_kind.y) * heat_merge;
+		float clock = f_state.y;
+		float hot = f_state.z;
+		float age = f_state.w;
 		// v runs from the foot (0) to the tallest tongue's room (1); x in the flame's half widths
 		// from its foot, the wind bending the top (the S of v squared).
 		float v = (1.0 - UV.y) / HEADROOM;
 		float x = (UV.x * 2.0 - 1.0) * f_frame.y + f_frame.x - f_frame.z * min(v * v, LEAN_REACH);
-		float mirror = fract(seed * 5.3) < 0.5 ? -1.0 : 1.0;
-		float field = -1.0;
-		int tallest = 0;
-		vec3 top = vec3(0.0);
-		for (int i = 0; i < 4; i++) {
-			vec3 t = tongue(layout, i);
-			if (t.z <= 0.0) {
-				break;
-			}
-			float k = float(i);
-			// This drawing's roll: every held drawing re-draws the tongues (a minor one sits some
-			// out, heights and places move), so the drawings differ rather than drift.
-			float roll = fire_hash(vec2(seed * 19.0 + f_draw * 0.618, k + 6.5));
-			if (i > 0 && roll < TONGUE_GONE) {
-				continue;
-			}
-			// Each flame's own tongues: moved, stretched and thinned by its seed, so no two crowns
-			// share a silhouette.
-			t.x = t.x * mirror + (fire_hash(vec2(seed * 47.0, k + 2.5)) - 0.5) * 0.24 + (roll - 0.5) * 0.14;
-			float own = 1.0 + (fire_hash(vec2(seed * 31.0, k + 0.5)) - 0.5) * 0.6;
-			float drawn = mix(0.7, 1.12, fire_hash(vec2(seed * 23.0 + f_draw * 0.414, k + 8.5)));
-			t.y = min(t.y * own * drawn, 1.0);
-			t.z *= 0.8 + 0.4 * fire_hash(vec2(seed * 53.0, k + 4.5));
-			field = max(field, tongue_field(x, v, t, sway(seed, i, v, clock)));
-			if (t.y > top.y) {
-				top = t;
-				tallest = i;
-			}
-		}
-		if (heat >= BLAZE_FROM) {
-			// A blaze's two low licks at its foot, re-drawn with it.
-			for (int j = 0; j < 2; j++) {
-				float r = fire_hash(vec2(seed * 29.0 + f_draw * 0.37, float(j) + 11.5));
-				vec3 t = vec3((j == 0 ? -1.0 : 1.0) * (0.62 + 0.1 * r), 0.2 + 0.14 * r, 0.2);
-				field = max(field, tongue_field(x, v, t, sway(seed, j + 4, v, clock) * 0.5));
-			}
-		}
-		float cloud = fire_cloud(vec2(x * 2.2, v * 2.6 - clock * 3.0) + seed * 7.0);
-		float age = mix(FLAME_AGE.x, FLAME_AGE.y, max(smoothstep(0.43, 0.75, heat), hot));
-		float inside = fire_erode(field, cloud, age, ERODE_FROM);
-		// The foot rounds in: near the quad's bottom the erosion noise may not push the shape out,
-		// else the quad's bottom (or the foot's fade) cut it with a straight horizontal line.
-		inside -= FOOT_IN * (1.0 - smoothstep(0.0, 0.35, v));
-		// This flame's bands: each width scaled by its seed; where the bed is hot the rim thins
-		// away and the amber and the core widen, so crowded flames read as one hotter body.
-		vec3 bands = FLAME_BANDS * vec3(
-			mix(0.55, 1.5, fire_hash(vec2(seed * 61.0, 1.5))),
-			mix(0.7, 1.35, fire_hash(vec2(seed * 67.0, 2.5))),
-			mix(0.92, 1.12, fire_hash(vec2(seed * 71.0, 3.5)))
+		// This drawing's tongues (vertex()); the tallest, whose tip the lick tears off.
+		vec3 t0 = f_ta.xyz;
+		vec3 t1 = vec3(f_ta.w, f_tb.xy);
+		vec3 t2 = vec3(f_tb.zw, f_tc.x);
+		vec3 t3 = f_tc.yzw;
+		int tallest = int(f_frame.w + 0.5);
+		vec3 top = tallest == 0 ? t0 : (tallest == 1 ? t1 : (tallest == 2 ? t2 : t3));
+		vec3 bands = f_bands.xyz;
+		float life = f_bands.w;
+		bool blazing = heat >= BLAZE_FROM;
+		vec3 lick_a = vec3(-(0.62 + 0.1 * f_licks.x), 0.2 + 0.14 * f_licks.x, 0.2);
+		vec3 lick_b = vec3(0.62 + 0.1 * f_licks.y, 0.2 + 0.14 * f_licks.y, 0.2);
+		// The most the shape's field can be here however the noise falls: past SKIP_BELOW the
+		// pixel skips the noise and is dropped.
+		float most = max(
+			max(tongue_most(x, v, t0, SWAY_REACH * v), tongue_most(x, v, t1, SWAY_REACH * v)),
+			max(tongue_most(x, v, t2, SWAY_REACH * v), tongue_most(x, v, t3, SWAY_REACH * v))
 		);
-		bands *= vec3(1.0 - 0.7 * hot, mix(1.0, 0.85, hot), mix(1.0, 0.94, hot));
-		bands.y = max(bands.y, AMBER_LEAST);
-		// The lick: once a loop the tallest tongue's tip tears off as a whole tongue of its own
-		// (round below, pointed above), rises clear of the flame and is eaten over LICK_LIFE of
-		// the loop; orange and amber, never the core.
-		float life = fract(clock * BREAKOFF_RATE + seed * 3.7) / LICK_LIFE;
+		if (blazing) {
+			most = max(
+				most,
+				max(tongue_most(x, v, lick_a, SWAY_REACH * 0.5 * v), tongue_most(x, v, lick_b, SWAY_REACH * 0.5 * v))
+			);
+		}
+		most = max(most, -1.0) + CLOUD_PUSH - smoothstep(ERODE_FROM, 0.9, age) * 1.4;
+		most -= FOOT_IN * (1.0 - smoothstep(0.0, 0.35, v));
+		float lick_h = top.y * 0.55 * (1.0 - 0.3 * life);
+		float u = (v - top.y * (0.78 + 0.42 * life)) / lick_h;
+		float lick_w = top.z * 0.9 * (1.0 - 0.35 * life);
+		float lick_ends = 4.0 * (max(0.0, -u) + max(0.0, u - 1.0));
 		if (life < 1.0) {
-			float lick_h = top.y * 0.55 * (1.0 - 0.3 * life);
-			float u = (v - top.y * (0.78 + 0.42 * life)) / lick_h;
-			float body = u < 0.33
-				? sqrt(max(0.0, 1.0 - pow((0.33 - u) / 0.33, 2.0)))
-				: pow(max(0.0, (1.0 - u) / 0.67), 1.2);
-			float lick_x = top.x * (1.0 + 0.35 * v) + sway(seed, tallest, v, clock);
-			float lick_w = top.z * 0.9 * (1.0 - 0.35 * life);
-			// Past either end the field falls away steeply, so the erosion noise draws no hair there.
-			float lick = body - abs(x - lick_x) / lick_w - 4.0 * (max(0.0, -u) + max(0.0, u - 1.0));
-			lick = min(fire_erode(lick, cloud, 0.3 + 0.65 * life, ERODE_FROM), bands.z - 0.06);
-			inside = max(inside, lick);
+			float lick_off = max(0.0, abs(x - top.x * (1.0 + 0.35 * v)) - SWAY_REACH * v) / lick_w;
+			float lick_most = lick_body(u) - lick_off - lick_ends + CLOUD_PUSH;
+			lick_most -= smoothstep(ERODE_FROM, 0.9, 0.3 + 0.65 * life) * 1.4;
+			most = max(most, lick_most);
+		}
+		bool empty = most < SKIP_BELOW;
+		float inside = most;
+		float cloud = 0.5;
+		if (!empty) {
+			float field = -1.0;
+			field = t0.z > 0.0 ? max(field, tongue_field(x, v, t0, sway(seed, 0, v, clock))) : field;
+			field = t1.z > 0.0 ? max(field, tongue_field(x, v, t1, sway(seed, 1, v, clock))) : field;
+			field = t2.z > 0.0 ? max(field, tongue_field(x, v, t2, sway(seed, 2, v, clock))) : field;
+			field = t3.z > 0.0 ? max(field, tongue_field(x, v, t3, sway(seed, 3, v, clock))) : field;
+			if (blazing) {
+				// A blaze's two low licks at its foot, re-drawn with it.
+				field = max(field, tongue_field(x, v, lick_a, sway(seed, 4, v, clock) * 0.5));
+				field = max(field, tongue_field(x, v, lick_b, sway(seed, 5, v, clock) * 0.5));
+			}
+			cloud = fire_cloud(vec2(x * 2.2, v * 2.6 - clock * 3.0) + seed * 7.0);
+			inside = fire_erode(field, cloud, age, ERODE_FROM);
+			// The foot rounds in: near the quad's bottom the erosion noise may not push the shape
+			// out, else the quad's bottom (or the foot's fade) cut it with a straight line.
+			inside -= FOOT_IN * (1.0 - smoothstep(0.0, 0.35, v));
+			// The lick: once a loop the tallest tongue's tip tears off as a whole tongue of its own
+			// (round below, pointed above), rises clear of the flame and is eaten over LICK_LIFE of
+			// the loop; orange and amber, never the core.
+			if (life < 1.0) {
+				float lick_x = top.x * (1.0 + 0.35 * v) + sway(seed, tallest, v, clock);
+				// Past either end the field falls away steeply, so the erosion noise draws no hair.
+				float lick = lick_body(u) - abs(x - lick_x) / lick_w - lick_ends;
+				lick = min(fire_erode(lick, cloud, 0.3 + 0.65 * life, ERODE_FROM), bands.z - 0.06);
+				inside = max(inside, lick);
+			}
 		}
 		// A soft outer edge, softer toward the tips; the bands bleed into each other.
 		float px = max(fwidth(inside), 1e-4);
+		if (empty && debug_view != 1) {
+			discard;
+		}
 		float soft = mix(EDGE_SOFT.x, EDGE_SOFT.y, smoothstep(0.55, 1.05, v));
 		shape = smoothstep(-px, max(soft, 2.0 * px), inside);
+		// The outer orange dissolves into the bed at the foot; the hot inside stands.
+		shape *= smoothstep(0.0, 0.3, v + (cloud - 0.5) * 0.24 + max(inside - bands.x, 0.0) * 0.7);
+		if (shape <= 0.0 && debug_view != 1) {
+			discard;
+		}
 		vec3 bleed = max(BAND_BLEED, vec3(px));
 		// The rim's deep red only where a noise along the edge allows it: no continuous outline.
 		float rim_noise = fire_noise(vec2(x * 2.6 + seed * 13.0, v * 3.2 - clock * 2.6));
@@ -334,8 +455,6 @@ void fragment() {
 		float core = smoothstep(bands.z - bleed.z, bands.z + bleed.z, inside) * core_on;
 		colour = mix(colour, FLAME_CORE, core);
 		colour *= 1.0 + 0.12 * hot;
-		// The outer orange dissolves into the bed at the foot; the hot inside stands.
-		shape *= smoothstep(0.0, 0.3, v + (cloud - 0.5) * 0.24 + max(inside - bands.x, 0.0) * 0.7);
 	}
 	float depth_tex = textureLod(depth_texture, SCREEN_UV, 0.0).r;
 	vec4 behind = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, depth_tex, 1.0);
