@@ -693,24 +693,25 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   saved as `_firefeat_look`. Look (card F4b-1's lights and smoke; card F4a's rounds 1-4 are
   in its history up to ed6696c9, their frames kept in `render_jobs/fire_field_look`): that level
   under the game's own presets (the probe's sun keys: `sunset` the outdoor_sunset preset with
-  the sun at 19:00, `night` outdoor_night at 23:00, `day` the level's own sky at 14:00) at home,
-  at zoom 8 over the blaze and zoom 20 over the fire's middle at sunset, and at zoom 12 framing
-  the largest smoke column (the probe's `zs` view) at sunset, night and day, each three times:
-  `<key>_r4` with the lights and smoke hidden (the probe's `extras`, captioned ROUND 4),
-  `<key>_r2` (card F4b-1's round 2, its captures kept in `render_jobs/fire_lights_smoke_round2`
-  and replayed from its `replay/` folder: taken under the level's own sky, its dusk frames
-  standing in for sunset) and `<key>_ls` with them, side by side in `sheet_<key>.png`, the
-  probe's `info` (lights, gate, smoke sites, the largest clusters) logged after each;
-  `sheet_motion` eight frames 1.6 s apart grabbed by the probe's `burst` at sunset in the `zs`
-  view (a `capture` step takes about 0.4 s, so a strip of captures cannot be faster; measured
-  2026-10-16), their engine times in `smoke_times.txt`; `sheet_dark` the probe's `dark` key
-  (the harness's own night, a diagnostic only: a flat dim ambient, sky reflections off, the sky
-  a tenth, the sun hidden) at home with the lights off and on; `sheet_night_tune` outdoor_night
-  at zoom 8 on the blaze with the lights off, as shipped, round 2's and a stronger tuning (the
-  probe's `lights` action). It writes to `render_jobs/fire_lights_smoke`. Mobile: the same job
-  with `--rendering-method mobile --only sunset_home_ls --out
-  render_jobs/fire_lights_smoke_mobile`. Cleanup deletes every
-  `_firefeat_` level.
+  the sun at 19:00, `night` outdoor_night at 23:00, `day` the level's own sky at 14:00) in the
+  smoke's two structures (the smoke shader's `structure`, set by the probe's `param`): at zoom
+  12 framing the largest smoke column (the probe's `zs` view) at sunset, night and day, at home
+  and at zoom 20 at sunset, each three times: `<key>_r3` (card F4b-1's round 3, its captures
+  kept in `render_jobs/fire_lights_smoke_round3` and replayed), `<key>_a` (one plume a column)
+  and `<key>_b` (merged billows), side by side in `sheet_<key>.png`, the probe's `info`
+  (lights, gate, smoke sites, the largest clusters) logged after each; `sheet_motion_a` and
+  `sheet_motion_b` eight frames 1.6 s apart grabbed by the probe's `burst` at sunset in the
+  `zs` view (a `capture` step takes about 0.4 s, so a strip of captures cannot be faster;
+  measured 2026-10-16), their engine times in `smokeA_times.txt` and `smokeB_times.txt`;
+  `sheet_lights` `<key>_r4` (the lights and smoke hidden, ROUND 4) against `<key>_ls` (both
+  shown) at night home, night zs and sunset home; `lp_home` and `lp_z8` outdoor_night with the
+  flames and smoke hidden: the probe's `grab` keeps the raw frame with the lights off and on
+  (held at their energy, no flicker) and its `diff` writes `lp_<view>_diff.png` ((on - off) x 4)
+  and `lp_<view>_diff.txt` (both colours at level ground 2, 4, 8 and 11 m from the home blaze's
+  light, eight ways each, with its attenuation, cosine and reach there). It writes to
+  `render_jobs/fire_lights_smoke`. Mobile: the same job with `--rendering-method mobile` before
+  `--script` and `--only sunset_home_ls --out render_jobs/fire_lights_smoke_mobile` after `--`.
+  Cleanup deletes every `_firefeat_` level.
 
 ## Caveats
 

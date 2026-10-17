@@ -33,6 +33,13 @@ extends RefCounted
 ##                     and saves them as <name>_<k>.png with their engine times in
 ##                     <name>_times.txt (a capture step takes about 0.4 s, too slow for a strip
 ##                     of held drawings); wait about count x 0.25 s after it
+##   grab {tag, freeze}  keeps the raw 3D frame under `tag` for diff; `freeze` true holds the
+##                     fire's lights at their gated energy with no flicker (false lets them go)
+##   diff {a, b, out, gain, near, rings, points}  compares grabs `a` (lights off) and `b` (on):
+##                     saves (b - a) x gain as <out>.png and writes <out>.txt with both colours
+##                     at level ground `rings` metres from the light nearest `near` (eight ways
+##                     each, with the light's attenuation, cosine and reach there) and at the
+##                     labelled screen points `points` ([name, x, y] in shares of the frame)
 ##   save {folder}     saves the open map as a PREFIX test level (replacing one there)
 ##   cleanup           deletes every PREFIX test level
 ## The views and the sun match the F3 probe's (docs/plans/2026-10-11-fire-features/probe.md), so
@@ -80,6 +87,8 @@ static var _sun_key := ""
 static var _view_key := ""
 ## While the dark key holds: Environment -> its saved properties, DirectionalLight3D -> visible.
 static var _env_saved := {}
+## The grab action's frames by tag.
+static var _grabs := {}
 
 
 static func run(base: Node, step: Dictionary) -> String:
@@ -132,7 +141,139 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _tune_lights(ctrl.editor.fire_field, step)
 		"param":
 			return _param(ctrl.editor.fire_field, step)
+		"grab":
+			return _grab(base, ctrl.editor.fire_field, step)
+		"diff":
+			return _diff(base, ctrl, step)
 	return "unknown action %s" % action
+
+
+static func _grab(base: Node, field: FireField, step: Dictionary) -> String:
+	var lights := field.lights() if field != null else null
+	if step.has("freeze") and lights != null:
+		var hold := bool(step["freeze"])
+		lights.process_mode = Node.PROCESS_MODE_DISABLED if hold else Node.PROCESS_MODE_INHERIT
+		if hold:
+			var energies: PackedFloat32Array = lights.get("_energy")
+			var gate := FireLook.light_gate(FoliageLight.last_sun)
+			for slot in lights.lights().size():
+				lights.lights()[slot].light_energy = energies[slot] * gate
+	var gm: GameMap = base.get("_game_map")
+	var tag := String(step.get("tag", "off"))
+	_grabs[tag] = gm.camera_node.get_viewport().get_texture().get_image()
+	return "grabbed %s" % tag
+
+
+## Compares two grabs (see the header's diff).
+static func _diff(base: Node, ctrl: AuthoringController, step: Dictionary) -> String:
+	var off: Image = _grabs.get(String(step.get("a", "off")))
+	var on: Image = _grabs.get(String(step.get("b", "on")))
+	if off == null or on == null:
+		return "no grabs"
+	var size := Vector2i(960, 540)
+	var scale := Vector2(size) / Vector2(off.get_size())
+	off = off.duplicate() as Image
+	on = on.duplicate() as Image
+	for image: Image in [off, on]:
+		image.convert(Image.FORMAT_RGB8)
+		image.resize(size.x, size.y, Image.INTERPOLATE_BILINEAR)
+	var gain := float(step.get("gain", 4.0))
+	var bytes_off := off.get_data()
+	var bytes_on := on.get_data()
+	var bytes := PackedByteArray()
+	bytes.resize(bytes_off.size())
+	for k in bytes.size():
+		bytes[k] = clampi(roundi((bytes_on[k] - bytes_off[k]) * gain), 0, 255)
+	var out := String(step.get("out", "user://render_jobs/lights_diff"))
+	Image.create_from_data(size.x, size.y, false, Image.FORMAT_RGB8, bytes).save_png(out + ".png")
+	var lines := PackedStringArray()
+	var gm: GameMap = base.get("_game_map")
+	var light := _nearest_light(ctrl.editor.fire_field, step.get("near", [0.0, 0.0]))
+	if light != null:
+		var p := light.global_position
+		lines.append(
+			(
+				"light at (%.1f, %.1f, %.1f) energy %.2f range %.1f decay %.2f"
+				% [p.x, p.y, p.z, light.light_energy, light.omni_range, light.omni_attenuation]
+			)
+		)
+		for ring: float in step.get("rings", [2.0, 4.0, 8.0]):
+			for k in 8:
+				var angle := k * TAU / 8.0
+				var g := Vector3(p.x + ring * cos(angle), 0.0, p.z + ring * sin(angle))
+				g.y = ctrl.editor.ground_height_at(g)
+				var at := _on_screen(gm.camera_node, g, scale, size)
+				if at.x < 0:
+					continue
+				var dist := p.distance_to(g)
+				var fall := pow(maxf(1.0 - pow(dist / light.omni_range, 4.0), 0.0), 2.0)
+				var att := fall * pow(maxf(dist, 1e-4), -light.omni_attenuation)
+				var cosine := (p.y - g.y) / dist
+				lines.append(
+					(
+						"ground %4.1f m %3d deg px (%d, %d) off %s on %s att %.3f cos %.2f reach %.2f"
+						% [
+							ring,
+							k * 45,
+							at.x,
+							at.y,
+							_box_text(off, at),
+							_box_text(on, at),
+							att,
+							cosine,
+							light.light_energy * att * cosine
+						]
+					)
+				)
+	for point: Array in step.get("points", []):
+		var at := Vector2i(int(float(point[1]) * size.x), int(float(point[2]) * size.y))
+		lines.append(
+			(
+				"point %s px (%d, %d) off %s on %s"
+				% [point[0], at.x, at.y, _box_text(off, at), _box_text(on, at)]
+			)
+		)
+	var file := FileAccess.open(out + ".txt", FileAccess.WRITE)
+	file.store_string("\n".join(lines) + "\n")
+	file.close()
+	return "diff written %s (%d lines)" % [out, lines.size()]
+
+
+static func _nearest_light(field: FireField, near: Array) -> OmniLight3D:
+	if field == null or field.lights() == null:
+		return null
+	var best: OmniLight3D = null
+	var best_d := INF
+	var spot := Vector2(float(near[0]), float(near[1]))
+	for light in field.lights().lights():
+		var d := Vector2(light.global_position.x, light.global_position.z).distance_to(spot)
+		if d < best_d and light.light_energy > 0.0:
+			best = light
+			best_d = d
+	return best
+
+
+## Where world point `g` falls in the scaled frame (-1, -1 when off it or behind the camera).
+static func _on_screen(camera: Camera3D, g: Vector3, scale: Vector2, size: Vector2i) -> Vector2i:
+	if camera.is_position_behind(g):
+		return Vector2i(-1, -1)
+	var s := camera.unproject_position(g) * scale
+	if s.x < 3.0 or s.y < 3.0 or s.x > size.x - 4.0 or s.y > size.y - 4.0:
+		return Vector2i(-1, -1)
+	return Vector2i(int(s.x), int(s.y))
+
+
+## The mean colour (0-255) of the 5 x 5 box at `at`, as text.
+static func _box_text(image: Image, at: Vector2i) -> String:
+	var sum := Color(0, 0, 0)
+	var n := 0
+	for dy in range(-2, 3):
+		for dx in range(-2, 3):
+			var x := clampi(at.x + dx, 0, image.get_width() - 1)
+			var y := clampi(at.y + dy, 0, image.get_height() - 1)
+			sum += image.get_pixel(x, y)
+			n += 1
+	return "(%d, %d, %d)" % [roundi(sum.r / n * 255), roundi(sum.g / n * 255), roundi(sum.b / n * 255)]
 
 
 ## Grabs step.count frames of the window step.every seconds apart, then saves them (see the

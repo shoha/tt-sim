@@ -221,7 +221,7 @@ func test_the_fire_lights_are_not_the_maps_own() -> void:
 	assert_eq(environment.get("_original_light_energies").size(), 0)
 
 
-func test_each_smoke_column_spreads_its_billows_over_a_life() -> void:
+func test_each_smoke_column_is_one_quad_on_its_own_clock() -> void:
 	var smoke := FireFieldSmoke.new()
 	autofree(smoke)
 	assert_eq(smoke.multimesh.instance_count, FireFieldSmoke.capacity())
@@ -231,25 +231,21 @@ func test_each_smoke_column_spreads_its_billows_over_a_life() -> void:
 			{"cell": Vector2i(k * 3, 0), "size": 60.0 - k * 20.0, "at": Vector3(k * 8, 0, 0), "top": 3.0}
 		)
 	smoke.place(sites)
-	assert_eq(smoke.live_count(), 3 * FireFieldSmoke.PER_SITE, "a column of billows per site")
+	assert_eq(FireFieldSmoke.PER_SITE, 1, "the whole column is one quad")
+	assert_eq(smoke.live_count(), 3, "a column per site")
 	# The headless renderer keeps no MultiMesh data to read back, so the pure buffer is read.
 	var buffer := FireFieldSmoke.instance_buffer(sites)
 	assert_eq(buffer.size(), FireFieldSmoke.capacity() * FireLook.INSTANCE_FLOATS)
+	var phases: Array[float] = []
 	for site in sites.size():
-		var phases: Array[float] = []
-		for k in FireFieldSmoke.PER_SITE:
-			var i := (site * FireFieldSmoke.PER_SITE + k) * FireLook.INSTANCE_FLOATS
-			var born := Vector3(buffer[i + 3], buffer[i + 7], buffer[i + 11])
-			assert_almost_eq(born, FireFieldSmoke.source(sites[site]), Vector3.ONE * 1e-4)
-			assert_almost_eq(buffer[i], FireFieldSmoke.column_unit(sites[site]), 1e-4)
-			assert_between(buffer[i + 14], 9.0, 11.0, "a climb of about 10 s")
-			phases.append(buffer[i + 12])
-		phases.sort()
-		phases.append(phases[0] + 1.0)
-		for k in FireFieldSmoke.PER_SITE:
-			assert_lt(phases[k + 1] - phases[k], 2.0 / FireFieldSmoke.PER_SITE, "no gap in the column")
-	var unused := 3 * FireFieldSmoke.PER_SITE * FireLook.INSTANCE_FLOATS
-	assert_eq(buffer[unused], 0.0, "the rest of the pool stays empty")
+		var i := site * FireLook.INSTANCE_FLOATS
+		var born := Vector3(buffer[i + 3], buffer[i + 7], buffer[i + 11])
+		assert_almost_eq(born, FireFieldSmoke.source(sites[site]), Vector3.ONE * 1e-4)
+		assert_almost_eq(buffer[i], FireFieldSmoke.column_unit(sites[site]), 1e-4)
+		assert_between(buffer[i + 14], 9.0, 11.0, "a lobe climbs the column in about 10 s")
+		assert_false(buffer[i + 12] in phases, "each column on its own clock")
+		phases.append(buffer[i + 12])
+	assert_eq(buffer[3 * FireLook.INSTANCE_FLOATS], 0.0, "the rest of the pool stays empty")
 	smoke.place([] as Array[Dictionary])
 	assert_eq(smoke.live_count(), 0)
 
