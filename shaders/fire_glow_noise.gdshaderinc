@@ -1,10 +1,10 @@
-// The ground fire's value noise (fire_glow.gdshaderinc) and its broad fields, shared by the
-// ground shader and the bake that works the broad fields out once per map
-// (fire_glow_bake.gdshader, FireNoiseBake; card F4b-3). The fields are a pure function of
-// map-frame XZ, so the bake's texels hold exactly what the ground would compute at their
-// centres, and the ground reads them with two filtered fetches instead of about 27 value noises
-// a pixel. The fine fields (the tufts, lobes, coal lumps, cracks) and the drifting ember bed stay
-// in the ground shader: at the bake's spacing they would move visibly.
+// The ground fire's value noise (fire_glow.gdshaderinc) and its fields, shared by the ground
+// shader and the bakes (FireNoiseBake; cards F4b-3 and F4b-4). The fields are a pure function of
+// map-frame XZ: the broad ones (glow_fields_a, glow_fields_b) feed the static bake
+// (fire_ground_bake.gdshader), which works out everything of the ground's fire that does not
+// change with time, and the fine ones (glow_fine_fields: the tufts, lobes, coal lumps, cracks)
+// are baked once per map at a finer spacing (fire_glow_bake.gdshader). Only the drifting ember
+// bed is evaluated per pixel (fire_warped, in fire_glow.gdshaderinc).
 
 // How far (metres) the mask's read wanders (a broad lobe and a finer ripple), and the most it
 // moves either way (the baked warp's range).
@@ -69,4 +69,40 @@ vec4 glow_fields_b(vec2 at) {
 	float blotch = fire_warped(at / 3.8 + vec2(-8.3, 15.1));
 	float ash = fire_warped(at / FIRE_ASH_M + vec2(41.3, 17.9));
 	return vec4(drift, blotch, ash, glow_noise(at * 0.4 + 9.1));
+}
+
+// The scales (metres) of the fine fields: the dried band's tufts, the glow's lobes, the coal
+// lumps (crust plates) and the cracks. (GLOW_ names: F4b-3's fire_glow, which A/B probes
+// compile against this file, defines the FIRE_ ones.)
+const float GLOW_TUFT_M = 0.6;
+const float GLOW_LOBE_M = 1.3;
+const float GLOW_LUMP_M = 0.9;
+const float GLOW_CRACK_M = 1.5;
+// How much the crack noise's distance from its middle is magnified in the bake (only within
+// 0.5 / GLOW_CRACK_GAIN of it is a crack drawn), for precision in eight bits.
+const float GLOW_CRACK_GAIN = 4.0;
+
+// The static bake's (fire_ground_bake.gdshader) ranges in eight bits: the burn (below its
+// start nothing burns, scorches or dries), the dried band's argument and the ash's.
+const vec2 GLOW_BURN_RANGE = vec2(-0.3, 0.7);
+const vec2 GLOW_DRY_RANGE = vec2(-0.05, 0.2);
+const vec2 GLOW_ASH_RANGE = vec2(-0.5, 1.5);
+
+// `v` stored in `range` (0..1), and back.
+float glow_pack(float v, vec2 range) {
+	return clamp((v - range.x) / (range.y - range.x), 0.0, 1.0);
+}
+
+float glow_unpack(float e, vec2 range) {
+	return range.x + e * (range.y - range.x);
+}
+
+// The fine fields at `at`: the tufts' noise, the lobes' noise, the coal lumps' noise and the
+// crack noise's offset from its middle (times GLOW_CRACK_GAIN, about 0.5, clamped to 0..1).
+vec4 glow_fine_fields(vec2 at) {
+	float tuft = fire_turned(at / GLOW_TUFT_M + vec2(5.3, -2.1));
+	float lobe = fire_warped(at / GLOW_LOBE_M + vec2(23.3, 9.1));
+	float lump = fire_warped(at / GLOW_LUMP_M + vec2(77.0, 5.3));
+	float crack = fire_warped(at / GLOW_CRACK_M + vec2(-3.7, 29.3));
+	return vec4(tuft, lobe, lump, clamp((crack - 0.5) * GLOW_CRACK_GAIN + 0.5, 0.0, 1.0));
 }

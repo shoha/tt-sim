@@ -225,7 +225,15 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   ash between the clumps, matte, its normals straight up so no ground facet shows; the outline
   read through a bold warp, the grass dried and browned outside it in a band of wandering
   width). All of it is a term in the authored ground shader, `shaders/fire_glow.gdshaderinc`,
-  fed the mask (R8) and the two rasters (RG8); its value noise hashes lattice points in integer
+  which since card F4b-4 reads everything of it that does not change with time from two
+  bakes (`FireNoiseBake`, a child of the field): the static bake (`fire_ground_bake.gdshader`,
+  8 texels a metre, three RGBA8 tiles worked out from the mask (R8), the two rasters (RG8) and
+  the broad noise; each refresh redraws only the region its blocks reach) and the fine noise
+  (`fire_glow_bake.gdshader`, 16 texels a metre, once per map); the bed's drift, the breathing
+  and the specks stay per pixel. A refresh's re-plan, cluster sums and rasters (`FirePlanJob`)
+  run on a worker from a snapshot of the document when `FireField.use_worker` is set (the
+  authoring and play-time editors set it, as they do the water's) and land on a later frame.
+  Its value noise hashes lattice points in integer
   arithmetic (`glow_hash`; card F4b-2: `fire_hash`'s float hash gave a lattice point shared by
   two cells two values at map-sized coordinates, which broke every threshold on the noise into
   the straight-edged grey shards and orange wedges seen on the burn; found with the

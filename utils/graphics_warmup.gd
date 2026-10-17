@@ -30,6 +30,7 @@ const COVERED_SHADERS := [
 	"res://shaders/fire_field.gdshader",
 	"res://shaders/fire_field_smoke.gdshader",
 	"res://shaders/fire_glow_bake.gdshader",
+	"res://shaders/fire_ground_bake.gdshader",
 	"res://shaders/fire_smoke.gdshader",
 	"res://shaders/grid_overlay.gdshader",
 	"res://shaders/ground_burn.gdshader",

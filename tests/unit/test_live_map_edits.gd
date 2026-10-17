@@ -141,6 +141,10 @@ func _editable(copy: Copy) -> Copy:
 	scatter.attach_document(copy.doc)
 	copy.editor = AuthoringEditor.create(copy.doc, copy.root, copy.history)
 	copy.editor.water.use_worker = true
+	# The fire's re-plan on a worker too, as play-time live edits run it: the peer and the
+	# reload must still draw the host's flames.
+	if copy.editor.fire_field != null:
+		copy.editor.fire_field.use_worker = true
 	return copy
 
 
@@ -153,6 +157,7 @@ func _busy(copy: Copy) -> bool:
 		or e.scatter.is_growing()
 		or e.props.is_growing()
 		or (water != null and water.is_refreshing())
+		or (e.fire_field != null and e.fire_field.is_working())
 	)
 
 

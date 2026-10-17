@@ -239,6 +239,13 @@ static func heat_texture(
 	texture: ImageTexture,
 	pools := PackedFloat32Array()
 ) -> ImageTexture:
+	return raster_texture(heat_bytes(heat, size, full, pools), size, texture)
+
+
+## heat_texture's bytes (RG8, row by row). Pure, so a worker can encode them (FirePlanJob).
+static func heat_bytes(
+	heat: PackedFloat32Array, size: Vector2i, full: float, pools := PackedFloat32Array()
+) -> PackedByteArray:
 	var count := size.x * size.y
 	var bytes := PackedByteArray()
 	bytes.resize(count * 2)
@@ -249,6 +256,14 @@ static func heat_texture(
 			bytes[i * 2] = mini(roundi(heat[i] * scale), 255)
 			if with_pools:
 				bytes[i * 2 + 1] = mini(roundi(pools[i] * 255.0), 255)
+	return bytes
+
+
+## The RG8 raster `bytes` of `size` texels as a texture: `texture` updated in place when it has
+## the size, else a new one.
+static func raster_texture(
+	bytes: PackedByteArray, size: Vector2i, texture: ImageTexture
+) -> ImageTexture:
 	var image := Image.create_from_data(size.x, size.y, false, Image.FORMAT_RG8, bytes)
 	if texture != null and Vector2i(texture.get_size()) == size:
 		texture.update(image)
@@ -256,19 +271,17 @@ static func heat_texture(
 	return ImageTexture.create_from_image(image)
 
 
-## Binds the glow's mask `texture` (null: no fire), the flames' heat `heat` and the baked broad
-## noise `noise` with its half's frame `noise_rect` (FireNoiseBake; null until drawn: no fire
-## yet) to the ground material `ground`.
+## Binds the ground fire's bakes (FireNoiseBake: the static bake and one tile's frame, the fine
+## noise and its frame; null until drawn, or no fire) to the ground material `ground`.
 static func bind_glow(
 	ground: ShaderMaterial,
-	texture: ImageTexture,
-	heat: ImageTexture,
-	noise: Texture2D,
-	noise_rect: Vector4
+	static_map: Texture2D,
+	static_rect: Vector4,
+	fine_map: Texture2D,
+	fine_rect: Vector4
 ) -> void:
-	ground.set_shader_parameter("fire_mask_map", texture)
-	ground.set_shader_parameter("fire_heat_map", heat)
-	ground.set_shader_parameter("fire_heat_step", FireField.HEAT_STEP_M)
-	ground.set_shader_parameter("fire_noise_map", noise)
-	ground.set_shader_parameter("fire_noise_rect", noise_rect)
-	ground.set_shader_parameter("fire_present", 0 if texture == null or noise == null else 1)
+	ground.set_shader_parameter("fire_static_map", static_map)
+	ground.set_shader_parameter("fire_static_rect", static_rect)
+	ground.set_shader_parameter("fire_fine_map", fine_map)
+	ground.set_shader_parameter("fire_fine_rect", fine_rect)
+	ground.set_shader_parameter("fire_present", 0 if static_map == null or fine_map == null else 1)
