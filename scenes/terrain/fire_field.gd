@@ -53,7 +53,8 @@ extends Node3D
 ## (shown only while the sun is low) and FireFieldSmoke raises a leaning column of soft billows
 ## over up to eight of the largest blaze clusters. Both are children, made with the first fire
 ## and freed with the map; their per-frame work is the lights' flicker (the smoke moves in its
-## shader).
+## shader). The ground's fire term reads its broad noise from a bake (FireNoiseBake, card
+## F4b-3), also a child, made with the first fire mask and bound once it is drawn.
 
 const NODE_NAME := "FireField"
 ## Lattice spacing of the flames, and how far each is moved off its lattice point (a share of
@@ -158,6 +159,8 @@ var _heat_texture: ImageTexture = null
 var _cells: Dictionary = {}
 var _lights: FireLights = null
 var _smoke: FireFieldSmoke = null
+## The ground fire's baked broad noise (made with the first fire mask).
+var _noise: FireNoiseBake = null
 
 
 ## A field for `doc`, already planned and drawn.
@@ -621,8 +624,25 @@ func _bind_glow() -> void:
 		var terrain := child as AuthoredTerrain
 		if terrain != null and terrain.get_material() != null:
 			_glow_texture = FireLook.glow_texture(document, _glow_texture)
-			FireLook.bind_glow(terrain.get_material(), _glow_texture, _heat_texture)
+			if _glow_texture != null:
+				_ensure_noise()
+			var noise := _noise.texture() if _noise != null else null
+			var rect := _noise.rect() if _noise != null else Vector4.ZERO
+			FireLook.bind_glow(terrain.get_material(), _glow_texture, _heat_texture, noise, rect)
 			return
+
+
+## Bakes the ground fire's broad noise for the map's extent (FireNoiseBake) the first time the
+## map has a fire mask, and again when the extent changed; its drawing binds the glow again.
+func _ensure_noise() -> void:
+	var rect := FireNoiseBake.rect_for(document.extent_m())
+	if _noise != null and _noise.rect() == rect:
+		return
+	if _noise == null:
+		_noise = FireNoiseBake.new()
+		add_child(_noise)
+		_noise.baked.connect(_bind_glow)
+	_noise.bake(document.extent_m())
 
 
 ## Stands the lights over the largest burning clusters and the smoke over the largest blaze

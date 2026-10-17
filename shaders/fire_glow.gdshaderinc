@@ -2,10 +2,11 @@
 // docs/plans/2026-10-11-fire-features/design.md section 4, option C of the F3 probe). Included
 // by authored_ground.gdshaderinc for the map's ground only (the skirt never burns): fragment()
 // calls fire_glow(world_xz, TIME, albedo), which turns the albedo to char where the ground burns
-// and returns the fire for EMISSION. Two textures (FireLook.bind_glow; fire_present 0 skips
-// everything): the document's fire_mask on the sample grid, and the flames' rasters (FireField,
+// and returns the fire for EMISSION. Three textures (FireLook.bind_glow; fire_present 0 skips
+// everything): the document's fire_mask on the sample grid, the flames' rasters (FireField,
 // one texel every fire_heat_step metres: red the summed heat, green the feet's pools), both read
-// through a cubic B-spline (texture_bspline) so every threshold is a smooth curve.
+// through a cubic B-spline (texture_bspline) so every threshold is a smooth curve, and the broad
+// noise fields baked once per map (FireNoiseBake, fire_glow_noise.gdshaderinc).
 // Needs weight_uv, texture_bspline, layer_grid_origin and layer_grid_step from the including
 // shader.
 //
@@ -37,8 +38,15 @@
 // or cell lines up with anything. Colours are linear emission, and zero outside the lobes, cracks
 // and cores: the filmic tonemap (white 1.0) lifts low emission about six times, so a dim fringe
 // spread wide reads as a red or plum wash.
+//
+// Cost (card F4b-3, docs/PERFORMANCE.md "Fire (F4)"): the broad fields come from the bake, two
+// fetches for about 27 noises, and every remaining noise is worked out only where its result
+// shows: the dried band's tufts outside the full char, the char and glow only where it burns,
+// the coal lumps under a lobe or a speck, the cracks near the flames' heat, the ember bed away
+// from the crowded clumps, the ash outside them. The output is what evaluating everything gave.
 
 #include "res://shaders/fire_noise.gdshaderinc"
+#include "res://shaders/fire_glow_noise.gdshaderinc"
 
 uniform int fire_present = 0;
 uniform sampler2D fire_mask_map : hint_default_black, filter_linear, repeat_disable;
@@ -47,6 +55,10 @@ uniform sampler2D fire_mask_map : hint_default_black, filter_linear, repeat_disa
 // from the document's first sample.
 uniform sampler2D fire_heat_map : hint_default_black, filter_linear, repeat_disable;
 uniform float fire_heat_step = 0.5;
+// The baked broad fields (FireNoiseBake: glow_fields_a in the left half, glow_fields_b in the
+// right) and one half's frame (the map-frame XZ of its corner, its size in metres).
+uniform sampler2D fire_noise_map : hint_default_black, filter_linear, repeat_disable;
+uniform vec4 fire_noise_rect = vec4(0.0, 0.0, 1.0, 1.0);
 // How much of the flames' bed draws (the look probe compares the flames without it).
 uniform float fire_bed = 1.0;
 
@@ -68,10 +80,9 @@ const vec3 FIRE_SCORCH = vec3(0.42, 0.3, 0.2);
 const vec3 FIRE_DRY = vec3(0.16, 0.105, 0.04);
 const float FIRE_DRY_MIX = 0.7;
 // How far (metres) the char's heat reaches across a cool valley (and the dried band past the
-// char), how far the mask's read wanders (metres: a broad lobe and a finer ripple), and how far
-// a broad noise moves the burn's edge (in mask units) and over what the char fades in at it.
+// char; the read's wander is FIRE_WANDER_M), how far a broad noise moves the burn's edge (in
+// mask units) and over what the char fades in at it.
 const float FIRE_FILL_M = 1.4;
-const vec2 FIRE_WANDER_M = vec2(1.8, 0.45);
 const float FIRE_FEATHER = 0.5;
 const float FIRE_EDGE_SOFT = 0.1;
 // The ground's fire ramp, from a glow's fringe to its hottest (linear emission); the gold stays
@@ -101,47 +112,8 @@ const float FIRE_BREATHE = 1.9;
 // Specks: one cell this wide in FIRE_SPECK_SHARE carries one, in the hotter glow.
 const float FIRE_SPECK_CELL_M = 0.4;
 const float FIRE_SPECK_SHARE = 0.12;
-// The ash: its noise's scale (metres) and the noise value its blotches start at.
-const float FIRE_ASH_M = 2.2;
+// The noise value the ash's blotches start at (its scale is FIRE_ASH_M).
 const float FIRE_ASH_COVER = 0.58;
-
-// A lattice point's value (0..1) from its integer coordinates. The ground's noise hashes here
-// rather than with fire_hash (card F4b-2): fire_hash's float arithmetic amplifies rounding, so
-// at map-sized coordinates the cells sharing a lattice point, which reach it through different
-// expressions, hashed it to different values, and every threshold on the noise broke along the
-// lattice's edges into the straight-edged grey shards and orange wedges seen on the burn.
-// Integer arithmetic is exact, so the noise is continuous everywhere.
-float glow_hash(ivec2 c) {
-	uvec2 q = uvec2(c) * uvec2(1597334677u, 3812015801u);
-	uint n = (q.x ^ q.y) * 1597334677u;
-	return float(n >> 8u) / 16777216.0;
-}
-
-// Value noise, 0..1, one blob a unit across (fire_noise's, on glow_hash).
-float glow_noise(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = p - i;
-	vec2 u = f * f * (3.0 - 2.0 * f);
-	ivec2 c = ivec2(i);
-	float a = glow_hash(c);
-	float b = glow_hash(c + ivec2(1, 0));
-	float d = glow_hash(c + ivec2(0, 1));
-	float e = glow_hash(c + ivec2(1, 1));
-	return mix(mix(a, b, u.x), mix(d, e, u.x), u.y);
-}
-
-// The fire's two octaves on lattices turned off the map's axes (by about 32 and 74 degrees).
-float fire_turned(vec2 p) {
-	vec2 a = vec2(0.848 * p.x - 0.53 * p.y, 0.53 * p.x + 0.848 * p.y);
-	vec2 b = vec2(0.276 * p.x - 0.961 * p.y, 0.961 * p.x + 0.276 * p.y) * 2.17;
-	return 0.68 * glow_noise(a) + 0.32 * glow_noise(b + vec2(7.1, 3.3));
-}
-
-// fire_turned warped by a broad noise (about three of its units across), for the big shapes.
-float fire_warped(vec2 p) {
-	vec2 w = vec2(glow_noise(p * 0.37 + vec2(3.1, 8.3)), glow_noise(p * 0.37 + vec2(9.7, 1.9)));
-	return fire_turned(p + (w - 0.5) * 1.2);
-}
 
 // The ground's fire at temperature `t` (0 the crust, 1 the hottest): deep red, orange, a warm
 // orange-gold, its brightness rising out of the crust over a short fringe.
@@ -157,6 +129,11 @@ float fire_tap_max(vec2 uv, vec2 a, vec2 b) {
 		max(texture(fire_mask_map, uv + a).r, texture(fire_mask_map, uv - a).r),
 		max(texture(fire_mask_map, uv + b).r, texture(fire_mask_map, uv - b).r)
 	);
+}
+
+// The coal lumps' share at `at` (0..1).
+float fire_lump(vec2 at) {
+	return smoothstep(0.5, 0.66, fire_warped(at / FIRE_LUMP_M + vec2(77.0, 5.3)));
 }
 
 // The fire at map-frame XZ `at` at time `clock`: turns `albedo` to char where it burns, sets
@@ -179,11 +156,15 @@ vec3 fire_glow(vec2 at, float clock, inout vec3 albedo, out float charred) {
 	if (max(near, texture(fire_mask_map, uv).r) < 0.002) {
 		return vec3(0.0);
 	}
+	// The broad fields here, baked (the bake's halves side by side; kept off the seam).
+	vec2 baked_uv = (at - fire_noise_rect.xy) / fire_noise_rect.zw;
+	float edge_px = 0.5 / float(textureSize(fire_noise_map, 0).x);
+	baked_uv.x = clamp(baked_uv.x * 0.5, edge_px, 0.5 - edge_px);
+	vec4 fields_a = texture(fire_noise_map, baked_uv);
+	vec4 fields_b = texture(fire_noise_map, baked_uv + vec2(0.5, 0.0));
 	// The burn wanders: the mask is read through a bold warp (lobes) and a finer one, so the
 	// outline of a straight stroke swells and bites unevenly and a straight valley bends.
-	vec2 lobe_w = vec2(glow_noise(at / 7.0 + vec2(4.1, 7.7)), glow_noise(at / 7.0 + vec2(8.9, 2.6)));
-	vec2 ripple = vec2(glow_noise(at / 2.4 + vec2(1.3, 5.9)), glow_noise(at / 2.4 + vec2(6.2, 3.4)));
-	vec2 read = at + (lobe_w - 0.5) * 2.0 * FIRE_WANDER_M.x + (ripple - 0.5) * 2.0 * FIRE_WANDER_M.y;
+	vec2 read = at + (fields_a.xy * 2.0 - 1.0) * FIRE_WANDER_REACH;
 	uv = weight_uv(read, grid);
 	// The mask widened across a cool valley (the mean of four turned taps FIRE_FILL_M out), and
 	// their largest for the dried band past the char.
@@ -203,8 +184,7 @@ vec3 fire_glow(vec2 at, float clock, inout vec3 albedo, out float charred) {
 	float flame_heat = rasters.x;
 	float pool = rasters.y;
 	// The char's edge: eroded by a broad noise and a finer one; under flames always burnt.
-	float edge_noise = 0.65 * fire_warped(at / 4.2 + vec2(13.1, -4.7))
-		+ 0.35 * fire_turned(at / 1.3 + vec2(2.7, 6.1));
+	float edge_noise = fields_a.z;
 	float burn = max(
 		heat - FIRE_EMBER_T + (edge_noise - 0.5) * FIRE_FEATHER, max(flame_heat, pool) * 2.0 - 0.1
 	);
@@ -214,27 +194,35 @@ vec3 fire_glow(vec2 at, float clock, inout vec3 albedo, out float charred) {
 	float fire_t = clamp((heat - FIRE_EMBER_T) / (1.0 - FIRE_EMBER_T), 0.0, 1.0);
 	// Outside the char: dried grass in a band whose width wanders (the mask's taps 1.4 m out, or
 	// the early-out's rings further, or none), its edge ragged, browned further next to the char.
-	float dry_w = fire_warped(at / 4.5 + vec2(-17.3, 3.9));
-	float dry_reach = mix(reach, near, smoothstep(0.45, 0.7, dry_w)) * smoothstep(0.2, 0.42, dry_w);
-	float tuft = fire_turned(at / 0.6 + vec2(5.3, -2.1));
-	float dry = smoothstep(0.01, 0.1, dry_reach + (edge_noise - 0.5) * 0.12 + (tuft - 0.5) * 0.05);
-	dry *= 1.0 - burnt;
-	float lum = dot(albedo, vec3(0.2126, 0.7152, 0.0722));
-	vec3 dried = FIRE_DRY * clamp(lum / 0.1, 0.6, 1.3);
-	albedo = mix(albedo, dried, dry * FIRE_DRY_MIX * (0.75 + 0.5 * (tuft - 0.5)));
-	float scorch = smoothstep(-0.1 - 0.12 * dry_w, 0.0, burn + (tuft - 0.5) * 0.06);
-	albedo *= mix(vec3(1.0), FIRE_SCORCH, scorch);
+	// Under the full char none of it shows.
+	if (burnt < 1.0) {
+		float dry_w = fields_a.w;
+		float dry_reach = mix(reach, near, smoothstep(0.45, 0.7, dry_w)) * smoothstep(0.2, 0.42, dry_w);
+		float tuft = fire_turned(at / 0.6 + vec2(5.3, -2.1));
+		float dry = smoothstep(0.01, 0.1, dry_reach + (edge_noise - 0.5) * 0.12 + (tuft - 0.5) * 0.05);
+		dry *= 1.0 - burnt;
+		float lum = dot(albedo, vec3(0.2126, 0.7152, 0.0722));
+		vec3 dried = FIRE_DRY * clamp(lum / 0.1, 0.6, 1.3);
+		albedo = mix(albedo, dried, dry * FIRE_DRY_MIX * (0.75 + 0.5 * (tuft - 0.5)));
+		float scorch = smoothstep(-0.1 - 0.12 * dry_w, 0.0, burn + (tuft - 0.5) * 0.06);
+		albedo *= mix(vec3(1.0), FIRE_SCORCH, scorch);
+	}
+	// Outside the char there is no fire either.
+	if (burnt <= 0.0) {
+		return vec3(0.0);
+	}
 	// The char: brown-black drifting to a warmer brown, a few bold near-black shapes, and soft
 	// grey ash at the outskirts and between the clumps (where the flames' heat is low).
-	float drift = fire_warped(at / 5.5 + vec2(31.7, 2.9));
-	float blotch = smoothstep(0.58, 0.7, fire_warped(at / 3.8 + vec2(-8.3, 15.1)));
+	float drift = fields_b.x;
+	float blotch = smoothstep(0.58, 0.7, fields_b.y);
 	vec3 char_colour = mix(FIRE_CHAR, FIRE_CHAR_WARM, smoothstep(0.45, 0.75, drift));
 	char_colour = mix(char_colour, FIRE_CHAR_DEEP, blotch * 0.9);
 	float ash_room = (1.0 - smoothstep(0.04, 0.22, flame_heat + pool * 0.3)) * (1.0 - 0.5 * blotch);
-	float ash_cover = mix(FIRE_ASH_COVER - 0.08, FIRE_ASH_COVER + 0.06, fire_t);
-	float ash_n = fire_warped(at / FIRE_ASH_M + vec2(41.3, 17.9));
-	float ash = smoothstep(ash_cover, ash_cover + 0.14, ash_n) * ash_room;
-	char_colour = mix(char_colour, FIRE_ASH, ash * 0.85);
+	if (ash_room > 0.0) {
+		float ash_cover = mix(FIRE_ASH_COVER - 0.08, FIRE_ASH_COVER + 0.06, fire_t);
+		float ash = smoothstep(ash_cover, ash_cover + 0.14, fields_b.z) * ash_room;
+		char_colour = mix(char_colour, FIRE_ASH, ash * 0.85);
+	}
 	albedo = mix(albedo, char_colour, burnt);
 	charred = burnt;
 	// The crust's glow: bold lobes round the flames' feet, wider and hotter where the summed heat
@@ -249,20 +237,27 @@ vec3 fire_glow(vec2 at, float clock, inout vec3 albedo, out float charred) {
 	lobe_t *= 0.8 + 0.4 * lobe_n;
 	// Crust plates: dark coal lumps over the glow, fewer where it is hottest; the cracks run
 	// bright between them.
-	float lump = smoothstep(0.5, 0.66, fire_warped(at / FIRE_LUMP_M + vec2(77.0, 5.3)));
+	bool lumped = lobe_t > 0.0;
+	float lump = lumped ? fire_lump(at) : 0.0;
 	lobe_t *= 1.0 - FIRE_LUMP_DARK * lump * (1.0 - 0.4 * crowd);
 	// Cracks: wandering lines of the glow through the crust near the flames.
-	float crack_n = fire_warped(at / FIRE_CRACK_M + vec2(-3.7, 29.3));
-	float crack = 1.0 - smoothstep(FIRE_CRACK_W * 0.4, FIRE_CRACK_W, abs(crack_n - 0.5));
-	crack *= smoothstep(0.03, 0.2, pool + flame_heat) * burnt;
-	float crack_t = crack * (0.38 + 0.3 * crowd + 0.2 * pool);
+	float crack_t = 0.0;
+	if (pool + flame_heat > 0.03) {
+		float crack_n = fire_warped(at / FIRE_CRACK_M + vec2(-3.7, 29.3));
+		float crack = 1.0 - smoothstep(FIRE_CRACK_W * 0.4, FIRE_CRACK_W, abs(crack_n - 0.5));
+		crack *= smoothstep(0.03, 0.2, pool + flame_heat) * burnt;
+		crack_t = crack * (0.38 + 0.3 * crowd + 0.2 * pool);
+	}
 	// Ember cores: bold, few, drifting slowly, away from the clumps.
-	float bed = fire_warped(at / FIRE_BED_M + vec2(clock * 0.012, -clock * 0.008));
-	float cover = mix(FIRE_BED_COVER.x, FIRE_BED_COVER.y, fire_t);
-	float core = smoothstep(cover, cover + FIRE_BED_SOFT, bed) * deep * 0.75 * (1.0 - crowd);
+	float core = 0.0;
+	if (deep > 0.0 && crowd < 1.0) {
+		float bed = fire_warped(at / FIRE_BED_M + vec2(clock * 0.012, -clock * 0.008));
+		float cover = mix(FIRE_BED_COVER.x, FIRE_BED_COVER.y, fire_t);
+		core = smoothstep(cover, cover + FIRE_BED_SOFT, bed) * deep * 0.75 * (1.0 - crowd);
+	}
 	// One rate everywhere, the phase by place (a rate that varied by place wound the phase up
 	// into fine ripples as the clock ran on).
-	float breathe = 0.86 + 0.14 * sin(clock * FIRE_BREATHE + glow_noise(at * 0.4 + 9.1) * 12.0);
+	float breathe = 0.86 + 0.14 * sin(clock * FIRE_BREATHE + fields_b.w * 12.0);
 	float t = max(max(lobe_t, crack_t), core) * breathe;
 	vec3 glow = fire_ramp(t);
 	// Specks: a few small gold dots in the hotter glow, pulsing on their own clocks (the cells
@@ -270,11 +265,15 @@ vec3 fire_glow(vec2 at, float clock, inout vec3 albedo, out float charred) {
 	vec2 sp = vec2(0.848 * at.x - 0.53 * at.y, 0.53 * at.x + 0.848 * at.y) / FIRE_SPECK_CELL_M;
 	vec2 cell = floor(sp);
 	float pick = fire_hash(cell + vec2(7.3, 1.9));
-	vec2 spot = vec2(fire_hash(cell + vec2(3.1, 9.7)), fire_hash(cell + vec2(8.5, 2.3))) * 0.5 + 0.25;
-	float size = mix(0.1, 0.2, fire_hash(cell + vec2(5.5, 4.4)));
-	float speck = 1.0 - smoothstep(size * 0.55, size, length(fract(sp) - spot));
-	speck *= step(1.0 - FIRE_SPECK_SHARE, pick) * smoothstep(0.35, 0.6, t) * (1.0 - lump);
-	float pulse = 0.55 + 0.45 * sin(clock * (2.5 + pick * 5.0) + pick * 60.0);
-	glow = mix(glow, FIRE_SPECK, speck * pulse);
+	float speck_on = step(1.0 - FIRE_SPECK_SHARE, pick) * smoothstep(0.35, 0.6, t);
+	if (speck_on > 0.0) {
+		lump = lumped ? lump : fire_lump(at);
+		vec2 spot = vec2(fire_hash(cell + vec2(3.1, 9.7)), fire_hash(cell + vec2(8.5, 2.3))) * 0.5 + 0.25;
+		float size = mix(0.1, 0.2, fire_hash(cell + vec2(5.5, 4.4)));
+		float speck = 1.0 - smoothstep(size * 0.55, size, length(fract(sp) - spot));
+		speck *= speck_on * (1.0 - lump);
+		float pulse = 0.55 + 0.45 * sin(clock * (2.5 + pick * 5.0) + pick * 60.0);
+		glow = mix(glow, FIRE_SPECK, speck * pulse);
+	}
 	return max(glow, vec3(0.0));
 }

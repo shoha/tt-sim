@@ -256,10 +256,19 @@ static func heat_texture(
 	return ImageTexture.create_from_image(image)
 
 
-## Binds the glow's mask `texture` (null: no fire) and the flames' heat `heat` to the ground
-## material `ground`.
-static func bind_glow(ground: ShaderMaterial, texture: ImageTexture, heat: ImageTexture) -> void:
+## Binds the glow's mask `texture` (null: no fire), the flames' heat `heat` and the baked broad
+## noise `noise` with its half's frame `noise_rect` (FireNoiseBake; null until drawn: no fire
+## yet) to the ground material `ground`.
+static func bind_glow(
+	ground: ShaderMaterial,
+	texture: ImageTexture,
+	heat: ImageTexture,
+	noise: Texture2D,
+	noise_rect: Vector4
+) -> void:
 	ground.set_shader_parameter("fire_mask_map", texture)
 	ground.set_shader_parameter("fire_heat_map", heat)
 	ground.set_shader_parameter("fire_heat_step", FireField.HEAT_STEP_M)
-	ground.set_shader_parameter("fire_present", 0 if texture == null else 1)
+	ground.set_shader_parameter("fire_noise_map", noise)
+	ground.set_shader_parameter("fire_noise_rect", noise_rect)
+	ground.set_shader_parameter("fire_present", 0 if texture == null or noise == null else 1)

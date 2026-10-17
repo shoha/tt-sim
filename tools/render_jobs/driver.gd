@@ -107,7 +107,8 @@ func _process(delta: float) -> void:
 	if _i < 0 or _i >= steps.size():
 		return
 	var step: Dictionary = steps[_i]
-	_state.t += delta
+	# Real time while a probe holds the clock (fire_ab.gd hold: Engine.time_scale 0).
+	_state.t += delta if Engine.time_scale > 0.0 else frame_ms / 1000.0
 	var done := true
 	match String(step.op):
 		"title":

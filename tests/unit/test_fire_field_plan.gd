@@ -322,5 +322,23 @@ func test_lod_keeps_half_and_draws_back_to_front() -> void:
 func test_the_warmup_covers_the_fire_shaders() -> void:
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_field.gdshader")
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_field_smoke.gdshader")
+	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_glow_bake.gdshader")
 	var sources := "\n".join(GraphicsWarmup.shader_sources())
 	assert_true(sources.contains("res://shaders/fire_glow.gdshaderinc\n"), "the ground's glow")
+
+
+func test_the_ground_noise_bake_covers_the_map_at_its_spacing() -> void:
+	var extent := Vector2(60.96, 45.0)
+	var size := FireNoiseBake.half_size(extent)
+	var span := extent + Vector2.ONE * FireNoiseBake.MARGIN_M * 2.0
+	assert_eq(size, Vector2i(ceili(span.x * 8.0), ceili(span.y * 8.0)), "8 texels a metre")
+	var rect := FireNoiseBake.rect_for(extent)
+	assert_almost_eq(rect.z, size.x / FireNoiseBake.TEXELS_PER_M, 1e-4, "whole texels")
+	assert_almost_eq(rect.x, -rect.z * 0.5, 1e-4, "centred on the map")
+	assert_lte(rect.x, -span.x * 0.5 + 1e-4, "the map and its margin inside")
+	assert_lte(rect.y, -span.y * 0.5 + 1e-4)
+	var big := Vector2(400.0, 300.0)
+	assert_eq(FireNoiseBake.half_size(big), Vector2i(FireNoiseBake.MAX_PX, FireNoiseBake.MAX_PX))
+	var big_rect := FireNoiseBake.rect_for(big)
+	assert_almost_eq(big_rect.z, 402.0, 1e-4, "a coarser bake over the same span")
+	assert_almost_eq(big_rect.w, 302.0, 1e-4)
