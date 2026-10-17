@@ -464,7 +464,10 @@ Probe and numbers:
   burn", widened the same day: the crown flames, the ground fire and the smoke should be one
   consistent set built from the same technique family. So (card fire-look-3) they share one
   noise and one erosion rule (`shaders/fire_noise.gdshaderinc`: a shape eaten by bold value
-  noise as it ages, its edge a crisp step a pixel wide, never an alpha fade) and one palette
+  noise as it ages, its edge a crisp step a pixel wide, never an alpha fade; the ground's
+  scorch draws the same noise on `fire_glow_noise.gdshaderinc`'s integer hash since card F4b-5,
+  as the persistent fire's smoke does, because `fire_hash`'s float rounding broke its
+  thresholds into straight-edged cells) and one palette
   (stepped flame bands, the ember glow, warm charcoal smoke going pale as it rises). A banded
   tongue (EventPuffs' flame with `band_flames`: three tongues swaying on the noise, cut into
   flat rim, amber, gold and core bands, eroded from 45 % of its life; the `FlameAtlas`

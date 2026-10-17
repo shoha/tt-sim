@@ -11,8 +11,10 @@ extends RefCounted
 ##   effects {on}      the scene's screen-space effects (SSAO, SSIL, SSR, SDFGI) off or back
 ##   debug {view}      the ground shader's code swapped in place for a debug view of its last
 ##                     outputs (DEBUG_VIEWS: lit grey, unlit, the shading normal, the geometric
-##                     normal), built in memory from authored_ground.gdshaderinc; 0 puts the
-##                     shader's own code back
+##                     normal, the char's weight, the static fire bake's first tile as RGB (card
+##                     F4b-5; until F4b-4's bake it was the mask and the heat rasters), the albedo
+##                     before the fire, the fire's emission), built in memory from
+##                     authored_ground.gdshaderinc; 0 puts the shader's own code back
 
 const EFFECTS: PackedStringArray = ["ssao_enabled", "ssil_enabled", "ssr_enabled", "sdfgi_enabled"]
 const GROUND_INC := "res://shaders/authored_ground.gdshaderinc"
@@ -25,11 +27,9 @@ const DEBUG_VIEWS := {
 	5: "EMISSION = vec3(charred); ALBEDO = vec3(0.0); SPECULAR = 0.0;",
 	6:
 	(
-		"{ vec2 g6 = vec2(textureSize(fire_mask_map, 0));"
-		+ " vec2 h6 = vec2(textureSize(fire_heat_map, 0));"
-		+ " vec2 r6 = texture_bspline(fire_heat_map,"
-		+ " ((world_xz - layer_grid_origin) / fire_heat_step + 0.5) / h6).rg;"
-		+ " EMISSION = vec3(texture_bspline(fire_mask_map, weight_uv(world_xz, g6)).r, r6);"
+		"{ vec2 s6 = (world_xz - fire_static_rect.xy) / fire_static_rect.zw;"
+		+ " s6.x = clamp(s6.x / 3.0, 0.0, 1.0 / 3.0);"
+		+ " EMISSION = texture(fire_static_map, s6).rgb;"
 		+ " ALBEDO = vec3(0.0); SPECULAR = 0.0; }"
 	),
 	7: "EMISSION = lit_albedo; ALBEDO = vec3(0.0); SPECULAR = 0.0;",
