@@ -219,3 +219,57 @@ func test_three_biomes_and_a_burnt_patch_draw_every_accent() -> void:
 	assert_true(drawn >= 6, "a crowded map: %d accents" % drawn)
 	assert_true(layers.has("ash"), "the painted ash")
 	assert_true(layers.has("dirt"), "the burnt forest's dirt accent (dropped by the slot table)")
+
+
+func test_a_reserve_fills_only_the_capacity_step() -> void:
+	var table := {"layers": _names(14), "fallbacks": {}, "dropped": PackedStringArray()}
+	var reserved := PackedStringArray(["absent_3", "", "r0", "r1", "r2"])
+	var out := GroundLayerBinding.with_reserve(table, reserved)
+	var expected := _names(14)
+	expected.append_array(PackedStringArray(["r0", "r1"]))
+	assert_eq(out.layers, expected, "two fit in the step of 16; a bound one is skipped")
+	assert_eq(table.layers, _names(14), "the table passed in is unchanged")
+	var full := GroundLayerBinding.with_reserve({"layers": _names(16)}, reserved)
+	assert_eq(full.layers.size(), 16, "a full step takes none")
+
+
+## A fire's op reaches every peer with nothing armed (card F4b-2): the burnt forest's surfaces
+## and the ash are bound when the map loads, so the first burn appends no layer and reads no
+## texture back.
+func test_the_first_burn_binds_no_new_layer() -> void:
+	var doc := MapDocument.create_flat(Vector2i(30, 30), "grass_birch", "test", 5)
+	doc.biome_ids = PackedStringArray([FOREST])
+	var slots := PackedByteArray()
+	slots.resize(doc.sample_count())
+	slots.fill(1)
+	var density := PackedByteArray()
+	density.resize(doc.sample_count())
+	density.fill(255)
+	doc.biome_slots = slots
+	doc.biome_density = density
+	var reserved := AuthoredTerrain.fire_surfaces(doc, PaletteLibrary.DEFAULT_ROOT, false)
+	assert_true(reserved.has("ash"), str(reserved))
+	assert_true(reserved.size() >= 3, "the burnt forest's ground and accents too: %s" % reserved)
+	var paths := AuthoredTerrain.texture_paths(doc)
+	var ash: Dictionary = PaletteLibrary.surfaces()["ash"]
+	assert_true(
+		paths.has(PaletteLibrary.DEFAULT_ROOT.path_join(String(ash.albedo))),
+		"the load reads the reserve's textures on its threads"
+	)
+	var terrain := AuthoredTerrain.create(doc)
+	add_child_autofree(terrain)
+	var bound := terrain.ground_layers()
+	for surface in reserved:
+		assert_true(bound.has(surface), "%s bound at load: %s" % [surface, bound])
+	var albedo: Texture2DArray = terrain.layer_binding().arrays.textures.albedo
+	# The fire's change: the burnt biome over a patch, then the ash (TerrainEvents' two strokes).
+	doc.biome_ids.append(FireSweep.burnt_biome())
+	var ash_id := doc.ensure_surface("ash")
+	for z in 12:
+		for x in 12:
+			doc.biome_slots[doc.sample_index(x, z)] = 2
+			doc.set_surface_weight(doc.sample_index(x, z), ash_id, 200)
+	terrain.update_ground_region(Rect2i(0, 0, 12, 12))
+	assert_eq(terrain.ground_layers(), bound, "no layer appended")
+	assert_eq(terrain.layer_binding().arrays.textures.albedo, albedo, "the same arrays")
+	assert_eq(terrain.layer_binding().arrays.layers, bound, "and no layer read")

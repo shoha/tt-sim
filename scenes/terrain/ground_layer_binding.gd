@@ -10,7 +10,8 @@ extends RefCounted
 ## Per map it binds:
 ##   - the layer arrays: every surface the map uses, the base at layer 0, in a stable order
 ##     for the session (a surface first used mid-session appends; painting never rebinds),
-##     compacted at the next build();
+##     compacted at the next build(); build() also binds the `reserve` surfaces after the map's
+##     own, ahead of their first use, as many as the arrays' capacity step already holds;
 ##   - the routing table by biome slot (biome_rules, biome_extra, accent_params): each biome's
 ##     ground, cliff, scree, water bed, shore and accent layers. Row 0 is the base, which takes
 ##     the rules and accents of the most covered painted biome on the base surface (else the
@@ -46,6 +47,11 @@ var document: MapDocument = null
 var material: ShaderMaterial = null
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT
 var arrays := GroundLayerArrays.new()
+## Surfaces build() binds ahead of their first use (AuthoredTerrain.fire_surfaces: a fire's op
+## brings them to a map at once, on every peer, and binding them there read their textures back
+## in one frame). Only those the map's own capacity step holds are bound (with_reserve), so a
+## reserve never grows the arrays; GroundLayers.extend keeps them for the session.
+var reserve := PackedStringArray()
 ## GroundLayers.extend() of the current list, GroundLayers.routing() over it, and the inputs
 ## both were computed from (gather_inputs()).
 var table: Dictionary = {}
@@ -122,6 +128,8 @@ func retable(water: bool) -> bool:
 		return GroundPalette.surface_mean_albedo(surface, root)
 	var previous: PackedStringArray = table.get("layers", PackedStringArray())
 	table = GroundLayers.extend(previous, GroundLayers.wanted(inputs), role_of, color_of)
+	if previous.is_empty():
+		table = with_reserve(table, reserve)
 	_warn_overflow()
 	routing = GroundLayers.routing(inputs, table)
 	var layers: PackedStringArray = table.layers
@@ -154,6 +162,24 @@ func retable(water: bool) -> bool:
 ## The palette surface of each layer, in layer order (the base first).
 func layers() -> PackedStringArray:
 	return table.get("layers", PackedStringArray())
+
+
+## `table` (GroundLayers.extend) with the surfaces of `reserved` it lacks appended, as many as
+## its capacity step (GroundLayers.capacity) still holds, so the arrays keep their size. Pure.
+static func with_reserve(table: Dictionary, reserved: PackedStringArray) -> Dictionary:
+	var layers: PackedStringArray = table.get("layers", PackedStringArray()).duplicate()
+	var fallbacks: Dictionary = table.get("fallbacks", {})
+	var room := GroundLayers.capacity(maxi(layers.size(), 1)) - layers.size()
+	for surface in reserved:
+		if room <= 0:
+			break
+		if surface == "" or surface in layers or fallbacks.has(surface):
+			continue
+		layers.append(surface)
+		room -= 1
+	var out := table.duplicate()
+	out["layers"] = layers
+	return out
 
 
 ## The layer drawing `surface` (its fallback's past MAX_LAYERS), or -1.
