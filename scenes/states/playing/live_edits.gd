@@ -90,6 +90,9 @@ static func create(
 	service.editor = AuthoringEditor.create(doc, root, service.history)
 	# Water edits compute on a worker, as the Water tool's do, so none freezes a frame.
 	service.editor.water.use_worker = true
+	# And a fire op's re-plan (FireField).
+	if is_instance_valid(service.editor.fire_field):
+		service.editor.fire_field.use_worker = true
 	if service.sends:
 		# Before the history is watched: a replayed op is the session's past, not a new edit.
 		service._replay(replay)

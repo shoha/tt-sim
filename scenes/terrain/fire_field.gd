@@ -53,8 +53,15 @@ extends Node3D
 ## (shown only while the sun is low) and FireFieldSmoke raises a leaning column of soft billows
 ## over up to eight of the largest blaze clusters. Both are children, made with the first fire
 ## and freed with the map; their per-frame work is the lights' flicker (the smoke moves in its
-## shader). The ground's fire term reads its broad noise from a bake (FireNoiseBake, card
-## F4b-3), also a child, made with the first fire mask and bound once it is drawn.
+## shader). The ground's fire term reads everything of it that does not change with time from
+## bakes (FireNoiseBake, cards F4b-3 and F4b-4), also a child, made with the first fire mask and
+## bound once drawn; each refresh redraws the static bake over the region it re-planned.
+##
+## A refresh's pure half (FirePlanJob: the re-plan, the cluster sums, the rasters) runs on a
+## WorkerThreadPool task with `use_worker` (the authoring and play-time editors set it, as they
+## do the water's), from a snapshot of the document, and lands on a later frame (_process, or
+## at once from finish_work()); refreshes asked for meanwhile are merged into the next job.
+## Without it (tests, probes, a load's rebuild) the same function runs at once on this thread.
 
 const NODE_NAME := "FireField"
 ## Lattice spacing of the flames, and how far each is moved off its lattice point (a share of
@@ -134,12 +141,18 @@ const HEAT_REACH := Vector2(1.0, 1.0)
 const POOL_REACH := Vector2(0.45, 0.6)
 ## Texels the cleared rect of a refresh reaches past its blocks (more than any kernel's reach).
 const HEAT_GROW := 8
+## Metres the static bake's redraw reaches past a refresh's blocks: the rasters' cleared rect
+## (HEAT_GROW texels) and their B-spline, and the ground's mask reads (the wander, the fill's
+## taps and the early-out's rings, under 6 m together).
+const BAKE_REACH_M := 6.0
 ## Past this camera zoom (the orthographic size) half the flames hide.
 const LOD_ZOOM := 24.0
 ## Lattice points a block's window reaches past its own (a lick looks two points out).
 const WINDOW_MARGIN := 2
 
 var document: MapDocument = null
+## Whether refreshes plan on a worker (see the header).
+var use_worker := false
 ## block Vector2i -> the block's whole plan, for burning blocks only.
 var _plans: Dictionary = {}
 ## block Vector2i -> MultiMeshInstance3D, for blocks that show something.
@@ -159,8 +172,11 @@ var _heat_texture: ImageTexture = null
 var _cells: Dictionary = {}
 var _lights: FireLights = null
 var _smoke: FireFieldSmoke = null
-## The ground fire's baked broad noise (made with the first fire mask).
+## The ground fire's bakes (made with the first fire mask).
 var _noise: FireNoiseBake = null
+## The refresh planning on a worker (null: none) and the samples asked for while it runs.
+var _job: FirePlanJob = null
+var _queued := Rect2i()
 
 
 ## A field for `doc`, already planned and drawn.
@@ -188,10 +204,18 @@ func _process(_delta: float) -> void:
 	if far != _far:
 		_far = far
 		FireLook.set_far(far)
+	if _job != null and WorkerThreadPool.is_task_completed(_job.task):
+		_finish_job()
 
 
-## Re-plans the whole map (after a load or a whole-document change).
+func _exit_tree() -> void:
+	# A job's task must not outlive the field that holds it.
+	finish_work()
+
+
+## Re-plans the whole map (after a load or a whole-document change), at once on this thread.
 func rebuild() -> void:
+	finish_work()
 	for block in _chunks:
 		(_chunks[block] as Node).free()
 	_chunks.clear()
@@ -201,31 +225,85 @@ func rebuild() -> void:
 	if document == null:
 		_place_lights_and_smoke()
 		return
-	refresh(Rect2i(0, 0, document.samples_x(), document.samples_z()))
+	var job := _job_for(Rect2i(0, 0, document.samples_x(), document.samples_z()))
+	job.compute()
+	_land(job)
 
 
 ## Re-plans the blocks the samples of `sample_rect` touch (a stroke's frame, an undo), and those
 ## whose points read the mask there through the placement warp, then re-shares the budget: a
-## block whose share changed is drawn again.
+## block whose share changed is drawn again. With use_worker the re-plan runs on a worker and
+## lands on a later frame (see the header).
 func refresh(sample_rect: Rect2i) -> void:
 	if document == null or not sample_rect.has_area():
 		return
+	if _job != null:
+		_queued = sample_rect if not _queued.has_area() else _queued.merge(sample_rect)
+		return
+	var job := _job_for(sample_rect)
+	if use_worker:
+		job.task = WorkerThreadPool.add_task(job.compute, false, "Fire re-plan")
+		_job = job
+		return
+	job.compute()
+	_land(job)
+
+
+## Whether a refresh is planning on a worker or waiting to.
+func is_working() -> bool:
+	return _job != null
+
+
+## Lands the refresh in progress and any asked for meanwhile, at once (waiting for the worker).
+func finish_work() -> void:
+	while _job != null:
+		_finish_job()
+
+
+## A job re-planning the blocks the samples of `sample_rect` reach (see refresh).
+func _job_for(sample_rect: Rect2i) -> FirePlanJob:
 	var step := document.sample_step()
 	var reach := PLACE_WARP.y + JITTER * FLAME_SPACING_M
 	var touched := blocks_of(document, sample_rect.grow(ceili(reach / minf(step.x, step.y)) + 1))
+	return FirePlanJob.make(document, touched, _plans, _heat, _pools, _heat_size)
+
+
+## Waits for the job in flight, lands it and starts the next for the samples queued meanwhile.
+func _finish_job() -> void:
+	var job := _job
+	_job = null
+	if job.task >= 0:
+		WorkerThreadPool.wait_for_task_completion(job.task)
+	_land(job)
+	if _queued.has_area():
+		var next := _queued
+		_queued = Rect2i()
+		refresh(next)
+
+
+## Installs `job`'s plans, cluster sums and rasters, re-shares the budget, draws the blocks
+## whose share or neighbourhood changed, redraws the ground's bake there and moves the lights
+## and smoke.
+func _land(job: FirePlanJob) -> void:
+	if document == null:
+		return
+	var touched := job.touched
 	for block in touched:
-		var plan := plan_block(document, block)
+		var plan: PackedFloat32Array = job.planned[block]
 		if plan.is_empty():
 			_plans.erase(block)
 			_cells.erase(block)
 		else:
 			_plans[block] = plan
-			_cells[block] = FireClusters.cells_of(plan)
+			_cells[block] = job.cells[block]
+	_heat = job.heat
+	_pools = job.pools
+	_heat_size = job.heat_size
+	_heat_texture = FireLook.raster_texture(job.heat_bytes, _heat_size, _heat_texture)
 	var planned := {}
 	for block in _plans:
 		@warning_ignore("integer_division")
 		planned[block] = (_plans[block] as PackedFloat32Array).size() / STRIDE
-	_update_heat(touched)
 	var shares := budget_shares(planned, MAX_FLAMES)
 	var stale: Array = _counts.keys()
 	for block in shares:
@@ -237,7 +315,22 @@ func refresh(sample_rect: Rect2i) -> void:
 		if _beside(block, touched) or share != int(_counts.get(block, 0)):
 			_show(block, share)
 	_bind_glow()
+	if _noise != null:
+		_noise.rebake(bake_region(document, touched))
 	_place_lights_and_smoke()
+
+
+## The document region (map-frame metres) whose ground bake a refresh of blocks `touched`
+## changes: the blocks grown by BAKE_REACH_M. Pure.
+static func bake_region(doc: MapDocument, touched: Array[Vector2i]) -> Rect2:
+	var step := doc.sample_step()
+	var half := doc.extent_m() * 0.5
+	var region := Rect2()
+	for block in touched:
+		var r := MaskStroke.block_rect(doc, block)
+		var box := Rect2(-half + Vector2(r.position) * step, Vector2(r.size) * step)
+		region = box if not region.has_area() else region.merge(box)
+	return region.grow(BAKE_REACH_M) if region.has_area() else region
 
 
 ## Flames (and sparks) shown on the whole map.
@@ -573,24 +666,31 @@ func _show(block: Vector2i, shown: int) -> void:
 	_counts[block] = shown
 
 
-## Re-splats the heat raster around the re-planned blocks `touched` (all of it when its size
-## changed) and uploads it.
-func _update_heat(touched: Array[Vector2i]) -> void:
-	var size := heat_size(document)
+## The heat raster `heat` and the pools `pools` (`old_size` texels; written in place, so pass
+## copies) of `doc` re-splatted from `plans` (block -> plan) around the re-planned blocks
+## `touched`, or whole when the raster's size changed: {"heat", "pools", "size"}.
+static func resplat(
+	doc: MapDocument,
+	plans: Dictionary,
+	touched: Array[Vector2i],
+	heat: PackedFloat32Array,
+	pools: PackedFloat32Array,
+	old_size: Vector2i
+) -> Dictionary:
+	var size := heat_size(doc)
 	var clip := Rect2i(Vector2i.ZERO, size)
-	var whole := size != _heat_size
+	var whole := size != old_size
 	if whole:
-		_heat_size = size
-		_heat = PackedFloat32Array()
-		_heat.resize(size.x * size.y)
-		_pools = PackedFloat32Array()
-		_pools.resize(size.x * size.y)
+		heat = PackedFloat32Array()
+		heat.resize(size.x * size.y)
+		pools = PackedFloat32Array()
+		pools.resize(size.x * size.y)
 	else:
-		var step := document.sample_step()
+		var step := doc.sample_step()
 		var grow := Vector2i(HEAT_GROW, HEAT_GROW)
 		var area := Rect2i()
 		for block in touched:
-			var r := MaskStroke.block_rect(document, block)
+			var r := MaskStroke.block_rect(doc, block)
 			var lo := Vector2i((Vector2(r.position) * step / HEAT_STEP_M).floor()) - grow
 			var hi := Vector2i((Vector2(r.end) * step / HEAT_STEP_M).ceil()) + grow
 			var box := Rect2i(lo, hi - lo)
@@ -598,13 +698,13 @@ func _update_heat(touched: Array[Vector2i]) -> void:
 		clip = area.intersection(clip)
 		for z in range(clip.position.y, clip.end.y):
 			for x in range(clip.position.x, clip.end.x):
-				_heat[z * size.x + x] = 0.0
-				_pools[z * size.x + x] = 0.0
-	var half := document.extent_m() * 0.5
-	for block in _plans:
+				heat[z * size.x + x] = 0.0
+				pools[z * size.x + x] = 0.0
+	var half := doc.extent_m() * 0.5
+	for block in plans:
 		if whole or _beside(block, touched):
-			splat_heat(_heat, size, half, _plans[block], clip, _pools)
-	_heat_texture = FireLook.heat_texture(_heat, size, HEAT_FULL_M, _heat_texture, _pools)
+			splat_heat(heat, size, half, plans[block], clip, pools)
+	return {"heat": heat, "pools": pools, "size": size}
 
 
 ## The camera's forward axis in this node's frame (the game camera never turns).
@@ -626,17 +726,26 @@ func _bind_glow() -> void:
 			_glow_texture = FireLook.glow_texture(document, _glow_texture)
 			if _glow_texture != null:
 				_ensure_noise()
-			var noise := _noise.texture() if _noise != null else null
-			var rect := _noise.rect() if _noise != null else Vector4.ZERO
-			FireLook.bind_glow(terrain.get_material(), _glow_texture, _heat_texture, noise, rect)
+			if _noise == null:
+				FireLook.bind_glow(terrain.get_material(), null, Vector4.ZERO, null, Vector4.ZERO)
+				return
+			var half := document.extent_m() * 0.5
+			_noise.set_inputs(_glow_texture, _heat_texture, -half, document.sample_step())
+			FireLook.bind_glow(
+				terrain.get_material(),
+				_noise.static_texture() if _glow_texture != null else null,
+				_noise.static_rect(),
+				_noise.fine_texture(),
+				_noise.fine_rect()
+			)
 			return
 
 
-## Bakes the ground fire's broad noise for the map's extent (FireNoiseBake) the first time the
-## map has a fire mask, and again when the extent changed; its drawing binds the glow again.
+## Bakes the ground fire's fields for the map's extent (FireNoiseBake) the first time the map
+## has a fire mask, and again when the extent changed; its drawing binds the glow again.
 func _ensure_noise() -> void:
-	var rect := FireNoiseBake.rect_for(document.extent_m())
-	if _noise != null and _noise.rect() == rect:
+	var extent := document.extent_m()
+	if _noise != null and _noise.static_rect() == FireNoiseBake.rect_for(extent, _noise.static_per_m):
 		return
 	if _noise == null:
 		_noise = FireNoiseBake.new()

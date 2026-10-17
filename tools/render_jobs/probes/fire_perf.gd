@@ -121,7 +121,14 @@ static func _refresh(field: FireField, doc: MapDocument, step: Dictionary) -> St
 	var whole := PackedFloat64Array()
 	var plan := PackedFloat64Array()
 	var heat := PackedFloat64Array()
+	var launch := PackedFloat64Array()
+	var worker := PackedFloat64Array()
+	var land := PackedFloat64Array()
+	var threaded := field.use_worker
+	field.finish_work()
 	for k in runs:
+		# At once on this thread (FireField.use_worker off): the whole refresh and its parts.
+		field.use_worker = false
 		var started := Time.get_ticks_usec()
 		field.refresh(rect)
 		whole.append((Time.get_ticks_usec() - started) / 1000.0)
@@ -130,17 +137,33 @@ static func _refresh(field: FireField, doc: MapDocument, step: Dictionary) -> St
 			FireClusters.cells_of(FireField.plan_block(doc, block))
 		plan.append((Time.get_ticks_usec() - started) / 1000.0)
 		started = Time.get_ticks_usec()
-		field._update_heat(touched)
+		var heat_copy := field._heat.duplicate()
+		var pools_copy := field._pools.duplicate()
+		FireField.resplat(doc, field._plans, touched, heat_copy, pools_copy, field._heat_size)
 		heat.append((Time.get_ticks_usec() - started) / 1000.0)
+		# On a worker: the main thread's launch (the snapshot) and landing, and the worker's time.
+		field.use_worker = true
+		started = Time.get_ticks_usec()
+		field.refresh(rect)
+		launch.append((Time.get_ticks_usec() - started) / 1000.0)
+		started = Time.get_ticks_usec()
+		while not WorkerThreadPool.is_task_completed(field._job.task):
+			OS.delay_usec(50)
+		worker.append((Time.get_ticks_usec() - started) / 1000.0)
+		started = Time.get_ticks_usec()
+		field.finish_work()
+		land.append((Time.get_ticks_usec() - started) / 1000.0)
+	field.use_worker = threaded
 	return (
 		(
-			"refresh at %s r %.1f m (%d blocks re-planned, %d shown of the map): whole %.2f ms,"
-			+ " re-plan %.2f, heat re-splat and upload %.2f, the rest (budget, drawing, glow,"
-			+ " lights) %.2f"
+			"refresh at %s r %.1f m (%d blocks re-planned, %d shown of the map): at once %.2f ms"
+			+ " (re-plan %.2f, heat re-splat %.2f, the rest %.2f); on the worker: main thread"
+			+ " %.2f ms (launch %.2f, landing %.2f), the worker %.2f"
 		)
 		% [
 			str(at), radius, touched.size(), field.flame_count(), _median(whole),
-			_median(plan), _median(heat), _median(whole) - _median(plan) - _median(heat)
+			_median(plan), _median(heat), _median(whole) - _median(plan) - _median(heat),
+			_median(launch) + _median(land), _median(launch), _median(land), _median(worker)
 		]
 	)
 

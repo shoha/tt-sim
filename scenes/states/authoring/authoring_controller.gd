@@ -341,6 +341,9 @@ func _install(root: Node3D, loaded: MapDocument) -> void:
 	brush.unit_label = level.display_unit
 	# The Water tool's carve computes on a worker (WaterEditor), so a stroke never freezes.
 	editor.water.use_worker = true
+	# A fire dab's re-plan too (FireField), on the host as on every peer.
+	if is_instance_valid(editor.fire_field):
+		editor.fire_field.use_worker = true
 	# A crossing removed with its water is said (it vanished away from the pointer).
 	editor.crossings.followed.connect(
 		func(_moved: int, removed: int) -> void:

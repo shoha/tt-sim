@@ -3548,6 +3548,72 @@ the lobe, lump and crack noises: bake the lobe noise too, it is the next broades
 night (0.26-0.52 ms), the flames' remaining fill (0.25-0.36 ms), then the re-plan off the main
 thread (deterministic per block; the save-reload parity test guards it).
 
+### Bakes and a worker (F4b-4, 2026-10-16): the ground term a third of what it was
+
+**What changed (look-neutral).** Everything in the ground's fire term that does not change
+with time is baked (`FireNoiseBake`): a static bake (`fire_ground_bake.gdshader`, three RGBA8
+tiles at 8 texels a metre, worked out from the mask, the flames' heat and pool rasters and the
+broad noise: the burn, the dried band, the char's colour weights, the ash, the pools, the
+crowding, the cracks' strength, the breathing's phase), redrawn on each refresh only over the
+region its blocks reach (the viewport is never cleared; a ColorRect per tile covers the dirty
+texels), and a fine noise bake (`fire_glow_bake.gdshader`, 16 texels a metre, once per map: the
+tufts, lobes, coal lumps and cracks). Both hold the thresholds' arguments, not their results,
+so every edge keeps its width; the ground does one fetch where nothing burns and four where it
+does, then the thresholds, the drifting bed (one warped noise), the breathing and the specks.
+Memory on a 200 ft map: 6.8 MB (F4b-3's bake 2.0 MB). A refresh's re-plan, cluster sums and
+rasters (`FirePlanJob`) run on a WorkerThreadPool task from a snapshot of the document when
+`FireField.use_worker` is set (the authoring and play-time editors set it), landing on a later
+frame; the same function runs at once without it, and `test_live_map_edits` now runs the fire
+on the worker for the host, the peer and the reload.
+
+**Look.** `fire_ab.gd` with the clock held, F4b-3's term patched in as "before" (its bake drawn
+by `bake_before`), at firefeat_look's views, full frames (`--full`), main against the tree:
+
+| View | Mean | RMS | Max | Over 8 | Over 24 |
+| --- | --- | --- | --- | --- | --- |
+| Day zs | 0.027 | 0.307 | 47 | 0.082 % | 0.006 % |
+| Sunset zs | 0.023 | 0.283 | 50 | 0.057 % | 0.004 % |
+| Night home | 0.053 | 0.355 | 47 | 0.065 % | 0.002 % |
+| Sunset z20 | 0.042 | 0.301 | 47 | 0.043 % | 0.002 % |
+
+The fine bake's spacing, pixels over 8: 8 a metre (3.9 MB) 0.12-0.26 %, max 91-127; 12 (5.1 MB)
+0.07-0.12 %; 16 (6.8 MB, chosen) above; the static bake at 16 too (15.5 MB) 0.02-0.04 %. The
+diffs that remain are single-pixel traces along crack and coal-lump edges; at 4x gain the
+ground shows nothing else. The stroke-time partial redraws against a whole re-bake, and two
+re-bakes against each other: identical. Mobile draws it without shader errors (the same diffs).
+
+**Measured.** `fire_perf_play` before (main 3bf3ea59) and after in one session, pinned
+`override.cfg`, nothing else on the GPU (start 38 % P8 300 MHz and 25 % P5 435 MHz). The after
+run's "off" windows were 4-13 % slower (drift: identical scenes); the corrected column divides
+by that factor. GPU median ms, fire on minus off, two pairs each:
+
+| View | Before | After | After, drift-corrected | Target |
+| --- | --- | --- | --- | --- |
+| Third, day, home | +1.34 / +1.42 | +0.88 / +0.99 | +0.89 | 0.5 (at the cap) |
+| Third, day, zoom 20 | +0.79 / +0.78 | +0.56 / +0.57 | +0.54 | 0.3 (at the cap) |
+| Third, night, home | +1.75 / +1.70 | +1.00 / +1.02 | +0.89 | |
+| Third, night, zoom 20 | +0.91 / +0.88 | +0.67 / +0.72 | +0.67 | |
+| Whole, day, home (1,729 shown) | +1.84 / +1.85 | +1.27 / +1.30 | +1.22 | 0.5 |
+| Whole, day, zoom 20 | +1.11 / +1.10 | +0.72 / +0.71 | +0.68 | 0.3 |
+| Whole, night, home | +2.28 / +2.27 | +1.72 / +1.70 | +1.62 | |
+| Whole, night, zoom 20 | +1.66 / +1.64 | +0.88 / +0.81 | +0.80 | |
+
+Split (third, each part off): the ground term day home 0.83 -> 0.39, day zoom 20 0.34 -> 0.11,
+night home 0.70 -> 0.24, night zoom 20 0.30 -> 0.09; after, the flames 0.25-0.35, the smoke
+0.09-0.17, the lights at night 0.20 (home) and 0.12 (zoom 20). F4b-3's 0.52 ms for the lights at
+night zoom 20 did not reproduce (0.12 before and after, two windows each), so no light change
+was made. A 4 m dab's refresh at once: 19.6 / 23.1 ms (re-plan 14.6 / 14.7, heat re-splat 2.0 /
+2.7); on the worker the main thread spends 1.95 / 4.0 ms (launch 0.03, landing 1.9 / 4.0:
+drawing the touched chunks, the two texture uploads, the lights) and the worker 19.0 / 20.4.
+
+**Verdict: the targets are still missed, now by about 1.8x at home and zoom 20 on the third
+(0.89 against 0.5, 0.54 against 0.3).** What remains is the flames (0.25-0.35 ms) and the
+ground's leftover (0.09-0.39: the four fetches, the bed's noise, the thresholds), then the smoke
+(0.1-0.17). Options that would trade look for cost, not shipped: the flames' noise (0.18 ms in
+F4b-3's measure) baked into a per-drawing atlas; the bed's drift dropped so its noise can be
+baked too (the last per-pixel noise of the ground; its share not measured); the smoke's columns
+capped lower than eight.
+
 ### First-burn hitch (F4b-2)
 
 The first burnt-forest op on a map read the burnt biome's and the ash's ground textures back in

@@ -4,7 +4,8 @@ extends GutTest
 ## only, nothing below the ember band, nothing on wet or steep ground, heights from the
 ## document's triangles; the look card's clumps (scale range, gaps, a blaze's big flames and
 ## licks, no flames in the ember band); the bands; the budget shared in proportion past the
-## cap; the LOD half; and the warm-up covering the fire's shaders.
+## cap; the LOD half; the warm-up covering the fire's shaders; the ground bakes' frames and
+## redraw region; and a re-plan on a worker landing what the main thread plans.
 
 
 func _doc(cells: int = 20, heat: int = 255) -> MapDocument:
@@ -323,22 +324,76 @@ func test_the_warmup_covers_the_fire_shaders() -> void:
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_field.gdshader")
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_field_smoke.gdshader")
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_glow_bake.gdshader")
+	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_ground_bake.gdshader")
 	var sources := "\n".join(GraphicsWarmup.shader_sources())
 	assert_true(sources.contains("res://shaders/fire_glow.gdshaderinc\n"), "the ground's glow")
 
 
-func test_the_ground_noise_bake_covers_the_map_at_its_spacing() -> void:
+func test_the_ground_bakes_cover_the_map_at_their_spacing() -> void:
 	var extent := Vector2(60.96, 45.0)
-	var size := FireNoiseBake.half_size(extent)
+	var size := FireNoiseBake.tile_size(extent, 8.0)
 	var span := extent + Vector2.ONE * FireNoiseBake.MARGIN_M * 2.0
 	assert_eq(size, Vector2i(ceili(span.x * 8.0), ceili(span.y * 8.0)), "8 texels a metre")
-	var rect := FireNoiseBake.rect_for(extent)
-	assert_almost_eq(rect.z, size.x / FireNoiseBake.TEXELS_PER_M, 1e-4, "whole texels")
+	var rect := FireNoiseBake.rect_for(extent, 8.0)
+	assert_almost_eq(rect.z, size.x / 8.0, 1e-4, "whole texels")
 	assert_almost_eq(rect.x, -rect.z * 0.5, 1e-4, "centred on the map")
 	assert_lte(rect.x, -span.x * 0.5 + 1e-4, "the map and its margin inside")
 	assert_lte(rect.y, -span.y * 0.5 + 1e-4)
+	var fine := FireNoiseBake.rect_for(extent, FireNoiseBake.FINE_PER_M)
+	var fine_px := FireNoiseBake.tile_size(extent, FireNoiseBake.FINE_PER_M)
+	assert_almost_eq(fine.z, fine_px.x / FireNoiseBake.FINE_PER_M, 1e-4, "the fine bake too")
 	var big := Vector2(400.0, 300.0)
-	assert_eq(FireNoiseBake.half_size(big), Vector2i(FireNoiseBake.MAX_PX, FireNoiseBake.MAX_PX))
-	var big_rect := FireNoiseBake.rect_for(big)
+	assert_eq(FireNoiseBake.tile_size(big, 8.0), Vector2i(FireNoiseBake.MAX_PX, FireNoiseBake.MAX_PX))
+	var big_rect := FireNoiseBake.rect_for(big, 8.0)
 	assert_almost_eq(big_rect.z, 402.0, 1e-4, "a coarser bake over the same span")
 	assert_almost_eq(big_rect.w, 302.0, 1e-4)
+
+
+func test_a_refresh_redraws_the_bake_only_where_it_reaches() -> void:
+	var doc := _doc(20)
+	var blocks: Array[Vector2i] = [Vector2i(1, 1)]
+	var region := FireField.bake_region(doc, blocks)
+	var r := MaskStroke.block_rect(doc, Vector2i(1, 1))
+	var step := doc.sample_step()
+	var low := -doc.extent_m() * 0.5 + Vector2(r.position) * step
+	assert_almost_eq(region.position.x, low.x - FireField.BAKE_REACH_M, 1e-4, "the block, grown")
+	assert_almost_eq(region.size.x, r.size.x * step.x + FireField.BAKE_REACH_M * 2.0, 1e-4)
+	var frame := FireNoiseBake.rect_for(doc.extent_m(), 8.0)
+	var size := FireNoiseBake.tile_size(doc.extent_m(), 8.0)
+	var box := FireNoiseBake.texels_of(region, frame, size)
+	assert_true(box.has_area())
+	assert_true(Rect2i(Vector2i.ZERO, size).encloses(box), "within the tile")
+	var expect := Vector2i(((region.position - Vector2(frame.x, frame.y)) * 8.0).floor())
+	assert_eq(box.position, expect.max(Vector2i.ZERO), "whole texels from the frame's corner")
+	var everything := FireNoiseBake.texels_of(Rect2(-1000, -1000, 2000, 2000), frame, size)
+	assert_eq(everything, Rect2i(Vector2i.ZERO, size), "clipped to the tile")
+
+
+func test_a_worker_refresh_plans_what_the_main_thread_does() -> void:
+	var doc := _doc(20, 0)
+	var at_once := FireField.create(doc)
+	add_child_autofree(at_once)
+	var threaded := FireField.create(doc)
+	threaded.use_worker = true
+	add_child_autofree(threaded)
+	var mask := doc.fire_mask.duplicate()
+	var columns := doc.samples_x()
+	var rows := doc.samples_z()
+	@warning_ignore("integer_division")
+	var dab := Rect2i(columns / 5, rows / 4, columns / 2, rows / 2)
+	for z in range(dab.position.y, dab.end.y):
+		for x in range(dab.position.x, dab.end.x):
+			mask[doc.sample_index(x, z)] = 230
+	doc.fire_mask = mask
+	threaded.refresh(dab)
+	assert_true(threaded.is_working(), "the re-plan runs on a worker")
+	threaded.refresh(Rect2i(dab.position + Vector2i(2, 2), Vector2i(4, 4)))
+	threaded.finish_work()
+	assert_false(threaded.is_working(), "a refresh asked for meanwhile lands too")
+	at_once.refresh(dab)
+	assert_gt(at_once.flame_count(), 0, "a fire burns")
+	assert_eq(threaded.flame_count(), at_once.flame_count(), "the same flames")
+	assert_eq(threaded._plans, at_once._plans, "the same plans")
+	assert_eq(threaded._heat, at_once._heat, "the same rasters")
+	assert_eq(threaded._pools, at_once._pools)
+	assert_eq(threaded._cells, at_once._cells, "the same cluster sums")

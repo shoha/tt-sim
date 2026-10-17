@@ -728,7 +728,11 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   passes burn the rest of the map and home, zoom 20 and zoom 30 are measured again near the
   cap, day and night. `--saved` skips the build. It deletes `_firefeat_perf` at the end.
   Card F4b-3 ran it before and after its shader changes in one session (`--out
-  render_jobs/fire_perf_before`, `render_jobs/fire_perf_after`).
+  render_jobs/fire_perf_before`, `render_jobs/fire_perf_after`), card F4b-4 before and after
+  its bakes and worker (`render_jobs/fire_perf_bake_before`, `render_jobs/fire_perf_bake_after`).
+  Since F4b-4 the `refresh` line gives the dab at once on the main thread (`FireField.use_worker`
+  off: the whole refresh, its re-plan and heat re-splat) and on the worker (the main thread's
+  launch and landing, and the worker's own time).
 - Per-term and before/after shader A/B (card F4b-3; `probes/fire_ab.gd`): a job written for the
   task (kept out of `jobs/`, as its variant file is) builds `_firefeat_perf` with
   fire_perf_play's build steps (or loads `_firefeat_look --saved`) and `patch`es variants of the
@@ -738,7 +742,14 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (`pdiff`, `sheet`). Main's sources for a "before" variant: `git -C D:/dev/tt-sim archive
   --format=zip --output=<scratch>/before.zip HEAD <shader paths>`, read as
   `<scratch>/before.zip:shaders/<file>` (`git show --output` writes no blob). The fragment
-  shader rejects `return`, so a variant cannot cut fragment() short that way.
+  shader rejects `return`, so a variant cannot cut fragment() short that way. Card F4b-4 added
+  `bake_before {source}` (draws F4b-3's broad noise bake from main's `fire_glow_bake.gdshader`
+  and binds it with the mask and rasters under F4b-3's uniform names, so F4b-3's
+  `fire_glow.gdshaderinc` patches in as a "before" against the baked term) and `density
+  {static, fine}` (re-bakes `FireNoiseBake` at those texels a metre); its look job (in the
+  session scratchpad) grabbed main against the tree at fine 8, 12 and 16 and static 16 at
+  firefeat_look's day zs, sunset zs, night home and sunset z20, and the stroke-time partial
+  redraws against a whole re-bake.
 - `jobs/fire_first_burn.json`: the first burnt-forest op on a fresh map (card F4b-2;
   `probes/fire_perf.gd first_burn`): a new 200 ft temperate map, the palette's burnt biome
   painted over a 4 m disc with nothing armed (a peer's case), the dab's milliseconds, the ground
@@ -751,7 +762,9 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   and everything but the ground, tiled in `sheet_debug.png`; `chunks` logs the chunk meshes'
   formats and their largest UV-to-XZ gap. Then the ground alone with its shader's code swapped in
   memory for debug views of its outputs (`debug`: 1 lit grey, 2 unlit, 3 the shading normal, 4
-  the geometric normal, 5 the fire's char weight, 6 the mask and the two rasters as RGB, 7 the
+  the geometric normal, 5 the fire's char weight, 6 the mask and the two rasters as RGB (broken
+  since card F4b-4: the ground no longer declares `fire_mask_map` and `fire_heat_map`; read
+  the static bake's tiles instead), 7 the
   ground's albedo before the fire, 8 the fire's emission alone; `sheet_debug2.png`, and
   `sheet_debug3.png` the lower half of 2 and 5-8), and `sheet_before_after.png` from
   `firefeat_look --only "day_zs_new,sunset_zs_new"` run into `render_jobs/fire_shards_before` and
