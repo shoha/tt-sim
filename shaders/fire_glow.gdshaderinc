@@ -105,16 +105,41 @@ const float FIRE_SPECK_SHARE = 0.12;
 const float FIRE_ASH_M = 2.2;
 const float FIRE_ASH_COVER = 0.58;
 
+// A lattice point's value (0..1) from its integer coordinates. The ground's noise hashes here
+// rather than with fire_hash (card F4b-2): fire_hash's float arithmetic amplifies rounding, so
+// at map-sized coordinates the cells sharing a lattice point, which reach it through different
+// expressions, hashed it to different values, and every threshold on the noise broke along the
+// lattice's edges into the straight-edged grey shards and orange wedges seen on the burn.
+// Integer arithmetic is exact, so the noise is continuous everywhere.
+float glow_hash(ivec2 c) {
+	uvec2 q = uvec2(c) * uvec2(1597334677u, 3812015801u);
+	uint n = (q.x ^ q.y) * 1597334677u;
+	return float(n >> 8u) / 16777216.0;
+}
+
+// Value noise, 0..1, one blob a unit across (fire_noise's, on glow_hash).
+float glow_noise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = p - i;
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	ivec2 c = ivec2(i);
+	float a = glow_hash(c);
+	float b = glow_hash(c + ivec2(1, 0));
+	float d = glow_hash(c + ivec2(0, 1));
+	float e = glow_hash(c + ivec2(1, 1));
+	return mix(mix(a, b, u.x), mix(d, e, u.x), u.y);
+}
+
 // The fire's two octaves on lattices turned off the map's axes (by about 32 and 74 degrees).
 float fire_turned(vec2 p) {
 	vec2 a = vec2(0.848 * p.x - 0.53 * p.y, 0.53 * p.x + 0.848 * p.y);
 	vec2 b = vec2(0.276 * p.x - 0.961 * p.y, 0.961 * p.x + 0.276 * p.y) * 2.17;
-	return 0.68 * fire_noise(a) + 0.32 * fire_noise(b + vec2(7.1, 3.3));
+	return 0.68 * glow_noise(a) + 0.32 * glow_noise(b + vec2(7.1, 3.3));
 }
 
 // fire_turned warped by a broad noise (about three of its units across), for the big shapes.
 float fire_warped(vec2 p) {
-	vec2 w = vec2(fire_noise(p * 0.37 + vec2(3.1, 8.3)), fire_noise(p * 0.37 + vec2(9.7, 1.9)));
+	vec2 w = vec2(glow_noise(p * 0.37 + vec2(3.1, 8.3)), glow_noise(p * 0.37 + vec2(9.7, 1.9)));
 	return fire_turned(p + (w - 0.5) * 1.2);
 }
 
@@ -156,8 +181,8 @@ vec3 fire_glow(vec2 at, float clock, inout vec3 albedo, out float charred) {
 	}
 	// The burn wanders: the mask is read through a bold warp (lobes) and a finer one, so the
 	// outline of a straight stroke swells and bites unevenly and a straight valley bends.
-	vec2 lobe_w = vec2(fire_noise(at / 7.0 + vec2(4.1, 7.7)), fire_noise(at / 7.0 + vec2(8.9, 2.6)));
-	vec2 ripple = vec2(fire_noise(at / 2.4 + vec2(1.3, 5.9)), fire_noise(at / 2.4 + vec2(6.2, 3.4)));
+	vec2 lobe_w = vec2(glow_noise(at / 7.0 + vec2(4.1, 7.7)), glow_noise(at / 7.0 + vec2(8.9, 2.6)));
+	vec2 ripple = vec2(glow_noise(at / 2.4 + vec2(1.3, 5.9)), glow_noise(at / 2.4 + vec2(6.2, 3.4)));
 	vec2 read = at + (lobe_w - 0.5) * 2.0 * FIRE_WANDER_M.x + (ripple - 0.5) * 2.0 * FIRE_WANDER_M.y;
 	uv = weight_uv(read, grid);
 	// The mask widened across a cool valley (the mean of four turned taps FIRE_FILL_M out), and
@@ -237,7 +262,7 @@ vec3 fire_glow(vec2 at, float clock, inout vec3 albedo, out float charred) {
 	float core = smoothstep(cover, cover + FIRE_BED_SOFT, bed) * deep * 0.75 * (1.0 - crowd);
 	// One rate everywhere, the phase by place (a rate that varied by place wound the phase up
 	// into fine ripples as the clock ran on).
-	float breathe = 0.86 + 0.14 * sin(clock * FIRE_BREATHE + fire_noise(at * 0.4 + 9.1) * 12.0);
+	float breathe = 0.86 + 0.14 * sin(clock * FIRE_BREATHE + glow_noise(at * 0.4 + 9.1) * 12.0);
 	float t = max(max(lobe_t, crack_t), core) * breathe;
 	vec3 glow = fire_ramp(t);
 	// Specks: a few small gold dots in the hotter glow, pulsing on their own clocks (the cells
