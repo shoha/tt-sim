@@ -110,6 +110,14 @@ other committed home.
   now (user, 2026-10-16): dark crusted char glowing in lobes round the flames' feet, the flames
   always the brightest thing. Still open for a later look pass: by day the beds under big clumps
   read as flat orange plates.
+  Card F4b-1's round 5 (the fire's lights and smoke) is good enough for now too (user,
+  2026-10-16): up to four warm lights over the largest clusters while the sun is low, one leaning
+  plume over each of the largest blazes. Charred wood is a dark warm brown about twice as light
+  as the first burnt forest's, so the fire's light can warm it (user, 2026-10-16). The look is
+  aligned to external references once a first end-to-end version of the fire features is in the
+  game (user, 2026-10-16); open for that pass besides the day beds: the smoke's colour (five
+  critic rounds swung between muddy brown and candy pastel with no fixed reference) and a
+  fire-facing side on lit trunks.
   Design before code: `docs/plans/2026-10-11-fire-features/` (gitignored).
 
 ## Where each system is documented
