@@ -22,8 +22,14 @@ const NODE_NAME := "FireLights"
 ## inverse distance). Broad and flat (round 2's dark probe, the harness's night with the ambient
 ## cut): at range 7 and falloff 1 a light only warmed the logs right under it, a low strong
 ## light blew out a yellow patch under itself, and range 12 at falloff 0.5 washed the ash, rock
-## and logs across the burn warm, the read of the fire as the scene's light.
-const RANGE_M := 12.0
+## and logs across the burn warm, the read of the fire as the scene's light. Round 4 measured
+## (outdoor_night, lights on against off, pixel probes): the burn's char and ash move strongly
+## out to 8 m, but range 12's window, (1 - (d / range)^4)^2, leaves 2 % of the light at 11 m, so
+## the green beyond the burn's edge (10 m and more from a light) never moved; range 20 keeps the
+## near field as it was (within 4 m the window is above 0.99) and leaves an attenuation of 0.24
+## at 11 m (0.016 at range 12): green ground 8-11 m out now warms, canopies near the burn take a
+## lit fire side, with no blown patch.
+const RANGE_M := 20.0
 const DECAY := 0.5
 ## A light stands this share of its cluster's tallest flame above the cluster's centroid,
 ## within RISE_M (high enough to reach past the burn's edge without a hot spot under it).

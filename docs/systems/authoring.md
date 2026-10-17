@@ -233,11 +233,13 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   has one per hot spot at least two cells apart (connected components would make the look
   level's passes one cluster with one light at its middle); re-planning one block changes only
   the clusters within two cells of it. `FireLights` stands four shared `OmniLight3D` (no
-  shadows, range 12 m with a flat falloff, `omni_attenuation` 0.5, 0.7 x the tallest flame up,
+  shadows, range 20 m with a flat falloff, `omni_attenuation` 0.5, 0.7 x the tallest flame up,
   `FireLook.LIGHT_COLOR`, energy 14 by the cluster's size; judged under the game's
   `outdoor_night` and `outdoor_sunset` presets, where they warm the ash, logs, stumps and rocks
-  across the burn and give the trunks a warm side, though the burnt bark's linear albedo of
-  about 0.035 keeps it dark-ish however strong the light) over the four
+  across the burn, give the trunks a warm side and light the fire side of living canopies near
+  the burn, though the burnt bark's linear albedo of about 0.035 keeps it dark-ish however
+  strong the light; measured with pixel probes, range 12's window left 2 % of the light at
+  11 m, so the green beyond the burn's edge never moved) over the four
   largest clusters, a lit cluster keeping its light across a re-plan (`keep_slots`); they show
   only while the sun is low (`FireLook.light_gate` of `FoliageLight.last_sun`, the published
   sun's weight: off at 14:00, fading in from about 17:00, full at dusk, at night and with no
@@ -246,21 +248,25 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   Mobile renderer's eight per mesh; the env manager skips a `FireField` when it collects the
   map's own lights (counted, they turned the level's sun off in "auto" mode). A cluster's size
   is its flames' heights squared, summed (about their drawn area), so a blaze's big flames
-  outweigh a wide field of small ones. `FireFieldSmoke` (one `MultiMesh` of camera-facing
-  quads, `fire_field_smoke.gdshader`) raises a leaning column over each of up to eight of the
-  largest clusters holding at least 8 m2 of blaze (ranked by all their flames, as the lights
-  are, so the biggest fire is the biggest smoker): five billows a column, each born small at
-  the tips of the tallest flames, lifting and growing over about 10 s while it slows, leans down
-  the map's wind (at least 0.6 of the lean across the screen) and thins away, a new one every
-  2 s, the column's size the cluster's tallest flame (less for a small cluster), about twice
-  as tall as wide; each billow is a cluster of three round lobes (sphere-shaded with a fake
-  normal, the nearer lobe's surface winning where they overlap), painted in emission: at dusk
-  and night amber on the side facing down to the fire, strongest low on the column, and a cool
-  blue-grey on the sky side, by day cream on the sun side and cool in shade (from
-  `foliage_sun`); no fog or ambient light (the sky's ambient and reflections through the fake
-  normal washed every tone pale blue-lilac), thinner low on the column, drawn before the flames.
-  The shader moves every billow on `TIME`; nothing runs per frame (one buffer written when the
-  blocks re-plan). The fire events' `SmokePuffs` crowns are unchanged)
+  outweigh a wide field of small ones. `FireFieldSmoke` (one `MultiMesh`,
+  `fire_field_smoke.gdshader`) raises a leaning plume over each of up to eight of the largest
+  clusters holding at least 8 m2 of blaze (ranked by all their flames, as the lights are, so the
+  biggest fire is the biggest smoker). Each column is one quad standing on its source and
+  turning about the world's up axis to face the camera (so it keeps its world depth against the
+  trees), 3.4 of its unit tall (the cluster's tallest flame, less for a small cluster: about four
+  flame heights), widening upward and leaning down the map's wind (at least 0.6 of the lean
+  across the screen); the shader paints the whole column as one silhouette, a cylinder body
+  with large round lobes along its edges and over its face, joined by a smooth minimum of their
+  distances, the lobes in rows spaced by the height's logarithm (small at the base, big at the
+  crown) climbing on the column's 10 s clock, all warped by a broad noise carried up with them,
+  so it rolls upward without a rebuild. Painted unshaded with a fake normal: at dusk and night a
+  saturated amber base lit from below, a terracotta rose waist and a dark slate crown lifted on
+  its sky side, by day cream on the sun side and cool in shade (from `foliage_sun`); no fog;
+  it thins away at the crown and is drawn before the flames. Round 4 compared this plume with
+  merged billows (a wide base and four climbing billows in the same quad, `structure` 1, kept
+  for the comparison) and three rounds of separate billow quads (faceted crowns, one oval haze,
+  a chain of discs). Nothing runs per frame (one buffer written when the blocks re-plan). The
+  fire events' `SmokePuffs` crowns are unchanged)
   and is refreshed by `AuthoringEditor.refresh_fire`, which
   `apply_mask_diff` calls for any diff that writes `fire_mask` (the fire part records through
   it as every mask stroke does; a diff of `fire_mask` alone regenerates no scatter). Render jobs
