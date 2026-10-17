@@ -38,9 +38,14 @@ shader_type spatial;
 // size); INSTANCE_CUSTOM is (phase 0..1, seed, life in seconds, unused). The column's shape is
 // set from FireFieldSmoke's constants, the wind's direction per map (lean_dir). Colours are linear
 // and shown through the scene's tonemap.
+//
+// Its noise is glow_noise's integer hash, not fire_noise's (card F4b-5): fire_hash's float
+// rounding hashed a lattice point differently from the cells either side of it, so the warp
+// jumped along the lattice's lines, which in the column's frame are the screen's verticals and
+// horizontals, and the plume showed straight cuts and rectangle corners by day.
 render_mode unshaded, blend_premul_alpha, depth_draw_never, cull_disabled, shadows_disabled, fog_disabled;
 
-#include "res://shaders/fire_noise.gdshaderinc"
+#include "res://shaders/fire_glow_noise.gdshaderinc"
 
 global uniform vec4 foliage_sun;
 global uniform vec3 figure_ambient;
@@ -244,8 +249,10 @@ void plume(vec2 p, float lean_x, float seed, float clock, inout float dist, inou
 				continue;
 			}
 			float spacing = spacing_at(ly);
-			float h1 = fire_hash(vec2(row * 1.37 + seed * 23.0, side * 3.1 + 0.7));
-			float h2 = fire_hash(vec2(row * 0.71 + 5.3, side * 1.9 + seed * 11.0));
+			// Hashed from integers, so every pixel that weighs this lobe places it alike.
+			ivec2 key = ivec2(int(row), s + 2 * int(seed * 4096.0));
+			float h1 = glow_hash(key);
+			float h2 = glow_hash(key + ivec2(7919, 104729));
 			float lc = centre_at(ly, lean_x);
 			float lh = half_at(ly);
 			vec2 at = vec2(lc + side * lh * mix(EDGE_AT.x, EDGE_AT.y, h1), ly + spacing * 0.15 * (h2 - 0.5));
@@ -269,7 +276,7 @@ void fragment() {
 	// The broad warp, carried up the column and growing with it.
 	vec2 flow = vec2(seed * 13.0, seed * 7.0 - clock * WARP_CLIMB * rise);
 	vec2 cell = p / mix(0.45, 1.0, t);
-	vec2 warp = vec2(fire_cloud(cell * 1.3 + flow), fire_cloud(cell * 1.3 + flow.yx + 4.1)) - 0.5;
+	vec2 warp = vec2(glow_cloud(cell * 1.3 + flow), glow_cloud(cell * 1.3 + flow.yx + 4.1)) - 0.5;
 	vec2 pw = p + warp * mix(WARP.x, WARP.y, t) * 2.0;
 	float dist = 1e3;
 	vec4 acc = vec4(0.0);
@@ -294,7 +301,7 @@ void fragment() {
 	// The key light's side: toward the sun along the ground and a little up (low at sunset).
 	vec3 key = normalize(vec3(foliage_sun.x, 0.35, foliage_sun.z) + vec3(0.0, 1e-3, 0.0));
 	float lit = smoothstep(TERMINATOR.x, TERMINATOR.y, dot(world_n, key));
-	float patches = mix(0.92, 1.08, fire_noise(pw * 1.5 + vec2(seed * 3.0, -clock * rise * 0.6)));
+	float patches = mix(0.92, 1.08, glow_noise(pw * 1.5 + vec2(seed * 3.0, -clock * rise * 0.6)));
 	float to_rose = smoothstep(TO_ROSE.x, TO_ROSE.y, t);
 	float to_crown = smoothstep(TO_CROWN.x, TO_CROWN.y, t);
 	// Dusk and night: the foot amber, lit from below; the rose lit by the fire below (its lower

@@ -1,6 +1,8 @@
 // The ground fire's value noise (fire_glow.gdshaderinc) and its fields, shared by the ground
-// shader and the bakes (FireNoiseBake; cards F4b-3 and F4b-4). The fields are a pure function of
-// map-frame XZ: the broad ones (glow_fields_a, glow_fields_b) feed the static bake
+// shader and the bakes (FireNoiseBake; cards F4b-3 and F4b-4); the noise alone (glow_noise,
+// glow_cloud) also by the events' scorch and the persistent fire's smoke (card F4b-5). The
+// fields are a pure function of map-frame XZ: the broad ones (glow_fields_a, glow_fields_b) feed
+// the static bake
 // (fire_ground_bake.gdshader), which works out everything of the ground's fire that does not
 // change with time, and the fine ones (glow_fine_fields: the tufts, lobes, coal lumps, cracks)
 // are baked once per map at a finer spacing (fire_glow_bake.gdshader). Only the drifting ember
@@ -18,7 +20,9 @@ const float FIRE_ASH_M = 2.2;
 // at map-sized coordinates the cells sharing a lattice point, which reach it through different
 // expressions, hashed it to different values, and every threshold on the noise broke along the
 // lattice's edges into the straight-edged grey shards and orange wedges seen on the burn.
-// Integer arithmetic is exact, so the noise is continuous everywhere.
+// Integer arithmetic is exact, so the noise is continuous everywhere. The flaw does not need
+// large coordinates: one rounding step in fire_hash's first product scrambles its result, and
+// the smoke showed it at inputs of 10 to 30 (card F4b-5).
 float glow_hash(ivec2 c) {
 	uvec2 q = uvec2(c) * uvec2(1597334677u, 3812015801u);
 	uint n = (q.x ^ q.y) * 1597334677u;
@@ -36,6 +40,13 @@ float glow_noise(vec2 p) {
 	float d = glow_hash(c + ivec2(0, 1));
 	float e = glow_hash(c + ivec2(1, 1));
 	return mix(mix(a, b, u.x), mix(d, e, u.x), u.y);
+}
+
+// Two octaves on glow_noise, mostly the broad one: fire_cloud's bold blobs without its seams.
+// The events' scorch (ground_burn.gdshader) and the persistent fire's smoke use it (card
+// F4b-5: fire_cloud's seams cut the smoke's plume along straight screen-aligned lines).
+float glow_cloud(vec2 p) {
+	return 0.68 * glow_noise(p) + 0.32 * glow_noise(p * 2.17 + vec2(7.1, 3.3));
 }
 
 // The fire's two octaves on lattices turned off the map's axes (by about 32 and 74 degrees).

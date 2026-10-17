@@ -561,7 +561,9 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (`crossing.gd place`), saves it as
   `_gm_events_spectacle` (`events_pane.gd save`) and plays it; `--saved` loads it in play.
   Its probe (`probes/terrain_events.gd`: look, fire, advance, free, abort, arm, hover,
-  report) fires each event on the GM's side with the TerrainEvents clock held, so the
+  report, and `burn {view}`, card F4b-5's debug views of the fire's scorch noise: 1 the specks,
+  smoulder and band breaks as RGB, 2 the metres behind the front as bands, the hottest patches
+  and the ash, 0 back) fires each event on the GM's side with the TerrainEvents clock held, so the
   filmstrips step it to
   exact times: the bridge at zoom 11 with the camera turned 56 deg (`look` `yaw`) to look west
   up the river, so no crown stands in front of it (`collapse_0_before`, then 0.3, 0.7, 1.1,
@@ -762,9 +764,8 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   and everything but the ground, tiled in `sheet_debug.png`; `chunks` logs the chunk meshes'
   formats and their largest UV-to-XZ gap. Then the ground alone with its shader's code swapped in
   memory for debug views of its outputs (`debug`: 1 lit grey, 2 unlit, 3 the shading normal, 4
-  the geometric normal, 5 the fire's char weight, 6 the mask and the two rasters as RGB (broken
-  since card F4b-4: the ground no longer declares `fire_mask_map` and `fire_heat_map`; read
-  the static bake's tiles instead), 7 the
+  the geometric normal, 5 the fire's char weight, 6 the static fire bake's first tile as RGB
+  (card F4b-5; it was the mask and the two rasters until F4b-4's bake removed them), 7 the
   ground's albedo before the fire, 8 the fire's emission alone; `sheet_debug2.png`, and
   `sheet_debug3.png` the lower half of 2 and 5-8), and `sheet_before_after.png` from
   `firefeat_look --only "day_zs_new,sunset_zs_new"` run into `render_jobs/fire_shards_before` and

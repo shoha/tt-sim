@@ -22,18 +22,35 @@ extends RefCounted
 ##   arm      {"preset": "collapse" | "topple"}: PlayEvents.pick, as the preset's tile does
 ##   hover    {"at": "bridge" | "forest"}: the brush's pointer there, not pressed
 ##   report   the bridges, the forest spot and what is playing
+##   burn     {"view": n}: the fire's ground scorch (GroundBurn's shader, shared by every burn)
+##            swapped for a debug view of its noise, drawn opaque over the box (BURN_VIEWS: 1
+##            the specks, the smoulder and the hot band's breaks as RGB; 2 the metres behind
+##            the ragged front as repeating bands, the hottest patches and the ash); 0 puts the
+##            shader's own code back (card F4b-5). With "source" (fire_ab.gd's
+##            "<archive>.zip:<inner>" form: main's ground_burn.gdshader) the view, or with 0
+##            the plain look, is drawn from that code instead, for a before
 
+const FireAb := preload("res://tools/render_jobs/probes/fire_ab.gd")
 const FIND_RADIUS := 6.0
 const FIND_STEP := 3.0
 const FIND_REACH := 18.0
 ## `advance` steps the clock in slices this long (a frame at 30 fps).
 const SLICE_S := 1.0 / 30.0
+## The scorch's last line, after which a debug view overwrites its outputs.
+const BURN_ANCHOR := "\tALBEDO = colour + hot * ENERGY * glow;"
+const BURN_VIEWS := {
+	1: "ALBEDO = vec3(speck, smoulder, whole); ALPHA = keep;",
+	2: "ALBEDO = vec3(fract(b), hottest, ash); ALPHA = keep;",
+}
 
 static var _forest := Vector2.INF
+static var _burn_code := ""
 
 
 static func run(base: Node, step: Dictionary) -> String:
 	var map: GameMap = base.get("_game_map")
+	if String(step.get("action", "")) == "burn":
+		return _burn_debug(int(step.get("view", 0)), String(step.get("source", "")))
 	var lpc: LevelPlayController = map.get_level_play_controller() if map != null else null
 	if lpc == null or lpc.live_edits == null:
 		return "no table with live edits"
@@ -122,6 +139,25 @@ static func run(base: Node, step: Dictionary) -> String:
 				% [str(bridges), str(_point(edits, "forest")), edits.events.active_count()]
 			)
 	return "unknown action"
+
+
+## Swaps the scorch's shader for debug view `view` (see the header's burn) of its own code or of
+## `source`'s, or puts that code back for 0.
+static func _burn_debug(view: int, source: String) -> String:
+	var shader: Shader = GroundBurn.SHADER
+	if _burn_code == "":
+		_burn_code = shader.code
+	var code := _burn_code if source == "" else FireAb._read(source)
+	var from := "its own" if source == "" else source
+	if code == "":
+		return "no ground burn code at %s" % source
+	if view == 0:
+		shader.code = code
+		return "ground burn shader: %s" % from
+	if not code.contains(BURN_ANCHOR) or not BURN_VIEWS.has(view):
+		return "no anchor or no view %d for the burn debug" % view
+	shader.code = code.replace(BURN_ANCHOR, BURN_ANCHOR + "\n\t" + String(BURN_VIEWS[view]))
+	return "ground burn debug view %d of %s" % [view, from]
 
 
 static func _play_events(map: GameMap) -> PlayEvents:

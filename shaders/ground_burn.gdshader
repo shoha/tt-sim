@@ -21,9 +21,14 @@ shader_type spatial;
 // brightness times a tint, the glow is added. Drawn first among the transparent passes (below
 // the water's priority), so nothing drawn later is painted over. Linear colours, shown through
 // the filmic tonemap (FireSweep's header).
+//
+// Its noise is glow_noise's integer hash (card F4b-5): fire_noise's float hash, at the inputs
+// the fire's offset gives here (up to about 90), hashed a lattice point differently from the
+// cells either side of it, so the specks, the smoulder and the band's breaks came out as
+// straight-edged cells and slivers along the map's axes instead of round blobs.
 render_mode unshaded, depth_draw_never, depth_test_disabled, cull_front, fog_disabled;
 
-#include "res://shaders/fire_noise.gdshaderinc"
+#include "res://shaders/fire_glow_noise.gdshaderinc"
 
 uniform sampler2D depth_texture : hint_depth_texture, filter_nearest, repeat_disable;
 uniform sampler2D screen_texture : hint_screen_texture, filter_nearest, repeat_disable;
@@ -102,14 +107,14 @@ void fragment() {
 	vec2 p = local.xz;
 	// Metres behind the front (above 0 burnt): the lobed reach, ragged.
 	float reach = length(p) - lobe_m * (lobes(p) - 0.5);
-	float b = front - reach + (fire_noise(p / RAG_BLOB_M + lobe_offset * 3.0) - 0.5) * RAG_M;
+	float b = front - reach + (glow_noise(p / RAG_BLOB_M + lobe_offset * 3.0) - 0.5) * RAG_M;
 	vec3 ground = texture(screen_texture, SCREEN_UV).rgb;
 	float luma = dot(ground, LUMA);
 
 	// Ahead: the grass dries in a mottled band, wide and narrow by its noise.
-	float wide = SCORCH_M * (0.55 + 0.9 * fire_cloud(p * 0.33 + lobe_offset * 4.0));
+	float wide = SCORCH_M * (0.55 + 0.9 * glow_cloud(p * 0.33 + lobe_offset * 4.0));
 	float dry = clamp(1.0 + b / wide, 0.0, 1.0);
-	dry += (fire_cloud(p * 1.3 + lobe_offset * 6.0) - 0.5) * 0.4;
+	dry += (glow_cloud(p * 1.3 + lobe_offset * 6.0) - 0.5) * 0.4;
 	vec3 colour = mix(ground, luma * OLIVE, tone(0.12, dry));
 	colour = mix(colour, luma * STRAW, tone(0.38, dry));
 	colour = mix(colour, luma * BROWN, tone(0.66, dry));
@@ -118,7 +123,7 @@ void fragment() {
 
 	// Behind: char with ash blotches.
 	float burnt = smoothstep(-0.03, 0.03, b);
-	float ash = tone(0.66, fire_cloud(p * 0.9 + lobe_offset * 5.0));
+	float ash = tone(0.66, glow_cloud(p * 0.9 + lobe_offset * 5.0));
 	colour = mix(colour, luma * mix(CHAR_TINT, ASH_TINT, ash * 0.6), burnt);
 	alpha = max(alpha, burnt);
 
@@ -126,11 +131,11 @@ void fragment() {
 	// an orange body, gold only in the hottest patches (a gold line all along tonemapped to a
 	// near-white neon stroke).
 	float clock = elapsed;
-	float width = HOT_M * (0.45 + 1.1 * fire_cloud(p * 0.5 + lobe_offset + vec2(clock * 0.35, 0.0)));
-	float whole = tone(GAPS, fire_cloud(p * 0.38 + lobe_offset * 2.0 - vec2(0.0, clock * 0.3)));
+	float width = HOT_M * (0.45 + 1.1 * glow_cloud(p * 0.5 + lobe_offset + vec2(clock * 0.35, 0.0)));
+	float whole = tone(GAPS, glow_cloud(p * 0.38 + lobe_offset * 2.0 - vec2(0.0, clock * 0.3)));
 	float x = b / width;
 	float on_band = step(0.0, x) * (1.0 - tone(0.92, x)) * whole;
-	float hottest = tone(0.55, fire_cloud(p * 0.9 + lobe_offset * 9.0 + vec2(0.0, clock * 0.5)));
+	float hottest = tone(0.55, glow_cloud(p * 0.9 + lobe_offset * 9.0 + vec2(0.0, clock * 0.5)));
 	vec3 bands = mix(HOT_RED, HOT_ORANGE, tone(0.3, x));
 	bands = mix(bands, HOT_GOLD, tone(0.55, x) * hottest);
 	vec3 hot = bands * on_band;
@@ -140,12 +145,12 @@ void fragment() {
 	// front leaves them.
 	float behind = max(b - width, 0.0);
 	float off_band = burnt * (1.0 - on_band);
-	float smoulder = tone(0.5, fire_cloud(p * 0.7 + lobe_offset * 8.0 + vec2(clock * 0.1)));
+	float smoulder = tone(0.5, glow_cloud(p * 0.7 + lobe_offset * 8.0 + vec2(clock * 0.1)));
 	hot += HOT_RED * SMOULDER * smoulder * exp(-behind / SMOULDER_FADE_M) * off_band;
 	vec2 speck_at = p * 2.6 + lobe_offset * 7.0;
-	float big = tone(0.8, fire_noise(p * 1.1 + lobe_offset * 11.0));
-	float speck = max(tone(0.84, fire_noise(speck_at)), big);
-	float pulse = 0.6 + 0.4 * sin(clock * 6.0 + fire_hash(floor(speck_at)) * 30.0);
+	float big = tone(0.8, glow_noise(p * 1.1 + lobe_offset * 11.0));
+	float speck = max(tone(0.84, glow_noise(speck_at)), big);
+	float pulse = 0.6 + 0.4 * sin(clock * 6.0 + glow_hash(ivec2(floor(speck_at))) * 30.0);
 	hot += EMBER * speck * pulse * exp(-behind / SPECK_FADE_M) * off_band;
 
 	ALBEDO = colour + hot * ENERGY * glow;
