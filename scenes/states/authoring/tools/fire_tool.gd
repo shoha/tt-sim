@@ -24,7 +24,13 @@ func _init() -> void:
 	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [
-		["Left Drag (Fire)", "Lay fire; trees under it burn to snags and the ground to ash"],
+		[
+			"Left Drag (Fire)",
+			(
+				"Area: lay fire. Line: draw a line of fire. Trees under it burn to snags, the"
+				+ " ground to ash"
+			),
+		],
 		["Ctrl + Left Drag (Fire)", "Put fire out; the ash and snags stay"],
 	]
 
@@ -67,14 +73,25 @@ func build_pane(panel: AuthoringPanel) -> Control:
 	return FireToolPane.new(panel)
 
 
-## The intensity tiles set the brush's target; size and strength go through the panel's own
-## Advanced rows (AuthoringPanel.build_advanced), already wired to the brush.
+## The shape and intensity tiles set the brush's mode, and the shape tiles follow Tab; size and
+## strength go through the panel's own Advanced rows (AuthoringPanel.build_advanced), already
+## wired to the brush.
 func connect_pane(controller: AuthoringController, pane: Control) -> void:
 	var fire_pane := pane as FireToolPane
 	if fire_pane == null:
 		return
+	fire_pane.shape_selected.connect(
+		func(value: int) -> void:
+			if controller.brush != null:
+				of(controller.brush).shape = value
+				controller.brush.redraw()
+	)
 	fire_pane.intensity_selected.connect(
 		func(value: int) -> void:
 			if controller.brush != null:
 				of(controller.brush).intensity = value
 	)
+	if controller.brush != null:
+		controller.brush.shape_toggled.connect(
+			func() -> void: fire_pane.select_shape(of(controller.brush).shape)
+		)

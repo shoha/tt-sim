@@ -22,6 +22,9 @@ extends RefCounted
 ## false does its own work in frame(), end() and cancel() (a river's line, a crossing's line,
 ## a prop being turned).
 ##
+## Shapes. A mode with a line shape and an area shape (has_shapes()) switches between them on
+## Tab (toggle_shape()); every such brush shows them in one ShapeField, line first.
+##
 ## Cursor. draw_cursor() draws on BrushCursor's overlay; the default is the brush ring in
 ## cursor_tint() with cursor_text() under it. A mode with a cursor of its own overrides it.
 
@@ -95,6 +98,20 @@ func step(brush: BrushTool, steps: int) -> void:
 ## RMB or Delete over the target under the pointer (see `picks`).
 func remove_target(_brush: BrushTool) -> void:
 	pass
+
+
+## True for a mode with two shapes, a line and an area (Water's River and Pond, Fire's Line
+## and Area), which Tab switches between (toggle_shape()): while such a mode is out, Tab is
+## the brush's, not the room drawer's.
+func has_shapes() -> bool:
+	return false
+
+
+## Tab, with no modifier and no press held: switch to the mode's other shape. True when it
+## switched (BrushTool then emits `shape_toggled`, so a pane's tiles and the hint bar follow);
+## the default has one shape and leaves Tab alone.
+func toggle_shape(_brush: BrushTool) -> bool:
+	return false
 
 
 ## Where the pointer ray from `origin` along `direction` meets the mode's ground when it

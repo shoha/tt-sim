@@ -1,16 +1,34 @@
 class_name FireToolPane
 extends VBoxContainer
 
-## The Fire tool's pane in AuthoringPanel: the gestures in a wrapped hint, an intensity row of
-## three tiles (Embers, Flames, Blaze: the mask byte a lay approaches, FireBrush) with a line
-## saying what the picked one looks like, and the panel's Advanced foldout (size and strength,
-## kept in step with the brush by AuthoringPanel.set_brush_values). The Area / Line shape row
-## comes with the Line shape (card F5). Built in code; every interactive Control is named.
+## The Fire tool's pane in AuthoringPanel: the gestures in a wrapped hint, the Shape field
+## (ShapeField: Line, then Area; Tab switches them too, and select_shape() follows it), an
+## intensity row of three tiles (Embers, Flames, Blaze: the mask byte a lay approaches,
+## FireBrush) with a line saying what the picked one looks like, and the panel's Advanced
+## foldout (size and strength, kept in step with the brush by AuthoringPanel.set_brush_values).
+## Built in code; every interactive Control is named.
 
+## A shape tile was picked: its FireBrush.Shape.
+signal shape_selected(shape: int)
 ## An intensity tile was picked: its mask byte.
 signal intensity_selected(intensity: int)
 
 const TILE_SIZE := Vector2(64, 56)
+## The Shape field's tiles (ShapeField: the line shape first, its icons ShapeField's).
+const SHAPE_TILES: Array[Dictionary] = [
+	{
+		"shape": FireBrush.Shape.LINE,
+		"id": &"fire_line",
+		"label": "Line",
+		"tooltip": "Draw a line of fire: it burns evenly along the line you draw",
+	},
+	{
+		"shape": FireBrush.Shape.AREA,
+		"id": &"fire_area",
+		"label": "Area",
+		"tooltip": "Paint fire over an area: linger to build it up",
+	},
+]
 const INTENSITY_TILES: Array[Dictionary] = [
 	{
 		"intensity": FireBrush.EMBERS,
@@ -34,12 +52,9 @@ const INTENSITY_TILES: Array[Dictionary] = [
 		"hint": "Blaze: tall flames at the heart of a fire.",
 	},
 ]
-const HINT := (
-	"Drag to lay fire; it keeps burning where you paint it and never spreads. Trees under it"
-	+ " burn to snags and the ground to ash. Ctrl+drag puts it out; the ash stays. Shift +"
-	+ " scroll or [ and ] set the size."
-)
+const HINT := "Drag to lay fire. Ctrl+drag puts it out; the ash stays. Tab: area or line."
 
+var shape_field: TileField
 var intensity_field: TileField
 
 var _intensity_hint: Label
@@ -56,6 +71,15 @@ func _init(panel: AuthoringPanel = null) -> void:
 	header.setup(tool.label, tool.summary)
 	add_child(header)
 	add_child(_caption("FireHint", HINT))
+	shape_field = ShapeField.build("FireShapeField", SHAPE_TILES[0], SHAPE_TILES[1])
+	select_shape(FireBrush.Shape.AREA)
+	shape_field.tiles.selection_changed.connect(
+		func(id: StringName) -> void:
+			for tile in SHAPE_TILES:
+				if tile.id == id:
+					shape_selected.emit(int(tile.shape))
+	)
+	add_child(shape_field)
 	intensity_field = TileField.new()
 	intensity_field.name = "FireIntensityField"
 	intensity_field.caption = "Intensity"
@@ -78,6 +102,13 @@ func _init(panel: AuthoringPanel = null) -> void:
 	select_intensity(FireBrush.FLAMES)
 	if panel != null:
 		add_child(panel.build_advanced("Fire"))
+
+
+## Selects a shape tile (FireBrush.Shape) without emitting shape_selected.
+func select_shape(shape: int) -> void:
+	for tile in SHAPE_TILES:
+		if int(tile.shape) == shape:
+			shape_field.tiles.select(tile.id)
 
 
 ## Selects an intensity tile (and its hint) without emitting intensity_selected.

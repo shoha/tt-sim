@@ -113,6 +113,10 @@ func setup(game_map: GameMap) -> void:
 	)
 	PaintTool.of(brush).surface = panel.get_paint_surface()
 	brush.radius_changed.connect(func(_radius: float) -> void: _show_brush_values())
+	# Tab switched Water's shape: its tiles follow (Fire's pane follows in FireTool.connect_pane).
+	brush.shape_toggled.connect(
+		func() -> void: panel.water_pane.select_shape(WaterTool.of(brush).shape)
+	)
 	_show_brush_values()
 	_autosave_timer = Timer.new()
 	_autosave_timer.name = "AutosaveTimer"

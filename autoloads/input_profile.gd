@@ -34,6 +34,8 @@ const LABELS := {
 	&"drag_height": ["Scroll", "Scroll"],
 	&"free_move": ["Shift", "Shift"],
 	&"cycle_mode": ["Tab", "Tab"],
+	# A brush with two shapes (Water's River / Pond, Fire's Line / Area) switches on Tab.
+	&"brush_shape": ["Tab", "Tab"],
 	&"done": ["M", "M"],
 }
 

@@ -41,6 +41,10 @@ extends Node
 ##                      mode's target, remove it; otherwise put the brush down
 ##   Escape             while a press is held, cancel it as RMB does (idle: not taken)
 ##   Delete             idle over a picking mode's target, remove it
+##   Tab                with no modifier and no press held, the mode's other shape
+##                      (BrushMode.toggle_shape: Water's River / Pond, Fire's Line / Area);
+##                      taken, so GUI focus does not move (GameMap's _input reaches the brush
+##                      first); a mode with one shape leaves it to the room drawer
 ## A press or release a mode refuses says why through `refused`, which the controller toasts.
 
 signal toggled(active: bool)
@@ -50,8 +54,11 @@ signal radius_changed(radius: float)
 signal refused(reason: String)
 ## A press on the board started the mode's gesture (the play brush's drawer steps aside).
 signal gesture_started
+## Tab switched the mode's shape (BrushMode.toggle_shape): the pane's tiles and the hint bar
+## follow it.
+signal shape_toggled
 
-enum Action { NONE, POINTER, BEGIN, END, CANCEL, DESELECT, GROW, SHRINK, REMOVE, SWALLOW }
+enum Action { NONE, POINTER, BEGIN, END, CANCEL, DESELECT, GROW, SHRINK, REMOVE, SWALLOW, SHAPE }
 
 const MIN_RADIUS := 1.0
 const MAX_RADIUS := 12.0
@@ -188,6 +195,12 @@ static func decide(event: InputEvent, picks: bool, held: bool, over_target: bool
 				# it goes on to the drawer (close, then leave).
 				if held:
 					return Action.CANCEL
+			KEY_TAB:
+				# A bare Tab switches the shape between gestures; mid-press it does nothing,
+				# and with a modifier it is GUI focus navigation's.
+				if key.shift_pressed or key.ctrl_pressed or key.alt_pressed or key.meta_pressed:
+					return Action.NONE
+				return Action.SWALLOW if held else Action.SHAPE
 	return Action.NONE
 
 
@@ -373,9 +386,22 @@ func handle_input(event: InputEvent) -> bool:
 		Action.REMOVE:
 			mode.remove_target(self)
 			return true
+		Action.SHAPE:
+			if not mode.has_shapes():
+				return false
+			# A held Tab's repeats are taken too, but switch nothing.
+			if not (event as InputEventKey).echo and mode.toggle_shape(self):
+				shape_toggled.emit()
+			return true
 		Action.SWALLOW:
 			return true
 	return false
+
+
+## True while Tab is the brush's: it is out and its mode has two shapes (BrushMode.has_shapes),
+## so the room drawer leaves Tab alone.
+func takes_tab() -> bool:
+	return _active and mode.has_shapes()
 
 
 func _process(delta: float) -> void:

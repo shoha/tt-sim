@@ -31,10 +31,10 @@ const TINT := Color(0.56, 0.84, 1.0)
 const ERASE_TINT := Color(1.0, 0.52, 0.42)
 const SHADOW := Color(0.05, 0.04, 0.05, 0.55)
 ## A river point is recorded once the pointer's ground point is this far (metres) from the
-## last; the shortest line a release carves.
-const RIVER_DECIMATE_M := 0.6
+## last; the shortest line a release carves (StrokePath's, which every line shape shares).
+const RIVER_DECIMATE_M := StrokePath.DECIMATE_M
 const WIDTH_DECIMATE := 0.6
-const RIVER_MIN_LENGTH_M := 2.0
+const RIVER_MIN_LENGTH_M := StrokePath.MIN_LENGTH_M
 ## The pond dab's growth with dwell (1 + POND_DWELL_GROW at BrushTool.DWELL_MAX).
 const POND_DWELL_GROW := 0.35
 ## The ribbon's chevron spacing, and its fill's alpha upstream and downstream (the gradient
@@ -87,41 +87,22 @@ static func radius_for(radius: float, depth_class: int) -> float:
 	return clampf(radius, narrowest, WaterBody.MAX_HALF_WIDTH_M)
 
 
-## `points` with `p` appended when it lies at least `spacing` from the last point (always
-## when empty): the river line's decimation by distance. Pure.
+## The river line's decimation by distance (StrokePath.decimate). Pure.
 static func decimate(points: PackedVector2Array, p: Vector2, spacing: float) -> PackedVector2Array:
-	var out := points.duplicate()
-	if out.is_empty() or out[-1].distance_to(p) >= spacing:
-		out.append(p)
-	return out
+	return StrokePath.decimate(points, p, spacing)
 
 
-## A drawn river line smoothed for carving and preview: two Chaikin passes
-## (WaterGeometry.chaikin), which keep both ends, so a shaky hand or a corner reads as a
-## meander and the flow still starts and ends where the author pressed and released. Pure.
+## A drawn river line smoothed for carving and preview (StrokePath.smooth_line: two Chaikin
+## passes that keep both ends, so a shaky hand reads as a meander). Pure.
 static func smooth_line(points: PackedVector2Array) -> PackedVector2Array:
-	var widths := PackedFloat32Array()
-	widths.resize(points.size())
-	return WaterGeometry.chaikin(points, widths, 2)[0]
+	return StrokePath.smooth_line(points)
 
 
-## The recorded line `points` ended at the pointer's last point `tip` (Vector2.INF: none), as
-## the preview draws it: decimation records a point only `spacing` from the last, so the
-## release point itself was usually dropped, up to `spacing` plus a frame's travel short of
-## where the author let go (P6-3: an ankle stream released 0.36 m inside the map edge ended
-## over 1 m inside it and got no exit). A tip closer than half the spacing replaces the last
-## point instead of crowding it. Pure.
+## The recorded line ended at the pointer's last point (StrokePath.with_tip). Pure.
 static func with_tip(
 	points: PackedVector2Array, tip: Vector2, spacing: float
 ) -> PackedVector2Array:
-	var out := points.duplicate()
-	if tip == Vector2.INF or out.is_empty() or out[-1].distance_to(tip) < 1e-4:
-		return out
-	if out.size() >= 2 and out[-1].distance_to(tip) < spacing * 0.5:
-		out[-1] = tip
-	else:
-		out.append(tip)
-	return out
+	return StrokePath.with_tip(points, tip, spacing)
 
 
 ## The line a release carves now: the recorded points ended at the pointer (with_tip()),
@@ -163,12 +144,9 @@ static func chevron(at: Vector2, tangent: Vector2, size: float) -> PackedVector2
 	)
 
 
-## The length of a polyline (metres). Pure.
+## The length of a polyline (metres; StrokePath.line_length). Pure.
 static func line_length(points: PackedVector2Array) -> float:
-	var total := 0.0
-	for i in points.size() - 1:
-		total += points[i].distance_to(points[i + 1])
-	return total
+	return StrokePath.line_length(points)
 
 
 ## The readout under the ring: "River  Waist  40 ft" while a river is drawn (`length_m` > 0,
@@ -311,10 +289,7 @@ func draw(
 	stroking: bool,
 	erasing: bool
 ) -> void:
-	var ground := func(xz: Vector2) -> Vector2:
-		var p := Vector3(xz.x, 0.0, xz.y)
-		p.y = editor.ground_height_at(p) + 0.05
-		return camera.unproject_position(p)
+	var ground := on_ground(camera, editor)
 	if drawing and not river.is_empty():
 		var live := river.duplicate()
 		var tip := Vector2(hit.x, hit.z)
@@ -337,6 +312,15 @@ func draw(
 	elif shape == Shape.POND:
 		for dab in pond_dabs:
 			_fill_disc(canvas, camera, editor, Vector2(dab.x, dab.y), dab.z)
+
+
+## The ribbon's `ground` for draw_ribbon(): a world XZ point to the screen, on `editor`'s
+## ground there (lifted 5 cm), seen by `camera`.
+static func on_ground(camera: Camera3D, editor: AuthoringEditor) -> Callable:
+	return func(xz: Vector2) -> Vector2:
+		var p := Vector3(xz.x, 0.0, xz.y)
+		p.y = editor.ground_height_at(p) + 0.05
+		return camera.unproject_position(p)
 
 
 ## A band `radius` either side of `line` (world XZ; `ground` maps a point to the screen on
@@ -485,6 +469,17 @@ func end(brush: BrushTool) -> void:
 
 func cancel(_brush: BrushTool) -> void:
 	reset()
+
+
+func has_shapes() -> bool:
+	return true
+
+
+## Tab: River to Pond and back (the pane's tiles follow, BrushTool.shape_toggled).
+func toggle_shape(brush: BrushTool) -> bool:
+	shape = Shape.POND if shape == Shape.RIVER else Shape.RIVER
+	brush.redraw()
+	return true
 
 
 ## From the size the ring shows, so a notch always changes it visibly; with Ctrl held (the

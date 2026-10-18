@@ -288,7 +288,13 @@ The Fire tool (`FireTool`, `FireBrush`, `FireToolPane`: Embers 96, Flames 176, B
 `FireEditor` behind `AuthoringEditor.begin_fire_stroke`) writes `fire_mask` through a
 `MaskStroke` in `MaskBrush.FIRE`; a lay is one "Lay fire" history group (the fire, the burnt
 forest only over forest, the ash) and Ctrl puts fire out ("Put out fire", the ash and snags
-stay). `AuthoringEditor.apply_mask_diff` calls `refresh_fire` for any diff that writes
+stay). Two shapes, Tab switching them (card F5): Area paints; Line draws a line as a river is
+drawn (`StrokePath`, the river's ribbon in ember orange) and lays it on release as even
+capsule dabs (`FireBrush.lay_line`: the same exposure per metre whatever the drawing speed,
+the centre about 97 % of the intensity), through the same stroke, so it is the same one
+history entry with its ash; a Ctrl line puts fire out along it. A narrow Flames line stands
+one big fire per clump it crosses (FireFires), so it reads as a charred path with a few
+fires; a Blaze line stands flames all along. `AuthoringEditor.apply_mask_diff` calls `refresh_fire` for any diff that writes
 `fire_mask`, which refreshes the field over the diff's samples; undo and live ops take the same
 path. Arming the tool requests the fire book, so the first stroke's fires have their drawings.
 The same brush is a GM brush in play (card F2), its ops `mask` ops. The tool, its pane, its
