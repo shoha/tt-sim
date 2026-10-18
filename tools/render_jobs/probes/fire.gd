@@ -62,9 +62,12 @@ const DUSK_HOUR := 19.0
 const NIGHT_HOUR := 23.0
 ## A shot key's sky: the hour (-1: the default time of day) and the environment preset ("": the
 ## level's own). Sunset and night are the game's own dark presets with a low and a set sun (the
-## look is judged there); dusk is the level's own sky at the dusk hour, dark the harness's.
+## look is judged there); dusk is the level's own sky at the dusk hour, dark the harness's; hell
+## and ethereal are those presets at the default hour (the glow card's no-fire set).
 const SKIES := {
 	"day": [-1.0, ""],
+	"hell": [-1.0, "hell"],
+	"ethereal": [-1.0, "ethereal"],
 	"dusk": [DUSK_HOUR, ""],
 	"sunset": [DUSK_HOUR, "outdoor_sunset"],
 	"night": [NIGHT_HOUR, "outdoor_night"],

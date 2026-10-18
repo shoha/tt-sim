@@ -1,0 +1,48 @@
+{
+ "out_dir": "render_jobs/firefeat_glow",
+ "timeout_s": 480,
+ "hang_s": 120,
+ "saved": {"folder": "_firefeat_glow"},
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 150, "seed": 1234, "phase": "build"},
+  {"op": "wait_ready", "settle": 1.0, "phase": "build"},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "look_at", "at": [0, 0], "phase": "build"},
+  {"op": "zoom", "size": 20.0, "phase": "build"},
+  {"op": "wait", "s": 1.5, "phase": "build"},
+  {"op": "stroke", "mode": "water", "shape": "river", "depth": "waist", "radius": 1.5, "speed": 4.0, "points": [[-7, -12], [-7, 12]], "phase": "build"},
+  {"op": "wait_ready", "settle": 0.5, "phase": "build"},
+  {"op": "stroke", "mode": "water", "shape": "pond", "depth": "deep", "radius": 3.2, "speed": 2.5, "points": [[6, 2], [12, 2]], "hold": 0.6, "phase": "build"},
+  {"op": "wait_ready", "settle": 1.0, "phase": "build"},
+  {"op": "eval", "expr": "_game_map.get_brush_tool().deactivate()", "phase": "build"},
+  {"op": "wait_ready", "settle": 1.0, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "save", "folder": "_firefeat_glow", "phase": "build"},
+  {"op": "hide_ui"},
+  {"op": "wait", "s": 2.0},
+  {"op": "expand", "values": ["day_home", "day_z8", "sunset_home", "sunset_z8", "night_home", "night_z8", "hell_home", "hell_z8", "ethereal_home", "ethereal_z8"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "{value}", "label": "", "phase": "look", "for": "{value}"},
+   {"op": "wait", "s": 2.5, "phase": "look", "for": "{value}"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/glow.gd", "action": "report", "phase": "look", "for": "{value}"},
+   {"op": "capture", "name": "{value}", "desc": "{value}: a map with no fire (forest, open ground, a river and a pond)"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "day_home", "label": "", "phase": "look", "for": "glow0_home"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/glow.gd", "action": "env", "preset": "", "overrides": {"glow_enabled": true, "glow_intensity": 0.0}, "phase": "look", "for": "glow0_home"},
+  {"op": "wait", "s": 2.0, "phase": "look", "for": "glow0_home"},
+  {"op": "capture", "name": "glow0_home", "desc": "day home with the Glow slider (glow_intensity override) at 0"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "day_home", "label": "", "phase": "look", "for": "glow2_home"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/glow.gd", "action": "env", "preset": "", "overrides": {"glow_enabled": true, "glow_intensity": 2.0}, "phase": "look", "for": "glow2_home"},
+  {"op": "wait", "s": 2.0, "phase": "look", "for": "glow2_home"},
+  {"op": "capture", "name": "glow2_home", "desc": "day home with the Glow slider (glow_intensity override) at 2, the top of its slider"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/glow.gd", "action": "env", "preset": "", "overrides": {}},
+  {"op": "expand", "values": ["day", "sunset", "night", "hell", "ethereal"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/firefeat_glow", "out": "sheet_{value}", "columns": 2, "names": ["user://render_jobs/firefeat_glow_old/{value}_home", "{value}_home", "user://render_jobs/firefeat_glow_old/{value}_z8", "{value}_z8"], "tile": [960, 540], "phase": "look", "for": "{value}_z8"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/firefeat_glow", "out": "sheet_slider", "columns": 2, "names": ["user://render_jobs/firefeat_glow_old/glow0_home", "glow0_home", "user://render_jobs/firefeat_glow_old/day_home", "day_home", "user://render_jobs/firefeat_glow_old/glow2_home", "glow2_home"], "tile": [960, 540], "phase": "look", "for": "glow2_home"},
+  {"op": "index", "title": "The game's glow on a map with no fire (card fire-prod-c5b)", "intro": "Produced by tools/render_jobs/jobs/firefeat_glow.json on the saved _firefeat_glow level (a 150 m temperate forest, seed 1234, a river and a pond, no fire). The old set (main's glow, before card C5b) was run with --out render_jobs/firefeat_glow_old; the sheets put old (left) beside new (right): sheet_<preset> home over zoom 8 for day (the level's own environment), sunset (outdoor_sunset), night (outdoor_night), hell and ethereal; sheet_slider the Color pane's Glow slider at 0, the preset's own value and 2."},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/glow.gd", "action": "cleanup", "folder": "_firefeat_glow"}
+ ]
+}

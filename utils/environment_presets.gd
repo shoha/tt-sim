@@ -397,7 +397,9 @@ const PRESETS = {
 		"glow_enabled": true,
 		"glow_intensity": 0.6,
 		"glow_strength": 1.2,
-		"glow_bloom": 0.15,
+		# 0.15 before the game's glow went wide and additive (EnvironmentGlow): scaled by the
+		# glow levels' sums (1.3 / 3.1) so the red wash stays as soft as it was.
+		"glow_bloom": 0.065,
 	},
 	"ethereal":
 	{
@@ -415,7 +417,9 @@ const PRESETS = {
 		"glow_enabled": true,
 		"glow_intensity": 0.7,
 		"glow_strength": 1.3,
-		"glow_bloom": 0.2,
+		# 0.2 before the game's glow went wide and additive (EnvironmentGlow): scaled as hell's,
+		# else the wash turned the frame milky grey-green.
+		"glow_bloom": 0.085,
 	},
 	"arctic":
 	{
@@ -667,13 +671,24 @@ static func apply_to_world_environment(
 		world_env.environment = env
 
 	# Apply all settings
-	_apply_config_to_environment(env, config, map_sky)
+	_apply_config_to_environment(
+		env, config, map_sky, glow_reference(preset_name, map_defaults)
+	)
+
+
+## The preset's own glow_intensity, without a level's overrides: what EnvironmentGlow reads a
+## level's Glow value against.
+static func glow_reference(preset_name: String = "", map_defaults: Dictionary = {}) -> float:
+	var base := get_environment_config(preset_name, {}, map_defaults)
+	return float(base.get("glow_intensity", PROPERTY_DEFAULTS["glow_intensity"]))
 
 
 ## Apply configuration to an Environment resource.
 ## [param map_sky] optional Sky resource for the "map_default" sky preset.
+## [param glow_ref] the preset's own glow_intensity (EnvironmentGlow); below 0, the
+## config's own (no level override to read against).
 static func _apply_config_to_environment(
-	env: Environment, config: Dictionary, map_sky: Sky = null
+	env: Environment, config: Dictionary, map_sky: Sky = null, glow_ref: float = -1.0
 ) -> void:
 	# Background
 	env.background_mode = config.get("background_mode", Environment.BG_COLOR)
@@ -697,11 +712,9 @@ static func _apply_config_to_environment(
 	env.tonemap_exposure = config.get("tonemap_exposure", 1.0)
 	env.tonemap_white = config.get("tonemap_white", 1.0)
 
-	# Glow
-	env.glow_enabled = config.get("glow_enabled", false)
-	env.glow_intensity = config.get("glow_intensity", 0.8)
-	env.glow_strength = config.get("glow_strength", 1.0)
-	env.glow_bloom = config.get("glow_bloom", 0.0)
+	# Glow: the game's one tuning (EnvironmentGlow), scaled by the config's glow keys
+	var own_glow := float(config.get("glow_intensity", PROPERTY_DEFAULTS["glow_intensity"]))
+	EnvironmentGlow.apply(env, config, glow_ref if glow_ref >= 0.0 else own_glow)
 
 	# Reflected light source
 	env.reflected_light_source = config.get(
@@ -741,9 +754,10 @@ static func _apply_config_to_environment(
 
 
 ## Extract all supported settings from an existing Environment resource into a
-## config dictionary.  This is the inverse of _apply_config_to_environment() and
-## uses the same key names as PROPERTY_DEFAULTS so the result can be used
-## directly as overrides or compared against presets.
+## config dictionary, with the same key names as PROPERTY_DEFAULTS so the result can be
+## used directly as overrides or compared against presets. It reads a map's own embedded
+## environment; the glow keys are not an inverse of _apply_config_to_environment(), which
+## maps them through EnvironmentGlow.
 static func extract_from_environment(env: Environment) -> Dictionary:
 	if not env:
 		return {}
@@ -784,7 +798,7 @@ static func extract_from_environment(env: Environment) -> Dictionary:
 static func create_environment(preset_name: String = "", overrides: Dictionary = {}) -> Environment:
 	var config = get_environment_config(preset_name, overrides)
 	var env = Environment.new()
-	_apply_config_to_environment(env, config)
+	_apply_config_to_environment(env, config, null, glow_reference(preset_name))
 	return env
 
 
