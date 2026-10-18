@@ -153,6 +153,7 @@ Each preset can configure any combination of the following properties:
 
 **Glow/Bloom:**
 - `glow_enabled`, `glow_intensity`, `glow_strength`, `glow_bloom`
+- preset only (not in `PROPERTY_DEFAULTS`): `glow_bloom_scale`, `glow_hdr_threshold`
 
 The game has one glow for every map and preset (`utils/environment_glow.gd`, `EnvironmentGlow`,
 applied from `EnvironmentPresets._apply_config_to_environment`; the user's decision of
@@ -164,7 +165,7 @@ threshold 1.0, scale 2.0, levels [0, 0.8, 0.4, 0.1, 0, 0, 0]), became:
 | Property | Value |
 |----------|-------|
 | `glow_blend_mode` | additive |
-| `glow_hdr_threshold` | 1.05 |
+| `glow_hdr_threshold` | 1.05, or the preset's own `glow_hdr_threshold` (`outdoor_sunset` 0.8) |
 | `glow_hdr_scale` | 1.5 |
 | glow levels 1-7 | [0, 0, 0.6, 1, 1, 0.5, 0] (a wide halo) |
 | `glow_intensity` | 0.5 x share, share = the config's `glow_intensity` / the preset's own |
@@ -173,9 +174,10 @@ threshold 1.0, scale 2.0, levels [0, 0.8, 0.4, 0.1, 0, 0, 0]), became:
 
 The preset and level keys keep the meaning they had, so no level needed new numbers or a
 migration. At the preset's own Glow value every preset glows at 0.5, so the fire blooms alike by
-day, at sunset and at night (round 6's look on the default, `outdoor_sunset` and `outdoor_night`
-presets exactly). The Color pane's Glow slider is read against the preset's own value: 0 is no
-glow, twice the preset's value is twice the halo round bright things and 1.41 times the wash
+day, at sunset and at night (round 6's look on the default and `outdoor_night` presets exactly;
+`outdoor_sunset` keeps its blooming mass with a calibrated wash, below). The Color pane's Glow
+slider is read against the preset's own value: 0 is no glow, twice the preset's value is twice
+the halo round bright things and 1.41 times the wash
 (the square root), so a high slider blooms the highlights more than it lifts the whole frame.
 The wash over the whole frame (Godot feeds every pixel at `max(smoothstep(threshold, threshold +
 scale, luminance), bloom)`) keeps the amount it had at the preset's value, `glow_bloom x
@@ -192,9 +194,7 @@ which blew the fire under `ethereal` into a white glare and lifted the whole fra
 `EnvironmentGlow.strength` maps a strength to the one that boosts the wide levels as much as it
 boosted Godot's (by bisection on sum(level_k x s^(k+1))), so the presets' numbers and the Color
 pane's Glow strength slider keep their effect (its top, 2, was 27 times the glow; it maps to
-1.48, 6.2 times). `outdoor_sunset` is the exception: its strength went from 1.1 to 1.19, which
-maps to the 1.1 round 6's fire look was tuned with at sunset, so its halo and wash stay as they
-were.
+1.48, 6.2 times).
 
 **Per-preset wash.** The wide, additive wash lifts and greys a frame more than the old
 screen-blended one per unit of bloom (at the same lift of mean luma it costs about 30 % more
@@ -203,12 +203,23 @@ saturation). `hell` and `ethereal` keep their `glow_bloom` (0.15 and 0.2) and ca
 luma, saturation and contrast within 0.01 at home and zoom 8. The other presets' washes are
 small and kept their numbers (day and night unscaled: mean luma and contrast within 0.01 of the
 old glow, saturation 0.008 to 0.016 lower).
-`outdoor_sunset`'s wash is left as round 6 had it, an open choice (card fire-prod-c5c): it is
-0.035 of mean luma lighter than the old glow on a map with no fire, and matching the old glow
-there (a scale of about 0.4 with the strength back at 1.1; a per-preset HDR threshold of 0.6,
-which EnvironmentGlow does not read today, would let fire-lit ground bloom again) moves the
-burning sunset zoom 20 view from round 6 (pixel diff mean 7.4 to 12.2, or 9.3 with the
-threshold), though it stays one blooming mass.
+
+**Sunset's threshold.** `outdoor_sunset` keeps its old strength of 1.1 and `glow_bloom` 0.1, and
+carries `glow_bloom_scale` 0.4 (a bloom share of 0.040 at 0.5) and `glow_hdr_threshold` 0.8 (card
+fire-prod-c5d). Round 6's look kept sunset's full wash (share 0.1), which made a map without fire
+0.035 of mean luma lighter and 0.024 less saturated than the old glow. The scale alone matches the
+old glow there but darkens the burning view round the fires (pixel diff mean against round 6 at
+zoom 20 from 7.4 to 12.2): part of round 6's one blooming mass at sunset was the wash. The lower
+threshold gives that bloom back where it belongs: the fire-lit ground and the flames' edges pass
+0.8 but not 1.05, while a map without fire has almost nothing that bright (a glint on the river
+blooms a little more). Measured at full size: without fire, home +0.0013 / -0.0021 / -0.0008 and
+zoom 8 +0.0008 / -0.0039 / -0.0015 against the old glow (mean luma / saturation / contrast); on the
+burning map at zoom 20 the upper-left blaze stays one bright blooming mass with its tongues inside,
+pixel diff mean 10.2 against round 6 (7.5 with the full wash), the difference an even deepening of
+the mid-tones and a little less warm haze on the foliage round the fires. The key is preset only:
+the Color pane never writes it, a map's own environment never carries it, and a level override of
+it lands only on a preset that has the key (`get_environment_config` drops an override the config
+lacks, as it does `glow_bloom_scale` everywhere but `hell` and `ethereal`).
 
 On the **Mobile renderer** the intensity is doubled (and the bloom share halved, so the wash
 stays): there the over-bright cores are capped near the threshold, and the round 6 probe needed

@@ -19,6 +19,10 @@ extends RefCounted
 ##   times the preset's optional glow_bloom_scale: the wide, additive wash lifts and greys a frame
 ##   more than the old screen-blended one did, so the presets with a strong wash (hell, ethereal)
 ##   carry a scale calibrated against the old glow on a map without fire (card fire-prod-c5c);
+## - a preset's optional glow_hdr_threshold replaces HDR_THRESHOLD: outdoor_sunset's lower one
+##   lets its fire-lit ground bloom as round 6's did once its wash is scaled to the old glow's
+##   (card fire-prod-c5d). The Color pane never writes it, and an override of it reaches the
+##   config only on a preset that carries it (get_environment_config drops a key the config lacks);
 ## - glow_strength keeps its old relative effect. Godot multiplies each level by the strength once
 ##   per blur pass on the way down (level k by strength^(k+1)), so over the wide LEVELS a strength
 ##   above 1 compounds far more than it did over Godot's own levels (1.3 was 3.3 times the glow
@@ -61,7 +65,7 @@ static func settings(config: Dictionary, reference: float, method := "") -> Dict
 		"glow_intensity": INTENSITY * gain * share,
 		"glow_bloom": minf(bloom, 1.0),
 		"glow_strength": strength(float(config.get("glow_strength", 1.0))),
-		"glow_hdr_threshold": HDR_THRESHOLD,
+		"glow_hdr_threshold": float(config.get("glow_hdr_threshold", HDR_THRESHOLD)),
 		"glow_hdr_scale": HDR_SCALE,
 		"glow_blend_mode": BLEND_MODE,
 	}
