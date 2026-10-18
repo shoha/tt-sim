@@ -122,6 +122,13 @@ other committed home.
   the fire still runs about 1.8x over its targets, so cheaper approaches are spiked and measured
   next, and the look may change with them "as long as it looks good"; the user then gives visual
   references, and the fire is steered to where a cheap approach and the references meet.
+  Round 6 of the reference fit (branch spike-flipbook at de7f3d16: flames drawn from a book of
+  drawings baked offline by a small fire simulation, fewer and bigger fires, dark char with a
+  soft pool of light under each, a smoke book, short lights) is approved for production (user,
+  2026-10-17): "go ahead with production, busyness is fine for now". It is ported clean, not
+  merged, on branch fire-sim (cards fire-prod-c1 to c7, nothing pushed until C7's verdict
+  captures and the user's OK); Start a fire keeps its own look for now. The system doc is
+  `systems/fire.md`.
   Design before code: `docs/plans/2026-10-11-fire-features/` (gitignored).
 
 ## Where each system is documented
@@ -147,6 +154,7 @@ other committed home.
 | Water tool (River and Pond tiles, depth tiles, ribbon preview, Ctrl erase) | `scenes/states/authoring/water_brush.gd`, `water_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Water) and "Brushes and gestures" |
 | Crossings (plank bridges, stepping stones, stone arches, fords: model, snapping to banks, geometry, collision, grid on the deck, editor API, following later edits, the per-crossing rebuild cache) | `resources/crossing.gd`, `utils/crossing_placement.gd`, `utils/crossing_geometry.gd`, `utils/crossing_arch.gd`, `utils/crossing_ford.gd`, `utils/crossing_cache.gd`, `utils/map_crossing_io.gd`, `scenes/terrain/authored_crossings.gd`, `scenes/states/authoring/crossing_editor.gd` | `systems/crossings.md`, `ARCHITECTURE.md` "Map document (map.ttmap)" |
 | Bridge tool (Planks, Stones, Arch and Ford tiles, live preview, refusal hint, Ctrl erase) | `scenes/states/authoring/bridge_brush.gd`, `bridge_tool_pane.gd`, `brush_tool.gd` | `UI_SYSTEMS.md` authoring drawer (Bridge) and "Brushes and gestures" |
+| Persistent fire (the plan: FireFires' fewer, bigger fires, the per-fire seed, the sorted splat, `plan_digest`; the stroke path and its worker; the shipped fire and smoke books and their lifecycle; the flames, the ground's sim bake, the smoke, the lights) | `scenes/terrain/fire_field.gd`, `fire_fires.gd`, `fire_plan_job.gd`, `fire_noise_bake.gd`, `fire_clusters.gd`, `fire_lights.gd`, `fire_field_smoke.gd`, `scenes/effects/fire_look.gd`, `resources/fire_book.gd`, `resources/fire_smoke_book.gd`, `assets/fire/`, `shaders/fire_flames.gdshader`, `fire_smoke_book.gdshader`, `fire_ground_bake.gdshader`, `fire_glow.gdshaderinc`, `fire_glow_noise.gdshaderinc`, `tools/fire_sim/` | `systems/fire.md`; the Fire tool in `systems/authoring.md` "Tools" |
 | Starting landforms (Valley, Hilltop, Terraces, Lakeshore, Gorge: the seeded frame, the shared steps, each recipe's shape and feature chances, the stage, the open path, the dialog's Landform row) | `utils/starting_landform.gd`, `utils/landform_recipes.gd`, `utils/landform_hilltop.gd`, `utils/landform_terraces.gd`, `utils/landform_lakeshore.gd`, `utils/landform_gorge.gd`, `utils/new_map.gd`, `scenes/states/authoring/new_map_dialog.gd` | `systems/landforms.md`, `UI_SYSTEMS.md` "New map dialog" |
 | Water past the map edge (a river's course past the edge, pond lobes, the skirt's channel patch, the opaque skirt and `SkirtBackdrop`) | `scenes/terrain/skirt_exits.gd`, `scenes/terrain/terrain_skirt.gd`, `scenes/terrain/skirt_backdrop.gd`, `utils/river_exit_mesh.gd`, `utils/pond_exits.gd` | `systems/water.md` "Past the map edge", `ARCHITECTURE.md` "Ground skirt" |
 | Trees at close and home zoom (the near plane held behind the camera, the canopy fade's window) | `scenes/states/playing/camera_controller.gd`, `scenes/states/playing/canopy_fade.gd`, `shaders/wind_foliage_include.gdshaderinc` | `CONVENTIONS.md` "Camera System", `PERFORMANCE.md` "Close-zoom canopy fade" |
@@ -515,6 +523,27 @@ a wading token matched to the millimetre, and the wading token showed the submer
 the client. (A ford is 0.17 m deep, so a token on it is correctly not submerged.) Host and
 client captures matched. Since 2026-10-10 the tokens are avatars, whose ring follows the
 swimmer's rule (NETWORKING.md "Automated runs"); passed on both sides.
+
+Fire after the production port (round 6 of the reference fit, branch fire-sim, cards
+fire-prod-c1 to c7; `systems/fire.md`). Busyness is fine for now (user, 2026-10-17); open for
+later passes, none blocking the port:
+
+- The event fire (Start a fire) still has today's look: EventPuffs' banded tongues and
+  `FlameAtlas` cards, the smoke crowns and the scorch, beside the new persistent fire. A
+  follow-up card would bring it into the book's family.
+- Broad-lobe drawings and a calmer default zoom: the far form still reads busy at home.
+- Dimmer pool-edge arcs: a few thin red crescents at pool rims (round 6's crack and lobe fringe,
+  in round 6's own frames too).
+- A stronger air halo round the flames (round 6's night aura and day bloom); judge it again once
+  card fire-prod-c5b's screen glow lands.
+- Flat pool discs: seen alone, the pools are flat saturated orange-yellow discs with no inner
+  gradient (the pool clamps to 1 under its kernel and the light's plateau saturates in the
+  tonemap); under the flames they read as round 6.
+- The worker re-plan delay: FireFires' 7-point window makes a 4 m dab's re-plan about 168 ms on
+  the worker (19-20 ms before the port), so a stroke's fires appear about a sixth of a second
+  after the dab and a peer's later still (card fire-prod-c7 measures it in the pinned pass).
+- Compatibility and Mac (the Mobile renderer) are unverified for the production fire until cards
+  fire-prod-c5b (the glow and a Mobile look job) and c7 (the verdict captures).
 
 Path direction (user, 2026-10-13): paths and roads have a direction, but the ground samples
 built surfaces (cobblestone, flagstone, planks, dirt roads) with the same per-cell rotation and

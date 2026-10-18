@@ -30,8 +30,9 @@ extends Node3D
 ## A base fire unifies the flames (the user's 2026-10-16 verdict): the flames' heat raster
 ## (HEAT_STEP_M) sums each planned flame's height under a soft kernel, re-splatted around the
 ## region a refresh re-plans. The ground burns as a bed on that summed heat
-## (fire_glow.gdshaderinc), and each drawn flame carries the heat at its foot, which thins its
-## rim and widens its hot bands, so a crowded clump reads as one hotter body. A second raster on
+## (fire_glow.gdshaderinc), and each drawn flame carries the heat at its foot, so a fire on a hot,
+## merged bed takes its shape jitter whole, shifts its colour bands and keeps its core's bloom by
+## day (fire_flames.gdshader): a crowded clump reads as one hotter body. A second raster on
 ## the same grid, the feet's pools (POOL_REACH, round 4), marks where flames stand, so the
 ## ground glows under every foot and stays dark crust between. The rasters come
 ## from the whole plans (not the budget's prefix), so thinning does not dim the bed. A peer
@@ -55,8 +56,8 @@ extends Node3D
 ## Lights and smoke (look card F4b-1): each re-planned block's flames are summed on the
 ## clusters' grid (FireClusters.cells_of, kept per block), and every refresh finds the hot spots
 ## from those sums: FireLights stands up to four warm lights over the largest burning clusters
-## (shown only while the sun is low) and FireFieldSmoke raises a leaning column of soft billows
-## over up to eight of the largest blaze clusters. Both are children, made with the first fire
+## (shown only while the sun is low) and FireFieldSmoke raises a leaning plume from the smoke
+## book over up to eight of the largest blaze clusters. Both are children, made with the first fire
 ## and freed with the map; their per-frame work is the lights' flicker (the smoke moves in its
 ## shader). The ground's fire term reads everything of it that does not change with time from
 ## the sim bake (FireNoiseBake, cards F4b-4 and ground-cost), also a child, made with the first

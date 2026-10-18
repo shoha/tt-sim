@@ -38,7 +38,7 @@ system's map and the rules the code keeps (moved from `AGENTS.md` Key Convention
   surface (`surface_weights`), a separate layer. `MapFingerprint` carries a `fire` key. Drawn by
   `FireField` (`scenes/terrain/fire_field.gd`), which `MapSourceLoader` adds to every map root
   whose ground is the document's; where flames may stand (not wet, not steep) is derived there,
-  never saved.
+  never saved ([fire.md](fire.md)).
 
 ## Painted surfaces (format 2)
 

@@ -688,41 +688,50 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   then grassland, taiga, grassland, taiga played, a `sweep` at home and zoom 26 of the new and the
   base include, with and without scatter, and the `ground_std` reference.
 - `jobs/firefeat_build.json`, `jobs/firefeat_look.json` and `jobs/firefeat_cleanup.json`:
-  persistent ground fire's look (fire cards F3 and F4a; `probes/fire.gd`). Build (about 100 s):
-  a new 200 ft temperate forest (seed 1234), fire laid with the real Fire tool (three `flames`
-  passes of radius 4 across the map and a shorter fourth, then a curved `blaze` line of radius 2
-  across the view; south of them an author-laid fire, a scrubbed blob and a curving line),
-  saved as `_firefeat_look`. Look (card F4b-1's lights and smoke; card F4a's rounds 1-4 are
-  in its history up to ed6696c9, their frames kept in `render_jobs/fire_field_look`): that level
-  under the game's own presets (the probe's sun keys: `sunset` the outdoor_sunset preset with
-  the sun at 19:00, `night` outdoor_night at 23:00, `day` the level's own sky at 14:00): at zoom
-  12 framing the largest smoke column (the probe's `zs` view) at sunset, night and day, at home
-  at sunset and night, and at zoom 20 at sunset, each `<key>_new` (the lights and smoke) beside
-  `<key>_old` (card F4b-1's round 4, its captures kept in
-  `render_jobs/fire_lights_smoke_round4` and replayed) in `sheet_<key>.png`, with `<key>_ns`
-  (the same view, the smoke hidden) for colour probes of the smoke against what is behind it
-  (`sample_pixels.gd` down one column of both); `sheet_motion` eight frames 1.6 s apart grabbed
-  by the probe's `burst` at sunset in the `zs` view (a `capture` step takes about 0.4 s, so a
-  strip of captures cannot be faster; measured 2026-10-16), their engine times in
-  `smoke5_times.txt`; `sheet_lights` `<key>_nl` (the lights hidden, the smoke shown) against
-  `<key>_new` at night home, night zs and sunset home; `fp_zs` the flames' colours at sunset zs
-  with the smoke off and on (`fp_zs_diff.txt`, the probe's `grab` and `diff` at labelled
-  points); `lp_home` and `lp_z8` outdoor_night with the flames and smoke hidden: the probe's
-  `grab` keeps the raw frame with the lights off and on (held at their energy, no flicker) and
-  its `diff` writes `lp_<view>_diff.png` ((on - off) x 4) and `lp_<view>_diff.txt` (both colours
-  at level ground 2, 4, 8, 11, 13 and 16 m from the home blaze's light, eight ways each, with its
-  attenuation, cosine and reach there; the probe's `lights` action re-tunes range, decay and
-  energy in place to compare falloffs in one run). It writes to `render_jobs/fire_lights_smoke`.
-  Mobile: the same job with `--rendering-method mobile` before `--script` and `--only
-  sunset_home_new --out render_jobs/fire_lights_smoke_mobile` after `--`.
-  Cleanup deletes every `_firefeat_` level.
+  persistent ground fire's look (fire cards F3, F4a and the production port;
+  `probes/fire.gd`; `docs/systems/fire.md`). Build (about 100 s): a new 200 ft temperate forest
+  (seed 1234), fire laid with the real Fire tool (three `flames` passes of radius 4 across the
+  map and a shorter fourth, then a curved `blaze` line of radius 2 across the view; south of
+  them an author-laid fire, a scrubbed blob and a curving line), saved as `_firefeat_look`
+  (267 fires shown, the book ready). Look (rewritten by card fire-prod-c3; card F4b-1's look,
+  `_new` beside `_old` sheets with the smoke's colour probes and the lights' falloff diffs, is in
+  its history up to f4ac41b9): that level with the clock held for each capture (`fire_ab.gd
+  hold`), under the probe's sun keys (`day` the level's own sky at 14:00, `night` outdoor_night
+  at 23:00, `sunset` outdoor_sunset at 19:00): `day_z8` and `night_z8` (zoom 8 over the blaze),
+  `day_home`, `night_home` and `sunset_z20`; then night motion bursts at z8 and home
+  (`motion_<view>_0` to `_23`: the probe's `scale` 0.25 and `burst` of 24 grabs 1/24 s apart,
+  half a drawing apart at 12 drawings a second, their engine times in
+  `motion_<view>_times.txt`; a `capture` step takes about 0.4 s, too slow for a strip). The
+  sheets put production beside round 6 of the reference fit ("production | r6"): `sheet_close`
+  (day and night z8), `sheet_far` (day and night home, sunset z20), `sheet_zoom` (the middle of
+  the z8 views), `sheet_motion_z8` and `sheet_motion_home` (production only). The r6 frames are
+  the spike's `render_jobs/ref_fit_r6_sim/<view>_sim.png` (branch spike-flipbook at de7f3d16, its
+  user dir `TTSim_spike_flipbook`), copied once by hand into `user://render_jobs/fire_r6_ref/`
+  (no absolute path is committed; a missing one leaves its tile blank). Until card
+  fire-prod-c5b the screen glow is main's, so r6's night aura and day bloom do not compare yet.
+  It writes to `render_jobs/firefeat_look`. The probe's `info` logs the fires shown and planned,
+  the fire book's state and the ground bake's bytes and frame (8,128,512 bytes over 63 m on this
+  level); `scale` sets `Engine.time_scale` (the shaders' clock and a burst's spacing follow it).
+  A Mobile and a Compatibility look (`firefeat_look_mobile.json`) come with cards fire-prod-c5b
+  and c7. Cleanup deletes every `_firefeat_` level.
+- `jobs/fire_smoke_book.json`: bakes the persistent fire's smoke book once, offline (card
+  fire-prod-c5a; `probes/fire_smoke_book.gd`; `tools/fire_sim/README.md`). In the real window (a
+  headless run draws nothing) it draws `tools/fire_sim/fire_smoke_book_bake.gdshader` into one
+  SubViewport atlas of 8 x 6 tiles (`FireSmokeBook`'s 2 seeds of 24 frames), reads it back after
+  the frame that draws it, slices it into 48 RGBA8 layers of 128 x 160 and saves
+  `res://assets/fire/fire_smoke_book.res` with `FLAG_COMPRESS` (3,409,542 bytes, Git LFS), then
+  reloads it to check the round trip; `report` logs the book's `problem()`, the file's size and
+  the round trip. A scratch job's `reference` (another bake shader's path, such as the spike's
+  own) is baked the same way and compared layer by layer: on 2026-10-17 all 3,932,160 bytes
+  equalled the spike's. It overwrites the shipped asset, so run it only to re-bake.
 - `jobs/fire_perf_play.json`: the persistent fire's pinned performance pass (card F4b-2;
   docs/PERFORMANCE.md "Fire (F4): pinned performance pass"; `probes/fire_perf.gd`). Drop the
   pinned `override.cfg` in first (the job removes it at startup) and run on a quiet machine.
   Build (tagged `build`, about 100 s): a new 200 ft temperate forest (seed 1234), three
   `flames` passes of radius 4 across about a third of the map and a curved `blaze` line across
   the view, saved as `_firefeat_perf`. Then, vsync off, an in-run A/B of 6 s windows per view
-  (home, zoom 8 over the blaze, zoom 20, the camera's own widest zoom, zoom 30 past the LOD) by
+  (home, zoom 8 over the blaze, zoom 20, the camera's own widest zoom, and zoom 30, past the
+  camera's limits; since card fire-prod-c3 there is no LOD, so every zoom draws the same fires) by
   day and under `outdoor_night` (fire.gd's sun keys): the fire on and off (flames, ground term,
   smoke and lights) on / off / on / off, and at home and zoom 20 each part off in turn
   (`config no_flames`, `no_glow`, `no_smoke`, `no_lights`) in a palindrome; the field's
@@ -734,29 +743,33 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   its bakes and worker (`render_jobs/fire_perf_bake_before`, `render_jobs/fire_perf_bake_after`).
   Since F4b-4 the `refresh` line gives the dab at once on the main thread (`FireField.use_worker`
   off: the whole refresh, its re-plan and heat re-splat) and on the worker (the main thread's
-  launch and landing, and the worker's own time).
+  launch and landing, and the worker's own time). Its numbers so far measured the fire before
+  the production port (PERFORMANCE.md "Fire (F4)"); card fire-prod-c7 runs it on the production
+  fire.
 - Per-term and before/after shader A/B (card F4b-3; `probes/fire_ab.gd`): a job written for the
   task (kept out of `jobs/`, as its variant file is) builds `_firefeat_perf` with
   fire_perf_play's build steps (or loads `_firefeat_look --saved`) and `patch`es variants of the
-  ground's fire term, the flames and the smoke from a JSON file, in a palindrome of perf.gd
-  windows; or holds the clock (`hold`), grabs the frame under main's sources and under the
-  working tree's (`grab`), and writes the pixel metrics and a before | after | diff x4 row
-  (`pdiff`, `sheet`). Main's sources for a "before" variant: `git -C D:/dev/tt-sim archive
-  --format=zip --output=<scratch>/before.zip HEAD <shader paths>`, read as
-  `<scratch>/before.zip:shaders/<file>` (`git show --output` writes no blob). The fragment
-  shader rejects `return`, so a variant cannot cut fragment() short that way. Card F4b-4 added
-  `bake_before {source}` (draws F4b-3's broad noise bake from main's `fire_glow_bake.gdshader`
-  and binds it with the mask and rasters under F4b-3's uniform names, so F4b-3's
-  `fire_glow.gdshaderinc` patches in as a "before" against the baked term) and `density
-  {static, fine}` (re-bakes `FireNoiseBake` at those texels a metre); its look job (in the
-  session scratchpad) grabbed main against the tree at fine 8, 12 and 16 and static 16 at
-  firefeat_look's day zs, sunset zs, night home and sunset z20, and the stroke-time partial
-  redraws against a whole re-bake.
+  ground's fire term (`shaders/fire_glow.gdshaderinc`, inlined into the ground shader), the
+  flames (`shaders/fire_flames.gdshader`) and the smoke (`shaders/fire_smoke_book.gdshader`) from
+  a JSON file, in a palindrome of perf.gd windows; or holds the clock (`hold`), grabs the frame
+  under main's sources and under the working tree's (`grab`), keeps an earlier capture or a
+  reference frame (`load {tag, path}`, card fire-prod-c4: round 6's frames against
+  production's), and writes the pixel metrics and a before | after | diff x4 row (`pdiff`,
+  which takes the larger of two frames down to the smaller; `sheet`). Main's sources for a
+  "before" variant: `git -C D:/dev/tt-sim archive --format=zip --output=<scratch>/before.zip
+  HEAD <shader paths>`, read as `<scratch>/before.zip:shaders/<file>` (`git show --output`
+  writes no blob). The fragment shader rejects `return`, so a variant cannot cut fragment()
+  short that way. Card F4b-4's two bake actions (a "before" broad noise bake, and a re-bake at
+  other densities) went with the static and fine bakes in card fire-prod-c4; they are in the
+  probe's history up to f4ac41b9, and PERFORMANCE.md "Bakes and a worker (F4b-4)" holds what
+  they measured.
 - `jobs/fire_first_burn.json`: the first burnt-forest op on a fresh map (card F4b-2;
   `probes/fire_perf.gd first_burn`): a new 200 ft temperate map, the palette's burnt biome
   painted over a 4 m disc with nothing armed (a peer's case), the dab's milliseconds, the ground
   layers before and after and the layer arrays' sync; then a second map with the Fire tool's
-  warm-up (`warm`) first (the host's case). `perf.gd author` logs each load. About 30 s.
+  warm-up (`warm`) first (the host's case). `perf.gd author` logs each load. Since card
+  fire-prod-c3 each line also gives the fire book's state with its load (threaded, request to
+  landing) and upload (main thread) milliseconds: 66.9 and 4.2 ms on 2026-10-17. About 30 s.
 - `jobs/fire_shards.json`: debug views of the grey shards and straight-edged wedges on burnt
   ground (card F4b-2; `probes/fire_shards.gd`) on `_firefeat_look` (build it with
   `firefeat_build` first) at the day zs view: everything, the ground alone (its chunks and
@@ -764,8 +777,9 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   and everything but the ground, tiled in `sheet_debug.png`; `chunks` logs the chunk meshes'
   formats and their largest UV-to-XZ gap. Then the ground alone with its shader's code swapped in
   memory for debug views of its outputs (`debug`: 1 lit grey, 2 unlit, 3 the shading normal, 4
-  the geometric normal, 5 the fire's char weight, 6 the static fire bake's first tile as RGB
-  (card F4b-5; it was the mask and the two rasters until F4b-4's bake removed them), 7 the
+  the geometric normal, 5 the fire's char weight, 6 the sim fire bake's albedo tile as RGB (the
+  char's weight, the dried band's mix and the scorch; card fire-prod-c4; F4b-5 read the static
+  bake's first tile and F4b-2 the mask and the two rasters), 7 the
   ground's albedo before the fire, 8 the fire's emission alone; `sheet_debug2.png`, and
   `sheet_debug3.png` the lower half of 2 and 5-8), and `sheet_before_after.png` from
   `firefeat_look --only "day_zs_new,sunset_zs_new"` run into `render_jobs/fire_shards_before` and

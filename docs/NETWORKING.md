@@ -1057,13 +1057,19 @@ on every peer on 2026-10-10 with the card's path; the launcher flagged only anot
   it, then its labelled op; the fire's centre moves onto the nearest tree within 6 m of its
   spot, since the level's forest has none within its radius there), and the undo of the
   lower (a height op's before side) is `PlayEvents.undo`, Ctrl+Z's path. client's
-  `MapFingerprint` (its fire key included) and flame count equal the host's after each, and
+  `MapFingerprint` (its fire key included), flame count and fire digest
+  (`FireField.plan_digest()`: SHA-256 of the burning blocks' plans in row order and the fire
+  rasters' size and bytes, so a peer that refreshed stroke by stroke must hold exactly what the
+  host planned) equal the host's after each, once both peers' fire workers have landed, and
   its Scout stands where the host's does (the host's `LiveEditGround` set it down on the raised
   ground and sent it); client played all three events. The host drops Hero onto the raised
   ground; client2 then joins at the table, downloads the original map, takes the log (twelve
   ops: the Start a fire's two and the Fire lay's three among them, no motion) and matches the
-  host's final fingerprint and flames, with Hero and Scout resting on its own ground at the
-  host's heights. Passed on 2026-10-16 in about 31.6 s on the host (Scout 0.035 m before the
+  host's final fingerprint, flames and fire digest, with Hero and Scout resting on its own
+  ground at the host's heights. The digest came with the fire's production port (card
+  fire-prod-c2, 2026-10-17): the run passed with `--peers=3`, the digests equal on every op and
+  for the late joiner, and the Fire lay now stands 1 flame (round 6's fewer, bigger fires; the
+  counts below are the old placement's). Passed on 2026-10-16 in about 31.6 s on the host (Scout 0.035 m before the
   raise, 0.294 m after on every peer; Hero 0.628 m; 71 flames after the lay, 34 after the
   put-out, on every peer; client events_played 3; no shipped file changed). Before that day's
   fix to the fire's centre the run failed at Start a fire ("Only a forest burns"), on the base
@@ -1467,9 +1473,11 @@ The GM's UI is the Events pane (`PlayEvents`, [systems/authoring.md](systems/aut
 "Live edits"). ENet scenario: `tests/net/enet_live_edits` (three peers: the host builds an
 authored level in its test root and changes it through the play brush and three terrain
 events, a Fire lay and a put-out among the brush strokes; a client follows nine edits (twelve
-ops) with an equal `MapFingerprint`, the same flame count and a re-grounded token after each
-and plays the three events, a late joiner downloads the original map, catches up and matches,
-fire included, its tokens resting on the raised ground at the host's heights).
+ops) with an equal `MapFingerprint`, the same flame count and fire digest
+(`FireField.plan_digest()`) and a re-grounded token after each and plays the three events, a
+late joiner downloads the original map, catches up and matches, fire and digest included, its
+tokens resting on the raised ground at the host's heights). The fire's system doc is
+[systems/fire.md](systems/fire.md).
 
 ### NetworkStateSync
 

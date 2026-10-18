@@ -1,12 +1,12 @@
-// The ground fire's value noise (fire_glow.gdshaderinc) and its fields, shared by the ground
-// shader and the bakes (FireNoiseBake; cards F4b-3 and F4b-4); the noise alone (glow_noise,
-// glow_cloud) also by the events' scorch and the persistent fire's smoke (card F4b-5). The
-// fields are a pure function of map-frame XZ: the broad ones (glow_fields_a, glow_fields_b) feed
-// the static bake
-// (fire_ground_bake.gdshader), which works out everything of the ground's fire that does not
-// change with time, and the fine ones (glow_fine_fields: the tufts, lobes, coal lumps, cracks)
-// are baked once per map at a finer spacing (fire_glow_bake.gdshader). Only the drifting ember
-// bed is evaluated per pixel (fire_warped, in fire_glow.gdshaderinc).
+// The ground fire's value noise and its fields (cards F4b-3 and F4b-4, and the production port's
+// ground, docs/systems/fire.md), included through fire_glow.gdshaderinc by the ground's sim bake
+// (fire_ground_bake.gdshader, drawn by FireNoiseBake); the noise alone (glow_noise, glow_cloud)
+// also by the events' scorch (ground_burn.gdshader) and the smoke book's offline bake
+// (tools/fire_sim/fire_smoke_book_bake.gdshader; card F4b-5). The fields are a pure function of
+// map-frame XZ: the broad ones (glow_fields_a, glow_fields_b) and the fine ones (glow_fine_fields:
+// the tufts, lobes, coal lumps, cracks) are worked out at each texel of the sim bake, which holds
+// everything of the ground's fire that does not change with time, so none of this runs per pixel
+// on the ground.
 
 // How far (metres) the mask's read wanders (a broad lobe and a finer ripple), and the most it
 // moves either way (the baked warp's range).
@@ -93,8 +93,9 @@ const float GLOW_CRACK_M = 1.5;
 // 0.5 / GLOW_CRACK_GAIN of it is a crack drawn), for precision in eight bits.
 const float GLOW_CRACK_GAIN = 4.0;
 
-// The static bake's (fire_ground_bake.gdshader) ranges in eight bits: the burn (below its
-// start nothing burns, scorches or dries), the dried band's argument and the ash's.
+// The ranges the sim bake (fire_ground_bake.gdshader) packs its static fields into (0..1) before
+// fire_sim_bake reads them back: the burn (below its start nothing burns, scorches or dries), the
+// dried band's argument and the ash's.
 const vec2 GLOW_BURN_RANGE = vec2(-0.3, 0.7);
 const vec2 GLOW_DRY_RANGE = vec2(-0.05, 0.2);
 const vec2 GLOW_ASH_RANGE = vec2(-0.5, 1.5);

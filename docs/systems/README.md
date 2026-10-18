@@ -44,6 +44,9 @@ Documents here:
   collision, ground layers, the self-dressing rules, height and ground refresh calls.
 - [authoring.md](authoring.md): authoring mode (entry, controller, new maps, save, autosave,
   undo) and the brushes (mask, Paint and Sculpt strokes, flush, history).
+- [fire.md](fire.md): the persistent ground fire: the plan (FireFires, the lattice, the per-fire
+  seed, the sorted splat, `plan_digest`), the stroke path and its worker, the shipped fire and
+  smoke books and their lifecycle, the flames, the ground's sim bake, the smoke and the lights.
 
 The last five were moved out of `AGENTS.md` Key Conventions on 2026-10-09 and are first cuts:
 they hold the map and the rules, use only the headings they have content for, and leave the
