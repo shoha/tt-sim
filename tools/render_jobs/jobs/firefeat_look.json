@@ -20,6 +20,20 @@
    {"op": "capture", "name": "{value}", "desc": "{value}: the production flames (fire_flames.gdshader from the shipped book), clock held"},
    {"op": "call", "script": "res://tools/render_jobs/probes/fire_ab.gd", "action": "hold", "on": false, "phase": "look", "for": "{value}"}
   ]},
+  {"op": "expand", "values": ["hell_home", "hell_z8", "ethereal_home", "ethereal_z8"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "{value}", "label": "", "phase": "look", "for": "{value}"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "extras", "show": true, "phase": "look", "for": "{value}"},
+   {"op": "wait", "s": 2.5, "phase": "look", "for": "{value}"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_ab.gd", "action": "hold", "on": true, "phase": "look", "for": "{value}"},
+   {"op": "wait", "s": 0.8, "phase": "look", "for": "{value}"},
+   {"op": "capture", "name": "{value}", "desc": "{value}: the burning map under the hell or ethereal preset with the game's glow, clock held"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/glow.gd", "action": "shot", "value": "{value}_oldglow", "specs": {"oldglow": "old"}, "phase": "look", "for": "{value}_oldglow"},
+   {"op": "wait", "s": 0.6, "phase": "look", "for": "{value}_oldglow"},
+   {"op": "capture", "name": "{value}_oldglow", "desc": "{value} on the same held frame with the old glow (main's before card C5b: glow.gd variant old)"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/glow.gd", "action": "shot", "value": "{value}_new", "specs": {}, "phase": "look", "for": "{value}_oldglow"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_ab.gd", "action": "hold", "on": false, "phase": "look", "for": "{value}"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/firefeat_look", "out": "sheet_presets", "columns": 2, "names": ["hell_home", "hell_home_oldglow", "hell_z8", "hell_z8_oldglow", "ethereal_home", "ethereal_home_oldglow", "ethereal_z8", "ethereal_z8_oldglow"], "tile": [960, 540], "phase": "look", "for": "ethereal_z8"},
   {"op": "expand", "values": ["z8", "home"], "template": [
    {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "night_{value}", "label": "", "phase": "look", "for": "motion_{value}"},
    {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "extras", "show": true, "phase": "look", "for": "motion_{value}"},
@@ -41,7 +55,7 @@
    {"op": "call", "script": "res://tools/render_jobs/probes/fire_ab.gd", "action": "pdiff", "a": "r6", "b": "prod", "out": "user://render_jobs/firefeat_look/pdiff_{value}", "phase": "look", "for": "{value}"}
   ]},
   {"op": "call", "script": "res://tools/render_jobs/probes/fire_ab.gd", "action": "sheet", "out": "user://render_jobs/firefeat_look/sheet_pdiff", "phase": "look", "for": "sunset_z20"},
-  {"op": "index", "title": "Fire, production (cards fire-prod-c3 to c5b)","intro": "Produced by tools/render_jobs/jobs/firefeat_look.json on the saved _firefeat_look level (firefeat_build: a 200 ft temperate forest, seed 1234, fire laid with the real Fire tool). Each view is captured with the clock held (fire_ab.gd hold). The sheets put production (left: fire_flames.gdshader drawing from assets/fire/fire_book.res) beside round 6 of the reference fit (right: spike-flipbook de7f3d16's ref_fit_r6_sim/<view>_sim.png, copied once into user://render_jobs/fire_r6_ref/; a missing one leaves its tile blank). sheet_close: day and night at zoom 8; sheet_far: day and night home and sunset zoom 20; sheet_zoom: the middle of the zoom 8 views. The flames, the ground, the smoke (from assets/fire/fire_smoke_book.res) and the lights (range 8 m, decay 1.4) are production's, and so is the glow (EnvironmentGlow, the game's one tuning since card C5b, r6's screen glow). sheet_pdiff: r6 | production | the difference x4 per view, with the mean and RMS in the log (the spike's own baseline, a frame against itself 0.37 s later: mean about 5-8, RMS about 18-25). sheet_motion_<z8|home>: night, 24 grabs 1/24 s apart at time scale 0.25 (motion_<view>_times.txt)."},
+  {"op": "index", "title": "Fire, production (cards fire-prod-c3 to c5c)","intro": "Produced by tools/render_jobs/jobs/firefeat_look.json on the saved _firefeat_look level (firefeat_build: a 200 ft temperate forest, seed 1234, fire laid with the real Fire tool). Each view is captured with the clock held (fire_ab.gd hold). The sheets put production (left: fire_flames.gdshader drawing from assets/fire/fire_book.res) beside round 6 of the reference fit (right: spike-flipbook de7f3d16's ref_fit_r6_sim/<view>_sim.png, copied once into user://render_jobs/fire_r6_ref/; a missing one leaves its tile blank). sheet_close: day and night at zoom 8; sheet_far: day and night home and sunset zoom 20; sheet_zoom: the middle of the zoom 8 views. The flames, the ground, the smoke (from assets/fire/fire_smoke_book.res) and the lights (range 8 m, decay 1.4) are production's, and so is the glow (EnvironmentGlow, the game's one tuning since card C5b, r6's screen glow). sheet_pdiff: r6 | production | the difference x4 per view, with the mean and RMS in the log (the spike's own baseline, a frame against itself 0.37 s later: mean about 5-8, RMS about 18-25). sheet_motion_<z8|home>: night, 24 grabs 1/24 s apart at time scale 0.25 (motion_<view>_times.txt). sheet_presets: the burning map under the hell and ethereal presets (home over zoom 8), production (left) beside the old glow on the same held frame (right; main's before card C5b, no r6 reference exists for these presets)."},
   {"op": "title"},
   {"op": "wait", "s": 1.0}
  ]

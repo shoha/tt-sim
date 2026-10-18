@@ -221,7 +221,10 @@ const PRESETS = {
 		"tonemap_white": 1.5,
 		"glow_enabled": true,
 		"glow_intensity": 0.5,
-		"glow_strength": 1.1,
+		# 1.1 before the game's glow went wide (EnvironmentGlow.strength maps a strength to the
+		# effect it had over Godot's own levels): 1.19 maps to the 1.1 the round 6 fire look was
+		# tuned with at sunset, so its halo and wash stay (card fire-prod-c5c, an open choice).
+		"glow_strength": 1.19,
 		"glow_bloom": 0.1,
 	},
 	"outdoor_night":
@@ -397,9 +400,10 @@ const PRESETS = {
 		"glow_enabled": true,
 		"glow_intensity": 0.6,
 		"glow_strength": 1.2,
-		# 0.15 before the game's glow went wide and additive (EnvironmentGlow): scaled by the
-		# glow levels' sums (1.3 / 3.1) so the red wash stays as soft as it was.
-		"glow_bloom": 0.065,
+		"glow_bloom": 0.15,
+		# The wide, additive glow's wash is stronger and greyer per unit of bloom (EnvironmentGlow):
+		# 0.38 matches the old glow's red wash on a map without fire (card fire-prod-c5c).
+		"glow_bloom_scale": 0.38,
 	},
 	"ethereal":
 	{
@@ -417,9 +421,10 @@ const PRESETS = {
 		"glow_enabled": true,
 		"glow_intensity": 0.7,
 		"glow_strength": 1.3,
-		# 0.2 before the game's glow went wide and additive (EnvironmentGlow): scaled as hell's,
-		# else the wash turned the frame milky grey-green.
-		"glow_bloom": 0.085,
+		"glow_bloom": 0.2,
+		# Scaled as hell's (else the wash turns the frame milky grey-green, the pond loses its
+		# blue): 0.31 matches the old glow on a map without fire (card fire-prod-c5c).
+		"glow_bloom_scale": 0.31,
 	},
 	"arctic":
 	{
