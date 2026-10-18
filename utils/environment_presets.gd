@@ -221,11 +221,13 @@ const PRESETS = {
 		"tonemap_white": 1.5,
 		"glow_enabled": true,
 		"glow_intensity": 0.5,
-		# 1.1 before the game's glow went wide (EnvironmentGlow.strength maps a strength to the
-		# effect it had over Godot's own levels): 1.19 maps to the 1.1 the round 6 fire look was
-		# tuned with at sunset, so its halo and wash stay (card fire-prod-c5c, an open choice).
-		"glow_strength": 1.19,
+		"glow_strength": 1.1,
 		"glow_bloom": 0.1,
+		# The wash scaled as hell's, to the old glow's on a map without fire, and a lower HDR
+		# threshold so the fire-lit ground blooms round the flames as in round 6's look: the
+		# burning sunset keeps round 6's one blooming mass (card fire-prod-c5d).
+		"glow_bloom_scale": 0.4,
+		"glow_hdr_threshold": 0.8,
 	},
 	"outdoor_night":
 	{

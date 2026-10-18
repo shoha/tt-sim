@@ -29,9 +29,6 @@ extends RefCounted
 const FireProbe := preload("res://tools/render_jobs/probes/fire.gd")
 ## The test levels this probe may delete.
 const FOLDERS: Array[String] = ["_firefeat_glow"]
-## The glow_strength a preset had under the old glow where card C5c re-calibrated the number for
-## EnvironmentGlow.strength (the old variant draws these).
-const OLD_STRENGTHS := {"outdoor_sunset": 1.1}
 ## Rec. 709 luma weights, applied to the PNG's (sRGB) values.
 const LUMA := Vector3(0.2126, 0.7152, 0.0722)
 const KEYS: Array[String] = [
@@ -127,7 +124,7 @@ static func _variant(base: Node, spec: String, preset: String) -> String:
 			var defaults := Environment.new()
 			env.glow_enabled = bool(config.get("glow_enabled", false))
 			env.glow_intensity = float(config.get("glow_intensity", 0.8))
-			env.glow_strength = float(OLD_STRENGTHS.get(preset, config.get("glow_strength", 1.0)))
+			env.glow_strength = float(config.get("glow_strength", 1.0))
 			env.glow_bloom = float(config.get("glow_bloom", 0.0))
 			env.glow_hdr_threshold = defaults.glow_hdr_threshold
 			env.glow_hdr_scale = defaults.glow_hdr_scale
