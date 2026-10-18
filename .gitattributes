@@ -13,3 +13,7 @@ assets/palette/**/*.jpg filter=lfs diff=lfs merge=lfs -text
 # GLBs and PNGs in LFS, kit.json, build_report.json and the .import sidecars in plain git.
 assets/avatar_kit/**/*.glb filter=lfs diff=lfs merge=lfs -text
 assets/avatar_kit/**/*.png filter=lfs diff=lfs merge=lfs -text
+
+# The fire's baked books (tools/fire_sim/README.md): FireBook resources of about 10 MB each,
+# re-baked rarely but never worth a diff, so the same way.
+assets/fire/** filter=lfs diff=lfs merge=lfs -text

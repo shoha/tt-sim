@@ -432,6 +432,7 @@ resources/                  # Custom Resource classes (LevelData, TokenState, To
 scenes/                     # States (incl. states/authoring), board_token, effects, level_editor, level_loader, terrain, ui
 utils/                      # GlbUtils, SerializationUtils, EnvironmentPresets, TabUtils; map document, palette, scatter generator
 assets/palette/             # Built-in treecube palette (Git LFS; installed by treecube's build_palette.py, see docs/MAP_AUTHORING.md)
+assets/fire/                # the fire's baked books (Git LFS; tools/fire_sim/README.md)
 tools/render_jobs/          # 1920x1080 scripted render jobs for look judgments (README inside)
 shaders/                    # GLSL shaders (lo-fi, occlusion fade, selection glow)
 themes/                     # painted_theme_base.gd + paper/glass leaves → generated/*.tres
