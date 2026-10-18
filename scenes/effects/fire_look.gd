@@ -25,7 +25,8 @@ extends RefCounted
 ## sampler is null, `drawings` is 0 and the flames draw nothing. A missing book or a Git LFS
 ## pointer pushes one error and leaves the flames invisible. Live fields are counted
 ## (hold_book, drop_book); when the last leaves the tree the material lets go of the book and
-## the texture is freed.
+## the texture is freed. The smoke's book (FireSmokeBook) rides the same calls: request_book,
+## poll_book, finish_book and release_book ask FireFieldSmoke's to do the same.
 ##
 ## The glow is a term in the authored ground shader (fire_glow.gdshaderinc) read from the sim
 ## bake (FireNoiseBake), worked out from the document's fire_mask uploaded whole as an R8 texture
@@ -37,7 +38,8 @@ extends RefCounted
 ##
 ## The fire's lights (FireLights) take their look from here: their warm colour, energy, slow
 ## flicker and the gate that shows them only while the sun is low (light_gate). The smoke
-## (FireFieldSmoke, fire_field_smoke.gdshader) shares the flames' quad and leans down wind_for.
+## (FireFieldSmoke, fire_smoke_book.gdshader) shares the flames' quad, ROW_CUTS rows and all,
+## and leans down wind_for.
 
 ## The book's states: not asked for, loading on a thread, bound, or missing (one error pushed).
 enum Book { NONE, LOADING, READY, FAILED }
@@ -85,7 +87,7 @@ const LIGHT_COLOR := Color(1.0, 0.56, 0.24)
 ## game's outdoor_night preset, 8 warmed the ash and logs only a little and 14 warms the ash,
 ## logs and stumps across the burn with no blown patch; the burnt bark itself, linear albedo
 ## about 0.035, stays dark either way. Round 5's steeper falloff, FireLights.DECAY 0.75, takes
-## 18 for the same light within 4 m.)
+## 18 for the same light within 4 m; round 6's short lights, range 8 and decay 1.4, keep 18.)
 const LIGHT_ENERGY := 18.0
 const LIGHT_SMALL := 0.6
 const LIGHT_FULL_SIZE := 60.0
@@ -127,9 +129,11 @@ static func material() -> ShaderMaterial:
 
 
 ## Starts loading the fire book on a thread (once; FireField's first fire, the Fire tool's
-## arming). A missing book or a Git LFS pointer pushes one error and the flames stay invisible.
+## arming), and the smoke's with it. A missing book or a Git LFS pointer pushes one error and the
+## flames stay invisible.
 static func request_book(path: String = FireBook.PATH) -> void:
 	material()
+	FireFieldSmoke.request_book()
 	if _book != Book.NONE:
 		return
 	_requested_usec = Time.get_ticks_usec()
@@ -144,8 +148,10 @@ static func request_book(path: String = FireBook.PATH) -> void:
 	_book = Book.LOADING
 
 
-## Binds the book once its load has landed (each live FireField's _process); true once bound.
+## Binds the book once its load has landed (each live FireField's _process), and the smoke's;
+## true once the flames' is bound.
 static func poll_book(path: String = FireBook.PATH) -> bool:
+	FireFieldSmoke.poll_book()
 	if _book != Book.LOADING:
 		return _book == Book.READY
 	var status := ResourceLoader.load_threaded_get_status(path)
@@ -155,8 +161,9 @@ static func poll_book(path: String = FireBook.PATH) -> bool:
 	return _book == Book.READY
 
 
-## Waits for the book's load and binds it (tests and probes; the game polls).
+## Waits for the book's load and binds it, and the smoke's (tests and probes; the game polls).
 static func finish_book(path: String = FireBook.PATH) -> bool:
+	FireFieldSmoke.finish_book()
 	if _book == Book.LOADING:
 		_land_book(path, true)
 	return _book == Book.READY
@@ -195,9 +202,11 @@ static func live_fields() -> int:
 	return _live_fields
 
 
-## Lets go of the book: the material's samplers nulled (nothing draws) and the texture freed. A
-## load still in flight is waited for and dropped, so no loaded book stays behind on the loader.
+## Lets go of the book and the smoke's: the materials' samplers nulled (nothing draws) and the
+## textures freed. A load still in flight is waited for and dropped, so no loaded book stays
+## behind on the loader.
 static func release_book(path: String = FireBook.PATH) -> void:
+	FireFieldSmoke.release_book()
 	if _book == Book.LOADING:
 		ResourceLoader.load_threaded_get(path)
 	_book = Book.NONE

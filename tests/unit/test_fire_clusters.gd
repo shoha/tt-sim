@@ -206,7 +206,11 @@ func test_the_lights_show_only_while_the_sun_is_low() -> void:
 			assert_gt(light.light_energy, 0.0)
 			assert_false(light.shadow_enabled)
 			assert_eq(light.omni_range, FireLights.RANGE_M)
+			assert_almost_eq(light.omni_attenuation, FireLights.DECAY, 1e-6)
 	assert_eq(shown, lights.count(), "every placed light shows at dusk")
+	# Round 6's short lights: the warmth stays under and round each fire, the char between dark.
+	assert_eq(FireLights.RANGE_M, 8.0)
+	assert_almost_eq(FireLights.DECAY, 1.4, 1e-6)
 
 
 func test_the_fire_lights_are_not_the_maps_own() -> void:
@@ -266,3 +270,12 @@ func test_the_biggest_fire_raises_the_biggest_column_taller_than_wide() -> void:
 	var box := FireFieldSmoke.bounds([big, small] as Array[Dictionary])
 	assert_true(box.has_point(FireFieldSmoke.source(small)))
 	assert_gt(box.end.y, FireFieldSmoke.source(big).y + FireFieldSmoke.column_extent(big).x)
+	# The book's whole frame at the wind's widest lean, whichever way the camera looks.
+	var unit := FireFieldSmoke.column_unit(big)
+	var side := unit * (FireSmokeBook.DOMAIN.x + FireFieldSmoke.LEAN * FireFieldSmoke.RISE)
+	var born := FireFieldSmoke.source(big)
+	for corner: Vector3 in [
+		Vector3(-side, unit * FireSmokeBook.DOMAIN.y, -side),
+		Vector3(side, unit * FireSmokeBook.DOMAIN.z, side),
+	]:
+		assert_true(box.grow(1e-4).has_point(born + corner), "the frame's corner %s" % corner)

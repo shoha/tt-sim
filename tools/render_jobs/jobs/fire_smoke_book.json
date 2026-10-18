@@ -1,0 +1,11 @@
+{
+ "out_dir": "render_jobs/fire_smoke_book",
+ "timeout_s": 90,
+ "hang_s": 45,
+ "steps": [
+  {"op": "wait_title"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_smoke_book.gd", "action": "bake", "save": true},
+  {"op": "wait", "s": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_smoke_book.gd", "action": "report"}
+ ]
+}

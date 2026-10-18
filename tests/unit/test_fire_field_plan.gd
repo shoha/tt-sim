@@ -280,7 +280,10 @@ func test_a_straight_pass_stands_its_flames_off_its_axis() -> void:
 func test_the_warmup_covers_the_fire_shaders() -> void:
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_flames.gdshader")
 	assert_does_not_have(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_field.gdshader")
-	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_field_smoke.gdshader")
+	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_smoke_book.gdshader")
+	assert_does_not_have(
+		GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_field_smoke.gdshader"
+	)
 	assert_does_not_have(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_glow_bake.gdshader")
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_ground_bake.gdshader")
 	var sources := "\n".join(GraphicsWarmup.shader_sources())

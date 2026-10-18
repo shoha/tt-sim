@@ -28,7 +28,7 @@ const GROUND_INC := "res://shaders/authored_ground.gdshaderinc"
 const GLOW_INC := "res://shaders/fire_glow.gdshaderinc"
 const FILES := {
 	"flames": "res://shaders/fire_flames.gdshader",
-	"smoke": "res://shaders/fire_field_smoke.gdshader",
+	"smoke": "res://shaders/fire_smoke_book.gdshader",
 }
 const ROW_TILE := Vector2i(640, 360)
 
