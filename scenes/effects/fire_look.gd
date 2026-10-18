@@ -27,10 +27,10 @@ extends RefCounted
 ## (hold_book, drop_book); when the last leaves the tree the material lets go of the book and
 ## the texture is freed.
 ##
-## The glow is a term in the authored ground shader (fire_glow.gdshaderinc): the document's
-## fire_mask uploaded whole as an R8 texture on the sample grid (glow_texture) and FireField's
-## heat raster with the feet's pools as an RG8 one (heat_texture), both bound to the terrain's
-## material (bind_glow).
+## The glow is a term in the authored ground shader (fire_glow.gdshaderinc) read from the sim
+## bake (FireNoiseBake), worked out from the document's fire_mask uploaded whole as an R8 texture
+## on the sample grid (glow_texture) and FireField's heat raster with the feet's pools as an RG8
+## one (heat_texture); the bake is bound to the terrain's material (bind_glow).
 ##
 ## One map is shown at a time, so the material's per-map uniform (the wind) is set on the
 ## shared material by the map's FireField.
@@ -462,17 +462,9 @@ static func raster_texture(
 	return ImageTexture.create_from_image(image)
 
 
-## Binds the ground fire's bakes (FireNoiseBake: the static bake and one tile's frame, the fine
-## noise and its frame; null until drawn, or no fire) to the ground material `ground`.
-static func bind_glow(
-	ground: ShaderMaterial,
-	static_map: Texture2D,
-	static_rect: Vector4,
-	fine_map: Texture2D,
-	fine_rect: Vector4
-) -> void:
-	ground.set_shader_parameter("fire_static_map", static_map)
-	ground.set_shader_parameter("fire_static_rect", static_rect)
-	ground.set_shader_parameter("fire_fine_map", fine_map)
-	ground.set_shader_parameter("fire_fine_rect", fine_rect)
-	ground.set_shader_parameter("fire_present", 0 if static_map == null or fine_map == null else 1)
+## Binds the ground fire's sim bake (FireNoiseBake: its texture, null until drawn or with no
+## fire, and one tile's frame) to the ground material `ground`; null turns the ground's fire off.
+static func bind_glow(ground: ShaderMaterial, sim_map: Texture2D, sim_rect: Vector4) -> void:
+	ground.set_shader_parameter("fire_sim_map", sim_map)
+	ground.set_shader_parameter("fire_sim_rect", sim_rect)
+	ground.set_shader_parameter("fire_present", 0 if sim_map == null else 1)

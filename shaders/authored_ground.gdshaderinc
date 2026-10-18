@@ -234,11 +234,11 @@
  * index layers").
  *
  * FIRE (fire card F4a, 2026-10-16): persistent ground fire (MapDocument.fire_mask) chars the
- * ground and burns on it, a bed of fire under the flames and ember cores beyond them, from
+ * ground and burns on it, a soft pool of light under each fire and dark char between, from
  * fire_glow.gdshaderinc (its header holds the model). The map's ground only, plain and looked;
- * the skirt pair compiles none of it (a skirt never burns). Nine plain fetches and a branch per
- * pixel where the map has a fire mask (two B-spline reads more inside a burn's reach), nothing
- * where it has none (fire_present 0).
+ * the skirt pair compiles none of it (a skirt never burns). One fetch of the sim bake per pixel
+ * where the map has a fire mask (two where it burns), nothing where it has none
+ * (fire_present 0).
  *
  * LIGHTING matches the StandardMaterial3D terrain of a Blender-made map: burley diffuse,
  * schlick GGX specular at the default 0.5, AO from ORM.r affecting ambient only

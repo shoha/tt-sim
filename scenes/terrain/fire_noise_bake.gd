@@ -1,55 +1,49 @@
 class_name FireNoiseBake
 extends Node
 
-## The ground fire's bakes (cards F4b-3 and F4b-4; docs/PERFORMANCE.md "Fire (F4)"). The
-## ground's fire term (fire_glow.gdshaderinc) once evaluated about 45 value noises, nine mask
-## taps and two B-spline reads a burning pixel. Everything of it that does not change with time
-## is a function of map-frame XZ, the fire mask and the flames' rasters, so it is worked out on
-## the GPU into two textures the ground reads with one fetch where nothing burns and four where
-## it does:
-##   - the fine noise (fire_glow_bake.gdshader: the dried band's tufts, the glow's lobes, the
-##     coal lumps, the cracks), a pure function of XZ, drawn once per map at fine_per_m;
-##   - the static bake (fire_ground_bake.gdshader: three tiles side by side, the burn, the
-##     dried band, the char's colour weights, the ash, the pools, the crowding, the cracks'
-##     strength and the breathing's phase), drawn whole once and then, as strokes land, only
-##     over the rectangle a refresh reaches (rebake; the viewport is never cleared), at
-##     static_per_m.
-## Each is a 2D SubViewport rendered on demand (UPDATE_ONCE), over the map and MARGIN_M round
-## it. FireField makes one with the first fire mask, hands it the mask and the rasters
-## (set_inputs) and binds the textures once they are drawn (`baked`).
+## The ground fire's bake (cards F4b-3, F4b-4 and ground-cost; docs/PERFORMANCE.md "Fire
+## (F4)"). The ground's fire term (fire_glow.gdshaderinc) once evaluated about 45 value noises,
+## nine mask taps and two B-spline reads a burning pixel. Everything of it that does not change
+## with time is a function of map-frame XZ, the fire mask and the flames' rasters, so it is
+## worked out on the GPU into one texture, the sim bake, that the ground reads with one fetch
+## where nothing burns and two where it does, and no noise:
+##   - one 2D SubViewport (fire_ground_bake.gdshader) over the map and MARGIN_M round it, two
+##     RGBA8 tiles side by side at SIM_PER_M: the albedo terms (the char's weight, the dried
+##     band's mix, the scorch, the char's tone) and the glow terms (the glow before its
+##     breathing, stored as its square root, and the breathing's phase);
+##   - each texel works out the static fields (the burn, the dried band, the char's colour
+##     weights, the ash, the pools, the crowding, the cracks' strength) from the mask, the
+##     rasters and the broad noise, and the fine noise (tufts, lobes, coal lumps, cracks) inline,
+##     then the ground's terms from them (fire_sim_bake), so the cracks and coal lumps are
+##     thresholded before the bake and need the fine noise's spacing, 16 texels a metre.
+## Drawn whole once (UPDATE_ONCE) and then, as strokes land, only over the rectangle a refresh
+## reaches (rebake; the viewport is never cleared). FireField makes one with the first fire
+## mask, hands it the mask and the rasters (set_inputs) and binds the texture once it is drawn
+## (`baked`).
 
-## Emitted once a whole bake has been drawn (its textures hold the fields).
+## Emitted once the bake has been drawn whole (its texture holds the terms).
 signal baked
 
-const FINE_SHADER := preload("res://shaders/fire_glow_bake.gdshader")
-const STATIC_SHADER := preload("res://shaders/fire_ground_bake.gdshader")
+const SHADER := preload("res://shaders/fire_ground_bake.gdshader")
 const NODE_NAME := "FireNoiseBake"
-## Texels a metre of the static bake (its fields are as smooth as the mask's B-spline and the
-## broad noise) and of the fine noise (the cracks and coal lumps are 5 to 10 cm across). Chosen by
-## pixel diff against per-pixel evaluation (card F4b-4; docs/PERFORMANCE.md).
-const STATIC_PER_M := 8.0
-const FINE_PER_M := 16.0
+## Texels a metre (card ground-cost: the cracks' and coal lumps' edges stay crisp, no texel
+## steps at the pools' edges).
+const SIM_PER_M := 16.0
 const MARGIN_M := 1.0
-## The static bake's tiles, side by side.
-const TILES := 3
+## The tiles, side by side: the albedo terms, then the glow terms.
+const TILES := 2
 ## Texels a side spans at most (a larger map gets a coarser bake) and at least.
 const MAX_PX := 2048
 const MIN_PX := 16
 
-## The spacings in use (probes may change them before bake()).
-var static_per_m := STATIC_PER_M
-var fine_per_m := FINE_PER_M
-
-var _fine: SubViewport = null
-var _static: SubViewport = null
-var _fine_rect := Vector4.ZERO
-var _static_rect := Vector4.ZERO
+var _bake: SubViewport = null
+var _rect := Vector4.ZERO
 var _tile := Vector2i.ZERO
 var _drawn := false
 var _pending := false
-## Whether the next draw of the static bake must cover it whole.
+## Whether the next draw must cover the bake whole.
 var _whole := true
-## The static bake's rectangle to redraw at the next draw (texels of one tile), if any.
+## The rectangle to redraw at the next draw (texels of one tile), if any.
 var _dirty := Rect2i()
 
 
@@ -88,34 +82,40 @@ static func texels_of(region: Rect2, frame: Vector4, size: Vector2i) -> Rect2i:
 	return box.intersection(Rect2i(Vector2i.ZERO, size))
 
 
-## Bakes both for a map of extent `extent` (metres); `baked` follows once they are drawn.
+## Bakes for a map of extent `extent` (metres); `baked` follows once it is drawn whole.
 func bake(extent: Vector2) -> void:
-	_fine_rect = rect_for(extent, fine_per_m)
-	_static_rect = rect_for(extent, static_per_m)
-	_tile = tile_size(extent, static_per_m)
-	if _fine == null:
-		_fine = _viewport("Fine", FINE_SHADER, 1)
-		_static = _viewport("Static", STATIC_SHADER, TILES)
-		_static.render_target_clear_mode = SubViewport.CLEAR_MODE_NEVER
-	_fine.size = tile_size(extent, fine_per_m)
-	_fit(_fine, 0, Rect2i(Vector2i.ZERO, _fine.size), _fine.size)
-	(_fine.get_node("Rect0").material as ShaderMaterial).set_shader_parameter("rect", _fine_rect)
-	_static.size = Vector2i(_tile.x * TILES, _tile.y)
-	var mat := _static_material()
-	mat.set_shader_parameter("rect", _static_rect)
+	_rect = rect_for(extent, SIM_PER_M)
+	_tile = tile_size(extent, SIM_PER_M)
+	if _bake == null:
+		_bake = SubViewport.new()
+		_bake.name = "Sim"
+		_bake.disable_3d = true
+		_bake.transparent_bg = true
+		_bake.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		_bake.render_target_clear_mode = SubViewport.CLEAR_MODE_NEVER
+		var mat := ShaderMaterial.new()
+		mat.shader = SHADER
+		for k in TILES:
+			var fill := ColorRect.new()
+			fill.name = "Rect%d" % k
+			fill.material = mat
+			_bake.add_child(fill)
+		add_child(_bake)
+	_bake.size = Vector2i(_tile.x * TILES, _tile.y)
+	var mat := _material()
+	mat.set_shader_parameter("rect", _rect)
 	mat.set_shader_parameter("tile_px", _tile)
 	_drawn = false
 	_whole = true
 	_dirty = Rect2i(Vector2i.ZERO, _tile)
-	_fine.render_target_update_mode = SubViewport.UPDATE_ONCE
-	_redraw_static()
+	_redraw()
 
 
-## The static bake's inputs: the fire mask `mask` on the document's sample grid (its first
-## sample at `origin`, `step` metres apart) and the flames' rasters `heat` (FireField). A new
-## texture redraws the bake whole.
+## The bake's inputs: the fire mask `mask` on the document's sample grid (its first sample at
+## `origin`, `step` metres apart) and the flames' rasters `heat` (FireField). A new texture
+## redraws the bake whole.
 func set_inputs(mask: Texture2D, heat: Texture2D, origin: Vector2, step: Vector2) -> void:
-	var mat := _static_material()
+	var mat := _material()
 	if mat == null:
 		return
 	var changed: bool = (
@@ -130,90 +130,63 @@ func set_inputs(mask: Texture2D, heat: Texture2D, origin: Vector2, step: Vector2
 	if changed:
 		_whole = true
 		_dirty = Rect2i(Vector2i.ZERO, _tile)
-		_redraw_static()
+		_redraw()
 
 
-## Redraws the static bake over document region `region` (map-frame metres) at the next draw
-## (after its inputs changed there).
+## Redraws the bake over document region `region` (map-frame metres) at the next draw (after
+## its inputs changed there).
 func rebake(region: Rect2) -> void:
-	if _static == null:
+	if _bake == null:
 		return
-	var box := texels_of(region, _static_rect, _tile)
+	var box := texels_of(region, _rect, _tile)
 	if not box.has_area():
 		return
 	_dirty = box if not _dirty.has_area() else _dirty.merge(box)
-	_redraw_static()
+	_redraw()
 
 
-## The static bake's texture and the fine noise's (null until drawn).
-func static_texture() -> Texture2D:
-	return _static.get_texture() if _drawn and _static != null else null
+## The bake's texture (null until drawn whole) and one tile's frame (see rect_for).
+func sim_texture() -> Texture2D:
+	return _bake.get_texture() if _drawn and _bake != null else null
 
 
-func fine_texture() -> Texture2D:
-	return _fine.get_texture() if _drawn and _fine != null else null
+func sim_rect() -> Vector4:
+	return _rect
 
 
-## The static bake's frame (one tile's; see rect_for) and the fine noise's.
-func static_rect() -> Vector4:
-	return _static_rect
-
-
-func fine_rect() -> Vector4:
-	return _fine_rect
-
-
-## Bytes of video memory the two bakes take (RGBA8).
+## Bytes of video memory the bake takes (RGBA8; 0 before the first bake).
 func memory_bytes() -> int:
-	if _fine == null:
+	if _bake == null:
 		return 0
-	return (_fine.size.x * _fine.size.y + _static.size.x * _static.size.y) * 4
+	return _bake.size.x * _bake.size.y * 4
 
 
-func _viewport(label: String, shader: Shader, rects: int) -> SubViewport:
-	var viewport := SubViewport.new()
-	viewport.name = label
-	viewport.disable_3d = true
-	viewport.transparent_bg = true
-	viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
-	var mat := ShaderMaterial.new()
-	mat.shader = shader
-	for k in rects:
-		var fill := ColorRect.new()
-		fill.name = "Rect%d" % k
-		fill.material = mat
-		viewport.add_child(fill)
-	add_child(viewport)
-	return viewport
-
-
-func _static_material() -> ShaderMaterial:
-	if _static == null:
+func _material() -> ShaderMaterial:
+	if _bake == null:
 		return null
-	return (_static.get_node("Rect0") as ColorRect).material as ShaderMaterial
+	return (_bake.get_node("Rect0") as ColorRect).material as ShaderMaterial
 
 
-## Places rect `k` of `viewport` over texels `box` of tile `k` (tiles `tile` texels).
-static func _fit(viewport: SubViewport, k: int, box: Rect2i, tile: Vector2i) -> void:
-	var fill := viewport.get_node("Rect%d" % k) as ColorRect
-	fill.position = Vector2(box.position + Vector2i(tile.x * k, 0))
+## Places rect `k` over texels `box` of tile `k`.
+func _fit(k: int, box: Rect2i) -> void:
+	var fill := _bake.get_node("Rect%d" % k) as ColorRect
+	fill.position = Vector2(box.position + Vector2i(_tile.x * k, 0))
 	fill.size = Vector2(box.size)
 
 
-func _redraw_static() -> void:
+func _redraw() -> void:
 	var box := Rect2i(Vector2i.ZERO, _tile) if _whole else _dirty
 	for k in TILES:
-		_fit(_static, k, box, _tile)
-	_static.render_target_update_mode = SubViewport.UPDATE_ONCE
+		_fit(k, box)
+	_bake.render_target_update_mode = SubViewport.UPDATE_ONCE
 	_await_draw()
 
 
 func _enter_tree() -> void:
 	if _pending:
 		_pending = false
-		if _fine != null:
-			_fine.render_target_update_mode = SubViewport.UPDATE_ONCE
-			_redraw_static()
+		if _bake != null:
+			_redraw()
 
 
 func _exit_tree() -> void:
