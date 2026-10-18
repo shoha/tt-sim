@@ -1,7 +1,8 @@
 extends GutTest
 
-## FireLook's drawing of the persistent fire: the fire book is asked for only once a field in the
-## tree has fire, bound once it lands and let go when the last field leaves the tree; a chunk's
+## FireLook's drawing of the persistent fire: the fire book (and the smoke's book with it) is asked
+## for only once a field in the tree has fire, bound once it lands and let go when the last field
+## leaves the tree; a chunk's
 ## bounds hold every corner of every quad at fire_flames.gdshader's jitter maxima (the quad's
 ## numbers read from the shader's own source, so the bounds cannot drift from it); the instance
 ## buffer draws back to front and carries each fire's integer seed.
@@ -40,6 +41,7 @@ func test_the_book_loads_with_fire_and_goes_with_the_last_field() -> void:
 	field.refresh(Rect2i(0, 0, doc.samples_x(), doc.samples_z()))
 	assert_gt(field.flame_count(), 0)
 	assert_eq(FireLook.book_state(), FireLook.Book.LOADING, "asked for with the first fire")
+	assert_eq(FireFieldSmoke.book_state(), FireLook.Book.LOADING, "the smoke's with it")
 	var other := FireField.create(_doc(160))
 	assert_eq(FireLook.live_fields(), 1, "a field out of the tree is not counted")
 	add_child(other)
@@ -52,6 +54,9 @@ func test_the_book_loads_with_fire_and_goes_with_the_last_field() -> void:
 	var bounds: PackedVector4Array = material.get_shader_parameter("seq_bounds")
 	assert_eq(bounds.size(), FireLook.BOOK_SEQUENCES, "padded to the shader's array")
 	assert_eq(material.get_shader_parameter("class_first"), Vector4i(0, 3, 5, 8))
+	var smoke := FireFieldSmoke.material()
+	assert_not_null(smoke.get_shader_parameter("smoke_book"), "the smoke's book is bound too")
+	assert_eq(smoke.get_shader_parameter("frames"), 24)
 	var timings := FireLook.book_timings()
 	assert_gt(float(timings.load_ms), 0.0)
 	field.free()
@@ -63,6 +68,9 @@ func test_the_book_loads_with_fire_and_goes_with_the_last_field() -> void:
 	assert_null(FireLook.book_texture())
 	assert_null(material.get_shader_parameter("flipbook"), "the sampler is null")
 	assert_eq(material.get_shader_parameter("drawings"), 0, "and nothing draws")
+	assert_eq(FireFieldSmoke.book_state(), FireLook.Book.NONE, "the smoke's goes with it")
+	assert_null(smoke.get_shader_parameter("smoke_book"))
+	assert_eq(smoke.get_shader_parameter("frames"), 0, "and no column draws")
 
 
 func test_a_fieldless_fire_is_not_loaded_and_a_cold_field_asks_nothing() -> void:

@@ -34,8 +34,12 @@ const NODE_NAME := "FireLights"
 ## decay of 0.75 and energy 18 (FireLook.LIGHT_ENERGY) keeps the near field (0.97 of range 20's
 ## light at 4 m), the burn's edge at 11 m about 0.44 of it, 13 m 0.2 and nothing from 15 m, so
 ## the firelit pool falls off to the night's green within a few trunk lengths of the burn.
-const RANGE_M := 15.0
-const DECAY := 0.75
+## Round 6 of the reference fit (spike-flipbook, card ref-fit-flipbook-r2 onward) stands bigger,
+## fewer fires with their own glowing pools on the ground (fire_glow.gdshaderinc), so the light
+## no longer has to carry the burn: range 8 with a decay of 1.4 (energy unchanged) keeps the
+## warmth under and round each fire and leaves the char between fires dark, as round 6 judged.
+const RANGE_M := 8.0
+const DECAY := 1.4
 ## A light stands this share of its cluster's tallest flame above the cluster's centroid,
 ## within RISE_M (high enough to reach past the burn's edge without a hot spot under it).
 const RISE_SHARE := 0.7

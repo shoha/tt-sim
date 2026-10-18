@@ -69,3 +69,26 @@ stored mips included); a headless load takes about 60 ms.
 3. The export check: `godot --headless --path D:/dev/tt-sim --export-pack "Windows Desktop" <scratch>/check.zip`
    stores `res://assets/fire/fire_book.res` (the log's "Storing File" lines) and nothing from
    `tools/fire_sim`. Delete the zip afterwards.
+
+## The smoke book
+
+The smoke columns draw from a second, smaller book: 2 seeds of 24 held frames (128x160 RGBA8, no
+mips), each a closed 12 s loop of the upright plume's signed distance, fake normal and tone
+multiplier. It ships as `res://assets/fire/fire_smoke_book.res`, a `FireSmokeBook` resource
+(`resources/fire_smoke_book.gd`), in Git LFS beside the flames' book. `fire_smoke_book_bake.gdshader`
+here draws it; the GPU does the work, so the bake is a windowed render job, not a headless script:
+
+```
+godot --path D:/dev/tt-sim --windowed --resolution 1920x1080 --position 320,120 --script res://tools/render_jobs/run.gd -- fire_smoke_book
+```
+
+`probes/fire_smoke_book.gd` draws the atlas once, slices it, saves the book with
+`ResourceSaver.FLAG_COMPRESS` and reloads it to check every byte; the job's last line gives the
+file's size and the round trip. A step's `reference` (a shader path) bakes a second shader the same
+way and compares it byte for byte. Then run `-gselect=test_fire_smoke_book` and check
+`git lfs status` as for the flames' book.
+
+The shipped smoke book (2026-10-18) is round 6's (spike-flipbook de7f3d16, which baked it at load):
+baked with the spike's own `shaders/fire_smoke_flipbook_bake.gdshader` as the reference, all
+3,932,160 bytes are equal, and the resource is 3,409,542 bytes (the compression saves little on
+these smooth fields).
