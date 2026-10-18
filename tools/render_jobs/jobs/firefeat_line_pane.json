@@ -15,6 +15,20 @@
   {"op": "eval", "expr": "_authoring_controller.panel._on_rail_item_pressed(\"fire\")"},
   {"op": "wait", "s": 2.0},
   {"op": "capture", "name": "fire_pane", "scale": 1.0, "desc": "The Fire pane: the hint, the Shape field (Line, Area) once F5 lands, the intensity tiles, Advanced"},
+
+  {"op": "eval", "expr": "_authoring_controller.panel._on_rail_item_pressed(\"water\")"},
+  {"op": "wait", "s": 1.0},
+  {"op": "eval", "expr": "_authoring_controller.panel.close()"},
+  {"op": "hide_ui"},
+  {"op": "eval", "expr": "_authoring_controller.brush.set_radius(2.5)"},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "zoom", "size": 22.0},
+  {"op": "wait", "s": 1.5},
+  {"op": "gesture", "points": [[12, 8], [7, 6], [2, 4], [-3, 1], [-7, -3], [-12, -6]], "speed": 6.0, "release": false},
+  {"op": "wait", "s": 0.3},
+  {"op": "capture", "name": "river_drag", "scale": 1.0, "desc": "A Water river mid-drag at zoom 22 with a 2.5 m brush: the river's ribbon (F5b: must match before and after the ribbon style)"},
+  {"op": "input", "events": [{"type": "key", "key": "escape"}, {"type": "key", "key": "escape", "pressed": false}, {"type": "release", "at": [-12, -6]}]},
+  {"op": "wait", "s": 0.5},
   {"op": "title"},
   {"op": "wait", "s": 1.0}
  ]

@@ -5,7 +5,9 @@ extends GutTest
 ## slow hand and a fast one) lays the same mask along its centre; a Ctrl line puts fire out
 ## along it and keeps the ash; a lay is one "Lay fire" entry whose one undo puts every layer
 ## back byte for byte; a release under 2 m lays nothing; and the brush's own press, frames and
-## release draw and lay a line, Esc dropping it.
+## release draw and lay a line, Esc dropping it. Card F5b: a Ctrl line's chip names its length;
+## the Line's ring and ribbon are the band its fire stands in (line_reach); and the ribbon's
+## default style is the river's, call for call.
 
 const MEADOW := "grassland_meadow_summer_s1"
 const RADIUS := 2.0
@@ -174,6 +176,102 @@ func test_the_brush_draws_a_line_and_lays_it_on_release() -> void:
 	assert_eq(_fire_at(editor, Vector2(0, 6)), 0, "only along the line")
 	assert_eq(editor.history.get("_undo").back().label, FireEditor.LAY_LABEL)
 	BrushTool.session_radius = radius_was
+
+
+func test_a_ctrl_line_names_its_length_in_its_chip() -> void:
+	var editor := _editor()
+	var brush := BrushTool.new()
+	add_child_autofree(brush)
+	var radius_was := BrushTool.session_radius
+	brush.editor = editor
+	brush.use_tool(ToolRegistry.find(FireTool.ID))
+	brush.set_radius(RADIUS)
+	brush.unit_cell_m = 1.0
+	brush.unit_per_cell = 1.0
+	brush.unit_label = "m"
+	var fire := FireTool.of(brush)
+	fire.shape = FireBrush.Shape.LINE
+	brush.ctrl = true
+	assert_eq(fire.cursor_text(brush), FireBrush.ERASE_TEXT, "Ctrl over the board, no line yet")
+	brush.pressed = true
+	brush.press_ctrl = true
+	brush.hit = Vector3(-6, 0, 0)
+	fire.press(brush)
+	for k in 13:
+		brush.hit = Vector3(-6 + k, 0, 0)
+		fire.frame(brush)
+	assert_eq(fire.cursor_text(brush), "Put out fire  12 m", "the put-out chip names the length")
+	brush.press_ctrl = false
+	assert_eq(fire.cursor_text(brush), "Line of fire  12 m", "as the lay's does")
+	brush.cancel_gesture()
+	BrushTool.session_radius = radius_was
+
+
+## The Line's ring and ribbon show where its fire will stand: a straight Blaze line's mask
+## falls under the flames band about line_reach() radii out, inside the brush's rim.
+func test_the_line_shows_the_band_its_fire_stands_in() -> void:
+	var radius := 4.0
+	var reach := FireBrush.line_reach(FireBrush.BLAZE, 1.0, false)
+	assert_between(reach, 0.6, 0.85, "the band ends inside the rim")
+	assert_lt(FireBrush.line_reach(FireBrush.EMBERS, 1.0, false), 1.0)
+	assert_gt(FireBrush.line_reach(FireBrush.BLAZE, 2.0, false), reach, "stronger reaches wider")
+	var editor := _editor()
+	var line := PackedVector2Array([Vector2(-9, 0), Vector2(9, 0)])
+	assert_true(FireBrush.lay_line(editor, line, radius, 1.0, false))
+	var step := editor.document.sample_step().x / editor.map_scale()
+	for side in [1.0, -1.0]:
+		var d := 0.0
+		while _fire_at(editor, Vector2(0, side * (d + 0.05))) >= FireField.FLAME_MIN:
+			d += 0.05
+		assert_almost_eq(d, reach * radius, step, "the flames band ends at line_reach (%.2f)" % d)
+	var put_out := FireBrush.line_reach(FireBrush.BLAZE, 1.0, true)
+	assert_true(FireBrush.lay_line(editor, line, radius, 0.0, true))
+	assert_lt(_fire_at(editor, Vector2(0, put_out * radius - step)), FireField.EMBER_MIN)
+	var brush := BrushTool.new()
+	add_child_autofree(brush)
+	var radius_was := BrushTool.session_radius
+	brush.editor = editor
+	brush.use_tool(ToolRegistry.find(FireTool.ID))
+	brush.set_radius(radius)
+	var fire := FireTool.of(brush)
+	fire.intensity = FireBrush.BLAZE
+	assert_eq(fire.stroke_radius(brush), radius, "Area: the brush")
+	fire.shape = FireBrush.Shape.LINE
+	var expected := radius * FireBrush.line_reach(FireBrush.BLAZE, brush.get_flow(), false)
+	assert_almost_eq(fire.stroke_radius(brush), expected, 0.001, "Line: the band")
+	BrushTool.session_radius = radius_was
+
+
+## The river's ribbon is the default style's, call for call; the fire line's own style
+## changes its look alone.
+func test_the_ribbon_style_defaults_are_the_rivers() -> void:
+	var ground := func(p: Vector2) -> Vector2: return p * 10.0
+	var line := PackedVector2Array([Vector2(0, 0), Vector2(4, 0), Vector2(8, 1)])
+	var tint := WaterBrush.TINT
+	var river := WaterBrush.ribbon(ground, line, 1.0, tint, 0.5, true)
+	var shadow := WaterBrush.SHADOW
+	var lines: Array = river.lines
+	assert_eq(lines.size(), 4 + 2 * 3, "two edges, three chevrons")
+	assert_eq(lines[0][1], Color(shadow, 0.4 * 0.5))
+	assert_eq(lines[0][2], 3.0)
+	assert_eq(lines[1][1], Color(tint, 0.85 * 0.5))
+	assert_eq(lines[1][2], 1.5)
+	assert_eq(lines[4][1], Color(shadow, 0.3 * 0.5))
+	assert_eq(lines[4][2], 3.5)
+	assert_eq(lines[5][1], Color(1.0, 1.0, 1.0, 0.7 * 0.5))
+	assert_eq(lines[5][2], 2.0)
+	var colors: PackedColorArray = river.colors
+	assert_eq(colors[0], Color(tint, WaterBrush.RIBBON_ALPHA_UP * 0.5))
+	assert_eq(colors[-1], Color(tint, WaterBrush.RIBBON_ALPHA_DOWN * 0.5))
+	assert_eq(river.points[0], Vector2(0, 10), "on the ground")
+	assert_eq(WaterBrush.ribbon(ground, line, 1.0, tint, 0.5, true, {}), river)
+	var fire := WaterBrush.ribbon(
+		ground, line, 1.0, FireBrush.LAY_TINT, 1.0, true, FireBrush.LAY_STYLE
+	)
+	assert_eq(fire.points, river.points, "the same band")
+	assert_eq(fire.lines.size(), 2 + 4 + 2 * 3, "a glow under each edge")
+	assert_gte(fire.colors[0].a, 0.4, "about half coverage")
+	assert_eq(fire.lines[-1][1], Color(FireBrush.LAY_STYLE.chevron, 0.95), "cream chevrons")
 
 
 func _spread(values: PackedInt32Array) -> int:

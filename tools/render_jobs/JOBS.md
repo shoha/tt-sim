@@ -748,19 +748,27 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (`--saved` finds no level). For a calibration, `glow.gd shot` with `specs` captures named glow
   variants ("+key=value" suffixes on `new` or `old`, `glow.gd variant`) on one frame, and `stats`
   compares them; card C5c's scratch jobs did that on a kept `_firefeat_glow` with `--saved`.
-- `jobs/firefeat_line.json`: the Fire tool's Line shape (card F5; about 95 s). A 200 ft temperate
-  forest (seed 1234) with a meadow painted over its east half; the Fire tool picked from the
-  rail, a real Tab key (`input` op, `"key": "tab"`) switches it to Line (`pane_after_tab`: the
-  pane's Line tile follows), then a Blaze line at radius 2.5 is drawn with real input (`gesture`)
-  from the meadow into the forest: `line_drag` mid-drag (the ember ribbon, zoom 22),
-  `laid_day_z22`, a Ctrl line over part of it (`erase_drag`, zoom 8, the red ribbon), and the
-  result under the fire probe's `day` and `night` skies at home and zoom 8 on the put-out gap;
-  `sheet_line` (the four) and `sheet_drag`. It saves no level, so it leaves none.
-- `jobs/firefeat_line_pane.json`: the Water and Fire panes at full size on a 100 ft map (card
-  F5; about 17 s), for a before | after check of a pane change: run with `--out
+- `jobs/firefeat_line.json`: the Fire tool's Line shape (cards F5, F5b; about 190 s). Run once
+  per window size (`expand` over 1920x1080 and 1280x720, the critic's size; names start with
+  the size): a 200 ft temperate forest (seed 1234) with a meadow painted over its east half
+  (the strokes leave the brush at 9 m, flow 2); the Fire tool picked from the rail
+  (`fire_pane`: the help and the Area ring at 9 m), a real Tab key (`input` op, `"key":
+  "tab"`) switches it to Line (`pane_after_tab`: the Line tile follows, the Line ring at its
+  band's width), then a Blaze line at radius 2.5 is drawn with real input (`gesture`) from the
+  meadow into the forest: `line_drag` mid-drag (the ember ribbon, zoom 22), `laid_day_z22`
+  (after `fire.gd profile`, which logs the mask along and across the laid line against
+  `FireBrush.line_reach`), a Ctrl line over part of it (`erase_drag`, zoom 8, the madder
+  put-out ribbon), and a second line held at night (`line_drag_night`, dropped with Esc);
+  `sheet_1920` and `sheet_720` (the four drags and lays). The 720p gesture lands off the job's
+  points (the 3D view renders at 1371x771 there), so read its profile's offsets loosely. It
+  saves no level, so it leaves none.
+- `jobs/firefeat_line_pane.json`: the Water and Fire panes and a Water river held mid-drag
+  (`river_drag`, zoom 22, dropped with Esc) at full size on a 100 ft map (cards F5, F5b; about
+  26 s), for a before | after check of a pane or ribbon change: run with `--out
   render_jobs/<name>_before` before the change and `_after` after, then diff the pane rect
   with `probes/avatar_diff.gd` (the foliage behind the glass moves with the wind: pixels over
-  8 there are the background; a pane change shows over 32). Saves no level.
+  8 there are the background; a pane change shows over 32; the ribbon lies over swaying trees,
+  so compare a crop of it by eye, `avatar_diff.gd crop`). Saves no level.
 - `jobs/fire_smoke_book.json`: bakes the persistent fire's smoke book once, offline (card
   fire-prod-c5a; `probes/fire_smoke_book.gd`; `tools/fire_sim/README.md`). In the real window (a
   headless run draws nothing) it draws `tools/fire_sim/fire_smoke_book_bake.gdshader` into one
