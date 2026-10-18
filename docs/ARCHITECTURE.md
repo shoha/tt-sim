@@ -1153,7 +1153,7 @@ rather than in `ASSET_PIPELINE.md`.
   `authoring/biomes.json` (`{"biomes": [palette biome id, ...]}`), optional painted
   surfaces (below), optional water (below), and optional `fire.png` (L8 persistent ground
   fire intensity, 0 none, never all zero; drawn by `FireField`, painted by the Fire tool;
-  `docs/systems/map_document.md`). Unknown entries are ignored, so later
+  `docs/systems/map_document.md`, and "Persistent fire" below). Unknown entries are ignored, so later
   phases add entries without a format bump.
 - **Size (measured 2026-10-09, 200 ft maps):** a fresh starting-cover map is 0.2-0.26 MB
   (about 3.7K scatter rows); a full-density grassland map is 1.37-1.48 MB (43K rows),
@@ -1291,6 +1291,24 @@ or water changed, keyed by `CrossingCache`, `utils/crossing_cache.gd`), and an e
 waterfall or a ford over deep water; crossings follow later sculpt and water edits, and the
 Bridge tool (`BridgeBrush`) drives it all. See
 [docs/systems/crossings.md](systems/crossings.md).
+
+### Persistent fire
+
+The document's `fire_mask` drawn on every peer (the fire cards F1 to F4b and the production port
+of the reference fit's round 6). `FireField` (`scenes/terrain/fire_field.gd`), one per map with a
+document under the map root, plans each 10 m block purely from the document: `FireFires`
+(`scenes/terrain/fire_fires.gd`) stands a few big fires on a jittered 0.9 m lattice, each with a
+per-fire integer seed from the map seed and its lattice point, and the field sums them into heat
+and pool rasters in a fixed block order, so a peer that refreshed stroke by stroke and one that
+rebuilt hold the same plans and bytes (`plan_digest`). A stroke's re-plan runs on a worker
+(`FirePlanJob`). `FireLook` (`scenes/effects/fire_look.gd`) draws the flames from a book of
+drawings baked offline by a small fire simulation and shipped as a resource (`FireBook`,
+`assets/fire/fire_book.res`, Git LFS; `shaders/fire_flames.gdshader`), loaded on a thread with
+the first fire and released with the last field. The ground's char and pools are a term in the
+authored ground shader read from one GPU bake (`FireNoiseBake`, `fire_glow.gdshaderinc`);
+`FireFieldSmoke` raises plumes from a second offline book (`FireSmokeBook`) and `FireLights`
+stands up to four short warm lights at dusk and night. See
+[docs/systems/fire.md](systems/fire.md).
 
 ### Authored terrain
 

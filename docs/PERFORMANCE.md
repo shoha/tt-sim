@@ -3425,6 +3425,14 @@ map perhaps to 1-1.5 s; it is a dependency and build decision, not taken.
 
 ## Fire (F4): pinned performance pass (2026-10-16)
 
+**These sections measured the previous look** (note of 2026-10-18). The Fire (F4) sections below,
+through "Bakes and a worker (F4b-4)", timed the fire before its production port to round 6 of the
+reference fit (branch `fire-sim`, cards fire-prod-c1 to c6; [systems/fire.md](systems/fire.md)):
+the banded-tongue flames with their LOD past zoom 24, the static and fine ground bakes with the
+per-pixel bed, the per-pixel smoke plume and lights of range 15 m. Their numbers stay as measured;
+the production fire's pinned numbers will follow in a section of their own (card fire-prod-c7).
+The first-burn hitch's surface binding (F4b-2, below) is unchanged by the port.
+
 What the persistent ground fire (FireField: flames, the ground's fire term, smoke, lights) costs
 in play, against the design's targets (docs/plans/2026-10-11-fire-features/design.md section 4:
 0.5 ms GPU at home and 0.3 ms at zoom 20 with the field at its cap, CPU under 0.1 ms a frame),

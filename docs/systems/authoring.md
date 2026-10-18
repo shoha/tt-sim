@@ -199,98 +199,17 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   footprint (1.1x the fire's radius, its faint rim keeping plants), is undone with the ash
   part, and putting fire out brings nothing back. Start a fire's ash clears the same way. The burnt-biome and
   ash parts mirror `TerrainEvents._burn` (which is not called: its dabs are one circle, these
-  follow the stroke). `FireField` draws the mask (look card F4a: banded-tongue flames from
-  `shaders/fire_field.gdshader` on a 0.9 m jittered lattice, the mask read through a broad
-  warp so a straight pass's flames wander across its width, gathered into blob-shaped clumps
-  about 4 m across (a clump noise turned and warped off the map's axes) with open ground
-  between, a big flame with licks at its feet in each blaze clump, no flames in the ember band,
-  soft-edged tongues with a broken rim and bleeding bands, a saturated yellow core only in a
-  tongue's inner third and an orange band on every tongue, held drawings at 3-4 a second that
-  re-draw the tongues, a lick torn off the tip as a whole small tongue that rises clear and is
-  eaten in about 0.45 s, and one wind per map leaning every tip about a quarter of its flame's
-  height; a MultiMesh per 10 m block, at most 4096 on a map shared in proportion to each
-  block's burning area, half of them past zoom 24; not depth tested, the depth texture fading
-  a flame from 0.25 m behind the scene's surface, so rising ground in front of a foot melts it
-  instead of cutting it straight while logs and stumps further in front still hide it). A base
-  fire unifies the flames (the user's verdict, 2026-10-16): `FireField` keeps a heat raster
-  (`HEAT_STEP_M` 0.5 m) where each flame adds its height times a soft kernel, so a clump sums to
-  one hot plateau, and a second raster of the feet's pools (each flame adds 1 under a narrow
-  kernel); each flame takes the heat at its foot (in its instance data) to thin its rim and
-  widen its amber, so overlapping flames read as one hotter body. The ground (round 4, the
-  user's direction: dark crusted char with bold glowing patches and cracks under each clump,
-  brightest where flames overlap, the flames always the brightest thing) glows in soft-edged
-  lobes round the feet, red at their fringe, orange-gold only where the heat sums high and
-  never as bright as a flame's outer band, with dark crust plates and wandering cracks; ember
-  cores glow away from the clumps; the char (brown-black with near-black shapes and soft grey
-  ash between the clumps, matte, its normals straight up so no ground facet shows; the outline
-  read through a bold warp, the grass dried and browned outside it in a band of wandering
-  width). All of it is a term in the authored ground shader, `shaders/fire_glow.gdshaderinc`,
-  which since card F4b-4 reads everything of it that does not change with time from two
-  bakes (`FireNoiseBake`, a child of the field): the static bake (`fire_ground_bake.gdshader`,
-  8 texels a metre, three RGBA8 tiles worked out from the mask (R8), the two rasters (RG8) and
-  the broad noise; each refresh redraws only the region its blocks reach) and the fine noise
-  (`fire_glow_bake.gdshader`, 16 texels a metre, once per map); the bed's drift, the breathing
-  and the specks stay per pixel. A refresh's re-plan, cluster sums and rasters (`FirePlanJob`)
-  run on a worker from a snapshot of the document when `FireField.use_worker` is set (the
-  authoring and play-time editors set it, as they do the water's) and land on a later frame.
-  Its value noise hashes lattice points in integer
-  arithmetic (`glow_hash`; card F4b-2: `fire_hash`'s float hash gave a lattice point shared by
-  two cells two values at map-sized coordinates, which broke every threshold on the noise into
-  the straight-edged grey shards and orange wedges seen on the burn; found with the
-  `fire_shards` job's debug views). `FireLook` in `scenes/effects/` owns the meshes,
-  materials and the glow binding. Lights and smoke (card F4b-1): `FireClusters` (pure) sums each
-  re-planned block's flame heights on a 3.5 m grid (kept per block, merged in block row order,
-  so every peer and every refresh history agree) and finds the hot spots, a burning cell whose
-  3 x 3 sum tops every burning neighbour's, so a small fire is one cluster and a map-wide burn
-  has one per hot spot at least two cells apart (connected components would make the look
-  level's passes one cluster with one light at its middle); re-planning one block changes only
-  the clusters within two cells of it. `FireLights` stands four shared `OmniLight3D` (no
-  shadows, range 15 m, `omni_attenuation` 0.75, 0.7 x the tallest flame up,
-  `FireLook.LIGHT_COLOR`, energy 18 by the cluster's size; judged under the game's
-  `outdoor_night` and `outdoor_sunset` presets, where they warm the ash, logs, stumps and rocks
-  across the burn, give the trunks a warm side and light the fire side of living canopies near
-  the burn, though the burnt bark's linear albedo of about 0.035 keeps it dark-ish however
-  strong the light; measured with pixel probes, range 12's window left 2 % of the light at
-  11 m, so the green beyond the burn's edge never moved, and range 20 at a decay of 0.5 still
-  held 8 % at 16 m, so night read as a dim sunset; range 15 at 0.75 keeps the near field, about
-  0.44 of range 20's light at the burn's edge and none from 15 m, a firelit pool that falls off
-  to the night's green; the painted foliage eases each such light toward a cap,
-  `FOLIAGE_NEAR_CAP` in `wind_foliage_include.gdshaderinc`, so a canopy beside the fire turns a
-  golden olive rather than neon) over the four
-  largest clusters, a lit cluster keeping its light across a re-plan (`keep_slots`); they show
-  only while the sun is low (`FireLook.light_gate` of `FoliageLight.last_sun`, the published
-  sun's weight: off at 14:00, fading in from about 17:00, full at dusk, at night and with no
-  sun) and flicker slowly (four energy sets a frame, the only per-frame light work). The game
-  adds no other omni light to a scene (only a Blender map's own lamps can), so the four fit the
-  Mobile renderer's eight per mesh; the env manager skips a `FireField` when it collects the
-  map's own lights (counted, they turned the level's sun off in "auto" mode). A cluster's size
-  is its flames' heights squared, summed (about their drawn area), so a blaze's big flames
-  outweigh a wide field of small ones. `FireFieldSmoke` (one `MultiMesh`,
-  `fire_field_smoke.gdshader`) raises a leaning plume over each of up to eight of the largest
-  clusters holding at least 8 m2 of blaze (ranked by all their flames, as the lights are, so the
-  biggest fire is the biggest smoker). Each column is one quad standing on its source and
-  turning about the world's up axis to face the camera (so it keeps its world depth against the
-  trees), 3.4 of its unit tall (the cluster's tallest flame, less for a small cluster: about four
-  flame heights), widening upward and leaning down the map's wind (at least 0.6 of the lean
-  across the screen); the shader paints the whole column as one silhouette, a cylinder body
-  with large round lobes along its edges and over its face, joined by a smooth minimum of their
-  distances, the lobes in rows spaced by the height's logarithm (small at the base, big at the
-  crown) climbing on the column's 10 s clock, all warped by a broad noise carried up with them,
-  so it rolls upward without a rebuild; its outline fades over about a quarter of its width.
-  Painted unshaded with a fake normal and blended premultiplied: the foot is nearly transparent
-  among the flames (they show at full strength) and its amber is a glow added over the scene;
-  only the upper two thirds carry real density. At dusk and night a salmon-rose waist lit by the
-  fire below and a powder blue-grey crown, keyed to the scene's ambient (`figure_ambient`): under
-  a sunset's ambient the crown is lighter than the land behind it, under a night's about the
-  night's own value; by day a translucent grey-lavender on the sun side and blue-grey in shade
-  (from `foliage_sun`); no fog; it thins away at the crown and is drawn before the flames. Round
-  4 compared this plume with merged billows (a wide base and four climbing billows in the same
-  quad; removed in round 5) and three rounds of separate billow quads (faceted crowns, one oval
-  haze, a chain of discs). Nothing runs per frame (one buffer written when the blocks re-plan). The
-  fire events' `SmokePuffs` crowns are unchanged)
-  and is refreshed by `AuthoringEditor.refresh_fire`, which
-  `apply_mask_diff` calls for any diff that writes `fire_mask` (the fire part records through
-  it as every mask stroke does; a diff of `fire_mask` alone regenerates no scatter). Render jobs
+  follow the stroke). `FireField` draws the mask on every peer from the document: round 6's
+  fewer, bigger fires drawn from the shipped fire book, dark char with a soft pool of light under
+  each fire, a plume from the smoke book over the largest blazes and short lights at dusk and
+  night; its plan, stroke path, books, shaders and numbers are in [fire.md](fire.md). It is
+  refreshed by `AuthoringEditor.refresh_fire`, which `apply_mask_diff` calls for any diff that
+  writes `fire_mask` (the fire part records through it as every mask stroke does; a diff of
+  `fire_mask` alone regenerates no scatter), so a stroke, an undo, a redo and a live op take one
+  path. The refresh's re-plan runs on a worker (`FireField.use_worker`, which the authoring and
+  play-time editors set, as they do the water's) and lands on a later frame: a 4 m dab's fires
+  appear about 0.17 s after it (fire.md "The stroke path"). Arming the tool asks for the fire
+  book (`FireLook.request_book`), so the first stroke's fires have their drawings. Render jobs
   `tools/render_jobs/jobs/fire_mask.json`, and for the look `firefeat_build`, `firefeat_look`
   and `firefeat_cleanup` (JOBS.md).
 
@@ -466,7 +385,7 @@ Probe and numbers:
   noise and one erosion rule (`shaders/fire_noise.gdshaderinc`: a shape eaten by bold value
   noise as it ages, its edge a crisp step a pixel wide, never an alpha fade; the ground's
   scorch draws the same noise on `fire_glow_noise.gdshaderinc`'s integer hash since card F4b-5,
-  as the persistent fire's smoke does, because `fire_hash`'s float rounding broke its
+  as the persistent fire's smoke book is baked, because `fire_hash`'s float rounding broke its
   thresholds into straight-edged cells) and one palette
   (stepped flame bands, the ember glow, warm charcoal smoke going pale as it rises). A banded
   tongue (EventPuffs' flame with `band_flames`: three tongues swaying on the noise, cut into
@@ -671,3 +590,5 @@ See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work".
   cursor (`BrushCursor`) and one `BrushMode` per tool, named by its descriptor's
   `brush_mode`; the `BrushTool.Mode` enum, `ToolRegistry.for_mode` and the three
   per-tool refusal signals are gone (one `refused`).
+- 2026-10-18: the persistent fire's look, plan and books moved to [fire.md](fire.md) with the
+  production port of round 6 (card fire-prod-c6); the Fire tool's part stays here.
