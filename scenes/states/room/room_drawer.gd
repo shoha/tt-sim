@@ -69,7 +69,8 @@ func _input(event: InputEvent) -> void:
 ## Whether `event` opens or closes the drawer: a bare Tab press, at a table (`at_table`: Root
 ## is PLAYING with nothing paused over it), with the drawer's tab shown, and nothing else
 ## taking Tab (`busy`: an overlay or panel over the board, a focused text field, the measure
-## tool, which cycles its mode with Tab). Pure.
+## tool, which cycles its mode with Tab, or a brush with two shapes, which switches its shape
+## with it). Pure.
 static func tab_toggles(event: InputEvent, at_table: bool, revealed: bool, busy: bool) -> bool:
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo or key.keycode != KEY_TAB:
@@ -90,7 +91,12 @@ func _board_busy() -> bool:
 	if focused is LineEdit or focused is TextEdit:
 		return true
 	var map := _game_map()
-	return map != null and map.get_measure_tool() != null and map.get_measure_tool().is_active()
+	if map == null:
+		return false
+	# A brush with two shapes out (Water, Fire) switches its shape on Tab (BrushTool.takes_tab).
+	if map.get_brush_tool() != null and map.get_brush_tool().takes_tab():
+		return true
+	return map.get_measure_tool() != null and map.get_measure_tool().is_active()
 
 
 func _game_map() -> GameMap:

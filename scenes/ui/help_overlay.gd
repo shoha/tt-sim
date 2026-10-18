@@ -106,6 +106,10 @@ func _get_shortcut_data() -> Array:
 				"Shift + scroll / [ ]",
 				"Brush size (Place: resize the prop under the cursor; Bridge: its width)",
 			],
+			[
+				InputProfile.label(&"brush_shape"),
+				"The brush's other shape: Water's river or pond, Fire's area or line",
+			],
 			["Right-click / Esc", "Cancel the stroke in progress"],
 			["Right-click", "Remove a prop, or put the brush down"],
 			["Delete", "Remove the prop under the cursor"],

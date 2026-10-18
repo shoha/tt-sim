@@ -392,13 +392,16 @@ func _stroke(step: Dictionary) -> bool:
 			brush.set_radius(float(step.get("radius", 4.0)))
 			_state.ctrl = bool(step.get("ctrl", false))
 		elif mode == "fire":
-			# The Fire tool at an intensity tile ("embers", "flames", "blaze"); Ctrl at the
-			# press puts fire out.
+			# The Fire tool at an intensity tile ("embers", "flames", "blaze") and a shape
+			# ("area" default, "line"); Ctrl at the press puts fire out.
 			var tiles := {
 				"embers": FireBrush.EMBERS, "flames": FireBrush.FLAMES, "blaze": FireBrush.BLAZE
 			}
 			c.call("_select_tool", FireTool.ID)
 			FireTool.of(brush).intensity = int(tiles.get(String(step.get("tile", "flames")), 176))
+			# "shape": "line" draws a line of fire along the points, laid on release (F5).
+			var line := String(step.get("shape", "area")) == "line"
+			FireTool.of(brush).shape = FireBrush.Shape.LINE if line else FireBrush.Shape.AREA
 			_state.ctrl = bool(step.get("ctrl", false))
 		else:
 			c.call("_select_tool", AuthoringPanel.TOOL_THIN)
@@ -539,7 +542,7 @@ func _gesture(step: Dictionary) -> bool:
 
 ## `input` (P4b-2): `events`, one per frame, as real input: {"type": "move", "at"}, {"type":
 ## "press" / "release", "at", "button" ("left" default, "right")}, {"type": "key", "key"
-## ("ctrl", "escape"), "pressed" (default true)}; mouse events take `ctrl` (held).
+## ("ctrl", "escape", "tab"), "pressed" (default true)}; mouse events take `ctrl` (held).
 func _input_events(step: Dictionary) -> bool:
 	var events: Array = step.get("events", [])
 	var k := int(_state.phase)
@@ -558,7 +561,7 @@ func _input_events(step: Dictionary) -> bool:
 			)
 			_mouse_button(event.at, button, String(event.type) == "press", held)
 		"key":
-			var keys := {"ctrl": KEY_CTRL, "escape": KEY_ESCAPE}
+			var keys := {"ctrl": KEY_CTRL, "escape": KEY_ESCAPE, "tab": KEY_TAB}
 			_key(
 				keys.get(String(event.get("key", "ctrl")), KEY_CTRL),
 				bool(event.get("pressed", true))

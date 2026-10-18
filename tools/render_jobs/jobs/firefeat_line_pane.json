@@ -1,0 +1,21 @@
+{
+ "out_dir": "render_jobs/firefeat_line_pane",
+ "timeout_s": 240,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 100, "seed": 1234},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "home"},
+  {"op": "eval", "expr": "_authoring_controller.panel._on_rail_item_pressed(\"water\")"},
+  {"op": "wait", "s": 2.0},
+  {"op": "capture", "name": "water_pane", "scale": 1.0, "desc": "The Water pane: River and Pond shape tiles, depth tiles, hint, Advanced (F5: must match before and after the ShapeField lift)"},
+  {"op": "eval", "expr": "_authoring_controller.panel._on_rail_item_pressed(\"fire\")"},
+  {"op": "wait", "s": 2.0},
+  {"op": "capture", "name": "fire_pane", "scale": 1.0, "desc": "The Fire pane: the hint, the Shape field (Line, Area) once F5 lands, the intensity tiles, Advanced"},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0}
+ ]
+}

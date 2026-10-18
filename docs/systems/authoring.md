@@ -174,6 +174,20 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   conformed ring (`BrushCursor.draw_ring`, in `cursor_tint` with `cursor_text` under it).
   Sculpt conforms it to the document's heights every frame, Water draws its previews under
   it, and Place and Bridge draw cursors of their own.
+- Shapes (card F5, 2026-10-18): a mode with a line shape and an area shape (`has_shapes`:
+  Water's River / Pond, Fire's Line / Area) switches on Tab. `BrushTool.decide` maps a bare
+  Tab with no press held to `Action.SHAPE` (mid-press it is swallowed; with a modifier it is
+  focus navigation's), the brush calls `toggle_shape` and emits `shape_toggled`, and the panes
+  follow without re-emitting (`select_shape`; the controller for Water, `FireTool.connect_pane`
+  for Fire, `PlayEvents` in play, which also redraws the hint bar). GameMap's `_input` reaches
+  the brush before GUI focus navigation, so the handled Tab never moves focus; the room drawer,
+  whose `_input` runs first at a table, counts `BrushTool.takes_tab()` as busy, so a two-shape
+  brush's Tab is never the drawer's. Every such pane builds its Shape field with
+  `ShapeField.build` (`scenes/ui/primitives/shape_field.gd`: captioned "Shape", two tiles at
+  64x56, the line shape first with the river's `ripple` icon, the area second with the pond's
+  `circle-dashed`). The hint bar (`PlayEvents.hints_for(tool, sculpt, shape)`) gives Tab the
+  slot the other brushes give Ctrl and names the shape it switches to ("Tab Line", "Tab Pond");
+  the pane's gesture line says what Ctrl does. `InputProfile` label `brush_shape`; one Help row.
 - Modes reach the editor and the host only, never `AuthoringController`, so a play-side host
   (the GM's Events pane over `LiveEdits.editor`) can run the same modes. A new tool with
   gestures adds its `BrushMode` subclass beside `water_brush.gd` and names it in its
@@ -182,8 +196,15 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   first tool added through the registry alone. `FireTool` (rail after Paint, Tabler
   `campfire` icon; the document's own ground, as Paint; a play brush too since card F2,
   2026-10-16, see "Live edits"),
-  `FireBrush` (Area only; Line and Tab come in F5), `FireToolPane` (Embers 96, Flames 176,
-  Blaze 255, and the panel's `build_advanced` rows), and `FireEditor` behind
+  `FireBrush` (two shapes since card F5, 2026-10-18: Area paints with Paint's falloff and
+  dwell; Line captures a line as a river's through `StrokePath` (`utils/stroke_path.gd`, the
+  capture lifted out of `WaterBrush`, which calls it), previews it with the river's ribbon
+  (`WaterBrush.draw_ribbon`) at the brush width in `FireBrush.TINT`, red with Ctrl, and on
+  release lays it with `FireBrush.lay_line`: resampled every 0.25 brush radii and dabbed as
+  capsules at 0.22 s per segment (times the flow), so the exposure per metre, and the mask,
+  do not depend on the drawing speed (centre about 97 % of the intensity); a release under
+  2 m lays nothing, Esc or RMB drops the line), `FireToolPane` (the Shape field, Embers 96,
+  Flames 176, Blaze 255, and the panel's `build_advanced` rows), and `FireEditor` behind
   `AuthoringEditor.begin_fire_stroke(target, erase)`. A lay is a `MaskStroke` in
   `MaskBrush.FIRE` writing only `fire_mask`; its dabs are recorded, and at release they are
   replayed inside one history group, so one entry "Lay fire" holds three parts: the fire,

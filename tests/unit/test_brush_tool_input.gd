@@ -4,7 +4,8 @@ extends GutTest
 ## and what it means. Plain wheel stays the camera's; Shift+wheel sizes the brush (or scales
 ## a hovered prop); RMB cancels a stroke, removes a hovered prop, or puts the brush down.
 ## Then the host's dispatch: every registered tool's mode is a BrushMode the brush switches
-## to, and a mode's fade focus reaches the occlusion fade.
+## to, a mode's fade focus reaches the occlusion fade, and a bare Tab between gestures switches
+## a two-shape brush's shape (Fire, Water) and leaves the others' Tab alone.
 
 ## decide()'s `picks`: a mode that works the ground (Biome), or one that picks a target under
 ## the pointer (Place).
@@ -158,6 +159,57 @@ func test_thin_ring_is_the_canopy_brush_window() -> void:
 	brush.deactivate()
 	assert_eq(CanopyFade.brush_asked(), Vector4.ZERO, "putting the brush down clears it")
 	CanopyFade.step_brush(1.0)
+
+
+func test_tab_is_the_shape_key_only_bare_and_between_gestures() -> void:
+	assert_eq(BrushTool.decide(_key(KEY_TAB), GROUND, false, false), A.SHAPE)
+	assert_eq(BrushTool.decide(_key(KEY_TAB), PICKS, false, true), A.SHAPE)
+	assert_eq(BrushTool.decide(_key(KEY_TAB), GROUND, true, false), A.SWALLOW, "mid-press: none")
+	for modifier in ["shift_pressed", "ctrl_pressed", "alt_pressed", "meta_pressed"]:
+		var chord := _key(KEY_TAB)
+		chord.set(modifier, true)
+		assert_eq(BrushTool.decide(chord, GROUND, false, false), A.NONE, "%s: focus's" % modifier)
+	var release := _key(KEY_TAB)
+	release.pressed = false
+	assert_eq(BrushTool.decide(release, GROUND, false, false), A.NONE)
+
+
+func test_tab_switches_fire_and_water_and_leaves_one_shape_brushes_alone() -> void:
+	var brush := BrushTool.new()
+	add_child_autofree(brush)
+	watch_signals(brush)
+	brush.use_tool(ToolRegistry.find(FireTool.ID))
+	brush.activate()
+	assert_true(brush.takes_tab(), "Fire has two shapes")
+	assert_eq(FireTool.of(brush).shape, FireBrush.Shape.AREA, "Area first, as before F5")
+	assert_true(brush.handle_input(_key(KEY_TAB)), "taken, so GUI focus stays")
+	assert_eq(FireTool.of(brush).shape, FireBrush.Shape.LINE)
+	assert_signal_emit_count(brush, "shape_toggled", 1)
+	var chord := _key(KEY_TAB)
+	chord.shift_pressed = true
+	assert_false(brush.handle_input(chord), "Shift+Tab is focus navigation's")
+	var repeat := _key(KEY_TAB)
+	repeat.echo = true
+	assert_true(brush.handle_input(repeat), "a held Tab's repeats are taken")
+	brush.pressed = true
+	assert_true(brush.handle_input(_key(KEY_TAB)), "mid-press: taken")
+	brush.pressed = false
+	assert_eq(FireTool.of(brush).shape, FireBrush.Shape.LINE, "and neither switched it")
+	assert_true(brush.handle_input(_key(KEY_TAB)))
+	assert_eq(FireTool.of(brush).shape, FireBrush.Shape.AREA, "back to Area")
+	brush.use_tool(ToolRegistry.find(WaterTool.ID))
+	assert_eq(WaterTool.of(brush).shape, WaterBrush.Shape.RIVER)
+	assert_true(brush.handle_input(_key(KEY_TAB)))
+	assert_eq(WaterTool.of(brush).shape, WaterBrush.Shape.POND, "Water: River to Pond")
+	assert_true(brush.handle_input(_key(KEY_TAB)))
+	assert_eq(WaterTool.of(brush).shape, WaterBrush.Shape.RIVER, "and back")
+	assert_signal_emit_count(brush, "shape_toggled", 4)
+	brush.use_tool(ToolRegistry.find(PaintTool.ID))
+	assert_false(brush.takes_tab(), "Paint has one shape: Tab stays the room drawer's")
+	assert_false(brush.handle_input(_key(KEY_TAB)), "and goes on")
+	brush.use_tool(ToolRegistry.find(FireTool.ID))
+	brush.deactivate()
+	assert_false(brush.takes_tab(), "a brush put down takes nothing")
 
 
 func test_radius_steps_are_multiplicative_and_clamped() -> void:

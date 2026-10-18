@@ -40,7 +40,9 @@ signal tool_toggled(tool_id: StringName, on: bool)
 signal sculpt_selected(op: int)
 signal biome_selected(biome_id: String)
 signal paint_selected(surface: String)
-## A Fire intensity tile was picked: its mask byte (FireBrush.EMBERS, FLAMES or BLAZE).
+## A Fire shape tile was picked (FireBrush.Shape), or an intensity tile: its mask byte
+## (FireBrush.EMBERS, FLAMES or BLAZE).
+signal fire_shape_selected(shape: int)
 signal fire_intensity_selected(intensity: int)
 signal water_shape_selected(shape: int)
 signal water_depth_selected(depth: int)
@@ -67,7 +69,8 @@ const TOOL_HINTS := {
 	FireTool.ID:
 	(
 		"Drag to lay fire; it keeps burning and never spreads, trees under it burn to snags and"
-		+ " the ground to ash. Hold Ctrl as you press to put it out; the ash stays."
+		+ " the ground to ash. Hold Ctrl as you press to put it out; the ash stays. Tab: area or"
+		+ " line."
 	),
 	WaterTool.ID:
 	(
@@ -285,6 +288,7 @@ func _build_tool_options(tool_id: StringName) -> Control:
 			fire_pane = FireToolPane.new()
 			fire_pane.get_node("FireHeader").visible = false
 			(fire_pane.get_node("FireHint") as Label).text = String(TOOL_HINTS[tool_id])
+			fire_pane.shape_selected.connect(fire_shape_selected.emit)
 			fire_pane.intensity_selected.connect(fire_intensity_selected.emit)
 			return fire_pane
 		WaterTool.ID:

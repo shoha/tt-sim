@@ -127,12 +127,16 @@ static func is_large(entry: Dictionary) -> bool:
 ## and Esc naming what it puts away (at most five, so with Help beside them the row keeps one
 ## line at 720p with the drawer open). A preset's first key already names it ("Click Topple
 ## trees"), so its Esc says only "Put away" and its keys stay short;
-## `sculpt_tile` names the Sculpt drag, `water_shape` the Water drag.
+## `sculpt_tile` names the Sculpt drag, `shape` the shape of a brush with two (Water's
+## WaterBrush.Shape, Fire's FireBrush.Shape; -1: its default): its drag, and Tab naming the
+## shape it switches to, in the slot the others give Ctrl (the pane's gesture line says what
+## Ctrl does).
 static func hints_for(
-	tool_id: StringName, sculpt_tile: int = HeightBrush.RAISE, water_shape: int = 0
+	tool_id: StringName, sculpt_tile: int = HeightBrush.RAISE, shape: int = -1
 ) -> Array[Dictionary]:
 	var rows: Array = []
 	var size := "Size"
+	var tab := InputProfile.label(&"brush_shape")
 	match tool_id:
 		BiomeTool.ID:
 			rows = [["Left-drag", "Paint biome"]]
@@ -149,10 +153,15 @@ static func hints_for(
 		PaintTool.ID:
 			rows = [["Left-drag", "Lay surface"], ["Ctrl+left-drag", "Erase paint"]]
 		FireTool.ID:
-			rows = [["Left-drag", "Lay fire"], ["Ctrl+left-drag", "Put out fire"]]
+			if shape == FireBrush.Shape.LINE:
+				rows = [["Left-drag", "Draw a line of fire"], [tab, "Area"]]
+			else:
+				rows = [["Left-drag", "Lay fire"], [tab, "Line"]]
 		WaterTool.ID:
-			var drag := "Paint pond" if water_shape == WaterBrush.Shape.POND else "Draw river"
-			rows = [["Left-drag", drag], ["Ctrl+left-drag", "Erase water"]]
+			if shape == WaterBrush.Shape.POND:
+				rows = [["Left-drag", "Paint pond"], [tab, "River"]]
+			else:
+				rows = [["Left-drag", "Draw river"], [tab, "Pond"]]
 			size = "Width"
 		BridgeTool.ID:
 			rows = [["Left-drag", "Lay a crossing"], ["Ctrl+click", "Remove one"]]
@@ -205,6 +214,9 @@ func setup(lpc: LevelPlayController, events_pane: EventsPane) -> void:
 	pane.sculpt_selected.connect(_on_sculpt_selected)
 	pane.biome_selected.connect(_on_biome_selected)
 	pane.paint_selected.connect(_on_paint_selected)
+	pane.fire_shape_selected.connect(
+		func(shape: int) -> void: _set_mode(FireTool.ID, "shape", shape)
+	)
 	pane.fire_intensity_selected.connect(
 		func(intensity: int) -> void: _set_mode(FireTool.ID, "intensity", intensity)
 	)
@@ -393,6 +405,7 @@ func _wired_brush() -> BrushTool:
 				if armed != &"":
 					stroke_started.emit()
 		)
+		_brush.shape_toggled.connect(_on_shape_toggled)
 	var edits := _lpc.live_edits
 	if edits != _edits:
 		if is_instance_valid(_edits) and _edits.history.recorded.is_connected(_on_recorded):
@@ -451,7 +464,7 @@ func _set_armed(tool_id: StringName) -> void:
 func _show_hints() -> void:
 	if armed != &"":
 		var sculpt := SculptTool.of(_brush).tile
-		var shape := WaterTool.of(_brush).shape
+		var shape := FireTool.of(_brush).shape if armed == FireTool.ID else WaterTool.of(_brush).shape
 		UIManager.set_tool_hints(hints_for(armed, sculpt, shape))
 		return
 	var map := _lpc.get_game_map() if _lpc != null else null
@@ -509,6 +522,16 @@ func _set_mode(tool_id: StringName, field: String, value: Variant, arm: bool = t
 ## brush put down with a right click.
 func _pick_again(tool_id: StringName) -> void:
 	pick(tool_id)
+
+
+## Tab switched the armed brush's shape (Water, Fire): its pane's tiles and the hint bar
+## follow, without the tiles re-emitting.
+func _on_shape_toggled() -> void:
+	if pane != null and pane.water_pane != null:
+		pane.water_pane.select_shape(WaterTool.of(_brush).shape)
+	if pane != null and pane.fire_pane != null:
+		pane.fire_pane.select_shape(FireTool.of(_brush).shape)
+	_show_hints()
 
 
 func _on_brush_toggled(active: bool) -> void:

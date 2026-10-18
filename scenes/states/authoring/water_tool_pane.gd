@@ -1,7 +1,8 @@
 class_name WaterToolPane
 extends VBoxContainer
 
-## The Water tool's pane in AuthoringPanel (phase 4, P4-4): River and Pond tiles, Ankle /
+## The Water tool's pane in AuthoringPanel (phase 4, P4-4): River and Pond tiles (ShapeField,
+## which Tab switches too: select_shape() follows it), Ankle /
 ## Waist / Deep tiles with a hint line saying what the depth means for tokens, and an Advanced
 ## foldout with the exact width and flow speed (values hidden, like the other panes). No
 ## numbers in the main flow: the width is Shift+wheel, and the depth a tile. On a dressed
@@ -16,12 +17,12 @@ signal width_changed(width: float)
 signal speed_changed(speed: float)
 
 const TILE_SIZE := Vector2(64, 56)
+## The Shape field's tiles (ShapeField: the line shape first, its icons ShapeField's).
 const SHAPE_TILES: Array[Dictionary] = [
 	{
 		"shape": WaterBrush.Shape.RIVER,
 		"id": &"water_river",
 		"label": "River",
-		"icon": "ripple",
 		"tooltip":
 		"Draw a river: it flows the way you draw it, always downhill; a steep drop makes a waterfall",
 	},
@@ -29,7 +30,6 @@ const SHAPE_TILES: Array[Dictionary] = [
 		"shape": WaterBrush.Shape.POND,
 		"id": &"water_pond",
 		"label": "Pond",
-		"icon": "circle-dashed",
 		"tooltip": "Paint a pond or a lake: still water in a basin",
 	},
 ]
@@ -87,7 +87,7 @@ func _init() -> void:
 	add_child(header)
 	_hint = _caption("WaterHint", HINT)
 	add_child(_hint)
-	shape_field = _tiles("WaterShapeField", "Shape", SHAPE_TILES, "tooltip")
+	shape_field = ShapeField.build("WaterShapeField", SHAPE_TILES[0], SHAPE_TILES[1])
 	shape_field.tiles.select(&"water_river")
 	shape_field.tiles.selection_changed.connect(
 		func(id: StringName) -> void:
