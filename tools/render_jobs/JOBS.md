@@ -714,7 +714,11 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   30-34) at z8 and home and 7.6 (20.0) at sunset z20, about production's own frame against
   itself 0.24 s later (night z8 burst frames 0 and 23: 10.2, RMS 31.9), the difference on the
   flame shapes (the per-fire seed re-rolls each drawing), the trees' sway and the smoke's lobes.
-  `pdiff`'s `width` takes both frames down first (a low-pass compare).
+  `pdiff`'s `width` takes both frames down first (a low-pass compare). Card fire-prod-c5c added
+  the burning map under the `hell` and `ethereal` presets (`hell_home`, `hell_z8`,
+  `ethereal_home`, `ethereal_z8`), each with a `_oldglow` twin on the same held frame (`glow.gd
+  shot` with the old glow variant), in `sheet_presets` (production left, old glow right; no r6
+  frame exists for those presets); `--only "hell_*,ethereal_*"` runs just those.
   It writes to `render_jobs/firefeat_look`. The probe's `info` logs the fires shown and planned,
   the fire book's state and the ground bake's bytes and frame (8,128,512 bytes over 63 m on this
   level); `scale` sets `Engine.time_scale` (the shaders' clock and a burst's spacing follow it).
@@ -735,9 +739,15 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   then `glow0_home` and `glow2_home` (the Color pane's Glow slider at 0 and 2 through
   `glow.gd env`). The sheets put an old set beside the new: run once with `--out
   render_jobs/firefeat_glow_old` before a glow change, then again with no flag after;
-  `sheet_<sky>` (home over z8) and `sheet_slider` (0, the preset's value, 2), old left. Its last
-  step, `glow.gd cleanup {folder: "_firefeat_glow"}`, deletes only that level (`fire.gd cleanup`
-  would take `_firefeat_look` too), so every run builds it afresh (`--saved` finds no level).
+  `sheet_<sky>` (home over z8) and `sheet_slider` (0, the preset's value, 2), old left.
+  `stats.txt` (`glow.gd stats`, card fire-prod-c5c): per view old | new, the mean luma, mean
+  saturation, contrast (the luma's standard deviation) and the luma's 50th and 98th percentiles,
+  and new - old (the old set's full-size frames taken down to the run's size), then the slider's
+  lift over no glow. Its last step, `glow.gd cleanup {folder: "_firefeat_glow"}`, deletes only
+  that level (`fire.gd cleanup` would take `_firefeat_look` too), so every run builds it afresh
+  (`--saved` finds no level). For a calibration, `glow.gd shot` with `specs` captures named glow
+  variants ("+key=value" suffixes on `new` or `old`, `glow.gd variant`) on one frame, and `stats`
+  compares them; card C5c's scratch jobs did that on a kept `_firefeat_glow` with `--saved`.
 - `jobs/fire_smoke_book.json`: bakes the persistent fire's smoke book once, offline (card
   fire-prod-c5a; `probes/fire_smoke_book.gd`; `tools/fire_sim/README.md`). In the real window (a
   headless run draws nothing) it draws `tools/fire_sim/fire_smoke_book_bake.gdshader` into one
