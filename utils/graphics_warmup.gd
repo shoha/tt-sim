@@ -29,7 +29,6 @@ const COVERED_SHADERS := [
 	"res://shaders/event_puff.gdshader",
 	"res://shaders/fire_field_smoke.gdshader",
 	"res://shaders/fire_flames.gdshader",
-	"res://shaders/fire_glow_bake.gdshader",
 	"res://shaders/fire_ground_bake.gdshader",
 	"res://shaders/fire_smoke.gdshader",
 	"res://shaders/grid_overlay.gdshader",

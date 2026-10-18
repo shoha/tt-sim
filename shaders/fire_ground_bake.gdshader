@@ -1,21 +1,27 @@
 shader_type canvas_item;
-// The ground fire's static part, baked (FireNoiseBake; card F4b-4): everything of
-// fire_glow.gdshaderinc that does not change with time, worked out from the fire mask, the
-// flames' rasters and the broad noise fields (fire_glow_noise.gdshaderinc) at each texel's
-// centre. One 2D SubViewport, three tiles side by side over the same frame; a refresh redraws
-// only the rectangle its re-planned blocks reach (the viewport is never cleared). Each tile
-// holds four fields, the arguments of the ground's thresholds rather than their results, so
-// an edge keeps its width at the bake's spacing:
-//   A: the burn (GLOW_BURN_RANGE; 0 where the mask has no fire within the early-out's reach),
+// The ground fire's sim bake (FireNoiseBake; cards F4b-4 and ground-cost): everything of
+// fire_glow.gdshaderinc that does not change with time, worked out at each texel's centre. One 2D
+// SubViewport, two tiles side by side over the same frame; a refresh redraws only the rectangle
+// its re-planned blocks reach (the viewport is never cleared). Each texel first works out the
+// static fields from the fire mask, the flames' rasters and the broad noise fields
+// (fire_glow_noise.gdshaderinc), and the fine noise fields (glow_fine_fields) inline:
+//   a: the burn (GLOW_BURN_RANGE; 0 where the mask has no fire within the early-out's reach),
 //      the dried band's argument (GLOW_DRY_RANGE, without the tufts), the dried band's width
 //      noise and the fire's temperature (0..1 over the ember band and up);
-//   B: the char's warm drift (its weight), the dark blotches' noise, the ash's argument
+//   b: the char's warm drift (its weight), the dark blotches' noise, the ash's argument
 //      (GLOW_ASH_RANGE) and the room the ash has between the clumps;
-//   C: the feet's pools, the flames' crowding, the cracks' strength and the breathing's phase.
-// Written as is (no blending), in RGBA8.
+//   c: the feet's pools, the flames' crowding, the cracks' strength and the breathing's phase;
+// then fire_sim_bake (fire_glow.gdshaderinc) turns them into the ground's terms, the tile's
+// share of which it writes:
+//   tile 0, the albedo terms: the char's weight, the dried band's mix, the scorch, the char's tone;
+//   tile 1, the glow terms: sqrt(glow / FIRE_SIM_GLOW_MAX) before the breathing, and the
+//      breathing's phase.
+// Both are 0 where nothing burns or dries. Written as is (no blending), in RGBA8.
 render_mode unshaded, blend_disabled;
 
-#include "res://shaders/fire_glow_noise.gdshaderinc"
+// fire_glow.gdshaderinc brings fire_glow_noise.gdshaderinc and fire_sim_bake (its uniforms are
+// unused here).
+#include "res://shaders/fire_glow.gdshaderinc"
 
 // One tile's frame: the map-frame XZ of its corner and its size in metres, and its texels.
 uniform vec4 rect = vec4(0.0, 0.0, 1.0, 1.0);
@@ -27,8 +33,6 @@ uniform vec2 grid_origin = vec2(0.0);
 uniform vec2 grid_step = vec2(0.25);
 uniform sampler2D fire_heat_map : hint_default_black, filter_linear, repeat_disable;
 uniform float fire_heat_step = 0.5;
-// How much of the flames' bed draws (the look probe compares the flames without it).
-uniform float fire_bed = 1.0;
 
 // The ember band's start as a mask value (FireField.EMBER_MIN over 255).
 const float FIRE_EMBER_T = 0.157;
@@ -109,7 +113,7 @@ void fragment() {
 		float heat = max(bake_bspline(fire_mask_map, uv).r, wide);
 		vec2 heat_grid = vec2(textureSize(fire_heat_map, 0));
 		vec2 heat_uv = ((at - grid_origin) / fire_heat_step + 0.5) / heat_grid;
-		vec2 rasters = bake_bspline(fire_heat_map, heat_uv).rg * fire_bed;
+		vec2 rasters = bake_bspline(fire_heat_map, heat_uv).rg;
 		float flame_heat = rasters.x;
 		float pool = rasters.y;
 		// The char's edge: eroded by a broad noise and a finer one; under flames always burnt.
@@ -136,5 +140,11 @@ void fragment() {
 		float crack = smoothstep(0.03, 0.2, pool + flame_heat) * (0.38 + 0.3 * crowd + 0.2 * pool);
 		c = vec4(clamp(pool, 0.0, 1.0), crowd, crack, fields_b.w);
 	}
-	COLOR = tile == 0 ? a : (tile == 1 ? b : c);
+	// The ground's terms where anything burns or dries, nothing elsewhere.
+	vec4 albedo_terms = vec4(0.0);
+	vec4 glow_terms = vec4(0.0);
+	if (a.x + a.y > 0.0) {
+		fire_sim_bake(a, b, c, glow_fine_fields(at), albedo_terms, glow_terms);
+	}
+	COLOR = tile == 0 ? albedo_terms : glow_terms;
 }

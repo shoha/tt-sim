@@ -281,30 +281,48 @@ func test_the_warmup_covers_the_fire_shaders() -> void:
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_flames.gdshader")
 	assert_does_not_have(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_field.gdshader")
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_field_smoke.gdshader")
-	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_glow_bake.gdshader")
+	assert_does_not_have(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_glow_bake.gdshader")
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_ground_bake.gdshader")
 	var sources := "\n".join(GraphicsWarmup.shader_sources())
 	assert_true(sources.contains("res://shaders/fire_glow.gdshaderinc\n"), "the ground's glow")
 
 
-func test_the_ground_bakes_cover_the_map_at_their_spacing() -> void:
+func test_the_ground_bake_covers_the_map_at_its_spacing() -> void:
+	var per_m := FireNoiseBake.SIM_PER_M
+	assert_eq(per_m, 16.0, "the fine noise's spacing")
 	var extent := Vector2(60.96, 45.0)
-	var size := FireNoiseBake.tile_size(extent, 8.0)
+	var size := FireNoiseBake.tile_size(extent, per_m)
 	var span := extent + Vector2.ONE * FireNoiseBake.MARGIN_M * 2.0
-	assert_eq(size, Vector2i(ceili(span.x * 8.0), ceili(span.y * 8.0)), "8 texels a metre")
-	var rect := FireNoiseBake.rect_for(extent, 8.0)
-	assert_almost_eq(rect.z, size.x / 8.0, 1e-4, "whole texels")
+	assert_eq(size, Vector2i(ceili(span.x * per_m), ceili(span.y * per_m)), "16 texels a metre")
+	var rect := FireNoiseBake.rect_for(extent, per_m)
+	assert_almost_eq(rect.z, size.x / per_m, 1e-4, "whole texels")
 	assert_almost_eq(rect.x, -rect.z * 0.5, 1e-4, "centred on the map")
 	assert_lte(rect.x, -span.x * 0.5 + 1e-4, "the map and its margin inside")
 	assert_lte(rect.y, -span.y * 0.5 + 1e-4)
-	var fine := FireNoiseBake.rect_for(extent, FireNoiseBake.FINE_PER_M)
-	var fine_px := FireNoiseBake.tile_size(extent, FireNoiseBake.FINE_PER_M)
-	assert_almost_eq(fine.z, fine_px.x / FireNoiseBake.FINE_PER_M, 1e-4, "the fine bake too")
 	var big := Vector2(400.0, 300.0)
-	assert_eq(FireNoiseBake.tile_size(big, 8.0), Vector2i(FireNoiseBake.MAX_PX, FireNoiseBake.MAX_PX))
-	var big_rect := FireNoiseBake.rect_for(big, 8.0)
+	var most := Vector2i(FireNoiseBake.MAX_PX, FireNoiseBake.MAX_PX)
+	assert_eq(FireNoiseBake.tile_size(big, per_m), most)
+	var big_rect := FireNoiseBake.rect_for(big, per_m)
 	assert_almost_eq(big_rect.z, 402.0, 1e-4, "a coarser bake over the same span")
 	assert_almost_eq(big_rect.w, 302.0, 1e-4)
+
+
+func test_the_bake_is_two_rgba8_tiles() -> void:
+	var extent := Vector2(60.96, 60.96)
+	var bake := FireNoiseBake.new()
+	add_child_autofree(bake)
+	assert_eq(bake.memory_bytes(), 0, "nothing before the first bake")
+	bake.bake(extent)
+	var tile := FireNoiseBake.tile_size(extent, FireNoiseBake.SIM_PER_M)
+	assert_eq(tile, Vector2i(1008, 1008), "a 200 ft map at 16 texels a metre")
+	assert_eq(FireNoiseBake.TILES, 2, "the albedo terms and the glow terms")
+	var viewports := bake.find_children("*", "SubViewport", false, false)
+	assert_eq(viewports.size(), 1, "one viewport, no static or fine bake beside it")
+	assert_eq((viewports[0] as SubViewport).size, Vector2i(tile.x * 2, tile.y), "side by side")
+	assert_eq(bake.memory_bytes(), tile.x * 2 * tile.y * 4, "two RGBA8 tiles")
+	assert_eq(bake.memory_bytes(), 8128512, "7.75 MiB")
+	assert_eq(bake.sim_rect(), FireNoiseBake.rect_for(extent, FireNoiseBake.SIM_PER_M))
+	assert_null(bake.sim_texture(), "unbound until drawn")
 
 
 func test_a_refresh_redraws_the_bake_only_where_it_reaches() -> void:
@@ -314,17 +332,31 @@ func test_a_refresh_redraws_the_bake_only_where_it_reaches() -> void:
 	var r := MaskStroke.block_rect(doc, Vector2i(1, 1))
 	var step := doc.sample_step()
 	var low := -doc.extent_m() * 0.5 + Vector2(r.position) * step
+	assert_eq(FireField.BAKE_REACH_M, 8.0)
 	assert_almost_eq(region.position.x, low.x - FireField.BAKE_REACH_M, 1e-4, "the block, grown")
 	assert_almost_eq(region.size.x, r.size.x * step.x + FireField.BAKE_REACH_M * 2.0, 1e-4)
-	var frame := FireNoiseBake.rect_for(doc.extent_m(), 8.0)
-	var size := FireNoiseBake.tile_size(doc.extent_m(), 8.0)
+	var per_m := FireNoiseBake.SIM_PER_M
+	var frame := FireNoiseBake.rect_for(doc.extent_m(), per_m)
+	var size := FireNoiseBake.tile_size(doc.extent_m(), per_m)
 	var box := FireNoiseBake.texels_of(region, frame, size)
 	assert_true(box.has_area())
 	assert_true(Rect2i(Vector2i.ZERO, size).encloses(box), "within the tile")
-	var expect := Vector2i(((region.position - Vector2(frame.x, frame.y)) * 8.0).floor())
+	var expect := Vector2i(((region.position - Vector2(frame.x, frame.y)) * per_m).floor())
 	assert_eq(box.position, expect.max(Vector2i.ZERO), "whole texels from the frame's corner")
 	var everything := FireNoiseBake.texels_of(Rect2(-1000, -1000, 2000, 2000), frame, size)
 	assert_eq(everything, Rect2i(Vector2i.ZERO, size), "clipped to the tile")
+	# The bake: drawn whole first, then a refresh redraws that box in both tiles.
+	var bake := FireNoiseBake.new()
+	add_child_autofree(bake)
+	bake.bake(doc.extent_m())
+	var albedo := bake.get_node("Sim/Rect0") as ColorRect
+	var glow := bake.get_node("Sim/Rect1") as ColorRect
+	assert_eq(Rect2i(albedo.get_rect()), Rect2i(Vector2i.ZERO, size), "whole at first")
+	bake._on_drawn()
+	bake.rebake(region)
+	assert_eq(Rect2i(albedo.get_rect()), box, "the albedo tile over the region")
+	var beside := Rect2i(box.position + Vector2i(size.x, 0), box.size)
+	assert_eq(Rect2i(glow.get_rect()), beside, "the glow tile beside it")
 
 
 func test_a_worker_refresh_plans_what_the_main_thread_does() -> void:

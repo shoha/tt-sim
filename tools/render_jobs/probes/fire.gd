@@ -378,6 +378,9 @@ static func _info(doc: MapDocument, field: FireField) -> String:
 		% [field.flame_count(), planned, FireField.MAX_FLAMES, burning, bands[1], bands[2], bands[3]]
 	)
 	out += "; book %s" % String(FireLook.Book.keys()[FireLook.book_state()]).to_lower()
+	var bake := field.get_node_or_null(FireNoiseBake.NODE_NAME) as FireNoiseBake
+	if bake != null:
+		out += "; ground bake %d bytes over %s m" % [bake.memory_bytes(), str(bake.sim_rect())]
 	if field.lights() == null:
 		return out + "; no lights or smoke"
 	var gate := FireLook.light_gate(FoliageLight.last_sun)

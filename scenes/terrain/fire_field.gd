@@ -59,8 +59,9 @@ extends Node3D
 ## over up to eight of the largest blaze clusters. Both are children, made with the first fire
 ## and freed with the map; their per-frame work is the lights' flicker (the smoke moves in its
 ## shader). The ground's fire term reads everything of it that does not change with time from
-## bakes (FireNoiseBake, cards F4b-3 and F4b-4), also a child, made with the first fire mask and
-## bound once drawn; each refresh redraws the static bake over the region it re-planned.
+## the sim bake (FireNoiseBake, cards F4b-4 and ground-cost), also a child, made with the first
+## fire mask and bound once drawn; each refresh redraws it over the region it re-planned, and the
+## field's leaving the tree lets the ground go of it.
 ##
 ## A refresh's pure half (FirePlanJob: the re-plan, the cluster sums, the rasters) runs on a
 ## WorkerThreadPool task with `use_worker` (the authoring and play-time editors set it, as they
@@ -154,7 +155,7 @@ const HEAT_GROW := 13
 ## Texels round a block its flames' feet read the heat raster at (each drawn flame carries the
 ## heat at its foot): FireFires.spill_m and the bilinear read's next texel.
 const FEET_GROW := 5
-## Metres the static bake's redraw reaches past a refresh's blocks: the rasters' cleared rect
+## Metres the sim bake's redraw reaches past a refresh's blocks: the rasters' cleared rect
 ## (HEAT_GROW texels) and their B-spline, and the ground's mask reads (the wander, the fill's
 ## taps and the early-out's rings, under 6 m together).
 const BAKE_REACH_M := 8.0
@@ -202,6 +203,9 @@ func _enter_tree() -> void:
 	FireLook.hold_book()
 	if not _plans.is_empty():
 		FireLook.request_book()
+	# Back in the tree (_exit_tree let the ground go of the bake).
+	if is_node_ready():
+		_bind_glow()
 
 
 func _ready() -> void:
@@ -220,6 +224,7 @@ func _exit_tree() -> void:
 	# A job's task must not outlive the field that holds it.
 	finish_work()
 	FireLook.drop_book()
+	_unbind_glow()
 
 
 ## Re-plans the whole map (after a load or a whole-document change), at once on this thread.
@@ -731,37 +736,52 @@ func _forward() -> Vector3:
 	return (global_basis.inverse() * -camera.global_basis.z).normalized()
 
 
-## The ground's glow follows the mask: bound to the sibling AuthoredTerrain's material.
+## The ground's glow follows the mask: the sim bake bound to the sibling AuthoredTerrain's
+## material.
 func _bind_glow() -> void:
-	var parent := get_parent()
-	if parent == null or document == null:
+	var material := _ground_material()
+	if material == null or document == null:
 		return
+	_glow_texture = FireLook.glow_texture(document, _glow_texture)
+	if _glow_texture != null:
+		_ensure_noise()
+	if _noise == null:
+		FireLook.bind_glow(material, null, Vector4.ZERO)
+		return
+	var half := document.extent_m() * 0.5
+	_noise.set_inputs(_glow_texture, _heat_texture, -half, document.sample_step())
+	var sim_map := _noise.sim_texture() if _glow_texture != null else null
+	FireLook.bind_glow(material, sim_map, _noise.sim_rect())
+
+
+## Lets the ground go of this field's bake when it leaves the tree (the last field's leaving
+## lets go of the book too): the terrain's material samples it no longer.
+func _unbind_glow() -> void:
+	var material := _ground_material()
+	if material == null or _noise == null:
+		return
+	var bound: Variant = material.get_shader_parameter("fire_sim_map")
+	if FireLook.live_fields() == 0 or (bound != null and bound == _noise.sim_texture()):
+		FireLook.bind_glow(material, null, Vector4.ZERO)
+
+
+## The sibling AuthoredTerrain's material (null without one).
+func _ground_material() -> ShaderMaterial:
+	var parent := get_parent()
+	if parent == null:
+		return null
 	for child in parent.get_children():
 		var terrain := child as AuthoredTerrain
 		if terrain != null and terrain.get_material() != null:
-			_glow_texture = FireLook.glow_texture(document, _glow_texture)
-			if _glow_texture != null:
-				_ensure_noise()
-			if _noise == null:
-				FireLook.bind_glow(terrain.get_material(), null, Vector4.ZERO, null, Vector4.ZERO)
-				return
-			var half := document.extent_m() * 0.5
-			_noise.set_inputs(_glow_texture, _heat_texture, -half, document.sample_step())
-			FireLook.bind_glow(
-				terrain.get_material(),
-				_noise.static_texture() if _glow_texture != null else null,
-				_noise.static_rect(),
-				_noise.fine_texture(),
-				_noise.fine_rect()
-			)
-			return
+			return terrain.get_material()
+	return null
 
 
-## Bakes the ground fire's fields for the map's extent (FireNoiseBake) the first time the map
+## Bakes the ground fire's terms for the map's extent (FireNoiseBake) the first time the map
 ## has a fire mask, and again when the extent changed; its drawing binds the glow again.
 func _ensure_noise() -> void:
 	var extent := document.extent_m()
-	if _noise != null and _noise.static_rect() == FireNoiseBake.rect_for(extent, _noise.static_per_m):
+	if _noise != null and _noise.sim_rect() == FireNoiseBake.rect_for(extent, FireNoiseBake.SIM_PER_M):
 		return
 	if _noise == null:
 		_noise = FireNoiseBake.new()

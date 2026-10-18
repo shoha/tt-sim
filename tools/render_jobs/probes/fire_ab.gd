@@ -15,16 +15,13 @@ extends RefCounted
 ##   hold {on}         Engine.time_scale 0 (the shaders' TIME, the lights' flicker and the
 ##                     camera stop; the driver's waits count real time meanwhile) or back to 1
 ##   grab {tag}        keeps the raw 3D frame under `tag`
+##   load {tag, path}  keeps the PNG at `path` (an earlier capture, a reference frame) under
+##                     `tag` for pdiff, which takes the larger of two frames down to the smaller
 ##   pdiff {a, b, out, gain}  compares grabs `a` and `b`: the mean, RMS and largest difference
 ##                     (0..255, Image.compute_image_metrics) and the share of pixels any channel
 ##                     of which differs by more than 8 and 24; saves a row for a sheet at
 ##                     <out>.png: a | b | |b - a| x gain (default 4), 640x360 each
 ##   sheet {out}       stacks the rows of every pdiff since the last sheet into <out>.png
-##   bake_before {source}  draws F4b-3's broad noise bake from `source` (main's
-##                     fire_glow_bake.gdshader in a zip) and binds it, with the mask and the
-##                     rasters, under F4b-3's uniform names, so F4b-3's ground term can be patched
-##                     in as a "before" variant (card F4b-4)
-##   density {static, fine}  re-bakes the ground's bakes at these texels a metre (FireNoiseBake)
 
 const PerfProbe := preload("res://tools/render_jobs/probes/fire_perf.gd")
 const GROUND_INC := "res://shaders/authored_ground.gdshaderinc"
@@ -51,25 +48,14 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _pdiff(step)
 		"sheet":
 			return _sheet(String(step.get("out", "user://render_jobs/fire_ab/sheet")))
+		"load":
+			return _load(step)
 	var ctrl: AuthoringController = base.get("_authoring_controller")
 	if ctrl == null or ctrl.editor == null:
 		return "no authoring editor"
 	match action:
 		"patch":
 			return _patch(ctrl, step)
-		"bake_before":
-			return _bake_before(base, ctrl, String(step.get("source", "")))
-		"density":
-			var bake := ctrl.editor.fire_field.get_node_or_null(FireNoiseBake.NODE_NAME) as FireNoiseBake
-			if bake == null:
-				return "no bake"
-			bake.static_per_m = float(step.get("static", FireNoiseBake.STATIC_PER_M))
-			bake.fine_per_m = float(step.get("fine", FireNoiseBake.FINE_PER_M))
-			bake.bake(ctrl.editor.document.extent_m())
-			ctrl.editor.fire_field._bind_glow()
-			return "bake at %.0f / %.0f texels a metre: %.1f MB" % [
-				bake.static_per_m, bake.fine_per_m, bake.memory_bytes() / 1048576.0
-			]
 		"grab":
 			var gm: GameMap = base.get("_game_map")
 			var tag := String(step.get("tag", "a"))
@@ -110,44 +96,6 @@ static func _patch(ctrl: AuthoringController, step: Dictionary) -> String:
 	return "variant %s (%s); %s" % [name, ", ".join(changed), config]
 
 
-## F4b-3's broad noise bake, for a "before" variant of the ground's term that reads it (card
-## F4b-4 baked the term's static part instead): its shader from `source` (main's, a zip path)
-## drawn once into a viewport kept beside the probe's base, bound under F4b-3's uniform names
-## with the mask and rasters that term read.
-static func _bake_before(base: Node, ctrl: AuthoringController, source: String) -> String:
-	var code := _read(source)
-	if code == "":
-		return "no source %s" % source
-	var field := ctrl.editor.fire_field
-	var extent := ctrl.editor.document.extent_m()
-	var size := FireNoiseBake.tile_size(extent, 8.0)
-	var rect := FireNoiseBake.rect_for(extent, 8.0)
-	var viewport := SubViewport.new()
-	viewport.name = "BeforeBake"
-	viewport.disable_3d = true
-	viewport.transparent_bg = true
-	viewport.size = Vector2i(size.x * 2, size.y)
-	var fill := ColorRect.new()
-	fill.size = Vector2(viewport.size)
-	var shader := Shader.new()
-	shader.code = code
-	var mat := ShaderMaterial.new()
-	mat.shader = shader
-	mat.set_shader_parameter("rect", rect)
-	fill.material = mat
-	viewport.add_child(fill)
-	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
-	base.add_child(viewport)
-	var ground := ctrl.editor.terrain.get_material()
-	ground.set_shader_parameter("fire_noise_map", viewport.get_texture())
-	ground.set_shader_parameter("fire_noise_rect", rect)
-	ground.set_shader_parameter("fire_mask_map", field._glow_texture)
-	ground.set_shader_parameter("fire_heat_map", field._heat_texture)
-	ground.set_shader_parameter("fire_heat_step", FireField.HEAT_STEP_M)
-	ground.set_shader_parameter("fire_bed", 1.0)
-	return "F4b-3's bake %s over %s" % [str(viewport.size), str(rect)]
-
-
 ## `part`'s code with variant `spec` (see the header); "" when an edit's text is missing.
 static func _variant_code(part: String, own: String, spec: Dictionary) -> String:
 	var path := GLOW_INC if part == "glow" else String(FILES[part])
@@ -179,13 +127,28 @@ static func _read(path: String) -> String:
 	return text
 
 
+static func _load(step: Dictionary) -> String:
+	var path := String(step.get("path", ""))
+	var image := Image.load_from_file(ProjectSettings.globalize_path(path))
+	if image == null or image.is_empty():
+		return "no image at %s" % path
+	var tag := String(step.get("tag", "a"))
+	_grabs[tag] = image
+	return "loaded %s as %s (%s)" % [path, tag, str(image.get_size())]
+
+
 static func _pdiff(step: Dictionary) -> String:
 	var a: Image = _grabs.get(String(step.get("a", "a")))
 	var b: Image = _grabs.get(String(step.get("b", "b")))
-	if a == null or b == null or a.get_size() != b.get_size():
+	if a == null or b == null:
 		return "no grabs to compare"
 	a = a.duplicate() as Image
 	b = b.duplicate() as Image
+	# A reference frame saved at another size: the larger one taken down to the smaller.
+	var size := a.get_size().min(b.get_size())
+	for image: Image in [a, b]:
+		if image.get_size() != size:
+			image.resize(size.x, size.y, Image.INTERPOLATE_BILINEAR)
 	a.convert(Image.FORMAT_RGB8)
 	b.convert(Image.FORMAT_RGB8)
 	var metrics := a.compute_image_metrics(b, false)
