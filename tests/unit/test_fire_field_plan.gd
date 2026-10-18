@@ -1,11 +1,12 @@
 extends GutTest
 
-## FireField's placement (pure plan_block): deterministic, each lattice point in one block
-## only, nothing below the ember band, nothing on wet or steep ground, heights from the
-## document's triangles; the look card's clumps (scale range, gaps, a blaze's big flames and
-## licks, no flames in the ember band); the bands; the budget shared in proportion past the
-## cap; the LOD half; the warm-up covering the fire's shaders; the ground bakes' frames and
-## redraw region; and a re-plan on a worker landing what the main thread plans.
+## FireField's placement (pure plan_block, FireFires' fires; test_fire_fires has their own
+## rules): deterministic, each fire in one block only, nothing below the ember band, nothing on
+## wet or steep ground, heights from the document's triangles, no flames in the ember band; its
+## trigonometry held in literals; the bands; the budget shared in proportion past the cap; the
+## LOD half; the warm-up covering the fire's shaders; the ground bakes' frames and redraw region;
+## a re-plan on a worker landing what the main thread plans; and a refresh by dabs landing
+## exactly what a rebuild plans (plan_digest and the rasters' bytes).
 
 
 func _doc(cells: int = 20, heat: int = 255) -> MapDocument:
@@ -29,15 +30,22 @@ func _lattice_points(doc: MapDocument) -> float:
 	return doc.extent_m().x * doc.extent_m().y / pow(FireField.FLAME_SPACING_M, 2)
 
 
-## Each flame's height over its band's base height (its clump, big or lick scale).
-func _scales(plan: PackedFloat32Array) -> PackedFloat32Array:
-	var out := PackedFloat32Array()
-	for k in plan.size() / FireField.STRIDE:
-		var o := k * FireField.STRIDE
-		if plan[o + FireField.KIND] == FireField.FLAME:
-			var base := FireField.base_height(plan[o + FireField.INTENSITY])
-			out.append(plan[o + FireField.HEIGHT] / base)
-	return out
+## Sets the mask to `value` over the disc of `radius` metres round document point `at` (a hard
+## dab); returns the samples' rect it covers.
+func _dab(doc: MapDocument, at: Vector2, radius: float, value: int) -> Rect2i:
+	var step := doc.sample_step()
+	var half := doc.extent_m() * 0.5
+	var lo := Vector2i(((at - Vector2.ONE * radius + half) / step).floor())
+	var hi := Vector2i(((at + Vector2.ONE * radius + half) / step).ceil()) + Vector2i.ONE
+	var rect := Rect2i(lo, hi - lo).intersection(Rect2i(0, 0, doc.samples_x(), doc.samples_z()))
+	var mask := doc.fire_mask.duplicate()
+	for z in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			var p := Vector2(x, z) * step - half
+			if p.distance_to(at) <= radius:
+				mask[doc.sample_index(x, z)] = value
+	doc.fire_mask = mask
+	return rect
 
 
 func test_the_plan_is_deterministic_and_burns_where_painted() -> void:
@@ -113,24 +121,6 @@ func test_steep_ground_does_not_burn_and_flames_stand_on_the_ground() -> void:
 		assert_almost_eq(y, (x + half) * 0.2, 0.01, "on the ground")
 
 
-func test_clumps_scale_the_flames_and_leave_gaps() -> void:
-	var doc := _doc(30, 150)
-	var plan := _whole(doc)
-	var scales := _scales(plan)
-	assert_eq(scales.size() * FireField.STRIDE, plan.size(), "a flames band has no sparks")
-	var low := 99.0
-	var high := 0.0
-	for s in scales:
-		low = minf(low, s)
-		high = maxf(high, s)
-	assert_gte(low, FireField.CLUMP_SCALE.x - 0.001, "no flame under the clump range")
-	assert_lte(high, FireField.CLUMP_SCALE.y + 0.001, "no flame over it")
-	assert_gt(high / low, 1.8, "small flames and big ones")
-	var points := _lattice_points(doc)
-	assert_lt(float(scales.size()), points * 0.85, "open ground between the clumps")
-	assert_gt(float(scales.size()), points * 0.35, "but most of a flames band stands")
-
-
 func test_the_ember_band_draws_no_flames_only_sparks() -> void:
 	var doc := _doc(30, 80)
 	var plan := _whole(doc)
@@ -141,29 +131,15 @@ func test_the_ember_band_draws_no_flames_only_sparks() -> void:
 		assert_eq(plan[k * FireField.STRIDE + FireField.KIND], FireField.SPARK, "no flame")
 
 
-func test_weak_flames_have_fewer_tongues_than_a_blaze() -> void:
-	var weak := _whole(_doc(20, FireField.FLAME_MIN + 5))
-	for k in weak.size() / FireField.STRIDE:
-		var layout := floori(weak[k * FireField.STRIDE + FireField.SEED])
-		assert_lte(layout, FireField.LAYOUT_TWO, "one or two tongues")
-	var blaze := _whole(_doc(20, 255))
-	var crowns := 0
-	for k in blaze.size() / FireField.STRIDE:
-		crowns += 1 if floori(blaze[k * FireField.STRIDE + FireField.SEED]) == 3 else 0
-	assert_gt(crowns, 0, "a blaze has crowns of four tongues")
-
-
-func test_a_blaze_has_big_flames_with_licks_at_their_feet() -> void:
-	var plan := _whole(_doc(30, 255))
-	var scales := _scales(plan)
-	var big := 0
-	var licks := 0
-	for s in scales:
-		big += 1 if s >= FireField.BIG_SCALE.x - 0.001 else 0
-		licks += 1 if s <= FireField.LICK_SCALE.y + 0.001 else 0
-	assert_gt(big, 0, "big flames")
-	assert_lt(big, scales.size() / 5, "one per clump, not everywhere")
-	assert_gt(licks, big, "licks around them")
+func test_the_plans_trigonometry_is_held_in_literals() -> void:
+	var tolerance := Vector2.ONE * 1e-6
+	var turn := FireField.CLUMP_TURN
+	assert_almost_eq(FireField.CLUMP_TURN_A, Vector2(cos(turn.x), sin(turn.x)), tolerance)
+	assert_almost_eq(FireField.CLUMP_TURN_B, Vector2(cos(turn.y), sin(turn.y)), tolerance)
+	var p := Vector2(3.7, -11.2)
+	assert_almost_eq(FireField._turn(p, FireField.CLUMP_TURN_A), p.rotated(turn.x), tolerance * 20)
+	var flat := cos(deg_to_rad(FireField.STEEP_DEG))
+	assert_almost_eq(FireField.STEEP_NORMAL_Y, flat, 1e-9, "the cliff rule's cosine")
 
 
 func test_bands() -> void:
@@ -397,3 +373,55 @@ func test_a_worker_refresh_plans_what_the_main_thread_does() -> void:
 	assert_eq(threaded._heat, at_once._heat, "the same rasters")
 	assert_eq(threaded._pools, at_once._pools)
 	assert_eq(threaded._cells, at_once._cells, "the same cluster sums")
+	assert_eq(threaded.plan_digest(), at_once.plan_digest(), "the same digest")
+
+
+func test_a_refresh_lands_exactly_what_a_rebuild_plans() -> void:
+	var doc := _doc(30, 0)
+	var half := doc.extent_m() * 0.5
+	var block_m := MaskStroke.BLOCK * doc.sample_step().x
+	# Block lines (metres) near the middle of the map.
+	var a := -half.x + block_m * 2.0
+	var b := a + block_m
+	# A strong flames band over most of the map (big fires), a blaze across a block line.
+	_dab(doc, Vector2.ZERO, 17.0, 190)
+	_dab(doc, Vector2(a, b - 4.0), 3.0, 235)
+	var field := FireField.create(doc)
+	add_child_autofree(field)
+	var tallest := 0.0
+	for block in field._plans:
+		var plan: PackedFloat32Array = field._plans[block]
+		for k in plan.size() / FireField.STRIDE:
+			tallest = maxf(tallest, plan[k * FireField.STRIDE + FireField.HEIGHT])
+	assert_gt(tallest, 2.9, "big fires beside the dabs")
+	# [centre, radius, mask value]: inside a block, on a block line, across a corner, putting
+	# out the edge of a big fire across a line, a blaze across a line, a weak flame's corner;
+	# then small dabs about 3 m short of a block line, whose fires' neighbourhoods reach across.
+	var dabs := [
+		[Vector2((a + b) * 0.5, (a + b) * 0.5), 2.0, 0],
+		[Vector2(a, (a + b) * 0.5 + 1.0), 2.0, 199],
+		[Vector2(b, b), 2.5, 120],
+		[Vector2(b + 0.6, a - 3.0), 1.5, 0],
+		[Vector2(b, a + 2.0), 2.0, 240],
+		[Vector2(a - 0.3, a - 0.2), 1.0, 150],
+		[Vector2(a + 4.3, -6.0), 1.2, 0],
+		[Vector2(a + 4.3, 1.0), 1.2, 199],
+		[Vector2(b - 4.4, b - 5.0), 1.0, 0],
+		[Vector2(-3.0, a + 4.2), 1.3, 120],
+	]
+	for dab: Array in dabs:
+		var label := "dab at %s r %.1f to %d" % [str(dab[0]), dab[1], dab[2]]
+		field.refresh(_dab(doc, dab[0], dab[1], dab[2]))
+		var fresh: FireField = autofree(FireField.create(doc))
+		assert_eq(field.plan_digest(), fresh.plan_digest(), label)
+		assert_eq(field._plans.size(), fresh._plans.size(), label + ": the burning blocks")
+		for block in fresh._plans:
+			assert_eq(field._plans.get(block), fresh._plans[block], label + ": " + str(block))
+		assert_eq(field._heat.to_byte_array(), fresh._heat.to_byte_array(), label + ": heat")
+		assert_eq(field._pools.to_byte_array(), fresh._pools.to_byte_array(), label + ": pools")
+		assert_eq(field._counts, fresh._counts, label + ": the shown flames")
+		for block in fresh._chunks:
+			var mine := (field._chunks[block] as MultiMeshInstance3D).multimesh.buffer
+			var theirs := (fresh._chunks[block] as MultiMeshInstance3D).multimesh.buffer
+			assert_eq(theirs.size(), int(fresh._counts[block]) * FireLook.INSTANCE_FLOATS)
+			assert_eq(mine, theirs, label + ": the drawn flames of " + str(block))

@@ -22,8 +22,9 @@ extends "res://tests/net/enet_late_joiner.gd"
 ##   and the undo (of the lower: the before side of a height op) is
 ##   PlayEvents.undo, Ctrl+Z's path. After each it waits for its map to settle and its ground
 ##   follower (LiveEditGround) to set the tokens down, and writes its MapFingerprint (with its
-##   fire key), log length, Scout's height and the flames its FireField draws; client compares
-##   them all. Then it drops Hero onto the raised ground,
+##   fire key), log length, Scout's height, the flames its FireField draws and the field's
+##   plan_digest (its plans and rasters, byte for byte); client compares them all. Then it drops
+##   Hero onto the raised ground,
 ##   writes the final fingerprint and the hero's resting position, and lets client2 join. It
 ##   finishes when both clients reported.
 ## client: joins at the start and lands in the room, then at the table; after each op, once
@@ -32,7 +33,8 @@ extends "res://tests/net/enet_late_joiner.gd"
 ##   raise: the host's re-grounding reached it).
 ## client2: joins at the table after every op (a late joiner: the map file is the original,
 ##   the log brings the edits); once its live edits have caught up and its map has settled,
-##   its MapFingerprint and its flames must equal the host's final ones and Hero and Scout must
+##   its MapFingerprint, its flames and its fire digest must equal the host's final ones (the
+##   host refreshed its fire stroke by stroke) and Hero and Scout must
 ##   rest on its ground where the host's do.
 ##
 ## Run: godot --headless --path D:/dev/tt-sim res://tests/net/net_launcher.tscn --
@@ -159,6 +161,7 @@ func _map_still() -> bool:
 	var root := _lpc().loaded_map_instance
 	var water := root.get_node_or_null(AuthoredWater.NODE_NAME) as AuthoredWater
 	var ground := edits.get_node_or_null("LiveEditGround") as LiveEditGround
+	var fire := edits.editor.fire_field
 	_watch_events()
 	var busy := (
 		not edits.is_settled()
@@ -168,6 +171,7 @@ func _map_still() -> bool:
 		or edits.editor.scatter.is_growing()
 		or edits.editor.props.is_growing()
 		or (water != null and water.is_refreshing())
+		or (is_instance_valid(fire) and fire.is_working())
 	)
 	_still = 0 if busy else _still + 1
 	return _still >= STILL_FRAMES
@@ -181,6 +185,12 @@ func _fingerprint() -> Dictionary:
 func _flames() -> int:
 	var field := _edits().editor.fire_field
 	return field.flame_count() if is_instance_valid(field) else -1
+
+
+## This peer's FireField.plan_digest (its plans and rasters; "" without a field).
+func _fire_digest() -> String:
+	var field := _edits().editor.fire_field
+	return field.plan_digest() if is_instance_valid(field) else ""
 
 
 ## Counts the terrain events this peer's board played (each start of one while none was).
@@ -240,6 +250,7 @@ func _process_host() -> void:
 						"ops": edits.op_log.size(),
 						"scout": _scout_y(),
 						"flames": _flames(),
+						"fire_digest": _fire_digest(),
 					}
 				)
 				_log("op %d (%s) logged as %d ops" % [_op, OPS[_op], edits.op_log.size()])
@@ -469,6 +480,7 @@ func _host_check_landing() -> void:
 			"hero": {"x": at.x, "y": at.y, "z": at.z},
 			"scout": _scout_y(),
 			"flames": _flames(),
+			"fire_digest": _fire_digest(),
 		}
 	)
 	_log("hero %s rests at %s; the late joiner may join" % [_hero_id, str(at)])
@@ -569,6 +581,7 @@ func _client_follow_op() -> void:
 		"scout_ok": scout_off <= GROUND_TOLERANCE_M,
 		"flames": _flames(),
 		"flames_ok": _flames() == int(host.get("flames", -2)),
+		"fire_digest_ok": _fire_digest() == str(host.get("fire_digest", "-")),
 	}
 	_log("%s: %s" % [OPS[_op], str(_result[OPS[_op]])])
 	_mark(step)
@@ -578,7 +591,7 @@ func _client_follow_op() -> void:
 	var ok := _edits().problem == ""
 	for label in OPS:
 		ok = ok and (_result[label].mismatch as Array).is_empty() and bool(_result[label].scout_ok)
-		ok = ok and bool(_result[label].flames_ok)
+		ok = ok and bool(_result[label].flames_ok) and bool(_result[label].fire_digest_ok)
 	# Every terrain event played on this board too, before its op landed.
 	ok = ok and int(_result.get("events_played", 0)) == EVENT_OPS.size()
 	_result["pass"] = ok
@@ -639,11 +652,13 @@ func _joiner_check() -> void:
 	_result["host_hero_y"] = snappedf(host_y, 0.001)
 	_result["scout_y"] = snappedf(_scout_y(), 0.001)
 	_result["flames"] = _flames()
+	_result["fire_digest_ok"] = _fire_digest() == str(host.get("fire_digest", "-"))
 	# A late joiner gets the events' ops only: no motion plays on its board.
 	_result["pass"] = (
 		mismatch.is_empty()
 		and edits.problem == ""
 		and _flames() == int(host.get("flames", -2))
+		and bool(_result["fire_digest_ok"])
 		and int(_result.get("events_played", 0)) == 0
 		and absf(_scout_y() - float(host.get("scout", NAN))) <= GROUND_TOLERANCE_M
 		and absf(at.y - host_y) <= GROUND_TOLERANCE_M

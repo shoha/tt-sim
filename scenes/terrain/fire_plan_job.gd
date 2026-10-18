@@ -3,8 +3,10 @@ extends RefCounted
 
 ## The pure half of a FireField refresh (card F4b-4; docs/PERFORMANCE.md "Fire (F4)"): a brush
 ## dab's re-plan held the main thread 15 ms of its 20 (GDScript per lattice point), on the host
-## and on every peer. compute() re-plans the touched blocks (FireField.plan_block), sums them on
-## the clusters' grid (FireClusters.cells_of), re-splats the flames' rasters around them and
+## and on every peer. compute() re-plans the touched blocks (FireField.plan_block; the field
+## picks them with FireField.blocks_to_replan, about 8.7 m round a dab, so a FireFires decision
+## that reads the changed mask is re-planned), sums them on the clusters' grid
+## (FireClusters.cells_of), re-splats the flames' rasters around them (FireField.resplat) and
 ## encodes their texture's bytes, all from a snapshot of the document and copies of the field's
 ## plans and rasters, so it can run on a WorkerThreadPool task while the document is edited. The
 ## field lands the result on the main thread (FireField._land). The same function computes it on

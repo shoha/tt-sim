@@ -114,10 +114,8 @@ static func _refresh(field: FireField, doc: MapDocument, step: Dictionary) -> St
 	var lo := Vector2i(((at - Vector2.ONE * radius + half) / spacing).floor())
 	var hi := Vector2i(((at + Vector2.ONE * radius + half) / spacing).ceil())
 	var rect := Rect2i(lo, hi - lo).intersection(Rect2i(0, 0, doc.samples_x(), doc.samples_z()))
-	# The blocks refresh() re-plans for that rect (its own reach through the placement warp).
-	var reach := FireField.PLACE_WARP.y + FireField.JITTER * FireField.FLAME_SPACING_M
-	var grow := ceili(reach / minf(spacing.x, spacing.y)) + 1
-	var touched := FireField.blocks_of(doc, rect.grow(grow))
+	# The blocks refresh() re-plans for that rect.
+	var touched := FireField.blocks_to_replan(doc, rect)
 	var whole := PackedFloat64Array()
 	var plan := PackedFloat64Array()
 	var heat := PackedFloat64Array()
