@@ -326,10 +326,12 @@ Unit tests in `tests/unit/` (all in the authoring subset):
 Render jobs (`tools/render_jobs/JOBS.md`): `firefeat_build`, `firefeat_look` (production | r6
 sheets, held clock, motion bursts) and `firefeat_cleanup`; `fire_mask` (lay and put out);
 `fire_shards` (debug view 6 the sim bake's albedo tile); `fire_first_burn` (the book's load and
-upload ms); `fire_perf_play`; `fire_smoke_book` (the smoke book's bake). Performance:
-[../PERFORMANCE.md](../PERFORMANCE.md) "Fire (F4): pinned performance pass" and its subsections
-measured the look before the port; the production fire's pinned numbers come in a section of
-their own (card fire-prod-c7).
+upload ms); `fire_perf_play`; `fire_smoke_book` (the smoke book's bake); `fire_c7a_aba`,
+`fire_c7a_parts`, `fire_c7a_parts2` and `fire_c7b_glow` (the production timing). Performance:
+[../PERFORMANCE.md](../PERFORMANCE.md) "Fire, production port (C7, 2026-10-18)" times this fire
+(every target met by day; whole night home and third night zoom 20 at the edge, met in the latest
+run and missed in the two before; CPU 0.002 ms; a stroke 1.8-3.6 ms on the main thread); "Fire
+(F4): pinned performance pass" and its subsections measured the look before the port.
 
 ## Open work
 

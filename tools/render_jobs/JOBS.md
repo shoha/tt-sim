@@ -768,8 +768,32 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   Since F4b-4 the `refresh` line gives the dab at once on the main thread (`FireField.use_worker`
   off: the whole refresh, its re-plan and heat re-splat) and on the worker (the main thread's
   launch and landing, and the worker's own time). Its numbers so far measured the fire before
-  the production port (PERFORMANCE.md "Fire (F4)"); card fire-prod-c7 runs it on the production
-  fire.
+  the production port (PERFORMANCE.md "Fire (F4)"). Since card fire-prod-c7b it takes zoom 20
+  straight after home and zoom 8 after zoom 20: a view's camera pose depends on the view before it
+  (PERFORMANCE.md "Fire, production port (C7, 2026-10-18)"), so its zoom 20 and zoom 8 poses
+  differ from the F4 runs'.
+- `jobs/fire_c7a_aba.json`, `jobs/fire_c7a_parts.json`, `jobs/fire_c7a_parts2.json`: the
+  production fire's pinned timing (cards fire-prod-c7a and c7b; `probes/fire_perf.gd`;
+  PERFORMANCE.md "Fire, production port (C7, 2026-10-18)"). Each builds fire_perf_play's map
+  without saving it (no level to delete); drop the pinned `override.cfg` in first. `fire_c7a_aba`
+  (about 450 s): third and whole, day and night, home and zoom 20, the fire on / off / off / on,
+  memory at no fire, third and whole, `cpu`, four on | off pdiff rows and `sheet_onoff`; it ran
+  identically on main and production. `fire_c7a_parts` (about 950 s): each part off in a palindrome
+  at home and zoom 20, then zoom 8 and the widest zoom (`fire_perf.gd view zout`), the stroke's
+  `refresh`, `bake_gpu` (the sim bake's redraw on the GPU, dab and whole) and `book {do
+  release|load}` with memory; since c7b home and zoom 20 come first and a zoom 20 shot comes
+  before the stroke section's home, so no home or zoom 20 follows zoom 8 or the widest.
+  `fire_c7a_parts2` (about 790 s): the per-part palindromes at the A-B-A's poses, `bake_gpu`, the
+  book with memory. Parse a log's windows with a script like C7a's `parse_c7a.gd` (kept with the
+  card's notes): it groups `perf <view> <variant>` lines and prints on minus off and each part.
+- `jobs/fire_c7b_glow.json`: the game's glow timed in run (card fire-prod-c7b, about 405 s;
+  `probes/glow.gd variant`). Drop the pinned `override.cfg` in first. Builds firefeat_glow's map
+  (no fire; not saved), then at day and night home and zoom 20 a palindrome of the glow old (main's
+  before card fire-prod-c5b: the preset's intensity, strength and bloom over Godot's Environment
+  defaults), new (`EnvironmentGlow`) and off; then a 200 ft forest burning its "third" and the same
+  at night home and zoom 20. The `eval` lines log the camera holder, size, offset, the SubViewport's
+  size and the cursor before each view. The second map's strokes start from the camera the first
+  map left (181 fires shown, not fire_c7a_aba's 223).
 - Per-term and before/after shader A/B (card F4b-3; `probes/fire_ab.gd`): a job written for the
   task (kept out of `jobs/`, as its variant file is) builds `_firefeat_perf` with
   fire_perf_play's build steps (or loads `_firefeat_look --saved`) and `patch`es variants of the

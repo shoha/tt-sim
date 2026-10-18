@@ -9,7 +9,8 @@ extends RefCounted
 ##                     "no_flames", "no_glow" (fire_present 0 on the ground: its char and bed),
 ##                     "no_smoke" or "no_lights"; a "#n" suffix is ignored, so an expand can
 ##                     repeat a config in one A/B
-##   view {view}       zout: the camera's widest zoom (its own limit) over the map's middle
+##   view {view}       zout (or a key ending in it, "day_zout"): the camera's widest zoom (its
+##                     own limit) over the map's middle; any other key is left to fire.gd's shot
 ##   cpu {frames}      the field's per-frame script work (FireField._process, the lights'
 ##                     flicker) called `frames` times in a row: microseconds a frame
 ##   refresh {at, radius, runs}  a brush dab's refresh at document point `at` (a square of
@@ -20,6 +21,17 @@ extends RefCounted
 ##                     armed, as a peer applies a fire's op: the stroke's milliseconds, the
 ##                     ground layers before and after, GroundLayerArrays.last_sync_ms, and the
 ##                     fire book's state with its load and upload milliseconds (FireLook)
+##   bake_gpu {mode, at, radius, read}  the ground bake's redraw on the GPU (card fire-prod-c7a):
+##                     without `read`, turns on render-time measuring for the bake's SubViewport
+##                     and asks it to redraw the region a 4 m dab at `at` re-bakes (mode "dab",
+##                     FireField.bake_region of blocks_to_replan) or the whole map ("whole"),
+##                     holding it at UPDATE_ALWAYS over that box (a one-off draw's timestamps never
+##                     come back); with `read` true, that viewport's last measured GPU and CPU
+##                     milliseconds a redraw, and the viewport back to UPDATE_DISABLED (wait about
+##                     a second between the two)
+##   book {do}         the fire book's state and last load's timings; do "release" lets both
+##                     books go (FireLook.release_book), do "load" asks for them again and waits
+##                     for the load and the binding (a warm load: same process, file cached)
 ##   remove {folder}   deletes one _firefeat_ test level
 
 const FireProbe := preload("res://tools/render_jobs/probes/fire.gd")
@@ -50,7 +62,66 @@ static func run(base: Node, step: Dictionary) -> String:
 			return "warming the fire's surfaces"
 		"first_burn":
 			return _first_burn(ctrl.editor, step)
+		"bake_gpu":
+			return _bake_gpu(field, ctrl.document, step)
+		"book":
+			return _book(String(step.get("do", "")))
 	return "unknown action %s" % action
+
+
+static func _bake_gpu(field: FireField, doc: MapDocument, step: Dictionary) -> String:
+	var bake := field.get_node_or_null(FireNoiseBake.NODE_NAME) as FireNoiseBake
+	var viewport := bake.get_node_or_null("Sim") as SubViewport if bake != null else null
+	if viewport == null:
+		return "no ground bake"
+	var rid := viewport.get_viewport_rid()
+	if bool(step.get("read", false)):
+		var text := "bake redraw measured: gpu %.3f ms, cpu %.3f ms (viewport %s)" % [
+			RenderingServer.viewport_get_measured_render_time_gpu(rid),
+			RenderingServer.viewport_get_measured_render_time_cpu(rid),
+			str(viewport.size)
+		]
+		viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		return text
+	RenderingServer.viewport_set_measure_render_time(rid, true)
+	var half := doc.extent_m() * 0.5
+	var region := Rect2(-half, doc.extent_m())
+	var mode := String(step.get("mode", "whole"))
+	if mode == "dab":
+		var at_list: Array = step.get("at", [0.0, 0.0])
+		var at := Vector2(float(at_list[0]), float(at_list[1]))
+		var radius := float(step.get("radius", 4.0))
+		var spacing := doc.sample_step()
+		var lo := Vector2i(((at - Vector2.ONE * radius + half) / spacing).floor())
+		var hi := Vector2i(((at + Vector2.ONE * radius + half) / spacing).ceil())
+		var rect := Rect2i(lo, hi - lo).intersection(Rect2i(0, 0, doc.samples_x(), doc.samples_z()))
+		region = FireField.bake_region(doc, FireField.blocks_to_replan(doc, rect))
+	bake.rebake(region)
+	# A viewport drawn once never gets its timestamps back (they resolve frames later), so it
+	# redraws the same box every frame until the read: the same pixels, a steady per-frame cost.
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	var box := FireNoiseBake.texels_of(region, bake.sim_rect(), viewport.size / Vector2i(2, 1))
+	return "bake redraw %s over %s m: %s texels a tile of %s" % [
+		mode, str(region), str(box.size), str(viewport.size / Vector2i(2, 1))
+	]
+
+
+static func _book(what: String) -> String:
+	var started := Time.get_ticks_usec()
+	if what == "release":
+		FireLook.release_book()
+		return "books released in %.2f ms; %s" % [
+			(Time.get_ticks_usec() - started) / 1000.0, _book_text()
+		]
+	if what == "load":
+		FireLook.request_book()
+		FireLook.finish_book()
+		return "books loaded and bound in %.2f ms (blocking); %s; smoke book %s" % [
+			(Time.get_ticks_usec() - started) / 1000.0,
+			_book_text(),
+			String(FireLook.Book.keys()[FireFieldSmoke.book_state()]).to_lower()
+		]
+	return _book_text()
 
 
 static func _config(ctrl: AuthoringController, field: FireField, config: String) -> String:
@@ -79,8 +150,9 @@ static func _lit(lights: FireLights) -> int:
 
 
 static func _view(gm: GameMap, view: String) -> String:
-	if view != "zout":
-		return "unknown view %s" % view
+	# A shot key ("day_zout") names the same view; any other key leaves the camera to fire.gd.
+	if not view.ends_with("zout"):
+		return "view %s left to the shot" % view
 	var cc := gm.get_camera_controller()
 	if _widest <= 0.0:
 		_widest = float(cc.get("max_zoom"))

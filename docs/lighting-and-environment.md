@@ -186,7 +186,9 @@ and kept their numbers. On the **Mobile renderer** the intensity is doubled (and
 share halved, so the wash stays): there the over-bright cores are capped near the threshold, and
 the round 6 probe needed the gain to match Forward+'s halo. `extract_from_environment` reads a
 map's own embedded WorldEnvironment as it is; it is not an inverse of this mapping. The avatar
-builder's preview environment turns its glow off.
+builder's preview environment turns its glow off. Cost (pinned, in run, 1920x1080, RTX 3080):
+about 0.2 ms GPU a frame whatever the frame holds, 0.01-0.05 ms more than the old values
+([PERFORMANCE.md](PERFORMANCE.md) "Fire, production port (C7, 2026-10-18)", the glow table).
 
 **Adjustments:**
 - `adjustment_enabled` — Master toggle for brightness/contrast/saturation
