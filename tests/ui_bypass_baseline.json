@@ -30,9 +30,6 @@
 		"res://scenes/states/authoring/brush_cursor.gd": {
 			"colour": 6
 		},
-		"res://scenes/states/authoring/fire_brush.gd": {
-			"colour": 9
-		},
 		"res://scenes/states/authoring/new_map_dialog.gd": {
 			"override": 1
 		},

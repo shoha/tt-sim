@@ -748,7 +748,7 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (`--saved` finds no level). For a calibration, `glow.gd shot` with `specs` captures named glow
   variants ("+key=value" suffixes on `new` or `old`, `glow.gd variant`) on one frame, and `stats`
   compares them; card C5c's scratch jobs did that on a kept `_firefeat_glow` with `--saved`.
-- `jobs/firefeat_line.json`: the Fire tool's Line shape (cards F5, F5b; about 190 s). Run once
+- `jobs/firefeat_line.json`: the Fire tool's Line shape (cards F5, F5b, F5c; about 220 s). Run once
   per window size (`expand` over 1920x1080 and 1280x720, the critic's size; names start with
   the size): a 200 ft temperate forest (seed 1234) with a meadow painted over its east half
   (the strokes leave the brush at 9 m, flow 2); the Fire tool picked from the rail
@@ -757,9 +757,13 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   band's width), then a Blaze line at radius 2.5 is drawn with real input (`gesture`) from the
   meadow into the forest: `line_drag` mid-drag (the ember ribbon, zoom 22), `laid_day_z22`
   (after `fire.gd profile`, which logs the mask along and across the laid line against
-  `FireBrush.line_reach`), a Ctrl line over part of it (`erase_drag`, zoom 8, the madder
-  put-out ribbon), and a second line held at night (`line_drag_night`, dropped with Esc);
-  `sheet_1920` and `sheet_720` (the four drags and lays). The 720p gesture lands off the job's
+  `FireBrush.line_reach`), a Ctrl line held over part of it at zoom 8 with two put-out
+  interiors on the same drag (`erase_drag_a`, the ash plum-grey; `erase_drag_b`, the lake: an
+  `eval` sets `FireBrush.put_out_tint`, then a redraw), and a second line held at night
+  (`line_drag_night`) and under the sunset preset (`line_drag_dusk`), each dropped with Esc;
+  `sheet_1920` and `sheet_720` (the six drags and lays), and `sheet_water` (the Water pane and
+  river drag before | after from `firefeat_line_pane` run with `--out
+  render_jobs/firefeat_line/water_before` and `water_after`). The 720p gesture lands off the job's
   points (the 3D view renders at 1371x771 there), so read its profile's offsets loosely. It
   saves no level, so it leaves none.
 - `jobs/firefeat_line_pane.json`: the Water and Fire panes and a Water river held mid-drag

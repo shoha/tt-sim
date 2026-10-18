@@ -45,7 +45,10 @@ const RIBBON_ALPHA_DOWN := 0.34
 ## The ribbon's look (draw_ribbon()'s `style`), the river's own: the fill's alpha at the line's
 ## start and end (the fill is the tint), the edges' colour (null: the tint), alpha and width over
 ## a shadow line, a soft glow line under both edges (its colour, null: the edge's; width 0:
-## none), and the chevrons' colour, alpha and width over their shadow. Another brush passes only
+## none), the chevrons' colour, alpha and width over their shadow, round caps at both ends
+## (`caps`: the edge runs round them as one outline; the river's ends are cut square), and the
+## fill's light (`fill_gain`: 0 a plain fill; above 0 the fill's colours lit_fill() by that gain,
+## for a premultiplied-alpha canvas item, draw_ribbon()'s `fill_item`). Another brush passes only
 ## the keys it changes (FireBrush's line).
 const RIBBON_STYLE := {
 	"alpha_up": RIBBON_ALPHA_UP,
@@ -64,7 +67,11 @@ const RIBBON_STYLE := {
 	"chevron_width": 2.0,
 	"chevron_shadow_alpha": 0.3,
 	"chevron_shadow_width": 3.5,
+	"caps": false,
+	"fill_gain": 0.0,
 }
+## A round cap's half circle, in segments.
+const CAP_SEGMENTS := 12
 ## Refusal reasons (BrushTool.refused).
 const NO_CARVE := (
 	"Rivers and ponds carve the map's own ground: not on a Blender map."
@@ -350,7 +357,9 @@ static func on_ground(camera: Camera3D, editor: AuthoringEditor) -> Callable:
 ## the ground), filled in `tint` with a gradient from upstream (faint) to downstream (stronger)
 ## and edged; with `arrows`, chevrons every RIBBON_ARROW_M point the way the water will flow.
 ## `strength` scales every alpha; `style` overrides any of RIBBON_STYLE's keys (none: the
-## river's look). Drawn with explicit indices, never triangulated (ribbon() builds it).
+## river's look). `fill_item`, when valid, takes the fill instead of `canvas` (a style with a
+## fill_gain draws on BrushCursor.glow_item(), a premultiplied layer under the canvas's lines).
+## Drawn with explicit indices, never triangulated (ribbon() builds it).
 static func draw_ribbon(
 	canvas: Control,
 	ground: Callable,
@@ -359,13 +368,17 @@ static func draw_ribbon(
 	tint: Color,
 	strength: float,
 	arrows: bool,
-	style: Dictionary = {}
+	style: Dictionary = {},
+	fill_item: RID = RID()
 ) -> void:
 	var shape := ribbon(ground, line, radius, tint, strength, arrows, style)
 	if shape.is_empty():
 		return
 	RenderingServer.canvas_item_add_triangle_array(
-		canvas.get_canvas_item(), shape.indices, shape.points, shape.colors
+		fill_item if fill_item.is_valid() else canvas.get_canvas_item(),
+		shape.indices,
+		shape.points,
+		shape.colors
 	)
 	for stroke: Array in shape.lines:
 		canvas.draw_polyline(stroke[0], stroke[1], stroke[2], true)
@@ -373,7 +386,8 @@ static func draw_ribbon(
 
 ## What draw_ribbon() draws, as data: the fill's triangles ("points", "colors", "indices")
 ## and "lines", [points, colour, width] per polyline in drawing order (any glow, then each
-## edge's shadow and edge, then each chevron's shadow and chevron); {} for a line under two
+## edge's shadow and edge, then each chevron's shadow and chevron; with caps the two edges are
+## one closed outline, and each cap a fan after the band's triangles); {} for a line under two
 ## points. Pure but for `ground`.
 static func ribbon(
 	ground: Callable,
@@ -420,20 +434,54 @@ static func ribbon(
 		points.append(r)
 		var alpha := lerpf(alpha_up, alpha_down, walked / maxf(total, 0.001))
 		var fill := Color(tint, alpha * strength)
+		if float(look.fill_gain) > 0.0:
+			fill = lit_fill(fill, look.fill_gain)
 		colors.append(fill)
 		colors.append(fill)
 	var indices := PackedInt32Array()
 	for i in n - 1:
 		var a := 2 * i
 		indices.append_array([a, a + 1, a + 2, a + 1, a + 3, a + 2])
+	var sides: Array = [left, right]
+	if look.caps:
+		# A fan round each end, from the band's last left and right points (the end's) and
+		# its first right and left (the start's); the edge then runs round as one outline.
+		var ends := [
+			[line[n - 1], line[n - 1] - line[n - 2], 2 * n - 2, 2 * n - 1, colors[2 * n - 1]],
+			[line[0], line[0] - line[1], 1, 0, colors[0]],
+		]
+		var arcs: Array[PackedVector2Array] = []
+		for end: Array in ends:
+			var tip: Vector2 = end[0]
+			var forward: Vector2 = end[1]
+			var arc := _cap_arc(ground, tip, forward.normalized(), radius)
+			arcs.append(arc)
+			var centre := points.size()
+			points.append(ground.call(tip))
+			colors.append(end[4])
+			var previous: int = end[2]
+			for p in arc:
+				points.append(p)
+				colors.append(end[4])
+				indices.append_array([centre, previous, points.size() - 1])
+				previous = points.size() - 1
+			indices.append_array([centre, previous, end[3]])
+		var outline := left.duplicate()
+		outline.append_array(arcs[0])
+		var back := right.duplicate()
+		back.reverse()
+		outline.append_array(back)
+		outline.append_array(arcs[1])
+		outline.append(left[0])
+		sides = [outline]
 	var edge: Color = tint if look.edge == null else look.edge
 	var shadow: Color = look.shadow
 	var lines: Array = []
 	if float(look.glow_width) > 0.0:
 		var glow: Color = edge if look.glow == null else look.glow
-		for side in [left, right]:
+		for side in sides:
 			lines.append([side, Color(glow, float(look.glow_alpha) * strength), look.glow_width])
-	for side in [left, right]:
+	for side in sides:
 		lines.append([side, Color(shadow, float(look.shadow_alpha) * strength), look.shadow_width])
 		lines.append([side, Color(edge, float(look.edge_alpha) * strength), look.edge_width])
 	var shape := {"points": points, "colors": colors, "indices": indices, "lines": lines}
@@ -458,6 +506,29 @@ static func ribbon(
 			next += RIBBON_ARROW_M
 		walked += length
 	return shape
+
+
+## A fill colour for a premultiplied-alpha canvas item: `fill` times its alpha and `gain`, the
+## alpha kept. A gain of 1 blends as a plain fill; above 1 the fill adds light as well as
+## covering, so it brightens what is under it instead of greying it (a fire line). Pure.
+static func lit_fill(fill: Color, gain: float) -> Color:
+	var lit := fill * (fill.a * gain)
+	lit.a = fill.a
+	return lit
+
+
+## The half circle round a ribbon's end at world XZ `centre`, bulging toward `forward` (a unit
+## vector out of the ribbon), from the band's side on the left of `forward` to the right, through
+## `ground` to the screen; the two side points themselves left out.
+static func _cap_arc(
+	ground: Callable, centre: Vector2, forward: Vector2, radius: float
+) -> PackedVector2Array:
+	var side := Vector2(-forward.y, forward.x)
+	var arc := PackedVector2Array()
+	for k in range(1, CAP_SEGMENTS):
+		var angle := PI * float(k) / CAP_SEGMENTS
+		arc.append(ground.call(centre + (side * cos(angle) + forward * sin(angle)) * radius))
+	return arc
 
 
 ## A flat disc of world `radius` at world XZ `at`, on the ground there, faintly filled.
