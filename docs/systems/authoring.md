@@ -199,10 +199,14 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   `FireBrush` (two shapes since card F5, 2026-10-18: Area paints with Paint's falloff and
   dwell; Line captures a line as a river's through `StrokePath` (`utils/stroke_path.gd`, the
   capture lifted out of `WaterBrush`, which calls it), previews it with the river's ribbon
-  (`WaterBrush.draw_ribbon`) in the line's own style (card F5b: `FireBrush.LAY_STYLE`, a
-  persimmon fill at about half coverage, amber edge, cream chevrons; `PUT_OUT_STYLE` with
-  Ctrl, a darker madder with a dark-outlined edge that reads over flames; the river's look is
-  `WaterBrush.RIBBON_STYLE`, the default) at the width its fire will stand in, which the ring
+  (`WaterBrush.draw_ribbon`) in the line's own style (cards F5b, F5c: `FireBrush.LAY_STYLE`, a
+  persimmon fill at about half coverage lit on the cursor's premultiplied glow layer
+  (`BrushCursor.glow_item`, `WaterBrush.lit_fill`), so it adds light and stays orange over
+  green, a dark wood and at night instead of greying toward the ground, a full persimmon edge,
+  chalk chevrons; `PUT_OUT_STYLE` with Ctrl, the erase salmon (`BrushCursor.CLEAR_TINT`) on
+  the edge and chevrons over a lake interior that cools the flames under it; both with round
+  ends (the style's `caps`); every colour a theme role or the erase tint; the river's look is
+  `WaterBrush.RIBBON_STYLE`, the default, square-ended) at the width its fire will stand in, which the ring
   shows too (`FireBrush.line_reach`: where the soft falloff's mask passes the flames band,
   about 0.73 of the brush radius at Blaze and full strength, 0.81 at strength 2), and on
   release lays it with `FireBrush.lay_line`: resampled every 0.25 brush radii and dabbed as

@@ -17,6 +17,10 @@ extends RefCounted
 ## critic). An inner ring brightens as dwell builds strength, and a mode's readout
 ## (BrushMode.cursor_text) sits in a glass chip under the ring. fan_indices() stays for the
 ## Bridge tool's stone ghosts, filled as fans because a conformed outline can cross itself.
+## Under the canvas's own drawing lies a glow layer (glow_item()), blended premultiplied, where
+## a fill lit by WaterBrush.lit_fill() adds light as well as covering (the fire line's ribbon
+## glows over green, a dark wood and at night instead of greying); it is cleared at every
+## drawing of the cursor, so what a mode lays there lasts one drawing as its lines do.
 
 ## Above the world viewport (LAYER_WORLD_VIEWPORT), under the drawers and panels
 ## (LAYER_GAMEPLAY_MENU, LAYER_AUTHORING), with the hint bar.
@@ -40,6 +44,7 @@ var camera: Camera3D = null
 
 var _world_viewport: SubViewport = null
 var _canvas_layer: CanvasLayer = null
+var _glow_layer: Control = null
 var _ring_world := PackedVector3Array()
 var _ring_centre: Vector3 = Vector3.INF
 var _ring_radius: float = -1.0
@@ -62,11 +67,24 @@ func setup(
 	camera = cam
 	_world_viewport = viewport
 	var overlay: Dictionary = MapOverlayUtils.create_overlay(
-		overlay_parent, OVERLAY_LAYER, on_draw
+		overlay_parent, OVERLAY_LAYER, _on_canvas_draw.bind(on_draw)
 	)
 	_canvas_layer = overlay.canvas_layer
 	canvas = overlay.draw_control
+	_glow_layer = Control.new()
+	_glow_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_glow_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_glow_layer.show_behind_parent = true
+	var blend := CanvasItemMaterial.new()
+	blend.blend_mode = CanvasItemMaterial.BLEND_MODE_PREMULT_ALPHA
+	_glow_layer.material = blend
+	canvas.add_child(_glow_layer)
 	_canvas_layer.visible = false
+
+
+## The glow layer's canvas item (the class header), or an invalid RID before setup().
+func glow_item() -> RID:
+	return _glow_layer.get_canvas_item() if _glow_layer else RID()
 
 
 func set_visible(visible: bool) -> void:
@@ -77,6 +95,13 @@ func set_visible(visible: bool) -> void:
 func redraw() -> void:
 	if canvas:
 		canvas.queue_redraw()
+
+
+## Every drawing of the canvas: the glow layer cleared, then the cursor drawn (`on_draw`).
+func _on_canvas_draw(on_draw: Callable) -> void:
+	if _glow_layer:
+		RenderingServer.canvas_item_clear(_glow_layer.get_canvas_item())
+	on_draw.call()
 
 
 ## The brush ring at `brush.hit` with the stroke radius in `tint`, `text` under it when not

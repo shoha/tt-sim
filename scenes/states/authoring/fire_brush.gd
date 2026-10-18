@@ -10,8 +10,9 @@ extends BrushMode
 ##          the release point added, Chaikin-smoothed), previewed while dragging with the
 ##          river's own ribbon (WaterBrush.draw_ribbon: gradient fill, edges, chevrons; user,
 ##          2026-10-11: the same affordance as driving a river) in the line's own style
-##          (LAY_STYLE: a persimmon fill at about half coverage, a hot amber edge, cream
-##          chevrons, so it reads as fire over green grass, a yellow meadow and at dusk). The
+##          (LAY_STYLE: a persimmon fill at about half coverage that adds light on the
+##          cursor's glow layer, so it glows orange over green grass, a yellow meadow, a dark
+##          wood and at night; a full persimmon edge, chalk chevrons, round ends). The
 ##          release lays it (lay_line()): resampled evenly every LINE_SPACING radii and dabbed
 ##          segment by segment as capsules at a fixed exposure per segment, so a line is even
 ##          whatever the drawing speed. A release under StrokePath.MIN_LENGTH_M lays nothing;
@@ -24,8 +25,10 @@ extends BrushMode
 ## Both shapes lay through AuthoringEditor.begin_fire_stroke, so a lay is one history entry
 ## "Lay fire" with its burnt forest and ash (FireEditor), synced and undoable in play as any
 ## stroke. Ctrl at the press puts fire out instead (the area, or along the line), leaving its
-## ash and snags. The ring is ember orange, red to put out; the put-out line's ribbon is a
-## darker madder (PUT_OUT_STYLE) with a dark-outlined edge that reads over bright flames.
+## ash and snags. The ring is ember orange, the erase salmon (BrushCursor.CLEAR_TINT, every
+## brush's erase) to put out; the put-out line's ribbon (PUT_OUT_STYLE) keeps that salmon on
+## its edge and chevrons over a cool interior (put_out_tint) that reads over bright flames and
+## over char alike. Every colour is a theme role or the erase tint; only alphas are set here.
 
 enum Shape { LINE, AREA }
 
@@ -44,52 +47,64 @@ const LINE_SPACING := 0.25
 const LINE_SECONDS := 0.22
 const MAX_LINE_DABS := 4096
 ## The line's ribbon fill, and its look over the river's (WaterBrush.RIBBON_STYLE's keys): a
-## persimmon at about half coverage, stronger toward the pointer, stays orange over green and
-## over a yellow meadow; the amber edge sits on a soft glow and a dark line; the chevrons are
-## warm cream.
-const LAY_TINT := Color(0.97, 0.38, 0.1)
+## persimmon at about half coverage, stronger toward the pointer, lit by LAY_GAIN on the glow
+## layer (WaterBrush.lit_fill), so it adds light where a plain fill greyed toward the ground's
+## colour (ochre over green grass, brown over a pine wood); a full persimmon edge on a soft
+## ember glow and a faint ink line keeps the band crisp; chalk chevrons; round ends.
+const LAY_TINT := ThemeColors.PERSIMMON
+const LAY_GAIN := 2.4
 const LAY_STYLE := {
-	"alpha_up": 0.4,
+	"alpha_up": 0.46,
 	"alpha_down": 0.56,
-	"edge": Color(1.0, 0.8, 0.36),
-	"edge_alpha": 0.95,
+	"fill_gain": LAY_GAIN,
+	"edge": ThemeColors.PERSIMMON,
+	"edge_alpha": 1.0,
 	"edge_width": 2.5,
-	"shadow": Color(0.24, 0.06, 0.0),
-	"shadow_alpha": 0.45,
+	"shadow": ThemeColors.INK,
+	"shadow_alpha": 0.3,
 	"shadow_width": 4.5,
-	"glow": Color(1.0, 0.5, 0.14),
-	"glow_alpha": 0.32,
+	"glow": ThemeColors.EMBER,
+	"glow_alpha": 0.3,
 	"glow_width": 9.0,
-	"chevron": Color(1.0, 0.94, 0.74),
+	"chevron": ThemeColors.CHALK,
 	"chevron_alpha": 0.95,
 	"chevron_width": 2.5,
 	"chevron_shadow_alpha": 0.45,
 	"chevron_shadow_width": 4.5,
+	"caps": true,
 }
-## Putting out along a line: a darker, cooler madder with real coverage, so it reads over the
-## glare of the flames it is drawn on, a pale rose edge on a dark outline, and the lay's
-## chevrons.
-const PUT_OUT_TINT := Color(0.42, 0.06, 0.2)
+## Putting out along a line: the erase salmon (BrushCursor.CLEAR_TINT, the ring's) on the edge
+## and the chevrons over an ink outline, round ends, and a cool interior (put_out_tint) at the
+## lay's coverage, a plain fill (gain 1), so the band reads over the glare of the flames it is
+## drawn on and over char, calm rather than alarming. The interior is the lake, water on fire:
+## against the warm blaze it parted more plainly than an ash plum-grey (PAPER_TRACK), whose
+## mauve leaned into the flames' pinks (card F5c, firefeat_line erase_drag_a and _b).
+const PUT_OUT_TINT := ThemeColors.LAKE
 const PUT_OUT_STYLE := {
-	"alpha_up": 0.48,
-	"alpha_down": 0.64,
-	"edge": Color(1.0, 0.64, 0.7),
+	"alpha_up": 0.46,
+	"alpha_down": 0.56,
+	"fill_gain": 1.0,
+	"edge": BrushCursor.CLEAR_TINT,
 	"edge_alpha": 1.0,
 	"edge_width": 2.5,
-	"shadow": Color(0.1, 0.0, 0.04),
-	"shadow_alpha": 0.75,
+	"shadow": ThemeColors.INK,
+	"shadow_alpha": 0.7,
 	"shadow_width": 5.5,
-	"chevron": Color(1.0, 0.94, 0.74),
-	"chevron_alpha": 0.95,
+	"chevron": BrushCursor.CLEAR_TINT,
+	"chevron_alpha": 1.0,
 	"chevron_width": 2.5,
 	"chevron_shadow_alpha": 0.6,
 	"chevron_shadow_width": 4.5,
+	"caps": true,
 }
 
 ## The mask byte a lay approaches (EMBERS, FLAMES or BLAZE).
 var intensity: int = FLAMES
 ## The shape a press draws (Shape; Area until Tab or the pane picks Line).
 var shape: int = Shape.AREA
+## The put-out ribbon's interior (PUT_OUT_TINT; the firefeat_line job sets the ash candidate
+## and the lake in turn to show both).
+var put_out_tint: Color = PUT_OUT_TINT
 ## A line being drawn: its recorded points (world XZ).
 var line := PackedVector2Array()
 var drawing: bool = false
@@ -277,7 +292,8 @@ func cursor_text(brush: BrushTool) -> String:
 
 
 ## The line being drawn as the river's ribbon up to the pointer, at the ring's width, in the
-## line's style (LAY_STYLE, or PUT_OUT_STYLE with Ctrl), then the ring.
+## line's style (LAY_STYLE, or PUT_OUT_STYLE with Ctrl), its fill on the cursor's glow layer,
+## then the ring.
 func draw_cursor(brush: BrushTool, cursor: BrushCursor) -> void:
 	if drawing and not line.is_empty() and brush.editor != null:
 		var live := line.duplicate()
@@ -291,10 +307,11 @@ func draw_cursor(brush: BrushTool, cursor: BrushCursor) -> void:
 			WaterBrush.on_ground(cursor.camera, brush.editor),
 			StrokePath.smooth_line(live),
 			stroke_radius(brush),
-			PUT_OUT_TINT if erasing else LAY_TINT,
+			put_out_tint if erasing else LAY_TINT,
 			1.0,
 			true,
-			PUT_OUT_STYLE if erasing else LAY_STYLE
+			PUT_OUT_STYLE if erasing else LAY_STYLE,
+			cursor.glow_item()
 		)
 	super.draw_cursor(brush, cursor)
 
