@@ -17,9 +17,11 @@ extends RefCounted
 ##   grab {tag}        keeps the raw 3D frame under `tag`
 ##   load {tag, path}  keeps the PNG at `path` (an earlier capture, a reference frame) under
 ##                     `tag` for pdiff, which takes the larger of two frames down to the smaller
-##   pdiff {a, b, out, gain}  compares grabs `a` and `b`: the mean, RMS and largest difference
-##                     (0..255, Image.compute_image_metrics) and the share of pixels any channel
-##                     of which differs by more than 8 and 24; saves a row for a sheet at
+##   pdiff {a, b, out, gain, width}  compares grabs `a` and `b` (both taken down to `width`
+##                     pixels wide when given, a low-pass compare): the mean, RMS and largest
+##                     difference (0..255, Image.compute_image_metrics) and the share of
+##                     pixels any channel of which differs by more than 8 and 24; saves a
+##                     row for a sheet at
 ##                     <out>.png: a | b | |b - a| x gain (default 4), 640x360 each
 ##   sheet {out}       stacks the rows of every pdiff since the last sheet into <out>.png
 
@@ -144,11 +146,16 @@ static func _pdiff(step: Dictionary) -> String:
 		return "no grabs to compare"
 	a = a.duplicate() as Image
 	b = b.duplicate() as Image
-	# A reference frame saved at another size: the larger one taken down to the smaller.
+	# A reference frame saved at another size: the larger one taken down to the smaller; `width`
+	# takes both down further (a low-pass compare: the glow and the light, not each flame's shape).
 	var size := a.get_size().min(b.get_size())
+	var width := int(step.get("width", 0))
+	if width > 0 and width < size.x:
+		size = Vector2i(width, roundi(float(width) * size.y / size.x))
+	var filter := Image.INTERPOLATE_TRILINEAR if width > 0 else Image.INTERPOLATE_BILINEAR
 	for image: Image in [a, b]:
 		if image.get_size() != size:
-			image.resize(size.x, size.y, Image.INTERPOLATE_BILINEAR)
+			image.resize(size.x, size.y, filter)
 	a.convert(Image.FORMAT_RGB8)
 	b.convert(Image.FORMAT_RGB8)
 	var metrics := a.compute_image_metrics(b, false)

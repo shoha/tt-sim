@@ -154,6 +154,40 @@ Each preset can configure any combination of the following properties:
 **Glow/Bloom:**
 - `glow_enabled`, `glow_intensity`, `glow_strength`, `glow_bloom`
 
+The game has one glow for every map and preset (`utils/environment_glow.gd`, `EnvironmentGlow`,
+applied from `EnvironmentPresets._apply_config_to_environment`; the user's decision of
+2026-10-18 to carry the persistent fire's round 6 screen glow to the whole game). Only what
+passes the HDR threshold blooms strongly: the fire's over-bright cores, sun glints on water,
+emissive materials. Godot's own values, which every preset left untouched before (screen blend,
+threshold 1.0, scale 2.0, levels [0, 0.8, 0.4, 0.1, 0, 0, 0]), became:
+
+| Property | Value |
+|----------|-------|
+| `glow_blend_mode` | additive |
+| `glow_hdr_threshold` | 1.05 |
+| `glow_hdr_scale` | 1.5 |
+| glow levels 1-7 | [0, 0, 0.6, 1, 1, 0.5, 0] (a wide halo) |
+| `glow_intensity` | 0.5 x (the config's `glow_intensity` / the preset's own) |
+| `glow_bloom` | the config's `glow_bloom` x the preset's own `glow_intensity` / 0.5 |
+| `glow_strength` | the config's, unchanged |
+
+The preset and level keys keep the meaning they had, so no level needed new numbers or a
+migration. At the preset's own Glow value every preset glows at 0.5, so the fire blooms alike by
+day, at sunset and at night (round 6's look on the default, `outdoor_sunset` and `outdoor_night`
+presets exactly). The Color pane's Glow slider is read against the preset's own value: 0 is no
+glow, twice the preset's value is twice the glow (the default preset's 0.3 makes the slider's 2
+an intensity of 3.33: on a map without fire a lighter, hazier frame with brighter highlights,
+captured 2026-10-18; on a burning map a far stronger halo). The wash over the whole frame (Godot
+feeds every pixel at `max(smoothstep(threshold, threshold + scale, luminance), bloom)`) keeps the
+amount it had, `glow_bloom x glow_intensity`, so the slider scales it too. The wider, additive
+levels made a strong wash milky, so `hell` and `ethereal` had their `glow_bloom` scaled by the
+levels' sums (1.3 / 3.1: 0.15 to 0.065 and 0.2 to 0.085); the other presets' washes are small
+and kept their numbers. On the **Mobile renderer** the intensity is doubled (and the bloom
+share halved, so the wash stays): there the over-bright cores are capped near the threshold, and
+the round 6 probe needed the gain to match Forward+'s halo. `extract_from_environment` reads a
+map's own embedded WorldEnvironment as it is; it is not an inverse of this mapping. The avatar
+builder's preview environment turns its glow off.
+
 **Adjustments:**
 - `adjustment_enabled` — Master toggle for brightness/contrast/saturation
 - `adjustment_brightness`, `adjustment_contrast`, `adjustment_saturation`

@@ -1,0 +1,27 @@
+{
+ "out_dir": "render_jobs/firefeat_look_mobile",
+ "timeout_s": 300,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "dress", "folder": "_firefeat_look"},
+  {"op": "wait_ready", "settle": 2.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wait", "s": 3.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "info"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "night_home", "label": ""},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "extras", "show": true},
+  {"op": "wait", "s": 2.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/glow.gd", "action": "report"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_ab.gd", "action": "hold", "on": true},
+  {"op": "wait", "s": 0.8},
+  {"op": "capture", "name": "night_home", "desc": "night_home under the renderer this run was started with (glow.gd report logs it and the glow it got)"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_ab.gd", "action": "hold", "on": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/contact_sheet.gd", "dir": "user://render_jobs/firefeat_look_mobile", "out": "sheet_renderers", "columns": 2, "names": ["user://render_jobs/firefeat_look/night_home", "user://render_jobs/fire_r6_ref/night_home_sim", "user://render_jobs/firefeat_look_mobile/night_home", "user://render_jobs/firefeat_look_compat/night_home"], "tile": [960, 540]},
+  {"op": "index", "title": "Fire, production, on the Mobile and Compatibility renderers (card fire-prod-c5b)", "intro": "Produced by tools/render_jobs/jobs/firefeat_look_mobile.json on the saved _firefeat_look level: night_home with the clock held. Run it twice, with --rendering-method mobile (out_dir render_jobs/firefeat_look_mobile) and with --rendering-method gl_compatibility and --out render_jobs/firefeat_look_compat. sheet_renderers (written into firefeat_look_mobile by each run, complete after both): Forward+ (firefeat_look) | r6, then Mobile | Compatibility."},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0}
+ ]
+}

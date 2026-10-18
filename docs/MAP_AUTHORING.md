@@ -534,16 +534,19 @@ later passes, none blocking the port:
 - Broad-lobe drawings and a calmer default zoom: the far form still reads busy at home.
 - Dimmer pool-edge arcs: a few thin red crescents at pool rims (round 6's crack and lobe fringe,
   in round 6's own frames too).
-- A stronger air halo round the flames (round 6's night aura and day bloom); judge it again once
-  card fire-prod-c5b's screen glow lands.
+- A stronger air halo round the flames: card fire-prod-c5b made round 6's screen glow the
+  game's glow (docs/lighting-and-environment.md "Glow/Bloom"), so production's night aura and day
+  bloom now match round 6's; a stronger halo than round 6's is still open.
 - Flat pool discs: seen alone, the pools are flat saturated orange-yellow discs with no inner
   gradient (the pool clamps to 1 under its kernel and the light's plateau saturates in the
   tonemap); under the flames they read as round 6.
 - The worker re-plan delay: FireFires' 7-point window makes a 4 m dab's re-plan about 168 ms on
   the worker (19-20 ms before the port), so a stroke's fires appear about a sixth of a second
   after the dab and a peer's later still (card fire-prod-c7 measures it in the pinned pass).
-- Compatibility and Mac (the Mobile renderer) are unverified for the production fire until cards
-  fire-prod-c5b (the glow and a Mobile look job) and c7 (the verdict captures).
+- Compatibility: the production fire's flames do not draw under `gl_compatibility` (only the
+  smoke and the lights' pools; the authored ground shader itself fails there on `textureGather`),
+  captured by `firefeat_look_mobile.json` on 2026-10-18. Mac's Mobile renderer shows the fire and
+  its glow (x2 intensity) as Forward+ does; card fire-prod-c7 takes the verdict captures.
 
 Path direction (user, 2026-10-13): paths and roads have a direction, but the ground samples
 built surfaces (cobblestone, flagstone, planks, dirt roads) with the same per-cell rotation and

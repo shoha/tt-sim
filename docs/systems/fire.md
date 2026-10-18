@@ -264,10 +264,16 @@ chose the falloff (ranges 7, 12, 15 and 20 under pixel probes) are in `FireLight
   first-launch warm-up once, by design.
 - **Mobile and Compatibility:** Mac runs the Mobile renderer by default. The books are RGBA8
   arrays without VRAM compression (data, not colour; the flames' with mips), which Metal takes;
-  the four lights fit Mobile's eight. The production fire has not been captured on Mobile or
-  Compatibility yet: card fire-prod-c5b brings the screen glow (with its Mobile gain) and a
-  Mobile look job, card fire-prod-c7 the verdict captures. Until C5b the screen glow is main's,
-  so round 6's night aura and day bloom are missing.
+  the four lights fit Mobile's eight. The halo round the flames is the game's own glow
+  (`EnvironmentGlow`, docs/lighting-and-environment.md "Glow/Bloom"), round 6's screen glow made
+  the glow of every map since card fire-prod-c5b, with its intensity doubled on Mobile.
+  `jobs/firefeat_look_mobile.json` (2026-10-18, half size): on Mobile, night home shows the
+  flames, pools and halos as Forward+ does, the aura a little softer. On **Compatibility** the
+  flames do not draw at all (no shader error in the log) and so no halo either; the smoke draws
+  (a darker red-orange) and the lights leave faint pools, while the authored ground itself fails
+  there (`authored_ground.gdshaderinc` `textureGather` is not in GLES3; the map shows pale grey)
+  and the scatter runs out of shader instance variables. Compatibility is not a supported fire
+  renderer yet (docs/MAP_AUTHORING.md open work); card fire-prod-c7 takes the verdict captures.
 - **The event fire** (Start a fire: `IgniteMode`, `TerrainEvents._burn`, `FireSweep`) is
   untouched by the port and keeps its own look: `EventPuffs`' banded tongues (`band_flames`, the
   `FlameAtlas` flipbook its other branch) on the ground ring and the crowns,

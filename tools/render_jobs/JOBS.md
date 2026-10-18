@@ -707,13 +707,37 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   the z8 views), `sheet_motion_z8` and `sheet_motion_home` (production only). The r6 frames are
   the spike's `render_jobs/ref_fit_r6_sim/<view>_sim.png` (branch spike-flipbook at de7f3d16, its
   user dir `TTSim_spike_flipbook`), copied once by hand into `user://render_jobs/fire_r6_ref/`
-  (no absolute path is committed; a missing one leaves its tile blank). Until card
-  fire-prod-c5b the screen glow is main's, so r6's night aura and day bloom do not compare yet.
+  (no absolute path is committed; a missing one leaves its tile blank). Since card
+  fire-prod-c5b the glow is the game's own (`EnvironmentGlow`, round 6's), so the night aura and
+  day bloom compare too. `sheet_pdiff` (`fire_ab.gd` `load` and `pdiff`): r6 | production | the
+  difference x4 per view, the mean and RMS in the log; on 2026-10-18 means 10.9-11.9 (RMS
+  30-34) at z8 and home and 7.6 (20.0) at sunset z20, about production's own frame against
+  itself 0.24 s later (night z8 burst frames 0 and 23: 10.2, RMS 31.9), the difference on the
+  flame shapes (the per-fire seed re-rolls each drawing), the trees' sway and the smoke's lobes.
+  `pdiff`'s `width` takes both frames down first (a low-pass compare).
   It writes to `render_jobs/firefeat_look`. The probe's `info` logs the fires shown and planned,
   the fire book's state and the ground bake's bytes and frame (8,128,512 bytes over 63 m on this
   level); `scale` sets `Engine.time_scale` (the shaders' clock and a burst's spacing follow it).
-  A Mobile and a Compatibility look (`firefeat_look_mobile.json`) come with cards fire-prod-c5b
-  and c7. Cleanup deletes every `_firefeat_` level.
+  Cleanup deletes every `_firefeat_` level.
+- `jobs/firefeat_look_mobile.json`: night_home on `_firefeat_look` with the clock held, under the
+  renderer the run starts with (card fire-prod-c5b, about 25 s). Run it twice: with
+  `--rendering-method mobile` (writes `render_jobs/firefeat_look_mobile`) and with
+  `--rendering-method gl_compatibility --out render_jobs/firefeat_look_compat`; `glow.gd report`
+  logs the renderer and the glow it got (Mobile: intensity 1.0, bloom 0.015 at night). Each run
+  writes `sheet_renderers` into `firefeat_look_mobile`: Forward+ (firefeat_look's) | r6, then
+  Mobile | Compatibility, complete after both runs. On 2026-10-18 Mobile matched Forward+ (the
+  aura a little softer); Compatibility drew no flames, only the smoke and the lights' pools, on a
+  pale grey ground (the authored ground shader fails there on `textureGather`).
+- `jobs/firefeat_glow.json`: the game's glow on a map with no fire (card fire-prod-c5b;
+  `probes/glow.gd`; about 90 s). Build: a 150 m temperate forest (seed 1234) with a river and a
+  pond, saved as `_firefeat_glow`; look: `<sky>_<home|z8>` under the fire
+  probe's sun keys `day` (the level's own environment), `sunset`, `night`, `hell` and `ethereal`,
+  then `glow0_home` and `glow2_home` (the Color pane's Glow slider at 0 and 2 through
+  `glow.gd env`). The sheets put an old set beside the new: run once with `--out
+  render_jobs/firefeat_glow_old` before a glow change, then again with no flag after;
+  `sheet_<sky>` (home over z8) and `sheet_slider` (0, the preset's value, 2), old left. Its last
+  step, `glow.gd cleanup {folder: "_firefeat_glow"}`, deletes only that level (`fire.gd cleanup`
+  would take `_firefeat_look` too), so every run builds it afresh (`--saved` finds no level).
 - `jobs/fire_smoke_book.json`: bakes the persistent fire's smoke book once, offline (card
   fire-prod-c5a; `probes/fire_smoke_book.gd`; `tools/fire_sim/README.md`). In the real window (a
   headless run draws nothing) it draws `tools/fire_sim/fire_smoke_book_bake.gdshader` into one
