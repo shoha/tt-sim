@@ -16,29 +16,30 @@ extends Node3D
 ## derived here and never saved: a river carved through a fire puts it out on screen and the
 ## fire comes back if the river is erased.
 ##
-## What stands there depends on the band (the look card F4a): the ember band gets no flames
-## (the ground's glow draws it), only a spark at about one point in SPARK_EVERY. Flames and
-## the blaze are gathered by a low-frequency clump noise (clump, about CLUMP_CELL_M across, its
-## lattices turned and warped off the map's axes so clumps are blobs, not hedges): it drops the
-## points where it is lowest and scales the rest from CLUMP_SCALE.x at a clump's edge to .y in
-## its middle, each flame moved a little in that range by its own draw (SCALE_JITTER), so flames
-## stand in bonfire-sized clumps of uneven heights with open ground between (the weaker the
-## fire, the wider the gaps). In a blaze the point whose clump value tops its
-## eight lattice neighbours is a big flame (BIG_SCALE) and the blaze points beside it shrink to
-## licks at its feet (LICK_SCALE).
-## Intensity changes the shape too: it picks the tongue layout (weak flames one or two tongues,
-## a blaze three or four) and the shader's bands and erosion. Each plan is emitted shuffled
-## (ordered by its points' seeds), so any prefix of it is an even thinning.
+## What stands there is FireFires' (the reference fit's fewer, bigger fires; its header): the
+## ember band gets no flames (the ground's glow draws it), only a spark at about one point in
+## SPARK_EVERY; in the flames band each clump of a low-frequency clump noise (clump, about
+## CLUMP_CELL_M across, its lattices turned and warped off the map's axes so clumps are blobs,
+## not hedges; it drops the points where it is lowest) stands one big fire, and the ragged
+## edges keep single stragglers; in a blaze every lattice point stands this field's own flame
+## (_flame: the point whose clump value tops its eight lattice neighbours a big flame,
+## BIG_SCALE, the blaze points beside it licks at its feet, LICK_SCALE, the rest scaled through
+## the clump range), shrunk and widened so they merge into one mass. Each plan is emitted
+## shuffled (ordered by its points' seeds), so any prefix of it is an even thinning.
 ##
 ## A base fire unifies the flames (the user's 2026-10-16 verdict): the flames' heat raster
 ## (HEAT_STEP_M) sums each planned flame's height under a soft kernel, re-splatted around the
-## blocks a refresh re-plans. The ground burns as a bed on that summed heat
+## region a refresh re-plans. The ground burns as a bed on that summed heat
 ## (fire_glow.gdshaderinc), and each drawn flame carries the heat at its foot, which thins its
 ## rim and widens its hot bands, so a crowded clump reads as one hotter body. A second raster on
 ## the same grid, the feet's pools (POOL_REACH, round 4), marks where flames stand, so the
 ## ground glows under every foot and stays dark crust between. The rasters come
-## from the whole plans (not the budget's prefix), so thinning does not dim the bed; a peer
-## that refreshed stroke by stroke and one that rebuilt hold the same raster.
+## from the whole plans (not the budget's prefix), so thinning does not dim the bed. A peer
+## that refreshed stroke by stroke and one that rebuilt hold the same plans and the same raster
+## bytes (plan_digest): a refresh re-plans every block whose fires a changed mask can reach
+## (blocks_to_replan), clears the rasters as far as those blocks' fires reach (HEAT_GROW) and
+## re-splats every block that reaches into the cleared rect, in row order, so each texel sums
+## its flames in the same order however the plans were made.
 ##
 ## Budget: the whole map shows at most MAX_FLAMES. Past it every burning block shows the same
 ## share of its plan (budget_shares: a uniform thinning in proportion to each block's burning
@@ -76,8 +77,10 @@ const BLAZE_MIN := 200
 const MAX_FLAMES := 4096
 ## A sample whose wet line (the wet dressing's alpha) is at least this does not burn.
 const WET_LINE_MIN := 128
-## A face steeper than this does not burn (the cliff rule's start).
+## A face steeper than this does not burn (the cliff rule's start), and the up component of a
+## face's normal at it (its cosine as a literal, so no platform's cos moves a fire).
 const STEEP_DEG := TerrainRules.CLIFF_START_DEG
+const STEEP_NORMAL_Y := 0.719339800339
 ## Floats per planned flame, and where each sits: x, y, z (document metres), intensity 0..1,
 ## seed (the tongue layout plus a 0..1 seed), height and width (metres), kind (FLAME, SPARK).
 const STRIDE := 8
@@ -101,9 +104,12 @@ const BLAZE_WIDTH_FROM := 0.55
 ## zoom; fewer, larger clumps with wider gaps read as separate fires.)
 const CLUMP_CELL_M := 4.2
 ## The clump noise's warp: the broad noise's cell and how far (metres) it moves a point; and
-## the turns (radians) of its two octaves' lattices off the map's axes.
+## the turns of its two octaves' lattices off the map's axes (CLUMP_TURN, radians), each held
+## as its (cos, sin) in literals so no platform's sin or cos moves a clump.
 const CLUMP_WARP := Vector2(6.0, 3.0)
 const CLUMP_TURN := Vector2(0.56, 1.21)
+const CLUMP_TURN_A := Vector2(0.847255111013, 0.531186197921)
+const CLUMP_TURN_B := Vector2(0.353019401219, 0.935616001553)
 const CLUMP_SCALE := Vector2(0.6, 1.6)
 ## How far a flame's own draw moves its place in the clump's scale range (either way), so a
 ## clump's neighbours are not one height.
@@ -137,14 +143,21 @@ const HEAT_FULL_M := 4.5
 const HEAT_REACH := Vector2(1.0, 1.0)
 ## The feet's pools, a second raster on the same grid (round 4: where the ground glows under the
 ## flames, so every flame's foot stands in glow whatever its size): each flame adds 1 under a
-## narrow kernel reaching POOL_REACH.x plus POOL_REACH.y of its width; uploaded clamped to 1.
-const POOL_REACH := Vector2(0.45, 0.6)
-## Texels the cleared rect of a refresh reaches past its blocks (more than any kernel's reach).
-const HEAT_GROW := 8
+## narrow kernel reaching POOL_REACH.x plus POOL_REACH.y of its width (a pool of light about
+## twice a fire's width); uploaded clamped to 1.
+const POOL_REACH := Vector2(0.4, 0.85)
+## Texels a block's flames can reach past it with their kernels, so the cleared rect of a
+## refresh reaches this far past its blocks: FireFires' largest fire (about 3.4 m tall and 3.7 m
+## wide) stands up to 1.8 m off its block and its heat kernel reaches 4.7 m
+## (FireFires.heat_reach_m, 6.48 m).
+const HEAT_GROW := 13
+## Texels round a block its flames' feet read the heat raster at (each drawn flame carries the
+## heat at its foot): FireFires.spill_m and the bilinear read's next texel.
+const FEET_GROW := 5
 ## Metres the static bake's redraw reaches past a refresh's blocks: the rasters' cleared rect
 ## (HEAT_GROW texels) and their B-spline, and the ground's mask reads (the wander, the fill's
 ## taps and the early-out's rings, under 6 m together).
-const BAKE_REACH_M := 6.0
+const BAKE_REACH_M := 8.0
 ## Past this camera zoom (the orthographic size) half the flames hide.
 const LOD_ZOOM := 24.0
 ## Lattice points a block's window reaches past its own (a lick looks two points out).
@@ -262,10 +275,19 @@ func finish_work() -> void:
 
 ## A job re-planning the blocks the samples of `sample_rect` reach (see refresh).
 func _job_for(sample_rect: Rect2i) -> FirePlanJob:
-	var step := document.sample_step()
-	var reach := PLACE_WARP.y + JITTER * FLAME_SPACING_M
-	var touched := blocks_of(document, sample_rect.grow(ceili(reach / minf(step.x, step.y)) + 1))
+	var touched := blocks_to_replan(document, sample_rect)
 	return FirePlanJob.make(document, touched, _plans, _heat, _pools, _heat_size)
+
+
+## The blocks whose plans a change to the mask's samples `sample_rect` can change, row by row: a
+## lattice point reads the mask through the placement warp (PLACE_WARP.y, plus its jitter and
+## the bilinear read's sample), and a FireFires decision reads the window's points up to
+## FireFires.MARGIN lattice points away (about 8.7 m together). Pure.
+static func blocks_to_replan(doc: MapDocument, sample_rect: Rect2i) -> Array[Vector2i]:
+	var step := doc.sample_step()
+	var points := maxi(FireFires.MARGIN, WINDOW_MARGIN) + JITTER
+	var reach := PLACE_WARP.y + points * FLAME_SPACING_M
+	return blocks_of(doc, sample_rect.grow(ceili(reach / minf(step.x, step.y)) + 1))
 
 
 ## Waits for the job in flight, lands it and starts the next for the samples queued meanwhile.
@@ -296,6 +318,10 @@ func _land(job: FirePlanJob) -> void:
 		else:
 			_plans[block] = plan
 			_cells[block] = job.cells[block]
+	# The rasters changed inside the cleared rect only (all of them with a new size).
+	var cleared := Rect2i(Vector2i.ZERO, job.heat_size)
+	if job.heat_size == _heat_size:
+		cleared = cleared_rect(document, touched)
 	_heat = job.heat
 	_pools = job.pools
 	_heat_size = job.heat_size
@@ -311,8 +337,10 @@ func _land(job: FirePlanJob) -> void:
 			stale.append(block)
 	for block in stale:
 		var share := int(shares.get(block, 0))
-		# A neighbour of a re-planned block is drawn again too: its flames' heat may have changed.
-		if _beside(block, touched) or share != int(_counts.get(block, 0)):
+		# A block whose flames stand where the rasters changed is drawn again too: the heat at
+		# their feet may have changed.
+		var feet := raster_box(document, block, FEET_GROW)
+		if feet.intersects(cleared) or share != int(_counts.get(block, 0)):
 			_show(block, share)
 	_bind_glow()
 	if _noise != null:
@@ -331,6 +359,24 @@ static func bake_region(doc: MapDocument, touched: Array[Vector2i]) -> Rect2:
 		var box := Rect2(-half + Vector2(r.position) * step, Vector2(r.size) * step)
 		region = box if not region.has_area() else region.merge(box)
 	return region.grow(BAKE_REACH_M) if region.has_area() else region
+
+
+## A stable hash of the field's landed plans and rasters (hex SHA-256 over the burning blocks in
+## row order with their plans, then the rasters' size and bytes): equal on every peer holding the
+## same fire, whether it refreshed stroke by stroke or rebuilt. Read it once is_working() is
+## false (finish_work()); for tests and the net check.
+func plan_digest() -> String:
+	var bytes := PackedByteArray()
+	for block: Vector2i in row_order(_plans.keys()):
+		bytes.append_array(PackedInt32Array([block.x, block.y]).to_byte_array())
+		bytes.append_array((_plans[block] as PackedFloat32Array).to_byte_array())
+	bytes.append_array(PackedInt32Array([_heat_size.x, _heat_size.y]).to_byte_array())
+	bytes.append_array(_heat.to_byte_array())
+	bytes.append_array(_pools.to_byte_array())
+	var hashing := HashingContext.new()
+	hashing.start(HashingContext.HASH_SHA256)
+	hashing.update(bytes)
+	return hashing.finish().hex_encode()
 
 
 ## Flames (and sparks) shown on the whole map.
@@ -401,64 +447,21 @@ static func clump(map_seed: int, p: Vector2) -> float:
 	var warp := Vector2(
 		_value_noise(map_seed + 9, wq) - 0.5, _value_noise(map_seed + 10, wq + Vector2(5.3, 1.7)) - 0.5
 	)
-	var q := (p + warp * CLUMP_WARP.y).rotated(CLUMP_TURN.x) / CLUMP_CELL_M
-	var fine := q.rotated(CLUMP_TURN.y) * 2.3
+	var q := _turn(p + warp * CLUMP_WARP.y, CLUMP_TURN_A) / CLUMP_CELL_M
+	var fine := _turn(q, CLUMP_TURN_B) * 2.3
 	var v := 0.7 * _value_noise(map_seed + 7, q) + 0.3 * _value_noise(map_seed + 8, fine)
 	return smoothstep(0.22, 0.78, v)
 
 
-## The flames of diff block `block` of `doc` (see the header): STRIDE floats each, shuffled.
-## Pure and deterministic; empty without a fire mask.
+## The fires of diff block `block` of `doc` (FireFires.plan_block; see the header): STRIDE
+## floats each, shuffled. Pure and deterministic; empty without a fire mask.
 static func plan_block(doc: MapDocument, block: Vector2i) -> PackedFloat32Array:
-	var count := doc.sample_count()
-	if doc.fire_mask.size() != count or doc.heights.size() != count:
-		return PackedFloat32Array()
-	var rect := MaskStroke.block_rect(doc, block)
-	if not rect.has_area():
-		return PackedFloat32Array()
-	var step := doc.sample_step()
-	var half := doc.extent_m() * 0.5
-	var low := -half + Vector2(rect.position) * step
-	var high := -half + Vector2(rect.end) * step
-	# Lattice points whose unjittered spot lies in [low, high) belong to this block.
-	var first := Vector2i(ceili(low.x / FLAME_SPACING_M), ceili(low.y / FLAME_SPACING_M))
-	var end := Vector2i(ceili(high.x / FLAME_SPACING_M), ceili(high.y / FLAME_SPACING_M))
-	var window := LatticeWindow.new(doc, first, end)
-	var columns := doc.samples_x()
-	var rows := doc.samples_z()
-	var wet := doc.water_dressing.size() == count * 4
-	var flat_y := cos(deg_to_rad(STEEP_DEG))
-	var entries: Array = []
-	for iz in range(first.y, end.y):
-		for ix in range(first.x, end.x):
-			var i := window.index(ix, iz)
-			var heat := window.heat[i]
-			if heat < EMBER_MIN:
-				continue
-			var key := _key(ix, iz)
-			var p := Vector2(window.px[i], window.pz[i])
-			var at := (p + half) / step
-			var nearest := doc.sample_index(
-				clampi(roundi(at.x), 0, columns - 1), clampi(roundi(at.y), 0, rows - 1)
-			)
-			if wet and doc.water_dressing[nearest * 4 + 3] >= WET_LINE_MIN:
-				continue
-			var normal := ScatterGenerator.triangle_normal(doc.heights, columns, rows, at, step)
-			if normal.y < flat_y:
-				continue
-			var entry := _flame(doc.map_seed, key, heat, window, i)
-			if entry.is_empty():
-				continue
-			entry[0] = p.x
-			entry[1] = ScatterGenerator.triangle_height(doc.heights, columns, rows, at)
-			entry[2] = p.y
-			entries.append(entry)
-	entries.sort_custom(func(a: PackedFloat32Array, b: PackedFloat32Array) -> bool:
-		return fmod(a[SEED], 1.0) < fmod(b[SEED], 1.0))
-	var out := PackedFloat32Array()
-	for entry: PackedFloat32Array in entries:
-		out.append_array(entry)
-	return out
+	return FireFires.plan_block(doc, block)
+
+
+## `v` turned by the turn whose (cos, sin) is `turn`.
+static func _turn(v: Vector2, turn: Vector2) -> Vector2:
+	return Vector2(v.x * turn.x - v.y * turn.y, v.x * turn.y + v.y * turn.x)
 
 
 ## Each block's share of `cap` for blocks planning `planned` (block -> flames): all of them
@@ -498,9 +501,10 @@ static func thin(plan: PackedFloat32Array, budget: int) -> PackedFloat32Array:
 	return plan.slice(0, maxi(budget, 0) * STRIDE)
 
 
-## A flame for lattice point `i` of `window` at mask value `heat`, or empty where none stands
-## (an ember point with no spark, a point in a clump's gap). Its x, y, z are filled by the
-## caller.
+## The own flame of lattice point `i` of `window` at mask value `heat` (FireFires stands it in the
+## ember band and the blaze): an ember point's spark, a blaze point's flame, or empty where none
+## stands (an ember point with no spark, a blaze point in its clump's gap, a flames-band point).
+## Its x, y, z are filled by the caller.
 static func _flame(
 	map_seed: int, key: int, heat: float, window: LatticeWindow, i: int
 ) -> PackedFloat32Array:
@@ -517,15 +521,7 @@ static func _flame(
 	var own := (MaskBrush.sample_noise(map_seed + 5, key) - 0.5) * 2.0 * SCALE_JITTER
 	var layout: int
 	var scale: float
-	if heat < BLAZE_MIN:
-		var strength := (heat - FLAME_MIN) / float(BLAZE_MIN - FLAME_MIN)
-		var gap := lerpf(FLAME_GAP.x, FLAME_GAP.y, strength)
-		if c < gap:
-			return PackedFloat32Array()
-		# Small at a clump's edge, big in its middle, each flame a little off its neighbours.
-		scale = lerpf(CLUMP_SCALE.x, CLUMP_SCALE.y, clampf((c - gap) / (1.0 - gap) + own, 0.0, 1.0))
-		layout = floori(size * (2.0 if strength < 0.4 else 3.0))
-	elif window.big(i):
+	if window.big(i):
 		scale = lerpf(BIG_SCALE.x, BIG_SCALE.y, c)
 		layout = LAYOUT_CROWN if size < 0.6 else LAYOUT_THREE
 		width_share = lerpf(BLAZE_WIDTH_FROM, WIDTH_SHARE.y, size)
@@ -606,12 +602,33 @@ static func heat_at(heat: PackedFloat32Array, size: Vector2i, half: Vector2, p: 
 	return clampf(lerpf(top, bottom, f.y) / HEAT_FULL_M, 0.0, 1.0)
 
 
-## Whether `block` is one of `blocks` or next to one (eight ways).
-static func _beside(block: Vector2i, blocks: Array[Vector2i]) -> bool:
-	for other in blocks:
-		if absi(other.x - block.x) <= 1 and absi(other.y - block.y) <= 1:
-			return true
-	return false
+## The heat raster's texels the flames of `block` of `doc` can reach: its rect grown by `grow`
+## texels (HEAT_GROW: their kernels; FEET_GROW: the texels their feet read). Pure.
+static func raster_box(doc: MapDocument, block: Vector2i, grow := HEAT_GROW) -> Rect2i:
+	var step := doc.sample_step()
+	var r := MaskStroke.block_rect(doc, block)
+	var lo := Vector2i((Vector2(r.position) * step / HEAT_STEP_M).floor()) - Vector2i.ONE * grow
+	var hi := Vector2i((Vector2(r.end) * step / HEAT_STEP_M).ceil()) + Vector2i.ONE * grow
+	return Rect2i(lo, hi - lo)
+
+
+## The texels a refresh of blocks `touched` of `doc` clears and re-splats: every texel their
+## flames, old or new, can reach (the raster_box rects merged), clipped to the raster. Pure.
+static func cleared_rect(doc: MapDocument, touched: Array[Vector2i]) -> Rect2i:
+	var area := Rect2i()
+	for block in touched:
+		var box := raster_box(doc, block)
+		area = box if area.size == Vector2i.ZERO else area.merge(box)
+	return area.intersection(Rect2i(Vector2i.ZERO, heat_size(doc)))
+
+
+## `blocks` (Vector2i) sorted in row order: by row, then column.
+static func row_order(blocks: Array) -> Array:
+	var out := blocks.duplicate()
+	out.sort_custom(
+		func(p: Vector2i, q: Vector2i) -> bool: return p.y < q.y or (p.y == q.y and p.x < q.x)
+	)
+	return out
 
 
 static func _key(ix: int, iz: int) -> int:
@@ -667,8 +684,10 @@ func _show(block: Vector2i, shown: int) -> void:
 
 
 ## The heat raster `heat` and the pools `pools` (`old_size` texels; written in place, so pass
-## copies) of `doc` re-splatted from `plans` (block -> plan) around the re-planned blocks
-## `touched`, or whole when the raster's size changed: {"heat", "pools", "size"}.
+## copies) of `doc` re-splatted from `plans` (block -> plan) over the cleared rect of the
+## re-planned blocks `touched` (cleared_rect), or whole when the raster's size changed:
+## {"heat", "pools", "size"}. Every block reaching into the cleared rect is splatted there, in
+## row order, so the bytes equal a whole re-splat's.
 static func resplat(
 	doc: MapDocument,
 	plans: Dictionary,
@@ -686,23 +705,16 @@ static func resplat(
 		pools = PackedFloat32Array()
 		pools.resize(size.x * size.y)
 	else:
-		var step := doc.sample_step()
-		var grow := Vector2i(HEAT_GROW, HEAT_GROW)
-		var area := Rect2i()
-		for block in touched:
-			var r := MaskStroke.block_rect(doc, block)
-			var lo := Vector2i((Vector2(r.position) * step / HEAT_STEP_M).floor()) - grow
-			var hi := Vector2i((Vector2(r.end) * step / HEAT_STEP_M).ceil()) + grow
-			var box := Rect2i(lo, hi - lo)
-			area = box if area.size == Vector2i.ZERO else area.merge(box)
-		clip = area.intersection(clip)
+		clip = cleared_rect(doc, touched)
 		for z in range(clip.position.y, clip.end.y):
 			for x in range(clip.position.x, clip.end.x):
 				heat[z * size.x + x] = 0.0
 				pools[z * size.x + x] = 0.0
 	var half := doc.extent_m() * 0.5
-	for block in plans:
-		if whole or _beside(block, touched):
+	# In row order, not the Dictionary's (a refresh appends a newly burning block last): every
+	# texel sums its flames in the same order on a refreshed peer and a rebuilt one.
+	for block: Vector2i in row_order(plans.keys()):
+		if whole or raster_box(doc, block).intersects(clip):
 			splat_heat(heat, size, half, plans[block], clip, pools)
 	return {"heat": heat, "pools": pools, "size": size}
 
@@ -774,9 +786,10 @@ func _place_lights_and_smoke() -> void:
 	_smoke.place(smoky)
 
 
-## The lattice around one block (WINDOW_MARGIN points past it on every side): each point's
-## jittered spot, its mask value and its clump value, so a point can see its neighbours
-## across the block's edge without reading another block's plan.
+## The lattice around one block (`margin` points past it on every side, WINDOW_MARGIN at least;
+## FireFires reads FireFires.MARGIN): each point's jittered spot, its mask value and its clump
+## value, so a point can see its neighbours across the block's edge without reading another
+## block's plan.
 class LatticeWindow:
 	var origin: Vector2i
 	var width: int
@@ -785,9 +798,9 @@ class LatticeWindow:
 	var heat := PackedFloat32Array()
 	var clump := PackedFloat32Array()
 
-	func _init(doc: MapDocument, first: Vector2i, end: Vector2i) -> void:
-		origin = first - Vector2i(WINDOW_MARGIN, WINDOW_MARGIN)
-		var last := end + Vector2i(WINDOW_MARGIN, WINDOW_MARGIN)
+	func _init(doc: MapDocument, first: Vector2i, end: Vector2i, margin := WINDOW_MARGIN) -> void:
+		origin = first - Vector2i(margin, margin)
+		var last := end + Vector2i(margin, margin)
 		width = last.x - origin.x
 		var size := width * (last.y - origin.y)
 		px.resize(size)
