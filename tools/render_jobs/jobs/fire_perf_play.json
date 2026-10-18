@@ -41,18 +41,6 @@
    {"op": "wait", "s": 6.0},
    {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
   ]},
-  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "day_z8"},
-  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
-  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
-  {"op": "wait", "s": 3.0},
-  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "third day z8"},
-  {"op": "expand", "values": ["on", "off", "on#2", "off#2"], "template": [
-   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "{value}"},
-   {"op": "wait", "s": 1.0},
-   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "third day z8 {value}"},
-   {"op": "wait", "s": 6.0},
-   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
-  ]},
   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "day_z20"},
   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
@@ -62,6 +50,18 @@
    {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "{value}"},
    {"op": "wait", "s": 1.0},
    {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "third day z20 {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "day_z8"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
+  {"op": "wait", "s": 3.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "third day z8"},
+  {"op": "expand", "values": ["on", "off", "on#2", "off#2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "{value}"},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "third day z8 {value}"},
    {"op": "wait", "s": 6.0},
    {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
   ]},
@@ -101,18 +101,6 @@
    {"op": "wait", "s": 6.0},
    {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
   ]},
-  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "night_z8"},
-  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
-  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
-  {"op": "wait", "s": 3.0},
-  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "third night z8"},
-  {"op": "expand", "values": ["on", "off", "on#2", "off#2"], "template": [
-   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "{value}"},
-   {"op": "wait", "s": 1.0},
-   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "third night z8 {value}"},
-   {"op": "wait", "s": 6.0},
-   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
-  ]},
   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "night_z20"},
   {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
@@ -122,6 +110,18 @@
    {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "{value}"},
    {"op": "wait", "s": 1.0},
    {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "third night z20 {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "night_z8"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
+  {"op": "wait", "s": 3.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "third night z8"},
+  {"op": "expand", "values": ["on", "off", "on#2", "off#2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "{value}"},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "third night z8 {value}"},
    {"op": "wait", "s": 6.0},
    {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
   ]},

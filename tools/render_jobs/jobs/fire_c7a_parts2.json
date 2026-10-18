@@ -1,0 +1,177 @@
+{
+ "out_dir": "render_jobs/fire_c7a_parts2",
+ "timeout_s": 1500,
+ "hang_s": 120,
+ "remove_override": true,
+ "steps": [
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "start"},
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 200, "seed": 1234},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "stroke", "mode": "fire", "tile": "flames", "points": [[-25, -10], [25, -10]], "speed": 4.0, "radius": 4.0},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "stroke", "mode": "fire", "tile": "flames", "points": [[25, -3], [-25, -3]], "speed": 4.0, "radius": 4.0},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "stroke", "mode": "fire", "tile": "flames", "points": [[-25, 4], [25, 4]], "speed": 4.0, "radius": 4.0},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "stroke", "mode": "fire", "tile": "blaze", "curve": true, "points": [[-26, -1], [-14, -4], [-2, -2.5], [10, 0], [26, -3]], "speed": 3.0, "radius": 2.0},
+  {"op": "wait_ready", "settle": 1.5},
+  {"op": "eval", "expr": "_game_map.get_brush_tool().deactivate()"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "info"},
+  {"op": "vsync_off"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "day_home"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
+  {"op": "wait", "s": 3.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "third day home"},
+  {"op": "expand", "values": ["on", "off", "no_flames", "no_glow", "no_smoke", "no_smoke#2", "no_glow#2", "no_flames#2", "off#2", "on#2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "{value}"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "third day home {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "day_z20"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
+  {"op": "wait", "s": 3.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "third day z20"},
+  {"op": "expand", "values": ["on", "off", "no_flames", "no_glow", "no_smoke", "no_smoke#2", "no_glow#2", "no_flames#2", "off#2", "on#2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "{value}"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "third day z20 {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "night_home"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
+  {"op": "wait", "s": 3.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "third night home"},
+  {"op": "expand", "values": ["on", "off", "no_flames", "no_glow", "no_smoke", "no_lights", "no_lights#2", "no_smoke#2", "no_glow#2", "no_flames#2", "off#2", "on#2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "{value}"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "third night home {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "night_z20"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
+  {"op": "wait", "s": 3.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "third night z20"},
+  {"op": "expand", "values": ["on", "off", "no_flames", "no_glow", "no_smoke", "no_lights", "no_lights#2", "no_smoke#2", "no_glow#2", "no_flames#2", "off#2", "on#2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "{value}"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "third night z20 {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "day_home"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
+  {"op": "wait", "s": 1.0},
+  {"op": "expand", "values": ["dab", "dab", "whole", "whole"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "bake_gpu", "mode": "{value}", "at": [-2, -2.5], "radius": 4.0},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "bake_gpu", "read": true}
+  ]},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "third, books held"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "book", "do": "release"},
+  {"op": "wait", "s": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "third, books released"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "book", "do": "load"},
+  {"op": "wait", "s": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "third, books reloaded"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "stroke", "mode": "fire", "tile": "flames", "points": [[-28, -26], [28, -26]], "speed": 5.0, "radius": 4.0},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "stroke", "mode": "fire", "tile": "flames", "points": [[28, -18.5], [-28, -18.5]], "speed": 5.0, "radius": 4.0},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "stroke", "mode": "fire", "tile": "flames", "points": [[-28, 11], [28, 11]], "speed": 5.0, "radius": 4.0},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "stroke", "mode": "fire", "tile": "flames", "points": [[28, 18.5], [-28, 18.5]], "speed": 5.0, "radius": 4.0},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "stroke", "mode": "fire", "tile": "flames", "points": [[-28, 26], [28, 26]], "speed": 5.0, "radius": 4.0},
+  {"op": "wait_ready", "settle": 1.5},
+  {"op": "eval", "expr": "_game_map.get_brush_tool().deactivate()"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "info"},
+  {"op": "expand", "values": ["dab", "whole"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "bake_gpu", "mode": "{value}", "at": [-2, -2.5], "radius": 4.0},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "bake_gpu", "read": true}
+  ]},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "day_home"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
+  {"op": "wait", "s": 3.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "whole day home"},
+  {"op": "expand", "values": ["on", "off", "off#2", "on#2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "{value}"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "whole day home {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "day_z20"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
+  {"op": "wait", "s": 3.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "whole day z20"},
+  {"op": "expand", "values": ["on", "off", "off#2", "on#2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "{value}"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "whole day z20 {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "night_home"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
+  {"op": "wait", "s": 3.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "whole night home"},
+  {"op": "expand", "values": ["on", "off", "no_flames", "no_glow", "no_smoke", "no_lights", "no_lights#2", "no_smoke#2", "no_glow#2", "no_flames#2", "off#2", "on#2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "{value}"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "whole night home {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "shot", "key": "night_z20"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire.gd", "action": "label", "text": ""},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
+  {"op": "wait", "s": 3.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info", "name": "whole night z20"},
+  {"op": "expand", "values": ["on", "off", "no_flames", "no_glow", "no_smoke", "no_lights", "no_lights#2", "no_smoke#2", "no_glow#2", "no_flames#2", "off#2", "on#2"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "{value}"},
+   {"op": "wait", "s": 1.5},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "start", "name": "whole night z20 {value}"},
+   {"op": "wait", "s": 6.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "stop"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_perf.gd", "action": "config", "config": "on"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "end"},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0}
+ ]
+}

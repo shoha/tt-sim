@@ -3430,7 +3430,7 @@ through "Bakes and a worker (F4b-4)", timed the fire before its production port 
 reference fit (branch `fire-sim`, cards fire-prod-c1 to c6; [systems/fire.md](systems/fire.md)):
 the banded-tongue flames with their LOD past zoom 24, the static and fine ground bakes with the
 per-pixel bed, the per-pixel smoke plume and lights of range 15 m. Their numbers stay as measured;
-the production fire's pinned numbers will follow in a section of their own (card fire-prod-c7).
+the production fire's pinned numbers are in "Fire, production port (C7, 2026-10-18)" below.
 The first-burn hitch's surface binding (F4b-2, below) is unchanged by the port.
 
 What the persistent ground fire (FireField: flames, the ground's fire term, smoke, lights) costs
@@ -3635,3 +3635,158 @@ process's first map and 13 ms on the second (a plain biome paint's cost), the sy
 load's arrays sync grew 8-9 ms (44 / 67 ms against 36 / 58), the loading screen did not move
 beyond its noise (3,761 / 1,307 ms against 3,909 and 3,648 / 1,343 and 1,307), video memory is
 unchanged.
+
+## Fire, production port (C7, 2026-10-18)
+
+The persistent fire after its production port to round 6 of the reference fit (branch `fire-sim`,
+cards fire-prod-c1 to c6; [systems/fire.md](systems/fire.md)) and the game's re-tuned glow (card
+fire-prod-c5b, [lighting-and-environment.md](lighting-and-environment.md) "Glow/Bloom"), against
+the design's targets: 0.5 ms GPU at home and 0.3 ms at zoom 20 (night held to the same numbers),
+CPU under 0.1 ms a frame. Card C7a measured the port before the glow re-tune (59aeb514) and main
+(f4ac41b9); card C7b re-ran the fire's on/off with the new glow and timed the glow itself.
+
+**How.** The pinned procedure: `override.cfg` 1920x1080 with `aspect="keep"` (each job removes it
+at startup), vsync off at runtime, the user's graphics settings (shadow quality 2, SSAO on, MSAA
+off, foliage budget 8M), a debug build, RTX 3080, Forward+, `perf.gd gpu_state` at the start and
+end. Jobs (JOBS.md): `fire_c7a_aba` (the fire on / off / off / on per view), `fire_c7a_parts` and
+`fire_c7a_parts2` (each part off in a palindrome, zoom 8, the widest zoom, the stroke, the book,
+memory) and `fire_c7b_glow` (the glow old / new / off in a palindrome). Each window is 6 s after
+1.5 s of settle; the numbers are GPU medians. The map: a new 200 ft temperate forest (seed 1234);
+"third" three `flames` passes and a `blaze` line (223 shown: 54 sparks, 58 flames, 111 blaze; 18
+blocks), "whole" five more passes (439 shown: 166 / 162 / 111; 42 blocks). The fire "off" hides the
+flames, the smoke and the lights and sets the ground's `fire_present` 0, which also drops the
+char's albedo, roughness, specular and normal flattening (`authored_ground.gdshaderinc`, the
+`charred` lines). The glow does not toggle with the fire.
+
+**The camera pose depends on the previous view.** Compare each view's `info` line (objects and
+primitives) before trusting a number. Two mechanisms, from the code:
+- Home after the widest zoom lands south of the fire (429 objects against 471). The game's
+  `CameraController._reset_camera_to_home()` clamps the home position with
+  `_clamp_position_to_bounds()` at the camera's size when Home is pressed; from 0.6 of the
+  map-fitting size (`RECENTRE_START`; about 31 on 200 ft) `recentre_weight` narrows the pan range
+  onto the map centre, so at the widest zoom the tween goes to the centre and the zoom then eases
+  back to home's size there. Pressing Home from the whole-map view does not return to the home
+  framing in play either. Game camera code; reported, not changed. From home's own size, zoom 8,
+  20 or 30 the clamp is a no-op.
+- Zoom 20 after zoom 8 lands elsewhere (712 objects against 732). The probe (`fire.gd _view`) sets
+  `_target_zoom` and places the holder at once from `_get_view_center_ground_offset()` at the
+  current size, but the camera's offset scales with its size (`_update_camera_offset`, along a base
+  offset that is not exactly the view axis), so the screen centre's ground point moves while the
+  zoom eases in, by an amount that depends on the size it started from. The cursor sits at the
+  SubViewport's centre (960, 540 of 1920x1080, logged), so zoom-toward-cursor adds nothing.
+  Logged holder positions repeat exactly: home (0, 0, 0) at 13.85, zoom 20 after home (3.20, 0,
+  0.20) at 20.0, on both maps and under both skies.
+The timing jobs now take home and zoom 20 first and zoom 8 and the widest last (`fire_perf_play`
+takes zoom 20 straight after home); zoom 8 and the widest have no target, so their own poses only
+need to repeat.
+
+**Fire on minus off (GPU ms).** C7a runs 2 and 5, C7b one run of `fire_c7a_aba` in the same order
+(home, zoom 20, night home, night zoom 20; the poses equal C7a's within 24 primitives):
+
+| View | C7a run 2 | C7a run 5 | C7b (new glow) | Target |
+| --- | --- | --- | --- | --- |
+| Third, day, home | 0.210 | 0.296 | 0.153 | 0.5: meets |
+| Third, day, zoom 20 | 0.152 | 0.157 | 0.161 | 0.3: meets |
+| Third, night, home | 0.436 | 0.351 | 0.353 | 0.5: meets |
+| Third, night, zoom 20 | 0.381 | 0.382 | 0.231 | 0.3: missed by 0.08 in C7a, meets in C7b |
+| Whole, day, home | 0.156 | 0.161 | 0.401 (off windows 3.559 / 3.417) | 0.5: meets |
+| Whole, day, zoom 20 | 0.195 | 0.206 | 0.180 | 0.3: meets |
+| Whole, night, home | 0.633 | 0.673 | 0.365 | 0.5: missed by 0.15 in C7a, meets in C7b |
+| Whole, night, zoom 20 | 0.208 | 0.280 | 0.231 | 0.3: meets |
+
+The glow is not the difference between C7a and C7b: it costs the same with the fire on and off
+(below), so it cancels in every row. The rows move by up to 0.3 ms between processes at the same
+pose while the windows inside a run agree within about 0.01 (whole night home, C7b: on 4.299 /
+4.304, off 3.931 / 3.943), as C7a saw on main (0.01-0.43 between processes). The whole-day-home
+row of C7b had an unsteady off pair (the pairs read 0.31 and 0.50); it follows the five burning
+strokes by about 5 s.
+
+**Per part (C7a run 5; on minus that part off, GPU ms).** Run 4's value in brackets where it
+differed:
+
+| View | Flames | Ground term | Smoke | Lights | Sum | Whole fire |
+| --- | --- | --- | --- | --- | --- | --- |
+| Third, day, home | 0.080 (0.074) | 0.190 (0.064) | -0.017 (0.018) | gated | 0.25 | 0.296 |
+| Third, day, zoom 20 | 0.095 | 0.050 | 0.025 | gated | 0.17 | 0.157 |
+| Third, night, home | 0.117 | 0.076 | 0.011 | 0.150 | 0.35 | 0.351 |
+| Third, night, zoom 20 | 0.094 | 0.200 | 0.018 | 0.173 | 0.49 | 0.382 |
+| Whole, night, home | 0.125 | 0.469 | 0.004 | 0.146 | 0.74 | 0.673 |
+| Whole, night, zoom 20 | 0.122 | 0.020 | 0.017 | 0.109 | 0.27 | 0.280 |
+
+The ground term is the irregular part: 0.02-0.47 ms, not tracking the burning area (whole night
+zoom 20 sees more burning ground than home and costs 0.02). Inside a run it is steady (run 5,
+whole night home: on 3.974 / 3.981, ground off 3.508 / 3.509); between runs the same view and
+pose differs (third day home 0.064 and 0.190), so the cause is per process, not window noise.
+Not explained: the sim bake's SubViewport is `UPDATE_DISABLED` outside a refresh by design, but
+whether it redraws during the windows and how much the ground overdraws were not checked; a
+per-process pipeline state (Godot's ubershader fallback before a specialised pipeline compiles)
+is a candidate, unverified. A per-term profile at whole night home (`fire_ab.gd patch`) is the next
+step.
+
+**Zoom 8 and the widest zoom (52.37), C7a run 4.** The flames' quads fill the frame at zoom 8;
+nothing has an LOD since the port.
+
+| View | Third, day | Third, night | Whole, day | Whole, night |
+| --- | --- | --- | --- | --- |
+| Zoom 8 | 0.156 | 0.407 | 0.181 | 0.345 |
+| Widest | 0.056 | 0.116 | 0.093 | 0.130 |
+
+**Main against production (C7a, A-B-A across processes).** Main f4ac41b9 runs 1 and 3 around
+production's run 2; main's own fire delta moved by up to 0.43 ms between its two runs and its off
+windows drifted 4-17 %:
+
+| View | Main run 1 | Production run 2 | Main run 3 | Production / main |
+| --- | --- | --- | --- | --- |
+| Third, day, home | 0.933 | 0.210 | 0.693 | 23-30 % |
+| Third, day, zoom 20 | 0.536 | 0.152 | 0.526 | 28-29 % |
+| Third, night, home | 1.038 | 0.436 | 1.005 | 42-43 % |
+| Third, night, zoom 20 | 0.990 | 0.381 | 0.677 | 38-56 % |
+| Whole, day, home | 1.059 | 0.156 | 1.294 | 12-15 % |
+| Whole, day, zoom 20 | 0.712 | 0.195 | 0.688 | 27-28 % |
+| Whole, night, home | 1.588 | 0.633 | 1.375 | 40-46 % |
+| Whole, night, zoom 20 | 1.263 | 0.208 | 0.835 | 16-25 % |
+
+Main showed 579 fires on "third" and 1,721 on "whole" against production's 223 and 439.
+
+**The glow (C7b, in run, no fire and burning).** `glow.gd variant` switches the live Environment's
+glow alone: old (main's before C5b: the preset's intensity, strength and bloom, Godot's screen
+blend, threshold 1.0, scale 2.0, levels [0, 0.8, 0.4, 0.1, 0, 0, 0]; on day and night 0.3 / 0.05),
+new (`EnvironmentGlow`: additive, 1.05, 1.5, levels [0, 0, 0.6, 1, 1, 0.5, 0], 0.5 / 0.03) and off.
+No fire: the firefeat_glow map (150 m forest, a river and a pond); burning: the 200 ft "third"
+built in the same process after it (181 shown, 16 blocks: fewer than the A-B-A's 223, the strokes
+being screen gestures from a camera the first map left elsewhere). Means of two windows, GPU ms:
+
+| View | Old | New | Off | New - off | Old - off | New - old |
+| --- | --- | --- | --- | --- | --- | --- |
+| No fire, day, home | 3.545 | 3.597 | 3.382 | 0.215 | 0.163 | +0.051 |
+| No fire, day, zoom 20 | 3.815 | 3.829 | 3.633 | 0.196 | 0.182 | +0.014 |
+| No fire, night, home | 3.729 | 3.753 | 3.527 | 0.226 | 0.202 | +0.024 |
+| No fire, night, zoom 20 | 4.010 | 4.020 | 3.820 | 0.199 | 0.189 | +0.010 |
+| Burning, night, home | 4.571 | 4.587 | 4.385 | 0.202 | 0.186 | +0.016 |
+| Burning, night, zoom 20 | 4.671 | 4.693 | 4.472 | 0.221 | 0.199 | +0.022 |
+
+The glow is a full-frame cost of about 0.2 ms whatever the frame holds; the re-tune's wider levels
+(mips 3-6) add 0.01-0.05 ms over the old. It is not part of the fire's budget.
+
+**CPU, stroke, book, memory.**
+- CPU: the field and its lights 0.002 ms a frame (field 0.39-0.48 us, lights 1.59-2.03 us with 3-4
+  lit; C7b 0.42 / 1.80 and 0.39 / 1.97); target 0.1 ms: meets. The frame's CPU median is the GPU's
+  plus about 0.5 ms (GPU-bound).
+- A 4 m dab at the blaze (16 blocks, median of 9): the worker 166.5 / 170.2 ms (third / whole); the
+  main thread 0.04 at launch and 1.75 / 3.56 ms at landing; at once 168.0 / 173.1 (re-plan 166.6 /
+  170.6, heat re-splat 2.6 / 4.0). The sim bake's redraw on the GPU: the dab's region 0.20 / 0.31
+  ms, the whole bake 0.23 / 0.38 ms (`bake_gpu`, the SubViewport held at `UPDATE_ALWAYS` while
+  measured: a one-off `UPDATE_ONCE` never returns its render time).
+- The flame book: a cold load 70.1-79.5 ms on a loader thread plus 4.9-5.0 ms of upload on the main
+  thread; warm 57.3-59.1 ms plus 4.7-4.8 (the file always in the OS cache).
+- Texture memory: no fire 873.0 MB; production third 918.7 (+45.7: the books 33.1, the sim bake
+  8.1, the rest about 4.5; C7b +45.7 again); main third 884.7 (+11.7). A later +37.8 MB in every
+  run comes with the first `outdoor_night` view, not the fire.
+
+**Verdict.** The production fire meets every target by day in every run (0.15-0.40 ms at home,
+0.15-0.21 at zoom 20 against 0.5 and 0.3) and costs 12-56 % of main's with fewer, bigger fires.
+At night the lights and the ground term put two views at the edge: whole night home (0.63 / 0.67
+in C7a, 0.37 in C7b, against 0.5) and third night zoom 20 (0.38 / 0.38, then 0.23, against 0.3);
+they meet in the latest run and miss in the two before, with the ground term's per-process swing
+as the open cause. CPU 0.002 ms against 0.1. A stroke's re-plan stays off the main thread (1.8-3.6
+ms there); a peer sees it about 170 ms later. The game's glow is 0.2 ms a frame of its own.
