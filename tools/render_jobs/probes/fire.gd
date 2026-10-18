@@ -44,6 +44,11 @@ extends RefCounted
 ##                     at level ground `rings` metres from the light nearest `near` (eight ways
 ##                     each, with the light's attenuation, cosine and reach there) and at the
 ##                     labelled screen points `points` ([name, x, y] in shares of the frame)
+##   profile {points, every, across, radius}  the fire mask along `points` ([x, z] world)
+##                     smoothed as a line's release smooths it, every `every` metres: lowest,
+##                     highest, and each stretch under FireField.FLAME_MIN; and across the line
+##                     at every `across` metres, the offset each side where it falls under
+##                     FLAME_MIN, against FireBrush.line_reach for a Blaze line of `radius`
 ##   save {folder}     saves the open map as a PREFIX test level (replacing one there)
 ##   cleanup           deletes every PREFIX test level
 ## The views and the sun match the F3 probe's (docs/plans/2026-10-11-fire-features/probe.md), so
@@ -124,6 +129,8 @@ static func run(base: Node, step: Dictionary) -> String:
 	match action:
 		"info":
 			return _info(ctrl.document, ctrl.editor.fire_field)
+		"profile":
+			return _profile(ctrl.editor, step)
 		"shot":
 			var gm: GameMap = base.get("_game_map")
 			var label := String(step.get("label", "NEW"))
@@ -156,6 +163,75 @@ static func run(base: Node, step: Dictionary) -> String:
 		"diff":
 			return _diff(base, ctrl, step)
 	return "unknown action %s" % action
+
+
+static func _profile(editor: AuthoringEditor, step: Dictionary) -> String:
+	var doc := editor.document
+	if doc.fire_mask.size() != doc.sample_count():
+		return "no fire mask"
+	var raw := PackedVector2Array()
+	for p: Array in step.get("points", []):
+		raw.append(Vector2(float(p[0]), float(p[1])))
+	var path := StrokePath.smooth_line(raw)
+	var every := float(step.get("every", 0.5))
+	var across := float(step.get("across", 4.0))
+	var low := 255
+	var high := 0
+	var dips := PackedStringArray()
+	var reaches := PackedStringArray()
+	var mean_reach := 0.0
+	var count := 0
+	var walked := 0.0
+	var next_across := across * 0.5
+	for i in path.size() - 1:
+		var length := path[i].distance_to(path[i + 1])
+		var tangent := (path[i + 1] - path[i]) / maxf(length, 0.0001)
+		var s := 0.0
+		while s < length:
+			var at := path[i] + tangent * s
+			var v := _mask_at(editor, at)
+			low = mini(low, v)
+			high = maxi(high, v)
+			if v < FireField.FLAME_MIN:
+				dips.append("%.1f m (%.1f, %.1f) %d" % [walked + s, at.x, at.y, v])
+			if walked + s >= next_across:
+				var normal := Vector2(-tangent.y, tangent.x)
+				var sides := Vector2(_reach_side(editor, at, normal), _reach_side(editor, at, -normal))
+				reaches.append("%.1f m: %.1f / %.1f" % [walked + s, sides.x, sides.y])
+				mean_reach += sides.x + sides.y
+				count += 2
+				next_across += across
+			s += every
+		walked += length
+	var radius := float(step.get("radius", 0.0))
+	var flow := float(step.get("flow", 1.0))
+	var predicted := radius * FireBrush.line_reach(FireBrush.BLAZE, flow, false)
+	var summary := (
+		"mean reach %.2f m, line_reach %.2f m; centre over %.1f m: low %d high %d"
+		% [mean_reach / maxf(float(count), 1.0), predicted, walked, low, high]
+	)
+	var under := ", ".join(dips) if not dips.is_empty() else "none"
+	return (
+		"%s; under %d: %s | across (m): %s"
+		% [summary, FireField.FLAME_MIN, under, "; ".join(reaches)]
+	)
+
+
+## The fire mask byte at world XZ `xz` (the nearest sample).
+static func _mask_at(editor: AuthoringEditor, xz: Vector2) -> int:
+	var doc := editor.document
+	var s := Vector2i(doc.world_to_sample(editor.to_map_xz(Vector3(xz.x, 0, xz.y))).round())
+	if s.x < 0 or s.y < 0 or s.x >= doc.samples_x() or s.y >= doc.samples_z():
+		return 0
+	return doc.fire_mask[doc.sample_index(s.x, s.y)]
+
+
+## How far from `at` along `normal` the mask stays at or over FireField.FLAME_MIN (0.1 m steps).
+static func _reach_side(editor: AuthoringEditor, at: Vector2, normal: Vector2) -> float:
+	var d := 0.0
+	while d < 12.0 and _mask_at(editor, at + normal * (d + 0.1)) >= FireField.FLAME_MIN:
+		d += 0.1
+	return d
 
 
 static func _grab(base: Node, field: FireField, step: Dictionary) -> String:

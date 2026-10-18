@@ -52,7 +52,11 @@ const INTENSITY_TILES: Array[Dictionary] = [
 		"hint": "Blaze: tall flames at the heart of a fire.",
 	},
 ]
-const HINT := "Drag to lay fire. Ctrl+drag puts it out; the ash stays. Tab: area or line."
+const HINT := (
+	"Line: drag a line of fire. Area: paint it; linger to build it up. Shift + scroll or"
+	+ " [ and ] set the width. Hold Ctrl as you press to put fire out; the ash stays. Tab"
+	+ " switches the shape."
+)
 
 var shape_field: TileField
 var intensity_field: TileField

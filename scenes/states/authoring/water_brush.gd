@@ -42,6 +42,29 @@ const POND_DWELL_GROW := 0.35
 const RIBBON_ARROW_M := 2.5
 const RIBBON_ALPHA_UP := 0.12
 const RIBBON_ALPHA_DOWN := 0.34
+## The ribbon's look (draw_ribbon()'s `style`), the river's own: the fill's alpha at the line's
+## start and end (the fill is the tint), the edges' colour (null: the tint), alpha and width over
+## a shadow line, a soft glow line under both edges (its colour, null: the edge's; width 0:
+## none), and the chevrons' colour, alpha and width over their shadow. Another brush passes only
+## the keys it changes (FireBrush's line).
+const RIBBON_STYLE := {
+	"alpha_up": RIBBON_ALPHA_UP,
+	"alpha_down": RIBBON_ALPHA_DOWN,
+	"edge": null,
+	"edge_alpha": 0.85,
+	"edge_width": 1.5,
+	"shadow": SHADOW,
+	"shadow_alpha": 0.4,
+	"shadow_width": 3.0,
+	"glow": null,
+	"glow_alpha": 0.0,
+	"glow_width": 0.0,
+	"chevron": Color.WHITE,
+	"chevron_alpha": 0.7,
+	"chevron_width": 2.0,
+	"chevron_shadow_alpha": 0.3,
+	"chevron_shadow_width": 3.5,
+}
 ## Refusal reasons (BrushTool.refused).
 const NO_CARVE := (
 	"Rivers and ponds carve the map's own ground: not on a Blender map."
@@ -324,9 +347,10 @@ static func on_ground(camera: Camera3D, editor: AuthoringEditor) -> Callable:
 
 
 ## A band `radius` either side of `line` (world XZ; `ground` maps a point to the screen on
-## the ground), filled with a gradient from upstream (faint) to downstream (stronger) and
-## edged; with `arrows`, chevrons every RIBBON_ARROW_M point the way the water will flow.
-## `strength` scales every alpha. Drawn with explicit indices, never triangulated.
+## the ground), filled in `tint` with a gradient from upstream (faint) to downstream (stronger)
+## and edged; with `arrows`, chevrons every RIBBON_ARROW_M point the way the water will flow.
+## `strength` scales every alpha; `style` overrides any of RIBBON_STYLE's keys (none: the
+## river's look). Drawn with explicit indices, never triangulated (ribbon() builds it).
 static func draw_ribbon(
 	canvas: Control,
 	ground: Callable,
@@ -334,11 +358,38 @@ static func draw_ribbon(
 	radius: float,
 	tint: Color,
 	strength: float,
-	arrows: bool
+	arrows: bool,
+	style: Dictionary = {}
 ) -> void:
+	var shape := ribbon(ground, line, radius, tint, strength, arrows, style)
+	if shape.is_empty():
+		return
+	RenderingServer.canvas_item_add_triangle_array(
+		canvas.get_canvas_item(), shape.indices, shape.points, shape.colors
+	)
+	for stroke: Array in shape.lines:
+		canvas.draw_polyline(stroke[0], stroke[1], stroke[2], true)
+
+
+## What draw_ribbon() draws, as data: the fill's triangles ("points", "colors", "indices")
+## and "lines", [points, colour, width] per polyline in drawing order (any glow, then each
+## edge's shadow and edge, then each chevron's shadow and chevron); {} for a line under two
+## points. Pure but for `ground`.
+static func ribbon(
+	ground: Callable,
+	line: PackedVector2Array,
+	radius: float,
+	tint: Color,
+	strength: float,
+	arrows: bool,
+	style: Dictionary = {}
+) -> Dictionary:
 	var n := line.size()
 	if n < 2:
-		return
+		return {}
+	var look := RIBBON_STYLE.merged(style, true)
+	var alpha_up: float = look.alpha_up
+	var alpha_down: float = look.alpha_down
 	var total := line_length(line)
 	var points := PackedVector2Array()
 	var colors := PackedColorArray()
@@ -367,21 +418,28 @@ static func draw_ribbon(
 		right.append(r)
 		points.append(l)
 		points.append(r)
-		var alpha := lerpf(RIBBON_ALPHA_UP, RIBBON_ALPHA_DOWN, walked / maxf(total, 0.001))
-		colors.append(Color(tint, alpha * strength))
-		colors.append(Color(tint, alpha * strength))
+		var alpha := lerpf(alpha_up, alpha_down, walked / maxf(total, 0.001))
+		var fill := Color(tint, alpha * strength)
+		colors.append(fill)
+		colors.append(fill)
 	var indices := PackedInt32Array()
 	for i in n - 1:
 		var a := 2 * i
 		indices.append_array([a, a + 1, a + 2, a + 1, a + 3, a + 2])
-	RenderingServer.canvas_item_add_triangle_array(
-		canvas.get_canvas_item(), indices, points, colors
-	)
-	for edge in [left, right]:
-		canvas.draw_polyline(edge, Color(SHADOW, 0.4 * strength), 3.0, true)
-		canvas.draw_polyline(edge, Color(tint, 0.85 * strength), 1.5, true)
+	var edge: Color = tint if look.edge == null else look.edge
+	var shadow: Color = look.shadow
+	var lines: Array = []
+	if float(look.glow_width) > 0.0:
+		var glow: Color = edge if look.glow == null else look.glow
+		for side in [left, right]:
+			lines.append([side, Color(glow, float(look.glow_alpha) * strength), look.glow_width])
+	for side in [left, right]:
+		lines.append([side, Color(shadow, float(look.shadow_alpha) * strength), look.shadow_width])
+		lines.append([side, Color(edge, float(look.edge_alpha) * strength), look.edge_width])
+	var shape := {"points": points, "colors": colors, "indices": indices, "lines": lines}
 	if not arrows:
-		return
+		return shape
+	var chevron_tint: Color = look.chevron
 	var next := RIBBON_ARROW_M * 0.5
 	walked = 0.0
 	for i in n - 1:
@@ -393,10 +451,13 @@ static func draw_ribbon(
 			var arrow := PackedVector2Array()
 			for p in chevron(at, tangent, size):
 				arrow.append(ground.call(p))
-			canvas.draw_polyline(arrow, Color(SHADOW, 0.3 * strength), 3.5, true)
-			canvas.draw_polyline(arrow, Color(1.0, 1.0, 1.0, 0.7 * strength), 2.0, true)
+			var under := Color(shadow, float(look.chevron_shadow_alpha) * strength)
+			lines.append([arrow, under, look.chevron_shadow_width])
+			var over := Color(chevron_tint, float(look.chevron_alpha) * strength)
+			lines.append([arrow, over, look.chevron_width])
 			next += RIBBON_ARROW_M
 		walked += length
+	return shape
 
 
 ## A flat disc of world `radius` at world XZ `at`, on the ground there, faintly filled.

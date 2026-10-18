@@ -289,7 +289,8 @@ The Fire tool (`FireTool`, `FireBrush`, `FireToolPane`: Embers 96, Flames 176, B
 `MaskStroke` in `MaskBrush.FIRE`; a lay is one "Lay fire" history group (the fire, the burnt
 forest only over forest, the ash) and Ctrl puts fire out ("Put out fire", the ash and snags
 stay). Two shapes, Tab switching them (card F5): Area paints; Line draws a line as a river is
-drawn (`StrokePath`, the river's ribbon in ember orange) and lays it on release as even
+drawn (`StrokePath`, the river's ribbon in an ember style, as wide as the band its fire will
+stand in: `FireBrush.line_reach`, card F5b) and lays it on release as even
 capsule dabs (`FireBrush.lay_line`: the same exposure per metre whatever the drawing speed,
 the centre about 97 % of the intensity), through the same stroke, so it is the same one
 history entry with its ash; a Ctrl line puts fire out along it. A narrow Flames line stands

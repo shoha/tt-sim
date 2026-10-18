@@ -8,16 +8,24 @@ extends BrushMode
 ##   Line   the press starts a line captured as a river's (StrokePath: a point every
 ##          StrokePath.DECIMATE_M, or every WaterBrush.WIDTH_DECIMATE radii for a wide brush,
 ##          the release point added, Chaikin-smoothed), previewed while dragging with the
-##          river's own ribbon (WaterBrush.draw_ribbon: gradient fill, edges, chevrons) at the
-##          brush width in ember orange (user, 2026-10-11: the same affordance as driving a
-##          river, orange for fire). The release lays it (lay_line()): resampled evenly every
-##          LINE_SPACING radii and dabbed segment by segment as capsules at a fixed exposure
-##          per segment, so a line is even whatever the drawing speed. A release under
-##          StrokePath.MIN_LENGTH_M lays nothing; Esc or RMB mid-drag drops the line.
+##          river's own ribbon (WaterBrush.draw_ribbon: gradient fill, edges, chevrons; user,
+##          2026-10-11: the same affordance as driving a river) in the line's own style
+##          (LAY_STYLE: a persimmon fill at about half coverage, a hot amber edge, cream
+##          chevrons, so it reads as fire over green grass, a yellow meadow and at dusk). The
+##          release lays it (lay_line()): resampled evenly every LINE_SPACING radii and dabbed
+##          segment by segment as capsules at a fixed exposure per segment, so a line is even
+##          whatever the drawing speed. A release under StrokePath.MIN_LENGTH_M lays nothing;
+##          Esc or RMB mid-drag drops the line.
+## The Line's ring and ribbon are as wide as the band its fire will stand in, not the brush:
+## the soft falloff leaves the brush's rim under the flames band, so the shown half-width is
+## line_reach() of the brush radius (about 0.7 to 0.8 of it), as a river's ring shows its
+## channel. The lay itself keeps the brush radius, so its burnt forest and ash rim stay where
+## an Area stroke of that size puts them.
 ## Both shapes lay through AuthoringEditor.begin_fire_stroke, so a lay is one history entry
 ## "Lay fire" with its burnt forest and ash (FireEditor), synced and undoable in play as any
 ## stroke. Ctrl at the press puts fire out instead (the area, or along the line), leaving its
-## ash and snags. The ring is ember orange, red to put out; so is the line's ribbon.
+## ash and snags. The ring is ember orange, red to put out; the put-out line's ribbon is a
+## darker madder (PUT_OUT_STYLE) with a dark-outlined edge that reads over bright flames.
 
 enum Shape { LINE, AREA }
 
@@ -35,6 +43,48 @@ const TINT := ThemeColors.EMBER
 const LINE_SPACING := 0.25
 const LINE_SECONDS := 0.22
 const MAX_LINE_DABS := 4096
+## The line's ribbon fill, and its look over the river's (WaterBrush.RIBBON_STYLE's keys): a
+## persimmon at about half coverage, stronger toward the pointer, stays orange over green and
+## over a yellow meadow; the amber edge sits on a soft glow and a dark line; the chevrons are
+## warm cream.
+const LAY_TINT := Color(0.97, 0.38, 0.1)
+const LAY_STYLE := {
+	"alpha_up": 0.4,
+	"alpha_down": 0.56,
+	"edge": Color(1.0, 0.8, 0.36),
+	"edge_alpha": 0.95,
+	"edge_width": 2.5,
+	"shadow": Color(0.24, 0.06, 0.0),
+	"shadow_alpha": 0.45,
+	"shadow_width": 4.5,
+	"glow": Color(1.0, 0.5, 0.14),
+	"glow_alpha": 0.32,
+	"glow_width": 9.0,
+	"chevron": Color(1.0, 0.94, 0.74),
+	"chevron_alpha": 0.95,
+	"chevron_width": 2.5,
+	"chevron_shadow_alpha": 0.45,
+	"chevron_shadow_width": 4.5,
+}
+## Putting out along a line: a darker, cooler madder with real coverage, so it reads over the
+## glare of the flames it is drawn on, a pale rose edge on a dark outline, and the lay's
+## chevrons.
+const PUT_OUT_TINT := Color(0.42, 0.06, 0.2)
+const PUT_OUT_STYLE := {
+	"alpha_up": 0.48,
+	"alpha_down": 0.64,
+	"edge": Color(1.0, 0.64, 0.7),
+	"edge_alpha": 1.0,
+	"edge_width": 2.5,
+	"shadow": Color(0.1, 0.0, 0.04),
+	"shadow_alpha": 0.75,
+	"shadow_width": 5.5,
+	"chevron": Color(1.0, 0.94, 0.74),
+	"chevron_alpha": 0.95,
+	"chevron_width": 2.5,
+	"chevron_shadow_alpha": 0.6,
+	"chevron_shadow_width": 4.5,
+}
 
 ## The mask byte a lay approaches (EMBERS, FLAMES or BLAZE).
 var intensity: int = FLAMES
@@ -71,6 +121,47 @@ static func line_dabs(path: PackedVector2Array, radius: float, flow: float) -> A
 		var to := Vector3(points[i + 1].x, 0.0, points[i + 1].y)
 		dabs.append([from, to, LINE_SECONDS * flow * length / spacing])
 	return dabs
+
+
+## The share of the brush radius within which a line's fire stands (the half-width its ring
+## and ribbon show): where a line laid at `intensity` (a mask byte) with `flow` over bare
+## ground passes its band's start (FireField.FLAME_MIN, or EMBER_MIN for an intensity under
+## the flames band), or with `erase`, where a blaze falls under EMBER_MIN. A sample at t
+## radii from a long straight line gathers line_exposure(t) * LINE_SECONDS * flow seconds,
+## which MaskBrush.amount turns into the mask (CLEAR_GAIN times faster to put out). Pure.
+static func line_reach(intensity: int, flow: float, erase: bool) -> float:
+	var seconds := LINE_SECONDS * maxf(flow, 0.0)
+	var need := 0.0
+	if erase:
+		var rate := MaskBrush.RATE * MaskBrush.CLEAR_GAIN
+		need = log(float(BLAZE) / FireField.EMBER_MIN) / rate
+	else:
+		var band := FireField.FLAME_MIN if intensity > FireField.FLAME_MIN else FireField.EMBER_MIN
+		if intensity <= band:
+			return 0.0
+		need = -log(1.0 - float(band) / float(intensity)) / MaskBrush.RATE
+	if line_exposure(0.0) * seconds < need:
+		return 0.0
+	var inside := 0.0
+	var outside := 1.0
+	for i in 24:
+		var t := (inside + outside) * 0.5
+		if line_exposure(t) * seconds >= need:
+			inside = t
+		else:
+			outside = t
+	return inside
+
+
+## The dabs' worth of exposure a sample at `t` brush radii from a long straight laid line
+## gathers (line_dabs()): the capsule beside it weighs MaskBrush.falloff(t) = c^4 (c^2 =
+## 1 - t^2), and the ones along the line, LINE_SPACING radii apart, add their falloff's
+## integral along the line over the spacing, 16/15 c^5 / LINE_SPACING (5.3 at the centre). Pure.
+static func line_exposure(t: float) -> float:
+	if t >= 1.0:
+		return 0.0
+	var c2 := 1.0 - t * t
+	return c2 * c2 + 16.0 / 15.0 * c2 * c2 * sqrt(c2) / LINE_SPACING
 
 
 ## Lays the line `path` (world XZ, smoothed) on `editor` with a brush of `radius` metres: fire
@@ -161,22 +252,32 @@ func cursor_tint(brush: BrushTool) -> Color:
 	return BrushCursor.CLEAR_TINT if _erasing(brush) else TINT
 
 
-## The red ring names its erase under it ("Put out fire"), as Paint's "Erase paint"; the Line
-## shape says so ("Line of fire"), with the line's length in the level's units while drawn.
-func cursor_text(brush: BrushTool) -> String:
-	if _erasing(brush):
-		return ERASE_TEXT
+## Line: the half-width of the band its fire stands in (or is put out in), line_reach() of
+## the brush radius, which the ring and the ribbon show. Area: the brush radius.
+func stroke_radius(brush: BrushTool) -> float:
 	if shape == Shape.AREA:
-		return ""
+		return brush.get_radius()
+	var reach := line_reach(intensity, brush.get_flow(), _erasing(brush))
+	return brush.get_radius() * maxf(reach, 0.1)
+
+
+## The red ring names its erase under it ("Put out fire"), as Paint's "Erase paint"; the Line
+## shape says what it lays ("Line of fire", or "Put out fire" with Ctrl), with the line's
+## length in the level's units while drawn.
+func cursor_text(brush: BrushTool) -> String:
+	var erasing := _erasing(brush)
+	if shape == Shape.AREA:
+		return ERASE_TEXT if erasing else ""
+	var label := ERASE_TEXT if erasing else LINE_TEXT
 	if not drawing:
-		return LINE_TEXT
+		return label
 	var length := StrokePath.line_length(laid_line())
 	var shown := ScaleUtils.world_to_display(length, brush.unit_cell_m, brush.unit_per_cell)
-	return "%s  %d %s" % [LINE_TEXT, roundi(shown), brush.unit_label]
+	return "%s  %d %s" % [label, roundi(shown), brush.unit_label]
 
 
-## The line being drawn as the river's ribbon up to the pointer (ember, red to put out), then
-## the ring.
+## The line being drawn as the river's ribbon up to the pointer, at the ring's width, in the
+## line's style (LAY_STYLE, or PUT_OUT_STYLE with Ctrl), then the ring.
 func draw_cursor(brush: BrushTool, cursor: BrushCursor) -> void:
 	if drawing and not line.is_empty() and brush.editor != null:
 		var live := line.duplicate()
@@ -189,10 +290,11 @@ func draw_cursor(brush: BrushTool, cursor: BrushCursor) -> void:
 			cursor.canvas,
 			WaterBrush.on_ground(cursor.camera, brush.editor),
 			StrokePath.smooth_line(live),
-			brush.get_radius(),
-			BrushCursor.CLEAR_TINT if erasing else TINT,
+			stroke_radius(brush),
+			PUT_OUT_TINT if erasing else LAY_TINT,
 			1.0,
-			not erasing
+			true,
+			PUT_OUT_STYLE if erasing else LAY_STYLE
 		)
 	super.draw_cursor(brush, cursor)
 
