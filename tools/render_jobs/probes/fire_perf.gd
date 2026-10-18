@@ -18,7 +18,8 @@ extends RefCounted
 ##   warm              starts the fire's ground surfaces loading as the Fire tool's arming does
 ##   first_burn {at, radius}  paints the palette's burnt forest biome over a disc with nothing
 ##                     armed, as a peer applies a fire's op: the stroke's milliseconds, the
-##                     ground layers before and after, GroundLayerArrays.last_sync_ms
+##                     ground layers before and after, GroundLayerArrays.last_sync_ms, and the
+##                     fire book's state with its load and upload milliseconds (FireLook)
 ##   remove {folder}   deletes one _firefeat_ test level
 
 const FireProbe := preload("res://tools/render_jobs/probes/fire.gd")
@@ -86,7 +87,7 @@ static func _view(gm: GameMap, view: String) -> String:
 	var zoom := _widest
 	cc.set("_target_zoom", zoom)
 	FireProbe._look(gm, Vector2.ZERO)
-	return "view zout: zoom %.2f (LOD past %.0f)" % [zoom, FireField.LOD_ZOOM]
+	return "view zout: zoom %.2f" % zoom
 
 
 static func _cpu(field: FireField, frames: int) -> String:
@@ -189,13 +190,22 @@ static func _first_burn(editor: AuthoringEditor, step: Dictionary) -> String:
 	return (
 		(
 			"first burn: dab and flush %.1f ms, with the stroke's end %.1f ms; layers %d -> %d,"
-			+ " arrays sync %.1f ms (at load %.1f ms; %s)"
+			+ " arrays sync %.1f ms (at load %.1f ms; %s); %s"
 		)
 		% [
 			stroked, total, before, binding.layers().size(), binding.arrays.last_sync_ms,
-			load_sync, ", ".join(binding.layers())
+			load_sync, ", ".join(binding.layers()), _book_text()
 		]
 	)
+
+
+## The fire book's state and its last load's timings (FireLook.book_timings).
+static func _book_text() -> String:
+	var timings := FireLook.book_timings()
+	var state: String = FireLook.Book.keys()[FireLook.book_state()]
+	return "fire book %s: load %.1f ms (threaded), upload %.1f ms (main thread)" % [
+		state.to_lower(), float(timings.load_ms), float(timings.upload_ms)
+	]
 
 
 static func _remove(folder: String) -> String:

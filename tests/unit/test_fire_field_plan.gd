@@ -4,7 +4,7 @@ extends GutTest
 ## rules): deterministic, each fire in one block only, nothing below the ember band, nothing on
 ## wet or steep ground, heights from the document's triangles, no flames in the ember band; its
 ## trigonometry held in literals; the bands; the budget shared in proportion past the cap; the
-## LOD half; the warm-up covering the fire's shaders; the ground bakes' frames and redraw region;
+## warm-up covering the fire's shaders; the ground bakes' frames and redraw region;
 ## a re-plan on a worker landing what the main thread plans; and a refresh by dabs landing
 ## exactly what a rebuild plans (plan_digest and the rasters' bytes).
 
@@ -277,27 +277,9 @@ func test_a_straight_pass_stands_its_flames_off_its_axis() -> void:
 	assert_lt(reach, 1.5 + step.y + FireField.PLACE_WARP.y + 0.1, "but stays near its stroke")
 
 
-func test_lod_keeps_half_and_draws_back_to_front() -> void:
-	assert_eq(FireLook.far_count(7), 4)
-	assert_eq(FireLook.far_count(8), 4)
-	var plan := FireField.plan_block(_doc(), Vector2i(1, 1))
-	var count := plan.size() / FireField.STRIDE
-	var forward := FireLook.DEFAULT_FORWARD.normalized()
-	var buffer := FireLook.instance_buffer(plan, count, forward)
-	assert_eq(buffer.size(), count * FireLook.INSTANCE_FLOATS)
-	var kept := 0
-	var last := INF
-	for slot in count:
-		var i := slot * FireLook.INSTANCE_FLOATS
-		kept += int(buffer[i + 15])
-		var depth := Vector3(buffer[i + 3], buffer[i + 7], buffer[i + 11]).dot(forward)
-		assert_lte(depth, last + 0.0001, "the far flames first")
-		last = depth
-	assert_eq(kept, FireLook.far_count(count), "half show past the LOD zoom")
-
-
 func test_the_warmup_covers_the_fire_shaders() -> void:
-	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_field.gdshader")
+	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_flames.gdshader")
+	assert_does_not_have(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_field.gdshader")
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_field_smoke.gdshader")
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_glow_bake.gdshader")
 	assert_has(GraphicsWarmup.COVERED_SHADERS, "res://shaders/fire_ground_bake.gdshader")
