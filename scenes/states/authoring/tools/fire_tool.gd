@@ -60,7 +60,7 @@ static func warm(editor: AuthoringEditor) -> void:
 		editor.prepare_biome(String(plan.biome))
 	if String(plan.surface) != "" and is_instance_valid(editor.terrain):
 		editor.terrain.warm_surface(String(plan.surface))
-	FireLook.material()
+	FireLook.request_book()
 
 
 func build_pane(panel: AuthoringPanel) -> Control:

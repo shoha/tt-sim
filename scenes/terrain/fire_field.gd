@@ -4,7 +4,7 @@ extends Node3D
 ## The persistent ground fire of a map document, drawn (MapDocument.fire_mask; design:
 ## docs/plans/2026-10-11-fire-features/design.md section 4). One per map with a document, a
 ## child of the map root (MapSourceLoader adds it), so its frame is the document's. It owns
-## placement, chunks, the budget and the LOD switch; FireLook owns the meshes and materials.
+## placement, chunks and the budget; FireLook owns the meshes, the materials and the fire book.
 ##
 ## Placement is pure (plan_block): per diff block of the mask (MaskStroke.BLOCK samples, 10 m
 ## at the default spacing), a jittered lattice at FLAME_SPACING_M seeded by the map seed and
@@ -45,8 +45,12 @@ extends Node3D
 ## share of its plan (budget_shares: a uniform thinning in proportion to each block's burning
 ## area, as FoliageBudget.plan; the remainder by largest fraction, ties in block order), a pure
 ## function of all the plans, so a peer that rebuilt once and one that refreshed stroke by
-## stroke show the same flames. LOD: past LOD_ZOOM half the flames hide and the rest grow
-## (FireLook.set_far: one uniform when the zoom crosses it). Nothing runs per flame per frame.
+## stroke show the same flames. There is no LOD: every zoom draws the same fires, and nothing
+## runs per flame per frame.
+##
+## The flames draw from the fire book (FireLook): a field in the tree asks for it with its
+## first fire (request_book), polls its threaded load each frame until it is bound, and is
+## counted while it is in the tree, so the last field to leave lets the book go.
 ##
 ## Lights and smoke (look card F4b-1): each re-planned block's flames are summed on the
 ## clusters' grid (FireClusters.cells_of, kept per block), and every refresh finds the hot spots
@@ -82,7 +86,8 @@ const WET_LINE_MIN := 128
 const STEEP_DEG := TerrainRules.CLIFF_START_DEG
 const STEEP_NORMAL_Y := 0.719339800339
 ## Floats per planned flame, and where each sits: x, y, z (document metres), intensity 0..1,
-## seed (the tongue layout plus a 0..1 seed), height and width (metres), kind (FLAME, SPARK).
+## seed (0..1, from the map seed and the lattice point; the shader's picks hash it), height and
+## width (metres), kind (FLAME, SPARK).
 const STRIDE := 8
 const INTENSITY := 3
 const SEED := 4
@@ -128,11 +133,6 @@ const LICK_SCALE := Vector2(0.45, 0.7)
 ## zoom 8).
 const SPARK_EVERY := 6
 const SPARK_SIZE_M := 0.16
-## Tongue layouts (fire_field.gdshader's tongue()): one tall with a side lick, two, three, four.
-const LAYOUT_ONE := 0
-const LAYOUT_TWO := 1
-const LAYOUT_THREE := 2
-const LAYOUT_CROWN := 3
 ## The flames' heat raster (the ground's bed, fire_glow.gdshaderinc; the user's 2026-10-16
 ## verdict: a base fire unifies the flames): a texel every HEAT_STEP_M from the document's first
 ## sample; each flame adds its height (metres) times a soft kernel reaching HEAT_REACH.x plus
@@ -158,8 +158,6 @@ const FEET_GROW := 5
 ## (HEAT_GROW texels) and their B-spline, and the ground's mask reads (the wander, the fill's
 ## taps and the early-out's rings, under 6 m together).
 const BAKE_REACH_M := 8.0
-## Past this camera zoom (the orthographic size) half the flames hide.
-const LOD_ZOOM := 24.0
 ## Lattice points a block's window reaches past its own (a lick looks two points out).
 const WINDOW_MARGIN := 2
 
@@ -173,7 +171,6 @@ var _chunks: Dictionary = {}
 ## block Vector2i -> flames shown there.
 var _counts: Dictionary = {}
 var _glow_texture: ImageTexture = null
-var _far := false
 ## The flames' heat raster (see HEAT_STEP_M), the feet's pools (POOL_REACH) on its grid, its
 ## size in texels, and their texture.
 var _heat := PackedFloat32Array()
@@ -201,22 +198,20 @@ static func create(doc: MapDocument) -> FireField:
 	return field
 
 
+func _enter_tree() -> void:
+	FireLook.hold_book()
+	if not _plans.is_empty():
+		FireLook.request_book()
+
+
 func _ready() -> void:
 	if document != null:
 		FireLook.set_wind(document.map_seed)
-	FireLook.set_far(false)
 	_bind_glow()
 
 
 func _process(_delta: float) -> void:
-	var camera := get_viewport().get_camera_3d()
-	var far := (
-		camera != null and camera.projection == Camera3D.PROJECTION_ORTHOGONAL
-		and camera.size > LOD_ZOOM
-	)
-	if far != _far:
-		_far = far
-		FireLook.set_far(far)
+	FireLook.poll_book()
 	if _job != null and WorkerThreadPool.is_task_completed(_job.task):
 		_finish_job()
 
@@ -224,6 +219,7 @@ func _process(_delta: float) -> void:
 func _exit_tree() -> void:
 	# A job's task must not outlive the field that holds it.
 	finish_work()
+	FireLook.drop_book()
 
 
 ## Re-plans the whole map (after a load or a whole-document change), at once on this thread.
@@ -318,6 +314,8 @@ func _land(job: FirePlanJob) -> void:
 		else:
 			_plans[block] = plan
 			_cells[block] = job.cells[block]
+	if is_inside_tree() and not _plans.is_empty():
+		FireLook.request_book()
 	# The rasters changed inside the cleared rect only (all of them with a new size).
 	var cleared := Rect2i(Vector2i.ZERO, job.heat_size)
 	if job.heat_size == _heat_size:
@@ -504,40 +502,35 @@ static func thin(plan: PackedFloat32Array, budget: int) -> PackedFloat32Array:
 ## The own flame of lattice point `i` of `window` at mask value `heat` (FireFires stands it in the
 ## ember band and the blaze): an ember point's spark, a blaze point's flame, or empty where none
 ## stands (an ember point with no spark, a blaze point in its clump's gap, a flames-band point).
-## Its x, y, z are filled by the caller.
+## Its x, y, z and seed (plan_seed) are filled by the caller.
 static func _flame(
 	map_seed: int, key: int, heat: float, window: LatticeWindow, i: int
 ) -> PackedFloat32Array:
-	var seed := MaskBrush.sample_noise(map_seed + 2, key) * 0.999
 	var pick := MaskBrush.sample_noise(map_seed + 3, key)
 	var t := heat / 255.0
 	var c := window.clump[i]
 	if heat < FLAME_MIN:
 		if pick * SPARK_EVERY >= 1.0:
 			return PackedFloat32Array()
-		return PackedFloat32Array([0, 0, 0, t, seed, SPARK_SIZE_M, SPARK_SIZE_M, SPARK])
+		return PackedFloat32Array([0, 0, 0, t, 0, SPARK_SIZE_M, SPARK_SIZE_M, SPARK])
 	var size := pick
 	var width_share := lerpf(WIDTH_SHARE.x, WIDTH_SHARE.y, MaskBrush.sample_noise(map_seed + 4, key))
 	var own := (MaskBrush.sample_noise(map_seed + 5, key) - 0.5) * 2.0 * SCALE_JITTER
-	var layout: int
 	var scale: float
 	if window.big(i):
 		scale = lerpf(BIG_SCALE.x, BIG_SCALE.y, c)
-		layout = LAYOUT_CROWN if size < 0.6 else LAYOUT_THREE
 		width_share = lerpf(BLAZE_WIDTH_FROM, WIDTH_SHARE.y, size)
 	elif window.blaze(i):
 		if window.beside_big(i):
 			scale = lerpf(LICK_SCALE.x, LICK_SCALE.y, size)
-			layout = LAYOUT_ONE if size < 0.5 else LAYOUT_TWO
 		else:
 			var place := (c - BLAZE_GAP) / (1.0 - BLAZE_GAP) + own
 			scale = lerpf(CLUMP_SCALE.x, CLUMP_SCALE.y, clampf(place, 0.0, 1.0))
-			layout = LAYOUT_THREE if size < 0.65 else LAYOUT_CROWN
 			width_share = lerpf(BLAZE_WIDTH_FROM, WIDTH_SHARE.y, size)
 	else:
 		return PackedFloat32Array()
 	var height := base_height(t) * scale
-	return PackedFloat32Array([0, 0, 0, t, layout + seed, height, height * width_share, FLAME])
+	return PackedFloat32Array([0, 0, 0, t, 0, height, height * width_share, FLAME])
 
 
 ## The heat raster's size for `doc` (texels; see HEAT_STEP_M). Pure.
@@ -629,6 +622,17 @@ static func row_order(blocks: Array) -> Array:
 		func(p: Vector2i, q: Vector2i) -> bool: return p.y < q.y or (p.y == q.y and p.x < q.x)
 	)
 	return out
+
+
+## The seed (0..1) of the fire standing on lattice point (ix, iz) of a map with `map_seed`: each
+## index hashed in turn, so no two points share one. (The lattice key folds (ix, iz) and
+## (-ix, -iz) together when both are odd, so a seed from it would stamp point-mirrored fires
+## beside the map's middle with one drawing.) The flames' shader hashes it for every pick
+## (FireLook.fire_seed). Pure.
+static func plan_seed(map_seed: int, ix: int, iz: int) -> float:
+	# 31 bits, so sample_noise's product stays inside a 64-bit int.
+	var row := int(MaskBrush.sample_noise(map_seed + 2, iz) * 2147483648.0)
+	return MaskBrush.sample_noise(row, ix) * 0.999
 
 
 static func _key(ix: int, iz: int) -> int:

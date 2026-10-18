@@ -30,7 +30,7 @@ const PerfProbe := preload("res://tools/render_jobs/probes/fire_perf.gd")
 const GROUND_INC := "res://shaders/authored_ground.gdshaderinc"
 const GLOW_INC := "res://shaders/fire_glow.gdshaderinc"
 const FILES := {
-	"flames": "res://shaders/fire_field.gdshader",
+	"flames": "res://shaders/fire_flames.gdshader",
 	"smoke": "res://shaders/fire_field_smoke.gdshader",
 }
 const ROW_TILE := Vector2i(640, 360)

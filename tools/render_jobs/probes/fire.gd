@@ -2,8 +2,9 @@ extends RefCounted
 
 ## Render-job probe (`call` op) for persistent ground fire's look (FireField, FireLook; the fire
 ## cards' jobs firefeat_build, firefeat_look and firefeat_cleanup). Actions:
-##   info              flames shown and planned (the cap), burning blocks, entries by band; the
-##                     lights (place, energy, the sun's gate) and the smoke's sites
+##   info              flames shown and planned (the cap), burning blocks, entries by band, the
+##                     fire book's state; the lights (place, energy, the sun's gate) and the
+##                     smoke's sites
 ##   extras {show, what}  shows or hides the fire's lights and smoke (FireLights,
 ##                     FireFieldSmoke; `what` "lights", "smoke" or "both"), so a capture can
 ##                     show the field as round 4 drew it
@@ -16,7 +17,7 @@ extends RefCounted
 ##                     with the scene's ambient and sky energy cut to DARK, the harness's own
 ##                     diagnostic for the lights), the view (home; z8,
 ##                     zoom 8 over a point on the blaze; z20, zoom 20 over the fire's middle; z30,
-##                     zoom 30 there, past the LOD zoom; zs, zoom 12 framing the largest smoke
+##                     zoom 30 there; zs, zoom 12 framing the largest smoke
 ##                     column) and an on-screen label, `label` (default
 ##                     "NEW") before the key's words
 ##   label {text}      an on-screen caption for captures ("" removes it)
@@ -33,6 +34,9 @@ extends RefCounted
 ##                     and saves them as <name>_<k>.png with their engine times in
 ##                     <name>_times.txt (a capture step takes about 0.4 s, too slow for a strip
 ##                     of held drawings); wait about count x 0.25 s after it
+##   scale {value}     Engine.time_scale (the shaders' clock and the burst's spacing follow it):
+##                     0.25 with a burst every 1/24 s grabs a motion strip at the drawings' own
+##                     rate; 1 puts the clock back
 ##   grab {tag, freeze}  keeps the raw 3D frame under `tag` for diff; `freeze` true holds the
 ##                     fire's lights at their gated energy with no flicker (false lets them go)
 ##   diff {a, b, out, gain, near, rings, points}  compares grabs `a` (lights off) and `b` (on):
@@ -103,6 +107,9 @@ static func run(base: Node, step: Dictionary) -> String:
 		return "time %.3f s frames %d" % [Time.get_ticks_usec() / 1e6, Engine.get_frames_drawn()]
 	if action == "burst":
 		return _burst(base, step)
+	if action == "scale":
+		Engine.time_scale = float(step.get("value", 1.0))
+		return "time scale %.3f" % Engine.time_scale
 	if action == "shadows":
 		var on := bool(step.get("on", true))
 		for light in base.get_tree().root.find_children("*", "DirectionalLight3D", true, false):
@@ -370,6 +377,7 @@ static func _info(doc: MapDocument, field: FireField) -> String:
 		"fire shown %d of planned %d (cap %d); blocks with flames %d; sparks %d flames %d blaze %d"
 		% [field.flame_count(), planned, FireField.MAX_FLAMES, burning, bands[1], bands[2], bands[3]]
 	)
+	out += "; book %s" % String(FireLook.Book.keys()[FireLook.book_state()]).to_lower()
 	if field.lights() == null:
 		return out + "; no lights or smoke"
 	var gate := FireLook.light_gate(FoliageLight.last_sun)

@@ -19,9 +19,9 @@ extends RefCounted
 ##     lattice's spacing) at SIM_BLAZE_SCALE of its height and a mass's width (SIM_BLAZE_SHARE),
 ##     so a blaze merges into one mass with many small tongues inside it and no blaze flame
 ##     stands as tall as the trees; the ember band keeps its sparks.
-## Each entry's seed still carries a tongue layout for fire_field.gdshader (FireField.LAYOUT_ONE
-## for a straggler, LAYOUT_TWO for a small fire, LAYOUT_THREE for a big one) until the flames draw
-## from the fire book.
+## Each entry's seed is its lattice point's (FireField.plan_seed, from the map seed and the
+## point): the flames' shader hashes it for its drawing, its mirror and its size
+## (FireLook.fire_seed), and the plan is shuffled by it.
 ##
 ## Pure and deterministic, as FireField.plan_block: a point's decision reads only the lattice
 ## window (MARGIN points past the block), so neighbouring blocks agree on every centre, and a
@@ -91,9 +91,10 @@ static func plan_block(doc: MapDocument, block: Vector2i) -> PackedFloat32Array:
 				continue
 			var at := (Vector2(entry[0], entry[2]) + half) / step
 			entry[1] = ScatterGenerator.triangle_height(doc.heights, doc.samples_x(), doc.samples_z(), at)
+			entry[FireField.SEED] = FireField.plan_seed(doc.map_seed, ix, iz)
 			entries.append(entry)
 	entries.sort_custom(func(a: PackedFloat32Array, b: PackedFloat32Array) -> bool:
-		return fmod(a[FireField.SEED], 1.0) < fmod(b[FireField.SEED], 1.0))
+		return a[FireField.SEED] < b[FireField.SEED])
 	var out := PackedFloat32Array()
 	for entry: PackedFloat32Array in entries:
 		out.append_array(entry)
@@ -262,7 +263,6 @@ static func _fire(
 	var own_spot := Vector2(window.px[i], window.pz[i])
 	var at := sum / weight if weight > 0.0 else own_spot
 	at = at.lerp(own_spot, 0.5)
-	var seed := MaskBrush.sample_noise(map_seed + 2, key) * 0.999
 	var own := MaskBrush.sample_noise(map_seed + 5, key)
 	var shape := MaskBrush.sample_noise(map_seed + 4, key)
 	var heat := window.heat[i]
@@ -273,32 +273,21 @@ static func _fire(
 	height *= lerpf(BAND_SCALE.x, BAND_SCALE.y, _strength(heat))
 	height *= lerpf(OWN_SCALE.x, OWN_SCALE.y, own)
 	var width := height * lerpf(FIRE_WIDTH.x, FIRE_WIDTH.y, shape)
-	var layout := FireField.LAYOUT_THREE if size > 0.55 else FireField.LAYOUT_TWO
 	var t := heat / 255.0
-	return PackedFloat32Array([at.x, 0, at.y, t, layout + seed, height, width, FireField.FLAME])
+	return PackedFloat32Array([at.x, 0, at.y, t, 0, height, width, FireField.FLAME])
 
 
 ## A straggler's single flame at point `i`.
 static func _single(
 	map_seed: int, key: int, window: FireField.LatticeWindow, i: int
 ) -> PackedFloat32Array:
-	var seed := MaskBrush.sample_noise(map_seed + 2, key) * 0.999
 	var own := MaskBrush.sample_noise(map_seed + 5, key)
 	var t := window.heat[i] / 255.0
 	var height := FireField.base_height(minf(t, (FireField.BLAZE_MIN - 1) / 255.0))
 	height *= lerpf(SINGLE_SCALE.x, SINGLE_SCALE.y, own)
 	var share := lerpf(SINGLE_WIDTH.x, SINGLE_WIDTH.y, MaskBrush.sample_noise(map_seed + 4, key))
 	return PackedFloat32Array(
-		[
-			window.px[i],
-			0,
-			window.pz[i],
-			t,
-			FireField.LAYOUT_ONE + seed,
-			height,
-			height * share,
-			FireField.FLAME
-		]
+		[window.px[i], 0, window.pz[i], t, 0, height, height * share, FireField.FLAME]
 	)
 
 
