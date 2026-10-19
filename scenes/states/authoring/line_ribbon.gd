@@ -35,6 +35,9 @@ extends RefCounted
 ##                         the chevrons over their ink outline
 ##   caps                  round ends, the edge running round them as one outline (false: cut
 ##                         square)
+##   cap_start, cap_end    which ends are round when caps is on (a line drawn as stretches in
+##                         two tints, Start a fire's Path, rounds only its own two ends, so
+##                         the stretches join without an edge across the band)
 ##   night_light           the share of its colour the ribbon keeps under no sun (1: all)
 ## An erase ribbon is the same shape at the same weights with the erase salmon
 ## (BrushCursor.CLEAR_TINT, every brush's erase) on its edge, glow and chevrons, and no wash
@@ -89,6 +92,8 @@ const STYLE := {
 	"chevron_shadow_alpha": BrushCursor.INK_ALPHA,
 	"chevron_shadow_width": BrushCursor.INK_WIDTH,
 	"caps": true,
+	"cap_start": true,
+	"cap_end": true,
 	"night_light": NIGHT_LIGHT,
 }
 ## The keys a tool's lay sets: its hue. The band and edge in `tint`, the glow under the edge in
@@ -264,8 +269,9 @@ static func ribbon(
 			var a := width * i + k
 			indices.append_array([a, a + 1, a + width, a + 1, a + width + 1, a + width])
 	var sides: Array = [left, right]
-	if look.caps:
-		var capped := _with_caps(ground, line, radius, row, points, colors, indices)
+	if look.caps and (look.cap_start or look.cap_end):
+		var ends := [bool(look.cap_end), bool(look.cap_start)]
+		var capped := _with_caps(ground, line, radius, row, points, colors, indices, ends)
 		points = capped.points
 		colors = capped.colors
 		indices = capped.indices
@@ -399,17 +405,29 @@ static func _on_screen(ground: Callable, world: PackedVector2Array) -> PackedVec
 	return out
 
 
-## The band's two sides and its caps' arcs (_with_caps()) as one closed outline: the left side,
-## the end's arc, the right side back, the start's arc, closed at the left side's start.
+## The band's two sides and its caps' arcs (_with_caps(): the end's, then the start's, empty
+## where that end is cut) as one outline: the left side, the end's arc, the right side back,
+## the start's arc, closed at the left side's start. With one end cut it is left open there:
+## from the left side's start round the end to the right side's start, or from the right
+## side's end round the start to the left side's end.
 static func _outline(
 	left: PackedVector2Array, right: PackedVector2Array, arcs: Array
 ) -> PackedVector2Array:
-	var outline := left.duplicate()
-	outline.append_array(arcs[0])
 	var back := right.duplicate()
 	back.reverse()
+	var end_arc: PackedVector2Array = arcs[0]
+	var start_arc: PackedVector2Array = arcs[1]
+	if end_arc.is_empty():
+		var open := back.duplicate()
+		open.append_array(start_arc)
+		open.append_array(left)
+		return open
+	var outline := left.duplicate()
+	outline.append_array(end_arc)
 	outline.append_array(back)
-	outline.append_array(arcs[1])
+	if start_arc.is_empty():
+		return outline
+	outline.append_array(start_arc)
 	outline.append(left[0])
 	return outline
 
@@ -420,7 +438,8 @@ static func _outline(
 ## the centre (the row's centre point, or a new one at the tip when the row has none). Every
 ## ring takes its row point's colour, so a fill_profile's coverage runs round the end too.
 ## Returns the new "points", "colors" and "indices" and "arcs" (each end's outer arc, the end's
-## then the start's). Pure but for `ground`.
+## then the start's, empty for an end `rounded` leaves cut: [the end's, the start's]). Pure but
+## for `ground`.
 static func _with_caps(
 	ground: Callable,
 	line: PackedVector2Array,
@@ -428,7 +447,8 @@ static func _with_caps(
 	row: Array,
 	band_points: PackedVector2Array,
 	band_colors: PackedColorArray,
-	band_indices: PackedInt32Array
+	band_indices: PackedInt32Array,
+	rounded: Array = [true, true]
 ) -> Dictionary:
 	var points := band_points.duplicate()
 	var colors := band_colors.duplicate()
@@ -448,8 +468,11 @@ static func _with_caps(
 		[line[n - 1], line[n - 1] - line[n - 2], width * (n - 1), false],
 		[line[0], line[0] - line[1], 0, true],
 	]
-	var arcs: Array = []
-	for end: Array in ends:
+	var arcs: Array = [PackedVector2Array(), PackedVector2Array()]
+	for which in ends.size():
+		if not bool(rounded[which]):
+			continue
+		var end: Array = ends[which]
 		var tip: Vector2 = end[0]
 		var forward: Vector2 = (end[1] as Vector2).normalized()
 		var base: int = end[2]
@@ -466,7 +489,7 @@ static func _with_caps(
 			var offset: float = row[k][0]
 			var arc := _cap_arc(ground, tip, forward, radius if offset >= 1.0 else radius * offset)
 			if k == 0:
-				arcs.append(arc)
+				arcs[which] = arc
 			for p in arc:
 				ring.append(points.size())
 				points.append(p)

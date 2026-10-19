@@ -128,7 +128,8 @@ static func is_large(entry: Dictionary) -> bool:
 ## line at 720p with the drawer open). A preset's first key already names it ("Click Topple
 ## trees"), so its Esc says only "Put away" and its keys stay short;
 ## `sculpt_tile` names the Sculpt drag, `shape` the shape of a brush with two (Water's
-## WaterBrush.Shape, Fire's FireBrush.Shape; -1: its default): its drag, and Tab naming the
+## WaterBrush.Shape, Fire's FireBrush.Shape, Start a fire's IgniteMode.Shape; -1: its
+## default): its drag, and Tab naming the
 ## shape it switches to, in the slot the others give Ctrl (the pane's gesture line says what
 ## Ctrl does).
 static func hints_for(
@@ -175,7 +176,15 @@ static func hints_for(
 		EventPresets.TOPPLE:
 			rows = [["Click", EventPresets.TOPPLE_LABEL], ["Drag", "Wider stand"]]
 		EventPresets.IGNITE:
-			rows = [["Click", EventPresets.IGNITE_LABEL], ["Drag", "Wider fire"]]
+			# Tab in the second slot as the line tools have it; the Path's keys read as Fire's
+			# Line's (the drag "Draw a ...", the size key Width), and the Circle gives its size
+			# key's slot to Tab (its drag widens the ring; five keys at most).
+			if shape == IgniteMode.Shape.PATH:
+				rows = [["Left-drag", "Draw a fire path"], [tab, "Circle"]]
+				size = "Width"
+			else:
+				rows = [["Click", EventPresets.IGNITE_LABEL], [tab, "Path"], ["Drag", "Wider fire"]]
+				size = ""
 	var tool := ToolRegistry.find(tool_id)
 	var put_away := "Put away " + tool.label if tool != null else "Put away"
 	if size != "":
@@ -225,6 +234,9 @@ func setup(lpc: LevelPlayController, events_pane: EventsPane) -> void:
 	)
 	pane.water_shape_selected.connect(
 		func(shape: int) -> void: _set_mode(WaterTool.ID, "shape", shape)
+	)
+	pane.ignite_shape_selected.connect(
+		func(shape: int) -> void: _set_mode(EventPresets.IGNITE, "shape", shape)
 	)
 	pane.water_depth_selected.connect(
 		func(depth: int) -> void: _set_mode(WaterTool.ID, "depth", depth)
@@ -466,9 +478,7 @@ func _set_armed(tool_id: StringName) -> void:
 ## measure tool or the sun gizmo took over (their own keys are on the bar then).
 func _show_hints() -> void:
 	if armed != &"":
-		var sculpt := SculptTool.of(_brush).tile
-		var shape := FireTool.of(_brush).shape if armed == FireTool.ID else WaterTool.of(_brush).shape
-		UIManager.set_tool_hints(hints_for(armed, sculpt, shape))
+		UIManager.set_tool_hints(hints_for(armed, SculptTool.of(_brush).tile, _shape_of(armed)))
 		return
 	var map := _lpc.get_game_map() if _lpc != null else null
 	var measuring := map != null and map.get_measure_tool() != null
@@ -511,10 +521,18 @@ func _on_paint_selected(surface: String) -> void:
 	_pick_again(PaintTool.ID)
 
 
-## A mode setting `field` = `value` picked in the pane; `arm` arms its tool as a tile does.
+## The shape of `tool_id`'s mode on the brush (Water, Fire, Start a fire), or -1.
+func _shape_of(tool_id: StringName) -> int:
+	if _brush == null or not tool_id in [WaterTool.ID, FireTool.ID, EventPresets.IGNITE]:
+		return -1
+	return int(_brush.mode_for(find_tool(tool_id)).get("shape"))
+
+
+## A mode setting `field` = `value` picked in the pane (a brush's or a preset's); `arm` arms
+## its tool as a tile does.
 func _set_mode(tool_id: StringName, field: String, value: Variant, arm: bool = true) -> void:
 	var brush := _wired_brush()
-	brush.mode_for(ToolRegistry.find(tool_id)).set(field, value)
+	brush.mode_for(find_tool(tool_id)).set(field, value)
 	if arm:
 		_pick_again(tool_id)
 	elif armed == tool_id:
@@ -527,13 +545,16 @@ func _pick_again(tool_id: StringName) -> void:
 	pick(tool_id)
 
 
-## Tab switched the armed brush's shape (Water, Fire): its pane's tiles and the hint bar
-## follow, without the tiles re-emitting.
+## Tab switched the armed brush's shape (Water, Fire, Start a fire): its pane's tiles (and
+## Start a fire's Advanced size, Size or Width) and the hint bar follow, without the tiles
+## re-emitting.
 func _on_shape_toggled() -> void:
 	if pane != null and pane.water_pane != null:
 		pane.water_pane.select_shape(WaterTool.of(_brush).shape)
 	if pane != null and pane.fire_pane != null:
 		pane.fire_pane.select_shape(FireTool.of(_brush).shape)
+	if pane != null:
+		pane.select_ignite_shape(_shape_of(EventPresets.IGNITE))
 	_show_hints()
 
 

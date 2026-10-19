@@ -14,7 +14,10 @@ extends RefCounted
 ##            `yaw` about the vertical from the play angle (0, the default, turns it back)
 ##   fire     {"kind": "collapse" | "fall" | "fire", "radius": m, "seed": n}: starts the event
 ##            on the table's TerrainEvents (the bridge, or the forest spot `look` found), its
-##            clock held so `advance` steps it
+##            clock held so `advance` steps it; "path" with "points" (world XZ, as a gesture
+##            draws them) and "radius" (its half-width) a fire along them, as IgniteMode's Path
+##            makes one (card F6)
+##   delete_level  deletes exactly the _firefeat_path test level (firefeat_path.json's)
 ##   advance  {"s": seconds}: the events' clock that much further, in frame-sized slices
 ##   free     the clock back to the frame loop (the change lands, the effects let go)
 ##   abort    every playing event stopped without its change (its trees stood back up), the
@@ -34,6 +37,8 @@ const FireAb := preload("res://tools/render_jobs/probes/fire_ab.gd")
 const FIND_RADIUS := 6.0
 const FIND_STEP := 3.0
 const FIND_REACH := 18.0
+## The test level firefeat_path.json saves, which delete_level removes (and nothing else).
+const PATH_LEVEL := "_firefeat_path"
 ## `advance` steps the clock in slices this long (a frame at 30 fps).
 const SLICE_S := 1.0 / 30.0
 ## The scorch's last line, after which a debug view overwrites its outputs.
@@ -49,6 +54,8 @@ static var _burn_code := ""
 
 static func run(base: Node, step: Dictionary) -> String:
 	var map: GameMap = base.get("_game_map")
+	if String(step.get("action", "")) == "delete_level":
+		return delete_path_level()
 	if String(step.get("action", "")) == "burn":
 		return _burn_debug(int(step.get("view", 0)), String(step.get("source", "")))
 	var lpc: LevelPlayController = map.get_level_play_controller() if map != null else null
@@ -72,7 +79,9 @@ static func run(base: Node, step: Dictionary) -> String:
 			return "looking at map %s (world %s), %.1f px off centre" % [str(at), str(world), miss]
 		"fire":
 			var event: TerrainEvent = null
-			if String(step.get("kind", "collapse")) == "collapse":
+			if String(step.get("kind", "collapse")) == "path":
+				event = _path_event(edits, step)
+			elif String(step.get("kind", "collapse")) == "collapse":
 				var bridge := _bridge(edits)
 				if bridge == null:
 					return "no bridge"
@@ -158,6 +167,28 @@ static func _burn_debug(view: int, source: String) -> String:
 		return "no anchor or no view %d for the burn debug" % view
 	shader.code = code.replace(BURN_ANCHOR, BURN_ANCHOR + "\n\t" + String(BURN_VIEWS[view]))
 	return "ground burn debug view %d of %s" % [view, from]
+
+
+## A fire along `step.points` (world XZ, as the gesture op draws them), made as IgniteMode makes
+## one on release: to the map frame, smoothed, capped and resampled, `step.radius` its
+## half-width.
+static func _path_event(edits: LiveEdits, step: Dictionary) -> TerrainEvent:
+	var line := PackedVector2Array()
+	for p: Array in step.get("points", []):
+		line.append(edits.editor.to_map_xz(Vector3(float(p[0]), 0.0, float(p[1]))))
+	var capped := StrokePath.capped(StrokePath.smooth_line(line), TerrainEvent.MAX_PATH_LENGTH_M)
+	var even := StrokePath.resample(
+		capped, TerrainEvent.MAX_PATH_POINTS, StrokePath.MIN_SPACING_M
+	)
+	return TerrainEvent.fire_path(even, float(step.get("radius", 2.5)), int(step.get("seed", 7)))
+
+
+## Deletes exactly the `_firefeat_path` test level (the one firefeat_path.json saves).
+static func delete_path_level() -> String:
+	var path := LevelManager.folder_path(PATH_LEVEL)
+	if not DirAccess.dir_exists_absolute(path):
+		return "no %s level" % PATH_LEVEL
+	return "deleted %s: %s" % [PATH_LEVEL, LevelManager.delete_level_folder(path)]
 
 
 static func _play_events(map: GameMap) -> PlayEvents:

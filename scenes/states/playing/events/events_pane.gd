@@ -45,6 +45,8 @@ signal paint_selected(surface: String)
 signal fire_shape_selected(shape: int)
 signal fire_intensity_selected(intensity: int)
 signal water_shape_selected(shape: int)
+## A Start a fire shape tile was picked (IgniteMode.Shape).
+signal ignite_shape_selected(shape: int)
 signal water_depth_selected(depth: int)
 signal water_speed_changed(speed: float)
 signal bridge_kind_selected(kind: int)
@@ -83,8 +85,30 @@ const TOOL_HINTS := {
 	EventPresets.TOPPLE:
 	"Click in a forest: the marked trees fall away from the click. Drag out for a wider stand.",
 	EventPresets.IGNITE:
-	"Click in a forest: fire spreads out from the click and leaves ash. Drag out for a wider fire.",
+	(
+		"Circle: click in a forest, and fire spreads out from the click; drag out for a wider"
+		+ " fire. Path: draw the line it runs along. It leaves ash. Tab switches the shape."
+	),
 }
+## Start a fire's Shape tiles (ShapeField: the line shape first), each tooltip saying what its
+## shape does; the path's begins "Draw a ..." as the line tools' do.
+const IGNITE_SHAPE_TILES: Array[Dictionary] = [
+	{
+		"shape": IgniteMode.Shape.PATH,
+		"id": &"ignite_path",
+		"label": "Path",
+		"tooltip": "Draw a fire path: the fire runs along it from where you start",
+	},
+	{
+		"shape": IgniteMode.Shape.CIRCLE,
+		"id": &"ignite_circle",
+		"label": "Circle",
+		"tooltip": "Click in a forest: the fire spreads out from the click",
+	},
+]
+## The Advanced size row: the brush's Size, or a fire path's Width (its half-width, metres).
+const SIZE_ROW := {"label": "Size", "low": "Small", "high": "Large"}
+const WIDTH_ROW := {"label": "Width", "low": "Narrow", "high": "Wide"}
 
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT
 var preset_field: TileField
@@ -99,6 +123,9 @@ var paint_fields: Dictionary = {}
 var fire_pane: FireToolPane
 var water_pane: WaterToolPane
 var bridge_pane: BridgeToolPane
+## Start a fire's Shape field (IGNITE_SHAPE_TILES), and the shape it shows.
+var ignite_shape_field: TileField
+var ignite_shape: int = IgniteMode.Shape.CIRCLE
 
 ## Each brush's controls by tool id; only the picked brush's show, in _options_holder.
 var _options: Dictionary = {}
@@ -170,8 +197,22 @@ func show_tool(tool_id: StringName, pressed: bool = true) -> void:
 	var sized := tool_id != &"" and not tool_id in [WaterTool.ID, BridgeTool.ID]
 	_advanced.visible = sized and tool_id != EventPresets.COLLAPSE
 	_strength_row.visible = not preset
+	var path := tool_id == EventPresets.IGNITE and ignite_shape == IgniteMode.Shape.PATH
+	_set_size_row(path)
 	if tool_id == PaintTool.ID:
 		ensure_paint_tiles()
+
+
+## Selects Start a fire's Shape tile for `shape` (IgniteMode.Shape; -1 leaves it) without
+## emitting ignite_shape_selected, and while it is shown its Advanced reads Width for a path.
+func select_ignite_shape(shape: int) -> void:
+	for tile in IGNITE_SHAPE_TILES:
+		if int(tile.shape) == shape:
+			ignite_shape = shape
+			ignite_shape_field.tiles.select(tile.id)
+	var box: Control = _options.get(EventPresets.IGNITE)
+	var shown := box != null and box.visible
+	_set_size_row(shown and ignite_shape == IgniteMode.Shape.PATH)
 
 
 ## The notice line: `text` says why the map takes no live edits ("" hides it, and with it the
@@ -322,6 +363,13 @@ func _build_tool_options(tool_id: StringName) -> Control:
 		SculptTool.ID:
 			sculpt_field = _sculpt_field()
 			box.add_child(sculpt_field)
+		EventPresets.IGNITE:
+			ignite_shape_field = ShapeField.build(
+				"IgniteShapeField", IGNITE_SHAPE_TILES[0], IGNITE_SHAPE_TILES[1]
+			)
+			ignite_shape_field.tiles.select(&"ignite_circle")
+			ignite_shape_field.tiles.selection_changed.connect(_on_ignite_shape_tile)
+			box.add_child(ignite_shape_field)
 		PaintTool.ID:
 			for group in AuthoringPanel.PAINT_GROUPS:
 				var field := TileField.new()
@@ -389,6 +437,25 @@ func _on_paint_tile(id: StringName, source: TileRow) -> void:
 	var surface := AuthoringPanel.paint_tile_surface(id)
 	if surface != "":
 		paint_selected.emit(surface)
+
+
+func _on_ignite_shape_tile(id: StringName) -> void:
+	for tile in IGNITE_SHAPE_TILES:
+		if tile.id == id:
+			ignite_shape = int(tile.shape)
+			_set_size_row(ignite_shape == IgniteMode.Shape.PATH)
+			ignite_shape_selected.emit(ignite_shape)
+
+
+## The Advanced size row as the brush's Size, or with `path` a fire path's Width (its
+## half-width, TerrainEvent's 1-6 m).
+func _set_size_row(path: bool) -> void:
+	var words: Dictionary = WIDTH_ROW if path else SIZE_ROW
+	_size_row.label = String(words.label)
+	_size_row.hint_low = String(words.low)
+	_size_row.hint_high = String(words.high)
+	_size_row.min_value = TerrainEvent.MIN_PATH_RADIUS_M if path else BrushTool.MIN_RADIUS
+	_size_row.max_value = TerrainEvent.MAX_PATH_RADIUS_M if path else BrushTool.MAX_RADIUS
 
 
 ## The exact size and strength, values hidden like the authoring panes' Advanced rows.

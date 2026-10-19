@@ -55,7 +55,8 @@ static func all() -> Array[ToolDescriptor]:
 				"flame",
 				(
 					"Fire spreads through the forest from where you click and leaves ash and"
-					+ " charred snags, for everyone. Drag out for a wider fire."
+					+ " charred snags, for everyone. Drag out for a wider fire, or Tab and draw"
+					+ " the path it runs along."
 				),
 				IgniteMode
 			),

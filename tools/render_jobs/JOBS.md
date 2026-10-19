@@ -795,6 +795,18 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   sheets against `render_jobs/firefeat_line_tool_before_f5h` (a run of the job with `--out`
   before card F5h): `sheet_rings_before_after` (per brush: rest before, after, Ctrl before,
   after), `sheet_erase_before_after`, `sheet_lay_1080_before_after`. Saves no level.
+- `jobs/firefeat_path.json`: Start a fire's Path shape (card F6; about 130 s built, 60-75 s
+  `--saved`). Build: the 200 ft temperate map with the meadow stripes east of x 0 (as
+  firefeat_line_tool's), authoring River and Line of fire held mid-drag on one curve from the
+  forest into the meadow at zoom 22 (`one_tool_*`), saved as `_firefeat_path` and played. Look:
+  Start a fire's pane at Circle, real Tabs with the pane open and closed (an eval logs the
+  shape and that no GUI control took focus), the Path ring at rest, mid-drag over the forest
+  and over the meadow, Esc keeping it armed; then a path fire on the same curve (the probe's
+  `fire` kind `path`) at 0.7, 1.6 and 2.6 s and after, by day and at 23:00, and the drag at
+  night. Sheets: `sheet_one_tool` (River | Line of fire | Path; the first two from the build
+  run's folder, `render_jobs/firefeat_path_before`), `sheet_today_now` (the circle's pane and
+  ring before card F6's UI | now), `sheet_cursor`, `sheet_motion`. Delete the level with
+  `jobs/firefeat_path_cleanup.json` (the probe's `delete_level`: `_firefeat_path` only).
 - `jobs/fire_smoke_book.json`: bakes the persistent fire's smoke book once, offline (card
   fire-prod-c5a; `probes/fire_smoke_book.gd`; `tools/fire_sim/README.md`). In the real window (a
   headless run draws nothing) it draws `tools/fire_sim/fire_smoke_book_bake.gdshader` into one

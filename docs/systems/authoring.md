@@ -346,15 +346,34 @@ Probe and numbers:
   fire" and no marks (the whole forest in the ring burns); where no tree stands in the ring
   (the burnt forest's own snags do not count, `FireSweep.burnable`) the ring is chalk_soft
   with "Only a forest burns" (`IgniteMode.ring_look`) and a release is refused through the
-  brush's `refused` (`TerrainEvents.NO_FOREST`). Hint row: Click "Start a fire", Drag "Wider
-  fire", `[ ]`, Ctrl+Z, Esc. A fired event goes to `TerrainEvents.start`;
+  brush's `refused` (`TerrainEvents.NO_FOREST`). Start a fire has two shapes, Tab switching
+  them (card F6; `IgniteMode.Shape`, the pane's Shape field through `ShapeField`, Path first,
+  Circle the default): Circle is the ring above; Path draws the line the fire runs along
+  through the line tools' `LineGesture` and `LineRibbon` (`IgniteMode.lay_style`: `PATH_HUE`,
+  ochre on its ring's light ochre glow, every other key the river's and the fire line's), its
+  half-width the brush size within 1-6 m (`path_radius`; Advanced reads Width), a flame mark
+  at its start in the ring's stroke, the stretches with no burnable tree within reach in
+  chalk_soft (`FirePath.forest_spans` of the live line, refreshed every 200 ms), and the chip
+  "Fire along a path", "Fire along a path  48 ft" while drawn, "Longest fire path" at 64 m,
+  "Only a forest burns" while no forest stands along it. At rest the ring at the half-width
+  has a dash across it. Esc or a right click drops the line and stays armed; a release under
+  2 m says "Draw the fire's path"; one with no forest along it `NO_FOREST_PATH`. Hint rows:
+  Circle Click "Start a fire", Tab "Path", Drag "Wider fire", Ctrl+Z, Esc; Path Left-drag
+  "Draw a fire path", Tab "Circle", `[ ]` "Width", Ctrl+Z, Esc. A fired event goes to
+  `TerrainEvents.start`;
   the drawer steps aside as it starts (`stroke_started`) and the preset stays armed for the
   next one, until Drop bridge has no bridge left and puts itself away.
 - **Terrain events** (`TerrainEvent`, `utils/terrain_event.gd`; `TerrainEvents`,
   `scenes/states/playing/events/terrain_events.gd`, a child of `LiveEdits` made in
   `LiveEdits.create`, `LiveEdits.events`): an event is a few parameters (kind, table key,
-  centre, radius or crossing id, duration, the host's lead, a seed; 32 bytes), never document
-  state. The GM's side checks it (`refusal_for`: at most `MAX_ACTIVE` 4 at once, the bridge
+  centre, radius or crossing id, duration, the host's lead, a seed; 32 bytes, and a fire along
+  a path its points after them, 32 + 8n up to 544; NETWORKING.md), never document state. A
+  path fire (`FireSweep`'s path flavour, `FirePath`) burns the trees within its half-width,
+  each catching as the front reaches its arc (length / 12 m/s held to 1.0-3.5 s; the event
+  lasts that plus 2 s), at most 96 animated spread along it; the ground fire runs along the
+  arc (`GroundBurn.setup_path`); its change paints the burnt biome only over the forest spans
+  and the ash along the whole path, as capsules whose seconds are shared out
+  (`FirePath.capsule_seconds`) so the centre line and the rim match a circle's. The GM's side checks it (`refusal_for`: at most `MAX_ACTIVE` 4 at once, the bridge
   still there and not already falling, a tree in the circle), stamps the table key and the
   lead (0.1 s hosting, 0 solo), broadcasts it (NETWORKING.md "Live map edits") and plays it
   after the lead; a client plays it on receipt. One clock, `advance(delta)` (`_process`, tests
