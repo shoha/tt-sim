@@ -11,6 +11,7 @@
   {"op": "look_at", "at": [2, 0]},
   {"op": "zoom", "size": 14.0},
   {"op": "wait", "s": 1.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_sound.gd"},
   {"op": "stroke", "mode": "fire", "tile": "flames", "points": [[5, -1], [8, 1]], "speed": 2.0, "radius": 3.0},
   {"op": "wait_ready", "settle": 1.5},
   {"op": "eval", "expr": "_game_map.get_brush_tool().deactivate()"},
@@ -26,6 +27,8 @@
   {"op": "look_at", "at": [1, 0]},
   {"op": "zoom", "size": 14.0},
   {"op": "wait", "s": 1.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_sound.gd"},
+  {"op": "wait", "s": 1.0},
   {"op": "call", "script": "res://tools/render_jobs/probes/p4b.gd", "action": "hold", "token": 0, "to": [6.5, 0]},
   {"op": "wait", "s": 1.2},
   {"op": "eval", "expr": "_game_map.get_drag_ruler()._distance_label.text"},
@@ -38,10 +41,13 @@
   {"op": "capture", "name": "cue_outside", "desc": "Play, zoom 14: the token carried off the fire onto the meadow; the label has no cue"},
   {"op": "call", "script": "res://tools/render_jobs/probes/p4b.gd", "action": "drop"},
   {"op": "wait", "s": 1.0},
+  {"op": "look_at", "at": [-15, 0]},
+  {"op": "wait", "s": 2.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/fire_sound.gd"},
   {"op": "title"},
   {"op": "wait", "s": 1.0},
   {"op": "eval", "expr": "get_node(\"/root/LevelManager\").delete_level_folder(get_node(\"/root/LevelManager\").folder_path(\"_firefeat_cue\"))"},
-  {"op": "index", "title": "F7 fire token cue", "intro": "Produced by tools/render_jobs/jobs/firefeat_cue.json. A new 100 ft meadow (seed 4242) with a disc of flames laid east of the middle, saved as the _firefeat_cue test level and played: a token is held mid-drag over the fire (the drag ruler's label adds In fire) and then off it (no cue). The level is deleted at the end."},
+  {"op": "index", "title": "F7 fire token cue", "intro": "Produced by tools/render_jobs/jobs/firefeat_cue.json. A new 100 ft meadow (seed 4242) with a disc of flames laid east of the middle, saved as the _firefeat_cue test level and played: the fire's sound players, their gains and the SFX bus peak are logged with the fire in view, a token is held mid-drag over the fire (the drag ruler's label adds In fire) and then off it (no cue), and the sound is logged again after the view pans away from the fire. The level is deleted at the end."},
   {"op": "wait", "s": 0.5}
  ]
 }

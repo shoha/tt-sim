@@ -9,6 +9,11 @@ Usage:
     python tools/generate_sfx.py --verify                 # gate on measured softness
     python tools/generate_sfx.py --install                # write into assets/audio/
     python tools/generate_sfx.py --manifest               # rewrite only the manifest
+
+The audition commands render the synthesized palette (sfx_spec.SPECS). The
+recorded loops (sfx_spec.RECORDINGS) are processed from their originals by
+--install, which keeps the committed file when an original is not on this
+machine, and --verify checks the committed file.
 """
 
 import argparse
@@ -22,17 +27,19 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import sfx_measure as measure
+import sfx_recording
 import sfx_spec
 from sfx_render import (
     ATTACK_BAND_HIGH_MS,
     ATTACK_BAND_LOW,
     DURATION_TOLERANCE,
+    LOOP_SEAM_MAX_RATIO,
     PEAK_WINDOW_DBFS,
     WARMTH_FLOOR_MARGIN_DB,
     render_spec,
     variant_spec,
 )
-from sfx_synth import ms_to_samples, render_wav
+from sfx_synth import SAMPLE_RATE, ms_to_samples, read_wav, render_wav
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -163,7 +170,29 @@ def verify_samples(name: str, samples: list) -> list:
             "%s: attack %.1f ms is outside [%.1f, %.1f] for a declared %.1f ms onset"
             % (name, attack, low, high, spec.attack_ms)
         )
+    return failures + _level_failures(name, spec, samples, SAMPLE_RATE)
 
+
+def verify_recording(name: str, samples: list, sample_rate: int) -> list:
+    """Check one recorded loop's file (sfx_recording.process_loop's samples)."""
+    loop = sfx_spec.RECORDINGS[name]
+    failures = []
+    if sample_rate != loop.sample_rate:
+        failures.append("%s: %d Hz, not the spec's %d Hz" % (name, sample_rate, loop.sample_rate))
+    if not samples or samples[-1] != samples[0]:
+        failures.append("%s: the guard sample after the loop is not its first" % name)
+    seam = measure.loop_seam_ratio(samples[:-1])
+    if seam > LOOP_SEAM_MAX_RATIO:
+        failures.append(
+            "%s: the loop's seam steps %.1f times its typical step (at most %.1f): a click"
+            % (name, seam, LOOP_SEAM_MAX_RATIO)
+        )
+    return failures + _level_failures(name, loop, samples[:-1], sample_rate)
+
+
+def _level_failures(name: str, spec, samples: list, sample_rate: int) -> list:
+    """Peak, warmth and duration against a SoundSpec's or RecordedLoop's targets."""
+    failures = []
     peak = measure.peak_dbfs(samples)
     low, high = PEAK_WINDOW_DBFS
     if not low <= peak <= high:
@@ -173,7 +202,7 @@ def verify_samples(name: str, samples: list) -> list:
             % (name, peak, low, high, direction)
         )
 
-    ratio = measure.high_band_ratio_db(samples)
+    ratio = measure.high_band_ratio_db(samples, sample_rate=sample_rate)
     if ratio > spec.max_high_band_db:
         failures.append(
             "%s: high-band ratio %.1f dB exceeds %.1f dB (too bright)"
@@ -186,7 +215,7 @@ def verify_samples(name: str, samples: list) -> list:
         )
 
     expected = spec.total_ms
-    actual = measure.duration_ms(samples)
+    actual = measure.duration_ms(samples, sample_rate)
     if abs(actual - expected) / expected > DURATION_TOLERANCE:
         failures.append(
             "%s: duration %.0f ms differs from the declared %.0f ms by more than %.0f percent"
@@ -196,31 +225,48 @@ def verify_samples(name: str, samples: list) -> list:
     return failures
 
 
-def verify_palette() -> list:
-    """Render and check every declared sound. Returns all failures."""
+def verify_palette(assets_root: str = REPO_ROOT) -> list:
+    """Render and check every synthesized sound, and check every recorded loop's
+    installed file beneath assets_root. Returns all failures."""
     failures = []
     for name, spec in sfx_spec.SPECS.items():
         failures.extend(verify_samples(name, render_spec(spec)))
+    for name, loop in sfx_spec.RECORDINGS.items():
+        path = installed_path(assets_root, name, loop.bus)
+        if not os.path.isfile(path):
+            failures.append("%s: no installed file at %s" % (name, path))
+            continue
+        samples, rate = read_wav(path)
+        failures.extend(verify_recording(name, samples, rate))
     return failures
 
 
 def build_manifest() -> dict:
     """The playback table for every sound in the spec, keyed by name.
 
-    Each entry names the installed file, its Godot bus and the spec's playback
-    fields (volume_db, pitch_jitter in semitones, cooldown_s, priority).
+    Each entry names the installed file, its Godot bus, whether it is a loop
+    (a RecordedLoop, played by the node that owns its source, never by
+    AudioManager.play) and the spec's playback fields (volume_db, pitch_jitter
+    in semitones, cooldown_s, priority).
     """
+    every = {**sfx_spec.SPECS, **sfx_spec.RECORDINGS}
     return {
         name: {
             "bus": GODOT_BUS[spec.bus],
+            "loop": name in sfx_spec.RECORDINGS,
             "path": "res://assets/audio/%s/%s.wav" % (spec.bus, name),
             "volume_db": spec.volume_db,
             "pitch_jitter": spec.pitch_jitter,
             "cooldown_s": spec.cooldown_s,
             "priority": spec.priority,
         }
-        for name, spec in sorted(sfx_spec.SPECS.items())
+        for name, spec in sorted(every.items())
     }
+
+
+def installed_path(assets_root: str, name: str, bus: str) -> str:
+    """Where a sound's .wav lives beneath a repository root."""
+    return os.path.join(assets_root, "assets", "audio", bus, "%s.wav" % name)
 
 
 def manifest_path(assets_root: str) -> str:
@@ -241,32 +287,54 @@ def write_manifest(assets_root: str) -> str:
     return path
 
 
-def install(assets_root: str, seed: int) -> tuple:
-    """Write variant 0 of every sound into assets/audio/, drop stale .ogg files,
-    and write the manifest AudioManager loads.
+def _write_atomically(wav_path: str, samples: list, sample_rate: int) -> None:
+    """Write to a temporary file beside the target and move it into place.
+
+    os.replace is atomic on the same filesystem, so an interrupted render can
+    never leave a truncated .wav behind where the manifest points.
+    """
+    temp_path = wav_path + ".tmp"
+    try:
+        render_wav(temp_path, samples, sample_rate)
+        os.replace(temp_path, wav_path)
+    except Exception:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise
+
+
+def install(assets_root: str, seed: int, sources_root: str = REPO_ROOT) -> tuple:
+    """Write variant 0 of every synthesized sound and every recorded loop into
+    assets/audio/, drop stale .ogg files, and write the manifest AudioManager
+    loads. Returns the files written, the files removed, and the recorded loops
+    whose original is not beneath sources_root (their file is left as it is).
 
     The manifest names each .wav path explicitly, so a surviving .ogg for the
-    same sound name would never be loaded again; it is removed here.
+    same sound name would never be loaded again; it is removed here. A recorded
+    loop's original is kept out of git, so a fresh clone has none: its
+    committed file is kept, never a reason to fail.
     """
     written = []
     removed = []
-    for name, spec in sfx_spec.SPECS.items():
-        bus_dir = os.path.join(assets_root, "assets", "audio", spec.bus)
+    kept = []
+    every = {**sfx_spec.SPECS, **sfx_spec.RECORDINGS}
+    for name, spec in every.items():
+        wav_path = installed_path(assets_root, name, spec.bus)
+        bus_dir = os.path.dirname(wav_path)
         os.makedirs(bus_dir, exist_ok=True)
 
-        wav_path = os.path.join(bus_dir, "%s.wav" % name)
-        # Write to a temporary file beside the target and move it into place.
-        # os.replace is atomic on the same filesystem, so an interrupted render
-        # can never leave a truncated .wav behind where the manifest points.
-        temp_path = wav_path + ".tmp"
-        try:
-            render_wav(temp_path, render_spec(spec, seed=seed))
-            os.replace(temp_path, wav_path)
-        except Exception:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-            raise
-        written.append(wav_path)
+        if name in sfx_spec.RECORDINGS:
+            source = os.path.join(sources_root, *spec.source.split("/"))
+            if os.path.isfile(source):
+                samples, rate = sfx_recording.read_source(source)
+                loop = sfx_recording.process_loop(samples, rate, spec)
+                _write_atomically(wav_path, loop, spec.sample_rate)
+                written.append(wav_path)
+            else:
+                kept.append(wav_path)
+        else:
+            _write_atomically(wav_path, render_spec(spec, seed=seed), SAMPLE_RATE)
+            written.append(wav_path)
 
         for stale in ("%s.ogg" % name, "%s.ogg.import" % name):
             stale_path = os.path.join(bus_dir, stale)
@@ -274,7 +342,7 @@ def install(assets_root: str, seed: int) -> tuple:
                 os.remove(stale_path)
                 removed.append(stale_path)
     write_manifest(assets_root)
-    return written, removed
+    return written, removed, kept
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -320,6 +388,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=REPO_ROOT,
         help="repository root that --install and --manifest write beneath",
     )
+    parser.add_argument(
+        "--sources-root",
+        default=REPO_ROOT,
+        help="root the recorded loops' originals are found beneath (sfx_spec.RECORDINGS)",
+    )
     return parser
 
 
@@ -333,15 +406,24 @@ def main(argv: list = None) -> int:
             for failure in failures:
                 print("  " + failure)
             return 1
-        print("Palette verification passed: %d sounds." % len(sfx_spec.SPECS))
+        print(
+            "Palette verification passed: %d sounds and %d recorded loop(s)."
+            % (len(sfx_spec.SPECS), len(sfx_spec.RECORDINGS))
+        )
         return 0
 
     if args.install:
-        written, removed = install(args.assets_root, args.seed)
+        written, removed, kept = install(args.assets_root, args.seed, args.sources_root)
         print("Installed %d file(s) into %s" % (len(written), args.assets_root))
         print("Wrote %s" % manifest_path(args.assets_root))
         for path in removed:
             print("  removed superseded %s" % os.path.relpath(path, args.assets_root))
+        for path in kept:
+            state = "kept the committed" if os.path.isfile(path) else "no file at"
+            print(
+                "  %s %s: its original recording is not under %s (see tools/sfx_spec.py)"
+                % (state, os.path.relpath(path, args.assets_root), args.sources_root)
+            )
         print("Next: godot --headless --import --path .")
         return 0
 

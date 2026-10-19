@@ -31,6 +31,7 @@
 		"res://tests/unit/test_fire_line.gd",
 		"res://tests/unit/test_fire_look.gd",
 		"res://tests/unit/test_fire_smoke_book.gd",
+		"res://tests/unit/test_fire_sound.gd",
 		"res://tests/unit/test_fire_stroke.gd",
 		"res://tests/unit/test_foliage_budget.gd",
 		"res://tests/unit/test_foliage_light.gd",

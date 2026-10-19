@@ -23,6 +23,8 @@ is a separate effect; "Runtime" ends with what it still uses.
 | `scenes/terrain/fire_clusters.gd` | `FireClusters` | Flame sums on a 3.5 m grid and the hot spots the lights and smoke stand on (pure) |
 | `scenes/terrain/fire_lights.gd` | `FireLights` | Up to four shared `OmniLight3D` |
 | `scenes/terrain/fire_field_smoke.gd` | `FireFieldSmoke` | One MultiMesh of plumes; the smoke book's load and binding |
+| `scenes/terrain/fire_sound.gd` | `FireSound` | The roar loop on two `AudioStreamPlayer3D` at the strongest clusters near the view |
+| `assets/audio/sfx/fire_roar.wav` | | The roar loop (a CC0 recording processed by `tools/sfx_recording.py` from its `tools/sfx_spec.py` `RecordedLoop`) |
 | `scenes/effects/fire_look.gd` | `FireLook` | The shared quad and material, instance buffers and bounds, the fire book's lifecycle, the ground's glow binding, the lights' colour, energy, flicker and gate |
 | `resources/fire_book.gd` | `FireBook` | The flames' book as a Resource: validation (`problem()`), `create_texture()`, `is_lfs_pointer()` |
 | `resources/fire_smoke_book.gd` | `FireSmokeBook` | The smoke's book as a Resource |
@@ -241,6 +243,30 @@ four fit the Mobile renderer's eight per mesh; the env manager skips a FireField
 the map's own lights (counted, they turned the level's sun off in "auto" mode). The rounds that
 chose the falloff (ranges 7, 12, 15 and 20 under pixel probes) are in `FireLights`' header.
 
+### The sound
+
+`FireSound` (cards F7 and F7b), made with the lights and smoke: the roar loop (`fire_roar`, a
+CC0 recording of a large fire processed into a 57 s seamless loop;
+[../SOUND_EFFECTS.md](../SOUND_EFFECTS.md) "Loops") on at most two `AudioStreamPlayer3D` on the
+SFX bus, so the Settings SFX volume governs it. Each refresh hands it every burning cluster
+(`FireClusters.find`, the lights' own search); `FireSound.pick` (pure) takes the two loudest near
+the view: a cluster's loudness is the square root of its size over `FULL_SIZE_M2` 12 m², times its
+place in the view (whole within `FULL_SHARE` 0.5 of the orthographic camera's height from its
+axis, silent at `REACH_SHARE` 1.0, just past the screen's sides). The pick runs when the fire
+changes or the view moves or zooms by `REPICK_SHARE` 0.15 of its height, never per frame (about
+0.13 ms over 300 clusters, measured in `test_fire_sound.gd`); per frame each player only fades
+toward its target at `FADE_PER_S` 1 (about a second from silence to full), and a player whose
+cluster changes fades out, moves and fades in. Distance does not attenuate the players (the level
+is the view's fire); their place pans them through the world SubViewport's 3D listener
+(`audio_listener_enable_3d` in `game_map.tscn`, its camera). They exist only while flames do:
+embers alone are silent, and once the fire is erased they fade out and are freed. The two start
+at random points of the loop, a quarter semitone either side of its pitch, so the pair never
+phases. The level is the spec's `volume_db` (-6 dB, an ambience about 20 dB under the token
+sounds; the level by ear is the user's). In the real window (`firefeat_cue`, 2026-10-19): the SFX
+bus at -200 dB before the fire; with one cluster in view at gain 0.68, peaks of -30 to -34 dB
+(the fire right of centre, right 2 dB over left); panned away, gains 0 and the bus back to
+-200 dB within 2.5 s.
+
 ### Tokens
 
 No token state and no effect on a token (fire is a rules matter for the GM). While a token is
@@ -335,6 +361,12 @@ Unit tests in `tests/unit/` (all in the authoring subset):
   1.4, the smoke's bounds holding the book's frame at the widest lean.
 - `test_fire_cue.gd`: `DragRuler.in_fire` inside, outside, the ember band, the map's edge, no
   fire and no document; the label's cue after its other parts; the field's group.
+- `test_fire_sound.gd` (also in the ui subset): the manifest's loop on the SFX bus under the
+  token sounds, the stream imported looping as QOA over the whole file (`loop_end` the last
+  frame, the guard sample equal to the first) with a seam no larger than its neighbours' steps,
+  `play()` refusing a loop; `pick` near the view, loudest first, faded across the edge, and its
+  cost; a field's players at the strongest clusters, fading in, and freed once the fire is
+  erased; embers silent. The processing is tested in Python (`tools/tests/test_sfx_recording.py`).
 - `test_fire_stroke.gd`, `test_map_document_fire.gd`: the Fire tool's history entries and the
   document's `fire.png`; `test_live_map_edits.gd` runs the fire on the worker for host, peer and
   reload. Over ENet: `tests/net/enet_live_edits` compares `plan_digest` on every op and for the
@@ -345,7 +377,8 @@ sheets, held clock, motion bursts) and `firefeat_cleanup`; `fire_mask` (lay and 
 `fire_shards` (debug view 6 the sim bake's albedo tile); `fire_first_burn` (the book's load and
 upload ms); `fire_perf_play`; `fire_smoke_book` (the smoke book's bake); `fire_c7a_aba`,
 `fire_c7a_parts`, `fire_c7a_parts2` and `fire_c7b_glow` (the production timing); `firefeat_cue`
-(the drag ruler's "In fire" in play). Performance:
+(the drag ruler's "In fire" in play, and the sound's players and the SFX bus with the fire in
+view and away from it, `probes/fire_sound.gd`). Performance:
 [../PERFORMANCE.md](../PERFORMANCE.md) "Fire, production port (C7, 2026-10-18)" times this fire
 (every target met by day; whole night home and third night zoom 20 at the edge, met in the latest
 run and missed in the two before; CPU 0.002 ms; a stroke 1.8-3.6 ms on the main thread); "Fire

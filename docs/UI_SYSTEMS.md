@@ -1174,6 +1174,11 @@ manifest (`assets/audio/sfx_manifest.json`, written from `tools/sfx_spec.py`), a
 requests coalesce to the highest-priority sound per bus, so a button that confirms and closes a
 dialog is heard once. Names, tiers and how to add a sound: `docs/SOUND_EFFECTS.md`.
 
+A loop (a manifest entry with `"loop": true`, the fire's roar) is the exception: `play()`
+refuses it with a warning, and the node that owns its source plays it on its own positional
+players, taking the stream from `AudioManager.loop_stream(&"name")` and the bus and gain from
+`sound_entry()` (`FireSound`; SOUND_EFFECTS.md "Loops").
+
 ### Volume Control
 
 ```gdscript

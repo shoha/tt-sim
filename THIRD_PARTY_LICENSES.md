@@ -45,6 +45,18 @@ sources are listed for provenance.
 | `assets/skies/dusk.exr` | Evening Sky HDRI 022 B | ambientCG | https://ambientcg.com/a/EveningSkyHDRI022B |
 | `assets/skies/storm.exr` | Day Sky HDRI 061 A | ambientCG | https://ambientcg.com/a/DaySkyHDRI061A |
 
+## Sound recordings (assets/audio/)
+
+Every other sound in `assets/audio/` is synthesized by `tools/generate_sfx.py`. The recordings
+below are released under the Creative Commons CC0 1.0 Universal Public Domain Dedication
+(https://creativecommons.org/publicdomain/zero/1.0/); no attribution is required, and the
+sources are listed for provenance. The processing is declared in `tools/sfx_spec.py`
+(`RECORDINGS`) and done by `tools/sfx_recording.py`.
+
+| File | Title | Author | URL | Licence | Processing |
+|---|---|---|---|---|---|
+| `assets/audio/sfx/fire_roar.wav` | R27-25-Large Fire Burning.wav (pack "Vintage Fire (Red Lib)") | craigsmith | https://freesound.org/people/craigsmith/sounds/483318/ | CC0 1.0 | 48 kHz 24-bit mono original: low-pass 10 kHz and halved to 24 kHz, high-pass 70 Hz, 49.8 Hz hum notched, trimmed to 2.0-59.3 s, the last 400 ms crossfaded into the head (equal power) as a seamless loop, peak-normalized to -3 dBFS, 16-bit |
+
 ## Vendored addons
 
 Each addon under `addons/` carries its own licence file:

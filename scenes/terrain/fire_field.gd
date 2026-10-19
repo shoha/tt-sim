@@ -53,17 +53,19 @@ extends Node3D
 ## first fire (request_book), polls its threaded load each frame until it is bound, and is
 ## counted while it is in the tree, so the last field to leave lets the book go.
 ##
-## Lights and smoke (look card F4b-1): each re-planned block's flames are summed on the
-## clusters' grid (FireClusters.cells_of, kept per block), and every refresh finds the hot spots
-## from those sums: FireLights stands up to four warm lights over the largest burning clusters
-## (shown only while the sun is low) and FireFieldSmoke raises a leaning plume from the smoke
-## book over up to eight of the largest blaze clusters. Both are children, made with the first fire
-## and freed with the map; their per-frame work is the lights' flicker (the smoke moves in its
-## shader). The field is in GROUP, so the drag ruler finds the document's fire under a drop
-## (DragRuler.in_fire, through mask_at, card F7a). The ground's fire term reads everything of it
-## that does not change with time from the sim bake (FireNoiseBake, cards F4b-4 and ground-cost),
-## also a child, made with the first fire mask and bound once drawn; each refresh redraws it over
-## the region it re-planned, and the field's leaving the tree lets the ground go of it.
+## Lights, smoke and sound (look card F4b-1, cards F7 and F7b): each re-planned block's flames are
+## summed on the clusters' grid (FireClusters.cells_of, kept per block), and every refresh finds
+## the hot spots from those sums: FireLights stands up to four warm lights over the largest burning
+## clusters (shown only while the sun is low), FireFieldSmoke raises a leaning plume from the smoke
+## book over up to eight of the largest blaze clusters, and FireSound plays the fire's roar loop at
+## the two strongest clusters near the view. All three are children, made with the first fire and
+## freed with the map; their per-frame work is the lights' flicker and the sound's fades (the smoke
+## moves in its shader). The field is in GROUP, so the drag ruler finds the document's fire under
+## a drop (DragRuler.in_fire, through mask_at, card F7a). The ground's fire term reads everything
+## of it that does not change with time from the sim bake (FireNoiseBake, cards F4b-4 and
+## ground-cost), also a child, made with the first fire mask and bound once drawn; each refresh
+## redraws it over the region it re-planned, and the field's leaving the tree lets the ground go
+## of it.
 ##
 ## A refresh's pure half (FirePlanJob: the re-plan, the cluster sums, the rasters) runs on a
 ## WorkerThreadPool task with `use_worker` (the authoring and play-time editors set it, as they
@@ -187,6 +189,7 @@ var _heat_texture: ImageTexture = null
 var _cells: Dictionary = {}
 var _lights: FireLights = null
 var _smoke: FireFieldSmoke = null
+var _sound: FireSound = null
 ## The ground fire's bakes (made with the first fire mask).
 var _noise: FireNoiseBake = null
 ## The refresh planning on a worker (null: none) and the samples asked for while it runs.
@@ -403,6 +406,11 @@ func lights() -> FireLights:
 ## The fire's smoke (null before the first fire), for probes and tests.
 func smoke() -> FireFieldSmoke:
 	return _smoke
+
+
+## The fire's sound (null before the first fire), for probes and tests.
+func sound() -> FireSound:
+	return _sound
 
 
 ## The fire mask of `doc` at document point `p` (metres, the map's frame), read bilinearly as the
@@ -807,11 +815,13 @@ func _ensure_noise() -> void:
 
 
 ## Stands the lights over the largest burning clusters and the smoke over the largest blaze
-## ones (FireClusters, from the kept per-block sums); both are made with the first fire and
+## ones (FireClusters, from the kept per-block sums), and hands every burning cluster to the
+## sound, which picks the strongest near the view; all three are made with the first fire and
 ## kept, empty, after it goes out.
 func _place_lights_and_smoke() -> void:
 	var cells := FireClusters.merge(_cells)
-	var lit := FireClusters.lights(cells)
+	var burning := FireClusters.find(cells, false)
+	var lit := burning.slice(0, FireClusters.MAX_LIGHTS)
 	var smoky := FireClusters.smoke(cells)
 	if _lights == null:
 		if lit.is_empty() and smoky.is_empty():
@@ -820,10 +830,13 @@ func _place_lights_and_smoke() -> void:
 		add_child(_lights)
 		_smoke = FireFieldSmoke.new()
 		add_child(_smoke)
+		_sound = FireSound.new()
+		add_child(_sound)
 	if document != null:
 		FireFieldSmoke.set_wind(document.map_seed)
 	_lights.place(lit)
 	_smoke.place(smoky)
+	_sound.place(burning)
 
 
 ## The lattice around one block (`margin` points past it on every side, WINDOW_MARGIN at least;
