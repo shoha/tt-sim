@@ -437,17 +437,21 @@ func mark_edited() -> void:
 	session.mark_edited()
 
 
+## Undoes the newest edit, with undo's tick (StrokeSound) when there was one.
 func undo() -> void:
 	_finish_brush_gesture()
 	if history.undo() != "":
+		StrokeSound.play_history(false)
 		mark_edited()
 		_bounds_stale = true
 		_refresh_tools()
 
 
+## Redoes the newest undone edit, with redo's tick when there was one.
 func redo() -> void:
 	_finish_brush_gesture()
 	if history.redo() != "":
+		StrokeSound.play_history(true)
 		mark_edited()
 		_bounds_stale = true
 		_refresh_tools()

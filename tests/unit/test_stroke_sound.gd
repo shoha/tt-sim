@@ -1,0 +1,154 @@
+extends GutTest
+
+## StrokeSound, the authoring brush's sounds: the distance-to-ticks throttle (pure), what a
+## drag, a tap, a cancel and a silent tool are heard as, that every sound it names is a
+## recorded shot on the SFX bus, and the queue's take choice for a shot with several takes.
+
+const FAMILIES: Array[StringName] = [&"plant", &"prop", &"water", &"paint", &"sculpt"]
+const MOMENTS: Array[String] = ["start", "tick", "settle"]
+
+var _heard: Array[StringName] = []
+
+
+func _recording_sound() -> StrokeSound:
+	_heard.clear()
+	var sound := StrokeSound.new()
+	sound.player = func(name: StringName) -> void: _heard.append(name)
+	return sound
+
+
+func test_ticks_are_whole_spacings_of_distance() -> void:
+	assert_eq(StrokeSound.ticks_for(0.0, 3.0), 0)
+	assert_eq(StrokeSound.ticks_for(2.99, 3.0), 0, "under one spacing: none")
+	assert_eq(StrokeSound.ticks_for(3.0, 3.0), 1)
+	assert_eq(StrokeSound.ticks_for(9.6, 3.0), 3)
+	assert_eq(StrokeSound.ticks_for(-1.0, 3.0), 0)
+	assert_eq(StrokeSound.ticks_for(5.0, 0.0), 0, "no spacing, no ticks")
+	assert_almost_eq(StrokeSound.carry(9.6, 3.0), 0.6, 1e-5)
+	assert_almost_eq(StrokeSound.carry(2.5, 3.0), 2.5, 1e-5)
+
+
+func test_spacing_follows_the_brush_but_never_chatters() -> void:
+	assert_almost_eq(StrokeSound.spacing_m(4.0), 3.0, 1e-5, "default brush: 3 m")
+	assert_almost_eq(StrokeSound.spacing_m(1.0), StrokeSound.MIN_SPACING_M, 1e-5)
+	assert_almost_eq(StrokeSound.spacing_m(12.0), 9.0, 1e-5)
+
+
+func test_a_drag_starts_ticks_by_distance_and_settles() -> void:
+	var sound := _recording_sound()
+	sound.begin(&"biome", 4.0)
+	# One second at 9.6 m/s in 60 frames: 9.6 m, three spacings of 3 m.
+	for i in 60:
+		sound.moved(0.16, 1.0 / 60.0)
+	sound.end()
+	assert_eq(_heard.count(&"plant_start"), 1)
+	assert_eq(_heard.count(&"plant_tick"), 3)
+	assert_eq(_heard.back(), &"plant_settle")
+	assert_eq(_heard.size(), 5)
+
+
+func test_a_fast_frame_ticks_once_and_drops_the_rest() -> void:
+	var sound := _recording_sound()
+	sound.begin(&"water", 4.0)
+	sound.moved(20.0, 0.1)
+	assert_eq(_heard, [&"water_start", &"water_tick"] as Array[StringName])
+	# The frame's five other whole spacings are dropped; 2 m of the last is carried.
+	sound.moved(0.5, 0.016)
+	assert_eq(_heard.size(), 2, "2.5 m carried: under one spacing")
+	sound.moved(0.5, 0.016)
+	assert_eq(_heard.size(), 3, "3 m carried: the next tick")
+
+
+func test_holding_still_is_silent_until_the_release() -> void:
+	var sound := _recording_sound()
+	sound.begin(&"sculpt", 4.0)
+	for i in 120:
+		sound.moved(0.0, 1.0 / 60.0)
+	sound.end()
+	assert_eq(_heard, [&"sculpt_start", &"sculpt_settle"] as Array[StringName])
+
+
+func test_a_tap_is_heard_once_and_a_cancel_never_settles() -> void:
+	var sound := _recording_sound()
+	sound.begin(&"place", 4.0)
+	sound.end()
+	assert_eq(_heard, [&"prop_start"] as Array[StringName], "a click: its start alone")
+	assert_false(StrokeSound.settles(0.1, 0.5, 3.0))
+	assert_true(StrokeSound.settles(0.3, 0.0, 3.0))
+	assert_true(StrokeSound.settles(0.1, 3.0, 3.0))
+	sound = _recording_sound()
+	sound.begin(&"paint", 4.0)
+	for i in 60:
+		sound.moved(0.1, 1.0 / 60.0)
+	sound.cancel()
+	sound.end()
+	assert_false(_heard.has(&"paint_settle"))
+
+
+func test_fire_and_unknown_tools_are_silent() -> void:
+	var sound := _recording_sound()
+	for tool_id in [&"fire", &"", &"no_such_tool"]:
+		sound.begin(tool_id, 4.0)
+		sound.moved(10.0, 0.5)
+		sound.end()
+	assert_eq(_heard.size(), 0)
+	assert_eq(StrokeSound.family_of(&"thin_clear"), &"plant")
+	assert_eq(StrokeSound.family_of(&"bridge"), &"prop")
+
+
+func test_every_sound_is_a_recorded_shot_on_sfx() -> void:
+	var names: Array[StringName] = [&"undo", &"redo"]
+	for family in FAMILIES:
+		for moment in MOMENTS:
+			names.append(StringName("%s_%s" % [family, moment]))
+	for name in names:
+		var entry := AudioManager.sound_entry(name)
+		assert_false(entry.is_empty(), "%s is in the manifest" % name)
+		assert_eq(str(entry.get("bus", "")), AudioManager.BUS_SFX, name)
+		assert_false(bool(entry.get("loop", true)), name)
+		var takes: Array = entry.get("takes", [])
+		assert_gte(takes.size(), 3, "%s has three or more takes" % name)
+		for path in takes:
+			assert_true(ResourceLoader.exists(path), path)
+		if str(name).ends_with("_tick"):
+			assert_gte(float(entry.get("cooldown_s", 0.0)), 0.1, name)
+
+
+func test_a_take_never_plays_twice_running_and_every_take_comes_up() -> void:
+	assert_eq(SoundRequestQueue.pick_take(1, 0, 0.9), 0)
+	assert_eq(SoundRequestQueue.pick_take(3, 1, 0.0), 0)
+	assert_eq(SoundRequestQueue.pick_take(3, 1, 0.99), 2)
+	assert_eq(SoundRequestQueue.pick_take(3, -1, 0.99), 2)
+	var seen := {}
+	var last := -1
+	for i in 40:
+		var take := SoundRequestQueue.pick_take(4, last, fposmod(i * 0.618, 1.0))
+		assert_ne(take, last)
+		seen[take] = true
+		last = take
+	assert_eq(seen.size(), 4)
+
+
+func test_flush_plays_the_takes_gain_and_base_pitch() -> void:
+	var entry := {
+		"bus": "SFX",
+		"path": "res://a.wav",
+		"takes": ["res://a.wav", "res://b.wav"],
+		"take_gains_db": [0.0, 4.0],
+		"volume_db": -10.0,
+		"pitch_jitter": 0.0,
+		"gain_jitter_db": 0.0,
+		"pitch_scale": 0.5,
+		"cooldown_s": 0.0,
+		"priority": 10,
+	}
+	var queue := SoundRequestQueue.new({&"shot": entry})
+	var last := -1
+	for i in 6:
+		queue.request(&"shot", float(i))
+		var played: Dictionary = queue.flush(float(i))[0]
+		assert_ne(int(played["take"]), last, "alternates between its two takes")
+		last = int(played["take"])
+		assert_eq(played["path"], entry["takes"][last])
+		assert_almost_eq(float(played["volume_db"]), -10.0 + 4.0 * last, 1e-4)
+		assert_almost_eq(float(played["pitch_scale"]), 0.5, 1e-4)

@@ -51,11 +51,30 @@ Every other sound in `assets/audio/` is synthesized by `tools/generate_sfx.py`. 
 below are released under the Creative Commons CC0 1.0 Universal Public Domain Dedication
 (https://creativecommons.org/publicdomain/zero/1.0/); no attribution is required, and the
 sources are listed for provenance. The processing is declared in `tools/sfx_spec.py`
-(`RECORDINGS`) and done by `tools/sfx_recording.py`.
+(`RECORDINGS`, and `ORIGINALS` and `SHOTS` for the authoring sounds) and done by
+`tools/sfx_recording.py`.
 
 | File | Title | Author | URL | Licence | Processing |
 |---|---|---|---|---|---|
 | `assets/audio/sfx/fire_roar.wav` | R27-25-Large Fire Burning.wav (pack "Vintage Fire (Red Lib)") | craigsmith | https://freesound.org/people/craigsmith/sounds/483318/ | CC0 1.0 | 48 kHz 24-bit mono original: low-pass 10 kHz and halved to 24 kHz, high-pass 70 Hz, 49.8 Hz hum notched, trimmed to 2.0-59.3 s, the last 400 ms crossfaded into the head (equal power) as a seamless loop, peak-normalized to -3 dBFS, 16-bit |
+
+The authoring tools' sounds (`plant_*`, `prop_*`, `water_*`, `paint_*`, `sculpt_*`, `undo`,
+`redo`, each with takes `<name>.wav`, `<name>.v1.wav`, ...) are cut from the recordings below,
+each from Freesound's HQ MP3 preview decoded to 44.1 kHz mono (licence confirmed on each page on
+2026-10-19). Each take is low-passed and halved to 22.05 kHz, high-passed, trimmed to its range
+in `SHOTS`, faded in and out (raised cosine) and peak-normalized to -3 dBFS, 16-bit.
+
+| Used in | Title | Author | URL | Licence |
+|---|---|---|---|---|
+| `plant_*` | Rustling foilage 1.wav | GUS_MAN | https://freesound.org/people/GUS_MAN/sounds/190641/ | CC0 1.0 |
+| `plant_*` | Rustling foilage 3.wav | GUS_MAN | https://freesound.org/people/GUS_MAN/sounds/190639/ | CC0 1.0 |
+| `prop_*`, `undo`, `redo` | Balsa hit 1.wav, 2.wav, 4, 5.wav | LloydEvans09 | https://freesound.org/people/LloydEvans09/sounds/186401/, .../186400/, .../186398/, .../186405/ | CC0 1.0 |
+| `water_start` | Small Water Splash; Water Splash | qubodup | https://freesound.org/people/qubodup/sounds/737233/, .../737234/ | CC0 1.0 |
+| `water_tick` | Quick Splash (dropping grapes into a glass of water) | asherkaye2 | https://freesound.org/people/asherkaye2/sounds/538143/ | CC0 1.0 |
+| `water_*` | water_splash_10shots.wav | vibe_crc | https://freesound.org/people/vibe_crc/sounds/50623/ | CC0 1.0 |
+| `paint_*` | normal paint strokes_1-2.aif; slowpaintstrokes_1-2.aif | acrober | https://freesound.org/people/acrober/sounds/86113/, .../86114/ | CC0 1.0 |
+| `sculpt_start`, `sculpt_settle` | Digging in wet course sand (raw file); (2) | f3bbbo | https://freesound.org/people/f3bbbo/sounds/651294/, .../651293/ | CC0 1.0 |
+| `sculpt_tick` | Digging Into Soft Soil with Small Trowell.wav | dhallcomposer | https://freesound.org/people/dhallcomposer/sounds/696531/ | CC0 1.0 |
 
 ## Vendored addons
 

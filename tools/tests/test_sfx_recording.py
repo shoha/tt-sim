@@ -159,5 +159,44 @@ class TestCrossfade(unittest.TestCase):
         self.assertAlmostEqual(head / m.rms(noise), 1.0, delta=0.05)
 
 
+class TestProcessShot(unittest.TestCase):
+    """A take of an original becomes a short faded one-shot at the shot's rate."""
+
+    SHOT = sfx_spec.SHOTS["plant_tick"]
+
+    def _take(self, start_s, end_s):
+        return sfx_spec.Take("foliage_1", start_s, end_s)
+
+    def test_rate_length_peak_and_silent_edges(self):
+        source = noisy_fire(3.0, 44100)
+        out = rec.process_shot(source, 44100, self._take(1.0, 1.2), self.SHOT)
+        self.assertEqual(len(out), int(round(0.2 * self.SHOT.sample_rate)))
+        low, high = PEAK_WINDOW_DBFS
+        self.assertTrue(low <= m.peak_dbfs(out) <= high)
+        # The fades start and end the take at rest: no click on either edge.
+        self.assertLess(abs(out[0]), 1e-6)
+        self.assertLess(abs(out[-1]), 0.01)
+
+    def test_reproducible_and_refuses_a_range_outside(self):
+        source = noisy_fire(1.0, 44100)
+        take = self._take(0.2, 0.4)
+        self.assertEqual(
+            rec.process_shot(source, 44100, take, self.SHOT),
+            rec.process_shot(source, 44100, take, self.SHOT),
+        )
+        with self.assertRaises(ValueError):
+            rec.process_shot(source, 44100, self._take(2.0, 2.2), self.SHOT)
+        with self.assertRaises(ValueError):
+            rec.process_shot(source, 48000, take, self.SHOT)
+
+    def test_fade_edges_is_raised_cosine(self):
+        out = rec.fade_edges([1.0] * 100, 10, 20)
+        self.assertEqual(out[0], 0.0)
+        self.assertAlmostEqual(out[5], 0.5, places=6)
+        self.assertEqual(out[50], 1.0)
+        self.assertEqual(out[-1], 0.0)
+        self.assertAlmostEqual(out[-11], 0.5, places=6)
+
+
 if __name__ == "__main__":
     unittest.main()

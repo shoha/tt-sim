@@ -35,7 +35,10 @@ class TestInstall(unittest.TestCase):
             _make_fake_assets(tmp)
             written, _, kept = cli.install(tmp, seed=0, sources_root=tmp)
             self.assertEqual(len(written), len(sfx_spec.SPECS))
-            self.assertEqual(len(kept), len(sfx_spec.RECORDINGS), "no originals here")
+            takes = sum(len(shot.takes) for shot in sfx_spec.SHOTS.values())
+            self.assertEqual(
+                len(kept), len(sfx_spec.RECORDINGS) + takes, "no originals here"
+            )
             for name, spec in sfx_spec.SPECS.items():
                 expected = os.path.join(
                     tmp, "assets", "audio", spec.bus, "%s.wav" % name
@@ -126,7 +129,7 @@ class TestManifest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             cli.install(tmp, seed=0, sources_root=tmp)
             sounds = self._read(tmp)["sounds"]
-        every = {**sfx_spec.SPECS, **sfx_spec.RECORDINGS}
+        every = cli.every_sound()
         self.assertEqual(set(sounds), set(every))
         for name, spec in every.items():
             entry = sounds[name]
@@ -135,6 +138,9 @@ class TestManifest(unittest.TestCase):
             self.assertEqual(
                 entry["path"], "res://assets/audio/%s/%s.wav" % (spec.bus, name)
             )
+            self.assertEqual(entry["takes"][0], entry["path"], name)
+            self.assertEqual(len(entry["takes"]), cli.take_count(name), name)
+            self.assertEqual(len(entry["take_gains_db"]), len(entry["takes"]), name)
             self.assertEqual(entry["volume_db"], spec.volume_db, name)
             self.assertEqual(entry["pitch_jitter"], spec.pitch_jitter, name)
             self.assertEqual(entry["cooldown_s"], spec.cooldown_s, name)
@@ -173,6 +179,39 @@ class TestInstallWiring(unittest.TestCase):
             self.assertTrue(os.path.isfile(cli.manifest_path(tmp)))
 
 
+class TestRecordedShots(unittest.TestCase):
+    """A recorded shot installs one file per take from the takes' originals, and
+    drops a take file past its count (a take taken out of the spec)."""
+
+    def test_present_originals_give_one_file_per_take_and_stale_takes_go(self):
+        shot = sfx_spec.SHOTS["plant_tick"]
+        with tempfile.TemporaryDirectory() as tmp:
+            for key in {take.original for take in shot.takes}:
+                source = os.path.join(tmp, *sfx_spec.ORIGINALS[key].source.split("/"))
+                os.makedirs(os.path.dirname(source), exist_ok=True)
+                write_source(source, noisy_fire(2.5, 44100), 44100, width=2)
+            _make_fake_assets(tmp)
+            stale = cli.installed_path(tmp, "plant_tick", "sfx", len(shot.takes))
+            with open(stale, "wb") as handle:
+                handle.write(b"a dropped take")
+            with mock.patch.dict(sfx_spec.SHOTS, {"plant_tick": shot}, clear=True):
+                written, removed, _ = cli.install(tmp, seed=0, sources_root=tmp)
+            with open(cli.manifest_path(tmp), encoding="utf-8") as handle:
+                sounds = json.load(handle)["sounds"]
+            for index in range(len(shot.takes)):
+                path = cli.installed_path(tmp, "plant_tick", "sfx", index)
+                self.assertIn(path, written)
+                samples, rate = read_wav(path)
+                self.assertEqual(rate, shot.sample_rate)
+                self.assertEqual(cli.verify_shot("plant_tick", index, samples, rate), [])
+            self.assertIn(stale, removed)
+            self.assertFalse(os.path.exists(stale))
+        entry = sounds["plant_tick"]
+        self.assertEqual(len(entry["takes"]), len(shot.takes))
+        self.assertEqual(entry["take_gains_db"], [take.gain_db for take in shot.takes])
+        self.assertEqual(entry["gain_jitter_db"], shot.gain_jitter_db)
+
+
 class TestRecordedLoops(unittest.TestCase):
     """A recorded loop is processed from its original when present, and its
     committed file is kept, never a failure, when it is not (a fresh clone)."""
@@ -183,7 +222,8 @@ class TestRecordedLoops(unittest.TestCase):
             committed = cli.installed_path(tmp, "fire_roar", "sfx")
             with open(committed, "wb") as handle:
                 handle.write(b"the committed loop")
-            _, _, kept = cli.install(tmp, seed=0, sources_root=tmp)
+            with mock.patch.dict(sfx_spec.SHOTS, {}, clear=True):
+                _, _, kept = cli.install(tmp, seed=0, sources_root=tmp)
             self.assertEqual(kept, [committed])
             with open(committed, "rb") as handle:
                 self.assertEqual(handle.read(), b"the committed loop")
@@ -208,7 +248,8 @@ class TestRecordedLoops(unittest.TestCase):
             os.makedirs(os.path.dirname(source))
             write_source(source, noisy_fire(3.0, 48000), 48000, channels=2)
             with mock.patch.dict(sfx_spec.RECORDINGS, {"fire_roar": loop}):
-                written, _, kept = cli.install(tmp, seed=0, sources_root=tmp)
+                with mock.patch.dict(sfx_spec.SHOTS, {}, clear=True):
+                    written, _, kept = cli.install(tmp, seed=0, sources_root=tmp)
             path = cli.installed_path(tmp, "fire_roar", "sfx")
             self.assertIn(path, written)
             self.assertEqual(kept, [])

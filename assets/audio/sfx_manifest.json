@@ -4,173 +4,690 @@
     "cancel": {
       "bus": "UI",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/ui/cancel.wav",
       "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
       "priority": 40,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/ui/cancel.wav"
+      ],
       "volume_db": 0.0
     },
     "click": {
       "bus": "UI",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/ui/click.wav",
       "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
       "priority": 20,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/ui/click.wav"
+      ],
       "volume_db": 0.0
     },
     "close": {
       "bus": "UI",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/ui/close.wav",
       "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
       "priority": 30,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/ui/close.wav"
+      ],
       "volume_db": 0.0
     },
     "confirm": {
       "bus": "UI",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/ui/confirm.wav",
       "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
       "priority": 40,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/ui/confirm.wav"
+      ],
       "volume_db": 0.0
     },
     "error": {
       "bus": "UI",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/ui/error.wav",
       "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
       "priority": 50,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/ui/error.wav"
+      ],
       "volume_db": 0.0
     },
     "fire_roar": {
       "bus": "SFX",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": true,
       "path": "res://assets/audio/sfx/fire_roar.wav",
       "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
       "priority": 10,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/fire_roar.wav"
+      ],
       "volume_db": -9.0
     },
     "hover": {
       "bus": "UI",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/ui/hover.wav",
       "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
       "priority": 10,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/ui/hover.wav"
+      ],
       "volume_db": -6.0
     },
     "leave_game": {
       "bus": "UI",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/ui/leave_game.wav",
       "pitch_jitter": 0.0,
+      "pitch_scale": 1.0,
       "priority": 40,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/ui/leave_game.wav"
+      ],
       "volume_db": 0.0
     },
     "open": {
       "bus": "UI",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/ui/open.wav",
       "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
       "priority": 30,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/ui/open.wav"
+      ],
       "volume_db": 0.0
+    },
+    "paint_settle": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "gain_jitter_db": 1.5,
+      "loop": false,
+      "path": "res://assets/audio/sfx/paint_settle.wav",
+      "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
+      "priority": 20,
+      "take_gains_db": [
+        5.4,
+        1.1,
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/paint_settle.wav",
+        "res://assets/audio/sfx/paint_settle.v1.wav",
+        "res://assets/audio/sfx/paint_settle.v2.wav"
+      ],
+      "volume_db": -12.2
+    },
+    "paint_start": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "gain_jitter_db": 1.5,
+      "loop": false,
+      "path": "res://assets/audio/sfx/paint_start.wav",
+      "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
+      "priority": 20,
+      "take_gains_db": [
+        0.0,
+        4.2,
+        3.2
+      ],
+      "takes": [
+        "res://assets/audio/sfx/paint_start.wav",
+        "res://assets/audio/sfx/paint_start.v1.wav",
+        "res://assets/audio/sfx/paint_start.v2.wav"
+      ],
+      "volume_db": -9.3
+    },
+    "paint_tick": {
+      "bus": "SFX",
+      "cooldown_s": 0.12,
+      "gain_jitter_db": 2.0,
+      "loop": false,
+      "path": "res://assets/audio/sfx/paint_tick.wav",
+      "pitch_jitter": 0.8,
+      "pitch_scale": 1.0,
+      "priority": 10,
+      "take_gains_db": [
+        2.4,
+        0.2,
+        0.8,
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/paint_tick.wav",
+        "res://assets/audio/sfx/paint_tick.v1.wav",
+        "res://assets/audio/sfx/paint_tick.v2.wav",
+        "res://assets/audio/sfx/paint_tick.v3.wav"
+      ],
+      "volume_db": -17.0
+    },
+    "plant_settle": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "gain_jitter_db": 1.5,
+      "loop": false,
+      "path": "res://assets/audio/sfx/plant_settle.wav",
+      "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
+      "priority": 20,
+      "take_gains_db": [
+        0.6,
+        0.0,
+        0.1
+      ],
+      "takes": [
+        "res://assets/audio/sfx/plant_settle.wav",
+        "res://assets/audio/sfx/plant_settle.v1.wav",
+        "res://assets/audio/sfx/plant_settle.v2.wav"
+      ],
+      "volume_db": -9.6
+    },
+    "plant_start": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "gain_jitter_db": 1.5,
+      "loop": false,
+      "path": "res://assets/audio/sfx/plant_start.wav",
+      "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
+      "priority": 20,
+      "take_gains_db": [
+        1.6,
+        0.0,
+        1.5
+      ],
+      "takes": [
+        "res://assets/audio/sfx/plant_start.wav",
+        "res://assets/audio/sfx/plant_start.v1.wav",
+        "res://assets/audio/sfx/plant_start.v2.wav"
+      ],
+      "volume_db": -9.5
+    },
+    "plant_tick": {
+      "bus": "SFX",
+      "cooldown_s": 0.12,
+      "gain_jitter_db": 2.0,
+      "loop": false,
+      "path": "res://assets/audio/sfx/plant_tick.wav",
+      "pitch_jitter": 0.8,
+      "pitch_scale": 1.0,
+      "priority": 10,
+      "take_gains_db": [
+        0.0,
+        1.5,
+        0.7,
+        1.4
+      ],
+      "takes": [
+        "res://assets/audio/sfx/plant_tick.wav",
+        "res://assets/audio/sfx/plant_tick.v1.wav",
+        "res://assets/audio/sfx/plant_tick.v2.wav",
+        "res://assets/audio/sfx/plant_tick.v3.wav"
+      ],
+      "volume_db": -14.6
+    },
+    "prop_settle": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "gain_jitter_db": 1.5,
+      "loop": false,
+      "path": "res://assets/audio/sfx/prop_settle.wav",
+      "pitch_jitter": 0.5,
+      "pitch_scale": 0.71,
+      "priority": 20,
+      "take_gains_db": [
+        2.9,
+        2.6,
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/prop_settle.wav",
+        "res://assets/audio/sfx/prop_settle.v1.wav",
+        "res://assets/audio/sfx/prop_settle.v2.wav"
+      ],
+      "volume_db": -7.4
+    },
+    "prop_start": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "gain_jitter_db": 1.5,
+      "loop": false,
+      "path": "res://assets/audio/sfx/prop_start.wav",
+      "pitch_jitter": 0.5,
+      "pitch_scale": 0.84,
+      "priority": 20,
+      "take_gains_db": [
+        2.1,
+        0.0,
+        4.6
+      ],
+      "takes": [
+        "res://assets/audio/sfx/prop_start.wav",
+        "res://assets/audio/sfx/prop_start.v1.wav",
+        "res://assets/audio/sfx/prop_start.v2.wav"
+      ],
+      "volume_db": -7.7
+    },
+    "prop_tick": {
+      "bus": "SFX",
+      "cooldown_s": 0.12,
+      "gain_jitter_db": 2.0,
+      "loop": false,
+      "path": "res://assets/audio/sfx/prop_tick.wav",
+      "pitch_jitter": 0.8,
+      "pitch_scale": 1.0,
+      "priority": 10,
+      "take_gains_db": [
+        5.3,
+        0.0,
+        2.1
+      ],
+      "takes": [
+        "res://assets/audio/sfx/prop_tick.wav",
+        "res://assets/audio/sfx/prop_tick.v1.wav",
+        "res://assets/audio/sfx/prop_tick.v2.wav"
+      ],
+      "volume_db": -13.7
+    },
+    "redo": {
+      "bus": "SFX",
+      "cooldown_s": 0.05,
+      "gain_jitter_db": 1.0,
+      "loop": false,
+      "path": "res://assets/audio/sfx/redo.wav",
+      "pitch_jitter": 0.3,
+      "pitch_scale": 1.12,
+      "priority": 20,
+      "take_gains_db": [
+        4.8,
+        4.9,
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/redo.wav",
+        "res://assets/audio/sfx/redo.v1.wav",
+        "res://assets/audio/sfx/redo.v2.wav"
+      ],
+      "volume_db": -8.4
+    },
+    "sculpt_settle": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "gain_jitter_db": 1.5,
+      "loop": false,
+      "path": "res://assets/audio/sfx/sculpt_settle.wav",
+      "pitch_jitter": 0.5,
+      "pitch_scale": 0.71,
+      "priority": 20,
+      "take_gains_db": [
+        1.4,
+        0.0,
+        1.3,
+        1.2
+      ],
+      "takes": [
+        "res://assets/audio/sfx/sculpt_settle.wav",
+        "res://assets/audio/sfx/sculpt_settle.v1.wav",
+        "res://assets/audio/sfx/sculpt_settle.v2.wav",
+        "res://assets/audio/sfx/sculpt_settle.v3.wav"
+      ],
+      "volume_db": -12.1
+    },
+    "sculpt_start": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "gain_jitter_db": 1.5,
+      "loop": false,
+      "path": "res://assets/audio/sfx/sculpt_start.wav",
+      "pitch_jitter": 0.5,
+      "pitch_scale": 0.79,
+      "priority": 20,
+      "take_gains_db": [
+        1.1,
+        1.2,
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/sculpt_start.wav",
+        "res://assets/audio/sfx/sculpt_start.v1.wav",
+        "res://assets/audio/sfx/sculpt_start.v2.wav"
+      ],
+      "volume_db": -9.9
+    },
+    "sculpt_tick": {
+      "bus": "SFX",
+      "cooldown_s": 0.12,
+      "gain_jitter_db": 2.0,
+      "loop": false,
+      "path": "res://assets/audio/sfx/sculpt_tick.wav",
+      "pitch_jitter": 0.8,
+      "pitch_scale": 0.84,
+      "priority": 10,
+      "take_gains_db": [
+        0.2,
+        1.4,
+        3.9,
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/sculpt_tick.wav",
+        "res://assets/audio/sfx/sculpt_tick.v1.wav",
+        "res://assets/audio/sfx/sculpt_tick.v2.wav",
+        "res://assets/audio/sfx/sculpt_tick.v3.wav"
+      ],
+      "volume_db": -15.9
     },
     "splash_enter": {
       "bus": "SFX",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/sfx/splash_enter.wav",
       "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
       "priority": 30,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/splash_enter.wav"
+      ],
       "volume_db": 0.0
     },
     "splash_exit": {
       "bus": "SFX",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/sfx/splash_exit.wav",
       "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
       "priority": 30,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/splash_exit.wav"
+      ],
       "volume_db": -3.0
     },
     "success": {
       "bus": "UI",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/ui/success.wav",
       "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
       "priority": 40,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/ui/success.wav"
+      ],
       "volume_db": 0.0
     },
     "tick": {
       "bus": "UI",
       "cooldown_s": 0.08,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/ui/tick.wav",
       "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
       "priority": 10,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/ui/tick.wav"
+      ],
       "volume_db": -8.0
     },
     "token_drop": {
       "bus": "SFX",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/sfx/token_drop.wav",
       "pitch_jitter": 0.7,
+      "pitch_scale": 1.0,
       "priority": 20,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/token_drop.wav"
+      ],
       "volume_db": 0.0
     },
     "token_hover": {
       "bus": "SFX",
       "cooldown_s": 0.15,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/sfx/token_hover.wav",
       "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
       "priority": 10,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/token_hover.wav"
+      ],
       "volume_db": -6.0
     },
     "token_pickup": {
       "bus": "SFX",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/sfx/token_pickup.wav",
       "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
       "priority": 20,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/token_pickup.wav"
+      ],
       "volume_db": 0.0
     },
     "token_slide": {
       "bus": "SFX",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/sfx/token_slide.wav",
       "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
       "priority": 10,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/token_slide.wav"
+      ],
       "volume_db": -3.0
     },
     "token_whoosh": {
       "bus": "SFX",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/sfx/token_whoosh.wav",
       "pitch_jitter": 1.3,
+      "pitch_scale": 1.0,
       "priority": 10,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/token_whoosh.wav"
+      ],
       "volume_db": -3.0
     },
     "transition": {
       "bus": "UI",
       "cooldown_s": 0.0,
+      "gain_jitter_db": 0.0,
       "loop": false,
       "path": "res://assets/audio/ui/transition.wav",
       "pitch_jitter": 0.0,
+      "pitch_scale": 1.0,
       "priority": 30,
+      "take_gains_db": [
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/ui/transition.wav"
+      ],
       "volume_db": -3.0
+    },
+    "undo": {
+      "bus": "SFX",
+      "cooldown_s": 0.05,
+      "gain_jitter_db": 1.0,
+      "loop": false,
+      "path": "res://assets/audio/sfx/undo.wav",
+      "pitch_jitter": 0.3,
+      "pitch_scale": 0.89,
+      "priority": 20,
+      "take_gains_db": [
+        4.8,
+        4.9,
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/undo.wav",
+        "res://assets/audio/sfx/undo.v1.wav",
+        "res://assets/audio/sfx/undo.v2.wav"
+      ],
+      "volume_db": -8.4
+    },
+    "water_settle": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "gain_jitter_db": 1.5,
+      "loop": false,
+      "path": "res://assets/audio/sfx/water_settle.wav",
+      "pitch_jitter": 0.5,
+      "pitch_scale": 0.89,
+      "priority": 20,
+      "take_gains_db": [
+        1.7,
+        0.4,
+        0.0
+      ],
+      "takes": [
+        "res://assets/audio/sfx/water_settle.wav",
+        "res://assets/audio/sfx/water_settle.v1.wav",
+        "res://assets/audio/sfx/water_settle.v2.wav"
+      ],
+      "volume_db": -9.5
+    },
+    "water_start": {
+      "bus": "SFX",
+      "cooldown_s": 0.0,
+      "gain_jitter_db": 1.5,
+      "loop": false,
+      "path": "res://assets/audio/sfx/water_start.wav",
+      "pitch_jitter": 0.5,
+      "pitch_scale": 1.0,
+      "priority": 20,
+      "take_gains_db": [
+        0.9,
+        0.0,
+        0.4
+      ],
+      "takes": [
+        "res://assets/audio/sfx/water_start.wav",
+        "res://assets/audio/sfx/water_start.v1.wav",
+        "res://assets/audio/sfx/water_start.v2.wav"
+      ],
+      "volume_db": -7.9
+    },
+    "water_tick": {
+      "bus": "SFX",
+      "cooldown_s": 0.12,
+      "gain_jitter_db": 2.0,
+      "loop": false,
+      "path": "res://assets/audio/sfx/water_tick.wav",
+      "pitch_jitter": 0.8,
+      "pitch_scale": 1.0,
+      "priority": 10,
+      "take_gains_db": [
+        0.0,
+        1.9,
+        1.3
+      ],
+      "takes": [
+        "res://assets/audio/sfx/water_tick.wav",
+        "res://assets/audio/sfx/water_tick.v1.wav",
+        "res://assets/audio/sfx/water_tick.v2.wav"
+      ],
+      "volume_db": -13.5
     }
   }
 }
