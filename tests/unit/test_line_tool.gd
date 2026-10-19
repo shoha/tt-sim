@@ -392,11 +392,14 @@ func test_start_a_fire_path_is_the_third_line_tool() -> void:
 	assert_eq(IgniteMode.PATH_HUE.glow, ToppleMode.TINT, "on its ring's colour")
 	assert_eq(IgniteMode.REFUSED_HUE.tint, CollapseMode.REFUSED_TINT, "the refused ring's chalk")
 	var rails: Dictionary = LineRibbon.FILLS.rails
-	var tint: Color = IgniteMode.PATH_HUE.tint
+	var tint: Color = IgniteMode.PATH_HUES.A.tint
 	var faint := LineRibbon.lit_fill(Color(tint, rails.alpha_up), rails.fill_gain)
-	var strong := LineRibbon.lit_fill(Color(tint, rails.alpha_down), rails.fill_gain)
 	for c in 3:
-		assert_almost_eq(faint[c], ThemeColors.OCHRE[c], 0.01, "the faintest rail is ochre")
+		assert_almost_eq(faint[c], ThemeColors.OCHRE[c], 0.01, "A's faintest rail is ochre")
+	var strong := LineRibbon.lit_fill(
+		Color(IgniteMode.PATH_HUE.tint, rails.alpha_down), rails.fill_gain
+	)
+	for c in 3:
 		assert_lt(strong[c], 1.0, "the strongest within full value")
 	var quiet := LineRibbon.ribbon(_ground(), _line(), 1.0, LineRibbon.QUIET_STYLE)
 	var lay := LineRibbon.ribbon(_ground(), _line(), 1.0, {})
@@ -511,12 +514,12 @@ func test_a_quiet_stretch_narrows_along_the_arc() -> void:
 	assert_eq(path.path_style(PackedVector2Array(), 20.0), refused, "no forest: refused whole")
 
 
-## Start a fire's Path offers its hue in three depths for the user to pick (card F6c), each a
-## theme role on the ring's light ochre, so only the tint differs from the default, and none of
-## them lifted by the rails past full value; A, today's, stays the default.
+## Start a fire's Path keeps card F6c's three hues to compare, each a theme role on the ring's
+## light ochre, so only the tint differs from the default, and none of them lifted by the rails
+## past full value; C, the user's pick (2026-10-19), is the default.
 func test_the_path_hues_differ_only_in_their_tint() -> void:
-	assert_eq(IgniteMode.HUE, "A")
-	assert_eq(IgniteMode.PATH_HUES[IgniteMode.HUE], IgniteMode.PATH_HUE, "A is today's")
+	assert_eq(IgniteMode.HUE, "C")
+	assert_eq(IgniteMode.PATH_HUES[IgniteMode.HUE], IgniteMode.PATH_HUE, "C is the Path's")
 	var rails: Dictionary = LineRibbon.FILLS.rails
 	var tints: Array = []
 	for name: String in IgniteMode.PATH_HUES:

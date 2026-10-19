@@ -271,3 +271,10 @@ that conflicts with one stops and asks. Add each new verdict here with its date.
   its ink it holds 3:1 over flames, ash, night water and bright grass, and an erase keeps its
   full colour at night (dimmed, a paler #FFCEC4 was needed, and it read near-white beside
   Thin's cream and Paint's tan rings).
+- **2026-10-19** "go with C". Decision (cards F6 to F6c): Start a fire's Path is the third
+  line tool in the same look, its hue deep amber (`ThemeColors.AMBER_DEEP` on the ring's light
+  ochre glow), chosen over a deep ochre (merged with the golden meadow and the lightest of the
+  three line tools) and a deeper ochre (olive by day, bronze at night). The colour says which
+  tool; the rails say where trees catch, narrowing over about one half-width where only the
+  ground burns; chalk_soft only for a path refused whole, as the refused Circle. No tool's ring
+  at rest carries a mark of its shape: the chip's words tell the shapes apart.
