@@ -2,23 +2,25 @@ class_name WaterBrush
 extends BrushMode
 
 ## The Water tool's mode (phase 4, P4-4; WaterTool): what a Water press does (a river's line,
-## a pond stroke, an erase), the line's capture and smoothing, the width rule, and the
-## previews drawn under the ring. BrushTool routes the tool's press, frames, release and
-## cancel to it (the BrushMode hooks at the end of this file), and a refused press or release
-## emits the brush's `refused` with the reason. What the water does to the map is
-## WaterEditor's.
+## a pond stroke, an erase), the width rule, and the previews drawn under the ring. BrushTool
+## routes the tool's press, frames, release and cancel to it (the BrushMode hooks at the end of
+## this file), and a refused press or release emits the brush's `refused` with the reason. What
+## the water does to the map is WaterEditor's.
 ##
-## River: the press starts the line; every frame the pointer's ground point is recorded once
-## it lies RIVER_DECIMATE_M from the last (decimate()), and the line ends where the pointer
-## was let go (with_tip()); the line is Chaikin-smoothed
-## (smooth_line()) for the preview and the carve; the release carves it
-## (WaterEditor.carve_river, first point upstream), and the ribbon stays, faint, until the
-## carve (on a worker) lands. The ribbon's gradient and chevrons show the way the water will
-## really run (flow_line(): a line drawn uphill is reversed, as the plan reverses it,
-## WaterFallPlan.orient, P4c-5). Pond: the press starts a pond stroke (a press inside a pond
-## extends it) whose dabs BrushTool paints like the Biome brush's, the dab growing with
-## dwell (POND_DWELL_GROW); the painted dabs preview its area. Ctrl at the press (either
-## tile): an erase stroke, whose touched river reaches are previewed in red (they go whole).
+## River: the line tool's gesture (LineGesture, shared with Fire's Line, card F5e): the press
+## starts the line, every frame records the pointer's ground point at the gesture's spacing for
+## the river's width, the line ends where the pointer was let go and is Chaikin-smoothed for the
+## preview and the carve, and the chip reads "River  Waist  40 ft". The release carves it
+## (WaterEditor.carve_river, first point upstream), and the ribbon stays, faint, until the carve
+## (on a worker) lands. The ribbon is the line tool's (LineRibbon) in the river's style
+## (RIBBON_STYLE: the river's pale blue, an even translucent fill); its gradient and chevrons
+## show the way the water will really run (flow_line(): a line drawn uphill is reversed, as the
+## plan reverses it, WaterFallPlan.orient, P4c-5). Pond: the press starts a pond stroke (a press
+## inside a pond extends it) whose dabs BrushTool paints like the Biome brush's, the dab growing
+## with dwell (POND_DWELL_GROW); the painted dabs preview its area. Ctrl at the press (either
+## tile): an erase stroke, whose touched river reaches are previewed (they go whole) as the line
+## tool's erase ribbon (LineRibbon.erase_style: salmon edge and chevrons) over a salmon
+## interior (ERASE_INTERIOR), warm against the cool water it removes.
 ## The width is the brush size, never below the depth class's narrowest channel
 ## (radius_for()). A river may be drawn on past the map edge (P6-1): where the pointer leaves
 ## the ground there (the skirt has no collision), it meets the level of the last ground the
@@ -28,54 +30,21 @@ extends BrushMode
 enum Shape { RIVER, POND }
 
 const TINT := Color(0.56, 0.84, 1.0)
-const ERASE_TINT := Color(1.0, 0.52, 0.42)
-const SHADOW := Color(0.05, 0.04, 0.05, 0.55)
 ## A river point is recorded once the pointer's ground point is this far (metres) from the
 ## last; the shortest line a release carves (StrokePath's, which every line shape shares).
 const RIVER_DECIMATE_M := StrokePath.DECIMATE_M
-const WIDTH_DECIMATE := 0.6
 const RIVER_MIN_LENGTH_M := StrokePath.MIN_LENGTH_M
 ## The pond dab's growth with dwell (1 + POND_DWELL_GROW at BrushTool.DWELL_MAX).
 const POND_DWELL_GROW := 0.35
-## The ribbon's chevron spacing, and its fill's alpha upstream and downstream (the gradient
-## shows the flow too).
-const RIBBON_ARROW_M := 2.5
-const RIBBON_ALPHA_UP := 0.12
-const RIBBON_ALPHA_DOWN := 0.34
-## The ribbon's look (draw_ribbon()'s `style`), the river's own: the fill's alpha at the line's
-## start and end (the fill is the tint), the edges' colour (null: the tint), alpha and width over
-## a shadow line, a soft glow line under both edges (its colour, null: the edge's; width 0:
-## none), the chevrons' colour, alpha and width over their shadow, round caps at both ends
-## (`caps`: the edge runs round them as one outline; the river's ends are cut square), and the
-## fill's light (`fill_gain`: 0 a plain fill; above 0 the fill's colours lit_fill() by that gain,
-## for a premultiplied-alpha canvas item, draw_ribbon()'s `fill_item`), and the fill's coverage
-## across the band (`fill_profile`: [offset, coverage] pairs from the edge, offset 1, in to
-## the centre line, offset 0, each coverage scaling the fill's alpha there, mirrored about the
-## centre; empty: the river's even fill, edge to edge, fill_row()). Another brush passes only
-## the keys it changes (FireBrush's line).
-const RIBBON_STYLE := {
-	"alpha_up": RIBBON_ALPHA_UP,
-	"alpha_down": RIBBON_ALPHA_DOWN,
-	"edge": null,
-	"edge_alpha": 0.85,
-	"edge_width": 1.5,
-	"shadow": SHADOW,
-	"shadow_alpha": 0.4,
-	"shadow_width": 3.0,
-	"glow": null,
-	"glow_alpha": 0.0,
-	"glow_width": 0.0,
-	"chevron": Color.WHITE,
-	"chevron_alpha": 0.7,
-	"chevron_width": 2.0,
-	"chevron_shadow_alpha": 0.3,
-	"chevron_shadow_width": 3.5,
-	"caps": false,
-	"fill_gain": 0.0,
-	"fill_profile": [],
-}
-## A round cap's half circle, in segments.
-const CAP_SEGMENTS := 12
+## The river's ribbon over the line tool's (LineRibbon.STYLE): its pale blue, the shared even
+## fill (faint upstream, stronger downstream: the gradient shows the flow too). The river keeps
+## the even fill where the fire line's rails stand at its edges: blue at partial coverage reads
+## as water over any ground, where the fire's orange greyed to olive, and the even band shows the
+## channel the carve will dig.
+const RIBBON_STYLE := {"tint": TINT}
+## An erase's interior (LineRibbon.erase_style, at the erase's half coverage): the erase salmon,
+## warm over the cool water it removes.
+const ERASE_INTERIOR := {"tint": BrushCursor.CLEAR_TINT}
 ## Refusal reasons (BrushTool.refused).
 const NO_CARVE := (
 	"Rivers and ponds carve the map's own ground: not on a Blender map."
@@ -91,9 +60,18 @@ const DEPTH_LABELS: Array[String] = ["Ankle", "Waist", "Deep"]
 var shape: int = Shape.RIVER
 var depth: int = WaterBody.Depth.WAIST
 var speed: float = WaterBody.DEFAULT_SPEED
-## A river being drawn: its recorded points (world XZ).
-var river := PackedVector2Array()
-var drawing: bool = false
+## The river line being drawn (the line tool's gesture).
+var gesture := LineGesture.new()
+## True while a river is being drawn (the gesture's).
+var drawing: bool:
+	get:
+		return gesture.drawing
+	set(value):
+		gesture.drawing = value
+## The river's recorded points (world XZ; the gesture's).
+var river: PackedVector2Array:
+	get:
+		return gesture.points
 ## The last river's smoothed line and half-width, drawn faintly while its carve computes.
 var held := PackedVector2Array()
 var held_radius: float = 0.0
@@ -101,11 +79,6 @@ var held_radius: float = 0.0
 var pond_dabs := PackedVector3Array()
 
 var _refusal: String = ""
-## The height of the last point a river line recorded (world).
-var _line_y: float = 0.0
-## The pointer's last ground point while a river is drawn (world XZ; Vector2.INF: none): the
-## release point, which the line ends at whether or not decimation recorded it.
-var _tip: Vector2 = Vector2.INF
 
 
 func _init() -> void:
@@ -139,10 +112,9 @@ static func with_tip(
 	return StrokePath.with_tip(points, tip, spacing)
 
 
-## The line a release carves now: the recorded points ended at the pointer (with_tip()),
-## smoothed (smooth_line()).
+## The line a release carves now (the gesture's line()).
 func carve_line() -> PackedVector2Array:
-	return smooth_line(with_tip(river, _tip, RIVER_DECIMATE_M))
+	return gesture.line()
 
 
 ## The line the ribbon previews for a river drawn along `line` (world XZ): reversed when the
@@ -165,35 +137,19 @@ static func ground_reader(editor: AuthoringEditor) -> Callable:
 		return WaterEdit.water_ground_at(editor.document, at)
 
 
-## The three world points of a chevron at `at` pointing along `tangent` (unit), `size` metres
-## across: a barb either side behind, the tip ahead. Pure.
-static func chevron(at: Vector2, tangent: Vector2, size: float) -> PackedVector2Array:
-	var normal := Vector2(-tangent.y, tangent.x)
-	return PackedVector2Array(
-		[
-			at - tangent * size * 0.2 + normal * size * 0.45,
-			at + tangent * size * 0.3,
-			at - tangent * size * 0.2 - normal * size * 0.45,
-		]
-	)
-
-
 ## The length of a polyline (metres; StrokePath.line_length). Pure.
 static func line_length(points: PackedVector2Array) -> float:
 	return StrokePath.line_length(points)
 
 
 ## The readout under the ring: "River  Waist  40 ft" while a river is drawn (`length_m` > 0,
-## in the level's units), "River  Waist" or "Pond  Deep" otherwise. Pure.
+## in the level's units; LineGesture.chip), "River  Waist" or "Pond  Deep" otherwise. Pure.
 static func readout(
 	shape_id: int, depth_class: int, length_m: float, cell_m: float, per_cell: float, label: String
 ) -> String:
 	var title := "River" if shape_id == Shape.RIVER else "Pond"
 	var text := "%s  %s" % [title, DEPTH_LABELS[clampi(depth_class, 0, 2)]]
-	if length_m > 0.0:
-		var value := roundi(ScaleUtils.world_to_display(length_m, cell_m, per_cell))
-		text += "  %d %s" % [value, label]
-	return text
+	return LineGesture.chip(text, length_m, cell_m, per_cell, label)
 
 
 ## The width now for brush size `brush_radius` (radius_for()).
@@ -220,9 +176,7 @@ func begin(editor: AuthoringEditor, erase: bool, hit: Vector3) -> bool:
 			return false
 		pond_dabs = PackedVector3Array()
 		return true
-	drawing = true
-	river = decimate(PackedVector2Array(), Vector2(hit.x, hit.z), RIVER_DECIMATE_M)
-	_tip = Vector2(hit.x, hit.z)
+	gesture.begin(hit)
 	held = PackedVector2Array()
 	return false
 
@@ -233,15 +187,10 @@ func refusal() -> String:
 
 
 ## One frame with the pointer's ground point at `hit` (INF: none), the river `half_width`
-## wide: records the line (a point every RIVER_DECIMATE_M, or every WIDTH_DECIMATE
-## half-widths for a wide river, whose wiggles finer than its width would only crease it),
-## and drops the faint ribbon once its carve has landed.
+## wide: records the line (LineGesture.track), and drops the faint ribbon once its carve has
+## landed.
 func track(editor: AuthoringEditor, hit: Vector3, half_width: float) -> void:
-	if drawing and hit != Vector3.INF:
-		var spacing := maxf(RIVER_DECIMATE_M, half_width * WIDTH_DECIMATE)
-		river = decimate(river, Vector2(hit.x, hit.z), spacing)
-		_tip = Vector2(hit.x, hit.z)
-		_line_y = hit.y
+	gesture.track(hit, half_width)
 	if not held.is_empty() and (editor == null or not editor.water.is_working()):
 		held = PackedVector2Array()
 
@@ -252,7 +201,7 @@ func track(editor: AuthoringEditor, hit: Vector3, half_width: float) -> void:
 func hit_past_edge(origin: Vector3, direction: Vector3) -> Vector3:
 	if not drawing or shape != Shape.RIVER or river.is_empty() or absf(direction.y) < 1e-4:
 		return Vector3.INF
-	var t := (_line_y - origin.y) / direction.y
+	var t := (gesture.height - origin.y) / direction.y
 	return origin + direction * t if t > 0.0 else Vector3.INF
 
 
@@ -260,11 +209,8 @@ func hit_past_edge(origin: Vector3, direction: Vector3) -> Vector3:
 ## when refused (refusal() says why; a line too short to carve is silently dropped).
 func carve(editor: AuthoringEditor, half_width: float) -> bool:
 	_refusal = ""
-	drawing = false
-	var line := carve_line()
-	river = PackedVector2Array()
-	_tip = Vector2.INF
-	if line_length(line) < RIVER_MIN_LENGTH_M:
+	var line := gesture.finish()
+	if line.is_empty():
 		return true
 	var id := editor.water.carve_river(
 		line, PackedFloat32Array([half_width]), depth as WaterBody.Depth, speed
@@ -296,322 +242,49 @@ func record_dab(hit: Vector3, dab_radius: float) -> void:
 
 ## Drops a gesture's state (release or cancel).
 func reset() -> void:
-	drawing = false
-	river = PackedVector2Array()
-	_tip = Vector2.INF
+	gesture.reset()
 	pond_dabs = PackedVector3Array()
 
 
 ## The readout text now: "Erase water" when `erasing`, else readout() with the line's length
-## while a river is drawn.
+## while a river is drawn (the gesture's: the line a release would carve).
 func readout_text(erasing: bool, cell_m: float, per_cell: float, label: String) -> String:
 	if erasing:
 		return "Erase water"
-	var length := line_length(river) if drawing else 0.0
-	return readout(shape, depth, length, cell_m, per_cell, label)
+	return readout(shape, depth, gesture.length(), cell_m, per_cell, label)
 
 
-## The previews under the ring on `canvas` (see the header): the river being drawn up to the
+## The previews under the ring on `cursor` (see the header): the river being drawn up to the
 ## pointer at `hit` with half-width `half_width`, or the faint one whose carve computes; with
 ## a stroke held (`stroking`), the reaches an erase (`erasing`) will remove, or a pond's dabs.
 func draw(
-	canvas: Control,
-	camera: Camera3D,
+	cursor: BrushCursor,
 	editor: AuthoringEditor,
 	hit: Vector3,
 	half_width: float,
 	stroking: bool,
 	erasing: bool
 ) -> void:
-	var ground := on_ground(camera, editor)
+	var ground := LineRibbon.on_ground(cursor.camera, editor)
 	if drawing and not river.is_empty():
-		var live := river.duplicate()
-		var tip := Vector2(hit.x, hit.z)
-		if live[-1].distance_to(tip) > 0.05:
-			live.append(tip)
-		var flow := flow_line(smooth_line(live), ground_reader(editor))
-		draw_ribbon(canvas, ground, flow, half_width, TINT, 1.0, true)
+		var flow := flow_line(gesture.live(hit), ground_reader(editor))
+		LineRibbon.draw(cursor, ground, flow, half_width, RIBBON_STYLE)
 	elif not held.is_empty():
-		draw_ribbon(canvas, ground, held, held_radius, TINT, 0.5, true)
+		LineRibbon.draw(cursor, ground, held, held_radius, RIBBON_STYLE, 0.5)
 	if not stroking:
 		return
 	if erasing:
+		var style := LineRibbon.erase_style(ERASE_INTERIOR)
 		for body in editor.water.erase_touched():
 			var course := PackedVector2Array()
 			for p: Vector2 in WaterGeometry.river_course(body)[0]:
 				var world := editor.to_world(Vector3(p.x, 0.0, p.y))
 				course.append(Vector2(world.x, world.z))
 			var half := body.half_widths[0] * editor.map_scale()
-			draw_ribbon(canvas, ground, course, half, ERASE_TINT, 1.0, false)
+			LineRibbon.draw(cursor, ground, course, half, style)
 	elif shape == Shape.POND:
 		for dab in pond_dabs:
-			_fill_disc(canvas, camera, editor, Vector2(dab.x, dab.y), dab.z)
-
-
-## The ribbon's `ground` for draw_ribbon(): a world XZ point to the screen, on `editor`'s
-## ground there (lifted 5 cm), seen by `camera`.
-static func on_ground(camera: Camera3D, editor: AuthoringEditor) -> Callable:
-	return func(xz: Vector2) -> Vector2:
-		var p := Vector3(xz.x, 0.0, xz.y)
-		p.y = editor.ground_height_at(p) + 0.05
-		return camera.unproject_position(p)
-
-
-## A band `radius` either side of `line` (world XZ; `ground` maps a point to the screen on
-## the ground), filled in `tint` with a gradient from upstream (faint) to downstream (stronger)
-## and edged; with `arrows`, chevrons every RIBBON_ARROW_M point the way the water will flow.
-## `strength` scales every alpha; `style` overrides any of RIBBON_STYLE's keys (none: the
-## river's look). `fill_item`, when valid, takes the fill instead of `canvas` (a style with a
-## fill_gain draws on BrushCursor.glow_item(), a premultiplied layer under the canvas's lines).
-## Drawn with explicit indices, never triangulated (ribbon() builds it).
-static func draw_ribbon(
-	canvas: Control,
-	ground: Callable,
-	line: PackedVector2Array,
-	radius: float,
-	tint: Color,
-	strength: float,
-	arrows: bool,
-	style: Dictionary = {},
-	fill_item: RID = RID()
-) -> void:
-	draw_shape(canvas, ribbon(ground, line, radius, tint, strength, arrows, style), fill_item)
-
-
-## Draws a ribbon() `shape` (or one built on it) on `canvas`: the fill's triangles on
-## `fill_item` when valid, else on the canvas, then its lines in order. Nothing for {}.
-static func draw_shape(canvas: Control, shape: Dictionary, fill_item: RID = RID()) -> void:
-	if shape.is_empty():
-		return
-	RenderingServer.canvas_item_add_triangle_array(
-		fill_item if fill_item.is_valid() else canvas.get_canvas_item(),
-		shape.indices,
-		shape.points,
-		shape.colors
-	)
-	for stroke: Array in shape.lines:
-		canvas.draw_polyline(stroke[0], stroke[1], stroke[2], true)
-
-
-## What draw_ribbon() draws, as data: the fill's triangles ("points", "colors", "indices")
-## and "lines", [points, colour, width] per polyline in drawing order (any glow, then each
-## edge's shadow and edge, then each chevron's shadow and chevron; with caps the two edges are
-## one closed outline, and each cap a fan after the band's triangles); {} for a line under two
-## points. Pure but for `ground`.
-static func ribbon(
-	ground: Callable,
-	line: PackedVector2Array,
-	radius: float,
-	tint: Color,
-	strength: float,
-	arrows: bool,
-	style: Dictionary = {}
-) -> Dictionary:
-	var n := line.size()
-	if n < 2:
-		return {}
-	var look := RIBBON_STYLE.merged(style, true)
-	var alpha_up: float = look.alpha_up
-	var alpha_down: float = look.alpha_down
-	var row := fill_row(look.fill_profile)
-	var width := row.size()
-	var total := line_length(line)
-	var points := PackedVector2Array()
-	var colors := PackedColorArray()
-	var left := PackedVector2Array()
-	var right := PackedVector2Array()
-	var walked := 0.0
-	var last_l := Vector2.INF
-	var last_r := Vector2.INF
-	for i in n:
-		if i > 0:
-			walked += line[i - 1].distance_to(line[i])
-		var tangent := (line[mini(i + 1, n - 1)] - line[maxi(i - 1, 0)]).normalized()
-		var normal := Vector2(-tangent.y, tangent.x)
-		var world_l := line[i] + normal * radius
-		var world_r := line[i] - normal * radius
-		# The inside of a bend tighter than the ribbon never runs backwards (no twisted quads).
-		if last_l != Vector2.INF and (world_l - last_l).dot(tangent) < 0.0:
-			world_l = last_l
-		if last_r != Vector2.INF and (world_r - last_r).dot(tangent) < 0.0:
-			world_r = last_r
-		last_l = world_l
-		last_r = world_r
-		var alpha := lerpf(alpha_up, alpha_down, walked / maxf(total, 0.001))
-		for step: Array in row:
-			var offset: float = step[0]
-			var world := world_l if offset > 0.0 else world_r
-			if absf(offset) < 1.0:
-				world = line[i] + (world - line[i]) * absf(offset)
-			points.append(ground.call(world))
-			var fill := Color(tint, alpha * strength * float(step[1]))
-			if float(look.fill_gain) > 0.0:
-				fill = lit_fill(fill, look.fill_gain)
-			colors.append(fill)
-		left.append(points[width * i])
-		right.append(points[width * i + width - 1])
-	var indices := PackedInt32Array()
-	for i in n - 1:
-		for k in width - 1:
-			var a := width * i + k
-			indices.append_array([a, a + 1, a + width, a + 1, a + width + 1, a + width])
-	var sides: Array = [left, right]
-	if look.caps:
-		var capped := _with_caps(ground, line, radius, row, points, colors, indices)
-		points = capped.points
-		colors = capped.colors
-		indices = capped.indices
-		var arcs: Array = capped.arcs
-		var outline := left.duplicate()
-		outline.append_array(arcs[0])
-		var back := right.duplicate()
-		back.reverse()
-		outline.append_array(back)
-		outline.append_array(arcs[1])
-		outline.append(left[0])
-		sides = [outline]
-	var edge: Color = tint if look.edge == null else look.edge
-	var shadow: Color = look.shadow
-	var lines: Array = []
-	if float(look.glow_width) > 0.0:
-		var glow: Color = edge if look.glow == null else look.glow
-		for side in sides:
-			lines.append([side, Color(glow, float(look.glow_alpha) * strength), look.glow_width])
-	for side in sides:
-		lines.append([side, Color(shadow, float(look.shadow_alpha) * strength), look.shadow_width])
-		lines.append([side, Color(edge, float(look.edge_alpha) * strength), look.edge_width])
-	var shape := {"points": points, "colors": colors, "indices": indices, "lines": lines}
-	if not arrows:
-		return shape
-	var chevron_tint: Color = look.chevron
-	var next := RIBBON_ARROW_M * 0.5
-	walked = 0.0
-	for i in n - 1:
-		var length := line[i].distance_to(line[i + 1])
-		var tangent := (line[i + 1] - line[i]) / maxf(length, 0.0001)
-		var size := minf(radius, 1.5)
-		while next <= walked + length:
-			var at := line[i] + tangent * (next - walked)
-			var arrow := PackedVector2Array()
-			for p in chevron(at, tangent, size):
-				arrow.append(ground.call(p))
-			var under := Color(shadow, float(look.chevron_shadow_alpha) * strength)
-			lines.append([arrow, under, look.chevron_shadow_width])
-			var over := Color(chevron_tint, float(look.chevron_alpha) * strength)
-			lines.append([arrow, over, look.chevron_width])
-			next += RIBBON_ARROW_M
-		walked += length
-	return shape
-
-
-## A fill colour for a premultiplied-alpha canvas item: `fill` times its alpha and `gain`, the
-## alpha kept. A gain of 1 blends as a plain fill; above 1 the fill adds light as well as
-## covering, so it brightens what is under it instead of greying it (a fire line). Pure.
-static func lit_fill(fill: Color, gain: float) -> Color:
-	var lit := fill * (fill.a * gain)
-	lit.a = fill.a
-	return lit
-
-
-## The fill's row across the band, left edge to right: [offset, coverage] pairs, the offset
-## signed (1 the left edge, -1 the right, 0 the centre line), from `profile` (RIBBON_STYLE's
-## fill_profile, edge in to centre) mirrored about the centre; an empty profile is the river's
-## two edges at full coverage. Pure.
-static func fill_row(profile: Array) -> Array:
-	var half: Array = [[1.0, 1.0]] if profile.is_empty() else profile
-	var row: Array = []
-	for step: Array in half:
-		row.append([float(step[0]), float(step[1])])
-	for k in range(half.size() - 1, -1, -1):
-		if float(half[k][0]) > 0.0:
-			row.append([-float(half[k][0]), float(half[k][1])])
-	return row
-
-
-## The band's arrays with a round cap at each end (ribbon()'s caps): per end, a ring of
-## CAP_SEGMENTS - 1 arc points for every offset of `row` off the centre line, from that offset's
-## point on one side of the end's row round to the other, strips between the rings and a fan to
-## the centre (the row's centre point, or a new one at the tip when the row has none). Every
-## ring takes its row point's colour, so a fill_profile's coverage runs round the end too.
-## Returns the new "points", "colors" and "indices" and "arcs" (each end's outer arc, the end's
-## then the start's). Pure but for `ground`.
-static func _with_caps(
-	ground: Callable,
-	line: PackedVector2Array,
-	radius: float,
-	row: Array,
-	band_points: PackedVector2Array,
-	band_colors: PackedColorArray,
-	band_indices: PackedInt32Array
-) -> Dictionary:
-	var points := band_points.duplicate()
-	var colors := band_colors.duplicate()
-	var indices := band_indices.duplicate()
-	var n := line.size()
-	var width := row.size()
-	var rings_n := 0
-	var middle := -1
-	for k in width:
-		if float(row[k][0]) > 0.0:
-			rings_n += 1
-		elif float(row[k][0]) == 0.0:
-			middle = k
-	# The end's row runs left to right round its cap; the start's, seen from outside, right to
-	# left.
-	var ends := [
-		[line[n - 1], line[n - 1] - line[n - 2], width * (n - 1), false],
-		[line[0], line[0] - line[1], 0, true],
-	]
-	var arcs: Array = []
-	for end: Array in ends:
-		var tip: Vector2 = end[0]
-		var forward: Vector2 = (end[1] as Vector2).normalized()
-		var base: int = end[2]
-		var flip: bool = end[3]
-		var centre := base + middle
-		if middle < 0:
-			centre = points.size()
-			points.append(ground.call(tip))
-			colors.append(colors[base + rings_n - 1])
-		var rings: Array[PackedInt32Array] = []
-		for k in rings_n:
-			var from := base + (width - 1 - k if flip else k)
-			var ring := PackedInt32Array([from])
-			var offset: float = row[k][0]
-			var arc := _cap_arc(ground, tip, forward, radius if offset >= 1.0 else radius * offset)
-			if k == 0:
-				arcs.append(arc)
-			for p in arc:
-				ring.append(points.size())
-				points.append(p)
-				colors.append(colors[from])
-			ring.append(base + (k if flip else width - 1 - k))
-			rings.append(ring)
-		for k in rings_n - 1:
-			var outer := rings[k]
-			var inner := rings[k + 1]
-			for j in outer.size() - 1:
-				indices.append_array(
-					[outer[j], outer[j + 1], inner[j], outer[j + 1], inner[j + 1], inner[j]]
-				)
-		var last := rings[rings_n - 1]
-		for j in last.size() - 1:
-			indices.append_array([centre, last[j], last[j + 1]])
-	return {"points": points, "colors": colors, "indices": indices, "arcs": arcs}
-
-
-## The half circle round a ribbon's end at world XZ `centre`, bulging toward `forward` (a unit
-## vector out of the ribbon), from the band's side on the left of `forward` to the right, through
-## `ground` to the screen; the two side points themselves left out.
-static func _cap_arc(
-	ground: Callable, centre: Vector2, forward: Vector2, radius: float
-) -> PackedVector2Array:
-	var side := Vector2(-forward.y, forward.x)
-	var arc := PackedVector2Array()
-	for k in range(1, CAP_SEGMENTS):
-		var angle := PI * float(k) / CAP_SEGMENTS
-		arc.append(ground.call(centre + (side * cos(angle) + forward * sin(angle)) * radius))
-	return arc
+			_fill_disc(cursor.canvas, cursor.camera, editor, Vector2(dab.x, dab.y), dab.z)
 
 
 ## A flat disc of world `radius` at world XZ `at`, on the ground there, faintly filled.
@@ -706,8 +379,9 @@ func step(brush: BrushTool, steps: int) -> void:
 	brush.set_radius(radius(radius(brush.get_radius()) * pow(BrushTool.RADIUS_STEP, steps)))
 
 
+## The river's blue, or the erase salmon every brush erases in.
 func cursor_tint(brush: BrushTool) -> Color:
-	return ERASE_TINT if _erasing(brush) else TINT
+	return BrushCursor.CLEAR_TINT if _erasing(brush) else TINT
 
 
 func cursor_text(brush: BrushTool) -> String:
@@ -719,7 +393,7 @@ func draw_cursor(brush: BrushTool, cursor: BrushCursor) -> void:
 	if brush.editor != null:
 		var width := radius(brush.get_radius())
 		var erasing := _erasing(brush)
-		draw(cursor.canvas, cursor.camera, brush.editor, brush.hit, width, brush.stroking, erasing)
+		draw(cursor, brush.editor, brush.hit, width, brush.stroking, erasing)
 	super.draw_cursor(brush, cursor)
 
 

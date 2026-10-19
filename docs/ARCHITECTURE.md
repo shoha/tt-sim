@@ -614,12 +614,13 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   following; see [docs/systems/water.md](systems/water.md) (Authoring).
 - **Water tool (P4-4):** `BrushTool.Mode.WATER`, its work done by a `WaterBrush`
   (`scenes/states/authoring/water_brush.gd`, `BrushTool.water`: shape, depth and flow the
-  panel's `WaterToolPane` sets). River: the press starts a line recorded as the pointer moves
-  (`WaterBrush.decimate`: a point every 0.6 m, or 0.6 half-widths for a wide river;
-  `smooth_line`: two Chaikin passes keeping both ends), previewed as a ribbon on the ground at
-  the river's width, a gradient and chevrons pointing downstream (`draw_ribbon`, explicit
-  indices, the inside of a tight bend clamped so quads never twist) with the readout "River
-  Waist  40 ft" in the level's units; the release carves it (`carve_river`, the drawn
+  panel's `WaterToolPane` sets). River: the line tool Fire's Line shares (card F5e): the press
+  starts a line recorded as the pointer moves (`LineGesture`: a point every 0.6 m, or 0.6
+  half-widths for a wide river; two Chaikin passes keeping both ends), previewed as the line
+  tool's ribbon on the ground at the river's width, a gradient and chevrons pointing downstream
+  (`LineRibbon` in `WaterBrush.RIBBON_STYLE`, explicit indices, the inside of a tight bend
+  clamped so quads never twist) with the readout "River  Waist  40 ft" in the level's units;
+  the release carves it (`carve_river`, the drawn
   direction is the flow), and the ribbon stays faint until the carve (on a worker) lands; RMB
   or Escape before the release drops it. Pond: a pond stroke dabbed like the Biome brush, the
   dab growing with dwell (up to 1.35x), its dabs previewed as faint discs; a press in a pond

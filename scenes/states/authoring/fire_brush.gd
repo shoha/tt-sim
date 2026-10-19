@@ -5,19 +5,16 @@ extends BrushMode
 ## section 2), Tab switching them (toggle_shape()):
 ##   Area   an LMB drag lays persistent ground fire with Paint's falloff and dwell, the fire
 ##          mask approaching the pane's intensity (BrushTool dabs the stroke).
-##   Line   the press starts a line captured as a river's (StrokePath: a point every
-##          StrokePath.DECIMATE_M, or every WaterBrush.WIDTH_DECIMATE radii for a wide brush,
-##          the release point added, Chaikin-smoothed), previewed while dragging with the
-##          river's own ribbon (WaterBrush.draw_ribbon: gradient fill, edges, chevrons; user,
-##          2026-10-11: the same affordance as driving a river) in the line's own style
-##          (lay_style(): one of LAY_VARIANTS, by default LAY_STYLE, a persimmon fill at about
-##          half coverage that adds light on the cursor's glow layer, so it glows orange over
-##          green grass, a yellow meadow, a dark wood and at night; a full persimmon edge,
-##          chalk chevrons, round ends; FireRibbon builds it). The
-##          release lays it (lay_line()): resampled evenly every LINE_SPACING radii and dabbed
-##          segment by segment as capsules at a fixed exposure per segment, so a line is even
-##          whatever the drawing speed. A release under StrokePath.MIN_LENGTH_M lays nothing;
-##          Esc or RMB mid-drag drops the line.
+##   Line   the line tool the river is (card F5e; user, 2026-10-11: the same affordance as
+##          driving a river, and 2026-10-18: every shape and icon the same): its gesture
+##          (LineGesture: capture, the live line to the pointer, Esc or RMB dropping it, the
+##          minimum length, the chip "Line of fire  40 ft") and its ribbon (LineRibbon) in the
+##          fire line's style (LAY_STYLE: persimmon rails at both edges on an ember glow, lit on
+##          the cursor's glow layer, the coverage falling to nearly clear along the centre line,
+##          chalk chevrons down the middle; card F5d's variant C). The release lays it
+##          (lay_line()): resampled evenly every LINE_SPACING radii and dabbed segment by segment
+##          as capsules at a fixed exposure per segment, so a line is even whatever the drawing
+##          speed.
 ## The Line's ring and ribbon are as wide as the band its fire will stand in, not the brush:
 ## the soft falloff leaves the brush's rim under the flames band, so the shown half-width is
 ## line_reach() of the brush radius (about 0.7 to 0.8 of it), as a river's ring shows its
@@ -27,10 +24,10 @@ extends BrushMode
 ## "Lay fire" with its burnt forest and ash (FireEditor), synced and undoable in play as any
 ## stroke. Ctrl at the press puts fire out instead (the area, or along the line), leaving its
 ## ash and snags. The ring is ember orange, the erase salmon (BrushCursor.CLEAR_TINT, every
-## brush's erase) to put out; the put-out line's ribbon (PUT_OUT_STYLE) keeps that salmon on
-## its edge and chevrons over a cool interior (put_out_tint) that reads over bright flames and
-## over char alike, its edge as heavy as the lay's and glowing (put_out_style()). Every colour
-## is a theme role or the erase tint; only alphas are set here.
+## brush's erase) to put out; the put-out line's ribbon is the line tool's erase
+## (LineRibbon.erase_style: the salmon edge and chevrons) over a cool interior (put_out_tint, the
+## lake) that parts from the bright flames it is drawn on and from char alike. Every colour is a
+## theme role or the erase tint; only alphas are set here.
 
 enum Shape { LINE, AREA }
 
@@ -48,140 +45,28 @@ const TINT := ThemeColors.EMBER
 const LINE_SPACING := 0.25
 const LINE_SECONDS := 0.22
 const MAX_LINE_DABS := 4096
-## The line's ribbon fill, and its look over the river's (WaterBrush.RIBBON_STYLE's keys): a
-## persimmon at about half coverage, stronger toward the pointer, lit by LAY_GAIN on the glow
-## layer (WaterBrush.lit_fill), so it adds light where a plain fill greyed toward the ground's
-## colour (ochre over green grass, brown over a pine wood); a full persimmon edge on a soft
-## ember glow and a faint ink line keeps the band crisp; chalk chevrons; round ends.
-const LAY_TINT := ThemeColors.PERSIMMON
-const LAY_GAIN := 2.4
+## The fire line's ribbon over the line tool's (LineRibbon.STYLE): a glowing tube. The fill's
+## coverage is high at the two edges and falls steeply to nearly clear along the centre line,
+## lit by fill_gain on the glow layer, so orange stands where it is solid and the ground and
+## its plants show unmixed down the middle (orange at partial coverage over green mixes toward
+## olive, card F5d), the persimmon edge on an ember glow. The rails run in to 0.62 radii before
+## the fall: a fall from 0.78 left a half-covered zone that read grey-teal beside the rails over
+## the pine's dark ground (card F5d round 2).
 const LAY_STYLE := {
-	"alpha_up": 0.46,
-	"alpha_down": 0.56,
-	"fill_gain": LAY_GAIN,
-	"edge": ThemeColors.PERSIMMON,
-	"edge_alpha": 1.0,
-	"edge_width": 2.5,
-	"shadow": ThemeColors.INK,
-	"shadow_alpha": 0.3,
-	"shadow_width": 4.5,
-	"glow": ThemeColors.EMBER,
-	"glow_alpha": 0.3,
-	"glow_width": 9.0,
-	"chevron": ThemeColors.CHALK,
-	"chevron_alpha": 0.95,
-	"chevron_width": 2.5,
-	"chevron_shadow_alpha": 0.45,
-	"chevron_shadow_width": 4.5,
-	"caps": true,
-}
-## The lay ribbon's variants (card F5d; LAY_VARIANTS, lay_variant), each with LAY_STYLE's round
-## ends, chip and solid persimmon edge, and each leaving the ground and its plants to show
-## through: LAY_STYLE glows at high coverage and keeps its colour at night, so three others
-## carry the orange where it is solid and take the scene's light (FireRibbon's night_light),
-## NIGHT_LIGHT of their colour under a sun well below the horizon (0.6 lost A's and C's thin
-## lines in the dark in card F5d's first round).
-const NIGHT_LIGHT := 0.75
-## A: a river's translucent persimmon wash, lit a little so it leans warm rather than olive,
-## the read carried by a bold persimmon edge on its ember glow and amber chevrons on an ink
-## hairline.
-const LAY_A := {
-	"alpha_up": 0.14,
-	"alpha_down": 0.34,
-	"fill_gain": 1.8,
-	"edge": ThemeColors.PERSIMMON,
-	"edge_alpha": 1.0,
-	"edge_width": 4.0,
-	"shadow": ThemeColors.INK,
-	"shadow_alpha": 0.35,
-	"shadow_width": 6.0,
-	"glow": ThemeColors.EMBER,
-	"glow_alpha": 0.55,
-	"glow_width": 13.0,
-	"chevron": ThemeColors.OCHRE_LIGHT,
-	"chevron_alpha": 1.0,
-	"chevron_width": 2.5,
-	"chevron_shadow_alpha": 0.85,
-	"chevron_shadow_width": 4.0,
-	"caps": true,
-	"night_light": NIGHT_LIGHT,
-}
-## B: no wash; solid persimmon chevron bands across the band (FireRibbon.bands), lit a little,
-## the ground clear and unmixed between them; the bands point the way, so no river chevrons.
-## Few and bold: 1.4 m apart read as fussy hazard hatching (first round).
-const LAY_B := {
-	"alpha_up": 0.0,
-	"alpha_down": 0.0,
-	"fill_gain": 1.45,
-	"band_spacing": 2.0,
-	"band_share": 0.45,
-	"band_slant": 0.55,
-	"band_alpha": 0.9,
-	"chevrons": false,
-	"edge": ThemeColors.PERSIMMON,
-	"edge_alpha": 1.0,
-	"edge_width": 2.5,
-	"shadow": ThemeColors.INK,
-	"shadow_alpha": 0.3,
-	"shadow_width": 4.5,
-	"glow": ThemeColors.EMBER,
-	"glow_alpha": 0.3,
-	"glow_width": 9.0,
-	"caps": true,
-	"night_light": NIGHT_LIGHT,
-}
-## C: a glowing tube, the fill's coverage high at the two edges falling to nearly clear along
-## the centre line (WaterBrush's fill_profile), lit; chalk chevrons in the clear middle. The
-## rails wide and the fall steep: a slow fall left a grey-olive half-covered zone (first round).
-const LAY_C := {
+	"tint": ThemeColors.PERSIMMON,
 	"alpha_up": 0.8,
 	"alpha_down": 0.9,
 	"fill_gain": 1.7,
-	"fill_profile": [[1.0, 1.0], [0.78, 0.7], [0.5, 0.12], [0.0, 0.04]],
-	"edge": ThemeColors.PERSIMMON,
-	"edge_alpha": 1.0,
-	"edge_width": 2.5,
-	"shadow": ThemeColors.INK,
-	"shadow_alpha": 0.3,
-	"shadow_width": 4.5,
+	"fill_profile": [[1.0, 1.0], [0.62, 0.7], [0.5, 0.12], [0.0, 0.04]],
 	"glow": ThemeColors.EMBER,
-	"glow_alpha": 0.3,
-	"glow_width": 9.0,
-	"chevron": ThemeColors.CHALK,
-	"chevron_alpha": 0.95,
-	"chevron_width": 2.5,
-	"chevron_shadow_alpha": 0.6,
-	"chevron_shadow_width": 4.5,
-	"caps": true,
-	"night_light": NIGHT_LIGHT,
 }
-## The variants by letter; D is LAY_STYLE (card F5c), the default until the user picks.
-const LAY_VARIANTS := {"A": LAY_A, "B": LAY_B, "C": LAY_C, "D": LAY_STYLE}
-const LAY_DEFAULT := "D"
-## Putting out along a line: the erase salmon (BrushCursor.CLEAR_TINT, the ring's) on the edge
-## and the chevrons over an ink outline, round ends, and a cool interior (put_out_tint) at the
-## lay's coverage, a plain fill (gain 1), so the band reads over the glare of the flames it is
-## drawn on and over char, calm rather than alarming. The interior is the lake, water on fire:
-## against the warm blaze it parted more plainly than an ash plum-grey (PAPER_TRACK), whose
-## mauve leaned into the flames' pinks (card F5c, firefeat_line erase_drag_a and _b).
+## Putting out along a line: the line tool's erase (about half coverage, a plain fill) over a
+## cool interior, so the band reads over the glare of the flames it is drawn on and over char,
+## calm rather than alarming. The interior is the lake, water on fire: against the warm blaze
+## it parted more plainly than an ash plum-grey (PAPER_TRACK), whose mauve leaned into the
+## flames' pinks (card F5c, firefeat_line erase_drag_a and _b).
 const PUT_OUT_TINT := ThemeColors.LAKE
-const PUT_OUT_STYLE := {
-	"alpha_up": 0.46,
-	"alpha_down": 0.56,
-	"fill_gain": 1.0,
-	"edge": BrushCursor.CLEAR_TINT,
-	"edge_alpha": 1.0,
-	"edge_width": 2.5,
-	"shadow": ThemeColors.INK,
-	"shadow_alpha": 0.7,
-	"shadow_width": 5.5,
-	"chevron": BrushCursor.CLEAR_TINT,
-	"chevron_alpha": 1.0,
-	"chevron_width": 2.5,
-	"chevron_shadow_alpha": 0.6,
-	"chevron_shadow_width": 4.5,
-	"caps": true,
-}
+const PUT_OUT_INTERIOR := {"tint": PUT_OUT_TINT}
 
 ## The mask byte a lay approaches (EMBERS, FLAMES or BLAZE).
 var intensity: int = FLAMES
@@ -190,16 +75,12 @@ var shape: int = Shape.AREA
 ## The put-out ribbon's interior (PUT_OUT_TINT; the firefeat_line job sets the ash candidate
 ## and the lake in turn to show both).
 var put_out_tint: Color = PUT_OUT_TINT
-## The lay ribbon's variant (a key of LAY_VARIANTS; the firefeat_variants job sets each in
-## turn on one held drag).
-var lay_variant: String = LAY_DEFAULT
-## A line being drawn: its recorded points (world XZ).
-var line := PackedVector2Array()
-var drawing: bool = false
-
-## The pointer's last ground point while a line is drawn (world XZ; Vector2.INF: none): the
-## release point, which the line ends at whether or not decimation recorded it.
-var _tip: Vector2 = Vector2.INF
+## The line being drawn (the line tool's gesture).
+var gesture := LineGesture.new()
+## True while a line is being drawn (the gesture's).
+var drawing: bool:
+	get:
+		return gesture.drawing
 
 
 func _init() -> void:
@@ -269,8 +150,8 @@ static func line_exposure(t: float) -> float:
 
 ## Lays the line `path` (world XZ, smoothed) on `editor` with a brush of `radius` metres: fire
 ## toward `target` (0..1 of 255), or with `erase` put out along it, as one stroke (one history
-## entry, FireEditor). A path under StrokePath.MIN_LENGTH_M lays nothing. True when the fire
-## changed.
+## entry, FireEditor). A path too short for a line (LineGesture.long_enough) lays nothing. True
+## when the fire changed.
 static func lay_line(
 	editor: AuthoringEditor,
 	path: PackedVector2Array,
@@ -279,7 +160,7 @@ static func lay_line(
 	erase: bool,
 	flow: float = 1.0
 ) -> bool:
-	if StrokePath.line_length(path) < StrokePath.MIN_LENGTH_M:
+	if not LineGesture.long_enough(path):
 		return false
 	if not editor.begin_fire_stroke(target, erase):
 		return false
@@ -289,53 +170,34 @@ static func lay_line(
 	return editor.end_stroke()
 
 
-## The line a release lays now: the recorded points ended at the pointer
-## (StrokePath.with_tip), smoothed (StrokePath.smooth_line).
-func laid_line() -> PackedVector2Array:
-	return StrokePath.smooth_line(StrokePath.with_tip(line, _tip, StrokePath.DECIMATE_M))
-
-
-## Drops a line's state (release or cancel).
-func reset() -> void:
-	drawing = false
-	line = PackedVector2Array()
-	_tip = Vector2.INF
+## The put-out ribbon's style: the line tool's erase over put_out_tint (PUT_OUT_INTERIOR).
+func put_out_style() -> Dictionary:
+	return LineRibbon.erase_style(PUT_OUT_INTERIOR.merged({"tint": put_out_tint}, true))
 
 
 ## Area: a fire stroke for the brush to dab. Line: the line begins (the release lays it).
 func press(brush: BrushTool) -> bool:
 	if shape == Shape.AREA:
 		return brush.editor.begin_fire_stroke(intensity / 255.0, brush.press_ctrl)
-	var at := Vector2(brush.hit.x, brush.hit.z)
-	line = StrokePath.decimate(PackedVector2Array(), at, StrokePath.DECIMATE_M)
-	_tip = at
-	drawing = true
+	gesture.begin(brush.hit)
 	return false
 
 
-## Records the line under the pointer, a point once it lies the capture spacing from the last.
+## Records the line under the pointer (LineGesture.track at the brush's radius, the lay's).
 func frame(brush: BrushTool) -> void:
-	if not drawing or brush.hit == Vector3.INF:
-		return
-	var at := Vector2(brush.hit.x, brush.hit.z)
-	var spacing := maxf(StrokePath.DECIMATE_M, brush.get_radius() * WaterBrush.WIDTH_DECIMATE)
-	line = StrokePath.decimate(line, at, spacing)
-	_tip = at
+	gesture.track(brush.hit, brush.get_radius())
 
 
 ## Lays the line being drawn (the release, or a tool switch or undo before it).
 func end(brush: BrushTool) -> void:
-	if not drawing:
-		return
-	var path := laid_line()
-	reset()
-	if brush.editor != null:
+	var path := gesture.finish()
+	if not path.is_empty() and brush.editor != null:
 		var target := intensity / 255.0
 		lay_line(brush.editor, path, brush.get_radius(), target, brush.press_ctrl, brush.get_flow())
 
 
 func cancel(_brush: BrushTool) -> void:
-	reset()
+	gesture.reset()
 
 
 func has_shapes() -> bool:
@@ -366,66 +228,21 @@ func stroke_radius(brush: BrushTool) -> float:
 
 ## The red ring names its erase under it ("Put out fire"), as Paint's "Erase paint"; the Line
 ## shape says what it lays ("Line of fire", or "Put out fire" with Ctrl), with the line's
-## length in the level's units while drawn.
+## length in the level's units while drawn (LineGesture.readout).
 func cursor_text(brush: BrushTool) -> String:
 	var erasing := _erasing(brush)
 	if shape == Shape.AREA:
 		return ERASE_TEXT if erasing else ""
-	var label := ERASE_TEXT if erasing else LINE_TEXT
-	if not drawing:
-		return label
-	var length := StrokePath.line_length(laid_line())
-	var shown := ScaleUtils.world_to_display(length, brush.unit_cell_m, brush.unit_per_cell)
-	return "%s  %d %s" % [label, roundi(shown), brush.unit_label]
+	return gesture.readout(ERASE_TEXT if erasing else LINE_TEXT, brush)
 
 
-## The lay ribbon's style: lay_variant's (LAY_VARIANTS), LAY_STYLE for an unknown letter.
-func lay_style() -> Dictionary:
-	return LAY_VARIANTS.get(lay_variant, LAY_STYLE)
-
-
-## The light the lay ribbon takes now (FireRibbon.scene_light under the published sun; 1 for a
-## style that keeps its colour).
-func lay_light() -> float:
-	var style := lay_style()
-	if not style.has("night_light"):
-		return 1.0
-	return FireRibbon.scene_light(FoliageLight.last_sun, float(style.night_light))
-
-
-## PUT_OUT_STYLE with `lay`'s edge weight and glow (the salmon's own), so the put-out line is
-## edged as boldly as the lay ribbon and cannot pass for a river's pale-edged ribbon. Pure.
-static func put_out_style(lay: Dictionary) -> Dictionary:
-	var edge := float(lay.get("edge_width", PUT_OUT_STYLE.edge_width))
-	var weight := {
-		"edge_width": edge,
-		"shadow_width": maxf(float(PUT_OUT_STYLE.shadow_width), edge + 3.0),
-		"glow_alpha": float(lay.get("glow_alpha", 0.0)),
-		"glow_width": float(lay.get("glow_width", 0.0)),
-	}
-	return PUT_OUT_STYLE.merged(weight, true)
-
-
-## The line being drawn as the river's ribbon up to the pointer, at the ring's width, in the
-## line's style (lay_style(), or put_out_style() with Ctrl; FireRibbon.build), its fill on the
-## cursor's glow layer, then the ring.
+## The line being drawn as the line tool's ribbon out to the pointer, at the ring's width, in
+## the fire line's style (LAY_STYLE, or put_out_style() with Ctrl), then the ring.
 func draw_cursor(brush: BrushTool, cursor: BrushCursor) -> void:
-	if drawing and not line.is_empty() and brush.editor != null:
-		var live := line.duplicate()
-		if brush.hit != Vector3.INF:
-			var tip := Vector2(brush.hit.x, brush.hit.z)
-			if live[-1].distance_to(tip) > 0.05:
-				live.append(tip)
-		var erasing := _erasing(brush)
-		var shape := FireRibbon.build(
-			WaterBrush.on_ground(cursor.camera, brush.editor),
-			StrokePath.smooth_line(live),
-			stroke_radius(brush),
-			put_out_tint if erasing else LAY_TINT,
-			put_out_style(lay_style()) if erasing else lay_style(),
-			FoliageLight.last_sun
-		)
-		FireRibbon.draw(cursor.canvas, shape, cursor.glow_item())
+	if drawing and brush.editor != null:
+		var style := put_out_style() if _erasing(brush) else LAY_STYLE
+		var ground := LineRibbon.on_ground(cursor.camera, brush.editor)
+		LineRibbon.draw(cursor, ground, gesture.live(brush.hit), stroke_radius(brush), style)
 	super.draw_cursor(brush, cursor)
 
 

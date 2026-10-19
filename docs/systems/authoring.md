@@ -188,6 +188,33 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   `circle-dashed`). The hint bar (`PlayEvents.hints_for(tool, sculpt, shape)`) gives Tab the
   slot the other brushes give Ctrl and names the shape it switches to ("Tab Line", "Tab Pond");
   the pane's gesture line says what Ctrl does. `InputProfile` label `brush_shape`; one Help row.
+- The line tool (card F5e, 2026-10-18; user: "let's be sure that all of the shapes and
+  iconography are consistent with the river tool"): Water's River and Fire's Line are one
+  line tool in two tints, built from two shared parts so they cannot drift.
+  `LineGesture` (`line_gesture.gd`) is what both do while a line is drawn: the press begins it,
+  each frame records the pointer a capture spacing from the last point (0.6 m, or 0.6
+  half-widths for a wide line; `StrokePath`), the release's line is the recorded points ended
+  at the pointer and Chaikin-smoothed, the preview draws that same line out to the pointer,
+  a release under 2 m makes nothing, Esc or RMB drops the line with the tool still armed, and
+  the chip reads "<label>  N <unit>" ("River  Waist  40 ft", "Line of fire  40 ft"). What the
+  release does is each mode's own (`WaterBrush.carve`, `FireBrush.lay_line`). `LineRibbon`
+  (`line_ribbon.gd`) is the preview: a band at the line's width with round caps, one closed
+  edge (2.5 px) over an ink outline on a soft glow, chalk chevrons on ink every 2.5 m, the fill
+  on the cursor's premultiplied glow layer (`BrushCursor.glow_item`, `LineRibbon.lit_fill`),
+  every colour in the scene's light (0.75 of itself under a sun 6 degrees or more below the
+  horizon, full from the horizon up). A tool passes only a style, as data over
+  `LineRibbon.STYLE`: the river's `WaterBrush.RIBBON_STYLE` is its pale blue with the even
+  translucent fill (faint upstream; blue at partial coverage reads as water over any ground);
+  the fire line's `FireBrush.LAY_STYLE` is persimmon rails at both edges on an ember glow, lit
+  (gain 1.7), the coverage falling steeply to nearly clear along the centre line, so the
+  orange stays solid and the ground shows unmixed down the middle (orange at partial coverage
+  over green turns olive; card F5d's variant C). The two erase ribbons share
+  `LineRibbon.erase_style`: the erase salmon (`BrushCursor.CLEAR_TINT`) on the edge, glow and
+  chevrons over a heavier ink outline and an interior at about half coverage that parts from
+  what it erases (a water erase's touched reaches: salmon over the cool water; Fire's put-out
+  line: the lake over the warm flames). The pane's Shape tiles (`ShapeField`), their icons and the hint
+  bar's keys ("Draw a river" / "Draw a line of fire", Tab naming the other shape, Width) read
+  alike. Comparison job: `firefeat_line_tool`.
 - Modes reach the editor and the host only, never `AuthoringController`, so a play-side host
   (the GM's Events pane over `LiveEdits.editor`) can run the same modes. A new tool with
   gestures adds its `BrushMode` subclass beside `water_brush.gd` and names it in its
@@ -197,16 +224,8 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   `campfire` icon; the document's own ground, as Paint; a play brush too since card F2,
   2026-10-16, see "Live edits"),
   `FireBrush` (two shapes since card F5, 2026-10-18: Area paints with Paint's falloff and
-  dwell; Line captures a line as a river's through `StrokePath` (`utils/stroke_path.gd`, the
-  capture lifted out of `WaterBrush`, which calls it), previews it with the river's ribbon
-  (`WaterBrush.draw_ribbon`) in the line's own style (cards F5b, F5c: `FireBrush.LAY_STYLE`, a
-  persimmon fill at about half coverage lit on the cursor's premultiplied glow layer
-  (`BrushCursor.glow_item`, `WaterBrush.lit_fill`), so it adds light and stays orange over
-  green, a dark wood and at night instead of greying toward the ground, a full persimmon edge,
-  chalk chevrons; `PUT_OUT_STYLE` with Ctrl, the erase salmon (`BrushCursor.CLEAR_TINT`) on
-  the edge and chevrons over a lake interior that cools the flames under it; both with round
-  ends (the style's `caps`); every colour a theme role or the erase tint; the river's look is
-  `WaterBrush.RIBBON_STYLE`, the default, square-ended) at the width its fire will stand in, which the ring
+  dwell; Line is the line tool the river is, see "The line tool" below, in the fire line's
+  style `FireBrush.LAY_STYLE`) at the width its fire will stand in, which the ring
   shows too (`FireBrush.line_reach`: where the soft falloff's mask passes the flames band,
   about 0.73 of the brush radius at Blaze and full strength, 0.81 at strength 2), and on
   release lays it with `FireBrush.lay_line`: resampled every 0.25 brush radii and dabbed as

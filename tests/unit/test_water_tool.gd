@@ -746,7 +746,7 @@ func test_an_uphill_stroke_previews_its_flow_downhill() -> void:
 	assert_eq(flow[0], Vector2(4, 0), "reversed: the water starts at the high end")
 	assert_eq(flow[-1], Vector2(0, 0))
 	var tangent := (flow[1] - flow[0]).normalized()
-	var arrow := WaterBrush.chevron(flow[1], tangent, 1.0)
+	var arrow := LineRibbon.chevron(flow[1], tangent, 1.0)
 	assert_lt(arrow[1].x, arrow[0].x, "the chevron's tip points downhill")
 	assert_lt(arrow[1].x, arrow[2].x)
 	assert_almost_eq(arrow[0].y, -arrow[2].y, 1e-6, "barbs either side")

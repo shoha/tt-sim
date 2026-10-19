@@ -157,11 +157,14 @@ static func hints_for(
 				rows = [["Left-drag", "Draw a line of fire"], [tab, "Area"]]
 			else:
 				rows = [["Left-drag", "Lay fire"], [tab, "Line"]]
+			# The line tool's keys read alike for Fire and Water (card F5e): the drag says
+			# "Draw a ..." as its Line tile's tooltip begins, and the size key is Width.
+			size = "Width"
 		WaterTool.ID:
 			if shape == WaterBrush.Shape.POND:
 				rows = [["Left-drag", "Paint pond"], [tab, "River"]]
 			else:
-				rows = [["Left-drag", "Draw river"], [tab, "Pond"]]
+				rows = [["Left-drag", "Draw a river"], [tab, "Pond"]]
 			size = "Width"
 		BridgeTool.ID:
 			rows = [["Left-drag", "Lay a crossing"], ["Ctrl+click", "Remove one"]]

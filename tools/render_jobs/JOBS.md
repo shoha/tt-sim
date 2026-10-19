@@ -773,6 +773,20 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   with `probes/avatar_diff.gd` (the foliage behind the glass moves with the wind: pixels over
   8 there are the background; a pane change shows over 32; the ribbon lies over swaying trees,
   so compare a crop of it by eye, `avatar_diff.gd crop`). Saves no level.
+- `jobs/firefeat_line_tool.json`: the shared line tool, river beside fire line (card F5e; about
+  190 s; replaces card F5d's `firefeat_variants`). At 1280x720 on firefeat_line's map (a 200 ft
+  temperate forest, seed 1234, a meadow over its east half): the Water pane at River and the
+  Fire pane after a real Tab (Line), then at zoom 22 with a 2.5 m brush each tool's cursor at
+  rest (`river_rest`, `fire_rest`) and the same curve held mid-drag from the meadow into the
+  forest past the dark pine, by day (`river_lay_day`, `fire_lay_day`), at 1920x1080
+  (`river_lay_1080`, `fire_lay_1080`) and under outdoor_night (`river_lay_night`,
+  `fire_lay_night`), each dropped with Esc; then a river carved along a second curve and the
+  Blaze line laid, and at zoom 8 by day and night a Ctrl line held over the flames
+  (`fire_put_out_{day,night}`) and a Ctrl drag held across the river (`river_erase_{day,night}`),
+  each cancelled with Esc. Every frame carries a fire.gd label. Sheets: `sheet_consistency_720`
+  (river | fire per row), `sheet_panes` (Water | Fire), and `sheet_water_before_after` (left
+  `render_jobs/firefeat_line_tool_before`, a run of the job with `--out` before a change; right
+  this run). Saves no level.
 - `jobs/fire_smoke_book.json`: bakes the persistent fire's smoke book once, offline (card
   fire-prod-c5a; `probes/fire_smoke_book.gd`; `tools/fire_sim/README.md`). In the real window (a
   headless run draws nothing) it draws `tools/fire_sim/fire_smoke_book_bake.gdshader` into one
