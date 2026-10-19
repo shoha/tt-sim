@@ -15,6 +15,11 @@ extends Node
 ## pause menu's sounds play while the tree is paused, a sound already playing when the
 ## game pauses finishes instead of freezing, and every request of a frame is in before
 ## the flush. Bus volumes (the Settings sliders) are set here too, through set_bus_volume.
+##
+## A loop (a manifest entry with "loop": true, the fire's roar) is not played here: it
+## lasts as long as its source, so the node that owns the source plays it on positional
+## players of its own on the entry's bus (FireSound), taking the stream from loop_stream().
+## play() refuses one with a warning.
 
 ## Emitted when a requested sound actually starts, after coalescing and cooldowns.
 signal sound_played(sound: StringName)
@@ -109,9 +114,15 @@ func sound_entry(sound: StringName) -> Dictionary:
 	return _queue.entry(sound)
 
 
-## Unknown names play() has warned about since startup.
+## Unknown names (and loops) play() has warned about since startup.
 func warned_names() -> Array:
 	return _queue.warned_names()
+
+
+## The looping stream of a loop sound (see the header), or null for a one-shot, an unknown
+## name or a missing file. Its manifest entry (sound_entry) gives the bus and the gain.
+func loop_stream(sound: StringName) -> AudioStream:
+	return _streams.get(sound) if _queue.is_loop(sound) else null
 
 
 # ---------------------------------------------------------------------------

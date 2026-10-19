@@ -12,9 +12,10 @@ This document catalogs all sound effects used (or expected) across the game, org
 | SFX      | `res://assets/audio/sfx/`    | `.wav` |
 
 `tools/generate_sfx.py --install` renders every sound in `tools/sfx_spec.py` into these
-directories and writes `res://assets/audio/sfx_manifest.json`, the table `AudioManager` loads
-at startup: each sound's file, bus, gain, pitch jitter, cooldown and priority. A file that is
-not in the manifest is never played; a name that is not in the manifest warns once.
+directories (and processes its one recorded loop, see "Loops") and writes
+`res://assets/audio/sfx_manifest.json`, the table `AudioManager` loads at startup: each sound's
+file, bus, whether it loops, gain, pitch jitter, cooldown and priority. A file that is not in the
+manifest is never played; a name that is not in the manifest warns once.
 
 ---
 
@@ -195,6 +196,49 @@ Played with `AudioManager.play(&"<name>")`; columns as for the UI table.
 | `token_whoosh`  | -3 dB  | 1.3    | -        | 10       | Rapid drag swoosh (velocity-based)   | Disabled      |
 | `splash_enter`  | 0 dB   | 0.5    | -        | 30       | Token entering a water zone          | **Wired**     |
 | `splash_exit`   | -3 dB  | 0.5    | -        | 30       | Token leaving a water zone           | **Wired**     |
+| `fire_roar`     | -6 dB  | 0.5    | -        | 10       | The persistent fire's roar, a recorded loop (see "Loops") | **Wired** (`FireSound`) |
+
+### Loops
+
+A loop is an ambience with no start or end, lasting as long as its source: today only
+`fire_roar`, the persistent fire's sound. It is the palette's one recording, not a synthesized
+sound: "R27-25-Large Fire Burning.wav" by craigsmith (Freesound 483318, pack "Vintage Fire (Red
+Lib)", CC0 1.0; `THIRD_PARTY_LICENSES.md`), a minute of a large fire, steady (RMS within a few dB
+second to second), never repeating, mostly low roar (56% of its energy in 120-400 Hz) with soft
+crackle. It enters the same pipeline as every other sound: a `RecordedLoop` in
+`tools/sfx_spec.py` (`RECORDINGS`) names the original and its processing, and
+`tools/sfx_recording.py` (stdlib only) turns it into the shipped file.
+
+- **Processing**, every step fixed by the spec so the file is reproducible from the original:
+  read the 48 kHz 24-bit original; low-pass at 10 kHz and halve the rate to 24 kHz (the buses
+  low-pass at 7 kHz and the recording has nothing above 12 kHz, -43 dB of its energy); high-pass
+  at 70 Hz (fourth order) and notch the mains hum at 49.8 Hz; trim to 2.0-59.3 s (a quieter
+  lead-in and the fade-out are cut); fade the last 400 ms into the head at equal power, so the
+  loop's last sample runs into its first; peak-normalize to -3 dBFS; one guard sample, a copy of
+  the first, ends the file, because Godot's forward loop wraps at the last frame (`loop_end` -1
+  imports as frames - 1). The result is 56.9 s of 16-bit mono at 24 kHz: 2.73 MB committed,
+  553 KB imported as QOA (what an export ships).
+- **The original** stays out of git (`docs/plans/2026-10-11-fire-features/cc0_fire_large/`, the
+  path the spec names). `--install` processes it when it is there and otherwise keeps the
+  committed file and says so (`--sources-root` points it elsewhere); a fresh clone never fails
+  an install.
+- **Gate.** `--verify` checks the committed file: the spec's rate, the guard sample, the seam (the
+  step from the loop's last sample to its first at most `LOOP_SEAM_MAX_RATIO` (4) times the RMS
+  step between neighbours, `sfx_measure.loop_seam_ratio`; the roar measures 0.10), and the peak,
+  warmth (`max_high_band_db` -20; it measures -21.1) and length as for any sound.
+  `tools/tests/test_sfx_recording.py` checks the processing on a short made-up original (trim,
+  rate, hum taken, seam, lead-in cut, reproducible); `test_install.py` the kept file.
+- **Import.** The loop's `.wav.import` sets `edit/loop_mode=2` (forward, over the whole file) and
+  `compress/mode=2` (QOA, as every palette file); `--install` never touches an `.import`, so a new
+  loop's import file is written by hand before its first import.
+- **Manifest and playback.** Every manifest entry carries `"loop"`. `AudioManager.play()` refuses
+  a loop with a warning (it would hold a pooled voice for ever); the node that owns the source
+  plays it on positional players of its own, with the stream from `AudioManager.loop_stream()`
+  and the bus, gain and pitch jitter from `sound_entry()`. `FireSound` stands two
+  `AudioStreamPlayer3D` on the SFX bus at the two strongest fire clusters near the view, the level
+  following the fire there and fading over about a second ([systems/fire.md](systems/fire.md)
+  "The sound"). The level by ear is the spec's `volume_db` alone (`--manifest` after a change):
+  -6 dB puts one player at -28.6 dBFS RMS, about 20 dB under `token_drop`'s loudest 50 ms.
 
 ### Where SFX Sounds Are Used
 
@@ -206,12 +250,13 @@ Played with `AudioManager.play(&"<name>")`; columns as for the UI table.
 | `token_whoosh` | `draggable_token.gd`    | Horizontal drag speed >= 10 units/sec (0.15s cooldown, velocity-scaled pitch) -- trigger still wired, but the call is skipped while `AudioManager.TOKEN_WHOOSH_SOUND_ENABLED` is false |
 | `splash_enter` | `scenes/effects/water_zone.gd` (`_on_body_entered`) | Token's collision shape enters a water zone |
 | `splash_exit`  | `scenes/effects/water_zone.gd` (`_on_body_exited`) | Token's collision shape fully exits a water zone |
+| `fire_roar`    | `scenes/terrain/fire_sound.gd` | Loops while flames burn near the view (authoring and play, wherever a `FireField` is) |
 
 ### Additional SFX Candidates (Not Yet in the Palette)
 
 Interactions that could benefit from a sound. Adding one is a spec entry, an install and a call
-(see "Adding a Sound" below); there is no file to source, since every sound in the palette is
-synthesized.
+(see "Adding a Sound" below); there is no file to source, since every one-shot in the palette is
+synthesized (only the fire's ambience is a recording; see "Loops").
 
 | Proposed Sound    | Description                                    | Where to Wire                          |
 |-------------------|------------------------------------------------|----------------------------------------|
@@ -260,11 +305,12 @@ The SFX and UI buses have effects applied to achieve a warm, lo-fi aesthetic. Th
 
 ## Sound Design Guidelines
 
-Every sound is synthesized by a stdlib Python toolchain in `tools/` (`sfx_spec.py`,
+Every one-shot is synthesized by a stdlib Python toolchain in `tools/` (`sfx_spec.py`,
 `sfx_synth.py`, `sfx_render.py`, `sfx_measure.py`, driven by `generate_sfx.py`), not sourced as
 audio files. There is no format/sample-rate/channel checklist to follow when adding a sound — the
 renderer always writes 44100 Hz mono `.wav`. What matters is how each sound is specified. The
 table below is the palette as it currently ships; the source of truth is `tools/sfx_spec.py`.
+The one recorded sound, the fire's roar loop, is not in it: see "Loops" above.
 
 ### The Palette
 
@@ -534,10 +580,12 @@ manifest name the same sounds, so a missed step fails the test rather than playi
 - [x] `assets/audio/sfx/token_whoosh.wav`
 - [x] `assets/audio/sfx/splash_enter.wav`
 - [x] `assets/audio/sfx/splash_exit.wav`
+- [x] `assets/audio/sfx/fire_roar.wav` (a recorded loop; its level by ear is still open)
 
-All files are generated by `tools/generate_sfx.py --install` from the `SoundSpec` entries in
-`tools/sfx_spec.py` (see "Regenerating and Iterating" above) — there are no third-party CC0 packs
-to track or license anymore. Regeneration is deterministic: running `--install` from a clean
+All one-shots are generated by `tools/generate_sfx.py --install` from the `SoundSpec` entries in
+`tools/sfx_spec.py` (see "Regenerating and Iterating" above). The one recording, `fire_roar`, is
+CC0 and processed by the same `--install` from its original (see "Loops"); its row in
+`THIRD_PARTY_LICENSES.md` keeps where it came from. Regeneration is deterministic: running `--install` from a clean
 checkout reproduces byte-identical files to the ones committed (verified — `--install`, `--seed`
 defaults to 0, and neither `generate_sfx.py` nor `sfx_synth.py` reads any other source of
 randomness for variant 0). All files still pass through the pre-commit normalization hook like

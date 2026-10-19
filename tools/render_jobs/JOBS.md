@@ -833,10 +833,13 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   f1 and f3 to f7 against `render_jobs/firefeat_handover_before_f6c`, the run before card
   F6c's char drift). Saves nothing;
   each fire is undone.
-- `jobs/firefeat_cue.json`: the drag ruler's "In fire" cue (card F7a; about 36 s). A new 100 ft
-  meadow (seed 4242) with a radius-3 disc of flames at (6.5, 0), saved as `_firefeat_cue` and
-  played: holds a token mid-drag over the fire (`cue_in_fire`, the label text logged) and off it
-  (`cue_outside`). Its last step deletes exactly `_firefeat_cue` (an `eval` of
+- `jobs/firefeat_cue.json`: the drag ruler's "In fire" cue and the fire's sound (cards F7a and
+  F7b; about 40 s). A new 100 ft meadow (seed 4242) with a radius-3 disc of flames at (6.5, 0),
+  saved as `_firefeat_cue` and played. `probes/fire_sound.gd` logs the fire's sound players, their
+  gains and three SFX bus peak readings before the fire, with it in view and after the view pans
+  away (`look_at` (-15, 0), 2.5 s); a second of settling before the first hold (on one F7a run the
+  hold set no drag target). Holds a token mid-drag over the fire (`cue_in_fire`, the label text
+  logged) and off it (`cue_outside`). Its last step deletes exactly `_firefeat_cue` (an `eval` of
   `LevelManager.delete_level_folder`), not the other `_firefeat_` levels.
 - `jobs/fire_smoke_book.json`: bakes the persistent fire's smoke book once, offline (card
   fire-prod-c5a; `probes/fire_smoke_book.gd`; `tools/fire_sim/README.md`). In the real window (a

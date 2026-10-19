@@ -1307,8 +1307,10 @@ drawings baked offline by a small fire simulation and shipped as a resource (`Fi
 `assets/fire/fire_book.res`, Git LFS; `shaders/fire_flames.gdshader`), loaded on a thread with
 the first fire and released with the last field. The ground's char and pools are a term in the
 authored ground shader read from one GPU bake (`FireNoiseBake`, `fire_glow.gdshaderinc`);
-`FireFieldSmoke` raises plumes from a second offline book (`FireSmokeBook`) and `FireLights`
-stands up to four short warm lights at dusk and night. See
+`FireFieldSmoke` raises plumes from a second offline book (`FireSmokeBook`), `FireLights`
+stands up to four short warm lights at dusk and night, and `FireSound` plays a recorded roar loop
+on two positional players at the strongest fires in view (the world SubViewport is the game's
+only 3D audio listener, `audio_listener_enable_3d` in `game_map.tscn`). See
 [docs/systems/fire.md](systems/fire.md).
 
 ### Authored terrain

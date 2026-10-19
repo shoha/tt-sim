@@ -1,16 +1,27 @@
-"""Tests for --install and --manifest."""
+"""Tests for --install and --manifest.
 
+Every install here passes a sources root of its own (an empty one unless the
+test writes an original into it), so no test depends on whether this machine
+holds a recorded loop's original or spends seconds processing it.
+"""
+
+import contextlib
+import dataclasses
+import io
 import json
 import os
 import sys
 import tempfile
 import unittest
+import wave
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import generate_sfx as cli
 import sfx_spec
+from sfx_synth import read_wav
+from tests.test_sfx_recording import noisy_fire, write_source
 
 
 def _make_fake_assets(root):
@@ -22,8 +33,9 @@ class TestInstall(unittest.TestCase):
     def test_writes_every_sound_into_its_bus_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
             _make_fake_assets(tmp)
-            written, _ = cli.install(tmp, seed=0)
+            written, _, kept = cli.install(tmp, seed=0, sources_root=tmp)
             self.assertEqual(len(written), len(sfx_spec.SPECS))
+            self.assertEqual(len(kept), len(sfx_spec.RECORDINGS), "no originals here")
             for name, spec in sfx_spec.SPECS.items():
                 expected = os.path.join(
                     tmp, "assets", "audio", spec.bus, "%s.wav" % name
@@ -40,7 +52,7 @@ class TestInstall(unittest.TestCase):
                 with open(path, "w", encoding="utf-8") as handle:
                     handle.write("stale")
 
-            _, removed = cli.install(tmp, seed=0)
+            _, removed, _ = cli.install(tmp, seed=0, sources_root=tmp)
 
             self.assertFalse(os.path.exists(ogg))
             self.assertFalse(os.path.exists(sidecar))
@@ -57,7 +69,7 @@ class TestInstall(unittest.TestCase):
                 stray_path = os.path.join(tmp, "assets", "audio", "ui", stray_name)
                 with open(stray_path, "w", encoding="utf-8") as handle:
                     handle.write("keep me")
-            cli.install(tmp, seed=0)
+            cli.install(tmp, seed=0, sources_root=tmp)
             self.assertTrue(os.path.isfile(stray))
             for stray_name in ("unrelated.ogg", "unrelated.ogg.import"):
                 stray_path = os.path.join(tmp, "assets", "audio", "ui", stray_name)
@@ -65,14 +77,12 @@ class TestInstall(unittest.TestCase):
 
     def test_creates_missing_bus_directories(self):
         with tempfile.TemporaryDirectory() as tmp:
-            written, _ = cli.install(tmp, seed=0)
+            written, _, _ = cli.install(tmp, seed=0, sources_root=tmp)
             self.assertEqual(len(written), len(sfx_spec.SPECS))
 
     def test_installed_files_pass_verification(self):
-        from sfx_synth import read_wav
-
         with tempfile.TemporaryDirectory() as tmp:
-            written, _ = cli.install(tmp, seed=0)
+            written, _, _ = cli.install(tmp, seed=0, sources_root=tmp)
             for path in written:
                 name = os.path.splitext(os.path.basename(path))[0]
                 samples, _rate = read_wav(path)
@@ -94,7 +104,7 @@ class TestInstall(unittest.TestCase):
 
             with mock.patch.object(cli, "render_wav", side_effect=half_write):
                 with self.assertRaises(IOError):
-                    cli.install(tmp, seed=0)
+                    cli.install(tmp, seed=0, sources_root=tmp)
 
             for bus in ("ui", "sfx"):
                 bus_dir = os.path.join(tmp, "assets", "audio", bus)
@@ -114,12 +124,14 @@ class TestManifest(unittest.TestCase):
 
     def test_install_writes_a_manifest_entry_for_every_sound(self):
         with tempfile.TemporaryDirectory() as tmp:
-            cli.install(tmp, seed=0)
+            cli.install(tmp, seed=0, sources_root=tmp)
             sounds = self._read(tmp)["sounds"]
-        self.assertEqual(set(sounds), set(sfx_spec.SPECS))
-        for name, spec in sfx_spec.SPECS.items():
+        every = {**sfx_spec.SPECS, **sfx_spec.RECORDINGS}
+        self.assertEqual(set(sounds), set(every))
+        for name, spec in every.items():
             entry = sounds[name]
             self.assertEqual(entry["bus"], cli.GODOT_BUS[spec.bus], name)
+            self.assertEqual(entry["loop"], name in sfx_spec.RECORDINGS, name)
             self.assertEqual(
                 entry["path"], "res://assets/audio/%s/%s.wav" % (spec.bus, name)
             )
@@ -153,12 +165,65 @@ class TestManifest(unittest.TestCase):
 class TestInstallWiring(unittest.TestCase):
     def test_main_install_flag_writes_files(self):
         with tempfile.TemporaryDirectory() as tmp:
-            code = cli.main(["--install", "--assets-root", tmp])
+            code = cli.main(["--install", "--assets-root", tmp, "--sources-root", tmp])
             self.assertEqual(code, 0)
             self.assertTrue(
                 os.path.isfile(os.path.join(tmp, "assets", "audio", "ui", "click.wav"))
             )
             self.assertTrue(os.path.isfile(cli.manifest_path(tmp)))
+
+
+class TestRecordedLoops(unittest.TestCase):
+    """A recorded loop is processed from its original when present, and its
+    committed file is kept, never a failure, when it is not (a fresh clone)."""
+
+    def test_a_missing_original_keeps_the_committed_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _make_fake_assets(tmp)
+            committed = cli.installed_path(tmp, "fire_roar", "sfx")
+            with open(committed, "wb") as handle:
+                handle.write(b"the committed loop")
+            _, _, kept = cli.install(tmp, seed=0, sources_root=tmp)
+            self.assertEqual(kept, [committed])
+            with open(committed, "rb") as handle:
+                self.assertEqual(handle.read(), b"the committed loop")
+            self.assertIn("fire_roar", self._sounds(tmp))
+
+    def test_install_says_it_kept_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _make_fake_assets(tmp)
+            with open(cli.installed_path(tmp, "fire_roar", "sfx"), "wb") as handle:
+                handle.write(b"the committed loop")
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = cli.main(["--install", "--assets-root", tmp, "--sources-root", tmp])
+        self.assertEqual(code, 0)
+        self.assertIn("kept the committed", out.getvalue())
+        self.assertIn("fire_roar.wav", out.getvalue())
+
+    def test_a_present_original_is_processed_to_a_mono_16_bit_loop(self):
+        loop = dataclasses.replace(sfx_spec.RECORDINGS["fire_roar"], start_s=0.5, end_s=2.5)
+        with tempfile.TemporaryDirectory() as tmp:
+            source = os.path.join(tmp, *loop.source.split("/"))
+            os.makedirs(os.path.dirname(source))
+            write_source(source, noisy_fire(3.0, 48000), 48000, channels=2)
+            with mock.patch.dict(sfx_spec.RECORDINGS, {"fire_roar": loop}):
+                written, _, kept = cli.install(tmp, seed=0, sources_root=tmp)
+            path = cli.installed_path(tmp, "fire_roar", "sfx")
+            self.assertIn(path, written)
+            self.assertEqual(kept, [])
+            with wave.open(path, "rb") as handle:
+                self.assertEqual(handle.getnchannels(), 1, "mono stays mono")
+                self.assertEqual(handle.getsampwidth(), 2)
+                self.assertEqual(handle.getframerate(), loop.sample_rate)
+            samples, _ = read_wav(path)
+        expected = round(loop.total_ms * loop.sample_rate / 1000.0) + 1
+        self.assertEqual(len(samples), expected, "the loop and its guard sample")
+        self.assertEqual(samples[-1], samples[0])
+
+    def _sounds(self, root):
+        with open(cli.manifest_path(root), "r", encoding="utf-8") as handle:
+            return json.load(handle)["sounds"]
 
 
 if __name__ == "__main__":

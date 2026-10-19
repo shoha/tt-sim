@@ -17,7 +17,9 @@ extends RefCounted
 ##
 ## A sound still inside its cooldown since it last played is dropped when requested,
 ## before coalescing, so it cannot outrank a lower sound that would otherwise play. An
-## unknown name is dropped with one warning per name, never silently.
+## unknown name is dropped with one warning per name, never silently, and so is a loop
+## (an entry with "loop": true, such as the fire's roar): it would hold a pooled voice
+## for ever, so the node that owns its source plays it (FireSound; AudioManager.loop_stream).
 
 const MANIFEST_PATH := "res://assets/audio/sfx_manifest.json"
 
@@ -86,6 +88,11 @@ func has_sound(sound: StringName) -> bool:
 	return _entries.has(sound)
 
 
+## True when the table declares the sound as a loop (see the header).
+func is_loop(sound: StringName) -> bool:
+	return bool(entry(sound).get("loop", false))
+
+
 ## The manifest entry for a sound, or an empty Dictionary when unknown.
 func entry(sound: StringName) -> Dictionary:
 	return _entries.get(sound, {})
@@ -100,6 +107,11 @@ func request(
 		if not _warned.has(sound):
 			_warned[sound] = true
 			push_warning("AudioManager: unknown sound '%s'; see tools/sfx_spec.py" % sound)
+		return false
+	if is_loop(sound):
+		if not _warned.has(sound):
+			_warned[sound] = true
+			push_warning("AudioManager: '%s' is a loop; its source's node plays it" % sound)
 		return false
 	var spec: Dictionary = _entries[sound]
 	if _last_played_s.has(sound) and now_s - _last_played_s[sound] < _cooldown(spec):
@@ -146,7 +158,7 @@ func flush(now_s: float) -> Array[Dictionary]:
 	return out
 
 
-## Unknown names warned about so far, in the order they were first requested.
+## Unknown names (and loops) warned about so far, in the order they were first requested.
 func warned_names() -> Array:
 	return _warned.keys()
 

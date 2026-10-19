@@ -34,6 +34,15 @@ wins when one gesture asks for several. They never change a rendered file.
 `generate_sfx.py --install` (or `--manifest` alone) writes them into
 assets/audio/sfx_manifest.json, which AudioManager loads, so this file is the
 one place that says how anything sounds in game.
+
+One kind of sound is not synthesized: a RecordedLoop (RECORDINGS) names an
+original recording and the processing that turns it into a seamless loop
+(sfx_recording.process_loop), for an ambience no struck note can be, such as
+the persistent fire's roar. `--install` processes the original when it is
+present (it is kept out of git; the URL says where it came from) and otherwise
+keeps the committed file. The manifest marks a loop, its file imports looping,
+and the node that owns its source plays it (FireSound), never
+AudioManager.play(); its `volume_db` is still the one place its level is set.
 """
 
 from dataclasses import dataclass
@@ -95,6 +104,63 @@ class SoundSpec:
         if self.chord or not self.notes:
             return self.note_ms
         return len(self.notes) * (self.note_ms + self.gap_ms)
+
+
+@dataclass(frozen=True)
+class RecordedLoop:
+    """A seamless loop processed from an original recording (see the module docstring)."""
+
+    bus: str
+    # The original, relative to the repository root, and where it came from.
+    source: str
+    title: str
+    author: str
+    url: str
+    licence: str
+    # The loop's range in the original; the last crossfade_ms fade into the head.
+    start_s: float
+    end_s: float
+    crossfade_ms: float
+    # Filters: the rumble under highpass_hz, a mains hum (0: none), and the
+    # low-pass before the rate is halved down to sample_rate.
+    highpass_hz: float
+    hum_hz: float
+    lowpass_hz: float
+    sample_rate: int
+    max_high_band_db: float
+    # Playback (manifest only), as for SoundSpec.
+    volume_db: float = 0.0
+    pitch_jitter: float = 0.5
+    cooldown_s: float = 0.0
+    priority: int = PRIORITY_FAINT
+
+    @property
+    def total_ms(self) -> float:
+        """The loop's length in milliseconds (the file adds one guard sample)."""
+        return (self.end_s - self.start_s) * 1000.0 - self.crossfade_ms
+
+
+RECORDINGS = {
+    "fire_roar": RecordedLoop(
+        bus="sfx",
+        source="docs/plans/2026-10-11-fire-features/cc0_fire_large/"
+        "483318__craigsmith__r27-25-large-fire-burning.wav",
+        title="R27-25-Large Fire Burning.wav",
+        author="craigsmith",
+        url="https://freesound.org/people/craigsmith/sounds/483318/",
+        licence="CC0 1.0",
+        # 1.75 s of quieter lead-in and a fade-out after 59.4 s are cut.
+        start_s=2.0, end_s=59.3, crossfade_ms=400.0,
+        highpass_hz=70.0, hum_hz=49.8, lowpass_hz=10000.0, sample_rate=24000,
+        max_high_band_db=-20.0,
+        # An ambience under the token sounds: the level by ear is set here only.
+        # At -6 dB one player's RMS is -28.6 dBFS (the loop's -22.6 under it),
+        # about 20 dB under token_drop's loudest 50 ms (-8.9 dBFS) and where card
+        # F7's generated crackle sat at -12 dB. Each of FireSound's two players
+        # starts at its own pitch within the jitter, so the pair never phases.
+        volume_db=-6.0, pitch_jitter=0.5, priority=PRIORITY_FAINT,
+    ),
+}
 
 
 SPECS = {

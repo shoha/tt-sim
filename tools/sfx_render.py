@@ -40,6 +40,11 @@ PEAK_WINDOW_DBFS = (-4.0, -2.0)
 
 DURATION_TOLERANCE = 0.2
 
+# A loop's seam (its last sample to its first) may step at most this many times
+# the RMS step between neighbouring samples: no larger than the steps a fire
+# makes anywhere else, so the seam never clicks.
+LOOP_SEAM_MAX_RATIO = 4.0
+
 
 def render_spec(spec: SoundSpec, seed: int = 0) -> list[float]:
     """Render one sound to peak-normalized mono samples."""

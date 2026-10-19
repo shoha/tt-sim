@@ -36,8 +36,12 @@ class TestPaletteCoverage(unittest.TestCase):
     """
 
     def test_every_spec_has_exactly_one_installed_file(self):
-        expected = {(spec.bus, name) for name, spec in sfx_spec.SPECS.items()}
+        every = {**sfx_spec.SPECS, **sfx_spec.RECORDINGS}
+        expected = {(spec.bus, name) for name, spec in every.items()}
         self.assertEqual(_installed_wavs(), expected)
+
+    def test_recordings_and_synthesized_sounds_never_share_a_name(self):
+        self.assertEqual(set(sfx_spec.SPECS) & set(sfx_spec.RECORDINGS), set())
 
     def test_committed_manifest_matches_the_spec(self):
         with open(generate_sfx.manifest_path(REPO_ROOT), "r", encoding="utf-8") as handle:
@@ -79,6 +83,22 @@ class TestPlaybackFields(unittest.TestCase):
                 continue
             self.assertLessEqual(spec.pitch_jitter, 1.0, name)
             self.assertGreaterEqual(spec.pitch_jitter, 0.0, name)
+
+    def test_the_roar_is_an_ambience_under_the_token_sounds(self):
+        roar = sfx_spec.RECORDINGS["fire_roar"]
+        self.assertEqual(roar.bus, "sfx")
+        self.assertLess(roar.volume_db, sfx_spec.SPECS["token_drop"].volume_db)
+        self.assertTrue(generate_sfx.build_manifest()["fire_roar"]["loop"])
+
+    def test_every_recording_keeps_its_provenance(self):
+        # CC0 asks for no credit; the row in THIRD_PARTY_LICENSES.md and these
+        # fields keep where the sound came from anyway.
+        for name, loop in sfx_spec.RECORDINGS.items():
+            self.assertTrue(loop.url.startswith("https://"), name)
+            self.assertTrue(loop.author and loop.title and loop.licence, name)
+            self.assertTrue(loop.source.endswith(".wav"), name)
+            self.assertLess(loop.start_s, loop.end_s, name)
+            self.assertLess(loop.crossfade_ms / 1000.0, (loop.end_s - loop.start_s) / 2.0, name)
 
     def test_cooldowns_are_short_and_non_negative(self):
         for name, spec in sfx_spec.SPECS.items():

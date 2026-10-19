@@ -66,7 +66,7 @@ def attack_time_ms(
 
 
 def high_band_ratio_db(
-    samples: Sequence[float], cutoff_hz: float = 6000.0
+    samples: Sequence[float], cutoff_hz: float = 6000.0, sample_rate: int = SAMPLE_RATE
 ) -> float:
     """RMS of the high-passed signal relative to the full-band RMS, in dB.
 
@@ -84,7 +84,8 @@ def high_band_ratio_db(
     full = rms(samples)
     if full == 0.0:
         return float("-inf")
-    high = rms(one_pole_hp(one_pole_hp(samples, cutoff_hz), cutoff_hz))
+    once = one_pole_hp(samples, cutoff_hz, sample_rate)
+    high = rms(one_pole_hp(once, cutoff_hz, sample_rate))
     if high == 0.0:
         return float("-inf")
     return 20.0 * math.log10(high / full)
@@ -93,3 +94,19 @@ def high_band_ratio_db(
 def duration_ms(samples: Sequence[float], sample_rate: int = SAMPLE_RATE) -> float:
     """Length of the buffer in milliseconds."""
     return len(samples) * 1000.0 / sample_rate
+
+
+def loop_seam_ratio(samples: Sequence[float]) -> float:
+    """How far a loop steps at its seam, from its last sample back to its first,
+    over the RMS step between neighbouring samples inside it.
+
+    A seamless loop's seam is one more step like any other (a ratio near 1); a
+    loop cut from a longer recording jumps there, which the ear hears as a
+    click on every repeat.
+    """
+    if len(samples) < 3:
+        return 0.0
+    typical = rms([b - a for a, b in zip(samples, samples[1:])])
+    if typical == 0.0:
+        return 0.0
+    return abs(samples[0] - samples[-1]) / typical
