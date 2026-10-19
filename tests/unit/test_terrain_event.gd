@@ -91,6 +91,117 @@ func test_decode_refuses_what_is_out_of_bounds() -> void:
 	assert_null(TerrainEvent.decode(fire), "a fire past the radius bound")
 
 
+## A fire path of `n` points `step` metres apart along x from (-10, 2), resampled as
+## IgniteMode makes one when `step` is 0 (a 30 m curve).
+func _path(n: int = 0, step: float = 1.0) -> PackedVector2Array:
+	if n > 0:
+		var line := PackedVector2Array()
+		for i in n:
+			line.append(Vector2(-10.0 + step * i, 2.0))
+		return line
+	var drawn := PackedVector2Array([Vector2(-10, 2), Vector2(0, 6), Vector2(10, 0), Vector2(18, 3)])
+	var smooth := StrokePath.smooth_line(drawn)
+	return StrokePath.resample(smooth, StrokePath.MAX_POINTS, StrokePath.MIN_SPACING_M)
+
+
+## A fire path's bytes: the header with the point count in place of the crossing id, then the
+## points; it round-trips, a circle stays 32 bytes, and the longest path is 544.
+func test_a_fire_path_round_trips_through_its_bytes() -> void:
+	var line := _path()
+	var event := TerrainEvent.fire_path(line, 2.5, 4242)
+	event.table_key = 0x7FFF0002
+	var bytes := event.encode()
+	assert_eq(bytes.size(), TerrainEvent.EVENT_BYTES + TerrainEvent.POINT_BYTES * line.size())
+	assert_eq(bytes.decode_u16(2), line.size(), "the point count in the crossing id's place")
+	var back := TerrainEvent.decode(bytes)
+	assert_not_null(back, "a path is an event: %s" % TerrainEvent.problem_of(bytes))
+	if back == null:
+		return
+	assert_true(back.is_path())
+	assert_eq(back.path, line, "every point, in order")
+	assert_eq(back.centre, line[0], "it catches at its first point")
+	assert_eq(back.radius_m, 2.5)
+	assert_eq(back.crossing_id, 0)
+	assert_eq(back.table_key, event.table_key)
+	var length := StrokePath.line_length(line)
+	var spread := clampf(length / TerrainEvent.PATH_SPEED_MPS, 1.0, 3.5)
+	assert_almost_eq(back.duration_s, spread + TerrainEvent.PATH_TAIL_S, 0.0001)
+	assert_lt(back.duration_s, TerrainEvent.MAX_PATH_DURATION_S, "under 6 s")
+	assert_almost_eq(TerrainEvent.path_spread(64.0), 3.5, 0.0001, "the longest front is held")
+	assert_almost_eq(TerrainEvent.path_spread(3.0), 1.0, 0.0001, "and the shortest")
+	assert_eq(TerrainEvent.fire_path(line, 9.0, 1).radius_m, TerrainEvent.MAX_PATH_RADIUS_M)
+	assert_eq(TerrainEvent.fire_path(line, 0.2, 1).radius_m, TerrainEvent.MIN_PATH_RADIUS_M)
+	assert_eq(TerrainEvent.fire(Vector2.ZERO, 5.0, 1).encode().size(), 32, "a circle: 32 bytes")
+	var longest := TerrainEvent.fire_path(_path(TerrainEvent.MAX_PATH_POINTS, 1.0), 6.0, 3)
+	var most := longest.encode()
+	assert_eq(most.size(), 544, "the longest path")
+	assert_eq(TerrainEvent.MAX_EVENT_BYTES, 544)
+	assert_not_null(TerrainEvent.decode(most), TerrainEvent.problem_of(most))
+	assert_true(TerrainEvent.is_event_size(32))
+	assert_true(TerrainEvent.is_event_size(544))
+	assert_false(TerrainEvent.is_event_size(33), "whole points only")
+	assert_false(TerrainEvent.is_event_size(552), "no more than 64 points")
+	var rect := event.bounds()
+	assert_true(rect.has_point(line[-1]) and rect.has_point(line[0]), "the whole path in bounds")
+
+
+## The bytes of a 3-point path fire with `at` (byte offset) set to `value`.
+func _path_with(at: int, value: float) -> PackedByteArray:
+	var bytes := TerrainEvent.fire_path(_path(3, 1.0), 2.0, 1).encode()
+	bytes.encode_float(at, value)
+	return bytes
+
+
+func test_decode_refuses_a_path_out_of_bounds() -> void:
+	var first := TerrainEvent.EVENT_BYTES
+	var fall := _sample().encode()
+	fall.encode_u16(2, 2)
+	fall.append_array(TerrainEvent.fire_path(_path(2, 1.0), 2.0, 1).encode().slice(first))
+	var one := TerrainEvent.fire_path(_path(2, 1.0), 2.0, 1).encode().slice(0, first + 8)
+	one.encode_u16(2, 1)
+	var many := TerrainEvent.fire_path(_path(65, 0.9), 2.0, 1).encode()
+	var short := TerrainEvent.fire_path(_path(3, 1.0), 2.0, 1).encode().slice(0, first + 16)
+	var cases := {
+		"points on a forest fall": fall,
+		"one point": one,
+		"65 points": many,
+		"a length other than 32 + 8n": short,
+		"a nan point": _path_with(first + 8, NAN),
+		"an infinite point": _path_with(first + 12, INF),
+		"a point off any map": _path_with(first + 16, TerrainEvent.MAX_COORD_M * 2.0),
+		"a step under 5 cm": _path_with(first + 8, -10.01),
+		"a step over 4 m": _path_with(first + 16, -3.0),
+		"a narrow path": _path_with(16, 0.5),
+		"a wide path": _path_with(16, TerrainEvent.MAX_PATH_RADIUS_M + 0.5),
+		"a long path duration": _path_with(20, TerrainEvent.MAX_PATH_DURATION_S + 0.5),
+		"a short path duration": _path_with(20, 0.2),
+		"a path over 64 m": TerrainEvent.fire_path(_path(20, 3.9), 2.0, 1).encode(),
+	}
+	for label: String in cases:
+		var bytes: PackedByteArray = cases[label]
+		assert_ne(TerrainEvent.problem_of(bytes), "", "%s is refused" % label)
+		assert_null(TerrainEvent.decode(bytes), "%s decodes to nothing" % label)
+	assert_eq(TerrainEvent.problem_of(_path_with(16, 6.0)), "", "6 m is the widest path")
+	assert_eq(TerrainEvent.problem_of(_path_with(20, 5.9)), "", "a path may last nearly 6 s")
+	# A circle keeps its own bounds: wider than a path, never past 4 s.
+	var circle := TerrainEvent.fire(Vector2.ZERO, 12.0, 1).encode()
+	assert_eq(TerrainEvent.problem_of(circle), "", "a 12 m circle")
+	circle.encode_float(20, 5.0)
+	assert_ne(TerrainEvent.problem_of(circle), "", "a circle over 4 s")
+
+
+## Two events' lines: a circle's is its centre; the busy check measures between them.
+func test_events_measure_between_their_lines() -> void:
+	var line := _path(11, 1.0)
+	var path := TerrainEvent.fire_path(line, 2.0, 1)
+	var near := TerrainEvent.fire(Vector2(-5.0, 5.0), 3.0, 1)
+	var far := TerrainEvent.fire(Vector2(-30.0, 2.0), 3.0, 1)
+	assert_almost_eq(path.distance_to(near), 3.0, 0.001, "to the line, not its start")
+	assert_almost_eq(near.distance_to(path), 3.0, 0.001)
+	assert_almost_eq(path.distance_to(far), 20.0, 0.001)
+	assert_almost_eq(near.distance_to(far), Vector2(-5, 5).distance_to(Vector2(-30, 2)), 0.001)
+
+
 func test_a_client_hears_an_event_and_the_host_ignores_one() -> void:
 	var game_sync := NetworkManager.game_sync
 	watch_signals(game_sync)
@@ -103,6 +214,12 @@ func test_a_client_hears_an_event_and_the_host_ignores_one() -> void:
 	assert_signal_not_emitted(game_sync, "terrain_event_received", "a wrong length is dropped")
 	game_sync._rpc_terrain_event(bytes)
 	assert_signal_emitted_with_parameters(game_sync, "terrain_event_received", [bytes])
+	var path := TerrainEvent.fire_path(_path(), 2.0, 5).encode()
+	game_sync._rpc_terrain_event(path)
+	assert_signal_emitted_with_parameters(game_sync, "terrain_event_received", [path])
+	assert_signal_emit_count(game_sync, "terrain_event_received", 2)
+	game_sync._rpc_terrain_event(path.slice(0, path.size() - 3))
+	assert_signal_emit_count(game_sync, "terrain_event_received", 2, "a broken point is dropped")
 
 
 func test_only_the_host_broadcasts_an_event() -> void:

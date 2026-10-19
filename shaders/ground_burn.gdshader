@@ -22,6 +22,12 @@ shader_type spatial;
 // the water's priority), so nothing drawn later is painted over. Linear colours, shown through
 // the filmic tonemap (FireSweep's header).
 //
+// Along a path (path_count of 2 or more, GroundBurn.setup_path) the front runs along the line:
+// a point's reach is its arc length to the nearest point of the path, lobed the same way, and
+// past the path's half-width (lobed too) it does not burn, so the same dry band and ragged
+// edge run along both sides and round both ends. The ground's height there is the line's,
+// so a long path over a slope keeps to the ground.
+//
 // Its noise is glow_noise's integer hash (card F4b-5): fire_noise's float hash, at the inputs
 // the fire's offset gives here (up to about 90), hashed a lattice point differently from the
 // cells either side of it, so the specks, the smoulder and the band's breaks came out as
@@ -46,6 +52,13 @@ uniform float elapsed = 0.0;
 uniform float glow = 0.0;
 uniform float fade = 1.0;
 uniform float half_height = 1.5;
+// A path: its points in the fire's frame (x, z metres from its first point; z holds the arc
+// length there, w the ground's height in the box's frame), how many there are (0: a circle),
+// its half-width, and where the box's centre lies in the fire's frame.
+uniform vec4 path_points[64];
+uniform int path_count = 0;
+uniform float path_width = 1.0;
+uniform vec2 frame_offset = vec2(0.0);
 
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 // The ragged edge: a finer noise (blobs this many metres across) moving the front this far.
@@ -90,24 +103,57 @@ float tone(float edge, float v) {
 	return smoothstep(edge - 0.05, edge + 0.05, v);
 }
 
+// The path's point nearest `p` (the fire's frame): x its arc length, y the distance to it, z
+// the ground's height there (FirePath.project).
+vec3 along_path(vec2 p) {
+	float best = 1e12;
+	vec3 on_line = vec3(0.0);
+	for (int i = 0; i < path_count - 1; i++) {
+		vec4 a = path_points[i];
+		vec4 c = path_points[i + 1];
+		vec2 ab = c.xy - a.xy;
+		float t = clamp(dot(p - a.xy, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0);
+		vec2 q = p - a.xy - ab * t;
+		float d2 = dot(q, q);
+		if (d2 < best) {
+			best = d2;
+			on_line = vec3(mix(a.z, c.z, t), 0.0, mix(a.w, c.w, t));
+		}
+	}
+	on_line.y = sqrt(best);
+	return on_line;
+}
+
 void fragment() {
 	float depth = texture(depth_texture, SCREEN_UV).r;
 	vec4 view = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, depth, 1.0);
 	vec3 world = (INV_VIEW_MATRIX * vec4(view.xyz / view.w, 1.0)).xyz;
 	vec3 facet = normalize(cross(dFdx(world), dFdy(world)));
 	vec3 local = (inverse(MODEL_MATRIX) * vec4(world, 1.0)).xyz;
+	vec2 p = local.xz + frame_offset;
+	// The height over the burn's ground: the box's middle, or along a path the line's ground.
+	float up = local.y;
+	vec3 on_line = vec3(0.0);
+	if (path_count > 1) {
+		on_line = along_path(p);
+		up = local.y - on_line.z;
+	}
 	// Only the ground and what stands low on it: within the box's height, and off steep faces
 	// above LOW_M (the trunks and crowns burn by their own shader).
-	float low = 1.0 - smoothstep(LOW_M * 0.6, LOW_M, local.y);
+	float low = 1.0 - smoothstep(LOW_M * 0.6, LOW_M, up);
 	float upright = max(smoothstep(0.2, 0.5, abs(facet.y)), low);
-	float keep = fade * (1.0 - smoothstep(half_height * 0.7, half_height, abs(local.y))) * upright;
+	float keep = fade * (1.0 - smoothstep(half_height * 0.7, half_height, abs(up))) * upright;
 	if (depth < 0.0001 || keep < 0.002) {
 		discard;
 	}
-	vec2 p = local.xz;
-	// Metres behind the front (above 0 burnt): the lobed reach, ragged.
-	float reach = length(p) - lobe_m * (lobes(p) - 0.5);
-	float b = front - reach + (glow_noise(p / RAG_BLOB_M + lobe_offset * 3.0) - 0.5) * RAG_M;
+	// Metres behind the front (above 0 burnt): the lobed reach, ragged. Along a path, behind the
+	// front along the line and inside its half-width, whichever is nearer its edge.
+	float wobble = lobe_m * (lobes(p) - 0.5);
+	float behind_front = front - (length(p) - wobble);
+	if (path_count > 1) {
+		behind_front = min(front - (on_line.x - wobble), path_width * 1.05 - (on_line.y - wobble));
+	}
+	float b = behind_front + (glow_noise(p / RAG_BLOB_M + lobe_offset * 3.0) - 0.5) * RAG_M;
 	vec3 ground = texture(screen_texture, SCREEN_UV).rgb;
 	float luma = dot(ground, LUMA);
 

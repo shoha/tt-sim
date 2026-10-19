@@ -237,7 +237,7 @@ func send_live_edit_log(peer_id: int, table_key: int, ops: Array[PackedByteArray
 ## edit outbox so it never overtakes an op queued before it (the crossing it takes down is
 ## there when it arrives), reliable.
 func broadcast_terrain_event(bytes: PackedByteArray) -> void:
-	if not NetworkManager.is_host() or bytes.size() != TerrainEvent.EVENT_BYTES:
+	if not NetworkManager.is_host() or not TerrainEvent.is_event_size(bytes.size()):
 		return
 	_live_outbox.push(func() -> void: _rpc_terrain_event.rpc(bytes), bytes.size())
 	_live_outbox.drain(0.0)
@@ -433,11 +433,12 @@ func _rpc_live_edit_log(table_key: int, count: int) -> void:
 	live_edit_log_received.emit(table_key, count)
 
 
-## RPC: a terrain event started (host -> clients). Anything but an event's length is dropped
-## here; TerrainEvent.decode checks the rest where it is played.
+## RPC: a terrain event started (host -> clients). Anything but an event's length (its header
+## and whole path points, TerrainEvent.is_event_size) is dropped here; TerrainEvent.decode
+## checks the rest where it is played.
 @rpc("authority", "reliable")
 func _rpc_terrain_event(bytes: PackedByteArray) -> void:
-	if NetworkManager.is_host() or bytes.size() != TerrainEvent.EVENT_BYTES:
+	if NetworkManager.is_host() or not TerrainEvent.is_event_size(bytes.size()):
 		return
 	terrain_event_received.emit(bytes)
 
