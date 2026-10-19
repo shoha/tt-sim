@@ -48,7 +48,10 @@ const RIBBON_ALPHA_DOWN := 0.34
 ## none), the chevrons' colour, alpha and width over their shadow, round caps at both ends
 ## (`caps`: the edge runs round them as one outline; the river's ends are cut square), and the
 ## fill's light (`fill_gain`: 0 a plain fill; above 0 the fill's colours lit_fill() by that gain,
-## for a premultiplied-alpha canvas item, draw_ribbon()'s `fill_item`). Another brush passes only
+## for a premultiplied-alpha canvas item, draw_ribbon()'s `fill_item`), and the fill's coverage
+## across the band (`fill_profile`: [offset, coverage] pairs from the edge, offset 1, in to
+## the centre line, offset 0, each coverage scaling the fill's alpha there, mirrored about the
+## centre; empty: the river's even fill, edge to edge, fill_row()). Another brush passes only
 ## the keys it changes (FireBrush's line).
 const RIBBON_STYLE := {
 	"alpha_up": RIBBON_ALPHA_UP,
@@ -69,6 +72,7 @@ const RIBBON_STYLE := {
 	"chevron_shadow_width": 3.5,
 	"caps": false,
 	"fill_gain": 0.0,
+	"fill_profile": [],
 }
 ## A round cap's half circle, in segments.
 const CAP_SEGMENTS := 12
@@ -371,7 +375,12 @@ static func draw_ribbon(
 	style: Dictionary = {},
 	fill_item: RID = RID()
 ) -> void:
-	var shape := ribbon(ground, line, radius, tint, strength, arrows, style)
+	draw_shape(canvas, ribbon(ground, line, radius, tint, strength, arrows, style), fill_item)
+
+
+## Draws a ribbon() `shape` (or one built on it) on `canvas`: the fill's triangles on
+## `fill_item` when valid, else on the canvas, then its lines in order. Nothing for {}.
+static func draw_shape(canvas: Control, shape: Dictionary, fill_item: RID = RID()) -> void:
 	if shape.is_empty():
 		return
 	RenderingServer.canvas_item_add_triangle_array(
@@ -404,6 +413,8 @@ static func ribbon(
 	var look := RIBBON_STYLE.merged(style, true)
 	var alpha_up: float = look.alpha_up
 	var alpha_down: float = look.alpha_down
+	var row := fill_row(look.fill_profile)
+	var width := row.size()
 	var total := line_length(line)
 	var points := PackedVector2Array()
 	var colors := PackedColorArray()
@@ -426,46 +437,31 @@ static func ribbon(
 			world_r = last_r
 		last_l = world_l
 		last_r = world_r
-		var l: Vector2 = ground.call(world_l)
-		var r: Vector2 = ground.call(world_r)
-		left.append(l)
-		right.append(r)
-		points.append(l)
-		points.append(r)
 		var alpha := lerpf(alpha_up, alpha_down, walked / maxf(total, 0.001))
-		var fill := Color(tint, alpha * strength)
-		if float(look.fill_gain) > 0.0:
-			fill = lit_fill(fill, look.fill_gain)
-		colors.append(fill)
-		colors.append(fill)
+		for step: Array in row:
+			var offset: float = step[0]
+			var world := world_l if offset > 0.0 else world_r
+			if absf(offset) < 1.0:
+				world = line[i] + (world - line[i]) * absf(offset)
+			points.append(ground.call(world))
+			var fill := Color(tint, alpha * strength * float(step[1]))
+			if float(look.fill_gain) > 0.0:
+				fill = lit_fill(fill, look.fill_gain)
+			colors.append(fill)
+		left.append(points[width * i])
+		right.append(points[width * i + width - 1])
 	var indices := PackedInt32Array()
 	for i in n - 1:
-		var a := 2 * i
-		indices.append_array([a, a + 1, a + 2, a + 1, a + 3, a + 2])
+		for k in width - 1:
+			var a := width * i + k
+			indices.append_array([a, a + 1, a + width, a + 1, a + width + 1, a + width])
 	var sides: Array = [left, right]
 	if look.caps:
-		# A fan round each end, from the band's last left and right points (the end's) and
-		# its first right and left (the start's); the edge then runs round as one outline.
-		var ends := [
-			[line[n - 1], line[n - 1] - line[n - 2], 2 * n - 2, 2 * n - 1, colors[2 * n - 1]],
-			[line[0], line[0] - line[1], 1, 0, colors[0]],
-		]
-		var arcs: Array[PackedVector2Array] = []
-		for end: Array in ends:
-			var tip: Vector2 = end[0]
-			var forward: Vector2 = end[1]
-			var arc := _cap_arc(ground, tip, forward.normalized(), radius)
-			arcs.append(arc)
-			var centre := points.size()
-			points.append(ground.call(tip))
-			colors.append(end[4])
-			var previous: int = end[2]
-			for p in arc:
-				points.append(p)
-				colors.append(end[4])
-				indices.append_array([centre, previous, points.size() - 1])
-				previous = points.size() - 1
-			indices.append_array([centre, previous, end[3]])
+		var capped := _with_caps(ground, line, radius, row, points, colors, indices)
+		points = capped.points
+		colors = capped.colors
+		indices = capped.indices
+		var arcs: Array = capped.arcs
 		var outline := left.duplicate()
 		outline.append_array(arcs[0])
 		var back := right.duplicate()
@@ -515,6 +511,93 @@ static func lit_fill(fill: Color, gain: float) -> Color:
 	var lit := fill * (fill.a * gain)
 	lit.a = fill.a
 	return lit
+
+
+## The fill's row across the band, left edge to right: [offset, coverage] pairs, the offset
+## signed (1 the left edge, -1 the right, 0 the centre line), from `profile` (RIBBON_STYLE's
+## fill_profile, edge in to centre) mirrored about the centre; an empty profile is the river's
+## two edges at full coverage. Pure.
+static func fill_row(profile: Array) -> Array:
+	var half: Array = [[1.0, 1.0]] if profile.is_empty() else profile
+	var row: Array = []
+	for step: Array in half:
+		row.append([float(step[0]), float(step[1])])
+	for k in range(half.size() - 1, -1, -1):
+		if float(half[k][0]) > 0.0:
+			row.append([-float(half[k][0]), float(half[k][1])])
+	return row
+
+
+## The band's arrays with a round cap at each end (ribbon()'s caps): per end, a ring of
+## CAP_SEGMENTS - 1 arc points for every offset of `row` off the centre line, from that offset's
+## point on one side of the end's row round to the other, strips between the rings and a fan to
+## the centre (the row's centre point, or a new one at the tip when the row has none). Every
+## ring takes its row point's colour, so a fill_profile's coverage runs round the end too.
+## Returns the new "points", "colors" and "indices" and "arcs" (each end's outer arc, the end's
+## then the start's). Pure but for `ground`.
+static func _with_caps(
+	ground: Callable,
+	line: PackedVector2Array,
+	radius: float,
+	row: Array,
+	band_points: PackedVector2Array,
+	band_colors: PackedColorArray,
+	band_indices: PackedInt32Array
+) -> Dictionary:
+	var points := band_points.duplicate()
+	var colors := band_colors.duplicate()
+	var indices := band_indices.duplicate()
+	var n := line.size()
+	var width := row.size()
+	var rings_n := 0
+	var middle := -1
+	for k in width:
+		if float(row[k][0]) > 0.0:
+			rings_n += 1
+		elif float(row[k][0]) == 0.0:
+			middle = k
+	# The end's row runs left to right round its cap; the start's, seen from outside, right to
+	# left.
+	var ends := [
+		[line[n - 1], line[n - 1] - line[n - 2], width * (n - 1), false],
+		[line[0], line[0] - line[1], 0, true],
+	]
+	var arcs: Array = []
+	for end: Array in ends:
+		var tip: Vector2 = end[0]
+		var forward: Vector2 = (end[1] as Vector2).normalized()
+		var base: int = end[2]
+		var flip: bool = end[3]
+		var centre := base + middle
+		if middle < 0:
+			centre = points.size()
+			points.append(ground.call(tip))
+			colors.append(colors[base + rings_n - 1])
+		var rings: Array[PackedInt32Array] = []
+		for k in rings_n:
+			var from := base + (width - 1 - k if flip else k)
+			var ring := PackedInt32Array([from])
+			var offset: float = row[k][0]
+			var arc := _cap_arc(ground, tip, forward, radius if offset >= 1.0 else radius * offset)
+			if k == 0:
+				arcs.append(arc)
+			for p in arc:
+				ring.append(points.size())
+				points.append(p)
+				colors.append(colors[from])
+			ring.append(base + (k if flip else width - 1 - k))
+			rings.append(ring)
+		for k in rings_n - 1:
+			var outer := rings[k]
+			var inner := rings[k + 1]
+			for j in outer.size() - 1:
+				indices.append_array(
+					[outer[j], outer[j + 1], inner[j], outer[j + 1], inner[j + 1], inner[j]]
+				)
+		var last := rings[rings_n - 1]
+		for j in last.size() - 1:
+			indices.append_array([centre, last[j], last[j + 1]])
+	return {"points": points, "colors": colors, "indices": indices, "arcs": arcs}
 
 
 ## The half circle round a ribbon's end at world XZ `centre`, bulging toward `forward` (a unit
