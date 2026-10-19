@@ -207,20 +207,22 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   in a 720 px view, scaled to the view's height, F5g), the fill
   on the cursor's premultiplied glow layer (`BrushCursor.glow_item`, `LineRibbon.lit_fill`),
   every colour in the scene's light (0.75 of itself under a sun 6 degrees or more below the
-  horizon, full from the horizon up). A tool passes only a style, as data over
-  `LineRibbon.STYLE`: the river's `WaterBrush.RIBBON_STYLE` is its pale blue with the even
-  translucent fill (faint upstream; blue at partial coverage reads as water over any ground);
-  the fire line's `FireBrush.LAY_STYLE` is persimmon rails at both edges on an ember glow, lit
-  (gain 1.7), the rails held out to 0.62 radii and falling to clear within 0.08 radii, so the
-  orange stays solid and the ground shows unmixed down the middle (orange at partial coverage
-  over green turns olive, so the half-covered fall is a thin seam; card F5d's variant C, F5f).
-  The two erase ribbons share `LineRibbon.erase_style`: the erase salmon
-  (`BrushCursor.CLEAR_TINT`) on the edge and glow over the erase's ink (INK at 0.85, the erase
-  ring's own, `BrushCursor.ring_strokes`, so every erase line holds 3:1 over pale water and
-  bright flames), the lay's chevrons exactly (glyph, weights, ink) with only their colour
-  salmon, and no wash, so what goes shows through untouched (a wash at half coverage hid the
-  water and greyed the flames to mud, F5f; even at 0.08 to 0.14 a salmon wash pulled the river's
-  blue toward grey and the light lake cooled the flames, F5g). The pane's Shape tiles
+  horizon, full from the horizon up). The river and the fire line are one look in two hues
+  (card F5h; user, 2026-10-18): each passes only its hue (`LineRibbon.TINT_KEYS`: the river's
+  `WaterBrush.RIBBON_HUE` lake with a light lake glow, the fire's `FireBrush.LAY_HUE` persimmon
+  with an ember glow) over one of `LineRibbon.FILLS`, the same for both (`LineRibbon.lay_style`;
+  `fill` on each brush, `"rails"` by default): `rails` is card F5d's variant C, the coverage
+  high at both edges, lit (gain 1.7), held out to 0.62 radii and falling to clear within 0.08
+  radii, so the hue stays solid and the ground shows unmixed down the middle; `even` is the
+  river's old even translucent band, faint upstream. Every line is the brush ring's stroke
+  (`BrushCursor.ring_strokes`: the colour 2.5 px over INK at 0.85 and 5.5 px on a glow of
+  it), the edge and the chevrons, lay and erase alike. Both erases pass the one
+  `LineRibbon.ERASE_STYLE`: the erase salmon (`BrushCursor.CLEAR_TINT`, #FFB6A8 since F5h, 3:1
+  on its ink over flames, ash, night water and bright grass) on the edge, glow and chevrons,
+  every weight the lay's, full colour at night as the erase ring, and no wash, so what goes
+  shows through untouched (a wash at half
+  coverage hid the water and greyed the flames to mud, F5f; even at 0.08 to 0.14 a salmon wash
+  pulled the river's blue toward grey and a light lake cooled the flames, F5g). The pane's Shape tiles
   (`ShapeField`), their icons and the hint
   bar's keys ("Draw a river" / "Draw a line of fire", Tab naming the other shape, Width) read
   alike. Comparison job: `firefeat_line_tool`.
@@ -234,7 +236,7 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   2026-10-16, see "Live edits"),
   `FireBrush` (two shapes since card F5, 2026-10-18: Area paints with Paint's falloff and
   dwell; Line is the line tool the river is, see "The line tool" below, in the fire line's
-  style `FireBrush.LAY_STYLE`) at the width its fire will stand in, which the ring
+  hue `FireBrush.LAY_HUE`) at the width its fire will stand in, which the ring
   shows too (`FireBrush.line_reach`: where the soft falloff's mask passes the flames band,
   about 0.73 of the brush radius at Blaze and full strength, 0.81 at strength 2), and on
   release lays it with `FireBrush.lay_line`: resampled every 0.25 brush radii and dabbed as

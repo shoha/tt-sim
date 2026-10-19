@@ -97,16 +97,16 @@ func draw_cursor(brush: BrushTool, cursor: BrushCursor) -> void:
 	var editor := brush.editor
 	if not _hover.is_empty() and _placing.is_empty():
 		var centre := editor.prop_position(_hover)
-		cursor.draw_flat_ring(centre, float(_hover.get("radius", 1.0)), BrushCursor.PLACE_TINT, 2.5)
+		cursor.draw_flat_ring(centre, float(_hover.get("radius", 1.0)), BrushCursor.PLACE_TINT)
 		return
 	if not _placing.is_empty():
 		var at := editor.prop_position(_placing)
-		cursor.draw_flat_ring(at, PLACE_MARKER_M, BrushCursor.PLACE_TINT, 2.0)
+		cursor.draw_flat_ring(at, PLACE_MARKER_M, BrushCursor.PLACE_TINT)
 		return
 	var tint := BrushCursor.PLACE_TINT
 	if not rule.is_empty() and editor.footing_drop(rule, brush.hit) > PLACE_DROP_WARN_M:
 		tint = BrushCursor.CLEAR_TINT
-	cursor.draw_flat_ring(brush.hit, PLACE_MARKER_M, Color(tint, 0.8), 1.5)
+	cursor.draw_flat_ring(brush.hit, PLACE_MARKER_M, tint)
 
 
 ## Once the pointer has moved TURN_START_PX from the press, the prop turns to face it.

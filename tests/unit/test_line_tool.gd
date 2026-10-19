@@ -1,15 +1,16 @@
 extends GutTest
 
 ## The line tool Water's River and Fire's Line share (card F5e): one ribbon (LineRibbon) built
-## from a style, and one gesture (LineGesture). The styles change only shared keys, and the
-## river's and the fire line's differ only in their tint and fill; the builder makes both
-## ribbons with the same caps, edge, outline and chevrons, a chevron keeping its glyph at any
-## zoom and never growing past its look at the reference zoom; the fire's rails fall to clear in
-## a thin seam; the two erase ribbons share one structure with no wash, their chevrons the lay's
-## with only the colour salmon (card F5g); every ribbon takes
-## the scene's light; and both brushes record at one spacing, drop their line on Esc and stay
-## armed, make nothing of a line under the minimum length, and read their chips alike (card F5f:
-## "<shape>  <setting>  <length>", "<erase>  <length>").
+## from a style, and one gesture (LineGesture). The river and the fire line are one look in two
+## hues (card F5h; user, 2026-10-18): their styles are equal key for key but the tint keys,
+## under either fill (LineRibbon.FILLS), the rails by default; every line is the ring's stroke
+## (BrushCursor.ring_strokes); a chevron keeps its glyph at any zoom and never grows past its
+## look at the reference zoom, lay and erase alike; the rails fall to clear in a thin seam; both
+## erases are one style with no wash, their lines the lay's at the lay's weights with only the
+## colour salmon (cards F5g, F5h); every ribbon takes the scene's light; and both brushes record
+## at one spacing, drop their line on Esc and stay armed, make nothing of a line under the
+## minimum length, and read their chips alike (card F5f: "<shape>  <setting>  <length>",
+## "<erase>  <length>").
 
 ## Published suns (FoliageLight.last_sun: xyz toward the sun, w its weight): the game's day
 ## (48 degrees up), outdoor_sunset's dusk (2.5 up) and outdoor_night (7.5 under the horizon).
@@ -17,9 +18,6 @@ const DAY := Vector4(0.0, 0.75, 0.66, 0.9)
 const DUSK := Vector4(0.0, 0.044, 0.999, 0.0)
 const NIGHT := Vector4(0.0, -0.13, 0.99, 0.0)
 const RADIUS := 2.0
-## The keys by which the river's style and the fire line's may differ: their meaning (the tint
-## and its glow, the fill's coverage and light). Every other key is the line tool's.
-const MEANING_KEYS := ["alpha_down", "alpha_up", "fill_gain", "fill_profile", "glow", "tint"]
 
 
 func _ground() -> Callable:
@@ -32,76 +30,113 @@ func _line() -> PackedVector2Array:
 
 func _styles() -> Array[Dictionary]:
 	var out: Array[Dictionary] = [
-		WaterBrush.RIBBON_STYLE,
-		FireBrush.LAY_STYLE,
-		LineRibbon.erase_style(WaterBrush.ERASE_INTERIOR),
-		FireBrush.new().put_out_style(),
+		WaterBrush.new().ribbon_style(),
+		FireBrush.new().lay_style(),
+		LineRibbon.lay_style(WaterBrush.RIBBON_HUE, "even"),
+		LineRibbon.lay_style(FireBrush.LAY_HUE, "even"),
+		LineRibbon.ERASE_STYLE,
 	]
 	return out
 
 
-## Every key a tool's style sets is one of STYLE's, and the river's and the fire line's differ
-## only where their meaning does.
-func test_the_style_tables_differ_only_by_meaning() -> void:
+## The keys of `style` over STYLE where `other` over STYLE differs, sorted.
+func _differing(style: Dictionary, other: Dictionary) -> Array:
+	var a := LineRibbon.STYLE.merged(style, true)
+	var b := LineRibbon.STYLE.merged(other, true)
+	var differs: Array = []
+	for key: String in LineRibbon.STYLE:
+		if typeof(a[key]) != typeof(b[key]) or a[key] != b[key]:
+			differs.append(key)
+	differs.sort()
+	return differs
+
+
+## Every key a tool's style sets is one of STYLE's, and the river's and the fire line's are
+## equal key for key but the tint keys, under either fill: every width, alpha, edge, glow, ink,
+## cap, chevron and fill profile one, only the hue differing (lake and persimmon, the theme's
+## paired ramps, at about one lightness). Both tools take the rails unless told otherwise.
+func test_the_river_and_the_fire_line_are_one_look_in_two_hues() -> void:
 	for style in _styles():
 		for key: String in style:
 			assert_true(LineRibbon.STYLE.has(key), "%s is a line tool key" % key)
-	var river := LineRibbon.STYLE.merged(WaterBrush.RIBBON_STYLE, true)
-	var fire := LineRibbon.STYLE.merged(FireBrush.LAY_STYLE, true)
-	var differs: Array = []
-	for key: String in LineRibbon.STYLE:
-		if typeof(river[key]) != typeof(fire[key]) or river[key] != fire[key]:
-			differs.append(key)
-	differs.sort()
-	assert_eq(differs, MEANING_KEYS)
-	assert_true(river.fill_profile.is_empty(), "the river keeps its even fill")
+	var tint_keys: Array = []
+	tint_keys.append_array(LineRibbon.TINT_KEYS)
+	tint_keys.sort()
+	for fill: String in LineRibbon.FILLS:
+		var water := WaterBrush.new()
+		var fire := FireBrush.new()
+		water.fill = fill
+		fire.fill = fill
+		var river := water.ribbon_style()
+		var line := fire.lay_style()
+		assert_eq(_differing(river, line), tint_keys, "only the hue differs (%s)" % fill)
+		for key: String in LineRibbon.TINT_KEYS:
+			var blue: Color = river[key]
+			var orange: Color = line[key]
+			assert_almost_eq(blue.ok_hsl_l, orange.ok_hsl_l, 0.1, "%s: one lightness" % key)
+	assert_eq(LineRibbon.FILL, "rails", "the rails by default (option R)")
+	assert_eq(WaterBrush.new().fill, LineRibbon.FILL)
+	assert_eq(FireBrush.new().fill, LineRibbon.FILL)
+	assert_eq(WaterBrush.RIBBON_HUE, {"tint": ThemeColors.LAKE, "glow": ThemeColors.LAKE_LIGHT})
+	assert_eq(FireBrush.LAY_HUE, {"tint": ThemeColors.PERSIMMON, "glow": ThemeColors.EMBER})
+	assert_eq(WaterBrush.TINT, WaterBrush.RIBBON_HUE.glow, "each ring in its line's glow")
+	assert_eq(FireBrush.TINT, FireBrush.LAY_HUE.glow, "each ring in its line's glow")
 	assert_true(LineRibbon.STYLE.caps, "round ends for every line")
 
 
 ## The river's ribbon and the fire line's are one shape: round caps, a closed edge over the
-## same ink outline on a glow, the same chalk chevrons at the same places; the river's fill
-## even and faint upstream, the fire's rails at the edges, lit, nearly clear down the middle.
+## ring's ink on a glow at the ring's weights, the same chalk chevrons at the same places; under
+## the rails both lit at the edges and nearly clear down the middle, under the even fill both
+## faint upstream and stronger down.
 func test_the_river_and_the_fire_line_build_one_shape() -> void:
 	var ground := _ground()
 	var line := _line()
-	var river := LineRibbon.ribbon(ground, line, 1.0, WaterBrush.RIBBON_STYLE)
-	var fire := LineRibbon.ribbon(ground, line, 1.0, FireBrush.LAY_STYLE)
+	var river := LineRibbon.ribbon(ground, line, 1.0, WaterBrush.new().ribbon_style())
+	var fire := LineRibbon.ribbon(ground, line, 1.0, FireBrush.new().lay_style())
 	var arc := LineRibbon.CAP_SEGMENTS - 1
+	var ring := BrushCursor.ring_strokes(ThemeColors.EMBER)
+	var width := LineRibbon.fill_row(LineRibbon.FILLS.rails.fill_profile).size()
+	assert_eq(width, 7, "the rails' row: edge to edge through the centre line")
 	for shape: Dictionary in [river, fire]:
 		assert_eq(shape.lines.size(), 3 + 2 * 3, "glow, outline and edge; three chevrons")
 		var outline: PackedVector2Array = shape.lines[0][0]
 		assert_eq(outline[0], outline[-1], "round ends: one closed outline")
-		assert_eq(shape.lines[1][1], Color(ThemeColors.INK, 0.55), "the edge on ink")
-		assert_eq(shape.lines[1][2], 4.5, "a pixel of ink either side of the edge")
-		assert_eq(shape.lines[2][2], 2.5, "the edge's weight")
-		assert_eq(shape.lines[-2][1], Color(ThemeColors.INK, 0.6), "each chevron on ink")
+		assert_eq(shape.lines[0][2], ring[0][1], "the ring's glow width")
+		assert_eq(float(shape.lines[0][1].a), float(ring[0][0].a), "at the ring's glow alpha")
+		assert_eq([shape.lines[1][1], shape.lines[1][2]], ring[1], "the ring's ink")
+		assert_eq(shape.lines[2][2], ring[2][1], "the ring's weight")
+		assert_eq(shape.lines[-2][1], Color(ThemeColors.INK, BrushCursor.INK_ALPHA), "on ink")
+		assert_eq(shape.lines[-2][2], BrushCursor.INK_WIDTH, "at the ring's ink width")
 		assert_eq(shape.lines[-1][1], Color(ThemeColors.CHALK, 0.95), "chalk chevrons")
+		assert_eq(shape.lines[-1][2], BrushCursor.LINE_WIDTH, "at the ring's weight")
+		assert_eq(shape.points.size(), width * line.size() + 2 * 3 * arc, "three rings each end")
+		assert_eq(shape.points[3], Vector2(0, 0), "the centre line runs down the middle")
+		var rail: Color = shape.colors[0]
+		assert_lt(float(shape.colors[3].a), 0.1 * rail.a, "nearly clear at the centre")
 	for k in 3:
 		assert_eq(river.lines[4 + 2 * k][0], fire.lines[4 + 2 * k][0], "the same chevron %d" % k)
-	assert_eq(river.lines[2][1], WaterBrush.TINT, "the river's edge in its blue")
-	assert_eq(river.lines[0][1], Color(WaterBrush.TINT, 0.3), "on a glow of it")
+	assert_eq(river.lines[2][1], ThemeColors.LAKE, "the river's edge in lake")
+	assert_eq(river.lines[0][1], Color(ThemeColors.LAKE_LIGHT, 0.3), "on a light lake glow")
 	assert_eq(fire.lines[2][1], ThemeColors.PERSIMMON, "the fire's in persimmon")
 	assert_eq(fire.lines[0][1], Color(ThemeColors.EMBER, 0.3), "on an ember glow")
-	assert_eq(river.points.size(), 2 * line.size() + 2 * (1 + arc), "a fan round each end")
-	assert_eq(river.indices.size(), 6 * (line.size() - 1) + 2 * 3 * (arc + 1))
-	var up: Color = river.colors[0]
-	assert_true(up.is_equal_approx(Color(WaterBrush.TINT * 0.12, 0.12)), "a plain blend")
-	assert_almost_eq(float(river.colors[2 * line.size() - 1].a), 0.34, 0.001, "stronger down")
-	assert_eq(river.points[0], Vector2(0, 10), "on the ground")
-	var width := LineRibbon.fill_row(FireBrush.LAY_STYLE.fill_profile).size()
-	assert_eq(width, 7, "the fire's row: edge to edge through the centre line")
-	assert_eq(fire.points.size(), width * line.size() + 2 * 3 * arc, "three rings each end")
-	assert_eq(fire.points[3], Vector2(0, 0), "the centre line runs down the middle")
-	var rail: Color = fire.colors[0]
-	assert_lt(float(fire.colors[3].a), 0.1 * rail.a, "nearly clear at the centre")
-	assert_gt(rail.r, ThemeColors.PERSIMMON.r * rail.a, "lit: brighter than a plain fill")
+	var lit: Color = fire.colors[0]
+	assert_gt(lit.r, ThemeColors.PERSIMMON.r * lit.a, "lit: brighter than a plain fill")
+	var even_style := LineRibbon.lay_style(WaterBrush.RIBBON_HUE, "even")
+	var even := LineRibbon.ribbon(ground, line, 1.0, even_style)
+	assert_eq(even.points.size(), 2 * line.size() + 2 * (1 + arc), "a fan round each end")
+	assert_eq(even.indices.size(), 6 * (line.size() - 1) + 2 * 3 * (arc + 1))
+	var up: Color = even.colors[0]
+	assert_true(up.is_equal_approx(Color(ThemeColors.LAKE * 0.12, 0.12)), "a plain blend")
+	assert_almost_eq(float(even.colors[2 * line.size() - 1].a), 0.34, 0.001, "stronger down")
+	assert_eq(even.points[0], Vector2(0, 10), "on the ground")
 
 
 ## A cap bulges a radius past each end, and its outline keeps to the band's rim.
 func test_the_ends_are_round() -> void:
 	var ground := func(p: Vector2) -> Vector2: return p
 	var line := PackedVector2Array([Vector2(0, 0), Vector2(4, 0), Vector2(8, 0)])
-	var shape := LineRibbon.ribbon(ground, line, 1.5, WaterBrush.RIBBON_STYLE)
+	var even_style := LineRibbon.lay_style(WaterBrush.RIBBON_HUE, "even")
+	var shape := LineRibbon.ribbon(ground, line, 1.5, even_style)
 	var arc := LineRibbon.CAP_SEGMENTS - 1
 	var tip: Vector2 = shape.points[2 * line.size() + 1 + floori(arc * 0.5)]
 	assert_almost_eq(tip.x, 9.5, 0.2, "the end bulges a radius past the pointer")
@@ -111,53 +146,50 @@ func test_the_ends_are_round() -> void:
 		assert_almost_eq(p.distance_to(Vector2(nearest, 0.0)), 1.5, 0.01, "on the band's rim")
 
 
-## The two erase ribbons are one structure: the lay's lines, the salmon edge and glow over the
-## erase's ink (the erase ring's, BrushCursor.ring_strokes), the chevrons the lay's exactly
-## (glyph, places, weights and ink) with only their colour salmon, and no wash: what an erase
-## covers shows through untouched (any wash shifted the water's blue or the flames', F5f, F5g).
+## The erase is one style for both tools (the river's erase and the fire's put-out preview
+## alike): the lay's lines at the lay's weights (the put-out's edge as heavy as the fire line's,
+## its ink the ring's), the edge and glow salmon, the chevrons the lay's exactly (glyph, places,
+## weights and ink) with only their colour salmon, and no wash: what an erase covers shows
+## through untouched (any wash shifted the water's blue or the flames', F5f, F5g).
 func test_the_erase_ribbons_share_one_structure() -> void:
 	var ground := _ground()
 	var line := _line()
-	var lay := LineRibbon.ribbon(ground, line, 1.5, FireBrush.LAY_STYLE)
-	var put_out := LineRibbon.ribbon(ground, line, 1.5, FireBrush.new().put_out_style())
-	var erase := LineRibbon.ribbon(
-		ground, line, 1.5, LineRibbon.erase_style(WaterBrush.ERASE_INTERIOR)
-	)
-	var ring := BrushCursor.ring_strokes(BrushCursor.CLEAR_TINT, 2.0)
-	for shape: Dictionary in [put_out, erase]:
-		assert_eq(shape.lines.size(), lay.lines.size(), "the lay's lines")
-		assert_eq(shape.lines[0][1], Color(BrushCursor.CLEAR_TINT, 0.3), "a salmon glow")
-		assert_eq([shape.lines[1][1], shape.lines[1][2]], ring[0], "the erase ring's ink")
-		assert_eq([shape.lines[2][1], shape.lines[2][2]], ring[1], "and its salmon line")
-		assert_eq(shape.lines[2][2], lay.lines[2][2], "as heavy as the lay's edge")
-		for k in range(3, lay.lines.size()):
-			assert_eq(shape.lines[k][0], lay.lines[k][0], "the lay's chevron glyph %d" % k)
-			assert_eq(shape.lines[k][2], lay.lines[k][2], "at the lay's weight %d" % k)
-		for k in range(3, lay.lines.size(), 2):
-			assert_eq(shape.lines[k][1], lay.lines[k][1], "on the lay's ink %d" % k)
-			var salmon := Color(BrushCursor.CLEAR_TINT, float(lay.lines[k + 1][1].a))
-			assert_eq(shape.lines[k + 1][1], salmon, "only the chevron's colour salmon %d" % k)
-		for c: Color in shape.colors:
-			assert_eq(c.a, 0.0, "no wash: what goes shows through untouched")
-	var ink: Color = ring[0][0]
-	assert_true(ink.is_equal_approx(Color(ThemeColors.INK, ink.a)), "ink")
-	assert_gte(ink.a, 0.8, "strong enough for 3:1 over flames and pale water")
-	var plain := BrushCursor.ring_strokes(WaterBrush.TINT, 2.0)
-	assert_eq(plain[1], [WaterBrush.TINT, 2.0], "a lay's ring keeps its own line")
+	var erase := LineRibbon.ribbon(ground, line, 1.5, LineRibbon.ERASE_STYLE)
+	var salmon := BrushCursor.CLEAR_TINT
+	var ring := BrushCursor.ring_strokes(salmon)
+	assert_eq(erase.lines[0][1], ring[0][0], "the erase ring's salmon glow")
+	assert_eq([erase.lines[1][1], erase.lines[1][2]], ring[1], "the erase ring's ink")
+	assert_eq([erase.lines[2][1], erase.lines[2][2]], ring[2], "and its salmon line")
+	for c: Color in erase.colors:
+		assert_eq(c.a, 0.0, "no wash: what goes shows through untouched")
+	for style in [WaterBrush.new().ribbon_style(), FireBrush.new().lay_style()]:
+		var lay := LineRibbon.ribbon(ground, line, 1.5, style)
+		assert_eq(erase.lines.size(), lay.lines.size(), "the lay's lines")
+		for k in lay.lines.size():
+			assert_eq(erase.lines[k][0], lay.lines[k][0], "the lay's line %d" % k)
+			assert_eq(erase.lines[k][2], lay.lines[k][2], "at the lay's weight %d" % k)
+			var colour: Color = lay.lines[k][1]
+			var is_ink := colour.is_equal_approx(Color(ThemeColors.INK, colour.a))
+			var expected := colour if is_ink else Color(salmon, colour.a)
+			assert_eq(erase.lines[k][1], expected, "only the colour salmon %d" % k)
 
 
-## A chevron is one glyph at any zoom and never grows past its look at the reference zoom: a
-## close one is drawn CHEVRON_PX across (scaled to the view's height) at the weights that size
-## takes, so a close erase's chevrons are neither thin hollow outlines nor road markings, and an
-## erase's are the lay's at every zoom (F5g).
+## A chevron is one glyph at any zoom and never grows past its look at the reference zoom, lay
+## and erase alike: a close one is drawn CHEVRON_PX across (scaled to the view's height) at the
+## weights that size takes, so a close erase's chevrons are neither thin hollow outlines nor
+## road markings, and an erase's are the lay's glyph, weight and ink at every zoom, salmon (F5g).
 func test_a_chevron_never_grows_past_its_reference_look() -> void:
 	var line := _line()
-	var far := LineRibbon.ribbon(_ground(), line, 1.0, FireBrush.LAY_STYLE)
+	var lay_style := FireBrush.new().lay_style()
+	var far := LineRibbon.ribbon(_ground(), line, 1.0, lay_style)
 	var near_ground := func(p: Vector2) -> Vector2: return p * 100.0
-	var near := LineRibbon.ribbon(near_ground, line, 1.0, FireBrush.LAY_STYLE)
+	var near := LineRibbon.ribbon(near_ground, line, 1.0, lay_style)
 	var view := LineRibbon.CHEVRON_VIEW_H * 1.5
-	var tall := LineRibbon.ribbon(near_ground, line, 1.0, FireBrush.LAY_STYLE, 1.0, 1.0, view)
-	var erase := LineRibbon.ribbon(near_ground, line, 1.0, FireBrush.new().put_out_style())
+	var tall := LineRibbon.ribbon(near_ground, line, 1.0, lay_style, 1.0, 1.0, view)
+	var erase := LineRibbon.ribbon(near_ground, line, 1.0, LineRibbon.ERASE_STYLE)
+	assert_almost_eq(_across(erase), LineRibbon.CHEVRON_PX, 0.01, "the erase's clamped too")
+	assert_eq(erase.lines[-1][1], Color(BrushCursor.CLEAR_TINT, 0.95), "a salmon chevron")
+	assert_eq(erase.lines[-2][1], near.lines[-2][1], "on the lay's ink")
 	assert_lt(_across(far), LineRibbon.CHEVRON_PX, "a far chevron")
 	assert_eq(far.lines[-1][2], LineRibbon.STYLE.chevron_width, "at the style's weight")
 	assert_eq(far.lines[-2][2], LineRibbon.STYLE.chevron_shadow_width)
@@ -177,10 +209,10 @@ func _across(shape: Dictionary) -> float:
 	return glyph[0].distance_to(glyph[2])
 
 
-## The fire line's rails keep their weight out at the edges and fall to nearly clear in a thin
-## seam: the half-covered olive band the old fall left inside them is gone (F5f).
+## The rails keep their weight out at the edges and fall to nearly clear in a thin seam: the
+## half-covered olive band the old fall left inside the fire's is gone (F5f).
 func test_the_rails_fall_in_a_thin_seam() -> void:
-	var profile: Array = FireBrush.LAY_STYLE.fill_profile
+	var profile: Array = LineRibbon.FILLS.rails.fill_profile
 	assert_gte(_coverage(profile, 0.62), 0.75, "the rail holds its weight to 0.62 radii")
 	assert_gte(_coverage(profile, 0.9), 0.9, "and is full at the edge")
 	var held := 0.0
@@ -242,17 +274,21 @@ func test_the_hint_bar_reads_alike() -> void:
 		assert_true(hint.ends_with(" Tab switches the shape."), "each pane names Tab alike")
 
 
-## Every ribbon takes the scene's light: full by day and at dusk, NIGHT_LIGHT of its colour
-## under a sun well below the horizon, the alpha kept.
+## Every lay ribbon takes the scene's light: full by day and at dusk, NIGHT_LIGHT of its colour
+## under a sun well below the horizon, the alpha kept. An erase keeps its full colour, as the
+## erase ring does (dimmed, its salmon fell to about 2:1 over the river at night, F5h).
 func test_every_ribbon_takes_the_scene_light() -> void:
 	var least := LineRibbon.NIGHT_LIGHT
 	assert_eq(LineRibbon.scene_light(DAY, least), 1.0, "full by day")
 	assert_eq(LineRibbon.scene_light(DUSK, least), 1.0, "and at dusk, the sun just up")
 	assert_eq(LineRibbon.scene_light(NIGHT, least), least, "the floor at night")
 	assert_eq(LineRibbon.scene_light(FoliageLight.NO_SUN, least), 1.0, "full with no sun")
+	assert_eq(LineRibbon.light_of(LineRibbon.ERASE_STYLE, NIGHT), 1.0, "an erase: full")
 	var ground := _ground()
 	var line := _line()
 	for style in _styles():
+		if style == LineRibbon.ERASE_STYLE:
+			continue
 		var light := LineRibbon.light_of(style, NIGHT)
 		assert_eq(light, least)
 		var day := LineRibbon.ribbon(ground, line, 1.0, style)

@@ -22,7 +22,8 @@ extends BrushMode
 const TINT := Color(0.98, 0.84, 0.58)
 const STONE_TINT := Color(0.88, 0.9, 0.86)
 const GRAVEL_TINT := Color(0.86, 0.8, 0.64)
-const ERASE_TINT := Color(1.0, 0.52, 0.42)
+## Every brush's one erase salmon.
+const ERASE_TINT := BrushCursor.CLEAR_TINT
 const SHADOW := Color(0.05, 0.04, 0.05, 0.55)
 ## The readout's name per Crossing.Kind (P4d-3: one per kind, so a hover never indexes past
 ## the end).

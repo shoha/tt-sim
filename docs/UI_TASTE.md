@@ -255,3 +255,19 @@ that conflicts with one stops and asks. Add each new verdict here with its date.
   0.14; at half coverage the river went a flat dusty rose and the lake over flames went grey
   mud, and even at 0.12 to 0.2 the salmon greyed the blue water), so the salmon edge, glow and chevrons say "erase", each on a strong ink outline the
   erase ring shares; the rails keep their weight but fall to clear in a thin seam.
+- **2026-10-18** "ensure that the widths and presence of colors (like the outer edge of the
+  fire line tool) are consistent between water and fire. basically, fire should just be an
+  orange-coded version of the visuals for water and vice versa". Decision (card F5h): the
+  river and the fire line are one look in two hues. Both pass one LineRibbon style, equal key
+  for key but the tint keys (the band and edge in lake or persimmon, the glow in light lake or
+  ember, the theme's paired ramps): every width, alpha, edge, glow, ink, cap, chevron and fill
+  profile is one, and so is the erase (one style for the river's erase and the fire's put-out).
+  The fill is one for both: the rails (option R) by default, the river's even fill (option E)
+  kept as data to compare; in the dark ramp hues the even fill read as a faint murky veil
+  (grey-teal for the river, brown-olive for the fire), so R reads better for both. Every line
+  is one stroke, the ring's included: the tint 2.5 px over ink at 0.85 and 5.5 px on a glow
+  of the tint, at rest and in erase alike (the lay ring was a 2 px hairline on a faint shadow,
+  under 3:1 over bright grass). The one erase salmon moved toward chalk-pink (#FFB6A8), so on
+  its ink it holds 3:1 over flames, ash, night water and bright grass, and an erase keeps its
+  full colour at night (dimmed, a paler #FFCEC4 was needed, and it read near-white beside
+  Thin's cream and Paint's tan rings).

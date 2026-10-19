@@ -618,7 +618,7 @@ alike), and turns gestures into calls on an `AuthoringEditor`
   starts a line recorded as the pointer moves (`LineGesture`: a point every 0.6 m, or 0.6
   half-widths for a wide river; two Chaikin passes keeping both ends), previewed as the line
   tool's ribbon on the ground at the river's width, a gradient and chevrons pointing downstream
-  (`LineRibbon` in `WaterBrush.RIBBON_STYLE`, explicit indices, the inside of a tight bend
+  (`LineRibbon` in `WaterBrush.ribbon_style()`, explicit indices, the inside of a tight bend
   clamped so quads never twist) with the readout "River  Waist  40 ft" in the level's units;
   the release carves it (`carve_river`, the drawn
   direction is the flow), and the ribbon stays faint until the carve (on a worker) lands; RMB

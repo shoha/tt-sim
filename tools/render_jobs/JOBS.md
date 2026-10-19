@@ -759,7 +759,8 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (after `fire.gd profile`, which logs the mask along and across the laid line against
   `FireBrush.line_reach`), a Ctrl line held over part of it at zoom 8 with two put-out
   interiors on the same drag (`erase_drag_a`, the ash plum-grey; `erase_drag_b`, the lake: an
-  `eval` sets `FireBrush.put_out_tint`, then a redraw), and a second line held at night
+  `eval` set `FireBrush.put_out_tint`, then a redraw; since card F5h the put-out has no
+  interior and that property is gone, so the two frames match), and a second line held at night
   (`line_drag_night`) and under the sunset preset (`line_drag_dusk`), each dropped with Esc;
   `sheet_1920` and `sheet_720` (the six drags and lays), and `sheet_water` (the Water pane and
   river drag before | after from `firefeat_line_pane` run with `--out
@@ -774,19 +775,26 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   8 there are the background; a pane change shows over 32; the ribbon lies over swaying trees,
   so compare a crop of it by eye, `avatar_diff.gd crop`). Saves no level.
 - `jobs/firefeat_line_tool.json`: the shared line tool, river beside fire line (card F5e; about
-  190 s; replaces card F5d's `firefeat_variants`). At 1280x720 on firefeat_line's map (a 200 ft
-  temperate forest, seed 1234, a meadow over its east half): the Water pane at River and the
-  Fire pane after a real Tab (Line), then at zoom 22 with a 2.5 m brush each tool's cursor at
+  265 s at `--full`; replaces card F5d's `firefeat_variants`). At 1280x720 on firefeat_line's
+  map (a 200 ft temperate forest, seed 1234, a meadow over its east half): the Water pane at
+  River and the Fire pane after a real Tab (Line, Blaze picked), each pane's size as an `eval`
+  (authoring has no hint bar: the tool hint row is play's, the Events pane's);
+  every brush's ring at rest and with Ctrl held over the bright meadow at zoom
+  22 (`ring_<tool>_rest`, `ring_<tool>_erase` for biome, thin_clear, sculpt, paint, place, water
+  and fire; Bridge draws its own cursor); then with a 2.5 m brush each line tool's cursor at
   rest (`river_rest`, `fire_rest`) and the same curve held mid-drag from the meadow into the
-  forest past the dark pine, by day (`river_lay_day`, `fire_lay_day`), at 1920x1080
-  (`river_lay_1080`, `fire_lay_1080`) and under outdoor_night (`river_lay_night`,
-  `fire_lay_night`), each dropped with Esc; then a river carved along a second curve and the
-  Blaze line laid, and at zoom 8 by day and night a Ctrl line held over the flames
-  (`fire_put_out_{day,night}`) and a Ctrl drag held across the river (`river_erase_{day,night}`),
-  each cancelled with Esc. Every frame carries a fire.gd label. Sheets: `sheet_consistency_720`
-  (river | fire per row), `sheet_panes` (Water | Fire), and `sheet_water_before_after` (left
-  `render_jobs/firefeat_line_tool_before`, a run of the job with `--out` before a change; right
-  this run). Saves no level.
+  forest past the dark pine, by day (`river_lay_day`, `fire_lay_day`, and under the even fill,
+  option E, `*_lay_day_E`: an `eval` sets each brush's `fill`), at 1920x1080 (`river_lay_1080`,
+  `fire_lay_1080`) and under outdoor_night (`river_lay_night`, `fire_lay_night`, `*_night_E`),
+  each dropped with Esc; then a river carved along a second curve and the Blaze line laid, and
+  at zoom 8 by day and night Ctrl held at rest and a Ctrl line held over the flames
+  (`fire_put_out_rest_*`, `fire_put_out_*`) and across the river (`river_erase_rest_*`,
+  `river_erase_*`), each cancelled with Esc. Every frame carries a fire.gd label. Sheets:
+  `sheet_one_look_R` and `sheet_one_look_E` (river | fire per row under each fill),
+  `sheet_panes` (Water | Fire), and before | after
+  sheets against `render_jobs/firefeat_line_tool_before_f5h` (a run of the job with `--out`
+  before card F5h): `sheet_rings_before_after` (per brush: rest before, after, Ctrl before,
+  after), `sheet_erase_before_after`, `sheet_lay_1080_before_after`. Saves no level.
 - `jobs/fire_smoke_book.json`: bakes the persistent fire's smoke book once, offline (card
   fire-prod-c5a; `probes/fire_smoke_book.gd`; `tools/fire_sim/README.md`). In the real window (a
   headless run draws nothing) it draws `tools/fire_sim/fire_smoke_book_bake.gdshader` into one

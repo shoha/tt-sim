@@ -55,7 +55,7 @@ func draw_cursor(brush: BrushTool, cursor: BrushCursor) -> void:
 	if not dragging:
 		cursor.draw_ring(brush, look.tint, look.text, false)
 		return
-	cursor.draw_flat_ring(centre, stroke_radius(brush), look.tint, 2.0)
+	cursor.draw_flat_ring(centre, stroke_radius(brush), look.tint)
 	var at := cursor.camera.unproject_position(centre)
 	cursor.canvas.draw_circle(at, 2.5, BrushCursor.SHADOW_COLOR)
 	cursor.canvas.draw_circle(at, 1.5, look.tint)
