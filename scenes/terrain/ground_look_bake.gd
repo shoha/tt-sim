@@ -356,11 +356,14 @@ func _unbind() -> void:
 	set_process(false)
 
 
-## The asset ids of `biome_id`'s palette species of kind GRASS_KIND.
+## The asset ids of `biome_id`'s palette species of kind GRASS_KIND, except a rule with
+## `keep_colour` (a rosette that draws in its own colours; the zone tuft colour never applies).
 func _grass_assets(biome_id: String) -> PackedStringArray:
 	var ids := PackedStringArray()
 	var biome := PaletteLibrary.biome(biome_id, terrain.palette_root)
 	for rule: Dictionary in biome.get("species", []):
+		if rule.get("keep_colour", false) == true:
+			continue
 		if String(rule.get("kind", "")) == GRASS_KIND:
 			for asset_id: String in rule.get("assets", []):
 				if not asset_id in ids:

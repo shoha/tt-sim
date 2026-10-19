@@ -729,6 +729,7 @@ static func _validate_species(
 	return {
 		"key": key,
 		"kind": kind,
+		"keep_colour": entry.get("keep_colour") == true,
 		"size_class": _text_or(entry.get("size_class"), MAX_TEXT_LENGTH, ""),
 		"density_per_m2": density,
 		"min_spacing_m":
