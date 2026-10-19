@@ -51,19 +51,21 @@ const PATH_TEXT := "Fire along a path"
 const LONGEST_TEXT := "Longest fire path"
 const DRAW_PATH := "Draw the fire's path"
 ## The Path's ribbon: Start a fire's hue over the line tools' look (LineRibbon.lay_style),
-## deep ochre with its ring's light ochre glow, as the river is lake on light lake and the fire
-## line persimmon on ember: each tint the deep step its rails' light brings up to the hue's own
-## (ochre itself, lifted 1.36 to 1.53 times, clipped to lemon and white, card F6b).
-const PATH_HUE := {"tint": ThemeColors.OCHRE_DEEP, "glow": ToppleMode.TINT}
-## The Path's hues for the user to pick between (card F6c), each a tint on the ring's glow:
-## A PATH_HUE (the default; its rails the lightest of the three line tools'), B ochre deeper
-## still (its rails at the fire line's luminance), C a warmer amber-gold between them.
+## deep amber with its ring's light ochre glow, as the river is lake on light lake and the fire
+## line persimmon on ember: each tint a deep step its rails' light brings up (ochre itself,
+## lifted 1.36 to 1.53 times, clipped to lemon and white, card F6b). Amber, the user's pick of
+## card F6c's three (2026-10-19): its rails near the river's and the fire line's presence, and
+## standing off the golden meadow by hue where ochre merged with it.
+const PATH_HUE := {"tint": ThemeColors.AMBER_DEEP, "glow": ToppleMode.TINT}
+## The three hues card F6c offered, each a tint on the ring's glow, kept to compare: A deep
+## ochre (its rails the lightest of the three line tools'), B ochre deeper still (its rails at
+## the fire line's luminance, olive by day and bronze at night), C PATH_HUE.
 const PATH_HUES := {
-	"A": PATH_HUE,
+	"A": {"tint": ThemeColors.OCHRE_DEEP, "glow": ToppleMode.TINT},
 	"B": {"tint": ThemeColors.OCHRE_DEEPER, "glow": ToppleMode.TINT},
-	"C": {"tint": ThemeColors.AMBER_DEEP, "glow": ToppleMode.TINT},
+	"C": PATH_HUE,
 }
-const HUE := "A"
+const HUE := "C"
 ## A path refused whole: the refused ring's chalk_soft, its lines alone with no fill
 ## (REFUSED_FILL), so it reads as the refused ring does, an outline where nothing will happen
 ## (its rails lifted read as a pure white band, the loudest thing on the board, card F6b).

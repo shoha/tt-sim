@@ -67,10 +67,11 @@ const OCHRE := Color("#E0A23A")
 ## so the line ribbon's rails, which lift their tint 1.36 to 1.53 times (LineRibbon.FILLS),
 ## give back ochre itself (Start a fire's Path). Ochre lifted so clipped to lemon (card F6b).
 const OCHRE_DEEP := Color("#A5772B")
-## Two more depths of the Path's tint for the user to pick between (card F6c; OCHRE_DEEP stays
-## the default): ochre deeper still, so the rails land at the fire line's luminance (about 0.35
-## by day where OCHRE_DEEP's give about 0.49), and a warmer amber-gold between the two, its blue
-## nearly gone so it keeps its chroma at the lower value (a deep ochre alone reads bronze).
+## Two more depths of the Path's tint (card F6c): ochre deeper still, so the rails land at the
+## fire line's luminance (about 0.35 by day where OCHRE_DEEP's give about 0.49; it read olive
+## by day and bronze at night), and a warmer amber-gold between the two, its blue nearly gone
+## so it keeps its chroma at the lower value. AMBER_DEEP is the Path's tint (the user's pick,
+## 2026-10-19); the two ochres stay as IgniteMode.PATH_HUES options to compare.
 const OCHRE_DEEPER := Color("#8F6220")
 const AMBER_DEEP := Color("#A56210")
 

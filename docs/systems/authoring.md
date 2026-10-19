@@ -350,11 +350,11 @@ Probe and numbers:
   them (card F6; `IgniteMode.Shape`, the pane's Shape field through `ShapeField`, Path first,
   Circle the default): Circle is the ring above; Path draws the line the fire runs along
   through the line tools' `LineGesture` and `LineRibbon` (`IgniteMode.lay_style`: `PATH_HUE`,
-  `ThemeColors.OCHRE_DEEP` on its ring's light ochre glow, every other key the river's and
-  the fire line's; deep ochre because the rails lift their tint 1.36 to 1.53 times, which
-  gives back ochre, where ochre itself clipped to lemon, card F6b; `IgniteMode.PATH_HUES`
-  holds two more depths for the user to pick between, B `OCHRE_DEEPER` with its rails at the
-  fire line's luminance and C the warmer `AMBER_DEEP`, A the default, card F6c), its
+  `ThemeColors.AMBER_DEEP` on its ring's light ochre glow, every other key the river's and
+  the fire line's; a deep tint because the rails lift their tint 1.36 to 1.53 times, where
+  ochre itself clipped to lemon, card F6b; amber is the user's pick, 2026-10-19, of card
+  F6c's three in `IgniteMode.PATH_HUES`: A `OCHRE_DEEP` merged with the golden meadow and
+  read lightest of the line tools, B `OCHRE_DEEPER` read olive by day and bronze at night), its
   half-width the brush size within 1-6 m (`path_radius`; Advanced reads Width), drawn as one
   ribbon (`IgniteMode.path_style`) whose stretches follow what a release does there
   (`IgniteMode.Stretch`, `FirePath.forest_spans` of the live line, refreshed every 200 ms):
