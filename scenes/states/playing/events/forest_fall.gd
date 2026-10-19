@@ -87,23 +87,43 @@ static func trees_near(
 	limit: int = MAX_TREES,
 	skip: String = ""
 ) -> Array[Dictionary]:
-	var found: Array[Dictionary] = []
-	if scatter == null:
-		return found
-	var size := ScatterChunker.CHUNK_SIZE_WORLD_UNITS
-	var low := ScatterChunker.cell_for(Vector3(centre.x - radius, 0, centre.y - radius), size)
-	var high := ScatterChunker.cell_for(Vector3(centre.x + radius, 0, centre.y + radius), size)
-	for cx in range(low.x, high.x + 1):
-		for cz in range(low.y, high.y + 1):
-			var cell := Vector2i(cx, cz)
-			var rows_by_asset := scatter.cell_rows(cell)
-			for asset_id: String in rows_by_asset:
-				if skip != "" and asset_id.begins_with(skip):
-					continue
-				_collect(scatter, cell, asset_id, rows_by_asset[asset_id], centre, radius, found)
+	var cells := {}
+	add_cells(cells, Rect2(centre, Vector2.ZERO).grow(radius))
+	var measure := func(at: Vector2) -> float:
+		var distance := at.distance_to(centre)
+		return distance if distance <= radius else -1.0
+	var found := trees_in(scatter, cells, measure, skip)
 	found.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.distance < b.distance)
 	if found.size() > limit:
 		found.resize(limit)
+	return found
+
+
+## Adds to `cells` (Vector2i -> true) every scatter cell map rectangle `area` touches.
+static func add_cells(cells: Dictionary, area: Rect2) -> void:
+	var size := ScatterChunker.CHUNK_SIZE_WORLD_UNITS
+	var low := ScatterChunker.cell_for(Vector3(area.position.x, 0, area.position.y), size)
+	var high := ScatterChunker.cell_for(Vector3(area.end.x, 0, area.end.y), size)
+	for cx in range(low.x, high.x + 1):
+		for cz in range(low.y, high.y + 1):
+			cells[Vector2i(cx, cz)] = true
+
+
+## The drawn tree instances of `scatter` in `cells` (Vector2i keys) that `measure` keeps: it
+## takes a tree's map XZ and returns its "distance" (0 or more) or below 0 to pass it over.
+## Each cell's rows are read once, unsorted. Assets whose id starts with `skip` are passed over.
+static func trees_in(
+	scatter: AuthoredScatter, cells: Dictionary, measure: Callable, skip: String = ""
+) -> Array[Dictionary]:
+	var found: Array[Dictionary] = []
+	if scatter == null:
+		return found
+	for cell: Vector2i in cells:
+		var rows_by_asset := scatter.cell_rows(cell)
+		for asset_id: String in rows_by_asset:
+			if skip != "" and asset_id.begins_with(skip):
+				continue
+			_collect(scatter, cell, asset_id, rows_by_asset[asset_id], measure, found)
 	return found
 
 
@@ -112,8 +132,7 @@ static func _collect(
 	cell: Vector2i,
 	asset_id: String,
 	rows: PackedFloat32Array,
-	centre: Vector2,
-	radius: float,
+	measure: Callable,
 	found: Array[Dictionary]
 ) -> void:
 	var node := scatter.get_cell_node(cell, asset_id)
@@ -135,8 +154,8 @@ static func _collect(
 	for i in drawn:
 		var row := order[i]
 		var at := Vector2(rows[row * stride], rows[row * stride + 2])
-		var distance := at.distance_to(centre)
-		if distance <= radius:
+		var distance: float = measure.call(at)
+		if distance >= 0.0:
 			found.append(
 				{
 					"node": node,
@@ -157,7 +176,7 @@ func setup(editor: AuthoringEditor, event: TerrainEvent) -> bool:
 	if found.is_empty():
 		return false
 	_make_puffs()
-	_area = Rect2(event.centre - Vector2.ONE * event.radius_m, Vector2.ONE * event.radius_m * 2.0)
+	_area = event.bounds()
 	var by_mesh := {}
 	for tree in found:
 		var mesh: Mesh = (tree.node as MultiMeshInstance3D).multimesh.mesh

@@ -1,5 +1,8 @@
 extends GutTest
 
+## The same along a path (card F6): the burnt biome only where trees stood and the ash the
+## whole way, and a path's ground matching a circle's of its radius on its centre line.
+##
 ## A fire (TerrainEvent.Kind.FIRE, the Events pane's Start a fire) end to end without a
 ## network, on a forest level loaded as the GM's copy and a client's, each with its LiveEdits
 ## and TerrainEvents (as test_terrain_events does for a collapse and a fall). The event's bytes
@@ -289,6 +292,184 @@ func test_a_fire_burns_the_forest_on_every_board_then_changes_the_map() -> void:
 	assert_engine_error(0, "no accent dropped")
 
 
+## The level, built once for the run (_make_level); false if its scatter never landed.
+func _level_ready() -> bool:
+	if FileAccess.file_exists(LEVEL):
+		return true
+	return await _make_level()
+
+
+## `drawn` (map XZ) as IgniteMode makes a path of it: smoothed, resampled.
+func _fire_line(drawn: Array) -> PackedVector2Array:
+	var line := PackedVector2Array()
+	for p: Vector2 in drawn:
+		line.append(p)
+	return StrokePath.resample(
+		StrokePath.smooth_line(line), StrokePath.MAX_POINTS, StrokePath.MIN_SPACING_M
+	)
+
+
+## `doc`'s ash weight and the burnt biome's density at map point `at` (0 where another biome
+## or none holds the sample), 0..255.
+func _after_at(doc: MapDocument, at: Vector2, burnt: String) -> Vector2i:
+	var sample := doc.world_to_sample(at).round()
+	var i := doc.sample_index(int(sample.x), int(sample.y))
+	var ash := doc.surface_ids.find(FireSweep.ASH)
+	var weight := doc.surface_weight(i, ash) if ash >= 0 else 0
+	var slot := doc.biome_slots[i] if not doc.biome_slots.is_empty() else 0
+	var density := doc.biome_density[i] if slot > 0 and doc.biome_ids[slot - 1] == burnt else 0
+	return Vector2i(weight, density)
+
+
+## Start a fire along a path from the forest into the meadow (design 3d, card F6): every board
+## plays it, the GM's side makes one entry of two strokes once it has burnt out, the burnt
+## biome only where trees stood and the ash the whole way, the client and a late joiner end
+## alike, and one undo puts the map back as it was.
+func test_a_fire_along_a_path_burns_the_forest_and_ashes_the_meadow() -> void:
+	var made: bool = await _level_ready()
+	if not made:
+		return
+	var gm := await _load(true)
+	var client := await _load(false)
+	await _settle([gm, client], "the loads")
+	var key := gm.edits.table_key
+	gm.edits.op_logged.connect(
+		func(index: int, bytes: PackedByteArray) -> void: client.edits.receive_op(key, index, bytes)
+	)
+	gm.edits.events.started.connect(client.edits.events.receive)
+	client.edits.receive_log(key, 0)
+	var half := 2.0
+	var line := _fire_line([Vector2(-14, -1), Vector2(-6, 1), Vector2(2, -1), Vector2(14, 0)])
+	var scatter := gm.edits.editor.scatter
+	var root := PaletteLibrary.DEFAULT_ROOT
+	var standing := FireSweep.burnable_along(scatter, line, half, root, FirePath.ALL_TREES)
+	assert_gt(standing.size(), 4, "a forest stands along the path's first half")
+	for tree in standing:
+		assert_lte(float(tree.distance), half, "within the half-width")
+		assert_lt((tree.base as Transform3D).origin.x, FOREST_EDGE_X + 1.0, "only in the forest")
+	var meadow := TerrainEvent.fire_path(_fire_line([Vector2(6, 0), Vector2(14, 0)]), half, 1)
+	assert_eq(gm.edits.events.start(meadow), TerrainEvents.NO_FOREST_PATH, "a meadow path: none")
+	var before := MapFingerprint.of(gm.root, gm.doc)
+	var entries := []
+	var record := func(entry: Dictionary) -> void: entries.append(entry)
+	gm.edits.history.recorded.connect(record)
+	var fire := TerrainEvent.fire_path(line, half, 13)
+	var logged := gm.edits.op_log.size()
+	assert_eq(gm.edits.events.start(fire), "", "the GM's side starts the path")
+	assert_eq(client.edits.events.active_count(), 1, "the client plays it too")
+	var on_it := TerrainEvent.fire(line[line.size() / 4], 3.0, 2)
+	assert_eq(gm.edits.events.start(on_it), TerrainEvents.BUSY, "not over a burning path")
+	var across := TerrainEvent.fire_path(_fire_line([Vector2(-8, -6), Vector2(-8, 6)]), 1.5, 3)
+	assert_eq(gm.edits.events.start(across), TerrainEvents.BUSY, "nor a path across it")
+	_advance([gm, client], 1.0)
+	var animated := []
+	for copy: Copy in [gm, client]:
+		var effects := copy.edits.events.effects()
+		assert_eq(effects.size(), 1, "every board plays the path")
+		if effects.size() == 1 and effects[0] is FireSweep:
+			animated.append((effects[0].get("_trees") as Array).size())
+	assert_eq(animated.size(), 2)
+	if animated.size() == 2:
+		assert_eq(animated[0], animated[1], "both boards burn the same trees")
+		assert_eq(animated[0], mini(standing.size(), FirePath.MAX_TREES))
+	assert_eq(gm.edits.op_log.size(), logged, "no op while it burns")
+	_advance([gm, client], fire.duration_s)
+	gm.edits.history.recorded.disconnect(record)
+	assert_eq(entries.size(), 1, "one history entry")
+	var entry: Dictionary = entries[0] if not entries.is_empty() else {}
+	assert_eq(entry.get("label"), EventPresets.IGNITE_LABEL, "labelled as its tile")
+	assert_eq(entry.get("preset"), TerrainEvent.Kind.FIRE)
+	assert_eq((entry.get("parts", []) as Array).size(), 2, "of two strokes")
+	await _settle([gm, client], "the path fire")
+	assert_eq(_kinds(gm, logged), ["mask", "surface"], "the burnt biome, then the ash")
+	assert_eq(client.edits.op_log.size(), 2, "the client has both")
+	var burnt := FireSweep.burnt_biome()
+	for copy: Copy in [gm, client]:
+		var forest_at := _on_line(line, -8.0)
+		var meadow_at := _on_line(line, 10.0)
+		assert_eq(_biome_at(copy.doc, forest_at), burnt, "snags where the forest stood")
+		assert_ne(_biome_at(copy.doc, meadow_at), burnt, "no snags in the meadow")
+		assert_gt(_after_at(copy.doc, forest_at, burnt).x, 200, "ash in the forest")
+		assert_gt(_after_at(copy.doc, meadow_at, burnt).x, 200, "and in the meadow")
+		var left := FireSweep.burnable_along(copy.edits.editor.scatter, line, half * 0.7, root)
+		assert_eq(left.size(), 0, "no green tree stands on the path")
+	_same(gm, client, "after the path fire")
+	assert_eq(client.edits.events.active_count(), 0, "every effect is gone")
+
+	# A late joiner gets only the two ops.
+	var joiner := await _load(false)
+	await _settle([joiner], "the late joiner's load")
+	joiner.edits.receive_log(key, gm.edits.op_log.size())
+	for index in gm.edits.op_log.size():
+		joiner.edits.receive_op(key, index, gm.edits.op_log[index])
+	assert_eq(joiner.edits.op_log.size(), 2, "two ops")
+	assert_eq(joiner.edits.events.active_count(), 0, "the late joiner sees no motion")
+	await _settle([gm, joiner], "the late joiner's catch-up")
+	_same(gm, joiner, "late joiner")
+
+	# Undo: one step, nothing plays, the map as it was.
+	assert_eq(gm.edits.history.undo(), EventPresets.IGNITE_LABEL)
+	assert_eq(gm.edits.events.active_count(), 0, "an undo plays no effect")
+	await _settle([gm, client], "the undo")
+	var diff := MapFingerprint.diff(before, MapFingerprint.of(gm.root, gm.doc))
+	assert_true(diff.is_empty(), "the undo restores the map: %s" % str(diff))
+	_same(gm, client, "after the undo")
+
+
+## The point of `line` at map x `x` (it runs west to east).
+func _on_line(line: PackedVector2Array, x: float) -> Vector2:
+	for i in line.size() - 1:
+		if line[i].x <= x and line[i + 1].x >= x:
+			return line[i].lerp(line[i + 1], (x - line[i].x) / maxf(line[i + 1].x - line[i].x, 1e-4))
+	return line[-1]
+
+
+## A path and a circle of one radius on twin copies of the forest leave the same ground: the
+## same burnt-biome density and ash weight (within 2 of 255) at the path's centre line as at
+## the circle's centre, the rim falling off alike, and one undo restores each copy.
+func test_a_path_and_a_circle_leave_the_same_ground() -> void:
+	var made: bool = await _level_ready()
+	if not made:
+		return
+	var circle := await _load(true)
+	var path := await _load(true)
+	await _settle([circle, path], "the twins' loads")
+	var radius := 3.0
+	var line := _fire_line([FIRE_CENTRE + Vector2(-6, 0), FIRE_CENTRE + Vector2(6, 0)])
+	var copies: Array = [circle, path]
+	var events := [TerrainEvent.fire(FIRE_CENTRE, radius, 4), TerrainEvent.fire_path(line, radius, 4)]
+	var before := []
+	for k in 2:
+		var copy: Copy = copies[k]
+		before.append(MapFingerprint.of(copy.root, copy.doc))
+		copy.edits.events.call("_apply", events[k])
+	await _settle(copies, "both burns")
+	var burnt := FireSweep.burnt_biome()
+	# Out to the half-width the two fall off alike; past it (where a line of capsules' u^2.5
+	# and a dab's u^2 part, FirePath.capsule_seconds) both are nearly gone.
+	for d: float in [0.0, 0.5, 1.0, 1.2]:
+		var at := FIRE_CENTRE + Vector2(0.0, d * radius)
+		var round_one := _after_at(circle.doc, at, burnt)
+		var long_one := _after_at(path.doc, at, burnt)
+		var where := "%.1f radii out: circle %s, path %s" % [d, round_one, long_one]
+		gut.p(where)
+		if d > 1.0:
+			assert_lt(maxi(long_one.x, round_one.x), 64, "ash nearly gone " + where)
+			continue
+		var within := 2 if d == 0.0 else 16
+		assert_almost_eq(long_one.x, round_one.x, within, "ash alike " + where)
+		assert_almost_eq(long_one.y, round_one.y, within, "burnt forest alike " + where)
+	assert_gt(_after_at(circle.doc, FIRE_CENTRE, burnt).y, 240, "the centre is burnt through")
+	for k in 2:
+		var copy: Copy = copies[k]
+		assert_eq(copy.edits.history.undo(), EventPresets.IGNITE_LABEL)
+	await _settle(copies, "both undos")
+	for k in 2:
+		var copy: Copy = copies[k]
+		var diff := MapFingerprint.diff(before[k], MapFingerprint.of(copy.root, copy.doc))
+		assert_true(diff.is_empty(), "copy %d restored: %s" % [k, str(diff)])
+
+
 func test_the_fire_plan_follows_the_palette() -> void:
 	assert_eq(FireSweep.plan_for([], {}), {"biome": "", "surface": ""}, "nothing to lay: a Clear")
 	var old := FireSweep.plan_for([{"id": FOREST, "biome": "temperate_forest"}], {"dirt_peat": {}})
@@ -372,6 +553,56 @@ func test_a_fire_fits_its_pools() -> void:
 	assert_lt(going.basis.y.length(), 1.0, "shrinking")
 	assert_eq(going.origin, base.origin, "about its foot")
 	assert_almost_eq(FireSweep.snag_transform(base, 4.0, 4.0).basis.y.length(), 0.0, 0.001, "gone")
+
+
+## A path's geometry (FirePath) and its motion's bounds: arcs and projection along the line,
+## the trees thinned evenly, the forest spans widened and merged, the runs covering the line,
+## the pools fitting its most trees, and its front within the event.
+func test_a_path_fits_its_pools_and_spans() -> void:
+	var line := PackedVector2Array([Vector2(0, 0), Vector2(4, 0), Vector2(4, 3)])
+	var along := FirePath.arcs(line)
+	assert_eq(along, PackedFloat32Array([0.0, 4.0, 7.0]))
+	assert_almost_eq(FirePath.project(line, along, Vector2(2, 1)).x, 2.0, 0.001, "its arc")
+	assert_almost_eq(FirePath.project(line, along, Vector2(2, 1)).y, 1.0, 0.001, "off the line")
+	assert_almost_eq(FirePath.project(line, along, Vector2(6, 1.5)).x, 5.5, 0.001)
+	var at := FirePath.frame_at(line, along, 5.0)
+	assert_true(Vector2(at.x, at.y).is_equal_approx(Vector2(4, 1)), "a point along it")
+	assert_true(Vector2(at.z, at.w).is_equal_approx(Vector2(0, 1)), "and its way")
+	var part := FirePath.span_line(line, along, 2.0, 5.0)
+	assert_eq(part, PackedVector2Array([Vector2(2, 0), Vector2(4, 0), Vector2(4, 1)]))
+	var found: Array[Dictionary] = []
+	for i in 200:
+		found.append({"arc": float(i)})
+	var kept := FirePath.thin(found, FirePath.MAX_TREES)
+	assert_eq(kept.size(), FirePath.MAX_TREES)
+	assert_eq(kept[0].arc, 0.0, "the first kept")
+	assert_eq(kept[-1].arc, 199.0, "and the last")
+	assert_almost_eq(float(kept[48].arc), 100.5, 1.5, "evenly between")
+	var spans := FirePath.forest_spans(PackedFloat32Array([3.0, 5.0, 20.0]), 1.0, 22.0)
+	assert_eq(spans, PackedVector2Array([Vector2(1, 7), Vector2(18, 22)]), "widened, merged, cut")
+	var runs := FirePath.runs(spans, 30.0)
+	var expected := [
+		[0.0, 1.0, false], [1.0, 7.0, true], [7.0, 18.0, false], [18.0, 22.0, true], [22.0, 30.0, false]
+	]
+	assert_eq(runs, expected, "forest and open stretches in order, covering the path")
+	assert_eq(FirePath.runs(PackedVector2Array(), 5.0), [[0.0, 5.0, false]], "no forest: all open")
+	# A line of capsules gathers about 1 + 16 r / 15 L dabs on its centre line.
+	assert_almost_eq(FirePath.capsule_seconds(3.0, 1.0, 3.0), 3.0 / 4.2, 0.001)
+	assert_eq(FirePath.capsule_seconds(3.0, 0.0, 3.0), 3.0, "a point is a dab")
+	# Pools: every puff of the path's most trees at once; its front and burn within the event.
+	var flames := FireSweep.FLAMES_PER_TREE * FirePath.MAX_TREES + FireSweep.PATH_FRONT_TONGUES
+	assert_lte(flames, FireSweep.PATH_FLAME_POOL)
+	assert_lte(FirePath.MAX_TREES + FireSweep.COLUMN_AT.size(), FireSweep.PATH_SMOKE_POOL)
+	var longest := TerrainEvent.path_spread(TerrainEvent.MAX_PATH_LENGTH_M)
+	var last := longest + FireSweep.SPREAD_JITTER + FireSweep.BURN_S.y
+	assert_lte(last, longest + TerrainEvent.PATH_TAIL_S, "the last tree burns out in time")
+	assert_lt(longest + TerrainEvent.PATH_TAIL_S, TerrainEvent.MAX_PATH_DURATION_S, "under 6 s")
+	# The ground's front along a path is timed by the same lobed arc the shader draws.
+	var reach := GroundBurn.path_reach(Vector2(3, 0), 3.0, 2.0, 7)
+	assert_between(reach, 3.0 - GroundBurn.lobe_m(2.0) * 0.5, 3.0 + GroundBurn.lobe_m(2.0) * 0.5)
+	var code := (GroundBurn.SHADER as Shader).code
+	assert_true(code.contains("path_points[64]"), "the shader takes the longest path")
+	assert_eq(TerrainEvent.MAX_PATH_POINTS, 64)
 
 
 func test_the_smoke_pool() -> void:

@@ -1365,7 +1365,7 @@ signal live_edit_log_requested(sender_id)            # rate-limited, players onl
 | `_rpc_live_edit_chunk` | host -> clients or one client | reliable, paced by the outbox (`LIVE_EDIT_BYTES_PER_SECOND`, 512 KB/s); reassembled, capped at `LiveEditCodec.MAX_BYTES` | `live_edit_received` once an op is whole |
 | `_rpc_live_edit_log` | host -> clients or one client | reliable, in the outbox's order | `live_edit_log_received` |
 | `_rpc_request_live_edit_log` | client -> host | reliable, one answered per `LIVE_EDIT_LOG_REQUEST_INTERVAL` (2 s) a player | `live_edit_log_requested` |
-| `_rpc_terrain_event` | host -> clients | reliable, in the outbox's order; authority-only, a host ignores it, any length but `TerrainEvent.EVENT_BYTES` (32) is dropped | `terrain_event_received` |
+| `_rpc_terrain_event` | host -> clients | reliable, in the outbox's order; authority-only, a host ignores it, any length but an event's (`TerrainEvent.is_event_size`: 32 + 8n, at most 544) is dropped | `terrain_event_received` |
 
 The client used to ACK every full state (`_rpc_state_sync_ack`, `state_sync_complete`); nothing
 listened, and both were removed on 2026-10-09. A late joiner's state is released by
@@ -1439,9 +1439,12 @@ joiner included, ends with the same map. The ops and their checks are
   `NetworkStateSync.broadcast_token_properties` (reliable, GameState kept in step), so a token
   on raised ground stands on it on every peer and one on a bridge that went sits in the water.
   Clients take the host's positions and never re-ground on their own.
-- **Terrain events** (a bridge collapsing, a forest falling; `TerrainEvents`, a child of the
-  service). An event is not document state: the host sends its few parameters (`TerrainEvent`,
-  32 bytes: version, kind, crossing id, table key, centre, radius, duration, lead, seed) with
+- **Terrain events** (a bridge collapsing, a forest falling, a fire; `TerrainEvents`, a child
+  of the service). An event is not document state: the host sends its few parameters
+  (`TerrainEvent` VERSION 2, a 32-byte header: version, kind, crossing id, table key, centre,
+  radius, duration, lead, seed; a fire along a path, Start a fire's Path shape, puts its point
+  count n in the crossing id's u16 and n x/z f32 pairs after the header, 32 + 8n bytes, at most
+  544 for 64 points; a circle is n = 0, 32 bytes) with
   `broadcast_terrain_event()` through the same outbox, so it never overtakes an op queued
   before it (the crossing it takes down is on the client when it arrives). Every peer plays
   the motion from the event alone. There is no shared clock: the host waits the event's lead
@@ -1450,7 +1453,10 @@ joiner included, ends with the same map. The ops and their checks are
   editor as one ordinary history entry (the crossing removed, or a Clear over the area), which
   goes out as an op; it reaches a client after the client's motion when latency is near the
   lead. A client takes an event only through `TerrainEvent.decode` (wrong length or version,
-  unknown kind, non-finite or out-of-range values refused), only for its own table key and
+  unknown kind, non-finite or out-of-range values refused; for a path, points on any kind but a
+  fire, one point or more than 64, a length other than 32 + 8n, a point off any map, a step under
+  0.05 m or over 4 m, a line over 64 m, a half-width outside 1-6 m or a duration past 6 s), only
+  for its own table key and
   only while its service takes ops, and drops anything else without a word. A late joiner
   never sees the motion: it gets the op in its catch-up like any other.
 - **Persistent fire** (the Fire brush, card F2). A "Lay fire" entry is one history group of

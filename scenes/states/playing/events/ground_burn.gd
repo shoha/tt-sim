@@ -17,6 +17,14 @@ extends MeshInstance3D
 ## reads the same bytes, so the ground tongues and the trees (FireSweep) are timed by the very
 ## line the ground shows. A frame only sets a few uniforms, so it allocates nothing while it
 ## plays.
+##
+## Along a path (setup_path, Start a fire's Path shape) the same front runs along the line
+## instead of out from a centre: a point's reach is its arc length to the nearest point of the
+## line (FirePath.project, run in the shader over the path's points), lobed by the same field
+## (path_reach), and it burns only within the half-width of the line, the same dry band and
+## ragged edge along both sides and round both ends. The box covers the path's bounds, and the
+## ground's height is taken from the line under each point, so a path over a slope keeps to
+## the ground and what stands low on it.
 
 ## The lobe field: its size in pixels, its period in noise units (one blob a unit across), and
 ## how far it moves the front (metres, a share of the rim) at what scale (a blob's width,
@@ -54,29 +62,78 @@ var _duration := 1.0
 func setup(
 	centre: Vector3, nearest: float, radius: float, spread: float, duration: float, event_seed: int
 ) -> void:
+	_begin(nearest, radius, spread, duration)
+	position = centre
+	var across := 2.0 * (_radius * (1.05 + 0.5 * LOBE_SHARE) + PAD_M)
+	_shade(Vector3(across, 2.0 * HALF_HEIGHT_M, across), _radius, event_seed)
+	step(0.0)
+
+
+## The burn set up along `line` (map XZ, at least two points; `heights` the ground under each),
+## `half_width` metres either side of it, the front running from its first point to its last
+## over `spread` seconds, the event lasting `duration`, its lobes drawn by `event_seed`. Its
+## frame is the line's first point's, as a circle's is its centre, so path_reach and the shader
+## read the lobe field alike.
+func setup_path(
+	line: PackedVector2Array,
+	heights: PackedFloat32Array,
+	half_width: float,
+	spread: float,
+	duration: float,
+	event_seed: int
+) -> void:
+	var along := FirePath.arcs(line)
+	_begin(0.0, along[-1], spread, duration)
+	var area := Rect2(line[0], Vector2.ZERO)
+	for p in line:
+		area = area.expand(p)
+	area = area.grow(half_width * (1.05 + 0.5 * LOBE_SHARE) + PAD_M)
+	var low := INF
+	var high := -INF
+	for h in heights:
+		low = minf(low, h)
+		high = maxf(high, h)
+	var middle := area.get_center()
+	position = Vector3(middle.x, (low + high) * 0.5, middle.y)
+	var size := Vector3(area.size.x, high - low + 2.0 * HALF_HEIGHT_M, area.size.y)
+	_shade(size, half_width, event_seed)
+	var points := PackedVector4Array()
+	for i in line.size():
+		var at := line[i] - line[0]
+		points.append(Vector4(at.x, at.y, along[i], heights[i] - position.y))
+	_material.set_shader_parameter(&"path_points", points)
+	_material.set_shader_parameter(&"path_count", line.size())
+	_material.set_shader_parameter(&"path_width", half_width)
+	_material.set_shader_parameter(&"frame_offset", middle - line[0])
+	step(0.0)
+
+
+func _begin(nearest: float, radius: float, spread: float, duration: float) -> void:
 	name = "GroundBurn"
 	_nearest = nearest
 	_radius = maxf(radius, 0.5)
 	_spread = maxf(spread, 0.05)
 	_duration = duration
-	position = centre
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var across := 2.0 * (_radius * (1.05 + 0.5 * LOBE_SHARE) + PAD_M)
+
+
+## The box of `size` and its material, the lobe field scaled for a rim (or a path's half-width)
+## of `scale_m`.
+func _shade(size: Vector3, scale_m: float, event_seed: int) -> void:
 	var box := BoxMesh.new()
-	box.size = Vector3(across, 2.0 * HALF_HEIGHT_M, across)
+	box.size = size
 	mesh = box
 	_material = ShaderMaterial.new()
 	_material.shader = SHADER
 	# Below the water's transparent pass: the ground is reworked before anything is drawn over it.
 	_material.render_priority = -1
 	_material.set_shader_parameter(&"lobe_texture", lobe_texture())
-	_material.set_shader_parameter(&"lobe_m", lobe_m(_radius))
-	_material.set_shader_parameter(&"lobe_scale", lobe_scale(_radius))
+	_material.set_shader_parameter(&"lobe_m", lobe_m(scale_m))
+	_material.set_shader_parameter(&"lobe_scale", lobe_scale(scale_m))
 	_material.set_shader_parameter(&"lobe_offset", lobe_offset(event_seed))
 	_material.set_shader_parameter(&"lobe_period", float(LOBE_PERIOD))
 	_material.set_shader_parameter(&"half_height", HALF_HEIGHT_M)
 	material_override = _material
-	step(0.0)
 
 
 ## Plays the burn `elapsed` seconds into the fire.
@@ -135,6 +192,15 @@ static func lobe_offset(event_seed: int) -> Vector2:
 static func reach(p: Vector2, radius: float, event_seed: int) -> float:
 	var at := p / lobe_scale(radius) + lobe_offset(event_seed)
 	return p.length() - lobe_m(radius) * (lobe_at(at / float(LOBE_PERIOD)) - 0.5)
+
+
+## The reach along a path of map point `p` (metres from the path's first point), `arc` metres
+## along the line where it lies nearest, in a fire `half_width` wide of seed `event_seed`: its
+## arc pulled in or pushed out by the lobe field, as reach() moves a circle's distance. Pure
+## but for the field.
+static func path_reach(p: Vector2, arc: float, half_width: float, event_seed: int) -> float:
+	var at := p / lobe_scale(half_width) + lobe_offset(event_seed)
+	return arc - lobe_m(half_width) * (lobe_at(at / float(LOBE_PERIOD)) - 0.5)
 
 
 ## The lobe field at `uv` (wrapping, a period across), 0..1, bilinear as the GPU samples it.

@@ -15,7 +15,8 @@ extends Node
 ## CLEAR_REACH times the radius (the Clear's falloff is soft at its rim, so the trees that fell
 ## are well inside it), or for a fire a group of two strokes (_burn: the burnt biome painted
 ## over the forest, or a Clear on a palette without it, then ash laid over the ground;
-## FireSweep.plan_for). LiveEdits turns that entry into ops like any edit (one per stroke), so
+## FireSweep.plan_for; along a path the biome only where trees stood, the ash all along it).
+## LiveEdits turns that entry into ops like any edit (one per stroke), so
 ## every client gets them after the motion, a late joiner gets only the ops, and an undo
 ## restores the map without replaying anything.
 ##
@@ -59,6 +60,7 @@ const TOO_MANY := "Let the last events finish first."
 const NO_BRIDGE := "Click a bridge to drop it."
 const NO_TREES := "No trees stand there. Click in a forest."
 const NO_FOREST := "Only a forest burns. Click in a forest."
+const NO_FOREST_PATH := "Only a forest burns. Draw the path through a forest."
 const NOT_GM := "Only the GM starts events."
 ## Kinds that take the trees in a circle: two of them over the same trees would fight for them.
 const TREE_KINDS: Array[int] = [TerrainEvent.Kind.FOREST_FALL, TerrainEvent.Kind.FIRE]
@@ -118,16 +120,23 @@ func refusal_for(event: TerrainEvent) -> String:
 				if other.kind == event.kind and other.crossing_id == event.crossing_id:
 					return BUSY
 		TerrainEvent.Kind.FOREST_FALL, TerrainEvent.Kind.FIRE:
+			# Along a path, the distance between the two lines (TerrainEvent.distance_to).
 			for entry in _active:
 				var other: TerrainEvent = entry.event
 				var reach := other.radius_m + event.radius_m
-				var near := other.centre.distance_to(event.centre) < reach * 0.5
+				var near := other.distance_to(event) < reach * 0.5
 				if other.kind in TREE_KINDS and near:
 					return BUSY
 			if event.kind == TerrainEvent.Kind.FIRE:
 				var root := editor.palette_root
-				if FireSweep.burnable(editor.scatter, event.centre, event.radius_m, root, 1).is_empty():
-					return NO_FOREST
+				var radius := event.radius_m
+				var trees := (
+					FireSweep.burnable_along(editor.scatter, event.path, radius, root, 1)
+					if event.is_path()
+					else FireSweep.burnable(editor.scatter, event.centre, radius, root, 1)
+				)
+				if trees.is_empty():
+					return NO_FOREST_PATH if event.is_path() else NO_FOREST
 			elif ForestFall.trees_near(editor.scatter, event.centre, event.radius_m, 1).is_empty():
 				return NO_TREES
 	return ""
@@ -279,29 +288,75 @@ func _apply(event: TerrainEvent) -> void:
 ## contest thinning the forest just past it), or a Clear as a fall's where the palette has no
 ## burnt biome, then ash (or its stand-in) laid over the ground, which keeps what grows there
 ## (FireSweep.plan_for). One undo takes both back.
+##
+## Along a path the same two strokes are capsules along its segments (a capsule's exposure on
+## its axis is a dab's at its centre, so the centre line ends as a circle's centre does): the
+## burnt biome (or the Clear) only over its forest spans (FirePath.forest_spans of every tree
+## within its half-width, design 7 Q3: snags only where trees stood), the ash along the whole
+## path.
 func _burn(event: TerrainEvent) -> void:
 	var editor := edits.editor
 	var root := editor.palette_root
 	var plan := FireSweep.plan_for(PaletteLibrary.biomes(root), PaletteLibrary.surfaces(root))
-	var at := editor.to_world(Vector3(event.centre.x, 0.0, event.centre.y))
-	var scale := editor.map_scale()
+	var whole: Array[PackedVector2Array] = [
+		event.path if event.is_path() else PackedVector2Array([event.centre])
+	]
+	var forest := _forest_lines(event) if event.is_path() else whole
 	var biome := String(plan.biome)
 	editor.history.begin_group()
 	# A map whose biome list is full (MapDocument.MAX_BIOMES) takes the Clear too.
-	if biome != "" and editor.begin_stroke(MaskBrush.PAINT, biome):
-		var reach := event.radius_m * FireSweep.BURN_REACH * scale
-		editor.stroke_dab(at, at, reach, FireSweep.BURN_SECONDS)
+	if forest.is_empty():
+		pass
+	elif biome != "" and editor.begin_stroke(MaskBrush.PAINT, biome):
+		_dabs(forest, event.radius_m * FireSweep.BURN_REACH, FireSweep.BURN_SECONDS)
 		editor.end_stroke()
 	elif editor.begin_stroke(MaskBrush.CLEAR):
-		editor.stroke_dab(at, at, event.radius_m * CLEAR_REACH * scale, CLEAR_SECONDS)
+		_dabs(forest, event.radius_m * CLEAR_REACH, CLEAR_SECONDS)
 		editor.end_stroke()
 	var surface := String(plan.surface)
 	if surface != "" and editor.surface_refusal(surface) == "":
 		if editor.begin_surface_stroke(surface, false):
-			var spread := event.radius_m * FireSweep.ASH_REACH * scale
-			editor.stroke_dab(at, at, spread, FireSweep.ASH_SECONDS)
+			_dabs(whole, event.radius_m * FireSweep.ASH_REACH, FireSweep.ASH_SECONDS)
 			editor.end_stroke()
 	editor.history.end_group(label_for(event.kind))
+
+
+## The forest spans of a fire along a path (FirePath.forest_spans of every burnable tree within
+## its half-width, not only those its motion animates), each as its part of the line.
+func _forest_lines(event: TerrainEvent) -> Array[PackedVector2Array]:
+	var editor := edits.editor
+	var along := FirePath.arcs(event.path)
+	var trees := FireSweep.burnable_along(
+		editor.scatter, event.path, event.radius_m, editor.palette_root, FirePath.ALL_TREES
+	)
+	var tree_arcs := PackedFloat32Array()
+	for tree in trees:
+		tree_arcs.append(float(tree.arc))
+	var lines: Array[PackedVector2Array] = []
+	for span in FirePath.forest_spans(tree_arcs, event.radius_m, along[-1]):
+		var part := FirePath.span_line(event.path, along, span.x, span.y)
+		if part.size() >= 2:
+			lines.append(part)
+	return lines
+
+
+## Exposes the stroke in progress along each of `lines` (map XZ) at map radius `radius` for
+## `seconds`: a single point is one dab there; a line one capsule a segment, CAPSULE_REACH
+## wider, each its share of the seconds (FirePath.capsule_seconds), so the line's centre takes
+## what the dab's centre does and its rim falls off alike.
+func _dabs(lines: Array[PackedVector2Array], radius: float, seconds: float) -> void:
+	var editor := edits.editor
+	var scale := editor.map_scale()
+	for line in lines:
+		var last := editor.to_world(Vector3(line[0].x, 0.0, line[0].y))
+		if line.size() == 1:
+			editor.stroke_dab(last, last, radius * scale, seconds)
+		var wide := radius * FirePath.CAPSULE_REACH
+		for i in range(1, line.size()):
+			var at := editor.to_world(Vector3(line[i].x, 0.0, line[i].y))
+			var share := FirePath.capsule_seconds(seconds, line[i - 1].distance_to(line[i]), wide)
+			editor.stroke_dab(last, at, wide * scale, share)
+			last = at
 
 
 func _on_recorded(entry: Dictionary) -> void:

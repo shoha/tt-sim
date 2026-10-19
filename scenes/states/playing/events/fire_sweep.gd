@@ -40,6 +40,15 @@ extends ForestFall
 ## without them gets a Clear and the peat it has). A burnt tree is gone from its chunk when
 ## that change rebuilds it, as a fallen one is.
 ##
+## Along a path (Start a fire's Path shape, TerrainEvent.path; design 3d) the same fire runs
+## along the line instead of out from a centre: the trees within its half-width burn
+## (FirePath.trees_along, at most FirePath.MAX_TREES spread evenly along it), each catching
+## as the front reaches its arc length (front_reaches over the path's length, the front taking
+## TerrainEvent.path_spread), plus the circle's jitter; the ground fire's front runs along the
+## arc (GroundBurn.setup_path) and its tongues stand along the line (PATH_FRONT_TONGUES). The
+## flames and smoke are the circle's, only laid along the path; its pools are sized for its
+## most trees.
+##
 ## Bounded: at most MAX_TREES trees, one stand-in mesh copy per species made in setup, two
 ## pools of fixed size made once (every flame and billow of one fire fits at once, so none is
 ## overwritten), one ground burn, every random draw and every ground tongue's place made in
@@ -121,6 +130,10 @@ const COLUMN_SIZE := 0.45
 const FLAMES_PER_TREE := CROWN_TONGUES + 1
 const FLAME_POOL := FLAMES_PER_TREE * MAX_TREES + FRONT_TONGUES
 const SMOKE_POOL := MAX_TREES + 2
+## A path's ground tongues (spread along it, a longer line than a ring holds) and its pools.
+const PATH_FRONT_TONGUES := 56
+const PATH_FLAME_POOL := FLAMES_PER_TREE * FirePath.MAX_TREES + PATH_FRONT_TONGUES
+const PATH_SMOKE_POOL := FirePath.MAX_TREES + 2
 ## Draw order: the flames over the water and the ring.
 const FLAME_PRIORITY := EventPuffs.RENDER_PRIORITY + 2
 ## Colours (linear, see the header): a flame's rim (shows a deep red-orange; its bands burn
@@ -150,6 +163,12 @@ var _across := Vector3.RIGHT
 var _front: Array[Vector4] = []
 var _front_draws := PackedFloat32Array()
 var _front_next := 0
+## A path's line (map XZ; empty for a circle), its arcs and length, and how long its front
+## takes (a circle's SPREAD_S).
+var _path := PackedVector2Array()
+var _along := PackedFloat32Array()
+var _length := 0.0
+var _spread := SPREAD_S
 
 
 ## The id of the palette's burnt biome under `root`, or "" when it has none.
@@ -189,6 +208,19 @@ static func burnable(
 	return trees_near(scatter, centre, radius, limit, burnt + "/" if burnt != "" else "")
 
 
+## The trees a fire along `line` (map XZ), `half_width` either side, burns on `scatter`, the
+## burnt biome's own passed over, sorted along the line (FirePath.trees_along).
+static func burnable_along(
+	scatter: AuthoredScatter,
+	line: PackedVector2Array,
+	half_width: float,
+	root: String = PaletteLibrary.DEFAULT_ROOT,
+	limit: int = FirePath.MAX_TREES
+) -> Array[Dictionary]:
+	var burnt := burnt_biome(root)
+	return FirePath.trees_along(scatter, line, half_width, burnt + "/" if burnt != "" else "", limit)
+
+
 ## The burn shader's progress for a tree `t` seconds after it caught a burn of `burn`
 ## seconds: 0 until it catches, BURN_RATE at the end of its burn, on past it. Pure.
 static func burn_progress(t: float, burn: float) -> float:
@@ -214,9 +246,12 @@ static func snag_transform(base: Transform3D, elapsed: float, duration: float) -
 
 
 ## When the ring on the ground reaches `distance` metres from the centre, the nearest tree
-## `nearest` out and the rim `radius` (GroundBurn.front_radius run backwards). Pure.
-static func front_reaches(distance: float, nearest: float, radius: float) -> float:
-	return SPREAD_S * clampf((distance - nearest) / maxf(radius - nearest, 0.1), 0.0, 1.0)
+## `nearest` out and the rim `radius`, the front taking `spread` seconds between them
+## (GroundBurn.front_radius run backwards; along a path, the arc from 0 to its length). Pure.
+static func front_reaches(
+	distance: float, nearest: float, radius: float, spread: float = SPREAD_S
+) -> float:
+	return spread * clampf((distance - nearest) / maxf(radius - nearest, 0.1), 0.0, 1.0)
 
 
 ## Prepares the fire `event` describes on `editor`'s map; false when no forest stands there.
@@ -249,15 +284,22 @@ func setup(editor: AuthoringEditor, event: TerrainEvent) -> bool:
 		editor.terrain.warm_surface(plan.surface)
 	_ground = GroundBurn.new()
 	add_child(_ground)
-	_ground.setup(
-		Vector3(event.centre.x, _middle.y, event.centre.y),
-		_nearest,
-		event.radius_m,
-		SPREAD_S,
-		duration,
-		event.seed_value
-	)
-	_place_front(editor.document, event)
+	if _path.is_empty():
+		_ground.setup(
+			Vector3(event.centre.x, _middle.y, event.centre.y),
+			_nearest,
+			event.radius_m,
+			SPREAD_S,
+			duration,
+			event.seed_value
+		)
+		_place_front(editor.document, event)
+	else:
+		var heights := PackedFloat32Array()
+		for p in _path:
+			heights.append(_ground_y(editor.document, p))
+		_ground.setup_path(_path, heights, event.radius_m, _spread, duration, event.seed_value)
+		_place_path_front(editor.document, event)
 	return true
 
 
@@ -294,17 +336,25 @@ func is_played(elapsed: float) -> bool:
 	return elapsed >= duration and _flames.is_idle() and _smoke.is_idle() and not charred
 
 
-## The trees `event` burns (burnable).
+## The trees `event` burns (burnable, or along its path burnable_along).
 func _find(editor: AuthoringEditor, event: TerrainEvent) -> Array[Dictionary]:
+	if event.is_path():
+		_path = event.path
+		_along = FirePath.arcs(_path)
+		_length = _along[-1]
+		_spread = TerrainEvent.path_spread(_length)
+		_nearest = 0.0
+		return burnable_along(_scatter, _path, event.radius_m, editor.palette_root)
 	var found := burnable(_scatter, event.centre, event.radius_m, editor.palette_root)
 	_nearest = float(found[0].distance) if not found.is_empty() else 0.0
 	return found
 
 
-## The fire's two pools (see the header), its flames banded.
+## The fire's two pools (see the header), its flames banded; a path's sized for its trees.
 func _make_puffs() -> void:
-	_smoke = SmokePuffs.new(SMOKE_POOL)
-	_flames = EventPuffs.new(FLAME_POOL, FLAME_PRIORITY)
+	var on_path := not _path.is_empty()
+	_smoke = SmokePuffs.new(PATH_SMOKE_POOL if on_path else SMOKE_POOL)
+	_flames = EventPuffs.new(PATH_FLAME_POOL if on_path else FLAME_POOL, FLAME_PRIORITY)
 	add_child(_smoke)
 	add_child(_flames)
 	_flames.band_flames(true)
@@ -354,11 +404,7 @@ func _tree_entry(tree: Dictionary, event: TerrainEvent, box: AABB, height: float
 	return {
 		"height": height,
 		"width": clampf(width, height * 0.3, height),
-		"start":
-		(
-			front_reaches(_reach(base.origin, event), _nearest, event.radius_m)
-			+ _rng.randf_range(0.0, SPREAD_JITTER)
-		),
+		"start": _front_time(base.origin, event) + _rng.randf_range(0.0, SPREAD_JITTER),
 		"burn": _rng.randf_range(BURN_S.x, BURN_S.y),
 		"draws": draws,
 		"tongues": 0,
@@ -378,21 +424,51 @@ func _place_front(document: MapDocument, event: TerrainEvent) -> void:
 		var near_sq := _nearest * _nearest
 		var distance := sqrt(lerpf(near_sq, reach * reach, _rng.randf()))
 		var xz := event.centre + Vector2(cos(angle), sin(angle)) * distance
-		var y := WaterGeometry.ground_at(document, xz) if document != null else _middle.y
-		var when := front_reaches(_reach(Vector3(xz.x, y, xz.y), event), _nearest, event.radius_m)
-		places.append(Vector4(xz.x, y, xz.y, when))
+		var y := _ground_y(document, xz)
+		places.append(Vector4(xz.x, y, xz.y, _front_time(Vector3(xz.x, y, xz.y), event)))
+	_set_front(places)
+
+
+## A path's PATH_FRONT_TONGUES places along its line on `document`'s ground, one in each even
+## stretch of its length at a random point of it and a random way across its half-width, each
+## timed for when the front reaches it, sorted by that time.
+func _place_path_front(document: MapDocument, event: TerrainEvent) -> void:
+	var places: Array[Vector4] = []
+	for i in PATH_FRONT_TONGUES:
+		var s := (float(i) + _rng.randf()) / float(PATH_FRONT_TONGUES) * _length
+		var frame := FirePath.frame_at(_path, _along, s)
+		var across := Vector2(-frame.w, frame.z) * event.radius_m * _rng.randf_range(-0.9, 0.9)
+		var xz := Vector2(frame.x, frame.y) + across
+		var y := _ground_y(document, xz)
+		places.append(Vector4(xz.x, y, xz.y, _front_time(Vector3(xz.x, y, xz.y), event)))
+	_set_front(places)
+
+
+## The ground's tongues: `places` sorted by when the front reaches them, a draw each.
+func _set_front(places: Array[Vector4]) -> void:
 	places.sort_custom(func(a: Vector4, b: Vector4) -> bool: return a.w < b.w)
 	_front = places
-	_front_draws.resize(FRONT_TONGUES)
-	for i in FRONT_TONGUES:
+	_front_draws.resize(places.size())
+	for i in places.size():
 		_front_draws[i] = _rng.randf()
 
 
-## The reach of map point `at` in `event` (GroundBurn.reach): when the front gets there, a
-## lobe of it running ahead or a bay lagging, as the ground shows it.
-func _reach(at: Vector3, event: TerrainEvent) -> float:
+## The ground's height under map point `xz` on `document` (the stand's middle without one).
+func _ground_y(document: MapDocument, xz: Vector2) -> float:
+	return WaterGeometry.ground_at(document, xz) if document != null else _middle.y
+
+
+## When the front reaches map point `at` in `event`: its reach (GroundBurn.reach, or along a
+## path GroundBurn.path_reach at its arc) through front_reaches, a lobe of the front running
+## ahead or a bay lagging, as the ground shows it.
+func _front_time(at: Vector3, event: TerrainEvent) -> float:
 	var p := Vector2(at.x - event.centre.x, at.z - event.centre.y)
-	return GroundBurn.reach(p, event.radius_m, event.seed_value)
+	if _path.is_empty():
+		var reach := GroundBurn.reach(p, event.radius_m, event.seed_value)
+		return front_reaches(reach, _nearest, event.radius_m)
+	var arc := FirePath.project(_path, _along, Vector2(at.x, at.z)).x
+	var along := GroundBurn.path_reach(p, arc, event.radius_m, event.seed_value)
+	return front_reaches(along, 0.0, _length, _spread)
 
 
 ## The ground's tongue `index` rising where the front has reached.
