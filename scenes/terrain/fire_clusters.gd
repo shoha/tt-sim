@@ -1,9 +1,10 @@
 class_name FireClusters
 extends RefCounted
 
-## Where the persistent fire's lights and smoke stand (FireField; design:
-## docs/plans/2026-10-11-fire-features/design.md section 4, "Light" and "Smoke"). Pure and
-## deterministic, so every peer agrees, and run only when blocks re-plan, never per frame.
+## Where the persistent fire's lights and smoke stand, and which cluster each burning cell's
+## flames belong to, which the sound hears (FireField, FireSound; design:
+## docs/plans/2026-10-11-fire-features/design.md section 4, "Light", "Smoke" and "Sound"). Pure
+## and deterministic, so every peer agrees, and run only when blocks re-plan, never per frame.
 ##
 ## A cluster is a hot spot of the burn, found on a coarse grid of CELL_M cells: each cell sums
 ## the size of the flames standing in it, a flame's height squared (square metres, about its
@@ -106,6 +107,33 @@ static func find(cells: Dictionary, blaze: bool) -> Array[Dictionary]:
 	return out
 
 
+## Where the flames of each cluster (find's, all flames) stand: cluster cell ->
+## PackedVector3Array of the size-weighted centroids (document metres) of the burning cells that
+## belong to it. A cell belongs to the cluster its steepest ascent of scores reaches, each step to
+## the neighbour that tops it most (the order find's clusters top their neighbours by), so every
+## burning cell belongs to exactly one cluster, also the cells of a long burn outside every
+## cluster's own nine (FireSound hears a cluster over all of them). Pure.
+static func spots(cells: Dictionary) -> Dictionary:
+	var scores := {}
+	for cell: Vector2i in cells:
+		if (cells[cell] as PackedFloat64Array)[SIZE] > 0.0:
+			scores[cell] = _score(cells, cell, 0)
+	var up := {}
+	for cell: Vector2i in scores:
+		up[cell] = _uphill(scores, cell)
+	var out := {}
+	for cell: Vector2i in scores:
+		var top: Vector2i = up[cell]
+		while up[top] != top:
+			top = up[top]
+		up[cell] = top
+		var sums: PackedFloat64Array = cells[cell]
+		var list: PackedVector3Array = out.get(top, PackedVector3Array())
+		list.append(Vector3(sums[1], sums[2], sums[3]) / sums[SIZE])
+		out[top] = list
+	return out
+
+
 ## The clusters the lights stand over: the MAX_LIGHTS largest burning ones. Pure.
 static func lights(cells: Dictionary) -> Array[Dictionary]:
 	return find(cells, false).slice(0, MAX_LIGHTS)
@@ -183,6 +211,22 @@ static func _tops(scores: Dictionary, cell: Vector2i) -> bool:
 			if score > own or (score == own and _row_order(other, cell)):
 				return false
 	return true
+
+
+## The burning neighbour of `cell` that tops it most (find's order: the higher score, ties to
+## the earlier in row order), or `cell` itself when none does (a cluster).
+static func _uphill(scores: Dictionary, cell: Vector2i) -> Vector2i:
+	var best := cell
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			var other := cell + Vector2i(dx, dz)
+			if other == cell or not scores.has(other):
+				continue
+			var score: float = scores[other]
+			var top: float = scores[best]
+			if score > top or (score == top and _row_order(other, best)):
+				best = other
+	return best
 
 
 static func _cluster(cells: Dictionary, cell: Vector2i, o: int) -> Dictionary:

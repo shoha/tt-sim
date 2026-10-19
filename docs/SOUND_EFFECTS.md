@@ -196,7 +196,7 @@ Played with `AudioManager.play(&"<name>")`; columns as for the UI table.
 | `token_whoosh`  | -3 dB  | 1.3    | -        | 10       | Rapid drag swoosh (velocity-based)   | Disabled      |
 | `splash_enter`  | 0 dB   | 0.5    | -        | 30       | Token entering a water zone          | **Wired**     |
 | `splash_exit`   | -3 dB  | 0.5    | -        | 30       | Token leaving a water zone           | **Wired**     |
-| `fire_roar`     | -6 dB  | 0.5    | -        | 10       | The persistent fire's roar, a recorded loop (see "Loops") | **Wired** (`FireSound`) |
+| `fire_roar`     | -9 dB  | 0.5    | -        | 10       | The persistent fire's roar, a recorded loop (see "Loops") | **Wired** (`FireSound`) |
 
 ### Loops
 
@@ -234,11 +234,14 @@ crackle. It enters the same pipeline as every other sound: a `RecordedLoop` in
 - **Manifest and playback.** Every manifest entry carries `"loop"`. `AudioManager.play()` refuses
   a loop with a warning (it would hold a pooled voice for ever); the node that owns the source
   plays it on positional players of its own, with the stream from `AudioManager.loop_stream()`
-  and the bus, gain and pitch jitter from `sound_entry()`. `FireSound` stands two
-  `AudioStreamPlayer3D` on the SFX bus at the two strongest fire clusters near the view, the level
-  following the fire there and fading over about a second ([systems/fire.md](systems/fire.md)
-  "The sound"). The level by ear is the spec's `volume_db` alone (`--manifest` after a change):
-  -6 dB puts one player at -28.6 dBFS RMS, about 20 dB under `token_drop`'s loudest 50 ms.
+  and the bus, gain and pitch jitter from `sound_entry()`. `FireSound` voices the two strongest
+  fire clusters near the view on two `AudioStreamPlayer3D` on the SFX bus, each cluster heard by
+  how near its flames (not its centroid) come to the screen's middle and standing at their point
+  nearest it, so zooming into a fire never silences it and a fire filling the screen sounds
+  centred; the level follows the fire there and fades over about a second
+  ([systems/fire.md](systems/fire.md) "The sound"). The level by ear is the spec's `volume_db`
+  alone (`--manifest` after a change): -9 dB (card F7c; F7b had -6) puts one player at -31.6 dBFS
+  RMS, about 23 dB under `token_drop`'s loudest 50 ms.
 
 ### Where SFX Sounds Are Used
 

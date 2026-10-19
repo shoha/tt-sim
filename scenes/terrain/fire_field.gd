@@ -836,7 +836,7 @@ func _place_lights_and_smoke() -> void:
 		FireFieldSmoke.set_wind(document.map_seed)
 	_lights.place(lit)
 	_smoke.place(smoky)
-	_sound.place(burning)
+	_sound.place(burning, FireClusters.spots(cells))
 
 
 ## The lattice around one block (`margin` points past it on every side, WINDOW_MARGIN at least;

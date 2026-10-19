@@ -2,19 +2,26 @@ class_name FireSound
 extends Node3D
 
 ## The persistent fire's sound (FireField; design: docs/plans/2026-10-11-fire-features/design.md
-## section 4 "Sound", cards F7 and F7b): the roar loop (tools/sfx_spec.py RECORDINGS "fire_roar",
-## a CC0 recording of a large fire processed into a seamless loop, which AudioManager does not
-## play itself) on at most MAX_PLAYERS AudioStreamPlayer3D on the manifest entry's bus, SFX, so
-## the Settings SFX volume governs it. Each player stands at one of the strongest fire clusters
-## near what the camera sees.
+## section 4 "Sound", cards F7, F7b and F7c): the roar loop (tools/sfx_spec.py RECORDINGS
+## "fire_roar", a CC0 recording of a large fire processed into a seamless loop, which AudioManager
+## does not play itself) on at most MAX_PLAYERS AudioStreamPlayer3D on the manifest entry's bus,
+## SFX, so the Settings SFX volume governs it. Each player voices one of the strongest fire
+## clusters near what the camera sees.
 ##
 ## Placement reuses the clusters FireField finds for its lights (FireClusters.find on each
-## refresh, handed over by place()), and the players are re-picked (pick, pure) only when the fire
-## changes or the camera's view moves or zooms by REPICK_SHARE of its height, never per frame. A
-## cluster counts by its distance from the camera's axis, for the orthographic game camera its
-## distance from the screen's middle: whole within FULL_SHARE of the view's height, fading out by
-## REACH_SHARE, just past the screen's sides. Its loudness (gain_for) follows its size (square
-## metres of flame, as the lights' energy does) on a square-root curve, full at FULL_SIZE_M2.
+## refresh, handed over by place() with FireClusters.spots), and the players are re-picked (pick,
+## pure) only when the fire changes or the camera's view moves or zooms by REPICK_SHARE of its
+## height, never per frame. A cluster is an area, not a point: its flames are the burning cells
+## that belong to it (spots, every burning cell in exactly one cluster, also a long burn's cells
+## outside every cluster's own nine), each reaching SPOT_REACH_M. It counts by how near those
+## flames come to the camera's axis, for the orthographic game camera to the screen's middle:
+## whole within FULL_SHARE of the view's height, fading out by REACH_SHARE, just past the
+## screen's sides, with FULL_MIN_M and REACH_MIN_M under both once zoomed in (card F7c: at zoom 2
+## a fire 3 m from its cluster's centroid fell silent while it filled the view). Its player stands
+## at the flames' point nearest the screen's middle, so a fire around the view sounds centred and
+## one to the right is heard right, alike at every zoom. Its loudness (gain_for) follows its size
+## (square metres of flame, as the lights' energy does) on a square-root curve, full at
+## FULL_SIZE_M2.
 ##
 ## Each player fades toward its cluster's loudness at FADE_PER_S (about a second from silence to
 ## full), so fire appearing, being put out or leaving the view eases in and out; a player whose
@@ -32,10 +39,19 @@ const SOUND := &"fire_roar"
 const MAX_PLAYERS := 2
 ## A cluster of this many square metres of flame (FireClusters' size) plays at full.
 const FULL_SIZE_M2 := 12.0
-## Shares of the view's height (the orthographic camera's size): a cluster this far from the
-## camera's axis plays whole, and one this far is silent (the screen's sides are at about 0.9).
+## Shares of the view's height (the orthographic camera's size): a cluster whose flames come this
+## near the camera's axis plays whole, and one whose flames stay this far is silent (the screen's
+## sides are at about 0.9).
 const FULL_SHARE := 0.5
 const REACH_SHARE := 1.0
+## The same in metres, the floor under either share once zoomed in, so a fire just off a close
+## view's sides still sounds (at the closest zoom, 2, the view is 2 m high and 3.6 m wide).
+const FULL_MIN_M := 2.0
+const REACH_MIN_M := 5.0
+## How far a spot's flames reach around it (metres): a cell's flames stand within about half its
+## diagonal of their centroid, so neighbouring cells' reaches overlap and a view over any flame
+## is over some cluster's flames.
+const SPOT_REACH_M := 0.75 * FireClusters.CELL_M
 ## Linear gain per second a player fades by.
 const FADE_PER_S := 1.0
 ## The view re-picks the players once it moves or zooms by this share of its height.
@@ -47,7 +63,8 @@ const SILENT := 0.001
 ## An empty slot's cell.
 const NONE := Vector2i(2147483647, 2147483647)
 
-## The burning clusters (FireClusters.find), largest first, in this node's frame.
+## The burning clusters (FireClusters.find), largest first, in this node's frame, each with its
+## "spots" (place).
 var _clusters: Array[Dictionary] = []
 var _players: Array[AudioStreamPlayer3D] = []
 ## Per slot: its cluster's cell (NONE: none), its gain now and the gain it fades toward, the
@@ -78,9 +95,14 @@ func _process(delta: float) -> void:
 
 
 ## Takes the burning clusters of a refresh (FireClusters.find: largest first, document metres,
-## this node's frame) and re-picks the players for the current view.
-func place(clusters: Array[Dictionary]) -> void:
-	_clusters = clusters
+## this node's frame) and where each one's flames stand (FireClusters.spots; a cluster missing
+## from it counts as its centroid alone) and re-picks the players for the current view.
+func place(clusters: Array[Dictionary], spots: Dictionary = {}) -> void:
+	_clusters = []
+	for cluster in clusters:
+		var heard := cluster.duplicate()
+		heard["spots"] = spots.get(cluster["cell"], PackedVector3Array([cluster["at"]]))
+		_clusters.append(heard)
 	_repick(_view())
 	set_process(not _players.is_empty())
 
@@ -113,21 +135,38 @@ func gains() -> PackedFloat32Array:
 	return _gain
 
 
+## The gain each player fades toward, for probes and tests.
+func targets() -> PackedFloat32Array:
+	return _target
+
+
+## The burning clusters place() last took (largest first, this node's frame, each with its
+## "spots"), for probes and tests.
+func clusters() -> Array[Dictionary]:
+	return _clusters
+
+
 ## The clusters the players stand at for a camera at `eye` looking along `axis` (unit) with a
 ## view `view_m` high (INF: no camera, every cluster in view): up to MAX_PLAYERS of `clusters`
 ## with a gain above 0, loudest first (ties in the given order), each {"cell", "at", "gain"}.
-## Pure.
+## A cluster's flames are its "spots" (place's; without them its centroid "at"), each reaching
+## SPOT_REACH_M around it; the cluster is heard by how near its flames come to the camera's axis
+## and stands at their point nearest the axis (near), so a fire around the view's middle sounds
+## centred at every zoom. Without a view it stands at its centroid. Pure.
 static func pick(
 	clusters: Array[Dictionary], eye: Vector3, axis: Vector3, view_m: float
 ) -> Array[Dictionary]:
 	var heard: Array[Dictionary] = []
+	var full := maxf(FULL_SHARE * view_m, FULL_MIN_M)
+	var reach := maxf(REACH_SHARE * view_m, REACH_MIN_M)
 	for cluster in clusters:
 		var at: Vector3 = cluster["at"]
 		var shown := 1.0
 		if is_finite(view_m):
-			var off := at - eye
-			var aside := (off - axis * off.dot(axis)).length()
-			shown = 1.0 - smoothstep(FULL_SHARE * view_m, REACH_SHARE * view_m, aside)
+			var spots: PackedVector3Array = cluster.get("spots", PackedVector3Array([at]))
+			var nearest := near(spots, eye, axis)
+			at = nearest[0]
+			shown = 1.0 - smoothstep(full, reach, float(nearest[1]))
 		var gain := gain_for(float(cluster["size"])) * shown
 		if gain > 0.0:
 			heard.append({"cell": cluster["cell"], "at": at, "gain": gain})
@@ -145,21 +184,42 @@ static func pick(
 	return out
 
 
+## The point of the flames at `spots` nearest the camera's axis (from `eye` along unit `axis`)
+## and its distance from the axis: [Vector3, float]. Each spot reaches SPOT_REACH_M around it,
+## across the axis, so the point is a spot moved toward the axis by up to that, and the distance
+## is 0 for an axis through a spot's reach. Pure.
+static func near(spots: PackedVector3Array, eye: Vector3, axis: Vector3) -> Array:
+	var best := Vector3.INF
+	var nearest := INF
+	for spot in spots:
+		var off := spot - eye
+		var aside := off - axis * off.dot(axis)
+		var length := aside.length()
+		if length < nearest:
+			nearest = length
+			best = spot - aside * (minf(length, SPOT_REACH_M) / maxf(length, 1e-6))
+	return [best, maxf(nearest - SPOT_REACH_M, 0.0)]
+
+
 ## A cluster's loudness (0..1) for its size in square metres of flame. Pure.
 static func gain_for(size_m2: float) -> float:
 	return sqrt(clampf(size_m2 / FULL_SIZE_M2, 0.0, 1.0))
 
 
 ## The camera's view in this node's frame: [eye, axis, size], or empty without a camera (or out
-## of the tree). A perspective camera counts as no view (every cluster heard).
+## of the tree). The size is taken into the frame too (camera.size is in world units; a level's
+## map_scale scales the map and this node with it). A perspective camera counts as no view
+## (every cluster heard).
 func _view() -> Array:
 	var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
 	if camera == null:
 		return []
 	var to_local := global_transform.affine_inverse()
-	var axis := (to_local.basis * -camera.global_basis.z).normalized()
-	var size := camera.size if camera.projection == Camera3D.PROJECTION_ORTHOGONAL else INF
-	return [to_local * camera.global_position, axis, size]
+	var forward := to_local.basis * -camera.global_basis.z
+	var size := INF
+	if camera.projection == Camera3D.PROJECTION_ORTHOGONAL:
+		size = camera.size * forward.length()
+	return [to_local * camera.global_position, forward.normalized(), size]
 
 
 ## Whether `view` moved or zoomed by REPICK_SHARE of its height since the last pick.

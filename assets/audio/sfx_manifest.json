@@ -53,7 +53,7 @@
       "path": "res://assets/audio/sfx/fire_roar.wav",
       "pitch_jitter": 0.5,
       "priority": 10,
-      "volume_db": -6.0
+      "volume_db": -9.0
     },
     "hover": {
       "bus": "UI",
