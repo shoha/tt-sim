@@ -4,8 +4,9 @@ extends GutTest
 ## from a style, and one gesture (LineGesture). The styles change only shared keys, and the
 ## river's and the fire line's differ only in their tint and fill; the builder makes both
 ## ribbons with the same caps, edge, outline and chevrons, a chevron keeping its glyph at any
-## zoom; the fire's rails fall to clear in a thin seam; the two erase ribbons share one
-## structure and one low wash, only its tint parting from what each erases; every ribbon takes
+## zoom and never growing past its look at the reference zoom; the fire's rails fall to clear in
+## a thin seam; the two erase ribbons share one structure with no wash, their chevrons the lay's
+## with only the colour salmon (card F5g); every ribbon takes
 ## the scene's light; and both brushes record at one spacing, drop their line on Esc and stay
 ## armed, make nothing of a line under the minimum length, and read their chips alike (card F5f:
 ## "<shape>  <setting>  <length>", "<erase>  <length>").
@@ -110,11 +111,10 @@ func test_the_ends_are_round() -> void:
 		assert_almost_eq(p.distance_to(Vector2(nearest, 0.0)), 1.5, 0.01, "on the band's rim")
 
 
-## The two erase ribbons are one structure: the lay's lines, the salmon edge, glow and chevrons
-## each over the erase's ink (the erase ring's, BrushCursor.ring_strokes), the chevrons the lay's
-## glyph at the lay's places and weights, and one coverage rule, a low wash that leaves what it
-## erases readable under it. Only the wash's tint differs: warm salmon over the cool water, a
-## light lake over the warm flames (the dark lake at half coverage greyed them to mud, F5f).
+## The two erase ribbons are one structure: the lay's lines, the salmon edge and glow over the
+## erase's ink (the erase ring's, BrushCursor.ring_strokes), the chevrons the lay's exactly
+## (glyph, places, weights and ink) with only their colour salmon, and no wash: what an erase
+## covers shows through untouched (any wash shifted the water's blue or the flames', F5f, F5g).
 func test_the_erase_ribbons_share_one_structure() -> void:
 	var ground := _ground()
 	var line := _line()
@@ -133,43 +133,48 @@ func test_the_erase_ribbons_share_one_structure() -> void:
 		for k in range(3, lay.lines.size()):
 			assert_eq(shape.lines[k][0], lay.lines[k][0], "the lay's chevron glyph %d" % k)
 			assert_eq(shape.lines[k][2], lay.lines[k][2], "at the lay's weight %d" % k)
-		assert_eq(shape.lines[-2][1], ring[0][0], "each chevron on the erase's ink")
-		assert_eq(shape.lines[-1][1], Color(BrushCursor.CLEAR_TINT, 0.95), "salmon chevrons")
-		var last: Color = shape.colors[2 * line.size() - 1]
-		assert_almost_eq(float(shape.colors[0].a), float(erase.colors[0].a), 1e-6, "one rule")
-		assert_almost_eq(float(last.a), float(erase.colors[2 * line.size() - 1].a), 1e-6)
-		assert_lte(float(last.a), 0.25, "a low wash: what goes stays readable under it")
+		for k in range(3, lay.lines.size(), 2):
+			assert_eq(shape.lines[k][1], lay.lines[k][1], "on the lay's ink %d" % k)
+			var salmon := Color(BrushCursor.CLEAR_TINT, float(lay.lines[k + 1][1].a))
+			assert_eq(shape.lines[k + 1][1], salmon, "only the chevron's colour salmon %d" % k)
+		for c: Color in shape.colors:
+			assert_eq(c.a, 0.0, "no wash: what goes shows through untouched")
 	var ink: Color = ring[0][0]
 	assert_true(ink.is_equal_approx(Color(ThemeColors.INK, ink.a)), "ink")
 	assert_gte(ink.a, 0.8, "strong enough for 3:1 over flames and pale water")
-	var cool: Color = put_out.colors[0]
-	assert_gt(cool.b, cool.r, "cool over the flames")
-	assert_gt(ThemeColors.LAKE_LIGHT.get_luminance(), ThemeColors.LAKE.get_luminance() * 1.5)
-	assert_eq(FireBrush.PUT_OUT_TINT, ThemeColors.LAKE_LIGHT, "a light lake, not grey mud")
-	var warm: Color = erase.colors[0]
-	assert_gt(warm.r, warm.b, "warm over the water")
 	var plain := BrushCursor.ring_strokes(WaterBrush.TINT, 2.0)
 	assert_eq(plain[1], [WaterBrush.TINT, 2.0], "a lay's ring keeps its own line")
 
 
-## A chevron is one glyph at any zoom: its strokes scale with its size on screen, so a close
-## erase's chevrons are as solid as a far lay's, never thin hollow outlines.
-func test_a_chevron_keeps_its_glyph_at_any_zoom() -> void:
+## A chevron is one glyph at any zoom and never grows past its look at the reference zoom: a
+## close one is drawn CHEVRON_PX across (scaled to the view's height) at the weights that size
+## takes, so a close erase's chevrons are neither thin hollow outlines nor road markings, and an
+## erase's are the lay's at every zoom (F5g).
+func test_a_chevron_never_grows_past_its_reference_look() -> void:
 	var line := _line()
 	var far := LineRibbon.ribbon(_ground(), line, 1.0, FireBrush.LAY_STYLE)
 	var near_ground := func(p: Vector2) -> Vector2: return p * 100.0
 	var near := LineRibbon.ribbon(near_ground, line, 1.0, FireBrush.LAY_STYLE)
-	var far_glyph: PackedVector2Array = far.lines[-1][0]
-	var near_glyph: PackedVector2Array = near.lines[-1][0]
-	var far_across := far_glyph[0].distance_to(far_glyph[2])
-	var near_across := near_glyph[0].distance_to(near_glyph[2])
-	assert_lt(far_across, LineRibbon.CHEVRON_PX, "a far chevron")
+	var view := LineRibbon.CHEVRON_VIEW_H * 1.5
+	var tall := LineRibbon.ribbon(near_ground, line, 1.0, FireBrush.LAY_STYLE, 1.0, 1.0, view)
+	var erase := LineRibbon.ribbon(near_ground, line, 1.0, FireBrush.new().put_out_style())
+	assert_lt(_across(far), LineRibbon.CHEVRON_PX, "a far chevron")
 	assert_eq(far.lines[-1][2], LineRibbon.STYLE.chevron_width, "at the style's weight")
 	assert_eq(far.lines[-2][2], LineRibbon.STYLE.chevron_shadow_width)
-	var weight := float(near.lines[-1][2]) / near_across
-	assert_almost_eq(weight, LineRibbon.STYLE.chevron_width / LineRibbon.CHEVRON_PX, 1e-4)
-	var under := float(near.lines[-2][2]) / near_across
-	assert_almost_eq(under, LineRibbon.STYLE.chevron_shadow_width / LineRibbon.CHEVRON_PX, 1e-4)
+	assert_almost_eq(_across(near), LineRibbon.CHEVRON_PX, 0.01, "a near one at the reference")
+	assert_almost_eq(float(near.lines[-1][2]), LineRibbon.STYLE.chevron_width, 1e-4)
+	assert_almost_eq(float(near.lines[-2][2]), LineRibbon.STYLE.chevron_shadow_width, 1e-4)
+	assert_almost_eq(_across(tall), LineRibbon.CHEVRON_PX * 1.5, 0.01, "a taller view's")
+	assert_almost_eq(float(tall.lines[-1][2]), LineRibbon.STYLE.chevron_width * 1.5, 1e-4)
+	for k in range(3, near.lines.size()):
+		assert_eq(erase.lines[k][0], near.lines[k][0], "the erase's glyph the lay's %d" % k)
+		assert_eq(erase.lines[k][2], near.lines[k][2], "at its weight %d" % k)
+
+
+## The last chevron's width across on screen in a ribbon() `shape`.
+func _across(shape: Dictionary) -> float:
+	var glyph: PackedVector2Array = shape.lines[-1][0]
+	return glyph[0].distance_to(glyph[2])
 
 
 ## The fire line's rails keep their weight out at the edges and fall to nearly clear in a thin
