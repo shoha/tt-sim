@@ -18,8 +18,9 @@ extends RefCounted
 ## (BrushMode.cursor_text) sits in a glass chip under the ring. fan_indices() stays for the
 ## Bridge tool's stone ghosts, filled as fans because a conformed outline can cross itself.
 ## Under the canvas's own drawing lies a glow layer (glow_item()), blended premultiplied, where
-## a fill lit by WaterBrush.lit_fill() adds light as well as covering (the fire line's ribbon
-## glows over green, a dark wood and at night instead of greying); it is cleared at every
+## a fill lit by LineRibbon.lit_fill() adds light as well as covering (every line tool's ribbon
+## fills there; the fire line's glows over green and a dark wood instead of greying); it is
+## cleared at every
 ## drawing of the cursor, so what a mode lays there lasts one drawing as its lines do.
 
 ## Above the world viewport (LAYER_WORLD_VIEWPORT), under the drawers and panels

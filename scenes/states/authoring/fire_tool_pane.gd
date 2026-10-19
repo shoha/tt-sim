@@ -53,7 +53,7 @@ const INTENSITY_TILES: Array[Dictionary] = [
 	},
 ]
 const HINT := (
-	"Line: drag a line of fire. Area: paint it; linger to build it up. Shift + scroll or"
+	"Line: draw a line of fire. Area: paint it; linger to build it up. Shift + scroll or"
 	+ " [ and ] set the width. Hold Ctrl as you press to put fire out; the ash stays. Tab"
 	+ " switches the shape."
 )

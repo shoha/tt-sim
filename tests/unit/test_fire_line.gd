@@ -6,16 +6,9 @@ extends GutTest
 ## along it and keeps the ash; a lay is one "Lay fire" entry whose one undo puts every layer
 ## back byte for byte; a release under 2 m lays nothing; and the brush's own press, frames and
 ## release draw and lay a line, Esc dropping it. Card F5b: a Ctrl line's chip names its length;
-## the Line's ring and ribbon are the band its fire stands in (line_reach); and the ribbon's
-## default style is the river's, call for call. Card F5d: the lay ribbon's variants (A to D)
-## build without touching the river's, the three new ones take the scene's light, and the
-## put-out edge is as heavy as the lay's.
+## the Line's ring and ribbon are the band its fire stands in (line_reach). The ribbon and the
+## gesture the Line shares with the river are test_line_tool.gd's (card F5e).
 
-## Published suns (FoliageLight.last_sun: xyz toward the sun, w its weight): the game's day
-## (48 degrees up), outdoor_sunset's dusk (2.5 up) and outdoor_night (7.5 under the horizon).
-const DAY := Vector4(0.0, 0.75, 0.66, 0.9)
-const DUSK := Vector4(0.0, 0.044, 0.999, 0.0)
-const NIGHT := Vector4(0.0, -0.13, 0.99, 0.0)
 const MEADOW := "grassland_meadow_summer_s1"
 const RADIUS := 2.0
 ## The arc every test draws: a circle's top, about 15 m long across the map's middle.
@@ -247,144 +240,6 @@ func test_the_line_shows_the_band_its_fire_stands_in() -> void:
 	var expected := radius * FireBrush.line_reach(FireBrush.BLAZE, brush.get_flow(), false)
 	assert_almost_eq(fire.stroke_radius(brush), expected, 0.001, "Line: the band")
 	BrushTool.session_radius = radius_was
-
-
-## The river's ribbon is the default style's, call for call; the fire line's own style
-## changes its look alone.
-func test_the_ribbon_style_defaults_are_the_rivers() -> void:
-	var ground := func(p: Vector2) -> Vector2: return p * 10.0
-	var line := PackedVector2Array([Vector2(0, 0), Vector2(4, 0), Vector2(8, 1)])
-	var tint := WaterBrush.TINT
-	var river := WaterBrush.ribbon(ground, line, 1.0, tint, 0.5, true)
-	var shadow := WaterBrush.SHADOW
-	var lines: Array = river.lines
-	assert_eq(lines.size(), 4 + 2 * 3, "two edges, three chevrons")
-	assert_eq(lines[0][1], Color(shadow, 0.4 * 0.5))
-	assert_eq(lines[0][2], 3.0)
-	assert_eq(lines[1][1], Color(tint, 0.85 * 0.5))
-	assert_eq(lines[1][2], 1.5)
-	assert_eq(lines[4][1], Color(shadow, 0.3 * 0.5))
-	assert_eq(lines[4][2], 3.5)
-	assert_eq(lines[5][1], Color(1.0, 1.0, 1.0, 0.7 * 0.5))
-	assert_eq(lines[5][2], 2.0)
-	var colors: PackedColorArray = river.colors
-	assert_eq(colors[0], Color(tint, WaterBrush.RIBBON_ALPHA_UP * 0.5))
-	assert_eq(colors[-1], Color(tint, WaterBrush.RIBBON_ALPHA_DOWN * 0.5))
-	assert_eq(river.points[0], Vector2(0, 10), "on the ground")
-	assert_eq(WaterBrush.ribbon(ground, line, 1.0, tint, 0.5, true, {}), river)
-	assert_false(WaterBrush.RIBBON_STYLE.caps, "the river's ends stay cut square")
-	assert_eq(river.points.size(), 2 * line.size(), "no cap points on the river")
-	assert_eq(river.indices.size(), 6 * (line.size() - 1), "no cap triangles")
-	var fire := WaterBrush.ribbon(
-		ground, line, 1.0, FireBrush.LAY_TINT, 1.0, true, FireBrush.LAY_STYLE
-	)
-	assert_eq(fire.points.slice(0, 2 * line.size()), river.points, "the same band")
-	assert_eq(fire.lines.size(), 3 + 2 * 3, "glow, shadow and edge as one outline; chevrons")
-	assert_eq(fire.lines[2][1], ThemeColors.PERSIMMON, "a full persimmon edge")
-	assert_eq(fire.lines[-1][1], Color(ThemeColors.CHALK, 0.95), "chalk chevrons")
-	var up: Color = fire.colors[0]
-	assert_almost_eq(up.a, 0.46, 0.001, "about half coverage")
-	var lit := Color(FireBrush.LAY_TINT * (0.46 * FireBrush.LAY_GAIN), 0.46)
-	assert_true(up.is_equal_approx(lit), "the fill premultiplied and lit: it adds light")
-	assert_gt(up.r, FireBrush.LAY_TINT.r * up.a, "brighter than a plain fill")
-
-
-## The fire line's ends are round: a fan of CAP_SEGMENTS - 1 arc points round each end, its
-## outline closed and every cap point a radius from its end; the put-out line's edge and
-## chevrons are the erase salmon every brush erases in.
-func test_the_fire_ribbons_have_round_ends() -> void:
-	var ground := func(p: Vector2) -> Vector2: return p
-	var line := PackedVector2Array([Vector2(0, 0), Vector2(4, 0), Vector2(8, 0)])
-	var out := WaterBrush.ribbon(
-		ground, line, 1.5, FireBrush.PUT_OUT_TINT, 1.0, true, FireBrush.PUT_OUT_STYLE
-	)
-	var arc := WaterBrush.CAP_SEGMENTS - 1
-	assert_eq(out.points.size(), 2 * line.size() + 2 * (1 + arc), "two fans")
-	assert_eq(out.indices.size(), 6 * (line.size() - 1) + 2 * 3 * (arc + 1))
-	var tip: Vector2 = out.points[2 * line.size() + 1 + floori(arc * 0.5)]
-	assert_almost_eq(tip.x, 9.5, 0.2, "the end bulges a radius past the pointer")
-	var outline: PackedVector2Array = out.lines[0][0]
-	assert_eq(outline[0], outline[-1], "the edge runs round as one closed outline")
-	for p in outline:
-		var nearest := clampf(p.x, 0.0, 8.0)
-		assert_almost_eq(p.distance_to(Vector2(nearest, 0.0)), 1.5, 0.01, "on the band's rim")
-	assert_eq(out.lines[1][1], BrushCursor.CLEAR_TINT, "the erase salmon edge")
-	assert_eq(out.lines[-1][1], BrushCursor.CLEAR_TINT, "salmon chevrons")
-	var fill: Color = out.colors[0]
-	var plain := Color(FireBrush.PUT_OUT_TINT * 0.46, 0.46)
-	assert_true(fill.is_equal_approx(plain), "premultiplied at gain 1: blends as a plain fill")
-
-
-## Every lay variant builds a capped ribbon with its own look, and building them leaves the
-## river's style and its ribbon as they were, call for call.
-func test_each_lay_variant_builds_and_the_river_is_unchanged() -> void:
-	var ground := func(p: Vector2) -> Vector2: return p * 10.0
-	var line := PackedVector2Array([Vector2(0, 0), Vector2(4, 0), Vector2(8, 1), Vector2(12, 1)])
-	var defaults := WaterBrush.RIBBON_STYLE.duplicate(true)
-	var river := WaterBrush.ribbon(ground, line, 1.0, WaterBrush.TINT, 0.5, true)
-	assert_eq(FireBrush.LAY_VARIANTS.D, FireBrush.LAY_STYLE, "D is F5c's style")
-	assert_eq(FireBrush.new().lay_variant, "D", "the default until the user picks")
-	var arc := WaterBrush.CAP_SEGMENTS - 1
-	for letter: String in ["A", "B", "C", "D"]:
-		var style: Dictionary = FireBrush.LAY_VARIANTS[letter]
-		var shape := FireRibbon.build(ground, line, 1.0, FireBrush.LAY_TINT, style, NIGHT)
-		assert_false(shape.is_empty(), letter)
-		var outline: PackedVector2Array = shape.lines[0][0]
-		assert_eq(outline[0], outline[-1], "%s: round ends, one closed outline" % letter)
-		var edge: Array = shape.lines[2]
-		assert_gte(float(edge[2]), 2.5, "%s: a solid edge" % letter)
-	assert_eq(WaterBrush.RIBBON_STYLE, defaults, "the river's style is untouched")
-	assert_eq(WaterBrush.ribbon(ground, line, 1.0, WaterBrush.TINT, 0.5, true), river)
-	assert_eq(river.points.size(), 2 * line.size(), "the river's band is still two points wide")
-	var a := WaterBrush.ribbon(ground, line, 1.0, FireBrush.LAY_TINT, 1.0, true, FireBrush.LAY_A)
-	assert_almost_eq(float(a.colors[0].a), 0.14, 0.001, "A: about the river's own wash")
-	assert_between(float(a.lines[2][2]), 3.0, 4.0, "A: a bold edge, 3 to 4 px")
-	assert_eq(a.lines[-1][1], ThemeColors.OCHRE_LIGHT, "A: amber chevrons")
-	var b := FireRibbon.build(ground, line, 1.0, FireBrush.LAY_TINT, FireBrush.LAY_B, DAY)
-	var bands := FireRibbon.bands(ground, line, 1.0, FireBrush.LAY_TINT, FireBrush.LAY_B)
-	assert_gt(bands.indices.size(), 0, "B: bands across the band")
-	assert_eq(bands.points.size() % 6, 0, "six points a band")
-	assert_eq(b.lines.size(), 3, "B: glow, shadow and edge; its bands point the way")
-	assert_eq(float(b.colors[0].a), 0.0, "B: the ground clear between the bands")
-	assert_gt(float(b.colors[-1].a), 0.8, "B: solid bands")
-	var c := WaterBrush.ribbon(ground, line, 1.0, FireBrush.LAY_TINT, 1.0, true, FireBrush.LAY_C)
-	var width := WaterBrush.fill_row(FireBrush.LAY_C.fill_profile).size()
-	assert_eq(width, 7, "C: edge to edge through the centre line")
-	assert_lt(float(c.colors[3].a), 0.1 * float(c.colors[0].a), "C: nearly clear at the centre")
-	var rings := 3 * arc
-	assert_eq(c.points.size(), width * line.size() + 2 * rings, "C: three rings round each end")
-	assert_eq(c.points[3], Vector2(0, 0), "the centre line runs down the middle")
-
-
-## A variant that takes the scene's light dims with the sun and keeps its alpha; D keeps its
-## colour; the put-out line is edged as heavily as the lay, with a glow of its salmon.
-func test_the_lay_takes_the_light_and_the_put_out_edge_matches() -> void:
-	var least := FireBrush.NIGHT_LIGHT
-	assert_eq(FireRibbon.scene_light(DAY, least), 1.0, "full by day")
-	assert_eq(FireRibbon.scene_light(DUSK, least), 1.0, "and at dusk, the sun just up")
-	assert_eq(FireRibbon.scene_light(NIGHT, least), least, "the floor at night")
-	assert_eq(FireRibbon.scene_light(FoliageLight.NO_SUN, least), 1.0, "full with no sun")
-	var ground := func(p: Vector2) -> Vector2: return p
-	var line := PackedVector2Array([Vector2(0, 0), Vector2(6, 0)])
-	var tint := FireBrush.LAY_TINT
-	var day := FireRibbon.build(ground, line, 1.0, tint, FireBrush.LAY_A, DAY)
-	var night := FireRibbon.build(ground, line, 1.0, tint, FireBrush.LAY_A, NIGHT)
-	assert_almost_eq(float(night.lines[2][1].r), float(day.lines[2][1].r) * least, 0.001)
-	assert_eq(float(night.lines[2][1].a), float(day.lines[2][1].a), "alpha kept")
-	assert_almost_eq(float(night.colors[0].g), float(day.colors[0].g) * least, 0.001)
-	var d_night := FireRibbon.build(ground, line, 1.0, tint, FireBrush.LAY_STYLE, NIGHT)
-	var d := WaterBrush.ribbon(ground, line, 1.0, tint, 1.0, true, FireBrush.LAY_STYLE)
-	assert_eq(d_night, d, "D keeps its colour, as F5c drew it")
-	for letter: String in ["A", "B", "C", "D"]:
-		var lay: Dictionary = FireBrush.LAY_VARIANTS[letter]
-		var out := FireBrush.put_out_style(lay)
-		assert_eq(out.edge_width, lay.edge_width, "%s: the same edge weight" % letter)
-		assert_eq(out.glow_width, lay.glow_width, "%s: the same glow" % letter)
-		var shape := WaterBrush.ribbon(ground, line, 1.0, FireBrush.PUT_OUT_TINT, 1.0, true, out)
-		assert_eq(shape.lines[0][1], Color(BrushCursor.CLEAR_TINT, lay.glow_alpha), "salmon glow")
-		assert_gt(float(shape.lines[1][2]), float(lay.edge_width), "the ink outline under it")
-		assert_eq(shape.lines[2][1], BrushCursor.CLEAR_TINT, "the salmon edge")
-	assert_eq(FireBrush.PUT_OUT_STYLE.fill_gain, 1.0, "the lake interior, a plain blend")
 
 
 func _spread(values: PackedInt32Array) -> int:

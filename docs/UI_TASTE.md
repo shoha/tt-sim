@@ -240,3 +240,14 @@ that conflicts with one stops and asks. Add each new verdict here with its date.
 - **2026-10-11** The small offset applied to the Host and Join icons on hover (the 2 px lift)
   reads weird and inconsistent: no other control's icon moves on hover. Hover changes colour
   and shadow, never an icon's position.
+- **2026-10-18** "i think c as well. let's be sure that all of the shapes and iconography are
+  consistent with the river tool. ideally they share some amount of functionality and
+  modularity". Decision (card F5e): the Fire Line ships card F5d's variant C (persimmon rails
+  at both edges, the coverage falling to nearly clear along the centre line, chalk chevrons
+  down the middle), and the river and the fire line are one line tool in two tints: one
+  gesture (`LineGesture`) and one ribbon (`LineRibbon`) that each tool passes a style. Every
+  shape, icon and key is the same (round caps, the edge and its ink outline and glow, chalk
+  chevrons on ink, the ring at the line's width, the chip, the Shape tiles, the hint bar's
+  wording) except where the meaning differs: the tint, the fill (the river's even translucent
+  band, the fire's rails) and the words. Both erase ribbons share one structure, the salmon
+  edge and chevrons, over an interior that parts from what it erases.
