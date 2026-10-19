@@ -9,9 +9,10 @@ extends BrushMode
 ##          driving a river, and 2026-10-18: every shape and icon the same): its gesture
 ##          (LineGesture: capture, the live line to the pointer, Esc or RMB dropping it, the
 ##          minimum length, the chip "Line of fire  Blaze  40 ft") and its ribbon (LineRibbon)
-##          in the fire line's style (LAY_STYLE: persimmon rails at both edges on an ember glow,
-##          lit on the cursor's glow layer, falling in a thin seam to clear along the centre
-##          line, chalk chevrons down the middle; card F5d's variant C). The release lays it
+##          in the river's look in orange (lay_style(): LAY_HUE over the line tool's fill, by
+##          default persimmon rails at both edges on an ember glow, lit on the cursor's glow
+##          layer, falling in a thin seam to clear along the centre line, chalk chevrons down
+##          the middle; card F5d's variant C, card F5h one look for both). The release lays it
 ##          (lay_line()): resampled evenly every LINE_SPACING radii and dabbed segment by segment
 ##          as capsules at a fixed exposure per segment, so a line is even whatever the drawing
 ##          speed.
@@ -24,10 +25,9 @@ extends BrushMode
 ## "Lay fire" with its burnt forest and ash (FireEditor), synced and undoable in play as any
 ## stroke. Ctrl at the press puts fire out instead (the area, or along the line), leaving its
 ## ash and snags. The ring is ember orange, the erase salmon (BrushCursor.CLEAR_TINT, every
-## brush's erase) to put out; the put-out line's ribbon is the line tool's erase
-## (LineRibbon.erase_style: the salmon edge and chevrons on ink, no wash), through which the
-## flames it is drawn on keep their colour. Every colour is a theme role or the erase tint; only
-## alphas are set here.
+## brush's erase) to put out; the put-out line's ribbon is the line tool's one erase
+## (LineRibbon.ERASE_STYLE: the salmon edge and chevrons on ink, no wash), through which the
+## flames it is drawn on keep their colour. Every colour is a theme role or the erase tint.
 
 enum Shape { LINE, AREA }
 
@@ -48,40 +48,21 @@ const TINT := ThemeColors.EMBER
 const LINE_SPACING := 0.25
 const LINE_SECONDS := 0.22
 const MAX_LINE_DABS := 4096
-## The fire line's ribbon over the line tool's (LineRibbon.STYLE): a glowing tube. The fill's
-## coverage is high at the two edges and falls steeply to nearly clear along the centre line,
-## lit by fill_gain on the glow layer, so orange stands where it is solid and the ground and
-## its plants show unmixed down the middle (orange at partial coverage over green mixes toward
-## olive, card F5d), the persimmon edge on ink (the river's edge) over an ember glow. The rails
-## hold their weight in to 0.62 radii, then fall to clear within 0.08 radii, so the half-covered
-## band where orange over green turns olive is a thin seam: a fall from 0.78 read grey-teal
-## beside the rails over the pine's dark ground (card F5d round 2), and F5e's fall to 0.12 at
-## 0.5 radii, with a 0.12 to 0.04 tail inside, left an olive-ochre band about a quarter of the
-## band wide each side (card F5f).
-const LAY_STYLE := {
-	"tint": ThemeColors.PERSIMMON,
-	"alpha_up": 0.8,
-	"alpha_down": 0.9,
-	"fill_gain": 1.7,
-	"fill_profile": [[1.0, 1.0], [0.62, 0.78], [0.54, 0.03], [0.0, 0.0]],
-	"glow": ThemeColors.EMBER,
-}
-## Putting out along a line: the line tool's erase (the salmon lines on ink, no wash), the
-## flames showing through in their own colour and the salmon lines saying what goes. The tint is
-## a light lake, water on fire, the one a wash would take: the dark lake at half coverage mixed
-## with the orange flames to a neutral grey and left them ghosts (card F5f), an ash plum-grey
-## (PAPER_TRACK) leaned into the flames' pinks (card F5c), and even the light lake at 0.08 to
-## 0.14 cooled them, so the erase has none (F5g).
-const PUT_OUT_TINT := ThemeColors.LAKE_LIGHT
-const PUT_OUT_INTERIOR := {"tint": PUT_OUT_TINT}
+## The fire line's hue over the line tool's look (LineRibbon.lay_style): the band and its edge
+## in persimmon, the glow in ember, the ring's colour; the river's RIBBON_HUE in orange (card
+## F5h: every width, alpha, edge, glow, ink, cap, chevron and fill one). Putting out along a
+## line is the line tool's one erase (LineRibbon.ERASE_STYLE: the salmon lines on ink, no wash),
+## the flames showing through in their own colour: any wash shifted them (a lake at half
+## coverage left grey ghosts, card F5f; even a light lake at 0.08 to 0.14 cooled them, F5g).
+const LAY_HUE := {"tint": ThemeColors.PERSIMMON, "glow": ThemeColors.EMBER}
 
 ## The mask byte a lay approaches (EMBERS, FLAMES or BLAZE).
 var intensity: int = FLAMES
 ## The shape a press draws (Shape; Area until Tab or the pane picks Line).
 var shape: int = Shape.AREA
-## The put-out ribbon's interior (PUT_OUT_TINT; the firefeat_line job sets the ash candidate
-## and the lake in turn to show both).
-var put_out_tint: Color = PUT_OUT_TINT
+## The line's fill (LineRibbon.FILLS; the firefeat_line_tool job shows "even" beside the
+## default to compare), the river's always the same.
+var fill: String = LineRibbon.FILL
 ## The line being drawn (the line tool's gesture).
 var gesture := LineGesture.new()
 ## True while a line is being drawn (the gesture's).
@@ -190,9 +171,10 @@ func line_label() -> String:
 	return "%s  %s" % [LINE_TEXT, intensity_label(intensity)]
 
 
-## The put-out ribbon's style: the line tool's erase over put_out_tint (PUT_OUT_INTERIOR).
-func put_out_style() -> Dictionary:
-	return LineRibbon.erase_style(PUT_OUT_INTERIOR.merged({"tint": put_out_tint}, true))
+## The fire line's ribbon style: its hue (LAY_HUE) over the line tool's fill `fill`, the
+## river's with only the hue changed.
+func lay_style() -> Dictionary:
+	return LineRibbon.lay_style(LAY_HUE, fill)
 
 
 ## Area: a fire stroke for the brush to dab. Line: the line begins (the release lays it).
@@ -258,10 +240,10 @@ func cursor_text(brush: BrushTool) -> String:
 
 
 ## The line being drawn as the line tool's ribbon out to the pointer, at the ring's width, in
-## the fire line's style (LAY_STYLE, or put_out_style() with Ctrl), then the ring.
+## the fire line's style (lay_style(), or the line tool's erase with Ctrl), then the ring.
 func draw_cursor(brush: BrushTool, cursor: BrushCursor) -> void:
 	if drawing and brush.editor != null:
-		var style := put_out_style() if _erasing(brush) else LAY_STYLE
+		var style := LineRibbon.ERASE_STYLE if _erasing(brush) else lay_style()
 		var ground := LineRibbon.on_ground(cursor.camera, brush.editor)
 		LineRibbon.draw(cursor, ground, gesture.live(brush.hit), stroke_radius(brush), style)
 	super.draw_cursor(brush, cursor)

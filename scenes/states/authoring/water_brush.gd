@@ -12,14 +12,14 @@ extends BrushMode
 ## the river's width, the line ends where the pointer was let go and is Chaikin-smoothed for the
 ## preview and the carve, and the chip reads "River  Waist  40 ft". The release carves it
 ## (WaterEditor.carve_river, first point upstream), and the ribbon stays, faint, until the carve
-## (on a worker) lands. The ribbon is the line tool's (LineRibbon) in the river's style
-## (RIBBON_STYLE: the river's pale blue, an even translucent fill); its gradient and chevrons
+## (on a worker) lands. The ribbon is the line tool's (LineRibbon) in the river's hue
+## (ribbon_style(): RIBBON_HUE over the fill every line tool shares); its gradient and chevrons
 ## show the way the water will really run (flow_line(): a line drawn uphill is reversed, as the
 ## plan reverses it, WaterFallPlan.orient, P4c-5). Pond: the press starts a pond stroke (a press
 ## inside a pond extends it) whose dabs BrushTool paints like the Biome brush's, the dab growing
 ## with dwell (POND_DWELL_GROW); the painted dabs preview its area. Ctrl at the press (either
 ## tile): an erase stroke, whose touched river reaches are previewed (they go whole) as the line
-## tool's erase ribbon (LineRibbon.erase_style: salmon edge and chevrons on ink, no wash), the
+## tool's erase ribbon (LineRibbon.ERASE_STYLE: salmon edge and chevrons on ink, no wash), the
 ## water it removes showing through untouched, and the chip reads "Erase water  40 ft", the
 ## length of those reaches.
 ## The width is the brush size, never below the depth class's narrowest channel
@@ -30,22 +30,21 @@ extends BrushMode
 
 enum Shape { RIVER, POND }
 
-const TINT := Color(0.56, 0.84, 1.0)
+## The ring's colour, the river ribbon's glow: light lake, the fire's ember in blue.
+const TINT := ThemeColors.LAKE_LIGHT
 ## A river point is recorded once the pointer's ground point is this far (metres) from the
 ## last; the shortest line a release carves (StrokePath's, which every line shape shares).
 const RIVER_DECIMATE_M := StrokePath.DECIMATE_M
 const RIVER_MIN_LENGTH_M := StrokePath.MIN_LENGTH_M
 ## The pond dab's growth with dwell (1 + POND_DWELL_GROW at BrushTool.DWELL_MAX).
 const POND_DWELL_GROW := 0.35
-## The river's ribbon over the line tool's (LineRibbon.STYLE): its pale blue, the shared even
-## fill (faint upstream, stronger downstream: the gradient shows the flow too). The river keeps
-## the even fill where the fire line's rails stand at its edges: blue at partial coverage reads
-## as water over any ground, where the fire's orange greyed to olive, and the even band shows the
-## channel the carve will dig.
-const RIBBON_STYLE := {"tint": TINT}
-## An erase's interior (LineRibbon.erase_style): the erase salmon, the tint a wash would take.
-## The erase has none: even a low salmon wash, the water's complement, greyed the river (F5g).
-const ERASE_INTERIOR := {"tint": BrushCursor.CLEAR_TINT}
+## The river's hue over the line tool's look (LineRibbon.lay_style): the band and its edge in
+## lake, the glow in light lake, the ring's colour; the fire line's LAY_HUE in blue (card F5h,
+## user 2026-10-18: every width, alpha, edge, glow, ink, cap, chevron and fill one, only the hue
+## differing). The fill rises from upstream to downstream, so the gradient shows the flow too.
+## An erase is the line tool's one erase (LineRibbon.ERASE_STYLE, no wash): even a low salmon
+## wash, the water's complement, greyed the river (F5g).
+const RIBBON_HUE := {"tint": ThemeColors.LAKE, "glow": ThemeColors.LAKE_LIGHT}
 ## The erase's chip: "Erase water", with the length of the rivers it will remove while a stroke
 ## touches any ("Erase water  40 ft", the line tool's erase pattern, as "Put out fire  40 ft").
 const ERASE_TEXT := "Erase water"
@@ -81,12 +80,21 @@ var held := PackedVector2Array()
 var held_radius: float = 0.0
 ## Pond stroke dabs painted so far, for the preview: Vector3(x, z, radius) world.
 var pond_dabs := PackedVector3Array()
+## The river's fill (LineRibbon.FILLS; the firefeat_line_tool job shows "even" beside the
+## default to compare), the fire line's always the same.
+var fill: String = LineRibbon.FILL
 
 var _refusal: String = ""
 
 
 func _init() -> void:
 	fades = true
+
+
+## The river's ribbon style: its hue (RIBBON_HUE) over the line tool's fill `fill`, the fire
+## line's with only the hue changed.
+func ribbon_style() -> Dictionary:
+	return LineRibbon.lay_style(RIBBON_HUE, fill)
 
 
 ## The river half-width or pond brush radius for brush size `radius` and depth class
@@ -298,15 +306,14 @@ func draw(
 	var ground := LineRibbon.on_ground(cursor.camera, editor)
 	if drawing and not river.is_empty():
 		var flow := flow_line(gesture.live(hit), ground_reader(editor))
-		LineRibbon.draw(cursor, ground, flow, half_width, RIBBON_STYLE)
+		LineRibbon.draw(cursor, ground, flow, half_width, ribbon_style())
 	elif not held.is_empty():
-		LineRibbon.draw(cursor, ground, held, held_radius, RIBBON_STYLE, 0.5)
+		LineRibbon.draw(cursor, ground, held, held_radius, ribbon_style(), 0.5)
 	if not stroking:
 		return
 	if erasing:
-		var style := LineRibbon.erase_style(ERASE_INTERIOR)
 		for pair: Array in erase_courses(editor):
-			LineRibbon.draw(cursor, ground, pair[0], pair[1], style)
+			LineRibbon.draw(cursor, ground, pair[0], pair[1], LineRibbon.ERASE_STYLE)
 	elif shape == Shape.POND:
 		for dab in pond_dabs:
 			_fill_disc(cursor.canvas, cursor.camera, editor, Vector2(dab.x, dab.y), dab.z)

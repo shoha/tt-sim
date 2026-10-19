@@ -2,19 +2,23 @@ class_name LineRibbon
 extends RefCounted
 
 ## The ribbon every line tool previews its line with (card F5e: Water's River and Fire's Line,
-## and each one's erase): one shape in two tints, so the river and the fire line read as one
-## line tool. A band `radius` either side of the line, filled from the line's start (fainter)
-## to its end, round caps at both ends, one closed edge over an ink outline on a soft glow, and
+## and each one's erase): one look in two hues, so the river and the fire line read as one
+## line tool (card F5h; user, 2026-10-18: "fire should just be an orange-coded version of the
+## visuals for water and vice versa"). A band `radius` either side of the line, filled from the
+## line's start (fainter) to its end, round caps at both ends, one closed edge over an ink
+## outline on a soft glow (the brush ring's own stroke, BrushCursor.ring_strokes), and
 ## chevrons every ARROW_M pointing the way the line runs (a river's, the way its water will
 ## flow). It is drawn on BrushCursor's overlay with its fill on the cursor's glow layer
 ## (BrushCursor.glow_item(), premultiplied), where a fill lit above gain 1 adds light as well as
 ## covering (lit_fill()). It takes the scene's light (scene_light()): NIGHT_LIGHT of its colour
 ## under a sun well below the horizon, so at night it sits in the dark scene instead of glowing
 ## over it, and its full colour from the horizon up (a dusk sun 2.5 degrees up weighs about
-## nothing while the scene is still bright, card F5d).
+## nothing while the scene is still bright, card F5d); an erase keeps its full colour, as the
+## erase ring does (card F5h).
 ##
 ## What a tool changes is its style, as data: STYLE's keys, of which a tool passes only those it
-## changes (WaterBrush.RIBBON_STYLE, FireBrush.LAY_STYLE; erase_style() for an erase):
+## changes. A lay passes only its hue (TINT_KEYS: WaterBrush.RIBBON_HUE, FireBrush.LAY_HUE) over
+## one of FILLS, the same for every tool (lay_style()); an erase passes ERASE_STYLE:
 ##   tint                  the fill's colour, and the edge's and glow's where those are null
 ##   alpha_up, alpha_down  the fill's coverage at the line's start and at its end
 ##   fill_profile          the coverage across the band: [offset, coverage] pairs from the edge
@@ -32,11 +36,11 @@ extends RefCounted
 ##   caps                  round ends, the edge running round them as one outline (false: cut
 ##                         square)
 ##   night_light           the share of its colour the ribbon keeps under no sun (1: all)
-## An erase ribbon is the same shape with the erase salmon (BrushCursor.CLEAR_TINT, every
-## brush's erase) on its edge and glow over the erase's ink (the erase ring's,
-## BrushCursor.ring_strokes), the lay's chevrons with only their colour salmon, and no wash
-## inside (ERASE_STYLE), so what it erases shows through untouched. Every colour is a theme
-## role, the erase tint or a tool's tint; only alphas and widths are set here.
+## An erase ribbon is the same shape at the same weights with the erase salmon
+## (BrushCursor.CLEAR_TINT, every brush's erase) on its edge, glow and chevrons, and no wash
+## inside (ERASE_STYLE, one for every tool), so what it erases shows through untouched. Every
+## colour is a theme role or the erase tint; the widths and the ink are the ring's
+## (BrushCursor.LINE_WIDTH and the rest), and only the fills' alphas are set here.
 
 ## Metres between chevrons along the line, the first half that from the start.
 const ARROW_M := 2.5
@@ -58,9 +62,11 @@ const CHEVRON_PX := 44.0
 ## glyph keeps that size and weight instead of growing (at zoom 8 the scaled glyph was 120 px of
 ## 7 px strokes on 12 px of ink, read as road markings, F5g).
 const CHEVRON_VIEW_H := 720.0
-## Every line tool's look, before its own keys (the class header names them). The edge's ink
-## at 0.55 (the ring's shadow) keeps the edge a crisp line over the fire's lit rails as over the
-## river's wash (at 0.3 the fire's edge sank into its rail and glow, F5f).
+## Every line tool's look, before its own keys (the class header names them). Every line is the
+## brush ring's stroke (BrushCursor.ring_strokes): the edge and the chevrons LINE_WIDTH over the
+## ring's ink, the edge on the ring's glow, lay and erase alike, so the ring and the line it
+## draws read as one and an erase is as heavy as its lay (card F5h; the edge's ink was 0.55 at
+## 4.5 px and the chevrons' 0.6, the erase's 0.85 at 5.5). Its fill keys are FILLS.even's.
 const STYLE := {
 	"tint": ThemeColors.CHALK,
 	"alpha_up": 0.12,
@@ -69,45 +75,76 @@ const STYLE := {
 	"fill_gain": 1.0,
 	"edge": null,
 	"edge_alpha": 1.0,
-	"edge_width": 2.5,
+	"edge_width": BrushCursor.LINE_WIDTH,
 	"shadow": ThemeColors.INK,
-	"shadow_alpha": 0.55,
-	"shadow_width": 4.5,
+	"shadow_alpha": BrushCursor.INK_ALPHA,
+	"shadow_width": BrushCursor.INK_WIDTH,
 	"glow": null,
-	"glow_alpha": 0.3,
-	"glow_width": 9.0,
+	"glow_alpha": BrushCursor.GLOW_ALPHA,
+	"glow_width": BrushCursor.GLOW_WIDTH,
 	"chevrons": true,
 	"chevron": ThemeColors.CHALK,
 	"chevron_alpha": 0.95,
-	"chevron_width": 2.5,
-	"chevron_shadow_alpha": 0.6,
-	"chevron_shadow_width": 4.5,
+	"chevron_width": BrushCursor.LINE_WIDTH,
+	"chevron_shadow_alpha": BrushCursor.INK_ALPHA,
+	"chevron_shadow_width": BrushCursor.INK_WIDTH,
 	"caps": true,
 	"night_light": NIGHT_LIGHT,
 }
-## An erase's keys over STYLE: the erase salmon on the edge and its glow over the erase's ink,
-## which holds the salmon at 3:1 over bright flames and pale water alike (BrushCursor
-## .ring_strokes, the erase ring's own); the lay's chevrons, glyph, places, weights and ink, with
-## only their colour salmon; and no wash inside, so what goes shows through untouched and the
-## salmon lines alone say "erase". Any wash shifted what it lay on: at about half coverage (F5e)
-## it hid the river as a flat dusty rose and greyed the flames to mud, and even at 0.08 to 0.14
-## the salmon, the water's complement, pulled the river's blue over red from about 40 to about
-## 20, and the light lake cooled the flames (F5f, F5g).
+## The keys a tool's lay sets: its hue. The band and edge in `tint`, the glow under the edge in
+## `glow` (the tool's ring colour), each one of the theme's paired ramps, so two tools differ in
+## hue alone (lake and light lake, persimmon and ember).
+const TINT_KEYS: Array[String] = ["tint", "glow"]
+## The fills every tool's lay takes, one for all (card F5h): its coverage across and along the
+## band and its light.
+##   rails  a glowing tube (card F5d's variant C, the user's pick for the fire line, 2026-10-18):
+##          the coverage high at the two edges and falling steeply to nearly clear along the
+##          centre line, lit by fill_gain on the glow layer, so the hue stands where it is
+##          solid and the ground and its plants show unmixed down the middle. The rails hold
+##          their weight in to 0.62 radii, then fall to clear within 0.08 radii, so the
+##          half-covered band where orange over green turns olive is a thin seam (a fall from
+##          0.78 read grey-teal over the pine's dark ground, F5d; F5e's fall to 0.12 at 0.5 radii
+##          left an olive-ochre band a quarter of the band wide each side, F5f).
+##   even   the river's even translucent band, faint upstream and stronger down, a plain blend
+##          (persimmon at that coverage over green mixed to olive, card F5).
+const FILLS := {
+	"rails":
+	{
+		"alpha_up": 0.8,
+		"alpha_down": 0.9,
+		"fill_gain": 1.7,
+		"fill_profile": [[1.0, 1.0], [0.62, 0.78], [0.54, 0.03], [0.0, 0.0]],
+	},
+	"even":
+	{
+		"alpha_up": 0.12,
+		"alpha_down": 0.34,
+		"fill_gain": 1.0,
+		"fill_profile": [],
+	},
+}
+## The fill a tool's lay takes unless told otherwise (option R; the job shows E beside it).
+const FILL := "rails"
+## An erase's keys over STYLE, for every tool (the river's erase and the fire's put-out alike):
+## the erase salmon on the edge, its glow and the chevrons, every weight and the ink the lay's,
+## and no wash inside, so what goes shows through untouched and the salmon lines alone say
+## "erase". Any wash shifted what it lay on: at about half coverage (F5e) it hid the river as a
+## flat dusty rose and greyed the flames to mud, and even at 0.08 to 0.14 the salmon, the
+## water's complement, pulled the river's blue over red from about 40 to about 20, and a light
+## lake cooled the flames (F5f, F5g). Its salmon keeps its full colour at night, as the erase
+## ring's does: dimmed with the scene it fell to about 2:1 over the river at night (card F5h).
 const ERASE_STYLE := {
+	"tint": BrushCursor.CLEAR_TINT,
 	"alpha_up": 0.0,
 	"alpha_down": 0.0,
-	"edge": BrushCursor.CLEAR_TINT,
-	"edge_width": BrushCursor.ERASE_LINE_WIDTH,
 	"chevron": BrushCursor.CLEAR_TINT,
-	"shadow_alpha": BrushCursor.ERASE_INK_ALPHA,
-	"shadow_width": BrushCursor.ERASE_INK_WIDTH,
+	"night_light": 1.0,
 }
 
 
-## An erase ribbon's style: ERASE_STYLE with `interior`'s keys (its tint; a tool that wants a
-## wash back sets its alphas there too). Pure.
-static func erase_style(interior: Dictionary) -> Dictionary:
-	return ERASE_STYLE.merged(interior, true)
+## A lay's style: `hue` (TINT_KEYS) over the fill named `fill` (FILLS). Pure.
+static func lay_style(hue: Dictionary, fill: String = FILL) -> Dictionary:
+	return (FILLS.get(fill, FILLS[FILL]) as Dictionary).merged(hue, true)
 
 
 ## Draws the ribbon of `line` (world XZ; `ground` maps a point to the screen on the ground) at

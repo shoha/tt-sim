@@ -9,8 +9,9 @@ extends RefCounted
 ## ground (one downward ray per ring point, cached until the brush moves; with `live`, the
 ## document's own heights every frame, since the ground under a still ring moves while
 ## sculpting). It is drawn on its own layer (OVERLAY_LAYER) so it stays crisp above the lo-fi
-## pass: a dark under-stroke and a light over-stroke read on any ground in either lo-fi theme
-## (the erase ring on the stronger ink every erase line shares, ring_strokes()).
+## pass, as one stroke for every brush, at rest and in erase alike (ring_strokes(), card F5h):
+## the tint over a strong ink outline on a soft glow of the tint, the stroke every line tool's
+## edge takes, so it reads on bright grass, flames and dark water in either lo-fi theme.
 ## That layer is under every panel and drawer: the ring belongs to the board, so the glass over
 ## the board covers it as it covers the ground (it was on the measure overlay, over the glass).
 ## The tint is the mode's (BrushMode.cursor_tint). The ring is an outline only: a fill, drawn on
@@ -31,17 +32,26 @@ const RING_SEGMENTS := 48
 ## Ring points re-conform to the ground when the centre moves this fraction of the radius.
 const RING_REFRESH := 0.04
 const DOWNCAST_HEIGHT := 200.0
+## The centre dot's under-disc (and the play events' own outlines).
 const SHADOW_COLOR := Color(0.05, 0.04, 0.05, 0.55)
-## The erase tint (Clear, a Paint or Water erase, a Place footing warning).
-const CLEAR_TINT := Color(1.0, 0.52, 0.42)
-## Every erase line (the erase ring, a line tool's erase edge; its chevrons are the lay's, on the
-## lay's ink, F5g): the salmon this
-## wide over INK at this alpha and width, so it holds 3:1 over a pale wash, water and bright
-## flames alike (at the shadow's 0.55, or 0.7, the salmon sank into a salmon wash and fell
-## under 3:1 over flames; card F5f).
-const ERASE_INK_ALPHA := 0.85
-const ERASE_INK_WIDTH := 5.5
-const ERASE_LINE_WIDTH := 2.5
+## The one erase tint, every brush's (Clear, a Paint, Water or Fire erase, a Bridge erase, a
+## Place footing warning, a line tool's erase ribbon): a light salmon toward chalk-pink, so with
+## the ink under it it holds 3:1 over flame yellow, a flame's core, ash, night water and bright
+## grass (the old #FF856B read brown over flames, brick over ash, and dimmed in a ribbon at
+## night about 1.9:1 over the water; card F5h). An erase is never dimmed at night
+## (LineRibbon.ERASE_STYLE), so it need not be lighter: #FFCEC4, light enough to hold 3:1
+## dimmed, read near-white beside Thin's cream and Paint's tan rings.
+const CLEAR_TINT := Color("#FFB6A8")
+## Every ring and every line tool's edge and chevron, lay and erase alike (card F5h): the tint
+## LINE_WIDTH px over INK at INK_ALPHA and INK_WIDTH px, on a glow of the tint at GLOW_ALPHA
+## and GLOW_WIDTH px (rings and edges; a chevron has no glow). The ink holds a light tint at 3:1
+## over bright ground; the tint holds over dark ground. The lay ring was 2 px over the 0.55
+## shadow: a hairline under 3:1 over bright grass (persimmon about 2.4:1).
+const LINE_WIDTH := 2.5
+const INK_ALPHA := 0.85
+const INK_WIDTH := 5.5
+const GLOW_ALPHA := 0.3
+const GLOW_WIDTH := 9.0
 ## The glass accent: the brush is drawn over the live table, where ember is the action colour.
 const PLACE_TINT := ThemeColors.EMBER
 ## The readout under the ring: a glass chip as the rulers' (MapOverlayUtils.draw_chip), this
@@ -119,7 +129,7 @@ func _on_canvas_draw(on_draw: Callable) -> void:
 func draw_ring(brush: BrushTool, tint: Color, text: String, live: bool) -> void:
 	_conform_ring(brush, brush.hit, brush.mode.stroke_radius(brush), live)
 	var outline := _project(_ring_world, Vector3.ZERO, 1.0)
-	_stroke_ring(outline, tint, 2.0)
+	_stroke_ring(outline, tint)
 	if brush.stroking:
 		# The half-strength contour, brightening as dwell builds strength.
 		var strength := clampf(brush.dwell / BrushTool.DWELL_MAX, 0.0, 1.0)
@@ -150,8 +160,9 @@ func draw_readout(text: String, outline: PackedVector2Array) -> void:
 	)
 
 
-## A flat ring of world `radius` at `centre` (a prop's footprint or the Place marker).
-func draw_flat_ring(centre: Vector3, radius: float, tint: Color, width: float) -> void:
+## A flat ring of world `radius` at `centre` (a prop's footprint or the Place marker), in the
+## ring's stroke.
+func draw_flat_ring(centre: Vector3, radius: float, tint: Color) -> void:
 	var points := PackedVector2Array()
 	for i in RING_SEGMENTS + 1:
 		var angle := TAU * float(i) / float(RING_SEGMENTS)
@@ -160,7 +171,7 @@ func draw_flat_ring(centre: Vector3, radius: float, tint: Color, width: float) -
 				centre + Vector3(cos(angle), 0.05, sin(angle)) * Vector3(radius, 1.0, radius)
 			)
 		)
-	_stroke_ring(points, tint, width)
+	_stroke_ring(points, tint)
 
 
 ## Re-conforms the ring's world points to the ground when the brush moved or resized; with
@@ -205,18 +216,18 @@ func _project(points: PackedVector3Array, pivot: Vector3, scale: float) -> Packe
 	return out
 
 
-func _stroke_ring(points: PackedVector2Array, tint: Color, width: float) -> void:
-	for stroke: Array in ring_strokes(tint, width):
+func _stroke_ring(points: PackedVector2Array, tint: Color) -> void:
+	for stroke: Array in ring_strokes(tint):
 		canvas.draw_polyline(points, stroke[0], stroke[1], true)
 
 
-## A ring's strokes in `tint` at `width` px, under to over: [colour, width] each. The erase
-## tint draws as every erase line does (the edge of a line tool's erase ribbon,
-## LineRibbon.ERASE_STYLE): ERASE_LINE_WIDTH over the erase's ink; any other tint over the
-## shadow. Pure.
-static func ring_strokes(tint: Color, width: float) -> Array:
-	if tint == CLEAR_TINT:
-		var ink := ThemeColors.INK
-		ink.a = ERASE_INK_ALPHA
-		return [[ink, ERASE_INK_WIDTH], [tint, ERASE_LINE_WIDTH]]
-	return [[SHADOW_COLOR, width + 2.0], [tint, width]]
+## A ring's strokes in `tint`, under to over, [colour, width] each: the glow, the ink, the line
+## (the class header; the stroke a line tool's edge takes, LineRibbon.STYLE). One weight for
+## every tint, the erase salmon's as a lay's; a translucent tint fades its ink and glow with
+## it. Pure.
+static func ring_strokes(tint: Color) -> Array:
+	var glow := tint
+	glow.a = GLOW_ALPHA * tint.a
+	var ink := ThemeColors.INK
+	ink.a = INK_ALPHA * tint.a
+	return [[glow, GLOW_WIDTH], [ink, INK_WIDTH], [tint, LINE_WIDTH]]
