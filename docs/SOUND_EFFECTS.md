@@ -39,6 +39,9 @@ playback fields are:
 | `pitch_jitter` | Random pitch offset per play, in semitones either way (default 0.5). |
 | `cooldown_s` | Minimum seconds between two plays of the sound; a request inside it is dropped. |
 | `priority` | Coalescing tier, below. |
+| `takes`, `take_gains_db` | The files a recorded shot plays one of at random (never the same twice running), each with its gain; one file for every other sound. |
+| `gain_jitter_db` | Random gain offset per play, in dB either way (recorded shots; 0 otherwise). |
+| `pitch_scale` | Base pitch under the jitter (undo 0.89, redo 1.12; 1 otherwise). |
 
 **One sound per gesture.** `play()` queues the request, and `AudioManager` flushes the queue once
 a frame, after every other node's `_process`. On each bus (UI, SFX) only the highest-priority
@@ -243,6 +246,35 @@ crackle. It enters the same pipeline as every other sound: a `RecordedLoop` in
   alone (`--manifest` after a change): -9 dB (card F7c; F7b had -6) puts one player at -31.6 dBFS
   RMS, about 23 dB under `token_drop`'s loudest 50 ms.
 
+### Authoring sounds (recorded shots)
+
+Every authoring edit answers in sound (card "feel-sound", 2026-10-19, a probe for the user to
+listen to; Brushland research lesson 3). `StrokeSound` (owned by `BrushTool`) maps the tool to
+a family and plays its three moments; the sounds are `RecordedShot`s in `tools/sfx_spec.py`
+(`SHOTS`), cut from CC0 Freesound recordings (`ORIGINALS`, `THIRD_PARTY_LICENSES.md`) by
+`sfx_recording.process_shot`, 3 or 4 takes each at 22.05 kHz, all on SFX.
+
+| Family | Tools | Start / tick / settle | Source |
+|---|---|---|---|
+| `plant` | Biome, Thin / Clear | leafy rustle | GUS_MAN's foliage rustles |
+| `prop` | Place, Bridge | soft balsa knock (pitched down; the settle lower still) | LloydEvans09's balsa hits |
+| `water` | Water | small splash / grape plops / splash tail | qubodup, asherkaye2, vibe_crc |
+| `paint` | Paint | brush swish | acrober's paint strokes |
+| `sculpt` | Sculpt | wet sand and soil, low-passed and pitched down | f3bbbo, dhallcomposer |
+| `undo`, `redo` | Ctrl+Z, Ctrl+Y (authoring) | the balsa knock shortened, 2 semitones down / up | LloydEvans09 |
+
+- **When.** The press plays `<family>_start`; the drag a `<family>_tick` per 0.75 of the brush
+  radius travelled (at least 2 m; `StrokeSound.ticks_for`, at most one a frame, the tick's 120 ms
+  cooldown above it); holding still is silent; the release `<family>_settle`, but a tap (under
+  0.3 s and never a spacing from its start) is heard once, as its start; a cancel is silent. Fire
+  has no family (its roar answers it). Ticks are Faint, starts, settles, undo and redo Tap.
+- **Level.** Each shot's `volume_db` puts its loudest take's loudest 50 ms a fixed distance under
+  `token_drop`'s (-8.8 dBFS): starts 14 dB, settles 16, undo and redo 15, ticks 20
+  (`UNDER_TOKEN_DROP_DB`); each take's `gain_db` lifts it to the loudest (a take needing more
+  than 6 dB was dropped). `test_sfx_spec.py` measures every installed take against it (1 dB).
+- **Originals** stay out of git under `docs/plans/2026-10-19-brushland/sound/originals/<id>/`
+  (the HQ preview MP3 and its decoded WAV); `--install --sources-root` points at them.
+
 ### Where SFX Sounds Are Used
 
 | Sound              | File                      | Trigger                          |
@@ -254,12 +286,15 @@ crackle. It enters the same pipeline as every other sound: a `RecordedLoop` in
 | `splash_enter` | `scenes/effects/water_zone.gd` (`_on_body_entered`) | Token's collision shape enters a water zone |
 | `splash_exit`  | `scenes/effects/water_zone.gd` (`_on_body_exited`) | Token's collision shape fully exits a water zone |
 | `fire_roar`    | `scenes/terrain/fire_sound.gd` | Loops while flames burn near the view (authoring and play, wherever a `FireField` is) |
+| `<family>_start`, `_tick`, `_settle` | `scenes/states/authoring/stroke_sound.gd` (from `brush_tool.gd`: `_start_gesture`, `_paint`, `finish_gesture`, `cancel_gesture`) | A brush stroke's press, each spacing of drag, its release (see "Authoring sounds") |
+| `undo`, `redo` | `authoring_controller.gd` (`undo`, `redo`) | An authoring undo or redo that changed something |
 
 ### Additional SFX Candidates (Not Yet in the Palette)
 
 Interactions that could benefit from a sound. Adding one is a spec entry, an install and a call
-(see "Adding a Sound" below); there is no file to source, since every one-shot in the palette is
-synthesized (only the fire's ambience is a recording; see "Loops").
+(see "Adding a Sound" below); a UI-style tone is synthesized, while a sound of the world (a
+rustle, a knock, a splash) is a CC0 recording cut into takes, as the authoring sounds are (see
+"Authoring sounds") and the fire's ambience is (see "Loops").
 
 | Proposed Sound    | Description                                    | Where to Wire                          |
 |-------------------|------------------------------------------------|----------------------------------------|
@@ -612,7 +647,9 @@ palette's own peak target and normalization is a no-op.
   a 150 ms cooldown; avatar builder plays confirm/cancel; a mid-game join plays `success` as the
   lobby does; volume sliders use a squared taper and the Music row is hidden
 - [ ] Wire `token_slide` to token movement
-- [ ] Sounds for authoring actions (prop place/remove, undo/redo), with the palette work
+- [x] Sounds for authoring actions: stroke start, ticks by distance, settle per tool family, undo
+  and redo (`StrokeSound`, recorded CC0 shots; a probe on branch `feel-sound`, levels by ear open)
+- [ ] Prop removal (RMB / Delete) and the play brush's live-edit undo and redo are still silent
 
 ### Phase 3: Expanded SFX (optional)
 - [ ] Add token snap, rotate, scale, cancel sounds to the palette

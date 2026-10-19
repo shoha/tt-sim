@@ -6,7 +6,10 @@ extends RefCounted
 ## The table comes from assets/audio/sfx_manifest.json, which tools/generate_sfx.py
 ## writes from tools/sfx_spec.py, so nothing here names a sound. Each entry carries the
 ## sound's Godot bus, file path, gain (volume_db), pitch jitter in semitones, cooldown
-## in seconds and coalescing priority.
+## in seconds and coalescing priority. A recorded shot (the authoring tools' sounds) also
+## lists its takes, one file each with its own gain, a gain jitter in dB either way and a
+## base pitch: flush() picks a take other than the last one played (pick_take) and says
+## which, so AudioManager plays that take's stream.
 ##
 ## A request names a sound and may add a gain offset and a base pitch for sounds that
 ## follow a quantity (a drop's height, a drag's speed). Requests collect until flush(),
@@ -31,6 +34,8 @@ var _pending: Dictionary = {}
 var _last_played_s: Dictionary = {}
 ## Unknown names already warned about, so each warns once.
 var _warned: Dictionary = {}
+## name -> the take that played last (pick_take).
+var _last_take: Dictionary = {}
 var _rng := RandomNumberGenerator.new()
 
 
@@ -71,6 +76,19 @@ static func load_manifest(path: String = MANIFEST_PATH) -> Dictionary:
 ## range in semitones. Never below 0.01, which AudioStreamPlayer rejects.
 static func jittered_pitch(base: float, jitter_semitones: float, unit: float) -> float:
 	return maxf(0.01, base * pow(2.0, jitter_semitones * unit / 12.0))
+
+
+## Which of `count` takes plays, given the one that played last (-1: none) and `unit` in
+## [0, 1): any take but the last, so a recorded shot never plays the same take twice
+## running. One take is always take 0.
+static func pick_take(count: int, last: int, unit: float) -> int:
+	if count <= 1:
+		return 0
+	var choices := count - 1 if last >= 0 and last < count else count
+	var index := clampi(int(unit * choices), 0, choices - 1)
+	if choices < count and index >= last:
+		index += 1
+	return index
 
 
 ## Every sound name in the table, sorted; restricted to one Godot bus when given.
@@ -144,12 +162,20 @@ func flush(now_s: float) -> Array[Dictionary]:
 		var spec: Dictionary = _entries[sound]
 		_last_played_s[sound] = now_s
 		var jitter := float(spec.get("pitch_jitter", 0.0))
-		var pitch := jittered_pitch(req["pitch_scale"], jitter, _rng.randf_range(-1.0, 1.0))
+		var base := float(req["pitch_scale"]) * float(spec.get("pitch_scale", 1.0))
+		var pitch := jittered_pitch(base, jitter, _rng.randf_range(-1.0, 1.0))
+		var takes: Array = spec.get("takes", [spec.get("path", "")])
+		var take := pick_take(takes.size(), int(_last_take.get(sound, -1)), _rng.randf())
+		_last_take[sound] = take
+		var take_gains: Array = spec.get("take_gains_db", [])
 		var gain := float(spec.get("volume_db", 0.0)) + float(req["volume_offset_db"])
+		gain += float(take_gains[take]) if take < take_gains.size() else 0.0
+		gain += float(spec.get("gain_jitter_db", 0.0)) * _rng.randf_range(-1.0, 1.0)
 		var played := {
 			"name": sound,
 			"bus": bus,
-			"path": str(spec.get("path", "")),
+			"path": str(takes[take]) if take < takes.size() else str(spec.get("path", "")),
+			"take": take,
 			"volume_db": gain,
 			"pitch_scale": pitch,
 		}

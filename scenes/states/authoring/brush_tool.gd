@@ -112,6 +112,8 @@ var fade_radius_factor: float = FADE_RADIUS_FACTOR
 var min_stroke_seconds: float = 0.0
 ## The cursor's overlay and the drawing the modes share.
 var cursor := BrushCursor.new()
+## The stroke's sounds (start, ticks by distance, settle) for the tool's family.
+var sound := StrokeSound.new()
 
 ## The pointer and the press, which the modes read (render jobs set them to drive the brush
 ## without input events): the pointer (screen), LMB down on the 3D view (a gesture in
@@ -323,6 +325,8 @@ func finish_gesture() -> void:
 	if editor != null and stroking:
 		_top_up_click()
 		editor.end_stroke()
+	if stroking:
+		sound.end()
 	mode.end(self)
 	stroking = false
 
@@ -331,6 +335,7 @@ func finish_gesture() -> void:
 func cancel_gesture() -> void:
 	if editor != null and stroking:
 		editor.cancel_stroke()
+	sound.cancel()
 	mode.cancel(self)
 	pressed = false
 	press_pending = false
@@ -428,6 +433,7 @@ func _start_gesture(click_seconds: float) -> void:
 		return
 	gesture_started.emit()
 	stroking = true
+	sound.begin(tool.id if tool != null else &"", session_radius)
 	_hit_pointer = pointer
 	_last_dab = hit
 	dwell = 0.0
@@ -464,6 +470,7 @@ func _paint(seconds: float) -> void:
 	editor.stroke_dab(_last_dab, hit, mode.stroke_radius(self), exposure)
 	editor.flush()
 	_stroke_exposure += exposure
+	sound.moved(_last_dab.distance_to(hit), seconds)
 	_last_dab = hit
 	mode.dabbed(self)
 
