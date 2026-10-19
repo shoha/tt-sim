@@ -8,10 +8,10 @@ extends BrushMode
 ##   Line   the line tool the river is (card F5e; user, 2026-10-11: the same affordance as
 ##          driving a river, and 2026-10-18: every shape and icon the same): its gesture
 ##          (LineGesture: capture, the live line to the pointer, Esc or RMB dropping it, the
-##          minimum length, the chip "Line of fire  40 ft") and its ribbon (LineRibbon) in the
-##          fire line's style (LAY_STYLE: persimmon rails at both edges on an ember glow, lit on
-##          the cursor's glow layer, the coverage falling to nearly clear along the centre line,
-##          chalk chevrons down the middle; card F5d's variant C). The release lays it
+##          minimum length, the chip "Line of fire  Blaze  40 ft") and its ribbon (LineRibbon)
+##          in the fire line's style (LAY_STYLE: persimmon rails at both edges on an ember glow,
+##          lit on the cursor's glow layer, falling in a thin seam to clear along the centre
+##          line, chalk chevrons down the middle; card F5d's variant C). The release lays it
 ##          (lay_line()): resampled evenly every LINE_SPACING radii and dabbed segment by segment
 ##          as capsules at a fixed exposure per segment, so a line is even whatever the drawing
 ##          speed.
@@ -25,8 +25,8 @@ extends BrushMode
 ## stroke. Ctrl at the press puts fire out instead (the area, or along the line), leaving its
 ## ash and snags. The ring is ember orange, the erase salmon (BrushCursor.CLEAR_TINT, every
 ## brush's erase) to put out; the put-out line's ribbon is the line tool's erase
-## (LineRibbon.erase_style: the salmon edge and chevrons) over a cool interior (put_out_tint, the
-## lake) that parts from the bright flames it is drawn on and from char alike. Every colour is a
+## (LineRibbon.erase_style: the salmon edge and chevrons on ink, a low wash) in a light lake
+## (put_out_tint), through which the flames it is drawn on keep their colour. Every colour is a
 ## theme role or the erase tint; only alphas are set here.
 
 enum Shape { LINE, AREA }
@@ -37,6 +37,9 @@ const LINE_TEXT := "Line of fire"
 const EMBERS := 96
 const FLAMES := 176
 const BLAZE := 255
+## The intensity tiles' names (FireToolPane's), which the Line's chip names as the river's
+## names its depth.
+const INTENSITY_LABELS: Array[String] = ["Embers", "Flames", "Blaze"]
 const TINT := ThemeColors.EMBER
 ## A laid line's dabs: one capsule every LINE_SPACING brush radii along the line, each with
 ## LINE_SECONDS of exposure (times the brush's flow). Along the centre a sample gathers about
@@ -49,23 +52,26 @@ const MAX_LINE_DABS := 4096
 ## coverage is high at the two edges and falls steeply to nearly clear along the centre line,
 ## lit by fill_gain on the glow layer, so orange stands where it is solid and the ground and
 ## its plants show unmixed down the middle (orange at partial coverage over green mixes toward
-## olive, card F5d), the persimmon edge on an ember glow. The rails run in to 0.62 radii before
-## the fall: a fall from 0.78 left a half-covered zone that read grey-teal beside the rails over
-## the pine's dark ground (card F5d round 2).
+## olive, card F5d), the persimmon edge on ink (the river's edge) over an ember glow. The rails
+## hold their weight in to 0.62 radii, then fall to clear within 0.08 radii, so the half-covered
+## band where orange over green turns olive is a thin seam: a fall from 0.78 read grey-teal
+## beside the rails over the pine's dark ground (card F5d round 2), and F5e's fall to 0.12 at
+## 0.5 radii, with a 0.12 to 0.04 tail inside, left an olive-ochre band about a quarter of the
+## band wide each side (card F5f).
 const LAY_STYLE := {
 	"tint": ThemeColors.PERSIMMON,
 	"alpha_up": 0.8,
 	"alpha_down": 0.9,
 	"fill_gain": 1.7,
-	"fill_profile": [[1.0, 1.0], [0.62, 0.7], [0.5, 0.12], [0.0, 0.04]],
+	"fill_profile": [[1.0, 1.0], [0.62, 0.78], [0.54, 0.03], [0.0, 0.0]],
 	"glow": ThemeColors.EMBER,
 }
-## Putting out along a line: the line tool's erase (about half coverage, a plain fill) over a
-## cool interior, so the band reads over the glare of the flames it is drawn on and over char,
-## calm rather than alarming. The interior is the lake, water on fire: against the warm blaze
-## it parted more plainly than an ash plum-grey (PAPER_TRACK), whose mauve leaned into the
-## flames' pinks (card F5c, firefeat_line erase_drag_a and _b).
-const PUT_OUT_TINT := ThemeColors.LAKE
+## Putting out along a line: the line tool's erase (the salmon lines on ink, a low wash) over a
+## light lake, water on fire, so the flames' own colour comes through the wash and the salmon
+## lines say what goes. The dark lake at half coverage mixed with the orange flames to a neutral
+## grey and left them ghosts (card F5f); an ash plum-grey (PAPER_TRACK) leaned into the flames'
+## pinks (card F5c).
+const PUT_OUT_TINT := ThemeColors.LAKE_LIGHT
 const PUT_OUT_INTERIOR := {"tint": PUT_OUT_TINT}
 
 ## The mask byte a lay approaches (EMBERS, FLAMES or BLAZE).
@@ -170,6 +176,19 @@ static func lay_line(
 	return editor.end_stroke()
 
 
+## The intensity tile's name for mask byte `value`: Embers up to EMBERS, Flames up to FLAMES,
+## else Blaze. Pure.
+static func intensity_label(value: int) -> String:
+	if value <= EMBERS:
+		return INTENSITY_LABELS[0]
+	return INTENSITY_LABELS[1] if value <= FLAMES else INTENSITY_LABELS[2]
+
+
+## The Line's chip label, the line tool's "<shape>  <setting>": "Line of fire  Blaze".
+func line_label() -> String:
+	return "%s  %s" % [LINE_TEXT, intensity_label(intensity)]
+
+
 ## The put-out ribbon's style: the line tool's erase over put_out_tint (PUT_OUT_INTERIOR).
 func put_out_style() -> Dictionary:
 	return LineRibbon.erase_style(PUT_OUT_INTERIOR.merged({"tint": put_out_tint}, true))
@@ -227,13 +246,14 @@ func stroke_radius(brush: BrushTool) -> float:
 
 
 ## The red ring names its erase under it ("Put out fire"), as Paint's "Erase paint"; the Line
-## shape says what it lays ("Line of fire", or "Put out fire" with Ctrl), with the line's
-## length in the level's units while drawn (LineGesture.readout).
+## shape says what it lays as the river does ("Line of fire  Blaze", line_label(), or "Put out
+## fire" with Ctrl), with the line's length in the level's units while drawn
+## (LineGesture.readout).
 func cursor_text(brush: BrushTool) -> String:
 	var erasing := _erasing(brush)
 	if shape == Shape.AREA:
 		return ERASE_TEXT if erasing else ""
-	return gesture.readout(ERASE_TEXT if erasing else LINE_TEXT, brush)
+	return gesture.readout(ERASE_TEXT if erasing else line_label(), brush)
 
 
 ## The line being drawn as the line tool's ribbon out to the pointer, at the ring's width, in

@@ -250,4 +250,8 @@ that conflicts with one stops and asks. Add each new verdict here with its date.
   chevrons on ink, the ring at the line's width, the chip, the Shape tiles, the hint bar's
   wording) except where the meaning differs: the tint, the fill (the river's even translucent
   band, the fire's rails) and the words. Both erase ribbons share one structure, the salmon
-  edge and chevrons, over an interior that parts from what it erases.
+  edge and chevrons, over an interior that parts from what it erases. Card F5f (a consistency
+  critic, 2026-10-18): an erase never hides what it erases. Its interior is a low wash (0.08 to
+  0.14; at half coverage the river went a flat dusty rose and the lake over flames went grey
+  mud, and even at 0.12 to 0.2 the salmon greyed the blue water), so the salmon edge, glow and chevrons say "erase", each on a strong ink outline the
+  erase ring shares; the rails keep their weight but fall to clear in a thin seam.

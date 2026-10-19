@@ -9,7 +9,8 @@ extends RefCounted
 ## ground (one downward ray per ring point, cached until the brush moves; with `live`, the
 ## document's own heights every frame, since the ground under a still ring moves while
 ## sculpting). It is drawn on its own layer (OVERLAY_LAYER) so it stays crisp above the lo-fi
-## pass: a dark under-stroke and a light over-stroke read on any ground in either lo-fi theme.
+## pass: a dark under-stroke and a light over-stroke read on any ground in either lo-fi theme
+## (the erase ring on the stronger ink every erase line shares, ring_strokes()).
 ## That layer is under every panel and drawer: the ring belongs to the board, so the glass over
 ## the board covers it as it covers the ground (it was on the measure overlay, over the glass).
 ## The tint is the mode's (BrushMode.cursor_tint). The ring is an outline only: a fill, drawn on
@@ -33,6 +34,13 @@ const DOWNCAST_HEIGHT := 200.0
 const SHADOW_COLOR := Color(0.05, 0.04, 0.05, 0.55)
 ## The erase tint (Clear, a Paint or Water erase, a Place footing warning).
 const CLEAR_TINT := Color(1.0, 0.52, 0.42)
+## Every erase line (the erase ring, a line tool's erase edge and chevrons): the salmon this
+## wide over INK at this alpha and width, so it holds 3:1 over a pale wash, water and bright
+## flames alike (at the shadow's 0.55, or 0.7, the salmon sank into a salmon wash and fell
+## under 3:1 over flames; card F5f).
+const ERASE_INK_ALPHA := 0.85
+const ERASE_INK_WIDTH := 5.5
+const ERASE_LINE_WIDTH := 2.5
 ## The glass accent: the brush is drawn over the live table, where ember is the action colour.
 const PLACE_TINT := ThemeColors.EMBER
 ## The readout under the ring: a glass chip as the rulers' (MapOverlayUtils.draw_chip), this
@@ -197,5 +205,17 @@ func _project(points: PackedVector3Array, pivot: Vector3, scale: float) -> Packe
 
 
 func _stroke_ring(points: PackedVector2Array, tint: Color, width: float) -> void:
-	canvas.draw_polyline(points, SHADOW_COLOR, width + 2.0, true)
-	canvas.draw_polyline(points, tint, width, true)
+	for stroke: Array in ring_strokes(tint, width):
+		canvas.draw_polyline(points, stroke[0], stroke[1], true)
+
+
+## A ring's strokes in `tint` at `width` px, under to over: [colour, width] each. The erase
+## tint draws as every erase line does (the edge and chevrons of a line tool's erase ribbon,
+## LineRibbon.ERASE_STYLE): ERASE_LINE_WIDTH over the erase's ink; any other tint over the
+## shadow. Pure.
+static func ring_strokes(tint: Color, width: float) -> Array:
+	if tint == CLEAR_TINT:
+		var ink := ThemeColors.INK
+		ink.a = ERASE_INK_ALPHA
+		return [[ink, ERASE_INK_WIDTH], [tint, ERASE_LINE_WIDTH]]
+	return [[SHADOW_COLOR, width + 2.0], [tint, width]]
