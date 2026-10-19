@@ -24,6 +24,7 @@
 		"res://tests/unit/test_environment_glow.gd",
 		"res://tests/unit/test_fire_book.gd",
 		"res://tests/unit/test_fire_clusters.gd",
+		"res://tests/unit/test_fire_cue.gd",
 		"res://tests/unit/test_fire_event.gd",
 		"res://tests/unit/test_fire_field_plan.gd",
 		"res://tests/unit/test_fire_fires.gd",
