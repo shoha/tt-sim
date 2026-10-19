@@ -40,6 +40,13 @@ HUM_NOTCH_Q = 4.0
 # The filters' run-in before the trim.
 WARMUP_S = 0.5
 
+# A one-shot take's sample peak. Half a dB under the palette's -3 dBFS, because the
+# pre-commit hook (tools/normalize_audio.py) judges a file by its true peak, and a
+# take with a sharp transient overshoots its samples by up to 1.6 dB at 22.05 kHz
+# (paint_settle's first take: -3.0 dBFS sampled, -1.4 dBTP, which the hook then
+# turned down 1.6 dB at commit, so the committed file no longer matched --install).
+SHOT_PEAK_DBFS = PEAK_TARGET_DBFS - 0.5
+
 
 def read_source(path) -> tuple[list[float], int]:
     """Read a 16- or 24-bit PCM WAV into mono floats in [-1, 1] and its rate."""
@@ -192,4 +199,4 @@ def process_shot(source: Sequence[float], rate: int, take, shot) -> list[float]:
     faded = fade_edges(
         trimmed, int(round(shot.fade_in_ms * per_ms)), int(round(shot.fade_out_ms * per_ms))
     )
-    return peak_normalize(faded, PEAK_TARGET_DBFS)
+    return peak_normalize(faded, SHOT_PEAK_DBFS)
