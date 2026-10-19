@@ -178,6 +178,13 @@ func request_stamps() -> void:
 		_stamp_wait = DEBOUNCE_S
 
 
+## True while a restamp of the masses is waiting (request_stamps, or the sun moved): the ground
+## still draws the masses of the scatter before its last regeneration (a fire's ash waits on it,
+## FireSweep).
+func is_restamping() -> bool:
+	return _stamp_wait >= 0.0 and not biomes().is_empty()
+
+
 func _process(delta: float) -> void:
 	if biomes().is_empty():
 		set_process(false)

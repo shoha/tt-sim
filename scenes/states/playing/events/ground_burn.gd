@@ -9,8 +9,9 @@ extends MeshInstance3D
 ## lobes run ahead and bays lag as it grows. Ahead of it the grass dries in a mottled band, on it
 ## a hot band of varying width burns, broken into crawling segments, and behind it the ground is
 ## charred with glowing specks that cool as the front leaves them. Its glow dies once the front
-## has reached the rim (glow_at), and the char stays until the ash lands at the end of the
-## event, then goes (char_at), so the charred ground hands over to the ash rather than popping.
+## has reached the rim (glow_at), and the char stays until the ash has landed (FireSweep holds
+## it past the event's end until its change is on the board), then goes (char_at), so the
+## charred ground hands over to the ash rather than popping or showing the grass between.
 ##
 ## The lobe field is one small wrapping texture of the fire's noise (fire_noise.gdshaderinc's
 ## two octaves, made periodic), painted once for the session; the shader samples it and reach
@@ -136,9 +137,10 @@ func _shade(size: Vector3, scale_m: float, event_seed: int) -> void:
 	material_override = _material
 
 
-## Plays the burn `elapsed` seconds into the fire.
-func step(elapsed: float) -> void:
-	var gone := char_at(elapsed, _duration)
+## Plays the burn `elapsed` seconds into the fire, its char going about `end` (char_at; the
+## event's end when below 0, else FireSweep.end_at: once its change has landed).
+func step(elapsed: float, end: float = -1.0) -> void:
+	var gone := char_at(elapsed, _duration if end < 0.0 else end)
 	visible = gone > 0.0
 	if not visible:
 		return
@@ -163,8 +165,8 @@ static func glow_at(t: float, spread: float) -> float:
 	return rise * fall
 
 
-## The char's alpha `t` seconds into an event of `duration`: whole until just before the ash
-## lands, gone soon after. Pure.
+## The char's alpha `t` seconds into an event whose ash has landed by `duration` (the event's
+## end, or later once its change landed): whole until just before then, gone soon after. Pure.
 static func char_at(t: float, duration: float) -> float:
 	return 1.0 - smoothstep(duration + CHAR_OUT_S.x, duration + CHAR_OUT_S.y, t)
 

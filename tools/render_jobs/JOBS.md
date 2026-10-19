@@ -798,15 +798,32 @@ and which test levels it keeps. How to run one, the flags and the build / look l
 - `jobs/firefeat_path.json`: Start a fire's Path shape (card F6; about 130 s built, 60-75 s
   `--saved`). Build: the 200 ft temperate map with the meadow stripes east of x 0 (as
   firefeat_line_tool's), authoring River and Line of fire held mid-drag on one curve from the
-  forest into the meadow at zoom 22 (`one_tool_*`), saved as `_firefeat_path` and played. Look:
-  Start a fire's pane at Circle, real Tabs with the pane open and closed (an eval logs the
-  shape and that no GUI control took focus), the Path ring at rest, mid-drag over the forest
-  and over the meadow, Esc keeping it armed; then a path fire on the same curve (the probe's
-  `fire` kind `path`) at 0.7, 1.6 and 2.6 s and after, by day and at 23:00, and the drag at
-  night. Sheets: `sheet_one_tool` (River | Line of fire | Path; the first two from the build
-  run's folder, `render_jobs/firefeat_path_before`), `sheet_today_now` (the circle's pane and
-  ring before card F6's UI | now), `sheet_cursor`, `sheet_motion`. Delete the level with
-  `jobs/firefeat_path_cleanup.json` (the probe's `delete_level`: `_firefeat_path` only).
+  forest into the meadow at zoom 22 (`one_tool_*`) and each at rest (`rest_*`), saved as
+  `_firefeat_path` and played. Look: Start a fire's pane at Circle, real Tabs with the pane
+  open and closed (an eval logs the shape and that no GUI control took focus), the Path ring
+  at rest, mid-drag over the forest and over the meadow, Esc keeping it armed, a path over the
+  meadow alone refused whole (`path_drag_refused_*`, the chip logged), the pane at Path and a
+  drag at 1280x720 (`*_720`, full size); then a path fire on the same curve (the probe's `fire`
+  kind `path`) at 0.7, 1.6 and 2.6 s and after (settled, 9 s after the clock is freed), by day
+  and at 23:00, and at night the Path, the River and the Line of fire mid-drag (the Events
+  pane's tools). Sheets: `sheet_one_tool` (River | Line of fire | Path, card F6's above card
+  F6b's; from `render_jobs/firefeat_path_before` and `firefeat_path_before_f6b`), `sheet_rest`,
+  `sheet_night_three`, `sheet_today_now` (the circle's pane and ring before card F6's UI |
+  now), `sheet_cursor`, `sheet_cursor_before_now`, `sheet_720`, `sheet_motion`,
+  `sheet_after_before_now`. Delete the level with `jobs/firefeat_path_cleanup.json` (the
+  probe's `delete_level`: `_firefeat_path` only).
+- `jobs/firefeat_handover.json`: a fire's handover from its motion to its map change (card
+  F6b), on `_firefeat_path` (`--saved` after a firefeat_path build; about 45 s). A path fire
+  with the clock held to 2.6, 3.0, 3.5, 4.0, 4.5 and 5.0 s, then free (`tl_path_f*` about every
+  0.5 to 3 s until settled), then a circle fire at map (-8, -6), 4 m, held to 2 and 3 s, then
+  free (`tl_circle_*`); each capture after a `status` line in log.txt (the probe's: wall
+  clock, event clock, change made, char alpha, played and landed, the scatter regenerating
+  and growing, the ground look's restamp wait and bakes, the ash weight and scatter rows
+  under named pixels), and F6B| lines in the raw output when the change is made and cells
+  land. Its first step logs straight 8 m lines with no burnable tree (`treeless`). Sheets
+  `sheet_handover_path`, `sheet_handover_circle` and `sheet_handover_before_now` (against
+  `render_jobs/firefeat_handover_before`, the run before card F6b's hold). Saves nothing;
+  each fire is undone.
 - `jobs/fire_smoke_book.json`: bakes the persistent fire's smoke book once, offline (card
   fire-prod-c5a; `probes/fire_smoke_book.gd`; `tools/fire_sim/README.md`). In the real window (a
   headless run draws nothing) it draws `tools/fire_sim/fire_smoke_book_bake.gdshader` into one

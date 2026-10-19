@@ -130,6 +130,12 @@ const FILLS := {
 }
 ## The fill a tool's lay takes unless told otherwise (option R; the job shows E beside it).
 const FILL := "rails"
+## A quieter stretch of a lay, over its keys (Start a fire's Path where only the ground burns,
+## card F6b): the rails narrowed to the band's outer edge at their full coverage and light, every
+## line (edge, ink, glow, chevrons) the lay's, so the line still reads whole, its hue and its
+## way plain, with less of it lit. Narrower, not fainter: at lower coverage the hue mixed with
+## the ground under it, khaki over grass and the dark wood (F5f's olive seam).
+const QUIET_STYLE := {"fill_profile": [[1.0, 1.0], [0.86, 0.78], [0.78, 0.03], [0.0, 0.0]]}
 ## An erase's keys over STYLE, for every tool (the river's erase and the fire's put-out alike):
 ## the erase salmon on the edge, its glow and the chevrons, every weight and the ink the lay's,
 ## and no wash inside, so what goes shows through untouched and the salmon lines alone say
