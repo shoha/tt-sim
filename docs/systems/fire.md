@@ -245,27 +245,40 @@ chose the falloff (ranges 7, 12, 15 and 20 under pixel probes) are in `FireLight
 
 ### The sound
 
-`FireSound` (cards F7 and F7b), made with the lights and smoke: the roar loop (`fire_roar`, a
-CC0 recording of a large fire processed into a 57 s seamless loop;
+`FireSound` (cards F7, F7b and F7c), made with the lights and smoke: the roar loop (`fire_roar`,
+a CC0 recording of a large fire processed into a 57 s seamless loop;
 [../SOUND_EFFECTS.md](../SOUND_EFFECTS.md) "Loops") on at most two `AudioStreamPlayer3D` on the
 SFX bus, so the Settings SFX volume governs it. Each refresh hands it every burning cluster
-(`FireClusters.find`, the lights' own search); `FireSound.pick` (pure) takes the two loudest near
-the view: a cluster's loudness is the square root of its size over `FULL_SIZE_M2` 12 m², times its
-place in the view (whole within `FULL_SHARE` 0.5 of the orthographic camera's height from its
-axis, silent at `REACH_SHARE` 1.0, just past the screen's sides). The pick runs when the fire
-changes or the view moves or zooms by `REPICK_SHARE` 0.15 of its height, never per frame (about
-0.13 ms over 300 clusters, measured in `test_fire_sound.gd`); per frame each player only fades
+(`FireClusters.find`, the lights' own search) and where each one's flames stand
+(`FireClusters.spots`: every burning cell belongs to the cluster its steepest ascent of scores
+reaches, so also a long burn's cells outside every cluster's own nine); `FireSound.pick` (pure)
+takes the two loudest near the view. A cluster is an area: each of its cells' centroids reaches
+`SPOT_REACH_M` (0.75 of a cell, 2.6 m) around it, and the cluster's loudness is the square root of
+its size over `FULL_SIZE_M2` 12 m², times how near its flames come to the orthographic camera's
+axis (whole within `FULL_SHARE` 0.5 of the view's height, silent at `REACH_SHARE` 1.0, just past
+the screen's sides, never under `FULL_MIN_M` 2 m and `REACH_MIN_M` 5 m once zoomed in). Its player
+stands at its flames' point nearest the screen's middle, so a fire around the view sounds centred
+and one to the right is heard right, alike at every zoom. Card F7c's reason: with each cluster a
+point at its centroid, a view at the closest zoom (2) fell silent 3 m from the largest cluster's
+centroid and over flames 8.5 m from any (`firefeat_sound_zoom`: two clusters for a 22 m band),
+and at zoom 8 a view full of flames heard them panned left. The view's size is taken into the
+field's frame, so a scaled map measures in its own metres. The pick runs when the fire changes or
+the view moves or zooms by `REPICK_SHARE` 0.15 of its height, never per frame (about 0.4 ms over
+300 clusters, measured in `test_fire_sound.gd`); per frame each player only fades
 toward its target at `FADE_PER_S` 1 (about a second from silence to full), and a player whose
 cluster changes fades out, moves and fades in. Distance does not attenuate the players (the level
 is the view's fire); their place pans them through the world SubViewport's 3D listener
 (`audio_listener_enable_3d` in `game_map.tscn`, its camera). They exist only while flames do:
 embers alone are silent, and once the fire is erased they fade out and are freed. The two start
 at random points of the loop, a quarter semitone either side of its pitch, so the pair never
-phases. The level is the spec's `volume_db` (-6 dB, an ambience about 20 dB under the token
-sounds; the level by ear is the user's). In the real window (`firefeat_cue`, 2026-10-19): the SFX
-bus at -200 dB before the fire; with one cluster in view at gain 0.68, peaks of -30 to -34 dB
-(the fire right of centre, right 2 dB over left); panned away, gains 0 and the bus back to
--200 dB within 2.5 s.
+phases. The level is the spec's `volume_db` (-9 dB since card F7c, "a tad" under F7b's -6: one
+player at -31.6 dBFS RMS, an ambience about 23 dB under the token sounds; the level by ear is the
+user's). In the real window (`firefeat_cue`, 2026-10-19, at -6 dB): the SFX bus at -200 dB before
+the fire; with one cluster in view at gain 0.68, peaks of -30 to -34 dB (the fire right of
+centre, right 2 dB over left); panned away, gains 0 and the bus back to -200 dB within 2.5 s.
+`firefeat_sound_zoom` (card F7c) logs the players, their pan and the bus at the home view, zoom 8
+and zoom 2 over and beside a band of flames: at zoom 2 over any of its flames, and 1.5 m past
+their edge, gain 1 and pan 0.00 (before the fix silent, -200 dB); 12 m past the edge, silent.
 
 ### Tokens
 
@@ -365,8 +378,12 @@ Unit tests in `tests/unit/` (all in the authoring subset):
   token sounds, the stream imported looping as QOA over the whole file (`loop_end` the last
   frame, the guard sample equal to the first) with a seam no larger than its neighbours' steps,
   `play()` refusing a loop; `pick` near the view, loudest first, faded across the edge, and its
-  cost; a field's players at the strongest clusters, fading in, and freed once the fire is
-  erased; embers silent. The processing is tested in Python (`tools/tests/test_sfx_recording.py`).
+  cost; at zoom 2 a cluster heard whole over its flames off its centroid and placed at the view's
+  middle, a place pulled toward the middle by no more than the reach at zoom 2, 8 and 14, a far
+  cluster silent at each; `FireClusters.spots` giving every burning cell of a band to exactly one
+  cluster, and a view over any of the band's flames heard at zoom 2 (its centroids alone left 5
+  of its 20 cells silent); a field's players at the strongest clusters, fading in, and freed once
+  the fire is erased; embers silent. The processing is tested in Python (`tools/tests/test_sfx_recording.py`).
 - `test_fire_stroke.gd`, `test_map_document_fire.gd`: the Fire tool's history entries and the
   document's `fire.png`; `test_live_map_edits.gd` runs the fire on the worker for host, peer and
   reload. Over ENet: `tests/net/enet_live_edits` compares `plan_digest` on every op and for the
@@ -378,7 +395,9 @@ sheets, held clock, motion bursts) and `firefeat_cleanup`; `fire_mask` (lay and 
 upload ms); `fire_perf_play`; `fire_smoke_book` (the smoke book's bake); `fire_c7a_aba`,
 `fire_c7a_parts`, `fire_c7a_parts2` and `fire_c7b_glow` (the production timing); `firefeat_cue`
 (the drag ruler's "In fire" in play, and the sound's players and the SFX bus with the fire in
-view and away from it, `probes/fire_sound.gd`). Performance:
+view and away from it, `probes/fire_sound.gd`); `firefeat_sound_zoom` (the sound at the home
+view, zoom 8 and zoom 2 over, beside and away from a band of flames, in authoring, nothing
+saved). Performance:
 [../PERFORMANCE.md](../PERFORMANCE.md) "Fire, production port (C7, 2026-10-18)" times this fire
 (every target met by day; whole night home and third night zoom 20 at the edge, met in the latest
 run and missed in the two before; CPU 0.002 ms; a stroke 1.8-3.6 ms on the main thread); "Fire

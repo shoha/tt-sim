@@ -841,6 +841,14 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   hold set no drag target). Holds a token mid-drag over the fire (`cue_in_fire`, the label text
   logged) and off it (`cue_outside`). Its last step deletes exactly `_firefeat_cue` (an `eval` of
   `LevelManager.delete_level_folder`), not the other `_firefeat_` levels.
+- `jobs/firefeat_sound_zoom.json`: the fire's sound at every zoom (card F7c; about 47 s). A new
+  100 ft meadow (seed 4242) in authoring with a radius-4 band of flames along x -4..12 (two
+  clusters); nothing is saved, so there is no level to clean up. `probes/fire_sound.gd` logs the
+  camera's size and place, the clusters nearest the view's middle with their distance from its
+  axis, each player's place, gain, target and pan, and the SFX bus at the home view, at zoom 8
+  and zoom 2 over the burning point farthest from every cluster's centroid (its `aim` action,
+  `target` "gap"), at zoom 2 3 m off the largest cluster's centroid and on it, and 1.5 m and
+  12 m past the flames' east edge (`target` "edge"). One capture, `zoom2_gap`.
 - `jobs/fire_smoke_book.json`: bakes the persistent fire's smoke book once, offline (card
   fire-prod-c5a; `probes/fire_smoke_book.gd`; `tools/fire_sim/README.md`). In the real window (a
   headless run draws nothing) it draws `tools/fire_sim/fire_smoke_book_bake.gdshader` into one

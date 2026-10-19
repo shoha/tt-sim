@@ -154,11 +154,12 @@ RECORDINGS = {
         highpass_hz=70.0, hum_hz=49.8, lowpass_hz=10000.0, sample_rate=24000,
         max_high_band_db=-20.0,
         # An ambience under the token sounds: the level by ear is set here only.
-        # At -6 dB one player's RMS is -28.6 dBFS (the loop's -22.6 under it),
-        # about 20 dB under token_drop's loudest 50 ms (-8.9 dBFS) and where card
-        # F7's generated crackle sat at -12 dB. Each of FireSound's two players
-        # starts at its own pitch within the jitter, so the pair never phases.
-        volume_db=-6.0, pitch_jitter=0.5, priority=PRIORITY_FAINT,
+        # At -9 dB (card F7c, the user: "lower the fire sound volume a tad"; F7b
+        # had -6) one player's RMS is -31.6 dBFS (the loop's -22.6 under it),
+        # about 23 dB under token_drop's loudest 50 ms (-8.9 dBFS), 20 dB with
+        # both players at full. Each of FireSound's two players starts at its
+        # own pitch within the jitter, so the pair never phases.
+        volume_db=-9.0, pitch_jitter=0.5, priority=PRIORITY_FAINT,
     ),
 }
 

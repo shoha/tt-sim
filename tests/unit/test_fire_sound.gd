@@ -1,11 +1,12 @@
 extends GutTest
 
-## The persistent fire's sound (cards F7 and F7b; FireSound): the manifest declares the roar a
-## loop on the SFX bus, AudioManager hands out its stream and refuses to play it as a one-shot,
+## The persistent fire's sound (cards F7, F7b and F7c; FireSound): the manifest declares the roar
+## a loop on the SFX bus, AudioManager hands out its stream and refuses to play it as a one-shot,
 ## the file imports looping (QOA) and its last sample runs into its first without a click; a
 ## field's players exist only while flames do, stand at the strongest clusters, fade in and out
 ## and are freed once the fire is erased; pick hears the clusters near the view only, loudest
-## first.
+## first, each cluster by its flames (FireClusters.spots) rather than its centroid, so a view over
+## any flame hears the fire at the closest zoom, centred.
 
 const SOUND := &"fire_roar"
 const PATH := "res://assets/audio/sfx/fire_roar.wav"
@@ -30,14 +31,27 @@ func _doc(centres: Array, radius: float, heat: int = 255) -> MapDocument:
 	return doc
 
 
-## The burning clusters of `doc` as FireField finds them (every block planned, row order).
-func _clusters(doc: MapDocument) -> Array[Dictionary]:
+## The flames' cells of `doc` as FireField sums them (every block planned, row order).
+func _cells(doc: MapDocument) -> Dictionary:
 	var per_block := {}
 	for block in FireField.blocks_of(doc, Rect2i(0, 0, doc.samples_x(), doc.samples_z())):
 		var plan := FireField.plan_block(doc, block)
 		if not plan.is_empty():
 			per_block[block] = FireClusters.cells_of(plan)
-	return FireClusters.find(FireClusters.merge(per_block), false)
+	return FireClusters.merge(per_block)
+
+
+## The burning clusters of `doc` as FireField finds them.
+func _clusters(doc: MapDocument) -> Array[Dictionary]:
+	return FireClusters.find(_cells(doc), false)
+
+
+## A band of flames along x, about 23 m long and 7 m wide.
+func _band() -> MapDocument:
+	var centres := []
+	for k in 5:
+		centres.append(Vector2(-8.0 + 4.0 * k, 0.0))
+	return _doc(centres, 3.5)
 
 
 func _cluster(cell: Vector2i, at: Vector3, size: float) -> Dictionary:
@@ -137,14 +151,109 @@ func test_pick_hears_the_loudest_near_the_view_ties_in_order() -> void:
 
 func test_pick_fades_a_cluster_across_the_view_edge() -> void:
 	var view := 10.0
-	var at_edge: Array[Dictionary] = [_cluster(Vector2i.ZERO, Vector3(7.5, 0.0, 0.0), 12.0)]
+	# Its flames reach SPOT_REACH_M around its centroid: this far out they are half way from
+	# whole (FULL_SHARE of the view) to silent (REACH_SHARE).
+	var edge := FireSound.SPOT_REACH_M + 0.75 * view
+	var at_edge: Array[Dictionary] = [_cluster(Vector2i.ZERO, Vector3(edge, 0.0, 0.0), 12.0)]
 	var picked := FireSound.pick(at_edge, Vector3(0.0, 20.0, 0.0), Vector3.DOWN, view)
 	assert_eq(picked.size(), 1)
 	assert_between(float(picked[0]["gain"]), 0.01, 0.99, "half way out: partly heard")
-	var gone: Array[Dictionary] = [_cluster(Vector2i.ZERO, Vector3(10.5, 0.0, 0.0), 12.0)]
+	var out := FireSound.SPOT_REACH_M + 1.05 * view
+	var gone: Array[Dictionary] = [_cluster(Vector2i.ZERO, Vector3(out, 0.0, 0.0), 12.0)]
 	assert_eq(FireSound.pick(gone, Vector3(0.0, 20.0, 0.0), Vector3.DOWN, view).size(), 0)
 	assert_eq(FireSound.gain_for(0.0), 0.0)
 	assert_almost_eq(FireSound.gain_for(FireSound.FULL_SIZE_M2 * 4.0), 1.0, 1e-6)
+
+
+func test_pick_at_the_closest_zoom_hears_a_cluster_over_its_flames_off_its_centroid() -> void:
+	# Card F7c's report: at zoom 2 a cluster counted by its centroid alone fell silent 3 m from
+	# it, with the view full of its flames.
+	var centroid := Vector3(1.5, 0.0, 0.2)
+	var cluster := _cluster(Vector2i.ZERO, centroid, 12.0)
+	cluster["spots"] = PackedVector3Array(
+		[Vector3.ZERO, Vector3(3.5, 0.0, 0.0), Vector3(7.0, 0.0, 0.5)]
+	)
+	var eye := Vector3(9.5, 20.0, 0.0)
+	var one: Array[Dictionary] = [cluster]
+	var picked := FireSound.pick(one, eye, Vector3.DOWN, 2.0)
+	assert_eq(picked.size(), 1)
+	assert_almost_eq(float(picked[0]["gain"]), 1.0, 1e-6, "whole over its flames")
+	var at: Vector3 = picked[0]["at"]
+	assert_almost_eq(Vector2(at.x, at.z), Vector2(9.5, 0.0), Vector2.ONE * 1e-5, "centred")
+	var point: Array[Dictionary] = [_cluster(Vector2i.ZERO, centroid, 12.0)]
+	assert_eq(FireSound.pick(point, eye, Vector3.DOWN, 2.0).size(), 0, "its centroid alone: out")
+
+
+func test_pick_pulls_a_place_toward_the_view_middle_within_the_reach() -> void:
+	var at := Vector3(0.0, 0.0, 0.0)
+	var clusters: Array[Dictionary] = [_cluster(Vector2i.ZERO, at, 12.0)]
+	var inside := FireSound.pick(clusters, Vector3(1.0, 20.0, 0.0), Vector3.DOWN, 2.0)
+	assert_almost_eq(inside[0]["at"], Vector3(1.0, 0.0, 0.0), Vector3.ONE * 1e-5, "the middle")
+	for view in [2.0, 8.0, 14.0]:
+		# The cluster left of the view's middle, its flames 30% of the way out of the fade.
+		var full := maxf(FireSound.FULL_SHARE * view, FireSound.FULL_MIN_M)
+		var reach := maxf(FireSound.REACH_SHARE * view, FireSound.REACH_MIN_M)
+		var eye := Vector3(FireSound.SPOT_REACH_M + full + 0.3 * (reach - full), 20.0, 0.0)
+		var picked := FireSound.pick(clusters, eye, Vector3.DOWN, view)
+		assert_eq(picked.size(), 1, "heard at view %.0f" % view)
+		var place: Vector3 = picked[0]["at"]
+		assert_almost_eq(place.distance_to(at), FireSound.SPOT_REACH_M, 1e-5, "within the reach")
+		assert_between(place.x, 0.0, eye.x - full, "toward the middle, still left of it")
+		assert_between(float(picked[0]["gain"]), 0.5, 0.99, "partly heard")
+
+
+func test_pick_leaves_a_far_cluster_silent_at_every_zoom() -> void:
+	for view in [2.0, 8.0, 14.0]:
+		var reach := maxf(FireSound.REACH_SHARE * view, FireSound.REACH_MIN_M)
+		var far := Vector3(FireSound.SPOT_REACH_M + reach + 0.5, 0.0, 0.0)
+		var cluster := _cluster(Vector2i.ZERO, far, 40.0)
+		cluster["spots"] = PackedVector3Array([far, far + Vector3(3.0, 0.0, 0.0)])
+		var one: Array[Dictionary] = [cluster]
+		var picked := FireSound.pick(one, Vector3(0.0, 20.0, 0.0), Vector3.DOWN, view)
+		assert_eq(picked.size(), 0, "silent at view %.0f" % view)
+
+
+func test_spots_give_every_burning_cell_to_one_cluster() -> void:
+	var cells := _cells(_band())
+	var clusters := FireClusters.find(cells, false)
+	var spots := FireClusters.spots(cells)
+	var wanted := []
+	for cluster in clusters:
+		wanted.append(cluster["cell"])
+	var keys := spots.keys()
+	assert_eq(keys.size(), wanted.size(), "one entry per cluster")
+	for key in keys:
+		assert_has(wanted, key)
+	var count := 0
+	for key in keys:
+		count += (spots[key] as PackedVector3Array).size()
+	var burning := 0
+	for cell in cells:
+		if (cells[cell] as PackedFloat64Array)[FireClusters.SIZE] > 0.0:
+			burning += 1
+	assert_eq(count, burning, "every burning cell in exactly one cluster")
+
+
+func test_a_view_over_any_flame_hears_the_fire_at_the_closest_zoom() -> void:
+	var field := FireField.create(_band())
+	add_child_autofree(field)
+	var clusters := field.sound().clusters()
+	assert_gt(clusters.size(), 0)
+	var missed := 0
+	var spots := 0
+	for cluster in clusters:
+		for spot: Vector3 in cluster["spots"]:
+			spots += 1
+			var eye := spot + Vector3(0.3, 20.0, -0.4)
+			var picked := FireSound.pick(clusters, eye, Vector3.DOWN, 2.0)
+			assert_gt(picked.size(), 0, "heard over the flames at %s" % str(spot))
+			var bare: Array[Dictionary] = []
+			for c in clusters:
+				bare.append(_cluster(c["cell"], c["at"], float(c["size"])))
+			if FireSound.pick(bare, eye, Vector3.DOWN, 2.0).is_empty():
+				missed += 1
+	gut.p("%d clusters, %d spots; centroids alone silent over %d" % [clusters.size(), spots, missed])
+	assert_gt(missed, 0, "the band has flames its centroids alone would leave silent")
 
 
 func test_pick_costs_little_for_a_wide_fire() -> void:
