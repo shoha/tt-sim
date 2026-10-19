@@ -202,7 +202,7 @@ func test_a_ctrl_line_names_its_length_in_its_chip() -> void:
 		fire.frame(brush)
 	assert_eq(fire.cursor_text(brush), "Put out fire  12 m", "the put-out chip names the length")
 	brush.press_ctrl = false
-	assert_eq(fire.cursor_text(brush), "Line of fire  12 m", "as the lay's does")
+	assert_eq(fire.cursor_text(brush), "Line of fire  Flames  12 m", "as the lay's does")
 	brush.cancel_gesture()
 	BrushTool.session_radius = radius_was
 

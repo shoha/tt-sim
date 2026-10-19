@@ -61,7 +61,7 @@ const HINT := (
 	+ " falls by itself. Pond: paint an area; start inside a pond to grow it. Shift + scroll or"
 	+ " [ and ] set the width. Hold Ctrl as you press to erase water; the ground stays carved"
 	+ " (Sculpt's Smooth fills a dry channel). Sculpting never makes or moves a waterfall:"
-	+ " erase the river and draw it again."
+	+ " erase the river and draw it again. Tab switches the shape."
 )
 const ERASE_ONLY_HINT := (
 	"Rivers and ponds carve the map's own ground, which a Blender map's is not."

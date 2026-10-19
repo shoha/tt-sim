@@ -196,23 +196,30 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   half-widths for a wide line; `StrokePath`), the release's line is the recorded points ended
   at the pointer and Chaikin-smoothed, the preview draws that same line out to the pointer,
   a release under 2 m makes nothing, Esc or RMB drops the line with the tool still armed, and
-  the chip reads "<label>  N <unit>" ("River  Waist  40 ft", "Line of fire  40 ft"). What the
+  the chip reads "<shape>  <setting>  N <unit>" ("River  Waist  40 ft", "Line of fire  Blaze
+  40 ft"; an erase "<erase>  N <unit>", "Put out fire  40 ft", "Erase water  40 ft" with N
+  the length of the rivers it will remove; the label alone at rest). What the
   release does is each mode's own (`WaterBrush.carve`, `FireBrush.lay_line`). `LineRibbon`
   (`line_ribbon.gd`) is the preview: a band at the line's width with round caps, one closed
-  edge (2.5 px) over an ink outline on a soft glow, chalk chevrons on ink every 2.5 m, the fill
+  edge (2.5 px) over an ink outline on a soft glow, chalk chevrons on ink every 2.5 m (one
+  glyph at any zoom: their strokes scale with their size on screen), the fill
   on the cursor's premultiplied glow layer (`BrushCursor.glow_item`, `LineRibbon.lit_fill`),
   every colour in the scene's light (0.75 of itself under a sun 6 degrees or more below the
   horizon, full from the horizon up). A tool passes only a style, as data over
   `LineRibbon.STYLE`: the river's `WaterBrush.RIBBON_STYLE` is its pale blue with the even
   translucent fill (faint upstream; blue at partial coverage reads as water over any ground);
   the fire line's `FireBrush.LAY_STYLE` is persimmon rails at both edges on an ember glow, lit
-  (gain 1.7), the coverage falling steeply to nearly clear along the centre line, so the
+  (gain 1.7), the rails held out to 0.62 radii and falling to clear within 0.08 radii, so the
   orange stays solid and the ground shows unmixed down the middle (orange at partial coverage
-  over green turns olive; card F5d's variant C). The two erase ribbons share
-  `LineRibbon.erase_style`: the erase salmon (`BrushCursor.CLEAR_TINT`) on the edge, glow and
-  chevrons over a heavier ink outline and an interior at about half coverage that parts from
-  what it erases (a water erase's touched reaches: salmon over the cool water; Fire's put-out
-  line: the lake over the warm flames). The pane's Shape tiles (`ShapeField`), their icons and the hint
+  over green turns olive, so the half-covered fall is a thin seam; card F5d's variant C, F5f).
+  The two erase ribbons share `LineRibbon.erase_style`: the erase salmon
+  (`BrushCursor.CLEAR_TINT`) on the edge, glow and chevrons, each over the erase's ink (INK at
+  0.85, the erase ring's own, `BrushCursor.ring_strokes`, so every erase line holds 3:1 over
+  pale water and bright flames), and one low wash (0.08 to 0.14) that leaves what goes readable
+  under it, only its tint parting from what it erases (a water erase's touched reaches: salmon
+  over the cool water; Fire's put-out line: the light lake over the warm flames; a wash at
+  half coverage hid the water and greyed the flames to mud, F5f). The pane's Shape tiles
+  (`ShapeField`), their icons and the hint
   bar's keys ("Draw a river" / "Draw a line of fire", Tab naming the other shape, Width) read
   alike. Comparison job: `firefeat_line_tool`.
 - Modes reach the editor and the host only, never `AuthoringController`, so a play-side host

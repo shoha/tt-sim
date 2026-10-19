@@ -33,9 +33,11 @@ extends RefCounted
 ##                         square)
 ##   night_light           the share of its colour the ribbon keeps under no sun (1: all)
 ## An erase ribbon is the same shape with the erase salmon (BrushCursor.CLEAR_TINT, every
-## brush's erase) on its edge, glow and chevrons over a heavier ink outline (ERASE_STYLE), its
-## interior the tool's own, chosen to part from what it erases. Every colour is a theme role,
-## the erase tint or a tool's tint; only alphas and widths are set here.
+## brush's erase) on its edge, glow and chevrons, each over the erase's ink (the erase ring's,
+## BrushCursor.ring_strokes), and a low wash inside (ERASE_STYLE) that leaves what it erases
+## readable under it, only the wash's tint the tool's own, chosen to part from what it erases.
+## Every colour is a theme role, the erase tint or a tool's tint; only alphas and widths are
+## set here.
 
 ## Metres between chevrons along the line, the first half that from the start.
 const ARROW_M := 2.5
@@ -47,7 +49,13 @@ const NIGHT_LIGHT := 0.75
 ## The published sun's height (FoliageLight.last_sun's y) at and under which a ribbon is at its
 ## night_light: about 6 degrees below the horizon.
 const DARK_HEIGHT := -0.1
-## Every line tool's look, before its own keys (the class header names them).
+## A chevron's width across on screen (px) at which it is drawn at its style's widths: a 1.5 m
+## chevron at zoom 22 in a 720 px window. A larger one scales its strokes with it, so it is one
+## glyph at any zoom (thin strokes on a close erase's chevrons read as hollow outlines, F5f).
+const CHEVRON_PX := 44.0
+## Every line tool's look, before its own keys (the class header names them). The edge's ink
+## at 0.55 (the ring's shadow) keeps the edge a crisp line over the fire's lit rails as over the
+## river's wash (at 0.3 the fire's edge sank into its rail and glow, F5f).
 const STYLE := {
 	"tint": ThemeColors.CHALK,
 	"alpha_up": 0.12,
@@ -58,7 +66,7 @@ const STYLE := {
 	"edge_alpha": 1.0,
 	"edge_width": 2.5,
 	"shadow": ThemeColors.INK,
-	"shadow_alpha": 0.3,
+	"shadow_alpha": 0.55,
 	"shadow_width": 4.5,
 	"glow": null,
 	"glow_alpha": 0.3,
@@ -72,17 +80,23 @@ const STYLE := {
 	"caps": true,
 	"night_light": NIGHT_LIGHT,
 }
-## An erase's keys over STYLE: the erase salmon on the edge, its glow and the chevrons, over an
-## ink outline heavy enough to hold the salmon over bright flames and pale water alike, and an
-## interior at about half coverage, a plain fill, so it plainly covers what goes (a water
-## erase's wash at the river's 0.12 to 0.34 barely tinted the water, card F5e round 1).
+## An erase's keys over STYLE: the erase salmon on the edge, its glow and the chevrons (the lay's
+## glyph, places and weights), each over the erase's ink, which holds the salmon at 3:1 over
+## bright flames and pale water alike (BrushCursor.ring_strokes, the erase ring's own), and one
+## coverage rule for every erase's interior: a low plain wash, so what goes stays readable under
+## it and the salmon lines say "erase". At about half coverage (F5e) the wash hid the river as a
+## flat dusty rose and greyed the flames under the dark lake to mud, the chevrons sinking into it;
+## at 0.12 to 0.2 the salmon, the water's complement, still turned the river a neutral grey
+## (card F5f).
 const ERASE_STYLE := {
-	"alpha_up": 0.46,
-	"alpha_down": 0.56,
+	"alpha_up": 0.08,
+	"alpha_down": 0.14,
 	"edge": BrushCursor.CLEAR_TINT,
+	"edge_width": BrushCursor.ERASE_LINE_WIDTH,
 	"chevron": BrushCursor.CLEAR_TINT,
-	"shadow_alpha": 0.7,
-	"shadow_width": 5.5,
+	"shadow_alpha": BrushCursor.ERASE_INK_ALPHA,
+	"shadow_width": BrushCursor.ERASE_INK_WIDTH,
+	"chevron_shadow_alpha": BrushCursor.ERASE_INK_ALPHA,
 }
 
 
@@ -294,7 +308,8 @@ static func _dimmed(c: Color, light: float) -> Color:
 
 
 ## The chevrons along `line` every ARROW_M, the first half that from the start, each as its
-## ink outline then itself: ribbon()'s lines. Pure but for `ground`.
+## ink outline then itself: ribbon()'s lines, each one's strokes at the style's widths scaled
+## by its size across on screen over CHEVRON_PX (never below 1). Pure but for `ground`.
 static func _chevrons(
 	ground: Callable, line: PackedVector2Array, radius: float, look: Dictionary, strength: float
 ) -> Array:
@@ -312,8 +327,9 @@ static func _chevrons(
 			var arrow := PackedVector2Array()
 			for p in chevron(at, tangent, size):
 				arrow.append(ground.call(p))
-			lines.append([arrow, under, look.chevron_shadow_width])
-			lines.append([arrow, over, look.chevron_width])
+			var scale := maxf(1.0, arrow[0].distance_to(arrow[2]) / CHEVRON_PX)
+			lines.append([arrow, under, float(look.chevron_shadow_width) * scale])
+			lines.append([arrow, over, float(look.chevron_width) * scale])
 			next += ARROW_M
 		walked += length
 	return lines

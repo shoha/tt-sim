@@ -19,8 +19,9 @@ extends BrushMode
 ## inside a pond extends it) whose dabs BrushTool paints like the Biome brush's, the dab growing
 ## with dwell (POND_DWELL_GROW); the painted dabs preview its area. Ctrl at the press (either
 ## tile): an erase stroke, whose touched river reaches are previewed (they go whole) as the line
-## tool's erase ribbon (LineRibbon.erase_style: salmon edge and chevrons) over a salmon
-## interior (ERASE_INTERIOR), warm against the cool water it removes.
+## tool's erase ribbon (LineRibbon.erase_style: salmon edge and chevrons on ink) over a low
+## salmon wash (ERASE_INTERIOR), warm against the cool water it removes, which shows through,
+## and the chip reads "Erase water  40 ft", the length of those reaches.
 ## The width is the brush size, never below the depth class's narrowest channel
 ## (radius_for()). A river may be drawn on past the map edge (P6-1): where the pointer leaves
 ## the ground there (the skirt has no collision), it meets the level of the last ground the
@@ -42,9 +43,12 @@ const POND_DWELL_GROW := 0.35
 ## as water over any ground, where the fire's orange greyed to olive, and the even band shows the
 ## channel the carve will dig.
 const RIBBON_STYLE := {"tint": TINT}
-## An erase's interior (LineRibbon.erase_style, at the erase's half coverage): the erase salmon,
-## warm over the cool water it removes.
+## An erase's interior (LineRibbon.erase_style, at the erase's low wash): the erase salmon, warm
+## over the cool water it removes, which stays readable under it.
 const ERASE_INTERIOR := {"tint": BrushCursor.CLEAR_TINT}
+## The erase's chip: "Erase water", with the length of the rivers it will remove while a stroke
+## touches any ("Erase water  40 ft", the line tool's erase pattern, as "Put out fire  40 ft").
+const ERASE_TEXT := "Erase water"
 ## Refusal reasons (BrushTool.refused).
 const NO_CARVE := (
 	"Rivers and ponds carve the map's own ground: not on a Blender map."
@@ -246,12 +250,38 @@ func reset() -> void:
 	pond_dabs = PackedVector3Array()
 
 
-## The readout text now: "Erase water" when `erasing`, else readout() with the line's length
-## while a river is drawn (the gesture's: the line a release would carve).
-func readout_text(erasing: bool, cell_m: float, per_cell: float, label: String) -> String:
+## The readout text now: when `erasing`, ERASE_TEXT with `erased_m`, the length of the rivers
+## the stroke will remove (erase_courses(); 0 at rest or with none touched: the label alone),
+## else readout() with the line's length while a river is drawn (the gesture's: the line a
+## release would carve).
+func readout_text(
+	erasing: bool, cell_m: float, per_cell: float, label: String, erased_m: float = 0.0
+) -> String:
 	if erasing:
-		return "Erase water"
+		return LineGesture.chip(ERASE_TEXT, erased_m, cell_m, per_cell, label)
 	return readout(shape, depth, gesture.length(), cell_m, per_cell, label)
+
+
+## The river reaches the erase stroke in progress on `editor` will remove (they go whole), as
+## [course, half-width] pairs: each course its world XZ line, first point upstream, and its
+## half-width in metres. Empty with no erase stroke.
+static func erase_courses(editor: AuthoringEditor) -> Array:
+	var out: Array = []
+	for body in editor.water.erase_touched():
+		var course := PackedVector2Array()
+		for p: Vector2 in WaterGeometry.river_course(body)[0]:
+			var world := editor.to_world(Vector3(p.x, 0.0, p.y))
+			course.append(Vector2(world.x, world.z))
+		out.append([course, body.half_widths[0] * editor.map_scale()])
+	return out
+
+
+## The length of the rivers the erase stroke in progress on `editor` will remove (metres).
+static func erased_length(editor: AuthoringEditor) -> float:
+	var total := 0.0
+	for pair: Array in erase_courses(editor):
+		total += StrokePath.line_length(pair[0])
+	return total
 
 
 ## The previews under the ring on `cursor` (see the header): the river being drawn up to the
@@ -275,13 +305,8 @@ func draw(
 		return
 	if erasing:
 		var style := LineRibbon.erase_style(ERASE_INTERIOR)
-		for body in editor.water.erase_touched():
-			var course := PackedVector2Array()
-			for p: Vector2 in WaterGeometry.river_course(body)[0]:
-				var world := editor.to_world(Vector3(p.x, 0.0, p.y))
-				course.append(Vector2(world.x, world.z))
-			var half := body.half_widths[0] * editor.map_scale()
-			LineRibbon.draw(cursor, ground, course, half, style)
+		for pair: Array in erase_courses(editor):
+			LineRibbon.draw(cursor, ground, pair[0], pair[1], style)
 	elif shape == Shape.POND:
 		for dab in pond_dabs:
 			_fill_disc(cursor.canvas, cursor.camera, editor, Vector2(dab.x, dab.y), dab.z)
@@ -384,8 +409,15 @@ func cursor_tint(brush: BrushTool) -> Color:
 	return BrushCursor.CLEAR_TINT if _erasing(brush) else TINT
 
 
+## The chip (readout_text()), an erase stroke's with the length of the rivers it will remove.
 func cursor_text(brush: BrushTool) -> String:
-	return readout_text(_erasing(brush), brush.unit_cell_m, brush.unit_per_cell, brush.unit_label)
+	var erasing := _erasing(brush)
+	var erased := 0.0
+	if erasing and brush.stroking and brush.editor != null:
+		erased = erased_length(brush.editor)
+	return readout_text(
+		erasing, brush.unit_cell_m, brush.unit_per_cell, brush.unit_label, erased
+	)
 
 
 ## The previews (draw()) under the ring.
