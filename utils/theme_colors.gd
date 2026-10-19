@@ -63,6 +63,10 @@ const MADDER := Color("#A12F3A")
 const MOSS := Color("#46723A")
 ## The warning chip.
 const OCHRE := Color("#E0A23A")
+## Ochre at the depth of the line tools' tints (lake, persimmon): ochre at 1/1.36 of its value,
+## so the line ribbon's rails, which lift their tint 1.36 to 1.53 times (LineRibbon.FILLS),
+## give back ochre itself (Start a fire's Path). Ochre lifted so clipped to lemon (card F6b).
+const OCHRE_DEEP := Color("#A5772B")
 
 # -- Glass tokens (HUD, drawers, hints, context menu, toasts) --
 ## Plum, at a chroma and opacity that survive the board through it: #1E1A28 at 0.86 let a

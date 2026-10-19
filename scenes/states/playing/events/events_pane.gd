@@ -86,8 +86,8 @@ const TOOL_HINTS := {
 	"Click in a forest: the marked trees fall away from the click. Drag out for a wider stand.",
 	EventPresets.IGNITE:
 	(
-		"Circle: click in a forest, and fire spreads out from the click; drag out for a wider"
-		+ " fire. Path: draw the line it runs along. It leaves ash. Tab switches the shape."
+		"Path: draw the line the fire runs along. Circle: click in a forest, and fire spreads"
+		+ " out from the click; drag out for a wider fire. It leaves ash. Tab switches the shape."
 	),
 }
 ## Start a fire's Shape tiles (ShapeField: the line shape first), each tooltip saying what its

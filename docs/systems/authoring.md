@@ -350,10 +350,15 @@ Probe and numbers:
   them (card F6; `IgniteMode.Shape`, the pane's Shape field through `ShapeField`, Path first,
   Circle the default): Circle is the ring above; Path draws the line the fire runs along
   through the line tools' `LineGesture` and `LineRibbon` (`IgniteMode.lay_style`: `PATH_HUE`,
-  ochre on its ring's light ochre glow, every other key the river's and the fire line's), its
-  half-width the brush size within 1-6 m (`path_radius`; Advanced reads Width), a flame mark
-  at its start in the ring's stroke, the stretches with no burnable tree within reach in
-  chalk_soft (`FirePath.forest_spans` of the live line, refreshed every 200 ms), and the chip
+  `ThemeColors.OCHRE_DEEP` on its ring's light ochre glow, every other key the river's and
+  the fire line's; deep ochre because the rails lift their tint 1.36 to 1.53 times, which
+  gives back ochre, where ochre itself clipped to lemon, card F6b), its half-width the brush
+  size within 1-6 m (`path_radius`; Advanced reads Width), its stretches by what a release
+  does there (`IgniteMode.Stretch`, `FirePath.forest_spans` of the live line, refreshed every
+  200 ms): the forest spans, where trees catch, in the full rails; the ground between them,
+  where only the ground burns, the same with the rails narrowed (`LineRibbon.QUIET_STYLE`);
+  a line with no forest anywhere along it in chalk_soft with no fill, ring and all, as the
+  refused circle (no start mark: the chevrons say which way it runs), and the chip
   "Fire along a path", "Fire along a path  48 ft" while drawn, "Longest fire path" at 64 m,
   "Only a forest burns" while no forest stands along it. At rest the ring at the half-width
   has a dash across it. Esc or a right click drops the line and stays armed; a release under

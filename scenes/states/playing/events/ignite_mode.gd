@@ -17,10 +17,12 @@ extends ToppleMode
 ##           PATH_HUE, so the colour says which tool and the ribbon's shape which gesture). Its
 ##           half-width is the brush size within TerrainEvent's 1-6 m (path_radius()). At rest
 ##           the ring at the half-width with a short dash across it, the line's direction; while
-##           drawn the ribbon to the pointer, a small flame mark at its start (where it
-##           catches), its stretches with no burnable tree within reach in chalk_soft (the
-##           forest spans the change will burn, FirePath.forest_spans, found again at most every
-##           SPAN_REFRESH_MS), and the chip (path_chip()). The line stops growing at
+##           drawn the ribbon to the pointer in its stretches (Stretch, path_style(): the
+##           forest spans, where trees catch, in the lay's full rails; the stretches between,
+##           where only the ground burns, in the same ochre with narrower rails; a line with no
+##           forest anywhere along it, which a release refuses, in the refused ring's chalk_soft
+##           as lines alone; the spans found again at most every SPAN_REFRESH_MS,
+##           FirePath.forest_spans) and the chip (path_chip()). The line stops growing at
 ##           TerrainEvent.MAX_PATH_LENGTH_M; a release under StrokePath.MIN_LENGTH_M fires
 ##           nothing and says DRAW_PATH through `refused`.
 ##
@@ -31,6 +33,11 @@ extends ToppleMode
 ## with no forest along it the same.
 
 enum Shape { PATH, CIRCLE }
+## A stretch of the Path while it is drawn, by what a release would do there (path_style()):
+## TREES a forest span (the trees catch and the ground burns), GROUND between them (only the
+## ground burns: the fire still runs there, quieter), REFUSED the whole line when no forest
+## stands anywhere along it (a release fires nothing, as a click in the refused ring).
+enum Stretch { TREES, GROUND, REFUSED }
 
 ## The pill's words, and the preset tile's label (EventPresets). (ToppleMode's TEXT is the
 ## parent's, so this one has a name of its own.)
@@ -42,15 +49,17 @@ const PATH_TEXT := "Fire along a path"
 const LONGEST_TEXT := "Longest fire path"
 const DRAW_PATH := "Draw the fire's path"
 ## The Path's ribbon: Start a fire's hue over the line tools' look (LineRibbon.lay_style),
-## ochre with its ring's light ochre glow, as the river is lake on light lake and the fire line
-## persimmon on ember; its stretches with no forest in the refused ring's chalk_soft.
-const PATH_HUE := {"tint": ThemeColors.OCHRE, "glow": ToppleMode.TINT}
+## deep ochre with its ring's light ochre glow, as the river is lake on light lake and the fire
+## line persimmon on ember: each tint the deep step its rails' light brings up to the hue's own
+## (ochre itself, lifted 1.36 to 1.53 times, clipped to lemon and white, card F6b).
+const PATH_HUE := {"tint": ThemeColors.OCHRE_DEEP, "glow": ToppleMode.TINT}
+## A path refused whole: the refused ring's chalk_soft, its lines alone with no fill
+## (REFUSED_FILL), so it reads as the refused ring does, an outline where nothing will happen
+## (its rails lifted read as a pure white band, the loudest thing on the board, card F6b).
 const REFUSED_HUE := {"tint": CollapseMode.REFUSED_TINT, "glow": CollapseMode.REFUSED_TINT}
+const REFUSED_FILL := {"alpha_up": 0.0, "alpha_down": 0.0}
 ## The ring at rest's dash: its length across the ring (a share of the ring's diameter).
 const DASH := 0.7
-## The flame mark at the path's start: its height and width on screen (px), and its points.
-const FLAME_PX := Vector2(11.0, 17.0)
-const FLAME_SEGMENTS := 18
 ## The forest spans of the line being drawn are found again at most this often (ms), and when
 ## its length has changed by SPAN_REFRESH_M (metres).
 const SPAN_REFRESH_MS := 200
@@ -106,10 +115,17 @@ static func event_line(line: PackedVector2Array) -> PackedVector2Array:
 	return StrokePath.resample(capped, TerrainEvent.MAX_PATH_POINTS, StrokePath.MIN_SPACING_M)
 
 
-## The Path's ribbon style for a stretch over a forest span (`forest`) or not: its hue over the
-## line tools' fill, every other key the river's and the fire line's.
-func lay_style(forest: bool = true) -> Dictionary:
-	return LineRibbon.lay_style(PATH_HUE if forest else REFUSED_HUE, fill)
+## The Path's ribbon style for a `stretch` (Stretch): over a forest span its hue over the line
+## tools' fill, every other key the river's and the fire line's; where only the ground burns
+## the same as LineRibbon's quieter stretch (QUIET_STYLE); refused, the refused ring's
+## chalk_soft with no fill (REFUSED_FILL).
+func lay_style(stretch: int = Stretch.TREES) -> Dictionary:
+	match stretch:
+		Stretch.GROUND:
+			return LineRibbon.lay_style(PATH_HUE, fill).merged(LineRibbon.QUIET_STYLE, true)
+		Stretch.REFUSED:
+			return LineRibbon.lay_style(REFUSED_HUE, fill).merged(REFUSED_FILL, true)
+	return LineRibbon.lay_style(PATH_HUE, fill)
 
 
 ## The Path's half-width on `brush` (world): the brush size within TerrainEvent's path range.
@@ -289,9 +305,10 @@ func _refresh_spans(brush: BrushTool) -> void:
 	_spans = FirePath.forest_spans(arcs, radius * scale, length)
 
 
-## The Path's cursor: while drawn, its ribbon out to the pointer in its stretches (ochre over
-## the forest spans, chalk_soft elsewhere), the flame mark at its start, then the ring with
-## its chip; at rest, the ring at the half-width with the dash across it.
+## The Path's cursor: while drawn, its ribbon out to the pointer in its stretches (Stretch:
+## the forest spans and the ground between them in ochre, a path with no forest at all in
+## chalk_soft), then the ring with its chip in the tip's colour; at rest, the ring at the
+## half-width with the dash across it.
 func _draw_path(brush: BrushTool, cursor: BrushCursor) -> void:
 	var tint := cursor_tint(brush)
 	if gesture.drawing and brush.editor != null:
@@ -303,12 +320,11 @@ func _draw_path(brush: BrushTool, cursor: BrushCursor) -> void:
 			var runs := _merged_runs(FirePath.runs(_spans, along[-1]))
 			for k in runs.size():
 				var run: Array = runs[k]
-				var style := lay_style(bool(run[2]))
+				var style := lay_style(_stretch_of(bool(run[2])))
 				style.cap_start = k == 0
 				style.cap_end = k == runs.size() - 1
 				var part := FirePath.span_line(line, along, float(run[0]), float(run[1]))
 				LineRibbon.draw(cursor, ground, part, radius, style)
-			_draw_flame(cursor, ground.call(line[0]), tint)
 		cursor.draw_ring(brush, tint, cursor_text(brush), false)
 		return
 	cursor.draw_ring(brush, tint, cursor_text(brush), false)
@@ -342,17 +358,9 @@ func _draw_dash(brush: BrushTool, cursor: BrushCursor, tint: Color) -> void:
 		cursor.canvas.draw_line(a, b, stroke[0], stroke[1], true)
 
 
-## The flame mark standing on screen point `at` (the path's start): a small teardrop flame,
-## its tip up, filled in `tint` over the ring's stroke.
-func _draw_flame(cursor: BrushCursor, at: Vector2, tint: Color) -> void:
-	var outline := PackedVector2Array()
-	for i in FLAME_SEGMENTS + 1:
-		var t := TAU * float(i) / float(FLAME_SEGMENTS)
-		var x := sin(t) * sin(t * 0.5) * FLAME_PX.x * 0.65
-		var y := (cos(t) + 1.0) * 0.5 * FLAME_PX.y
-		outline.append(at + Vector2(x, -y))
-	var strokes := BrushCursor.ring_strokes(tint)
-	cursor.canvas.draw_polyline(outline, strokes[0][0], strokes[0][1], true)
-	cursor.canvas.draw_polyline(outline, strokes[1][0], strokes[1][1], true)
-	cursor.canvas.draw_colored_polygon(outline.slice(0, FLAME_SEGMENTS), tint)
-	cursor.canvas.draw_polyline(outline, strokes[2][0], strokes[2][1], true)
+## The Stretch of a run of the line being drawn over a forest span (`forest`) or not: a path
+## with no forest span at all is refused whole.
+func _stretch_of(forest: bool) -> int:
+	if forest:
+		return Stretch.TREES
+	return Stretch.GROUND if not _spans.is_empty() else Stretch.REFUSED

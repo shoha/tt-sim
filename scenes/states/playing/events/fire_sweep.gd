@@ -27,8 +27,14 @@ extends ForestFall
 ## Billows of smoke (SmokePuffs) rise from
 ## half the trees and in a short column over the middle: smoke crowns, each a cluster of small
 ## painted puff cards built and lit the way the trees' crowns are, born about a crown across,
-## breaking up card by card as they age. Over the event's last SNAG_GO_S the
-## charred snags shrink away (snag_transform) as the change lands.
+## breaking up card by card as they age. The charred snags and the char hold past the event's
+## end until its change has landed (_settled(): every cell a burnt tree stood in rebuilt, the
+## scatter done regenerating, the ground's grass masses restamped; at most HOLD_MAX_S), then the
+## snags shrink away over SNAG_GO_S (snag_transform) and the char goes under the ash
+## (GroundBurn.char_at), so the ground goes from char to ash and a burnt tree from its snag to
+## the burnt forest's with no frame between them (card F6b: the char went on the clock, 0.6 s
+## after the end, while a path's scatter took about 5 s to land: the meadow showed green and the
+## trees were gone with no snag in between; a circle's trees, about 1 s).
 ##
 ## Colours are linear, as every puff's and shader constant's is: each is picked as the colour
 ## it should show through the scene's filmic tonemap, which shows low values lighter still
@@ -76,8 +82,11 @@ const BURN_S := Vector2(1.2, 1.5)
 ## The burn shader's progress at the end of a tree's burn (every patch has burnt through by
 ## about 1.55: a patch catches between 0 and 1 and its leaves are gone 0.55 after).
 const BURN_RATE := 1.7
-## The charred snags shrink away over the event's last this many seconds.
+## The charred snags shrink away over this many seconds once the change has landed.
 const SNAG_GO_S := 0.6
+## The longest the snags and the char wait past the event's end for the change to land (an op
+## refused or never sent): TerrainEvents lets the effect go RELEASE_AFTER_S after the end.
+const HOLD_MAX_S := 6.0
 ## A crown's flames: CROWN_TONGUES small tongues tucked among its leaf cards (EventPuffs'
 ## crown flame), each rising once the burn has reached its height (tongue_at; a tongue on a
 ## crown still green there stood as a sticker): how long it lives (a share of the tree's
@@ -169,6 +178,11 @@ var _path := PackedVector2Array()
 var _along := PackedFloat32Array()
 var _length := 0.0
 var _spread := SPREAD_S
+## The ground look whose masses the change restamps (null on a map without one), when the
+## change was seen landed (INF until then), and whether the snags have gone.
+var _look: GroundLookBake = null
+var _landed_at := INF
+var _gone := false
 
 
 ## The id of the palette's burnt biome under `root`, or "" when it has none.
@@ -282,6 +296,8 @@ func setup(editor: AuthoringEditor, event: TerrainEvent) -> bool:
 		editor.prepare_biome(plan.biome)
 	if plan.surface != "" and is_instance_valid(editor.terrain):
 		editor.terrain.warm_surface(plan.surface)
+	if is_instance_valid(editor.terrain):
+		_look = editor.terrain.ground_look()
 	_ground = GroundBurn.new()
 	add_child(_ground)
 	if _path.is_empty():
@@ -305,12 +321,17 @@ func setup(editor: AuthoringEditor, event: TerrainEvent) -> bool:
 
 ## Plays the fire `elapsed` seconds in (after `delta` more seconds of flames and smoke).
 func step(elapsed: float, delta: float) -> void:
+	if elapsed >= duration:
+		_ended = true
+	if _ended and _landed_at == INF and (_settled() or elapsed >= duration + HOLD_MAX_S):
+		_landed_at = elapsed
+	var end := end_at(elapsed)
 	for tree in _trees:
 		var t := elapsed - float(tree.start)
 		var burn := float(tree.burn)
 		var multimesh := (tree.stand_in as MultiMeshInstance3D).multimesh
 		multimesh.set_instance_custom_data(tree.slot, Color(burn_progress(t, burn), 0.0, 0.0, 0.0))
-		multimesh.set_instance_transform(tree.slot, snag_transform(tree.base, elapsed, duration))
+		multimesh.set_instance_transform(tree.slot, snag_transform(tree.base, elapsed, end))
 		# A burning tree goes still (ForestFall.calm_weight's colour), as a falling one does.
 		var calm := calm_weight(t, burn)
 		multimesh.set_instance_color(tree.slot, Color(calm, calm, 1.0, 1.0))
@@ -323,17 +344,38 @@ func step(elapsed: float, delta: float) -> void:
 		_columns += 1
 	_smoke.step(delta)
 	_flames.step(delta)
-	_ground.step(elapsed)
-	if elapsed >= duration and not _ended:
-		_ended = true
+	_ground.step(elapsed, end)
+	if elapsed >= end and not _gone:
+		_gone = true
 		for tree in _trees:
 			(tree.stand_in as Node3D).visible = false
 
 
+## When the snags are gone and the char's going is centred, `elapsed` seconds in
+## (snag_transform's and GroundBurn.char_at's end): never before the event's end, SNAG_GO_S
+## after the change landed, and while it has not, always SNAG_GO_S ahead (held whole).
+func end_at(elapsed: float) -> float:
+	var landed := _landed_at if _landed_at < INF else elapsed
+	return maxf(duration, landed + SNAG_GO_S)
+
+
 ## True once the fire has burnt out, its smoke has cleared and its char has gone under the ash.
 func is_played(elapsed: float) -> bool:
-	var charred := GroundBurn.char_at(elapsed, duration) > 0.0
-	return elapsed >= duration and _flames.is_idle() and _smoke.is_idle() and not charred
+	var charred := GroundBurn.char_at(elapsed, end_at(elapsed)) > 0.0
+	var idle := _flames.is_idle() and _smoke.is_idle()
+	return elapsed >= duration and _landed_at < INF and idle and not charred
+
+
+## Whether the change has landed on this board since the event's end: every cell a burnt tree
+## stood in rebuilt (is_removed), the scatter done regenerating and growing (the ash's own
+## cells, which hold no tree, rebuild in the same pass), and the ground look's masses
+## restamped from it (the meadow's green masses stood over the ash until then).
+func _settled() -> bool:
+	if not is_removed():
+		return false
+	if is_instance_valid(_scatter) and (_scatter.is_regenerating() or _scatter.is_growing()):
+		return false
+	return not (is_instance_valid(_look) and _look.is_restamping())
 
 
 ## The trees `event` burns (burnable, or along its path burnable_along).

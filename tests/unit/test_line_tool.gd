@@ -270,8 +270,12 @@ func test_the_hint_bar_reads_alike() -> void:
 	assert_eq([river[1].action, fire[1].action], ["Pond", "Area"])
 	assert_eq(river[2], fire[2], "the same size key")
 	assert_eq(fire[2].action, "Width")
-	for hint: String in [WaterToolPane.HINT, FireToolPane.HINT]:
+	var ignite: String = EventsPane.TOOL_HINTS[EventPresets.IGNITE]
+	for hint: String in [WaterToolPane.HINT, FireToolPane.HINT, ignite]:
 		assert_true(hint.ends_with(" Tab switches the shape."), "each pane names Tab alike")
+	# Start a fire's help names its shapes in its tiles' order, Path then Circle (card F6b).
+	assert_true(ignite.begins_with("Path: "), "the first tile first")
+	assert_gt(ignite.find("Circle: "), 0, "then the second")
 
 
 ## Every lay ribbon takes the scene's light: full by day and at dusk, NIGHT_LIGHT of its colour
@@ -357,25 +361,46 @@ func test_both_line_tools_share_the_gesture() -> void:
 	BrushTool.session_radius = radius_was
 
 
-## Start a fire's Path is the third line tool (card F6): its ribbon is the fire line's key for
-## key but the hue (Start a fire's ochre on its ring's light ochre; chalk_soft over a stretch
-## with no forest), its hint keys read as the line tools', and it records through the same
-## gesture: "Fire along a path" at rest, Esc drops the line and stays armed, a release under
-## the minimum says "Draw the fire's path", one with no forest along it fires nothing.
+## Start a fire's Path is the third line tool (card F6): where trees catch its ribbon is the
+## fire line's key for key but the hue (Start a fire's deep ochre on its ring's light ochre),
+## where only the ground burns the same but for its narrower rails (LineRibbon.QUIET_STYLE),
+## and a path with no forest anywhere the refused ring's chalk_soft with no fill (card F6b).
+## Its rails give back ochre and never pass full value (ochre itself clipped to lemon). Its
+## hint keys read as the line tools', and it records through the same gesture: "Fire along a
+## path" at rest, Esc drops the line and stays armed, a release under the minimum says "Draw
+## the fire's path", one with no forest along it fires nothing.
 func test_start_a_fire_path_is_the_third_line_tool() -> void:
 	var tint_keys: Array = []
 	tint_keys.append_array(LineRibbon.TINT_KEYS)
 	tint_keys.sort()
+	var refused_keys: Array = ["alpha_up", "alpha_down"]
+	refused_keys.append_array(LineRibbon.TINT_KEYS)
+	refused_keys.sort()
 	for fill: String in LineRibbon.FILLS:
 		var fire := FireBrush.new()
 		var path := IgniteMode.new()
 		fire.fill = fill
 		path.fill = fill
-		assert_eq(_differing(fire.lay_style(), path.lay_style()), tint_keys, "the hue (%s)" % fill)
-		assert_eq(_differing(fire.lay_style(), path.lay_style(false)), tint_keys, "no forest too")
+		var trees := path.lay_style(IgniteMode.Stretch.TREES)
+		assert_eq(_differing(fire.lay_style(), trees), tint_keys, "the hue (%s)" % fill)
+		var ground := path.lay_style(IgniteMode.Stretch.GROUND)
+		assert_eq(_differing(trees, ground), ["fill_profile"], "only the ground: narrower rails")
+		var refused := path.lay_style(IgniteMode.Stretch.REFUSED)
+		assert_eq(_differing(trees, refused), refused_keys, "refused: chalk, no fill")
+		assert_eq(float(refused.alpha_up) + float(refused.alpha_down), 0.0, "lines alone")
 	assert_eq(IgniteMode.new().fill, LineRibbon.FILL, "the rails by default")
 	assert_eq(IgniteMode.PATH_HUE.glow, ToppleMode.TINT, "on its ring's colour")
 	assert_eq(IgniteMode.REFUSED_HUE.tint, CollapseMode.REFUSED_TINT, "the refused ring's chalk")
+	var rails: Dictionary = LineRibbon.FILLS.rails
+	var tint: Color = IgniteMode.PATH_HUE.tint
+	var faint := LineRibbon.lit_fill(Color(tint, rails.alpha_up), rails.fill_gain)
+	var strong := LineRibbon.lit_fill(Color(tint, rails.alpha_down), rails.fill_gain)
+	for c in 3:
+		assert_almost_eq(faint[c], ThemeColors.OCHRE[c], 0.01, "the faintest rail is ochre")
+		assert_lt(strong[c], 1.0, "the strongest within full value")
+	var quiet := LineRibbon.ribbon(_ground(), _line(), 1.0, LineRibbon.QUIET_STYLE)
+	var lay := LineRibbon.ribbon(_ground(), _line(), 1.0, {})
+	assert_eq(quiet.lines, lay.lines, "the quiet stretch's lines are the lay's")
 	var line := PlayEvents.hints_for(FireTool.ID, HeightBrush.RAISE, FireBrush.Shape.LINE)
 	var hints := PlayEvents.hints_for(EventPresets.IGNITE, HeightBrush.RAISE, IgniteMode.Shape.PATH)
 	assert_eq(hints.size(), line.size())

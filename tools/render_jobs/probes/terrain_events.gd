@@ -16,7 +16,12 @@ extends RefCounted
 ##            on the table's TerrainEvents (the bridge, or the forest spot `look` found), its
 ##            clock held so `advance` steps it; "path" with "points" (world XZ, as a gesture
 ##            draws them) and "radius" (its half-width) a fire along them, as IgniteMode's Path
-##            makes one (card F6)
+##            makes one (card F6); kind "fire" takes "at" ([x, z], map frame) for its centre;
+##            from the first fire on, F6B| lines print when a change is made and when the
+##            scatter applies cells (card F6b)
+##   status   {"pixels": [[x, y], ...] in a 1920x1080 frame}: one timeline line (_status)
+##   treeless {"radius": m}: straight 8 m world lines over the view with no burnable tree
+##            within the radius (a Path a release refuses whole)
 ##   delete_level  deletes exactly the _firefeat_path test level (firefeat_path.json's)
 ##   advance  {"s": seconds}: the events' clock that much further, in frame-sized slices
 ##   free     the clock back to the frame loop (the change lands, the effects let go)
@@ -88,7 +93,7 @@ static func run(base: Node, step: Dictionary) -> String:
 				var middle := (bridge.start + bridge.end) * 0.5
 				event = TerrainEvent.bridge_collapse(bridge.id, middle, int(step.get("seed", 7)))
 			else:
-				var at := _point(edits, "forest")
+				var at := _point(edits, step.get("at", "forest"))
 				var radius := float(step.get("radius", FIND_RADIUS))
 				var event_seed := int(step.get("seed", 7))
 				if String(step.get("kind")) == "fire":
@@ -96,6 +101,7 @@ static func run(base: Node, step: Dictionary) -> String:
 				else:
 					event = TerrainEvent.forest_fall(at, radius, event_seed)
 			edits.events.set_process(false)
+			_trace(edits)
 			# PlayEvents hears the table's history once a brush or preset was wired (its
 			# first pick): the event's toast comes from there.
 			var play := _play_events(map)
@@ -139,6 +145,27 @@ static func run(base: Node, step: Dictionary) -> String:
 			brush.pointer = map.camera_node.unproject_position(world)
 			brush.has_pointer = true
 			return "pointer at %s" % str(brush.pointer)
+		"status":
+			return _status(map, edits, step.get("pixels", []))
+		"treeless":
+			# Straight world lines 8 m long on a grid over the view with no burnable tree within
+			# `radius` of them (a Path that a release refuses whole), the first few found.
+			var radius := float(step.get("radius", 2.5))
+			var found := PackedStringArray()
+			for ix in range(-20, 32, 3):
+				for iz in range(-18, 20, 3):
+					var a := Vector2(ix, iz)
+					var b := a + Vector2(6.0, 5.0)
+					var line := PackedVector2Array(
+						[
+							edits.editor.to_map_xz(Vector3(a.x, 0.0, a.y)),
+							edits.editor.to_map_xz(Vector3(b.x, 0.0, b.y))
+						]
+					)
+					var root := edits.editor.palette_root
+					if FireSweep.burnable_along(edits.editor.scatter, line, radius, root, 1).is_empty():
+						found.append("%s-%s" % [str(a), str(b)])
+			return "treeless: %s" % ", ".join(found)
 		"report":
 			var bridges := []
 			for crossing in edits.editor.document.crossings:
@@ -148,6 +175,86 @@ static func run(base: Node, step: Dictionary) -> String:
 				% [str(bridges), str(_point(edits, "forest")), edits.events.active_count()]
 			)
 	return "unknown action"
+
+
+## Prints (F6B| lines, in the raw output) when the table's events make their change and when
+## the scatter applies regenerated cells, with the wall clock (card F6b's handover timeline).
+static func _trace(edits: LiveEdits) -> void:
+	if edits.has_meta(&"f6b_traced"):
+		return
+	edits.set_meta(&"f6b_traced", true)
+	edits.events.applied.connect(
+		func(_event: TerrainEvent) -> void: print("F6B| applied at %d ms" % Time.get_ticks_msec())
+	)
+	if edits.editor.scatter != null:
+		edits.editor.scatter.cells_applied.connect(
+			func(cells: Array[Vector2i]) -> void:
+				print("F6B| cells_applied %d at %d ms" % [cells.size(), Time.get_ticks_msec()])
+		)
+
+
+## One timeline line (card F6b): the wall clock, each playing event's clock, whether its change
+## was made, its char's alpha (GroundBurn.char_at), whether it has played and its scatter
+## change landed, the scatter's regeneration, the ground look's restamp wait and bakes, and at
+## each window pixel of `pixels` (1920x1080 frame) the ground point there with its ash weight
+## and the scatter rows within 0.6 m.
+static func _status(map: GameMap, edits: LiveEdits, pixels: Array) -> String:
+	var events := edits.events
+	var clock: float = events.get("_clock")
+	var parts := PackedStringArray(["wall %d ms" % Time.get_ticks_msec()])
+	for entry: Dictionary in events.get("_active"):
+		var event: TerrainEvent = entry.event
+		var elapsed := clock - float(entry.begin)
+		var node: Node3D = entry.get("node")
+		var end := event.duration_s
+		if node is FireSweep and is_instance_valid(node):
+			end = (node as FireSweep).end_at(elapsed)
+		var line := (
+			"event %.2f/%.2f s applied %s char %.2f"
+			% [elapsed, event.duration_s, str(entry.get("applied", false)), GroundBurn.char_at(elapsed, end)]
+		)
+		if node != null and is_instance_valid(node):
+			line += (
+				" played %s landed %s"
+				% [str(node.call(&"is_played", elapsed)), str(node.call(&"is_removed"))]
+			)
+		parts.append(line)
+	var editor := edits.editor
+	var scatter := editor.scatter
+	if scatter != null:
+		parts.append(
+			"scatter regen %s growing %s" % [str(scatter.is_regenerating()), str(scatter.is_growing())]
+		)
+	var look := editor.terrain.ground_look() if is_instance_valid(editor.terrain) else null
+	if look != null:
+		parts.append("look stamp_wait %.2f bakes %d" % [float(look.get("_stamp_wait")), look.bakes])
+	var doc := editor.document
+	var ash := doc.surface_ids.find(FireSweep.ASH)
+	var camera := map.camera_node
+	var scale := Vector2(map.world_viewport.size) / Vector2(1920.0, 1080.0)
+	var rows: Dictionary = scatter.rows_by_asset() if scatter != null else {}
+	for px: Array in pixels:
+		var at := Vector2(float(px[0]), float(px[1])) * scale
+		var from := camera.project_ray_origin(at)
+		var dir := camera.project_ray_normal(at)
+		var hit := from
+		var ground_y := 0.0
+		for i in 3:
+			hit = from + dir * ((ground_y - from.y) / dir.y)
+			ground_y = editor.ground_height_at(hit)
+		var xz := editor.to_map_xz(hit)
+		var s := doc.world_to_sample(xz).round()
+		var sample := doc.sample_index(int(s.x), int(s.y))
+		var weight := doc.surface_weight(sample, ash) if ash >= 0 else -1
+		var near := 0
+		for asset_id in rows:
+			var flat: PackedFloat32Array = rows[asset_id]
+			for r in range(0, flat.size(), MapDocument.ROW_STRIDE):
+				if Vector2(flat[r], flat[r + 2]).distance_to(xz) <= 0.6:
+					near += 1
+		var where := str(xz.snapped(Vector2(0.1, 0.1)))
+		parts.append("px %s map %s ash %d rows %d" % [str(px), where, weight, near])
+	return " | ".join(parts)
 
 
 ## Swaps the scorch's shader for debug view `view` (see the header's burn) of its own code or of

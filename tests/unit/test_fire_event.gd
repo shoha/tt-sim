@@ -553,6 +553,21 @@ func test_a_fire_fits_its_pools() -> void:
 	assert_lt(going.basis.y.length(), 1.0, "shrinking")
 	assert_eq(going.origin, base.origin, "about its foot")
 	assert_almost_eq(FireSweep.snag_transform(base, 4.0, 4.0).basis.y.length(), 0.0, 0.001, "gone")
+	# They and the char hold past the end until the change has landed, then go (card F6b).
+	var sweep := FireSweep.new()
+	add_child_autofree(sweep)
+	sweep.duration = 4.0
+	assert_eq(sweep.end_at(1.0), 4.0, "never before the event's end")
+	for t: float in [4.0, 5.0, 9.0]:
+		var end := sweep.end_at(t)
+		assert_eq(FireSweep.snag_transform(base, t, end), base, "a snag stands at %.1f s" % t)
+		assert_eq(GroundBurn.char_at(t, end), 1.0, "the char holds at %.1f s" % t)
+	sweep.set("_landed_at", 6.0)
+	var landed := sweep.end_at(9.0)
+	assert_almost_eq(landed, 6.0 + FireSweep.SNAG_GO_S, 0.001, "going once it landed")
+	assert_lt(FireSweep.snag_transform(base, 6.3, landed).basis.y.length(), 1.0, "shrinking")
+	assert_eq(GroundBurn.char_at(6.0, landed), 1.0, "the char whole as the ash lands")
+	assert_eq(GroundBurn.char_at(landed + 1.0, landed), 0.0, "then under the ash")
 
 
 ## A path's geometry (FirePath) and its motion's bounds: arcs and projection along the line,
