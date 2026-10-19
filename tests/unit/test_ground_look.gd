@@ -257,6 +257,38 @@ func test_a_loaded_levels_first_dab_redraws_its_masses_into_the_kept_stamps() ->
 	assert_eq(shade.get_meta("masses"), 1, "with the mass drawn into it")
 
 
+## A grass rule with `keep_colour` (a rosette) is never bound to the zone tuft colour; the other
+## grass rules of the biome are.
+func test_a_keep_colour_grass_rule_is_not_bound_to_the_tuft_colour() -> void:
+	PaletteLibrary.clear_cache()
+	var palette: Dictionary = PaletteLibrary.get_palette().duplicate(true)
+	for biome: Dictionary in palette.biomes:
+		if biome.id == ZONED[0]:
+			biome["species"] = [
+				{"key": "tuft", "kind": "grass", "assets": ["tuft_asset"]},
+				{"key": "rosette", "kind": "grass", "keep_colour": true, "assets": ["rosette_asset"]},
+				{"key": "oak", "kind": "tree", "assets": ["oak_asset"]},
+			]
+	PaletteLibrary._palettes[PaletteLibrary.DEFAULT_ROOT] = palette
+	var biome := PaletteLibrary.biome(ZONED[0])
+	var doc := MapDocument.create_flat(Vector2i(8, 8), String(biome.ground_surface), "", 1234)
+	doc.biome_ids = PackedStringArray([ZONED[0]])
+	var terrain := AuthoredTerrain.create(doc)
+	add_child_autofree(terrain)
+	var bake := terrain.ground_look()
+	assert_not_null(bake, "the grassland makes a bake")
+	assert_eq(bake._grass_assets(ZONED[0]), PackedStringArray(["tuft_asset"]), "only the tuft")
+	PaletteLibrary.clear_cache()
+
+
+func test_the_palette_keeps_keep_colour_and_defaults_it_off() -> void:
+	PaletteLibrary.clear_cache()
+	for rule in PaletteLibrary.species(ZONED[0]):
+		assert_true(rule.has("keep_colour"), "every validated rule carries the flag")
+		assert_typeof(rule.keep_colour, TYPE_BOOL)
+	PaletteLibrary.clear_cache()
+
+
 ## A MultiMeshInstance3D of `count` tufts around `anchor` (world XZ), each anchored to it in its
 ## custom data as AuthoredScatter's massed grass is (ScatterMass.custom_data).
 func _anchored_grass(anchor: Vector2, count: int) -> MultiMeshInstance3D:

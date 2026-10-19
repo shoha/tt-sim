@@ -447,6 +447,7 @@ and cacti carry no COLOR_0.
       "species": [
         {
           "key": "<species key>", "kind": "<tree|grass|flower|rock|deadwood|...>",
+          "keep_colour": <bool, optional, default false>,
           "size_class": "<large|medium|small|ground>",
           "density_per_m2": <target instances per m2 for this species>,
           "min_spacing_m": <float, 0 = none>,
@@ -481,6 +482,10 @@ Field notes:
   distance never applies to clumped layers) and the class limit distance for a random
   species. A rule clumped only through a palette-only species block (Ground look and grass
   masses, below) keeps its Geoscatter-derived value, as round 20 did.
+- `keep_colour` (bool, optional, default false): the species draws in its own colours and the
+  ground look's zone tuft colour never applies to it (`GroundLookBake` skips the rule when it
+  binds the tuft uniforms). Placement and grass masses are unchanged. treecube writes it for
+  rosette-habit grass species such as the bromeliad and the sword-leaf rosette.
 - `name` is the plain biome display name; the season is its own field.
 - Surface `role` says what the surface is for (added 2026-09-26, phase 3; same format 1,
   since every field is optional to the consumer):
