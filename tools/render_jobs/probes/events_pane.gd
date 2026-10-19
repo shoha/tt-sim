@@ -28,6 +28,9 @@ extends RefCounted
 ##   gm          the GM's view back after `player`: the drawer and the HUD buttons
 ##   dismiss     every toast on screen dismissed at once
 ##   close       the Visuals drawer closed (as a press on the board sends it aside)
+##   click_tile  {"id"}: the visible tile of that name pressed as a click presses it (a brush's
+##               Shape or Intensity tile, in authoring or play), so its pane and the hint bar
+##               follow as they do for a user
 ##   hover_crossing {"kind"}: the brush's pointer over the first crossing of that kind
 ##               ("stones", "plank", ...), at its own level
 ##   tile        {"id"}: a preset or brush tile's state, disabled and tooltip, for the log
@@ -59,6 +62,8 @@ static func run(base: Node, step: Dictionary) -> String:
 				return "no Visuals drawer"
 			panel.close()
 			return "Visuals drawer closed"
+		"click_tile":
+			return _click_tile(base, StringName(String(step.get("id", ""))))
 	var events := _events(base)
 	if events == null:
 		return "no PlayEvents on the table"
@@ -157,6 +162,20 @@ static func run(base: Node, step: Dictionary) -> String:
 				events.call("_on_recorded", {"preset": kind, "label": "", "bytes": 0})
 			return "shown: %s" % str(PlayEvents.PRESET_DONE.values())
 	return "unknown action"
+
+
+## Presses the visible tile named `id` (a TileRow tile: "fire_line", "fire_blaze", ...) as a
+## click does: its toggle fires, so the pane's selection_changed reaches the brush and the hint
+## bar, where setting the brush's field from an eval leaves the pane and the bar behind (card
+## F6c). Authoring's panel and play's Events pane alike.
+static func _click_tile(base: Node, id: StringName) -> String:
+	var found := base.find_children(String(id), "Button", true, false)
+	for node in found:
+		var tile := node as Button
+		if tile.is_visible_in_tree() and not tile.disabled:
+			tile.button_pressed = true
+			return "clicked tile %s (%s)" % [id, tile.get_path()]
+	return "no visible tile %s (%d hidden)" % [id, found.size()]
 
 
 ## Shows or hides the GM's own HUD buttons, which a player never has.

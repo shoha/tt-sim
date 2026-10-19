@@ -568,6 +568,12 @@ func test_a_fire_fits_its_pools() -> void:
 	assert_lt(FireSweep.snag_transform(base, 6.3, landed).basis.y.length(), 1.0, "shrinking")
 	assert_eq(GroundBurn.char_at(6.0, landed), 1.0, "the char whole as the ash lands")
 	assert_eq(GroundBurn.char_at(landed + 1.0, landed), 0.0, "then under the ash")
+	# Held, the char drifts toward the ash's colour instead of sitting dark (card F6c): none
+	# while the fire burns, rising after its end, never past ASHEN of the way.
+	assert_eq(GroundBurn.ashen_at(3.9, 4.0), 0.0, "dark while it burns")
+	assert_gt(GroundBurn.ashen_at(5.5, 4.0), 0.0, "drifting while held")
+	assert_lt(GroundBurn.ashen_at(5.5, 4.0), GroundBurn.ashen_at(6.5, 4.0), "slowly")
+	assert_eq(GroundBurn.ashen_at(30.0, 4.0), GroundBurn.ASHEN, "at most ASHEN of the way")
 
 
 ## A path's geometry (FirePath) and its motion's bounds: arcs and projection along the line,

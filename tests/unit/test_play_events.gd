@@ -341,6 +341,11 @@ func test_the_presets_stand_above_the_brushes_and_lead_their_hints() -> void:
 	assert_eq(path[1], {"key": "Tab", "action": "Circle"})
 	assert_eq(path[2], {"key": PlayEvents.SIZE_KEY, "action": "Width"}, "a path has a width")
 	assert_eq(path[-1], {"key": "Esc", "action": "Put away"})
+	# Every preset's Esc reads alike, Start a fire's in both shapes (card F6c): the first key
+	# names the preset; a brush's Esc names the brush.
+	for preset in EventPresets.all():
+		var esc := {"key": "Esc", "action": "Put away"}
+		assert_eq(PlayEvents.hints_for(preset.id)[-1], esc, "%s's Esc as its siblings'" % preset.id)
 	# Its Shape field: Path first (the line tools' icon), Circle picked; a pick says which, and
 	# Advanced reads Width for a path (its half-width, 1-6 m) and Size for the ring.
 	var field := pane.ignite_shape_field

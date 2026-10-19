@@ -10,8 +10,9 @@ extends MeshInstance3D
 ## a hot band of varying width burns, broken into crawling segments, and behind it the ground is
 ## charred with glowing specks that cool as the front leaves them. Its glow dies once the front
 ## has reached the rim (glow_at), and the char stays until the ash has landed (FireSweep holds
-## it past the event's end until its change is on the board), then goes (char_at), so the
-## charred ground hands over to the ash rather than popping or showing the grass between.
+## it past the event's end until its change is on the board, drifting meanwhile toward the
+## ash's warm grey, ashen_at), then goes (char_at), so the charred ground hands over to the ash
+## rather than popping or showing the grass between.
 ##
 ## The lobe field is one small wrapping texture of the fire's noise (fire_noise.gdshaderinc's
 ## two octaves, made periodic), painted once for the session; the shader samples it and reach
@@ -45,6 +46,13 @@ const GLOW_IN_S := 0.15
 const GLOW_HOLD_S := 0.35
 const GLOW_OUT_S := 0.8
 const CHAR_OUT_S := Vector2(-0.2, 0.6)
+## Held past the event's end until the change lands (FireSweep.end_at), the char drifts toward
+## the landed ash's warm grey: this share of the way at most, over ASHEN_S from the end, so a
+## long path's board is not a still dark strip for seconds and the char hands over to a near
+## colour (card F6c; at 0.5 a 50 m path's char went from 63,56,50 to 84,75,65 by the end of its
+## hold against the landed ash's 143,119,101, too little to read as change).
+const ASHEN := 0.7
+const ASHEN_S := 3.0
 const SHADER := preload("res://shaders/ground_burn.gdshader")
 
 static var _lobe_bytes := PackedByteArray()
@@ -147,6 +155,7 @@ func step(elapsed: float, end: float = -1.0) -> void:
 	_material.set_shader_parameter(&"front", front_radius(elapsed, _nearest, _radius, _spread))
 	_material.set_shader_parameter(&"glow", glow_at(elapsed, _spread))
 	_material.set_shader_parameter(&"fade", gone)
+	_material.set_shader_parameter(&"ashen", ashen_at(elapsed, _duration))
 	_material.set_shader_parameter(&"elapsed", elapsed)
 
 
@@ -169,6 +178,12 @@ static func glow_at(t: float, spread: float) -> float:
 ## end, or later once its change landed): whole until just before then, gone soon after. Pure.
 static func char_at(t: float, duration: float) -> float:
 	return 1.0 - smoothstep(duration + CHAR_OUT_S.x, duration + CHAR_OUT_S.y, t)
+
+
+## How far toward the ash's colour the char has drifted `t` seconds into an event that ended
+## at `duration`: none while it burns, easing up to ASHEN over ASHEN_S after its end. Pure.
+static func ashen_at(t: float, duration: float) -> float:
+	return ASHEN * smoothstep(duration, duration + ASHEN_S, t)
 
 
 ## How far the lobe field moves the front for a rim of `radius` metres, and its blobs' width.

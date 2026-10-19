@@ -461,6 +461,78 @@ func test_start_a_fire_path_is_the_third_line_tool() -> void:
 	assert_not_null(TerrainEvent.decode(TerrainEvent.fire_path(long, 2.0, 1).encode()))
 
 
+## Where a Path's stretch turns from trees to ground only, its rails narrow along the arc over
+## about one half-width (LineRibbon's quiet_spans, card F6c), never in a square notch: from one
+## sample to the next the rails' inner edge moves at most 0.09 half-widths and no faster than
+## 0.4 m across per metre along, the forest stretch keeps its whole rails, and the band stays
+## one outline with the lay's chevrons. The Path draws its line as that one ribbon.
+func test_a_quiet_stretch_narrows_along_the_arc() -> void:
+	var radius := 2.0
+	var line := PackedVector2Array()
+	for k in 11:
+		line.append(Vector2(2.0 * k, 0.0))
+	var lay := LineRibbon.lay_style(IgniteMode.PATH_HUE)
+	var look := LineRibbon.STYLE.merged(lay, true)
+	look.quiet_spans = PackedVector2Array([Vector2(6.0, 14.0)])
+	var band := LineRibbon.rows_along(line, radius, look)
+	var stopped: PackedVector2Array = band.line
+	var rows: Array = band.rows
+	var full: Array = LineRibbon.fill_row(LineRibbon.FILLS.rails.fill_profile)
+	var quiet: Array = LineRibbon.fill_row(LineRibbon.QUIET_PROFILE)
+	assert_gt(stopped.size(), line.size(), "the tapers take points of their own")
+	var most_step := 0.0
+	var most_slope := 0.0
+	for i in stopped.size():
+		var x := stopped[i].x
+		var inner := float(rows[i][2][0])
+		if x <= 6.0 or x >= 14.0:
+			assert_almost_eq(inner, float(full[2][0]), 0.001, "whole rails at %.2f m" % x)
+		elif x >= 6.0 + radius and x <= 14.0 - radius:
+			assert_almost_eq(inner, float(quiet[2][0]), 0.001, "narrowed at %.2f m" % x)
+		if i > 0:
+			var step := absf(inner - float(rows[i - 1][2][0]))
+			most_step = maxf(most_step, step)
+			most_slope = maxf(most_slope, step * radius / (x - stopped[i - 1].x))
+	assert_lte(most_step, 0.09, "no step in the rails' width over 0.09 half-widths per sample")
+	assert_lte(most_slope, 0.4, "nor steeper than 0.4 m across per metre along")
+	var plain := LineRibbon.ribbon(_ground(), line, radius, lay)
+	var eased := LineRibbon.ribbon(_ground(), line, radius, look)
+	assert_eq(eased.lines.size(), plain.lines.size(), "one outline, the lay's chevrons")
+	var ends := PackedVector2Array([Vector2(0.0, 5.0), Vector2(14.0, 20.0)])
+	assert_eq(LineRibbon.quiet_at(0.0, ends, 20.0, radius), 1.0, "no taper at the line's start")
+	assert_eq(LineRibbon.quiet_at(20.0, ends, 20.0, radius), 1.0, "nor at its end")
+	assert_eq(LineRibbon.quiet_at(14.0, ends, 20.0, radius), 0.0, "whole where the trees end")
+	var path := IgniteMode.new()
+	var style := path.path_style(PackedVector2Array([Vector2(0.0, 5.0), Vector2(9.0, 12.0)]), 20.0)
+	assert_eq(style.quiet_spans, PackedVector2Array([Vector2(5, 9), Vector2(12, 20)]), "between")
+	assert_eq(style.quiet_profile, path.lay_style(IgniteMode.Stretch.GROUND).fill_profile)
+	assert_eq(_differing(path.lay_style(), style), ["quiet_spans"], "else the forest's look")
+	var refused := path.lay_style(IgniteMode.Stretch.REFUSED)
+	assert_eq(path.path_style(PackedVector2Array(), 20.0), refused, "no forest: refused whole")
+
+
+## Start a fire's Path offers its hue in three depths for the user to pick (card F6c), each a
+## theme role on the ring's light ochre, so only the tint differs from the default, and none of
+## them lifted by the rails past full value; A, today's, stays the default.
+func test_the_path_hues_differ_only_in_their_tint() -> void:
+	assert_eq(IgniteMode.HUE, "A")
+	assert_eq(IgniteMode.PATH_HUES[IgniteMode.HUE], IgniteMode.PATH_HUE, "A is today's")
+	var rails: Dictionary = LineRibbon.FILLS.rails
+	var tints: Array = []
+	for name: String in IgniteMode.PATH_HUES:
+		var path := IgniteMode.new()
+		path.hue = name
+		var style := path.lay_style()
+		assert_eq(style.glow, ToppleMode.TINT, "%s on the ring's colour" % name)
+		var expected: Array = [] if name == IgniteMode.HUE else ["tint"]
+		assert_eq(_differing(IgniteMode.new().lay_style(), style), expected, name)
+		var strong := LineRibbon.lit_fill(Color(style.tint, rails.alpha_down), rails.fill_gain)
+		for c in 3:
+			assert_lt(strong[c], 1.01, "%s's strongest rail within full value" % name)
+		tints.append(style.tint)
+	assert_eq(tints, [ThemeColors.OCHRE_DEEP, ThemeColors.OCHRE_DEEPER, ThemeColors.AMBER_DEEP])
+
+
 func _editor() -> AuthoringEditor:
 	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass_birch", "v", 11)
 	var root := MapSourceLoader.create_authored_root(doc)
