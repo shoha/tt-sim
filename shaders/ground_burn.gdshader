@@ -52,6 +52,9 @@ uniform float elapsed = 0.0;
 uniform float glow = 0.0;
 uniform float fade = 1.0;
 uniform float half_height = 1.5;
+// How far the char has drifted toward the landed ash's colour while it is held (GroundBurn
+// ashen_at), 0..1.
+uniform float ashen = 0.0;
 // A path: its points in the fire's frame (x, z metres from its first point; z holds the arc
 // length there, w the ground's height in the box's frame), how many there are (0: a circle),
 // its half-width, and where the box's centre lies in the fire's frame.
@@ -88,6 +91,8 @@ const float ENERGY = 2.0;
 // drying grass (olive straw, straw, brown, scorched).
 const vec3 CHAR_TINT = vec3(0.3, 0.24, 0.21);
 const vec3 ASH_TINT = vec3(0.62, 0.58, 0.55);
+// The landed ash surface's warm grey over the frame's brightness, which a held char drifts to.
+const vec3 ASH_LANDED = vec3(0.78, 0.64, 0.5);
 const vec3 OLIVE = vec3(1.15, 1.08, 0.4);
 const vec3 STRAW = vec3(1.75, 1.25, 0.4);
 const vec3 BROWN = vec3(1.05, 0.6, 0.28);
@@ -174,7 +179,8 @@ void fragment() {
 	// Behind: char with ash blotches.
 	float burnt = smoothstep(-0.03, 0.03, b);
 	float ash = tone(0.66, glow_cloud(p * 0.9 + lobe_offset * 5.0));
-	colour = mix(colour, luma * mix(CHAR_TINT, ASH_TINT, ash * 0.6), burnt);
+	vec3 charred = mix(mix(CHAR_TINT, ASH_TINT, ash * 0.6), ASH_LANDED, ashen);
+	colour = mix(colour, luma * charred, burnt);
 	alpha = max(alpha, burnt);
 
 	// On it: the hot band, its width and its breaks crawling with the clock. Deep red outside,

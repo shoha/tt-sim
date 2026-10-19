@@ -38,6 +38,13 @@ extends RefCounted
 ##   cap_start, cap_end    which ends are round when caps is on (a line drawn as stretches in
 ##                         two tints, Start a fire's Path, rounds only its own two ends, so
 ##                         the stretches join without an edge across the band)
+##   quiet_spans           arc spans (metres from the line's start, x to y) drawn quieter, in
+##                         quiet_profile instead of fill_profile (Start a fire's Path where only
+##                         the ground burns); the band narrows into a span and widens out of it
+##                         over TAPER_RADII half-widths along the arc (quiet_at()), so the change
+##                         reads as a soft narrowing inside one edge, never a cut across the band
+##   quiet_profile         the quiet spans' fill_profile (QUIET_PROFILE), as many steps as
+##                         fill_profile's so each step's offset eases from one to the other
 ##   night_light           the share of its colour the ribbon keeps under no sun (1: all)
 ## An erase ribbon is the same shape at the same weights with the erase salmon
 ## (BrushCursor.CLEAR_TINT, every brush's erase) on its edge, glow and chevrons, and no wash
@@ -65,6 +72,18 @@ const CHEVRON_PX := 44.0
 ## glyph keeps that size and weight instead of growing (at zoom 8 the scaled glyph was 120 px of
 ## 7 px strokes on 12 px of ink, read as road markings, F5g).
 const CHEVRON_VIEW_H := 720.0
+## A quieter stretch's coverage across the band (Start a fire's Path where only the ground
+## burns, card F6b): the rails narrowed to the band's outer edge at their full coverage and
+## light, every line (edge, ink, glow, chevrons) the lay's, so the line still reads whole, its
+## hue and its way plain, with less of it lit. Narrower, not fainter: at lower coverage the hue
+## mixed with the ground under it, khaki over grass and the dark wood (F5f's olive seam). As
+## many steps as FILLS.rails' profile, so the one eases into the other.
+const QUIET_PROFILE := [[1.0, 1.0], [0.86, 0.78], [0.78, 0.03], [0.0, 0.0]]
+## How far along the arc (half-widths) the band takes to narrow into a quiet span and widen out
+## of it, and the points the ease is drawn with: switched from one point to the next, the rail
+## stepped by a quarter of the half-width (a square notch, card F6c).
+const TAPER_RADII := 1.0
+const TAPER_STEPS := 4
 ## Every line tool's look, before its own keys (the class header names them). Every line is the
 ## brush ring's stroke (BrushCursor.ring_strokes): the edge and the chevrons LINE_WIDTH over the
 ## ring's ink, the edge on the ring's glow, lay and erase alike, so the ring and the line it
@@ -94,6 +113,8 @@ const STYLE := {
 	"caps": true,
 	"cap_start": true,
 	"cap_end": true,
+	"quiet_spans": [],
+	"quiet_profile": QUIET_PROFILE,
 	"night_light": NIGHT_LIGHT,
 }
 ## The keys a tool's lay sets: its hue. The band and edge in `tint`, the glow under the edge in
@@ -130,12 +151,8 @@ const FILLS := {
 }
 ## The fill a tool's lay takes unless told otherwise (option R; the job shows E beside it).
 const FILL := "rails"
-## A quieter stretch of a lay, over its keys (Start a fire's Path where only the ground burns,
-## card F6b): the rails narrowed to the band's outer edge at their full coverage and light, every
-## line (edge, ink, glow, chevrons) the lay's, so the line still reads whole, its hue and its
-## way plain, with less of it lit. Narrower, not fainter: at lower coverage the hue mixed with
-## the ground under it, khaki over grass and the dark wood (F5f's olive seam).
-const QUIET_STYLE := {"fill_profile": [[1.0, 1.0], [0.86, 0.78], [0.78, 0.03], [0.0, 0.0]]}
+## A lay quiet along its whole length, over its keys (QUIET_PROFILE across the band).
+const QUIET_STYLE := {"fill_profile": QUIET_PROFILE}
 ## An erase's keys over STYLE, for every tool (the river's erase and the fire's put-out alike):
 ## the erase salmon on the edge, its glow and the chevrons, every weight and the ink the lay's,
 ## and no wash inside, so what goes shows through untouched and the salmon lines alone say
@@ -228,14 +245,16 @@ static func ribbon(
 	light: float = 1.0,
 	view_height: float = CHEVRON_VIEW_H
 ) -> Dictionary:
-	var n := line.size()
-	if n < 2:
+	if line.size() < 2:
 		return {}
 	var look := STYLE.merged(style, true)
 	var tint: Color = look.tint
 	var gain := float(look.fill_gain)
-	var row := fill_row(look.fill_profile)
-	var width := row.size()
+	var band := rows_along(line, radius, look)
+	line = band.line
+	var rows: Array = band.rows
+	var n := line.size()
+	var width: int = (rows[0] as Array).size()
 	var total := StrokePath.line_length(line)
 	var points := PackedVector2Array()
 	var colors := PackedColorArray()
@@ -259,7 +278,7 @@ static func ribbon(
 		last_l = world_l
 		last_r = world_r
 		var alpha := lerpf(look.alpha_up, look.alpha_down, walked / maxf(total, 0.001))
-		for step: Array in row:
+		for step: Array in rows[i]:
 			var offset: float = step[0]
 			var world := world_l if offset > 0.0 else world_r
 			if absf(offset) < 1.0:
@@ -277,7 +296,8 @@ static func ribbon(
 	var sides: Array = [left, right]
 	if look.caps and (look.cap_start or look.cap_end):
 		var ends := [bool(look.cap_end), bool(look.cap_start)]
-		var capped := _with_caps(ground, line, radius, row, points, colors, indices, ends)
+		var end_rows := [rows[n - 1], rows[0]]
+		var capped := _with_caps(ground, line, radius, end_rows, points, colors, indices, ends)
 		points = capped.points
 		colors = capped.colors
 		indices = capped.indices
@@ -334,6 +354,99 @@ static func fill_row(profile: Array) -> Array:
 		if float(half[k][0]) > 0.0:
 			row.append([-float(half[k][0]), float(half[k][1])])
 	return row
+
+
+## The band's line and its row across at each point (fill_row()), for `line` at half-width
+## `radius` in `look` (STYLE merged): with no quiet_spans the line as given and fill_profile's
+## row at every point; with them the line with a point at each step of every taper
+## (TAPER_STEPS over TAPER_RADII * radius) and each point's row eased from fill_profile's to
+## quiet_profile's by quiet_at(), so the rails narrow along the arc. A quiet_profile of another
+## step count than fill_profile's cannot ease: the spans are left out. Pure.
+static func rows_along(line: PackedVector2Array, radius: float, look: Dictionary) -> Dictionary:
+	var full := fill_row(look.get("fill_profile", []))
+	var spans := PackedVector2Array(look.get("quiet_spans", []))
+	var quiet := fill_row(look.get("quiet_profile", QUIET_PROFILE))
+	var rows: Array = []
+	if spans.is_empty() or quiet.size() != full.size():
+		for _p in line:
+			rows.append(full)
+		return {"line": line, "rows": rows}
+	var total := StrokePath.line_length(line)
+	var taper := maxf(TAPER_RADII * radius, 0.01)
+	var stopped := _with_stops(line, _taper_stops(spans, total, taper))
+	var walked := 0.0
+	for i in stopped.size():
+		if i > 0:
+			walked += stopped[i - 1].distance_to(stopped[i])
+		var w := quiet_at(walked, spans, total, taper)
+		var row: Array = []
+		for k in full.size():
+			var a: Array = full[k]
+			var b: Array = quiet[k]
+			row.append([lerpf(a[0], b[0], w), lerpf(a[1], b[1], w)])
+		rows.append(row)
+	return {"line": stopped, "rows": rows}
+
+
+## How quiet a line `total` metres long is `at` metres along it, 0 (fill_profile) to 1
+## (quiet_profile), with quiet arc spans `spans`: 1 inside a span, easing in from 0 at a span's
+## end that meets a full stretch over its first `taper` metres (smoothstep), so the band narrows
+## inside the quiet span and the full stretch keeps its whole rails; an end at the line's own
+## start or end eases nothing. Pure.
+static func quiet_at(at: float, spans: PackedVector2Array, total: float, taper: float) -> float:
+	var most := 0.0
+	for span in spans:
+		if at < span.x or at > span.y:
+			continue
+		var w := 1.0
+		if span.x > 0.001:
+			w = minf(w, smoothstep(0.0, taper, at - span.x))
+		if span.y < total - 0.001:
+			w = minf(w, smoothstep(0.0, taper, span.y - at))
+		most = maxf(most, w)
+	return most
+
+
+## The arcs a quiet span's tapers are drawn at (rows_along()): TAPER_STEPS + 1 evenly over each
+## eased end's first `taper` metres into its span, within the span and the line. Pure.
+static func _taper_stops(
+	spans: PackedVector2Array, total: float, taper: float
+) -> PackedFloat32Array:
+	var stops := PackedFloat32Array()
+	for span in spans:
+		var reach := minf(taper, (span.y - span.x) * 0.5)
+		for k in TAPER_STEPS + 1:
+			var into := reach * float(k) / TAPER_STEPS
+			if span.x > 0.001:
+				stops.append(span.x + into)
+			if span.y < total - 0.001:
+				stops.append(span.y - into)
+	var inside := PackedFloat32Array()
+	for at in stops:
+		if at > 0.0 and at < total:
+			inside.append(at)
+	inside.sort()
+	return inside
+
+
+## `line` with a point inserted at each arc of `arcs` (sorted, metres from its start) on the
+## segment it falls on, none within a centimetre of a point it has. Pure.
+static func _with_stops(line: PackedVector2Array, arcs: PackedFloat32Array) -> PackedVector2Array:
+	var out := PackedVector2Array([line[0]])
+	var walked := 0.0
+	var next := 0
+	for i in range(1, line.size()):
+		var length := line[i - 1].distance_to(line[i])
+		while next < arcs.size() and arcs[next] < walked + length:
+			var into := arcs[next] - walked
+			if into > 0.01 and length - into > 0.01:
+				var at := line[i - 1].lerp(line[i], into / length)
+				if out[-1].distance_to(at) > 0.01:
+					out.append(at)
+			next += 1
+		out.append(line[i])
+		walked += length
+	return out
 
 
 ## `shape` with every colour, fill and line, at `light` of its own (alpha kept). Pure.
@@ -439,18 +552,18 @@ static func _outline(
 
 
 ## The band's arrays with a round cap at each end (ribbon()'s caps): per end, a ring of
-## CAP_SEGMENTS - 1 arc points for every offset of `row` off the centre line, from that offset's
-## point on one side of the end's row round to the other, strips between the rings and a fan to
-## the centre (the row's centre point, or a new one at the tip when the row has none). Every
-## ring takes its row point's colour, so a fill_profile's coverage runs round the end too.
-## Returns the new "points", "colors" and "indices" and "arcs" (each end's outer arc, the end's
-## then the start's, empty for an end `rounded` leaves cut: [the end's, the start's]). Pure but
-## for `ground`.
+## CAP_SEGMENTS - 1 arc points for every offset of that end's row (`rows`: the end's, then the
+## start's, one structure) off the centre line, from that offset's point on one side of the end's
+## row round to the other, strips between the rings and a fan to the centre (the row's centre
+## point, or a new one at the tip when the row has none). Every ring takes its row point's
+## colour, so a fill_profile's coverage runs round the end too. Returns the new "points",
+## "colors" and "indices" and "arcs" (each end's outer arc, the end's then the start's, empty
+## for an end `rounded` leaves cut: [the end's, the start's]). Pure but for `ground`.
 static func _with_caps(
 	ground: Callable,
 	line: PackedVector2Array,
 	radius: float,
-	row: Array,
+	rows: Array,
 	band_points: PackedVector2Array,
 	band_colors: PackedColorArray,
 	band_indices: PackedInt32Array,
@@ -460,13 +573,14 @@ static func _with_caps(
 	var colors := band_colors.duplicate()
 	var indices := band_indices.duplicate()
 	var n := line.size()
-	var width := row.size()
+	var first: Array = rows[0]
+	var width := first.size()
 	var rings_n := 0
 	var middle := -1
 	for k in width:
-		if float(row[k][0]) > 0.0:
+		if float(first[k][0]) > 0.0:
 			rings_n += 1
-		elif float(row[k][0]) == 0.0:
+		elif float(first[k][0]) == 0.0:
 			middle = k
 	# The end's row runs left to right round its cap; the start's, seen from outside, right to
 	# left.
@@ -483,6 +597,7 @@ static func _with_caps(
 		var forward: Vector2 = (end[1] as Vector2).normalized()
 		var base: int = end[2]
 		var flip: bool = end[3]
+		var row: Array = rows[which]
 		var centre := base + middle
 		if middle < 0:
 			centre = points.size()

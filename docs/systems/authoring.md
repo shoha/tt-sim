@@ -352,16 +352,22 @@ Probe and numbers:
   through the line tools' `LineGesture` and `LineRibbon` (`IgniteMode.lay_style`: `PATH_HUE`,
   `ThemeColors.OCHRE_DEEP` on its ring's light ochre glow, every other key the river's and
   the fire line's; deep ochre because the rails lift their tint 1.36 to 1.53 times, which
-  gives back ochre, where ochre itself clipped to lemon, card F6b), its half-width the brush
-  size within 1-6 m (`path_radius`; Advanced reads Width), its stretches by what a release
-  does there (`IgniteMode.Stretch`, `FirePath.forest_spans` of the live line, refreshed every
-  200 ms): the forest spans, where trees catch, in the full rails; the ground between them,
-  where only the ground burns, the same with the rails narrowed (`LineRibbon.QUIET_STYLE`);
+  gives back ochre, where ochre itself clipped to lemon, card F6b; `IgniteMode.PATH_HUES`
+  holds two more depths for the user to pick between, B `OCHRE_DEEPER` with its rails at the
+  fire line's luminance and C the warmer `AMBER_DEEP`, A the default, card F6c), its
+  half-width the brush size within 1-6 m (`path_radius`; Advanced reads Width), drawn as one
+  ribbon (`IgniteMode.path_style`) whose stretches follow what a release does there
+  (`IgniteMode.Stretch`, `FirePath.forest_spans` of the live line, refreshed every 200 ms):
+  the forest spans, where trees catch, in the full rails; the ground between them, where only
+  the ground burns, the same with the rails narrowed (LineRibbon's `quiet_spans` in
+  `QUIET_PROFILE`, the rails easing in and out over one half-width along the arc,
+  `LineRibbon.quiet_at`, so the change is a soft narrowing, never a notch, card F6c);
   a line with no forest anywhere along it in chalk_soft with no fill, ring and all, as the
   refused circle (no start mark: the chevrons say which way it runs), and the chip
   "Fire along a path", "Fire along a path  48 ft" while drawn, "Longest fire path" at 64 m,
   "Only a forest burns" while no forest stands along it. At rest the ring at the half-width
-  has a dash across it. Esc or a right click drops the line and stays armed; a release under
+  alone, as the River's and the Line of fire's (the chip's words tell the shapes apart; the
+  dash across it read as a no-entry sign, card F6c). Esc or a right click drops the line and stays armed; a release under
   2 m says "Draw the fire's path"; one with no forest along it `NO_FOREST_PATH`. Hint rows:
   Circle Click "Start a fire", Tab "Path", Drag "Wider fire", Ctrl+Z, Esc; Path Left-drag
   "Draw a fire path", Tab "Circle", `[ ]` "Width", Ctrl+Z, Esc. A fired event goes to
