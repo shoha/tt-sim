@@ -59,10 +59,11 @@ extends Node3D
 ## (shown only while the sun is low) and FireFieldSmoke raises a leaning plume from the smoke
 ## book over up to eight of the largest blaze clusters. Both are children, made with the first fire
 ## and freed with the map; their per-frame work is the lights' flicker (the smoke moves in its
-## shader). The ground's fire term reads everything of it that does not change with time from
-## the sim bake (FireNoiseBake, cards F4b-4 and ground-cost), also a child, made with the first
-## fire mask and bound once drawn; each refresh redraws it over the region it re-planned, and the
-## field's leaving the tree lets the ground go of it.
+## shader). The field is in GROUP, so the drag ruler finds the document's fire under a drop
+## (DragRuler.in_fire, through mask_at, card F7a). The ground's fire term reads everything of it
+## that does not change with time from the sim bake (FireNoiseBake, cards F4b-4 and ground-cost),
+## also a child, made with the first fire mask and bound once drawn; each refresh redraws it over
+## the region it re-planned, and the field's leaving the tree lets the ground go of it.
 ##
 ## A refresh's pure half (FirePlanJob: the re-plan, the cluster sums, the rasters) runs on a
 ## WorkerThreadPool task with `use_worker` (the authoring and play-time editors set it, as they
@@ -71,6 +72,8 @@ extends Node3D
 ## Without it (tests, probes, a load's rebuild) the same function runs at once on this thread.
 
 const NODE_NAME := "FireField"
+## The group every field made by create() is in (one per map).
+const GROUP := &"fire_fields"
 ## Lattice spacing of the flames, and how far each is moved off its lattice point (a share of
 ## the spacing, either way).
 const FLAME_SPACING_M := 0.9
@@ -196,6 +199,7 @@ static func create(doc: MapDocument) -> FireField:
 	var field := FireField.new()
 	field.name = NODE_NAME
 	field.document = doc
+	field.add_to_group(GROUP)
 	field.rebuild()
 	return field
 
@@ -399,6 +403,17 @@ func lights() -> FireLights:
 ## The fire's smoke (null before the first fire), for probes and tests.
 func smoke() -> FireFieldSmoke:
 	return _smoke
+
+
+## The fire mask of `doc` at document point `p` (metres, the map's frame), read bilinearly as the
+## flames read it (without their wander): 0..255, 0 off the map or without a mask. Pure.
+static func mask_at(doc: MapDocument, p: Vector2) -> float:
+	if doc == null or doc.fire_mask.size() != doc.sample_count():
+		return 0.0
+	var half := doc.extent_m() * 0.5
+	if absf(p.x) > half.x or absf(p.y) > half.y:
+		return 0.0
+	return _bilinear(doc.fire_mask, doc.samples_x(), doc.samples_z(), doc.world_to_sample(p))
 
 
 ## The diff blocks the samples of `sample_rect` touch, row by row.

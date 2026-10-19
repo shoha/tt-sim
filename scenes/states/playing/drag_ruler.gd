@@ -5,6 +5,11 @@ extends Node
 ## position while dragging. Renders as a 2D overlay on its own CanvasLayer
 ## (above the lo-fi shader, below the measure tool).
 ##
+## The label adds "In fire" while the drop point stands in the map's persistent fire at the
+## flames band or above (in_fire, on this peer's own document: the FireField of the map, found by
+## its group at drag start). It only tells: nothing is synced and the token is not changed (fire
+## is a rules matter for the GM).
+##
 ## Usage:
 ##   1. Call setup() after instantiation to provide camera, viewport, and overlay parent.
 ##   2. Call configure() after a level loads to provide scale settings.
@@ -17,6 +22,8 @@ const ENDPOINT_COLOR := Color(0.6, 0.8, 1.0, 1.0)
 ## The ground under the token at drag start is found by a downcast from this far above the
 ## token's origin (a token's origin may sit on its base, right at the ground).
 const START_CAST_CLEARANCE_M: float = 0.5
+## The label's part for a drop point in fire, after the distance's parts.
+const IN_FIRE_TEXT := "In fire"
 
 ## References — set once via setup()
 var _camera: Camera3D
@@ -35,6 +42,8 @@ var _start_pos: Vector3 = Vector3.ZERO
 ## Ground height (world Y) under the token where the drag began, or NAN when no ground was
 ## found there (the label then shows no elevation).
 var _start_ground_y: float = NAN
+## The map's persistent fire during a drag (null on a map without one).
+var _fire: FireField = null
 
 ## Overlay nodes
 var _canvas_layer: CanvasLayer
@@ -108,6 +117,7 @@ func _on_dragging_started(dragging_object: DraggingObject3D) -> void:
 		return
 	_start_pos = dragging_object.objectBody.global_position
 	_start_ground_y = _ground_below(_start_pos)
+	_fire = get_tree().get_first_node_in_group(FireField.GROUP) as FireField
 	_active = true
 	set_process(true)
 	_needs_redraw = true
@@ -152,11 +162,16 @@ func _do_redraw() -> void:
 	# Distance on the XZ plane; elevation from the ground under the start to the ground at
 	# the target (not the token's own lift or scroll height, which the settle undoes).
 	var dist_2d := Vector2(_start_pos.x, _start_pos.z).distance_to(Vector2(end_pos.x, end_pos.z))
+	var target := _drag_and_drop.get_target_ground_position()
 	var elevation := 0.0
 	if not is_nan(_start_ground_y):
-		var end_ground := _ground_below(_drag_and_drop.get_target_ground_position())
+		var end_ground := _ground_below(target)
 		if not is_nan(end_ground):
 			elevation = end_ground - _start_ground_y
+	var burning := false
+	if is_instance_valid(_fire):
+		var local := _fire.to_local(target)
+		burning = in_fire(_fire.document, Vector2(local.x, local.z))
 
 	if _distance_label:
 		_distance_label.text = ruler_text(
@@ -165,17 +180,23 @@ func _do_redraw() -> void:
 			_grid_cell_size,
 			_display_unit_per_cell,
 			_display_unit,
-			_grid_snap_enabled
+			_grid_snap_enabled,
+			burning
 		)
+		# A PanelContainer grows with its text but never shrinks by itself: without this the chip
+		# kept the width of a longer label ("In fire", an elevation) after the text shortened.
+		if _distance_panel:
+			_distance_panel.reset_size()
 
 	# Project to screen
 	var screen_start := _camera.unproject_position(_start_pos)
 	var screen_end := _camera.unproject_position(end_pos)
 
-	# Only show label if the line is long enough
+	# Only show label if the line is long enough (or the drop point is in fire: a short step
+	# into a fire still says so)
 	if _distance_panel:
 		var screen_len := screen_start.distance_to(screen_end)
-		_distance_panel.visible = screen_len > 40.0
+		_distance_panel.visible = screen_len > 40.0 or burning
 		if _distance_panel.visible:
 			var midpoint := (_start_pos + end_pos) * 0.5
 			var screen_mid := _camera.unproject_position(midpoint)
@@ -189,7 +210,7 @@ func _do_redraw() -> void:
 ## The ruler label: the horizontal distance ("30 ft", or "6 cells / 30 ft" with grid snap),
 ## followed like the measure tool's by the signed elevation change and the direct distance
 ## when the elevation passes MeasureTool.ELEVATION_THRESHOLD
-## (ScaleUtils.format_distance_with_elevation). Pure.
+## (ScaleUtils.format_distance_with_elevation), and by IN_FIRE_TEXT when `burning`. Pure.
 static func ruler_text(
 	horizontal: float,
 	elevation: float,
@@ -197,6 +218,7 @@ static func ruler_text(
 	display_unit_per_cell: float,
 	display_unit: String,
 	snap: bool,
+	burning := false,
 ) -> String:
 	var text := (
 		ScaleUtils
@@ -212,7 +234,17 @@ static func ruler_text(
 	)
 	if snap and grid_cell_size > 0.0:
 		text = "%d cells / %s" % [roundi(horizontal / grid_cell_size), text]
+	if burning:
+		text += "  |  " + IN_FIRE_TEXT
 	return text
+
+
+## Whether a token dropped at `at` (document metres, the map's frame: XZ in the FireField's
+## frame) of `doc` stands in fire: the fire mask there (FireField.mask_at) at the flames band
+## (FireField.FLAME_MIN) or above; embers do not count. False off the map, on a map without fire
+## and without a document. Pure.
+static func in_fire(doc: MapDocument, at: Vector2) -> bool:
+	return FireField.mask_at(doc, at) >= FireField.FLAME_MIN
 
 
 ## The walkable surface (world Y) straight below `point`: the ground, or a water surface

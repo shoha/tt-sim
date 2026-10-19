@@ -241,6 +241,14 @@ four fit the Mobile renderer's eight per mesh; the env manager skips a FireField
 the map's own lights (counted, they turned the level's sun off in "auto" mode). The rounds that
 chose the falloff (ranges 7, 12, 15 and 20 under pixel probes) are in `FireLights`' header.
 
+### Tokens
+
+No token state and no effect on a token (fire is a rules matter for the GM). While a token is
+dragged, the drag ruler's label adds "In fire" when the drop point's mask is at the flames band
+or above (`DragRuler.in_fire` through `FireField.mask_at`: the bilinear mask without the
+flames' wander, at least `FLAME_MIN`; embers do not count), a pure lookup on each peer's own
+document; nothing is synced. [../ARCHITECTURE.md](../ARCHITECTURE.md) "Drag Ruler".
+
 ## Runtime
 
 - `MapSourceLoader` adds one `FireField` under the map root for a document (authoring and play;
@@ -325,6 +333,8 @@ Unit tests in `tests/unit/` (all in the authoring subset):
   buffer is back to front; every fire carries its own exact integer seed.
 - `test_fire_clusters.gd`: the clusters and hot spots, the lights' attenuation, range 8 and decay
   1.4, the smoke's bounds holding the book's frame at the widest lean.
+- `test_fire_cue.gd`: `DragRuler.in_fire` inside, outside, the ember band, the map's edge, no
+  fire and no document; the label's cue after its other parts; the field's group.
 - `test_fire_stroke.gd`, `test_map_document_fire.gd`: the Fire tool's history entries and the
   document's `fire.png`; `test_live_map_edits.gd` runs the fire on the worker for host, peer and
   reload. Over ENet: `tests/net/enet_live_edits` compares `plan_digest` on every op and for the
@@ -334,7 +344,8 @@ Render jobs (`tools/render_jobs/JOBS.md`): `firefeat_build`, `firefeat_look` (pr
 sheets, held clock, motion bursts) and `firefeat_cleanup`; `fire_mask` (lay and put out);
 `fire_shards` (debug view 6 the sim bake's albedo tile); `fire_first_burn` (the book's load and
 upload ms); `fire_perf_play`; `fire_smoke_book` (the smoke book's bake); `fire_c7a_aba`,
-`fire_c7a_parts`, `fire_c7a_parts2` and `fire_c7b_glow` (the production timing). Performance:
+`fire_c7a_parts`, `fire_c7a_parts2` and `fire_c7b_glow` (the production timing); `firefeat_cue`
+(the drag ruler's "In fire" in play). Performance:
 [../PERFORMANCE.md](../PERFORMANCE.md) "Fire, production port (C7, 2026-10-18)" times this fire
 (every target met by day; whole night home and third night zoom 20 at the edge, met in the latest
 run and missed in the two before; CPU 0.002 ms; a stroke 1.8-3.6 ms on the main thread); "Fire
