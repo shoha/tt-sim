@@ -33,11 +33,10 @@ extends RefCounted
 ##                         square)
 ##   night_light           the share of its colour the ribbon keeps under no sun (1: all)
 ## An erase ribbon is the same shape with the erase salmon (BrushCursor.CLEAR_TINT, every
-## brush's erase) on its edge, glow and chevrons, each over the erase's ink (the erase ring's,
-## BrushCursor.ring_strokes), and a low wash inside (ERASE_STYLE) that leaves what it erases
-## readable under it, only the wash's tint the tool's own, chosen to part from what it erases.
-## Every colour is a theme role, the erase tint or a tool's tint; only alphas and widths are
-## set here.
+## brush's erase) on its edge and glow over the erase's ink (the erase ring's,
+## BrushCursor.ring_strokes), the lay's chevrons with only their colour salmon, and no wash
+## inside (ERASE_STYLE), so what it erases shows through untouched. Every colour is a theme
+## role, the erase tint or a tool's tint; only alphas and widths are set here.
 
 ## Metres between chevrons along the line, the first half that from the start.
 const ARROW_M := 2.5
@@ -50,9 +49,15 @@ const NIGHT_LIGHT := 0.75
 ## night_light: about 6 degrees below the horizon.
 const DARK_HEIGHT := -0.1
 ## A chevron's width across on screen (px) at which it is drawn at its style's widths: a 1.5 m
-## chevron at zoom 22 in a 720 px window. A larger one scales its strokes with it, so it is one
-## glyph at any zoom (thin strokes on a close erase's chevrons read as hollow outlines, F5f).
+## chevron at zoom 22 (the reference zoom) in a CHEVRON_VIEW_H window. A larger one scales its
+## strokes with it, so it is one glyph at any zoom (thin strokes on a close erase's chevrons read
+## as hollow outlines, F5f).
 const CHEVRON_PX := 44.0
+## The view height CHEVRON_PX is measured in. A chevron is never drawn wider across than
+## CHEVRON_PX times the view's height over this, its look at the reference zoom: closer in, the
+## glyph keeps that size and weight instead of growing (at zoom 8 the scaled glyph was 120 px of
+## 7 px strokes on 12 px of ink, read as road markings, F5g).
+const CHEVRON_VIEW_H := 720.0
 ## Every line tool's look, before its own keys (the class header names them). The edge's ink
 ## at 0.55 (the ring's shadow) keeps the edge a crisp line over the fire's lit rails as over the
 ## river's wash (at 0.3 the fire's edge sank into its rail and glow, F5f).
@@ -80,34 +85,35 @@ const STYLE := {
 	"caps": true,
 	"night_light": NIGHT_LIGHT,
 }
-## An erase's keys over STYLE: the erase salmon on the edge, its glow and the chevrons (the lay's
-## glyph, places and weights), each over the erase's ink, which holds the salmon at 3:1 over
-## bright flames and pale water alike (BrushCursor.ring_strokes, the erase ring's own), and one
-## coverage rule for every erase's interior: a low plain wash, so what goes stays readable under
-## it and the salmon lines say "erase". At about half coverage (F5e) the wash hid the river as a
-## flat dusty rose and greyed the flames under the dark lake to mud, the chevrons sinking into it;
-## at 0.12 to 0.2 the salmon, the water's complement, still turned the river a neutral grey
-## (card F5f).
+## An erase's keys over STYLE: the erase salmon on the edge and its glow over the erase's ink,
+## which holds the salmon at 3:1 over bright flames and pale water alike (BrushCursor
+## .ring_strokes, the erase ring's own); the lay's chevrons, glyph, places, weights and ink, with
+## only their colour salmon; and no wash inside, so what goes shows through untouched and the
+## salmon lines alone say "erase". Any wash shifted what it lay on: at about half coverage (F5e)
+## it hid the river as a flat dusty rose and greyed the flames to mud, and even at 0.08 to 0.14
+## the salmon, the water's complement, pulled the river's blue over red from about 40 to about
+## 20, and the light lake cooled the flames (F5f, F5g).
 const ERASE_STYLE := {
-	"alpha_up": 0.08,
-	"alpha_down": 0.14,
+	"alpha_up": 0.0,
+	"alpha_down": 0.0,
 	"edge": BrushCursor.CLEAR_TINT,
 	"edge_width": BrushCursor.ERASE_LINE_WIDTH,
 	"chevron": BrushCursor.CLEAR_TINT,
 	"shadow_alpha": BrushCursor.ERASE_INK_ALPHA,
 	"shadow_width": BrushCursor.ERASE_INK_WIDTH,
-	"chevron_shadow_alpha": BrushCursor.ERASE_INK_ALPHA,
 }
 
 
-## An erase ribbon's style: ERASE_STYLE with `interior`'s keys (its tint). Pure.
+## An erase ribbon's style: ERASE_STYLE with `interior`'s keys (its tint; a tool that wants a
+## wash back sets its alphas there too). Pure.
 static func erase_style(interior: Dictionary) -> Dictionary:
 	return ERASE_STYLE.merged(interior, true)
 
 
 ## Draws the ribbon of `line` (world XZ; `ground` maps a point to the screen on the ground) at
 ## half-width `radius` in `style` on `cursor`: its lines on the cursor's canvas, its fill on the
-## glow layer, every colour in the scene's light under the published sun and times `strength`.
+## glow layer, every colour in the scene's light under the published sun and times `strength`,
+## its chevrons no larger than the reference zoom's in the canvas's view.
 static func draw(
 	cursor: BrushCursor,
 	ground: Callable,
@@ -117,7 +123,8 @@ static func draw(
 	strength: float = 1.0
 ) -> void:
 	var light := light_of(style, FoliageLight.last_sun)
-	var shape := ribbon(ground, line, radius, style, strength, light)
+	var view_height := cursor.canvas.get_viewport_rect().size.y
+	var shape := ribbon(ground, line, radius, style, strength, light, view_height)
 	draw_shape(cursor.canvas, shape, cursor.glow_item())
 
 
@@ -162,14 +169,16 @@ static func scene_light(sun: Vector4, least: float) -> float:
 ## "lines", [points, colour, width] per polyline in drawing order (the glow, the ink outline,
 ## the edge, then each chevron's outline and chevron; with caps the two edges are one closed
 ## outline, and each cap a fan after the band's triangles), every colour times `strength` and
-## at `light` of itself (alpha kept); {} for a line under two points. Pure but for `ground`.
+## at `light` of itself (alpha kept), the chevrons clamped for a view `view_height` px tall
+## (_chevrons()); {} for a line under two points. Pure but for `ground`.
 static func ribbon(
 	ground: Callable,
 	line: PackedVector2Array,
 	radius: float,
 	style: Dictionary = {},
 	strength: float = 1.0,
-	light: float = 1.0
+	light: float = 1.0,
+	view_height: float = CHEVRON_VIEW_H
 ) -> Dictionary:
 	var n := line.size()
 	if n < 2:
@@ -236,7 +245,7 @@ static func ribbon(
 		lines.append([side, under, look.shadow_width])
 		lines.append([side, _at_alpha(edge, look.edge_alpha * strength), look.edge_width])
 	if look.chevrons:
-		lines.append_array(_chevrons(ground, line, radius, look, strength))
+		lines.append_array(_chevrons(ground, line, radius, look, strength, view_height))
 	var shape := {"points": points, "colors": colors, "indices": indices, "lines": lines}
 	return in_light(shape, light)
 
@@ -308,15 +317,23 @@ static func _dimmed(c: Color, light: float) -> Color:
 
 
 ## The chevrons along `line` every ARROW_M, the first half that from the start, each as its
-## ink outline then itself: ribbon()'s lines, each one's strokes at the style's widths scaled
-## by its size across on screen over CHEVRON_PX (never below 1). Pure but for `ground`.
+## ink outline then itself: ribbon()'s lines. A chevron wider across on screen than its look at
+## the reference zoom (CHEVRON_PX in a CHEVRON_VIEW_H view, scaled to `view_height`) is drawn at
+## that width about the same point; its strokes take the style's widths scaled by its width
+## across over CHEVRON_PX (never below 1). Pure but for `ground`.
 static func _chevrons(
-	ground: Callable, line: PackedVector2Array, radius: float, look: Dictionary, strength: float
+	ground: Callable,
+	line: PackedVector2Array,
+	radius: float,
+	look: Dictionary,
+	strength: float,
+	view_height: float
 ) -> Array:
 	var lines: Array = []
 	var under := _at_alpha(look.shadow, look.chevron_shadow_alpha * strength)
 	var over := _at_alpha(look.chevron, look.chevron_alpha * strength)
 	var size := minf(radius, 1.5)
+	var widest := CHEVRON_PX * view_height / CHEVRON_VIEW_H
 	var next := ARROW_M * 0.5
 	var walked := 0.0
 	for i in line.size() - 1:
@@ -324,15 +341,25 @@ static func _chevrons(
 		var tangent := (line[i + 1] - line[i]) / maxf(length, 0.0001)
 		while next <= walked + length:
 			var at := line[i] + tangent * (next - walked)
-			var arrow := PackedVector2Array()
-			for p in chevron(at, tangent, size):
-				arrow.append(ground.call(p))
-			var scale := maxf(1.0, arrow[0].distance_to(arrow[2]) / CHEVRON_PX)
+			var arrow := _on_screen(ground, chevron(at, tangent, size))
+			var across := arrow[0].distance_to(arrow[2])
+			if across > widest:
+				arrow = _on_screen(ground, chevron(at, tangent, size * widest / across))
+				across = arrow[0].distance_to(arrow[2])
+			var scale := maxf(1.0, across / CHEVRON_PX)
 			lines.append([arrow, under, float(look.chevron_shadow_width) * scale])
 			lines.append([arrow, over, float(look.chevron_width) * scale])
 			next += ARROW_M
 		walked += length
 	return lines
+
+
+## `world` (XZ points) through `ground` to the screen.
+static func _on_screen(ground: Callable, world: PackedVector2Array) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for p in world:
+		out.append(ground.call(p))
+	return out
 
 
 ## The band's two sides and its caps' arcs (_with_caps()) as one closed outline: the left side,

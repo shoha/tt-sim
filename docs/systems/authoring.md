@@ -202,7 +202,9 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   release does is each mode's own (`WaterBrush.carve`, `FireBrush.lay_line`). `LineRibbon`
   (`line_ribbon.gd`) is the preview: a band at the line's width with round caps, one closed
   edge (2.5 px) over an ink outline on a soft glow, chalk chevrons on ink every 2.5 m (one
-  glyph at any zoom: their strokes scale with their size on screen), the fill
+  glyph at any zoom: their strokes scale with their size on screen, and closer in than the
+  reference zoom 22 a chevron keeps that zoom's size and weight, `LineRibbon.CHEVRON_PX` across
+  in a 720 px view, scaled to the view's height, F5g), the fill
   on the cursor's premultiplied glow layer (`BrushCursor.glow_item`, `LineRibbon.lit_fill`),
   every colour in the scene's light (0.75 of itself under a sun 6 degrees or more below the
   horizon, full from the horizon up). A tool passes only a style, as data over
@@ -213,12 +215,12 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   orange stays solid and the ground shows unmixed down the middle (orange at partial coverage
   over green turns olive, so the half-covered fall is a thin seam; card F5d's variant C, F5f).
   The two erase ribbons share `LineRibbon.erase_style`: the erase salmon
-  (`BrushCursor.CLEAR_TINT`) on the edge, glow and chevrons, each over the erase's ink (INK at
-  0.85, the erase ring's own, `BrushCursor.ring_strokes`, so every erase line holds 3:1 over
-  pale water and bright flames), and one low wash (0.08 to 0.14) that leaves what goes readable
-  under it, only its tint parting from what it erases (a water erase's touched reaches: salmon
-  over the cool water; Fire's put-out line: the light lake over the warm flames; a wash at
-  half coverage hid the water and greyed the flames to mud, F5f). The pane's Shape tiles
+  (`BrushCursor.CLEAR_TINT`) on the edge and glow over the erase's ink (INK at 0.85, the erase
+  ring's own, `BrushCursor.ring_strokes`, so every erase line holds 3:1 over pale water and
+  bright flames), the lay's chevrons exactly (glyph, weights, ink) with only their colour
+  salmon, and no wash, so what goes shows through untouched (a wash at half coverage hid the
+  water and greyed the flames to mud, F5f; even at 0.08 to 0.14 a salmon wash pulled the river's
+  blue toward grey and the light lake cooled the flames, F5g). The pane's Shape tiles
   (`ShapeField`), their icons and the hint
   bar's keys ("Draw a river" / "Draw a line of fire", Tab naming the other shape, Width) read
   alike. Comparison job: `firefeat_line_tool`.

@@ -19,9 +19,9 @@ extends BrushMode
 ## inside a pond extends it) whose dabs BrushTool paints like the Biome brush's, the dab growing
 ## with dwell (POND_DWELL_GROW); the painted dabs preview its area. Ctrl at the press (either
 ## tile): an erase stroke, whose touched river reaches are previewed (they go whole) as the line
-## tool's erase ribbon (LineRibbon.erase_style: salmon edge and chevrons on ink) over a low
-## salmon wash (ERASE_INTERIOR), warm against the cool water it removes, which shows through,
-## and the chip reads "Erase water  40 ft", the length of those reaches.
+## tool's erase ribbon (LineRibbon.erase_style: salmon edge and chevrons on ink, no wash), the
+## water it removes showing through untouched, and the chip reads "Erase water  40 ft", the
+## length of those reaches.
 ## The width is the brush size, never below the depth class's narrowest channel
 ## (radius_for()). A river may be drawn on past the map edge (P6-1): where the pointer leaves
 ## the ground there (the skirt has no collision), it meets the level of the last ground the
@@ -43,8 +43,8 @@ const POND_DWELL_GROW := 0.35
 ## as water over any ground, where the fire's orange greyed to olive, and the even band shows the
 ## channel the carve will dig.
 const RIBBON_STYLE := {"tint": TINT}
-## An erase's interior (LineRibbon.erase_style, at the erase's low wash): the erase salmon, warm
-## over the cool water it removes, which stays readable under it.
+## An erase's interior (LineRibbon.erase_style): the erase salmon, the tint a wash would take.
+## The erase has none: even a low salmon wash, the water's complement, greyed the river (F5g).
 const ERASE_INTERIOR := {"tint": BrushCursor.CLEAR_TINT}
 ## The erase's chip: "Erase water", with the length of the rivers it will remove while a stroke
 ## touches any ("Erase water  40 ft", the line tool's erase pattern, as "Put out fire  40 ft").

@@ -25,9 +25,9 @@ extends BrushMode
 ## stroke. Ctrl at the press puts fire out instead (the area, or along the line), leaving its
 ## ash and snags. The ring is ember orange, the erase salmon (BrushCursor.CLEAR_TINT, every
 ## brush's erase) to put out; the put-out line's ribbon is the line tool's erase
-## (LineRibbon.erase_style: the salmon edge and chevrons on ink, a low wash) in a light lake
-## (put_out_tint), through which the flames it is drawn on keep their colour. Every colour is a
-## theme role or the erase tint; only alphas are set here.
+## (LineRibbon.erase_style: the salmon edge and chevrons on ink, no wash), through which the
+## flames it is drawn on keep their colour. Every colour is a theme role or the erase tint; only
+## alphas are set here.
 
 enum Shape { LINE, AREA }
 
@@ -66,11 +66,12 @@ const LAY_STYLE := {
 	"fill_profile": [[1.0, 1.0], [0.62, 0.78], [0.54, 0.03], [0.0, 0.0]],
 	"glow": ThemeColors.EMBER,
 }
-## Putting out along a line: the line tool's erase (the salmon lines on ink, a low wash) over a
-## light lake, water on fire, so the flames' own colour comes through the wash and the salmon
-## lines say what goes. The dark lake at half coverage mixed with the orange flames to a neutral
-## grey and left them ghosts (card F5f); an ash plum-grey (PAPER_TRACK) leaned into the flames'
-## pinks (card F5c).
+## Putting out along a line: the line tool's erase (the salmon lines on ink, no wash), the
+## flames showing through in their own colour and the salmon lines saying what goes. The tint is
+## a light lake, water on fire, the one a wash would take: the dark lake at half coverage mixed
+## with the orange flames to a neutral grey and left them ghosts (card F5f), an ash plum-grey
+## (PAPER_TRACK) leaned into the flames' pinks (card F5c), and even the light lake at 0.08 to
+## 0.14 cooled them, so the erase has none (F5g).
 const PUT_OUT_TINT := ThemeColors.LAKE_LIGHT
 const PUT_OUT_INTERIOR := {"tint": PUT_OUT_TINT}
 
