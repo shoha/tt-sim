@@ -332,9 +332,36 @@ func test_the_presets_stand_above_the_brushes_and_lead_their_hints() -> void:
 	var ignite := PlayEvents.hints_for(EventPresets.IGNITE)
 	assert_lte(ignite.size(), 5, "one line beside Help")
 	assert_eq(ignite[0], {"key": "Click", "action": "Start a fire"})
-	assert_eq(ignite[1], {"key": "Drag", "action": "Wider fire"})
-	assert_eq(ignite[-3]["key"], PlayEvents.SIZE_KEY, "the fire's ring has a size")
+	assert_eq(ignite[1], {"key": "Tab", "action": "Path"}, "Tab names the shape it switches to")
+	assert_eq(ignite[2], {"key": "Drag", "action": "Wider fire"}, "the drag widens the ring")
 	assert_eq(ignite[-1], {"key": "Esc", "action": "Put away"})
+	var path := PlayEvents.hints_for(EventPresets.IGNITE, HeightBrush.RAISE, IgniteMode.Shape.PATH)
+	assert_lte(path.size(), 5, "one line beside Help")
+	assert_eq(path[0], {"key": "Left-drag", "action": "Draw a fire path"})
+	assert_eq(path[1], {"key": "Tab", "action": "Circle"})
+	assert_eq(path[2], {"key": PlayEvents.SIZE_KEY, "action": "Width"}, "a path has a width")
+	assert_eq(path[-1], {"key": "Esc", "action": "Put away"})
+	# Its Shape field: Path first (the line tools' icon), Circle picked; a pick says which, and
+	# Advanced reads Width for a path (its half-width, 1-6 m) and Size for the ring.
+	var field := pane.ignite_shape_field
+	assert_eq(field.caption, ShapeField.CAPTION, "the one Shape field")
+	assert_true(field.tiles.has_tile(&"ignite_path") and field.tiles.has_tile(&"ignite_circle"))
+	assert_eq(field.tiles.selected, &"ignite_circle", "Circle by default")
+	var shapes := []
+	pane.ignite_shape_selected.connect(func(shape: int) -> void: shapes.append(shape))
+	pane.call("_on_ignite_shape_tile", &"ignite_path")
+	assert_eq(shapes, [IgniteMode.Shape.PATH])
+	pane.show_tool(EventPresets.IGNITE)
+	var size_row := pane.find_child("EventsBrushSize", true, false) as PropertyRow
+	assert_eq(size_row.label, "Width")
+	assert_eq([size_row.min_value, size_row.max_value], [1.0, 6.0], "the path's half-width")
+	pane.select_ignite_shape(IgniteMode.Shape.CIRCLE)
+	assert_eq(field.tiles.selected, &"ignite_circle")
+	assert_eq(size_row.label, "Size", "the ring's size")
+	assert_eq(shapes.size(), 1, "a select is silent")
+	pane.select_ignite_shape(IgniteMode.Shape.PATH)
+	pane.show_tool(EventPresets.TOPPLE)
+	assert_eq(size_row.label, "Size", "Topple's ring")
 	# Off a forest the ring says so in chalk, not the "do" ochre.
 	assert_eq(IgniteMode.ring_look(true), {"tint": ToppleMode.TINT, "text": "Start a fire"})
 	assert_eq(

@@ -147,13 +147,17 @@ void fragment() {
 		discard;
 	}
 	// Metres behind the front (above 0 burnt): the lobed reach, ragged. Along a path, behind the
-	// front along the line and inside its half-width, whichever is nearer its edge.
+	// front along the line (b_front, which alone carries the hot band and the cooling behind it,
+	// so the band runs with the front instead of lining both sides like lava banks) and inside
+	// the half-width, whichever is nearer its edge (b: the char and the dry edge).
 	float wobble = lobe_m * (lobes(p) - 0.5);
-	float behind_front = front - (length(p) - wobble);
+	float rag = (glow_noise(p / RAG_BLOB_M + lobe_offset * 3.0) - 0.5) * RAG_M;
+	float b_front = front - (length(p) - wobble) + rag;
+	float b = b_front;
 	if (path_count > 1) {
-		behind_front = min(front - (on_line.x - wobble), path_width * 1.05 - (on_line.y - wobble));
+		b_front = front - (on_line.x - wobble) + rag;
+		b = min(b_front, path_width * 1.05 - (on_line.y - wobble) + rag);
 	}
-	float b = behind_front + (glow_noise(p / RAG_BLOB_M + lobe_offset * 3.0) - 0.5) * RAG_M;
 	vec3 ground = texture(screen_texture, SCREEN_UV).rgb;
 	float luma = dot(ground, LUMA);
 
@@ -179,8 +183,10 @@ void fragment() {
 	float clock = elapsed;
 	float width = HOT_M * (0.45 + 1.1 * glow_cloud(p * 0.5 + lobe_offset + vec2(clock * 0.35, 0.0)));
 	float whole = tone(GAPS, glow_cloud(p * 0.38 + lobe_offset * 2.0 - vec2(0.0, clock * 0.3)));
-	float x = b / width;
-	float on_band = step(0.0, x) * (1.0 - tone(0.92, x)) * whole;
+	float x = b_front / width;
+	// Along a path only inside the half-width (a circle's band is its front, b itself).
+	float inside = path_count > 1 ? step(0.0, b) : 1.0;
+	float on_band = step(0.0, x) * (1.0 - tone(0.92, x)) * whole * inside;
 	float hottest = tone(0.55, glow_cloud(p * 0.9 + lobe_offset * 9.0 + vec2(0.0, clock * 0.5)));
 	vec3 bands = mix(HOT_RED, HOT_ORANGE, tone(0.3, x));
 	bands = mix(bands, HOT_GOLD, tone(0.55, x) * hottest);
@@ -189,7 +195,7 @@ void fragment() {
 	// Behind it: a deep red smoulder in broad patches, and glowing specks of two sizes (fewer
 	// of the large, so they read as embers rather than confetti) that pulse; both cool as the
 	// front leaves them.
-	float behind = max(b - width, 0.0);
+	float behind = max(b_front - width, 0.0);
 	float off_band = burnt * (1.0 - on_band);
 	float smoulder = tone(0.5, glow_cloud(p * 0.7 + lobe_offset * 8.0 + vec2(clock * 0.1)));
 	hot += HOT_RED * SMOULDER * smoulder * exp(-behind / SMOULDER_FADE_M) * off_band;

@@ -357,6 +357,85 @@ func test_both_line_tools_share_the_gesture() -> void:
 	BrushTool.session_radius = radius_was
 
 
+## Start a fire's Path is the third line tool (card F6): its ribbon is the fire line's key for
+## key but the hue (Start a fire's ochre on its ring's light ochre; chalk_soft over a stretch
+## with no forest), its hint keys read as the line tools', and it records through the same
+## gesture: "Fire along a path" at rest, Esc drops the line and stays armed, a release under
+## the minimum says "Draw the fire's path", one with no forest along it fires nothing.
+func test_start_a_fire_path_is_the_third_line_tool() -> void:
+	var tint_keys: Array = []
+	tint_keys.append_array(LineRibbon.TINT_KEYS)
+	tint_keys.sort()
+	for fill: String in LineRibbon.FILLS:
+		var fire := FireBrush.new()
+		var path := IgniteMode.new()
+		fire.fill = fill
+		path.fill = fill
+		assert_eq(_differing(fire.lay_style(), path.lay_style()), tint_keys, "the hue (%s)" % fill)
+		assert_eq(_differing(fire.lay_style(), path.lay_style(false)), tint_keys, "no forest too")
+	assert_eq(IgniteMode.new().fill, LineRibbon.FILL, "the rails by default")
+	assert_eq(IgniteMode.PATH_HUE.glow, ToppleMode.TINT, "on its ring's colour")
+	assert_eq(IgniteMode.REFUSED_HUE.tint, CollapseMode.REFUSED_TINT, "the refused ring's chalk")
+	var line := PlayEvents.hints_for(FireTool.ID, HeightBrush.RAISE, FireBrush.Shape.LINE)
+	var hints := PlayEvents.hints_for(EventPresets.IGNITE, HeightBrush.RAISE, IgniteMode.Shape.PATH)
+	assert_eq(hints.size(), line.size())
+	assert_eq(hints[0], {"key": line[0].key, "action": "Draw a fire path"}, "the drag: Draw a ...")
+	assert_eq(hints[1], {"key": line[1].key, "action": "Circle"}, "Tab names the other shape")
+	assert_eq(hints[2], line[2], "the same size key, Width")
+	# Only its two own ends are round: a stretch cut at a span's edge joins with no edge across.
+	var open := LineRibbon.ribbon(_ground(), _line(), 1.0, {"cap_end": false})
+	var outline: PackedVector2Array = open.lines[0][0]
+	assert_ne(outline[0], outline[-1], "open where it is cut")
+	var sides := 2 * _line().size()
+	assert_eq(outline.size(), sides + LineRibbon.CAP_SEGMENTS - 1, "round only at its start")
+	var cut := LineRibbon.ribbon(_ground(), _line(), 1.0, {"cap_start": false, "cap_end": false})
+	assert_eq(cut.lines.size(), 3 * 2 + 2 * 3, "both sides apart, uncapped")
+	var editor := _editor()
+	var radius_was := BrushTool.session_radius
+	var brush := BrushTool.new()
+	add_child_autofree(brush)
+	brush.editor = editor
+	brush.use_tool(EventPresets.find(EventPresets.IGNITE))
+	brush.set_radius(RADIUS)
+	brush.unit_cell_m = 1.0
+	brush.unit_per_cell = 1.0
+	brush.unit_label = "m"
+	var mode := brush.mode as IgniteMode
+	assert_eq(mode.shape, IgniteMode.Shape.CIRCLE, "Circle by default")
+	assert_true(mode.has_shapes(), "Tab is the brush's")
+	assert_true(mode.toggle_shape(brush))
+	assert_eq(mode.cursor_text(brush), IgniteMode.PATH_TEXT, "at rest")
+	assert_eq(mode.stroke_radius(brush), RADIUS, "the ring at the half-width")
+	var refused := []
+	brush.refused.connect(func(why: String) -> void: refused.append(why))
+	var fired := []
+	mode.fired.connect(func(event: TerrainEvent) -> void: fired.append(event))
+	_draw(brush, 13)
+	assert_true(mode.gesture.drawing)
+	assert_eq(mode.cursor_text(brush), IgniteMode.NOT_A_FOREST, "no forest along it")
+	brush.cancel_gesture()
+	assert_false(mode.gesture.drawing, "Esc drops the line")
+	assert_eq(brush.mode, mode, "and the preset stays armed")
+	assert_eq(refused, [], "dropping says nothing")
+	_draw(brush, 2)
+	brush.finish_gesture()
+	assert_eq(refused, [IgniteMode.DRAW_PATH], "a 1 m line")
+	_draw(brush, 13)
+	brush.finish_gesture()
+	assert_eq(refused, [IgniteMode.DRAW_PATH, TerrainEvents.NO_FOREST_PATH], "no forest")
+	assert_eq(fired.size(), 0, "nothing fired")
+	brush.set_radius(10.0)
+	assert_eq(mode.path_radius(brush), TerrainEvent.MAX_PATH_RADIUS_M, "at most 6 m either side")
+	BrushTool.session_radius = radius_was
+	assert_eq(IgniteMode.path_chip(12.2, false, true), "Fire along a path  12 m", "while drawn")
+	assert_eq(IgniteMode.path_chip(0.0, false, false), IgniteMode.PATH_TEXT, "at rest")
+	assert_eq(IgniteMode.path_chip(64.0, true, true), IgniteMode.LONGEST_TEXT, "at the cap")
+	var long := IgniteMode.event_line(PackedVector2Array([Vector2.ZERO, Vector2(100, 0)]))
+	assert_almost_eq(StrokePath.line_length(long), TerrainEvent.MAX_PATH_LENGTH_M, 0.01)
+	assert_lte(long.size(), TerrainEvent.MAX_PATH_POINTS)
+	assert_not_null(TerrainEvent.decode(TerrainEvent.fire_path(long, 2.0, 1).encode()))
+
+
 func _editor() -> AuthoringEditor:
 	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass_birch", "v", 11)
 	var root := MapSourceLoader.create_authored_root(doc)
