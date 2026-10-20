@@ -220,9 +220,11 @@ jobs:
           name: TTSim-Windows
           path: artifacts/windows
 
-      # The exe and the native scatter DLL beside it (files-folder is not searched
-      # recursively; the export puts both at its top).
-      - name: Sign executable and native library
+      # The exe (by the folder filter; the folder is not searched recursively and the export
+      # puts everything at its top), then by name the native scatter library and the GodotSteam
+      # addon's DLL. Valve's steam_api64.dll is left alone: it ships with Valve's signature,
+      # which a dll filter would replace with ours (it did in run 39495944613).
+      - name: Sign executable and our libraries
         uses: azure/artifact-signing-action@v1
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -232,7 +234,10 @@ jobs:
           signing-account-name: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT }}
           certificate-profile-name: ${{ secrets.ARTIFACT_SIGNING_CERT_PROFILE }}
           files-folder: ${{ github.workspace }}/artifacts/windows
-          files-folder-filter: exe,dll
+          files-folder-filter: exe
+          files: |
+            ${{ github.workspace }}/artifacts/windows/libttscatter.windows.template_release.x86_64.dll
+            ${{ github.workspace }}/artifacts/windows/libgodotsteam.windows.template_release.x86_64.dll
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
