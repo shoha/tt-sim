@@ -1801,8 +1801,13 @@ brush scheduler, so both build identical nodes.
   applied only where nobody has requested since; a dropped job's species stay dirty for the
   next one. A stroke's live requests also get lead jobs (the non-ground species only, whose
   rows equal the full job's) shown provisionally while the brush is down; the full job still
-  decides the final rows (`docs/systems/scatter.md`). `rows_by_asset()` returns the current
-  rows for saving.
+  decides the final rows (`docs/systems/scatter.md`). Where jobs run natively a lead job is
+  whole (every dirty species, ground cover included, and so the cell's full job, only
+  protected; card native-cover). Finished jobs land through `ScatterApply`
+  (`utils/scatter_apply.gd`): a cell lands only its newest waiting result, nearest the brush
+  first, within a per-frame rebuild budget (2 ms, at least one a frame), and provisional
+  landings that change nothing are skipped; a rebuild leaves unchanged assets alone and merges
+  an asset's finished grow-ins together. `rows_by_asset()` returns the current rows for saving.
 
 ### Level Flow
 
