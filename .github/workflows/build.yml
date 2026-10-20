@@ -14,8 +14,21 @@ env:
   PROJECT_NAME: "TTSim"
 
 jobs:
+  # The native scatter library for every platform, debug and release (native.yml), then its
+  # parity with GDScript on Windows and macOS (native-parity.yml) beside the test job, which
+  # checks Linux's. The exports ship the release libraries.
+  native:
+    name: Native
+    uses: ./.github/workflows/native.yml
+
+  native-parity:
+    name: Native parity
+    needs: native
+    uses: ./.github/workflows/native-parity.yml
+
   test:
     name: Run tests and lint
+    needs: native
     runs-on: ubuntu-latest
     container:
       image: barichello/godot-ci:4.7.2
@@ -42,24 +55,52 @@ jobs:
       - name: Pull LFS objects
         run: git lfs pull
 
+      - name: Download native libraries
+        uses: actions/download-artifact@v7
+        with:
+          pattern: native-linux-*
+          path: native
+          merge-multiple: true
+
+      - name: Install tools
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq binutils python3-pip
+          pip install --break-system-packages gdtoolkit
+
+      # The library must not need a newer glibc than the game's own Linux binary.
+      - name: Check the native library's glibc against the export template
+        shell: bash
+        run: |
+          for target in debug release; do
+            bash .github/native/check_glibc.sh native/bin/libttscatter.linux.template_$target.x86_64.so \
+              /root/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/linux_$target.x86_64
+          done
+
       - name: Import project
         run: godot --headless --import
 
-      - name: Run unit tests
-        run: godot --headless --path . --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json
+      # Linux's parity: the release library here, the debug one in the full run below
+      # (test_scatter_native), which must not show it pending.
+      - name: Native parity, release library
+        shell: bash
+        run: PARITY_TARGETS=template_release bash .github/native/parity.sh godot
 
-      - name: Install gdtoolkit
+      - name: Run unit tests
+        shell: bash
         run: |
-          apt-get update -qq
-          apt-get install -y -qq python3-pip
-          pip install --break-system-packages gdtoolkit
+          godot --headless --path . --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json 2>&1 | tee gut.log
+          if grep -q 'the native library is not built' gut.log; then
+            echo "::error::the native library did not load"
+            exit 1
+          fi
 
       - name: Lint GDScript
         run: gdlint autoloads/ scenes/ utils/ resources/ tests/unit/
 
   export:
     name: Export ${{ matrix.preset }}
-    needs: test
+    needs: [test, native-parity]
     runs-on: ubuntu-latest
     container:
       image: barichello/godot-ci:4.7.2
@@ -97,6 +138,16 @@ jobs:
 
       - name: Pull LFS objects
         run: git lfs pull
+
+      # Every platform's library: the export copies the preset's release library beside the
+      # binary (Windows, Linux) or into Contents/Frameworks (macOS); the debug ones let the
+      # import load the extension.
+      - name: Download native libraries
+        uses: actions/download-artifact@v7
+        with:
+          pattern: native-*
+          path: native
+          merge-multiple: true
 
       - name: Setup export templates
         run: |
@@ -169,7 +220,9 @@ jobs:
           name: TTSim-Windows
           path: artifacts/windows
 
-      - name: Sign executable
+      # The exe and the native scatter DLL beside it (files-folder is not searched
+      # recursively; the export puts both at its top).
+      - name: Sign executable and native library
         uses: azure/artifact-signing-action@v1
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -179,7 +232,7 @@ jobs:
           signing-account-name: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT }}
           certificate-profile-name: ${{ secrets.ARTIFACT_SIGNING_CERT_PROFILE }}
           files-folder: ${{ github.workspace }}/artifacts/windows
-          files-folder-filter: exe
+          files-folder-filter: exe,dll
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
@@ -241,7 +294,8 @@ jobs:
         run: |
           APP="artifacts/macos/TTSim.app"
 
-          # Sign all framework dylibs first (innermost before outermost)
+          # Sign all framework dylibs first (innermost before outermost): the export puts the
+          # native scatter library (libttscatter.macos.template_release.dylib) here.
           for dylib in "$APP"/Contents/Frameworks/*.dylib; do
             [ -f "$dylib" ] || continue
             codesign --force --sign "$MACOS_CERTIFICATE_NAME" \
@@ -262,7 +316,8 @@ jobs:
             --entitlements build/macos/entitlements.plist \
             "$APP"
 
-          codesign --verify --verbose "$APP"
+          # --deep only to verify: it checks the nested dylibs' signatures too.
+          codesign --verify --deep --strict --verbose=2 "$APP"
 
       - name: Create zip for notarization
         run: ditto -c -k --keepParent artifacts/macos/TTSim.app artifacts/macos/TTSim-notarize.zip
