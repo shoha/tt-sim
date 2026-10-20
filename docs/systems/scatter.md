@@ -81,7 +81,22 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
 Brushes call `attach_document()` + `request_region(rect)`, which regenerates the touched cells
 plus the relation halo on `WorkerThreadPool` via `ScatterRegen` (latest request wins per cell)
 and grows new instances in (the `grow` instance uniform in every wind shader variant). Removed
-scatter shrinks out ([authoring.md](authoring.md)).
+scatter shrinks out ([authoring.md](authoring.md)), including rows a later apply drops while
+they are still growing in (from the size they reached).
+
+A biome stroke's frames are live requests (`request_region(rect, true)`, from
+`AuthoringEditor.flush()`). Under latest-wins alone nothing under a brush that is still down
+ever lands, so a live cell also gets lead jobs: its dirty work restricted to the species
+outside the ground class. Species resolve large to ground and only look at earlier ones, so a
+lead job's rows are exactly what the full job gives them, at a few ms per species where a
+painted cell's ground cover costs hundreds. Lead results show provisionally (never current,
+never cancelled; one out per cell, at most one per 100 ms, only while requests keep coming),
+and the cell's full job still lands under latest-wins, so the final rows are unchanged. Trees,
+shrubs and rocks appear about 0.2-0.4 s after the press; the ground cover follows with the full
+job after the brush lifts or moves on. Other callers (undo, live edits, sculpt, crossings, fire)
+send ordinary requests and keep latest-wins alone. `AuthoredScatter.live_applies` turns it off
+for measurement. Card brush-latency, numbers in [PERFORMANCE.md](../PERFORMANCE.md) "Brush
+latency".
 
 ## Verification
 

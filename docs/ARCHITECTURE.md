@@ -1789,7 +1789,10 @@ brush scheduler, so both build identical nodes.
   tree or shrub row is generated ("Rocks survive terrain changes" under Authoring Flow).
   Latest wins per cell: every request bumps the cells' generations and a finished job is
   applied only where nobody has requested since; a dropped job's species stay dirty for the
-  next one. `rows_by_asset()` returns the current rows for saving.
+  next one. A stroke's live requests also get lead jobs (the non-ground species only, whose
+  rows equal the full job's) shown provisionally while the brush is down; the full job still
+  decides the final rows (`docs/systems/scatter.md`). `rows_by_asset()` returns the current
+  rows for saving.
 
 ### Level Flow
 
