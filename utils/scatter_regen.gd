@@ -37,6 +37,17 @@ extends RefCounted
 ## flight, something newer than its rows on screen is owed, and it has shown nothing for
 ## LIVE_INTERVAL_MSEC. The final rows do not change: a lead result clears no dirty state, so the
 ## last full job replaces every asset a lead job did, from the document as the stroke left it.
+##
+## Whole leads (native-cover, 2026-10-20). Where jobs run natively a painted cell's whole job
+## costs about 20 ms, so the ground-class restriction has no reason left: with `whole_leads` a
+## lead job carries every dirty species, and so is the cell's full job, only protected. The
+## cell's pending entry goes with it; a lead that lands current (no request since it was taken)
+## is accepted like any job, and one that lands stale shows provisionally as before. While the
+## brush is on a cell (live_hold_msec) the cell gets lead jobs only, one out at a time, so a held
+## brush never spends a worker on a full job the next frame's request would make stale; once it
+## lifts or moves on, latest-wins takes over. The ground cover then grows in under the brush,
+## raised a little at every landing as the stroke raises the density. The GDScript path keeps
+## the restricted lead jobs (a painted cell's ground cover costs about 750 ms there).
 
 ## Cells per job. One: one cell per job lets the pool run a dab's cells in parallel instead
 ## of in series (a painted cell under a dab takes 250 to 800 ms on a worker, its relation halo
@@ -54,6 +65,12 @@ const _NEVER := -1_000_000_000
 var map_seed: int = 0
 ## The map rectangle in world XZ; nothing outside it is regenerated.
 var bounds: Rect2 = Rect2()
+## Lead jobs carry every dirty species and stand as the cell's full job (see the header). Set by
+## AuthoredScatter where jobs run natively; off, lead jobs leave the ground class out.
+var whole_leads: bool = false
+## The live throttle (see the header), variables so a measurement can sweep them.
+var live_interval_msec: int = LIVE_INTERVAL_MSEC
+var live_hold_msec: int = LIVE_HOLD_MSEC
 ## The document's sample step (the larger axis); the bilinear lookup reaches this far.
 var sample_step: float = 0.25
 ## Palette surfaces with role "built" (read on the main thread): painted ones clear the
@@ -188,7 +205,10 @@ func pending_count() -> int:
 ## PackedStringArray asset ids whose rows the job replaces}, "work": {biome id:
 ## {"species", "cells_by_species", "window"}}}. The work part is plain data for run(). A
 ## live cell due a lead job (see the header) at `now_msec` (default: now) gets one first: the
-## same form for that one cell with "lead": true, its lead species only, the cell left pending.
+## same form for that one cell with "lead": true, its lead species only, the cell left pending;
+## with whole_leads every dirty species, "whole": true, and the cell taken off pending. With
+## whole_leads a cell the brush is still on gets no other job, so this can return {} while cells
+## are pending.
 func take_job(max_cells: int = DEFAULT_CELLS_PER_JOB, now_msec: int = -1) -> Dictionary:
 	if _pending.is_empty():
 		return {}
@@ -197,12 +217,18 @@ func take_job(max_cells: int = DEFAULT_CELLS_PER_JOB, now_msec: int = -1) -> Dic
 		if _due_lead(cell, now):
 			_lead_out[cell] = true
 			var one: Array[Vector2i] = [cell]
+			if whole_leads:
+				_pending.erase(cell)
 			return _job(one, true)
 	var cells: Array[Vector2i] = []
 	for cell in _pending:
 		if cells.size() >= maxi(max_cells, 1):
 			break
+		if whole_leads and _held(cell, now):
+			continue
 		cells.append(cell)
+	if cells.is_empty():
+		return {}
 	for cell in cells:
 		_pending.erase(cell)
 	return _job(cells, false)
@@ -210,10 +236,10 @@ func take_job(max_cells: int = DEFAULT_CELLS_PER_JOB, now_msec: int = -1) -> Dic
 
 ## The cells of a finished `job` that are still current (no request touched them since
 ## the job was taken), clearing their dirty and live state. The rest are dropped. A lead job
-## is never current (provisional() shows it).
+## is never current (provisional() shows it) unless it is whole.
 func accept(job: Dictionary, now_msec: int = -1) -> Array[Vector2i]:
 	var current: Array[Vector2i] = []
-	if job.get("lead", false):
+	if job.get("lead", false) and not job.get("whole", false):
 		return current
 	var now := _now(now_msec)
 	for cell in job.get("cells", []):
@@ -229,7 +255,8 @@ func accept(job: Dictionary, now_msec: int = -1) -> Array[Vector2i]:
 
 ## The cells of a finished lead `job` that show its rows until their full job lands: still
 ## live, and showing nothing as new. Their dirty state stays, so the full job still replaces
-## every asset this one did. Empty for a job that is not a lead job.
+## every asset this one did. Empty for a job that is not a lead job. Call it after accept(): a
+## whole lead's current cells were accepted there and show nothing newer here.
 func provisional(job: Dictionary, now_msec: int = -1) -> Array[Vector2i]:
 	var shown: Array[Vector2i] = []
 	if not job.get("lead", false):
@@ -273,16 +300,16 @@ func cancel_stale(entries: Array[Dictionary]) -> void:
 ## out, something newer than its rows on screen owed, nothing shown for LIVE_INTERVAL_MSEC, and
 ## a lead species dirty there.
 func _due_lead(cell: Vector2i, now: int) -> bool:
-	if not _live.has(cell) or _lead_out.has(cell):
-		return false
-	if now - _requested_msec.get(cell, _NEVER) >= LIVE_HOLD_MSEC:
+	if _lead_out.has(cell) or not _held(cell, now):
 		return false
 	if _shown_generation.get(cell, -1) >= _generation.get(cell, 0):
 		return false
-	if now - _shown_msec.get(cell, _NEVER) < LIVE_INTERVAL_MSEC:
+	if now - _shown_msec.get(cell, _NEVER) < live_interval_msec:
 		return false
 	var per_biome: Dictionary = _dirty.get(cell, {})
 	for biome_id in per_biome:
+		if whole_leads and not (per_biome[biome_id] as Dictionary).is_empty():
+			return true
 		var lead: Dictionary = _biomes[biome_id].lead
 		for s in per_biome[biome_id]:
 			if lead.has(s):
@@ -290,8 +317,15 @@ func _due_lead(cell: Vector2i, now: int) -> bool:
 	return false
 
 
-## A job for `cells` (take_job's form): every dirty species, or with `lead` the lead ones.
+## True while the brush is on live `cell`: a live request touched it within live_hold_msec.
+func _held(cell: Vector2i, now: int) -> bool:
+	return _live.has(cell) and now - _requested_msec.get(cell, _NEVER) < live_hold_msec
+
+
+## A job for `cells` (take_job's form): every dirty species, or with `lead` the lead ones (all of
+## them with whole_leads).
 func _job(cells: Array[Vector2i], lead: bool) -> Dictionary:
+	var restricted := lead and not whole_leads
 	var generations := {}
 	var regenerated := {}
 	var work := {}
@@ -302,7 +336,7 @@ func _job(cells: Array[Vector2i], lead: bool) -> Dictionary:
 		for biome_id in per_biome:
 			var info: Dictionary = _biomes[biome_id]
 			for s in per_biome[biome_id]:
-				if lead and not info.lead.has(s):
+				if restricted and not info.lead.has(s):
 					continue
 				if not work.has(biome_id):
 					work[biome_id] = _new_work(info)
@@ -320,6 +354,8 @@ func _job(cells: Array[Vector2i], lead: bool) -> Dictionary:
 	var job := {"cells": cells, "generations": generations, "regenerated": regenerated, "work": work}
 	if lead:
 		job["lead"] = true
+		if whole_leads:
+			job["whole"] = true
 	return job
 
 

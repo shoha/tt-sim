@@ -99,6 +99,18 @@ send ordinary requests and keep latest-wins alone. `AuthoredScatter.live_applies
 for measurement. Card brush-latency, numbers in [PERFORMANCE.md](../PERFORMANCE.md) "Brush
 latency".
 
+Where jobs run natively (below), a painted cell's whole job costs about 20 ms, so lead jobs are
+whole (`ScatterRegen.whole_leads`, set by `AuthoredScatter.attach_document` from
+`ScatterNative.active()`; card native-cover): a lead job carries every dirty species, ground
+cover included, and is the cell's full job, only protected. It takes the cell off pending, is
+accepted when it lands current and shows provisionally when stale; while the brush is on a cell
+it gets no other job. The ground cover grows in under the brush, raised at each landing; rows
+that stay keep their keys (no regrowth) and rows a landing drops shrink out (about 1 % of the
+ground rows in a stroke, more in a held dab). `AuthoredScatter` applies at most
+`LEAD_APPLIES_PER_FRAME` (1) lead jobs a frame, which keeps whole leads off the frame time but
+backs up at slow frame rates (open). The GDScript path keeps the restricted lead jobs. Numbers
+in [PERFORMANCE.md](../PERFORMANCE.md) "Ground cover under the brush".
+
 ## Native path
 
 `ScatterRegen.run` hands each biome of a job to `ScatterNative.run_biome` first (card
