@@ -896,3 +896,9 @@ Broader than map authoring; recorded here so they are not lost.
   under the same guiding principle of beautiful and expressive. Likely a treecube-style
   parametric generator (Blender side for authoring, or an in-game builder in the spirit of
   this authoring mode), exporting through the asset-pack token path.
+- **Brushland as a reference for edit feel and buildings** (user, 2026-10-19): "it operates at
+  a generally farther perspective, but i really like how the edits feel impactful and joyful.
+  the tools are very responsive and immediate. we will also probably want to build support for
+  structures and buildings in the future and they have a pretty cool implementation." A second
+  reference beside Tiny Glade for how an edit should feel; structures and buildings are future
+  work. Research (gitignored): `docs/plans/2026-10-19-brushland/research.md`.
