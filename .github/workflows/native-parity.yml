@@ -1,0 +1,139 @@
+name: Native scatter parity
+
+# tests/unit/test_scatter_native.gd (the native rows bit-equal to GDScript's) on Windows and on
+# macOS, with the official Godot binary and the libraries native.yml built earlier in the same
+# run, debug and release (.github/native/parity.sh). Linux's parity runs in build.yml's test job.
+# Called by build.yml beside its test job, and by native.yml on branch runs.
+#
+# LFS objects come from build.yml's Actions cache and are checked out offline, so these jobs
+# spend no LFS bandwidth (build.yml's test job explains the budget). That entry is written by the
+# godot-ci container, which has no zstd, so it is a gzip archive, and actions/cache folds the
+# compression (and, on Windows, the OS unless enableCrossOsArchive) into the entry's version: the
+# restore step runs with a PATH that has no zstd, so it looks the entry up as gzip and unpacks it
+# with the system tar. A miss falls back to the newest lfs- entry; objects it lacks stay pointer
+# files.
+
+on:
+  workflow_call:
+
+env:
+  GODOT_VERSION: "4.7.2"
+
+jobs:
+  windows:
+    name: Parity Windows
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      GODOT_ZIP: Godot_v4.7.2-stable_win64.exe.zip
+      GODOT_SHA256: 731980f9608d61333e5baf54a2ef17210acc7a538446c0cb9969f002aca1e953
+      GODOT: .ci-godot/Godot_v4.7.2-stable_win64_console.exe
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: List LFS objects
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS cache
+        uses: actions/cache/restore@v4
+        env:
+          PATH: C:\Windows\System32;C:\Windows
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-assets-id') }}
+          restore-keys: lfs-
+          enableCrossOsArchive: true
+
+      - name: Check out LFS objects
+        run: git lfs checkout
+
+      - name: Download native libraries
+        uses: actions/download-artifact@v7
+        with:
+          pattern: native-windows-*
+          path: native
+          merge-multiple: true
+
+      - name: Download Godot
+        shell: pwsh
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri "https://github.com/godotengine/godot/releases/download/$env:GODOT_VERSION-stable/$env:GODOT_ZIP" -OutFile godot.zip
+          if ((Get-FileHash godot.zip -Algorithm SHA256).Hash -ne $env:GODOT_SHA256) { throw "Godot download checksum mismatch" }
+          Expand-Archive godot.zip -DestinationPath .ci-godot
+          Remove-Item godot.zip
+
+      - name: Import project
+        run: '"$GODOT" --headless --path . --import'
+
+      - name: Parity
+        run: bash .github/native/parity.sh "$GODOT"
+
+  macos:
+    name: Parity macOS
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      GODOT_ZIP: Godot_v4.7.2-stable_macos.universal.zip
+      GODOT_SHA256: c58a24e31d720be9d62f60cb5627c4e695fb72f21b0cfe1bc9ccaa9a3b3ba63e
+      GODOT: .ci-godot/Godot.app/Contents/MacOS/Godot
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: List LFS objects
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS cache
+        uses: actions/cache/restore@v4
+        env:
+          PATH: /usr/bin:/bin:/usr/sbin:/sbin
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-assets-id') }}
+          restore-keys: lfs-
+          enableCrossOsArchive: true
+
+      - name: Check out LFS objects
+        run: git lfs checkout
+
+      - name: Download native libraries
+        uses: actions/download-artifact@v7
+        with:
+          pattern: native-macos-*
+          path: native
+          merge-multiple: true
+
+      - name: Download Godot
+        run: |
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/$GODOT_VERSION-stable/$GODOT_ZIP"
+          echo "$GODOT_SHA256  godot.zip" | shasum -a 256 -c -
+          unzip -q godot.zip -d .ci-godot
+          rm godot.zip
+
+      - name: Import project
+        run: '"$GODOT" --headless --path . --import'
+
+      # The runner is arm64, so this is the arm64 slice of both Godot and the library.
+      - name: Parity (arm64)
+        run: bash .github/native/parity.sh "$GODOT"
+
+      # Intel Macs: the x86_64 slices under Rosetta, the release library players load.
+      - name: Parity (x86_64 under Rosetta, release library)
+        run: PARITY_TARGETS=template_release bash .github/native/parity.sh arch -x86_64 "$GODOT"
+
+      # Context for the parity result on branch runs: whether the engine itself was compiled
+      # with contraction (arm64 has fused multiply-add in its baseline; x86_64's needs -mfma).
+      - name: Count fused multiply-adds in the Godot binary
+        if: github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/')
+        timeout-minutes: 8
+        run: |
+          for arch in x86_64 arm64; do
+            fused=$(otool -tv -arch "$arch" "$GODOT" | grep -cE '[[:space:]](fn?m(add|sub)|fml[as]|vfn?m(add|sub)[0-9a-z]*)[[:space:]]' || true)
+            echo "Godot $arch: $fused fused multiply-add instructions"
+          done

@@ -1,0 +1,287 @@
+name: Native scatter library
+
+# Builds the native scatter generator (native/, docs/systems/scatter.md "Native path") for every
+# export platform, template_debug and template_release, and uploads each library as an artifact
+# named native-<platform>-<target>. Each artifact also carries native/tt_scatter.gdextension,
+# which lists every platform's library (native/SConstruct writes the same file everywhere), so
+# downloading them merged into native/ gives a project that loads and exports them all.
+#
+# build.yml calls this first: its test job imports with the Linux libraries and runs the tests,
+# native-parity.yml checks the Windows and macOS libraries against GDScript, and the export job
+# exports with every library. A push to a ci/** branch (or native-ci, the branch this workflow
+# was proven on) runs this workflow alone, with the parity jobs and a branch-only check that
+# runs the Linux tests and exports the three presets without signing, release or Steam.
+#
+# Each platform builds against the C runtime its official Godot binary uses, since libm's last
+# bits must match the engine's: glibc (built on glibc 2.28, so the library needs no newer glibc
+# than Godot's Linux template), msvcrt through llvm-mingw, and macOS's libSystem.
+
+on:
+  workflow_call:
+  push:
+    branches: [native-ci, "ci/**"]
+
+env:
+  # The llvm-mingw release on the msvcrt runtime that local Windows builds use (AGENTS.md
+  # "Testing"); its digest is GitHub's for the release asset.
+  LLVM_MINGW: "20261006"
+  LLVM_MINGW_SHA256: "9dd3bbff7f746937c99b38322c8b1fcab8054b7d8d31ec840b3457234dff7e52"
+  SCONS_VERSION: "4.11.1"
+
+jobs:
+  linux:
+    name: Native Linux ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    # AlmaLinux 8 (glibc 2.28) with a current GCC toolset: the oldest glibc a current compiler
+    # and the Actions runtime both support, and no newer than the export template needs.
+    container:
+      image: quay.io/pypa/manylinux_2_28_x86_64
+    strategy:
+      matrix:
+        target: [template_debug, template_release]
+    env:
+      PYTHON: /opt/python/cp312-cp312/bin/python
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Install SCons
+        shell: bash
+        run: |
+          "$PYTHON" -m venv "$RUNNER_TEMP/scons"
+          "$RUNNER_TEMP/scons/bin/pip" install --quiet "scons==$SCONS_VERSION"
+          echo "$RUNNER_TEMP/scons/bin" >> "$GITHUB_PATH"
+
+      - name: Build
+        shell: bash
+        run: |
+          gcc --version | head -n 1
+          bash .github/native/build.sh platform=linux arch=x86_64 target=${{ matrix.target }}
+
+      - name: Show the library's glibc and libstdc++ needs
+        shell: bash
+        run: |
+          objdump -p native/bin/*.so | grep NEEDED
+          objdump -T native/bin/*.so | grep -oE '(GLIBC|GLIBCXX|CXXABI|GCC)_[0-9][0-9.]*' | sort -uV
+
+      - name: Upload library
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-linux-${{ matrix.target }}
+          path: |
+            native/bin/
+            native/tt_scatter.gdextension
+          retention-days: 1
+
+  windows:
+    name: Native Windows ${{ matrix.target }}
+    # Cross-compiled with llvm-mingw on Linux: the same toolchain and runtime as local builds.
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [template_debug, template_release]
+    env:
+      PYTHON: python3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Install llvm-mingw
+        shell: bash
+        run: |
+          archive="$RUNNER_TEMP/llvm-mingw.tar.xz"
+          curl -fsSL -o "$archive" "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW/llvm-mingw-$LLVM_MINGW-msvcrt-ubuntu-22.04-x86_64.tar.xz"
+          echo "$LLVM_MINGW_SHA256  $archive" | sha256sum -c -
+          mkdir "$RUNNER_TEMP/llvm-mingw"
+          tar -xf "$archive" -C "$RUNNER_TEMP/llvm-mingw" --strip-components=1
+          "$RUNNER_TEMP/llvm-mingw/bin/x86_64-w64-mingw32-clang" --version | head -n 1
+
+      - name: Install SCons
+        shell: bash
+        run: |
+          "$PYTHON" -m venv "$RUNNER_TEMP/scons"
+          "$RUNNER_TEMP/scons/bin/pip" install --quiet "scons==$SCONS_VERSION"
+          echo "$RUNNER_TEMP/scons/bin" >> "$GITHUB_PATH"
+
+      - name: Build
+        shell: bash
+        run: |
+          bash .github/native/build.sh platform=windows arch=x86_64 target=${{ matrix.target }} \
+            use_mingw=yes use_llvm=yes mingw_prefix="$RUNNER_TEMP/llvm-mingw"
+
+      # The official Godot Windows build imports msvcrt.dll; the library must use that runtime
+      # too (UCRT's libm differs in the last bit) and carry its C++ runtime statically.
+      - name: Check the DLL's imports
+        shell: bash
+        run: |
+          dump=$("$RUNNER_TEMP/llvm-mingw/bin/llvm-objdump" -p native/bin/*.dll)
+          echo "$dump" | awk '/DLL Name/ {dll=$3; print "imports " dll; next} dll && NF == 2 && $1 ~ /^[0-9]+$/ {print "  " $2} /^$/ {dll=""}'
+          echo "$dump" | grep -q 'DLL Name: msvcrt.dll'
+          if echo "$dump" | grep -iE 'DLL Name: (ucrtbase|api-ms-win-crt|libc\+\+|libstdc\+\+|libgcc|libwinpthread|libunwind)'; then
+            echo "::error::the DLL needs a runtime DLL beside msvcrt.dll"
+            exit 1
+          fi
+
+      - name: Upload library
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-windows-${{ matrix.target }}
+          path: |
+            native/bin/
+            native/tt_scatter.gdextension
+          retention-days: 1
+
+  macos:
+    name: Native macOS ${{ matrix.target }}
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target: [template_debug, template_release]
+    env:
+      PYTHON: python3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Install SCons
+        shell: bash
+        run: |
+          "$PYTHON" -m venv "$RUNNER_TEMP/scons"
+          "$RUNNER_TEMP/scons/bin/pip" install --quiet "scons==$SCONS_VERSION"
+          echo "$RUNNER_TEMP/scons/bin" >> "$GITHUB_PATH"
+
+      # Universal (x86_64 + arm64) at the export preset's minimum macOS versions (10.12 on
+      # x86_64; arm64 starts at 11.0 whatever is asked).
+      - name: Build
+        shell: bash
+        run: |
+          clang --version | head -n 1
+          bash .github/native/build.sh platform=macos arch=universal macos_deployment_target=10.12 \
+            target=${{ matrix.target }}
+
+      # arm64 has fused multiply-add in its baseline, so this is where a contraction would show:
+      # the count of fused instructions in each slice must be zero.
+      - name: Check slices, minimum versions and fused multiply-adds
+        shell: bash
+        run: |
+          lib=$(ls native/bin/*.dylib)
+          lipo -info "$lib"
+          for arch in x86_64 arm64; do
+            echo "$arch: $(otool -l -arch "$arch" "$lib" | grep -A3 -E 'LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX' | grep -E 'minos|version' | head -n 1)"
+            fused=$(otool -tv -arch "$arch" "$lib" | grep -cE '[[:space:]](fn?m(add|sub)|fml[as]|vfn?m(add|sub)[0-9a-z]*)[[:space:]]' || true)
+            echo "$arch: $fused fused multiply-add instructions"
+            [ "$fused" -eq 0 ]
+          done
+
+      - name: Upload library
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-macos-${{ matrix.target }}
+          path: |
+            native/bin/
+            native/tt_scatter.gdextension
+          retention-days: 1
+
+  # Branch runs only (build.yml calls native-parity.yml itself, beside its test job).
+  parity:
+    name: Parity
+    if: github.event_name == 'push' && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/')
+    needs: [windows, macos]
+    uses: ./.github/workflows/native-parity.yml
+
+  # Branch runs only: what build.yml's test and export jobs do with the libraries, without
+  # signing, release or Steam. Runs the whole test suite with the Linux library (the Linux
+  # parity), checks its glibc against the export template, exports the three presets and lists
+  # where Godot put each library.
+  branch-check:
+    name: Branch check (tests and exports, nothing published)
+    if: github.event_name == 'push' && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/')
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.7.2
+    env:
+      GODOT_VERSION: "4.7.2"
+      TEMPLATES: /root/.local/share/godot/export_templates/4.7.2.stable
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # LFS objects from build.yml's cache, restored only and checked out offline: a branch
+      # run spends no LFS bandwidth (build.yml's comment on the test job has the budget).
+      - name: List LFS objects
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-assets-id') }}
+          restore-keys: lfs-
+
+      - name: Check out LFS objects
+        run: git lfs checkout
+
+      - name: Download native libraries
+        uses: actions/download-artifact@v7
+        with:
+          pattern: native-*
+          path: native
+          merge-multiple: true
+
+      - name: Check the Linux library's glibc against the export template
+        shell: bash
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq binutils > /dev/null
+          for target in debug release; do
+            bash .github/native/check_glibc.sh \
+              native/bin/libttscatter.linux.template_$target.x86_64.so "$TEMPLATES/linux_$target.x86_64"
+          done
+
+      - name: Import project
+        run: godot --headless --import
+
+      - name: Parity on Linux, release library
+        shell: bash
+        run: PARITY_TARGETS=template_release bash .github/native/parity.sh godot
+
+      - name: Run unit tests with the library
+        shell: bash
+        run: |
+          godot --headless --path . --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json 2>&1 | tee gut.log
+          if grep -q 'the native library is not built' gut.log; then
+            echo "::error::the native library did not load"
+            exit 1
+          fi
+
+      - name: Export the three presets
+        shell: bash
+        run: |
+          mkdir -p ~/.local/share/godot/export_templates build/windows build/macos build/linux
+          [ -d ~/.local/share/godot/export_templates/$GODOT_VERSION.stable ] \
+            || mv "$TEMPLATES" ~/.local/share/godot/export_templates/
+          godot --headless --export-release "Windows Desktop" build/windows/TTSim.exe
+          godot --headless --export-release "macOS" build/macos/TTSim.zip
+          godot --headless --export-release "Linux" build/linux/TTSim.x86_64
+          godot --headless --export-pack "Linux" build/pack.zip
+
+      - name: List the exported files
+        shell: bash
+        run: |
+          for os in windows linux; do
+            echo "== build/$os"
+            ls -l build/$os
+          done
+          echo "== build/macos/TTSim.zip"
+          unzip -l build/macos/TTSim.zip | grep -vE '/Resources/.+\.(png|icns)$'
+          echo "== the pack's native/ and extension entries (libraries ship beside the binary, not in it)"
+          unzip -l build/pack.zip | grep -E 'native/|extension_list' || true
