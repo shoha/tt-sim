@@ -3834,3 +3834,43 @@ frame over 14 ms with it on (the 32.6 ms frame was off). The baseline above ("Au
 regeneration, opening") measured a grassland stroke over the full forest at 6.88 / 7.60 / 10.56
 in 2026-09; these runs are faster overall, so compare within the pairs. Indicative: one run, the
 GPU shared.
+
+## Native scatter generator (2026-10-20, card native-scatter)
+
+ScatterRegen's jobs run in the C++ GDExtension (`native/`, docs/systems/scatter.md "Native
+path") with rows bit-equal to GDScript's. Headless, CPU only, Windows, template_debug build
+(-O2), machine quiet (no other Godot or Blender process for 90 s before, none after), all in-run
+A/B through `ScatterNative.force_gdscript` (`tools/native_scatter_bench.gd`).
+
+| Measurement | GDScript | Native |
+|---|---|---|
+| Probe cell's job (fresh 200 ft grassland, seed 1234, cell (0, 0) painted full; 3052 rows), one thread | 740 ms median (15 runs, 738-753) | 44.1 ms median (75 runs, 43.3-46.8): pack 24.6 + library 18.1 |
+| 1 job at once, per job | 740 ms | 44.6 ms |
+| 6 jobs at once, per job / batch | 941 / 1017 ms | 56.9 / 57.6 ms |
+| 12 jobs at once, per job / batch | 991 / 1899 ms | 58.2 / 113 ms |
+| Whole new map's scatter build (flat grassland, 64 jobs at min(cores / 2, 6), apply left out) | 2895 ms | 279 ms |
+| Same, gorge landform (wet) | 3085 ms | 284 ms |
+
+- The job is 16.8x faster whole and the generation itself about 41x (740 ms against 18.1 ms in
+  the library, the gen-native probe's 14-18 ms estimate with the noise counted). What is left is
+  `ScatterNative.pack()`: 24.6 ms of GDScript building the window's grids (the density decode,
+  `TerrainRules.sample_fields`, `face_proximity`, the painted fields) and the plan, the same work
+  document_fields did. Porting that decode is the next step: a job would fall to about 20 ms.
+- Threads scale now: GDScript generation stopped scaling past about 5 threads (6 at once cost
+  1.27x one, 12 at once 2.6x per batch); native jobs cost 1.3x at 6 and the 12-job batch takes
+  2 rounds of the pool, 113 ms.
+- Brush latency (`brush_latency_native` render job, lead jobs on, one window run, GDScript forced
+  then native). First grow-in from the press, GDScript -> native: forest dab 216 -> 213 ms, forest
+  stroke 376 -> 378, alpine dab 300 -> 310, alpine stroke 116 -> 116, badlands dab 1208 -> 708,
+  badlands stroke 672 -> 619. Settled (every cell final): forest dab 1373 -> 902, forest stroke
+  1939 -> 1501, alpine dab 1595 -> 1103, alpine stroke 2275 -> 1609, badlands dab 1655 -> 1124,
+  badlands stroke 2237 -> 1800. Frame median / p95 while pressed (vsync on, so bound at 16 ms):
+  GDScript 15.5-17.0 / 24.4-28.8 ms, native 13.9-16.3 / 23.8-31.2 ms, no consistent change.
+  Not quiet: another agent's render job started 8:50:54, during this run; redo before quoting.
+- The lead jobs still matter at native speed, for their first reason rather than their cost: a
+  brush re-requests its cells every frame, so under latest-wins no job is current until the
+  brush moves on, however fast. The first grow-in is set by lead jobs and their 100 ms throttle,
+  not by generation (tree and flower first grow-ins are unchanged). What native speed changes is
+  the lead jobs' restriction: a whole cell now costs about 45 ms instead of 780, so a lead job
+  could carry the ground cover too and show the cell's full provisional rows while the brush is
+  down. Not changed in this card.
