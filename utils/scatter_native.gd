@@ -122,8 +122,8 @@ static func pack(
 	cliff: PackedStringArray,
 	blockers: PackedFloat32Array
 ) -> Dictionary:
-	var grids := grids_for(doc, biome_id, window, built, cliff)
-	if grids.is_empty():
+	var source := source_for(doc, biome_id, window, built, cliff)
+	if source.is_empty():
 		return {}
 	var plan := ScatterPlan.build(biome_id, species, doc.map_seed)
 	var fields: Array[Dictionary] = []
@@ -144,15 +144,97 @@ static func pack(
 		"consts": job_consts,
 		"plan": plan,
 		"noise": noise,
-		"grids": grids,
+		"source": source,
 		"bounds": Rect2(-half, doc.extent_m()),
 		"cells_by_species": cells_by_species,
 		"blockers": blockers,
 	}
 
 
+## What the library builds the window's grids from (card native-cover): the document's own
+## arrays, shared not copied, the window's sample range and the few numbers grids_for derives
+## (radii, the cliff band, each surface slot's kind), or {} when the biome has no paint. The
+## library's grids equal grids_for's bit for bit (test_scatter_native); computing them there took
+## a native job from 44 to about 20 ms (GDScript spent 24 ms in grids_for on the probe cell).
+static func source_for(
+	doc: MapDocument,
+	biome_id: String,
+	window: Rect2,
+	built: PackedStringArray,
+	cliff: PackedStringArray
+) -> Dictionary:
+	var count := doc.sample_count()
+	var columns := doc.samples_x()
+	var rows := doc.samples_z()
+	var slot := doc.biome_ids.find(biome_id) + 1
+	if not (slot > 0 and doc.biome_slots.size() == count and doc.biome_density.size() == count):
+		return {}
+	var low := Vector2i.ZERO
+	var high := Vector2i(columns - 1, rows - 1)
+	if window.has_area():
+		low = Vector2i(doc.world_to_sample(window.position).floor()).clamp(low, high)
+		high = Vector2i(doc.world_to_sample(window.end).ceil()).clamp(low, high)
+	var step := doc.sample_step()
+	var finest := maxf(minf(step.x, step.y), 1e-4)
+	# Per surface slot what its weight counts toward (ScatterGround._painted_fields): 0 only the
+	# total, 1 built, 2 rock, 3 ash.
+	var kinds := PackedByteArray()
+	kinds.resize(MapDocument.MAX_SURFACES)
+	for s in doc.surface_ids.size():
+		if built.has(doc.surface_ids[s]):
+			kinds[s] = 1
+		elif cliff.has(doc.surface_ids[s]):
+			kinds[s] = 2
+		elif doc.surface_ids[s] in ScatterGround.SCORCHED_SURFACES:
+			kinds[s] = 3
+	var wet := doc.water_dressing.size() == count * WaterDressing.CHANNELS
+	var spans := PackedFloat64Array()
+	for crossing in doc.crossings:
+		spans.append_array(
+			[crossing.start.x, crossing.start.y, crossing.end.x, crossing.end.y, crossing.width_m]
+		)
+	return {
+		"columns": columns,
+		"rows": rows,
+		"step": step,
+		"half": doc.extent_m() * 0.5,
+		"seed_value": doc.map_seed & 0x7FFFFFFF,
+		"slot": slot,
+		"low": low,
+		"high": high,
+		"rect":
+		Rect2i(low, high - low + Vector2i.ONE).grow(1).intersection(Rect2i(0, 0, columns, rows)),
+		"biome_slots": doc.biome_slots,
+		"biome_density": doc.biome_density,
+		"heights": doc.heights,
+		"curvature_radius": TerrainRules.radius_samples(minf(step.x, step.y)),
+		"face_radius": maxi(1, roundi(ScatterGround.FACE_NEAR_RADIUS_M / finest)),
+		"fringe_radius": maxi(1, roundi(ScatterGround.FRINGE_RADIUS_M / finest)),
+		"start_cos": TerrainRules.cliff_start_cos(),
+		"end_cos": TerrainRules.cliff_end_cos(),
+		"surfaces": 1 if doc.has_surface_entries() else 0,
+		"surface_weights": doc.surface_weights,
+		"kinds": kinds,
+		"used": doc.surface_ids.size(),
+		"entries": MapDocument.SURFACE_ENTRIES,
+		"channels": MapDocument.SURFACE_CHANNELS,
+		"water": doc.water_dressing if wet else PackedByteArray(),
+		"crossings": spans,
+	}
+
+
+## The library's grids for `source` (source_for's), keyed as grids_for keys them; {} without the
+## library. The grid parity check's call.
+static func native_grids(source: Dictionary) -> Dictionary:
+	var native := _instance()
+	if native == null:
+		return {}
+	return native.call("grids", source)
+
+
 ## The arrays document_fields and ScatterGround.sampler build for `window` (the same calls, so
-## the same values), as whole-grid PackedFloat32Arrays, or {} when the biome has no paint.
+## the same values), as whole-grid PackedFloat32Arrays, or {} when the biome has no paint. The
+## GDScript reference the library's grids are tested against (native_grids).
 static func grids_for(
 	doc: MapDocument,
 	biome_id: String,

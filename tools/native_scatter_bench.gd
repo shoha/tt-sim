@@ -34,6 +34,8 @@ func run(args: Dictionary) -> void:
 			_map(int(args.get("runs", "3")), String(args.get("landform", "flat")))
 		"counts":
 			_counts()
+		"pack":
+			_pack_parts(int(args.get("runs", "15")))
 	ScatterNative.force_gdscript = false
 	print("native_scatter_bench: library %s" % ScatterNative.version())
 
@@ -249,6 +251,73 @@ func _counts() -> void:
 				]
 			)
 		)
+
+
+## pack()'s parts on the probe cell, one thread (card native-cover): where the GDScript of a
+## native job goes.
+func _pack_parts(runs: int) -> void:
+	var doc := _probe_doc()
+	var entry: Dictionary = _probe_work(doc)[BIOME]
+	var species: Array[Dictionary] = []
+	species.assign(entry.species)
+	var parts := {}
+	for k in runs + 2:
+		var times := {}
+		var t := Time.get_ticks_usec()
+		ScatterNative.pack(
+			doc,
+			BIOME,
+			species,
+			entry.cells_by_species,
+			entry.window,
+			entry.built,
+			entry.cliff,
+			PackedFloat32Array()
+		)
+		times["pack"] = Time.get_ticks_usec() - t
+		t = Time.get_ticks_usec()
+		ScatterNative.grids_for(doc, BIOME, entry.window, entry.built, entry.cliff)
+		times["grids_for"] = Time.get_ticks_usec() - t
+		var columns := doc.samples_x()
+		var rows := doc.samples_z()
+		var low := Vector2i(doc.world_to_sample(entry.window.position).floor())
+		var high := Vector2i(doc.world_to_sample(entry.window.end).ceil())
+		var rect := Rect2i(low, high - low + Vector2i.ONE).grow(1).intersection(
+			Rect2i(0, 0, columns, rows)
+		)
+		t = Time.get_ticks_usec()
+		TerrainRules.sample_fields(doc.heights, columns, rows, doc.sample_step(), rect)
+		times["sample_fields"] = Time.get_ticks_usec() - t
+		t = Time.get_ticks_usec()
+		ScatterGround.face_proximity(doc.heights, columns, rows, doc.sample_step(), rect)
+		times["face_proximity"] = Time.get_ticks_usec() - t
+		t = Time.get_ticks_usec()
+		ScatterGround._painted_fields(doc, rect, entry.built, entry.cliff)
+		times["painted"] = Time.get_ticks_usec() - t
+		t = Time.get_ticks_usec()
+		ScatterGround._built_fringe(doc, rect, entry.built)
+		times["fringe"] = Time.get_ticks_usec() - t
+		t = Time.get_ticks_usec()
+		var plan := ScatterPlan.build(BIOME, species, doc.map_seed)
+		times["plan"] = Time.get_ticks_usec() - t
+		t = Time.get_ticks_usec()
+		var fields: Array[Dictionary] = []
+		fields.assign(plan.fields)
+		for plan_entry: Dictionary in plan.species:
+			ScatterGenerator._noise(plan_entry, fields)
+		times["noise"] = Time.get_ticks_usec() - t
+		if k < 2:
+			continue
+		for key in times:
+			var list: PackedFloat64Array = parts.get(key, PackedFloat64Array())
+			list.append(times[key] / 1000.0)
+			parts[key] = list
+	var line := PackedStringArray()
+	for key in parts:
+		line.append("%s %.2f" % [key, _median(parts[key])])
+	print("pack parts (probe cell, median ms of %d, surfaces %s): %s" % [
+		runs, str(doc.has_surface_entries()), ", ".join(line)
+	])
 
 
 func _median(values: PackedFloat64Array) -> float:

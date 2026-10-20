@@ -145,6 +145,67 @@ func test_landform_maps_equal_gdscript_over_water_steep_ground_and_a_crossing() 
 		assert_eq(differing, [], "%s: every job equal" % landform)
 
 
+## The grids the library computes from pack()'s "source" (card native-cover) against grids_for's
+## GDScript, byte for byte: steep landforms (curvature, steepness, face proximity), the map edge,
+## and plain, built, cliff and ash surfaces painted in overlapping weights (painted fields and the
+## path fringe).
+func test_native_grids_equal_grids_for_on_steep_painted_ground() -> void:
+	if _skip_without_library():
+		return
+	var biome_id := "grassland_meadow_summer_s1"
+	var built := PackedStringArray(PaletteLibrary.surfaces_with_role("built"))
+	var cliff := PackedStringArray(PaletteLibrary.surfaces_with_role("cliff"))
+	var keys := [
+		"density", "heights", "curvature", "steep", "near_face", "paint_total", "paint_built",
+		"paint_rock", "paint_ash", "fringe"
+	]
+	var checked := 0
+	var off: Array[String] = []
+	for landform in ["gorge", "terraces"]:
+		var doc := NewMap.create(SIZE_FT, biome_id, SEED, PaletteLibrary.DEFAULT_ROOT, landform)
+		_paint_surfaces(doc, built, cliff)
+		_paint(doc, biome_id, Rect2(-4.0, -4.0, 9.0, 7.0))
+		for cell in [Vector2i(-3, -3), Vector2i(0, 0), Vector2i(-1, 0), Vector2i(2, 2)]:
+			var window := Rect2(Vector2(cell) * 10.0, Vector2(10.0, 10.0)).grow(3.0)
+			var expected := ScatterNative.grids_for(doc, biome_id, window, built, cliff)
+			var actual := ScatterNative.native_grids(
+				ScatterNative.source_for(doc, biome_id, window, built, cliff)
+			)
+			for key in keys:
+				checked += 1
+				var a: PackedFloat32Array = expected.get(key, PackedFloat32Array())
+				var b: PackedFloat32Array = actual.get(key, PackedFloat32Array())
+				if a.to_byte_array() != b.to_byte_array():
+					off.append("%s %s %s (%d vs %d)" % [landform, cell, key, a.size(), b.size()])
+		assert_true(doc.has_surface_entries(), "%s has painted surfaces" % landform)
+		# And the rows over that ground, through pack's source path.
+		_assert_same_rows(doc, biome_id, _work(doc, biome_id, Vector2i(0, -1)))
+	gut.p("grids: %d compared, off %s" % [checked, off])
+	assert_eq(checked, 2 * 4 * keys.size())
+	assert_eq(off, [] as Array[String], "native grids equal grids_for byte for byte")
+
+
+## Paints a plain, a built, a cliff and the ash surface over overlapping patches of `doc`, with
+## weights varying by sample, so samples carry one to four entries of every kind.
+@warning_ignore("integer_division")
+func _paint_surfaces(doc: MapDocument, built: PackedStringArray, cliff: PackedStringArray) -> void:
+	var names: Array[String] = []
+	for surface in PaletteLibrary.surfaces():
+		if not built.has(surface) and not cliff.has(surface) and surface != "ash":
+			names.append(String(surface))
+			break
+	names.append_array([built[0], cliff[0], "ash"])
+	var columns := doc.samples_x()
+	var rows := doc.samples_z()
+	for k in names.size():
+		var slot := doc.ensure_surface(names[k])
+		var centre := Vector2i(columns / 2 + (k - 2) * 9, rows / 2 + (k % 2) * 7 - 3)
+		for z in range(maxi(centre.y - 30, 0), mini(centre.y + 30, rows)):
+			for x in range(maxi(centre.x - 26, 0), mini(centre.x + 26, columns)):
+				var value := 40 + ((x * 7 + z * 13 + k * 31) % 200)
+				doc.set_surface_weight(z * columns + x, slot, value)
+
+
 ## A fresh map of `biome_id` as the New map dialog makes it, with `cell` and PAINT_MARGIN_M
 ## around it painted to full density (the gen-native probe's cell).
 func _painted_doc(biome_id: String, cell: Vector2i) -> MapDocument:
