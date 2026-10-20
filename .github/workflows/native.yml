@@ -135,12 +135,11 @@ jobs:
             native/tt_scatter.gdextension
           retention-days: 1
 
+  # One job for both targets: macOS runners are the scarce ones (a second job can queue for
+  # many minutes), and each build takes under a minute.
   macos:
-    name: Native macOS ${{ matrix.target }}
+    name: Native macOS
     runs-on: macos-latest
-    strategy:
-      matrix:
-        target: [template_debug, template_release]
     env:
       PYTHON: python3
     steps:
@@ -162,29 +161,41 @@ jobs:
         shell: bash
         run: |
           clang --version | head -n 1
-          bash .github/native/build.sh platform=macos arch=universal macos_deployment_target=10.12 \
-            target=${{ matrix.target }}
+          for target in template_debug template_release; do
+            bash .github/native/build.sh platform=macos arch=universal macos_deployment_target=10.12 \
+              target=$target
+          done
 
       # arm64 has fused multiply-add in its baseline, so this is where a contraction would show:
       # the count of fused instructions in each slice must be zero.
       - name: Check slices, minimum versions and fused multiply-adds
         shell: bash
         run: |
-          lib=$(ls native/bin/*.dylib)
-          lipo -info "$lib"
-          for arch in x86_64 arm64; do
-            echo "$arch: $(otool -l -arch "$arch" "$lib" | grep -A3 -E 'LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX' | grep -E 'minos|version' | head -n 1)"
-            fused=$(otool -tv -arch "$arch" "$lib" | grep -cE '[[:space:]](fn?m(add|sub)|fml[as]|vfn?m(add|sub)[0-9a-z]*)[[:space:]]' || true)
-            echo "$arch: $fused fused multiply-add instructions"
-            [ "$fused" -eq 0 ]
+          for lib in native/bin/*.dylib; do
+            lipo -info "$lib"
+            for arch in x86_64 arm64; do
+              echo "  $arch: $(otool -l -arch "$arch" "$lib" | grep -A3 -E 'LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX' | grep -E 'minos|version' | head -n 1)"
+              fused=$(otool -tv -arch "$arch" "$lib" | grep -cE '[[:space:]](fn?m(add|sub)|fml[as]|vfn?m(add|sub)[0-9a-z]*)[[:space:]]' || true)
+              echo "  $arch: $fused fused multiply-add instructions"
+              [ "$fused" -eq 0 ]
+            done
           done
 
-      - name: Upload library
+      - name: Upload debug library
         uses: actions/upload-artifact@v6
         with:
-          name: native-macos-${{ matrix.target }}
+          name: native-macos-template_debug
           path: |
-            native/bin/
+            native/bin/libttscatter.macos.template_debug.dylib
+            native/tt_scatter.gdextension
+          retention-days: 1
+
+      - name: Upload release library
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-macos-template_release
+          path: |
+            native/bin/libttscatter.macos.template_release.dylib
             native/tt_scatter.gdextension
           retention-days: 1
 
