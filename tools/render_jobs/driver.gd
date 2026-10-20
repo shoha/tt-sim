@@ -4,6 +4,8 @@ extends Node
 ## over real frames and sets root meta "render_job_done" to a summary when finished. Logs
 ## every step to out_dir/log.txt (appended). The ops are documented in REFERENCE.md.
 
+const Steady := preload("res://tools/render_jobs/steady.gd")
+
 var steps: Array = []
 var out_dir: String = ""
 var root_node: Node = null
@@ -24,6 +26,10 @@ var _rec_name: String = ""
 var _rec_extra: Array = []
 var _captures: Array[Dictionary] = []
 var _saved_loaded: bool = false
+## `wind`: while frozen every capture freezes the wind first (materials made since, a placed
+## prop's or a regrown cell's, included); the saved speeds put them back on a thaw.
+var _wind_frozen: bool = false
+var _wind_saved: Dictionary = {}
 
 
 func _ready() -> void:
@@ -207,6 +213,24 @@ func _process(delta: float) -> void:
 			done = _wait_ready(step)
 		"wait":
 			done = _state.t >= float(step.get("s", 1.0))
+		"settle":
+			done = _settle(step)
+		"palette_overlay":
+			_palette_overlay(step)
+		"place_seed":
+			var c := ctrl()
+			if c != null and c.editor != null:
+				c.editor.seed_placement(int(step.get("seed", 1234)))
+				log_line("placement seeded %d" % int(step.get("seed", 1234)))
+			else:
+				log_line("place_seed: no authoring editor open; not seeded")
+		"wind":
+			_wind_frozen = bool(step.get("freeze", true))
+			if _wind_frozen:
+				var n := Steady.freeze_wind(get_tree().root, _wind_saved)
+				log_line("wind frozen (%d materials)" % n)
+			else:
+				log_line("wind thawed (%d materials)" % Steady.thaw_wind(_wind_saved))
 		"no_autosave":
 			var c := ctrl()
 			if c:
@@ -341,6 +365,54 @@ func _wait_ready(step: Dictionary) -> bool:
 			_state.t = 0.0
 			return false
 	return _state.t >= settle
+
+
+## `settle`: done once nothing has moved on its own (Steady.busy) for `frames` frames in a
+## row, then ends the zoom ease exactly on its target (CameraController.finish_zoom) so the
+## next look_at or capture starts from the same camera every run; logs how long it took. At
+## `timeout` seconds it gives up, logs what was still busy and carries on.
+func _settle(step: Dictionary) -> bool:
+	var reason := Steady.busy(gm(), ctrl())
+	_state.rest = 0 if reason != "" else int(_state.get("rest", 0)) + 1
+	if _state.rest >= int(step.get("frames", 3)):
+		gm().get_camera_controller().finish_zoom()
+		log_line("settled in %.2f s" % _state.t)
+		return true
+	if _state.t >= float(step.get("timeout", 10.0)):
+		log_line("settle timeout after %.1f s: %s still busy" % [_state.t, reason])
+		return true
+	return false
+
+
+## `palette_overlay`: lays the package at `package` over the installed palette
+## (PaletteLibrary.overlay_package) before a map opens. A package that cannot be read stops
+## the job, since every capture after it would show the wrong plants.
+func _palette_overlay(step: Dictionary) -> void:
+	var report := PaletteLibrary.overlay_package(
+		String(step.get("package", "")), PaletteLibrary.DEFAULT_ROOT, step.get("biomes", [])
+	)
+	if not report["ok"]:
+		log_line("palette overlay FAILED: %s; stopping the job" % report["error"])
+		_i = steps.size()
+		return
+	var warnings: Array = report["warnings"]
+	log_line(
+		(
+			"palette overlay %s: biomes %s, %d parsed %s, %d kept, %d failed %s, %d warnings%s, %.0f ms"
+			% [
+				step.get("package", ""),
+				str(report["biomes"]),
+				(report["parsed"] as Array).size(),
+				str(report["parsed"]),
+				(report["kept"] as Array).size(),
+				(report["failed"] as Array).size(),
+				str(report["failed"]),
+				warnings.size(),
+				(" (first: %s)" % warnings[0]) if not warnings.is_empty() else "",
+				report["msec"],
+			]
+		)
+	)
 
 
 func _stroke(step: Dictionary) -> bool:
@@ -649,6 +721,9 @@ func _gpu(step: Dictionary) -> bool:
 func _capture(step: Dictionary) -> bool:
 	if _state.phase == 0:
 		_state.phase = 1
+		if _wind_frozen:
+			# Set before this frame draws, so the frame grabbed below already holds still.
+			Steady.freeze_wind(get_tree().root, _wind_saved)
 		RenderingServer.frame_post_draw.connect(_grab.bind(String(step.name)), CONNECT_ONE_SHOT)
 	return _state.phase == 2
 

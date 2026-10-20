@@ -544,6 +544,12 @@ func rule_for_asset(asset_id: String) -> Dictionary:
 	return {}
 
 
+## Seeds the generator behind place_prop's variant and yaw, so a scripted run of placements
+## lands the same props every time (the render-job op `place_seed`); create() randomizes it.
+func seed_placement(value: int) -> void:
+	_rng.seed = value
+
+
 ## Places one of the species' assets at world point `hit` on ground with world normal
 ## `normal`, random yaw and scale 1. Returns the prop's handle {"asset_id", "row"}, or {}.
 ## The gesture is recorded when commit_prop_edit() runs (BrushTool calls it on release).

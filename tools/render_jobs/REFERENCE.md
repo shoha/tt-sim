@@ -74,6 +74,10 @@ A skipped step logs `skip <op> (<reason>)`.
 | `play` | `folder` | Load that level folder and play it (`_on_play_level_requested`). |
 | `wait_ready` | `settle` (s, default 2.0) | Wait until the map has loaded, authoring is open, and the scatter is neither regenerating nor growing, then `settle` more seconds; the timer restarts whenever any of those is busy again. |
 | `wait` | `s` (default 1.0) | Wait that many seconds. |
+| `settle` | `frames` (default 3), `timeout` (s, default 10) | Wait until nothing moves on its own for `frames` frames in a row (`steady.gd` `busy`): no level loading, the camera at rest (`CameraController.is_at_rest`: zoom eased onto its target, no home or shake tween, no pan), the scatter neither regenerating nor growing, placed props not growing in, no height work. Then end the zoom ease exactly on its target (`finish_zoom`), so the next `look_at` or `capture` starts from the same camera every run, and log `settled in <s>`. At `timeout` it logs what was still busy and carries on. Use it in place of `wait` after `home`, `zoom`, a placement or a visibility toggle: a zoom from home to 6.9 settles in about 0.8 s, a toggle in 2-5 frames. It does not see shader-side easing or a fade a probe runs on its own clock. |
+| `palette_overlay` | `package` (absolute folder), `biomes` (optional ids) | Lay a built treecube package (a `build_palette.py` output folder: `palette.json`, `assets/<biome>/*.glb`) over the installed palette for this run (`PaletteLibrary.overlay_package`, `PaletteOverlay`): its biomes and their assets replace the installed ones, the GLBs whose bytes differ are parsed now and the rest keep the editor import. No merge into `assets/palette`, no import, nothing written, so lanes with different packages share one checkout and run at once. Run it after `wait_title` and before `new_map`. Logs the biomes, the parsed, kept and failed assets and the time; a package it cannot read stops the job. |
+| `place_seed` | `seed` (default 1234) | Seed the open editor's placement generator (`AuthoringEditor.seed_placement`), so `place` and probe placements (`species1.gd grid`) pick the same variants and yaws every run. Run it after `wait_ready`; each map opens unseeded. |
+| `wind` | `freeze` (default true) | Freeze the wind: every wind material's sway, flutter and gust speeds go to 0 (`steady.gd`), so plants hold still whatever the shader clock, and while frozen every `capture` freezes materials made since (placed props, regrown cells) before its frame. `freeze: false` puts the saved speeds back. For A/B and parity captures; a look at the motion itself needs it off. |
 | `no_autosave` | none | Stop and disconnect the authoring autosave timer. |
 | `hide_ui` | `hide` (default true) | Hide (or with `false`, show) the authoring panel. |
 | `expand_ab` | `configs` (array of ground shader versions), `label`, `s` (default 3.0) | An in-run ground shader A/B: per config, swap the terrain's shader (`probes/ground_perf.gd` `shader`; `"std"` draws the chunks with `perf.gd`'s StandardMaterial3D instead), wait 0.5 s and sample GPU time for `s` seconds (`perf.gd` `start` / `stop`). Run `vsync_off` first. |
@@ -86,7 +90,7 @@ A skipped step logs `skip <op> (<reason>)`.
 | Op | Fields | What it does |
 |---|---|---|
 | `home` | none | Reset the camera to its home view. |
-| `zoom` | `size` (optional) | With `size`, set the target orthographic size (it eases there, so follow with a `wait`). Without it, zoom out 60 steps, which reaches full zoom-out. |
+| `zoom` | `size` (optional) | With `size`, set the target orthographic size (it eases there, so follow with a `settle`). Without it, zoom out 60 steps, which reaches full zoom-out. |
 | `look_at` | `at` ([x, z] world metres) | Pan so the screen centre looks at that ground point. |
 
 ### Authoring edits
