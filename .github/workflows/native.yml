@@ -8,9 +8,9 @@ name: Native scatter library
 #
 # build.yml calls this first: its test job imports with the Linux libraries and runs the tests,
 # native-parity.yml checks the Windows and macOS libraries against GDScript, and the export job
-# exports with every library. A push to a ci/** branch (or native-ci, the branch this workflow
-# was proven on) runs this workflow alone, with the parity jobs and a branch-only check that
-# runs the Linux tests and exports the three presets without signing, release or Steam.
+# exports with every library. A push to a ci/** branch runs this workflow alone, with the parity
+# jobs and a branch-only check that runs the Linux tests and exports the three presets without
+# signing, release or Steam (it was proven that way on the branch native-ci, 2026-10-20).
 #
 # Each platform builds against the C runtime its official Godot binary uses, since libm's last
 # bits must match the engine's: glibc (built on glibc 2.28, so the library needs no newer glibc
@@ -19,7 +19,7 @@ name: Native scatter library
 on:
   workflow_call:
   push:
-    branches: [native-ci, "ci/**"]
+    branches: ["ci/**"]
 
 env:
   # The llvm-mingw release on the msvcrt runtime that local Windows builds use (AGENTS.md
