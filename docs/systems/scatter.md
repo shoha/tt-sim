@@ -15,6 +15,7 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
 | `utils/scatter_plan.gd` | `ScatterPlan` | The sampling plan and the density calibration models: `DENSITY_RESPONSE`, `additive_clumps`, `CLUMP_SATURATION` |
 | `utils/authored_scatter.gd` | `AuthoredScatter` | Node3D under `LevelMap` that builds an authored map's palette scatter: `build_all(rows)`, `set_cells(rows_by_cell)`, `attach_document()`, `request_region(rect)`, `species_added` |
 | `utils/scatter_regen.gd` | `ScatterRegen` | Regenerates the touched cells on `WorkerThreadPool` |
+| `utils/scatter_native.gd` | `ScatterNative` | The one door to the native generator (`native/`, GDExtension class `TTScatterNative`): packs a job's biome once, runs it natively when the library is built, counts outcomes; see "Native path" |
 | `utils/pipeline_warmer.gd` | `PipelineWarmer` | Draws each resolved species once, invisibly |
 | `utils/scatter_mass.gd` | `ScatterMass` | Grass masses (a clump with `mass` 1, `ScatterPlan.MASS_FIELDS`): ellipse membership, core growth, zone keeps, bare openings, shoulders, and the mass anchors (collect, custom data, the level's anchors entry) |
 | `utils/ground_look.gd` | `GroundLook` | A biome's `ground_look`: `BASE` (every contract key) and the lenient merge `PaletteLibrary` keeps on the biome |
@@ -98,12 +99,79 @@ send ordinary requests and keep latest-wins alone. `AuthoredScatter.live_applies
 for measurement. Card brush-latency, numbers in [PERFORMANCE.md](../PERFORMANCE.md) "Brush
 latency".
 
+Where jobs run natively (below), a painted cell's whole job costs about 20 ms, so lead jobs are
+whole (`ScatterRegen.whole_leads`, set by `AuthoredScatter.attach_document` from
+`ScatterNative.active()`; card native-cover): a lead job carries every dirty species, ground
+cover included, and is the cell's full job, only protected. It takes the cell off pending, is
+accepted when it lands current and shows provisionally when stale; while the brush is on a cell
+it gets no other job. The ground cover grows in under the brush, raised at each landing; rows
+that stay keep their keys (no regrowth) and rows a landing drops shrink out (about 1 % of the
+ground rows in a stroke, more in a held dab). The GDScript path keeps the restricted lead jobs.
+
+Landing (`ScatterApply`, `utils/scatter_apply.gd`; card native-cover round 2). Finished jobs
+land on the main thread by cost, not count: a cell lands only the newest of its waiting results
+(`ScatterRegen.landed()` frees a cell for its next lead as soon as one finishes on its worker, so
+an older result still waiting is dropped, never shown in sequence); waiting results land nearest
+`ScatterRegen.focus` (the latest live request) first; each frame lands results until
+`ScatterApply.BUDGET_USEC` (2 ms) of rebuild time is spent, judged from the rows a result
+carries at the measured cost per row, and always at least one; a provisional landing that
+changes no rows is skipped, and so is one outside the brush rectangle that changes at most
+`NEAR_NOTHING_ROWS` (2). Most whole-lead landings change nothing (773 of 888 in a measured
+stroke), which is where round 1's frame cost went. The rebuild itself (`AuthoredScatter`,
+`lean_rebuild`) leaves an asset whose rows are unchanged alone, keeps each asset's row keys
+with its rows instead of recomputing them, and merges finished grow-ins of one asset into the
+cell's node together (`MERGE_BATCH` 3, or when none is still growing) rather than one rebuild
+each. Numbers in [PERFORMANCE.md](../PERFORMANCE.md) "Ground cover under the brush".
+
+## Native path
+
+`ScatterRegen.run` hands each biome of a job to `ScatterNative.run_biome` first (card
+native-scatter, 2026-10-20). Where the native library is built, the job runs in C++
+(`native/src/`, a port line for line with `scatter_generator.gd`, `scatter_clumps.gd`,
+`scatter_mass.gd`, `ground_zones.gd`, `ground_accents.gd`, `terrain_rules.gd`,
+`ScatterGround.sampler`, `WaterDressing.sample` and `CrossingGeometry.clearance`) and gives the
+same rows and mass anchors bit for bit, about fifty times faster; where it is not (CI's Linux
+tests today, a fresh clone, an export built without it) the job runs in GDScript as before.
+
+- **One call per job.** `ScatterNative.pack()` builds the plan (`ScatterPlan.build`), the
+  window's grids with document_fields' and the sampler's own GDScript calls (density decode,
+  `TerrainRules.sample_fields`, `face_proximity`, painted fields, fringe, the water field and
+  the crossings), each species' pattern-noise settings and a constants table read by name; the
+  library reads the plan's Dictionaries directly and returns `{rows, anchors, usec}`. No
+  Callable crosses; the samplers are native over the packed grids.
+- **Exact rows.** godot-cpp's Vector2, Vector3, Quaternion, Basis and Rect2 carry the engine's
+  float32 formulas, scalars stay double, `-ffp-contract=off`, no fast-math, and the Windows
+  build links the msvcrt runtime the official Godot binary uses (llvm-mingw), so libm gives the
+  same last bits. FastNoiseLite is Godot 4.7.2's own header, set up as its resource sets it up.
+  `test_scatter_native.gd` checks the noise on every palette setting and the rows of a painted
+  cell of every biome and of the five landform maps' whole builds (water, steep faces, a
+  crossing); it is pending without the library.
+- **Never mixed.** A job runs whole natively or whole in GDScript (later species read earlier
+  species' memos). `run_biome` returns null to fall back; `ScatterNative.fallbacks()` counts
+  outcomes by reason ("native", "forced", "missing", "grids"), and `force_gdscript` sends every
+  job to GDScript for A/B runs and tests. A branch added to the GDScript generator must be ported
+  (and its parity cell added to the test) or refused in `ScatterNative._refusal`.
+- **No class identifier.** No script names `TTScatterNative`: a missing library would make it
+  fail to parse. `ScatterNative` finds it through `ClassDB.class_exists` and `instantiate`.
+- **Reentrant.** Each call builds its own context (memos, the edge and anchor slots, the noise
+  objects); nothing mutable is static, and the library calls no engine API but Variant reads, so
+  any number of WorkerThreadPool tasks may run jobs at once.
+- **Building.** `native/SConstruct` builds godot-cpp (submodule, 10.0.0-stable, api 4.7) and the
+  library, and writes `native/tt_scatter.gdextension` beside it; both are gitignored, because a
+  `.gdextension` whose library is missing prints three errors at every start. Re-import after a
+  build (`.godot/extension_list.cfg`). A loaded DLL is locked on Windows: stop every Godot
+  process of the project before rebuilding. Removing a built library leaves Godot erroring on the
+  stale list until `.godot/extension_list.cfg` is deleted and the project re-imported. Commands in
+  `AGENTS.md` "Testing".
+
 ## Verification
 
 Unit tests in `tests/unit/`: `test_scatter_generator.gd` (region independence, byte for byte),
 `test_scatter_generator_calibration.gd`, `test_scatter_build.gd`,
 `test_scatter_ground_rules.gd`, `test_scatter_chunker.gd`, `test_authored_scatter.gd`,
-`test_pipeline_warmer.gd`, `test_scatter_mass.gd`.
+`test_pipeline_warmer.gd`, `test_scatter_mass.gd`, `test_scatter_native.gd` (native against
+GDScript; pending without the library). Timing: `tools/native_scatter_bench.gd` through
+`tools/native_scatter_run.gd` (tasks job, threads, map, counts).
 
 `test_scatter_mass.gd`'s golden rows (`tests/fixtures/scatter_golden_1234.json`) run on Windows
 only, where the pre-push gate runs them; elsewhere the test is pending. The digest hashes raw

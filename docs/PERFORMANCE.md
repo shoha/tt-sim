@@ -3834,3 +3834,130 @@ frame over 14 ms with it on (the 32.6 ms frame was off). The baseline above ("Au
 regeneration, opening") measured a grassland stroke over the full forest at 6.88 / 7.60 / 10.56
 in 2026-09; these runs are faster overall, so compare within the pairs. Indicative: one run, the
 GPU shared.
+
+## Native scatter generator (2026-10-20, card native-scatter)
+
+ScatterRegen's jobs run in the C++ GDExtension (`native/`, docs/systems/scatter.md "Native
+path") with rows bit-equal to GDScript's. Headless, CPU only, Windows, template_debug build
+(-O2), machine quiet (no other Godot or Blender process for 90 s before, none after), all in-run
+A/B through `ScatterNative.force_gdscript` (`tools/native_scatter_bench.gd`).
+
+| Measurement | GDScript | Native |
+|---|---|---|
+| Probe cell's job (fresh 200 ft grassland, seed 1234, cell (0, 0) painted full; 3052 rows), one thread | 740 ms median (15 runs, 738-753) | 44.1 ms median (75 runs, 43.3-46.8): pack 24.6 + library 18.1 |
+| 1 job at once, per job | 740 ms | 44.6 ms |
+| 6 jobs at once, per job / batch | 941 / 1017 ms | 56.9 / 57.6 ms |
+| 12 jobs at once, per job / batch | 991 / 1899 ms | 58.2 / 113 ms |
+| Whole new map's scatter build (flat grassland, 64 jobs at min(cores / 2, 6), apply left out) | 2895 ms | 279 ms |
+| Same, gorge landform (wet) | 3085 ms | 284 ms |
+
+- The job is 16.8x faster whole and the generation itself about 41x (740 ms against 18.1 ms in
+  the library, the gen-native probe's 14-18 ms estimate with the noise counted). What is left is
+  `ScatterNative.pack()`: 24.6 ms of GDScript building the window's grids (the density decode,
+  `TerrainRules.sample_fields`, `face_proximity`, the painted fields) and the plan, the same work
+  document_fields did. Porting that decode is the next step: a job would fall to about 20 ms.
+- Threads scale now: GDScript generation stopped scaling past about 5 threads (6 at once cost
+  1.27x one, 12 at once 2.6x per batch); native jobs cost 1.3x at 6 and the 12-job batch takes
+  2 rounds of the pool, 113 ms.
+- Brush latency (`brush_latency_native` render job, lead jobs on, one window run, GDScript forced
+  then native). First grow-in from the press, GDScript -> native: forest dab 216 -> 213 ms, forest
+  stroke 376 -> 378, alpine dab 300 -> 310, alpine stroke 116 -> 116, badlands dab 1208 -> 708,
+  badlands stroke 672 -> 619. Settled (every cell final): forest dab 1373 -> 902, forest stroke
+  1939 -> 1501, alpine dab 1595 -> 1103, alpine stroke 2275 -> 1609, badlands dab 1655 -> 1124,
+  badlands stroke 2237 -> 1800. Frame median / p95 while pressed (vsync on, so bound at 16 ms):
+  GDScript 15.5-17.0 / 24.4-28.8 ms, native 13.9-16.3 / 23.8-31.2 ms, no consistent change.
+  Not quiet: another agent's render job started 8:50:54, during this run; redo before quoting.
+- The lead jobs still matter at native speed, for their first reason rather than their cost: a
+  brush re-requests its cells every frame, so under latest-wins no job is current until the
+  brush moves on, however fast. The first grow-in is set by lead jobs and their 100 ms throttle,
+  not by generation (tree and flower first grow-ins are unchanged). What native speed changes is
+  the lead jobs' restriction: a whole cell now costs about 45 ms instead of 780, so a lead job
+  could carry the ground cover too and show the cell's full provisional rows while the brush is
+  down. Not changed in this card.
+
+## Ground cover under the brush (2026-10-20, card native-cover)
+
+Native jobs build their grids in the library (`native/src/scatter_grids.cpp`, byte-equal to
+`ScatterNative.grids_for`): the probe cell's job, quiet machine, one thread, GDScript 743.8 ms
+median against native 20.26 ms (pack 0.90 + library 18.21; was 44.1 with 24.6 of GDScript
+grids). Lead jobs are whole where jobs run natively (docs/systems/scatter.md "Authoring").
+
+Latency from the press, one window run (render job `cover_latency`, quiet, vsync on, fresh
+200 ft maps at seed 1234; meadow sites on a fresh badlands map; GDScript forced, then native
+with native-scatter's lead jobs, then whole leads; before the apply cap below):
+
+| Site | first grow-in | first ground row | ground 90 % | settled |
+| --- | --- | --- | --- | --- |
+| Forest dab | 212 / 137 / 167 | - / - / 162 | - | 1352 / 840 / 909 |
+| Forest stroke | 395 / 263 / 166 | 1463 / 1055 / 161 | 1547 / 1055 / 948 | 1905 / 1418 / 1440 |
+| Alpine dab | 303 / 148 / 173 | none added | - | 1547 / 873 / 852 |
+| Alpine stroke | 105 / 25 / 48 | 1620 / 1042 / 172 | 1669 / 1042 / 908 | 2173 / 1403 / 1403 |
+| Badlands dab | 1116 / 484 / 183 | none added | - | 1579 / 844 / 907 |
+| Badlands stroke | 685 / 393 / 182 | 1743 / 1077 / 175 | 1810 / 1077 / 836 | 2191 / 1437 / 1430 |
+| Meadow dab | 1206 / 537 / 49 | 1204 / 530 / 42 | 1239 / 578 / 578 | 1740 / 937 / 930 |
+| Meadow stroke | 1775 / 1074 / 32 | 1774 / 1072 / 27 | 1843 / 1099 / 991 | 2294 / 1451 / 1451 |
+
+"Ground 90 %": when 90 % of the ground rows the watch added and kept had appeared; a held dab
+raises its density until the release, so most of its final rows exist only after it. Churn
+(rows one apply added and a later one removed) 0 with restricted leads; with whole leads 15 of
+146 ground rows in the meadow dab, 7 of 105 in the stroke, about 1 % in the long strokes below
+(mostly displaced, a few re-scaled in place); they shrink out.
+
+Main thread (`cover_perf`: fresh 200 ft temperate forest, zoom 26, vsync off, grassland strokes
+r 4 m at 6 m/s along 24 m, alternating). Without a cap whole leads cost +0 to +3 ms median and
++3.1 to +3.5 ms p95 while pressed (set_cells 2.5-4.9 ms median, 5.9-9.1 p95, up to 11.9 ms; 2.7
+cells per apply), interval 50 ms twice that, 200 ms cheaper but the cover half-grown 1.3 s later.
+With `LEAD_APPLIES_PER_FRAME` 1 (second run), frame ms median / p95 / worst while pressed: lead
+8.44 / 11.74 / 36.92 and 9.16 / 11.29 / 19.85, whole leads 7.68 / 11.52 / 13.49 and 7.15 / 11.47 /
+14.51; set_cells per apply 1.10-1.58 ms median, 2.59-3.52 p95. Ground cover half-grown at +2.2 to
++2.3 s into the 4 s stroke against +4.0 s (at the release) with restricted leads. Under the
+filmer's 20 ms frames the cap backs up and the cover stroke trails restricted leads (first
+ground row +346 against +212): the cap needs to follow cost, not count. LIVE_INTERVAL_MSEC stays
+100 and LIVE_HOLD_MSEC 50. Indicative: one run each, the GPU shared.
+
+### Round 2: landing by cost (card native-cover round 2)
+
+Where `set_cells` went, per landing (probe `apply_profile.gd`, job `cover_profile`, the densest
+cell after one cover stroke on the forest map: 564 rows in 29 assets, median of 7): a landing
+3.6-3.9 ms, the grow-in merges after it 2.2-2.4 ms, and a landing that changes no row 3.0-3.2
+ms. So most of the cost was rebuilding assets whose rows had not changed. Per-row pieces over
+all 29 assets once: `row_keys` 0.67 ms (run twice a landing and again at every merge),
+`instance_order` 0.27, `transforms_from_rows` 0.27, `ScatterMass.custom_data` 0.25,
+`build_multimesh` 0.50; one packed buffer built in GDScript instead of per-instance calls 0.62-0.66,
+slower, so a packed copy would only pay natively. Cut: unchanged assets are left alone, row keys
+are kept with the rows, grow-ins merge in batches, and landings are coalesced, skipped when they
+change nothing and spent within a frame budget (`ScatterApply`, docs/systems/scatter.md
+"Authoring").
+
+Main thread, in-run A/B (`cover_perf2`: a fresh 200 ft temperate forest per variant, zoom 26,
+vsync off, the same grassland stroke r 4 m at 6 m/s along 24 m). Frame ms median / p95 / worst
+while pressed; landing ms per frame median / p95 / worst; ground cover first row / 50 % / 90 %
+from the press:
+
+| Variant | Frame | Landing | Ground cover |
+| --- | --- | --- | --- |
+| Restricted leads (round 2 landing) | 5.63 / 6.93 / 36.41 | 0.34 / 3.28 / 3.52 | +3469 / +3994 / +4002 |
+| Whole leads, round 1 uncapped | 6.98 / 14.84 / 20.12 | 2.36 / 6.50 / 9.65 | +142 / +2142 / +3643 |
+| Whole leads, round 1 cap (1 a frame) | 5.95 / 7.76 / 14.51 | 1.15 / 2.42 / 6.71 | +160 / +2181 / +3754 |
+| Whole leads, round 2 (2 ms budget) | 5.59 / 7.89 / 11.82 | 1.06 / 2.57 / 2.84 | +131 / +2189 / +3688 |
+| Round 2, 1 ms budget | 5.56 / 7.68 / 10.20 | 0.91 / 2.43 / 2.86 | +130 / +2188 / +3656 |
+| Round 2, no budget | 5.66 / 7.87 / 11.17 | 1.07 / 2.72 / 2.90 | +133 / +2198 / +3676 |
+
+773 of the 888 whole-lead landings in that stroke changed no rows (halo cells, and cells whose
+density had not moved since their last landing); round 1 rebuilt every one (866 rebuilds against
+115). Round 2 grows the cover as fast as round 1 uncapped (its 50 % and 90 % are when the 4 s
+stroke reaches the cells, not a backlog) at round 1's capped frame times, and its worst landing
+is under 3 ms. The budget rarely binds at these frame rates (35 deferrals at 2 ms, 57 at 1 ms),
+and 1 ms measured the same as 2 within noise, so 2 ms stays as the guard for bursts (the release,
+slow frames).
+
+Latency (`cover_latency2`, vsync on, the eight sites of the table above, round 1 whole leads
+uncapped / round 2): first ground row forest dab 162 / 141, forest stroke 161 / 155, alpine dab
+- / 152, alpine stroke 172 / 169, badlands dab - / 157, badlands stroke 175 / 173, meadow dab
+42 / 21, meadow stroke 27 / 28 ms; ground 90 % 948 / 1005, 908 / 991, 836 / 890, 578 / 570,
+991 / 897 on the strokes and the meadow dab; settled within 70 ms of round 1 everywhere (909 /
+924 to 1451 / 1430). (Round 1's probe missed the ground rows of the alpine and badlands dabs; they
+add 184 and 21.) Pressed landing per frame 0.4-2.0 ms median, worst 2.9, against 3.3-5.9 ms
+median and up to 10.6 for native-scatter's restricted leads under round 1's landing in the same
+run. Churn unchanged (meadow dab 15 ground rows of 140, the strokes 0-9). Indicative: one run
+each, the GPU shared.

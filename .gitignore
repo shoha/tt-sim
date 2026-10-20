@@ -37,3 +37,13 @@ tools/mcp/dist/
 # Python bytecode from the SFX generation tools
 __pycache__/
 *.pyc
+
+# Native scatter library: native/SConstruct builds it and writes the extension file beside it,
+# so a checkout that never built it has no extension for Godot to load (docs/systems/scatter.md)
+/native/bin/
+/native/tt_scatter.gdextension
+/native/tt_scatter.gdextension.uid
+/native/.sconsign.dblite
+/native/**/*.o
+/native/**/*.os
+/native/compile_commands.json

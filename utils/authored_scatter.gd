@@ -45,7 +45,10 @@ extends Node3D
 ## Brushes. attach_document() plus request_region(rect) regenerate the cells a painted
 ## rectangle can affect (ScatterRegen: the cells it touches plus each species' relation
 ## halo) on WorkerThreadPool from a copy of the document's masks, and apply finished jobs
-## on the main thread, latest request wins per cell. A biome's asset scenes load on
+## on the main thread, latest request wins per cell, newest and nearest the brush first within
+## a per-frame budget (ScatterApply). A rebuild leaves an asset whose rows did not change
+## alone, and a grow-in merges into its cell's node with the asset's other grow-ins
+## (MERGE_BATCH), not one rebuild each. A biome's asset scenes load on
 ## background threads as soon as it is registered (prepare_biome), species resolve one per
 ## frame as they arrive, and a finished job waits for its species rather than loading them
 ## on the spot. rows_by_asset() gives the current rows back in the document's form for
@@ -65,16 +68,15 @@ const GROW_UNIFORM := &"grow"
 ## How long a new instance takes to grow in. Long enough to read as growth rather than a
 ## pop at the game camera, short enough that a stroke does not trail a wave behind it.
 const GROW_SECONDS := 0.35
-## At most this many regeneration jobs run at once (and never more than half the cores). The pool
-## runs low-priority tasks on at most low_priority_thread_ratio (0.3) of its threads, 7 of 24, so 6
-## leaves one for GLB loads; a new map's 64 one-cell jobs and a dab's nine are bound by it (4 before
-## ground-opt-cpu2).
+## At most this many regeneration jobs at once, never over half the cores: the pool runs
+## low-priority tasks on 0.3 of its threads (7 of 24), so 6 leaves one for GLB loads.
 const MAX_JOBS := 6
-## Species resolved per frame by _process (see _warm_species; measured cost in
-## docs/PERFORMANCE.md "Authored scatter").
+## Species resolved per frame by _process (_warm_species; PERFORMANCE.md "Authored scatter").
 const SPECIES_PER_FRAME := 1
-## Every instance joins this group, so GameMap.apply_foliage_density() can hand a changed
-## density setting to set_budget() without knowing where the scatter lives.
+## Finished grow-ins of one asset in one cell that wait to be merged into its settled node
+## together while others are still growing (each merge rebuilds the node; native-cover round 2).
+const MERGE_BATCH := 3
+## Every instance joins it: GameMap.apply_foliage_density() reaches set_budget() through it.
 const GROUP := &"authored_scatter"
 
 const _GROW_SHADER := 0
@@ -88,8 +90,7 @@ var foliage_overrides: Dictionary = {}
 ## Where FoliageDensityController applies the budget after a rebuild; null means the parent
 ## (LevelMap), which holds a dressed GLB's own scatter too, so the budget stays map-wide.
 var budget_root: Node3D = null
-## The foliage primitive budget; negative reads the player's setting once, on first use.
-## Kept current by set_budget() through GROUP.
+## The foliage primitive budget; negative reads the player's setting on first use (set_budget).
 var budget: int = -1
 ## Grow-in duration; 0 builds new instances in place with no animation.
 var grow_seconds: float = GROW_SECONDS
@@ -98,9 +99,12 @@ var last_apply_usec: int = 0
 var last_worker_usec: int = 0
 ## Draw each species once, invisibly, as it resolves (PipelineWarmer); off to measure.
 var warm_pipelines: bool = true
-## Let live requests show provisional results (request_region); off to measure against
-## latest-wins alone.
+## Let live requests show provisional results; off to measure against latest-wins alone.
 var live_applies: bool = true
+## Skip unchanged assets and batch grow-in merges (the class comment); off to measure round 1.
+var lean_rebuild: bool = true
+## Which finished jobs land each frame (coalesced, nearest first, within a budget).
+var landing: ScatterApply = ScatterApply.new()
 ## Props (AuthoredProps) whose rocks regeneration grows no twin inside (RockKeep.blockers_of).
 var blocker_source: AuthoredScatter = null
 ## The grass-mass anchors of the rows (ScatterMass: saved (x, z) -> offset to the clump parent):
@@ -114,6 +118,8 @@ var mass_anchors: Dictionary = {}
 var _species: Dictionary = {}
 ## cell -> {asset id -> PackedFloat32Array}: the rows every node of the cell is built from.
 var _cells: Dictionary = {}
+## cell -> {asset id -> PackedInt64Array}: row_keys of those rows, kept with them.
+var _keys: Dictionary = {}
 ## cell -> {asset id -> MultiMeshInstance3D}: the settled node of each asset in the cell.
 var _nodes: Dictionary = {}
 ## cell -> {asset id -> Array of {"node", "keys", "tween"}}: instances still growing in.
@@ -226,10 +232,11 @@ func _exit_tree() -> void:
 
 func _process(_delta: float) -> void:
 	if _regen != null:
-		_collect_finished_jobs()
+		var usec := landing.collect(_jobs, _finished, _regen)
+		last_worker_usec = usec if usec >= 0 else last_worker_usec
 	_warm_species()
 	if _regen != null:
-		_apply_ready_jobs()
+		landing.land(self, _finished, _regen)
 		_dispatch_jobs()
 	if not is_regenerating() and _loading.is_empty():
 		set_process(false)
@@ -249,16 +256,36 @@ func build_all(rows_by_asset: Dictionary) -> void:
 ## stay put; without, the cell is rebuilt in place.
 func set_cells(rows_by_cell: Dictionary, animate: bool = true) -> void:
 	var started := Time.get_ticks_usec()
-	var grow := animate and grow_seconds > 0.0 and is_inside_tree()
 	var cells: Array[Vector2i] = []
+	cells.assign(rows_by_cell.keys())
+	finish_cells(cells, rebuild_cells(rows_by_cell, animate), started)
+
+
+## set_cells() without the density budget or the signal, for ScatterApply, which lands one
+## result at a time against its frame budget. Returns the primitive delta for finish_cells().
+func rebuild_cells(rows_by_cell: Dictionary, animate: bool = true) -> int:
+	var grow := animate and grow_seconds > 0.0 and is_inside_tree()
 	var delta := 0
 	for cell in rows_by_cell:
 		delta += _primitive_delta(_cells.get(cell, {}), rows_by_cell[cell])
 		_rebuild_cell(cell, rows_by_cell[cell], grow)
-		cells.append(cell)
+	return delta
+
+
+## Ends rebuild_cells() of `cells`: applies the density budget for `delta`, records the time
+## since `started_usec` as last_apply_usec and emits cells_applied.
+func finish_cells(cells: Array[Vector2i], delta: int, started_usec: int) -> void:
 	_apply_budget(delta)
-	last_apply_usec = Time.get_ticks_usec() - started
+	last_apply_usec = Time.get_ticks_usec() - started_usec
 	cells_applied.emit(cells)
+
+
+## True when every asset id in `ids` has resolved (a finished job waits for its species).
+func species_ready(ids: Array) -> bool:
+	for asset_id in ids:
+		if not _species.has(asset_id):
+			return false
+	return true
 
 
 ## Moves instances of `asset_id` in `cell` in place: `rows` replaces the cell's rows of that
@@ -323,6 +350,7 @@ func clear() -> void:
 	_nodes.clear()
 	_orders.clear()
 	_cells.clear()
+	_keys.clear()
 	mass_anchors.clear()
 	_known_total = -1
 
@@ -389,6 +417,7 @@ func species_materials(asset_id: String) -> Array[ShaderMaterial]:
 func attach_document(doc: MapDocument) -> void:
 	_document = doc
 	_regen = ScatterRegen.for_document(doc)
+	_regen.whole_leads = ScatterNative.active()  # lead jobs grow the ground cover too
 	_regen.built_surfaces = PackedStringArray(
 		PaletteLibrary.surfaces_with_role("built", palette_root)
 	)
@@ -563,6 +592,8 @@ func _dispatch_jobs() -> void:
 	var blockers := PackedFloat32Array() if busy else RockKeep.blockers_of(blocker_source)
 	while _jobs.size() < limit and _regen.has_pending():
 		var job := _regen.take_job()
+		if job.is_empty():  # only cells the brush is still on, their lead jobs out
+			break
 		if snapshot == null:
 			# One copy serves every job dispatched this frame; they only read it.
 			snapshot = ScatterRegen.snapshot(_document)
@@ -574,81 +605,43 @@ func _dispatch_jobs() -> void:
 		_jobs.append({"id": id, "job": job, "result": result, "cancel": cancel})
 
 
-## Moves jobs whose worker task has completed to _finished, noting the species their rows
-## need. wait_for_task_completion() returns at once for a completed task.
-func _collect_finished_jobs() -> void:
-	for entry in _jobs.duplicate():
-		if not WorkerThreadPool.is_task_completed(entry.id):
-			continue
-		_jobs.erase(entry)
-		WorkerThreadPool.wait_for_task_completion(entry.id)
-		var result: Dictionary = entry.result
-		last_worker_usec = result.get("usec", 0)
-		var needs := {}
-		for cell_rows in (result.get("rows_by_cell", {}) as Dictionary).values():
-			for asset_id in cell_rows:
-				needs[asset_id] = true
-		entry["needs"] = needs.keys()
-		_finished.append(entry)
-
-
-## Applies finished jobs whose species resolved, in one set_cells(): their current cells
-## (ScatterRegen.accept) and, for a lead job, the live cells it shows until their full job
-## lands (ScatterRegen.provisional).
-func _apply_ready_jobs() -> void:
-	var rows_by_cell := {}
-	for entry in _finished.duplicate():
-		var ready := true
-		for asset_id in entry.needs:
-			if not _species.has(asset_id):
-				ready = false
-				break
-		if not ready:
-			continue
-		_finished.erase(entry)
-		var job: Dictionary = entry.job
-		ScatterMass.merge_into(mass_anchors, entry.result.get("anchors", {}))
-		var fresh: Dictionary = entry.result.get("rows_by_cell", {})
-		var cells := _regen.accept(job)
-		if not entry.get("cancelled", false):
-			cells.append_array(_regen.provisional(job))
-		for cell in cells:
-			var base: Dictionary = rows_by_cell.get(cell, _cells.get(cell, {}))
-			rows_by_cell[cell] = ScatterRegen.merge_cell(
-				base, job.regenerated[cell], fresh.get(cell, {})
-			)
-	if not rows_by_cell.is_empty():
-		set_cells(rows_by_cell)
-
-
 func _rebuild_cell(cell: Vector2i, fresh: Dictionary, grow: bool) -> void:
 	var old: Dictionary = _cells.get(cell, {})
+	var old_keys: Dictionary = _keys.get(cell, {})
 	var kept := {}
 	for asset_id in fresh:
 		var rows: PackedFloat32Array = fresh[asset_id]
 		if rows.size() >= MapDocument.ROW_STRIDE:
 			kept[asset_id] = rows
-	if kept.is_empty():
-		_cells.erase(cell)
-	else:
-		_cells[cell] = kept
+	_cells[cell] = kept
+	_keys[cell] = {}
 	var assets := {}
 	for source in [old, kept, _nodes.get(cell, {}), _growing.get(cell, {})]:
 		for asset_id in source:
 			assets[asset_id] = true
 	for asset_id in assets:
-		_rebuild_asset(cell, asset_id, old.get(asset_id, PackedFloat32Array()), grow)
+		var old_rows: PackedFloat32Array = old.get(asset_id, PackedFloat32Array())
+		# Rows that did not change leave every node of the asset as it is (round 2).
+		var same: bool = old_rows == kept.get(asset_id, PackedFloat32Array())
+		if lean_rebuild and old_keys.has(asset_id) and same:
+			_keys[cell][asset_id] = old_keys[asset_id]
+		else:
+			_rebuild_asset(cell, asset_id, old_rows, old_keys.get(asset_id), grow)
+	if kept.is_empty():
+		_cells.erase(cell)
+		_keys.erase(cell)
 
 
 func _rebuild_asset(
-	cell: Vector2i, asset_id: String, old_rows: PackedFloat32Array, grow: bool
+	cell: Vector2i, asset_id: String, old_rows: PackedFloat32Array, cached: Variant, grow: bool
 ) -> void:
 	var species := _species_for(asset_id)
 	if species.is_empty():
 		return
 	var rows: PackedFloat32Array = _cells.get(cell, {}).get(asset_id, PackedFloat32Array())
-	var bits := rows.to_byte_array().to_int32_array()
-	var keys := row_keys(bits)
+	var keys := row_keys(rows.to_byte_array().to_int32_array())
+	if not rows.is_empty():
+		_keys[cell][asset_id] = keys
 	var present := {}
 	for key in keys:
 		present[key] = true
@@ -659,7 +652,8 @@ func _rebuild_asset(
 	if grow:
 		# Instances a rebuild removes shrink away instead of vanishing (ScatterShrink); those
 		# still growing in, from the size they had reached.
-		old_list = row_keys(old_rows.to_byte_array().to_int32_array())
+		# `cached`: the old rows' keys, kept with them (null when not kept).
+		old_list = cached if cached != null else row_keys(old_rows.to_byte_array().to_int32_array())
 		var growing: Array = _growing.get(cell, {}).get(asset_id, [])
 		ScatterShrink.start_growing(
 			self, species, cell, growing, old_rows, old_list, present, grow_seconds, mass_anchors
@@ -822,26 +816,33 @@ func _set_growth(value: float, node: MultiMeshInstance3D, mode: int, lift: float
 		node.position.y = -lift * (1.0 - value)
 
 
-## Merges a finished grow-in into the cell's settled node. The merged node draws as many
-## instances as the two did together, so the density budget's totals do not move and no
-## global re-plan is needed.
+## Merges finished grow-ins into the cell's settled node: this one, with the asset's others
+## that finished before it, once MERGE_BATCH have finished or none is still growing (lean). The
+## merged node draws as many instances as they did together, so the density budget's totals do
+## not move and no global re-plan is needed.
 func _finish_growth(cell: Vector2i, asset_id: String, entry: Dictionary) -> void:
 	var entries: Array = _growing.get(cell, {}).get(asset_id, [])
 	if not entry in entries:
 		return
-	entries.erase(entry)
+	entry["done"] = true
+	var done := entries.filter(func(e: Dictionary) -> bool: return e.get("done", false))
+	if lean_rebuild and done.size() < mini(MERGE_BATCH, entries.size()):
+		return  # stays at full size in its own node until the batch merges
+	if not lean_rebuild:
+		done = [entry]
+	var settled: MultiMeshInstance3D = _nodes.get(cell, {}).get(asset_id)
+	var visible := settled.multimesh.visible_instance_count if settled else 0
+	for other: Dictionary in done:
+		var grown_visible := (other.node as MultiMeshInstance3D).multimesh.visible_instance_count
+		visible = -1 if visible < 0 or grown_visible < 0 else visible + grown_visible
+		entries.erase(other)
+		_free_growing(other)
 	if entries.is_empty():
 		_erase_growing(cell, asset_id)
-	var grown: MultiMeshInstance3D = entry.node
-	var settled: MultiMeshInstance3D = _nodes.get(cell, {}).get(asset_id)
-	var visible := -1
-	var grown_visible := grown.multimesh.visible_instance_count
-	var settled_visible := settled.multimesh.visible_instance_count if settled else 0
-	if grown_visible >= 0 and settled_visible >= 0:
-		visible = grown_visible + settled_visible
-	_free_growing(entry)
 	var rows: PackedFloat32Array = _cells.get(cell, {}).get(asset_id, PackedFloat32Array())
-	var keys := row_keys(rows.to_byte_array().to_int32_array())
+	var keys: PackedInt64Array = _keys.get(cell, {}).get(asset_id, PackedInt64Array())
+	if keys.size() * MapDocument.ROW_STRIDE != rows.size():
+		keys = row_keys(rows.to_byte_array().to_int32_array())
 	var still := {}
 	for other in entries:
 		still.merge(other.keys)
