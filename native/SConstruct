@@ -1,0 +1,67 @@
+#!/usr/bin/env python
+# tt-sim's native scatter generator: a GDExtension that runs ScatterGenerator's per-cell path
+# (utils/scatter_generator.gd and the classes it calls) in C++, row for row with GDScript. The
+# GDScript generator stays the reference and the fallback wherever this library is absent; see
+# docs/systems/scatter.md "Native path".
+#
+# Build (from anywhere; -C picks this folder), then refresh Godot's extension list:
+#   scons -C native -j8 [target=template_debug|template_release] [platform=...] [arch=...]
+#   godot --headless --import --path .
+# On Windows without MSVC add: use_mingw=yes use_llvm=yes mingw_prefix=<llvm-mingw root>
+# (llvm-mingw on the msvcrt runtime, the C runtime the official Godot Windows build uses).
+#
+# Writes native/bin/<library> and, beside it, native/tt_scatter.gdextension (both
+# gitignored), so a checkout that never built the library has no extension for Godot to load.
+import os
+
+env = Environment(tools=["default"], PLATFORM="")
+# Exact rows: the engine's float32 maths and the C runtime's libm, never contracted or
+# reassociated (no FMA contraction, no fast-math anywhere, godot-cpp included).
+env.Append(CCFLAGS=["-ffp-contract=off"])
+env["build_profile"] = File("build_profile.json").abspath
+Export("env")
+env = SConscript("godot-cpp/SConstruct", {"api_version": "4.7"})
+
+env.Append(CPPPATH=["src/", "thirdparty/"])
+sources = Glob("src/*.cpp")
+
+NAME = "libttscatter"
+if env["platform"] == "macos":
+    library_path = "bin/{}.macos.{}.dylib".format(NAME, env["target"])
+else:
+    library_path = "bin/{}{}{}".format(NAME, env["suffix"], env["SHLIBSUFFIX"])
+library = env.SharedLibrary(library_path, source=sources)
+env.NoCache(library)
+Default(library)
+
+# The extension file lists every platform's library; Godot loads the one for the running
+# platform and build (debug: the editor and debug exports; release: release exports).
+GDEXTENSION = """[configuration]
+
+entry_symbol = "ttscatter_library_init"
+compatibility_minimum = "4.7"
+reloadable = false
+
+[libraries]
+
+windows.debug.x86_64 = "res://native/bin/{name}.windows.template_debug.x86_64.dll"
+windows.release.x86_64 = "res://native/bin/{name}.windows.template_release.x86_64.dll"
+linux.debug.x86_64 = "res://native/bin/{name}.linux.template_debug.x86_64.so"
+linux.release.x86_64 = "res://native/bin/{name}.linux.template_release.x86_64.so"
+macos.debug = "res://native/bin/{name}.macos.template_debug.dylib"
+macos.release = "res://native/bin/{name}.macos.template_release.dylib"
+""".format(name=NAME)
+
+
+def write_gdextension(target, source, env):
+    path = str(target[0])
+    old = open(path).read() if os.path.exists(path) else ""
+    if old != GDEXTENSION:
+        with open(path, "w", newline="\n") as f:
+            f.write(GDEXTENSION)
+    return None
+
+
+gdextension = env.Command("tt_scatter.gdextension", [], write_gdextension)
+env.AlwaysBuild(gdextension)
+Default(gdextension)
