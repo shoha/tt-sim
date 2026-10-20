@@ -5,13 +5,11 @@ name: Native scatter parity
 # run, debug and release (.github/native/parity.sh). Linux's parity runs in build.yml's test job.
 # Called by build.yml beside its test job, and by native.yml on branch runs.
 #
-# LFS objects come from build.yml's Actions cache and are checked out offline, so these jobs
-# spend no LFS bandwidth (build.yml's test job explains the budget). That entry is written by the
-# godot-ci container, which has no zstd, so it is a gzip archive, and actions/cache folds the
-# compression (and, on Windows, the OS unless enableCrossOsArchive) into the entry's version: the
-# restore step runs with a PATH that has no zstd, so it looks the entry up as gzip and unpacks it
-# with the system tar. A miss falls back to the newest lfs- entry; objects it lacks stay pointer
-# files.
+# These jobs take no LFS objects: test_scatter_native reads the palette's plans and the scripts,
+# which are plain git files. Run 39485110220's Windows job compared every biome's real rows (the
+# same counts as Linux and macOS) with only LFS pointer files checked out, so the jobs spend no
+# LFS bandwidth and no cache download (build.yml's test job explains the LFS budget). A future
+# parity test that needs an LFS asset must restore build.yml's cache here first.
 
 on:
   workflow_call:
@@ -33,22 +31,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
-      - name: List LFS objects
-        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
-
-      - name: Restore LFS cache
-        uses: actions/cache/restore@v4
-        env:
-          PATH: C:\Windows\System32;C:\Windows
-        with:
-          path: .git/lfs
-          key: lfs-${{ hashFiles('.lfs-assets-id') }}
-          restore-keys: lfs-
-          enableCrossOsArchive: true
-
-      - name: Check out LFS objects
-        run: git lfs checkout
 
       - name: Download native libraries
         uses: actions/download-artifact@v7
@@ -85,22 +67,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
-      - name: List LFS objects
-        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
-
-      - name: Restore LFS cache
-        uses: actions/cache/restore@v4
-        env:
-          PATH: /usr/bin:/bin:/usr/sbin:/sbin
-        with:
-          path: .git/lfs
-          key: lfs-${{ hashFiles('.lfs-assets-id') }}
-          restore-keys: lfs-
-          enableCrossOsArchive: true
-
-      - name: Check out LFS objects
-        run: git lfs checkout
 
       - name: Download native libraries
         uses: actions/download-artifact@v7

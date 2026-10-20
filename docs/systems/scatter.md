@@ -130,8 +130,10 @@ native-scatter, 2026-10-20). Where the native library is built, the job runs in 
 (`native/src/`, a port line for line with `scatter_generator.gd`, `scatter_clumps.gd`,
 `scatter_mass.gd`, `ground_zones.gd`, `ground_accents.gd`, `terrain_rules.gd`,
 `ScatterGround.sampler`, `WaterDressing.sample` and `CrossingGeometry.clearance`) and gives the
-same rows and mass anchors bit for bit, about fifty times faster; where it is not (CI's Linux
-tests today, a fresh clone, an export built without it) the job runs in GDScript as before.
+same rows and mass anchors bit for bit, about fifty times faster; where it is not (a fresh clone,
+a platform whose library failed to load) the job runs in GDScript as before. CI builds the
+library for every export platform, checks it on each, and ships it in every export (see
+"Building" below).
 
 - **One call per job.** `ScatterNative.pack()` builds the plan (`ScatterPlan.build`), the
   window's grids with document_fields' and the sampler's own GDScript calls (density decode,
@@ -145,7 +147,8 @@ tests today, a fresh clone, an export built without it) the job runs in GDScript
   same last bits. FastNoiseLite is Godot 4.7.2's own header, set up as its resource sets it up.
   `test_scatter_native.gd` checks the noise on every palette setting and the rows of a painted
   cell of every biome and of the five landform maps' whole builds (water, steep faces, a
-  crossing); it is pending without the library.
+  crossing); it is pending without the library. Parity is per platform: native against
+  GDScript on the same machine, never one platform's rows against another's.
 - **Never mixed.** A job runs whole natively or whole in GDScript (later species read earlier
   species' memos). `run_biome` returns null to fall back; `ScatterNative.fallbacks()` counts
   outcomes by reason ("native", "forced", "missing", "grids"), and `force_gdscript` sends every
@@ -163,6 +166,14 @@ tests today, a fresh clone, an export built without it) the job runs in GDScript
   process of the project before rebuilding. Removing a built library leaves Godot erroring on the
   stale list until `.godot/extension_list.cfg` is deleted and the project re-imported. Commands in
   `AGENTS.md` "Testing".
+- **In CI.** `.github/workflows/native.yml` builds all six libraries (Linux x86_64 on glibc 2.28,
+  Windows x86_64 with llvm-mingw on msvcrt, macOS universal; debug and release), each on the C
+  runtime its official Godot binary uses, since libm's last bits must match the engine's.
+  `native-parity.yml` and build.yml's test job run `test_scatter_native` on all three platforms
+  with the official binary, debug and release libraries, and the exports ship the release one
+  beside the binary (in `Contents/Frameworks/` on macOS). A Linux library may need no newer
+  glibc than Godot's Linux template, or it would not load on the older machines the game runs
+  on. The checks and how to test CI changes without publishing: `AGENTS.md` "CI/CD".
 
 ## Verification
 
