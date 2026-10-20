@@ -20,6 +20,15 @@ extends RefCounted
 ##   native `mode` "on" or "off": the native scatter generator, or every job forced to GDScript
 ##          (ScatterNative.force_gdscript; card native-scatter); resets its job counts.
 ##   counts ScatterNative's jobs by outcome since the last "native".
+##   mode   `mode` "gdscript" (every job forced to GDScript, lead jobs without ground cover),
+##          "lead" (native, lead jobs without ground cover: card native-scatter's behaviour) or
+##          "cover" (native, whole lead jobs: card native-cover); after new_map, since
+##          attach_document sets whole_leads. Optional `interval` and `hold` (ms) set the live
+##          throttle (ScatterRegen.live_interval_msec, live_hold_msec).
+##
+## A watch also times the ground cover (species of the ground class): its first row, and when
+## 90 % of the ground rows this watch added and that are there once it settles had appeared
+## ("cover 90 %"), with the ground rows' own churn.
 
 static var _running: Array[Node] = []
 
@@ -60,6 +69,24 @@ static func run(root: Node, step: Dictionary) -> String:
 			return "native %s (library %s)" % [str(ScatterNative.active()), ScatterNative.version()]
 		"counts":
 			return "jobs %s" % str(ScatterNative.fallbacks())
+		"mode":
+			var mode := String(step.get("mode", "cover"))
+			ScatterNative.force_gdscript = mode == "gdscript"
+			ScatterNative.reset_counts()
+			var regen := c.scatter.get_regen()
+			regen.whole_leads = mode == "cover" and ScatterNative.active()
+			regen.live_interval_msec = int(step.get("interval", ScatterRegen.LIVE_INTERVAL_MSEC))
+			regen.live_hold_msec = int(step.get("hold", ScatterRegen.LIVE_HOLD_MSEC))
+			return (
+				"mode %s: native %s, whole leads %s, interval %d, hold %d"
+				% [
+					mode,
+					str(ScatterNative.active()),
+					str(regen.whole_leads),
+					regen.live_interval_msec,
+					regen.live_hold_msec
+				]
+			)
 		"busy":
 			var busy := 0
 			for node in _running:
@@ -103,7 +130,20 @@ class Watcher:
 	var _jobs := {}
 	## cell -> {asset id -> {row key -> msec added in this watch, 0 for rows already there}}
 	var _rows := {}
-	var _counts := {"applies": 0, "provisional": 0, "added": 0, "removed": 0, "churn": 0}
+	var _counts := {
+		"applies": 0,
+		"provisional": 0,
+		"added": 0,
+		"removed": 0,
+		"churn": 0,
+		"ground_churn": 0,
+		"ground_rescaled": 0,
+	}
+	## row key -> its X and Z bits (see _keys_of).
+	var _xz := {}
+	## Asset ids of the ground class, in every registered biome.
+	var _ground := {}
+	var _first_ground := -1
 	## Frame and process time while pressed, and after the release until settled.
 	var _frame_ms := PackedFloat32Array()
 	var _proc_ms := PackedFloat32Array()
@@ -120,7 +160,17 @@ class Watcher:
 		for cell in scatter.get("_cells") as Dictionary:
 			_rows[cell] = _keys_of(cell)
 		_gen = (scatter.get_regen().get("_generation") as Dictionary).duplicate()
+		_refresh_ground()
 		scatter.cells_applied.connect(_on_applied)
+
+	## The ground assets of every biome registered so far (a biome registers on its first paint).
+	func _refresh_ground() -> void:
+		var biomes: Dictionary = scatter.get_regen().get("_biomes")
+		for info: Dictionary in biomes.values():
+			for rule: Dictionary in info.species:
+				if rule.get("size_class", "") == ScatterRegen.GROUND_CLASS:
+					for asset_id in rule.get("assets", []):
+						_ground[String(asset_id)] = true
 
 	func _process(_delta: float) -> void:
 		var now := Time.get_ticks_msec()
@@ -176,16 +226,22 @@ class Watcher:
 	func _keys_of(cell: Vector2i) -> Dictionary:
 		var out := {}
 		var rows_by_asset: Dictionary = scatter.cell_rows(cell)
+		var stride := MapDocument.ROW_STRIDE
 		for asset_id in rows_by_asset:
 			var rows: PackedFloat32Array = rows_by_asset[asset_id]
+			var bits := rows.to_byte_array().to_int32_array()
+			var row_keys := AuthoredScatter.row_keys(bits)
 			var keys := {}
-			for key in AuthoredScatter.row_keys(rows.to_byte_array().to_int32_array()):
-				keys[key] = 0
+			for r in row_keys.size():
+				keys[row_keys[r]] = 0
+				# The row's X and Z bits: a removed row whose spot a new row holds was re-scaled.
+				_xz[row_keys[r]] = (bits[r * stride] << 32) | (bits[r * stride + 2] & 0xFFFFFFFF)
 			out[asset_id] = keys
 		return out
 
 	func _on_applied(cells: Array[Vector2i]) -> void:
 		var now := Time.get_ticks_msec()
+		_refresh_ground()
 		var dirty: Dictionary = scatter.get_regen().get("_dirty")
 		_apply_ms.append(scatter.last_apply_usec / 1000.0)
 		if _press >= 0 and _first_apply < 0:
@@ -209,14 +265,24 @@ class Watcher:
 					else:
 						keys[key] = now
 						_counts.added += 1
+						if _press >= 0 and _first_ground < 0 and _ground.has(asset_id):
+							_first_ground = now
 			for asset_id in old:
 				var after: Dictionary = fresh.get(asset_id, {})
+				var after_xz := {}
+				if _ground.has(asset_id):
+					for key in after:
+						after_xz[_xz.get(key, 0)] = true
 				var keys: Dictionary = old[asset_id]
 				for key in keys:
 					if not after.has(key):
 						_counts.removed += 1
 						if int(keys[key]) > 0:
 							_counts.churn += 1
+							if _ground.has(asset_id):
+								_counts.ground_churn += 1
+								if after_xz.has(_xz.get(key, -1)):
+									_counts.ground_rescaled += 1
 			_rows[cell] = fresh
 
 	func _rel(t: int, base: int) -> String:
@@ -263,6 +329,36 @@ class Watcher:
 				]
 			)
 		)
+		# Ground cover: when 90 % of the ground rows added in this watch and still there had appeared.
+		var times := PackedInt32Array()
+		for cell in _rows:
+			for asset_id in _rows[cell]:
+				if not _ground.has(asset_id):
+					continue
+				for key in _rows[cell][asset_id]:
+					var t := int(_rows[cell][asset_id][key])
+					if t > 0:
+						times.append(t)
+		times.sort()
+		var cover90 := -1
+		if times.size() > 0:
+			cover90 = times[mini(floori(times.size() * 0.9), times.size() - 1)]
+		lines.append(
+			(
+				(
+					"  ground: first row %s, cover 50%% %s, 90%% %s (%d rows added and kept),"
+					+ " ground churn %d (re-scaled in place %d)"
+				)
+				% [
+					_rel(_first_ground, p),
+					_rel(times[floori(times.size() * 0.5)] if times.size() > 0 else -1, p),
+					_rel(cover90, p),
+					times.size(),
+					_counts.ground_churn,
+					_counts.ground_rescaled
+				]
+			)
+		)
 		lines.append(
 			(
 				"  pressed: frame ms %s, process ms %s; tail: frame ms %s, process ms %s; set_cells ms %s"
@@ -295,6 +391,7 @@ class Watcher:
 		print("RJ| latency " + lines[0])
 		print("RJ| latency " + lines[1].strip_edges())
 		print("RJ| latency " + lines[2].strip_edges())
+		print("RJ| latency " + lines[3].strip_edges())
 		queue_free()
 
 

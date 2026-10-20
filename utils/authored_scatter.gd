@@ -65,16 +65,14 @@ const GROW_UNIFORM := &"grow"
 ## How long a new instance takes to grow in. Long enough to read as growth rather than a
 ## pop at the game camera, short enough that a stroke does not trail a wave behind it.
 const GROW_SECONDS := 0.35
-## At most this many regeneration jobs run at once (and never more than half the cores). The pool
-## runs low-priority tasks on at most low_priority_thread_ratio (0.3) of its threads, 7 of 24, so 6
-## leaves one for GLB loads; a new map's 64 one-cell jobs and a dab's nine are bound by it (4 before
-## ground-opt-cpu2).
+## At most this many regeneration jobs at once, never over half the cores: the pool runs
+## low-priority tasks on 0.3 of its threads (7 of 24), so 6 leaves one for GLB loads.
 const MAX_JOBS := 6
-## Species resolved per frame by _process (see _warm_species; measured cost in
-## docs/PERFORMANCE.md "Authored scatter").
+## Species resolved per frame by _process (_warm_species; PERFORMANCE.md "Authored scatter").
 const SPECIES_PER_FRAME := 1
-## Every instance joins this group, so GameMap.apply_foliage_density() can hand a changed
-## density setting to set_budget() without knowing where the scatter lives.
+## Lead jobs applied per frame; more wait a frame (native-cover: a whole lead is a full cell).
+const LEAD_APPLIES_PER_FRAME := 1
+## Every instance joins it: GameMap.apply_foliage_density() reaches set_budget() through it.
 const GROUP := &"authored_scatter"
 
 const _GROW_SHADER := 0
@@ -88,8 +86,7 @@ var foliage_overrides: Dictionary = {}
 ## Where FoliageDensityController applies the budget after a rebuild; null means the parent
 ## (LevelMap), which holds a dressed GLB's own scatter too, so the budget stays map-wide.
 var budget_root: Node3D = null
-## The foliage primitive budget; negative reads the player's setting once, on first use.
-## Kept current by set_budget() through GROUP.
+## The foliage primitive budget; negative reads the player's setting on first use (set_budget).
 var budget: int = -1
 ## Grow-in duration; 0 builds new instances in place with no animation.
 var grow_seconds: float = GROW_SECONDS
@@ -98,8 +95,7 @@ var last_apply_usec: int = 0
 var last_worker_usec: int = 0
 ## Draw each species once, invisibly, as it resolves (PipelineWarmer); off to measure.
 var warm_pipelines: bool = true
-## Let live requests show provisional results (request_region); off to measure against
-## latest-wins alone.
+## Let live requests show provisional results; off to measure against latest-wins alone.
 var live_applies: bool = true
 ## Props (AuthoredProps) whose rocks regeneration grows no twin inside (RockKeep.blockers_of).
 var blocker_source: AuthoredScatter = null
@@ -389,6 +385,7 @@ func species_materials(asset_id: String) -> Array[ShaderMaterial]:
 func attach_document(doc: MapDocument) -> void:
 	_document = doc
 	_regen = ScatterRegen.for_document(doc)
+	_regen.whole_leads = ScatterNative.active()  # lead jobs grow the ground cover too
 	_regen.built_surfaces = PackedStringArray(
 		PaletteLibrary.surfaces_with_role("built", palette_root)
 	)
@@ -563,6 +560,8 @@ func _dispatch_jobs() -> void:
 	var blockers := PackedFloat32Array() if busy else RockKeep.blockers_of(blocker_source)
 	while _jobs.size() < limit and _regen.has_pending():
 		var job := _regen.take_job()
+		if job.is_empty():  # only cells the brush is still on, their lead jobs out
+			break
 		if snapshot == null:
 			# One copy serves every job dispatched this frame; they only read it.
 			snapshot = ScatterRegen.snapshot(_document)
@@ -594,17 +593,19 @@ func _collect_finished_jobs() -> void:
 
 ## Applies finished jobs whose species resolved, in one set_cells(): their current cells
 ## (ScatterRegen.accept) and, for a lead job, the live cells it shows until their full job
-## lands (ScatterRegen.provisional).
+## lands (ScatterRegen.provisional); at most LEAD_APPLIES_PER_FRAME lead jobs a frame.
 func _apply_ready_jobs() -> void:
 	var rows_by_cell := {}
+	var leads := 0
 	for entry in _finished.duplicate():
-		var ready := true
+		var ready: bool = not (entry.job.get("lead", false) and leads >= LEAD_APPLIES_PER_FRAME)
 		for asset_id in entry.needs:
 			if not _species.has(asset_id):
 				ready = false
 				break
 		if not ready:
 			continue
+		leads += 1 if entry.job.get("lead", false) else 0
 		_finished.erase(entry)
 		var job: Dictionary = entry.job
 		ScatterMass.merge_into(mass_anchors, entry.result.get("anchors", {}))

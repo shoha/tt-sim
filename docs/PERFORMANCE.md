@@ -3874,3 +3874,43 @@ A/B through `ScatterNative.force_gdscript` (`tools/native_scatter_bench.gd`).
   the lead jobs' restriction: a whole cell now costs about 45 ms instead of 780, so a lead job
   could carry the ground cover too and show the cell's full provisional rows while the brush is
   down. Not changed in this card.
+
+## Ground cover under the brush (2026-10-20, card native-cover)
+
+Native jobs build their grids in the library (`native/src/scatter_grids.cpp`, byte-equal to
+`ScatterNative.grids_for`): the probe cell's job, quiet machine, one thread, GDScript 743.8 ms
+median against native 20.26 ms (pack 0.90 + library 18.21; was 44.1 with 24.6 of GDScript
+grids). Lead jobs are whole where jobs run natively (docs/systems/scatter.md "Authoring").
+
+Latency from the press, one window run (render job `cover_latency`, quiet, vsync on, fresh
+200 ft maps at seed 1234; meadow sites on a fresh badlands map; GDScript forced, then native
+with native-scatter's lead jobs, then whole leads; before the apply cap below):
+
+| Site | first grow-in | first ground row | ground 90 % | settled |
+| --- | --- | --- | --- | --- |
+| Forest dab | 212 / 137 / 167 | - / - / 162 | - | 1352 / 840 / 909 |
+| Forest stroke | 395 / 263 / 166 | 1463 / 1055 / 161 | 1547 / 1055 / 948 | 1905 / 1418 / 1440 |
+| Alpine dab | 303 / 148 / 173 | none added | - | 1547 / 873 / 852 |
+| Alpine stroke | 105 / 25 / 48 | 1620 / 1042 / 172 | 1669 / 1042 / 908 | 2173 / 1403 / 1403 |
+| Badlands dab | 1116 / 484 / 183 | none added | - | 1579 / 844 / 907 |
+| Badlands stroke | 685 / 393 / 182 | 1743 / 1077 / 175 | 1810 / 1077 / 836 | 2191 / 1437 / 1430 |
+| Meadow dab | 1206 / 537 / 49 | 1204 / 530 / 42 | 1239 / 578 / 578 | 1740 / 937 / 930 |
+| Meadow stroke | 1775 / 1074 / 32 | 1774 / 1072 / 27 | 1843 / 1099 / 991 | 2294 / 1451 / 1451 |
+
+"Ground 90 %": when 90 % of the ground rows the watch added and kept had appeared; a held dab
+raises its density until the release, so most of its final rows exist only after it. Churn
+(rows one apply added and a later one removed) 0 with restricted leads; with whole leads 15 of
+146 ground rows in the meadow dab, 7 of 105 in the stroke, about 1 % in the long strokes below
+(mostly displaced, a few re-scaled in place); they shrink out.
+
+Main thread (`cover_perf`: fresh 200 ft temperate forest, zoom 26, vsync off, grassland strokes
+r 4 m at 6 m/s along 24 m, alternating). Without a cap whole leads cost +0 to +3 ms median and
++3.1 to +3.5 ms p95 while pressed (set_cells 2.5-4.9 ms median, 5.9-9.1 p95, up to 11.9 ms; 2.7
+cells per apply), interval 50 ms twice that, 200 ms cheaper but the cover half-grown 1.3 s later.
+With `LEAD_APPLIES_PER_FRAME` 1 (second run), frame ms median / p95 / worst while pressed: lead
+8.44 / 11.74 / 36.92 and 9.16 / 11.29 / 19.85, whole leads 7.68 / 11.52 / 13.49 and 7.15 / 11.47 /
+14.51; set_cells per apply 1.10-1.58 ms median, 2.59-3.52 p95. Ground cover half-grown at +2.2 to
++2.3 s into the 4 s stroke against +4.0 s (at the release) with restricted leads. Under the
+filmer's 20 ms frames the cap backs up and the cover stroke trails restricted leads (first
+ground row +346 against +212): the cap needs to follow cost, not count. LIVE_INTERVAL_MSEC stays
+100 and LIVE_HOLD_MSEC 50. Indicative: one run each, the GPU shared.
