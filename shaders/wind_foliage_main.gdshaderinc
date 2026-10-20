@@ -8,6 +8,9 @@
 // wind_foliage_burn.gdshader keeps its own vertex() and fragment() and does not include this.
 
 #include "res://shaders/wind_foliage_include.gdshaderinc"
+// The arrival motion's grow_scale() (here, not in wind_foliage_include, so the burn variant gains
+// no uniform).
+#include "res://shaders/wind_foliage_grow.gdshaderinc"
 // The ground look's tuft colour (ground_light_field.gdshaderinc LIGHT_FIELD_TUFT), off until
 // GroundLookBake sets zone_tuft_strength on a looked biome's grass. Here rather than in
 // wind_foliage_include, so wind_foliage_burn.gdshader gains no uniform.
@@ -30,7 +33,7 @@ varying float zone_mass_h;
 void vertex() {
 	local_vertex_y = VERTEX.y;
 	VERTEX += wind_sway_vertex_offset(VERTEX, COLOR, MODEL_MATRIX, TIME);
-	VERTEX *= grow;
+	VERTEX *= grow_scale(MODEL_MATRIX[3].xyz);
 	zone_tuft = vec4(1.0);
 	zone_mass = vec2(0.0);
 	zone_mass_h = 0.0;

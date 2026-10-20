@@ -97,6 +97,7 @@
 		"res://tests/unit/test_scatter_mass.gd",
 		"res://tests/unit/test_scatter_native.gd",
 		"res://tests/unit/test_scatter_apply.gd",
+		"res://tests/unit/test_scatter_arrival.gd",
 		"res://tests/unit/test_scatter_regen_live.gd",
 		"res://tests/unit/test_sculpt_tool.gd",
 		"res://tests/unit/test_shape_field.gd",

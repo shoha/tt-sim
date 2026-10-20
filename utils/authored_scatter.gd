@@ -35,12 +35,12 @@ extends Node3D
 ##
 ## Grow-in. set_cells() with animation splits each rebuilt cell: rows that were already
 ## there stay in the cell's node untouched, and rows that are new go to a temporary
-## `..._grow<n>` node that grows in over grow_seconds and is then merged back. Wind species
-## grow through the `grow` instance uniform every wind shader variant multiplies the vertex
-## by (one per-node value, no per-instance work); anything else, rocks above all, rises out
-## of the ground by moving the temporary node, which needs no shader at all. Instances an
-## animated rebuild removes shrink away the same two ways (ScatterShrink); an unanimated
-## rebuild (a prop being rotated or scaled in place) replaces them at once.
+## `..._grow<n>` node that grows in and is then merged back. The motion is ScatterArrival's:
+## staged by size class on a brush landing, plants overshooting a little and rippling out from
+## the brush centre the landing carries (through per-node instance uniforms every wind shader
+## variant reads), rocks dropping in through their own instance transforms. Instances an
+## animated rebuild removes shrink away (ScatterShrink); an unanimated rebuild (a prop being
+## rotated or scaled in place) replaces them at once.
 ##
 ## Brushes. attach_document() plus request_region(rect) regenerate the cells a painted
 ## rectangle can affect (ScatterRegen: the cells it touches plus each species' relation
@@ -79,9 +79,6 @@ const MERGE_BATCH := 3
 ## Every instance joins it: GameMap.apply_foliage_density() reaches set_budget() through it.
 const GROUP := &"authored_scatter"
 
-const _GROW_SHADER := 0
-const _GROW_RISE := 1
-
 ## Palette root species are resolved from.
 var palette_root: String = PaletteLibrary.DEFAULT_ROOT
 ## The level's foliage overrides ("<category>_sway_speed" ...), baked into each species'
@@ -92,7 +89,7 @@ var foliage_overrides: Dictionary = {}
 var budget_root: Node3D = null
 ## The foliage primitive budget; negative reads the player's setting on first use (set_budget).
 var budget: int = -1
-## Grow-in duration; 0 builds new instances in place with no animation.
+## Classic grow-in duration (ScatterArrival.classic); 0 builds new instances in place.
 var grow_seconds: float = GROW_SECONDS
 ## Microseconds of the last set_cells() call and of the last worker job, for measurement.
 var last_apply_usec: int = 0
@@ -113,9 +110,11 @@ var blocker_source: AuthoredScatter = null
 ## every MultiMesh this node builds. clear() forgets them.
 var mass_anchors: Dictionary = {}
 
-## asset id -> {"mesh", "wind_category", "stem", "materials", "grow_mode", "height"}, or {}
-## for an id that did not resolve (its rows are kept, nothing is built).
+## asset id -> {"mesh", "wind_category", "stem", "materials", "by_shader", "height", "stage"},
+## or {} for an id that did not resolve (its rows are kept, nothing is built).
 var _species: Dictionary = {}
+## cell -> brush centre (Vector2, map XZ) of the landing rebuild_cells() is applying, else empty.
+var _centres: Dictionary = {}
 ## cell -> {asset id -> PackedFloat32Array}: the rows every node of the cell is built from.
 var _cells: Dictionary = {}
 ## cell -> {asset id -> PackedInt64Array}: row_keys of those rows, kept with them.
@@ -263,13 +262,22 @@ func set_cells(rows_by_cell: Dictionary, animate: bool = true) -> void:
 
 ## set_cells() without the density budget or the signal, for ScatterApply, which lands one
 ## result at a time against its frame budget. Returns the primitive delta for finish_cells().
-func rebuild_cells(rows_by_cell: Dictionary, animate: bool = true) -> int:
+## `centres`: the job's brush centre per cell (ScatterRegen "Brush centres"), which stages the
+## arrival and ripples it from there (ScatterArrival).
+func rebuild_cells(rows_by_cell: Dictionary, animate: bool = true, centres: Dictionary = {}) -> int:
 	var grow := animate and grow_seconds > 0.0 and is_inside_tree()
 	var delta := 0
+	_centres = centres
 	for cell in rows_by_cell:
 		delta += _primitive_delta(_cells.get(cell, {}), rows_by_cell[cell])
 		_rebuild_cell(cell, rows_by_cell[cell], grow)
+	_centres = {}
 	return delta
+
+
+## The brush centre of `cell` in the landing being applied (Vector2, map XZ), or null.
+func landing_centre(cell: Vector2i) -> Variant:
+	return _centres.get(cell)
 
 
 ## Ends rebuild_cells() of `cells`: applies the density budget for `delta`, records the time
@@ -712,11 +720,9 @@ func _refresh_growing(
 				if surviving.has(keys[i]):
 					indices.append(i)
 			var node: MultiMeshInstance3D = entry.node
-			node.multimesh = ScatterGlbUtils.build_multimesh(
-				node.multimesh.mesh,
-				_ordered_transforms(asset_id, cell, rows, keys, indices),
-				mass_anchors
-			)
+			var kept := _ordered_transforms(asset_id, cell, rows, keys, indices)
+			node.multimesh = ScatterGlbUtils.build_multimesh(node.multimesh.mesh, kept, mass_anchors)
+			ScatterArrival.refreshed(entry, kept)  # dropping rocks stay where their drop has them
 			_touched.append(node)
 		growing_keys.merge(surviving)
 	if entries.is_empty():
@@ -773,47 +779,20 @@ func _start_growth(
 ) -> void:
 	var species: Dictionary = _species[asset_id]
 	_grow_serial += 1
-	var node := _new_chunk_node(
-		asset_id,
-		cell,
-		GROWING_INFIX + str(_grow_serial),
-		_ordered_transforms(asset_id, cell, rows, keys, indices)
-	)
+	var transforms := _ordered_transforms(asset_id, cell, rows, keys, indices)
+	var node := _new_chunk_node(asset_id, cell, GROWING_INFIX + str(_grow_serial), transforms)
 	var entry_keys := {}
 	for i in indices:
 		entry_keys[keys[i]] = true
-	var lift := 0.0
-	if species.grow_mode == _GROW_RISE:
-		var tallest := 0.0
-		for i in indices:
-			tallest = maxf(tallest, rows[i * MapDocument.ROW_STRIDE + 8])
-		lift = maxf(species.height * tallest, 0.05)
 	_touched.append(node)
-	var entry := {"node": node, "keys": entry_keys, "tween": null}
-	_set_growth(0.0, node, species.grow_mode, lift)
-	var tween := create_tween()
-	(
-		tween
-		. tween_method(_set_growth.bind(node, species.grow_mode, lift), 0.0, 1.0, grow_seconds)
-		. set_trans(Tween.TRANS_CUBIC)
-		. set_ease(Tween.EASE_OUT)
-	)
-	tween.tween_callback(_finish_growth.bind(cell, asset_id, entry))
-	entry.tween = tween
+	var entry := {"node": node, "keys": entry_keys, "tween": create_tween()}
+	ScatterArrival.grow_in(entry, species, transforms, _centres.get(cell), grow_seconds)
+	(entry.tween as Tween).tween_callback(_finish_growth.bind(cell, asset_id, entry))
 	if not _growing.has(cell):
 		_growing[cell] = {}
 	if not _growing[cell].has(asset_id):
 		_growing[cell][asset_id] = []
 	_growing[cell][asset_id].append(entry)
-
-
-func _set_growth(value: float, node: MultiMeshInstance3D, mode: int, lift: float) -> void:
-	if not is_instance_valid(node):
-		return
-	if mode == _GROW_SHADER:
-		node.set_instance_shader_parameter(GROW_UNIFORM, value)
-	else:
-		node.position.y = -lift * (1.0 - value)
 
 
 ## Merges finished grow-ins into the cell's settled node: this one, with the asset's others
@@ -938,9 +917,10 @@ func _species_for(asset_id: String) -> Dictionary:
 		"wind_category": category,
 		"stem": asset_id.validate_node_name(),
 		"materials": materials,
-		"grow_mode": _GROW_SHADER if all_wind else _GROW_RISE,
+		"by_shader": all_wind,
 		"height": maxf(aabb.end.y, 0.0),
 		"primitives": FoliageBudget.primitives_per_instance(mesh),
+		"stage": ScatterArrival.stage_for(asset_id, palette_root),
 	}
 	if not materials.is_empty():
 		species_added.emit(materials)
