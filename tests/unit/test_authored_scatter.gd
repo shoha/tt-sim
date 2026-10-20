@@ -657,7 +657,8 @@ func test_new_instances_grow_in_and_unchanged_ones_stay_put() -> void:
 	var growing := scatter.get_growing_nodes(cell, OAK)
 	assert_eq(growing.size(), 1)
 	assert_eq(growing[0].multimesh.instance_count, 2)
-	assert_eq(growing[0].get_instance_shader_parameter(AuthoredScatter.GROW_UNIFORM), 0.0)
+	var clock: Vector2 = growing[0].get_instance_shader_parameter(ScatterArrival.CLOCK_UNIFORM)
+	assert_eq(clock, Vector2(0.0, ScatterArrival.LIFE_GROW_SECONDS), "starts collapsed")
 
 	scatter.complete_growth()
 	assert_false(scatter.is_growing())
@@ -683,13 +684,18 @@ func test_a_rebuild_mid_growth_keeps_the_running_grow_in() -> void:
 	assert_eq(scatter.get_cell_node(cell, OAK).multimesh.instance_count, 6)
 
 
-func test_species_without_wind_rise_out_of_the_ground() -> void:
+func test_species_without_wind_drop_in_one_by_one() -> void:
 	var scatter := _scatter()
 	var cell := Vector2i(0, 0)
 	scatter.set_cells({cell: {BOULDER: _cell_rows(cell, 3)}})
 	var growing := scatter.get_growing_nodes(cell, BOULDER)
 	assert_eq(growing.size(), 1)
-	assert_lt(growing[0].position.y, 0.0, "starts below the ground")
+	assert_eq(growing[0].position, Vector3.ZERO, "the node stays put; each rock moves")
+	var entry: Dictionary = (scatter.get("_growing") as Dictionary)[cell][BOULDER][0]
+	var drop: Dictionary = entry.arrival.drop
+	assert_eq((drop.delays as PackedFloat32Array).size(), 3, "a delay per rock")
+	for height: float in drop.drops:
+		assert_between(height, ScatterArrival.ROCK_DROP_MIN_M, ScatterArrival.ROCK_DROP_MAX_M)
 	scatter.complete_growth()
 	var settled := scatter.get_cell_node(cell, BOULDER)
 	assert_eq(settled.position, Vector3.ZERO)

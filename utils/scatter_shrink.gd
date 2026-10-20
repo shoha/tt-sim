@@ -9,11 +9,12 @@ extends RefCounted
 ## dressed Blender map's own scatter under the erase mask).
 ##
 ## Same two modes as the grow-in: a species whose every surface is a wind ShaderMaterial
-## shrinks through the `grow` instance uniform every wind shader variant multiplies the
-## vertex by (one value per node, no per-instance work); anything else (rocks, whose
-## material has no such uniform) sinks into the ground by moving the temporary node.
-## The node is built with ScatterGlbUtils.build_chunk, so it shares the chunk's mesh and
-## materials and creates nothing new.
+## shrinks through instance uniforms every wind shader variant reads (per node; each instance
+## works out its own size in the shader); anything else (rocks, whose material has no such
+## uniform) sinks into the ground by moving the temporary node. The motion itself (staged by
+## size class, a swell and collapse rippling out from the brush, rocks hopping before they
+## sink) is ScatterArrival's. The node is built with ScatterGlbUtils.build_chunk, so it shares
+## the chunk's mesh and materials and creates nothing new.
 
 ## Long enough to read as the plant withdrawing, short enough to keep up with a stroke.
 const SECONDS := 0.3
@@ -76,8 +77,9 @@ static func shrinks_by_shader(mesh: Mesh) -> bool:
 ## is named after it plus INFIX and a serial); `sink_depth` is how far a sinking species
 ## travels down (its height). A grass mass's tufts keep their anchors (`anchors`, the owner's
 ## ScatterMass table) in custom data while they shrink, so they keep their mass's hue. `from`
-## is the share of their full size they start at (an instance removed mid-grow-in), and the
-## shrink takes that share of `seconds`.
+## is the share of their full size they start at under ScatterArrival.classic (an instance
+## removed mid-grow-in), and the shrink takes that share of `seconds`; otherwise the shrink waits
+## `delay` seconds (its stage) and ripples out from `centre` (ScatterArrival.origin_of's forms).
 static func start(
 	parent: Node3D,
 	mesh: Mesh,
@@ -88,7 +90,9 @@ static func start(
 	sink_depth: float,
 	seconds: float = SECONDS,
 	anchors: Dictionary = {},
-	from: float = 1.0
+	from: float = 1.0,
+	delay: float = 0.0,
+	centre: Variant = null
 ) -> MultiMeshInstance3D:
 	transforms = unheld(parent, transforms)
 	if transforms.is_empty() or mesh == null or seconds <= 0.0 or not parent.is_inside_tree():
@@ -104,21 +108,25 @@ static func start(
 		return null
 	var by_shader := shrinks_by_shader(mesh)
 	var depth := maxf(sink_depth, 0.05)
-	_apply(from, node, by_shader, depth)
 	var tween := node.create_tween()
-	(
-		tween
-		. tween_method(_apply.bind(node, by_shader, depth), from, 0.0, seconds * from)
-		. set_trans(Tween.TRANS_CUBIC)
-		. set_ease(Tween.EASE_IN)
-	)
+	if ScatterArrival.classic:
+		_apply(from, node, by_shader, depth)
+		(
+			tween
+			. tween_method(_apply.bind(node, by_shader, depth), from, 0.0, seconds * from)
+			. set_trans(Tween.TRANS_CUBIC)
+			. set_ease(Tween.EASE_IN)
+		)
+	else:
+		ScatterArrival.shrink_out(tween, node, by_shader, transforms, centre, delay, depth)
 	tween.tween_callback(node.queue_free)
 	return node
 
 
 ## Shrinks out the rows at `indices` of a cell's flat `rows` (MapDocument.ROW_STRIDE) under
-## `parent`, an AuthoredScatter, for its `species` record ("mesh", "stem", "wind_category"),
-## from `from` of their full size.
+## `parent`, an AuthoredScatter, for its `species` record ("mesh", "stem", "wind_category",
+## "stage"), from `from` of their full size. A brush landing (AuthoredScatter.landing_centre) is
+## staged and ripples from its brush centre; a direct rebuild shrinks at once from the centroid.
 static func start_rows(
 	parent: Node3D,
 	species: Dictionary,
@@ -132,26 +140,38 @@ static func start_rows(
 	if indices.is_empty():
 		return
 	var transforms := ScatterRows.transforms_from_rows(rows, indices)
+	var centre: Variant = null
+	if parent is AuthoredScatter:
+		centre = (parent as AuthoredScatter).landing_centre(cell)
+	var delay := ScatterArrival.stage_delay(int(species.get("stage", 1))) if centre != null else 0.0
+	_start_transforms(parent, species, cell, transforms, seconds, anchors, from, delay, centre)
+
+
+static func _start_transforms(
+	parent: Node3D,
+	species: Dictionary,
+	cell: Vector2i,
+	transforms: Array[Transform3D],
+	seconds: float,
+	anchors: Dictionary,
+	from: float,
+	delay: float,
+	centre: Variant
+) -> void:
 	var suffix := ScatterChunker.cell_suffix(cell)
 	var depth := sink_depth_for(species.mesh, transforms)
-	start(
-		parent,
-		species.mesh,
-		species.stem,
-		suffix,
-		transforms,
-		species.wind_category,
-		depth,
-		seconds,
-		anchors,
-		from
-	)
+	var wind: String = species.wind_category
+	var mesh: Mesh = species.mesh
+	var stem: String = species.stem
+	start(parent, mesh, stem, suffix, transforms, wind, depth, seconds, anchors, from, delay, centre)
 
 
 ## Rows still growing in that a rebuild removes (a stroke's provisional result can drop what an
 ## earlier one started) shrink away from the size they had reached, instead of vanishing.
 ## `growing` is AuthoredScatter's list for the cell's asset ({"keys", "tween"} entries growing
-## over `seconds`), `old_list` the row keys of `old_rows`, `present` the keys the cell keeps.
+## over `seconds`, with "arrival" when ScatterArrival built them: each instance then leaves from
+## its own size, rippling from the same centre), `old_list` the row keys of `old_rows`, `present`
+## the keys the cell keeps.
 static func start_growing(
 	parent: Node3D,
 	species: Dictionary,
@@ -170,6 +190,13 @@ static func start_growing(
 			if entry_keys.has(old_list[i]) and not present.has(old_list[i]):
 				gone.append(i)
 		if gone.is_empty():
+			continue
+		if entry.has("arrival"):
+			var leaving := unheld(parent, ScatterRows.transforms_from_rows(old_rows, gone))
+			var by_shader := shrinks_by_shader(species.mesh)
+			var shown := ScatterArrival.as_shown(entry, parent, leaving, by_shader, species.height)
+			var at: Vector3 = entry.arrival.at
+			_start_transforms(parent, species, cell, shown, seconds, anchors, 1.0, 0.0, at)
 			continue
 		var tween: Tween = entry.tween
 		var t := 1.0
