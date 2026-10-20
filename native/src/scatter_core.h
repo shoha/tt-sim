@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
 #include <godot_cpp/variant/quaternion.hpp>
@@ -305,16 +306,26 @@ struct CrossingSpan {
 	double width_m = 0.0;
 };
 
-/// One whole-grid float32 array of the job, held (not copied) and read through its pointer.
+/// One whole-grid float32 array of the job, read through its pointer: either held from the job's
+/// Dictionary (not copied) or computed here from the document (scatter_grids.cpp) and owned.
 struct Grid {
 	godot::PackedFloat32Array hold;
+	std::vector<float> own;
 	const float *p = nullptr;
+	int64_t n = 0;
 
 	void take(const godot::PackedFloat32Array &a) {
 		hold = a;
 		p = hold.is_empty() ? nullptr : hold.ptr();
+		n = hold.size();
+	}
+	void adopt(std::vector<float> &&v) {
+		own = std::move(v);
+		p = own.empty() ? nullptr : own.data();
+		n = (int64_t)own.size();
 	}
 	bool empty() const { return p == nullptr; }
+	int64_t size() const { return n; }
 	float operator[](int64_t i) const { return p[i]; }
 };
 
@@ -331,5 +342,11 @@ struct Grids {
 	std::vector<CrossingSpan> crossings;
 	bool paints = false, fringed = false, wet = false;
 };
+
+/// ScatterNative.grids_for in C++ (scatter_grids.cpp): the window's density, curvature, steepness,
+/// face proximity, painted fields and fringe from the document's own arrays in `source`
+/// (ScatterNative.pack's "source"), the same values bit for bit. Fills every Grid of `grids` and
+/// its sizes; water and crossings are left to the loader. False when `source` is malformed.
+bool build_grids(const godot::Dictionary &source, Grids &grids);
 
 } // namespace ttscatter

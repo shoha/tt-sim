@@ -28,6 +28,10 @@ public:
 	/// The pattern noise's get_noise_2d at each (x, z) pair of `xz`, set up as
 	/// ScatterGenerator._noise sets up its FastNoiseLite: the parity check's call.
 	PackedFloat32Array noise_2d(int64_t seed, double frequency, int64_t octaves, const PackedFloat64Array &xz) const;
+	/// The window's grids the library computes from a job's "source" (ScatterNative.pack), as
+	/// whole-grid arrays keyed as ScatterNative.grids_for keys them, or {"error"}: the grid
+	/// parity check's call.
+	Dictionary grids(const Dictionary &source) const;
 };
 
 } // namespace godot

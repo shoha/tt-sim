@@ -391,22 +391,32 @@ bool Job::load(const Dictionary &d) {
 		}
 		entry.blocked_by_rocks = entry.ground_role == (int)inum(at(d, "consts"), "role_rock") || entry.footing_m > 0.0;
 	}
-	Dictionary g = at(d, "grids");
-	grids.columns = (int)inum(g, "columns");
-	grids.rows = (int)inum(g, "rows");
-	grids.step = vec2(g, "step");
-	grids.half = vec2(g, "half");
-	grids.seed_value = inum(g, "seed_value");
-	grids.density.take(at(g, "density"));
-	grids.heights.take(at(g, "heights"));
-	grids.curvature.take(at(g, "curvature"));
-	grids.steep.take(at(g, "steep"));
-	grids.near_face.take(at(g, "near_face"));
-	grids.paint_total.take(at(g, "paint_total"));
-	grids.paint_built.take(at(g, "paint_built"));
-	grids.paint_rock.take(at(g, "paint_rock"));
-	grids.paint_ash.take(at(g, "paint_ash"));
-	grids.fringe.take(at(g, "fringe"));
+	// The grids come computed here from the document's arrays ("source", ScatterNative.pack) or,
+	// for the parity checks, as GDScript built them ("grids", ScatterNative.grids_for).
+	Dictionary g = at(d, "source");
+	if (!g.is_empty()) {
+		if (!build_grids(g, grids)) {
+			error = "grids";
+			return false;
+		}
+	} else {
+		g = at(d, "grids");
+		grids.columns = (int)inum(g, "columns");
+		grids.rows = (int)inum(g, "rows");
+		grids.step = vec2(g, "step");
+		grids.half = vec2(g, "half");
+		grids.seed_value = inum(g, "seed_value");
+		grids.density.take(at(g, "density"));
+		grids.heights.take(at(g, "heights"));
+		grids.curvature.take(at(g, "curvature"));
+		grids.steep.take(at(g, "steep"));
+		grids.near_face.take(at(g, "near_face"));
+		grids.paint_total.take(at(g, "paint_total"));
+		grids.paint_built.take(at(g, "paint_built"));
+		grids.paint_rock.take(at(g, "paint_rock"));
+		grids.paint_ash.take(at(g, "paint_ash"));
+		grids.fringe.take(at(g, "fringe"));
+	}
 	grids.paints = !grids.paint_total.empty();
 	grids.fringed = !grids.fringe.empty();
 	int64_t count = (int64_t)grids.columns * grids.rows;
@@ -421,8 +431,8 @@ bool Job::load(const Dictionary &d) {
 		span.width_m = crossings_in[i + 4];
 		grids.crossings.push_back(span);
 	}
-	if (grids.columns < 2 || grids.rows < 2 || grids.density.hold.size() != count || grids.heights.hold.size() != count ||
-			grids.curvature.hold.size() != count || grids.steep.hold.size() != count || grids.near_face.hold.size() != count) {
+	if (grids.columns < 2 || grids.rows < 2 || grids.density.size() != count || grids.heights.size() != count ||
+			grids.curvature.size() != count || grids.steep.size() != count || grids.near_face.size() != count) {
 		error = "grids";
 		return false;
 	}
