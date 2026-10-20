@@ -3,8 +3,10 @@ extends RefCounted
 
 ## The brush's sounds: a soft answer to every edit, by the tool's family. BrushTool owns
 ## one and tells it when a stroke begins, how far each frame of it moved and when it ends;
-## this decides what is heard. Every sound is a recorded shot in tools/sfx_spec.py (SHOTS)
-## on the SFX bus, its takes, level and jitter set there; this class only says when.
+## this decides what is heard. A stroke is a dab stroke or a gesture a mode took
+## itself (BrushMode.took_press: a prop placed, a river's or a crossing's line drawn).
+## Every sound is a recorded shot in tools/sfx_spec.py (SHOTS) on the SFX bus, its
+## takes, level and jitter set there; this class only says when.
 ##
 ## Families. A tool's id names its family (FAMILIES): plant for Biome and Thin / Clear (a
 ## leafy rustle), prop for Place and Bridge (a soft wood knock), water, paint (a brush swish

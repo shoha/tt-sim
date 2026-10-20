@@ -17,6 +17,26 @@ func _recording_sound() -> StrokeSound:
 	return sound
 
 
+func _editor() -> AuthoringEditor:
+	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass_birch", "v", 11)
+	var root := MapSourceLoader.create_authored_root(doc)
+	if root.get_node_or_null(MapSourceLoader.PROPS_NODE) == null:
+		var props := AuthoredScatter.create()
+		props.name = MapSourceLoader.PROPS_NODE
+		props.budget = 1_000_000_000
+		root.add_child(props)
+	add_child_autofree(root)
+	return AuthoringEditor.create(doc, root, AuthoringHistory.new())
+
+
+## A press at `at` whose ground point is known, as BrushTool's next frame starts it.
+func _press(brush: BrushTool, at: Vector3) -> void:
+	brush.pressed = true
+	brush.press_pending = true
+	brush.hit = at
+	brush._start_gesture(0.0)
+
+
 func test_ticks_are_whole_spacings_of_distance() -> void:
 	assert_eq(StrokeSound.ticks_for(0.0, 3.0), 0)
 	assert_eq(StrokeSound.ticks_for(2.99, 3.0), 0, "under one spacing: none")
@@ -94,6 +114,48 @@ func test_fire_and_unknown_tools_are_silent() -> void:
 	assert_eq(_heard.size(), 0)
 	assert_eq(StrokeSound.family_of(&"thin_clear"), &"plant")
 	assert_eq(StrokeSound.family_of(&"bridge"), &"prop")
+
+
+## A gesture a mode takes itself (BrushMode.took_press) is heard as a stroke is: a Place press
+## that places a prop knocks once (a tap), one that places nothing (no species picked) is
+## silent, and a river's line starts, ticks by distance and settles on its release. The sound
+## once began only for dab strokes, so Place, Bridge and River were silent in the game.
+func test_gestures_a_mode_takes_itself_are_heard() -> void:
+	var editor := _editor()
+	var radius_was := BrushTool.session_radius
+	var brush := BrushTool.new()
+	add_child_autofree(brush)
+	brush.editor = editor
+	# Place beds its prop with a downward ray in the brush's world.
+	var world := SubViewport.new()
+	add_child_autofree(world)
+	brush._world_viewport = world
+	brush.sound = _recording_sound()
+	brush.use_tool(ToolRegistry.find(PlaceTool.ID))
+	brush.set_radius(4.0)
+	_press(brush, Vector3(2, 0, 2))
+	brush.finish_gesture()
+	assert_eq(_heard.size(), 0, "no species picked: nothing placed, nothing heard")
+	PlaceTool.of(brush).rule = editor.species_rule("temperate_forest_summer_s1", "boulder")
+	var edits := editor.history.undo_count()
+	_press(brush, Vector3(2, 0, 2))
+	brush.finish_gesture()
+	assert_eq(editor.history.undo_count(), edits + 1, "the press placed a boulder")
+	assert_eq(_heard, [&"prop_start"] as Array[StringName], "a placed prop: its knock alone")
+	_heard.clear()
+	brush.use_tool(ToolRegistry.find(WaterTool.ID))
+	brush.set_radius(4.0)
+	_press(brush, Vector3(-6, 0, 0))
+	for k in 13:
+		brush.hit = Vector3(-6 + k, 0, 0)
+		brush.mode.frame(brush)
+		brush.follow_sound(0.1)
+	brush.finish_gesture()
+	assert_eq(_heard.front(), &"water_start")
+	assert_eq(_heard.count(&"water_tick"), 4, "12 m of line at a 3 m spacing")
+	assert_eq(_heard.back(), &"water_settle")
+	assert_eq(_heard.size(), 6)
+	BrushTool.session_radius = radius_was
 
 
 func test_every_sound_is_a_recorded_shot_on_sfx() -> void:

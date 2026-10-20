@@ -271,6 +271,11 @@ func press(brush: BrushTool) -> bool:
 	return false
 
 
+## True when the press began a line (an erase is silent, as a prop's removal is).
+func took_press() -> bool:
+	return drawing
+
+
 ## Ctrl held while hovering (not pressed) looks up the crossing to outline.
 func frame(brush: BrushTool) -> void:
 	track(brush.editor, brush.hit, brush.ctrl and not brush.pressed)

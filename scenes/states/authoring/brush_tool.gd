@@ -148,6 +148,11 @@ var _dwell_anchor: Vector3 = Vector3.INF
 ## The stroke's start and the exposure it has had (min_stroke_seconds).
 var _stroke_start: Vector3 = Vector3.INF
 var _stroke_exposure: float = 0.0
+## A press the mode took for a gesture of its own is held (BrushMode.took_press: a prop placed,
+## a river's or a crossing's line begun), and the ground point its sound last measured from:
+## the sound follows the pointer as a dab stroke's does.
+var _own_gesture: bool = false
+var _sound_at: Vector3 = Vector3.INF
 
 
 ## What an input event means to the brush, given whether the mode `picks` targets, whether a
@@ -325,10 +330,11 @@ func finish_gesture() -> void:
 	if editor != null and stroking:
 		_top_up_click()
 		editor.end_stroke()
-	if stroking:
+	if stroking or _own_gesture:
 		sound.end()
 	mode.end(self)
 	stroking = false
+	_own_gesture = false
 
 
 ## Drops the gesture in progress, reverting it (RMB or Escape while a press is held).
@@ -340,6 +346,7 @@ func cancel_gesture() -> void:
 	pressed = false
 	press_pending = false
 	stroking = false
+	_own_gesture = false
 	redraw()
 
 
@@ -418,6 +425,7 @@ func _process(delta: float) -> void:
 	mode.frame(self)
 	if stroking and hit != Vector3.INF:
 		_paint(seconds)
+	follow_sound(seconds)
 	if editor != null:
 		editor.tick(seconds)
 	redraw()
@@ -430,6 +438,10 @@ func _start_gesture(click_seconds: float) -> void:
 	if editor == null or hit == Vector3.INF:
 		return
 	if not mode.press(self):
+		if mode.took_press():
+			_own_gesture = true
+			_sound_at = hit
+			sound.begin(tool.id if tool != null else &"", session_radius)
 		return
 	gesture_started.emit()
 	stroking = true
@@ -473,6 +485,15 @@ func _paint(seconds: float) -> void:
 	sound.moved(_last_dab.distance_to(hit), seconds)
 	_last_dab = hit
 	mode.dabbed(self)
+
+
+## A frame of a gesture the mode took itself (see _own_gesture): its sound hears how far the
+## pointer's ground point moved over `seconds`, as _paint tells it for a dab stroke.
+func follow_sound(seconds: float) -> void:
+	if not _own_gesture or hit == Vector3.INF:
+		return
+	sound.moved(_sound_at.distance_to(hit), seconds)
+	_sound_at = hit
 
 
 ## Where the pointer meets the ground this frame (layer 1), or Vector3.INF.
