@@ -1,0 +1,93 @@
+{
+ "out_dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover",
+ "timeout_s": 1200,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "expand", "values": ["lead", "cover"], "template": [
+   {"op": "new_map", "biome": "grassland_meadow_summer_s1", "size": 200, "seed": 1234},
+   {"op": "wait_ready", "settle": 1.0},
+   {"op": "no_autosave"},
+   {"op": "hide_ui"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+   {"op": "call", "script": "res://tools/render_jobs/probes/prepare_biomes.gd", "all": true},
+   {"op": "zoom", "size": 13.85},
+   {"op": "wait", "s": 5.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/prepare_biomes.gd"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "live", "mode": "on"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "mode", "mode": "{value}", "landing": "{value}"},
+
+   {"op": "look_at", "at": [-20, -14]},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "r2_{value}_tree_dab", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
+   {"op": "stroke", "mode": "paint", "biome": "temperate_forest_summer_s1", "radius": 3.5, "hold": 0.5, "points": [[-20, -14], [-20, -14]]},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 0.5},
+
+   {"op": "look_at", "at": [-20, 14]},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "r2_{value}_tree_stroke", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
+   {"op": "stroke", "mode": "paint", "biome": "temperate_forest_summer_s1", "radius": 2.5, "speed": 6.0, "points": [[-23, 14], [-17, 14]]},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 0.5},
+
+   {"op": "look_at", "at": [0, -14]},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "r2_{value}_flower_dab", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
+   {"op": "stroke", "mode": "paint", "biome": "alpine_meadow_summer_s1", "radius": 3.5, "hold": 0.5, "points": [[0, -14], [0, -14]]},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 0.5},
+
+   {"op": "look_at", "at": [0, 14]},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "r2_{value}_flower_stroke", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
+   {"op": "stroke", "mode": "paint", "biome": "alpine_meadow_summer_s1", "radius": 2.5, "speed": 6.0, "points": [[-3, 14], [3, 14]]},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 0.5},
+
+   {"op": "look_at", "at": [20, -14]},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "r2_{value}_rock_dab", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
+   {"op": "stroke", "mode": "paint", "biome": "rocky_badlands_summer_s1", "radius": 3.5, "hold": 0.5, "points": [[20, -14], [20, -14]]},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 0.5},
+
+   {"op": "look_at", "at": [20, 14]},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "r2_{value}_rock_stroke", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
+   {"op": "stroke", "mode": "paint", "biome": "rocky_badlands_summer_s1", "radius": 2.5, "speed": 6.0, "points": [[17, 14], [23, 14]]},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 0.5},
+
+   {"op": "new_map", "biome": "rocky_badlands_summer_s1", "size": 200, "seed": 1234},
+   {"op": "wait_ready", "settle": 1.0},
+   {"op": "no_autosave"},
+   {"op": "hide_ui"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/prepare_biomes.gd", "all": true},
+   {"op": "zoom", "size": 13.85},
+   {"op": "wait", "s": 5.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/prepare_biomes.gd"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "live", "mode": "on"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "mode", "mode": "{value}", "landing": "{value}"},
+
+   {"op": "look_at", "at": [-10, 0]},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "r2_{value}_meadow_dab", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
+   {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "radius": 3.5, "hold": 0.5, "points": [[-10, 0], [-10, 0]]},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 0.5},
+
+   {"op": "look_at", "at": [10, 0]},
+   {"op": "wait", "s": 1.0},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "r2_{value}_meadow_stroke", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
+   {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "radius": 2.5, "speed": 6.0, "points": [[7, 0], [13, 0]]},
+   {"op": "wait", "s": 2.0},
+   {"op": "wait_ready", "settle": 0.5},
+
+   {"op": "eval", "expr": "_game_map.get_brush_tool().deactivate()"},
+   {"op": "title"},
+   {"op": "wait", "s": 1.0}
+  ]},
+  {"op": "wait", "s": 0.5}
+ ]
+}

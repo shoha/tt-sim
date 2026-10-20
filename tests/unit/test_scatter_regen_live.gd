@@ -79,11 +79,13 @@ func _dab_value(f: int) -> int:
 
 ## Runs a stroke of `frames` frames through the scheduler the way AuthoredScatter does (cancel,
 ## finish, apply, take, one frame at a time), then lets it settle. Returns {"cells": the rows
-## every cell ends with, "provisional": provisional applies, "final": current applies}.
-func _simulate(live: bool, frames: int) -> Dictionary:
+## every cell ends with, "provisional": provisional applies, "final": current applies}. `whole`:
+## lead jobs carry every species (ScatterRegen.whole_leads, the native path).
+func _simulate(live: bool, frames: int, whole: bool = false) -> Dictionary:
 	var doc := _start_doc()
 	var cells := _generate_all(doc)
 	var regen := ScatterRegen.for_document(doc)
+	regen.whole_leads = whole
 	regen.set_biome(BIOME, PaletteLibrary.species(BIOME))
 	var in_flight: Array[Dictionary] = []
 	var counts := {"provisional": 0, "final": 0}
@@ -114,6 +116,8 @@ func _simulate(live: bool, frames: int) -> Dictionary:
 				)
 		while in_flight.size() < SLOTS and regen.has_pending():
 			var job := regen.take_job(1, now)
+			if job.is_empty():  # whole leads: only held cells left, their leads out
+				break
 			in_flight.append(
 				{
 					"job": job,
@@ -146,6 +150,56 @@ func test_a_live_stroke_settles_on_the_rows_latest_wins_gives() -> void:
 	for cell in all_cells:
 		assert_eq(live.cells.get(cell, {}), today.cells.get(cell, {}), "cell %s as today" % cell)
 		assert_eq(live.cells.get(cell, {}), expected.get(cell, {}), "cell %s as generated" % cell)
+
+
+## Whole leads (the native path, card native-cover): the stroke shows provisional rows ground
+## cover included, and still settles on exactly latest-wins' rows and the generator's.
+func test_a_live_stroke_with_whole_leads_settles_on_the_rows_latest_wins_gives() -> void:
+	var today := _simulate(false, 10)
+	var live := _simulate(true, 10, true)
+	assert_gt(live.provisional, 0, "the live stroke showed results while the brush was down")
+	var expected := _generate_all(live.doc)
+	var all_cells := {}
+	all_cells.merge(today.cells)
+	all_cells.merge(live.cells)
+	all_cells.merge(expected)
+	for cell in all_cells:
+		assert_eq(live.cells.get(cell, {}), today.cells.get(cell, {}), "cell %s as today" % cell)
+		assert_eq(live.cells.get(cell, {}), expected.get(cell, {}), "cell %s as generated" % cell)
+
+
+func test_a_whole_lead_carries_the_ground_cover_and_stands_as_the_full_job() -> void:
+	var regen := _regen()
+	regen.whole_leads = true
+	var dab := Rect2(2.0, 2.0, 1.0, 1.0)
+	var painted := Vector2i(0, 0)
+	regen.request_region(dab, true, 0)
+	var lead := regen.take_job(100, 0)
+	assert_true(lead.get("lead", false) and lead.get("whole", false), "a whole lead job first")
+	assert_eq(lead.cells, [painted] as Array[Vector2i])
+	var ground := 0
+	for rule in PaletteLibrary.species(BIOME):
+		if rule.get("size_class", "") == ScatterRegen.GROUND_CLASS:
+			for asset_id in rule.get("assets", []):
+				ground += 1 if asset_id in lead.regenerated[painted] else 0
+	assert_gt(ground, 0, "the ground cover is in it")
+	assert_true(OAK in lead.regenerated[painted], "and the trees")
+	regen.request_region(dab, true, 10)
+	var held := regen.take_job(100, 20)
+	assert_false(painted in held.get("cells", []), "no other job while the brush is on the cell")
+	assert_eq(regen.accept(lead, 30), [] as Array[Vector2i], "stale: not current")
+	assert_eq(regen.provisional(lead, 30), [painted] as Array[Vector2i], "it shows for now")
+	assert_eq(_full_job(regen, 40).get("cells", []).count(painted), 0, "still held at 40 ms")
+	var full := _full_job(regen, 70)
+	assert_true(painted in full.cells, "once the brush has left, the full job (latest-wins)")
+	assert_true(painted in regen.accept(full, 90))
+	# A whole lead no request overtook lands as the cell's final rows.
+	regen.request_region(dab, true, 200)
+	var last := regen.take_job(100, 200)
+	assert_true(last.get("whole", false) and painted in last.cells)
+	assert_eq(regen.accept(last, 230), [painted] as Array[Vector2i], "current: accepted")
+	assert_eq(regen.provisional(last, 230), [] as Array[Vector2i], "and not shown twice")
+	assert_false(painted in regen.take_job(100, 300).get("cells", []), "the cell owes nothing")
 
 
 func _regen() -> ScatterRegen:

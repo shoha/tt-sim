@@ -1716,6 +1716,14 @@ models, clearance); the generator only evaluates candidates.
   reach into its instances (relations, clump parents' relations and clearance, chained);
   `generate_species_cells()` takes a cell list per species so a brush regenerates every
   species where it painted and only the relation-driven ones around it.
+- **Native path (card native-scatter, 2026-10-20):** `ScatterRegen.run` gives each biome of a
+  job to `ScatterNative` (`utils/scatter_native.gd`) first. Where the C++ GDExtension in
+  `native/` is built, the whole biome runs there in one call (the plan, the window's grids, the
+  noise settings and the cells packed once; no Callables cross) with rows and anchors bit-equal
+  to this generator's, about fifty times faster; where it is not, or `force_gdscript` is set, it
+  runs here. This GDScript stays the reference the native rows are tested against. Map, rules
+  and building: [systems/scatter.md](systems/scatter.md) "Native path"; numbers:
+  [PERFORMANCE.md](PERFORMANCE.md) "Native scatter generator".
 
 ### Authored scatter
 
@@ -1793,8 +1801,13 @@ brush scheduler, so both build identical nodes.
   applied only where nobody has requested since; a dropped job's species stay dirty for the
   next one. A stroke's live requests also get lead jobs (the non-ground species only, whose
   rows equal the full job's) shown provisionally while the brush is down; the full job still
-  decides the final rows (`docs/systems/scatter.md`). `rows_by_asset()` returns the current
-  rows for saving.
+  decides the final rows (`docs/systems/scatter.md`). Where jobs run natively a lead job is
+  whole (every dirty species, ground cover included, and so the cell's full job, only
+  protected; card native-cover). Finished jobs land through `ScatterApply`
+  (`utils/scatter_apply.gd`): a cell lands only its newest waiting result, nearest the brush
+  first, within a per-frame rebuild budget (2 ms, at least one a frame), and provisional
+  landings that change nothing are skipped; a rebuild leaves unchanged assets alone and merges
+  an asset's finished grow-ins together. `rows_by_asset()` returns the current rows for saving.
 
 ### Level Flow
 

@@ -1,0 +1,29 @@
+{
+ "out_dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 200, "seed": 1234},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/prepare_biomes.gd", "all": true},
+  {"op": "zoom", "size": 26},
+  {"op": "wait", "s": 5.0},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/prepare_biomes.gd"},
+  {"op": "vsync_off"},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "wait", "s": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "mode", "mode": "cover"},
+  {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "radius": 4.0, "speed": 6.0, "points": [[-12, 5], [12, 5]]},
+  {"op": "wait", "s": 1.0},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/apply_profile.gd", "repeats": 7},
+  {"op": "call", "script": "res://tools/render_jobs/probes/apply_profile.gd", "repeats": 7},
+  {"op": "eval", "expr": "_game_map.get_brush_tool().deactivate()"},
+  {"op": "wait", "s": 0.5}
+ ]
+}
