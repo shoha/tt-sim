@@ -94,6 +94,29 @@ static func clear_cache() -> void:
 	_source_meshes.clear()
 
 
+## Lays a built treecube package (a build_palette.py output folder anywhere on disk) over
+## the palette under `root` for this run, as PaletteOverlay.read describes: the package's
+## biomes (those `only` names, or all) and their assets replace the cached ones, the GLBs
+## whose bytes differ from root's are parsed now and the rest load from root as before.
+## Call it before a map opens; meshes already handed out are unaffected. Returns read()'s
+## report; when it is not ok the caches are left as they were.
+static func overlay_package(
+	package: String, root: String = DEFAULT_ROOT, only: Array = []
+) -> Dictionary:
+	var report := PaletteOverlay.read(package, get_palette(root), root, only)
+	if not report["ok"]:
+		return report
+	_palettes[root] = report["palette"]
+	for asset_id: String in report["dropped"]:
+		_source_meshes.erase(root + "|" + asset_id)
+	var meshes: Dictionary = report["meshes"]
+	for asset_id: String in meshes:
+		_source_meshes[root + "|" + asset_id] = meshes[asset_id]
+		var category := String(report["palette"]["assets"][asset_id].get("wind_category", ""))
+		WindFoliage.check_layout(root, asset_id, meshes[asset_id], category)
+	return report
+
+
 static func palette_version(root: String = DEFAULT_ROOT) -> String:
 	return get_palette(root)["palette_version"]
 
@@ -336,8 +359,12 @@ static func _source_mesh(root: String, asset_id: String, entry: Dictionary) -> M
 ## uncompressed, no LODs, no shadow meshes) and the evidence for them are in
 ## docs/ASSET_PIPELINE.md section 9 "Import path". A GLB with no import (a user:// palette,
 ## the unit-test fixture) is parsed at runtime through GLTFDocument instead, the path
-## GlbUtils uses for user:// maps; with those settings both give the same meshes, vertex
-## colours, materials and unmipmapped textures.
+## GlbUtils uses for user:// maps. Both give the same materials, vertex colours and
+## unmipmapped textures, but not the same vertex buffers: the import compresses the vertex
+## attributes of some surfaces and reorders every surface's vertices, while this parse
+## compresses every surface (lookbench capture probe, 2026-10-20). So the two paths draw
+## alike to the eye but not bit for bit (PaletteOverlay parses with compression off, which
+## comes closest).
 ##
 ## Returns null (the caller warns) for a missing, oversized or unparseable file or a
 ## missing node. Treecube exports the asset node at the identity transform; one that is
