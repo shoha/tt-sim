@@ -84,6 +84,7 @@
 		"res://tests/unit/test_play_events.gd",
 		"res://tests/unit/test_palette_builtin.gd",
 		"res://tests/unit/test_palette_library.gd",
+		"res://tests/unit/test_palette_overlay.gd",
 		"res://tests/unit/test_pond_exits.gd",
 		"res://tests/unit/test_prop_rows.gd",
 		"res://tests/unit/test_relief_gameplay.gd",
