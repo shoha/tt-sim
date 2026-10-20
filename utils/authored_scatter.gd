@@ -98,6 +98,9 @@ var last_apply_usec: int = 0
 var last_worker_usec: int = 0
 ## Draw each species once, invisibly, as it resolves (PipelineWarmer); off to measure.
 var warm_pipelines: bool = true
+## Let live requests show provisional results (request_region); off to measure against
+## latest-wins alone.
+var live_applies: bool = true
 ## Props (AuthoredProps) whose rocks regeneration grows no twin inside (RockKeep.blockers_of).
 var blocker_source: AuthoredScatter = null
 ## The grass-mass anchors of the rows (ScatterMass: saved (x, z) -> offset to the clump parent):
@@ -396,13 +399,15 @@ func attach_document(doc: MapDocument) -> void:
 
 
 ## Queues regeneration of everything the density samples inside `rect` (world XZ) can
-## change. Returns at once; results appear over the next frames.
-func request_region(rect: Rect2) -> void:
+## change. Returns at once; results appear over the next frames. `live`: a brush stroke in
+## progress, whose cells show their trees, shrubs and rocks while the brush is still down
+## (ScatterRegen "Live cells"); the rows they settle on are the same.
+func request_region(rect: Rect2, live: bool = false) -> void:
 	if _regen == null:
 		push_warning("AuthoredScatter: request_region() before attach_document()")
 		return
 	_register_biomes()
-	_regen.request_region(rect)
+	_regen.request_region(rect, live and live_applies)
 	_regen.cancel_stale(_jobs)
 	_dispatch_jobs()
 	set_process(true)
@@ -587,7 +592,9 @@ func _collect_finished_jobs() -> void:
 		_finished.append(entry)
 
 
-## Applies finished jobs whose species resolved, in one set_cells() (ScatterRegen.accept filters).
+## Applies finished jobs whose species resolved, in one set_cells(): their current cells
+## (ScatterRegen.accept) and, for a lead job, the live cells it shows until their full job
+## lands (ScatterRegen.provisional).
 func _apply_ready_jobs() -> void:
 	var rows_by_cell := {}
 	for entry in _finished.duplicate():
@@ -602,7 +609,10 @@ func _apply_ready_jobs() -> void:
 		var job: Dictionary = entry.job
 		ScatterMass.merge_into(mass_anchors, entry.result.get("anchors", {}))
 		var fresh: Dictionary = entry.result.get("rows_by_cell", {})
-		for cell in _regen.accept(job):
+		var cells := _regen.accept(job)
+		if not entry.get("cancelled", false):
+			cells.append_array(_regen.provisional(job))
+		for cell in cells:
 			var base: Dictionary = rows_by_cell.get(cell, _cells.get(cell, {}))
 			rows_by_cell[cell] = ScatterRegen.merge_cell(
 				base, job.regenerated[cell], fresh.get(cell, {})
@@ -645,16 +655,24 @@ func _rebuild_asset(
 	var was_growing := {}
 	for entry in _growing.get(cell, {}).get(asset_id, []):
 		was_growing.merge(entry.keys)
+	var old_list := PackedInt64Array()
+	if grow:
+		# Instances a rebuild removes shrink away instead of vanishing (ScatterShrink); those
+		# still growing in, from the size they had reached.
+		old_list = row_keys(old_rows.to_byte_array().to_int32_array())
+		var growing: Array = _growing.get(cell, {}).get(asset_id, [])
+		ScatterShrink.start_growing(
+			self, species, cell, growing, old_rows, old_list, present, grow_seconds, mass_anchors
+		)
 	var growing_keys := _refresh_growing(cell, asset_id, rows, keys, present)
 	var old_keys := {}
 	if grow:
-		var old_list := row_keys(old_rows.to_byte_array().to_int32_array())
 		var removed := PackedInt32Array()
 		for i in old_list.size():
 			old_keys[old_list[i]] = true
 			if not present.has(old_list[i]) and not was_growing.has(old_list[i]):
 				removed.append(i)
-		_shrink_out(species, cell, old_rows, removed)
+		ScatterShrink.start_rows(self, species, cell, old_rows, removed, grow_seconds, mass_anchors)
 	var settled := PackedInt32Array()
 	var fresh := PackedInt32Array()
 	for i in keys.size():
@@ -793,27 +811,6 @@ func _start_growth(
 	if not _growing[cell].has(asset_id):
 		_growing[cell][asset_id] = []
 	_growing[cell][asset_id].append(entry)
-
-
-## Instances a rebuild removed (rows at `indices` of the cell's previous rows) shrink away
-## on a temporary node instead of vanishing (ScatterShrink).
-func _shrink_out(
-	species: Dictionary, cell: Vector2i, old_rows: PackedFloat32Array, indices: PackedInt32Array
-) -> void:
-	if indices.is_empty():
-		return
-	var transforms := ScatterRows.transforms_from_rows(old_rows, indices)
-	ScatterShrink.start(
-		self,
-		species.mesh,
-		species.stem,
-		ScatterChunker.cell_suffix(cell),
-		transforms,
-		species.wind_category,
-		ScatterShrink.sink_depth_for(species.mesh, transforms),
-		grow_seconds,
-		mass_anchors
-	)
 
 
 func _set_growth(value: float, node: MultiMeshInstance3D, mode: int, lift: float) -> void:

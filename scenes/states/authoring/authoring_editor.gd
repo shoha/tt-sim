@@ -11,7 +11,8 @@ extends RefCounted
 ##
 ## Per frame of a stroke, flush() takes the samples the frame's dabs changed and makes one
 ## update of each consumer: AuthoredTerrain.update_ground_region (the painted ground; none on
-## a dressed GLB), AuthoredScatter.request_region (regeneration on workers, grown in), and
+## a dressed GLB), AuthoredScatter.request_region (regeneration on workers, grown in, shown
+## provisionally while the brush is down), and
 ## BaseScatterEraser.refresh (a dressed GLB's own scatter under the erase mask, shrunk out).
 ##
 ## History. A stroke records MaskStroke's per-block compressed diff, a prop gesture its 10 m
@@ -177,7 +178,7 @@ func flush() -> void:
 		return
 	if _stroke == null:
 		return
-	_refresh(_stroke.take_pending())
+	_refresh(_stroke.take_pending(), true)
 
 
 ## Ends the stroke and records it for undo. True when it changed anything.
@@ -263,8 +264,9 @@ func refresh_fire(sample_rect: Rect2i) -> void:
 		fire_field.refresh(sample_rect)
 
 
-## One update of every consumer for the samples of `sample_rect`.
-func _refresh(sample_rect: Rect2i) -> void:
+## One update of every consumer for the samples of `sample_rect`. `live`: a mask stroke's frame,
+## whose scatter shows provisional results while the brush is down (AuthoredScatter).
+func _refresh(sample_rect: Rect2i, live: bool = false) -> void:
 	if not sample_rect.has_area():
 		return
 	var started := Time.get_ticks_usec()
@@ -272,7 +274,7 @@ func _refresh(sample_rect: Rect2i) -> void:
 		terrain.update_ground_region(sample_rect.grow(1))
 	var world := MaskBrush.sample_rect_to_world(document, sample_rect)
 	if is_instance_valid(scatter):
-		scatter.request_region(world)
+		scatter.request_region(world, live)
 	if eraser != null:
 		eraser.refresh(document, world.grow(document.sample_step().x))
 	last_flush_usec = Time.get_ticks_usec() - started
