@@ -70,3 +70,13 @@ Each addon under `addons/` carries its own licence file:
 | DragAndDrop3D | see `addons/DragAndDrop3D/` |
 | brackeys_particle_controls | see `addons/brackeys_particle_controls/` |
 | GodotSteam | see `addons/godotsteam/` |
+
+## Native scatter library (native/)
+
+The native scatter generator (`native/`, built into the game where its library is present)
+carries these third-party sources:
+
+| Source | Origin | Licence |
+|---|---|---|
+| `native/thirdparty/FastNoiseLite.h` | FastNoiseLite by Jordan Peck and contributors, as vendored in Godot 4.7.2-stable (`thirdparty/misc/FastNoiseLite.h`, https://github.com/godotengine/godot), unmodified | MIT, header of the file |
+| `native/godot-cpp/` (submodule) | godot-cpp 10.0.0-stable, https://github.com/godotengine/godot-cpp | MIT, `native/godot-cpp/LICENSE.md` |
