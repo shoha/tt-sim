@@ -3914,3 +3914,50 @@ With `LEAD_APPLIES_PER_FRAME` 1 (second run), frame ms median / p95 / worst whil
 filmer's 20 ms frames the cap backs up and the cover stroke trails restricted leads (first
 ground row +346 against +212): the cap needs to follow cost, not count. LIVE_INTERVAL_MSEC stays
 100 and LIVE_HOLD_MSEC 50. Indicative: one run each, the GPU shared.
+
+### Round 2: landing by cost (card native-cover round 2)
+
+Where `set_cells` went, per landing (probe `apply_profile.gd`, job `cover_profile`, the densest
+cell after one cover stroke on the forest map: 564 rows in 29 assets, median of 7): a landing
+3.6-3.9 ms, the grow-in merges after it 2.2-2.4 ms, and a landing that changes no row 3.0-3.2
+ms. So most of the cost was rebuilding assets whose rows had not changed. Per-row pieces over
+all 29 assets once: `row_keys` 0.67 ms (run twice a landing and again at every merge),
+`instance_order` 0.27, `transforms_from_rows` 0.27, `ScatterMass.custom_data` 0.25,
+`build_multimesh` 0.50; one packed buffer built in GDScript instead of per-instance calls 0.62-0.66,
+slower, so a packed copy would only pay natively. Cut: unchanged assets are left alone, row keys
+are kept with the rows, grow-ins merge in batches, and landings are coalesced, skipped when they
+change nothing and spent within a frame budget (`ScatterApply`, docs/systems/scatter.md
+"Authoring").
+
+Main thread, in-run A/B (`cover_perf2`: a fresh 200 ft temperate forest per variant, zoom 26,
+vsync off, the same grassland stroke r 4 m at 6 m/s along 24 m). Frame ms median / p95 / worst
+while pressed; landing ms per frame median / p95 / worst; ground cover first row / 50 % / 90 %
+from the press:
+
+| Variant | Frame | Landing | Ground cover |
+| --- | --- | --- | --- |
+| Restricted leads (round 2 landing) | 5.63 / 6.93 / 36.41 | 0.34 / 3.28 / 3.52 | +3469 / +3994 / +4002 |
+| Whole leads, round 1 uncapped | 6.98 / 14.84 / 20.12 | 2.36 / 6.50 / 9.65 | +142 / +2142 / +3643 |
+| Whole leads, round 1 cap (1 a frame) | 5.95 / 7.76 / 14.51 | 1.15 / 2.42 / 6.71 | +160 / +2181 / +3754 |
+| Whole leads, round 2 (2 ms budget) | 5.59 / 7.89 / 11.82 | 1.06 / 2.57 / 2.84 | +131 / +2189 / +3688 |
+| Round 2, 1 ms budget | 5.56 / 7.68 / 10.20 | 0.91 / 2.43 / 2.86 | +130 / +2188 / +3656 |
+| Round 2, no budget | 5.66 / 7.87 / 11.17 | 1.07 / 2.72 / 2.90 | +133 / +2198 / +3676 |
+
+773 of the 888 whole-lead landings in that stroke changed no rows (halo cells, and cells whose
+density had not moved since their last landing); round 1 rebuilt every one (866 rebuilds against
+115). Round 2 grows the cover as fast as round 1 uncapped (its 50 % and 90 % are when the 4 s
+stroke reaches the cells, not a backlog) at round 1's capped frame times, and its worst landing
+is under 3 ms. The budget rarely binds at these frame rates (35 deferrals at 2 ms, 57 at 1 ms),
+and 1 ms measured the same as 2 within noise, so 2 ms stays as the guard for bursts (the release,
+slow frames).
+
+Latency (`cover_latency2`, vsync on, the eight sites of the table above, round 1 whole leads
+uncapped / round 2): first ground row forest dab 162 / 141, forest stroke 161 / 155, alpine dab
+- / 152, alpine stroke 172 / 169, badlands dab - / 157, badlands stroke 175 / 173, meadow dab
+42 / 21, meadow stroke 27 / 28 ms; ground 90 % 948 / 1005, 908 / 991, 836 / 890, 578 / 570,
+991 / 897 on the strokes and the meadow dab; settled within 70 ms of round 1 everywhere (909 /
+924 to 1451 / 1430). (Round 1's probe missed the ground rows of the alpine and badlands dabs; they
+add 184 and 21.) Pressed landing per frame 0.4-2.0 ms median, worst 2.9, against 3.3-5.9 ms
+median and up to 10.6 for native-scatter's restricted leads under round 1's landing in the same
+run. Churn unchanged (meadow dab 15 ground rows of 140, the strokes 0-9). Indicative: one run
+each, the GPU shared.

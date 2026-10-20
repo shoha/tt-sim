@@ -106,10 +106,22 @@ cover included, and is the cell's full job, only protected. It takes the cell of
 accepted when it lands current and shows provisionally when stale; while the brush is on a cell
 it gets no other job. The ground cover grows in under the brush, raised at each landing; rows
 that stay keep their keys (no regrowth) and rows a landing drops shrink out (about 1 % of the
-ground rows in a stroke, more in a held dab). `AuthoredScatter` applies at most
-`LEAD_APPLIES_PER_FRAME` (1) lead jobs a frame, which keeps whole leads off the frame time but
-backs up at slow frame rates (open). The GDScript path keeps the restricted lead jobs. Numbers
-in [PERFORMANCE.md](../PERFORMANCE.md) "Ground cover under the brush".
+ground rows in a stroke, more in a held dab). The GDScript path keeps the restricted lead jobs.
+
+Landing (`ScatterApply`, `utils/scatter_apply.gd`; card native-cover round 2). Finished jobs
+land on the main thread by cost, not count: a cell lands only the newest of its waiting results
+(`ScatterRegen.landed()` frees a cell for its next lead as soon as one finishes on its worker, so
+an older result still waiting is dropped, never shown in sequence); waiting results land nearest
+`ScatterRegen.focus` (the latest live request) first; each frame lands results until
+`ScatterApply.BUDGET_USEC` (2 ms) of rebuild time is spent, judged from the rows a result
+carries at the measured cost per row, and always at least one; a provisional landing that
+changes no rows is skipped, and so is one outside the brush rectangle that changes at most
+`NEAR_NOTHING_ROWS` (2). Most whole-lead landings change nothing (773 of 888 in a measured
+stroke), which is where round 1's frame cost went. The rebuild itself (`AuthoredScatter`,
+`lean_rebuild`) leaves an asset whose rows are unchanged alone, keeps each asset's row keys
+with its rows instead of recomputing them, and merges finished grow-ins of one asset into the
+cell's node together (`MERGE_BATCH` 3, or when none is still growing) rather than one rebuild
+each. Numbers in [PERFORMANCE.md](../PERFORMANCE.md) "Ground cover under the brush".
 
 ## Native path
 

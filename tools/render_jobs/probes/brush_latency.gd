@@ -14,8 +14,8 @@ extends RefCounted
 ##   watch  `name`, `dir`: watches the next press until the brush is released and the scatter
 ##          has settled (at most 12 s), then logs a summary and writes `<dir>/<name>.txt`.
 ##   film   `name`, `dir`, `seconds` (2.5), `crop` ([800, 450], centred), `scale` (0.8): keeps
-##          the window's centre crop of every drawn frame from the press for `seconds` of real
-##          time, then writes it resampled to 30 fps as `<name>_<NNN>.png`.
+##          the window's centre crop of every drawn frame (or one per `gap` ms) from the press
+##          for `seconds` of real time, then writes it resampled to 30 fps as `<name>_<NNN>.png`.
 ##   busy   how many watches and films are still running.
 ##   native `mode` "on" or "off": the native scatter generator, or every job forced to GDScript
 ##          (ScatterNative.force_gdscript; card native-scatter); resets its job counts.
@@ -24,7 +24,10 @@ extends RefCounted
 ##          "lead" (native, lead jobs without ground cover: card native-scatter's behaviour) or
 ##          "cover" (native, whole lead jobs: card native-cover); after new_map, since
 ##          attach_document sets whole_leads. Optional `interval` and `hold` (ms) set the live
-##          throttle (ScatterRegen.live_interval_msec, live_hold_msec).
+##          throttle (ScatterRegen.live_interval_msec, live_hold_msec), and `landing` the
+##          landing policy (ScatterApply; card native-cover round 2): "r2" (default), "b<usec>"
+##          or "bnone" for another budget or none, "r1" and "r1u" round 1's landing and rebuild
+##          with and without its one-lead cap, "lead" native-scatter as it was.
 ##
 ## A watch also times the ground cover (species of the ground class): its first row, and when
 ## 90 % of the ground rows this watch added and that are there once it settles had appeared
@@ -60,6 +63,7 @@ static func run(root: Node, step: Dictionary) -> String:
 			var crop: Array = step.get("crop", [800, 450])
 			filmer.crop = Vector2i(int(crop[0]), int(crop[1]))
 			filmer.scale = float(step.get("scale", 0.8))
+			filmer.gap_msec = int(step.get("gap", 0))
 			filmer.brush = c.brush
 			_start(root, filmer)
 			return "filming " + filmer.prefix
@@ -77,14 +81,33 @@ static func run(root: Node, step: Dictionary) -> String:
 			regen.whole_leads = mode == "cover" and ScatterNative.active()
 			regen.live_interval_msec = int(step.get("interval", ScatterRegen.LIVE_INTERVAL_MSEC))
 			regen.live_hold_msec = int(step.get("hold", ScatterRegen.LIVE_HOLD_MSEC))
+			# Landing policy (card native-cover round 2): "r1" round 1's one lead a frame, "r1u"
+			# round 1 uncapped (both with round 1's rebuild), "r2" round 2 at its budget,
+			# "b<usec>" another budget, "bnone" none, "lead" native-scatter's leads under r2.
+			# "lead": native-scatter as it was (restricted leads, round 1's landing, no cap).
+			var landing := String(step.get("landing", "r2"))
+			if landing == "lead":
+				regen.whole_leads = false
+			var applier: ScatterApply = c.scatter.landing
+			applier.legacy = landing.begins_with("r1") or landing == "lead"
+			applier.max_leads = 1 if landing == "r1" else -1
+			applier.budget_usec = ScatterApply.BUDGET_USEC
+			if applier.legacy or landing == "bnone":
+				applier.budget_usec = -1
+			elif landing.begins_with("b"):
+				applier.budget_usec = int(landing.substr(1))
+			applier.reset_counts()
+			c.scatter.lean_rebuild = not applier.legacy
 			return (
-				"mode %s: native %s, whole leads %s, interval %d, hold %d"
+				"mode %s: native %s, whole leads %s, interval %d, hold %d, landing %s budget %d"
 				% [
 					mode,
 					str(ScatterNative.active()),
 					str(regen.whole_leads),
 					regen.live_interval_msec,
-					regen.live_hold_msec
+					regen.live_hold_msec,
+					landing,
+					applier.budget_usec
 				]
 			)
 		"busy":
@@ -319,16 +342,18 @@ class Watcher:
 		)
 		lines.append(
 			(
-				"  applies %d (provisional %d); rows added %d, removed %d, churn %d"
+				"  applies %d (provisional %d); rows added %d, removed %d, churn %d; landing %s"
 				% [
 					_counts.applies,
 					_counts.provisional,
 					_counts.added,
 					_counts.removed,
-					_counts.churn
+					_counts.churn,
+					str(scatter.landing.counts)
 				]
 			)
 		)
+		scatter.landing.reset_counts()
 		# Ground cover: when 90 % of the ground rows added in this watch and still there had appeared.
 		var times := PackedInt32Array()
 		for cell in _rows:
@@ -404,9 +429,14 @@ class Filmer:
 	var seconds := 2.5
 	var crop := Vector2i(800, 450)
 	var scale := 0.8
+	## Read a frame back at most this often (0: every frame). Each read stalls its frame on the
+	## GPU, so filming every frame ran at about 20 ms a frame against 6-9 ms in play; at 30 ms
+	## the frames between reads run at play speed (native-cover round 2).
+	var gap_msec := 0
 	var brush: BrushTool = null
 	var _start := 0
 	var _press := -1
+	var _last_grab := -1_000_000
 	var _images: Array[Image] = []
 	var _times := PackedInt32Array()
 
@@ -429,6 +459,9 @@ class Filmer:
 		if now - _press > seconds * 1000.0:
 			_finish()
 			return
+		if now - _last_grab < gap_msec:
+			return
+		_last_grab = now
 		var image := get_viewport().get_texture().get_image()
 		var size := image.get_size()
 		var w := mini(crop.x, size.x)

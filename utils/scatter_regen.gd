@@ -78,6 +78,8 @@ var sample_step: float = 0.25
 var built_surfaces: PackedStringArray = PackedStringArray()
 ## Palette surfaces with role "cliff" (main thread): painted rock clears plants too.
 var cliff_surfaces: PackedStringArray = PackedStringArray()
+## The rectangle (world XZ) of the latest live request: where the brush is, or last was.
+var focus: Rect2 = Rect2()
 
 ## biome id -> {"species": Array[Dictionary], "reach": PackedFloat32Array,
 ## "assets": Array[PackedStringArray] per species, "groups": Array[PackedInt32Array]
@@ -99,6 +101,8 @@ var _shown_msec: Dictionary = {}
 var _lead_out: Dictionary = {}
 ## cell -> Time.get_ticks_msec() of the last live request that touched it.
 var _requested_msec: Dictionary = {}
+## cell -> Time.get_ticks_msec() a lead job for it finished on its worker (landed()).
+var _landed_msec: Dictionary = {}
 
 
 ## A scheduler for one map: its seed, rectangle and sample step.
@@ -172,6 +176,7 @@ func request_region(rect: Rect2, live: bool = false, now_msec: int = -1) -> Arra
 	var cells: Array[Vector2i] = []
 	cells.assign(touched.keys())
 	if live:
+		focus = rect
 		var size := ScatterChunker.CHUNK_SIZE_WORLD_UNITS
 		var centre := rect.get_center() / size - Vector2(0.5, 0.5)
 		cells.sort_custom(
@@ -273,6 +278,19 @@ func provisional(job: Dictionary, now_msec: int = -1) -> Array[Vector2i]:
 	return shown
 
 
+## Notes that lead `job` finished on its worker at `now_msec` (default: now), before it is applied:
+## its cells may take their next lead job from here (live_interval_msec after this landing) while
+## it waits to be applied, and AuthoredScatter's landing (ScatterApply) keeps only the newest of a
+## cell's waiting results. Without this call a lead stays out until provisional() applies it.
+func landed(job: Dictionary, now_msec: int = -1) -> void:
+	if not job.get("lead", false):
+		return
+	var now := _now(now_msec)
+	for cell in job.get("cells", []):
+		_lead_out.erase(cell)
+		_landed_msec[cell] = now
+
+
 ## True when a request has touched every cell of `job` (take_job's) since it was taken, so
 ## accept() would drop all of its rows; a newer request carries those cells' work.
 func is_stale(job: Dictionary) -> bool:
@@ -304,7 +322,8 @@ func _due_lead(cell: Vector2i, now: int) -> bool:
 		return false
 	if _shown_generation.get(cell, -1) >= _generation.get(cell, 0):
 		return false
-	if now - _shown_msec.get(cell, _NEVER) < live_interval_msec:
+	var last := maxi(_shown_msec.get(cell, _NEVER), _landed_msec.get(cell, _NEVER))
+	if now - last < live_interval_msec:
 		return false
 	var per_biome: Dictionary = _dirty.get(cell, {})
 	for biome_id in per_biome:
