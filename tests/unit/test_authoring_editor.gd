@@ -163,6 +163,32 @@ func test_a_cancelled_placement_is_not_recorded() -> void:
 	assert_eq(_history.undo_count(), 0)
 
 
+## Nine oaks on a grid, as a species round places its nine; the props' rows by asset.
+func _place_nine(editor: AuthoringEditor, seed_value: int) -> Dictionary:
+	var rule := editor.species_rule(BIOME, "oak")
+	assert_gt((rule.get("assets", []) as Array).size(), 1, "a species with variants to pick")
+	editor.seed_placement(seed_value)
+	for i in 9:
+		var at := Vector3(float(i % 3) * 3.0, 0, floorf(i / 3.0) * 3.0)
+		editor.place_prop(rule, at, Vector3.UP)
+		editor.commit_prop_edit()
+	return editor.props.rows_by_asset()
+
+
+func test_seeded_placement_lands_the_same_props_every_time() -> void:
+	var first := _place_nine(_editor(true), 1234)
+	assert_eq(MapDocument.row_count(first), 9)
+	var other_map := Node3D.new()
+	add_child_autofree(other_map)
+	_map = other_map
+	var second := _place_nine(_editor(true), 1234)
+	assert_eq(second, first, "same seed: same variants, yaws and rows")
+	var third_map := Node3D.new()
+	add_child_autofree(third_map)
+	_map = third_map
+	assert_ne(_place_nine(_editor(true), 99), first, "another seed: other yaws")
+
+
 func test_rule_for_asset_finds_the_species() -> void:
 	var editor := _editor()
 	var rule := editor.species_rule(BIOME, "boulder")

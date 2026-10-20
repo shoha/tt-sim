@@ -389,6 +389,31 @@ func handle_zoom(delta: float) -> void:
 	_update_camera_offset()
 
 
+## Whether the camera has stopped moving on its own: the zoom has eased onto its target
+## (within handle_zoom's own 0.001), no home, focus or shake tween runs, and no key, edge or
+## mouse pan is moving it. Render jobs wait on it before a capture (the `settle` op).
+func is_at_rest() -> bool:
+	var camera_node := _game_map.camera_node
+	if absf(camera_node.size - _corrected_size(_target_zoom)) > 0.001:
+		return false
+	for tween: Tween in [_reset_tween, _shake_tween]:
+		if tween != null and tween.is_valid() and tween.is_running():
+			return false
+	return (
+		_camera_velocity.length_squared() <= 0.001
+		and _current_edge_pan == Vector2.ZERO
+		and not _is_panning
+	)
+
+
+## Ends the zoom ease exactly on its target. The ease stops anywhere within 0.001 of it,
+## depending on the frame times it ran at, so a view taken after it is only repeatable run
+## to run once snapped (the render-job `settle` op calls this when the camera is at rest).
+func finish_zoom() -> void:
+	_game_map.camera_node.size = _corrected_size(_target_zoom)
+	_update_camera_offset()
+
+
 ## Record the latest mouse position (tracked every frame, even during
 ## measurement) so zoom-toward-cursor always targets the current cursor.
 func record_mouse_position(screen_pos: Vector2) -> void:
