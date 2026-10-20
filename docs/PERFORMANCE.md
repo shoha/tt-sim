@@ -3961,3 +3961,40 @@ add 184 and 21.) Pressed landing per frame 0.4-2.0 ms median, worst 2.9, against
 median and up to 10.6 for native-scatter's restricted leads under round 1's landing in the same
 run. Churn unchanged (meadow dab 15 ground rows of 140, the strokes 0-9). Indicative: one run
 each, the GPU shared.
+
+## Arrival motion (2026-10-20, card motion)
+
+The STAGED + LIFE arrival (systems/scatter.md "Arrival motion") against the motion before it,
+in-run A/B through `ScatterArrival.classic` (probe `brush_latency` action `motion`). Extra work:
+per animating plant node one uniform write a frame as before, plus one loop over its new rows
+when it starts (the ripple span); per dropping rock one transform write a frame until it rests;
+in the shader one compare per wind vertex on a settled node, a distance, a clamp and a cubic on an
+animating one. Grow-ins last longer (about 0.8 s), so more grow nodes live at once and finished
+ones wait longer for their `MERGE_BATCH`.
+
+Main thread (`motion_perf`, quiet, vsync off, a fresh 200 ft forest per variant, the grassland
+stroke of `cover_perf2`, order today, new, today, new), pressed frame ms median / p95 / worst,
+landing (`set_cells`) ms median / p95 / worst, settled from the press:
+
+| Variant | Frame | Landing | Settled |
+| --- | --- | --- | --- |
+| Today (a) | 9.29 / 16.57 / 46.80 | 1.01 / 2.58 / 2.85 | +4397 |
+| STAGED + LIFE (a) | 6.78 / 11.40 / 18.53 | 1.28 / 3.41 / 3.66 | +5122 |
+| Today (b) | 7.14 / 14.19 / 19.96 | 1.07 / 2.94 / 3.72 | +4390 |
+| STAGED + LIFE (b) | 8.70 / 13.66 / 20.10 | 0.83 / 2.98 / 3.69 | +5103 |
+
+No difference beyond the run-to-day spread (today's own two runs differ more than either pair);
+the frames after release (the grow-ins finishing) measured 4.68 / 7.09 and 6.26 / 13.15 ms median
+/ p95 against 6.76 / 9.83 and 5.70 / 12.88. MERGE_BATCH unchanged. Caveat: a Blender process
+another session started at 15:30:49 may have overlapped the last variant (b); the latency run
+below was clean.
+
+Latency (`motion_latency`, the six grassland sites of `cover_latency2`, vsync on, quiet), today /
+STAGED + LIFE, ms from the press: first grow-in landed tree dab 224 / 147, tree stroke 140 / 165,
+flower dab 223 / 166, flower stroke 33 / 34, rock dab 163 / 172, rock stroke 173 / 173; first
+ground row landed 219 / 141, 136 / 161, 217 / 162, 162 / 151, 155 / 164, 167 / 166; ground 90 %
+landed 521 / 529, 904 / 898, 505 / 450, 947 / 953, 520 / 532, 869 / 851; settled 872 / 1478, 1404
+/ 1943, 855 / 1485, 1446 / 1959, 874 / 1472, 1368 / 1923. Landing is unchanged; what moves is when
+rows show: ground cover starts growing 0.36 s after it lands (its stage) plus up to 0.35 s of
+ripple, on purpose, and an edit settles 0.5-0.6 s later. Filming (`motion_film`, the same sites
+with the frame read-back) ran 27-37 ms frames median on both sides.
