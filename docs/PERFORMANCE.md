@@ -3790,3 +3790,47 @@ in C7a, 0.37 in C7b, against 0.5) and third night zoom 20 (0.38 / 0.38, then 0.2
 they meet in the latest run and miss in the two before, with the ground term's per-process swing
 as the open cause. CPU 0.002 ms against 0.1. A stroke's re-plan stays off the main thread (1.8-3.6
 ms there); a peer sees it about 170 ms later. The game's glow is 0.2 ms a frame of its own.
+
+## Brush latency: lead jobs (2026-10-19, card brush-latency)
+
+Plants appeared only after a biome brush lifted: the first grow-in came 0.95-1.10 s after a dab's
+press (held 0.5 s) and 1.41-1.65 s after a 1 s stroke's. Cause, from per-cell timelines
+(`tools/render_jobs/probes/brush_latency.gd`): the brush re-requests its cells every frame, so
+latest-wins cancelled every job under it, and only the jobs taken at release landed; those take
+500-800 ms of worker time in a painted cell (a grassland cell under a forest dab: 780 ms
+single-threaded, of which the grassland's ground cover is 750 and every large, medium and small
+species 1-3 ms). The fix (`ScatterRegen` "Live cells", `docs/systems/scatter.md`): a stroke's
+cells also get lead jobs, the non-ground species only, shown provisionally while the brush is on
+them; the full job still decides the final rows (`test_scatter_regen_live.gd` checks a simulated
+stroke ends on exactly latest-wins' rows).
+
+Latency from the press, in one run with `AuthoredScatter.live_applies` off then on (fresh 200 ft
+grassland, seed 1234, home zoom 13.85, vsync on; job `brush_latency.json`), first grow-in:
+
+| Site | Off | On |
+| --- | --- | --- |
+| Forest dab (tree brush), held 0.5 s | 962 ms | 233 ms |
+| Alpine meadow dab (flower brush) | 1096 | 312 |
+| Badlands dab (rock brush; grows no rocks there) | 1033 | 1042 |
+| Forest stroke, 6 m in 1 s | 1408-1470 (earlier runs) | 373 |
+| Alpine meadow stroke | 1625 | 103 |
+| Badlands stroke | 1588 | 710 |
+
+Settling (nothing regenerating or growing) moved by -20 to +170 ms. No row was added by one
+apply and removed by a later one in any site (churn 0).
+
+Main-thread cost, same run style on a fresh 200 ft temperate forest (zoom 26, vsync off,
+grassland strokes of 4 m radius at 6 m/s along 24 m, alternating off, on, off, on; job
+`brush_latency_perf.json`). Frame ms median / p95 / worst while pressed:
+
+| Stroke | Off | On |
+| --- | --- | --- |
+| Pair a | 4.53 / 5.63 / 32.58 (856) | 4.91 / 7.66 / 12.14 (755) |
+| Pair b | 5.18 / 6.26 / 11.07 (758) | 5.39 / 10.11 / 13.97 (672) |
+
+On costs +0.2 to +0.4 ms median and +2 to +4 ms at p95: about one lead apply a frame
+(`set_cells` 1.3-1.6 ms median, 2.9-4.4 p95), throttled to one per cell per 100 ms. No stroke
+frame over 14 ms with it on (the 32.6 ms frame was off). The baseline above ("Authoring: strokes,
+regeneration, opening") measured a grassland stroke over the full forest at 6.88 / 7.60 / 10.56
+in 2026-09; these runs are faster overall, so compare within the pairs. Indicative: one run, the
+GPU shared.

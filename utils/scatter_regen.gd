@@ -22,10 +22,34 @@ extends RefCounted
 ## or already running) carries their work too, because a cell's dirty species accumulate
 ## until a current job for it is applied. Queued cells are coalesced: a stroke that
 ## dabs the same cell ten times while a job runs queues it once.
+##
+## Live cells (brush-latency, 2026-10-19). A brush re-requests the cells under it every frame,
+## so under latest-wins alone no job there finishes current until the brush moves on or lifts,
+## and plants appeared only after the release. A live request (a stroke in progress) marks its
+## cells live, and a live cell also gets lead jobs: its dirty work restricted to its lead
+## species, every species outside the ground class whose asset group is too. Species resolve
+## large to ground and only look at earlier ones, so a lead job's rows are exactly what the
+## full job gives those species, at a few ms each where a painted cell's ground cover costs
+## hundreds (a grassland cell under a forest dab: 780 ms in all, 25 ms of it lead). A lead job
+## is never current and never cancelled: provisional() shows it while the cell is still live
+## and shows nothing newer, and the cell stays dirty and pending, so its full job still lands
+## under latest-wins. Throttle: take_job() hands a live cell a lead job only when none is in
+## flight, something newer than its rows on screen is owed, and it has shown nothing for
+## LIVE_INTERVAL_MSEC. The final rows do not change: a lead result clears no dirty state, so the
+## last full job replaces every asset a lead job did, from the document as the stroke left it.
 
-## Cells per job. One: a dense cell takes about 50 ms, and one cell per job lets the pool
-## run a four-cell dab in parallel instead of in series.
+## Cells per job. One: one cell per job lets the pool run a dab's cells in parallel instead
+## of in series (a painted cell under a dab takes 250 to 800 ms on a worker, its relation halo
+## 10 to 100 ms; brush-latency, 2026-10-19).
 const DEFAULT_CELLS_PER_JOB := 1
+## A live cell shows a lead result at most this often.
+const LIVE_INTERVAL_MSEC := 100
+## A live cell gets lead jobs only while live requests keep coming (the brush is still on it):
+## once the brush lifts or moves on, its full job goes first.
+const LIVE_HOLD_MSEC := 50
+## The size class whose species a lead job leaves to the full job.
+const GROUND_CLASS := "ground"
+const _NEVER := -1_000_000_000
 
 var map_seed: int = 0
 ## The map rectangle in world XZ; nothing outside it is regenerated.
@@ -48,6 +72,16 @@ var _dirty: Dictionary = {}
 var _generation: Dictionary = {}
 ## cell -> true for cells waiting for a job, in request order.
 var _pending: Dictionary = {}
+## cell -> true for cells the latest request was live for, until a current job is applied.
+var _live: Dictionary = {}
+## cell -> the generation of the job whose rows the cell shows (lead or current), and the
+## Time.get_ticks_msec() it was applied at.
+var _shown_generation: Dictionary = {}
+var _shown_msec: Dictionary = {}
+## cell -> true while a lead job for it is out.
+var _lead_out: Dictionary = {}
+## cell -> Time.get_ticks_msec() of the last live request that touched it.
+var _requested_msec: Dictionary = {}
 
 
 ## A scheduler for one map: its seed, rectangle and sample step.
@@ -70,11 +104,21 @@ func set_biome(biome_id: String, species: Array[Dictionary]) -> void:
 	var assets: Array[PackedStringArray] = []
 	for rule in copy:
 		assets.append(PackedStringArray(rule.get("assets", [])))
+	var groups := _asset_groups(assets)
+	# Lead species (see the header): outside the ground class, with every asset-sharing one.
+	var lead := {}
+	for s in copy.size():
+		var all_lead := true
+		for other in groups[s]:
+			all_lead = all_lead and copy[other].get("size_class", "") != GROUND_CLASS
+		if all_lead:
+			lead[s] = true
 	_biomes[biome_id] = {
 		"species": copy,
 		"reach": ScatterGenerator.species_reach(plan),
 		"assets": assets,
-		"groups": _asset_groups(assets),
+		"groups": groups,
+		"lead": lead,
 	}
 
 
@@ -92,8 +136,11 @@ func max_reach(biome_id: String) -> float:
 
 
 ## Marks everything the density samples inside `rect` (world XZ) can change, in every
-## registered biome. Returns the cells it dirtied.
-func request_region(rect: Rect2) -> Array[Vector2i]:
+## registered biome. Returns the cells it dirtied. A `live` request (a brush stroke in
+## progress) marks them live (see the header) and queues them nearest the rectangle first,
+## so the cells under the brush get the first slots. `now_msec` defaults to now.
+func request_region(rect: Rect2, live: bool = false, now_msec: int = -1) -> Array[Vector2i]:
+	var now := _now(now_msec)
 	var touched := {}
 	for biome_id in _biomes:
 		var info: Dictionary = _biomes[biome_id]
@@ -106,11 +153,25 @@ func request_region(rect: Rect2) -> Array[Vector2i]:
 				_mark(cell, biome_id, info.groups[s])
 				touched[cell] = true
 	var cells: Array[Vector2i] = []
-	for cell in touched:
+	cells.assign(touched.keys())
+	if live:
+		var size := ScatterChunker.CHUNK_SIZE_WORLD_UNITS
+		var centre := rect.get_center() / size - Vector2(0.5, 0.5)
+		cells.sort_custom(
+			func(a: Vector2i, b: Vector2i) -> bool:
+				return Vector2(a).distance_squared_to(centre) < Vector2(b).distance_squared_to(centre)
+		)
+	for cell in cells:
 		_generation[cell] = _generation.get(cell, 0) + 1
 		_pending.erase(cell)
 		_pending[cell] = true
-		cells.append(cell)
+		# Live while the latest request was: an undo or a cancelled stroke's revert shows
+		# nothing provisional.
+		if live:
+			_live[cell] = true
+			_requested_msec[cell] = now
+		else:
+			_live.erase(cell)
 	return cells
 
 
@@ -125,51 +186,64 @@ func pending_count() -> int:
 ## The next job, or {} when nothing waits: up to `max_cells` of the oldest pending cells,
 ## {"cells": Array[Vector2i], "generations": {cell: int}, "regenerated": {cell:
 ## PackedStringArray asset ids whose rows the job replaces}, "work": {biome id:
-## {"species", "cells_by_species", "window"}}}. The work part is plain data for run().
-func take_job(max_cells: int = DEFAULT_CELLS_PER_JOB) -> Dictionary:
+## {"species", "cells_by_species", "window"}}}. The work part is plain data for run(). A
+## live cell due a lead job (see the header) at `now_msec` (default: now) gets one first: the
+## same form for that one cell with "lead": true, its lead species only, the cell left pending.
+func take_job(max_cells: int = DEFAULT_CELLS_PER_JOB, now_msec: int = -1) -> Dictionary:
 	if _pending.is_empty():
 		return {}
+	var now := _now(now_msec)
+	for cell in _pending:
+		if _due_lead(cell, now):
+			_lead_out[cell] = true
+			var one: Array[Vector2i] = [cell]
+			return _job(one, true)
 	var cells: Array[Vector2i] = []
 	for cell in _pending:
 		if cells.size() >= maxi(max_cells, 1):
 			break
 		cells.append(cell)
-	var generations := {}
-	var regenerated := {}
-	var work := {}
 	for cell in cells:
 		_pending.erase(cell)
-		generations[cell] = _generation.get(cell, 0)
-		var assets := PackedStringArray()
-		var per_biome: Dictionary = _dirty.get(cell, {})
-		for biome_id in per_biome:
-			var info: Dictionary = _biomes[biome_id]
-			if not work.has(biome_id):
-				work[biome_id] = _new_work(info)
-			var entry: Dictionary = work[biome_id]
-			for s in per_biome[biome_id]:
-				(entry.cells_by_species[s] as Array).append(cell)
-				entry.depth = maxf(entry.depth, info.reach[s])
-				assets.append_array(info.assets[s])
-		regenerated[cell] = assets
-	for biome_id in work:
-		var entry: Dictionary = work[biome_id]
-		entry.window = _cells_rect(cells).grow(entry.depth + 2.0 * sample_step)
-		entry.erase("depth")
-		entry.built = built_surfaces.duplicate()
-		entry.cliff = cliff_surfaces.duplicate()
-	return {"cells": cells, "generations": generations, "regenerated": regenerated, "work": work}
+	return _job(cells, false)
 
 
 ## The cells of a finished `job` that are still current (no request touched them since
-## the job was taken), clearing their dirty state. The rest are dropped.
-func accept(job: Dictionary) -> Array[Vector2i]:
+## the job was taken), clearing their dirty and live state. The rest are dropped. A lead job
+## is never current (provisional() shows it).
+func accept(job: Dictionary, now_msec: int = -1) -> Array[Vector2i]:
 	var current: Array[Vector2i] = []
+	if job.get("lead", false):
+		return current
+	var now := _now(now_msec)
 	for cell in job.get("cells", []):
-		if _generation.get(cell, 0) == job.generations.get(cell, -1):
+		var generation: int = job.generations.get(cell, -1)
+		if _generation.get(cell, 0) == generation:
 			current.append(cell)
 			_dirty.erase(cell)
+			_live.erase(cell)
+			_shown_generation[cell] = generation
+			_shown_msec[cell] = now
 	return current
+
+
+## The cells of a finished lead `job` that show its rows until their full job lands: still
+## live, and showing nothing as new. Their dirty state stays, so the full job still replaces
+## every asset this one did. Empty for a job that is not a lead job.
+func provisional(job: Dictionary, now_msec: int = -1) -> Array[Vector2i]:
+	var shown: Array[Vector2i] = []
+	if not job.get("lead", false):
+		return shown
+	var now := _now(now_msec)
+	for cell in job.get("cells", []):
+		_lead_out.erase(cell)
+		var generation: int = job.generations.get(cell, -1)
+		if not _live.has(cell) or generation <= _shown_generation.get(cell, -1):
+			continue
+		shown.append(cell)
+		_shown_generation[cell] = generation
+		_shown_msec[cell] = now
+	return shown
 
 
 ## True when a request has touched every cell of `job` (take_job's) since it was taken, so
@@ -184,12 +258,73 @@ func is_stale(job: Dictionary) -> bool:
 ## Posts the cancel of each of AuthoredScatter's in-flight `entries` ({"job", "cancel": Semaphore})
 ## that is_stale: accept() would drop all its rows, and a stroke re-requests its cells every frame,
 ## so such jobs would otherwise hold the slots the current ones wait for (ground-opt-cpu2). run()
-## then hands back what it has.
+## then hands back what it has. Lead jobs are left to finish: they are short, and they are what
+## a held brush shows.
 func cancel_stale(entries: Array[Dictionary]) -> void:
 	for entry in entries:
-		if not entry.get("cancelled", false) and is_stale(entry.job):
+		if entry.get("cancelled", false) or entry.job.get("lead", false):
+			continue
+		if is_stale(entry.job):
 			(entry.cancel as Semaphore).post()
 			entry["cancelled"] = true
+
+
+## True when live `cell` may have a lead job now: the brush still on it (LIVE_HOLD_MSEC), none
+## out, something newer than its rows on screen owed, nothing shown for LIVE_INTERVAL_MSEC, and
+## a lead species dirty there.
+func _due_lead(cell: Vector2i, now: int) -> bool:
+	if not _live.has(cell) or _lead_out.has(cell):
+		return false
+	if now - _requested_msec.get(cell, _NEVER) >= LIVE_HOLD_MSEC:
+		return false
+	if _shown_generation.get(cell, -1) >= _generation.get(cell, 0):
+		return false
+	if now - _shown_msec.get(cell, _NEVER) < LIVE_INTERVAL_MSEC:
+		return false
+	var per_biome: Dictionary = _dirty.get(cell, {})
+	for biome_id in per_biome:
+		var lead: Dictionary = _biomes[biome_id].lead
+		for s in per_biome[biome_id]:
+			if lead.has(s):
+				return true
+	return false
+
+
+## A job for `cells` (take_job's form): every dirty species, or with `lead` the lead ones.
+func _job(cells: Array[Vector2i], lead: bool) -> Dictionary:
+	var generations := {}
+	var regenerated := {}
+	var work := {}
+	for cell in cells:
+		generations[cell] = _generation.get(cell, 0)
+		var assets := PackedStringArray()
+		var per_biome: Dictionary = _dirty.get(cell, {})
+		for biome_id in per_biome:
+			var info: Dictionary = _biomes[biome_id]
+			for s in per_biome[biome_id]:
+				if lead and not info.lead.has(s):
+					continue
+				if not work.has(biome_id):
+					work[biome_id] = _new_work(info)
+				var entry: Dictionary = work[biome_id]
+				(entry.cells_by_species[s] as Array).append(cell)
+				entry.depth = maxf(entry.depth, info.reach[s])
+				assets.append_array(info.assets[s])
+		regenerated[cell] = assets
+	for biome_id in work:
+		var entry: Dictionary = work[biome_id]
+		entry.window = _cells_rect(cells).grow(entry.depth + 2.0 * sample_step)
+		entry.erase("depth")
+		entry.built = built_surfaces.duplicate()
+		entry.cliff = cliff_surfaces.duplicate()
+	var job := {"cells": cells, "generations": generations, "regenerated": regenerated, "work": work}
+	if lead:
+		job["lead"] = true
+	return job
+
+
+static func _now(now_msec: int) -> int:
+	return now_msec if now_msec >= 0 else Time.get_ticks_msec()
 
 
 ## A copy of what generation reads of `doc` (wet dressing and crossings too), for a worker:

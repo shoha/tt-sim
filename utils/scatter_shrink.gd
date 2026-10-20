@@ -75,7 +75,9 @@ static func shrinks_by_shader(mesh: Mesh) -> bool:
 ## `suffix` and `wind_category` are the chunk's (see ScatterGlbUtils.build_chunk; the node
 ## is named after it plus INFIX and a serial); `sink_depth` is how far a sinking species
 ## travels down (its height). A grass mass's tufts keep their anchors (`anchors`, the owner's
-## ScatterMass table) in custom data while they shrink, so they keep their mass's hue.
+## ScatterMass table) in custom data while they shrink, so they keep their mass's hue. `from`
+## is the share of their full size they start at (an instance removed mid-grow-in), and the
+## shrink takes that share of `seconds`.
 static func start(
 	parent: Node3D,
 	mesh: Mesh,
@@ -85,10 +87,14 @@ static func start(
 	wind_category: String,
 	sink_depth: float,
 	seconds: float = SECONDS,
-	anchors: Dictionary = {}
+	anchors: Dictionary = {},
+	from: float = 1.0
 ) -> MultiMeshInstance3D:
 	transforms = unheld(parent, transforms)
 	if transforms.is_empty() or mesh == null or seconds <= 0.0 or not parent.is_inside_tree():
+		return null
+	from = clampf(from, 0.0, 1.0)
+	if from < 0.01:
 		return null
 	_serial += 1
 	var node := ScatterGlbUtils.build_chunk(
@@ -98,16 +104,79 @@ static func start(
 		return null
 	var by_shader := shrinks_by_shader(mesh)
 	var depth := maxf(sink_depth, 0.05)
-	_apply(1.0, node, by_shader, depth)
+	_apply(from, node, by_shader, depth)
 	var tween := node.create_tween()
 	(
 		tween
-		. tween_method(_apply.bind(node, by_shader, depth), 1.0, 0.0, seconds)
+		. tween_method(_apply.bind(node, by_shader, depth), from, 0.0, seconds * from)
 		. set_trans(Tween.TRANS_CUBIC)
 		. set_ease(Tween.EASE_IN)
 	)
 	tween.tween_callback(node.queue_free)
 	return node
+
+
+## Shrinks out the rows at `indices` of a cell's flat `rows` (MapDocument.ROW_STRIDE) under
+## `parent`, an AuthoredScatter, for its `species` record ("mesh", "stem", "wind_category"),
+## from `from` of their full size.
+static func start_rows(
+	parent: Node3D,
+	species: Dictionary,
+	cell: Vector2i,
+	rows: PackedFloat32Array,
+	indices: PackedInt32Array,
+	seconds: float,
+	anchors: Dictionary,
+	from: float = 1.0
+) -> void:
+	if indices.is_empty():
+		return
+	var transforms := ScatterRows.transforms_from_rows(rows, indices)
+	var suffix := ScatterChunker.cell_suffix(cell)
+	var depth := sink_depth_for(species.mesh, transforms)
+	start(
+		parent,
+		species.mesh,
+		species.stem,
+		suffix,
+		transforms,
+		species.wind_category,
+		depth,
+		seconds,
+		anchors,
+		from
+	)
+
+
+## Rows still growing in that a rebuild removes (a stroke's provisional result can drop what an
+## earlier one started) shrink away from the size they had reached, instead of vanishing.
+## `growing` is AuthoredScatter's list for the cell's asset ({"keys", "tween"} entries growing
+## over `seconds`), `old_list` the row keys of `old_rows`, `present` the keys the cell keeps.
+static func start_growing(
+	parent: Node3D,
+	species: Dictionary,
+	cell: Vector2i,
+	growing: Array,
+	old_rows: PackedFloat32Array,
+	old_list: PackedInt64Array,
+	present: Dictionary,
+	seconds: float,
+	anchors: Dictionary
+) -> void:
+	for entry: Dictionary in growing:
+		var entry_keys: Dictionary = entry.keys
+		var gone := PackedInt32Array()
+		for i in old_list.size():
+			if entry_keys.has(old_list[i]) and not present.has(old_list[i]):
+				gone.append(i)
+		if gone.is_empty():
+			continue
+		var tween: Tween = entry.tween
+		var t := 1.0
+		if tween != null and tween.is_valid() and seconds > 0.0:
+			t = clampf(tween.get_total_elapsed_time() / seconds, 0.0, 1.0)
+		# The grow-in's cubic ease-out, so the shrink starts at the size on screen.
+		start_rows(parent, species, cell, old_rows, gone, seconds, anchors, 1.0 - pow(1.0 - t, 3.0))
 
 
 ## The tallest a set of instances stands: `mesh`'s height times the largest Y scale.

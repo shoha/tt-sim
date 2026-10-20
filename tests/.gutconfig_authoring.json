@@ -94,6 +94,7 @@
 		"res://tests/unit/test_scatter_generator_calibration.gd",
 		"res://tests/unit/test_scatter_ground_rules.gd",
 		"res://tests/unit/test_scatter_mass.gd",
+		"res://tests/unit/test_scatter_regen_live.gd",
 		"res://tests/unit/test_sculpt_tool.gd",
 		"res://tests/unit/test_shape_field.gd",
 		"res://tests/unit/test_starting_landform.gd",
