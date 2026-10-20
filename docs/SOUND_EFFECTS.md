@@ -268,6 +268,22 @@ a family and plays its three moments; the sounds are `RecordedShot`s in `tools/s
   cooldown above it); holding still is silent; the release `<family>_settle`, but a tap (under
   0.3 s and never a spacing from its start) is heard once, as its start; a cancel is silent. Fire
   has no family (its roar answers it). Ticks are Faint, starts, settles, undo and redo Tap.
+- **Gestures a tool takes itself.** Place, a Bridge's line and a River's line are not dab
+  strokes: their press returns false and the mode does the work (`BrushMode.press`). When such
+  a press began something (`BrushMode.took_press`: a prop placed, a line begun) the brush plays
+  the same moments, following the pointer's ground point for the ticks (`BrushTool.follow_sound`):
+  a Place click knocks once (held 0.3 s or more, turning the prop, it also settles), a River or
+  Bridge line ticks as it is drawn and settles on its release. Removing a prop (RMB, Delete) or a
+  crossing (Ctrl press) is silent, and a press that places nothing is silent.
+- **Heard in the running game** (render job `sound_check`, 2026-10-20, `probes/authoring_sound.gd`
+  logging AudioManager's sounds and the SFX bus per step): a Biome dab plays `plant_start` alone;
+  a 10 m Biome stroke (4 m brush) `plant_start`, three `plant_tick` 0.75 s apart and
+  `plant_settle`; a 10 m Paint stroke the same in `paint_`; a Place click `prop_start`; undo and
+  redo one each; a 12 m River (2.5 m brush, 2 m spacing) `water_start`, five or six ticks (the
+  sixth when the last frame reaches 12 m, 20 ms before the settle) and `water_settle`; an 8 m
+  Bridge `prop_start`, four ticks and `prop_settle`. Every take named, none repeated running.
+  Bus peaks -7.0 to -15.4 dB in each step over two runs; between steps it falls to -90 dB or
+  below within 2 s, an inaudible tail (it reads -200 only before the first sound).
 - **Level.** Each shot's `volume_db` puts its loudest take's loudest 50 ms a fixed distance under
   `token_drop`'s (-8.8 dBFS): starts 14 dB, settles 16, undo and redo 15, ticks 20
   (`UNDER_TOKEN_DROP_DB`); each take's `gain_db` lifts it to the loudest (a take needing more
@@ -286,7 +302,7 @@ a family and plays its three moments; the sounds are `RecordedShot`s in `tools/s
 | `splash_enter` | `scenes/effects/water_zone.gd` (`_on_body_entered`) | Token's collision shape enters a water zone |
 | `splash_exit`  | `scenes/effects/water_zone.gd` (`_on_body_exited`) | Token's collision shape fully exits a water zone |
 | `fire_roar`    | `scenes/terrain/fire_sound.gd` | Loops while flames burn near the view (authoring and play, wherever a `FireField` is) |
-| `<family>_start`, `_tick`, `_settle` | `scenes/states/authoring/stroke_sound.gd` (from `brush_tool.gd`: `_start_gesture`, `_paint`, `finish_gesture`, `cancel_gesture`) | A brush stroke's press, each spacing of drag, its release (see "Authoring sounds") |
+| `<family>_start`, `_tick`, `_settle` | `scenes/states/authoring/stroke_sound.gd` (from `brush_tool.gd`: `_start_gesture`, `_paint`, `follow_sound`, `finish_gesture`, `cancel_gesture`) | A brush stroke's press, each spacing of drag, its release (see "Authoring sounds") |
 | `undo`, `redo` | `authoring_controller.gd` (`undo`, `redo`) | An authoring undo or redo that changed something |
 
 ### Additional SFX Candidates (Not Yet in the Palette)

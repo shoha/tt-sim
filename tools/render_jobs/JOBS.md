@@ -849,6 +849,14 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   and zoom 2 over the burning point farthest from every cluster's centroid (its `aim` action,
   `target` "gap"), at zoom 2 3 m off the largest cluster's centroid and on it, and 1.5 m and
   12 m past the flames' east edge (`target` "edge"). One capture, `zoom2_gap`.
+- `jobs/sound_check.json`: the authoring tools' sounds in the running game (card brushland-sound;
+  about 45 s). A new 100 ft meadow (seed 4242) in authoring, never saved: a Biome dab (a tap), a
+  10 m Biome stroke, a 10 m Paint stroke, a Place click (a real input `gesture`), undo, redo, a
+  12 m River and an 8 m plank Bridge across it. `probes/authoring_sound.gd` (`listen`, then a
+  `mark` per step, `stop`) logs every sound AudioManager plays with its take and time, every
+  request by name and count, the SFX bus's loudest peak, how many frames read above -200 dB and
+  its peak over the step's last 0.5 s. One capture, `sound_check_end`. Its first and last steps
+  delete `_sound_check_` in case a run ever saved one.
 - `jobs/fire_smoke_book.json`: bakes the persistent fire's smoke book once, offline (card
   fire-prod-c5a; `probes/fire_smoke_book.gd`; `tools/fire_sim/README.md`). In the real window (a
   headless run draws nothing) it draws `tools/fire_sim/fire_smoke_book_bake.gdshader` into one
