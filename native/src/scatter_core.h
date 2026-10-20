@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 
+#include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/packed_float32_array.hpp>
 #include <godot_cpp/variant/quaternion.hpp>
 #include <godot_cpp/variant/rect2.hpp>
@@ -287,6 +288,21 @@ struct Consts {
 	double edge_boost = 0.0, paved_clear_start = 0.0, paved_clear_full = 1.0;
 	double tree_face_start = 0.0, tree_face_full = 1.0, shrub_face_start = 0.0, shrub_face_full = 1.0;
 	double fringe_start = 0.0, fringe_full = 1.0;
+	// ScatterGround's wet factor and WaterDressing
+	int arid_bit = 64;
+	double depth_scale = 1.0, wet_clear_start = 0.0, wet_clear_full = 1.0;
+	double emergent_depth_start_m = 0.0, emergent_depth_full_m = 1.0;
+	double tree_shore_start = 0.0, tree_shore_full = 1.0, shrub_shore_start = 0.0, shrub_shore_full = 1.0;
+	double shrub_shore_keep = 0.0, tall_shore_start = 0.0, tall_shore_full = 1.0, flower_shore_thin = 0.0;
+	double arid_shore_start = 0.0, arid_shore_full = 1.0;
+	// CrossingGeometry.clearance
+	double clear_margin_m = 0.0, clear_anchor_m = 0.0, clear_soft_m = 1.0, clear_tree_m = 0.0, clear_shrub_m = 0.0;
+};
+
+/// A crossing as CrossingGeometry.clearance reads it.
+struct CrossingSpan {
+	Vector2 start, end;
+	double width_m = 0.0;
 };
 
 /// One whole-grid float32 array of the job, held (not copied) and read through its pointer.
@@ -309,7 +325,11 @@ struct Grids {
 	int64_t seed_value = 0;
 	Grid density, heights, curvature, steep, near_face;
 	Grid paint_total, paint_built, paint_rock, paint_ash, fringe;
-	bool paints = false, fringed = false, wet = false, sampled = false;
+	/// WaterDressing's field (CHANNELS bytes per sample) when `wet`.
+	godot::PackedByteArray water_hold;
+	const uint8_t *water = nullptr;
+	std::vector<CrossingSpan> crossings;
+	bool paints = false, fringed = false, wet = false;
 };
 
 } // namespace ttscatter

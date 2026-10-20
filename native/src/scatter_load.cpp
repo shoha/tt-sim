@@ -173,6 +173,27 @@ static void load_consts(const Dictionary &d, Consts &c) {
 	c.shrub_face_full = num(d, "shrub_face_full");
 	c.fringe_start = num(d, "fringe_start");
 	c.fringe_full = num(d, "fringe_full");
+	c.arid_bit = (int)inum(d, "arid_bit");
+	c.depth_scale = num(d, "depth_scale", 1.0);
+	c.wet_clear_start = num(d, "wet_clear_start");
+	c.wet_clear_full = num(d, "wet_clear_full");
+	c.emergent_depth_start_m = num(d, "emergent_depth_start_m");
+	c.emergent_depth_full_m = num(d, "emergent_depth_full_m");
+	c.tree_shore_start = num(d, "tree_shore_start");
+	c.tree_shore_full = num(d, "tree_shore_full");
+	c.shrub_shore_start = num(d, "shrub_shore_start");
+	c.shrub_shore_full = num(d, "shrub_shore_full");
+	c.shrub_shore_keep = num(d, "shrub_shore_keep");
+	c.tall_shore_start = num(d, "tall_shore_start");
+	c.tall_shore_full = num(d, "tall_shore_full");
+	c.flower_shore_thin = num(d, "flower_shore_thin");
+	c.arid_shore_start = num(d, "arid_shore_start");
+	c.arid_shore_full = num(d, "arid_shore_full");
+	c.clear_margin_m = num(d, "clear_margin_m");
+	c.clear_anchor_m = num(d, "clear_anchor_m");
+	c.clear_soft_m = num(d, "clear_soft_m");
+	c.clear_tree_m = num(d, "clear_tree_m");
+	c.clear_shrub_m = num(d, "clear_shrub_m");
 }
 
 static std::vector<Relation> relations(const Variant &v) {
@@ -388,15 +409,21 @@ bool Job::load(const Dictionary &d) {
 	grids.fringe.take(at(g, "fringe"));
 	grids.paints = !grids.paint_total.empty();
 	grids.fringed = !grids.fringe.empty();
-	grids.wet = flag(g, "wet");
 	int64_t count = (int64_t)grids.columns * grids.rows;
+	grids.water_hold = at(g, "water");
+	grids.wet = grids.water_hold.size() == count * 4;
+	grids.water = grids.wet ? grids.water_hold.ptr() : nullptr;
+	godot::PackedFloat64Array crossings_in = at(g, "crossings");
+	for (int64_t i = 0; i + 4 < crossings_in.size(); i += 5) {
+		CrossingSpan span;
+		span.start = v2(crossings_in[i], crossings_in[i + 1]);
+		span.end = v2(crossings_in[i + 2], crossings_in[i + 3]);
+		span.width_m = crossings_in[i + 4];
+		grids.crossings.push_back(span);
+	}
 	if (grids.columns < 2 || grids.rows < 2 || grids.density.hold.size() != count || grids.heights.hold.size() != count ||
 			grids.curvature.hold.size() != count || grids.steep.hold.size() != count || grids.near_face.hold.size() != count) {
 		error = "grids";
-		return false;
-	}
-	if (grids.wet) {
-		error = "water";
 		return false;
 	}
 	bounds = (Rect2)at(d, "bounds");

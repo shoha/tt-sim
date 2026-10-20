@@ -17,6 +17,9 @@ extends RefCounted
 ##          the window's centre crop of every drawn frame from the press for `seconds` of real
 ##          time, then writes it resampled to 30 fps as `<name>_<NNN>.png`.
 ##   busy   how many watches and films are still running.
+##   native `mode` "on" or "off": the native scatter generator, or every job forced to GDScript
+##          (ScatterNative.force_gdscript; card native-scatter); resets its job counts.
+##   counts ScatterNative's jobs by outcome since the last "native".
 
 static var _running: Array[Node] = []
 
@@ -51,6 +54,12 @@ static func run(root: Node, step: Dictionary) -> String:
 			filmer.brush = c.brush
 			_start(root, filmer)
 			return "filming " + filmer.prefix
+		"native":
+			ScatterNative.force_gdscript = String(step.get("mode", "on")) != "on"
+			ScatterNative.reset_counts()
+			return "native %s (library %s)" % [str(ScatterNative.active()), ScatterNative.version()]
+		"counts":
+			return "jobs %s" % str(ScatterNative.fallbacks())
 		"busy":
 			var busy := 0
 			for node in _running:

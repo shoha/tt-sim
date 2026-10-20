@@ -68,9 +68,8 @@ public:
 int64_t pcg2d_x(int64_t x, int64_t y);
 
 /// The document_fields Callables over the job's grids (ScatterGenerator.document_fields with
-/// ScatterGround.sampler), for dry ground: painted surfaces, the path fringe and the rule noise
-/// on steep ground are covered; wet dressing and crossings never reach here (ScatterNative
-/// sends those jobs to GDScript).
+/// ScatterGround.sampler): painted surfaces, the path fringe, the rule noise on steep ground,
+/// wet dressing (WaterDressing.sample, wet_factor) and crossings (CrossingGeometry.clearance).
 class Ground {
 	const Grids &g;
 	const Consts &c;
@@ -86,6 +85,9 @@ class Ground {
 	Vector2 painted_lookup(Vector2 xz) const;
 	bool scorches(int role) const;
 	double plain_at(Vector2 p) const;
+	Vector3 water_at(Vector2 s) const;
+	double wet_factor(int role, Vector3 water) const;
+	double clearance(Vector2 p, double extra) const;
 
 public:
 	Ground(const Grids &grids, const Consts &consts) :
