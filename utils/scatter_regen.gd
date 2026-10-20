@@ -356,6 +356,8 @@ static func snapshot(doc: MapDocument) -> MapDocument:
 ## {cell: {asset id: PackedFloat32Array}}, "anchors": the grass-mass anchors of those rows
 ## (ScatterMass.collect's table, this job's own), "usec": int}. Once `cancel` is posted
 ## (AuthoredScatter, for a job whose cells are all stale) it stops and returns what it has.
+## Each biome runs in the native generator where it is built and covers the job (ScatterNative;
+## the same rows, about fifty times faster), else in GDScript.
 static func run(snapshot: MapDocument, work: Dictionary, cancel: Semaphore = null) -> Dictionary:
 	var started := Time.get_ticks_usec()
 	var rows_by_cell := {}
@@ -364,30 +366,11 @@ static func run(snapshot: MapDocument, work: Dictionary, cancel: Semaphore = nul
 		if ScatterGenerator.cancelled(cancel):
 			break
 		var entry: Dictionary = work[biome_id]
-		var fields := ScatterGenerator.document_fields(
-			snapshot,
-			biome_id,
-			entry.window,
-			entry.get("built", PackedStringArray()),
-			entry.get("cliff", PackedStringArray())
-		)
-		var species: Array[Dictionary] = []
-		species.assign(entry.species)
-		var rows := ScatterGenerator.generate_species_cells(
-			biome_id,
-			species,
-			fields.density_at,
-			fields.height_at,
-			fields.normal_at,
-			snapshot.map_seed,
-			entry.cells_by_species,
-			fields.bounds,
-			fields.species_density_at,
-			entry.get("blockers", PackedFloat32Array()),
-			anchors,
-			fields.density_ceiling_at,
-			cancel
-		)
+		# The native generator when it is built and covers the job (ScatterNative), with
+		# rows equal to GDScript's; otherwise the whole biome runs in GDScript.
+		var rows: Variant = ScatterNative.run_biome(snapshot, biome_id, entry, anchors)
+		if rows == null:
+			rows = _generate(snapshot, biome_id, entry, anchors, cancel)
 		for asset_id in rows:
 			var split := split_by_cell(rows[asset_id])
 			for cell in split:
@@ -402,6 +385,36 @@ static func run(snapshot: MapDocument, work: Dictionary, cancel: Semaphore = nul
 		"anchors": anchors,
 		"usec": Time.get_ticks_usec() - started,
 	}
+
+
+## One biome of a job in GDScript (generate_species_cells over document_fields).
+static func _generate(
+	snapshot: MapDocument, biome_id: String, entry: Dictionary, anchors: Dictionary, cancel: Semaphore
+) -> Dictionary:
+	var fields := ScatterGenerator.document_fields(
+		snapshot,
+		biome_id,
+		entry.window,
+		entry.get("built", PackedStringArray()),
+		entry.get("cliff", PackedStringArray())
+	)
+	var species: Array[Dictionary] = []
+	species.assign(entry.species)
+	return ScatterGenerator.generate_species_cells(
+		biome_id,
+		species,
+		fields.density_at,
+		fields.height_at,
+		fields.normal_at,
+		snapshot.map_seed,
+		entry.cells_by_species,
+		fields.bounds,
+		fields.species_density_at,
+		entry.get("blockers", PackedFloat32Array()),
+		anchors,
+		fields.density_ceiling_at,
+		cancel
+	)
 
 
 ## One cell's new asset rows: `existing` without the `regenerated` assets, plus `fresh`

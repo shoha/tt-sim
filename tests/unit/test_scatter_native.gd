@@ -68,6 +68,83 @@ func test_painted_cell_rows_equal_gdscript_for_every_biome() -> void:
 		_assert_same_rows(doc, biome_id, _work(doc, biome_id, Vector2i.ZERO))
 
 
+func test_regen_run_gives_the_same_result_native_and_forced_to_gdscript() -> void:
+	if _skip_without_library():
+		return
+	var biome_id := "temperate_forest_summer_s1"
+	var doc := _painted_doc(biome_id, Vector2i(1, -1))
+	var work := {biome_id: _work(doc, biome_id, Vector2i(1, -1))}
+	ScatterNative.reset_counts()
+	var native := ScatterRegen.run(doc, work)
+	ScatterNative.force_gdscript = true
+	var gdscript := ScatterRegen.run(doc, work)
+	assert_eq(ScatterNative.fallbacks(), {"native": 1, "forced": 1})
+	assert_false((native.rows_by_cell as Dictionary).is_empty())
+	assert_eq(native.rows_by_cell, gdscript.rows_by_cell)
+	assert_eq(native.anchors, gdscript.anchors)
+
+
+func test_force_switch_and_missing_library_send_jobs_to_gdscript() -> void:
+	var biome_id := "grassland_meadow_summer_s1"
+	var doc := _painted_doc(biome_id, Vector2i.ZERO)
+	ScatterNative.reset_counts()
+	ScatterNative.force_gdscript = true
+	assert_false(ScatterNative.active())
+	assert_null(ScatterNative.run_biome(doc, biome_id, _work(doc, biome_id, Vector2i.ZERO), {}))
+	ScatterNative.force_gdscript = false
+	var reason := "native" if ScatterNative.available() else "missing"
+	var rows: Variant = ScatterNative.run_biome(doc, biome_id, _work(doc, biome_id, Vector2i.ZERO), {})
+	assert_eq(rows == null, not ScatterNative.available())
+	assert_eq(ScatterNative.fallbacks(), {"forced": 1, reason: 1})
+
+
+## The five landform recipes' whole maps (their own starting cover, which reaches water, steep
+## faces and, on the valley here, a crossing): every job of the build equal, native and GDScript.
+@warning_ignore("integer_division")
+func test_landform_maps_equal_gdscript_over_water_steep_ground_and_a_crossing() -> void:
+	if _skip_without_library():
+		return
+	var biome_id := "grassland_meadow_summer_s1"
+	for landform in ["valley", "hilltop", "terraces", "lakeshore", "gorge"]:
+		var doc := NewMap.create(SIZE_FT, biome_id, SEED, PaletteLibrary.DEFAULT_ROOT, landform)
+		if landform == "valley":
+			var crossing := Crossing.new()
+			crossing.start = Vector2(-6.0, 2.0)
+			crossing.end = Vector2(5.0, -3.0)
+			crossing.width_m = 1.8
+			doc.crossings.append(crossing)
+		var regen := ScatterRegen.for_document(doc)
+		regen.set_biome(biome_id, PaletteLibrary.species(biome_id))
+		regen.built_surfaces = PackedStringArray(PaletteLibrary.surfaces_with_role("built"))
+		regen.cliff_surfaces = PackedStringArray(PaletteLibrary.surfaces_with_role("cliff"))
+		regen.request_region(Rect2(-doc.extent_m() * 0.5, doc.extent_m()))
+		ScatterNative.reset_counts()
+		var rows := 0
+		var differing := []
+		var job := regen.take_job()
+		while not job.is_empty():
+			ScatterNative.force_gdscript = false
+			var native := ScatterRegen.run(doc, job.work)
+			ScatterNative.force_gdscript = true
+			var gdscript := ScatterRegen.run(doc, job.work)
+			for cell in gdscript.rows_by_cell:
+				for asset_id in gdscript.rows_by_cell[cell]:
+					rows += gdscript.rows_by_cell[cell][asset_id].size() / MapDocument.ROW_STRIDE
+			if native.rows_by_cell != gdscript.rows_by_cell or native.anchors != gdscript.anchors:
+				differing.append(job.cells)
+			job = regen.take_job()
+		var wet := doc.water_dressing.size() == doc.sample_count() * WaterDressing.CHANNELS
+		gut.p(
+			(
+				"%s: wet %s, crossings %d, %d rows, %s, differing jobs %s"
+				% [landform, wet, doc.crossings.size(), rows, ScatterNative.fallbacks(), differing]
+			)
+		)
+		assert_gt(rows, 0)
+		assert_false(ScatterNative.fallbacks().has("missing"))
+		assert_eq(differing, [], "%s: every job equal" % landform)
+
+
 ## A fresh map of `biome_id` as the New map dialog makes it, with `cell` and PAINT_MARGIN_M
 ## around it painted to full density (the gen-native probe's cell).
 func _painted_doc(biome_id: String, cell: Vector2i) -> MapDocument:

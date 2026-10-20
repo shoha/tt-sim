@@ -106,10 +106,10 @@ void Ctx::generate_species(int s) {
 		if (area.size.x <= 0.0f || area.size.y <= 0.0f) {
 			continue;
 		}
-		int64_t bj1 = floori(area.position.y / size), bi1 = floori((area.position.x + area.size.x) / size);
-		int64_t bj_end = floori((area.position.y + area.size.y) / size);
-		int64_t bi0 = floori(area.position.x / size);
-		for (int64_t bj = bj1; bj <= bj_end; bj++) {
+		// Rect2's end is position + size in float32, as GDScript's area.end.
+		int64_t bj0 = floori(area.position.y / size), bj1 = floori((area.position.y + area.size.y) / size);
+		int64_t bi0 = floori(area.position.x / size), bi1 = floori((area.position.x + area.size.x) / size);
+		for (int64_t bj = bj0; bj <= bj1; bj++) {
 			for (int64_t bi = bi0; bi <= bi1; bi++) {
 				const List &cands = *bucket(field, bi, bj);
 				for (int c_ = 0; c_ < (int)cands.size(); c_ += STRIDE) {

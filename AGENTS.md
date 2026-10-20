@@ -149,6 +149,22 @@ After editing files, format them so output matches project style. See `.cursor/r
 
 - **Unit tests** – GUT framework (`addons/gut/`), configured in `tests/.gutconfig.json`. Test files in `tests/unit/` with `test_` prefix.
 - **Integration test scenes** – Runnable with F6 in Godot editor: `tests/test_glb_lights.tscn`, `tests/test_play_level.tscn`, `tests/test_client_waiting.tscn`
+- **Native scatter library** (`native/`, docs/systems/scatter.md "Native path") – optional. Without
+  it everything runs (start, lint, tests, exports) on the GDScript generator and
+  `test_scatter_native.gd` shows as pending; with it, scatter jobs run natively and that test checks
+  them against GDScript bit for bit. Build it with no Godot process of the project running (a
+  loaded DLL is locked), then re-import:
+  ```
+  git submodule update --init native/godot-cpp
+  scons -C native -j8 use_mingw=yes use_llvm=yes mingw_prefix=<llvm-mingw root>   # Windows, llvm-mingw on msvcrt
+  scons -C native -j8                                                              # Linux, macOS
+  godot --headless --import --path .
+  ```
+  Add `target=template_release` for the library release exports load. On this machine the
+  llvm-mingw root is `C:/Users/hshore/scoop/apps/mingw-mstorsjo-llvm-msvcrt/current` and its `bin`
+  must lead PATH for the build. To go back to GDScript only, delete `native/bin/`,
+  `native/tt_scatter.gdextension` and `.godot/extension_list.cfg`, then re-import (Godot keeps a
+  vanished extension in that list and errors at every start until it is deleted).
 
 ### Running tests from the CLI
 
@@ -431,6 +447,7 @@ autoloads/                  # Singletons, static class_name scripts, and facade 
 resources/                  # Custom Resource classes (LevelData, TokenState, TokenPlacement, TokenConfig, AssetPack)
 scenes/                     # States (incl. states/authoring), board_token, effects, level_editor, level_loader, terrain, ui
 utils/                      # GlbUtils, SerializationUtils, EnvironmentPresets, TabUtils; map document, palette, scatter generator
+native/                     # C++ GDExtension: the native scatter generator (SConstruct, src/, thirdparty/, godot-cpp submodule; bin/ and the .gdextension are built, gitignored)
 assets/palette/             # Built-in treecube palette (Git LFS; installed by treecube's build_palette.py, see docs/MAP_AUTHORING.md)
 assets/fire/                # the fire's baked books (Git LFS; tools/fire_sim/README.md)
 tools/render_jobs/          # 1920x1080 scripted render jobs for look judgments (README inside)

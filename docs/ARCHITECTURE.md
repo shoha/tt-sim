@@ -1716,6 +1716,14 @@ models, clearance); the generator only evaluates candidates.
   reach into its instances (relations, clump parents' relations and clearance, chained);
   `generate_species_cells()` takes a cell list per species so a brush regenerates every
   species where it painted and only the relation-driven ones around it.
+- **Native path (card native-scatter, 2026-10-20):** `ScatterRegen.run` gives each biome of a
+  job to `ScatterNative` (`utils/scatter_native.gd`) first. Where the C++ GDExtension in
+  `native/` is built, the whole biome runs there in one call (the plan, the window's grids, the
+  noise settings and the cells packed once; no Callables cross) with rows and anchors bit-equal
+  to this generator's, about fifty times faster; where it is not, or `force_gdscript` is set, it
+  runs here. This GDScript stays the reference the native rows are tested against. Map, rules
+  and building: [systems/scatter.md](systems/scatter.md) "Native path"; numbers:
+  [PERFORMANCE.md](PERFORMANCE.md) "Native scatter generator".
 
 ### Authored scatter
 

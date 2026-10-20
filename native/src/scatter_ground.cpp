@@ -3,7 +3,8 @@
 // species_density_at multiplies in, and the terrain's height and normal; with TerrainRules'
 // weights (the cliff and scree rules with their edge noise) and the painted-surface shaping.
 // Line for line with utils/scatter_generator.gd, utils/scatter_ground.gd and
-// utils/terrain_rules.gd. Wet dressing and crossings are not here: such jobs run in GDScript.
+// utils/terrain_rules.gd, with WaterDressing.sample, ScatterGround.wet_factor and
+// CrossingGeometry.clearance.
 #include "scatter_gen.h"
 
 namespace ttscatter {
@@ -95,15 +96,16 @@ Vector3 Ground::ground_at(Vector2 p, int role) const {
 			yielding = gmax(shaped - held, 0.0);
 		}
 	}
-	// TerrainRules.compose_water(yielding, held, rule, Vector2.ZERO, 0.0) as a
+	Vector3 water = g.wet ? water_at(s) : Vector3();
+	// TerrainRules.compose_water(yielding, held, rule, Vector2(water.x, water.y), water.z) as a
 	// PackedFloat32Array: [keep, cliff, scree, paint_scale, bed, shore], each rounded to float32.
 	double unpainted = gclamp(1.0 - yielding - held, 0.0, 1.0);
 	double cliff_scale = 1.0 - c.paint_cliff_yield * rule.x;
-	double fording = smoothstep(c.paint_ford_start_m, c.paint_ford_end_m, 0.0);
-	double ford = c.paint_water_yield * 0.0 * fording;
+	double fording = smoothstep(c.paint_ford_start_m, c.paint_ford_end_m, water.z);
+	double ford = c.paint_water_yield * water.x * fording;
 	float share_scale = (float)(cliff_scale * (1.0 - ford));
 	float share_cliff = (float)(unpainted * rule.x + yielding * (1.0 - cliff_scale));
-	float share_scree = (float)(unpainted * rule.y * 1.0);
+	float share_scree = (float)(unpainted * rule.y * (1.0 - water.x));
 	double paved = (built_weight + ash_weight) * share_scale + held;
 	double open = 1.0 - share_cliff - smoothstep(c.paved_clear_start, c.paved_clear_full, paved);
 	if (base == c.role_tree || base == c.role_shrub) {
@@ -120,7 +122,93 @@ Vector3 Ground::ground_at(Vector2 p, int role) const {
 		double verge = smoothstep(c.fringe_start, c.fringe_full, beside);
 		open *= flower ? 1.0 + c.flower_verge_gather * verge : 1.0 - verge;
 	}
+	if (water != Vector3()) {
+		open *= wet_factor(role, water);
+	}
+	if (!g.crossings.empty()) {
+		double extra = 0.0;
+		if (base == c.role_tree) {
+			extra = c.clear_tree_m;
+		} else if (base == c.role_shrub || base == c.role_rock) {
+			extra = c.clear_shrub_m;
+		}
+		open *= clearance(p, extra);
+	}
 	return Vector3((float)gmax(open, 0.0), share_cliff, share_scree);
+}
+
+Vector3 Ground::water_at(Vector2 s) const {
+	const int channels = 4;
+	int columns = g.columns;
+	double fx = gclamp(s.x, 0.0, columns - 1);
+	double fz = gclamp(s.y, 0.0, g.rows - 1);
+	int64_t x0 = imin(floori(fx), columns - 2);
+	int64_t z0 = imin(floori(fz), g.rows - 2);
+	double tx = fx - x0;
+	double tz = fz - z0;
+	int64_t a = (z0 * columns + x0) * channels;
+	int64_t b = a + channels;
+	int64_t cc = a + (int64_t)columns * channels;
+	int64_t d = cc + channels;
+	float out[3];
+	for (int ch = 0; ch < 3; ch++) {
+		double top = glerp(g.water[a + ch], g.water[b + ch], tx);
+		double bottom = glerp(g.water[cc + ch], g.water[d + ch], tx);
+		out[ch] = (float)glerp(top, bottom, tz);
+	}
+	return Vector3((float)(out[0] / 255.0), (float)(out[1] / 255.0), (float)(out[2] / c.depth_scale));
+}
+
+double Ground::wet_factor(int role, Vector3 water) const {
+	double bed = water.x;
+	double shore = water.y;
+	if ((role & c.edge_emergent) != 0) {
+		double f = 1.0 - smoothstep(c.emergent_depth_start_m, c.emergent_depth_full_m, water.z);
+		f *= 1.0 - smoothstep(0.5, 0.9, bed) * (1.0 - smoothstep(0.0, 0.05, water.z));
+		return f * (1.0 + c.edge_boost * gmax(shore, bed));
+	}
+	double dry = 1.0 - smoothstep(c.wet_clear_start, c.wet_clear_full, bed);
+	if ((role & c.edge_bank) != 0) {
+		return dry * (1.0 + c.edge_boost * shore);
+	}
+	if ((role & c.arid_bit) != 0) {
+		return dry * (1.0 - smoothstep(c.arid_shore_start, c.arid_shore_full, shore));
+	}
+	int base = role & c.role_bits;
+	if (base == c.role_tree) {
+		return dry * (1.0 - smoothstep(c.tree_shore_start, c.tree_shore_full, shore));
+	}
+	if (base == c.role_shrub) {
+		double thin = smoothstep(c.shrub_shore_start, c.shrub_shore_full, shore);
+		return dry * (1.0 - (1.0 - c.shrub_shore_keep) * thin);
+	}
+	if (base == c.role_tall_cover) {
+		return dry * (1.0 - smoothstep(c.tall_shore_start, c.tall_shore_full, shore));
+	}
+	if ((role & c.flower_bit) != 0) {
+		return dry * (1.0 - c.flower_shore_thin * shore);
+	}
+	return dry;
+}
+
+double Ground::clearance(Vector2 p, double extra) const {
+	double keep = 1.0;
+	double anchor_m = c.clear_anchor_m + extra;
+	for (const CrossingSpan &crossing : g.crossings) {
+		double span = crossing.start.distance_to(crossing.end);
+		if (span <= 0.0) {
+			continue;
+		}
+		Vector2 dv = crossing.end - crossing.start;
+		Vector2 dir = dv.length() > 0.0f ? dv / dv.length() : Vector2();
+		Vector2 rel = p - crossing.start;
+		Vector2 uv(rel.dot(dir), rel.dot(Vector2(-dir.y, dir.x)));
+		double half = crossing.width_m * 0.5 + c.clear_margin_m + extra;
+		double du = gmax(gmax(-anchor_m - uv.x, uv.x - span - anchor_m), 0.0);
+		double dvv = gmax(std::fabs((double)uv.y) - half, 0.0);
+		keep = gmin(keep, smoothstep(0.0, c.clear_soft_m, v2(du, dvv).length()));
+	}
+	return keep;
 }
 
 // ---- TerrainRules ----------------------------------------------------------------------------

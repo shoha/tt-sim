@@ -15,10 +15,12 @@ extends RefCounted
 ##
 ## Fallback. A job reaches the native path only when the port covers everything it can reach;
 ## otherwise it runs whole in GDScript, never mixed (later species read earlier species' memos).
-## Not covered yet: wet dressing (WaterDressing) and crossings (CrossingGeometry.clearance) in the
-## ground sampler. fallbacks() counts the jobs sent back, by reason; force_gdscript sends every
-## job back, for A/B runs and tests. Thread-safe: run_biome() is called from ScatterRegen.run on
-## WorkerThreadPool tasks; the shared state is read-only after first use or under a mutex.
+## The port covers every branch generation has today (painted surfaces, the path fringe, the rule
+## noise on steep ground, wet dressing, crossings, rock blockers); a branch added to the GDScript
+## later must be ported or refused here. fallbacks() counts jobs by outcome; force_gdscript sends
+## every job back, for A/B runs and tests. Thread-safe: run_biome() is called from
+## ScatterRegen.run on WorkerThreadPool tasks; the shared state is read-only after first use or
+## under a mutex.
 
 const CLASS_NAME := "TTScatterNative"
 
@@ -48,7 +50,7 @@ static func version() -> String:
 
 
 ## Jobs per outcome since the last reset: "native", and each fallback reason ("forced",
-## "missing", "water", "crossings", "grids", or a reason the library gave).
+## "missing", "grids", or a reason the library gave).
 static func fallbacks() -> Dictionary:
 	_mutex.lock()
 	var copy := _counts.duplicate()
@@ -68,7 +70,7 @@ static func reset_counts() -> void:
 static func run_biome(
 	snapshot: MapDocument, biome_id: String, entry: Dictionary, anchors: Dictionary
 ) -> Variant:
-	var reason := _refusal(snapshot)
+	var reason := _refusal()
 	if reason != "":
 		_count(reason)
 		return null
@@ -96,16 +98,15 @@ static func run_biome(
 	return out.rows
 
 
-## Why `snapshot` cannot run natively ("" when it can).
-static func _refusal(snapshot: MapDocument) -> String:
+## Why jobs cannot run natively ("" when they can). Every branch generation has today is ported;
+## a branch added later is refused here until it is.
+static func _refusal() -> String:
 	if force_gdscript:
 		return "forced"
 	if _instance() == null:
 		return "missing"
-	if snapshot.water_dressing.size() == snapshot.sample_count() * WaterDressing.CHANNELS:
-		return "water"
-	if not snapshot.crossings.is_empty():
-		return "crossings"
+	if WaterDressing.CHANNELS != 4:
+		return "water channels"
 	return ""
 
 
@@ -193,6 +194,13 @@ static func grids_for(
 	)
 	var paint: Dictionary = ScatterGround._painted_fields(doc, rect, built, cliff)
 	var paints := not (paint.total as PackedFloat32Array).is_empty()
+	# The library reads WaterDressing's field as 4 bytes per sample.
+	var wet := doc.water_dressing.size() == count * WaterDressing.CHANNELS
+	var spans := PackedFloat64Array()
+	for crossing in doc.crossings:
+		spans.append_array(
+			[crossing.start.x, crossing.start.y, crossing.end.x, crossing.end.y, crossing.width_m]
+		)
 	return {
 		"columns": columns,
 		"rows": rows,
@@ -209,7 +217,8 @@ static func grids_for(
 		"paint_rock": paint.rock,
 		"paint_ash": paint.ash,
 		"fringe": ScatterGround._built_fringe(doc, rect, built) if paints else PackedFloat32Array(),
-		"wet": doc.water_dressing.size() == count * WaterDressing.CHANNELS,
+		"water": doc.water_dressing if wet else PackedByteArray(),
+		"crossings": spans,
 	}
 
 
@@ -269,9 +278,17 @@ static func _make_consts() -> Dictionary:
 		"EDGE_BANK", "EDGE_EMERGENT", "FLOWER_BIT", "CHARRED_BIT", "SCREE_THIN",
 		"SCREE_ROCK_BOOST", "FLOWER_VERGE_FILL", "FLOWER_VERGE_GATHER", "EDGE_BOOST",
 		"PAVED_CLEAR_START", "PAVED_CLEAR_FULL", "TREE_FACE_START", "TREE_FACE_FULL",
-		"SHRUB_FACE_START", "SHRUB_FACE_FULL", "FRINGE_START", "FRINGE_FULL"
+		"SHRUB_FACE_START", "SHRUB_FACE_FULL", "FRINGE_START", "FRINGE_FULL", "ARID_BIT",
+		"WET_CLEAR_START", "WET_CLEAR_FULL", "EMERGENT_DEPTH_START_M", "EMERGENT_DEPTH_FULL_M",
+		"TREE_SHORE_START", "TREE_SHORE_FULL", "SHRUB_SHORE_START", "SHRUB_SHORE_FULL",
+		"SHRUB_SHORE_KEEP", "TALL_SHORE_START", "TALL_SHORE_FULL", "FLOWER_SHORE_THIN",
+		"ARID_SHORE_START", "ARID_SHORE_FULL"
 	]:
 		made[String(name).to_lower()] = ground[name]
+	var crossing := _constants(CrossingGeometry)
+	for name in ["CLEAR_MARGIN_M", "CLEAR_ANCHOR_M", "CLEAR_SOFT_M", "CLEAR_TREE_M", "CLEAR_SHRUB_M"]:
+		made[String(name).to_lower()] = crossing[name]
+	made["depth_scale"] = WaterDressing.DEPTH_SCALE
 	return made
 
 
