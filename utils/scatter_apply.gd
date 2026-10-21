@@ -131,7 +131,7 @@ func land(scatter: AuthoredScatter, finished: Array[Dictionary], regen: ScatterR
 		if by_cell.is_empty():
 			continue
 		var t := Time.get_ticks_usec()
-		delta += scatter.rebuild_cells(by_cell)
+		delta += scatter.rebuild_cells(by_cell, true, job.get("centres", {}))
 		var cost := float(Time.get_ticks_usec() - t)
 		spent += cost
 		counts.landed += 1

@@ -8,7 +8,8 @@ extends SceneTree
 ## red at least green, little blue) and those over grass (green over red), their count, their
 ## median relative luminance (WCAG), the board's under them, the median contrast ratio between
 ## the two, and both mean colours.
-##   godot --headless --path D:/dev/tt-sim --script res://tools/render_jobs/ribbon_pixels.gd
+##   godot --headless --path D:/dev/tabletop/tt-sim
+##     --script res://tools/render_jobs/ribbon_pixels.gd
 ##     -- <x0> <y0> <x1> <y1> <png>...
 ## Coordinates are the PNG's own pixels (half size unless the run passed --full). Keep the box
 ## off the ring and its chip, drawn in the ring's colour whatever the ribbon's.

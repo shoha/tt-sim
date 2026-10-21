@@ -1,6 +1,7 @@
 """Tests that the declared palette obeys its own design rules."""
 
 import json
+import math
 import os
 import sys
 import unittest
@@ -28,6 +29,17 @@ def _installed_wavs() -> set:
     return found
 
 
+def _loudest_50ms(samples: list, rate: int) -> float:
+    """The loudest 50 ms window's RMS, in dBFS."""
+    width = int(0.05 * rate)
+    energy = sum(v * v for v in samples[:width])
+    best = energy
+    for i in range(width, len(samples)):
+        energy += samples[i] * samples[i] - samples[i - width] * samples[i - width]
+        best = max(best, energy)
+    return 10.0 * math.log10(max(best / width, 1e-12))
+
+
 class TestPaletteCoverage(unittest.TestCase):
     """The spec, the installed files and the committed manifest name the same sounds.
 
@@ -35,13 +47,19 @@ class TestPaletteCoverage(unittest.TestCase):
     SoundSpec and running --install, not editing a number here.
     """
 
-    def test_every_spec_has_exactly_one_installed_file(self):
-        every = {**sfx_spec.SPECS, **sfx_spec.RECORDINGS}
-        expected = {(spec.bus, name) for name, spec in every.items()}
+    def test_every_spec_has_exactly_one_installed_file_per_take(self):
+        expected = {
+            (spec.bus, generate_sfx.variant_filename(name, index)[: -len(".wav")])
+            for name, spec in generate_sfx.every_sound().items()
+            for index in range(generate_sfx.take_count(name))
+        }
         self.assertEqual(_installed_wavs(), expected)
 
     def test_recordings_and_synthesized_sounds_never_share_a_name(self):
-        self.assertEqual(set(sfx_spec.SPECS) & set(sfx_spec.RECORDINGS), set())
+        kinds = (set(sfx_spec.SPECS), set(sfx_spec.RECORDINGS), set(sfx_spec.SHOTS))
+        for i, first in enumerate(kinds):
+            for second in kinds[i + 1 :]:
+                self.assertEqual(first & second, set())
 
     def test_committed_manifest_matches_the_spec(self):
         with open(generate_sfx.manifest_path(REPO_ROOT), "r", encoding="utf-8") as handle:
@@ -99,6 +117,45 @@ class TestPlaybackFields(unittest.TestCase):
             self.assertTrue(loop.source.endswith(".wav"), name)
             self.assertLess(loop.start_s, loop.end_s, name)
             self.assertLess(loop.crossfade_ms / 1000.0, (loop.end_s - loop.start_s) / 2.0, name)
+
+    def test_every_shot_take_keeps_its_cc0_provenance(self):
+        for name, shot in sfx_spec.SHOTS.items():
+            self.assertGreaterEqual(len(shot.takes), 3, name)
+            for take in shot.takes:
+                original = sfx_spec.ORIGINALS[take.original]
+                self.assertTrue(original.url.startswith("https://freesound.org/"), name)
+                self.assertEqual(original.licence, "CC0 1.0", name)
+                self.assertTrue(original.author and original.title, name)
+                self.assertTrue(original.source.endswith(".wav"), name)
+                self.assertLess(take.start_s, take.end_s, name)
+                self.assertLessEqual(take.gain_db, 6.0, name)
+
+    def test_authoring_shots_play_on_sfx_ticks_faintest(self):
+        for name, shot in sfx_spec.SHOTS.items():
+            self.assertEqual(shot.bus, "sfx", name)
+            self.assertIn(shot.priority, sfx_spec.PRIORITIES, name)
+            if name.endswith("_tick"):
+                # A drag's ticks never outrank its start or settle, and a fast
+                # drag cannot run them together.
+                self.assertEqual(shot.priority, sfx_spec.PRIORITY_FAINT, name)
+                self.assertGreaterEqual(shot.cooldown_s, 0.1, name)
+            else:
+                self.assertEqual(shot.priority, sfx_spec.PRIORITY_TAP, name)
+        self.assertLess(sfx_spec.SHOTS["undo"].pitch_scale, 1.0)
+        self.assertGreater(sfx_spec.SHOTS["redo"].pitch_scale, 1.0)
+
+    def test_every_take_plays_its_moment_under_token_drop(self):
+        # Each take's loudest 50 ms, with its gain and the shot's volume_db, sits
+        # within 1 dB of its UNDER_TOKEN_DROP_DB under token_drop's.
+        drop, rate = s.read_wav(generate_sfx.installed_path(REPO_ROOT, "token_drop", "sfx"))
+        ref = _loudest_50ms(drop, rate) + sfx_spec.SPECS["token_drop"].volume_db
+        for name, shot in sfx_spec.SHOTS.items():
+            target = ref - sfx_spec.UNDER_TOKEN_DROP_DB[name.split("_")[-1]]
+            for index, take in enumerate(shot.takes):
+                path = generate_sfx.installed_path(REPO_ROOT, name, shot.bus, index)
+                samples, take_rate = s.read_wav(path)
+                level = _loudest_50ms(samples, take_rate) + take.gain_db + shot.volume_db
+                self.assertAlmostEqual(level, target, delta=1.0, msg="%s %d" % (name, index))
 
     def test_cooldowns_are_short_and_non_negative(self):
         for name, spec in sfx_spec.SPECS.items():

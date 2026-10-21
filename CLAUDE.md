@@ -30,7 +30,7 @@ Supplementary detail is in `.cursor/rules/` and `docs/`.
 - `@onready` references use the unique-name form (`%NodeName`, with `unique_name_in_owner`
   set on the node in the `.tscn`), not `$Full/Path`. Every existing scene does this.
 - New `.gd` files need a `.gd.uid` sidecar, which Godot generates lazily. Run
-  `godot --headless --import --path D:/dev/tt-sim` and `git add` the new `.uid` before
+  `godot --headless --import --path D:/dev/tabletop/tt-sim` and `git add` the new `.uid` before
   committing; they are tracked. A subagent that creates a script and never re-imports leaves its
   `.uid` untracked, so check `git status` for stray `.gd.uid` entries after any batch of
   new-file work.
@@ -46,12 +46,12 @@ Supplementary detail is in `.cursor/rules/` and `docs/`.
   `Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64.exe`). `godot` on PATH is a
   wrapper that picks the newest (`~/.local/bin/godot` for bash, `~/scoop/shims/godot.cmd`
   for PowerShell); the validator MCP server gets an explicit path through `GODOT_PATH` in
-  `.mcp.json` (both this repo's and `D:/dev`'s pin 4.7.2, as CI's image does). Always pass `--headless` for CLI
+  `.mcp.json` (both this repo's and `D:/dev/tabletop`'s pin 4.7.2, as CI's image does). Always pass `--headless` for CLI
   and agent use unless real pixels are needed.
-- Commands use absolute paths (`--path D:/dev/tt-sim`, `git -C D:/dev/tt-sim`), because
-  sessions usually start in `D:/dev`. The allowlist (`git`, `godot`, `gdformat`, `gdlint`)
+- Commands use absolute paths (`--path D:/dev/tabletop/tt-sim`, `git -C D:/dev/tabletop/tt-sim`), because
+  sessions usually start in the suite root, `D:/dev/tabletop`. The allowlist (`git`, `godot`, `gdformat`, `gdlint`)
   matches a command by its first word, so a `cd`-prefixed command does not match.
-  The full command rules are in the `tt-sim-task` agent and `D:/dev/docs/coordinating.md`.
+  The full command rules are in the `tt-sim-task` agent and `D:/dev/tabletop/docs/coordinating.md`.
 - For tt-sim work spawn the `tt-sim-task` agent (and `tt-sim-gate` for the gate and a named
   commit): it carries the command rules, the gate and the file rules. A general-purpose agent
   needs those rules in its card.
@@ -59,7 +59,7 @@ Supplementary detail is in `.cursor/rules/` and `docs/`.
 ## Formatting
 
 A hook runs `gdformat` on every `.gd` file after each Edit or Write, so there is no manual
-formatting step. Lint the files you touched by absolute path: `gdlint D:/dev/tt-sim/utils/x.gd`.
+formatting step. Lint the files you touched by absolute path: `gdlint D:/dev/tabletop/tt-sim/utils/x.gd`.
 
 ## Pre-Push Gate (REQUIRED)
 
@@ -71,12 +71,12 @@ an earlier session and will still fail CI and block a release:
 
 ```
 gdlint autoloads/ scenes/ utils/ resources/ tests/unit/
-godot --headless --path D:/dev/tt-sim --quit-after 1
-godot --headless --path D:/dev/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json
+godot --headless --path D:/dev/tabletop/tt-sim --quit-after 1
+godot --headless --path D:/dev/tabletop/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json
 ```
 
-Run the `gdlint` line with `D:/dev/tt-sim` as the working directory: gdlint reads `.gdlintrc`
-only from the current directory, and run from `D:/dev` it reports false max-public-methods and
+Run the `gdlint` line with `D:/dev/tabletop/tt-sim` as the working directory: gdlint reads `.gdlintrc`
+only from the current directory, and run from `D:/dev/tabletop` it reports false max-public-methods and
 max-returns failures that the repo config relaxes. All three must be clean before pushing. Do
 not rely on per-file `gdlint` runs during editing as a substitute — those only cover files
 touched in the current task. This gate exists because the `v0.1.16` tag build failed at lint on
@@ -88,19 +88,19 @@ release steps are in `AGENTS.md` "Cutting a release"; cutting a version needs th
 
 ```
 # Syntax check (prints all compile errors, exits)
-godot --headless --path D:/dev/tt-sim --quit-after 1
+godot --headless --path D:/dev/tabletop/tt-sim --quit-after 1
 
 # Run all unit tests (about 4 minutes)
-godot --headless --path D:/dev/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json
+godot --headless --path D:/dev/tabletop/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json
 
 # Named subsets for the inner loop; the full run is still required before a commit
-godot --headless --path D:/dev/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_avatar.json
-godot --headless --path D:/dev/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_authoring.json
-godot --headless --path D:/dev/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_net.json
-godot --headless --path D:/dev/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_ui.json
+godot --headless --path D:/dev/tabletop/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_avatar.json
+godot --headless --path D:/dev/tabletop/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_authoring.json
+godot --headless --path D:/dev/tabletop/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_net.json
+godot --headless --path D:/dev/tabletop/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_ui.json
 
 # After fresh clone or new class_name scripts
-godot --headless --import --path D:/dev/tt-sim
+godot --headless --import --path D:/dev/tabletop/tt-sim
 ```
 
 The subsets (AGENTS.md "Running tests from the CLI" says what each covers): avatar and tokens
@@ -148,7 +148,7 @@ Rules that apply every time the bridge is used:
 - **If the MCP server reports `CONNECTION_CLOSED` at session start**, `node` is not on the PATH
   Claude Code launches servers with (fnm only sets it in the PowerShell profile). The committed
   `tools/mcp/run-server.cmd` resolves the newest fnm node itself; the registrations in
-  `.mcp.json` (this repo's and `D:/dev`'s) point `command` at that file with no `args`, and must
+  `.mcp.json` (this repo's and `D:/dev/tabletop`'s) point `command` at that file with no `args`, and must
   keep doing so. See the AGENTS.md troubleshooting list for the no-MCP fallback over TCP.
 
 ## Performance Is a First-Class Constraint

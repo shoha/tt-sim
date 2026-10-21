@@ -16,6 +16,9 @@ extends Node
 ## game pauses finishes instead of freezing, and every request of a frame is in before
 ## the flush. Bus volumes (the Settings sliders) are set here too, through set_bus_volume.
 ##
+## A recorded shot (the authoring tools' sounds, StrokeSound) has several takes: the queue
+## picks one per play, never the last one again, and this plays its stream.
+##
 ## A loop (a manifest entry with "loop": true, the fire's roar) is not played here: it
 ## lasts as long as its source, so the node that owns the source plays it on positional
 ## players of its own on the entry's bus (FireSound), taking the stream from loop_stream().
@@ -56,6 +59,9 @@ const VOLUME_KEYS: PackedStringArray = ["master", "music", "sfx", "ui"]
 var _queue: SoundRequestQueue
 ## name -> AudioStream, for every manifest entry whose file exists.
 var _streams: Dictionary = {}
+## name -> Array of AudioStream (null where a file is missing), for a recorded shot with
+## several takes; the queue says which take a request plays.
+var _takes: Dictionary = {}
 ## Godot bus name -> Array of AudioStreamPlayer.
 var _players: Dictionary = {}
 
@@ -187,15 +193,26 @@ func _on_toggle_sound(button: BaseButton) -> void:
 
 func _load_streams() -> void:
 	for sound in _queue.names():
-		var path := str(_queue.entry(sound).get("path", ""))
+		var entry := _queue.entry(sound)
+		var path := str(entry.get("path", ""))
 		if ResourceLoader.exists(path):
 			_streams[sound] = load(path)
+		var takes: Array = entry.get("takes", [])
+		if takes.size() > 1:
+			var loaded: Array[AudioStream] = []
+			for take_path in takes:
+				loaded.append(load(take_path) if ResourceLoader.exists(take_path) else null)
+			_takes[sound] = loaded
 
 
 func _play_requests(requests: Array[Dictionary]) -> void:
 	for req in requests:
 		var sound: StringName = req["name"]
 		var stream: AudioStream = _streams.get(sound)
+		var takes: Array = _takes.get(sound, [])
+		var take := int(req.get("take", 0))
+		if take < takes.size() and takes[take] != null:
+			stream = takes[take]
 		var player := _get_available_player(str(req["bus"]))
 		if stream == null or player == null:
 			continue

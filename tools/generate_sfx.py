@@ -238,35 +238,85 @@ def verify_palette(assets_root: str = REPO_ROOT) -> list:
             continue
         samples, rate = read_wav(path)
         failures.extend(verify_recording(name, samples, rate))
+    for name, shot in sfx_spec.SHOTS.items():
+        for index in range(len(shot.takes)):
+            path = installed_path(assets_root, name, shot.bus, index)
+            if not os.path.isfile(path):
+                failures.append("%s: no installed take at %s" % (name, path))
+                continue
+            samples, rate = read_wav(path)
+            failures.extend(verify_shot(name, index, samples, rate))
     return failures
+
+
+def verify_shot(name: str, index: int, samples: list, sample_rate: int) -> list:
+    """Check one recorded shot's take: the rate, the peak and its warmth."""
+    shot = sfx_spec.SHOTS[name]
+    label = "%s take %d" % (name, index)
+    failures = []
+    if sample_rate != shot.sample_rate:
+        failures.append("%s: %d Hz, not the spec's %d Hz" % (label, sample_rate, shot.sample_rate))
+    low, high = PEAK_WINDOW_DBFS
+    peak = measure.peak_dbfs(samples)
+    if not low <= peak <= high:
+        failures.append("%s: peak %.2f dBFS is outside [%.1f, %.1f]" % (label, peak, low, high))
+    ratio = measure.high_band_ratio_db(samples, sample_rate=sample_rate)
+    if ratio > shot.max_high_band_db:
+        failures.append(
+            "%s: high-band ratio %.1f dB exceeds %.1f dB (too bright)"
+            % (label, ratio, shot.max_high_band_db)
+        )
+    return failures
+
+
+def every_sound() -> dict:
+    """Every sound in the spec by name: synthesized, recorded loops, recorded shots."""
+    return {**sfx_spec.SPECS, **sfx_spec.RECORDINGS, **sfx_spec.SHOTS}
+
+
+def take_count(name: str) -> int:
+    """How many files a sound installs: a recorded shot's takes, else one."""
+    shot = sfx_spec.SHOTS.get(name)
+    return len(shot.takes) if shot else 1
 
 
 def build_manifest() -> dict:
     """The playback table for every sound in the spec, keyed by name.
 
-    Each entry names the installed file, its Godot bus, whether it is a loop
-    (a RecordedLoop, played by the node that owns its source, never by
-    AudioManager.play) and the spec's playback fields (volume_db, pitch_jitter
-    in semitones, cooldown_s, priority).
+    Each entry names the installed file (`path`, the first of `takes`; a
+    recorded shot has one file per take, played at random), its Godot bus,
+    whether it is a loop (a RecordedLoop, played by the node that owns its
+    source, never by AudioManager.play) and the spec's playback fields
+    (volume_db, pitch_jitter in semitones, gain_jitter_db, pitch_scale,
+    cooldown_s, priority).
     """
-    every = {**sfx_spec.SPECS, **sfx_spec.RECORDINGS}
-    return {
-        name: {
+    table = {}
+    for name, spec in sorted(every_sound().items()):
+        takes = [
+            "res://assets/audio/%s/%s" % (spec.bus, variant_filename(name, index))
+            for index in range(take_count(name))
+        ]
+        table[name] = {
             "bus": GODOT_BUS[spec.bus],
             "loop": name in sfx_spec.RECORDINGS,
-            "path": "res://assets/audio/%s/%s.wav" % (spec.bus, name),
+            "path": takes[0],
+            "takes": takes,
+            "take_gains_db": [
+                take.gain_db for take in getattr(spec, "takes", ())
+            ] or [0.0],
             "volume_db": spec.volume_db,
             "pitch_jitter": spec.pitch_jitter,
+            "gain_jitter_db": getattr(spec, "gain_jitter_db", 0.0),
+            "pitch_scale": getattr(spec, "pitch_scale", 1.0),
             "cooldown_s": spec.cooldown_s,
             "priority": spec.priority,
         }
-        for name, spec in sorted(every.items())
-    }
+    return table
 
 
-def installed_path(assets_root: str, name: str, bus: str) -> str:
-    """Where a sound's .wav lives beneath a repository root."""
-    return os.path.join(assets_root, "assets", "audio", bus, "%s.wav" % name)
+def installed_path(assets_root: str, name: str, bus: str, index: int = 0) -> str:
+    """Where a sound's .wav (a recorded shot's take `index`) lives beneath a root."""
+    return os.path.join(assets_root, "assets", "audio", bus, variant_filename(name, index))
 
 
 def manifest_path(assets_root: str) -> str:
@@ -317,13 +367,24 @@ def install(assets_root: str, seed: int, sources_root: str = REPO_ROOT) -> tuple
     written = []
     removed = []
     kept = []
-    every = {**sfx_spec.SPECS, **sfx_spec.RECORDINGS}
-    for name, spec in every.items():
+    for name, spec in every_sound().items():
         wav_path = installed_path(assets_root, name, spec.bus)
         bus_dir = os.path.dirname(wav_path)
         os.makedirs(bus_dir, exist_ok=True)
 
-        if name in sfx_spec.RECORDINGS:
+        if name in sfx_spec.SHOTS:
+            for index, take in enumerate(spec.takes):
+                take_path = installed_path(assets_root, name, spec.bus, index)
+                original = sfx_spec.ORIGINALS[take.original]
+                source = os.path.join(sources_root, *original.source.split("/"))
+                if not os.path.isfile(source):
+                    kept.append(take_path)
+                    continue
+                samples, rate = sfx_recording.read_source(source)
+                shot = sfx_recording.process_shot(samples, rate, take, spec)
+                _write_atomically(take_path, shot, spec.sample_rate)
+                written.append(take_path)
+        elif name in sfx_spec.RECORDINGS:
             source = os.path.join(sources_root, *spec.source.split("/"))
             if os.path.isfile(source):
                 samples, rate = sfx_recording.read_source(source)
@@ -336,7 +397,13 @@ def install(assets_root: str, seed: int, sources_root: str = REPO_ROOT) -> tuple
             _write_atomically(wav_path, render_spec(spec, seed=seed), SAMPLE_RATE)
             written.append(wav_path)
 
-        for stale in ("%s.ogg" % name, "%s.ogg.import" % name):
+        # A shot's takes past its count (one dropped from the spec) and any .ogg.
+        stales = ["%s.ogg" % name, "%s.ogg.import" % name]
+        index = take_count(name)
+        while os.path.exists(os.path.join(bus_dir, variant_filename(name, index))):
+            stales += [variant_filename(name, index), variant_filename(name, index) + ".import"]
+            index += 1
+        for stale in stales:
             stale_path = os.path.join(bus_dir, stale)
             if os.path.exists(stale_path):
                 os.remove(stale_path)
@@ -407,8 +474,8 @@ def main(argv: list = None) -> int:
                 print("  " + failure)
             return 1
         print(
-            "Palette verification passed: %d sounds and %d recorded loop(s)."
-            % (len(sfx_spec.SPECS), len(sfx_spec.RECORDINGS))
+            "Palette verification passed: %d sounds, %d recorded loop(s) and %d recorded "
+            "shot(s)." % (len(sfx_spec.SPECS), len(sfx_spec.RECORDINGS), len(sfx_spec.SHOTS))
         )
         return 0
 
@@ -418,7 +485,14 @@ def main(argv: list = None) -> int:
         print("Wrote %s" % manifest_path(args.assets_root))
         for path in removed:
             print("  removed superseded %s" % os.path.relpath(path, args.assets_root))
+        # One line per sound (a shot's takes share it), so a fresh clone's
+        # install does not list every take.
+        reported = set()
         for path in kept:
+            sound = os.path.basename(path).split(".")[0]
+            if sound in reported:
+                continue
+            reported.add(sound)
             state = "kept the committed" if os.path.isfile(path) else "no file at"
             print(
                 "  %s %s: its original recording is not under %s (see tools/sfx_spec.py)"

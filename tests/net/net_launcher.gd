@@ -4,7 +4,7 @@ extends Node
 ## machine and exits 0 only when every peer passed and the real user's data is untouched.
 ## One command form serves every scenario, so it is allowlisted once:
 ##
-##   godot --headless --path D:/dev/tt-sim res://tests/net/net_launcher.tscn --
+##   godot --headless --path D:/dev/tabletop/tt-sim res://tests/net/net_launcher.tscn --
 ##     --data-root=net_launcher --scenario=<name> [--peers=2] [--timeout-s=180] [--port=28471]
 ##     [--windowed=<role>]
 ##

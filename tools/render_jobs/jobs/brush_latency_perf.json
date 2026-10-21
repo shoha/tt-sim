@@ -1,5 +1,5 @@
 {
- "out_dir": "D:/dev/tt-sim/docs/plans/2026-10-19-brushland/latency",
+ "out_dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-19-brushland/latency",
  "timeout_s": 900,
  "hang_s": 90,
  "steps": [
@@ -19,25 +19,25 @@
   {"op": "wait", "s": 2.0},
 
   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "live", "mode": "off"},
-  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_off_a", "dir": "D:/dev/tt-sim/docs/plans/2026-10-19-brushland/latency"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_off_a", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-19-brushland/latency"},
   {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "radius": 4.0, "speed": 6.0, "points": [[-12, -21], [12, -21]]},
   {"op": "wait", "s": 1.0},
   {"op": "wait_ready", "settle": 1.0},
 
   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "live", "mode": "on"},
-  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_on_a", "dir": "D:/dev/tt-sim/docs/plans/2026-10-19-brushland/latency"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_on_a", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-19-brushland/latency"},
   {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "radius": 4.0, "speed": 6.0, "points": [[-12, -7], [12, -7]]},
   {"op": "wait", "s": 1.0},
   {"op": "wait_ready", "settle": 1.0},
 
   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "live", "mode": "off"},
-  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_off_b", "dir": "D:/dev/tt-sim/docs/plans/2026-10-19-brushland/latency"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_off_b", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-19-brushland/latency"},
   {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "radius": 4.0, "speed": 6.0, "points": [[-12, 7], [12, 7]]},
   {"op": "wait", "s": 1.0},
   {"op": "wait_ready", "settle": 1.0},
 
   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "live", "mode": "on"},
-  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_on_b", "dir": "D:/dev/tt-sim/docs/plans/2026-10-19-brushland/latency"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_on_b", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-19-brushland/latency"},
   {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "radius": 4.0, "speed": 6.0, "points": [[-12, 21], [12, 21]]},
   {"op": "wait", "s": 1.0},
   {"op": "wait_ready", "settle": 1.0},

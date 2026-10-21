@@ -20,7 +20,8 @@ extends RefCounted
 ## it every frame along the pointer's path at stroke_radius(), with the dwell gain, calls
 ## dabbed() after each dab, and ends or cancels it with the editor. A mode whose press returns
 ## false does its own work in frame(), end() and cancel() (a river's line, a crossing's line,
-## a prop being turned).
+## a prop being turned); took_press() says when such a press began something, so the brush's
+## sound (StrokeSound) answers it as it answers a dab stroke.
 ##
 ## Shapes. A mode with a line shape and an area shape (has_shapes()) switches between them on
 ## Tab (toggle_shape()); every such brush shows them in one ShapeField, line first.
@@ -59,6 +60,13 @@ func has_target() -> bool:
 ## a dab stroke the brush is to paint; false when the mode took the press itself or refused
 ## it (emitting `brush.refused` with the reason when the author should hear why).
 func press(_brush: BrushTool) -> bool:
+	return false
+
+
+## True when the press() just made, which returned false, began a gesture of the mode's own (a
+## prop placed, a river's or a crossing's line begun) rather than refusing the press or erasing
+## with it. Default: false, a mode with no gesture of its own.
+func took_press() -> bool:
 	return false
 
 

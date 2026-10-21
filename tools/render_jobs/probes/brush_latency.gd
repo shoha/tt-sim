@@ -1,7 +1,7 @@
 extends RefCounted
 
 ## Brush latency probe (card brush-latency, 2026-10-19; notes in
-## D:/dev/tt-sim/docs/plans/2026-10-19-brushland/latency.md). Times a brush's scatter
+## D:/dev/tabletop/tt-sim/docs/plans/2026-10-19-brushland/latency.md). Times a brush's scatter
 ## regeneration from the press, per 10 m cell: when its generation was bumped (requests), when
 ## jobs were taken, cancelled and finished, and when rows were applied (provisionally, while
 ## the cell is still dirty, or for good). It also counts the rows each apply added and removed,
@@ -28,6 +28,8 @@ extends RefCounted
 ##          landing policy (ScatterApply; card native-cover round 2): "r2" (default), "b<usec>"
 ##          or "bnone" for another budget or none, "r1" and "r1u" round 1's landing and rebuild
 ##          with and without its one-lead cap, "lead" native-scatter as it was.
+##   motion `mode` "today..." (the grow-in before the arrival motion, ScatterArrival.classic) or
+##          anything else (the arrival motion; card motion).
 ##
 ## A watch also times the ground cover (species of the ground class): its first row, and when
 ## 90 % of the ground rows this watch added and that are there once it settles had appeared
@@ -110,6 +112,11 @@ static func run(root: Node, step: Dictionary) -> String:
 					applier.budget_usec
 				]
 			)
+		"motion":
+			# Card motion: "today" the grow-in before STAGED + LIFE (ScatterArrival.classic), for
+			# the in-run A/B and the side-by-side films; anything else the arrival motion.
+			ScatterArrival.classic = String(step.get("mode", "arrival")).begins_with("today")
+			return "motion classic %s" % str(ScatterArrival.classic)
 		"busy":
 			var busy := 0
 			for node in _running:

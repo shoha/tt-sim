@@ -1,5 +1,5 @@
 {
- "out_dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/latency",
+ "out_dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-20-native-scatter/latency",
  "timeout_s": 900,
  "hang_s": 90,
  "steps": [
@@ -19,7 +19,7 @@
 
    {"op": "look_at", "at": [-20, -14]},
    {"op": "wait", "s": 1.0},
-   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "native_{value}_tree_dab", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/latency"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "native_{value}_tree_dab", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-20-native-scatter/latency"},
    {"op": "stroke", "mode": "paint", "biome": "temperate_forest_summer_s1", "radius": 3.5, "hold": 0.5, "points": [[-20, -14], [-20, -14]]},
    {"op": "wait", "s": 2.0},
    {"op": "wait_ready", "settle": 0.5},
@@ -27,7 +27,7 @@
 
    {"op": "look_at", "at": [-20, 14]},
    {"op": "wait", "s": 1.0},
-   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "native_{value}_tree_stroke", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/latency"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "native_{value}_tree_stroke", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-20-native-scatter/latency"},
    {"op": "stroke", "mode": "paint", "biome": "temperate_forest_summer_s1", "radius": 2.5, "speed": 6.0, "points": [[-23, 14], [-17, 14]]},
    {"op": "wait", "s": 2.0},
    {"op": "wait_ready", "settle": 0.5},
@@ -35,7 +35,7 @@
 
    {"op": "look_at", "at": [0, -14]},
    {"op": "wait", "s": 1.0},
-   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "native_{value}_flower_dab", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/latency"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "native_{value}_flower_dab", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-20-native-scatter/latency"},
    {"op": "stroke", "mode": "paint", "biome": "alpine_meadow_summer_s1", "radius": 3.5, "hold": 0.5, "points": [[0, -14], [0, -14]]},
    {"op": "wait", "s": 2.0},
    {"op": "wait_ready", "settle": 0.5},
@@ -43,7 +43,7 @@
 
    {"op": "look_at", "at": [0, 14]},
    {"op": "wait", "s": 1.0},
-   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "native_{value}_flower_stroke", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/latency"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "native_{value}_flower_stroke", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-20-native-scatter/latency"},
    {"op": "stroke", "mode": "paint", "biome": "alpine_meadow_summer_s1", "radius": 2.5, "speed": 6.0, "points": [[-3, 14], [3, 14]]},
    {"op": "wait", "s": 2.0},
    {"op": "wait_ready", "settle": 0.5},
@@ -51,7 +51,7 @@
 
    {"op": "look_at", "at": [20, -14]},
    {"op": "wait", "s": 1.0},
-   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "native_{value}_rock_dab", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/latency"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "native_{value}_rock_dab", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-20-native-scatter/latency"},
    {"op": "stroke", "mode": "paint", "biome": "rocky_badlands_summer_s1", "radius": 3.5, "hold": 0.5, "points": [[20, -14], [20, -14]]},
    {"op": "wait", "s": 2.0},
    {"op": "wait_ready", "settle": 0.5},
@@ -59,7 +59,7 @@
 
    {"op": "look_at", "at": [20, 14]},
    {"op": "wait", "s": 1.0},
-   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "native_{value}_rock_stroke", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/latency"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "native_{value}_rock_stroke", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-20-native-scatter/latency"},
    {"op": "stroke", "mode": "paint", "biome": "rocky_badlands_summer_s1", "radius": 2.5, "speed": 6.0, "points": [[17, 14], [23, 14]]},
    {"op": "wait", "s": 2.0},
    {"op": "wait_ready", "settle": 0.5},

@@ -12,7 +12,8 @@ case "$cmd" in
   *'|'*|*'>'*) printf '{}'; exit 0 ;;
 esac
 
-log=/d/dev/tt-sim/.godot/last_godot_output.txt
+# The checkout this hook lives in (settings.json calls it by absolute path).
+log=${BASH_SOURCE[0]%/.claude/hooks/*}/.godot/last_godot_output.txt
 reason="godot output filtered; raw log in .godot/last_godot_output.txt"
 
 case "$cmd" in

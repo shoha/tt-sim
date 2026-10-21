@@ -1,5 +1,5 @@
 {
- "out_dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover",
+ "out_dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-20-native-scatter/cover",
  "timeout_s": 900,
  "hang_s": 90,
  "steps": [
@@ -20,37 +20,37 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "live", "mode": "on"},
 
   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "mode", "mode": "lead"},
-  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_lead_a", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_lead_a", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
   {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "radius": 4.0, "speed": 6.0, "points": [[-12, -25], [12, -25]]},
   {"op": "wait", "s": 1.0},
   {"op": "wait_ready", "settle": 1.0},
 
   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "mode", "mode": "cover"},
-  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_cover_a", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_cover_a", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
   {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "radius": 4.0, "speed": 6.0, "points": [[-12, -15], [12, -15]]},
   {"op": "wait", "s": 1.0},
   {"op": "wait_ready", "settle": 1.0},
 
   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "mode", "mode": "lead"},
-  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_lead_b", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_lead_b", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
   {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "radius": 4.0, "speed": 6.0, "points": [[-12, -5], [12, -5]]},
   {"op": "wait", "s": 1.0},
   {"op": "wait_ready", "settle": 1.0},
 
   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "mode", "mode": "cover"},
-  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_cover_b", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_cover_b", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
   {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "radius": 4.0, "speed": 6.0, "points": [[-12, 5], [12, 5]]},
   {"op": "wait", "s": 1.0},
   {"op": "wait_ready", "settle": 1.0},
 
   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "mode", "mode": "cover", "interval": 50},
-  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_cover_i50", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_cover_i50", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
   {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "radius": 4.0, "speed": 6.0, "points": [[-12, 15], [12, 15]]},
   {"op": "wait", "s": 1.0},
   {"op": "wait_ready", "settle": 1.0},
 
   {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "mode", "mode": "cover", "interval": 200},
-  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_cover_i200", "dir": "D:/dev/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/brush_latency.gd", "action": "watch", "name": "perf_cover_i200", "dir": "D:/dev/tabletop/tt-sim/docs/plans/2026-10-20-native-scatter/cover"},
   {"op": "stroke", "mode": "paint", "biome": "grassland_meadow_summer_s1", "radius": 4.0, "speed": 6.0, "points": [[-12, 25], [12, 25]]},
   {"op": "wait", "s": 1.0},
   {"op": "wait_ready", "settle": 1.0},

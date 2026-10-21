@@ -623,7 +623,7 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   writes the diff images.
 - `jobs/ground_install.json` and `jobs/ground_install_levels.json`: the ground ship's install
   captures (card 4, 2026-10-15) on the committed ship palette, written straight into treecube
-  `out/looks/ground_ship/install/`. `ground_install` imports `D:/dev/terrain-paint/
+  `out/looks/ground_ship/install/`. `ground_install` imports `D:/dev/tabletop/terrain-paint/
   deciduous_clusters.glb` as `_gship4_glb_` first, then takes ground_parity's views with the
   clean ids (grassland home, zoom 26 and the road on `dirt_road_packed`, seed 2, birch) and the
   zoned biomes seen at home and zoom 26 (savanna, wetland, alpine meadow, temperate forest:
@@ -849,6 +849,14 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   and zoom 2 over the burning point farthest from every cluster's centroid (its `aim` action,
   `target` "gap"), at zoom 2 3 m off the largest cluster's centroid and on it, and 1.5 m and
   12 m past the flames' east edge (`target` "edge"). One capture, `zoom2_gap`.
+- `jobs/sound_check.json`: the authoring tools' sounds in the running game (card brushland-sound;
+  about 45 s). A new 100 ft meadow (seed 4242) in authoring, never saved: a Biome dab (a tap), a
+  10 m Biome stroke, a 10 m Paint stroke, a Place click (a real input `gesture`), undo, redo, a
+  12 m River and an 8 m plank Bridge across it. `probes/authoring_sound.gd` (`listen`, then a
+  `mark` per step, `stop`) logs every sound AudioManager plays with its take and time, every
+  request by name and count, the SFX bus's loudest peak, how many frames read above -200 dB and
+  its peak over the step's last 0.5 s. One capture, `sound_check_end`. Its first and last steps
+  delete `_sound_check_` in case a run ever saved one.
 - `jobs/fire_smoke_book.json`: bakes the persistent fire's smoke book once, offline (card
   fire-prod-c5a; `probes/fire_smoke_book.gd`; `tools/fire_sim/README.md`). In the real window (a
   headless run draws nothing) it draws `tools/fire_sim/fire_smoke_book_bake.gdshader` into one
@@ -915,7 +923,7 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   reference frame (`load {tag, path}`, card fire-prod-c4: round 6's frames against
   production's), and writes the pixel metrics and a before | after | diff x4 row (`pdiff`,
   which takes the larger of two frames down to the smaller; `sheet`). Main's sources for a
-  "before" variant: `git -C D:/dev/tt-sim archive --format=zip --output=<scratch>/before.zip
+  "before" variant: `git -C D:/dev/tabletop/tt-sim archive --format=zip --output=<scratch>/before.zip
   HEAD <shader paths>`, read as `<scratch>/before.zip:shaders/<file>` (`git show --output`
   writes no blob). The fragment shader rejects `return`, so a variant cannot cut fragment()
   short that way. Card F4b-4's two bake actions (a "before" broad noise bake, and a re-bake at

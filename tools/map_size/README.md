@@ -28,13 +28,13 @@ author` already takes `"size": "400x200"` and passes `depth_ft`).
 ## Running it
 
 ```
-godot --path D:/dev/tt-sim --windowed --resolution 1920x1080 --script res://tools/render_jobs/run.gd -- res://tools/map_size/msize_build.json
-godot --path D:/dev/tt-sim --windowed --resolution 1920x1080 --script res://tools/render_jobs/run.gd -- res://tools/map_size/msize_full.json
-godot --headless --path D:/dev/tt-sim --script res://tools/map_size/measure.gd
-godot --path D:/dev/tt-sim --windowed --resolution 1920x1080 --position 320,120 --script res://tools/render_jobs/run.gd -- res://tools/map_size/msize_sizes_build.json
-godot --path D:/dev/tt-sim --windowed --resolution 1920x1080 --position 320,120 --script res://tools/render_jobs/run.gd -- res://tools/map_size/msize_sizes_play.json
-godot --headless --path D:/dev/tt-sim --script res://tools/map_size/measure.gd -- levels
-godot --headless --path D:/dev/tt-sim --script res://tools/map_size/cleanup.gd
+godot --path D:/dev/tabletop/tt-sim --windowed --resolution 1920x1080 --script res://tools/render_jobs/run.gd -- res://tools/map_size/msize_build.json
+godot --path D:/dev/tabletop/tt-sim --windowed --resolution 1920x1080 --script res://tools/render_jobs/run.gd -- res://tools/map_size/msize_full.json
+godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/map_size/measure.gd
+godot --path D:/dev/tabletop/tt-sim --windowed --resolution 1920x1080 --position 320,120 --script res://tools/render_jobs/run.gd -- res://tools/map_size/msize_sizes_build.json
+godot --path D:/dev/tabletop/tt-sim --windowed --resolution 1920x1080 --position 320,120 --script res://tools/render_jobs/run.gd -- res://tools/map_size/msize_sizes_play.json
+godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/map_size/measure.gd -- levels
+godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/map_size/cleanup.gd
 ```
 
 `measure.gd` takes optional user args `-- <lean_max_deg> <lean_bits> p`: the range and bit

@@ -182,7 +182,7 @@ coordinates outside the image instead of clamping them silently.
 `sample_pixels.gd` (this folder):
 
 ```
-godot --headless --path D:/dev/tt-sim --script res://tools/render_jobs/sample_pixels.gd -- <x> <y0> <y1> <step> <png>...
+godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/render_jobs/sample_pixels.gd -- <x> <y0> <y1> <step> <png>...
 ```
 
 prints the mean colour of 9x9 boxes down one column of each PNG, for comparing captures

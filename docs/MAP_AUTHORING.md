@@ -902,3 +902,11 @@ Broader than map authoring; recorded here so they are not lost.
   structures and buildings in the future and they have a pretty cool implementation." A second
   reference beside Tiny Glade for how an edit should feel; structures and buildings are future
   work. Research (gitignored): `docs/plans/2026-10-19-brushland/research.md`.
+- **How plants arrive under the brush: "STAGED + LIFE"** (user, 2026-10-20, review board item
+  brushland-motion, choice "life"; the coordinator had recommended STAGED alone). Of the three
+  filmed variants (today's all-at-once grow-in, size-class staging, staging plus life) the user
+  picked staging plus life: each species waits by size class (large first, ground cover 0.36 s
+  later) so the painted thing arrives first and the floor answers; plants overshoot about 10
+  percent and ripple outward from the brush; rocks drop in and rebound. An edit settles in about
+  0.8 s against 0.4 s before. Built as production code by card motion (`ScatterArrival`,
+  [systems/scatter.md](systems/scatter.md) "Arrival motion").

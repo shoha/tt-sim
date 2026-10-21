@@ -2,11 +2,11 @@
   "mcpServers": {
     "tt-sim-validator": {
       "type": "stdio",
-      "command": "D:/dev/tt-sim/tools/mcp/run-server.cmd",
+      "command": "D:/dev/tabletop/tt-sim/tools/mcp/run-server.cmd",
       "args": [],
       "env": {
         "GODOT_PATH": "D:/Apps/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64.exe",
-        "GODOT_PROJECT_PATH": "D:/dev/tt-sim"
+        "GODOT_PROJECT_PATH": "D:/dev/tabletop/tt-sim"
       }
     }
   }
