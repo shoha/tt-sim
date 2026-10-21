@@ -28,7 +28,7 @@ extends "res://tests/net/enet_session_room.gd"
 ##   out checks it: Bystander A where it was moved, the ground as high as the first host raised
 ##   it, one op caught up, Hero A on the board and under its control.
 ##
-## Run: godot --headless --path D:/dev/tt-sim res://tests/net/net_launcher.tscn --
+## Run: godot --headless --path D:/dev/tabletop/tt-sim res://tests/net/net_launcher.tscn --
 ##   --data-root=net_launcher --scenario=enet_session_file --peers=2 --timeout-s=300
 ##   --port=28493
 

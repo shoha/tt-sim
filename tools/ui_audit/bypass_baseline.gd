@@ -2,7 +2,7 @@ extends SceneTree
 
 ## Writes tests/ui_bypass_baseline.json, the theme-bypass ratchet's baseline
 ## (bypass_audit.gd). Run it after a migration lowered counts:
-##   godot --headless --path D:/dev/tt-sim --script res://tools/ui_audit/bypass_baseline.gd
+##   godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/ui_audit/bypass_baseline.gd
 ## It only lowers: each entry becomes the smaller of its baseline and today's count, and
 ## files at zero drop out. A count above its baseline is printed and left as it was; a rise
 ## is a decision for a person (edit the JSON by hand, with the reason in the commit message).

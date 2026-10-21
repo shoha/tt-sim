@@ -6,8 +6,9 @@ extends GutTest
 ## tests/ui_bypass_baseline.json. A count may fall, never rise. On a failure, read the role,
 ## variation or constant from the theme instead; a real exception (a 3D colour in a UI
 ## script) raises that file's entry by hand, with the reason in the commit message. After a
-## migration lowers counts, lower the baseline with
-## `godot --headless --path D:/dev/tt-sim --script res://tools/ui_audit/bypass_baseline.gd`.
+## migration lowers counts, lower the baseline with this one command:
+## `godot --headless --path D:/dev/tabletop/tt-sim
+## --script res://tools/ui_audit/bypass_baseline.gd`.
 ## The run prints each rule's total against the baseline and every entry that can be lowered.
 ##
 ## Some rules and review methods here are adapted from Impeccable by Paul Bakaus

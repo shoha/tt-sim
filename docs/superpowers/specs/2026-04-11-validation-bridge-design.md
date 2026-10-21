@@ -195,7 +195,7 @@ capture for regressions.
 ### File Layout
 
 ```
-D:\dev\tt-sim\
+D:\dev\tabletop\tt-sim\
   addons/
     validation_bridge/
       validation_bridge.gd    # TCP server + commands (~200 lines, registered as autoload)
@@ -211,7 +211,7 @@ D:\dev\tt-sim\
 ### MCP Registration
 
 ```bash
-claude mcp add tt-sim-validator -- node D:/dev/tt-sim/tools/mcp/dist/server.js
+claude mcp add tt-sim-validator -- node D:/dev/tabletop/tt-sim/tools/mcp/dist/server.js
 ```
 
 ### Git

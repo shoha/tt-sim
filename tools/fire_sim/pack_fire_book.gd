@@ -3,7 +3,7 @@ extends SceneTree
 ## Packs the fire's baked drawing book (bake_fire_book.py's "TTFSIM02" .bin) into the shipped
 ## FireBook resource (tools/fire_sim/README.md has the whole procedure):
 ##
-##   godot --headless --path D:/dev/tt-sim --script res://tools/fire_sim/pack_fire_book.gd
+##   godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/fire_sim/pack_fire_book.gd
 ##       -- --in <folder>/fire_sim_book.bin [--out <path>]
 ##
 ## `--out` defaults to FireBook.PATH (res://assets/fire/fire_book.res). The .bin is little-endian:

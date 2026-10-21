@@ -44,6 +44,11 @@ func press(brush: BrushTool) -> bool:
 	return false
 
 
+## True when the press placed a prop (not over a placed one, a species picked).
+func took_press() -> bool:
+	return not _placing.is_empty()
+
+
 func frame(brush: BrushTool) -> void:
 	if not _placing.is_empty():
 		_turn_placing(brush)

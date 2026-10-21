@@ -48,6 +48,14 @@ extends RefCounted
 ## lifts or moves on, latest-wins takes over. The ground cover then grows in under the brush,
 ## raised a little at every landing as the stroke raises the density. The GDScript path keeps
 ## the restricted lead jobs (a painted cell's ground cover costs about 750 ms there).
+##
+## Brush centres (motion, 2026-10-20). Each job carries, per cell, the point its new rows ripple
+## out from as they arrive (ScatterArrival): the centre of the request nearest the cell's middle
+## since the cell last landed current. A dab ripples from the dab; a stroke from the nearest point
+## of its path, so a long stroke's trail spreads out sideways from where the brush passed instead
+## of every cell waiting out the longest ripple from wherever the brush is now. A request that is
+## not live (an undo, a cancelled stroke's revert, a sculpt) notes its rectangle's centre only
+## where no stroke has noted one.
 
 ## Cells per job. One: one cell per job lets the pool run a dab's cells in parallel instead
 ## of in series (a painted cell under a dab takes 250 to 800 ms on a worker, its relation halo
@@ -103,6 +111,8 @@ var _lead_out: Dictionary = {}
 var _requested_msec: Dictionary = {}
 ## cell -> Time.get_ticks_msec() a lead job for it finished on its worker (landed()).
 var _landed_msec: Dictionary = {}
+## cell -> brush centre (Vector2, world XZ) its jobs carry (see "Brush centres").
+var _centres: Dictionary = {}
 
 
 ## A scheduler for one map: its seed, rectangle and sample step.
@@ -187,6 +197,7 @@ func request_region(rect: Rect2, live: bool = false, now_msec: int = -1) -> Arra
 		_generation[cell] = _generation.get(cell, 0) + 1
 		_pending.erase(cell)
 		_pending[cell] = true
+		_note_centre(cell, rect.get_center(), live)
 		# Live while the latest request was: an undo or a cancelled stroke's revert shows
 		# nothing provisional.
 		if live:
@@ -253,6 +264,7 @@ func accept(job: Dictionary, now_msec: int = -1) -> Array[Vector2i]:
 			current.append(cell)
 			_dirty.erase(cell)
 			_live.erase(cell)
+			_centres.erase(cell)
 			_shown_generation[cell] = generation
 			_shown_msec[cell] = now
 	return current
@@ -371,11 +383,30 @@ func _job(cells: Array[Vector2i], lead: bool) -> Dictionary:
 		entry.built = built_surfaces.duplicate()
 		entry.cliff = cliff_surfaces.duplicate()
 	var job := {"cells": cells, "generations": generations, "regenerated": regenerated, "work": work}
+	var centres := {}
+	for cell in cells:
+		if _centres.has(cell):
+			centres[cell] = _centres[cell]
+	job["centres"] = centres
 	if lead:
 		job["lead"] = true
 		if whole_leads:
 			job["whole"] = true
 	return job
+
+
+## Notes `centre` (a request's) as `cell`'s brush centre when it is nearer the cell's middle than
+## the one noted, or when none is (always for a live request; see "Brush centres").
+func _note_centre(cell: Vector2i, centre: Vector2, live: bool) -> void:
+	if not _centres.has(cell):
+		_centres[cell] = centre
+		return
+	if not live:
+		return
+	var middle := (Vector2(cell) + Vector2(0.5, 0.5)) * ScatterChunker.CHUNK_SIZE_WORLD_UNITS
+	var noted: Vector2 = _centres[cell]
+	if middle.distance_squared_to(centre) < middle.distance_squared_to(noted):
+		_centres[cell] = centre
 
 
 static func _now(now_msec: int) -> int:

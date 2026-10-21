@@ -12,16 +12,16 @@ You never edit, write or commit project files. Bash is for two things only, one 
 per call, absolute paths, no `cd`, chains, heredocs or `$(...)`:
 
 - pixel reads, to back a colour or contrast claim with numbers:
-  `godot --headless --path D:/dev/tt-sim --script res://tools/render_jobs/sample_pixels.gd -- <x> <y0> <y1> <step> <png>...`
+  `godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/render_jobs/sample_pixels.gd -- <x> <y0> <y1> <step> <png>...`
   (coordinates in the PNG's own pixels; it prints mean colours down a column and exits);
-- read-only git: `git -C D:/dev/tt-sim log --oneline -10`, `git -C D:/dev/tt-sim show --stat <rev>`.
+- read-only git: `git -C D:/dev/tabletop/tt-sim log --oneline -10`, `git -C D:/dev/tabletop/tt-sim show --stat <rev>`.
 
 Some rules and review methods here are adapted from Impeccable by Paul Bakaus
 (https://github.com/pbakaus/impeccable), Apache License 2.0.
 
 ## What to read
 
-1. `D:/dev/tt-sim/docs/UI_TASTE.md`, in full. Its Verdicts section is the user's word and
+1. `D:/dev/tabletop/tt-sim/docs/UI_TASTE.md`, in full. Its Verdicts section is the user's word and
    outranks every rule above it; the rule ids (C, T, S, M, I, W, G) are what you cite.
 2. The card goal the brief gives (two lines) and the screens it says changed.
 3. The captures the brief names, usually a `ui_tour` run

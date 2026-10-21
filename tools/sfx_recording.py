@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Turns an original recording into a palette loop (a RecordedLoop in sfx_spec).
+"""Turns an original recording into a palette loop (a RecordedLoop in sfx_spec),
+or a recording's take into a one-shot (a RecordedShot's, process_shot).
 
 Standard library only. No numpy, no scipy, no soundfile.
 
@@ -38,6 +39,13 @@ HUM_NOTCH_Q = 4.0
 
 # The filters' run-in before the trim.
 WARMUP_S = 0.5
+
+# A one-shot take's sample peak. Half a dB under the palette's -3 dBFS, because the
+# pre-commit hook (tools/normalize_audio.py) judges a file by its true peak, and a
+# take with a sharp transient overshoots its samples by up to 1.6 dB at 22.05 kHz
+# (paint_settle's first take: -3.0 dBFS sampled, -1.4 dBTP, which the hook then
+# turned down 1.6 dB at commit, so the committed file no longer matched --install).
+SHOT_PEAK_DBFS = PEAK_TARGET_DBFS - 0.5
 
 
 def read_source(path) -> tuple[list[float], int]:
@@ -154,3 +162,41 @@ def process_loop(source: Sequence[float], rate: int, loop) -> list[float]:
     overlap = int(round(loop.crossfade_ms * loop.sample_rate / 1000.0))
     body = peak_normalize(crossfade_loop(trimmed, overlap), PEAK_TARGET_DBFS)
     return body + body[:1]
+
+
+def fade_edges(samples: Sequence[float], fade_in: int, fade_out: int) -> list[float]:
+    """Raised-cosine fades over the first `fade_in` and the last `fade_out` samples."""
+    out = list(samples)
+    count = len(out)
+    for i in range(min(fade_in, count)):
+        out[i] *= 0.5 - 0.5 * math.cos(math.pi * i / fade_in)
+    for i in range(min(fade_out, count)):
+        out[count - 1 - i] *= 0.5 - 0.5 * math.cos(math.pi * i / fade_out)
+    return out
+
+
+def process_shot(source: Sequence[float], rate: int, take, shot) -> list[float]:
+    """One take's file samples at shot.sample_rate. Pure.
+
+    `take` is a sfx_spec.Take of `source` (read_source's samples at `rate`) and
+    `shot` its sfx_spec.RecordedShot: low-pass and halve the rate, high-pass,
+    trim to the take, fade both edges, peak-normalize. The filters run in
+    before the take as for a loop, so the trim cuts away their settling.
+    """
+    if rate % shot.sample_rate != 0:
+        raise ValueError("%d Hz does not divide into %d Hz" % (rate, shot.sample_rate))
+    begin = int(round(take.start_s * rate))
+    end = min(len(source), int(round(take.end_s * rate)))
+    if not 0 <= begin < end:
+        raise ValueError("%.2f-%.2f s is outside the recording" % (take.start_s, take.end_s))
+    factor = rate // shot.sample_rate
+    first = max(0, begin - int(round(WARMUP_S * rate)))
+    first += (begin - first) % factor
+    run = butterworth(source[first:end], "low", shot.lowpass_hz, LOWPASS_ORDER, rate)[::factor]
+    run = butterworth(run, "high", shot.highpass_hz, HIGHPASS_ORDER, shot.sample_rate)
+    trimmed = run[(begin - first) // factor :]
+    per_ms = shot.sample_rate / 1000.0
+    faded = fade_edges(
+        trimmed, int(round(shot.fade_in_ms * per_ms)), int(round(shot.fade_out_ms * per_ms))
+    )
+    return peak_normalize(faded, SHOT_PEAK_DBFS)

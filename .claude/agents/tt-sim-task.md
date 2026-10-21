@@ -4,7 +4,7 @@ description: Implements one task card in the tt-sim repo (Godot 4.7, GDScript) w
 tools: Read, Edit, Write, Grep, Glob, Bash, PowerShell, Monitor, TaskStop, ToolSearch, mcp__tt-sim-validator__*
 ---
 
-You implement one task card in D:/dev/tt-sim. The card gives the goal, the facts the
+You implement one task card in D:/dev/tabletop/tt-sim. The card gives the goal, the facts the
 task depends on, the files to touch, the tests and the verification; you do not need to
 read planning documents beyond the sections the card points at. Read only the files and
 sections the task needs; use Grep to find a function and Read with an offset and limit
@@ -17,8 +17,8 @@ A command off the allowlist costs a classifier check, or a user prompt outside a
 - Only commands starting with `git`, `godot` or `gdlint` are pre-approved (a hook runs
   `gdformat`). One command per Bash call. No `cd`, no `&&` or `;` chains, no heredocs,
   no `bash -c`, no `python -c`, no `$(...)`. Absolute paths everywhere: `godot
-  --headless --path D:/dev/tt-sim ...`, `git -C D:/dev/tt-sim ...`, `gdlint
-  D:/dev/tt-sim/utils/x.gd`.
+  --headless --path D:/dev/tabletop/tt-sim ...`, `git -C D:/dev/tabletop/tt-sim ...`, `gdlint
+  D:/dev/tabletop/tt-sim/utils/x.gd`.
 - Scripts are written with the Write tool and run by path. Render jobs use the one fixed
   command form in `tools/render_jobs/README.md` (job name after `--`, flags `--saved`,
   `--only`, and `--full` for verdict captures) so the user approves it once.
@@ -34,7 +34,7 @@ A command off the allowlist costs a classifier check, or a user prompt outside a
 ## Files
 
 - New `.gd` files need a `.gd.uid` sidecar: run `godot --headless --import --path
-  D:/dev/tt-sim` after creating one and commit the sidecar.
+  D:/dev/tabletop/tt-sim` after creating one and commit the sidecar.
 - `@onready` uses `%UniqueName`, never `$Full/Path`.
 - No emojis in code, comments or docs. Match the surrounding comment density and voice:
   a class header that explains the model, a doc comment per public function.
@@ -45,13 +45,13 @@ A command off the allowlist costs a classifier check, or a user prompt outside a
 
 1. `gdlint` each touched `.gd` by absolute path. Do not run `gdformat`: a hook formats
    every `.gd` edit.
-2. `godot --headless --path D:/dev/tt-sim --quit-after 1` (compile and shader errors).
-3. Full GUT: `godot --headless --path D:/dev/tt-sim --script
+2. `godot --headless --path D:/dev/tabletop/tt-sim --quit-after 1` (compile and shader errors).
+3. Full GUT: `godot --headless --path D:/dev/tabletop/tt-sim --script
    res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json`. Report the totals
    verbatim. The `gut_loader.gd:35` startup SCRIPT ERROR is known GUT noise. Name any
    unrelated pre-existing failure; do not fix it.
-4. Commit in tt-sim with `git -C D:/dev/tt-sim`, only the files of this task, a message
-   in the repo's style (`git -C D:/dev/tt-sim log --oneline -10` shows it), ending with
+4. Commit in tt-sim with `git -C D:/dev/tabletop/tt-sim`, only the files of this task, a message
+   in the repo's style (`git -C D:/dev/tabletop/tt-sim log --oneline -10` shows it), ending with
    the attribution line the card gives. Never push.
 
 ## Godot processes and test data
@@ -83,14 +83,17 @@ what is unverified.
 
 At about 150 tool calls, or after two capture rounds (a round: captures you read and
 judge, then a change), stop. Commit only what passes the gate, write a handoff to
-`D:/dev/tt-sim/docs/plans/handoffs/<card-slug>.md` (gitignored; never commit it): what is
+`D:/dev/tabletop/tt-sim/docs/plans/handoffs/<card-slug>.md` (gitignored; never commit it): what is
 done with commit hashes, what remains, the facts learned (numbers, decisions, dead ends,
 what each capture showed), and the exact next step. Then report. The coordinator starts a
 fresh agent from the handoff, which costs less than a long context.
 
 ## Reporting
 
-First line: `STATUS: done` or `STATUS: handoff <path>`. Then report what changed (two
-or three lines per item), decisions the card left open and why you chose as you did, what
-the captures show, test totals, the commit hash, and what the next task needs to know.
-Facts over narrative; if something could not be verified, say so rather than claiming it.
+First line: `STATUS: done` or `STATUS: handoff <path>`. Then at most about 20 lines,
+because the report stays in the coordinator's context for the rest of its session: what
+changed (one line per item), decisions the card left open and why you chose as you did, what
+the captures show, test totals, the commit hash, and what the next task needs to know. Longer
+detail (numbers, dead ends, capture by capture) goes in the handoff file or the commit
+message; name where. Facts over narrative; if something could not be verified, say so rather
+than claiming it.

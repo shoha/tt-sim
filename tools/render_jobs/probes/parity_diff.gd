@@ -3,7 +3,7 @@ extends SceneTree
 ## Capture reader for pixel parity (ground ship card 3c, jobs/ground_parity.json): compares
 ## pairs of same-size captures and says where they differ. Standalone, not a `call` probe:
 ##
-##   godot --headless --path D:/dev/tt-sim
+##   godot --headless --path D:/dev/tabletop/tt-sim
 ##     --script res://tools/render_jobs/probes/parity_diff.gd -- <manifest.json>
 ##
 ## The manifest: {"out_dir", "dilate_px" (default 6), "pairs": [{"view", "ref", "mine",

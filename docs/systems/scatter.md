@@ -81,7 +81,7 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
 
 Brushes call `attach_document()` + `request_region(rect)`, which regenerates the touched cells
 plus the relation halo on `WorkerThreadPool` via `ScatterRegen` (latest request wins per cell)
-and grows new instances in (the `grow` instance uniform in every wind shader variant). Removed
+and grows new instances in ("Arrival motion" below). Removed
 scatter shrinks out ([authoring.md](authoring.md)), including rows a later apply drops while
 they are still growing in (from the size they reached).
 
@@ -122,6 +122,44 @@ stroke), which is where round 1's frame cost went. The rebuild itself (`Authored
 with its rows instead of recomputing them, and merges finished grow-ins of one asset into the
 cell's node together (`MERGE_BATCH` 3, or when none is still growing) rather than one rebuild
 each. Numbers in [PERFORMANCE.md](../PERFORMANCE.md) "Ground cover under the brush".
+
+### Arrival motion
+
+How new rows arrive and removed ones leave (`ScatterArrival`, `utils/scatter_arrival.gd`; card
+motion, the user's pick "STAGED + LIFE" from the brushland feel probe, 2026-10-20):
+
+- **Staged.** On a brush landing each species waits by its palette size class: large at once,
+  medium 0.12 s, small 0.24 s, ground cover 0.36 s (`STAGE_STEP`; an unknown class counts as
+  medium). The painted thing arrives first and the floor answers. Shrink-outs are staged the same
+  way. A direct `set_cells()` (a prop placed or removed, an undo of props) is not staged, so a
+  rock the Place tool puts down shows under the cursor at once.
+- **Life.** Plants grow with a back-out ease over 0.42 s that peaks about 10 percent over full
+  size, each instance after a ripple delay of 0.06 s per metre from the brush centre, at most
+  0.35 s. Each wind instance works its own size out in the vertex shader
+  (`shaders/wind_foliage_grow.gdshaderinc`: `grow_wave`, `grow_clock`, `grow_scale()`, included
+  by `wind_foliage_main.gdshaderinc` and the three debug variants), so the CPU still writes one
+  uniform per animating node per frame. Rocks drop in from 0.6x their height (0.3 to 1.2 m) over
+  0.32 s, a fall then an 8 percent rebound, each instance through its own MultiMesh transform
+  after its own delay (hidden until then, as a zero basis). Removed plants swell and collapse
+  over 0.3 s, rippling; removed rocks hop and sink.
+- **Brush centres.** Each `ScatterRegen` job carries, per cell, the point its rows ripple from:
+  the centre of the request nearest the cell's middle since the cell last landed current. A dab
+  ripples from the dab, a stroke from the nearest point of its path (so a trail spreads out
+  sideways from where the brush passed, instead of every cell behind the brush waiting out the
+  longest ripple); a request that is not live fills only an empty entry. `ScatterApply` passes
+  them to `rebuild_cells(rows, animate, centres)`.
+- **No restart.** A row's stage and ripple delays are fixed when it first appears: new rows get
+  their own grow node and tween, and later landings that keep them leave that node running, so a
+  held brush's provisional landings (about every 100 ms per cell) never start a row over. A row
+  removed mid-arrival shrinks from the size or height it reached (`ScatterArrival.as_shown`).
+- **The burn variant** (`wind_foliage_burn.gdshader`) includes `wind_foliage_include.gdshaderinc`,
+  not the main include, and neither changed: it keeps `VERTEX *= grow` and gains no uniform, so a
+  tree growing in under a burn material shows at full size at once, as before
+  (`test_scatter_arrival.gd` pins that its expanded source never reads the new uniforms).
+- Each peer animates its own rebuilds from its own landings; nothing is synced.
+  `ScatterArrival.classic` restores the earlier grow-in (all at once, cubic over
+  `grow_seconds`, rocks rising) for measurement and side-by-side films only. Numbers in
+  [PERFORMANCE.md](../PERFORMANCE.md) "Arrival motion".
 
 ## Native path
 

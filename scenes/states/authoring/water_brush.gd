@@ -370,6 +370,11 @@ func press(brush: BrushTool) -> bool:
 	return false
 
 
+## True when the press began a river's line.
+func took_press() -> bool:
+	return drawing
+
+
 func frame(brush: BrushTool) -> void:
 	track(brush.editor, brush.hit, radius(brush.get_radius()))
 

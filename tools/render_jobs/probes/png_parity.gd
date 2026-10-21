@@ -3,7 +3,8 @@ extends SceneTree
 ## Pixel parity of captures (the ground optimization card's exactness check,
 ## jobs/ground_opt_parity.json):
 ##
-##   godot --headless --path D:/dev/tt-sim --script res://tools/render_jobs/probes/png_parity.gd
+##   godot --headless --path D:/dev/tabletop/tt-sim
+##       --script res://tools/render_jobs/probes/png_parity.gd
 ##       -- <folder a> <folder b>
 ##   ... -- <folder> <token a> <token b>
 ##

@@ -24,7 +24,7 @@ extends "res://tests/net/enet_late_joiner.gd"
 ## client3: joins while Fen is out (a late joiner); its table's load downloads Fen (the table's
 ##   map, first), then it fetches Pond and Mill at the table, and ends holding all three.
 ##
-## Run: godot --headless --path D:/dev/tt-sim res://tests/net/net_launcher.tscn --
+## Run: godot --headless --path D:/dev/tabletop/tt-sim res://tests/net/net_launcher.tscn --
 ##   --data-root=net_launcher --scenario=enet_prefetch --peers=4 --timeout-s=240
 
 const FEN := {"name": "Prefetch Fen", "folder": "_prefetch_fen"}

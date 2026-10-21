@@ -1,7 +1,7 @@
 # Asset Pipeline Contract
 
 The interface between the Blender producers (`terrain-paint`, `treecube`, both at
-`D:/dev/`) and this consumer. tt-sim owns this file because its loader is what breaks
+`D:/dev/tabletop/`) and this consumer. tt-sim owns this file because its loader is what breaks
 when the interface drifts. The producer repos link here instead of restating it.
 
 **Change procedure for anything on this page:** edit this file first, then the producer,
@@ -1248,7 +1248,7 @@ main.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 
-A third path: figurine (`D:/dev/figurine`, a Blender 5.2 extension) generates a kit of
+A third path: figurine (`D:/dev/tabletop/figurine`, a Blender 5.2 extension) generates a kit of
 painted, skinned parts that ships inside the game, and tt-sim builds a player's avatar
 token from it by a small recipe that every peer rebuilds from its own copy of the kit, the
 way a `.ttmap` is rebuilt. Design and style: `figurine/docs/design.md`. Status: contract

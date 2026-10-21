@@ -21,12 +21,13 @@ render_mode cull_disabled, unshaded;
  */
 
 #include "res://shaders/wind_foliage_include.gdshaderinc"
+#include "res://shaders/wind_foliage_grow.gdshaderinc"
 
 
 void vertex() {
 	local_vertex_y = VERTEX.y;
 	VERTEX += wind_sway_vertex_offset(VERTEX, COLOR, MODEL_MATRIX, TIME);
-	VERTEX *= grow;
+	VERTEX *= grow_scale(MODEL_MATRIX[3].xyz);
 }
 
 
