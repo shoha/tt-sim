@@ -1,7 +1,7 @@
 extends RefCounted
 
 ## Brush latency probe (card brush-latency, 2026-10-19; notes in
-## D:/dev/tt-sim/docs/plans/2026-10-19-brushland/latency.md). Times a brush's scatter
+## D:/dev/tabletop/tt-sim/docs/plans/2026-10-19-brushland/latency.md). Times a brush's scatter
 ## regeneration from the press, per 10 m cell: when its generation was bumped (requests), when
 ## jobs were taken, cancelled and finished, and when rows were applied (provisionally, while
 ## the cell is still dirty, or for good). It also counts the rows each apply added and removed,

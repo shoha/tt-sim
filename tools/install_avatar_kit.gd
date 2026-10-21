@@ -3,9 +3,10 @@ extends SceneTree
 ## Installs figurine's avatar kit (docs/ASSET_PIPELINE.md section 10) under
 ## res://assets/avatar_kit/, the way section 9 installs treecube's palette:
 ##
-##     godot --headless --path D:/dev/tt-sim --script res://tools/install_avatar_kit.gd
+##     godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/install_avatar_kit.gd
 ##
-## takes an optional kit dir after `--`; it defaults to D:/dev/figurine/out/kit. Every file is
+## takes an optional kit dir after `--`; it defaults to the sibling figurine checkout's out/kit
+## (default_source()). Every file is
 ## copied over the installed one (kit.json, build_report.json, skeleton.glb, parts, faces,
 ## thumbnails); committed `.import` sidecars are kept. A GLB or PNG without a sidecar gets one
 ## written before Godot first imports it, so its settings never start from Godot's defaults:
@@ -14,9 +15,8 @@ extends SceneTree
 ## Only a shippable kit installs: one whose build_report.json says `"check": "full"` (or has no
 ## `check`, as builds before the field did). An iteration build (`fast`, `incremental`) is
 ## refused before anything is copied (refusal()).
-## Run `godot --headless --import --path D:/dev/tt-sim` afterwards.
+## Run `godot --headless --import --path D:/dev/tabletop/tt-sim` afterwards.
 
-const DEFAULT_SOURCE := "D:/dev/figurine/out/kit"
 const DEST := "res://assets/avatar_kit"
 
 const GLB_SIDECAR := """[remap]
@@ -48,7 +48,7 @@ detect_3d/compress_to=0
 
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()
-	var source := String(args[0]) if args.size() > 0 else DEFAULT_SOURCE
+	var source := String(args[0]) if args.size() > 0 else default_source()
 	if not FileAccess.file_exists(source.path_join("kit.json")):
 		printerr("install_avatar_kit: no kit.json in %s" % source)
 		quit(1)
@@ -65,6 +65,16 @@ func _init() -> void:
 	var copied := _copy_tree(source, ProjectSettings.globalize_path(DEST))
 	print("install_avatar_kit: copied %d files from %s" % [copied, source])
 	quit(0)
+
+
+## figurine's kit in the sibling checkout: beside this one, or beside its parent when this
+## checkout is a worktree under worktrees/ (which holds no figurine).
+static func default_source() -> String:
+	var parent := ProjectSettings.globalize_path("res://").trim_suffix("/").get_base_dir()
+	for base: String in [parent, parent.get_base_dir()]:
+		if DirAccess.dir_exists_absolute(base.path_join("figurine")):
+			return base.path_join("figurine/out/kit")
+	return parent.path_join("figurine/out/kit")
 
 
 ## Why a kit with this build_report.json text must not install, or "" when it may: a `check`

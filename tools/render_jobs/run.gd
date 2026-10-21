@@ -2,7 +2,7 @@ extends SceneTree
 
 ## Render-job runner (see README.md in this folder; REFERENCE.md documents the job format).
 ## A plain godot command, no bridge:
-##   godot --path D:/dev/tt-sim --windowed --resolution 1920x1080 --position 320,120
+##   godot --path D:/dev/tabletop/tt-sim --windowed --resolution 1920x1080 --position 320,120
 ##     --script res://tools/render_jobs/run.gd -- <job> [--out <dir>] [--full]
 ## <job> is a JSON file path, or a name under res://tools/render_jobs/jobs/ (".json" optional).
 ## Loads the project's main scene, forces a 1920x1080 window on the primary screen, runs the

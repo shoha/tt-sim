@@ -842,7 +842,7 @@ Two headless peers work without a human (probe, 2026-10-09): the host runs unsan
 the client in the box.
 
 - Command form for the boxed peer, from Bash:
-  `"/c/Program Files/Sandboxie-Plus/Start.exe" /box:SteamAlt //wait "<godot exe>" --headless --path D:/dev/tt-sim <scene> -- <args>`.
+  `"/c/Program Files/Sandboxie-Plus/Start.exe" /box:SteamAlt //wait "<godot exe>" --headless --path D:/dev/tabletop/tt-sim <scene> -- <args>`.
   Git Bash rewrites `/wait` and `/terminate` as file paths, so they must be written
   `//wait` and `//terminate` (a single slash shows "Could not invoke program... cannot
   find the file specified"). `//wait` blocks until Godot exits and returns its exit code.
@@ -924,7 +924,7 @@ sets NetworkManager's peer and state the way the Steam lobby callbacks would), o
 res:// map, so nothing downloads and no second Steam account is needed. One launcher runs any
 scenario, with one command form (allowlist it once):
 
-`godot --headless --path D:/dev/tt-sim res://tests/net/net_launcher.tscn -- --data-root=net_launcher --scenario=<name> [--peers=2] [--timeout-s=180] [--port=28471] [--windowed=<role>]`
+`godot --headless --path D:/dev/tabletop/tt-sim res://tests/net/net_launcher.tscn -- --data-root=net_launcher --scenario=<name> [--peers=2] [--timeout-s=180] [--port=28471] [--windowed=<role>]`
 
 `--windowed=<role>` starts that one peer in a real 1920x1080 window instead of headless, for a
 scenario that films its own board (it uses the GPU: a look, not every run).

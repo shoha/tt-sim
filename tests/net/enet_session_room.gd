@@ -42,7 +42,7 @@ extends "res://tests/net/enet_late_joiner.gd"
 ## client4: joins while table A is out again (a late joiner); must go straight to the table
 ##   and get table A as the session left it, with Hero A, never seeing the room.
 ##
-## Run: godot --headless --path D:/dev/tt-sim res://tests/net/net_launcher.tscn --
+## Run: godot --headless --path D:/dev/tabletop/tt-sim res://tests/net/net_launcher.tscn --
 ##   --data-root=net_launcher --scenario=enet_session_room --peers=5 --timeout-s=420
 
 const TABLE_A := {"name": "Session table A", "folder": "_session_room_a"}
