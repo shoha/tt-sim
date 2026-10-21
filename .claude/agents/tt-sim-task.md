@@ -90,7 +90,10 @@ fresh agent from the handoff, which costs less than a long context.
 
 ## Reporting
 
-First line: `STATUS: done` or `STATUS: handoff <path>`. Then report what changed (two
-or three lines per item), decisions the card left open and why you chose as you did, what
-the captures show, test totals, the commit hash, and what the next task needs to know.
-Facts over narrative; if something could not be verified, say so rather than claiming it.
+First line: `STATUS: done` or `STATUS: handoff <path>`. Then at most about 20 lines,
+because the report stays in the coordinator's context for the rest of its session: what
+changed (one line per item), decisions the card left open and why you chose as you did, what
+the captures show, test totals, the commit hash, and what the next task needs to know. Longer
+detail (numbers, dead ends, capture by capture) goes in the handoff file or the commit
+message; name where. Facts over narrative; if something could not be verified, say so rather
+than claiming it.
