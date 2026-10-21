@@ -2,7 +2,8 @@ extends SceneTree
 
 ## Standalone helper for reading captures: prints the mean colour of a 9x9 box every <step>
 ## pixels down column <x> from <y0> to <y1>, for each PNG given.
-##   godot --headless --path D:/dev/tt-sim --script res://tools/render_jobs/sample_pixels.gd
+##   godot --headless --path D:/dev/tabletop/tt-sim
+##     --script res://tools/render_jobs/sample_pixels.gd
 ##     -- <x> <y0> <y1> <step> <png>...
 ## Coordinates are the PNG's own pixels, read off the image being sampled. Captures are half
 ## size (960x540) by default and full size only with --full, so coordinates taken from one

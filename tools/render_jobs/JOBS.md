@@ -623,7 +623,7 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   writes the diff images.
 - `jobs/ground_install.json` and `jobs/ground_install_levels.json`: the ground ship's install
   captures (card 4, 2026-10-15) on the committed ship palette, written straight into treecube
-  `out/looks/ground_ship/install/`. `ground_install` imports `D:/dev/terrain-paint/
+  `out/looks/ground_ship/install/`. `ground_install` imports `D:/dev/tabletop/terrain-paint/
   deciduous_clusters.glb` as `_gship4_glb_` first, then takes ground_parity's views with the
   clean ids (grassland home, zoom 26 and the road on `dirt_road_packed`, seed 2, birch) and the
   zoned biomes seen at home and zoom 26 (savanna, wetland, alpine meadow, temperate forest:
@@ -923,7 +923,7 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   reference frame (`load {tag, path}`, card fire-prod-c4: round 6's frames against
   production's), and writes the pixel metrics and a before | after | diff x4 row (`pdiff`,
   which takes the larger of two frames down to the smaller; `sheet`). Main's sources for a
-  "before" variant: `git -C D:/dev/tt-sim archive --format=zip --output=<scratch>/before.zip
+  "before" variant: `git -C D:/dev/tabletop/tt-sim archive --format=zip --output=<scratch>/before.zip
   HEAD <shader paths>`, read as `<scratch>/before.zip:shaders/<file>` (`git show --output`
   writes no blob). The fragment shader rejects `return`, so a variant cannot cut fragment()
   short that way. Card F4b-4's two bake actions (a "before" broad noise bake, and a re-bake at

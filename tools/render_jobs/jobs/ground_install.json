@@ -1,11 +1,11 @@
 {
- "out_dir": "D:/dev/treecube/out/looks/ground_ship/install",
+ "out_dir": "D:/dev/tabletop/treecube/out/looks/ground_ship/install",
  "timeout_s": 1800,
  "hang_s": 90,
  "steps": [
   {"op": "wait_title"},
   {"op": "wait", "s": 1.0},
-  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "import_glb", "path": "D:/dev/terrain-paint/deciduous_clusters.glb", "name": "_gship4_glb_"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "import_glb", "path": "D:/dev/tabletop/terrain-paint/deciduous_clusters.glb", "name": "_gship4_glb_"},
   {"op": "wait", "s": 30.0},
 
   {"op": "title"}, {"op": "wait", "s": 1.0},

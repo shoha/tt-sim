@@ -1301,14 +1301,14 @@ Expected: JSON response with `"ok": true` and a `"png_base64"` field containing 
 
 - [ ] **Step 4: Register MCP server with Claude Code**
 
-Run: `claude mcp add tt-sim-validator -- node D:/dev/tt-sim/tools/mcp/dist/server.js`
+Run: `claude mcp add tt-sim-validator -- node D:/dev/tabletop/tt-sim/tools/mcp/dist/server.js`
 
 Expected: MCP server registered. In subsequent Claude Code sessions within the tt-sim project, the `game_launch`, `game_screenshot`, etc. tools will be available.
 
 Note: If the Godot executable is not on PATH as `godot`, set the environment variable when registering:
 
 ```bash
-claude mcp add tt-sim-validator -e GODOT_PATH="D:/Apps/Godot 4.6/Godot.exe" -- node D:/dev/tt-sim/tools/mcp/dist/server.js
+claude mcp add tt-sim-validator -e GODOT_PATH="D:/Apps/Godot 4.6/Godot.exe" -- node D:/dev/tabletop/tt-sim/tools/mcp/dist/server.js
 ```
 
 - [ ] **Step 5: Verify tools appear in Claude Code**

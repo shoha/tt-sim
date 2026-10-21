@@ -161,13 +161,13 @@ After modifying code:
 The user stores screenshots and reference images in the workspace at:
 
 ```
-D:\dev\tt-sim\cursor_hints\
+D:\dev\tabletop\tt-sim\cursor_hints\
 ```
 
 - Filenames contain **spaces**: `Screenshot 2026-02-14 204006.png`
 - The directory has a `.gdignore` file, so Godot (and some search tools like Glob) may skip it
-- **To list files**, use Shell: `Get-ChildItem "D:\dev\tt-sim\cursor_hints" -Name`
-- **To read an image**, use the Read tool with the full path (quote spaces): `D:\dev\tt-sim\cursor_hints\Screenshot 2026-02-14 204006.png`
+- **To list files**, use Shell: `Get-ChildItem "D:\dev\tabletop\tt-sim\cursor_hints" -Name`
+- **To read an image**, use the Read tool with the full path (quote spaces): `D:\dev\tabletop\tt-sim\cursor_hints\Screenshot 2026-02-14 204006.png`
 - Cursor's project assets cache (`C:\Users\hshore\.cursor\projects\d-dev-tt-sim\assets\`) may have copies with underscores replacing spaces and a `d__dev_tt-sim_cursor_hints_` prefix, but these can be **stale** — always check the workspace `cursor_hints/` directory first
 
 ## Key Gotchas

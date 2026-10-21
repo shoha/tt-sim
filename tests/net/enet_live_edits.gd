@@ -37,7 +37,7 @@ extends "res://tests/net/enet_late_joiner.gd"
 ##   host refreshed its fire stroke by stroke) and Hero and Scout must
 ##   rest on its ground where the host's do.
 ##
-## Run: godot --headless --path D:/dev/tt-sim res://tests/net/net_launcher.tscn --
+## Run: godot --headless --path D:/dev/tabletop/tt-sim res://tests/net/net_launcher.tscn --
 ##   --data-root=net_launcher --scenario=enet_live_edits --peers=3 --timeout-s=300
 ## Add --windowed=client for a look at a client's board: that client films the host's Fire lay
 ## (_filmed_fire) to .godot/net_runs/enet_live_edits/client_fire.png.

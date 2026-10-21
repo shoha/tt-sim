@@ -18,7 +18,7 @@ catalogue of the jobs in `jobs/`.
 One fixed command form, so it is approved once; only the job and the flags change:
 
 ```
-godot --path D:/dev/tt-sim --windowed --resolution 1920x1080 --position 320,120 --script res://tools/render_jobs/run.gd -- <job> [flags]
+godot --path D:/dev/tabletop/tt-sim --windowed --resolution 1920x1080 --position 320,120 --script res://tools/render_jobs/run.gd -- <job> [flags]
 ```
 
 Do not pass `--headless`: captures need real pixels. `run.gd` loads the main scene, waits

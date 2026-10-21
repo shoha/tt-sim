@@ -24,7 +24,7 @@ reads only the resource.
 Bake into a scratch folder, never into the repo (about 86 s, 11 s a sequence):
 
 ```
-"C:/Program Files/Blender Foundation/Blender 5.2/5.2/python/bin/python.exe" -I D:/dev/tt-sim/tools/fire_sim/bake_fire_book.py --out <scratch> --sheets <scratch>/sheets
+"C:/Program Files/Blender Foundation/Blender 5.2/5.2/python/bin/python.exe" -I D:/dev/tabletop/tt-sim/tools/fire_sim/bake_fire_book.py --out <scratch> --sheets <scratch>/sheets
 ```
 
 `--out` is required; `--sheets` is optional (no sheets without it). `--only 0,5` bakes only those
@@ -45,7 +45,7 @@ Read the sheets before packing:
 ## Packing
 
 ```
-godot --headless --path D:/dev/tt-sim --script res://tools/fire_sim/pack_fire_book.gd -- --in <scratch>/fire_sim_book.bin
+godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/fire_sim/pack_fire_book.gd -- --in <scratch>/fire_sim_book.bin
 ```
 
 The packer refuses anything but the book the flame shader is written for (magic "TTFSIM02", a
@@ -61,12 +61,12 @@ stored mips included); a headless load takes about 60 ms.
 
 ## After packing
 
-1. `godot --headless --path D:/dev/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_authoring.json -gselect=test_fire_book`
+1. `godot --headless --path D:/dev/tabletop/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_authoring.json -gselect=test_fire_book`
    (a changed sequence count changes this test and the packer's `EXPECTED_LAYERS` together).
-2. `git -C D:/dev/tt-sim lfs status` lists `assets/fire/fire_book.res` as an LFS object to commit
-   (`git -C D:/dev/tt-sim lfs ls-files` after the commit). `.gitattributes` routes
+2. `git -C D:/dev/tabletop/tt-sim lfs status` lists `assets/fire/fire_book.res` as an LFS object to commit
+   (`git -C D:/dev/tabletop/tt-sim lfs ls-files` after the commit). `.gitattributes` routes
    `assets/fire/**` through LFS.
-3. The export check: `godot --headless --path D:/dev/tt-sim --export-pack "Windows Desktop" <scratch>/check.zip`
+3. The export check: `godot --headless --path D:/dev/tabletop/tt-sim --export-pack "Windows Desktop" <scratch>/check.zip`
    stores `res://assets/fire/fire_book.res` (the log's "Storing File" lines) and nothing from
    `tools/fire_sim`. Delete the zip afterwards.
 
@@ -79,7 +79,7 @@ multiplier. It ships as `res://assets/fire/fire_smoke_book.res`, a `FireSmokeBoo
 here draws it; the GPU does the work, so the bake is a windowed render job, not a headless script:
 
 ```
-godot --path D:/dev/tt-sim --windowed --resolution 1920x1080 --position 320,120 --script res://tools/render_jobs/run.gd -- fire_smoke_book
+godot --path D:/dev/tabletop/tt-sim --windowed --resolution 1920x1080 --position 320,120 --script res://tools/render_jobs/run.gd -- fire_smoke_book
 ```
 
 `probes/fire_smoke_book.gd` draws the atlas once, slices it, saves the book with

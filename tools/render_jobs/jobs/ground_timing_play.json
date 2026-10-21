@@ -21,7 +21,7 @@
    {"op": "home"}, {"op": "wait", "s": 2.0},
    {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "gpu_state", "name": "{value} home"},
    {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "sweep", "name": "{value} home",
-    "shared": {"scatter": "all", "look": "on", "tuft": "on", "code": "new", "std": "off", "skirt": "on", "base": "D:/dev/worktrees/tt-sim-timing-base"},
+    "shared": {"scatter": "all", "look": "on", "tuft": "on", "code": "new", "std": "off", "skirt": "on", "base": "D:/dev/tabletop/worktrees/tt-sim-timing-base"},
     "configs": [
      {"label": "full"},
      {"label": "bare", "scatter": "none"},
@@ -39,7 +39,7 @@
     ]},
    {"op": "zoom", "size": 26.0}, {"op": "wait", "s": 2.5},
    {"op": "call", "script": "res://tools/render_jobs/probes/ground_timing.gd", "action": "sweep", "name": "{value} z26",
-    "shared": {"scatter": "all", "look": "on", "tuft": "on", "code": "new", "std": "off", "skirt": "on", "base": "D:/dev/worktrees/tt-sim-timing-base"},
+    "shared": {"scatter": "all", "look": "on", "tuft": "on", "code": "new", "std": "off", "skirt": "on", "base": "D:/dev/tabletop/worktrees/tt-sim-timing-base"},
     "configs": [
      {"label": "full"},
      {"label": "bare", "scatter": "none"},

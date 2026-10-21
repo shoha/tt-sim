@@ -4,7 +4,7 @@ extends SceneTree
 ## whether a skinned figure (outline hull included) renders the same pixels as its baked
 ## twin. Standalone, not a `call` probe:
 ##
-##   godot --headless --path D:/dev/tt-sim
+##   godot --headless --path D:/dev/tabletop/tt-sim
 ##     --script res://tools/render_jobs/probes/avatar_diff.gd -- <a> <b> <x0> <y0> <x1> <y1>
 ##
 ## Prints the mean absolute channel difference (0-255) and how many pixels differ by more
