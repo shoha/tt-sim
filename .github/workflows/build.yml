@@ -106,11 +106,14 @@ jobs:
         shell: bash
         run: PARITY_TARGETS=template_release bash .github/native/parity.sh godot
 
+      # Sharded (tools/gut_shards.gd), 2 shards on the 4-core runner: 5.75 min against 7.8-11.3
+      # serial. 4 shards were 4.4 min but failed three wall-time budget tests under the load.
       - name: Run unit tests
         shell: bash
         run: |
-          godot --headless --path . --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json 2>&1 | tee gut.log
-          if grep -q 'the native library is not built' gut.log; then
+          echo "runner: nproc=$(nproc), $(grep -E 'MemTotal|MemAvailable' /proc/meminfo | tr -s ' ' | tr '\n' ' ')"
+          godot --headless --path . --script res://tools/gut_shards.gd -- -n=2
+          if grep -qr 'the native library is not built' ~/.local/share/godot/app_userdata/TTSim/gut_shards/; then
             echo "::error::the native library did not load"
             exit 1
           fi
