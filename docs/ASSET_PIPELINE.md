@@ -485,7 +485,10 @@ Field notes:
 - `keep_colour` (bool, optional, default false): the species draws in its own colours and the
   ground look's zone tuft colour never applies to it (`GroundLookBake` skips the rule when it
   binds the tuft uniforms). Placement and grass masses are unchanged. treecube writes it for
-  rosette-habit grass species such as the bromeliad and the sword-leaf rosette.
+  rosette-habit grass species such as the bromeliad and the sword-leaf rosette, but only in a
+  zoned biome (one with a `ground_look`), where it applies the species' palette-only block: the
+  rocky badlands carry no ground look, so their sword rosette ships without the flag (treecube
+  0818ee7, `palette.py` `_with_palette_block`) and draws in its own colours all the same.
 - `name` is the plain biome display name; the season is its own field.
 - Surface `role` says what the surface is for (added 2026-09-26, phase 3; same format 1,
   since every field is optional to the consumer):
@@ -1245,6 +1248,38 @@ savanna the massed grass now delivers about a third to a half of its palette den
 within 6.5 levels, mostly where the renamed accents moved; birch within 0.2), a level saved by
 main's build reopens with its rows and takes the zones, and a Blender GLB level draws as on
 main.
+Refreshed 2026-10-21 with treecube 0818ee7 (the species merge: four looks the user approved on
+the review board and chose to ship together, "All four", 2026-10-21: the rocky badlands' sword
+rosette (round 12 T3), the flowering bush (C7 with colour L4) in birch woodland and grassland
+meadow, the alpine bellflower (round 7), and alpine meadow's magenta carpet turned gold;
+`palette_version` `0818ee7-dirty`, 9 packages, 213 assets, 36 surfaces). The pre-install parity
+(treecube `out/flow/rosette_ship/install_I1_parity.txt`) found the package, biome and surface ids
+and their order unchanged and 12 asset records added, none removed or changed:
+`Rosette_Sword_summer_20..22` (rocky badlands), `Bush_Flowering_summer_23..25` (birch woodland),
+`Bush_Flowering_summer_22..24` (grassland meadow) and `Flower_Bellflower_summer_24..26` (alpine
+meadow). One GLB changed, `alpine_meadow_summer_s1/Flower_Carpet_Magenta_summer_23.glb`, now gold
+under its old id. In the rules, the badlands' `dry_grass` and `dry_tall` avoid the rosette by
+1 m and four densities differ in the last bit only. Every burnt forest GLB, `ash`, `dirt`,
+`dirt_peat` and every surface map are byte-identical. Install: `build_palette.py --no-build
+--install`, the tracked sidecars restored by the first checkout, the re-rendered thumbnails of
+the five untouched biomes (taiga, burnt forest, savanna, temperate forest, wetland) put back at
+their committed copies, a minimal sidecar for each of the 12 new GLBs, then the import, which
+gave each its uid and the three settings and extracted no texture. `git status` checked twice:
+one GLB, `palette.json` and four thumbnails modified, 12 GLBs and their sidecars added; `git lfs
+status` lists the GLBs and JPGs as LFS and `palette.json` and the sidecars as Git. The rosette's
+`keep_colour` does not reach the palette (this section's `keep_colour` field), so
+`PaletteLibrary` reads it as false; it changes nothing in the badlands, which bind no tuft
+colour. At seed 1234 only
+those four biomes' rows moved (`tests/fixtures/scatter_golden_1234.json` re-pinned: the new
+species' rows, and neighbours' rows in the same biomes: birch's round bushes, a log and the
+sapling, grassland's round bushes and a medium rock, the badlands' six grass rows; the taiga,
+savanna, temperate forest, wetland and burnt forest digests unchanged). The rosette is sparse:
+none in the golden's 24 m square, 9 plants in an 80 m square at full painted density (about 5 %
+of its 0.0264 per square metre). `test_scatter_generator_calibration.gd` measures it delivering
+0.047 of that density, under its floor of 0.091 (0.55 of the plan's packing cap, 0.165: the
+clump of 0.075 parents per square metre, 0.9 m radius and children 1.2 m apart cannot hold the
+density, and five avoid relations thin it further), and was left failing for a decision. No code
+change, no saved map migrated.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 

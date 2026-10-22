@@ -1,6 +1,6 @@
 {
  "format": 1,
- "palette_version": "6bc37ea-dirty",
+ "palette_version": "0818ee7-dirty",
  "surfaces": {
   "ash": {
    "albedo": "surfaces/ash/ash_albedo.png",
@@ -914,7 +914,7 @@
      "key": "turf",
      "kind": "grass",
      "size_class": "ground",
-     "density_per_m2": 5.6,
+     "density_per_m2": 5.599999999999999,
      "min_spacing_m": 0.0,
      "slope_max_deg": 50.0,
      "scale_spread": 0.3,
@@ -1332,6 +1332,79 @@
      "assets": [
       "alpine_meadow_summer_s1/Flower_Poppy_Alpine_summer_22"
      ]
+    },
+    {
+     "key": "bellflower",
+     "kind": "flower",
+     "size_class": "ground",
+     "density_per_m2": 0.72,
+     "min_spacing_m": 0.12,
+     "slope_max_deg": 50.0,
+     "scale_spread": 0.3,
+     "scale_floor": 0.5,
+     "yaw_random_deg": 360.0,
+     "align": "normal",
+     "pattern": {
+      "influence": 0.7,
+      "scale_influence": 0.2,
+      "geoscatter_pattern": {
+       "texture_dict": {
+        "texture_type": "noise_",
+        "scale": 3.0,
+        "detail": 1.0,
+        "distorsion": 0.0,
+        "out_type": "Color",
+        "contrast": 2.0,
+        "use_color_ramp": false,
+        "mapping_projection": "global",
+        "mapping_location": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_rotation": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_scale": [
+         0.1,
+         0.1,
+         0.1
+        ],
+        "mapping_random_allow": true,
+        "mapping_random_seed": 221,
+        "mapping_random_loc": true
+       },
+       "color_sample_method": "id_greyscale",
+       "dist_infl_allow": true,
+       "dist_influence": 70.0,
+       "dist_revert": true,
+       "scale_infl_allow": true,
+       "scale_influence": 20.0,
+       "scale_revert": true
+      }
+     },
+     "clump": {
+      "parents_per_m2": 0.06,
+      "radius_m": 1.1,
+      "transition_m": 0.9,
+      "children_spacing_m": 0.12
+     },
+     "near": [
+      {
+       "species": "boulder",
+       "distance_m": 2.5,
+       "transition_m": 2.5,
+       "influence": 0.3
+      }
+     ],
+     "avoid": [],
+     "assets": [
+      "alpine_meadow_summer_s1/Flower_Bellflower_summer_24",
+      "alpine_meadow_summer_s1/Flower_Bellflower_summer_25",
+      "alpine_meadow_summer_s1/Flower_Bellflower_summer_26"
+     ]
     }
    ]
   },
@@ -1607,6 +1680,67 @@
       "birch_woodland_summer_s1/Bush_Round_summer_06",
       "birch_woodland_summer_s1/Bush_Round_summer_07",
       "birch_woodland_summer_s1/Bush_Round_summer_08"
+     ]
+    },
+    {
+     "key": "flowering_bush",
+     "kind": "tree",
+     "size_class": "medium",
+     "density_per_m2": 0.0162,
+     "min_spacing_m": 2.0,
+     "slope_max_deg": 40.0,
+     "scale_spread": 0.2,
+     "scale_floor": null,
+     "yaw_random_deg": 360.0,
+     "align": "upright",
+     "pattern": {
+      "influence": 0.5,
+      "scale_influence": 0.0,
+      "geoscatter_pattern": {
+       "texture_dict": {
+        "texture_type": "noise_",
+        "scale": 2.0,
+        "detail": 1.0,
+        "distorsion": 0.0,
+        "out_type": "Color",
+        "contrast": 2.0,
+        "use_color_ramp": false,
+        "mapping_projection": "global",
+        "mapping_location": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_rotation": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_scale": [
+         0.1,
+         0.1,
+         0.1
+        ],
+        "mapping_random_allow": true,
+        "mapping_random_seed": 221,
+        "mapping_random_loc": true
+       },
+       "color_sample_method": "id_greyscale",
+       "dist_infl_allow": true,
+       "dist_influence": 50.0,
+       "dist_revert": true,
+       "scale_infl_allow": false,
+       "scale_influence": 0.0,
+       "scale_revert": true
+      }
+     },
+     "clump": null,
+     "near": [],
+     "avoid": [],
+     "assets": [
+      "birch_woodland_summer_s1/Bush_Flowering_summer_23",
+      "birch_woodland_summer_s1/Bush_Flowering_summer_24",
+      "birch_woodland_summer_s1/Bush_Flowering_summer_25"
      ]
     },
     {
@@ -3000,7 +3134,7 @@
      "key": "bush",
      "kind": "tree",
      "size_class": "medium",
-     "density_per_m2": 0.018000000000000002,
+     "density_per_m2": 0.018,
      "min_spacing_m": 2.0,
      "slope_max_deg": 40.0,
      "scale_spread": 0.2,
@@ -3113,6 +3247,67 @@
      "avoid": [],
      "assets": [
       "grassland_meadow_summer_s1/Rock_Medium_summer_03"
+     ]
+    },
+    {
+     "key": "flowering_bush",
+     "kind": "tree",
+     "size_class": "medium",
+     "density_per_m2": 0.009,
+     "min_spacing_m": 2.0,
+     "slope_max_deg": 40.0,
+     "scale_spread": 0.2,
+     "scale_floor": null,
+     "yaw_random_deg": 360.0,
+     "align": "upright",
+     "pattern": {
+      "influence": 0.5,
+      "scale_influence": 0.0,
+      "geoscatter_pattern": {
+       "texture_dict": {
+        "texture_type": "noise_",
+        "scale": 2.0,
+        "detail": 1.0,
+        "distorsion": 0.0,
+        "out_type": "Color",
+        "contrast": 2.0,
+        "use_color_ramp": false,
+        "mapping_projection": "global",
+        "mapping_location": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_rotation": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_scale": [
+         0.1,
+         0.1,
+         0.1
+        ],
+        "mapping_random_allow": true,
+        "mapping_random_seed": 221,
+        "mapping_random_loc": true
+       },
+       "color_sample_method": "id_greyscale",
+       "dist_infl_allow": true,
+       "dist_influence": 50.0,
+       "dist_revert": true,
+       "scale_infl_allow": false,
+       "scale_influence": 0.0,
+       "scale_revert": true
+      }
+     },
+     "clump": null,
+     "near": [],
+     "avoid": [],
+     "assets": [
+      "grassland_meadow_summer_s1/Bush_Flowering_summer_22",
+      "grassland_meadow_summer_s1/Bush_Flowering_summer_23",
+      "grassland_meadow_summer_s1/Bush_Flowering_summer_24"
      ]
     },
     {
@@ -4314,7 +4509,7 @@
      "key": "stone",
      "kind": "rock",
      "size_class": "small",
-     "density_per_m2": 0.048,
+     "density_per_m2": 0.047999999999999994,
      "min_spacing_m": 0.25,
      "slope_max_deg": 55.0,
      "scale_spread": 0.3,
@@ -4385,7 +4580,7 @@
      "key": "barrel",
      "kind": "cactus",
      "size_class": "small",
-     "density_per_m2": 0.048,
+     "density_per_m2": 0.047999999999999994,
      "min_spacing_m": 0.5,
      "slope_max_deg": 55.0,
      "scale_spread": 0.3,
@@ -4444,6 +4639,103 @@
      "assets": [
       "rocky_badlands_summer_s1/Cactus_Barrel_summer_12",
       "rocky_badlands_summer_s1/Cactus_Barrel_summer_13"
+     ]
+    },
+    {
+     "key": "sword_rosette",
+     "kind": "grass",
+     "size_class": "small",
+     "density_per_m2": 0.0264,
+     "min_spacing_m": 1.2,
+     "slope_max_deg": 55.0,
+     "scale_spread": 0.3,
+     "scale_floor": 0.5,
+     "yaw_random_deg": 360.0,
+     "align": "normal",
+     "pattern": {
+      "influence": 0.5,
+      "scale_influence": 0.15,
+      "geoscatter_pattern": {
+       "texture_dict": {
+        "texture_type": "noise_",
+        "scale": 2.0,
+        "detail": 1.0,
+        "distorsion": 0.0,
+        "out_type": "Color",
+        "contrast": 2.0,
+        "use_color_ramp": false,
+        "mapping_projection": "global",
+        "mapping_location": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_rotation": [
+         0.0,
+         0.0,
+         0.0
+        ],
+        "mapping_scale": [
+         0.1,
+         0.1,
+         0.1
+        ],
+        "mapping_random_allow": true,
+        "mapping_random_seed": 221,
+        "mapping_random_loc": true
+       },
+       "color_sample_method": "id_greyscale",
+       "dist_infl_allow": true,
+       "dist_influence": 50.0,
+       "dist_revert": true,
+       "scale_infl_allow": true,
+       "scale_influence": 15.0,
+       "scale_revert": true
+      }
+     },
+     "clump": {
+      "parents_per_m2": 0.075,
+      "radius_m": 0.9,
+      "transition_m": 0.6,
+      "children_spacing_m": 1.2
+     },
+     "near": [],
+     "avoid": [
+      {
+       "species": "barrel",
+       "distance_m": 3.0,
+       "transition_m": 0.5,
+       "influence": 1.0
+      },
+      {
+       "species": "saguaro",
+       "distance_m": 3.0,
+       "transition_m": 0.5,
+       "influence": 1.0
+      },
+      {
+       "species": "boulder",
+       "distance_m": 2.2,
+       "transition_m": 0.5,
+       "influence": 1.0
+      },
+      {
+       "species": "rock",
+       "distance_m": 1.2,
+       "transition_m": 0.4,
+       "influence": 1.0
+      },
+      {
+       "species": "shrub",
+       "distance_m": 1.6,
+       "transition_m": 0.5,
+       "influence": 1.0
+      }
+     ],
+     "assets": [
+      "rocky_badlands_summer_s1/Rosette_Sword_summer_20",
+      "rocky_badlands_summer_s1/Rosette_Sword_summer_21",
+      "rocky_badlands_summer_s1/Rosette_Sword_summer_22"
      ]
     },
     {
@@ -4509,6 +4801,12 @@
       {
        "species": "boulder",
        "distance_m": 0.8,
+       "transition_m": 0.4,
+       "influence": 1.0
+      },
+      {
+       "species": "sword_rosette",
+       "distance_m": 1.0,
        "transition_m": 0.4,
        "influence": 1.0
       }
@@ -4580,7 +4878,14 @@
       "children_spacing_m": 0.12
      },
      "near": [],
-     "avoid": [],
+     "avoid": [
+      {
+       "species": "sword_rosette",
+       "distance_m": 1.0,
+       "transition_m": 0.4,
+       "influence": 1.0
+      }
+     ],
      "assets": [
       "rocky_badlands_summer_s1/Grass_Seed_summer_19"
      ]
@@ -8492,6 +8797,39 @@
     0.4226928949356079
    ]
   },
+  "alpine_meadow_summer_s1/Flower_Bellflower_summer_24": {
+   "file": "assets/alpine_meadow_summer_s1/Flower_Bellflower_summer_24.glb",
+   "node": "Flower_Bellflower_summer_24",
+   "wind_category": "grass",
+   "size_class": "ground",
+   "dimensions_m": [
+    0.561863899230957,
+    0.4648790657520294,
+    0.5943993926048279
+   ]
+  },
+  "alpine_meadow_summer_s1/Flower_Bellflower_summer_25": {
+   "file": "assets/alpine_meadow_summer_s1/Flower_Bellflower_summer_25.glb",
+   "node": "Flower_Bellflower_summer_25",
+   "wind_category": "grass",
+   "size_class": "ground",
+   "dimensions_m": [
+    0.6233245730400085,
+    0.48299551010131836,
+    0.6729100942611694
+   ]
+  },
+  "alpine_meadow_summer_s1/Flower_Bellflower_summer_26": {
+   "file": "assets/alpine_meadow_summer_s1/Flower_Bellflower_summer_26.glb",
+   "node": "Flower_Bellflower_summer_26",
+   "wind_category": "grass",
+   "size_class": "ground",
+   "dimensions_m": [
+    0.6812695860862732,
+    0.5277105569839478,
+    0.8037539720535278
+   ]
+  },
   "birch_woodland_summer_s1/Tree_Birch_summer_00": {
    "file": "assets/birch_woodland_summer_s1/Tree_Birch_summer_00.glb",
    "node": "Tree_Birch_summer_00",
@@ -8589,6 +8927,39 @@
     3.135028839111328,
     2.728799343109131,
     2.9476873874664307
+   ]
+  },
+  "birch_woodland_summer_s1/Bush_Flowering_summer_23": {
+   "file": "assets/birch_woodland_summer_s1/Bush_Flowering_summer_23.glb",
+   "node": "Bush_Flowering_summer_23",
+   "wind_category": "tree",
+   "size_class": "medium",
+   "dimensions_m": [
+    1.271493673324585,
+    0.7775486707687378,
+    1.2251754999160767
+   ]
+  },
+  "birch_woodland_summer_s1/Bush_Flowering_summer_24": {
+   "file": "assets/birch_woodland_summer_s1/Bush_Flowering_summer_24.glb",
+   "node": "Bush_Flowering_summer_24",
+   "wind_category": "tree",
+   "size_class": "medium",
+   "dimensions_m": [
+    1.4118385314941406,
+    0.910820722579956,
+    1.4930403232574463
+   ]
+  },
+  "birch_woodland_summer_s1/Bush_Flowering_summer_25": {
+   "file": "assets/birch_woodland_summer_s1/Bush_Flowering_summer_25.glb",
+   "node": "Bush_Flowering_summer_25",
+   "wind_category": "tree",
+   "size_class": "medium",
+   "dimensions_m": [
+    1.7777926921844482,
+    1.190930962562561,
+    1.9152486324310303
    ]
   },
   "birch_woodland_summer_s1/Stone_Cluster_summer_09": {
@@ -9042,6 +9413,39 @@
     1.0709943771362305
    ]
   },
+  "grassland_meadow_summer_s1/Bush_Flowering_summer_22": {
+   "file": "assets/grassland_meadow_summer_s1/Bush_Flowering_summer_22.glb",
+   "node": "Bush_Flowering_summer_22",
+   "wind_category": "tree",
+   "size_class": "medium",
+   "dimensions_m": [
+    1.2540780305862427,
+    0.7971592545509338,
+    1.2495825290679932
+   ]
+  },
+  "grassland_meadow_summer_s1/Bush_Flowering_summer_23": {
+   "file": "assets/grassland_meadow_summer_s1/Bush_Flowering_summer_23.glb",
+   "node": "Bush_Flowering_summer_23",
+   "wind_category": "tree",
+   "size_class": "medium",
+   "dimensions_m": [
+    1.5289515256881714,
+    1.0300607681274414,
+    1.6550540924072266
+   ]
+  },
+  "grassland_meadow_summer_s1/Bush_Flowering_summer_24": {
+   "file": "assets/grassland_meadow_summer_s1/Bush_Flowering_summer_24.glb",
+   "node": "Bush_Flowering_summer_24",
+   "wind_category": "tree",
+   "size_class": "medium",
+   "dimensions_m": [
+    1.764023780822754,
+    1.0911723375320435,
+    1.7389527559280396
+   ]
+  },
   "grassland_meadow_summer_s1/Stone_Small_summer_04": {
    "file": "assets/grassland_meadow_summer_s1/Stone_Small_summer_04.glb",
    "node": "Stone_Small_summer_04",
@@ -9392,6 +9796,39 @@
     0.9224042892456055,
     0.7227398157119751,
     0.9224042892456055
+   ]
+  },
+  "rocky_badlands_summer_s1/Rosette_Sword_summer_20": {
+   "file": "assets/rocky_badlands_summer_s1/Rosette_Sword_summer_20.glb",
+   "node": "Rosette_Sword_summer_20",
+   "wind_category": "grass",
+   "size_class": "small",
+   "dimensions_m": [
+    0.7251245975494385,
+    0.4689842760562897,
+    0.7964448928833008
+   ]
+  },
+  "rocky_badlands_summer_s1/Rosette_Sword_summer_21": {
+   "file": "assets/rocky_badlands_summer_s1/Rosette_Sword_summer_21.glb",
+   "node": "Rosette_Sword_summer_21",
+   "wind_category": "grass",
+   "size_class": "small",
+   "dimensions_m": [
+    0.8671169281005859,
+    0.5376484394073486,
+    0.8096904754638672
+   ]
+  },
+  "rocky_badlands_summer_s1/Rosette_Sword_summer_22": {
+   "file": "assets/rocky_badlands_summer_s1/Rosette_Sword_summer_22.glb",
+   "node": "Rosette_Sword_summer_22",
+   "wind_category": "grass",
+   "size_class": "small",
+   "dimensions_m": [
+    0.988440752029419,
+    0.5705341100692749,
+    0.9503438472747803
    ]
   },
   "rocky_badlands_summer_s1/Grass_Clump_summer_14": {
