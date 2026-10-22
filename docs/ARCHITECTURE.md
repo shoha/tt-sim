@@ -1483,9 +1483,11 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   depth `NewMap.edge_feather_m`, bound by `GroundAccents.bind_edge`) the patches shrink away,
   so none sits on the rim; the skirt draws none (`GroundAccents.sync_skirt`), and continues
   the base or the painted surface covering the map's edge (`TerrainSkirt.edge_surface`,
-  `skirt_ground_mask`; 2026-10-09). **Plants:** do not read accents (the contract says
-  the scatter does not; a moss patch under a forest is still forest floor), so there is no
-  `TerrainRules` / `ScatterGround` twin. **Cost:** see `PERFORMANCE.md` "Ground accents".
+  `skirt_ground_mask`; 2026-10-09). **Plants:** read accents only where a rule asks: a
+  mass rule's clump `bare` keeps a biome's grass off the patches and a species'
+  `avoid_bare` keeps that species off them (2026-10-22), both through
+  `ScatterMass.bare_params`, the mask's CPU twin; otherwise a moss patch under a forest is
+  still forest floor, so there is no `TerrainRules` / `ScatterGround` twin. **Cost:** see `PERFORMANCE.md` "Ground accents".
 - **Automatic dressing (P3-4):** always on, no toggle; the user's decisions are tier edges
   as rock cliffs and hand paint winning, except that ground and built paint yield to the
   rock on faces (P3-6, above). Formulas and defaults live once in

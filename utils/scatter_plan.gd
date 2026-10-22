@@ -121,7 +121,9 @@ const DENSITY_RESPONSE := {
 	"ground": {"lead": 1.0, "lag": 1.6},
 }
 ## A species rule's fields and their neutral defaults (PaletteLibrary fills the same ones
-## when it validates the palette; tests may pass partial rules).
+## when it validates the palette; tests may pass partial rules). `avoid_bare` > 0 keeps the
+## species itself off the biome's ground-accent openings, fading in over that many accent-noise
+## units (_plan_masses; clump `bare` does the same for a biome's whole grass).
 const RULE_DEFAULTS := {
 	"key": "",
 	"kind": "",
@@ -137,6 +139,7 @@ const RULE_DEFAULTS := {
 	"clump": null,
 	"near": [],
 	"avoid": [],
+	"avoid_bare": 0.0,
 	"assets": [],
 }
 
@@ -403,22 +406,36 @@ static func _mass_of(rule: Dictionary, clump: Dictionary) -> Dictionary:
 ## Gives every mass entry the biome's zone record (GroundZones.record of its ground_look on
 ## `map_seed`, shared read-only) and, when a mass rule sets clump `bare`, every grass entry the
 ## biome's bare openings (ScatterMass.bare_params with the largest `bare`), so no lone tuft
-## stands in a clearing. Nothing for a biome without a mass rule.
+## stands in a clearing. An entry whose rule sets `avoid_bare` gets openings of its own whatever
+## its kind (a bromeliad kept off the wetland's mud while the reeds and sedge, which belong there,
+## stay): zero from the edge the shader draws (the look's accent edge_scale) and fading in over
+## `avoid_bare`, after the clump's openings when a grass entry has both. Nothing for a biome
+## without a mass rule or an `avoid_bare`, so every other plan is exactly as before.
 static func _plan_masses(biome_id: String, map_seed: int, entries: Array[Dictionary]) -> void:
-	if not entries.any(func(entry: Dictionary) -> bool: return entry.mass):
+	var avoiding := entries.any(func(entry: Dictionary) -> bool: return _avoid_bare(entry) > 0.0)
+	if not avoiding and not entries.any(func(entry: Dictionary) -> bool: return entry.mass):
 		return
-	var zones := GroundZones.record(GroundLook.for_biome(biome_id), map_seed)
+	var look := GroundLook.for_biome(biome_id)
+	var zones := GroundZones.record(look, map_seed)
 	var bare := 0.0
 	for entry in entries:
 		if entry.mass:
 			entry.mass_zones = zones
 			bare = maxf(bare, float(entry.rule.clump.get("bare", 0.0)))
-	if bare <= 0.0:
-		return
-	var records := ScatterMass.bare_params(biome_id, map_seed, bare, zones)
+	var records := ScatterMass.bare_params(biome_id, map_seed, bare, zones) if bare > 0.0 else []
+	var edge_scale := float(look.get("accent_shape", {}).get("edge_scale", 1.0))
 	for entry in entries:
-		if entry.rule.kind == ScatterGround.GRASS_KIND:
+		if bare > 0.0 and entry.rule.kind == ScatterGround.GRASS_KIND:
 			entry.mass_bare = records
+		var own := _avoid_bare(entry)
+		if own > 0.0:
+			var drawn := ScatterMass.bare_params(biome_id, map_seed, own, zones, edge_scale)
+			entry.mass_bare = entry.mass_bare + drawn
+
+
+## An entry's own bare margin (its rule's `avoid_bare`; 0 for a partial test rule without one).
+static func _avoid_bare(entry: Dictionary) -> float:
+	return float(entry.rule.get("avoid_bare", 0.0))
 
 
 ## Expected share of the ground inside a clump. Clumps are a union of discs of radius

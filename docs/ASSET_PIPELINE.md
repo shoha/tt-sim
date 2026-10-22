@@ -462,6 +462,7 @@ and cacti carry no COLOR_0.
                     "children_spacing_m": ..., "mass": 0 | 1, <mass fields>} | null,
           "near":  [{"species": "<key>", "distance_m": ..., "transition_m": ..., "influence": <0..1>}],
           "avoid": [ ...same shape... ],
+          "avoid_bare": <0..1 accent-noise units, optional, default 0 = off>,
           "assets": ["<asset id>", ...]
         }
       ]
@@ -489,6 +490,22 @@ Field notes:
   zoned biome (one with a `ground_look`), where it applies the species' palette-only block: the
   rocky badlands carry no ground look, so their sword rosette ships without the flag (treecube
   0818ee7, `palette.py` `_with_palette_block`) and draws in its own colours all the same.
+- `avoid_bare` (float 0..1, optional, default 0 = off; added 2026-10-22): the species keeps off
+  its biome's `ground_accents` patches (below). None stands where the ground shader draws a
+  patch, soft edge included, and it fades back in over this many accent-noise units outside
+  the drawn edge, the unit of the clump field `bare` (Ground look and grass masses, below).
+  Clump `bare` keeps all of a biome's grass off the patches; `avoid_bare` keeps one species of
+  any kind off them, so a bromeliad stays off the wetland's mud while the reeds and sedge,
+  which belong there, grow in it. Keep it small: a noise margin has no fixed width in metres
+  (on the wetland's 5 m patches the noise rose 0.04 to 0.25 units per metre across a drawn
+  edge, p10 to p90), and where the noise runs just under its threshold a wide margin thins
+  turf metres from any patch. Measured on new wetland maps (seeds 1 to 10 and 1234, tt-sim
+  2026-10-22): without the field 12.9% of bromeliads stood on drawn mud, with any value none;
+  0.01 costs about 1% of the species' density on turf, nearly all of it within 0.2 m of the
+  mud, 0.02 about 2% within about 0.5 m, and 0.08 about 9% with a quarter of that beyond
+  0.5 m. The species also loses what stood on the patches, so a producer that wants the same
+  count raises `density_per_m2` by that share. The consumer clamps it to 0..1; the producer
+  rejects values outside it.
 - `name` is the plain biome display name; the season is its own field.
 - Surface `role` says what the surface is for (added 2026-09-26, phase 3; same format 1,
   since every field is optional to the consumer):
@@ -560,8 +577,12 @@ Field notes:
   `coverage` over a large area and a patch is about `scale_m` across. Entries are in
   priority order: a consumer with a layer budget draws the first ones and drops the
   rest. Accents belong to the ground: they appear only where the biome ground would
-  show, so the automatic cliff and scree and every painted surface cover them, and
-  the plant scatter does not read them. Empty (`[]`) where a biome's ground wants no
+  show, so the automatic cliff and scree and every painted surface cover them. The plant
+  scatter reads them only where a rule asks: a mass rule's clump `bare` keeps the biome's
+  grass off the patches and a species' `avoid_bare` keeps that species off them, both
+  through the consumer's CPU twin of the shader's patch mask (`ScatterMass.bare_params`);
+  otherwise a moss patch under a forest is forest floor to the scatter. Empty (`[]`)
+  where a biome's ground wants no
   accents; a season whose `ground_surface` differs from the all-year one (winter
   snow) gets no accents unless the producer lists some for it.
 - `path_surfaces` (added 2026-09-27, phase 3; optional) is an ordered list of `built`
