@@ -106,6 +106,8 @@ jobs:
         shell: bash
         run: PARITY_TARGETS=template_release bash .github/native/parity.sh godot
 
+      # Sharded (tools/gut_shards.gd), 2 shards on the 4-core runner: 5.75 min against 7.8-11.3
+      # serial. 4 shards were 4.4 min but failed three wall-time budget tests under the load.
       - name: Run unit tests
         shell: bash
         run: |

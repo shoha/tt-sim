@@ -116,10 +116,11 @@ try {
 
     # --- Test suite ---
     Write-Host "Running GUT test suite..." -ForegroundColor Cyan
-    # The -gconfig arg must be quoted -- unquoted, the godot.cmd Scoop shim's
-    # batch-file argument forwarding splits it apart (observed: Godot receives
-    # "tests/" and ".gutconfig.json" as two separate/unknown arguments).
-    & godot --headless --path . --script res://addons/gut/gut_cmdln.gd -- "-gconfig=tests/.gutconfig.json"
+    # The sharded runner (tools/gut_shards.gd) exits 1 on a failing test, a crashed
+    # shard or a shard past 900 s, so $LASTEXITCODE means the same as the serial run's.
+    # (If a -gconfig=tests/.gutconfig.json arg is ever passed, quote it: the godot.cmd
+    # Scoop shim splits it apart at the dot.)
+    & godot --headless --path . --script res://tools/gut_shards.gd
     if ($LASTEXITCODE -ne 0) {
         throw "Test suite failed (exit code $LASTEXITCODE). Fix failing tests before cutting a release."
     }
