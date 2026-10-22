@@ -476,8 +476,9 @@ static func parent_angle(entry: Dictionary, x: float, z: float, angle: float) ->
 ## ScatterPlan.respond (the painted density through the size class's response) times bare_keep
 ## over the entry's mass_bare: a biome whose mass rule sets clump `bare` keeps all its grass off
 ## the bare openings (ScatterPlan.build), not only the masses, so no lone tuft stands in a dirt
-## clearing. With the candidate's uniform `u` and `shade`, the pattern keep the candidate meets
-## next: where u >= the response times shade the candidate is rejected whatever the openings say
+## clearing, and a species whose rule sets `avoid_bare` keeps itself off them. With the
+## candidate's uniform `u` and `shade`, the pattern keep the candidate meets next: where
+## u >= the response times shade the candidate is rejected whatever the openings say
 ## (bare_keep is 0..1), so that product comes back, at most u, and the openings' noise is never
 ## evaluated (off_bare). ScatterGenerator._evaluate runs the same steps itself, asking off_bare
 ## only of a candidate the response keeps on an entry with openings.
@@ -507,8 +508,14 @@ static func off_bare(bare: Array, keep: float, x: float, z: float, u: float, sha
 ## record's accent shape, or today's round patches without one. The memo
 ## (TerrainRules.value_noise_memo, for the warp) is the records' one mutable part, shared by them
 ## since they share the seed; a plan makes its own (ScatterPlan.build), so no two threads ever
-## share it.
-static func bare_params(biome_id: String, map_seed: int, margin: float, zones: Dictionary) -> Array:
+## share it. bare_keep is 0 from t - EDGE up, a little outside the patch the shader draws when the
+## look narrows its ramp (accent_shape edge_scale under 1: the drawn patch starts at
+## t - EDGE * edge_scale); `edge_scale` moves that zero level onto the drawn edge (a species'
+## `avoid_bare`, so a plant just beside the mud keeps its place), and 1 leaves the records exactly
+## as clump `bare` has always had them.
+static func bare_params(
+	biome_id: String, map_seed: int, margin: float, zones: Dictionary, edge_scale: float = 1.0
+) -> Array:
 	var accents := PaletteLibrary.ground_accents(biome_id)
 	var count := mini(accents.size(), GroundAccents.PER_COMPONENT)
 	var coverages := PackedFloat32Array()
@@ -524,11 +531,12 @@ static func bare_params(biome_id: String, map_seed: int, margin: float, zones: D
 		sin(float(zones.get("accent_stretch_angle", 0.0))),
 		{},
 	]
+	var shift := GroundAccents.EDGE * (1.0 - edge_scale)
 	var out := []
 	for i in count:
 		var offset := GroundAccents.surface_offset(String(accents[i].get("surface", "")), map_seed)
 		var scale_m := float(accents[i].get("scale_m", 6.0))
-		out.append([GroundAccents.threshold(drawn[i]), scale_m, offset, margin] + shape)
+		out.append([GroundAccents.threshold(drawn[i]) + shift, scale_m, offset, margin] + shape)
 	return out
 
 

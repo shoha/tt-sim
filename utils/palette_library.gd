@@ -771,6 +771,7 @@ static func _validate_species(
 		"clump": _validate_clump(entry.get("clump"), label, warnings),
 		"near": _validate_relations(entry.get("near"), label + " near", warnings),
 		"avoid": _validate_relations(entry.get("avoid"), label + " avoid", warnings),
+		"avoid_bare": _optional_number(entry, "avoid_bare", 0.0, 1.0, 0.0, label, warnings),
 		"assets": asset_ids,
 	}
 
