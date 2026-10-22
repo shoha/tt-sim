@@ -4,7 +4,8 @@ extends GutTest
 ## against GDScript's, bit for bit: the pattern noise on every noise setting the palettes use, and
 ## the rows and mass anchors of whole painted cells. Pending, with the reason, where the library
 ## is not built: CI's tests and a fresh clone run the GDScript path only, and the rest of the
-## suite checks that path.
+## suite checks that path. The landform recipes' whole maps are compared in
+## test_scatter_native_landforms_dry.gd and _wet.gd (scatter_native_landform_parity.gd).
 
 const SIZE_FT := 200
 const SEED := 1234
@@ -111,53 +112,6 @@ func test_force_switch_and_missing_library_send_jobs_to_gdscript() -> void:
 	var rows: Variant = ScatterNative.run_biome(doc, biome_id, _work(doc, biome_id, Vector2i.ZERO), {})
 	assert_eq(rows == null, not ScatterNative.available())
 	assert_eq(ScatterNative.fallbacks(), {"forced": 1, reason: 1})
-
-
-## The five landform recipes' whole maps (their own starting cover, which reaches water, steep
-## faces and, on the valley here, a crossing): every job of the build equal, native and GDScript.
-@warning_ignore("integer_division")
-func test_landform_maps_equal_gdscript_over_water_steep_ground_and_a_crossing() -> void:
-	if _skip_without_library():
-		return
-	var biome_id := "grassland_meadow_summer_s1"
-	for landform in ["valley", "hilltop", "terraces", "lakeshore", "gorge"]:
-		var doc := NewMap.create(SIZE_FT, biome_id, SEED, PaletteLibrary.DEFAULT_ROOT, landform)
-		if landform == "valley":
-			var crossing := Crossing.new()
-			crossing.start = Vector2(-6.0, 2.0)
-			crossing.end = Vector2(5.0, -3.0)
-			crossing.width_m = 1.8
-			doc.crossings.append(crossing)
-		var regen := ScatterRegen.for_document(doc)
-		regen.set_biome(biome_id, PaletteLibrary.species(biome_id))
-		regen.built_surfaces = PackedStringArray(PaletteLibrary.surfaces_with_role("built"))
-		regen.cliff_surfaces = PackedStringArray(PaletteLibrary.surfaces_with_role("cliff"))
-		regen.request_region(Rect2(-doc.extent_m() * 0.5, doc.extent_m()))
-		ScatterNative.reset_counts()
-		var rows := 0
-		var differing := []
-		var job := regen.take_job()
-		while not job.is_empty():
-			ScatterNative.force_gdscript = false
-			var native := ScatterRegen.run(doc, job.work)
-			ScatterNative.force_gdscript = true
-			var gdscript := ScatterRegen.run(doc, job.work)
-			for cell in gdscript.rows_by_cell:
-				for asset_id in gdscript.rows_by_cell[cell]:
-					rows += gdscript.rows_by_cell[cell][asset_id].size() / MapDocument.ROW_STRIDE
-			if native.rows_by_cell != gdscript.rows_by_cell or native.anchors != gdscript.anchors:
-				differing.append(job.cells)
-			job = regen.take_job()
-		var wet := doc.water_dressing.size() == doc.sample_count() * WaterDressing.CHANNELS
-		gut.p(
-			(
-				"%s: wet %s, crossings %d, %d rows, %s, differing jobs %s"
-				% [landform, wet, doc.crossings.size(), rows, ScatterNative.fallbacks(), differing]
-			)
-		)
-		assert_gt(rows, 0)
-		assert_false(ScatterNative.fallbacks().has("missing"))
-		assert_eq(differing, [], "%s: every job equal" % landform)
 
 
 ## The grids the library computes from pack()'s "source" (card native-cover) against grids_for's
