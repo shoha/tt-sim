@@ -90,8 +90,12 @@ release steps are in `AGENTS.md` "Cutting a release"; cutting a version needs th
 # Syntax check (prints all compile errors, exits)
 godot --headless --path D:/dev/tabletop/tt-sim --quit-after 1
 
-# Run all unit tests (about 4 minutes)
+# Run all unit tests (about 10 minutes serial, 2026-10-22)
 godot --headless --path D:/dev/tabletop/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json
+
+# The same scripts split across processes (tools/gut_shards.gd; default half the logical
+# processors, at most 8): about 81 s at 8 shards, 65 s at 12 on the 24-thread dev machine
+godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/gut_shards.gd -- -n=8
 
 # Named subsets for the inner loop; the full run is still required before a commit
 godot --headless --path D:/dev/tabletop/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig_avatar.json
@@ -104,10 +108,14 @@ godot --headless --import --path D:/dev/tabletop/tt-sim
 ```
 
 The subsets (AGENTS.md "Running tests from the CLI" says what each covers): avatar and tokens
-(about 2.5 s), net (under 1 s) and ui (about 10 s) are quick. Authoring takes about 220 s of
-the full run's 236 s, because the five landform recipe scripts alone take about 115 s, so narrow
-it with `-gselect=<part of a script name>` while iterating. Add a new test script to every
-subset it belongs to; `test_gut_subsets.gd` fails if a subset lists a missing script.
+(about 2.5 s), net (under 1 s) and ui (about 10 s) are quick. Authoring holds most of the full
+run (the scatter parity and calibration scripts about 125 s, the six landform recipe scripts
+about 150 s), so narrow it with `-gselect=<part of a script name>` while iterating, or shard
+it (`-gconfig=tests/.gutconfig_authoring.json` on the runner). Add a new test script to every
+subset it belongs to; `test_gut_subsets.gd` fails if a subset lists a missing script. The
+runner prints one line per shard, each failing test and the totals; a failing shard's full
+GUT log is under `user://gut_shards/`. Refresh its committed weights (`tests/gut_times.json`)
+with `--write-times` when a script's time changes a lot; stale weights only unbalance shards.
 
 After any batch of file renames/deletions (e.g. a multi-step refactor), re-run the import step
 before the user reopens the editor. See AGENTS.md's "Running tests from the CLI" section for why
