@@ -24,9 +24,10 @@ holds the version being worked *toward*, not the one last shipped.
      without it) -- that's the whole reason this script exists instead of
      doing it manually again.
 2. Pushing the tag (`-Push`, or manually: `git push origin main && git push origin vX.Y.Z`)
-   triggers `.github/workflows/build.yml` automatically: test → export
-   Windows/macOS/Linux → code-sign (Azure) + notarize (Apple) → create a
-   GitHub Release → deploy to Steam's `testing` branch. All credentials
+   triggers `.github/workflows/build.yml` automatically: tests, parity and the
+   Windows/macOS/Linux exports side by side → code-sign (Azure) + notarize
+   (Apple), once the tests and parity passed → create a GitHub Release →
+   deploy to Steam's `testing` branch. All credentials
    already exist as GitHub Actions secrets -- nothing to supply.
 3. **Promoting the Steam build from `testing` to live (`default`) is a manual
    step in the Steamworks partner web UI.** Neither CI nor the script does
