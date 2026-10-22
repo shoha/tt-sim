@@ -287,7 +287,7 @@ jobs:
         shell: bash
         run: |
           echo "runner: nproc=$(nproc), $(grep -E 'MemTotal|MemAvailable' /proc/meminfo | tr -s ' ' | tr '\n' ' ')"
-          godot --headless --path . --script res://tools/gut_shards.gd -- -n=4
+          godot --headless --path . --script res://tools/gut_shards.gd -- -n=2
           if grep -qr 'the native library is not built' ~/.local/share/godot/app_userdata/TTSim/gut_shards/; then
             echo "::error::the native library did not load"
             exit 1
