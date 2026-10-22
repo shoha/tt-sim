@@ -313,6 +313,29 @@ func test_numbers_are_clamped_to_the_contract_range_and_wrong_types_fall_back() 
 	assert_eq(result.warnings.size(), 3, "two wrong types and one unknown align")
 
 
+## `avoid_bare` (contract section 9) is off unless given: absent means 0, a number is clamped to
+## 0..1, and a value of the wrong type falls back to 0 with a warning.
+func test_avoid_bare_defaults_off_and_bad_values_fall_back() -> void:
+	var cases := [
+		[null, 0.0, 0],
+		[0.01, 0.01, 0],
+		[-0.5, 0.0, 0],
+		[5.0, 1.0, 0],
+		["mud", 0.0, 1],
+		[true, 0.0, 1],
+	]
+	for row: Array in cases:
+		var document := _valid_document()
+		if row[0] != null:
+			document.biomes[0].species[0]["avoid_bare"] = row[0]
+		var result := PaletteLibrary.validate_palette(document)
+		var rules: Array = result.palette.biomes[0].species
+		assert_eq(rules[0].avoid_bare, row[1], "%s reads as %s" % [row[0], row[1]])
+		assert_eq(result.warnings.size(), row[2], "warnings for %s" % [row[0]])
+		for other: Dictionary in rules.slice(1):
+			assert_eq(other.avoid_bare, 0.0, "every other rule carries the default")
+
+
 func test_counts_over_the_cap_are_truncated() -> void:
 	var document := _valid_document()
 	var many: Array = []
