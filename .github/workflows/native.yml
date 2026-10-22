@@ -7,10 +7,13 @@ name: Native scatter library
 # downloading them merged into native/ gives a project that loads and exports them all.
 #
 # build.yml calls this first: its test job imports with the Linux libraries and runs the tests,
-# native-parity.yml checks the Windows and macOS libraries against GDScript, and the export job
-# exports with every library. A push to a ci/** branch runs this workflow alone, with the parity
-# jobs and a branch-only check that runs the Linux tests and exports the three presets without
-# signing, release or Steam (it was proven that way on the branch native-ci, 2026-10-20).
+# native-parity.yml checks the Windows and macOS libraries against GDScript, and the export jobs
+# export with every library beside them. A push to a ci/** branch runs this workflow alone,
+# with the parity jobs and a branch-only check that runs the Linux tests and exports the three
+# presets without signing, release or Steam (it was proven that way on the branch native-ci,
+# 2026-10-20). The branch check and the parity jobs restore and save Godot's import through the
+# Actions cache like build.yml's jobs (.github/actions/import-cache; proven on ci/import-cache,
+# 2026-10-22).
 #
 # Each platform builds against the C runtime its official Godot binary uses, since libm's last
 # bits must match the engine's: glibc (built on glibc 2.28, so the library needs no newer glibc
@@ -258,8 +261,23 @@ jobs:
               native/bin/libttscatter.linux.template_$target.x86_64.so "$TEMPLATES/linux_$target.x86_64"
           done
 
-      - name: Import project
+      # Branch runs save their own Linux import (branch-scoped, so main never reads it); they
+      # restore main's entries too (.github/actions/import-cache explains the key).
+      - name: Restore import cache
+        id: import-cache
+        uses: ./.github/actions/import-cache
+        with:
+          godot-version: ${{ env.GODOT_VERSION }}
+
+      - name: Import project (import cache ${{ steps.import-cache.outputs.state }})
         run: godot --headless --import
+
+      - name: Save import cache
+        if: steps.import-cache.outputs.state != 'exact'
+        uses: actions/cache/save@v4
+        with:
+          path: .godot/imported
+          key: ${{ steps.import-cache.outputs.key }}
 
       - name: Parity on Linux, release library
         shell: bash

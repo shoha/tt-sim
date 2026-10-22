@@ -10,6 +10,10 @@ name: Native scatter parity
 # same counts as Linux and macOS) with only LFS pointer files checked out, so the jobs spend no
 # LFS bandwidth and no cache download (build.yml's test job explains the LFS budget). A future
 # parity test that needs an LFS asset must restore build.yml's cache here first.
+#
+# Each job restores and saves its own OS's import of the project from the Actions cache
+# (.github/actions/import-cache). The LFS assets are pointer files here, so their imports fail
+# as they always have; the entry holds whatever the import wrote.
 
 on:
   workflow_call:
@@ -48,8 +52,21 @@ jobs:
           Expand-Archive godot.zip -DestinationPath .ci-godot
           Remove-Item godot.zip
 
-      - name: Import project
+      - name: Restore import cache
+        id: import-cache
+        uses: ./.github/actions/import-cache
+        with:
+          godot-version: ${{ env.GODOT_VERSION }}
+
+      - name: Import project (import cache ${{ steps.import-cache.outputs.state }})
         run: '"$GODOT" --headless --path . --import'
+
+      - name: Save import cache
+        if: steps.import-cache.outputs.state != 'exact'
+        uses: actions/cache/save@v4
+        with:
+          path: .godot/imported
+          key: ${{ steps.import-cache.outputs.key }}
 
       - name: Parity
         run: bash .github/native/parity.sh "$GODOT"
@@ -82,8 +99,21 @@ jobs:
           unzip -q godot.zip -d .ci-godot
           rm godot.zip
 
-      - name: Import project
+      - name: Restore import cache
+        id: import-cache
+        uses: ./.github/actions/import-cache
+        with:
+          godot-version: ${{ env.GODOT_VERSION }}
+
+      - name: Import project (import cache ${{ steps.import-cache.outputs.state }})
         run: '"$GODOT" --headless --path . --import'
+
+      - name: Save import cache
+        if: steps.import-cache.outputs.state != 'exact'
+        uses: actions/cache/save@v4
+        with:
+          path: .godot/imported
+          key: ${{ steps.import-cache.outputs.key }}
 
       # The runner is arm64, so this is the arm64 slice of both Godot and the library.
       - name: Parity (arm64)
