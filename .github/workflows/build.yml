@@ -109,8 +109,9 @@ jobs:
       - name: Run unit tests
         shell: bash
         run: |
-          godot --headless --path . --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json 2>&1 | tee gut.log
-          if grep -q 'the native library is not built' gut.log; then
+          echo "runner: nproc=$(nproc), $(grep -E 'MemTotal|MemAvailable' /proc/meminfo | tr -s ' ' | tr '\n' ' ')"
+          godot --headless --path . --script res://tools/gut_shards.gd -- -n=4
+          if grep -qr 'the native library is not built' ~/.local/share/godot/app_userdata/TTSim/gut_shards/; then
             echo "::error::the native library did not load"
             exit 1
           fi
