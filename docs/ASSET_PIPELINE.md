@@ -1286,6 +1286,18 @@ installed palette's `_sub` frames equal the overlay's, through which the user ap
 on every view of the badlands and the grassland; alpine's turned views differ on 13 to 16 pixels by
 one level, and birch's frames, bare ones included, only in a 64 px band at the right edge. No code
 change, no saved map migrated.
+Refreshed again 2026-10-21 with treecube 936bbbe (the rosette's honest density, approved by the
+user on the review board, item `rosette-density`: "Install it"; `palette_version` `936bbbe-dirty`,
+213 assets, 36 surfaces). Only `palette.json` was copied: every GLB and surface map is
+byte-identical, the nine re-rendered thumbnails differ only by render noise and stay at their
+committed copies, and the one rule change is the sword rosette's: no clump, `density_per_m2`
+0.0264 to 0.001344 and `min_spacing_m` 1.2 to 0.8. The plan had modelled the old rule correctly
+(treecube `out/flow/rosette-density/handoff.md`: parents 1.008 of their target, clump membership
+0.116 against 0.118 modelled, the five avoids keeping 0.039 against 0.035): it asked for a density
+no field at 1.2 m spacing could pack. Placed singly at random, the rosette now delivers 1.03 of its
+target over 12 seeds (8.9 per 80 m square against 9.4 before), so the calibration test's pin is
+gone and it sits in the random band. At seed 1234 only the badlands' six grass rows moved (the
+grass now avoids the rosette at its real density) and the golden square holds one rosette.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 
