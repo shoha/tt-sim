@@ -1319,6 +1319,32 @@ no field at 1.2 m spacing could pack. Placed singly at random, the rosette now d
 target over 12 seeds (8.9 per 80 m square against 9.4 before), so the calibration test's pin is
 gone and it sits in the random band. At seed 1234 only the badlands' six grass rows moved (the
 grass now avoids the rosette at its real density) and the golden square holds one rosette.
+Refreshed 2026-10-22 with treecube 1931dac (the wetland bromeliad, approved by the user on the
+review board: round 4's L2 look and placement P2 "more"; `palette_version` `1931dac-dirty`, 9
+packages, 216 assets, 36 surfaces). The pre-install parity (treecube
+`out/flow/bromeliad/install_parity.txt`) found the package, biome and surface ids and their order
+unchanged and three asset records added, none removed or changed:
+`wetland_riparian_summer_s1/Bromeliad_summer_24..26`. The wetland's species list gains `bromeliad`
+between `log` and `reeds` (kind grass, small, random, density 0.034425, spacing 0.8 m, avoiding
+willow by 4.1 m, poplar 2.1, palm_short 2.4 and bush 1.5 with a 0.5 m transition, `keep_colour`,
+and `avoid_bare` 0.01, the field above); four wetland densities differ in the last bit only. Every
+other GLB, every burnt forest file, `ash`, `dirt`, `dirt_peat` and every surface map are
+byte-identical. Install: `build_palette.py --no-build --install`, the tracked sidecars restored by
+checkout, the eight untouched biomes' re-rendered thumbnails put back at their committed copies
+(the wetland's new one keeps: its lineup now holds the bromeliad), a minimal sidecar for each of
+the three new GLBs, then the import (uid and the three settings, no texture extracted). `git lfs
+status` lists the GLBs and the JPG as LFS and `palette.json` and the sidecars as Git. At seed 1234
+only the wetland moved (`tests/fixtures/scatter_golden_1234.json` re-pinned): eleven bromeliad rows
+appear and the fallen log drops from five rows to two, because random spaced species of one size
+class share a Matern field (`ScatterPlan._plan_groups`) and the bromeliad joins the log's. The
+bromeliad delivers 0.58 of its palette density in `test_scatter_generator_calibration.gd` (0.67 on
+its 200 ft map; treecube's bench measured 0.75 at full paint over 200 seeds): its canopy avoids and
+the mud take that share, and the density was raised for the mud by the approved factor, not to meet
+the band, so the test pins the ratio at 0.578 with the grass masses' 15 percent. Bench check
+(treecube `out/flow/bromeliad/install_sheets/`, job `bromeliad_install.json`): at the home view of
+map seeds 1234, 1 and 2 the installed palette draws the scene the user approved through P2's
+overlay, the bromeliads at or near P2's spots (in view: P2 3, 4 and 11, installed 4, 5 and 10);
+the one P2 bromeliad that stood on drawn mud (seed 2) is gone and no installed one stands on mud.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
 
