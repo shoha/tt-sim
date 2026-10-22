@@ -13,6 +13,12 @@ env:
   GODOT_VERSION: "4.7.2"
   PROJECT_NAME: "TTSim"
 
+# The job graph: native builds the libraries; then the test job, the Windows and macOS parity
+# jobs and the three exports all run side by side. Signing waits for the exports and for the
+# tests and every parity job to pass, and the release and the Steam upload wait for signing, so
+# nothing is signed, released or uploaded from a build whose tests or parity failed (the export
+# artifacts of such a run just expire after a day). Every job that imports the project restores
+# Godot's import from the Actions cache first (.github/actions/import-cache explains the key).
 jobs:
   # The native scatter library for every platform, debug and release (native.yml), then its
   # parity with GDScript on Windows and macOS (native-parity.yml) beside the test job, which
@@ -77,8 +83,22 @@ jobs:
               /root/.local/share/godot/export_templates/${{ env.GODOT_VERSION }}.stable/linux_$target.x86_64
           done
 
-      - name: Import project
+      # This job saves the Linux import for the next run; the export jobs only restore it.
+      - name: Restore import cache
+        id: import-cache
+        uses: ./.github/actions/import-cache
+        with:
+          godot-version: ${{ env.GODOT_VERSION }}
+
+      - name: Import project (import cache ${{ steps.import-cache.outputs.state }})
         run: godot --headless --import
+
+      - name: Save import cache
+        if: steps.import-cache.outputs.state != 'exact'
+        uses: actions/cache/save@v4
+        with:
+          path: .godot/imported
+          key: ${{ steps.import-cache.outputs.key }}
 
       # Linux's parity: the release library here, the debug one in the full run below
       # (test_scatter_native), which must not show it pending.
@@ -98,9 +118,10 @@ jobs:
       - name: Lint GDScript
         run: gdlint autoloads/ scenes/ utils/ resources/ tests/unit/
 
+  # Beside the tests, not after them: signing is what waits for the tests and parity.
   export:
     name: Export ${{ matrix.preset }}
-    needs: [test, native-parity]
+    needs: native
     runs-on: ubuntu-latest
     container:
       image: barichello/godot-ci:4.7.2
@@ -183,7 +204,14 @@ jobs:
       - name: Write Steam App ID
         run: echo "${{ secrets.STEAM_APP_ID }}" > steam_appid.txt
 
-      - name: Import project
+      # Restored only: the test job saves the Linux import, so three exports never race it.
+      - name: Restore import cache
+        id: import-cache
+        uses: ./.github/actions/import-cache
+        with:
+          godot-version: ${{ env.GODOT_VERSION }}
+
+      - name: Import project (import cache ${{ steps.import-cache.outputs.state }})
         run: godot --headless --import
 
       - name: Export ${{ matrix.preset }}
@@ -209,9 +237,10 @@ jobs:
           path: ${{ matrix.folder }}/
           retention-days: 1
 
+  # Signing is the gate: nothing past this point runs unless the tests and parity passed.
   sign-windows:
     name: Sign Windows executable
-    needs: export
+    needs: [export, test, native-parity]
     runs-on: windows-latest
     steps:
       - name: Download Windows artifact
@@ -251,7 +280,7 @@ jobs:
 
   sign-macos:
     name: Sign and Notarize macOS
-    needs: export
+    needs: [export, test, native-parity]
     runs-on: macos-latest
     steps:
       - name: Checkout
