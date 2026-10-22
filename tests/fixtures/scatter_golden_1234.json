@@ -197,6 +197,9 @@
 		"temperate_forest_summer_s1/Tree_Pine_summer_03": "1:d240dfb8899a4c66784d7f996bf2c8c6"
 	},
 	"wetland_riparian_summer_s1": {
+		"wetland_riparian_summer_s1/Bromeliad_summer_24": "1:5cd031551ad54412e6798ba81f1a1170",
+		"wetland_riparian_summer_s1/Bromeliad_summer_25": "6:1e6a992cab6dc4168c4df8e6e2f2b7ba",
+		"wetland_riparian_summer_s1/Bromeliad_summer_26": "4:773807de1528ccdfdb054ed9242128c3",
 		"wetland_riparian_summer_s1/Bush_Round_summer_04": "12:49449cc8067455c1907cb63ab47e1d20",
 		"wetland_riparian_summer_s1/Fern_summer_09": "7:3320c804d3419140650b617ec54a638b",
 		"wetland_riparian_summer_s1/Fern_summer_10": "7:9dd697211a981691940c96fd08f86046",
@@ -212,7 +215,7 @@
 		"wetland_riparian_summer_s1/Grass_Sedge_summer_16": "623:93e9e508c5284c9e7b02b181116e0e65",
 		"wetland_riparian_summer_s1/Grass_Sedge_summer_17": "604:2f37885191dc895e71332d3b82f85160",
 		"wetland_riparian_summer_s1/Grass_Sprig_summer_20": "366:37a64058bf867b3fad5db247055e0079",
-		"wetland_riparian_summer_s1/Log_Fallen_summer_11": "5:45e5c2dab2af2524601ff39d0a90339b",
+		"wetland_riparian_summer_s1/Log_Fallen_summer_11": "2:c93bef88b5a1ef3c54f79b722e5e0854",
 		"wetland_riparian_summer_s1/Palm_Short_summer_06": "2:abe563d45928494b0b418009f7167c73",
 		"wetland_riparian_summer_s1/Rock_Medium_summer_05": "4:8c190a29002979c82606f5e260b4f79f",
 		"wetland_riparian_summer_s1/Stone_Cluster_summer_07": "2:52c4a9eedfa6a0ccbc90ee3e880dfa23",

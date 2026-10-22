@@ -47,9 +47,11 @@ extends RefCounted
 ## after the automatic cliff and scree took theirs, and painted surfaces cover everything:
 ## painted > rules > accents > biome ground.
 ##
-## Plants do not read accents (contract section 9: "the plant scatter does not read them"):
-## a moss patch under a forest is still forest floor to the scatter. So nothing here has a
-## ScatterGround twin.
+## Plants read accents only where a rule asks: a mass rule's clump `bare` keeps a biome's grass
+## off the patches, and a species' `avoid_bare` keeps that species off them (contract section 9),
+## both through ScatterMass.bare_params, this mask's CPU twin with the ground look's patch shape.
+## Otherwise a moss patch under a forest is still forest floor to the scatter, so nothing here
+## has a ScatterGround twin.
 
 ## Accents per ground component the shader draws (the first entries; the rest are dropped).
 const PER_COMPONENT := GroundLayerTable.ACCENTS_PER_COMPONENT

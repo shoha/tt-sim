@@ -308,6 +308,58 @@ func test_ground_look_merges_over_base() -> void:
 	assert_eq(warnings.size(), 1, "no colours: ignored with a warning")
 
 
+## Species `avoid_bare` (ScatterPlan._plan_masses): the entry that sets it gets the biome's openings
+## with its own margin and its zero level on the edge the shader draws (the look's accent
+## edge_scale), whatever its kind; every other entry plans exactly as without it.
+func test_avoid_bare_gives_only_its_entry_openings_from_the_drawn_edge() -> void:
+	var biome_id := "wetland_riparian_summer_s1"
+	var species: Array[Dictionary] = []
+	for rule in PaletteLibrary.species(biome_id):
+		species.append(rule.duplicate(true))
+	assert_gt(species.size(), 1, "the installed wetland has species")
+	var before := ScatterPlan.build(biome_id, species, 1234)
+	var s := species.size() - 1
+	species[s].avoid_bare = 0.02
+	var after := ScatterPlan.build(biome_id, species, 1234)
+	var own: Array = after.species[s].mass_bare
+	var drawn := ScatterMass.bare_params(biome_id, 1234, 0.0, {})
+	assert_gt(drawn.size(), 0, "the wetland draws ground accents")
+	assert_eq(own.size(), before.species[s].mass_bare.size() + drawn.size(), "its own openings")
+	var edge_scale := float(GroundLook.for_biome(biome_id).accent_shape.edge_scale)
+	assert_lt(edge_scale, 1.0, "the wetland's look narrows the drawn ramp")
+	var record: Array = own[own.size() - 1]
+	var low := float(drawn[drawn.size() - 1][0]) - GroundAccents.EDGE * edge_scale
+	assert_almost_eq(float(record[0]) - GroundAccents.EDGE, low, 1e-6, "zero from the drawn edge")
+	assert_eq(record[3], 0.02, "fading in over its own margin")
+	for i in species.size() - 1:
+		assert_eq(after.species[i].mass_bare, before.species[i].mass_bare, "%d unchanged" % i)
+
+
+## A grass entry that sets `avoid_bare` in a biome whose mass rule sets clump `bare` keeps the
+## clump's openings and adds its own; the other grass entries keep exactly the clump's.
+func test_avoid_bare_adds_to_the_clump_openings_of_grass() -> void:
+	var biome_id := "savanna_summer_s1"
+	var species: Array[Dictionary] = []
+	for rule in PaletteLibrary.species(biome_id):
+		species.append(rule.duplicate(true))
+	var before := ScatterPlan.build(biome_id, species, 1234)
+	var grass: Array[int] = []
+	for i in species.size():
+		if not (before.species[i].mass_bare as Array).is_empty():
+			grass.append(i)
+	assert_gt(grass.size(), 1, "the savanna's mass rule sets clump bare for its grass")
+	species[grass[0]].avoid_bare = 0.01
+	var after := ScatterPlan.build(biome_id, species, 1234)
+	var clump: Array = before.species[grass[0]].mass_bare
+	var both: Array = after.species[grass[0]].mass_bare
+	assert_eq(both.size(), clump.size() * 2, "the clump's openings, then its own")
+	assert_eq(both.slice(0, clump.size()), clump, "the clump's first, unchanged")
+	assert_eq(both[clump.size()][3], 0.01, "then its own margin")
+	for i in species.size():
+		if i != grass[0]:
+			assert_eq(after.species[i].mass_bare, before.species[i].mass_bare, "%d unchanged" % i)
+
+
 func test_golden_rows_equal_pinned() -> void:
 	# The digest hashes raw float bytes, and the platforms' maths libraries differ in the last
 	# bit: CI on Linux generated other bytes for six of nine biomes (boreal_taiga included, which

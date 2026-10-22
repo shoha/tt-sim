@@ -33,6 +33,13 @@ const MASS_DELIVERED := {
 	"savanna_summer_s1 dry_grass": 0.308,
 	"savanna_summer_s1 seed_grass": 0.330,
 	"savanna_summer_s1 short_grass": 0.683,
+	# The wetland bromeliad (treecube 1931dac, installed 2026-10-22): it keeps off the drawn mud
+	# (avoid_bare 0.01) and out from under the canopy (willow 4.1 m, poplar 2.1, palm 2.4, bush
+	# 1.5), and shares the small spaced field with the log, so it delivers about 0.6 of its
+	# palette density here (0.67 on the 200 ft map; treecube's bench measured 0.75 at full paint
+	# over 200 seeds). The user approved that placement (P2 "more", 2026-10-22); the density was
+	# raised for the mud, not to meet this band, so the ratio is pinned rather than the density.
+	"wetland_riparian_summer_s1 bromeliad": 0.578,
 }
 const MASS_PIN := 0.15
 

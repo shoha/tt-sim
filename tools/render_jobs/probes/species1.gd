@@ -4,7 +4,8 @@ extends RefCounted
 ## scripts/bench.py).
 ## `action`:
 ## - `grid` (`biome`, `species`, `n`, `cols`, `spacing` m, `shift` [dx, dz] m): places `n` props of
-##   the species on a grid centred `shift` from the ground point at the screen centre, then pans
+##   the species on a grid centred `shift` from the ground point at the screen centre (its assets
+##   dealt evenly, each row and column holding every one when there are as many columns), then pans
 ##   the camera by `shift` so the grid sits at the centre of the view.
 ## - `only` (`keep`: substrings): hides every MultiMeshInstance3D under the map whose name holds
 ##   none of them; `keep` empty hides them all. Logs a few names.
@@ -40,11 +41,16 @@ static func _grid(base: Node, gm: GameMap, step: Dictionary) -> String:
 	var cols := int(step.get("cols", 3))
 	var s := float(step.get("spacing", 2.0))
 	var rows := ceili(float(n) / cols)
+	var assets: Array = rule.get("assets", [])
 	for i in range(n):
 		var x := cx + (float(i % cols) - (cols - 1) * 0.5) * s
 		var z := cz + (float(int(i / cols)) - (rows - 1) * 0.5) * s
 		var p: Vector3 = c.brush.bedded(Vector3(x, 0.0, z))
-		c.editor.place_prop(rule, p, Vector3.UP)
+		# Deal the species' assets evenly, shifted one per row, so every row and column holds each.
+		var one := rule.duplicate()
+		if not assets.is_empty():
+			one["assets"] = [assets[(i % cols + int(i / cols)) % assets.size()]]
+		c.editor.place_prop(one, p, Vector3.UP)
 		c.editor.commit_prop_edit()
 	holder.global_position += Vector3(float(shift[0]), 0.0, float(shift[1]))
 	return "placed %d %s at %.1f %.1f" % [n, step.species, cx, cz]

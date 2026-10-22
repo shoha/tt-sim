@@ -68,6 +68,21 @@ func test_painted_cell_rows_equal_gdscript_for_every_biome() -> void:
 		_assert_same_rows(doc, biome_id, _work(doc, biome_id, Vector2i.ZERO))
 
 
+## Species `avoid_bare` on every rule (openings on entries of any kind, and on savanna grass the
+## clump's openings plus its own) places the same rows natively.
+func test_avoid_bare_rows_equal_gdscript() -> void:
+	if _skip_without_library():
+		return
+	for biome_id in ["wetland_riparian_summer_s1", "savanna_summer_s1"]:
+		var doc := _painted_doc(biome_id, Vector2i.ZERO)
+		var work := _work(doc, biome_id, Vector2i.ZERO)
+		var species: Array[Dictionary] = []
+		for rule: Dictionary in work.species:
+			species.append(rule.merged({"avoid_bare": 0.02}, true))
+		work.species = species
+		_assert_same_rows(doc, biome_id, work)
+
+
 func test_regen_run_gives_the_same_result_native_and_forced_to_gdscript() -> void:
 	if _skip_without_library():
 		return
