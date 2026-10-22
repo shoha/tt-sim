@@ -283,6 +283,7 @@ jobs:
         shell: bash
         run: PARITY_TARGETS=template_release bash .github/native/parity.sh godot
 
+      # The same sharded run as build.yml's test job (2 shards, 5.75 min on branch ci/gut-shards).
       - name: Run unit tests with the library
         shell: bash
         run: |
