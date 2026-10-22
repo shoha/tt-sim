@@ -33,6 +33,11 @@ const MASS_DELIVERED := {
 	"savanna_summer_s1 dry_grass": 0.308,
 	"savanna_summer_s1 seed_grass": 0.330,
 	"savanna_summer_s1 short_grass": 0.683,
+	# The sword rosette (treecube 0818ee7, installed 2026-10-21): its clumps (0.9 m radius, 1.2 m
+	# children spacing) and its avoid rules deliver about 5 percent of its palette density, a few
+	# rare red accents per view. The user kept that look over a denser badlands ("Keep as
+	# approved", 2026-10-21); pinned until treecube states the density it delivers.
+	"rocky_badlands_summer_s1 sword_rosette": 0.047,
 }
 const MASS_PIN := 0.15
 

@@ -1278,7 +1278,13 @@ none in the golden's 24 m square, 9 plants in an 80 m square at full painted den
 of its 0.0264 per square metre). `test_scatter_generator_calibration.gd` measures it delivering
 0.047 of that density, under its floor of 0.091 (0.55 of the plan's packing cap, 0.165: the
 clump of 0.075 parents per square metre, 0.9 m radius and children 1.2 m apart cannot hold the
-density, and five avoid relations thin it further), and was left failing for a decision. No code
+density, and five avoid relations thin it further). The user kept that sparse look over a denser
+badlands ("Keep as approved", 2026-10-21), so the test pins the rosette's ratio at 0.047 with the
+grass masses' 15 percent, until treecube states the density the rosette delivers. Bench check
+(treecube `out/bench/rosette_install`, `_bell`, `_bush`, each round's `install_diff.txt`): the
+installed palette's `_sub` frames equal the overlay's, through which the user approved the looks,
+on every view of the badlands and the grassland; alpine's turned views differ on 13 to 16 pixels by
+one level, and birch's frames, bare ones included, only in a 64 px band at the right edge. No code
 change, no saved map migrated.
 
 ## 10. Avatar kit (figurine -> tt-sim, for player avatar tokens)
