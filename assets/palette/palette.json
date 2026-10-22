@@ -1,6 +1,6 @@
 {
  "format": 1,
- "palette_version": "0818ee7-dirty",
+ "palette_version": "936bbbe-dirty",
  "surfaces": {
   "ash": {
    "albedo": "surfaces/ash/ash_albedo.png",
@@ -4645,8 +4645,8 @@
      "key": "sword_rosette",
      "kind": "grass",
      "size_class": "small",
-     "density_per_m2": 0.0264,
-     "min_spacing_m": 1.2,
+     "density_per_m2": 0.001344,
+     "min_spacing_m": 0.8,
      "slope_max_deg": 55.0,
      "scale_spread": 0.3,
      "scale_floor": 0.5,
@@ -4693,12 +4693,7 @@
        "scale_revert": true
       }
      },
-     "clump": {
-      "parents_per_m2": 0.075,
-      "radius_m": 0.9,
-      "transition_m": 0.6,
-      "children_spacing_m": 1.2
-     },
+     "clump": null,
      "near": [],
      "avoid": [
       {
