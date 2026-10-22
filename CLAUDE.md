@@ -84,6 +84,11 @@ a `static var` ordering violation in a file no one in that session had touched; 
 broken CI for three pushes, and the tag had to be moved and the release pipeline re-run. The
 release steps are in `AGENTS.md` "Cutting a release"; cutting a version needs the user's OK.
 
+One gate per tree: a merge whose tree equals the tree that already passed needs no second run.
+After a `--no-ff` merge onto a main that has not moved, `git -C D:/dev/tabletop/tt-sim rev-parse
+<branch>^{tree} main^{tree}` prints the same hash twice (2026-10-22: the bromeliad install ran
+the full suite twice on one tree, 9.4 minutes each).
+
 ## Godot CLI
 
 ```
