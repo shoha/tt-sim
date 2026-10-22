@@ -10,8 +10,8 @@ code. Do not run `gdformat`: a hook formats every `.gd` edit.
 
 Commands, strictly: only commands starting with `git`, `godot` or `gdlint` are
 pre-approved; one command per Bash call; no `cd`, no `&&` or `;` chains, no heredocs, no
-`bash -c`, no `$(...)`; absolute paths. Run the full GUT in the foreground with `timeout`
-600000 (it takes about 4 minutes), or in the background and wait for the completion
+`bash -c`, no `$(...)`; absolute paths. Run the sharded GUT runner in the foreground with
+`timeout` 600000 (it takes about 1.5 minutes), or in the background and wait for the completion
 notification; never poll an output file with `tail`.
 
 Steps, in order, stopping at the first failure:
@@ -22,10 +22,12 @@ Steps, in order, stopping at the first failure:
    shell is already there; if not, lint each named file by absolute path instead and say
    that the whole-tree lint was not run).
 2. `godot --headless --path D:/dev/tabletop/tt-sim --quit-after 1`.
-3. `godot --headless --path D:/dev/tabletop/tt-sim --script res://addons/gut/gut_cmdln.gd --
-   -gconfig=tests/.gutconfig.json`. The `gut_loader.gd:35` startup SCRIPT ERROR is
-   known noise. The output is filtered by a hook; the raw log is at
-   `.godot/last_godot_output.txt`.
+3. `godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/gut_shards.gd`
+   (the sharded runner, the gate's test run since 2026-10-22; not the serial
+   `gut_cmdln.gd`). It prints one line per shard, each failing test and the totals, and exits 1
+   on any failure, crash or a shard past 900 s; the hook does not filter it. Each shard's GUT log is
+   under `user://gut_shards/`. If you stop it early its shards keep running: run the process
+   check and stop them by id.
 4. If the brief asks for a commit: `git -C D:/dev/tabletop/tt-sim add <the named files>`, then
    `git -C D:/dev/tabletop/tt-sim commit` with the message the brief gives, verbatim. Never push,
    never add files the brief did not name, never commit if any step above failed.

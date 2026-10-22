@@ -97,6 +97,8 @@
 		"res://tests/unit/test_scatter_ground_rules.gd",
 		"res://tests/unit/test_scatter_mass.gd",
 		"res://tests/unit/test_scatter_native.gd",
+		"res://tests/unit/test_scatter_native_landforms_dry.gd",
+		"res://tests/unit/test_scatter_native_landforms_wet.gd",
 		"res://tests/unit/test_scatter_apply.gd",
 		"res://tests/unit/test_scatter_arrival.gd",
 		"res://tests/unit/test_scatter_regen_live.gd",

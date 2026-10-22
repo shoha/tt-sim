@@ -42,6 +42,10 @@ const MASS_DELIVERED := {
 	"wetland_riparian_summer_s1 bromeliad": 0.578,
 }
 const MASS_PIN := 0.15
+## A regression guard on each biome's whole 200 ft map (ms), not a budget: the densest, the
+## savanna, measured about 9 s on 2026-10-22. The density test's one generation per biome is
+## the whole-map timing; the timing test no longer generates the map again.
+const WHOLE_MAP_GUARD_MS := 15000.0
 
 
 func before_all() -> void:
@@ -164,6 +168,7 @@ func test_every_biome_delivers_the_palette_density() -> void:
 		for asset_id in rows:
 			total += rows[asset_id].size() / ScatterGenerator.ROW_STRIDE
 		timings.append("%-26s %6d instances %8.1f ms" % [biome.id, total, elapsed])
+		assert_lt(elapsed, WHOLE_MAP_GUARD_MS, "%s: the whole 200 ft map" % biome.id)
 		_assert_spacing(biome.id, the_plan, rows)
 		var tiers := {}
 		for size_class in ["large", "medium", "small"]:
@@ -222,8 +227,9 @@ func test_every_biome_delivers_the_palette_density() -> void:
 		gut.p("whole 200 ft map: " + line)
 
 
-func test_timing_of_one_chunk_four_chunks_and_the_whole_map() -> void:
-	# The densest biome by total target density is the worst case for a brush dab.
+func test_timing_of_one_chunk_and_four_chunks() -> void:
+	# The densest biome by total target density is the worst case for a brush dab. Its whole
+	# map is timed (and guarded) once, by the density test.
 	var densest := ""
 	var most := 0.0
 	for biome in PaletteLibrary.biomes():
@@ -239,7 +245,6 @@ func test_timing_of_one_chunk_four_chunks_and_the_whole_map() -> void:
 		"one chunk": [Vector2i(0, 0)] as Array[Vector2i],
 		"four chunks":
 		[Vector2i(-1, -1), Vector2i(0, -1), Vector2i(-1, 0), Vector2i(0, 0)] as Array[Vector2i],
-		"whole map": ScatterGenerator.cells_in_bounds(bounds),
 	}
 	for label in runs:
 		var best := INF

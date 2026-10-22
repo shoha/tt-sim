@@ -171,7 +171,13 @@ After editing files, format them so output matches project style. See `.cursor/r
 
 `godot` must be on PATH (bash wrapper at `~/.local/bin/godot` pointing to the local install).
 
-**Run all unit tests (headless):**
+**Run all unit tests (headless)** with the sharded runner, which is the pre-push gate's test run
+(user, 2026-10-22; about 81 s against about 600 s serial; `-n=<shards>` and `-gconfig=<config>`
+are optional):
+```
+godot --headless --path . --script res://tools/gut_shards.gd
+```
+The serial form runs one ordered process, for debugging an order-dependent failure, not as the gate:
 ```
 godot --headless --path . --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json
 ```

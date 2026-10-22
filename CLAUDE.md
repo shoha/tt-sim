@@ -72,8 +72,15 @@ an earlier session and will still fail CI and block a release:
 ```
 gdlint autoloads/ scenes/ utils/ resources/ tests/unit/
 godot --headless --path D:/dev/tabletop/tt-sim --quit-after 1
-godot --headless --path D:/dev/tabletop/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json
+godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/gut_shards.gd
 ```
+
+The third line is the sharded GUT runner (`tools/gut_shards.gd`), the gate's test run in place of
+the serial one (user, 2026-10-22): about 81 s at 8 shards against about 600 s serial. It prints
+one line per shard, each failing test and the totals, exits 1 on any failure, crash or a shard
+past 900 s, and keeps each shard's log under `user://gut_shards/`. If you stop it early its
+shards keep running: run the process check and stop them by id. The serial command (Godot CLI
+below) is for running one ordered process, for example when debugging an order-dependent failure.
 
 Run the `gdlint` line with `D:/dev/tabletop/tt-sim` as the working directory: gdlint reads `.gdlintrc`
 only from the current directory, and run from `D:/dev/tabletop` it reports false max-public-methods and
@@ -87,7 +94,7 @@ release steps are in `AGENTS.md` "Cutting a release"; cutting a version needs th
 One gate per tree: a merge whose tree equals the tree that already passed needs no second run.
 After a `--no-ff` merge onto a main that has not moved, `git -C D:/dev/tabletop/tt-sim rev-parse
 <branch>^{tree} main^{tree}` prints the same hash twice (2026-10-22: the bromeliad install ran
-the full suite twice on one tree, 9.4 minutes each).
+the full suite twice on one tree, 9.4 minutes each, serial).
 
 ## Godot CLI
 
@@ -95,7 +102,13 @@ the full suite twice on one tree, 9.4 minutes each).
 # Syntax check (prints all compile errors, exits)
 godot --headless --path D:/dev/tabletop/tt-sim --quit-after 1
 
-# Run all unit tests (about 4 minutes)
+# Run all unit tests: the gate's run, split across processes (tools/gut_shards.gd; default
+# half the logical processors, at most 8; -n=<shards>, -gconfig=<config>): about 81 s at 8
+# shards, 65 s at 12 on the 24-thread dev machine
+godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/gut_shards.gd -- -n=8
+
+# The same scripts in one ordered process (about 10 minutes, 2026-10-22): for debugging an
+# order-dependent failure, not the gate
 godot --headless --path D:/dev/tabletop/tt-sim --script res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json
 
 # Named subsets for the inner loop; the full run is still required before a commit
@@ -109,10 +122,14 @@ godot --headless --import --path D:/dev/tabletop/tt-sim
 ```
 
 The subsets (AGENTS.md "Running tests from the CLI" says what each covers): avatar and tokens
-(about 2.5 s), net (under 1 s) and ui (about 10 s) are quick. Authoring takes about 220 s of
-the full run's 236 s, because the five landform recipe scripts alone take about 115 s, so narrow
-it with `-gselect=<part of a script name>` while iterating. Add a new test script to every
-subset it belongs to; `test_gut_subsets.gd` fails if a subset lists a missing script.
+(about 2.5 s), net (under 1 s) and ui (about 10 s) are quick. Authoring holds most of the full
+run (the scatter parity and calibration scripts about 125 s, the six landform recipe scripts
+about 150 s), so narrow it with `-gselect=<part of a script name>` while iterating, or shard
+it (`-gconfig=tests/.gutconfig_authoring.json` on the runner). Add a new test script to every
+subset it belongs to; `test_gut_subsets.gd` fails if a subset lists a missing script. The
+runner prints one line per shard, each failing test and the totals; a failing shard's full
+GUT log is under `user://gut_shards/`. Refresh its committed weights (`tests/gut_times.json`)
+with `--write-times` when a script's time changes a lot; stale weights only unbalance shards.
 
 After any batch of file renames/deletions (e.g. a multi-step refactor), re-run the import step
 before the user reopens the editor. See AGENTS.md's "Running tests from the CLI" section for why

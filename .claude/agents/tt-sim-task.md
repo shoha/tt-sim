@@ -22,14 +22,15 @@ A command off the allowlist costs a classifier check, or a user prompt outside a
 - Scripts are written with the Write tool and run by path. Render jobs use the one fixed
   command form in `tools/render_jobs/README.md` (job name after `--`, flags `--saved`,
   `--only`, and `--full` for verdict captures) so the user approves it once.
-- Wait for a long run (full GUT is about 4 minutes; render jobs) with a foreground
+- Wait for a long run (the sharded GUT runner is about 1.5 minutes; render jobs) with a foreground
   `timeout` up to 600000, or in the background with Monitor or the completion
   notification. Never poll an output file with `tail`.
 - Read, Grep and Glob for reading and searching, never `grep`, `find` or `cat` in Bash.
   Read a file before editing it (CRLF working copies). Never write scripts to do string
   replacement in source files.
-- The full test run and the compile check are output-filtered by a hook; the raw log is
-  at `.godot/last_godot_output.txt` if a failure needs more context.
+- The compile check is output-filtered by a hook; the raw log is at
+  `.godot/last_godot_output.txt` if a failure needs more context. The sharded GUT runner
+  prints compactly and is not filtered; its shard logs are under `user://gut_shards/`.
 
 ## Files
 
@@ -46,9 +47,10 @@ A command off the allowlist costs a classifier check, or a user prompt outside a
 1. `gdlint` each touched `.gd` by absolute path. Do not run `gdformat`: a hook formats
    every `.gd` edit.
 2. `godot --headless --path D:/dev/tabletop/tt-sim --quit-after 1` (compile and shader errors).
-3. Full GUT: `godot --headless --path D:/dev/tabletop/tt-sim --script
-   res://addons/gut/gut_cmdln.gd -- -gconfig=tests/.gutconfig.json`. Report the totals
-   verbatim. The `gut_loader.gd:35` startup SCRIPT ERROR is known GUT noise. Name any
+3. Full GUT, sharded: `godot --headless --path D:/dev/tabletop/tt-sim --script
+   res://tools/gut_shards.gd` (the serial `gut_cmdln.gd` run is only for debugging an
+   order-dependent failure). If you stop it early, its shards keep running: stop them by id
+   after the process check. Report the totals verbatim. The `gut_loader.gd:35` startup SCRIPT ERROR is known GUT noise. Name any
    unrelated pre-existing failure; do not fix it.
 4. Commit in tt-sim with `git -C D:/dev/tabletop/tt-sim`, only the files of this task, a message
    in the repo's style (`git -C D:/dev/tabletop/tt-sim log --oneline -10` shows it), ending with
