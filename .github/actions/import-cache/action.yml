@@ -1,0 +1,89 @@
+name: Restore Godot's import cache
+description: >
+  Restores .godot/imported, Godot's imported copy of every asset, from the Actions cache, so
+  the next `godot --import` imports only what changed. Outputs the key to save under and
+  whether the restore was an exact hit, a partial one or a miss.
+
+# Godot decides per asset whether to import again from its own checks, not from modification
+# times: the asset's .import sidecar, the imported files the sidecar names, and the md5 of the
+# source and of those files (kept in .godot/imported as <name>-<hash>.md5). So a fresh
+# checkout's new times do not matter, and nothing else under .godot needs caching (the
+# filesystem cache, the class cache and uid_cache.bin are rebuilt by the scan). Measured
+# locally on 2026-10-22: a cold import of the project took 62 s and imported 691 assets; with
+# only .godot/imported kept and every tracked file touched, it took 22 s and imported none.
+#
+# The key is per OS (imported textures differ by platform) and Godot version, plus a hash of
+# the git blob ids of every imported asset and of its sidecar: it changes exactly when an asset
+# or its import settings do. restore-keys falls back to the newest entry for the OS and version,
+# so a changed asset imports only itself: Godot sees its new md5. A changed sidecar alone is
+# not seen, though: with no filesystem cache, the same probe with one texture's sidecar turned
+# to mipmaps/generate=true kept the old import. So each entry carries the asset list it was
+# built from (.godot/imported/import-assets-id), and after a partial restore every asset whose
+# sidecar line differs loses its imported files, which Godot does notice (the probe then
+# imported exactly that texture). Leftovers of deleted assets ride along in the entry until the
+# Godot version changes the key (or `gh cache delete` drops it).
+#
+# The caller imports, then saves with actions/cache/save under outputs.key unless the state is
+# "exact" (that key exists already). One job per OS and run saves: the test job (build.yml) or
+# the branch check (native.yml) for Linux, and each parity job (native-parity.yml) for its own
+# OS. The export jobs only restore, so no two jobs race to save one key.
+
+inputs:
+  godot-version:
+    description: The Godot version, part of the key.
+    required: true
+
+outputs:
+  key:
+    description: The key to save the import under after importing.
+    value: ${{ steps.restore.outputs.cache-primary-key }}
+  state:
+    description: exact, partial (an older entry for this OS and version) or miss.
+    value: ${{ steps.restore.outputs.cache-hit == 'true' && 'exact' || (steps.restore.outputs.cache-matched-key != '' && 'partial' || 'miss') }}
+
+runs:
+  using: composite
+  steps:
+    # Every tracked .import sidecar, and the index line (mode, blob id, path) of each sidecar
+    # and of the asset it belongs to. Container jobs need the workspace marked safe for git.
+    - name: List imported assets
+      shell: bash
+      run: |
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        git -c core.quotePath=false ls-files -- '*.import' > .import-sidecars
+        git -c core.quotePath=false ls-files -s |
+          awk -F '\t' 'NR == FNR { sidecar[$0] = 1; next } $2 ~ /\.import$/ || sidecar[$2 ".import"]' \
+            .import-sidecars - > .import-assets-id
+        echo "$(wc -l < .import-sidecars) imported assets"
+
+    - name: Restore import cache
+      id: restore
+      uses: actions/cache/restore@v4
+      with:
+        path: .godot/imported
+        key: import-${{ runner.os }}-${{ inputs.godot-version }}-${{ hashFiles('.import-assets-id') }}
+        restore-keys: import-${{ runner.os }}-${{ inputs.godot-version }}-
+
+    # A partial restore: drop the imports of every asset whose sidecar is new or changed since
+    # the entry was built (by file name, so a same-named asset elsewhere imports again too,
+    # which costs only time). Then the entry to be saved carries the current list.
+    - name: Drop imports whose settings changed
+      shell: bash
+      run: |
+        old=.godot/imported/import-assets-id
+        if [ "${{ steps.restore.outputs.cache-hit }}" != "true" ] && [ -d .godot/imported ]; then
+          if [ ! -f "$old" ]; then
+            echo "The entry carries no asset list; importing everything."
+            rm -rf .godot/imported
+          else
+            awk -F '\t' 'NR == FNR { seen[$0] = 1; next } !seen[$0] && $2 ~ /\.import$/ { print $2 }' \
+              "$old" .import-assets-id |
+              while IFS= read -r sidecar; do
+                asset=${sidecar%.import}
+                echo "New or changed import settings: $asset"
+                rm -f .godot/imported/"${asset##*/}"-*
+              done
+          fi
+        fi
+        mkdir -p .godot/imported
+        cp .import-assets-id "$old"
