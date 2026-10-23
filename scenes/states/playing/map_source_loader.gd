@@ -64,6 +64,8 @@ var is_superseded: Callable = func() -> bool: return false
 ## The document load_async() read (or build_async() was given), or null when there is none
 ## or it could not be read.
 var document: MapDocument = null
+## FoliageLibrary.adapt_async's report for the document load_async() read ({} before one).
+var library_adaptation: Dictionary = {}
 ## The water geometry the authored root's worker built (AuthoredLoadPrep.WATER), for
 ## add_authored_water(); {} otherwise.
 var _prepared_water: Dictionary = {}
@@ -105,6 +107,10 @@ func load_async(glb_path: String, document_path: String) -> Node3D:
 				push_error("MapSourceLoader: Map document could not be read: " + document_path)
 				return null
 			report_document_problem("Map document could not be read: " + document_path)
+		else:
+			cells = await adapt_to_library(document, cells)
+			if is_superseded.call():
+				return null
 	return await _build_async(glb_path, cells)
 
 
@@ -117,6 +123,21 @@ func build_async(glb_path: String, doc: MapDocument) -> Node3D:
 	if doc != null:
 		cells = cells_of_document(doc, props_apart(doc, _apart()))
 	return await _build_async(glb_path, cells)
+
+
+## Makes the document's scatter rows resolve in the active foliage library
+## (FoliageLibrary.adapt_async): rows whose assets the palette lacks (a map saved under the
+## other library) are regenerated from the biome painting, announced once with a toast and a
+## log line. Returns `cells` re-split when the rows changed, else `cells` itself.
+func adapt_to_library(doc: MapDocument, cells: Dictionary) -> Dictionary:
+	var adapted := await FoliageLibrary.adapt_async(doc, tree)
+	library_adaptation = adapted
+	var text := FoliageLibrary.describe(adapted)
+	if text == "":
+		return cells
+	print("MapSourceLoader: " + text)
+	UIManager.show_toast(text, UIManager.TOAST_INFO, 6.0)
+	return cells_of_document(doc, props_apart(doc, _apart()))
 
 
 ## True when props go in their own node and both scatter nodes are made even empty.
