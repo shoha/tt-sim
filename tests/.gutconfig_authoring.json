@@ -34,6 +34,7 @@
 		"res://tests/unit/test_fire_sound.gd",
 		"res://tests/unit/test_fire_stroke.gd",
 		"res://tests/unit/test_foliage_budget.gd",
+		"res://tests/unit/test_foliage_library.gd",
 		"res://tests/unit/test_foliage_light.gd",
 		"res://tests/unit/test_glb_check.gd",
 		"res://tests/unit/test_glb_utils_collision.gd",

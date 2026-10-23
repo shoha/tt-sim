@@ -412,6 +412,14 @@ static func representative_assets() -> Array[String]:
 	return _representative_ids.duplicate()
 
 
+## Forgets the representative assets and their surface formats, which key on the default
+## palette: call it when the palette changes (FoliageLibrary.apply), or check_layout() keeps
+## judging against assets the palette no longer holds.
+static func reset_caches() -> void:
+	_representative_ids = []
+	_representative_formats = {}
+
+
 ## The representatives among `wind_ids` (wind assets in palette order): the first, plus the
 ## first stemmed "Flower_*" unless the first is one already. A stemless "Flower_Carpet_*"
 ## draws with the common layout (since treecube 20d9451), so it is not the flower to take
