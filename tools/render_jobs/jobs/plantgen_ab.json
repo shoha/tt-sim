@@ -1,0 +1,43 @@
+{
+ "out_dir": "render_jobs/plantgen_ab",
+ "timeout_s": 900,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "foliage_library", "name": "treecube"},
+  {"op": "new_map", "biome": "alpine_meadow_summer_s1", "seed": 1234},
+  {"op": "wait_ready", "settle": 3.0}, {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/tree_fade.gd", "factor": 0},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "nocursor"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "wind", "freeze": true},
+  {"op": "home"}, {"op": "settle"},
+  {"op": "capture", "name": "a_treecube_home", "desc": "alpine seed 1234, the installed treecube palette, home view, fades off"},
+  {"op": "zoom", "size": 14}, {"op": "look_at", "at": [0, 0]}, {"op": "settle"},
+  {"op": "capture", "name": "a_treecube_close", "desc": "treecube, zoomed to size 14 at the map centre; the camera is left alone by the switch"},
+
+  {"op": "foliage_library", "name": "plantgen", "package": "D:/dev/plantgen/out/ttsim_package_plantgen_all"},
+  {"op": "wait_ready", "settle": 3.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/tree_fade.gd", "factor": 0},
+  {"op": "wind", "freeze": true},
+  {"op": "settle"},
+  {"op": "capture", "name": "b_plantgen_close", "desc": "plantgen, same camera as a_treecube_close (not reset), scatter regenerated from the same biome painting"},
+  {"op": "home"}, {"op": "settle"},
+  {"op": "capture", "name": "b_plantgen_home", "desc": "plantgen, home view"},
+
+  {"op": "foliage_library", "name": "treecube"},
+  {"op": "wait_ready", "settle": 3.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/tree_fade.gd", "factor": 0},
+  {"op": "wind", "freeze": true},
+  {"op": "settle"},
+  {"op": "capture", "name": "c_treecube_home", "desc": "back to treecube, home view: equal to a_treecube_home when the overlay is fully removed"},
+
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "index", "title": "treecube against plantgen foliage, same map", "intro": "A new 200 ft alpine map (seed 1234), built once in authoring and never saved. a_* with the installed treecube palette (home, then size 14 at the map centre); the foliage_library op then serves the plantgen package (D:/dev/plantgen/out/ttsim_package_plantgen_all, nine biomes) and reopens the map from its document in memory, which regenerates the scatter from the same biome painting: b_* are the same two cameras (never reset), so ground, rocks (shared assets) and framing match and only the plants differ. c_treecube_home returns to treecube and should equal a_treecube_home. Occlusion fade, close-zoom canopy fade and the brush fade are held off, the wind is frozen."}
+ ]
+}

@@ -217,6 +217,8 @@ func _process(delta: float) -> void:
 			done = _settle(step)
 		"palette_overlay":
 			_palette_overlay(step)
+		"foliage_library":
+			_foliage_library(step)
 		"place_seed":
 			var c := ctrl()
 			if c != null and c.editor != null:
@@ -410,6 +412,46 @@ func _palette_overlay(step: Dictionary) -> void:
 				warnings.size(),
 				(" (first: %s)" % warnings[0]) if not warnings.is_empty() else "",
 				report["msec"],
+			]
+		)
+	)
+
+
+## `foliage_library`: serves the foliage library `name` ("treecube" or "plantgen") from now on
+## (FoliageLibrary.switch, which does not persist it here) and, when a map is open, rebuilds it
+## from the document in memory (Root's handler of EventBus.foliage_library_changed); follow it
+## with `wait_ready`. `package` names the plantgen folder (else the saved one). `fades_off`
+## (default true) holds the occlusion fade and the close-zoom canopy fade off, so two captures
+## differ by the plants alone. A switch that fails stops the job, since every capture after it
+## would show the wrong plants.
+func _foliage_library(step: Dictionary) -> void:
+	var result := FoliageLibrary.switch(
+		String(step.get("name", FoliageLibrary.TREECUBE)), String(step.get("package", "")), false
+	)
+	if not result["ok"]:
+		log_line("foliage library FAILED: %s; stopping the job" % result["error"])
+		_i = steps.size()
+		return
+	if bool(step.get("fades_off", true)) and gm() != null:
+		gm().set_occlusion_fade_enabled(false)
+		CanopyFade.play_strength = 0.0
+	var report: Dictionary = result["report"]
+	log_line(
+		(
+			"foliage library %s: %d assets in the palette%s"
+			% [
+				result["library"],
+				(PaletteLibrary.get_palette()["assets"] as Dictionary).size(),
+				(
+					", package %d parsed, %d kept, %d failed"
+					% [
+						(report["parsed"] as Array).size(),
+						(report["kept"] as Array).size(),
+						(report["failed"] as Array).size(),
+					]
+					if not report.is_empty()
+					else ""
+				),
 			]
 		)
 	)
