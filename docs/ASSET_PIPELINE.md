@@ -393,6 +393,17 @@ Producer: `treecube/scripts/build_palette.py` (runs `scripts/garden.py --palette
 biome and season, sequentially). Consumer: `utils/palette_library.gd` (`PaletteLibrary`),
 whose `resolver()` feeds `ScatterGlbUtils.build_scatter()`.
 
+A second producer, plantgen (`D:/dev/plantgen`, `tools/build_ttsim_package_cli.gd`), writes a
+package in this same shape (`palette.json` format 1, `assets/<biome id>/*.glb`, the same nine biome
+ids and species keys, its own asset names) into a folder outside the repo. The consumer serves it
+instead of the installed palette when the dev setting `foliage/package_path` names it and the
+`foliage/library` choice is `plantgen` (2026-10-23; `FoliageLibrary`, `docs/systems/palette.md`
+"Foliage library"). Nothing in this contract changes for it; it is a palette like any other, laid
+over the installed one per biome by `PaletteLibrary.overlay_package`, so a package must keep each
+biome's id and species keys for authored maps to keep their painting and rules. Scatter rows a map
+saved under one library names an asset the other lacks are regenerated from the biome painting at
+load, never migrated.
+
 ### Layout
 
 ```

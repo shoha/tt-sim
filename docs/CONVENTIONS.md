@@ -380,6 +380,7 @@ Settings use a single `user://settings.cfg` (ConfigFile) but are **decentralized
 | `updates` | `check_prereleases` | `UpdateManager`, `SettingsMenu` |
 | `controls` | `input_profile` | `InputProfile` |
 | `ui` | `show_values`, `interface_size` | `UiPreferences` |
+| `foliage` | `library` (`treecube` default, `plantgen`), `package_path` (a plantgen package folder, empty by default; dev setting, no menu row) | `FoliageLibrary`, the F3 debug panel |
 
 ### Adding New Settings
 

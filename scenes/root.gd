@@ -88,6 +88,10 @@ func _ready() -> void:
 	# Apply saved graphics settings (fullscreen, vsync) before any UI is shown
 	SettingsMenu.apply_startup_graphics_settings()
 
+	# The saved foliage library (a dev setting) before anything reads the palette, the graphics
+	# warm-up included.
+	FoliageLibrary.apply_saved()
+
 	# Setup core systems
 	_setup_level_play_controller()
 	_setup_app_menu()
@@ -103,6 +107,7 @@ func _ready() -> void:
 	EventBus.pause_requested.connect(func(): push_state(State.PAUSED))
 	EventBus.resume_requested.connect(func(): pop_state())
 	EventBus.open_editor_requested.connect(_on_open_editor_requested)
+	EventBus.foliage_library_changed.connect(_on_foliage_library_changed)
 
 	# Skip in-app updates for Steam users — Steam handles updates. The check starts on the
 	# first title screen, so its dialog cannot open over the graphics warm-up.
@@ -110,6 +115,29 @@ func _ready() -> void:
 
 	# Enter initial state
 	push_state(boot_state(GraphicsWarmup.should_run()))
+
+
+## FoliageLibrary switched the palette: rebuild the open map so its scatter draws the new
+## plants. Authoring reopens from its document in memory (camera, tool and biome kept). A solo
+## table reloads its level through play_level, which sets the tokens out again from the level's
+## saved placements; a networked table is left alone, since a reload would clear every peer's
+## table, and says so.
+func _on_foliage_library_changed(_library: String) -> void:
+	match get_current_state():
+		State.AUTHORING:
+			if _authoring_controller:
+				_authoring_controller.reopen_async()
+		State.PLAYING:
+			var level := _level_play_controller.active_level_data
+			if level == null or _level_play_controller.is_loading():
+				return
+			if NetworkManager.is_networked():
+				UIManager.show_toast(
+					"Foliage library changed. Reload the map to draw it.", UIManager.TOAST_INFO
+				)
+				return
+			pending_level = level
+			_level_play_controller.play_level(level)
 
 
 func _setup_download_notifications() -> void:

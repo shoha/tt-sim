@@ -14,7 +14,50 @@ rules, shipped inside tt-sim under `assets/palette/` (Git LFS) and installed by 
 | `utils/palette_library.gd` | `PaletteLibrary` | Static, cached per root, default root `res://assets/palette`. Reads `palette.json` lazily on first use; the read access, `resolver()` and `resolve()` |
 | `assets/palette/` | | The built-in palette: `palette.json`, the asset GLBs and their committed `.glb.import` sidecars |
 | `utils/scatter_glb_utils.gd` | `ScatterGlbUtils` | `build_scatter()`, the resolver-driven scatter core that `process_scatter_instances()` wraps for GLB maps |
-| `utils/wind_foliage.gd` | `WindFoliage` | `apply_material`, which mutates surface materials in place; `classify_category()` |
+| `utils/wind_foliage.gd` | `WindFoliage` | `apply_material`, which mutates surface materials in place; `classify_category()`; `reset_caches()` (the warm-up representatives) |
+| `utils/palette_overlay.gd` | `PaletteOverlay` | A built package folder laid over the loaded palette (`PaletteLibrary.overlay_package`) |
+| `utils/foliage_library.gd` | `FoliageLibrary` | The runtime choice between the installed palette and a plantgen package (below) |
+
+## Foliage library (treecube or plantgen)
+
+Added 2026-10-23 so two foliage libraries can be compared in the running game. `treecube` (the
+default) is the installed palette; `plantgen` is a package built by `D:/dev/plantgen/tools/
+build_ttsim_package_cli.gd`, a folder in `build_palette.py`'s shape that stays outside the repo.
+
+- Setting: `user://settings.cfg` section `foliage`, keys `library` (`treecube` or `plantgen`) and
+  `package_path` (the package folder, empty by default; a dev setting with no menu row). The F3
+  debug panel's "Foliage library: plantgen" checkbox exists only when `package_path` holds a
+  `palette.json`; checking it serves the package, unchecking it the installed palette, and the
+  choice is persisted. Root applies the saved choice at startup, before the graphics warm-up.
+- `FoliageLibrary.apply()` is the one place that applies a choice: it clears `PaletteLibrary`'s
+  caches and `WindFoliage.reset_caches()` (the warm-up representatives and the layout guard key on
+  the default palette), then for plantgen lays the package over every biome with
+  `PaletteLibrary.overlay_package`. The overlay has no undo of its own and needs none: it only
+  replaces cached palette entries, so clearing the cache is the removal and the installed palette
+  reloads lazily. A missing or unreadable package changes nothing (or falls back to treecube)
+  and says why. `switch()` is `apply()` plus the setting plus `EventBus.foliage_library_changed`.
+- The open map rebuilds on that signal (`Root._on_foliage_library_changed`): authoring calls
+  `AuthoringController.reopen_async()`, which rebuilds the map from the document in memory (the
+  camera is untouched, the active tool, selected biome and unsaved state carry over, the undo
+  history is dropped because its entries point at the old nodes); a solo table reloads its level
+  through `play_level` (tokens are set out again from the level's saved placements); a networked
+  table is only told to reload, since a reload clears every peer's table.
+- Saved maps hold scatter rows keyed by asset id, and the libraries name their assets
+  differently (installed `alpine_meadow_summer_s1/Bush_Round_summer_04`, package
+  `alpine_meadow_summer_s1/Bush_Bush_v0`; only the rocks, whose GLBs are byte-identical, share
+  ids), so a map saved under one library has rows the other cannot resolve. The rows are derived data: the document keeps the biome painting and the seed.
+  `FoliageLibrary.adapt_async()` (called by `MapSourceLoader.load_async` and by the reopen)
+  regenerates `doc.scatter` and its mass anchors from the painting under the active library
+  whenever any scatter asset is missing from the palette, on a worker over a snapshot, through
+  the same `ScatterRegen.run` (native where built) the brushes use; it announces this once with a
+  toast. A map that resolves is left alone, so treecube keeps its authored rows. What is lost is
+  hand work in the scatter itself (erased plants return, which only matters to a map edited by
+  hand); hand-placed props are not regenerated, and the ones the library lacks are skipped by the
+  build like any missing asset and counted in the toast. Saving while plantgen is served writes
+  the regenerated rows, so keep the compared map's saved copy untouched (the A/B jobs never save).
+- Render jobs: the op `foliage_library {name, package, fades_off}` and the jobs
+  `plantgen_ab.json` (authoring, same cameras before and after) and `plantgen_play.json`
+  (play); [../../tools/render_jobs/REFERENCE.md](../../tools/render_jobs/REFERENCE.md).
 
 ## Model
 

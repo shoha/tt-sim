@@ -112,6 +112,10 @@ static func overlay_package(
 	var meshes: Dictionary = report["meshes"]
 	for asset_id: String in meshes:
 		_source_meshes[root + "|" + asset_id] = meshes[asset_id]
+	# After every mesh is cached: the layout guard resolves its representatives, which may be
+	# overlaid assets later in the list (resolving one before it was cached warned and cached
+	# a failed load from the installed root).
+	for asset_id: String in meshes:
 		var category := String(report["palette"]["assets"][asset_id].get("wind_category", ""))
 		WindFoliage.check_layout(root, asset_id, meshes[asset_id], category)
 	return report
