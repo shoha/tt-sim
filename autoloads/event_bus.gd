@@ -30,3 +30,7 @@ signal state_changed(old_state: int, new_state: int)
 ## level to edit (the title screen's per-card Edit action); "" means edit whichever
 ## level is currently playing, if any.
 signal open_editor_requested(level_path: String)
+
+## Emitted by FoliageLibrary.switch() once the palette serves another foliage library
+## ("treecube" or "plantgen"). Root rebuilds the open map so its scatter uses the new plants.
+signal foliage_library_changed(library: String)

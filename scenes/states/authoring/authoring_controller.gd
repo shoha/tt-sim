@@ -50,6 +50,8 @@ const PALETTE_WARM_TIMEOUT_MS := 2000
 ## Frames drawn after the first species resolves before the loading screen goes, so its
 ## pipeline warm-up node (PipelineWarmer) is drawn under it too.
 const PALETTE_WARM_FRAMES := 3
+## Longest reopen_async() waits for the scatter to finish growing in before it copies the rows.
+const REOPEN_WAIT_MS := 20000
 
 var level: LevelData = null
 var document: MapDocument = null
@@ -211,8 +213,14 @@ func _offer_recovery(request: Dictionary) -> void:
 ## Loads and shows a map. `spec` non-empty: a new map from NewMap; else `document_path`
 ## names the document to read ("" for a GLB-only level, which gets an empty dressing
 ## document). `recovered`: the document is an autosave, so the session starts unsaved.
+## `reopen`: the map is already open and its document is the one in memory (reopen_async), so
+## it is built from that and the author's tool, biome and unsaved state carry over.
 func _open_async(
-	opened: LevelData, spec: Dictionary, document_path: String, recovered: bool = false
+	opened: LevelData,
+	spec: Dictionary,
+	document_path: String,
+	recovered: bool = false,
+	reopen: bool = false
 ) -> void:
 	_generation += 1
 	var generation := _generation
@@ -229,7 +237,17 @@ func _open_async(
 	loader.is_superseded = func() -> bool: return _superseded(generation)
 	var glb := opened.get_absolute_map_path() if opened.map_path != "" else ""
 	var root: Node3D = null
-	if not spec.is_empty():
+	if reopen:
+		# Rows whose assets the active foliage library lacks are regenerated from the biome
+		# painting first (FoliageLibrary.adapt_async), then the map is built from the document.
+		var adapted := await FoliageLibrary.adapt_async(document, get_tree())
+		var text := FoliageLibrary.describe(adapted)
+		if text != "":
+			print("AuthoringController: " + text)
+			UIManager.show_toast(text, UIManager.TOAST_INFO, 6.0)
+		if not _superseded(generation):
+			root = await loader.build_async(glb, document)
+	elif not spec.is_empty():
 		# The recipe runs on a worker under the loading screen (NewMapBuild, P5-8).
 		var made := await NewMapBuild.start(spec).wait(get_tree())
 		if not _superseded(generation):
@@ -270,6 +288,7 @@ func _open_async(
 	var unsaved := not spec.is_empty() or recovered or settled_rows > 0
 	session = AuthoringSession.unsaved() if unsaved else AuthoringSession.new()
 	session.dirty_changed.connect(_on_dirty_changed)
+	# The undo entries point at the old map's nodes, so a reopen drops them.
 	history.clear()
 	if not spec.is_empty() and not document.biome_ids.is_empty():
 		# The starting cover grows in across the map on worker threads.
@@ -280,10 +299,14 @@ func _open_async(
 	panel.set_map_name(level.level_name)
 	panel.set_dirty(session.is_dirty())
 	panel.set_history_state(false, false)
-	if not document.biome_ids.is_empty():
-		panel.select_biome(document.biome_ids[0])
-		_use_biome(document.biome_ids[0])
-	panel.begin_session()
+	if reopen:
+		if selected_biome != "":
+			_use_biome(selected_biome)
+	else:
+		if not document.biome_ids.is_empty():
+			panel.select_biome(document.biome_ids[0])
+			_use_biome(document.biome_ids[0])
+		panel.begin_session()
 	_is_open = true
 	_autosave_timer.start()
 	set_process(true)
@@ -293,6 +316,46 @@ func _open_async(
 			UIManager.TOAST_INFO,
 			6.0
 		)
+
+
+## Rebuilds the open map from its document in memory, so the scatter is drawn from the
+## foliage library now active (Root calls it on EventBus.foliage_library_changed; rows the new
+## library cannot resolve are regenerated from the biome painting in _open_async). The camera
+## is not touched, the active tool and biome and the unsaved state carry over, the undo history
+## does not (its entries point at the old nodes). Waits for a scatter still growing in first.
+## Returns false when no map is open or a save is running.
+func reopen_async() -> bool:
+	if not _is_open or _saving:
+		return false
+	_is_open = false
+	var deadline := Time.get_ticks_msec() + REOPEN_WAIT_MS
+	while (
+		Time.get_ticks_msec() < deadline
+		and is_instance_valid(scatter)
+		and (scatter.is_regenerating() or scatter.is_growing())
+	):
+		await get_tree().process_frame
+	_sync_document()
+	var was_dirty := session.is_dirty()
+	var tool_id: StringName = &""
+	if brush.is_active() and brush.tool != null:
+		tool_id = brush.tool.id
+	brush.deactivate()
+	brush.editor = null
+	editor.water.release()
+	editor.rock_keeper.release()
+	tokens.clear()
+	_game_map.notify_map_clearing()
+	if is_instance_valid(map_root):
+		map_root.get_parent().remove_child(map_root)
+		map_root.queue_free()
+	_game_map.clear_weather()
+	_environment.clear()
+	_view_fit.clear()
+	await _open_async(level, {}, "", was_dirty, true)
+	if tool_id != &"":
+		_select_tool(tool_id)
+	return true
 
 
 func _superseded(generation: int) -> bool:

@@ -103,6 +103,10 @@ const _DEFAULT_OFF_CHECKBOX_KEYS := (
 	_DEBUG_SHADER_CHECKBOX_KEYS + ["hard_sun_shadows", "grass_shadows", "baked_foliage_ao"]
 )
 
+## The key of the "Foliage library" checkbox, which exists only when a plantgen package is
+## configured and is not one of PANEL_ORDER_KEYS.
+const FOLIAGE_LIBRARY_KEY := "foliage_library"
+
 ## Checkbox keys in the same order they appear in the panel, so toggle_by_index()
 ## (and therefore the digit-key 1..9/0 shortcuts) match what a reader sees on screen.
 const PANEL_ORDER_KEYS := [
@@ -265,6 +269,12 @@ func refresh() -> void:
 	_baked_foliage_ao = false
 	for key in _checkboxes:
 		_checkboxes[key].set_pressed_no_signal(key not in _DEFAULT_OFF_CHECKBOX_KEYS)
+	# Not a render toggle: it shows the foliage library the palette serves now, which a map
+	# switch does not reset.
+	if _checkboxes.has(FOLIAGE_LIBRARY_KEY):
+		_checkboxes[FOLIAGE_LIBRARY_KEY].set_pressed_no_signal(
+			FoliageLibrary.current() == FoliageLibrary.PLANTGEN
+		)
 
 
 func _collect_nodes() -> void:
@@ -291,6 +301,13 @@ func _create_panel(overlay_parent: GameMap) -> void:
 		"Cheap lighting foliage",
 		"Baked foliage AO",
 	]
+	# Offered only when a plantgen package folder is configured (or is already served), and
+	# outside PANEL_ORDER_KEYS: the digit shortcuts and the CSV columns keep their ten.
+	var offer_library := (
+		FoliageLibrary.available() or FoliageLibrary.current() != FoliageLibrary.TREECUBE
+	)
+	if offer_library:
+		labels.append("Foliage library: plantgen")
 	var result: Dictionary = MapOverlayUtils.create_checkbox_panel(labels)
 	_panel = result.panel
 	var checkboxes: Array[CheckBox] = result.checkboxes
@@ -327,6 +344,23 @@ func _create_panel(overlay_parent: GameMap) -> void:
 		_on_debug_shader_checkbox_toggled.bind("cheap_lighting_foliage", "cheap_lighting")
 	)
 	_checkboxes["baked_foliage_ao"].toggled.connect(_on_baked_foliage_ao_toggled)
+	if offer_library:
+		_checkboxes[FOLIAGE_LIBRARY_KEY] = checkboxes[10]
+		checkboxes[10].toggled.connect(_on_foliage_library_toggled)
+		checkboxes[10].set_pressed_no_signal(FoliageLibrary.current() == FoliageLibrary.PLANTGEN)
+
+
+## Serves the plantgen package (checked) or the installed treecube palette (unchecked) and
+## rebuilds the open map (FoliageLibrary.switch). A switch that fails leaves the box showing
+## what is still served.
+func _on_foliage_library_toggled(pressed: bool) -> void:
+	var result := FoliageLibrary.switch(
+		FoliageLibrary.PLANTGEN if pressed else FoliageLibrary.TREECUBE
+	)
+	if not result["ok"]:
+		_checkboxes[FOLIAGE_LIBRARY_KEY].set_pressed_no_signal(
+			FoliageLibrary.current() == FoliageLibrary.PLANTGEN
+		)
 
 
 func _on_foliage_visible_toggled(pressed: bool) -> void:
