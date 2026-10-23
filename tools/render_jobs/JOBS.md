@@ -8,6 +8,16 @@ and which test levels it keeps. How to run one, the flags and the build / look l
 
 ## Jobs
 
+- `jobs/plantgen_ab.json`: treecube against plantgen foliage on one map (about 30 s, keeps no
+  level): a new 200 ft alpine map (seed 1234) with the installed palette at home and at size 14,
+  then the `foliage_library` op serves `D:/dev/plantgen/out/ttsim_package_plantgen_all` and
+  reopens the map in memory (scatter regenerated from the same biome painting) for the same two
+  cameras, then back to treecube for a home view that equals the first. Fades off, wind frozen,
+  5 captures, 10 PNGs. Edit the `package` path to compare another build.
+- `jobs/plantgen_play.json`: the same switch in play (about 30 s): builds the alpine map, saves
+  it as `_reopen_plantgen`, plays it with treecube and again after switching to plantgen (Root
+  reloads the table; the load regenerates the rows), then removes the level
+  (`render_state.gd cleanup`, which takes every `_reopen_` folder).
 - `jobs/authoring_judgment_set.json`: the authoring judgment set: two captures per palette
   biome plus three, each as a window and a raw PNG (21 captures, 42 PNGs, with the 9-biome
   palette installed in October 2026). Every palette biome as a new 200 ft map (seed 1234) at home
