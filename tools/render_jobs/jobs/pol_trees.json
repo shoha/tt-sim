@@ -18,6 +18,7 @@
   {"op": "wait_ready", "settle": 1.0, "phase": "build"},
   {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "save", "folder": "_pol_forest", "replace": true, "phase": "build"},
   {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "play", "enabled": true},
 
   {"op": "zoom", "size": 20.0, "phase": "look", "for": "f_a_z20"},
   {"op": "look_at", "at": [0, 0], "phase": "look", "for": "f_a_z20"},
@@ -156,6 +157,7 @@
   {"op": "saved", "folder": "_pol_forest", "load": "play"},
   {"op": "play", "folder": "_pol_forest", "phase": "build"},
   {"op": "wait", "s": 4.0, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "play", "enabled": true},
   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
   {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "tokens", "points": [[9, -7], [7.5, -9], [-9, 2]], "phase": "look", "for": "p_*"},
   {"op": "wait", "s": 2.0, "phase": "look", "for": "p_*"},
@@ -184,6 +186,7 @@
 
   {"op": "play", "folder": "deciduous_clusters", "phase": "look", "for": "b_*"},
   {"op": "wait", "s": 5.0, "phase": "look", "for": "b_*"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "play", "enabled": true, "phase": "look", "for": "b_*"},
   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540], "phase": "look", "for": "b_*"},
   {"op": "zoom", "size": 13.85, "phase": "look", "for": "b_*"},
   {"op": "look_at", "at": [-16, -1], "phase": "look", "for": "b_*"},
@@ -203,6 +206,7 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "save", "folder": "_pol_taiga", "replace": true, "phase": "build"},
   {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
   {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "play", "enabled": true},
   {"op": "zoom", "size": 13.85, "phase": "look", "for": "t_a_z13"},
   {"op": "look_at", "at": [0, 0], "phase": "look", "for": "t_a_z13"},
   {"op": "wait", "s": 1.5, "phase": "look", "for": "t_a_z13"},
