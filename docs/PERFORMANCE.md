@@ -4030,3 +4030,52 @@ Rules: no ghost on a token hidden from players, on one the water hides (its Subm
 the cue) or on a loading placeholder; a dragged token keeps it; a multi-material pack token ghosts
 in its first material's colour. The shader is in `GraphicsWarmup.COVERED_SHADERS`. Only Forward+
 was run; `hint_depth_texture` is also available on Mobile, not checked.
+
+### Token ghost: self-occlusion fix (2026-10-24, topic ghostself)
+
+Bug (user, with a large creature token, Venusaur): the ghost drew on the token itself. The shader
+compared the depth buffer with the fragment's own depth and called any surface 0.5 m or more in
+front an occluder, but the buffer cannot say whose surface it is: a large token's body, in front
+of its own far legs by more than 0.5 m, counted. (A 0.5 m avatar never reached the threshold.)
+
+Fix, the analytic bound (no extra pass, no extra draw call): `TokenGhost.body_bounds` takes the
+token body's bounding cylinder (centre, horizontal radius to the farthest corner so a turn does
+not change it, half height; the union of every mesh AABB in the body's frame) and `_set_bounds`
+hands it to each mesh's overlay in that mesh's own space (`bound_center`, `bound_extent`,
+`bound_up`: the body's up axis in mesh space, whose length through MODEL_MATRIX is the body's
+world scale, exact under any mesh scale). The shader reads the cylinder through MODEL_MATRIX, so
+it follows moves, turns and token scale with no per-frame work, and measures how far the fragment's
+view ray runs inside it toward the camera (`chord_out`, times the ray's view-depth factor, so
+perspective and orthographic alike): every part of the token that can be in front of the fragment
+lies in that stretch. A surface counts as an occluder only when it is nearer than the stretch plus
+`bound_gap` (0.15 m; `min_gap` 0.5 still applies to a token without bounds, and the
+ramp is unchanged). So the ghost shows only where something that is not the token is in front:
+foliage, trunks, rocks, walls, other tokens (a nearer token counts: it stands outside the bound).
+A token made off the tree (the factories) is dressed again, once, when its body enters it
+(`PENDING_META`), because bounds need world transforms; a recipe or model change re-dresses as
+before. Cost: three uniforms and a few ALU per ghost fragment; draw calls identical (+576 at 32
+tokens uncapped, +288 capped; taiga 930 to 1506 and 1218, temperate 1162 to 1738 and 1450);
+GPU median `token_ghost_perf` 5.32 / 5.70 / 5.81 ms (none / full / capped) taiga and 9.88 /
+10.07 / 10.06 temperate, the same band as before the fix. The opacity constants are untouched.
+
+Slack: a surface of another object that lies inside the token's bounding cylinder, in front of the
+fragment, is not an occluder either (a bush touching a large token's flank). The cylinder is loose
+for a long or flat creature seen end on, which only shortens the ghost near the silhouette.
+
+Alternatives, not taken: (a) stencil: the token's opaque materials would write a mark and the
+ghost would draw only where it is absent; it needs every token material changed (avatar shader,
+arbitrary pack StandardMaterial3D), and the mark is order dependent: a crown drawn after the token
+leaves the mark where the token drew first, so a covered token would not ghost. (c) a token-only
+depth buffer: a second viewport or a prepass per token, the opposite of the draw-call budget.
+(b), the per-token slab, needs neither.
+
+Evidence (`jobs/token_ghost_self.json` taiga, `_grass` open meadow, `_temperate`, each with a
+large multi-part quadruped pack token from the probe's `spawn_big`, and `ghost_params
+bound_extent [0, 0]` as the "before" in the same run): in the open the far legs drew over the
+body before and nothing draws now; a token behind a bush or a trunk still ghosts exactly the
+covered legs; the eight avatars at home zoom differ by 17 pixels at 3 percent fuzz between
+before and after (the one sampled head behind a crown kept its ghost once `bound_gap` replaced
+`min_gap`; with the full 0.5 m margin added to the stretch it had faded). Tests:
+`tests/unit/test_token_ghost.gd` (bounds, mesh space, scale, late dressing, margin). Mobile and
+Compatibility: only built-ins (MODEL_MATRIX, INV_VIEW_MATRIX, VIEW) are added; `hint_depth_texture`
+is the unchanged requirement. MSAA 4x and the lo-fi pass are unaffected (no new texture reads).
