@@ -89,8 +89,15 @@ static func create_from_placement(placement: TokenPlacement) -> BoardToken:
 ## A changed capsule resizes the glow and drag height; the transform, hidden fade and
 ## everything else are kept. Returns false for a token that is not an avatar or when there
 ## is no kit. Local only: callers that need the change saved and synced use
-## LevelPlayController.set_avatar_recipe.
+## LevelPlayController.set_avatar_recipe. New parts or colours re-dress the token ghost.
 static func set_recipe(token: BoardToken, recipe: Dictionary) -> bool:
+	var done := _apply_recipe(token, recipe)
+	if done:
+		TokenGhost.dress(token)
+	return done
+
+
+static func _apply_recipe(token: BoardToken, recipe: Dictionary) -> bool:
 	var view := view_of(token)
 	var avatar_kit := kit()
 	if view == null or avatar_kit == null:

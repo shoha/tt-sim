@@ -44,15 +44,19 @@ const FADE_OUT_SIZE := 30.0
 ## Terrain collision layer for the view-centre ground ray.
 const GROUND_MASK := 1
 const RAY_LENGTH := 400.0
+## The Settings default of the close-zoom window (graphics/canopy_fade_enabled).
+const DEFAULT_ENABLED := false
 
 ## The play-zoom window (home to PLAY_MAX_SIZE): strength, and inner and outer radius per unit
 ## of orthographic size. Chosen by eye on forest and taiga maps (Polish, 2026-10-05). Vars, not
 ## constants, so a render probe can tune them in-run (probes/close_zoom.gd play).
 static var play_strength := 0.9
-## False holds the whole close-zoom fade off, whatever the zoom. The Settings menu's occlusion
-## fade sets it (VisualEffectsController.set_occlusion_fade_enabled) until this fade has its own
-## setting.
-static var enabled := true
+## False holds the whole close-zoom window off, whatever the zoom (the brush window is not
+## affected). The Settings menu's "Canopy fade" sets it (VisualEffectsController
+## .set_canopy_fade_enabled), off by default: the window follows the screen centre and players
+## found the tunnel disruptive (2026-10-24), the token ghost and the per-token occlusion fade
+## now show tokens under foliage without it.
+static var enabled := DEFAULT_ENABLED
 static var play_inner := 0.2
 static var play_outer := 0.55
 
