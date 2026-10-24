@@ -3998,3 +3998,35 @@ landed 521 / 529, 904 / 898, 505 / 450, 947 / 953, 520 / 532, 869 / 851; settled
 rows show: ground cover starts growing 0.36 s after it lands (its stage) plus up to 0.35 s of
 ripple, on purpose, and an edit settles 0.5-0.6 s later. Filming (`motion_film`, the same sites
 with the frame read-back) ran 27-37 ms frames median on both sides.
+
+## Token ghost (2026-10-24, topic tokenvis)
+
+What it is and why: `TokenGhost` draws a token that foliage, trunks, rocks or walls cover a second
+time as a translucent silhouette (`shaders/token_ghost.gdshader`, a `material_overlay` on every mesh
+of the token, depth test off, kept where the depth buffer says something stands at least 0.5 m in
+front). It replaced the screen-centre canopy window as the way to see tokens in heavy foliage:
+the window (`CanopyFade`, now Settings > Canopy fade, default off) follows the camera, which
+players found disruptive. Settings > Graphics > Token ghost, default on.
+
+Opacity: the prototype filled the covered part at 0.78 (rim boost 0.4). Judged from render-job
+captures (taiga and temperate forest, home and zoom 5, selected and unselected tokens;
+`jobs/token_ghost.json`) the fill is now `TokenGhost.FILL_ALPHA` 0.54 (31 percent less) with
+`RIM_ALPHA` 0.5 so the ink line stays as solid as before; 0.46 was legible but too faint on dark
+conifers.
+
+Cost, measured at the token cap (32 avatar tokens all on screen, 1920x1080, vsync off, in-run A/B
+with a repeat, shared GPU so indicative): taiga 5.27 and 5.82 ms without the ghost, 5.74 and 5.91
+with it; temperate forest 9.73 and 9.96 without, 10.03 and 10.05 with: +0.1 to 0.45 ms. Draw
+calls: +576 for 32 tokens (18 each, 5 meshes), 930 to 1506 on taiga and 1162 to 1738 on
+temperate forest; primitives +178k. The draw-call plan: the frustum already culls the overlays of
+off-screen tokens; above `TokenGhost.BUDGET_TOKENS` (16) on-screen tokens the extra ones go
+undressed, the selected or hovered first, then those nearest the screen centre (checked every
+0.5 s by `VisualEffectsController`, no per-frame cost within the budget): +288 draw calls at 32
+tokens (1218 and 1450), GPU time within noise of the uncapped run. Not done: dressing only
+tokens a CPU ray finds under a crown (saved nothing in forests; the ghost also serves rocks and
+walls) and dropping the foliage half of the occlusion fade (it stays; its setting is its own).
+
+Rules: no ghost on a token hidden from players, on one the water hides (its SubmergedMarker is
+the cue) or on a loading placeholder; a dragged token keeps it; a multi-material pack token ghosts
+in its first material's colour. The shader is in `GraphicsWarmup.COVERED_SHADERS`. Only Forward+
+was run; `hint_depth_texture` is also available on Mobile, not checked.

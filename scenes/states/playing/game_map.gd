@@ -805,6 +805,7 @@ func notify_map_loaded() -> void:
 	AvatarShadeCache.clear()
 	_visual_effects.setup_occlusion_fade()
 	_visual_effects.apply_foliage_antialiasing()
+	_visual_effects.refresh_token_ghosts()
 
 	# Compute camera soft bounds from map geometry and snap the camera into
 	# the allowed range immediately so the first user input doesn't jump.

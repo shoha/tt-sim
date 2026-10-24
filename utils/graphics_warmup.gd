@@ -39,6 +39,7 @@ const COVERED_SHADERS := [
 	"res://shaders/selection_glow.gdshader",
 	"res://shaders/submerged_marker.gdshader",
 	"res://shaders/texel_copy_blit.gdshader",
+	"res://shaders/token_ghost.gdshader",
 	"res://shaders/ui_backdrop.gdshader",
 	"res://shaders/ui_card_thumb.gdshader",
 	"res://shaders/ui_scrim.gdshader",
@@ -58,7 +59,6 @@ const EXCLUDED_SHADERS := {
 	"res://shaders/pixelate.gdshader": "no references in the code",
 	"res://shaders/sharpen.gdshader": "no references in the code",
 	"res://shaders/selected_indicator.gdshader": "no references in the code",
-	"res://shaders/token_ghost.gdshader": "tokenvis prototype, off by default; cover it if it ships",
 }
 ## A user argument (after `--`) that forces the warm-up, whatever the skip rules say.
 const FORCE_ARG := "--warm-graphics"

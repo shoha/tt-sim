@@ -349,51 +349,6 @@ void apply_canopy_fade(
 }
 
 
-// Token window (prototype, topic tokenvis; OcclusionFadeManager.set_token_window). The
-// occlusion fade's per-token zone, but dissolving the way the canopy fade does: leaf cards
-// and limbs in front of a token drop out card by card (the authored phase is the key) over
-// a soft zone sized to the token, where the occlusion fade stipples every fragment through
-// a Bayer screen door. The trunk is left to the stipple (apply_occlusion_fade), since a
-// trunk standing between the camera and a token must still thin to show it.
-// x: 1 on, 0 off (the stipple everywhere); y: the zone's scale on the token's own
-// (1 is the occlusion fade's radius, FIGURE_WIDTH wide for an avatar); z: the share of the
-// zone that is cleared fully (the rest fades back to solid).
-uniform vec4 token_window = vec4(0.0, 1.4, 0.6, 0.0);
-
-bool token_window_trunk(vec2 wind) {
-	return use_vertex_wind ? wind.x < CANOPY_LIMB_FLUTTER : canopy_part == 1;
-}
-
-void apply_token_window(vec3 vertex_view, mat4 view_matrix, vec2 wind, vec2 frag_coord) {
-	if (!enable_occlusion || occlusion_token_count <= 0) {
-		return;
-	}
-	float fade = 0.0;
-	for (int i = 0; i < 32; i++) {
-		if (i >= occlusion_token_count) break;
-		vec4 token_data = texelFetch(occlusion_tokens, ivec2(i, 0), 0);
-		float radius = abs(token_data.w);
-		if (radius <= 0.0) continue;
-		vec3 token_view = (view_matrix * vec4(token_data.xyz, 1.0)).xyz;
-		if (vertex_view.z <= token_view.z) continue;
-		vec2 offset = vertex_view.xy - token_view.xy;
-		vec2 half_size = vec2(radius) * token_window.y;
-		if (token_data.w < 0.0) {
-			half_size.x *= FIGURE_WIDTH;
-		}
-		float d = length(offset / half_size);
-		fade = max(fade, 1.0 - smoothstep(token_window.z, 1.0, d));
-	}
-	if (fade <= 0.0) {
-		return;
-	}
-	float key = use_vertex_wind ? fract(wind.y * 13.37 + 0.31) : bayer16(frag_coord);
-	if (key < fade) {
-		discard;
-	}
-}
-
-
 #ifdef FOLIAGE_PAINTED_LIGHT
 // The painted light's fragment terms (see the uniforms above): the sun-ward albedo ramp, the
 // edge-on cut in the camera's pass, and the silhouette ink. `normal` is the view-space
@@ -443,10 +398,6 @@ void apply_wind_foliage_pbr(
 	out vec3 out_normal_map
 ) {
 	apply_canopy_fade(vertex_view, inv_view_matrix, wind, frag_coord);
-	bool windowed = token_window.x > 0.5 && !token_window_trunk(wind);
-	if (windowed) {
-		apply_token_window(vertex_view, view_matrix, wind, frag_coord);
-	}
 	vec4 albedo_sample = texture(albedo_texture, uv);
 	out_albedo = albedo_sample.rgb;
 	out_alpha = albedo_sample.a;
@@ -479,9 +430,7 @@ void apply_wind_foliage_pbr(
 	}
 
 	vec3 world_normal = mat3(inv_view_matrix) * normal;
-	if (!windowed) {
-		apply_occlusion_fade(world_normal, vertex_view, view_matrix, frag_coord, viewport_size);
-	}
+	apply_occlusion_fade(world_normal, vertex_view, view_matrix, frag_coord, viewport_size);
 }
 
 

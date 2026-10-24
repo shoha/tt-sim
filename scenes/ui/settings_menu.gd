@@ -78,7 +78,9 @@ var _reset_tween: Tween
 @onready var interface_size_option: OptionButton = %InterfaceSizeOption
 @onready var vsync_check: CheckButton = %VSyncCheck
 @onready var lofi_check: CheckButton = %LofiCheck
+@onready var token_ghost_check: CheckButton = %TokenGhostCheck
 @onready var occlusion_fade_check: CheckButton = %OcclusionFadeCheck
+@onready var canopy_fade_check: CheckButton = %CanopyFadeCheck
 @onready var antialiasing_option: OptionButton = %AntialiasingOption
 @onready var shadow_quality_option: OptionButton = %ShadowQualityOption
 @onready var water_quality_option: OptionButton = %WaterQualityOption
@@ -473,9 +475,7 @@ func _show_saved_values(config: ConfigFile) -> void:
 	fullscreen_check.set_pressed_no_signal(config.get_value("graphics", "fullscreen", false))
 	vsync_check.set_pressed_no_signal(config.get_value("graphics", "vsync", true))
 	lofi_check.set_pressed_no_signal(config.get_value("graphics", "lofi_enabled", true))
-	occlusion_fade_check.set_pressed_no_signal(
-		config.get_value("graphics", "occlusion_fade_enabled", true)
-	)
+	SettingsSeeThrough.show_saved(self, config)
 	ssao_check.set_pressed_no_signal(
 		config.get_value(
 			"graphics", "ssao_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["ssao_enabled"]
@@ -529,7 +529,7 @@ func _save_settings(path: String = Paths.SETTINGS_PATH) -> void:
 	config.set_value("graphics", "fullscreen", fullscreen_check.button_pressed)
 	config.set_value("graphics", "vsync", vsync_check.button_pressed)
 	config.set_value("graphics", "lofi_enabled", lofi_check.button_pressed)
-	config.set_value("graphics", "occlusion_fade_enabled", occlusion_fade_check.button_pressed)
+	SettingsSeeThrough.save(self, config)
 	config.set_value("graphics", "ssao_enabled", ssao_check.button_pressed)
 	config.set_value("graphics", "ssr_enabled", ssr_check.button_pressed)
 	config.set_value("graphics", "sdfgi_enabled", sdfgi_check.button_pressed)
@@ -576,8 +576,8 @@ func _apply_settings() -> void:
 	# Apply lo-fi filter setting
 	_apply_lofi_setting()
 
-	# Apply occlusion fade setting
-	_apply_occlusion_fade_setting()
+	# Apply token ghost, occlusion fade and canopy fade settings
+	SettingsSeeThrough.apply(self, _find_game_map())
 
 	# Apply foliage antialiasing setting
 	_apply_foliage_antialiasing_setting()
@@ -653,12 +653,6 @@ func _apply_lofi_setting() -> void:
 	var game_map = _find_game_map()
 	if game_map:
 		game_map.set_lofi_enabled(lofi_check.button_pressed)
-
-
-func _apply_occlusion_fade_setting() -> void:
-	var game_map = _find_game_map()
-	if game_map:
-		game_map.set_occlusion_fade_enabled(occlusion_fade_check.button_pressed)
 
 
 func _apply_foliage_antialiasing_setting() -> void:
@@ -824,7 +818,7 @@ func _show_defaults() -> void:
 	fullscreen_check.set_pressed_no_signal(false)
 	vsync_check.set_pressed_no_signal(true)
 	lofi_check.set_pressed_no_signal(true)
-	occlusion_fade_check.set_pressed_no_signal(true)
+	SettingsSeeThrough.show_defaults(self)
 	antialiasing_option.select(antialiasing_option.get_item_index(Viewport.MSAA_DISABLED))
 	shadow_quality_option.select(
 		shadow_quality_option.get_item_index(RenderingServer.SHADOW_QUALITY_SOFT_ULTRA)

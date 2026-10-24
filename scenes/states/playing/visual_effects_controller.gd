@@ -23,6 +23,9 @@ var _foliage_antialiasing_level: int = Viewport.MSAA_DISABLED  # Current Antiali
 ## means "not yet synced", forcing the next sync through.
 var _last_synced_pixelation: float = -1.0
 
+## Seconds since the token ghost budget last looked at the tokens (TokenGhost.apply_budget).
+var _ghost_budget_s := 0.0
+
 
 ## Wire this controller to its owning GameMap and run initial setup:
 ## cache the scene's lo-fi material, load lo-fi/occlusion settings from
@@ -37,6 +40,7 @@ func setup(game_map: GameMap) -> void:
 
 	_load_lofi_setting()
 	_load_occlusion_fade_setting()
+	_load_see_through_settings()
 	setup_occlusion_fade()
 	_load_foliage_antialiasing_setting()
 	apply_foliage_antialiasing()
@@ -154,8 +158,6 @@ func _load_occlusion_fade_setting() -> void:
 ## Enable or disable the occlusion fade effect
 func set_occlusion_fade_enabled(enabled: bool) -> void:
 	_occlusion_fade_enabled = enabled
-	# The close-zoom canopy fade follows the same setting until it has its own.
-	CanopyFade.enabled = enabled
 	if not _game_map.occlusion_fade:
 		return
 	if enabled:
@@ -171,6 +173,44 @@ func set_occlusion_fade_enabled(enabled: bool) -> void:
 	else:
 		_game_map.occlusion_fade.clear()
 		_last_synced_pixelation = -1.0
+
+
+## The saved Canopy fade setting (the close-zoom window round the screen centre), off by
+## default, and the saved Token ghost setting, on by default. Loaded once at setup; the
+## Settings menu calls the setters below to apply a change at once.
+func _load_see_through_settings() -> void:
+	var config := ConfigFile.new()
+	config.load(Paths.SETTINGS_PATH)
+	set_canopy_fade_enabled(
+		config.get_value("graphics", "canopy_fade_enabled", CanopyFade.DEFAULT_ENABLED)
+	)
+	set_token_ghost_enabled(
+		config.get_value("graphics", "token_ghost_enabled", TokenGhost.DEFAULT_ENABLED)
+	)
+
+
+## Turns the close-zoom canopy window on or off (it is independent of the occlusion fade).
+func set_canopy_fade_enabled(enabled: bool) -> void:
+	CanopyFade.enabled = enabled
+
+
+## Turns the token ghost (the see-through silhouette of a covered token) on or off for every
+## token on the map and for the tokens made later.
+func set_token_ghost_enabled(enabled: bool) -> void:
+	TokenGhost.set_enabled(enabled, _game_map.get_tree())
+
+
+## Re-dresses every token after a map load (the map's tokens exist by then) with the current
+## Token ghost setting.
+func refresh_token_ghosts() -> void:
+	TokenGhost.refresh_all(_game_map.get_tree())
+
+
+func _process(delta: float) -> void:
+	_ghost_budget_s += delta
+	if _ghost_budget_s >= TokenGhost.BUDGET_PERIOD_S:
+		_ghost_budget_s = 0.0
+		TokenGhost.apply_budget(_game_map.get_tree(), _game_map.camera_node)
 
 
 ## Clear the occlusion fade manager ahead of a map change. Called from

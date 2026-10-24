@@ -531,3 +531,17 @@ func test_toggle_by_index_nine_flips_the_tenth_panel_checkbox() -> void:
 	assert_true(baked_ao_checkbox.button_pressed)
 
 	baked_ao_checkbox.free()
+
+
+func test_the_panel_holds_only_the_ten_diagnostics_each_with_a_tooltip() -> void:
+	# The token visibility prototypes (ghost, window, anchored canopy) left the panel when the
+	# ghost became Settings > Graphics > Token ghost: ten keyed boxes plus the optional
+	# Foliage library box, and the CSV columns match the ten.
+	assert_eq(DebugRenderToggles.PANEL_ORDER_KEYS.size(), 10)
+	assert_eq(DebugRenderToggles.TIPS.size(), DebugRenderToggles.PANEL_ORDER_KEYS.size())
+	var toggles := DebugRenderToggles.new()
+	add_child_autofree(toggles)
+	var states := toggles.get_toggle_states()
+	assert_eq(states.size(), 10)
+	for key in DebugRenderToggles.PANEL_ORDER_KEYS:
+		assert_true(states.has("toggle_" + key), "CSV column for %s" % key)
