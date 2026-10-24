@@ -1,0 +1,326 @@
+{
+ "out_dir": "render_jobs/tokenvis_perf",
+ "timeout_s": 1500,
+ "hang_s": 120,
+ "steps": [
+  {
+   "op": "wait_title"
+  },
+  {
+   "op": "palette_overlay",
+   "package": "D:/dev/plantgen/out/ttsim_package_plantgen_all"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "temperate_forest_summer_s1",
+   "size": 150,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 2.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "place_seed",
+   "seed": 1234
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/avatar_token.gd",
+   "action": "save",
+   "folder": "_avatartoken_tvis_temperate_fo",
+   "replace": true
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "play",
+   "folder": "_avatartoken_tvis_temperate_fo"
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "wait_ready",
+   "settle": 2.0
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "vsync_off"
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "spawn_screen",
+   "fracs": [
+    [
+     0.5,
+     0.5
+    ],
+    [
+     0.22,
+     0.45
+    ],
+    [
+     0.36,
+     0.72
+    ],
+    [
+     0.66,
+     0.38
+    ],
+    [
+     0.8,
+     0.68
+    ],
+    [
+     0.5,
+     0.82
+    ],
+    [
+     0.12,
+     0.75
+    ],
+    [
+     0.88,
+     0.3
+    ]
+   ],
+   "select": 1
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "report"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true,
+   "canopy": false,
+   "occlusion": false
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "temperat_home_none",
+   "desc": "temperat_home_none"
+  },
+  {
+   "op": "gpu",
+   "name": "temperat_home_none",
+   "s": 3.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "info"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true,
+   "canopy": false,
+   "occlusion": false,
+   "ghost": true
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "temperat_home_ghost",
+   "desc": "temperat_home_ghost"
+  },
+  {
+   "op": "gpu",
+   "name": "temperat_home_ghost",
+   "s": 3.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "info"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true,
+   "canopy": false,
+   "occlusion": false,
+   "ghost": true,
+   "gate": true
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "temperat_home_ghostgate",
+   "desc": "temperat_home_ghostgate"
+  },
+  {
+   "op": "gpu",
+   "name": "temperat_home_ghostgate",
+   "s": 3.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "info"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true,
+   "canopy": false
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "temperat_home_nocanopy",
+   "desc": "temperat_home_nocanopy"
+  },
+  {
+   "op": "gpu",
+   "name": "temperat_home_nocanopy",
+   "s": 3.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "info"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true,
+   "canopy": false,
+   "occlusion": false
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "temperat_home_none2",
+   "desc": "temperat_home_none2"
+  },
+  {
+   "op": "gpu",
+   "name": "temperat_home_none2",
+   "s": 3.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "info"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true,
+   "canopy": false,
+   "occlusion": false,
+   "ghost": true,
+   "gate": true
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "temperat_home_ghostgate2",
+   "desc": "temperat_home_ghostgate2"
+  },
+  {
+   "op": "gpu",
+   "name": "temperat_home_ghostgate2",
+   "s": 3.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "info"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/avatar_token.gd",
+   "action": "cleanup"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "index",
+   "title": "tokenvis_perf",
+   "intro": "tokenvis"
+  }
+ ]
+}

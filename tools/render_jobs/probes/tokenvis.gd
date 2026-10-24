@@ -1,0 +1,206 @@
+extends RefCounted
+
+## Render-job probe (`call` op) for the token visibility prototypes (topic tokenvis,
+## docs/plans/2026-10-24-tokenvis or D:/dev/plantgen/docs/ttsim_token_visibility.md).
+## Positions are map XZ metres. `action`:
+## - `spawn` (`at` [x, z], `preset` default 0, `yaw` degrees, `select` default false): one
+##   avatar token dropped on the terrain at the point (selected = hover glow layer added).
+## - `look` (`at` [x, z], `height` default 0.8, `shift` [dx, dy] default [0, 0]): pans so the
+##   point stands at the screen centre moved by `shift` (screen fractions, +x right, +y down),
+##   so a token can be put away from the centre the canopy window sits on.
+## - `mode` (`name`): see TokenVisibility.set_mode; `ghost`, `window`, `size`, `strength`
+##   etc. are read from the step as the prototypes define them.
+## - `report`: tokens and their screen positions.
+
+const AVATAR_PROBE := "res://tools/render_jobs/probes/avatar_token.gd"
+
+
+static func run(base: Node, step: Dictionary) -> String:
+	var gm: GameMap = base.get("_game_map")
+	var lpc: LevelPlayController = base.get("_level_play_controller")
+	match String(step.get("action", "report")):
+		"spawn":
+			return _spawn(gm, lpc, step)
+		"look":
+			return _look(gm, step)
+		"spawn_screen":
+			return _spawn_screen(gm, lpc, step)
+		"clear":
+			return _clear(gm)
+		"mode":
+			return _mode(gm, step)
+		"lofi":
+			# The lo-fi pass with its pixelation (the dither grid of the occlusion fade aligns
+			# to it), as a map's own lo-fi settings can ask for.
+			var px := float(step.get("pixelation", 0.0))
+			gm.get("_visual_effects").call("apply_lofi_overrides", {"pixelation": px})
+			return "lofi pixelation %.4f" % px
+		"spawn_box":
+			# A pack-style token (a box model with a collision shape and a StandardMaterial3D),
+			# for the ghost's albedo path; there is no cached asset pack in a topic's own user
+			# folder.
+			if lpc == null:
+				return "not playing"
+			var model := Node3D.new()
+			var mesh := MeshInstance3D.new()
+			var box := BoxMesh.new()
+			box.size = Vector3(0.6, 1.4, 0.6)
+			mesh.mesh = box
+			mesh.position = Vector3(0, 0.7, 0)
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = Color(0.75, 0.2, 0.15)
+			mesh.material_override = mat
+			model.add_child(mesh)
+			var body := CollisionShape3D.new()
+			var shape := BoxShape3D.new()
+			shape.size = box.size
+			body.shape = shape
+			body.position = Vector3(0, 0.7, 0)
+			model.add_child(body)
+			var token := BoardTokenFactory.create_from_scene(model)
+			if token == null:
+				return "box token failed"
+			var at := _ground(gm, _vec2(step.get("at", [0, 0])))
+			lpc.get("_token_spawner").call("_place_new_token", token, "test", "box", "default", at, false)
+			return "box token at %s" % str(at)
+		"info":
+			var vp := gm.world_viewport.get_viewport_rid()
+			var meshes := 0
+			for node in gm.drag_and_drop_node.get_children():
+				if node is BoardToken:
+					meshes += (node as BoardToken).rigid_body.find_children("*", "MeshInstance3D", true, false).size()
+			return (
+				"draw calls %d, primitives %d, token meshes %d"
+				% [
+					RenderingServer.viewport_get_render_info(
+						vp,
+						RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE,
+						RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME
+					),
+					RenderingServer.viewport_get_render_info(
+						vp,
+						RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE,
+						RenderingServer.VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME
+					),
+					meshes,
+				]
+			)
+		"msaa":
+			gm.world_viewport.msaa_3d = int(step.get("level", 0)) as Viewport.MSAA
+			return "msaa_3d %d" % gm.world_viewport.msaa_3d
+		"report":
+			return _report(gm)
+	return "unknown action %s" % step.get("action", "")
+
+
+static func _vec2(a: Variant) -> Vector2:
+	return Vector2(float(a[0]), float(a[1]))
+
+
+static func _ground(gm: GameMap, xz: Vector2) -> Vector3:
+	var space := gm.world_viewport.find_world_3d().direct_space_state
+	var hit := DragPlaceController.raycast_terrain_down(space, Vector3(xz.x, 0, xz.y))
+	return Vector3(xz.x, hit.y if hit != Vector3.INF else 0.0, xz.y)
+
+
+static func _spawn(gm: GameMap, lpc: LevelPlayController, step: Dictionary) -> String:
+	if lpc == null:
+		return "not playing"
+	var at := _ground(gm, _vec2(step.get("at", [0, 0])))
+	var index := int(step.get("preset", 0)) % AvatarPresets.PRESETS.size()
+	var token := lpc.spawn_avatar(
+		AvatarPresets.recipe(index), String(AvatarPresets.PRESETS[index].name), at
+	)
+	if token == null:
+		return "spawn failed"
+	var yaw := float(step.get("yaw", 0.0))
+	if yaw != 0.0:
+		token.set_transform_immediate(at, Vector3(0, deg_to_rad(yaw), 0), Vector3.ONE)
+		token.transform_changed.emit()
+	if bool(step.get("select", false)):
+		token.set_highlighted(true)
+	return "spawned %s at %s" % [token.token_name, str(at.snapped(Vector3.ONE * 0.01))]
+
+
+## Spawns an avatar on the terrain under each screen fraction of `fracs` ([[fx, fy], ...],
+## 0..1 of the window), presets cycling from `preset`; the first `select` ones are selected.
+static func _spawn_screen(gm: GameMap, lpc: LevelPlayController, step: Dictionary) -> String:
+	if lpc == null:
+		return "not playing"
+	var cam := gm.camera_node
+	var size := Vector2(gm.world_viewport.size)
+	var out := PackedStringArray()
+	var k := 0
+	for f in step.get("fracs", []):
+		var px := Vector2(float(f[0]) * size.x, float(f[1]) * size.y)
+		var origin := cam.project_ray_origin(px)
+		var dir := cam.project_ray_normal(px)
+		var space := gm.world_viewport.find_world_3d().direct_space_state
+		var query := PhysicsRayQueryParameters3D.create(origin, origin + dir * 400.0)
+		query.collision_mask = 1
+		var hit := space.intersect_ray(query)
+		var at: Vector3 = hit.position if not hit.is_empty() else origin
+		var index := (int(step.get("preset", 0)) + k) % AvatarPresets.PRESETS.size()
+		var token := lpc.spawn_avatar(
+			AvatarPresets.recipe(index), String(AvatarPresets.PRESETS[index].name), at
+		)
+		if token != null:
+			if k < int(step.get("select", 0)):
+				token.set_highlighted(true)
+			out.append("%s %s" % [token.token_name, str(Vector2(at.x, at.z).snapped(Vector2.ONE * 0.1))])
+		k += 1
+	return "spawned " + ", ".join(out)
+
+
+static func _clear(gm: GameMap) -> String:
+	var n := 0
+	for node in gm.drag_and_drop_node.get_children():
+		if node is BoardToken:
+			node.queue_free()
+			n += 1
+	return "cleared %d tokens" % n
+
+
+static func _look(gm: GameMap, step: Dictionary) -> String:
+	var xz := _vec2(step.get("at", [0, 0]))
+	var q := _ground(gm, xz) + Vector3.UP * float(step.get("height", 0.8))
+	var z := gm.camera_node.global_basis.z
+	var g := q - z * (q.y / z.y)
+	var off: Vector2 = gm.get_camera_controller().call("_get_view_center_ground_offset")
+	var holder := gm.cameraholder_node
+	var shift := _vec2(step.get("shift", [0, 0]))
+	var cam := gm.camera_node
+	# Screen shift in metres on the ground plane: the camera's right axis and its up axis
+	# flattened onto the ground (the view is orthographic, so the screen is linear).
+	var half_h := cam.size * 0.5
+	var half_w := half_h * float(gm.world_viewport.size.x) / float(gm.world_viewport.size.y)
+	var right := cam.global_basis.x
+	var up_screen := cam.global_basis.y
+	var delta_world := right * (-shift.x * 2.0 * half_w) + up_screen * (shift.y * 2.0 * half_h)
+	var gd := delta_world - z * (delta_world.y / z.y)
+	holder.global_position = Vector3(g.x - off.x + gd.x, holder.global_position.y, g.z - off.y + gd.z)
+	return "look at %s shift %s" % [str(Vector2(g.x, g.z)), str(shift)]
+
+
+static func _mode(gm: GameMap, step: Dictionary) -> String:
+	return TokenVisibility.set_mode(gm, step)
+
+
+static func _report(gm: GameMap) -> String:
+	var out := PackedStringArray()
+	var cam := gm.camera_node
+	for node in gm.drag_and_drop_node.get_children():
+		if node is BoardToken:
+			var token := node as BoardToken
+			var p := token.rigid_body.global_position + Vector3.UP * 0.8
+			out.append(
+				(
+					"%s world %s screen %s"
+					% [
+						token.token_name,
+						str(p.snapped(Vector3.ONE * 0.01)),
+						str(cam.unproject_position(p).snapped(Vector2.ONE)),
+					]
+				)
+			)
+	return "cam size %.2f | %s" % [cam.size, " | ".join(out)]

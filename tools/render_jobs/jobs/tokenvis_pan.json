@@ -1,0 +1,399 @@
+{
+ "out_dir": "render_jobs/tokenvis_pan",
+ "timeout_s": 600,
+ "hang_s": 120,
+ "steps": [
+  {
+   "op": "wait_title"
+  },
+  {
+   "op": "palette_overlay",
+   "package": "D:/dev/plantgen/out/ttsim_package_plantgen_all"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "boreal_taiga_summer_s1",
+   "size": 150,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 2.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "place_seed",
+   "seed": 1234
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/avatar_token.gd",
+   "action": "save",
+   "folder": "_avatartoken_tvis_pan",
+   "replace": true
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "play",
+   "folder": "_avatartoken_tvis_pan"
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "wait_ready",
+   "settle": 2.0
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "zoom",
+   "size": 8.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "spawn",
+   "at": [
+    -3.2,
+    -3.2
+   ],
+   "preset": 0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "spawn",
+   "at": [
+    -0.5,
+    -1.0
+   ],
+   "preset": 1
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "spawn",
+   "at": [
+    -6.0,
+    -0.8
+   ],
+   "preset": 2
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "spawn",
+   "at": [
+    1.8,
+    -4.4
+   ],
+   "preset": 3
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "spawn",
+   "at": [
+    -1.5,
+    2.2
+   ],
+   "preset": 4
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "look",
+   "at": [
+    -3.2,
+    -3.2
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "pan0_base",
+   "desc": "pan 0 base"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true,
+   "canopy": false,
+   "occlusion": false,
+   "ghost": true
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "pan0_ghost",
+   "desc": "pan 0 ghost"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true,
+   "canopy": false
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "pan0_nocanopy",
+   "desc": "pan 0 nocanopy"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true,
+   "canopy": false,
+   "window": true
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "pan0_window",
+   "desc": "pan 0 window"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "look",
+   "at": [
+    -1.0,
+    -1.5
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "pan1_base",
+   "desc": "pan 1 base"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true,
+   "canopy": false,
+   "occlusion": false,
+   "ghost": true
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "pan1_ghost",
+   "desc": "pan 1 ghost"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true,
+   "canopy": false
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "pan1_nocanopy",
+   "desc": "pan 1 nocanopy"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true,
+   "canopy": false,
+   "window": true
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "pan1_window",
+   "desc": "pan 1 window"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "look",
+   "at": [
+    0.8,
+    0.2
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "pan2_base",
+   "desc": "pan 2 base"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true,
+   "canopy": false,
+   "occlusion": false,
+   "ghost": true
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "pan2_ghost",
+   "desc": "pan 2 ghost"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true,
+   "canopy": false
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "pan2_nocanopy",
+   "desc": "pan 2 nocanopy"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true,
+   "canopy": false,
+   "window": true
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "pan2_window",
+   "desc": "pan 2 window"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tokenvis.gd",
+   "action": "mode",
+   "reset": true
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/avatar_token.gd",
+   "action": "cleanup"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "index",
+   "title": "tokenvis_pan",
+   "intro": "pan at zoom 8"
+  }
+ ]
+}

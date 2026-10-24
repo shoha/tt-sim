@@ -58,6 +58,7 @@ const EXCLUDED_SHADERS := {
 	"res://shaders/pixelate.gdshader": "no references in the code",
 	"res://shaders/sharpen.gdshader": "no references in the code",
 	"res://shaders/selected_indicator.gdshader": "no references in the code",
+	"res://shaders/token_ghost.gdshader": "tokenvis prototype, off by default; cover it if it ships",
 }
 ## A user argument (after `--`) that forces the warm-up, whatever the skip rules say.
 const FORCE_ARG := "--warm-graphics"

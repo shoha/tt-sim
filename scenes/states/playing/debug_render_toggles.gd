@@ -170,6 +170,7 @@ var _original_foliage_shaders: Dictionary = {}  # ShaderMaterial -> Shader
 
 var _panel: PanelContainer
 var _checkboxes: Dictionary = {}  # String -> CheckBox
+var _game_map: GameMap = null
 
 
 ## Current state of every toggle, keyed by the exact CSV column name
@@ -308,9 +309,24 @@ func _create_panel(overlay_parent: GameMap) -> void:
 	)
 	if offer_library:
 		labels.append("Foliage library: plantgen")
+	# Token visibility prototypes (topic tokenvis), always the last three, off by default.
+	labels.append_array(
+		["Token ghost (x-ray)", "Token window (card dissolve)", "Canopy window at token"]
+	)
 	var result: Dictionary = MapOverlayUtils.create_checkbox_panel(labels)
 	_panel = result.panel
 	var checkboxes: Array[CheckBox] = result.checkboxes
+	_game_map = overlay_parent
+	var tv_first := checkboxes.size() - 3
+	checkboxes[tv_first].toggled.connect(
+		func(on: bool) -> void: TokenVisibility.set_ghost(_game_map, on)
+	)
+	checkboxes[tv_first + 1].toggled.connect(
+		func(on: bool) -> void: TokenVisibility.set_window(_game_map, on)
+	)
+	checkboxes[tv_first + 2].toggled.connect(
+		func(on: bool) -> void: TokenVisibility.set_anchor(_game_map, on)
+	)
 	_checkboxes = {
 		"foliage_visible": checkboxes[0],
 		"tree_shadows": checkboxes[1],
