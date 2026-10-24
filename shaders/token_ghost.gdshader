@@ -12,9 +12,17 @@ render_mode unshaded, depth_test_disabled, depth_draw_never, cull_back, blend_mi
  *
  * The occlusion test reads the depth buffer (hint_depth_texture) and compares it with the
  * fragment's own view depth. Opaque foliage writes depth, a cutout card's discarded
- * fragments do not, so the ghost appears only behind the pixels a card really covers. The
- * token's own parts write depth too (an arm over the torso), so the gap must exceed
- * `min_gap` metres before it counts as an occluder.
+ * fragments do not, so the ghost appears only behind the pixels a card really covers.
+ *
+ * The token's own parts write depth too (an arm over the torso, a large creature's body over
+ * its far legs), and the depth buffer cannot say whose they are. So the token carries a
+ * bounding cylinder (`bound_center`, `bound_extent`, set by TokenGhost in the mesh's own
+ * space and carried to the world by MODEL_MATRIX, so it follows the token's move, turn and
+ * scale) and the fragment measures how far its view ray runs inside it on the way to the
+ * camera: everything of the token that can lie in front of this fragment lies in that
+ * stretch. Only a surface nearer than that stretch, plus a small margin (`bound_gap`), is
+ * somebody else's and counts as an occluder. Without a bound (`bound_extent` 0) the stretch
+ * is 0 and the margin is `min_gap`, as before.
  *
  * Colour: a figure part reads its palette column at the base of the gradient (use_palette,
  * the avatar figure shader's own palette texture), a pack token its albedo; both are
@@ -49,14 +57,55 @@ uniform float rim_power : hint_range(0.5, 6.0) = 1.3;
 uniform float min_gap : hint_range(0.0, 2.0) = 0.5;
 // Fade from nothing at min_gap to full over this many more metres, so a twig brushing the
 // figure gives a faint ghost and a crown a clear one.
+// With the token's bounds known the stretch above already covers its own parts, so only this
+// small margin (depth precision, a part grazing the fragment) is added to it instead of
+// `min_gap`; a token without bounds keeps `min_gap`.
+uniform float bound_gap : hint_range(0.0, 2.0) = 0.15;
 uniform float gap_ramp : hint_range(0.01, 4.0) = 0.5;
+
+// The token's bounding cylinder in this mesh's local space: its centre, its radius and half
+// height in the token body's own metres (x, y; 0 = none), and the body's up axis in this
+// mesh's local space (its length through MODEL_MATRIX is the body's world scale).
+uniform vec3 bound_center = vec3(0.0);
+uniform vec2 bound_extent = vec2(0.0);
+uniform vec3 bound_up = vec3(0.0, 1.0, 0.0);
+
+// How far a ray from `p` (relative to the cylinder's centre) along unit `d` runs inside a
+// vertical cylinder of radius `r` and half height `h` before it leaves it (0 when `p` is
+// outside or the cylinder is empty).
+float chord_out(vec3 p, vec3 d, float r, float h) {
+	if (r <= 0.0 || h <= 0.0) {
+		return 0.0;
+	}
+	float a = dot(d.xz, d.xz);
+	float t_side = 1e6;
+	if (a > 1e-6) {
+		float b = dot(p.xz, d.xz);
+		float c = dot(p.xz, p.xz) - r * r;
+		t_side = (-b + sqrt(max(b * b - a * c, 0.0))) / a;
+	}
+	float t_cap = 1e6;
+	if (abs(d.y) > 1e-6) {
+		t_cap = ((d.y > 0.0 ? h : -h) - p.y) / d.y;
+	}
+	return max(min(t_side, t_cap), 0.0);
+}
 
 void fragment() {
 	float depth = texture(depth_tex, SCREEN_UV).r;
 	vec4 scene = INV_PROJECTION_MATRIX * vec4(SCREEN_UV * 2.0 - 1.0, depth, 1.0);
 	float scene_dist = -(scene.z / scene.w);
 	float own_dist = -VERTEX.z;
-	float hidden = smoothstep(min_gap, min_gap + gap_ramp, own_dist - scene_dist);
+	// The stretch of this fragment's view ray inside the token's own bounds, as view depth.
+	float body_scale = length((MODEL_MATRIX * vec4(bound_up, 0.0)).xyz);
+	vec3 world_pos = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec3 to_camera = normalize((INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz);
+	vec3 centre = (MODEL_MATRIX * vec4(bound_center, 1.0)).xyz;
+	float own_stretch = chord_out(
+		world_pos - centre, to_camera, bound_extent.x * body_scale, bound_extent.y * body_scale)
+		* abs(VIEW.z);
+	float gap_floor = bound_extent.x > 0.0 ? bound_gap : min_gap;
+	float hidden = smoothstep(gap_floor, gap_floor + gap_ramp, own_dist - scene_dist - own_stretch);
 	if (hidden <= 0.01) {
 		discard;
 	}

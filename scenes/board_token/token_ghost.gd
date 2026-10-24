@@ -7,6 +7,9 @@ extends RefCounted
 ## (shaders/token_ghost.gdshader, a material_overlay on every mesh of the token). Nothing in
 ## the plants or the map changes, so nothing carves, moves or flickers as the camera pans, and
 ## it works for any occluder and both foliage libraries (it reads no foliage material).
+## The token's own parts never count as the cover (a large creature's body over its far legs):
+## each overlay carries the body's bounding cylinder (body_bounds) and the shader ignores
+## whatever lies within it on the way to the camera (docs/PERFORMANCE.md "self-occlusion fix").
 ## Settings > Graphics > "Token ghost" (graphics/token_ghost_enabled, default on).
 ## The decision, captures and measurements: docs/PERFORMANCE.md "Token ghost" and
 ## D:/dev/plantgen/docs/ttsim_token_visibility.md.
@@ -37,6 +40,8 @@ const GHOST_META := &"token_ghost"
 const SOURCE_META := &"token_ghost_source"
 ## Meta on a BoardToken the budget left undressed.
 const TRIMMED_META := &"token_ghost_trimmed"
+## Meta on a BoardToken made off the tree that waits to be dressed again once it is in it.
+const PENDING_META := &"token_ghost_pending"
 ## Drawn after the foliage and the water.
 const RENDER_PRIORITY := 8
 ## The rim of a selected or hovered token's ghost (the selection glow's gold).
@@ -95,11 +100,74 @@ static func dress(token: BoardToken) -> void:
 	if token == null or token.rigid_body == null:
 		return
 	var on := enabled and not suppressed(token)
-	for mi in meshes_of(token.rigid_body):
+	var meshes := meshes_of(token.rigid_body)
+	var bounds := body_bounds(token.rigid_body, meshes) if on else {}
+	if on and not token.rigid_body.is_inside_tree():
+		# Made off the tree (the factories): the bounds need world transforms, so dress again
+		# once the body enters it.
+		if not token.has_meta(PENDING_META):
+			token.set_meta(PENDING_META, true)
+			token.rigid_body.tree_entered.connect(
+				func() -> void:
+					if is_instance_valid(token):
+						token.remove_meta(PENDING_META)
+						dress(token),
+				CONNECT_ONE_SHOT | CONNECT_DEFERRED
+			)
+	for mi in meshes:
 		if on:
-			_dress_mesh(mi, token.is_highlighted)
+			_dress_mesh(mi, token.is_highlighted, bounds)
 		else:
 			_strip_mesh(mi)
+
+
+## The token body's bounding cylinder in the body's own frame and metres: {"center": Vector3,
+## "radius": float (horizontal, from the centre to the farthest corner, so a turn of the token
+## does not change it), "half_height": float}; empty when no mesh is in the tree yet. The
+## shader measures how far a view ray runs inside it (see the shader's header).
+static func body_bounds(body: Node3D, meshes: Array[MeshInstance3D]) -> Dictionary:
+	if not body.is_inside_tree():
+		return {}
+	var to_body := body.global_transform.affine_inverse()
+	var corners := PackedVector3Array()
+	for mi in meshes:
+		if not mi.is_inside_tree():
+			continue
+		var aabb := mi.get_aabb()
+		var rel := to_body * mi.global_transform
+		for i in 8:
+			corners.append(rel * aabb.get_endpoint(i))
+	if corners.is_empty():
+		return {}
+	var lo := corners[0]
+	var hi := corners[0]
+	for p in corners:
+		lo = lo.min(p)
+		hi = hi.max(p)
+	var centre := (lo + hi) * 0.5
+	var radius := 0.0
+	for p in corners:
+		radius = maxf(radius, Vector2(p.x - centre.x, p.z - centre.z).length())
+	return {"center": centre, "radius": radius, "half_height": (hi.y - lo.y) * 0.5}
+
+
+## Hands `bounds` (body_bounds) to one mesh's overlay in that mesh's own space, which is where
+## the shader reads them: the centre moved into the mesh's frame, and the body's up axis in
+## it, whose length through the mesh's world transform is the body's world scale (exact
+## whatever scale the mesh itself carries).
+static func _set_bounds(ghost: ShaderMaterial, mi: MeshInstance3D, bounds: Dictionary) -> void:
+	var body: Node = mi.get_parent()
+	while body != null and not body is RigidBody3D:
+		body = body.get_parent()
+	if bounds.is_empty() or body == null:
+		ghost.set_shader_parameter("bound_extent", Vector2.ZERO)
+		return
+	var to_mesh := mi.global_transform.affine_inverse() * (body as Node3D).global_transform
+	ghost.set_shader_parameter("bound_center", to_mesh * (bounds.center as Vector3))
+	ghost.set_shader_parameter("bound_up", to_mesh.basis * Vector3.UP)
+	ghost.set_shader_parameter(
+		"bound_extent", Vector2(bounds.radius as float, bounds.half_height as float)
+	)
 
 
 ## Every MeshInstance3D of a token's body: not the selection glow, the submerged marker or a
@@ -132,13 +200,14 @@ static func _strip_mesh(mi: MeshInstance3D) -> void:
 		mi.material_overlay = null
 
 
-static func _dress_mesh(mi: MeshInstance3D, highlighted: bool) -> void:
+static func _dress_mesh(mi: MeshInstance3D, highlighted: bool, bounds: Dictionary) -> void:
 	var source: Variant = _source_of(mi)
 	var ghost := overlay_of(mi)
 	if ghost == null or ghost.get_meta(SOURCE_META) != source:
 		ghost = _make_ghost(source)
 		mi.material_overlay = ghost
 	_set_rim(ghost, highlighted)
+	_set_bounds(ghost, mi, bounds)
 
 
 ## What a mesh's colours come from: an avatar part's palette texture, or a pack mesh's
