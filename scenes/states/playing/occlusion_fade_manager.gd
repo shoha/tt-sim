@@ -82,6 +82,9 @@ var _tree_materials: Array[ShaderMaterial] = []
 var _frame_counter: int = 0
 var _is_setup: bool = false
 var _lofi_pixelation: float = 0.0  # Mirror of lo-fi shader's pixelation value (0 = disabled)
+## The token window prototype's state (set_token_window), kept so a material registered later
+## starts in it.
+var _token_window := Vector4(0.0, 1.4, 0.6, 0.0)
 
 # Shared token data: pixel i = (world x, y, z, fade radius). Bound once to every
 # material; one update() per tick reaches all of them.
@@ -153,6 +156,17 @@ func _physics_process(_delta: float) -> void:
 	PerformanceMonitor.start_timer(&"perf/occlusion_fade_ms")
 	_update_token_uniforms()
 	PerformanceMonitor.stop_timer(&"perf/occlusion_fade_ms")
+
+
+## Prototype (topic tokenvis): turns the token window on or off for tree foliage, the
+## occlusion fade's zone dissolved card by card instead of stippled (wind_foliage_include
+## `token_window`). `scale` is the zone's size against the occlusion fade's, `core` the share
+## of it cleared fully. Reaches materials registered later too.
+func set_token_window(on: bool, scale: float = 1.4, core: float = 0.6) -> void:
+	_token_window = Vector4(1.0 if on else 0.0, scale, core, 0.0)
+	for mat in _tree_materials:
+		if is_instance_valid(mat):
+			mat.set_shader_parameter("token_window", _token_window)
 
 
 ## Update the lo-fi pixelation value so the dither grid aligns with the
@@ -365,6 +379,7 @@ func _register_tree_material(shader_mat: ShaderMaterial) -> void:
 	shader_mat.set_shader_parameter("floor_threshold", FOLIAGE_FLOOR_THRESHOLD)
 	shader_mat.set_shader_parameter("lofi_pixelation", _lofi_pixelation)
 	shader_mat.set_shader_parameter("lofi_dither_scale", lofi_dither_scale)
+	shader_mat.set_shader_parameter("token_window", _token_window)
 	_tree_materials.append(shader_mat)
 	_all_shader_materials.append(shader_mat)
 

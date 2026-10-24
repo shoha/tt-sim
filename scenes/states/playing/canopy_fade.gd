@@ -55,7 +55,18 @@ static var play_strength := 0.9
 static var enabled := true
 static var play_inner := 0.2
 static var play_outer := 0.55
+## Prototype (topic tokenvis, off by default): the window stands on a token instead of the
+## view centre. `anchor_on` swaps the window's centre for `anchor_point` (a world point on
+## the token, or none: `anchor_has_point` false closes the window) and its shape for
+## `anchor_shape` (inner radius, outer radius, depth band, in metres, whatever the zoom).
+static var anchor_on := false
+static var anchor_has_point := false
+static var anchor_point := Vector3.ZERO
+static var anchor_shape := Vector4(1.3, 3.2, 4.0, 0.0)
+static var anchor_strength := 1.0
 
+static var _anchor_last := Vector3.ZERO
+static var _anchor_open := 0.0
 static var _last_centre := Vector4(INF, INF, INF, INF)
 static var _last_view := Vector4(INF, INF, INF, INF)
 static var _last_shape := Vector4(INF, INF, INF, INF)
@@ -143,11 +154,25 @@ static func publish(
 	var s := strength(camera.size, home) if enabled else 0.0
 	var back := camera.global_basis.z.normalized()
 	var centre := Vector4.ZERO
-	if s > 0.0:
+	var window := shape(camera.size, home)
+	if anchor_on:
+		# Eased open and closed like the brush window, so a pointer passing over tokens
+		# thins and restores the crowns instead of flicking them; the last point stays while
+		# the window closes.
+		var wanted := enabled and anchor_has_point
+		if wanted:
+			_anchor_last = anchor_point
+		var rate := 1.0 / (BRUSH_OPEN_S if wanted else BRUSH_CLOSE_S)
+		_anchor_open = clampf(_anchor_open + (rate if wanted else -rate) * maxf(seconds, 0.0), 0.0, 1.0)
+		var gone := 1.0 - smoothstep(PLAY_MAX_SIZE, FADE_OUT_SIZE, camera.size)
+		s = anchor_strength * gone * smoothstep(0.0, 1.0, _anchor_open)
+		if s > 0.0:
+			centre = Vector4(_anchor_last.x, _anchor_last.y, _anchor_last.z, s)
+		window = anchor_shape
+	elif s > 0.0:
 		var ground := view_centre_ground(camera, viewport_size)
 		centre = Vector4(ground.x, ground.y, ground.z, s)
 	var view := Vector4(back.x, back.y, back.z, 0.0)
-	var window := shape(camera.size, home)
 	if centre != _last_centre:
 		_last_centre = centre
 		RenderingServer.global_shader_parameter_set(GLOBAL_CENTRE, centre)
