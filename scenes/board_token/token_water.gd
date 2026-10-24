@@ -164,10 +164,14 @@ func update_cue(moving: bool) -> void:
 		surface = WaterSurface.submerged_surface(
 			space, at, box.size.y, WaterSurface.submerged_share_for(_swims())
 		)
+	var was_shown := _marker.is_shown()
 	if is_nan(surface):
 		_marker.hide_marker()
 	else:
 		_marker.show_at(Vector3(at.x, surface, at.z), _swims())
+	# A token the water hides has no ghost (the marker is its cue); one that surfaces gets it back.
+	if _marker.is_shown() != was_shown:
+		TokenGhost.dress(_token.get_parent() as BoardToken)
 
 
 ## How deep the token rides in floating water (WaterSurface.draft_for: avatars swim).

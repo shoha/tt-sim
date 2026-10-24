@@ -1023,7 +1023,14 @@ live one ends the silence; see `docs/SOUND_EFFECTS.md`.
 **Graphics Tab:**
 
 - Fullscreen toggle, VSync toggle
-- Lo-fi filter toggle, occlusion fade toggle
+- Lo-fi filter toggle
+- "See tokens through scenery" rows (`SettingsSeeThrough`, `graphics/*` keys, applied at once by
+  Apply and read again at every map load): **Token ghost** (default on; a see-through silhouette
+  with an ink rim, gold while selected or hovered, of a token that foliage, rocks or walls cover:
+  `TokenGhost`, `shaders/token_ghost.gdshader`), **Occlusion fade** (default on; only the
+  per-token dithered reveal of map geometry and tree cards: `OcclusionFadeManager`) and **Canopy
+  fade** (default off; the close-zoom window of thinned crowns round the screen centre:
+  `CanopyFade`). The three are independent. Tooltips are in `SettingsSeeThrough.apply_tooltips`.
 - Antialiasing, shadow quality, water quality option buttons
 - Advanced (`Foldout`): foliage density slider, SSAO/SSR/SDFGI toggles, renderer method option button
 

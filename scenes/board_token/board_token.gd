@@ -210,6 +210,8 @@ func set_visible_to_players(is_visible_value: bool) -> void:
 	is_visible_to_players = is_visible_value
 	token_visibility_changed.emit(is_visible_value)
 	_update_visibility_visuals()
+	# A token hidden from players has no ghost (the GM already sees it dithered).
+	TokenGhost.dress(self)
 
 
 func toggle_visibility() -> void:
@@ -281,6 +283,8 @@ func _update_highlight_visuals() -> void:
 			_selection_glow.show_glow()
 		else:
 			_selection_glow.hide_glow()
+	# The token ghost's rim turns gold while the token is selected or hovered.
+	TokenGhost.dress(self)
 
 
 ## Set the highlight glow color

@@ -976,3 +976,12 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   `mobile_maps`, `p4b_cue` and `pol_trees` still play `user://levels/river` or
   `user://levels/deciduous_clusters` and need them to exist; their `play` and `dress` steps
   only read them.
+- `jobs/token_ghost.json` (about 80 s, keeps no level): the token ghost on the plantgen package at
+  taiga and temperate forest, home zoom (8 avatar tokens, the first selected) and zoom 5 (three
+  tokens), in three modes: `none` (ghost and occlusion fade off: the problem), `ghost_only`
+  (the ghost alone: the stress case, where the ghost does all the work) and `shipped` (ghost plus
+  occlusion fade, canopy fade off). 12 captures. Edit the `package` path to use another build.
+- `jobs/token_ghost_perf.json` (about 80 s): the same two maps with 32 avatar tokens on screen
+  (the token cap), vsync off, GPU median and draw calls for `none`, `full` (ghost, no budget),
+  `capped` (ghost at the 16-token budget), repeated to show drift. Numbers in
+  `docs/PERFORMANCE.md` "Token ghost".
