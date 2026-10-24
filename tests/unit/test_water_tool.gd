@@ -721,7 +721,7 @@ func test_smoothing_a_fall_s_face_turns_it_back_into_a_draped_sheet() -> void:
 	assert_true(editor.begin_height_stroke(HeightBrush.SMOOTH))
 	var from := lip - dir * 2.0
 	var to := lip + dir * (search + 2.0)
-	for _pass in 30:
+	for _dab in 30:
 		editor.stroke_dab(Vector3(from.x, 0, from.y), Vector3(to.x, 0, to.y), 3.5, 0.25)
 		editor.flush()
 	assert_true(editor.end_stroke())

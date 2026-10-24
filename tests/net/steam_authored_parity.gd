@@ -566,8 +566,9 @@ func _token_states() -> Dictionary:
 			"z": snappedf(base.z, 0.001),
 			"height": snappedf(height, 0.001),
 			"submerged": draggable.is_submerged_cue_shown(),
-			"ground_y": snappedf(ground.y, 0.001) if ground != Vector3.INF else null,
-			"water_y": snappedf(float(water.y), 0.001) if not water.is_empty() else null,
+			"ground_y": (snappedf(ground.y, 0.001) as Variant) if ground != Vector3.INF else null,
+			"water_y":
+			(snappedf(float(water.y), 0.001) as Variant) if not water.is_empty() else null,
 		}
 	return out
 
@@ -605,7 +606,7 @@ func _maybe_capture() -> void:
 	_set_phase(previous)
 
 
-func _grab(dir: String, name: String) -> void:
+func _grab(dir: String, shot_name: String) -> void:
 	await RenderingServer.frame_post_draw
 	var images: Array[Image] = [
 		get_viewport().get_texture().get_image(),
@@ -619,8 +620,8 @@ func _grab(dir: String, name: String) -> void:
 			int(img.get_height() * CAPTURE_SCALE),
 			Image.INTERPOLATE_LANCZOS
 		)
-		img.save_png(dir.path_join("%s_%s%s.png" % [_role, name, suffixes[k]]))
-	_log("captured %s (%s)" % [name, str(images[0].get_size())])
+		img.save_png(dir.path_join("%s_%s%s.png" % [_role, shot_name, suffixes[k]]))
+	_log("captured %s (%s)" % [shot_name,str(images[0].get_size())])
 
 
 func _on_hard_timeout() -> void:

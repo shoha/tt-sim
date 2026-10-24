@@ -7,6 +7,7 @@ extends GutTest
 ## install's first save is never converted. Every test works on its own config file, never
 ## user://settings.cfg.
 
+const AUDIO_MANAGER_SCRIPT := preload("res://autoloads/audio_manager.gd")
 const SETTINGS_SCENE := preload("res://scenes/ui/settings_menu.tscn")
 const TEMP_PATH := "user://_test_volume_taper_settings.cfg"
 
@@ -49,12 +50,12 @@ func _master(config: ConfigFile) -> float:
 
 func test_a_linear_save_keeps_its_loudness() -> void:
 	_write_linear_settings()
-	assert_not_null(AudioManager.load_migrated_settings(TEMP_PATH))
+	assert_not_null(AUDIO_MANAGER_SCRIPT.load_migrated_settings(TEMP_PATH))
 
 	var config := _reread()
 	assert_almost_eq(_master(config), 70.71, 0.01, "50% becomes 70.7%")
 	assert_almost_eq(
-		AudioManager.slider_to_db(_master(config) / 100.0),
+		AUDIO_MANAGER_SCRIPT.slider_to_db(_master(config) / 100.0),
 		linear_to_db(0.5),
 		0.001,
 		"which plays at the -6 dB the linear taper gave 50%"
@@ -66,8 +67,8 @@ func test_a_linear_save_keeps_its_loudness() -> void:
 
 func test_a_second_load_does_not_convert_again() -> void:
 	_write_linear_settings()
-	AudioManager.load_migrated_settings(TEMP_PATH)
-	var loaded := AudioManager.load_migrated_settings(TEMP_PATH)
+	AUDIO_MANAGER_SCRIPT.load_migrated_settings(TEMP_PATH)
+	var loaded := AUDIO_MANAGER_SCRIPT.load_migrated_settings(TEMP_PATH)
 
 	assert_almost_eq(_master(loaded), 70.71, 0.01, "not 84.1%, the square root taken twice")
 	assert_almost_eq(_master(_reread()), 70.71, 0.01)
@@ -80,7 +81,7 @@ func test_a_stamped_file_is_untouched() -> void:
 	config.save(TEMP_PATH)
 	var before := FileAccess.get_file_as_string(TEMP_PATH)
 
-	var loaded := AudioManager.load_migrated_settings(TEMP_PATH)
+	var loaded := AUDIO_MANAGER_SCRIPT.load_migrated_settings(TEMP_PATH)
 
 	assert_eq(_master(loaded), 50.0)
 	assert_eq(FileAccess.get_file_as_string(TEMP_PATH), before)
@@ -88,7 +89,7 @@ func test_a_stamped_file_is_untouched() -> void:
 
 func test_only_the_saved_volumes_change() -> void:
 	_write_linear_settings()
-	AudioManager.load_migrated_settings(TEMP_PATH)
+	AUDIO_MANAGER_SCRIPT.load_migrated_settings(TEMP_PATH)
 
 	var config := _reread()
 	var sections := PackedStringArray(["audio", "graphics", "grid_visuals", "controls"])
@@ -105,7 +106,7 @@ func test_only_the_saved_volumes_change() -> void:
 
 
 func test_no_file_stays_no_file() -> void:
-	assert_null(AudioManager.load_migrated_settings(TEMP_PATH))
+	assert_null(AUDIO_MANAGER_SCRIPT.load_migrated_settings(TEMP_PATH))
 	assert_false(FileAccess.file_exists(TEMP_PATH), "a fresh install gets no file at startup")
 
 
@@ -115,7 +116,7 @@ func test_the_menu_stamps_the_taper_when_it_saves() -> void:
 	menu.master_slider.set_value_no_signal(50.0)
 
 	menu._save_settings(TEMP_PATH)
-	var loaded := AudioManager.load_migrated_settings(TEMP_PATH)
+	var loaded := AUDIO_MANAGER_SCRIPT.load_migrated_settings(TEMP_PATH)
 
 	assert_eq(loaded.get_value("audio", AudioManager.VOLUME_TAPER_KEY), AudioManager.VOLUME_TAPER)
 	assert_eq(_master(loaded), 50.0, "a value saved on the squared taper is not converted")

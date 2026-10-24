@@ -31,9 +31,9 @@ func test_settling_onto_the_ground_is_not_a_move() -> void:
 func test_a_move_a_rename_an_add_and_a_removal_count() -> void:
 	var saved := _snapshot([_placement("a", Vector3(1, 0, 1))])
 	assert_true(TokenSaveState.differs(saved, _snapshot([_placement("a", Vector3(2, 0, 1))])))
-	var renamed := _placement("a", Vector3(1, 0, 1))
-	renamed.token_name = "Marigold"
-	assert_true(TokenSaveState.differs(saved, _snapshot([renamed])))
+	var renamed_token := _placement("a", Vector3(1, 0, 1))
+	renamed_token.token_name = "Marigold"
+	assert_true(TokenSaveState.differs(saved, _snapshot([renamed_token])))
 	var hurt := _placement("a", Vector3(1, 0, 1))
 	hurt.current_health = 40
 	assert_true(TokenSaveState.differs(saved, _snapshot([hurt])))

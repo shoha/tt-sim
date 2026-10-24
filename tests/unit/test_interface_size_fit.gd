@@ -397,11 +397,11 @@ func test_an_empty_library_shows_the_bundled_name_unscrolled() -> void:
 		await _assert_fits(what, title.new_map_card, Vector2(canvas))
 		assert_true(title.new_map_card.is_empty_library(), what)
 		assert_eq(title.new_map_card.caption.get_line_count(), 1, "%s: one line" % what)
-		var name := _drawn_rect(title.grid._cards[0]._name)
+		var name_rect := _drawn_rect(title.grid._cards[0]._name)
 		var view := _drawn_rect(title.grid).grow(SLACK_PX)
 		assert_eq(title.grid.scroll_vertical, 0, what)
-		assert_true(view.encloses(name), "%s: Old Mill's name %s in %s" % [what, name, view])
-		assert_lte(name.end.y, canvas.y - 24.0, "%s: above the foot's room" % what)
+		assert_true(view.encloses(name_rect), "%s: Old Mill's name %s in %s" % [what, name_rect, view])
+		assert_lte(name_rect.end.y, canvas.y - 24.0, "%s: above the foot's room" % what)
 		title.free()
 
 

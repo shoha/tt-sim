@@ -14,12 +14,12 @@ var _plays: Dictionary = {}
 var _sessions: Array[Dictionary] = []
 
 
-func _info(folder: String, name: String, modified: int) -> Dictionary:
+func _info(folder: String, level_name: String, modified: int) -> Dictionary:
 	return {
 		"path": "user://x/%s/" % folder,
 		"folder": folder,
 		"is_folder_based": true,
-		"name": name,
+		"name": level_name,
 		"token_count": 3,
 		"modified_at": modified,
 		"environment_preset": "",
@@ -400,7 +400,7 @@ func test_the_panels_facts_stay_in_view_at_1280x720() -> void:
 	title.session_provider = func() -> Array[Dictionary]: return _sessions
 	host.add_child(title)
 	var panel := title.map_panel
-	panel.footprint = func(_info: Dictionary) -> Vector2: return Vector2(150, 150)
+	panel.footprint = func(_map_info: Dictionary) -> Vector2: return Vector2(150, 150)
 	panel.show_map(long)
 	await wait_process_frames(4)
 	assert_true(panel.description_clamped(), "past three lines")

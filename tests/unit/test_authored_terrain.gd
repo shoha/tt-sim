@@ -106,8 +106,8 @@ func test_chunks_are_scatter_chunker_cells() -> void:
 		var inner := doc.sample_to_world(Vector2(rect.end - Vector2i.ONE))
 		var first := doc.sample_to_world(Vector2(rect.position))
 		for p in [first, inner]:
-			var owner := ScatterChunker.cell_for(Vector3(p.x, 0.0, p.y), 10.0)
-			assert_eq(owner, cell, "sample at %s belongs to its chunk's cell" % p)
+			var owner_cell := ScatterChunker.cell_for(Vector3(p.x, 0.0, p.y), 10.0)
+			assert_eq(owner_cell, cell, "sample at %s belongs to its chunk's cell" % p)
 
 
 func test_neighbouring_chunks_share_border_vertices_exactly() -> void:
@@ -166,9 +166,7 @@ func test_normals_are_continuous_across_chunk_borders() -> void:
 		worst = maxf(worst, (norms[row * columns + columns - 1] - expected).length())
 	assert_lt(worst, EPSILON, "border normals use neighbours across the border")
 	# And the step in normal across the border is no larger than one step inside a chunk.
-	var east := TerrainMeshBuilder.chunk_sample_rect(doc, cell + Vector2i(1, 0))
 	var east_norms := _normals(doc, cell + Vector2i(1, 0))
-	var east_columns := east.size.x + 1
 	var across := (east_norms[1] - norms[columns - 1]).length()
 	var inside := (norms[columns - 1] - norms[columns - 2]).length()
 	assert_lt(across, inside * 1.5 + EPSILON, "no normal jump at the border")

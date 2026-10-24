@@ -203,9 +203,9 @@ func test_apply_water_settings_from_resource_round_trips_through_the_material() 
 ## size on the object scale, and glTF carries that as node scale -- so the mesh's own
 ## PlaneMesh stays 1x1 here and `size` lands on the node's scale instead, mirroring what
 ## the importer actually hands the loader.
-func _water_plane(name: String, size: float, with_flow: bool) -> MeshInstance3D:
+func _water_plane(node_name: String, size: float, with_flow: bool) -> MeshInstance3D:
 	var mesh_node := MeshInstance3D.new()
-	mesh_node.name = name
+	mesh_node.name = node_name
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(1.0, 1.0)
 	var material := StandardMaterial3D.new()

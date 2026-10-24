@@ -361,8 +361,8 @@ func test_the_panel_takes_a_share_of_the_window_within_limits() -> void:
 
 func test_face_tiles_grow_to_the_largest_size_that_fits_the_pane() -> void:
 	var counts: Array[int] = [7, 4, 5, 5]
-	var lines := func(side: float, width: float) -> int:
-		var per_line := floori((width + 6.0) / (side + 6.0))
+	var lines := func(tile: float, width: float) -> int:
+		var per_line := floori((width + 6.0) / (tile + 6.0))
 		var total := 0
 		for count in counts:
 			total += ceili(float(count) / float(per_line))

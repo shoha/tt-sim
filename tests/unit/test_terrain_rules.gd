@@ -257,19 +257,19 @@ func _shader_constants() -> Dictionary:
 func test_shader_constants_mirror_the_rules() -> void:
 	var shader := _shader_constants()
 	var rules: Dictionary = TerrainRules.new().get_script().get_script_constant_map()
-	for name in MIRRORED:
-		assert_true(rules.has(name), "%s in TerrainRules" % name)
-		assert_true(shader.has(name), "%s in the shader" % name)
-		if not rules.has(name) or not shader.has(name):
+	for constant_name in MIRRORED:
+		assert_true(rules.has(constant_name), "%s in TerrainRules" % constant_name)
+		assert_true(shader.has(constant_name), "%s in the shader" % constant_name)
+		if not rules.has(constant_name) or not shader.has(constant_name):
 			continue
-		var cpu: Variant = rules[name]
+		var cpu: Variant = rules[constant_name]
 		if cpu is Vector2:
 			assert_true(
-				(shader[name] as Vector2).is_equal_approx(cpu),
-				"%s: %s vs %s" % [name, shader[name], cpu]
+				(shader[constant_name] as Vector2).is_equal_approx(cpu),
+				"%s: %s vs %s" % [constant_name, shader[constant_name], cpu]
 			)
 		else:
-			assert_almost_eq(float(shader[name]), float(cpu), 1e-6, name)
+			assert_almost_eq(float(shader[constant_name]), float(cpu), 1e-6, constant_name)
 	assert_almost_eq(shader.get("CLIFF_START_COS", 0.0), TerrainRules.cliff_start_cos(), 1e-6)
 	assert_almost_eq(shader.get("CLIFF_END_COS", 0.0), TerrainRules.cliff_end_cos(), 1e-6)
 	assert_almost_eq(shader.get("WATER_DEPTH_SCALE", 0.0), WaterDressing.DEPTH_SCALE, 1e-6)

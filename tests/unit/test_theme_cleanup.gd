@@ -92,7 +92,14 @@ func test_a_toast_action_runs_once_and_dismisses() -> void:
 	var toasts: ToastContainer = TOAST_SCENE.instantiate()
 	add_child_autofree(toasts)
 	var calls := [0]
-	toasts.show_toast('Removed "Marigold"', 0, 30.0, "Undo", func(): calls[0] += 1, "arrow-back-up")
+	toasts.show_toast(
+		'Removed "Marigold"',
+		ToastContainer.ToastType.INFO,
+		30.0,
+		"Undo",
+		func(): calls[0] += 1,
+		"arrow-back-up"
+	)
 	var button := toasts.toast_vbox.find_child("Action", true, false) as Button
 	assert_eq(button.text, "Undo")
 	assert_not_null(button.icon, "a real icon")
@@ -107,8 +114,22 @@ func test_a_toast_action_runs_once_and_dismisses() -> void:
 func test_an_event_toast_wears_its_icon_and_a_stack_aligns() -> void:
 	var toasts: ToastContainer = TOAST_SCENE.instantiate()
 	add_child_autofree(toasts)
-	toasts.show_toast("The bridge fell", 0, 30.0, "", Callable(), "", "bridge-broken")
-	toasts.show_toast("The trees fell for everyone at the table", 0, 30.0, "Undo", func(): pass)
+	toasts.show_toast(
+		"The bridge fell",
+		ToastContainer.ToastType.INFO,
+		30.0,
+		"",
+		Callable(),
+		"",
+		"bridge-broken"
+	)
+	toasts.show_toast(
+		"The trees fell for everyone at the table",
+		ToastContainer.ToastType.INFO,
+		30.0,
+		"Undo",
+		func(): pass
+	)
 	var shown: Array = toasts._active_toasts
 	var icon := (shown[0] as Control).find_child("Icon", true, false) as TextureRect
 	assert_eq(icon.texture, IconButton.load_icon("bridge-broken"), "the event's picture")

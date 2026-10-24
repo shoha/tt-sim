@@ -22,6 +22,7 @@ extends Node
 ## Each run writes its log and one final `NET_RESULT {json}` line to --out and stdout,
 ## then quits with exit code 0 (pass) or 1 (fail).
 
+const NETWORK_MANAGER_SCRIPT := preload("res://autoloads/network_manager.gd")
 const APP_ID := 480
 const LEVEL_PREFIX := "_nettest_"
 const DEFAULT_LEVEL := "_nettest_map"
@@ -181,7 +182,7 @@ func _on_host_player_joined(peer_id: int, _info: Dictionary) -> void:
 	_broadcast_done = true
 	var level_dict := {"level_name": "Net test", "level_folder": _level, "map_path": "map.glb"}
 	NetworkManager.broadcast_level_data(level_dict)
-	var hashes: Dictionary = NetworkManager.with_map_hashes(level_dict).get(
+	var hashes: Dictionary = NETWORK_MANAGER_SCRIPT.with_map_hashes(level_dict).get(
 		MapFileHash.HASHES_KEY, {}
 	)
 	_result["host_hash"] = hashes.get(Paths.LEVEL_MAP_VARIANT, "")
