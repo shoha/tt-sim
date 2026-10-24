@@ -254,14 +254,18 @@ static func _make_ghost(source: Variant) -> ShaderMaterial:
 ## A selected or hovered token's rim is the selection glow's gold (the glow disc itself is
 ## hidden by the foliage); otherwise the shader's own ink rim (null puts the default back).
 static func _set_rim(ghost: ShaderMaterial, highlighted: bool) -> void:
-	ghost.set_shader_parameter("rim_color", SELECTED_RIM if highlighted else null)
-	ghost.set_shader_parameter("rim_strength", 1.0 if highlighted else null)
+	if highlighted:
+		ghost.set_shader_parameter("rim_color", SELECTED_RIM)
+		ghost.set_shader_parameter("rim_strength", 1.0)
+	else:
+		ghost.set_shader_parameter("rim_color", null)
+		ghost.set_shader_parameter("rim_strength", null)
 
 
 ## Which of `candidates` ({id, highlighted: bool, distance: float}, the distance from the
-## screen centre) stay dressed under a budget of `budget`: the highlighted first, then the
+## screen centre) stay dressed under a budget of `limit`: the highlighted first, then the
 ## nearest. Returns {id: true}.
-static func allowed(candidates: Array[Dictionary], budget: int) -> Dictionary:
+static func allowed(candidates: Array[Dictionary], limit: int) -> Dictionary:
 	var order := candidates.duplicate()
 	order.sort_custom(
 		func(a: Dictionary, b: Dictionary) -> bool:
@@ -270,7 +274,7 @@ static func allowed(candidates: Array[Dictionary], budget: int) -> Dictionary:
 			return a.distance < b.distance
 	)
 	var out := {}
-	for i in mini(budget, order.size()):
+	for i in mini(limit, order.size()):
 		out[order[i].id] = true
 	return out
 
