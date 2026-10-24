@@ -223,6 +223,20 @@ unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 
+[node name="TokenGhost" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/TokenGhost"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Token ghost"
+
+[node name="TokenGhostCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/TokenGhost"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+
 [node name="OcclusionFade" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
 layout_mode = 2
 
@@ -236,6 +250,19 @@ text = "Occlusion fade"
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
+
+[node name="CanopyFade" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/CanopyFade"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "Canopy fade"
+
+[node name="CanopyFadeCheck" type="CheckButton" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content/CanopyFade"]
+unique_name_in_owner = true
+layout_mode = 2
 
 [node name="Antialiasing" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/Graphics/Margin/Content"]
 layout_mode = 2

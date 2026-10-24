@@ -18,7 +18,7 @@ static func apply(menu: SettingsMenu) -> void:
 	)
 	menu.vsync_check.tooltip_text = "Sync frame rate to monitor refresh rate"
 	menu.lofi_check.tooltip_text = "Apply a lo-fi pixel filter to the 3D view"
-	menu.occlusion_fade_check.tooltip_text = "Fade map geometry and foliage that hide tokens"
+	SettingsSeeThrough.apply_tooltips(menu)
 	menu.antialiasing_option.tooltip_text = "Smooths jagged edges on foliage (uses more GPU memory)"
 	menu.shadow_quality_option.tooltip_text = (
 		"Shadow edge softness (Hard is fastest, " + "Ultra is priciest)"

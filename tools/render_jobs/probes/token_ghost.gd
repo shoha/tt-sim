@@ -1,15 +1,17 @@
 extends RefCounted
 
-## Render-job probe (`call` op) for the token visibility prototypes (topic tokenvis,
-## docs/plans/2026-10-24-tokenvis or D:/dev/plantgen/docs/ttsim_token_visibility.md).
-## Positions are map XZ metres. `action`:
+## Render-job probe (`call` op) for the token ghost and the see-through settings (docs/
+## PERFORMANCE.md "Token ghost", jobs/token_ghost.json). Positions are map XZ metres. `action`:
 ## - `spawn` (`at` [x, z], `preset` default 0, `yaw` degrees, `select` default false): one
 ##   avatar token dropped on the terrain at the point (selected = hover glow layer added).
 ## - `look` (`at` [x, z], `height` default 0.8, `shift` [dx, dy] default [0, 0]): pans so the
 ##   point stands at the screen centre moved by `shift` (screen fractions, +x right, +y down),
 ##   so a token can be put away from the centre the canopy window sits on.
-## - `mode` (`name`): see TokenVisibility.set_mode; `ghost`, `window`, `size`, `strength`
-##   etc. are read from the step as the prototypes define them.
+## - `spawn_screen` (`fracs` [[fx, fy], ...], `preset`, `select`): avatars under screen points.
+## - `mode`: `reset` (the shipped state), `ghost` (bool), `ghost_params` ({uniform: value},
+##   set on every overlay, for tuning), `occlusion` (bool, the per-token fade), `canopy` (bool,
+##   the close-zoom window).
+## - `info`: draw calls, primitives and token meshes of the last frame.
 ## - `report`: tokens and their screen positions.
 
 const AVATAR_PROBE := "res://tools/render_jobs/probes/avatar_token.gd"
@@ -68,7 +70,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			var meshes := 0
 			for node in gm.drag_and_drop_node.get_children():
 				if node is BoardToken:
-					meshes += (node as BoardToken).rigid_body.find_children("*", "MeshInstance3D", true, false).size()
+					var body := (node as BoardToken).rigid_body
+					meshes += body.find_children("*", "MeshInstance3D", true, false).size()
 			return (
 				"draw calls %d, primitives %d, token meshes %d"
 				% [
@@ -187,7 +190,39 @@ static func _look(gm: GameMap, step: Dictionary) -> String:
 
 
 static func _mode(gm: GameMap, step: Dictionary) -> String:
-	return TokenVisibility.set_mode(gm, step)
+	var out := PackedStringArray()
+	if bool(step.get("reset", false)):
+		gm.set_occlusion_fade_enabled(true)
+		CanopyFade.enabled = CanopyFade.DEFAULT_ENABLED
+		TokenGhost.set_enabled(TokenGhost.DEFAULT_ENABLED, gm.get_tree())
+		TokenGhost.budget = TokenGhost.BUDGET_TOKENS
+		out.append("reset")
+	if step.has("occlusion"):
+		gm.set_occlusion_fade_enabled(bool(step.occlusion))
+		out.append("occlusion %s" % str(step.occlusion))
+	if step.has("canopy"):
+		CanopyFade.enabled = bool(step.canopy)
+		out.append("canopy %s" % str(step.canopy))
+	if step.has("budget"):
+		TokenGhost.budget = int(step.budget)
+		out.append("budget %d" % TokenGhost.budget)
+	if step.has("ghost"):
+		TokenGhost.set_enabled(bool(step.ghost), gm.get_tree())
+		out.append("ghost %s" % str(step.ghost))
+	var params: Dictionary = step.get("ghost_params", {})
+	if not params.is_empty():
+		var n := 0
+		for node in gm.get_tree().get_nodes_in_group(BoardToken.GROUP_NAME):
+			var token := node as BoardToken
+			for mi in TokenGhost.meshes_of(token.rigid_body):
+				var ghost := TokenGhost.overlay_of(mi)
+				if ghost == null:
+					continue
+				n += 1
+				for key in params:
+					ghost.set_shader_parameter(String(key), params[key])
+		out.append("ghost_params on %d overlays" % n)
+	return ", ".join(out)
 
 
 static func _report(gm: GameMap) -> String:

@@ -117,6 +117,7 @@ static func _assemble_token(
 	instance._selection_glow = selection_glow
 
 	NodeUtils.set_own_children(instance)
+	TokenGhost.dress(instance)
 
 	return instance
 
@@ -626,6 +627,9 @@ static func apply_model_upgrade(token: BoardToken, model: Node3D) -> void:
 
 	# Update display name (is_placeholder was already cleared at the top of this method)
 	token.name = token.token_name
+
+	# The real model is in: give it the token ghost (the placeholder had none)
+	TokenGhost.dress(token)
 
 	# Sparkle burst effect to signal "model is ready"
 	var viewport := rb.get_viewport()

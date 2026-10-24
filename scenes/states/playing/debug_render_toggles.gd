@@ -122,6 +122,22 @@ const PANEL_ORDER_KEYS := [
 	"baked_foliage_ao",
 ]
 
+## One tooltip line per PANEL_ORDER_KEYS entry (same order). These are performance
+## diagnostics for A/B runs (docs/PERFORMANCE.md), not player settings: the player-facing
+## options are in Settings > Graphics.
+const TIPS := [
+	"Show or hide every tree and grass MultiMesh.",
+	"Whether tree MultiMeshes cast shadows.",
+	"Whether grass MultiMeshes cast shadows (off in the shipped build).",
+	"Whether map meshes cast shadows.",
+	"Whether the sun light casts shadows at all.",
+	"Swap the sun's soft shadow filter for the hard one, to isolate filter cost.",
+	"Foliage as an unshaded, albedo-only shader. Exclusive with the next two.",
+	"Foliage unshaded but with every real texture read. Exclusive with the others.",
+	"Foliage with Lambert diffuse and no specular. Exclusive with the others.",
+	"Apply the full baked ORM occlusion channel to foliage instead of the shipped strength.",
+]
+
 var _foliage_visible: bool = true
 var _tree_shadows: bool = true
 ## Default false, unlike the other three visibility/shadow toggles above: grass no
@@ -170,7 +186,6 @@ var _original_foliage_shaders: Dictionary = {}  # ShaderMaterial -> Shader
 
 var _panel: PanelContainer
 var _checkboxes: Dictionary = {}  # String -> CheckBox
-var _game_map: GameMap = null
 
 
 ## Current state of every toggle, keyed by the exact CSV column name
@@ -309,24 +324,11 @@ func _create_panel(overlay_parent: GameMap) -> void:
 	)
 	if offer_library:
 		labels.append("Foliage library: plantgen")
-	# Token visibility prototypes (topic tokenvis), always the last three, off by default.
-	labels.append_array(
-		["Token ghost (x-ray)", "Token window (card dissolve)", "Canopy window at token"]
-	)
 	var result: Dictionary = MapOverlayUtils.create_checkbox_panel(labels)
 	_panel = result.panel
 	var checkboxes: Array[CheckBox] = result.checkboxes
-	_game_map = overlay_parent
-	var tv_first := checkboxes.size() - 3
-	checkboxes[tv_first].toggled.connect(
-		func(on: bool) -> void: TokenVisibility.set_ghost(_game_map, on)
-	)
-	checkboxes[tv_first + 1].toggled.connect(
-		func(on: bool) -> void: TokenVisibility.set_window(_game_map, on)
-	)
-	checkboxes[tv_first + 2].toggled.connect(
-		func(on: bool) -> void: TokenVisibility.set_anchor(_game_map, on)
-	)
+	for i in PANEL_ORDER_KEYS.size():
+		checkboxes[i].tooltip_text = "%s (key %d)\n%s" % [labels[i], (i + 1) % 10, TIPS[i]]
 	_checkboxes = {
 		"foliage_visible": checkboxes[0],
 		"tree_shadows": checkboxes[1],
@@ -362,6 +364,10 @@ func _create_panel(overlay_parent: GameMap) -> void:
 	_checkboxes["baked_foliage_ao"].toggled.connect(_on_baked_foliage_ao_toggled)
 	if offer_library:
 		_checkboxes[FOLIAGE_LIBRARY_KEY] = checkboxes[10]
+		checkboxes[10].tooltip_text = (
+			"Serve the plantgen foliage package (checked) or the installed treecube palette, "
+			+ "and rebuild the open map."
+		)
 		checkboxes[10].toggled.connect(_on_foliage_library_toggled)
 		checkboxes[10].set_pressed_no_signal(FoliageLibrary.current() == FoliageLibrary.PLANTGEN)
 

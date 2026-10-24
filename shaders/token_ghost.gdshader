@@ -2,8 +2,8 @@ shader_type spatial;
 render_mode unshaded, depth_test_disabled, depth_draw_never, cull_back, blend_mix, shadows_disabled;
 
 /*
- * Token ghost (prototype, topic tokenvis; TokenVisibility, off by default)
- * ========================================================================
+ * Token ghost (TokenGhost, Settings > Graphics > Token ghost)
+ * ===========================================================
  *
  * A material_overlay on every mesh of a token: the token's own geometry drawn a second time
  * with the depth test off, kept only where something stands between the camera and the
@@ -21,6 +21,10 @@ render_mode unshaded, depth_test_disabled, depth_draw_never, cull_back, blend_mi
  * lifted toward `ghost_tint` and rimmed in `rim_color` so the shape reads on dark leaves.
  * No lighting: the figure's painted colours stay their own, the lo-fi pass grades them
  * with the rest of the frame.
+ *
+ * Opacity: `ghost_alpha` is the fill where the token is covered, `rim_alpha` how much the
+ * silhouette's edge adds on top of it, so the ink line stays solid while the body is a
+ * little see-through. TokenGhost.FILL_ALPHA and RIM_ALPHA are these defaults.
  */
 
 uniform sampler2D depth_tex : hint_depth_texture, repeat_disable, filter_nearest;
@@ -35,7 +39,8 @@ uniform vec4 ghost_tint : source_color = vec4(0.9, 0.88, 0.8, 1.0);
 uniform vec4 rim_color : source_color = vec4(0.04, 0.06, 0.14, 1.0);
 // How much of the part's own colour survives (1) against the flat tint (0).
 uniform float own_colour : hint_range(0.0, 1.0) = 1.0;
-uniform float ghost_alpha : hint_range(0.0, 1.0) = 0.78;
+uniform float ghost_alpha : hint_range(0.0, 1.0) = 0.54;
+uniform float rim_alpha : hint_range(0.0, 1.0) = 0.5;
 uniform float rim_strength : hint_range(0.0, 1.0) = 0.9;
 // How far down the palette gradient (toward its shadow end) the ghost reads, 0 the highlight.
 uniform float palette_depth : hint_range(0.0, 0.8) = 0.45;
@@ -65,5 +70,5 @@ void fragment() {
 	float facing = abs(dot(normalize(NORMAL), normalize(VIEW)));
 	float rim = pow(1.0 - clamp(facing, 0.0, 1.0), rim_power) * rim_strength;
 	ALBEDO = mix(base, rim_color.rgb, rim);
-	ALPHA = clamp(ghost_alpha + rim * 0.4, 0.0, 1.0) * hidden;
+	ALPHA = clamp(ghost_alpha + rim * rim_alpha, 0.0, 1.0) * hidden;
 }

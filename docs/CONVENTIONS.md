@@ -373,7 +373,7 @@ Settings use a single `user://settings.cfg` (ConfigFile) but are **decentralized
 | Section | Keys | Managed By |
 |---------|------|------------|
 | `audio` | `master`, `music`, `sfx`, `ui` | `SettingsMenu` |
-| `graphics` | `fullscreen`, `vsync`, `lofi_enabled`, `occlusion_fade_enabled`, `antialiasing`, `rendering_method`, `shadow_quality`, `water_quality`, `ssao_enabled`, `ssr_enabled`, `sdfgi_enabled` | `SettingsMenu`, `GameMap` |
+| `graphics` | `fullscreen`, `vsync`, `lofi_enabled`, `token_ghost_enabled` (default true), `occlusion_fade_enabled`, `canopy_fade_enabled` (default false), `antialiasing`, `rendering_method`, `shadow_quality`, `water_quality`, `ssao_enabled`, `ssr_enabled`, `sdfgi_enabled` | `SettingsMenu`, `GameMap` |
 | `grid_visuals` | `cell_tint_opacity`, `line_thickness`, `fade_radius` | `SettingsMenu`, `GameMap` |
 | `network` | `noray_server`, `noray_port`, `debug_logging`, `p2p_enabled` | `NetworkManager`, `SettingsMenu` |
 | `player` | `name` | `NetworkManager` |

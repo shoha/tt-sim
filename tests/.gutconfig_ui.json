@@ -65,6 +65,7 @@
 		"res://tests/unit/test_theme_cleanup.gd",
 		"res://tests/unit/test_tile_field.gd",
 		"res://tests/unit/test_tile_row.gd",
+		"res://tests/unit/test_token_ghost.gd",
 		"res://tests/unit/test_title_screen.gd",
 		"res://tests/unit/test_tool_registry.gd",
 		"res://tests/unit/test_ui_actions.gd",
