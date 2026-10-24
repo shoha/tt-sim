@@ -39,9 +39,14 @@ func test_the_newest_entry_stays_even_when_it_alone_is_over_the_cap() -> void:
 
 func test_entries_without_bytes_count_only_toward_the_entry_cap() -> void:
 	var history := AuthoringHistory.new()
-	var event_log: Array = []
-	for i in AuthoringHistory.MAX_ENTRIES + 5:
+	var extra := 5
+	for i in AuthoringHistory.MAX_ENTRIES + extra:
 		history.record({"label": str(i)})
 	assert_eq(history.undo_count(), AuthoringHistory.MAX_ENTRIES)
 	assert_eq(history.held_bytes(), 0)
-	assert_true(event_log.is_empty())
+	assert_eq(history.undo(), str(AuthoringHistory.MAX_ENTRIES + extra - 1), "the newest stays")
+	var oldest := ""
+	for i in AuthoringHistory.MAX_ENTRIES - 1:
+		oldest = history.undo()
+	assert_eq(oldest, str(extra), "the oldest survivor is the first one past the dropped ones")
+	assert_eq(history.undo(), "", "the first %d entries were dropped" % extra)

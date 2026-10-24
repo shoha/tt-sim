@@ -138,6 +138,10 @@ before the user reopens the editor. See AGENTS.md's "Running tests from the CLI"
 ## Testing Notes
 
 - GUT v9.5.0 vendored at `addons/gut/`
+- Every GUT run prints "SCRIPT ERROR: Trying to assign value of type 'Nil' to a variable of type
+  'bool'" at `addons/gut/gut_loader.gd:35`: GUT reads the project setting
+  `debug/gdscript/warnings/exclude_addons`, which Godot 4.7 no longer registers (and drops from
+  project.godot), so it reads null. Harmless; fixable only by updating GUT, not from the project.
 
 ## Checking the running game: render jobs first, then the bridge
 
