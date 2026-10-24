@@ -108,17 +108,22 @@ static func dress(token: BoardToken) -> void:
 		if not token.has_meta(PENDING_META):
 			token.set_meta(PENDING_META, true)
 			token.rigid_body.tree_entered.connect(
-				func() -> void:
-					if is_instance_valid(token):
-						token.remove_meta(PENDING_META)
-						dress(token),
-				CONNECT_ONE_SHOT | CONNECT_DEFERRED
+				_dress_entered.bind(token.get_instance_id()), CONNECT_ONE_SHOT | CONNECT_DEFERRED
 			)
 	for mi in meshes:
 		if on:
 			_dress_mesh(mi, token.is_highlighted, bounds)
 		else:
 			_strip_mesh(mi)
+
+
+## The deferred second dressing of a token made off the tree (by instance id: the token may be
+## gone by then, and a bound object that was freed is an engine error).
+static func _dress_entered(id: int) -> void:
+	var token := instance_from_id(id) as BoardToken
+	if token != null:
+		token.remove_meta(PENDING_META)
+		dress(token)
 
 
 ## The token body's bounding cylinder in the body's own frame and metres: {"center": Vector3,
