@@ -185,6 +185,8 @@ func test_every_real_wind_variant_reads_the_arrival_uniforms() -> void:
 
 func test_the_burn_variant_gains_nothing() -> void:
 	var code := _expanded(BURN)
-	for name in ["grow_wave", "grow_clock", "grow_scale"]:
-		assert_false(code.contains(name), "the burn shader and its includes never read " + name)
+	for uniform_name in ["grow_wave", "grow_clock", "grow_scale"]:
+		assert_false(
+			code.contains(uniform_name), "the burn shader and its includes never read " + uniform_name
+		)
 	assert_string_contains(code, "VERTEX *= grow;", false)

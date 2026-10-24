@@ -43,14 +43,14 @@ func test_autosave_is_needed_once_per_new_edit() -> void:
 
 func test_history_undo_and_redo_run_the_entry_and_track_availability() -> void:
 	var history := AuthoringHistory.new()
-	var log: Array[String] = []
+	var event_log: Array[String] = []
 	assert_false(history.can_undo())
 	assert_eq(history.undo(), "", "nothing to undo")
 	history.record(
 		{
 			"label": "Paint",
-			"undo": func() -> void: log.append("undo"),
-			"redo": func() -> void: log.append("redo"),
+			"undo": func() -> void: event_log.append("undo"),
+			"redo": func() -> void: event_log.append("redo"),
 		}
 	)
 	assert_true(history.can_undo())
@@ -58,7 +58,7 @@ func test_history_undo_and_redo_run_the_entry_and_track_availability() -> void:
 	assert_eq(history.undo(), "Paint")
 	assert_true(history.can_redo())
 	assert_eq(history.redo(), "Paint")
-	assert_eq(log, ["undo", "redo"])
+	assert_eq(event_log, ["undo", "redo"])
 
 
 func test_recording_clears_redo_and_the_stack_is_bounded() -> void:

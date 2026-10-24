@@ -76,11 +76,13 @@ func test_cross_section_per_depth_class() -> void:
 		assert_almost_eq(level, -WaterGeometry.FREEBOARD_M, 1e-4)
 		Fixtures.carve(doc, WaterCarve.river_goals(doc, bodies, start))
 		var d := WaterBody.depth_for(depth)
-		var name := WaterBody.DEPTH_NAMES[depth]
+		var depth_name := WaterBody.DEPTH_NAMES[depth]
 		var hw := bodies[0].half_widths[0]
-		assert_almost_eq(hw, maxf(2.0, WaterCarve.min_half_width(depth)), 1e-4, "%s: width" % name)
-		assert_almost_eq(_height(doc, Vector2(0, 0)), level - d, 0.03, "%s: bed depth" % name)
-		assert_almost_eq(_height(doc, Vector2(0, hw)), level, 0.08, "%s: waterline" % name)
+		assert_almost_eq(
+			hw, maxf(2.0, WaterCarve.min_half_width(depth)), 1e-4, "%s: width" % depth_name
+		)
+		assert_almost_eq(_height(doc, Vector2(0, 0)), level - d, 0.03, "%s: bed depth" % depth_name)
+		assert_almost_eq(_height(doc, Vector2(0, hw)), level, 0.08, "%s: waterline" % depth_name)
 		# The shore under the water is soft for wading water, steeper for deep (and for a
 		# channel too narrow to reach its bed at the class's slope).
 		var shore := (_height(doc, Vector2(0, hw - 0.1)) - _height(doc, Vector2(0, hw - 0.4))) / 0.3
@@ -89,18 +91,18 @@ func test_cross_section_per_depth_class() -> void:
 			WaterCarve.SHORE_SLOPE[depth],
 			WaterCarve.MAX_SHORE_SLOPE
 		)
-		assert_almost_eq(shore, expected, 0.1, "%s: shore slope" % name)
+		assert_almost_eq(shore, expected, 0.1, "%s: shore slope" % depth_name)
 		# The bank's slope away from the water, then no steeper than the cliff rule starts.
 		var bank := (_height(doc, Vector2(0, hw + 1.0)) - _height(doc, Vector2(0, hw + 0.5))) / 0.5
-		assert_almost_eq(bank, WaterCarve.BANK_SLOPE[depth], 0.06, "%s: bank slope" % name)
+		assert_almost_eq(bank, WaterCarve.BANK_SLOPE[depth], 0.06, "%s: bank slope" % depth_name)
 		var steepest := 0.0
 		for k in 60:
 			var z := k * 0.1
 			var rise := absf(_height(doc, Vector2(0, z + 0.1)) - _height(doc, Vector2(0, z)))
 			steepest = maxf(steepest, rise / 0.1)
-		assert_lt(steepest, tan(deg_to_rad(TerrainRules.CLIFF_START_DEG)), "%s: no rock" % name)
+		assert_lt(steepest, tan(deg_to_rad(TerrainRules.CLIFF_START_DEG)), "%s: no rock" % depth_name)
 		for i in doc.sample_count():
-			assert_true(doc.heights[i] <= start[i] + 1e-6, "%s never raises ground" % name)
+			assert_true(doc.heights[i] <= start[i] + 1e-6, "%s never raises ground" % depth_name)
 			if doc.heights[i] > start[i] + 1e-6:
 				break
 

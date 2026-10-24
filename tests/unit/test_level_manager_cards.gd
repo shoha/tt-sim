@@ -37,10 +37,10 @@ func _remove_tree(path: String) -> void:
 	DirAccess.remove_absolute(path)
 
 
-func _write_level(folder: String, name: String, preset: String, modified_at: int) -> void:
+func _write_level(folder: String, level_name: String, preset: String, modified_at: int) -> void:
 	DirAccess.make_dir_recursive_absolute(LevelManager.folder_path(folder))
 	var data := {
-		"level_name": name,
+		"level_name": level_name,
 		"map_path": "map.glb",
 		"modified_at": modified_at,
 		"level_folder": folder,
@@ -116,9 +116,9 @@ func test_rename_of_a_legacy_tres_level_removes_the_old_file() -> void:
 	assert_false(FileAccess.file_exists(old_path))
 
 
-func _info_by_name(name: String) -> Dictionary:
+func _info_by_name(level_name: String) -> Dictionary:
 	for info in LevelManager.get_saved_levels():
-		if info["name"] == name:
+		if info["name"] == level_name:
 			return info
 	return {}
 

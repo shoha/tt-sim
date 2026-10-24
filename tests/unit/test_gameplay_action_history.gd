@@ -203,13 +203,13 @@ func test_undo_rename_uses_the_rename_callable() -> void:
 	var fake := FakeToken.new()
 	fake.token_name = "New"
 	_history.set_token_lookup(func(_id: String) -> Variant: return fake)
-	var renamed: Array[String] = []
-	_history.set_rename_callable(func(_t: Variant, name: String) -> void: renamed.append(name))
+	var renames: Array[String] = []
+	_history.set_rename_callable(func(_t: Variant, new_name: String) -> void: renames.append(new_name))
 	_history.record_property_change(TEST_TOKEN_ID, "token_name", "Old", "New")
 
 	_history.undo()
 
-	assert_eq(renamed, ["Old"])
+	assert_eq(renames, ["Old"])
 
 
 func test_rename_description_names_both_names() -> void:

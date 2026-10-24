@@ -164,14 +164,14 @@ func test_reshaped_binds_carry_the_bone_map() -> void:
 	assert_ne(head.skin, original, "the skin is a per-figure copy")
 	var point := Vector3(0.03, 1.4, 0.05)
 	for i in head.skin.get_bind_count():
-		var name := String(head.skin.get_bind_name(i))
-		var rest := sk.get_bone_global_rest(sk.find_bone(name))
+		var bone_name := String(head.skin.get_bind_name(i))
+		var rest := sk.get_bone_global_rest(sk.find_bone(bone_name))
 		# A mesh-space point the original bind puts at `point` lands, through the new rest and
 		# bind, where the bone's map sends it.
-		var to_mesh := (_old_global_rest(name) * original.get_bind_pose(i)).affine_inverse()
+		var to_mesh := (_old_global_rest(bone_name) * original.get_bind_pose(i)).affine_inverse()
 		var skinned := rest * head.skin.get_bind_pose(i) * to_mesh * point
-		var mapped := AvatarProportions.bone_map_transform(maps[name]) * point
-		assert_lt(skinned.distance_to(mapped), 1e-4, "bind %s maps a rest point" % name)
+		var mapped := AvatarProportions.bone_map_transform(maps[bone_name]) * point
+		assert_lt(skinned.distance_to(mapped), 1e-4, "bind %s maps a rest point" % bone_name)
 
 
 func _old_global_rest(bone: String) -> Transform3D:

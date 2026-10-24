@@ -111,10 +111,10 @@ func test_raise_dab_builds_a_soft_hill_and_reports_its_rectangle() -> void:
 	assert_almost_eq(_height_at(doc, Vector2(3.2, 0.0)), 0.0, EPSILON, "nothing past the rim")
 	var half := _height_at(doc, Vector2(1.5, 0.0))
 	assert_between(half, 0.4 * centre, 0.7 * centre, "falloff halfway")
-	var pending := stroke.take_pending()
-	assert_true(pending.has_area())
+	var pending_rect := stroke.take_pending()
+	assert_true(pending_rect.has_area())
 	assert_false(stroke.take_pending().has_area(), "taken once")
-	var world := MaskBrush.sample_rect_to_world(doc, pending)
+	var world := MaskBrush.sample_rect_to_world(doc, pending_rect)
 	assert_true(world.grow(0.01).has_point(Vector2(2.9, 0.0)))
 	assert_false(world.has_point(Vector2(3.5, 0.0)))
 
@@ -440,9 +440,9 @@ func test_snap_rows_follow_the_ground_and_keep_yaw_and_lean() -> void:
 	var rows := _row(Vector3(1.5, 0.0, 0.5), lean, 0.7)
 	rows.append_array(_row(Vector3(9.0, 0.0, 9.0), Vector3.UP, 0.2))
 	var window := Rect2(-5, -5, 10, 10)
-	var snapped := GroundSnap.snap_rows(rows, rows, before, doc.heights, grid, true, window)
-	assert_eq(snapped.moved, PackedInt32Array([0]), "only the row on the hill")
-	var out: PackedFloat32Array = snapped.rows
+	var tilted := GroundSnap.snap_rows(rows, rows, before, doc.heights, grid, true, window)
+	assert_eq(tilted.moved, PackedInt32Array([0]), "only the row on the hill")
+	var out: PackedFloat32Array = tilted.rows
 	var fields := ScatterGenerator.document_fields(doc, "")
 	assert_almost_eq(out[1], fields.height_at.call(Vector2(1.5, 0.5)), 1e-5, "on the ground")
 	var q_before := Quaternion(rows[3], rows[4], rows[5], rows[6])

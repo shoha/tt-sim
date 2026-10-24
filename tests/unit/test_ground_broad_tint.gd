@@ -170,12 +170,12 @@ func doc_half() -> int:
 
 func test_shader_mirrors_the_tint_constants() -> void:
 	var text := FileAccess.get_file_as_string(SHADER_PATH)
-	var constant := func(name: String) -> float:
-		var regex := RegEx.create_from_string("const float %s = ([0-9.]+);" % name)
+	var constant := func(const_name: String) -> float:
+		var regex := RegEx.create_from_string("const float %s = ([0-9.]+);" % const_name)
 		var m := regex.search(text)
 		return float(m.get_string(1)) if m != null else -1.0
-	var default := func(name: String) -> float:
-		var regex := RegEx.create_from_string("uniform float %s [^=]*= ([0-9.]+);" % name)
+	var default := func(uniform_name: String) -> float:
+		var regex := RegEx.create_from_string("uniform float %s [^=]*= ([0-9.]+);" % uniform_name)
 		var m := regex.search(text)
 		return float(m.get_string(1)) if m != null else -1.0
 	assert_almost_eq(constant.call("BROAD_OWN_START"), GroundBroadTint.OWN_START, 1e-6)

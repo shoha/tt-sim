@@ -167,7 +167,7 @@ func test_a_selection_scrolls_its_card_into_view() -> void:
 func _panel(info: Dictionary, updated := false) -> MapPanel:
 	var panel := MapPanel.new()
 	panel.is_updated = func(_folder: String) -> bool: return updated
-	panel.footprint = func(_info: Dictionary) -> Vector2: return Vector2(150, 150)
+	panel.footprint = func(_map_info: Dictionary) -> Vector2: return Vector2(150, 150)
 	add_child_autofree(panel)
 	panel.show_map(info)
 	return panel
@@ -410,7 +410,7 @@ func test_the_date_fits_the_chip_line_or_takes_its_own() -> void:
 	assert_eq(panel.when_on_own_line(), line > panel.words_width(), "own line only past the width")
 	if panel.when_on_own_line():
 		assert_eq(panel.played_label.get_parent(), panel._body, "a line in the words' rhythm")
-	panel.footprint = func(_info: Dictionary) -> Vector2: return Vector2.ZERO
+	panel.footprint = func(_map_info: Dictionary) -> Vector2: return Vector2.ZERO
 	var short := _info("x", "", "map.ttmap")
 	short.token_count = 0
 	panel.show_map(short)

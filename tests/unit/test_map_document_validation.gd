@@ -50,11 +50,11 @@ func test_manifest_over_its_byte_cap_is_ignored() -> void:
 
 
 func test_total_byte_cap() -> void:
-	var log := MapDocumentIO._WarningLog.new()
+	var warnings := MapDocumentIO._WarningLog.new()
 	var total := MapDocumentIO.MAX_TOTAL_BYTES - 5
-	assert_false(MapDocumentIO._size_allowed("height.bin", 10, total, log))
-	assert_true(MapDocumentIO._size_allowed("height.bin", 5, total, log))
-	assert_eq(log.result().size(), 1)
+	assert_false(MapDocumentIO._size_allowed("height.bin", 10, total, warnings))
+	assert_true(MapDocumentIO._size_allowed("height.bin", 5, total, warnings))
+	assert_eq(warnings.result().size(), 1)
 
 
 # --- manifest and geometry ----------------------------------------------------------
@@ -232,7 +232,7 @@ func test_rows_per_asset_cap() -> void:
 ## The total-row budget, exercised through the budget parameter rather than a
 ## million-row fixture; parse passes MAX_TOTAL_ROWS minus the props rows.
 func test_total_row_budget() -> void:
-	var log := MapDocumentIO._WarningLog.new()
+	var warnings := MapDocumentIO._WarningLog.new()
 	var text := (
 		JSON
 		. stringify(
@@ -242,10 +242,10 @@ func test_total_row_budget() -> void:
 			}
 		)
 	)
-	var rows := MapDocumentIO._parse_rows(text.to_utf8_buffer(), "scatter.json", 3, log)
+	var rows := MapDocumentIO._parse_rows(text.to_utf8_buffer(), "scatter.json", 3, warnings)
 	assert_eq(MapDocument.row_count(rows), 3)
 	assert_eq(rows["a/two"].size(), 10)
-	assert_eq(log.result().size(), 1)
+	assert_eq(warnings.result().size(), 1)
 
 
 func test_props_and_scatter_share_the_budget() -> void:

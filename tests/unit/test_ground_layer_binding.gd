@@ -129,7 +129,7 @@ func test_tint_tables_tint_biome_grounds_and_built_paint_without_a_slot_limit() 
 func test_padded_tiles_fill_the_shader_array() -> void:
 	var tiles := GroundLayerBinding.padded_tiles(
 		PackedStringArray(["a", "b"]),
-		func(surface: String) -> Variant: return 3.5 if surface == "a" else null
+		func(surface: String) -> Variant: return (3.5 as Variant) if surface == "a" else null
 	)
 	assert_eq(tiles.size(), GroundLayers.MAX_LAYERS)
 	assert_almost_eq(tiles[0], 3.5, 1e-6)

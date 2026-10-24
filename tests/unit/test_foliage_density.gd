@@ -21,11 +21,11 @@ func _chunk(parent: Node3D, node_name: String, instances: int, category: String)
 func _scene_with(species: Dictionary) -> Node3D:
 	# species maps a species name to an array of per-chunk instance counts.
 	var root := Node3D.new()
-	for name in species.keys():
-		var counts: Array = species[name]
+	for species_name in species.keys():
+		var counts: Array = species[species_name]
 		for i in counts.size():
 			var suffix := "" if counts.size() == 1 else "_c%d_0" % i
-			_chunk(root, "%s_MultiMesh%s" % [name, suffix], counts[i], "grass")
+			_chunk(root, "%s_MultiMesh%s" % [species_name, suffix], counts[i], "grass")
 	return root
 
 

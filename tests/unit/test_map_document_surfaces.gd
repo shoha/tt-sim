@@ -126,8 +126,8 @@ func test_ensure_surface_appends_and_reuses_slots() -> void:
 	assert_eq(doc.ensure_surface(NAMES[1]), 1)
 	assert_eq(doc.ensure_surface(NAMES[0]), 0, "an existing surface keeps its slot")
 	for slot in range(2, MapDocument.PAINT_SURFACE_LIMIT):
-		var name: String = NAMES[slot] if slot < NAMES.size() else "surface_%d" % slot
-		assert_eq(doc.ensure_surface(name), slot)
+		var surface_name: String = NAMES[slot] if slot < NAMES.size() else "surface_%d" % slot
+		assert_eq(doc.ensure_surface(surface_name), slot)
 	for slot in MapDocument.PAINT_SURFACE_LIMIT:
 		doc.set_surface_weight(slot, slot, 10)
 	# The index ground (G3) draws every slot a document can list: the paint limit is the cap.
