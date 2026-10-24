@@ -9,6 +9,20 @@ const HOME := 13.85
 const BACK_Y := 0.36812454
 
 
+func test_the_occlusion_fade_setting_also_switches_the_canopy_fade() -> void:
+	var was := CanopyFade.enabled
+	var effects := VisualEffectsController.new()
+	var game_map := GameMap.new()
+	effects._game_map = game_map
+	effects.set_occlusion_fade_enabled(false)
+	assert_false(CanopyFade.enabled, "occlusion fade off holds the canopy fade off")
+	effects.set_occlusion_fade_enabled(true)
+	assert_true(CanopyFade.enabled, "occlusion fade on restores it")
+	CanopyFade.enabled = was
+	game_map.free()
+	effects.free()
+
+
 func test_strength_is_the_play_strength_from_home_to_the_play_zoom_out() -> void:
 	var play := CanopyFade.play_strength
 	assert_almost_eq(CanopyFade.strength(HOME, HOME), play, 0.0001)

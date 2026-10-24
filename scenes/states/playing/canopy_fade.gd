@@ -49,6 +49,10 @@ const RAY_LENGTH := 400.0
 ## of orthographic size. Chosen by eye on forest and taiga maps (Polish, 2026-10-05). Vars, not
 ## constants, so a render probe can tune them in-run (probes/close_zoom.gd play).
 static var play_strength := 0.9
+## False holds the whole close-zoom fade off, whatever the zoom. The Settings menu's occlusion
+## fade sets it (VisualEffectsController.set_occlusion_fade_enabled) until this fade has its own
+## setting.
+static var enabled := true
 static var play_inner := 0.2
 static var play_outer := 0.55
 
@@ -136,7 +140,7 @@ static func publish(
 	if brush != _last_brush:
 		_last_brush = brush
 		RenderingServer.global_shader_parameter_set(GLOBAL_BRUSH, brush)
-	var s := strength(camera.size, home)
+	var s := strength(camera.size, home) if enabled else 0.0
 	var back := camera.global_basis.z.normalized()
 	var centre := Vector4.ZERO
 	if s > 0.0:
