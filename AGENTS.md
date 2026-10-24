@@ -149,6 +149,7 @@ After editing files, format them so output matches project style. See `.cursor/r
 ## Testing
 
 - **Unit tests** – GUT framework (`addons/gut/`), configured in `tests/.gutconfig.json`. Test files in `tests/unit/` with `test_` prefix.
+- **GDScript warnings** – the editor's warnings come from the analyzer, which sends them to an attached debugger only (headless runs and `--check-only` print none). `python D:/dev/tabletop/tt-sim/tools/gdscript_warnings/collect.py --project <project dir> --out <file.tsv>` is a minimal debugger: it recompiles every script and prints counts by code and file (about 1 minute, exit 1 when any are seen; add `override.cfg` with `[network] limits/debugger/max_errors_per_second=1000000` beside project.godot if the count looks capped). Keep it at zero outside addons. `integer_division` is off in `project.godot` on purpose (index and pixel arithmetic such as `rows.size() / ROW_STRIDE` is everywhere and audited); `unused_signal` is off too. Fix the rest by renaming (a local named `name`, `log`, `seed`, `snapped`, `range` shadows a base property or builtin), never by blanket ignores.
 - **Integration test scenes** – Runnable with F6 in Godot editor: `tests/test_glb_lights.tscn`, `tests/test_play_level.tscn`, `tests/test_client_waiting.tscn`
 - **Native scatter library** (`native/`, docs/systems/scatter.md "Native path") – optional locally;
   CI builds it for every platform, tests with it and ships it ("CI/CD" below). Without
