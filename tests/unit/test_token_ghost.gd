@@ -114,6 +114,87 @@ func test_dressing_twice_keeps_the_same_overlay() -> void:
 	assert_same(TokenGhost.overlay_of(part), first)
 
 
+# --- the token's own bounds (a part of the token in front is not an occluder) --------------
+
+
+func _offset_part(offset: Vector3, size: Vector3) -> MeshInstance3D:
+	var part := _pack_part(Color.RED)
+	(part.mesh as BoxMesh).size = size
+	part.position = offset
+	return part
+
+
+func test_the_bounds_are_the_cylinder_round_every_part_in_the_bodys_frame() -> void:
+	var a := _offset_part(Vector3(-1, 0.5, 0), Vector3(1, 1, 1))
+	var b := _offset_part(Vector3(1, 1.5, 0), Vector3(1, 1, 1))
+	var token := _token([a, b])
+	token.rigid_body.position = Vector3(5, 0, 3)
+	token.rigid_body.rotation.y = 1.0
+	var bounds := TokenGhost.body_bounds(token.rigid_body, TokenGhost.meshes_of(token.rigid_body))
+	assert_almost_eq(bounds.center as Vector3, Vector3(0, 1.0, 0), Vector3.ONE * 0.001)
+	assert_almost_eq(bounds.half_height as float, 1.0, 0.001, "y from 0 to 2")
+	# Farthest corner: (+-1.5, ., +-0.5) from the centre.
+	assert_almost_eq(bounds.radius as float, sqrt(1.5 * 1.5 + 0.5 * 0.5), 0.001)
+
+
+func test_every_mesh_carries_the_bounds_in_its_own_space() -> void:
+	var a := _offset_part(Vector3(-1, 0.5, 0), Vector3(1, 1, 1))
+	var b := _offset_part(Vector3(1, 1.5, 0), Vector3(1, 1, 1))
+	b.scale = Vector3(2, 2, 2)
+	var token := _token([a, b])
+	TokenGhost.dress(token)
+	for part in [a, b]:
+		var ghost := TokenGhost.overlay_of(part)
+		var extent: Vector2 = ghost.get_shader_parameter("bound_extent")
+		assert_gt(extent.x, 0.0)
+		assert_gt(extent.y, 0.0)
+		# Back through the mesh's transform the centre and the body's up axis land where the
+		# body's own frame says (a unit of body up is a unit long in the world here).
+		var world_centre: Vector3 = part.global_transform * ghost.get_shader_parameter("bound_center")
+		var bounds := TokenGhost.body_bounds(
+			token.rigid_body, TokenGhost.meshes_of(token.rigid_body)
+		)
+		var body_centre: Vector3 = token.rigid_body.global_transform * (bounds.center as Vector3)
+		assert_almost_eq(world_centre, body_centre, Vector3.ONE * 0.001)
+		var up: Vector3 = part.global_transform.basis * ghost.get_shader_parameter("bound_up")
+		assert_almost_eq(up.length(), 1.0, 0.001, "the body's scale, whatever the mesh's own")
+
+
+func test_the_bounds_follow_the_body_not_its_scale() -> void:
+	var part := _offset_part(Vector3(0, 0.5, 0), Vector3(1, 1, 1))
+	var token := _token([part])
+	token.rigid_body.scale = Vector3(1.5, 1.5, 1.5)
+	TokenGhost.dress(token)
+	var ghost := TokenGhost.overlay_of(part)
+	var up: Vector3 = part.global_transform.basis * ghost.get_shader_parameter("bound_up")
+	assert_almost_eq(up.length(), 1.5, 0.001, "world metres per body metre")
+	var extent: Vector2 = ghost.get_shader_parameter("bound_extent")
+	assert_almost_eq(extent.y, 0.5, 0.001, "the extent stays in body metres")
+
+
+func test_a_token_made_off_the_tree_gets_its_bounds_once_it_enters_it() -> void:
+	var part := _offset_part(Vector3(0, 0.5, 0), Vector3(1, 1, 1))
+	var token := BoardToken.new()
+	token._factory_created = true
+	var body := RigidBody3D.new()
+	token.rigid_body = body
+	body.add_child(part)
+	TokenGhost.dress(token)
+	var ghost := TokenGhost.overlay_of(part)
+	assert_not_null(ghost, "dressed at once")
+	assert_eq(ghost.get_shader_parameter("bound_extent"), Vector2.ZERO, "no bounds yet")
+	token.add_child(body)
+	add_child_autofree(token)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_gt((ghost.get_shader_parameter("bound_extent") as Vector2).x, 0.0)
+	assert_false(token.has_meta(TokenGhost.PENDING_META))
+
+
+func test_the_margin_with_bounds_is_smaller_than_the_one_without() -> void:
+	assert_lt(_shader_default("bound_gap"), _shader_default("min_gap"))
+
+
 func test_new_colours_rebuild_the_overlay() -> void:
 	var part := _avatar_part(_palette())
 	var token := _token([part])
