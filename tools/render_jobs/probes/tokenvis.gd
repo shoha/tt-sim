@@ -85,6 +85,10 @@ static func run(base: Node, step: Dictionary) -> String:
 					meshes,
 				]
 			)
+		"aa":
+			# The foliage antialiasing level (0 swaps every tree to the plain-cutout wind shader).
+			gm.set_foliage_antialiasing_level(int(step.get("level", 0)))
+			return "foliage antialiasing level %d" % int(step.get("level", 0))
 		"msaa":
 			gm.world_viewport.msaa_3d = int(step.get("level", 0)) as Viewport.MSAA
 			return "msaa_3d %d" % gm.world_viewport.msaa_3d
