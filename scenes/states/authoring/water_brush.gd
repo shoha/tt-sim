@@ -97,13 +97,13 @@ func ribbon_style() -> Dictionary:
 	return LineRibbon.lay_style(RIBBON_HUE, fill)
 
 
-## The river half-width or pond brush radius for brush size `radius` and depth class
+## The river half-width or pond brush radius for brush size `brush_size` and depth class
 ## `depth_class`: never below the narrowest channel that reaches the class's depth
 ## (WaterCarve.min_half_width: ankle 0.44 m, waist 1.33 m, deep 2.96 m) nor past the widest
 ## river (WaterBody.MAX_HALF_WIDTH_M). Pure.
-static func radius_for(radius: float, depth_class: int) -> float:
+static func radius_for(brush_size: float, depth_class: int) -> float:
 	var narrowest := maxf(WaterCarve.min_half_width(depth_class), WaterBody.MIN_HALF_WIDTH_M)
-	return clampf(radius, narrowest, WaterBody.MAX_HALF_WIDTH_M)
+	return clampf(brush_size, narrowest, WaterBody.MAX_HALF_WIDTH_M)
 
 
 ## The river line's decimation by distance (StrokePath.decimate). Pure.
@@ -319,15 +319,15 @@ func draw(
 			_fill_disc(cursor.canvas, cursor.camera, editor, Vector2(dab.x, dab.y), dab.z)
 
 
-## A flat disc of world `radius` at world XZ `at`, on the ground there, faintly filled.
+## A flat disc of world radius `disc_radius` at world XZ `at`, on the ground there, faintly filled.
 static func _fill_disc(
-	canvas: Control, camera: Camera3D, editor: AuthoringEditor, at: Vector2, radius: float
+	canvas: Control, camera: Camera3D, editor: AuthoringEditor, at: Vector2, disc_radius: float
 ) -> void:
 	var y := editor.ground_height_at(Vector3(at.x, 0.0, at.y)) + 0.05
 	var points := PackedVector2Array()
 	for i in 24:
 		var angle := TAU * float(i) / 24.0
-		var p := Vector3(at.x + cos(angle) * radius, y, at.y + sin(angle) * radius)
+		var p := Vector3(at.x + cos(angle) * disc_radius, y, at.y + sin(angle) * disc_radius)
 		points.append(camera.unproject_position(p))
 	points.append(camera.unproject_position(Vector3(at.x, y, at.y)))
 	var colors := PackedColorArray()

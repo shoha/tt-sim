@@ -401,11 +401,11 @@ func regenerate(rect: Rect2i) -> void:
 ## changes; request_region() then grows it by each species' reach plus one step.
 func regenerated_area(rect: Rect2i) -> Rect2:
 	var doc := _editor().document
-	var step := doc.sample_step()
+	var cell_step := doc.sample_step()
 	# Normals need one step more than request_region() adds, the rules read curvature
 	# CURVATURE_RADIUS_M out and face proximity FACE_NEAR_RADIUS_M more.
 	var reach := TerrainRules.CURVATURE_RADIUS_M + ScatterGround.FACE_NEAR_RADIUS_M
-	return MaskBrush.sample_rect_to_world(doc, rect).grow(maxf(step.x, step.y) * 2.0 + reach)
+	return MaskBrush.sample_rect_to_world(doc, rect).grow(maxf(cell_step.x, cell_step.y) * 2.0 + reach)
 
 
 # ============================================================================
@@ -451,10 +451,10 @@ func _snap_cell(cell: Vector2i, window: Rect2) -> int:
 				start[asset_id] = from
 			var tilt := _aligned.has(asset_id)
 			var cap := RockKeep.MAX_TILT_RAD if _rocks.has(asset_id) else PI
-			var snapped := GroundSnap.snap_rows(
+			var snapped_rows := GroundSnap.snap_rows(
 				from, rows, _snap_before, after, grid, tilt, window, cap
 			)
-			moved += _apply_moved(e.scatter, cell, asset_id, snapped)
+			moved += _apply_moved(e.scatter, cell, asset_id, snapped_rows)
 	if _snap_props and is_instance_valid(e.props):
 		var placed: Dictionary = e.props.cell_rows(cell)
 		if not placed.is_empty() and not _prop_start.has(cell):
@@ -467,22 +467,22 @@ func _snap_cell(cell: Vector2i, window: Rect2) -> int:
 				continue
 			var bed := _prop_bedding(asset_id)
 			var cap := RockKeep.MAX_TILT_RAD if bed.z > 0.0 else PI
-			var snapped := GroundSnap.rebed_props(
+			var snapped_rows := GroundSnap.rebed_props(
 				from, rows, _snap_before, after, grid, bed.x > 0.0, window, bed.y, cap
 			)
-			moved += _apply_moved(e.props, cell, asset_id, snapped)
+			moved += _apply_moved(e.props, cell, asset_id, snapped_rows)
 	return moved
 
 
 static func _apply_moved(
-	node: AuthoredScatter, cell: Vector2i, asset_id: String, snapped: Dictionary
+	node: AuthoredScatter, cell: Vector2i, asset_id: String, snapped_rows: Dictionary
 ) -> int:
-	var moved: PackedInt32Array = snapped.moved
+	var moved: PackedInt32Array = snapped_rows.moved
 	if moved.is_empty():
 		return 0
-	if not node.move_rows(cell, asset_id, snapped.rows, moved):
+	if not node.move_rows(cell, asset_id, snapped_rows.rows, moved):
 		var rows: Dictionary = node.cell_rows(cell).duplicate()
-		rows[asset_id] = snapped.rows
+		rows[asset_id] = snapped_rows.rows
 		node.set_cells({cell: rows}, false)
 	return moved.size()
 

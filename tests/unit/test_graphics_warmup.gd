@@ -40,10 +40,10 @@ func test_the_cache_key_is_stable_and_every_input_changes_it() -> void:
 	var key := GraphicsWarmup.cache_key_for(BASE_INPUTS)
 	assert_eq(key, GraphicsWarmup.cache_key_for(BASE_INPUTS.duplicate()), "stable")
 	assert_eq(key.length(), 64, "a sha256 hex digest")
-	for name in BASE_INPUTS:
+	for input_name in BASE_INPUTS:
 		var changed := BASE_INPUTS.duplicate()
-		changed[name] = str(changed[name]) + "x"
-		assert_ne(GraphicsWarmup.cache_key_for(changed), key, "%s is in the key" % name)
+		changed[input_name] = str(changed[input_name]) + "x"
+		assert_ne(GraphicsWarmup.cache_key_for(changed), key, "%s is in the key" % input_name)
 
 
 ## The driver info is empty on macOS, where the Metal compiler and its caches belong to the
@@ -51,8 +51,8 @@ func test_the_cache_key_is_stable_and_every_input_changes_it() -> void:
 func test_the_real_key_inputs_include_the_os_version() -> void:
 	var inputs := GraphicsWarmup.key_inputs()
 	assert_eq(inputs.keys().size(), BASE_INPUTS.keys().size(), "BASE_INPUTS mirrors key_inputs()")
-	for name in BASE_INPUTS:
-		assert_true(inputs.has(name), "key_inputs() has %s" % name)
+	for input_name in BASE_INPUTS:
+		assert_true(inputs.has(input_name), "key_inputs() has %s" % input_name)
 	assert_eq(inputs.get("os"), OS.get_name() + " " + OS.get_version())
 	var updated := BASE_INPUTS.duplicate()
 	updated["os"] = "macOS 26.1.0"
@@ -67,8 +67,8 @@ func test_the_key_does_not_depend_on_input_order() -> void:
 	var reordered := {}
 	var names := BASE_INPUTS.keys()
 	names.reverse()
-	for name in names:
-		reordered[name] = BASE_INPUTS[name]
+	for input_name in names:
+		reordered[input_name] = BASE_INPUTS[input_name]
 	assert_eq(GraphicsWarmup.cache_key_for(reordered), GraphicsWarmup.cache_key_for(BASE_INPUTS))
 
 

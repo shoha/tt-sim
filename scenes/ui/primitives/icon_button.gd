@@ -62,13 +62,13 @@ func _ready() -> void:
 
 ## Resolve an icon texture by Tabler name. Returns null and warns once per
 ## name when the file is missing, so a typo degrades to an empty button.
-static func load_icon(name: String) -> Texture2D:
-	if name.is_empty():
+static func load_icon(tabler_name: String) -> Texture2D:
+	if tabler_name.is_empty():
 		return null
-	var path := ICON_DIR + name + ".svg"
+	var path := ICON_DIR + tabler_name + ".svg"
 	if not ResourceLoader.exists(path):
-		if not _warned_icons.has(name):
-			_warned_icons[name] = true
+		if not _warned_icons.has(tabler_name):
+			_warned_icons[tabler_name] = true
 			push_warning("IconButton: missing icon %s" % path)
 		return null
 	return load(path)

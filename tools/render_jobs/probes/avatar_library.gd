@@ -112,7 +112,7 @@ static func _report(root: Node) -> String:
 
 
 static func _cleanup() -> String:
-	AvatarLibrary.directory = AvatarLibrary.DEFAULT_DIRECTORY
+	AvatarLibrary.directory = Paths.AVATARS_DIR
 	var removed := PackedStringArray()
 	var users := DirAccess.open("user://")
 	if users == null:

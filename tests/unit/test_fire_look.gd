@@ -185,12 +185,12 @@ func _corners(
 
 
 ## The numbers of fire_flames.gdshader's constant `name` (a float or a vector), from its source.
-func _const(name: String) -> Array[float]:
+func _const(const_name: String) -> Array[float]:
 	var regex := RegEx.create_from_string(
-		"const\\s+(?:float|vec2|vec3|vec4)\\s+%s\\s*=\\s*([^;]+);" % name
+		"const\\s+(?:float|vec2|vec3|vec4)\\s+%s\\s*=\\s*([^;]+);" % const_name
 	)
 	var found := regex.search(FireLook.FLAMES_SHADER.code)
-	assert_not_null(found, "the shader holds %s" % name)
+	assert_not_null(found, "the shader holds %s" % const_name)
 	var text := found.get_string(1) if found != null else "0"
 	var open := text.find("(")
 	if open >= 0:

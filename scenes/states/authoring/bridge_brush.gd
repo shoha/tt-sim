@@ -128,10 +128,10 @@ static func followed_text(removed: int) -> String:
 	return "%d crossings lost their water and were removed. Undo brings them back." % removed
 
 
-## `width` stepped `steps` notches (positive widens) within kind `crossing_kind`'s range. Pure.
-static func stepped_width(width: float, steps: int, crossing_kind: int) -> float:
+## `from_width` stepped `steps` notches (positive widens) within kind `crossing_kind`'s range. Pure.
+static func stepped_width(from_width: float, steps: int, crossing_kind: int) -> float:
 	return clampf(
-		width * pow(WIDTH_STEP, steps),
+		from_width * pow(WIDTH_STEP, steps),
 		Crossing.MIN_WIDTH_M[crossing_kind],
 		Crossing.MAX_WIDTH_M[crossing_kind]
 	)
@@ -487,14 +487,14 @@ static func _draw_line(
 ) -> void:
 	var sa := camera.unproject_position(a)
 	var sb := camera.unproject_position(b)
-	var width := LINE_REFUSED_PX if refused else LINE_PX
-	canvas.draw_line(sa, sb, Color(SHADOW, 0.7), width + 2.5 * LINE_KEY_PX, true)
-	canvas.draw_dashed_line(sa, sb, Color(tint, 0.95), width, LINE_DASH_PX, true, true)
-	canvas.draw_circle(sa, width + LINE_KEY_PX + 1.5, Color(SHADOW, 0.7))
-	canvas.draw_circle(sa, width + 1.0, tint)
+	var line_px := LINE_REFUSED_PX if refused else LINE_PX
+	canvas.draw_line(sa, sb, Color(SHADOW, 0.7), line_px + 2.5 * LINE_KEY_PX, true)
+	canvas.draw_dashed_line(sa, sb, Color(tint, 0.95), line_px, LINE_DASH_PX, true, true)
+	canvas.draw_circle(sa, line_px + LINE_KEY_PX + 1.5, Color(SHADOW, 0.7))
+	canvas.draw_circle(sa, line_px + 1.0, tint)
 	if refused:
-		canvas.draw_circle(sb, width + LINE_KEY_PX + 1.5, Color(SHADOW, 0.7))
-		canvas.draw_circle(sb, width + 1.0, tint)
+		canvas.draw_circle(sb, line_px + LINE_KEY_PX + 1.5, Color(SHADOW, 0.7))
+		canvas.draw_circle(sb, line_px + 1.0, tint)
 
 
 ## A small ring on the ground at `at` (the idle cursor).

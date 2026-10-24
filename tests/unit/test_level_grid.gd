@@ -39,12 +39,12 @@ func after_each() -> void:
 	LevelManager.levels_dir = Paths.LEVELS_DIR
 
 
-func _info(folder: String, name: String, modified: int) -> Dictionary:
+func _info(folder: String, level_name: String, modified: int) -> Dictionary:
 	return {
 		"path": TEMP_DIR + folder + "/",
 		"folder": folder,
 		"is_folder_based": true,
-		"name": name,
+		"name": level_name,
 		"token_count": 0,
 		"modified_at": modified,
 		"environment_preset": "",
@@ -235,10 +235,10 @@ func test_rename_of_a_legacy_level_reselects_by_the_new_path() -> void:
 	assert_eq(grid.card_count(), 1)
 
 
-func _write_real_level(folder: String, name: String) -> void:
+func _write_real_level(folder: String, level_name: String) -> void:
 	DirAccess.make_dir_recursive_absolute(LevelManager.folder_path(folder))
 	var data := {
-		"level_name": name,
+		"level_name": level_name,
 		"map_path": "map.glb",
 		"modified_at": 100,
 		"level_folder": folder,

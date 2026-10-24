@@ -184,7 +184,7 @@ func _biome_at(doc: MapDocument, at: Vector2) -> String:
 ## sees while it burns; returns the GM's history entry for it.
 func _burn(gm: Copy, client: Copy, centre: Vector2, seed_value: int) -> Dictionary:
 	var entries := []
-	var record := func(entry: Dictionary) -> void: entries.append(entry)
+	var record := func(recorded: Dictionary) -> void: entries.append(recorded)
 	gm.edits.history.recorded.connect(record)
 	var fire := TerrainEvent.fire(centre, RADIUS, seed_value)
 	var logged := gm.edits.op_log.size()
@@ -351,7 +351,7 @@ func test_a_fire_along_a_path_burns_the_forest_and_ashes_the_meadow() -> void:
 	assert_eq(gm.edits.events.start(meadow), TerrainEvents.NO_FOREST_PATH, "a meadow path: none")
 	var before := MapFingerprint.of(gm.root, gm.doc)
 	var entries := []
-	var record := func(entry: Dictionary) -> void: entries.append(entry)
+	var record := func(recorded: Dictionary) -> void: entries.append(recorded)
 	gm.edits.history.recorded.connect(record)
 	var fire := TerrainEvent.fire_path(line, half, 13)
 	var logged := gm.edits.op_log.size()
@@ -483,7 +483,7 @@ func test_a_history_group_is_one_entry() -> void:
 	var history := AuthoringHistory.new()
 	var calls := []
 	var heard := []
-	history.recorded.connect(func(entry: Dictionary) -> void: heard.append(entry.label))
+	history.recorded.connect(func(recorded: Dictionary) -> void: heard.append(recorded.label))
 	history.begin_group()
 	for part in ["a", "b"]:
 		history.record(

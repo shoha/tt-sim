@@ -148,13 +148,13 @@ static func raise_to_water(ground: PackedFloat32Array, levels: PackedFloat32Arra
 	return [out, flags]
 
 
-## `heights` raised to the decks `decks` (per sample, CrossingGeometry.deck_field; -INF where
+## `ground` raised to the decks `decks` (per sample, CrossingGeometry.deck_field; -INF where
 ## none): the higher of the two per sample, what world_height_at() reports. Pure.
 static func raise_to_decks(
-	heights: PackedFloat32Array, decks: PackedFloat32Array
+	ground: PackedFloat32Array, decks: PackedFloat32Array
 ) -> PackedFloat32Array:
-	var out := heights.duplicate()
-	if decks.size() != heights.size():
+	var out := ground.duplicate()
+	if decks.size() != ground.size():
 		return out
 	for i in out.size():
 		out[i] = maxf(out[i], decks[i])

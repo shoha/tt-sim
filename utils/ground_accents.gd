@@ -164,9 +164,9 @@ static func noise(xz: Vector2, scale_m: float, offset: Vector2) -> float:
 	return broad + detail * DETAIL + fine * FINE
 
 
-## The patch mask 0..1 (the shader's accent_mask) at `xz` for threshold `threshold`.
-static func mask(xz: Vector2, threshold: float, scale_m: float, offset: Vector2) -> float:
-	return smoothstep(threshold - EDGE, threshold + EDGE, noise(xz, scale_m, offset))
+## The patch mask 0..1 (the shader's accent_mask) at `xz` for threshold `cutoff`.
+static func mask(xz: Vector2, cutoff: float, scale_m: float, offset: Vector2) -> float:
+	return smoothstep(cutoff - EDGE, cutoff + EDGE, noise(xz, scale_m, offset))
 
 
 ## The threshold that makes a share `coverage` (0..1) of the ground a patch: linear between

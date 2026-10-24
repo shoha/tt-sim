@@ -191,7 +191,7 @@ func show_tool(tool_id: StringName, pressed: bool = true) -> void:
 		(_options[id] as Control).visible = id == tool_id
 	var preset := EventPresets.find(tool_id) != null
 	# A preset's controls go under the preset tiles' caption, which belongs to the tiles.
-	var above: Control = preset_note if preset else tool_field
+	var above: Control = (preset_note as Control) if preset else tool_field
 	move_child(_options_holder, above.get_index() + 1)
 	move_child(_advanced, _options_holder.get_index() + 1)
 	var sized := tool_id != &"" and not tool_id in [WaterTool.ID, BridgeTool.ID]

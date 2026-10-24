@@ -71,10 +71,10 @@ func _add_look_heading(text: String) -> IconButton:
 	return clear
 
 
-## The eraser `clear` shown (and able) while `changed`, hidden while the pane matches its Look.
-static func show_look_clear(clear: IconButton, changed: bool) -> void:
-	clear.visible = changed
-	clear.disabled = not changed
+## The eraser `clear` shown (and able) while `is_changed`, hidden while the pane matches its Look.
+static func show_look_clear(clear: IconButton, is_changed: bool) -> void:
+	clear.visible = is_changed
+	clear.disabled = not is_changed
 
 
 ## A muted caption: a subhead over the rows it names (Water's Advanced groups), or with

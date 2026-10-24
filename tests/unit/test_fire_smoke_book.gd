@@ -62,14 +62,19 @@ func test_each_seeds_loop_closes() -> void:
 	if _book == null:
 		fail_test(MISSING)
 		return
-	for seed in _book.seeds:
+	for book_seed in _book.seeds:
 		var steps := 0.0
 		for f in _book.frames - 1:
-			steps += _step(_book.layers[_book.layer_of(seed, f)], _book.layers[_book.layer_of(seed, f + 1)])
+			steps += _step(
+				_book.layers[_book.layer_of(book_seed, f)],
+				_book.layers[_book.layer_of(book_seed, f + 1)]
+			)
 		var mean := steps / (_book.frames - 1)
-		assert_gt(mean, 0.0, "seed %d's frames move" % seed)
-		var wrap := _step(_book.layers[_book.layer_of(seed, -1)], _book.layers[_book.layer_of(seed, 0)])
-		assert_lt(wrap, mean * 2.0, "seed %d's last frame runs into its first" % seed)
+		assert_gt(mean, 0.0, "seed %d's frames move" % book_seed)
+		var wrap_step := _step(
+			_book.layers[_book.layer_of(book_seed, -1)], _book.layers[_book.layer_of(book_seed, 0)]
+		)
+		assert_lt(wrap_step, mean * 2.0, "seed %d's last frame runs into its first" % book_seed)
 
 
 func test_the_texture_builds_and_is_released() -> void:

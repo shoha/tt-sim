@@ -124,12 +124,12 @@ static func anchors_entry(
 
 ## The anchor table of a level's anchors `entry` over its `rows_by_asset`: an asset's offsets are
 ## dropped with a warning when their count is not two per row, when the asset belongs to no mass
-## rule (`reach_by_asset`, reach_by_asset()'s form) or when one lies beyond its rule's reach.
+## rule (`reach_table`, reach_by_asset()'s form) or when one lies beyond its rule's reach.
 @warning_ignore("integer_division")
 static func table_of(
 	entry: Dictionary,
 	rows_by_asset: Dictionary,
-	reach_by_asset: Dictionary,
+	reach_table: Dictionary,
 	warnings: Array[String]
 ) -> Dictionary:
 	var table := {}
@@ -137,7 +137,7 @@ static func table_of(
 	for asset_id: String in entry:
 		var offsets: PackedFloat32Array = entry[asset_id]
 		var rows: PackedFloat32Array = rows_by_asset.get(asset_id, PackedFloat32Array())
-		var reach := float(reach_by_asset.get(asset_id, 0.0))
+		var reach := float(reach_table.get(asset_id, 0.0))
 		var problem := ""
 		if offsets.size() != rows.size() / stride * 2:
 			problem = "%d offsets for %d rows" % [offsets.size() / 2, rows.size() / stride]

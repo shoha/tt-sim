@@ -169,15 +169,15 @@ class Watch:
 				return
 		print("RJ| " + s)
 
-	static func _stats(values: PackedFloat64Array, name: String) -> String:
+	static func _stats(values: PackedFloat64Array, stat_label: String) -> String:
 		var s := values.duplicate()
 		s.sort()
 		var n := s.size()
 		if n == 0:
-			return "%s n 0" % name
+			return "%s n 0" % stat_label
 		return (
 			"%s n %d median %.3f p10 %.3f p90 %.3f worst %.3f"
-			% [name, n, s[n / 2], s[n / 10], s[mini(n - 1, n * 9 / 10)], s[n - 1]]
+			% [stat_label, n, s[n / 2], s[n / 10], s[mini(n - 1, n * 9 / 10)], s[n - 1]]
 		)
 
 

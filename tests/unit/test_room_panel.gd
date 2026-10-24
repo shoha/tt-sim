@@ -406,7 +406,7 @@ func test_the_drawer_starts_on_the_table_and_moves_it_elsewhere() -> void:
 func test_the_drawer_action_follows_the_shelf_and_pins_only_on_overflow() -> void:
 	for height in [1080, 720]:
 		var host := SubViewport.new()
-		host.size = Vector2i(RoomPanel.SIDE_WIDTH, height)
+		host.size = Vector2i(int(RoomPanel.SIDE_WIDTH), height)
 		host.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		add_child_autofree(host)
 		var panel := RoomPanel.new()

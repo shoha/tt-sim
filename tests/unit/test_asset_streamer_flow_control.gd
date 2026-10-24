@@ -259,7 +259,7 @@ func test_resumed_download_keeps_its_chunks_and_asks_from_the_first_gap() -> voi
 	_receive(1)
 	_streamer._save_partial_transfers()
 	var partial: Dictionary = _streamer._partial_transfers[KEY]
-	assert_eq(_streamer.first_missing_chunk(partial.chunks), 2)
+	assert_eq(StreamerDouble.first_missing_chunk(partial.chunks), 2)
 	_streamer._client_downloads[KEY] = partial.duplicate(true)
 	_streamer._rpc_asset_header(PARTS[0], PARTS[1], PARTS[2], PARTS[3], 5, 1000)
 	assert_eq(_streamer.get_download_status(KEY).received_chunks, 2, "chunks kept")

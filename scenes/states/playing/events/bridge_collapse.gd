@@ -117,11 +117,11 @@ func release() -> void:
 func _piece_transform(piece: Dictionary, elapsed: float) -> Transform3D:
 	var pivot: Vector3 = piece.pivot
 	var release_s: float = piece.release
-	var rotation := Basis()
+	var turn := Basis()
 	var offset := Vector3.ZERO
 	if elapsed < release_s:
 		var shake := deg_to_rad(SHUDDER_DEG) * minf(elapsed / SHUDDER_S, 1.0)
-		rotation = Basis(piece.spin, shake * sin(elapsed * 38.0 + float(piece.phase)))
+		turn = Basis(piece.spin, shake * sin(elapsed * 38.0 + float(piece.phase)))
 	else:
 		var t := elapsed - release_s
 		var drop := 0.5 * GRAVITY * t * t
@@ -136,14 +136,14 @@ func _piece_transform(piece: Dictionary, elapsed: float) -> Transform3D:
 		offset = Vector3(0.0, -drop, 0.0) + (piece.drift as Vector3) * t
 		var tip := float(piece.tip_rate) * t + 0.5 * float(piece.tip_rate) * 2.5 * t * t
 		var spin := float(piece.spin_rate) * t
-		rotation = Basis(piece.tip, minf(tip, PI * 0.6)) * Basis(piece.spin, spin)
-	var scale := 1.0
+		turn = Basis(piece.tip, minf(tip, PI * 0.6)) * Basis(piece.spin, spin)
+	var shrink := 1.0
 	var gone_at := duration - 0.3
 	if elapsed > gone_at:
-		scale = maxf(1.0 - (elapsed - gone_at) / 0.3, 0.0)
-	var basis := rotation.scaled(Vector3.ONE * scale)
+		shrink = maxf(1.0 - (elapsed - gone_at) / 0.3, 0.0)
+	var piece_basis := turn.scaled(Vector3.ONE * shrink)
 	# Rotate and scale about the pivot, then move.
-	return Transform3D(basis, pivot + offset - basis * pivot)
+	return Transform3D(piece_basis, pivot + offset - piece_basis * pivot)
 
 
 func _splash(at: Vector3, piece: Dictionary) -> void:

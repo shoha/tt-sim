@@ -148,8 +148,8 @@ static func kind_icon(type: ToastType, themed: Control, icon_name: String = "") 
 
 
 ## Sizes `toast` (in the tree, so its fonts resolve) to its words' one-line width beside the
-## icon and any action, up to `max_width`; past that they wrap.
-func _fit_one_line(toast: Control, max_width: float) -> void:
+## icon and any action, up to `limit_px`; past that they wrap.
+func _fit_one_line(toast: Control, limit_px: float) -> void:
 	var label := toast.get_child(0).get_child(1) as Label
 	toast.custom_minimum_size.x = 0.0
 	# The chip with its words wrapped to nothing, plus the words' one-line width (2 px spare,
@@ -158,7 +158,7 @@ func _fit_one_line(toast: Control, max_width: float) -> void:
 	var font := label.get_theme_font(&"font")
 	var font_size := label.get_theme_font_size(&"font_size")
 	var words := font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-	toast.custom_minimum_size.x = minf(ceilf(rest + words) + 2.0, max_width)
+	toast.custom_minimum_size.x = minf(ceilf(rest + words) + 2.0, limit_px)
 
 
 ## The action at a toast's end: a quiet Secondary button with its icon and a verb.

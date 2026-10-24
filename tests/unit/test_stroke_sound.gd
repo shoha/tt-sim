@@ -13,7 +13,7 @@ var _heard: Array[StringName] = []
 func _recording_sound() -> StrokeSound:
 	_heard.clear()
 	var sound := StrokeSound.new()
-	sound.player = func(name: StringName) -> void: _heard.append(name)
+	sound.player = func(sound_name: StringName) -> void: _heard.append(sound_name)
 	return sound
 
 
@@ -163,17 +163,17 @@ func test_every_sound_is_a_recorded_shot_on_sfx() -> void:
 	for family in FAMILIES:
 		for moment in MOMENTS:
 			names.append(StringName("%s_%s" % [family, moment]))
-	for name in names:
-		var entry := AudioManager.sound_entry(name)
-		assert_false(entry.is_empty(), "%s is in the manifest" % name)
-		assert_eq(str(entry.get("bus", "")), AudioManager.BUS_SFX, name)
-		assert_false(bool(entry.get("loop", true)), name)
+	for sound_name in names:
+		var entry := AudioManager.sound_entry(sound_name)
+		assert_false(entry.is_empty(), "%s is in the manifest" % sound_name)
+		assert_eq(str(entry.get("bus", "")), AudioManager.BUS_SFX, sound_name)
+		assert_false(bool(entry.get("loop", true)), sound_name)
 		var takes: Array = entry.get("takes", [])
-		assert_gte(takes.size(), 3, "%s has three or more takes" % name)
+		assert_gte(takes.size(), 3, "%s has three or more takes" % sound_name)
 		for path in takes:
 			assert_true(ResourceLoader.exists(path), path)
-		if str(name).ends_with("_tick"):
-			assert_gte(float(entry.get("cooldown_s", 0.0)), 0.1, name)
+		if str(sound_name).ends_with("_tick"):
+			assert_gte(float(entry.get("cooldown_s", 0.0)), 0.1, sound_name)
 
 
 func test_a_take_never_plays_twice_running_and_every_take_comes_up() -> void:

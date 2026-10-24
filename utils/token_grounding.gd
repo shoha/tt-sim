@@ -31,8 +31,8 @@ static func cast_top(game_map: GameMap) -> float:
 
 
 ## Where `token`'s rigid body rests on the ground as it is now, or Vector3.INF when nothing
-## is under it (or it is not in the tree). `cast_top` is cast_top()'s.
-static func resting_position(token: BoardToken, cast_top: float) -> Vector3:
+## is under it (or it is not in the tree). `top_y` is cast_top()'s.
+static func resting_position(token: BoardToken, top_y: float) -> Vector3:
 	if not is_instance_valid(token) or token.rigid_body == null:
 		return Vector3.INF
 	if not token.rigid_body.is_inside_tree():
@@ -42,18 +42,18 @@ static func resting_position(token: BoardToken, cast_top: float) -> Vector3:
 		return Vector3.INF
 	var landing: Variant = dragging.water.landing_position()
 	if landing == null:
-		landing = dragging.water.landing_from(cast_top)
+		landing = dragging.water.landing_from(top_y)
 	return landing if landing is Vector3 else Vector3.INF
 
 
 ## Moves `token` straight onto its resting position, with no animation, when it stands more
 ## than TOLERANCE_M off it. Returns true when it moved. Leaves a token mid-drag alone (the
 ## drop decides where that one lands; a settle tween in flight overwrites any move).
-static func reground(token: BoardToken, cast_top: float) -> bool:
+static func reground(token: BoardToken, top_y: float) -> bool:
 	var dragging := token.get_dragging_object() if is_instance_valid(token) else null
 	if dragging == null or dragging.is_being_dragged():
 		return false
-	var rest := resting_position(token, cast_top)
+	var rest := resting_position(token, top_y)
 	if rest == Vector3.INF:
 		return false
 	if absf(rest.y - token.rigid_body.global_position.y) <= TOLERANCE_M:

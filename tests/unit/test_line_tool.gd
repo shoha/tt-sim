@@ -385,9 +385,9 @@ func test_start_a_fire_path_is_the_third_line_tool() -> void:
 		assert_eq(_differing(fire.lay_style(), trees), tint_keys, "the hue (%s)" % fill)
 		var ground := path.lay_style(IgniteMode.Stretch.GROUND)
 		assert_eq(_differing(trees, ground), ["fill_profile"], "only the ground: narrower rails")
-		var refused := path.lay_style(IgniteMode.Stretch.REFUSED)
-		assert_eq(_differing(trees, refused), refused_keys, "refused: chalk, no fill")
-		assert_eq(float(refused.alpha_up) + float(refused.alpha_down), 0.0, "lines alone")
+		var refused_style := path.lay_style(IgniteMode.Stretch.REFUSED)
+		assert_eq(_differing(trees, refused_style), refused_keys, "refused: chalk, no fill")
+		assert_eq(float(refused_style.alpha_up) + float(refused_style.alpha_down), 0.0, "lines alone")
 	assert_eq(IgniteMode.new().fill, LineRibbon.FILL, "the rails by default")
 	assert_eq(IgniteMode.PATH_HUE.glow, ToppleMode.TINT, "on its ring's colour")
 	assert_eq(IgniteMode.REFUSED_HUE.tint, CollapseMode.REFUSED_TINT, "the refused ring's chalk")
@@ -522,16 +522,16 @@ func test_the_path_hues_differ_only_in_their_tint() -> void:
 	assert_eq(IgniteMode.PATH_HUES[IgniteMode.HUE], IgniteMode.PATH_HUE, "C is the Path's")
 	var rails: Dictionary = LineRibbon.FILLS.rails
 	var tints: Array = []
-	for name: String in IgniteMode.PATH_HUES:
+	for hue_name: String in IgniteMode.PATH_HUES:
 		var path := IgniteMode.new()
-		path.hue = name
+		path.hue = hue_name
 		var style := path.lay_style()
-		assert_eq(style.glow, ToppleMode.TINT, "%s on the ring's colour" % name)
-		var expected: Array = [] if name == IgniteMode.HUE else ["tint"]
-		assert_eq(_differing(IgniteMode.new().lay_style(), style), expected, name)
+		assert_eq(style.glow, ToppleMode.TINT, "%s on the ring's colour" % hue_name)
+		var expected: Array = [] if hue_name == IgniteMode.HUE else ["tint"]
+		assert_eq(_differing(IgniteMode.new().lay_style(), style), expected, hue_name)
 		var strong := LineRibbon.lit_fill(Color(style.tint, rails.alpha_down), rails.fill_gain)
 		for c in 3:
-			assert_lt(strong[c], 1.01, "%s's strongest rail within full value" % name)
+			assert_lt(strong[c], 1.01, "%s's strongest rail within full value" % hue_name)
 		tints.append(style.tint)
 	assert_eq(tints, [ThemeColors.OCHRE_DEEP, ThemeColors.OCHRE_DEEPER, ThemeColors.AMBER_DEEP])
 

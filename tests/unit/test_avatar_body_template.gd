@@ -167,16 +167,20 @@ func test_attribute_controls_drive_signed_shape_weights() -> void:
 	assert_almost_eq(float(high.hips), 0.5, 1e-6)
 	assert_almost_eq(float(high.shoulders), 1.0, 1e-6)
 	var old := _kit.shape_weights(RECIPE.proportions)
-	for name in ATTRIBUTES:
-		assert_almost_eq(float(old[name]), 0.0, 1e-6, "%s at 0 without the attributes" % name)
+	for attribute in ATTRIBUTES:
+		assert_almost_eq(
+			float(old[attribute]), 0.0, 1e-6, "%s at 0 without the attributes" % attribute
+		)
 	assert_almost_eq(float(old.build_plus), 0.0, 1e-6, "build_plus as before")
 	assert_almost_eq(float(_kit.shape_weights({"build": 0.75}).build_plus), 0.5, 1e-6)
 
 
 func test_a_recipe_resolves_the_attributes_clamped_and_defaults_them() -> void:
 	var old := _kit.resolve(RECIPE)
-	for name in ATTRIBUTES:
-		assert_eq(float(old.proportions[name]), 0.5, "%s defaults to the modelled body" % name)
+	for attribute in ATTRIBUTES:
+		assert_eq(
+			float(old.proportions[attribute]), 0.5, "%s defaults to the modelled body" % attribute
+		)
 	var recipe := RECIPE.duplicate(true)
 	recipe.proportions = {"frame": 1.7, "chest": -0.2, "waist": 0.3}
 	var resolved := _kit.resolve(recipe)
@@ -199,17 +203,22 @@ func test_the_built_figure_carries_the_signed_blend_shape_values() -> void:
 	var figure := _free_later(_kit.build_figure(recipe)) as Node3D
 	var body := figure.find_child("body_a", true, false) as MeshInstance3D
 	var want := {"frame": -1.0, "chest": -0.35, "waist": 1.0, "hips": 0.0, "shoulders": 0.0}
-	for name in want:
-		var index := body.find_blend_shape_by_name(StringName(name))
-		assert_gt(index, -1, "the body carries %s" % name)
+	for shape_name in want:
+		var index := body.find_blend_shape_by_name(StringName(shape_name))
+		assert_gt(index, -1, "the body carries %s" % shape_name)
 		assert_almost_eq(
-			body.get_blend_shape_value(index), float(want[name]), 1e-6, "%s unclamped" % name
+			body.get_blend_shape_value(index),
+			float(want[shape_name]),
+			1e-6,
+			"%s unclamped" % shape_name
 		)
 	var plain := _free_later(_kit.build_figure(RECIPE)) as Node3D
 	var old_body := plain.find_child("body_a", true, false) as MeshInstance3D
-	for name in ATTRIBUTES:
-		var index := old_body.find_blend_shape_by_name(StringName(name))
-		assert_almost_eq(old_body.get_blend_shape_value(index), 0.0, 1e-6, "%s old recipe" % name)
+	for attribute in ATTRIBUTES:
+		var index := old_body.find_blend_shape_by_name(StringName(attribute))
+		assert_almost_eq(
+			old_body.get_blend_shape_value(index), 0.0, 1e-6, "%s old recipe" % attribute
+		)
 
 
 # --- the builder -------------------------------------------------------------------------------
@@ -218,29 +227,31 @@ func test_the_built_figure_carries_the_signed_blend_shape_values() -> void:
 func test_the_shape_pane_has_an_attribute_slider_each_that_writes_the_recipe() -> void:
 	var builder := AvatarBuilder.open_for_new(_scene, RECIPE, "Plum")
 	var values := {"frame": 0.2, "shoulders": 0.8, "hips": 0.35, "chest": 0.9, "waist": 0.1}
-	for name in ATTRIBUTES:
-		var row := builder._shape_rows.get(name) as PropertyRow
-		assert_not_null(row, "a %s slider" % name)
-		assert_eq(row.label, SLIDERS[name][0])
-		assert_eq(row.hint_low, SLIDERS[name][1])
-		assert_eq(row.hint_high, SLIDERS[name][2])
+	for attribute in ATTRIBUTES:
+		var row := builder._shape_rows.get(attribute) as PropertyRow
+		assert_not_null(row, "a %s slider" % attribute)
+		assert_eq(row.label, SLIDERS[attribute][0])
+		assert_eq(row.hint_low, SLIDERS[attribute][1])
+		assert_eq(row.hint_high, SLIDERS[attribute][2])
 		assert_eq(row.min_value, 0.0)
 		assert_eq(row.max_value, 1.0)
-		assert_eq(row.value, 0.5, "%s starts at the modelled body" % name)
-		row.value_changed.emit(float(values[name]))
+		assert_eq(row.value, 0.5, "%s starts at the modelled body" % attribute)
+		row.value_changed.emit(float(values[attribute]))
 	await get_tree().process_frame
 	await get_tree().process_frame
-	for name in ATTRIBUTES:
-		assert_eq(float(builder.recipe.proportions[name]), float(values[name]), name)
+	for attribute in ATTRIBUTES:
+		assert_eq(
+			float(builder.recipe.proportions[attribute]), float(values[attribute]), attribute
+		)
 	builder.cancel()
 
 
 func test_surprise_me_draws_every_attribute_independently() -> void:
 	var builder := AvatarBuilder.open_for_new(_scene, RECIPE, "Plum")
 	builder.surprise()
-	for name in ATTRIBUTES:
-		assert_true(builder.recipe.proportions.has(name), "surprise sets %s" % name)
-		var value := float(builder.recipe.proportions[name])
+	for attribute in ATTRIBUTES:
+		assert_true(builder.recipe.proportions.has(attribute), "surprise sets %s" % attribute)
+		var value := float(builder.recipe.proportions[attribute])
 		assert_between(value, 0.0, 1.0)
 		assert_almost_eq(value, AvatarSurprise.quantize(value), 1e-6, "on the step")
 	builder.cancel()
@@ -251,7 +262,7 @@ func test_surprise_me_draws_every_attribute_independently() -> void:
 	for i in 60:
 		var shape := AvatarSurprise.shape(_kit, rng)
 		differ += 1 if shape.frame != shape.hips or shape.chest != shape.waist else 0
-		for name in ATTRIBUTES:
-			ends += 1 if shape[name] <= 0.0 or shape[name] >= 1.0 else 0
+		for attribute in ATTRIBUTES:
+			ends += 1 if shape[attribute] <= 0.0 or shape[attribute] >= 1.0 else 0
 	assert_gt(differ, 40, "the attributes are drawn independently")
 	assert_gt(ends, 0, "an attribute's ends come up like any other value")

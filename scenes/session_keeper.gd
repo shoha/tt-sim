@@ -150,7 +150,7 @@ func save_now(settle := false) -> bool:
 		"last_played": int(Time.get_unix_time_from_system()),
 		"gm": session.session_id_of(1),
 		"shelf": shelf_out,
-		"table": session.get_table() if session.get_table() != "" else null,
+		"table": (session.get_table() as Variant) if session.get_table() != "" else null,
 		"selected": session.get_selected(),
 		"players": _players(session.get_players()),
 		"party": session.party.snapshot(),
@@ -322,7 +322,9 @@ func _found_ref(stored: Dictionary, level: Dictionary) -> Dictionary:
 	if stored.folder != "":
 		if level.is_empty():
 			return {}
-		return SessionChannel.map_ref(NetworkManager.with_map_hashes(level))
+		# with_map_hashes is static; reached through the autoload's script (see SessionChannel.shelve).
+		var hashed: Dictionary = NetworkManager.get_script().with_map_hashes(level)
+		return SessionChannel.map_ref(hashed)
 	if stored.map_path == "" or not ResourceLoader.exists(stored.map_path):
 		return {}
 	return SessionChannel.map_ref({"map_path": stored.map_path, "level_name": stored.name})

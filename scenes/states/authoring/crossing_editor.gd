@@ -199,17 +199,17 @@ static func followed_list(doc: MapDocument, area: Rect2) -> Dictionary:
 			out.append(crossing)
 			continue
 		reached += 1
-		var snapped := CrossingPlacement.anchor(
+		var anchored := CrossingPlacement.anchor(
 			doc, crossing.start, crossing.end, crossing.kind, crossing.width_m, crossing.style
 		)
-		if snapped != null:
-			snapped.id = crossing.id
-		if snapped == null or MapCrossingIO.crossing_problem(snapped, doc.extent_m()) != "":
+		if anchored != null:
+			anchored.id = crossing.id
+		if anchored == null or MapCrossingIO.crossing_problem(anchored, doc.extent_m()) != "":
 			removed += 1
-		elif _near(snapped, crossing):
+		elif _near(anchored, crossing):
 			out.append(crossing)
 		else:
-			out.append(snapped)
+			out.append(anchored)
 			moved += 1
 	return {"crossings": out, "moved": moved, "removed": removed, "reached": reached}
 
@@ -303,9 +303,9 @@ func _change(label: String, after: Array[Crossing], touched: Array[Crossing]) ->
 ## (map XZ): the undo and redo of a crossing edit, and a live crossings edit.
 func apply_list(crossings: Array[Crossing], area: Rect2) -> void:
 	var e := _editor()
-	var list: Array[Crossing] = []
-	list.assign(crossings)
-	e.document.crossings = list
+	var copied: Array[Crossing] = []
+	copied.assign(crossings)
+	e.document.crossings = copied
 	var started := Time.get_ticks_usec()
 	if is_instance_valid(e.map_root):
 		AuthoredCrossings.refresh_map(e.map_root, e.document)
