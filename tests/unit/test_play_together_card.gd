@@ -7,9 +7,11 @@ extends GutTest
 ## under way locks the field and going back drops it; an error shows in place; pad input is
 ## ignored while the window is unfocused; an instant state set kills the easings under way.
 
+const UI_MANAGER_SCRIPT := preload("res://autoloads/ui_manager.gd")
+
 
 func before_all() -> void:
-	UIManager.add_pad_accept_and_back()
+	UI_MANAGER_SCRIPT.add_pad_accept_and_back()
 
 
 func _card() -> PlayTogetherCard:

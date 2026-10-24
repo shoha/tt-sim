@@ -600,9 +600,9 @@ func _land() -> void:
 		region = region.merge(stroke.changed) if stroke.changed.has_area() else region
 	timings["ground"] = Time.get_ticks_usec() - t0
 	# The shore band reaches past the water's area.
-	var step := doc.sample_step()
+	var cell_step := doc.sample_step()
 	var shore := WaterDressing.SHORE_FAR_M + WaterDressing.SHORE_NOISE_M + 0.5
-	region = region.grow(ceili(shore / minf(step.x, step.y))).intersection(
+	region = region.grow(ceili(shore / minf(cell_step.x, cell_step.y))).intersection(
 		Rect2i(0, 0, doc.samples_x(), doc.samples_z())
 	)
 	doc.water_dressing = result.dressing

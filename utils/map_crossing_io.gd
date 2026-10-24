@@ -44,9 +44,9 @@ static func problem(doc: MapDocument) -> String:
 	for crossing in doc.crossings:
 		if crossing == null:
 			return "a null crossing"
-		var crossing_problem := crossing_problem(crossing, doc.extent_m())
-		if crossing_problem != "":
-			return "crossing %d: %s" % [crossing.id, crossing_problem]
+		var reason := crossing_problem(crossing, doc.extent_m())
+		if reason != "":
+			return "crossing %d: %s" % [crossing.id, reason]
 		if seen.has(crossing.id):
 			return "crossing id %d is used twice" % crossing.id
 		seen[crossing.id] = true
@@ -84,21 +84,25 @@ static func crossing_problem(crossing: Crossing, extent: Vector2) -> String:
 
 ## Fills doc.crossings from `blobs` (entry name -> bytes, already within their caps) with
 ## MapDocumentIO's warning log. Never raises.
-static func parse(blobs: Dictionary, doc: MapDocument, log: MapDocumentIO._WarningLog) -> void:
+static func parse(
+	blobs: Dictionary, doc: MapDocument, warn_log: MapDocumentIO._WarningLog
+) -> void:
 	if not blobs.has(ENTRY):
 		return
-	var data: Variant = MapDocumentIO._json(blobs[ENTRY], ENTRY, log)
+	var data: Variant = MapDocumentIO._json(blobs[ENTRY], ENTRY, warn_log)
 	var version: Variant = null
 	if data is Dictionary:
 		version = MapDocumentIO._integer(data.get("version"), 0, 1000000)
 	if version != VERSION:
-		log.add("%s is not a version %d crossings object; crossings ignored" % [ENTRY, VERSION])
+		warn_log.add(
+			"%s is not a version %d crossings object; crossings ignored" % [ENTRY, VERSION]
+		)
 		return
 	var list: Variant = data.get("crossings")
 	if not list is Array:
-		log.add("%s needs a crossings list; crossings ignored" % ENTRY)
+		warn_log.add("%s needs a crossings list; crossings ignored" % ENTRY)
 		return
-	doc.crossings = parse_list(list, doc.extent_m(), log)
+	doc.crossings = parse_list(list, doc.extent_m(), warn_log)
 
 
 # --- writing ------------------------------------------------------------------------
@@ -121,14 +125,14 @@ static func crossing_json(crossing: Crossing) -> Dictionary:
 
 
 ## The crossings of a JSON list (crossing_json() forms, untrusted) on a map of `extent`: each
-## one crossing_problem() accepts, a warning in `log` for each one dropped.
+## one crossing_problem() accepts, a warning in `warn_log` for each one dropped.
 static func parse_list(
-	list: Array, extent: Vector2, log: MapDocumentIO._WarningLog
+	list: Array, extent: Vector2, warn_log: MapDocumentIO._WarningLog
 ) -> Array[Crossing]:
 	var out: Array[Crossing] = []
 	var seen := {}
 	if list.size() > MapDocument.MAX_CROSSINGS:
-		log.add(
+		warn_log.add(
 			(
 				"%s: %d crossings over the cap of %d ignored"
 				% [ENTRY, list.size() - MapDocument.MAX_CROSSINGS, MapDocument.MAX_CROSSINGS]
@@ -137,11 +141,11 @@ static func parse_list(
 	for index in mini(list.size(), MapDocument.MAX_CROSSINGS):
 		var parsed: Variant = _crossing_from(list[index])
 		var crossing: Crossing = parsed if parsed is Crossing else null
-		var problem: String = parsed if parsed is String else crossing_problem(crossing, extent)
-		if problem == "" and seen.has(crossing.id):
-			problem = "id %d is used twice" % crossing.id
-		if problem != "":
-			log.add("%s: crossing %d skipped: %s" % [ENTRY, index, problem])
+		var reason: String = parsed if parsed is String else crossing_problem(crossing, extent)
+		if reason == "" and seen.has(crossing.id):
+			reason = "id %d is used twice" % crossing.id
+		if reason != "":
+			warn_log.add("%s: crossing %d skipped: %s" % [ENTRY, index, reason])
 			continue
 		seen[crossing.id] = true
 		out.append(crossing)

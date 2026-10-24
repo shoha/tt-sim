@@ -212,6 +212,6 @@ func test_snap_rows_keeps_unmoved_arrays() -> void:
 	var doc := _doc()
 	var fields := ScatterGenerator.document_fields(doc, "")
 	var rows := {OAK: _rows([Vector2(0.2, 0.2)])}
-	var snapped := DressingGround.snap_rows(rows, fields, fields, {})
-	assert_eq(snapped.moved, 0)
-	assert_eq(snapped.rows[OAK], rows[OAK])
+	var result := DressingGround.snap_rows(rows, fields, fields, {})
+	assert_eq(result.moved, 0)
+	assert_eq(result.rows[OAK], rows[OAK])

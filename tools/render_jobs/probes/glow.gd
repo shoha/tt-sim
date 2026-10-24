@@ -117,8 +117,8 @@ static func _variant(base: Node, spec: String, preset: String) -> String:
 	var env := world_env.environment
 	match variant:
 		"new":
-			var reference := EnvironmentPresets.glow_reference(preset, map_defaults)
-			EnvironmentGlow.apply(env, config, reference)
+			var glow_ref := EnvironmentPresets.glow_reference(preset, map_defaults)
+			EnvironmentGlow.apply(env, config, glow_ref)
 		"old":
 			# What _apply_config_to_environment set before card C5b; the rest Godot's defaults.
 			var defaults := Environment.new()

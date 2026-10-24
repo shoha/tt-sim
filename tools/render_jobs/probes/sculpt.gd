@@ -357,21 +357,21 @@ class Comparer:
 			)
 			# Leave the terrain consistent: the rebuild reps bypassed the vertex copies and
 			# the collision.
-			var terrain := ctrl.editor.terrain
-			terrain.queue_heights(rect)
-			terrain.process_heights(-1)
-			terrain.settle_heights()
-			terrain.update_collision()
+			var final_terrain := ctrl.editor.terrain
+			final_terrain.queue_heights(rect)
+			final_terrain.process_heights(-1)
+			final_terrain.settle_heights()
+			final_terrain.update_collision()
 			queue_free()
 			return
 		i += 1
 		if i <= 2:
 			return  # settle
 		var doc := ctrl.document
-		var sign := 1.0 if i % 4 < 2 else -1.0
+		var side := 1.0 if i % 4 < 2 else -1.0
 		for z in range(rect.position.y, rect.end.y):
 			for x in range(rect.position.x, rect.end.x):
-				doc.heights[doc.sample_index(x, z)] += 0.02 * sign
+				doc.heights[doc.sample_index(x, z)] += 0.02 * side
 		var terrain := ctrl.editor.terrain
 		var started := Time.get_ticks_usec()
 		if i % 2 == 0:

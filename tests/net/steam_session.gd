@@ -83,7 +83,6 @@ var _arrived: Array = []
 var _map_downloads := 0
 var _offline_events := 0
 var _first_id := 0
-var _signals_connected := false
 
 
 func _ready() -> void:

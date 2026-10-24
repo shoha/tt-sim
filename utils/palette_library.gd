@@ -138,8 +138,8 @@ static func palette_version(root: String = DEFAULT_ROOT) -> String:
 ## surfaces; both [] when the palette lists none (a palette from before 2026-09-27).
 static func biomes(root: String = DEFAULT_ROOT) -> Array[Dictionary]:
 	var copies: Array[Dictionary] = []
-	for biome in get_palette(root)["biomes"]:
-		copies.append((biome as Dictionary).duplicate(true))
+	for entry in get_palette(root)["biomes"]:
+		copies.append((entry as Dictionary).duplicate(true))
 	return copies
 
 
@@ -454,10 +454,10 @@ static func _validate_surfaces(raw: Variant, warnings: Array[String]) -> Diction
 	return result
 
 
-static func _names_with_role(surfaces: Dictionary, role: String) -> Array[String]:
+static func _names_with_role(known: Dictionary, role: String) -> Array[String]:
 	var names: Array[String] = []
-	for name in surfaces:
-		if surfaces[name]["role"] == role:
+	for name in known:
+		if known[name]["role"] == role:
 			names.append(name)
 	return names
 
@@ -465,17 +465,17 @@ static func _names_with_role(surfaces: Dictionary, role: String) -> Array[String
 ## A biome's cliff_surface: the named surface when it is a cliff; else (with a warning
 ## when a name was given) the first cliff surface in file order, or "" when there is none.
 static func _cliff_surface_of(
-	entry: Dictionary, id: String, surfaces: Dictionary, warnings: Array[String]
+	entry: Dictionary, id: String, known: Dictionary, warnings: Array[String]
 ) -> String:
 	var fallback := ""
-	var cliffs := _names_with_role(surfaces, "cliff")
+	var cliffs := _names_with_role(known, "cliff")
 	if not cliffs.is_empty():
 		fallback = cliffs[0]
 	var raw: Variant = entry.get("cliff_surface")
 	if raw == null:
 		return fallback
 	var cliff := _text_or(raw, MAX_TEXT_LENGTH, "")
-	if surfaces.has(cliff) and surfaces[cliff]["role"] == "cliff":
+	if known.has(cliff) and known[cliff]["role"] == "cliff":
 		return cliff
 	warnings.append(
 		(
@@ -489,13 +489,13 @@ static func _cliff_surface_of(
 ## A biome's scree_surface: the named surface when it is ground, else "" (the foot keeps
 ## the biome ground), with a warning when a name was given.
 static func _scree_surface_of(
-	entry: Dictionary, id: String, surfaces: Dictionary, warnings: Array[String]
+	entry: Dictionary, id: String, known: Dictionary, warnings: Array[String]
 ) -> String:
 	var raw: Variant = entry.get("scree_surface")
 	if raw == null:
 		return ""
 	var scree := _text_or(raw, MAX_TEXT_LENGTH, "")
-	if surfaces.has(scree) and surfaces[scree]["role"] == "ground":
+	if known.has(scree) and known[scree]["role"] == "ground":
 		return scree
 	warnings.append("biome '%s': scree surface '%s' is not a ground surface" % [id, _label(raw)])
 	return ""
@@ -510,20 +510,20 @@ static func _water_surface_of(
 	id: String,
 	key: String,
 	index: int,
-	surfaces: Dictionary,
+	known: Dictionary,
 	warnings: Array[String]
 ) -> String:
 	var defaults: Array = WATER_SURFACE_DEFAULTS.get(
 		_text_or(entry.get("biome"), MAX_TEXT_LENGTH, ""), DEFAULT_WATER_SURFACES
 	)
 	var fallback := String(defaults[index])
-	if not surfaces.has(fallback) or surfaces[fallback]["role"] != "ground":
+	if not known.has(fallback) or known[fallback]["role"] != "ground":
 		fallback = ""
 	var raw: Variant = entry.get(key)
 	if raw == null:
 		return fallback
 	var named := _text_or(raw, MAX_TEXT_LENGTH, "")
-	if surfaces.has(named) and surfaces[named]["role"] == "ground":
+	if known.has(named) and known[named]["role"] == "ground":
 		return named
 	warnings.append(
 		"biome '%s': %s '%s' is not a ground surface, using '%s'" % [id, key, _label(raw), fallback]
@@ -538,7 +538,7 @@ static func _water_surface_of(
 ## coverage is clamped to 0..1; a missing scale_m is DEFAULT_ACCENT_SCALE_M silently, a
 ## non-numeric or non-positive one warns and is too. Order is kept (priority order).
 static func _ground_accents_of(
-	entry: Dictionary, id: String, ground: String, surfaces: Dictionary, warnings: Array[String]
+	entry: Dictionary, id: String, ground: String, known: Dictionary, warnings: Array[String]
 ) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	var raw: Variant = entry.get("ground_accents")
@@ -558,7 +558,7 @@ static func _ground_accents_of(
 		if surface == null or coverage == null:
 			warnings.append("%s: malformed entry '%s' dropped" % [where, _label(accent)])
 			continue
-		if not surfaces.has(surface) or surfaces[surface]["role"] != "ground" or surface == ground:
+		if not known.has(surface) or known[surface]["role"] != "ground" or surface == ground:
 			warnings.append(
 				(
 					"%s: '%s' is not a ground surface other than the biome's own, dropped"
@@ -586,7 +586,7 @@ static func _ground_accents_of(
 ## A biome's path_surfaces: absent is [] silently; not an array warns and is []; a name that
 ## is absent or not role built warns and is dropped; a duplicate is ignored silently.
 static func _path_surfaces_of(
-	entry: Dictionary, id: String, surfaces: Dictionary, warnings: Array[String]
+	entry: Dictionary, id: String, known: Dictionary, warnings: Array[String]
 ) -> Array[String]:
 	var result: Array[String] = []
 	var raw: Variant = entry.get("path_surfaces")
@@ -598,7 +598,7 @@ static func _path_surfaces_of(
 		return result
 	for name in _capped(raw, MAX_PATH_SURFACES, where, warnings):
 		var surface: Variant = _text(name, MAX_TEXT_LENGTH)
-		if surface == null or not surfaces.has(surface) or surfaces[surface]["role"] != "built":
+		if surface == null or not known.has(surface) or known[surface]["role"] != "built":
 			warnings.append("%s: '%s' is not a built surface, dropped" % [where, _label(name)])
 			continue
 		if not surface in result:
@@ -637,7 +637,7 @@ static func _validate_assets(raw: Variant, warnings: Array[String]) -> Dictionar
 
 
 static func _validate_biomes(
-	raw: Variant, assets: Dictionary, surfaces: Dictionary, warnings: Array[String]
+	raw: Variant, assets: Dictionary, known: Dictionary, warnings: Array[String]
 ) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	if not raw is Array:
@@ -651,7 +651,7 @@ static func _validate_biomes(
 			continue
 		seen[id] = true
 		var ground := _text_or(entry.get("ground_surface"), MAX_TEXT_LENGTH, "")
-		if ground != "" and not surfaces.has(ground):
+		if ground != "" and not known.has(ground):
 			warnings.append("biome '%s': ground surface '%s' not in surfaces" % [id, ground])
 			ground = ""
 		var seed_value: Variant = _number(entry.get("seed"), -2147483648.0, 2147483647.0)
@@ -671,16 +671,15 @@ static func _validate_biomes(
 					"climate": _text_or(entry.get("climate"), MAX_TEXT_LENGTH, ""),
 					"thumbnail": _path_or(entry.get("thumbnail"), ""),
 					"ground_surface": ground,
-					"cliff_surface": _cliff_surface_of(entry, id, surfaces, warnings),
-					"scree_surface": _scree_surface_of(entry, id, surfaces, warnings),
+					"cliff_surface": _cliff_surface_of(entry, id, known, warnings),
+					"scree_surface": _scree_surface_of(entry, id, known, warnings),
 					"water_bed_surface":
-					_water_surface_of(entry, id, "water_bed_surface", 0, surfaces, warnings),
-					"shore_surface":
-					_water_surface_of(entry, id, "shore_surface", 1, surfaces, warnings),
-					"ground_accents": _ground_accents_of(entry, id, ground, surfaces, warnings),
-					"path_surfaces": _path_surfaces_of(entry, id, surfaces, warnings),
+					_water_surface_of(entry, id, "water_bed_surface", 0, known, warnings),
+					"shore_surface": _water_surface_of(entry, id, "shore_surface", 1, known, warnings),
+					"ground_accents": _ground_accents_of(entry, id, ground, known, warnings),
+					"path_surfaces": _path_surfaces_of(entry, id, known, warnings),
 					"ground_look":
-					GroundLook.validate(entry.get("ground_look"), id, ground, surfaces, warnings),
+					GroundLook.validate(entry.get("ground_look"), id, ground, known, warnings),
 					"species": species_rules,
 				}
 			)
@@ -841,18 +840,20 @@ static func _validate_clump(raw: Variant, label: String, warnings: Array[String]
 	if _optional_number(raw, "mass", 0.0, 1.0, 0.0, label, warnings) < 0.5:
 		return clump
 	for field: String in ScatterPlan.MASS_FIELDS:
-		var range: Array = ScatterPlan.MASS_FIELDS[field]
-		var value: Variant = _optional_number(raw, field, range[0], range[1], null, label, warnings)
+		var limits: Array = ScatterPlan.MASS_FIELDS[field]
+		var value: Variant = _optional_number(
+			raw, field, limits[0], limits[1], null, label, warnings
+		)
 		if value != null:
 			clump[field] = value
 	for field: String in ScatterPlan.MASS_ARRAYS:
-		var range: Array = ScatterPlan.MASS_ARRAYS[field]
+		var limits: Array = ScatterPlan.MASS_ARRAYS[field]
 		var items: Variant = raw.get(field)
 		if items == null:
 			continue
 		var values := []
 		for item: Variant in items if items is Array and items.size() == 4 else []:
-			var number: Variant = _number(item, range[0], range[1])
+			var number: Variant = _number(item, limits[0], limits[1])
 			if number != null:
 				values.append(roundf(number) if field == "zone_family" else number)
 		if values.size() == 4:

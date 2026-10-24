@@ -196,9 +196,9 @@ func _settle(
 	var applied := [0]
 	var on_applied := func(_cells: Array) -> void: applied[0] += e.scatter.last_apply_usec
 	e.scatter.cells_applied.connect(on_applied)
-	var pending := func() -> bool: return _busy(copy) or (queue != null and queue.size() > 0)
+	var is_pending := func() -> bool: return _busy(copy) or (queue != null and queue.size() > 0)
 	var deadline := begin + int(SETTLE_S * 1000000.0)
-	while pending.call() and Time.get_ticks_usec() < deadline:
+	while is_pending.call() and Time.get_ticks_usec() < deadline:
 		var water := copy.root.get_node_or_null(AuthoredWater.NODE_NAME) as AuthoredWater
 		var version := water.version if water != null else 0
 		heights.last_terrain_usec = 0
@@ -260,7 +260,7 @@ func _settle(
 		last = now
 		out.frames += 1
 	e.scatter.cells_applied.disconnect(on_applied)
-	out["settled"] = not pending.call()
+	out["settled"] = not is_pending.call()
 	var took := "%d frames, %.0f ms" % [out.frames, (last - begin) / 1000.0]
 	assert_true(out.settled, "%s: settled within %.0f s (%s)" % [what, SETTLE_S, took])
 	print("P-LIVE-SETTLE %s: %s" % [what, took])

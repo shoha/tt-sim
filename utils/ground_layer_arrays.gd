@@ -120,27 +120,27 @@ func _create(wanted: PackedStringArray, root: String) -> void:
 ## `images` as one array can take them: as they are when they agree in size, format and
 ## mipmaps and none is missing, else all uncompressed at the first image's size.
 func _conformed(images: Array[Image], kind: String, wanted: PackedStringArray) -> Array[Image]:
-	var reference: Image = null
+	var first: Image = null
 	for image in images:
 		if image != null:
-			reference = image
+			first = image
 			break
-	var agree := reference != null
+	var agree := first != null
 	var missing := false
 	for image in images:
 		missing = missing or image == null
 		agree = (
 			agree
 			and image != null
-			and image.get_size() == reference.get_size()
-			and image.get_format() == reference.get_format()
-			and image.has_mipmaps() == reference.has_mipmaps()
+			and image.get_size() == first.get_size()
+			and image.get_format() == first.get_format()
+			and image.has_mipmaps() == first.has_mipmaps()
 		)
 	if agree:
 		return images
 	# A missing map (a surface the palette lacks) was warned about where it was named; a
 	# mismatch breaks the palette contract and is worth its own warning.
-	if reference != null and not missing and not _warned.has(kind):
+	if first != null and not missing and not _warned.has(kind):
 		_warned[kind] = true
 		push_warning(
 			(
@@ -148,7 +148,7 @@ func _conformed(images: Array[Image], kind: String, wanted: PackedStringArray) -
 				% [kind, str(wanted)]
 			)
 		)
-	var size := reference.get_size() if reference != null else Vector2i.ONE * STAND_IN_SIZE
+	var size := first.get_size() if first != null else Vector2i.ONE * STAND_IN_SIZE
 	var out: Array[Image] = []
 	for image in images:
 		out.append(_uncompressed(image, size, DEFAULTS[kind]))

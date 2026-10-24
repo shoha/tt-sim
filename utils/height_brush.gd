@@ -271,10 +271,12 @@ static func raise(
 	return clamp_height(height + direction * speed * w * seconds)
 
 
-## `height` moved toward `goal` by amount(w, seconds, rate): the step smooth (goal = the
+## `height` moved toward `goal` by amount(w, seconds, approach_rate): the step smooth (goal = the
 ## local mean), flatten (goal = the target) and tier (goal = the tier height) share.
-static func approach(height: float, goal: float, w: float, seconds: float, rate: float) -> float:
-	return clamp_height(height + (goal - height) * MaskBrush.amount(w, seconds, rate))
+static func approach(
+	height: float, goal: float, w: float, seconds: float, approach_rate: float
+) -> float:
+	return clamp_height(height + (goal - height) * MaskBrush.amount(w, seconds, approach_rate))
 
 
 ## One step of operation `op` at a sample of height `height` and weight `w`, for `seconds`

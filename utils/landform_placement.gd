@@ -231,12 +231,12 @@ static func wood(rng: RandomNumberGenerator, density: Vector2, lean_chance: floa
 
 
 ## A wood's line in a recipe's report.
-static func wood_report(wood: Dictionary) -> String:
-	if not wood.has("side"):
-		return "wood %.2f" % float(wood.density)
+static func wood_report(drawn: Dictionary) -> String:
+	if not drawn.has("side"):
+		return "wood %.2f" % float(drawn.density)
 	return (
 		"wood %.2f, gathered toward %d deg, the far side %.2f open"
-		% [float(wood.density), LandformGrowth.degrees(wood.side), float(wood.lean)]
+		% [float(drawn.density), LandformGrowth.degrees(drawn.side), float(drawn.lean)]
 	)
 
 

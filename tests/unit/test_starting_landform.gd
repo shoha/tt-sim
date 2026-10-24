@@ -62,8 +62,8 @@ func test_same_seed_same_map() -> void:
 	var entries_a: Dictionary = MapDocumentIO.serialize(a.doc).entries
 	var entries_b: Dictionary = MapDocumentIO.serialize(b.doc).entries
 	assert_eq(entries_a.keys(), entries_b.keys())
-	for name in entries_a:
-		assert_eq(entries_a[name], entries_b.get(name), name)
+	for entry_name in entries_a:
+		assert_eq(entries_a[entry_name], entries_b.get(entry_name), entry_name)
 
 
 func test_different_seeds_turn_the_axis() -> void:

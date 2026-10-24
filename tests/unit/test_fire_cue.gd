@@ -67,8 +67,8 @@ func test_no_fire_or_no_document_is_never_in_fire() -> void:
 func test_the_label_adds_the_cue_after_its_other_parts() -> void:
 	var plain := DragRuler.ruler_text(3.0 * CELL, 0.0, CELL, 5.0, "ft", false, true)
 	assert_eq(plain, "15 ft  |  In fire")
-	var snapped := DragRuler.ruler_text(3.0 * CELL, 0.0, CELL, 5.0, "ft", true, true)
-	assert_eq(snapped, "3 cells / 15 ft  |  In fire")
+	var cell_snapped := DragRuler.ruler_text(3.0 * CELL, 0.0, CELL, 5.0, "ft", true, true)
+	assert_eq(cell_snapped,"3 cells / 15 ft  |  In fire")
 	var climb := DragRuler.ruler_text(3.0 * CELL, 2.0, CELL, 5.0, "ft", false, true)
 	assert_true(climb.ends_with("direct  |  In fire"), climb)
 	assert_eq(DragRuler.ruler_text(3.0 * CELL, 0.0, CELL, 5.0, "ft", false), "15 ft", "no cue")

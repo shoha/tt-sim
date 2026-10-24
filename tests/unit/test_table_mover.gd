@@ -572,7 +572,8 @@ func test_the_chip_keeps_its_width() -> void:
 	assert_eq(font.opentype_features.get(tnum), 1)
 	var size := notice.count_label.get_theme_font_size(&"font_size")
 	var widths := ["1", "2", "3"].map(
-		func(digit: String) -> float: return font.get_string_size(digit, 0, -1, size).x
+		func(digit: String) -> float:
+			return font.get_string_size(digit, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	)
 	assert_eq(widths[0], widths[2])
 	assert_eq(widths[1], widths[2])
@@ -580,7 +581,9 @@ func test_the_chip_keeps_its_width() -> void:
 	assert_eq((notice.find_child("Chip", true, false) as Control).tooltip_text, LONG_NAME)
 	var body := notice.before_label.get_theme_font(&"font")
 	var body_size := notice.before_label.get_theme_font_size(&"font_size")
-	var width := body.get_string_size(notice.before_label.text, 0, -1, body_size).x
+	var width := body.get_string_size(
+		notice.before_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, body_size
+	).x
 	assert_lte(width, TableMoveNotice.MAX_SENTENCE_WIDTH)
 	var box := notice.stay_button.get_theme_stylebox(&"normal") as StyleBoxFlat
 	assert_eq(box.border_color, ThemeColors.of(notice.stay_button, ThemeColors.TRACK))

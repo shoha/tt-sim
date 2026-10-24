@@ -132,15 +132,15 @@ func retable(water: bool) -> bool:
 		table = with_reserve(table, reserve)
 	_warn_overflow()
 	routing = GroundLayers.routing(inputs, table)
-	var layers: PackedStringArray = table.layers
-	var recreated := arrays.sync(layers, palette_root)
+	var layer_names: PackedStringArray = table.layers
+	var recreated := arrays.sync(layer_names, palette_root)
 	if recreated:
 		arrays.bind(material)
-	var flags := GroundLayers.layer_flags(layers, role_of)
+	var flags := GroundLayers.layer_flags(layer_names, role_of)
 	flags.resize(GroundLayers.MAX_LAYERS)
 	material.set_shader_parameter("layer_flags", flags)
 	var tile_of := func(surface: String) -> Variant: return surfaces.get(surface, {}).get("tile_m")
-	material.set_shader_parameter("layer_tile_m", padded_tiles(layers, tile_of))
+	material.set_shader_parameter("layer_tile_m", padded_tiles(layer_names, tile_of))
 	material.set_shader_parameter(
 		"paint_layer",
 		GroundLayers.painted_layers(table, inputs.get("painted", PackedStringArray()))
@@ -164,21 +164,21 @@ func layers() -> PackedStringArray:
 	return table.get("layers", PackedStringArray())
 
 
-## `table` (GroundLayers.extend) with the surfaces of `reserved` it lacks appended, as many as
-## its capacity step (GroundLayers.capacity) still holds, so the arrays keep their size. Pure.
-static func with_reserve(table: Dictionary, reserved: PackedStringArray) -> Dictionary:
-	var layers: PackedStringArray = table.get("layers", PackedStringArray()).duplicate()
-	var fallbacks: Dictionary = table.get("fallbacks", {})
-	var room := GroundLayers.capacity(maxi(layers.size(), 1)) - layers.size()
+## `from_table` (GroundLayers.extend) with the surfaces of `reserved` it lacks appended, as many
+## as its capacity step (GroundLayers.capacity) still holds, so the arrays keep their size. Pure.
+static func with_reserve(from_table: Dictionary, reserved: PackedStringArray) -> Dictionary:
+	var names: PackedStringArray = from_table.get("layers", PackedStringArray()).duplicate()
+	var fallbacks: Dictionary = from_table.get("fallbacks", {})
+	var room := GroundLayers.capacity(maxi(names.size(), 1)) - names.size()
 	for surface in reserved:
 		if room <= 0:
 			break
-		if surface == "" or surface in layers or fallbacks.has(surface):
+		if surface == "" or surface in names or fallbacks.has(surface):
 			continue
-		layers.append(surface)
+		names.append(surface)
 		room -= 1
-	var out := table.duplicate()
-	out["layers"] = layers
+	var out := from_table.duplicate()
+	out["layers"] = names
 	return out
 
 
@@ -274,9 +274,11 @@ static func shader_tables(
 	}
 
 
-## Per-layer tile sizes for `layers` padded to MAX_LAYERS (GroundLayers.layer_tiles).
-static func padded_tiles(layers: PackedStringArray, tile_of: Callable) -> PackedFloat32Array:
-	var tiles := GroundLayers.layer_tiles(layers, tile_of)
+## Per-layer tile sizes for `layer_names` padded to MAX_LAYERS (GroundLayers.layer_tiles).
+static func padded_tiles(
+	layer_names: PackedStringArray, tile_of: Callable
+) -> PackedFloat32Array:
+	var tiles := GroundLayers.layer_tiles(layer_names, tile_of)
 	var size := tiles.size()
 	tiles.resize(GroundLayers.MAX_LAYERS)
 	for j in range(size, tiles.size()):

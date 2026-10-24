@@ -87,13 +87,13 @@ func end_group(label: String) -> Dictionary:
 	return entry
 
 
-## Runs the redo of every entry of `parts` in order (`redo`), or their undo in reverse.
-static func run_parts(parts: Array, redo: bool) -> void:
+## Runs the redo of every entry of `parts` in order (`is_redo`), or their undo in reverse.
+static func run_parts(parts: Array, is_redo: bool) -> void:
 	var ordered := parts.duplicate()
-	if not redo:
+	if not is_redo:
 		ordered.reverse()
 	for part: Dictionary in ordered:
-		var action: Callable = part.get("redo" if redo else "undo", Callable())
+		var action: Callable = part.get("redo" if is_redo else "undo", Callable())
 		if action.is_valid():
 			action.call()
 

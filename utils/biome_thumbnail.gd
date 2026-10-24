@@ -137,11 +137,13 @@ static func _luminous(mean: Color) -> Color:
 
 
 ## Paints the landscape behind `studio` (a crop of the studio render) and keys the studio's
-## grey out over it: sky, the far ridge whose skyline `seed` draws, then the ground from
+## grey out over it: sky, the far ridge whose skyline `skyline_seed` draws, then the ground from
 ## `ground` at the horizon's haze to a deeper foreground. The picture is `size` px (the
 ## studio's own size when zero) with the studio centred across it; with no studio, or beyond
 ## its sides, the landscape stands empty.
-static func paint(studio: Image, ground: Color, seed: float, size := Vector2i.ZERO) -> Image:
+static func paint(
+	studio: Image, ground: Color, skyline_seed: float, size := Vector2i.ZERO
+) -> Image:
 	if size == Vector2i.ZERO:
 		size = studio.get_size()
 	var studio_size := studio.get_size() if studio != null else Vector2i.ZERO
@@ -154,7 +156,7 @@ static func paint(studio: Image, ground: Color, seed: float, size := Vector2i.ZE
 	var fore := Color.from_ok_hsl(
 		ground.ok_hsl_h, ground.ok_hsl_s, ground.ok_hsl_l - FORE_DEEPEN
 	)
-	var phase := seed * TAU
+	var phase := skyline_seed * TAU
 	var edge := 1.0 / size.y
 	for y in size.y:
 		var v := (float(y) + 0.5) / size.y
@@ -186,8 +188,10 @@ static func paint(studio: Image, ground: Color, seed: float, size := Vector2i.ZE
 
 ## A strip `size` px painted at SUPERSAMPLE over `studio` (a band of the studio square at that
 ## resolution, or null for empty ground), downsampled, its corners rounded.
-static func _strip_texture(studio: Image, size: Vector2i, ground: Color, seed: float) -> Texture2D:
-	var image := paint(studio, ground, seed, size * SUPERSAMPLE)
+static func _strip_texture(
+	studio: Image, size: Vector2i, ground: Color, skyline_seed: float
+) -> Texture2D:
+	var image := paint(studio, ground, skyline_seed, size * SUPERSAMPLE)
 	image.resize(size.x, size.y, Image.INTERPOLATE_LANCZOS)
 	var radius := STRIP_CORNER * size.y
 	for y in size.y:

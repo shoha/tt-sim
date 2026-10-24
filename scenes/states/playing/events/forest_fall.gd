@@ -149,8 +149,8 @@ static func _collect(
 	for i in keys.size():
 		all[i] = i
 	var order := ScatterRows.instance_order(keys, all, AuthoredScatter.node_name_for(asset_id, cell))
-	var visible := node.multimesh.visible_instance_count
-	var drawn := order.size() if visible < 0 else mini(visible, order.size())
+	var visible_count := node.multimesh.visible_instance_count
+	var drawn := order.size() if visible_count < 0 else mini(visible_count, order.size())
 	for i in drawn:
 		var row := order[i]
 		var at := Vector2(rows[row * stride], rows[row * stride + 2])
@@ -314,14 +314,14 @@ func _tree_entry(tree: Dictionary, event: TerrainEvent, box: AABB, height: float
 	}
 
 
-## The angle from upright a tree of mesh bounds `box` at instance `scale` comes to rest at:
+## The angle from upright a tree of mesh bounds `box` at `inst_scale` comes to rest at:
 ## propped on its crown, whose underside meets the ground (a crown of radius r centred d up
 ## the trunk rests the trunk at acos(r / d) from upright, eased by CROWN_PROP since a crown
 ## gives a little), within REST_DEG. Lying flat at 90 degrees, a broad crown sank half into the
 ## ground and left a bare log (the first full-size look). Pure.
-static func rest_angle(box: AABB, scale: Vector3) -> float:
-	var radius := maxf(box.size.x, box.size.z) * 0.5 * maxf(scale.x, scale.z)
-	var reach := (box.position.y + box.size.y * 0.6) * scale.y
+static func rest_angle(box: AABB, inst_scale: Vector3) -> float:
+	var radius := maxf(box.size.x, box.size.z) * 0.5 * maxf(inst_scale.x, inst_scale.z)
+	var reach := (box.position.y + box.size.y * 0.6) * inst_scale.y
 	if reach <= 0.01:
 		return deg_to_rad(REST_DEG.y)
 	var angle := acos(clampf(CROWN_PROP * radius / reach, 0.0, 1.0))

@@ -7,6 +7,7 @@ extends GutTest
 ## sliders follow a squared taper. Checked on AudioManager.sound_requested, which reports
 ## every play() call before coalescing could hide one.
 
+const AUDIO_MANAGER_SCRIPT := preload("res://autoloads/audio_manager.gd")
 const SETTINGS_SCENE := preload("res://scenes/ui/settings_menu.tscn")
 const DOWNLOAD_QUEUE_SCENE := preload("res://scenes/ui/download_queue.tscn")
 const PACK_ID := "_test_sound_call_sites_pack"
@@ -231,8 +232,10 @@ func test_finished_variants_are_silent_and_a_pack_chimes_once() -> void:
 
 
 func test_volume_sliders_use_a_squared_taper() -> void:
-	assert_almost_eq(AudioManager.slider_to_db(1.0), 0.0, 0.001)
-	assert_almost_eq(AudioManager.slider_to_db(0.5), -12.04, 0.01)
-	assert_almost_eq(AudioManager.slider_to_db(0.1), -40.0, 0.01)
-	assert_eq(AudioManager.slider_to_db(0.0), -INF)
-	assert_almost_eq(AudioManager.db_to_slider(AudioManager.slider_to_db(0.3)), 0.3, 0.0001)
+	assert_almost_eq(AUDIO_MANAGER_SCRIPT.slider_to_db(1.0), 0.0, 0.001)
+	assert_almost_eq(AUDIO_MANAGER_SCRIPT.slider_to_db(0.5), -12.04, 0.01)
+	assert_almost_eq(AUDIO_MANAGER_SCRIPT.slider_to_db(0.1), -40.0, 0.01)
+	assert_eq(AUDIO_MANAGER_SCRIPT.slider_to_db(0.0), -INF)
+	assert_almost_eq(
+		AUDIO_MANAGER_SCRIPT.db_to_slider(AUDIO_MANAGER_SCRIPT.slider_to_db(0.3)), 0.3, 0.0001
+	)

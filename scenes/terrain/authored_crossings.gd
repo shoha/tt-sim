@@ -217,7 +217,7 @@ func refresh(doc: MapDocument) -> void:
 		built.append(CrossingGeometry.build_one(doc, crossing))
 	last_build_usec = Time.get_ticks_usec() - started
 	started = Time.get_ticks_usec()
-	var keys: Dictionary = plan.keys
+	var planned_keys: Dictionary = plan.keys
 	var changed := false
 	# The deck field changes only with a deck: re-rasterised when a deck left or was rebuilt,
 	# a new deck added onto it, untouched when only fords and stones changed (it was about 3
@@ -226,7 +226,7 @@ func refresh(doc: MapDocument) -> void:
 	var decks_added: Array[Crossing] = []
 	for child in get_children():
 		var crossing_id := _id_of(child)
-		if not keys.has(crossing_id):
+		if not planned_keys.has(crossing_id):
 			decks_redrawn = decks_redrawn or _decks.has(crossing_id)
 			_decks.erase(crossing_id)
 			_free_crossing_node(crossing_id)
@@ -246,7 +246,7 @@ func refresh(doc: MapDocument) -> void:
 		add_child(_crossing_node(parts))
 		_tops[crossing_id] = float(parts.get("top", -INF))
 		changed = true
-	_keys = keys
+	_keys = planned_keys
 	builds += built.size()
 	last_rebuilt = built.size()
 	if changed:

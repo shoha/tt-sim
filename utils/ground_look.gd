@@ -295,7 +295,7 @@ static func _colors(value: Variant) -> Array:
 ## `value` in the shape of `base` (a number, a numeric array of base's length, or a surface list)
 ## clamped to the range of `name`, or null when its type is wrong.
 static func _value(value: Variant, base: Variant, name: String, surfaces: Dictionary) -> Variant:
-	var range: Array = RANGES.get(name, [-INF, INF])
+	var limits: Array = RANGES.get(name, [-INF, INF])
 	if SURFACE_LISTS.has(name):
 		if not value is Array or value.size() > MAX_SURFACES:
 			return null
@@ -305,31 +305,31 @@ static func _value(value: Variant, base: Variant, name: String, surfaces: Dictio
 				kept.append(item)
 		return kept
 	if base is Array:
-		return _numbers(value, base.size(), range)
-	return _number(value, range)
+		return _numbers(value, base.size(), limits)
+	return _number(value, limits)
 
 
-## `count` finite numbers clamped to `range`, or null.
-static func _numbers(value: Variant, count: int, range: Array) -> Variant:
+## `count` finite numbers clamped to `limits`, or null.
+static func _numbers(value: Variant, count: int, limits: Array) -> Variant:
 	if not value is Array or value.size() != count:
 		return null
 	var out := []
 	for item: Variant in value:
-		var number: Variant = _number(item, range)
+		var number: Variant = _number(item, limits)
 		if number == null:
 			return null
 		out.append(number)
 	return out
 
 
-## A finite number clamped to `range`, or null.
-static func _number(value: Variant, range: Array) -> Variant:
+## A finite number clamped to `limits`, or null.
+static func _number(value: Variant, limits: Array) -> Variant:
 	if value is bool or not (value is float or value is int):
 		return null
 	var number := float(value)
 	if is_nan(number) or is_inf(number):
 		return null
-	return clampf(number, float(range[0]), float(range[1]))
+	return clampf(number, float(limits[0]), float(limits[1]))
 
 
 static func _role_of(surfaces: Dictionary, name: String) -> String:

@@ -465,7 +465,9 @@ static func hair_trim(hat: Dictionary, hair: Dictionary) -> Variant:
 			return []
 		"trimmed":
 			var trim: Variant = hair.get("hat_trim")
-			return (trim as Array).duplicate() if trim is Array else null
+			if trim is Array:
+				return (trim as Array).duplicate()
+			return null
 	return null
 
 
@@ -624,20 +626,20 @@ static func ground_offsets(
 
 
 ## Bone `b`'s global transform in `pose` (bone name -> local rotation) with `offsets` (bone
-## name -> translation from the rest origin), chained from the rests. `cache` is filled as it
+## name -> translation from the rest origin), chained from the rests. `memo` is filled as it
 ## goes (bone index -> Transform3D).
 static func posed_global(
-	sk: Skeleton3D, b: int, pose: Dictionary, offsets: Dictionary, cache: Dictionary
+	sk: Skeleton3D, b: int, pose: Dictionary, offsets: Dictionary, memo: Dictionary
 ) -> Transform3D:
-	if cache.has(b):
-		return cache[b]
+	if memo.has(b):
+		return memo[b]
 	var rest := sk.get_bone_rest(b)
 	var bone := sk.get_bone_name(b)
 	var basis := Basis(pose[bone] as Quaternion) if pose.has(bone) else rest.basis
 	var local := Transform3D(basis, rest.origin + (offsets.get(bone, Vector3.ZERO) as Vector3))
 	var parent := sk.get_bone_parent(b)
-	var global := local if parent < 0 else posed_global(sk, parent, pose, offsets, cache) * local
-	cache[b] = global
+	var global := local if parent < 0 else posed_global(sk, parent, pose, offsets, memo) * local
+	memo[b] = global
 	return global
 
 
@@ -719,13 +721,18 @@ static func set_hidden_fade(figure: Node3D, value: float) -> void:
 
 
 ## Takes the figure's shade ray (AvatarShade) toward `sun` against `world_root` and sets it.
-## Call at placement and after a move. No sun, or a hidden one, means no shade. `cache`
+## Call at placement and after a move. No sun, or a hidden one, means no shade. `shade_cache`
 ## (AvatarShadeCache, the map's canopies) saves walking `world_root` for them.
 static func update_shade(
-	figure: Node3D, world_root: Node3D, sun: DirectionalLight3D, cache: AvatarShadeCache = null
+	figure: Node3D,
+	world_root: Node3D,
+	sun: DirectionalLight3D,
+	shade_cache: AvatarShadeCache = null
 ) -> float:
 	var value := 0.0
 	if sun != null and sun.is_visible_in_tree():
-		value = AvatarShade.shade_at(world_root, figure.global_position, sun.global_basis.z, cache)
+		value = AvatarShade.shade_at(
+			world_root, figure.global_position, sun.global_basis.z, shade_cache
+		)
 	set_shade(figure, value)
 	return value

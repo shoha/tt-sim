@@ -196,20 +196,20 @@ func _mask_diff(value: Variant, redo: bool) -> Dictionary:
 	)
 	var slot_ids := ids_after if redo else ids_before
 	var read_side := func(rect: Rect2i, side: Variant) -> Dictionary:
-		var out := {}
+		var kept := {}
 		if not side is Dictionary or (side as Dictionary).size() > MASKS.size():
 			_fail("a mask block is not a table of masks")
-			return out
+			return kept
 		for mask: Variant in side:
 			var mask_name := _mask_name(mask)
 			if problem != "":
-				return out
+				return kept
 			var raw := _unpack(side[mask], rect.size.x * rect.size.y)
 			if mask_name == MaskStroke.SLOTS and raw.size() > 0:
 				if int(Array(raw).max()) > slot_ids.size():
 					_fail("a slot names a biome past the list")
-			out[mask_name] = side[mask]
-		return out
+			kept[mask_name] = side[mask]
+		return kept
 	var out := _blocks(value, read_side)
 	if problem != "":
 		return {}
@@ -301,12 +301,12 @@ func _water_model(value: Variant) -> Dictionary:
 		_fail("the pond mask is not the grid's size")
 		return {}
 	var bodies_json: Variant = value.get("bodies")
-	var log := MapDocumentIO._WarningLog.new()
+	var warn_log := MapDocumentIO._WarningLog.new()
 	var bodies := MapWaterIO.parse_bodies(
-		bodies_json if bodies_json is Array else [null], _doc.extent_m(), log
+		bodies_json if bodies_json is Array else [null], _doc.extent_m(), warn_log
 	)
-	if not log.items.is_empty():
-		_fail("water: " + log.items[0])
+	if not warn_log.items.is_empty():
+		_fail("water: " + warn_log.items[0])
 	var mask := PackedByteArray()
 	if size > 0:
 		mask = _unpack(value.get("pond_mask"), size)
@@ -325,10 +325,12 @@ func _water_model(value: Variant) -> Dictionary:
 
 
 func _crossing_list(value: Variant) -> Array[Crossing]:
-	var log := MapDocumentIO._WarningLog.new()
-	var list := MapCrossingIO.parse_list(value if value is Array else [null], _doc.extent_m(), log)
-	if not log.items.is_empty():
-		_fail("crossings: " + log.items[0])
+	var warn_log := MapDocumentIO._WarningLog.new()
+	var list := MapCrossingIO.parse_list(
+		value if value is Array else [null], _doc.extent_m(), warn_log
+	)
+	if not warn_log.items.is_empty():
+		_fail("crossings: " + warn_log.items[0])
 	return list
 
 

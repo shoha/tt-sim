@@ -40,11 +40,11 @@ static func _bake(base: Node, step: Dictionary) -> String:
 	if GRID.x * GRID.y != FireSmokeBook.SEEDS * FireSmokeBook.FRAMES:
 		return "the grid %s does not hold %d frames" % [GRID, FireSmokeBook.SEEDS * FireSmokeBook.FRAMES]
 	var shaders: Array[Shader] = [load(BAKE) as Shader]
-	var reference := String(step.get("reference", ""))
-	if reference != "":
-		var code := FileAccess.get_file_as_string(reference)
+	var reference_path := String(step.get("reference", ""))
+	if reference_path != "":
+		var code := FileAccess.get_file_as_string(reference_path)
 		if code == "":
-			return "no reference shader at %s" % reference
+			return "no reference shader at %s" % reference_path
 		var shader := Shader.new()
 		shader.code = code
 		shaders.append(shader)

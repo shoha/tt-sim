@@ -116,8 +116,8 @@ static func refusal_for(gm_access: bool, doc: MapDocument, edits: LiveEdits) -> 
 
 ## Whether history `entry` changed a lot at once (see LARGE_EDIT_BYTES). Pure.
 static func is_large(entry: Dictionary) -> bool:
-	var redo: Callable = entry.get("redo", Callable())
-	if redo.is_valid() and redo.get_method() in WHOLE_FEATURE_METHODS:
+	var redo_action: Callable = entry.get("redo", Callable())
+	if redo_action.is_valid() and redo_action.get_method() in WHOLE_FEATURE_METHODS:
 		return true
 	return int(entry.get("bytes", 0)) >= LARGE_EDIT_BYTES
 
@@ -186,10 +186,10 @@ static func hints_for(
 				rows = [["Click", EventPresets.IGNITE_LABEL], [tab, "Path"], ["Drag", "Wider fire"]]
 				size = ""
 	var tool := ToolRegistry.find(tool_id)
-	var put_away := "Put away " + tool.label if tool != null else "Put away"
+	var put_away_label := "Put away " + tool.label if tool != null else "Put away"
 	if size != "":
 		rows.append([SIZE_KEY, size])
-	rows.append_array([["Ctrl+Z", "Undo"], ["Esc", put_away]])
+	rows.append_array([["Ctrl+Z", "Undo"], ["Esc", put_away_label]])
 	var hints: Array[Dictionary] = []
 	for row: Array in rows:
 		hints.append({"key": row[0], "action": row[1]})
@@ -318,25 +318,25 @@ func pick(tool_id: StringName) -> void:
 		UIManager.show_toast(why, UIManager.TOAST_WARNING, 5.0)
 		refresh()
 		return
-	var brush := _wired_brush()
-	brush.use_tool(tool)
+	var wired := _wired_brush()
+	wired.use_tool(tool)
 	picked = tool_id
-	if tool_id == PaintTool.ID and PaintTool.of(brush).surface == "":
+	if tool_id == PaintTool.ID and PaintTool.of(wired).surface == "":
 		# The pane's Paint tiles open on a picked surface (as authoring's do): that one.
 		pane.ensure_paint_tiles()
-		PaintTool.of(brush).surface = pane.paint_surface()
+		PaintTool.of(wired).surface = pane.paint_surface()
 	if not _has_work(tool_id):
-		brush.deactivate()
+		wired.deactivate()
 		_set_armed(&"")
 		refresh()
 		return
 	_prepare(tool_id)
-	var mode := brush.mode_for(tool)
+	var mode := wired.mode_for(tool)
 	if mode.has_signal(&"fired") and not mode.is_connected(&"fired", _on_fired):
 		mode.connect(&"fired", _on_fired)
-	brush.fade_held_only = true
-	brush.min_stroke_seconds = PLAY_CLICK_SECONDS
-	brush.activate()
+	wired.fade_held_only = true
+	wired.min_stroke_seconds = PLAY_CLICK_SECONDS
+	wired.activate()
 	_set_armed(tool_id)
 	refresh()
 
@@ -503,19 +503,19 @@ func _on_sculpt_selected(op: int) -> void:
 
 func _on_biome_selected(biome_id: String) -> void:
 	_biome_id = biome_id
-	var brush := _wired_brush()
-	BiomeTool.of(brush).biome_id = biome_id
-	BiomeTool.of(brush).tint = AuthoringController.biome_tint(biome_id)
-	if brush.editor != null:
-		brush.editor.prepare_biome(biome_id)
+	var wired := _wired_brush()
+	BiomeTool.of(wired).biome_id = biome_id
+	BiomeTool.of(wired).tint = AuthoringController.biome_tint(biome_id)
+	if wired.editor != null:
+		wired.editor.prepare_biome(biome_id)
 	_pick_again(BiomeTool.ID)
 
 
 func _on_paint_selected(surface: String) -> void:
-	var brush := _wired_brush()
-	PaintTool.of(brush).surface = surface
-	if brush.editor != null:
-		var reason := brush.editor.surface_refusal(surface)
+	var wired := _wired_brush()
+	PaintTool.of(wired).surface = surface
+	if wired.editor != null:
+		var reason := wired.editor.surface_refusal(surface)
 		if reason != "":
 			UIManager.show_toast(reason, UIManager.TOAST_WARNING, 5.0)
 	_pick_again(PaintTool.ID)
@@ -531,8 +531,8 @@ func _shape_of(tool_id: StringName) -> int:
 ## A mode setting `field` = `value` picked in the pane (a brush's or a preset's); `arm` arms
 ## its tool as a tile does.
 func _set_mode(tool_id: StringName, field: String, value: Variant, arm: bool = true) -> void:
-	var brush := _wired_brush()
-	brush.mode_for(find_tool(tool_id)).set(field, value)
+	var wired := _wired_brush()
+	wired.mode_for(find_tool(tool_id)).set(field, value)
 	if arm:
 		_pick_again(tool_id)
 	elif armed == tool_id:

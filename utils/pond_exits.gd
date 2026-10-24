@@ -120,17 +120,17 @@ static func _exit(
 	var across := Vector2(-dir.y, dir.x)
 	var a := doc.sample_to_world(Vector2(line[run.x]))
 	var b := doc.sample_to_world(Vector2(line[run.y]))
-	var mouth := (a + b) * 0.5
+	var mouth_at := (a + b) * 0.5
 	# On the edge exactly, as the map's boundary vertices are.
 	if dir.x != 0.0:
-		mouth.x = dir.x * half.x
+		mouth_at.x = dir.x * half.x
 	else:
-		mouth.y = dir.y * half.y
+		mouth_at.y = dir.y * half.y
 	var step := doc.sample_step()
 	var along := step.y if dir.x != 0.0 else step.x
 	var half_width := 0.5 * absf((b - a).dot(across)) + 0.5 * along
-	var ua := (doc.sample_to_world(Vector2(line[0])) - mouth).dot(across)
-	var ub := (doc.sample_to_world(Vector2(line[-1])) - mouth).dot(across)
+	var ua := (doc.sample_to_world(Vector2(line[0])) - mouth_at).dot(across)
+	var ub := (doc.sample_to_world(Vector2(line[-1])) - mouth_at).dot(across)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash([doc.map_seed & 0x7FFFFFFF, body.id, side, run.x])
 	var wide := minf(half_width / WIDE_HALF_M, 1.0)
@@ -141,11 +141,11 @@ static func _exit(
 	return {
 		"id": body.id,
 		"level": body.level_m,
-		"mouth": mouth,
+		"mouth": mouth_at,
 		"dir": dir,
 		"half_width": half_width,
 		"length": maxf(length, half_width),
-		"flare": _flare(doc, body.id, line, run, dir, mouth),
+		"flare": _flare(doc, body.id, line, run, dir, mouth_at),
 		"sector": Vector2(maxf(ua, ub), -minf(ua, ub)),
 		"noise": rng.randi() & 0x7FFFFFFF,
 	}
@@ -156,7 +156,7 @@ static func _exit(
 ## its middle FLARE_IN_M inside), clamped to FLARE_RANGE; 0 where the middle is not in the pond
 ## there.
 static func _flare(
-	doc: MapDocument, id: int, line: Array[Vector2i], run: Vector2i, dir: Vector2, mouth: Vector2
+	doc: MapDocument, id: int, line: Array[Vector2i], run: Vector2i, dir: Vector2, mouth_at: Vector2
 ) -> Vector2:
 	var across := Vector2(-dir.y, dir.x)
 	var step := doc.sample_step()
@@ -176,7 +176,7 @@ static func _flare(
 	while hi < line.size() - 1 and inside.call(hi + 1):
 		hi += 1
 	var offset := func(k: int) -> float:
-		return (doc.sample_to_world(Vector2(line[k])) - mouth).dot(across)
+		return (doc.sample_to_world(Vector2(line[k])) - mouth_at).dot(across)
 	var edge := Vector2(offset.call(run.x), offset.call(run.y))
 	var deep := Vector2(offset.call(lo), offset.call(hi))
 	var run_m := rows * inward

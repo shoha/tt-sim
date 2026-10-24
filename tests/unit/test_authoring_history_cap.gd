@@ -4,11 +4,11 @@ extends GutTest
 ## dropped past max_bytes (the newest always stays).
 
 
-func _entry(bytes: int, log: Array, label: String) -> Dictionary:
+func _entry(bytes: int, event_log: Array, label: String) -> Dictionary:
 	return {
 		"label": label,
-		"undo": func() -> void: log.append("undo " + label),
-		"redo": func() -> void: log.append("redo " + label),
+		"undo": func() -> void: event_log.append("undo " + label),
+		"redo": func() -> void: event_log.append("redo " + label),
 		"bytes": bytes,
 	}
 
@@ -16,9 +16,9 @@ func _entry(bytes: int, log: Array, label: String) -> Dictionary:
 func test_oldest_entries_drop_past_the_byte_cap() -> void:
 	var history := AuthoringHistory.new()
 	history.max_bytes = 1000
-	var log: Array = []
+	var event_log: Array = []
 	for i in 5:
-		history.record(_entry(300, log, str(i)))
+		history.record(_entry(300, event_log, str(i)))
 	assert_eq(history.undo_count(), 3, "900 bytes fit, 1200 do not")
 	assert_true(history.held_bytes() <= 1000)
 	assert_eq(history.undo(), "4")
@@ -30,18 +30,18 @@ func test_oldest_entries_drop_past_the_byte_cap() -> void:
 func test_the_newest_entry_stays_even_when_it_alone_is_over_the_cap() -> void:
 	var history := AuthoringHistory.new()
 	history.max_bytes = 100
-	var log: Array = []
-	history.record(_entry(50, log, "small"))
-	history.record(_entry(500, log, "huge"))
+	var event_log: Array = []
+	history.record(_entry(50, event_log, "small"))
+	history.record(_entry(500, event_log, "huge"))
 	assert_eq(history.undo_count(), 1)
 	assert_eq(history.undo(), "huge")
 
 
 func test_entries_without_bytes_count_only_toward_the_entry_cap() -> void:
 	var history := AuthoringHistory.new()
-	var log: Array = []
+	var event_log: Array = []
 	for i in AuthoringHistory.MAX_ENTRIES + 5:
 		history.record({"label": str(i)})
 	assert_eq(history.undo_count(), AuthoringHistory.MAX_ENTRIES)
 	assert_eq(history.held_bytes(), 0)
-	assert_true(log.is_empty())
+	assert_true(event_log.is_empty())

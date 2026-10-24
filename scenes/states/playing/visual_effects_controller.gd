@@ -267,7 +267,7 @@ func set_foliage_antialiasing_level(level: int) -> void:
 ## must be reapplied on every map load, not just once.
 func apply_foliage_antialiasing() -> void:
 	if _game_map.world_viewport:
-		_game_map.world_viewport.msaa_3d = _foliage_antialiasing_level
+		_game_map.world_viewport.msaa_3d = _foliage_antialiasing_level as Viewport.MSAA
 	_apply_antialiasing_variant(
 		WindFoliage.collect_foliage_shader_materials(_game_map.map_container)
 	)

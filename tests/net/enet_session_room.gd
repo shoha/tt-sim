@@ -824,16 +824,16 @@ func _client_report_b() -> void:
 		"client2": [STATE_ROOM, STATE_PLAYING, STATE_ROOM, STATE_PLAYING],
 		"client3": [STATE_ROOM, STATE_PLAYING],
 	}
-	var owner := _role == LEAVER
+	var is_owner := _role == LEAVER
 	var checks := {
 		"same_peer_id": _unique_id != 0 and _result.unique_id == _unique_id,
 		"never_offline": _offline_events == 0,
 		"states": _states == expected_states[_role],
 		"token_a_gone": bool(_result.token_a_gone),
 		"hero_travelled": bool(_result.hero_travelled),
-		"hero_control": bool(_result.hero_control) == owner,
+		"hero_control": bool(_result.hero_control) == is_owner,
 		"control_at_a":
-		_role not in START_CLIENTS or bool(_result.get("control_at_a", not owner)) == owner,
+		_role not in START_CLIENTS or bool(_result.get("control_at_a", not is_owner)) == is_owner,
 		"session_table": _result.session_table == TABLE_B.folder,
 		"shelf": _result.shelf == [TABLE_A.folder, TABLE_B.folder],
 		"room": room_ok,

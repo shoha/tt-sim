@@ -56,18 +56,18 @@ func test_contest_fades_the_owner_and_hands_over_when_the_challenger_is_denser()
 	assert_almost_eq(light.x, 0.72, 1e-5, "owner fades by the step")
 	assert_almost_eq(light.y, 0.2, 1e-5, "challenger grows as on bare ground")
 	assert_eq(light.z, 0.0, "a light touch keeps the owner")
-	var owner := 0.9
+	var owner_weight := 0.9
 	var challenger := 0.0
 	var steps := 0
 	while steps < 50:
-		var result := MaskBrush.contest(owner, challenger, 1.0, 0.2)
-		owner = result.x
+		var result := MaskBrush.contest(owner_weight, challenger, 1.0, 0.2)
+		owner_weight = result.x
 		challenger = result.y
 		steps += 1
 		if result.z > 0.0:
 			break
 	assert_lt(steps, 10, "a firm pass replaces the owner")
-	assert_true(challenger >= owner)
+	assert_true(challenger >= owner_weight)
 
 
 func test_erase_byte_thins_below_the_threshold_and_erases_past_the_noise() -> void:

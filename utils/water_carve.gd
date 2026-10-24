@@ -597,11 +597,11 @@ static func pond_goals(doc: MapDocument, body: WaterBody, start: PackedFloat32Ar
 			var centre := smoothstep(toe, toe + POND_CENTRE_RUN_M, -e)
 			var bed := level - depth * (1.0 + POND_CENTRE_EXTRA * centre)
 			var ground := start[(rect.position.y + j) * columns + rect.position.x + i]
-			var section := pond_section(e, level, bed, body.depth)
-			var goal := blend_with_ground(section, ground, e)
+			var basin := pond_section(e, level, bed, body.depth)
+			var goal := blend_with_ground(basin, ground, e)
 			if e < 0.0:
 				var eased := smoothstep(-POND_UNDER_EASE_M, 0.0, e)
-				goal = lerpf(minf(section, ground), goal, eased)
+				goal = lerpf(minf(basin, ground), goal, eased)
 			# Outside the painted area nothing sinks under the level: water there would end in
 			# the air (it is not the pond's).
 			if in_pond[k] == 0:

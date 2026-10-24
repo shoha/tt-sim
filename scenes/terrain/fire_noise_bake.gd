@@ -93,12 +93,12 @@ func bake(extent: Vector2) -> void:
 		_bake.transparent_bg = true
 		_bake.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		_bake.render_target_clear_mode = SubViewport.CLEAR_MODE_NEVER
-		var mat := ShaderMaterial.new()
-		mat.shader = SHADER
+		var fill_mat := ShaderMaterial.new()
+		fill_mat.shader = SHADER
 		for k in TILES:
 			var fill := ColorRect.new()
 			fill.name = "Rect%d" % k
-			fill.material = mat
+			fill.material = fill_mat
 			_bake.add_child(fill)
 		add_child(_bake)
 	_bake.size = Vector2i(_tile.x * TILES, _tile.y)
