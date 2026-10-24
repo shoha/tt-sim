@@ -97,9 +97,9 @@ func _process(delta: float) -> void:
 ## Takes the burning clusters of a refresh (FireClusters.find: largest first, document metres,
 ## this node's frame) and where each one's flames stand (FireClusters.spots; a cluster missing
 ## from it counts as its centroid alone) and re-picks the players for the current view.
-func place(clusters: Array[Dictionary], spots: Dictionary = {}) -> void:
+func place(found: Array[Dictionary], spots: Dictionary = {}) -> void:
 	_clusters = []
-	for cluster in clusters:
+	for cluster in found:
 		var heard := cluster.duplicate()
 		heard["spots"] = spots.get(cluster["cell"], PackedVector3Array([cluster["at"]]))
 		_clusters.append(heard)
@@ -147,19 +147,19 @@ func clusters() -> Array[Dictionary]:
 
 
 ## The clusters the players stand at for a camera at `eye` looking along `axis` (unit) with a
-## view `view_m` high (INF: no camera, every cluster in view): up to MAX_PLAYERS of `clusters`
+## view `view_m` high (INF: no camera, every cluster in view): up to MAX_PLAYERS of `candidates`
 ## with a gain above 0, loudest first (ties in the given order), each {"cell", "at", "gain"}.
 ## A cluster's flames are its "spots" (place's; without them its centroid "at"), each reaching
 ## SPOT_REACH_M around it; the cluster is heard by how near its flames come to the camera's axis
 ## and stands at their point nearest the axis (near), so a fire around the view's middle sounds
 ## centred at every zoom. Without a view it stands at its centroid. Pure.
 static func pick(
-	clusters: Array[Dictionary], eye: Vector3, axis: Vector3, view_m: float
+	candidates: Array[Dictionary], eye: Vector3, axis: Vector3, view_m: float
 ) -> Array[Dictionary]:
 	var heard: Array[Dictionary] = []
 	var full := maxf(FULL_SHARE * view_m, FULL_MIN_M)
 	var reach := maxf(REACH_SHARE * view_m, REACH_MIN_M)
-	for cluster in clusters:
+	for cluster in candidates:
 		var at: Vector3 = cluster["at"]
 		var shown := 1.0
 		if is_finite(view_m):
@@ -214,12 +214,12 @@ func _view() -> Array:
 	var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
 	if camera == null:
 		return []
-	var to_local := global_transform.affine_inverse()
-	var forward := to_local.basis * -camera.global_basis.z
+	var into_local := global_transform.affine_inverse()
+	var forward := into_local.basis * -camera.global_basis.z
 	var size := INF
 	if camera.projection == Camera3D.PROJECTION_ORTHOGONAL:
 		size = camera.size * forward.length()
-	return [to_local * camera.global_position, forward.normalized(), size]
+	return [into_local * camera.global_position, forward.normalized(), size]
 
 
 ## Whether `view` moved or zoomed by REPICK_SHARE of its height since the last pick.

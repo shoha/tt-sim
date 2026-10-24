@@ -272,8 +272,8 @@ static func gorge_stage(
 	var nearest := INF
 	var steps := ceili(half / 0.5)
 	for n in steps + 1:
-		for sign in [0.0] if n == 0 else [1.0, -1.0]:
-			var here := StartingLandform.along(course, start + sign * 0.5 * n)
+		for direction in [0.0] if n == 0 else [1.0, -1.0]:
+			var here := StartingLandform.along(course, start + direction * 0.5 * n)
 			var dir: Vector2 = here.dir
 			var side := Vector2(-dir.y, dir.x)
 			var near := side.dot(StartingLandform.NEAR)

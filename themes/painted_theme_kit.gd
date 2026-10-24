@@ -84,16 +84,16 @@ func c(role: StringName) -> Color:
 
 ## Builds this theme's fonts once, so every item shares one FontVariation per role.
 func build_fonts() -> void:
-	var lift := 50.0 if on_glass else 0.0
-	font_body = inter(400.0 + lift)
-	font_label = inter(500.0 + lift)
-	font_strong = inter(600.0 + lift)
-	font_count = inter(600.0 + lift, ["tnum"])
+	var weight_lift := 50.0 if on_glass else 0.0
+	font_body = inter(400.0 + weight_lift)
+	font_label = inter(500.0 + weight_lift)
+	font_strong = inter(600.0 + weight_lift)
+	font_count = inter(600.0 + weight_lift, ["tnum"])
 	font_wordmark = fraunces(650.0, 144.0)
 	font_title = fraunces(600.0, SIZE_TITLE)
 	font_heading = fraunces(600.0, SIZE_HEADING)
-	font_eyebrow = fraunces(500.0 + lift, SIZE_HEADING, true)
-	font_code = inter(600.0 + lift, ["tnum", "zero", "ss02", "cv05"])
+	font_eyebrow = fraunces(500.0 + weight_lift, SIZE_HEADING, true)
+	font_code = inter(600.0 + weight_lift, ["tnum", "zero", "ss02", "cv05"])
 	font_code.spacing_glyph = 1
 
 

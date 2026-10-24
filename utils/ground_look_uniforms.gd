@@ -329,7 +329,9 @@ static func ref_linear(surface: String, root: String = PaletteLibrary.DEFAULT_RO
 static func opaque_mean_linear(tex: Texture2D) -> Color:
 	if tex == null:
 		return NO_REF
-	var key: Variant = tex.resource_path if tex.resource_path != "" else tex.get_rid()
+	var key: Variant = tex.get_rid()
+	if tex.resource_path != "":
+		key = tex.resource_path
 	if not _tuft_refs.has(key):
 		_tuft_refs[key] = _mean_linear(tex, true)
 	return _tuft_refs[key]

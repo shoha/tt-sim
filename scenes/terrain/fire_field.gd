@@ -545,20 +545,20 @@ static func _flame(
 	var size := pick
 	var width_share := lerpf(WIDTH_SHARE.x, WIDTH_SHARE.y, MaskBrush.sample_noise(map_seed + 4, key))
 	var own := (MaskBrush.sample_noise(map_seed + 5, key) - 0.5) * 2.0 * SCALE_JITTER
-	var scale: float
+	var clump_scale: float
 	if window.big(i):
-		scale = lerpf(BIG_SCALE.x, BIG_SCALE.y, c)
+		clump_scale = lerpf(BIG_SCALE.x, BIG_SCALE.y, c)
 		width_share = lerpf(BLAZE_WIDTH_FROM, WIDTH_SHARE.y, size)
 	elif window.blaze(i):
 		if window.beside_big(i):
-			scale = lerpf(LICK_SCALE.x, LICK_SCALE.y, size)
+			clump_scale = lerpf(LICK_SCALE.x, LICK_SCALE.y, size)
 		else:
 			var place := (c - BLAZE_GAP) / (1.0 - BLAZE_GAP) + own
-			scale = lerpf(CLUMP_SCALE.x, CLUMP_SCALE.y, clampf(place, 0.0, 1.0))
+			clump_scale = lerpf(CLUMP_SCALE.x, CLUMP_SCALE.y, clampf(place, 0.0, 1.0))
 			width_share = lerpf(BLAZE_WIDTH_FROM, WIDTH_SHARE.y, size)
 	else:
 		return PackedFloat32Array()
-	var height := base_height(t) * scale
+	var height := base_height(t) * clump_scale
 	return PackedFloat32Array([0, 0, 0, t, 0, height, height * width_share, FLAME])
 
 

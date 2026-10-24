@@ -282,9 +282,9 @@ static func _bench(base: Node, step: Dictionary) -> String:
 	var runs := int(step.get("runs", 20))
 	var times := PackedFloat64Array()
 	for _i in runs:
-		var started := Time.get_ticks_usec()
+		var plan_started := Time.get_ticks_usec()
 		editor.crossings.plan(kind, a, b)
-		times.append((Time.get_ticks_usec() - started) / 1000.0)
+		times.append((Time.get_ticks_usec() - plan_started) / 1000.0)
 	times.sort()
 	var started := Time.get_ticks_usec()
 	var id := editor.crossings.place(kind, a, b)

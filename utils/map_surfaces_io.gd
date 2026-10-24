@@ -71,40 +71,40 @@ static func ids_problem(ids: Array) -> String:
 ## Fills `doc`'s surface fields from `blobs` (the known entries within their caps) of a
 ## document of manifest format `format`.
 static func parse(
-	blobs: Dictionary, doc: MapDocument, log: MapDocumentIO._WarningLog, format: int
+	blobs: Dictionary, doc: MapDocument, warn_log: MapDocumentIO._WarningLog, format: int
 ) -> void:
 	if format == 1:
-		_parse_slots(blobs, doc, log)
+		_parse_slots(blobs, doc, warn_log)
 	else:
-		_parse_entries(blobs, doc, log)
+		_parse_entries(blobs, doc, warn_log)
 
 
 ## Format 2: surfaces.json and the entry pair. Unknown surface names are kept; they resolve
 ## against the palette at load and draw as the fallback earth.
 static func _parse_entries(
-	blobs: Dictionary, doc: MapDocument, log: MapDocumentIO._WarningLog
+	blobs: Dictionary, doc: MapDocument, warn_log: MapDocumentIO._WarningLog
 ) -> void:
-	var ids: Variant = _surface_list(blobs, [INDEX_ENTRY, WEIGHT_ENTRY], log)
+	var ids: Variant = _surface_list(blobs, [INDEX_ENTRY, WEIGHT_ENTRY], warn_log)
 	if ids == null:
 		return
 	for entry_name in [INDEX_ENTRY, WEIGHT_ENTRY]:
 		if not blobs.has(entry_name):
-			log.add("surfaces.json without %s; painted surfaces dropped" % entry_name)
+			warn_log.add("surfaces.json without %s; painted surfaces dropped" % entry_name)
 			return
 	var rgba := Image.FORMAT_RGBA8
-	var index := MapDocumentIO._parse_mask(blobs[INDEX_ENTRY], doc, rgba, INDEX_ENTRY, log)
+	var index := MapDocumentIO._parse_mask(blobs[INDEX_ENTRY], doc, rgba, INDEX_ENTRY, warn_log)
 	if index.is_empty():
 		return
-	var weight := MapDocumentIO._parse_mask(blobs[WEIGHT_ENTRY], doc, rgba, WEIGHT_ENTRY, log)
+	var weight := MapDocumentIO._parse_mask(blobs[WEIGHT_ENTRY], doc, rgba, WEIGHT_ENTRY, warn_log)
 	if weight.is_empty():
 		return
 	var fixed := SurfaceEntries.canonical(index + weight, doc.sample_count(), ids.size())
 	if fixed["dropped"] > 0:
-		log.add("surfaces: %d entries name an unlisted surface, dropped" % fixed["dropped"])
+		warn_log.add("surfaces: %d entries name an unlisted surface, dropped" % fixed["dropped"])
 	if fixed["merged"] > 0:
-		log.add("surfaces: %d samples name a surface twice, merged" % fixed["merged"])
+		warn_log.add("surfaces: %d samples name a surface twice, merged" % fixed["merged"])
 	if fixed["over"] > 0:
-		log.add("surfaces: %d samples sum past 255, scaled down" % fixed["over"])
+		warn_log.add("surfaces: %d samples sum past 255, scaled down" % fixed["over"])
 	doc.surface_ids = ids
 	doc.surface_weights = fixed["weights"]
 
@@ -112,43 +112,47 @@ static func _parse_entries(
 ## Format 1: surfaces.json, surfaces.png and surfaces_b.png (one weight channel per slot,
 ## at most FORMAT_1_SLOTS), migrated to entries (SurfaceEntries.from_slots).
 static func _parse_slots(
-	blobs: Dictionary, doc: MapDocument, log: MapDocumentIO._WarningLog
+	blobs: Dictionary, doc: MapDocument, warn_log: MapDocumentIO._WarningLog
 ) -> void:
-	var ids: Variant = _surface_list(blobs, [SLOTS_A_ENTRY, SLOTS_B_ENTRY], log)
+	var ids: Variant = _surface_list(blobs, [SLOTS_A_ENTRY, SLOTS_B_ENTRY], warn_log)
 	if ids == null:
 		return
 	if ids.size() > MapDocument.FORMAT_1_SLOTS:
 		var cap := MapDocument.FORMAT_1_SLOTS
-		log.add("surfaces.json: more than %d surfaces in format 1; dropped" % cap)
+		warn_log.add("surfaces.json: more than %d surfaces in format 1; dropped" % cap)
 		return
 	if not blobs.has(SLOTS_A_ENTRY):
-		log.add("surfaces.json without surfaces.png; painted surfaces dropped")
+		warn_log.add("surfaces.json without surfaces.png; painted surfaces dropped")
 		return
 	var rgba := Image.FORMAT_RGBA8
-	var plane_a := MapDocumentIO._parse_mask(blobs[SLOTS_A_ENTRY], doc, rgba, SLOTS_A_ENTRY, log)
+	var plane_a := MapDocumentIO._parse_mask(
+		blobs[SLOTS_A_ENTRY], doc, rgba, SLOTS_A_ENTRY, warn_log
+	)
 	if plane_a.is_empty():
 		return
 	var plane_b := PackedByteArray()
 	if ids.size() > MapDocument.SURFACE_CHANNELS:
 		if blobs.has(SLOTS_B_ENTRY):
 			var b_bytes: PackedByteArray = blobs[SLOTS_B_ENTRY]
-			plane_b = MapDocumentIO._parse_mask(b_bytes, doc, rgba, SLOTS_B_ENTRY, log)
+			plane_b = MapDocumentIO._parse_mask(b_bytes, doc, rgba, SLOTS_B_ENTRY, warn_log)
 		if plane_b.is_empty():
-			log.add("surfaces 5-%d have no usable surfaces_b.png; dropped" % ids.size())
+			warn_log.add("surfaces 5-%d have no usable surfaces_b.png; dropped" % ids.size())
 			ids = ids.slice(0, MapDocument.SURFACE_CHANNELS)
 	elif blobs.has(SLOTS_B_ENTRY):
-		log.add("surfaces_b.png with %d surfaces listed; ignored" % ids.size())
+		warn_log.add("surfaces_b.png with %d surfaces listed; ignored" % ids.size())
 	if plane_b.is_empty():
 		plane_b.resize(plane_a.size())
 	var migrated := SurfaceEntries.from_slots(plane_a + plane_b, doc.sample_count(), ids.size())
 	if migrated["stray"] > 0:
-		log.add("surfaces: %d samples paint an unlisted slot, cleared" % migrated["stray"])
+		warn_log.add("surfaces: %d samples paint an unlisted slot, cleared" % migrated["stray"])
 	if migrated["over"] > 0:
-		log.add("surfaces: %d samples sum past 255, scaled down" % migrated["over"])
+		warn_log.add("surfaces: %d samples sum past 255, scaled down" % migrated["over"])
 	if migrated["crowded"] > 0:
 		var crowded: int = migrated["crowded"]
 		var kept := MapDocument.SURFACE_ENTRIES
-		log.add("surfaces: %d samples paint over %d surfaces; weakest dropped" % [crowded, kept])
+		warn_log.add(
+			"surfaces: %d samples paint over %d surfaces; weakest dropped" % [crowded, kept]
+		)
 	doc.surface_ids = ids
 	doc.surface_weights = migrated["weights"]
 
@@ -156,29 +160,29 @@ static func _parse_slots(
 ## The parsed surfaces.json list when it names surfaces, else null (with a warning when
 ## `images`, the two image entries of the format being read, are present without one).
 static func _surface_list(
-	blobs: Dictionary, images: Array, log: MapDocumentIO._WarningLog
+	blobs: Dictionary, images: Array, warn_log: MapDocumentIO._WarningLog
 ) -> Variant:
 	var has_png: bool = blobs.has(images[0]) or blobs.has(images[1])
 	var ids: Variant = null
 	if blobs.has(JSON_ENTRY):
-		ids = _parse_ids(blobs[JSON_ENTRY], log)
+		ids = _parse_ids(blobs[JSON_ENTRY], warn_log)
 	elif has_png:
-		log.add("%s without surfaces.json; ignored" % images[0])
+		warn_log.add("%s without surfaces.json; ignored" % images[0])
 	if ids == null or ids.is_empty():
 		if ids != null and has_png:
-			log.add("surfaces.json lists no surfaces; its images are ignored")
+			warn_log.add("surfaces.json lists no surfaces; its images are ignored")
 		return null
 	return ids
 
 
-static func _parse_ids(bytes: PackedByteArray, log: MapDocumentIO._WarningLog) -> Variant:
-	var data: Variant = MapDocumentIO._json(bytes, JSON_ENTRY, log)
+static func _parse_ids(bytes: PackedByteArray, warn_log: MapDocumentIO._WarningLog) -> Variant:
+	var data: Variant = MapDocumentIO._json(bytes, JSON_ENTRY, warn_log)
 	var list: Variant = data.get("surfaces") if data is Dictionary else null
 	if not list is Array:
-		log.add("surfaces.json needs a surfaces list; painted surfaces dropped")
+		warn_log.add("surfaces.json needs a surfaces list; painted surfaces dropped")
 		return null
 	var problem_text := ids_problem(list)
 	if problem_text != "":
-		log.add("surfaces.json: %s; painted surfaces dropped" % problem_text)
+		warn_log.add("surfaces.json: %s; painted surfaces dropped" % problem_text)
 		return null
 	return PackedStringArray(list)

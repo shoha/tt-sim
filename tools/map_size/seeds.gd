@@ -9,10 +9,8 @@ func _init() -> void:
 		var doc := NewMap.from_spec(
 			{"size_ft": 200, "biome_id": "grassland_meadow_summer_s1", "seed": s, "landform": "valley"}
 		)
-		var rivers := 0
-		for body in doc.water_bodies:
-			if body.get("kind") != null:
-				pass
-			rivers += 1
-		print("MS| seed %d water_bodies %d crossings %d" % [s, doc.water_bodies.size(), doc.crossings.size()])
+		print(
+			"MS| seed %d water_bodies %d crossings %d"
+			% [s, doc.water_bodies.size(), doc.crossings.size()]
+		)
 	quit()

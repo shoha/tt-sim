@@ -427,7 +427,7 @@ func _place_when() -> void:
 		if fact != played_label and fact.visible:
 			line += fact.get_combined_minimum_size().x + gap
 	line += played_label.get_combined_minimum_size().x
-	var target: Container = _facts if line <= words_width() else _body
+	var target: Container = (_facts as Container) if line <= words_width() else _body
 	if played_label.get_parent() == target:
 		return
 	played_label.get_parent().remove_child(played_label)

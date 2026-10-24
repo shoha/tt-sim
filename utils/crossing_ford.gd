@@ -119,7 +119,6 @@ static func build(
 	gravel: CrossingGeometry._Mesh,
 	stone: CrossingGeometry._Mesh
 ) -> void:
-	var span := crossing.span_m()
 	var half := crossing.width_m * 0.5
 	var courses := WaterGeometry.river_courses(
 		doc, Rect2(crossing.start, Vector2.ZERO).expand(crossing.end).grow(half + LANDING_M + 2.0)

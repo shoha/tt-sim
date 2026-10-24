@@ -64,9 +64,9 @@ func _init() -> void:
 
 
 ## Paint the map with the stable `key` (its folder, or its name when it has none) in the mood
-## of environment preset `mood`, with the initial of `title` (its name; the key's without one).
-func paint(key: String, mood: String = "", title: String = "") -> void:
-	_mood = PaintedBackdrop.mood_of(mood)
+## of environment preset `preset`, with the initial of `title` (its name; the key's without one).
+func paint(key: String, preset: String = "", title: String = "") -> void:
+	_mood = PaintedBackdrop.mood_of(preset)
 	_set_look(look_for(_mood))
 	_initial.text = LevelCard.initial_of(title if title != "" else key)
 

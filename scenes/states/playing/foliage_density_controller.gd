@@ -46,17 +46,19 @@ static func apply(map_root: Node3D, budget: int) -> Dictionary:
 	_collect(map_root, chunks_by_species, per_instance)
 
 	var species := {}
-	for name in chunks_by_species.keys():
+	for species_name in chunks_by_species.keys():
 		var total := 0
-		for count in (chunks_by_species[name] as Dictionary).values():
+		for count in (chunks_by_species[species_name] as Dictionary).values():
 			total += count
-		species[name] = {"count": total, "primitives_per_instance": per_instance[name]}
+		species[species_name] = {
+			"count": total, "primitives_per_instance": per_instance[species_name]
+		}
 
 	var report := FoliageBudget.plan(species, budget)
-	for name in chunks_by_species.keys():
-		var chunk_counts: Dictionary = chunks_by_species[name]
-		var total: int = species[name]["count"]
-		var kept: int = report.kept.get(name, total)
+	for species_name in chunks_by_species.keys():
+		var chunk_counts: Dictionary = chunks_by_species[species_name]
+		var total: int = species[species_name]["count"]
+		var kept: int = report.kept.get(species_name, total)
 		var visible := FoliageBudget.visible_counts_for_chunks(chunk_counts, kept, total)
 		for node in visible.keys():
 			var mmi := node as MultiMeshInstance3D

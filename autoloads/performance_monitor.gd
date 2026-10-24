@@ -20,33 +20,36 @@ var _last_elapsed_usec: Dictionary = {}  # StringName -> int
 var _registered_monitors: Dictionary = {}  # StringName -> true
 
 
-func start_timer(name: StringName) -> void:
+func start_timer(timer_name: StringName) -> void:
 	if not enabled:
 		return
-	_timer_starts_usec[name] = Time.get_ticks_usec()
+	_timer_starts_usec[timer_name] = Time.get_ticks_usec()
 
 
-func stop_timer(name: StringName) -> void:
+func stop_timer(timer_name: StringName) -> void:
 	if not enabled:
 		return
-	if not _timer_starts_usec.has(name):
+	if not _timer_starts_usec.has(timer_name):
 		if OS.is_debug_build():
 			push_warning(
-				"PerformanceMonitor: stop_timer(%s) called without a matching start_timer" % name
+				(
+					"PerformanceMonitor: stop_timer(%s) called without a matching start_timer"
+					% timer_name
+				)
 			)
 		return
-	var elapsed: int = Time.get_ticks_usec() - _timer_starts_usec[name]
-	_timer_starts_usec.erase(name)
-	_last_elapsed_usec[name] = elapsed
-	_register_monitor(name)
+	var elapsed: int = Time.get_ticks_usec() - _timer_starts_usec[timer_name]
+	_timer_starts_usec.erase(timer_name)
+	_last_elapsed_usec[timer_name] = elapsed
+	_register_monitor(timer_name)
 
 
-func _register_monitor(name: StringName) -> void:
-	if _registered_monitors.has(name):
+func _register_monitor(timer_name: StringName) -> void:
+	if _registered_monitors.has(timer_name):
 		return
-	_registered_monitors[name] = true
-	Performance.add_custom_monitor(name, _get_elapsed_ms.bindv([name]))
+	_registered_monitors[timer_name] = true
+	Performance.add_custom_monitor(timer_name, _get_elapsed_ms.bindv([timer_name]))
 
 
-func _get_elapsed_ms(name: StringName) -> float:
-	return _last_elapsed_usec.get(name, 0) / 1000.0
+func _get_elapsed_ms(timer_name: StringName) -> float:
+	return _last_elapsed_usec.get(timer_name, 0) / 1000.0

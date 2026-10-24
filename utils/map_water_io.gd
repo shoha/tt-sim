@@ -80,9 +80,9 @@ static func problem(doc: MapDocument) -> String:
 	for body in doc.water_bodies:
 		if body == null:
 			return "a null water body"
-		var body_problem := body_problem(body, doc.extent_m())
-		if body_problem != "":
-			return "water body %d: %s" % [body.id, body_problem]
+		var reason := body_problem(body, doc.extent_m())
+		if reason != "":
+			return "water body %d: %s" % [body.id, reason]
 		if seen.has(body.id):
 			return "water body id %d is used twice" % body.id
 		seen[body.id] = true
@@ -161,28 +161,32 @@ static func beyond_problem(course: PackedVector2Array, extent: Vector2) -> Strin
 
 ## Fills the water fields of `doc` from `blobs` (entry name -> bytes, already within
 ## their caps) with MapDocumentIO's warning log. Never raises.
-static func parse(blobs: Dictionary, doc: MapDocument, log: MapDocumentIO._WarningLog) -> void:
+static func parse(
+	blobs: Dictionary, doc: MapDocument, warn_log: MapDocumentIO._WarningLog
+) -> void:
 	if not blobs.has(SPLINES_ENTRY):
 		for entry_name in [PONDS_ENTRY, FLOW_ENTRY]:
 			if blobs.has(entry_name):
-				log.add("%s without %s; ignored" % [entry_name, SPLINES_ENTRY])
+				warn_log.add("%s without %s; ignored" % [entry_name, SPLINES_ENTRY])
 		return
-	var data: Variant = MapDocumentIO._json(blobs[SPLINES_ENTRY], SPLINES_ENTRY, log)
+	var data: Variant = MapDocumentIO._json(blobs[SPLINES_ENTRY], SPLINES_ENTRY, warn_log)
 	var version: Variant = null
 	if data is Dictionary:
 		version = MapDocumentIO._integer(data.get("version"), 0, 1000000)
 	if version != VERSION:
-		log.add("%s is not a version %d water object; water ignored" % [SPLINES_ENTRY, VERSION])
+		warn_log.add(
+			"%s is not a version %d water object; water ignored" % [SPLINES_ENTRY, VERSION]
+		)
 		return
 	var bodies: Variant = data.get("bodies")
 	if not bodies is Array:
-		log.add("%s needs a bodies list; water ignored" % SPLINES_ENTRY)
+		warn_log.add("%s needs a bodies list; water ignored" % SPLINES_ENTRY)
 		return
-	doc.water_bodies = parse_bodies(bodies, doc.extent_m(), log)
+	doc.water_bodies = parse_bodies(bodies, doc.extent_m(), warn_log)
 	if blobs.has(PONDS_ENTRY):
-		_parse_ponds(blobs[PONDS_ENTRY], doc, log)
+		_parse_ponds(blobs[PONDS_ENTRY], doc, warn_log)
 	if blobs.has(FLOW_ENTRY):
-		_parse_flow(blobs[FLOW_ENTRY], data.get("flow"), doc, log)
+		_parse_flow(blobs[FLOW_ENTRY], data.get("flow"), doc, warn_log)
 
 
 # --- writing ------------------------------------------------------------------------
@@ -214,15 +218,15 @@ static func body_json(body: WaterBody) -> Dictionary:
 
 
 ## The bodies of a JSON list (body_json() forms, untrusted) on a map of `extent`: each one the
-## rules accept, a warning in `log` for each one dropped.
+## rules accept, a warning in `warn_log` for each one dropped.
 static func parse_bodies(
-	list: Array, extent: Vector2, log: MapDocumentIO._WarningLog
+	list: Array, extent: Vector2, warn_log: MapDocumentIO._WarningLog
 ) -> Array[WaterBody]:
 	var out: Array[WaterBody] = []
 	var seen := {}
 	var rivers := 0
 	if list.size() > MapDocument.MAX_WATER_BODIES:
-		log.add(
+		warn_log.add(
 			(
 				"%s: %d bodies over the cap of %d ignored"
 				% [
@@ -239,17 +243,17 @@ static func parse_bodies(
 			for key in BEYOND_KEYS:
 				var course_problem := beyond_problem(body.get(key), extent)
 				if course_problem != "":
-					log.add(
+					warn_log.add(
 						"%s: body %d %s dropped: %s" % [SPLINES_ENTRY, index, key, course_problem]
 					)
 					body.set(key, PackedVector2Array())
-		var problem: String = parsed if parsed is String else body_problem(body, extent)
-		if problem == "" and seen.has(body.id):
-			problem = "id %d is used twice" % body.id
-		if problem == "" and body.is_river() and rivers >= MapDocument.MAX_RIVERS:
-			problem = "over the cap of %d rivers" % MapDocument.MAX_RIVERS
-		if problem != "":
-			log.add("%s: body %d skipped: %s" % [SPLINES_ENTRY, index, problem])
+		var reason: String = parsed if parsed is String else body_problem(body, extent)
+		if reason == "" and seen.has(body.id):
+			reason = "id %d is used twice" % body.id
+		if reason == "" and body.is_river() and rivers >= MapDocument.MAX_RIVERS:
+			reason = "over the cap of %d rivers" % MapDocument.MAX_RIVERS
+		if reason != "":
+			warn_log.add("%s: body %d skipped: %s" % [SPLINES_ENTRY, index, reason])
 			continue
 		seen[body.id] = true
 		rivers += 1 if body.is_river() else 0
@@ -320,9 +324,9 @@ static func _course_from(value: Variant) -> PackedVector2Array:
 
 
 static func _parse_ponds(
-	bytes: PackedByteArray, doc: MapDocument, log: MapDocumentIO._WarningLog
+	bytes: PackedByteArray, doc: MapDocument, warn_log: MapDocumentIO._WarningLog
 ) -> void:
-	var mask := MapDocumentIO._parse_mask(bytes, doc, Image.FORMAT_L8, PONDS_ENTRY, log)
+	var mask := MapDocumentIO._parse_mask(bytes, doc, Image.FORMAT_L8, PONDS_ENTRY, warn_log)
 	if mask.is_empty():
 		return
 	var ponds := PackedByteArray()
@@ -336,12 +340,12 @@ static func _parse_ponds(
 			mask[i] = 0
 			cleared += 1
 	if cleared > 0:
-		log.add("%s: %d samples name no pond, cleared" % [PONDS_ENTRY, cleared])
+		warn_log.add("%s: %d samples name no pond, cleared" % [PONDS_ENTRY, cleared])
 	doc.pond_mask = mask
 
 
 static func _parse_flow(
-	bytes: PackedByteArray, meta: Variant, doc: MapDocument, log: MapDocumentIO._WarningLog
+	bytes: PackedByteArray, meta: Variant, doc: MapDocument, warn_log: MapDocumentIO._WarningLog
 ) -> void:
 	var size := Vector2i.ZERO
 	if meta is Dictionary and str(meta.get("frame", "")) == FLOW_FRAME:
@@ -352,15 +356,15 @@ static func _parse_flow(
 			if nx != null and nz != null:
 				size = Vector2i(nx, nz)
 	if size == Vector2i.ZERO:
-		log.add("%s has no usable flow metadata; %s ignored" % [SPLINES_ENTRY, FLOW_ENTRY])
+		warn_log.add("%s has no usable flow metadata; %s ignored" % [SPLINES_ENTRY, FLOW_ENTRY])
 		return
 	var declared := MapDocumentIO._png_size(bytes)
 	if declared != size:
-		log.add("%s is %s, its metadata says %s; ignored" % [FLOW_ENTRY, declared, size])
+		warn_log.add("%s is %s, its metadata says %s; ignored" % [FLOW_ENTRY, declared, size])
 		return
 	var image := Image.new()
 	if image.load_png_from_buffer(bytes) != OK or image.get_size() != size:
-		log.add("%s could not be decoded; ignored" % FLOW_ENTRY)
+		warn_log.add("%s could not be decoded; ignored" % FLOW_ENTRY)
 		return
 	if image.get_format() != Image.FORMAT_RG8:
 		image.convert(Image.FORMAT_RG8)

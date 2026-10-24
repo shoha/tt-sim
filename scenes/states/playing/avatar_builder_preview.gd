@@ -133,10 +133,10 @@ static func default_ambient() -> Vector4:
 	return Vector4(ambient.r, ambient.g, ambient.b, 1.0)
 
 
-## Stands `figure` in the default ambient whatever level is open (ambient_override).
-static func light_figure(figure: Node3D) -> void:
+## Stands `target` in the default ambient whatever level is open (ambient_override).
+static func light_figure(target: Node3D) -> void:
 	var ambient := default_ambient()
-	for part in AvatarKit.figure_parts(figure):
+	for part in AvatarKit.figure_parts(target):
 		part.set_instance_shader_parameter("ambient_override", ambient)
 
 
@@ -191,17 +191,17 @@ static func _floor_disc(node_name: String, radius: float, colour: Color, y: floa
 	texture.fill_to = Vector2(1.0, 0.5)
 	texture.width = 64
 	texture.height = 64
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.albedo_texture = texture
-	material.disable_receive_shadows = true
+	var disc_material := StandardMaterial3D.new()
+	disc_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	disc_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	disc_material.albedo_texture = texture
+	disc_material.disable_receive_shadows = true
 	var quad := PlaneMesh.new()
 	quad.size = Vector2(radius, radius) * 2.0
 	var disc := MeshInstance3D.new()
 	disc.name = node_name
 	disc.mesh = quad
-	disc.material_override = material
+	disc.material_override = disc_material
 	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	disc.position.y = y
 	return disc

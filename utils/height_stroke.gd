@@ -390,8 +390,8 @@ func revert() -> Rect2i:
 	for index in _touched.size():
 		if _touched[index] == 0:
 			continue
-		var rect := MaskStroke.block_rect(doc, Vector2i(index % _blocks_x, index / _blocks_x))
-		write_block(doc.heights, width, rect, read_block(start_heights, width, rect))
+		var block := MaskStroke.block_rect(doc, Vector2i(index % _blocks_x, index / _blocks_x))
+		write_block(doc.heights, width, block, read_block(start_heights, width, block))
 	var rect := changed
 	changed = Rect2i()
 	pending = Rect2i()

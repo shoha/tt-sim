@@ -580,7 +580,7 @@ static func cpu_bake(mesh: ArrayMesh, skin: Skin, sk: Skeleton3D) -> ArrayMesh:
 		mats.append(sk.get_bone_global_pose(i) * skin.get_bind_pose(i))
 	var pos: PackedVector3Array = src[Mesh.ARRAY_VERTEX]
 	var nrm: PackedVector3Array = src[Mesh.ARRAY_NORMAL]
-	var tan: PackedFloat32Array = src[Mesh.ARRAY_TANGENT]
+	var tangents: PackedFloat32Array = src[Mesh.ARRAY_TANGENT]
 	var bones: PackedInt32Array = src[Mesh.ARRAY_BONES]
 	var weights: PackedFloat32Array = src[Mesh.ARRAY_WEIGHTS]
 	var out_pos := PackedVector3Array()
@@ -588,12 +588,12 @@ static func cpu_bake(mesh: ArrayMesh, skin: Skin, sk: Skeleton3D) -> ArrayMesh:
 	var out_tan := PackedFloat32Array()
 	out_pos.resize(pos.size())
 	out_nrm.resize(pos.size())
-	out_tan.resize(tan.size())
+	out_tan.resize(tangents.size())
 	for i in pos.size():
 		var ma := mats[bones[i * 4]]
 		var mb := mats[bones[i * 4 + 1]]
 		var w := weights[i * 4 + 1]
-		var t := Vector3(tan[i * 4], tan[i * 4 + 1], tan[i * 4 + 2])
+		var t := Vector3(tangents[i * 4], tangents[i * 4 + 1], tangents[i * 4 + 2])
 		out_pos[i] = (ma * pos[i]).lerp(mb * pos[i], w)
 		out_nrm[i] = (ma.basis * nrm[i]).lerp(mb.basis * nrm[i], w).normalized()
 		var tt := (ma.basis * t).lerp(mb.basis * t, w).normalized()

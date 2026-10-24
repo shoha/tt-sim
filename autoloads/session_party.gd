@@ -131,9 +131,9 @@ func restore(members: Array, grants: Dictionary) -> void:
 		var owned_by: Array[String] = []
 		var raw_owners: Variant = member.get("owners", [])
 		if raw_owners is Array:
-			for owner: Variant in raw_owners:
-				if owner is String and owner != "":
-					owned_by.append(owner)
+			for owner_id: Variant in raw_owners:
+				if owner_id is String and owner_id != "":
+					owned_by.append(owner_id)
 		_members.append({"state": state.to_dict(), "owners": owned_by})
 	for session_id: Variant in grants:
 		var ids: Variant = grants[session_id]

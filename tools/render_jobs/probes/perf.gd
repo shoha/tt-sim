@@ -536,10 +536,10 @@ static func _broad(gm: GameMap, on: bool) -> String:
 			_ground_shader = mat.shader
 			var wrapper := FileAccess.get_file_as_string("res://shaders/authored_ground.gdshader")
 			var inc := FileAccess.get_file_as_string("res://shaders/authored_ground.gdshaderinc")
-			var call := "ground.albedo = apply_broad_edge(ground.albedo, world_xz, ground_a, ground_b);"
-			if not inc.contains(call):
+			var call_line := "ground.albedo = apply_broad_edge(ground.albedo, world_xz, ground_a, ground_b);"
+			if not inc.contains(call_line):
 				return "broad: call not found in the include"
-			inc = inc.replace(call, "")
+			inc = inc.replace(call_line, "")
 			_no_broad_shader = Shader.new()
 			_no_broad_shader.code = wrapper.replace(
 				'#include "res://shaders/authored_ground.gdshaderinc"', inc

@@ -249,10 +249,10 @@ static func tongue_at(up: float, jitter: float) -> float:
 	return progress / BURN_RATE
 
 
-## A tree standing at `base`, `elapsed` seconds into a fire of `duration`: where it stands,
+## A tree standing at `base`, `elapsed` seconds into a fire of `fire_s`: where it stands,
 ## shrinking away about its foot over the last SNAG_GO_S. Pure.
-static func snag_transform(base: Transform3D, elapsed: float, duration: float) -> Transform3D:
-	var x := clampf((elapsed - duration + SNAG_GO_S) / SNAG_GO_S, 0.0, 1.0)
+static func snag_transform(base: Transform3D, elapsed: float, fire_s: float) -> Transform3D:
+	var x := clampf((elapsed - fire_s + SNAG_GO_S) / SNAG_GO_S, 0.0, 1.0)
 	if x <= 0.0:
 		return base
 	var keep := 1.0 - smoothstep(0.0, 1.0, x)
@@ -423,8 +423,8 @@ func _stand_in_mesh(mesh: Mesh) -> Mesh:
 ## flames, spark and smoke take (made here, so a frame draws nothing).
 func _tree_entry(tree: Dictionary, event: TerrainEvent, box: AABB, height: float) -> Dictionary:
 	var base: Transform3D = tree.base
-	var scale := base.basis.get_scale()
-	var width := maxf(box.size.x * scale.x, box.size.z * scale.z)
+	var tree_scale := base.basis.get_scale()
+	var width := maxf(box.size.x * tree_scale.x, box.size.z * tree_scale.z)
 	# Six for the spark and the smoke, then four for each crown tongue (when, how high, where
 	# round the trunk, how far out), its rising times sorted low first.
 	var draws := PackedFloat32Array()

@@ -216,13 +216,13 @@ static func when_of(last_played: int, now: int, bias: int) -> String:
 ## The session's maps: its name (the first map it shelved) and how many more, "Old Mill and
 ## 2 more maps"; "" with no name. Pure.
 static func maps_line(session: Dictionary) -> String:
-	var name := str(session.get("name", "")).strip_edges()
-	if name == "":
+	var first_map := str(session.get("name", "")).strip_edges()
+	if first_map == "":
 		return ""
 	var more := int(session.get("maps", 0)) - 1
 	if more <= 0:
-		return MAPS_ONE % name
-	return MAPS_MORE_ONE % name if more == 1 else MAPS_MORE % [name, more]
+		return MAPS_ONE % first_map
+	return MAPS_MORE_ONE % first_map if more == 1 else MAPS_MORE % [first_map, more]
 
 
 func _on_resume_pressed() -> void:

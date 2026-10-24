@@ -64,9 +64,9 @@ static func base_marks(
 	if editor == null or editor.scatter == null or at == Vector3.INF:
 		return out
 	var scale := maxf(editor.map_scale(), 0.001)
-	var centre := editor.to_map_xz(at)
+	var map_centre := editor.to_map_xz(at)
 	var limit := ForestFall.MAX_TREES
-	for tree in ForestFall.trees_near(editor.scatter, centre, radius / scale, limit, skip):
+	for tree in ForestFall.trees_near(editor.scatter, map_centre, radius / scale, limit, skip):
 		var node := tree.node as MultiMeshInstance3D
 		if not is_instance_valid(node) or node.multimesh == null or node.multimesh.mesh == null:
 			continue

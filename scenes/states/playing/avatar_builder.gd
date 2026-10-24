@@ -212,12 +212,12 @@ static func preview_size(panel_px: Vector2) -> Vector2:
 static func undo_changes(
 	network_id: String,
 	original: Dictionary,
-	recipe: Dictionary,
+	edited_recipe: Dictionary,
 	original_name: String,
-	token_name: String,
+	edited_name: String,
 ) -> Array[Dictionary]:
 	var changes: Array[Dictionary] = []
-	if recipe != original:
+	if edited_recipe != original:
 		(
 			changes
 			. append(
@@ -225,12 +225,12 @@ static func undo_changes(
 					"network_id": network_id,
 					"property": "avatar_recipe",
 					"old_value": original.duplicate(true),
-					"new_value": recipe.duplicate(true),
+					"new_value": edited_recipe.duplicate(true),
 					"description": "edited avatar",
 				}
 			)
 		)
-	if not token_name.is_empty() and token_name != original_name:
+	if not edited_name.is_empty() and edited_name != original_name:
 		(
 			changes
 			. append(
@@ -238,7 +238,7 @@ static func undo_changes(
 					"network_id": network_id,
 					"property": "token_name",
 					"old_value": original_name,
-					"new_value": token_name,
+					"new_value": edited_name,
 					"description": "edited avatar",
 				}
 			)

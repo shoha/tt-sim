@@ -96,22 +96,22 @@ static func line_dabs(path: PackedVector2Array, radius: float, flow: float) -> A
 
 
 ## The share of the brush radius within which a line's fire stands (the half-width its ring
-## and ribbon show): where a line laid at `intensity` (a mask byte) with `flow` over bare
+## and ribbon show): where a line laid at `mask_byte` (a mask byte) with `flow` over bare
 ## ground passes its band's start (FireField.FLAME_MIN, or EMBER_MIN for an intensity under
 ## the flames band), or with `erase`, where a blaze falls under EMBER_MIN. A sample at t
 ## radii from a long straight line gathers line_exposure(t) * LINE_SECONDS * flow seconds,
 ## which MaskBrush.amount turns into the mask (CLEAR_GAIN times faster to put out). Pure.
-static func line_reach(intensity: int, flow: float, erase: bool) -> float:
+static func line_reach(mask_byte: int, flow: float, erase: bool) -> float:
 	var seconds := LINE_SECONDS * maxf(flow, 0.0)
 	var need := 0.0
 	if erase:
 		var rate := MaskBrush.RATE * MaskBrush.CLEAR_GAIN
 		need = log(float(BLAZE) / FireField.EMBER_MIN) / rate
 	else:
-		var band := FireField.FLAME_MIN if intensity > FireField.FLAME_MIN else FireField.EMBER_MIN
-		if intensity <= band:
+		var band := FireField.FLAME_MIN if mask_byte > FireField.FLAME_MIN else FireField.EMBER_MIN
+		if mask_byte <= band:
 			return 0.0
-		need = -log(1.0 - float(band) / float(intensity)) / MaskBrush.RATE
+		need = -log(1.0 - float(band) / float(mask_byte)) / MaskBrush.RATE
 	if line_exposure(0.0) * seconds < need:
 		return 0.0
 	var inside := 0.0
