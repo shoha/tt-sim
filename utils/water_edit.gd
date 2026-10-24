@@ -92,10 +92,10 @@ static func resample(
 	for n in count + 1:
 		var target := minf(n * interval, total)
 		while segment < points.size() - 2:
-			var length := points[segment].distance_to(points[segment + 1])
-			if walked + length >= target:
+			var step_length := points[segment].distance_to(points[segment + 1])
+			if walked + step_length >= target:
 				break
-			walked += length
+			walked += step_length
 			segment += 1
 		var length := points[segment].distance_to(points[segment + 1])
 		var t := clampf((target - walked) / length, 0.0, 1.0) if length > 1e-9 else 0.0

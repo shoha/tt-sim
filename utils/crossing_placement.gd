@@ -127,8 +127,8 @@ static func place(
 	var shore_b := _waterline(doc, origin + d * ((run.y + 1) * STEP_M), -d, courses)
 	var anchor_a := shore_a - d * inset
 	var anchor_b := shore_b + d * inset
-	for anchor in [anchor_a, anchor_b]:
-		if absf(anchor.x) > half.x or absf(anchor.y) > half.y:
+	for bank_anchor: Vector2 in [anchor_a, anchor_b]:
+		if absf(bank_anchor.x) > half.x or absf(bank_anchor.y) > half.y:
 			return _refused(REFUSED_NO_BANK)
 	var low: float = Crossing.MIN_WIDTH_M[kind]
 	var high: float = Crossing.MAX_WIDTH_M[kind]

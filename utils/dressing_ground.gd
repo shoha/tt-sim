@@ -75,7 +75,7 @@ static func begin(
 
 
 ## A sampler for a regular grid of `columns` x `rows` samples in the frame placed by
-## `map_transform`: sample (x, z) at map-frame XZ `origin + Vector2(x, z) * step`, row-major.
+## `map_transform`: sample (x, z) at map-frame XZ `origin + Vector2(x, z) * cell_step`, row-major.
 ## Casts as begin() does, on the collision layers `mask`: the grid's ground passes
 ## WaterSurface.WALKABLE_MASK so a water surface counts as ground (and `water` marks it).
 static func begin_grid(
@@ -83,7 +83,7 @@ static func begin_grid(
 	map_transform: Transform3D,
 	top_y: float,
 	origin: Vector2,
-	step: Vector2,
+	cell_step: Vector2,
 	columns: int,
 	rows: int,
 	mask: int = WaterSurface.TERRAIN_LAYER
@@ -96,7 +96,7 @@ static func begin_grid(
 	sampler._inverse = map_transform.affine_inverse()
 	sampler._top = top_y
 	sampler._origin = origin
-	sampler._step = step
+	sampler._step = cell_step
 	sampler._columns = columns
 	sampler._rows = rows
 	sampler.heights.resize(columns * rows)
@@ -200,10 +200,10 @@ static func settle(
 	var changed := {}
 	var by_cell := AuthoredScatter.rows_by_cell_of(scatter.rows_by_asset())
 	for cell in by_cell:
-		var snapped := snap_rows(by_cell[cell], before, after, aligned)
-		if snapped.moved > 0:
-			moved += snapped.moved
-			changed[cell] = snapped.rows
+		var snapped_cell := snap_rows(by_cell[cell], before, after, aligned)
+		if snapped_cell.moved > 0:
+			moved += snapped_cell.moved
+			changed[cell] = snapped_cell.rows
 	if not changed.is_empty():
 		scatter.set_cells(changed, false)
 	return moved

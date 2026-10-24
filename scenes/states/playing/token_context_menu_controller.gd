@@ -343,10 +343,10 @@ func _on_avatar_edit_confirmed(
 ) -> void:
 	if not is_instance_valid(token):
 		return
-	var renamed := not token_name.is_empty() and token_name != original_name
+	var was_renamed := not token_name.is_empty() and token_name != original_name
 	if not GameState.has_authority():
 		NetworkManager.permissions.send_avatar_recipe(
-			token.network_id, recipe, token_name if renamed else ""
+			token.network_id, recipe, token_name if was_renamed else ""
 		)
 		return
 	var lpc := _game_map.get_level_play_controller()
@@ -359,7 +359,7 @@ func _on_avatar_edit_confirmed(
 		if not changes.is_empty():
 			_game_map._action_history.record_compound_property_change(changes)
 	lpc.set_avatar_recipe(token, recipe)
-	if renamed:
+	if was_renamed:
 		lpc.rename_token(token, token_name)
 
 

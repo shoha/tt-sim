@@ -383,13 +383,13 @@ static func place_crossing(
 	return placed
 
 
-## A pond of depth class `depth` over every sample where `inside.call(p: Vector2) -> bool`
+## A pond of depth class `depth` over every sample where `contains.call(p: Vector2) -> bool`
 ## (map XZ), carved into the heights and added to the document's bodies as the Water tool's
 ## pond stroke does (the mask, WaterGeometry.pond_rim_level: the lowest rim ground less the
 ## freeboard, WaterCarve.pond_goals, WaterEditor.lower). The heights must be final around the
 ## pond first: the level is read from the rim as it is. Returns the body, or null when no
 ## sample is inside or the document has no room for it.
-static func carve_pond(doc: MapDocument, inside: Callable, depth: WaterBody.Depth) -> WaterBody:
+static func carve_pond(doc: MapDocument, contains: Callable, depth: WaterBody.Depth) -> WaterBody:
 	var id := doc.next_water_id()
 	if id < 1 or id > WaterBody.MAX_ID:
 		return null
@@ -402,7 +402,7 @@ static func carve_pond(doc: MapDocument, inside: Callable, depth: WaterBody.Dept
 	for z in doc.samples_z():
 		for x in doc.samples_x():
 			var i := doc.sample_index(x, z)
-			if mask[i] == 0 and inside.call(doc.sample_to_world(Vector2(x, z))):
+			if mask[i] == 0 and contains.call(doc.sample_to_world(Vector2(x, z))):
 				mask[i] = id
 				marked += 1
 	if marked == 0:

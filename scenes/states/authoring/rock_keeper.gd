@@ -168,7 +168,7 @@ func _convert(
 	var grid := GroundSnap.grid_of(document)
 	for cell in cells:
 		var rows: Dictionary = scatter.cell_rows(cell).duplicate()
-		var start: Dictionary = snap_start.get(cell, {})
+		var cell_start: Dictionary = snap_start.get(cell, {})
 		var gained := {}
 		var starts := {}
 		for asset_id in rows.keys():
@@ -176,7 +176,7 @@ func _convert(
 			if gone.is_empty() or not rocks.has(asset_id):
 				continue
 			var split := RockKeep.split_kept(
-				rows[asset_id], start.get(asset_id, PackedFloat32Array()), gone
+				rows[asset_id], cell_start.get(asset_id, PackedFloat32Array()), gone
 			)
 			var flat: PackedFloat32Array = split.kept
 			if flat.is_empty():

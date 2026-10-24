@@ -503,11 +503,11 @@ func chosen_size() -> Vector2i:
 func refusal() -> String:
 	if parse_seed(seed_edit.text) < -1:
 		return SEED_ERROR
-	var size := chosen_size()
-	if size == Vector2i.ZERO:
+	var chosen := chosen_size()
+	if chosen == Vector2i.ZERO:
 		return ""
-	var width := side_refusal("Width", size.x)
-	return width if width != "" else side_refusal("Depth", size.y)
+	var width := side_refusal("Width", chosen.x)
+	return width if width != "" else side_refusal("Depth", chosen.y)
 
 
 ## The refusal of one side `feet` long, named `what`, or "" when a map can have it. Pure.
@@ -525,13 +525,13 @@ func spec() -> Dictionary:
 	var pinned := parse_seed(seed_edit.text)
 	var seed_value := pinned if pinned >= 0 else NewMap.random_seed()
 	var out := {"seed": seed_value}
-	var size := chosen_size()
-	if size == Vector2i.ZERO:
+	var chosen := chosen_size()
+	if chosen == Vector2i.ZERO:
 		out.size_ft = draw_size(seed_value)
 	else:
-		out.size_ft = size.x
-		if size.y != size.x:
-			out.depth_ft = size.y
+		out.size_ft = chosen.x
+		if chosen.y != chosen.x:
+			out.depth_ft = chosen.y
 	return out
 
 
@@ -586,11 +586,11 @@ func _on_size_selected(id: StringName) -> void:
 func _refresh_size() -> void:
 	if size_line == null:
 		return
-	var size := chosen_size()
+	var chosen := chosen_size()
 	var refused := refusal()
 	var note := refused
-	if note == "" and size != Vector2i.ZERO:
-		note = size_note(size.x, size.y)
+	if note == "" and chosen != Vector2i.ZERO:
+		note = size_note(chosen.x, chosen.y)
 	size_line.text = note
 	size_note_row.visible = note != ""
 	var role := ThemeColors.DANGER if refused != "" else ThemeColors.WARNING

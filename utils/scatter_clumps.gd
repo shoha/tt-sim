@@ -51,6 +51,10 @@ static func parents_near_bucket(
 	var reach: float = (clump.radius_m * (1.0 + entry.clump_jitter) + transition) * root
 	var span := _span(rect, reach, size)
 	var out := PackedFloat64Array()
+	var left: float = rect.position.x
+	var right: float = rect.end.x
+	var near_z: float = rect.position.y
+	var far_z: float = rect.end.y
 	# Parents sit in their own, larger buckets; a child bucket gathers the few whose reach
 	# overlaps it, so each child tests two or three parents, not a neighbourhood.
 	var buckets := (span[1] - span[0] + 1) * (span[3] - span[2] + 1)
@@ -59,10 +63,6 @@ static func parents_near_bucket(
 		# _BUCKET_SPAN past its left neighbour's: the lookups are most of a scan's work, and every
 		# clumped species of every biome scans (ground-opt-cpu).
 		var kept_memo: Dictionary = ctx.parent_buckets[s]
-		var left: float = rect.position.x
-		var right: float = rect.end.x
-		var near_z: float = rect.position.y
-		var far_z: float = rect.end.y
 		for parent_j in range(span[2], span[3] + 1):
 			var bucket_key := _key(span[0], parent_j)
 			for parent_i in range(span[0], span[1] + 1):
@@ -93,10 +93,6 @@ static func parents_near_bucket(
 	var last_i := span[1]
 	var first_j := span[2]
 	var last_j := span[3]
-	var left: float = rect.position.x
-	var right: float = rect.end.x
-	var near_z: float = rect.position.y
-	var far_z: float = rect.end.y
 	for c in range(0, listed.size(), _LISTED_STRIDE):
 		var parent_i := int(listed[c + PARENT_STRIDE])
 		var parent_j := int(listed[c + PARENT_STRIDE + 1])

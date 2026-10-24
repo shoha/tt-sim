@@ -372,10 +372,10 @@ func _rpc_request_asset(
 	# a real multiplayer peer -- see is_level_request_authorized() and its tests.
 	# The variant names which map file (whitelist: "map" -> map.glb, "ttmap" -> map.ttmap).
 	if pack_id == Paths.LEVEL_MAPS_PACK_ID:
-		var file_path := level_map_file_for_request(
+		var map_file := level_map_file_for_request(
 			asset_id, variant_id, NetworkManager.session.servable_folders()
 		)
-		if file_path == "":
+		if map_file == "":
 			push_warning(
 				(
 					"AssetStreamer: Peer %d requested map file '%s' of level '%s' -- %s"
@@ -385,12 +385,12 @@ func _rpc_request_asset(
 			rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id, file_type)
 			return
 
-		if not FileAccess.file_exists(file_path):
+		if not FileAccess.file_exists(map_file):
 			rpc_id(peer_id, "_rpc_asset_not_found", pack_id, asset_id, variant_id, file_type)
 			return
 
 		_send_asset_to_peer(
-			peer_id, pack_id, asset_id, variant_id, file_type, file_path, resume_from_chunk
+			peer_id, pack_id, asset_id, variant_id, file_type, map_file, resume_from_chunk
 		)
 		return
 

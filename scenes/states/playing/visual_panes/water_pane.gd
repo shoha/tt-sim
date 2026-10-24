@@ -72,9 +72,13 @@ func _build() -> void:
 	_look_tiles.selection_changed.connect(_on_look_selected)
 
 	var palette_field := _add_tile_field("Color", [])
-	for name in WaterPresets.get_palette_names():
+	for palette_name in WaterPresets.get_palette_names():
 		palette_field.tiles.add_tile(
-			StringName(name), name.capitalize(), "", "", SwatchTextures.water_swatch(name)
+			StringName(palette_name),
+			palette_name.capitalize(),
+			"",
+			"",
+			SwatchTextures.water_swatch(palette_name)
 		)
 	palette_field.tiles.add_tile(&"custom", "Custom", "adjustments")
 	_palette_tiles = palette_field.tiles

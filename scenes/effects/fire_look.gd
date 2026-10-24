@@ -228,11 +228,11 @@ static func _land_book(path: String, loaded: bool) -> void:
 	if texture == null:
 		_fail()
 		return
-	var bounds := book.seq_bounds.duplicate()
-	bounds.resize(BOOK_SEQUENCES)
+	var seq_bounds := book.seq_bounds.duplicate()
+	seq_bounds.resize(BOOK_SEQUENCES)
 	var mat := material()
 	mat.set_shader_parameter("flipbook", texture)
-	mat.set_shader_parameter("seq_bounds", bounds)
+	mat.set_shader_parameter("seq_bounds", seq_bounds)
 	mat.set_shader_parameter("class_first", book.class_first)
 	mat.set_shader_parameter("drawings", book.drawings)
 	mat.set_shader_parameter("tear_layer", book.tear_layer)
@@ -348,11 +348,11 @@ static func instance_buffer(
 	return out
 
 
-## The fire's integer seed the shader hashes for its picks, from its plan seed `seed` (0..1,
+## The fire's integer seed the shader hashes for its picks, from its plan seed `plan_seed` (0..1,
 ## drawn from the map seed and its lattice point): exact in a float, so every peer and GPU
 ## draws the same fire. Pure.
-static func fire_seed(seed: float) -> float:
-	return floorf(clampf(seed, 0.0, 1.0) * (SEED_RANGE - 1.0))
+static func fire_seed(plan_seed: float) -> float:
+	return floorf(clampf(plan_seed, 0.0, 1.0) * (SEED_RANGE - 1.0))
 
 
 ## The camera's frame for forward axis `forward` as the shader builds it: x the screen's right

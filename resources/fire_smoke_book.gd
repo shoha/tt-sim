@@ -37,9 +37,9 @@ const DOMAIN := Vector3(1.8, -0.45, 4.15)
 @export var layers: Array[Image] = []
 
 
-## The layer index of seed `seed`'s frame `frame` (the frame wraps round the loop).
-func layer_of(seed: int, frame: int) -> int:
-	return seed * frames + posmod(frame, frames)
+## The layer index of seed `seed_index`'s frame `frame` (the frame wraps round the loop).
+func layer_of(seed_index: int, frame: int) -> int:
+	return seed_index * frames + posmod(frame, frames)
 
 
 ## What is wrong with the book, or "" when it is whole: the format, the tile, the seed and frame

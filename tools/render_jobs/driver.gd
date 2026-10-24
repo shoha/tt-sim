@@ -770,7 +770,7 @@ func _capture(step: Dictionary) -> bool:
 	return _state.phase == 2
 
 
-func _grab(name: String) -> void:
+func _grab(capture_name: String) -> void:
 	var step: Dictionary = steps[_i]
 	# Both images are halved before saving unless `--full` is given; the step's own `scale`
 	# wins over either (pixel-exact diffs pin 1.0, perf jobs pin 0.5).
@@ -787,14 +787,16 @@ func _grab(name: String) -> void:
 				int(img.get_height() * scale),
 				Image.INTERPOLATE_LANCZOS
 			)
-	images[0].save_png(out_dir.path_join(name + ".png"))
+	images[0].save_png(out_dir.path_join(capture_name + ".png"))
 	var zoom := map.camera_node.size if map else 0.0
 	var sub_size := Vector2i.ZERO
 	if map:
-		images[1].save_png(out_dir.path_join(name + "_sub.png"))
+		images[1].save_png(out_dir.path_join(capture_name + "_sub.png"))
 		sub_size = images[1].get_size()
-	_captures.append({"name": name, "desc": String(step.get("desc", "")), "zoom": zoom})
-	log_line("captured %s sub %s win %s zoom %.2f" % [name, sub_size, images[0].get_size(), zoom])
+	_captures.append({"name": capture_name, "desc": String(step.get("desc", "")), "zoom": zoom})
+	log_line(
+		"captured %s sub %s win %s zoom %.2f" % [capture_name, sub_size, images[0].get_size(), zoom]
+	)
 	_state.phase = 2
 
 
@@ -815,10 +817,10 @@ func _skip_reason(step: Dictionary) -> String:
 	return ""
 
 
-## Whether `name` matches one of the `--only` patterns (`*` and `?` wildcards).
-func _wanted(name: String) -> bool:
+## Whether `capture_name` matches one of the `--only` patterns (`*` and `?` wildcards).
+func _wanted(capture_name: String) -> bool:
 	for pattern in only:
-		if name.match(pattern):
+		if capture_name.match(pattern):
 			return true
 	return false
 
@@ -833,8 +835,8 @@ func _serves_wanted(for_text: String) -> bool:
 		for other: Dictionary in steps:
 			if String(other.get("op", "")) != "capture":
 				continue
-			var name := String(other.get("name", ""))
-			if name.match(entry) and _wanted(name):
+			var other_name := String(other.get("name", ""))
+			if other_name.match(entry) and _wanted(other_name):
 				return true
 	return false
 

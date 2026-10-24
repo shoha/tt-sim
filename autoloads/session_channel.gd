@@ -163,17 +163,17 @@ func _shelf_keys() -> Array:
 
 
 ## The peer id the player with `session_id` has now, or 0 when absent.
-func peer_for(session_id: String) -> int:
-	return int(_players.get(session_id, {}).get("peer_id", 0))
+func peer_for(player_session: String) -> int:
+	return int(_players.get(player_session, {}).get("peer_id", 0))
 
 
 ## The session id of the player on `peer_id`, or "" when none is.
 func session_id_of(peer_id: int) -> String:
 	if peer_id <= 0:
 		return ""
-	for session_id in _players:
-		if int(_players[session_id].get("peer_id", 0)) == peer_id:
-			return session_id
+	for player_session in _players:
+		if int(_players[player_session].get("peer_id", 0)) == peer_id:
+			return player_session
 	return ""
 
 
@@ -238,7 +238,10 @@ func cancel_move() -> void:
 func shelve(level_dict: Dictionary) -> String:
 	if not NetworkManager.is_host():
 		return ""
-	var ref := map_ref(NetworkManager.with_map_hashes(level_dict))
+	# with_map_hashes is static; reached through the autoload's script because a preload of
+	# network_manager.gd here would be a cyclic dependency (it types its session as SessionChannel).
+	var hashed: Dictionary = NetworkManager.get_script().with_map_hashes(level_dict)
+	var ref := map_ref(hashed)
 	var key := ref_key(ref)
 	if key == "":
 		return ""

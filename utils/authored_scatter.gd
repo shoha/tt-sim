@@ -175,10 +175,10 @@ static func row_keys(bits: PackedInt32Array) -> PackedInt64Array:
 
 
 ## Rows per asset regrouped by 10 m cell: cell -> {asset id -> PackedFloat32Array}.
-static func rows_by_cell_of(rows_by_asset: Dictionary) -> Dictionary:
+static func rows_by_cell_of(asset_rows: Dictionary) -> Dictionary:
 	var by_cell := {}
-	for asset_id in rows_by_asset:
-		var split := ScatterRegen.split_by_cell(rows_by_asset[asset_id])
+	for asset_id in asset_rows:
+		var split := ScatterRegen.split_by_cell(asset_rows[asset_id])
 		for cell in split:
 			if not by_cell.has(cell):
 				by_cell[cell] = {}
@@ -243,9 +243,9 @@ func _process(_delta: float) -> void:
 
 ## Builds every cell of a whole map's rows (asset id -> flat rows, MapDocument.scatter's
 ## form) with no animation, replacing whatever was built. The play-time load path.
-func build_all(rows_by_asset: Dictionary) -> void:
+func build_all(asset_rows: Dictionary) -> void:
 	clear()
-	set_cells(rows_by_cell_of(rows_by_asset), false)
+	set_cells(rows_by_cell_of(asset_rows), false)
 
 
 ## Replaces the instances of exactly the given cells (cell -> {asset id ->
@@ -307,11 +307,11 @@ func species_ready(ids: Array) -> bool:
 func move_rows(
 	cell: Vector2i, asset_id: String, rows: PackedFloat32Array, moved: PackedInt32Array
 ) -> bool:
-	var cell_rows: Dictionary = _cells.get(cell, {})
-	var current: PackedFloat32Array = cell_rows.get(asset_id, PackedFloat32Array())
+	var asset_rows: Dictionary = _cells.get(cell, {})
+	var current: PackedFloat32Array = asset_rows.get(asset_id, PackedFloat32Array())
 	if current.is_empty() or current.size() != rows.size():
 		return false
-	cell_rows[asset_id] = rows
+	asset_rows[asset_id] = rows
 	if moved.is_empty():
 		return true
 	var flags := PackedByteArray()
@@ -335,13 +335,13 @@ func move_rows(
 				if (entry.keys as Dictionary).has(keys[i]):
 					indices.append(i)
 			var growing_node: MultiMeshInstance3D = entry.node
-			var visible := growing_node.multimesh.visible_instance_count
+			var visible_count := growing_node.multimesh.visible_instance_count
 			growing_node.multimesh = ScatterGlbUtils.build_multimesh(
 				growing_node.multimesh.mesh,
 				_ordered_transforms(asset_id, cell, rows, keys, indices),
 				mass_anchors
 			)
-			growing_node.multimesh.visible_instance_count = visible
+			growing_node.multimesh.visible_instance_count = visible_count
 	return true
 
 
@@ -731,7 +731,7 @@ func _refresh_growing(
 
 
 ## Builds (or rebuilds, or frees) the settled node of an asset in a cell from the rows at
-## `indices`. `visible` >= 0 sets its visible_instance_count directly (a grow-in merge,
+## `indices`. `visible_count` >= 0 sets its visible_instance_count directly (a grow-in merge,
 ## which moves instances between nodes without changing the species' total).
 func _set_settled(
 	cell: Vector2i,
@@ -739,7 +739,7 @@ func _set_settled(
 	rows: PackedFloat32Array,
 	keys: PackedInt64Array,
 	indices: PackedInt32Array,
-	visible: int
+	visible_count: int
 ) -> void:
 	var node: MultiMeshInstance3D = _nodes.get(cell, {}).get(asset_id)
 	var growing: bool = _growing.get(cell, {}).has(asset_id)
@@ -766,8 +766,8 @@ func _set_settled(
 			node.multimesh.mesh, transforms, mass_anchors
 		)
 	_touched.append(node)
-	if visible >= 0:
-		node.multimesh.visible_instance_count = mini(visible, node.multimesh.instance_count)
+	if visible_count >= 0:
+		node.multimesh.visible_instance_count = mini(visible_count, node.multimesh.instance_count)
 
 
 func _start_growth(
@@ -810,10 +810,12 @@ func _finish_growth(cell: Vector2i, asset_id: String, entry: Dictionary) -> void
 	if not lean_rebuild:
 		done = [entry]
 	var settled: MultiMeshInstance3D = _nodes.get(cell, {}).get(asset_id)
-	var visible := settled.multimesh.visible_instance_count if settled else 0
+	var visible_count := settled.multimesh.visible_instance_count if settled else 0
 	for other: Dictionary in done:
 		var grown_visible := (other.node as MultiMeshInstance3D).multimesh.visible_instance_count
-		visible = -1 if visible < 0 or grown_visible < 0 else visible + grown_visible
+		visible_count = (
+			-1 if visible_count < 0 or grown_visible < 0 else visible_count + grown_visible
+		)
 		entries.erase(other)
 		_free_growing(other)
 	if entries.is_empty():
@@ -829,7 +831,7 @@ func _finish_growth(cell: Vector2i, asset_id: String, entry: Dictionary) -> void
 	for i in keys.size():
 		if not still.has(keys[i]):
 			indices.append(i)
-	_set_settled(cell, asset_id, rows, keys, indices, visible)
+	_set_settled(cell, asset_id, rows, keys, indices, visible_count)
 
 
 ## A chunk node of this asset in this cell (ScatterGlbUtils.build_chunk, so it matches the

@@ -163,7 +163,7 @@ func _play_level_async(level_data: LevelData) -> void:
 
 		if assets_to_preload.size() > 0:
 			# Pre-load with progress callback (create_static_bodies=false for tokens)
-			var loaded_count = await AssetManager.preload_models(
+			await AssetManager.preload_models(
 				assets_to_preload,
 				func(loaded: int, total: int):
 					var model_progress = 0.2 + (0.4 * loaded / max(total, 1))

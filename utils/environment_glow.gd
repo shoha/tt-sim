@@ -50,13 +50,13 @@ const MAX_STRENGTH := 4.0
 
 
 ## The Environment glow properties (by property name) for `config` (a resolved environment
-## config), read against `reference`, the preset's own glow_intensity without the level's
+## config), read against `base_intensity`, the preset's own glow_intensity without the level's
 ## overrides, on rendering method `method` ("" the running one).
-static func settings(config: Dictionary, reference: float, method := "") -> Dictionary:
+static func settings(config: Dictionary, base_intensity: float, method := "") -> Dictionary:
 	if method == "":
 		method = RenderingServer.get_current_rendering_method()
 	var gain := MOBILE_GAIN if method == "mobile" else 1.0
-	var ref := reference if reference > 0.001 else FALLBACK_REFERENCE
+	var ref := base_intensity if base_intensity > 0.001 else FALLBACK_REFERENCE
 	var share := float(config.get("glow_intensity", ref)) / ref
 	var bloom := float(config.get("glow_bloom", 0.0)) * ref / (INTENSITY * gain)
 	bloom *= float(config.get("glow_bloom_scale", 1.0)) / sqrt(maxf(share, MIN_SHARE))
@@ -90,8 +90,10 @@ static func strength(value: float) -> float:
 
 
 ## Applies the game's glow for `config` to `env` (settings() plus the levels).
-static func apply(env: Environment, config: Dictionary, reference: float, method := "") -> void:
-	var values := settings(config, reference, method)
+static func apply(
+	env: Environment, config: Dictionary, base_intensity: float, method := ""
+) -> void:
+	var values := settings(config, base_intensity, method)
 	for key: String in values:
 		env.set(key, values[key])
 	for k in LEVELS.size():

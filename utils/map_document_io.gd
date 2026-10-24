@@ -187,20 +187,20 @@ static func write(doc: MapDocument, path: String) -> Error:
 ## "warnings": PackedStringArray}; never raises and never prints (the caller decides how
 ## to surface warnings).
 static func read(path: String) -> Dictionary:
-	var log := _WarningLog.new()
-	var entries: Variant = _extract_entries(path, log)
+	var warn_log := _WarningLog.new()
+	var entries: Variant = _extract_entries(path, warn_log)
 	var doc: MapDocument = null
 	if entries is Dictionary:
-		doc = _parse_document(entries, log)
-	return {"document": doc, "warnings": log.result()}
+		doc = _parse_document(entries, warn_log)
+	return {"document": doc, "warnings": warn_log.result()}
 
 
 ## Validates already-extracted entries (entry name -> PackedByteArray), with the same
 ## caps read() applies. Pure: the testable core of read().
 static func parse(entries: Dictionary) -> Dictionary:
-	var log := _WarningLog.new()
-	var doc := _parse_document(entries, log)
-	return {"document": doc, "warnings": log.result()}
+	var warn_log := _WarningLog.new()
+	var doc := _parse_document(entries, warn_log)
+	return {"document": doc, "warnings": warn_log.result()}
 
 
 ## The entries write() would store: {"entries": Dictionary[String, PackedByteArray],
@@ -415,16 +415,16 @@ static func _rows_problem(rows_by_asset: Dictionary[String, PackedFloat32Array])
 ## Known entries of the archive at `path` (name -> bytes), each read only after its
 ## declared size passed its cap and the running total; null when the file is missing,
 ## oversized, or not a ZIP this reader will open.
-static func _extract_entries(path: String, log: _WarningLog) -> Variant:
+static func _extract_entries(path: String, warn_log: _WarningLog) -> Variant:
 	if not FileAccess.file_exists(path):
-		log.add("no map document at %s" % path)
+		warn_log.add("no map document at %s" % path)
 		return null
-	var sizes: Variant = _entry_sizes(path, log)
+	var sizes: Variant = _entry_sizes(path, warn_log)
 	if not sizes is Dictionary:
 		return null
 	var reader := ZIPReader.new()
 	if reader.open(path) != OK:
-		log.add("%s cannot be opened as a ZIP" % path)
+		warn_log.add("%s cannot be opened as a ZIP" % path)
 		return null
 	var entries := {}
 	var total := 0
@@ -432,10 +432,10 @@ static func _extract_entries(path: String, log: _WarningLog) -> Variant:
 		if not sizes.has(entry_name):
 			continue
 		var declared: int = sizes[entry_name]
-		if not _size_allowed(entry_name, declared, total, log):
+		if not _size_allowed(entry_name, declared, total, warn_log):
 			continue
 		if not reader.file_exists(entry_name):
-			log.add("%s is listed but cannot be read; ignored" % entry_name)
+			warn_log.add("%s is listed but cannot be read; ignored" % entry_name)
 			continue
 		total += declared
 		entries[entry_name] = reader.read_file(entry_name)
@@ -446,19 +446,21 @@ static func _extract_entries(path: String, log: _WarningLog) -> Variant:
 ## Declared uncompressed size of every entry (name -> bytes, the larger one for a
 ## repeated name), read from the ZIP central directory without trusting anything else;
 ## null (with a warning) when the file is not a plain ZIP within the caps (ZipEntrySizes).
-static func _entry_sizes(path: String, log: _WarningLog) -> Variant:
+static func _entry_sizes(path: String, warn_log: _WarningLog) -> Variant:
 	var found := ZipEntrySizes.read(
 		path, MAX_ARCHIVE_BYTES, MAX_ARCHIVE_ENTRIES, MAX_CENTRAL_DIRECTORY_BYTES
 	)
 	if found["error"] != "":
-		log.add(found["error"])
+		warn_log.add(found["error"])
 	return found["sizes"]
 
 
 ## True when an entry of `size` bytes may be kept after `total` bytes already were.
-static func _size_allowed(entry_name: String, size: int, total: int, log: _WarningLog) -> bool:
+static func _size_allowed(
+	entry_name: String, size: int, total: int, warn_log: _WarningLog
+) -> bool:
 	if size > ENTRY_CAPS[entry_name]:
-		log.add(
+		warn_log.add(
 			(
 				"%s is %d bytes, over its cap of %d; ignored"
 				% [entry_name, size, ENTRY_CAPS[entry_name]]
@@ -466,7 +468,9 @@ static func _size_allowed(entry_name: String, size: int, total: int, log: _Warni
 		)
 		return false
 	if total + size > MAX_TOTAL_BYTES:
-		log.add("%s would take the document over %d bytes; ignored" % [entry_name, MAX_TOTAL_BYTES])
+		warn_log.add(
+			"%s would take the document over %d bytes; ignored" % [entry_name, MAX_TOTAL_BYTES]
+		)
 		return false
 	return true
 
@@ -474,36 +478,38 @@ static func _size_allowed(entry_name: String, size: int, total: int, log: _Warni
 # --- validating entries ---------------------------------------------------------------
 
 
-static func _parse_document(entries: Dictionary, log: _WarningLog) -> MapDocument:
-	var blobs := _known_entries(entries, log)
+static func _parse_document(entries: Dictionary, warn_log: _WarningLog) -> MapDocument:
+	var blobs := _known_entries(entries, warn_log)
 	if not blobs.has(MANIFEST_ENTRY):
-		log.add("no usable manifest.json")
+		warn_log.add("no usable manifest.json")
 		return null
 	var meta := {}
-	var doc := _parse_manifest(blobs[MANIFEST_ENTRY], log, meta)
+	var doc := _parse_manifest(blobs[MANIFEST_ENTRY], warn_log, meta)
 	if doc == null:
 		return null
 	if not blobs.has(HEIGHT_ENTRY):
-		log.add("no usable height.bin")
+		warn_log.add("no usable height.bin")
 		return null
-	var heights: Variant = _parse_heights(blobs[HEIGHT_ENTRY], doc.sample_count(), log)
+	var heights: Variant = _parse_heights(blobs[HEIGHT_ENTRY], doc.sample_count(), warn_log)
 	if heights == null:
 		return null
 	doc.heights = heights
 	# Props first: hand-placed assets are the scarcer work if the row budget runs out.
-	doc.props = _parse_rows(blobs.get(PROPS_ENTRY), PROPS_ENTRY, MAX_TOTAL_ROWS, log)
+	doc.props = _parse_rows(blobs.get(PROPS_ENTRY), PROPS_ENTRY, MAX_TOTAL_ROWS, warn_log)
 	var remaining := MAX_TOTAL_ROWS - MapDocument.row_count(doc.props)
-	doc.scatter = _parse_rows(blobs.get(SCATTER_ENTRY), SCATTER_ENTRY, remaining, log)
+	doc.scatter = _parse_rows(blobs.get(SCATTER_ENTRY), SCATTER_ENTRY, remaining, warn_log)
 	if blobs.has(ERASE_ENTRY):
-		doc.erase_mask = _parse_mask(blobs[ERASE_ENTRY], doc, Image.FORMAT_L8, ERASE_ENTRY, log)
-	_parse_biomes(blobs, doc, log)
-	MapSurfacesIO.parse(blobs, doc, log, meta["format"])
-	MapWaterIO.parse(blobs, doc, log)
-	MapCrossingIO.parse(blobs, doc, log)
+		doc.erase_mask = _parse_mask(
+			blobs[ERASE_ENTRY], doc, Image.FORMAT_L8, ERASE_ENTRY, warn_log
+		)
+	_parse_biomes(blobs, doc, warn_log)
+	MapSurfacesIO.parse(blobs, doc, warn_log, meta["format"])
+	MapWaterIO.parse(blobs, doc, warn_log)
+	MapCrossingIO.parse(blobs, doc, warn_log)
 	if blobs.has(FIRE_ENTRY):
-		var fire := _parse_mask(blobs[FIRE_ENTRY], doc, Image.FORMAT_L8, FIRE_ENTRY, log)
+		var fire := _parse_mask(blobs[FIRE_ENTRY], doc, Image.FORMAT_L8, FIRE_ENTRY, warn_log)
 		doc.fire_mask = fire if has_fire(fire) else PackedByteArray()
-	MapAnchorsIO.parse(blobs, doc, log)
+	MapAnchorsIO.parse(blobs, doc, warn_log)
 	return doc
 
 
@@ -515,7 +521,7 @@ static func has_fire(fire_mask: PackedByteArray) -> bool:
 
 ## The known entries of `entries` that are byte buffers within their caps, in
 ## KNOWN_ENTRIES order. Unknown names are ignored without a warning.
-static func _known_entries(entries: Dictionary, log: _WarningLog) -> Dictionary:
+static func _known_entries(entries: Dictionary, warn_log: _WarningLog) -> Dictionary:
 	var blobs := {}
 	var total := 0
 	for entry_name in KNOWN_ENTRIES:
@@ -523,9 +529,9 @@ static func _known_entries(entries: Dictionary, log: _WarningLog) -> Dictionary:
 			continue
 		var bytes: Variant = entries[entry_name]
 		if not bytes is PackedByteArray:
-			log.add("%s is not a byte buffer; ignored" % entry_name)
+			warn_log.add("%s is not a byte buffer; ignored" % entry_name)
 			continue
-		if not _size_allowed(entry_name, bytes.size(), total, log):
+		if not _size_allowed(entry_name, bytes.size(), total, warn_log):
 			continue
 		total += bytes.size()
 		blobs[entry_name] = bytes
@@ -535,15 +541,15 @@ static func _known_entries(entries: Dictionary, log: _WarningLog) -> Dictionary:
 ## The document's geometry and scalars from manifest.json, or null; `meta` receives the
 ## "format" read (MIN_FORMAT..FORMAT).
 static func _parse_manifest(
-	bytes: PackedByteArray, log: _WarningLog, meta: Dictionary
+	bytes: PackedByteArray, warn_log: _WarningLog, meta: Dictionary
 ) -> MapDocument:
-	var data: Variant = _json(bytes, MANIFEST_ENTRY, log)
+	var data: Variant = _json(bytes, MANIFEST_ENTRY, warn_log)
 	if not data is Dictionary:
-		log.add("manifest.json is not a JSON object")
+		warn_log.add("manifest.json is not a JSON object")
 		return null
 	var format: Variant = _integer(data.get("format"), MapDocument.MIN_FORMAT, MapDocument.FORMAT)
 	if format == null:
-		log.add("unsupported map document format %s" % _label(data.get("format")))
+		warn_log.add("unsupported map document format %s" % _label(data.get("format")))
 		return null
 	meta["format"] = format
 	var cells: Variant = data.get("size_cells")
@@ -556,13 +562,13 @@ static func _parse_manifest(
 	var spacing: Variant = _number(data.get("sample_spacing_m"))
 	var tier: Variant = _number(data.get("tier_height_m"))
 	if width == null or height == null or cell_size == null or spacing == null:
-		log.add("manifest.json needs size_cells, cell_size_m and sample_spacing_m")
+		warn_log.add("manifest.json needs size_cells, cell_size_m and sample_spacing_m")
 		return null
 	var geometry := _geometry_problem(
 		Vector2i(width, height), cell_size, spacing, tier if tier != null else cell_size
 	)
 	if geometry != "":
-		log.add("manifest.json: " + geometry)
+		warn_log.add("manifest.json: " + geometry)
 		return null
 	var doc := MapDocument.new()
 	doc.size_cells = Vector2i(width, height)
@@ -571,17 +577,17 @@ static func _parse_manifest(
 	if tier != null:
 		doc.tier_height_m = tier
 	else:
-		log.add("manifest.json: no tier_height_m, using one cell")
+		warn_log.add("manifest.json: no tier_height_m, using one cell")
 		doc.tier_height_m = cell_size
-	doc.palette_version = _text_field(data, "palette_version", MAX_TEXT_LENGTH, log)
-	doc.base_surface = _text_field(data, "base_surface", MAX_TEXT_LENGTH, log)
+	doc.palette_version = _text_field(data, "palette_version", MAX_TEXT_LENGTH, warn_log)
+	doc.base_surface = _text_field(data, "base_surface", MAX_TEXT_LENGTH, warn_log)
 	var seed_value: Variant = _integer(data.get("map_seed"), -MAX_SEED, MAX_SEED)
 	if seed_value == null:
-		log.add("manifest.json: map_seed missing or not an integer, using 0")
+		warn_log.add("manifest.json: map_seed missing or not an integer, using 0")
 	doc.map_seed = seed_value if seed_value != null else 0
 	var base_map: Variant = data.get("has_base_map")
 	if not base_map is bool:
-		log.add("manifest.json: has_base_map missing or not a bool, using false")
+		warn_log.add("manifest.json: has_base_map missing or not a bool, using false")
 	doc.has_base_map = base_map if base_map is bool else false
 	return doc
 
@@ -614,14 +620,18 @@ static func _geometry_problem(
 ## float32 values within MAX_ABS_HEIGHT_M. The size is checked before decoding.
 ## to_float32_array() reads the host's byte order; every platform Godot ships is
 ## little-endian, which is what the format specifies.
-static func _parse_heights(bytes: PackedByteArray, count: int, log: _WarningLog) -> Variant:
+static func _parse_heights(
+	bytes: PackedByteArray, count: int, warn_log: _WarningLog
+) -> Variant:
 	if bytes.size() != count * 4:
-		log.add("height.bin is %d bytes, the grid needs exactly %d" % [bytes.size(), count * 4])
+		warn_log.add(
+			"height.bin is %d bytes, the grid needs exactly %d" % [bytes.size(), count * 4]
+		)
 		return null
 	var heights := bytes.to_float32_array()
 	var bad := _first_bad_height(heights)
 	if bad >= 0:
-		log.add("height.bin sample %d is NaN, Inf or out of range" % bad)
+		warn_log.add("height.bin sample %d is NaN, Inf or out of range" % bad)
 		return null
 	return heights
 
@@ -638,20 +648,20 @@ static func _first_bad_height(heights: PackedFloat32Array) -> int:
 ## assets are skipped and malformed rows dropped, each with one warning per asset.
 @warning_ignore("integer_division")
 static func _parse_rows(
-	bytes: Variant, label: String, budget: int, log: _WarningLog
+	bytes: Variant, label: String, budget: int, warn_log: _WarningLog
 ) -> Dictionary[String, PackedFloat32Array]:
 	var result: Dictionary[String, PackedFloat32Array] = {}
 	if bytes == null:
 		return result
-	var data: Variant = _json(bytes, label, log)
+	var data: Variant = _json(bytes, label, warn_log)
 	if data == null:
 		return result
 	if not data is Dictionary:
-		log.add("%s is not a JSON object; ignored" % label)
+		warn_log.add("%s is not a JSON object; ignored" % label)
 		return result
 	var ids: Array = data.keys()
 	if ids.size() > MAX_ASSETS:
-		log.add(
+		warn_log.add(
 			(
 				"%s: %d asset ids over the cap of %d ignored"
 				% [label, ids.size() - MAX_ASSETS, MAX_ASSETS]
@@ -662,20 +672,26 @@ static func _parse_rows(
 	for asset_id in ids:
 		var rows: Variant = data[asset_id]
 		if not _is_id(asset_id) or not rows is Array:
-			log.add("%s: asset '%s' skipped: malformed id or rows" % [label, _label(asset_id)])
+			warn_log.add(
+				"%s: asset '%s' skipped: malformed id or rows" % [label, _label(asset_id)]
+			)
 			continue
 		var take := mini(rows.size(), MAX_ROWS_PER_ASSET)
 		if rows.size() > MAX_ROWS_PER_ASSET:
-			log.add(
+			warn_log.add(
 				"%s: asset '%s' keeps its first %d rows" % [label, asset_id, MAX_ROWS_PER_ASSET]
 			)
 		if take > remaining:
-			log.add("%s: total row cap of %d reached at '%s'" % [label, MAX_TOTAL_ROWS, asset_id])
+			warn_log.add(
+				"%s: total row cap of %d reached at '%s'" % [label, MAX_TOTAL_ROWS, asset_id]
+			)
 			take = remaining
 		var flat := _collect_rows(rows, take)
 		var kept := flat.size() / MapDocument.ROW_STRIDE
 		if kept < take:
-			log.add("%s: asset '%s': %d malformed rows skipped" % [label, asset_id, take - kept])
+			warn_log.add(
+				"%s: asset '%s': %d malformed rows skipped" % [label, asset_id, take - kept]
+			)
 		if kept > 0:
 			result[asset_id] = flat
 			remaining -= kept
@@ -721,19 +737,23 @@ static func row_ok(flat: PackedFloat32Array, start: int) -> bool:
 ## One grid-sized mask from a PNG, or empty (with a warning). The PNG header's size is
 ## checked against the grid before decoding, so a small file cannot declare a huge image.
 static func _parse_mask(
-	bytes: PackedByteArray, doc: MapDocument, format: Image.Format, label: String, log: _WarningLog
+	bytes: PackedByteArray,
+	doc: MapDocument,
+	format: Image.Format,
+	label: String,
+	warn_log: _WarningLog
 ) -> PackedByteArray:
 	var grid := Vector2i(doc.samples_x(), doc.samples_z())
 	var declared := _png_size(bytes)
 	if declared == Vector2i.ZERO:
-		log.add("%s is not a PNG; ignored" % label)
+		warn_log.add("%s is not a PNG; ignored" % label)
 		return PackedByteArray()
 	if declared != grid:
-		log.add("%s is %s, the sample grid is %s; ignored" % [label, declared, grid])
+		warn_log.add("%s is %s, the sample grid is %s; ignored" % [label, declared, grid])
 		return PackedByteArray()
 	var image := Image.new()
 	if image.load_png_from_buffer(bytes) != OK or image.get_size() != grid:
-		log.add("%s could not be decoded; ignored" % label)
+		warn_log.add("%s could not be decoded; ignored" % label)
 		return PackedByteArray()
 	if image.get_format() != format:
 		image.convert(format)
@@ -760,19 +780,21 @@ static func _u32_big_endian(bytes: PackedByteArray, at: int) -> int:
 ## Fills the biome fields from authoring/biomes.json and authoring/biomes.png. Both are
 ## authoring-only (regenerable), so any problem drops them with a warning instead of
 ## rejecting the document. The mask needs the id list; the list alone is kept.
-static func _parse_biomes(blobs: Dictionary, doc: MapDocument, log: _WarningLog) -> void:
+static func _parse_biomes(blobs: Dictionary, doc: MapDocument, warn_log: _WarningLog) -> void:
 	var has_png := blobs.has(BIOMES_PNG_ENTRY)
 	if not blobs.has(BIOMES_JSON_ENTRY):
 		if has_png:
-			log.add("authoring/biomes.png without authoring/biomes.json; ignored")
+			warn_log.add("authoring/biomes.png without authoring/biomes.json; ignored")
 		return
-	var ids: Variant = _parse_biome_ids(blobs[BIOMES_JSON_ENTRY], log)
+	var ids: Variant = _parse_biome_ids(blobs[BIOMES_JSON_ENTRY], warn_log)
 	if ids == null:
 		return
 	doc.biome_ids = ids
 	if not has_png:
 		return
-	var data := _parse_mask(blobs[BIOMES_PNG_ENTRY], doc, Image.FORMAT_RG8, BIOMES_PNG_ENTRY, log)
+	var data := _parse_mask(
+		blobs[BIOMES_PNG_ENTRY], doc, Image.FORMAT_RG8, BIOMES_PNG_ENTRY, warn_log
+	)
 	if data.is_empty():
 		return
 	var count := doc.sample_count()
@@ -789,21 +811,23 @@ static func _parse_biomes(blobs: Dictionary, doc: MapDocument, log: _WarningLog)
 		slots[i] = slot
 		density[i] = data[i * 2 + 1]
 	if unknown > 0:
-		log.add("authoring/biomes.png: %d samples name no listed biome, cleared" % unknown)
+		warn_log.add("authoring/biomes.png: %d samples name no listed biome, cleared" % unknown)
 	doc.biome_slots = slots
 	doc.biome_density = density
 
 
-static func _parse_biome_ids(bytes: PackedByteArray, log: _WarningLog) -> Variant:
-	var data: Variant = _json(bytes, BIOMES_JSON_ENTRY, log)
+static func _parse_biome_ids(bytes: PackedByteArray, warn_log: _WarningLog) -> Variant:
+	var data: Variant = _json(bytes, BIOMES_JSON_ENTRY, warn_log)
 	var list: Variant = data.get("biomes") if data is Dictionary else null
 	if not list is Array or list.size() > MapDocument.MAX_BIOMES:
-		log.add("authoring/biomes.json needs a biomes list of at most %d" % MapDocument.MAX_BIOMES)
+		warn_log.add(
+			"authoring/biomes.json needs a biomes list of at most %d" % MapDocument.MAX_BIOMES
+		)
 		return null
 	var ids := PackedStringArray()
 	for biome_id in list:
 		if not _is_id(biome_id):
-			log.add(
+			warn_log.add(
 				"authoring/biomes.json: biome id '%s' malformed; biomes ignored" % _label(biome_id)
 			)
 			return null
@@ -816,10 +840,10 @@ static func _parse_biome_ids(bytes: PackedByteArray, log: _WarningLog) -> Varian
 
 ## Parsed JSON, or null with a warning. Bytes that are not UTF-8 decode to garbage the
 ## parser then rejects.
-static func _json(bytes: PackedByteArray, label: String, log: _WarningLog) -> Variant:
+static func _json(bytes: PackedByteArray, label: String, warn_log: _WarningLog) -> Variant:
 	var json := JSON.new()
 	if json.parse(bytes.get_string_from_utf8()) != OK:
-		log.add(
+		warn_log.add(
 			(
 				"%s is not valid JSON (line %d: %s)"
 				% [label, json.get_error_line(), json.get_error_message()]
@@ -853,12 +877,12 @@ static func _within(value: float, low: float, high: float) -> bool:
 
 ## An optional short string field; "" with a warning when present but wrong.
 static func _text_field(
-	data: Dictionary, field: String, max_length: int, log: _WarningLog
+	data: Dictionary, field: String, max_length: int, warn_log: _WarningLog
 ) -> String:
 	var value: Variant = data.get(field)
 	if value is String and value.length() <= max_length:
 		return value
-	log.add('manifest.json: %s missing, not a string or too long; using ""' % field)
+	warn_log.add('manifest.json: %s missing, not a string or too long; using ""' % field)
 	return ""
 
 

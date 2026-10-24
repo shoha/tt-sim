@@ -31,9 +31,9 @@ static func spacing(half_width: float) -> float:
 	return maxf(StrokePath.DECIMATE_M, half_width * WIDTH_DECIMATE)
 
 
-## True when `line` is long enough for a release to make anything of. Pure.
-static func long_enough(line: PackedVector2Array) -> bool:
-	return StrokePath.line_length(line) >= StrokePath.MIN_LENGTH_M
+## True when `drawn` is long enough for a release to make anything of. Pure.
+static func long_enough(drawn: PackedVector2Array) -> bool:
+	return StrokePath.line_length(drawn) >= StrokePath.MIN_LENGTH_M
 
 
 ## The chip under the ring: `label`, then while a line `length_m` long is drawn (above 0) two

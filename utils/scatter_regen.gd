@@ -436,7 +436,7 @@ static func snapshot(doc: MapDocument) -> MapDocument:
 
 
 ## Runs a job's work on a snapshot of the document. Pure and thread-safe: it reads only
-## its arguments (the snapshot must not be mutated while it runs; AuthoredScatter hands
+## its arguments (the copy must not be mutated while it runs; AuthoredScatter hands
 ## over a copy). A work entry's optional "blockers" (RockKeep.blockers) are the footprints
 ## of kept rocks no generated rock, tree or shrub grows inside. Returns {"rows_by_cell":
 ## {cell: {asset id: PackedFloat32Array}}, "anchors": the grass-mass anchors of those rows
@@ -444,7 +444,7 @@ static func snapshot(doc: MapDocument) -> MapDocument:
 ## (AuthoredScatter, for a job whose cells are all stale) it stops and returns what it has.
 ## Each biome runs in the native generator where it is built and covers the job (ScatterNative;
 ## the same rows, about fifty times faster), else in GDScript.
-static func run(snapshot: MapDocument, work: Dictionary, cancel: Semaphore = null) -> Dictionary:
+static func run(frozen: MapDocument, work: Dictionary, cancel: Semaphore = null) -> Dictionary:
 	var started := Time.get_ticks_usec()
 	var rows_by_cell := {}
 	var anchors := {}
@@ -454,9 +454,9 @@ static func run(snapshot: MapDocument, work: Dictionary, cancel: Semaphore = nul
 		var entry: Dictionary = work[biome_id]
 		# The native generator when it is built and covers the job (ScatterNative), with
 		# rows equal to GDScript's; otherwise the whole biome runs in GDScript.
-		var rows: Variant = ScatterNative.run_biome(snapshot, biome_id, entry, anchors)
+		var rows: Variant = ScatterNative.run_biome(frozen, biome_id, entry, anchors)
 		if rows == null:
-			rows = _generate(snapshot, biome_id, entry, anchors, cancel)
+			rows = _generate(frozen, biome_id, entry, anchors, cancel)
 		for asset_id in rows:
 			var split := split_by_cell(rows[asset_id])
 			for cell in split:
@@ -475,10 +475,10 @@ static func run(snapshot: MapDocument, work: Dictionary, cancel: Semaphore = nul
 
 ## One biome of a job in GDScript (generate_species_cells over document_fields).
 static func _generate(
-	snapshot: MapDocument, biome_id: String, entry: Dictionary, anchors: Dictionary, cancel: Semaphore
+	frozen: MapDocument, biome_id: String, entry: Dictionary, anchors: Dictionary, cancel: Semaphore
 ) -> Dictionary:
 	var fields := ScatterGenerator.document_fields(
-		snapshot,
+		frozen,
 		biome_id,
 		entry.window,
 		entry.get("built", PackedStringArray()),
@@ -492,7 +492,7 @@ static func _generate(
 		fields.density_at,
 		fields.height_at,
 		fields.normal_at,
-		snapshot.map_seed,
+		frozen.map_seed,
 		entry.cells_by_species,
 		fields.bounds,
 		fields.species_density_at,

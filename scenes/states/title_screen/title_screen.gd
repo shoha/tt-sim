@@ -352,9 +352,11 @@ func _refresh_actions() -> void:
 	else:
 		grid.scroll_vertical = 0
 	panel_column.visible = not info.is_empty()
-	var name := String(info.get("name", ""))
+	var map_name := String(info.get("name", ""))
 	var folder := String(info.get("folder", ""))
-	backdrop.show_map(String(info.get("environment_preset", "")), folder if folder != "" else name)
+	backdrop.show_map(
+		String(info.get("environment_preset", "")), folder if folder != "" else map_name
+	)
 	backdrop.refit()
 
 

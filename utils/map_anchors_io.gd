@@ -51,23 +51,27 @@ static func serialize(doc: MapDocument, entries: Dictionary) -> void:
 
 ## Reads the entry from `blobs` into `doc.mass_anchors` (see the header); none when absent.
 @warning_ignore("integer_division")
-static func parse(blobs: Dictionary, doc: MapDocument, log: MapDocumentIO._WarningLog) -> void:
+static func parse(
+	blobs: Dictionary, doc: MapDocument, warn_log: MapDocumentIO._WarningLog
+) -> void:
 	doc.mass_anchors = {}
 	if not blobs.has(ENTRY):
 		return
-	var data: Variant = MapDocumentIO._json(blobs[ENTRY], ENTRY, log)
+	var data: Variant = MapDocumentIO._json(blobs[ENTRY], ENTRY, warn_log)
 	if data == null:
 		return
 	if not data is Dictionary:
-		log.add("%s is not a JSON object; ignored" % ENTRY)
+		warn_log.add("%s is not a JSON object; ignored" % ENTRY)
 		return
 	for asset_id: Variant in data:
 		var rows: PackedFloat32Array = doc.scatter.get(asset_id, PackedFloat32Array())
 		var offsets: Variant = _offsets(data[asset_id])
 		if offsets == null:
-			log.add("%s: '%s' dropped: malformed offsets" % [ENTRY, MapDocumentIO._label(asset_id)])
+			warn_log.add(
+				"%s: '%s' dropped: malformed offsets" % [ENTRY, MapDocumentIO._label(asset_id)]
+			)
 		elif offsets.size() != rows.size() / MapDocument.ROW_STRIDE * 2 or rows.is_empty():
-			log.add(
+			warn_log.add(
 				(
 					"%s: '%s' dropped: %d offsets for %d rows"
 					% [
