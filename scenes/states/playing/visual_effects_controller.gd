@@ -154,6 +154,8 @@ func _load_occlusion_fade_setting() -> void:
 ## Enable or disable the occlusion fade effect
 func set_occlusion_fade_enabled(enabled: bool) -> void:
 	_occlusion_fade_enabled = enabled
+	# The close-zoom canopy fade follows the same setting until it has its own.
+	CanopyFade.enabled = enabled
 	if not _game_map.occlusion_fade:
 		return
 	if enabled:
