@@ -985,3 +985,10 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (the token cap), vsync off, GPU median and draw calls for `none`, `full` (ghost, no budget),
   `capped` (ghost at the 16-token budget), repeated to show drift. Numbers in
   `docs/PERFORMANCE.md` "Token ghost".
+- `jobs/token_ghost_self.json`, `token_ghost_self_grass.json`, `token_ghost_self_temperate.json`
+  (about 25 s each, taiga, open meadow and temperate forest): a large multi-part pack token
+  (`token_ghost.gd` probe `spawn_big`: body, head, bloom and four legs, scale 1.5, 0.7 and 2) beside
+  three avatars. Captures `big_none` (no ghost), `big_ghost_only` (the fix) and `big_before_fix`
+  (`bound_extent` zeroed through `ghost_params`: the old behaviour in the same run); taiga also has
+  `avatars_*` and `home_*` pairs. The ghost must not draw on the token itself in the open and must
+  draw on the legs a bush or trunk covers. Docs: `docs/PERFORMANCE.md` "Token ghost: self-occlusion".

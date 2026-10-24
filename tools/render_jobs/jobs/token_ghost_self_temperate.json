@@ -1,0 +1,226 @@
+{
+ "out_dir": "render_jobs/ghostself_temperate",
+ "timeout_s": 1500,
+ "hang_s": 120,
+ "steps": [
+  {
+   "op": "wait_title"
+  },
+  {
+   "op": "palette_overlay",
+   "package": "D:/dev/plantgen/out/ttsim_package_plantgen_all"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "temperate_forest_summer_s1",
+   "size": 150,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 2.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "place_seed",
+   "seed": 1234
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/avatar_token.gd",
+   "action": "save",
+   "folder": "_avatartoken_ghostself_temperate",
+   "replace": true
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "play",
+   "folder": "_avatartoken_ghostself_temperate"
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "wait_ready",
+   "settle": 2.0
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "zoom",
+   "size": 5.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/token_ghost.gd",
+   "action": "spawn_big",
+   "at": [
+    -3.2,
+    -3.2
+   ],
+   "scale": 1.5,
+   "yaw": 0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/token_ghost.gd",
+   "action": "spawn_big",
+   "at": [
+    -6.5,
+    -1.0
+   ],
+   "scale": 1.5,
+   "yaw": 90
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/token_ghost.gd",
+   "action": "spawn_big",
+   "at": [
+    0.0,
+    -4.0
+   ],
+   "scale": 0.7,
+   "yaw": 45
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/token_ghost.gd",
+   "action": "look",
+   "at": [
+    -3.2,
+    -3.2
+   ],
+   "shift": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/token_ghost.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/token_ghost.gd",
+   "action": "bounds"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/token_ghost.gd",
+   "action": "mode",
+   "reset": true,
+   "ghost": false,
+   "occlusion": false
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "big_none"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/token_ghost.gd",
+   "action": "mode",
+   "reset": true,
+   "ghost": true,
+   "occlusion": false
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "big_ghost_only"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/token_ghost.gd",
+   "action": "mode",
+   "reset": true
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/token_ghost.gd",
+   "action": "mode",
+   "reset": true,
+   "ghost": true,
+   "occlusion": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/token_ghost.gd",
+   "action": "mode",
+   "ghost_params": {
+    "bound_extent": [
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "op": "wait",
+   "s": 0.7
+  },
+  {
+   "op": "capture",
+   "name": "big_before_fix"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/token_ghost.gd",
+   "action": "mode",
+   "reset": true
+  }
+ ]
+}
