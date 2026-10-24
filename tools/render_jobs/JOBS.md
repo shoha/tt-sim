@@ -290,7 +290,11 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   play-zoom window at home with the fade off, its GPU A/B (`t_gpu`), the Thin ring at home,
   zoom 20 and full zoom-out; a new grassland map at home and zoom 20 (`g_*`, not saved). 43
   captures and `INDEX.md`; the levels are kept. `probes/close_zoom.gd play` tunes the
-  play-zoom window in-run.
+  play-zoom window in-run. The canopy fade is a setting that defaults off (2026-10-24), so
+  the job turns it on with a `play` step (`"enabled": true`) after each map is up; without
+  that its captures show the wall of leaves the fade removes. `terrain_events.json` does the
+  same for its `collapse_4_gm` and `fall_3_nofade` captures. A new job that captures the
+  fade must pass `"enabled": true`.
 - `jobs/ford_look.json`: the ford (P4d-2): a new 150 ft temperate forest map with a waist
   river, an ankle stream and a deep river, saved as `_p4d_ford` and played (`saved` loads it
   in play: tokens spawn only there); a ford across the river and one across the stream through
