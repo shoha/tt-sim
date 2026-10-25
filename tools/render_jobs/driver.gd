@@ -219,6 +219,8 @@ func _process(delta: float) -> void:
 			_palette_overlay(step)
 		"foliage_library":
 			_foliage_library(step)
+		"library_dev":
+			_library_dev(step)
 		"place_seed":
 			var c := ctrl()
 			if c != null and c.editor != null:
@@ -412,6 +414,38 @@ func _palette_overlay(step: Dictionary) -> void:
 				warnings.size(),
 				(" (first: %s)" % warnings[0]) if not warnings.is_empty() else "",
 				report["msec"],
+			]
+		)
+	)
+
+
+## `library_dev`: sets the content-library developer override (LibraryRegistry) to the folder
+## `path` ("" clears it) for this run, nothing persisted, and re-serves the current foliage
+## library through FoliageLibrary.switch, which lays the compiled library over the palette and
+## rebuilds an open map from its document in memory; follow it with `wait_ready`. A library
+## that fails to read or compile stops the job.
+func _library_dev(step: Dictionary) -> void:
+	var path := String(step.get("path", ""))
+	if path == "":
+		LibraryRegistry.clear()
+	else:
+		LibraryRegistry.set_dev_override(path)
+	var result := FoliageLibrary.switch(
+		FoliageLibrary.current(), FoliageLibrary.active_package(), false
+	)
+	var content: Dictionary = result.get("content_library", {})
+	if not result["ok"] or (path != "" and not content.get("ok", false)):
+		log_line("library dev FAILED: %s; stopping the job" % content.get("error", result["error"]))
+		_i = steps.size()
+		return
+	log_line(
+		(
+			"library dev '%s': %s, biomes %s, %d warnings"
+			% [
+				path,
+				"applied" if content.get("applied", false) else "off",
+				str(content.get("biomes", [])),
+				(content.get("warnings", []) as Array).size(),
 			]
 		)
 	)
