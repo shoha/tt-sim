@@ -14,10 +14,6 @@ const MAX_NAME := 48
 const MAX_ID := LibraryContracts.MAX_LIBRARY_ID
 ## Characters left free in the id for a "_2" that makes it unique.
 const ID_SUFFIX_ROOM := 4
-const EXPLAIN := (
-	"The copy keeps using the plants of the collection it came from, so you can design from "
-	+ "its assets without copying them. You can add plants of your own later."
-)
 
 var existing: Array[String] = []
 
@@ -49,12 +45,15 @@ func _init(with_scrim: bool = true) -> void:
 	column.theme_type_variation = &"BoxContainerSpaced"
 	sheet.add_child(column)
 	_header = MenuHeader.new()
-	_header.setup("Save as new collection", "A copy of this biome in a collection of your own.")
+	_header.setup(
+		"Save as new %s" % LibraryNames.lower(),
+		"A copy of this biome in %s of your own." % LibraryNames.article()
+	)
 	column.add_child(_header)
-	column.add_child(DesignerRows.caption("Explain", EXPLAIN))
+	column.add_child(DesignerRows.caption("Explain", explanation()))
 	_name_edit = LineEdit.new()
 	_name_edit.name = "CollectionName"
-	_name_edit.placeholder_text = "Name of the collection"
+	_name_edit.placeholder_text = "Name of the %s" % LibraryNames.lower()
 	_name_edit.max_length = MAX_NAME
 	_name_edit.text_changed.connect(func(_text: String) -> void: _check())
 	_name_edit.text_submitted.connect(func(_text: String) -> void: _confirm())
@@ -83,12 +82,9 @@ func _init(with_scrim: bool = true) -> void:
 ## Opens the dialog with `default_name`; `heading` and `action` word it for where it was asked
 ## (the picker says "Make my own copy").
 func open(
-	default_name: String,
-	taken: Array[String],
-	heading: String = "Save as new collection",
-	action: String = "Create"
+	default_name: String, taken: Array[String], heading: String = "", action: String = "Create"
 ) -> void:
-	_header.title_label.text = heading
+	_header.title_label.text = heading if heading != "" else "Save as new %s" % LibraryNames.lower()
 	_create.text = action
 	existing = taken
 	_name_edit.text = default_name
@@ -111,7 +107,7 @@ static func id_for(wanted_name: String, taken: Array[String]) -> String:
 			id += "_"
 	id = id.trim_suffix("_")
 	if id == "" or (id.unicode_at(0) >= 48 and id.unicode_at(0) <= 57) or id.length() < 2:
-		id = "my_" + id if id != "" else "my_collection"
+		id = "my_" + id if id != "" else "my_" + LibraryNames.lower()
 	id = id.substr(0, MAX_ID - ID_SUFFIX_ROOM).trim_suffix("_")
 	var candidate := id
 	var n := 2
@@ -123,6 +119,17 @@ static func id_for(wanted_name: String, taken: Array[String]) -> String:
 		candidate = "%s_%d" % [id, n]
 		n += 1
 	return candidate
+
+
+## What the dialog says the copy is.
+static func explanation() -> String:
+	return (
+		(
+			"The copy keeps using the plants of the %s it came from, so you can design from "
+			% LibraryNames.lower()
+		)
+		+ "its assets without copying them. You can add plants of your own later."
+	)
 
 
 func current_id() -> String:

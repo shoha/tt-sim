@@ -93,7 +93,9 @@ func save_as_collection(collection_id: String, collection_name: String) -> void:
 	var library_id := collection_id
 	var biome_id := model.biome_id
 	UIManager.show_toast(
-		"Created the collection %s. Opening it." % collection_name, UIManager.TOAST_SUCCESS, 4.0
+		"Created the %s %s. Opening it." % [LibraryNames.lower(), collection_name],
+		UIManager.TOAST_SUCCESS,
+		4.0
 	)
 	_leave_then_open(library_id, biome_id)
 

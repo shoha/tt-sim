@@ -12,6 +12,8 @@ signal save_as_requested
 signal revert_requested
 signal leave_requested
 
+const SEASON_TIP := "The season whose plants are on the map. Scrubbing is a later step."
+
 const TITLE_WIDTH := 120.0
 
 var session: BiomeDesignerSession = null
@@ -53,9 +55,7 @@ func setup(designer: BiomeDesignerSession) -> void:
 	top.add_child(_dirty)
 	_season = OptionButton.new()
 	_season.name = "Season"
-	_season.tooltip_text = (
-		"The season whose plants are on the map. (The season scrub is the next designer step.)"
-	)
+	_season.tooltip_text = SEASON_TIP
 	_season.item_selected.connect(
 		func(index: int) -> void:
 			if not _syncing:
@@ -78,8 +78,8 @@ func setup(designer: BiomeDesignerSession) -> void:
 	_save_as.name = "SaveAs"
 	_save_as.text = "Save as..."
 	_save_as.tooltip_text = (
-		"Copy this biome into a collection of your own. "
-		+ "Its plants stay in the collection they came from."
+		"Copy this biome into %s of your own. " % LibraryNames.article()
+		+ "Its plants stay in the %s they came from." % LibraryNames.lower()
 	)
 	_save_as.pressed.connect(func() -> void: save_as_requested.emit())
 	top.add_child(_save_as)
@@ -156,7 +156,7 @@ func refresh() -> void:
 	_save.tooltip_text = (
 		"Write the biome to %s" % model.library_name
 		if model.writable
-		else "%s is read-only: save a copy with Save as new collection" % model.library_name
+		else "%s is read-only: save a copy with Save as..." % model.library_name
 	)
 	_revert.disabled = not model.is_dirty()
 	_show_status()

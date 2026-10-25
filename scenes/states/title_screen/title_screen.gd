@@ -202,7 +202,8 @@ func _build_top_bar() -> void:
 	libraries_button = _tool(LibraryNames.title(2), "trees", tools)
 	libraries_button.tooltip_text = "Add plants and ground to start new maps from"
 	libraries_button.pressed.connect(_on_libraries_pressed)
-	design_button = _tool("Design a biome", "leaf", tools)
+	design_button = _tool("Design", "leaf", tools)
+	design_button.text = ""
 	design_button.tooltip_text = "Shape how a place grows: its plants, where they stand, how dense"
 	design_button.pressed.connect(design_biome_requested.emit)
 	settings_button = _tool("Settings", "settings", tools)

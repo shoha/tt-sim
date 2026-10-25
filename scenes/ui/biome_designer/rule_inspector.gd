@@ -82,9 +82,7 @@ const NUMBER_ROWS: Array[Dictionary] = [
 	},
 ]
 ## The rows whose value has a class default to be marked against (and reset to).
-const CLASS_FIELDS: Array[String] = [
-	"spacing_m", "slope_max_deg", "scale_spread", "yaw_random_deg"
-]
+const CLASS_FIELDS: Array[String] = ["spacing_m", "slope_max_deg", "scale_spread", "yaw_random_deg"]
 const CLASS_OPTIONS: Array = [
 	["large", "Large"], ["medium", "Medium"], ["small", "Small"], ["ground", "Ground"]
 ]
