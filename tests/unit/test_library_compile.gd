@@ -40,6 +40,10 @@ const CACHE_WRITER := "surface_cache.gd"
 ## `LibraryRegistry.received_root()` (it never reads a library's files; the registry scans that
 ## root as its own source).
 const RECEIVED_STORE := "library_received_store.gd"
+## The import step (S6) reads the player's import source, writes and empties the quarantine
+## folder, moves a staged library into place and deletes one the player removed. It never
+## DISCOVERS libraries: nothing there decides what is installed, the registry still does.
+const IMPORT_STEP: Array[String] = ["library_importer.gd", "library_install.gd"]
 
 var _saved_settings_path: String = ""
 
@@ -556,6 +560,8 @@ func test_only_the_registry_lists_folders() -> void:
 	var offenders: Array[String] = []
 	for file_name in DirAccess.get_files_at("res://utils/library"):
 		if not file_name.ends_with(".gd") or file_name == "library_registry.gd":
+			continue
+		if file_name in IMPORT_STEP:
 			continue
 		var code := FileAccess.get_file_as_string("res://utils/library/" + file_name)
 		if "DirAccess" in code and not file_name in [CACHE_WRITER, RECEIVED_STORE]:

@@ -35,32 +35,87 @@ const _ZIP64_EOCD_SIGNATURE := 0x06064b50
 static func read(
 	path: String, max_archive_bytes: int, max_entries: int, max_directory_bytes: int
 ) -> Dictionary:
+	var found := read_directory(path, max_archive_bytes, max_entries, max_directory_bytes)
+	if found["error"] != "":
+		return _failure(String(found["error"]))
+	var sizes: Variant = parse_central_directory(found["directory"], int(found["count"]))
+	if sizes == null:
+		return _failure("%s has a malformed ZIP directory" % path)
+	return {"sizes": sizes, "error": ""}
+
+
+## {"directory": PackedByteArray (the raw central directory), "count": int, "length": int (the
+## archive's bytes), "error": String}: the archive checks of read() without parsing the records,
+## for a reader that wants more than the sizes (LibraryImporter reads each record's flags, method
+## and attributes). `error` is "" when the directory could be taken.
+static func read_directory(
+	path: String, max_archive_bytes: int, max_entries: int, max_directory_bytes: int
+) -> Dictionary:
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
-		return _failure("%s cannot be opened" % path)
+		return _directory_failure("%s cannot be opened" % path)
 	var length := file.get_length()
 	if length > max_archive_bytes:
-		return _failure("%s is %d bytes, over the cap of %d" % [path, length, max_archive_bytes])
+		return _directory_failure(
+			"%s is %d bytes, over the cap of %d" % [path, length, max_archive_bytes]
+		)
 	var tail_start := maxi(0, length - (_EOCD_SIZE + _MAX_ZIP_COMMENT))
 	file.seek(tail_start)
 	var tail := file.get_buffer(length - tail_start)
 	var eocd := _last_signature(tail, _EOCD_SIGNATURE, _EOCD_SIZE)
 	if eocd < 0 or eocd + _EOCD_SIZE + tail.decode_u16(eocd + 20) != tail.size():
-		return _failure("%s is not a ZIP archive" % path)
+		return _directory_failure("%s is not a ZIP archive" % path)
 	if _has_zip64_record(file, tail):
-		return _failure("%s is a Zip64 archive, which map documents never are" % path)
+		return _directory_failure("%s is a Zip64 archive, which is not supported" % path)
 	var count := tail.decode_u16(eocd + 10)
 	var directory_size := tail.decode_u32(eocd + 12)
 	var directory_end := tail_start + eocd
 	if count > max_entries or directory_size > max_directory_bytes:
-		return _failure("%s has an oversized ZIP directory" % path)
+		return _directory_failure("%s has an oversized ZIP directory" % path)
 	if tail.decode_u32(eocd + 16) + directory_size > directory_end:
-		return _failure("%s has an inconsistent ZIP directory" % path)
+		return _directory_failure("%s has an inconsistent ZIP directory" % path)
 	file.seek(directory_end - directory_size)
-	var sizes: Variant = parse_central_directory(file.get_buffer(directory_size), count)
-	if sizes == null:
-		return _failure("%s has a malformed ZIP directory" % path)
-	return {"sizes": sizes, "error": ""}
+	return {
+		"directory": file.get_buffer(directory_size),
+		"count": count,
+		"length": length,
+		"error": "",
+	}
+
+
+## One record per central-directory entry, in order: {name, size (declared uncompressed),
+## compressed, method, flags, made_by_host (the high byte of "version made by": 3 is Unix),
+## external (the attribute word)}, or null when a record is truncated or carries the wrong
+## signature. Pure.
+static func parse_central_records(directory: PackedByteArray, count: int) -> Variant:
+	var records: Array[Dictionary] = []
+	var at := 0
+	for _record in count:
+		if at + _CENTRAL_HEADER_SIZE > directory.size():
+			return null
+		if directory.decode_u32(at) != _CENTRAL_SIGNATURE:
+			return null
+		var name_length := directory.decode_u16(at + 28)
+		var name_end := at + _CENTRAL_HEADER_SIZE + name_length
+		if name_end > directory.size():
+			return null
+		(
+			records
+			. append(
+				{
+					"name":
+					directory.slice(at + _CENTRAL_HEADER_SIZE, name_end).get_string_from_utf8(),
+					"size": directory.decode_u32(at + 24),
+					"compressed": directory.decode_u32(at + 20),
+					"method": directory.decode_u16(at + 10),
+					"flags": directory.decode_u16(at + 8),
+					"made_by_host": directory.decode_u16(at + 4) >> 8,
+					"external": directory.decode_u32(at + 38),
+				}
+			)
+		)
+		at = name_end + directory.decode_u16(at + 30) + directory.decode_u16(at + 32)
+	return records
 
 
 ## Name -> declared uncompressed size for `count` central-directory records, or null
@@ -88,6 +143,10 @@ static func parse_central_directory(directory: PackedByteArray, count: int) -> V
 
 static func _failure(message: String) -> Dictionary:
 	return {"sizes": null, "error": message}
+
+
+static func _directory_failure(message: String) -> Dictionary:
+	return {"directory": PackedByteArray(), "count": 0, "length": 0, "error": message}
 
 
 ## Offset of the last occurrence of a little-endian u32 `signature` in `bytes` that has
