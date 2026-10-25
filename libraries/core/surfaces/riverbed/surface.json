@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.1656,
+		0.1428,
+		0.1171
+	],
+	"kind": "riverbed",
+	"label": "Riverbed",
+	"role": "ground",
+	"tile_m": 3
+}

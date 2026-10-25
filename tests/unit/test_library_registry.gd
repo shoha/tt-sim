@@ -122,17 +122,20 @@ func test_list_describes_each_library_for_the_manager() -> void:
 	assert_eq(core["default_biome"], World.CORE_RUNTIME)
 
 
-func test_the_built_in_core_is_listed_first_when_no_folder_provides_it() -> void:
-	DirAccess.remove_absolute(_paths["core"] + "/library.json")
-	World.remove_tree(_paths["core"])
+func test_core_is_an_official_folder_listed_first_and_nothing_stands_in_for_it() -> void:
 	var listed := LibraryRegistry.list(_paths["base"])
 	assert_eq(listed[0]["id"], "core")
-	assert_eq(listed[0]["source"], "builtin")
+	assert_eq(listed[0]["source"], "official")
 	assert_true(listed[0]["official"])
-	assert_eq(listed[0]["version"], LibraryRegistry.BUILTIN_VERSION)
-	assert_eq(listed[0]["biome_ids"], ["forest_summer_s1", "meadow_summer_s1"])
-	# core ^1.0 is met by the built-in core, so alienworld still serves.
-	assert_eq(_info("alienworld")["status"], "ok")
+	assert_eq(listed[0]["version"], "1.2.0", "the version of its library.json")
+	# Without the folder there is no core: nothing is listed for it and a library that needs it is
+	# an error like any missing dependency (step S10 retired the built-in core).
+	DirAccess.remove_absolute(_paths["core"] + "/library.json")
+	World.remove_tree(_paths["core"])
+	LibraryRegistry.refresh(_paths["base"])
+	assert_true(_info("core").is_empty())
+	assert_eq(_info("alienworld")["status"], "error")
+	assert_string_contains(String(_info("alienworld")["reasons"][0]), "needs library 'core'")
 
 
 # ---- serving ----
@@ -217,16 +220,16 @@ func test_served_records_each_library() -> void:
 
 
 func test_foliage_library_serves_the_installed_libraries_without_a_dev_override() -> void:
-	var applied := FoliageLibrary.apply(FoliageLibrary.TREECUBE, "", _paths["base"])
+	var applied := FoliageLibrary.apply(_paths["base"])
 	assert_true(applied["ok"])
 	assert_eq(applied["content_library"]["libraries"], ["core", "alienworld"])
 	assert_true(LibraryRegistry.discoverable())
 	assert_true(_has_asset(SPIRE))
-	# Dropping the libraries and applying again puts the installed palette back.
+	# Dropping the libraries and applying again puts the base palette back.
 	LibraryRegistry.clear()
 	LibraryRegistry.official_root = ROOT + "/nowhere"
 	LibraryRegistry.user_root = ROOT + "/nowhere_either"
-	FoliageLibrary.apply(FoliageLibrary.TREECUBE, "", _paths["base"])
+	FoliageLibrary.apply(_paths["base"])
 	assert_false(_has_asset(SPIRE))
 	assert_false(LibraryRegistry.discoverable())
 
@@ -493,13 +496,13 @@ func test_assets_used_by_a_map_are_enumerated_per_library() -> void:
 
 func test_record_of_gives_the_served_version_and_hash() -> void:
 	_apply()
-	var alien := LibraryRegistry.record_of("alienworld", _paths["base"])
+	var alien := LibraryRegistry.record_of("alienworld")
 	assert_eq(alien["version"], "0.3.1")
 	assert_eq(alien["hash"], _info("alienworld")["hash"])
-	assert_eq(LibraryRegistry.record_of("nobody", _paths["base"]), {})
+	assert_eq(LibraryRegistry.record_of("nobody"), {})
+	assert_eq(LibraryRegistry.record_of("core")["version"], "1.2.0", "core is served like the rest")
 	LibraryRegistry.clear()
-	var builtin := LibraryRegistry.record_of("core", _paths["base"])
-	assert_eq(builtin["version"], LibraryRegistry.BUILTIN_VERSION, "the built-in core always answers")
+	assert_eq(LibraryRegistry.record_of("core"), {}, "nothing answers for a library not served")
 
 
 # ---- the developer override still layers over everything ----
@@ -590,17 +593,12 @@ func test_a_thumbnail_outside_the_file_list_or_with_a_bad_path_falls_back_to_leg
 # ---- the foliage library's refresh ----
 
 
-func test_refresh_libraries_serves_again_without_touching_the_foliage_setting() -> void:
-	var saved_foliage_settings := FoliageLibrary.settings_path
-	FoliageLibrary.settings_path = SETTINGS
+func test_refresh_libraries_serves_again_and_persists_nothing() -> void:
 	LibraryRegistry.official_root = ROOT + "/nowhere"
 	LibraryRegistry.user_root = ROOT + "/nowhere_either"
-	var before := FoliageLibrary.current()
 	watch_signals(EventBus)
 	var result := FoliageLibrary.refresh_libraries()
 	assert_true(result["ok"], str(result["error"]))
-	assert_eq(FoliageLibrary.current(), before, "the foliage set is unchanged")
 	assert_signal_emitted(EventBus, "foliage_library_changed")
 	assert_false(FileAccess.file_exists(SETTINGS), "nothing was persisted")
-	FoliageLibrary.settings_path = saved_foliage_settings
-	FoliageLibrary.apply(FoliageLibrary.TREECUBE)
+	FoliageLibrary.apply()

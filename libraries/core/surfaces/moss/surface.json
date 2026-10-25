@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.085,
+		0.1857,
+		0.0198
+	],
+	"kind": "moss",
+	"label": "Moss",
+	"role": "ground",
+	"tile_m": 3
+}

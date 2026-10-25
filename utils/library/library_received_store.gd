@@ -214,47 +214,52 @@ static func sweep_leftovers(root: String = "") -> Array[String]:
 	return removed
 
 
-## Keeps a received library: moves it into the user's libraries (`user_root`, default the
-## registry's) unless one of that id is installed. `importer` is the library importer's entry
-## when it exists (a Callable taking the folder and returning an Error); until it is merged the
-## folder is moved directly. TODO(libmanager): route through LibraryImporter's quarantine flow.
-## Returns {ok, error}.
-static func promote(
-	id: String, importer: Callable = Callable(), user_root: String = "", root: String = ""
-) -> Dictionary:
+## Keeps a received library: it goes through the same flow as an import, in order: the importer
+## inspects the received folder (LibraryImporter.inspect, the caps and name rules), stages a copy
+## in the quarantine (stage), the install card examines it (LibraryInstall.examine: reader, dry
+## run, identity, reserved ids) and the installer moves it into the user's libraries
+## (LibraryInstall.install, never replacing an installed one). Only then is the received copy
+## removed. A refusal at any step leaves the received copy as it was and the quarantine empty.
+## The destination is always the registry's user libraries; `root` is the received folder (the
+## registry's by default). Reads the registry, so call it on the main thread. Returns {ok, error}.
+static func promote(id: String, root: String = "") -> Dictionary:
 	var out := {"ok": false, "error": ""}
 	var resolved := _base(root)
-	var destination := (
-		LibraryPaths.resolve(user_root) if user_root != "" else LibraryPaths.libraries()
-	)
-	if not resolved["ok"] or not destination["ok"]:
+	if not resolved["ok"]:
 		out["error"] = "no safe place to keep it"
 		return out
 	var base := String(resolved["path"])
-	var target_root := String(destination["path"])
 	if (
 		not LibraryIds.library_problems(id).is_empty()
 		or not DirAccess.dir_exists_absolute(base.path_join(id))
 	):
 		out["error"] = "no received library '%s'" % id
 		return out
-	var target := target_root.path_join(id)
-	if DirAccess.dir_exists_absolute(target):
-		out["error"] = "'%s' is already installed" % id
+	var plan := LibraryImporter.inspect(base.path_join(id))
+	if not plan["ok"]:
+		out["error"] = _first_line(plan["errors"], "the library cannot be imported")
 		return out
-	if importer.is_valid():
-		var err: int = importer.call(base.path_join(id))
-		out["ok"] = err == OK
-		out["error"] = "" if err == OK else "the importer refused it"
-	else:
-		DirAccess.make_dir_recursive_absolute(target_root)
-		var moved := DirAccess.rename_absolute(base.path_join(id), target)
-		out["ok"] = moved == OK
-		out["error"] = "" if moved == OK else "cannot move the library"
-	if out["ok"]:
-		SafeDelete.file(base.path_join(id + MARKER_SUFFIX), base)
-		_this_session.erase(id)
+	var staged := LibraryImporter.stage(plan)
+	if not staged["ok"]:
+		out["error"] = String(staged["error"])
+		return out
+	var card := LibraryInstall.examine(String(staged["folder"]))
+	if not card["can_install"]:
+		LibraryImporter.discard(String(staged["folder"]))
+		out["error"] = _first_line(card["errors"], "the library cannot be installed")
+		return out
+	var installed := LibraryInstall.install(card, false)
+	if not installed["ok"]:
+		LibraryImporter.discard(String(staged["folder"]))
+		out["error"] = String(installed["error"])
+		return out
+	remove(id, base)
+	out["ok"] = true
 	return out
+
+
+static func _first_line(lines: Array, fallback: String) -> String:
+	return String(lines[0]) if not lines.is_empty() else fallback
 
 
 ## The resolved received folder: `root` when given (it must pass LibraryPaths.resolve), else the

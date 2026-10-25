@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.3681,
+		0.22,
+		0.0604
+	],
+	"kind": "forest_floor",
+	"label": "Forest floor litter",
+	"role": "ground",
+	"tile_m": 4
+}

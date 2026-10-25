@@ -117,7 +117,9 @@ func test_foliage_samples_cover_both_wind_shaders_with_the_real_layouts() -> voi
 		for i in mesh.get_surface_count():
 			if mesh.surface_get_material(i) is ShaderMaterial:
 				layouts[mesh.surface_get_format(i)] = {}
-	assert_gt(layouts.size(), 1, "the representatives bring more than one layout")
+	# Core's wind assets share one surface layout (the package builder writes them uniform, so
+	# check_layout never warns): the representatives bring that layout at least.
+	assert_gte(layouts.size(), 1, "the representatives bring a layout")
 	var shaders := {}
 	for sample in samples:
 		assert_true(sample.multimesh, "foliage draws as a MultiMesh")

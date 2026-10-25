@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.2711,
+		0.3928,
+		0.0485
+	],
+	"kind": "grass",
+	"label": "Grass meadow",
+	"role": "ground",
+	"tile_m": 4
+}

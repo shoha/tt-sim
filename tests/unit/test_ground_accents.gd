@@ -443,8 +443,10 @@ func test_terrain_binds_accents_with_an_edge_band_and_the_skirt_draws_none() -> 
 	assert_eq(skirt.get_shader_parameter("biome_present"), 0, "the skirt reads no biomes")
 	assert_eq(skirt.get_shader_parameter("paint_present"), 0, "and no paint")
 	assert_eq(material.get_shader_parameter("accent_noise"), GroundAccents.noise_texture())
-	var paths := AuthoredTerrain.texture_paths(terrain.document)
-	assert_true(Array(paths).any(func(p: String) -> bool: return p.contains("/moss/")))
+	# A library surface has no editor import to preload (texture_paths lists imported files only):
+	# SurfaceStore bakes its maps when the layer arrays take them.
+	var moss: Dictionary = PaletteLibrary.surfaces()["moss"]
+	assert_true(SurfaceStore.available(PaletteLibrary.DEFAULT_ROOT, String(moss["albedo"])))
 	PaletteLibrary.clear_cache()
 
 

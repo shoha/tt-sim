@@ -166,11 +166,10 @@ func test_tree_leaf_cutouts_take_the_leaf_shadow_push_and_blended_cards_do_not()
 	)
 
 
-func test_the_installed_palette_flags_broadleaf_and_pine_leaves_and_nothing_else() -> void:
-	# docs/ASSET_PIPELINE.md section 6: oak, birch, bush, poplar, acacia, willow and their
-	# saplings and young trees carry the extra on their leaf material (acacia and willow from
-	# treecube 1a9c552), and so does every pine with a canopy (treecube 12fee28); dead trees,
-	# charred snags and every non-leaf material do not.
+func test_the_core_palette_flags_every_crown_and_no_ground_litter() -> void:
+	# docs/ASSET_PIPELINE.md section 6 (tt_foliage_light "painted"): plantgen writes the extra on
+	# the leaf material of every tree, bush, fern and flower crown; grass tufts, litter, logs and
+	# stumps carry none. (Until 2026-10-25 this pinned treecube's installed palette.)
 	var painted := PackedStringArray()
 	var pines := 0
 	var acacias := 0
@@ -185,11 +184,17 @@ func test_the_installed_palette_flags_broadleaf_and_pine_leaves_and_nothing_else
 				var mesh := PaletteLibrary.resolve(String(asset_id)).get("mesh") as Mesh
 				if mesh == null:
 					continue
+				var file := String(asset_id).get_file()
 				for i in mesh.get_surface_count():
 					var source := mesh.surface_get_material(i) as BaseMaterial3D
-					if source == null or not FoliageLight.is_painted(source):
+					if source == null or not WindFoliage.is_leaf_cutout(source):
 						continue
-					var file := String(asset_id).get_file()
+					var crown := file.begins_with("Tree_") or file.begins_with("Bush_")
+					crown = crown or file.begins_with("Fern_") or file.begins_with("Flower_")
+					crown = crown or file.begins_with("Grass_SprigClump")
+					assert_eq(FoliageLight.is_painted(source), crown, "%s: painted" % file)
+					if not FoliageLight.is_painted(source):
+						continue
 					painted.append(file)
 					if file.begins_with("Tree_Pine"):
 						pines += 1
@@ -197,32 +202,29 @@ func test_the_installed_palette_flags_broadleaf_and_pine_leaves_and_nothing_else
 						acacias += 1
 					if file.begins_with("Tree_Willow"):
 						willows += 1
-					assert_false(file.begins_with("Tree_Dead"), "%s has no canopy" % file)
-					assert_false(file.begins_with("Snag_"), "%s has no canopy" % file)
-					assert_true(WindFoliage.is_leaf_cutout(source), "%s: a leaf cutout" % file)
-	assert_gt(painted.size(), 10, "the round 5 broadleaf crowns are flagged: %s" % str(painted))
-	assert_eq(pines, 8, "every pine's frond crown is flagged: %s" % str(painted))
-	assert_eq(acacias, 3, "both savanna acacias and the badlands one: %s" % str(painted))
-	assert_eq(willows, 3, "the wetland's three willows: %s" % str(painted))
+	assert_gt(painted.size(), 100, "the broadleaf crowns are flagged: %s" % str(painted))
+	assert_gte(pines, 6, "every pine's frond crown is flagged: %s" % str(painted))
+	assert_gte(acacias, 3, "the savanna acacias: %s" % str(painted))
+	assert_gte(willows, 3, "the wetland's three willows: %s" % str(painted))
 
 
-func test_the_installed_palette_carries_the_judged_shade_floors() -> void:
-	# treecube 83d9e06 (docs/looks/colour_plan.md "Fix round"): the savanna and badlands
-	# shrubs and every birch carry their own floor through the editor import; treecube 1a9c552
-	# (docs/looks/biome_identity.md) adds the acacias and willows and cools the savanna shrub's.
-	# Other painted crowns keep the default.
+func test_the_core_palette_carries_the_tone_shade_floors() -> void:
+	# plantgen writes each leaf material's tt_foliage_shade (PlantMaterials.foliage_shade_floor,
+	# translated in linear light from the shade colour); the game profile tones one stem
+	# differently per biome, so the floors differ between biomes. Recorded 2026-10-25 from the
+	# shipped core (three decimals).
 	var expected := {
-		"savanna_summer_s1/Bush_Round_summer_04": Vector3(0.1, 0.17, 0.14),
-		"rocky_badlands_summer_s1/Bush_Round_summer_04": Vector3(0.15, 0.13, 0.19),
-		"savanna_summer_s1/Tree_Acacia_summer_00": Vector3(0.15, 0.16, 0.06),
-		"savanna_summer_s1/Tree_Acacia_Young_summer_03": Vector3(0.15, 0.16, 0.06),
-		"rocky_badlands_summer_s1/Tree_Acacia_summer_01": Vector3(0.15, 0.13, 0.19),
-		"wetland_riparian_summer_s1/Tree_Willow_summer_00": Vector3(0.12, 0.24, 0.22),
-		"birch_woodland_summer_s1/Tree_Birch_summer_00": Vector3(0.12, 0.28, 0.1),
-		"birch_woodland_summer_s1/Tree_Birch_Sapling_summer_05": Vector3(0.12, 0.28, 0.1),
-		"boreal_taiga_summer_s1/Tree_Birch_summer_04": Vector3(0.12, 0.28, 0.1),
-		"temperate_forest_summer_s1/Tree_Birch_summer_02": Vector3(0.12, 0.28, 0.1),
-		"temperate_forest_summer_s1/Tree_Oak_summer_00": null,
+		"temperate_forest_summer_s1/Tree_Oak_v0": Vector3(0.022, 0.049, 0.677),
+		"temperate_forest_summer_s1/Tree_Birch_v0": Vector3(0.08, 0.141, 0.264),
+		"savanna_summer_s1/Tree_Acacia_v0": Vector3(0.122, 0.11, 0.287),
+		"wetland_riparian_summer_s1/Tree_Willow_v0": Vector3(0.243, 0.385, 0.689),
+		"temperate_forest_summer_s1/Tree_Spruce_v0_temperate_forest":
+		Vector3(0.166, 0.257, 0.343),
+		"temperate_forest_summer_s1/Tree_Pine_v0_temperate_forest": Vector3(0.098, 0.273, 0.358),
+		"temperate_forest_summer_s1/Tree_Sapling_v0_temperate_forest":
+		Vector3(0.022, 0.049, 0.677),
+		"savanna_summer_s1/Tree_Sapling_v0_savanna": Vector3(0.062, 0.057, 0.135),
+		"temperate_forest_summer_s1/Bush_Bush_v0_temperate_forest": null,
 	}
 	for asset_id: String in expected:
 		var mesh := PaletteLibrary.resolve(asset_id).get("mesh") as Mesh
@@ -236,9 +238,9 @@ func test_the_installed_palette_carries_the_judged_shade_floors() -> void:
 			if material != null and material.has_meta(FoliageLight.META_PAINTED):
 				found = material.get_shader_parameter(FoliageLight.SHADE_UNIFORM)
 		if expected[asset_id] == null:
-			assert_null(found, "%s keeps the default floor" % asset_id)
+			assert_not_null(found, "%s carries a floor" % asset_id)
 		else:
-			assert_almost_eq(found as Vector3, expected[asset_id] as Vector3, Vector3.ONE * 1e-4)
+			assert_almost_eq(found as Vector3, expected[asset_id] as Vector3, Vector3.ONE * 2e-3)
 
 
 func test_the_antialiasing_swap_keeps_painted_and_plain_apart() -> void:

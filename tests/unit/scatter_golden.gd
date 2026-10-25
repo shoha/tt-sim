@@ -1,15 +1,14 @@
 extends RefCounted
 
-## The golden digest of every built-in biome's generated rows (test_scatter_mass.gd): each
-## biome of the installed palette generated at GOLDEN_SEED over a square of GOLDEN_HALF_M with
-## a varying painted density, and per asset id its row count and the MD5 of its rows' bytes.
-## FIXTURE was first written from main's code path (94e18825, before the ground ship's mass
-## port) by running dump() once, and re-pinned when the ship palette (treecube 020bbdc) was
-## installed (ground ship card 4): only the grass of the six zoned biomes moved (their mass,
-## clump and density fields), while boreal_taiga, rocky_badlands and burnt_forest, which carry
-## no mass fields, still grow exactly main's rows. Re-pin only after checking that. The
-## digests are Windows' bytes (other platforms differ in the last bit), so the test runs there
-## only.
+## The golden digest of every shipped biome's generated rows (test_scatter_mass.gd): each biome of
+## the served palette (the core library) generated at GOLDEN_SEED over a square of GOLDEN_HALF_M
+## with a varying painted density, and per asset id its row count and the MD5 of its rows' bytes.
+## FIXTURE was written from main's code path (94e18825) and re-pinned for treecube's palette
+## twice; at step S10 (2026-10-25) it was re-pinned from the shipped core library (dump(), after
+## test_library_row_parity.gd had proved the library's rows equal the plantgen package route's
+## from tests/fixtures/library_core_golden.json). Re-pin only after a change that moves rows on
+## purpose. The digests are Windows' bytes (other platforms differ in the last bit), so the test
+## runs there only.
 
 const GOLDEN_SEED := 1234
 const GOLDEN_HALF_M := 12.0

@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.3915,
+		0.1505,
+		0.0545
+	],
+	"kind": "gravel",
+	"label": "Red gravel",
+	"role": "ground",
+	"tile_m": 2
+}

@@ -673,9 +673,10 @@ func test_a_ford_node_carries_gravel_stone_and_moss() -> void:
 	assert_eq(AuthoredCrossings.gravel_surface("temperate_forest_summer_s1"), "gravel")
 	assert_eq(AuthoredCrossings.gravel_surface("rocky_badlands_summer_s1"), "gravel_sandstone")
 	assert_eq(AuthoredCrossings.gravel_surface(""), AuthoredCrossings.DEFAULT_GRAVEL_SURFACE)
-	assert_has(
-		AuthoredCrossings.texture_paths(doc),
-		"res://assets/palette/surfaces/gravel/gravel_albedo.png"
+	assert_true(
+		SurfaceStore.available(
+			PaletteLibrary.DEFAULT_ROOT, String(PaletteLibrary.surfaces()["gravel"]["albedo"])
+		)
 	)
 	assert_has(
 		AuthoredCrossings.surfaces_for_styles(PackedStringArray(["rocky_badlands_summer_s1"])),
@@ -773,9 +774,10 @@ func test_an_arch_node_carries_stone_moss_and_paving() -> void:
 	assert_eq(AuthoredCrossings.paving_surface(""), AuthoredCrossings.DEFAULT_PAVING_SURFACE)
 	var paving: ORMMaterial3D = instance.mesh.surface_get_material(2)
 	assert_almost_eq(paving.uv1_scale.x, 1.0 / 3.0, EPSILON, "world metres at the tile")
-	assert_has(
-		AuthoredCrossings.texture_paths(doc),
-		"res://assets/palette/surfaces/flagstone/flagstone_albedo.png"
+	assert_true(
+		SurfaceStore.available(
+			PaletteLibrary.DEFAULT_ROOT, String(PaletteLibrary.surfaces()["flagstone"]["albedo"])
+		)
 	)
 	assert_has(
 		AuthoredCrossings.surfaces_for_styles(PackedStringArray(["rocky_badlands_summer_s1"])),

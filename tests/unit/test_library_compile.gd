@@ -51,9 +51,13 @@ const IMPORT_STEP: Array[String] = [
 ]
 
 var _saved_settings_path: String = ""
+var _saved_official: String = ""
 
 
 func before_all() -> void:
+	_saved_official = LibraryRegistry.official_root
+	# The shipped core is not part of these scratch worlds.
+	LibraryRegistry.official_root = ROOT + "/no_official"
 	for relative in ["library.json", "assets/catalog.json", "biomes/meadow.json"]:
 		DirAccess.make_dir_recursive_absolute(MINI.path_join(relative).get_base_dir())
 		var text := FileAccess.get_file_as_string(MINI_SRC.path_join(relative))
@@ -70,6 +74,7 @@ func before_all() -> void:
 
 func after_all() -> void:
 	LibraryRegistry.settings_path = _saved_settings_path
+	LibraryRegistry.official_root = _saved_official
 	LibraryRegistry.clear()
 	PaletteLibrary.clear_cache()
 	_remove_tree(ROOT)
@@ -219,14 +224,22 @@ func _rule(compiled: Dictionary, key: String) -> Dictionary:
 # ---- the savanna golden ----
 
 
+## The surface table the savanna fixture's names resolve against: the shipped core's own, the
+## surfaces the game serves (the fixture was compiled against the installed palette's table, which
+## core's surface names equal).
+func _core_surfaces() -> Dictionary:
+	var made := LibraryRegistry.compile_folder("res://libraries/core", {})
+	assert_true(made["ok"], str(made["errors"]))
+	return made["compiled"]["palette"]["surfaces"]
+
+
 func test_savanna_compiles_to_the_frozen_golden_with_no_warnings() -> void:
 	var sources := LibraryRegistry.read_sources(SAVANNA)
 	sources.erase("files")
 	var read := LibraryReader.read(sources)
 	assert_eq(read["errors"], [])
 	assert_eq(read["warnings"], [])
-	var surfaces: Dictionary = PaletteLibrary.get_palette()["surfaces"]
-	var compiled := BiomeCompiler.compile(read, {"surfaces": surfaces})
+	var compiled := BiomeCompiler.compile(read, {"surfaces": _core_surfaces()})
 	assert_eq(compiled["warnings"], [], "no compile warnings")
 	assert_eq(compiled["palette_warnings"], [], "validate_palette: zero warnings")
 	assert_eq(compiled["biome_ids"], ["savanna_summer_s1"])
@@ -246,7 +259,7 @@ func test_the_compiled_savanna_validates_into_the_palette_without_losing_a_rule(
 	var sources := LibraryRegistry.read_sources(SAVANNA)
 	sources.erase("files")
 	var compiled := BiomeCompiler.compile(
-		LibraryReader.read(sources), {"surfaces": PaletteLibrary.get_palette()["surfaces"]}
+		LibraryReader.read(sources), {"surfaces": _core_surfaces()}
 	)
 	var validated := PaletteLibrary.validate_palette(compiled["palette"])
 	assert_eq(validated["warnings"], [])
@@ -435,13 +448,13 @@ func test_the_dev_override_is_off_by_default_and_changes_nothing() -> void:
 
 func test_apply_lays_the_library_over_the_palette_and_loads_its_glbs() -> void:
 	LibraryRegistry.set_dev_override(MINI)
+	var parses_before: int = AssetStore.stats["parses"]
 	var result := LibraryRegistry.apply(BASE)
 	assert_true(result["ok"], str(result["error"]))
 	assert_true(result["applied"])
 	assert_eq(result["library"], "mini")
 	assert_eq(result["biomes"], [RUNTIME])
-	assert_eq(result["report"]["parsed"].size(), 0, "no GLB is read until a plant is asked for")
-	assert_eq(result["report"]["failed"], [])
+	assert_eq(AssetStore.stats["parses"], parses_before, "no GLB is read until a plant is asked for")
 	assert_eq(AssetStore.assets_of("mini", BASE).size(), 3, "AssetStore holds the three assets")
 	var ids := PaletteLibrary.biomes(BASE).map(func(b: Dictionary) -> String: return b["id"])
 	assert_eq(ids, ["forest_summer_s1", RUNTIME], "another biome is left alone")
@@ -528,12 +541,12 @@ func test_the_saved_dev_path_comes_from_settings_unless_one_is_set() -> void:
 
 func test_the_foliage_library_layers_the_content_library_and_drops_it_again() -> void:
 	LibraryRegistry.set_dev_override(MINI)
-	var applied := FoliageLibrary.apply(FoliageLibrary.TREECUBE, "", BASE)
+	var applied := FoliageLibrary.apply(BASE)
 	assert_true(applied["ok"])
 	assert_true(applied["content_library"]["applied"])
 	assert_true(PaletteLibrary.get_palette(BASE)["assets"].has(RUNTIME + "/Tree_Oak_v0"))
 	LibraryRegistry.clear()
-	FoliageLibrary.apply(FoliageLibrary.TREECUBE, "", BASE)
+	FoliageLibrary.apply(BASE)
 	assert_false(PaletteLibrary.get_palette(BASE)["assets"].has(RUNTIME + "/Tree_Oak_v0"))
 	assert_eq(PaletteLibrary.biomes(BASE).size(), 1)
 

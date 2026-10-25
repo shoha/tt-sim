@@ -1,0 +1,1348 @@
+{
+	"climate": "temperate",
+	"format": "ttsim-biome",
+	"format_version": 1,
+	"ground": {
+		"accents": [
+			{
+				"coverage": 0.06,
+				"scale_m": 14,
+				"surface": "dirt_opening"
+			}
+		],
+		"cliff": "cliff",
+		"paths": [
+			"dirt_road_packed",
+			"cobblestone",
+			"flagstone",
+			"stone_tiles"
+		],
+		"scree": "gravel",
+		"shore": "mud",
+		"surface": "grass_meadow",
+		"water_bed": "riverbed"
+	},
+	"ground_look": {
+		"brush": {
+			"mean": 3.2
+		},
+		"light": {
+			"cap": 0.94,
+			"cover": 0.4,
+			"knee": 0.64,
+			"lift": 0.4,
+			"shade": 0.4
+		},
+		"mass": {
+			"lit_m": 2.5
+		},
+		"ref_surface": "grass_meadow",
+		"rim": {
+			"surfaces": [
+				"dirt_opening",
+				"dirt_road_packed"
+			]
+		},
+		"strokes": {
+			"len": 4,
+			"m": 2
+		},
+		"zones": {
+			"angle": 0.5,
+			"angle_k": [
+				-0.45,
+				0.2,
+				0
+			],
+			"colors_linear": [
+				[
+					0.2339,
+					0.3318,
+					0.0537
+				],
+				[
+					0.1423,
+					0.2711,
+					0.0272
+				],
+				[
+					0.4986,
+					0.4346,
+					0.041
+				],
+				[
+					0.6418,
+					0.3278,
+					0.0403
+				]
+			],
+			"cover": [
+				0.42,
+				0.24,
+				0.22
+			],
+			"edge": [
+				0.045,
+				0.045,
+				0.045
+			],
+			"edge_vary_m": 30,
+			"nest": 0,
+			"rag_m": 2.6,
+			"scale_m": [
+				9,
+				10,
+				14
+			],
+			"shade_warm": [
+				1.04,
+				0.95,
+				0.88
+			],
+			"stretch": 2.2,
+			"stretch_k": [
+				0.65,
+				1.1,
+				1
+			]
+		}
+	},
+	"id": "grassland_meadow",
+	"name": "Grassland Meadow",
+	"rules": [
+		{
+			"align": "upright",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.0016,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "oak",
+			"near": [],
+			"pattern": null,
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Tree_Oak_v0"
+					},
+					{
+						"ref": "Tree_Broadleaf_v0"
+					},
+					{
+						"ref": "Tree_Oak_v1"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "canopy_tree",
+			"scale_floor": null,
+			"scale_spread": 0.15,
+			"size_class": "large",
+			"slope_max_deg": 35,
+			"spacing_m": 4.5,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "upright",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.018,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "bush",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": false,
+					"scale_influence": 0,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 132,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Bush_Bush_v0_grassland_meadow"
+					},
+					{
+						"ref": "Bush_BerryBush_v0_grassland_meadow"
+					},
+					{
+						"ref": "Bush_Bush_v1_grassland_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "shrub",
+			"scale_floor": null,
+			"scale_spread": 0.2,
+			"size_class": "medium",
+			"slope_max_deg": 40,
+			"spacing_m": 2,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.006,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "rock",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": false,
+					"scale_influence": 0,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 133,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Rock_Medium_summer_03"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "rock",
+			"scale_floor": null,
+			"scale_spread": 0.2,
+			"size_class": "medium",
+			"slope_max_deg": 40,
+			"spacing_m": 2,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "upright",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.009,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "flowering_bush",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": false,
+					"scale_influence": 0,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 221,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Bush_FloweringBush_v0"
+					},
+					{
+						"ref": "Bush_BerryBush_v1_grassland_meadow"
+					},
+					{
+						"ref": "Bush_BushWithWildflowers_v0"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "shrub",
+			"scale_floor": null,
+			"scale_spread": 0.2,
+			"size_class": "medium",
+			"slope_max_deg": 40,
+			"spacing_m": 2,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.25,
+				"parents_per_m2": 0.05,
+				"radius_m": 1.2,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 0.05,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "stone",
+			"near": [
+				{
+					"distance_m": 2,
+					"influence": 0.5,
+					"rule": "rock",
+					"transition_m": 1.5
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 15,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 134,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0.15
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Stone_Small_summer_04"
+					},
+					{
+						"ref": "Stone_Small_summer_05"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "stone",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "small",
+			"slope_max_deg": 55,
+			"spacing_m": 0.25,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.25,
+				"parents_per_m2": 0.05,
+				"radius_m": 1.2,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 0.025,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "stones",
+			"near": [
+				{
+					"distance_m": 2,
+					"influence": 0.5,
+					"rule": "rock",
+					"transition_m": 1.5
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 15,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 135,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0.15
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Stone_Cluster_summer_06"
+					},
+					{
+						"ref": "Stone_Cluster_summer_07_grassland_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "stones",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "small",
+			"slope_max_deg": 55,
+			"spacing_m": 0.25,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"angle_deg": 0,
+				"angle_jitter_deg": 14,
+				"bare": 0.08,
+				"children_spacing_m": 0,
+				"core_height": 2.4,
+				"core_height_m": 0.8,
+				"core_hold": 0.6,
+				"core_scale": 2.4,
+				"edge_shrink": 0.45,
+				"follow": 1,
+				"mass": 1,
+				"parent_group": 1,
+				"parent_spacing_m": 4,
+				"parents_per_m2": 0.05,
+				"radius_jitter": 0.5,
+				"radius_m": 4.2,
+				"shoulder_m": 1.2,
+				"stretch": 1.4,
+				"transition_m": 0.3,
+				"zone_core": 0.6,
+				"zone_family": [
+					0,
+					0,
+					2,
+					2
+				],
+				"zone_fill": 0.35,
+				"zone_keep": [
+					0.45,
+					0.45,
+					0.9,
+					0.9
+				],
+				"zone_share": 0.6
+			},
+			"density_per_m2": 20.722,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "grass",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 100,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2.2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 136,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 0.5,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.25,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Grass_Grass_v0_grassland_meadow"
+					},
+					{
+						"ref": "Grass_Grass_v1_grassland_meadow"
+					},
+					{
+						"ref": "Grass_Grass_v2_grassland_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "grass",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"angle_deg": 0,
+				"angle_jitter_deg": 14,
+				"bare": 0.08,
+				"children_spacing_m": 0,
+				"core_height": 2,
+				"core_height_m": 0.8,
+				"core_hold": 0.6,
+				"core_scale": 1.6,
+				"edge_shrink": 0.4,
+				"follow": 1,
+				"mass": 1,
+				"parent_group": 1,
+				"parent_spacing_m": 4,
+				"parents_per_m2": 0.05,
+				"radius_jitter": 0.5,
+				"radius_m": 4.2,
+				"shoulder_m": 1.2,
+				"stretch": 1.4,
+				"transition_m": 0.3,
+				"zone_core": 0.6,
+				"zone_family": [
+					0,
+					0,
+					2,
+					2
+				],
+				"zone_fill": 0.35,
+				"zone_keep": [
+					0.45,
+					0.45,
+					0.9,
+					0.9
+				],
+				"zone_share": 0.6
+			},
+			"density_per_m2": 8.103,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "tall_grass",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 100,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2.8,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 137,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 0.5,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.25,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Grass_Grass_v3_grassland_meadow"
+					},
+					{
+						"ref": "Grass_Grass_v4_grassland_meadow"
+					},
+					{
+						"ref": "Grass_Grass_v5_grassland_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "tall_grass",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.7,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"keep_colour": true,
+			"key": "sprig",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 100,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 1.2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 138,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 0.5,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 1,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Grass_SprigClump_v0_grassland_meadow"
+					},
+					{
+						"ref": "Grass_SprigClump_v1_grassland_meadow"
+					},
+					{
+						"ref": "Grass_SprigClump_v2_grassland_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "grass",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.12,
+				"radius_m": 2.2,
+				"transition_m": 1.4
+			},
+			"density_per_m2": 0.5,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "dry_drift",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 100,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 1.6,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 139,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 0.5,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 1,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Grass_Grass_v6_grassland_meadow"
+					},
+					{
+						"ref": "Grass_Grass_v7_grassland_meadow"
+					},
+					{
+						"ref": "Grass_Grass_v8_grassland_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "tall_grass",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.01,
+				"radius_m": 2.4,
+				"transition_m": 1.5
+			},
+			"density_per_m2": 1.14545454545455,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "carpet",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 140,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 1,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Flower_BloomMound_v0_grassland_meadow"
+					},
+					{
+						"ref": "Flower_BloomMound_v1_grassland_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "carpet",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.08,
+				"radius_m": 0.9,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 0.916363636363636,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "daisy",
+			"near": [
+				{
+					"distance_m": 1.5,
+					"influence": 0.9,
+					"rule": "carpet",
+					"transition_m": 2
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 70,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 141,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 3,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.7,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Flower_Daisy_v0_grassland_meadow"
+					},
+					{
+						"ref": "Flower_Daisy_v1_grassland_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "flower",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.08,
+				"radius_m": 0.9,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 0.572727272727273,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "poppy",
+			"near": [
+				{
+					"distance_m": 1.5,
+					"influence": 0.9,
+					"rule": "carpet",
+					"transition_m": 2
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 70,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 142,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 3,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.7,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Flower_Poppy_v0_grassland_meadow"
+					},
+					{
+						"ref": "Flower_Poppy_v1"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "flower",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.08,
+				"radius_m": 0.9,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 0.687272727272727,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "lavender",
+			"near": [
+				{
+					"distance_m": 1.5,
+					"influence": 0.9,
+					"rule": "carpet",
+					"transition_m": 2
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 70,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 143,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 3,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.7,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Flower_LavenderMound_v0"
+					},
+					{
+						"ref": "Flower_LavenderMound_v1"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "flower",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.08,
+				"radius_m": 0.9,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 0.687272727272727,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "buttercup",
+			"near": [
+				{
+					"distance_m": 1.5,
+					"influence": 0.9,
+					"rule": "carpet",
+					"transition_m": 2
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 70,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 144,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 3,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.7,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Flower_Daisy_v2"
+					},
+					{
+						"ref": "Flower_Daisy_v3"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "flower",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		}
+	],
+	"seasons": [
+		{
+			"id": "summer",
+			"seed": 1
+		}
+	],
+	"surfaces": "library",
+	"thumbnail": "thumbnails/grassland_meadow.jpg"
+}

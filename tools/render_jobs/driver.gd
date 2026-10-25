@@ -215,8 +215,6 @@ func _process(delta: float) -> void:
 			done = _state.t >= float(step.get("s", 1.0))
 		"settle":
 			done = _settle(step)
-		"palette_overlay":
-			_palette_overlay(step)
 		"foliage_library":
 			_foliage_library(step)
 		"library_dev":
@@ -388,40 +386,9 @@ func _settle(step: Dictionary) -> bool:
 	return false
 
 
-## `palette_overlay`: lays the package at `package` over the installed palette
-## (PaletteLibrary.overlay_package) before a map opens. A package that cannot be read stops
-## the job, since every capture after it would show the wrong plants.
-func _palette_overlay(step: Dictionary) -> void:
-	var report := PaletteLibrary.overlay_package(
-		String(step.get("package", "")), PaletteLibrary.DEFAULT_ROOT, step.get("biomes", [])
-	)
-	if not report["ok"]:
-		log_line("palette overlay FAILED: %s; stopping the job" % report["error"])
-		_i = steps.size()
-		return
-	var warnings: Array = report["warnings"]
-	log_line(
-		(
-			"palette overlay %s: biomes %s, %d parsed %s, %d kept, %d failed %s, %d warnings%s, %.0f ms"
-			% [
-				step.get("package", ""),
-				str(report["biomes"]),
-				(report["parsed"] as Array).size(),
-				str(report["parsed"]),
-				(report["kept"] as Array).size(),
-				(report["failed"] as Array).size(),
-				str(report["failed"]),
-				warnings.size(),
-				(" (first: %s)" % warnings[0]) if not warnings.is_empty() else "",
-				report["msec"],
-			]
-		)
-	)
-
-
 ## `library_dev`: sets the content-library developer override (LibraryRegistry) to the folder
-## `path` ("" clears it) for this run, nothing persisted, and re-serves the current foliage
-## library through FoliageLibrary.switch, which lays the compiled library over the palette and
+## `path` ("" clears it) for this run, nothing persisted, and serves the libraries again through
+## FoliageLibrary.refresh_libraries, which lays the compiled libraries over the palette and
 ## rebuilds an open map from its document in memory; follow it with `wait_ready`. A library
 ## that fails to read or compile stops the job.
 func _library_dev(step: Dictionary) -> void:
@@ -430,9 +397,7 @@ func _library_dev(step: Dictionary) -> void:
 		LibraryRegistry.clear()
 	else:
 		LibraryRegistry.set_dev_override(path)
-	var result := FoliageLibrary.switch(
-		FoliageLibrary.current(), FoliageLibrary.active_package(), false
-	)
+	var result := FoliageLibrary.refresh_libraries()
 	var content: Dictionary = result.get("content_library", {})
 	if not result["ok"] or (path != "" and not content.get("ok", false)):
 		log_line("library dev FAILED: %s; stopping the job" % content.get("error", result["error"]))
@@ -451,17 +416,14 @@ func _library_dev(step: Dictionary) -> void:
 	)
 
 
-## `foliage_library`: serves the foliage library `name` ("treecube" or "plantgen") from now on
-## (FoliageLibrary.switch, which does not persist it here) and, when a map is open, rebuilds it
-## from the document in memory (Root's handler of EventBus.foliage_library_changed); follow it
-## with `wait_ready`. `package` names the plantgen folder (else the saved one). `fades_off`
-## (default true) holds the occlusion fade and the close-zoom canopy fade off, so two captures
-## differ by the plants alone. A switch that fails stops the job, since every capture after it
-## would show the wrong plants.
+## `foliage_library`: serves the libraries again (FoliageLibrary.refresh_libraries) and, when a
+## map is open, rebuilds it from the document in memory (Root's handler of
+## EventBus.foliage_library_changed); follow it with `wait_ready`. `fades_off` (default true)
+## holds the occlusion fade and the close-zoom canopy fade off, so two captures differ by the
+## plants alone. A failure stops the job, since every capture after it would show the wrong
+## plants. (Until 2026-10-25 it switched between the treecube palette and a plantgen package.)
 func _foliage_library(step: Dictionary) -> void:
-	var result := FoliageLibrary.switch(
-		String(step.get("name", FoliageLibrary.TREECUBE)), String(step.get("package", "")), false
-	)
+	var result := FoliageLibrary.refresh_libraries()
 	if not result["ok"]:
 		log_line("foliage library FAILED: %s; stopping the job" % result["error"])
 		_i = steps.size()
@@ -469,24 +431,10 @@ func _foliage_library(step: Dictionary) -> void:
 	if bool(step.get("fades_off", true)) and gm() != null:
 		gm().set_occlusion_fade_enabled(false)
 		CanopyFade.play_strength = 0.0
-	var report: Dictionary = result["report"]
 	log_line(
 		(
-			"foliage library %s: %d assets in the palette%s"
-			% [
-				result["library"],
-				(PaletteLibrary.get_palette()["assets"] as Dictionary).size(),
-				(
-					", package %d parsed, %d kept, %d failed"
-					% [
-						(report["parsed"] as Array).size(),
-						(report["kept"] as Array).size(),
-						(report["failed"] as Array).size(),
-					]
-					if not report.is_empty()
-					else ""
-				),
-			]
+			"foliage library: %d assets in the palette"
+			% (PaletteLibrary.get_palette()["assets"] as Dictionary).size()
 		)
 	)
 

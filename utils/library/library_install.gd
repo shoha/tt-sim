@@ -137,7 +137,7 @@ static func _check_identity(card: Dictionary) -> void:
 	card["existing"] = existing
 	if existing.is_empty():
 		return
-	if bool(existing.get("official", false)) or String(existing["source"]) == "builtin":
+	if bool(existing.get("official", false)):
 		card["reserved"] = true
 		errors.append("'%s' comes with the game and cannot be replaced." % id)
 		return
@@ -177,9 +177,6 @@ static func _dependency_context(library: Dictionary) -> Dictionary:
 		var need := String(dep.get("id", ""))
 		var info := LibraryRegistry.info(need)
 		if info.is_empty() or String(info["status"]) != LibraryResolver.OK:
-			continue
-		if String(info["source"]) == "builtin":
-			out[need] = {"read": {"library": {}, "catalog": {}}, "folder": ""}
 			continue
 		var folder := String(info["folder"])
 		var read := LibraryReader.read(LibraryRegistry.read_sources(folder))

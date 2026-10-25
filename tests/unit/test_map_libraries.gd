@@ -236,7 +236,7 @@ func test_open_without_those_plants_drops_them_and_says_so() -> void:
 	var read: MapDocument = MapDocumentIO.read(made[0])["document"]
 	LibraryRegistry.clear()
 	PaletteLibrary.clear_cache()
-	LibraryRegistry.official_root = ROOT + "/nowhere"
+	# Core is a folder like any library (step S10): the game with only its own core installed.
 	LibraryRegistry.user_root = ROOT + "/nowhere"
 	LibraryRegistry.apply(_paths["base"])
 	var accept := func(_report: Dictionary) -> bool: return true

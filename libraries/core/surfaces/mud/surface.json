@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.0978,
+		0.0624,
+		0.0368
+	],
+	"kind": "mud",
+	"label": "Mud",
+	"role": "ground",
+	"tile_m": 4
+}

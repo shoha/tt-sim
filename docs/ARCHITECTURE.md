@@ -861,11 +861,12 @@ and frees the templates afterwards. In-game authored maps do not go through
 `build_scatter()`: `AuthoredScatter` (see "Authored scatter" below) resolves each palette
 species once, builds each (species, cell) node with `ScatterGlbUtils.build_chunk()`, and
 rebuilds single cells while a brush paints. `PaletteLibrary.resolver()` still plugs a
-palette into `build_scatter()` for one-shot builds (`utils/palette_library.gd`, the built-in palette
-of `docs/ASSET_PIPELINE.md` section 9), which loads each asset GLB once per palette root
-(the editor-imported PackedScene through `ResourceLoader`, since an export ships no raw
-`.glb`; `GLTFDocument` only for a GLB without an import, such as a `user://` test
-fixture), takes the wind category from `palette.json`, and hands out a fresh `Mesh.duplicate()` per
+palette into `build_scatter()` for one-shot builds (`utils/palette_library.gd`: the palette the
+content libraries serve, the shipped core `res://libraries/core` first, in the form of
+`docs/ASSET_PIPELINE.md` section 9), which loads each asset GLB once per palette root
+(`AssetStore`: a `GLTFDocument` parse of the raw file, which ships in the pack as an
+`importer="keep"` file; never `ResourceLoader`), takes the wind category from the library's
+catalog, and hands out a fresh `Mesh.duplicate()` per
 call so one map load's wind overrides never leak into the next. The output is the same
 nodes either way, so FoliageDensityController, OcclusionFadeManager and the foliage
 budget apply unchanged.
@@ -1392,9 +1393,9 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   the other palette helpers: texture paths, base rule surfaces) from the palette surface (albedo, normal, ORM,
   height at `tile_m`); a missing surface warns and falls back to a flat earth colour.
   Every surface map (the ground's, the arrays', the crossings', the swatches' and thumbnails')
-  comes through `SurfaceStore` (`utils/library/surface_store.gd`): the editor-imported texture
-  for the installed palette, a baked PNG set (BC7 / BC5 / BC1 / L8, raw cache under
-  `user://library_cache`) for a content library's own surfaces, same formats either way
+  comes through `SurfaceStore` (`utils/library/surface_store.gd`): a baked PNG set (BC7 / BC5 / BC1
+  / L8, raw cache under `user://library_cache`) for a content library's own surfaces (core's too,
+  since step S10; only a plain test palette still has editor-imported textures)
   ([systems/library.md](systems/library.md) "Surfaces (S3)").
   Anti-tiling is a triangle-grid tile-and-blend (terrain-paint's mosaic idea done live:
   3 cells per pixel with hashed rotation and offset, sharpened height-weighted blend),

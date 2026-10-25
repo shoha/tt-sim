@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.3949,
+		0.1722,
+		0.0705
+	],
+	"kind": "cliff",
+	"label": "Sandstone",
+	"role": "cliff",
+	"tile_m": 3
+}

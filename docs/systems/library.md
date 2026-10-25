@@ -18,7 +18,8 @@ with its surfaces, thumbnails and bindings, proven equal to the plantgen package
 Step S6 (2026-10-24): the library manager, which the player knows as "Collections" (the word
 "library" already means the list of maps on the title): list, card, import through a quarantine,
 Verify and Remove. Step S8a (2026-10-25): the asset query (category, subtype, group, tags, size
-class, seasons, count, pin, lock files) and the biome designer, [biome_designer.md](biome_designer.md).
+class, seasons, count, pin, lock files) and the biome designer, [biome_designer.md](biome_designer.md). Step S10 (2026-10-25): `core` ships as the folder `res://libraries/core` and
+treecube is gone ("The core library").
 
 ## Map
 
@@ -35,7 +36,7 @@ class, seasons, count, pin, lock files) and the biome designer, [biome_designer.
 | `utils/library/library_query.gd` | `LibraryQuery` | (S8a, pure) The asset query of a rule: filter clauses, shared tag and size filters, the season mode, group order by FNV-1a hash, `count`, `pin`, lock files and the 64-asset cap; the compiler asks it for everything but explicit `ref`s ([biome_designer.md](biome_designer.md) "Model") |
 | `utils/library/designer/` | `BiomeDesignerModel` and friends | (S8a) The biome designer's model, patches, curves, catalog and writer; `LibraryRegistry.designer_context`, `serve_draft` and `designer_writable` serve it ([biome_designer.md](biome_designer.md)) |
 | `utils/library/library_registry.gd` | `LibraryRegistry` | The only module that lists or reads folders (S4: multi-library): `refresh` / `list` / `info` (what the manager shows), `apply` (compiles every servable library in load order and lays it over the palette), `served`, `record_of`, `assets_used_by(map)`, `resolve_asset_alias` / `resolve_biome_alias`, `is_enabled` / `set_enabled` / `disabled_ids`, `discoverable`, `read_sources`, `compile_folder`, the dev override (`set_dev_override`, settings `[library] dev_path`), `clear` |
-| `utils/library/library_resolver.gd`, `library_versions.gd` | `LibraryResolver`, `LibraryVersions` | (S4, pure) Which libraries found on disk can be served and in what order (duplicate ids, disabled libraries, dependency ranges `^1.0` `~1.2` exact and comparators, cycles, depth 4, at most 16 active; the built-in core provides `core` when no folder does); semver parse, compare and range check (prerelease tags ignored) |
+| `utils/library/library_resolver.gd`, `library_versions.gd` | `LibraryResolver`, `LibraryVersions` | (S4, pure) Which libraries found on disk can be served and in what order (duplicate ids, disabled libraries, dependency ranges `^1.0` `~1.2` exact and comparators, cycles, depth 4, at most 16 active; `core` is an ordinary folder dependency (S10)); semver parse, compare and range check (prerelease tags ignored) |
 | `utils/library/asset_store.gd`, `glb_guard.gd` | `AssetStore`, `GlbGuard` | (S4) The one place a library asset's mesh comes from, keyed by (library id, asset id): lazy GLTFDocument parse from a file path, cached, sha256 and byte count checked for a non-official library, `GlbGuard` (pure) reads the container and every embedded texture's size from its header before any decode; `instance()` dresses a copy with `WindFoliage.apply_material` |
 | `utils/library/map_libraries.gd`, `utils/map_library_gate.gd` | `MapLibraries`, `MapLibraryGate` | (S4) What a map says about its libraries (the `libraries` record, the format number, `check` against the served libraries, `without_libraries`, `apply_aliases`) and the step between reading a document and building it (an aliases pass, the mismatch dialog, "Open without those plants") |
 | `utils/library/library_groups.gd` | `LibraryGroups` | (S4, pure) The palette's biomes grouped by library for the New map dialog: core first, then by name, a library's default biome first |
@@ -43,10 +44,10 @@ class, seasons, count, pin, lock files) and the biome designer, [biome_designer.
 | `utils/library/library_transfer.gd`, `library_transfer_consent.gd` | `LibraryTransfer`, `LibraryTransferConsent` | (multiplayer) `plan` (what a client asks for), `authorize` / `quote` / `build_bundle` (the host), `verify_and_install` (the client); the consent model (phases, the question's words, the size-cap refusal, progress text) |
 | `utils/library/library_received_store.gd` | `LibraryReceivedStore` | (multiplayer) The transient cache under `LibraryRegistry.received_root()`: `write_library` (atomic, with a marker), `inventory`, `touch`, `evict_to_fit` (LRU, 512 MB), `remove`, `sweep_session`, `sweep_leftovers`, `promote` (Keep). The one module besides the registry and the surface cache that touches library folders (`test_only_the_registry_lists_folders` names it) |
 | `autoloads/library_transfer_channel.gd`, `scenes/ui/library_transfer_ui.gd` | `LibraryTransferChannel`, `LibraryTransferUi` | (multiplayer) The messages and the client's flow (`AssetManager.library_transfer`), and the question, progress and Keep dialogs (the confirmation dialog) |
-| `utils/palette_overlay.gd`, `utils/palette_library.gd` | `PaletteOverlay.read_palette`, `PaletteLibrary.install_overlay` | The existing overlay merge, split so a palette already in memory takes the same path as a package folder (`read` and `overlay_package` call the same code) |
-| `utils/legacy_habit.gd` | `LegacyHabit` | (S2) The legacy key and kind lists (`EMERGENT_KEYS`, `BANK_KEYS`, `CHARRED_KEYS`, `ARID_KINDS`) in one place, `for_key(key, kind)` and `export_table()` (published in `contract.json` as `legacy_habit`, so plantgen's importer derives a rule's explicit habit from the same lists). `ScatterGround.habit_of(rule)` returns the rule's own `habit`, else this |
+| `utils/library/library_layer.gd`, `utils/palette_library.gd` | `LibraryLayer.lay`, `PaletteLibrary.install_overlay` | (S10) The merge that lays a compiled library over the palette cache (a biome replaces the base's biome of the same runtime id with its assets; the library's surfaces are added); it reads no file and no GLB. It is what `PaletteOverlay.read_palette` became when treecube's overlay route was deleted. `PaletteLibrary.DEFAULT_ROOT` (`res://libraries`) is a VIRTUAL root: the first read of its palette serves the libraries into it (`get_palette`), `base_for_serving` is the empty base `LibraryRegistry.apply` lays onto |
+| `utils/scatter_ground.gd` | `ScatterGround.habit_of` | (S2, S10) The rule's own `habit`, else NO habit (neutral `NO_HABIT`). The legacy key and kind lists (`LegacyHabit`, `EMERGENT_KEYS` ...) were deleted at S10: every shipped rule carries its habit through its role |
 | `utils/palette_validator.gd` (+ `palette_surfaces.gd`, `palette_fields.gd`, `palette_asset_files.gd`) | `PaletteValidator` | (S2) `palette_library.gd` was at gdlint's 1000-line cap and is split; the rule whitelist in `PaletteValidator._validate_species` / `_library_fields` keeps `role`, `habit`, `weight` |
-| `utils/foliage_library.gd` | `FoliageLibrary` | The developer A/B switch (treecube against a plantgen package); `apply()` calls `LibraryRegistry.apply()` last, so the content libraries are a layer over whichever foliage set is served; `apply_saved()` serves them at start-up when any is installed; `refresh_libraries()` serves them again and rebuilds the open map |
+| `utils/foliage_library.gd` | `FoliageLibrary` | (S10: the treecube and plantgen-package switch, `[foliage]` settings and the F3 checkbox are gone) `apply(root)` clears the palette and wind caches and serves the libraries (`LibraryRegistry.apply`); `apply_saved()` does it at start-up; `refresh_libraries()` serves again and rebuilds the open map; `analyse` / `adapt_async` / `describe` regenerate a map's scatter from its biome painting when its rows name assets no library serves |
 | `utils/library/library_names.gd` | `LibraryNames` | (S6) The ONE place the player-facing word for a library lives: `TITLE_SINGULAR` / `TITLE_PLURAL` (today "Collection" / "Collections"), the helpers every label is built from (`title`, `lower`, `counted`, `article`, the install card's promise line, the manager's caption). A rename is a one-line change; `test_library_manager.gd` fails when a string literal in the manager, importer, title or New map dialog holds the word |
 | `utils/library/library_importer.gd` | `LibraryImporter` | (S6, no scene tree) `inspect(path)` judges a `.ttlib`/`.zip` or a folder BEFORE anything is written (the caps, extensions, portable names, links, encrypted entries, case twins, ratio), `stage(plan, progress)` extracts or copies into the quarantine `<libraries>/.incoming/<random>/` (a worker-thread-safe call with a `Progress` for the bar and Cancel), `is_candidate(path)` sniffs a drop, `sweep_incoming`, `discard`, `limits` (a test can lower them) |
 | `utils/library/library_install.gd` | `LibraryInstall` | (S6) `examine(folder)` reads a staged folder with `LibraryReader` and compiles it in a dry run through the libraries installed, giving the install card (identity, size, counts, dependencies with their state, warnings, the relation to an installed copy, reserved ids); `install(card, replace)` moves it into `<libraries>/<id>/`; `remove(id)`; `levels_using(id, levels_dir)` (a lazy scan of the saved maps' manifests with `MapDocumentIO.peek_libraries`) |
@@ -54,7 +55,7 @@ class, seasons, count, pin, lock files) and the biome designer, [biome_designer.
 | `scenes/ui/library_manager/` | `LibraryManager`, `LibraryDetail`, `LibraryInstallCard`, `LibraryImportFlow` | (S6) The sheet (list at the left, the selected library's card at the right, Import file... / Import folder... / Done), its card, the install sheet and the one flow behind the picker, the folder picker and a drop (inspect, stage on a worker thread, examine, ask, install, `refresh_all`). All built in code |
 | `utils/zip_entry_sizes.gd` | `ZipEntrySizes` | (S6) Gained `read_directory` and `parse_central_records` (flags, method, attributes, sizes) beside the sizes the map reader uses |
 | `tools/compile_library_cli.gd` | | Headless: prints or writes the compiled palette JSON of a library folder, or `--contract <file>` |
-| `tools/render_jobs/driver.gd`, `jobs/library_s1_savanna.json` | op `library_dev` | Sets the override for a run and rebuilds the open map |
+| `tools/render_jobs/driver.gd` | op `library_dev` | Sets the override for a run and rebuilds the open map |
 | `tests/fixtures/library_savanna/`, `library_savanna_compiled.json`, `library_mini/` | | The savanna JSON (no GLBs) with its frozen compiled golden; a three-asset, two-rule library |
 
 ## Model
@@ -109,9 +110,10 @@ class, seasons, count, pin, lock files) and the biome designer, [biome_designer.
   a store under the data root, so a GUT run and a `--data-root` run see an empty one) then the developer
   override (`[library] dev_path`, laid over everything and replacing biomes of the same runtime
   id, as it always did). A folder of an official or user library must be named after its id; a
-  folder starting with a dot (an import in progress) is not scanned. `core` is BUILT IN until it
-  ships as `res://libraries/core`: the installed palette provides it, version
-  `LibraryRegistry.BUILTIN_VERSION`, so `core: ^1.0` is met on a game with no core folder.
+  folder starting with a dot (an import in progress) is not scanned. `core` is the folder
+  `res://libraries/core` (S10; "The core library" below): there is no built-in core any more and
+  `LibraryRegistry.BUILTIN_VERSION` is gone, so `core: ^1.0` is met by that folder and fails like
+  any missing dependency without it. The listing skips `*.import` editor sidecars.
   `LibraryResolver` (pure) decides, and a library that cannot be served is an entry with status
   `error` and `reasons`, never a crash:
   - duplicate ids: an official library beats a user one, among user libraries the folder name
@@ -122,15 +124,14 @@ class, seasons, count, pin, lock files) and the biome designer, [biome_designer.
     most 4 deep, no cycles, at most 16 libraries active;
   - load order: dependencies first, core first, then by id, the developer override last; each
     library is compiled with its dependencies' catalogs and surfaces, then laid over the palette
-    (`PaletteOverlay.read_palette` in its `lazy` form, which reads no GLB).
+    (`LibraryLayer.lay`, which reads no GLB).
 - **Cross-library refs (S4).** A query ref may be `<library id>:<local id>` naming an asset of a
   declared dependency (through that library's `aliases`; a `retired` id is skipped with a
   warning). The asset takes the local id `<library id>__<local id>` in the biome's asset ids
   (`<runtime biome>/core__Tree_Oak_v0`, still one slash) and its GLB stays in the dependency's
   folder (`AssetStore.library_of` says `core`). `lib://<library id>/<surface>` resolves the same
   way for a surface of a dependency. A ref or surface of a library that is not a declared
-  dependency is skipped with a warning. The built-in core has no catalog yet, so a `core:` ref
-  needs `core` to be a folder.
+  dependency is skipped with a warning. A `core:` ref resolves through core's real catalog.
 - **Enabling (S4).** `[library] disabled` in settings.cfg lists the ids the user turned off (all
   are on by default; `core` cannot be turned off). `LibraryRegistry.set_enabled(id, on)`
   persists it; a library that needs a disabled one is an error that says so. It takes effect at
@@ -151,23 +152,22 @@ class, seasons, count, pin, lock files) and the biome designer, [biome_designer.
   (`{water: ""|"bank"|"emergent"|"arid", charred: bool}`: the role's habit with the rule's own
   flags over it, present whenever the rule has a role or a habit) and `weight` (0 to 1000); a
   bad value warns and is dropped, an absent one never warns, and a rule with none of the three
-  (treecube's palette, plantgen's package) is unchanged byte for byte. `library` is still
+  (a hand-built test palette) is unchanged byte for byte. `library` is still
   dropped silently: S4 reads the owning library from the id's prefix instead
   (`LibraryIds.library_of`), so the validator did not need to learn it.
-- **Habit.** `ScatterGround.plan_role` reads `habit_of(rule)`: the rule's `habit`, else the
-  LEGACY lists of `LegacyHabit` (keys of reeds, willows and snags, kind `cactus`). The lists stay
-  for legacy palettes only; a library rule never needs them. `test_legacy_habit.gd` pins that
-  the fallback, an explicit habit built from `LegacyHabit.for_key` and the pre-S2 algorithm give
-  the same role for every rule of the nine built-in biomes. The roles table is authoritative at
-  compile: a rule that omits `kind`, `size_class`, `align` or `habit` takes its role's.
+- **Habit.** `ScatterGround.plan_role` reads `habit_of(rule)`: the rule's `habit`, else NO habit
+  (neutral: not a bank or emergent plant, not arid, not charred). The legacy key and kind lists
+  (`LegacyHabit`) were deleted at S10; `test_rule_habit.gd` pins that every rule of the nine
+  shipped biomes carries an explicit habit that plans the role the lists gave (the lists live on
+  there as reference data). The roles table is authoritative at compile: a rule that omits
+  `kind`, `size_class`, `align` or `habit` takes its role's.
 - **Paths.** Compiled assets keep a library-relative `file` (the palette contract: relative, no
   `..`, no scheme). The absolute file of each asset is `compiled["paths"]`, joined from the
   folder; nothing `path_join`s an absolute second argument (it concatenates, S0 P5).
 - **Merge.** Each compiled biome replaces the palette's biome of the same runtime id together
-  with all its `<id>/` assets (the overlay's rule), so a core `savanna_summer_s1` replaces
-  treecube's. A library's own surfaces are laid into the palette's `surfaces` table too
-  (`PaletteOverlay.read_palette` merges the compiled table over the base's, which it holds
-  unchanged), by name, so a core `ash` replaces treecube's.
+  with all its `<id>/` assets (`LibraryLayer.lay`), so a developer override of core's
+  `savanna_summer_s1` replaces core's. A library's own surfaces are laid into the palette's
+  `surfaces` table too (the compiled table is merged over the base's), by name.
 - **Surfaces (S3).** `surfaces/<name>/{albedo,normal,orm,height}.png` plus `surface.json`
   (`label`, `kind`, `role` ground / cliff / built, `tile_m` 0.001 to 10000 required,
   `albedo_mean_linear` optional). The reader (`SurfaceReader`) checks the folder: names
@@ -185,13 +185,15 @@ class, seasons, count, pin, lock files) and the biome designer, [biome_designer.
   / `ref_of`), not a registered scheme: the palette itself stores runtime names, and every
   `SurfaceStore` entry point and `GroundPalette` surface lookup takes either form.
 - **SurfaceStore.** A legacy palette path (`surfaces/ash/ash_albedo.png` under the root) is
-  ResourceLoader's editor-imported texture, unchanged. A library surface's palette entry holds
+  ResourceLoader's editor-imported texture, unchanged (only a test fixture has one since S10).
+  A library surface's palette entry holds
   `surfaces/<runtime name>/<map>.png` (unique per library, so two libraries' `crystal` never
   collide and the validator's relative-path rule holds); `LibraryRegistry.apply` registers them
-  (`SurfaceStore.register_library`) and the store resolves the path to the library file: an
-  editor import when the file is a `res://` file that has one (`ResourceLoader.exists(file,
-  "Texture2D")`, the pack's `core`), else `Image.load_from_file`, a bake to the formats the import
-  gives the installed surfaces, a memory cache and the raw disk cache. Formats (measured on 4.7.2
+  (`SurfaceStore.register_library`) and the store resolves the path to the library file with
+  `Image.load_png_from_buffer` over the file's bytes (core's PNGs are raw `importer="keep"` files in the pack; a library file
+  is never loaded as a resource), a bake to the formats the import gave the retired installed
+  surfaces, a memory cache and the raw disk cache (`user://library_cache`, about 170 MB once all
+  36 core surfaces have been baked: the maps are BC7, BC5, BC1 and L8 at 1024 px). Formats (measured on 4.7.2
   against ash, cliff and grass_savanna, `test_surface_store.gd`): albedo BPTC (BC7, format 22,
   from sRGB), normal RGTC (BC5, 21, renormalised mips), ORM S3TC (BC1, 17, from RGB: the S0
   probe's GENERIC source picks RG for an ORM with no blue), height L8 (0); every map with the
@@ -219,7 +221,8 @@ class, seasons, count, pin, lock files) and the biome designer, [biome_designer.
   that binds nothing, behaves as it did. Converted: `FireSweep.plan_for` and
   `FireEditor.forest_slots` (ash, fallback, burnt biome), `AuthoredCrossings` (planks, moss,
   gravel, stone default, paving default), `AuthoringPanel` (the Paint tool's first surface, labels:
-  `SurfaceStore.label_of` reads surface.json `label` before the legacy `SURFACE_LABELS`),
+  `SurfaceStore.label_of` reads surface.json `label`, else the id spelled out; the legacy
+  `SURFACE_LABELS` table was deleted at S10 and is frozen in `test_library_core_surfaces.gd`),
   `EventsPane`, `GroundPalette.base_water_surfaces` and `NewMapDialog._initial_biome`. The legacy
   constants stay beside them as the documented defaults. NOT converted (other steps' files):
   `ScatterGround.SCORCHED_SURFACES` and `scatter_native.gd` (ash under a fire), and
@@ -229,14 +232,15 @@ class, seasons, count, pin, lock files) and the biome designer, [biome_designer.
 - **AssetStore (S4).** A served library's assets are registered (`register_library`: the
   absolute GLB, the node, the catalog's `sha256` and `bytes`, whether the library is official)
   and nothing is read. `PaletteLibrary._source_mesh` asks `AssetStore.mesh_for` for an id the
-  store serves and loads the built-in palette as before for any other; `resolve()` still hands
+  store serves and loads a plain palette's GLB as before for any other (test palettes);
+  `resolve()` still hands
   out a duplicate, and the scatter build still applies `WindFoliage.apply_material` to it, so a
   library material only ever draws with the game's own shaders (glTF cannot carry one;
   `AssetStore.sanitize` makes sure and `instance()` does the dressing for a direct caller). On
   the first ask the file's bytes are read once (64 MiB cap), `GlbGuard.inspect` checks the
   container, refuses any `uri` and reads every embedded PNG or JPEG's size from its header (at
   most 64 images, 4096 px a side, 32M pixels in all) BEFORE GLTFDocument decodes anything, then
-  the mesh is parsed with compression off (`PaletteOverlay.FORCE_DISABLE_COMPRESSION`, from a
+  the mesh is parsed with compression off (`AssetStore.FORCE_DISABLE_COMPRESSION`, from a
   buffer, never `ResourceLoader`). A library that is not official must also match the catalog's
   `sha256` and `bytes`, else the asset is refused with a warning once and the refusal is
   cached; the others of that library still load. Official libraries are not hashed on load
@@ -284,12 +288,59 @@ class, seasons, count, pin, lock files) and the biome designer, [biome_designer.
   or `preload()`, and `AssetStore` never uses `ResourceLoader` (a library file is bytes, never a
   resource or a script).
 
-## The core library (S5)
+## The core library (S5, shipped at S10)
 
-Step S5 (2026-10-24) makes `core` the nine-biome library plantgen builds from the sources repo
-`D:/dev/tabletop/core-library` (local git, no remote; its README and AGENTS say what it holds). It
-changed nothing in the scatter, ground, water or fire code: the proof is that the library route
-reads and places exactly like the package route (Verification, "Step S5 proof").
+Step S5 (2026-10-24) made `core` the nine-biome library plantgen builds from the sources repo
+`D:/dev/tabletop/core-library` (local git, no remote; its README and AGENTS say what it holds).
+Step S10 (2026-10-25) ships it with the game and removes treecube: core is the folder
+`res://libraries/core` (library.json, assets/ with 268 GLBs and catalog.json, biomes/ with the nine
+biome-defs, surfaces/ with 36 sets, thumbnails/ with nine JPGs; 468 files, 175 MB: 34 MB of GLBs,
+136 MB of surface PNGs). It is built by plantgen (`out/lib_core_s10`, `--no-treecube`, its
+`--check-built` clean) and copied in whole; to ship a rebuild replace the folder and re-run the
+import so the sidecars stay constant (see below). Nothing in the scatter, ground, water or fire
+code changed for S5: the proof is that the library route reads and places exactly like the package
+route (Verification, "Step S5 proof"), now frozen as `tests/fixtures/library_core_golden.json`.
+
+- **Route K (how the files ship).** Every PNG, GLB and JPG under `libraries/core/` has a constant
+  sidecar `<file>.import` holding exactly `[remap]`, a blank line and `importer="keep"`: the
+  editor does not import the file, an export stores the RAW file in the pack and stores no
+  sidecar. One loader path then serves core, user libraries and the developer override
+  (`FileAccess`, `Image.load_png_from_buffer`, `GLTFDocument.append_from_buffer`; never `ResourceLoader` and not `Image.load_from_file`, which warns once for a keep file in the editor,
+  which answers false for a keep file in a pack and errors in the editor). Verified 2026-10-25 with
+  a real `godot --headless --export-pack "Windows Desktop"` (no templates; the presets exclude
+  only tests, tools, docs and addons, so `libraries/` ships): a 254 MB pack that holds
+  `libraries/core/library.json`, all GLBs, PNGs and JPGs raw and no `.import` entry, no
+  `assets/palette`; run with `--main-pack` plus the engine's own extension DLLs beside it, a probe
+  scene saw `FoliageLibrary.apply()` serve 9 biomes, 288 palette assets (268 library assets; the
+  shared stems repeat per biome) and 36 surfaces with no warning in 109 ms, resolve every one of
+  the 288 assets to a mesh in 634 ms, `AssetStore.verify` every GLB's sha256 against the catalog
+  with 0 failures, bake a surface and read a thumbnail, and `compile_folder` the folder clean.
+  `LibraryRegistry` skips `*.import` when it lists a folder (the editor run shows them, the pack
+  does not). `.gitattributes` keeps `libraries/core/**/*.glb`, `*.png` and `*.jpg` in LFS; the
+  JSON files and the sidecars are plain git. The surfaces are the SAME bytes as the retired
+  `assets/palette` ones, so they dedupe in LFS.
+- **Official by location, no built-in core.** `LibraryRegistry` scans `res://libraries` first: a
+  folder there is OFFICIAL (never read from the file), listed in the manager as "Built in", with
+  no Remove and a switch that cannot turn it off; `core` is the first in load order and what
+  `core: ^1.0` dependencies resolve against. `LibraryRegistry.BUILTIN_VERSION`, the built-in info
+  entry and the resolver's `builtin` parameter are gone: a game without `libraries/core` serves
+  nothing, and a library that needs `core` is an error like any missing dependency. A `core:` ref
+  resolves through the real catalog. The New map default biome, the Paint default, the fire's ash
+  and the crossings' surfaces read `library.json` (`default_biome` and `bindings`) through
+  `LibraryBindings`; the legacy values stay as its defaults for a game with no library.
+- **Maps saved under treecube asset ids (documented behaviour).** There are no users and no
+  compatibility work. A saved map keeps the biome painting and the seed its scatter came from;
+  core keeps the runtime biome ids the treecube palette had (`savanna_summer_s1`), so on load
+  `FoliageLibrary.adapt_async` finds scatter rows naming assets no library serves, regenerates the
+  rows from the painting under core and says so once ("scatter rebuilt from the biome painting").
+  Hand-placed props whose assets are gone are counted and skipped by the build, as for any asset
+  a build lacks; a painting that names a biome no library serves regenerates nothing and the map
+  draws no plants there. Nothing crashes: the missing ids take the existing skip paths
+  (`PaletteLibrary.resolve` warns once per id). `test_foliage_library.gd` pins all three cases.
+  The `[foliage]` keys of `settings.cfg` (`library`, `package_path`) are dead: nothing reads
+  them and the file is left alone.
+
+Facts of the S5 build (still true of the shipped folder):
 
 - **Asset ids.** The game profile tones one stem differently per biome, so a library asset id
   must be unique and its bytes fixed. A package stem whose GLB bytes are identical in every biome
@@ -321,7 +372,8 @@ reads and places exactly like the package route (Verification, "Step S5 proof").
 - **Thumbnails.** `thumbnails/<local biome id>.jpg` (512 px, the installed treecube renders,
   byte-identical) named by the biome-def's `thumbnail`; the compiler serves each as
   `thumbnails/<runtime id>.jpg`, the path the palette already used, through `SurfaceStore`
-  (`is_library_thumbnail`). S10 decides whether they are re-rendered.
+  (`is_library_thumbnail`). At S10 the shipped JPGs stay the treecube renders (re-rendering them
+  from the plantgen look is a later decision).
 - **Catalog `roles`.** plantgen's catalog entries carry `roles` (the contract roles of the
   rules that use the asset); `LibraryContracts.CATALOG_ENTRY_KEYS` knows the key, so the nine
   biomes read with no warnings.
@@ -329,24 +381,26 @@ reads and places exactly like the package route (Verification, "Step S5 proof").
 ## Runtime
 
 Nothing is served unless something is installed: with no `res://libraries/*`, no
-`user://libraries/*` and no dev override the registry changes nothing. `FoliageLibrary.apply()` /
-`switch()` clear the caches, lay the plantgen package when chosen, then call
-`LibraryRegistry.apply(root)`: scan the roots, read every folder (`LibraryReader`), resolve
-(`LibraryResolver`), and for each servable library in load order compile it through its
-dependencies, lay it with `PaletteOverlay.read_palette(..., lazy)` and
-`PaletteLibrary.install_overlay` (the same cache install; no GLB is parsed now, `AssetStore`
-parses on first use), then register its assets, surfaces, thumbnails and (core and the developer
-override only) bindings. `FoliageLibrary.apply_saved()` does this at start-up when
-`LibraryRegistry.discoverable()`. A library that does not read, resolve or compile changes no
-cache and is an entry in `LibraryRegistry.list()` with status `error` and its reasons
-(`result["errors"]`, a `push_warning` per line from the foliage library); only a developer
-override that cannot be served makes `result["ok"]` false. The map rebuilds on
-`EventBus.foliage_library_changed` as for the plantgen switch; two switches in quick succession
-leave the first one's rows (a pre-existing property of `FoliageLibrary.switch`; the job waits
-with `wait_ready` between them). A switch keeps an open map's BAKED rows: a rule that changed
-(S12a found this) only shows in a map built, or a cell regenerated, after the switch, so a job
-that compares two libraries on one terrain builds the map again under each (`landform.gd new`
-with the same seed), as `library_s12a_terrain.json` does. Settings: `[library] dev_path` (the override), `[library]
+`user://libraries/*` and no dev override the registry serves nothing and the palette is empty
+(no warning storm: the shipped game always has `libraries/core`). The palette at
+`PaletteLibrary.DEFAULT_ROOT` (`res://libraries`, a virtual root: no folder of that name holds a
+palette.json) is filled by the first read of it (`PaletteLibrary.get_palette` calls
+`LibraryRegistry.apply`) or by `FoliageLibrary.apply()` / `apply_saved()` at start-up. `apply(root)`
+scans the roots, reads every folder (`LibraryReader`), resolves (`LibraryResolver`), and for each
+servable library in load order compiles it through its dependencies, lays it with
+`LibraryLayer.lay` and `PaletteLibrary.install_overlay` (no GLB is parsed now, `AssetStore` parses
+on first use), then registers its assets, surfaces, thumbnails and (core and the developer
+override only) bindings. It clears only the registrations of the root it serves
+(`AssetStore.clear_root`, `SurfaceStore.clear_libraries_of`), so the first read of the default
+palette by incidental code does not wipe what a scratch root (a test, a tool) has laid. A library
+that does not read, resolve or compile changes no cache and is an entry in
+`LibraryRegistry.list()` with status `error` and its reasons (`result["errors"]`, a
+`push_warning` per line); only a developer override that cannot be served makes `result["ok"]`
+false. The map rebuilds on `EventBus.foliage_library_changed` (`FoliageLibrary.refresh_libraries()`
+emits it). A refresh keeps an open map's BAKED rows: a rule that changed (S12a found this) only
+shows in a map built, or a cell regenerated, after it, so a job that compares two libraries on
+one terrain builds the map again under each (`landform.gd new` with the same seed), as
+`library_s12a_terrain.json` does. Settings: `[library] dev_path` (the override), `[library]
 disabled` (a list of ids). The `compile_library_cli` and `LibraryRegistry.compile_folder` compile
 one folder alone, without dependencies.
 
@@ -449,8 +503,8 @@ the biome designer ([biome_designer.md](biome_designer.md), step S8a; S9 follows
   it so the library can be added and the map opened again.
 - **The sheet** (`LibraryManager`, 960 wide, the manager's own scrim, shared with a dialog under
   it: one scrim, UI_TASTE G1). The list at the left, one row per `LibraryRegistry.list()` entry
-  (the built-in core first): name, version and author, "2 assets, 1 biome · 5 KB" (or, for a
-  library that fails, the first reason, with a mark), an Official / Yours / Built in chip and an
+  (core first): name, version and author, "2 assets, 1 biome · 5 KB" (or, for a
+  library that fails, the first reason, with a mark), a Built in (official) / Yours / From host chip and an
   on switch (core and a developer override cannot be switched off; a library that needs a
   switched-off one fails and says so). The card at the right (`LibraryDetail`): heading, version,
   author and licence, the origin and state chips (On, Off, Needs attention), the description,
@@ -475,7 +529,8 @@ the biome designer ([biome_designer.md](biome_designer.md), step S8a; S9 follows
 - **Verify** hashes every GLB of the selected library against the catalog's `sha256` and `bytes`
   and runs `GlbGuard` over it (`AssetStore.verify`, also for an official library), 6 ms of
   work a frame with a bar, Stop and a line per failing file. A library that is off or failing has
-  nothing registered, so it says to turn it on first; the built-in core ships inside the game.
+  nothing registered, so it says to turn it on first. Core is verified like any other library (its
+  GLBs are files of the pack).
 - **Importing** (design 5.5), all of it in `LibraryImporter` and `LibraryInstall`, which have no
   scene tree and are tested with generated zips (`test_library_importer.gd`):
   1. `inspect` reads the zip's central directory (`ZipEntrySizes.read_directory`, which already
@@ -597,9 +652,10 @@ the biome designer ([biome_designer.md](biome_designer.md), step S8a; S9 follows
 
 - Unit tests: `test_library_ids.gd` (grammar, runtime ids, portable names),
   `test_library_contracts.gd` (S2: roles, habit flags, caps against the palette limits, the
-  `export_json` round trip with `legacy_habit`), `test_legacy_habit.gd` (S2: identical plan roles
-  by fallback and by habit for every built-in rule, the rule's habit beating the lists, the
-  validator's `role`/`habit`/`weight` whitelist), `test_library_reader.gd` (the miniature library reads clean; malformed and hostile
+  `export_json` round trip, now with `bindings` and `surface_caps` and without `legacy_habit`),
+  `test_rule_habit.gd` (S2, renamed at S10: every shipped rule's explicit habit plans the role the
+  retired key lists gave, a rule with no habit has none, the rule's habit decides, the validator's
+  `role`/`habit`/`weight` whitelist), `test_library_reader.gd` (the miniature library reads clean; malformed and hostile
   files: unknown keys, newer versions, reserved ids and names, case duplicates, missing and
   wrong-case files, bad roles and numbers, caps), `test_library_compile.gd` (the savanna golden
   with zero `validate_palette` warnings, the mini library under a prefix, role defaults and role
@@ -655,6 +711,20 @@ godot --path D:/dev/tabletop/tt-sim --windowed --resolution 1920x1080 --position
   square, against both `lib_slice_pkg` and the stable `ttsim_package_plantgen_all`); the render
   job's package and library captures (home and size 14) are pixel-identical (mean absolute
   difference 0.000 of 255).
+- Step S10 proof (2026-10-25): the shipped `res://libraries/core` is the rebuilt library
+  (`out/lib_core_s10`, trimmed meshes, built from the package `out/lib_core_pkg2`). Before the
+  overlay code was deleted, `test_library_row_parity` (env vars set to those two folders) passed
+  against it (nine biomes, 2074 checks), and the package route's snapshot was frozen into
+  `tests/fixtures/library_core_golden.json` (biome fields, rule texts, plan roles, rows at seed
+  1234 as `count:md5`, assets table, all by package stem). The test now needs no plantgen folder:
+  it serves the shipped core and compares it to the golden, mapped back through the catalog's
+  `package_stem` (2061 checks; the digests are Windows' bytes). Rows per biome over the 32 m
+  square: alpine meadow 6196, birch woodland 3486, boreal taiga 2228, burnt forest 347, grassland
+  meadow 9875, rocky badlands 1117, savanna 4196, temperate forest 4418, wetland riparian 7470.
+  `scatter_golden_1234.json` was re-pinned from the shipped core. Render jobs `core_nine_biomes`
+  (all nine biomes, home and size 14) and `library_s5_surfaces` (now one route) were read by eye.
+  What follows is the S5 record, kept for history (its commands need the plantgen folders and
+  the retired overlay code).
 - Step S5 proof (2026-10-24, plantgen `out/lib_core` built from `out/lib_core_pkg`, the nine
   biomes, 121 rules, 268 library assets, 288 palette assets, 36 surfaces):
 
@@ -791,29 +861,33 @@ worker thread and the examine step (a compile) runs on the main thread, which is
 library of hundreds of assets and not measured past that; the manager does not list what a
 failing library's dependents are; the title's Collections tool has no capture in the UI tour yet.
 Left over from S4: the authoring panel's Biomes field, which still
-lists every biome of every library in one grid without headers; (multiplayer, done: see
-"Multiplayer"; left: the manager's "partial: received from host" badge, which reads `partial` and
-`received` from `list()`, and routing Keep through the importer); the built-in
-`core` cannot be the target of a `core:` ref until it ships as a folder (S5 and S10); a map
-opened "without those plants" keeps the painting of the missing library's areas but regenerates
-no plants there (regeneration is offered, not automatic, because it discards scatter hand
-edits). A library GLB is parsed exactly as the S1 route parsed it (compression off; the
-installed counterpart `PaletteOverlay.compressed_like` looked up had no file at the library's
-own relative path), so the S1 parity holds in kind; re-run `jobs/library_s1_savanna.json` when
-core moves into `res://libraries`. Left over for S10 (ship `core`, leave treecube): copy
-plantgen's `out/lib_core` (170 MB: 35 MB of GLB, 135 MB of surfaces, 468 files) into
-`res://libraries/core` by route K or R of the design (the surfaces are Git LFS in the sources
-repo, and `core` then needs `LibraryRegistry.BUILTIN_VERSION` retired); remove `assets/palette`,
-`PaletteOverlay` and the treecube branch of `FoliageLibrary`, the key-list fallbacks, and
-`SURFACE_LABELS` (the labels are in each `surface.json`); decide whether the nine biome
-thumbnails are re-rendered (they are still the 512 px treecube JPGs) and publish
-`LibraryBindings.TABLE` in `contract.json`; maps saved under treecube asset ids regenerate once
-(the library's ids are `<stem>_<biome>` for 208 assets, `AssetStore` and the aliases pass can
-map the old ids if a kept map must keep its plants); re-run the nine-biome row parity and
-`jobs/library_s5_surfaces.json` against the shipped folder.
+lists every biome of every library in one grid without headers; a map opened "without those
+plants" keeps the painting of the missing library's areas but regenerates no plants there
+(regeneration is offered, not automatic, because it discards scatter hand edits). Left over from
+S10 (core shipped, treecube removed): the nine biome thumbnails are still the 512 px treecube
+JPGs (re-render them from the plantgen look); the surface bake runs on first use (about 0.2 s a
+surface on a GPU build, the maps a map uses; the cache then lives in `user://library_cache`, about
+170 MB for all 36 surfaces) and the release could ship the baked cache (`SurfaceCache` is plain
+bytes) to skip it; `settings.cfg` `[foliage]` keys are dead and left in the user's files; the
+`core` library carries `license: TBD` from its sources (the owner decides); `contract.json` in
+plantgen is regenerated by `compile_library_cli --contract` (uncommitted there).
 
 ## History
 
+- 2026-10-25: step S10, off treecube: `res://libraries/core` ships (route K, see "The core
+  library"), `assets/palette` (160 MB: 384 LFS files, the imported palette), `PaletteOverlay`,
+  `PaletteLibrary.overlay_package`, `LegacyHabit` and the scatter key lists, the
+  `AuthoringPanel.SURFACE_LABELS` table, `LibraryRegistry.BUILTIN_VERSION` and the built-in core
+  entry, the resolver's built-in provider, the `[foliage]` package switch with its F3 checkbox and
+  the render ops `palette_overlay`, the treecube half of `foliage_library` and the plantgen A/B
+  jobs are deleted. `LibraryLayer` holds the merge, `FoliageLibrary` serves and adapts,
+  `contract.json` publishes `bindings` and `surface_caps` (and no longer `legacy_habit`), and
+  `LibraryReceivedStore.promote` (Keep) goes through `LibraryImporter` (inspect, stage in the
+  quarantine) and `LibraryInstall` (examine, install). Tests: deleted `test_palette_overlay.gd`
+  (it pinned the overlay's byte-compare and compressed-like logic); rewritten
+  `test_palette_builtin.gd`, `test_library_core_surfaces.gd`, `test_library_row_parity.gd`
+  (golden), `test_foliage_library.gd`, `test_rule_habit.gd` (was `test_legacy_habit.gd`);
+  migrated asset ids and surface paths in 25 more.
 - 2026-10-25: step S8a: `LibraryQuery` (the query clauses of design doc 2.6.3 with goldens: the nine
   biomes' rows stay byte-identical), lock files (`biomes/<id>.lock.json`, read by the reader and
   compiler, part of the library hash), `LibraryContracts.QUERY_*` (also in `contract.json` under

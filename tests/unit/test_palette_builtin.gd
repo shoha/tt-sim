@@ -1,70 +1,28 @@
 extends GutTest
 
-## The seam check for the real built-in palette: treecube's committed output under
-## res://assets/palette (docs/ASSET_PIPELINE.md section 9) loaded through PaletteLibrary
-## with its default root, the first committed golden fixture from a producer (section 8).
-## test_palette_library.gd covers the loader's rules against a synthetic palette; this
-## file fails when a palette refresh breaks what tt-sim relies on.
+## The seam check for the SHIPPED palette: the core library under res://libraries/core (built by
+## plantgen, docs/systems/library.md "The core library") served through PaletteLibrary with its
+## default root. Since step S10 (2026-10-25) this replaces the check of treecube's committed
+## palette (assets/palette and its editor-import sidecars, retired). test_palette_library.gd covers
+## the loader's rules against a synthetic palette; this file fails when a core rebuild breaks what
+## tt-sim relies on: the counts, the roles, the sidecars that ship the raw files in the pack, and
+## every asset resolving with its wind data.
 ##
-## Headless CI has no GPU, so everything here asserts on structure (meshes, vertex
-## colour arrays, harvested material parameters, chunk nodes), never on pixels. CI
-## imports the project before running tests, so the imported resources exist there.
+## Headless CI has no GPU, so everything here asserts on structure (meshes, vertex colour arrays,
+## harvested material parameters, chunk nodes), never on pixels.
 
-## Palette v7 (2026-10-10) adds the fire entries (section 9 "Fire"): the burnt_forest
-## biome, listed last, and the ash ground surface. treecube 1c05fb0 (2026-10-13) adds three
-## ground surfaces: grass_meadow, grass_forest and grass_birch. The ground ship (treecube
-## 020bbdc, 2026-10-15) adds seven: dirt_mud, dirt_opening, forest_floor_litter, grass_glade,
-## grass_wetland, gravel_scree and sand_savanna.
+const CORE_FOLDER := "res://libraries/core"
 const BIOME_COUNT := 9
+const ASSET_COUNT := 268
+## The palette lists an asset once per biome that places it (shared stems appear several times).
+const PALETTE_ASSET_COUNT := 288
 const SURFACE_COUNT := 36
-## Surfaces per role (section 9 "Surface role"); the rest of SURFACE_COUNT is ground.
+## Surfaces per role; the rest of SURFACE_COUNT is ground.
 const CLIFF_SURFACE_COUNT := 3
 const BUILT_SURFACE_COUNT := 7
 const WIND_CATEGORIES := ["tree", "grass"]
-## Committed surface-map sidecar settings per map (section 9 "Import path"), all
-## mipmapped: albedo BC7 (VRAM, high quality), normal BC5 (VRAM, normal-map flag), ORM
-## BC1 (VRAM, normal quality), height lossless with detect_3d off so an editor session
-## cannot silently switch it to VRAM compression. A new surface whose sidecar Godot
-## generated with defaults (lossless, no mipmaps) fails here.
-const SURFACE_IMPORT_PARAMS := {
-	"albedo":
-	{
-		"compress/mode": 2,
-		"compress/high_quality": true,
-		"compress/normal_map": 0,
-		"mipmaps/generate": true,
-	},
-	"normal":
-	{
-		"compress/mode": 2,
-		"compress/high_quality": false,
-		"compress/normal_map": 1,
-		"mipmaps/generate": true,
-	},
-	"orm":
-	{
-		"compress/mode": 2,
-		"compress/high_quality": false,
-		"compress/normal_map": 0,
-		"mipmaps/generate": true,
-	},
-	"height":
-	{
-		"compress/mode": 0,
-		"detect_3d/compress_to": 0,
-		"mipmaps/generate": true,
-	},
-}
-## Sidecar settings the export path depends on (section 9 "Import path"). A palette
-## refresh that drops the committed .import files falls back to Godot's defaults, which
-## extract every embedded texture next to the GLB as a mipmapped PNG (small flowers fade
-## at game scale) and generate LODs that decimate leaf cards. 3 is "Embed as
-## Uncompressed": the textures match the runtime GLTFDocument load pixel for pixel.
-const GLB_IMPORT_PARAMS := {
-	"gltf/embedded_image_handling": 3,
-	"meshes/generate_lods": false,
-	"meshes/create_shadow_meshes": false,
-}
+## The constant sidecar beside every PNG, GLB and JPG of the folder: the raw file ships in the pack.
+const KEEP_SIDECAR := '[remap]\n\nimporter="keep"\n'
 
 
 func before_all() -> void:
@@ -86,26 +44,58 @@ func _rows(count: int, spacing: float) -> Array:
 	return rows
 
 
-func test_the_palette_loads_without_warnings() -> void:
+## Every file of `folder` (a res:// path) with extension `extension`, recursively.
+func _files(folder: String, extension: String) -> Array[String]:
+	var out: Array[String] = []
+	for file_name in DirAccess.get_files_at(folder):
+		if file_name.get_extension() == extension:
+			out.append(folder.path_join(file_name))
+	for sub in DirAccess.get_directories_at(folder):
+		out.append_array(_files(folder.path_join(sub), extension))
+	return out
+
+
+func test_the_palette_is_the_served_core_library() -> void:
 	var palette := PaletteLibrary.get_palette()
-	assert_ne(palette["palette_version"], "", "treecube stamps its commit")
 	assert_eq(palette["biomes"].size(), BIOME_COUNT)
+	assert_eq(palette["assets"].size(), PALETTE_ASSET_COUNT)
 	assert_eq(palette["surfaces"].size(), SURFACE_COUNT)
+	assert_eq(LibraryRegistry.served().keys(), ["core"])
+	var core: Dictionary = LibraryRegistry.info("core")
+	assert_eq(core["source"], "official")
+	assert_true(core["official"])
+	assert_eq(core["asset_count"], ASSET_COUNT)
 	# A validation warning is a push_warning, which GUT fails as an unexpected error.
 
 
-## The fire entries tt-sim may assume from this palette on (section 9 "Fire"): an ash
-## ground surface and the burnt forest as the last biome, on that ash, so adding it moved
-## no existing biome index.
+func test_core_is_a_folder_with_no_palette_json_and_the_default_root_is_virtual() -> void:
+	assert_true(FileAccess.file_exists(CORE_FOLDER.path_join("library.json")))
+	assert_false(FileAccess.file_exists(PaletteLibrary.DEFAULT_ROOT.path_join("palette.json")))
+	assert_false(DirAccess.dir_exists_absolute("res://assets/palette"), "treecube's palette is gone")
+
+
+func test_every_png_glb_and_jpg_ships_raw_through_a_constant_keep_sidecar() -> void:
+	var checked := 0
+	for extension in ["png", "glb", "jpg"]:
+		for path in _files(CORE_FOLDER, extension):
+			assert_eq(
+				FileAccess.get_file_as_string(path + ".import"), KEEP_SIDECAR, path + ".import"
+			)
+			checked += 1
+	assert_gt(checked, 400, "268 GLBs, 144 surface maps and 9 thumbnails")
+	for sidecar in _files(CORE_FOLDER, "import"):
+		assert_true(FileAccess.file_exists(sidecar.trim_suffix(".import")), sidecar + " has a file")
+
+
 func test_the_fire_entries_are_shipped() -> void:
 	var surfaces := PaletteLibrary.surfaces()
 	assert_true(surfaces.has("ash"), "ash surface")
 	if surfaces.has("ash"):
 		assert_eq(surfaces["ash"].role, "ground")
-	var biomes := PaletteLibrary.biomes()
-	assert_eq(biomes[biomes.size() - 1].id, "burnt_forest_summer_s1", "burnt forest is listed last")
-	assert_eq(biomes[biomes.size() - 1].ground_surface, "ash")
-	assert_eq(biomes[0].id, "alpine_meadow_summer_s1", "the first biome did not move")
+	var burnt := PaletteLibrary.biome("burnt_forest_summer_s1")
+	assert_eq(burnt.get("ground_surface"), "ash")
+	assert_eq(LibraryBindings.fire_burnt_biome(), "burnt_forest")
+	assert_eq(LibraryBindings.fire_ash_surface(), "ash")
 
 
 func test_every_biome_names_a_shipped_ground_surface_and_thumbnail() -> void:
@@ -113,7 +103,8 @@ func test_every_biome_names_a_shipped_ground_surface_and_thumbnail() -> void:
 	for biome in PaletteLibrary.biomes():
 		assert_true(surfaces.has(biome.ground_surface), biome.id)
 		assert_true(
-			ResourceLoader.exists(PaletteLibrary.DEFAULT_ROOT.path_join(biome.thumbnail)), biome.id
+			SurfaceStore.is_library_thumbnail(PaletteLibrary.DEFAULT_ROOT, biome.thumbnail),
+			biome.id
 		)
 		assert_gt(biome.species.size(), 0, biome.id)
 
@@ -130,7 +121,7 @@ func test_surfaces_carry_their_roles() -> void:
 
 
 ## The loader falls back (with a warning GUT fails on) when a biome names a missing or
-## wrong-role surface, so a resolved, role-correct name here is the one palette.json gave.
+## wrong-role surface, so a resolved, role-correct name here is the one the library gave.
 func test_every_biome_resolves_its_cliff_and_scree_surfaces() -> void:
 	var surfaces := PaletteLibrary.surfaces()
 	for biome in PaletteLibrary.biomes():
@@ -144,33 +135,19 @@ func test_every_biome_resolves_its_cliff_and_scree_surfaces() -> void:
 			assert_eq(surfaces[biome.ground_surface].role, "ground", biome.id)
 
 
-## The raw palette.json biome entry for an id, to compare against what the loader kept.
-func _raw_biome(biome_id: String) -> Dictionary:
-	var path := PaletteLibrary.DEFAULT_ROOT.path_join("palette.json")
-	var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
-	for entry in raw["biomes"]:
-		if entry["id"] == biome_id:
-			return entry
-	return {}
-
-
-## Palette v5 gives every biome path surfaces and ground accents (section 9). The loader
-## drops a wrong-role or missing name with a warning GUT fails on; comparing against the
-## raw lists also catches a silently ignored duplicate.
+## Every biome gives path surfaces and ground accents; the loader drops a wrong-role or missing
+## name with a warning GUT fails on.
 func test_every_biome_resolves_its_path_surfaces_and_ground_accents() -> void:
 	var surfaces := PaletteLibrary.surfaces()
 	for biome in PaletteLibrary.biomes():
-		var raw := _raw_biome(biome.id)
 		var paths := PaletteLibrary.path_surfaces(biome.id)
 		assert_gt(paths.size(), 0, "%s path_surfaces" % biome.id)
-		assert_eq(paths.size(), raw.get("path_surfaces", []).size(), "%s paths kept" % biome.id)
 		for surface_name in paths:
 			assert_true(surfaces.has(surface_name), "%s path %s" % [biome.id, surface_name])
 			if surfaces.has(surface_name):
 				assert_eq(surfaces[surface_name].role, "built", "%s %s" % [biome.id, surface_name])
 		var accents := PaletteLibrary.ground_accents(biome.id)
 		assert_gt(accents.size(), 0, "%s ground_accents" % biome.id)
-		assert_eq(accents.size(), raw.get("ground_accents", []).size(), "%s kept" % biome.id)
 		for accent in accents:
 			var surface_name: String = accent.surface
 			var label := "%s accent %s" % [biome.id, surface_name]
@@ -182,34 +159,19 @@ func test_every_biome_resolves_its_path_surfaces_and_ground_accents() -> void:
 			assert_gt(accent.scale_m, 0.0, label)
 
 
-func test_every_surface_map_is_an_imported_texture_with_the_committed_settings() -> void:
+func test_every_surface_map_is_a_raw_png_the_surface_store_can_read() -> void:
 	for surface_name in PaletteLibrary.surfaces():
 		var surface: Dictionary = PaletteLibrary.surfaces()[surface_name]
 		for map_name in PaletteLibrary.SURFACE_MAPS:
-			var path := PaletteLibrary.DEFAULT_ROOT.path_join(surface[map_name])
-			assert_true(ResourceLoader.exists(path, "Texture2D"), path)
-			var sidecar := ConfigFile.new()
-			assert_eq(sidecar.load(path + ".import"), OK, path)
-			var params: Dictionary = SURFACE_IMPORT_PARAMS[map_name]
-			for param in params:
-				assert_eq(sidecar.get_value("params", param), params[param], path + " " + param)
-
-
-func test_every_asset_is_an_editor_import_with_the_committed_settings() -> void:
-	for asset_id in _asset_ids():
-		var path := PaletteLibrary.DEFAULT_ROOT.path_join(PaletteLibrary.asset(asset_id).file)
-		# What an export ships: the imported scene, reachable through ResourceLoader.
-		assert_true(ResourceLoader.exists(path, "PackedScene"), path)
-		var sidecar := ConfigFile.new()
-		assert_eq(sidecar.load(path + ".import"), OK, path)
-		for param in GLB_IMPORT_PARAMS:
-			assert_eq(
-				sidecar.get_value("params", param), GLB_IMPORT_PARAMS[param], path + " " + param
+			assert_true(
+				SurfaceStore.available(PaletteLibrary.DEFAULT_ROOT, String(surface[map_name])),
+				"%s %s" % [surface_name, map_name]
 			)
 
 
-## Every one of the 180 assets: resolves to a mesh, keeps the manifest's wind category,
-## and carries COLOR_0 on every surface exactly when it sways (contract section 5).
+## Every one of the palette's assets: resolves to a mesh, keeps the catalog's wind category, and
+## carries COLOR_0 on every surface when it sways (contract section 5). A still asset (a rock, a
+## log) may carry COLOR_0 too: the wind shader reads the category, not the attribute.
 func test_every_asset_resolves_with_its_manifest_wind_data() -> void:
 	for asset_id in _asset_ids():
 		var template := PaletteLibrary.resolve(asset_id)
@@ -219,10 +181,11 @@ func test_every_asset_resolves_with_its_manifest_wind_data() -> void:
 		var category: String = PaletteLibrary.asset(asset_id).wind_category
 		assert_eq(template.wind_category, category, asset_id)
 		var mesh: Mesh = template.mesh
+		if not category in WIND_CATEGORIES:
+			continue
 		for surface in mesh.get_surface_count():
-			assert_eq(
+			assert_true(
 				WindFoliage.surface_has_vertex_colors(mesh, surface),
-				category in WIND_CATEGORIES,
 				"%s surface %d vertex colours" % [asset_id, surface]
 			)
 
@@ -254,7 +217,7 @@ func test_one_species_per_biome_builds_chunks_with_a_full_harvest() -> void:
 			assert_not_null(material, asset_id)
 			if material == null:
 				continue
+			# Leaf cards carry no ORM map (only bark does), so only the albedo is required.
 			assert_not_null(material.get_shader_parameter("albedo_texture"), asset_id)
-			assert_not_null(material.get_shader_parameter("orm_texture"), asset_id)
 			assert_true(material.get_shader_parameter("use_vertex_wind"), asset_id)
 	level.free()

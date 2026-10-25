@@ -1,0 +1,950 @@
+{
+	"climate": "dry",
+	"format": "ttsim-biome",
+	"format_version": 1,
+	"ground": {
+		"accents": [
+			{
+				"coverage": 0.12,
+				"scale_m": 5,
+				"surface": "gravel_sandstone"
+			}
+		],
+		"cliff": "cliff_sandstone",
+		"paths": [
+			"dirt_road_caliche",
+			"flagstone_sandstone",
+			"planks"
+		],
+		"scree": "gravel_sandstone",
+		"shore": "gravel_sandstone",
+		"surface": "sand_red",
+		"water_bed": "gravel_sandstone"
+	},
+	"id": "rocky_badlands",
+	"name": "Rocky Badlands",
+	"rules": [
+		{
+			"align": "upright",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.00225,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "dead",
+			"near": [],
+			"pattern": null,
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Tree_DeadTree_v0_rocky_badlands"
+					},
+					{
+						"ref": "Tree_DeadTree_v1_rocky_badlands"
+					},
+					{
+						"ref": "Tree_DeadTree_v2_rocky_badlands"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "snag",
+			"scale_floor": null,
+			"scale_spread": 0.15,
+			"size_class": "large",
+			"slope_max_deg": 35,
+			"spacing_m": 4.5,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "upright",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.00075,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "acacia",
+			"near": [],
+			"pattern": null,
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Tree_Acacia_v0"
+					},
+					{
+						"ref": "Tree_Acacia_v1"
+					},
+					{
+						"ref": "Tree_Acacia_v2"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "canopy_tree",
+			"scale_floor": null,
+			"scale_spread": 0.15,
+			"size_class": "large",
+			"slope_max_deg": 35,
+			"spacing_m": 4.5,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.0342857142857143,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "boulder",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": false,
+					"scale_influence": 0,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 133,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Rock_Boulder_summer_02_rocky_badlands"
+					},
+					{
+						"ref": "Rock_Boulder_summer_03_rocky_badlands"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "boulder",
+			"scale_floor": null,
+			"scale_spread": 0.2,
+			"size_class": "medium",
+			"slope_max_deg": 40,
+			"spacing_m": 2,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "upright",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.00857142857142857,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "shrub",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": false,
+					"scale_influence": 0,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 134,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Bush_DeadShrub_v0"
+					},
+					{
+						"ref": "Bush_Bush_v0_rocky_badlands"
+					},
+					{
+						"ref": "Bush_DeadShrub_v1_rocky_badlands"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "shrub",
+			"scale_floor": null,
+			"scale_spread": 0.2,
+			"size_class": "medium",
+			"slope_max_deg": 40,
+			"spacing_m": 2,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "upright",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.0171428571428571,
+			"habit": {
+				"charred": false,
+				"water": "arid"
+			},
+			"key": "saguaro",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": false,
+					"scale_influence": 0,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 135,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Tree_Cactus_v0"
+					},
+					{
+						"ref": "Tree_Cactus_v1"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "cactus_tall",
+			"scale_floor": null,
+			"scale_spread": 0.2,
+			"size_class": "medium",
+			"slope_max_deg": 40,
+			"spacing_m": 2,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.25,
+				"parents_per_m2": 0.05,
+				"radius_m": 1.2,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 0.072,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "rock",
+			"near": [
+				{
+					"distance_m": 3,
+					"influence": 0.6,
+					"rule": "boulder",
+					"transition_m": 2.5
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 15,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 136,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0.15
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Rock_Medium_summer_07_rocky_badlands"
+					},
+					{
+						"ref": "Rock_Medium_summer_08_rocky_badlands"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "rock",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "small",
+			"slope_max_deg": 55,
+			"spacing_m": 0.25,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.25,
+				"parents_per_m2": 0.05,
+				"radius_m": 1.2,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 0.072,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "stones",
+			"near": [
+				{
+					"distance_m": 2.5,
+					"influence": 0.6,
+					"rule": "boulder",
+					"transition_m": 2
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 15,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 137,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0.15
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Stone_Cluster_summer_09_rocky_badlands"
+					},
+					{
+						"ref": "Stone_Cluster_summer_10_rocky_badlands"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "stones",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "small",
+			"slope_max_deg": 55,
+			"spacing_m": 0.25,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.25,
+				"parents_per_m2": 0.05,
+				"radius_m": 1.2,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 0.048,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "stone",
+			"near": [
+				{
+					"distance_m": 1.5,
+					"influence": 0.5,
+					"rule": "rock",
+					"transition_m": 1
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 15,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 138,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0.15
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Stone_Small_summer_11_rocky_badlands"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "stone",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "small",
+			"slope_max_deg": 55,
+			"spacing_m": 0.25,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "upright",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.5,
+				"parents_per_m2": 0.04,
+				"radius_m": 1.6,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 0.048,
+			"habit": {
+				"charred": false,
+				"water": "arid"
+			},
+			"key": "barrel",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 15,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 139,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0.15
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Bush_BarrelCactus_v0"
+					},
+					{
+						"ref": "Bush_BarrelCactus_v1"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "cactus_low",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "small",
+			"slope_max_deg": 55,
+			"spacing_m": 0.5,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [
+				{
+					"distance_m": 3,
+					"influence": 1,
+					"rule": "barrel",
+					"transition_m": 0.5
+				},
+				{
+					"distance_m": 3,
+					"influence": 1,
+					"rule": "saguaro",
+					"transition_m": 0.5
+				},
+				{
+					"distance_m": 2.2,
+					"influence": 1,
+					"rule": "boulder",
+					"transition_m": 0.5
+				},
+				{
+					"distance_m": 1.2,
+					"influence": 1,
+					"rule": "rock",
+					"transition_m": 0.4
+				},
+				{
+					"distance_m": 1.6,
+					"influence": 1,
+					"rule": "shrub",
+					"transition_m": 0.5
+				}
+			],
+			"clump": null,
+			"density_per_m2": 0.001344,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"keep_colour": true,
+			"key": "sword_rosette",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 15,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 221,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0.15
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Bush_Agave_v0_rocky_badlands"
+					},
+					{
+						"ref": "Bush_Agave_v1_rocky_badlands"
+					},
+					{
+						"ref": "Bush_Agave_v2_rocky_badlands"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "fern",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "small",
+			"slope_max_deg": 55,
+			"spacing_m": 0.8,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [
+				{
+					"distance_m": 0.8,
+					"influence": 1,
+					"rule": "boulder",
+					"transition_m": 0.4
+				},
+				{
+					"distance_m": 1,
+					"influence": 1,
+					"rule": "sword_rosette",
+					"transition_m": 0.4
+				}
+			],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.2,
+				"radius_m": 1.4,
+				"transition_m": 1
+			},
+			"density_per_m2": 1.6,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "dry_grass",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 70,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 140,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 3,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.7,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Grass_Grass_v0_rocky_badlands"
+					},
+					{
+						"ref": "Grass_Grass_v1_rocky_badlands"
+					},
+					{
+						"ref": "Grass_Grass_v2_rocky_badlands"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "grass",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [
+				{
+					"distance_m": 1,
+					"influence": 1,
+					"rule": "sword_rosette",
+					"transition_m": 0.4
+				}
+			],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.1,
+				"radius_m": 1.5,
+				"transition_m": 0.6
+			},
+			"density_per_m2": 0.4,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "dry_tall",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 70,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 141,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 3,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.7,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Grass_Grass_v3_rocky_badlands"
+					},
+					{
+						"ref": "Grass_Grass_v4_rocky_badlands"
+					},
+					{
+						"ref": "Grass_Grass_v5_rocky_badlands"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "tall_grass",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		}
+	],
+	"seasons": [
+		{
+			"id": "summer",
+			"seed": 1
+		}
+	],
+	"surfaces": "library",
+	"thumbnail": "thumbnails/rocky_badlands.jpg"
+}

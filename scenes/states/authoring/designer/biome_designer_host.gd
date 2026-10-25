@@ -272,4 +272,4 @@ func _leave_then_open(library_id: String, biome_id: String) -> void:
 
 ## The served libraries as they were: the draft overlay is gone and a saved biome is read again.
 func _restore_libraries() -> void:
-	FoliageLibrary.apply(FoliageLibrary.current(), FoliageLibrary.active_package())
+	FoliageLibrary.apply()

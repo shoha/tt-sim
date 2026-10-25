@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.1745,
+		0.1338,
+		0.0959
+	],
+	"kind": "ash",
+	"label": "Ash",
+	"role": "ground",
+	"tile_m": 4
+}

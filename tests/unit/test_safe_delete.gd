@@ -524,16 +524,21 @@ func test_received_sweeps_leave_what_the_game_did_not_make() -> void:
 
 
 func test_promote_stays_inside_the_user_folders() -> void:
-	var files := {"library.json": "{}".to_utf8_buffer()}
-	assert_eq(LibraryReceivedStore.write_library(RECEIVED, "hostworld", files, 1, {}), "")
+	World.write_core(ROOT + "/official/core")
+	World.write_alien(RECEIVED + "/alienworld", "0.3.1", [], false)
+	assert_true(SafeDelete.mark(RECEIVED + "/alienworld", "received", RECEIVED))
 	for bad in UNSAFE_ROOTS:
 		if bad == "":
 			continue  # "" is the default folder
-		assert_false(LibraryReceivedStore.promote("hostworld", Callable(), bad, RECEIVED)["ok"])
-		assert_false(LibraryReceivedStore.promote("hostworld", Callable(), LIBS, bad)["ok"])
-	assert_true(_exists(RECEIVED + "/hostworld"))
-	assert_true(LibraryReceivedStore.promote("hostworld", Callable(), LIBS, RECEIVED)["ok"])
-	assert_true(SafeDelete.is_owned(LIBS + "/hostworld"))
+		assert_false(LibraryReceivedStore.promote("alienworld", bad)["ok"], "received " + bad)
+		LibraryRegistry.user_root = bad
+		assert_false(LibraryReceivedStore.promote("alienworld")["ok"], "user_root " + bad)
+		LibraryRegistry.user_root = LIBS
+	assert_true(_exists(RECEIVED + "/alienworld"))
+	var kept := LibraryReceivedStore.promote("alienworld")
+	assert_true(kept["ok"], str(kept))
+	assert_true(SafeDelete.is_owned(LIBS + "/alienworld"))
+	assert_false(_exists(RECEIVED + "/alienworld"), "the received copy goes after the install")
 	_survives()
 
 
