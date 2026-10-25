@@ -65,6 +65,9 @@ static double terrain_keep(const Ground &ground, const Entry &entry, Vector2 p, 
 	if (!entry.curve_wet.empty()) {
 		result *= curve_value(entry.curve_wet, ground.wet_at(p));
 	}
+	if (!entry.curve_water_dist.empty()) {
+		result *= curve_value(entry.curve_water_dist, ground.water_dist_at(p));
+	}
 	return result;
 }
 static constexpr double NORMAL_TILT_MAX_RAD = 0.12;

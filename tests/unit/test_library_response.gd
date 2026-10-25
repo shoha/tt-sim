@@ -50,7 +50,9 @@ func test_response_problem_names_each_fault() -> void:
 	assert_ne(LibraryContracts.response_problem("slope", [[0, true], [10, 1]]), "", "bool")
 	assert_ne(LibraryContracts.response_problem("slope", [[0, 1], [10, NAN]]), "", "nan")
 	assert_eq(LibraryContracts.response_problem("height", [[-500, 1], [5000, 0]]), "")
-	assert_eq(LibraryContracts.response_problem("water_dist", [[0, 1], [200, 0]]), "")
+	assert_eq(LibraryContracts.response_problem("water_dist", [[0, 1], [64, 0]]), "")
+	assert_ne(LibraryContracts.response_problem("water_dist", [[0, 1], [65, 0]]), "", "past 64 m")
+	assert_ne(LibraryContracts.response_problem("water_dist", [[-1, 1], [20, 0]]), "", "negative")
 	assert_ne(LibraryContracts.response_problem("moisture", ok), "", "unknown axis")
 
 
@@ -60,7 +62,8 @@ func test_the_contract_publishes_the_axes_and_stays_version_one() -> void:
 	var response: Dictionary = data["response"]
 	assert_eq(int(response["min_points"]), 2)
 	assert_eq(int(response["max_points"]), 8)
-	assert_eq(response["unsupported_axes"], ["water_dist"])
+	assert_eq(response["unsupported_axes"], [])
+	assert_eq(response["axes"]["water_dist"], [0.0, 64.0])
 	for axis: String in LibraryContracts.RESPONSE_AXES:
 		assert_eq(response["axes"][axis], LibraryContracts.RESPONSE_AXES[axis], axis)
 	assert_true("response" in LibraryContracts.RULE_KEYS)
@@ -96,7 +99,11 @@ func test_the_reader_accepts_good_fields_and_checks_bad_ones() -> void:
 		_sources("dry_grass", {"response": {"water_dist": [[0, 1], [20, 0]]}})
 	)
 	assert_true(water["ok"])
-	assert_true(_has(water["warnings"], "water_dist"), "named as not evaluated yet")
+	assert_eq(water["warnings"], [], "evaluated since S12c: no warning")
+	var far := LibraryReader.read(
+		_sources("dry_grass", {"response": {"water_dist": [[0, 1], [100, 0]]}})
+	)
+	assert_false(far["ok"], "past the 64 m cap is an error")
 
 
 func test_the_compiler_carries_the_fields_only_when_present() -> void:
@@ -147,7 +154,7 @@ func test_the_validator_sorts_clamps_and_drops_with_a_warning() -> void:
 	assert_eq(response["height"], [[0.0, 1.0], [10.0, 0.0]], "y clamped")
 	assert_false(response.has("wet"), "one point: dropped")
 	assert_false(response.has("moisture"), "unknown axis: dropped")
-	assert_true(response.has("water_dist"), "kept and planned, not evaluated")
+	assert_true(response.has("water_dist"), "kept, planned and evaluated")
 	assert_true(warnings.any(func(w: String) -> bool: return "response.wet" in w))
 	assert_true(warnings.any(func(w: String) -> bool: return "moisture" in w))
 	assert_true(warnings.any(func(w: String) -> bool: return "response.height" in w))

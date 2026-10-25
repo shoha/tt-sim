@@ -4131,3 +4131,29 @@ alternated with the GDScript runs, 45 native runs per variant, medians, debug bu
   the 2026-10-20 native section are superseded for this cell; the curved job is as fast as a
   legacy one. No warning is needed for a built library, only for a missing or stale one (a stale
   library fails `test_scatter_native`, docs/systems/scatter.md "Native path").
+
+### The water_dist axis (S12c, 2026-10-25)
+
+Same task, debug build, headless, shared machine (indicative). The axis needs the distance grid
+(`ScatterTerrain.water_distance_grid`): an exact `DistanceField` transform over the water's
+bounding rect grown by 64 m, in GDScript, built lazily on the first lookup of a job that has a
+`water_dist` curve and cached by the dressing's content, so it is paid once per water change, not
+per job and never by a legacy rule:
+
+| Map | Samples | Grid build | Cached lookup | Sampler (GDScript) |
+|---|---|---|---|---|
+| 24 m (16 cells) | 99 x 99 | 5.8 ms | 0.01 ms | 0.82 us a call |
+| 61 m (200 ft) | 245 x 245 | 31 ms (30 ms in the bench) | 0.02 ms | 0.84 us a call |
+| 97 m (64 cells, 0.153 m spacing, the sample maximum) | 638 x 638 | 201 ms | 0.10 ms | 0.83 us a call |
+
+- A lookup (`water_dist_at`, one bilinear read) costs 0.8 us in GDScript; `ScatterTerrain.keep`
+  alone with an identity `water_dist` curve is 1.6 us a call (the call and dictionary overhead
+  is 0.5 us), against 1.4 to 2.7 us for the other axes.
+- The probe cell's job with every rule carrying an identity `water_dist` curve (rows unchanged,
+  a lake beside the cell so the grid is real): GDScript 803 ms against 783 ms legacy (+20 ms,
+  +2.5%); all four identity curves 843 ms (+7.7%). Native: identity `water_dist` 21.30 ms against
+  21.28 ms legacy (+0.1%; library alone +0.14 ms, +0.7%), all four 21.95 ms (+3.2%, one noisy
+  median among the four), within the run-to-run noise of the earlier S12b table. The grid itself
+  adds one array to the job's source (`ScatterNative.pack` shares it by reference), no copy.
+- Probe: `godot --headless --path <project> --script res://tools/native_scatter_run.gd --
+  --task=curves` (it now dresses a lake first and prints the grid build time).

@@ -25,6 +25,8 @@ extends RefCounted
 const CLASS_NAME := "TTScatterNative"
 ## The word version() carries once the library evaluates terrain response (S12b).
 const CAPABILITY_CURVES := "curves"
+## ... and the water_dist axis (S12c): its distance grid in the job's source, ScatterTerrain.
+const CAPABILITY_WATER := "water"
 
 ## True: every job runs in GDScript (A/B measurements, tests of the GDScript path).
 static var force_gdscript := false
@@ -102,9 +104,9 @@ static func run_biome(
 
 ## Why jobs cannot run natively ("" when they can). Every branch generation has today is ported;
 ## a branch added later is refused here until it is. Terrain response (a rule's slope_min_deg or
-## response curves, step S12a) is not ported yet: a job whose biome has any runs in GDScript
-## unless the loaded library reports the "curves" capability in version() (S12b adds it), which
-## also keeps a stale library, which would ignore the new plan keys, from placing different rows.
+## response curves, step S12a) runs in GDScript unless the loaded library reports the "curves"
+## capability in version() (S12b), and a water_dist curve (S12c) unless it reports "water"; a
+## stale library, which would ignore the new plan keys, is thereby kept from placing different rows.
 static func _refusal(species: Array[Dictionary] = []) -> String:
 	if force_gdscript:
 		return "forced"
@@ -114,6 +116,8 @@ static func _refusal(species: Array[Dictionary] = []) -> String:
 		return "water channels"
 	if species.any(ScatterPlan.has_terrain_response) and not version().contains(CAPABILITY_CURVES):
 		return "curves"
+	if species.any(ScatterPlan.has_water_dist) and not version().contains(CAPABILITY_WATER):
+		return "water"
 	return ""
 
 
@@ -133,6 +137,8 @@ static func pack(
 	if source.is_empty():
 		return {}
 	var plan := ScatterPlan.build(biome_id, species, doc.map_seed)
+	if species.any(ScatterPlan.has_water_dist):  # the grid only for a job that reads it
+		source["water_dist"] = ScatterTerrain.water_distance_grid(doc)
 	var fields: Array[Dictionary] = []
 	fields.assign(plan.fields)
 	var noise := []
@@ -432,6 +438,7 @@ static func _make_consts() -> Dictionary:
 	]:
 		made[String(name).to_lower()] = crossing[name]
 	made["depth_scale"] = WaterDressing.DEPTH_SCALE
+	made["water_dist_max_m"] = ScatterTerrain.WATER_DIST_MAX_M
 	return made
 
 

@@ -349,7 +349,8 @@ static func _generate(
 		{},
 		fields.density_ceiling_at,
 		null,
-		fields.wet_at
+		fields.wet_at,
+		fields.water_dist_at
 	)
 
 

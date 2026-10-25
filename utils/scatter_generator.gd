@@ -125,7 +125,8 @@ static func generate(
 ## uniform clears the response to it is rejected without asking species_density_at.
 ## Once `cancel` is posted (cancelled()) generation stops between rows of buckets and hands back
 ## what it has; the caller drops it.
-## `wet_at`, when valid, is Callable(p) -> shore weight 0..1 for the `wet` response axis (else 0).
+## `wet_at`, when valid, is Callable(p) -> shore weight 0..1 for the `wet` response axis (else 0);
+## `water_dist_at` Callable(p) -> metres to the nearest water for `water_dist` (else the maximum).
 static func generate_species_cells(
 	biome_id: String,
 	species: Array[Dictionary],
@@ -140,7 +141,8 @@ static func generate_species_cells(
 	anchors_out: Dictionary = {},
 	density_ceiling_at: Callable = Callable(),
 	cancel: Semaphore = null,
-	wet_at: Callable = Callable()
+	wet_at: Callable = Callable(),
+	water_dist_at: Callable = Callable()
 ) -> Dictionary[String, PackedFloat32Array]:
 	var the_plan := ScatterPlan.build(biome_id, species, map_seed)
 	var ctx := _context(the_plan, density_at, height_at, normal_at, bounds)
@@ -148,6 +150,8 @@ static func generate_species_cells(
 		ctx["species_density_at"] = species_density_at
 	if wet_at.is_valid():
 		ctx["wet_at"] = wet_at
+	if water_dist_at.is_valid():
+		ctx["water_dist_at"] = water_dist_at
 	ctx["density_ceiling_at"] = density_ceiling_at
 	ctx["blockers"] = blockers
 	ctx["anchors_out"] = anchors_out
@@ -257,13 +261,15 @@ static func generate_for_document(
 		{},
 		fields.density_ceiling_at,
 		null,
-		fields.wet_at
+		fields.wet_at,
+		fields.water_dist_at
 	)
 
 
 ## The sampling fields generate() takes, built from a MapDocument for one biome:
 ## {density_at, rock_density_at, species_density_at, density_ceiling_at, height_at, normal_at,
-## wet_at (the shore weight, for the `wet` response axis), bounds}. Density
+## wet_at (the shore weight, for the `wet` response axis), water_dist_at (metres to the nearest
+## water, for `water_dist`; ScatterTerrain.water_dist_sampler), bounds}. Density
 ## is the biome's painted density (0 where another biome or none is painted), bilinear on
 ## the document's sample grid, times what the ground lets grow there for a ScatterGround
 ## role (species_density_at(p, role), ScatterGround.species_density; density_at and
@@ -345,6 +351,7 @@ static func document_fields(
 		return triangle_height(heights, columns, rows, (p + half) / step)
 	var normal_at := func(p: Vector2) -> Vector3:
 		return triangle_normal(heights, columns, rows, (p + half) / step, step)
+	var water_dist_at := ScatterTerrain.water_dist_sampler(doc)
 	return {
 		"density_at": species_density_at.bind(ScatterGround.ROLE_COVER),
 		"rock_density_at": species_density_at.bind(ScatterGround.ROLE_ROCK),
@@ -353,6 +360,7 @@ static func document_fields(
 		"height_at": height_at,
 		"normal_at": normal_at,
 		"wet_at": ScatterTerrain.wet_sampler(doc),
+		"water_dist_at": water_dist_at,
 		"bounds": Rect2(-half, doc.extent_m()),
 	}
 
@@ -419,6 +427,7 @@ static func _context(
 		"height_at": height_at,
 		"normal_at": normal_at,
 		"wet_at": func(_p: Vector2) -> float: return 0.0,
+		"water_dist_at": func(_p: Vector2) -> float: return ScatterTerrain.WATER_DIST_MAX_M,
 		"bounds": bounds,
 		"edge": 1.0,
 		"anchor": Vector2.ZERO,

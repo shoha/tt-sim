@@ -12,8 +12,8 @@ func test_every_preset_is_a_valid_curve_on_every_evaluated_axis() -> void:
 			assert_eq(ResponseCurve.preset_of(axis, points), shape)
 
 
-func test_the_evaluated_axes_leave_out_water_dist() -> void:
-	assert_eq(ResponseCurve.axes(), ["slope", "height", "wet"])
+func test_the_evaluated_axes_include_water_dist_since_s12c() -> void:
+	assert_eq(ResponseCurve.axes(), ["slope", "height", "wet", "water_dist"])
 
 
 func test_sample_matches_the_engine_curve_value() -> void:

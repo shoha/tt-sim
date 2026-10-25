@@ -340,14 +340,34 @@ func _curves(runs: int) -> void:
 		"slope": [[0.0, 1.0], [90.0, 1.0]],
 		"height": [[-500.0, 1.0], [5000.0, 1.0]],
 		"wet": [[0.0, 1.0], [1.0, 1.0]],
+		"water_dist": [[0.0, 1.0], [64.0, 1.0]],
 	}
+	# S12c: a lake beside the probe cell (wet-line byte only, so the ground rules stay quiet) and
+	# the distance grid's build cost on this 200 ft map (one transform, then cached per dressing).
+	var columns := doc.samples_x()
+	var field := PackedByteArray()
+	field.resize(doc.sample_count() * WaterDressing.CHANNELS)
+	for z in doc.samples_z():
+		for x in columns:
+			if doc.sample_to_world(Vector2(x, z)).distance_to(Vector2(-8.0, 5.0)) <= 4.0:
+				field[(z * columns + x) * WaterDressing.CHANNELS + 3] = 255
+	doc.water_dressing = field
+	var started := Time.get_ticks_usec()
+	ScatterTerrain.water_distance_grid(doc)
+	print(
+		(
+			"water distance grid (%d x %d samples, built once per dressing): %.1f ms"
+			% [columns, doc.samples_z(), (Time.get_ticks_usec() - started) / 1000.0]
+		)
+	)
 	var variants := {
 		"legacy": {},
 		"slope_min 20": {"slope_min_deg": 20.0},
 		"identity slope": {"response": {"slope": identity["slope"]}},
 		"identity height": {"response": {"height": identity["height"]}},
 		"identity wet": {"response": {"wet": identity["wet"]}},
-		"identity all three": {"response": identity},
+		"identity water_dist": {"response": {"water_dist": identity["water_dist"]}},
+		"identity all four": {"response": identity},
 	}
 	var times := {}
 	var native_times := {}
@@ -387,10 +407,14 @@ func _curves(runs: int) -> void:
 				)
 				var out: Dictionary = ScatterNative._instance().call("generate", packed)
 				if k >= 2:
-					var whole_list: PackedFloat64Array = native_times.get(label, PackedFloat64Array())
+					var whole_list: PackedFloat64Array = native_times.get(
+						label, PackedFloat64Array()
+					)
 					whole_list.append(whole / 1000.0)
 					native_times[label] = whole_list
-					var inner_list: PackedFloat64Array = inner_times.get(label, PackedFloat64Array())
+					var inner_list: PackedFloat64Array = inner_times.get(
+						label, PackedFloat64Array()
+					)
 					inner_list.append(int(out.usec) / 1000.0)
 					inner_times[label] = inner_list
 	var base := _median(times["legacy"])
@@ -402,19 +426,21 @@ func _curves(runs: int) -> void:
 			var inner_ms := _median(inner_times[label])
 			print(
 				(
-					"curves job (probe cell, native, median of %d): %-20s job %.3f ms (%+.3f ms,"
-					+ " %+.1f%%), library alone %.3f ms (%+.3f ms, %+.1f%%)"
+					(
+						"curves job (probe cell, native, median of %d): %-20s job %.3f ms (%+.3f ms,"
+						+ " %+.1f%%), library alone %.3f ms (%+.3f ms, %+.1f%%)"
+					)
+					% [
+						runs * 5,
+						label,
+						whole_ms,
+						whole_ms - native_base,
+						100.0 * (whole_ms / native_base - 1.0),
+						inner_ms,
+						inner_ms - inner_base,
+						100.0 * (inner_ms / inner_base - 1.0)
+					]
 				)
-				% [
-					runs * 5,
-					label,
-					whole_ms,
-					whole_ms - native_base,
-					100.0 * (whole_ms / native_base - 1.0),
-					inner_ms,
-					inner_ms - inner_base,
-					100.0 * (inner_ms / inner_base - 1.0)
-				]
 			)
 	else:
 		print("curves job: no native library with the curves capability, native rows skipped")
@@ -433,7 +459,10 @@ func _curves(runs: int) -> void:
 		)
 	var fields := ScatterGenerator.document_fields(doc, BIOME)
 	var ctx := {
-		"normal_at": fields.normal_at, "height_at": fields.height_at, "wet_at": fields.wet_at
+		"normal_at": fields.normal_at,
+		"height_at": fields.height_at,
+		"wet_at": fields.wet_at,
+		"water_dist_at": fields.water_dist_at,
 	}
 	var rule := {
 		"key": "bench",
