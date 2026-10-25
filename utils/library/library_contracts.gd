@@ -185,6 +185,7 @@ const CATALOG_ENTRY_KEYS: Array[String] = [
 	"subtype",
 	"tags",
 	"biomes",
+	"roles",
 	"seasons",
 	"game_kind",
 	"wind_category",
