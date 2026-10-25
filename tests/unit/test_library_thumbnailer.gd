@@ -218,6 +218,9 @@ func test_hashes_are_recorded_only_where_a_library_lists_them() -> void:
 	var recorded := LibraryThumbnailer.record_hashes(built, {"thumbnails/b.jpg": "ff"})
 	assert_eq(recorded["stats"]["file_sha256"], {"a": "1", "thumbnails/b.jpg": "ff"})
 	assert_eq(built["stats"]["file_sha256"], {"a": "1"}, "the input is untouched")
+	var sized := {"stats": {"file_sha256": {}, "surface_bytes": 100}}
+	var moved := LibraryThumbnailer.record_hashes(sized, {"thumbnails/b.jpg": "ff"}, -30)
+	assert_eq(moved["stats"]["surface_bytes"], 70, "surface_bytes follows the picture's size")
 	var source := {"id": "x"}
 	assert_eq(LibraryThumbnailer.record_hashes(source, {"thumbnails/b.jpg": "ff"}), source)
 

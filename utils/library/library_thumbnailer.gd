@@ -28,8 +28,8 @@ const MAX_BYTES := 131072
 const MAP_SIZE_FT := 100
 const MAP_SEED := 1234
 const PLACE_SEED := 1234
-const CAMERA_ZOOM := 24.0
-const LOOK_AT := Vector2(0.0, -1.0)
+const CAMERA_ZOOM := 20.0
+const LOOK_AT := Vector2(0.0, 0.0)
 ## The render job's ceiling in seconds, and how long a biome waits for its plants.
 const JOB_TIMEOUT_S := 900
 const SETTLE_S := 3.0
@@ -201,8 +201,11 @@ static func sha256(bytes: PackedByteArray) -> String:
 
 ## `library` (the library.json dictionary) with the hashes in `hashes` ({relative path: sha256})
 ## recorded in `stats.file_sha256`, when the library carries one (a built library does; a
-## library's sources do not, and are returned unchanged). A copy.
-static func record_hashes(library: Dictionary, hashes: Dictionary) -> Dictionary:
+## library's sources do not, and are returned unchanged); `byte_delta` (new file size minus the
+## old one) moves `stats.surface_bytes` with them. A copy.
+static func record_hashes(
+	library: Dictionary, hashes: Dictionary, byte_delta: int = 0
+) -> Dictionary:
 	var out := library.duplicate(true)
 	var stats: Variant = out.get("stats")
 	if not stats is Dictionary or not (stats as Dictionary).get("file_sha256") is Dictionary:
@@ -210,6 +213,9 @@ static func record_hashes(library: Dictionary, hashes: Dictionary) -> Dictionary
 	var listed := (stats as Dictionary)["file_sha256"] as Dictionary
 	for relative: String in hashes:
 		listed[relative] = hashes[relative]
+	# stats.surface_bytes counts the surface and biome picture files: follow a changed picture.
+	if byte_delta != 0 and (stats as Dictionary).has("surface_bytes"):
+		(stats as Dictionary)["surface_bytes"] = int((stats as Dictionary)["surface_bytes"]) + byte_delta
 	return out
 
 

@@ -112,6 +112,8 @@ A skipped step logs `skip <op> (<reason>)`.
 | Op | Fields | What it does |
 |---|---|---|
 | `capture` | `name`, `desc` (caption for the index), `scale` (default 0.5, or 1.0 with `--full`; the step's own value wins) | After the next frame is drawn, save `<name>_sub.png` (raw SubViewport) and `<name>.png` (window), resized by `scale` (Lanczos) when it is not 1, and log both sizes and the camera size. With no map open (a dialog over the title) only `<name>.png` is written. `--only` skips captures whose `name` matches none of its patterns. |
+| `thumbnail_prepare` | `zoom` (default 20), `at` ([x, z], default [0, 0]) | Biome-thumbnail state (ThumbnailShot.prepare): wind speeds to 0, canopy fades off, the camera framed on the ground point at that zoom. |
+| `thumbnail` | `biome`, `folder` | Grab the world view and write it as biome `biome`'s 512 px JPG into library folder `folder` (LibraryWriter.write_thumbnail); results join root meta `thumbnail_results`. Used by `tools/render_library_thumbnails.gd` (docs/systems/library.md "Biome thumbnails"). |
 | `index` | `title`, `intro` | Write `INDEX.md` in the output folder: title, intro, then a table row per capture so far (window image, raw image, camera size, caption). |
 
 ### Measurement

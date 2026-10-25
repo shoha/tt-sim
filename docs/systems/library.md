@@ -388,11 +388,40 @@ Facts of the S5 build (still true of the shipped folder):
   flagstone, `paint.default` dirt_road_packed, `water.bed` riverbed, `water.shore` mud) and
   `default_biome` `temperate_forest_summer_s1`. A game served by `core` therefore behaves as the
   constants did; `SCORCHED_SURFACES` and `WATER_SURFACE_DEFAULTS` stay code.
-- **Thumbnails.** `thumbnails/<local biome id>.jpg` (512 px, the installed treecube renders,
-  byte-identical) named by the biome-def's `thumbnail`; the compiler serves each as
-  `thumbnails/<runtime id>.jpg`, the path the palette already used, through `SurfaceStore`
-  (`is_library_thumbnail`). At S10 the shipped JPGs stay the treecube renders (re-rendering them
-  from the plantgen look is a later decision).
+- **Thumbnails.** `thumbnails/<local biome id>.jpg` (512 px) named by the biome-def's `thumbnail`;
+  the compiler serves each as `thumbnails/<runtime id>.jpg`, the path the palette already used,
+  through `SurfaceStore` (`is_library_thumbnail`). Since 2026-10-25 the shipped nine are renders of
+  core's own plants (see "Biome thumbnails" below), no longer the treecube Blender renders.
+- **Biome thumbnails (2026-10-25).** Two kinds of picture: an ASSET's (`assets/thumbs/<id>.png`, 256 px
+  PNG, plantgen's `build_library_cli --thumbs 1` renders each GLB alone) and a BIOME's
+  (`thumbnails/<biome>.jpg`, 512 px JPG, shown by the manager, the New map dialog and the designer
+  picker). Only the game can draw a biome (real scatter, ground look, light), so the biome pictures
+  are rendered by tt-sim: `LibraryThumbnailer` (pure: the plan, the file name, the standard scene,
+  the JPG caps, the hash record), `ThumbnailShot` (freezes the wind and the canopy fades, frames the
+  camera, grabs the world view) and `tools/render_library_thumbnails.gd` (a render job built in code
+  over `tools/render_jobs/run.gd`). The standard scene is a new 100 ft map painted with the biome
+  (`NewMap`, map seed and placement seed 1234, the biome's first season), the game camera (fixed
+  orthographic, 21.6 degrees) at zoom 20 on the map's centre, wind and fades off, then the centred
+  square scaled to 512 px, JPEG quality 0.8 (30 to 55 KB, cap 128 KB; the treecube ones were 10 to
+  15 KB). `LibraryWriter.write_thumbnail` writes the file, gives the biome-def its `thumbnail`
+  field when it lacks one and moves `stats.file_sha256` and `stats.surface_bytes` of a built
+  library. Two runs, and runs from two folders, give identical bytes on this machine (the
+  RTX 3080); one savanna render of a cold first run once differed, so judge a build by the second.
+  ```
+  # A built library folder (plantgen's output), windowed, one window, about 25 s plus 1 s a biome
+  godot --path <tt-sim> --windowed --resolution 1920x1080 --position 320,120 --script res://tools/render_library_thumbnails.gd -- --library <built folder> [--out <folder>] [--biome a,b] [--season summer] [--list 1]
+  # Part of the collection build (plantgen), after the assets, before the zip
+  godot --path <plantgen> --resolution 320x200 --script res://tools/build_library_cli.gd -- --library <core-library>/library.json --out <dir> --thumbs 1 --biome-thumbs <tt-sim project>
+  ```
+  Without `--biome-thumbs` the build copies the library's authored `thumbnails/` (core:
+  core-library's), so a build stays reproducible; to refresh core's pictures build once with the
+  option, copy `<dir>/thumbnails/*.jpg` into core-library, commit, and ship the folder and
+  library.json into `libraries/core`. In the biome designer the header's **Thumbnail** button takes
+  the draft's picture on the same standard map (`BiomeDesignerSession.capture_thumbnail`, about
+  20 s, the proving ground returns) and saves it through the writer; it is enabled for a user
+  library and the developer-override folder (`LibraryThumbnailer.designer_writable`), never for a
+  shipped one. `test_library_thumbnailer.gd` pins the pure parts, the writer and the shipped core
+  pictures against the caps and the recorded hashes.
 - **Asset thumbnails (library update, 2026-10-25).** The shipped core carries one 256 px PNG per
   catalog asset, `assets/thumbs/<asset id>.png` (268 files, 3.2 MB, Git LFS, constant
   `importer="keep"` sidecars), named by the catalog entry's `thumb`, with `stats.thumbs`,
@@ -892,8 +921,8 @@ Left over from S4: the authoring panel's Biomes field, which still
 lists every biome of every library in one grid without headers; a map opened "without those
 plants" keeps the painting of the missing library's areas but regenerates no plants there
 (regeneration is offered, not automatic, because it discards scatter hand edits). Left over from
-S10 (core shipped, treecube removed): the nine biome thumbnails are still the 512 px treecube
-JPGs (re-render them from the plantgen look); the surface bake runs on first use (about 0.2 s a
+S10 (core shipped, treecube removed): (the nine biome thumbnails were re-rendered from the plantgen
+look on 2026-10-25, see "Biome thumbnails"); the surface bake runs on first use (about 0.2 s a
 surface on a GPU build, the maps a map uses; the cache then lives in `user://library_cache`, about
 170 MB for all 36 surfaces) and the release could ship the baked cache (`SurfaceCache` is plain
 bytes) to skip it; `settings.cfg` `[foliage]` keys are dead and left in the user's files; the
