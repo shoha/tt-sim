@@ -1,32 +1,26 @@
 extends GutTest
 
-## The library route against the package route (design doc 6.1, step S5): every biome generated at
-## seed 1234 over a fixed square through (a) PaletteLibrary.overlay_package with plantgen's
-## palette package and (b) LibraryRegistry with the library plantgen exported from the same
-## package must give byte-identical rows, the same rules, the same biome fields and the same assets
-## table once the library's asset ids are mapped back to the package's stems through the catalog's
-## `package_stem` (a stem whose bytes differ per biome is `<stem>_<biome>` in the library). The
-## technique is scatter_golden.gd's (a varying painted density, flat ground).
+## The library route against the package route (design doc 6.1, step S5), kept alive by step S10.
 ##
-## Two tests. The miniature (always on) builds a core-shaped library and its package in a scratch
-## folder, with renamed ids and surfaces by name. The real one reads the nine-biome folders outside
-## this repo from environment variables and is pending when they are not set:
-##   PLANTGEN_LIB_CORE      the exported library (plantgen out/lib_core)
-##   PLANTGEN_LIB_CORE_PKG  the package it was built from (plantgen out/lib_core_pkg)
-## Run (PowerShell):  $env:PLANTGEN_LIB_CORE='D:/dev/plantgen/out/lib_core'
-##   $env:PLANTGEN_LIB_CORE_PKG='D:/dev/plantgen/out/lib_core_pkg'
-##   godot --headless --path <project> --script res://addons/gut/gut_cmdln.gd --
-##     '-gconfig=tests/.gutconfig.json' -gselect=test_library_row_parity
-## The one-biome slice of step S1 still runs when PLANTGEN_LIB_SLICE and PLANTGEN_LIB_SLICE_PKG
-## name plantgen's out/lib_slice and out/lib_slice_pkg.
+## Two proofs. (1) The miniature: a core-shaped library and the package it was built from, in a
+## scratch folder, with renamed ids and surfaces by name, must give byte-identical rows, the same
+## rules, biome fields and assets table once the library's asset ids are mapped back to the
+## package's stems through the catalog's `package_stem`. (2) The shipped core library
+## (res://libraries/core, served as the palette) must reproduce the plantgen package route it was
+## built from: tests/fixtures/library_core_golden.json freezes, per biome of the nine, the package
+## route's biome fields, rules, plan roles, scatter rows at seed 1234 over a fixed square and
+## assets table, computed on 2026-10-25 from plantgen's out/lib_core_pkg2 laid over the retired
+## treecube palette by the retired overlay code, BEFORE that code was deleted (byte-identical to
+## the library route then: 2074 assertions). No plantgen folder is needed any more. The technique
+## is scatter_golden.gd's (a varying painted density, flat ground); the digests are Windows' bytes.
+## Re-freeze the fixture only for a deliberate rebuild of core, after comparing it with the new
+## package it came from.
 
 const Compare := preload("res://tests/unit/library_route_compare.gd")
 const World := preload("res://tests/unit/library_world.gd")
 
-const ENV_CORE := "PLANTGEN_LIB_CORE"
-const ENV_CORE_PKG := "PLANTGEN_LIB_CORE_PKG"
-const ENV_SLICE := "PLANTGEN_LIB_SLICE"
-const ENV_SLICE_PKG := "PLANTGEN_LIB_SLICE_PKG"
+const GOLDEN := "res://tests/fixtures/library_core_golden.json"
+const CORE_FOLDER := "res://libraries/core"
 const ROOT := "user://test_library_row_parity"
 const BASE := ROOT + "/base"
 const PACKAGE := ROOT + "/package"
@@ -36,15 +30,20 @@ const MINI_RUNTIME := "meadow_summer_s1"
 const SURFACE_SRC := "res://tests/fixtures/library_surfaces/surfaces"
 
 var _saved_settings_path: String = ""
+var _saved_official: String = ""
 
 
 func before_all() -> void:
 	_saved_settings_path = LibraryRegistry.settings_path
+	_saved_official = LibraryRegistry.official_root
 	LibraryRegistry.settings_path = SETTINGS
+	# The miniature's library is core-shaped (id core): the shipped core is not part of it.
+	LibraryRegistry.official_root = ROOT + "/no_official"
 
 
 func after_all() -> void:
 	LibraryRegistry.settings_path = _saved_settings_path
+	LibraryRegistry.official_root = _saved_official
 	LibraryRegistry.clear()
 	PaletteLibrary.clear_cache()
 	World.remove_tree(ROOT)
@@ -107,19 +106,27 @@ func _assert_routes_equal(package: Dictionary, library: Dictionary, runtimes: Ar
 				)
 
 
-## Both routes over `runtimes`: the package overlaid on `root`, then the library laid by the
+## The package route: the package's palette.json laid over the palette under `root`, as the retired
+## PaletteLibrary.overlay_package did (validate, replace the biomes of the same id with their
+## assets; GLBs are not read, the comparison needs none).
+func _lay_package(package: String, root: String) -> void:
+	var text := FileAccess.get_file_as_string(package.path_join("palette.json"))
+	var raw: Dictionary = JSON.parse_string(text)
+	var report := PaletteLibrary.install_overlay(
+		LibraryLayer.lay(raw, PaletteLibrary.base_for_serving(root)), root
+	)
+	assert_true(report["ok"], str(report["error"]))
+
+
+## Both routes over `runtimes`: the package laid on `root`, then the library laid by the
 ## registry as the developer override. Returns [package snapshot, mapped library snapshot].
-func _both_routes(
-	package: String, library: String, root: String, runtimes: Array, overlay_only: Array = []
-) -> Array:
-	var overlay := PaletteLibrary.overlay_package(package, root, overlay_only)
-	assert_true(overlay["ok"], str(overlay["error"]))
+func _both_routes(package: String, library: String, root: String, runtimes: Array) -> Array:
+	_lay_package(package, root)
 	var from_package := Compare.snapshot(root, runtimes)
 	PaletteLibrary.clear_cache()
 	LibraryRegistry.set_dev_override(library)
 	var applied := LibraryRegistry.apply(root)
 	assert_true(applied["ok"], str(applied["error"]))
-	assert_eq(applied["report"]["failed"], [], "every GLB parsed")
 	assert_eq(applied["warnings"], [], "no read, compile or palette warnings")
 	assert_eq((applied["biomes"] as Array).size(), runtimes.size())
 	var from_library := Compare.snapshot(root, runtimes)
@@ -419,51 +426,64 @@ func _write_package() -> void:
 	)
 
 
-# ---- the real folders, pending without them ----
+# ---- the shipped core against the frozen package route ----
 
 
-func test_all_nine_biomes_of_the_library_equal_the_package_route() -> void:
-	var library := OS.get_environment(ENV_CORE)
-	var package := OS.get_environment(ENV_CORE_PKG)
-	if library == "" or package == "":
-		pending("set %s and %s to run the nine-biome parity" % [ENV_CORE, ENV_CORE_PKG])
-		return
+## `value` after a JSON round trip, the form the golden fixture holds.
+func _through_json(value: Variant) -> Variant:
+	return JSON.parse_string(JSON.stringify(value, "", true))
+
+
+func test_the_shipped_core_reproduces_the_frozen_package_route_for_all_nine_biomes() -> void:
 	if OS.get_name() != "Windows":
 		pending("row digests are Windows' float bytes")
 		return
-	var palette: Dictionary = JSON.parse_string(
-		FileAccess.get_file_as_string(package.path_join("palette.json"))
-	)
-	var runtimes: Array = []
-	for entry: Dictionary in palette["biomes"]:
-		runtimes.append(String(entry["id"]))
+	LibraryRegistry.official_root = LibraryRegistry.OFFICIAL_ROOT
+	LibraryRegistry.clear()
+	PaletteLibrary.clear_cache()
+	var golden: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(GOLDEN))
+	var biomes: Dictionary = golden["biomes"]
+	var runtimes: Array = biomes.keys()
 	runtimes.sort()
 	assert_eq(runtimes.size(), 9, "all nine biomes")
-	var both := _both_routes(package, library, PaletteLibrary.DEFAULT_ROOT, runtimes)
-	_assert_routes_equal(both[0], both[1], runtimes)
+	assert_eq(int(golden["seed"]), Compare.SEED)
+	var root := PaletteLibrary.DEFAULT_ROOT
+	assert_eq(PaletteLibrary.get_palette(root)["biomes"].size(), 9, "core served on first read")
+	var snapshot := Compare.mapped(Compare.snapshot(root, runtimes), Compare.stems_of(CORE_FOLDER))
 	for runtime: String in runtimes:
-		var rows: Dictionary = both[0][runtime]["rows"]
-		assert_gt(rows.size(), 5, runtime + " grows plants")
+		var want: Dictionary = biomes[runtime]
+		var got: Dictionary = snapshot[runtime]
+		var want_fields: Dictionary = want["biome"]
+		var got_fields: Dictionary = _through_json(got["biome"])
+		assert_eq(got_fields.keys().size(), want_fields.keys().size(), "%s: field set" % runtime)
+		for field: String in want_fields:
+			assert_eq(got_fields.get(field), want_fields[field], "%s: biome %s" % [runtime, field])
+		var got_rules: Array = got["species"]
+		var want_rules: Array = want["rules"]
+		assert_eq(got_rules.size(), want_rules.size(), "%s: the same number of rules" % runtime)
+		for i in mini(want_rules.size(), got_rules.size()):
+			assert_eq(Compare.rule_text(got_rules[i]), want_rules[i], "%s: rule %d" % [runtime, i])
+		assert_eq(Compare.plans(got_rules), want["plans"], "%s: habit" % runtime)
+		var want_rows: Dictionary = want["rows"]
+		assert_gt(want_rows.size(), 5, "%s grows plants" % runtime)
+		assert_eq((got["rows"] as Dictionary).keys().size(), want_rows.size(), runtime + " kinds")
 		var total := 0
-		for digest: String in rows.values():
-			total += int(digest.get_slice(":", 0))
+		for asset_id: String in want_rows:
+			assert_eq(got["rows"].get(asset_id), want_rows[asset_id], "%s: %s" % [runtime, asset_id])
+			total += int(String(want_rows[asset_id]).get_slice(":", 0))
+		var want_assets: Dictionary = want["assets"]
+		for id: String in want_assets:
+			var got_asset: Dictionary = snapshot["assets"].get(id, {})
+			assert_false(got_asset.is_empty(), "assets table has %s" % id)
+			for field in ["node", "wind_category", "size_class", "dimensions_m"]:
+				assert_eq(
+					_through_json(got_asset.get(field)),
+					(want_assets[id] as Dictionary).get(field),
+					"%s: %s" % [id, field]
+				)
 		gut.p(
 			(
-				"%s: %d rules, %d asset kinds, %d rows, byte-identical"
-				% [runtime, (both[0][runtime]["species"] as Array).size(), rows.size(), total]
+				"%s: %d rules, %d asset kinds, %d rows, byte-identical to the package route"
+				% [runtime, want_rules.size(), want_rows.size(), total]
 			)
 		)
-
-
-func test_savanna_slice_equals_the_package_route() -> void:
-	var library := OS.get_environment(ENV_SLICE)
-	var package := OS.get_environment(ENV_SLICE_PKG)
-	if library == "" or package == "":
-		pending("set %s and %s to run the slice parity" % [ENV_SLICE, ENV_SLICE_PKG])
-		return
-	if OS.get_name() != "Windows":
-		pending("row digests are Windows' float bytes")
-		return
-	var runtimes := ["savanna_summer_s1"]
-	var both := _both_routes(package, library, PaletteLibrary.DEFAULT_ROOT, runtimes, runtimes)
-	_assert_routes_equal(both[0], both[1], runtimes)

@@ -7,10 +7,6 @@
    "op": "wait_title"
   },
   {
-   "op": "palette_overlay",
-   "package": "D:/dev/plantgen/out/ttsim_package_plantgen_all"
-  },
-  {
    "op": "title"
   },
   {

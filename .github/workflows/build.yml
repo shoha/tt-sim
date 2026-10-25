@@ -44,8 +44,9 @@ jobs:
 
       # LFS objects come from the Actions cache instead of LFS bandwidth. GitHub Free
       # includes 10 GiB of LFS bandwidth a month and LFS is disabled for the rest of the
-      # month once it runs out; four LFS checkouts per run of the ~80 MB built-in
-      # palette (assets/palette/) would use about 9 GB at September 2026's push rate.
+      # month once it runs out; four LFS checkouts per run of the ~170 MB built-in core
+      # library (libraries/core/; the ~80 MB treecube palette in assets/palette/ before
+      # 2026-10-25) would use about 9 GB at September 2026's push rate.
       # The cache key changes only when an LFS file does. Same steps in the export job.
       - name: List LFS objects
         run: |

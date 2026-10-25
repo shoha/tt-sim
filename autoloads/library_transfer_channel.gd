@@ -464,7 +464,7 @@ func _on_transfer_progress(
 		_progress[int(asset_id)] = progress
 
 
-## Serves the libraries again under the foliage set that is active (the received ones appear or
-## go), without announcing a rebuild: the map being loaded is not built yet.
+## Serves the libraries again (the received ones appear or go), without announcing a rebuild: the
+## map being loaded is not built yet.
 func _reapply() -> void:
-	FoliageLibrary.apply(FoliageLibrary.current(), FoliageLibrary.active_package())
+	FoliageLibrary.apply()

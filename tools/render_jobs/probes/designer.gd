@@ -232,7 +232,7 @@ static func _cleanup(library: String) -> String:
 	if library == "" or library == "core" or not DirAccess.dir_exists_absolute(folder):
 		return "nothing to remove"
 	_remove_tree(folder)
-	FoliageLibrary.apply(FoliageLibrary.current(), FoliageLibrary.active_package())
+	FoliageLibrary.apply()
 	return "removed %s" % folder
 
 

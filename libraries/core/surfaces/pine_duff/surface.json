@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.1478,
+		0.104,
+		0.0515
+	],
+	"kind": "pine_duff",
+	"label": "Pine needles",
+	"role": "ground",
+	"tile_m": 3
+}

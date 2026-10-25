@@ -14,15 +14,6 @@
    "s": 1.0
   },
   {
-   "op": "foliage_library",
-   "name": "plantgen",
-   "package": "D:/dev/plantgen/out/lib_core_pkg"
-  },
-  {
-   "op": "wait",
-   "s": 3.0
-  },
-  {
    "op": "call",
    "script": "res://tools/render_jobs/probes/landform.gd",
    "action": "new",
@@ -77,8 +68,8 @@
   },
   {
    "op": "capture",
-   "name": "savanna_a_home",
-   "desc": "package route: plantgen lib_core_pkg over the installed palette, surfaces through the editor import, terraces seed 1234, home view, fades off, wind frozen"
+   "name": "savanna_home",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), home view, fades off, wind frozen"
   },
   {
    "op": "zoom",
@@ -96,8 +87,8 @@
   },
   {
    "op": "capture",
-   "name": "savanna_a_close",
-   "desc": "package route: plantgen lib_core_pkg over the installed palette, surfaces through the editor import, size 14 at the map centre"
+   "name": "savanna_close",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), size 14 at the map centre"
   },
   {
    "op": "call",
@@ -116,7 +107,7 @@
   },
   {
    "op": "capture",
-   "name": "savanna_a_bareclose",
+   "name": "savanna_bareclose",
    "desc": "the same view with the plants hidden: ground, cliff, accents and paths only"
   },
   {
@@ -128,7 +119,7 @@
   },
   {
    "op": "capture",
-   "name": "savanna_a_barehome",
+   "name": "savanna_barehome",
    "desc": "home view with the plants hidden"
   },
   {
@@ -142,160 +133,6 @@
   {
    "op": "wait",
    "s": 1.0
-  },
-  {
-   "op": "foliage_library",
-   "name": "treecube"
-  },
-  {
-   "op": "wait",
-   "s": 3.0
-  },
-  {
-   "op": "library_dev",
-   "path": "D:/dev/plantgen/out/lib_core"
-  },
-  {
-   "op": "wait",
-   "s": 3.0
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/landform.gd",
-   "action": "new",
-   "biome": "savanna_summer_s1",
-   "size": 150,
-   "seed": 1234,
-   "landform": "terraces"
-  },
-  {
-   "op": "wait_ready",
-   "settle": 3.0
-  },
-  {
-   "op": "no_autosave"
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/close_zoom.gd",
-   "action": "fade",
-   "on": false
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/tree_fade.gd",
-   "factor": 0
-  },
-  {
-   "op": "hide_ui"
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/ground_parity.gd",
-   "action": "nocursor"
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/env.gd",
-   "mouse": [
-    960,
-    540
-   ]
-  },
-  {
-   "op": "wind",
-   "freeze": true
-  },
-  {
-   "op": "home"
-  },
-  {
-   "op": "settle"
-  },
-  {
-   "op": "capture",
-   "name": "savanna_b_home",
-   "desc": "library route: out/lib_core served by LibraryRegistry, surfaces from its own surfaces/ folder (SurfaceStore bake), terraces seed 1234, home view, fades off, wind frozen"
-  },
-  {
-   "op": "zoom",
-   "size": 14
-  },
-  {
-   "op": "look_at",
-   "at": [
-    0,
-    0
-   ]
-  },
-  {
-   "op": "settle"
-  },
-  {
-   "op": "capture",
-   "name": "savanna_b_close",
-   "desc": "library route: out/lib_core served by LibraryRegistry, surfaces from its own surfaces/ folder (SurfaceStore bake), size 14 at the map centre"
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/ground_parity.gd",
-   "action": "only",
-   "prefix": "NOSCATTER_"
-  },
-  {
-   "op": "wait",
-   "s": 2.5
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/ground_parity.gd",
-   "action": "freeze"
-  },
-  {
-   "op": "capture",
-   "name": "savanna_b_bareclose",
-   "desc": "the same view with the plants hidden: ground, cliff, accents and paths only"
-  },
-  {
-   "op": "home"
-  },
-  {
-   "op": "wait",
-   "s": 2.5
-  },
-  {
-   "op": "capture",
-   "name": "savanna_b_barehome",
-   "desc": "home view with the plants hidden"
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/ground_parity.gd",
-   "action": "thaw"
-  },
-  {
-   "op": "library_dev",
-   "path": ""
-  },
-  {
-   "op": "wait",
-   "s": 3.0
-  },
-  {
-   "op": "title"
-  },
-  {
-   "op": "wait",
-   "s": 1.0
-  },
-  {
-   "op": "foliage_library",
-   "name": "plantgen",
-   "package": "D:/dev/plantgen/out/lib_core_pkg"
-  },
-  {
-   "op": "wait",
-   "s": 3.0
   },
   {
    "op": "call",
@@ -352,8 +189,8 @@
   },
   {
    "op": "capture",
-   "name": "temperate_forest_a_home",
-   "desc": "package route: plantgen lib_core_pkg over the installed palette, surfaces through the editor import, terraces seed 1234, home view, fades off, wind frozen"
+   "name": "temperate_forest_home",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), home view, fades off, wind frozen"
   },
   {
    "op": "zoom",
@@ -371,8 +208,8 @@
   },
   {
    "op": "capture",
-   "name": "temperate_forest_a_close",
-   "desc": "package route: plantgen lib_core_pkg over the installed palette, surfaces through the editor import, size 14 at the map centre"
+   "name": "temperate_forest_close",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), size 14 at the map centre"
   },
   {
    "op": "call",
@@ -391,7 +228,7 @@
   },
   {
    "op": "capture",
-   "name": "temperate_forest_a_bareclose",
+   "name": "temperate_forest_bareclose",
    "desc": "the same view with the plants hidden: ground, cliff, accents and paths only"
   },
   {
@@ -403,7 +240,7 @@
   },
   {
    "op": "capture",
-   "name": "temperate_forest_a_barehome",
+   "name": "temperate_forest_barehome",
    "desc": "home view with the plants hidden"
   },
   {
@@ -417,160 +254,6 @@
   {
    "op": "wait",
    "s": 1.0
-  },
-  {
-   "op": "foliage_library",
-   "name": "treecube"
-  },
-  {
-   "op": "wait",
-   "s": 3.0
-  },
-  {
-   "op": "library_dev",
-   "path": "D:/dev/plantgen/out/lib_core"
-  },
-  {
-   "op": "wait",
-   "s": 3.0
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/landform.gd",
-   "action": "new",
-   "biome": "temperate_forest_summer_s1",
-   "size": 150,
-   "seed": 1234,
-   "landform": "terraces"
-  },
-  {
-   "op": "wait_ready",
-   "settle": 3.0
-  },
-  {
-   "op": "no_autosave"
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/close_zoom.gd",
-   "action": "fade",
-   "on": false
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/tree_fade.gd",
-   "factor": 0
-  },
-  {
-   "op": "hide_ui"
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/ground_parity.gd",
-   "action": "nocursor"
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/env.gd",
-   "mouse": [
-    960,
-    540
-   ]
-  },
-  {
-   "op": "wind",
-   "freeze": true
-  },
-  {
-   "op": "home"
-  },
-  {
-   "op": "settle"
-  },
-  {
-   "op": "capture",
-   "name": "temperate_forest_b_home",
-   "desc": "library route: out/lib_core served by LibraryRegistry, surfaces from its own surfaces/ folder (SurfaceStore bake), terraces seed 1234, home view, fades off, wind frozen"
-  },
-  {
-   "op": "zoom",
-   "size": 14
-  },
-  {
-   "op": "look_at",
-   "at": [
-    0,
-    0
-   ]
-  },
-  {
-   "op": "settle"
-  },
-  {
-   "op": "capture",
-   "name": "temperate_forest_b_close",
-   "desc": "library route: out/lib_core served by LibraryRegistry, surfaces from its own surfaces/ folder (SurfaceStore bake), size 14 at the map centre"
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/ground_parity.gd",
-   "action": "only",
-   "prefix": "NOSCATTER_"
-  },
-  {
-   "op": "wait",
-   "s": 2.5
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/ground_parity.gd",
-   "action": "freeze"
-  },
-  {
-   "op": "capture",
-   "name": "temperate_forest_b_bareclose",
-   "desc": "the same view with the plants hidden: ground, cliff, accents and paths only"
-  },
-  {
-   "op": "home"
-  },
-  {
-   "op": "wait",
-   "s": 2.5
-  },
-  {
-   "op": "capture",
-   "name": "temperate_forest_b_barehome",
-   "desc": "home view with the plants hidden"
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/ground_parity.gd",
-   "action": "thaw"
-  },
-  {
-   "op": "library_dev",
-   "path": ""
-  },
-  {
-   "op": "wait",
-   "s": 3.0
-  },
-  {
-   "op": "title"
-  },
-  {
-   "op": "wait",
-   "s": 1.0
-  },
-  {
-   "op": "foliage_library",
-   "name": "plantgen",
-   "package": "D:/dev/plantgen/out/lib_core_pkg"
-  },
-  {
-   "op": "wait",
-   "s": 3.0
   },
   {
    "op": "call",
@@ -627,8 +310,8 @@
   },
   {
    "op": "capture",
-   "name": "rocky_badlands_a_home",
-   "desc": "package route: plantgen lib_core_pkg over the installed palette, surfaces through the editor import, terraces seed 1234, home view, fades off, wind frozen"
+   "name": "rocky_badlands_home",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), home view, fades off, wind frozen"
   },
   {
    "op": "zoom",
@@ -646,8 +329,8 @@
   },
   {
    "op": "capture",
-   "name": "rocky_badlands_a_close",
-   "desc": "package route: plantgen lib_core_pkg over the installed palette, surfaces through the editor import, size 14 at the map centre"
+   "name": "rocky_badlands_close",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), size 14 at the map centre"
   },
   {
    "op": "call",
@@ -666,7 +349,7 @@
   },
   {
    "op": "capture",
-   "name": "rocky_badlands_a_bareclose",
+   "name": "rocky_badlands_bareclose",
    "desc": "the same view with the plants hidden: ground, cliff, accents and paths only"
   },
   {
@@ -678,158 +361,13 @@
   },
   {
    "op": "capture",
-   "name": "rocky_badlands_a_barehome",
+   "name": "rocky_badlands_barehome",
    "desc": "home view with the plants hidden"
   },
   {
    "op": "call",
    "script": "res://tools/render_jobs/probes/ground_parity.gd",
    "action": "thaw"
-  },
-  {
-   "op": "title"
-  },
-  {
-   "op": "wait",
-   "s": 1.0
-  },
-  {
-   "op": "foliage_library",
-   "name": "treecube"
-  },
-  {
-   "op": "wait",
-   "s": 3.0
-  },
-  {
-   "op": "library_dev",
-   "path": "D:/dev/plantgen/out/lib_core"
-  },
-  {
-   "op": "wait",
-   "s": 3.0
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/landform.gd",
-   "action": "new",
-   "biome": "rocky_badlands_summer_s1",
-   "size": 150,
-   "seed": 1234,
-   "landform": "terraces"
-  },
-  {
-   "op": "wait_ready",
-   "settle": 3.0
-  },
-  {
-   "op": "no_autosave"
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/close_zoom.gd",
-   "action": "fade",
-   "on": false
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/tree_fade.gd",
-   "factor": 0
-  },
-  {
-   "op": "hide_ui"
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/ground_parity.gd",
-   "action": "nocursor"
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/env.gd",
-   "mouse": [
-    960,
-    540
-   ]
-  },
-  {
-   "op": "wind",
-   "freeze": true
-  },
-  {
-   "op": "home"
-  },
-  {
-   "op": "settle"
-  },
-  {
-   "op": "capture",
-   "name": "rocky_badlands_b_home",
-   "desc": "library route: out/lib_core served by LibraryRegistry, surfaces from its own surfaces/ folder (SurfaceStore bake), terraces seed 1234, home view, fades off, wind frozen"
-  },
-  {
-   "op": "zoom",
-   "size": 14
-  },
-  {
-   "op": "look_at",
-   "at": [
-    0,
-    0
-   ]
-  },
-  {
-   "op": "settle"
-  },
-  {
-   "op": "capture",
-   "name": "rocky_badlands_b_close",
-   "desc": "library route: out/lib_core served by LibraryRegistry, surfaces from its own surfaces/ folder (SurfaceStore bake), size 14 at the map centre"
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/ground_parity.gd",
-   "action": "only",
-   "prefix": "NOSCATTER_"
-  },
-  {
-   "op": "wait",
-   "s": 2.5
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/ground_parity.gd",
-   "action": "freeze"
-  },
-  {
-   "op": "capture",
-   "name": "rocky_badlands_b_bareclose",
-   "desc": "the same view with the plants hidden: ground, cliff, accents and paths only"
-  },
-  {
-   "op": "home"
-  },
-  {
-   "op": "wait",
-   "s": 2.5
-  },
-  {
-   "op": "capture",
-   "name": "rocky_badlands_b_barehome",
-   "desc": "home view with the plants hidden"
-  },
-  {
-   "op": "call",
-   "script": "res://tools/render_jobs/probes/ground_parity.gd",
-   "action": "thaw"
-  },
-  {
-   "op": "library_dev",
-   "path": ""
-  },
-  {
-   "op": "wait",
-   "s": 3.0
   },
   {
    "op": "title"
@@ -840,8 +378,8 @@
   },
   {
    "op": "index",
-   "title": "library S5: package route against library route, surfaces",
-   "intro": "Three biomes (savanna, temperate forest, rocky badlands) on the terraces landform, seed 1234, built once under plantgen's lib_core_pkg (a_*: the installed palette's surfaces through the editor import) and once under the library out/lib_core (b_*: the same plants, ground, cliff, accents and paths baked from the library's own PNGs). Fades off, wind frozen. Compare a_ against b_ with the mean absolute difference (target 0.000 to 0.5 of 255)."
+   "title": "core surfaces: the shipped library, ground and plants",
+   "intro": "Three biomes (savanna, temperate forest, rocky badlands) on the terraces landform, seed 1234, built under the SHIPPED core library (res://libraries/core, surfaces baked from its raw PNGs by SurfaceStore, no editor import). Each biome: home view, a size 14 view, and both again with the plants hidden (ground, cliff, accents and paths only). Until step S10 (2026-10-25) this job compared the installed treecube palette's editor-imported surfaces with the library route; the installed palette is gone, so it now records the one route. Fades off, wind frozen."
   }
  ]
 }

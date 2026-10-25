@@ -61,9 +61,6 @@ func _live(model: BiomeDesignerModel) -> Dictionary:
 	scatter.grow_seconds = 0.0
 	scatter.request_region(Rect2(-document.extent_m() * 0.5, document.extent_m()))
 	await _await_regeneration(scatter)
-	# The two wind assets (the spire and core's oak) warn once that their vertex format is not
-	# the graphics warm-up's: the test GLBs are not the game's.
-	assert_engine_error(2, "the fixture GLBs differ from the warm-up's vertex format")
 	var controller := AuthoringController.new()
 	controller.scatter = scatter
 	controller.document = document
@@ -261,7 +258,6 @@ func test_switching_the_season_moves_the_map_to_that_seasons_plants() -> void:
 	)
 	await get_tree().create_timer(0.1).timeout
 	await _await_regeneration(scatter)
-	assert_engine_error(4, "the summer and the autumn plants warn once each")
 	assert_eq(_rows_of(scatter, TREES_ASSET), 0, "the summer plants are gone")
 	assert_true(_rows_of(scatter, autumn) > 5, "the autumn plants stand")
 	session.set_season(0)

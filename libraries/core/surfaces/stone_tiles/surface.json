@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.2075,
+		0.1889,
+		0.1721
+	],
+	"kind": "stone_tiles",
+	"label": "Stone tiles",
+	"role": "built",
+	"tile_m": 1.5
+}

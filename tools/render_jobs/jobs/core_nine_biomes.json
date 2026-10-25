@@ -1,0 +1,778 @@
+{
+ "out_dir": "render_jobs/core_nine_biomes",
+ "timeout_s": 1500,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/landform.gd",
+   "action": "new",
+   "biome": "alpine_meadow_summer_s1",
+   "size": 150,
+   "seed": 1234,
+   "landform": "terraces"
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/close_zoom.gd",
+   "action": "fade",
+   "on": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tree_fade.gd",
+   "factor": 0
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ground_parity.gd",
+   "action": "nocursor"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "alpine_meadow_home",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), home view, fades off, wind frozen"
+  },
+  {
+   "op": "zoom",
+   "size": 14
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "alpine_meadow_close",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), size 14 at the map centre"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/landform.gd",
+   "action": "new",
+   "biome": "birch_woodland_summer_s1",
+   "size": 150,
+   "seed": 1234,
+   "landform": "terraces"
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/close_zoom.gd",
+   "action": "fade",
+   "on": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tree_fade.gd",
+   "factor": 0
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ground_parity.gd",
+   "action": "nocursor"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "birch_woodland_home",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), home view, fades off, wind frozen"
+  },
+  {
+   "op": "zoom",
+   "size": 14
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "birch_woodland_close",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), size 14 at the map centre"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/landform.gd",
+   "action": "new",
+   "biome": "boreal_taiga_summer_s1",
+   "size": 150,
+   "seed": 1234,
+   "landform": "terraces"
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/close_zoom.gd",
+   "action": "fade",
+   "on": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tree_fade.gd",
+   "factor": 0
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ground_parity.gd",
+   "action": "nocursor"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "boreal_taiga_home",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), home view, fades off, wind frozen"
+  },
+  {
+   "op": "zoom",
+   "size": 14
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "boreal_taiga_close",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), size 14 at the map centre"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/landform.gd",
+   "action": "new",
+   "biome": "burnt_forest_summer_s1",
+   "size": 150,
+   "seed": 1234,
+   "landform": "terraces"
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/close_zoom.gd",
+   "action": "fade",
+   "on": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tree_fade.gd",
+   "factor": 0
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ground_parity.gd",
+   "action": "nocursor"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "burnt_forest_home",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), home view, fades off, wind frozen"
+  },
+  {
+   "op": "zoom",
+   "size": 14
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "burnt_forest_close",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), size 14 at the map centre"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/landform.gd",
+   "action": "new",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 150,
+   "seed": 1234,
+   "landform": "terraces"
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/close_zoom.gd",
+   "action": "fade",
+   "on": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tree_fade.gd",
+   "factor": 0
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ground_parity.gd",
+   "action": "nocursor"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "grassland_meadow_home",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), home view, fades off, wind frozen"
+  },
+  {
+   "op": "zoom",
+   "size": 14
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "grassland_meadow_close",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), size 14 at the map centre"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/landform.gd",
+   "action": "new",
+   "biome": "rocky_badlands_summer_s1",
+   "size": 150,
+   "seed": 1234,
+   "landform": "terraces"
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/close_zoom.gd",
+   "action": "fade",
+   "on": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tree_fade.gd",
+   "factor": 0
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ground_parity.gd",
+   "action": "nocursor"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "rocky_badlands_home",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), home view, fades off, wind frozen"
+  },
+  {
+   "op": "zoom",
+   "size": 14
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "rocky_badlands_close",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), size 14 at the map centre"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/landform.gd",
+   "action": "new",
+   "biome": "savanna_summer_s1",
+   "size": 150,
+   "seed": 1234,
+   "landform": "terraces"
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/close_zoom.gd",
+   "action": "fade",
+   "on": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tree_fade.gd",
+   "factor": 0
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ground_parity.gd",
+   "action": "nocursor"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "savanna_home",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), home view, fades off, wind frozen"
+  },
+  {
+   "op": "zoom",
+   "size": 14
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "savanna_close",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), size 14 at the map centre"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/landform.gd",
+   "action": "new",
+   "biome": "temperate_forest_summer_s1",
+   "size": 150,
+   "seed": 1234,
+   "landform": "terraces"
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/close_zoom.gd",
+   "action": "fade",
+   "on": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tree_fade.gd",
+   "factor": 0
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ground_parity.gd",
+   "action": "nocursor"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "temperate_forest_home",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), home view, fades off, wind frozen"
+  },
+  {
+   "op": "zoom",
+   "size": 14
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "temperate_forest_close",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), size 14 at the map centre"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/landform.gd",
+   "action": "new",
+   "biome": "wetland_riparian_summer_s1",
+   "size": 150,
+   "seed": 1234,
+   "landform": "terraces"
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/close_zoom.gd",
+   "action": "fade",
+   "on": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tree_fade.gd",
+   "factor": 0
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ground_parity.gd",
+   "action": "nocursor"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "wetland_riparian_home",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), home view, fades off, wind frozen"
+  },
+  {
+   "op": "zoom",
+   "size": 14
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "wetland_riparian_close",
+   "desc": "core, terraces seed 1234, the shipped library (res://libraries/core), size 14 at the map centre"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "index",
+   "title": "core: the nine biomes of the shipped library",
+   "intro": "All nine biomes of the shipped core library (res://libraries/core), each a new 150 ft terraces map (seed 1234, never saved): a home view and a size 14 view at the map centre, fades off, wind frozen. The evidence for step S10 (treecube removed, plantgen's core ships with the game)."
+  }
+ ]
+}

@@ -6,7 +6,7 @@ extends GutTest
 ## refusal, and the entry points on the level card, level grid and title.
 
 const DIR := "user://test_authoring_open/"
-const ROCK := "temperate_forest_summer_s1/Rock_Boulder_summer_08"
+const ROCK := "temperate_forest_summer_s1/Rock_Boulder_summer_08_temperate_forest"
 const TITLE_SCENE := preload("res://scenes/states/title_screen/title_screen.tscn")
 const GAME_MAP_SCENE := preload("res://scenes/states/playing/game_map.tscn")
 const ROOT_SCRIPT := preload("res://scenes/root.gd")
@@ -169,7 +169,7 @@ func test_new_map_dialog_spec_follows_the_tiles() -> void:
 	var spec := dialog.current_spec()
 	assert_eq(spec["size_ft"], 200)
 	assert_eq(spec["biome_id"], NewMap.BARE_BIOME)
-	assert_eq(dialog.ground_caption.text, "Ground: grass")
+	assert_eq(dialog.ground_caption.text, "Ground: Grass")
 	watch_signals(dialog)
 	dialog._on_create_pressed()
 	assert_signal_emitted(dialog, "map_chosen")

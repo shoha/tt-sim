@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.2708,
+		0.3839,
+		0.0803
+	],
+	"kind": "grass",
+	"label": "Grass birch",
+	"role": "ground",
+	"tile_m": 4
+}

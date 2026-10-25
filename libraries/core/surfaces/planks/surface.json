@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.2617,
+		0.1618,
+		0.0843
+	],
+	"kind": "planks",
+	"label": "Planks",
+	"role": "built",
+	"tile_m": 2
+}

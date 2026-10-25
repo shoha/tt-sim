@@ -4,7 +4,6 @@
  "steps": [
   {"op": "wait", "s": 1.0},
   {"op": "wait_title"},
-  {"op": "library_dev", "path": "D:/dev/plantgen/out/lib_core"},
   {"op": "wait", "s": 1.0},
   {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "window", "size": [1600, 900]},
   {"op": "wait", "s": 1.0},

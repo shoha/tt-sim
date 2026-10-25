@@ -10,7 +10,7 @@ extends GutTest
 ## it is removed after each test.
 
 const FOLDER := "_gut_t4_loader"
-const ROCK := "temperate_forest_summer_s1/Rock_Boulder_summer_08"
+const ROCK := "temperate_forest_summer_s1/Rock_Boulder_summer_08_temperate_forest"
 
 
 class FakeStreamer:

@@ -6,7 +6,7 @@ extends GutTest
 ## reads the new uniforms while the burn variant stays as it was.
 
 const BIOME := "temperate_forest_summer_s1"
-const OAK := BIOME + "/Tree_Oak_summer_01"
+const OAK := BIOME + "/Tree_Oak_v0"
 const BIG_BUDGET := 1_000_000_000
 const REAL_VARIANTS := [
 	"res://shaders/wind_foliage.gdshader",

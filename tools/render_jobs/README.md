@@ -99,25 +99,21 @@ phases (REFERENCE.md "Tagging a job for build and look") and run in look mode:
 ## Repeatable captures and package rounds
 
 A job whose captures are compared run to run (an A/B, a treecube species round) needs the
-same pixels from the same inputs. Four ops give that (REFERENCE.md "State and maps"):
+same pixels from the same inputs. Three ops give that (REFERENCE.md "State and maps"):
 
-- `palette_overlay` lays a built treecube package over the installed palette for the run,
-  instead of merging it into `assets/palette` and re-importing (about 9 s and a git reset per
-  round). Lanes with different packages run from one checkout at once, each with its own
-  `--out`.
 - `place_seed` after `wait_ready`: placed props pick the same variants and yaws every run.
 - `wind` (`freeze`): plants hold still, so the shader clock no longer shows in the pixels.
 - `settle` in place of `wait` after a camera move, a placement or a toggle: it ends when the
   camera and the scatter are at rest, and snaps the zoom onto its target.
 
-A species round is then: `wait_title`, `palette_overlay` (the package), `new_map`,
+A species round is then: `wait_title`, `library_dev` (a plantgen library folder as the developer override), `new_map`,
 `wait_ready` (`settle` 0.5), `no_autosave`, `place_seed`, `wind`, the probes' setup, and for
 each view its camera ops, a `settle` and the `capture`. Measured on the alpine bellflower
 round (12 full-size captures, 2026-10-20): every raw (`_sub`) capture identical between two
 runs, the job 33 s against 72 s with fixed waits; against merge plus import the plant and
 bare views are identical and the home views differ on under a thousand pixels, where a
-changed asset the import compresses differently draws (`PaletteOverlay`). Keep merge plus
-import as the ship check of an approved species.
+changed asset the import compressed differently drew (the retired `PaletteOverlay`; since
+step S10 a library's GLBs are parsed the same way everywhere, so the difference is gone).
 
 ## Levels, hangs and the process check
 

@@ -1,0 +1,1088 @@
+{
+	"climate": "cold",
+	"format": "ttsim-biome",
+	"format_version": 1,
+	"ground": {
+		"accents": [
+			{
+				"coverage": 0.08,
+				"scale_m": 7,
+				"surface": "gravel_scree"
+			}
+		],
+		"cliff": "cliff_basalt",
+		"paths": [
+			"flagstone",
+			"dirt_road_packed",
+			"cobblestone"
+		],
+		"scree": "gravel",
+		"shore": "gravel",
+		"surface": "grass_alpine",
+		"water_bed": "riverbed"
+	},
+	"ground_look": {
+		"brush": {
+			"mean": 3.2
+		},
+		"light": {
+			"cap": 0.95,
+			"knee": 0.68,
+			"lit_tint": [
+				1.03,
+				1,
+				0.88
+			],
+			"shade": 0.38,
+			"shade_tint": [
+				0.95,
+				1,
+				1
+			]
+		},
+		"mass": {
+			"lit_m": 0.9,
+			"step": 1.04
+		},
+		"ref_surface": "grass_alpine",
+		"rim": {
+			"color_linear": [
+				0.2738,
+				0.2957,
+				0.1329
+			],
+			"strength": 0.35,
+			"surfaces": []
+		},
+		"strokes": {
+			"len": 2.5,
+			"m": 1.2
+		},
+		"zones": {
+			"angle_k": [
+				0,
+				0.8,
+				-0.4
+			],
+			"colors_linear": [
+				[
+					0.1625,
+					0.2991,
+					0.0806
+				],
+				[
+					0.0494,
+					0.194,
+					0.0885
+				],
+				[
+					0.6519,
+					0.2215,
+					0.0844
+				],
+				[
+					0.2813,
+					0.1766,
+					0.3573
+				]
+			],
+			"cover": [
+				0.3,
+				0.16,
+				0
+			],
+			"edge": [
+				0.04,
+				0.045,
+				0.03
+			],
+			"edge_vary_m": 8,
+			"rag": 0.14,
+			"rag_m": 1.2,
+			"scale_m": [
+				5,
+				8,
+				5
+			],
+			"stretch": 1.2,
+			"stretch_k": [
+				1,
+				1.6,
+				1
+			],
+			"warp": 0.5
+		}
+	},
+	"id": "alpine_meadow",
+	"name": "Alpine Meadow",
+	"rules": [
+		{
+			"align": "upright",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.003,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "dwarf_pine",
+			"near": [],
+			"pattern": null,
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Tree_Pine_v0_alpine_meadow"
+					},
+					{
+						"ref": "Tree_Spruce_v0_alpine_meadow"
+					},
+					{
+						"ref": "Tree_Pine_v1_alpine_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "canopy_tree",
+			"scale_floor": null,
+			"scale_spread": 0.15,
+			"size_class": "large",
+			"slope_max_deg": 35,
+			"spacing_m": 4.5,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.036,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "boulder",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": false,
+					"scale_influence": 0,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 132,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Rock_Boulder_summer_01"
+					},
+					{
+						"ref": "Rock_Boulder_summer_02_alpine_meadow"
+					},
+					{
+						"ref": "Rock_Boulder_summer_03_alpine_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "boulder",
+			"scale_floor": null,
+			"scale_spread": 0.2,
+			"size_class": "medium",
+			"slope_max_deg": 40,
+			"spacing_m": 2,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "upright",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.012,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "bush",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": false,
+					"scale_influence": 0,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 133,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Bush_Bush_v0_alpine_meadow"
+					},
+					{
+						"ref": "Bush_BerryBush_v0_alpine_meadow"
+					},
+					{
+						"ref": "Bush_Bush_v1_alpine_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "shrub",
+			"scale_floor": null,
+			"scale_spread": 0.2,
+			"size_class": "medium",
+			"slope_max_deg": 40,
+			"spacing_m": 2,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.25,
+				"parents_per_m2": 0.05,
+				"radius_m": 1.2,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 0.135,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "rock",
+			"near": [
+				{
+					"distance_m": 2.5,
+					"influence": 0.6,
+					"rule": "boulder",
+					"transition_m": 2
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 15,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 134,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0.15
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Rock_Medium_summer_05_alpine_meadow"
+					},
+					{
+						"ref": "Rock_Medium_summer_06_alpine_meadow"
+					},
+					{
+						"ref": "Rock_Medium_summer_07_alpine_meadow"
+					},
+					{
+						"ref": "Rock_Medium_summer_08_alpine_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "rock",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "small",
+			"slope_max_deg": 55,
+			"spacing_m": 0.25,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.25,
+				"parents_per_m2": 0.05,
+				"radius_m": 1.2,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 0.09,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "stones",
+			"near": [
+				{
+					"distance_m": 2,
+					"influence": 0.7,
+					"rule": "boulder",
+					"transition_m": 1.5
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 15,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 135,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0.15
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Stone_Cluster_summer_09_alpine_meadow"
+					},
+					{
+						"ref": "Stone_Cluster_summer_10_alpine_meadow"
+					},
+					{
+						"ref": "Stone_Cluster_summer_11"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "stones",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "small",
+			"slope_max_deg": 55,
+			"spacing_m": 0.25,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"angle_deg": 0,
+				"angle_jitter_deg": 90,
+				"children_spacing_m": 0,
+				"edge_shrink": 0.5,
+				"mass": 1,
+				"parents_per_m2": 0.09,
+				"radius_m": 0.9,
+				"stretch": 1.2,
+				"transition_m": 0.5
+			},
+			"density_per_m2": 5.6,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "turf",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 100,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2.2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 136,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 0.6,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.25,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Grass_Grass_v0_alpine_meadow"
+					},
+					{
+						"ref": "Grass_Grass_v1_alpine_meadow"
+					},
+					{
+						"ref": "Grass_Grass_v2_alpine_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "grass",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.25,
+				"radius_m": 1.6,
+				"transition_m": 1
+			},
+			"density_per_m2": 3.36,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"keep_colour": true,
+			"key": "tundra_sprig",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 100,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 3,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 137,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 1.2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 1,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Grass_SprigClump_v0_alpine_meadow"
+					},
+					{
+						"ref": "Grass_SprigClump_v1_alpine_meadow"
+					},
+					{
+						"ref": "Grass_SprigClump_v2_alpine_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "grass",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.03,
+				"radius_m": 3,
+				"transition_m": 1.5
+			},
+			"density_per_m2": 0.96,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "carpet",
+			"near": [
+				{
+					"distance_m": 2.5,
+					"influence": 0.2,
+					"rule": "boulder",
+					"transition_m": 2.5
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 138,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 1,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Flower_BloomMound_v0_alpine_meadow"
+					},
+					{
+						"ref": "Flower_BloomMound_v1_alpine_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "carpet",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.08,
+				"radius_m": 0.9,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 1.92,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "alpine_daisy",
+			"near": [
+				{
+					"distance_m": 1.5,
+					"influence": 0.9,
+					"rule": "carpet",
+					"transition_m": 2
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 70,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 139,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 3,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.7,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Flower_Daisy_v0_alpine_meadow"
+					},
+					{
+						"ref": "Flower_Daisy_v1_alpine_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "flower",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.08,
+				"radius_m": 0.9,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 0.96,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "gentian",
+			"near": [
+				{
+					"distance_m": 1.5,
+					"influence": 0.9,
+					"rule": "carpet",
+					"transition_m": 2
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 70,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 140,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 3,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.7,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Flower_BellCluster_v0_alpine_meadow"
+					},
+					{
+						"ref": "Flower_BellCluster_v1_alpine_meadow"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "flower",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.08,
+				"radius_m": 0.9,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 0.96,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "poppy",
+			"near": [
+				{
+					"distance_m": 1.5,
+					"influence": 0.9,
+					"rule": "carpet",
+					"transition_m": 2
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 70,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 141,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 3,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.7,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Flower_Poppy_v0_alpine_meadow"
+					},
+					{
+						"ref": "Flower_Poppy_v1"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "flower",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.06,
+				"radius_m": 1.1,
+				"transition_m": 0.9
+			},
+			"density_per_m2": 0.72,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "bellflower",
+			"near": [
+				{
+					"distance_m": 2.5,
+					"influence": 0.3,
+					"rule": "boulder",
+					"transition_m": 2.5
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 70,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 221,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 3,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.7,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Flower_BellCluster_v2"
+					},
+					{
+						"ref": "Flower_BellCluster_v3"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "flower",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		}
+	],
+	"seasons": [
+		{
+			"id": "summer",
+			"seed": 1
+		}
+	],
+	"surfaces": "library",
+	"thumbnail": "thumbnails/alpine_meadow.jpg"
+}

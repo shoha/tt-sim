@@ -250,11 +250,10 @@ func test_the_first_burn_binds_no_new_layer() -> void:
 	var reserved := AuthoredTerrain.fire_surfaces(doc, PaletteLibrary.DEFAULT_ROOT, false)
 	assert_true(reserved.has("ash"), str(reserved))
 	assert_true(reserved.size() >= 3, "the burnt forest's ground and accents too: %s" % reserved)
-	var paths := AuthoredTerrain.texture_paths(doc)
 	var ash: Dictionary = PaletteLibrary.surfaces()["ash"]
 	assert_true(
-		paths.has(PaletteLibrary.DEFAULT_ROOT.path_join(String(ash.albedo))),
-		"the load reads the reserve's textures on its threads"
+		SurfaceStore.available(PaletteLibrary.DEFAULT_ROOT, String(ash.albedo)),
+		"the reserve's textures are readable (library surfaces bake on first use)"
 	)
 	var terrain := AuthoredTerrain.create(doc)
 	add_child_autofree(terrain)

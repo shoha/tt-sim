@@ -1,170 +1,58 @@
 extends GutTest
 
-## FoliageLibrary (utils/foliage_library.gd): the runtime choice between the installed palette
-## (treecube) and a built plantgen package laid over it. Switching clears the palette and wind
-## caches, the overlay goes away when treecube is chosen again, an unknown library or package is
-## refused without touching anything, the choice round-trips through the settings file, and a
-## map saved under the other library has its scatter regenerated from the biome painting.
+## FoliageLibrary (utils/foliage_library.gd) since step S10: it serves the content libraries into
+## the palette (the treecube palette and the plantgen-package switch are gone) and keeps a map in
+## step with them. apply() clears the palette and wind caches and serves the libraries again,
+## refresh_libraries() announces it, a developer override that cannot be served is reported while
+## the others stay served, the retired `[foliage]` settings are ignored, and a map saved under
+## another asset set has its scatter regenerated from the biome painting.
 ##
-## Fixture, built on the fly under user://: an installed palette with a meadow (Bell, Daisy, Old)
-## and a forest (Oak), and a package with the meadow only: Bell byte-identical, Daisy rebuilt,
-## Old gone, New added (the model is test_palette_overlay.gd).
+## Fixture: tests/unit/library_world.gd (a palette root `base` with a forest and a meadow, an
+## official root holding the miniature `core` with biome `forest` and assets Tree_Oak_v0 and
+## Tree_Oak_v1, a user root holding `alienworld`).
 
+const World := preload("res://tests/unit/library_world.gd")
 const ROOT := "user://test_foliage_library"
-const BASE := ROOT + "/base"
-const PACKAGE := ROOT + "/package"
-const SETTINGS := ROOT + "/settings.cfg"
-const MEADOW := "meadow_summer_s1"
-const FOREST := "forest_summer_s1"
+const FOREST := World.CORE_RUNTIME
+const OAK := FOREST + "/Tree_Oak_v0"
+## An asset of the retired treecube palette: no served library has it.
+const OLD := FOREST + "/Tree_Oak_summer_01"
 
-var _saved_settings_path: String = ""
+var _paths: Dictionary = {}
+var _saved: Dictionary = {}
 
 
 func before_all() -> void:
-	_write_glb(BASE, MEADOW, "Bell", _card_mesh(1))
-	_write_glb(BASE, MEADOW, "Daisy", _card_mesh(1))
-	_write_glb(BASE, MEADOW, "Old", _card_mesh(1))
-	_write_glb(BASE, FOREST, "Oak", _card_mesh(1))
-	_write_document(BASE, [_biome(MEADOW, ["Bell", "Daisy", "Old"]), _biome(FOREST, ["Oak"])])
-	DirAccess.make_dir_recursive_absolute(PACKAGE.path_join("assets").path_join(MEADOW))
-	var bell := "assets/%s/Bell.glb" % MEADOW
-	DirAccess.copy_absolute(BASE.path_join(bell), PACKAGE.path_join(bell))
-	_write_glb(PACKAGE, MEADOW, "Daisy", _card_mesh(2))
-	_write_glb(PACKAGE, MEADOW, "New", _card_mesh(3))
-	_write_document(PACKAGE, [_biome(MEADOW, ["Bell", "Daisy", "New"])])
-	_saved_settings_path = FoliageLibrary.settings_path
-	FoliageLibrary.settings_path = SETTINGS
+	_saved = {
+		"settings": LibraryRegistry.settings_path,
+		"official": LibraryRegistry.official_root,
+		"user": LibraryRegistry.user_root,
+	}
 
 
 func after_all() -> void:
-	FoliageLibrary.settings_path = _saved_settings_path
-	FoliageLibrary.apply(FoliageLibrary.TREECUBE, "", BASE)
+	LibraryRegistry.settings_path = _saved["settings"]
+	LibraryRegistry.official_root = _saved["official"]
+	LibraryRegistry.user_root = _saved["user"]
+	LibraryRegistry.clear()
 	PaletteLibrary.clear_cache()
-	_remove_tree(ROOT)
+	World.remove_tree(ROOT)
 
 
 func before_each() -> void:
-	FoliageLibrary.apply(FoliageLibrary.TREECUBE, "", BASE)
-	DirAccess.remove_absolute(SETTINGS)
+	World.remove_tree(ROOT)
+	_paths = World.build(ROOT)
+	LibraryRegistry.clear()
+	LibraryRegistry.settings_path = ROOT + "/settings.cfg"
+	LibraryRegistry.official_root = _paths["official"]
+	LibraryRegistry.user_root = _paths["user"]
+	FoliageLibrary.apply(_paths["base"])
 
 
-func _card_mesh(surface_count: int) -> ArrayMesh:
-	var mesh := ArrayMesh.new()
-	for surface in surface_count:
-		var arrays := []
-		arrays.resize(Mesh.ARRAY_MAX)
-		arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array(
-			[Vector3(0, 0, 0), Vector3(0.5, 0, 0.2), Vector3(0, 2, 0.1)]
-		)
-		arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.BACK, Vector3.BACK, Vector3.BACK])
-		arrays[Mesh.ARRAY_TANGENT] = PackedFloat32Array([1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1])
-		arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array([Vector2(0, 1), Vector2(1, 1), Vector2(0, 0)])
-		arrays[Mesh.ARRAY_COLOR] = PackedColorArray(
-			[Color(0, 0, 0.2), Color(0, 0, 0.4), Color(1, 1, 0.6)]
-		)
-		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-		mesh.surface_set_material(surface, StandardMaterial3D.new())
-	return mesh
-
-
-func _write_glb(root_path: String, biome_id: String, object_name: String, mesh: Mesh) -> void:
-	DirAccess.make_dir_recursive_absolute(root_path.path_join("assets").path_join(biome_id))
-	var root := Node3D.new()
-	root.name = "Root"
-	var node := MeshInstance3D.new()
-	node.name = object_name
-	node.mesh = mesh
-	root.add_child(node)
-	node.owner = root
-	var document := GLTFDocument.new()
-	var state := GLTFState.new()
-	document.append_from_scene(root, state)
-	document.write_to_filesystem(
-		state, root_path.path_join("assets/%s/%s.glb" % [biome_id, object_name])
-	)
-	root.free()
-
-
-func _biome(biome_id: String, names: Array) -> Dictionary:
-	var ids: Array = names.map(func(n: String) -> String: return "%s/%s" % [biome_id, n])
-	return {
-		"id": biome_id,
-		"biome": biome_id.get_slice("_", 0),
-		"season": "summer",
-		"seed": 1,
-		"name": biome_id,
-		"climate": "temperate",
-		"thumbnail": "thumbnails/%s.jpg" % biome_id,
-		"ground_surface": "grass",
-		"species":
-		[
-			{
-				"key": "flower",
-				"kind": "flower",
-				"size_class": "small",
-				"density_per_m2": 0.5,
-				"min_spacing_m": 0.3,
-				"slope_max_deg": 35.0,
-				"scale_spread": 0.3,
-				"yaw_random_deg": 360.0,
-				"align": "upright",
-				"near": [],
-				"avoid": [],
-				"assets": ids,
-			}
-		],
-	}
-
-
-func _write_document(root_path: String, biomes: Array) -> void:
-	var assets := {}
-	for biome: Dictionary in biomes:
-		for asset_id: String in biome["species"][0]["assets"]:
-			assets[asset_id] = {
-				"file": "assets/%s.glb" % asset_id,
-				"node": asset_id.get_slice("/", 1),
-				"wind_category": "grass",
-				"size_class": "small",
-				"dimensions_m": [0.5, 2.0, 0.1],
-			}
-	var surface := {
-		"albedo": "surfaces/grass/grass_albedo.png",
-		"normal": "surfaces/grass/grass_normal.png",
-		"orm": "surfaces/grass/grass_orm.png",
-		"height": "surfaces/grass/grass_height.png",
-		"tile_m": 2.0,
-		"kind": "grass",
-		"role": "ground",
-	}
-	var document := {
-		"format": 1,
-		"palette_version": root_path.get_file(),
-		"surfaces": {"grass": surface},
-		"biomes": biomes,
-		"assets": assets,
-	}
-	var file := FileAccess.open(root_path.path_join("palette.json"), FileAccess.WRITE)
-	file.store_string(JSON.stringify(document))
-	file.close()
-
-
-func _remove_tree(path: String) -> void:
-	if LibraryPaths.verify(path) != "":  # "" and "." mean the working directory (the project)
-		return
-	var dir := DirAccess.open(path)
-	if dir == null:
-		return
-	for sub in dir.get_directories():
-		_remove_tree(path.path_join(sub))
-	for file_name in dir.get_files():
-		dir.remove(file_name)
-	DirAccess.remove_absolute(path)
-
-
-## A document painted all with the meadow, whose scatter holds one row of each of `asset_ids`.
+## A document painted all with the forest, whose scatter holds one row of each of `asset_ids`.
 func _document(asset_ids: Array) -> MapDocument:
 	var doc := MapDocument.create_flat(Vector2i(4, 4), "", "", 7)
-	doc.biome_ids = PackedStringArray([MEADOW])
+	doc.biome_ids = PackedStringArray([FOREST])
 	var slots := PackedByteArray()
 	slots.resize(doc.sample_count())
 	slots.fill(1)
@@ -178,171 +66,149 @@ func _document(asset_ids: Array) -> MapDocument:
 	return doc
 
 
-func _asset_ids(root: String) -> Array:
-	return (PaletteLibrary.get_palette(root)["assets"] as Dictionary).keys()
+func _asset_ids() -> Array:
+	return (PaletteLibrary.get_palette(_paths["base"])["assets"] as Dictionary).keys()
 
 
-func test_plantgen_lays_the_package_over_every_biome_and_treecube_takes_it_off() -> void:
-	var result := FoliageLibrary.apply(FoliageLibrary.PLANTGEN, PACKAGE, BASE)
+func test_apply_serves_every_installed_library_over_the_base() -> void:
+	var result := FoliageLibrary.apply(_paths["base"])
 	assert_true(result["ok"], str(result["error"]))
-	assert_eq(FoliageLibrary.current(), FoliageLibrary.PLANTGEN)
-	assert_eq(FoliageLibrary.active_package(), PACKAGE)
-	var ids := _asset_ids(BASE)
-	assert_has(ids, MEADOW + "/New", "the package's asset")
-	assert_does_not_have(ids, MEADOW + "/Old", "the installed meadow's own asset went")
-	assert_has(ids, FOREST + "/Oak", "a biome the package lacks is left alone")
-	var back := FoliageLibrary.apply(FoliageLibrary.TREECUBE, "", BASE)
-	assert_true(back["ok"])
-	assert_eq(FoliageLibrary.current(), FoliageLibrary.TREECUBE)
-	assert_eq(FoliageLibrary.active_package(), "")
-	ids = _asset_ids(BASE)
-	assert_has(ids, MEADOW + "/Old", "the installed palette is back")
-	assert_does_not_have(ids, MEADOW + "/New", "the overlay is gone")
+	var ids := _asset_ids()
+	assert_has(ids, OAK, "core's asset")
+	assert_has(ids, World.ALIEN_RUNTIME + "/Crystal_Spire_v0", "the user's library")
+	assert_does_not_have(ids, FOREST + "/Oak", "the base's own forest asset went with its biome")
+	assert_eq(LibraryRegistry.served().keys().size(), 2)
 
 
-func test_a_switch_drops_the_cached_meshes_of_the_other_library() -> void:
-	var before := PaletteLibrary.resolve(MEADOW + "/Daisy", BASE)["mesh"] as Mesh
-	assert_eq(before.get_surface_count(), 1)
-	FoliageLibrary.apply(FoliageLibrary.PLANTGEN, PACKAGE, BASE)
-	var rebuilt := PaletteLibrary.resolve(MEADOW + "/Daisy", BASE)["mesh"] as Mesh
-	assert_eq(rebuilt.get_surface_count(), 2, "the package's rebuilt daisy")
-	FoliageLibrary.apply(FoliageLibrary.TREECUBE, "", BASE)
-	var again := PaletteLibrary.resolve(MEADOW + "/Daisy", BASE)["mesh"] as Mesh
-	assert_eq(again.get_surface_count(), 1, "the installed daisy again")
+func test_apply_drops_what_a_removed_library_laid() -> void:
+	assert_has(_asset_ids(), World.ALIEN_RUNTIME + "/Crystal_Spire_v0")
+	World.remove_tree(_paths["alien"])
+	FoliageLibrary.apply(_paths["base"])
+	assert_does_not_have(_asset_ids(), World.ALIEN_RUNTIME + "/Crystal_Spire_v0")
+	assert_has(_asset_ids(), OAK, "core stays")
 
 
-func test_a_switch_resets_the_wind_representatives() -> void:
+func test_apply_drops_the_cached_meshes() -> void:
+	var before: int = AssetStore.stats["parses"]
+	assert_not_null(PaletteLibrary.resolve(OAK, _paths["base"]).get("mesh"))
+	assert_eq(AssetStore.stats["parses"], before + 1)
+	PaletteLibrary.resolve(OAK, _paths["base"])
+	assert_eq(AssetStore.stats["parses"], before + 1, "served from the cache")
+	FoliageLibrary.apply(_paths["base"])
+	PaletteLibrary.resolve(OAK, _paths["base"])
+	assert_eq(AssetStore.stats["parses"], before + 2, "parsed again after apply")
+
+
+func test_apply_resets_the_wind_representatives() -> void:
+	FoliageLibrary.apply()  # the default root: the one the representatives are picked from
 	WindFoliage.representative_assets()
-	assert_false(WindFoliage._representative_ids.is_empty(), "primed from the installed palette")
-	FoliageLibrary.apply(FoliageLibrary.TREECUBE, "", BASE)
-	assert_true(WindFoliage._representative_ids.is_empty(), "forgotten on a switch")
+	assert_false(WindFoliage._representative_ids.is_empty(), "primed from the served palette")
+	FoliageLibrary.apply()
+	assert_true(WindFoliage._representative_ids.is_empty(), "forgotten on apply")
 	assert_true(WindFoliage._representative_formats.is_empty())
 
 
-func test_an_unknown_library_or_package_changes_nothing() -> void:
-	FoliageLibrary.apply(FoliageLibrary.PLANTGEN, PACKAGE, BASE)
-	var served := PaletteLibrary.get_palette(BASE)
-	var unknown := FoliageLibrary.apply("speedtree", PACKAGE, BASE)
-	assert_false(unknown["ok"])
-	assert_string_contains(String(unknown["error"]), "speedtree")
-	var missing := FoliageLibrary.apply(FoliageLibrary.PLANTGEN, ROOT + "/nowhere", BASE)
-	assert_false(missing["ok"])
-	assert_string_contains(String(missing["error"]), "nowhere")
-	var empty := FoliageLibrary.apply(FoliageLibrary.PLANTGEN, "", BASE)
-	assert_false(empty["ok"], "no folder given and none saved")
-	assert_eq(FoliageLibrary.current(), FoliageLibrary.PLANTGEN, "still serving what it did")
-	assert_same(PaletteLibrary.get_palette(BASE), served, "the cache was not touched")
-
-
-func test_a_package_that_cannot_be_laid_over_falls_back_to_treecube() -> void:
-	DirAccess.make_dir_recursive_absolute(ROOT + "/empty_package")
-	var file := FileAccess.open(ROOT + "/empty_package/palette.json", FileAccess.WRITE)
-	file.store_string("{}")
-	file.close()
-	var result := FoliageLibrary.apply(FoliageLibrary.PLANTGEN, ROOT + "/empty_package", BASE)
+func test_a_developer_override_that_cannot_be_served_is_reported_and_the_rest_stays() -> void:
+	LibraryRegistry.set_dev_override(ROOT + "/nowhere")
+	var result := FoliageLibrary.apply(_paths["base"])
 	assert_false(result["ok"])
-	assert_eq(FoliageLibrary.current(), FoliageLibrary.TREECUBE)
-	assert_has(_asset_ids(BASE), MEADOW + "/Old", "the installed palette serves")
+	assert_ne(String(result["error"]), "")
+	assert_engine_error(2, "the override's problem, and the library's reason")
+	assert_has(_asset_ids(), OAK, "core is still served")
 
 
-func test_the_choice_round_trips_through_the_settings_file() -> void:
-	assert_eq(FoliageLibrary.saved_library(), FoliageLibrary.TREECUBE, "the default")
-	assert_eq(FoliageLibrary.package_path(), "")
-	assert_false(FoliageLibrary.available(), "no folder, nothing to offer")
-	FoliageLibrary.save_settings(FoliageLibrary.PLANTGEN, PACKAGE)
-	assert_eq(FoliageLibrary.saved_library(), FoliageLibrary.PLANTGEN)
-	assert_eq(FoliageLibrary.package_path(), PACKAGE)
-	assert_true(FoliageLibrary.available())
-	FoliageLibrary.save_settings(FoliageLibrary.TREECUBE)
-	assert_eq(FoliageLibrary.saved_library(), FoliageLibrary.TREECUBE)
-	assert_eq(FoliageLibrary.package_path(), PACKAGE, "the folder is kept")
-	FoliageLibrary.save_settings("nonsense", ROOT + "/nowhere")
-	assert_eq(FoliageLibrary.saved_library(), FoliageLibrary.TREECUBE, "unknown reads as treecube")
-	assert_false(FoliageLibrary.available(), "a folder without a palette is not offered")
-
-
-func test_apply_saved_serves_the_saved_library() -> void:
+func test_the_retired_foliage_settings_are_ignored() -> void:
+	var config := ConfigFile.new()
+	config.set_value("foliage", "library", "plantgen")
+	config.set_value("foliage", "package_path", ROOT + "/nowhere")
+	assert_eq(config.save(LibraryRegistry.settings_path), OK)
 	FoliageLibrary.apply_saved()
-	assert_eq(FoliageLibrary.current(), FoliageLibrary.TREECUBE)
-	FoliageLibrary.save_settings(FoliageLibrary.PLANTGEN, ROOT + "/nowhere")
-	FoliageLibrary.apply_saved()
-	assert_eq(FoliageLibrary.current(), FoliageLibrary.TREECUBE, "a missing package is warned about")
-	assert_engine_error("no plantgen package")
+	assert_has(
+		(PaletteLibrary.get_palette()["assets"] as Dictionary).keys(),
+		OAK,
+		"core serves whatever the old setting says"
+	)
+	var kept := ConfigFile.new()
+	kept.load(LibraryRegistry.settings_path)
+	assert_eq(kept.get_value("foliage", "library"), "plantgen", "the file is left alone")
 
 
-func test_switch_persists_and_announces_only_a_change_that_worked() -> void:
+func test_refresh_announces_only_a_change_that_worked() -> void:
 	watch_signals(EventBus)
-	var failed := FoliageLibrary.switch(FoliageLibrary.PLANTGEN, ROOT + "/nowhere")
-	assert_false(failed["ok"])
-	assert_engine_error("no plantgen package")
-	assert_signal_not_emitted(EventBus, "foliage_library_changed")
-	assert_eq(FoliageLibrary.saved_library(), FoliageLibrary.TREECUBE, "nothing persisted")
-	var worked := FoliageLibrary.switch(FoliageLibrary.PLANTGEN, PACKAGE)
+	var worked := FoliageLibrary.refresh_libraries()
 	assert_true(worked["ok"], str(worked["error"]))
 	assert_signal_emit_count(EventBus, "foliage_library_changed", 1)
-	assert_eq(get_signal_parameters(EventBus, "foliage_library_changed"), ["plantgen"])
-	assert_eq(FoliageLibrary.saved_library(), FoliageLibrary.PLANTGEN)
-	FoliageLibrary.switch(FoliageLibrary.TREECUBE, "", false)
-	assert_eq(FoliageLibrary.saved_library(), FoliageLibrary.PLANTGEN, "persist false leaves it")
-	assert_signal_emit_count(EventBus, "foliage_library_changed", 2)
+	LibraryRegistry.set_dev_override(ROOT + "/nowhere")
+	var failed := FoliageLibrary.refresh_libraries()
+	assert_false(failed["ok"])
+	assert_engine_error(2, "the override's problem, and the library's reason")
+	assert_signal_emit_count(EventBus, "foliage_library_changed", 1)
 
 
-func test_analyse_names_the_assets_the_library_lacks() -> void:
-	FoliageLibrary.apply(FoliageLibrary.PLANTGEN, PACKAGE, BASE)
-	var doc := _document([MEADOW + "/Old", MEADOW + "/Bell"])
-	doc.props[MEADOW + "/Old"] = PackedFloat32Array([1, 0, 1, 0, 0, 0, 1, 1, 1, 1])
-	var report := FoliageLibrary.analyse(doc, BASE)
-	assert_eq(report["missing_ids"], PackedStringArray([MEADOW + "/Old"]))
+func test_analyse_names_the_assets_the_libraries_lack() -> void:
+	var doc := _document([OLD, OAK])
+	doc.props[OLD] = PackedFloat32Array([1, 0, 1, 0, 0, 0, 1, 1, 1, 1])
+	var report := FoliageLibrary.analyse(doc, _paths["base"])
+	assert_eq(report["missing_ids"], PackedStringArray([OLD]))
 	assert_eq(report["missing_rows"], 1)
 	assert_eq(report["props_missing"], 1)
 	assert_eq(FoliageLibrary.describe(report), "", "analysis alone says nothing")
 
 
-func test_rows_the_library_lacks_are_regenerated_from_the_biome_painting() -> void:
-	FoliageLibrary.apply(FoliageLibrary.PLANTGEN, PACKAGE, BASE)
-	var doc := _document([MEADOW + "/Old"])
-	var report: Dictionary = await FoliageLibrary.adapt_async(doc, get_tree(), BASE)
+func test_rows_the_libraries_lack_are_regenerated_from_the_biome_painting() -> void:
+	var doc := _document([OLD])
+	var report: Dictionary = await FoliageLibrary.adapt_async(doc, get_tree(), _paths["base"])
 	assert_true(report["regenerated"])
-	assert_gt(report["rows"], 0, "the painted meadow grows plants")
-	var ids := _asset_ids(BASE)
+	assert_gt(report["rows"], 0, "the painted forest grows plants")
+	var ids := _asset_ids()
 	for asset_id: String in doc.scatter:
-		assert_has(ids, asset_id, "every row now names an asset the library has")
-	assert_does_not_have(doc.scatter.keys(), MEADOW + "/Old")
-	assert_string_contains(FoliageLibrary.describe(report), "plantgen")
-	assert_true(FoliageLibrary.analyse(doc, BASE)["missing_ids"].is_empty())
+		assert_has(ids, asset_id, "every row now names an asset a library has")
+	assert_does_not_have(doc.scatter.keys(), OLD)
+	assert_string_contains(FoliageLibrary.describe(report), "rebuilt from the biome painting")
+	assert_true(FoliageLibrary.analyse(doc, _paths["base"])["missing_ids"].is_empty())
 	var rows := _row_count(doc)
-	var again: Dictionary = await FoliageLibrary.adapt_async(doc, get_tree(), BASE)
+	var again: Dictionary = await FoliageLibrary.adapt_async(doc, get_tree(), _paths["base"])
 	assert_false(again["regenerated"], "nothing missing the second time")
 	assert_eq(_row_count(doc), rows, "and the rows stay")
 
 
 func test_regeneration_is_deterministic() -> void:
-	FoliageLibrary.apply(FoliageLibrary.PLANTGEN, PACKAGE, BASE)
-	var first := _document([MEADOW + "/Old"])
-	var second := _document([MEADOW + "/Old"])
-	await FoliageLibrary.adapt_async(first, get_tree(), BASE)
-	await FoliageLibrary.adapt_async(second, get_tree(), BASE)
+	var first := _document([OLD])
+	var second := _document([OLD])
+	await FoliageLibrary.adapt_async(first, get_tree(), _paths["base"])
+	await FoliageLibrary.adapt_async(second, get_tree(), _paths["base"])
 	assert_eq(first.scatter.keys(), second.scatter.keys())
 	for asset_id: String in first.scatter:
 		assert_eq(first.scatter[asset_id], second.scatter[asset_id])
 
 
 func test_a_document_that_resolves_is_left_alone() -> void:
-	var doc := _document([MEADOW + "/Old"])
-	var before: PackedFloat32Array = doc.scatter[MEADOW + "/Old"].duplicate()
-	var report: Dictionary = await FoliageLibrary.adapt_async(doc, get_tree(), BASE)
-	assert_false(report["regenerated"], "the installed palette has Old")
-	assert_eq(doc.scatter[MEADOW + "/Old"], before)
+	var doc := _document([OAK])
+	var before: PackedFloat32Array = doc.scatter[OAK].duplicate()
+	var report: Dictionary = await FoliageLibrary.adapt_async(doc, get_tree(), _paths["base"])
+	assert_false(report["regenerated"], "core has the oak")
+	assert_eq(doc.scatter[OAK], before)
 
 
+## The documented behaviour for a map saved under the retired treecube asset ids (step S10): no
+## compatibility work. A painting that names a biome core still serves regenerates; one that names
+## a biome no library serves regenerates nothing and the build skips the unknown rows.
 func test_rows_with_no_painting_to_regenerate_from_are_left_alone() -> void:
-	FoliageLibrary.apply(FoliageLibrary.PLANTGEN, PACKAGE, BASE)
-	var doc := _document([MEADOW + "/Old"])
+	var doc := _document([OLD])
 	doc.biome_ids = PackedStringArray()
-	var report: Dictionary = await FoliageLibrary.adapt_async(doc, get_tree(), BASE)
+	var report: Dictionary = await FoliageLibrary.adapt_async(doc, get_tree(), _paths["base"])
 	assert_false(report["regenerated"])
-	assert_eq(report["missing_ids"], PackedStringArray([MEADOW + "/Old"]))
-	assert_has(doc.scatter.keys(), MEADOW + "/Old", "the build skips it with its usual warning")
+	assert_eq(report["missing_ids"], PackedStringArray([OLD]))
+	assert_has(doc.scatter.keys(), OLD, "the build skips it with its usual warning")
+
+
+func test_a_painting_of_a_biome_nobody_serves_grows_nothing() -> void:
+	var doc := _document([OLD])
+	doc.biome_ids = PackedStringArray(["retired_biome_summer_s1"])
+	var report: Dictionary = await FoliageLibrary.adapt_async(doc, get_tree(), _paths["base"])
+	assert_true(report["regenerated"], "the rows were derived data, so they are rebuilt")
+	assert_eq(report["rows"], 0, "and an unknown biome has no rules to grow")
+	assert_true(doc.scatter.is_empty())
 
 
 func _row_count(doc: MapDocument) -> int:

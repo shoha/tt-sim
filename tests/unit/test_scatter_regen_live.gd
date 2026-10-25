@@ -6,7 +6,7 @@ extends GutTest
 ## of rows a later apply removes while they are still growing in (AuthoredScatter).
 
 const BIOME := "temperate_forest_summer_s1"
-const OAK := BIOME + "/Tree_Oak_summer_01"
+const OAK := BIOME + "/Tree_Oak_v0"
 const BIG_BUDGET := 1_000_000_000
 ## Simulated frames: 16 ms each, a job runs four of them, three run at once.
 const FRAME_MSEC := 16

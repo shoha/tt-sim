@@ -378,6 +378,7 @@ static func export_json() -> String:
 	for axis: String in RESPONSE_AXES:
 		axes[axis] = (RESPONSE_AXES[axis] as Array).duplicate()
 	var data := {
+		"bindings": LibraryBindings.TABLE.duplicate(true),
 		"caps": CAPS.duplicate(),
 		"categories": CATEGORIES.duplicate(),
 		"class_defaults": CLASS_DEFAULTS.duplicate(true),
@@ -386,7 +387,6 @@ static func export_json() -> String:
 		"format": FORMAT_CONTRACT,
 		"habit_defaults": HABIT_DEFAULTS.duplicate(true),
 		"habit_water": HABIT_WATER.duplicate(),
-		"legacy_habit": LegacyHabit.export_table(),
 		"note":
 		"Exported by tt-sim LibraryContracts.export_json (utils/library/library_contracts.gd).",
 		"query":
@@ -405,6 +405,20 @@ static func export_json() -> String:
 		},
 		"roles": roles,
 		"size_classes": SIZE_CLASSES.duplicate(),
+		"surface_caps":
+		{
+			"expected_size": SurfaceBake.EXPECTED_SIZE,
+			"info_keys": SurfaceBake.INFO_KEYS.duplicate(),
+			"kinds": SurfaceBake.KINDS.duplicate(),
+			"max_info_bytes": SurfaceBake.MAX_INFO_BYTES,
+			"max_size": SurfaceBake.MAX_SIZE,
+			"max_surfaces": SurfaceBake.MAX_SURFACES,
+			"max_text": SurfaceBake.MAX_TEXT,
+			"max_tile_m": SurfaceBake.MAX_TILE_M,
+			"min_size": SurfaceBake.MIN_SIZE,
+			"min_tile_m": SurfaceBake.MIN_TILE_M,
+			"roles": SurfaceBake.ROLES.duplicate(),
+		},
 		"wind_categories": WIND_CATEGORIES.duplicate(),
 	}
 	return JSON.stringify(data, "\t", true) + "\n"

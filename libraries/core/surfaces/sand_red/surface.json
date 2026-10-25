@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.4746,
+		0.1609,
+		0.0463
+	],
+	"kind": "sand",
+	"label": "Red sand",
+	"role": "ground",
+	"tile_m": 3
+}

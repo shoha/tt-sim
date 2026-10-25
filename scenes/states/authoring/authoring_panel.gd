@@ -122,34 +122,6 @@ const PAINT_TILE_PREFIX := "paint_"
 ## The surface the Paint tool starts with: a path is what a new map most often wants. The legacy
 ## value of the `paint.default` library binding (LibraryBindings.paint_default).
 const DEFAULT_PAINT_SURFACE := "dirt_road_packed"
-## Readable names for the built-in palette's surfaces (surface_label(); a content library's
-## surfaces carry their own `label` in surface.json, SurfaceStore.label_of; the rest are
-## prettified ids).
-const SURFACE_LABELS := {
-	"cliff": "Rock",
-	"cliff_basalt": "Basalt",
-	"cliff_sandstone": "Sandstone",
-	"cobblestone": "Cobblestone",
-	"dirt": "Dirt",
-	"dirt_peat": "Peat",
-	"dirt_road_packed": "Dirt track",
-	"flagstone": "Flagstone",
-	"forest_floor": "Forest floor",
-	"grass": "Grass",
-	"grass_alpine": "Alpine grass",
-	"grass_savanna": "Dry grass",
-	"gravel": "Gravel",
-	"gravel_sandstone": "Red gravel",
-	"moss": "Moss",
-	"mud": "Mud",
-	"pine_duff": "Pine needles",
-	"planks": "Planks",
-	"riverbed": "Riverbed",
-	"sand": "Sand",
-	"sand_red": "Red sand",
-	"snow": "Snow",
-	"stone_tiles": "Stone tiles",
-}
 ## Sculpt tiles: id (the HeightBrush operation), label, icon, tooltip.
 const SCULPT_TILES: Array[Dictionary] = [
 	{
@@ -631,14 +603,12 @@ static func listed_paths(
 
 
 ## A palette surface's readable name ("dirt_road_packed" -> "Dirt track"): the Paint tiles'
-## labels and the history labels of Paint strokes.
+## labels and the history labels of Paint strokes. The name is the `label` in the surface's
+## surface.json (SurfaceStore.label_of); a surface without one is its id spelled out.
 static func surface_label(surface: String) -> String:
 	var library_label := SurfaceStore.label_of(surface)
 	if library_label != "":
 		return library_label
-	var named: String = SURFACE_LABELS.get(surface, "")
-	if named != "":
-		return named
 	return species_label(surface)
 
 

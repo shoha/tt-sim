@@ -83,7 +83,7 @@ static func new_from(
 	)
 	if not made["ok"]:
 		return {"ok": false, "error": String(made["error"])}
-	var applied := FoliageLibrary.apply(FoliageLibrary.current(), FoliageLibrary.active_package())
+	var applied := FoliageLibrary.apply()
 	if not applied.get("ok", true):
 		return {
 			"ok": false,

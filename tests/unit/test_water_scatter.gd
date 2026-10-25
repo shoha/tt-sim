@@ -89,12 +89,31 @@ func test_the_bank_band_by_role() -> void:
 
 func test_plan_role_carries_the_water_bits() -> void:
 	assert_eq(
-		ScatterGround.plan_role({"key": "reeds", "kind": "grass", "size_class": "ground"}),
+		ScatterGround.plan_role(
+			{
+				"key": "reeds",
+				"kind": "grass",
+				"size_class": "ground",
+				"habit": {"water": "emergent", "charred": false},
+			}
+		),
 		ScatterGround.ROLE_COVER | ScatterGround.EDGE_EMERGENT
 	)
 	assert_eq(
-		ScatterGround.plan_role({"key": "willow", "kind": "tree", "size_class": "large"}),
+		ScatterGround.plan_role(
+			{
+				"key": "willow",
+				"kind": "tree",
+				"size_class": "large",
+				"habit": {"water": "bank", "charred": false},
+			}
+		),
 		ScatterGround.ROLE_TREE | ScatterGround.EDGE_BANK
+	)
+	assert_eq(
+		ScatterGround.plan_role({"key": "reeds", "kind": "grass", "size_class": "ground"}),
+		ScatterGround.ROLE_COVER,
+		"a rule with no habit has none, whatever its key says"
 	)
 	assert_eq(
 		ScatterGround.plan_role({"key": "daisy", "kind": "flower", "size_class": "ground"}),

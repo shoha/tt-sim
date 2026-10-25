@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.1398,
+		0.1208,
+		0.0987
+	],
+	"kind": "cobblestone",
+	"label": "Cobblestone",
+	"role": "built",
+	"tile_m": 2
+}

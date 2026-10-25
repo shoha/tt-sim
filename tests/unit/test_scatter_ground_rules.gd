@@ -224,18 +224,19 @@ func test_tall_cover_and_shrubs_thin_beside_paths_and_short_cover_stays() -> voi
 				var role: int = ScatterPlan.build("g", [rule], 1).species[0].ground_role
 				assert_eq(role, cover | flower, "%s %s" % [entry.id, rule.key])
 	assert_gt(flowers, 10, "the palette's flowers (18 in seven biomes)")
-	# Temperate forest: the tall grass (0.47 m) thins again, the clumps (0.33) and sprig stay,
-	# as before the rework; the fern stays a bank species.
+	# Temperate forest: the tall grass thins again and, with the core library's tufts (step S10:
+	# plantgen's grass stands taller than treecube's clumps did), so do the clumps; the sprig
+	# stays and the fern stays a bank species.
 	var forest := _roles(FOREST)
 	assert_eq(forest.get("tall_grass"), tall, "forest tall grass")
-	assert_eq(forest.get("grass"), cover, "forest clumps")
+	assert_eq(forest.get("grass"), tall, "forest clumps")
 	assert_eq(forest.get("sprig"), cover, "forest sprig")
 	assert_eq(forest.get("fern"), cover | ScatterGround.EDGE_BANK, "fern")
-	# Wetland: the sedge (0.53 m) thins again, the grass (0.31) and sprig stay.
+	# Wetland: the sedge thins again, and the grass too (the core library's tufts); the sprig stays.
 	var wetland := _roles("wetland_riparian_summer_s1")
 	assert_eq(wetland.get("sedge"), tall | ScatterGround.EDGE_EMERGENT, "sedge")
 	assert_eq(wetland.get("reeds"), tall | ScatterGround.EDGE_EMERGENT, "reeds")
-	assert_eq(wetland.get("grass"), cover, "wetland grass")
+	assert_eq(wetland.get("grass"), tall, "wetland grass")
 	assert_eq(wetland.get("sprig"), cover, "wetland sprig")
 	# Savanna and badlands: their tall grass as before, and now their short grass too.
 	var savanna := _roles("savanna_summer_s1")
@@ -246,8 +247,6 @@ func test_tall_cover_and_shrubs_thin_beside_paths_and_short_cover_stays() -> voi
 	assert_eq(badlands.get("dry_tall"), tall, "badlands tall grass")
 	# The low grass of the woodland, alpine and burnt biomes stays, as before.
 	var low := {
-		"birch_woodland_summer_s1": ["grass"],
-		"boreal_taiga_summer_s1": ["grass"],
 		"alpine_meadow_summer_s1": ["turf", "tundra_sprig"],
 		"burnt_forest_summer_s1": ["burnt_stubble"],
 	}
