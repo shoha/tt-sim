@@ -7,9 +7,11 @@ extends RefCounted
 ## docs/ARCHITECTURE.md "Map document (map.ttmap)".
 ##
 ## Format 2 entries (format 1 differs only in its painted surfaces, below):
-##   manifest.json          {"format": 2, "palette_version", "map_seed", "size_cells": [w, h],
-##                          "cell_size_m", "sample_spacing_m", "tier_height_m",
-##                          "base_surface", "has_base_map"}                        required
+##   manifest.json          {"format": 2 (3 with a non-core library), "palette_version",
+##                          "map_seed", "size_cells": [w, h], "cell_size_m",
+##                          "sample_spacing_m", "tier_height_m", "base_surface",
+##                          "has_base_map", "libraries": [{id, version, hash}]
+##                          (optional, MapLibraries)}                              required
 ##   height.bin             float32 little-endian heights on the sample grid        required
 ##   scatter.json           {asset id: [[lx, ly, lz, qx, qy, qz, qw, sx, sy, sz], ...]}
 ##   props.json             same shape, hand-placed assets
@@ -195,6 +197,27 @@ static func read(path: String) -> Dictionary:
 	return {"document": doc, "warnings": warn_log.result()}
 
 
+## The libraries the document at `path` names in its manifest ({id, version, hash} each, [] for
+## none, for a map saved before libraries and for any file that cannot be read), without reading
+## the rest of the archive: the open flow checks them before it builds anything.
+static func peek_libraries(path: String) -> Array[Dictionary]:
+	var warn_log := _WarningLog.new()
+	var sizes: Variant = _entry_sizes(path, warn_log) if FileAccess.file_exists(path) else null
+	if not sizes is Dictionary or not (sizes as Dictionary).has(MANIFEST_ENTRY):
+		return []
+	if int(sizes[MANIFEST_ENTRY]) > ENTRY_CAPS[MANIFEST_ENTRY]:
+		return []
+	var reader := ZIPReader.new()
+	if reader.open(path) != OK:
+		return []
+	var bytes := PackedByteArray()
+	if reader.file_exists(MANIFEST_ENTRY):
+		bytes = reader.read_file(MANIFEST_ENTRY)
+	reader.close()
+	var data: Variant = _json(bytes, MANIFEST_ENTRY, warn_log)
+	return _parse_libraries(data.get("libraries"), warn_log) if data is Dictionary else []
+
+
 ## Validates already-extracted entries (entry name -> PackedByteArray), with the same
 ## caps read() applies. Pure: the testable core of read().
 static func parse(entries: Dictionary) -> Dictionary:
@@ -266,9 +289,12 @@ static func _write_zip(path: String, entries: Dictionary) -> Error:
 	return packer.close()
 
 
+## The manifest. `libraries` is recomputed from the document's ids (MapLibraries.record_for, the
+## versions as the registry serves them now) and the format is 3 when any is not core, else 2.
 static func _manifest(doc: MapDocument) -> Dictionary:
-	return {
-		"format": MapDocument.FORMAT,
+	var libraries := MapLibraries.record_for(doc)
+	var manifest := {
+		"format": MapLibraries.format_for(libraries),
 		"palette_version": doc.palette_version,
 		"map_seed": doc.map_seed,
 		"size_cells": [doc.size_cells.x, doc.size_cells.y],
@@ -278,6 +304,40 @@ static func _manifest(doc: MapDocument) -> Dictionary:
 		"base_surface": doc.base_surface,
 		"has_base_map": doc.has_base_map,
 	}
+	if not libraries.is_empty():
+		manifest["libraries"] = libraries
+	return manifest
+
+
+## The manifest's `libraries` list, validated: at most MapDocument.MAX_LIBRARIES entries, each
+## {id (a library id), version (at most 64 characters), hash (at most 64 hex characters)}. A
+## malformed entry is skipped with a warning; a missing list is an empty one (core only).
+static func _parse_libraries(raw: Variant, warn_log: _WarningLog) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if raw == null:
+		return out
+	if not raw is Array:
+		warn_log.add("manifest.json: libraries is not a list; ignored")
+		return out
+	for item: Variant in raw as Array:
+		if out.size() >= MapDocument.MAX_LIBRARIES:
+			warn_log.add("manifest.json: more than %d libraries; the rest ignored" % out.size())
+			break
+		if not item is Dictionary or not (item as Dictionary).get("id") is String:
+			warn_log.add("manifest.json: a libraries entry is malformed; skipped")
+			continue
+		var entry: Dictionary = item
+		var id := String(entry["id"])
+		var version: Variant = entry.get("version", "")
+		var digest: Variant = entry.get("hash", "")
+		var good := LibraryIds.library_problems(id).is_empty()
+		good = good and version is String and String(version).length() <= MAX_TEXT_LENGTH
+		good = good and digest is String and String(digest).length() <= 64
+		if not good:
+			warn_log.add("manifest.json: library '%s' is malformed; skipped" % _label(id))
+			continue
+		out.append({"id": id, "version": String(version), "hash": String(digest)})
+	return out
 
 
 ## Rounds every value of `rows`, in place, to ROW_DECIMALS decimals, as writing and reading
@@ -547,7 +607,9 @@ static func _parse_manifest(
 	if not data is Dictionary:
 		warn_log.add("manifest.json is not a JSON object")
 		return null
-	var format: Variant = _integer(data.get("format"), MapDocument.MIN_FORMAT, MapDocument.FORMAT)
+	var format: Variant = _integer(
+		data.get("format"), MapDocument.MIN_FORMAT, MapDocument.MAX_FORMAT
+	)
 	if format == null:
 		warn_log.add("unsupported map document format %s" % _label(data.get("format")))
 		return null
@@ -580,6 +642,7 @@ static func _parse_manifest(
 		warn_log.add("manifest.json: no tier_height_m, using one cell")
 		doc.tier_height_m = cell_size
 	doc.palette_version = _text_field(data, "palette_version", MAX_TEXT_LENGTH, warn_log)
+	doc.libraries = _parse_libraries(data.get("libraries"), warn_log)
 	doc.base_surface = _text_field(data, "base_surface", MAX_TEXT_LENGTH, warn_log)
 	var seed_value: Variant = _integer(data.get("map_seed"), -MAX_SEED, MAX_SEED)
 	if seed_value == null:

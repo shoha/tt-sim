@@ -1,0 +1,49 @@
+{
+ "out_dir": "render_jobs/library-s4_two_libraries",
+ "timeout_s": 600,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait_title"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/library_s4.gd", "action": "report"},
+
+  {"op": "eval", "expr": "get_viewport().warp_mouse(Vector2(100, 1000))"},
+  {"op": "eval", "expr": "request_authoring(null, \"title\")"},
+  {"op": "wait", "s": 1.5},
+  {"op": "capture", "name": "a_dialog_grouped", "desc": "The New map dialog with the user library alienworld installed: core's biomes under 'Start from' (the library name at the end of the line), then a field headed 'Alien World' with its one biome, version and author at the end of the line"},
+  {"op": "eval", "expr": "get(\"_new_map_dialog\").library_fields[0].tiles.get_node(\"alienworld__red_mesa_summer_s1\").set_pressed(true)"},
+  {"op": "wait", "s": 0.6},
+  {"op": "capture", "name": "b_dialog_library_pick", "desc": "The library's tile picked: the core tiles let go, the ground caption follows the library biome"},
+  {"op": "eval", "expr": "get(\"_new_map_dialog\")._on_cancel_pressed()"},
+  {"op": "wait", "s": 0.8},
+  {"op": "title"},
+  {"op": "wait", "s": 1.0},
+
+  {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 150, "seed": 1234},
+  {"op": "wait_ready", "settle": 3.0}, {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/tree_fade.gd", "factor": 0},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "wind", "freeze": true},
+  {"op": "home"}, {"op": "settle"},
+  {"op": "capture", "name": "c_core_only_home", "desc": "A new 150 ft map from the core temperate forest, seed 1234, home view, before any painting"},
+
+  {"op": "stroke", "mode": "paint", "biome": "alienworld__red_mesa_summer_s1", "radius": 9, "speed": 18,
+   "points": [[6, -24], [6, 24], [16, 24], [16, -24], [26, -24], [26, 24]]},
+  {"op": "wait_ready", "settle": 4.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/tree_fade.gd", "factor": 0},
+  {"op": "wind", "freeze": true},
+  {"op": "home"}, {"op": "settle"},
+  {"op": "capture", "name": "d_two_libraries_home", "desc": "The same map with the right third painted with alienworld's Red Mesa (biome id alienworld__red_mesa_summer_s1, assets copied from core's badlands onto a green alpine ground): the core forest to the left, the second library to the right"},
+  {"op": "zoom", "size": 16}, {"op": "look_at", "at": [6, 0]}, {"op": "settle"},
+  {"op": "capture", "name": "e_boundary_close", "desc": "Size 16 across the seam between the core forest and the second library's biome"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/library_s4.gd", "action": "document"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/library_s4.gd", "action": "save", "folder": "_libs4_two", "replace": true},
+  {"op": "call", "script": "res://tools/render_jobs/probes/library_s4.gd", "action": "cleanup"},
+  {"op": "title"},
+  {"op": "index", "title": "Content library step S4: a second library next to core", "intro": "alienworld is a user library in user://libraries (version 0.3.1, depends on core ^1.0, one biome: red_mesa, with plants copied from plantgen's core library on an alpine-green ground). It is found by the registry at start-up, its biome is served as alienworld__red_mesa_summer_s1, and a new map is painted with it beside the core temperate forest. a/b: the New map dialog grouped by library. c/d/e: the map. The probe's lines in log.txt show the libraries list, the libraries the map records and the manifest the save wrote (format 3). Nothing is saved except the _libs4_two level, deleted at the end."}
+ ]
+}

@@ -36,6 +36,15 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   curve; same cameras (4 captures, 8 PNGs). The second map is built anew because a library switch
   keeps an open map's baked rows. Seen 2026-10-24: acacias and the low shrub domes leave the
   flat ground, the dry grass leaves the flats and stays on the slopes. `docs/systems/library.md`.
+- `jobs/library_s4_two_libraries.json`: a second content library beside core (about 35 s, keeps
+  no level): needs a user library `alienworld` in the run's `user://libraries/` (the worktree's
+  `%APPDATA%/TTSim_<topic>/libraries/alienworld`: plantgen `out/lib_core`'s badlands assets and
+  biome renamed `red_mesa` on a green ground; any library with that id and a `red_mesa` biome
+  works). Captures the New map dialog grouped by library, a 150 ft forest map, the same map
+  with its right third painted with `alienworld__red_mesa_summer_s1` (home and a size-16 close
+  view of the seam), and logs through `probes/library_s4.gd` the libraries list, the libraries
+  the map records and the format (3) the save wrote, then deletes its `_libs4_two` level. 5
+  captures. `docs/systems/library.md`.
 - `jobs/plantgen_play.json`: the same switch in play (about 30 s): builds the alpine map, saves
   it as `_reopen_plantgen`, plays it with treecube and again after switching to plantgen (Root
   reloads the table; the load regenerates the rows), then removes the level

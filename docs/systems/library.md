@@ -11,6 +11,9 @@ results"); this doc holds what is built and the rules the code keeps. Step S1 (2
 savanna as a one-biome `core` library, behind an opt-in developer path. Step S3 (2026-10-24):
 surfaces without editor imports (`SurfaceStore`) and the library bindings. Step S12a
 (2026-10-24): terrain response on a rule (`slope_min_deg` and `response` curves), in GDScript.
+Step S4 (2026-10-24): the multi-library registry (official and user libraries, dependencies,
+enable and disable), `AssetStore`, the map's `libraries` record with its mismatch dialog, and
+the New map dialog grouped by library.
 
 ## Map
 
@@ -24,11 +27,15 @@ surfaces without editor imports (`SurfaceStore`) and the library bindings. Step 
 | `utils/library/surface_cache.gd` | `SurfaceCache` | (S3) The raw `TTIMG` cache under `user://library_cache/<library id>/<hash>/<surface>_<map>.ttimg`: header (magic, version, engine string, format, size, mips, length, SHA-256) plus `Image.get_data()`; never a resource |
 | `utils/library/surface_store.gd` | `SurfaceStore` | (S3) The one place the ground, crossings, swatches and biome thumbnails get a surface's maps: `texture(root, relative)`, `image(root, relative)`, `available`, `texture_of` / `image_of(root, name or lib:// ref, kind)`, `runtime_name` / `ref_of` (the `lib://<library id>/<name>` convention), `register_library`, `label_of`, `load_set(folder)` and `load_installed(root, name)` (the two forms, for the equality test) |
 | `utils/library/library_bindings.gd` | `LibraryBindings` | (S3) The named things code needs (`fire.ash_surface`, `fire.ash_fallback`, `fire.burnt_biome`, `crossings.planks/moss/gravel/stone_default/paving`, `paint.default`, `water.bed/shore`, `default_biome`) with the legacy values as defaults; `value(key)` answers from the served libraries, else the default |
-| `utils/library/library_registry.gd` | `LibraryRegistry` | The only module that lists or reads folders: `read_sources`, `compile_folder`, the dev override (`set_dev_override`, settings `[library] dev_path`), `apply` (lays the compiled library over the palette), `served`, `clear` |
+| `utils/library/library_registry.gd` | `LibraryRegistry` | The only module that lists or reads folders (S4: multi-library): `refresh` / `list` / `info` (what the manager shows), `apply` (compiles every servable library in load order and lays it over the palette), `served`, `record_of`, `assets_used_by(map)`, `resolve_asset_alias` / `resolve_biome_alias`, `is_enabled` / `set_enabled` / `disabled_ids`, `discoverable`, `read_sources`, `compile_folder`, the dev override (`set_dev_override`, settings `[library] dev_path`), `clear` |
+| `utils/library/library_resolver.gd`, `library_versions.gd` | `LibraryResolver`, `LibraryVersions` | (S4, pure) Which libraries found on disk can be served and in what order (duplicate ids, disabled libraries, dependency ranges `^1.0` `~1.2` exact and comparators, cycles, depth 4, at most 16 active; the built-in core provides `core` when no folder does); semver parse, compare and range check (prerelease tags ignored) |
+| `utils/library/asset_store.gd`, `glb_guard.gd` | `AssetStore`, `GlbGuard` | (S4) The one place a library asset's mesh comes from, keyed by (library id, asset id): lazy GLTFDocument parse from a file path, cached, sha256 and byte count checked for a non-official library, `GlbGuard` (pure) reads the container and every embedded texture's size from its header before any decode; `instance()` dresses a copy with `WindFoliage.apply_material` |
+| `utils/library/map_libraries.gd`, `utils/map_library_gate.gd` | `MapLibraries`, `MapLibraryGate` | (S4) What a map says about its libraries (the `libraries` record, the format number, `check` against the served libraries, `without_libraries`, `apply_aliases`) and the step between reading a document and building it (an aliases pass, the mismatch dialog, "Open without those plants") |
+| `utils/library/library_groups.gd` | `LibraryGroups` | (S4, pure) The palette's biomes grouped by library for the New map dialog: core first, then by name, a library's default biome first |
 | `utils/palette_overlay.gd`, `utils/palette_library.gd` | `PaletteOverlay.read_palette`, `PaletteLibrary.install_overlay` | The existing overlay merge, split so a palette already in memory takes the same path as a package folder (`read` and `overlay_package` call the same code) |
 | `utils/legacy_habit.gd` | `LegacyHabit` | (S2) The legacy key and kind lists (`EMERGENT_KEYS`, `BANK_KEYS`, `CHARRED_KEYS`, `ARID_KINDS`) in one place, `for_key(key, kind)` and `export_table()` (published in `contract.json` as `legacy_habit`, so plantgen's importer derives a rule's explicit habit from the same lists). `ScatterGround.habit_of(rule)` returns the rule's own `habit`, else this |
 | `utils/palette_validator.gd` (+ `palette_surfaces.gd`, `palette_fields.gd`, `palette_asset_files.gd`) | `PaletteValidator` | (S2) `palette_library.gd` was at gdlint's 1000-line cap and is split; the rule whitelist in `PaletteValidator._validate_species` / `_library_fields` keeps `role`, `habit`, `weight` |
-| `utils/foliage_library.gd` | `FoliageLibrary` | `apply()` calls `LibraryRegistry.apply()` last, so the content library is a layer over whichever foliage library is served; `apply_saved()` also reads the persisted dev path |
+| `utils/foliage_library.gd` | `FoliageLibrary` | The developer A/B switch (treecube against a plantgen package); `apply()` calls `LibraryRegistry.apply()` last, so the content libraries are a layer over whichever foliage set is served; `apply_saved()` serves them at start-up when any is installed; `refresh_libraries()` serves them again and rebuilds the open map |
 | `tools/compile_library_cli.gd` | | Headless: prints or writes the compiled palette JSON of a library folder, or `--contract <file>` |
 | `tools/render_jobs/driver.gd`, `jobs/library_s1_savanna.json` | op `library_dev` | Sets the override for a run and rebuilds the open map |
 | `tests/fixtures/library_savanna/`, `library_savanna_compiled.json`, `library_mini/` | | The savanna JSON (no GLBs) with its frozen compiled golden; a three-asset, two-rule library |
@@ -78,6 +85,41 @@ surfaces without editor imports (`SurfaceStore`) and the library bindings. Step 
   (`PaletteLibrary.MAX_ID_LENGTH`; a longer one is skipped with a warning); every season and seed
   gets its own asset prefix (live edits accept an asset only when its prefix is the whole
   biome id). Seasons expand without overrides in this build.
+- **Sources and load order (S4).** `res://libraries/*/` (OFFICIAL, derived from the location,
+  never read from a library file) then `user://libraries/*/` (the user's: `Paths.LIBRARIES_DIR`,
+  a store under the data root, so a GUT run and a `--data-root` run see an empty one) then the developer
+  override (`[library] dev_path`, laid over everything and replacing biomes of the same runtime
+  id, as it always did). A folder of an official or user library must be named after its id; a
+  folder starting with a dot (an import in progress) is not scanned. `core` is BUILT IN until it
+  ships as `res://libraries/core`: the installed palette provides it, version
+  `LibraryRegistry.BUILTIN_VERSION`, so `core: ^1.0` is met on a game with no core folder.
+  `LibraryResolver` (pure) decides, and a library that cannot be served is an entry with status
+  `error` and `reasons`, never a crash:
+  - duplicate ids: an official library beats a user one, among user libraries the folder name
+    sorted first wins, the rest are errors naming the winner;
+  - `dependencies: [{"id": "core", "version": "^1.0"}]`: the library must be installed, enabled,
+    itself available and at a version that satisfies the range (`^1.0`, `~1.2`, `1.2.3`, a
+    partial `1.2`, `>=1.0 <2`, `*`; prerelease tags such as `1.0.0-dev` are ignored); chains at
+    most 4 deep, no cycles, at most 16 libraries active;
+  - load order: dependencies first, core first, then by id, the developer override last; each
+    library is compiled with its dependencies' catalogs and surfaces, then laid over the palette
+    (`PaletteOverlay.read_palette` in its `lazy` form, which reads no GLB).
+- **Cross-library refs (S4).** A query ref may be `<library id>:<local id>` naming an asset of a
+  declared dependency (through that library's `aliases`; a `retired` id is skipped with a
+  warning). The asset takes the local id `<library id>__<local id>` in the biome's asset ids
+  (`<runtime biome>/core__Tree_Oak_v0`, still one slash) and its GLB stays in the dependency's
+  folder (`AssetStore.library_of` says `core`). `lib://<library id>/<surface>` resolves the same
+  way for a surface of a dependency. A ref or surface of a library that is not a declared
+  dependency is skipped with a warning. The built-in core has no catalog yet, so a `core:` ref
+  needs `core` to be a folder.
+- **Enabling (S4).** `[library] disabled` in settings.cfg lists the ids the user turned off (all
+  are on by default; `core` cannot be turned off). `LibraryRegistry.set_enabled(id, on)`
+  persists it; a library that needs a disabled one is an error that says so. It takes effect at
+  the next `apply()`: `FoliageLibrary.refresh_libraries()` applies and rebuilds the open map (the
+  manager UI of step S6 calls it).
+- **Bindings (S4).** Only `core` and the developer override may set `bindings` and
+  `default_biome` (the names game code looks up: ash, planks, the New map default); another
+  library's are ignored so an installed library cannot rebind the game.
 - **Portable names (S0 P5).** Rejected as reader errors: case-insensitive duplicate ids, files
   or paths; Windows device names (also with an extension); a trailing dot or space; a backslash,
   colon or drive letter; `..`; a path over 120 characters; a catalog file whose exact case is not
@@ -91,7 +133,8 @@ surfaces without editor imports (`SurfaceStore`) and the library bindings. Step 
   flags over it, present whenever the rule has a role or a habit) and `weight` (0 to 1000); a
   bad value warns and is dropped, an absent one never warns, and a rule with none of the three
   (treecube's palette, plantgen's package) is unchanged byte for byte. `library` is still
-  dropped silently (nothing reads it before S4).
+  dropped silently: S4 reads the owning library from the id's prefix instead
+  (`LibraryIds.library_of`), so the validator did not need to learn it.
 - **Habit.** `ScatterGround.plan_role` reads `habit_of(rule)`: the rule's `habit`, else the
   LEGACY lists of `LegacyHabit` (keys of reeds, willows and snags, kind `cactus`). The lists stay
   for legacy palettes only; a library rule never needs them. `test_legacy_habit.gd` pins that
@@ -164,37 +207,119 @@ surfaces without editor imports (`SurfaceStore`) and the library bindings. Step 
   `PaletteLibrary.WATER_SURFACE_DEFAULTS` (the per-biome-key bed and shore the validator
   applies); the design lets a biome-def's `ground.water_bed` / `shore` supply them, which the
   installed data does not have.
-- **Architecture rules** (pinned by `test_library_compile.gd` and `test_surface_store.gd`): the
-  pure modules (contracts, ids, reader, compiler, `SurfaceBake`, `SurfaceReader`,
-  `LibraryBindings`) use no `FileAccess`, `DirAccess`, `EventBus`, `ResourceLoader` or scene
-  tree; only the registry lists folders (the cache writer creates and replaces its own files and
-  lists nothing); `SurfaceStore` and `SurfaceCache` never call `load()` or `preload()` and use an
-  import only for `res://` files.
+- **AssetStore (S4).** A served library's assets are registered (`register_library`: the
+  absolute GLB, the node, the catalog's `sha256` and `bytes`, whether the library is official)
+  and nothing is read. `PaletteLibrary._source_mesh` asks `AssetStore.mesh_for` for an id the
+  store serves and loads the built-in palette as before for any other; `resolve()` still hands
+  out a duplicate, and the scatter build still applies `WindFoliage.apply_material` to it, so a
+  library material only ever draws with the game's own shaders (glTF cannot carry one;
+  `AssetStore.sanitize` makes sure and `instance()` does the dressing for a direct caller). On
+  the first ask the file's bytes are read once (64 MiB cap), `GlbGuard.inspect` checks the
+  container, refuses any `uri` and reads every embedded PNG or JPEG's size from its header (at
+  most 64 images, 4096 px a side, 32M pixels in all) BEFORE GLTFDocument decodes anything, then
+  the mesh is parsed with compression off (`PaletteOverlay.FORCE_DISABLE_COMPRESSION`, from a
+  buffer, never `ResourceLoader`). A library that is not official must also match the catalog's
+  `sha256` and `bytes`, else the asset is refused with a warning once and the refusal is
+  cached; the others of that library still load. Official libraries are not hashed on load
+  (they ship in the game): `AssetStore.verify` does it for a test or a CLI. A Mutex guards the
+  tables because scatter preparation resolves assets on worker threads. `PaletteLibrary.clear_cache`
+  clears the store (the registry registers again on its next `apply`).
+- **Maps (S4).** `manifest.json` carries `libraries: [{id, version, hash}]` for every library
+  whose biome, asset, prop or painted surface the map holds (the prefix of the id names it:
+  `LibraryIds.library_of`, `MapLibraries.surface_library`); the writer recomputes it from the
+  document at every save with the versions the registry serves, falling back to what the file
+  claimed for a library that is not served. The format number is 2 while only `core` is named
+  (an older build still opens it) and 3 (`MapDocument.FORMAT_LIBRARIES`) as soon as another
+  library is, so a build that does not know libraries refuses the document instead of dropping
+  the prefixed plants on its next save. Opening: `MapSourceLoader.load_async` runs
+  `MapLibraryGate.run` after the document is read (authoring and play both set
+  `MapLibraryGate.ask_dialog`): first `MapLibraries.apply_aliases` renames ids a served library
+  renamed (`aliases` in library.json, used only for ids the palette lacks), then
+  `MapLibraries.check` compares the record with what is served: a library that is not served
+  (not installed, turned off, or failed, with the reason) is MISSING; one served at another
+  major version is INCOMPATIBLE; a newer minor or patch opens as it is; a different hash at the
+  same version only logs. A mismatch shows a dialog naming each library, the version the map
+  was saved with, why it is missing and its author, with "Open without those plants" and
+  "Cancel". The first drops those libraries' scatter and prop rows, points their biomes at the
+  default biome (`LibraryBindings.default_biome`, else the first core biome), shows a toast and
+  leaves the authoring session unsaved so leaving asks; Cancel returns to the title with nothing
+  changed (`MapSourceLoader.library_cancelled`). A loader with no `library_choice` (a test, a
+  tool) takes "open without" and still shows the toast: never a silent substitution.
+  `LibraryRegistry.assets_used_by(map)` answers {library id: sorted asset ids} for the multiplayer
+  step that will send only those; `record_of(id)` is the {id, version, hash} a map stores.
+- **New map dialog (S4).** `LibraryGroups.group` splits the palette's biomes by owning library:
+  core's keep the existing `biome_field` (Bare ground included), every other library that
+  supplies a biome gets a `library_fields` field headed by its name with its version and author
+  at the end of the line, its default biome first, the season in the label when two share a
+  name. One pick spans all the fields. A library's own picture
+  (`biomes/thumbs/<biome>.jpg` named by the biome-def's `thumbnail`, listed in the folder) is
+  compiled to the palette thumbnail path `thumbnails/<runtime id>.jpg`, which
+  `SurfaceStore.register_thumbnails` serves (JPG or PNG decoded as an image, 4 MiB and 4096 px
+  at most); without one the strip is painted from the biome's ground alone.
+- **Architecture rules** (pinned by `test_library_compile.gd`, `test_surface_store.gd` and
+  `test_library_assetstore.gd`): the pure modules (contracts, ids, reader, compiler,
+  `SurfaceBake`, `SurfaceReader`, `LibraryBindings`, `LibraryVersions`, `LibraryResolver`,
+  `GlbGuard`, `MapLibraries`) use no `FileAccess`, `DirAccess`, `EventBus`, `ResourceLoader` or
+  scene tree; only the registry lists folders (the cache writer creates and replaces its own
+  files and lists nothing); `SurfaceStore`, `SurfaceCache` and `AssetStore` never call `load()`
+  or `preload()`, and `AssetStore` never uses `ResourceLoader` (a library file is bytes, never a
+  resource or a script).
 
 ## Runtime
 
-The dev override is OFF by default and nothing changes without it. Set it with settings.cfg
-`[library] dev_path="<library folder>"` (read by `FoliageLibrary.apply_saved()` at start-up, so
-the first palette read already sees it), or for one run with `LibraryRegistry.set_dev_override()`
-(the render-job op `library_dev`, `tools/compile_library_cli.gd`). `FoliageLibrary.apply()` /
+Nothing is served unless something is installed: with no `res://libraries/*`, no
+`user://libraries/*` and no dev override the registry changes nothing. `FoliageLibrary.apply()` /
 `switch()` clear the caches, lay the plantgen package when chosen, then call
-`LibraryRegistry.apply(root)`: read and compile the folder, then `PaletteOverlay.read_palette`
-and `PaletteLibrary.install_overlay` (the same cache install, wind layout guard included). The
-GLBs are parsed by `PaletteOverlay.parse_mesh` (`GLTFDocument`, mesh compression off), the path
-the plantgen package route takes. A library that does not read or compile changes no cache and
-reports why (`result["error"]`, a `push_warning` from the foliage library). The map rebuilds on
+`LibraryRegistry.apply(root)`: scan the roots, read every folder (`LibraryReader`), resolve
+(`LibraryResolver`), and for each servable library in load order compile it through its
+dependencies, lay it with `PaletteOverlay.read_palette(..., lazy)` and
+`PaletteLibrary.install_overlay` (the same cache install; no GLB is parsed now, `AssetStore`
+parses on first use), then register its assets, surfaces, thumbnails and (core and the developer
+override only) bindings. `FoliageLibrary.apply_saved()` does this at start-up when
+`LibraryRegistry.discoverable()`. A library that does not read, resolve or compile changes no
+cache and is an entry in `LibraryRegistry.list()` with status `error` and its reasons
+(`result["errors"]`, a `push_warning` per line from the foliage library); only a developer
+override that cannot be served makes `result["ok"]` false. The map rebuilds on
 `EventBus.foliage_library_changed` as for the plantgen switch; two switches in quick succession
 leave the first one's rows (a pre-existing property of `FoliageLibrary.switch`; the job waits
 with `wait_ready` between them). A switch keeps an open map's BAKED rows: a rule that changed
 (S12a found this) only shows in a map built, or a cell regenerated, after the switch, so a job
 that compares two libraries on one terrain builds the map again under each (`landform.gd new`
-with the same seed), as `library_s12a_terrain.json` does.
+with the same seed), as `library_s12a_terrain.json` does. Settings: `[library] dev_path` (the override), `[library]
+disabled` (a list of ids). The `compile_library_cli` and `LibraryRegistry.compile_folder` compile
+one folder alone, without dependencies.
 
 ## Authoring
 
-None yet: the library manager and the biome designer are steps S6 to S9 of the design.
+None yet: the library manager (list, import, enable and disable, remove, verify) and the biome
+designer are steps S6 to S9 of the design. `LibraryRegistry.list()`, `set_enabled` and
+`FoliageLibrary.refresh_libraries()` are what the manager will call.
 
 ## Verification
+
+- Step S4 tests: `test_library_registry.gd` (scan order and sources, official derived from the
+  location, the manager's list, the built-in core, prefixed ids, a cross-library ref, retired and
+  aliased dependency ids, bindings not taken from a user library, duplicates, folder naming, dot
+  folders, unmet and missing dependencies, ranges, a broken or disabled dependency, cycles,
+  depth, load order, the 16 cap, enable and disable persisted in a scratch settings file,
+  aliases, `assets_used_by`, `record_of`, the developer override last, a biome's own thumbnail,
+  `refresh_libraries`), `test_library_versions.gd` (ranges, and `LibraryResolver` over plain
+  dictionaries), `test_library_assetstore.gd` (lazy parse, the cache, the (library, id) key, a
+  hash or byte mismatch refused for a user library and not for an official one, a missing file,
+  a missing node, materials replaced, `GlbGuard` on crafted GLBs: texture size from the header,
+  uri, counts, JPEG), `test_map_libraries.gd` (the record, check, "open without", aliases, the
+  gate, `LibraryGroups`), `test_new_map_dialog_libraries.gd`, additions to
+  `test_map_document_io.gd` (format 2 against 3, the record round trip, malformed entries,
+  `peek_libraries`), `test_library_ids.gd` and `test_library_reader.gd` (dependencies, refs into
+  a dependency, `package_stem`, `sha256` and `bytes`). The two-library world is written at test
+  time by `tests/unit/library_world.gd` (`core` official 1.2.0, `alienworld` user 0.3.1
+  depending on `core ^1.0`, real GLBs, a catalog with bytes and sha256).
+- Render proof (2026-10-24, `jobs/library_s4_two_libraries.json`, half size; a copy of plantgen's
+  badlands plants as a user library `alienworld` in the worktree's `user://libraries`): the New
+  map dialog shows core's nine biomes and Bare ground, then an "Alien World" field with Red Mesa;
+  a 150 ft forest map painted over its right third with `alienworld__red_mesa_summer_s1` draws
+  the second library's cacti, snags, boulders and dry grass beside the core forest, and the save
+  writes format 3 with `libraries` [alienworld 0.3.1, core 1.0.0] (probe `library_s4.gd`).
 
 - Unit tests: `test_library_ids.gd` (grammar, runtime ids, portable names),
   `test_library_contracts.gd` (S2: roles, habit flags, caps against the palette limits, the
@@ -259,18 +384,42 @@ godot --path D:/dev/tabletop/tt-sim --windowed --resolution 1920x1080 --position
 
 ## Open work
 
-See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work". The library steps (S4 onwards: the
-multi-library registry and map `libraries` record, the manager, the designer) are in plantgen's
-design doc section 6. Left over from S3: a library biome's thumbnail (`biomes/thumbs/*.jpg`) is
-not served by `SurfaceStore` (a library biome still names a palette thumbnail); the cache is not
+See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work". The library steps (S6 onwards: the
+manager, the designer) are in plantgen's design doc section 6. Left over: the cache is not
 pruned and nothing prewarms it on a worker thread (the first ground draw of a new surface bakes
 about 0.2 s on the main thread); `ScatterGround.SCORCHED_SURFACES` and
 `PaletteLibrary.WATER_SURFACE_DEFAULTS` still hold their legacy values (their files belong to the
 scatter and validator steps); `contract.json` does not yet publish the surface caps (2048 px, 64
-surfaces) or `LibraryBindings.TABLE`.
+surfaces) or `LibraryBindings.TABLE`. Left over from S4: (S6) the manager UI itself, an import
+that quarantines a zip or folder under `user://libraries/.incoming/`, "Verify" (hash every GLB of
+every library with `AssetStore.verify`) and the authoring panel's Biomes field, which still
+lists every biome of every library in one grid without headers; (multiplayer) a host sending a
+peer the `libraries` list and only the assets in `assets_used_by` (the registry enumerates them;
+nothing transfers a library yet, and a client without it gets the same dialog); the built-in
+`core` cannot be the target of a `core:` ref until it ships as a folder (S5 and S10); a map
+opened "without those plants" keeps the painting of the missing library's areas but regenerates
+no plants there (regeneration is offered, not automatic, because it discards scatter hand
+edits). A library GLB is parsed exactly as the S1 route parsed it (compression off; the
+installed counterpart `PaletteOverlay.compressed_like` looked up had no file at the library's
+own relative path), so the S1 parity holds in kind; re-run `jobs/library_s1_savanna.json` when
+core moves into `res://libraries`.
 
 ## History
 
+- 2026-10-24: step S4: `LibraryRegistry` scans `res://libraries` and `user://libraries` besides
+  the developer override and serves every library that `LibraryResolver` can (duplicates,
+  dependency ranges, cycles, disabled ones; a failing library is an entry with reasons);
+  cross-library refs (`<lib>:<id>`) and `lib://` surfaces resolve through declared dependencies;
+  `AssetStore` + `GlbGuard` load a library's GLBs lazily, hash-checked unless official, with the
+  texture sizes read from the headers first; `PaletteOverlay.read_palette` gained its `lazy`
+  form (no GLB parsed at apply); `manifest.json` `libraries` and format 3 (`MapLibraries`), the
+  mismatch dialog (`MapLibraryGate`); the New map dialog grouped by library (`LibraryGroups`);
+  a biome's own thumbnail served by `SurfaceStore`; reader: dependencies validated,
+  `package_stem`, `sha256` and `bytes` checked. Findings: GUT counts a `push_warning` as an
+  unexpected error unless the test calls `assert_engine_error` (`push_error` is
+  `assert_push_error`); a typed `Array[int]` cannot be assigned a ternary of two array literals.
+  `tools/compile_library_cli.gd` prints "Identifier not found: UIManager" noise under `--script`
+  (no autoloads) but works: PaletteLibrary alone already does it, it is not new.
 - 2026-10-24: step S12b: the native scatter library evaluates `slope_min_deg` and the slope,
   height and wet curves (`version()` `ttscatter 4 curves`), rows byte-identical to GDScript's;
   a library built before it is refused to GDScript and fails `test_scatter_native`.

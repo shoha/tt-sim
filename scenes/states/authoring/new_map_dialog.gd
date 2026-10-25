@@ -68,6 +68,10 @@ var preset: Dictionary = {}
 var header: MenuHeader
 var size_field: TileField
 var biome_field: TileField
+## One more field under `biome_field` for every library other than core that supplies a biome
+## (LibraryGroups: alphabetical by name, its default biome first), each headed by the library's
+## name. Empty while core is the only library, which leaves the dialog as it has always been.
+var library_fields: Array[TileField] = []
 var ground_caption: Label
 var landform_field: TileField
 var landform_caption: Label
@@ -123,14 +127,15 @@ func _on_panel_ready() -> void:
 	biome_field.tiles.tile_min_size = BIOME_TILE_SIZE
 	biome_field.tiles.columns = BIOME_COLUMNS
 	var biomes := PaletteLibrary.biomes(palette_root)
-	for biome in biomes:
-		biome_field.tiles.add_tile(
-			StringName(biome["id"]),
-			AuthoringPanel.short_name(String(biome["name"])),
-			"",
-			String(biome["name"]),
-			BiomeThumbnail.strip(biome, BIOME_STRIP_PX, palette_root)
-		)
+	var groups := LibraryGroups.group(biomes, LibraryRegistry.list(palette_root))
+	var core_group: Dictionary = {}
+	var other_groups: Array[Dictionary] = []
+	for group in groups:
+		if group["id"] == LibraryContracts.CORE_ID:
+			core_group = group
+		else:
+			other_groups.append(group)
+	_add_biome_tiles(biome_field, core_group)
 	var bare: Dictionary = PaletteLibrary.surfaces(palette_root).get(NewMap.BARE_SURFACE, {})
 	biome_field.tiles.add_tile(
 		BARE_TILE,
@@ -143,6 +148,13 @@ func _on_panel_ready() -> void:
 	biome_field.tiles.select(_tile_for_biome(_biome_id))
 	biome_field.tiles.selection_changed.connect(_on_biome_selected)
 	_fields.add_child(biome_field)
+	if not other_groups.is_empty():
+		biome_field.show_note(String(core_group.get("name", "tt-sim Core")))
+	for group in other_groups:
+		var field := _library_field(group)
+		field.tiles.select(_tile_for_biome(_biome_id))
+		library_fields.append(field)
+		_fields.add_child(field)
 	# The ground the biome starts on, under its tiles as the landform's caption is under its.
 	ground_caption = Label.new()
 	ground_caption.name = "GroundCaption"
@@ -214,9 +226,11 @@ func _fit_to_canvas() -> void:
 	var wide := canvas.y < WIDE_BELOW_PX and canvas.x >= WIDE_SHEET_WIDTH + 2.0 * margin
 	_panel.custom_minimum_size.x = WIDE_SHEET_WIDTH if wide else SHEET_WIDTH
 	var columns := BIOME_COLUMNS_WIDE if wide else BIOME_COLUMNS
-	for field in [biome_field, size_field]:
-		if (field as TileField).tiles.columns != columns:
-			(field as TileField).tiles.columns = columns
+	var column_fields: Array[TileField] = [size_field]
+	column_fields.append_array(_biome_fields())
+	for field in column_fields:
+		if field.tiles.columns != columns:
+			field.tiles.columns = columns
 	var chrome := _panel.get_combined_minimum_size().y - _scroll.custom_minimum_size.y
 	var room := canvas.y - 2.0 * margin - chrome
 	var wanted := _fields.get_combined_minimum_size().y
@@ -255,6 +269,51 @@ static func _footer_button(
 	button.set_meta("ui_silent", true)
 	parent.add_child(button)
 	return button
+
+
+## Adds a tile per biome of `group` (LibraryGroups.group's entry, {} for none) to `field`: the
+## painted strip of the biome, its name (with the season when two share a name) and, for a
+## library other than core, the library's name in the tooltip.
+func _add_biome_tiles(field: TileField, group: Dictionary) -> void:
+	for biome: Dictionary in group.get("biomes", []):
+		var label := String((group["labels"] as Dictionary).get(biome["id"], biome["name"]))
+		var tip := label
+		if group["id"] != LibraryContracts.CORE_ID:
+			tip = "%s (%s %s)" % [label, group["name"], group["version"]]
+		field.tiles.add_tile(
+			StringName(biome["id"]),
+			AuthoringPanel.short_name(label),
+			"",
+			tip,
+			BiomeThumbnail.strip(biome, BIOME_STRIP_PX, palette_root)
+		)
+
+
+## The field of one library other than core: headed by its name, its version and author at the
+## end of the line, one tile per biome, a pick clearing the other fields' picks.
+func _library_field(group: Dictionary) -> TileField:
+	var field := TileField.new()
+	field.name = "Library_%s" % group["id"]
+	field.caption = String(group["name"])
+	field.tiles.photo_icons = true
+	field.tiles.photo_fill = true
+	field.tiles.tile_min_size = BIOME_TILE_SIZE
+	field.tiles.columns = BIOME_COLUMNS
+	_add_biome_tiles(field, group)
+	var note := "v%s" % group["version"] if group["version"] != "" else ""
+	if group["author"] != "":
+		note += (" by %s" if note != "" else "by %s") % group["author"]
+	if note != "":
+		field.show_note(note)
+	field.tiles.selection_changed.connect(_on_biome_selected)
+	return field
+
+
+## Every biome field, core's first.
+func _biome_fields() -> Array[TileField]:
+	var out: Array[TileField] = [biome_field]
+	out.append_array(library_fields)
+	return out
 
 
 func _initial_biome(biomes: Array[Dictionary]) -> String:
@@ -305,6 +364,10 @@ func _on_size_selected(id: StringName) -> void:
 func _on_biome_selected(id: StringName) -> void:
 	var was_bare := _biome_id == NewMap.BARE_BIOME
 	_biome_id = NewMap.BARE_BIOME if id == BARE_TILE else String(id)
+	# One pick across the library fields: the others show nothing chosen.
+	for field in _biome_fields():
+		if field.tiles.selected != id:
+			field.tiles.select(id)
 	_refresh_ground_caption()
 	if _biome_id == NewMap.BARE_BIOME and not was_bare:
 		_biome_landform = _landform
@@ -340,7 +403,8 @@ func _refresh_ground_caption() -> void:
 		)
 		if biome_surface != "":
 			surface = biome_surface
-	ground_caption.text = "Ground: %s" % surface.replace("_", " ")
+	var label := SurfaceStore.label_of(surface)
+	ground_caption.text = "Ground: %s" % (label if label != "" else surface.replace("_", " "))
 
 
 func _on_create_pressed() -> void:

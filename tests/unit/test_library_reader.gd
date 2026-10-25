@@ -258,7 +258,103 @@ func test_unsupported_features_warn_instead_of_failing() -> void:
 	parts["biome"]["rules"][0]["query"]["match"].append({"category": "tree", "subtype": "oak"})
 	var read := _read(parts)
 	assert_true(read["ok"], str(read["errors"]))
-	assert_true(_has(read["warnings"], "dependencies are not resolved"))
+	assert_false(_has(read["warnings"], "dependenc"), "the registry resolves dependencies")
 	assert_true(_has(read["warnings"], "treated as legacy"))
 	assert_true(_has(read["warnings"], "overrides are not applied"))
 	assert_true(_has(read["warnings"], "only {ref} clauses"))
+
+
+# ---- step S4: dependencies, refs into a dependency, catalog integrity fields ----
+
+
+func test_dependencies_are_checked_for_shape_and_range() -> void:
+	var good := _parts()
+	good["library"]["dependencies"] = [
+		{"id": "core", "version": "^1.0"}, {"id": "other-lib", "version": ">=2.1 <3"}
+	]
+	var read := _read(good)
+	assert_true(read["ok"], str(read["errors"]))
+	assert_eq(read["warnings"], [])
+	var cases := {
+		"not an object": ["core"],
+		"depends on itself": [{"id": "mini", "version": "*"}],
+		"listed twice": [{"id": "core", "version": "*"}, {"id": "core", "version": "^1"}],
+		"must match": [{"id": "Bad Id", "version": "*"}],
+		"contains '__'": [{"id": "a__b", "version": "*"}],
+		"version must be a string": [{"id": "core", "version": 1}],
+		"not a version range": [{"id": "core", "version": "^banana"}],
+	}
+	for needle: String in cases:
+		var parts := _parts()
+		parts["library"]["dependencies"] = cases[needle]
+		var result := _read(parts)
+		assert_false(result["ok"], needle)
+		assert_true(_has(result["errors"], needle), "%s in %s" % [needle, result["errors"]])
+	var too_many := _parts()
+	too_many["library"]["dependencies"] = []
+	for i in LibraryContracts.MAX_DEPENDENCIES + 1:
+		too_many["library"]["dependencies"].append({"id": "lib%d" % i, "version": "*"})
+	assert_true(_has(_read(too_many)["errors"], "at most 8"))
+	var not_a_list := _parts()
+	not_a_list["library"]["dependencies"] = {"core": "^1"}
+	assert_false(_read(not_a_list)["ok"])
+	var typo := _parts()
+	typo["library"]["dependencies"] = [{"id": "core", "versoin": "^1"}]
+	assert_true(_has(_read(typo)["warnings"], "unknown key 'versoin'"))
+
+
+func test_aliases_and_retired_are_shape_checked_with_warnings() -> void:
+	var good := _parts()
+	good["library"]["aliases"] = {"Old": "Tree_Oak_v0"}
+	good["library"]["retired"] = ["Gone"]
+	var read := _read(good)
+	assert_true(read["ok"])
+	assert_eq(read["warnings"], [])
+	var bad := _parts()
+	bad["library"]["aliases"] = {"Old": 5}
+	bad["library"]["retired"] = "Gone"
+	var result := _read(bad)
+	assert_true(result["ok"], "a wrong rename entry never blocks the library")
+	assert_true(_has(result["warnings"], "alias 'Old'"))
+	assert_true(_has(result["warnings"], "retired must be a list"))
+	var worse := _parts()
+	worse["library"]["aliases"] = ["x"]
+	assert_true(_has(_read(worse)["warnings"], "aliases must be an object"))
+
+
+func test_a_query_ref_may_name_a_dependencys_asset() -> void:
+	var parts := _parts()
+	parts["biome"]["rules"][0]["query"]["match"].append({"ref": "core:Tree_Oak_v9"})
+	var read := _read(parts)
+	assert_true(read["ok"], str(read["errors"]))
+	for bad in ["core:", "a:b:c", "Bad Lib:Oak", "core:has/slash"]:
+		var broken := _parts()
+		broken["biome"]["rules"][0]["query"]["match"].append({"ref": bad})
+		assert_false(_read(broken)["ok"], bad)
+
+
+func test_catalog_entries_may_carry_package_stem_and_integrity_fields() -> void:
+	var parts := _parts()
+	var entry: Dictionary = parts["catalog"]["assets"][0]
+	entry["package_stem"] = "Tree_Oak_v0"
+	entry["sha256"] = "ab".repeat(32)
+	entry["bytes"] = 1234
+	var read := _read(parts)
+	assert_true(read["ok"], str(read["errors"]))
+	assert_eq(read["warnings"], [], "package_stem is a known catalog key")
+	var typo := _parts()
+	typo["catalog"]["assets"][0]["package_stm"] = "x"
+	assert_true(_has(_read(typo)["warnings"], "unknown key 'package_stm'"), "typos still warn")
+
+
+func test_a_malformed_sha256_or_byte_count_is_an_error() -> void:
+	for digest in ["abc", "A".repeat(64), 12, "g".repeat(64)]:
+		var parts := _parts()
+		parts["catalog"]["assets"][0]["sha256"] = digest
+		var read := _read(parts)
+		assert_false(read["ok"], str(digest))
+		assert_true(_has(read["errors"], "sha256 must be"))
+	for size in [-1, 1.5, "100", LibraryContracts.CAPS["glb_bytes"] + 1]:
+		var parts := _parts()
+		parts["catalog"]["assets"][0]["bytes"] = size
+		assert_false(_read(parts)["ok"], str(size))

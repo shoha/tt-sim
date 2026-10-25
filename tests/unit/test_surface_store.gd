@@ -746,7 +746,9 @@ func test_a_legacy_biome_keeps_its_names_and_a_missing_surface_warns() -> void:
 				'"lib://surf/lilac"', '"lib://elsewhere/sand"'
 			)
 	)
-	assert_string_contains("\n".join(other["warnings"]), "names another library")
+	assert_string_contains(
+		"\n".join(other["warnings"]), "names a library this one does not depend on"
+	)
 	var core := _compile_fixture(
 		func(sources: Dictionary) -> void:
 			sources["biomes"]["meadow.json"] = String(sources["biomes"]["meadow.json"]).replace(

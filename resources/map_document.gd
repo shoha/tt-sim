@@ -68,11 +68,18 @@ extends RefCounted
 ## The fields are plain vars because authoring mutates one document for a whole session;
 ## every helper here is pure except the surface_* mutators, which edit the fields.
 
-## The format written. The reader accepts MIN_FORMAT up to FORMAT; 2 stores painted
-## surfaces as entries (see the header), so a format 1 build refuses a format 2 document
-## instead of reading it as unpainted.
+## The format written while the map uses only the core library. The reader accepts MIN_FORMAT
+## up to MAX_FORMAT; 2 stores painted surfaces as entries (see the header), so a format 1 build
+## refuses a format 2 document instead of reading it as unpainted. 3 (FORMAT_LIBRARIES) is
+## written when the map uses a library other than core: its ids are prefixed
+## `<library>__...`, which a build that does not know libraries would take for unknown plants
+## and drop on its next save, so an older build refuses the document instead.
 const FORMAT := 2
+const FORMAT_LIBRARIES := 3
+const MAX_FORMAT := 3
 const MIN_FORMAT := 1
+## Libraries a manifest may name (the registry serves at most this many).
+const MAX_LIBRARIES := 16
 const ROW_STRIDE := 10
 const DEFAULT_SAMPLE_SPACING_M := 0.25
 
@@ -118,6 +125,11 @@ const MAX_FLOW_TEXELS := 1024
 const MAX_CROSSINGS := 64
 
 var palette_version: String = ""
+## The content libraries this map used when it was saved: [{id, version, hash}], one per
+## library whose biome or asset it holds (MapLibraries.record_for). Read from the manifest;
+## the writer recomputes it from the document's ids, so this is what the file CLAIMED. Empty
+## for a map saved before libraries, which counts as core only.
+var libraries: Array[Dictionary] = []
 var map_seed: int = 0
 var size_cells: Vector2i = Vector2i(20, 20)
 var cell_size_m: float = LevelData.DEFAULT_GRID_CELL_SIZE

@@ -28,6 +28,10 @@ const PURE_MODULES: Array[String] = [
 	"surface_bake",
 	"surface_reader",
 	"library_bindings",
+	"library_versions",
+	"library_resolver",
+	"glb_guard",
+	"map_libraries",
 ]
 ## The one other module that touches a folder: it creates and replaces its own cache files and
 ## lists nothing (checked below).
@@ -421,8 +425,9 @@ func test_apply_lays_the_library_over_the_palette_and_loads_its_glbs() -> void:
 	assert_true(result["applied"])
 	assert_eq(result["library"], "mini")
 	assert_eq(result["biomes"], [RUNTIME])
-	assert_eq(result["report"]["parsed"].size(), 3)
+	assert_eq(result["report"]["parsed"].size(), 0, "no GLB is read until a plant is asked for")
 	assert_eq(result["report"]["failed"], [])
+	assert_eq(AssetStore.assets_of("mini", BASE).size(), 3, "AssetStore holds the three assets")
 	var ids := PaletteLibrary.biomes(BASE).map(func(b: Dictionary) -> String: return b["id"])
 	assert_eq(ids, ["forest_summer_s1", RUNTIME], "another biome is left alone")
 	var species := PaletteLibrary.species(RUNTIME, BASE)

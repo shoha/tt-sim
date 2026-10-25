@@ -66,6 +66,15 @@ var is_superseded: Callable = func() -> bool: return false
 var document: MapDocument = null
 ## FoliageLibrary.adapt_async's report for the document load_async() read ({} before one).
 var library_adaptation: Dictionary = {}
+## func(report) -> bool (a coroutine is fine): what to do when the document names a content
+## library this game lacks or has at another major version (MapLibraryGate; the report is
+## MapLibraries.check's). Authoring and play set MapLibraryGate.ask_dialog; left invalid, the
+## load opens the map without those plants at once and says so in a toast.
+var library_choice: Callable = Callable()
+## MapLibraryGate.run's result for the document load_async() read ({} before one).
+var library_gate: Dictionary = {}
+## True when load_async() returned null because the player chose Cancel in the library dialog.
+var library_cancelled: bool = false
 ## The water geometry the authored root's worker built (AuthoredLoadPrep.WATER), for
 ## add_authored_water(); {} otherwise.
 var _prepared_water: Dictionary = {}
@@ -108,6 +117,17 @@ func load_async(glb_path: String, document_path: String) -> Node3D:
 				return null
 			report_document_problem("Map document could not be read: " + document_path)
 		else:
+			# The libraries the map names against the ones served (MapLibraryGate): renamed
+			# ids, a missing library asked about, never a quiet substitution.
+			library_gate = await MapLibraryGate.run(document, library_choice)
+			if is_superseded.call():
+				return null
+			if not library_gate["proceed"]:
+				library_cancelled = true
+				document = null
+				return null
+			if library_gate["changed"]:
+				cells = cells_of_document(document, props_apart(document, _apart()))
 			cells = await adapt_to_library(document, cells)
 			if is_superseded.call():
 				return null
