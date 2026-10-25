@@ -34,3 +34,7 @@ signal open_editor_requested(level_path: String)
 ## Emitted by FoliageLibrary.switch() once the palette serves another foliage library
 ## ("treecube" or "plantgen"). Root rebuilds the open map so its scatter uses the new plants.
 signal foliage_library_changed(library: String)
+
+## Emitted to open biome `biome_id` of library `library_id` in the biome designer (the title's
+## picker, the designer's own "Save as new collection"). Root prepares and opens the session.
+signal biome_designer_requested(library_id: String, biome_id: String)

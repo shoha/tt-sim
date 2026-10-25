@@ -17,7 +17,8 @@ the New map dialog grouped by library. Step S5 (2026-10-24): `core` as the nine-
 with its surfaces, thumbnails and bindings, proven equal to the plantgen package route.
 Step S6 (2026-10-24): the library manager, which the player knows as "Collections" (the word
 "library" already means the list of maps on the title): list, card, import through a quarantine,
-Verify and Remove.
+Verify and Remove. Step S8a (2026-10-25): the asset query (category, subtype, group, tags, size
+class, seasons, count, pin, lock files) and the biome designer, [biome_designer.md](biome_designer.md).
 
 ## Map
 
@@ -31,6 +32,8 @@ Verify and Remove.
 | `utils/library/surface_cache.gd` | `SurfaceCache` | (S3) The raw `TTIMG` cache under `user://library_cache/<library id>/<hash>/<surface>_<map>.ttimg`: header (magic, version, engine string, format, size, mips, length, SHA-256) plus `Image.get_data()`; never a resource |
 | `utils/library/surface_store.gd` | `SurfaceStore` | (S3) The one place the ground, crossings, swatches and biome thumbnails get a surface's maps: `texture(root, relative)`, `image(root, relative)`, `available`, `texture_of` / `image_of(root, name or lib:// ref, kind)`, `runtime_name` / `ref_of` (the `lib://<library id>/<name>` convention), `register_library`, `label_of`, `load_set(folder)` and `load_installed(root, name)` (the two forms, for the equality test) |
 | `utils/library/library_bindings.gd` | `LibraryBindings` | (S3) The named things code needs (`fire.ash_surface`, `fire.ash_fallback`, `fire.burnt_biome`, `crossings.planks/moss/gravel/stone_default/paving`, `paint.default`, `water.bed/shore`, `default_biome`) with the legacy values as defaults; `value(key)` answers from the served libraries, else the default |
+| `utils/library/library_query.gd` | `LibraryQuery` | (S8a, pure) The asset query of a rule: filter clauses, shared tag and size filters, the season mode, group order by FNV-1a hash, `count`, `pin`, lock files and the 64-asset cap; the compiler asks it for everything but explicit `ref`s ([biome_designer.md](biome_designer.md) "Model") |
+| `utils/library/designer/` | `BiomeDesignerModel` and friends | (S8a) The biome designer's model, patches, curves, catalog and writer; `LibraryRegistry.designer_context`, `serve_draft` and `designer_writable` serve it ([biome_designer.md](biome_designer.md)) |
 | `utils/library/library_registry.gd` | `LibraryRegistry` | The only module that lists or reads folders (S4: multi-library): `refresh` / `list` / `info` (what the manager shows), `apply` (compiles every servable library in load order and lays it over the palette), `served`, `record_of`, `assets_used_by(map)`, `resolve_asset_alias` / `resolve_biome_alias`, `is_enabled` / `set_enabled` / `disabled_ids`, `discoverable`, `read_sources`, `compile_folder`, the dev override (`set_dev_override`, settings `[library] dev_path`), `clear` |
 | `utils/library/library_resolver.gd`, `library_versions.gd` | `LibraryResolver`, `LibraryVersions` | (S4, pure) Which libraries found on disk can be served and in what order (duplicate ids, disabled libraries, dependency ranges `^1.0` `~1.2` exact and comparators, cycles, depth 4, at most 16 active; the built-in core provides `core` when no folder does); semver parse, compare and range check (prerelease tags ignored) |
 | `utils/library/asset_store.gd`, `glb_guard.gd` | `AssetStore`, `GlbGuard` | (S4) The one place a library asset's mesh comes from, keyed by (library id, asset id): lazy GLTFDocument parse from a file path, cached, sha256 and byte count checked for a non-official library, `GlbGuard` (pure) reads the container and every embedded texture's size from its header before any decode; `instance()` dresses a copy with `WindFoliage.apply_material` |
@@ -64,8 +67,10 @@ Verify and Remove.
 - **Rules.** Each rule has a closed `role` (`LibraryContracts.ROLES`: it supplies the palette
   `kind`, the default size class and align and a default `habit`), explicit numbers (a missing one
   takes the class default; a missing density takes the class default times `density_factor`
-  with a warning) and `query.match[].ref` entries naming catalog ids. Other query clauses
-  (category, tags, counts) are warned about and skipped in this build. `near` and `avoid` take a
+  with a warning) and a `query`: `ref` clauses naming catalog ids or whole groups, and (S8a) filter
+  clauses, tags, size classes, a season mode, `count`, `order`, `pin` and lock files, resolved by
+  `LibraryQuery` over the library's and its dependencies' catalogs (semantics: [biome_designer.md](biome_designer.md)
+  "Model"); a rule with only `ref` clauses compiles as it always did. `near` and `avoid` take a
   `rule` or a `role` (a role expands to every rule of that role), compiled to the palette's
   `species` key; a relation to a rule that was dropped is dropped with a warning.
 - **Terrain response (S12a).** Two optional rule fields, additive to contract 1 (the version
@@ -433,7 +438,7 @@ only the assets a given map uses. The messages and the network rules are in
 ## Authoring
 
 The library manager (step S6) is the player's way to see, add, switch off and remove libraries;
-the biome designer is S8 and S9. The words the player sees come from `LibraryNames` (today
+the biome designer ([biome_designer.md](biome_designer.md), step S8a; S9 follows). The words the player sees come from `LibraryNames` (today
 "Collections"); this section, like the code, says library.
 
 - **Entry points.** The title's masthead has a quiet tool, Collections (`TitleScreen.
@@ -809,6 +814,12 @@ map the old ids if a kept map must keep its plants); re-run the nine-biome row p
 
 ## History
 
+- 2026-10-25: step S8a: `LibraryQuery` (the query clauses of design doc 2.6.3 with goldens: the nine
+  biomes' rows stay byte-identical), lock files (`biomes/<id>.lock.json`, read by the reader and
+  compiler, part of the library hash), `LibraryContracts.QUERY_*` (also in `contract.json` under
+  `query`; plantgen's vendored copy needs regenerating), `designer_context`, `serve_draft` and
+  `designer_writable` on the registry, `AssetStore.register_missing`, and the biome designer
+  ([biome_designer.md](biome_designer.md)).
 - 2026-10-24: step S6: the library manager ("Collections"): `LibraryNames` (one display-name
   constant), `LibraryImporter` (inspect a zip or folder against the caps before extracting,
   quarantine, worker-thread stage), `LibraryInstall` (examine with a dry-run compile, install,

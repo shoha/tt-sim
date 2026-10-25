@@ -70,8 +70,12 @@ var tokens: AuthoringTokens = null
 ## The last dressing ground fit (fit_dressing_ground_async), for measurement: {"samples",
 ## "ray_ms", "missed", "settled_rows", "wall_ms"}; {} for a map that is not a dressing.
 var ground_fit: Dictionary = {}
+## The biome designer when this session is one (BiomeDesignerHost; docs/systems/biome_designer.md):
+## the proving ground instead of a map, the designer's panels instead of the tool drawer.
+var designer: BiomeDesignerHost = null
 
 var _game_map: GameMap = null
+var _designer_config: Dictionary = {}
 var _environment := LevelEnvironmentManager.new()
 var _ui_layer: CanvasLayer = null
 ## The camera model play uses too: whole-map zoom, pan bounds, near plane, shadow reach.
@@ -162,7 +166,9 @@ func _build_ui() -> void:
 ## Opens what `request` names ({"level": LevelData or null, "new_map": NewMapDialog spec or
 ## absent}), after offering a leftover autosave if there is one.
 func start(request: Dictionary) -> void:
-	if AuthoringAutosave.exists():
+	_designer_config = request.get("designer", {})
+	# A biome designer session never offers, recovers or discards the author's autosave.
+	if AuthoringAutosave.exists() and _designer_config.is_empty():
 		_offer_recovery(request)
 	else:
 		_open_request(request)
@@ -318,8 +324,11 @@ func _open_async(
 			_use_biome(document.biome_ids[0])
 		panel.begin_session()
 	_is_open = true
-	_autosave_timer.start()
+	if _designer_config.is_empty():
+		_autosave_timer.start()
 	set_process(true)
+	if not _designer_config.is_empty() and designer == null:
+		designer = BiomeDesignerHost.attach(self, _game_map, _designer_config)
 	if settled_rows > 0:
 		UIManager.show_toast(
 			"Plants painted before were set down onto the ground. Save to keep the fix.",
@@ -485,6 +494,8 @@ func _process(_delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not _is_open:
 		return
+	if designer != null:
+		return  # The designer has its own undo and no tool shortcuts.
 	if event.is_action_pressed("ui_undo"):
 		undo()
 		get_viewport().set_input_as_handled()
@@ -914,6 +925,11 @@ func _save_and_leave() -> void:
 
 func _discard_and_leave() -> void:
 	AuthoringAutosave.discard()
+	_leave()
+
+
+## Leaves at once, asking nothing (the biome designer asks about its own unsaved biome).
+func leave_now() -> void:
 	_leave()
 
 

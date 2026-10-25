@@ -261,7 +261,7 @@ func test_unsupported_features_warn_instead_of_failing() -> void:
 	assert_false(_has(read["warnings"], "dependenc"), "the registry resolves dependencies")
 	assert_true(_has(read["warnings"], "treated as legacy"))
 	assert_true(_has(read["warnings"], "overrides are not applied"))
-	assert_true(_has(read["warnings"], "only {ref} clauses"))
+	assert_false(_has(read["warnings"], "only {ref} clauses"), "filter clauses compile (S8a)")
 
 
 # ---- step S4: dependencies, refs into a dependency, catalog integrity fields ----

@@ -108,6 +108,7 @@ func _ready() -> void:
 	EventBus.resume_requested.connect(func(): pop_state())
 	EventBus.open_editor_requested.connect(_on_open_editor_requested)
 	EventBus.foliage_library_changed.connect(_on_foliage_library_changed)
+	EventBus.biome_designer_requested.connect(_on_biome_designer_requested)
 
 	# Skip in-app updates for Steam users — Steam handles updates. The check starts on the
 	# first title screen, so its dialog cannot open over the graphics warm-up.
@@ -334,6 +335,10 @@ func _enter_state(state: State) -> void:
 				_title_screen.build_map_requested.connect(
 					func(preset: Dictionary) -> void: request_authoring(null, RETURN_TO_TITLE, preset)
 				)
+			if _title_screen.has_signal("design_biome_requested"):
+				_title_screen.design_biome_requested.connect(
+					func() -> void: BiomeDesignerPicker.show_over(self)
+				)
 			if _title_screen.has_signal("edit_map_requested"):
 				_title_screen.edit_map_requested.connect(_on_edit_map_requested)
 			var title_app_ctrl = _app_menu.get_node_or_null("AppMenu") if _app_menu else null
@@ -523,6 +528,21 @@ static func authoring_refusal(level: LevelData, networked: bool) -> String:
 	if level != null and level.map_path.begins_with("res://"):
 		return "Built-in maps cannot be edited in the game."
 	return ""
+
+
+## Opens biome `biome_id` of library `library_id` in the biome designer: the draft is compiled
+## and laid over the palette, then the proving ground opens as an authoring session
+## (docs/systems/biome_designer.md). Offline only, like map building.
+func _on_biome_designer_requested(library_id: String, biome_id: String) -> void:
+	var refusal := authoring_refusal(null, NetworkManager.is_networked())
+	if refusal != "":
+		UIManager.show_warning(refusal)
+		return
+	var prepared := BiomeDesignerEntry.prepare(library_id, biome_id)
+	if not prepared["ok"]:
+		UIManager.show_error(String(prepared["error"]))
+		return
+	_begin_authoring(prepared["request"])
 
 
 func _begin_authoring(request: Dictionary) -> void:
