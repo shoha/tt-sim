@@ -35,11 +35,23 @@ static func write_library(
 ) -> String:
 	if not LibraryIds.library_problems(id).is_empty():
 		return "unsafe library id"
+	var base := _base(root)
+	if not base["ok"]:
+		return "no safe place to keep it"
+	root = String(base["path"])
 	var staging := root.path_join(".staging-" + id)
-	_remove_tree(staging)
+	if not _delete(staging, root):
+		return "cannot clear the staging folder"
+	if DirAccess.make_dir_recursive_absolute(staging) != OK or not SafeDelete.mark(
+		staging, "received_staging", root
+	):
+		return "cannot create the staging folder"
 	var total := 0
 	for relative: String in files:
-		if not LibraryIds.path_problems(relative).is_empty():
+		if (
+			not LibraryIds.path_problems(relative).is_empty()
+			or SafeDelete.MARKER in relative.split("/")
+		):
 			return "unsafe path " + relative
 		var path := staging.path_join(relative)
 		if DirAccess.make_dir_recursive_absolute(path.get_base_dir()) != OK:
@@ -51,10 +63,13 @@ static func write_library(
 		file.close()
 		total += (files[relative] as PackedByteArray).size()
 	var final := root.path_join(id)
-	_remove_tree(final)
+	if not _delete(final, root):
+		_delete(staging, root)
+		return "cannot replace the earlier copy"
 	if DirAccess.rename_absolute(staging, final) != OK:
-		_remove_tree(staging)
+		_delete(staging, root)
 		return "cannot move the library into place"
+	SafeDelete.mark(final, "received", root)
 	var marker := {
 		"id": id,
 		"version": String(library.get("version", "")),
@@ -74,8 +89,11 @@ static func write_library(
 ## The received libraries: [{id, version, bytes, received_at, last_used}], least recently used
 ## first.
 static func inventory(root: String = "") -> Array[Dictionary]:
-	var base := root if root != "" else LibraryRegistry.received_root()
 	var out: Array[Dictionary] = []
+	var resolved := _base(root)
+	if not resolved["ok"]:
+		return out
+	var base := String(resolved["path"])
 	if not DirAccess.dir_exists_absolute(base):
 		return out
 	for file_name in DirAccess.get_files_at(base):
@@ -109,9 +127,11 @@ static func inventory(root: String = "") -> Array[Dictionary]:
 
 ## Marks the received library `id` as used now, so the LRU eviction keeps it.
 static func touch(id: String, now: int = -1, root: String = "") -> void:
-	var base := root if root != "" else LibraryRegistry.received_root()
-	var path := base.path_join(id + MARKER_SUFFIX)
-	if LibraryIds.library_problems(id).is_empty() and FileAccess.file_exists(path):
+	var resolved := _base(root)
+	if not resolved["ok"] or not LibraryIds.library_problems(id).is_empty():
+		return
+	var path := String(resolved["path"]).path_join(id + MARKER_SUFFIX)
+	if FileAccess.file_exists(path):
 		var json := JSON.new()
 		if json.parse(FileAccess.get_file_as_string(path)) == OK and json.data is Dictionary:
 			var data: Dictionary = json.data
@@ -127,8 +147,11 @@ static func touch(id: String, now: int = -1, root: String = "") -> void:
 static func evict_to_fit(
 	incoming: int, keep: Array[String], cap: int = CACHE_CAP_BYTES, root: String = ""
 ) -> Array[String]:
-	var base := root if root != "" else LibraryRegistry.received_root()
 	var removed: Array[String] = []
+	var resolved := _base(root)
+	if not resolved["ok"]:
+		return removed
+	var base := String(resolved["path"])
 	var items := inventory(base)
 	var total := incoming
 	for item in items:
@@ -148,9 +171,15 @@ static func evict_to_fit(
 static func remove(id: String, root: String = "") -> bool:
 	if not LibraryIds.library_problems(id).is_empty():
 		return false
-	var base := root if root != "" else LibraryRegistry.received_root()
-	_remove_tree(base.path_join(id))
-	DirAccess.remove_absolute(base.path_join(id + MARKER_SUFFIX))
+	var resolved := _base(root)
+	if not resolved["ok"]:
+		return false
+	var base := String(resolved["path"])
+	var folder_gone := _delete(base.path_join(id), base)
+	# The record goes only with its folder: a folder that could not be deleted keeps its record,
+	# so the next sweep sees it again.
+	if folder_gone:
+		SafeDelete.file(base.path_join(id + MARKER_SUFFIX), base)
 	_this_session.erase(id)
 	return true
 
@@ -167,17 +196,21 @@ static func sweep_session(root: String = "") -> Array[String]:
 
 ## Start-up: a received library no session of this process owns is a leftover of a crash.
 static func sweep_leftovers(root: String = "") -> Array[String]:
-	var base := root if root != "" else LibraryRegistry.received_root()
 	var removed: Array[String] = []
+	var resolved := _base(root)
+	if not resolved["ok"]:
+		return removed
+	var base := String(resolved["path"])
 	if not DirAccess.dir_exists_absolute(base):
 		return removed
 	for item in inventory(base):
 		if not _this_session.has(item["id"]):
 			remove(String(item["id"]), base)
 			removed.append(String(item["id"]))
+	# Folders left without a record (a crashed write): ours only when they carry the marker.
 	for folder in DirAccess.get_directories_at(base):
 		if not _this_session.has(folder):
-			_remove_tree(base.path_join(folder))
+			_delete(base.path_join(folder), base)
 	return removed
 
 
@@ -190,8 +223,15 @@ static func promote(
 	id: String, importer: Callable = Callable(), user_root: String = "", root: String = ""
 ) -> Dictionary:
 	var out := {"ok": false, "error": ""}
-	var base := root if root != "" else LibraryRegistry.received_root()
-	var target_root := user_root if user_root != "" else LibraryRegistry.user_root
+	var resolved := _base(root)
+	var destination := (
+		LibraryPaths.resolve(user_root) if user_root != "" else LibraryPaths.libraries()
+	)
+	if not resolved["ok"] or not destination["ok"]:
+		out["error"] = "no safe place to keep it"
+		return out
+	var base := String(resolved["path"])
+	var target_root := String(destination["path"])
 	if (
 		not LibraryIds.library_problems(id).is_empty()
 		or not DirAccess.dir_exists_absolute(base.path_join(id))
@@ -212,16 +252,28 @@ static func promote(
 		out["ok"] = moved == OK
 		out["error"] = "" if moved == OK else "cannot move the library"
 	if out["ok"]:
-		DirAccess.remove_absolute(base.path_join(id + MARKER_SUFFIX))
+		SafeDelete.file(base.path_join(id + MARKER_SUFFIX), base)
 		_this_session.erase(id)
 	return out
 
 
-static func _remove_tree(path: String) -> void:
+## The resolved received folder: `root` when given (it must pass LibraryPaths.resolve), else the
+## registry's. {ok, path, error}; never an empty or relative path.
+static func _base(root: String) -> Dictionary:
+	if root == "":
+		return LibraryPaths.received()
+	return LibraryPaths.resolve(root)
+
+
+## Deletes the folder `path` (inside `base`) through SafeDelete; true when it is gone. A folder
+## the game wrote before the ownership marker existed is adopted first when its own record
+## (`<id>.received.json`) sits beside it, or when it is a `.staging-` folder of this store.
+static func _delete(path: String, base: String) -> bool:
 	if not DirAccess.dir_exists_absolute(path):
-		return
-	for file_name in DirAccess.get_files_at(path):
-		DirAccess.remove_absolute(path.path_join(file_name))
-	for folder in DirAccess.get_directories_at(path):
-		_remove_tree(path.path_join(folder))
-	DirAccess.remove_absolute(path)
+		return true
+	if not SafeDelete.is_owned(path):
+		var name := path.get_file()
+		var recorded := FileAccess.file_exists(base.path_join(name + MARKER_SUFFIX))
+		if recorded or name.begins_with(".staging-"):
+			SafeDelete.mark(path, "received", base)
+	return bool(SafeDelete.tree(path, base)["ok"])

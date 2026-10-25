@@ -697,6 +697,78 @@ godot --path D:/dev/tabletop/tt-sim --windowed --resolution 1920x1080 --position
   (5) The asset-id mapping is recorded above (The core library). (6) Thumbnails are copies of
   the installed 512 px JPGs.
 
+## Destructive operations
+
+On 2026-10-24 a recursive delete in the importer emptied a whole disposable worktree (about 4000
+tracked files). The trigger was never seen, but the mechanism was reproduced (2026-10-24, a
+scratch copy of the pre-guard tree): Godot reads `""` and `"."` as the working directory
+(`DirAccess.open("")` opens it; `dir_exists_absolute("")` is true), which in a developer run is
+the project. A root that is empty, relative or unset therefore turns "delete the folder `<root>/x`"
+into "delete the project's `x`", and `remove_tree("")` or `remove_tree(".")` into "delete the
+project". Reproduced on the old code, each in its own scratch project: `remove_tree("")`,
+`remove_tree(".")` and the tests' own `World.remove_tree("")` (all 4031 tracked files), an
+`incoming_override` of `"."` through `sweep_incoming` (4018), `LibraryReceivedStore.sweep_leftovers(".")`
+(4018), and, with `user_root` empty, `LibraryInstall.remove("scenes")` / `install(replace)` /
+`ReceivedStore.write_library("", "scenes", ...)` (the project's `scenes` folder, 470 files: a
+library id is any `[a-z][a-z0-9_-]{1,31}`, so it can be the name of a project folder). A sweep
+with `user_root` empty alone only reached `./.incoming`. Not reproduced: how `user_root` got
+empty (it is `Paths.LIBRARIES_DIR` at load, `user://libraries/` in every run tried: GUT, `--script`,
+`--data-root`).
+
+The fix is at the root, not only a guard:
+
+- **`LibraryPaths`** (`utils/library/library_paths.gd`) is the only thing that turns a configured
+  string into a folder the library code may touch. `resolve(path)` returns `{ok, path, error}`:
+  an ABSOLUTE, normalised path strictly inside the user data folder (`user://`), else an error.
+  Empty, whitespace, relative, `res://`, any `..` segment, a bare drive or root, the user data
+  folder itself, its parents, the project folder or a parent of it: all refused. The named roots
+  `libraries()` (`LibraryRegistry.user_root`), `incoming()` (`<libraries>/.incoming` or the test
+  override), `received()` (`<libraries>/.received`) and `cache()` (`SurfaceCache.root`) resolve the
+  configured string each time they are asked, so an unset root fails closed. `child(root, name)`
+  accepts one plain segment only (a library id can never carry a separator, `.` or `..`).
+- **`SafeDelete`** (`utils/library/safe_delete.gd`) is the ONE recursive delete. `tree(path,
+  base)` removes a folder only when: (a) it is strictly inside an allowed base (the four roots
+  above, or the base the caller names, resolved the same way; never the base itself);
+  (b) it holds the `.tt-owned` marker our code wrote when it created it; (c) neither it, nor a
+  folder between the base and it, nor anything inside is a symlink or junction (links are never
+  followed, and one inside the tree stops the whole delete before the first file goes);
+  (d) it has at most 200,000 entries and 24 levels (`max_entries` for tests); and then it logs
+  the count. The tree is walked first (hidden files included: a dot file is hidden on macOS and
+  Linux), the marker is deleted last, so a failed delete can be retried. `file(path, base)` is
+  the single-file twin. A folder without the marker is refused and reported (`printerr`), never
+  deleted. `mark`/`adopt`/`mark_if_only` write the marker.
+- **Where the marker is written** (lazily, where our code creates the folder): `stage` writes it
+  into the quarantine folder before extracting (a `.tt-owned` inside an archive is dropped as
+  junk by `inspect`, so an archive cannot forge one); the staged folder keeps it when `install`
+  renames it to `<libraries>/<id>`; `LibraryReceivedStore` marks `.staging-<id>` and `<id>`;
+  `SurfaceCache.write` marks `library_cache/<id>`. The registry excludes the root marker from a
+  library's file list, so it is never part of a library's hash, size or transfer.
+- **Migration** (a folder without a marker is never deleted): `LibraryRegistry.refresh()` marks
+  every direct child of the user's libraries folder that has a valid library id and a
+  `library.json` (a library installed before the marker existed); a received folder is adopted
+  when its `<id>.received.json` record sits beside it or it is a `.staging-` folder; a surface
+  cache folder is adopted when it holds nothing but `.ttimg` and `.tmp` files. Anything else
+  stays, and `Remove` says "was not put there by the game; delete its folder by hand". Quarantine
+  folders made before the marker existed are left by the sweep (`last_sweep_skipped`).
+- **Not recursive, but guarded the same way**: the surface cache's replace-a-file, the received
+  store's record files, `AssetCacheManager`'s index-driven removals (`SafeDelete.file` against
+  `Paths.ASSET_CACHE_DIR`: the index is a file on disk) and `LevelManager.delete_level` /
+  `delete_level_folder` (absolute, strictly inside `levels_dir`; an empty path used to list and
+  empty the working directory's top level).
+- **Tests**: `tests/unit/test_safe_delete.gd` feeds every entry point empty, relative, `.`,
+  `..`, `res://`, drive and parent roots, hostile ids, an archive with a forged marker, a
+  stranger folder, a junction inside, as and on the way to the folder (made with `mklink /J`),
+  an oversized and a too deep tree, and asserts a canary file (marker and all) and the project
+  survive. Test cleanup uses `ScratchDir.clear` (`tests/unit/scratch_dir.gd`) or guards its own
+  helper with `LibraryPaths.verify`.
+
+Other deletes in the repo (not library code): `Paths._remove_tree` (only a root `test_data_root`
+names), the `_remove_tree` copies in `tools/render_jobs/probes/` and `tools/map_size/` (dev
+probes, unguarded), `AssetModelCache`/`AssetDownloader`/`AssetManager`/`UpdateManager` single-file
+removals of paths the code builds itself. The designer's `LibraryWriter` (S8a) writes and
+renames single files and removes its lock file only; any folder delete it adds must use
+`SafeDelete`.
+
 ## Open work
 
 See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work". The library steps (S6 onwards: the

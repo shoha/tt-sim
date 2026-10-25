@@ -149,6 +149,8 @@ func _write_document(root_path: String, biomes: Array) -> void:
 
 
 func _remove_tree(path: String) -> void:
+	if LibraryPaths.verify(path) != "":  # "" and "." mean the working directory (the project)
+		return
 	var dir := DirAccess.open(path)
 	if dir == null:
 		return

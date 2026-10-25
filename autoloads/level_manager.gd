@@ -551,6 +551,8 @@ func _get_folder_level_info(folder_name: String) -> Dictionary:
 
 ## Delete a level (handles both file and folder formats)
 func delete_level(path: String) -> bool:
+	if not _deletable(path):
+		return false
 	# Check if it's a folder
 	if DirAccess.dir_exists_absolute(path):
 		return delete_level_folder(path)
@@ -571,9 +573,25 @@ func delete_level(path: String) -> bool:
 	return true
 
 
+## True when `path` is a level inside the levels folder: absolute, resolved, strictly inside it.
+## An empty or relative path means the working directory to the file system (the project itself
+## in a developer run), so it is refused here rather than listed and emptied.
+func _deletable(path: String) -> bool:
+	var target := LibraryPaths.resolve(path)
+	var root := LibraryPaths.resolve(levels_dir)
+	if (
+		target["ok"]
+		and root["ok"]
+		and LibraryPaths.inside(String(target["path"]), String(root["path"]))
+	):
+		return true
+	printerr("LevelManager: refusing to delete '%s', not inside the levels folder" % path)
+	return false
+
+
 ## Delete a folder-based level and all its contents
 func delete_level_folder(level_dir: String) -> bool:
-	if not DirAccess.dir_exists_absolute(level_dir):
+	if not _deletable(level_dir) or not DirAccess.dir_exists_absolute(level_dir):
 		return false
 
 	var dir = DirAccess.open(level_dir)
