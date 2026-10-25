@@ -294,6 +294,8 @@ static func remove(library_id: String) -> Dictionary:
 		return {"ok": false, "error": "'%s' is not installed." % library_id}
 	if not LibraryImporter.remove_tree(folder):
 		return {"ok": false, "error": "Some files of '%s' could not be deleted." % library_id}
+	# Its baked surface maps (SurfaceCache) go with it; nothing else prunes that cache.
+	LibraryImporter.remove_tree(SurfaceCache.root.path_join(library_id))
 	return {"ok": true, "error": ""}
 
 

@@ -45,6 +45,18 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   view of the seam), and logs through `probes/library_s4.gd` the libraries list, the libraries
   the map records and the format (3) the save wrote, then deletes its `_libs4_two` level. 5
   captures. `docs/systems/library.md`.
+- `jobs/library_manager.json`: the collections manager (step S6, about 45 s, keeps no level and
+  leaves no library behind): the probe `library_manager.gd` (`world`) writes the test world's
+  `alienworld` 0.3.1 into the run's own `user://libraries` and three archives into
+  `user://_libmgr_inbox` (Beta Marsh as a zip of its folder, alienworld 0.4.0, a hostile one),
+  then at 1600x900 captures the title with its Collections tool, the manager (core selected, then
+  alienworld with Verify's result), the install card of Beta Marsh and the list after Install,
+  alienworld switched off, the Replace card, the refusal, Remove's confirmation, the New map
+  dialog with its footer link, the manager over it and the dialog after a library was switched
+  off; at 1280x800 the list and the install card. 15 captures, `--full` for the verdict set.
+  `cleanup` removes what `world` wrote and switches every id back on (the disabled list lives in
+  the worktree's `settings.cfg`; delete that file before a run if a failed run left one). The
+  log appends: delete `log.txt` between runs. `docs/systems/library.md`, `docs/UI_SYSTEMS.md`.
 - `jobs/plantgen_play.json`: the same switch in play (about 30 s): builds the alpine map, saves
   it as `_reopen_plantgen`, plays it with treecube and again after switching to plantgen (Root
   reloads the table; the load regenerates the rows), then removes the level
