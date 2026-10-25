@@ -316,7 +316,7 @@ func test_the_query_section_adds_a_filter_and_tags() -> void:
 func test_the_response_section_edits_curves_with_presets_and_dragging() -> void:
 	_session.select_rule("oak")
 	var section := _ui.inspector.find_child("Response", true, false) as DesignerResponseSection
-	for axis in ["slope", "height", "wet"]:
+	for axis in ["slope", "height", "wet", "water_dist"]:
 		assert_not_null(section.editor_of(axis), axis)
 	var preset := section.find_child("Preset_slope", true, false) as OptionButton
 	DesignerRows.select(preset, "ramp_down")
