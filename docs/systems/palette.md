@@ -16,7 +16,7 @@ rules, shipped inside tt-sim under `assets/palette/` (Git LFS) and installed by 
 | `utils/scatter_glb_utils.gd` | `ScatterGlbUtils` | `build_scatter()`, the resolver-driven scatter core that `process_scatter_instances()` wraps for GLB maps |
 | `utils/wind_foliage.gd` | `WindFoliage` | `apply_material`, which mutates surface materials in place; `classify_category()`; `reset_caches()` (the warm-up representatives) |
 | `utils/palette_overlay.gd` | `PaletteOverlay` | A built package folder laid over the loaded palette (`PaletteLibrary.overlay_package`) |
-| `utils/foliage_library.gd` | `FoliageLibrary` | The runtime choice between the installed palette and a plantgen package (below) |
+| `utils/foliage_library.gd` | `FoliageLibrary` | The runtime choice between the installed palette and a plantgen package (below); it also layers the developer content library ([library.md](library.md)) last |
 
 ## Foliage library (treecube or plantgen)
 

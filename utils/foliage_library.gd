@@ -108,20 +108,34 @@ static func apply(
 		if not report["ok"]:
 			# The cache was cleared, so the installed palette serves again.
 			result["error"] = String(report["error"])
+			_layer_content(result, root)
 			return result
 		_active = PLANTGEN
 		_package = package
 		result["library"] = PLANTGEN
+	_layer_content(result, root)
 	result["ok"] = true
 	return result
 
 
+## The developer content library (LibraryRegistry, off unless a dev path is set) lays over
+## whichever palette is served; its report goes in result["content_library"]. A failure warns
+## and changes nothing else.
+static func _layer_content(result: Dictionary, root: String) -> void:
+	var content := LibraryRegistry.apply(root)
+	result["content_library"] = content
+	if not content["ok"]:
+		push_warning("FoliageLibrary: %s" % content["error"])
+
+
 ## apply() for the persisted choice, at startup before any map or the graphics warm-up reads
-## the palette. A failure warns and leaves treecube.
+## the palette. A failure warns and leaves treecube. A persisted content-library dev path
+## (settings.cfg `[library] dev_path`) is applied here too.
 static func apply_saved() -> void:
-	if saved_library() != PLANTGEN:
+	LibraryRegistry.use_saved_override()
+	if saved_library() != PLANTGEN and not LibraryRegistry.has_override():
 		return
-	var result := apply(PLANTGEN)
+	var result := apply(saved_library())
 	if not result["ok"]:
 		push_warning("FoliageLibrary: %s; serving treecube" % result["error"])
 

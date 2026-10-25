@@ -1,0 +1,1270 @@
+{
+	"assets": [
+		{
+			"biomes": [
+				"temperate_forest",
+				"grassland_meadow",
+				"birch_woodland"
+			],
+			"bytes": 212584,
+			"category": "bush",
+			"dimensions_m": [
+				2.98,
+				2.619,
+				3.069
+			],
+			"file": "assets/bush/Bush_Bush_v0.glb",
+			"game_kind": "tree",
+			"group": "bush",
+			"id": "Bush_Bush_v0",
+			"lods": [
+				{
+					"node": "Bush_Bush_v0_LOD0",
+					"triangles": 906
+				}
+			],
+			"name": "Bush",
+			"node": "Bush_Bush_v0_LOD0",
+			"seasons": [],
+			"sha256": "fef6a8dc5672af45f13906222ba2b3b07b98fd6a995a21fff5a6b19c24b82db9",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "shrub",
+			"tags": [
+				"shrub"
+			],
+			"thumb": null,
+			"triangles": 906,
+			"wind_category": "tree"
+		},
+		{
+			"biomes": [
+				"rocky_badlands",
+				"savanna",
+				"burnt_forest"
+			],
+			"bytes": 282584,
+			"category": "bush",
+			"dimensions_m": [
+				3.221,
+				2.746,
+				3.21
+			],
+			"file": "assets/bush/Bush_DeadShrub_v0.glb",
+			"game_kind": "tree",
+			"group": "deadshrub",
+			"id": "Bush_DeadShrub_v0",
+			"lods": [
+				{
+					"node": "Bush_DeadShrub_v0_LOD0",
+					"triangles": 2712
+				}
+			],
+			"name": "Deadshrub",
+			"node": "Bush_DeadShrub_v0_LOD0",
+			"seasons": [],
+			"sha256": "6872c306afb71846182e4c791e0f995b8a648b7da694003e0299cec1496d8b64",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "dead_shrub",
+			"tags": [
+				"dead",
+				"dry"
+			],
+			"thumb": null,
+			"triangles": 2712,
+			"wind_category": "tree"
+		},
+		{
+			"biomes": [
+				"rocky_badlands",
+				"savanna",
+				"burnt_forest"
+			],
+			"bytes": 282592,
+			"category": "bush",
+			"dimensions_m": [
+				2.963,
+				2.619,
+				3.562
+			],
+			"file": "assets/bush/Bush_DeadShrub_v1.glb",
+			"game_kind": "tree",
+			"group": "deadshrub",
+			"id": "Bush_DeadShrub_v1",
+			"lods": [
+				{
+					"node": "Bush_DeadShrub_v1_LOD0",
+					"triangles": 2712
+				}
+			],
+			"name": "Deadshrub",
+			"node": "Bush_DeadShrub_v1_LOD0",
+			"seasons": [],
+			"sha256": "9028e706b47858f8dfd791304f3c153088b6eb3f211dc4a948511d9bf5b2216a",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "dead_shrub",
+			"tags": [
+				"dead",
+				"dry"
+			],
+			"thumb": null,
+			"triangles": 2712,
+			"wind_category": "tree"
+		},
+		{
+			"biomes": [
+				"grassland_meadow",
+				"alpine_meadow",
+				"temperate_forest"
+			],
+			"bytes": 188824,
+			"category": "flower",
+			"dimensions_m": [
+				0.4,
+				0.344,
+				0.435
+			],
+			"file": "assets/flower/Flower_Daisy_v0.glb",
+			"game_kind": "flower",
+			"group": "daisy",
+			"id": "Flower_Daisy_v0",
+			"lods": [
+				{
+					"node": "Flower_Daisy_v0_LOD0",
+					"triangles": 400
+				}
+			],
+			"name": "Daisy",
+			"node": "Flower_Daisy_v0_LOD0",
+			"seasons": [],
+			"sha256": "19d0f25ff4d6ee906594dd65c3ced8617496135c2b1cd5be3cbddd75782a7597",
+			"sidecar": null,
+			"size_class": "ground",
+			"subtype": "daisy",
+			"tags": [
+				"flowering"
+			],
+			"thumb": null,
+			"triangles": 400,
+			"wind_category": "grass"
+		},
+		{
+			"biomes": [
+				"grassland_meadow"
+			],
+			"bytes": 178632,
+			"category": "flower",
+			"dimensions_m": [
+				0.42,
+				0.505,
+				0.472
+			],
+			"file": "assets/flower/Flower_Poppy_v0.glb",
+			"game_kind": "flower",
+			"group": "poppy",
+			"id": "Flower_Poppy_v0",
+			"lods": [
+				{
+					"node": "Flower_Poppy_v0_LOD0",
+					"triangles": 336
+				}
+			],
+			"name": "Poppy",
+			"node": "Flower_Poppy_v0_LOD0",
+			"seasons": [],
+			"sha256": "54ea28ecdbbd336a6a223defdc495270a78c3c252c1bf90687152cecfca6760e",
+			"sidecar": null,
+			"size_class": "ground",
+			"subtype": "poppy",
+			"tags": [
+				"flowering"
+			],
+			"thumb": null,
+			"triangles": 336,
+			"wind_category": "grass"
+		},
+		{
+			"biomes": [
+				"grassland_meadow",
+				"alpine_meadow",
+				"savanna"
+			],
+			"bytes": 7124,
+			"category": "ground_cover",
+			"dimensions_m": [
+				1.397,
+				0.845,
+				1.365
+			],
+			"file": "assets/ground_cover/Grass_Grass_v0.glb",
+			"game_kind": "grass",
+			"group": "grass",
+			"id": "Grass_Grass_v0",
+			"lods": [
+				{
+					"node": "Grass_Grass_v0_LOD0",
+					"triangles": 12
+				}
+			],
+			"name": "Grass",
+			"node": "Grass_Grass_v0_LOD0",
+			"seasons": [],
+			"sha256": "8cff79e3b10fdf35b45a9cac280fb6be996a95291f67687feaa25e08e7da0729",
+			"sidecar": null,
+			"size_class": "ground",
+			"subtype": "grass",
+			"tags": [
+				"meadow"
+			],
+			"thumb": null,
+			"triangles": 12,
+			"wind_category": "grass"
+		},
+		{
+			"biomes": [
+				"grassland_meadow",
+				"alpine_meadow",
+				"savanna"
+			],
+			"bytes": 7376,
+			"category": "ground_cover",
+			"dimensions_m": [
+				1.407,
+				0.725,
+				1.308
+			],
+			"file": "assets/ground_cover/Grass_Grass_v1.glb",
+			"game_kind": "grass",
+			"group": "grass",
+			"id": "Grass_Grass_v1",
+			"lods": [
+				{
+					"node": "Grass_Grass_v1_LOD0",
+					"triangles": 12
+				}
+			],
+			"name": "Grass",
+			"node": "Grass_Grass_v1_LOD0",
+			"seasons": [],
+			"sha256": "d80248f338e90d206844602119749805cbce8fc25189b00c9e23479720129ed9",
+			"sidecar": null,
+			"size_class": "ground",
+			"subtype": "grass",
+			"tags": [
+				"meadow"
+			],
+			"thumb": null,
+			"triangles": 12,
+			"wind_category": "grass"
+		},
+		{
+			"biomes": [
+				"grassland_meadow",
+				"alpine_meadow",
+				"savanna"
+			],
+			"bytes": 7428,
+			"category": "ground_cover",
+			"dimensions_m": [
+				1.223,
+				0.57,
+				1.322
+			],
+			"file": "assets/ground_cover/Grass_Grass_v10.glb",
+			"game_kind": "grass",
+			"group": "grass",
+			"id": "Grass_Grass_v10",
+			"lods": [
+				{
+					"node": "Grass_Grass_v10_LOD0",
+					"triangles": 12
+				}
+			],
+			"name": "Grass",
+			"node": "Grass_Grass_v10_LOD0",
+			"seasons": [],
+			"sha256": "f5aceb33ab5a07c398e8451701de9e1a18458b285572c1f6b419bf3c8cba17c1",
+			"sidecar": null,
+			"size_class": "ground",
+			"subtype": "grass",
+			"tags": [
+				"meadow"
+			],
+			"thumb": null,
+			"triangles": 12,
+			"wind_category": "grass"
+		},
+		{
+			"biomes": [
+				"grassland_meadow",
+				"alpine_meadow",
+				"savanna"
+			],
+			"bytes": 7384,
+			"category": "ground_cover",
+			"dimensions_m": [
+				1.319,
+				0.522,
+				1.213
+			],
+			"file": "assets/ground_cover/Grass_Grass_v11.glb",
+			"game_kind": "grass",
+			"group": "grass",
+			"id": "Grass_Grass_v11",
+			"lods": [
+				{
+					"node": "Grass_Grass_v11_LOD0",
+					"triangles": 12
+				}
+			],
+			"name": "Grass",
+			"node": "Grass_Grass_v11_LOD0",
+			"seasons": [],
+			"sha256": "60bbf8e21deabb5ed9fd0044a77d78c622cabe0fd087ae27da0078a9c34e1b53",
+			"sidecar": null,
+			"size_class": "ground",
+			"subtype": "grass",
+			"tags": [
+				"meadow"
+			],
+			"thumb": null,
+			"triangles": 12,
+			"wind_category": "grass"
+		},
+		{
+			"biomes": [
+				"grassland_meadow",
+				"alpine_meadow",
+				"savanna"
+			],
+			"bytes": 7136,
+			"category": "ground_cover",
+			"dimensions_m": [
+				1.414,
+				0.805,
+				1.351
+			],
+			"file": "assets/ground_cover/Grass_Grass_v2.glb",
+			"game_kind": "grass",
+			"group": "grass",
+			"id": "Grass_Grass_v2",
+			"lods": [
+				{
+					"node": "Grass_Grass_v2_LOD0",
+					"triangles": 12
+				}
+			],
+			"name": "Grass",
+			"node": "Grass_Grass_v2_LOD0",
+			"seasons": [],
+			"sha256": "f8a3a851216e64edf13b2e0d2793619b41c2a3884b0a4bce6a2f517fafb0672c",
+			"sidecar": null,
+			"size_class": "ground",
+			"subtype": "grass",
+			"tags": [
+				"meadow"
+			],
+			"thumb": null,
+			"triangles": 12,
+			"wind_category": "grass"
+		},
+		{
+			"biomes": [
+				"grassland_meadow",
+				"alpine_meadow",
+				"savanna"
+			],
+			"bytes": 9312,
+			"category": "ground_cover",
+			"dimensions_m": [
+				1.115,
+				0.741,
+				1.236
+			],
+			"file": "assets/ground_cover/Grass_Grass_v3.glb",
+			"game_kind": "grass",
+			"group": "grass",
+			"id": "Grass_Grass_v3",
+			"lods": [
+				{
+					"node": "Grass_Grass_v3_LOD0",
+					"triangles": 12
+				}
+			],
+			"name": "Grass",
+			"node": "Grass_Grass_v3_LOD0",
+			"seasons": [],
+			"sha256": "77cdc9b2ad446707cd21619286d86f14506e880510104ba4edd01e533a07cd3a",
+			"sidecar": null,
+			"size_class": "ground",
+			"subtype": "grass",
+			"tags": [
+				"meadow"
+			],
+			"thumb": null,
+			"triangles": 12,
+			"wind_category": "grass"
+		},
+		{
+			"biomes": [
+				"grassland_meadow",
+				"alpine_meadow",
+				"savanna"
+			],
+			"bytes": 9448,
+			"category": "ground_cover",
+			"dimensions_m": [
+				1.162,
+				0.814,
+				1.188
+			],
+			"file": "assets/ground_cover/Grass_Grass_v4.glb",
+			"game_kind": "grass",
+			"group": "grass",
+			"id": "Grass_Grass_v4",
+			"lods": [
+				{
+					"node": "Grass_Grass_v4_LOD0",
+					"triangles": 12
+				}
+			],
+			"name": "Grass",
+			"node": "Grass_Grass_v4_LOD0",
+			"seasons": [],
+			"sha256": "466db448cddf1a458469d1fa206c6efb2fd4cc13d089ea0ec23de6ff4b474715",
+			"sidecar": null,
+			"size_class": "ground",
+			"subtype": "grass",
+			"tags": [
+				"meadow"
+			],
+			"thumb": null,
+			"triangles": 12,
+			"wind_category": "grass"
+		},
+		{
+			"biomes": [
+				"grassland_meadow",
+				"alpine_meadow",
+				"savanna"
+			],
+			"bytes": 9468,
+			"category": "ground_cover",
+			"dimensions_m": [
+				1.2,
+				0.888,
+				1.206
+			],
+			"file": "assets/ground_cover/Grass_Grass_v5.glb",
+			"game_kind": "grass",
+			"group": "grass",
+			"id": "Grass_Grass_v5",
+			"lods": [
+				{
+					"node": "Grass_Grass_v5_LOD0",
+					"triangles": 12
+				}
+			],
+			"name": "Grass",
+			"node": "Grass_Grass_v5_LOD0",
+			"seasons": [],
+			"sha256": "9e43fb3a0cd1bcc0d450df3eb3daa2c5ef881ddbeeeda050a743c4bc2d53ec14",
+			"sidecar": null,
+			"size_class": "ground",
+			"subtype": "grass",
+			"tags": [
+				"meadow"
+			],
+			"thumb": null,
+			"triangles": 12,
+			"wind_category": "grass"
+		},
+		{
+			"biomes": [
+				"grassland_meadow",
+				"alpine_meadow",
+				"savanna"
+			],
+			"bytes": 5176,
+			"category": "ground_cover",
+			"dimensions_m": [
+				0.908,
+				0.496,
+				0.858
+			],
+			"file": "assets/ground_cover/Grass_Grass_v6.glb",
+			"game_kind": "grass",
+			"group": "grass",
+			"id": "Grass_Grass_v6",
+			"lods": [
+				{
+					"node": "Grass_Grass_v6_LOD0",
+					"triangles": 12
+				}
+			],
+			"name": "Grass",
+			"node": "Grass_Grass_v6_LOD0",
+			"seasons": [],
+			"sha256": "1e63577ba9858e95a456e86f8d42e464924cae5d1be5fa6db7aeb82de622b3a6",
+			"sidecar": null,
+			"size_class": "ground",
+			"subtype": "grass",
+			"tags": [
+				"meadow"
+			],
+			"thumb": null,
+			"triangles": 12,
+			"wind_category": "grass"
+		},
+		{
+			"biomes": [
+				"grassland_meadow",
+				"alpine_meadow",
+				"savanna"
+			],
+			"bytes": 5624,
+			"category": "ground_cover",
+			"dimensions_m": [
+				0.922,
+				0.495,
+				0.927
+			],
+			"file": "assets/ground_cover/Grass_Grass_v7.glb",
+			"game_kind": "grass",
+			"group": "grass",
+			"id": "Grass_Grass_v7",
+			"lods": [
+				{
+					"node": "Grass_Grass_v7_LOD0",
+					"triangles": 12
+				}
+			],
+			"name": "Grass",
+			"node": "Grass_Grass_v7_LOD0",
+			"seasons": [],
+			"sha256": "adcb099a97f47473723335c4921d28e0437c8a8e935c8e8137cbc9f95457c518",
+			"sidecar": null,
+			"size_class": "ground",
+			"subtype": "grass",
+			"tags": [
+				"meadow"
+			],
+			"thumb": null,
+			"triangles": 12,
+			"wind_category": "grass"
+		},
+		{
+			"biomes": [
+				"grassland_meadow",
+				"alpine_meadow",
+				"savanna"
+			],
+			"bytes": 5224,
+			"category": "ground_cover",
+			"dimensions_m": [
+				0.911,
+				0.529,
+				0.809
+			],
+			"file": "assets/ground_cover/Grass_Grass_v8.glb",
+			"game_kind": "grass",
+			"group": "grass",
+			"id": "Grass_Grass_v8",
+			"lods": [
+				{
+					"node": "Grass_Grass_v8_LOD0",
+					"triangles": 12
+				}
+			],
+			"name": "Grass",
+			"node": "Grass_Grass_v8_LOD0",
+			"seasons": [],
+			"sha256": "4af7b4d707df4a53eee41abb6859267d906e2ceac85113c114e3c9032393c92f",
+			"sidecar": null,
+			"size_class": "ground",
+			"subtype": "grass",
+			"tags": [
+				"meadow"
+			],
+			"thumb": null,
+			"triangles": 12,
+			"wind_category": "grass"
+		},
+		{
+			"biomes": [
+				"grassland_meadow",
+				"alpine_meadow",
+				"savanna"
+			],
+			"bytes": 7576,
+			"category": "ground_cover",
+			"dimensions_m": [
+				1.186,
+				0.591,
+				1.323
+			],
+			"file": "assets/ground_cover/Grass_Grass_v9.glb",
+			"game_kind": "grass",
+			"group": "grass",
+			"id": "Grass_Grass_v9",
+			"lods": [
+				{
+					"node": "Grass_Grass_v9_LOD0",
+					"triangles": 12
+				}
+			],
+			"name": "Grass",
+			"node": "Grass_Grass_v9_LOD0",
+			"seasons": [],
+			"sha256": "b13c69fe3d248682993df5577d8b17555d1cd8b61b2e9dfc2ae5964407e5a6ac",
+			"sidecar": null,
+			"size_class": "ground",
+			"subtype": "grass",
+			"tags": [
+				"meadow"
+			],
+			"thumb": null,
+			"triangles": 12,
+			"wind_category": "grass"
+		},
+		{
+			"biomes": [
+				"rocky_badlands",
+				"alpine_meadow",
+				"boreal_taiga"
+			],
+			"bytes": 263360,
+			"category": "rock",
+			"dimensions_m": [
+				2.53,
+				1.354,
+				1.916
+			],
+			"file": "assets/rock/Rock_Boulder_summer_05.glb",
+			"game_kind": "rock",
+			"group": "boulder_summer",
+			"id": "Rock_Boulder_summer_05",
+			"lods": [
+				{
+					"node": "Rock_Boulder_summer_05_LOD0",
+					"triangles": 1072
+				}
+			],
+			"name": "Boulder Summer",
+			"node": "Rock_Boulder_summer_05_LOD0",
+			"seasons": [],
+			"sha256": "8187866834fb878efc222f5a463929a08fc447ab0c561e680a32c41ca6c088b2",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "boulder",
+			"tags": [
+				"mineral",
+				"large"
+			],
+			"thumb": null,
+			"triangles": 1072,
+			"wind_category": ""
+		},
+		{
+			"biomes": [
+				"rocky_badlands",
+				"alpine_meadow",
+				"temperate_forest",
+				"savanna"
+			],
+			"bytes": 114040,
+			"category": "rock",
+			"dimensions_m": [
+				0.616,
+				0.429,
+				0.702
+			],
+			"file": "assets/rock/Rock_Medium_summer_06.glb",
+			"game_kind": "rock",
+			"group": "medium_summer",
+			"id": "Rock_Medium_summer_06",
+			"lods": [
+				{
+					"node": "Rock_Medium_summer_06_LOD0",
+					"triangles": 153
+				}
+			],
+			"name": "Medium Summer",
+			"node": "Rock_Medium_summer_06_LOD0",
+			"seasons": [],
+			"sha256": "398a97984b092e4cc2f2b3b3007e0c45d04a3af27f5e0041adc89f910b27df32",
+			"sidecar": null,
+			"size_class": "small",
+			"subtype": "medium",
+			"tags": [
+				"mineral"
+			],
+			"thumb": null,
+			"triangles": 153,
+			"wind_category": ""
+		},
+		{
+			"biomes": [
+				"rocky_badlands",
+				"alpine_meadow",
+				"temperate_forest",
+				"savanna"
+			],
+			"bytes": 113396,
+			"category": "rock",
+			"dimensions_m": [
+				0.548,
+				0.354,
+				0.59
+			],
+			"file": "assets/rock/Rock_Medium_summer_07.glb",
+			"game_kind": "rock",
+			"group": "medium_summer",
+			"id": "Rock_Medium_summer_07",
+			"lods": [
+				{
+					"node": "Rock_Medium_summer_07_LOD0",
+					"triangles": 149
+				}
+			],
+			"name": "Medium Summer",
+			"node": "Rock_Medium_summer_07_LOD0",
+			"seasons": [],
+			"sha256": "954fa272f3b81dfd3c683928da49b09a47b790386fdf44fd27f8c48eee35e0e5",
+			"sidecar": null,
+			"size_class": "small",
+			"subtype": "medium",
+			"tags": [
+				"mineral"
+			],
+			"thumb": null,
+			"triangles": 149,
+			"wind_category": ""
+		},
+		{
+			"biomes": [
+				"rocky_badlands",
+				"alpine_meadow",
+				"grassland_meadow"
+			],
+			"bytes": 173544,
+			"category": "rock",
+			"dimensions_m": [
+				0.69,
+				0.238,
+				0.743
+			],
+			"file": "assets/rock/Stone_Cluster_summer_08.glb",
+			"game_kind": "rock",
+			"group": "cluster_summer",
+			"id": "Stone_Cluster_summer_08",
+			"lods": [
+				{
+					"node": "Stone_Cluster_summer_08_LOD0",
+					"triangles": 538
+				}
+			],
+			"name": "Cluster Summer",
+			"node": "Stone_Cluster_summer_08_LOD0",
+			"seasons": [],
+			"sha256": "dcea80936452539afece4de463824004325b3504e99ff85a2b57444aa5e61c79",
+			"sidecar": null,
+			"size_class": "small",
+			"subtype": "cluster",
+			"tags": [
+				"mineral",
+				"group"
+			],
+			"thumb": null,
+			"triangles": 538,
+			"wind_category": ""
+		},
+		{
+			"biomes": [
+				"rocky_badlands",
+				"alpine_meadow",
+				"grassland_meadow"
+			],
+			"bytes": 172896,
+			"category": "rock",
+			"dimensions_m": [
+				0.93,
+				0.353,
+				0.846
+			],
+			"file": "assets/rock/Stone_Cluster_summer_09.glb",
+			"game_kind": "rock",
+			"group": "cluster_summer",
+			"id": "Stone_Cluster_summer_09",
+			"lods": [
+				{
+					"node": "Stone_Cluster_summer_09_LOD0",
+					"triangles": 534
+				}
+			],
+			"name": "Cluster Summer",
+			"node": "Stone_Cluster_summer_09_LOD0",
+			"seasons": [],
+			"sha256": "48401a8219e9ba89a6880fd5d4ab8c794ba5d2736711baf2ca4deef93d0ac7f7",
+			"sidecar": null,
+			"size_class": "small",
+			"subtype": "cluster",
+			"tags": [
+				"mineral",
+				"group"
+			],
+			"thumb": null,
+			"triangles": 534,
+			"wind_category": ""
+		},
+		{
+			"biomes": [
+				"rocky_badlands",
+				"alpine_meadow",
+				"grassland_meadow"
+			],
+			"bytes": 172896,
+			"category": "rock",
+			"dimensions_m": [
+				0.874,
+				0.308,
+				0.895
+			],
+			"file": "assets/rock/Stone_Cluster_summer_10.glb",
+			"game_kind": "rock",
+			"group": "cluster_summer",
+			"id": "Stone_Cluster_summer_10",
+			"lods": [
+				{
+					"node": "Stone_Cluster_summer_10_LOD0",
+					"triangles": 534
+				}
+			],
+			"name": "Cluster Summer",
+			"node": "Stone_Cluster_summer_10_LOD0",
+			"seasons": [],
+			"sha256": "1a07581a14d541ec800ec3023450522b495f238845a88931b8fd34cf0ca0f23a",
+			"sidecar": null,
+			"size_class": "small",
+			"subtype": "cluster",
+			"tags": [
+				"mineral",
+				"group"
+			],
+			"thumb": null,
+			"triangles": 534,
+			"wind_category": ""
+		},
+		{
+			"biomes": [
+				"savanna"
+			],
+			"bytes": 242352,
+			"category": "tree",
+			"dimensions_m": [
+				8.553,
+				7.376,
+				9.04
+			],
+			"file": "assets/tree/Tree_Acacia_v0.glb",
+			"game_kind": "tree",
+			"group": "acacia",
+			"id": "Tree_Acacia_v0",
+			"lods": [
+				{
+					"node": "Tree_Acacia_v0_LOD0",
+					"triangles": 1574
+				}
+			],
+			"name": "Acacia",
+			"node": "Tree_Acacia_v0_LOD0",
+			"seasons": [],
+			"sha256": "85ac98402206cc1389dd673f3bb86699f9b749a9aa4f69376f08f12a28f7ceda",
+			"sidecar": null,
+			"size_class": "large",
+			"subtype": "acacia",
+			"tags": [
+				"deciduous",
+				"umbrella"
+			],
+			"thumb": null,
+			"triangles": 1574,
+			"wind_category": "tree"
+		},
+		{
+			"biomes": [
+				"savanna"
+			],
+			"bytes": 243568,
+			"category": "tree",
+			"dimensions_m": [
+				9.161,
+				6.962,
+				8.98
+			],
+			"file": "assets/tree/Tree_Acacia_v1.glb",
+			"game_kind": "tree",
+			"group": "acacia",
+			"id": "Tree_Acacia_v1",
+			"lods": [
+				{
+					"node": "Tree_Acacia_v1_LOD0",
+					"triangles": 1602
+				}
+			],
+			"name": "Acacia",
+			"node": "Tree_Acacia_v1_LOD0",
+			"seasons": [],
+			"sha256": "6e809f2ebc745e6ebebdb2744452c0e4d2502dc79454ca791b612877c90e6ce5",
+			"sidecar": null,
+			"size_class": "large",
+			"subtype": "acacia",
+			"tags": [
+				"deciduous",
+				"umbrella"
+			],
+			"thumb": null,
+			"triangles": 1602,
+			"wind_category": "tree"
+		},
+		{
+			"biomes": [
+				"savanna"
+			],
+			"bytes": 243612,
+			"category": "tree",
+			"dimensions_m": [
+				9.176,
+				6.578,
+				9.702
+			],
+			"file": "assets/tree/Tree_Acacia_v2.glb",
+			"game_kind": "tree",
+			"group": "acacia",
+			"id": "Tree_Acacia_v2",
+			"lods": [
+				{
+					"node": "Tree_Acacia_v2_LOD0",
+					"triangles": 1602
+				}
+			],
+			"name": "Acacia",
+			"node": "Tree_Acacia_v2_LOD0",
+			"seasons": [],
+			"sha256": "0cb8bd90fe88f0c08b9da0188181d1b4b364ffeacaa025574678ae84b104788b",
+			"sidecar": null,
+			"size_class": "large",
+			"subtype": "acacia",
+			"tags": [
+				"deciduous",
+				"umbrella"
+			],
+			"thumb": null,
+			"triangles": 1602,
+			"wind_category": "tree"
+		},
+		{
+			"biomes": [
+				"burnt_forest",
+				"rocky_badlands",
+				"boreal_taiga"
+			],
+			"bytes": 273224,
+			"category": "deadwood",
+			"dimensions_m": [
+				6.791,
+				8.202,
+				7.798
+			],
+			"file": "assets/deadwood/Tree_DeadTree_v0.glb",
+			"game_kind": "tree",
+			"group": "deadtree",
+			"id": "Tree_DeadTree_v0",
+			"lods": [
+				{
+					"node": "Tree_DeadTree_v0_LOD0",
+					"triangles": 2606
+				}
+			],
+			"name": "Deadtree",
+			"node": "Tree_DeadTree_v0_LOD0",
+			"seasons": [],
+			"sha256": "fe69c82ef03ba47ea770e906e3b97586db79c594575aef452b0edd1bf420b191",
+			"sidecar": null,
+			"size_class": "large",
+			"subtype": "dead_tree",
+			"tags": [
+				"dead",
+				"snag"
+			],
+			"thumb": null,
+			"triangles": 2606,
+			"wind_category": "tree"
+		},
+		{
+			"biomes": [
+				"burnt_forest",
+				"rocky_badlands",
+				"boreal_taiga"
+			],
+			"bytes": 273232,
+			"category": "deadwood",
+			"dimensions_m": [
+				6.741,
+				7.37,
+				5.535
+			],
+			"file": "assets/deadwood/Tree_DeadTree_v1.glb",
+			"game_kind": "tree",
+			"group": "deadtree",
+			"id": "Tree_DeadTree_v1",
+			"lods": [
+				{
+					"node": "Tree_DeadTree_v1_LOD0",
+					"triangles": 2606
+				}
+			],
+			"name": "Deadtree",
+			"node": "Tree_DeadTree_v1_LOD0",
+			"seasons": [],
+			"sha256": "686e8a6a57ec846fd2513033a040f4139b3e9869b67b1e31ac080c880b2fb9c5",
+			"sidecar": null,
+			"size_class": "large",
+			"subtype": "dead_tree",
+			"tags": [
+				"dead",
+				"snag"
+			],
+			"thumb": null,
+			"triangles": 2606,
+			"wind_category": "tree"
+		},
+		{
+			"biomes": [
+				"burnt_forest",
+				"rocky_badlands",
+				"boreal_taiga"
+			],
+			"bytes": 273228,
+			"category": "deadwood",
+			"dimensions_m": [
+				7.437,
+				7.719,
+				6.61
+			],
+			"file": "assets/deadwood/Tree_DeadTree_v2.glb",
+			"game_kind": "tree",
+			"group": "deadtree",
+			"id": "Tree_DeadTree_v2",
+			"lods": [
+				{
+					"node": "Tree_DeadTree_v2_LOD0",
+					"triangles": 2606
+				}
+			],
+			"name": "Deadtree",
+			"node": "Tree_DeadTree_v2_LOD0",
+			"seasons": [],
+			"sha256": "f6652defe57dd625a6d26d73c170c2ceea3fe99de9c443b764218e728636cd2b",
+			"sidecar": null,
+			"size_class": "large",
+			"subtype": "dead_tree",
+			"tags": [
+				"dead",
+				"snag"
+			],
+			"thumb": null,
+			"triangles": 2606,
+			"wind_category": "tree"
+		},
+		{
+			"biomes": [
+				"wetland_riparian",
+				"savanna"
+			],
+			"bytes": 182376,
+			"category": "tree",
+			"dimensions_m": [
+				7.048,
+				7.258,
+				6.692
+			],
+			"file": "assets/tree/Tree_Palm_v0.glb",
+			"game_kind": "palm",
+			"group": "palm",
+			"id": "Tree_Palm_v0",
+			"lods": [
+				{
+					"node": "Tree_Palm_v0_LOD0",
+					"triangles": 396
+				}
+			],
+			"name": "Palm",
+			"node": "Tree_Palm_v0_LOD0",
+			"seasons": [],
+			"sha256": "5f82ccb833c1f5829f4ff0f7e9d8d3253e6d4b88db0d6643bd75a7da0bf871b9",
+			"sidecar": null,
+			"size_class": "large",
+			"subtype": "palm",
+			"tags": [
+				"tropical",
+				"fronds"
+			],
+			"thumb": null,
+			"triangles": 396,
+			"wind_category": "tree"
+		},
+		{
+			"biomes": [
+				"wetland_riparian",
+				"savanna"
+			],
+			"bytes": 182380,
+			"category": "tree",
+			"dimensions_m": [
+				7.173,
+				7.405,
+				6.476
+			],
+			"file": "assets/tree/Tree_Palm_v1.glb",
+			"game_kind": "palm",
+			"group": "palm",
+			"id": "Tree_Palm_v1",
+			"lods": [
+				{
+					"node": "Tree_Palm_v1_LOD0",
+					"triangles": 396
+				}
+			],
+			"name": "Palm",
+			"node": "Tree_Palm_v1_LOD0",
+			"seasons": [],
+			"sha256": "a20891563d82a487aaad3e8342a6844634d874b378a6cd4eca21a5c807bfada3",
+			"sidecar": null,
+			"size_class": "large",
+			"subtype": "palm",
+			"tags": [
+				"tropical",
+				"fronds"
+			],
+			"thumb": null,
+			"triangles": 396,
+			"wind_category": "tree"
+		},
+		{
+			"biomes": [
+				"temperate_forest",
+				"grassland_meadow"
+			],
+			"bytes": 171900,
+			"category": "tree",
+			"dimensions_m": [
+				3.167,
+				2.865,
+				2.513
+			],
+			"file": "assets/tree/Tree_Sapling_v0.glb",
+			"game_kind": "tree",
+			"group": "sapling",
+			"id": "Tree_Sapling_v0",
+			"lods": [
+				{
+					"node": "Tree_Sapling_v0_LOD0",
+					"triangles": 332
+				}
+			],
+			"name": "Sapling",
+			"node": "Tree_Sapling_v0_LOD0",
+			"seasons": [],
+			"sha256": "ec038941686a25d38338af94dc3e773e016997b49caac91433c5e84c7c13174b",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "sapling",
+			"tags": [
+				"deciduous",
+				"young"
+			],
+			"thumb": null,
+			"triangles": 332,
+			"wind_category": "tree"
+		},
+		{
+			"biomes": [
+				"temperate_forest",
+				"grassland_meadow"
+			],
+			"bytes": 171904,
+			"category": "tree",
+			"dimensions_m": [
+				2.899,
+				2.837,
+				3.48
+			],
+			"file": "assets/tree/Tree_Sapling_v1.glb",
+			"game_kind": "tree",
+			"group": "sapling",
+			"id": "Tree_Sapling_v1",
+			"lods": [
+				{
+					"node": "Tree_Sapling_v1_LOD0",
+					"triangles": 332
+				}
+			],
+			"name": "Sapling",
+			"node": "Tree_Sapling_v1_LOD0",
+			"seasons": [],
+			"sha256": "f3aa4e34f90eb01c9f8fcaba032da0c2cfd87ecf46d05b72fcf36ae1faf4d4a6",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "sapling",
+			"tags": [
+				"deciduous",
+				"young"
+			],
+			"thumb": null,
+			"triangles": 332,
+			"wind_category": "tree"
+		},
+		{
+			"biomes": [
+				"temperate_forest",
+				"grassland_meadow"
+			],
+			"bytes": 171904,
+			"category": "tree",
+			"dimensions_m": [
+				2.827,
+				2.913,
+				2.697
+			],
+			"file": "assets/tree/Tree_Sapling_v2.glb",
+			"game_kind": "tree",
+			"group": "sapling",
+			"id": "Tree_Sapling_v2",
+			"lods": [
+				{
+					"node": "Tree_Sapling_v2_LOD0",
+					"triangles": 332
+				}
+			],
+			"name": "Sapling",
+			"node": "Tree_Sapling_v2_LOD0",
+			"seasons": [],
+			"sha256": "5b8c13589331929db6b462d9f5ed082b985ab3d22c3d0023e8eee8e43698a976",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "sapling",
+			"tags": [
+				"deciduous",
+				"young"
+			],
+			"thumb": null,
+			"triangles": 332,
+			"wind_category": "tree"
+		}
+	],
+	"format": "ttsim-catalog",
+	"format_version": 1
+}

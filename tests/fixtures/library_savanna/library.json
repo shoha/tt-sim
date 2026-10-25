@@ -1,0 +1,21 @@
+{
+	"author": "Hannah Shore",
+	"contract": 1,
+	"default_biome": "savanna_summer_s1",
+	"dependencies": [],
+	"description": "The core content library of tt-sim: plants, rocks and biomes built by plantgen.",
+	"format": "ttsim-library",
+	"format_version": 1,
+	"id": "core",
+	"license": "TBD (to be decided by the owner)",
+	"name": "Core",
+	"stats": {
+		"assets": 34,
+		"bytes": 4673304,
+		"triangles": 24574
+	},
+	"tags": [
+		"official"
+	],
+	"version": "1.0.0-dev"
+}

@@ -138,6 +138,10 @@ before the user reopens the editor. See AGENTS.md's "Running tests from the CLI"
 ## Testing Notes
 
 - GUT v9.5.0 vendored at `addons/gut/`
+- `test_library_row_parity.gd` shows as pending unless `PLANTGEN_LIB_SLICE` and
+  `PLANTGEN_LIB_SLICE_PKG` name plantgen's `out/lib_slice` and `out/lib_slice_pkg` (it compares
+  the content-library route with the package route; command in `docs/systems/library.md`).
+  The content library is a developer path: nothing in the gate needs those folders.
 - Every GUT run prints "SCRIPT ERROR: Trying to assign value of type 'Nil' to a variable of type
   'bool'" at `addons/gut/gut_loader.gd:35`: GUT reads the project setting
   `debug/gdscript/warnings/exclude_addons`, which Godot 4.7 no longer registers (and drops from
