@@ -1,0 +1,29 @@
+{
+ "out_dir": "render_jobs/libthumbs_core",
+ "timeout_s": 600,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "wait_title"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "open", "library": "core", "biome": "temperate_forest"},
+  {"op": "wait_ready", "settle": 3.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "wind", "freeze": true},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "window", "size": [1600, 900]},
+  {"op": "wait", "s": 1.0},
+  {"op": "settle"},
+  {"op": "capture", "name": "a_picker_1600", "desc": "the designer's asset picker with the catalog's real thumbnails, 1600x900"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "window", "size": [1280, 800]},
+  {"op": "wait", "s": 1.0},
+  {"op": "settle"},
+  {"op": "capture", "name": "b_picker_1280", "desc": "the same at 1280x800"},
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "window", "size": [1600, 900]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/library_manager.gd", "action": "open"},
+  {"op": "wait", "s": 1.5},
+  {"op": "capture", "name": "c_manager_core", "desc": "the manager's detail for core: the nine biome pictures"},
+  {"op": "title"}, {"op": "wait", "s": 0.5},
+  {"op": "index", "title": "library thumbnails", "intro": "The core library's 268 asset thumbnails in the designer's asset picker (a, b) and the manager detail of core (c)."}
+ ]
+}
