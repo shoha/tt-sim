@@ -232,6 +232,7 @@ func _open_async(
 	loading_progress.emit(0.1, NewMap.opening_status(spec))
 	var loader := MapSourceLoader.new(get_tree())
 	loader.separate_props = true
+	loader.library_choice = MapLibraryGate.ask_dialog
 	loader.light_intensity_scale = opened.light_intensity_scale
 	loader.foliage_overrides = opened.foliage.to_dict()
 	loader.is_superseded = func() -> bool: return _superseded(generation)
@@ -261,6 +262,12 @@ func _open_async(
 			root.free()
 		return
 	if root == null:
+		if loader.library_cancelled:
+			# The player chose Cancel in the library dialog: back out quietly, not an error.
+			_game_map.map_loading = false
+			loading_completed.emit()
+			exit_requested.emit(level)
+			return
 		_fail_open()
 		return
 	loading_progress.emit(0.8, "Placing the map...")
@@ -285,7 +292,10 @@ func _open_async(
 	await _await_palette_warm(generation)
 	if _superseded(generation):
 		return
-	var unsaved := not spec.is_empty() or recovered or settled_rows > 0
+	# A map opened without a missing library's plants differs from its file until saved, so
+	# leaving it asks first (MapLibraryGate).
+	var left_out: bool = not (loader.library_gate.get("dropped", {}) as Dictionary).is_empty()
+	var unsaved := not spec.is_empty() or recovered or settled_rows > 0 or left_out
 	session = AuthoringSession.unsaved() if unsaved else AuthoringSession.new()
 	session.dirty_changed.connect(_on_dirty_changed)
 	# The undo entries point at the old map's nodes, so a reopen drops them.

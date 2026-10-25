@@ -85,6 +85,8 @@ static var AVATARS_DIR: String = ""
 static var UPDATES_DIR: String = ""
 ## Saved hosted sessions, one folder each (SessionFile, SessionKeeper: Resume).
 static var SESSIONS_DIR: String = ""
+## The libraries the user imported, one folder per library id (LibraryRegistry's user root).
+static var LIBRARIES_DIR: String = ""
 # gdlint: enable=class-variable-name
 
 
@@ -118,6 +120,7 @@ static func use_data_root(root: String) -> void:
 	AVATARS_DIR = stores.AVATARS_DIR
 	UPDATES_DIR = stores.UPDATES_DIR
 	SESSIONS_DIR = stores.SESSIONS_DIR
+	LIBRARIES_DIR = stores.LIBRARIES_DIR
 
 
 ## Every per-user store's path under the data root `root`, keyed by the name of its static
@@ -135,6 +138,7 @@ static func store_paths(root: String) -> Dictionary:
 		"AVATARS_DIR": root + "avatars/",
 		"UPDATES_DIR": root + "updates/",
 		"SESSIONS_DIR": root + "sessions/",
+		"LIBRARIES_DIR": root + "libraries/",
 	}
 
 

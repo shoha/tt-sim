@@ -99,6 +99,7 @@ static func clear_cover_outside(doc: MapDocument, area: Rect2) -> void:
 static func regrid(doc: MapDocument, cells: Vector2i) -> MapDocument:
 	var out := MapDocument.new()
 	out.palette_version = doc.palette_version
+	out.libraries = doc.libraries
 	out.map_seed = doc.map_seed
 	out.size_cells = cells
 	out.cell_size_m = doc.cell_size_m

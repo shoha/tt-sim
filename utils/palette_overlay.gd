@@ -53,10 +53,18 @@ static func read(package: String, base: Dictionary, root: String, only: Array = 
 ## Dictionary (LibraryRegistry's compiled library), validated here, and `package` is the folder
 ## its asset `file` values are relative to. The same report, the same merge rule.
 static func read_palette(
-	raw: Dictionary, package: String, base: Dictionary, root: String, only: Array = []
+	raw: Dictionary,
+	package: String,
+	base: Dictionary,
+	root: String,
+	only: Array = [],
+	lazy: bool = false
 ) -> Dictionary:
 	var started := Time.get_ticks_usec()
 	var report := _new_report(base)
+	# Lazy: no GLB is read here (the content library's assets are parsed on first use by
+	# AssetStore), so report.meshes stays empty and nothing is kept or parsed.
+	report["lazy"] = lazy
 	var result := PaletteLibrary.validate_palette(raw)
 	report["warnings"] = result["warnings"]
 	var merged := _merge(result["palette"], package, base, root, only, report, package, started)
@@ -143,6 +151,8 @@ static func _overlay_asset(
 	assets[key] = entry
 	if not (report["dropped"] as Array).has(key):
 		report["dropped"].append(key)
+	if report.get("lazy", false):
+		return
 	var file := String(entry["file"])
 	if same_bytes(root.path_join(file), package.path_join(file)):
 		report["kept"].append(key)

@@ -26,15 +26,24 @@ const PALETTE_FORMAT := 1
 ## resolves), paths ({asset id: absolute file}), surfaces ({runtime name: {library, name, info,
 ## maps}} of the library's own, for SurfaceStore.register_library), biome_ids, library (the id),
 ## warnings (compile problems), palette_warnings (PaletteLibrary.validate_palette's on
-## `palette`)}. `read` must be an ok LibraryReader result;
+## `palette`), origins ({asset id: {library, file, node, sha256, bytes, path}}: where each asset's
+## GLB lives and which library supplied it, the dependency's for a `<lib>:<id>` ref; what
+## AssetStore.register_library takes), thumbnails ({palette-relative thumbnail path: absolute
+## file} of the biomes that ship their own picture)}. `read` must be an ok LibraryReader result;
 ## otherwise the result is empty with the warning saying so. options: {"folder": the library
 ## folder (absolute), "surfaces": the surface table the biomes' names resolve against (the base
-## palette's), "hash": a short content hash for palette_version}.
+## palette's), "hash": a short content hash for palette_version, "files": the library's file
+## list (a biome thumbnail is used only when it is listed), "dependencies": {library id:
+## {"read": that library's LibraryReader result, "folder": its folder}} for every declared
+## dependency that is available (a `<lib>:<id>` ref and a `lib://<lib>/<surface>` reference
+## resolve through it)}.
 static func compile(read: Dictionary, options: Dictionary = {}) -> Dictionary:
 	var warnings: Array[String] = []
 	var result := {
 		"palette": {},
 		"paths": {},
+		"origins": {},
+		"thumbnails": {},
 		"surfaces": {},
 		"biome_ids": [] as Array[String],
 		"library": "",
@@ -49,20 +58,31 @@ static func compile(read: Dictionary, options: Dictionary = {}) -> Dictionary:
 	var folder := String(options.get("folder", ""))
 	var biomes: Array[Dictionary] = []
 	var assets := {}
-	var paths := {}
 	var table := (options.get("surfaces", {}) as Dictionary).duplicate(true)
 	var own := _library_surfaces(read, library_id, table, result)
-	var surface_context := {"library": library_id, "own": own, "table": table}
+	var context := {
+		"library": library_id,
+		"own": own,
+		"table": table,
+		"catalog": read["catalog"],
+		"folder": folder,
+		"deps": options.get("dependencies", {}),
+		"files": options.get("files", []),
+		"origins": result["origins"],
+		"thumbnails": result["thumbnails"],
+	}
 	for item: Dictionary in read["biomes"]:
 		var def: Dictionary = item["def"]
 		var seasons: Array = def.get("seasons", [{"id": "summer", "seed": 1}])
 		for season: Dictionary in seasons:
-			var biome := _compile_biome(
-				def, season, surface_context, read["catalog"], assets, paths, folder, warnings
-			)
+			var biome := _compile_biome(def, season, context, assets, warnings)
 			if not biome.is_empty():
 				biomes.append(biome)
 				(result["biome_ids"] as Array[String]).append(String(biome["id"]))
+	var paths := {}
+	for asset_id: String in result["origins"]:
+		if String(result["origins"][asset_id]["path"]) != "":
+			paths[asset_id] = result["origins"][asset_id]["path"]
 	var version := "%s@%s" % [library_id, String(library.get("version", ""))]
 	if String(options.get("hash", "")) != "":
 		version += "+" + String(options["hash"])
@@ -85,10 +105,7 @@ static func _compile_biome(
 	def: Dictionary,
 	season: Dictionary,
 	surface_context: Dictionary,
-	catalog: Dictionary,
 	assets: Dictionary,
-	paths: Dictionary,
-	folder: String,
 	warnings: Array[String]
 ) -> Dictionary:
 	var library_id := String(surface_context["library"])
@@ -103,7 +120,7 @@ static func _compile_biome(
 	var rules: Array[Dictionary] = []
 	var used := {}
 	for raw: Dictionary in def["rules"]:
-		var rule := _compile_rule(raw, runtime, library_id, catalog, role_of, used, warnings)
+		var rule := _compile_rule(raw, runtime, surface_context, role_of, used, warnings)
 		if not rule.is_empty():
 			rules.append(rule)
 	if rules.is_empty():
@@ -114,7 +131,8 @@ static func _compile_biome(
 		kept[rule["key"]] = true
 	_drop_dangling(rules, kept, runtime, warnings)
 	for asset_id: String in used:
-		var entry: Dictionary = catalog[used[asset_id]]
+		var found: Dictionary = used[asset_id]
+		var entry: Dictionary = found["entry"]
 		var dims: Array = entry["dimensions_m"]
 		assets[asset_id] = {
 			"file": entry["file"],
@@ -123,8 +141,15 @@ static func _compile_biome(
 			"size_class": entry["size_class"],
 			"dimensions_m": [dims[0], dims[1], dims[2]],
 		}
-		if folder != "":
-			paths[asset_id] = folder.path_join(String(entry["file"]))
+		var folder := String(found["folder"])
+		(surface_context["origins"] as Dictionary)[asset_id] = {
+			"library": found["library"],
+			"file": entry["file"],
+			"node": entry["node"],
+			"sha256": String(entry.get("sha256", "")),
+			"bytes": int(entry.get("bytes", 0)),
+			"path": folder.path_join(String(entry["file"])) if folder != "" else "",
+		}
 	return _biome_fields(def, season, runtime, surface_context, rules, warnings)
 
 
@@ -171,12 +196,12 @@ static func resolve_surface(
 			name = String(parsed["name"])
 		elif parsed["library"] == LibraryContracts.CORE_ID:
 			return _known(parsed["name"], table, label, warnings)
+		elif (surface_context.get("deps", {}) as Dictionary).has(parsed["library"]):
+			var runtime := LibraryIds.runtime_surface(parsed["library"], parsed["name"])
+			return _known(runtime, table, label, warnings)
 		else:
 			warnings.append(
-				(
-					"%s: '%s' names another library (dependencies are not resolved in this build)"
-					% [label, name]
-				)
+				"%s: '%s' names a library this one does not depend on" % [label, name]
 			)
 			return name
 	if own.has(name):
@@ -232,6 +257,22 @@ static func _ground_value(
 	return resolved if resolved != null else ""
 
 
+## The palette `thumbnail` of a biome: its own picture (the biome-def's `thumbnail`, a listed
+## library file) as the palette-relative path `thumbnails/<runtime id>.<ext>` that SurfaceStore
+## serves from the library folder (recorded in context.thumbnails), else the legacy palette
+## thumbnail the biome-def names, else "".
+static func _thumbnail(def: Dictionary, runtime: String, context: Dictionary) -> String:
+	var own: Variant = def.get("thumbnail")
+	var folder := String(context.get("folder", ""))
+	if own is String and folder != "" and LibraryIds.path_problems(own).is_empty():
+		var extension := String(own).get_extension().to_lower()
+		if extension in ["jpg", "png"] and String(own) in (context.get("files", []) as Array):
+			var relative := "thumbnails/%s.%s" % [runtime, extension]
+			(context["thumbnails"] as Dictionary)[relative] = folder.path_join(own)
+			return relative
+	return String((def.get("legacy", {}) as Dictionary).get("thumbnail", ""))
+
+
 static func _biome_fields(
 	def: Dictionary,
 	season: Dictionary,
@@ -251,7 +292,7 @@ static func _biome_fields(
 		"seed": int(season.get("seed", 1)),
 		"name": String(def.get("name", biome_name)),
 		"climate": String(def.get("climate", "")),
-		"thumbnail": String((def.get("legacy", {}) as Dictionary).get("thumbnail", "")),
+		"thumbnail": _thumbnail(def, runtime, surface_context),
 		"library": library_id,
 		"species": rules,
 	}
@@ -274,16 +315,85 @@ static func _biome_fields(
 	return biome
 
 
+## The catalog entry a query ref names: {library, local (the id the asset takes in the biome's
+## asset ids), entry, folder (of the library that holds the GLB)}, or {} with a warning. A plain
+## ref is this library's catalog; `<lib>:<id>` is a declared dependency's, through that library's
+## `aliases` (an old id) and refused when its `retired` list holds the id.
+static func resolve_ref(
+	ref: String, context: Dictionary, label: String, warnings: Array[String]
+) -> Dictionary:
+	var parts := LibraryIds.split_ref(ref)
+	var library := String(parts.get("library", ""))
+	var own_id := String(context["library"])
+	if library == "" or library == own_id:
+		var catalog: Dictionary = context["catalog"]
+		var local := String(parts.get("local", ref))
+		if not catalog.has(local):
+			warnings.append("%s: ref '%s' is not in the catalog (skipped)" % [label, ref])
+			return {}
+		return {
+			"library": own_id,
+			"local": local,
+			"entry": catalog[local],
+			"folder": String(context.get("folder", "")),
+		}
+	var deps: Dictionary = context.get("deps", {})
+	if not deps.has(library):
+		warnings.append(
+			"%s: ref '%s' names a library this one does not depend on (skipped)" % [label, ref]
+		)
+		return {}
+	var dep: Dictionary = deps[library]
+	var dep_read: Dictionary = dep["read"]
+	var wanted := LibraryIds.resolve_alias(
+		_aliases_of(dep_read["library"]), String(parts["local"])
+	)
+	if wanted in _retired_of(dep_read["library"]):
+		warnings.append("%s: '%s' is retired in %s (skipped)" % [label, ref, library])
+		return {}
+	var dep_catalog: Dictionary = dep_read["catalog"]
+	if not dep_catalog.has(wanted):
+		warnings.append("%s: ref '%s' is not in the catalog of %s (skipped)" % [label, ref, library])
+		return {}
+	return {
+		"library": library,
+		"local": LibraryIds.dependency_local(library, wanted),
+		"entry": dep_catalog[wanted],
+		"folder": String(dep.get("folder", "")),
+	}
+
+
+## The `aliases` of a read library.json ({old: new}), only the string pairs.
+static func _aliases_of(library: Dictionary) -> Dictionary:
+	var out := {}
+	var raw: Variant = library.get("aliases")
+	if raw is Dictionary:
+		for old: Variant in raw as Dictionary:
+			if (raw as Dictionary)[old] is String:
+				out[String(old)] = (raw as Dictionary)[old]
+	return out
+
+
+static func _retired_of(library: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var raw: Variant = library.get("retired")
+	if raw is Array:
+		for item: Variant in raw as Array:
+			if item is String:
+				out.append(item)
+	return out
+
+
 ## One palette species rule from a biome-def rule, or {} when none of its refs resolve.
 static func _compile_rule(
 	raw: Dictionary,
 	runtime: String,
-	library_id: String,
-	catalog: Dictionary,
+	context: Dictionary,
 	role_of: Dictionary,
 	used: Dictionary,
 	warnings: Array[String]
 ) -> Dictionary:
+	var library_id := String(context["library"])
 	var key := String(raw["key"])
 	var role := String(raw["role"])
 	var size_class := String(raw.get("size_class", LibraryContracts.size_class_of(role)))
@@ -294,16 +404,20 @@ static func _compile_rule(
 		if not clause is Dictionary or not (clause as Dictionary).get("ref") is String:
 			continue
 		var ref := String((clause as Dictionary)["ref"])
-		if not catalog.has(ref):
-			warnings.append("%s: ref '%s' is not in the catalog (skipped)" % [label, ref])
+		var found := resolve_ref(ref, context, label, warnings)
+		if found.is_empty():
 			continue
-		if not LibraryIds.asset_id_fits(runtime, ref):
+		var local := String(found["local"])
+		if not LibraryIds.asset_id_fits(runtime, local):
 			warnings.append("%s: asset id for '%s' is too long (skipped)" % [label, ref])
 			continue
-		var asset_id := LibraryIds.runtime_asset(runtime, ref)
+		var asset_id := LibraryIds.runtime_asset(runtime, local)
+		if used.has(asset_id) and used[asset_id]["entry"] != found["entry"]:
+			warnings.append("%s: '%s' collides with another asset id (skipped)" % [label, ref])
+			continue
 		if not asset_id in assets:
 			assets.append(asset_id)
-			used[asset_id] = ref
+			used[asset_id] = found
 	if assets.is_empty():
 		warnings.append("%s: no asset resolves; rule dropped" % label)
 		return {}

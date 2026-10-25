@@ -18,9 +18,10 @@ rules, shipped inside tt-sim under `assets/palette/` (Git LFS) and installed by 
 | `assets/palette/` | | The built-in palette: `palette.json`, the asset GLBs and their committed `.glb.import` sidecars |
 | `utils/scatter_glb_utils.gd` | `ScatterGlbUtils` | `build_scatter()`, the resolver-driven scatter core that `process_scatter_instances()` wraps for GLB maps |
 | `utils/wind_foliage.gd` | `WindFoliage` | `apply_material`, which mutates surface materials in place; `classify_category()`; `reset_caches()` (the warm-up representatives) |
-| `utils/palette_overlay.gd` | `PaletteOverlay` | A built package folder laid over the loaded palette (`PaletteLibrary.overlay_package`) |
+| `utils/palette_overlay.gd` | `PaletteOverlay` | A built package folder laid over the loaded palette (`PaletteLibrary.overlay_package`); `read_palette(..., lazy)` lays a compiled content library without parsing any GLB (S4) |
+| `utils/library/asset_store.gd` | `AssetStore` | (S4) The mesh of an asset a content library supplies, keyed by (library id, asset id): `PaletteLibrary._source_mesh` asks it for any id it serves (`AssetStore.serves`), and loads the installed palette as before for the rest. Lazy GLTFDocument parse from a file path, sha256-checked for a non-official library ([library.md](library.md) "AssetStore"); `PaletteLibrary.clear_cache` clears it |
 | `utils/library/surface_store.gd` | `SurfaceStore` | (S3) Where every consumer gets a surface map: `GroundPalette.load_texture`, `GroundLayerArrays.surface_image`, `SwatchTextures.palette_thumbnail` and `BiomeThumbnail` call it. An installed palette's path is the editor import, unchanged; a content library's surface is baked from its PNGs to the same formats ([library.md](library.md)) |
-| `utils/foliage_library.gd` | `FoliageLibrary` | The runtime choice between the installed palette and a plantgen package (below); it also layers the developer content library ([library.md](library.md)) last |
+| `utils/foliage_library.gd` | `FoliageLibrary` | The developer A/B switch between the installed palette and a plantgen package (below); it layers the content libraries (official, user, the developer override: [library.md](library.md)) last, and `refresh_libraries()` serves them again |
 
 ## Foliage library (treecube or plantgen)
 

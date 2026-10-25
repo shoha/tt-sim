@@ -29,10 +29,17 @@ extends RefCounted
 ## A PNG larger than this on disk is never read (a 2048 px RGBA16 map is about 32 MB raw, a
 ## compressed PNG far less).
 const MAX_PNG_BYTES := 48 * 1024 * 1024
+## A library biome's thumbnail: at most this many bytes on disk and this many pixels a side
+## (larger ones are shrunk to the side).
+const MAX_THUMB_BYTES := 4 * 1024 * 1024
+const MAX_THUMB_PX := 1024
 const SCHEME := LibraryIds.SURFACE_SCHEME
 
 ## "<root>|<palette-relative path>" -> {surface: runtime name, kind}.
 static var _paths: Dictionary = {}
+## "<root>|<palette-relative path>" -> the absolute JPG or PNG of a library biome's own thumbnail
+## (S4), read as an image and never as a resource, at most MAX_THUMB_BYTES and MAX_THUMB_PX.
+static var _thumbs: Dictionary = {}
 ## Runtime surface name -> {library, name, info, dir}.
 static var _surfaces: Dictionary = {}
 ## Absolute file -> baked Image / Texture2D, kept for the process.
@@ -90,8 +97,17 @@ static func register_library(root: String, folder: String, surfaces: Dictionary)
 			}
 
 
+## Registers the biome thumbnails of a compiled library (BiomeCompiler.compile's `thumbnails`:
+## {palette-relative path: absolute file}) for the palette at `root`.
+static func register_thumbnails(root: String, thumbnails: Dictionary) -> void:
+	for relative: String in thumbnails:
+		_thumbs[_key(root, relative)] = String(thumbnails[relative])
+		_textures.erase(String(thumbnails[relative]))
+
+
 ## Forgets every registered library surface and what was loaded from it (the cache files stay).
 static func clear_libraries() -> void:
+	_thumbs.clear()
 	_paths.clear()
 	_surfaces.clear()
 	_images.clear()
@@ -141,6 +157,8 @@ static func available(root: String, relative: String) -> bool:
 	var entry: Dictionary = _paths.get(_key(root, relative), {})
 	if not entry.is_empty():
 		return FileAccess.file_exists(_file_of(entry))
+	if _thumbs.has(_key(root, relative)):
+		return FileAccess.file_exists(String(_thumbs[_key(root, relative)]))
 	return ResourceLoader.exists(root.path_join(relative))
 
 
@@ -151,6 +169,8 @@ static func texture(root: String, relative: String) -> Texture2D:
 	if relative == "":
 		return null
 	var entry: Dictionary = _paths.get(_key(root, relative), {})
+	if entry.is_empty() and _thumbs.has(_key(root, relative)):
+		return _thumbnail_texture(String(_thumbs[_key(root, relative)]))
 	if entry.is_empty():
 		var path := root.path_join(relative)
 		if not ResourceLoader.exists(path):
@@ -289,6 +309,43 @@ static func _relative_of(root: String, ref: String, kind: String) -> String:
 static func _file_of(entry: Dictionary) -> String:
 	var found: Dictionary = _surfaces.get(String(entry["surface"]), {})
 	return String(found.get("dir", "")).path_join(String(entry["kind"]) + ".png")
+
+
+## A library biome's thumbnail as a texture (cached by file), or null for a missing, oversized
+## or unreadable file. The bytes are decoded as an image (JPG or PNG by extension), never loaded
+## as a resource.
+static func _thumbnail_texture(file: String) -> Texture2D:
+	if _textures.has(file):
+		return _textures[file]
+	if not FileAccess.file_exists(file):
+		return null
+	var handle := FileAccess.open(file, FileAccess.READ)
+	if handle == null or handle.get_length() > MAX_THUMB_BYTES:
+		return null
+	var bytes := handle.get_buffer(handle.get_length())
+	handle.close()
+	# The size is read from the header before anything is decoded.
+	var dims := GlbGuard.image_size(bytes.slice(0, GlbGuard.HEAD_BYTES))
+	var limit := LibraryContracts.MAX_GLB_TEXTURE_PX
+	if dims == Vector2i.ZERO or dims.x > limit or dims.y > limit:
+		return null
+	var picture := Image.new()
+	var err := (
+		picture.load_png_from_buffer(bytes)
+		if file.get_extension().to_lower() == "png"
+		else picture.load_jpg_from_buffer(bytes)
+	)
+	if err != OK or picture.is_empty():
+		return null
+	var side := maxi(picture.get_width(), picture.get_height())
+	if side > MAX_THUMB_PX:
+		var scale := float(MAX_THUMB_PX) / side
+		picture.resize(
+			maxi(1, int(picture.get_width() * scale)), maxi(1, int(picture.get_height() * scale))
+		)
+	var made := ImageTexture.create_from_image(picture)
+	_textures[file] = made
+	return made
 
 
 static func _texture_image(loaded: Texture2D) -> Image:

@@ -111,3 +111,29 @@ func test_aliases_follow_renames_but_not_forever() -> void:
 	assert_eq(LibraryIds.resolve_alias({"old": "mid", "mid": "new"}, "old"), "new")
 	assert_eq(LibraryIds.resolve_alias({}, "same"), "same")
 	assert_eq(LibraryIds.resolve_alias({"a": "b", "b": "a"}, "a").length(), 1, "a cycle ends")
+
+
+func test_refs_may_name_a_dependencys_asset() -> void:
+	assert_eq(LibraryIds.split_ref("Tree_Oak_v0"), {"library": "", "local": "Tree_Oak_v0"})
+	assert_eq(LibraryIds.split_ref("core:Tree_Oak_v0"), {"library": "core", "local": "Tree_Oak_v0"})
+	assert_eq(LibraryIds.split_ref("a:b:c"), {})
+	assert_eq(LibraryIds.ref_problems("Tree_Oak_v0").size(), 0)
+	assert_eq(LibraryIds.ref_problems("core:Tree_Oak_v0").size(), 0)
+	assert_eq(LibraryIds.ref_problems("alien-world:Spire").size(), 0, "a hyphen is legal")
+	for bad in ["a:b:c", "Bad Lib:Oak", "core:", "core:has/slash", "core:con", "x__y:Oak", ":Oak"]:
+		assert_gt(LibraryIds.ref_problems(bad).size(), 0, "ref '%s' is refused" % bad)
+
+
+func test_a_dependencys_asset_takes_a_prefixed_local_id() -> void:
+	assert_eq(LibraryIds.dependency_local("core", "Tree_Oak_v0"), "core__Tree_Oak_v0")
+	var runtime := LibraryIds.runtime_asset("alienworld__basin_summer_s1", "core__Tree_Oak_v0")
+	assert_eq(runtime.get_slice("/", 0), "alienworld__basin_summer_s1", "still one slash")
+	assert_eq(runtime.count("/"), 1)
+	assert_eq(LibraryIds.library_of(runtime), "alienworld", "the consuming library names the id")
+
+
+func test_sha256_digests() -> void:
+	assert_true(LibraryIds.is_sha256("a".repeat(64)))
+	assert_true(LibraryIds.is_sha256("0123456789abcdef".repeat(4)))
+	for bad in ["", "a".repeat(63), "a".repeat(65), "A".repeat(64), "g".repeat(64)]:
+		assert_false(LibraryIds.is_sha256(bad), bad.left(8))

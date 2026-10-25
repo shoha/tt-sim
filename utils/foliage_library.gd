@@ -1,18 +1,22 @@
 class_name FoliageLibrary
 extends RefCounted
 
-## Which foliage library the palette serves: "treecube" (the installed palette under
+## The DEVELOPER A/B switch between two foliage sets: "treecube" (the installed palette under
 ## assets/palette, the default) or "plantgen" (a built package, a folder anywhere on disk laid
 ## over the installed palette for every biome by PaletteLibrary.overlay_package). It exists so
 ## the two can be compared in the running game; nothing large ships in the repo, the setting
-## points at the package folder.
+## points at the package folder. Players choose content through content libraries
+## (LibraryRegistry), not through this class: since step S4 it only decides what the registry's
+## libraries are laid over, and the libraries are served after it on every apply().
 ##
 ## One place applies the choice: apply() clears the palette caches and the wind guard's
 ## representative caches (so the installed palette reloads for treecube), then lays the
-## package over all biomes for plantgen. The overlay has no undo of its own; clearing the cache
-## is the removal, because the overlay only ever replaces cached palette entries. switch() is
-## apply() plus the persisted setting plus EventBus.foliage_library_changed, which Root turns
-## into a rebuild of the open map.
+## package over all biomes for plantgen, then the content libraries (LibraryRegistry.apply:
+## official, user and the developer override). The overlay has no undo of its own; clearing the
+## cache is the removal, because the overlay only ever replaces cached palette entries. switch()
+## is apply() plus the persisted setting plus EventBus.foliage_library_changed, which Root turns
+## into a rebuild of the open map. refresh_libraries() serves the libraries again (after the
+## manager enabled or disabled one) without touching the setting.
 ##
 ## Saved maps hold scatter rows keyed by asset id, and the two libraries name their assets
 ## differently, so a map saved under one library has rows the other cannot resolve. The rows
@@ -118,22 +122,24 @@ static func apply(
 	return result
 
 
-## The developer content library (LibraryRegistry, off unless a dev path is set) lays over
-## whichever palette is served; its report goes in result["content_library"]. A failure warns
-## and changes nothing else.
+## The content libraries (LibraryRegistry: official, user and the developer override, none by
+## default) lay over whichever palette is served; the registry's report goes in
+## result["content_library"]. A failure warns and changes nothing else.
 static func _layer_content(result: Dictionary, root: String) -> void:
 	var content := LibraryRegistry.apply(root)
 	result["content_library"] = content
 	if not content["ok"]:
 		push_warning("FoliageLibrary: %s" % content["error"])
+	for line: String in content["errors"]:
+		push_warning("FoliageLibrary: %s" % line)
 
 
 ## apply() for the persisted choice, at startup before any map or the graphics warm-up reads
-## the palette. A failure warns and leaves treecube. A persisted content-library dev path
-## (settings.cfg `[library] dev_path`) is applied here too.
+## the palette. A failure warns and leaves treecube. The content libraries (installed ones, and
+## a persisted dev path, settings.cfg `[library] dev_path`) are served here too.
 static func apply_saved() -> void:
 	LibraryRegistry.use_saved_override()
-	if saved_library() != PLANTGEN and not LibraryRegistry.has_override():
+	if saved_library() != PLANTGEN and not LibraryRegistry.discoverable():
 		return
 	var result := apply(saved_library())
 	if not result["ok"]:
@@ -151,6 +157,13 @@ static func switch(library: String, folder: String = "", persist: bool = true) -
 		save_settings(library, folder)
 	EventBus.foliage_library_changed.emit(library)
 	return result
+
+
+## Serves the content libraries again under the foliage set already active (a library was
+## enabled, disabled, installed or removed) and announces it so the open map rebuilds; the
+## persisted foliage setting is left alone.
+static func refresh_libraries() -> Dictionary:
+	return switch(_active, _package, false)
 
 
 ## Drops every palette-derived cache that keys on the active library.
