@@ -5,8 +5,8 @@ extends Foldout
 ## what they keep company with. The water habit (from the role, none, bank, emergent, arid) and
 ## charred; how the plants stand on a slope (align); the clump (off, or a preset of scattered
 ## stones, patches of flowers, drifts, or the grass mass, with its four main numbers); the near
-## and avoid relations (a rule or a whole role, a distance, a transition and an influence); and
-## a stub for per-season overrides, which the season compile does not apply yet.
+## and avoid relations (a rule or a whole role, a distance, a transition and an influence). The
+## per-season changes of a rule are DesignerSeasonSection's.
 
 const WATER_OPTIONS: Array = [
 	[null, "From the role"],
@@ -68,10 +68,6 @@ const CLUMP_ROWS: Array[Dictionary] = [
 	},
 ]
 const RELATION_MAX := 32
-const SEASON_STUB := (
-	"Per-season overrides of a rule need the season compile, which comes with the season "
-	+ "scrub (TODO: designer step S9)."
-)
 
 var session: BiomeDesignerSession = null
 
@@ -143,7 +139,6 @@ func setup(designer: BiomeDesignerSession) -> void:
 	add_child(Label.new())
 	_near_box = _relation_box("near", "Keeps near")
 	_avoid_box = _relation_box("avoid", "Keeps away from")
-	add_child(DesignerRows.caption("SeasonStub", SEASON_STUB))
 	session.model.changed.connect(func(_reason: String) -> void: _sync())
 
 

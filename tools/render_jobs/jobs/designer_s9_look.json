@@ -1,0 +1,48 @@
+{
+ "out_dir": "render_jobs/designer-s9_look",
+ "timeout_s": 600,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "wait_title"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "open", "library": "core", "biome": "alpine_meadow"},
+  {"op": "wait_ready", "settle": 3.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/tree_fade.gd", "factor": 0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "wind", "freeze": true},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "debounce", "seconds": 0.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "window", "size": [1600, 900]},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer_s9.gd", "action": "focus", "rule": "no_such_rule"},
+  {"op": "capture", "name": "a_bare_before", "desc": "alpine meadow's ground alone (every plant hidden), before the look is touched"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer_s9.gd", "action": "look_open", "on": true},
+  {"op": "wait", "s": 0.5},
+  {"op": "capture", "name": "b_look_editor", "desc": "the look editor in the inspector's place: zones, light, brush... with the four-biomes note"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer_s9.gd", "action": "look_color", "index": 0, "hex": "#d0402a"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer_s9.gd", "action": "look", "group": "zones", "key": "cover", "value": "[0.8, 0.5, 0.2]"},
+  {"op": "wait", "s": 1.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "stats", "label": "look edit (zone colour and cover)"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer_s9.gd", "action": "state"},
+  {"op": "capture", "name": "c_look_edited", "desc": "zone colour 1 red and the zones' cover raised: the ground changed live, no map rebuild"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer_s9.gd", "action": "look", "group": "light", "key": "shade", "value": "0.9"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "stats", "label": "look edit (light shade)"},
+  {"op": "capture", "name": "d_look_shade", "desc": "painted shade raised to 0.9"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "window", "size": [1280, 800]},
+  {"op": "wait", "s": 1.0},
+  {"op": "settle"},
+  {"op": "capture", "name": "e_look_1280", "desc": "the look editor at 1280x800"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer_s9.gd", "action": "add_season", "id": "winter"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer_s9.gd", "action": "target", "season": "winter"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer_s9.gd", "action": "look_color", "season": "winter", "index": 0, "hex": "#e8eef2"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer_s9.gd", "action": "look_color", "season": "winter", "index": 1, "hex": "#c2ccd4"},
+  {"op": "wait", "s": 1.0},
+  {"op": "capture", "name": "f_winter_target", "desc": "Applies to: Winter only: the editor says it edits Winter, its colours changed there and the summer biome is untouched"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer_s9.gd", "action": "target", "season": ""},
+  {"op": "title"}, {"op": "wait", "s": 1.0}
+ ]
+}

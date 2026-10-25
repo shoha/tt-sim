@@ -260,7 +260,7 @@ func test_unsupported_features_warn_instead_of_failing() -> void:
 	assert_true(read["ok"], str(read["errors"]))
 	assert_false(_has(read["warnings"], "dependenc"), "the registry resolves dependencies")
 	assert_true(_has(read["warnings"], "treated as legacy"))
-	assert_true(_has(read["warnings"], "overrides are not applied"))
+	assert_false(_has(read["warnings"], "overrides are not applied"), "season overrides apply (S9)")
 	assert_false(_has(read["warnings"], "only {ref} clauses"), "filter clauses compile (S8a)")
 
 

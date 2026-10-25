@@ -288,6 +288,12 @@ func set_looked(looked: bool) -> void:
 		_skirt_material.shader = ground_shader(true, looked)
 
 
+## Bakes the ground look again from the palette's looks as they are now (the biome designer
+## edits a biome's look in place): one GPU pass per looked biome, no map rebuild.
+func refresh_ground_look() -> void:
+	_sync_ground_look(true)
+
+
 ## Brings the ground look up to the document (see GroundLookBake.sync); makes its node when a
 ## biome with a look first appears. Nothing at all for a map whose biomes carry none.
 func _sync_ground_look(rebake: bool) -> void:

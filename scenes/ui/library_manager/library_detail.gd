@@ -13,6 +13,8 @@ signal verify_requested(library_id: String)
 signal verify_cancelled
 signal folder_requested(folder: String)
 signal remove_requested(library_id: String)
+## "New biome from this...": the biome designer's copy flow for a biome of this library.
+signal new_biome_requested(library_id: String)
 
 ## "Built in": every official library, that is `core` and anything else the game ships under
 ## res://libraries (the badge used to be "Official" for those and "Built in" for the palette).
@@ -31,6 +33,7 @@ var heading: Label
 var verify_button: Button
 var folder_button: Button
 var remove_button: Button
+var design_button: Button
 var verify_box: VBoxContainer
 var verify_bar: ProgressBar
 var verify_label: Label
@@ -116,6 +119,17 @@ static func origin_badge(info: Dictionary) -> String:
 		"received":
 			return BADGE_RECEIVED
 	return BADGE_YOURS
+
+
+## Whether the biome designer can start from a biome of this library: it is served from a folder
+## on this machine (not one the host sent for the session), works, and has a biome. Pure.
+static func can_design(info: Dictionary) -> bool:
+	return (
+		String(info.get("status", "")) == LibraryResolver.OK
+		and String(info.get("folder", "")) != ""
+		and int(info.get("biome_count", 0)) > 0
+		and not bool(info.get("received", false))
+	)
 
 
 ## "On", "Off" or "Needs attention". Pure.
@@ -347,6 +361,14 @@ func _add_actions(info: Dictionary) -> void:
 	remove_button = _action("Remove", "x", row)
 	remove_button.visible = is_user
 	remove_button.pressed.connect(func() -> void: remove_requested.emit(library_id))
+	design_button = _action("New biome from this...", "wand", row)
+	design_button.name = "DesignButton"
+	design_button.visible = can_design(info)
+	design_button.tooltip_text = (
+		"Open the biome designer on one of its biomes, as a copy in a new %s of yours."
+		% LibraryNames.lower()
+	)
+	design_button.pressed.connect(func() -> void: new_biome_requested.emit(library_id))
 	verify_box = VBoxContainer.new()
 	verify_box.name = "VerifyBox"
 	verify_box.theme_type_variation = &"BoxContainerTight"
