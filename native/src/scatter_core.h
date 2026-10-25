@@ -228,6 +228,13 @@ struct Entry {
 	double influence = 0.0, scale_influence = 0.0, footing_m = 0.0;
 	double yaw_range = 0.0, scale_spread = 0.0, scale_floor = 0.0;
 	double response_lead = 1.0, response_lag = 1.0;
+	/// Terrain response (S12b; ScatterTerrain.keep): the slope minimum in degrees and its cosine
+	/// (-2 = off) and the flattened [x0, y0, x1, y1, ...] curves on the slope, height and wet axes
+	/// (empty = none). `has_response` gates the whole block, so legacy rules skip it.
+	/// curve_water_dist is planned but not evaluated, as in GDScript.
+	double slope_min = 0.0, slope_min_cos = -2.0;
+	std::vector<double> curve_slope, curve_height, curve_wet;
+	bool has_response = false;
 	double mass_stretch = 1.0, mass_core = 1.0, mass_core_y = 1.0, mass_core_y_max = 0.0;
 	double mass_core_hold = 0.0, clump_jitter = 0.0, clump_shrink = 0.0;
 	double clump_radius = 0.0, clump_transition = 0.0, clump_angle_deg = 0.0, clump_angle_jitter_deg = 0.0;

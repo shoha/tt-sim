@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Parity of the native scatter library with GDScript on this platform: runs
-# tests/unit/test_scatter_native.gd (about 80 s) under the given Godot command, with the
+# tests/unit/test_scatter_native.gd and the landform files (about 2 minutes) under the given Godot command, with the
 # template_debug library the editor loads and with the template_release library exports ship,
 # the latter by pointing the extension's debug entries at the release files for that run.
 # PARITY_TARGETS picks the libraries (default both). Fails if a run fails or the test is pending

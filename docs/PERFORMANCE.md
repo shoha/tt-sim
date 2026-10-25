@@ -4080,13 +4080,15 @@ before and after (the one sampled head behind a crown kept its ghost once `bound
 Compatibility: only built-ins (MODEL_MATRIX, INV_VIEW_MATRIX, VIEW) are added; `hint_depth_texture`
 is the unchanged requirement. MSAA 4x and the lo-fi pass are unaffected (no new texture reads).
 
-## Terrain response in the scatter generator (2026-10-24, step S12a)
+## Terrain response in the scatter generator (2026-10-24, steps S12a and S12b)
 
 A rule's `slope_min_deg` and `response` curves (docs/systems/scatter.md "Terrain response") run in
-GDScript only: `ScatterNative._refusal(species)` sends a job whose biome has any evaluated
-response to GDScript until the library reports `curves` (S12b). Measured headless on the debug
-build, quiet machine, `tools/native_scatter_run.gd -- --task=curves` (the probe cell of the native
-section, one thread, GDScript forced, 9 runs interleaved, medians):
+the native library too since S12b (`version()` carries `curves`). A library built before S12b
+lacks the word, and `ScatterNative._refusal(species)` then sends a curved job to GDScript, which
+is about 36 times slower for the probe cell (the "17x" of S12a predates the native grid decode;
+see the native numbers below). Measured headless on the debug build, quiet machine,
+`tools/native_scatter_run.gd -- --task=curves` (the probe cell of the native section, one thread,
+GDScript forced, 9 runs interleaved, medians):
 
 | Variant (every rule of the probe biome carries it; identity curves, so the rows are unchanged) | Job | Delta |
 |---|---|---|
@@ -4102,12 +4104,30 @@ section, one thread, GDScript forced, 9 runs interleaved, medians):
   wet curve, 4.1 us for all three. A legacy rule never calls it (`entry.has_response` is false), so
   legacy rows, plans and times are unchanged; the golden digests (`test_scatter_mass.gd`) and
   `test_scatter_native.gd` pass with no edit.
-- The cost that matters is the fallback, not the curve: a curved biome's whole job is the
-  GDScript one, 736 ms against 44 ms native for the probe cell (about 17x, the native section's
-  figure; a whole new map 2895 ms against 279 ms). The in-job cost of the evaluation itself is a
-  few percent of that. The "tens of nanoseconds per candidate" for the native port is the
-  design's estimate and is NOT measured: S12b measures it with `--task=curves` against
-  `force_gdscript`. A curved core biome should not ship before S12b; the designer's budget meter
-  should warn while the library lacks `curves`.
 - `slope_min_deg` 20 on every rule of the (mostly flat) probe cell cut the job to 217 ms because
   it removes most rows; that is a smaller job, not a faster evaluation.
+
+### Native (S12b)
+
+Same task, same run, the library's `generate` and the whole `ScatterRegen.run` (pack included)
+alternated with the GDScript runs, 45 native runs per variant, medians, debug build (-O2):
+
+| Variant (identity curves, rows unchanged) | Native job | Delta | Library alone | Delta |
+|---|---|---|---|---|
+| legacy (no field) | 20.67 ms | 0 | 18.25 ms | 0 |
+| identity `slope` | 20.68 ms | +0.01 ms (+0.1%) | 18.32 ms | +0.08 ms (+0.4%) |
+| identity `height` | 20.60 ms | -0.07 ms (-0.3%, noise) | 18.36 ms | +0.11 ms (+0.6%) |
+| identity `wet` | 20.62 ms | -0.05 ms (-0.2%, noise) | 18.27 ms | +0.02 ms (+0.1%) |
+| all three | 20.71 ms | +0.04 ms (+0.2%) | 18.41 ms | +0.16 ms (+0.9%) |
+
+- The evaluation costs under 1 percent of the library's time, inside the run-to-run noise of the
+  job (the estimate was "a few percent"). The GDScript delta of the all-three variant (+30 ms)
+  over its 4.0 us a call implies about 7.5 thousand candidates reach the block in this cell, so
+  the native cost is about 20 ns a candidate (0.16 ms over 7.5 thousand), the design's "tens of
+  nanoseconds" (this count is derived, not instrumented).
+- The whole probe-cell job, `--task=job`: GDScript 735 ms, native 20.5 ms (pack 1.1 ms plus
+  library 18.2 ms), 35.8 times; with all three identity curves 768 ms against 20.7 ms (37 times).
+  `ScatterNative.pack` now takes 1.1 ms (the grid decode is native), so the "44 ms" and "17x" of
+  the 2026-10-20 native section are superseded for this cell; the curved job is as fast as a
+  legacy one. No warning is needed for a built library, only for a missing or stale one (a stale
+  library fails `test_scatter_native`, docs/systems/scatter.md "Native path").

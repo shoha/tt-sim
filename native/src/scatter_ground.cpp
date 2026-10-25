@@ -159,6 +159,13 @@ Vector3 Ground::water_at(Vector2 s) const {
 	return Vector3((float)(out[0] / 255.0), (float)(out[1] / 255.0), (float)(out[2] / c.depth_scale));
 }
 
+double Ground::wet_at(Vector2 p) const {
+	if (!g.wet) {
+		return 0.0;
+	}
+	return water_at((p + g.half) / g.step).y;
+}
+
 double Ground::wet_factor(int role, Vector3 water) const {
 	double bed = water.x;
 	double shore = water.y;

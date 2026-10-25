@@ -12,6 +12,7 @@ const SEED := 1234
 ## How far past the cell the full-density paint reaches (metres).
 const PAINT_MARGIN_M := 2.0
 const NOISE_POINTS := 1500
+const Parity := preload("res://tests/unit/scatter_native_landform_parity.gd")
 
 
 func after_each() -> void:
@@ -114,6 +115,95 @@ func test_force_switch_and_missing_library_send_jobs_to_gdscript() -> void:
 	assert_eq(ScatterNative.fallbacks(), {"forced": 1, reason: 1})
 
 
+## S12b: a loaded library must carry the terrain response (version() names "curves"). This FAILS,
+## it does not pend, on a stale library: one built before S12b would load, ignore the curve keys
+## and place rows GDScript would not (rebuild it: native/README.md).
+func test_the_library_reports_the_curves_capability() -> void:
+	if _skip_without_library():
+		return
+	assert_string_contains(ScatterNative.version(), ScatterNative.CAPABILITY_CURVES)
+	var curved: Array[Dictionary] = PaletteLibrary.species("grassland_meadow_summer_s1")
+	assert_eq(ScatterNative._refusal(Parity.curved_species(curved)), "", "curved jobs run natively")
+
+
+## Terrain response on every rule (slope minimum, slope, height and wet curves) places the same
+## rows natively as in GDScript, on steep terraces with a synthetic shore weight, and the curves
+## visibly change the placement.
+func test_terrain_response_rows_equal_gdscript_dry_and_wet() -> void:
+	if _skip_without_library():
+		return
+	for biome_id in ["temperate_forest_summer_s1", "grassland_meadow_summer_s1"]:
+		for landform in ["rolling", "terraces"]:
+			for wet in [false, true]:
+				var doc := _rolling_doc(biome_id, Vector2i.ZERO, landform)
+				if wet:
+					_dress_shore(doc)
+				var plain := _work(doc, biome_id, Vector2i.ZERO)
+				var work := _curved_work(doc, biome_id, Vector2i.ZERO)
+				_assert_same_rows(doc, biome_id, work)
+				var base := _native_rows(doc, biome_id, plain)
+				var curved := _native_rows(doc, biome_id, work)
+				var label := "%s %s wet %s: curves thin" % [biome_id, landform, wet]
+				assert_lt(_row_count(curved), _row_count(base), label)
+
+
+## Each kind of terrain response alone (so a missed field cannot hide behind another), on rolling
+## ground with a shore weight that varies in both directions.
+func test_each_terrain_response_alone_equals_gdscript() -> void:
+	if _skip_without_library():
+		return
+	var biome_id := "temperate_forest_summer_s1"
+	var kinds: Array[Dictionary] = [
+		{"slope_min_deg": 4.0},
+		{"response": {"slope": [[0, 1], [10, 0.5], [30, 0.0]]}},
+		{"response": {"slope": [[0, 0.2], [40, 1.0]]}},
+		{"response": {"height": [[-500, 1.0], [1, 1.0], [5, 0.1]]}},
+		{"response": {"wet": [[0, 1.0], [0.5, 0.3]]}},
+		{"response": {"wet": [[0, 0.0], [1, 1.0]]}},
+	]
+	var doc := _rolling_doc(biome_id, Vector2i.ZERO)
+	_dress_shore(doc)
+	for kind in kinds:
+		var work := _work(doc, biome_id, Vector2i.ZERO)
+		var species: Array[Dictionary] = []
+		for rule: Dictionary in work.species:
+			species.append(rule.merged(kind.duplicate(true), true))
+		work.species = species
+		_assert_same_rows(doc, biome_id, work)
+
+
+## A cell generated alone equals the same cell inside a bigger job, with curved rules, natively
+## (the curves are pointwise, so no job size moves a row).
+func test_terrain_response_rows_do_not_depend_on_the_job_region() -> void:
+	if _skip_without_library():
+		return
+	var biome_id := "temperate_forest_summer_s1"
+	var doc := _rolling_doc(biome_id, Vector2i.ZERO)
+	_dress_shore(doc)
+	_paint(doc, biome_id, Rect2(Vector2(10.0, 0.0), Vector2(10.0, 10.0)).grow(PAINT_MARGIN_M))
+	var alone := _curved_work(doc, biome_id, Vector2i.ZERO)
+	var both := _curved_work(doc, biome_id, Vector2i.ZERO)
+	var cells: Array = []
+	for _s in (both.species as Array).size():
+		cells.append([Vector2i.ZERO, Vector2i(1, 0)])
+	both.cells_by_species = cells
+	both.window = (alone.window as Rect2).merge(Rect2(Vector2(10.0, 0.0), Vector2(10.0, 10.0)))
+	var single := _native_rows(doc, biome_id, alone)
+	var wide := _native_rows(doc, biome_id, both)
+	var stride := MapDocument.ROW_STRIDE
+	var checked := 0
+	for asset_id in single:
+		var kept := PackedFloat32Array()
+		var rows: PackedFloat32Array = wide.get(asset_id, PackedFloat32Array())
+		for r in rows.size() / stride:
+			if rows[r * stride] < 10.0:
+				kept.append_array(rows.slice(r * stride, (r + 1) * stride))
+		var expected: PackedFloat32Array = single[asset_id]
+		assert_eq(kept.to_byte_array(), expected.to_byte_array(), asset_id)
+		checked += (kept.size() / stride)
+	assert_gt(checked, 20)
+
+
 ## The grids the library computes from pack()'s "source" (card native-cover) against grids_for's
 ## GDScript, byte for byte: steep landforms (curvature, steepness, face proximity), the map edge,
 ## and plain, built, cliff and ash surfaces painted in overlapping weights (painted fields and the
@@ -177,9 +267,27 @@ func _paint_surfaces(doc: MapDocument, built: PackedStringArray, cliff: PackedSt
 
 ## A fresh map of `biome_id` as the New map dialog makes it, with `cell` and PAINT_MARGIN_M
 ## around it painted to full density (the gen-native probe's cell).
-func _painted_doc(biome_id: String, cell: Vector2i) -> MapDocument:
-	var doc := NewMap.create(SIZE_FT, biome_id, SEED)
+func _painted_doc(
+	biome_id: String, cell: Vector2i, landform: String = StartingLandform.FLAT
+) -> MapDocument:
+	var doc := NewMap.create(SIZE_FT, biome_id, SEED, PaletteLibrary.DEFAULT_ROOT, landform)
 	_paint(doc, biome_id, Rect2(Vector2(cell) * 10.0, Vector2(10.0, 10.0)).grow(PAINT_MARGIN_M))
+	return doc
+
+
+## `_painted_doc` on the named landform, or, for "rolling", on flat ground raised into hills:
+## slopes from 0 to about 35 degrees and heights within +-3.5 m, so the slope and height curves
+## act on real values (the flat cell and the terraces' level tiers leave them at one value).
+func _rolling_doc(biome_id: String, cell: Vector2i, landform: String = "rolling") -> MapDocument:
+	if landform != "rolling":
+		return _painted_doc(biome_id, cell, landform)
+	var doc := _painted_doc(biome_id, cell)
+	var heights := PackedFloat32Array()
+	for z in doc.samples_z():
+		for x in doc.samples_x():
+			var p := doc.sample_to_world(Vector2(x, z))
+			heights.append(3.0 * sin(p.x * 0.17) * cos(p.y * 0.13) + 0.15 * p.x)
+	doc.heights = heights
 	return doc
 
 
@@ -215,6 +323,43 @@ func _work(doc: MapDocument, biome_id: String, cell: Vector2i) -> Dictionary:
 	}
 
 
+## `_work` with terrain response on every rule (scatter_native_landform_parity.gd).
+func _curved_work(doc: MapDocument, biome_id: String, cell: Vector2i) -> Dictionary:
+	var work := _work(doc, biome_id, cell)
+	var species: Array[Dictionary] = []
+	species.assign(work.species)
+	work.species = Parity.curved_species(species)
+	return work
+
+
+## A stored shore weight (channel G) rising along x with a ripple along z; no bed or depth, so
+## the wet dressing's own ground rules stay quiet and only the `wet` axis reads it.
+func _dress_shore(doc: MapDocument) -> void:
+	var columns := doc.samples_x()
+	var field := PackedByteArray()
+	field.resize(doc.sample_count() * WaterDressing.CHANNELS)
+	for z in doc.samples_z():
+		for x in columns:
+			var at := (z * columns + x) * WaterDressing.CHANNELS
+			var along := float(x) / (columns - 1)
+			field[at + 1] = clampi(roundi(255.0 * (0.25 + 0.5 * along) + 20.0 * sin(z * 0.7)), 0, 255)
+	doc.water_dressing = field
+
+
+## The native rows of `work` ({asset id: PackedFloat32Array}), failing the test on a refusal.
+func _native_rows(doc: MapDocument, biome_id: String, work: Dictionary) -> Dictionary:
+	var native: Variant = ScatterNative.run_biome(doc, biome_id, work, {})
+	assert_not_null(native, "%s ran natively (fallbacks %s)" % [biome_id, ScatterNative.fallbacks()])
+	return native if native != null else {}
+
+
+func _row_count(rows: Dictionary) -> int:
+	var count := 0
+	for asset_id in rows:
+		count += (rows[asset_id] as PackedFloat32Array).size() / MapDocument.ROW_STRIDE
+	return count
+
+
 ## GDScript's rows and anchors for `work` (ScatterRegen.run's calls) against the native ones.
 @warning_ignore("integer_division")
 func _assert_same_rows(doc: MapDocument, biome_id: String, work: Dictionary) -> void:
@@ -236,7 +381,9 @@ func _assert_same_rows(doc: MapDocument, biome_id: String, work: Dictionary) -> 
 		fields.species_density_at,
 		work.get("blockers", PackedFloat32Array()),
 		anchors,
-		fields.density_ceiling_at
+		fields.density_ceiling_at,
+		null,
+		fields.wet_at
 	)
 	var native_anchors := {}
 	var native: Variant = ScatterNative.run_biome(doc, biome_id, work, native_anchors)
