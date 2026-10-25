@@ -70,6 +70,7 @@ static func compile(read: Dictionary, options: Dictionary = {}) -> Dictionary:
 		"files": options.get("files", []),
 		"origins": result["origins"],
 		"thumbnails": result["thumbnails"],
+		"locks": read.get("locks", {}),
 	}
 	for item: Dictionary in read["biomes"]:
 		var def: Dictionary = item["def"]
@@ -119,8 +120,16 @@ static func _compile_biome(
 		role_of[String(rule["key"])] = String(rule["role"])
 	var rules: Array[Dictionary] = []
 	var used := {}
+	var scope := {
+		"biome": biome_name,
+		"season": String(season.get("id", "summer")),
+		"locks":
+		((surface_context.get("locks", {}) as Dictionary).get(biome_name, {}) as Dictionary).get(
+			"rules", {}
+		),
+	}
 	for raw: Dictionary in def["rules"]:
-		var rule := _compile_rule(raw, runtime, surface_context, role_of, used, warnings)
+		var rule := _compile_rule(raw, runtime, surface_context, role_of, used, warnings, scope)
 		if not rule.is_empty():
 			rules.append(rule)
 	if rules.is_empty():
@@ -391,7 +400,8 @@ static func _compile_rule(
 	context: Dictionary,
 	role_of: Dictionary,
 	used: Dictionary,
-	warnings: Array[String]
+	warnings: Array[String],
+	scope: Dictionary = {}
 ) -> Dictionary:
 	var library_id := String(context["library"])
 	var key := String(raw["key"])
@@ -399,25 +409,7 @@ static func _compile_rule(
 	var size_class := String(raw.get("size_class", LibraryContracts.size_class_of(role)))
 	var defaults := LibraryContracts.class_defaults(size_class)
 	var label := "biome %s rule %s" % [runtime, key]
-	var assets: Array[String] = []
-	for clause: Variant in (raw["query"] as Dictionary).get("match", []):
-		if not clause is Dictionary or not (clause as Dictionary).get("ref") is String:
-			continue
-		var ref := String((clause as Dictionary)["ref"])
-		var found := resolve_ref(ref, context, label, warnings)
-		if found.is_empty():
-			continue
-		var local := String(found["local"])
-		if not LibraryIds.asset_id_fits(runtime, local):
-			warnings.append("%s: asset id for '%s' is too long (skipped)" % [label, ref])
-			continue
-		var asset_id := LibraryIds.runtime_asset(runtime, local)
-		if used.has(asset_id) and used[asset_id]["entry"] != found["entry"]:
-			warnings.append("%s: '%s' collides with another asset id (skipped)" % [label, ref])
-			continue
-		if not asset_id in assets:
-			assets.append(asset_id)
-			used[asset_id] = found
+	var assets := _rule_assets(raw, runtime, context, used, warnings, scope)
 	if assets.is_empty():
 		warnings.append("%s: no asset resolves; rule dropped" % label)
 		return {}
@@ -454,6 +446,73 @@ static func _compile_rule(
 		if raw.has(field) and raw[field] != null:
 			rule[field] = _copy(raw[field])
 	return rule
+
+
+## The runtime asset ids of a rule's query, in order (`used` records each one's source): the
+## `ref` clauses first, as listed (a ref naming a group stands for its variants), then the
+## selection of the filter clauses and pins (LibraryQuery.select), capped at
+## LibraryContracts.QUERY_MAX_ASSETS in all.
+static func _rule_assets(
+	raw: Dictionary,
+	runtime: String,
+	context: Dictionary,
+	used: Dictionary,
+	warnings: Array[String],
+	scope: Dictionary
+) -> Array[String]:
+	var key := String(raw["key"])
+	var label := "biome %s rule %s" % [runtime, key]
+	var query: Dictionary = raw["query"]
+	var wanted: Array[Dictionary] = []
+	for clause: Variant in query.get("match", []):
+		if not clause is Dictionary or not (clause as Dictionary).get("ref") is String:
+			continue
+		var ref := String((clause as Dictionary)["ref"])
+		var members := LibraryQuery.group_members(ref, context)
+		if not members.is_empty():
+			for member in members:
+				wanted.append({"ref": ref, "found": member})
+			continue
+		var found := resolve_ref(ref, context, label, warnings)
+		if not found.is_empty():
+			wanted.append({"ref": ref, "found": found})
+	if LibraryQuery.has_selection(query):
+		var season := String(scope.get("season", "summer"))
+		var picked := LibraryQuery.select(
+			query,
+			context,
+			{
+				"biome": String(scope.get("biome", "")),
+				"rule": key,
+				"season": season,
+				"label": label,
+				"lock": (scope.get("locks", {}) as Dictionary).get("%s/%s" % [season, key]),
+			},
+			warnings
+		)
+		for found: Dictionary in picked["found"]:
+			wanted.append({"ref": String(found["ref"]), "found": found})
+	var assets: Array[String] = []
+	for item in wanted:
+		var found: Dictionary = item["found"]
+		var local := String(found["local"])
+		if not LibraryIds.asset_id_fits(runtime, local):
+			warnings.append("%s: asset id for '%s' is too long (skipped)" % [label, item["ref"]])
+			continue
+		var asset_id := LibraryIds.runtime_asset(runtime, local)
+		if used.has(asset_id) and used[asset_id]["entry"] != found["entry"]:
+			warnings.append(
+				"%s: '%s' collides with another asset id (skipped)" % [label, item["ref"]]
+			)
+			continue
+		if not asset_id in assets:
+			assets.append(asset_id)
+			used[asset_id] = found
+	if assets.size() > LibraryContracts.QUERY_MAX_ASSETS:
+		var cap := LibraryContracts.QUERY_MAX_ASSETS
+		warnings.append("%s: %d assets; the first %d are kept" % [label, assets.size(), cap])
+		assets.resize(LibraryContracts.QUERY_MAX_ASSETS)
+	return assets
 
 
 static func _copy(value: Variant) -> Variant:

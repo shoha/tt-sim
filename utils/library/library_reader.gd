@@ -16,7 +16,8 @@ extends RefCounted
 ##    portable-name, case and existence checks, and the surfaces below),
 ##    "surfaces": {"<surface name>": the text of its surface.json} and
 ##    "png": {"<library-relative .png path>": SurfaceBake.png_header's result} (both optional;
-##    LibraryRegistry reads the first 33 bytes of each map)}
+##    LibraryRegistry reads the first 33 bytes of each map), and
+##    "locks": {"<biome id>.lock.json": String} (optional; the designer's lock files)}
 ## The result also holds `surfaces` ({name: {info, maps}} for each valid surfaces/<name>/ set,
 ## `maps` the kinds present) and `surface_order`.
 
@@ -26,6 +27,8 @@ const SURFACE_DIR := "surfaces/"
 ## default) or against the library's own surfaces/ folder first ("library").
 const SURFACES_LEGACY := "legacy"
 const SURFACES_LIBRARY := "library"
+## A lock file sits beside its biome-def: biomes/<biome id>.lock.json.
+const LOCK_SUFFIX := ".lock.json"
 
 
 static func read(sources: Dictionary) -> Dictionary:
@@ -39,6 +42,7 @@ static func read(sources: Dictionary) -> Dictionary:
 		"biomes": [] as Array[Dictionary],
 		"surfaces": {},
 		"surface_order": [] as Array[String],
+		"locks": {},
 	}
 	var errors: Array[String] = result["errors"]
 	var warnings: Array[String] = result["warnings"]
@@ -87,8 +91,50 @@ static func read(sources: Dictionary) -> Dictionary:
 				(result["biomes"] as Array[Dictionary]).append({"file": file_name, "def": def})
 	if have_files:
 		_read_surfaces(sources, files, result)
+	_read_locks(sources.get("locks"), result)
 	result["ok"] = errors.is_empty() and not library.is_empty() and not catalog.is_empty()
 	return result
+
+
+## Fills result.locks ({biome id: {"rules": {"<season>/<rule key>": {query, assets}}}}) from the
+## text of each biomes/<id>.lock.json (the designer's Lock, design doc 2.6.4). A lock only
+## narrows a compile to ids it names, so a malformed one is a warning and is left out.
+static func _read_locks(texts: Variant, result: Dictionary) -> void:
+	if not texts is Dictionary:
+		return
+	var warnings: Array[String] = result["warnings"]
+	var names: Array = (texts as Dictionary).keys()
+	names.sort()
+	for file_name: String in names:
+		var label := BIOME_DIR + file_name
+		var biome := file_name.trim_suffix(LOCK_SUFFIX)
+		var scratch: Array[String] = []
+		var lock := _parse(
+			String((texts as Dictionary)[file_name]),
+			label,
+			LibraryContracts.CAPS["biome_bytes"],
+			scratch
+		)
+		if lock.is_empty() or lock.get("format") != LibraryContracts.FORMAT_LOCK:
+			warnings.append("%s is not a readable lock file (ignored)" % label)
+			continue
+		var rules: Dictionary = {}
+		var raw: Variant = lock.get("rules")
+		for key: Variant in raw if raw is Dictionary else {}:
+			var entry: Variant = (raw as Dictionary)[key]
+			var assets: Array[String] = []
+			var fine := entry is Dictionary and (entry as Dictionary).get("query") is String
+			if fine and (entry as Dictionary).get("assets") is Array:
+				for item: Variant in (entry as Dictionary)["assets"] as Array:
+					fine = fine and item is String
+					assets.append(String(item))
+			else:
+				fine = false
+			if fine and assets.size() <= LibraryContracts.QUERY_MAX_ASSETS:
+				rules[String(key)] = {"query": String(entry["query"]), "assets": assets}
+			else:
+				warnings.append("%s: lock '%s' is malformed (ignored)" % [label, _short(str(key))])
+		(result["locks"] as Dictionary)[biome] = {"rules": rules}
 
 
 ## Fills result.surfaces from the library's surfaces/ folder (SurfaceReader).
@@ -618,13 +664,104 @@ static func _check_query(
 		)
 		return
 	for raw: Variant in clauses as Array:
-		if not raw is Dictionary or not (raw as Dictionary).get("ref") is String:
-			warnings.append(
-				"%s: only {ref} clauses are compiled in this build (clause skipped)" % label
-			)
-			continue
-		for problem in LibraryIds.ref_problems((raw as Dictionary)["ref"]):
+		_check_clause(raw, label, errors, warnings)
+	_check_query_shared(query as Dictionary, label, errors)
+
+
+## One `query.match` clause: `{ref}` names an asset or a group; anything else is a filter of
+## category, subtype, group, ids, role and library (LibraryQuery).
+static func _check_clause(
+	raw: Variant, label: String, errors: Array[String], warnings: Array[String]
+) -> void:
+	if not raw is Dictionary:
+		errors.append("%s: a query.match entry is not an object" % label)
+		return
+	var clause: Dictionary = raw
+	_unknown(clause, LibraryContracts.QUERY_CLAUSE_KEYS, label + " query clause", warnings)
+	if clause.has("ref"):
+		if not clause["ref"] is String:
+			errors.append("%s: ref must be a string" % label)
+			return
+		for problem in LibraryIds.ref_problems(clause["ref"]):
 			errors.append("%s: ref: %s" % [label, problem])
+		if clause.size() > 1:
+			warnings.append("%s: a ref clause with other keys uses only the ref" % label)
+		return
+	if clause.is_empty():
+		warnings.append("%s: an empty query clause matches every asset" % label)
+	if clause.has("category") and not _one_of(clause["category"], LibraryContracts.CATEGORIES):
+		errors.append("%s: query category must be one of %s" % [label, LibraryContracts.CATEGORIES])
+	var role: Variant = clause.get("role")
+	if clause.has("role") and not (role is String and LibraryContracts.has_role(role)):
+		errors.append("%s: query role '%s' is not a role" % [label, _short(str(role))])
+	for field in ["subtype", "group", "library"]:
+		if clause.has(field) and not _short_text(clause[field]):
+			errors.append("%s: query %s must be a short string" % [label, field])
+	if clause.has("ids"):
+		_check_string_list(clause["ids"], "query ids", label, errors, true)
+
+
+## The query-level filters: tags, size classes, seasons mode, count, order and pins.
+static func _check_query_shared(query: Dictionary, label: String, errors: Array[String]) -> void:
+	for field in ["tags_all", "tags_any", "tags_none"]:
+		if query.has(field):
+			_check_string_list(query[field], "query " + field, label, errors, false)
+	if query.has("size_class"):
+		var classes: Variant = query["size_class"]
+		var fine := classes is Array
+		for item: Variant in classes if classes is Array else []:
+			fine = fine and _one_of(item, LibraryContracts.SIZE_CLASSES)
+		if not fine:
+			errors.append(
+				"%s: query size_class is a list of %s" % [label, LibraryContracts.SIZE_CLASSES]
+			)
+	if query.has("seasons") and not _one_of(query["seasons"], LibraryContracts.QUERY_SEASON_MODES):
+		errors.append(
+			"%s: query seasons must be one of %s" % [label, LibraryContracts.QUERY_SEASON_MODES]
+		)
+	if query.has("order") and not _one_of(query["order"], LibraryContracts.QUERY_ORDERS):
+		errors.append("%s: query order must be one of %s" % [label, LibraryContracts.QUERY_ORDERS])
+	if query.has("count"):
+		var count: Variant = query["count"]
+		var top := float(LibraryContracts.QUERY_MAX_ASSETS)
+		var fine: bool = (count is String and count == "all") or (
+			_is_whole(count) and float(count) >= 1.0 and float(count) <= top
+		)
+		if not fine:
+			errors.append(
+				(
+					"%s: query count must be \"all\" or a whole number from 1 to %d"
+					% [label, LibraryContracts.QUERY_MAX_ASSETS]
+				)
+			)
+	if query.has("pin"):
+		_check_string_list(query["pin"], "query pin", label, errors, true)
+
+
+## `value` must be a list of at most QUERY_MAX_LIST short strings; `refs` also checks each as a
+## query ref (an id, `<library>:<id>` or a group key).
+static func _check_string_list(
+	value: Variant, what: String, label: String, errors: Array[String], refs: bool
+) -> void:
+	if not value is Array or (value as Array).size() > LibraryContracts.QUERY_MAX_LIST:
+		errors.append(
+			"%s: %s must be a list of at most %d" % [label, what, LibraryContracts.QUERY_MAX_LIST]
+		)
+		return
+	for item: Variant in value as Array:
+		if not _short_text(item):
+			errors.append("%s: %s holds a value that is not a short string" % [label, what])
+			return
+		if refs and not LibraryIds.ref_problems(item).is_empty():
+			errors.append("%s: %s '%s' is not an id" % [label, what, _short(item)])
+
+
+static func _short_text(value: Variant) -> bool:
+	return (
+		value is String
+		and String(value) != ""
+		and String(value).length() <= LibraryContracts.MAX_TEXT_LENGTH
+	)
 
 
 # ---- helpers ----
