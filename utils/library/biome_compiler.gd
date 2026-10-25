@@ -335,6 +335,10 @@ static func _compile_rule(
 	for field: String in ["avoid_bare", "keep_colour"]:
 		if raw.has(field) and raw[field] != null:
 			rule[field] = raw[field]
+	# Terrain response (S12): carried only when the rule has it, so legacy rules compile as before.
+	for field: String in ["slope_min_deg", "response"]:
+		if raw.has(field) and raw[field] != null:
+			rule[field] = _copy(raw[field])
 	return rule
 
 

@@ -191,7 +191,9 @@ func request_region(rect: Rect2, live: bool = false, now_msec: int = -1) -> Arra
 		var centre := rect.get_center() / size - Vector2(0.5, 0.5)
 		cells.sort_custom(
 			func(a: Vector2i, b: Vector2i) -> bool:
-				return Vector2(a).distance_squared_to(centre) < Vector2(b).distance_squared_to(centre)
+				return (
+					Vector2(a).distance_squared_to(centre) < Vector2(b).distance_squared_to(centre)
+				)
 		)
 	for cell in cells:
 		_generation[cell] = _generation.get(cell, 0) + 1
@@ -382,7 +384,9 @@ func _job(cells: Array[Vector2i], lead: bool) -> Dictionary:
 		entry.erase("depth")
 		entry.built = built_surfaces.duplicate()
 		entry.cliff = cliff_surfaces.duplicate()
-	var job := {"cells": cells, "generations": generations, "regenerated": regenerated, "work": work}
+	var job := {
+		"cells": cells, "generations": generations, "regenerated": regenerated, "work": work
+	}
 	var centres := {}
 	for cell in cells:
 		if _centres.has(cell):
@@ -499,7 +503,8 @@ static func _generate(
 		entry.get("blockers", PackedFloat32Array()),
 		anchors,
 		fields.density_ceiling_at,
-		cancel
+		cancel,
+		fields.wet_at
 	)
 
 

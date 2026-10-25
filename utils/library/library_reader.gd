@@ -440,6 +440,8 @@ static func _check_rule(
 	_check_number(rule, "density_factor", 0.0, 1000.0, true, label, errors)
 	_check_number(rule, "spacing_m", 0.0, 1000.0, true, label, errors)
 	_check_number(rule, "slope_max_deg", 0.0, 90.0, true, label, errors)
+	_check_number(rule, "slope_min_deg", 0.0, 90.0, true, label, errors)
+	_check_response(rule.get("response"), label, errors, warnings)
 	_check_number(rule, "scale_spread", 0.0, 0.9, true, label, errors)
 	_check_number(rule, "scale_floor", 0.0, 100.0, true, label, errors)
 	_check_number(rule, "yaw_random_deg", 0.0, 360.0, true, label, errors)
@@ -455,6 +457,33 @@ static func _check_rule(
 	for relation_field in ["near", "avoid"]:
 		_check_relations(rule.get(relation_field), relation_field, label, keys, errors, warnings)
 	_check_query(rule.get("query"), label, errors, warnings)
+
+
+## A rule's `response` (S12): an object of axis -> curve; a malformed curve is an error (an
+## authored library fails loudly), an unknown axis a warning, and an axis this build does not
+## evaluate yet (LibraryContracts.RESPONSE_UNSUPPORTED) a warning too.
+static func _check_response(
+	response: Variant, label: String, errors: Array[String], warnings: Array[String]
+) -> void:
+	if response == null:
+		return
+	if not response is Dictionary:
+		errors.append("%s: response must be an object of axis -> curve" % label)
+		return
+	for axis: Variant in response as Dictionary:
+		var axis_name := String(axis)
+		if not LibraryContracts.RESPONSE_AXES.has(axis_name):
+			warnings.append(
+				"%s: response axis '%s' is unknown (ignored)" % [label, _short(axis_name)]
+			)
+			continue
+		var problem := LibraryContracts.response_problem(axis_name, (response as Dictionary)[axis])
+		if problem != "":
+			errors.append("%s: response.%s %s" % [label, axis_name, problem])
+		elif axis_name in LibraryContracts.RESPONSE_UNSUPPORTED:
+			warnings.append(
+				"%s: response.%s is not evaluated in this build (ignored)" % [label, axis_name]
+			)
 
 
 static func _check_habit(
