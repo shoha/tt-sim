@@ -1391,6 +1391,11 @@ ground of a map without `map.glb`, built from the document heights. It goes unde
   `GroundPalette.build_ground_material(surface, seed)` (`utils/ground_palette.gd`, with
   the other palette helpers: texture paths, base rule surfaces) from the palette surface (albedo, normal, ORM,
   height at `tile_m`); a missing surface warns and falls back to a flat earth colour.
+  Every surface map (the ground's, the arrays', the crossings', the swatches' and thumbnails')
+  comes through `SurfaceStore` (`utils/library/surface_store.gd`): the editor-imported texture
+  for the installed palette, a baked PNG set (BC7 / BC5 / BC1 / L8, raw cache under
+  `user://library_cache`) for a content library's own surfaces, same formats either way
+  ([systems/library.md](systems/library.md) "Surfaces (S3)").
   Anti-tiling is a triangle-grid tile-and-blend (terrain-paint's mosaic idea done live:
   3 cells per pixel with hashed rotation and offset, sharpened height-weighted blend),
   plus height-map cavity shading and world-space value-noise brightness and dry/lush

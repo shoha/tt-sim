@@ -21,8 +21,17 @@ const BASE := ROOT + "/base"
 const SETTINGS := ROOT + "/settings.cfg"
 const RUNTIME := "mini__meadow_summer_s1"
 const PURE_MODULES: Array[String] = [
-	"library_contracts", "library_ids", "library_reader", "biome_compiler"
+	"library_contracts",
+	"library_ids",
+	"library_reader",
+	"biome_compiler",
+	"surface_bake",
+	"surface_reader",
+	"library_bindings",
 ]
+## The one other module that touches a folder: it creates and replaces its own cache files and
+## lists nothing (checked below).
+const CACHE_WRITER := "surface_cache.gd"
 
 var _saved_settings_path: String = ""
 
@@ -539,6 +548,12 @@ func test_only_the_registry_lists_folders() -> void:
 	for file_name in DirAccess.get_files_at("res://utils/library"):
 		if not file_name.ends_with(".gd") or file_name == "library_registry.gd":
 			continue
-		if "DirAccess" in FileAccess.get_file_as_string("res://utils/library/" + file_name):
+		var code := FileAccess.get_file_as_string("res://utils/library/" + file_name)
+		if "DirAccess" in code and file_name != CACHE_WRITER:
 			offenders.append(file_name)
 	assert_eq(offenders, [])
+	var cache := FileAccess.get_file_as_string("res://utils/library/" + CACHE_WRITER)
+	for listing in [
+		"get_files_at", "get_directories_at", "list_dir", "get_files(", "get_directories("
+	]:
+		assert_false(listing in cache, "the cache writer lists nothing: " + listing)

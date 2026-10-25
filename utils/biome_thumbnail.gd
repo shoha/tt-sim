@@ -71,7 +71,7 @@ static func of(
 	if _cache.has(key):
 		return _cache[key]
 	var thumbnail := String(biome.get("thumbnail", ""))
-	var studio := _studio(root.path_join(thumbnail), size * SUPERSAMPLE)
+	var studio := _studio(root, thumbnail, size * SUPERSAMPLE)
 	if studio == null:
 		return SwatchTextures.palette_thumbnail(thumbnail, size, root)
 	var image := paint(studio, ground_colour(biome, root), MapPlaceholder.seed_of(id))
@@ -92,7 +92,7 @@ static func strip(
 	if not _cache.has(key):
 		var high := size * SUPERSAMPLE
 		var side := int(round(float(high.y) / (STRIP_BAND.y - STRIP_BAND.x)))
-		var square := _studio(root.path_join(String(biome.get("thumbnail", ""))), side)
+		var square := _studio(root, String(biome.get("thumbnail", "")), side)
 		var studio: Image = null
 		if square != null:
 			var top := int(round(STRIP_BAND.x * side))
@@ -110,7 +110,7 @@ static func bare_strip(
 	var albedo := String(surface.get("albedo", ""))
 	var key := "%s:bare:%s:%dx%d" % [root, albedo, size.x, size.y]
 	if not _cache.has(key):
-		var ground := _luminous(_mean(root.path_join(albedo)))
+		var ground := _luminous(_mean(root, albedo))
 		_cache[key] = _strip_texture(null, size, ground, MapPlaceholder.seed_of("bare_ground"))
 	return _cache[key]
 
@@ -119,9 +119,9 @@ static func bare_strip(
 ## lifted to GROUND_SATURATION and into the GROUND_LIGHTNESS band at the same hue.
 static func ground_colour(biome: Dictionary, root: String = PaletteLibrary.DEFAULT_ROOT) -> Color:
 	var surface: Dictionary = PaletteLibrary.surfaces(root).get(
-		String(biome.get("ground_surface", "")), {}
+		SurfaceStore.runtime_name(String(biome.get("ground_surface", ""))), {}
 	)
-	return _luminous(_mean(root.path_join(String(surface.get("albedo", "")))))
+	return _luminous(_mean(root, String(surface.get("albedo", ""))))
 
 
 ## `mean` lifted to GROUND_SATURATION and into the GROUND_LIGHTNESS band at its own hue (moss
@@ -153,9 +153,7 @@ static func paint(
 	var sky_low := ThemeColors.SKY_LOW
 	var ridge := ground.lerp(sky_low, RIDGE_HAZE)
 	var near := ground.lerp(sky_low, HORIZON_HAZE)
-	var fore := Color.from_ok_hsl(
-		ground.ok_hsl_h, ground.ok_hsl_s, ground.ok_hsl_l - FORE_DEEPEN
-	)
+	var fore := Color.from_ok_hsl(ground.ok_hsl_h, ground.ok_hsl_s, ground.ok_hsl_l - FORE_DEEPEN)
 	var phase := skyline_seed * TAU
 	var edge := 1.0 / size.y
 	for y in size.y:
@@ -207,11 +205,10 @@ static func _strip_texture(
 	return ImageTexture.create_from_image(image)
 
 
-## The square of the studio render at `path` the assets stand in, `side` px, or null.
-static func _studio(path: String, side: int) -> Image:
-	if not ResourceLoader.exists(path):
-		return null
-	var source := load(path) as Texture2D
+## The square of the studio render at `relative` under palette `root` (SurfaceStore.texture) the
+## assets stand in, `side` px, or null.
+static func _studio(root: String, relative: String, side: int) -> Image:
+	var source := SurfaceStore.texture(root, relative)
 	if source == null:
 		return null
 	var image := source.get_image()
@@ -227,11 +224,10 @@ static func _studio(path: String, side: int) -> Image:
 	return image
 
 
-## The mean colour of the texture at `path` (alpha 0 when there is none).
-static func _mean(path: String) -> Color:
-	if not ResourceLoader.exists(path):
-		return Color(0, 0, 0, 0)
-	var source := load(path) as Texture2D
+## The mean colour of the texture at `relative` under palette `root` (alpha 0 when there is
+## none).
+static func _mean(root: String, relative: String) -> Color:
+	var source := SurfaceStore.texture(root, relative)
 	var image: Image = source.get_image() if source != null else null
 	if image == null or image.is_empty():
 		return Color(0, 0, 0, 0)

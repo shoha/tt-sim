@@ -119,9 +119,11 @@ const PAINT_THUMB_PX := 52
 const PAINT_COLUMNS := 3
 ## Paint tile ids (and node names) are this prefix plus the palette surface name.
 const PAINT_TILE_PREFIX := "paint_"
-## The surface the Paint tool starts with: a path is what a new map most often wants.
+## The surface the Paint tool starts with: a path is what a new map most often wants. The legacy
+## value of the `paint.default` library binding (LibraryBindings.paint_default).
 const DEFAULT_PAINT_SURFACE := "dirt_road_packed"
-## Readable names for the built-in palette's surfaces (surface_label(); the rest are
+## Readable names for the built-in palette's surfaces (surface_label(); a content library's
+## surfaces carry their own `label` in surface.json, SurfaceStore.label_of; the rest are
 ## prettified ids).
 const SURFACE_LABELS := {
 	"cliff": "Rock",
@@ -208,7 +210,7 @@ var _place_foldouts: Dictionary = {}
 ## Paint tile buttons by surface, and the tooltip each has when it can be picked.
 var _paint_tiles: Dictionary = {}
 var _paint_tooltips: Dictionary = {}
-var _paint_surface: String = DEFAULT_PAINT_SURFACE
+var _paint_surface: String = LibraryBindings.paint_default()
 ## True once the author picked a Paint tile; until then ordering may change the default.
 var _paint_picked: bool = false
 ## The biomes the Built tiles were last ordered for (order_paint_tiles).
@@ -598,7 +600,9 @@ func _apply_paint_order() -> void:
 			field.tiles.move_child(tile, index)
 	if not _paint_picked:
 		var listed := listed_paths(built, _paint_order_biomes, palette_root)
-		select_paint_surface(listed[0] if not listed.is_empty() else DEFAULT_PAINT_SURFACE)
+		select_paint_surface(
+			listed[0] if not listed.is_empty() else LibraryBindings.paint_default()
+		)
 
 
 ## The Built tiles' order for a map with `biome_ids` on it: every listed biome's
@@ -629,6 +633,9 @@ static func listed_paths(
 ## A palette surface's readable name ("dirt_road_packed" -> "Dirt track"): the Paint tiles'
 ## labels and the history labels of Paint strokes.
 static func surface_label(surface: String) -> String:
+	var library_label := SurfaceStore.label_of(surface)
+	if library_label != "":
+		return library_label
 	var named: String = SURFACE_LABELS.get(surface, "")
 	if named != "":
 		return named

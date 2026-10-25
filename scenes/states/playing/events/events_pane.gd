@@ -278,7 +278,7 @@ func ensure_paint_tiles() -> void:
 				)
 			)
 			_paint_surfaces.append(surface)
-	select_paint_surface(AuthoringPanel.DEFAULT_PAINT_SURFACE)
+	select_paint_surface(LibraryBindings.paint_default())
 
 
 ## Selects a Paint tile without emitting paint_selected.

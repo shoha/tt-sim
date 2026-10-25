@@ -86,10 +86,9 @@ static func palette_thumbnail(
 	var key := "palette:%s:%s:%d" % [root, relative_path, size]
 	if _cache.has(key):
 		return _cache[key]
-	var path := root.path_join(relative_path)
 	var image: Image = null
-	if relative_path != "" and ResourceLoader.exists(path):
-		var source := load(path) as Texture2D
+	if relative_path != "":
+		var source := SurfaceStore.texture(root, relative_path)
 		if source:
 			image = source.get_image()
 	if image == null or image.is_empty():
