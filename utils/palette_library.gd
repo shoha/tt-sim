@@ -103,7 +103,11 @@ static func clear_cache() -> void:
 static func overlay_package(
 	package: String, root: String = DEFAULT_ROOT, only: Array = []
 ) -> Dictionary:
-	var report := PaletteOverlay.read(package, get_palette(root), root, only)
+	return install_overlay(PaletteOverlay.read(package, get_palette(root), root, only), root)
+
+
+## Caches a PaletteOverlay report (read, or read_palette for LibraryRegistry); not ok: no change.
+static func install_overlay(report: Dictionary, root: String = DEFAULT_ROOT) -> Dictionary:
 	if not report["ok"]:
 		return report
 	_palettes[root] = report["palette"]

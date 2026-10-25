@@ -38,7 +38,32 @@ const FORCE_DISABLE_COMPRESSION := 64
 ## of the biomes asked for, is not ok and returns `base` unchanged.
 static func read(package: String, base: Dictionary, root: String, only: Array = []) -> Dictionary:
 	var started := Time.get_ticks_usec()
-	var report := {
+	var report := _new_report(base)
+	var path := package.path_join(PaletteLibrary.PALETTE_FILE)
+	var text := FileAccess.get_file_as_string(path) if FileAccess.file_exists(path) else ""
+	if text == "":
+		report["error"] = "no readable %s" % path
+		return report
+	var result := PaletteLibrary.validate_palette(JSON.parse_string(text))
+	report["warnings"] = result["warnings"]
+	return _merge(result["palette"], package, base, root, only, report, path, started)
+
+
+## read() for a package palette that is already in memory: `raw` is a palette.json-shaped
+## Dictionary (LibraryRegistry's compiled library), validated here, and `package` is the folder
+## its asset `file` values are relative to. The same report, the same merge rule.
+static func read_palette(
+	raw: Dictionary, package: String, base: Dictionary, root: String, only: Array = []
+) -> Dictionary:
+	var started := Time.get_ticks_usec()
+	var report := _new_report(base)
+	var result := PaletteLibrary.validate_palette(raw)
+	report["warnings"] = result["warnings"]
+	return _merge(result["palette"], package, base, root, only, report, package, started)
+
+
+static func _new_report(base: Dictionary) -> Dictionary:
+	return {
 		"ok": false,
 		"error": "",
 		"palette": base,
@@ -51,14 +76,21 @@ static func read(package: String, base: Dictionary, root: String, only: Array = 
 		"warnings": [],
 		"msec": 0.0,
 	}
-	var path := package.path_join(PaletteLibrary.PALETTE_FILE)
-	var text := FileAccess.get_file_as_string(path) if FileAccess.file_exists(path) else ""
-	if text == "":
-		report["error"] = "no readable %s" % path
-		return report
-	var result := PaletteLibrary.validate_palette(JSON.parse_string(text))
-	var pkg: Dictionary = result["palette"]
-	report["warnings"] = result["warnings"]
+
+
+## The shared merge of read() and read_palette(): each biome of `pkg` (validated) replaces the
+## base's biome of that id with all its "<id>/" assets. `source` names the origin in errors.
+static func _merge(
+	pkg: Dictionary,
+	package: String,
+	base: Dictionary,
+	root: String,
+	only: Array,
+	report: Dictionary,
+	source: String,
+	started: int
+) -> Dictionary:
+	var path := source
 	var biomes: Array = (base["biomes"] as Array).duplicate()
 	var assets: Dictionary = (base["assets"] as Dictionary).duplicate()
 	for biome: Dictionary in pkg["biomes"]:

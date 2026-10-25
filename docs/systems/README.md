@@ -36,6 +36,9 @@ Documents here:
   the open path.
 - [palette.md](palette.md): the built-in palette (`PaletteLibrary`): validation, read access,
   `resolve()`, the import sidecars.
+- [library.md](library.md): the content library (a data-only folder of GLBs, catalog and biome
+  definitions compiled into the palette form): ids, reader, compiler, registry, the developer
+  path, the parity proof against a plantgen package.
 - [map_document.md](map_document.md): `map.ttmap` (`MapDocument`, `MapDocumentIO`), levels
   with `map.glb`, `map.ttmap` or both, the play-time load and map downloads.
 - [scatter.md](scatter.md): the scatter generator (region independence, thinning, density

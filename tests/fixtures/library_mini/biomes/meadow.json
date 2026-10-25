@@ -1,0 +1,29 @@
+{
+	"format": "ttsim-biome",
+	"format_version": 1,
+	"id": "meadow",
+	"name": "Mini meadow",
+	"climate": "temperate",
+	"surfaces": "legacy",
+	"seasons": [{"id": "summer", "seed": 1}],
+	"ground": {"surface": "grass", "paths": []},
+	"legacy": {"thumbnail": "thumbnails/meadow_summer_s1.jpg"},
+	"rules": [
+		{
+			"key": "oak", "role": "canopy_tree", "size_class": "large", "weight": 1,
+			"density_per_m2": 0.01, "spacing_m": 4.5, "slope_max_deg": 35, "scale_spread": 0.15,
+			"scale_floor": null, "yaw_random_deg": 360, "align": "upright",
+			"pattern": null, "clump": null, "near": [], "avoid": [],
+			"habit": {"water": "", "charred": false},
+			"query": {"match": [{"ref": "Tree_Oak_v0"}, {"ref": "Tree_Oak_v1"}], "count": "all", "order": "explicit"}
+		},
+		{
+			"key": "stones", "role": "stones", "weight": 1,
+			"density_per_m2": 0.06, "spacing_m": 0.25, "slope_max_deg": 55, "scale_spread": 0.3,
+			"scale_floor": 0.5, "clump": {"children_spacing_m": 0.25, "parents_per_m2": 0.05, "radius_m": 1.2, "transition_m": 0.8},
+			"near": [{"role": "canopy_tree", "distance_m": 3, "influence": 0.4, "transition_m": 2}],
+			"avoid": [],
+			"query": {"match": [{"ref": "Rock_Stone_v0"}], "count": "all", "order": "explicit"}
+		}
+	]
+}
