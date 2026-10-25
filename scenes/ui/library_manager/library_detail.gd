@@ -17,6 +17,7 @@ signal remove_requested(library_id: String)
 const BADGE_OFFICIAL := "Official"
 const BADGE_YOURS := "Yours"
 const BADGE_BUILTIN := "Built in"
+const BADGE_RECEIVED := "From host"
 const STATE_ON := "On"
 const STATE_OFF := "Off"
 const STATE_PROBLEM := "Needs attention"
@@ -66,6 +67,11 @@ func show_library(info: Dictionary) -> void:
 		var words := _add_label(String(info["description"]), &"Body")
 		words.name = "Description"
 		words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	if bool(info.get("received", false)):
+		var sent := "The host sent this %s for this session. It holds only what the map uses."
+		var note := _add_label(sent % LibraryNames.lower(), &"Body")
+		note.name = "ReceivedNote"
+		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_add_facts(info)
 	_add_biomes(info)
 	_add_notes(info)
@@ -108,6 +114,8 @@ static func origin_badge(info: Dictionary) -> String:
 			return BADGE_BUILTIN
 		"official":
 			return BADGE_OFFICIAL
+		"received":
+			return BADGE_RECEIVED
 	return BADGE_YOURS
 
 

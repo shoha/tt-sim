@@ -73,23 +73,43 @@ class Progress:
 
 ## `<libraries>/.incoming/`: where an import waits until the user says install.
 static func incoming_root() -> String:
-	if incoming_override != "":
-		return incoming_override
-	return LibraryRegistry.user_root.path_join(INCOMING)
+	var forced := String(incoming_override)
+	if forced != "":
+		return forced
+	return String(LibraryRegistry.user_root).path_join(INCOMING)
 
 
 ## True when `path` is somewhere stage() may write or discard() may delete: inside the incoming
 ## folder, no `..`.
 static func is_quarantined(path: String) -> bool:
+	if not is_safe_path(incoming_root()):
+		return false
 	var root := incoming_root().simplify_path()
 	var clean := path.simplify_path()
 	return clean.begins_with(root + "/") and ".." not in clean.split("/")
+
+
+## True when `path` is a place this class may write to or delete from: absolute (`user://`, a
+## drive letter or a rooted path), not under `res://`, with no `..` segment, not a bare root and
+## not empty. A relative or empty path resolves against the working directory, which in a
+## developer run is the project itself: an empty quarantine root once made a sweep delete a whole
+## worktree (2026-10-24). Every deletion and every write of an import goes through this check.
+static func is_safe_path(path: String) -> bool:
+	if path == "" or path.begins_with("res://") or not path.is_absolute_path():
+		return false
+	var clean := path.simplify_path()
+	if clean.length() < 8 or ".." in clean.split("/"):
+		return false
+	var rest := clean.trim_prefix("user://")
+	return rest != "" and rest.trim_suffix("/") not in ["", "C:", "D:", "E:"]
 
 
 ## Deletes quarantine folders except `keep` (a staged folder still in use). Returns how many.
 static func sweep_incoming(keep: String = "") -> int:
 	var removed := 0
 	var root := incoming_root()
+	if not is_safe_path(root) or root.simplify_path().get_file() != INCOMING:
+		return 0
 	if not DirAccess.dir_exists_absolute(root):
 		return 0
 	for entry in DirAccess.get_directories_at(root):
@@ -316,7 +336,11 @@ static func _check_totals(plan: Dictionary) -> void:
 			errors,
 			(
 				"%s may be at most %s on disk; this one is %s."
-				% [LibraryNames.article(true), size_text(limit_of("library_bytes")), size_text(total)]
+				% [
+					LibraryNames.article(true),
+					size_text(limit_of("library_bytes")),
+					size_text(total)
+				]
 			)
 		)
 	elif total > limit_of("library_soft_bytes"):
@@ -393,7 +417,10 @@ static func _walk(
 		if _is_link(absolute):
 			_note(
 				plan["errors"],
-				"'%s' is a link, which %s may not contain." % [_short(relative), LibraryNames.article()]
+				(
+					"'%s' is a link, which %s may not contain."
+					% [_short(relative), LibraryNames.article()]
+				)
 			)
 			continue
 		var size := file_length(absolute)
@@ -417,7 +444,10 @@ static func _walk(
 		if _is_link(here.path_join(folder_name)):
 			_note(
 				plan["errors"],
-				"'%s' is a link, which %s may not contain." % [_short(relative), LibraryNames.article()]
+				(
+					"'%s' is a link, which %s may not contain."
+					% [_short(relative), LibraryNames.article()]
+				)
 			)
 			continue
 		_walk(root, relative, depth + 1, out, plan, counter)
@@ -571,6 +601,8 @@ static func _is_junk_segment(segment: String) -> bool:
 static func stage(plan: Dictionary, progress: Progress = null) -> Dictionary:
 	if not bool(plan.get("ok", false)):
 		return {"ok": false, "folder": "", "error": "The import was not checked."}
+	if not is_safe_path(incoming_root()):
+		return {"ok": false, "folder": "", "error": "There is no place to keep an import."}
 	var folder := incoming_root().path_join(token())
 	if DirAccess.make_dir_recursive_absolute(folder) != OK:
 		return {"ok": false, "folder": "", "error": "The incoming folder cannot be created."}
@@ -634,6 +666,9 @@ static func _write_one(item: Dictionary, folder: String, zip: ZIPReader) -> Stri
 ## Recursively deletes `path` (a file or a folder); true when it is gone. Never follows a link
 ## out of the tree: a link is removed as itself.
 static func remove_tree(path: String) -> bool:
+	if not is_safe_path(path):
+		push_error("LibraryImporter: refusing to delete '%s'" % path)
+		return false
 	if DirAccess.dir_exists_absolute(path):
 		if not _is_link(path):
 			for sub in DirAccess.get_directories_at(path):
