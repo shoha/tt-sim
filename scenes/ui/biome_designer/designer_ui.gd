@@ -102,7 +102,9 @@ func look_open() -> bool:
 ## Shows the ground look editor in the inspector's place (`on`), or the inspector again.
 func show_look(on: bool) -> void:
 	_look_scroll.visible = on
+	_look_scroll.get_parent().visible = on
 	_inspector_scroll.visible = not on
+	_inspector_scroll.get_parent().visible = not on
 	var button := ground.look_button()
 	if button.button_pressed != on:
 		button.set_pressed_no_signal(on)
@@ -172,7 +174,9 @@ func _right_column() -> Control:
 	var scroll := ScrollContainer.new()
 	scroll.name = "InspectorScroll"
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	sheet.add_child(scroll)
+	# The scroll's clip reaches out by the glass ring's room, so a button at the inspector's edge
+	# keeps its shadow and focus ring while the rows stay where they are.
+	sheet.add_child(ShadowGutter.outset(scroll, ShadowGutter.Kind.GLASS_RING))
 	inspector = DesignerRuleInspector.new()
 	inspector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inspector.setup(session)
@@ -182,7 +186,9 @@ func _right_column() -> Control:
 	_look_scroll.name = "LookScroll"
 	_look_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_look_scroll.visible = false
-	sheet.add_child(_look_scroll)
+	var look_holder := ShadowGutter.outset(_look_scroll, ShadowGutter.Kind.GLASS_RING)
+	look_holder.visible = false
+	sheet.add_child(look_holder)
 	look_editor = DesignerLookEditor.new()
 	look_editor.visible = true
 	look_editor.size_flags_horizontal = Control.SIZE_EXPAND_FILL

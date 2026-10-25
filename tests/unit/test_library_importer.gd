@@ -497,7 +497,11 @@ func test_a_missing_or_unmet_dependency_is_a_warning_on_the_card() -> void:
 	card = _card_of(_entries())
 	assert_eq((card["dependencies"] as Array)[0]["state"], LibraryInstall.DEP_UNMET)
 	assert_eq((card["dependencies"] as Array)[0]["installed"], "1.2.0")
-	assert_true(_has_line(card["warnings"], "1.2.0 is installed"), str(card["warnings"]))
+	assert_true(_has_line(card["warnings"], "You have 1.2.0."), str(card["warnings"]))
+	assert_true(
+		_has_line(card["warnings"], "Needs the Core collection, version 9.0 or newer."),
+		str(card["warnings"])
+	)
 
 
 func test_a_disabled_dependency_is_reported() -> void:

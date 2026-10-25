@@ -375,6 +375,8 @@ func test_the_title_with_a_selected_map_and_the_drawers_keep_every_shadow() -> v
 		AuthoringPanel.TOOL_SCULPT,
 		AuthoringPanel.TOOL_PAINT,
 		AuthoringPanel.TOOL_WATER,
+		AuthoringPanel.TOOL_THIN,
+		AuthoringPanel.TOOL_BRIDGE,
 	]:
 		if pane != panel._rail.selected or not panel.is_open:
 			panel._on_rail_item_pressed(pane)
@@ -389,7 +391,9 @@ func test_the_play_hud_drawers_and_the_room_keep_every_shadow() -> void:
 	var drawer := menu.get("level_edit_panel") as LevelEditPanel
 	drawer.initialize(LevelData.new())
 	drawer._mark_dirty()
-	for pane in LevelEditPanel.PANE_IDS:
+	var drawer_panes: Array[StringName] = LevelEditPanel.PANE_IDS.duplicate()
+	drawer_panes.append(LevelEditPanel.EVENTS_ID)
+	for pane in drawer_panes:
 		if pane != drawer._rail.selected or not drawer.is_open:
 			drawer._on_rail_item_pressed(pane)
 		await _audit("visuals drawer on %s" % pane, drawer)
@@ -432,3 +436,51 @@ func test_the_biome_designers_panels_keep_every_shadow() -> void:
 	await wait_process_frames(1)
 	ui.size = Vector2(1600.0, 900.0)
 	await _audit("biome designer", ui)
+	# Every rule selected in turn: the inspector and its sections (habit, query, response,
+	# seasons) fill with that rule's buttons.
+	for key in model.rule_keys():
+		session.select_rule(key)
+		await _audit("designer inspector on rule %s" % key, ui)
+	# The ground look editor takes the inspector's place.
+	ui.show_look(true)
+	await _audit("designer ground look editor", ui)
+	ui.show_look(false)
+	# The density popup (a window of its own, so audited on its own contents).
+	ui.ground.density_popup().show()
+	await _audit("designer density popup", ui.ground.density_popup())
+	ui.ground.density_popup().hide()
+	# The Save as dialog.
+	ui._open_dialog()
+	await _audit("designer save-as dialog", ui)
+	ui._close_dialog()
+
+
+func test_a_foldout_with_button_room_keeps_its_buttons_whole_and_its_body_in_place() -> void:
+	var column := VBoxContainer.new()
+	column.size = Vector2(300.0, 400.0)
+	column.theme = ThemeColors.glass_theme()  # the designer's theme: the room is the glass ring's
+	_host.add_child(column)
+	var places: Array[Vector2] = []
+	var heights: Array[float] = []
+	var found: Array = []
+	for room in [false, true]:
+		var foldout := Foldout.new()
+		foldout.button_room = room
+		foldout.expanded = true
+		var button := Button.new()
+		button.text = "Add"
+		button.theme_type_variation = &"Secondary"
+		foldout.add_child(button)
+		column.add_child(foldout)
+		await wait_process_frames(3)
+		for tween in get_tree().get_processed_tweens():
+			tween.custom_step(SETTLE_S)
+		await wait_process_frames(3)
+		places.append(button.global_position)
+		heights.append(foldout.size.y)
+		found.append(ShadowGutter.violations(foldout))
+	assert_gt((found[0] as Array).size(), 0, "a plain foldout cuts a flush button's shadow")
+	assert_eq(found[1], [], "the foldout with room keeps it")
+	assert_almost_eq(places[0].x, places[1].x, 0.5, "the body stays where it was")
+	assert_almost_eq(heights[0], heights[1], 0.5, "and the foldout needs the same height")
+	column.free()

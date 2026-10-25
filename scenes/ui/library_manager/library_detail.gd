@@ -286,11 +286,7 @@ func _add_facts(info: Dictionary) -> void:
 		facts.add_child(needs)
 		for dep in states:
 			var ok: bool = dep["state"] == LibraryInstall.DEP_OK
-			var text := "%s %s" % [dep["id"], dep["version"]]
-			if ok:
-				text += " (installed %s)" % dep["installed"]
-			else:
-				text = LibraryInstall.dependency_line(dep)
+			var text := LibraryInstall.dependency_line(dep)
 			var icon := "circle-check" if ok else "alert-triangle"
 			_add_note(text, icon, ThemeColors.SUCCESS if ok else ThemeColors.WARNING, needs)
 	if String(info["url"]) != "":

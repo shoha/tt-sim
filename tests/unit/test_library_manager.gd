@@ -218,8 +218,11 @@ func test_dependencies_are_shown_with_their_state() -> void:
 	await _settle()
 	manager.select("alienworld")
 	var needs := manager.detail.get_node("Facts/Needs") as VBoxContainer
-	assert_true("core ^1.0" in _all_text(needs))
-	assert_true("installed 1.2.0" in _all_text(needs))
+	assert_true(
+		"Needs the Core collection, version 1.0 or newer. You have 1.2.0." in _all_text(needs),
+		_all_text(needs)
+	)
+	assert_false("^1.0" in _all_text(needs))
 
 
 func _all_text(node: Node) -> String:
@@ -387,7 +390,7 @@ func test_an_import_goes_through_the_card_and_installs() -> void:
 	assert_eq(card.confirm_button.text, "Install")
 	assert_eq(card.header.title_label.text, "Alien World")
 	var words := _all_text(card)
-	for needle in ["Test Author", "CC0-1.0", "0.3.1", "2 assets, 1 biome", "core ^1.0"]:
+	for needle in ["Test Author", "CC0-1.0", "0.3.1", "2 assets, 1 biome", "Needs the Core"]:
 		assert_true(needle in words, needle)
 	assert_true(LibraryNames.only_art_and_settings() in words, "the promise is on the card")
 	assert_false(DirAccess.dir_exists_absolute(_paths["alien"]), "nothing installed yet")
