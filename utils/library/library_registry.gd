@@ -345,6 +345,10 @@ static func _builtin_info(root: String) -> Dictionary:
 		if LibraryIds.library_of(id) == LibraryContracts.CORE_ID and not served_elsewhere.has(id):
 			biome_ids.append(id)
 			names.append({"id": id, "name": String(biome["name"])})
+	var own_assets := 0
+	for asset_id: String in palette["assets"]:
+		if LibraryIds.library_of(asset_id) == LibraryContracts.CORE_ID:
+			own_assets += 1
 	var hashing := HashingContext.new()
 	hashing.start(HashingContext.HASH_SHA256)
 	hashing.update(String(palette["palette_version"]).to_utf8_buffer() + PackedByteArray([0]))
@@ -366,7 +370,7 @@ static func _builtin_info(root: String) -> Dictionary:
 		"folder": root,
 		"hash": hashing.finish().hex_encode().substr(0, HASH_LENGTH),
 		"bytes": 0,
-		"asset_count": (palette["assets"] as Dictionary).size(),
+		"asset_count": own_assets,
 		"biome_count": names.size(),
 		"biomes": names,
 		"biome_ids": biome_ids,
