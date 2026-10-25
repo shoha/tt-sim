@@ -138,10 +138,14 @@ before the user reopens the editor. See AGENTS.md's "Running tests from the CLI"
 ## Testing Notes
 
 - GUT v9.5.0 vendored at `addons/gut/`
-- `test_library_row_parity.gd` shows as pending unless `PLANTGEN_LIB_SLICE` and
-  `PLANTGEN_LIB_SLICE_PKG` name plantgen's `out/lib_slice` and `out/lib_slice_pkg` (it compares
-  the content-library route with the package route; command in `docs/systems/library.md`).
-  The content library is a developer path: nothing in the gate needs those folders.
+- `test_library_row_parity.gd` always runs its miniature (a core-shaped library against its
+  package, renamed ids); its two real tests show as pending unless `PLANTGEN_LIB_CORE` and
+  `PLANTGEN_LIB_CORE_PKG` name plantgen's `out/lib_core` and `out/lib_core_pkg` (all nine biomes)
+  or `PLANTGEN_LIB_SLICE` and `PLANTGEN_LIB_SLICE_PKG` name `out/lib_slice` and
+  `out/lib_slice_pkg` (savanna). `test_library_core_surfaces.gd` is pending unless
+  `PLANTGEN_LIB_CORE` is set (the 36 surfaces, thumbnails and bindings against the installed
+  palette). Commands in `docs/systems/library.md`. The content library is a developer path:
+  nothing in the gate needs those folders.
 - Every GUT run prints "SCRIPT ERROR: Trying to assign value of type 'Nil' to a variable of type
   'bool'" at `addons/gut/gut_loader.gd:35`: GUT reads the project setting
   `debug/gdscript/warnings/exclude_addons`, which Godot 4.7 no longer registers (and drops from
