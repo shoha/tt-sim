@@ -9,31 +9,47 @@ extends VBoxContainer
 ## catalog's hash, with progress and Cancel), Show in folder and Remove (a library the player
 ## installed only). Built in code; the manager owns one and calls show_library().
 
-signal verify_requested(library_id: String)
+## The signals carry the list KEY of the shown entry (LibraryManager.key_of): the library id, or
+## "id@folder" for the second folder that holds an id already listed.
+signal verify_requested(key: String)
 signal verify_cancelled
 signal folder_requested(folder: String)
-signal remove_requested(library_id: String)
+signal remove_requested(key: String)
 ## "New biome from this...": the biome designer's copy flow for a biome of this library.
 signal new_biome_requested(library_id: String)
+## The folder path was copied to the clipboard.
+signal path_copied(path: String)
 
 ## "Built in": every official library, that is `core` and anything else the game ships under
-## res://libraries (the badge used to be "Official" for those and "Built in" for the palette).
+## res://libraries. One term everywhere (review UX-6: "Part of the game" is gone).
 const BADGE_YOURS := "Yours"
-const BADGE_BUILTIN := "Built in"
+const BADGE_BUILTIN := LibraryNames.BUILT_IN
 const BADGE_RECEIVED := "From host"
 const BADGE_PARTIAL := "Partial copy"
 const PARTIAL_LINE := "Holds only what the host's maps used."
 const STATE_ON := "On"
 const STATE_OFF := "Off"
-const STATE_PROBLEM := "Needs attention"
-const STRIP_PX := Vector2i(168, 56)
+const STATE_PROBLEM := LibraryNames.NEEDS_ATTENTION
+## The biome pictures: three across in the card at the default sheet width, so core's nine are
+## three whole rows, not two and a half (review UX-10).
+const STRIP_PX := Vector2i(144, 48)
 const MAX_LINES := 6
 const ICON_PX := 20.0
 
+## Extension point for other modules (the host-received cache section): each callable is called
+## as `ext.call(detail: LibraryDetail, info: Dictionary)` at the end of show_library() and may
+## add nodes to `detail` (it is a VBoxContainer). Registered once, e.g. from an autoload.
+static var detail_extensions: Array[Callable] = []
+
 var library_id: String = ""
+## The list key of the shown entry (the id, or "id@folder" for a second folder with that id).
+var key: String = ""
 var heading: Label
 var verify_button: Button
 var folder_button: Button
+var copy_button: Button
+## The technical text of the reasons and warnings, folded away until "Show details".
+var details_box: VBoxContainer
 var remove_button: Button
 var design_button: Button
 var verify_box: VBoxContainer
@@ -56,10 +72,13 @@ func _init() -> void:
 func show_library(info: Dictionary) -> void:
 	_info = info
 	library_id = String(info.get("id", ""))
+	key = String(info.get("key", library_id))
 	for child in get_children():
 		remove_child(child)
 		child.queue_free()
 	verify_box = null
+	copy_button = null
+	details_box = null
 	if info.is_empty():
 		_add_label("Pick a %s to see what it holds." % LibraryNames.lower(), &"Caption")
 		return
@@ -81,10 +100,18 @@ func show_library(info: Dictionary) -> void:
 			var part := _add_label(PARTIAL_LINE, &"Caption")
 			part.name = "PartialNote"
 			part.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# What is wrong comes before what it holds: a collection that needs attention says why first.
+	var failing := String(info.get("status", "")) == LibraryResolver.ERROR
+	if failing:
+		_add_notes(info)
 	_add_facts(info)
 	_add_biomes(info)
-	_add_notes(info)
+	if not failing:
+		_add_notes(info)
 	_add_actions(info)
+	for extension in detail_extensions:
+		if extension.is_valid():
+			extension.call(self, info)
 
 
 ## "v0.3.1 by Test Author · CC0-1.0": the parts that exist, in that order. Pure.
@@ -97,7 +124,7 @@ static func subtitle_of(info: Dictionary) -> String:
 	elif author != "":
 		parts.append("by " + author)
 	if String(info.get("license", "")) != "":
-		parts.append(String(info["license"]))
+		parts.append(LibraryNames.license_text(String(info["license"])))
 	return " · ".join(parts)
 
 
@@ -106,13 +133,7 @@ static func contents_text(info: Dictionary) -> String:
 	var assets := int(info.get("asset_count", 0))
 	var biomes := int(info.get("biome_count", 0))
 	return (
-		"%d %s, %d %s"
-		% [
-			assets,
-			"asset" if assets == 1 else "assets",
-			biomes,
-			"biome" if biomes == 1 else "biomes"
-		]
+		"%s, %s" % [LibraryNames.count_of(assets, "asset"), LibraryNames.count_of(biomes, "biome")]
 	)
 
 
@@ -191,8 +212,11 @@ func finish_verify(summary: Dictionary, cancelled: bool = false) -> void:
 	var failed: Array = summary["failed"]
 	for i in mini(failed.size(), MAX_LINES):
 		var result: Dictionary = failed[i]
-		var line := "%s: %s" % [LibraryVerify.short_name(String(result["asset"])), result["error"]]
-		_add_note(line, "alert-circle", ThemeColors.DANGER, verify_box).name = "Failure%d" % i
+		var plain := LibraryVerify.plain_error(String(result["error"]))
+		var line := "%s: %s" % [LibraryVerify.short_name(String(result["asset"])), plain]
+		var note := _add_note(line, "alert-circle", ThemeColors.DANGER, verify_box)
+		note.name = "Failure%d" % i
+		note.tooltip_text = String(result["error"])
 	if failed.size() > MAX_LINES:
 		var more := _add_label(
 			"... and %d more." % (failed.size() - MAX_LINES), &"Caption", verify_box
@@ -248,7 +272,7 @@ func _add_facts(info: Dictionary) -> void:
 	add_child(facts)
 	_fact("Holds", contents_text(info))
 	if bool(info.get("official", false)):
-		_fact("Where", "Part of the game")
+		_fact("Where", BADGE_BUILTIN)
 	else:
 		_fact("Size", LibraryImporter.size_text(int(info["bytes"])))
 	var deps: Array = info["dependencies"]
@@ -272,7 +296,35 @@ func _add_facts(info: Dictionary) -> void:
 	if String(info["url"]) != "":
 		_fact("Link", String(info["url"]), true)
 	if String(info["source"]) == "user" or String(info["source"]) == "dev":
-		_fact("Folder", ProjectSettings.globalize_path(String(info["folder"])), true)
+		_folder_fact(ProjectSettings.globalize_path(String(info["folder"])))
+
+
+## The Folder row: the path (ellipsised, the whole path in the tooltip) and a Copy path button,
+## since a path that does not fit at 1280 px could be neither read nor copied (review UX-10).
+func _folder_fact(path: String) -> void:
+	_fact_label("Folder")
+	var row := HBoxContainer.new()
+	row.name = "FolderRow"
+	row.theme_type_variation = &"BoxContainerSpaced"
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	facts.add_child(row)
+	var words := Label.new()
+	words.name = "FolderPath"
+	words.theme_type_variation = &"Body"
+	words.text = path
+	words.tooltip_text = path
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words.custom_minimum_size.x = 60
+	words.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.add_child(words)
+	copy_button = _action("Copy path", "copy", row)
+	copy_button.name = "CopyPathButton"
+	copy_button.tooltip_text = "Copy the folder's path to paste into a file manager"
+	copy_button.pressed.connect(
+		func() -> void:
+			DisplayServer.clipboard_set(path)
+			path_copied.emit(path)
+	)
 
 
 func _fact(label: String, value: String, ellipsize: bool = false) -> void:
@@ -353,32 +405,83 @@ func _add_notes(info: Dictionary) -> void:
 	box.name = "Notes"
 	box.theme_type_variation = &"BoxContainerTight"
 	add_child(box)
-	_add_lines(box, reasons, "alert-circle", ThemeColors.DANGER)
-	_add_lines(box, warnings, "alert-triangle", ThemeColors.WARNING)
+	# A plain sentence and what to do for each reason; the technical text is behind Details
+	# (review UX-3: no path, no JSON, no hash in the first line).
+	var plain := LibraryReasons.explain_all(info)
+	for i in mini(plain.size(), MAX_LINES):
+		var line := _add_note(
+			LibraryReasons.sentence(plain[i]), "alert-circle", ThemeColors.DANGER, box
+		)
+		line.name = "Reason%d" % i
+	if plain.size() > MAX_LINES:
+		_add_label("... and %d more." % (plain.size() - MAX_LINES), &"Caption", box)
+	if not warnings.is_empty():
+		var noted := (
+			"It works, but the game noted %s about its files."
+			% (LibraryNames.count_of(warnings.size(), "thing"))
+		)
+		_add_note(noted, "alert-triangle", ThemeColors.WARNING, box).name = "WarningSummary"
+	_add_details(box, reasons, warnings)
 
 
-func _add_lines(box: VBoxContainer, lines: Array, icon: String, role: StringName) -> void:
-	for i in mini(lines.size(), MAX_LINES):
-		_add_note(String(lines[i]), icon, role, box)
-	if lines.size() > MAX_LINES:
-		_add_label("... and %d more." % (lines.size() - MAX_LINES), &"Caption", box)
+## The "Details" fold: every raw reason and warning as the reader wrote it, behind a toggle
+## button (focusable, so the keyboard reaches it). Folded by default.
+func _add_details(parent: Control, reasons: Array, warnings: Array) -> void:
+	var toggle := Button.new()
+	toggle.name = "DetailsButton"
+	toggle.text = "Show details"
+	toggle.toggle_mode = true
+	toggle.icon = IconButton.load_icon("chevron-right")
+	toggle.theme_type_variation = &"Ghost"
+	toggle.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	toggle.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	parent.add_child(toggle)
+	details_box = VBoxContainer.new()
+	details_box.name = "Details"
+	details_box.theme_type_variation = &"BoxContainerTight"
+	details_box.visible = false
+	for text: Variant in reasons + warnings:
+		var words := Label.new()
+		words.theme_type_variation = &"Caption"
+		words.text = String(text)
+		words.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+		words.custom_minimum_size.x = 160
+		words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		details_box.add_child(words)
+	parent.add_child(details_box)
+	var shown := details_box
+	toggle.toggled.connect(
+		func(on: bool) -> void:
+			shown.visible = on
+			toggle.text = "Hide details" if on else "Show details"
+	)
 
 
 func _add_actions(info: Dictionary) -> void:
-	var row := HBoxContainer.new()
+	# A flow, not a row: four buttons are wider than the column at the smallest window, and a
+	# button that wraps keeps its whole shadow where one clipped by the scroll does not.
+	var row := HFlowContainer.new()
 	row.name = "Actions"
-	row.theme_type_variation = &"BoxContainerSpaced"
+	row.theme_type_variation = &"FactsFlow"
 	add_child(row)
+	var is_user := String(info["source"]) == "user"
+	var duplicate := _is_duplicate(info)
+	# Two folders hold one id: removing the extra one is the fix, so Remove leads and takes the
+	# destructive style (review UX-4); otherwise it follows the safe actions.
+	var remove_first := duplicate and is_user
+	if remove_first:
+		remove_button = _remove_action(row, key)
+		remove_button.theme_type_variation = &"Danger"
+		remove_button.tooltip_text = "Delete this folder; the other copy stays."
 	verify_button = _action("Verify", "circle-check", row)
 	verify_button.tooltip_text = "Check every file against the %s's own list" % LibraryNames.lower()
-	verify_button.pressed.connect(func() -> void: verify_requested.emit(library_id))
-	var is_user := String(info["source"]) == "user"
+	verify_button.pressed.connect(func() -> void: verify_requested.emit(key))
 	folder_button = _action("Show in folder", "folder", row)
 	folder_button.visible = is_user
 	folder_button.pressed.connect(func() -> void: folder_requested.emit(String(info["folder"])))
-	remove_button = _action("Remove", "x", row)
+	if not remove_first:
+		remove_button = _remove_action(row, key)
 	remove_button.visible = is_user
-	remove_button.pressed.connect(func() -> void: remove_requested.emit(library_id))
 	design_button = _action("New biome from this...", "wand", row)
 	design_button.name = "DesignButton"
 	design_button.visible = can_design(info)
@@ -407,6 +510,20 @@ func _add_actions(info: Dictionary) -> void:
 	verify_cancel_button = _action("Stop", "x", bar_row)
 	verify_cancel_button.name = "VerifyCancel"
 	verify_cancel_button.pressed.connect(func() -> void: verify_cancelled.emit())
+
+
+func _remove_action(row: Control, list_key: String) -> Button:
+	var button := _action("Remove", "x", row)
+	button.pressed.connect(func() -> void: remove_requested.emit(list_key))
+	return button
+
+
+## True when the entry lost its id to another folder (the registry marks it so).
+static func _is_duplicate(info: Dictionary) -> bool:
+	for reason: Variant in info.get("reasons", []) as Array:
+		if String(reason).begins_with("duplicate library id"):
+			return true
+	return false
 
 
 func _clear_results() -> void:

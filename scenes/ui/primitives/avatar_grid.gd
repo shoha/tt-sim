@@ -35,6 +35,8 @@ var _cards: Array[AvatarCard] = []
 
 func _init() -> void:
 	horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# A card lifts a shadow of 18 px, 8 down, when the pointer is on it; the grid clips.
+	ShadowGutter.wrap(self, ShadowGutter.Kind.CARD)
 	_flow = HFlowContainer.new()
 	_flow.name = "Flow"
 	_flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -102,13 +104,15 @@ func content_height() -> float:
 	var card_height := 0.0
 	for card in _cards:
 		card_height = maxf(card_height, card.get_combined_minimum_size().y)
-	return lines * card_height + GAP * float(maxi(lines - 1, 0))
+	var room := ShadowGutter.extra_height(ShadowGutter.Kind.CARD)
+	return lines * card_height + GAP * float(maxi(lines - 1, 0)) + room
 
 
 ## Cards an equal share of the width. The scroll bar's width is always kept free, so a
 ## scroll bar appearing never re-wraps the cards (which would loop).
 func _fit_columns() -> void:
-	var width := size.x - SCROLL_RESERVE
+	var sides := 2.0 * ShadowGutter.CARD_SIDE
+	var width := size.x - SCROLL_RESERVE - sides
 	if width <= 0.0:
 		return
 	var each := floorf((width - GAP * float(columns - 1)) / float(maxi(columns, 1)))

@@ -24,6 +24,9 @@ extends CanvasLayer
 ## there and takes the place of the sheet below, which fades out (cover) and comes back, with
 ## its focus, as the panel over it closes.
 
+## How visible a sheet stays under a panel that dims it (see cover()).
+const DIM_ALPHA := 0.4
+
 ## Stack of live panels, topmost last. Only the topmost panel traps Tab, so a
 ## dialog opened over another panel (e.g. LevelPickerDialog over the pause
 ## menu) does not have its Tab presses yanked back into the panel below it.
@@ -59,7 +62,7 @@ func _ready() -> void:
 	_covered = _scrimmed_panel_below()
 	if _covered != null:
 		($ColorRect as CanvasItem).self_modulate.a = 0.0
-		_covered.cover(true)
+		_covered.cover(true, _dims_panel_below())
 
 	# Register as the topmost panel, even when trap_focus is false — a
 	# non-trapping panel is still the topmost surface, so a lower trapping
@@ -98,8 +101,10 @@ func _scrimmed_panel_below() -> AnimatedCanvasLayerPanel:
 
 
 ## Fade this panel's sheet out while a panel stacked over it holds the screen (`on`), or
-## back in, giving focus back to the control that had it.
-func cover(on: bool) -> void:
+## back in, giving focus back to the control that had it. With `dim` the sheet stays on screen,
+## stepped back to DIM_ALPHA, so the panel over it keeps its context (the install card over the
+## collections manager, review UX-10); the covering panel's own scrim is hidden either way.
+func cover(on: bool, dim: bool = false) -> void:
 	var sheet := $CenterContainer/PanelContainer as Control
 	if _cover_tween and _cover_tween.is_valid():
 		_cover_tween.kill()
@@ -108,6 +113,11 @@ func cover(on: bool) -> void:
 		var focused := get_viewport().gui_get_focus_owner()
 		_focus_before_cover = focused if focused != null and sheet.is_ancestor_of(focused) else null
 		_cover_tween.set_ease(Tween.EASE_IN)
+		if dim:
+			_cover_tween.tween_property(
+				sheet, "modulate:a", DIM_ALPHA, Constants.ANIM_FADE_OUT_DURATION
+			)
+			return
 		_cover_tween.tween_property(sheet, "modulate:a", 0.0, Constants.ANIM_FADE_OUT_DURATION)
 		_cover_tween.tween_callback(sheet.hide)
 		return
@@ -117,6 +127,12 @@ func cover(on: bool) -> void:
 	if is_instance_valid(_focus_before_cover) and _focus_before_cover.is_visible_in_tree():
 		_focus_before_cover.grab_focus()
 	_focus_before_cover = null
+
+
+## True when this panel, opened over a scrimmed one, leaves that sheet visible but dimmed
+## instead of hiding it. Override in a panel that is a step of the sheet below.
+func _dims_panel_below() -> bool:
+	return false
 
 
 ## Give the covered panel its sheet back, once.

@@ -213,7 +213,9 @@ static func _build_shelf(panel: RoomPanel) -> VBoxContainer:
 	panel.shelf_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	panel.shelf_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	panel.shelf_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	box.add_child(panel.shelf_scroll)
+	# The map rows' focus rings at the clip's edges stay whole; the clip reaches out by the ring's
+	# room and the rows keep the edge they share with the player rows above.
+	box.add_child(ShadowGutter.outset(panel.shelf_scroll))
 	panel.shelf_scroll.add_child(panel.shelf_rows)
 	ScrollBarFade.attach(panel.shelf_scroll)
 	return box

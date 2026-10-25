@@ -28,6 +28,20 @@ const CARD_TEXT_FIELDS: Array[String] = [
 ]
 const RESERVED_ID := "The id '%s' belongs to the game and cannot be installed."
 const RESERVED_HINT := " Ask the author for an id of its own."
+## install()'s failure codes (the `code` of its answer).
+const FAIL_REFUSED := "refused"
+const FAIL_GONE := "gone"
+const FAIL_FOLDER := "folder"
+const FAIL_EXISTS := "exists"
+const FAIL_FOREIGN := "foreign"
+const FAIL_IN_USE := "in_use"
+const FAIL_MOVE := "move"
+
+## Test seams for the failures a real disk gives rarely (a full disk, a refused move, a locked
+## folder): when valid, each is called instead of the engine's call and returns an Error code.
+## Empty in the game.
+static var rename_override: Callable = Callable()
+static var make_dir_override: Callable = Callable()
 
 
 ## The install card of the staged folder `folder`: reads it (LibraryReader), compiles it in a dry
@@ -142,7 +156,10 @@ static func _check_identity(card: Dictionary) -> void:
 	if order > 0:
 		card["relation"] = RELATION_NEWER
 	elif order < 0:
+		# Owner decision 2026-10-25: a file older than the installed copy is refused, not offered
+		# as a replacement; the player removes the installed one first if they want it back.
 		card["relation"] = RELATION_OLDER
+		errors.append(downgrade_refusal(String(card["version"]), String(existing["version"])))
 	else:
 		card["relation"] = RELATION_SAME
 	if not (existing.get("from_host", {}) as Dictionary).is_empty():
@@ -151,6 +168,38 @@ static func _check_identity(card: Dictionary) -> void:
 		(card["warnings"] as Array).append(sent % id)
 		if order <= 0:
 			card["relation"] = RELATION_NEWER
+
+
+## The refusal of a file older than the installed copy.
+static func downgrade_refusal(file_version: String, installed_version: String) -> String:
+	var line := "This is version %s; %s is installed. "
+	line += "Remove the installed one first if you want the older version."
+	return line % [file_version, installed_version]
+
+
+## What replacing changes for the maps that use the installed copy, in a sentence ("It holds 2
+## more assets and 1 fewer biome than the installed one."), or "" when the counts are the same.
+## Counts only: cheap, and the asset ids a map uses are checked when it opens.
+static func change_line(card: Dictionary) -> String:
+	var existing: Dictionary = card.get("existing", {})
+	if existing.is_empty():
+		return ""
+	var parts := PackedStringArray()
+	var assets := int(card["asset_count"]) - int(existing.get("asset_count", 0))
+	var biomes := int(card["biome_count"]) - int(existing.get("biome_count", 0))
+	if assets != 0:
+		parts.append(_more_or_fewer(assets, "asset"))
+	if biomes != 0:
+		parts.append(_more_or_fewer(biomes, "biome"))
+	if parts.is_empty():
+		return ""
+	return "It holds %s than the installed one." % " and ".join(parts)
+
+
+static func _more_or_fewer(delta: int, noun: String) -> String:
+	var many := absi(delta)
+	var word := noun if many == 1 else noun + "s"
+	return "%d %s %s" % [many, "more" if delta > 0 else "fewer", word]
 
 
 ## Compiles the staged library alone, through the dependencies installed, adding what it says
@@ -250,24 +299,28 @@ static func _folder_bytes(folder: String, files: Array) -> int:
 ## Moves the staged folder of `card` (examine's answer, can_install true) to
 ## `<libraries>/<id>/`. An installed library of that id is replaced only when `replace` is true
 ## (it is set aside in the quarantine until the new one is in place and put back if the move
-## fails). {ok, error, folder, replaced}.
+## fails). {ok, error, code, retry, folder, replaced}: `code` names a failure (the FAIL_ constants)
+## and `retry` says whether trying the same install again can work (a locked or full disk can
+## clear; staged files that are gone cannot).
 static func install(card: Dictionary, replace: bool = false) -> Dictionary:
-	var out := {"ok": false, "error": "", "folder": "", "replaced": false}
+	var out := {
+		"ok": false, "error": "", "code": "", "retry": false, "folder": "", "replaced": false
+	}
 	var id := String(card.get("id", ""))
 	var staged := String(card.get("folder", ""))
 	if not bool(card.get("can_install", false)) or not LibraryIds.library_problems(id).is_empty():
+		out["code"] = FAIL_REFUSED
 		out["error"] = "This %s cannot be installed." % LibraryNames.lower()
 		return out
 	if not LibraryImporter.is_quarantined(staged) or not DirAccess.dir_exists_absolute(staged):
+		out["code"] = FAIL_GONE
 		out["error"] = "The staged files are gone; import the %s again." % LibraryNames.lower()
 		return out
 	var libraries := LibraryPaths.libraries()
 	var quarantine := LibraryPaths.incoming()
-	if (
-		not libraries["ok"]
-		or not quarantine["ok"]
-		or DirAccess.make_dir_recursive_absolute(String(libraries["path"])) != OK
-	):
+	if not libraries["ok"] or not quarantine["ok"] or _make_dir(String(libraries["path"])) != OK:
+		out["code"] = FAIL_FOLDER
+		out["retry"] = true
 		out["error"] = "The %s folder cannot be created." % LibraryNames.lower(2)
 		return out
 	var root := String(libraries["path"])
@@ -275,20 +328,29 @@ static func install(card: Dictionary, replace: bool = false) -> Dictionary:
 	var aside := ""
 	if DirAccess.dir_exists_absolute(target):
 		if not replace:
+			out["code"] = FAIL_EXISTS
 			out["error"] = "'%s' is already installed." % id
 			return out
 		if not SafeDelete.is_owned(target):
+			out["code"] = FAIL_FOREIGN
 			out["error"] = "'%s' was not put there by the game, so it is not replaced." % id
 			return out
 		aside = String(quarantine["path"]).path_join(LibraryImporter.token() + "_old")
-		if DirAccess.rename_absolute(target, aside) != OK:
+		if _rename(target, aside) != OK:
+			out["code"] = FAIL_IN_USE
+			out["retry"] = true
 			out["error"] = "The installed copy of '%s' is in use and could not be set aside." % id
 			return out
 		out["replaced"] = true
-	if DirAccess.rename_absolute(staged, target) != OK:
+	if _rename(staged, target) != OK:
 		if aside != "":
 			DirAccess.rename_absolute(aside, target)
-		out["error"] = "The %s could not be moved into place." % LibraryNames.lower()
+		out["code"] = FAIL_MOVE
+		out["retry"] = true
+		out["error"] = (
+			"The %s could not be moved into place. The disk may be full or the folder in use."
+			% LibraryNames.lower()
+		)
 		out["replaced"] = false
 		return out
 	if aside != "":
@@ -296,6 +358,44 @@ static func install(card: Dictionary, replace: bool = false) -> Dictionary:
 	out["ok"] = true
 	out["folder"] = target
 	return out
+
+
+static func _rename(from: String, to: String) -> int:
+	if rename_override.is_valid():
+		return int(rename_override.call(from, to))
+	return DirAccess.rename_absolute(from, to)
+
+
+static func _make_dir(path: String) -> int:
+	if make_dir_override.is_valid():
+		return int(make_dir_override.call(path))
+	return DirAccess.make_dir_recursive_absolute(path)
+
+
+## Deletes the folder `folder_name` of the user's libraries folder, whatever library id it holds
+## ({ok, error}): the way to remove one of two folders that hold the same id, where remove() by id
+## would delete the other. The same rules as remove(): one plain folder name directly under the
+## user's libraries folder, carrying the game's marker.
+static func remove_folder(folder_name: String) -> Dictionary:
+	var libraries := LibraryPaths.child(LibraryPaths.libraries(), folder_name)
+	if not libraries["ok"]:
+		return {"ok": false, "error": "The %s folder is not available." % LibraryNames.lower(2)}
+	var folder := String(libraries["path"])
+	if not DirAccess.dir_exists_absolute(folder):
+		return {"ok": false, "error": "'%s' is not installed." % folder_name}
+	var base := String(LibraryPaths.libraries()["path"])
+	var done := SafeDelete.tree(folder, base)
+	if not done["ok"]:
+		if DirAccess.dir_exists_absolute(folder) and not SafeDelete.is_owned(folder):
+			return {
+				"ok": false,
+				"error":
+				"'%s' was not put there by the game; delete its folder by hand." % folder_name
+			}
+		return {"ok": false, "error": "Some files of '%s' could not be deleted." % folder_name}
+	# No surface cache goes with it: the cache is keyed by library id, and the folder of a
+	# duplicate shares its id with the copy that stays.
+	return {"ok": true, "error": ""}
 
 
 ## Deletes the user library `library_id` ({ok, error}). Refuses anything that is not a folder

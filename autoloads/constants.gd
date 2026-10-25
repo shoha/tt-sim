@@ -40,9 +40,14 @@ const LAYER_MEASURE_OVERLAY := 8
 const LAYER_PERF_OVERLAY := 9
 const LAYER_PAUSE := 10  ## Pause overlay (centered, full-screen backdrop)
 const LAYER_INPUT_HINTS := 1  ## Contextual keyboard hints — bottom-center, below gameplay panels
-const LAYER_TOAST := 90  ## Toast notifications — bottom-center
+## Toast notifications, bottom-center, above every scrim and sheet: a toast must be readable over
+## a dialog. Only the scene transition is above it.
+const LAYER_TOAST := 108
 const LAYER_SETTINGS := 95  ## Settings menu (centered, full-screen backdrop)
 const LAYER_DIALOG := 100  ## Modals: confirmation, update, add-pack; download queue — bottom-center
+## A sheet opened over a dialog (the biome designer's picker over the collections manager): it
+## must draw above the dialog's scrim, which sits on LAYER_DIALOG.
+const LAYER_SUBDIALOG := 101
 const LAYER_LOADING := 105  ## Loading screen (full-screen, hidden when idle)
 const LAYER_TRANSITION := 110  ## Scene transition fade (full-screen, hidden when idle)
 
