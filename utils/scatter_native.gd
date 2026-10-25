@@ -23,6 +23,8 @@ extends RefCounted
 ## under a mutex.
 
 const CLASS_NAME := "TTScatterNative"
+## The word version() carries once the library evaluates terrain response (S12b).
+const CAPABILITY_CURVES := "curves"
 
 ## True: every job runs in GDScript (A/B measurements, tests of the GDScript path).
 static var force_gdscript := false
@@ -70,12 +72,12 @@ static func reset_counts() -> void:
 static func run_biome(
 	snapshot: MapDocument, biome_id: String, entry: Dictionary, anchors: Dictionary
 ) -> Variant:
-	var reason := _refusal()
+	var species: Array[Dictionary] = []
+	species.assign(entry.species)
+	var reason := _refusal(species)
 	if reason != "":
 		_count(reason)
 		return null
-	var species: Array[Dictionary] = []
-	species.assign(entry.species)
 	var job := pack(
 		snapshot,
 		biome_id,
@@ -99,14 +101,19 @@ static func run_biome(
 
 
 ## Why jobs cannot run natively ("" when they can). Every branch generation has today is ported;
-## a branch added later is refused here until it is.
-static func _refusal() -> String:
+## a branch added later is refused here until it is. Terrain response (a rule's slope_min_deg or
+## response curves, step S12a) is not ported yet: a job whose biome has any runs in GDScript
+## unless the loaded library reports the "curves" capability in version() (S12b adds it), which
+## also keeps a stale library, which would ignore the new plan keys, from placing different rows.
+static func _refusal(species: Array[Dictionary] = []) -> String:
 	if force_gdscript:
 		return "forced"
 	if _instance() == null:
 		return "missing"
 	if WaterDressing.CHANNELS != 4:
 		return "water channels"
+	if species.any(ScatterPlan.has_terrain_response) and not version().contains(CAPABILITY_CURVES):
+		return "curves"
 	return ""
 
 
@@ -344,31 +351,85 @@ static func _make_consts() -> Dictionary:
 	}
 	var rules := _constants(TerrainRules)
 	for name in [
-		"CLIFF_EDGE_NOISE", "LIP_CURVATURE_START", "LIP_CURVATURE_END", "LIP_STRENGTH",
-		"LIP_SHEER_TAIL", "RAMP_LOW", "RAMP_HIGH", "SCREE_CURVATURE_START",
-		"SCREE_CURVATURE_END", "SCREE_NEAR_START", "SCREE_NEAR_END", "SCREE_EDGE_NOISE",
-		"SCREE_BREAKUP_SCALE_M", "SCREE_FAN", "SCREE_BREAKUP_LOW", "SCREE_BREAKUP_HIGH",
-		"RULE_NOISE_SCALE_M", "RULE_NOISE_SHEAR", "PAINT_EDGE_WARP_M", "PAINT_EDGE_SCALE_M",
-		"PAINT_EDGE_NOISE", "PAINT_CLIFF_YIELD", "PAINT_WATER_YIELD", "PAINT_FORD_START_M",
-		"PAINT_FORD_END_M", "CLIFF_NOISE_OFFSET", "SCREE_NOISE_OFFSET", "SCREE_BREAKUP_OFFSET",
-		"PAINT_WARP_OFFSET_A", "PAINT_WARP_OFFSET_B", "PAINT_NOISE_OFFSET"
+		"CLIFF_EDGE_NOISE",
+		"LIP_CURVATURE_START",
+		"LIP_CURVATURE_END",
+		"LIP_STRENGTH",
+		"LIP_SHEER_TAIL",
+		"RAMP_LOW",
+		"RAMP_HIGH",
+		"SCREE_CURVATURE_START",
+		"SCREE_CURVATURE_END",
+		"SCREE_NEAR_START",
+		"SCREE_NEAR_END",
+		"SCREE_EDGE_NOISE",
+		"SCREE_BREAKUP_SCALE_M",
+		"SCREE_FAN",
+		"SCREE_BREAKUP_LOW",
+		"SCREE_BREAKUP_HIGH",
+		"RULE_NOISE_SCALE_M",
+		"RULE_NOISE_SHEAR",
+		"PAINT_EDGE_WARP_M",
+		"PAINT_EDGE_SCALE_M",
+		"PAINT_EDGE_NOISE",
+		"PAINT_CLIFF_YIELD",
+		"PAINT_WATER_YIELD",
+		"PAINT_FORD_START_M",
+		"PAINT_FORD_END_M",
+		"CLIFF_NOISE_OFFSET",
+		"SCREE_NOISE_OFFSET",
+		"SCREE_BREAKUP_OFFSET",
+		"PAINT_WARP_OFFSET_A",
+		"PAINT_WARP_OFFSET_B",
+		"PAINT_NOISE_OFFSET"
 	]:
 		made[String(name).to_lower()] = rules[name]
 	var ground := _constants(ScatterGround)
 	for name in [
-		"ROLE_COVER", "ROLE_ROCK", "ROLE_TREE", "ROLE_SHRUB", "ROLE_TALL_COVER", "ROLE_BITS",
-		"EDGE_BANK", "EDGE_EMERGENT", "FLOWER_BIT", "CHARRED_BIT", "SCREE_THIN",
-		"SCREE_ROCK_BOOST", "FLOWER_VERGE_FILL", "FLOWER_VERGE_GATHER", "EDGE_BOOST",
-		"PAVED_CLEAR_START", "PAVED_CLEAR_FULL", "TREE_FACE_START", "TREE_FACE_FULL",
-		"SHRUB_FACE_START", "SHRUB_FACE_FULL", "FRINGE_START", "FRINGE_FULL", "ARID_BIT",
-		"WET_CLEAR_START", "WET_CLEAR_FULL", "EMERGENT_DEPTH_START_M", "EMERGENT_DEPTH_FULL_M",
-		"TREE_SHORE_START", "TREE_SHORE_FULL", "SHRUB_SHORE_START", "SHRUB_SHORE_FULL",
-		"SHRUB_SHORE_KEEP", "TALL_SHORE_START", "TALL_SHORE_FULL", "FLOWER_SHORE_THIN",
-		"ARID_SHORE_START", "ARID_SHORE_FULL"
+		"ROLE_COVER",
+		"ROLE_ROCK",
+		"ROLE_TREE",
+		"ROLE_SHRUB",
+		"ROLE_TALL_COVER",
+		"ROLE_BITS",
+		"EDGE_BANK",
+		"EDGE_EMERGENT",
+		"FLOWER_BIT",
+		"CHARRED_BIT",
+		"SCREE_THIN",
+		"SCREE_ROCK_BOOST",
+		"FLOWER_VERGE_FILL",
+		"FLOWER_VERGE_GATHER",
+		"EDGE_BOOST",
+		"PAVED_CLEAR_START",
+		"PAVED_CLEAR_FULL",
+		"TREE_FACE_START",
+		"TREE_FACE_FULL",
+		"SHRUB_FACE_START",
+		"SHRUB_FACE_FULL",
+		"FRINGE_START",
+		"FRINGE_FULL",
+		"ARID_BIT",
+		"WET_CLEAR_START",
+		"WET_CLEAR_FULL",
+		"EMERGENT_DEPTH_START_M",
+		"EMERGENT_DEPTH_FULL_M",
+		"TREE_SHORE_START",
+		"TREE_SHORE_FULL",
+		"SHRUB_SHORE_START",
+		"SHRUB_SHORE_FULL",
+		"SHRUB_SHORE_KEEP",
+		"TALL_SHORE_START",
+		"TALL_SHORE_FULL",
+		"FLOWER_SHORE_THIN",
+		"ARID_SHORE_START",
+		"ARID_SHORE_FULL"
 	]:
 		made[String(name).to_lower()] = ground[name]
 	var crossing := _constants(CrossingGeometry)
-	for name in ["CLEAR_MARGIN_M", "CLEAR_ANCHOR_M", "CLEAR_SOFT_M", "CLEAR_TREE_M", "CLEAR_SHRUB_M"]:
+	for name in [
+		"CLEAR_MARGIN_M", "CLEAR_ANCHOR_M", "CLEAR_SOFT_M", "CLEAR_TREE_M", "CLEAR_SHRUB_M"
+	]:
 		made[String(name).to_lower()] = crossing[name]
 	made["depth_scale"] = WaterDressing.DEPTH_SCALE
 	return made

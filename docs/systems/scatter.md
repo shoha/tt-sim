@@ -34,6 +34,26 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
   ground cover lags, and all are exactly 1 at full paint so the palette calibration holds.
 - Overlapping clumps add up (`ScatterPlan.additive_clumps`, capped at `CLUMP_SATURATION`
   overlaps), so dense ground cover forms drifts.
+- Terrain response (content library step S12a, 2026-10-24; fields in
+  [library.md](library.md) "Terrain response"): a rule may carry `slope_min_deg` and
+  `response` curves on the `slope`, `height` and `wet` axes. They are one more keep in
+  `ScatterGenerator._evaluate`, after the slope-maximum block and before footing, behind
+  `entry.has_response`: a legacy rule never runs the block, so its arithmetic and rows are
+  exactly as before (the golden digests are unchanged). `_terrain_keep` multiplies the slope
+  minimum band (full from the minimum up, none `SLOPE_MIN_FADE_DEG` = 5 below it, no allowance)
+  and each axis' `ScatterPlan.curve_value` (piecewise linear, flat beyond the ends, 0..1); the
+  product only lowers the keep, so the candidate supply is still sized for `density_per_m2`,
+  which is the density at curve value 1 ("denser in the wet" means a higher `density_per_m2`
+  and a curve that peaks at 1 there). Every axis is a pure function of the point (the angle of
+  `normal_at`, `height_at`, the stored shore weight `wet_at`), so region independence holds
+  (`test_scatter_curves.gd`). The curves multiply with the painted density, the rock and scree
+  terms of `ScatterGround` and the landform; they do not replace them. `water_dist` is validated
+  and planned (`curve_water_dist`) but not evaluated: it needs a distance grid (S12c) and warns
+  once per rule when planned.
+- Native: the library does not know the new plan keys, so `ScatterNative._refusal(species)`
+  sends a job whose biome has any evaluated terrain response to GDScript (counted as the
+  fallback reason `curves`) unless `version()` carries `curves` (S12b). A curved biome is then
+  about 17 times slower to generate than a legacy one (`PERFORMANCE.md` "Terrain response").
 - Grass masses (ground ship, contract section 9 "Ground look and grass masses"): a clump with
   `mass` 1 keeps the union of its clumps, may be an ellipse turned per parent (or along the
   zone edges with `follow`), grows its core tufts into one mound, and drops whole swathes by
@@ -219,8 +239,12 @@ Unit tests in `tests/unit/`: `test_scatter_generator.gd` (region independence, b
 `test_scatter_generator_calibration.gd`, `test_scatter_build.gd`,
 `test_scatter_ground_rules.gd`, `test_scatter_chunker.gd`, `test_authored_scatter.gd`,
 `test_pipeline_warmer.gd`, `test_scatter_mass.gd`, `test_scatter_native.gd` (native against
-GDScript; pending without the library). Timing: `tools/native_scatter_bench.gd` through
-`tools/native_scatter_run.gd` (tasks job, threads, map, counts).
+GDScript; pending without the library), `test_scatter_curves.gd` (S12a: the curve maths, neutral
+plan values for legacy rules, identity curves byte-equal to none on two real biomes, a slope
+curve's density falling in proportion on an analytic ramp, `slope_min_deg` and its 5 degree fade,
+the height and wet axes, axes multiplying, region independence with curves, the document
+adapter and the native refusal). Timing: `tools/native_scatter_bench.gd` through
+`tools/native_scatter_run.gd` (tasks job, threads, map, counts, curves).
 
 `test_scatter_mass.gd`'s golden rows (`tests/fixtures/scatter_golden_1234.json`) run on Windows
 only, where the pre-push gate runs them; elsewhere the test is pending. The digest hashes raw

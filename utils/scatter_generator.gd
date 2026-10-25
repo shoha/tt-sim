@@ -125,6 +125,7 @@ static func generate(
 ## uniform clears the response to it is rejected without asking species_density_at.
 ## Once `cancel` is posted (cancelled()) generation stops between rows of buckets and hands back
 ## what it has; the caller drops it.
+## `wet_at`, when valid, is Callable(p) -> shore weight 0..1 for the `wet` response axis (else 0).
 static func generate_species_cells(
 	biome_id: String,
 	species: Array[Dictionary],
@@ -138,12 +139,15 @@ static func generate_species_cells(
 	blockers: PackedFloat32Array = PackedFloat32Array(),
 	anchors_out: Dictionary = {},
 	density_ceiling_at: Callable = Callable(),
-	cancel: Semaphore = null
+	cancel: Semaphore = null,
+	wet_at: Callable = Callable()
 ) -> Dictionary[String, PackedFloat32Array]:
 	var the_plan := ScatterPlan.build(biome_id, species, map_seed)
 	var ctx := _context(the_plan, density_at, height_at, normal_at, bounds)
 	if species_density_at.is_valid():
 		ctx["species_density_at"] = species_density_at
+	if wet_at.is_valid():
+		ctx["wet_at"] = wet_at
 	ctx["density_ceiling_at"] = density_ceiling_at
 	ctx["blockers"] = blockers
 	ctx["anchors_out"] = anchors_out
@@ -251,13 +255,15 @@ static func generate_for_document(
 		fields.species_density_at,
 		PackedFloat32Array(),
 		{},
-		fields.density_ceiling_at
+		fields.density_ceiling_at,
+		null,
+		fields.wet_at
 	)
 
 
 ## The sampling fields generate() takes, built from a MapDocument for one biome:
 ## {density_at, rock_density_at, species_density_at, density_ceiling_at, height_at, normal_at,
-## bounds}. Density
+## wet_at (the shore weight, for the `wet` response axis), bounds}. Density
 ## is the biome's painted density (0 where another biome or none is painted), bilinear on
 ## the document's sample grid, times what the ground lets grow there for a ScatterGround
 ## role (species_density_at(p, role), ScatterGround.species_density; density_at and
@@ -346,6 +352,7 @@ static func document_fields(
 		"density_ceiling_at": density_ceiling_at,
 		"height_at": height_at,
 		"normal_at": normal_at,
+		"wet_at": ScatterTerrain.wet_sampler(doc),
 		"bounds": Rect2(-half, doc.extent_m()),
 	}
 
@@ -411,6 +418,7 @@ static func _context(
 		"species_density_at": func(p: Vector2, _role: int) -> float: return density_at.call(p),
 		"height_at": height_at,
 		"normal_at": normal_at,
+		"wet_at": func(_p: Vector2) -> float: return 0.0,
 		"bounds": bounds,
 		"edge": 1.0,
 		"anchor": Vector2.ZERO,
@@ -515,27 +523,9 @@ static func _generate_species(
 						var anchor: Vector2 = ctx.anchor
 						anchors.append(anchor.x)
 						anchors.append(anchor.y)
-	_split_rows(entry.rule.assets, rows, assets, result)
+	ScatterRows.split_by_asset(entry.rule.assets, rows, assets, result)
 	if mass:
 		ScatterMass.collect(rows, anchors, ctx.anchors_out)
-
-
-static func _split_rows(
-	asset_ids: Array, rows: PackedFloat32Array, assets: PackedInt32Array, result: Dictionary
-) -> void:
-	if rows.is_empty():
-		return
-	MapDocumentIO.snap_rows(rows)  # The saved precision: a reload is bit-equal.
-	if asset_ids.size() == 1:
-		result[String(asset_ids[0])] = rows
-		return
-	var per_asset: Array[PackedFloat32Array] = []
-	per_asset.resize(asset_ids.size())
-	for r in assets.size():
-		per_asset[assets[r]].append_array(rows.slice(r * ROW_STRIDE, (r + 1) * ROW_STRIDE))
-	for a in asset_ids.size():
-		if not per_asset[a].is_empty():
-			result[String(asset_ids[a])] = per_asset[a]
 
 
 ## The candidates of one bucket (memoized): CANDIDATES_PER_BUCKET records of _STRIDE
@@ -630,13 +620,18 @@ static func _evaluate(
 		if u >= keep:
 			return false
 	var slope_cos: float = entry.slope_cos
+	var normal := Vector3.ZERO  # fetched once for the slope maximum and the terrain response
 	if slope_cos > -1.5:
-		var normal: Vector3 = ctx.normal_at.call(p)
+		normal = ctx.normal_at.call(p)
 		if normal.y < slope_cos:
 			var angle := rad_to_deg(acos(clampf(normal.y, -1.0, 1.0)))
 			keep *= clampf(1.0 - (angle - entry.slope_max) / SLOPE_FALLOFF_DEG, 0.0, 1.0)
 			if u >= keep:
 				return false
+	if entry.has_response:  # slope minimum and curves (S12a); legacy rules skip it entirely
+		keep *= ScatterTerrain.keep(ctx, entry, p, normal)
+		if u >= keep:
+			return false
 	if GroundSnap.unfooted(ctx.height_at, p, entry.footing_m):  # a trunk over a rim
 		return false
 	# Spacing is a pure memo, so it may be decided before the costly mass keeps it would follow:
