@@ -67,10 +67,13 @@ static func get_palette(root: String = DEFAULT_ROOT) -> Dictionary:
 
 
 ## Drops every cached palette and source mesh. For tests and a future palette reload;
-## meshes already handed out by resolve() are independent duplicates and unaffected.
+## meshes already handed out by resolve() are independent duplicates and unaffected. Also
+## forgets the content library's registered assets (AssetStore): LibraryRegistry.apply registers
+## them again after the palette they belong to is laid back.
 static func clear_cache() -> void:
 	_palettes.clear()
 	_source_meshes.clear()
+	AssetStore.clear()
 
 
 ## Lays a built treecube package (a build_palette.py output folder anywhere on disk) over
@@ -306,11 +309,16 @@ static func _source_mesh(root: String, asset_id: String, entry: Dictionary) -> M
 	var cache_key := root + "|" + asset_id
 	if not _source_meshes.has(cache_key):
 		var path := root.path_join(entry["file"])
-		var mesh := PaletteAssetFiles.load_mesh(path, entry["node"])
-		if mesh == null:
-			push_warning(
-				"PaletteLibrary: asset '%s' could not be loaded from %s" % [asset_id, path]
-			)
+		var mesh: Mesh = null
+		if AssetStore.serves(asset_id, root):
+			# A content-library asset: AssetStore parses its GLB lazily (and warns itself).
+			mesh = AssetStore.mesh_for(asset_id, root)
+		else:
+			mesh = PaletteAssetFiles.load_mesh(path, entry["node"])
+			if mesh == null:
+				push_warning(
+					"PaletteLibrary: asset '%s' could not be loaded from %s" % [asset_id, path]
+				)
 		_source_meshes[cache_key] = mesh
 		# After caching, so the guard's own resolve of the representative cannot recurse here.
 		WindFoliage.check_layout(root, asset_id, mesh, String(entry.get("wind_category", "")))

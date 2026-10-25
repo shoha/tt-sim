@@ -280,3 +280,101 @@ func test_unreadable_archives() -> void:
 func test_central_directory_parser_rejects_truncation() -> void:
 	assert_null(ZipEntrySizes.parse_central_directory(PackedByteArray([0x50, 0x4b]), 1))
 	assert_eq(ZipEntrySizes.parse_central_directory(PackedByteArray(), 0), {})
+
+
+# --- libraries (step S4) -------------------------------------------------------------
+
+
+func _manifest_of(doc: MapDocument) -> Dictionary:
+	var bytes: PackedByteArray = _entries(doc)[MapDocumentIO.MANIFEST_ENTRY]
+	return JSON.parse_string(bytes.get_string_from_utf8())
+
+
+func test_a_core_only_map_stays_format_2_and_names_core() -> void:
+	assert_eq(MapDocument.FORMAT, 2)
+	assert_eq(MapDocument.FORMAT_LIBRARIES, 3)
+	var manifest := _manifest_of(Fixtures.full_doc())
+	assert_eq(int(manifest["format"]), 2, "an older build still opens a core-only map")
+	assert_eq(manifest["libraries"].size(), 1)
+	assert_eq(manifest["libraries"][0]["id"], "core")
+	assert_eq(manifest["libraries"][0]["version"], LibraryRegistry.BUILTIN_VERSION)
+
+
+func test_a_map_with_nothing_in_it_names_no_library() -> void:
+	var doc := MapDocument.create_flat(Vector2i(30, 30), "", "v1", 1)
+	var manifest := _manifest_of(doc)
+	assert_eq(int(manifest["format"]), 2)
+	assert_false(manifest.has("libraries"))
+
+
+func test_a_map_using_another_library_is_written_as_format_3() -> void:
+	var doc := Fixtures.full_doc()
+	var rows := PackedFloat32Array([0, 0, 0, 0, 0, 0, 1, 1, 1, 1])
+	doc.scatter["alienworld__crystal_basin_summer_s1/Crystal_Spire_v0"] = rows
+	doc.libraries = [{"id": "alienworld", "version": "0.3.1", "hash": "ab12cd34"}]
+	var manifest := _manifest_of(doc)
+	assert_eq(int(manifest["format"]), 3, "an older build refuses it instead of dropping plants")
+	var ids := manifest["libraries"].map(func(item: Dictionary) -> String: return item["id"])
+	assert_eq(ids, ["alienworld", "core"], "sorted, every library the map uses")
+	assert_eq(manifest["libraries"][0]["version"], "0.3.1", "what the file claimed is kept")
+
+
+func test_the_libraries_record_round_trips_and_a_format_3_document_reads() -> void:
+	var doc := Fixtures.full_doc()
+	doc.biome_ids = PackedStringArray(["alienworld__crystal_basin_summer_s1"])
+	doc.libraries = [{"id": "alienworld", "version": "0.3.1", "hash": "ab12cd34"}]
+	var path := DIR.path_join("libraries.ttmap")
+	assert_eq(MapDocumentIO.write(doc, path), OK)
+	var result := MapDocumentIO.read(path)
+	assert_eq(result["warnings"], PackedStringArray())
+	var read: MapDocument = result["document"]
+	var by_id := {}
+	for item in read.libraries:
+		by_id[item["id"]] = item
+	assert_eq(by_id["alienworld"], {"id": "alienworld", "version": "0.3.1", "hash": "ab12cd34"})
+	assert_true(by_id.has("core"))
+	assert_eq(MapDocumentIO.peek_libraries(path).size(), 2, "the manifest alone can be read")
+	assert_eq(MapDocumentIO.peek_libraries(DIR.path_join("nope.ttmap")), [])
+
+
+func test_a_map_without_a_libraries_record_reads_as_core_only() -> void:
+	var result := MapDocumentIO.parse(Fixtures.minimal_entries())
+	assert_eq(result["warnings"], PackedStringArray())
+	assert_eq(result["document"].libraries, [])
+	assert_eq(MapLibraries.check(result["document"].libraries)["ok"], true)
+
+
+func test_malformed_libraries_entries_are_skipped_with_warnings() -> void:
+	var libraries := [
+		{"id": "good", "version": "1.0.0", "hash": "abcd"},
+		{"id": "Bad Id", "version": "1.0.0", "hash": ""},
+		{"id": "alienworld__x", "version": "1.0.0", "hash": ""},
+		{"version": "1.0.0"},
+		"core",
+		{"id": "longhash", "version": "1.0.0", "hash": "a".repeat(65)},
+		{"id": "longversion", "version": "1".repeat(200), "hash": ""},
+	]
+	var entries := Fixtures.minimal_entries(
+		{"manifest.json": Fixtures.manifest({"format": 3, "libraries": libraries})}
+	)
+	var result := MapDocumentIO.parse(entries)
+	assert_eq(result["document"].libraries.size(), 1)
+	assert_eq(result["document"].libraries[0]["id"], "good")
+	assert_eq((result["warnings"] as PackedStringArray).size(), 6)
+	var not_a_list := MapDocumentIO.parse(
+		Fixtures.minimal_entries({"manifest.json": Fixtures.manifest({"libraries": "core"})})
+	)
+	assert_true(Fixtures.has_warning(not_a_list, "libraries is not a list"))
+	assert_not_null(not_a_list["document"], "a bad libraries entry never loses the map")
+
+
+func test_at_most_sixteen_libraries_are_read() -> void:
+	var libraries: Array = []
+	for i in 20:
+		libraries.append({"id": "lib%02d" % i, "version": "1.0.0", "hash": ""})
+	var entries := Fixtures.minimal_entries(
+		{"manifest.json": Fixtures.manifest({"format": 3, "libraries": libraries})}
+	)
+	var result := MapDocumentIO.parse(entries)
+	assert_eq(result["document"].libraries.size(), MapDocument.MAX_LIBRARIES)
+	assert_true(Fixtures.has_warning(result, "more than"))

@@ -146,6 +146,11 @@ const MAX_LOCAL_ID := 64
 const MAX_BIOME_NAME := 48
 const MAX_LIBRARY_ID := 32
 const MAX_DEPENDENCIES := 8
+const MAX_DEPENDENCY_DEPTH := 4
+## Libraries served at once (the registry refuses more), and the texture side a GLB may embed.
+const MAX_ACTIVE_LIBRARIES := 16
+const MAX_GLB_TEXTURE_PX := 4096
+const MAX_GLB_IMAGES := 64
 const MAX_SEASONS := 8
 
 ## Keys each library file may carry; any other key is reported as a warning (the palette
@@ -193,6 +198,7 @@ const CATALOG_ENTRY_KEYS: Array[String] = [
 	"sidecar",
 	"bytes",
 	"sha256",
+	"package_stem",
 ]
 const BIOME_KEYS: Array[String] = [
 	"format",

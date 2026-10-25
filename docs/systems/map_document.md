@@ -87,6 +87,34 @@ the palette has.
   entries become (0, 0). Unknown palette surface names stay readable and draw as the fallback
   earth. Format 1 entries in a format 2 document (and the reverse) are ignored.
 
+## Libraries (format 3)
+
+Step S4 of the content library ([library.md](library.md)). `manifest.json` gains an optional
+`libraries: [{id, version, hash}]`: one entry for every content library whose biome, scatter or
+prop asset, or painted surface the map holds, found from the id's prefix (a runtime id of
+another library is `<library>__...`; no prefix is `core`). The writer recomputes it at every
+save from the document and the libraries served now (`MapLibraries.record_for`), falling back
+to what the file claimed for a library that is not served; the reader keeps at most
+`MapDocument.MAX_LIBRARIES` = 16 well-formed entries in `MapDocument.libraries` and skips a
+malformed one with a warning (a bad record never loses the map).
+
+- Format number. 2 while only `core` is named, so an older build opens the map and ignores the
+  key (core ids are unchanged); 3 (`MapDocument.FORMAT_LIBRARIES`) as soon as another library is
+  named. The reader accepts 1 to `MapDocument.MAX_FORMAT` = 3; an older build refuses 3 instead
+  of reading prefixed ids as unknown plants and dropping them on its next save (the reasoning
+  of the format 2 bump). `MapLibraries.format_for` picks the number.
+- Reading. `MapSourceLoader.load_async` runs `MapLibraryGate.run` once the document is read:
+  aliases first (`MapLibraries.apply_aliases`), then `MapLibraries.check`. A library that is
+  not served (not installed, turned off, failed) is missing, one at another major version is
+  incompatible; either shows a dialog (library name, the version the map was saved with, why,
+  the author) with "Open without those plants" (the library's rows dropped, its biomes pointed
+  at the default biome, a toast, the authoring session left unsaved) and Cancel. Without a
+  `library_choice` callable the loader opens without those plants and shows the toast.
+  `MapDocumentIO.peek_libraries(path)` reads the record from the manifest alone. A map with no
+  record counts as core only.
+- Multiplayer later: `LibraryRegistry.assets_used_by(doc)` is {library id: asset ids} of the
+  rows the map holds, the list a host will send; `record_of` is what a peer compares.
+
 ## Runtime
 
 The play-time load, `LevelPlayLoader.load_map_sources_async`, is shared by the host and the
@@ -113,7 +141,8 @@ Unit tests in `tests/unit/`: `test_map_document.gd`, `test_map_document_io.gd`,
 `test_map_document_validation.gd`, `test_map_document_surfaces.gd` (format 2: entries, the
 fifth-surface rule, round trips, hostile input), `test_map_document_surfaces_format1.gd` (the
 migration), `test_map_document_water.gd`, `test_map_document_crossings.gd`, `test_map_document_fire.gd`,
-`test_level_map_streaming.gd`.
+`test_level_map_streaming.gd`; the `libraries` record, format 2 against 3 and the mismatch gate:
+the additions in `test_map_document_io.gd` and `test_map_libraries.gd`.
 
 ## Open work
 
@@ -124,3 +153,5 @@ See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work".
 - 2026-10-09: map and rules moved here from `AGENTS.md` Key Conventions.
 - 2026-10-13: format 2, painted surfaces as top-4 (index, weight) entries with up to 64
   surfaces (ground-layers card G2); format 1 migrates on read.
+- 2026-10-24: format 3 and the `libraries` record for maps that use a content library other than
+  core (step S4); the mismatch gate on open.
