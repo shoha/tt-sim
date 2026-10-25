@@ -780,6 +780,79 @@ static func _serve_surfaces(root: String, entry: Dictionary, compiled: Dictionar
 	)
 
 
+# ---- the biome designer (S8a) ----
+
+
+## What the biome designer needs to edit and compile a biome of library `library_id`: {ok,
+## error, id, name, version, source ("user", "dev" or "official"), official, writable (a user or
+## developer-override folder), folder, read (LibraryReader's result), files, hash, dependencies
+## (the compile context of its declared dependencies), dependency_list ([{id, version}]),
+## biomes (local ids), surfaces (the palette's surface table now)}. The folder that is served wins
+## when two entries share the id; the built-in core, which has no folder, answers ok false.
+static func designer_context(
+	library_id: String, root: String = PaletteLibrary.DEFAULT_ROOT
+) -> Dictionary:
+	if not _scanned:
+		refresh(root)
+	var found := {}
+	for i in _order:
+		var entry := _entries[i]
+		if entry["id"] == library_id and entry["status"] == LibraryResolver.OK:
+			found = entry
+	if found.is_empty():
+		return {"ok": false, "error": "library '%s' is not served from a folder" % library_id}
+	var read: Dictionary = found["read"]
+	var biomes: Array[String] = []
+	for item: Dictionary in read["biomes"]:
+		biomes.append(String((item["def"] as Dictionary)["id"]))
+	return {
+		"ok": true,
+		"error": "",
+		"id": library_id,
+		"name": found["name"],
+		"version": found["version"],
+		"source": found["source"],
+		"official": found["official"],
+		"writable": found["source"] == "user" or found["source"] == "dev",
+		"folder": found["folder"],
+		"read": read,
+		"files": found["files"],
+		"hash": found["hash"],
+		"dependencies": _dependency_context(found),
+		"dependency_list": (found["dependencies"] as Array).duplicate(true),
+		"biomes": biomes,
+		"surfaces": PaletteLibrary.get_palette(root)["surfaces"],
+	}
+
+
+## Lays a compiled DRAFT (BiomeCompiler.compile of one edited biome) over the palette without
+## rescanning anything: the draft's biomes replace the palette's biomes of the same runtime ids
+## with their assets, and assets not yet registered are registered with AssetStore (no GLB is
+## read). Returns PaletteOverlay's report ({ok, error, biomes, ...}). `context` is
+## designer_context's.
+static func serve_draft(
+	compiled: Dictionary, context: Dictionary, root: String = PaletteLibrary.DEFAULT_ROOT
+) -> Dictionary:
+	var report := PaletteLibrary.install_overlay(
+		PaletteOverlay.read_palette(
+			compiled["palette"],
+			String(context["folder"]),
+			PaletteLibrary.get_palette(root),
+			root,
+			[],
+			true
+		),
+		root
+	)
+	if not report["ok"]:
+		return report
+	var official_of := {LibraryContracts.CORE_ID: true}
+	for entry in _entries:
+		official_of[entry["id"]] = entry["official"]
+	AssetStore.register_missing(root, compiled["origins"], bool(context["official"]), official_of)
+	return report
+
+
 ## apply() for the persisted override, at startup (FoliageLibrary.apply_saved); a failure warns.
 static func apply_saved(root: String = PaletteLibrary.DEFAULT_ROOT) -> Dictionary:
 	use_saved_override()
@@ -806,9 +879,14 @@ static func read_sources(folder: String) -> Dictionary:
 		}
 	files.sort()
 	var biomes := {}
+	var locks := {}
 	for relative in files:
 		var in_biomes := relative.begins_with(BIOME_DIR + "/") and relative.count("/") == 1
-		if in_biomes and relative.ends_with(".json") and not relative.ends_with(".lock.json"):
+		if in_biomes and relative.ends_with(LibraryReader.LOCK_SUFFIX):
+			locks[relative.get_file()] = _text(
+				folder.path_join(relative), LibraryContracts.CAPS["biome_bytes"]
+			)
+		elif in_biomes and relative.ends_with(".json"):
 			biomes[relative.get_file()] = _text(
 				folder.path_join(relative), LibraryContracts.CAPS["biome_bytes"]
 			)
@@ -827,6 +905,7 @@ static func read_sources(folder: String) -> Dictionary:
 		_text(folder.path_join(LIBRARY_FILE), LibraryContracts.CAPS["library_json_bytes"]),
 		"catalog": _text(folder.path_join(CATALOG_FILE), LibraryContracts.CAPS["catalog_bytes"]),
 		"biomes": biomes,
+		"locks": locks,
 		"surfaces": surfaces,
 		"png": png,
 		"files": files,
@@ -879,6 +958,12 @@ static func _hash_of(sources: Dictionary) -> String:
 	surface_names.sort()
 	for surface_name: String in surface_names:
 		_feed(hashing, String(surfaces[surface_name]))
+	# Lock files change what a query selects; a library with none hashes as it always did.
+	var locks: Dictionary = sources.get("locks", {})
+	var lock_names: Array = locks.keys()
+	lock_names.sort()
+	for lock_name: String in lock_names:
+		_feed(hashing, String(locks[lock_name]))
 	return hashing.finish().hex_encode().substr(0, HASH_LENGTH)
 
 

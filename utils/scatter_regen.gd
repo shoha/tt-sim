@@ -144,17 +144,91 @@ func set_biome(biome_id: String, species: Array[Dictionary]) -> void:
 			all_lead = all_lead and copy[other].get("size_class", "") != GROUND_CLASS
 		if all_lead:
 			lead[s] = true
+	var needs: Array[PackedInt32Array] = []
+	for entry: Dictionary in plan.species:
+		needs.append(_needs_of(plan, entry))
 	_biomes[biome_id] = {
 		"species": copy,
 		"reach": ScatterGenerator.species_reach(plan),
 		"assets": assets,
 		"groups": groups,
 		"lead": lead,
+		"needs": needs,
 	}
+
+
+## set_biome() for a biome that is already registered and whose rules were edited (the biome
+## designer): registers the new rules and says what they changed. Returns {"indices" (species
+## of the NEW list whose rows may now differ: the rules that changed or are new, and every
+## species that reads one of them through a relation, a shared spacing field or a clearance, or
+## read a rule that was removed), "keys" (the same as rule keys), "removed_assets" (asset ids
+## the old rules placed and the new ones do not)}. A biome not registered before is all new.
+func replace_biome(biome_id: String, species: Array[Dictionary]) -> Dictionary:
+	var old: Dictionary = _biomes.get(biome_id, {})
+	set_biome(biome_id, species)
+	var info: Dictionary = _biomes[biome_id]
+	var now: Array = info.species
+	var changed := {}
+	var old_by_key := {}
+	for s in (old.get("species", []) as Array).size():
+		old_by_key[old.species[s].key] = s
+	for s in now.size():
+		var before: Variant = old_by_key.get(now[s].key)
+		if before == null or old.species[before] != now[s]:
+			changed[s] = true
+	var removed := PackedStringArray()
+	var new_assets := {}
+	for asset_list: PackedStringArray in info.assets:
+		for asset_id in asset_list:
+			new_assets[asset_id] = true
+	for asset_list: PackedStringArray in old.get("assets", []):
+		for asset_id in asset_list:
+			if not new_assets.has(asset_id) and not asset_id in removed:
+				removed.append(asset_id)
+	# Species that read a rule which is gone: found in the OLD dependency graph, by key.
+	var new_index := {}
+	for s in now.size():
+		new_index[now[s].key] = s
+	var gone := {}
+	for key in old_by_key:
+		if not new_index.has(key):
+			gone[old_by_key[key]] = true
+	var old_needs: Array = old.get("needs", [])
+	for s in old_needs.size():
+		for need in old_needs[s]:
+			if gone.has(need) and new_index.has(old.species[s].key):
+				changed[new_index[old.species[s].key]] = true
+	var indices := _readers_closure(info.needs, changed)
+	var keys := PackedStringArray()
+	for s in indices:
+		keys.append(String(now[s].key))
+	return {"indices": indices, "keys": keys, "removed_assets": removed}
 
 
 func has_biome(biome_id: String) -> bool:
 	return _biomes.has(biome_id)
+
+
+## Every asset id the registered rules of `biome_id` place.
+func assets_of(biome_id: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	for asset_list: PackedStringArray in _biomes.get(biome_id, {}).get("assets", []):
+		for asset_id in asset_list:
+			if not asset_id in out:
+				out.append(asset_id)
+	return out
+
+
+## Drops every queued and in-flight request: nothing is pending afterwards, and a job already
+## out is stale (its result is dropped when it lands). The rows that are on screen stay as the
+## landed jobs left them.
+func cancel_all() -> void:
+	_pending.clear()
+	_dirty.clear()
+	_live.clear()
+	_lead_out.clear()
+	for cell in _generation:
+		_generation[cell] += 1
 
 
 ## The deepest species reach of a registered biome, in metres (0 for an unknown one).
@@ -169,14 +243,24 @@ func max_reach(biome_id: String) -> float:
 ## Marks everything the density samples inside `rect` (world XZ) can change, in every
 ## registered biome. Returns the cells it dirtied. A `live` request (a brush stroke in
 ## progress) marks them live (see the header) and queues them nearest the rectangle first,
-## so the cells under the brush get the first slots. `now_msec` defaults to now.
-func request_region(rect: Rect2, live: bool = false, now_msec: int = -1) -> Array[Vector2i]:
+## so the cells under the brush get the first slots. `now_msec` defaults to now. `only`
+## ({biome id: PackedInt32Array of species indices}) restricts the request to those species
+## (and the species sharing an asset with them) of the biomes it names: the designer's edit of
+## one rule regenerates the rules it can change and leaves the rest of the cell's rows alone.
+func request_region(
+	rect: Rect2, live: bool = false, now_msec: int = -1, only: Dictionary = {}
+) -> Array[Vector2i]:
 	var now := _now(now_msec)
 	var touched := {}
 	for biome_id in _biomes:
+		if not only.is_empty() and not only.has(biome_id):
+			continue
 		var info: Dictionary = _biomes[biome_id]
 		var reach: PackedFloat32Array = info.reach
+		var wanted: PackedInt32Array = only.get(biome_id, PackedInt32Array())
 		for s in reach.size():
+			if not only.is_empty() and not s in wanted:
+				continue
 			var grown := rect.grow(reach[s] + sample_step)
 			if not grown.intersects(bounds, true):
 				continue
@@ -593,6 +677,50 @@ static func _asset_groups(assets: Array[PackedStringArray]) -> Array[PackedInt32
 				members.append(other)
 		groups.append(members)
 	return groups
+
+
+## The species indices `entry` reads the final instances or the placement field of: its
+## relation targets, the owners of its clearance fields and of its own spacing and clump
+## fields (species of one size class share a spacing field, so they place against each other).
+static func _needs_of(plan: Dictionary, entry: Dictionary) -> PackedInt32Array:
+	var needs := PackedInt32Array()
+	for relation: Dictionary in entry.near + entry.avoid:
+		if not relation.target in needs:
+			needs.append(relation.target)
+	var field_indices: Array = entry.clearance.duplicate()
+	field_indices.append(entry.field)
+	field_indices.append(entry.parent_field)
+	for field_index: int in field_indices:
+		if field_index < 0:
+			continue
+		for owner in plan.fields[field_index].owners:
+			if not owner in needs:
+				needs.append(owner)
+	return needs
+
+
+## `seeds` ({species index: true}) grown to every species that reads a member (needs[s] holds
+## a member), until nothing more joins; sorted indices.
+static func _readers_closure(needs: Array, seeds: Dictionary) -> PackedInt32Array:
+	var members := seeds.duplicate()
+	var grew := true
+	while grew:
+		grew = false
+		for s in needs.size():
+			if members.has(s):
+				continue
+			for need in needs[s]:
+				if members.has(need):
+					members[s] = true
+					grew = true
+					break
+	var out := PackedInt32Array()
+	var keys: Array = members.keys()
+	keys.sort()
+	for s in keys:
+		if s >= 0 and s < needs.size():
+			out.append(s)
+	return out
 
 
 func _mark(cell: Vector2i, biome_id: String, species_group: PackedInt32Array) -> void:

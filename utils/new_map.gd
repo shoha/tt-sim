@@ -153,6 +153,12 @@ static func create(
 ## {"size_ft" (the width), "depth_ft", "biome_id", "seed", "landform"}, each optional
 ## (DEFAULT_SIZE_FT, the width, BARE_BIOME, a fresh random_seed(), StartingLandform.FLAT).
 static func from_spec(spec: Dictionary, root: String = PaletteLibrary.DEFAULT_ROOT) -> MapDocument:
+	# The biome designer's map (ProvingGround): "proving_ground" is the palette biome id.
+	if String(spec.get("proving_ground", "")) != "":
+		return ProvingGround.build(
+			String(spec["proving_ground"]),
+			{"root": root, "seed": int(spec.get("seed", ProvingGround.SEED))}
+		)
 	return create(
 		int(spec.get("size_ft", DEFAULT_SIZE_FT)),
 		String(spec.get("biome_id", BARE_BIOME)),
@@ -167,6 +173,8 @@ static func from_spec(spec: Dictionary, root: String = PaletteLibrary.DEFAULT_RO
 ## landform other than Flat is named ("Shaping the valley..."); anything else is "Building
 ## the map...".
 static func opening_status(spec: Dictionary) -> String:
+	if String(spec.get("proving_ground", "")) != "":
+		return "Setting up the proving ground..."
 	var kind := String(spec.get("landform", StartingLandform.FLAT))
 	if kind == StartingLandform.FLAT or not StartingLandform.NAMES.has(kind):
 		return "Building the map..."

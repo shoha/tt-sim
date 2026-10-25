@@ -62,6 +62,21 @@ static func register_library(
 	_lock.unlock()
 
 
+## register_library() for the assets the store does not serve yet at that path, so a biome
+## designer laying a draft over and over leaves the meshes it already parsed alone.
+static func register_missing(
+	root: String, origins: Dictionary, official: bool, official_of: Dictionary = {}
+) -> void:
+	var fresh := {}
+	_lock.lock()
+	for asset_id: String in origins:
+		var held: Dictionary = _entries.get(_key(root, asset_id), {})
+		if held.is_empty() or String(held["path"]) != String((origins[asset_id] as Dictionary)["path"]):
+			fresh[asset_id] = origins[asset_id]
+	_lock.unlock()
+	register_library(root, fresh, official, official_of)
+
+
 ## Forgets every registration and every loaded mesh.
 static func clear() -> void:
 	_lock.lock()
