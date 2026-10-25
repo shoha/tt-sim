@@ -138,6 +138,8 @@ static func _layer_content(result: Dictionary, root: String) -> void:
 ## the palette. A failure warns and leaves treecube. The content libraries (installed ones, and
 ## a persisted dev path, settings.cfg `[library] dev_path`) are served here too.
 static func apply_saved() -> void:
+	# Libraries received from a host in a session that never ended cleanly are leftovers.
+	LibraryReceivedStore.sweep_leftovers()
 	LibraryRegistry.use_saved_override()
 	if saved_library() != PLANTGEN and not LibraryRegistry.discoverable():
 		return

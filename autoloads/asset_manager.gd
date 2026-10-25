@@ -68,6 +68,9 @@ var streamer: Node
 ## Asset resolution pipeline (local → cache → HTTP → P2P).
 var resolver: Node
 
+## Multiplayer transfer of the library assets a map uses (LibraryTransferChannel).
+var library_transfer: LibraryTransferChannel
+
 # =========================================================================
 # Internal state
 # =========================================================================
@@ -100,6 +103,10 @@ func _ready() -> void:
 	resolver = AssetResolverScript.new()
 	resolver.name = "AssetResolver"
 	add_child(resolver)
+
+	library_transfer = LibraryTransferChannel.new()
+	library_transfer.name = LibraryTransferChannel.NODE_NAME
+	add_child(library_transfer)
 
 	# 2. Wire dependencies (sub-components reference each other via injected refs)
 	downloader.setup(cache)

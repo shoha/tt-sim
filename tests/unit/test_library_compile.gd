@@ -36,6 +36,10 @@ const PURE_MODULES: Array[String] = [
 ## The one other module that touches a folder: it creates and replaces its own cache files and
 ## lists nothing (checked below).
 const CACHE_WRITER := "surface_cache.gd"
+## And the store of libraries received from a host: it writes, lists and removes only under
+## `LibraryRegistry.received_root()` (it never reads a library's files; the registry scans that
+## root as its own source).
+const RECEIVED_STORE := "library_received_store.gd"
 
 var _saved_settings_path: String = ""
 
@@ -554,7 +558,7 @@ func test_only_the_registry_lists_folders() -> void:
 		if not file_name.ends_with(".gd") or file_name == "library_registry.gd":
 			continue
 		var code := FileAccess.get_file_as_string("res://utils/library/" + file_name)
-		if "DirAccess" in code and file_name != CACHE_WRITER:
+		if "DirAccess" in code and not file_name in [CACHE_WRITER, RECEIVED_STORE]:
 			offenders.append(file_name)
 	assert_eq(offenders, [])
 	var cache := FileAccess.get_file_as_string("res://utils/library/" + CACHE_WRITER)

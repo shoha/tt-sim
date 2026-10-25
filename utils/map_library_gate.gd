@@ -29,12 +29,24 @@ const HINT := (
 ## is fine; ask_dialog is the dialog), invalid to take "open without" at once. Returns
 ## {proceed (false when the player cancelled), changed (rows or ids of `doc` were changed, so
 ## its cells must be split again), report (MapLibraries.check's), dropped
-## (MapLibraries.without_libraries's, {} when nothing was dropped)}.
+## (MapLibraries.without_libraries's, {} when nothing was dropped), fetched (the library ids
+## `fetch` installed). `fetch` is `func(doc) -> Dictionary` (a coroutine; LibraryTransferChannel.
+## fetch_for_document on a client): it asks the host for the plants this install lacks, with the
+## player's consent, BEFORE the check, so a library that arrived is served and the mismatch dialog
+## only follows when the player skipped or the transfer failed.
 static func run(
-	doc: MapDocument, choose: Callable = Callable(), root: String = PaletteLibrary.DEFAULT_ROOT
+	doc: MapDocument,
+	choose: Callable = Callable(),
+	root: String = PaletteLibrary.DEFAULT_ROOT,
+	fetch: Callable = Callable()
 ) -> Dictionary:
-	var out := {"proceed": true, "changed": false, "report": {}, "dropped": {}}
+	var out := {"proceed": true, "changed": false, "report": {}, "dropped": {}, "fetched": []}
 	out["changed"] = MapLibraries.apply_aliases(doc, root) > 0
+	if fetch.is_valid():
+		var got: Dictionary = await fetch.call(doc)
+		out["fetched"] = got.get("installed", [])
+		if not (out["fetched"] as Array).is_empty():
+			out["changed"] = MapLibraries.apply_aliases(doc, root) > 0 or out["changed"]
 	var report := MapLibraries.check(doc.libraries)
 	out["report"] = report
 	for warning: String in report["warnings"]:
