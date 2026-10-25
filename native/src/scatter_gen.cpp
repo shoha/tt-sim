@@ -15,6 +15,58 @@ static constexpr int64_t SALT_YAW = 0x61C88647, SALT_SCALE = 0x2545F491, SALT_TI
 static constexpr int64_t SALT_TILT_DIRECTION = 0x7A4D3B1F, SALT_CANDIDATE = 0x632BE5AB;
 static constexpr double CEILING_SLACK = 1e-9;
 static constexpr double SLOPE_FALLOFF_DEG = 10.0;
+static constexpr double SLOPE_MIN_FADE_DEG = 5.0;
+
+/// ScatterPlan.curve_value, expression for expression: plain double arithmetic only (the build
+/// never contracts it), so the native rows equal GDScript's bit for bit.
+static double curve_value(const std::vector<double> &points, double x) {
+	size_t n = points.size();
+	if (n < 4) {
+		return 1.0;
+	}
+	if (x <= points[0]) {
+		return gclamp(points[1], 0.0, 1.0);
+	}
+	if (x >= points[n - 2]) {
+		return gclamp(points[n - 1], 0.0, 1.0);
+	}
+	size_t i = 2;
+	while (points[i] < x) {
+		i += 2;
+	}
+	double x0 = points[i - 2];
+	double y0 = points[i - 1];
+	double y1 = points[i + 1];
+	return gclamp(y0 + (y1 - y0) * ((x - x0) / (points[i] - x0)), 0.0, 1.0);
+}
+
+/// ScatterTerrain.keep: the slope minimum band, then the slope, height and wet curves. `normal`
+/// is the ground normal when the slope maximum already fetched it (`have_normal`).
+static double terrain_keep(const Ground &ground, const Entry &entry, Vector2 p, Vector3 normal, bool have_normal) {
+	double result = 1.0;
+	if (entry.slope_min_cos > -1.5 || !entry.curve_slope.empty()) {
+		if (!have_normal) {
+			normal = ground.normal_at(p);
+		}
+		bool flatter = entry.slope_min_cos > -1.5 && normal.y > entry.slope_min_cos;
+		if (flatter || !entry.curve_slope.empty()) {
+			double angle = rad_to_deg(std::acos(gclamp(normal.y, -1.0, 1.0)));
+			if (flatter) {
+				result *= gclamp(1.0 - (entry.slope_min - angle) / SLOPE_MIN_FADE_DEG, 0.0, 1.0);
+			}
+			if (!entry.curve_slope.empty()) {
+				result *= curve_value(entry.curve_slope, angle);
+			}
+		}
+	}
+	if (!entry.curve_height.empty()) {
+		result *= curve_value(entry.curve_height, ground.height_at(p));
+	}
+	if (!entry.curve_wet.empty()) {
+		result *= curve_value(entry.curve_wet, ground.wet_at(p));
+	}
+	return result;
+}
 static constexpr double NORMAL_TILT_MAX_RAD = 0.12;
 static constexpr double CHUNK = 10.0;
 static constexpr int ROW_STRIDE = 10;
@@ -274,14 +326,23 @@ bool Ctx::evaluate(const Entry &entry, const List &cands, int c_) {
 			return false;
 		}
 	}
+	Vector3 normal;
+	bool have_normal = false; // fetched once for the slope maximum and the terrain response
 	if (entry.slope_cos > -1.5) {
-		Vector3 normal = ground.normal_at(p);
+		normal = ground.normal_at(p);
+		have_normal = true;
 		if (normal.y < entry.slope_cos) {
 			double a = rad_to_deg(std::acos(gclamp(normal.y, -1.0, 1.0)));
 			keep *= gclamp(1.0 - (a - entry.slope_max) / SLOPE_FALLOFF_DEG, 0.0, 1.0);
 			if (u >= keep) {
 				return false;
 			}
+		}
+	}
+	if (entry.has_response) { // slope minimum and curves (S12b); legacy rules skip it entirely
+		keep *= terrain_keep(ground, entry, p, normal, have_normal);
+		if (u >= keep) {
+			return false;
 		}
 	}
 	if (unfooted(p, entry.footing_m)) {

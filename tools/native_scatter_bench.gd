@@ -350,7 +350,9 @@ func _curves(runs: int) -> void:
 		"identity all three": {"response": identity},
 	}
 	var times := {}
-	ScatterNative.force_gdscript = true
+	var native_times := {}
+	var inner_times := {}
+	var native_ok := ScatterNative.available() and ScatterNative.version().contains("curves")
 	for k in 2 + runs:
 		for label: String in variants:
 			var species: Array[Dictionary] = []
@@ -359,13 +361,63 @@ func _curves(runs: int) -> void:
 			var changed := entry.duplicate()
 			changed["species"] = species
 			var job := {BIOME: changed}
+			ScatterNative.force_gdscript = true
 			var t := Time.get_ticks_usec()
 			ScatterRegen.run(doc, job)
 			if k >= 2:
 				var list: PackedFloat64Array = times.get(label, PackedFloat64Array())
 				list.append((Time.get_ticks_usec() - t) / 1000.0)
 				times[label] = list
+			ScatterNative.force_gdscript = false
+			if not native_ok:
+				continue
+			for _r in 5:  # native is ~50x faster: five runs per GDScript run
+				t = Time.get_ticks_usec()
+				ScatterRegen.run(doc, job)
+				var whole := Time.get_ticks_usec() - t
+				var packed := ScatterNative.pack(
+					doc,
+					BIOME,
+					species,
+					entry.cells_by_species,
+					entry.window,
+					entry.built,
+					entry.cliff,
+					PackedFloat32Array()
+				)
+				var out: Dictionary = ScatterNative._instance().call("generate", packed)
+				if k >= 2:
+					var whole_list: PackedFloat64Array = native_times.get(label, PackedFloat64Array())
+					whole_list.append(whole / 1000.0)
+					native_times[label] = whole_list
+					var inner_list: PackedFloat64Array = inner_times.get(label, PackedFloat64Array())
+					inner_list.append(int(out.usec) / 1000.0)
+					inner_times[label] = inner_list
 	var base := _median(times["legacy"])
+	if native_ok:
+		var native_base := _median(native_times["legacy"])
+		var inner_base := _median(inner_times["legacy"])
+		for label: String in variants:
+			var whole_ms := _median(native_times[label])
+			var inner_ms := _median(inner_times[label])
+			print(
+				(
+					"curves job (probe cell, native, median of %d): %-20s job %.3f ms (%+.3f ms,"
+					+ " %+.1f%%), library alone %.3f ms (%+.3f ms, %+.1f%%)"
+				)
+				% [
+					runs * 5,
+					label,
+					whole_ms,
+					whole_ms - native_base,
+					100.0 * (whole_ms / native_base - 1.0),
+					inner_ms,
+					inner_ms - inner_base,
+					100.0 * (inner_ms / inner_base - 1.0)
+				]
+			)
+	else:
+		print("curves job: no native library with the curves capability, native rows skipped")
 	for label: String in variants:
 		print(
 			(

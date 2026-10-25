@@ -50,10 +50,22 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
   terms of `ScatterGround` and the landform; they do not replace them. `water_dist` is validated
   and planned (`curve_water_dist`) but not evaluated: it needs a distance grid (S12c) and warns
   once per rule when planned.
-- Native: the library does not know the new plan keys, so `ScatterNative._refusal(species)`
-  sends a job whose biome has any evaluated terrain response to GDScript (counted as the
-  fallback reason `curves`) unless `version()` carries `curves` (S12b). A curved biome is then
-  about 17 times slower to generate than a legacy one (`PERFORMANCE.md` "Terrain response").
+- Native (S12b): the library evaluates the same block (`scatter_gen.cpp` `terrain_keep` and
+  `curve_value`, expression for expression, after the slope-maximum block and behind
+  `Entry::has_response`; `Ground::wet_at` reads the whole-document shore weight like
+  `ScatterTerrain.wet_sampler`) and `version()` is `ttscatter 4 curves`. The plan keys
+  (`slope_min`, `slope_min_cos`, `curve_slope`, `curve_height`, `curve_wet`, `has_response`) are
+  keyed reads with neutral defaults, so a legacy plan loads as before. A library without the
+  word `curves` (built before S12b; `native/bin` is gitignored and survives a pull) would load
+  and silently ignore those keys, so `ScatterNative._refusal(species)` sends a job with
+  evaluated terrain response to GDScript (fallback reason `curves`) and
+  `test_scatter_native.gd` fails (it does not pend) until the library is rebuilt. Cost
+  (`PERFORMANCE.md` "Terrain response"): under 1 percent of the library's time, about 20 ns a
+  candidate that reaches the block; a curved probe-cell job is 20.7 ms native against 768 ms in
+  GDScript. Parity: `test_scatter_native.gd` (curves on terraces and rolling ground, dry and with
+  a shore weight, each kind alone, region independence) and the valley and lakeshore whole maps
+  with curved rules in `test_scatter_native_landforms_dry.gd` and `_wet.gd`, rows and anchors
+  byte-identical to forced GDScript.
 - Grass masses (ground ship, contract section 9 "Ground look and grass masses"): a clump with
   `mass` 1 keeps the union of its clumps, may be an ellipse turned per parent (or along the
   zone edges with `follow`), grows its core tufts into one mound, and drops whole swathes by

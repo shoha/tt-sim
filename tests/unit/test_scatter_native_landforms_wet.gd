@@ -22,3 +22,8 @@ func test_lakeshore_equals_gdscript() -> void:
 
 func test_gorge_equals_gdscript() -> void:
 	Parity.check(self, "gorge")
+
+
+## Terrain response on every rule (S12b): the lakeshore's stored shore weight feeds the wet axis.
+func test_lakeshore_with_terrain_response_equals_gdscript() -> void:
+	Parity.check(self, "lakeshore", true)
