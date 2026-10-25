@@ -9,7 +9,8 @@ from byte for byte before it is allowed to replace anything. The design and the 
 it are plantgen's `docs/library_format_and_module_design.md` (sections 0 to 3, 6 and "S0 probe
 results"); this doc holds what is built and the rules the code keeps. Step S1 (2026-10-24):
 savanna as a one-biome `core` library, behind an opt-in developer path. Step S3 (2026-10-24):
-surfaces without editor imports (`SurfaceStore`) and the library bindings.
+surfaces without editor imports (`SurfaceStore`) and the library bindings. Step S12a
+(2026-10-24): terrain response on a rule (`slope_min_deg` and `response` curves), in GDScript.
 
 ## Map
 
@@ -46,6 +47,30 @@ surfaces without editor imports (`SurfaceStore`) and the library bindings.
   (category, tags, counts) are warned about and skipped in this build. `near` and `avoid` take a
   `rule` or a `role` (a role expands to every rule of that role), compiled to the palette's
   `species` key; a relation to a rule that was dropped is dropped with a warning.
+- **Terrain response (S12a).** Two optional rule fields, additive to contract 1 (the version
+  stays 1: an older reader only warns "unknown key" and ignores them, a legacy rule has neither,
+  and a rule without them compiles and places byte for byte as before). `slope_min_deg` (0 to
+  90, 0 = off) is a band edge: full density from the minimum up to `slope_max_deg`, fading to
+  none over `ScatterGenerator.SLOPE_MIN_FADE_DEG` = 5 degrees BELOW the minimum (the +10 degree
+  allowance belongs to the maximum only). `response` is an object of axis -> curve, a curve being
+  2 to 8 `[x, y]` points, x strictly ascending inside the axis range, y 0 to 1, piecewise linear
+  and flat beyond the ends. Axes (`LibraryContracts.RESPONSE_AXES`): `slope` degrees 0 to 90 (the
+  angle of the ground normal at the candidate), `height` world metres -500 to 5000 (the ground's
+  y, the same `height_at` the footing test reads: absolute height, not height above water),
+  `wet` 0 to 1 (the stored wet-dressing shore weight, nonzero only within 2.4 m of water and 0 on
+  a map with none), `water_dist` metres 0 to 200 (validated and planned, NOT evaluated: it needs
+  a distance grid, S12c; it warns once per rule at plan time and acts as 1). The axes and
+  `slope_min_deg` multiply and only ever lower the keep, so `density_per_m2` is the density at
+  curve value 1 (the candidate supply is sized for it): "denser in the wetland" is a higher
+  `density_per_m2` with the curve peaking at 1 there. The reader checks a curve strictly: a
+  malformed one is an ERROR (a library fails loudly), an unknown axis or `water_dist` a warning;
+  the lenient `PaletteValidator._library_fields` sorts points by x, clamps y with a warning and
+  drops a bad axis with a warning. `LibraryContracts.export_json()` publishes the axes in
+  `contract.json` (`response`: `axes`, `min_points`, `max_points`, `unsupported_axes`), and
+  `LibraryContracts.response_problem` is the one check both validators use. The compiler copies
+  both fields into the compiled rule only when present. Scatter: [scatter.md](scatter.md)
+  "Terrain response"; a job whose biome has any evaluated response runs in GDScript only until
+  S12b ports it (about 17 times slower, `../PERFORMANCE.md` "Terrain response").
 - **Runtime ids (S0 P4).** Core keeps today's ids (`savanna_summer_s1`, assets
   `savanna_summer_s1/Tree_Acacia_v0`); another library `<lib>__<biome>_<season>_s<seed>`, and
   its palette `biome` field is `<lib>__<biome>`. No `/` in a library id, biome name or local
@@ -160,7 +185,10 @@ the plantgen package route takes. A library that does not read or compile change
 reports why (`result["error"]`, a `push_warning` from the foliage library). The map rebuilds on
 `EventBus.foliage_library_changed` as for the plantgen switch; two switches in quick succession
 leave the first one's rows (a pre-existing property of `FoliageLibrary.switch`; the job waits
-with `wait_ready` between them).
+with `wait_ready` between them). A switch keeps an open map's BAKED rows: a rule that changed
+(S12a found this) only shows in a map built, or a cell regenerated, after the switch, so a job
+that compares two libraries on one terrain builds the map again under each (`landform.gd new`
+with the same seed), as `library_s12a_terrain.json` does.
 
 ## Authoring
 
@@ -196,6 +224,19 @@ None yet: the library manager and the biome designer are steps S6 to S9 of the d
   library-supplied surface (`D:/dev/plantgen/out/lib_slice` with two installed PNG sets copied in
   as `crimson_dust` and `night_rock`, `surfaces: library`) draws: the basalt cliff and the new
   ground replace the sandstone and the savanna grass, 9.4 MB of raw cache written.
+- Terrain response (S12a): `test_library_response.gd` (the contract's `response_problem` per
+  fault and the published axes, the reader's errors and warnings, the compiler carrying the fields
+  only when present, the validator's sort, clamp and drops) and `test_scatter_curves.gd` (engine,
+  see [scatter.md](scatter.md)). Render proof (2026-10-24, `jobs/library_s12a_terrain.json`,
+  half size): the same hilltop map built under `out/lib_slice` and under `out/lib_s12a` (a copy
+  with `slope_min_deg` on dry_grass, shrub and acacia_young and a slope curve on acacia): the
+  flat-ground acacias are thinned to the few on gentle ground (about half the trees of the
+  size 24 view remain), the low dark shrub domes are gone from the gentle ground, and the tall
+  dry grass that carpeted the flat is replaced by bare ground and the other grasses, with the
+  slope keeping its grass. The same hill, sky and paths. Plantgen: `packaging/library_check.gd`
+  (`_check_terrain`), `library_import.gd` and `library_compile.gd` carry the fields and
+  `tests/test_library_response.gd` round-trips them; plantgen's vendored `packaging/contract.json`
+  was regenerated (it gained only the `response` block).
 - Golden: `tests/fixtures/library_savanna_compiled.json` is `compile_library_cli.gd --out` of
   `tests/fixtures/library_savanna` (copy plantgen's `out/lib_slice` JSON files; regenerate the
   golden only after checking the diff below is still 0).
@@ -230,6 +271,10 @@ surfaces) or `LibraryBindings.TABLE`.
 
 ## History
 
+- 2026-10-24: step S12a: rule fields `slope_min_deg` and `response` (slope, height, wet curves;
+  water_dist validated and planned, not evaluated) through contract, reader, compiler, validator,
+  `ScatterPlan` and `ScatterGenerator` (GDScript only; `ScatterNative` refuses such jobs until
+  `curves`); contract stays 1; legacy rules byte-identical (golden digests unchanged).
 - 2026-10-24: step S3: `SurfaceStore` (+ `SurfaceBake`, `SurfaceReader`, `SurfaceCache`) loads a
   library's PNG surfaces without editor imports into the imported formats, with a raw
   engine-versioned cache; `GroundPalette`, `GroundLayerArrays`, `SwatchTextures` and

@@ -110,6 +110,23 @@ const CLASS_DEFAULTS := {
 	},
 }
 
+## The axes of a rule's `response` curves (step S12) and the range of each axis' x values:
+## slope in degrees, height in world metres (the ground's y), wet the shore weight 0..1 (the
+## stored wet dressing, which reaches 2.4 m from the waterline) and water_dist metres to the
+## nearest water (designed but not evaluated yet: S12c). A curve is RESPONSE_MIN_POINTS to
+## RESPONSE_MAX_POINTS [x, y] points, x strictly ascending, y 0..1, piecewise linear and flat
+## beyond its ends; axes multiply and only ever lower a rule's density.
+const RESPONSE_AXES := {
+	"slope": [0.0, 90.0],
+	"height": [-500.0, 5000.0],
+	"wet": [0.0, 1.0],
+	"water_dist": [0.0, 200.0],
+}
+## Axes the contract names that this build's scatter does not evaluate yet (they warn and act as 1).
+const RESPONSE_UNSUPPORTED: Array[String] = ["water_dist"]
+const RESPONSE_MIN_POINTS := 2
+const RESPONSE_MAX_POINTS := 8
+
 ## Hard caps, in bytes or counts, checked before anything is kept.
 const CAPS := {
 	"assets": 8192,
@@ -207,6 +224,8 @@ const RULE_KEYS: Array[String] = [
 	"density_factor",
 	"spacing_m",
 	"slope_max_deg",
+	"slope_min_deg",
+	"response",
 	"scale_spread",
 	"scale_floor",
 	"yaw_random_deg",
@@ -291,12 +310,49 @@ static func align_of(role_id: String) -> String:
 	return "normal" if kind_of(role_id) == "rock" else "upright"
 
 
+## Why `points` is not a valid curve on `axis` (RESPONSE_AXES), or "" when it is: a list of
+## RESPONSE_MIN_POINTS to RESPONSE_MAX_POINTS [x, y] pairs of finite numbers, x inside the axis'
+## range and strictly ascending, y from 0 to 1. The one rule the reader (an error) and the
+## palette validator (a warning and a dropped axis) share.
+static func response_problem(axis: String, points: Variant) -> String:
+	if not RESPONSE_AXES.has(axis):
+		return "unknown axis"
+	if (
+		not points is Array
+		or (points as Array).size() < RESPONSE_MIN_POINTS
+		or (points as Array).size() > RESPONSE_MAX_POINTS
+	):
+		return "needs %d to %d points" % [RESPONSE_MIN_POINTS, RESPONSE_MAX_POINTS]
+	var range_x: Array = RESPONSE_AXES[axis]
+	var last := -INF
+	for point: Variant in points as Array:
+		if not point is Array or (point as Array).size() != 2:
+			return "a point is not an [x, y] pair"
+		var pair: Array = point
+		for part: Variant in pair:
+			if part is bool or not (part is float or part is int) or is_nan(part) or is_inf(part):
+				return "a point is not made of numbers"
+		var x := float(pair[0])
+		var y := float(pair[1])
+		if x < float(range_x[0]) or x > float(range_x[1]):
+			return "x must be from %s to %s" % [str(range_x[0]), str(range_x[1])]
+		if x <= last:
+			return "x must be strictly ascending"
+		if y < 0.0 or y > 1.0:
+			return "y must be from 0 to 1"
+		last = x
+	return ""
+
+
 ## The contract as the JSON plantgen vendors (packaging/contract.json): sorted keys, tab
 ## indent, a trailing newline.
 static func export_json() -> String:
 	var roles := {}
 	for role_id: String in ROLES:
 		roles[role_id] = (ROLES[role_id] as Dictionary).duplicate()
+	var axes := {}
+	for axis: String in RESPONSE_AXES:
+		axes[axis] = (RESPONSE_AXES[axis] as Array).duplicate()
 	var data := {
 		"caps": CAPS.duplicate(),
 		"categories": CATEGORIES.duplicate(),
@@ -309,6 +365,13 @@ static func export_json() -> String:
 		"legacy_habit": LegacyHabit.export_table(),
 		"note":
 		"Exported by tt-sim LibraryContracts.export_json (utils/library/library_contracts.gd).",
+		"response":
+		{
+			"axes": axes,
+			"max_points": RESPONSE_MAX_POINTS,
+			"min_points": RESPONSE_MIN_POINTS,
+			"unsupported_axes": RESPONSE_UNSUPPORTED.duplicate(),
+		},
 		"roles": roles,
 		"size_classes": SIZE_CLASSES.duplicate(),
 		"wind_categories": WIND_CATEGORIES.duplicate(),

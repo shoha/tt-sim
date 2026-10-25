@@ -28,6 +28,14 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (`magick compare -metric MAE`): the home views were 0.000 of 255 for the S3 SurfaceStore
   change, the close views within the 0.2 to 0.75 run-to-run noise of main against itself
   (2026-10-24). `docs/systems/library.md`.
+- `jobs/library_s12a_terrain.json`: the terrain response of a rule (about 30 s, keeps no level):
+  a new 150 ft savanna hilltop (seed 1234) built under `D:/dev/plantgen/out/lib_slice` (the plain
+  library; home view and size 24 at the landform's stage), then the same map built again under
+  `D:/dev/plantgen/out/lib_s12a`, the same library with `dry_grass` `slope_min_deg` 15, `shrub`
+  and `acacia_young` 12, `acacia` a slope curve (1 to 10 degrees, 0 at 20) and `palm` a height
+  curve; same cameras (4 captures, 8 PNGs). The second map is built anew because a library switch
+  keeps an open map's baked rows. Seen 2026-10-24: acacias and the low shrub domes leave the
+  flat ground, the dry grass leaves the flats and stays on the slopes. `docs/systems/library.md`.
 - `jobs/plantgen_play.json`: the same switch in play (about 30 s): builds the alpine map, saves
   it as `_reopen_plantgen`, plays it with treecube and again after switching to plantgen (Root
   reloads the table; the load regenerates the rows), then removes the level

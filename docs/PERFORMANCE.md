@@ -4079,3 +4079,35 @@ before and after (the one sampled head behind a crown kept its ghost once `bound
 `tests/unit/test_token_ghost.gd` (bounds, mesh space, scale, late dressing, margin). Mobile and
 Compatibility: only built-ins (MODEL_MATRIX, INV_VIEW_MATRIX, VIEW) are added; `hint_depth_texture`
 is the unchanged requirement. MSAA 4x and the lo-fi pass are unaffected (no new texture reads).
+
+## Terrain response in the scatter generator (2026-10-24, step S12a)
+
+A rule's `slope_min_deg` and `response` curves (docs/systems/scatter.md "Terrain response") run in
+GDScript only: `ScatterNative._refusal(species)` sends a job whose biome has any evaluated
+response to GDScript until the library reports `curves` (S12b). Measured headless on the debug
+build, quiet machine, `tools/native_scatter_run.gd -- --task=curves` (the probe cell of the native
+section, one thread, GDScript forced, 9 runs interleaved, medians):
+
+| Variant (every rule of the probe biome carries it; identity curves, so the rows are unchanged) | Job | Delta |
+|---|---|---|
+| legacy (no field) | 736 ms | 0 |
+| identity `slope` curve | 753 ms | +17 ms (+2.3%) |
+| identity `height` curve | 756 ms | +20 ms (+2.7%) |
+| identity `wet` curve | 750 ms | +14 ms (+1.9%) |
+| all three curves | 764 ms | +28 ms (+3.8%) |
+
+- Per call, `ScatterGenerator._terrain_keep` alone on the document's fields (20 000 points,
+  GDScript): 405 ns of call and dictionary-read overhead with no field, 2.6 us with `slope_min_deg`
+  (one `normal_at`, an `acos`), 2.7 us for a slope curve, 1.3 us for a height curve, 0.8 us for a
+  wet curve, 4.1 us for all three. A legacy rule never calls it (`entry.has_response` is false), so
+  legacy rows, plans and times are unchanged; the golden digests (`test_scatter_mass.gd`) and
+  `test_scatter_native.gd` pass with no edit.
+- The cost that matters is the fallback, not the curve: a curved biome's whole job is the
+  GDScript one, 736 ms against 44 ms native for the probe cell (about 17x, the native section's
+  figure; a whole new map 2895 ms against 279 ms). The in-job cost of the evaluation itself is a
+  few percent of that. The "tens of nanoseconds per candidate" for the native port is the
+  design's estimate and is NOT measured: S12b measures it with `--task=curves` against
+  `force_gdscript`. A curved core biome should not ship before S12b; the designer's budget meter
+  should warn while the library lacks `curves`.
+- `slope_min_deg` 20 on every rule of the (mostly flat) probe cell cut the job to 217 ms because
+  it removes most rows; that is a smaller job, not a faster evaluation.

@@ -131,6 +131,8 @@ const RULE_DEFAULTS := {
 	"density_per_m2": 0.0,
 	"min_spacing_m": 0.0,
 	"slope_max_deg": 90.0,
+	"slope_min_deg": 0.0,
+	"response": {},
 	"scale_spread": 0.0,
 	"scale_floor": null,
 	"yaw_random_deg": 360.0,
@@ -142,6 +144,10 @@ const RULE_DEFAULTS := {
 	"avoid_bare": 0.0,
 	"assets": [],
 }
+
+## The response axes ScatterGenerator evaluates (a rule's `response`, step S12a); water_dist is
+## validated and planned (curve_water_dist) but acts as 1 with a warning until S12c.
+const RESPONSE_EVALUATED: Array[String] = ["slope", "height", "wet"]
 
 ## Matern III coverage curve for spacing r: packing time t = candidate intensity times
 ## pi (r/2)^2 against coverage theta = survivor density times pi (r/2)^2. Measured
@@ -205,6 +211,8 @@ const _MASK32 := 0xFFFFFFFF
 ## clump to four or five, which reads as drifts. A static switch so a probe can render both
 ## in one run; the generator reads it on worker threads, so change it only between jobs.
 static var additive_clumps: bool = true
+## Rule keys whose unsupported water_dist curve has already warned (once per run, not per job).
+static var _warned_unsupported: Dictionary = {}
 
 
 ## The plan for one biome: {"species": [...], "fields": [...]}. Each species entry carries
@@ -283,6 +291,52 @@ static func respond(density: float, lead: float, lag: float) -> float:
 	return d
 
 
+## A response curve ([[x, y], ...], as the validated rule carries it) flattened to
+## [x0, y0, x1, y1, ...] for curve_value(); empty for no curve (or fewer than two points).
+static func flatten_curve(points: Variant) -> PackedFloat64Array:
+	var flat := PackedFloat64Array()
+	if not points is Array or (points as Array).size() < 2:
+		return flat
+	for point: Array in points as Array:
+		flat.append(float(point[0]))
+		flat.append(float(point[1]))
+	return flat
+
+
+## A flattened response curve at `x`: piecewise linear between its points, held at the first
+## and last y beyond its ends, clamped to 0..1; 1 for an empty curve. The one definition the
+## generator uses (and the native port must repeat expression for expression).
+static func curve_value(points: PackedFloat64Array, x: float) -> float:
+	var n := points.size()
+	if n < 4:
+		return 1.0
+	if x <= points[0]:
+		return clampf(points[1], 0.0, 1.0)
+	if x >= points[n - 2]:
+		return clampf(points[n - 1], 0.0, 1.0)
+	var i := 2
+	while points[i] < x:
+		i += 2
+	var x0 := points[i - 2]
+	var y0 := points[i - 1]
+	var y1 := points[i + 1]
+	return clampf(y0 + (y1 - y0) * ((x - x0) / (points[i] - x0)), 0.0, 1.0)
+
+
+## Whether a rule carries terrain response the generator evaluates: a slope minimum or a curve
+## on an axis in RESPONSE_EVALUATED (water_dist is planned but not evaluated, S12c).
+static func has_terrain_response(rule: Dictionary) -> bool:
+	if float(rule.get("slope_min_deg", 0.0)) > 0.0:
+		return true
+	var response: Variant = rule.get("response")
+	if not response is Dictionary:
+		return false
+	for axis: String in RESPONSE_EVALUATED:
+		if (response as Dictionary).get(axis) is Array:
+			return true
+	return false
+
+
 ## Whether a rule asks for clumps (a clump block with parents and a radius).
 static func is_clumped(rule: Dictionary) -> bool:
 	var clump: Variant = rule.clump
@@ -330,40 +384,69 @@ static func _plan_species(species: Array[Dictionary], i: int, index_of: Dictiona
 	var slope_max: float = minf(rule.slope_max_deg + SLOPE_ALLOWANCE_DEG, 90.0)
 	var scale_floor: Variant = rule.scale_floor
 	var response: Dictionary = DENSITY_RESPONSE.get(rule.size_class, {})
+	var terrain := _plan_terrain(rule)
+	return (
+		{
+			"key": rule.key,
+			"index": i,
+			"rule": rule,
+			"rank": maxi(0, SIZE_CLASSES.find(rule.size_class)),
+			"placeable": placeable,
+			"clumped": clumped,
+			"spacing": spacing,
+			"pattern": pattern if pattern is Dictionary else null,
+			"near": near,
+			"avoid": avoid,
+			"keep": maxf(keep, 0.01),
+			"field": -1,
+			"parent_field": -1,
+			"clearance": [],
+			"clearance_m": 0.0,
+			"reachable": 1.0,
+			"referenced": false,
+			# Flattened for ScatterGenerator's per-candidate path.
+			"slope_max": slope_max,
+			"slope_cos": cos(deg_to_rad(slope_max)) if slope_max < 90.0 else -2.0,
+			"influence": pattern.influence if pattern is Dictionary else 0.0,
+			"scale_influence": pattern.scale_influence if pattern is Dictionary else 0.0,
+			"align_normal": rule.align == "normal",
+			"ground_role": ScatterGround.plan_role(rule),
+			"footing_m": GroundSnap.footing_radius(rule),
+			"yaw_range": deg_to_rad(rule.yaw_random_deg),
+			"scale_spread": float(rule.scale_spread),
+			"scale_floor": float(scale_floor) if scale_floor != null else -1.0,
+			"clump_scale": clumped and rule.size_class == "ground",
+			"asset_count": rule.assets.size(),
+			"response_lead": float(response.get("lead", 1.0)),
+			"response_lag": float(response.get("lag", 1.0)),
+		}
+		. merged(terrain)
+		. merged(mass)
+	)
+
+
+## A rule's terrain response, flattened for the per-candidate path (S12a): `slope_min` degrees and
+## its cosine (-2 = off), the curves as [x0, y0, x1, y1, ...] arrays (empty = none), and
+## `has_response`, whether any of it is evaluated. A rule without the fields gets the neutral
+## values, so a legacy plan runs exactly the arithmetic it always did. A water_dist curve is kept
+## in curve_water_dist but not evaluated: it warns once per rule (the distance grid is S12c).
+static func _plan_terrain(rule: Dictionary) -> Dictionary:
+	var slope_min := clampf(float(rule.get("slope_min_deg", 0.0)), 0.0, 90.0)
+	var curves: Dictionary = rule.response if rule.get("response") is Dictionary else {}
+	if curves.get("water_dist") is Array and not _warned_unsupported.has(rule.key):
+		_warned_unsupported[rule.key] = true
+		push_warning(
+			"ScatterPlan: rule '%s' has a water_dist response, not evaluated yet (S12c)" % rule.key
+		)
 	return {
-		"key": rule.key,
-		"index": i,
-		"rule": rule,
-		"rank": maxi(0, SIZE_CLASSES.find(rule.size_class)),
-		"placeable": placeable,
-		"clumped": clumped,
-		"spacing": spacing,
-		"pattern": pattern if pattern is Dictionary else null,
-		"near": near,
-		"avoid": avoid,
-		"keep": maxf(keep, 0.01),
-		"field": -1,
-		"parent_field": -1,
-		"clearance": [],
-		"clearance_m": 0.0,
-		"reachable": 1.0,
-		"referenced": false,
-		# Flattened for ScatterGenerator's per-candidate path.
-		"slope_max": slope_max,
-		"slope_cos": cos(deg_to_rad(slope_max)) if slope_max < 90.0 else -2.0,
-		"influence": pattern.influence if pattern is Dictionary else 0.0,
-		"scale_influence": pattern.scale_influence if pattern is Dictionary else 0.0,
-		"align_normal": rule.align == "normal",
-		"ground_role": ScatterGround.plan_role(rule),
-		"footing_m": GroundSnap.footing_radius(rule),
-		"yaw_range": deg_to_rad(rule.yaw_random_deg),
-		"scale_spread": float(rule.scale_spread),
-		"scale_floor": float(scale_floor) if scale_floor != null else -1.0,
-		"clump_scale": clumped and rule.size_class == "ground",
-		"asset_count": rule.assets.size(),
-		"response_lead": float(response.get("lead", 1.0)),
-		"response_lag": float(response.get("lag", 1.0)),
-	}.merged(mass)
+		"slope_min": slope_min,
+		"slope_min_cos": cos(deg_to_rad(slope_min)) if slope_min > 0.0 else -2.0,
+		"curve_slope": flatten_curve(curves.get("slope")),
+		"curve_height": flatten_curve(curves.get("height")),
+		"curve_wet": flatten_curve(curves.get("wet")),
+		"curve_water_dist": flatten_curve(curves.get("water_dist")),
+		"has_response": has_terrain_response(rule),
+	}
 
 
 ## A rule's mass entries (ScatterMass reads them; MASS_FIELDS has the fields): with clump `mass`
