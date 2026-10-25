@@ -324,6 +324,18 @@ static func _file_of(entry: Dictionary) -> String:
 static func _thumbnail_texture(file: String) -> Texture2D:
 	if _textures.has(file):
 		return _textures[file]
+	var picture := thumbnail_image(file, MAX_THUMB_PX)
+	if picture == null:
+		return null
+	var made := ImageTexture.create_from_image(picture)
+	_textures[file] = made
+	return made
+
+
+## The JPG or PNG `file` decoded from its bytes (never loaded as a resource), shrunk to at most
+## `max_side` pixels a side, or null for a missing, oversized (MAX_THUMB_BYTES, or a header over
+## MAX_GLB_TEXTURE_PX) or undecodable file. Biome thumbnails and AssetThumbnails use it.
+static func thumbnail_image(file: String, max_side: int) -> Image:
 	if not FileAccess.file_exists(file):
 		return null
 	var handle := FileAccess.open(file, FileAccess.READ)
@@ -345,14 +357,12 @@ static func _thumbnail_texture(file: String) -> Texture2D:
 	if err != OK or picture.is_empty():
 		return null
 	var side := maxi(picture.get_width(), picture.get_height())
-	if side > MAX_THUMB_PX:
-		var scale := float(MAX_THUMB_PX) / side
+	if side > max_side:
+		var scale := float(max_side) / side
 		picture.resize(
 			maxi(1, int(picture.get_width() * scale)), maxi(1, int(picture.get_height() * scale))
 		)
-	var made := ImageTexture.create_from_image(picture)
-	_textures[file] = made
-	return made
+	return picture
 
 
 static func _texture_image(loaded: Texture2D) -> Image:

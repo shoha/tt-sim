@@ -11,7 +11,7 @@ extends Control
 signal activated(ref: String)
 signal selected_by_click(ref: String)
 
-const TILE_SIZE := Vector2(104.0, 108.0)
+const TILE_SIZE := Vector2(104.0, 116.0)
 const ICON_SIZE := 36.0
 const PAD := 6.0
 const BADGE_RADIUS := 10.0
@@ -54,13 +54,14 @@ func setup(tile_info: Dictionary, uses: int = 0) -> void:
 	_icon = IconButton.load_icon(
 		String(CATEGORY_ICONS.get(info.get("category", "other"), "target"))
 	)
-	var thumb := String(info.get("thumb", ""))
-	if thumb != "" and FileAccess.file_exists(thumb):
-		var image := Image.load_from_file(thumb)
-		if image != null and not image.is_empty():
-			_thumb = ImageTexture.create_from_image(image)
+	_thumb = AssetThumbnails.texture(String(info.get("thumb", "")))
 	tooltip_text = _tooltip()
 	queue_redraw()
+
+
+## True when the tile draws the catalog's picture, false when it falls back to the category icon.
+func has_picture() -> bool:
+	return _thumb != null
 
 
 func set_used_by(count: int) -> void:
@@ -117,7 +118,11 @@ func _draw() -> void:
 	var soft := ThemeColors.of(self, ThemeColors.TEXT_SOFT)
 	var picture := Rect2(PAD, PAD, size.x - 2.0 * PAD, size.y - 52.0)
 	if _thumb != null:
-		draw_texture_rect(_thumb, picture, false)
+		var fitted := Rect2(Vector2.ZERO, _thumb.get_size())
+		var scale := minf(picture.size.x / fitted.size.x, picture.size.y / fitted.size.y)
+		fitted.size *= scale
+		fitted.position = picture.get_center() - fitted.size * 0.5
+		draw_texture_rect(_thumb, fitted, false)
 	elif _icon != null:
 		var at := picture.get_center() - Vector2(ICON_SIZE, ICON_SIZE) * 0.5
 		draw_texture_rect(_icon, Rect2(at, Vector2(ICON_SIZE, ICON_SIZE)), false, soft)
