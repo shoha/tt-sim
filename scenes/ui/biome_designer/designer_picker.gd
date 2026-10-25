@@ -19,11 +19,16 @@ const ROW_HEIGHT := 44.0
 var _collection_dialog: DesignerCollectionDialog = null
 var _pending: Dictionary = {}
 var _body: VBoxContainer
+## When set, the sheet lists only the biomes of this library (the manager's "New biome from
+## this...").
+var _only_library: String = ""
 
 
-## Shows the sheet over `parent` (Root, a menu); it frees itself when closed.
-static func show_over(parent: Node) -> BiomeDesignerPicker:
+## Shows the sheet over `parent` (Root, a menu); it frees itself when closed. `library_id`: list
+## only that library's biomes, each to open or to copy into a new collection of the player's.
+static func show_over(parent: Node, library_id: String = "") -> BiomeDesignerPicker:
 	var sheet := BiomeDesignerPicker.new()
+	sheet._only_library = library_id
 	parent.add_child(sheet)
 	return sheet
 
@@ -60,6 +65,13 @@ func _on_panel_ready() -> void:
 	header.close_requested.connect(animate_out)
 	_body.add_child(header)
 	var all := BiomeDesignerEntry.designable()
+	if _only_library != "":
+		var of_library := all.filter(
+			func(row: Dictionary) -> bool: return row["library"] == _only_library
+		)
+		_body.add_child(_section("New biome from one of these", of_library, true))
+		UIManager.register_overlay($ColorRect as Control)
+		return
 	var own := all.filter(func(row: Dictionary) -> bool: return row["writable"])
 	var shipped := all.filter(func(row: Dictionary) -> bool: return not row["writable"])
 	_body.add_child(_section("Your biomes", own, false))
@@ -130,12 +142,13 @@ func _row(row: Dictionary, copies: bool) -> Control:
 		line.add_child(copy)
 	var open := Button.new()
 	open.name = "Open"
-	open.text = "Try it" if copies else "Design"
-	open.theme_type_variation = &"Ghost" if copies else &"Secondary"
+	var editable := bool(row["writable"])
+	open.text = "Design" if editable else "Try it"
+	open.theme_type_variation = &"Secondary" if editable else &"Ghost"
 	open.tooltip_text = (
-		"Open it to experiment. Its changes can be kept only as a copy."
-		if copies
-		else "Open this biome in the designer."
+		"Open this biome in the designer."
+		if editable
+		else "Open it to experiment. Its changes can be kept only as a copy."
 	)
 	open.pressed.connect(_open.bind(row))
 	line.add_child(open)

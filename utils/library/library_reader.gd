@@ -483,6 +483,7 @@ static func check_biome(
 			errors.append("%s: rule key '%s' is empty, too long or repeated" % [where, key])
 		seen[key] = true
 		_check_rule(raw, "%s rule '%s'" % [where, key], keys, errors, warnings)
+	BiomeSeasons.check(def, where, keys, errors, warnings)
 	return errors.size() == before
 
 
@@ -516,11 +517,8 @@ static func _check_seasons(
 		for extra: String in season:
 			if not extra in ["id", "seed", "overrides"]:
 				warnings.append("%s: season key '%s' is unknown" % [where, extra])
-		if (
-			season.get("overrides") is Dictionary
-			and not (season["overrides"] as Dictionary).is_empty()
-		):
-			warnings.append("%s: season '%s' overrides are not applied in this build" % [where, id])
+		if season.has("overrides") and not season["overrides"] is Dictionary:
+			errors.append("%s: season '%s' overrides must be an object" % [where, id])
 
 
 static func _check_rule(
@@ -536,6 +534,17 @@ static func _check_rule(
 		errors.append("%s: unknown role '%s'" % [label, role])
 	if rule.has("size_class") and not _one_of(rule["size_class"], LibraryContracts.SIZE_CLASSES):
 		errors.append("%s: size_class must be one of %s" % [label, LibraryContracts.SIZE_CLASSES])
+	check_rule_values(rule, label, errors, warnings)
+	for relation_field in ["near", "avoid"]:
+		_check_relations(rule.get(relation_field), relation_field, label, keys, errors, warnings)
+	_check_query(rule.get("query"), label, errors, warnings)
+
+
+## The checks of a rule's value fields (numbers, response, align, keep_colour, pattern, clump,
+## habit), for a whole rule and for a season's override of some of them (BiomeSeasons.check).
+static func check_rule_values(
+	rule: Dictionary, label: String, errors: Array[String], warnings: Array[String]
+) -> void:
 	_check_number(rule, "weight", 0.0, 1000000.0, false, label, errors)
 	_check_number(rule, "density_per_m2", 0.0, 1000.0, true, label, errors)
 	_check_number(rule, "density_factor", 0.0, 1000.0, true, label, errors)
@@ -555,9 +564,6 @@ static func _check_rule(
 		if rule.get(object_field) != null and not rule.get(object_field) is Dictionary:
 			errors.append("%s: %s must be an object or null" % [label, object_field])
 	_check_habit(rule.get("habit"), label, errors, warnings)
-	for relation_field in ["near", "avoid"]:
-		_check_relations(rule.get(relation_field), relation_field, label, keys, errors, warnings)
-	_check_query(rule.get("query"), label, errors, warnings)
 
 
 ## A rule's `response` (S12): an object of axis -> curve; a malformed curve is an error (an
@@ -699,6 +705,19 @@ static func _check_clause(
 			errors.append("%s: query %s must be a short string" % [label, field])
 	if clause.has("ids"):
 		_check_string_list(clause["ids"], "query ids", label, errors, true)
+
+
+## A season's override of a rule's query (BiomeSeasons.check): the same checks as the query itself,
+## except that `match` may be absent.
+static func check_query_override(
+	query: Dictionary, label: String, errors: Array[String], warnings: Array[String]
+) -> void:
+	_unknown(query, LibraryContracts.QUERY_KEYS, label + " query", warnings)
+	for clause: Variant in query.get("match", []) if query.get("match") is Array else []:
+		_check_clause(clause, label, errors, warnings)
+	if query.has("match") and not query["match"] is Array:
+		errors.append("%s: query.match must be a list" % label)
+	_check_query_shared(query, label, errors)
 
 
 ## The query-level filters: tags, size classes, seasons mode, count, order and pins.

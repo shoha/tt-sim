@@ -152,6 +152,9 @@ func _build_split() -> void:
 	detail.verify_cancelled.connect(func() -> void: _verify_cancel = true)
 	detail.folder_requested.connect(_on_folder_requested)
 	detail.remove_requested.connect(_on_remove_requested)
+	detail.new_biome_requested.connect(
+		func(library_id: String) -> void: BiomeDesignerPicker.show_over(self, library_id)
+	)
 
 
 func _build_footer() -> void:
