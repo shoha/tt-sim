@@ -90,7 +90,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _divider(session, step)
 		"section":
 			var wanted := String(step.name)
-			for foldout in designer.ui.inspector.find_children("*", "Foldout", true, false):
+			var panel: Node = designer.ui.look_editor if step.get("in") == "look" else designer.ui.inspector
+			for foldout in panel.find_children("*", "Foldout", true, false):
 				(foldout as Foldout).expanded = foldout.name == wanted
 			return "section %s open" % wanted
 		"inspector_scroll":

@@ -241,6 +241,11 @@ func test_the_look_button_opens_the_editor_in_the_inspectors_place() -> void:
 
 func test_the_look_editor_edits_fields_and_marks_what_differs_from_the_library() -> void:
 	var editor := _ui.look_editor
+	var swatch := _find(editor, "Colour_1") as PropertyRow
+	var expected := DesignerLookEdits.display_color([0.2, 0.3, 0.1])
+	assert_almost_eq(swatch.color.g, expected.g, 0.001, "the zone colour shows on its swatch")
+	_model().changed.emit("test")
+	assert_almost_eq(swatch.color.g, expected.g, 0.001, "and still after a change")
 	var strength := editor.rows_of("zones", "strength")[0] as PropertyRow
 	assert_eq(strength.value, GroundLook.BASE.zones.strength)
 	assert_false(strength.overridden)

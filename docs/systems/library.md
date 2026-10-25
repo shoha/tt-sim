@@ -19,7 +19,8 @@ Step S6 (2026-10-24): the library manager, which the player knows as "Collection
 "library" already means the list of maps on the title): list, card, import through a quarantine,
 Verify and Remove. Step S8a (2026-10-25): the asset query (category, subtype, group, tags, size
 class, seasons, count, pin, lock files) and the biome designer, [biome_designer.md](biome_designer.md). Step S10 (2026-10-25): `core` ships as the folder `res://libraries/core` and
-treecube is gone ("The core library").
+treecube is gone ("The core library"). Step S9 (2026-10-25): per-season overrides in the compiler
+("Seasons (S9)"), and the designer's A/B view, ground look editor and lock UI.
 
 ## Map
 
@@ -34,6 +35,7 @@ treecube is gone ("The core library").
 | `utils/library/surface_store.gd` | `SurfaceStore` | (S3) The one place the ground, crossings, swatches and biome thumbnails get a surface's maps: `texture(root, relative)`, `image(root, relative)`, `available`, `texture_of` / `image_of(root, name or lib:// ref, kind)`, `runtime_name` / `ref_of` (the `lib://<library id>/<name>` convention), `register_library`, `label_of`, `load_set(folder)` and `load_installed(root, name)` (the two forms, for the equality test) |
 | `utils/library/library_bindings.gd` | `LibraryBindings` | (S3) The named things code needs (`fire.ash_surface`, `fire.ash_fallback`, `fire.burnt_biome`, `crossings.planks/moss/gravel/stone_default/paving`, `paint.default`, `water.bed/shore`, `default_biome`) with the legacy values as defaults; `value(key)` answers from the served libraries, else the default |
 | `utils/library/library_query.gd` | `LibraryQuery` | (S8a, pure) The asset query of a rule: filter clauses, shared tag and size filters, the season mode, group order by FNV-1a hash, `count`, `pin`, lock files and the 64-asset cap; the compiler asks it for everything but explicit `ref`s ([biome_designer.md](biome_designer.md) "Model") |
+| `utils/library/biome_seasons.gd` | `BiomeSeasons` | (S9, pure) A biome-def as one season sees it (`effective`, `rule_in`): the season's `overrides` and the rules' `seasons` laid over it, the density scale applied; `check` is the reader's words for them; `BiomeCompiler` calls it for every season |
 | `utils/library/designer/` | `BiomeDesignerModel` and friends | (S8a) The biome designer's model, patches, curves, catalog and writer; `LibraryRegistry.designer_context`, `serve_draft` and `designer_writable` serve it ([biome_designer.md](biome_designer.md)) |
 | `utils/library/library_registry.gd` | `LibraryRegistry` | The only module that lists or reads folders (S4: multi-library): `refresh` / `list` / `info` (what the manager shows), `apply` (compiles every servable library in load order and lays it over the palette), `served`, `record_of`, `assets_used_by(map)`, `resolve_asset_alias` / `resolve_biome_alias`, `is_enabled` / `set_enabled` / `disabled_ids`, `discoverable`, `read_sources`, `compile_folder`, the dev override (`set_dev_override`, settings `[library] dev_path`), `clear` |
 | `utils/library/library_resolver.gd`, `library_versions.gd` | `LibraryResolver`, `LibraryVersions` | (S4, pure) Which libraries found on disk can be served and in what order (duplicate ids, disabled libraries, dependency ranges `^1.0` `~1.2` exact and comparators, cycles, depth 4, at most 16 active; `core` is an ordinary folder dependency (S10)); semver parse, compare and range check (prerelease tags ignored) |
@@ -109,7 +111,19 @@ treecube is gone ("The core library").
   asset id; no `__` in a library id or biome name; the whole asset id under 160 characters
   (`PaletteLibrary.MAX_ID_LENGTH`; a longer one is skipped with a warning); every season and seed
   gets its own asset prefix (live edits accept an asset only when its prefix is the whole
-  biome id). Seasons expand without overrides in this build.
+  biome id).
+- **Seasons (S9).** A season is one palette biome, and `BiomeSeasons.effective` (called by
+  `BiomeCompiler._compile_biome`) is the biome-def as that season sees it: the season's `overrides`
+  (`ground` field by field, `ground_look` deep-merged, `density_scale` per size class, `rules` by key)
+  and each rule's own `seasons` (`only`, and a per-season override) laid over it, then the biome's
+  `density_scale` applied (the compiler read it from no one before S9). A def without any of them is
+  returned as it is, so every shipped library and the frozen goldens compile byte for byte as before.
+  A rule override may set the fields of `LibraryContracts.SEASON_RULE_FIELDS` (`density_factor` is
+  relative there, 0 removes the rule, `enabled` false too, `query` merges key by key); the reader
+  checks the shapes (`BiomeSeasons.check`) and `contract.json` publishes them (`seasons`). There is no
+  runtime season concept in the game: the New map dialog lists the season biomes as it lists any biome,
+  and a map stores the runtime id (`<biome>_<season>_s<seed>`) of the one it was made on. The designer
+  edits all of it ([biome_designer.md](biome_designer.md) "Seasons").
 - **Sources and load order (S4).** `res://libraries/*/` (OFFICIAL, derived from the location,
   never read from a library file) then `user://libraries/*/` (the user's: `Paths.LIBRARIES_DIR`,
   a store under the data root, so a GUT run and a `--data-root` run see an empty one) then the developer

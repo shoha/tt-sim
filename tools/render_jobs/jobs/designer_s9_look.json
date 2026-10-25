@@ -20,6 +20,9 @@
   {"op": "wait", "s": 0.5},
   {"op": "capture", "name": "b_look_editor", "desc": "the look editor in the inspector's place: zones, light, brush... with the four-biomes note"},
 
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer_s9.gd", "action": "section", "in": "look", "name": "Group_zones"},
+  {"op": "wait", "s": 0.8},
+  {"op": "capture", "name": "b2_look_zones_open", "desc": "the Colour zones group open: the zone colours as pickers, strength, cover, patch size, edge softness (three sliders each)"},
   {"op": "call", "script": "res://tools/render_jobs/probes/designer_s9.gd", "action": "look_color", "index": 0, "hex": "#d0402a"},
   {"op": "call", "script": "res://tools/render_jobs/probes/designer_s9.gd", "action": "look", "group": "zones", "key": "cover", "value": "[0.8, 0.5, 0.2]"},
   {"op": "wait", "s": 1.5},
