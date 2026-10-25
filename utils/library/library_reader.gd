@@ -13,9 +13,19 @@ extends RefCounted
 ## in a biome-def is caught. sources:
 ##   {"library": String, "catalog": String, "biomes": {"<file name>": String},
 ##    "files": Array of every library-relative file path (optional; enables the extension,
-##    portable-name, case and existence checks)}
+##    portable-name, case and existence checks, and the surfaces below),
+##    "surfaces": {"<surface name>": the text of its surface.json} and
+##    "png": {"<library-relative .png path>": SurfaceBake.png_header's result} (both optional;
+##    LibraryRegistry reads the first 33 bytes of each map)}
+## The result also holds `surfaces` ({name: {info, maps}} for each valid surfaces/<name>/ set,
+## `maps` the kinds present) and `surface_order`.
 
 const BIOME_DIR := "biomes/"
+const SURFACE_DIR := "surfaces/"
+## A biome-def's `surfaces`: names resolve against the installed palette ("legacy", the
+## default) or against the library's own surfaces/ folder first ("library").
+const SURFACES_LEGACY := "legacy"
+const SURFACES_LIBRARY := "library"
 
 
 static func read(sources: Dictionary) -> Dictionary:
@@ -27,6 +37,8 @@ static func read(sources: Dictionary) -> Dictionary:
 		"catalog": {},
 		"catalog_order": [] as Array[String],
 		"biomes": [] as Array[Dictionary],
+		"surfaces": {},
+		"surface_order": [] as Array[String],
 	}
 	var errors: Array[String] = result["errors"]
 	var warnings: Array[String] = result["warnings"]
@@ -73,8 +85,25 @@ static func read(sources: Dictionary) -> Dictionary:
 				continue
 			if check_biome(def, file_name, errors, warnings):
 				(result["biomes"] as Array[Dictionary]).append({"file": file_name, "def": def})
+	if have_files:
+		_read_surfaces(sources, files, result)
 	result["ok"] = errors.is_empty() and not library.is_empty() and not catalog.is_empty()
 	return result
+
+
+## Fills result.surfaces from the library's surfaces/ folder (SurfaceReader).
+static func _read_surfaces(sources: Dictionary, files: Array, result: Dictionary) -> void:
+	var texts: Variant = sources.get("surfaces", {})
+	var headers: Variant = sources.get("png", {})
+	var read := SurfaceReader.read(
+		files,
+		texts if texts is Dictionary else {},
+		headers if headers is Dictionary else {},
+		result["errors"],
+		result["warnings"]
+	)
+	result["surfaces"] = read["surfaces"]
+	result["surface_order"] = read["order"]
 
 
 ## The JSON object in `text`, or {} with an error appended.
@@ -158,6 +187,10 @@ static func check_library(
 			warnings.append(
 				"library.json: %s is not a string of at most %d characters" % [field, limit]
 			)
+	for problem: String in (
+		LibraryBindings.flatten(library.get("bindings"), library.get("default_biome"))["problems"]
+	):
+		warnings.append("library.json: " + problem)
 	var deps: Variant = library.get("dependencies", [])
 	if not deps is Array or (deps as Array).size() > LibraryContracts.MAX_DEPENDENCIES:
 		errors.append(
@@ -311,12 +344,12 @@ static func check_biome(
 		_unknown(ground, LibraryContracts.GROUND_KEYS, where + " ground", warnings)
 	if def.get("ground_look") != null and not def.get("ground_look") is Dictionary:
 		errors.append("%s: ground_look must be an object" % where)
-	var surfaces: Variant = def.get("surfaces", "legacy")
-	if surfaces != "legacy":
+	var surfaces: Variant = def.get("surfaces", SURFACES_LEGACY)
+	if not surfaces is String or not surfaces in [SURFACES_LEGACY, SURFACES_LIBRARY]:
 		warnings.append(
 			(
-				"%s: surfaces '%s' is not supported in this build, treated as legacy"
-				% [where, str(surfaces)]
+				"%s: surfaces '%s' is not '%s' or '%s', treated as legacy"
+				% [where, str(surfaces), SURFACES_LEGACY, SURFACES_LIBRARY]
 			)
 		)
 	var rules: Variant = def.get("rules")

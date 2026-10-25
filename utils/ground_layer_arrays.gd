@@ -190,9 +190,4 @@ static func _fits(image: Image, array: Texture2DArray) -> bool:
 
 ## The image of map `kind` of palette surface `surface`, or null when the palette has none.
 static func surface_image(surface: String, kind: String, root: String) -> Image:
-	var info: Dictionary = PaletteLibrary.surfaces(root).get(surface, {})
-	var texture := GroundPalette.load_texture(root, String(info.get(kind, "")))
-	if texture == null:
-		return null
-	var image := texture.get_image()
-	return image if image != null and not image.is_empty() else null
+	return SurfaceStore.image_of(root, surface, kind)
