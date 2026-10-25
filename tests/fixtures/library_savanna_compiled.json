@@ -1,0 +1,1386 @@
+{
+	"assets": {
+		"savanna_summer_s1/Bush_Bush_v0": {
+			"dimensions_m": [
+				2.98,
+				2.619,
+				3.069
+			],
+			"file": "assets/bush/Bush_Bush_v0.glb",
+			"node": "Bush_Bush_v0_LOD0",
+			"size_class": "medium",
+			"wind_category": "tree"
+		},
+		"savanna_summer_s1/Bush_DeadShrub_v0": {
+			"dimensions_m": [
+				3.221,
+				2.746,
+				3.21
+			],
+			"file": "assets/bush/Bush_DeadShrub_v0.glb",
+			"node": "Bush_DeadShrub_v0_LOD0",
+			"size_class": "medium",
+			"wind_category": "tree"
+		},
+		"savanna_summer_s1/Bush_DeadShrub_v1": {
+			"dimensions_m": [
+				2.963,
+				2.619,
+				3.562
+			],
+			"file": "assets/bush/Bush_DeadShrub_v1.glb",
+			"node": "Bush_DeadShrub_v1_LOD0",
+			"size_class": "medium",
+			"wind_category": "tree"
+		},
+		"savanna_summer_s1/Flower_Daisy_v0": {
+			"dimensions_m": [
+				0.4,
+				0.344,
+				0.435
+			],
+			"file": "assets/flower/Flower_Daisy_v0.glb",
+			"node": "Flower_Daisy_v0_LOD0",
+			"size_class": "ground",
+			"wind_category": "grass"
+		},
+		"savanna_summer_s1/Flower_Poppy_v0": {
+			"dimensions_m": [
+				0.42,
+				0.505,
+				0.472
+			],
+			"file": "assets/flower/Flower_Poppy_v0.glb",
+			"node": "Flower_Poppy_v0_LOD0",
+			"size_class": "ground",
+			"wind_category": "grass"
+		},
+		"savanna_summer_s1/Grass_Grass_v0": {
+			"dimensions_m": [
+				1.397,
+				0.845,
+				1.365
+			],
+			"file": "assets/ground_cover/Grass_Grass_v0.glb",
+			"node": "Grass_Grass_v0_LOD0",
+			"size_class": "ground",
+			"wind_category": "grass"
+		},
+		"savanna_summer_s1/Grass_Grass_v1": {
+			"dimensions_m": [
+				1.407,
+				0.725,
+				1.308
+			],
+			"file": "assets/ground_cover/Grass_Grass_v1.glb",
+			"node": "Grass_Grass_v1_LOD0",
+			"size_class": "ground",
+			"wind_category": "grass"
+		},
+		"savanna_summer_s1/Grass_Grass_v10": {
+			"dimensions_m": [
+				1.223,
+				0.57,
+				1.322
+			],
+			"file": "assets/ground_cover/Grass_Grass_v10.glb",
+			"node": "Grass_Grass_v10_LOD0",
+			"size_class": "ground",
+			"wind_category": "grass"
+		},
+		"savanna_summer_s1/Grass_Grass_v11": {
+			"dimensions_m": [
+				1.319,
+				0.522,
+				1.213
+			],
+			"file": "assets/ground_cover/Grass_Grass_v11.glb",
+			"node": "Grass_Grass_v11_LOD0",
+			"size_class": "ground",
+			"wind_category": "grass"
+		},
+		"savanna_summer_s1/Grass_Grass_v2": {
+			"dimensions_m": [
+				1.414,
+				0.805,
+				1.351
+			],
+			"file": "assets/ground_cover/Grass_Grass_v2.glb",
+			"node": "Grass_Grass_v2_LOD0",
+			"size_class": "ground",
+			"wind_category": "grass"
+		},
+		"savanna_summer_s1/Grass_Grass_v3": {
+			"dimensions_m": [
+				1.115,
+				0.741,
+				1.236
+			],
+			"file": "assets/ground_cover/Grass_Grass_v3.glb",
+			"node": "Grass_Grass_v3_LOD0",
+			"size_class": "ground",
+			"wind_category": "grass"
+		},
+		"savanna_summer_s1/Grass_Grass_v4": {
+			"dimensions_m": [
+				1.162,
+				0.814,
+				1.188
+			],
+			"file": "assets/ground_cover/Grass_Grass_v4.glb",
+			"node": "Grass_Grass_v4_LOD0",
+			"size_class": "ground",
+			"wind_category": "grass"
+		},
+		"savanna_summer_s1/Grass_Grass_v5": {
+			"dimensions_m": [
+				1.2,
+				0.888,
+				1.206
+			],
+			"file": "assets/ground_cover/Grass_Grass_v5.glb",
+			"node": "Grass_Grass_v5_LOD0",
+			"size_class": "ground",
+			"wind_category": "grass"
+		},
+		"savanna_summer_s1/Grass_Grass_v6": {
+			"dimensions_m": [
+				0.908,
+				0.496,
+				0.858
+			],
+			"file": "assets/ground_cover/Grass_Grass_v6.glb",
+			"node": "Grass_Grass_v6_LOD0",
+			"size_class": "ground",
+			"wind_category": "grass"
+		},
+		"savanna_summer_s1/Grass_Grass_v7": {
+			"dimensions_m": [
+				0.922,
+				0.495,
+				0.927
+			],
+			"file": "assets/ground_cover/Grass_Grass_v7.glb",
+			"node": "Grass_Grass_v7_LOD0",
+			"size_class": "ground",
+			"wind_category": "grass"
+		},
+		"savanna_summer_s1/Grass_Grass_v8": {
+			"dimensions_m": [
+				0.911,
+				0.529,
+				0.809
+			],
+			"file": "assets/ground_cover/Grass_Grass_v8.glb",
+			"node": "Grass_Grass_v8_LOD0",
+			"size_class": "ground",
+			"wind_category": "grass"
+		},
+		"savanna_summer_s1/Grass_Grass_v9": {
+			"dimensions_m": [
+				1.186,
+				0.591,
+				1.323
+			],
+			"file": "assets/ground_cover/Grass_Grass_v9.glb",
+			"node": "Grass_Grass_v9_LOD0",
+			"size_class": "ground",
+			"wind_category": "grass"
+		},
+		"savanna_summer_s1/Rock_Boulder_summer_05": {
+			"dimensions_m": [
+				2.53,
+				1.354,
+				1.916
+			],
+			"file": "assets/rock/Rock_Boulder_summer_05.glb",
+			"node": "Rock_Boulder_summer_05_LOD0",
+			"size_class": "medium",
+			"wind_category": ""
+		},
+		"savanna_summer_s1/Rock_Medium_summer_06": {
+			"dimensions_m": [
+				0.616,
+				0.429,
+				0.702
+			],
+			"file": "assets/rock/Rock_Medium_summer_06.glb",
+			"node": "Rock_Medium_summer_06_LOD0",
+			"size_class": "small",
+			"wind_category": ""
+		},
+		"savanna_summer_s1/Rock_Medium_summer_07": {
+			"dimensions_m": [
+				0.548,
+				0.354,
+				0.59
+			],
+			"file": "assets/rock/Rock_Medium_summer_07.glb",
+			"node": "Rock_Medium_summer_07_LOD0",
+			"size_class": "small",
+			"wind_category": ""
+		},
+		"savanna_summer_s1/Stone_Cluster_summer_08": {
+			"dimensions_m": [
+				0.69,
+				0.238,
+				0.743
+			],
+			"file": "assets/rock/Stone_Cluster_summer_08.glb",
+			"node": "Stone_Cluster_summer_08_LOD0",
+			"size_class": "small",
+			"wind_category": ""
+		},
+		"savanna_summer_s1/Stone_Cluster_summer_09": {
+			"dimensions_m": [
+				0.93,
+				0.353,
+				0.846
+			],
+			"file": "assets/rock/Stone_Cluster_summer_09.glb",
+			"node": "Stone_Cluster_summer_09_LOD0",
+			"size_class": "small",
+			"wind_category": ""
+		},
+		"savanna_summer_s1/Stone_Cluster_summer_10": {
+			"dimensions_m": [
+				0.874,
+				0.308,
+				0.895
+			],
+			"file": "assets/rock/Stone_Cluster_summer_10.glb",
+			"node": "Stone_Cluster_summer_10_LOD0",
+			"size_class": "small",
+			"wind_category": ""
+		},
+		"savanna_summer_s1/Tree_Acacia_v0": {
+			"dimensions_m": [
+				8.553,
+				7.376,
+				9.04
+			],
+			"file": "assets/tree/Tree_Acacia_v0.glb",
+			"node": "Tree_Acacia_v0_LOD0",
+			"size_class": "large",
+			"wind_category": "tree"
+		},
+		"savanna_summer_s1/Tree_Acacia_v1": {
+			"dimensions_m": [
+				9.161,
+				6.962,
+				8.98
+			],
+			"file": "assets/tree/Tree_Acacia_v1.glb",
+			"node": "Tree_Acacia_v1_LOD0",
+			"size_class": "large",
+			"wind_category": "tree"
+		},
+		"savanna_summer_s1/Tree_Acacia_v2": {
+			"dimensions_m": [
+				9.176,
+				6.578,
+				9.702
+			],
+			"file": "assets/tree/Tree_Acacia_v2.glb",
+			"node": "Tree_Acacia_v2_LOD0",
+			"size_class": "large",
+			"wind_category": "tree"
+		},
+		"savanna_summer_s1/Tree_DeadTree_v0": {
+			"dimensions_m": [
+				6.791,
+				8.202,
+				7.798
+			],
+			"file": "assets/deadwood/Tree_DeadTree_v0.glb",
+			"node": "Tree_DeadTree_v0_LOD0",
+			"size_class": "large",
+			"wind_category": "tree"
+		},
+		"savanna_summer_s1/Tree_DeadTree_v1": {
+			"dimensions_m": [
+				6.741,
+				7.37,
+				5.535
+			],
+			"file": "assets/deadwood/Tree_DeadTree_v1.glb",
+			"node": "Tree_DeadTree_v1_LOD0",
+			"size_class": "large",
+			"wind_category": "tree"
+		},
+		"savanna_summer_s1/Tree_DeadTree_v2": {
+			"dimensions_m": [
+				7.437,
+				7.719,
+				6.61
+			],
+			"file": "assets/deadwood/Tree_DeadTree_v2.glb",
+			"node": "Tree_DeadTree_v2_LOD0",
+			"size_class": "large",
+			"wind_category": "tree"
+		},
+		"savanna_summer_s1/Tree_Palm_v0": {
+			"dimensions_m": [
+				7.048,
+				7.258,
+				6.692
+			],
+			"file": "assets/tree/Tree_Palm_v0.glb",
+			"node": "Tree_Palm_v0_LOD0",
+			"size_class": "large",
+			"wind_category": "tree"
+		},
+		"savanna_summer_s1/Tree_Palm_v1": {
+			"dimensions_m": [
+				7.173,
+				7.405,
+				6.476
+			],
+			"file": "assets/tree/Tree_Palm_v1.glb",
+			"node": "Tree_Palm_v1_LOD0",
+			"size_class": "large",
+			"wind_category": "tree"
+		},
+		"savanna_summer_s1/Tree_Sapling_v0": {
+			"dimensions_m": [
+				3.167,
+				2.865,
+				2.513
+			],
+			"file": "assets/tree/Tree_Sapling_v0.glb",
+			"node": "Tree_Sapling_v0_LOD0",
+			"size_class": "medium",
+			"wind_category": "tree"
+		},
+		"savanna_summer_s1/Tree_Sapling_v1": {
+			"dimensions_m": [
+				2.899,
+				2.837,
+				3.48
+			],
+			"file": "assets/tree/Tree_Sapling_v1.glb",
+			"node": "Tree_Sapling_v1_LOD0",
+			"size_class": "medium",
+			"wind_category": "tree"
+		},
+		"savanna_summer_s1/Tree_Sapling_v2": {
+			"dimensions_m": [
+				2.827,
+				2.913,
+				2.697
+			],
+			"file": "assets/tree/Tree_Sapling_v2.glb",
+			"node": "Tree_Sapling_v2_LOD0",
+			"size_class": "medium",
+			"wind_category": "tree"
+		}
+	},
+	"biomes": [
+		{
+			"biome": "savanna",
+			"cliff_surface": "cliff_sandstone",
+			"climate": "dry",
+			"ground_accents": [
+				{
+					"coverage": 0.12,
+					"scale_m": 10.0,
+					"surface": "sand_savanna"
+				}
+			],
+			"ground_look": {
+				"brush": {
+					"mean": 3.29
+				},
+				"light": {
+					"cap": 0.97,
+					"knee": 0.72,
+					"lift": 0.36,
+					"lit_tint": [
+						1.04,
+						1.0,
+						0.88
+					],
+					"ripple_curve": 1.0,
+					"scale_m": 7.0,
+					"shade": 0.38,
+					"shade_tint": [
+						1.0,
+						0.93,
+						1.1
+					],
+					"streak": 0.05,
+					"streak_angle": 0.3,
+					"streak_cover": 0.55,
+					"streak_m": 1.3,
+					"streak_ripple": 1.0,
+					"streak_stretch": 4.0
+				},
+				"mass": {
+					"lit_m": 1.6
+				},
+				"ref_surface": "grass_savanna",
+				"rim": {
+					"color_linear": [
+						0.3931,
+						0.214,
+						0.055
+					],
+					"path_rim_m": 0.08,
+					"strength": 0.4,
+					"surfaces": []
+				},
+				"strokes": {
+					"len": 4.0,
+					"m": 1.8
+				},
+				"zones": {
+					"angle": 0.3,
+					"angle_k": [
+						0.0,
+						-0.5,
+						0.45
+					],
+					"colors_linear": [
+						[
+							0.458,
+							0.503,
+							0.1224
+						],
+						[
+							0.1901,
+							0.686,
+							0.0826
+						],
+						[
+							0.4047,
+							0.2587,
+							0.0822
+						],
+						[
+							0.3851,
+							0.1803,
+							0.0831
+						]
+					],
+					"cover": [
+						0.24,
+						0.26,
+						0.22
+					],
+					"edge": [
+						0.045,
+						0.05,
+						0.035
+					],
+					"edge_vary_m": 20.0,
+					"rag_m": 2.0,
+					"scale_m": [
+						12.0,
+						10.0,
+						9.0
+					],
+					"shade_warm": [
+						1.0,
+						1.0,
+						1.0
+					],
+					"stretch": 2.0,
+					"stretch_k": [
+						1.0,
+						1.0,
+						1.3
+					],
+					"warp": 0.5
+				}
+			},
+			"ground_surface": "grass_savanna",
+			"id": "savanna_summer_s1",
+			"library": "core",
+			"name": "Savanna",
+			"path_surfaces": [
+				"dirt_road_caliche",
+				"flagstone_sandstone",
+				"dirt_road_packed",
+				"planks"
+			],
+			"scree_surface": "gravel_sandstone",
+			"season": "summer",
+			"seed": 1,
+			"species": [
+				{
+					"align": "upright",
+					"assets": [
+						"savanna_summer_s1/Tree_Acacia_v0",
+						"savanna_summer_s1/Tree_Acacia_v1",
+						"savanna_summer_s1/Tree_Acacia_v2"
+					],
+					"avoid": [],
+					"clump": null,
+					"density_per_m2": 0.00333333333333333,
+					"habit": {
+						"charred": false,
+						"water": ""
+					},
+					"key": "acacia",
+					"kind": "tree",
+					"library": "core",
+					"min_spacing_m": 4.5,
+					"near": [],
+					"pattern": null,
+					"role": "canopy_tree",
+					"scale_floor": null,
+					"scale_spread": 0.15,
+					"size_class": "large",
+					"slope_max_deg": 35.0,
+					"weight": 1.0,
+					"yaw_random_deg": 360.0
+				},
+				{
+					"align": "upright",
+					"assets": [
+						"savanna_summer_s1/Tree_DeadTree_v0",
+						"savanna_summer_s1/Tree_DeadTree_v1",
+						"savanna_summer_s1/Tree_DeadTree_v2"
+					],
+					"avoid": [],
+					"clump": null,
+					"density_per_m2": 0.00083333333333333,
+					"habit": {
+						"charred": false,
+						"water": ""
+					},
+					"key": "dead",
+					"kind": "tree",
+					"library": "core",
+					"min_spacing_m": 4.5,
+					"near": [],
+					"pattern": null,
+					"role": "snag",
+					"scale_floor": null,
+					"scale_spread": 0.15,
+					"size_class": "large",
+					"slope_max_deg": 35.0,
+					"weight": 1.0,
+					"yaw_random_deg": 360.0
+				},
+				{
+					"align": "upright",
+					"assets": [
+						"savanna_summer_s1/Tree_Palm_v0",
+						"savanna_summer_s1/Tree_Palm_v1"
+					],
+					"avoid": [],
+					"clump": null,
+					"density_per_m2": 0.00083333333333333,
+					"habit": {
+						"charred": false,
+						"water": ""
+					},
+					"key": "palm",
+					"kind": "palm",
+					"library": "core",
+					"min_spacing_m": 4.5,
+					"near": [],
+					"pattern": null,
+					"role": "palm",
+					"scale_floor": null,
+					"scale_spread": 0.15,
+					"size_class": "large",
+					"slope_max_deg": 35.0,
+					"weight": 1.0,
+					"yaw_random_deg": 360.0
+				},
+				{
+					"align": "upright",
+					"assets": [
+						"savanna_summer_s1/Tree_Sapling_v0",
+						"savanna_summer_s1/Tree_Sapling_v1",
+						"savanna_summer_s1/Tree_Sapling_v2"
+					],
+					"avoid": [],
+					"clump": null,
+					"density_per_m2": 0.012,
+					"habit": {
+						"charred": false,
+						"water": ""
+					},
+					"key": "acacia_young",
+					"kind": "tree",
+					"library": "core",
+					"min_spacing_m": 2.0,
+					"near": [],
+					"pattern": {
+						"geoscatter_pattern": {
+							"color_sample_method": "id_greyscale",
+							"dist_infl_allow": true,
+							"dist_influence": 50.0,
+							"dist_revert": true,
+							"scale_infl_allow": false,
+							"scale_influence": 0.0,
+							"scale_revert": true,
+							"texture_dict": {
+								"contrast": 2.0,
+								"detail": 1.0,
+								"distorsion": 0.0,
+								"mapping_location": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_projection": "global",
+								"mapping_random_allow": true,
+								"mapping_random_loc": true,
+								"mapping_random_seed": 134.0,
+								"mapping_rotation": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_scale": [
+									0.1,
+									0.1,
+									0.1
+								],
+								"out_type": "Color",
+								"scale": 2.0,
+								"texture_type": "noise_",
+								"use_color_ramp": false
+							}
+						},
+						"influence": 0.5,
+						"scale_influence": 0.0
+					},
+					"role": "understory_tree",
+					"scale_floor": null,
+					"scale_spread": 0.2,
+					"size_class": "medium",
+					"slope_max_deg": 40.0,
+					"weight": 1.0,
+					"yaw_random_deg": 360.0
+				},
+				{
+					"align": "normal",
+					"assets": [
+						"savanna_summer_s1/Rock_Boulder_summer_05"
+					],
+					"avoid": [],
+					"clump": null,
+					"density_per_m2": 0.006,
+					"habit": {
+						"charred": false,
+						"water": ""
+					},
+					"key": "boulder",
+					"kind": "rock",
+					"library": "core",
+					"min_spacing_m": 2.0,
+					"near": [],
+					"pattern": {
+						"geoscatter_pattern": {
+							"color_sample_method": "id_greyscale",
+							"dist_infl_allow": true,
+							"dist_influence": 50.0,
+							"dist_revert": true,
+							"scale_infl_allow": false,
+							"scale_influence": 0.0,
+							"scale_revert": true,
+							"texture_dict": {
+								"contrast": 2.0,
+								"detail": 1.0,
+								"distorsion": 0.0,
+								"mapping_location": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_projection": "global",
+								"mapping_random_allow": true,
+								"mapping_random_loc": true,
+								"mapping_random_seed": 135.0,
+								"mapping_rotation": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_scale": [
+									0.1,
+									0.1,
+									0.1
+								],
+								"out_type": "Color",
+								"scale": 2.0,
+								"texture_type": "noise_",
+								"use_color_ramp": false
+							}
+						},
+						"influence": 0.5,
+						"scale_influence": 0.0
+					},
+					"role": "boulder",
+					"scale_floor": null,
+					"scale_spread": 0.2,
+					"size_class": "medium",
+					"slope_max_deg": 40.0,
+					"weight": 1.0,
+					"yaw_random_deg": 360.0
+				},
+				{
+					"align": "upright",
+					"assets": [
+						"savanna_summer_s1/Bush_DeadShrub_v0",
+						"savanna_summer_s1/Bush_Bush_v0",
+						"savanna_summer_s1/Bush_DeadShrub_v1"
+					],
+					"avoid": [
+						{
+							"distance_m": 1.5,
+							"influence": 1.0,
+							"species": "boulder",
+							"transition_m": 0.5
+						}
+					],
+					"clump": null,
+					"density_per_m2": 0.012,
+					"habit": {
+						"charred": false,
+						"water": ""
+					},
+					"key": "shrub",
+					"kind": "tree",
+					"library": "core",
+					"min_spacing_m": 2.0,
+					"near": [],
+					"pattern": {
+						"geoscatter_pattern": {
+							"color_sample_method": "id_greyscale",
+							"dist_infl_allow": true,
+							"dist_influence": 50.0,
+							"dist_revert": true,
+							"scale_infl_allow": false,
+							"scale_influence": 0.0,
+							"scale_revert": true,
+							"texture_dict": {
+								"contrast": 2.0,
+								"detail": 1.0,
+								"distorsion": 0.0,
+								"mapping_location": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_projection": "global",
+								"mapping_random_allow": true,
+								"mapping_random_loc": true,
+								"mapping_random_seed": 136.0,
+								"mapping_rotation": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_scale": [
+									0.1,
+									0.1,
+									0.1
+								],
+								"out_type": "Color",
+								"scale": 2.0,
+								"texture_type": "noise_",
+								"use_color_ramp": false
+							}
+						},
+						"influence": 0.5,
+						"scale_influence": 0.0
+					},
+					"role": "shrub",
+					"scale_floor": null,
+					"scale_spread": 0.2,
+					"size_class": "medium",
+					"slope_max_deg": 40.0,
+					"weight": 1.0,
+					"yaw_random_deg": 360.0
+				},
+				{
+					"align": "normal",
+					"assets": [
+						"savanna_summer_s1/Rock_Medium_summer_06",
+						"savanna_summer_s1/Rock_Medium_summer_07"
+					],
+					"avoid": [],
+					"clump": {
+						"children_spacing_m": 0.25,
+						"parents_per_m2": 0.05,
+						"radius_m": 1.2,
+						"transition_m": 0.8
+					},
+					"density_per_m2": 0.06,
+					"habit": {
+						"charred": false,
+						"water": ""
+					},
+					"key": "rock",
+					"kind": "rock",
+					"library": "core",
+					"min_spacing_m": 0.25,
+					"near": [
+						{
+							"distance_m": 3.0,
+							"influence": 0.4,
+							"species": "boulder",
+							"transition_m": 2.5
+						}
+					],
+					"pattern": {
+						"geoscatter_pattern": {
+							"color_sample_method": "id_greyscale",
+							"dist_infl_allow": true,
+							"dist_influence": 50.0,
+							"dist_revert": true,
+							"scale_infl_allow": true,
+							"scale_influence": 15.0,
+							"scale_revert": true,
+							"texture_dict": {
+								"contrast": 2.0,
+								"detail": 1.0,
+								"distorsion": 0.0,
+								"mapping_location": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_projection": "global",
+								"mapping_random_allow": true,
+								"mapping_random_loc": true,
+								"mapping_random_seed": 137.0,
+								"mapping_rotation": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_scale": [
+									0.1,
+									0.1,
+									0.1
+								],
+								"out_type": "Color",
+								"scale": 2.0,
+								"texture_type": "noise_",
+								"use_color_ramp": false
+							}
+						},
+						"influence": 0.5,
+						"scale_influence": 0.15
+					},
+					"role": "rock",
+					"scale_floor": 0.5,
+					"scale_spread": 0.3,
+					"size_class": "small",
+					"slope_max_deg": 55.0,
+					"weight": 1.0,
+					"yaw_random_deg": 360.0
+				},
+				{
+					"align": "normal",
+					"assets": [
+						"savanna_summer_s1/Stone_Cluster_summer_08",
+						"savanna_summer_s1/Stone_Cluster_summer_09",
+						"savanna_summer_s1/Stone_Cluster_summer_10"
+					],
+					"avoid": [],
+					"clump": {
+						"children_spacing_m": 0.25,
+						"parents_per_m2": 0.05,
+						"radius_m": 1.2,
+						"transition_m": 0.8
+					},
+					"density_per_m2": 0.06,
+					"habit": {
+						"charred": false,
+						"water": ""
+					},
+					"key": "stones",
+					"kind": "rock",
+					"library": "core",
+					"min_spacing_m": 0.25,
+					"near": [
+						{
+							"distance_m": 2.5,
+							"influence": 0.5,
+							"species": "boulder",
+							"transition_m": 2.0
+						}
+					],
+					"pattern": {
+						"geoscatter_pattern": {
+							"color_sample_method": "id_greyscale",
+							"dist_infl_allow": true,
+							"dist_influence": 50.0,
+							"dist_revert": true,
+							"scale_infl_allow": true,
+							"scale_influence": 15.0,
+							"scale_revert": true,
+							"texture_dict": {
+								"contrast": 2.0,
+								"detail": 1.0,
+								"distorsion": 0.0,
+								"mapping_location": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_projection": "global",
+								"mapping_random_allow": true,
+								"mapping_random_loc": true,
+								"mapping_random_seed": 138.0,
+								"mapping_rotation": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_scale": [
+									0.1,
+									0.1,
+									0.1
+								],
+								"out_type": "Color",
+								"scale": 2.0,
+								"texture_type": "noise_",
+								"use_color_ramp": false
+							}
+						},
+						"influence": 0.5,
+						"scale_influence": 0.15
+					},
+					"role": "stones",
+					"scale_floor": 0.5,
+					"scale_spread": 0.3,
+					"size_class": "small",
+					"slope_max_deg": 55.0,
+					"weight": 1.0,
+					"yaw_random_deg": 360.0
+				},
+				{
+					"align": "normal",
+					"assets": [
+						"savanna_summer_s1/Grass_Grass_v0",
+						"savanna_summer_s1/Grass_Grass_v1",
+						"savanna_summer_s1/Grass_Grass_v2"
+					],
+					"avoid": [],
+					"clump": {
+						"angle_deg": 0.0,
+						"angle_jitter_deg": 10.0,
+						"bare": 0.08,
+						"children_spacing_m": 0.12,
+						"core_height": 2.3,
+						"core_height_m": 0.9,
+						"core_hold": 0.6,
+						"core_scale": 1.6,
+						"edge_shrink": 0.4,
+						"follow": 1.0,
+						"mass": 1.0,
+						"parent_group": 1.0,
+						"parent_spacing_m": 4.5,
+						"parents_per_m2": 0.04,
+						"radius_jitter": 0.5,
+						"radius_m": 4.4,
+						"shoulder_m": 1.2,
+						"stretch": 2.8,
+						"transition_m": 0.3,
+						"zone_core": 0.6,
+						"zone_family": [
+							0.0,
+							1.0,
+							2.0,
+							2.0
+						],
+						"zone_fill": 0.5,
+						"zone_keep": [
+							0.8,
+							1.0,
+							1.0,
+							1.0
+						],
+						"zone_share": 0.6
+					},
+					"density_per_m2": 23.688,
+					"habit": {
+						"charred": false,
+						"water": ""
+					},
+					"key": "dry_grass",
+					"kind": "grass",
+					"library": "core",
+					"min_spacing_m": 0.12,
+					"near": [],
+					"pattern": {
+						"geoscatter_pattern": {
+							"color_sample_method": "id_greyscale",
+							"dist_infl_allow": true,
+							"dist_influence": 100.0,
+							"dist_revert": true,
+							"scale_infl_allow": true,
+							"scale_influence": 20.0,
+							"scale_revert": true,
+							"texture_dict": {
+								"contrast": 2.4,
+								"detail": 1.0,
+								"distorsion": 0.0,
+								"mapping_location": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_projection": "global",
+								"mapping_random_allow": true,
+								"mapping_random_loc": true,
+								"mapping_random_seed": 139.0,
+								"mapping_rotation": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_scale": [
+									0.1,
+									0.1,
+									0.1
+								],
+								"out_type": "Color",
+								"scale": 0.3,
+								"texture_type": "noise_",
+								"use_color_ramp": false
+							}
+						},
+						"influence": 0.35,
+						"scale_influence": 0.2
+					},
+					"role": "grass",
+					"scale_floor": 0.5,
+					"scale_spread": 0.3,
+					"size_class": "ground",
+					"slope_max_deg": 50.0,
+					"weight": 1.0,
+					"yaw_random_deg": 360.0
+				},
+				{
+					"align": "normal",
+					"assets": [
+						"savanna_summer_s1/Grass_Grass_v3",
+						"savanna_summer_s1/Grass_Grass_v4",
+						"savanna_summer_s1/Grass_Grass_v5"
+					],
+					"avoid": [],
+					"clump": {
+						"angle_deg": 0.0,
+						"angle_jitter_deg": 10.0,
+						"bare": 0.08,
+						"children_spacing_m": 0.0,
+						"core_height": 2.0,
+						"core_height_m": 0.9,
+						"core_hold": 0.6,
+						"core_scale": 1.4,
+						"edge_shrink": 0.4,
+						"follow": 1.0,
+						"mass": 1.0,
+						"parent_group": 1.0,
+						"parent_spacing_m": 4.5,
+						"parents_per_m2": 0.04,
+						"radius_jitter": 0.5,
+						"radius_m": 4.4,
+						"shoulder_m": 1.2,
+						"stretch": 2.8,
+						"transition_m": 0.3,
+						"zone_core": 0.6,
+						"zone_family": [
+							0.0,
+							1.0,
+							2.0,
+							2.0
+						],
+						"zone_fill": 0.5,
+						"zone_keep": [
+							0.8,
+							1.0,
+							1.0,
+							1.0
+						],
+						"zone_share": 0.6
+					},
+					"density_per_m2": 11.844,
+					"habit": {
+						"charred": false,
+						"water": ""
+					},
+					"key": "seed_grass",
+					"kind": "grass",
+					"library": "core",
+					"min_spacing_m": 0.0,
+					"near": [],
+					"pattern": {
+						"geoscatter_pattern": {
+							"color_sample_method": "id_greyscale",
+							"dist_infl_allow": true,
+							"dist_influence": 100.0,
+							"dist_revert": true,
+							"scale_infl_allow": true,
+							"scale_influence": 20.0,
+							"scale_revert": true,
+							"texture_dict": {
+								"contrast": 2.8,
+								"detail": 1.0,
+								"distorsion": 0.0,
+								"mapping_location": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_projection": "global",
+								"mapping_random_allow": true,
+								"mapping_random_loc": true,
+								"mapping_random_seed": 140.0,
+								"mapping_rotation": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_scale": [
+									0.1,
+									0.1,
+									0.1
+								],
+								"out_type": "Color",
+								"scale": 0.3,
+								"texture_type": "noise_",
+								"use_color_ramp": false
+							}
+						},
+						"influence": 0.35,
+						"scale_influence": 0.2
+					},
+					"role": "grass",
+					"scale_floor": 0.5,
+					"scale_spread": 0.3,
+					"size_class": "ground",
+					"slope_max_deg": 50.0,
+					"weight": 1.0,
+					"yaw_random_deg": 360.0
+				},
+				{
+					"align": "normal",
+					"assets": [
+						"savanna_summer_s1/Grass_Grass_v6",
+						"savanna_summer_s1/Grass_Grass_v7",
+						"savanna_summer_s1/Grass_Grass_v8"
+					],
+					"avoid": [],
+					"clump": null,
+					"density_per_m2": 0.9,
+					"habit": {
+						"charred": false,
+						"water": ""
+					},
+					"key": "short_grass",
+					"kind": "grass",
+					"library": "core",
+					"min_spacing_m": 0.0,
+					"near": [],
+					"pattern": {
+						"geoscatter_pattern": {
+							"color_sample_method": "id_greyscale",
+							"dist_infl_allow": true,
+							"dist_influence": 100.0,
+							"dist_revert": true,
+							"scale_infl_allow": true,
+							"scale_influence": 20.0,
+							"scale_revert": true,
+							"texture_dict": {
+								"contrast": 2.2,
+								"detail": 1.0,
+								"distorsion": 0.0,
+								"mapping_location": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_projection": "global",
+								"mapping_random_allow": true,
+								"mapping_random_loc": true,
+								"mapping_random_seed": 141.0,
+								"mapping_rotation": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_scale": [
+									0.1,
+									0.1,
+									0.1
+								],
+								"out_type": "Color",
+								"scale": 0.3,
+								"texture_type": "noise_",
+								"use_color_ramp": false
+							}
+						},
+						"influence": 1.0,
+						"scale_influence": 0.2
+					},
+					"role": "grass",
+					"scale_floor": 0.5,
+					"scale_spread": 0.3,
+					"size_class": "ground",
+					"slope_max_deg": 50.0,
+					"weight": 1.0,
+					"yaw_random_deg": 360.0
+				},
+				{
+					"align": "normal",
+					"assets": [
+						"savanna_summer_s1/Grass_Grass_v9",
+						"savanna_summer_s1/Grass_Grass_v10",
+						"savanna_summer_s1/Grass_Grass_v11"
+					],
+					"avoid": [],
+					"clump": {
+						"children_spacing_m": 0.12,
+						"parents_per_m2": 0.14,
+						"radius_m": 2.8,
+						"transition_m": 1.6
+					},
+					"density_per_m2": 1.0,
+					"habit": {
+						"charred": false,
+						"water": ""
+					},
+					"key": "rust_grass",
+					"kind": "grass",
+					"library": "core",
+					"min_spacing_m": 0.12,
+					"near": [],
+					"pattern": {
+						"geoscatter_pattern": {
+							"color_sample_method": "id_greyscale",
+							"dist_infl_allow": true,
+							"dist_influence": 100.0,
+							"dist_revert": true,
+							"scale_infl_allow": true,
+							"scale_influence": 20.0,
+							"scale_revert": true,
+							"texture_dict": {
+								"contrast": 3.5,
+								"detail": 1.0,
+								"distorsion": 0.0,
+								"mapping_location": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_projection": "global",
+								"mapping_random_allow": true,
+								"mapping_random_loc": true,
+								"mapping_random_seed": 142.0,
+								"mapping_rotation": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_scale": [
+									0.1,
+									0.1,
+									0.1
+								],
+								"out_type": "Color",
+								"scale": 0.5,
+								"texture_type": "noise_",
+								"use_color_ramp": false
+							}
+						},
+						"influence": 1.0,
+						"scale_influence": 0.2
+					},
+					"role": "grass",
+					"scale_floor": 0.5,
+					"scale_spread": 0.3,
+					"size_class": "ground",
+					"slope_max_deg": 50.0,
+					"weight": 1.0,
+					"yaw_random_deg": 360.0
+				},
+				{
+					"align": "normal",
+					"assets": [
+						"savanna_summer_s1/Flower_Daisy_v0",
+						"savanna_summer_s1/Flower_Poppy_v0"
+					],
+					"avoid": [],
+					"clump": {
+						"children_spacing_m": 0.12,
+						"parents_per_m2": 0.02,
+						"radius_m": 1.4,
+						"transition_m": 1.0
+					},
+					"density_per_m2": 0.18,
+					"habit": {
+						"charred": false,
+						"water": ""
+					},
+					"key": "flower",
+					"kind": "flower",
+					"library": "core",
+					"min_spacing_m": 0.12,
+					"near": [],
+					"pattern": {
+						"geoscatter_pattern": {
+							"color_sample_method": "id_greyscale",
+							"dist_infl_allow": true,
+							"dist_influence": 70.0,
+							"dist_revert": true,
+							"scale_infl_allow": true,
+							"scale_influence": 20.0,
+							"scale_revert": true,
+							"texture_dict": {
+								"contrast": 2.0,
+								"detail": 1.0,
+								"distorsion": 0.0,
+								"mapping_location": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_projection": "global",
+								"mapping_random_allow": true,
+								"mapping_random_loc": true,
+								"mapping_random_seed": 143.0,
+								"mapping_rotation": [
+									0.0,
+									0.0,
+									0.0
+								],
+								"mapping_scale": [
+									0.1,
+									0.1,
+									0.1
+								],
+								"out_type": "Color",
+								"scale": 3.0,
+								"texture_type": "noise_",
+								"use_color_ramp": false
+							}
+						},
+						"influence": 0.7,
+						"scale_influence": 0.2
+					},
+					"role": "flower",
+					"scale_floor": 0.5,
+					"scale_spread": 0.3,
+					"size_class": "ground",
+					"slope_max_deg": 50.0,
+					"weight": 1.0,
+					"yaw_random_deg": 360.0
+				}
+			],
+			"thumbnail": "thumbnails/savanna_summer_s1.jpg"
+		}
+	],
+	"format": 1,
+	"palette_version": "core@1.0.0-dev+6670c676"
+}

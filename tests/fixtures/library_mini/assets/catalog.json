@@ -1,0 +1,9 @@
+{
+	"format": "ttsim-catalog",
+	"format_version": 1,
+	"assets": [
+		{"id": "Tree_Oak_v0", "group": "oak", "name": "Oak", "category": "tree", "subtype": "oak", "tags": [], "biomes": ["meadow"], "seasons": [], "game_kind": "tree", "wind_category": "tree", "size_class": "large", "dimensions_m": [6.0, 8.0, 6.0], "triangles": 12, "lods": [{"node": "Tree_Oak_v0_LOD0", "triangles": 12}], "file": "assets/tree/Tree_Oak_v0.glb", "node": "Tree_Oak_v0_LOD0"},
+		{"id": "Tree_Oak_v1", "group": "oak", "name": "Oak", "category": "tree", "subtype": "oak", "tags": [], "biomes": ["meadow"], "seasons": [], "game_kind": "tree", "wind_category": "tree", "size_class": "large", "dimensions_m": [5.5, 7.0, 5.5], "triangles": 12, "lods": [{"node": "Tree_Oak_v1_LOD0", "triangles": 12}], "file": "assets/tree/Tree_Oak_v1.glb", "node": "Tree_Oak_v1_LOD0"},
+		{"id": "Rock_Stone_v0", "group": "stone", "name": "Stone", "category": "rock", "subtype": "stone", "tags": [], "biomes": ["meadow"], "seasons": [], "game_kind": "rock", "wind_category": "", "size_class": "small", "dimensions_m": [0.6, 0.4, 0.5], "triangles": 12, "lods": [{"node": "Rock_Stone_v0_LOD0", "triangles": 12}], "file": "assets/rock/Rock_Stone_v0.glb", "node": "Rock_Stone_v0_LOD0"}
+	]
+}

@@ -14,6 +14,13 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   reopens the map in memory (scatter regenerated from the same biome painting) for the same two
   cameras, then back to treecube for a home view that equals the first. Fades off, wind frozen,
   5 captures, 10 PNGs. Edit the `package` path to compare another build.
+- `jobs/library_s1_savanna.json`: the content library against the plantgen package it was built
+  from (about 30 s, keeps no level): a new 200 ft savanna map (seed 1234) with plantgen's
+  `lib_slice_pkg` laid over the installed palette (home, size 14), then the same map with
+  `D:/dev/plantgen/out/lib_slice` compiled over the treecube palette by `LibraryRegistry`
+  (`library_dev` op), same cameras, then the override cleared (the treecube baseline). Package
+  and library captures are pixel-identical (2026-10-24). 3 view pairs plus the baseline, 10
+  PNGs. `docs/systems/library.md`.
 - `jobs/plantgen_play.json`: the same switch in play (about 30 s): builds the alpine map, saves
   it as `_reopen_plantgen`, plays it with treecube and again after switching to plantgen (Root
   reloads the table; the load regenerates the rows), then removes the level

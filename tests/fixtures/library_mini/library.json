@@ -1,0 +1,14 @@
+{
+	"author": "tt-sim tests",
+	"contract": 1,
+	"dependencies": [],
+	"description": "Three assets and two rules: the smallest library the compile path can be proven on.",
+	"format": "ttsim-library",
+	"format_version": 1,
+	"id": "mini",
+	"license": "CC0-1.0",
+	"name": "Mini",
+	"stats": {"assets": 3},
+	"tags": ["test"],
+	"version": "0.1.0"
+}
