@@ -71,6 +71,13 @@ static var _served_signature: String = ""
 static var _signature_frame: int = -1
 
 
+## The registry's configuration changed: compare it with the served one on the next read even
+## within the frame of the last comparison (the frame throttle in get_palette would otherwise
+## believe a palette served under the old configuration until the next frame).
+static func recheck_configuration() -> void:
+	_signature_frame = -1
+
+
 ## The validated palette under `root`, loading it on first use. The returned Dictionary
 ## is the cached one; callers must not mutate it (the typed getters below hand out
 ## copies).

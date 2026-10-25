@@ -57,13 +57,24 @@ const HASH_LENGTH := 8
 ## library under res://) are import metadata, not library files; the pack does not hold them.
 const SIDECAR_SUFFIX := ".import"
 
-## The settings file; tests point it elsewhere.
-static var settings_path: String = Paths.SETTINGS_PATH
+## The settings file; tests point it elsewhere. The three configuration variables below make
+## PaletteLibrary compare the configuration again on its next read (a CI run on Linux served a
+## scratch world's palette to the next test script, which began in the same process frame).
+static var settings_path: String = Paths.SETTINGS_PATH:
+	set(value):
+		settings_path = value
+		PaletteLibrary.recheck_configuration()
 ## The folders scanned for official and user libraries; tests point them at scratch folders. The
 ## user root is the data root's own (Paths.LIBRARIES_DIR: `user://libraries/` in the shipped game,
 ## a disposable folder in a GUT run, so a test never sees the real user's libraries).
-static var official_root: String = OFFICIAL_ROOT
-static var user_root: String = Paths.LIBRARIES_DIR
+static var official_root: String = OFFICIAL_ROOT:
+	set(value):
+		official_root = value
+		PaletteLibrary.recheck_configuration()
+static var user_root: String = Paths.LIBRARIES_DIR:
+	set(value):
+		user_root = value
+		PaletteLibrary.recheck_configuration()
 static var _dev_path: String = ""
 ## Library id -> the summary apply() recorded for the library now served.
 static var _served: Dictionary = {}

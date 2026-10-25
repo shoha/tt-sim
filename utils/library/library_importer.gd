@@ -407,7 +407,7 @@ static func _walk(
 		counter["stop"] = true
 		return
 	var here := root if prefix == "" else root.path_join(prefix)
-	var names := Array(DirAccess.get_files_at(here))
+	var names := _listing(here, true)
 	names.sort()
 	for file_name: String in names:
 		var relative := file_name if prefix == "" else prefix + "/" + file_name
@@ -436,7 +436,7 @@ static func _walk(
 				_note(plan["errors"], line)
 			continue
 		out.append({"name": relative, "raw": absolute, "size": size, "compressed": size})
-	var folders := Array(DirAccess.get_directories_at(here))
+	var folders := _listing(here, false)
 	folders.sort()
 	for folder_name: String in folders:
 		var relative := folder_name if prefix == "" else prefix + "/" + folder_name
@@ -457,6 +457,18 @@ static func _walk(
 			)
 			continue
 		_walk(root, relative, depth + 1, out, plan, counter)
+
+
+## The files (or folders) directly in `path`, hidden ones included. The static
+## DirAccess.get_files_at skips dot-names on Linux and macOS but not on Windows, so a `.git`
+## folder or `.DS_Store` file was reported as ignored junk only on Windows; the listing has to
+## see them everywhere for the plan (and its `ignored` list) to be the same on every platform.
+static func _listing(path: String, files: bool) -> Array:
+	var handle := DirAccess.open(path)
+	if handle == null:
+		return []
+	handle.include_hidden = true
+	return Array(handle.get_files() if files else handle.get_directories())
 
 
 ## The folder that holds library.json: `path` itself, or its one subfolder; "" when neither.
