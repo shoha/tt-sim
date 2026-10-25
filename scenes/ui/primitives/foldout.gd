@@ -29,6 +29,11 @@ const ICON_SIZE := 28.0
 			_animate_body()
 			expanded_changed.emit(value)
 
+## Set before the foldout is ready when its body holds buttons that sit at the body's edge: the
+## clip (which cuts a button's shadow and focus ring) then reaches out by the glass ring's room on
+## every side (ShadowOutset) while the body stays exactly where it was.
+var button_room: bool = false
+
 var body: VBoxContainer
 
 var _header: HBoxContainer
@@ -37,6 +42,8 @@ var _title_label: Label
 var _clip: Control
 var _tween: Tween
 var _target_height: float = 0.0
+## The height the button room adds to the clip's own minimum (0 without button_room).
+var _extra: float = 0.0
 
 
 func _ready() -> void:
@@ -132,27 +139,51 @@ func _build_body() -> void:
 	_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_clip.clip_contents = true
 	_clip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	add_child(_clip)
+	var room := Vector4.ZERO
+	if button_room:
+		room = ShadowGutter.margins(ShadowGutter.Kind.GLASS_RING)
+		_extra = room.y + room.w
+		var holder := ShadowOutset.new()
+		holder.name = "ClipOutset"
+		holder.room = room
+		holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		holder.add_child(_clip)
+		add_child(holder)
+	else:
+		add_child(_clip)
 
 	body = VBoxContainer.new()
 	body.name = "Body"
 	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	body.theme_type_variation = &"BoxContainerSpaced"
 	body.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	if button_room:
+		# Held in from the clip's edge by its room, so the body is where it would be without it.
+		body.offset_left = room.x
+		body.offset_right = -room.z
+		body.offset_top = room.y
+		body.offset_bottom = room.y
 	body.resized.connect(_on_body_resized)
 	_clip.add_child(body)
 
 
 func _apply_state_immediately() -> void:
 	body.visible = expanded
-	_clip.custom_minimum_size.y = body.get_combined_minimum_size().y if expanded else 0.0
+	_clip.custom_minimum_size.y = (
+		_open_height(body.get_combined_minimum_size().y) if expanded else 0.0
+	)
 	_chevron.rotation = PI / 2.0 if expanded else 0.0
 
 
 func _animate_body() -> void:
 	if expanded:
 		body.visible = true
-	_retarget(body.get_combined_minimum_size().y if expanded else 0.0)
+	_retarget(_open_height(body.get_combined_minimum_size().y) if expanded else 0.0)
+
+
+## The clip's height for a body of `body_height` (the body's own plus the button room).
+func _open_height(body_height: float) -> float:
+	return body_height + _extra
 
 
 ## Start (or restart) the height tween towards [param height]. A body that
@@ -174,7 +205,7 @@ func _on_animation_finished() -> void:
 	body.visible = expanded
 	if expanded:
 		# The body is laid out by now; never leave the clip short of it.
-		_clip.custom_minimum_size.y = body.size.y
+		_clip.custom_minimum_size.y = _open_height(body.size.y)
 
 
 ## Content that grows (a weather row appearing, a tile row wrapping on its
@@ -184,10 +215,10 @@ func _on_body_resized() -> void:
 	if not expanded:
 		return
 	if _tween and _tween.is_valid() and _tween.is_running():
-		if not is_equal_approx(body.size.y, _target_height):
-			_retarget(body.size.y)
+		if not is_equal_approx(_open_height(body.size.y), _target_height):
+			_retarget(_open_height(body.size.y))
 		return
-	_clip.custom_minimum_size.y = body.size.y
+	_clip.custom_minimum_size.y = _open_height(body.size.y)
 
 
 func _on_header_gui_input(event: InputEvent) -> void:

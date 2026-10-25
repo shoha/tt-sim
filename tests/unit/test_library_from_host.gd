@@ -16,6 +16,7 @@ func _root() -> String:
 func before_each() -> void:
 	super.before_each()
 	LibraryRegistry.user_root = _client_user
+	LibraryFromHost.reported_leftovers.clear()
 
 
 ## A from-host collection that is not a valid library: only what the cache looks at (a record, the
@@ -322,3 +323,59 @@ func test_a_leftover_whose_id_is_already_installed_is_left_alone() -> void:
 	assert_true(
 		LibraryFromHost.record_of("alienworld").is_empty(), "the player's copy stays theirs"
 	)
+
+
+func test_a_stale_leftover_is_reported_once_and_remembered_across_runs() -> void:
+	var legacy := _leftover()
+	World.write_alien(_client_user.path_join("alienworld"))
+	LibraryRegistry.apply(_paths["base"])
+	var first := LibraryFromHost.migrate_received()
+	assert_eq(first["left"].size(), 1, "reported the first time")
+	assert_eq(first["stale"], ["alienworld"])
+	assert_true(FileAccess.file_exists(legacy.path_join("alienworld.reported")))
+	var second := LibraryFromHost.migrate_received()
+	assert_eq(second["left"], [], "not reported again in the session")
+	assert_eq(second["stale"], ["alienworld"], "but still known to the manager")
+	LibraryFromHost.reported_leftovers.clear()  # a new start: only the marker file remains
+	var third := LibraryFromHost.migrate_received()
+	assert_eq(third["left"], [], "nor on the next start")
+	assert_eq(third["stale"], ["alienworld"])
+	assert_true(_has_dir(legacy.path_join("alienworld")), "nothing was deleted by reporting")
+
+
+func test_a_stale_leftover_is_removed_through_safe_delete_and_only_when_stale() -> void:
+	var legacy := _leftover()
+	assert_true(LibraryFromHost.stale_received().is_empty(), "not installed: not stale")
+	assert_false(LibraryFromHost.remove_stale_received("alienworld")["ok"], "refused")
+	assert_true(_has_dir(legacy.path_join("alienworld")))
+	World.write_alien(_client_user.path_join("alienworld"))
+	LibraryRegistry.apply(_paths["base"])
+	LibraryFromHost.migrate_received()
+	assert_eq(LibraryFromHost.stale_received(), ["alienworld"])
+	var result := LibraryFromHost.remove_stale_received("alienworld")
+	assert_true(result["ok"], str(result))
+	assert_false(_has_dir(legacy.path_join("alienworld")))
+	assert_false(FileAccess.file_exists(legacy.path_join("alienworld.received.json")))
+	assert_false(FileAccess.file_exists(legacy.path_join("alienworld.reported")))
+	assert_true(_has_dir(_installed_path("alienworld")), "the installed collection is untouched")
+	assert_true(LibraryFromHost.stale_received().is_empty())
+	assert_false(LibraryFromHost.remove_stale_received("..")["ok"], "an unsafe id is refused")
+
+
+func test_the_manager_row_offers_removal_and_hides_when_nothing_is_left() -> void:
+	var legacy := _leftover()
+	World.write_alien(_client_user.path_join("alienworld"))
+	LibraryRegistry.apply(_paths["base"])
+	var section := LibraryStaleSection.new()
+	add_child_autofree(section)
+	assert_true(section.visible)
+	assert_eq(section.summary_label.text, LibraryStaleSection.summary_text(1))
+	assert_string_contains(
+		section.summary_label.text, "1 old copy of collections you already have takes"
+	)
+	assert_string_contains(LibraryStaleSection.remove_message(2), "2 old copies")
+	assert_true(_has_dir(legacy.path_join("alienworld")), "showing the row deletes nothing")
+	var report := section.remove_now()
+	assert_eq(report["removed"], ["alienworld"])
+	assert_false(_has_dir(legacy.path_join("alienworld")))
+	assert_false(section.visible)

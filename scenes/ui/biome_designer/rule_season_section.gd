@@ -62,6 +62,7 @@ var _syncing: bool = false
 func _init() -> void:
 	name = "Seasons"
 	title = "Seasons"
+	button_room = true
 
 
 func setup(designer: BiomeDesignerSession) -> void:
