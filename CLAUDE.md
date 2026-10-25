@@ -27,6 +27,11 @@ Supplementary detail is in `.cursor/rules/` and `docs/`.
   Windows (project has CRLF files on disk; git normalizes to LF on commit).
 - Never write Python, shell, or other scripts to perform string replacement in source files.
   The `Edit` tool is correct for all source file modifications. No exceptions.
+- Never write a recursive delete outside `SafeDelete` (`utils/library/safe_delete.gd`), and never
+  delete a folder built from an unchecked root string: `""` and `"."` mean the project folder in a
+  developer run (a worktree was emptied that way on 2026-10-24). Roots come from `LibraryPaths`;
+  destructive probes run in a scratch project, not a worktree (AGENTS.md "Destructive file
+  operations", `docs/systems/library.md` "Destructive operations").
 - `@onready` references use the unique-name form (`%NodeName`, with `unique_name_in_owner`
   set on the node in the `.tscn`), not `$Full/Path`. Every existing scene does this.
 - New `.gd` files need a `.gd.uid` sidecar, which Godot generates lazily. Run

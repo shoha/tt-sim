@@ -50,6 +50,8 @@ func _find_last(haystack: PackedByteArray, needle: PackedByteArray) -> int:
 
 
 func _remove_tree(path: String) -> void:
+	if LibraryPaths.verify(path) != "":  # "" and "." mean the working directory (the project)
+		return
 	var dir := DirAccess.open(path)
 	if dir == null:
 		return
