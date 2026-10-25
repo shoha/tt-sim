@@ -3,14 +3,22 @@ extends AnimatedCanvasLayerPanel
 
 ## The sheet an import goes through before anything is installed (design 5.5): it opens reading
 ## the archive (a bar and Cancel), then shows what the file holds as a card (its name, author,
-## licence, version, size, what it holds, what it needs, every warning), says in one line that a
-## collection only holds art and settings, never programs, and asks. A collection whose id is
-## already installed offers Replace with the two versions side by side; one the game refuses
-## (a reserved id, a file that does not read) shows why and Close alone. Nothing is installed
-## until Install or Replace is pressed.
+## licence, version, size, what it holds, what it needs, every warning, the file it came from),
+## says in one line that a collection only holds art and settings, never programs, and asks.
+## A collection whose id is already installed offers, by how the file compares with the
+## installed one (owner decision 2026-10-25): a NEWER file "Replace v0.3.1 with v0.4.0", the SAME
+## version "Reinstall" (a repair), and an OLDER file is refused with a plain reason. One the game
+## refuses (a reserved id, a file that does not read) shows why and Close alone. Nothing is
+## installed until Install, Replace or Reinstall is pressed.
+##
+## Pressing it does not close the card: the card goes busy ("Installing...") and the flow
+## (LibraryImportFlow) answers with dismiss() on success or show_failure() on a failure, which
+## puts the error on the card in red with an icon and offers Retry or Close (story S24: the
+## error used to be a toast under the scrim and the card had closed).
 ##
 ## Built in code (no scene), over the manager's scrim when the manager is open (one scrim, UI
-## taste G1). The flow (LibraryImportFlow) owns the files: this sheet only shows and asks.
+## taste G1); the manager stays visible behind it, dimmed (review UX-10). The flow owns the
+## files: this sheet only shows and asks.
 
 signal install_confirmed(card: Dictionary, replace: bool)
 signal cancelled
@@ -22,6 +30,11 @@ const MAX_LINES := 6
 const TITLE_READING := "Reading %s"
 const TITLE_REFUSED := "This file cannot be imported"
 const CAPTION_NOTHING := "Nothing is installed until you choose."
+const LABEL_INSTALL := "Install"
+const LABEL_INSTALLING := "Installing..."
+const LABEL_RETRY := "Retry"
+const LABEL_REINSTALL := "Reinstall"
+const LABEL_CLOSE := "Close"
 const RELATION_WORDS := {
 	LibraryInstall.RELATION_NEWER: "a newer version",
 	LibraryInstall.RELATION_OLDER: "an older version",
@@ -34,12 +47,17 @@ var progress_bar: ProgressBar
 var progress_label: Label
 var confirm_button: Button
 var cancel_button: Button
+## The red line (icon and words) a failed install put under the content, or null.
+var error_label: Label = null
 var card: Dictionary = {}
+## True from the press of Install until the flow answers (the buttons are off).
+var busy: bool = false
 
 var _closing := false
 var _body: VBoxContainer
 var _scroll: ScrollContainer
 var _content: VBoxContainer
+var _notice: VBoxContainer
 var _footer: HBoxContainer
 var _replace := false
 
@@ -77,6 +95,10 @@ func _init() -> void:
 	_content.theme_type_variation = &"BoxContainerSpaced"
 	_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(_content)
+	_notice = VBoxContainer.new()
+	_notice.name = "Notice"
+	_notice.theme_type_variation = &"BoxContainerTight"
+	_body.add_child(_notice)
 	_body.add_child(HSeparator.new())
 	_footer = HBoxContainer.new()
 	_footer.name = "Footer"
@@ -96,6 +118,11 @@ func _exit_tree() -> void:
 	super._exit_tree()
 	if get_viewport() != null and get_viewport().size_changed.is_connected(_fit_to_canvas):
 		get_viewport().size_changed.disconnect(_fit_to_canvas)
+
+
+## The manager (or the mismatch dialog) behind this card stays visible, stepped back.
+func _dims_panel_below() -> bool:
+	return true
 
 
 # ---- states ----
@@ -134,13 +161,14 @@ func show_refused(file_name: String, errors: Array) -> void:
 	_reset()
 	header.setup(TITLE_REFUSED, file_name, true)
 	_lines(errors, "alert-circle", ThemeColors.DANGER, _content)
-	cancel_button = _button("CloseButton", "Close", &"Secondary")
+	cancel_button = _button("CloseButton", LABEL_CLOSE, &"Secondary")
 	cancel_button.pressed.connect(_on_cancel_pressed)
 	_after_build()
 
 
-## The card of `description` (LibraryInstall.examine's answer).
-func show_card(description: Dictionary) -> void:
+## The card of `description` (LibraryInstall.examine's answer). `source_name` is the file or
+## folder it was read from, shown as the card's "From" line.
+func show_card(description: Dictionary, source_name: String = "") -> void:
 	_reset()
 	card = description
 	var named := String(card["name"]) if String(card["name"]) != "" else String(card["id"])
@@ -151,11 +179,11 @@ func show_card(description: Dictionary) -> void:
 		about.name = "Description"
 		about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	if not refused or String(card["id"]) != "":
-		_add_facts()
+		_add_facts(source_name)
 	_lines(card["errors"], "alert-circle", ThemeColors.DANGER, _content)
 	_lines(card["warnings"], "alert-triangle", ThemeColors.WARNING, _content)
 	var existing: Dictionary = card["existing"]
-	_replace = not existing.is_empty() and not bool(card["reserved"])
+	_replace = not existing.is_empty() and not bool(card["reserved"]) and not refused
 	if _replace:
 		var note := _label(replace_line(card), &"Body", _content)
 		note.name = "ReplaceNote"
@@ -164,29 +192,92 @@ func show_card(description: Dictionary) -> void:
 		[LibraryNames.only_art_and_settings()], "info-circle", ThemeColors.STATE, _content
 	)
 	promise.name = "Promise"
-	cancel_button = _button("CancelButton", "Close" if refused else "Cancel", &"Secondary")
+	cancel_button = _button("CancelButton", LABEL_CLOSE if refused else "Cancel", &"Secondary")
 	cancel_button.pressed.connect(_on_cancel_pressed)
 	if not refused:
-		var label := replace_label(card) if _replace else "Install"
+		var label := replace_label(card) if _replace else LABEL_INSTALL
 		confirm_button = _button("InstallButton", label, &"Primary")
 		confirm_button.pressed.connect(_on_confirm_pressed)
 	_after_build()
 
 
-## "Installed: v0.3.1. This file: v0.4.0, newer." Pure.
+## What the card says about the installed copy it would replace, by how the file compares with
+## it. Pure. A NEWER file replaces; the SAME version reinstalls (a repair); an OLDER file never
+## gets here (examine refuses it), but is worded in case.
 static func replace_line(description: Dictionary) -> String:
 	var installed := String((description["existing"] as Dictionary).get("version", ""))
 	var incoming := String(description["version"])
-	var tail := String(RELATION_WORDS.get(String(description["relation"]), ""))
-	var line := "%s is already installed (v%s). " % [description["name"], installed]
-	line += "This file is v%s, %s. " % [incoming, tail]
-	return line + "Replacing keeps your maps; they use the new files."
+	var shown := String(description["name"])
+	var line := ""
+	match String(description["relation"]):
+		LibraryInstall.RELATION_SAME:
+			line = "%s v%s is already installed, and this file is the same version. "
+			line = line % [shown, installed]
+			line += "Reinstalling puts a fresh copy over it, which repairs files that went "
+			line += "missing or changed. "
+			return line + "Your maps keep working."
+		LibraryInstall.RELATION_OLDER:
+			return LibraryInstall.downgrade_refusal(incoming, installed)
+	line = "%s is already installed (v%s). " % [shown, installed]
+	line += "This file is v%s, %s. " % [incoming, RELATION_WORDS[LibraryInstall.RELATION_NEWER]]
+	line += "Replacing keeps your maps; they use the new files."
+	var changes := LibraryInstall.change_line(description)
+	return line + ((" " + changes) if changes != "" else "")
 
 
-## The primary's label when an installed copy exists: "Replace v0.3.1". Pure.
+## The primary's label when an installed copy exists: "Replace v0.3.1 with v0.4.0" for a newer
+## file, "Reinstall" for the same version. Pure.
 static func replace_label(description: Dictionary) -> String:
 	var installed := String((description["existing"] as Dictionary).get("version", ""))
-	return "Replace v%s" % installed if installed != "" else "Replace"
+	var incoming := String(description["version"])
+	if String(description["relation"]) == LibraryInstall.RELATION_SAME:
+		return LABEL_REINSTALL
+	if installed == "":
+		return "Replace"
+	if incoming == "":
+		return "Replace v%s" % installed
+	return "Replace v%s with v%s" % [installed, incoming]
+
+
+## The busy state after Install was pressed: the buttons are off and the primary says so.
+func show_installing() -> void:
+	busy = true
+	_clear_notice()
+	if confirm_button != null:
+		confirm_button.disabled = true
+		confirm_button.text = LABEL_INSTALLING
+	if cancel_button != null:
+		cancel_button.disabled = true
+
+
+## The install failed: `message` in red with an icon under the content (not in the scroll, so it
+## is always in view), the card stays open and the footer offers Retry (when `can_retry`) and
+## Close. Retry asks the flow to install again.
+func show_failure(message: String, can_retry: bool = true) -> void:
+	busy = false
+	_closing = false
+	_clear_notice()
+	var row := HBoxContainer.new()
+	row.name = "InstallError"
+	row.theme_type_variation = &"BoxContainerSpaced"
+	_notice.add_child(row)
+	var mark := _mark("alert-circle", ThemeColors.DANGER, row)
+	mark.name = "ErrorIcon"
+	error_label = _label(message, &"BodyDanger", row)
+	error_label.name = "ErrorText"
+	error_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	error_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	error_label.custom_minimum_size.x = 160
+	for child in _footer.get_children():
+		_footer.remove_child(child)
+		child.queue_free()
+	confirm_button = null
+	cancel_button = _button("CancelButton", LABEL_CLOSE, &"Secondary")
+	cancel_button.pressed.connect(_on_cancel_pressed)
+	if can_retry:
+		confirm_button = _button("InstallButton", LABEL_RETRY, &"Primary")
+		confirm_button.pressed.connect(_on_confirm_pressed)
+	_after_build()
 
 
 func _caption() -> String:
@@ -198,28 +289,22 @@ func _caption() -> String:
 	return " ".join(parts) if not parts.is_empty() else CAPTION_NOTHING
 
 
-func _add_facts() -> void:
+func _add_facts(source_name: String) -> void:
 	facts = GridContainer.new()
 	facts.name = "Facts"
 	facts.columns = 2
 	facts.theme_type_variation = &"FactsGrid"
 	_content.add_child(facts)
+	if source_name != "":
+		_fact("From", source_name)
 	_fact("Id", String(card["id"]))
 	if String(card["license"]) != "":
-		_fact("Licence", String(card["license"]))
+		_fact("Licence", LibraryNames.license_text(String(card["license"])))
 	var assets := int(card["asset_count"])
 	var biomes := int(card["biome_count"])
 	_fact(
 		"Holds",
-		(
-			"%d %s, %d %s"
-			% [
-				assets,
-				"asset" if assets == 1 else "assets",
-				biomes,
-				"biome" if biomes == 1 else "biomes",
-			]
-		)
+		"%s, %s" % [LibraryNames.count_of(assets, "asset"), LibraryNames.count_of(biomes, "biome")]
 	)
 	_fact("Size", LibraryImporter.size_text(int(card["bytes"])))
 	var deps: Array = card["dependencies"]
@@ -276,11 +361,20 @@ func _reset() -> void:
 	for child in _footer.get_children():
 		_footer.remove_child(child)
 		child.queue_free()
+	_clear_notice()
 	facts = null
 	progress_bar = null
 	progress_label = null
 	confirm_button = null
 	cancel_button = null
+	busy = false
+
+
+func _clear_notice() -> void:
+	for child in _notice.get_children():
+		_notice.remove_child(child)
+		child.queue_free()
+	error_label = null
 
 
 func _after_build() -> void:
@@ -292,6 +386,20 @@ func _after_build() -> void:
 		cancel_button.grab_focus()
 
 
+## A tinted icon in `parent`.
+func _mark(icon: String, role: StringName, parent: Control) -> TextureRect:
+	var mark := TextureRect.new()
+	mark.texture = IconButton.load_icon(icon)
+	mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	mark.custom_minimum_size = Vector2(ICON_PX, ICON_PX)
+	mark.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(mark)
+	_tint_when_ready(mark, parent, role)
+	return mark
+
+
 ## Lines with a tinted icon, up to MAX_LINES; returns the box they are in.
 func _lines(lines: Array, icon: String, role: StringName, parent: Control) -> VBoxContainer:
 	var box := VBoxContainer.new()
@@ -301,30 +409,24 @@ func _lines(lines: Array, icon: String, role: StringName, parent: Control) -> VB
 		var row := HBoxContainer.new()
 		row.theme_type_variation = &"BoxContainerSpaced"
 		box.add_child(row)
-		var mark := TextureRect.new()
-		mark.texture = IconButton.load_icon(icon)
-		mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		mark.custom_minimum_size = Vector2(ICON_PX, ICON_PX)
-		mark.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_child(mark)
+		_mark(icon, role, row)
 		var words := _label(String(lines[i]), &"Body", row)
 		words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		words.custom_minimum_size.x = 160
-		_tint_when_ready(mark, row, role)
 	if lines.size() > MAX_LINES:
 		_label("... and %d more." % (lines.size() - MAX_LINES), &"Caption", box)
 	box.visible = not lines.is_empty()
 	return box
 
 
-func _tint_when_ready(mark: TextureRect, row: Control, role: StringName) -> void:
+## Tints the icon `item` with `role` once it is in the tree.
+func _tint_when_ready(item: Control, row: Control, role: StringName) -> void:
+	var apply := func() -> void: item.self_modulate = ThemeColors.of(row, role)
 	if row.is_inside_tree():
-		mark.self_modulate = ThemeColors.of(row, role)
+		apply.call()
 	else:
-		row.tree_entered.connect(func() -> void: mark.self_modulate = ThemeColors.of(row, role))
+		row.tree_entered.connect(apply)
 
 
 func _label(text: String, variation: StringName, parent: Control) -> Label:
@@ -382,16 +484,15 @@ func dismiss() -> void:
 
 
 func _on_confirm_pressed() -> void:
-	if _closing:
+	if _closing or busy:
 		return
-	_closing = true
 	AudioManager.play(&"confirm")
+	show_installing()
 	install_confirmed.emit(card, _replace)
-	animate_out()
 
 
 func _on_cancel_pressed() -> void:
-	if _closing:
+	if _closing or busy:
 		return
 	_closing = true
 	AudioManager.play(&"cancel")

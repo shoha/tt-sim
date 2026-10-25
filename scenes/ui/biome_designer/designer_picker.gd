@@ -35,7 +35,9 @@ static func show_over(parent: Node, library_id: String = "") -> BiomeDesignerPic
 
 func _init() -> void:
 	name = "BiomeDesignerPicker"
-	layer = Constants.LAYER_DIALOG
+	# Above LAYER_DIALOG: opened from the collections manager (a dialog on that layer), the
+	# manager's scrim drew over this sheet and left a blurred ghost (review UX-1).
+	layer = Constants.LAYER_SUBDIALOG
 	var scrim := Scrim.new()
 	scrim.name = "ColorRect"
 	scrim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -107,7 +109,10 @@ func _section(title_text: String, rows: Array, copies: bool) -> Control:
 		box.add_child(DesignerRows.caption("None", none))
 		return box
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0.0, minf(LIST_HEIGHT, ROW_HEIGHT * rows.size()))
+	ShadowGutter.wrap(scroll)
+	scroll.custom_minimum_size = Vector2(
+		0.0, minf(LIST_HEIGHT, ROW_HEIGHT * rows.size() + ShadowGutter.extra_height())
+	)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	box.add_child(scroll)
 	var list := VBoxContainer.new()

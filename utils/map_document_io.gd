@@ -336,7 +336,13 @@ static func _parse_libraries(raw: Variant, warn_log: _WarningLog) -> Array[Dicti
 		if not good:
 			warn_log.add("manifest.json: library '%s' is malformed; skipped" % _label(id))
 			continue
-		out.append({"id": id, "version": String(version), "hash": String(digest)})
+		var record := {"id": id, "version": String(version), "hash": String(digest)}
+		# The library's link, when it had one, so a player who lacks it is told where to look
+		# (MapLibraryGate). Optional; anything that is not a plain http(s) link is dropped.
+		var link: Variant = entry.get("url", "")
+		if link is String and MapLibraries.is_link(String(link)):
+			record["url"] = String(link)
+		out.append(record)
 	return out
 
 
@@ -516,9 +522,7 @@ static func _entry_sizes(path: String, warn_log: _WarningLog) -> Variant:
 
 
 ## True when an entry of `size` bytes may be kept after `total` bytes already were.
-static func _size_allowed(
-	entry_name: String, size: int, total: int, warn_log: _WarningLog
-) -> bool:
+static func _size_allowed(entry_name: String, size: int, total: int, warn_log: _WarningLog) -> bool:
 	if size > ENTRY_CAPS[entry_name]:
 		warn_log.add(
 			(
@@ -683,9 +687,7 @@ static func _geometry_problem(
 ## float32 values within MAX_ABS_HEIGHT_M. The size is checked before decoding.
 ## to_float32_array() reads the host's byte order; every platform Godot ships is
 ## little-endian, which is what the format specifies.
-static func _parse_heights(
-	bytes: PackedByteArray, count: int, warn_log: _WarningLog
-) -> Variant:
+static func _parse_heights(bytes: PackedByteArray, count: int, warn_log: _WarningLog) -> Variant:
 	if bytes.size() != count * 4:
 		warn_log.add(
 			"height.bin is %d bytes, the grid needs exactly %d" % [bytes.size(), count * 4]
@@ -735,9 +737,7 @@ static func _parse_rows(
 	for asset_id in ids:
 		var rows: Variant = data[asset_id]
 		if not _is_id(asset_id) or not rows is Array:
-			warn_log.add(
-				"%s: asset '%s' skipped: malformed id or rows" % [label, _label(asset_id)]
-			)
+			warn_log.add("%s: asset '%s' skipped: malformed id or rows" % [label, _label(asset_id)])
 			continue
 		var take := mini(rows.size(), MAX_ROWS_PER_ASSET)
 		if rows.size() > MAX_ROWS_PER_ASSET:

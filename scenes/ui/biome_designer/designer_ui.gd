@@ -83,6 +83,7 @@ func setup(designer: BiomeDesignerSession) -> void:
 	var strip_scroll := ScrollContainer.new()
 	strip_scroll.name = "GroundScroll"
 	strip_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	ShadowGutter.wrap(strip_scroll, ShadowGutter.Kind.GLASS_RING)
 	strip_scroll.custom_minimum_size = Vector2(0.0, GROUND_HEIGHT)
 	bottom.add_child(strip_scroll)
 	ground = DesignerGroundStrip.new()
