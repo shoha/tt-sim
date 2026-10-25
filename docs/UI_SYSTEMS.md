@@ -14,6 +14,7 @@ This guide documents the UI infrastructure and reusable components available in 
 - [Menu Design Language](#menu-design-language)
 - [Title Hub](#title-hub)
 - [Settings Menu](#settings-menu)
+- [Collections Manager](#collections-manager)
 - [Pause Menu](#pause-menu)
 - [AudioManager](#audiomanager)
 - [Overlay & Modal System](#overlay--modal-system)
@@ -529,7 +530,10 @@ and the panel share one left edge and width.
 
 The old left column (Play solo, Set up tokens, New map, Avatars, Settings, Quit) is gone: each
 action lives where it acts (UI_TASTE verdict 2026-10-09, no Host control far from what it acts
-on).
+on). The masthead's quiet tools are Avatars (a dev feature while it is built), Collections
+(content library step S6: the manager, [Collections Manager](#collections-manager), whose word is
+`LibraryNames`), Settings and Quit game; a collection file or folder dropped on the title opens
+the manager's install card (`TitleScreen.library_flow`).
 
 ### The library
 
@@ -1060,6 +1064,53 @@ Settings are saved to `Paths.SETTINGS_PATH` (`user://settings.cfg`) and loaded o
 
 ---
 
+## Collections Manager
+
+The player-facing word for a content library is one constant (`LibraryNames.TITLE_SINGULAR` and
+`TITLE_PLURAL`, today "Collection" and "Collections"; the user has not chosen a final name, and
+"library" already means the list of maps on the title). Every label, tooltip, caption, toast
+and error of this feature is built from `LibraryNames`, and `test_library_manager.gd` fails when a
+string literal in the files that show it holds the word, so a rename is a one-line change.
+Internals, files, settings keys and docs keep "library".
+
+`LibraryManager` (`scenes/ui/library_manager/`, an `AnimatedCanvasLayerPanel` built in code on
+`LAYER_DIALOG`, the sheet at the 960 width token and no wider than the canvas less its margins)
+follows the menu design language: a `MenuHeader` ("Collections", a caption that says they hold
+art and settings, never programs, closable), the body, and a footer with Import file... and
+Import folder... (Secondary, icons upload and folder) and Done (the one Primary). The body is
+two columns divided by a rule: at the left a scrolling list, at the right the selected one's card
+(`LibraryDetail`), each scrolling inside a height the canvas allows (the sheet fits the 1280x720
+canvas, `test_library_manager.gd`). A list row is a `ListRow` toggle button holding three lines
+(name in `Body`, "v0.3.1 by Author" and "2 assets, 1 biome · 5 KB" or, for a library that fails, its
+first reason, in `Caption`, which turn to the `...OnSelected` variations on the selected fill),
+an origin `Chip` (Official, Yours, Built in), a danger-tinted mark when it fails, and a
+`CheckButton` outside the row button: the switch. Core's and a developer override's is disabled
+with a tooltip saying so. The card is a heading, the version / author / licence line, the origin
+and state `Chip`s, the description, a `FactsGrid` (Holds, Size, Needs with a tinted icon per
+dependency, Link, Folder), the biomes as the strips the New map dialog draws, the reasons and
+warnings as icon lines (`alert-circle` in the danger role, `alert-triangle` in the warning role),
+and the actions Verify (`circle-check`), Show in folder and Remove (`x`), the last two only for a
+library the player installed; Remove opens `show_danger_confirmation` naming the saved maps that
+use it. Verify draws a bar, a line of words, Stop, and one icon line per failing file. The footer's
+left says the last thing that happened in words ("Beta Marsh added."), because a toast sits on
+layer 90, under the scrim of a sheet.
+
+`LibraryInstallCard` is the sheet an import goes through (600 wide, scroll inside it): while the
+archive is read it shows a bar and Cancel; then the facts, the dependency lines, every warning and
+the line "This collection only contains art and settings, never programs." with Cancel and
+Install (the primary), or, for an id already installed, Cancel and "Replace v0.3.1" with a sentence
+putting the two versions side by side; a file the importer or the reader refuses shows "This file
+cannot be imported", its reasons and Close alone. It stands on the manager's scrim when the
+manager is open (one scrim, UI_TASTE G1: the manager's sheet fades out while it is up) and on its
+own over the title. Drops: the title routes a `.ttlib`, a `.zip` or a folder that holds a
+`library.json` to the card and everything else to the Blender map check; the open manager takes
+any dropped path and shows the refusal for a wrong one. The mismatch dialog of a map whose
+library is missing has a third choice, "Manage collections", that opens the manager.
+
+Judge it from `tools/render_jobs/jobs/library_manager.json` (1600x900 and 1280x800; JOBS.md).
+
+---
+
 ## Pause Menu
 
 `PauseOverlay` (`scenes/states/paused/pause_overlay.gd`) is shown when the game is paused (ESC
@@ -1405,6 +1456,13 @@ is Cancel (Secondary) and Create map (the one primary). Temperate forest is pres
 than Flat opens, the loading line names it ("Shaping the valley...",
 `NewMap.opening_status`); Escape, Cancel and the close button
 emit nothing. It registers its backdrop as an overlay like `LevelPickerDialog`.
+
+Since content library step S6 the footer also holds "Manage collections..." at its left (an
+`InlineAction`, `manage_button`, always in view whatever the fields above scroll), which opens
+the collections manager over the dialog ([Collections Manager](#collections-manager)). The
+"Start from" fields live in one holder (`BiomeFields`) that the dialog builds again on
+`EventBus.foliage_library_changed`, keeping the pick when it still exists, so switching a
+collection off or adding one shows at once with no reopening.
 
 ### Tool drawer
 

@@ -624,9 +624,12 @@ func test_remove_deletes_a_user_library_and_refuses_everything_else() -> void:
 	_install_once()
 	LibraryRegistry.refresh()
 	assert_eq(LibraryRegistry.info("alienworld")["source"], "user")
+	var cached := SurfaceCache.root + "/alienworld/abcd1234/crystal_albedo.ttimg"
+	World.write_text(cached, "x")
 	var done := LibraryInstall.remove("alienworld")
 	assert_true(done["ok"], str(done["error"]))
 	assert_false(DirAccess.dir_exists_absolute(_paths["user"] + "/alienworld"))
+	assert_false(FileAccess.file_exists(cached), "its baked surfaces go with it")
 	assert_false(LibraryInstall.remove("alienworld")["ok"], "not installed any more")
 	assert_false(LibraryInstall.remove("core")["ok"])
 	assert_false(LibraryInstall.remove("../official")["ok"])
