@@ -49,6 +49,8 @@ signal asset_failed(
 signal transfer_progress(
 	pack_id: String, asset_id: String, variant_id: String, progress: float, file_type: String
 )
+## A partial-library bundle (LibraryTransferChannel) arrived whole: it goes to the channel.
+signal library_bundle_received(request_id: String, data: PackedByteArray)
 
 const CHUNK_SIZE := 32768  # 32KB chunks
 const MAX_CONCURRENT_TRANSFERS := 2
@@ -365,6 +367,11 @@ func _rpc_request_asset(
 	else:
 		print("AssetStreamer: Peer %d requesting asset %s" % [peer_id, key])
 
+	# A partial library for a request this peer quoted first (asset_id is the request number).
+	if pack_id == Paths.LIBRARY_PARTS_PACK_ID:
+		_serve_library_parts(peer_id, [pack_id, asset_id, variant_id, file_type], resume_from_chunk)
+		return
+
 	# Level map assets: asset_id is a client-controlled level folder name. Only ever serve
 	# the level on the table or one on the session's shelf — never an arbitrary saved level,
 	# and never a path-traversal escape out of user://levels/. Extracted into a static helper
@@ -423,6 +430,15 @@ func _rpc_request_asset(
 	)
 
 
+## Host: sends the partial library the peer was quoted (parts[1] is the request number).
+func _serve_library_parts(peer_id: int, parts: Array, resume_from_chunk: int) -> void:
+	var bundle: PackedByteArray = _asset_manager.library_transfer.host_bundle(peer_id, parts[1])
+	if bundle.is_empty():
+		rpc_id(peer_id, "_rpc_asset_not_found", parts[0], parts[1], parts[2], parts[3])
+	else:
+		_send_bytes_to_peer(peer_id, parts, bundle, resume_from_chunk)
+
+
 ## Send an asset file to a peer in chunks (with resume support)
 func _send_asset_to_peer(
 	peer_id: int,
@@ -440,40 +456,33 @@ func _send_asset_to_peer(
 
 	var data = file.get_buffer(file.get_length())
 	file.close()
+	var parts := [pack_id, asset_id, variant_id, file_type]
+	_send_bytes_to_peer(peer_id, parts, data, resume_from_chunk)
 
-	# Compress the data
-	var compressed = data.compress(FileAccess.COMPRESSION_ZSTD)
+
+## Compresses `data` and sends it to a peer as the transfer `parts` ([pack_id, asset_id,
+## variant_id, file_type]): the header, then the chunks a window at a time as the client acks
+## them, from the resume point.
+func _send_bytes_to_peer(
+	peer_id: int, parts: Array, data: PackedByteArray, resume_from_chunk: int = 0
+) -> void:
+	var compressed := data.compress(FileAccess.COMPRESSION_ZSTD)
 	var total_chunks := StreamSendWindow.chunk_count(compressed.size(), CHUNK_SIZE)
-
 	print(
 		(
 			"AssetStreamer: Sending %s to peer %d (%d bytes, %d chunks, starting from %d)"
-			% [
-				"%s/%s/%s/%s" % [pack_id, asset_id, variant_id, file_type],
-				peer_id,
-				compressed.size(),
-				total_chunks,
-				resume_from_chunk
-			]
+			% ["/".join(parts), peer_id, compressed.size(), total_chunks, resume_from_chunk]
 		)
 	)
-
 	# Send header (always send so client knows total)
-	rpc_id(
-		peer_id,
-		"_rpc_asset_header",
-		pack_id,
-		asset_id,
-		variant_id,
-		file_type,
-		total_chunks,
-		data.size()
-	)
+	_send_header_rpc(peer_id, parts, total_chunks, data.size())
+	_begin_host_transfer(peer_id, parts, compressed, resume_from_chunk)
 
-	# Send chunks from the resume point, a window at a time as the client acks them
-	_begin_host_transfer(
-		peer_id, [pack_id, asset_id, variant_id, file_type], compressed, resume_from_chunk
-	)
+
+## Sends the header of a transfer to a peer. Separate so tests can capture it.
+func _send_header_rpc(peer_id: int, parts: Array, total_chunks: int, original_size: int) -> void:
+	var rpc_name := "_rpc_asset_header"
+	rpc_id(peer_id, rpc_name, parts[0], parts[1], parts[2], parts[3], total_chunks, original_size)
 
 
 ## Starts (or restarts) the windowed send of `compressed` to a peer from `start_chunk`.
@@ -752,6 +761,13 @@ func _rpc_asset_header(
 	if not _client_downloads.has(key):
 		return
 
+	if pack_id == Paths.LIBRARY_PARTS_PACK_ID:
+		if not LibraryPartial.header_ok(total_chunks, original_size, CHUNK_SIZE):
+			_client_downloads.erase(key)
+			asset_failed.emit(pack_id, asset_id, variant_id, "Over the transfer limit", file_type)
+			_process_request_queue()
+			return
+
 	var download: Dictionary = _client_downloads[key]
 	# A resumed download keeps the chunks it already has when the file is unchanged;
 	# anything else starts over.
@@ -788,7 +804,7 @@ func _rpc_asset_chunk(
 
 	var download = _client_downloads[key]
 
-	if chunk_index < 0 or chunk_index >= download.chunks.size():
+	if chunk_index < 0 or chunk_index >= download.chunks.size() or chunk_data.size() > CHUNK_SIZE:
 		return
 
 	# Store chunk, counting it once (a resend of a stored chunk adds nothing)
@@ -840,6 +856,13 @@ func _finalize_download(key: String) -> void:
 			file_type
 		)
 		_client_downloads.erase(key)
+		_process_request_queue()
+		return
+
+	# A partial library goes to the channel to be checked, never to the disk cache.
+	if download.pack_id == Paths.LIBRARY_PARTS_PACK_ID:
+		_client_downloads.erase(key)
+		library_bundle_received.emit(download.asset_id, data)
 		_process_request_queue()
 		return
 

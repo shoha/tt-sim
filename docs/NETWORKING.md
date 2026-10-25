@@ -12,6 +12,7 @@ This document covers the multiplayer networking system, including connection man
 - [Sessions: the room and the table](#sessions-the-room-and-the-table)
 - [Late Joiner Support](#late-joiner-support)
 - [Level Map Files](#level-map-files)
+- [Library Transfer](#library-transfer)
 - [Token Synchronization](#token-synchronization)
 - [Development Setup](#development-setup)
 - [API Reference](#api-reference)
@@ -706,6 +707,62 @@ only there. Prefetch is covered by `test_asset_streamer_prefetch.gd` (the table 
 peers and within one, promotion at set out, slots, take-over, cancel, reuse at set out) and
 `test_session_prefetch.gd` (order, percent, reports, cancel on unshelve, failure), and between
 real peers by the ENet scenario `enet_prefetch`.
+
+---
+
+## Library Transfer
+
+A map made with a content library (a non-core collection of plants, see
+[systems/library.md](systems/library.md) "Multiplayer") names it in `manifest.json`
+`libraries`. A client that lacks the library asks the host for the plants the map uses, and
+only those: a PARTIAL library, kept for the session. Decision (user, 2026-10-24): non-core
+libraries transfer automatically in multiplayer, ideally only the assets used in a given map.
+"Automatically" means the request starts on its own; the player still says yes (below).
+
+Messages, on `AssetManager.library_transfer` (`LibraryTransferChannel`,
+`autoloads/library_transfer_channel.gd`, RPCs at `/root/AssetManager/LibraryTransfer` on every
+peer), protocol `LibraryPartial.PROTOCOL` = 1:
+
+| Message | Direction | Payload |
+|---------|-----------|---------|
+| `_rpc_library_quote(request_id, request)` | client -> host | library id, the version and hash the map names, the used asset, biome and surface ids, the libraries the client has (`have`) |
+| `_rpc_library_quote_reply(request_id, reply)` | host -> client | the quote (per library: name, version, author, asset count, files, bytes) or a refusal `{ok: false, code, error}` |
+| pack `_library_parts`, asset id = request number | client -> host through `AssetStreamer` | the same chunked, windowed, resumable and cancellable stream as a map file; the host builds the bundle (`LibraryTransfer.build_bundle`) from the request it quoted |
+| `_rpc_library_hint(hint)` | host -> clients | a request skeleton for a library the table's map started using (a live edit) |
+
+- **Version gate.** Every peer runs the host's exact game version (the same-version gate), so
+  every peer has the channel; the protocol number rides in the request and the reply, and a
+  reply with another one fails visibly ("the host speaks another library transfer version"). A
+  host that does not answer within 15 s ends the request with "The host did not answer. Is it
+  running the same version of the game?". The old "Open without those plants" dialog follows any
+  skip, refusal or failure.
+- **Untrusted input, both ways.** The host answers only for ids that a map it serves uses (the
+  table's live document, `LiveEdits.documents_provider`, and the shelf maps' files, usage cached
+  by modified time), for a library it serves that is not official, within the bundle caps, and
+  keeps at most 8 quotes per peer (`host_bundle` serves only what was quoted). The client checks
+  the stream header against the caps before it sizes anything (`LibraryPartial.header_ok`), drops
+  a chunk larger than `CHUNK_SIZE`, and installs nothing until `LibraryTransfer.verify_and_install`
+  accepts every library of the bundle (docs/systems/library.md lists the checks).
+- **Where it runs.** A map load on a client: `LevelPlayLoader.load_map_sources_async` sets
+  `MapSourceLoader.library_fetch`, `MapLibraryGate.run` calls it before it checks the libraries
+  (so a late joiner, a map set out from the shelf and a first load all take the same path).
+  After the download the libraries are served again (`FoliageLibrary.apply`, no map rebuild: the
+  map is not built yet).
+- **Mid-session edits.** `LiveEdits` (host) announces a library the first time its document uses
+  it, and again when its used assets grow, before the edit's op is sent; a client runs the
+  ordinary request for the hint, and its `LiveEdits` holds incoming ops while a transfer runs
+  (`LibraryTransferChannel.is_busy()`, `idle`), so an edit that uses the new plants is not
+  refused for lack of them.
+- **The end.** When the session ends (`ConnectionState.OFFLINE`) the received libraries are
+  removed (`LibraryReceivedStore.sweep_session`), and a start-up sweep removes what a crashed session
+  left. A library received while the cache holds more than 512 MB evicts the least recently used
+  first.
+
+Tests: `test_library_transfer.gd` (plan, authorize, quote, bundle), `test_library_transfer_install.gd`
+(hostile bundles, the cache, the registry's received source), `test_library_transfer_consent.gd`
+(the player's side as a UI-free model) and `test_library_transfer_flow.gd` (a client and a host
+channel over two `AssetStreamer` doubles and a message queue: the whole request, skip, cancel,
+refusal, timeout, protocol mismatch, tampering, the map gate, hints, deltas, the session end).
 
 ---
 

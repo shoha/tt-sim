@@ -87,6 +87,17 @@ static func _mark_duplicates(entries: Array[Dictionary]) -> void:
 				var right_official := bool(entries[b].get("official", false))
 				if left_official != right_official:
 					return left_official
+				# A library received from a host (a partial, transient) beats an installed one
+				# only when it is a strictly newer version of it; the player's own copy wins ties.
+				var left_received: bool = entries[a].get("source") == "received"
+				var right_received: bool = entries[b].get("source") == "received"
+				if left_received != right_received:
+					var cmp := LibraryVersions.compare(
+						String(entries[a].get("version", "")), String(entries[b].get("version", ""))
+					)
+					if cmp != 0:
+						return cmp > 0
+					return right_received
 				return String(entries[a].get("folder", "")) < String(entries[b].get("folder", ""))
 		)
 		var winner: Dictionary = entries[group[0]]

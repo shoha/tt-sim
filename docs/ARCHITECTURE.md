@@ -2221,6 +2221,7 @@ project/
 │   ├── asset_downloader.gd    # Sub-component: HTTP downloads
 │   ├── asset_streamer.gd      # Sub-component: P2P streaming
 │   ├── asset_resolver.gd      # Sub-component: resolution pipeline
+│   ├── library_transfer_channel.gd # Sub-component: content-library plants sent by the host (docs/NETWORKING.md)
 │   ├── asset_model_cache.gd   # RefCounted: memory model cache (owned by AssetManager)
 │   └── update_manager.gd    # Autoload: GitHub release checks
 ├── resources/           # Custom Resource classes

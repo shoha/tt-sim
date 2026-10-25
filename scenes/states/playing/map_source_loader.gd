@@ -71,6 +71,10 @@ var library_adaptation: Dictionary = {}
 ## MapLibraries.check's). Authoring and play set MapLibraryGate.ask_dialog; left invalid, the
 ## load opens the map without those plants at once and says so in a toast.
 var library_choice: Callable = Callable()
+## func(doc) -> Dictionary (a coroutine): a client's request to the host for the library plants
+## the document uses and this install lacks, asked before the check above
+## (LibraryTransferChannel.fetch_for_document). Left invalid on the host and in solo play.
+var library_fetch: Callable = Callable()
 ## MapLibraryGate.run's result for the document load_async() read ({} before one).
 var library_gate: Dictionary = {}
 ## True when load_async() returned null because the player chose Cancel in the library dialog.
@@ -119,7 +123,9 @@ func load_async(glb_path: String, document_path: String) -> Node3D:
 		else:
 			# The libraries the map names against the ones served (MapLibraryGate): renamed
 			# ids, a missing library asked about, never a quiet substitution.
-			library_gate = await MapLibraryGate.run(document, library_choice)
+			library_gate = await MapLibraryGate.run(
+				document, library_choice, PaletteLibrary.DEFAULT_ROOT, library_fetch
+			)
 			if is_superseded.call():
 				return null
 			if not library_gate["proceed"]:

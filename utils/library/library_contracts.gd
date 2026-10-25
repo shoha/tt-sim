@@ -175,6 +175,7 @@ const LIBRARY_KEYS: Array[String] = [
 	"retired",
 	"tags",
 	"stats",
+	"partial",
 ]
 const CATALOG_KEYS: Array[String] = ["format", "format_version", "assets"]
 const CATALOG_ENTRY_KEYS: Array[String] = [
