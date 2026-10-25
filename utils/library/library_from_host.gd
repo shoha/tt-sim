@@ -491,10 +491,15 @@ static func startup() -> Dictionary:
 	if not libraries["ok"] or not DirAccess.dir_exists_absolute(String(libraries["path"])):
 		return out
 	var root := String(libraries["path"])
-	for folder_name in DirAccess.get_directories_at(root):
-		if folder_name.begins_with(STAGING_PREFIX) or folder_name.begins_with(OLD_PREFIX):
-			if _delete(root.path_join(folder_name), root):
-				out["swept"] = int(out["swept"]) + 1
+	# The folders to sweep are dot folders, which Linux and macOS leave out of a listing unless
+	# hidden entries are asked for (the CI failure of 2026-10-25).
+	var listing := DirAccess.open(root)
+	if listing != null:
+		listing.include_hidden = true
+		for folder_name in listing.get_directories():
+			if folder_name.begins_with(STAGING_PREFIX) or folder_name.begins_with(OLD_PREFIX):
+				if _delete(root.path_join(folder_name), root):
+					out["swept"] = int(out["swept"]) + 1
 	var migrated := migrate_received()
 	out["adopted"] = migrated["adopted"]
 	out["left"] = migrated["left"]
