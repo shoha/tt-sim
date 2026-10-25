@@ -771,7 +771,14 @@ The owner reviewed the manager (49 stories, UX-1 to UX-12, plantgen
   Manager" (`ShadowGutter`). The audit found and fixed nine scroll sites: the manager's list and
   card, the designer picker's sections, the New map dialog's fields, the avatar roster's grid, the
   designer's slot list and ground strip, `PaneStack` (every pane of the authoring and Visuals
-  drawers and the avatar builder) and the room's shelf.
+  drawers and the avatar builder) and the room's shelf. Second pass (2026-10-25): the designer's
+  inspector and ground look scrolls (`ShadowGutter.outset`, rows stay put) and every `Foldout` of
+  its sections (`Foldout.button_room`, a clip that reaches out by the glass ring's room); the test
+  now selects every rule, opens the look editor, the density popup and the Save as dialog, and
+  walks the Events pane, the thin and bridge tools. Not instantiated by the test: the avatar
+  builder's 3D preview viewport (no buttons), the asset browser's pack tabs (need installed
+  packs), the update dialog's scroll beyond its default state and any popup menu (a Window of its
+  own, outside the clip walk).
 
 ## Verification
 
@@ -1055,7 +1062,15 @@ renames single files and removes its lock file only; any folder delete it adds m
 ## Open work
 
 See [../MAP_AUTHORING.md](../MAP_AUTHORING.md) "Open work". The library steps (S6 onwards: the
-manager, the designer) are in plantgen's design doc section 6. Left over: the cache is not
+manager, the designer) are in plantgen's design doc section 6. **Not built (product gaps, not
+bugs):** S47, updating a collection from its link (the manager shows a collection's `url` and
+nothing fetches it; an update is a new import by hand), and S48, live reload (the manager rescans
+on open, on window focus and on Refresh behind `disk_signature`; there is no file watcher, so a
+collection edited on disk while the game runs shows after the next rescan, never on its own).
+**Old copies** (2026-10-25): a `.received/<id>` leftover whose collection is installed is reported
+once (a `<id>.reported` file beside it remembers, plus the process), and the manager's
+`LibraryStaleSection` row offers "Remove old copies" behind a confirmation
+(`LibraryFromHost.remove_stale_received`, SafeDelete). Left over: the cache is not
 pruned and nothing prewarms it on a worker thread (the first ground draw of a new surface bakes
 about 0.2 s on the main thread); `ScatterGround.SCORCHED_SURFACES` and
 `PaletteLibrary.WATER_SURFACE_DEFAULTS` still hold their legacy values (their files belong to the

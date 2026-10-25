@@ -317,9 +317,7 @@ func _add_facts(source_name: String) -> void:
 		facts.add_child(needs)
 		for dep: Dictionary in deps:
 			var ok: bool = dep["state"] == LibraryInstall.DEP_OK
-			var text := "%s %s" % [dep["id"], dep["version"]]
-			if not ok:
-				text = LibraryInstall.dependency_line(dep)
+			var text := LibraryInstall.dependency_line(dep)
 			var role := ThemeColors.SUCCESS if ok else ThemeColors.WARNING
 			_lines([text], "circle-check" if ok else "alert-triangle", role, needs)
 	if String(card["url"]) != "":

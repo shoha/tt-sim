@@ -85,6 +85,7 @@ var _syncing: bool = false
 func _init() -> void:
 	name = "Habit"
 	title = "Habit, clump and company"
+	button_room = true
 
 
 func setup(designer: BiomeDesignerSession) -> void:

@@ -51,6 +51,7 @@ var _syncing: bool = false
 func _init() -> void:
 	name = "Response"
 	title = "Terrain response"
+	button_room = true
 	expanded = true
 
 

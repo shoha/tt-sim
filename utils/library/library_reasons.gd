@@ -158,6 +158,16 @@ static func dependency_title(id: String) -> String:
 	return String(found.get("name", id)) if not found.is_empty() else id
 
 
+## The version a dependency range asks for, in words: "version 1.0 or newer" for "^1.0" or
+## ">=1.0", "version <range>" for any other range, "" for any version. No leading space.
+static func version_words(range_text: String) -> String:
+	var text := range_text.strip_edges()
+	if text == "" or text == "*" or text == "any version":
+		return ""
+	var low := _lower_bound(text)
+	return ("version %s or newer" % low) if low != "" else "version " + text
+
+
 ## " 9 or newer" for a caret or at-least range ("^9.0", ">=9.0"), " 9" when `needing` is false;
 ## any other range reads as " version <range>"; "" for any version. Starts with a space.
 static func _range_words(range_text: String, needing: bool) -> String:

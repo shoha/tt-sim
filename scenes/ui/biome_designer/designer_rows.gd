@@ -93,6 +93,7 @@ static func section(node_name: String, title: String, open: bool = false) -> Fol
 	var foldout := Foldout.new()
 	foldout.name = node_name
 	foldout.title = title
+	foldout.button_room = true
 	foldout.expanded = open
 	return foldout
 

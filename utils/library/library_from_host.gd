@@ -35,9 +35,13 @@ const KEY_CAP_MB := "cache_cap_mb"
 ## Walking a folder for its size stops at these.
 const MAX_WALK_FILES := 20000
 const MAX_WALK_DEPTH := 8
+## The small file beside a `.received/<id>` leftover that says it was reported once.
+const REPORTED_SUFFIX := ".reported"
 
 ## The library ids the open map uses (MapLibraryGate.run records them): never evicted.
 static var open_ids: Dictionary = {}
+## The `.received` leftovers already reported in this process (the marker file covers later runs).
+static var reported_leftovers: Dictionary = {}
 ## The delta size under which an agreed collection extends without a question (tests lower it).
 static var auto_delta_limit: int = AUTO_DELTA_BYTES
 
@@ -509,10 +513,14 @@ static func startup() -> Dictionary:
 ## The earlier version kept received collections for the session only, in `<libraries>/.received/
 ## <id>/` with a `<id>.received.json` record beside. Each one that is a valid partial copy and
 ## whose id is not already installed is moved once into the normal libraries folder and flagged
-## from-host; anything else is reported and left where it is (nothing is deleted). {adopted: ids,
-## left: [{id, reason}]}. Reads the registry for the official ids.
+## from-host; anything else is reported ONCE and left where it is (nothing is deleted here: a
+## leftover whose id is installed is offered for removal in the manager, see stale_received). A
+## leftover is reported once per machine: a `<id>.reported` file beside it remembers (and the
+## process remembers when that file cannot be written). {adopted: ids, left: [{id, reason}] (only
+## those reported now), stale: [id] (every leftover whose id is installed)}. Reads the registry
+## for the official ids.
 static func migrate_received() -> Dictionary:
-	var out := {"adopted": [] as Array[String], "left": []}
+	var out := {"adopted": [] as Array[String], "left": [], "stale": [] as Array[String]}
 	var legacy := LibraryPaths.received()
 	if not legacy["ok"] or not DirAccess.dir_exists_absolute(String(legacy["path"])):
 		return out
@@ -520,15 +528,66 @@ static func migrate_received() -> Dictionary:
 	for folder_name in DirAccess.get_directories_at(base):
 		if folder_name.begins_with("."):
 			continue
+		var marker := base.path_join(folder_name + REPORTED_SUFFIX)
+		var seen := reported_leftovers.has(marker) or FileAccess.file_exists(marker)
+		if seen and not LibraryRegistry.info(folder_name).is_empty():
+			(out["stale"] as Array[String]).append(folder_name)
+			continue
 		var reason := _adopt_one(base, folder_name)
 		if reason == "":
 			(out["adopted"] as Array[String]).append(folder_name)
-		else:
-			(out["left"] as Array).append({"id": folder_name, "reason": reason})
-			printerr(
-				"LibraryFromHost: the old received folder '%s' was left: %s" % [folder_name, reason]
-			)
+			continue
+		if reason == installed_reason():
+			(out["stale"] as Array[String]).append(folder_name)
+		if seen:
+			continue
+		reported_leftovers[marker] = true
+		var file := FileAccess.open(marker, FileAccess.WRITE)
+		if file != null:
+			file.store_string(reason)
+		(out["left"] as Array).append({"id": folder_name, "reason": reason})
+		printerr(
+			"LibraryFromHost: the old received folder '%s' was left: %s" % [folder_name, reason]
+		)
 	return out
+
+
+## The reason _adopt_one gives for a leftover whose id is installed.
+static func installed_reason() -> String:
+	return "%s with that id is already installed" % LibraryNames.article()
+
+
+## The ids of `.received` leftovers whose collection is installed: nothing reads them, so the
+## manager offers to remove them (remove_stale_received). Lists only; reads the registry.
+static func stale_received() -> Array[String]:
+	var out: Array[String] = []
+	var legacy := LibraryPaths.received()
+	if not legacy["ok"] or not DirAccess.dir_exists_absolute(String(legacy["path"])):
+		return out
+	for folder_name in DirAccess.get_directories_at(String(legacy["path"])):
+		if folder_name.begins_with(".") or not LibraryIds.library_problems(folder_name).is_empty():
+			continue
+		if not LibraryRegistry.info(folder_name).is_empty():
+			out.append(folder_name)
+	return out
+
+
+## Removes the `.received` leftover `id` through SafeDelete, only when it is a stale one (its id
+## is installed), with its old record and its reported marker. {ok, error}. The caller confirms.
+static func remove_stale_received(id: String) -> Dictionary:
+	if not id in stale_received():
+		return {"ok": false, "error": "not an old copy of an installed %s" % LibraryNames.lower()}
+	var base := String(LibraryPaths.received()["path"])
+	var source := base.path_join(id)
+	if not SafeDelete.adopt(source, "received", base):
+		return {"ok": false, "error": "cannot be marked for removal"}
+	var gone := SafeDelete.tree(source, base)
+	if not bool(gone["ok"]):
+		return {"ok": false, "error": String(gone["error"])}
+	SafeDelete.file(base.path_join(id + ".received.json"), base)
+	SafeDelete.file(base.path_join(id + REPORTED_SUFFIX), base)
+	reported_leftovers.erase(base.path_join(id + REPORTED_SUFFIX))
+	return {"ok": true, "error": ""}
 
 
 static func _adopt_one(base: String, id: String) -> String:

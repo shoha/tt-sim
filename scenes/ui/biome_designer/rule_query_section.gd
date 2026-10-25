@@ -37,6 +37,7 @@ var _syncing: bool = false
 func _init() -> void:
 	name = "Assets"
 	title = "Assets"
+	button_room = true
 	expanded = true
 
 
