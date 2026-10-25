@@ -126,24 +126,40 @@ func test_the_library_reports_the_curves_capability() -> void:
 	assert_eq(ScatterNative._refusal(Parity.curved_species(curved)), "", "curved jobs run natively")
 
 
-## Terrain response on every rule (slope minimum, slope, height and wet curves) places the same
-## rows natively as in GDScript, on steep terraces with a synthetic shore weight, and the curves
+## S12c: and the water_dist axis (version() names "water"). A library built before S12c fails
+## here and in every curved parity check instead of placing rows without the distance curve.
+func test_the_library_reports_the_water_capability() -> void:
+	if _skip_without_library():
+		return
+	assert_string_contains(ScatterNative.version(), ScatterNative.CAPABILITY_WATER)
+	assert_eq(ScatterNative.version(), "ttscatter 5 curves water", "rebuild native/ (AGENTS.md)")
+	var wet_rule: Array[Dictionary] = [
+		{"key": "reed", "response": {"water_dist": [[0, 1], [9, 0]]}}
+	]
+	assert_eq(ScatterNative._refusal(wet_rule), "", "water_dist jobs run natively")
+
+
+## Terrain response on every rule (slope minimum, slope, height, wet and water_dist curves) places
+## the same rows natively as in GDScript, on rolling ground and steep terraces, dry, with a
+## synthetic shore weight, and beside a lake whose distance grid the curves read; the curves
 ## visibly change the placement.
 func test_terrain_response_rows_equal_gdscript_dry_and_wet() -> void:
 	if _skip_without_library():
 		return
 	for biome_id in ["temperate_forest_summer_s1", "grassland_meadow_summer_s1"]:
 		for landform in ["rolling", "terraces"]:
-			for wet in [false, true]:
+			for water in ["dry", "shore", "lake"]:
 				var doc := _rolling_doc(biome_id, Vector2i.ZERO, landform)
-				if wet:
+				if water == "shore":
 					_dress_shore(doc)
+				elif water == "lake":
+					_dress_lake(doc)
 				var plain := _work(doc, biome_id, Vector2i.ZERO)
 				var work := _curved_work(doc, biome_id, Vector2i.ZERO)
 				_assert_same_rows(doc, biome_id, work)
 				var base := _native_rows(doc, biome_id, plain)
 				var curved := _native_rows(doc, biome_id, work)
-				var label := "%s %s wet %s: curves thin" % [biome_id, landform, wet]
+				var label := "%s %s %s: curves thin" % [biome_id, landform, water]
 				assert_lt(_row_count(curved), _row_count(base), label)
 
 
@@ -160,9 +176,13 @@ func test_each_terrain_response_alone_equals_gdscript() -> void:
 		{"response": {"height": [[-500, 1.0], [1, 1.0], [5, 0.1]]}},
 		{"response": {"wet": [[0, 1.0], [0.5, 0.3]]}},
 		{"response": {"wet": [[0, 0.0], [1, 1.0]]}},
+		{"response": {"water_dist": [[0, 1.0], [6, 0.5], [30, 0.0]]}},
+		{"response": {"water_dist": [[0, 0.1], [20, 1.0]]}},
+		{"response": {"water_dist": [[0, 0.0], [3, 0.0], [4, 1.0], [8, 1.0], [10, 0.0]]}},
 	]
 	var doc := _rolling_doc(biome_id, Vector2i.ZERO)
 	_dress_shore(doc)
+	_dress_lake(doc)
 	for kind in kinds:
 		var work := _work(doc, biome_id, Vector2i.ZERO)
 		var species: Array[Dictionary] = []
@@ -180,6 +200,7 @@ func test_terrain_response_rows_do_not_depend_on_the_job_region() -> void:
 	var biome_id := "temperate_forest_summer_s1"
 	var doc := _rolling_doc(biome_id, Vector2i.ZERO)
 	_dress_shore(doc)
+	_dress_lake(doc)
 	_paint(doc, biome_id, Rect2(Vector2(10.0, 0.0), Vector2(10.0, 10.0)).grow(PAINT_MARGIN_M))
 	var alone := _curved_work(doc, biome_id, Vector2i.ZERO)
 	var both := _curved_work(doc, biome_id, Vector2i.ZERO)
@@ -346,6 +367,29 @@ func _dress_shore(doc: MapDocument) -> void:
 	doc.water_dressing = field
 
 
+## A round lake (radius 3 m at (5, 5)) laid over the stored field: wet line and bed at full, one
+## metre of depth, and a shore ring. The distance grid (water_dist axis) comes from the wet-line
+## byte alone. Creates the field when there is none.
+func _dress_lake(doc: MapDocument) -> void:
+	var columns := doc.samples_x()
+	var field := doc.water_dressing
+	if field.size() != doc.sample_count() * WaterDressing.CHANNELS:
+		field = PackedByteArray()
+		field.resize(doc.sample_count() * WaterDressing.CHANNELS)
+	for z in doc.samples_z():
+		for x in columns:
+			var d := doc.sample_to_world(Vector2(x, z)).distance_to(Vector2(5.0, 5.0)) - 3.0
+			var at := (z * columns + x) * WaterDressing.CHANNELS
+			if d <= 0.0:
+				field[at] = 255
+				field[at + 2] = 100
+				field[at + 3] = 255
+			elif d < 1.5:
+				field[at + 1] = maxi(field[at + 1], roundi(255.0 * (1.0 - d / 1.5)))
+				field[at + 3] = roundi(255.0 * (1.0 - d / 1.5) * 0.9)
+	doc.water_dressing = field
+
+
 ## The native rows of `work` ({asset id: PackedFloat32Array}), failing the test on a refusal.
 func _native_rows(doc: MapDocument, biome_id: String, work: Dictionary) -> Dictionary:
 	var native: Variant = ScatterNative.run_biome(doc, biome_id, work, {})
@@ -383,7 +427,8 @@ func _assert_same_rows(doc: MapDocument, biome_id: String, work: Dictionary) -> 
 		anchors,
 		fields.density_ceiling_at,
 		null,
-		fields.wet_at
+		fields.wet_at,
+		fields.water_dist_at
 	)
 	var native_anchors := {}
 	var native: Variant = ScatterNative.run_biome(doc, biome_id, work, native_anchors)
