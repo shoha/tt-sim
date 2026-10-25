@@ -66,7 +66,9 @@ static func base_rule_surfaces(
 
 ## The water bed and shore surfaces [bed, shore] that dress the water on base surface `base`
 ## where no painted biome says otherwise: those of the palette's first biome on that ground,
-## else PaletteLibrary.DEFAULT_WATER_SURFACES the palette has as ground ("" = none).
+## else the library bindings' water.bed and water.shore (LibraryBindings.water_defaults; the
+## legacy PaletteLibrary.DEFAULT_WATER_SURFACES until a library binds them) the palette has as
+## ground ("" = none).
 static func base_water_surfaces(
 	base: String, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> PackedStringArray:
@@ -77,7 +79,7 @@ static func base_water_surfaces(
 			)
 	var surfaces := PaletteLibrary.surfaces(root)
 	var out := PackedStringArray()
-	for name: String in PaletteLibrary.DEFAULT_WATER_SURFACES:
+	for name: String in LibraryBindings.water_defaults():
 		var ground: bool = surfaces.get(name, {}).get("role", "") == "ground"
 		out.append(name if ground else "")
 	return out
@@ -94,7 +96,9 @@ static func build_ground_material(
 	var material := ShaderMaterial.new()
 	material.shader = AuthoredTerrain.GROUND_SHADER
 	material.set_shader_parameter("breakup_seed", map_seed & 0x7fffffff)
-	var surface: Dictionary = PaletteLibrary.surfaces(root).get(surface_name, {})
+	var surface: Dictionary = PaletteLibrary.surfaces(root).get(
+		SurfaceStore.runtime_name(surface_name), {}
+	)
 	if load_texture(root, surface.get("albedo", "")) == null:
 		push_warning(
 			(
@@ -112,7 +116,9 @@ static func build_ground_material(
 static func surface_mean_albedo(
 	surface_name: String, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> Variant:
-	var surface: Dictionary = PaletteLibrary.surfaces(root).get(surface_name, {})
+	var surface: Dictionary = PaletteLibrary.surfaces(root).get(
+		SurfaceStore.runtime_name(surface_name), {}
+	)
 	var albedo := load_texture(root, surface.get("albedo", ""))
 	if albedo == null:
 		return null
@@ -133,19 +139,16 @@ static func surface_mean_albedo(
 static func surface_available(
 	surface_name: String, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> bool:
-	var surface: Dictionary = PaletteLibrary.surfaces(root).get(surface_name, {})
-	var path: String = surface.get("albedo", "")
-	return path != "" and ResourceLoader.exists(root.path_join(path))
+	var surface: Dictionary = PaletteLibrary.surfaces(root).get(
+		SurfaceStore.runtime_name(surface_name), {}
+	)
+	return SurfaceStore.available(root, surface.get("albedo", ""))
 
 
-## The texture at `relative_path` under palette root `root`, or null.
+## The texture at `relative_path` under palette root `root`, or null: the editor import for a
+## palette surface, the baked map for a content library's (SurfaceStore).
 static func load_texture(root: String, relative_path: String) -> Texture2D:
-	if relative_path == "":
-		return null
-	var path := root.path_join(relative_path)
-	if not ResourceLoader.exists(path):
-		return null
-	return ResourceLoader.load(path) as Texture2D
+	return SurfaceStore.texture(root, relative_path)
 
 
 ## A 1 x 1 texture of `color`.

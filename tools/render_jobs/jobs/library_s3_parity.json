@@ -1,0 +1,38 @@
+{
+ "out_dir": "render_jobs/library-s3_parity",
+ "timeout_s": 900,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "new", "biome": "savanna_summer_s1", "size": 150, "seed": 1234, "landform": "terraces"},
+  {"op": "wait_ready", "settle": 3.0}, {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/tree_fade.gd", "factor": 0},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "nocursor"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "wind", "freeze": true},
+  {"op": "home"}, {"op": "settle"},
+  {"op": "capture", "name": "savanna_home", "desc": "savanna terraces seed 1234, home view, fades off, wind frozen: ground, cliff, accents and paths through the surface resolver"},
+  {"op": "zoom", "size": 14}, {"op": "look_at", "at": [0, 0]}, {"op": "settle"},
+  {"op": "capture", "name": "savanna_close", "desc": "savanna, size 14 at the map centre"},
+
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "new", "biome": "rocky_badlands_summer_s1", "size": 150, "seed": 1234, "landform": "terraces"},
+  {"op": "wait_ready", "settle": 3.0}, {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/tree_fade.gd", "factor": 0},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "nocursor"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "wind", "freeze": true},
+  {"op": "home"}, {"op": "settle"},
+  {"op": "capture", "name": "badlands_home", "desc": "rocky badlands terraces seed 1234, home view"},
+  {"op": "zoom", "size": 14}, {"op": "look_at", "at": [0, 0]}, {"op": "settle"},
+  {"op": "capture", "name": "badlands_close", "desc": "badlands, size 14 at the map centre"},
+
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "index", "title": "library S3 surface resolver parity", "intro": "Two biomes (savanna, rocky badlands) on the terraces landform, seed 1234, fades off, wind frozen. Run once on main before the SurfaceStore change and once after; the legacy palette surfaces must draw identically (mean absolute difference 0.000 of 255)."}
+ ]
+}

@@ -62,7 +62,9 @@ extends ForestFall
 ## plays. The burn shader's noise runs only on the stand-ins.
 
 ## The palette biome a fire leaves (its "biome" key) and the ground it lays, or the stand-in
-## an older palette has (ASSET_PIPELINE.md "Fire").
+## an older palette has (ASSET_PIPELINE.md "Fire"). These are the legacy values; the code reads
+## them through LibraryBindings (fire.burnt_biome, fire.ash_surface, fire.ash_fallback), which
+## answers with these until a served content library binds its own.
 const BURNT_BIOME := "burnt_forest"
 const ASH := "ash"
 const ASH_FALLBACK := "dirt_peat"
@@ -194,15 +196,16 @@ static func burnt_biome(root: String = PaletteLibrary.DEFAULT_ROOT) -> String:
 
 ## The map change a fire makes with a palette of `biomes` (PaletteLibrary.biomes) and
 ## `surfaces` (PaletteLibrary.surfaces): {"biome": the burnt biome's id, or "" for a Clear,
-## "surface": ASH, else ASH_FALLBACK, else "" (none laid)}. Pure.
+## "surface": the ash binding (ASH), else its fallback (ASH_FALLBACK), else "" (none laid)}. Pure
+## over its arguments and the served bindings.
 static func plan_for(biomes: Array, surfaces: Dictionary) -> Dictionary:
 	var biome := ""
 	for entry: Dictionary in biomes:
-		if String(entry.get("biome", "")) == BURNT_BIOME:
+		if String(entry.get("biome", "")) == LibraryBindings.fire_burnt_biome():
 			biome = String(entry.get("id", ""))
 			break
 	var surface := ""
-	for name_of in [ASH, ASH_FALLBACK]:
+	for name_of in [LibraryBindings.fire_ash_surface(), LibraryBindings.fire_ash_fallback()]:
 		if surfaces.has(name_of):
 			surface = name_of
 			break
@@ -232,7 +235,9 @@ static func burnable_along(
 	limit: int = FirePath.MAX_TREES
 ) -> Array[Dictionary]:
 	var burnt := burnt_biome(root)
-	return FirePath.trees_along(scatter, line, half_width, burnt + "/" if burnt != "" else "", limit)
+	return FirePath.trees_along(
+		scatter, line, half_width, burnt + "/" if burnt != "" else "", limit
+	)
 
 
 ## The burn shader's progress for a tree `t` seconds after it caught a burn of `burn`

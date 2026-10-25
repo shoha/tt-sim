@@ -1,0 +1,7 @@
+{
+	"format": "ttsim-catalog",
+	"format_version": 1,
+	"assets": [
+		{"id": "Tree_Oak_v0", "group": "oak", "name": "Oak", "category": "tree", "subtype": "oak", "tags": [], "biomes": ["meadow"], "seasons": [], "game_kind": "tree", "wind_category": "tree", "size_class": "large", "dimensions_m": [6.0, 8.0, 6.0], "triangles": 12, "lods": [{"node": "Tree_Oak_v0_LOD0", "triangles": 12}], "file": "assets/tree/Tree_Oak_v0.glb", "node": "Tree_Oak_v0_LOD0"}
+	]
+}

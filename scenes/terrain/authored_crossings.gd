@@ -396,7 +396,7 @@ func _crossing_node(parts: Dictionary) -> Node3D:
 ## 0: bare, also when the palette has no `moss` surface).
 static func moss_amount(style: String, root: String = PaletteLibrary.DEFAULT_ROOT) -> float:
 	var biome := PaletteLibrary.biome(style, root) if style != "" else {}
-	if biome.is_empty() or not PaletteLibrary.surfaces(root).has(MOSS_SURFACE):
+	if biome.is_empty() or not PaletteLibrary.surfaces(root).has(LibraryBindings.crossing_moss()):
 		return 0.0
 	return float(MOSS_AMOUNTS.get(String(biome.get("climate", "")), 0.0))
 
@@ -501,7 +501,7 @@ func _wood_material(style: String) -> Material:
 		return _materials[key]
 	var climate := String(_biome(style).get("climate", ""))
 	var tint: Color = WOOD_TINTS.get(climate, DEFAULT_WOOD_TINT)
-	var material := _surface_material(WOOD_SURFACE, tint, WOOD_NORMAL_SCALE)
+	var material := _surface_material(LibraryBindings.crossing_planks(), tint, WOOD_NORMAL_SCALE)
 	_materials[key] = material
 	return material
 
@@ -527,10 +527,9 @@ func _moss_material() -> Material:
 	var key := "moss"
 	if _materials.has(key):
 		return _materials[key]
-	var material := _surface_material(MOSS_SURFACE, MOSS_TINT, MOSS_NORMAL_SCALE)
-	var tile := float(
-		PaletteLibrary.surfaces(_palette_root).get(MOSS_SURFACE, {}).get("tile_m", 3.0)
-	)
+	var moss := LibraryBindings.crossing_moss()
+	var material := _surface_material(moss, MOSS_TINT, MOSS_NORMAL_SCALE)
+	var tile := float(PaletteLibrary.surfaces(_palette_root).get(moss, {}).get("tile_m", 3.0))
 	material.uv1_triplanar = true
 	material.uv1_triplanar_sharpness = 4.0
 	material.uv1_scale = Vector3.ONE / maxf(tile, 0.1)
@@ -582,11 +581,11 @@ static func texture_paths(
 	var names := {}
 	for crossing in doc.crossings:
 		if crossing.is_plank():
-			names[WOOD_SURFACE] = true
+			names[LibraryBindings.crossing_planks()] = true
 			continue
 		names[stone_surface(crossing.style, root)] = true
 		if moss_amount(crossing.style, root) > 0.0:
-			names[MOSS_SURFACE] = true
+			names[LibraryBindings.crossing_moss()] = true
 		if crossing.is_arch():
 			var paving := paving_surface(crossing.style, root)
 			if paving != "":
@@ -597,17 +596,24 @@ static func texture_paths(
 		var surface: Dictionary = surfaces.get(surface_name, {})
 		for key in ["albedo", "normal", "orm"]:
 			var relative: Variant = surface.get(key, "")
-			if relative is String and relative != "":
+			# A content library's maps are baked by SurfaceStore, not threaded resource loads.
+			if (
+				relative is String
+				and relative != ""
+				and not SurfaceStore.is_library_path(root, relative)
+			):
 				paths.append(root.path_join(relative))
 	return paths
 
 
 ## The palette rock surface stepping stones of style `style` (a biome id, or "") take: the
-## biome's cliff_surface, else DEFAULT_STONE_SURFACE.
+## biome's cliff_surface, else the crossings.stone_default binding (DEFAULT_STONE_SURFACE).
 static func stone_surface(style: String, root: String = PaletteLibrary.DEFAULT_ROOT) -> String:
 	var biome := PaletteLibrary.biome(style, root) if style != "" else {}
 	var surface := String(biome.get("cliff_surface", ""))
-	return surface if PaletteLibrary.surfaces(root).has(surface) else DEFAULT_STONE_SURFACE
+	if PaletteLibrary.surfaces(root).has(surface):
+		return surface
+	return LibraryBindings.crossing_stone_default()
 
 
 ## The palette rock surface a stone arch's deck of style `style` (a biome id, or "") is paved
@@ -619,7 +625,8 @@ static func paving_surface(style: String, root: String = PaletteLibrary.DEFAULT_
 		for surface_name in PaletteLibrary.path_surfaces(style, root):
 			if PAVING_SURFACES.has(surface_name) and surfaces.has(surface_name):
 				return surface_name
-	return DEFAULT_PAVING_SURFACE if surfaces.has(DEFAULT_PAVING_SURFACE) else ""
+	var paving := LibraryBindings.crossing_paving()
+	return paving if surfaces.has(paving) else ""
 
 
 ## The palette gravel surface a ford of style `style` (a biome id, or "") is barred with:
@@ -628,10 +635,11 @@ static func paving_surface(style: String, root: String = PaletteLibrary.DEFAULT_
 static func gravel_surface(style: String, root: String = PaletteLibrary.DEFAULT_ROOT) -> String:
 	var surfaces := PaletteLibrary.surfaces(root)
 	var biome := PaletteLibrary.biome(style, root) if style != "" else {}
-	var wanted := DEFAULT_GRAVEL_SURFACE
+	var gravel := LibraryBindings.crossing_gravel()
+	var wanted := gravel
 	if String(biome.get("cliff_surface", "")) == SANDSTONE_CLIFF_SURFACE:
 		wanted = SANDSTONE_GRAVEL_SURFACE
-	for surface_name in [wanted, DEFAULT_GRAVEL_SURFACE, SANDSTONE_GRAVEL_SURFACE]:
+	for surface_name in [wanted, gravel, SANDSTONE_GRAVEL_SURFACE]:
 		if surfaces.has(surface_name):
 			return surface_name
 	return ""
@@ -643,7 +651,7 @@ static func gravel_surface(style: String, root: String = PaletteLibrary.DEFAULT_
 static func surfaces_for_styles(
 	styles: PackedStringArray, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> PackedStringArray:
-	var out := PackedStringArray([WOOD_SURFACE])
+	var out := PackedStringArray([LibraryBindings.crossing_planks()])
 	var all := styles.duplicate()
 	if all.is_empty():
 		all.append("")
@@ -653,8 +661,9 @@ static func surfaces_for_styles(
 		]:
 			if surface != "" and not out.has(surface):
 				out.append(surface)
-		if moss_amount(style, root) > 0.0 and not out.has(MOSS_SURFACE):
-			out.append(MOSS_SURFACE)
+		var moss := LibraryBindings.crossing_moss()
+		if moss_amount(style, root) > 0.0 and not out.has(moss):
+			out.append(moss)
 	return out
 
 

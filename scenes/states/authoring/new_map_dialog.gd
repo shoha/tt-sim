@@ -33,7 +33,9 @@ signal closed
 
 const BARE_TILE := &"bare_ground"
 ## Preselected starting biome: a temperate forest reads as a place at once and suits most
-## tabletop scenes. Falls back to the first palette biome, then to bare ground.
+## tabletop scenes. Falls back to the first palette biome, then to bare ground. The legacy value
+## of the library `default_biome` (LibraryBindings.default_biome), which wins when a served
+## library names one.
 const DEFAULT_BIOME := "temperate_forest_summer_s1"
 ## Size tiles are words alone at control height: one shared grid icon on all three said
 ## nothing, and the 16 px it took kept the Landform row under the scroll fade at 150%.
@@ -256,9 +258,10 @@ static func _footer_button(
 
 
 func _initial_biome(biomes: Array[Dictionary]) -> String:
+	var wanted := LibraryBindings.default_biome()
 	for biome in biomes:
-		if biome["id"] == DEFAULT_BIOME:
-			return DEFAULT_BIOME
+		if biome["id"] == wanted:
+			return wanted
 	return String(biomes[0]["id"]) if not biomes.is_empty() else NewMap.BARE_BIOME
 
 

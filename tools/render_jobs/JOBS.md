@@ -21,6 +21,13 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (`library_dev` op), same cameras, then the override cleared (the treecube baseline). Package
   and library captures are pixel-identical (2026-10-24). 3 view pairs plus the baseline, 10
   PNGs. `docs/systems/library.md`.
+- `jobs/library_s3_parity.json`: the surface resolver's A/B (about 30 s, keeps no level): savanna
+  and rocky badlands, 150 ft terraces landform, seed 1234, fades off, wind frozen, a home view
+  and a size-14 view each (4 captures, 8 PNGs). Run it with `--full --out render_jobs/<name>` on
+  main before a change to how surface maps load and once after, and compare the `_sub` PNGs
+  (`magick compare -metric MAE`): the home views were 0.000 of 255 for the S3 SurfaceStore
+  change, the close views within the 0.2 to 0.75 run-to-run noise of main against itself
+  (2026-10-24). `docs/systems/library.md`.
 - `jobs/plantgen_play.json`: the same switch in play (about 30 s): builds the alpine map, saves
   it as `_reopen_plantgen`, plays it with treecube and again after switching to plantgen (Root
   reloads the table; the load regenerates the rows), then removes the level

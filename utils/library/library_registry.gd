@@ -25,6 +25,7 @@ const KEY_DEV_PATH := "dev_path"
 const LIBRARY_FILE := "library.json"
 const CATALOG_FILE := "assets/catalog.json"
 const BIOME_DIR := "biomes"
+const SURFACE_DIR := "surfaces"
 ## A folder holding more files than this, or nested deeper, is refused before anything is read.
 const MAX_FILES := 20000
 const MAX_DEPTH := 8
@@ -77,6 +78,14 @@ static func served() -> Dictionary:
 static func clear() -> void:
 	_dev_path = ""
 	_served.clear()
+	_forget_surfaces()
+
+
+## Forgets the served libraries' surfaces and bindings: every name reads the legacy palette and
+## the legacy defaults again.
+static func _forget_surfaces() -> void:
+	SurfaceStore.clear_libraries()
+	LibraryBindings.clear()
 
 
 ## Reads the library at `folder` and compiles it: {ok, errors, warnings, read (LibraryReader's
@@ -133,6 +142,7 @@ static func apply(root: String = PaletteLibrary.DEFAULT_ROOT) -> Dictionary:
 		"report": {},
 	}
 	_served.clear()
+	_forget_surfaces()
 	if _dev_path == "":
 		return result
 	result["ok"] = false
@@ -158,6 +168,7 @@ static func apply(root: String = PaletteLibrary.DEFAULT_ROOT) -> Dictionary:
 	result["library"] = compiled["library"]
 	result["biomes"] = compiled["biome_ids"]
 	var library: Dictionary = built["read"]["library"]
+	_serve_surfaces(root, built["read"], compiled)
 	_served[compiled["library"]] = {
 		"id": compiled["library"],
 		"name": String(library.get("name", "")),
@@ -169,6 +180,23 @@ static func apply(root: String = PaletteLibrary.DEFAULT_ROOT) -> Dictionary:
 		"warnings": built["warnings"],
 	}
 	return result
+
+
+## Hands the compiled library's own surfaces to SurfaceStore and its bindings to LibraryBindings
+## (runtime names), once its palette is installed.
+static func _serve_surfaces(root: String, read: Dictionary, compiled: Dictionary) -> void:
+	var library_id := String(compiled["library"])
+	SurfaceStore.register_library(root, _dev_path, compiled["surfaces"])
+	var library: Dictionary = read["library"]
+	var flat: Dictionary = (
+		LibraryBindings.flatten(library.get("bindings"), library.get("default_biome"))["values"]
+	)
+	LibraryBindings.set_served(
+		library_id,
+		LibraryBindings.to_runtime(
+			library_id, flat, read["surface_order"], compiled["palette"]["biomes"]
+		)
+	)
 
 
 ## apply() for the persisted override, at startup (FoliageLibrary.apply_saved); a failure warns.
@@ -200,11 +228,23 @@ static func read_sources(folder: String) -> Dictionary:
 			biomes[relative.get_file()] = _text(
 				folder.path_join(relative), LibraryContracts.CAPS["biome_bytes"]
 			)
+	var surfaces := {}
+	var png := {}
+	for relative in files:
+		var parts := relative.split("/")
+		if parts.size() != 3 or parts[0] != SURFACE_DIR:
+			continue
+		if parts[2] == SurfaceReader.INFO_FILE:
+			surfaces[parts[1]] = _text(folder.path_join(relative), SurfaceBake.MAX_INFO_BYTES)
+		elif relative.get_extension().to_lower() == "png":
+			png[relative] = SurfaceStore.png_header_of(folder.path_join(relative))
 	return {
 		"library":
 		_text(folder.path_join(LIBRARY_FILE), LibraryContracts.CAPS["library_json_bytes"]),
 		"catalog": _text(folder.path_join(CATALOG_FILE), LibraryContracts.CAPS["catalog_bytes"]),
 		"biomes": biomes,
+		"surfaces": surfaces,
+		"png": png,
 		"files": files,
 	}
 
@@ -248,6 +288,11 @@ static func _hash_of(sources: Dictionary) -> String:
 	names.sort()
 	for biome_name: String in names:
 		_feed(hashing, String(biomes[biome_name]))
+	var surfaces: Dictionary = sources.get("surfaces", {})
+	var surface_names: Array = surfaces.keys()
+	surface_names.sort()
+	for surface_name: String in surface_names:
+		_feed(hashing, String(surfaces[surface_name]))
 	return hashing.finish().hex_encode().substr(0, HASH_LENGTH)
 
 

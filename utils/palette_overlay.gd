@@ -59,7 +59,15 @@ static func read_palette(
 	var report := _new_report(base)
 	var result := PaletteLibrary.validate_palette(raw)
 	report["warnings"] = result["warnings"]
-	return _merge(result["palette"], package, base, root, only, report, package, started)
+	var merged := _merge(result["palette"], package, base, root, only, report, package, started)
+	if merged["ok"]:
+		# A library brings its own surfaces (SurfaceStore resolves their paths); the table it
+		# compiled holds the base's too, unchanged, so the merge adds only what is new.
+		var palette: Dictionary = merged["palette"]
+		var surfaces: Dictionary = (base["surfaces"] as Dictionary).duplicate()
+		surfaces.merge(result["palette"]["surfaces"], true)
+		palette["surfaces"] = surfaces
+	return merged
 
 
 static func _new_report(base: Dictionary) -> Dictionary:

@@ -17,6 +17,7 @@ extends RefCounted
 ## drive letter) and short relative paths.
 
 const SEPARATOR := "__"
+const SURFACE_SCHEME := "lib://"
 const MAX_ASSET_ID_LENGTH := 160
 
 static var _library_re: RegEx = _compile("^[a-z][a-z0-9_-]{1,31}$")
@@ -101,6 +102,42 @@ static func runtime_asset(runtime_biome_id: String, local: String) -> String:
 ## The palette surface name: bare for core, `<lib>__<name>` otherwise.
 static func runtime_surface(library: String, surface: String) -> String:
 	return surface if library == LibraryContracts.CORE_ID else library + SEPARATOR + surface
+
+
+## The surface reference string of library surface `name`: `lib://<library id>/<name>`. A string
+## convention only (nothing registers a scheme): SurfaceStore and the compiler read it.
+static func surface_ref(library: String, name: String) -> String:
+	return SURFACE_SCHEME + library + "/" + name
+
+
+## {library, name} of a `lib://<library id>/<name>` reference, or {} for anything else (a plain
+## legacy surface name, a malformed or hostile string). Both parts are grammar-checked.
+static func parse_surface_ref(ref: String) -> Dictionary:
+	if not ref.begins_with(SURFACE_SCHEME):
+		return {}
+	var rest := ref.substr(SURFACE_SCHEME.length())
+	if rest.count("/") != 1:
+		return {}
+	var library := rest.get_slice("/", 0)
+	var name := rest.get_slice("/", 1)
+	if _library_re.search(library) == null or SEPARATOR in library:
+		return {}
+	if not surface_problems(name).is_empty():
+		return {}
+	return {"library": library, "name": name}
+
+
+## Problems with a library-local surface name (a `surfaces/<name>/` folder): it becomes part of
+## the runtime surface name and of a cache file name, so lower case, no `__`, no device name.
+static func surface_problems(name: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	if _biome_re.search(name) == null or name.length() > LibraryContracts.MAX_BIOME_NAME:
+		out.append("surface name '%s' must match [a-z][a-z0-9_]* (at most 48)" % _short(name))
+	elif SEPARATOR in name:
+		out.append("surface name '%s' contains '__'" % name)
+	elif name in LibraryContracts.RESERVED_DEVICE_NAMES:
+		out.append("surface name '%s' is a reserved device name" % name)
+	return out
 
 
 ## True when the whole palette asset id fits (PaletteLibrary rejects 160 and over).
