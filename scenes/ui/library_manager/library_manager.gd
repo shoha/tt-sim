@@ -122,6 +122,7 @@ func _on_panel_ready() -> void:
 	_body.add_child(header)
 	_build_split()
 	LibraryCacheSection.attach(self, _body)  # hook: the downloaded-collections row (own file)
+	LibraryStaleSection.attach(self, _body)  # hook: old `.received` leftovers (own file)
 	_build_footer()
 	flow = LibraryImportFlow.new()
 	flow.name = "ImportFlow"

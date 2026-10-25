@@ -273,19 +273,26 @@ static func dependency_states(library: Dictionary) -> Array[Dictionary]:
 	return out
 
 
-## One dependency's problem in a sentence ("Needs core ^1.0, but 0.9.0 is installed.").
+## One dependency in plain words, for the card's warnings and the manager's Needs list:
+## "Needs the Core collection, version 1.0 or newer. You have 1.0.0-dev." (met or too old),
+## "..., which is not installed.", "..., which is turned off." or "..., which has a problem of its
+## own." when it is missing, off or failing.
 static func dependency_line(dep: Dictionary) -> String:
-	var need := "%s %s" % [dep["id"], dep["version"]]
+	var need := (
+		"Needs the %s %s"
+		% [LibraryReasons.dependency_title(String(dep["id"])), LibraryNames.lower()]
+	)
+	var words := LibraryReasons.version_words(String(dep.get("version", "*")))
+	if words != "":
+		need += ", " + words
 	match String(dep["state"]):
 		DEP_MISSING:
-			return "Needs %s, which is not installed." % need
-		DEP_UNMET:
-			return "Needs %s, but %s is installed." % [need, dep["installed"]]
+			return need + ", which is not installed."
 		DEP_DISABLED:
-			return "Needs %s, which is turned off." % need
+			return need + ", which is turned off."
 		DEP_BROKEN:
-			return "Needs %s, which has a problem of its own." % need
-	return "Needs %s." % need
+			return need + ", which has a problem of its own."
+	return need + ". You have %s." % dep["installed"]
 
 
 static func _folder_bytes(folder: String, files: Array) -> int:
