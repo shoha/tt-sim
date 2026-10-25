@@ -35,6 +35,12 @@ const WORDED_FILES: Array[String] = [
 	"res://scenes/ui/library_manager/library_cache_section.gd",
 	"res://utils/library/library_from_host.gd",
 	"res://utils/library/library_transfer_install.gd",
+	"res://scenes/ui/library_manager/library_row.gd",
+	"res://scenes/ui/library_manager/library_verify_all.gd",
+	"res://scenes/ui/library_manager/library_mismatch_dialog.gd",
+	"res://utils/library/library_reasons.gd",
+	"res://utils/library/map_libraries.gd",
+	"res://utils/map_library_gate.gd",
 ]
 
 var _paths: Dictionary = {}
@@ -175,9 +181,10 @@ func test_the_list_shows_every_library_with_its_badge_and_switch() -> void:
 	assert_eq((alien.get_node("Inner/Text/Caption") as Label).text, "v0.3.1 by Test Author")
 	var facts := (alien.get_node("Inner/Text/Facts") as Label).text
 	assert_true(facts.begins_with("2 assets, 1 biome · "), facts)
-	assert_eq((alien.get_node("Inner/Origin/Label") as Label).text, "Yours")
+	assert_eq((alien.get_node("Inner/OriginSlot/Origin/Label") as Label).text, "Yours")
 	var core := manager.row_of("core")
-	assert_eq((core.get_node("Inner/Origin/Label") as Label).text, LibraryDetail.BADGE_BUILTIN)
+	var core_chip := core.get_node("Inner/OriginSlot/Origin/Label") as Label
+	assert_eq(core_chip.text, LibraryDetail.BADGE_BUILTIN)
 	assert_eq(LibraryDetail.BADGE_BUILTIN, "Built in")
 	assert_true(manager.toggle_of("core").disabled, "core cannot be turned off")
 	assert_true(manager.toggle_of("core").button_pressed)
@@ -232,8 +239,11 @@ func test_a_library_that_fails_shows_why_in_its_row_and_card() -> void:
 	var manager := _manager()
 	await _settle()
 	var row := manager.row_of("alienworld")
-	assert_not_null(row.get_node_or_null("Inner/Problem"), "a mark on the row")
-	assert_true("core" in (row.get_node("Inner/Text/Facts") as Label).text, "why, in the row")
+	assert_not_null(manager.library_row("alienworld").pill, "the pill stands in for the switch")
+	assert_null(manager.toggle_of("alienworld"), "no on switch on a collection that fails")
+	var facts := (row.get_node("Inner/Text/Facts") as Label).text
+	assert_true("Core" in facts, "why, in plain words, in the row: " + facts)
+	assert_false("library" in facts, facts)
 	manager.select("alienworld")
 	assert_not_null(manager.detail.get_node_or_null("Notes"), "the reasons are listed")
 	assert_eq((manager.detail.get_node("Chips/State/Label") as Label).text, "Needs attention")
@@ -414,7 +424,7 @@ func test_a_same_id_import_offers_replace_with_the_installed_version() -> void:
 	await _settle()
 	manager.flow.begin(_zip(Zip.entries_of(SOURCE)))
 	var card := await _ready_card(manager.flow)
-	assert_eq(card.confirm_button.text, "Replace v0.3.1")
+	assert_eq(card.confirm_button.text, "Replace v0.3.1 with v0.4.0")
 	assert_not_null(
 		card.get_node_or_null(
 			"%s" % "CenterContainer/PanelContainer/Body/Scroll/Content/ReplaceNote"
@@ -790,7 +800,8 @@ func test_a_collection_from_a_host_is_an_ordinary_one_that_is_only_marked() -> v
 	await _settle()
 	var row := manager.row_of("alienworld")
 	assert_not_null(row, "listed")
-	assert_eq((row.get_node("Inner/Origin/Label") as Label).text, LibraryDetail.BADGE_RECEIVED)
+	var chip := row.get_node("Inner/OriginSlot/Origin/Label") as Label
+	assert_eq(chip.text, LibraryDetail.BADGE_RECEIVED)
 	assert_false(manager.toggle_of("alienworld").disabled, "it can be switched like any other")
 	manager.select("alienworld")
 	assert_true(manager.detail.remove_button.visible, "and removed")

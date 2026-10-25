@@ -5,20 +5,27 @@ extends RefCounted
 ## compared with the ones served now (MapLibraries.check). A map that matches is only given its
 ## renamed ids (a library's `aliases`). A map that names a library this game lacks, or has at
 ## another major version, is NEVER opened with a quiet substitution: the player is asked
-## (ask_dialog: the library's name, the version the map was saved with and why it is missing,
-## and two choices, "Open without those plants" and "Cancel"), and "Open without those plants"
-## drops the rows of those libraries, points their biomes at the default biome and says so in a
-## toast. MapSourceLoader.load_async runs it after the document is read, for authoring and for
-## play alike; a loader with no `library_choice` set (a test, a tool) takes the first choice
-## and still shows the toast, because the substitution is visible whichever way it was chosen.
+## (ask_dialog, LibraryMismatchDialog: the collection's name and link, the version the map was
+## saved with and why it is missing; the choices Cancel, Manage collections, Import file...,
+## Import folder... and "Open without those collections"), and the last drops the rows of those
+## libraries, points their biomes at the default biome and says so in a toast. An import from the
+## dialog that succeeds ends the dialog with RETRY and run() checks the map again (the open is
+## re-run with the new library served) before it asks again. MapSourceLoader.load_async runs it
+## after the document is read, for authoring and for play alike; a loader with no `library_choice`
+## set (a test, a tool) takes the first choice and still shows the toast, because the
+## substitution is visible whichever way it was chosen. The words that name the content come from
+## LibraryNames (no "plants").
 ##
 ## run() is a coroutine; ask_dialog() too (it waits for a button).
 
 ## Emitted by the dialog's buttons; one gate object per question.
 signal chosen(proceed: bool)
 
-const TITLE := "This map needs plants you do not have"
-const OPEN_WITHOUT := "Open without those plants"
+## What a `choose` callable may return instead of a bool: a collection was installed from the
+## dialog, check the map again.
+const RETRY := "retry"
+## How many times the question is asked again after an install (a guard, not a limit anyone meets).
+const MAX_RETRIES := 8
 const HINT := (
 	"\n\nYou can open the map without them: their areas use the default place and stay empty"
 	+ " until you paint them again. Nothing is changed until you save."
@@ -55,8 +62,19 @@ static func run(
 	if report["ok"]:
 		return out
 	if choose.is_valid():
-		var proceed: bool = await choose.call(report)
-		if not proceed:
+		var proceed: Variant = await choose.call(report)
+		var retries := 0
+		while proceed is String and proceed == RETRY and retries < MAX_RETRIES:
+			# A collection was installed from the dialog: the map is checked again against
+			# what is served now, and the question only returns if something is still lacking.
+			retries += 1
+			out["changed"] = MapLibraries.apply_aliases(doc, root) > 0 or out["changed"]
+			report = MapLibraries.check(doc.libraries)
+			out["report"] = report
+			if report["ok"]:
+				return out
+			proceed = await choose.call(report)
+		if not (proceed is bool and proceed):
 			out["proceed"] = false
 			return out
 	var fallback := fallback_biome(root)
@@ -94,7 +112,10 @@ static func toast_text(
 	for item: Dictionary in report["incompatible"]:
 		names.append(String(item["id"]))
 	var left_out: int = dropped.get("rows", 0)
-	var text := "Opened without plants from %s: %d left out" % [", ".join(names), left_out]
+	var text := (
+		"Opened without %s from %s: %d left out"
+		% [LibraryNames.lower(2), ", ".join(names), left_out]
+	)
 	if int(dropped.get("biomes", 0)) > 0 and fallback != "":
 		text += "; %d areas now use %s" % [dropped["biomes"], _biome_name(fallback, root)]
 	return text + "."
@@ -105,28 +126,10 @@ static func _biome_name(biome_id: String, root: String) -> String:
 	return String(found.get("name", biome_id))
 
 
-## The mismatch dialog (a UIManager choice) as a coroutine: true for "Open without those
-## plants", false for Cancel, Escape and closing the dialog, and for "Manage <collections>",
-## which also opens the manager (LibraryManager) over the title the cancelled open returns to,
-## so the missing library can be added and the map opened again.
-static func ask_dialog(report: Dictionary) -> bool:
-	var gate := MapLibraryGate.new()
-	var answered := [false]
-	var settle := func(proceed: bool) -> void:
-		if not answered[0]:
-			answered[0] = true
-			gate.chosen.emit(proceed)
-	var manage := func() -> void:
-		settle.call(false)
-		LibraryManager.open((Engine.get_main_loop() as SceneTree).root)
-	UIManager.show_choice(
-		TITLE,
-		MapLibraries.describe(report) + HINT,
-		OPEN_WITHOUT,
-		"Manage %s" % LibraryNames.lower(2),
-		"Cancel",
-		func() -> void: settle.call(true),
-		manage,
-		func() -> void: settle.call(false)
-	)
-	return await gate.chosen
+## The mismatch dialog (LibraryMismatchDialog) as a coroutine: true for "Open without those
+## collections", RETRY after a collection was imported from the dialog (run() checks the map
+## again), false for Cancel, Escape and closing the dialog, and for "Manage collections", which
+## also opens the manager (LibraryManager, over the scrim) over the title the cancelled open
+## returns to, so the missing collection can be added and the map opened again.
+static func ask_dialog(report: Dictionary) -> Variant:
+	return await LibraryMismatchDialog.ask(report)

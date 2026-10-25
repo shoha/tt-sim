@@ -273,6 +273,8 @@ func _build_scroll() -> void:
 	_scroll = ScrollContainer.new()
 	_scroll.name = "FieldsScroll"
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# The tiles at the fields' edges keep their focus ring whole.
+	ShadowGutter.wrap(_scroll, ShadowGutter.Kind.RING)
 	_scroll.add_child(_fields)
 	_scroll.add_child(ScrollFade.new())
 	_body.add_child(_scroll)

@@ -4,7 +4,7 @@
 [ext_resource type="Theme" path="res://themes/generated/glass_theme.tres" id="2_glass"]
 
 [node name="ToastContainer" type="CanvasLayer"]
-layer = 90
+layer = 108
 process_mode = 3
 script = ExtResource("1_toast")
 

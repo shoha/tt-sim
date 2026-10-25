@@ -83,6 +83,7 @@ static var _served: Dictionary = {}
 static var _entries: Array[Dictionary] = []
 static var _order: Array[int] = []
 static var _scanned: bool = false
+static var _seen_signature: String = ""
 
 
 ## Where the earlier, session-only cache of libraries received from a host lived: a dot folder of
@@ -189,6 +190,36 @@ static func config_signature() -> String:
 	return "%s|%s|%s|%s" % [official_root, user_root, _dev_path, settings_path]
 
 
+## A cheap fingerprint of the libraries on disk: the folder names under the user, received and
+## official roots and each folder's library.json and catalog modified times, one directory listing
+## per root and two stat calls per folder, no file is read. The manager compares it with the last
+## one when it opens, when the window regains focus and on Refresh, and rescans only when it
+## differs: nothing watches the disk in the background (owner, 2026-10-25: wary of file watches).
+## The official root is `res://`, which does not change at run time, so it adds names only.
+static func disk_signature() -> String:
+	var parts := PackedStringArray()
+	for item: Array in [[official_root, false], [user_root, true], [received_root(), true]]:
+		var root := String(item[0])
+		parts.append(root)
+		for folder in _library_folders(root):
+			var line := folder.get_file()
+			if bool(item[1]):
+				line += (
+					":%d:%d"
+					% [
+						FileAccess.get_modified_time(folder.path_join(LIBRARY_FILE)),
+						FileAccess.get_modified_time(folder.path_join(CATALOG_FILE)),
+					]
+				)
+			parts.append(line)
+	return "|".join(parts)
+
+
+## What the disk looked like at the last refresh() (see disk_signature()); "" before the first.
+static func seen_signature() -> String:
+	return _seen_signature
+
+
 ## Drops the override and the record of what was served. The palette caches are the caller's to
 ## reset (FoliageLibrary.reset_caches): laying a library has no undo of its own.
 static func clear() -> void:
@@ -197,6 +228,7 @@ static func clear() -> void:
 	_entries.clear()
 	_order.clear()
 	_scanned = false
+	_seen_signature = ""
 	AssetStore.clear()
 	_forget_surfaces()
 
@@ -228,6 +260,7 @@ static func refresh(root: String = PaletteLibrary.DEFAULT_ROOT) -> Array[Diction
 	_entries.assign(resolved["entries"])
 	_order.assign(resolved["order"])
 	_scanned = true
+	_seen_signature = disk_signature()
 	return list(root)
 
 
