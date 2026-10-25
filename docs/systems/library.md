@@ -33,6 +33,10 @@ with its surfaces, thumbnails and bindings, proven equal to the plantgen package
 | `utils/library/asset_store.gd`, `glb_guard.gd` | `AssetStore`, `GlbGuard` | (S4) The one place a library asset's mesh comes from, keyed by (library id, asset id): lazy GLTFDocument parse from a file path, cached, sha256 and byte count checked for a non-official library, `GlbGuard` (pure) reads the container and every embedded texture's size from its header before any decode; `instance()` dresses a copy with `WindFoliage.apply_material` |
 | `utils/library/map_libraries.gd`, `utils/map_library_gate.gd` | `MapLibraries`, `MapLibraryGate` | (S4) What a map says about its libraries (the `libraries` record, the format number, `check` against the served libraries, `without_libraries`, `apply_aliases`) and the step between reading a document and building it (an aliases pass, the mismatch dialog, "Open without those plants") |
 | `utils/library/library_groups.gd` | `LibraryGroups` | (S4, pure) The palette's biomes grouped by library for the New map dialog: core first, then by name, a library's default biome first |
+| `utils/library/library_partial.gd` | `LibraryPartial` | (multiplayer, pure) The partial library and its wire bundle: `select` / `trim_biome` / `trim_library` / `trim_catalog` (what a map uses of a library), `encode` / `decode` (the `TTLP` bundle, capped before it allocates), `request_problem`, `inspect` (the client's checks of one received library), the error codes |
+| `utils/library/library_transfer.gd`, `library_transfer_consent.gd` | `LibraryTransfer`, `LibraryTransferConsent` | (multiplayer) `plan` (what a client asks for), `authorize` / `quote` / `build_bundle` (the host), `verify_and_install` (the client); the consent model (phases, the question's words, the size-cap refusal, progress text) |
+| `utils/library/library_received_store.gd` | `LibraryReceivedStore` | (multiplayer) The transient cache under `LibraryRegistry.received_root()`: `write_library` (atomic, with a marker), `inventory`, `touch`, `evict_to_fit` (LRU, 512 MB), `remove`, `sweep_session`, `sweep_leftovers`, `promote` (Keep). The one module besides the registry and the surface cache that touches library folders (`test_only_the_registry_lists_folders` names it) |
+| `autoloads/library_transfer_channel.gd`, `scenes/ui/library_transfer_ui.gd` | `LibraryTransferChannel`, `LibraryTransferUi` | (multiplayer) The messages and the client's flow (`AssetManager.library_transfer`), and the question, progress and Keep dialogs (the confirmation dialog) |
 | `utils/palette_overlay.gd`, `utils/palette_library.gd` | `PaletteOverlay.read_palette`, `PaletteLibrary.install_overlay` | The existing overlay merge, split so a palette already in memory takes the same path as a package folder (`read` and `overlay_package` call the same code) |
 | `utils/legacy_habit.gd` | `LegacyHabit` | (S2) The legacy key and kind lists (`EMERGENT_KEYS`, `BANK_KEYS`, `CHARRED_KEYS`, `ARID_KINDS`) in one place, `for_key(key, kind)` and `export_table()` (published in `contract.json` as `legacy_habit`, so plantgen's importer derives a rule's explicit habit from the same lists). `ScatterGround.habit_of(rule)` returns the rule's own `habit`, else this |
 | `utils/palette_validator.gd` (+ `palette_surfaces.gd`, `palette_fields.gd`, `palette_asset_files.gd`) | `PaletteValidator` | (S2) `palette_library.gd` was at gdlint's 1000-line cap and is split; the rule whitelist in `PaletteValidator._validate_species` / `_library_fields` keeps `role`, `habit`, `weight` |
@@ -332,6 +336,91 @@ with the same seed), as `library_s12a_terrain.json` does. Settings: `[library] d
 disabled` (a list of ids). The `compile_library_cli` and `LibraryRegistry.compile_folder` compile
 one folder alone, without dependencies.
 
+## Multiplayer
+
+User decision (2026-10-24): non-core libraries transfer automatically in multiplayer, ideally
+only the assets a given map uses. The messages and the network rules are in
+[../NETWORKING.md](../NETWORKING.md) "Library Transfer"; this is the library side.
+
+- **The flow.** A client loads a map (first load, a map set out from the shelf, a late join) and
+  `MapLibraryGate.run` first calls `fetch` (`LibraryTransferChannel.fetch_for_document`). `plan`
+  compares the document with what is served and returns requests and blocked libraries; for each
+  request the client sends a quote request, the host answers with what it would send, the player
+  answers "Host uses collection X v1.2 by Y (N assets, M MB). Download it? It stays on this
+  computer only until the session ends." (Download or Skip), the bytes stream with a progress
+  sheet and Cancel, and `verify_and_install` serves the library; the gate then checks the map
+  against it. A Skip, a refusal, a cancel or any failure leaves the existing mismatch dialog
+  ("Open without those plants" or Cancel).
+- **What is asked for (`plan`).** A library the map uses and the client does not have is requested
+  (`missing`). A library installed at the same major version but lacking used assets is requested
+  when the installed copy is a user library at a lower version (`newer`) or a partial received
+  earlier (`more`, a later edit); at the same version it is only blocked (`lacks`: the host's copy
+  is the same, there is nothing to ask for). Never requested, and reported with a reason: `core`
+  and official libraries (they ship with the game, every peer runs the same version), a disabled
+  or broken library, another major version, a reserved id. The request carries the used asset,
+  biome and surface ids, the version and hash the map names and the libraries the client has.
+- **The partial library (`LibraryPartial`).** An ordinary library folder with the SAME id and
+  version as the host's, marked by a `partial` block in `library.json` (`format`,
+  `source_version`, `source_hash`, `assets`, `biomes`, `surfaces`, `assets_only`, `bytes`). It
+  holds: `library.json` (stats, cover, bindings and default biome dropped); `assets/catalog.json`
+  with only the used assets, every entry carrying `sha256` and `bytes` recomputed by the host;
+  the GLBs of those assets; `biomes/<id>.json` for the biomes the map paints or places plants
+  from, each cut to the rules with a used asset (a biome left with none keeps its first rule and
+  that rule's first asset so its ground works), with near and avoid relations to cut rules
+  removed and the thumbnail dropped; and `surfaces/<name>/` for the library surfaces those
+  biomes' `ground` or the map's painting names. A dependency's assets that the map uses
+  (`<dep>__<id>`) travel as an `assets_only` partial of that dependency (no biome, served as a
+  pool that feeds the dependent's refs) unless the client's `have` satisfies the declared range;
+  `core` and official dependencies are never sent; a dependency of a dependency is refused
+  ("too deep to send"). The registry reports `partial`, `received` and `source: "received"` in
+  `list()` / `info()`, so the manager can badge it "partial: received from host"; a map saved
+  while it is served records the host's FULL library hash (`partial.source_hash`).
+- **Where it lives.** `LibraryRegistry.received_root()`, `user://libraries/.received/<id>/` (a dot
+  folder the user scan skips) plus `<id>.received.json` (version, bytes, `received_at`,
+  `last_used`). It is a fourth source in `refresh()`, never an installed user library. Precedence
+  (`LibraryResolver`): official first; a received library beats an installed one only when it is
+  a strictly newer version (for the session; the installed copy serves again when the cache
+  goes), the player's own copy wins a tie. It goes when the session ends
+  (`LibraryReceivedStore.sweep_session`), a start-up sweep removes a crashed session's leftovers
+  (`FoliageLibrary.apply_saved`), and the LRU cap (`LibraryReceivedStore.CACHE_CAP_BYTES`, 512 MB, by `last_used`)
+  evicts the oldest others before a new install.
+- **Keep.** After an install the player is offered a Keep toast; `LibraryReceivedStore.promote(id,
+  importer)` moves the folder into the user's libraries (refused when that id is installed) and
+  the manager lists it as a partial user library. TODO(libmanager): when the importer's
+  quarantine flow (`user://libraries/.incoming/`) is merged, pass its entry as `importer`
+  (`promote` takes a Callable taking the folder and returning an Error); until then it moves the
+  folder directly.
+- **Safety (`LibraryPartial.inspect`, run on every library of a bundle before anything is
+  written, all or nothing).** Caps: at most 4096 files, 8 libraries and 256 MiB in a bundle,
+  per-file by extension (json 4 MiB, glb 64 MiB, png 16 MiB, jpg 4 MiB, txt and md 64 KiB), the
+  stream header's chunk count and size (`header_ok`), a chunk over `CHUNK_SIZE`; the extension
+  whitelist (`LibraryContracts.EXTENSIONS`: no code); portable relative names (no `..`, drive,
+  scheme, backslash, device name, case duplicates; reported as `traversal` or `invalid_library`);
+  no file the library does not name (`extra_file`); the library id is not `core`, not reserved
+  (`legacy`, `draft`, `dev`) and not an official library (`reserved_id`); the folder, `library.json`
+  and the request agree (`id_mismatch`); the version has the major the map was saved with
+  (`version_mismatch`); a `partial` block is present (`not_partial`); every GLB's size and
+  sha256 match the catalog, which must carry both (`bad_hash`), and `GlbGuard` passes it; the
+  reader accepts the library; a compile dry-run gives at least one biome (an `assets_only` part
+  is exempt). Nothing is loaded as a resource: the files are data, GLBs parse through
+  `AssetStore` on first use with the catalog's sha256 checked again.
+- **Host side.** `authorize` allows only ids used by the table's live document and the shelf maps;
+  `quote` and `build_bundle` serve only a served, non-official library of a compatible major
+  version; a bundle is deterministic (sorted paths, sorted JSON keys) so a resumed transfer
+  matches.
+- **Consent and limits.** A quote over `LibraryTransfer.MAX_REQUEST_BYTES` (256 MB, settable per
+  channel as `size_cap_bytes`) is refused with "The host's plants for this map are 310.0 MB, over
+  the 256.0 MB limit, so they are not downloaded." and no question.
+  `LibraryTransferConsent` holds every phase and word
+  (QUOTING, ASKING, RECEIVING, INSTALLING, DONE, SKIPPED, REFUSED, CANCELLED, FAILED).
+- **Mid-session edits.** The host announces a library its table's document starts using
+  (`announce_document`, from `LiveEdits` as an edit is recorded); the client takes the same
+  request path (`handle_hint`), and a client `LiveEdits` holds ops while a transfer runs. A later
+  request for the same library repeats every asset asked for before and replaces the partial.
+- **Not done.** Prefetching libraries for shelf maps (the question is asked when a map is set out,
+  with its loading overlay behind it); a download cut by a reconnect starts over (the next request
+  has a new number, so `AssetStreamer`'s resume does not match; resume within a connection works).
+
 ## Authoring
 
 None yet: the library manager (list, import, enable and disable, remove, verify) and the biome
@@ -340,6 +429,20 @@ designer are steps S6 to S9 of the design. `LibraryRegistry.list()`, `set_enable
 
 ## Verification
 
+- Multiplayer transfer (2026-10-24): `test_library_transfer.gd` (plan for missing, installed,
+  older, same-version, other-major, disabled and reserved libraries; request validation;
+  authorize; the partial holds only the used assets, rules and surfaces; dependencies;
+  quote sizes equal the bundle's; deterministic bundles), `test_library_transfer_install.gd`
+  (a good bundle installs, serves and loads through `AssetStore`; wrong sha256 or size, extra
+  and stray files, traversal, drive and device paths, extensions, `core`, official and reserved
+  ids, id and version mismatch, a full library posing as partial, no hashes, a bad GLB,
+  truncation, a header asking for 3 GiB, the total cap, garbage: each refused with its code and
+  nothing written; LRU, touch, session sweep, leftovers, promote with and without an importer,
+  precedence against an installed library), `test_library_transfer_consent.gd` (the model),
+  `test_library_transfer_flow.gd` (the full request, serve, stream and install between two
+  channels and two streamer doubles over a message queue, and the failure cases listed in
+  NETWORKING.md). Render proof: the question, the progress sheet and the size-cap notice were
+  captured from a windowed probe at 1280 by 720 and read (the confirmation dialog's look).
 - Step S4 tests: `test_library_registry.gd` (scan order and sources, official derived from the
   location, the manager's list, the built-in core, prefixed ids, a cross-library ref, retired and
   aliased dependency ids, bindings not taken from a user library, duplicates, folder naming, dot
@@ -482,9 +585,9 @@ scatter and validator steps); `contract.json` does not yet publish the surface c
 surfaces) or `LibraryBindings.TABLE`. Left over from S4: (S6) the manager UI itself, an import
 that quarantines a zip or folder under `user://libraries/.incoming/`, "Verify" (hash every GLB of
 every library with `AssetStore.verify`) and the authoring panel's Biomes field, which still
-lists every biome of every library in one grid without headers; (multiplayer) a host sending a
-peer the `libraries` list and only the assets in `assets_used_by` (the registry enumerates them;
-nothing transfers a library yet, and a client without it gets the same dialog); the built-in
+lists every biome of every library in one grid without headers; (multiplayer, done: see
+"Multiplayer"; left: the manager's "partial: received from host" badge, which reads `partial` and
+`received` from `list()`, and routing Keep through the importer); the built-in
 `core` cannot be the target of a `core:` ref until it ships as a folder (S5 and S10); a map
 opened "without those plants" keeps the painting of the missing library's areas but regenerates
 no plants there (regeneration is offered, not automatic, because it discards scatter hand
@@ -514,6 +617,16 @@ map the old ids if a kept map must keep its plants); re-run the nine-biome row p
   in a run drew a savanna ground 0.5 of 255 away from its later builds (seen on the package
   route, the first of the job), so a parity capture should not be the first map of its run.
 
+- 2026-10-24: multiplayer transfer of the used library assets: `LibraryPartial`, `LibraryTransfer`,
+  `LibraryTransferConsent`, `LibraryTransferChannel` (protocol 1: quote, consent, stream through
+  `AssetStreamer`'s pack `_library_parts`, verify, install into `user://libraries/.received/`),
+  the registry's `received` source, `MapLibraryGate.run`'s `fetch`, the host's hint for a library
+  a live edit starts using. Findings: a library's `hash` covers its JSON only, so a partial
+  records the source's hash (`partial.source_hash`) or maps saved on a client would claim a
+  different library; `LibraryResolver` needed a rule for a received library beside an installed
+  one of the same id; `AssetStreamer` sized its chunk array from the host's header with no cap
+  (now capped for library parts) and kept chunks of any size (now `CHUNK_SIZE`); the file was at
+  1000 lines, so the file send was split into `_send_bytes_to_peer`.
 - 2026-10-24: step S4: `LibraryRegistry` scans `res://libraries` and `user://libraries` besides
   the developer override and serves every library that `LibraryResolver` can (duplicates,
   dependency ranges, cycles, disabled ones; a failing library is an entry with reasons);
