@@ -5,15 +5,18 @@ name: Native scatter parity
 # run, debug and release (.github/native/parity.sh). Linux's parity runs in build.yml's test job.
 # Called by build.yml beside its test job, and by native.yml on branch runs.
 #
-# These jobs take no LFS objects: test_scatter_native reads the palette's plans and the scripts,
-# which are plain git files. Run 39485110220's Windows job compared every biome's real rows (the
-# same counts as Linux and macOS) with only LFS pointer files checked out, so the jobs spend no
-# LFS bandwidth and no cache download (build.yml's test job explains the LFS budget). A future
-# parity test that needs an LFS asset must restore build.yml's cache here first.
+# These jobs need the LFS objects since 2026-10-25 (S7b): test_scatter_native builds its maps
+# from the built-in core library (libraries/core, GLBs and surface PNGs in Git LFS), and with
+# only pointer files checked out the library does not serve ("surface ash albedo: not a PNG"),
+# every biome is missing and the test fails (run 40185577349: 0 noise values, 0 placed rows).
+# Before that the plans were plain git files and these jobs took no LFS. They restore build.yml's
+# LFS cache (key lfs-<hash of the LFS object ids>, cross-OS archive so the Linux test job's entry
+# serves Windows and macOS) and `git lfs pull` fetches only what the cache lacks; the first run
+# after an LFS change misses (the test job saves at its end) and pulls from LFS bandwidth once
+# per job (build.yml's test job explains the LFS budget).
 #
 # Each job restores and saves its own OS's import of the project from the Actions cache
-# (.github/actions/import-cache). The LFS assets are pointer files here, so their imports fail
-# as they always have; the entry holds whatever the import wrote.
+# (.github/actions/import-cache); the LFS assets import as keep-importer files.
 
 on:
   workflow_call:
@@ -35,6 +38,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: List LFS objects
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      # The same cache entry as build.yml's test job (one entry for every OS), so a warm key
+      # spends no LFS bandwidth; see the header.
+      - name: Restore LFS cache
+        uses: actions/cache@v4
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-assets-id') }}
+          enableCrossOsArchive: true
+
+      - name: Pull LFS objects
+        run: git lfs pull
 
       - name: Download native libraries
         uses: actions/download-artifact@v7
@@ -84,6 +102,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: List LFS objects
+        run: git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      # The same cache entry as build.yml's test job (one entry for every OS), so a warm key
+      # spends no LFS bandwidth; see the header.
+      - name: Restore LFS cache
+        uses: actions/cache@v4
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-assets-id') }}
+          enableCrossOsArchive: true
+
+      - name: Pull LFS objects
+        run: git lfs pull
 
       - name: Download native libraries
         uses: actions/download-artifact@v7

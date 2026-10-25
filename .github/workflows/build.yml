@@ -58,6 +58,7 @@ jobs:
         with:
           path: .git/lfs
           key: lfs-${{ hashFiles('.lfs-assets-id') }}
+          enableCrossOsArchive: true
 
       - name: Pull LFS objects
         run: git lfs pull
@@ -160,6 +161,7 @@ jobs:
         with:
           path: .git/lfs
           key: lfs-${{ hashFiles('.lfs-assets-id') }}
+          enableCrossOsArchive: true
 
       - name: Pull LFS objects
         run: git lfs pull

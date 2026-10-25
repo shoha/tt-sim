@@ -240,6 +240,7 @@ jobs:
           path: .git/lfs
           key: lfs-${{ hashFiles('.lfs-assets-id') }}
           restore-keys: lfs-
+          enableCrossOsArchive: true
 
       - name: Check out LFS objects
         run: git lfs checkout
