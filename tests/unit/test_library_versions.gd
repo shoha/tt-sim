@@ -93,7 +93,7 @@ func _dep(id: String, version: String = "*") -> Dictionary:
 
 
 func _resolve(entries: Array[Dictionary]) -> Dictionary:
-	return LibraryResolver.resolve(entries, {"id": "core", "version": "1.0.0"})
+	return LibraryResolver.resolve(entries)
 
 
 func _order_ids(resolved: Dictionary) -> Array:
@@ -113,23 +113,38 @@ func test_load_order_is_core_first_then_alphabetical_with_dependencies_before_de
 	assert_eq(_order_ids(_resolve(entries)), ["core", "zebra", "apple", "mango"])
 
 
-func test_the_built_in_core_provides_core_when_no_folder_does() -> void:
+func test_core_is_an_ordinary_dependency_provided_by_its_folder() -> void:
+	var entries: Array[Dictionary] = [
+		_entry("core", "1.2.0", [], {"source": "official", "official": true}),
+		_entry("alien", "0.1.0", [_dep("core", "^1.0")]),
+	]
+	var resolved := _resolve(entries)
+	assert_eq(resolved["entries"][1]["status"], "ok")
+	assert_eq(resolved["entries"][1]["provides"], {"core": "1.2.0"})
+	var too_new: Array[Dictionary] = [
+		_entry("core", "1.2.0", [], {"source": "official", "official": true}),
+		_entry("alien", "0.1.0", [_dep("core", "^2.0")]),
+	]
+	assert_eq(_resolve(too_new)["entries"][1]["status"], "error")
+
+
+func test_without_a_core_folder_nothing_provides_core() -> void:
 	var entries: Array[Dictionary] = [_entry("alien", "0.1.0", [_dep("core", "^1.0")])]
 	var resolved := _resolve(entries)
-	assert_eq(resolved["entries"][0]["status"], "ok")
-	assert_eq(resolved["entries"][0]["provides"], {"core": "built in"})
-	var too_new: Array[Dictionary] = [_entry("alien", "0.1.0", [_dep("core", "^2.0")])]
-	assert_eq(_resolve(too_new)["entries"][0]["status"], "error")
+	assert_eq(resolved["entries"][0]["status"], "error")
+	assert_string_contains(resolved["entries"][0]["reasons"][0], "needs library 'core'")
+	assert_string_contains(resolved["entries"][0]["reasons"][0], "not installed")
 
 
-func test_a_broken_core_folder_falls_back_to_the_built_in_core() -> void:
+func test_a_broken_core_folder_is_an_error_for_its_dependents_too() -> void:
 	var entries: Array[Dictionary] = [
 		_entry("core", "", [], {"source": "official", "read_ok": false, "reasons": ["bad"]}),
 		_entry("alien", "0.1.0", [_dep("core", "^1.0")]),
 	]
 	var resolved := _resolve(entries)
 	assert_eq(resolved["entries"][0]["status"], "error")
-	assert_eq(resolved["entries"][1]["status"], "ok", "the game's own core still provides core")
+	assert_eq(resolved["entries"][1]["status"], "error", "no built-in core stands in for it")
+	assert_string_contains(resolved["entries"][1]["reasons"][0], "unavailable")
 
 
 func test_official_beats_user_and_the_first_folder_wins_among_users() -> void:

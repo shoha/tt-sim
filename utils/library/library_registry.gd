@@ -13,12 +13,16 @@ extends RefCounted
 ##   by set_dev_override(), laid over everything else and replacing biomes of the same runtime
 ##   id, as the override always did. Off by default.
 ## The folder name of an official or user library must equal its id. `core` is the game's own
-## library: until it ships as `res://libraries/core` it is BUILT IN (the installed palette), so
-## `dependencies: [{"id": "core", "version": "^1.0"}]` is met without a folder.
+## library and an ordinary folder, `res://libraries/core` (step S10): official by location, listed
+## in the manager as "Built in" and not removable, served first, and what `dependencies:
+## [{"id": "core", "version": "^1.0"}]` resolves against. Its files ship in the pack as raw files
+## (`importer="keep"` sidecars), so core, user libraries and the developer override share one
+## loader path (FileAccess bytes, Image.load_png_from_buffer, GLTFDocument; never ResourceLoader,
+## and not Image.load_from_file, which warns for a res:// file the editor knows).
 ##
 ## Serving a library means compiling it (BiomeCompiler, through its dependencies) into palette
-## biomes and assets and laying them over the palette behind PaletteLibrary.DEFAULT_ROOT with the
-## overlay's merge rule (PaletteOverlay.read_palette, PaletteLibrary.install_overlay): a biome
+## biomes and assets and laying them over the palette behind PaletteLibrary.DEFAULT_ROOT with
+## LibraryLayer's merge rule (LibraryLayer.lay, PaletteLibrary.install_overlay): a biome
 ## replaces the palette's biome of the same runtime id with its assets. A core biome keeps its id
 ## (`savanna_summer_s1`), any other library's is `<lib>__<biome>_<season>_s<seed>`. GLBs are NOT
 ## read here: the assets are registered with AssetStore, which parses each on first use.
@@ -33,8 +37,8 @@ extends RefCounted
 ## A map names the libraries it uses (MapLibraries); record_of() gives the {id, version, hash}
 ## it stores and assets_used_by() the (library, asset ids) a map needs, which a later step uses
 ## to send only those over the network.
-## FoliageLibrary.apply() calls apply() last, after the treecube or plantgen choice, so the
-## libraries are a layer over whatever the foliage library serves. Map and model:
+## PaletteLibrary.get_palette(DEFAULT_ROOT) calls apply() on first use, and FoliageLibrary.apply()
+## clears the caches and calls it again after a library changes. Map and model:
 ## docs/systems/library.md.
 
 const SECTION := "library"
@@ -49,8 +53,9 @@ const SURFACE_DIR := "surfaces"
 const MAX_FILES := 20000
 const MAX_DEPTH := 8
 const HASH_LENGTH := 8
-## The version the built-in core reports until `core` ships as a library folder.
-const BUILTIN_VERSION := "1.0.0"
+## Editor sidecars (`importer="keep"`, written once beside every PNG, GLB and JPG of an official
+## library under res://) are import metadata, not library files; the pack does not hold them.
+const SIDECAR_SUFFIX := ".import"
 
 ## The settings file; tests point it elsewhere.
 static var settings_path: String = Paths.SETTINGS_PATH
@@ -156,13 +161,20 @@ static func set_enabled(library_id: String, enabled: bool) -> bool:
 
 
 ## The libraries served now: id -> {id, name, version, folder, biome_ids, assets, hash, warnings,
-## source, official, dependencies}. Copies. The built-in core is not in it (it is the palette).
+## source, official, dependencies}. Copies. Core is in it like any other served library.
 static func served() -> Dictionary:
 	return _served.duplicate(true)
 
 
+## What the registry would serve from: the scanned roots, the developer override and the settings
+## file. PaletteLibrary serves the default palette again when this differs from what it was served
+## under (a test restored the roots a scratch world had replaced).
+static func config_signature() -> String:
+	return "%s|%s|%s|%s" % [official_root, user_root, _dev_path, settings_path]
+
+
 ## Drops the override and the record of what was served. The palette caches are the caller's to
-## reset (FoliageLibrary.reset_caches): the overlay has no undo of its own.
+## reset (FoliageLibrary.reset_caches): laying a library has no undo of its own.
 static func clear() -> void:
 	_dev_path = ""
 	_served.clear()
@@ -199,17 +211,17 @@ static func refresh(root: String = PaletteLibrary.DEFAULT_ROOT) -> Array[Diction
 	for entry in found:
 		var always: bool = entry["source"] == "dev" or entry["source"] == "received"
 		entry["enabled"] = always or not String(entry["id"]) in disabled
-	var resolved := LibraryResolver.resolve(found, _builtin(root))
+	var resolved := LibraryResolver.resolve(found)
 	_entries.assign(resolved["entries"])
 	_order.assign(resolved["order"])
 	_scanned = true
 	return list(root)
 
 
-## What the library manager shows: one dictionary per library, the built-in core first (when no
-## folder provides `core`), then every folder found in load order, the unusable ones last:
-## {id, name, description, version, author, license, url, tags, source ("builtin", "official",
-## "user" or "dev"), official, enabled, status ("ok", "error" or "disabled"), reasons, warnings,
+## What the library manager shows: one dictionary per library folder found, in load order (core
+## first), the unusable ones last:
+## {id, name, description, version, author, license, url, tags, source ("official", "user", "dev"
+## or "received"), official, enabled, status ("ok", "error" or "disabled"), reasons, warnings,
 ## folder, hash, bytes (on disk), asset_count, biome_count, biomes ([{id, name}] local ids),
 ## biome_ids (runtime ids), default_biome (a runtime id), dependencies, provides, served,
 ## thumbnail (absolute file or "")}. Scans on first use. Copies.
@@ -217,12 +229,6 @@ static func list(root: String = PaletteLibrary.DEFAULT_ROOT) -> Array[Dictionary
 	if not _scanned:
 		refresh(root)
 	var out: Array[Dictionary] = []
-	var has_core := false
-	for entry in _entries:
-		if entry["id"] == LibraryContracts.CORE_ID and entry["status"] == LibraryResolver.OK:
-			has_core = true
-	if not has_core:
-		out.append(_builtin_info(root))
 	var ranked: Array[int] = []
 	ranked.assign(_order)
 	for i in _entries.size():
@@ -245,15 +251,11 @@ static func info(library_id: String, root: String = PaletteLibrary.DEFAULT_ROOT)
 	return fallback
 
 
-## {id, version, hash} a map stores for library `library_id` while it is served (the built-in
-## core counts), {} when it is not.
-static func record_of(library_id: String, root: String = PaletteLibrary.DEFAULT_ROOT) -> Dictionary:
+## {id, version, hash} a map stores for library `library_id` while it is served, {} when it is not.
+static func record_of(library_id: String) -> Dictionary:
 	if _served.has(library_id):
 		var found: Dictionary = _served[library_id]
 		return {"id": library_id, "version": found["version"], "hash": found["hash"]}
-	if library_id == LibraryContracts.CORE_ID:
-		var core := _builtin_info(root)
-		return {"id": library_id, "version": core["version"], "hash": core["hash"]}
 	return {}
 
 
@@ -325,64 +327,6 @@ static func _aliases_of(library_id: String) -> Dictionary:
 						out[String(old)] = (raw as Dictionary)[old]
 				return out
 	return {}
-
-
-static func _builtin(root: String) -> Dictionary:
-	return {"id": LibraryContracts.CORE_ID, "version": BUILTIN_VERSION, "root": root}
-
-
-## The list() entry of the game's own core library: the installed palette's core biomes.
-static func _builtin_info(root: String) -> Dictionary:
-	var palette := PaletteLibrary.get_palette(root)
-	var biome_ids: Array[String] = []
-	var names: Array[Dictionary] = []
-	var served_elsewhere := {}
-	for found: Dictionary in _served.values():
-		if found["id"] != LibraryContracts.CORE_ID:
-			for id: String in found["biome_ids"]:
-				served_elsewhere[id] = true
-	for biome: Dictionary in palette["biomes"]:
-		var id := String(biome["id"])
-		if LibraryIds.library_of(id) == LibraryContracts.CORE_ID and not served_elsewhere.has(id):
-			biome_ids.append(id)
-			names.append({"id": id, "name": String(biome["name"])})
-	var own_assets := 0
-	for asset_id: String in palette["assets"]:
-		if LibraryIds.library_of(asset_id) == LibraryContracts.CORE_ID:
-			own_assets += 1
-	var hashing := HashingContext.new()
-	hashing.start(HashingContext.HASH_SHA256)
-	hashing.update(String(palette["palette_version"]).to_utf8_buffer() + PackedByteArray([0]))
-	return {
-		"id": LibraryContracts.CORE_ID,
-		"name": "tt-sim Core",
-		"description": "The plants and ground that come with the game.",
-		"version": BUILTIN_VERSION,
-		"author": "tt-sim",
-		"license": "",
-		"url": "",
-		"tags": ["official"],
-		"source": "builtin",
-		"official": true,
-		"enabled": true,
-		"status": LibraryResolver.OK,
-		"reasons": [] as Array[String],
-		"warnings": [] as Array[String],
-		"folder": root,
-		"hash": hashing.finish().hex_encode().substr(0, HASH_LENGTH),
-		"bytes": 0,
-		"asset_count": own_assets,
-		"biome_count": names.size(),
-		"biomes": names,
-		"biome_ids": biome_ids,
-		"default_biome": LibraryBindings.default_biome(),
-		"dependencies": [] as Array[Dictionary],
-		"provides": {},
-		"served": true,
-		"thumbnail": "",
-		"partial": {},
-		"received": false,
-	}
 
 
 ## The public dictionary of one scanned entry (no read result, no file list).
@@ -633,12 +577,18 @@ static func apply(root: String = PaletteLibrary.DEFAULT_ROOT) -> Dictionary:
 		"report": {},
 	}
 	_served.clear()
-	_forget_surfaces()
-	AssetStore.clear()
+	# Only this root's registrations go: a read of the default palette by incidental code (its first
+	# read serves it) must not wipe what a scratch root laid.
+	SurfaceStore.clear_libraries_of(root)
+	LibraryBindings.clear()
+	AssetStore.clear_root(root)
+	PaletteLibrary.base_for_serving(root)
+	if root == PaletteLibrary.DEFAULT_ROOT:
+		PaletteLibrary.note_default_served()
 	refresh(root)
 	if _entries.is_empty():
 		return result
-	var official_of := {LibraryContracts.CORE_ID: true}
+	var official_of := {}
 	for entry in _entries:
 		official_of[entry["id"]] = entry["official"]
 	var failed: Dictionary = {}
@@ -679,7 +629,7 @@ static func _serve(entry: Dictionary, root: String, official_of: Dictionary) -> 
 		read,
 		{
 			"folder": folder,
-			"surfaces": PaletteLibrary.get_palette(root)["surfaces"],
+			"surfaces": PaletteLibrary.base_for_serving(root)["surfaces"],
 			"hash": entry["hash"],
 			"files": entry["files"],
 			"dependencies": _dependency_context(entry),
@@ -700,10 +650,7 @@ static func _serve(entry: Dictionary, root: String, official_of: Dictionary) -> 
 		return out
 	if not pool:
 		var report := PaletteLibrary.install_overlay(
-			PaletteOverlay.read_palette(
-				compiled["palette"], folder, PaletteLibrary.get_palette(root), root, [], true
-			),
-			root
+			LibraryLayer.lay(compiled["palette"], PaletteLibrary.base_for_serving(root)), root
 		)
 		out["report"] = report
 		if not report["ok"]:
@@ -738,9 +685,6 @@ static func _dependency_context(entry: Dictionary) -> Dictionary:
 		var need := String(dep["id"])
 		var provider := _provider_entry(need, entry)
 		if provider.is_empty():
-			# The built-in core: no catalog to resolve refs against until it ships as a folder.
-			if need == LibraryContracts.CORE_ID:
-				out[need] = {"read": {"library": {}, "catalog": {}}, "folder": ""}
 			continue
 		out[need] = {"read": provider["read"], "folder": provider["folder"]}
 	return out
@@ -796,7 +740,7 @@ static func designer_writable(library_id: String, source: String) -> bool:
 ## (designer_writable), folder, read (LibraryReader's result), files, hash, dependencies
 ## (the compile context of its declared dependencies), dependency_list ([{id, version}]),
 ## biomes (local ids), surfaces (the palette's surface table now)}. The folder that is served wins
-## when two entries share the id; the built-in core, which has no folder, answers ok false.
+## when two entries share the id; a library that is not served from a folder answers ok false.
 static func designer_context(
 	library_id: String, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> Dictionary:
@@ -836,25 +780,17 @@ static func designer_context(
 ## Lays a compiled DRAFT (BiomeCompiler.compile of one edited biome) over the palette without
 ## rescanning anything: the draft's biomes replace the palette's biomes of the same runtime ids
 ## with their assets, and assets not yet registered are registered with AssetStore (no GLB is
-## read). Returns PaletteOverlay's report ({ok, error, biomes, ...}). `context` is
+## read). Returns LibraryLayer's report ({ok, error, biomes, ...}). `context` is
 ## designer_context's.
 static func serve_draft(
 	compiled: Dictionary, context: Dictionary, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> Dictionary:
 	var report := PaletteLibrary.install_overlay(
-		PaletteOverlay.read_palette(
-			compiled["palette"],
-			String(context["folder"]),
-			PaletteLibrary.get_palette(root),
-			root,
-			[],
-			true
-		),
-		root
+		LibraryLayer.lay(compiled["palette"], PaletteLibrary.get_palette(root)), root
 	)
 	if not report["ok"]:
 		return report
-	var official_of := {LibraryContracts.CORE_ID: true}
+	var official_of := {}
 	for entry in _entries:
 		official_of[entry["id"]] = entry["official"]
 	AssetStore.register_missing(root, compiled["origins"], bool(context["official"]), official_of)
@@ -928,6 +864,8 @@ static func _list(folder: String, prefix: String, depth: int, out: Array[String]
 	for file_name in DirAccess.get_files_at(here):
 		if prefix == "" and file_name == SafeDelete.MARKER:
 			continue  # the game's ownership marker is not part of the library's content
+		if file_name.ends_with(SIDECAR_SUFFIX):
+			continue  # an editor sidecar (res:// only); the exported pack does not hold them
 		out.append(file_name if prefix == "" else prefix + "/" + file_name)
 		if out.size() > MAX_FILES:
 			return false

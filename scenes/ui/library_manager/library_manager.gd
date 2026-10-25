@@ -336,7 +336,7 @@ static func facts_of(item: Dictionary) -> String:
 	if String(item["status"]) == LibraryResolver.ERROR:
 		return _first(item["reasons"])
 	var line := LibraryDetail.contents_text(item)
-	if String(item["source"]) != "builtin":
+	if not bool(item.get("official", false)):
 		line += " · " + LibraryImporter.size_text(int(item["bytes"]))
 	return line
 
@@ -455,11 +455,6 @@ func _on_verify_requested(library_id: String) -> void:
 	if _verifying:
 		return
 	var plan := LibraryVerify.plan(library_id, palette_root)
-	if plan["state"] == LibraryVerify.BUILTIN:
-		detail.say_cannot_verify(
-			"This comes with the game; its files are checked when the game is built."
-		)
-		return
 	if plan["state"] != LibraryVerify.READY:
 		detail.say_cannot_verify("Turn it on (and fix what is listed above) to check its files.")
 		return

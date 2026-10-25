@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.7092,
+		0.7638,
+		0.857
+	],
+	"kind": "snow",
+	"label": "Snow",
+	"role": "ground",
+	"tile_m": 8
+}

@@ -1,0 +1,718 @@
+{
+	"climate": "temperate",
+	"format": "ttsim-biome",
+	"format_version": 1,
+	"ground": {
+		"accents": [
+			{
+				"coverage": 0.14,
+				"scale_m": 6,
+				"surface": "dirt_peat"
+			},
+			{
+				"coverage": 0.08,
+				"scale_m": 9,
+				"surface": "dirt"
+			}
+		],
+		"cliff": "cliff",
+		"paths": [
+			"dirt_road_packed",
+			"planks",
+			"flagstone"
+		],
+		"scree": "gravel",
+		"shore": "mud",
+		"surface": "ash",
+		"water_bed": "riverbed"
+	},
+	"id": "burnt_forest",
+	"name": "Burnt Forest",
+	"rules": [
+		{
+			"align": "upright",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.012,
+			"habit": {
+				"charred": true,
+				"water": ""
+			},
+			"key": "snag",
+			"near": [],
+			"pattern": null,
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Tree_DeadTree_v0_burnt_forest"
+					},
+					{
+						"ref": "Tree_DeadTree_v1_burnt_forest"
+					},
+					{
+						"ref": "Tree_DeadTree_v2_burnt_forest"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "snag",
+			"scale_floor": null,
+			"scale_spread": 0.15,
+			"size_class": "large",
+			"slope_max_deg": 35,
+			"spacing_m": 4.5,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "upright",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.008,
+			"habit": {
+				"charred": true,
+				"water": ""
+			},
+			"key": "snag_conifer",
+			"near": [],
+			"pattern": null,
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Tree_DeadTree_v3"
+					},
+					{
+						"ref": "Tree_DeadTree_v4"
+					},
+					{
+						"ref": "Tree_DeadTree_v5"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "snag",
+			"scale_floor": null,
+			"scale_spread": 0.15,
+			"size_class": "large",
+			"slope_max_deg": 35,
+			"spacing_m": 4.5,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.028,
+			"habit": {
+				"charred": true,
+				"water": ""
+			},
+			"key": "high_stump",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": false,
+					"scale_influence": 0,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 133,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Wood_HighStump_v0"
+					},
+					{
+						"ref": "Wood_HighStump_v1"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "stump",
+			"scale_floor": null,
+			"scale_spread": 0.2,
+			"size_class": "medium",
+			"slope_max_deg": 40,
+			"spacing_m": 2,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.014,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "boulder",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": false,
+					"scale_influence": 0,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 134,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Rock_Boulder_summer_07_burnt_forest"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "boulder",
+			"scale_floor": null,
+			"scale_spread": 0.2,
+			"size_class": "medium",
+			"slope_max_deg": 40,
+			"spacing_m": 2,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.0514285714285714,
+			"habit": {
+				"charred": true,
+				"water": ""
+			},
+			"key": "log",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 15,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 135,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0.15
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Wood_SawnLog_v0_burnt_forest"
+					},
+					{
+						"ref": "Wood_SawnLog_v1_burnt_forest"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "log",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "small",
+			"slope_max_deg": 55,
+			"spacing_m": 0.8,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.5,
+				"parents_per_m2": 0.05,
+				"radius_m": 2,
+				"transition_m": 1.2
+			},
+			"density_per_m2": 0.0771428571428571,
+			"habit": {
+				"charred": true,
+				"water": ""
+			},
+			"key": "branches",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 15,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 136,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0.15
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Wood_Branch_v0"
+					},
+					{
+						"ref": "Wood_Branch_v1"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "branches",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "small",
+			"slope_max_deg": 55,
+			"spacing_m": 0.5,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": null,
+			"density_per_m2": 0.0257142857142857,
+			"habit": {
+				"charred": true,
+				"water": ""
+			},
+			"key": "stump",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 15,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 137,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0.15
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Wood_SawnStump_v0_burnt_forest"
+					},
+					{
+						"ref": "Wood_SawnStump_v1_burnt_forest"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "stump",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "small",
+			"slope_max_deg": 55,
+			"spacing_m": 0.8,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.25,
+				"parents_per_m2": 0.05,
+				"radius_m": 1.2,
+				"transition_m": 0.8
+			},
+			"density_per_m2": 0.0257142857142857,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "stones",
+			"near": [
+				{
+					"distance_m": 2.5,
+					"influence": 0.5,
+					"rule": "boulder",
+					"transition_m": 2
+				}
+			],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 50,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 15,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 138,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 2,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.5,
+				"scale_influence": 0.15
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Stone_Cluster_summer_14"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "stones",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "small",
+			"slope_max_deg": 55,
+			"spacing_m": 0.25,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.5,
+				"radius_m": 1,
+				"transition_m": 0.6
+			},
+			"density_per_m2": 0.36,
+			"habit": {
+				"charred": true,
+				"water": ""
+			},
+			"key": "char_litter",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 70,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 139,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 3,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.7,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Litter_Char_summer_15"
+					},
+					{
+						"ref": "Litter_Char_summer_16"
+					},
+					{
+						"ref": "Litter_Char_summer_17"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "char_litter",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		},
+		{
+			"align": "normal",
+			"avoid": [],
+			"clump": {
+				"children_spacing_m": 0.12,
+				"parents_per_m2": 0.5,
+				"radius_m": 1,
+				"transition_m": 0.6
+			},
+			"density_per_m2": 0.12,
+			"habit": {
+				"charred": false,
+				"water": ""
+			},
+			"key": "burnt_stubble",
+			"near": [],
+			"pattern": {
+				"geoscatter_pattern": {
+					"color_sample_method": "id_greyscale",
+					"dist_infl_allow": true,
+					"dist_influence": 70,
+					"dist_revert": true,
+					"scale_infl_allow": true,
+					"scale_influence": 20,
+					"scale_revert": true,
+					"texture_dict": {
+						"contrast": 2,
+						"detail": 1,
+						"distorsion": 0,
+						"mapping_location": [
+							0,
+							0,
+							0
+						],
+						"mapping_projection": "global",
+						"mapping_random_allow": true,
+						"mapping_random_loc": true,
+						"mapping_random_seed": 140,
+						"mapping_rotation": [
+							0,
+							0,
+							0
+						],
+						"mapping_scale": [
+							0.1,
+							0.1,
+							0.1
+						],
+						"out_type": "Color",
+						"scale": 3,
+						"texture_type": "noise_",
+						"use_color_ramp": false
+					}
+				},
+				"influence": 0.7,
+				"scale_influence": 0.2
+			},
+			"query": {
+				"count": "all",
+				"match": [
+					{
+						"ref": "Stubble_Burnt_summer_18"
+					}
+				],
+				"order": "explicit"
+			},
+			"role": "litter",
+			"scale_floor": 0.5,
+			"scale_spread": 0.3,
+			"size_class": "ground",
+			"slope_max_deg": 50,
+			"spacing_m": 0.12,
+			"weight": 1,
+			"yaw_random_deg": 360
+		}
+	],
+	"seasons": [
+		{
+			"id": "summer",
+			"seed": 1
+		}
+	],
+	"surfaces": "library",
+	"thumbnail": "thumbnails/burnt_forest.jpg"
+}

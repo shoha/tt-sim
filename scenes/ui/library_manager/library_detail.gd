@@ -14,7 +14,8 @@ signal verify_cancelled
 signal folder_requested(folder: String)
 signal remove_requested(library_id: String)
 
-const BADGE_OFFICIAL := "Official"
+## "Built in": every official library, that is `core` and anything else the game ships under
+## res://libraries (the badge used to be "Official" for those and "Built in" for the palette).
 const BADGE_YOURS := "Yours"
 const BADGE_BUILTIN := "Built in"
 const BADGE_RECEIVED := "From host"
@@ -110,10 +111,8 @@ static func contents_text(info: Dictionary) -> String:
 ## The badge for where a library came from. Pure.
 static func origin_badge(info: Dictionary) -> String:
 	match String(info.get("source", "")):
-		"builtin":
-			return BADGE_BUILTIN
 		"official":
-			return BADGE_OFFICIAL
+			return BADGE_BUILTIN
 		"received":
 			return BADGE_RECEIVED
 	return BADGE_YOURS
@@ -216,7 +215,7 @@ func _add_facts(info: Dictionary) -> void:
 	facts.theme_type_variation = &"FactsGrid"
 	add_child(facts)
 	_fact("Holds", contents_text(info))
-	if String(info["source"]) == "builtin":
+	if bool(info.get("official", false)):
 		_fact("Where", "Part of the game")
 	else:
 		_fact("Size", LibraryImporter.size_text(int(info["bytes"])))

@@ -9,8 +9,8 @@ extends RefCounted
 ## Input entries (one per library folder found, in any order):
 ##   {id, version, source ("official", "user" or "dev"), folder, enabled (bool), read_ok (bool),
 ##    reasons (Array[String], problems already found), dependencies: [{id, version (a range)}]}
-## `builtin` is the core library the game ships inside its palette ({id, version}); it provides
-## `core` when no folder does, so `core: ^1.0` is met on a game with no libraries/core folder yet.
+## `core` is an ordinary library here: the game ships it as the folder `res://libraries/core`, so
+## `core: ^1.0` is met by that entry and fails like any other missing dependency when it is not.
 ##
 ## Rules:
 ## - Duplicate ids: an official library beats a user one; among user libraries the folder name
@@ -31,10 +31,9 @@ extends RefCounted
 const OK := "ok"
 const ERROR := "error"
 const DISABLED := "disabled"
-const BUILTIN := -2
 
 
-static func resolve(entries: Array[Dictionary], builtin: Dictionary = {}) -> Dictionary:
+static func resolve(entries: Array[Dictionary]) -> Dictionary:
 	var out: Array[Dictionary] = []
 	for entry in entries:
 		var copy := entry.duplicate(true)
@@ -46,10 +45,10 @@ static func resolve(entries: Array[Dictionary], builtin: Dictionary = {}) -> Dic
 	for entry in out:
 		if entry["status"] == OK and not bool(entry.get("enabled", true)):
 			entry["status"] = DISABLED
-	var providers := _providers(out, builtin)
+	var providers := _providers(out)
 	var state := {}
 	for i in out.size():
-		_settle(i, out, providers, builtin, state, [])
+		_settle(i, out, providers, state, [])
 	var order := _load_order(out)
 	var active := 0
 	var kept: Array[int] = []
@@ -112,8 +111,8 @@ static func _mark_duplicates(entries: Array[Dictionary]) -> void:
 			)
 
 
-## id -> index of the entry that provides it (the duplicate winner, else a dev entry), or BUILTIN.
-static func _providers(entries: Array[Dictionary], builtin: Dictionary) -> Dictionary:
+## id -> index of the entry that provides it (the duplicate winner, else a dev entry).
+static func _providers(entries: Array[Dictionary]) -> Dictionary:
 	var providers := {}
 	for i in entries.size():
 		var id := String(entries[i].get("id", ""))
@@ -125,8 +124,6 @@ static func _providers(entries: Array[Dictionary], builtin: Dictionary) -> Dicti
 		var id := String(entries[i].get("id", ""))
 		if id != "" and entries[i].get("source") == "dev" and not providers.has(id):
 			providers[id] = i
-	if not builtin.is_empty() and not providers.has(String(builtin.get("id", ""))):
-		providers[String(builtin["id"])] = BUILTIN
 	return providers
 
 
@@ -143,7 +140,6 @@ static func _settle(
 	i: int,
 	entries: Array[Dictionary],
 	providers: Dictionary,
-	builtin: Dictionary,
 	state: Dictionary,
 	stack: Array
 ) -> int:
@@ -163,18 +159,14 @@ static func _settle(
 	for dep: Dictionary in entry.get("dependencies", []):
 		var need := String(dep.get("id", ""))
 		var wanted := String(dep.get("version", "*"))
-		var provider := _provider_of(need, entries, providers, builtin, state, stack)
-		var reason := _dependency_problem(need, wanted, provider, entries, builtin)
+		var provider := _provider_of(need, entries, providers, state, stack)
+		var reason := _dependency_problem(need, wanted, provider, entries)
 		if reason != "":
 			entry["status"] = ERROR
 			(entry["reasons"] as Array).append(reason)
 			continue
-		if provider == BUILTIN:
-			entry["provides"][need] = "built in"
-			depth = maxi(depth, 1)
-		else:
-			entry["provides"][need] = String(entries[provider]["version"])
-			depth = maxi(depth, int(state.get(provider, 0)) + 1)
+		entry["provides"][need] = String(entries[provider]["version"])
+		depth = maxi(depth, int(state.get(provider, 0)) + 1)
 	stack.pop_back()
 	if entry["status"] == OK and depth > LibraryContracts.MAX_DEPENDENCY_DEPTH:
 		entry["status"] = ERROR
@@ -185,44 +177,36 @@ static func _settle(
 	return depth
 
 
-## The entry index that meets dependency `need` once it is decided, BUILTIN when the game's own
-## core does (no folder provides it, or the folder that does is unavailable), or -1.
+## The entry index that meets dependency `need` once it is decided, or -1 when none is found.
 static func _provider_of(
 	need: String,
 	entries: Array[Dictionary],
 	providers: Dictionary,
-	builtin: Dictionary,
 	state: Dictionary,
 	stack: Array
 ) -> int:
 	if not providers.has(need):
 		return -1
 	var provider: int = providers[need]
-	if provider == BUILTIN:
-		return BUILTIN
-	_settle(provider, entries, providers, builtin, state, stack)
-	if entries[provider]["status"] != OK and need == String(builtin.get("id", "")):
-		return BUILTIN
+	_settle(provider, entries, providers, state, stack)
 	return provider
 
 
 ## "" when dependency `need` (range `wanted`) is met by `provider`, else the reason it is not.
 static func _dependency_problem(
-	need: String, wanted: String, provider: int, entries: Array[Dictionary], builtin: Dictionary
+	need: String, wanted: String, provider: int, entries: Array[Dictionary]
 ) -> String:
 	if provider == -1:
 		return (
 			"needs library '%s' %s, which is not installed"
 			% [need, LibraryVersions.describe(wanted)]
 		)
-	var have := String(builtin.get("version", ""))
-	if provider != BUILTIN:
-		var other: Dictionary = entries[provider]
-		have = String(other.get("version", ""))
-		if other["status"] == DISABLED:
-			return "needs library '%s', which is disabled" % need
-		if other["status"] != OK:
-			return "needs library '%s', which is unavailable" % need
+	var other: Dictionary = entries[provider]
+	var have := String(other.get("version", ""))
+	if other["status"] == DISABLED:
+		return "needs library '%s', which is disabled" % need
+	if other["status"] != OK:
+		return "needs library '%s', which is unavailable" % need
 	if not LibraryVersions.satisfies(have, wanted):
 		return (
 			"needs library '%s' %s, but %s is installed"

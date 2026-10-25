@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.1886,
+		0.3986,
+		0.0661
+	],
+	"kind": "grass",
+	"label": "Alpine grass",
+	"role": "ground",
+	"tile_m": 4
+}

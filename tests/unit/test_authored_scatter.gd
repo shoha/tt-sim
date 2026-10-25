@@ -8,10 +8,10 @@ extends GutTest
 ## nodes through identity, names and instance counts.
 
 const BIOME := "temperate_forest_summer_s1"
-const OAK := BIOME + "/Tree_Oak_summer_01"
-const PINE := BIOME + "/Tree_Pine_summer_03"
-const GRASS := BIOME + "/Grass_Clump_summer_17"
-const BOULDER := BIOME + "/Rock_Boulder_summer_08"
+const OAK := BIOME + "/Tree_Oak_v0"
+const PINE := BIOME + "/Tree_Pine_v0_temperate_forest"
+const GRASS := BIOME + "/Grass_Grass_v0_temperate_forest"
+const BOULDER := BIOME + "/Rock_Boulder_summer_08_temperate_forest"
 const BIG_BUDGET := 1_000_000_000
 
 var _map: Node3D = null
@@ -105,7 +105,7 @@ func _generate_all(doc: MapDocument) -> Dictionary:
 func test_node_names_are_always_cell_suffixed() -> void:
 	assert_eq(
 		AuthoredScatter.node_name_for(OAK, Vector2i(-1, 2)),
-		"temperate_forest_summer_s1_Tree_Oak_summer_01_MultiMesh_c-1_2"
+		"temperate_forest_summer_s1_Tree_Oak_v0_MultiMesh_c-1_2"
 	)
 
 

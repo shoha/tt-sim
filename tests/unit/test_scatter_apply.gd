@@ -6,7 +6,7 @@ extends GutTest
 ## assets alone and merges an asset's grow-ins in batches.
 
 const BIOME := "temperate_forest_summer_s1"
-const OAK := BIOME + "/Tree_Oak_summer_01"
+const OAK := BIOME + "/Tree_Oak_v0"
 const BIG_BUDGET := 1_000_000_000
 const DAB := Rect2(2.0, 2.0, 1.0, 1.0)
 

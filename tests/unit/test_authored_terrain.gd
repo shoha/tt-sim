@@ -272,8 +272,8 @@ func test_material_binds_the_palette_surface() -> void:
 		var array: Texture2DArray = material.get_shader_parameter(GroundLayerArrays.UNIFORMS[key])
 		assert_not_null(array, "%s array bound" % key)
 		if array != null:
-			var palette := load(PaletteLibrary.DEFAULT_ROOT.path_join(surface[key])) as Texture2D
-			assert_eq(array.get_format(), palette.get_image().get_format(), "%s as imported" % key)
+			var palette := SurfaceStore.image(PaletteLibrary.DEFAULT_ROOT, String(surface[key]))
+			assert_eq(array.get_format(), palette.get_format(), "%s as baked" % key)
 	var tiles: PackedFloat32Array = material.get_shader_parameter("layer_tile_m")
 	assert_almost_eq(tiles[0], float(surface["tile_m"]), EPSILON)
 	assert_false(material.has_meta(AuthoredTerrain.FALLBACK_META))

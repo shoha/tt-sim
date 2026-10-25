@@ -4,17 +4,19 @@ extends RefCounted
 ## The one place the ground, the crossings, the swatches and the biome thumbnails get a
 ## palette surface's maps from (design doc 2.7 and 3.2, module 7). Two sources, one result:
 ##
-## - A legacy palette surface (the installed treecube palette, a package, a test fixture) is a
-##   relative path under the palette root whose PNG the editor imported; the texture is
-##   ResourceLoader's, exactly as GroundPalette.load_texture always returned it.
+## - A legacy palette surface (a test fixture palette) is a relative path under the palette root
+##   whose PNG the editor imported; the texture is ResourceLoader's, exactly as
+##   GroundPalette.load_texture always returned it.
 ## - A library surface (`surfaces/<name>/{albedo,normal,orm,height}.png` plus surface.json in a
-##   library folder, no editor import) is registered by LibraryRegistry.apply with a palette
-##   entry whose paths are `surfaces/<runtime name>/<map>.png`. The store decodes the PNG with
-##   Image.load_from_file, bakes it to the formats the import gives (SurfaceBake: BC7 albedo, BC5
-##   normal, BC1 ORM, L8 height, full mip chains), keeps the result in memory and in the raw
-##   cache (SurfaceCache, user://library_cache/<library id>/<hash>/), and hands out an Image or
-##   an ImageTexture. A library file that HAS an editor import (a res:// library in the pack)
-##   takes the imported texture instead, as a legacy surface does.
+##   library folder, no editor import; core's files are `importer="keep"` raw files in the pack)
+##   is registered by LibraryRegistry.apply with a palette entry whose paths are
+##   `surfaces/<runtime name>/<map>.png`. The store decodes the PNG's bytes
+##   (Image.load_png_from_buffer), bakes it to the formats the import gives (SurfaceBake: BC7
+##   albedo, BC5 normal, BC1 ORM, L8 height, full mip chains), keeps the result in memory and
+##   in the raw cache (SurfaceCache, user://library_cache/<library id>/<hash>/), and hands out an
+##   Image or an ImageTexture. A
+##   library file is NEVER loaded through ResourceLoader (it does not work on a keep file in a
+##   pack, and would fail in the editor).
 ##
 ## Names. A surface is named by its palette name (`ash`, or `mylib__crystal` for a library
 ## surface of a non-core library: LibraryIds.runtime_surface) or by the string convention
@@ -89,6 +91,7 @@ static func register_library(root: String, folder: String, surfaces: Dictionary)
 			"name": String(found["name"]),
 			"info": (found["info"] as Dictionary).duplicate(true),
 			"dir": dir,
+			"root": root,
 		}
 		_hashes.erase(runtime)
 		for kind: String in found["maps"]:
@@ -113,6 +116,23 @@ static func clear_libraries() -> void:
 	_images.clear()
 	_textures.clear()
 	_hashes.clear()
+
+
+## Forgets what was registered for the palette at `root` only (LibraryRegistry.apply serving one
+## root leaves another root's registrations alone); loaded images and textures are dropped, they
+## are read again from the cache.
+static func clear_libraries_of(root: String) -> void:
+	var prefix := root + "|"
+	for table: Dictionary in [_thumbs, _paths]:
+		for key: String in table.keys():
+			if key.begins_with(prefix):
+				table.erase(key)
+	for runtime: String in _surfaces.keys():
+		if String((_surfaces[runtime] as Dictionary).get("root", "")) == root:
+			_surfaces.erase(runtime)
+			_hashes.erase(runtime)
+	_images.clear()
+	_textures.clear()
 
 
 ## Drops the in-memory images and textures of library surfaces (the next load reads the cache).
@@ -170,7 +190,7 @@ static func available(root: String, relative: String) -> bool:
 
 ## The texture of the map at palette-relative `relative` under `root`, or null. A legacy path is
 ## ResourceLoader's imported texture (null when there is none); a registered library path is the
-## editor import when its file has one, else the baked map as an ImageTexture.
+## baked map as an ImageTexture.
 static func texture(root: String, relative: String) -> Texture2D:
 	if relative == "":
 		return null
@@ -186,13 +206,9 @@ static func texture(root: String, relative: String) -> Texture2D:
 	if _textures.has(file):
 		return _textures[file]
 	var loaded: Texture2D = null
-	if file.begins_with("res://") and ResourceLoader.exists(file, "Texture2D"):
-		loaded = ResourceLoader.load(file, "Texture2D") as Texture2D
-		stats["imports"] += 1
-	else:
-		var image := _baked(entry)
-		if image != null:
-			loaded = ImageTexture.create_from_image(image)
+	var image := _baked(entry)
+	if image != null:
+		loaded = ImageTexture.create_from_image(image)
 	if loaded != null:
 		_textures[file] = loaded
 	return loaded
@@ -203,9 +219,6 @@ static func texture(root: String, relative: String) -> Texture2D:
 static func image(root: String, relative: String) -> Image:
 	var entry: Dictionary = _paths.get(_key(root, relative), {})
 	if not entry.is_empty():
-		var file := _file_of(entry)
-		if file.begins_with("res://") and ResourceLoader.exists(file, "Texture2D"):
-			return _texture_image(texture(root, relative))
 		var baked := _baked(entry)
 		return baked.duplicate() as Image if baked != null else null
 	return _texture_image(texture(root, relative))
@@ -273,18 +286,6 @@ static func load_set(folder: String, library_id: String = "dev") -> Dictionary:
 		out["mean_albedo_linear"] = SurfaceBake.mean_albedo_linear(out["images"]["albedo"])
 	out["ok"] = true
 	return out
-
-
-## The maps of the installed palette surface `name` at `root`, from the editor import (what a
-## library set must equal): {kind: Image}, a kind with no texture left out.
-static func load_installed(root: String, name: String) -> Dictionary:
-	var images := {}
-	var entry: Dictionary = PaletteLibrary.surfaces(root).get(runtime_name(name), {})
-	for kind in SurfaceBake.KINDS:
-		var loaded := image(root, String(entry.get(kind, "")))
-		if loaded != null:
-			images[kind] = loaded
-	return images
 
 
 ## {ok, width, height, bit_depth, color_type, interlace} of the PNG at `path`, read from its
@@ -405,7 +406,11 @@ static func _bake_or_cache(
 	if not problems.is_empty():
 		push_warning("SurfaceStore: %s" % problems[0])
 		return null
-	var decoded := Image.load_from_file(file)
+	# From bytes, not Image.load_from_file: that one warns (once per process) for a res:// file the
+	# editor knows through its keep sidecar, and the bytes are the same ones in a pack.
+	var decoded := Image.new()
+	if decoded.load_png_from_buffer(FileAccess.get_file_as_bytes(file)) != OK:
+		decoded = null
 	var baked := SurfaceBake.bake(decoded, kind)
 	if baked == null:
 		push_warning("SurfaceStore: %s could not be decoded" % file)

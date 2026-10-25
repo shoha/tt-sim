@@ -7,8 +7,8 @@ extends GutTest
 ## step (a box covering only x < 0), and a body on another layer that must be ignored.
 
 const BIOME := "temperate_forest_summer_s1"
-const OAK := BIOME + "/Tree_Oak_summer_01"
-const GRASS := BIOME + "/Grass_Clump_summer_17"
+const OAK := BIOME + "/Tree_Oak_v0"
+const GRASS := BIOME + "/Grass_Grass_v0_temperate_forest"
 const RAMP_SLOPE := 0.25
 const RAMP_BASE := 1.0
 const TOP := 50.0

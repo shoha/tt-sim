@@ -34,7 +34,7 @@ other committed home.
 - **Same version to join:** peers must run exactly the host's game version
   (`VersionGate`, checked from Steam lobby data before connecting and again by the host).
   This is what keeps the built-in palette identical across peers.
-- **Palette storage:** the built-in treecube palette (~80 MB) is in Git LFS; CI restores
+- **Palette storage:** the shipped core library (`libraries/core`, ~170 MB, plantgen's output; treecube's ~80 MB palette until 2026-10-25) is in Git LFS; CI restores
   LFS objects from the Actions cache (GitHub Free LFS bandwidth is 10 GiB a month and runs
   out otherwise). See `.gitattributes` and `.github/workflows/build.yml`.
 - **Height tiers are wanted** (phase 3): terracing that snaps to whole tiers so elevation
@@ -135,12 +135,12 @@ other committed home.
 
 | System | Code | Documented in |
 |--------|------|---------------|
-| Built-in palette (treecube -> tt-sim contract, import path) | `utils/palette_library.gd`, `assets/palette/` | `systems/palette.md`, `ASSET_PIPELINE.md` section 9 |
-| Content library (data-only folders compiled into the palette form; developer path only so far) | `utils/library/`, `tools/compile_library_cli.gd` | `systems/library.md` |
+| Palette (what the content libraries serve; the form of `ASSET_PIPELINE.md` section 9) | `utils/palette_library.gd`, `libraries/core/` | `systems/palette.md`, `ASSET_PIPELINE.md` section 9 |
+| Content library (data-only folders compiled into the palette form; core ships as one, user libraries import, the manager, the biome designer) | `utils/library/`, `tools/compile_library_cli.gd` | `systems/library.md` |
 | Biome designer (a visual tool for everyone: edit a biome's rules on a proving-ground map in the real scatter and ground, response curves, queries, undo, Save and "Save as new collection"; the title's "Design a biome") | `utils/library/designer/`, `utils/proving_ground.gd`, `utils/scatter_refresh.gd`, `scenes/states/authoring/designer/`, `scenes/ui/biome_designer/` | `systems/biome_designer.md` |
 | Map library core (level name, description and author edits; the GLB import check and its warnings; Import; Replace map and Reload from Blender with Keep dressing or Start fresh; the local source index and "Updated in Blender"; the card thumbnail, captured or rendered offscreen) | `autoloads/level_manager.gd` (`update_meta`), `utils/glb_check.gd`, `utils/map_import.gd`, `utils/import_sources.gd`, `utils/dressing_reconcile.gd`, `utils/level_thumbnail.gd` | `ASSET_PIPELINE.md` section 11 |
 | The library title (the title is the library: New map with Generate, Import... and Advanced size and seed; the selected map's detail strip with in-place name, description and author, source, size, tokens, last played, Play, Host with this map, Edit map and its menu; the import check panel; a dropped .glb as a new map or Replace on a card; the play index behind most recently played first) | `scenes/states/title_screen/` (`title_screen.gd`, `new_map_card.gd`, `map_detail_strip.gd`, `import_check_panel.gd`, `library_imports.gd`), `utils/library_facts.gd`, `utils/library_plays.gd`, `scenes/ui/primitives/level_grid.gd` | `UI_SYSTEMS.md` "Title Hub" |
-| Palette build (producer side) | `treecube/scripts/build_palette.py`, `treecube/treecube/palette.py` | treecube `README.md` "Palette for tt-sim" |
+| Core library build (producer side; treecube's `build_palette.py` retired 2026-10-25) | plantgen `tools/export_library_cli.gd`, sources `D:/dev/tabletop/core-library` | `systems/library.md` "The core library" |
 | Map document `map.ttmap` (format, caps, atomic write) | `resources/map_document.gd`, `utils/map_document_io.gd` | `systems/map_document.md`, `ARCHITECTURE.md` "Map document (map.ttmap)" |
 | Scatter generator (Matern III spacing, clumps, relations, density response) | `utils/scatter_generator.gd`, `utils/scatter_plan.gd` | `systems/scatter.md`, `ARCHITECTURE.md` "Scatter generator" |
 | Incremental scatter (per-cell rebuilds, worker regeneration, grow-in, shrink-out) | `utils/authored_scatter.gd`, `utils/scatter_regen.gd`, `utils/scatter_shrink.gd` | `systems/scatter.md`, `ARCHITECTURE.md` "Authored scatter", `PERFORMANCE.md` |

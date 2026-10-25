@@ -24,6 +24,9 @@ extends RefCounted
 ## again). A Mutex guards the tables: scatter preparation resolves assets on worker threads.
 
 const MAX_FILE_BYTES := PaletteAssetFiles.MAX_ASSET_FILE_BYTES
+## GLTFDocument.append_from_buffer's flag for EditorSceneFormatImporter's
+## IMPORT_FORCE_DISABLE_MESH_COMPRESSION (an editor-only enum, so the value is written out).
+const FORCE_DISABLE_COMPRESSION := 64
 
 static var _lock: Mutex = Mutex.new()
 ## "<root>|<asset id>" -> {library, path, node, sha256, bytes, official}.
@@ -83,6 +86,18 @@ static func clear() -> void:
 	_entries.clear()
 	_meshes.clear()
 	_errors.clear()
+	_lock.unlock()
+
+
+## Forgets the registrations and meshes of the palette at `root` only (LibraryRegistry.apply
+## serving one root leaves the libraries another root holds alone).
+static func clear_root(root: String) -> void:
+	var prefix := root + "|"
+	_lock.lock()
+	for table: Dictionary in [_entries, _meshes, _errors]:
+		for key: String in table.keys():
+			if key.begins_with(prefix):
+				table.erase(key)
 	_lock.unlock()
 
 
@@ -283,7 +298,7 @@ static func _sha256(buffer: PackedByteArray) -> String:
 static func _parse(buffer: PackedByteArray, path: String, node_name: String) -> Mesh:
 	var document := GLTFDocument.new()
 	var state := GLTFState.new()
-	if document.append_from_buffer(buffer, "", state, PaletteOverlay.FORCE_DISABLE_COMPRESSION) != OK:
+	if document.append_from_buffer(buffer, "", state, FORCE_DISABLE_COMPRESSION) != OK:
 		return null
 	var scene := document.generate_scene(state)
 	if scene == null:

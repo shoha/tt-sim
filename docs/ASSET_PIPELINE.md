@@ -371,15 +371,25 @@ Pushing a producer change into an existing level:
 (treecube), then copy `out.glb` over the level's `map.glb`. Keep the previous export
 beside it (`map.glb.pre-<change>-<date>`) until the new one is verified in-game.
 
-Golden fixtures: treecube's built-in palette (section 9) is committed under
-`assets/palette/` and is the first real producer output with a GUT test that loads it,
-`tests/unit/test_palette_builtin.gd`: all 180 assets resolve through `PaletteLibrary`, the
-wind categories and COLOR_0 presence match the manifest, every swaying surface harvests
-albedo and ORM, and one species per biome builds chunks through `build_scatter` (about
-0.8 s headless). terrain-paint map exports still have no committed fixture; for them the
-manual round trip above remains the gate.
+Golden fixtures: plantgen's shipped core library (`libraries/core`, section 9's palette form
+compiled from it) is the committed producer output with a GUT test that loads it,
+`tests/unit/test_palette_builtin.gd`: every asset resolves through `PaletteLibrary`, the wind
+categories and COLOR_0 presence match the catalog, every swaying surface harvests its albedo, and
+one species per biome builds chunks through `build_scatter` (treecube's palette, which this test
+pinned until 2026-10-25, is gone). terrain-paint map exports still have no committed fixture; for
+them the manual round trip above remains the gate.
 
-## 9. Built-in palette (treecube -> tt-sim, for in-game map authoring)
+## 9. The palette form (treecube, historically; plantgen's core library since 2026-10-25)
+
+> **Status 2026-10-25 (step S10).** treecube's palette is no longer shipped: `assets/palette/`,
+> `PaletteOverlay`, `PaletteLibrary.overlay_package` and the foliage-library switch were deleted,
+> and the palette the game serves is compiled in memory from the content libraries, the shipped
+> `res://libraries/core` first (`docs/systems/library.md`, `docs/systems/palette.md`). What this
+> section still holds is the FORM of `palette.json` that `PaletteLibrary.validate_palette` reads
+> (the compiler writes exactly it), the surface-map uniformity rules and the history of the
+> treecube path. The "Layout", "Import path" and "Refreshing the palette" parts below describe the
+> retired treecube install (editor-imported `.glb`/`.png`, `.import` sidecars, `build_palette.py
+> --install`) and are kept as history; core's files are `importer="keep"` raw files instead.
 
 A second path from treecube into tt-sim that bypasses Blender maps entirely: treecube
 builds a palette of assets, ground surfaces and placement rules that ships inside the
@@ -395,14 +405,13 @@ whose `resolver()` feeds `ScatterGlbUtils.build_scatter()`.
 
 A second producer, plantgen (`D:/dev/plantgen`, `tools/build_ttsim_package_cli.gd`), writes a
 package in this same shape (`palette.json` format 1, `assets/<biome id>/*.glb`, the same nine biome
-ids and species keys, its own asset names) into a folder outside the repo. The consumer serves it
-instead of the installed palette when the dev setting `foliage/package_path` names it and the
-`foliage/library` choice is `plantgen` (2026-10-23; `FoliageLibrary`, `docs/systems/palette.md`
-"Foliage library"). Nothing in this contract changes for it; it is a palette like any other, laid
-over the installed one per biome by `PaletteLibrary.overlay_package`, so a package must keep each
-biome's id and species keys for authored maps to keep their painting and rules. Scatter rows a map
-saved under one library names an asset the other lacks are regenerated from the biome painting at
-load, never migrated.
+ids and species keys, its own asset names) into a folder outside the repo. Until 2026-10-25 the
+consumer served it instead of the installed palette when the dev setting `foliage/package_path`
+named it (`FoliageLibrary`, `PaletteLibrary.overlay_package`); that route is retired: plantgen's
+output now ships as the content library `core` (`docs/systems/library.md`), which keeps each
+biome's id and species keys so authored maps keep their painting and rules. Scatter rows a map
+saved under one asset set names an asset the served libraries lack are regenerated from the biome
+painting at load, never migrated.
 
 ### Layout
 

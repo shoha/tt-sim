@@ -39,7 +39,7 @@ func test_a_good_bundle_installs_into_the_transient_cache_and_is_served() -> voi
 	assert_false(_assets().has(Tw.SHARD), "the unused one is not in the partial")
 	assert_not_null(AssetStore.mesh_for(Tw.SPIRE, _paths["base"]), "the GLB loads, hash checked")
 	assert_eq(
-		LibraryRegistry.record_of("alienworld", _paths["base"])["hash"],
+		LibraryRegistry.record_of("alienworld")["hash"],
 		info["partial"]["source_hash"],
 		"a map saved here records the full library's hash"
 	)
@@ -356,6 +356,9 @@ func test_a_new_install_evicts_older_received_libraries_over_the_cap() -> void:
 	var request := _request()
 	var host := _host_served()
 	_become_client()
+	# The served palette is read (and cached) before the fake library lands: its empty folder is
+	# not a library, and a later first read would scan it and warn.
+	PaletteLibrary.get_palette()
 	_fake_received("oldlib", 600_000_000, 1)
 	var made := LibraryTransfer.verify_and_install(
 		LibraryTransfer.build_bundle(request, host), _ctx({"cap": 600_000_000})
@@ -402,18 +405,35 @@ func test_keep_promotes_a_received_library_into_the_user_libraries() -> void:
 	assert_false(LibraryReceivedStore.promote("alienworld")["ok"], "already installed")
 
 
-func test_promote_goes_through_the_importer_when_there_is_one() -> void:
+func test_promote_goes_through_the_importers_quarantine_and_the_install_card() -> void:
 	var request := _request()
 	var host := _host_served()
 	_become_client()
 	LibraryTransfer.verify_and_install(LibraryTransfer.build_bundle(request, host), _ctx())
-	var seen: Array = []
-	var importer := func(folder: String) -> int:
-		seen.append(folder)
-		return OK
-	assert_true(LibraryReceivedStore.promote("alienworld", importer)["ok"])
-	assert_eq(seen.size(), 1)
-	assert_true(String(seen[0]).ends_with("/alienworld"))
+	var kept := LibraryReceivedStore.promote("alienworld")
+	assert_true(kept["ok"], str(kept))
+	assert_true(_has_dir(_client_user.path_join("alienworld")), "installed")
+	assert_false(_has_dir(_received_root().path_join("alienworld")), "the received copy is gone")
+	var incoming := LibraryImporter.incoming_root()
+	assert_eq(DirAccess.get_directories_at(incoming), PackedStringArray(), "the quarantine is empty")
+	assert_true(
+		SafeDelete.is_owned(_client_user.path_join("alienworld")), "the game made it, so it may remove it"
+	)
+
+
+func test_promote_refuses_through_the_install_card_and_keeps_the_received_copy() -> void:
+	var request := _request()
+	var host := _host_served()
+	_become_client()
+	LibraryTransfer.verify_and_install(LibraryTransfer.build_bundle(request, host), _ctx())
+	# A library of that id is already installed: the card's refusal, not a move over it.
+	DirAccess.make_dir_recursive_absolute(_client_user.path_join("alienworld"))
+	var kept := LibraryReceivedStore.promote("alienworld")
+	assert_false(kept["ok"])
+	assert_ne(String(kept["error"]), "")
+	assert_true(_has_dir(_received_root().path_join("alienworld")), "the received copy stays")
+	var incoming := LibraryImporter.incoming_root()
+	assert_eq(DirAccess.get_directories_at(incoming), PackedStringArray(), "nothing left staged")
 
 
 # ---- the registry's received source ----

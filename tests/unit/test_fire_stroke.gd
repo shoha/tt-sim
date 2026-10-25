@@ -241,7 +241,9 @@ func test_ash_clears_small_plants_and_spares_rocks_trees_and_snags() -> void:
 		assert_eq(ground.call(at, role).x, 0.0, "role %d burns away" % role)
 	assert_eq(ground.call(at, ScatterGround.ROLE_ROCK).x, 1.0, "a rock stays")
 	assert_eq(ground.call(at, ScatterGround.ROLE_TREE).x, 1.0, "a tree stays (snags replace it)")
-	var charred := ScatterGround.plan_role({"key": "stump", "size_class": "medium"})
+	var charred := ScatterGround.plan_role(
+		{"key": "stump", "size_class": "medium", "habit": {"water": "", "charred": true}}
+	)
 	assert_eq(ground.call(at, charred).x, 1.0, "the burnt forest's stumps live on ash")
 	var diff := {"ids_before": PackedStringArray(), "ids_after": PackedStringArray(["ash"])}
 	assert_true(SurfaceStroke.changes_plants(diff, PaletteLibrary.surfaces()), "ash regrows")

@@ -9,10 +9,11 @@ extends GutTest
 ## registry and the ground code must carry a library's own surfaces and bindings through.
 ##
 ## Fixture: tests/fixtures/library_surfaces (JSON and 16 px PNGs; this test copies it under
-## user:// and writes its one GLB there). The installed `ash` surface stands for the legacy form.
+## user:// and writes its one GLB there). The shipped core's `ash` surface stands for a real set;
+## the fixture's own editor-imported PNGs stand for the legacy form (a path ResourceLoader loads).
 
 const FIXTURE := "res://tests/fixtures/library_surfaces"
-const INSTALLED := "res://assets/palette/surfaces"
+const INSTALLED := "res://libraries/core/surfaces"
 const ROOT := "user://test_surface_store"
 const LIBRARY := ROOT + "/surf"
 const BASE := ROOT + "/base"
@@ -32,12 +33,16 @@ const PURE_MODULES: Array[String] = [
 
 var _saved_settings_path: String = ""
 var _saved_cache_root: String = ""
+var _saved_official: String = ""
 
 
 func before_all() -> void:
 	_saved_settings_path = LibraryRegistry.settings_path
 	_saved_cache_root = SurfaceCache.root
+	_saved_official = LibraryRegistry.official_root
 	LibraryRegistry.settings_path = SETTINGS
+	# The shipped core is not part of these scratch worlds.
+	LibraryRegistry.official_root = ROOT + "/no_official"
 	SurfaceCache.root = CACHE
 	_write_base()
 	_copy_fixture()
@@ -45,6 +50,7 @@ func before_all() -> void:
 
 func after_all() -> void:
 	LibraryRegistry.settings_path = _saved_settings_path
+	LibraryRegistry.official_root = _saved_official
 	SurfaceCache.root = _saved_cache_root
 	LibraryRegistry.clear()
 	PaletteLibrary.clear_cache()
@@ -181,20 +187,19 @@ func _remove_tree(path: String) -> void:
 	DirAccess.remove_absolute(path)
 
 
-## The installed `ash` surface as a library surface folder (albedo.png ... plus surface.json).
+## The shipped core's `ash` surface as a library surface folder (albedo.png ... plus surface.json).
 func _install_as_set(name: String, folder: String) -> void:
 	for kind in SurfaceBake.KINDS:
-		var source := INSTALLED.path_join("%s/%s_%s.png" % [name, name, kind])
+		var source := INSTALLED.path_join("%s/%s.png" % [name, kind])
 		_write_bytes(folder.path_join(kind + ".png"), FileAccess.get_file_as_bytes(source))
-	var entry: Dictionary = PaletteLibrary.surfaces()[name]
-	var info := {
-		"label": "Ash",
-		"kind": "ash",
-		"role": "ground",
-		"tile_m": entry["tile_m"],
-		"albedo_mean_linear": entry["albedo_mean_linear"],
-	}
+	var info := _core_info(name)
 	_write_text(folder.path_join("surface.json"), JSON.stringify(info))
+
+
+## The shipped core surface `name`'s surface.json, parsed.
+func _core_info(name: String) -> Dictionary:
+	var text := FileAccess.get_file_as_string(INSTALLED.path_join("%s/surface.json" % name))
+	return JSON.parse_string(text)
 
 
 func _read_fixture_sources() -> Dictionary:
@@ -316,59 +321,40 @@ func test_bake_gives_the_imported_formats_and_full_mip_chains() -> void:
 	)
 
 
-func test_data_size_matches_the_installed_textures() -> void:
-	var texture := load(INSTALLED.path_join("ash/ash_albedo.png")) as Texture2D
-	var image := texture.get_image()
+func test_data_size_matches_a_baked_core_surface() -> void:
+	var folder := ROOT + "/inst/ash_size"
+	_install_as_set("ash", folder)
+	var loaded := SurfaceStore.load_set(folder, "inst")
+	assert_true(loaded["ok"], str(loaded["errors"]))
+	var image: Image = loaded["images"]["albedo"]
 	assert_eq(SurfaceBake.data_size(image.get_format(), 1024, 1024), image.get_data().size())
 	assert_eq(SurfaceBake.data_size(Image.FORMAT_DXT1, 1024, 1024), 699064)
 	assert_eq(SurfaceBake.data_size(Image.FORMAT_L8, 1024, 1024), 1398101)
 	assert_eq(SurfaceBake.data_size(Image.FORMAT_RGBA8, 4, 4), -1, "not a baked format")
 
 
-func test_a_png_set_equals_the_editor_import_of_the_same_surface() -> void:
+func test_a_real_png_set_bakes_to_the_imported_formats_and_uses_the_given_mean() -> void:
 	var folder := ROOT + "/inst/ash"
 	_install_as_set("ash", folder)
 	var loaded := SurfaceStore.load_set(folder, "inst")
 	assert_true(loaded["ok"], str(loaded["errors"]))
 	assert_eq((loaded["warnings"] as Array).size(), 0, "1024 px maps, a clean surface.json")
-	var imported := SurfaceStore.load_installed(PaletteLibrary.DEFAULT_ROOT, "ash")
 	for kind in SurfaceBake.KINDS:
 		var mine: Image = loaded["images"][kind]
-		var theirs: Image = imported[kind]
-		assert_eq(mine.get_format(), theirs.get_format(), kind + " format")
-		assert_eq(mine.get_size(), theirs.get_size(), kind + " size")
-		assert_eq(mine.get_mipmap_count(), theirs.get_mipmap_count(), kind + " mips")
-		assert_eq(mine.get_data().size(), theirs.get_data().size(), kind + " bytes")
-		if kind != "albedo":
-			assert_true(mine.get_data() == theirs.get_data(), kind + " is byte for byte")
-	_assert_same_colours(loaded["images"]["albedo"], imported["albedo"], 0.05, 8)
+		assert_eq(mine.get_format(), SurfaceBake.format_of(kind), kind + " format")
+		assert_eq(mine.get_size(), Vector2i(1024, 1024), kind + " size")
+		assert_eq(mine.get_mipmap_count(), 10, kind + " mips below the first: 512 down to 1")
+		assert_eq(
+			mine.get_data().size(),
+			SurfaceBake.data_size(mine.get_format(), 1024, 1024),
+			kind + " bytes"
+		)
 	var mean: Color = loaded["mean_albedo_linear"]
-	var listed: Array = PaletteLibrary.surfaces()["ash"]["albedo_mean_linear"]
+	var listed: Array = _core_info("ash")["albedo_mean_linear"]
 	assert_almost_eq(mean.r, float(listed[0]), 0.0001, "the surface.json mean is used as given")
 
 
-## Mean and largest per-channel difference (0..255) of two images' decoded first mip.
-func _assert_same_colours(a: Image, b: Image, mean_limit: float, max_limit: int) -> void:
-	var left := a.duplicate() as Image
-	var right := b.duplicate() as Image
-	left.decompress()
-	right.decompress()
-	var x := left.get_data()
-	var y := right.get_data()
-	assert_eq(x.size(), y.size())
-	var total := 0
-	var worst := 0
-	var seen := 0
-	for i in range(0, x.size(), 7):
-		var d := absi(x[i] - y[i])
-		total += d
-		worst = maxi(worst, d)
-		seen += 1
-	assert_lt(float(total) / seen, mean_limit, "mean colour difference of 255")
-	assert_lte(worst, max_limit, "largest colour difference of 255")
-
-
-func test_the_measured_mean_matches_the_palette_mean() -> void:
+func test_the_measured_mean_matches_the_surface_json_mean() -> void:
 	var folder := ROOT + "/inst/ash_no_mean"
 	_install_as_set("ash", folder)
 	var info: Dictionary = JSON.parse_string(
@@ -379,7 +365,7 @@ func test_the_measured_mean_matches_the_palette_mean() -> void:
 	var loaded := SurfaceStore.load_set(folder, "inst")
 	assert_true(loaded["ok"])
 	var mean: Color = loaded["mean_albedo_linear"]
-	var listed: Array = PaletteLibrary.surfaces()["ash"]["albedo_mean_linear"]
+	var listed: Array = _core_info("ash")["albedo_mean_linear"]
 	assert_almost_eq(mean.r, float(listed[0]), 0.01)
 	assert_almost_eq(mean.g, float(listed[1]), 0.01)
 	assert_almost_eq(mean.b, float(listed[2]), 0.01)
@@ -782,7 +768,9 @@ func test_the_registry_serves_library_surfaces_to_the_ground_code() -> void:
 	assert_eq(SurfaceStore.label_of("surf__slate"), "Slate")
 	assert_eq(SurfaceStore.label_of("lib://surf/slate"), "Slate")
 	assert_eq(AuthoringPanel.surface_label("surf__boards"), "Boards")
-	assert_eq(AuthoringPanel.surface_label("cliff_basalt"), "Basalt", "legacy labels stay")
+	assert_eq(
+		AuthoringPanel.surface_label("cliff_basalt"), "Cliff basalt", "no label: the id spelled out"
+	)
 	# The three ways in give the same bytes.
 	var relative: String = surfaces["surf__lilac"]["albedo"]
 	var texture := GroundPalette.load_texture(BASE, relative)
@@ -833,22 +821,22 @@ func test_the_registry_bakes_lazily_and_then_reads_the_cache() -> void:
 
 
 func test_a_legacy_path_goes_through_the_import_unchanged() -> void:
-	var surface: Dictionary = PaletteLibrary.surfaces()["ash"]
+	# A palette root whose PNGs the editor imported (the fixture folder has .import sidecars).
+	var root := FIXTURE
 	for kind in SurfaceBake.KINDS:
-		var relative: String = surface[kind]
-		var through_store := SurfaceStore.texture(PaletteLibrary.DEFAULT_ROOT, relative)
-		var direct := (
-			ResourceLoader.load(PaletteLibrary.DEFAULT_ROOT.path_join(relative)) as Texture2D
-		)
+		var relative := "surfaces/lilac/%s.png" % kind
+		var through_store := SurfaceStore.texture(root, relative)
+		var direct := ResourceLoader.load(root.path_join(relative)) as Texture2D
+		assert_not_null(direct, kind)
 		assert_same(through_store, direct, kind + " is ResourceLoader's cached texture")
-		assert_true(SurfaceStore.available(PaletteLibrary.DEFAULT_ROOT, relative))
-	assert_null(SurfaceStore.texture(PaletteLibrary.DEFAULT_ROOT, ""))
-	assert_null(SurfaceStore.texture(PaletteLibrary.DEFAULT_ROOT, "surfaces/none/none.png"))
-	assert_false(SurfaceStore.available(PaletteLibrary.DEFAULT_ROOT, "surfaces/none/none.png"))
-	assert_false(SurfaceStore.available(PaletteLibrary.DEFAULT_ROOT, ""))
-	assert_eq(SurfaceStore.stats["bakes"], 0, "the installed palette is never baked")
-	var image := SurfaceStore.image(PaletteLibrary.DEFAULT_ROOT, surface["albedo"])
-	assert_eq(image.get_format(), Image.FORMAT_BPTC_RGBA)
+		assert_true(SurfaceStore.available(root, relative))
+	assert_null(SurfaceStore.texture(root, ""))
+	assert_null(SurfaceStore.texture(root, "surfaces/none/none.png"))
+	assert_false(SurfaceStore.available(root, "surfaces/none/none.png"))
+	assert_false(SurfaceStore.available(root, ""))
+	assert_eq(SurfaceStore.stats["bakes"], 0, "a legacy path is never baked")
+	var image := SurfaceStore.image(root, "surfaces/lilac/albedo.png")
+	assert_eq(image.get_size(), Vector2i(16, 16))
 
 
 func test_clearing_the_registry_forgets_surfaces_and_bindings() -> void:
@@ -961,7 +949,9 @@ func test_the_pure_modules_touch_no_files_and_the_stores_load_no_resources() -> 
 			assert_false(word in code, "%s must not use %s" % [module, word])
 		assert_false("\tload(" in code or " load(" in code, "%s must not call load()" % module)
 	var store := _code("res://utils/library/surface_store.gd")
-	assert_true('file.begins_with("res://")' in store, "an import is used only for res:// files")
+	assert_false(
+		"ResourceLoader.exists(file" in store, "a library file is never loaded as a resource"
+	)
 	assert_false("DirAccess" in store, "the store lists nothing")
 
 

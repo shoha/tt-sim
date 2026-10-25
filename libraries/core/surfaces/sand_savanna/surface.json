@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.6397,
+		0.3877,
+		0.1399
+	],
+	"kind": "sand",
+	"label": "Sand savanna",
+	"role": "ground",
+	"tile_m": 4
+}
