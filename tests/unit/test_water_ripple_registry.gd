@@ -99,7 +99,14 @@ func test_flush_disturbances_pushes_at_most_once_per_frame() -> void:
 	WaterRippleRegistry.flush_disturbances()
 	assert_eq(WaterRippleRegistry._last_push_frame, frame_with_token)
 
-	await get_tree().process_frame
+	# Wait until the process frame counter has moved on: in one 46-script headless run (2026-10-25)
+	# a single awaited process_frame returned with the counter unchanged on every run, which made
+	# the frame guard (correctly) skip the flush below; the cause was not found, the wait is
+	# what the test means.
+	var waited := 0
+	while Engine.get_process_frames() == frame_with_token and waited < 10:
+		await get_tree().process_frame
+		waited += 1
 
 	WaterRippleRegistry.unregister(id)
 	WaterRippleRegistry.flush_disturbances()
