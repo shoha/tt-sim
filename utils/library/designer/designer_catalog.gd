@@ -91,6 +91,58 @@ static func categories_in(all: Array[Dictionary]) -> Array[String]:
 	return out
 
 
+## What to relax when `filter` finds nothing (the picker's empty state, step S9): for each
+## condition that is on (a picked tag, a picked category, the search text, the role filter) the
+## number of groups the filter would find without it, the ones that would find some first, most
+## first. [{kind ("tag", "category", "search", "role"), value, count}]. Pure; no network.
+static func relax(
+	all: Array[Dictionary], search: String, categories: Array, tags: Array, role: String = ""
+) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for tag: Variant in tags:
+		var rest := tags.duplicate()
+		rest.erase(tag)
+		_note_relaxed(out, "tag", String(tag), filter(all, search, categories, rest, role).size())
+	for category: Variant in categories:
+		var rest := categories.duplicate()
+		rest.erase(category)
+		_note_relaxed(out, "category", String(category), filter(all, search, rest, tags, role).size())
+	if search.strip_edges() != "":
+		_note_relaxed(out, "search", search.strip_edges(), filter(all, "", categories, tags, role).size())
+	if role != "":
+		_note_relaxed(out, "role", role, filter(all, search, categories, tags, "").size())
+	out.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool: return int(a["count"]) > int(b["count"])
+	)
+	return out
+
+
+## The words of a request for an asset no group of the catalog fits: what was asked, as a line
+## to copy to whoever makes the plants (there is no network in the game to send it).
+static func request_text(
+	search: String, categories: Array, tags: Array, role: String = ""
+) -> String:
+	var parts: Array[String] = []
+	var kinds := ", ".join(PackedStringArray(categories)) if not categories.is_empty() else "asset"
+	if role != "":
+		kinds = String(DesignerSlots.ROLE_CATEGORY.get(role, kinds))
+		parts.append("for the %s role" % DesignerSlots.role_label(role))
+	if not tags.is_empty():
+		parts.append("tagged %s" % ", ".join(PackedStringArray(tags)))
+	if search.strip_edges() != "":
+		parts.append("like '%s'" % search.strip_edges())
+	if parts.is_empty():
+		return "Wanted: a %s" % kinds
+	return "Wanted: a %s %s" % [kinds, " ".join(PackedStringArray(parts))]
+
+
+static func _note_relaxed(
+	out: Array[Dictionary], kind: String, value: String, count: int
+) -> void:
+	if count > 0:
+		out.append({"kind": kind, "value": value, "count": count})
+
+
 static func _record(key: String, members: Array) -> Dictionary:
 	var first: Dictionary = members[0]
 	var entry: Dictionary = first["entry"]

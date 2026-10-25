@@ -52,6 +52,8 @@ var context: Dictionary = {}
 
 var _saved_hash: int = 0
 var _saved_lock_hash: int = 0
+var _saved_def: Dictionary = {}
+var _saved_lock_entries: Dictionary = {}
 var _undo: Array[Dictionary] = []
 var _redo: Array[Dictionary] = []
 var _query_context: Dictionary = {}
@@ -188,6 +190,17 @@ func rules_by_role() -> Dictionary:
 
 func is_dirty() -> bool:
 	return def.hash() != _saved_hash or locks.hash() != _saved_lock_hash
+
+
+## The biome-def as last saved (as opened until the first Save): what the A/B view compares the
+## draft with. A copy.
+func saved_def() -> Dictionary:
+	return _saved_def.duplicate(true)
+
+
+## The lock entries as last saved, in `locks`' form.
+func saved_locks() -> Dictionary:
+	return _saved_lock_entries.duplicate(true)
 
 
 func can_undo() -> bool:
@@ -434,7 +447,7 @@ func resolved_assets(key: String, season: String = "") -> Array[Dictionary]:
 		cached.assign(_resolved[cache_key])
 		return cached
 	var out: Array[Dictionary] = []
-	var query: Dictionary = rule(key).get("query", {})
+	var query: Dictionary = BiomeSeasons.rule_in(def, key, which).get("query", {})
 	var seen := {}
 	var ctx := query_context()
 	var all := LibraryQuery.candidates(ctx)
@@ -483,12 +496,7 @@ func is_locked(key: String) -> bool:
 func set_locked(key: String, on: bool) -> bool:
 	if not has_rule(key) or on == is_locked(key):
 		return false
-	for season in season_ids():
-		var lock_key := "%s/%s" % [season, key]
-		if on:
-			locks[lock_key] = _fresh_lock(key, season)
-		else:
-			locks.erase(lock_key)
+	DesignerLocks.lock_rule(self, key, on)
 	revision += 1
 	changed.emit("Lock" if on else "Unlock")
 	return true
@@ -647,29 +655,19 @@ func _new_rule(role: String, key: String, query: Dictionary) -> Dictionary:
 	}
 
 
-## The lock for rule `key` in `season`: the query's hash and the refs its selection gives now.
-func _fresh_lock(key: String, season: String) -> Dictionary:
-	var query: Dictionary = rule(key).get("query", {})
-	var warnings: Array[String] = []
-	var picked := LibraryQuery.select(query, query_context(), _scope(key, season), warnings)
-	var refs: Array[String] = []
-	for found: Dictionary in picked["found"]:
-		refs.append(String(found["ref"]))
-	return {"query": LibraryQuery.query_hash(query), "assets": refs}
-
-
 ## The lock file's rules: the locked rules that still exist, a lock whose query changed taken
-## again from the query as it is now.
+## again from the query as it is now (DesignerLocks).
 func _lock_entries() -> Dictionary:
 	var out := {}
 	for lock_key: String in locks:
 		var rule_key := lock_key.get_slice("/", 1)
-		if not has_rule(rule_key):
-			continue
-		var query: Dictionary = rule(rule_key).get("query", {})
+		var season := lock_key.get_slice("/", 0)
+		var query: Dictionary = BiomeSeasons.rule_in(def, rule_key, season).get("query", {})
+		if query.is_empty() or not season in season_ids():
+			continue  # The rule or the season is gone, or the rule left that season.
 		out[lock_key] = locks[lock_key]
 		if String(locks[lock_key]["query"]) != LibraryQuery.query_hash(query):
-			out[lock_key] = _fresh_lock(rule_key, lock_key.get_slice("/", 0))
+			out[lock_key] = DesignerLocks.fresh(self, rule_key, season)
 	return out
 
 
@@ -682,6 +680,8 @@ func _saved_locks() -> Dictionary:
 func _mark_saved() -> void:
 	_saved_hash = def.hash()
 	_saved_lock_hash = locks.hash()
+	_saved_def = def.duplicate(true)
+	_saved_lock_entries = locks.duplicate(true)
 
 
 func _scope(key: String, season: String) -> Dictionary:

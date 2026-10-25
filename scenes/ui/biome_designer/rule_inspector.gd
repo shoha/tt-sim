@@ -96,6 +96,9 @@ var _name_edit: LineEdit
 var _role: OptionButton
 var _class: OptionButton
 var _lock: Button
+var _focus: Button
+var _lock_words: Label
+var _lock_again: Button
 var _issues: VBoxContainer
 var _rows: Dictionary = {}
 var _mix_box: VBoxContainer
@@ -103,6 +106,7 @@ var _mix_keys: Array[String] = []
 var _query: DesignerQuerySection
 var _response: DesignerResponseSection
 var _habit: DesignerHabitSection
+var _seasons: DesignerSeasonSection
 
 
 func _init() -> void:
@@ -129,6 +133,9 @@ func setup(designer: BiomeDesignerSession) -> void:
 	_habit = DesignerHabitSection.new()
 	_habit.setup(session)
 	_body.add_child(_habit)
+	_seasons = DesignerSeasonSection.new()
+	_seasons.setup(session)
+	_body.add_child(_seasons)
 	session.selection_changed.connect(show_rule)
 	session.model.changed.connect(func(_reason: String) -> void: _sync())
 	session.compiled.connect(func(_result: Dictionary) -> void: _show_issues())
@@ -138,12 +145,15 @@ func setup(designer: BiomeDesignerSession) -> void:
 ## Shows rule `key` ("" for none).
 func show_rule(key: String) -> void:
 	_key = key if session.model.has_rule(key) else ""
+	if session.focus_rule != "" and session.focus_rule != _key:
+		session.set_focus(_key)  # "Show only this" follows the selection.
 	_empty.visible = _key == ""
 	_body.visible = _key != ""
 	if _key != "":
 		_query.show_rule(_key)
 		_response.show_rule(_key)
 		_habit.show_rule(_key)
+		_seasons.show_rule(_key)
 		_sync()
 
 
@@ -194,6 +204,16 @@ func _build_header() -> void:
 	)
 	_lock.toggled.connect(func(on: bool) -> void: session.model.set_locked(_key, on))
 	buttons.add_child(_lock)
+	_focus = Button.new()
+	_focus.name = "Focus"
+	_focus.text = "Show only this"
+	_focus.toggle_mode = true
+	_focus.tooltip_text = (
+		"Hide every other rule's plants on the map, to judge this one alone. "
+		+ "Nothing is removed from the biome."
+	)
+	_focus.toggled.connect(func(on: bool) -> void: session.set_focus(_key if on else ""))
+	buttons.add_child(_focus)
 	var copy := Button.new()
 	copy.name = "Duplicate"
 	copy.text = "Duplicate"
@@ -215,6 +235,16 @@ func _build_header() -> void:
 	)
 	buttons.add_child(remove)
 	_body.add_child(buttons)
+	var lock_line := HBoxContainer.new()
+	lock_line.name = "LockLine"
+	_lock_words = DesignerRows.caption("LockWords", "")
+	lock_line.add_child(_lock_words)
+	_lock_again = DesignerRows.chip(
+		"LockAgain", "Lock again", "Take the selection from the query as it is now."
+	)
+	_lock_again.pressed.connect(func() -> void: DesignerLocks.refresh(session.model, _key))
+	lock_line.add_child(_lock_again)
+	_body.add_child(lock_line)
 	_issues = VBoxContainer.new()
 	_issues.name = "Issues"
 	_body.add_child(_issues)
@@ -259,6 +289,8 @@ func _sync() -> void:
 		)
 	)
 	_lock.set_pressed_no_signal(model.is_locked(_key))
+	_show_lock(DesignerLocks.state(model, _key))
+	_focus.set_pressed_no_signal(session.focus_rule == _key)
 	for field: String in _rows:
 		var row: PropertyRow = _rows[field]
 		var shown := model.effective_number(_key, field)
@@ -270,6 +302,56 @@ func _sync() -> void:
 		)
 	_rebuild_mix()
 	_show_issues()
+
+
+## The words about the rule's lock (DesignerLocks.state): unlocked, locked, or stale
+## because the query or the catalogs moved since it was taken.
+func _show_lock(lock: Dictionary) -> void:
+	var state := String(lock["state"])
+	var words := ""
+	match state:
+		"unlocked":
+			words = (
+				"Not locked: the query decides which assets grow, so a catalog update can "
+				+ "change them."
+			)
+		"locked":
+			var held := 0
+			for season: String in lock["seasons"]:
+				held = maxi(held, (lock["seasons"][season]["held"] as Array).size())
+			var plural := "" if held == 1 else "s"
+			words = "Locked to %d picked asset%s. Save writes the lock file." % [held, plural]
+			if not _lock_saved():
+				words = "Locked to %d picked asset%s (not saved yet)." % [held, plural]
+			if held == 0:
+				words = "Locked, but its query names every asset, so nothing picked can change."
+		"stale_query":
+			words = "The query changed after the lock was taken, so the lock is ignored."
+		"stale_catalog":
+			var added := 0
+			var gone := 0
+			for season: String in lock["seasons"]:
+				var held: Array = lock["seasons"][season]["held"]
+				var now: Array = lock["seasons"][season]["now"]
+				for ref in now:
+					added += 0 if ref in held else 1
+				for ref in held:
+					gone += 0 if ref in now else 1
+			words = (
+				"The catalogs changed after the lock: the query would now give %d new and miss %d "
+				% [added, gone]
+				+ "locked asset%s." % ("" if gone == 1 else "s")
+			)
+	_lock_words.text = words
+	_lock_again.visible = state == "stale_query" or state == "stale_catalog"
+
+
+## Whether the lock file as last saved holds rule `_key`.
+func _lock_saved() -> bool:
+	for season in session.model.season_ids():
+		if session.model.saved_locks().has("%s/%s" % [season, _key]):
+			return true
+	return false
 
 
 ## The class default of `field` for the selected rule (what a cleared field falls back to).

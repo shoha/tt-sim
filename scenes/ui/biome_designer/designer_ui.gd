@@ -16,6 +16,8 @@ signal leave_requested
 
 const LEFT_WIDTH := 380.0
 const RIGHT_WIDTH := 430.0
+## The ground strip's height: two rows of pickers and chips; a taller strip scrolls.
+const GROUND_HEIGHT := 128.0
 
 var session: BiomeDesignerSession = null
 var header: DesignerHeader = null
@@ -23,8 +25,14 @@ var picker: DesignerAssetPicker = null
 var slots: DesignerSlotList = null
 var inspector: DesignerRuleInspector = null
 var ground: DesignerGroundStrip = null
+## The A/B divider over the map window, and the ground look editor that takes the inspector's
+## place while Look... is on.
+var compare_overlay: DesignerCompareOverlay = null
+var look_editor: DesignerLookEditor = null
 
 var _dialog: DesignerCollectionDialog = null
+var _inspector_scroll: ScrollContainer = null
+var _look_scroll: ScrollContainer = null
 
 
 func _init() -> void:
@@ -62,13 +70,43 @@ func setup(designer: BiomeDesignerSession) -> void:
 	window.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	window.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	middle.add_child(window)
+	compare_overlay = DesignerCompareOverlay.new()
+	window.add_child(compare_overlay)
+	compare_overlay.setup(session)
 	middle.add_child(_right_column())
 	var bottom := PanelContainer.new()
 	bottom.name = "GroundSheet"
+	# The strip scrolls when the window is too small for all its rows, so it never pushes the
+	# map and the panels out of the window.
+	var strip_scroll := ScrollContainer.new()
+	strip_scroll.name = "GroundScroll"
+	strip_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	strip_scroll.custom_minimum_size = Vector2(0.0, GROUND_HEIGHT)
+	bottom.add_child(strip_scroll)
 	ground = DesignerGroundStrip.new()
+	ground.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ground.setup(session)
-	bottom.add_child(ground)
+	ground.look_requested.connect(_on_look_requested)
+	strip_scroll.add_child(ground)
 	page.add_child(bottom)
+
+
+## Whether the ground look editor is the right column now.
+func look_open() -> bool:
+	return _look_scroll != null and _look_scroll.visible
+
+
+## Shows the ground look editor in the inspector's place (`on`), or the inspector again.
+func show_look(on: bool) -> void:
+	_look_scroll.visible = on
+	_inspector_scroll.visible = not on
+	var button := ground.look_button()
+	if button.button_pressed != on:
+		button.set_pressed_no_signal(on)
+
+
+func _on_look_requested() -> void:
+	show_look(ground.look_button().button_pressed)
 
 
 ## Shows the "Save as new collection" dialog. `taken`: the library ids that exist.
@@ -136,6 +174,18 @@ func _right_column() -> Control:
 	inspector.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	inspector.setup(session)
 	scroll.add_child(inspector)
+	_inspector_scroll = scroll
+	_look_scroll = ScrollContainer.new()
+	_look_scroll.name = "LookScroll"
+	_look_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_look_scroll.visible = false
+	sheet.add_child(_look_scroll)
+	look_editor = DesignerLookEditor.new()
+	look_editor.visible = true
+	look_editor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	look_editor.setup(session)
+	look_editor.closed.connect(func() -> void: show_look(false))
+	_look_scroll.add_child(look_editor)
 	return sheet
 
 

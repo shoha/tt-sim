@@ -268,6 +268,30 @@ const QUERY_SEASON_MODES: Array[String] = ["auto", "any"]
 ## ids and pins a query may list.
 const QUERY_MAX_ASSETS := 64
 const QUERY_MAX_LIST := 64
+## Season overrides (step S9, BiomeSeasons): the keys of a season's `overrides` (a ground field
+## by field, the ground look deep-merged, the density scale per class, rule overrides by rule
+## key) and the fields a rule's override (in a season's `overrides.rules` or the rule's own
+## `seasons`) may change; `enabled` false drops the rule from that season and `density_factor`
+## there is RELATIVE (it multiplies the density the rule compiles to; 0 drops the rule).
+const SEASON_OVERRIDE_KEYS: Array[String] = ["ground", "ground_look", "density_scale", "rules"]
+const SEASON_RULE_FIELDS: Array[String] = [
+	"enabled",
+	"weight",
+	"density_per_m2",
+	"density_factor",
+	"spacing_m",
+	"slope_max_deg",
+	"slope_min_deg",
+	"scale_spread",
+	"scale_floor",
+	"yaw_random_deg",
+	"avoid_bare",
+	"keep_colour",
+	"response",
+	"habit",
+	"align",
+	"query",
+]
 ## Names Windows reserves as devices; a file or id with one cannot exist on every platform.
 const RESERVED_DEVICE_NAMES: Array[String] = [
 	"con",
@@ -405,6 +429,12 @@ static func export_json() -> String:
 			"unsupported_axes": RESPONSE_UNSUPPORTED.duplicate(),
 		},
 		"roles": roles,
+		"seasons":
+		{
+			"max": MAX_SEASONS,
+			"override_keys": SEASON_OVERRIDE_KEYS.duplicate(),
+			"rule_fields": SEASON_RULE_FIELDS.duplicate(),
+		},
 		"size_classes": SIZE_CLASSES.duplicate(),
 		"surface_caps":
 		{

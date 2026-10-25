@@ -342,8 +342,11 @@ func _open_async(
 ## library cannot resolve are regenerated from the biome painting in _open_async). The camera
 ## is not touched, the active tool and biome and the unsaved state carry over, the undo history
 ## does not (its entries point at the old nodes). Waits for a scatter still growing in first.
+## `replacement`: a document to open in place of the one in memory (the biome designer's season
+## switch builds a fresh proving ground when the season changes the ground); the scatter's rows
+## are then not copied into the old document first.
 ## Returns false when no map is open or a save is running.
-func reopen_async() -> bool:
+func reopen_async(replacement: MapDocument = null) -> bool:
 	if not _is_open or _saving:
 		return false
 	_is_open = false
@@ -354,7 +357,10 @@ func reopen_async() -> bool:
 		and (scatter.is_regenerating() or scatter.is_growing())
 	):
 		await get_tree().process_frame
-	_sync_document()
+	if replacement != null:
+		document = replacement
+	else:
+		_sync_document()
 	var was_dirty := session.is_dirty()
 	var tool_id: StringName = &""
 	if brush.is_active() and brush.tool != null:

@@ -52,6 +52,7 @@ func setup(authoring: AuthoringController, game_map: GameMap, designed: BiomeDes
 	session = BiomeDesignerSession.new()
 	session.name = "Session"
 	add_child(session)
+	session.game_map = game_map
 	session.setup(model, controller)
 	ui = DesignerUI.new()
 	ui.setup(session)

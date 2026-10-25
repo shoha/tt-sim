@@ -12,7 +12,8 @@ extends RefCounted
 ##
 ## This build compiles the minimal subset (design doc 6.1): rules select assets by explicit
 ## `query.match[].ref` only, numbers are explicit (a missing density takes the class default
-## times `density_factor`), seasons are expanded without overrides, surfaces are the base
+## times `density_factor`), seasons are expanded with their overrides (BiomeSeasons, S9: the
+## ground, the ground look, the density scale and per-rule fields by season), surfaces are the base
 ## palette's names (`surfaces: legacy`) or, with `surfaces: library`, resolved against the
 ## library's own surfaces/ folder first (S3; resolve_surface). Pure: no files, no scene tree.
 ## Asset `file` values stay library-relative (the palette contract); `paths` carries the
@@ -109,6 +110,8 @@ static func _compile_biome(
 	assets: Dictionary,
 	warnings: Array[String]
 ) -> Dictionary:
+	# The season's own overrides (BiomeSeasons): the def itself when it has none.
+	def = BiomeSeasons.effective(def, String(season.get("id", "summer")))
 	var library_id := String(surface_context["library"])
 	var biome_name := String(def["id"])
 	var seed_value := int(season.get("seed", 1))

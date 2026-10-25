@@ -31,12 +31,17 @@ static func ground_value(model: BiomeDesignerModel, field: String) -> Variant:
 
 
 ## Replaces the ground look overrides (verbatim over GroundLook.BASE); null or {} erases them.
-static func set_ground_look(model: BiomeDesignerModel, look: Variant) -> bool:
+## `merge_tag` folds a run of edits (a colour being dragged) into one undo step.
+static func set_ground_look(
+	model: BiomeDesignerModel, look: Variant, merge_tag: String = ""
+) -> bool:
 	if look == null or (look is Dictionary and (look as Dictionary).is_empty()):
 		if not model.def.has("ground_look"):
 			return false
 		return model.apply_edit("Clear ground look", [DesignerPatch.erase_op(["ground_look"])])
-	return model.apply_edit("Edit ground look", [DesignerPatch.set_op(["ground_look"], look)])
+	return model.apply_edit(
+		"Edit ground look", [DesignerPatch.set_op(["ground_look"], look)], merge_tag
+	)
 
 
 ## The biome-wide multiplier of one size class's budget; null erases it.

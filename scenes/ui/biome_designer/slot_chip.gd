@@ -28,12 +28,23 @@ func setup(key: String) -> void:
 
 
 ## Sets the chip's words: "oak (3)", with " !" for a complaint and a lock icon when locked.
-func show_state(assets: int, problem: String, locked: bool) -> void:
+func show_state(
+	assets: int, problem: String, locked: bool, lock_state: String = "locked"
+) -> void:
 	text = "%s (%d)%s" % [rule_key, assets, " !" if problem != "" else ""]
-	icon = IconButton.load_icon("device-floppy") if locked else null
+	var stale := lock_state == "stale_query" or lock_state == "stale_catalog"
+	if locked:
+		icon = IconButton.load_icon("alert-triangle" if stale else "device-floppy")
+	else:
+		icon = null
 	var lines: Array[String] = [rule_key]
 	lines.append("%d assets" % assets)
-	if locked:
+	if locked and stale:
+		lines.append(
+			"Locked, but the %s changed since: see the rule's lock words."
+			% ("query" if lock_state == "stale_query" else "catalogs")
+		)
+	elif locked:
 		lines.append("Selection locked: Save writes it to the lock file.")
 	if problem != "":
 		lines.append(problem)

@@ -12,9 +12,19 @@ signal save_as_requested
 signal revert_requested
 signal leave_requested
 
-const SEASON_TIP := "The season whose plants are on the map. Scrubbing is a later step."
-
+const SEASON_TIP := (
+	"The season on the map. Each season is a biome of its own: the plants, ground and look it "
+	+ "changes are the ones set for it."
+)
 const TITLE_WIDTH := 120.0
+const SCRUB_WIDTH := 84.0
+const MENU_ADD_BASE := 100
+const MENU_REMOVE := 1
+const MENU_CLEAR := 2
+const COMPARE_OFF := 0
+const COMPARE_BASE := 10
+const COMPARE_BIOME_BASE := 1000
+const COMPARE_LABEL_MAX := 26
 
 var session: BiomeDesignerSession = null
 var meter: DesignerBudgetMeter = null
@@ -22,6 +32,13 @@ var meter: DesignerBudgetMeter = null
 var _title: Label
 var _dirty: Label
 var _season: OptionButton
+var _scrub: HSlider
+var _seasons_menu: MenuButton
+var _add_menu: PopupMenu
+var _add_names: Array[String] = []
+var _compare_menu: MenuButton
+var _biome_menu: PopupMenu
+var _compare_options: Array[Dictionary] = []
 var _undo: IconButton
 var _redo: IconButton
 var _save: Button
@@ -62,6 +79,7 @@ func setup(designer: BiomeDesignerSession) -> void:
 				session.set_season(index)
 	)
 	top.add_child(_season)
+	_build_season_controls(top)
 	_undo = _icon_button("Undo", "arrow-back-up", "Undo (Ctrl+Z)")
 	_undo.pressed.connect(func() -> void: session.model.undo())
 	top.add_child(_undo)
@@ -140,10 +158,17 @@ func refresh() -> void:
 	_syncing = true
 	_season.clear()
 	for i in model.season_ids().size():
-		_season.add_item(model.season_ids()[i].capitalize(), i)
+		var changes := int(DesignerSeasonEdits.summary(model, model.season_ids()[i])["total"])
+		var words := model.season_ids()[i].capitalize()
+		_season.add_item(words if changes == 0 else "%s (%d)" % [words, changes], i)
 	_season.select(session.season_index)
 	_season.disabled = model.season_ids().size() < 2
+	_scrub.visible = model.season_ids().size() > 1
+	_scrub.max_value = maxi(model.season_ids().size() - 1, 1)
+	_scrub.tick_count = model.season_ids().size()
+	_scrub.set_value_no_signal(session.season_index)
 	_syncing = false
+	_refresh_compare_button()
 	_undo.disabled = not model.can_undo()
 	_undo.tooltip_text = (
 		"Undo %s (Ctrl+Z)" % model.history_label() if model.can_undo() else "Nothing to undo"
@@ -160,6 +185,135 @@ func refresh() -> void:
 	)
 	_revert.disabled = not model.is_dirty()
 	_show_status()
+
+
+## The season dropdown's neighbours: the scrub slider over the seasons, the Seasons menu (add,
+## remove, clear the changes of the one on the map) and the A/B menu.
+func _build_season_controls(top: HBoxContainer) -> void:
+	_scrub = HSlider.new()
+	_scrub.name = "SeasonScrub"
+	_scrub.min_value = 0
+	_scrub.max_value = 1
+	_scrub.step = 1
+	_scrub.scrollable = false
+	_scrub.ticks_on_borders = true
+	_scrub.custom_minimum_size = Vector2(SCRUB_WIDTH, 0.0)
+	_scrub.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_scrub.tooltip_text = "Scrub through the seasons: the map shows each one's biome."
+	_scrub.value_changed.connect(
+		func(value: float) -> void:
+			if not _syncing:
+				session.set_season(roundi(value))
+	)
+	top.add_child(_scrub)
+	_seasons_menu = MenuButton.new()
+	_seasons_menu.name = "SeasonsMenu"
+	_seasons_menu.text = "Seasons"
+	_seasons_menu.tooltip_text = "Add a season, remove one, or clear what one changes."
+	var popup := _seasons_menu.get_popup()
+	_add_menu = PopupMenu.new()
+	_add_menu.name = "AddSeason"
+	_add_menu.id_pressed.connect(_on_add_season)
+	popup.add_child(_add_menu)
+	popup.about_to_popup.connect(_fill_seasons_menu)
+	popup.id_pressed.connect(_on_seasons_menu)
+	top.add_child(_seasons_menu)
+	_compare_menu = MenuButton.new()
+	_compare_menu.name = "CompareMenu"
+	_compare_menu.tooltip_text = (
+		"Compare the draft with the saved version, another season or another biome: the map "
+		+ "is split by a divider you drag, the draft on the left."
+	)
+	var compare_popup := _compare_menu.get_popup()
+	_biome_menu = PopupMenu.new()
+	_biome_menu.name = "AnotherBiome"
+	_biome_menu.id_pressed.connect(_on_compare_picked)
+	compare_popup.add_child(_biome_menu)
+	compare_popup.about_to_popup.connect(_fill_compare_menu)
+	compare_popup.id_pressed.connect(_on_compare_picked)
+	top.add_child(_compare_menu)
+	session.season_changed.connect(func(_index: int) -> void: refresh())
+	session.compare.changed.connect(_refresh_compare_button)
+
+
+func _fill_seasons_menu() -> void:
+	var model := session.model
+	var popup := _seasons_menu.get_popup()
+	popup.clear()
+	_add_menu.clear()
+	_add_names = DesignerSeasonEdits.unused_names(model)
+	for i in _add_names.size():
+		_add_menu.add_item(_add_names[i].capitalize(), MENU_ADD_BASE + i)
+	var room := model.season_ids().size() < LibraryContracts.MAX_SEASONS
+	popup.add_submenu_node_item("Add a season", _add_menu)
+	popup.set_item_disabled(0, _add_names.is_empty() or not room)
+	var here := session.season_id()
+	popup.add_item("Remove %s" % here.capitalize(), MENU_REMOVE)
+	popup.set_item_disabled(popup.get_item_index(MENU_REMOVE), model.season_ids().size() < 2)
+	var changes := int(DesignerSeasonEdits.summary(model, here)["total"])
+	popup.add_item("Clear what %s changes (%d)" % [here.capitalize(), changes], MENU_CLEAR)
+	popup.set_item_disabled(popup.get_item_index(MENU_CLEAR), changes == 0)
+
+
+func _on_add_season(id: int) -> void:
+	var at := id - MENU_ADD_BASE
+	if at >= 0 and at < _add_names.size():
+		if DesignerSeasonEdits.add_season(session.model, _add_names[at]):
+			session.set_season(session.model.season_ids().size() - 1)
+
+
+func _on_seasons_menu(id: int) -> void:
+	var here := session.season_id()
+	if id == MENU_REMOVE:
+		DesignerSeasonEdits.remove_season(session.model, here)
+	elif id == MENU_CLEAR:
+		DesignerSeasonEdits.clear(session.model, here)
+
+
+func _fill_compare_menu() -> void:
+	var popup := _compare_menu.get_popup()
+	popup.clear()
+	_biome_menu.clear()
+	_compare_options = DesignerReference.options(session.model, session.season_id())
+	popup.add_item("Off", COMPARE_OFF)
+	popup.set_item_disabled(0, not session.compare.active)
+	popup.add_separator()
+	var biomes_at := -1
+	for i in _compare_options.size():
+		var option := _compare_options[i]
+		if option["kind"] == "biome":
+			_biome_menu.add_item(String(option["label"]), COMPARE_BIOME_BASE + i)
+		else:
+			popup.add_item(String(option["label"]), COMPARE_BASE + i)
+	if _biome_menu.item_count > 0:
+		popup.add_submenu_node_item("Another biome", _biome_menu)
+		biomes_at = popup.item_count - 1
+	if biomes_at >= 0:
+		popup.set_item_disabled(biomes_at, false)
+
+
+func _on_compare_picked(id: int) -> void:
+	if id == COMPARE_OFF:
+		session.compare.stop()
+		return
+	var at := id - COMPARE_BIOME_BASE if id >= COMPARE_BIOME_BASE else id - COMPARE_BASE
+	if at < 0 or at >= _compare_options.size():
+		return
+	var made := session.compare.start(_compare_options[at])
+	if not made["ok"]:
+		UIManager.show_toast(String(made["error"]), UIManager.TOAST_WARNING, 5.0)
+
+
+func _refresh_compare_button() -> void:
+	if _compare_menu == null:
+		return
+	if session.compare.active:
+		var label := session.compare.reference_label()
+		if label.length() > COMPARE_LABEL_MAX:
+			label = label.substr(0, COMPARE_LABEL_MAX - 3) + "..."
+		_compare_menu.text = "A/B: vs %s" % label
+	else:
+		_compare_menu.text = "A/B: off"
 
 
 func _show_status() -> void:
