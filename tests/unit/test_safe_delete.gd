@@ -188,11 +188,13 @@ func test_an_empty_or_relative_registry_root_touches_nothing() -> void:
 			assert_false(LibraryInstall.remove(id)["ok"], label + " remove " + id)
 		var card := {"can_install": true, "id": "scenes", "folder": ".incoming/x"}
 		assert_false(LibraryInstall.install(card, true)["ok"], label)
-		assert_false(LibraryReceivedStore.remove("scenes"), label)
-		assert_eq(LibraryReceivedStore.sweep_leftovers(), [], label)
-		assert_eq(LibraryReceivedStore.sweep_session(), [], label)
-		assert_ne(LibraryReceivedStore.write_library("", "scenes", {}, 0, {}), "", label)
-		assert_false(LibraryReceivedStore.promote("scenes")["ok"], label)
+		assert_false(LibraryFromHost.remove("scenes")["ok"], label)
+		assert_eq(LibraryFromHost.clear_all()["removed"], [], label)
+		assert_eq(LibraryFromHost.inventory(), [], label)
+		assert_eq(LibraryFromHost.evict_to_fit(1, [], 0), [], label)
+		assert_eq(LibraryFromHost.startup()["adopted"], [], label)
+		var plan := {"id": "scenes", "files": {}, "library": {}, "mode": "new", "record": {}}
+		assert_false(LibraryFromHost.commit([plan], {})["ok"], label)
 		_survives()
 
 
@@ -250,7 +252,7 @@ func test_tree_stays_strictly_inside_its_base() -> void:
 	_folder(LIBS + "/mine", true)
 	# The base itself and its parents carry a marker too: they still must not go.
 	SafeDelete.mark(LIBS, "test", ROOT)
-	SafeDelete.mark(ROOT, "test", LibraryPaths.user_dir() + "/..") # refused: outside
+	SafeDelete.mark(ROOT, "test", LibraryPaths.user_dir() + "/..")  # refused: outside
 	assert_false(SafeDelete.tree(LIBS, LIBS)["ok"], "the base itself")
 	assert_false(SafeDelete.tree(ROOT, LIBS)["ok"], "the parent of the base")
 	assert_false(SafeDelete.tree(CANARY, LIBS)["ok"], "a sibling of the base, marker and all")
@@ -373,8 +375,22 @@ func test_a_junction_among_the_quarantine_folders_is_not_followed() -> void:
 func test_remove_rejects_hostile_ids() -> void:
 	_folder(LIBS + "/victim", true)
 	var ids := [
-		"..", ".", "", "a/b", "a\\b", "../libs/victim", "victim/..", "VICTIM", "core", ".incoming",
-		".received", "victim ", "vi ctim", "C:", "~", "x".repeat(40)
+		"..",
+		".",
+		"",
+		"a/b",
+		"a\\b",
+		"../libs/victim",
+		"victim/..",
+		"VICTIM",
+		"core",
+		".incoming",
+		".received",
+		"victim ",
+		"vi ctim",
+		"C:",
+		"~",
+		"x".repeat(40)
 	]
 	for id in ids:
 		assert_false(LibraryInstall.remove(id)["ok"], "'%s'" % id)
@@ -483,62 +499,62 @@ func test_install_replace_needs_an_owned_copy() -> void:
 	_survives()
 
 
-# ---- the received cache ----
+# ---- the cache of downloaded collections ----
 
 
-func test_the_received_store_is_marked_and_stays_inside() -> void:
+func _plan(id: String, files: Dictionary) -> Dictionary:
+	var library := {"id": id, "version": "1.0.0", "partial": {"source_hash": "h", "assets": []}}
+	return {"id": id, "files": files, "library": library, "mode": "new", "record": {}}
+
+
+func test_a_downloaded_collection_is_marked_and_stays_inside() -> void:
 	var files := {"library.json": "{}".to_utf8_buffer(), "a/b.json": "{}".to_utf8_buffer()}
-	assert_eq(LibraryReceivedStore.write_library(RECEIVED, "hostworld", files, 1, {}), "")
-	assert_true(SafeDelete.is_owned(RECEIVED + "/hostworld"))
-	assert_false(_exists(RECEIVED + "/.staging-hostworld"))
+	var made := LibraryFromHost.commit([_plan("hostworld", files)], {"host": "Ann", "now": 5})
+	assert_true(made["ok"], str(made))
+	assert_true(SafeDelete.is_owned(LIBS + "/hostworld"))
+	assert_false(_exists(LIBS + "/" + LibraryFromHost.STAGING_PREFIX + "hostworld"))
+	assert_eq(LibraryFromHost.record_of("hostworld")["host"], "Ann")
 	for id in ["..", ".", "", "a/b", "../canary", "Core", "x".repeat(40)]:
-		assert_ne(LibraryReceivedStore.write_library(RECEIVED, id, files, 1, {}), "", id)
-		assert_false(LibraryReceivedStore.remove(id, RECEIVED), id)
+		assert_false(LibraryFromHost.commit([_plan(id, files)], {})["ok"], id)
+		assert_false(LibraryFromHost.remove(id)["ok"], id)
 	var hostile := {"../../escape.json": "x".to_utf8_buffer()}
-	assert_ne(LibraryReceivedStore.write_library(RECEIVED, "hostworld", hostile, 1, {}), "")
-	var marker_name := {SafeDelete.MARKER: "x".to_utf8_buffer()}
-	assert_ne(LibraryReceivedStore.write_library(RECEIVED, "hostworld", marker_name, 1, {}), "")
+	assert_false(LibraryFromHost.commit([_plan("hostworld", hostile)], {})["ok"])
+	for name in [SafeDelete.MARKER, LibraryFromHost.RECORD_FILE, ".hidden/x.json"]:
+		var named := {name: "x".to_utf8_buffer()}
+		assert_false(LibraryFromHost.commit([_plan("hostworld", named)], {})["ok"], name)
 	assert_false(FileAccess.file_exists(ROOT + "/escape.json"))
-	assert_true(LibraryReceivedStore.remove("hostworld", RECEIVED))
-	assert_false(_exists(RECEIVED + "/hostworld"))
+	assert_true(LibraryFromHost.remove("hostworld")["ok"])
+	assert_false(_exists(LIBS + "/hostworld"))
 	_survives()
 
 
-func test_received_sweeps_leave_what_the_game_did_not_make() -> void:
+func test_the_startup_housekeeping_leaves_what_the_game_did_not_make() -> void:
+	# Leftover staging folders of a crashed install go (they carry the marker); an old received
+	# folder with no record beside it, or one that is no library, is left alone and reported.
+	_folder(LIBS + "/" + LibraryFromHost.STAGING_PREFIX + "crashed", true)
+	_folder(LIBS + "/" + LibraryFromHost.OLD_PREFIX + "crashed", true)
+	_folder(LIBS + "/" + LibraryFromHost.STAGING_PREFIX + "stranger", false)
 	_folder(RECEIVED + "/stranger", false, RECEIVED)
-	_folder(RECEIVED + "/recorded", false, RECEIVED)
-	# A folder from before the marker existed has its record beside it: that proves it is ours.
-	_write(
-		RECEIVED + "/recorded" + LibraryReceivedStore.MARKER_SUFFIX,
-		'{"id": "recorded", "bytes": 1, "last_used": 1}'
-	)
-	assert_eq(LibraryReceivedStore.sweep_leftovers(RECEIVED), ["recorded"])
-	assert_false(_exists(RECEIVED + "/recorded"))
-	assert_true(_exists(RECEIVED + "/stranger/sub"), "no marker, no record: left alone")
-	for bad in UNSAFE_ROOTS:
-		if bad == "":
-			continue  # "" is the default received folder
-		assert_eq(LibraryReceivedStore.sweep_leftovers(bad), [], bad)
-		assert_false(LibraryReceivedStore.remove("stranger", bad), bad)
+	var started := LibraryFromHost.startup()
+	assert_eq(started["swept"], 2)
+	assert_false(_exists(LIBS + "/" + LibraryFromHost.STAGING_PREFIX + "crashed"))
+	assert_true(_exists(LIBS + "/" + LibraryFromHost.STAGING_PREFIX + "stranger/sub"), "no marker")
+	assert_true(_exists(RECEIVED + "/stranger/sub"), "left alone")
+	assert_eq(started["adopted"], [])
 	_survives()
 
 
-func test_promote_stays_inside_the_user_folders() -> void:
+func test_adopting_an_old_received_folder_stays_inside_the_user_folders() -> void:
 	World.write_core(ROOT + "/official/core")
 	World.write_alien(RECEIVED + "/alienworld", "0.3.1", [], false)
-	assert_true(SafeDelete.mark(RECEIVED + "/alienworld", "received", RECEIVED))
+	assert_eq(LibraryFromHost.migrate_received()["adopted"], [], "a plain library is no partial")
+	assert_true(_exists(RECEIVED + "/alienworld"), "left where it was")
 	for bad in UNSAFE_ROOTS:
-		if bad == "":
-			continue  # "" is the default folder
-		assert_false(LibraryReceivedStore.promote("alienworld", bad)["ok"], "received " + bad)
 		LibraryRegistry.user_root = bad
-		assert_false(LibraryReceivedStore.promote("alienworld")["ok"], "user_root " + bad)
+		assert_eq(LibraryFromHost.migrate_received()["adopted"], [], "user_root " + bad)
 		LibraryRegistry.user_root = LIBS
 	assert_true(_exists(RECEIVED + "/alienworld"))
-	var kept := LibraryReceivedStore.promote("alienworld")
-	assert_true(kept["ok"], str(kept))
-	assert_true(SafeDelete.is_owned(LIBS + "/alienworld"))
-	assert_false(_exists(RECEIVED + "/alienworld"), "the received copy goes after the install")
+	assert_false(_exists(LIBS + "/alienworld"))
 	_survives()
 
 
@@ -584,4 +600,3 @@ func test_a_level_delete_cannot_reach_outside_the_levels_folder() -> void:
 	assert_true(LevelManager.delete_level(ROOT + "/levels/mine/"))
 	assert_false(_exists(ROOT + "/levels/mine"))
 	_survives()
-

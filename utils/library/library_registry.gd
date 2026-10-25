@@ -85,9 +85,10 @@ static var _order: Array[int] = []
 static var _scanned: bool = false
 
 
-## Where libraries received from a host live for the session (LibraryTransfer): a dot folder of
-## the user root, so the user scan skips it and refresh() scans it as the `received` source.
-static func received_root() -> String:
+## Where the earlier, session-only cache of libraries received from a host lived: a dot folder of
+## the user root that no scan reads. Only LibraryFromHost.migrate_received looks at it now, once,
+## to adopt what a session left there; a collection a host sends is an ordinary user library.
+static func legacy_received_root() -> String:
 	return user_root.path_join(".received")
 
 
@@ -123,8 +124,10 @@ static func use_saved_override() -> void:
 ## a library folder under the official or user root. A cheap check (two directory listings) for
 ## startup, before anything is read.
 static func discoverable() -> bool:
-	return has_override() or not _library_folders(official_root).is_empty() or not (
-		_library_folders(user_root).is_empty()
+	return (
+		has_override()
+		or not _library_folders(official_root).is_empty()
+		or not (_library_folders(user_root).is_empty())
 	)
 
 
@@ -163,7 +166,9 @@ static func set_enabled(library_id: String, enabled: bool) -> bool:
 	var config := ConfigFile.new()
 	var err := config.load(settings_path)
 	if err != OK and err != ERR_FILE_NOT_FOUND:
-		push_warning("LibraryRegistry: failed to load settings (err=%d), writing section only" % err)
+		push_warning(
+			"LibraryRegistry: failed to load settings (err=%d), writing section only" % err
+		)
 	config.set_value(SECTION, KEY_DISABLED, disabled)
 	return config.save(settings_path) == OK
 
@@ -214,14 +219,11 @@ static func refresh(root: String = PaletteLibrary.DEFAULT_ROOT) -> Array[Diction
 	for item: Array in [[official_root, "official"], [user_root, "user"]]:
 		for folder in _library_folders(String(item[0])):
 			found.append(_entry_of(folder, String(item[1])))
-	for folder in _library_folders(received_root()):
-		found.append(_entry_of(folder, "received"))
 	if _dev_path != "":
 		found.append(_entry_of(_dev_path, "dev"))
 	var disabled := disabled_ids()
 	for entry in found:
-		var always: bool = entry["source"] == "dev" or entry["source"] == "received"
-		entry["enabled"] = always or not String(entry["id"]) in disabled
+		entry["enabled"] = entry["source"] == "dev" or not String(entry["id"]) in disabled
 	var resolved := LibraryResolver.resolve(found)
 	_entries.assign(resolved["entries"])
 	_order.assign(resolved["order"])
@@ -231,11 +233,13 @@ static func refresh(root: String = PaletteLibrary.DEFAULT_ROOT) -> Array[Diction
 
 ## What the library manager shows: one dictionary per library folder found, in load order (core
 ## first), the unusable ones last:
-## {id, name, description, version, author, license, url, tags, source ("official", "user", "dev"
-## or "received"), official, enabled, status ("ok", "error" or "disabled"), reasons, warnings,
+## {id, name, description, version, author, license, url, tags, source ("official", "user" or
+## "dev"), official, enabled, status ("ok", "error" or "disabled"), reasons, warnings,
 ## folder, hash, bytes (on disk), asset_count, biome_count, biomes ([{id, name}] local ids),
 ## biome_ids (runtime ids), default_biome (a runtime id), dependencies, provides, served,
-## thumbnail (absolute file or "")}. Scans on first use. Copies.
+## thumbnail (absolute file or ""), partial (the partial block, {} for a whole library), from_host
+## (the LibraryFromHost record when a host sent it, else {}), received (from_host is not empty)}.
+## Scans on first use. Copies.
 static func list(root: String = PaletteLibrary.DEFAULT_ROOT) -> Array[Dictionary]:
 	if not _scanned:
 		refresh(root)
@@ -364,7 +368,11 @@ static func _public(entry: Dictionary) -> Dictionary:
 			if first_of_biome == "":
 				first_of_biome = runtime
 			# default_biome is a local biome id, or a runtime id (what the first export wrote).
-			if default_runtime == "" and wanted != "" and (runtime == wanted or def["id"] == wanted):
+			if (
+				default_runtime == ""
+				and wanted != ""
+				and (runtime == wanted or def["id"] == wanted)
+			):
 				default_runtime = first_of_biome
 		if default_runtime == "" and wanted == "":
 			default_runtime = first_of_biome
@@ -405,7 +413,8 @@ static func _public(entry: Dictionary) -> Dictionary:
 		"served": not served_info.is_empty() and served_info.get("folder") == entry["folder"],
 		"thumbnail": thumbnail,
 		"partial": (entry["partial"] as Dictionary).duplicate(true),
-		"received": entry["source"] == "received",
+		"received": not (entry["from_host"] as Dictionary).is_empty(),
+		"from_host": (entry["from_host"] as Dictionary).duplicate(true),
 	}
 
 
@@ -466,6 +475,7 @@ static func _entry_of(folder: String, source: String) -> Dictionary:
 		"bytes": 0,
 		"dependencies": [] as Array,
 		"partial": {},
+		"from_host": LibraryFromHost.read_record(folder) if source == "user" else {},
 	}
 	var sources := read_sources(folder)
 	if sources.has("error"):
@@ -481,7 +491,8 @@ static func _entry_of(folder: String, source: String) -> Dictionary:
 	var partial: Variant = library.get(LibraryPartial.PARTIAL_KEY)
 	if partial is Dictionary:
 		entry["partial"] = (partial as Dictionary).duplicate(true)
-		if source == "received" and (partial as Dictionary).get("source_hash") is String:
+		var kept := not (entry["from_host"] as Dictionary).is_empty()
+		if kept and (partial as Dictionary).get("source_hash") is String:
 			entry["hash"] = String((partial as Dictionary)["source_hash"])
 	(entry["reasons"] as Array).append_array(read["errors"])
 	(entry["warnings"] as Array).append_array(read["warnings"])
@@ -636,15 +647,18 @@ static func _serve(entry: Dictionary, root: String, official_of: Dictionary) -> 
 	var out := {"ok": false, "error": "", "warnings": [], "biome_ids": [], "report": {}}
 	var read: Dictionary = entry["read"]
 	var folder := String(entry["folder"])
-	var compiled := BiomeCompiler.compile(
-		read,
-		{
-			"folder": folder,
-			"surfaces": PaletteLibrary.base_for_serving(root)["surfaces"],
-			"hash": entry["hash"],
-			"files": entry["files"],
-			"dependencies": _dependency_context(entry),
-		}
+	var compiled := (
+		BiomeCompiler
+		. compile(
+			read,
+			{
+				"folder": folder,
+				"surfaces": PaletteLibrary.base_for_serving(root)["surfaces"],
+				"hash": entry["hash"],
+				"files": entry["files"],
+				"dependencies": _dependency_context(entry),
+			}
+		)
 	)
 	out["warnings"] = (compiled["warnings"] as Array).duplicate()
 	for warning: String in compiled["palette_warnings"]:
@@ -776,7 +790,11 @@ static func designer_context(
 		"version": found["version"],
 		"source": found["source"],
 		"official": found["official"],
-		"writable": designer_writable(library_id, String(found["source"])),
+		"writable":
+		(
+			designer_writable(library_id, String(found["source"]))
+			and (found["from_host"] as Dictionary).is_empty()
+		),
 		"folder": found["folder"],
 		"read": read,
 		"files": found["files"],
@@ -873,8 +891,8 @@ static func _list(folder: String, prefix: String, depth: int, out: Array[String]
 		return false
 	var here := folder if prefix == "" else folder.path_join(prefix)
 	for file_name in DirAccess.get_files_at(here):
-		if prefix == "" and file_name == SafeDelete.MARKER:
-			continue  # the game's ownership marker is not part of the library's content
+		if prefix == "" and file_name in [SafeDelete.MARKER, LibraryFromHost.RECORD_FILE]:
+			continue  # the game's own markers are not part of the library's content
 		if file_name.ends_with(SIDECAR_SUFFIX):
 			continue  # an editor sidecar (res:// only); the exported pack does not hold them
 		out.append(file_name if prefix == "" else prefix + "/" + file_name)

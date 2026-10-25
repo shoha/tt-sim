@@ -113,7 +113,8 @@ static func incoming() -> Dictionary:
 	return resolve(String(libs["path"]).path_join(INCOMING_NAME))
 
 
-## The received-libraries cache `<libraries>/.received`.
+## The old session-only received-libraries folder `<libraries>/.received`. Nothing writes it any
+## more; LibraryFromHost.migrate_received adopts what an earlier version left there.
 static func received() -> Dictionary:
 	var libs := libraries()
 	if not libs["ok"]:
@@ -149,7 +150,9 @@ static func child(root: Dictionary, segment: String) -> Dictionary:
 		or ":" in segment
 	)
 	if bad:
-		return {"ok": false, "path": "", "anchor": "", "error": "'%s' is not a folder name" % segment}
+		return {
+			"ok": false, "path": "", "anchor": "", "error": "'%s' is not a folder name" % segment
+		}
 	return resolve(String(root["path"]).path_join(segment))
 
 
