@@ -306,6 +306,7 @@ static func export_json() -> String:
 		"format": FORMAT_CONTRACT,
 		"habit_defaults": HABIT_DEFAULTS.duplicate(true),
 		"habit_water": HABIT_WATER.duplicate(),
+		"legacy_habit": LegacyHabit.export_table(),
 		"note":
 		"Exported by tt-sim LibraryContracts.export_json (utils/library/library_contracts.gd).",
 		"roles": roles,

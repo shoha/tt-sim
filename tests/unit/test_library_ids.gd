@@ -1,9 +1,9 @@
 extends GutTest
 
-## LibraryIds and LibraryContracts (utils/library/): the id grammar and runtime id mapping, the
-## S0 probe rules (no slash or double underscore inside a part, the whole asset id under the
-## palette's 160, a prefix per season) and the portable-names rules, plus the contract tables
-## and the contract.json export plantgen vendors.
+## LibraryIds (utils/library/): the id grammar and runtime id mapping, the S0 probe rules (no
+## slash or double underscore inside a part, the whole asset id under the palette's 160, a prefix
+## per season) and the portable-names rules. The contract tables and the contract.json export
+## are test_library_contracts.gd's.
 
 
 func test_core_keeps_todays_runtime_ids() -> void:
@@ -111,38 +111,3 @@ func test_aliases_follow_renames_but_not_forever() -> void:
 	assert_eq(LibraryIds.resolve_alias({"old": "mid", "mid": "new"}, "old"), "new")
 	assert_eq(LibraryIds.resolve_alias({}, "same"), "same")
 	assert_eq(LibraryIds.resolve_alias({"a": "b", "b": "a"}, "a").length(), 1, "a cycle ends")
-
-
-func test_contract_tables_agree_with_each_other() -> void:
-	for role_id: String in LibraryContracts.ROLES:
-		var kind := LibraryContracts.kind_of(role_id)
-		var size_class := LibraryContracts.size_class_of(role_id)
-		if role_id != "prop":
-			assert_ne(kind, "", role_id)
-			assert_true(size_class in LibraryContracts.SIZE_CLASSES, role_id)
-	for size_class: String in LibraryContracts.SIZE_CLASSES:
-		assert_true(LibraryContracts.CLASS_DEFAULTS.has(size_class), size_class)
-	assert_eq(LibraryContracts.habit_for("fern"), {"water": "bank", "charred": false})
-	assert_eq(LibraryContracts.habit_for("snag"), {"water": "", "charred": true})
-	assert_eq(
-		LibraryContracts.habit_for("grass", {"water": "emergent"}),
-		{"water": "emergent", "charred": false}
-	)
-	assert_eq(LibraryContracts.align_of("boulder"), "normal")
-	assert_eq(LibraryContracts.align_of("canopy_tree"), "upright")
-	assert_eq(LibraryContracts.role("nope"), {})
-
-
-func test_export_json_is_the_contract_plantgen_vendors() -> void:
-	var text := LibraryContracts.export_json()
-	var data: Variant = JSON.parse_string(text)
-	assert_true(data is Dictionary)
-	assert_eq(data["format"], "ttsim-contract")
-	assert_eq(int(data["contract"]), LibraryContracts.CONTRACT_VERSION)
-	assert_eq((data["roles"] as Dictionary).size(), LibraryContracts.ROLES.size())
-	assert_eq(data["roles"]["canopy_tree"], {"kind": "tree", "size_class": "large"})
-	assert_eq(data["size_classes"], ["large", "medium", "small", "ground"])
-	assert_eq(float(data["class_defaults"]["large"]["density_per_m2"]), 0.02)
-	assert_eq(int(data["caps"]["rules_per_biome"]), 128)
-	assert_true(text.ends_with("}\n"))
-	assert_eq(LibraryContracts.export_json(), text, "deterministic")

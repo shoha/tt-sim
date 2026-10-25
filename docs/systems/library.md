@@ -20,6 +20,8 @@ savanna as a one-biome `core` library, behind an opt-in developer path.
 | `utils/library/biome_compiler.gd` | `BiomeCompiler` | `compile(read, options)`: one palette biome per season and the asset table, with `role`, `habit`, `weight` and `library` riding on each rule; runs `validate_palette` and returns its warnings |
 | `utils/library/library_registry.gd` | `LibraryRegistry` | The only module that lists or reads folders: `read_sources`, `compile_folder`, the dev override (`set_dev_override`, settings `[library] dev_path`), `apply` (lays the compiled library over the palette), `served`, `clear` |
 | `utils/palette_overlay.gd`, `utils/palette_library.gd` | `PaletteOverlay.read_palette`, `PaletteLibrary.install_overlay` | The existing overlay merge, split so a palette already in memory takes the same path as a package folder (`read` and `overlay_package` call the same code) |
+| `utils/legacy_habit.gd` | `LegacyHabit` | (S2) The legacy key and kind lists (`EMERGENT_KEYS`, `BANK_KEYS`, `CHARRED_KEYS`, `ARID_KINDS`) in one place, `for_key(key, kind)` and `export_table()` (published in `contract.json` as `legacy_habit`, so plantgen's importer derives a rule's explicit habit from the same lists). `ScatterGround.habit_of(rule)` returns the rule's own `habit`, else this |
+| `utils/palette_validator.gd` (+ `palette_surfaces.gd`, `palette_fields.gd`, `palette_asset_files.gd`) | `PaletteValidator` | (S2) `palette_library.gd` was at gdlint's 1000-line cap and is split; the rule whitelist in `PaletteValidator._validate_species` / `_library_fields` keeps `role`, `habit`, `weight` |
 | `utils/foliage_library.gd` | `FoliageLibrary` | `apply()` calls `LibraryRegistry.apply()` last, so the content library is a layer over whichever foliage library is served; `apply_saved()` also reads the persisted dev path |
 | `tools/compile_library_cli.gd` | | Headless: prints or writes the compiled palette JSON of a library folder, or `--contract <file>` |
 | `tools/render_jobs/driver.gd`, `jobs/library_s1_savanna.json` | op `library_dev` | Sets the override for a run and rebuilds the open map |
@@ -53,9 +55,19 @@ savanna as a one-biome `core` library, behind an opt-in developer path.
 - **Validation layers.** The reader's errors block a library, its warnings (unknown keys,
   unsupported features) do not. `palette.json`'s `validate_palette` is a WHITELIST that silently
   drops unknown keys, so the reader is the only place a typo in a biome-def is caught; every new
-  compiled field a later step makes the scatter code read (`role`, `habit` in S2) must be added
-  to `_validate_species` in the same step. Until then they live in the compiled result only, and
-  the served palette is exactly what a package would give.
+  compiled field a later step makes the scatter code read must be added to `_validate_species`
+  in the same step. Since S2 the whitelist keeps `role` (a `LibraryContracts` role), `habit`
+  (`{water: ""|"bank"|"emergent"|"arid", charred: bool}`: the role's habit with the rule's own
+  flags over it, present whenever the rule has a role or a habit) and `weight` (0 to 1000); a
+  bad value warns and is dropped, an absent one never warns, and a rule with none of the three
+  (treecube's palette, plantgen's package) is unchanged byte for byte. `library` is still
+  dropped silently (nothing reads it before S4).
+- **Habit.** `ScatterGround.plan_role` reads `habit_of(rule)`: the rule's `habit`, else the
+  LEGACY lists of `LegacyHabit` (keys of reeds, willows and snags, kind `cactus`). The lists stay
+  for legacy palettes only; a library rule never needs them. `test_legacy_habit.gd` pins that
+  the fallback, an explicit habit built from `LegacyHabit.for_key` and the pre-S2 algorithm give
+  the same role for every rule of the nine built-in biomes. The roles table is authoritative at
+  compile: a rule that omits `kind`, `size_class`, `align` or `habit` takes its role's.
 - **Paths.** Compiled assets keep a library-relative `file` (the palette contract: relative, no
   `..`, no scheme). The absolute file of each asset is `compiled["paths"]`, joined from the
   folder; nothing `path_join`s an absolute second argument (it concatenates, S0 P5).
@@ -89,8 +101,11 @@ None yet: the library manager and the biome designer are steps S6 to S9 of the d
 
 ## Verification
 
-- Unit tests: `test_library_ids.gd` (grammar, runtime ids, portable names, contract tables and
-  export), `test_library_reader.gd` (the miniature library reads clean; malformed and hostile
+- Unit tests: `test_library_ids.gd` (grammar, runtime ids, portable names),
+  `test_library_contracts.gd` (S2: roles, habit flags, caps against the palette limits, the
+  `export_json` round trip with `legacy_habit`), `test_legacy_habit.gd` (S2: identical plan roles
+  by fallback and by habit for every built-in rule, the rule's habit beating the lists, the
+  validator's `role`/`habit`/`weight` whitelist), `test_library_reader.gd` (the miniature library reads clean; malformed and hostile
   files: unknown keys, newer versions, reserved ids and names, case duplicates, missing and
   wrong-case files, bad roles and numbers, caps), `test_library_compile.gd` (the savanna golden
   with zero `validate_palette` warnings, the mini library under a prefix, role defaults and role
@@ -124,6 +139,14 @@ role and habit flags read by the scatter code, surfaces, the multi-library regis
 `libraries` record, the manager, the designer) are in plantgen's design doc section 6.
 
 ## History
+
+- 2026-10-24: step S2: `palette_library.gd` (1000 lines, the lint cap) split into
+  `PaletteFields`, `PaletteSurfaces`, `PaletteValidator`, `PaletteAssetFiles` (320 lines left,
+  every public name kept); the rule whitelist keeps `role`, `habit`, `weight`;
+  `ScatterGround.plan_role` reads the rule's habit with `LegacyHabit` as the fallback; the
+  `contract.json` export gained `legacy_habit`. Checked on plantgen's `out/lib_core` (nine
+  biomes, 121 rules, 288 assets): 0 `validate_palette` warnings, every rule equal to the package
+  rule but for `assets`, `role`, `habit`, `weight`, `library`, and 0 plan-role mismatches.
 
 - 2026-10-24: step S1, tt-sim half: `utils/library/`, the dev override, `compile_library_cli`,
   the tests and the `library_dev` render op.

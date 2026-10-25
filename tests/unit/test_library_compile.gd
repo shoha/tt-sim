@@ -228,7 +228,7 @@ func test_the_compiled_savanna_validates_into_the_palette_without_losing_a_rule(
 	assert_eq((validated["palette"]["assets"] as Dictionary).size(), 34)
 
 
-func test_role_and_habit_ride_in_the_compiled_form_only() -> void:
+func test_role_habit_and_weight_survive_validation_and_library_does_not() -> void:
 	var sources := LibraryRegistry.read_sources(SAVANNA)
 	sources.erase("files")
 	var compiled := BiomeCompiler.compile(LibraryReader.read(sources), {})
@@ -236,11 +236,17 @@ func test_role_and_habit_ride_in_the_compiled_form_only() -> void:
 	assert_eq(acacia["role"], "canopy_tree")
 	assert_eq(acacia["habit"], {"water": "", "charred": false})
 	assert_eq(acacia["library"], "core")
-	# validate_palette is a whitelist: until the step that reads role and habit extends it (S2),
-	# the served rule does not carry them.
+	# validate_palette is a whitelist: since S2 it keeps role, habit and weight (the scatter code
+	# reads habit); `library` is still dropped until a step reads it.
 	var served: Dictionary = PaletteLibrary.validate_palette(compiled["palette"])["palette"]
-	assert_false((served["biomes"][0]["species"][0] as Dictionary).has("role"))
-	assert_false((served["biomes"][0]["species"][0] as Dictionary).has("habit"))
+	var kept := {}
+	for rule: Dictionary in served["biomes"][0]["species"]:
+		if rule["key"] == "acacia":
+			kept = rule
+	assert_eq(kept["role"], acacia["role"])
+	assert_eq(kept["habit"], acacia["habit"])
+	assert_eq(kept["weight"], acacia["weight"])
+	assert_false(kept.has("library"))
 
 
 # ---- the mini library, non-core ----
