@@ -142,6 +142,7 @@
 		"res://tests/unit/test_token_grounding.gd",
 		"res://tests/unit/test_tool_registry.gd",
 		"res://tests/unit/test_water_carve.gd",
+		"res://tests/unit/test_water_distance.gd",
 		"res://tests/unit/test_water_fall_mesh.gd",
 		"res://tests/unit/test_water_falls.gd",
 		"res://tests/unit/test_water_flow_baker.gd",

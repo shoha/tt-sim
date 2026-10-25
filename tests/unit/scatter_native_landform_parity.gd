@@ -25,13 +25,14 @@ static func check(test: GutTest, landform: String, curved: bool = false) -> void
 	test.assert_gt(result.rows, 0)
 	test.assert_false((result.fallbacks as Dictionary).has("missing"))
 	test.assert_false((result.fallbacks as Dictionary).has("curves"), "curved jobs run natively")
+	test.assert_false((result.fallbacks as Dictionary).has("water"), "water_dist jobs run natively")
 	test.assert_eq(result.differing, [], "%s: every job equal" % landform)
 
 
 ## `species` with terrain response on every rule, a different mix by index: a slope minimum, a
-## slope curve, a height curve (metres), a wet curve, and all of them together. Placement still
-## varies (no curve zeroes a rule on every map), and a stale library that ignores the keys places
-## different rows than GDScript.
+## slope curve, a height curve (metres), a wet curve, a water_dist curve (metres to water), and
+## all of them together. Placement still varies (no curve zeroes a rule on every map), and a
+## stale library that ignores the keys places different rows than GDScript.
 static func curved_species(species: Array[Dictionary]) -> Array[Dictionary]:
 	var variants: Array[Dictionary] = [
 		{"slope_min_deg": 3.0},
@@ -45,8 +46,11 @@ static func curved_species(species: Array[Dictionary]) -> Array[Dictionary]:
 				"slope": [[0, 0.6], [12, 1], [40, 0.5]],
 				"height": [[-500, 1], [3, 0.8], [5000, 0.3]],
 				"wet": [[0, 1], [1, 0.4]],
+				"water_dist": [[0, 1], [25, 0.5]],
 			},
 		},
+		{"response": {"water_dist": [[0, 1], [3, 0.7], [10, 0.25], [40, 0.05]]}},
+		{"response": {"water_dist": [[0, 0.3], [12, 1.0]], "slope": [[0, 1], [30, 0.6]]}},
 	]
 	var out: Array[Dictionary] = []
 	for i in species.size():

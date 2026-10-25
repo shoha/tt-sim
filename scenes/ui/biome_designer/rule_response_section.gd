@@ -2,12 +2,11 @@ class_name DesignerResponseSection
 extends Foldout
 
 ## The Terrain response section of the rule inspector (design doc 2.6, step S12 in the editor):
-## the rule's density as a function of the slope of the ground, its height and the shore
-## wetness, each a curve of 2 to 8 points drawn and dragged in a CurveEditor, with the preset
-## shapes (flat, ramp up, ramp down, bell, band) one click away. A curve only ever lowers the
-## density (the rule's density is the density at curve value 1); no curve is the same as flat.
-## The distance-to-water axis is in the contract but the scatter does not evaluate it yet, so it
-## is listed as such and cannot be edited.
+## the rule's density as a function of the slope of the ground, its height, the shore wetness
+## and (S12c) the distance to water, each a curve of 2 to 8 points drawn and dragged in a
+## CurveEditor, with the preset shapes (flat, ramp up, ramp down, bell, band) one click away. A
+## curve only ever lowers the density (the rule's density is the density at curve value 1); no
+## curve is the same as flat.
 
 const HOW_TO := (
 	"Density only goes down from the Placement density. Drag points; double-click to add one; "
@@ -24,6 +23,11 @@ const AXIS_TIPS := {
 	(
 		"Density by shore wetness: 0 away from water, 1 at the waterline. Only within 2.4 m "
 		+ "of water."
+	),
+	"water_dist":
+	(
+		"Density by the distance to the nearest water in metres: 0 on the water, 64 or more far "
+		+ "from it (or on a map with no water)."
 	),
 }
 const PRESET_OPTIONS: Array = [
@@ -69,12 +73,6 @@ func setup(designer: BiomeDesignerSession) -> void:
 		editor.curve_changed.connect(_on_curve.bind(axis))
 		add_child(editor)
 		_editors[axis] = editor
-	add_child(
-		DesignerRows.caption(
-			"WaterDistCaption",
-			"Distance to water: in the format, not evaluated by the scatter yet."
-		)
-	)
 	session.model.changed.connect(func(_reason: String) -> void: _sync())
 
 

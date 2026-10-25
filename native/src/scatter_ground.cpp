@@ -166,6 +166,26 @@ double Ground::wet_at(Vector2 p) const {
 	return water_at((p + g.half) / g.step).y;
 }
 
+double Ground::water_dist_at(Vector2 p) const {
+	if (!g.water_dist_ok) {
+		return c.water_dist_max_m;
+	}
+	// ScatterTerrain.sample_grid: WaterDressing.sample's corners and weights over one float grid.
+	Vector2 s = (p + g.half) / g.step;
+	int columns = g.columns;
+	double fx = gclamp(s.x, 0.0, columns - 1);
+	double fz = gclamp(s.y, 0.0, g.rows - 1);
+	int64_t x0 = imin(floori(fx), columns - 2);
+	int64_t z0 = imin(floori(fz), g.rows - 2);
+	double tx = fx - x0;
+	double tz = fz - z0;
+	int64_t a = z0 * columns + x0;
+	int64_t cc = a + columns;
+	double top = glerp(g.water_dist[a], g.water_dist[a + 1], tx);
+	double bottom = glerp(g.water_dist[cc], g.water_dist[cc + 1], tx);
+	return glerp(top, bottom, tz);
+}
+
 double Ground::wet_factor(int role, Vector3 water) const {
 	double bed = water.x;
 	double shore = water.y;
