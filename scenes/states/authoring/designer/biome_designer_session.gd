@@ -55,6 +55,11 @@ const GROUND_FIELDS: Array[String] = [
 ]
 ## Seconds between two reapplications of the focus while it is on (nodes made by a regeneration).
 const FOCUS_INTERVAL_SEC := 0.3
+## The thumbnail take: the longest wait for the scatter (ms), how long it must be still (ms) and
+## the frames drawn between framing the camera and the grab.
+const THUMBNAIL_WAIT_MS := 60000
+const THUMBNAIL_STILL_MS := 1000
+const THUMBNAIL_FRAMES := 4
 
 var model: BiomeDesignerModel = null
 var controller: AuthoringController = null
@@ -429,6 +434,55 @@ func _rebuild_proving_ground() -> void:
 	if not is_instance_valid(scatter()):
 		return
 	regenerate_all()
+
+
+## Takes the draft's thumbnail: opens the standard scene (LibraryThumbnailer.map_spec, a new map
+## painted with the biome now laid), generates the draft's plants on it, holds the wind and the
+## fades still, frames the camera and grabs the world view, then opens the proving ground
+## again. Returns the frame (ThumbnailShot.grab), or null when it could not be taken. The caller
+## encodes and saves it (BiomeDesignerHost.update_thumbnail).
+func capture_thumbnail() -> Image:
+	if _reopening or controller == null:
+		return null
+	_reopening = true
+	var doc := NewMap.from_spec(LibraryThumbnailer.map_spec(_laid_id))
+	var image: Image = null
+	if doc != null and await controller.reopen_async(doc):
+		regenerate_all()
+		await _wait_settled()
+		controller.editor.seed_placement(LibraryThumbnailer.PLACE_SEED)
+		var held := ThumbnailShot.prepare(game_map)
+		for _frame in THUMBNAIL_FRAMES:
+			await get_tree().process_frame
+		ThumbnailShot.freeze(game_map, held)
+		await RenderingServer.frame_post_draw
+		image = ThumbnailShot.grab(game_map)
+		ThumbnailShot.restore(held)
+	_reopening = false
+	await _rebuild_proving_ground()
+	return image
+
+
+## Waits until the scatter has generated and grown in and nothing has moved for a second, at
+## most THUMBNAIL_WAIT_MS.
+func _wait_settled() -> void:
+	var deadline := Time.get_ticks_msec() + THUMBNAIL_WAIT_MS
+	var still_since := -1
+	while Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+		var made := scatter()
+		var busy := (
+			not is_instance_valid(made)
+			or made.is_regenerating()
+			or made.is_growing()
+			or state == State.REGENERATING
+		)
+		if busy:
+			still_since = -1
+		elif still_since < 0:
+			still_since = Time.get_ticks_msec()
+		elif Time.get_ticks_msec() - still_since >= THUMBNAIL_STILL_MS:
+			return
 
 
 func _ground_differs(a: String, b: String) -> bool:

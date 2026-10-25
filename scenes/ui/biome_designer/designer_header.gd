@@ -10,6 +10,7 @@ extends VBoxContainer
 signal save_requested
 signal save_as_requested
 signal revert_requested
+signal thumbnail_requested
 signal leave_requested
 
 const SEASON_TIP := (
@@ -44,6 +45,7 @@ var _redo: IconButton
 var _save: Button
 var _save_as: Button
 var _revert: Button
+var _thumbnail: Button
 var _progress: ProgressBar
 var _progress_label: Label
 var _cancel: Button
@@ -107,6 +109,11 @@ func setup(designer: BiomeDesignerSession) -> void:
 	_revert.tooltip_text = "Throw away every change since the last save."
 	_revert.pressed.connect(func() -> void: revert_requested.emit())
 	top.add_child(_revert)
+	_thumbnail = Button.new()
+	_thumbnail.name = "Thumbnail"
+	_thumbnail.text = "Thumbnail"
+	_thumbnail.pressed.connect(func() -> void: thumbnail_requested.emit())
+	top.add_child(_thumbnail)
 	var leave := Button.new()
 	leave.name = "Leave"
 	leave.text = "Leave"
@@ -184,6 +191,16 @@ func refresh() -> void:
 		else "%s is read-only: save a copy with Save as..." % model.library_name
 	)
 	_revert.disabled = not model.is_dirty()
+	var picture_ok := LibraryThumbnailer.designer_writable(model.source, model.folder)
+	_thumbnail.disabled = not picture_ok
+	_thumbnail.tooltip_text = (
+		(
+			"Take this biome's picture (the one the New map dialog and the manager show) from "
+			+ "the draft on a standard map, and save it to %s." % model.library_name
+		)
+		if picture_ok
+		else "%s is read-only: its pictures come from the build." % model.library_name
+	)
 	_show_status()
 
 

@@ -28,6 +28,8 @@ extends SceneTree
 ## "RJ| HANG". The last "RJ| step" line before it is the step that hung.
 
 const JOBS_DIR := "res://tools/render_jobs/jobs"
+## The driver, by path: a script that extends this runner lives elsewhere.
+const DRIVER := "res://tools/render_jobs/driver.gd"
 const DEFAULT_OUT_ROOT := "user://render_jobs"
 const OVERRIDE := "res://override.cfg"
 const DEFAULT_HANG_S := 60.0
@@ -52,8 +54,16 @@ func _initialize() -> void:
 		print("RJ| bad job %s" % path)
 		quit(2)
 		return
-	_job = parsed
-	var out_arg := _option(args, "--out")
+	_begin(parsed, path, _option(args, "--out"))
+
+
+## Starts job `job` (already parsed) named `path` (for the output folder's default name),
+## its output going to `out_arg` when that is not empty. A script that builds its job in code
+## (tools/render_library_thumbnails.gd) extends this runner and calls it from its own
+## `_initialize`.
+func _begin(job: Dictionary, path: String, out_arg: String) -> void:
+	_start_ms = Time.get_ticks_msec()
+	_job = job
 	_out_dir = _resolve_out_dir(out_arg if out_arg != "" else String(_job.get("out_dir", "")), path)
 	var override_abs := ProjectSettings.globalize_path(OVERRIDE)
 	if bool(_job.get("remove_override", false)) and FileAccess.file_exists(override_abs):
@@ -137,8 +147,7 @@ func _start() -> void:
 	window.current_screen = primary
 	window.position = DisplayServer.screen_get_position(primary) + Vector2i(200, 60)
 	window.size = Vector2i(1920, 1080)
-	var dir := (get_script() as Script).resource_path.get_base_dir()
-	var driver_script := load(dir.path_join("driver.gd")) as GDScript
+	var driver_script := load(DRIVER) as GDScript
 	var driver: Node = driver_script.new()
 	driver.set("steps", _job.steps)
 	driver.set("out_dir", _out_dir)

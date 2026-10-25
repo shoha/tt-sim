@@ -414,6 +414,18 @@ func finish_zoom() -> void:
 	_update_camera_offset()
 
 
+## Puts the ground point `at` (map X and Z in metres) at the middle of the screen with the
+## orthographic zoom `zoom`, at once, the zoom ease ended on its target: the camera a
+## biome thumbnail is taken from (ThumbnailShot), the same every run.
+func frame_ground(at: Vector2, zoom: float) -> void:
+	_target_zoom = zoom
+	finish_zoom()
+	var offset := _get_view_center_ground_offset()
+	var holder := _game_map.cameraholder_node
+	holder.global_position = Vector3(at.x - offset.x, holder.global_position.y, at.y - offset.y)
+	finish_zoom()
+
+
 ## Record the latest mouse position (tracked every frame, even during
 ## measurement) so zoom-toward-cursor always targets the current cursor.
 func record_mouse_position(screen_pos: Vector2) -> void:
