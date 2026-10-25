@@ -261,17 +261,26 @@ static func install(card: Dictionary, replace: bool = false) -> Dictionary:
 	if not LibraryImporter.is_quarantined(staged) or not DirAccess.dir_exists_absolute(staged):
 		out["error"] = "The staged files are gone; import the %s again." % LibraryNames.lower()
 		return out
-	var root := LibraryRegistry.user_root
-	if not LibraryImporter.is_safe_path(root) or DirAccess.make_dir_recursive_absolute(root) != OK:
+	var libraries := LibraryPaths.libraries()
+	var quarantine := LibraryPaths.incoming()
+	if (
+		not libraries["ok"]
+		or not quarantine["ok"]
+		or DirAccess.make_dir_recursive_absolute(String(libraries["path"])) != OK
+	):
 		out["error"] = "The %s folder cannot be created." % LibraryNames.lower(2)
 		return out
+	var root := String(libraries["path"])
 	var target := root.path_join(id)
 	var aside := ""
 	if DirAccess.dir_exists_absolute(target):
 		if not replace:
 			out["error"] = "'%s' is already installed." % id
 			return out
-		aside = LibraryImporter.incoming_root().path_join(LibraryImporter.token() + "_old")
+		if not SafeDelete.is_owned(target):
+			out["error"] = "'%s' was not put there by the game, so it is not replaced." % id
+			return out
+		aside = String(quarantine["path"]).path_join(LibraryImporter.token() + "_old")
 		if DirAccess.rename_absolute(target, aside) != OK:
 			out["error"] = "The installed copy of '%s' is in use and could not be set aside." % id
 			return out
@@ -283,7 +292,7 @@ static func install(card: Dictionary, replace: bool = false) -> Dictionary:
 		out["replaced"] = false
 		return out
 	if aside != "":
-		LibraryImporter.remove_tree(aside)
+		SafeDelete.tree(aside, String(quarantine["path"]))
 	out["ok"] = true
 	out["folder"] = target
 	return out
@@ -300,13 +309,23 @@ static func remove(library_id: String) -> Dictionary:
 		return {
 			"ok": false, "error": "'%s' belongs to the game and cannot be removed." % library_id
 		}
-	var folder := LibraryRegistry.user_root.path_join(library_id)
+	var libraries := LibraryPaths.child(LibraryPaths.libraries(), library_id)
+	if not libraries["ok"]:
+		return {"ok": false, "error": "The %s folder is not available." % LibraryNames.lower(2)}
+	var folder := String(libraries["path"])
 	if not DirAccess.dir_exists_absolute(folder):
 		return {"ok": false, "error": "'%s' is not installed." % library_id}
-	if not LibraryImporter.remove_tree(folder):
+	var base := String(LibraryPaths.libraries()["path"])
+	var done := SafeDelete.tree(folder, base)
+	if not done["ok"]:
+		if DirAccess.dir_exists_absolute(folder) and not SafeDelete.is_owned(folder):
+			return {
+				"ok": false,
+				"error": "'%s' was not put there by the game; delete its folder by hand." % library_id
+			}
 		return {"ok": false, "error": "Some files of '%s' could not be deleted." % library_id}
 	# Its baked surface maps (SurfaceCache) go with it; nothing else prunes that cache.
-	LibraryImporter.remove_tree(SurfaceCache.root.path_join(library_id))
+	SurfaceCache.remove_library(library_id)
 	return {"ok": true, "error": ""}
 
 

@@ -236,9 +236,8 @@ func remove_cached(
 	_cache_mutex.unlock()
 
 	if entry:
-		# Delete the file
-		if FileAccess.file_exists(entry.path):
-			DirAccess.remove_absolute(entry.path)
+		# Delete the file; the index is on disk, so its paths must still be inside the cache
+		SafeDelete.file(entry.path, Paths.ASSET_CACHE_DIR)
 		_remove_from_index(key)
 
 
@@ -249,8 +248,7 @@ func clear_cache() -> void:
 	# Delete all cached files
 	for key in _cache_index:
 		var entry: CacheEntry = _cache_index[key]
-		if FileAccess.file_exists(entry.path):
-			DirAccess.remove_absolute(entry.path)
+		SafeDelete.file(entry.path, Paths.ASSET_CACHE_DIR)
 
 	_cache_index.clear()
 	_total_cache_size = 0
@@ -394,8 +392,7 @@ func _evict_if_needed(incoming_size: int) -> void:
 		var entry: CacheEntry = item.entry
 
 		# Delete the file
-		if FileAccess.file_exists(entry.path):
-			DirAccess.remove_absolute(entry.path)
+		SafeDelete.file(entry.path, Paths.ASSET_CACHE_DIR)
 
 		_cache_mutex.lock()
 		_total_cache_size -= entry.size_bytes

@@ -187,6 +187,7 @@ static func _forget_surfaces() -> void:
 ## resolves them (LibraryResolver). Reads files; changes no palette. list() returns the result.
 static func refresh(root: String = PaletteLibrary.DEFAULT_ROOT) -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
+	_adopt_installed()
 	for item: Array in [[official_root, "official"], [user_root, "user"]]:
 		for folder in _library_folders(String(item[0])):
 			found.append(_entry_of(folder, String(item[1])))
@@ -451,6 +452,25 @@ static func _public(entry: Dictionary) -> Dictionary:
 		"partial": (entry["partial"] as Dictionary).duplicate(true),
 		"received": entry["source"] == "received",
 	}
+
+
+## The migration for libraries installed before the ownership marker existed: every direct
+## subfolder of the user's libraries folder that has a valid library id and holds a library.json
+## gets the marker (SafeDelete), once. A folder that does not look like a library never does, so
+## Remove and Replace cannot reach it. Does nothing when the folder does not resolve.
+static func _adopt_installed() -> void:
+	var libraries := LibraryPaths.libraries()
+	if not libraries["ok"]:
+		return
+	var base := String(libraries["path"])
+	for folder in _library_folders(base):
+		var id := folder.get_file()
+		if (
+			LibraryIds.library_problems(id).is_empty()
+			and FileAccess.file_exists(folder.path_join(LIBRARY_FILE))
+			and not SafeDelete.is_owned(folder)
+		):
+			SafeDelete.mark(folder, "library", base)
 
 
 ## The subfolders of `root` that may hold a library (names not starting with a dot, which is how
@@ -819,6 +839,8 @@ static func _list(folder: String, prefix: String, depth: int, out: Array[String]
 		return false
 	var here := folder if prefix == "" else folder.path_join(prefix)
 	for file_name in DirAccess.get_files_at(here):
+		if prefix == "" and file_name == SafeDelete.MARKER:
+			continue  # the game's ownership marker is not part of the library's content
 		out.append(file_name if prefix == "" else prefix + "/" + file_name)
 		if out.size() > MAX_FILES:
 			return false
