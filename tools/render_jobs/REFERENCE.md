@@ -137,6 +137,7 @@ In `probes/`. Each is a static `run(base, step)`; every field is optional.
 | Script | Fields | Effect |
 |---|---|---|
 | `token_ghost.gd` | `action`: `spawn`, `spawn_screen`, `spawn_box`, `look`, `clear`, `mode` (`reset`, `ghost`, `occlusion`, `canopy`, `budget`, `ghost_params`), `info` (draw calls), `report`, `lofi`, `aa`, `msaa` | The token ghost and the see-through settings (jobs `token_ghost.json`, `token_ghost_perf.json`). |
+| `designer.gd` | `action`: `open`, `picker`, `press`, `text`, `select`, `set`, `edit_timed`, `curve`, `slope_min`, `ground`, `add_ref`, `remove_rule`, `add_rule`, `undo`, `redo`, `debounce`, `whole`, `stats`, `full`, `cancel`, `pick`, `click_rule`, `save`, `leave`, `libraries`, `cleanup`, `save_check`, `report` | Drives the biome designer (`docs/systems/biome_designer.md`) and times edit to new scatter rows (jobs `designer_*.json`). |
 | `env.gd` | `color` ([r, g, b]), `mouse` ([x, y]), `recentre` (bool), `skirt` (bool) | Flat background colour; the cursor position zoom-toward-cursor uses (the judgment set pins it to the screen centre so zoom-out is repeatable); camera clamp to fitted map bounds on or off; terrain skirt visibility. |
 | `ground_params.gd` | `params` ({uniform: value}), `broad_factor` (int) | Set ground shader uniforms for an in-run A/B; rebuild the broad weight texture at a different box-filter factor. |
 | `tree_fade.gd` | `params` ({uniform: value}), `factor` (float) | Set occlusion-fade uniforms on every registered tree material; set the brush's canopy fade radius factor (0 turns it off). |

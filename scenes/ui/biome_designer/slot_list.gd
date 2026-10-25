@@ -27,6 +27,7 @@ var _menu_key: String = ""
 var _role_menu: PopupMenu
 var _role_group: String = ""
 
+
 func _init() -> void:
 	name = "SlotList"
 	size_flags_vertical = Control.SIZE_EXPAND_FILL

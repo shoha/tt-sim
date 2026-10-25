@@ -193,6 +193,10 @@ motion, the user's pick "STAGED + LIFE" from the brushland feel probe, 2026-10-2
   `grow_seconds`, rocks rising) for measurement and side-by-side films only. Numbers in
   [PERFORMANCE.md](../PERFORMANCE.md) "Arrival motion".
 
+## Designer regeneration
+
+The biome designer replaces a biome's rules under an open map without a reopen: `ScatterRegen.replace_biome` regenerates only the rows whose rule (or a rule it relates to through relations, clearance or a shared spacing field) changed, `ScatterRefresh` runs it across the loaded cells and cancels a pass a newer edit supersedes. Measured edit to new rows on the map is 70 to 160 ms (`designer_perf`). See `docs/systems/biome_designer.md`.
+
 ## Native path
 
 `ScatterRegen.run` hands each biome of a job to `ScatterNative.run_biome` first (card

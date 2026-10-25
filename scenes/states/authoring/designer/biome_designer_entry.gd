@@ -52,18 +52,17 @@ static func designable() -> Array[Dictionary]:
 			continue
 		for biome: Dictionary in entry["biomes"]:
 			var writable := LibraryRegistry.designer_writable(entry["id"], entry["source"])
-			out.append(
-				{
-					"library": entry["id"],
-					"library_name": entry["name"],
-					"biome": biome["id"],
-					"name": biome["name"],
-					"source": entry["source"],
-					"writable": writable,
-					"official": entry["official"],
-					"version": entry["version"],
-				}
-			)
+			var row := {
+				"library": entry["id"],
+				"library_name": entry["name"],
+				"biome": biome["id"],
+				"name": biome["name"],
+				"source": entry["source"],
+				"writable": writable,
+				"official": entry["official"],
+				"version": entry["version"],
+			}
+			out.append(row)
 	return out
 
 
@@ -87,6 +86,7 @@ static func new_from(
 	var applied := FoliageLibrary.apply(FoliageLibrary.current(), FoliageLibrary.active_package())
 	if not applied.get("ok", true):
 		return {
-			"ok": false, "error": String(applied.get("error", "the new collection did not load"))
+			"ok": false,
+			"error": String(applied.get("error", "the new %s did not load" % LibraryNames.lower()))
 		}
 	return {"ok": true, "error": "", "library": collection_id, "biome": biome_id}

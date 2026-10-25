@@ -143,7 +143,9 @@ func _action(node_name: String, label: String, tip: String) -> Button:
 func _build_category_chips() -> void:
 	for category in DesignerCatalog.categories_in(_all):
 		var chip := DesignerRows.chip(
-			"Category_" + category, DesignerSlots.category_label(category), "Show only %s." % category
+			"Category_" + category,
+			DesignerSlots.category_label(category),
+			"Show only %s." % category
 		)
 		chip.toggle_mode = true
 		chip.toggled.connect(_on_category_toggled.bind(category))

@@ -608,7 +608,7 @@ func revert() -> void:
 ## library and for a draft the validators reject.
 func save() -> Dictionary:
 	if not writable:
-		var why := "%s is read-only; duplicate it as a new collection" % library_name
+		var why := "%s is read-only; save a copy as a new %s" % [library_name, LibraryNames.lower()]
 		return {"ok": false, "error": why}
 	var verdict := validation()
 	if not (verdict["errors"] as Array).is_empty():

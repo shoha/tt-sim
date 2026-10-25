@@ -137,6 +137,7 @@ other committed home.
 |--------|------|---------------|
 | Built-in palette (treecube -> tt-sim contract, import path) | `utils/palette_library.gd`, `assets/palette/` | `systems/palette.md`, `ASSET_PIPELINE.md` section 9 |
 | Content library (data-only folders compiled into the palette form; developer path only so far) | `utils/library/`, `tools/compile_library_cli.gd` | `systems/library.md` |
+| Biome designer (a visual tool for everyone: edit a biome's rules on a proving-ground map in the real scatter and ground, response curves, queries, undo, Save and "Save as new collection"; the title's "Design a biome") | `utils/library/designer/`, `utils/proving_ground.gd`, `utils/scatter_refresh.gd`, `scenes/states/authoring/designer/`, `scenes/ui/biome_designer/` | `systems/biome_designer.md` |
 | Map library core (level name, description and author edits; the GLB import check and its warnings; Import; Replace map and Reload from Blender with Keep dressing or Start fresh; the local source index and "Updated in Blender"; the card thumbnail, captured or rendered offscreen) | `autoloads/level_manager.gd` (`update_meta`), `utils/glb_check.gd`, `utils/map_import.gd`, `utils/import_sources.gd`, `utils/dressing_reconcile.gd`, `utils/level_thumbnail.gd` | `ASSET_PIPELINE.md` section 11 |
 | The library title (the title is the library: New map with Generate, Import... and Advanced size and seed; the selected map's detail strip with in-place name, description and author, source, size, tokens, last played, Play, Host with this map, Edit map and its menu; the import check panel; a dropped .glb as a new map or Replace on a card; the play index behind most recently played first) | `scenes/states/title_screen/` (`title_screen.gd`, `new_map_card.gd`, `map_detail_strip.gd`, `import_check_panel.gd`, `library_imports.gd`), `utils/library_facts.gd`, `utils/library_plays.gd`, `scenes/ui/primitives/level_grid.gd` | `UI_SYSTEMS.md` "Title Hub" |
 | Palette build (producer side) | `treecube/scripts/build_palette.py`, `treecube/treecube/palette.py` | treecube `README.md` "Palette for tt-sim" |
@@ -548,6 +549,12 @@ later passes, none blocking the port:
   smoke and the lights' pools; the authored ground shader itself fails there on `textureGather`),
   captured by `firefeat_look_mobile.json` on 2026-10-18. Mac's Mobile renderer shows the fire and
   its glow (x2 intensity) as Forward+ does; card fire-prod-c7 takes the verdict captures.
+
+Biome designer (step S8a, 2026-10-25; `systems/biome_designer.md`): built, the title's "Design a biome",
+the draft model with undo, the proving ground, response curves and queries in the editor, partial regeneration
+(single-rule edit to new plants 70 to 160 ms). Open for the next steps (S8b, S9): the A/B split view, the season
+scrub with per-season overrides, the ground look editor, thumbnails for the asset tiles, the manager's own entry,
+hover highlights and the density, slope and role overlays, "Request asset", the lock file's editing UI.
 
 Path direction (user, 2026-10-13): paths and roads have a direction, but the ground samples
 built surfaces (cobblestone, flagstone, planks, dirt roads) with the same per-cell rotation and

@@ -164,7 +164,9 @@ func _draw() -> void:
 func _tooltip() -> String:
 	var lines: Array[String] = [String(info.get("name", ""))]
 	var category := DesignerSlots.category_label(String(info.get("category", "")))
-	var kind := "%s / %s, %s class" % [category, info.get("subtype", ""), info.get("size_class", "")]
+	var kind := (
+		"%s / %s, %s class" % [category, info.get("subtype", ""), info.get("size_class", "")]
+	)
 	lines.append(kind)
 	var tags: Array = info.get("tags", [])
 	if not tags.is_empty():

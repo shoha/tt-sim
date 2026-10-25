@@ -88,7 +88,7 @@ func _section(title_text: String, rows: Array, copies: bool) -> Control:
 	box.add_child(title)
 	if rows.is_empty():
 		var none := (
-			"No collection with biomes is installed."
+			"No %s with biomes is installed." % LibraryNames.lower()
 			if copies
 			else "Nothing yet. Copy a core biome below, and it will be here."
 		)
@@ -123,7 +123,9 @@ func _row(row: Dictionary, copies: bool) -> Control:
 		copy.name = "Copy"
 		copy.text = "Make my own copy..."
 		copy.theme_type_variation = &"Secondary"
-		copy.tooltip_text = "Copy this biome into a new collection of yours, then design the copy."
+		copy.tooltip_text = (
+			"Copy this biome into a new %s of yours, then design the copy." % LibraryNames.lower()
+		)
 		copy.pressed.connect(_ask_name.bind(row))
 		line.add_child(copy)
 	var open := Button.new()
