@@ -30,6 +30,8 @@ var _saved_loaded: bool = false
 ## prop's or a regrown cell's, included); the saved speeds put them back on a thaw.
 var _wind_frozen: bool = false
 var _wind_saved: Dictionary = {}
+## What `thumbnail_prepare` froze (ThumbnailShot.prepare's result), for `thumbnail`.
+var _thumbnail_held: Dictionary = {"fade": false, "parts": {}, "winds": {}}
 
 
 func _ready() -> void:
@@ -314,6 +316,16 @@ func _process(delta: float) -> void:
 			done = _input_events(step)
 		"capture":
 			done = _capture(step)
+		"thumbnail_prepare":
+			var at: Array = step.get("at", [0.0, 0.0])
+			_thumbnail_held = ThumbnailShot.prepare(
+				gm(),
+				float(step.get("zoom", LibraryThumbnailer.CAMERA_ZOOM)),
+				Vector2(float(at[0]), float(at[1]))
+			)
+			log_line("thumbnail scene prepared (%d materials)" % _thumbnail_held["winds"].size())
+		"thumbnail":
+			done = _thumbnail(step)
 		"vsync_off":
 			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 			RenderingServer.viewport_set_measure_render_time(
@@ -750,6 +762,42 @@ func _capture(step: Dictionary) -> bool:
 			Steady.freeze_wind(get_tree().root, _wind_saved)
 		RenderingServer.frame_post_draw.connect(_grab.bind(String(step.name)), CONNECT_ONE_SHOT)
 	return _state.phase == 2
+
+
+## `thumbnail` (REFERENCE.md): takes the open map's frame as the biome `biome`'s thumbnail and
+## writes it into the library folder `folder` (LibraryWriter.write_thumbnail). Freezes the
+## materials that appeared since `thumbnail_prepare`, draws two frames, then grabs. The result
+## joins root meta "thumbnail_results" ({biome, ok, file, sha256, bytes, error}).
+func _thumbnail(step: Dictionary) -> bool:
+	if _state.phase == 0:
+		_state.phase = 1
+		_state["frames"] = 0
+		ThumbnailShot.freeze(gm(), _thumbnail_held)
+	elif _state.phase == 1:
+		_state["frames"] += 1
+		if _state["frames"] >= 3:
+			_state.phase = 3
+			RenderingServer.frame_post_draw.connect(_grab_thumbnail.bind(step), CONNECT_ONE_SHOT)
+	return _state.phase == 2
+
+
+func _grab_thumbnail(step: Dictionary) -> void:
+	var bytes := LibraryThumbnailer.encode(ThumbnailShot.grab(gm()))
+	var result := LibraryWriter.write_thumbnail(String(step.folder), String(step.biome), bytes)
+	result["biome"] = String(step.biome)
+	var results: Array = get_tree().root.get_meta("thumbnail_results", [])
+	results.append(result)
+	get_tree().root.set_meta("thumbnail_results", results)
+	if result["ok"]:
+		log_line(
+			(
+				"thumbnail %s -> %s (%d bytes, sha256 %s)"
+				% [step.biome, result["file"], bytes.size(), result["sha256"]]
+			)
+		)
+	else:
+		log_line("thumbnail %s FAILED: %s" % [step.biome, result["error"]])
+	_state.phase = 2
 
 
 func _grab(capture_name: String) -> void:

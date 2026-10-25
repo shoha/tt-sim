@@ -25,6 +25,10 @@ extends RefCounted
 ##   press {name, under}          presses the button called `name` (inside the node `under`).
 ##   text {name, value}           types into the LineEdit called `name`.
 ##   save, leave                  the designer's Save and Leave, as the buttons do them.
+##   picture                      the header's Thumbnail button: takes the draft's thumbnail on the
+##                                standard map and saves it (about 20 s); follow it with `wait`.
+##   picture_check                logs the biome's thumbnail file as the library folder holds it
+##                                (size, the caps' verdict, the field in the biome-def, dirty).
 ##   libraries                    logs the collections served and the user collection folders.
 ##   cleanup {library}            deletes the user collection `library` and serves the rest again.
 
@@ -96,6 +100,21 @@ static func run(base: Node, step: Dictionary) -> String:
 		"leave":
 			controller.designer.request_leave()
 			return "leaving"
+		"picture":
+			controller.designer.update_thumbnail()
+			return "taking the picture"
+		"picture_check":
+			var on_disk: Variant = JSON.parse_string(
+				FileAccess.get_file_as_string(
+					model.folder.path_join("biomes").path_join(model.biome_id + ".json")
+				)
+			)
+			var relative := String((on_disk as Dictionary).get("thumbnail", "")) if on_disk is Dictionary else ""
+			var bytes := FileAccess.get_file_as_bytes(model.folder.path_join(relative))
+			return (
+				"thumbnail the biome-def on disk names '%s': %d bytes, verdict '%s', dirty %s"
+				% [relative, bytes.size(), LibraryThumbnailer.jpg_problem(bytes), model.is_dirty()]
+			)
 		"save_check":
 			var verdict := model.validation()
 			return (

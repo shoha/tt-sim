@@ -24,6 +24,7 @@ var ui: DesignerUI = null
 var _game_map: GameMap = null
 var _prompt: Node = null
 var _leaving: bool = false
+var _taking_picture: bool = false
 
 
 ## Attaches a host to `authoring` (an open session whose map is the proving ground) over the
@@ -60,10 +61,51 @@ func setup(authoring: AuthoringController, game_map: GameMap, designed: BiomeDes
 	ui.save_requested.connect(save)
 	ui.save_as_requested.connect(save_as_collection)
 	ui.revert_requested.connect(revert)
+	ui.thumbnail_requested.connect(update_thumbnail)
 	ui.leave_requested.connect(request_leave)
 	var layer: Node = controller.panel.get_parent() if controller.panel != null else controller
 	layer.add_child(ui)
 	set_process_unhandled_input(true)
+
+
+## Takes the draft's picture on the standard map (BiomeDesignerSession.capture_thumbnail) and
+## saves it as the biome's thumbnail (BiomeDesignerModel.save_thumbnail: the JPG under the
+## library's thumbnails/ folder, the biome-def's `thumbnail` field, a built library's hash).
+## Only for a user library or the developer-override folder; the map is the proving ground
+## again afterwards.
+func update_thumbnail() -> void:
+	if _taking_picture or _leaving:
+		return
+	if not LibraryThumbnailer.designer_writable(model.source, model.folder):
+		UIManager.show_toast(
+			"%s is read-only: its pictures come from the build." % model.library_name,
+			UIManager.TOAST_WARNING,
+			5.0
+		)
+		return
+	_taking_picture = true
+	UIManager.show_toast("Taking the picture of %s..." % model.biome_id, UIManager.TOAST_INFO, 3.0)
+	var image := await session.capture_thumbnail()
+	_taking_picture = false
+	if _leaving or not is_instance_valid(self):
+		return
+	var camera_controller := _game_map.get_camera_controller()
+	for _step in ZOOM_OUT_STEPS:
+		camera_controller.zoom_out_step()
+	if image == null:
+		UIManager.show_toast("Could not take the picture.", UIManager.TOAST_WARNING, 5.0)
+		return
+	var bytes := LibraryThumbnailer.encode(image)
+	var written := LibraryWriter.write_thumbnail(model.folder, model.biome_id, bytes)
+	if written["ok"]:
+		LibraryRegistry.refresh()
+		UIManager.show_toast(
+			"Saved the picture of %s (%d KB)." % [model.biome_id, ceili(bytes.size() / 1024.0)],
+			UIManager.TOAST_SUCCESS,
+			4.0
+		)
+	else:
+		UIManager.show_toast(String(written["error"]), UIManager.TOAST_WARNING, 6.0)
 
 
 ## Writes the draft to its library folder.

@@ -12,6 +12,7 @@ extends Control
 signal save_requested
 signal save_as_requested(collection_id: String, collection_name: String)
 signal revert_requested
+signal thumbnail_requested
 signal leave_requested
 
 const LEFT_WIDTH := 380.0
@@ -56,6 +57,7 @@ func setup(designer: BiomeDesignerSession) -> void:
 	header.save_requested.connect(func() -> void: save_requested.emit())
 	header.save_as_requested.connect(_open_dialog)
 	header.revert_requested.connect(func() -> void: revert_requested.emit())
+	header.thumbnail_requested.connect(func() -> void: thumbnail_requested.emit())
 	header.leave_requested.connect(func() -> void: leave_requested.emit())
 	top.add_child(header)
 	page.add_child(top)
