@@ -104,8 +104,10 @@ static func _biome_name(biome_id: String, root: String) -> String:
 	return String(found.get("name", biome_id))
 
 
-## The mismatch dialog (a UIManager confirmation) as a coroutine: true for "Open without those
-## plants", false for Cancel, Escape and closing the dialog.
+## The mismatch dialog (a UIManager choice) as a coroutine: true for "Open without those
+## plants", false for Cancel, Escape and closing the dialog, and for "Manage <collections>",
+## which also opens the manager (LibraryManager) over the title the cancelled open returns to,
+## so the missing library can be added and the map opened again.
 static func ask_dialog(report: Dictionary) -> bool:
 	var gate := MapLibraryGate.new()
 	var answered := [false]
@@ -113,12 +115,17 @@ static func ask_dialog(report: Dictionary) -> bool:
 		if not answered[0]:
 			answered[0] = true
 			gate.chosen.emit(proceed)
-	UIManager.show_confirmation(
+	var manage := func() -> void:
+		settle.call(false)
+		LibraryManager.open((Engine.get_main_loop() as SceneTree).root)
+	UIManager.show_choice(
 		TITLE,
 		MapLibraries.describe(report) + HINT,
 		OPEN_WITHOUT,
+		"Manage %s" % LibraryNames.lower(2),
 		"Cancel",
 		func() -> void: settle.call(true),
+		manage,
 		func() -> void: settle.call(false)
 	)
 	return await gate.chosen

@@ -72,6 +72,8 @@ var biome_field: TileField
 ## (LibraryGroups: alphabetical by name, its default biome first), each headed by the library's
 ## name. Empty while core is the only library, which leaves the dialog as it has always been.
 var library_fields: Array[TileField] = []
+## "Manage collections...", the quiet link at the footer's left (LibraryManager).
+var manage_button: Button
 var ground_caption: Label
 var landform_field: TileField
 var landform_caption: Label
@@ -89,6 +91,8 @@ var _closing: bool = false
 ## The scroll region and the fields it holds.
 var _scroll: ScrollContainer
 var _fields: VBoxContainer
+## Holds the starting-place fields, built again when the collections change.
+var _biome_holder: VBoxContainer
 
 @onready var _body: VBoxContainer = %Body
 @onready var _panel: PanelContainer = %PanelContainer
@@ -119,42 +123,14 @@ func _on_panel_ready() -> void:
 		size_field.visible = false
 		header.setup("New map", preset_caption(preset), true)
 
-	biome_field = TileField.new()
-	biome_field.name = "BiomeField"
-	biome_field.caption = "Start from"
-	biome_field.tiles.photo_icons = true
-	biome_field.tiles.photo_fill = true
-	biome_field.tiles.tile_min_size = BIOME_TILE_SIZE
-	biome_field.tiles.columns = BIOME_COLUMNS
-	var biomes := PaletteLibrary.biomes(palette_root)
-	var groups := LibraryGroups.group(biomes, LibraryRegistry.list(palette_root))
-	var core_group: Dictionary = {}
-	var other_groups: Array[Dictionary] = []
-	for group in groups:
-		if group["id"] == LibraryContracts.CORE_ID:
-			core_group = group
-		else:
-			other_groups.append(group)
-	_add_biome_tiles(biome_field, core_group)
-	var bare: Dictionary = PaletteLibrary.surfaces(palette_root).get(NewMap.BARE_SURFACE, {})
-	biome_field.tiles.add_tile(
-		BARE_TILE,
-		"Bare ground",
-		"",
-		"Plain ground to paint on",
-		BiomeThumbnail.bare_strip(bare, BIOME_STRIP_PX, palette_root)
-	)
-	_biome_id = _initial_biome(biomes)
-	biome_field.tiles.select(_tile_for_biome(_biome_id))
-	biome_field.tiles.selection_changed.connect(_on_biome_selected)
-	_fields.add_child(biome_field)
-	if not other_groups.is_empty():
-		biome_field.show_note(String(core_group.get("name", "tt-sim Core")))
-	for group in other_groups:
-		var field := _library_field(group)
-		field.tiles.select(_tile_for_biome(_biome_id))
-		library_fields.append(field)
-		_fields.add_child(field)
+	# The starting places live in one holder so they can be built again when a collection is
+	# added, switched or removed while the dialog is open (EventBus.foliage_library_changed).
+	_biome_holder = VBoxContainer.new()
+	_biome_holder.name = "BiomeFields"
+	_biome_holder.theme_type_variation = &"BoxContainerSpaced"
+	_fields.add_child(_biome_holder)
+	_build_biome_fields("")
+	EventBus.foliage_library_changed.connect(_on_libraries_changed)
 	# The ground the biome starts on, under its tiles as the landform's caption is under its.
 	ground_caption = Label.new()
 	ground_caption.name = "GroundCaption"
@@ -191,6 +167,20 @@ func _on_panel_ready() -> void:
 	footer.alignment = BoxContainer.ALIGNMENT_END
 	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	footer.add_theme_constant_override("separation", 12)
+	# Always in view, whatever the fields above scroll: the way to more places to start from.
+	manage_button = Button.new()
+	manage_button.name = "ManageLibraries"
+	manage_button.text = "Manage %s..." % LibraryNames.lower(2)
+	manage_button.icon = IconButton.load_icon("trees")
+	manage_button.theme_type_variation = &"InlineAction"
+	manage_button.tooltip_text = "Add, switch off or remove the places and plants you can start from"
+	manage_button.pressed.connect(_on_manage_pressed)
+	footer.add_child(manage_button)
+	var gap := Control.new()
+	gap.name = "FooterGap"
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	footer.add_child(gap)
 	cancel_button = _footer_button("CancelButton", "Cancel", &"Secondary", footer)
 	cancel_button.pressed.connect(_on_cancel_pressed)
 	create_button = _footer_button("CreateButton", "Create map", &"Primary", footer)
@@ -201,6 +191,78 @@ func _on_panel_ready() -> void:
 	get_viewport().size_changed.connect(_fit_to_canvas)
 	_fields.minimum_size_changed.connect(_fit_to_canvas, CONNECT_DEFERRED)
 	_fit_to_canvas()
+
+
+## Builds the "Start from" fields in the holder: core's tiles and Bare ground, then one field per
+## other collection. `keep` is the biome to stay on when it still exists (a rebuild); "" picks
+## the default.
+func _build_biome_fields(keep: String) -> void:
+	biome_field = TileField.new()
+	biome_field.name = "BiomeField"
+	biome_field.caption = "Start from"
+	biome_field.tiles.photo_icons = true
+	biome_field.tiles.photo_fill = true
+	biome_field.tiles.tile_min_size = BIOME_TILE_SIZE
+	biome_field.tiles.columns = BIOME_COLUMNS
+	var biomes := PaletteLibrary.biomes(palette_root)
+	var groups := LibraryGroups.group(biomes, LibraryRegistry.list(palette_root))
+	var core_group: Dictionary = {}
+	var other_groups: Array[Dictionary] = []
+	for group in groups:
+		if group["id"] == LibraryContracts.CORE_ID:
+			core_group = group
+		else:
+			other_groups.append(group)
+	_add_biome_tiles(biome_field, core_group)
+	var bare: Dictionary = PaletteLibrary.surfaces(palette_root).get(NewMap.BARE_SURFACE, {})
+	biome_field.tiles.add_tile(
+		BARE_TILE,
+		"Bare ground",
+		"",
+		"Plain ground to paint on",
+		BiomeThumbnail.bare_strip(bare, BIOME_STRIP_PX, palette_root)
+	)
+	var still_there := keep == NewMap.BARE_BIOME
+	for biome in biomes:
+		still_there = still_there or biome["id"] == keep
+	_biome_id = keep if keep != "" and still_there else _initial_biome(biomes)
+	biome_field.tiles.select(_tile_for_biome(_biome_id))
+	biome_field.tiles.selection_changed.connect(_on_biome_selected)
+	_biome_holder.add_child(biome_field)
+	if not other_groups.is_empty():
+		biome_field.show_note(String(core_group.get("name", "tt-sim Core")))
+	for group in other_groups:
+		var field := _library_field(group)
+		field.tiles.select(_tile_for_biome(_biome_id))
+		library_fields.append(field)
+		_biome_holder.add_child(field)
+
+
+## A collection was added, switched or removed (EventBus.foliage_library_changed): the starting
+## places are built again, the pick kept when it still exists, so the dialog needs no reopening.
+func _on_libraries_changed(_library: String) -> void:
+	if _closing or not is_instance_valid(_biome_holder):
+		return
+	var keep := _biome_id
+	for child in _biome_holder.get_children():
+		_biome_holder.remove_child(child)
+		child.queue_free()
+	library_fields.clear()
+	_build_biome_fields(keep)
+	if ground_caption != null:
+		_refresh_ground_caption()
+	_fit_to_canvas.call_deferred()
+
+
+## Manage collections...: the manager over this dialog.
+func _on_manage_pressed() -> void:
+	LibraryManager.open(get_tree().root)
+
+
+func _exit_tree() -> void:
+	super._exit_tree()
+	if EventBus.foliage_library_changed.is_connected(_on_libraries_changed):
+		EventBus.foliage_library_changed.disconnect(_on_libraries_changed)
 
 
 func _build_scroll() -> void:

@@ -15,6 +15,9 @@ Step S4 (2026-10-24): the multi-library registry (official and user libraries, d
 enable and disable), `AssetStore`, the map's `libraries` record with its mismatch dialog, and
 the New map dialog grouped by library. Step S5 (2026-10-24): `core` as the nine-biome library
 with its surfaces, thumbnails and bindings, proven equal to the plantgen package route.
+Step S6 (2026-10-24): the library manager, which the player knows as "Collections" (the word
+"library" already means the list of maps on the title): list, card, import through a quarantine,
+Verify and Remove.
 
 ## Map
 
@@ -41,6 +44,12 @@ with its surfaces, thumbnails and bindings, proven equal to the plantgen package
 | `utils/legacy_habit.gd` | `LegacyHabit` | (S2) The legacy key and kind lists (`EMERGENT_KEYS`, `BANK_KEYS`, `CHARRED_KEYS`, `ARID_KINDS`) in one place, `for_key(key, kind)` and `export_table()` (published in `contract.json` as `legacy_habit`, so plantgen's importer derives a rule's explicit habit from the same lists). `ScatterGround.habit_of(rule)` returns the rule's own `habit`, else this |
 | `utils/palette_validator.gd` (+ `palette_surfaces.gd`, `palette_fields.gd`, `palette_asset_files.gd`) | `PaletteValidator` | (S2) `palette_library.gd` was at gdlint's 1000-line cap and is split; the rule whitelist in `PaletteValidator._validate_species` / `_library_fields` keeps `role`, `habit`, `weight` |
 | `utils/foliage_library.gd` | `FoliageLibrary` | The developer A/B switch (treecube against a plantgen package); `apply()` calls `LibraryRegistry.apply()` last, so the content libraries are a layer over whichever foliage set is served; `apply_saved()` serves them at start-up when any is installed; `refresh_libraries()` serves them again and rebuilds the open map |
+| `utils/library/library_names.gd` | `LibraryNames` | (S6) The ONE place the player-facing word for a library lives: `TITLE_SINGULAR` / `TITLE_PLURAL` (today "Collection" / "Collections"), the helpers every label is built from (`title`, `lower`, `counted`, `article`, the install card's promise line, the manager's caption). A rename is a one-line change; `test_library_manager.gd` fails when a string literal in the manager, importer, title or New map dialog holds the word |
+| `utils/library/library_importer.gd` | `LibraryImporter` | (S6, no scene tree) `inspect(path)` judges a `.ttlib`/`.zip` or a folder BEFORE anything is written (the caps, extensions, portable names, links, encrypted entries, case twins, ratio), `stage(plan, progress)` extracts or copies into the quarantine `<libraries>/.incoming/<random>/` (a worker-thread-safe call with a `Progress` for the bar and Cancel), `is_candidate(path)` sniffs a drop, `sweep_incoming`, `discard`, `limits` (a test can lower them) |
+| `utils/library/library_install.gd` | `LibraryInstall` | (S6) `examine(folder)` reads a staged folder with `LibraryReader` and compiles it in a dry run through the libraries installed, giving the install card (identity, size, counts, dependencies with their state, warnings, the relation to an installed copy, reserved ids); `install(card, replace)` moves it into `<libraries>/<id>/`; `remove(id)`; `levels_using(id, levels_dir)` (a lazy scan of the saved maps' manifests with `MapDocumentIO.peek_libraries`) |
+| `utils/library/library_verify.gd` | `LibraryVerify` | (S6) Verify: `plan(id)`, `check(asset)` (`AssetStore.verify`), `summarize`, one asset at a time so the sheet keeps drawing |
+| `scenes/ui/library_manager/` | `LibraryManager`, `LibraryDetail`, `LibraryInstallCard`, `LibraryImportFlow` | (S6) The sheet (list at the left, the selected library's card at the right, Import file... / Import folder... / Done), its card, the install sheet and the one flow behind the picker, the folder picker and a drop (inspect, stage on a worker thread, examine, ask, install, `refresh_all`). All built in code |
+| `utils/zip_entry_sizes.gd` | `ZipEntrySizes` | (S6) Gained `read_directory` and `parse_central_records` (flags, method, attributes, sizes) beside the sizes the map reader uses |
 | `tools/compile_library_cli.gd` | | Headless: prints or writes the compiled palette JSON of a library folder, or `--contract <file>` |
 | `tools/render_jobs/driver.gd`, `jobs/library_s1_savanna.json` | op `library_dev` | Sets the override for a run and rebuilds the open map |
 | `tests/fixtures/library_savanna/`, `library_savanna_compiled.json`, `library_mini/` | | The savanna JSON (no GLBs) with its frozen compiled golden; a three-asset, two-rule library |
@@ -423,9 +432,84 @@ only the assets a given map uses. The messages and the network rules are in
 
 ## Authoring
 
-None yet: the library manager (list, import, enable and disable, remove, verify) and the biome
-designer are steps S6 to S9 of the design. `LibraryRegistry.list()`, `set_enabled` and
-`FoliageLibrary.refresh_libraries()` are what the manager will call.
+The library manager (step S6) is the player's way to see, add, switch off and remove libraries;
+the biome designer is S8 and S9. The words the player sees come from `LibraryNames` (today
+"Collections"); this section, like the code, says library.
+
+- **Entry points.** The title's masthead has a quiet tool, Collections (`TitleScreen.
+  libraries_button`), and the New map dialog a "Manage collections..." link at its footer's
+  left (`NewMapDialog.manage_button`, always in view, whatever the fields above scroll). The
+  mismatch dialog of a map that names a library this game lacks has a third choice, "Manage
+  collections", which answers Cancel (the open returns to the title) and opens the manager over
+  it so the library can be added and the map opened again.
+- **The sheet** (`LibraryManager`, 960 wide, the manager's own scrim, shared with a dialog under
+  it: one scrim, UI_TASTE G1). The list at the left, one row per `LibraryRegistry.list()` entry
+  (the built-in core first): name, version and author, "2 assets, 1 biome · 5 KB" (or, for a
+  library that fails, the first reason, with a mark), an Official / Yours / Built in chip and an
+  on switch (core and a developer override cannot be switched off; a library that needs a
+  switched-off one fails and says so). The card at the right (`LibraryDetail`): heading, version,
+  author and licence, the origin and state chips (On, Off, Needs attention), the description,
+  Holds / Size / Needs (each dependency with its state: met, missing, outside its range, off,
+  failing) / Link / Folder, the biomes as the pictures the New map dialog uses (a served library
+  only), every reason and warning the reader and the compiler had, then Verify, Show in folder
+  and Remove (the last two only for a library the player installed). Footer: the last thing that
+  happened in words (the toast sits under the scrim, so the footer says it too), Import file...,
+  Import folder... and Done (the one primary).
+- **Switching, installing, removing** each call `LibraryRegistry.set_enabled` / `LibraryInstall`,
+  then `LibraryImportFlow.refresh_all()`: `LibraryRegistry.refresh()` and
+  `FoliageLibrary.refresh_libraries()`, which serves the libraries again and emits
+  `EventBus.foliage_library_changed`. The open New map dialog listens to it and builds its
+  starting-place fields again, keeping the pick when it still exists (a switched-off library's
+  field leaves without reopening the dialog); Root rebuilds an open map as for any foliage
+  change. A removed library that was switched off is switched on again, so adding it back is not
+  a surprise. `LibraryImportFlow.serve_palette = false` makes `refresh_all` only rescan (tests).
+- **Remove** (it also deletes the library's baked surface cache, `user://library_cache/<id>/`)
+  asks: what is deleted, and how many saved maps name the library
+  (`LibraryInstall.levels_using`, read from each `map.ttmap` manifest only, done when the button is
+  pressed, never in the background). Those maps then show the mismatch dialog when opened.
+- **Verify** hashes every GLB of the selected library against the catalog's `sha256` and `bytes`
+  and runs `GlbGuard` over it (`AssetStore.verify`, also for an official library), 6 ms of
+  work a frame with a bar, Stop and a line per failing file. A library that is off or failing has
+  nothing registered, so it says to turn it on first; the built-in core ships inside the game.
+- **Importing** (design 5.5), all of it in `LibraryImporter` and `LibraryInstall`, which have no
+  scene tree and are tested with generated zips (`test_library_importer.gd`):
+  1. `inspect` reads the zip's central directory (`ZipEntrySizes.read_directory`, which already
+     refuses Zip64, an oversized directory and a file that is not a zip) and judges every entry
+     BEFORE extracting. Hard limits (`LibraryImporter.default_limits`): 20,000 entries, 1 GiB
+     uncompressed, 200 times expansion (per entry over 1 MiB and for the whole archive), a library
+     of at most 512 MiB (150 MiB warns), a file at most 1 MiB (JSON), 4 MiB (the catalog), 64 MiB
+     (GLB), 48 MiB (PNG, JPG) or 1 MiB (text). Refused: any extension but `.json .glb .png .jpg
+     .txt .md` (case ignored, no extension at all), an absolute path or a drive, a backslash, a
+     `..` or `.` or empty segment, a Windows device name or a trailing dot or space, a path over 120
+     characters or nested deeper than 8, two names that differ only by case (and a name that
+     appears twice), a symbolic link (the Unix mode in the high half of the external attribute
+     word, or the DOS reparse bit), a device or other non-file mode, an encrypted entry, a method
+     other than stored or deflate, sizes that disagree, no `library.json` at the top. `__MACOSX`,
+     `.DS_Store`, `Thumbs.db`, `desktop.ini` and a `.git` folder are left out and counted, not
+     refused. A zip of the library's own folder (one top folder holding `library.json`) is
+     unwrapped. A folder import follows the same rules (links, junk, depth, counts).
+  2. `stage` extracts or copies into `<libraries>/.incoming/<random>/` (the registry skips dot
+     folders), re-checking each target stays inside it and that every entry reads back at its
+     declared size; on any problem or Cancel the folder is deleted. It runs on a worker thread
+     (`LibraryImportFlow`) with a `Progress` the sheet polls.
+  3. `examine` reads the staged folder (`LibraryReader`), compiles it in a dry run through the
+     dependencies installed (a `<lib>:<id>` ref resolves against them), and answers the card:
+     identity, counts, size, each dependency's state, every warning, whether the id is reserved
+     (`core`, `legacy`, `draft`, `dev`, or an id the game's own libraries hold: refused with no way
+     to install) and the relation to an installed copy of the same id.
+  4. The install card (`LibraryInstallCard`) shows it and says "This <collection> only contains art
+     and settings, never programs." Install moves the folder to `<libraries>/<id>/`; a same-id
+     library is replaced only on the explicit Replace (the primary reads "Replace v0.3.1" and the
+     text puts both versions side by side), the old folder set aside until the new one is in and
+     put back if the move fails. A cancelled or closed card, and a leftover after a crash
+     (swept when the manager opens), leave the quarantine empty. `official` is never written by
+     an import: it comes from where a library lives.
+  5. Drops: `TitleScreen._on_files_dropped` sends a drop to the flow only when
+     `LibraryImporter.is_candidate` says a file or folder holds a `library.json` (a zip with a
+     `.ttlib` or `.zip` extension, or a folder); everything else still reaches `LibraryImports`,
+     the Blender map check. With the manager open the title ignores drops (a scrim is up) and the
+     manager takes the first dropped path whatever it is, so a wrong file gets the refusal sheet
+     instead of silence.
 
 ## Verification
 
@@ -443,6 +527,45 @@ designer are steps S6 to S9 of the design. `LibraryRegistry.list()`, `set_enable
   channels and two streamer doubles over a message queue, and the failure cases listed in
   NETWORKING.md). Render proof: the question, the progress sheet and the size-cap notice were
   captured from a windowed probe at 1280 by 720 and read (the confirmation dialog's look).
+- Step S6 tests: `test_library_importer.gd` (40 checks, no scene: the happy path of a zip, a zip of
+  the library's folder, a folder and a parent folder, `is_candidate`, progress and cancel; hostile
+  archives written byte by byte by `tests/unit/zip_builder.gd`: zip slip with `..`, absolute and
+  drive paths, backslashes, a bomb by ratio before anything is read, a total over the ratio, too
+  many entries, a total size and a per-file cap, every non-data extension (`.gd .exe .dll .tscn
+  .tres .pck .bat .html .gltf` and none), case of the extension, symbolic-link, reparse and device
+  modes, case twins and a repeated name, Windows device names and trailing dots, an over-long
+  and a too deep path, no `library.json` or two top folders, an encrypted and an unsupported
+  method, disagreeing sizes, a truncated archive cut three ways, junk bytes, an empty file, a
+  wrong extension, a damaged entry that fails the stage and cleans up, junk files left out; then
+  the card: unreadable libraries, reserved ids (`core`, `legacy`, `draft`, `dev`), an id of an
+  official library, a missing, unmet and switched-off dependency, the relation to an installed
+  copy, Replace and its rollback guard, install refusing files outside the quarantine and an
+  unchecked card, `discard` and `sweep_incoming`, the quarantine never served, `remove`,
+  `levels_using`, and a source scan that the importer loads no resource and runs nothing).
+  `test_library_manager.gd` (30 checks, the real flow and its worker thread over generated zips:
+  the list, badges, switches and core locked, the card and its actions per origin, dependencies,
+  a failing library's reasons, switching with persistence and the signal, Remove with its
+  confirmation naming the saved maps and the deletion, a switched-off library coming back on after a
+  removal, Verify ok, Verify naming a changed file, Verify refusing an off library, an import
+  through Install, Cancel leaving nothing, Replace with the installed version in its label, a
+  hostile archive and a reserved id refused on the card, a second import ignored while a card is
+  open, a drop of a zip, of a stray file and of a folder on the manager, the title's tool and drop
+  routing (a library to the flow, a `.glb` and a zip without `library.json` to the map check), the
+  New map dialog's link and its rebuild when a library is switched off and on and keeping its
+  pick, the missing-library dialog's third choice, the one display-word rule over every file that
+  shows it, and both sheets inside a 1280x720 canvas). `test_library_compile.gd` lets the import
+  step touch folders (it never discovers libraries) and still forbids it elsewhere.
+- Render proof (2026-10-24, `jobs/library_manager.json` with `probes/library_manager.gd`, 1600x900
+  and 1280x800, `--full` for the verdict set): core (built in) and a generated user library
+  `alienworld` (the test world's, 0.3.1) in the worktree's own `user://libraries`, imports from
+  `user://_libmgr_inbox` (a zip of a folder, a newer alienworld, a hostile archive). The list, the
+  card of core and of alienworld (description, Holds, Size, Needs met, Link, Folder, its biome as
+  the New map picture), Verify's result, the install card of Beta Marsh (a zip of its folder,
+  author, licence, 3 assets, core ^1.0 met, the promise line), Beta Marsh installed and selected,
+  alienworld switched off ("Off" in the row and the chip), the Replace card (v0.4.0 against
+  0.3.1, "Replace v0.3.1"), the refusal of an archive holding a script and a `../` path (Close
+  alone, nothing extracted), Remove's confirmation, the New map dialog with its footer link, the
+  manager over it and the dialog's field gone after Beta Marsh was switched off. Fits both sizes.
 - Step S4 tests: `test_library_registry.gd` (scan order and sources, official derived from the
   location, the manager's list, the built-in core, prefixed ids, a cross-library ref, retired and
   aliased dependency ids, bindings not taken from a user library, duplicates, folder naming, dot
@@ -582,9 +705,15 @@ pruned and nothing prewarms it on a worker thread (the first ground draw of a ne
 about 0.2 s on the main thread); `ScatterGround.SCORCHED_SURFACES` and
 `PaletteLibrary.WATER_SURFACE_DEFAULTS` still hold their legacy values (their files belong to the
 scatter and validator steps); `contract.json` does not yet publish the surface caps (2048 px, 64
-surfaces) or `LibraryBindings.TABLE`. Left over from S4: (S6) the manager UI itself, an import
-that quarantines a zip or folder under `user://libraries/.incoming/`, "Verify" (hash every GLB of
-every library with `AssetStore.verify`) and the authoring panel's Biomes field, which still
+surfaces) or `LibraryBindings.TABLE`. Left over from S6: the player-facing name is undecided (one
+constant, `LibraryNames`); no "From URL" import and no update link beyond showing a library's
+`url` (design 5.5, later); no signing (design open question 8); Verify checks files, not that
+every catalog node is at the identity transform (design 2.10 layer 3, the GLB is only opened
+when first used); a large import reads on one
+worker thread and the examine step (a compile) runs on the main thread, which is fast for a
+library of hundreds of assets and not measured past that; the manager does not list what a
+failing library's dependents are; the title's Collections tool has no capture in the UI tour yet.
+Left over from S4: the authoring panel's Biomes field, which still
 lists every biome of every library in one grid without headers; (multiplayer, done: see
 "Multiplayer"; left: the manager's "partial: received from host" badge, which reads `partial` and
 `received` from `list()`, and routing Keep through the importer); the built-in
@@ -607,6 +736,20 @@ map the old ids if a kept map must keep its plants); re-run the nine-biome row p
 `jobs/library_s5_surfaces.json` against the shipped folder.
 
 ## History
+
+- 2026-10-24: step S6: the library manager ("Collections"): `LibraryNames` (one display-name
+  constant), `LibraryImporter` (inspect a zip or folder against the caps before extracting,
+  quarantine, worker-thread stage), `LibraryInstall` (examine with a dry-run compile, install,
+  replace, remove, a lazy scan of the maps that use a library), `LibraryVerify`, the manager sheet,
+  its card, the install card and `LibraryImportFlow`; the title's Collections tool and drop
+  routing, the New map dialog's "Manage collections..." footer link and its live rebuild, the
+  missing-library dialog's third choice. Findings: a native Windows file cannot be created under
+  a device name, so that rule is tested on archive entries and not on folders; GUT counts
+  `push_warning` as an unexpected error; `FoliageLibrary.refresh_libraries()` must follow a
+  `PaletteLibrary.clear_cache()` (it does) or a switched-off library's biomes stay in the palette
+  (a test that calls only `LibraryRegistry.apply` has to clear the cache itself); the registry's
+  built-in core counted EVERY palette asset as its own once another library was served (fixed:
+  only ids with no library prefix).
 
 - 2026-10-24: step S5: `core` as the nine-biome library with its 36 surfaces, 9 thumbnails and
   bindings (plantgen `LibrarySurfaces`, the sources repo `core-library`); the registry serves it
