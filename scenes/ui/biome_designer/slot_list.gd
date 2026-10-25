@@ -11,7 +11,7 @@ extends VBoxContainer
 signal rule_selected(key: String)
 signal add_rule_requested(role: String)
 
-const SLOTS_MIN_HEIGHT := 150.0
+const SLOTS_MIN_HEIGHT := 110.0
 const MENU_DUPLICATE := 1
 const MENU_REMOVE := 2
 const MENU_LOCK := 3
@@ -26,15 +26,22 @@ var _menu: PopupMenu
 var _menu_key: String = ""
 var _role_menu: PopupMenu
 var _role_group: String = ""
+var _lock_words: Label
+var _lock_all: Button
+var _unlock_all: Button
 
 
 func _init() -> void:
 	name = "SlotList"
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var head := HBoxContainer.new()
+	head.name = "SlotsHead"
 	var title := Label.new()
 	title.text = "Slots"
 	title.theme_type_variation = &"H3"
-	add_child(title)
+	head.add_child(title)
+	_build_lock_row(head)
+	add_child(head)
 	_scroll = ScrollContainer.new()
 	_scroll.name = "SlotScroll"
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -148,13 +155,53 @@ func _update_chips() -> void:
 				problem = String(item["message"])
 		var season := session.model.season_ids()[session.season_index]
 		var assets := session.model.resolved_assets(key, season).size()
-		chip.show_state(assets, problem, session.model.is_locked(key))
+		var lock := DesignerLocks.state(session.model, key)
+		chip.show_state(assets, problem, session.model.is_locked(key), String(lock["state"]))
 	_mark_selection()
+	_update_lock_row()
 
 
 func _mark_selection() -> void:
 	for key: String in _chips:
 		(_chips[key] as DesignerSlotChip).set_pressed_no_signal(key == session.selected_rule)
+
+
+## The row under the slots: lock every rule's selection or release them all, and how many are
+## locked (with how many of those are stale).
+func _build_lock_row(row: HBoxContainer) -> void:
+	_lock_words = DesignerRows.caption("LockSummary", "")
+	_lock_words.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_lock_words.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_lock_words.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.add_child(_lock_words)
+	_lock_all = DesignerRows.chip(
+		"LockAll",
+		"Lock all",
+		"Freeze which assets every rule's query picks now; Save writes biomes/<id>.lock.json."
+	)
+	_lock_all.pressed.connect(func() -> void: DesignerLocks.set_all(session.model, true))
+	row.add_child(_lock_all)
+	_unlock_all = DesignerRows.chip(
+		"UnlockAll", "Unlock all", "Let every query pick its assets again (Save removes the lock file)."
+	)
+	_unlock_all.pressed.connect(func() -> void: DesignerLocks.set_all(session.model, false))
+	row.add_child(_unlock_all)
+
+
+func _update_lock_row() -> void:
+	var summary := DesignerLocks.summary(session.model)
+	var locked := int(summary["locked"])
+	var words := "%d locked" % locked
+	if int(summary["stale"]) > 0:
+		words += ", %d stale" % int(summary["stale"])
+	_lock_words.text = words
+	_lock_words.tooltip_text = (
+		"%d of %d rules have their selection locked%s." % [
+			locked, int(summary["total"]), ", not saved yet" if DesignerLocks.changed(session.model) else ""
+		]
+	)
+	_lock_all.disabled = locked == int(summary["total"])
+	_unlock_all.disabled = locked == 0
 
 
 func _on_plus(group_id: String, button: Button) -> void:

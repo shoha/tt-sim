@@ -9,6 +9,7 @@
 		"res://tests/unit/test_asset_pack_tab_icons.gd",
 		"res://tests/unit/test_audio_manager.gd",
 		"res://tests/unit/test_avatar_drag_place.gd",
+		"res://tests/unit/test_biome_designer_s9_ui.gd",
 		"res://tests/unit/test_biome_designer_ui.gd",
 		"res://tests/unit/test_library_asset_thumbnails.gd",
 		"res://tests/unit/test_biome_thumbnail.gd",

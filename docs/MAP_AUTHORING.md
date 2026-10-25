@@ -550,11 +550,14 @@ later passes, none blocking the port:
   captured by `firefeat_look_mobile.json` on 2026-10-18. Mac's Mobile renderer shows the fire and
   its glow (x2 intensity) as Forward+ does; card fire-prod-c7 takes the verdict captures.
 
-Biome designer (step S8a, 2026-10-25; `systems/biome_designer.md`): built, the title's "Design a biome",
-the draft model with undo, the proving ground, response curves and queries in the editor, partial regeneration
-(single-rule edit to new plants 70 to 160 ms). Open for the next steps (S8b, S9): the A/B split view, the season
-scrub with per-season overrides, the ground look editor, thumbnails for the asset tiles, the manager's own entry,
-hover highlights and the density, slope and role overlays, "Request asset", the lock file's editing UI.
+Biome designer (steps S8a and S9, 2026-10-25; `systems/biome_designer.md`): built, the title's "Design a
+biome" and the manager's "New biome from this...", the draft model with undo, the proving ground, response
+curves and queries in the editor, partial regeneration (single-rule edit to new plants 70 to 160 ms), per-season
+overrides compiled (`BiomeSeasons`) with the season scrub and menus, the A/B split view (one map, two biomes, a
+draggable divider; reference: the saved version, another season or another biome), the ground look editor with
+an in-place re-bake (a look edit shows in 64 to 120 ms), the lock UI (states, Lock all, Lock again), "Show only
+this rule", the picker's empty state with "Request asset". Open: the density, slope and role overlays, a true
+hover outline, a `wanted.json` round trip with plantgen, the A/B view against the author's own open map.
 
 Path direction (user, 2026-10-13): paths and roads have a direction, but the ground samples
 built surfaces (cobblestone, flagstone, planks, dirt roads) with the same per-cell rotation and

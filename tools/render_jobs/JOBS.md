@@ -1018,6 +1018,16 @@ and which test levels it keeps. How to run one, the flags and the build / look l
 - `designer_flow.json`: the core loop: add a rule from the picker, edit density, a response curve and the slope minimum, remove and undo a rule, Save as a new collection, Leave; reads the edit-to-new-rows latency from the probe `designer.gd` (`edit_timed`).
 - `designer_perf.json`: windowed, vsync off, debounce 0: compile, serve and request times and the edit-to-scatter latency of tree density, ground cover, curve and rule removal, partial against whole-biome regeneration (`whole`). Summarise with the `designer.gd` `report` action.
 
+### Biome designer (S9; probe `probes/designer_s9.gd`)
+
+Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 25 to 50 s, runs windowed at 1600x900 with a 1280x800 capture, and is judged with `--full`.
+
+- `designer_s9_ab.json`: temperate forest against core savanna: A/B off, on (the forest left of the divider, the savanna right: its own ground, look and plants), at 1280x800, the divider a quarter in, off again. `state` logs the painted samples per biome slot, `share` the instances per biome.
+- `designer_s9_seasons.json`: adds autumn and winter to the temperate forest with changes (large trees at 0.4, grass at 0.15, no birches in winter, a different ground surface and zone colours), then scrubs summer, autumn, winter and back; the inspector's Seasons section open on the oak and the grass; winter with every plant hidden (the focus on a rule that is not there) to show the ground alone; stats of each switch.
+- `designer_s9_look.json`: alpine meadow with its plants hidden: the look editor open, a zone colour and the zones' cover edited (the ground changes live), the painted shade raised, the editor at 1280x800, "Applies to: Winter only" editing a season's colours.
+- `designer_s9_misc.json`: Lock all and a stale lock (a changed query: the chip's warning mark, "Lock again"), "Show only this" on the oak, the picker's empty state with its suggestions and Request asset at 1600x900 and 1280x800.
+- `designer_s9_perf.json`: windowed, vsync off, debounce 0: A/B on and off, five divider moves, a look colour, light and zone-shape edit, a season switch with the same ground and with another, a tree edit with three seasons. Numbers in `docs/systems/biome_designer.md` "Verification".
+
 ## Caveats
 
 - **The judgment set assumes palette content.** Its composition strokes use the palette ids

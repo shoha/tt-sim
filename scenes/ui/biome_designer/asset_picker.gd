@@ -13,7 +13,7 @@ signal pin_requested(ref: String)
 signal new_rule_requested(ref: String)
 
 const GRID_COLUMNS := 3
-const TILES_MIN_HEIGHT := 160.0
+const TILES_MIN_HEIGHT := 120.0
 const TAG_CHIPS := 14
 const EMPTY_TEXT := "Nothing matches. Clear a filter or search for something else."
 const MORE_TEXT := "Showing the first %d of %d. Narrow the search to see the rest."
@@ -26,6 +26,7 @@ var _categories: HFlowContainer
 var _tags: HFlowContainer
 var _grid: GridContainer
 var _count: Label
+var _hint: DesignerPickerHint
 var _actions: HBoxContainer
 var _add_button: Button
 var _pin_button: Button
@@ -75,6 +76,9 @@ func _init() -> void:
 	_count.name = "Count"
 	_count.theme_type_variation = &"Caption"
 	add_child(_count)
+	_hint = DesignerPickerHint.new()
+	_hint.relax_requested.connect(_on_relax)
+	add_child(_hint)
 	_actions = HBoxContainer.new()
 	_actions.name = "Actions"
 	add_child(_actions)
@@ -208,7 +212,33 @@ func _refilter() -> void:
 		_count.text = MORE_TEXT % [DesignerCatalog.MAX_TILES, found.size()]
 	else:
 		_count.text = "%d of %d match" % [found.size(), _all.size()]
+	# With nothing to show the hint takes the tiles' place, so the column does not grow.
+	_grid.get_parent().visible = not found.is_empty()
+	if found.is_empty():
+		_hint.show_for(_all, _search.text, _picked_categories, _picked_tags, _role_filter)
+	else:
+		_hint.clear()
 	_rebuilding = false
+
+
+## A suggestion of the empty state was clicked: drop that condition.
+func _on_relax(kind: String, value: String) -> void:
+	match kind:
+		"tag":
+			_picked_tags.erase(value)
+			for child in _tags.get_children():
+				if child is Button and (child as Button).text == value:
+					(child as Button).set_pressed_no_signal(false)
+		"category":
+			_picked_categories.erase(value)
+			var button := _categories.get_node_or_null("Category_" + value) as Button
+			if button != null:
+				button.set_pressed_no_signal(false)
+		"search":
+			_search.text = ""
+		"role":
+			_role_filter = ""
+	_refilter()
 
 
 func _uses_of(record: Dictionary) -> int:

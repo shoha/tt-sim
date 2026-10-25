@@ -466,10 +466,11 @@ func test_the_ground_strip_picks_surfaces_and_edits_accents_and_paths() -> void:
 	assert_eq(DesignerBiomeEdits.ground_value(_model(), "paths"), null)
 
 
-func test_the_look_button_is_a_labelled_stub() -> void:
+func test_the_look_button_is_live_and_the_editor_starts_closed() -> void:
 	var look := _ui.ground.find_child("OpenLook", true, false) as Button
-	assert_true(look.disabled)
-	assert_true("next designer step" in look.tooltip_text)
+	assert_false(look.disabled)
+	assert_false(_ui.look_open())
+	assert_true(_ui.inspector.is_visible_in_tree())
 
 
 # ---- the meter, the dialog, the picker ----
