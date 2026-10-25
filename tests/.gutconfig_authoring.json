@@ -66,6 +66,7 @@
 		"res://tests/unit/test_library_compile.gd",
 		"res://tests/unit/test_library_contracts.gd",
 		"res://tests/unit/test_library_core_surfaces.gd",
+		"res://tests/unit/test_library_asset_thumbnails.gd",
 		"res://tests/unit/test_library_ids.gd",
 		"res://tests/unit/test_library_importer.gd",
 		"res://tests/unit/test_library_query.gd",

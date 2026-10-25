@@ -374,6 +374,15 @@ Facts of the S5 build (still true of the shipped folder):
   `thumbnails/<runtime id>.jpg`, the path the palette already used, through `SurfaceStore`
   (`is_library_thumbnail`). At S10 the shipped JPGs stay the treecube renders (re-rendering them
   from the plantgen look is a later decision).
+- **Asset thumbnails (library update, 2026-10-25).** The shipped core carries one 256 px PNG per
+  catalog asset, `assets/thumbs/<asset id>.png` (268 files, 3.2 MB, Git LFS, constant
+  `importer="keep"` sidecars), named by the catalog entry's `thumb`, with `stats.thumbs`,
+  `stats.thumb_bytes` and every file's sha256 in `stats.file_sha256`. The designer's picker
+  (`DesignerCatalog` hands the tile the absolute file, `DesignerAssetTile` draws it) reads them
+  through `AssetThumbnails.texture(file)`: decoded from the bytes by `SurfaceStore.thumbnail_image`
+  (4 MiB and header-size caps, shrunk to 256 px), trimmed of the render's transparent border,
+  cached with a 512-texture LRU, null on any failure so the tile keeps its category icon.
+  `test_library_asset_thumbnails.gd` pins files, sizes and hashes.
 - **Catalog `roles`.** plantgen's catalog entries carry `roles` (the contract roles of the
   rules that use the asset); `LibraryContracts.CATALOG_ENTRY_KEYS` knows the key, so the nine
   biomes read with no warnings.
