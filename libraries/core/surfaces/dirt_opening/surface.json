@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.4644,
+		0.2918,
+		0.0725
+	],
+	"kind": "dirt",
+	"label": "Dirt opening",
+	"role": "ground",
+	"tile_m": 4
+}

@@ -1,10 +1,17 @@
 class_name PaletteLibrary
 extends RefCounted
 
-## The built-in palette treecube produces for in-game map authoring: biomes, their
-## per-species placement rules, ground surfaces, and the asset GLBs those rules place.
-## The file format is docs/ASSET_PIPELINE.md section 9; read it before changing anything
-## here, since the consumer owns that contract.
+## The palette the game places and paints from: biomes, their per-species placement rules,
+## ground surfaces, and the asset GLBs those rules place. The file format is
+## docs/ASSET_PIPELINE.md section 9; read it before changing anything here, since the consumer
+## owns that contract.
+##
+## Since step S10 (2026-10-25) the palette at DEFAULT_ROOT is not a folder: it is whatever
+## LibraryRegistry serves (the official libraries under res://libraries, led by `core`, the
+## user's, the developer override), compiled and laid into this cache on first use. DEFAULT_ROOT
+## is only the name of that served palette (the cache key and the `root` parameter every caller
+## already passes); a palette.json under any other root is read from disk as before, which is how
+## tests build palettes on the fly.
 ##
 ## Everything read from palette.json is validated as untrusted input even though the
 ## palette ships with the game: the same rules will read authored map documents that
@@ -17,7 +24,8 @@ extends RefCounted
 ## The root is a parameter so tests can point at a palette they build on the fly.
 ## validate_palette() is pure, so the validation rules are testable without files.
 
-const DEFAULT_ROOT := "res://assets/palette"
+## The served palette's name (a virtual root; no folder of this name holds a palette.json).
+const DEFAULT_ROOT := "res://libraries"
 const PALETTE_FILE := "palette.json"
 ## The palette contract's constants live in PaletteFields (the validators' shared base) and are
 ## re-exported here so every caller keeps reading them as PaletteLibrary.<NAME>.
@@ -55,15 +63,60 @@ static var _palettes: Dictionary = {}
 ## "<root>|<asset id>" -> the Mesh loaded from that asset's GLB, or null when the load
 ## failed (cached too, so a broken asset warns once rather than on every map load).
 static var _source_meshes: Dictionary = {}
+## What the registry's roots, override and settings file were when the default palette was last
+## served (LibraryRegistry.config_signature), and the frame it was last compared: a default
+## palette served under another configuration (a test that pointed the roots at a scratch world
+## and put them back) is served again on the next read instead of being believed.
+static var _served_signature: String = ""
+static var _signature_frame: int = -1
 
 
 ## The validated palette under `root`, loading it on first use. The returned Dictionary
 ## is the cached one; callers must not mutate it (the typed getters below hand out
 ## copies).
 static func get_palette(root: String = DEFAULT_ROOT) -> Dictionary:
+	if root == DEFAULT_ROOT and _palettes.has(root):
+		var frame := Engine.get_process_frames()
+		if frame != _signature_frame:
+			_signature_frame = frame
+			if _served_signature != "" and _served_signature != LibraryRegistry.config_signature():
+				_palettes.erase(root)
 	if not _palettes.has(root):
-		_palettes[root] = _load_palette(root)
+		if root == DEFAULT_ROOT:
+			# Cached empty first: the registry reads this root's surfaces and base while it serves.
+			_palettes[root] = PaletteValidator.empty_palette()
+			_serve_default(root)
+		else:
+			_palettes[root] = _load_palette(root)
 	return _palettes[root]
+
+
+## Makes sure the cache holds a palette for `root` WITHOUT serving the libraries, and returns it:
+## LibraryRegistry.apply lays the libraries onto this base (empty for the default root, the
+## palette.json under any other root). Keeps apply() from re-entering itself through get_palette.
+static func base_for_serving(root: String = DEFAULT_ROOT) -> Dictionary:
+	if not _palettes.has(root):
+		_palettes[root] = (
+			PaletteValidator.empty_palette() if root == DEFAULT_ROOT else _load_palette(root)
+		)
+	return _palettes[root]
+
+
+## LibraryRegistry.apply calls it when it serves the default root: remembers the configuration
+## the palette now in the cache was served under.
+static func note_default_served() -> void:
+	_served_signature = LibraryRegistry.config_signature()
+	_signature_frame = Engine.get_process_frames()
+
+
+## Serves the libraries (LibraryRegistry.apply) into the cache of the default root, warning about
+## what could not be served. The one place a read of the served palette triggers a serve.
+static func _serve_default(root: String) -> void:
+	var content := LibraryRegistry.apply(root)  # records the signature through note_default_served
+	if not content["ok"]:
+		push_warning("PaletteLibrary: %s" % content["error"])
+	for line: String in content["errors"]:
+		push_warning("PaletteLibrary: %s" % line)
 
 
 ## Drops every cached palette and source mesh. For tests and a future palette reload;
@@ -74,36 +127,18 @@ static func clear_cache() -> void:
 	_palettes.clear()
 	_source_meshes.clear()
 	AssetStore.clear()
+	# The warm-up's representatives and the layout guard are picked from the default palette.
+	WindFoliage.reset_caches()
 
 
-## Lays a built treecube package (a build_palette.py output folder anywhere on disk) over
-## the palette under `root` for this run, as PaletteOverlay.read describes: the package's
-## biomes (those `only` names, or all) and their assets replace the cached ones, the GLBs
-## whose bytes differ from root's are parsed now and the rest load from root as before.
-## Call it before a map opens; meshes already handed out are unaffected. Returns read()'s
-## report; when it is not ok the caches are left as they were.
-static func overlay_package(
-	package: String, root: String = DEFAULT_ROOT, only: Array = []
-) -> Dictionary:
-	return install_overlay(PaletteOverlay.read(package, get_palette(root), root, only), root)
-
-
-## Caches a PaletteOverlay report (read, or read_palette for LibraryRegistry); not ok: no change.
+## Caches a LibraryLayer.lay report (LibraryRegistry's compiled library laid over the palette);
+## not ok: no change. The meshes of the assets it replaced are dropped from the mesh cache.
 static func install_overlay(report: Dictionary, root: String = DEFAULT_ROOT) -> Dictionary:
 	if not report["ok"]:
 		return report
 	_palettes[root] = report["palette"]
 	for asset_id: String in report["dropped"]:
 		_source_meshes.erase(root + "|" + asset_id)
-	var meshes: Dictionary = report["meshes"]
-	for asset_id: String in meshes:
-		_source_meshes[root + "|" + asset_id] = meshes[asset_id]
-	# After every mesh is cached: the layout guard resolves its representatives, which may be
-	# overlaid assets later in the list (resolving one before it was cached warned and cached
-	# a failed load from the installed root).
-	for asset_id: String in meshes:
-		var category := String(report["palette"]["assets"][asset_id].get("wind_category", ""))
-		WindFoliage.check_layout(root, asset_id, meshes[asset_id], category)
 	return report
 
 

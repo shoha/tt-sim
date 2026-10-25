@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.162,
+		0.3127,
+		0.0435
+	],
+	"kind": "grass",
+	"label": "Grass wetland",
+	"role": "ground",
+	"tile_m": 4
+}

@@ -7,7 +7,7 @@ extends GutTest
 ## MultiMesh transforms read back as identity headless, so rows are checked, not nodes.
 
 const BIOME := "temperate_forest_summer_s1"
-const GRASS := BIOME + "/Grass_Clump_summer_17"
+const GRASS := BIOME + "/Grass_Grass_v0_temperate_forest"
 
 var _map: Node3D = null
 var _history: AuthoringHistory = null

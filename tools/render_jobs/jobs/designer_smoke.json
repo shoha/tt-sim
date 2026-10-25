@@ -4,7 +4,6 @@
  "steps": [
   {"op": "wait", "s": 1.0},
   {"op": "wait_title"},
-  {"op": "library_dev", "path": "D:/dev/plantgen/out/lib_core"},
   {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "open", "library": "core", "biome": "temperate_forest"},
   {"op": "wait_ready", "settle": 3.0},
   {"op": "no_autosave"},
@@ -68,6 +67,6 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "report"},
   {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "save_check"},
   {"op": "title"}, {"op": "wait", "s": 1.0},
-  {"op": "index", "title": "biome designer smoke", "intro": "Core's temperate forest opened in the biome designer on the proving ground (core served from plantgen's out/lib_core as the developer override). a to c: the whole screen at 1600x900 and 1280x800. d to f: a slope band curve on the three canopy rules, before, after and undone; the scatter regenerates only the species the edit can change."}
+  {"op": "index", "title": "biome designer smoke", "intro": "Core's temperate forest opened in the biome designer on the proving ground (core is the shipped library). a to c: the whole screen at 1600x900 and 1280x800. d to f: a slope band curve on the three canopy rules, before, after and undone; the scatter regenerates only the species the edit can change."}
  ]
 }

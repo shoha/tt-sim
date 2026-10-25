@@ -111,14 +111,34 @@ func test_export_json_round_trips_every_table() -> void:
 	assert_eq(LibraryContracts.export_json(), text, "deterministic")
 
 
-func test_export_json_publishes_the_legacy_habit_lists_once() -> void:
+func test_export_json_publishes_no_legacy_habit_lists() -> void:
 	var data: Dictionary = JSON.parse_string(LibraryContracts.export_json())
-	var legacy: Dictionary = data["legacy_habit"]
-	assert_eq(legacy["emergent_keys"], Array(LegacyHabit.EMERGENT_KEYS))
-	assert_eq(legacy["bank_keys"], Array(LegacyHabit.BANK_KEYS))
-	assert_eq(legacy["charred_keys"], Array(LegacyHabit.CHARRED_KEYS))
-	assert_eq(legacy["arid_kinds"], Array(LegacyHabit.ARID_KINDS))
-	assert_eq(ScatterGround.EMERGENT_KEYS, LegacyHabit.EMERGENT_KEYS, "one list, two names")
-	assert_eq(ScatterGround.BANK_KEYS, LegacyHabit.BANK_KEYS)
-	assert_eq(ScatterGround.CHARRED_KEYS, LegacyHabit.CHARRED_KEYS)
-	assert_eq(ScatterGround.ARID_KINDS, LegacyHabit.ARID_KINDS)
+	assert_false(data.has("legacy_habit"), "the key lists went with treecube (step S10)")
+
+
+func test_export_json_publishes_the_bindings_table() -> void:
+	var data: Dictionary = JSON.parse_string(LibraryContracts.export_json())
+	var bindings: Dictionary = data["bindings"]
+	assert_eq(bindings.keys().size(), LibraryBindings.TABLE.size())
+	for key: String in LibraryBindings.TABLE:
+		var want: Dictionary = LibraryBindings.TABLE[key]
+		assert_eq(bindings[key]["default"], want["default"], key)
+		assert_eq(bindings[key]["kind"], want["kind"], key)
+	assert_eq(bindings["fire.ash_surface"]["kind"], "surface")
+	assert_eq(bindings["default_biome"]["kind"], "biome_id")
+
+
+func test_export_json_publishes_the_surface_caps() -> void:
+	var data: Dictionary = JSON.parse_string(LibraryContracts.export_json())
+	var caps: Dictionary = data["surface_caps"]
+	assert_eq(int(caps["min_size"]), SurfaceBake.MIN_SIZE)
+	assert_eq(int(caps["max_size"]), SurfaceBake.MAX_SIZE)
+	assert_eq(int(caps["expected_size"]), SurfaceBake.EXPECTED_SIZE)
+	assert_eq(int(caps["max_surfaces"]), SurfaceBake.MAX_SURFACES)
+	assert_eq(int(caps["max_info_bytes"]), SurfaceBake.MAX_INFO_BYTES)
+	assert_eq(int(caps["max_text"]), SurfaceBake.MAX_TEXT)
+	assert_eq(float(caps["min_tile_m"]), SurfaceBake.MIN_TILE_M)
+	assert_eq(float(caps["max_tile_m"]), SurfaceBake.MAX_TILE_M)
+	assert_eq(caps["kinds"], Array(SurfaceBake.KINDS))
+	assert_eq(caps["roles"], Array(SurfaceBake.ROLES))
+	assert_eq(caps["info_keys"], Array(SurfaceBake.INFO_KEYS))

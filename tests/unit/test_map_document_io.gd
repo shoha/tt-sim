@@ -295,11 +295,17 @@ func _manifest_of(doc: MapDocument) -> Dictionary:
 func test_a_core_only_map_stays_format_2_and_names_core() -> void:
 	assert_eq(MapDocument.FORMAT, 2)
 	assert_eq(MapDocument.FORMAT_LIBRARIES, 3)
+	# The game serves the shipped core (res://libraries/core), whose version a map records.
+	PaletteLibrary.clear_cache()
+	LibraryRegistry.clear()
+	FoliageLibrary.apply()
 	var manifest := _manifest_of(Fixtures.full_doc())
 	assert_eq(int(manifest["format"]), 2, "an older build still opens a core-only map")
 	assert_eq(manifest["libraries"].size(), 1)
 	assert_eq(manifest["libraries"][0]["id"], "core")
-	assert_eq(manifest["libraries"][0]["version"], LibraryRegistry.BUILTIN_VERSION)
+	assert_eq(manifest["libraries"][0]["version"], LibraryRegistry.record_of("core")["version"])
+	assert_ne(manifest["libraries"][0]["version"], "")
+	assert_ne(manifest["libraries"][0]["hash"], "")
 
 
 func test_a_map_with_nothing_in_it_names_no_library() -> void:
@@ -316,7 +322,7 @@ func test_a_map_using_another_library_is_written_as_format_3() -> void:
 	doc.libraries = [{"id": "alienworld", "version": "0.3.1", "hash": "ab12cd34"}]
 	var manifest := _manifest_of(doc)
 	assert_eq(int(manifest["format"]), 3, "an older build refuses it instead of dropping plants")
-	var ids := manifest["libraries"].map(func(item: Dictionary) -> String: return item["id"])
+	var ids: Array = manifest["libraries"].map(func(item: Dictionary) -> String: return item["id"])
 	assert_eq(ids, ["alienworld", "core"], "sorted, every library the map uses")
 	assert_eq(manifest["libraries"][0]["version"], "0.3.1", "what the file claimed is kept")
 
@@ -324,6 +330,7 @@ func test_a_map_using_another_library_is_written_as_format_3() -> void:
 func test_the_libraries_record_round_trips_and_a_format_3_document_reads() -> void:
 	var doc := Fixtures.full_doc()
 	doc.biome_ids = PackedStringArray(["alienworld__crystal_basin_summer_s1"])
+	doc.biome_slots.fill(1)  # one biome now: every painted slot names it
 	doc.libraries = [{"id": "alienworld", "version": "0.3.1", "hash": "ab12cd34"}]
 	var path := DIR.path_join("libraries.ttmap")
 	assert_eq(MapDocumentIO.write(doc, path), OK)

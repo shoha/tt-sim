@@ -29,7 +29,8 @@ extends RefCounted
 ## and tall cover thin to short cover, flowers thin, cacti keep out of it altogether, and
 ## short grass, ground cover and rocks stay.
 ## Which species are edge species is the rule's `habit` (habit_of(); plan_role() puts it in the
-## plan's ground_role as bits); a rule without one takes the LEGACY key lists (LegacyHabit).
+## plan's ground_role as bits); a rule without one has no habit (neutral: not an edge species, not
+## arid, not charred). Every shipped rule carries one, set by its library through its role.
 ##
 ## Crossings (phase 4b): nothing grows under a bridge deck or its stones, nor on the bank
 ## landings past its anchors (CrossingGeometry.clearance, rocks included), so no plant stands
@@ -127,13 +128,10 @@ const PAVED_CLEAR_FULL := 0.4
 const ROLE_BITS := 7
 const EDGE_BANK := 8
 const EDGE_EMERGENT := 16
-## LEGACY: species keys of the water's edge, for a rule whose palette entry carries no `habit`
-## (treecube's palette, plantgen's package). The lists live in LegacyHabit; a content-library
-## rule says it itself (habit.water "emergent" or "bank"), and habit_of() reads that first.
-const EMERGENT_KEYS := LegacyHabit.EMERGENT_KEYS
-const BANK_KEYS := LegacyHabit.BANK_KEYS
-## Nothing roots in the water: plants clear over this ramp of the bed weight (WaterDressing R,
-## about 1 cm under the waterline to 5 cm deep); emergent species over this depth instead.
+## Which species are edge species is the rule's `habit` (habit.water "emergent" or "bank",
+## habit_of()). Nothing roots in the water: plants clear over this ramp of the bed weight
+## (WaterDressing R, about 1 cm under the waterline to 5 cm deep); emergent species over this
+## depth instead.
 const WET_CLEAR_START := 0.15
 const WET_CLEAR_FULL := 0.5
 const EMERGENT_DEPTH_START_M := 0.2
@@ -158,30 +156,28 @@ const FLOWER_KIND := "flower"
 const FLOWER_BIT := 32
 ## Dry-country species (cacti) keep out of the whole bank band: a saguaro at the waterline
 ## reads wrong. Kinds, their role bit, and the shore weight over which they clear.
-## ARID_KINDS is the LEGACY kind check (habit.water "arid" says it for a library rule).
-const ARID_KINDS := LegacyHabit.ARID_KINDS
+## habit.water "arid" says it for a rule.
 const ARID_BIT := 64
 ## Fire (2026-10-11, user: fire burns away the small plants under it). Painted ash (the
 ## surfaces named here) clears ground cover, tall cover and shrubs through the paved response,
 ## as built paint does, but never rocks or trees: trees under a fire become the burnt forest's
 ## snags instead (FireEditor), and a rock stays. The burnt forest's own charred species live on
-## ash and carry CHARRED_BIT (habit.charred, or the LEGACY CHARRED_KEYS list), so the ash
-## leaves them.
+## ash and carry CHARRED_BIT (habit.charred), so the ash leaves them.
 const SCORCHED_SURFACES := ["ash"]
-const CHARRED_KEYS := LegacyHabit.CHARRED_KEYS
+## The habit of a rule that names none (habit_of()).
+const NO_HABIT := {"water": "", "charred": false}
 const CHARRED_BIT := 128
 const ARID_SHORE_START := 0.05
 const ARID_SHORE_FULL := 0.35
 
 
 ## The habit of a species rule, {water: "" | "bank" | "emergent" | "arid", charred: bool}: the
-## rule's own `habit` when the palette carries one (a content-library rule, through its role),
-## else the LEGACY key and kind lists (LegacyHabit.for_key) for treecube and package palettes.
+## rule's own `habit` (a content-library rule gets it from its role), else NO habit (neutral).
 static func habit_of(rule: Dictionary) -> Dictionary:
 	var habit: Variant = rule.get("habit")
 	if habit is Dictionary:
 		return habit
-	return LegacyHabit.for_key(String(rule.get("key", "")), String(rule.get("kind", "")))
+	return NO_HABIT
 
 
 ## The role a ScatterPlan entry carries (ground_role): role_of() plus the water bits

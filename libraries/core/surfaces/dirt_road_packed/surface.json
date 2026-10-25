@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.4042,
+		0.2352,
+		0.0574
+	],
+	"kind": "dirt_road",
+	"label": "Dirt track",
+	"role": "built",
+	"tile_m": 4
+}

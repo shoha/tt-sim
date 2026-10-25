@@ -34,8 +34,8 @@ Documents here:
 - [landforms.md](landforms.md): the starting landforms a new map opens with (Valley, Hilltop,
   Terraces, Lakeshore, Gorge): the seeded frame, the shared steps, each recipe, the stage and
   the open path.
-- [palette.md](palette.md): the built-in palette (`PaletteLibrary`): validation, read access,
-  `resolve()`, the import sidecars.
+- [palette.md](palette.md): the palette the libraries serve (`PaletteLibrary`): validation, read access,
+  `resolve()`, serving and adapting maps.
 - [library.md](library.md): the content library (a data-only folder of GLBs, catalog and biome
   definitions compiled into the palette form): ids, reader, compiler, registry, the developer
   path, the parity proof against a plantgen package.

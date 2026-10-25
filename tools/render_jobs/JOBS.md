@@ -8,19 +8,14 @@ and which test levels it keeps. How to run one, the flags and the build / look l
 
 ## Jobs
 
-- `jobs/plantgen_ab.json`: treecube against plantgen foliage on one map (about 30 s, keeps no
-  level): a new 200 ft alpine map (seed 1234) with the installed palette at home and at size 14,
-  then the `foliage_library` op serves `D:/dev/plantgen/out/ttsim_package_plantgen_all` and
-  reopens the map in memory (scatter regenerated from the same biome painting) for the same two
-  cameras, then back to treecube for a home view that equals the first. Fades off, wind frozen,
-  5 captures, 10 PNGs. Edit the `package` path to compare another build.
-- `jobs/library_s1_savanna.json`: the content library against the plantgen package it was built
-  from (about 30 s, keeps no level): a new 200 ft savanna map (seed 1234) with plantgen's
-  `lib_slice_pkg` laid over the installed palette (home, size 14), then the same map with
-  `D:/dev/plantgen/out/lib_slice` compiled over the treecube palette by `LibraryRegistry`
-  (`library_dev` op), same cameras, then the override cleared (the treecube baseline). Package
-  and library captures are pixel-identical (2026-10-24). 3 view pairs plus the baseline, 10
-  PNGs. `docs/systems/library.md`.
+- `jobs/core_nine_biomes.json` (about 90 s, keeps no level): all nine biomes of the shipped core
+  library (`res://libraries/core`), each a new 150 ft terraces map (seed 1234, never saved): a home
+  view and a size 14 view, fades off, wind frozen (18 captures). The evidence of step S10 (treecube
+  removed); run it on any change to the library, a surface or the ground look. `docs/systems/library.md`.
+- `jobs/library_s5_surfaces.json` (about 60 s, keeps no level): the savanna, temperate forest and
+  rocky badlands on the terraces landform under the shipped core: home, size 14, and both with the
+  plants hidden (ground, cliff, accents and paths only). Until step S10 it compared the installed
+  palette's editor-imported surfaces with the library route; it records the one route now.
 - `jobs/library_s3_parity.json`: the surface resolver's A/B (about 30 s, keeps no level): savanna
   and rocky badlands, 150 ft terraces landform, seed 1234, fades off, wind frozen, a home view
   and a size-14 view each (4 captures, 8 PNGs). Run it with `--full --out render_jobs/<name>` on
@@ -57,10 +52,6 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   `cleanup` removes what `world` wrote and switches every id back on (the disabled list lives in
   the worktree's `settings.cfg`; delete that file before a run if a failed run left one). The
   log appends: delete `log.txt` between runs. `docs/systems/library.md`, `docs/UI_SYSTEMS.md`.
-- `jobs/plantgen_play.json`: the same switch in play (about 30 s): builds the alpine map, saves
-  it as `_reopen_plantgen`, plays it with treecube and again after switching to plantgen (Root
-  reloads the table; the load regenerates the rows), then removes the level
-  (`render_state.gd cleanup`, which takes every `_reopen_` folder).
 - `jobs/authoring_judgment_set.json`: the authoring judgment set: two captures per palette
   biome plus three, each as a window and a raw PNG (21 captures, 42 PNGs, with the 9-biome
   palette installed in October 2026). Every palette biome as a new 200 ft map (seed 1234) at home
@@ -1029,7 +1020,7 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   `mobile_maps`, `p4b_cue` and `pol_trees` still play `user://levels/river` or
   `user://levels/deciduous_clusters` and need them to exist; their `play` and `dress` steps
   only read them.
-- `jobs/token_ghost.json` (about 80 s, keeps no level): the token ghost on the plantgen package at
+- `jobs/token_ghost.json` (about 80 s, keeps no level): the token ghost on the shipped core library at
   taiga and temperate forest, home zoom (8 avatar tokens, the first selected) and zoom 5 (three
   tokens), in three modes: `none` (ghost and occlusion fade off: the problem), `ghost_only`
   (the ghost alone: the stress case, where the ghost does all the work) and `shipped` (ghost plus

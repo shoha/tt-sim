@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.4701,
+		0.2875,
+		0.1449
+	],
+	"kind": "flagstone",
+	"label": "Flagstone sandstone",
+	"role": "built",
+	"tile_m": 3
+}

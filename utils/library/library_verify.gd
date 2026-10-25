@@ -9,19 +9,17 @@ extends RefCounted
 ## catalog's byte count and sha256 (also for an official library, which load skips) and passes
 ## GlbGuard (container, no external uri, embedded textures within the caps). A library that is
 ## not served (turned off, or failing) has nothing registered, so it cannot be checked until it
-## is on; the built-in core ships inside the game and has no files to check.
+## is on. Core is checked like any other library (its GLBs are files of the pack).
 
 const NOT_SERVED := "not_served"
-const BUILTIN := "builtin"
 const READY := "ready"
 
 
-## {state (READY, NOT_SERVED or BUILTIN), assets: Array[String]} for library `library_id`.
+## {state (READY or NOT_SERVED), assets: Array[String]} for library `library_id`.
 static func plan(library_id: String, root: String = PaletteLibrary.DEFAULT_ROOT) -> Dictionary:
 	var info := LibraryRegistry.info(library_id, root)
 	if info.is_empty() or not bool(info.get("served", false)):
-		var builtin := String(info.get("source", "")) == "builtin"
-		return {"state": BUILTIN if builtin else NOT_SERVED, "assets": [] as Array[String]}
+		return {"state": NOT_SERVED, "assets": [] as Array[String]}
 	var assets := AssetStore.assets_of(library_id, root)
 	return {"state": READY, "assets": assets}
 

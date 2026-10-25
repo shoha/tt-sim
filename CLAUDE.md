@@ -143,14 +143,14 @@ before the user reopens the editor. See AGENTS.md's "Running tests from the CLI"
 ## Testing Notes
 
 - GUT v9.5.0 vendored at `addons/gut/`
-- `test_library_row_parity.gd` always runs its miniature (a core-shaped library against its
-  package, renamed ids); its two real tests show as pending unless `PLANTGEN_LIB_CORE` and
-  `PLANTGEN_LIB_CORE_PKG` name plantgen's `out/lib_core` and `out/lib_core_pkg` (all nine biomes)
-  or `PLANTGEN_LIB_SLICE` and `PLANTGEN_LIB_SLICE_PKG` name `out/lib_slice` and
-  `out/lib_slice_pkg` (savanna). `test_library_core_surfaces.gd` is pending unless
-  `PLANTGEN_LIB_CORE` is set (the 36 surfaces, thumbnails and bindings against the installed
-  palette). Commands in `docs/systems/library.md`. The content library is a developer path:
-  nothing in the gate needs those folders.
+- The shipped core library (`libraries/core`, plantgen's output, Git LFS) is the served palette in
+  every test that reads the default palette root (`PaletteLibrary.DEFAULT_ROOT`, a virtual root
+  served on first read). `test_library_row_parity.gd` runs its miniature and compares the shipped
+  core with `tests/fixtures/library_core_golden.json`, the frozen package route (Windows only);
+  nothing in the gate needs a plantgen folder. A test that serves its own library through
+  `LibraryRegistry.apply(<scratch root>)` points `LibraryRegistry.official_root` at a scratch folder
+  (else the real core is served beside it), restores it in `after_all`, and uses a scratch base
+  root. Commands in `docs/systems/library.md`.
 - Every GUT run prints "SCRIPT ERROR: Trying to assign value of type 'Nil' to a variable of type
   'bool'" at `addons/gut/gut_loader.gd:35`: GUT reads the project setting
   `debug/gdscript/warnings/exclude_addons`, which Godot 4.7 no longer registers (and drops from

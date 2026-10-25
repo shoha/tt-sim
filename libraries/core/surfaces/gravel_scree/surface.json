@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.4888,
+		0.431,
+		0.3285
+	],
+	"kind": "gravel",
+	"label": "Gravel scree",
+	"role": "ground",
+	"tile_m": 3
+}
