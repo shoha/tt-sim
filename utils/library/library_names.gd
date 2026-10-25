@@ -30,6 +30,13 @@ static func counted(count: int) -> String:
 	return "%d %s" % [count, lower(count)]
 
 
+## "1 asset", "3 assets": `count` and the noun, pluralised by adding an s unless `many` is given.
+## The one helper for every counted noun in a dialog (a "(1 assets)" slip is a test failure).
+static func count_of(count: int, noun: String, many: String = "") -> String:
+	var word := noun if count == 1 else (many if many != "" else noun + "s")
+	return "%d %s" % [count, word]
+
+
 ## "a collection" (or "an ..." when the word starts with a vowel), for sentences; `capital` for
 ## the start of one ("A collection").
 static func article(capital: bool = false) -> String:
@@ -50,3 +57,13 @@ static func manager_caption() -> String:
 		"Add plants, rocks and ground that start new places. %s hold art and settings, never programs."
 		% title(2)
 	)
+
+
+## The consent question's title: "The host uses collections you do not have".
+static func host_uses_title() -> String:
+	return "The host uses %s you do not have" % lower(2)
+
+
+## "Receiving collections from the host: 2 KB of 4 KB (39%)" starts with this.
+static func receiving_from_host() -> String:
+	return "Receiving %s from the host" % lower(2)

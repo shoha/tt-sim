@@ -21,6 +21,8 @@ signal new_biome_requested(library_id: String)
 const BADGE_YOURS := "Yours"
 const BADGE_BUILTIN := "Built in"
 const BADGE_RECEIVED := "From host"
+const BADGE_PARTIAL := "Partial copy"
+const PARTIAL_LINE := "Holds only what the host's maps used."
 const STATE_ON := "On"
 const STATE_OFF := "Off"
 const STATE_PROBLEM := "Needs attention"
@@ -72,10 +74,13 @@ func show_library(info: Dictionary) -> void:
 		words.name = "Description"
 		words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	if bool(info.get("received", false)):
-		var sent := "The host sent this %s for this session. It holds only what the map uses."
-		var note := _add_label(sent % LibraryNames.lower(), &"Body")
+		var note := _add_label(from_host_line(info), &"Body")
 		note.name = "ReceivedNote"
 		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		if is_partial(info):
+			var part := _add_label(PARTIAL_LINE, &"Caption")
+			part.name = "PartialNote"
+			part.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_add_facts(info)
 	_add_biomes(info)
 	_add_notes(info)
@@ -113,12 +118,23 @@ static func contents_text(info: Dictionary) -> String:
 
 ## The badge for where a library came from. Pure.
 static func origin_badge(info: Dictionary) -> String:
-	match String(info.get("source", "")):
-		"official":
-			return BADGE_BUILTIN
-		"received":
-			return BADGE_RECEIVED
+	if String(info.get("source", "")) == "official":
+		return BADGE_BUILTIN
+	if bool(info.get("received", false)):
+		return BADGE_RECEIVED
 	return BADGE_YOURS
+
+
+## "From host: Alice": which host sent it (its label), or just the badge when it is not known.
+## Pure.
+static func from_host_line(info: Dictionary) -> String:
+	var label := String((info.get("from_host", {}) as Dictionary).get("host", ""))
+	return "%s: %s" % [BADGE_RECEIVED, label] if label != "" else BADGE_RECEIVED
+
+
+## True for a copy that holds only part of the original (what a host's maps used). Pure.
+static func is_partial(info: Dictionary) -> bool:
+	return not (info.get("partial", {}) as Dictionary).is_empty()
 
 
 ## Whether the biome designer can start from a biome of this library: it is served from a folder
@@ -205,6 +221,8 @@ func _add_chips(info: Dictionary) -> void:
 	add_child(row)
 	row.add_child(chip(origin_badge(info), "Origin"))
 	row.add_child(chip(state_badge(info), "State"))
+	if is_partial(info):
+		row.add_child(chip(BADGE_PARTIAL, "Partial"))
 
 
 ## A small raised label ("Official", "On") in the Chip panel.

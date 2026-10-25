@@ -2,8 +2,8 @@ class_name LibraryTransferUi
 extends RefCounted
 
 ## The dialogs of a library transfer, driven by LibraryTransferConsent (which holds every rule and
-## every word): the question ("Host uses collection X ... Download?" with Download and Skip), a
-## progress sheet with a bar and Cancel, a plain notice, and the toast that offers Keep. Both
+## every word): the question ("The host uses collection X ... Download?" with Download and
+## Skip), a progress sheet with a bar and Cancel, and a plain notice (a toast). Both
 ## sheets are the confirmation dialog (ConfirmationDialogUI) the rest of the game uses, so they
 ## look and behave like it. LibraryTransferChannel calls these through duck typing, so a test or
 ## a tool can pass its own object with the same methods.
@@ -30,7 +30,7 @@ var _label: Label = null
 func ask(model: LibraryTransferConsent) -> bool:
 	var answer := Answer.new()
 	UIManager.show_confirmation(
-		LibraryTransferConsent.TITLE,
+		LibraryTransferConsent.title(),
 		model.message,
 		LibraryTransferConsent.DOWNLOAD,
 		LibraryTransferConsent.SKIP,
@@ -45,7 +45,7 @@ func ask(model: LibraryTransferConsent) -> bool:
 func begin_progress(model: LibraryTransferConsent, on_cancel: Callable) -> void:
 	end_progress()
 	_progress_dialog = UIManager.show_confirmation(
-		LibraryTransferConsent.TITLE,
+		LibraryTransferConsent.title(),
 		model.message,
 		"",
 		LibraryTransferConsent.CANCEL_DOWNLOAD,
@@ -86,8 +86,3 @@ func end_progress() -> void:
 ## A line for the player, as a toast.
 func notify(text: String) -> void:
 	UIManager.show_toast(text, UIManager.TOAST_INFO, 8.0)
-
-
-## The toast after an install: what arrived, and a Keep button that runs `keep`.
-func offer_keep(text: String, keep: Callable) -> void:
-	UIManager.show_action_toast(text, "Keep", keep)

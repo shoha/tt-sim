@@ -14,12 +14,17 @@ extends Node
 ##      versions, authors, asset counts, bytes) or why not. The host only answers for ids that a
 ##      map it serves uses (the table's live document and the shelf maps), never an arbitrary
 ##      library file.
-##   3. the client asks the player (LibraryTransferConsent / LibraryTransferUi); on Download it
-##      requests the pack `_library_parts`, asset id = the request number, from AssetStreamer: the
-##      same chunked, windowed, resumable, cancellable stream as a map file. The host builds the
-##      bundle at that moment (host_bundle) from the request it quoted.
+##   3. the client asks the player (LibraryTransferConsent / LibraryTransferUi), once per
+##      collection and source hash (a collection kept from this host extends without a question
+##      while the delta is small; a Skip lasts the session); on Download it requests the pack
+##      `_library_parts`, asset id = the request number, from AssetStreamer: the same chunked,
+##      windowed, resumable, cancellable stream as a map file. The host builds the bundle at that
+##      moment (host_bundle) from the request it quoted. A copy kept from this host is asked for
+##      what it lacks only (a delta); when the quote shows the host's copy changed, the whole
+##      request is sent again.
 ##   4. the bytes come back as AssetStreamer.library_bundle_received and go through
-##      LibraryTransfer.verify_and_install into the transient cache; then the libraries are served.
+##      LibraryTransfer.verify_and_install into the user's libraries (marked from host, merged
+##      into a kept copy); then the libraries are served.
 ## A host that puts a new library into the table's map mid-session announces it
 ## (announce_document -> `_rpc_library_hint`), and a client runs the same request path for it.
 ## fetch_for_document() is what a map load calls (MapLibraryGate.run's `fetch`).
@@ -56,8 +61,8 @@ var _bundles: Dictionary = {}
 var _failures: Dictionary = {}
 var _progress: Dictionary = {}
 var _cancelled: Dictionary = {}
-## Client: library id -> asset ids asked for so far this session (a later request repeats them).
-var _asked_assets: Dictionary = {}
+## Client: "<library id>|<source hash>" -> true for what the player skipped this session.
+var _skipped: Dictionary = {}
 var _next_id: int = 1
 var _busy: int = 0
 var _connected: bool = false
@@ -76,8 +81,8 @@ func _connect_session() -> void:
 		NetworkManager.connection_state_changed.connect(_on_connection_state_changed)
 
 
-## The session ended or a new one begins: libraries received from the last host go, as does what
-## the channel remembered of it. The served libraries are applied again when any went.
+## The session ended: the channel forgets its requests and the Skips (what was downloaded stays
+## on this computer, a collection like any other, until the player removes it).
 func _on_connection_state_changed(
 	_old_state: NetworkManager.ConnectionState, new_state: NetworkManager.ConnectionState
 ) -> void:
@@ -86,18 +91,16 @@ func _on_connection_state_changed(
 	end_session()
 
 
-## Removes the session's received libraries and forgets its requests.
+## Forgets the session's requests and Skips.
 func end_session() -> void:
 	_host_requests.clear()
 	_announced.clear()
-	_asked_assets.clear()
+	_skipped.clear()
 	_quotes.clear()
 	_bundles.clear()
 	_failures.clear()
 	_progress.clear()
 	_cancelled.clear()
-	if not LibraryReceivedStore.sweep_session().is_empty():
-		_reapply()
 
 
 func is_busy() -> bool:
@@ -269,14 +272,14 @@ func handle_hint(hint: Dictionary) -> Dictionary:
 ## the player said no to or that failed], results: [per request {library, phase, message}],
 ## plan}. Nothing is asked of a host or of the player when the plan has no request. A map load
 ## calls this before it checks its libraries (MapLibraryGate.run); the player's Skip and Cancel
-## leave the existing "Open without those plants" choice.
+## leave the existing "Open without those ..." choice.
 func fetch_for_document(doc: MapDocument) -> Dictionary:
 	var out := {
 		"installed": [] as Array[String], "skipped": [] as Array[String], "results": [], "plan": {}
 	}
 	if doc == null or not _is_client():
 		return out
-	var plan := LibraryTransfer.plan(doc, null, null, _asked_assets)
+	var plan := LibraryTransfer.plan(doc)
 	out["plan"] = plan
 	for request: Dictionary in plan["requests"]:
 		_busy += 1
@@ -305,26 +308,61 @@ func _transfer(request: Dictionary) -> Dictionary:
 		"libraries": [],
 	}
 	var screen := _ui()
-	var id := _next_id
-	_next_id += 1
-	var wire := request.duplicate(true)
-	wire.erase("reason")
-	_send_quote(id, wire)
-	var reply := await _await_quote(id)
+	var kept := LibraryFromHost.record_of(String(request["library"]))
+	var asked := await _ask_host(request)
+	var reply: Dictionary = asked["reply"]
+	if request.get("reason") == "more" and _host_copy_changed(reply, kept):
+		# The host's copy is not the one the kept delta base came from: ask for the whole
+		# request again; the answer replaces the kept copy.
+		request = (request["full"] as Dictionary).duplicate(true)
+		request["reason"] = "newer"
+		asked = await _ask_host(request)
+		reply = asked["reply"]
+	var id := int(asked["id"])
+	var main := LibraryTransferConsent.main_library(reply)
+	var key := "%s|%s" % [request["library"], main.get("hash", "")]
 	if reply.is_empty():
 		model.fail("The host did not answer. Is it running the same version of the game?")
 	elif int(reply.get("protocol", -1)) != LibraryPartial.PROTOCOL:
 		model.fail(
 			"The host speaks another library transfer version (%s)." % str(reply.get("protocol"))
 		)
+	elif _skipped.has(key):
+		model.quote = reply
+		model.skip_remembered()
 	else:
-		model.offer(reply)
+		model.offer(reply, kept if not _host_copy_changed(reply, kept) else {})
 	if model.phase == LibraryTransferConsent.Phase.ASKING:
-		model.answer(await screen.ask(model))
+		var download: bool = await screen.ask(model)
+		model.answer(download)
+		if not download:
+			_skipped[key] = true
 	var installed: Array = []
 	if model.phase == LibraryTransferConsent.Phase.RECEIVING:
 		installed = await _receive(id, request, model, screen)
 	return _finish(model, result, screen, installed)
+
+
+## Sends the quote request for `request` and waits for the answer: {id, reply} ({} on a timeout).
+func _ask_host(request: Dictionary) -> Dictionary:
+	var id := _next_id
+	_next_id += 1
+	var wire := request.duplicate(true)
+	wire.erase("reason")
+	wire.erase("full")
+	_send_quote(id, wire)
+	return {"id": id, "reply": await _await_quote(id)}
+
+
+## True when the host's quote shows another version or source hash than the kept copy's.
+func _host_copy_changed(reply: Dictionary, kept: Dictionary) -> bool:
+	var main := LibraryTransferConsent.main_library(reply)
+	if main.is_empty() or kept.is_empty():
+		return false
+	return (
+		String(main.get("version", "")) != String(kept.get("version", ""))
+		or String(main.get("hash", "")) != String(kept.get("source_hash", ""))
+	)
 
 
 ## Downloads and installs the bundle of quote `id`; returns the library ids installed ([] on any
@@ -347,13 +385,21 @@ func _receive(id: int, request: Dictionary, model: LibraryTransferConsent, scree
 	else:
 		model.installing()
 		screen.set_progress(model, 1.0)
-		var made := LibraryTransfer.verify_and_install(
-			_bundles[id], {"library": request["library"], "wanted_version": request["version"]}
+		var made := (
+			LibraryTransfer
+			. verify_and_install(
+				_bundles[id],
+				{
+					"library": request["library"],
+					"wanted_version": request["version"],
+					"host": _host_label(),
+				}
+			)
 		)
 		if made["ok"]:
 			model.done()
 			installed = made["libraries"]
-			_installed(request, made, screen)
+			_installed(made)
 		else:
 			model.fail(LibraryTransferConsent.error_text(made["errors"]))
 	_bundles.erase(id)
@@ -364,20 +410,17 @@ func _receive(id: int, request: Dictionary, model: LibraryTransferConsent, scree
 	return installed
 
 
-func _installed(request: Dictionary, made: Dictionary, screen: Object) -> void:
-	_asked_assets[request["library"]] = (request["assets"] as Array).duplicate()
+## The collections are on disk: serve them (and let the registry forget any that were evicted to
+## make room).
+func _installed(_made: Dictionary) -> void:
 	_reapply()
-	var ids: Array = made["libraries"]
-	var text := "Received %s from the host for this session." % ", ".join(ids)
-	screen.offer_keep(text, func() -> void: keep(ids))
 
 
-## The player kept received libraries: they move into the user's libraries
-## (LibraryReceivedStore.promote; a partial library stays marked partial).
-func keep(ids: Array) -> void:
-	for id: Variant in ids:
-		LibraryReceivedStore.promote(str(id))
-	_reapply()
+## What the record of a collection says about where it came from: the host's player name.
+func _host_label() -> String:
+	var host: Dictionary = NetworkManager.get_players().get(1, {})
+	var label := String(host.get("name", ""))
+	return label if label != "" else "the host"
 
 
 func _finish(
@@ -387,7 +430,7 @@ func _finish(
 	result["message"] = model.message
 	result["installed"] = model.installed()
 	result["libraries"] = installed
-	var quiet := model.installed() or model.phase == LibraryTransferConsent.Phase.SKIPPED
+	var quiet := model.phase == LibraryTransferConsent.Phase.SKIPPED
 	if not quiet and model.message != "":
 		screen.notify(model.message)
 	return result

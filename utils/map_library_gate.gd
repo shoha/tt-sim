@@ -49,6 +49,7 @@ static func run(
 			out["changed"] = MapLibraries.apply_aliases(doc, root) > 0 or out["changed"]
 	var report := MapLibraries.check(doc.libraries)
 	out["report"] = report
+	LibraryFromHost.note_open_map(MapLibraries.used_ids(doc))  # last-used stamps, never evicted
 	for warning: String in report["warnings"]:
 		print("MapLibraryGate: " + warning)
 	if report["ok"]:

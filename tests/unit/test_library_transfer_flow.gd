@@ -160,7 +160,6 @@ class UiDouble:
 	var asked: Array[String] = []
 	var progress: Array[float] = []
 	var notices: Array[String] = []
-	var keeps: Array = []
 	var began: int = 0
 	var ended: int = 0
 	var cancel_now: bool = false
@@ -184,9 +183,6 @@ class UiDouble:
 
 	func notify(text: String) -> void:
 		notices.append(text)
-
-	func offer_keep(text: String, keep: Callable) -> void:
-		keeps.append([text, keep])
 
 
 var _paths: Dictionary = {}
@@ -215,7 +211,8 @@ func after_all() -> void:
 	LibraryRegistry.user_root = _saved_user
 	LibraryRegistry.clear()
 	PaletteLibrary.clear_cache()
-	LibraryReceivedStore._this_session.clear()
+	LibraryFromHost.auto_delta_limit = LibraryFromHost.AUTO_DELTA_BYTES
+	LibraryFromHost.open_ids = {}
 	World.remove_tree(ROOT)
 
 
@@ -223,7 +220,8 @@ func before_each() -> void:
 	World.remove_tree(ROOT)
 	_paths = Tw.build(ROOT)
 	DirAccess.make_dir_recursive_absolute(_client_user)
-	LibraryReceivedStore._this_session.clear()
+	LibraryFromHost.auto_delta_limit = LibraryFromHost.AUTO_DELTA_BYTES
+	LibraryFromHost.open_ids = {}
 	LibraryRegistry.settings_path = SETTINGS
 	LibraryRegistry.official_root = _paths["official"]
 	# The host serves its library once; its folders stay absolute in `_served`.
@@ -276,7 +274,6 @@ func _streamer(channel: ChannelDouble) -> StreamerDouble:
 
 
 func after_each() -> void:
-	LibraryReceivedStore.sweep_session()
 	LibraryRegistry.clear()
 	PaletteLibrary.clear_cache()
 
@@ -305,31 +302,34 @@ func _client_assets() -> Dictionary:
 	return PaletteLibrary.get_palette(_paths["base"])["assets"]
 
 
+## The client's libraries folder: a downloaded collection is an ordinary user library there.
 func _received() -> String:
-	return LibraryRegistry.received_root()
+	return _client_user
 
 
 # ---- the path ----
 
 
-func test_a_client_asks_is_asked_downloads_and_serves_the_plants() -> void:
+func test_a_client_asks_is_asked_downloads_and_serves_the_items() -> void:
 	assert_false(_client_assets().has(Tw.SPIRE))
 	var out := await _fetch(Tw.map_using_spire())
 	assert_eq(out["installed"], ["alienworld"])
 	assert_eq(out["skipped"], [])
 	assert_eq(_ui.asked.size(), 1)
-	assert_string_contains(_ui.asked[0], "Host uses collection Alien World v0.3.1 by Test Author")
-	assert_string_contains(_ui.asked[0], "(1 assets,")
+	assert_string_contains(_ui.asked[0], "The host uses the collection Alien World v0.3.1 by Test")
+	assert_string_contains(_ui.asked[0], "(1 item,")
 	assert_eq(_ui.began, 1)
 	assert_eq(_ui.ended, 1)
 	assert_gt(_ui.progress.size(), 0)
 	assert_eq(_ui.progress.back(), 1.0)
-	assert_eq(_ui.keeps.size(), 1, "Keep is offered")
+	assert_eq(_ui.notices.size(), 1, "one line says it is kept and where to manage it")
+	assert_string_contains(_ui.notices[0], "Received Alien World (1 item) from the host")
+	assert_false("Keep" in _ui.notices[0])
 	assert_true(_client_assets().has(Tw.SPIRE), "served")
-	assert_true(DirAccess.dir_exists_absolute(_received().path_join("alienworld")))
-	assert_false(DirAccess.dir_exists_absolute(_client_user.path_join("alienworld")))
+	assert_true(DirAccess.dir_exists_absolute(_client_user.path_join("alienworld")), "kept")
+	assert_false(DirAccess.dir_exists_absolute(_client_user.path_join(".received")))
 	assert_true(_wire.log.has("quote") and _wire.log.has("request") and _wire.log.has("header"))
-	assert_eq(LibraryReceivedStore.session_ids(), ["alienworld"])
+	assert_eq(LibraryFromHost.record_of("alienworld")["host"], "the host")
 	assert_false(_client.is_busy())
 	assert_true(_host._host_requests.has(CLIENT), "the host remembers what it quoted")
 
@@ -338,7 +338,8 @@ func test_what_arrives_is_the_hosts_bytes_checked_end_to_end() -> void:
 	await _fetch(Tw.map_using_spire())
 	assert_not_null(AssetStore.mesh_for(Tw.SPIRE, _paths["base"]))
 	var info := LibraryRegistry.info("alienworld", _paths["base"])
-	assert_eq(info["source"], "received")
+	assert_eq(info["source"], "user", "an ordinary collection")
+	assert_true(info["received"], "marked from host")
 	assert_false(info["partial"].is_empty())
 
 
@@ -600,7 +601,7 @@ func test_a_host_announcing_a_new_library_makes_the_client_fetch_it() -> void:
 	assert_eq(_wire.log.count("hint"), 1)
 
 
-func test_a_later_edit_adds_assets_through_the_same_path_and_replaces_the_partial() -> void:
+func test_a_later_edit_adds_assets_through_the_same_path_and_merges_into_the_partial() -> void:
 	var doc := Tw.map_using_spire()
 	await _fetch(doc)
 	assert_false(_client_assets().has(Tw.SHARD))
@@ -613,7 +614,7 @@ func test_a_later_edit_adds_assets_through_the_same_path_and_replaces_the_partia
 	assert_eq(again["results"][0]["library"], "alienworld")
 	assert_true(_client_assets().has(Tw.SHARD))
 	assert_true(_client_assets().has(Tw.SPIRE), "what came first stays")
-	assert_eq(_ui.asked.size(), 2)
+	assert_eq(_ui.asked.size(), 1, "the same collection is not asked about twice")
 
 
 func test_client_ops_wait_while_a_library_transfer_runs() -> void:
@@ -634,20 +635,107 @@ func test_client_ops_wait_while_a_library_transfer_runs() -> void:
 # ---- the end of the session ----
 
 
-func test_the_session_ending_removes_the_received_libraries_and_serves_without_them() -> void:
+func test_the_session_ending_keeps_what_was_downloaded() -> void:
 	await _fetch(Tw.map_using_spire())
 	assert_true(_client_assets().has(Tw.SPIRE))
 	_client.end_session()
-	assert_false(DirAccess.dir_exists_absolute(_received().path_join("alienworld")))
-	assert_false(_client_assets().has(Tw.SPIRE))
-	assert_eq(LibraryReceivedStore.session_ids(), [])
-
-
-func test_keeping_moves_the_library_into_the_users_own() -> void:
-	await _fetch(Tw.map_using_spire())
-	_ui.keeps[0][1].call()
-	assert_true(DirAccess.dir_exists_absolute(_client_user.path_join("alienworld")))
-	assert_false(DirAccess.dir_exists_absolute(_received().path_join("alienworld")))
-	_client.end_session()
-	assert_true(DirAccess.dir_exists_absolute(_client_user.path_join("alienworld")), "kept")
+	assert_true(DirAccess.dir_exists_absolute(_received().path_join("alienworld")), "kept")
+	assert_true(_client_assets().has(Tw.SPIRE), "still served")
 	assert_eq(LibraryRegistry.info("alienworld", _paths["base"])["source"], "user")
+
+
+func test_a_collection_downloaded_once_is_served_in_the_next_session_without_the_host() -> void:
+	await _fetch(Tw.map_using_spire())
+	_client.end_session()
+	# A new process: nothing in memory, no host reachable. The map's plan needs nothing.
+	LibraryRegistry.clear()
+	PaletteLibrary.clear_cache()
+	LibraryRegistry.official_root = _paths["official"]
+	LibraryRegistry.apply(_paths["base"])
+	var alone := _channel(false)
+	alone.ui = _ui
+	var asked_before := _ui.asked.size()
+	var out: Dictionary = await _run(
+		func() -> Dictionary: return await alone.fetch_for_document(Tw.map_using_spire())
+	)
+	assert_eq(out["plan"]["requests"], [])
+	assert_eq(_ui.asked.size(), asked_before, "nothing is asked of anyone")
+	assert_true(_client_assets().has(Tw.SPIRE))
+
+
+# ---- ask once, and what is missing ----
+
+
+func test_a_second_request_for_the_same_collection_downloads_only_the_delta_without_asking(
+) -> void:
+	await _fetch(Tw.map_using_spire())
+	assert_eq(_ui.asked.size(), 1)
+	var grown := Tw.map_using_spire()
+	grown.scatter[Tw.SHARD] = PackedFloat32Array([0, 0, 0, 0, 0, 0, 1, 1, 1, 1])
+	_host.usage = LibraryTransfer.usage_of([grown])
+	var again := await _fetch(grown)
+	assert_eq(again["installed"], ["alienworld"])
+	assert_eq(_ui.asked.size(), 1, "the player agreed to this collection already")
+	assert_eq(again["results"][0]["phase"], LibraryTransferConsent.Phase.DONE)
+	var request: Dictionary = (_host._host_requests[CLIENT] as Dictionary).values().back()
+	assert_eq(request["assets"], [Tw.SHARD], "only what was missing was asked for")
+	assert_true(_client_assets().has(Tw.SHARD) and _client_assets().has(Tw.SPIRE))
+	assert_eq(LibraryFromHost.record_of("alienworld")["assets"].size(), 2)
+	assert_eq(_ui.notices.size(), 2, "told each time what arrived")
+
+
+func test_a_delta_over_the_threshold_asks_again() -> void:
+	await _fetch(Tw.map_using_spire())
+	LibraryFromHost.auto_delta_limit = 1
+	var grown := Tw.map_using_spire()
+	grown.scatter[Tw.SHARD] = PackedFloat32Array([0, 0, 0, 0, 0, 0, 1, 1, 1, 1])
+	_host.usage = LibraryTransfer.usage_of([grown])
+	var again := await _fetch(grown)
+	assert_eq(again["installed"], ["alienworld"])
+	assert_eq(_ui.asked.size(), 2, "a big delta is asked about again")
+	assert_string_contains(_ui.asked[1], "needs 1 item more from the collection Alien World")
+
+
+func test_a_skip_is_remembered_for_the_session_and_asked_again_in_the_next() -> void:
+	_ui.answer = false
+	var first := await _fetch(Tw.map_using_spire())
+	assert_eq(first["skipped"], ["alienworld"])
+	assert_eq(_ui.asked.size(), 1)
+	var second := await _fetch(Tw.map_using_spire())
+	assert_eq(second["skipped"], ["alienworld"])
+	assert_eq(_ui.asked.size(), 1, "not asked twice in a session")
+	assert_eq(_ui.notices, [], "and quiet")
+	_client.end_session()
+	_ui.answer = true
+	var third := await _fetch(Tw.map_using_spire())
+	assert_eq(third["installed"], ["alienworld"])
+	assert_eq(_ui.asked.size(), 2, "a new session asks again")
+
+
+func test_a_changed_host_copy_is_asked_about_and_replaces_the_kept_one() -> void:
+	await _fetch(Tw.map_using_spire())
+	var grown := Tw.map_using_spire()
+	grown.scatter[Tw.SHARD] = PackedFloat32Array([0, 0, 0, 0, 0, 0, 1, 1, 1, 1])
+	_host.usage = LibraryTransfer.usage_of([grown])
+	# The host's library is another build now (its source hash is not the one the kept copy has).
+	_served["alienworld"]["hash"] = "changed1"
+	var again := await _fetch(grown)
+	assert_eq(again["installed"], ["alienworld"])
+	assert_eq(_ui.asked.size(), 2, "another source hash is another question")
+	assert_string_contains(_ui.asked[1], "The host uses the collection Alien World")
+	assert_eq(LibraryFromHost.record_of("alienworld")["source_hash"], "changed1")
+	assert_true(
+		_client_assets().has(Tw.SPIRE) and _client_assets().has(Tw.SHARD), "the whole request"
+	)
+	var request: Dictionary = (_host._host_requests[CLIENT] as Dictionary).values().back()
+	assert_gt(request["assets"].size(), 1, "the full request was sent again, not a delta")
+
+
+func test_the_players_own_copy_is_never_asked_over() -> void:
+	World.write_alien(_client_user.path_join("alienworld"))
+	LibraryRegistry.apply(_paths["base"])
+	var out := await _fetch(Tw.map_using_spire())
+	assert_eq(out["plan"]["requests"], [])
+	assert_eq(_ui.asked, [])
+	assert_eq(_wire.log, [])
+	assert_true(LibraryFromHost.record_of("alienworld").is_empty())
