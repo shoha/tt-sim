@@ -13,16 +13,20 @@ extends RefCounted
 ## This build compiles the minimal subset (design doc 6.1): rules select assets by explicit
 ## `query.match[].ref` only, numbers are explicit (a missing density takes the class default
 ## times `density_factor`), seasons are expanded without overrides, surfaces are the base
-## palette's names (`surfaces: legacy`). Pure: no files, no scene tree. Asset `file` values stay
-## library-relative (the palette contract); `paths` carries the absolute file of each asset,
-## joined from the library folder, never the other way round.
+## palette's names (`surfaces: legacy`) or, with `surfaces: library`, resolved against the
+## library's own surfaces/ folder first (S3; resolve_surface). Pure: no files, no scene tree.
+## Asset `file` values stay library-relative (the palette contract); `paths` carries the
+## absolute file of each asset, joined from the library folder, never the other way round.
 
 const PALETTE_FORMAT := 1
 
 
-## compile(read, options) -> {palette (a palette.json-shaped Dictionary), paths ({asset id:
-## absolute file}), biome_ids, library (the id), warnings (compile problems), palette_warnings
-## (PaletteLibrary.validate_palette's on `palette`)}. `read` must be an ok LibraryReader result;
+## compile(read, options) -> {palette (a palette.json-shaped Dictionary; its `surfaces` are the
+## base table plus the library's own, as `surfaces/<runtime name>/<map>.png` paths SurfaceStore
+## resolves), paths ({asset id: absolute file}), surfaces ({runtime name: {library, name, info,
+## maps}} of the library's own, for SurfaceStore.register_library), biome_ids, library (the id),
+## warnings (compile problems), palette_warnings (PaletteLibrary.validate_palette's on
+## `palette`)}. `read` must be an ok LibraryReader result;
 ## otherwise the result is empty with the warning saying so. options: {"folder": the library
 ## folder (absolute), "surfaces": the surface table the biomes' names resolve against (the base
 ## palette's), "hash": a short content hash for palette_version}.
@@ -31,6 +35,7 @@ static func compile(read: Dictionary, options: Dictionary = {}) -> Dictionary:
 	var result := {
 		"palette": {},
 		"paths": {},
+		"surfaces": {},
 		"biome_ids": [] as Array[String],
 		"library": "",
 		"warnings": warnings,
@@ -45,12 +50,15 @@ static func compile(read: Dictionary, options: Dictionary = {}) -> Dictionary:
 	var biomes: Array[Dictionary] = []
 	var assets := {}
 	var paths := {}
+	var table := (options.get("surfaces", {}) as Dictionary).duplicate(true)
+	var own := _library_surfaces(read, library_id, table, result)
+	var surface_context := {"library": library_id, "own": own, "table": table}
 	for item: Dictionary in read["biomes"]:
 		var def: Dictionary = item["def"]
 		var seasons: Array = def.get("seasons", [{"id": "summer", "seed": 1}])
 		for season: Dictionary in seasons:
 			var biome := _compile_biome(
-				def, season, library_id, read["catalog"], assets, paths, folder, warnings
+				def, season, surface_context, read["catalog"], assets, paths, folder, warnings
 			)
 			if not biome.is_empty():
 				biomes.append(biome)
@@ -61,7 +69,7 @@ static func compile(read: Dictionary, options: Dictionary = {}) -> Dictionary:
 	var palette := {
 		"format": PALETTE_FORMAT,
 		"palette_version": version,
-		"surfaces": (options.get("surfaces", {}) as Dictionary).duplicate(true),
+		"surfaces": table,
 		"biomes": biomes,
 		"assets": assets,
 	}
@@ -76,13 +84,14 @@ static func compile(read: Dictionary, options: Dictionary = {}) -> Dictionary:
 static func _compile_biome(
 	def: Dictionary,
 	season: Dictionary,
-	library_id: String,
+	surface_context: Dictionary,
 	catalog: Dictionary,
 	assets: Dictionary,
 	paths: Dictionary,
 	folder: String,
 	warnings: Array[String]
 ) -> Dictionary:
+	var library_id := String(surface_context["library"])
 	var biome_name := String(def["id"])
 	var seed_value := int(season.get("seed", 1))
 	var runtime := LibraryIds.runtime_biome(
@@ -116,16 +125,123 @@ static func _compile_biome(
 		}
 		if folder != "":
 			paths[asset_id] = folder.path_join(String(entry["file"]))
-	return _biome_fields(def, season, runtime, library_id, rules)
+	return _biome_fields(def, season, runtime, surface_context, rules, warnings)
+
+
+## The library's own surfaces laid into `table` (the palette's surface table, by runtime name)
+## and recorded in result.surfaces ({runtime name: {library, name, info, maps}}). Returns
+## {local name: runtime name}.
+static func _library_surfaces(
+	read: Dictionary, library_id: String, table: Dictionary, result: Dictionary
+) -> Dictionary:
+	var own := {}
+	var recorded := {}
+	for name: String in read.get("surface_order", []):
+		var found: Dictionary = (read["surfaces"] as Dictionary)[name]
+		var runtime := LibraryIds.runtime_surface(library_id, name)
+		own[name] = runtime
+		table[runtime] = SurfaceBake.palette_entry(runtime, found["info"], found["maps"])
+		recorded[runtime] = {
+			"library": library_id, "name": name, "info": found["info"], "maps": found["maps"]
+		}
+	result["surfaces"] = recorded
+	return own
+
+
+## The runtime surface name `ref` stands for in a `surfaces: library` biome: a `lib://` reference
+## or a plain name that is one of the library's own surfaces becomes its runtime name; any other
+## plain name is the installed palette's (kept as written). A name in neither the library nor the
+## table is kept with a warning, and the palette validator then blanks it.
+static func resolve_surface(
+	ref: Variant, surface_context: Dictionary, label: String, warnings: Array[String]
+) -> Variant:
+	if not ref is String:
+		warnings.append("%s: a surface reference is not a string (dropped)" % label)
+		return null
+	var library_id := String(surface_context["library"])
+	var own: Dictionary = surface_context["own"]
+	var table: Dictionary = surface_context["table"]
+	var name := String(ref)
+	var parsed := LibraryIds.parse_surface_ref(name)
+	if name.begins_with(LibraryIds.SURFACE_SCHEME) and parsed.is_empty():
+		warnings.append("%s: '%s' is not a lib://<library>/<surface> reference" % [label, name])
+		return name
+	if not parsed.is_empty():
+		if parsed["library"] == library_id:
+			name = String(parsed["name"])
+		elif parsed["library"] == LibraryContracts.CORE_ID:
+			return _known(parsed["name"], table, label, warnings)
+		else:
+			warnings.append(
+				(
+					"%s: '%s' names another library (dependencies are not resolved in this build)"
+					% [label, name]
+				)
+			)
+			return name
+	if own.has(name):
+		return own[name]
+	return _known(name, table, label, warnings)
+
+
+static func _known(
+	name: String, table: Dictionary, label: String, warnings: Array[String]
+) -> String:
+	if not table.has(name):
+		warnings.append(
+			"%s: surface '%s' is not in the library's surfaces/ or the palette" % [label, name]
+		)
+	return name
+
+
+## The biome's `ground` references as the palette stores them: `legacy` copies the names
+## verbatim, `library` resolves each (resolve_surface), accents' surfaces and paths included.
+static func _ground_value(
+	source: String,
+	value: Variant,
+	mode: String,
+	surface_context: Dictionary,
+	label: String,
+	warnings: Array[String]
+) -> Variant:
+	if mode != LibraryReader.SURFACES_LIBRARY:
+		return _copy(value)
+	var here := "%s ground.%s" % [label, source]
+	match source:
+		"accents":
+			var accents := []
+			for raw: Variant in value if value is Array else []:
+				if not raw is Dictionary:
+					continue
+				var entry := (raw as Dictionary).duplicate(true)
+				var surface: Variant = resolve_surface(
+					entry.get("surface"), surface_context, here, warnings
+				)
+				if surface != null:
+					entry["surface"] = surface
+					accents.append(entry)
+			return accents
+		"paths":
+			var names := []
+			for raw: Variant in value if value is Array else []:
+				var surface: Variant = resolve_surface(raw, surface_context, here, warnings)
+				if surface != null:
+					names.append(surface)
+			return names
+	var resolved: Variant = resolve_surface(value, surface_context, here, warnings)
+	return resolved if resolved != null else ""
 
 
 static func _biome_fields(
 	def: Dictionary,
 	season: Dictionary,
 	runtime: String,
-	library_id: String,
-	rules: Array[Dictionary]
+	surface_context: Dictionary,
+	rules: Array[Dictionary],
+	warnings: Array[String]
 ) -> Dictionary:
+	var library_id := String(surface_context["library"])
+	var mode := String(def.get("surfaces", LibraryReader.SURFACES_LEGACY))
 	var biome_name := String(def["id"])
 	var ground: Dictionary = def.get("ground", {})
 	var biome := {
@@ -150,7 +266,9 @@ static func _biome_fields(
 	}
 	for source: String in map:
 		if ground.has(source):
-			biome[map[source]] = _copy(ground[source])
+			biome[map[source]] = _ground_value(
+				source, ground[source], mode, surface_context, "biome " + runtime, warnings
+			)
 	if def.get("ground_look") is Dictionary:
 		biome["ground_look"] = _copy(def["ground_look"])
 	return biome

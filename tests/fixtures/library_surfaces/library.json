@@ -1,0 +1,19 @@
+{
+	"format": "ttsim-library",
+	"format_version": 1,
+	"id": "surf",
+	"name": "Surfaces",
+	"description": "One tree and three 16 px surfaces: the smallest library the surface path can be proven on.",
+	"version": "0.1.0",
+	"contract": 1,
+	"author": "tt-sim tests",
+	"license": "CC0-1.0",
+	"dependencies": [],
+	"default_biome": "meadow",
+	"bindings": {
+		"fire": {"ash_surface": "slate"},
+		"paint": {"default": "boards"},
+		"water": {"bed": "lilac", "shore": "grass"}
+	},
+	"tags": ["test"]
+}

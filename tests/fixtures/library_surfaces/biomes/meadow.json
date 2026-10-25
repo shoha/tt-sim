@@ -1,0 +1,26 @@
+{
+	"format": "ttsim-biome",
+	"format_version": 1,
+	"id": "meadow",
+	"name": "Lilac meadow",
+	"climate": "temperate",
+	"surfaces": "library",
+	"seasons": [{"id": "summer", "seed": 1}],
+	"ground": {
+		"surface": "lilac",
+		"cliff": "slate",
+		"scree": "lib://surf/lilac",
+		"accents": [{"surface": "grass_meadow", "coverage": 0.2, "scale_m": 6}],
+		"paths": ["boards", "flagstone"]
+	},
+	"rules": [
+		{
+			"key": "oak", "role": "canopy_tree", "size_class": "large", "weight": 1,
+			"density_per_m2": 0.01, "spacing_m": 4.5, "slope_max_deg": 35, "scale_spread": 0.15,
+			"scale_floor": null, "yaw_random_deg": 360, "align": "upright",
+			"pattern": null, "clump": null, "near": [], "avoid": [],
+			"habit": {"water": "", "charred": false},
+			"query": {"match": [{"ref": "Tree_Oak_v0"}], "count": "all", "order": "explicit"}
+		}
+	]
+}

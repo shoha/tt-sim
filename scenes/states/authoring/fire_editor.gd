@@ -179,7 +179,7 @@ func _lay_ash(surface: String) -> void:
 static func forest_slots(biome_ids: PackedStringArray, biomes: Array) -> PackedByteArray:
 	var forests := {}
 	for entry: Dictionary in biomes:
-		if String(entry.get("biome", "")) == FireSweep.BURNT_BIOME:
+		if String(entry.get("biome", "")) == LibraryBindings.fire_burnt_biome():
 			continue
 		var trees := 0.0
 		for species: Dictionary in entry.get("species", []):
