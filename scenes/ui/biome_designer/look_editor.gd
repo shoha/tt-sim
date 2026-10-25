@@ -22,7 +22,7 @@ const NO_LOOK := (
 	"This biome has no ground look: its ground is drawn plain, with the surface's own colour."
 )
 const NEEDS_BASE := "Add a look for every season first; a season then changes parts of it."
-const COLOR_ROWS_MAX := 4
+const SWATCH_SIZE := Vector2(64.0, 30.0)
 
 var session: BiomeDesignerSession = null
 
@@ -90,7 +90,22 @@ func setup(designer: BiomeDesignerSession) -> void:
 	session.model.changed.connect(func(_reason: String) -> void: _sync())
 	session.edit_target_changed.connect(func(_season: String) -> void: _sync())
 	session.compare.changed.connect(_sync)
+	if is_inside_tree():
+		_sync()
+
+
+## The rows build themselves when they enter the tree, so the values go in once they have.
+func _ready() -> void:
 	_sync()
+
+
+## A colour row's swatch, big enough to read the colour (the theme's button style leaves a
+## small one no room).
+func _show_swatch(row: PropertyRow, color: Color) -> void:
+	row.set_color_no_signal(color)
+	var picker := row.find_child("Color", true, false) as ColorPickerButton
+	if picker != null:
+		picker.custom_minimum_size = SWATCH_SIZE
 
 
 ## The PropertyRows of (`group`, `key`): one, or three for a triple; [] when there is none.
@@ -227,7 +242,7 @@ func _sync_field(season: String, group: String, field: Dictionary) -> void:
 				_mark(row, changed, field, problem)
 		"color":
 			var row := rows[0] as PropertyRow
-			row.set_color_no_signal(DesignerLookEdits.display_color(shown))
+			_show_swatch(row, DesignerLookEdits.display_color(shown))
 			_mark(row, changed, field, problem)
 
 
@@ -255,7 +270,7 @@ func _sync_colors(season: String) -> void:
 		_color_row(_colors_box, "zones", field, "Colour_%d" % index, index)
 	for i in colors.size():
 		var row := _colors_box.get_child(i) as PropertyRow
-		row.set_color_no_signal(DesignerLookEdits.display_color(colors[i]))
+		_show_swatch(row, DesignerLookEdits.display_color(colors[i]))
 		row.overridden = changed
 	_color_add.visible = colors.size() < GroundLook.MAX_COLORS
 	_color_remove.visible = colors.size() > GroundLook.MIN_COLORS
