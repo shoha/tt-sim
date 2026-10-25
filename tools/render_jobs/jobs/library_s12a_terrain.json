@@ -1,0 +1,46 @@
+{
+ "out_dir": "render_jobs/library-s12a_terrain",
+ "timeout_s": 900,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "library_dev", "path": "D:/dev/plantgen/out/lib_slice"},
+  {"op": "wait", "s": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "new", "biome": "savanna_summer_s1", "size": 150, "seed": 1234, "landform": "hilltop"},
+  {"op": "wait_ready", "settle": 3.0}, {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/tree_fade.gd", "factor": 0},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "nocursor"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "wind", "freeze": true},
+  {"op": "home"}, {"op": "settle"},
+  {"op": "capture", "name": "a_before_home", "desc": "savanna hilltop 150 ft seed 1234, the library lib_slice (no terrain response), home view, fades off, wind frozen"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "look", "at": "stage"},
+  {"op": "zoom", "size": 24}, {"op": "settle"},
+  {"op": "capture", "name": "a_before_flank", "desc": "the same, size 24 at the landform's stage (the shoulder of the hill), no terrain response"},
+
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "library_dev", "path": "D:/dev/plantgen/out/lib_s12a"},
+  {"op": "wait", "s": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "new", "biome": "savanna_summer_s1", "size": 150, "seed": 1234, "landform": "hilltop"},
+  {"op": "wait_ready", "settle": 3.0}, {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/tree_fade.gd", "factor": 0},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "nocursor"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "wind", "freeze": true},
+  {"op": "home"}, {"op": "settle"},
+  {"op": "capture", "name": "b_after_home", "desc": "the same new map (same seed and landform) built under lib_s12a: dry_grass, shrub and acacia_young slope_min_deg 12 to 15, acacia slope curve [[0,1],[10,1],[20,0]], palm height curve; same camera"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "look", "at": "stage"},
+  {"op": "zoom", "size": 24}, {"op": "settle"},
+  {"op": "capture", "name": "b_after_flank", "desc": "the same, size 24 at the stage"},
+
+  {"op": "library_dev", "path": ""},
+  {"op": "wait", "s": 2.0},
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "index", "title": "terrain response: slope minimum and slope curve on a hilltop", "intro": "A new 150 ft savanna hilltop (seed 1234), never saved. a_* serves D:/dev/plantgen/out/lib_slice (the plain savanna library); b_* serves D:/dev/plantgen/out/lib_s12a, the same library with dry_grass slope_min_deg 15, shrub and acacia_young slope_min_deg 12, acacia a slope curve that is 1 to 10 degrees and 0 at 20, and palm a height curve. Same cameras; fades off, wind frozen."}
+ ]
+}

@@ -347,7 +347,9 @@ static func _generate(
 		fields.species_density_at,
 		PackedFloat32Array(),
 		{},
-		fields.density_ceiling_at
+		fields.density_ceiling_at,
+		null,
+		fields.wet_at
 	)
 
 

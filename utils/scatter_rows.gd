@@ -87,3 +87,26 @@ static func mix(value: int) -> int:
 	h = (h * 0x1B873593) & _MASK32
 	h ^= h >> 16
 	return h
+
+
+## The generator's rows split per asset id: `rows` (ScatterGenerator.ROW_STRIDE floats each) with
+## `assets[r]` the index into `asset_ids` of row r, written into `result` by asset id. Rows are
+## snapped to the saved precision first (MapDocumentIO.snap_rows), so a reload is bit-equal.
+static func split_by_asset(
+	asset_ids: Array, rows: PackedFloat32Array, assets: PackedInt32Array, result: Dictionary
+) -> void:
+	if rows.is_empty():
+		return
+	MapDocumentIO.snap_rows(rows)  # The saved precision: a reload is bit-equal.
+	if asset_ids.size() == 1:
+		result[String(asset_ids[0])] = rows
+		return
+	var per_asset: Array[PackedFloat32Array] = []
+	per_asset.resize(asset_ids.size())
+	for r in assets.size():
+		per_asset[assets[r]].append_array(
+			rows.slice(r * ScatterGenerator.ROW_STRIDE, (r + 1) * ScatterGenerator.ROW_STRIDE)
+		)
+	for a in asset_ids.size():
+		if not per_asset[a].is_empty():
+			result[String(asset_ids[a])] = per_asset[a]

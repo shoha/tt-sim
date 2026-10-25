@@ -246,7 +246,68 @@ static func _library_fields(
 	var weight: Variant = _optional_number(entry, "weight", 0.0, 1000.0, null, label, warnings)
 	if weight != null:
 		out["weight"] = weight
+	var slope_min: Variant = _optional_number(
+		entry, "slope_min_deg", 0.0, 90.0, null, label, warnings
+	)
+	if slope_min != null:
+		out["slope_min_deg"] = slope_min
+	var response := _validate_response(entry.get("response"), label, warnings)
+	if not response.is_empty():
+		out["response"] = response
 	return out
+
+
+## A rule's `response` (step S12): axis -> [[x, y], ...] for the axes LibraryContracts.RESPONSE_AXES
+## names, each curve sorted by x. An unknown axis, a malformed curve (see
+## LibraryContracts.response_problem) or an axis this build does not evaluate warns and is left
+## out; a y outside 0 to 1 is clamped with a warning. {} when nothing valid remains.
+static func _validate_response(raw: Variant, label: String, warnings: Array[String]) -> Dictionary:
+	var out := {}
+	if raw == null:
+		return out
+	if not raw is Dictionary:
+		warnings.append("%s: response is not an object, ignored" % label)
+		return out
+	for axis: Variant in raw as Dictionary:
+		var axis_name := String(axis)
+		var curve: Variant = (raw as Dictionary)[axis]
+		if not LibraryContracts.RESPONSE_AXES.has(axis_name):
+			warnings.append("%s: response axis '%s' is unknown, ignored" % [label, _label(axis)])
+			continue
+		var points := _sorted_points(curve)
+		var clamped := false
+		for point: Array in points:
+			var y := clampf(float(point[1]), 0.0, 1.0)
+			clamped = clamped or y != float(point[1])
+			point[1] = y
+		var problem := LibraryContracts.response_problem(
+			axis_name, points if not points.is_empty() else curve
+		)
+		if problem != "":
+			warnings.append("%s: response.%s %s, ignored" % [label, axis_name, problem])
+			continue
+		if clamped:
+			warnings.append("%s: response.%s has y outside 0 to 1, clamped" % [label, axis_name])
+		out[axis_name] = points
+	return out
+
+
+## A curve's points as fresh [x, y] float pairs sorted by x, or [] when `raw` is not a list of
+## numeric pairs (response_problem then names the fault from `raw`).
+static func _sorted_points(raw: Variant) -> Array:
+	var points: Array = []
+	if not raw is Array:
+		return points
+	for point: Variant in raw as Array:
+		if not point is Array or (point as Array).size() != 2:
+			return []
+		var pair: Array = point
+		for part: Variant in pair:
+			if part is bool or not (part is float or part is int) or is_nan(part) or is_inf(part):
+				return []
+		points.append([float(pair[0]), float(pair[1])])
+	points.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
+	return points
 
 
 ## The valid flags of a rule's `habit` (water, charred); anything else warns and is left out.

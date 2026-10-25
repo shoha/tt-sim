@@ -36,6 +36,8 @@ func run(args: Dictionary) -> void:
 			_counts()
 		"pack":
 			_pack_parts(int(args.get("runs", "15")))
+		"curves":
+			_curves(int(args.get("runs", "9")))
 	ScatterNative.force_gdscript = false
 	print("native_scatter_bench: library %s" % ScatterNative.version())
 
@@ -109,23 +111,25 @@ func _job(runs: int, warm: int) -> void:
 			gd.append(g / 1000.0)
 	print(
 		(
-			"job (probe cell, one thread): GDScript median %.2f ms (n %d, min %.2f max %.2f);"
-			+ " native median %.3f ms (n %d, min %.3f max %.3f): pack %.3f ms + library %.3f ms;"
-			+ " %.1fx"
+			(
+				"job (probe cell, one thread): GDScript median %.2f ms (n %d, min %.2f max %.2f);"
+				+ " native median %.3f ms (n %d, min %.3f max %.3f): pack %.3f ms + library %.3f ms;"
+				+ " %.1fx"
+			)
+			% [
+				_median(gd),
+				gd.size(),
+				_min(gd),
+				_max(gd),
+				_median(nt),
+				nt.size(),
+				_min(nt),
+				_max(nt),
+				_median(packed),
+				_median(inner),
+				_median(gd) / _median(nt)
+			]
 		)
-		% [
-			_median(gd),
-			gd.size(),
-			_min(gd),
-			_max(gd),
-			_median(nt),
-			nt.size(),
-			_min(nt),
-			_max(nt),
-			_median(packed),
-			_median(inner),
-			_median(gd) / _median(nt)
-		]
 	)
 
 
@@ -182,7 +186,9 @@ func _map(runs: int, landform: String) -> void:
 		var walls := PackedFloat64Array()
 		var jobs := 0
 		for _r in runs:
-			var built := _build(NewMap.create(SIZE_FT, BIOME, SEED, PaletteLibrary.DEFAULT_ROOT, landform))
+			var built := _build(
+				NewMap.create(SIZE_FT, BIOME, SEED, PaletteLibrary.DEFAULT_ROOT, landform)
+			)
 			walls.append(built.ms)
 			jobs = built.jobs
 		print(
@@ -315,9 +321,90 @@ func _pack_parts(runs: int) -> void:
 	var line := PackedStringArray()
 	for key in parts:
 		line.append("%s %.2f" % [key, _median(parts[key])])
-	print("pack parts (probe cell, median ms of %d, surfaces %s): %s" % [
-		runs, str(doc.has_surface_entries()), ", ".join(line)
-	])
+	print(
+		(
+			"pack parts (probe cell, median ms of %d, surfaces %s): %s"
+			% [runs, str(doc.has_surface_entries()), ", ".join(line)]
+		)
+	)
+
+
+## The GDScript cost of a rule's terrain response (step S12a): the probe cell's job with every
+## rule carrying identity curves (rows unchanged, so the delta is pure evaluation cost), variants
+## interleaved, then ScatterTerrain.keep alone per call on the document's fields.
+func _curves(runs: int) -> void:
+	var doc := _probe_doc()
+	var work := _probe_work(doc)
+	var entry: Dictionary = work[BIOME]
+	var identity := {
+		"slope": [[0.0, 1.0], [90.0, 1.0]],
+		"height": [[-500.0, 1.0], [5000.0, 1.0]],
+		"wet": [[0.0, 1.0], [1.0, 1.0]],
+	}
+	var variants := {
+		"legacy": {},
+		"slope_min 20": {"slope_min_deg": 20.0},
+		"identity slope": {"response": {"slope": identity["slope"]}},
+		"identity height": {"response": {"height": identity["height"]}},
+		"identity wet": {"response": {"wet": identity["wet"]}},
+		"identity all three": {"response": identity},
+	}
+	var times := {}
+	ScatterNative.force_gdscript = true
+	for k in 2 + runs:
+		for label: String in variants:
+			var species: Array[Dictionary] = []
+			for rule: Dictionary in entry.species:
+				species.append(rule.merged(variants[label].duplicate(true), true))
+			var changed := entry.duplicate()
+			changed["species"] = species
+			var job := {BIOME: changed}
+			var t := Time.get_ticks_usec()
+			ScatterRegen.run(doc, job)
+			if k >= 2:
+				var list: PackedFloat64Array = times.get(label, PackedFloat64Array())
+				list.append((Time.get_ticks_usec() - t) / 1000.0)
+				times[label] = list
+	var base := _median(times["legacy"])
+	for label: String in variants:
+		print(
+			(
+				"curves job (probe cell, GDScript, median of %d): %-20s %.2f ms (%+.2f ms, %+.1f%%)"
+				% [
+					runs,
+					label,
+					_median(times[label]),
+					_median(times[label]) - base,
+					100.0 * (_median(times[label]) / base - 1.0)
+				]
+			)
+		)
+	var fields := ScatterGenerator.document_fields(doc, BIOME)
+	var ctx := {
+		"normal_at": fields.normal_at, "height_at": fields.height_at, "wet_at": fields.wet_at
+	}
+	var rule := {
+		"key": "bench",
+		"kind": "grass",
+		"size_class": "small",
+		"density_per_m2": 1.0,
+		"assets": ["a"],
+	}
+	var points := PackedVector2Array()
+	for i in 20000:
+		points.append(Vector2(fmod(i * 0.7, 50.0) - 25.0, fmod(i * 1.3, 50.0) - 25.0))
+	for label: String in variants:
+		var species_rule := rule.merged(variants[label].duplicate(true), true)
+		var plan_entry: Dictionary = ScatterPlan.build(BIOME, [species_rule], 1).species[0]
+		var t := Time.get_ticks_usec()
+		var sum := 0.0
+		for p in points:
+			sum += ScatterTerrain.keep(ctx, plan_entry, p, Vector3.ZERO)
+		var per_call := 1000.0 * (Time.get_ticks_usec() - t) / points.size()
+		print(
+			"ScatterTerrain.keep alone: %-20s %.0f ns per call (sum %.1f)" % [label, per_call, sum]
+		)
+	ScatterNative.force_gdscript = false
 
 
 func _median(values: PackedFloat64Array) -> float:
