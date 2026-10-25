@@ -25,6 +25,7 @@ static var _biome_re: RegEx = _compile("^[a-z][a-z0-9_]*$")
 static var _season_re: RegEx = _compile("^[a-z][a-z0-9]{0,15}$")
 static var _local_re: RegEx = _compile("^[A-Za-z0-9_]+$")
 static var _semver_re: RegEx = _compile("^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.]+)?$")
+static var _sha_re: RegEx = _compile("^[0-9a-f]{64}$")
 static var _runtime_re: RegEx = _compile("^([a-z][a-z0-9_]*)_([a-z][a-z0-9]{0,15})_s(-?[0-9]+)$")
 
 
@@ -77,6 +78,44 @@ static func local_problems(local: String) -> PackedStringArray:
 
 static func is_semver(version: String) -> bool:
 	return _semver_re.search(version) != null
+
+
+## True for a lower-case SHA-256 hex digest (64 characters).
+static func is_sha256(text: String) -> bool:
+	return _sha_re.search(text) != null
+
+
+## {library, local} of a query ref: `Tree_Oak_v0` is a local id (library ""), `core:Tree_Oak_v0`
+## names an asset of a dependency. {} when the text has more than one colon.
+static func split_ref(ref: String) -> Dictionary:
+	if ref.count(":") > 1:
+		return {}
+	if ref.count(":") == 1:
+		return {"library": ref.get_slice(":", 0), "local": ref.get_slice(":", 1)}
+	return {"library": "", "local": ref}
+
+
+## Problems with a query ref: a local id, or `<library id>:<local id>` for a dependency's asset.
+static func ref_problems(ref: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var parts := split_ref(ref)
+	if parts.is_empty():
+		out.append("ref '%s' has more than one colon" % _short(ref))
+		return out
+	var library := String(parts["library"])
+	if library != "":
+		out.append_array(library_problems(library))
+	elif ":" in ref:
+		out.append("ref '%s' names no library before the colon" % _short(ref))
+	out.append_array(local_problems(String(parts["local"])))
+	return out
+
+
+## The local id a dependency's asset takes in the depending library's biome:
+## `<library id>__<local id>`, so it can never equal a local asset id of the library's own that
+## has no double underscore (the compiler skips a collision with a warning).
+static func dependency_local(library: String, local: String) -> String:
+	return library + SEPARATOR + local
 
 
 ## The palette biome id: `<biome>_<season>_s<seed>` for core, `<lib>__<biome>_<season>_s<seed>`

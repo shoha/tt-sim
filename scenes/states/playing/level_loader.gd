@@ -354,6 +354,8 @@ func load_map_sources_async(glb_path: String, document_path: String) -> Node3D:
 	loader.is_superseded = func() -> bool: return _superseded(generation)
 	# Every peer builds a document's map the same editable way, for the table's live edits.
 	loader.keep_props_apart = document_path != ""
+	# A map that names a library this game lacks asks first (MapLibraryGate).
+	loader.library_choice = MapLibraryGate.ask_dialog
 	var root := await loader.load_async(glb_path, document_path)
 	if root != null:
 		_level_play_controller.loaded_map_document = loader.document

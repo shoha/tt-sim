@@ -191,6 +191,15 @@ static func check_library(
 		LibraryBindings.flatten(library.get("bindings"), library.get("default_biome"))["problems"]
 	):
 		warnings.append("library.json: " + problem)
+	_check_dependencies(library, errors, warnings)
+	_check_renames(library, warnings)
+
+
+## `dependencies`: a list of at most MAX_DEPENDENCIES `{id, version}` (a version range,
+## LibraryVersions), no repeats and no self reference. The registry resolves them.
+static func _check_dependencies(
+	library: Dictionary, errors: Array[String], warnings: Array[String]
+) -> void:
 	var deps: Variant = library.get("dependencies", [])
 	if not deps is Array or (deps as Array).size() > LibraryContracts.MAX_DEPENDENCIES:
 		errors.append(
@@ -199,8 +208,46 @@ static func check_library(
 				% LibraryContracts.MAX_DEPENDENCIES
 			)
 		)
-	elif not (deps as Array).is_empty():
-		warnings.append("library.json: dependencies are not resolved in this build (ignored)")
+		return
+	var seen := {}
+	for raw: Variant in deps as Array:
+		if not raw is Dictionary:
+			errors.append("library.json: a dependency is not an object")
+			continue
+		var dep: Dictionary = raw
+		_unknown(dep, ["id", "version"], "library.json dependency", warnings)
+		var id := String(dep.get("id", "")) if dep.get("id") is String else ""
+		for problem in LibraryIds.library_problems(id):
+			errors.append("library.json: dependency: " + problem)
+		if id == String(library.get("id", "")):
+			errors.append("library.json: depends on itself")
+		if seen.has(id):
+			errors.append("library.json: dependency '%s' is listed twice" % id)
+		seen[id] = true
+		var range_text: Variant = dep.get("version", "*")
+		if not range_text is String:
+			errors.append("library.json: dependency '%s' version must be a string" % id)
+		else:
+			var problem := LibraryVersions.range_problem(range_text)
+			if problem != "":
+				errors.append("library.json: dependency '%s' version: %s" % [id, problem])
+
+
+## `aliases` ({old local id: new local id}) and `retired` (local ids): shape only; a wrong
+## entry is skipped with a warning (the registry reads them leniently).
+static func _check_renames(library: Dictionary, warnings: Array[String]) -> void:
+	var aliases: Variant = library.get("aliases")
+	if aliases != null and not aliases is Dictionary:
+		warnings.append("library.json: aliases must be an object (ignored)")
+	elif aliases is Dictionary:
+		for old: Variant in aliases as Dictionary:
+			if not (aliases as Dictionary)[old] is String:
+				warnings.append(
+					"library.json: alias '%s' must name an id (ignored)" % _short(str(old))
+				)
+	var retired: Variant = library.get("retired")
+	if retired != null and not retired is Array:
+		warnings.append("library.json: retired must be a list (ignored)")
 
 
 static func _check_format_version(data: Dictionary, label: String, errors: Array[String]) -> void:
@@ -300,6 +347,14 @@ static func _check_entry_fields(entry: Dictionary, label: String, errors: Array[
 			ok = ok and _is_num(value) and float(value) > 0.0
 	if not ok:
 		errors.append("%s: dimensions_m must be three finite positive numbers" % label)
+	var digest: Variant = entry.get("sha256")
+	if digest != null and not (digest is String and LibraryIds.is_sha256(digest)):
+		errors.append("%s: sha256 must be 64 lower-case hex characters" % label)
+	var size: Variant = entry.get("bytes")
+	if size != null and (
+		not _is_whole(size) or float(size) < 0.0 or float(size) > LibraryContracts.CAPS["glb_bytes"]
+	):
+		errors.append("%s: bytes must be a whole number within the GLB cap" % label)
 
 
 static func _check_stats(library: Dictionary, result: Dictionary, warnings: Array[String]) -> void:
@@ -568,7 +623,7 @@ static func _check_query(
 				"%s: only {ref} clauses are compiled in this build (clause skipped)" % label
 			)
 			continue
-		for problem in LibraryIds.local_problems((raw as Dictionary)["ref"]):
+		for problem in LibraryIds.ref_problems((raw as Dictionary)["ref"]):
 			errors.append("%s: ref: %s" % [label, problem])
 
 
