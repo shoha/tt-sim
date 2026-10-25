@@ -93,6 +93,8 @@ var play_together: PlayTogetherCard
 ## Resume a saved session, under the card; hidden with none.
 var resume_entry: ResumeEntry
 var avatars_button: Button
+## Opens the collections manager (LibraryManager); its word is LibraryNames.
+var libraries_button: Button
 var settings_button: Button
 var quit_button: Button
 var grid: LevelGrid
@@ -102,6 +104,8 @@ var map_panel: MapPanel
 ## nothing selected).
 var panel_column: VBoxContainer
 var imports: LibraryImports
+## A collection (a .ttlib or a folder) dropped on the title goes through this flow's install card.
+var library_flow: LibraryImportFlow
 var backdrop: PaintedBackdrop
 ## The version, a caption on the wordmark's baseline.
 var version_label: Label
@@ -191,6 +195,9 @@ func _build_top_bar() -> void:
 	avatars_button.tooltip_text = "Make your characters ahead of time; place them in any game"
 	avatars_button.pressed.connect(_on_avatars_pressed)
 	avatars_button.visible = DevFeatures.avatars
+	libraries_button = _tool(LibraryNames.title(2), "trees", tools)
+	libraries_button.tooltip_text = "Add plants and ground to start new maps from"
+	libraries_button.pressed.connect(_on_libraries_pressed)
 	settings_button = _tool("Settings", "settings", tools)
 	settings_button.pressed.connect(_on_settings_pressed)
 	quit_button = _tool(QUIT, QUIT_ICON, tools)
@@ -245,6 +252,9 @@ func _build_library() -> void:
 		func(folder: String, _result: Dictionary) -> void: _on_imported(folder)
 	)
 	new_map_card.import_requested.connect(imports.pick)
+	library_flow = LibraryImportFlow.new()
+	library_flow.name = "LibraryFlow"
+	add_child(library_flow)
 	grid = LevelGrid.new()
 	grid.name = "Grid"
 	grid.columns = GRID_COLUMNS
@@ -414,10 +424,14 @@ func card_at(point: Vector2) -> Dictionary:
 	return {}
 
 
-## Files dropped on the window while the library is the screen (no sheet over it): a .glb on
-## a map's card replaces that map; anywhere else it is a new map.
+## Files dropped on the window while the library is the screen (no sheet over it): a collection
+## (a .ttlib or .zip holding a library.json, or a folder that does) opens its install card; a
+## .glb on a map's card replaces that map; anywhere else it is a new map.
 func _on_files_dropped(files: PackedStringArray) -> void:
 	if not visible or Scrim.any_shown(get_tree()):
+		return
+	if LibraryImportFlow.any_candidate(files):
+		library_flow.drop(files)
 		return
 	var info := card_at(_hub.get_viewport().get_mouse_position())
 	imports.drop(files, String(info.get("folder", "")))
@@ -469,6 +483,11 @@ func _open_editor(info: Dictionary) -> void:
 ## running.
 func _on_avatars_pressed() -> void:
 	AvatarRoster.open(get_tree().root)
+
+
+## Collections: the manager over the title (list, import, switch, verify, remove).
+func _on_libraries_pressed() -> void:
+	LibraryManager.open(get_tree().root)
 
 
 func _on_settings_pressed() -> void:
