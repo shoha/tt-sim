@@ -13,7 +13,8 @@ surfaces without editor imports (`SurfaceStore`) and the library bindings. Step 
 (2026-10-24): terrain response on a rule (`slope_min_deg` and `response` curves), in GDScript.
 Step S4 (2026-10-24): the multi-library registry (official and user libraries, dependencies,
 enable and disable), `AssetStore`, the map's `libraries` record with its mismatch dialog, and
-the New map dialog grouped by library.
+the New map dialog grouped by library. Step S5 (2026-10-24): `core` as the nine-biome library
+with its surfaces, thumbnails and bindings, proven equal to the plantgen package route.
 
 ## Map
 
@@ -265,6 +266,48 @@ the New map dialog grouped by library.
   or `preload()`, and `AssetStore` never uses `ResourceLoader` (a library file is bytes, never a
   resource or a script).
 
+## The core library (S5)
+
+Step S5 (2026-10-24) makes `core` the nine-biome library plantgen builds from the sources repo
+`D:/dev/tabletop/core-library` (local git, no remote; its README and AGENTS say what it holds). It
+changed nothing in the scatter, ground, water or fire code: the proof is that the library route
+reads and places exactly like the package route (Verification, "Step S5 proof").
+
+- **Asset ids.** The game profile tones one stem differently per biome, so a library asset id
+  must be unique and its bytes fixed. A package stem whose GLB bytes are identical in every biome
+  that uses it keeps its name (`Bush_BarrelCactus_v0`, 60 ids); every other stem becomes
+  `<stem>_<local biome id>` (`Tree_Oak_v0_savanna`, 208 ids, 268 in all). The catalog entry
+  carries `package_stem`, the package's own stem; the compiled palette asset id is
+  `<runtime biome id>/<library id>` (`savanna_summer_s1/Tree_Oak_v0_savanna`), the package's is
+  `<runtime biome id>/<package stem>`. To compare the two routes map a compiled id back with
+  `tests/unit/library_route_compare.gd` `package_id` (the catalog's `package_stem`, or the id
+  itself when it has none); plantgen's `library_diff_cli --all` does the same through
+  `plan.json` `origins`. Nothing in the scatter code reads an id's text, so the renaming moves
+  no row (checked byte for byte).
+- **Surfaces.** The 36 installed surfaces are `surfaces/<name>/{albedo,normal,orm,height}.png`
+  (byte-identical copies of the installed files) plus `surface.json` (`label` as the game shows
+  it today, `kind`, `role`, `tile_m`, `albedo_mean_linear` as the palette lists it, so the ground
+  look reads the same mean). All nine biome-defs are `surfaces: library`: `ground.surface`,
+  `cliff`, `scree`, `water_bed`, `shore`, accents and paths are bare names that resolve to the
+  library's own surface (a core surface keeps its bare runtime name, so the compiled palette
+  table is the installed one with the library's maps behind each entry). The installed biomes
+  name no water surfaces; `water_bed` and `shore` are written from the game's
+  `PaletteFields.WATER_SURFACE_DEFAULTS` for the biome, which is what the validator resolved
+  anyway. `ground_look` blocks are verbatim.
+- **Bindings.** `library.json` `bindings` carries every `LibraryBindings.TABLE` key at its
+  legacy value (`fire.ash_surface` ash, `fire.ash_fallback` dirt_peat, `fire.burnt_biome`
+  burnt_forest, `crossings.planks/moss/gravel/stone_default/paving` planks, moss, gravel, cliff,
+  flagstone, `paint.default` dirt_road_packed, `water.bed` riverbed, `water.shore` mud) and
+  `default_biome` `temperate_forest_summer_s1`. A game served by `core` therefore behaves as the
+  constants did; `SCORCHED_SURFACES` and `WATER_SURFACE_DEFAULTS` stay code.
+- **Thumbnails.** `thumbnails/<local biome id>.jpg` (512 px, the installed treecube renders,
+  byte-identical) named by the biome-def's `thumbnail`; the compiler serves each as
+  `thumbnails/<runtime id>.jpg`, the path the palette already used, through `SurfaceStore`
+  (`is_library_thumbnail`). S10 decides whether they are re-rendered.
+- **Catalog `roles`.** plantgen's catalog entries carry `roles` (the contract roles of the
+  rules that use the asset); `LibraryContracts.CATALOG_ENTRY_KEYS` knows the key, so the nine
+  biomes read with no warnings.
+
 ## Runtime
 
 Nothing is served unless something is installed: with no `res://libraries/*`, no
@@ -381,6 +424,52 @@ godot --path D:/dev/tabletop/tt-sim --windowed --resolution 1920x1080 --position
   square, against both `lib_slice_pkg` and the stable `ttsim_package_plantgen_all`); the render
   job's package and library captures (home and size 14) are pixel-identical (mean absolute
   difference 0.000 of 255).
+- Step S5 proof (2026-10-24, plantgen `out/lib_core` built from `out/lib_core_pkg`, the nine
+  biomes, 121 rules, 268 library assets, 288 palette assets, 36 surfaces):
+
+```
+godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/compile_library_cli.gd -- --library D:/dev/plantgen/out/lib_core --out <compiled.json> --surfaces 1
+godot --headless --path D:/dev/plantgen --script res://tools/library_diff_cli.gd -- --compiled <compiled.json> --package D:/dev/plantgen/out/lib_core_pkg --plan D:/dev/tabletop/core-library/plan.json --all 1
+# PowerShell: $env:PLANTGEN_LIB_CORE='D:/dev/plantgen/out/lib_core'; $env:PLANTGEN_LIB_CORE_PKG='D:/dev/plantgen/out/lib_core_pkg'
+godot --headless --path D:/dev/tabletop/tt-sim --script res://addons/gut/gut_cmdln.gd -- '-gconfig=tests/.gutconfig.json' -gselect=test_library_row_parity
+godot --headless --path D:/dev/tabletop/tt-sim --script res://addons/gut/gut_cmdln.gd -- '-gconfig=tests/.gutconfig.json' -gselect=test_library_core_surfaces
+godot --path D:/dev/tabletop/tt-sim --windowed --resolution 1920x1080 --position 320,120 --script res://tools/render_jobs/run.gd -- library_s5_surfaces --full
+```
+
+  (1) Warnings: the compile prints 0 `validate_palette` warnings and the registry's `apply` 0
+  warnings for the whole library (the reader warned `roles` on all 268 catalog entries until
+  `LibraryContracts.CATALOG_ENTRY_KEYS` learned the key). (2) Rules and assets table: the diff
+  tool finds 0 differences in all nine biomes (every biome field including the thumbnail path,
+  every rule field, every asset id after the `package_stem` mapping) and 0 in the assets table
+  (node, wind category, size class, dimensions of 288 assets); the water surfaces the library
+  writes explicitly equal the game's defaults for each biome. (3) Rows: `test_library_row_parity`
+  generates every biome at seed 1234 over a 32 m square through the package route
+  (`overlay_package` of `lib_core_pkg`) and the library route (the dev override) and finds the
+  same rules (authoring fields stripped, habit and plan role equal), the same biome fields and
+  byte-identical rows after the id mapping: alpine meadow 6196 rows, birch woodland 3486, boreal
+  taiga 2228, burnt forest 347, grassland meadow 9875, rocky badlands 1117, savanna 4196,
+  temperate forest 4418, wetland riparian 7470 (2074 checks, 21 s). A miniature of the same
+  comparison (a core-shaped library with renamed ids, surfaces by name, a thumbnail and bindings,
+  against a hand-written package) always runs. (4) Surfaces: `test_library_core_surfaces` bakes
+  all 36 sets from their library PNGs and compares them with the editor import (formats, sizes,
+  mip counts; normal, ORM and height byte for byte, albedo decoded within 0.1 of 255 on
+  average), serves the library over the installed palette and finds every biome's ground, cliff,
+  scree, water, accents, paths, look and thumbnail, and the surface table (kind, role, tile,
+  mean), equal to the installed route, 132 maps resolved through `SurfaceStore` equal to the
+  imported ones, every label as `SURFACE_LABELS` or the spelled-out id gives today, and
+  `LibraryBindings` equal to its legacy defaults for all 12 keys. Render job
+  `library_s5_surfaces` (savanna, temperate forest and rocky badlands on the terraces landform,
+  seed 1234, full size, one run; a_ is the package route with the installed surfaces, b_ the
+  library with its own PNGs): the ground alone (plants hidden) differs by 0.06 (badlands), 0.07
+  (temperate forest) and 0.03 (savanna, once warmed up) of 255 mean absolute; with plants 0.34,
+  0.23 and 0.36 at the home view and 0.38, 0.32 and 1.42 at size 14. The first savanna map of a
+  run drew its ground 0.5 of 255 away from every later one (package route against itself 0.455,
+  library against itself 0.03; the warmed-up pair of the savanna ground is the 0.03 above, from
+  a repeat job), so the 0.68 and 1.42 the first run showed there are a warm-up effect of the
+  run, not of the surfaces. Read by eye the a_ and b_ frames are indistinguishable. The plants' share is the
+  usual run-to-run noise of two builds (sway, mesh import), which S3 measured at 0.24 to 0.75.
+  (5) The asset-id mapping is recorded above (The core library). (6) Thumbnails are copies of
+  the installed 512 px JPGs.
 
 ## Open work
 
@@ -402,9 +491,28 @@ no plants there (regeneration is offered, not automatic, because it discards sca
 edits). A library GLB is parsed exactly as the S1 route parsed it (compression off; the
 installed counterpart `PaletteOverlay.compressed_like` looked up had no file at the library's
 own relative path), so the S1 parity holds in kind; re-run `jobs/library_s1_savanna.json` when
-core moves into `res://libraries`.
+core moves into `res://libraries`. Left over for S10 (ship `core`, leave treecube): copy
+plantgen's `out/lib_core` (170 MB: 35 MB of GLB, 135 MB of surfaces, 468 files) into
+`res://libraries/core` by route K or R of the design (the surfaces are Git LFS in the sources
+repo, and `core` then needs `LibraryRegistry.BUILTIN_VERSION` retired); remove `assets/palette`,
+`PaletteOverlay` and the treecube branch of `FoliageLibrary`, the key-list fallbacks, and
+`SURFACE_LABELS` (the labels are in each `surface.json`); decide whether the nine biome
+thumbnails are re-rendered (they are still the 512 px treecube JPGs) and publish
+`LibraryBindings.TABLE` in `contract.json`; maps saved under treecube asset ids regenerate once
+(the library's ids are `<stem>_<biome>` for 208 assets, `AssetStore` and the aliases pass can
+map the old ids if a kept map must keep its plants); re-run the nine-biome row parity and
+`jobs/library_s5_surfaces.json` against the shipped folder.
 
 ## History
+
+- 2026-10-24: step S5: `core` as the nine-biome library with its 36 surfaces, 9 thumbnails and
+  bindings (plantgen `LibrarySurfaces`, the sources repo `core-library`); the registry serves it
+  with 0 warnings and the row, rule, asset-table, surface and binding proofs above; the catalog
+  key `roles` is known to the reader; `SurfaceStore.is_library_thumbnail`; the row parity test
+  loops the nine biomes through `tests/unit/library_route_compare.gd`. Findings: a core library
+  needs no id translation in the scatter code (nothing reads an id's text); the first map built
+  in a run drew a savanna ground 0.5 of 255 away from its later builds (seen on the package
+  route, the first of the job), so a parity capture should not be the first map of its run.
 
 - 2026-10-24: step S4: `LibraryRegistry` scans `res://libraries` and `user://libraries` besides
   the developer override and serves every library that `LibraryResolver` can (duplicates,

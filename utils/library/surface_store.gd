@@ -130,6 +130,12 @@ static func is_library_path(root: String, relative: String) -> bool:
 	return _paths.has(_key(root, relative))
 
 
+## True when the palette-relative path is a library biome's own thumbnail (registered by
+## register_thumbnails), not the installed palette's picture.
+static func is_library_thumbnail(root: String, relative: String) -> bool:
+	return _thumbs.has(_key(root, relative))
+
+
 static func is_library_surface(name: String) -> bool:
 	return _surfaces.has(runtime_name(name))
 

@@ -62,6 +62,7 @@
 		"res://tests/unit/test_library_assetstore.gd",
 		"res://tests/unit/test_library_compile.gd",
 		"res://tests/unit/test_library_contracts.gd",
+		"res://tests/unit/test_library_core_surfaces.gd",
 		"res://tests/unit/test_library_ids.gd",
 		"res://tests/unit/test_library_reader.gd",
 		"res://tests/unit/test_library_registry.gd",
