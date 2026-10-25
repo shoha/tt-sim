@@ -109,6 +109,7 @@
 		"res://tests/unit/test_relief_gameplay.gd",
 		"res://tests/unit/test_river_exits.gd",
 		"res://tests/unit/test_rocks_survive.gd",
+		"res://tests/unit/test_safe_delete.gd",
 		"res://tests/unit/test_scatter_build.gd",
 		"res://tests/unit/test_scatter_chunker.gd",
 		"res://tests/unit/test_scatter_curves.gd",

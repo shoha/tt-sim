@@ -700,8 +700,9 @@ func test_nothing_outside_the_user_folders_is_ever_deleted() -> void:
 	# the working directory (a worktree was emptied that way on 2026-10-24).
 	for bad in ["", "abc", ".incoming", "res://x/y/z", "C:/", "D:", "user://", "/", "../x/y/z/w/v"]:
 		assert_false(LibraryImporter.is_safe_path(bad), "'%s' is not safe" % bad)
-	for good in ["user://libraries/.incoming/ab12", "D:/dev/tabletop/scratch/x/y"]:
+	for good in ["user://libraries/.incoming/ab12", "user://x"]:
 		assert_true(LibraryImporter.is_safe_path(good), good)
+	assert_false(LibraryImporter.is_safe_path("D:/dev/tabletop/scratch/x/y"), "outside user dir")
 	var saved := LibraryRegistry.user_root
 	LibraryRegistry.user_root = ""
 	assert_eq(LibraryImporter.sweep_incoming(), 0, "no root, no sweep")
@@ -711,8 +712,7 @@ func test_nothing_outside_the_user_folders_is_ever_deleted() -> void:
 	assert_false(LibraryImporter.is_quarantined(SOURCE))
 	# A relative path that does not exist, never the project's own folders: if the guard were
 	# broken this test must not be the one that deletes them.
-	assert_false(LibraryImporter.remove_tree("zz_not_a_folder"))
-	assert_push_error("refusing to delete")
+	assert_false(SafeDelete.tree("zz_not_a_folder")["ok"])
 	assert_false(
 		LibraryInstall.install({"can_install": true, "id": "alienworld", "folder": SOURCE})["ok"]
 	)

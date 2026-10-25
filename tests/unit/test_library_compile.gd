@@ -43,7 +43,11 @@ const RECEIVED_STORE := "library_received_store.gd"
 ## The import step (S6) reads the player's import source, writes and empties the quarantine
 ## folder, moves a staged library into place and deletes one the player removed. It never
 ## DISCOVERS libraries: nothing there decides what is installed, the registry still does.
-const IMPORT_STEP: Array[String] = ["library_importer.gd", "library_install.gd"]
+## SafeDelete is the one recursive delete of all of them: it removes a marked folder inside a
+## managed root and lists nothing to decide what is installed.
+const IMPORT_STEP: Array[String] = [
+	"library_importer.gd", "library_install.gd", "safe_delete.gd"
+]
 
 var _saved_settings_path: String = ""
 
@@ -157,6 +161,8 @@ func _write_base() -> void:
 
 
 func _remove_tree(path: String) -> void:
+	if LibraryPaths.verify(path) != "":  # "" and "." mean the working directory (the project)
+		return
 	var dir := DirAccess.open(path)
 	if dir == null:
 		return

@@ -21,7 +21,7 @@ func after_each() -> void:
 
 
 func _remove_tree(path: String) -> void:
-	if not DirAccess.dir_exists_absolute(path):
+	if LibraryPaths.verify(path) != "" or not DirAccess.dir_exists_absolute(path):
 		return
 	var dir := DirAccess.open(path)
 	dir.list_dir_begin()

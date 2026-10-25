@@ -115,8 +115,21 @@ static func read(path: String) -> Image:
 ## Writes `image` to `path` (creating the folders); false on any failure. Written to a
 ## neighbouring temporary file and renamed, so a half-written cache is never read.
 static func write(path: String, image: Image) -> bool:
+	var base := LibraryPaths.cache()
+	var target := LibraryPaths.resolve(path)
+	if not base["ok"] or not target["ok"]:
+		return false
+	var cache_root := String(base["path"])
+	if not LibraryPaths.inside(String(target["path"]), cache_root):
+		return false
 	if DirAccess.make_dir_recursive_absolute(path.get_base_dir()) != OK:
 		return false
+	# The first folder under the cache root is the library's: the game made it, so it carries
+	# the ownership marker that lets remove_library() delete it.
+	var relative := String(target["path"]).substr(cache_root.length()).trim_prefix("/")
+	var library_folder := cache_root.path_join(relative.get_slice("/", 0))
+	if relative.contains("/") and not SafeDelete.is_owned(library_folder):
+		SafeDelete.mark(library_folder, "surface_cache", cache_root)
 	var temporary := path + ".tmp"
 	var file := FileAccess.open(temporary, FileAccess.WRITE)
 	if file == null:
@@ -124,8 +137,26 @@ static func write(path: String, image: Image) -> bool:
 	file.store_buffer(encode(image))
 	file.close()
 	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(path)
+		SafeDelete.file(path, cache_root)
 	return DirAccess.rename_absolute(temporary, path) == OK
+
+
+## Deletes the baked maps of library `library_id` (its folder under the cache root); true when
+## nothing is left. The folder goes only when it carries the ownership marker; a cache made
+## before the marker existed is adopted first when it holds nothing but `.ttimg` and `.tmp`
+## files (the cache is rebuilt on demand, so a refusal only costs disk).
+static func remove_library(library_id: String) -> bool:
+	var base := LibraryPaths.cache()
+	var folder := LibraryPaths.child(base, library_id)
+	if not folder["ok"]:
+		return false
+	var path := String(folder["path"])
+	if not DirAccess.dir_exists_absolute(path):
+		return true
+	if not SafeDelete.is_owned(path):
+		var extensions := PackedStringArray([FILE_EXTENSION, "tmp"])
+		SafeDelete.mark_if_only(path, "surface_cache", extensions, String(base["path"]))
+	return bool(SafeDelete.tree(path, String(base["path"]))["ok"])
 
 
 static func _digest(data: PackedByteArray) -> PackedByteArray:

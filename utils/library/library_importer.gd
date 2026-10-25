@@ -28,7 +28,8 @@ const LIBRARY_FILE := "library.json"
 const KIB := 1024
 const MIB := 1024 * 1024
 ## Names a zip tool or a file manager adds by itself; left out of the import with a note.
-const JUNK_NAMES: Array[String] = [".ds_store", "thumbs.db", "desktop.ini"]
+## (The ownership marker is one: a library never carries it in, the game writes its own.)
+const JUNK_NAMES: Array[String] = [".ds_store", "thumbs.db", "desktop.ini", ".tt-owned"]
 const JUNK_FOLDERS: Array[String] = ["__macosx", ".git", ".github", ".svn", ".hg"]
 ## The most error lines one answer carries (the rest are counted).
 const MAX_LINES := 12
@@ -37,6 +38,8 @@ const MAX_LINES := 12
 static var limits: Dictionary = default_limits()
 ## The incoming folder; empty means under LibraryRegistry.user_root.
 static var incoming_override: String = ""
+## How many quarantine folders the last sweep left because they carry no ownership marker.
+static var last_sweep_skipped: int = 0
 
 
 ## The hard limits of design 2.10: a zip of at most 20,000 entries, 1 GiB uncompressed, expanding
@@ -82,49 +85,52 @@ static func incoming_root() -> String:
 ## True when `path` is somewhere stage() may write or discard() may delete: inside the incoming
 ## folder, no `..`.
 static func is_quarantined(path: String) -> bool:
-	if not is_safe_path(incoming_root()):
-		return false
-	var root := incoming_root().simplify_path()
-	var clean := path.simplify_path()
-	return clean.begins_with(root + "/") and ".." not in clean.split("/")
+	var root := LibraryPaths.incoming()
+	var target := LibraryPaths.resolve(path)
+	return bool(root["ok"]) and bool(target["ok"]) and LibraryPaths.inside(
+		String(target["path"]), String(root["path"])
+	)
 
 
-## True when `path` is a place this class may write to or delete from: absolute (`user://`, a
-## drive letter or a rooted path), not under `res://`, with no `..` segment, not a bare root and
-## not empty. A relative or empty path resolves against the working directory, which in a
-## developer run is the project itself: an empty quarantine root once made a sweep delete a whole
-## worktree (2026-10-24). Every deletion and every write of an import goes through this check.
+## True when `path` is a place this class may write to: absolute, inside the user data folder,
+## no `..`, not empty (LibraryPaths.resolve). A relative or empty path resolves against the
+## working directory, which in a developer run is the project itself: a recursive delete of one
+## emptied a whole worktree (2026-10-24; docs/systems/library.md "Destructive operations").
 static func is_safe_path(path: String) -> bool:
-	if path == "" or path.begins_with("res://") or not path.is_absolute_path():
-		return false
-	var clean := path.simplify_path()
-	if clean.length() < 8 or ".." in clean.split("/"):
-		return false
-	var rest := clean.trim_prefix("user://")
-	return rest != "" and rest.trim_suffix("/") not in ["", "C:", "D:", "E:"]
+	return LibraryPaths.verify(path) == ""
 
 
 ## Deletes quarantine folders except `keep` (a staged folder still in use). Returns how many.
+## Only folders carrying the ownership marker go (SafeDelete); the rest are left and counted in
+## `last_sweep_skipped`.
 static func sweep_incoming(keep: String = "") -> int:
 	var removed := 0
-	var root := incoming_root()
-	if not is_safe_path(root) or root.simplify_path().get_file() != INCOMING:
+	last_sweep_skipped = 0
+	var root := LibraryPaths.incoming()
+	if not root["ok"] or String(root["path"]).get_file() != INCOMING:
 		return 0
-	if not DirAccess.dir_exists_absolute(root):
+	var base := String(root["path"])
+	if not DirAccess.dir_exists_absolute(base):
 		return 0
-	for entry in DirAccess.get_directories_at(root):
-		var folder := root.path_join(entry)
-		if keep != "" and folder.simplify_path() == keep.simplify_path():
+	var kept := ""
+	if keep != "" and LibraryPaths.resolve(keep)["ok"]:
+		kept = String(LibraryPaths.resolve(keep)["path"])
+	for entry in DirAccess.get_directories_at(base):
+		var folder := base.path_join(entry)
+		if kept != "" and LibraryPaths.clean(folder) == LibraryPaths.clean(kept):
 			continue
-		if remove_tree(folder):
+		if bool(SafeDelete.tree(folder, base)["ok"]):
 			removed += 1
+		else:
+			last_sweep_skipped += 1
 	return removed
 
 
-## Deletes a staged folder (a no-op for anything outside the quarantine).
-static func discard(staged: String) -> void:
-	if staged != "" and is_quarantined(staged):
-		remove_tree(staged)
+## Deletes a staged folder (a no-op for anything outside the quarantine). True when it is gone.
+static func discard(staged: String) -> bool:
+	if staged == "" or not is_quarantined(staged):
+		return false
+	return bool(SafeDelete.tree(staged, String(LibraryPaths.incoming()["path"]))["ok"])
 
 
 # ---- sniffing (drop routing) ----
@@ -601,10 +607,17 @@ static func _is_junk_segment(segment: String) -> bool:
 static func stage(plan: Dictionary, progress: Progress = null) -> Dictionary:
 	if not bool(plan.get("ok", false)):
 		return {"ok": false, "folder": "", "error": "The import was not checked."}
-	if not is_safe_path(incoming_root()):
+	var quarantine := LibraryPaths.incoming()
+	if not quarantine["ok"]:
 		return {"ok": false, "folder": "", "error": "There is no place to keep an import."}
+	var base := String(quarantine["path"])
 	var folder := incoming_root().path_join(token())
 	if DirAccess.make_dir_recursive_absolute(folder) != OK:
+		return {"ok": false, "folder": "", "error": "The incoming folder cannot be created."}
+	# The ownership marker first: the game created this folder, so only the game's own sweep may
+	# delete it (SafeDelete), and a marker inside the archive is ignored as junk.
+	if not SafeDelete.mark(folder, "incoming", base):
+		DirAccess.remove_absolute(folder)
 		return {"ok": false, "folder": "", "error": "The incoming folder cannot be created."}
 	if progress != null:
 		progress.total = int(plan["total_bytes"])
@@ -614,7 +627,7 @@ static func stage(plan: Dictionary, progress: Progress = null) -> Dictionary:
 	if String(plan["kind"]) == "zip":
 		zip = ZIPReader.new()
 		if zip.open(String(plan["source"])) != OK:
-			remove_tree(folder)
+			SafeDelete.tree(folder, base)
 			return {"ok": false, "folder": "", "error": "The archive cannot be opened."}
 	var problem := ""
 	for item: Dictionary in plan["files"]:
@@ -629,7 +642,7 @@ static func stage(plan: Dictionary, progress: Progress = null) -> Dictionary:
 	if zip != null:
 		zip.close()
 	if problem != "":
-		remove_tree(folder)
+		SafeDelete.tree(folder, base)
 		return {"ok": false, "folder": "", "error": problem}
 	return {"ok": true, "folder": folder, "error": ""}
 
@@ -661,24 +674,6 @@ static func _write_one(item: Dictionary, folder: String, zip: ZIPReader) -> Stri
 	var failed := file.get_error() != OK
 	file.close()
 	return "'%s' cannot be written (is the disk full?)." % _short(name) if failed else ""
-
-
-## Recursively deletes `path` (a file or a folder); true when it is gone. Never follows a link
-## out of the tree: a link is removed as itself.
-static func remove_tree(path: String) -> bool:
-	if not is_safe_path(path):
-		push_error("LibraryImporter: refusing to delete '%s'" % path)
-		return false
-	if DirAccess.dir_exists_absolute(path):
-		if not _is_link(path):
-			for sub in DirAccess.get_directories_at(path):
-				remove_tree(path.path_join(sub))
-			for file_name in DirAccess.get_files_at(path):
-				DirAccess.remove_absolute(path.path_join(file_name))
-		DirAccess.remove_absolute(path)
-	elif FileAccess.file_exists(path):
-		DirAccess.remove_absolute(path)
-	return not DirAccess.dir_exists_absolute(path) and not FileAccess.file_exists(path)
 
 
 # ---- small helpers ----

@@ -169,6 +169,8 @@ func _write_base() -> void:
 
 
 func _remove_tree(path: String) -> void:
+	if LibraryPaths.verify(path) != "":  # "" and "." mean the working directory (the project)
+		return
 	var dir := DirAccess.open(path)
 	if dir == null:
 		return
@@ -511,7 +513,8 @@ func _cache_files() -> Array[String]:
 
 func _collect(path: String, out: Array[String]) -> void:
 	for file_name in DirAccess.get_files_at(path):
-		out.append(path.path_join(file_name))
+		if file_name != SafeDelete.MARKER:  # the ownership marker is not a cache file
+			out.append(path.path_join(file_name))
 	for sub in DirAccess.get_directories_at(path):
 		_collect(path.path_join(sub), out)
 

@@ -34,7 +34,7 @@ func after_each() -> void:
 
 
 func _remove_tree(path: String) -> void:
-	if not DirAccess.dir_exists_absolute(path):
+	if LibraryPaths.verify(path) != "" or not DirAccess.dir_exists_absolute(path):
 		return
 	for sub in DirAccess.get_directories_at(path):
 		_remove_tree(path + sub + "/")

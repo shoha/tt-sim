@@ -9,6 +9,7 @@ extends RefCounted
 ## The GLBs are real (GLTFDocument writes them), the catalog carries each one's bytes and sha256.
 ## Not a test file itself (GUT only collects test_*.gd). Preload it as a const.
 
+const ScratchDir := preload("res://tests/unit/scratch_dir.gd")
 const ALIEN_RUNTIME := "alienworld__crystal_basin_summer_s1"
 const CORE_RUNTIME := "forest_summer_s1"
 
@@ -261,12 +262,7 @@ static func write_base(base: String) -> void:
 	write_json(base.path_join("palette.json"), document)
 
 
+## Test cleanup. Goes through ScratchDir, which refuses an empty, relative or non-scratch path:
+## DirAccess.open("") is the working directory, the project itself in a developer run.
 static func remove_tree(path: String) -> void:
-	var dir := DirAccess.open(path)
-	if dir == null:
-		return
-	for sub in dir.get_directories():
-		remove_tree(path.path_join(sub))
-	for file_name in dir.get_files():
-		dir.remove(file_name)
-	DirAccess.remove_absolute(path)
+	ScratchDir.clear(path)
