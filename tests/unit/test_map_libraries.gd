@@ -130,7 +130,8 @@ func test_a_library_that_is_not_installed_is_missing_with_its_name_and_version()
 	assert_eq(report["missing"][0]["reason"], "not installed")
 	assert_eq(report["blocked"], ["ghostworld"])
 	var text := MapLibraries.describe(report)
-	assert_string_contains(text, "ghostworld 2.1.0 (not installed)")
+	assert_string_contains(text, "ghostworld v2.1.0 is not installed.")
+	assert_false("plant" in text.to_lower(), "no 'plants' in a dialog")
 
 
 func test_a_turned_off_or_failed_library_is_missing_with_the_reason() -> void:
@@ -139,8 +140,8 @@ func test_a_turned_off_or_failed_library_is_missing_with_the_reason() -> void:
 	var report := MapLibraries.check(_claims("0.3.1"))
 	assert_eq(report["missing"][0]["reason"], "installed but turned off")
 	assert_eq(report["missing"][0]["name"], "Alien World")
-	assert_string_contains(MapLibraries.describe(report), "Alien World 0.3.1")
-	assert_string_contains(MapLibraries.describe(report), "by Test Author")
+	assert_string_contains(MapLibraries.describe(report), "Alien World v0.3.1 by Test Author")
+	assert_string_contains(MapLibraries.describe(report), "turned off")
 	LibraryRegistry.set_enabled("alienworld", true)
 	World.write_alien(_paths["alien"], "0.3.1", [{"id": "core", "version": "^5"}], false)
 	LibraryRegistry.apply(_paths["base"])
@@ -153,7 +154,8 @@ func test_another_major_version_is_incompatible_a_newer_minor_is_fine() -> void:
 	assert_false(incompatible["ok"])
 	assert_eq(incompatible["incompatible"][0]["wanted"], "1.0.0")
 	assert_eq(incompatible["incompatible"][0]["have"], "0.3.1")
-	assert_string_contains(MapLibraries.describe(incompatible), "saved with 1.0.0")
+	assert_string_contains(MapLibraries.describe(incompatible), "saved with version 1.0.0")
+	assert_string_contains(MapLibraries.describe(incompatible), "has version 0.3.1")
 	var older := MapLibraries.check(_core_claim("1.0.0"))
 	assert_true(older["ok"], "the installed core is newer in the minor: ids are never removed")
 	assert_false(MapLibraries.check(_core_claim("2.0.0"))["ok"])
@@ -266,6 +268,84 @@ func test_without_a_chooser_the_map_opens_without_those_plants_and_still_says_so
 	assert_false(gate["report"]["ok"], "the substitution is reported, not silent")
 
 
+func test_an_install_from_the_dialog_reruns_the_check_and_opens_the_map_whole() -> void:
+	var made := _saved_with_alien()
+	var read: MapDocument = MapDocumentIO.read(made[0])["document"]
+	LibraryRegistry.set_enabled("alienworld", false)
+	LibraryRegistry.apply(_paths["base"])
+	var asked := [0]
+	# The player turned the collection on from the dialog (as an import would add it): the choice
+	# answers RETRY, the gate checks again, finds nothing lacking and never drops a row.
+	var import_it := func(_report: Dictionary) -> Variant:
+		asked[0] += 1
+		LibraryRegistry.set_enabled("alienworld", true)
+		LibraryRegistry.apply(_paths["base"])
+		return MapLibraryGate.RETRY
+	var gate: Dictionary = await MapLibraryGate.run(read, import_it, _paths["base"])
+	assert_eq(asked[0], 1, "asked once")
+	assert_true(gate["proceed"])
+	assert_true(gate["report"]["ok"], "the second check passes")
+	assert_eq(gate["dropped"], {}, "nothing was dropped")
+	assert_true(read.scatter.has(SPIRE))
+
+
+func test_a_retry_that_still_lacks_the_library_asks_again() -> void:
+	var made := _saved_with_alien()
+	var read: MapDocument = MapDocumentIO.read(made[0])["document"]
+	LibraryRegistry.set_enabled("alienworld", false)
+	LibraryRegistry.apply(_paths["base"])
+	var answers: Array = [MapLibraryGate.RETRY, false]
+	var asked := [0]
+	var choose := func(_report: Dictionary) -> Variant:
+		asked[0] += 1
+		return answers.pop_front()
+	var gate: Dictionary = await MapLibraryGate.run(read, choose, _paths["base"])
+	assert_eq(asked[0], 2)
+	assert_false(gate["proceed"])
+
+
+func test_no_dialog_string_of_the_gate_says_plants() -> void:
+	var made := _saved_with_alien()
+	var read: MapDocument = MapDocumentIO.read(made[0])["document"]
+	LibraryRegistry.set_enabled("alienworld", false)
+	LibraryRegistry.apply(_paths["base"])
+	var gate: Dictionary = await MapLibraryGate.run(read, Callable(), _paths["base"])
+	var text := MapLibraryGate.toast_text(gate["report"], gate["dropped"], "", _paths["base"])
+	assert_false("plant" in text.to_lower(), text)
+	assert_false("plant" in LibraryNames.mismatch_title().to_lower())
+	assert_false("plant" in LibraryNames.open_without().to_lower())
+	assert_false("plant" in LibraryNames.host_uses_title().to_lower())
+	assert_true(LibraryNames.lower(2) in LibraryNames.open_without())
+
+
+# ---- the link a record may carry ----
+
+
+func test_a_record_carries_the_libraries_link_and_the_report_hands_it_on() -> void:
+	World.edit_json(
+		_paths["alien"] + "/library.json",
+		func(d: Dictionary) -> void: d["url"] = "https://example.org/alienworld"
+	)
+	LibraryRegistry.apply(_paths["base"])
+	var record := MapLibraries.record_for(_doc())
+	assert_eq(record[0]["url"], "https://example.org/alienworld")
+	assert_false(record[1].has("url"), "core has no link: no key")
+	var path := ROOT + "/linked.ttmap"
+	assert_eq(MapDocumentIO.write(_doc(), path), OK)
+	var peeked := MapDocumentIO.peek_libraries(path)
+	assert_eq(peeked[0]["url"], "https://example.org/alienworld", "kept in the manifest")
+	# Another install, where the library is not installed at all: the report names the record's.
+	var claimed: Array[Dictionary] = [
+		{"id": "frostworld", "version": "1.0.0", "hash": "", "url": "https://example.org/frost"}
+	]
+	var report := MapLibraries.check(claimed)
+	assert_eq(report["missing"][0]["url"], "https://example.org/frost")
+	assert_true(MapLibraries.is_link("https://example.org/x"))
+	assert_false(MapLibraries.is_link("javascript:alert(1)"))
+	assert_false(MapLibraries.is_link("https://example.org/a b"))
+	assert_false(MapLibraries.is_link("ftp://example.org"))
+
+
 # ---- LibraryGroups ----
 
 
@@ -279,7 +359,13 @@ func test_biomes_are_grouped_by_library_core_first_then_alphabetically() -> void
 		{"id": "meadow_summer_s1", "name": "Meadow", "season": "summer"},
 	]
 	var libraries: Array[Dictionary] = [
-		{"id": "core", "name": "tt-sim Core", "version": "1.0.0", "status": "ok", "default_biome": ""},
+		{
+			"id": "core",
+			"name": "tt-sim Core",
+			"version": "1.0.0",
+			"status": "ok",
+			"default_biome": ""
+		},
 		{
 			"id": "alienworld",
 			"name": "Alien World",

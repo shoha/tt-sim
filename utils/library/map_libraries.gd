@@ -21,6 +21,8 @@ extends RefCounted
 
 ## Library id -> display text the dialog uses when the library is not installed at all.
 const NOT_INSTALLED := "not installed"
+const TURNED_OFF := "installed but turned off"
+const MAX_LINK := 300
 
 
 ## The library ids `doc` uses, sorted: the prefix of every biome id, scatter and props asset id
@@ -57,13 +59,28 @@ static func record_for(doc: MapDocument) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for id in used_ids(doc):
 		var served := LibraryRegistry.record_of(id)
-		if served.is_empty():
+		if not served.is_empty():
+			# Carry the library's link, so a player without it is told where to look.
+			var link := String(LibraryRegistry.info(id).get("url", ""))
+			if is_link(link):
+				served["url"] = link
+		else:
 			served = {"id": id, "version": "", "hash": ""}
 			for claimed in doc.libraries:
 				if claimed.get("id") == id:
 					served = claimed.duplicate()
 		out.append(served)
 	return out
+
+
+## True for a plain web link a record may carry: http or https, at most MAX_LINK characters, no
+## whitespace.
+static func is_link(text: String) -> bool:
+	return (
+		text.length() <= MAX_LINK
+		and (text.begins_with("https://") or text.begins_with("http://"))
+		and not " " in text
+	)
 
 
 ## The format number to write for a `libraries` list: FORMAT_LIBRARIES when any is not core.
@@ -83,7 +100,11 @@ static func format_for(libraries: Array[Dictionary]) -> int:
 ## edited). Pure of the document; reads LibraryRegistry's served state.
 static func check(libraries: Array[Dictionary]) -> Dictionary:
 	var out := {
-		"ok": true, "missing": [], "incompatible": [], "warnings": [] as Array[String], "blocked": []
+		"ok": true,
+		"missing": [],
+		"incompatible": [],
+		"warnings": [] as Array[String],
+		"blocked": []
 	}
 	for claimed in libraries:
 		var id := String(claimed.get("id", ""))
@@ -91,15 +112,23 @@ static func check(libraries: Array[Dictionary]) -> Dictionary:
 		var served := LibraryRegistry.record_of(id)
 		if served.is_empty():
 			var found := LibraryRegistry.info(id)
-			(out["missing"] as Array).append(
-				{
-					"id": id,
-					"version": wanted,
-					"name": String(found.get("name", id)),
-					"author": String(found.get("author", "")),
-					"url": String(found.get("url", "")),
-					"reason": _why_missing(found),
-				}
+			# The link: the installed copy's, else the one the map's own record carries (a
+			# record written from a library that had a `url`).
+			var link := String(found.get("url", ""))
+			if link == "":
+				link = String(claimed.get("url", ""))
+			(
+				(out["missing"] as Array)
+				. append(
+					{
+						"id": id,
+						"version": wanted,
+						"name": String(found.get("name", id)),
+						"author": String(found.get("author", "")),
+						"url": link,
+						"reason": _why_missing(found),
+					}
+				)
 			)
 			(out["blocked"] as Array).append(id)
 			continue
@@ -111,8 +140,18 @@ static func check(libraries: Array[Dictionary]) -> Dictionary:
 			and not have_parts.is_empty()
 			and wanted_parts["major"] != have_parts["major"]
 		):
-			(out["incompatible"] as Array).append(
-				{"id": id, "wanted": wanted, "have": have, "name": id}
+			var served_info := LibraryRegistry.info(id)
+			(
+				(out["incompatible"] as Array)
+				. append(
+					{
+						"id": id,
+						"wanted": wanted,
+						"have": have,
+						"name": String(served_info.get("name", id)),
+						"url": String(served_info.get("url", String(claimed.get("url", "")))),
+					}
+				)
 			)
 			(out["blocked"] as Array).append(id)
 		elif wanted == have and String(claimed.get("hash", "")) not in ["", String(served["hash"])]:
@@ -127,24 +166,37 @@ static func _why_missing(found: Dictionary) -> String:
 	if found.is_empty():
 		return NOT_INSTALLED
 	if found["status"] == LibraryResolver.DISABLED:
-		return "installed but turned off"
+		return TURNED_OFF
 	var reasons: Array = found.get("reasons", [])
 	return String(reasons[0]) if not reasons.is_empty() else "it could not be loaded"
 
 
-## One line for the dialog: "alienworld 0.3.1 (not installed)" per missing or incompatible
-## library, joined with newlines.
+## One plain sentence per missing or incompatible library, joined with newlines: "Alien World
+## v0.3.1 by Test Author is not installed.", "... is installed but turned off.", "Frost World
+## v1.2.0: this map was saved with version 1.2.0; this game has version 1.0.0."
 static func describe(report: Dictionary) -> String:
 	var lines: Array[String] = []
 	for item: Dictionary in report["missing"]:
-		var line := "%s %s (%s)" % [item["name"], item["version"], item["reason"]]
+		var who := String(item["name"])
+		if String(item["version"]) != "":
+			who += " v%s" % item["version"]
 		if String(item.get("author", "")) != "":
-			line += ", by %s" % item["author"]
-		lines.append(line)
+			who += " by %s" % item["author"]
+		var reason := String(item["reason"])
+		if reason == NOT_INSTALLED:
+			lines.append("%s is not installed." % who)
+		elif reason == TURNED_OFF:
+			lines.append("%s is installed but turned off." % who)
+		else:
+			var plain := LibraryReasons.explain(reason)
+			lines.append("%s cannot be used. %s" % [who, LibraryReasons.sentence(plain)])
 	for item: Dictionary in report["incompatible"]:
-		lines.append("%s: the map was saved with %s, this game has %s" % [
-			item["id"], item["wanted"], item["have"]
-		])
+		lines.append(
+			(
+				"%s: this map was saved with version %s; this game has version %s."
+				% [item["name"], item["wanted"], item["have"]]
+			)
+		)
 	return "\n".join(lines)
 
 

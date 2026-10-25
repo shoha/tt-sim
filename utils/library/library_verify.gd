@@ -50,6 +50,19 @@ static func summary_text(summary: Dictionary) -> String:
 	return "%d of %d files have a problem." % [bad, checked]
 
 
+## A check's `error` in a player's words: no sha256, no catalog (review UX-3). The original text
+## stays available to the caller (a tooltip).
+static func plain_error(error: String) -> String:
+	var lowered := error.to_lower()
+	if "sha256" in lowered or "byte" in lowered or "size" in lowered:
+		return "this file has changed or is damaged"
+	if "missing" in lowered or "not found" in lowered or "no such" in lowered or "open" in lowered:
+		return "this file is missing"
+	if "external" in lowered or "texture" in lowered or "container" in lowered:
+		return "this file is not a safe model"
+	return "this file did not pass the check"
+
+
 ## The asset id without its biome prefix ("alienworld__x_summer_s1/Tree" -> "Tree") for a list.
 static func short_name(asset_id: String) -> String:
 	return asset_id.get_slice("/", 1) if "/" in asset_id else asset_id

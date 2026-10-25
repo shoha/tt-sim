@@ -37,6 +37,8 @@
 		"res://tests/unit/test_level_editor_chrome.gd",
 		"res://tests/unit/test_level_grid.gd",
 		"res://tests/unit/test_library_manager.gd",
+		"res://tests/unit/test_library_manager_ux.gd",
+		"res://tests/unit/test_shadow_gutter.gd",
 		"res://tests/unit/test_library_title.gd",
 		"res://tests/unit/test_level_manager_cards.gd",
 		"res://tests/unit/test_level_picker_dialog.gd",

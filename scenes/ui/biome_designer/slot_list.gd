@@ -44,6 +44,8 @@ func _init() -> void:
 	add_child(head)
 	_scroll = ScrollContainer.new()
 	_scroll.name = "SlotScroll"
+	# The Add buttons and chips at its edges keep their focus ring and halo whole.
+	ShadowGutter.wrap(_scroll, ShadowGutter.Kind.GLASS_RING)
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_scroll.custom_minimum_size = Vector2(0.0, SLOTS_MIN_HEIGHT)
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -182,7 +184,9 @@ func _build_lock_row(row: HBoxContainer) -> void:
 	_lock_all.pressed.connect(func() -> void: DesignerLocks.set_all(session.model, true))
 	row.add_child(_lock_all)
 	_unlock_all = DesignerRows.chip(
-		"UnlockAll", "Unlock all", "Let every query pick its assets again (Save removes the lock file)."
+		"UnlockAll",
+		"Unlock all",
+		"Let every query pick its assets again (Save removes the lock file)."
 	)
 	_unlock_all.pressed.connect(func() -> void: DesignerLocks.set_all(session.model, false))
 	row.add_child(_unlock_all)
@@ -196,8 +200,11 @@ func _update_lock_row() -> void:
 		words += ", %d stale" % int(summary["stale"])
 	_lock_words.text = words
 	_lock_words.tooltip_text = (
-		"%d of %d rules have their selection locked%s." % [
-			locked, int(summary["total"]), ", not saved yet" if DesignerLocks.changed(session.model) else ""
+		"%d of %d rules have their selection locked%s."
+		% [
+			locked,
+			int(summary["total"]),
+			", not saved yet" if DesignerLocks.changed(session.model) else ""
 		]
 	)
 	_lock_all.disabled = locked == int(summary["total"])

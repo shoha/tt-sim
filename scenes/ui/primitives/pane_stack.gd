@@ -41,6 +41,15 @@ func add_pane(id: StringName, pane: Control) -> void:
 	wrapper.name = String(id) + "Scroll"
 	wrapper.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	wrapper.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# The clip reaches past the stack by the room a focus ring (and a halo on glass) needs, and
+	# the scroll's margins hold the pane back by the same amount: the pane keeps its edges, its
+	# rings stay whole at them (the drawers are glass, the avatar builder is paper).
+	var room := ShadowGutter.margins(_ring_kind())
+	ShadowGutter.wrap(wrapper, _ring_kind())
+	wrapper.offset_left = -room.x
+	wrapper.offset_top = -room.y
+	wrapper.offset_right = room.z
+	wrapper.offset_bottom = room.w
 	wrapper.visible = false
 	wrapper.offset_transform_enabled = true
 	pane.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -62,8 +71,14 @@ func _reach_into_margin(wrapper: ScrollContainer) -> void:
 	var bar := wrapper.get_v_scroll_bar()
 	var reach := bar.get_combined_minimum_size().x
 	reach += float(wrapper.get_theme_constant(&"scrollbar_h_separation"))
+	reach += ShadowGutter.margins(_ring_kind()).z
 	if not is_equal_approx(wrapper.offset_right, reach):
 		wrapper.offset_right = reach
+
+
+## The drawers (bar in the margin) are glass, whose focus ring carries a halo; the rest is paper.
+func _ring_kind() -> ShadowGutter.Kind:
+	return ShadowGutter.Kind.GLASS_RING if bar_in_margin else ShadowGutter.Kind.RING
 
 
 func get_pane(id: StringName) -> Control:

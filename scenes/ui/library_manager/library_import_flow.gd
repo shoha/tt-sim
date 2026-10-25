@@ -16,6 +16,9 @@ extends Node
 
 ## A collection was moved into place (after the registry was refreshed).
 signal installed(library_id: String, replaced: bool)
+## The install failed; the card is still open with the reason and a Retry (the manager shows the
+## same words in its footer).
+signal install_failed(message: String)
 ## The card is gone, whatever came of it.
 signal finished
 ## The card opened or closed (the manager dims its Import buttons).
@@ -168,21 +171,30 @@ func _staging_done() -> void:
 	var card := LibraryInstall.examine(_staged)
 	if not bool(card["can_install"]):
 		_discard()
-	panel.show_card(card)
+	panel.show_card(card, _name)
 
 
+## Install or Replace was pressed: move the staged folder into place. On success the card
+## closes; on a failure it STAYS (story S24), shows the reason in red with Retry and Close, the
+## staged files are kept for the Retry (Close or Cancel empties the quarantine as always), and
+## the reason is also a toast (above every scrim) and `install_failed` for the manager's footer.
 func _on_install_confirmed(card: Dictionary, replace: bool) -> void:
 	var done := LibraryInstall.install(card, replace)
-	_staged = ""
 	if not bool(done["ok"]):
-		UIManager.show_error(String(done["error"]))
-		LibraryImporter.discard(String(card["folder"]))
+		var message := String(done["error"])
+		if is_instance_valid(panel):
+			panel.show_failure(message, bool(done.get("retry", false)))
+		UIManager.show_error(message)
+		install_failed.emit(message)
 		return
+	_staged = ""
 	refresh_all()
 	var shown := String(card["name"]) if String(card["name"]) != "" else String(card["id"])
 	var verb := "updated" if bool(done["replaced"]) else "added"
 	UIManager.show_success("%s %s" % [shown, verb])
 	installed.emit(String(card["id"]), bool(done["replaced"]))
+	if is_instance_valid(panel):
+		panel.dismiss()
 
 
 func _on_cancelled() -> void:
