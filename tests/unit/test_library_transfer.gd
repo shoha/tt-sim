@@ -44,8 +44,9 @@ func test_an_installed_library_with_every_used_asset_asks_for_nothing() -> void:
 	assert_eq(plan["satisfied"], ["alienworld"])
 
 
-func test_an_older_installed_version_lacking_a_used_asset_is_asked_to_upgrade() -> void:
-	# The client has 0.2.0 (same major) without the Spire; the map was saved with 0.3.1.
+func test_an_older_installed_version_of_the_players_own_is_never_replaced_by_the_hosts() -> void:
+	# The client has 0.2.0 (same major) without the Spire; the map was saved with 0.3.1. A copy
+	# the player installed is theirs: nothing is requested over it, the plan says what it lacks.
 	World.edit_json(
 		_paths["alien"] + "/library.json", func(d: Dictionary) -> void: d["version"] = "0.2.0"
 	)
@@ -53,8 +54,9 @@ func test_an_older_installed_version_lacking_a_used_asset_is_asked_to_upgrade() 
 	var assets: Dictionary = _assets().duplicate()
 	assets.erase(Tw.SPIRE)
 	var plan := LibraryTransfer.plan(Tw.map_using_spire(), _view(["core", "alienworld"]), assets)
-	assert_eq((plan["requests"] as Array).size(), 1)
-	assert_eq(plan["requests"][0]["reason"], "newer")
+	assert_eq(plan["requests"], [])
+	assert_eq(plan["blocked"][0]["code"], "older")
+	assert_string_contains(plan["blocked"][0]["text"], "0.2.0 is installed")
 
 
 func test_the_same_version_lacking_an_asset_is_blocked_not_requested() -> void:
@@ -89,7 +91,7 @@ func test_a_reserved_library_id_is_blocked() -> void:
 	assert_eq(plan["blocked"][0]["code"], "reserved")
 
 
-func test_a_received_partial_that_lacks_more_is_requested_again() -> void:
+func test_a_downloaded_partial_that_lacks_more_is_extended_by_a_delta() -> void:
 	var request := _request()
 	var host := _host_served()
 	_become_client()
@@ -103,6 +105,7 @@ func test_a_received_partial_that_lacks_more_is_requested_again() -> void:
 	var plan := LibraryTransfer.plan(doc, _view(["core", "alienworld"]), _assets())
 	assert_eq((plan["requests"] as Array).size(), 1)
 	assert_eq(plan["requests"][0]["reason"], "more")
+	assert_eq(plan["requests"][0]["assets"], [Tw.SHARD], "only what is missing")
 
 
 # ---- requests from a peer ----

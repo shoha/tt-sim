@@ -30,6 +30,11 @@ const WORDED_FILES: Array[String] = [
 	"res://utils/library/library_verify.gd",
 	"res://scenes/states/title_screen/title_screen.gd",
 	"res://scenes/states/authoring/new_map_dialog.gd",
+	"res://scenes/ui/library_transfer_ui.gd",
+	"res://utils/library/library_transfer_consent.gd",
+	"res://scenes/ui/library_manager/library_cache_section.gd",
+	"res://utils/library/library_from_host.gd",
+	"res://utils/library/library_transfer_install.gd",
 ]
 
 var _paths: Dictionary = {}
@@ -726,20 +731,227 @@ func test_the_missing_library_dialog_offers_the_manager() -> void:
 	assert_not_null(get_tree().root.find_child("LibraryManager", true, false), "the manager opened")
 
 
-# ---- a library the host sent ----
+# ---- a collection a host sent ----
 
 
-func test_a_library_received_from_the_host_is_marked_and_cannot_be_removed() -> void:
-	World.write_alien(LibraryRegistry.received_root() + "/alienworld", "0.3.1", [], false)
+## Writes a collection a host sent into the user's folder: an ordinary library folder with the
+## ownership marker and the from-host record (and the partial block when `partial`).
+func _from_host(id: String, host: String, last_used: int = 5, partial: bool = true) -> void:
+	var folder: String = _paths["user"] + "/" + id
+	World.write_alien(folder, "0.3.1", [], false)
+	World.edit_json(
+		folder + "/library.json",
+		func(d: Dictionary) -> void:
+			d["id"] = id
+			d["name"] = id.capitalize()
+			if partial:
+				d["partial"] = {
+					"format": 1,
+					"source_version": "0.3.1",
+					"source_hash": "abc12345",
+					"assets": ["Crystal_Spire_v0"],
+					"biomes": ["crystal_basin"],
+					"surfaces": [],
+					"assets_only": false,
+					"bytes": 1,
+				}
+	)
+	assert_true(SafeDelete.mark(folder, "test", _paths["user"]))
+	assert_true(
+		(
+			LibraryFromHost
+			. write_record(
+				folder,
+				{
+					"format": 1,
+					"id": id,
+					"host": host,
+					"version": "0.3.1",
+					"source_hash": "abc12345",
+					"received_at": last_used,
+					"last_used": last_used,
+					"assets": ["Crystal_Spire_v0"],
+					"partial": partial,
+					"assets_only": false,
+					"auto_delta": true,
+				}
+			)
+		)
+	)
+
+
+func _cache_section(manager: LibraryManager) -> LibraryCacheSection:
+	return manager.get_node("CenterContainer/PanelContainer/Body/CacheSection")
+
+
+func test_a_collection_from_a_host_is_an_ordinary_one_that_is_only_marked() -> void:
+	_from_host("alienworld", "Ann")
 	var manager := _manager()
 	await _settle()
 	var row := manager.row_of("alienworld")
 	assert_not_null(row, "listed")
 	assert_eq((row.get_node("Inner/Origin/Label") as Label).text, LibraryDetail.BADGE_RECEIVED)
-	assert_true(manager.toggle_of("alienworld").disabled, "on for the session, not a choice")
+	assert_false(manager.toggle_of("alienworld").disabled, "it can be switched like any other")
+	manager.select("alienworld")
+	assert_true(manager.detail.remove_button.visible, "and removed")
+	assert_true(manager.detail.folder_button.visible)
+	watch_signals(manager)
+	manager.toggle_of("alienworld").button_pressed = false
+	assert_signal_emitted(manager, "libraries_changed")
+	assert_false(LibraryRegistry.is_enabled("alienworld"))
+
+
+func test_the_card_names_the_host_and_says_the_copy_is_partial() -> void:
+	_from_host("alienworld", "Ann")
+	var manager := _manager()
+	await _settle()
+	manager.select("alienworld")
+	var note := manager.detail.get_node_or_null("ReceivedNote") as Label
+	assert_not_null(note)
+	assert_eq(note.text, "From host: Ann")
+	var chips := manager.detail.get_node("Chips")
+	assert_not_null(chips.get_node_or_null("Partial"), "the Partial copy chip")
+	assert_eq(chips.get_node("Partial/Label").text, LibraryDetail.BADGE_PARTIAL)
+	var line := manager.detail.get_node_or_null("PartialNote") as Label
+	assert_eq(line.text, "Holds only what the host's maps used.")
+	assert_false(manager.detail.design_button.visible, "a partial copy is not a designer base")
+
+
+func test_a_whole_collection_from_a_host_is_not_called_partial() -> void:
+	_from_host("alienworld", "Ann", 5, false)
+	var manager := _manager()
+	await _settle()
 	manager.select("alienworld")
 	assert_not_null(manager.detail.get_node_or_null("ReceivedNote"))
-	assert_false(manager.detail.remove_button.visible)
-	assert_false(manager.detail.folder_button.visible)
-	manager._on_remove_requested("alienworld")
-	assert_true(DirAccess.dir_exists_absolute(LibraryRegistry.received_root() + "/alienworld"))
+	assert_null(manager.detail.get_node_or_null("PartialNote"))
+	assert_null(manager.detail.get_node("Chips").get_node_or_null("Partial"))
+
+
+func test_removing_one_says_what_happens_to_the_maps_and_that_the_host_asks_first() -> void:
+	_from_host("alienworld", "Ann")
+	var manager := _manager()
+	await _settle()
+	manager.select("alienworld")
+	manager.detail.remove_button.pressed.emit()
+	var dialog: ConfirmationDialogUI = null
+	for node in get_tree().root.get_children():
+		if node is ConfirmationDialogUI:
+			dialog = node
+	assert_not_null(dialog)
+	await wait_process_frames(2)
+	assert_string_contains(dialog.message_label.text, "No saved map uses it")
+	assert_string_contains(dialog.message_label.text, LibraryCacheSection.REMOVE_NOTE.strip_edges())
+	manager._remove_confirmed("alienworld")
+	assert_false(DirAccess.dir_exists_absolute(_paths["user"] + "/alienworld"))
+
+
+func test_the_cache_row_counts_the_downloaded_collections_and_their_size() -> void:
+	var manager := _manager()
+	await _settle()
+	assert_false(_cache_section(manager).visible, "nothing downloaded: nothing to manage")
+	_from_host("alienworld", "Ann")
+	_from_host("spirelands", "Bob")
+	LibraryImportFlow.refresh_all()
+	manager.refresh_list()
+	manager.libraries_changed.emit()  # what every change the manager makes ends with
+	var section := _cache_section(manager)
+	assert_true(section.visible)
+	var total := LibraryFromHost.total_bytes()
+	assert_gt(total, 0)
+	assert_eq(
+		section.summary_label.text,
+		LibraryCacheSection.summary_text(2, total, LibraryFromHost.cap_bytes())
+	)
+	assert_string_contains(section.summary_label.text, "2 collections downloaded from hosts")
+	assert_false(section.clear_button.disabled)
+	assert_eq(section.clear_button.text, "Clear downloaded collections")
+
+
+func test_clear_asks_naming_collections_size_and_saved_maps_then_removes_only_those() -> void:
+	_install_alien()
+	_from_host("spirelands", "Bob")
+	_from_host("glowmoss", "Ann")
+	var doc := Fixtures.full_doc()
+	doc.libraries = [{"id": "spirelands", "version": "0.3.1", "hash": "abc12345"}]
+	doc.scatter["spirelands__crystal_basin_summer_s1/Crystal_Spire_v0"] = PackedFloat32Array(
+		[0, 0, 0, 0, 0, 0, 1, 1, 1, 1]
+	)
+	DirAccess.make_dir_recursive_absolute(ROOT + "/levels/uses")
+	assert_eq(MapDocumentIO.write(doc, ROOT + "/levels/uses/map.ttmap"), OK)
+	var manager := _manager()
+	await _settle()
+	var section := _cache_section(manager)
+	var plan := section.describe_clear()
+	assert_eq(plan["count"], 2)
+	assert_eq(plan["maps"], 1, "one saved map uses a downloaded collection")
+	assert_string_contains(plan["message"], "2 collections")
+	assert_string_contains(plan["message"], LibraryCacheSection.size_text(int(plan["bytes"])))
+	assert_string_contains(plan["message"], "1 saved map use")
+	assert_string_contains(plan["message"], "Your own collections are not touched")
+	section.clear_button.pressed.emit()
+	var dialog: ConfirmationDialogUI = null
+	for node in get_tree().root.get_children():
+		if node is ConfirmationDialogUI:
+			dialog = node
+	assert_not_null(dialog, "a confirmation, not an immediate clear")
+	await wait_process_frames(2)
+	assert_eq(dialog.message_label.text, plan["message"])
+	assert_true(DirAccess.dir_exists_absolute(_paths["user"] + "/spirelands"), "nothing yet")
+	watch_signals(manager)
+	var report := section.clear_now()
+	assert_eq(report["removed"].size(), 2)
+	assert_false(DirAccess.dir_exists_absolute(_paths["user"] + "/spirelands"))
+	assert_false(DirAccess.dir_exists_absolute(_paths["user"] + "/glowmoss"))
+	assert_true(DirAccess.dir_exists_absolute(_paths["alien"]), "the player's own is untouched")
+	assert_true(DirAccess.dir_exists_absolute(_paths["core"]), "and core")
+	assert_not_null(manager.row_of("alienworld"))
+	assert_null(manager.row_of("spirelands"))
+	assert_false(section.visible, "nothing left to manage")
+	assert_signal_emitted(manager, "libraries_changed")
+
+
+func test_the_cache_words_count_and_pluralise() -> void:
+	assert_eq(
+		LibraryCacheSection.clear_message(1, 3 * 1024 * 1024, 0),
+		(
+			"1 collection (3.0 MB) that hosts sent you will be deleted from this computer. "
+			+ "No saved map uses them. Your own collections are not touched."
+		)
+	)
+	assert_string_contains(LibraryCacheSection.clear_message(3, 100, 2), "2 saved maps use them")
+	assert_string_contains(LibraryCacheSection.clear_message(3, 100, 1), "1 saved map use them")
+	assert_eq(LibraryCacheSection.size_text(1536 * 1024 * 1024), "1.5 GB")
+	assert_eq(LibraryCacheSection.size_text(5 * 1024 * 1024), "5.0 MB")
+
+
+func test_the_size_limit_is_a_setting_and_defaults_to_one_gigabyte() -> void:
+	assert_eq(LibraryFromHost.cap_bytes(), 1024 * 1024 * 1024)
+	_from_host("alienworld", "Ann")
+	var manager := _manager()
+	await _settle()
+	var section := _cache_section(manager)
+	assert_eq(section.cap_option.get_item_text(section.cap_option.selected), "1.0 GB")
+	var at := section.cap_option.get_item_index(512)
+	section.cap_option.select(at)
+	section.cap_option.item_selected.emit(at)
+	assert_eq(LibraryFromHost.cap_bytes(), 512 * 1024 * 1024)
+	var config := ConfigFile.new()
+	assert_eq(config.load(SETTINGS), OK)
+	assert_eq(config.get_value("library", "cache_cap_mb"), 512)
+	assert_true(LibraryFromHost.set_cap_mb(1))
+	assert_eq(LibraryFromHost.cap_bytes(), 64 * 1024 * 1024, "never below the floor")
+
+
+func test_no_transfer_or_cache_text_says_plants_or_keep() -> void:
+	for path in [
+		"res://scenes/ui/library_transfer_ui.gd",
+		"res://utils/library/library_transfer_consent.gd",
+		"res://scenes/ui/library_manager/library_cache_section.gd",
+		"res://utils/library/library_from_host.gd",
+		"res://utils/library/library_transfer_install.gd",
+		"res://autoloads/library_transfer_channel.gd",
+	]:
+		for literal in _string_literals(FileAccess.get_file_as_string(path)):
+			var lowered := literal.to_lower()
+			assert_false("plants" in lowered, '%s: "%s"' % [path.get_file(), literal])
+			assert_false(lowered.strip_edges() == "keep", path.get_file())

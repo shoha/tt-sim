@@ -27,7 +27,6 @@ const ROW_HEIGHT := 76.0
 const ICON_PX := 20.0
 const VERIFY_SLICE_USEC := 6000
 const ALWAYS_ON := "This one comes with the game and is always on."
-const RECEIVED_ON := "The host sent this one; it is on for this session."
 
 var header: MenuHeader
 var list_box: VBoxContainer
@@ -89,6 +88,7 @@ func _on_panel_ready() -> void:
 	header.close_requested.connect(close)
 	_body.add_child(header)
 	_build_split()
+	LibraryCacheSection.attach(self, _body)  # hook: the downloaded-collections row (own file)
 	_build_footer()
 	flow = LibraryImportFlow.new()
 	flow.name = "ImportFlow"
@@ -311,11 +311,10 @@ func _add_row(item: Dictionary) -> void:
 	toggle.name = "Toggle"
 	toggle.button_pressed = bool(item["enabled"])
 	toggle.focus_mode = Control.FOCUS_ALL
-	var received := bool(item.get("received", false))
-	var locked := id == LibraryContracts.CORE_ID or String(item["source"]) == "dev" or received
+	var locked := id == LibraryContracts.CORE_ID or String(item["source"]) == "dev"
 	toggle.disabled = locked
 	toggle.tooltip_text = (
-		(RECEIVED_ON if received else ALWAYS_ON)
+		ALWAYS_ON
 		if locked
 		else ("Turn off %s" if toggle.button_pressed else "Turn on %s") % String(item["name"])
 	)
@@ -416,11 +415,11 @@ func _on_remove_requested(library_id: String) -> void:
 	if info.is_empty() or String(info["source"]) != "user":
 		return
 	var users := LibraryInstall.levels_using(library_id, LevelManager.levels_dir)
+	var words := remove_message(String(info["name"]), users.size())
+	if bool(info.get("received", false)):
+		words += LibraryCacheSection.REMOVE_NOTE  # the host sends it again when a map needs it
 	UIManager.show_danger_confirmation(
-		"Remove %s" % info["name"],
-		remove_message(String(info["name"]), users.size()),
-		func() -> void: _remove_confirmed(library_id),
-		"Remove"
+		"Remove %s" % info["name"], words, func() -> void: _remove_confirmed(library_id), "Remove"
 	)
 
 

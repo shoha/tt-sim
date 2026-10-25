@@ -1,37 +1,68 @@
 extends "res://tests/unit/library_transfer_case.gd"
 
 ## Multiplayer library transfer, the client's side of a bundle (docs/systems/library.md
-## "Multiplayer"): verify_and_install accepts a good partial into the transient cache and refuses
-## every hostile one with a structured error, writing nothing (wrong sha256 or size, an extra
-## file, traversal, a disallowed extension, a reserved or official id, an id or version mismatch,
-## a full library posing as a partial, a bad GLB, truncation, caps); the cache (LRU, session sweep,
-## promote) and the registry's `received` source.
+## "Multiplayer" and "The cache of downloaded collections"): verify_and_install keeps a good
+## partial as an ordinary user library marked "from host", merges a later delta into it, replaces
+## it when the host's copy changed, never writes over the player's own copy, and refuses every
+## hostile bundle with a structured error, writing nothing (wrong sha256 or size, an extra file,
+## traversal, a disallowed extension, a reserved or official id, an id or version mismatch, a full
+## library posing as a partial, a bad GLB, truncation, caps).
 
 
 func _root() -> String:
 	return "user://test_library_transfer_install"
 
 
+## Installs the spire's bundle on the client as the first download (host label "Ann").
+func _first_download(host: Dictionary) -> Dictionary:
+	var request := Tw.request_for(Tw.map_using_spire(), _view(["core"]), _assets())
+	var made := LibraryTransfer.verify_and_install(
+		LibraryTransfer.build_bundle(request, host), _ctx({"host": "Ann"})
+	)
+	assert_true(made["ok"], str(made["errors"]))
+	LibraryRegistry.apply(_paths["base"])
+	return made
+
+
+## The map that also uses the shard, and the plan the client makes for it now.
+func _delta_plan() -> Dictionary:
+	var doc := Tw.map_using_spire()
+	doc.scatter[Tw.SHARD] = PackedFloat32Array([0, 0, 0, 0, 0, 0, 1, 1, 1, 1])
+	return LibraryTransfer.plan(doc, _view(["core", "alienworld"]), _assets())
+
+
+func _folder_state(id: String) -> Dictionary:
+	return LibraryFromHost.read_folder_files(id)
+
+
 # ---- installing on the client ----
 
 
-func test_a_good_bundle_installs_into_the_transient_cache_and_is_served() -> void:
+func test_a_good_bundle_is_kept_as_a_user_library_marked_from_host() -> void:
 	var request := _request()
 	var host := _host_served()
 	_become_client()
 	assert_false(_assets().has(Tw.SPIRE))
 	var made := LibraryTransfer.verify_and_install(
-		LibraryTransfer.build_bundle(request, host), _ctx()
+		LibraryTransfer.build_bundle(request, host), _ctx({"host": "Ann"})
 	)
 	assert_true(made["ok"], str(made["errors"]))
 	assert_eq(made["libraries"], ["alienworld"])
-	assert_true(_has_dir(_received_root().path_join("alienworld")))
-	assert_false(_has_dir(_client_user.path_join("alienworld")), "never an installed user library")
+	assert_true(_has_dir(_installed_path("alienworld")), "an ordinary user library folder")
+	assert_true(SafeDelete.is_owned(_installed_path("alienworld")), "SafeDelete may remove it")
+	var record := LibraryFromHost.record_of("alienworld")
+	assert_eq(record["host"], "Ann")
+	assert_eq(record["version"], "0.3.1")
+	assert_eq(record["source_hash"], host["alienworld"]["hash"], "the host's FULL library hash")
+	assert_eq(record["assets"], ["Crystal_Spire_v0"])
+	assert_eq(record["received_at"], 1000)
+	assert_true(record["partial"])
 	LibraryRegistry.apply(_paths["base"])
 	var info := LibraryRegistry.info("alienworld", _paths["base"])
 	assert_eq(info["status"], "ok")
-	assert_true(info["received"])
-	assert_eq(info["source"], "received")
+	assert_true(info["received"], "marked from host")
+	assert_eq(info["from_host"]["host"], "Ann")
+	assert_eq(info["source"], "user", "listed like any other collection")
 	assert_false(info["official"])
 	assert_false(info["partial"].is_empty(), "the manager can badge it partial")
 	assert_eq(info["version"], "0.3.1")
@@ -40,26 +71,309 @@ func test_a_good_bundle_installs_into_the_transient_cache_and_is_served() -> voi
 	assert_not_null(AssetStore.mesh_for(Tw.SPIRE, _paths["base"]), "the GLB loads, hash checked")
 	assert_eq(
 		LibraryRegistry.record_of("alienworld")["hash"],
-		info["partial"]["source_hash"],
+		host["alienworld"]["hash"],
 		"a map saved here records the full library's hash"
 	)
 
 
-func test_the_manager_list_keeps_a_partial_library_apart_from_installed_ones() -> void:
+func test_the_markers_are_not_part_of_the_library() -> void:
+	var host := _host_served()
+	_become_client()
+	_first_download(host)
+	var listing := LibraryRegistry.read_sources(_installed_path("alienworld"))
+	assert_false(LibraryFromHost.RECORD_FILE in listing["files"])
+	assert_false(SafeDelete.MARKER in listing["files"])
+	assert_eq(
+		LibraryRegistry.info("alienworld", _paths["base"])["hash"],
+		host["alienworld"]["hash"],
+		"the record does not change the identity"
+	)
+
+
+func test_a_downloaded_collection_switches_off_and_on_like_any_other() -> void:
+	var host := _host_served()
+	_become_client()
+	_first_download(host)
+	assert_true(LibraryRegistry.set_enabled("alienworld", false))
+	LibraryRegistry.apply(_paths["base"])
+	assert_eq(LibraryRegistry.served().keys(), ["core"], "off: not served")
+	PaletteLibrary.clear_cache()
+	assert_false(_assets().has(Tw.SPIRE), "off: not in the palette")
+	assert_eq(LibraryRegistry.info("alienworld", _paths["base"])["enabled"], false)
+	assert_true(LibraryRegistry.set_enabled("alienworld", true))
+	LibraryRegistry.apply(_paths["base"])
+	assert_true(_assets().has(Tw.SPIRE), "on again")
+
+
+func test_a_downloaded_collection_is_served_again_after_a_restart() -> void:
+	var host := _host_served()
+	_become_client()
+	_first_download(host)
+	var before := LibraryRegistry.info("alienworld", _paths["base"])
+	# A new session: every in-memory state is gone, only the disk remains.
+	LibraryFromHost.open_ids = {}
+	LibraryRegistry.clear()
+	PaletteLibrary.clear_cache()
+	LibraryRegistry.official_root = _paths["official"]
+	var started := LibraryFromHost.startup()
+	assert_eq(started["swept"], 0)
+	LibraryRegistry.apply(_paths["base"])
+	assert_true(_assets().has(Tw.SPIRE), "still served")
+	var after := LibraryRegistry.info("alienworld", _paths["base"])
+	assert_eq(after["hash"], before["hash"])
+	assert_true(after["received"])
+	assert_eq(LibraryFromHost.inventory().size(), 1)
+
+
+func test_removing_a_downloaded_collection_is_the_ordinary_remove() -> void:
+	var host := _host_served()
+	_become_client()
+	_first_download(host)
+	assert_true(LibraryInstall.remove("alienworld")["ok"])
+	assert_false(_has_dir(_installed_path("alienworld")))
+	LibraryRegistry.apply(_paths["base"])
+	assert_true(LibraryRegistry.info("alienworld", _paths["base"]).is_empty())
+
+
+# ---- the delta ----
+
+
+func test_a_second_request_asks_only_for_what_is_missing() -> void:
+	var host := _host_served()
+	_become_client()
+	_first_download(host)
+	var plan := _delta_plan()
+	assert_eq(plan["requests"].size(), 1)
+	var request: Dictionary = plan["requests"][0]
+	assert_eq(request["reason"], "more")
+	assert_eq(request["assets"], [Tw.SHARD], "the shard only, not the spire again")
+	assert_eq(request["biomes"], [], "the biome is already kept")
+	assert_eq(request["surfaces"], [], "so is the surface")
+	assert_has(request["full"]["assets"], Tw.SPIRE, "the whole request stays for a changed host")
+	assert_has(request["full"]["assets"], Tw.SHARD)
+	var delta := _bundle_files(request, host)
+	assert_false(delta.has("alienworld/assets/tree/Crystal_Spire_v0.glb"), "not sent again")
+	assert_true(delta.has("alienworld/assets/rock/Crystal_Shard_v0.glb"))
+	assert_false(
+		delta.keys().any(func(p: String) -> bool: return p.begins_with("alienworld/surfaces"))
+	)
+	var whole: int = LibraryTransfer.quote(request["full"], host)["bytes"]
+	assert_lt(int(LibraryTransfer.quote(request, host)["bytes"]), whole, "the delta is smaller")
+
+
+func test_a_delta_is_merged_into_the_kept_copy() -> void:
+	var host := _host_served()
+	_become_client()
+	_first_download(host)
+	var spire_file: PackedByteArray = _folder_state("alienworld")["assets/tree/Crystal_Spire_v0.glb"]
+	var request: Dictionary = _delta_plan()["requests"][0]
+	var made := LibraryTransfer.verify_and_install(
+		LibraryTransfer.build_bundle(request, host), _ctx({"host": "Ann", "now": 2000})
+	)
+	assert_true(made["ok"], str(made["errors"]))
+	assert_eq(made["merged"], ["alienworld"])
+	LibraryRegistry.apply(_paths["base"])
+	assert_true(_assets().has(Tw.SPIRE) and _assets().has(Tw.SHARD), "both are served now")
+	assert_not_null(AssetStore.mesh_for(Tw.SPIRE, _paths["base"]))
+	assert_not_null(AssetStore.mesh_for(Tw.SHARD, _paths["base"]))
+	var files := _folder_state("alienworld")
+	assert_eq(files["assets/tree/Crystal_Spire_v0.glb"], spire_file, "the kept bytes are untouched")
+	var catalog: Dictionary = JSON.parse_string(files["assets/catalog.json"].get_string_from_utf8())
+	var ids: Array = (catalog["assets"] as Array).map(func(e: Dictionary) -> String: return e["id"])
+	assert_eq(ids, ["Crystal_Spire_v0", "Crystal_Shard_v0"], "the catalog is the union")
+	for entry: Dictionary in catalog["assets"]:
+		assert_eq(LibraryPartial.sha256_of(files[entry["file"]]), entry["sha256"], "hashes agree")
+		assert_eq(int(entry["bytes"]), (files[entry["file"]] as PackedByteArray).size())
+	var biome: Dictionary = JSON.parse_string(
+		files["biomes/crystal_basin.json"].get_string_from_utf8()
+	)
+	var keys: Array = (biome["rules"] as Array).map(func(r: Dictionary) -> String: return r["key"])
+	assert_eq(keys, ["trees", "stones"], "the biome-def is the union of the rules")
+	var library: Dictionary = JSON.parse_string(files["library.json"].get_string_from_utf8())
+	assert_eq(library["partial"]["assets"], ["Crystal_Shard_v0", "Crystal_Spire_v0"])
+	assert_eq(library["partial"]["source_hash"], host["alienworld"]["hash"])
+	var record := LibraryFromHost.record_of("alienworld")
+	assert_eq(record["assets"], ["Crystal_Shard_v0", "Crystal_Spire_v0"])
+	assert_eq(record["received_at"], 1000, "first received then")
+	assert_eq(record["last_used"], 2000)
+	assert_eq(record["host"], "Ann")
+	var again := (
+		LibraryPartial
+		. inspect(
+			files,
+			{
+				"id": "alienworld",
+				"official_ids": ["core"],
+				"surfaces": PaletteLibrary.get_palette(_paths["base"])["surfaces"],
+				"dependencies": {},
+			}
+		)
+	)
+	assert_true(again["ok"], str(again["errors"]))
+
+
+func test_a_tampered_delta_is_refused_and_the_kept_copy_is_untouched() -> void:
+	var host := _host_served()
+	_become_client()
+	_first_download(host)
+	var before := _folder_state("alienworld")
+	var record_before := LibraryFromHost.record_of("alienworld")
+	var request: Dictionary = _delta_plan()["requests"][0]
+	var files := _bundle_files(request, host)
+	var glb := "alienworld/assets/rock/Crystal_Shard_v0.glb"
+	var data: PackedByteArray = files[glb]
+	data[data.size() - 1] = (data[data.size() - 1] + 1) % 256
+	files[glb] = data
+	var made := LibraryTransfer.verify_and_install(LibraryPartial.encode(files), _ctx())
+	assert_false(made["ok"])
+	assert_has(_codes(made), LibraryPartial.E_HASH)
+	assert_eq(_folder_state("alienworld"), before, "not one byte of the kept copy changed")
+	assert_eq(LibraryFromHost.record_of("alienworld"), record_before)
+	assert_false(_has_dir(_installed_path(LibraryFromHost.STAGING_PREFIX + "alienworld")))
+	LibraryRegistry.apply(_paths["base"])
+	assert_true(_assets().has(Tw.SPIRE) and not _assets().has(Tw.SHARD))
+
+
+func test_a_delta_that_contradicts_the_kept_copy_is_refused_and_leaves_it() -> void:
+	var host := _host_served()
+	_become_client()
+	_first_download(host)
+	var before := _folder_state("alienworld")
+	var request: Dictionary = _delta_plan()["requests"][0]
+	var files := _bundle_files(request, host)
+	# The shard arrives, but the same asset id is already kept with other bytes: a delta that
+	# disagrees with what is on disk is an error, not a silent overwrite.
+	var clash := files.duplicate()
+	var kept_catalog: Dictionary = JSON.parse_string(
+		before["assets/catalog.json"].get_string_from_utf8()
+	)
+	var delta_catalog: Dictionary = JSON.parse_string(
+		files["alienworld/assets/catalog.json"].get_string_from_utf8()
+	)
+	delta_catalog["assets"].append(kept_catalog["assets"][0].duplicate())
+	delta_catalog["assets"].back()["sha256"] = "f".repeat(64)
+	clash["alienworld/assets/catalog.json"] = LibraryPartial.json_bytes(delta_catalog)
+	var made := LibraryTransfer.verify_and_install(LibraryPartial.encode(clash), _ctx())
+	assert_false(made["ok"])
+	assert_eq(_folder_state("alienworld"), before)
+
+
+func test_a_changed_host_copy_replaces_the_kept_one() -> void:
+	var host := _host_served()
+	_become_client()
+	_first_download(host)
+	var request: Dictionary = _delta_plan()["requests"][0]
+	var files := _bundle_files(request["full"], host)
+	var library: Dictionary = JSON.parse_string(
+		files["alienworld/library.json"].get_string_from_utf8()
+	)
+	library["partial"]["source_hash"] = "changed1"
+	files["alienworld/library.json"] = LibraryPartial.json_bytes(library)
+	var made := LibraryTransfer.verify_and_install(
+		LibraryPartial.encode(files), _ctx({"now": 3000})
+	)
+	assert_true(made["ok"], str(made["errors"]))
+	assert_eq(made["merged"], [], "another source hash is not a delta")
+	var record := LibraryFromHost.record_of("alienworld")
+	assert_eq(record["source_hash"], "changed1")
+	assert_eq(record["received_at"], 3000, "a new copy")
+	LibraryRegistry.apply(_paths["base"])
+	assert_true(_assets().has(Tw.SPIRE) and _assets().has(Tw.SHARD), "all the full request")
+	assert_false(_has_dir(_installed_path(LibraryFromHost.OLD_PREFIX + "alienworld")))
+
+
+func test_the_merge_itself_refuses_another_version_or_source() -> void:
+	var host := _host_served()
+	_become_client()
+	_first_download(host)
+	var request: Dictionary = _delta_plan()["requests"][0]
+	var delta := {}
+	var decoded: Dictionary = _bundle_files(request, host)
+	for path: String in decoded:
+		delta[path.trim_prefix("alienworld/")] = decoded[path]
+	var current := _folder_state("alienworld")
+	assert_true(LibraryPartialMerge.merge(current, delta)["ok"])
+	var library: Dictionary = JSON.parse_string(delta["library.json"].get_string_from_utf8())
+	library["version"] = "0.3.2"
+	var other_version := delta.duplicate()
+	other_version["library.json"] = LibraryPartial.json_bytes(library)
+	assert_eq(LibraryPartialMerge.merge(current, other_version)["code"], "changed")
+	library["version"] = "0.3.1"
+	library["partial"]["source_hash"] = "zzz"
+	var other_source := delta.duplicate()
+	other_source["library.json"] = LibraryPartial.json_bytes(library)
+	assert_eq(LibraryPartialMerge.merge(current, other_source)["code"], "changed")
+	var same_path := delta.duplicate()
+	same_path["assets/tree/Crystal_Spire_v0.glb"] = PackedByteArray([1, 2, 3])
+	assert_eq(LibraryPartialMerge.merge(current, same_path)["code"], "merge")
+
+
+# ---- the player's own copy ----
+
+
+func test_the_players_own_full_copy_is_never_replaced_by_a_hosts() -> void:
 	var request := _request()
 	var host := _host_served()
 	_become_client()
-	LibraryTransfer.verify_and_install(LibraryTransfer.build_bundle(request, host), _ctx())
+	World.write_alien(_client_user.path_join("alienworld"))
 	LibraryRegistry.apply(_paths["base"])
-	var listed := LibraryRegistry.list(_paths["base"])
-	var found := listed.filter(func(i: Dictionary) -> bool: return i["id"] == "alienworld")
-	var alien: Dictionary = found[0]
-	assert_true(alien["received"] and not alien["partial"].is_empty())
-	assert_false(DirAccess.dir_exists_absolute(_client_user + "/alienworld"))
-	# The user scan skips the dot folder: removing the cache removes the library.
-	LibraryReceivedStore.sweep_session()
+	var before := _folder_state("alienworld")
+	var made := LibraryTransfer.verify_and_install(
+		LibraryTransfer.build_bundle(request, host), _ctx()
+	)
+	assert_false(made["ok"])
+	assert_has(_codes(made), "own_copy")
+	assert_eq(_folder_state("alienworld"), before, "not one byte of the player's copy changed")
+	assert_true(LibraryFromHost.record_of("alienworld").is_empty(), "still no from-host record")
+	assert_eq(LibraryFromHost.decide("alienworld", {}, "0.3.1")["mode"], "own")
+
+
+func test_a_full_copy_of_the_same_version_needs_nothing_from_the_host() -> void:
+	var host := _host_served()
+	_become_client()
+	World.write_alien(_client_user.path_join("alienworld"))
 	LibraryRegistry.apply(_paths["base"])
-	assert_true(LibraryRegistry.info("alienworld", _paths["base"]).is_empty())
+	var plan := LibraryTransfer.plan(Tw.map_using_spire(), _view(["core", "alienworld"]), _assets())
+	assert_eq(plan["requests"], [])
+	assert_eq(plan["satisfied"], ["alienworld"])
+	assert_false(host.is_empty())
+
+
+func test_an_own_copy_that_lacks_items_or_is_older_is_blocked_not_replaced() -> void:
+	_become_client()
+	World.write_alien(_client_user.path_join("alienworld"))
+	LibraryRegistry.apply(_paths["base"])
+	var doc := Tw.map_using_spire()
+	doc.scatter[World.ALIEN_RUNTIME + "/Crystal_Unused_v0"] = PackedFloat32Array(
+		[0, 0, 0, 0, 0, 0, 1, 1, 1, 1]
+	)
+	var plan := LibraryTransfer.plan(doc, _view(["core", "alienworld"]), _assets())
+	assert_eq(plan["requests"], [], "nothing is ever requested over the player's own copy")
+	assert_eq(plan["blocked"][0]["code"], "lacks")
+	LibraryInstall.remove("alienworld")
+	World.write_alien(_client_user.path_join("alienworld"), "0.2.0")
+	LibraryRegistry.clear()
+	PaletteLibrary.clear_cache()
+	LibraryRegistry.official_root = _paths["official"]
+	LibraryRegistry.apply(_paths["base"])
+	var older := LibraryTransfer.plan(doc, _view(["core", "alienworld"]), _assets())
+	assert_eq(older["requests"], [])
+	assert_eq(older["blocked"][0]["code"], "older")
+
+
+func test_a_kept_copy_of_an_older_version_is_replaced_not_extended() -> void:
+	var host := _host_served()
+	_become_client()
+	_first_download(host)
+	var doc := Tw.map_using_spire("0.4.0")
+	doc.scatter[Tw.SHARD] = PackedFloat32Array([0, 0, 0, 0, 0, 0, 1, 1, 1, 1])
+	var plan := LibraryTransfer.plan(doc, _view(["core", "alienworld"]), _assets())
+	assert_eq(plan["requests"][0]["reason"], "newer")
+	assert_has(plan["requests"][0]["assets"], Tw.SPIRE, "the whole request, not a delta")
+	assert_has(plan["requests"][0]["assets"], Tw.SHARD)
+
+
+# ---- hostile bundles ----
 
 
 func test_a_wrong_sha256_is_refused_and_nothing_is_written() -> void:
@@ -73,7 +387,7 @@ func test_a_wrong_sha256_is_refused_and_nothing_is_written() -> void:
 	var made := LibraryTransfer.verify_and_install(LibraryPartial.encode(files), _ctx())
 	assert_false(made["ok"])
 	assert_has(_codes(made), LibraryPartial.E_HASH)
-	assert_false(_has_dir(_received_root().path_join("alienworld")))
+	assert_false(_has_dir(_installed_path("alienworld")))
 
 
 func test_a_wrong_size_is_refused() -> void:
@@ -94,7 +408,21 @@ func test_an_extra_file_is_refused() -> void:
 	var made := LibraryTransfer.verify_and_install(LibraryPartial.encode(files), _ctx())
 	assert_false(made["ok"])
 	assert_has(_codes(made), LibraryPartial.E_EXTRA)
-	assert_false(_has_dir(_received_root().path_join("alienworld")))
+	assert_false(_has_dir(_installed_path("alienworld")))
+
+
+func test_a_bundle_cannot_carry_the_from_host_record_or_the_ownership_marker() -> void:
+	var files := _bundle_files(_request(), _host_served())
+	_become_client()
+	var forged := files.duplicate()
+	forged["alienworld/" + LibraryFromHost.RECORD_FILE] = '{"format": 1}'.to_utf8_buffer()
+	var made := LibraryTransfer.verify_and_install(LibraryPartial.encode(forged), _ctx())
+	assert_false(made["ok"])
+	assert_has(_codes(made), LibraryPartial.E_EXTRA)
+	var marked := files.duplicate()
+	marked["alienworld/" + SafeDelete.MARKER] = "{}".to_utf8_buffer()
+	assert_false(LibraryTransfer.verify_and_install(LibraryPartial.encode(marked), _ctx())["ok"])
+	assert_false(_has_dir(_installed_path("alienworld")))
 
 
 func test_a_stray_file_outside_any_library_is_refused() -> void:
@@ -144,7 +472,7 @@ func test_a_library_claiming_core_or_an_official_id_is_never_accepted() -> void:
 		LibraryPartial.encode(as_core), _ctx({"library": "core"})
 	)
 	assert_has(_codes(made), LibraryPartial.E_RESERVED)
-	assert_false(_has_dir(_received_root().path_join("core")))
+	assert_false(_has_dir(_installed_path("core")))
 	# An official non-core id too.
 	var official := _ctx({"official_ids": ["core", "alienworld"]})
 	var made_official := LibraryTransfer.verify_and_install(LibraryPartial.encode(files), official)
@@ -250,7 +578,7 @@ func test_a_truncated_bundle_is_refused() -> void:
 	var long := bytes.duplicate()
 	long.append(7)
 	assert_false(LibraryTransfer.verify_and_install(long, _ctx())["ok"], "trailing bytes")
-	assert_false(_has_dir(_received_root().path_join("alienworld")))
+	assert_false(_has_dir(_installed_path("alienworld")))
 
 
 func test_a_bundle_header_cannot_ask_for_memory_the_caps_do_not_allow() -> void:
@@ -309,172 +637,3 @@ func test_garbage_is_not_a_bundle() -> void:
 		var made := LibraryTransfer.verify_and_install(bytes, _ctx())
 		assert_false(made["ok"])
 		assert_gt((made["errors"] as Array).size(), 0)
-
-
-# ---- the transient cache ----
-
-
-func _fake_received(id: String, bytes: int, last_used: int) -> void:
-	var root := _received_root()
-	DirAccess.make_dir_recursive_absolute(root.path_join(id))
-	World.write_text(root.path_join(id + "/library.json"), "{}")
-	World.write_json(
-		root.path_join(id + LibraryReceivedStore.MARKER_SUFFIX),
-		{
-			"id": id,
-			"version": "1.0.0",
-			"bytes": bytes,
-			"received_at": last_used,
-			"last_used": last_used
-		}
-	)
-
-
-func test_the_cache_evicts_the_least_recently_used_first() -> void:
-	_fake_received("aaa", 300, 10)
-	_fake_received("bbb", 300, 20)
-	_fake_received("ccc", 300, 30)
-	var removed := LibraryReceivedStore.evict_to_fit(700, [], 1000)
-	assert_eq(removed, ["aaa", "bbb"])
-	assert_false(_has_dir(_received_root().path_join("aaa")))
-	assert_true(_has_dir(_received_root().path_join("ccc")))
-	assert_eq(
-		LibraryReceivedStore.inventory().map(func(i: Dictionary) -> String: return i["id"]), ["ccc"]
-	)
-
-
-func test_touch_makes_a_library_recent_and_keep_protects_the_incoming() -> void:
-	_fake_received("aaa", 300, 10)
-	_fake_received("bbb", 300, 20)
-	LibraryReceivedStore.touch("aaa", 99)
-	assert_eq(LibraryReceivedStore.evict_to_fit(500, [], 1000), ["bbb"])
-	_fake_received("ddd", 300, 1)
-	assert_eq(LibraryReceivedStore.evict_to_fit(900, ["ddd"], 1000), ["aaa"], "the kept id stays")
-
-
-func test_a_new_install_evicts_older_received_libraries_over_the_cap() -> void:
-	var request := _request()
-	var host := _host_served()
-	_become_client()
-	# The served palette is read (and cached) before the fake library lands: its empty folder is
-	# not a library, and a later first read would scan it and warn.
-	PaletteLibrary.get_palette()
-	_fake_received("oldlib", 600_000_000, 1)
-	var made := LibraryTransfer.verify_and_install(
-		LibraryTransfer.build_bundle(request, host), _ctx({"cap": 600_000_000})
-	)
-	assert_true(made["ok"], str(made["errors"]))
-	assert_false(_has_dir(_received_root().path_join("oldlib")))
-	assert_true(_has_dir(_received_root().path_join("alienworld")))
-
-
-func test_the_session_sweep_removes_what_this_session_received() -> void:
-	var request := _request()
-	var host := _host_served()
-	_become_client()
-	LibraryTransfer.verify_and_install(LibraryTransfer.build_bundle(request, host), _ctx())
-	_fake_received("leftover", 10, 5)
-	assert_eq(LibraryReceivedStore.sweep_session(), ["alienworld"])
-	assert_false(_has_dir(_received_root().path_join("alienworld")))
-	assert_true(_has_dir(_received_root().path_join("leftover")), "not this session's")
-	assert_eq(LibraryReceivedStore.sweep_leftovers(), ["leftover"])
-	assert_eq(LibraryReceivedStore.inventory(), [])
-
-
-func test_remove_refuses_an_id_that_is_not_a_library_id() -> void:
-	World.write_text(_root() + "/keepme.txt", "x")
-	assert_false(LibraryReceivedStore.remove("../keepme"))
-	assert_false(LibraryReceivedStore.remove(".."))
-	assert_true(FileAccess.file_exists(_root() + "/keepme.txt"))
-
-
-func test_keep_promotes_a_received_library_into_the_user_libraries() -> void:
-	var request := _request()
-	var host := _host_served()
-	_become_client()
-	LibraryTransfer.verify_and_install(LibraryTransfer.build_bundle(request, host), _ctx())
-	var kept := LibraryReceivedStore.promote("alienworld")
-	assert_true(kept["ok"], str(kept))
-	assert_true(_has_dir(_client_user.path_join("alienworld")))
-	assert_false(_has_dir(_received_root().path_join("alienworld")))
-	assert_eq(LibraryReceivedStore.sweep_session(), [], "nothing left to sweep")
-	LibraryRegistry.apply(_paths["base"])
-	var info := LibraryRegistry.info("alienworld", _paths["base"])
-	assert_eq(info["source"], "user")
-	assert_false(info["partial"].is_empty(), "still marked partial in the manager")
-	assert_false(LibraryReceivedStore.promote("alienworld")["ok"], "already installed")
-
-
-func test_promote_goes_through_the_importers_quarantine_and_the_install_card() -> void:
-	var request := _request()
-	var host := _host_served()
-	_become_client()
-	LibraryTransfer.verify_and_install(LibraryTransfer.build_bundle(request, host), _ctx())
-	var kept := LibraryReceivedStore.promote("alienworld")
-	assert_true(kept["ok"], str(kept))
-	assert_true(_has_dir(_client_user.path_join("alienworld")), "installed")
-	assert_false(_has_dir(_received_root().path_join("alienworld")), "the received copy is gone")
-	var incoming := LibraryImporter.incoming_root()
-	assert_eq(DirAccess.get_directories_at(incoming), PackedStringArray(), "the quarantine is empty")
-	assert_true(
-		SafeDelete.is_owned(_client_user.path_join("alienworld")), "the game made it, so it may remove it"
-	)
-
-
-func test_promote_refuses_through_the_install_card_and_keeps_the_received_copy() -> void:
-	var request := _request()
-	var host := _host_served()
-	_become_client()
-	LibraryTransfer.verify_and_install(LibraryTransfer.build_bundle(request, host), _ctx())
-	# A library of that id is already installed: the card's refusal, not a move over it.
-	DirAccess.make_dir_recursive_absolute(_client_user.path_join("alienworld"))
-	var kept := LibraryReceivedStore.promote("alienworld")
-	assert_false(kept["ok"])
-	assert_ne(String(kept["error"]), "")
-	assert_true(_has_dir(_received_root().path_join("alienworld")), "the received copy stays")
-	var incoming := LibraryImporter.incoming_root()
-	assert_eq(DirAccess.get_directories_at(incoming), PackedStringArray(), "nothing left staged")
-
-
-# ---- the registry's received source ----
-
-
-func test_an_installed_library_beats_a_received_one_of_the_same_version() -> void:
-	var request := _request()
-	var host := _host_served()
-	_become_client()
-	# The client installed alienworld 0.3.1 itself (all of it), then a host sends the partial.
-	DirAccess.make_dir_recursive_absolute(_client_user)
-	World.write_alien(_client_user.path_join("alienworld"))
-	var made := LibraryTransfer.verify_and_install(
-		LibraryTransfer.build_bundle(request, host), _ctx()
-	)
-	assert_true(made["ok"])
-	LibraryRegistry.apply(_paths["base"])
-	var info := LibraryRegistry.info("alienworld", _paths["base"])
-	assert_eq(info["source"], "user", "the player's own copy wins a tie")
-
-
-func test_a_newer_received_partial_supersedes_an_older_installed_copy_for_the_session() -> void:
-	var request := _request()
-	var host := _host_served()
-	_become_client()
-	World.write_alien(_client_user.path_join("alienworld"), "0.2.0")
-	var made := LibraryTransfer.verify_and_install(
-		LibraryTransfer.build_bundle(request, host), _ctx()
-	)
-	assert_true(made["ok"])
-	LibraryRegistry.apply(_paths["base"])
-	var info := LibraryRegistry.info("alienworld", _paths["base"])
-	assert_eq(info["source"], "received")
-	assert_eq(info["version"], "0.3.1")
-	assert_true(_assets().has(Tw.SPIRE))
-	# When the session's cache goes, the installed 0.2.0 serves again.
-	LibraryReceivedStore.sweep_session()
-	LibraryRegistry.apply(_paths["base"])
-	assert_eq(LibraryRegistry.info("alienworld", _paths["base"])["version"], "0.2.0")
-
-
-func test_the_received_folder_is_a_dot_folder_the_user_scan_skips() -> void:
-	assert_true(LibraryRegistry.received_root().get_file().begins_with("."))
-	assert_eq(LibraryRegistry.received_root().get_base_dir(), LibraryRegistry.user_root)

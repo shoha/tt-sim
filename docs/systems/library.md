@@ -44,8 +44,10 @@ treecube is gone ("The core library"). Step S9 (2026-10-25): per-season override
 | `utils/library/library_groups.gd` | `LibraryGroups` | (S4, pure) The palette's biomes grouped by library for the New map dialog: core first, then by name, a library's default biome first |
 | `utils/library/library_partial.gd` | `LibraryPartial` | (multiplayer, pure) The partial library and its wire bundle: `select` / `trim_biome` / `trim_library` / `trim_catalog` (what a map uses of a library), `encode` / `decode` (the `TTLP` bundle, capped before it allocates), `request_problem`, `inspect` (the client's checks of one received library), the error codes |
 | `utils/library/library_transfer.gd`, `library_transfer_consent.gd` | `LibraryTransfer`, `LibraryTransferConsent` | (multiplayer) `plan` (what a client asks for), `authorize` / `quote` / `build_bundle` (the host), `verify_and_install` (the client); the consent model (phases, the question's words, the size-cap refusal, progress text) |
-| `utils/library/library_received_store.gd` | `LibraryReceivedStore` | (multiplayer) The transient cache under `LibraryRegistry.received_root()`: `write_library` (atomic, with a marker), `inventory`, `touch`, `evict_to_fit` (LRU, 512 MB), `remove`, `sweep_session`, `sweep_leftovers`, `promote` (Keep). The one module besides the registry and the surface cache that touches library folders (`test_only_the_registry_lists_folders` names it) |
-| `autoloads/library_transfer_channel.gd`, `scenes/ui/library_transfer_ui.gd` | `LibraryTransferChannel`, `LibraryTransferUi` | (multiplayer) The messages and the client's flow (`AssetManager.library_transfer`), and the question, progress and Keep dialogs (the confirmation dialog) |
+| `utils/library/library_from_host.gd` | `LibraryFromHost` | (multiplayer) The cache of collections downloaded from a host: the `.tt-from-host.json` record (`read_record`, `write_record`), `inventory`, `cap_bytes` / `set_cap_mb` (1 GB default), `evict_to_fit` (LRU, spares the open map's), `note_open_map` / `touch` (last used), `remove`, `clear_all`, `covers` (the consent rule), `decide` / `commit` (the all-or-nothing write), `startup` / `migrate_received`. With the registry and the surface cache the module that touches library folders (`test_only_the_registry_lists_folders` names it) |
+| `utils/library/library_partial_merge.gd`, `library_transfer_install.gd` | `LibraryPartialMerge`, `LibraryTransferInstall` | (multiplayer, pure / client) The union of a delta partial into a kept one (`merge`, `merge_biome`), and the last step of `verify_and_install` (new, merge, replace, or the player's own copy left alone) |
+| `scenes/ui/library_manager/library_cache_section.gd` | `LibraryCacheSection` | The manager's "downloaded from hosts" row: count and size, Clear with its confirmation, the size limit; attached by one line in `LibraryManager` |
+| `autoloads/library_transfer_channel.gd`, `scenes/ui/library_transfer_ui.gd` | `LibraryTransferChannel`, `LibraryTransferUi` | (multiplayer) The messages and the client's flow (`AssetManager.library_transfer`), and the question and progress dialogs (the confirmation dialog) |
 | `utils/library/library_layer.gd`, `utils/palette_library.gd` | `LibraryLayer.lay`, `PaletteLibrary.install_overlay` | (S10) The merge that lays a compiled library over the palette cache (a biome replaces the base's biome of the same runtime id with its assets; the library's surfaces are added); it reads no file and no GLB. It is what `PaletteOverlay.read_palette` became when treecube's overlay route was deleted. `PaletteLibrary.DEFAULT_ROOT` (`res://libraries`) is a VIRTUAL root: the first read of its palette serves the libraries into it (`get_palette`), `base_for_serving` is the empty base `LibraryRegistry.apply` lays onto |
 | `utils/scatter_ground.gd` | `ScatterGround.habit_of` | (S2, S10) The rule's own `habit`, else NO habit (neutral `NO_HABIT`). The legacy key and kind lists (`LegacyHabit`, `EMERGENT_KEYS` ...) were deleted at S10: every shipped rule carries its habit through its role |
 | `utils/palette_validator.gd` (+ `palette_surfaces.gd`, `palette_fields.gd`, `palette_asset_files.gd`) | `PaletteValidator` | (S2) `palette_library.gd` was at gdlint's 1000-line cap and is split; the rule whitelist in `PaletteValidator._validate_species` / `_library_fields` keeps `role`, `habit`, `weight` |
@@ -471,19 +473,25 @@ only the assets a given map uses. The messages and the network rules are in
   `MapLibraryGate.run` first calls `fetch` (`LibraryTransferChannel.fetch_for_document`). `plan`
   compares the document with what is served and returns requests and blocked libraries; for each
   request the client sends a quote request, the host answers with what it would send, the player
-  answers "Host uses collection X v1.2 by Y (N assets, M MB). Download it? It stays on this
-  computer only until the session ends." (Download or Skip), the bytes stream with a progress
-  sheet and Cancel, and `verify_and_install` serves the library; the gate then checks the map
-  against it. A Skip, a refusal, a cancel or any failure leaves the existing mismatch dialog
-  ("Open without those plants" or Cancel).
+  answers "The host uses the collection X v1.2 by Y (N items, M MB). Download M MB? It stays on
+  this computer until you remove it in Collections." (Download or Skip; the question is asked
+  ONCE per collection and source hash, see "The cache of downloaded collections"), the bytes
+  stream with a progress sheet and Cancel, and `verify_and_install` keeps the collection and
+  serves it; a toast says what arrived and that it can be removed any time. The gate then checks
+  the map against it. A Skip, a refusal, a cancel or any failure leaves the existing mismatch
+  dialog ("Open without those collections" or Cancel).
 - **What is asked for (`plan`).** A library the map uses and the client does not have is requested
   (`missing`). A library installed at the same major version but lacking used assets is requested
-  when the installed copy is a user library at a lower version (`newer`) or a partial received
-  earlier (`more`, a later edit); at the same version it is only blocked (`lacks`: the host's copy
-  is the same, there is nothing to ask for). Never requested, and reported with a reason: `core`
-  and official libraries (they ship with the game, every peer runs the same version), a disabled
-  or broken library, another major version, a reserved id. The request carries the used asset,
-  biome and surface ids, the version and hash the map names and the libraries the client has.
+  only when the installed copy is a from-host one (a copy a host sent, the cache below): then
+  `more` (same version; only the MISSING items are asked for, a delta) or `newer` (the map was
+  saved with a higher version; the whole request replaces the kept copy). The player's OWN copy is
+  never replaced by a host's: at the same version it is blocked (`lacks`), at a lower one blocked
+  as `older` (the dialog names what it lacks), and nothing is requested. Never requested, and
+  reported with a reason: `core` and official libraries (they ship with the game, every peer runs
+  the same version), a disabled or broken library, another major version, a reserved id. The
+  request carries the used (or, for a delta, the missing) asset, biome and surface ids, the
+  version and hash the map names, the libraries the client has, and for a delta the surfaces it
+  already holds (`held_surfaces`, so the host does not send them again).
 - **The partial library (`LibraryPartial`).** An ordinary library folder with the SAME id and
   version as the host's, marked by a `partial` block in `library.json` (`format`,
   `source_version`, `source_hash`, `assets`, `biomes`, `surfaces`, `assets_only`, `bytes`). It
@@ -497,24 +505,18 @@ only the assets a given map uses. The messages and the network rules are in
   (`<dep>__<id>`) travel as an `assets_only` partial of that dependency (no biome, served as a
   pool that feeds the dependent's refs) unless the client's `have` satisfies the declared range;
   `core` and official dependencies are never sent; a dependency of a dependency is refused
-  ("too deep to send"). The registry reports `partial`, `received` and `source: "received"` in
-  `list()` / `info()`, so the manager can badge it "partial: received from host"; a map saved
-  while it is served records the host's FULL library hash (`partial.source_hash`).
-- **Where it lives.** `LibraryRegistry.received_root()`, `user://libraries/.received/<id>/` (a dot
-  folder the user scan skips) plus `<id>.received.json` (version, bytes, `received_at`,
-  `last_used`). It is a fourth source in `refresh()`, never an installed user library. Precedence
-  (`LibraryResolver`): official first; a received library beats an installed one only when it is
-  a strictly newer version (for the session; the installed copy serves again when the cache
-  goes), the player's own copy wins a tie. It goes when the session ends
-  (`LibraryReceivedStore.sweep_session`), a start-up sweep removes a crashed session's leftovers
-  (`FoliageLibrary.apply_saved`), and the LRU cap (`LibraryReceivedStore.CACHE_CAP_BYTES`, 512 MB, by `last_used`)
-  evicts the oldest others before a new install.
-- **Keep.** After an install the player is offered a Keep toast; `LibraryReceivedStore.promote(id,
-  importer)` moves the folder into the user's libraries (refused when that id is installed) and
-  the manager lists it as a partial user library. TODO(libmanager): when the importer's
-  quarantine flow (`user://libraries/.incoming/`) is merged, pass its entry as `importer`
-  (`promote` takes a Callable taking the folder and returning an Error); until then it moves the
-  folder directly.
+  ("too deep to send"). The registry reports `partial`, `from_host` (the record) and `received`
+  (= has a record) in `list()` / `info()`, so the manager can badge it "From host" and "Partial
+  copy"; a map saved while it is served records the host's FULL library hash
+  (`partial.source_hash`).
+- **Where it lives.** `user://libraries/<id>/`, an ordinary user library, since 2026-10-25 (the
+  decision that a collection a host sent is treated like any other: it is served, switched,
+  removed, persists across sessions, and is only MARKED from host). The marker is the record file
+  `.tt-from-host.json`; see "The cache of downloaded collections". There is no session-only copy,
+  no `.received` source in the registry, no Keep step and no precedence rule for a received
+  library: the id is a folder, so a host's library can never replace the player's own copy. The
+  earlier `user://libraries/.received/` folder is adopted once at start-up
+  (`LibraryFromHost.migrate_received`).
 - **Safety (`LibraryPartial.inspect`, run on every library of a bundle before anything is
   written, all or nothing).** Caps: at most 4096 files, 8 libraries and 256 MiB in a bundle,
   per-file by extension (json 4 MiB, glb 64 MiB, png 16 MiB, jpg 4 MiB, txt and md 64 KiB), the
@@ -534,17 +536,95 @@ only the assets a given map uses. The messages and the network rules are in
   version; a bundle is deterministic (sorted paths, sorted JSON keys) so a resumed transfer
   matches.
 - **Consent and limits.** A quote over `LibraryTransfer.MAX_REQUEST_BYTES` (256 MB, settable per
-  channel as `size_cap_bytes`) is refused with "The host's plants for this map are 310.0 MB, over
-  the 256.0 MB limit, so they are not downloaded." and no question.
+  channel as `size_cap_bytes`) is refused with "The host's collections for this map are 310.0 MB,
+  over the 256.0 MB limit, so they are not downloaded." and no question.
   `LibraryTransferConsent` holds every phase and word
-  (QUOTING, ASKING, RECEIVING, INSTALLING, DONE, SKIPPED, REFUSED, CANCELLED, FAILED).
+  (QUOTING, ASKING, RECEIVING, INSTALLING, DONE, SKIPPED, REFUSED, CANCELLED, FAILED). Every word
+  that names the content goes through `LibraryNames` (the display word, `count_of` for plurals:
+  "1 item", "4 items"), and `test_library_manager.gd` scans the transfer and cache files for a
+  literal of the word and for "plants".
 - **Mid-session edits.** The host announces a library its table's document starts using
   (`announce_document`, from `LiveEdits` as an edit is recorded); the client takes the same
   request path (`handle_hint`), and a client `LiveEdits` holds ops while a transfer runs. A later
-  request for the same library repeats every asset asked for before and replaces the partial.
+  request for the same collection is a delta that is merged into the kept copy, without a
+  question while it is small.
 - **Not done.** Prefetching libraries for shelf maps (the question is asked when a map is set out,
   with its loading overlay behind it); a download cut by a reconnect starts over (the next request
   has a new number, so `AssetStreamer`'s resume does not match; resume within a connection works).
+
+## The cache of downloaded collections
+
+Owner decisions (2026-10-25): a collection received from a host is treated like ANY OTHER (it
+just works, can be switched off and removed, persists across sessions, and is only marked "From
+host" so it can be found for clearing); asking before every download is not the best behaviour,
+so the game keeps a content-addressed local cache and asks once. `LibraryFromHost` is that cache.
+
+- **Storage format.** `user://libraries/<id>/` is the whole collection folder (the partial
+  library of "Multiplayer": `library.json` with its `partial` block, `assets/catalog.json`,
+  the GLBs, `biomes/`, `surfaces/`), the ownership marker `.tt-owned` (SafeDelete may remove it)
+  and `.tt-from-host.json`: `{format 1, id, host (the host's player name, "the host" when
+  unknown), version, source_hash (the host's FULL library hash, which is also the hash a map
+  saved here records), received_at, last_used (unix seconds), assets (the catalog ids held),
+  partial, assets_only, auto_delta (true: later small deltas download without a question)}`. The
+  record names its own folder or it is ignored; the registry leaves both marker files out of
+  the file list (so they never change a hash, a size or a transfer) and the importer drops a file
+  of that name from anything the player imports (it cannot pass for a download). An install
+  builds `.fromhost-staging-<id>/` beside the target and swaps it in (an earlier copy is set
+  aside as `.fromhost-old-<id>` and put back if a later swap fails), all libraries of a bundle
+  or none; start-up removes leftovers of a crash.
+- **Delta and merge.** A map that needs more of a kept collection (same version and source hash)
+  sends a request for the MISSING items only (plus the biomes and surfaces it does not hold). The
+  host answers as for any request: a valid partial of just those items. `LibraryPartialMerge.
+  merge` unites it with the kept files (library.json's `partial` block widened; catalog entries
+  by id, an id in both must carry the same sha256; biome-defs united by rule key with the refs of
+  a rule united; files in both must be byte-equal), then the MERGED library goes through
+  `LibraryPartial.inspect` like a fresh download (every GLB's hash and size, `GlbGuard`, the
+  reader, the compile dry-run). A tampered delta fails the delta's own inspection first; either
+  way nothing is written and the kept copy is untouched. If the quote shows another version or
+  source hash than the record (the host changed its library since), the client asks again for the
+  whole request and the answer REPLACES the kept copy (after a new question).
+- **The player's own copy.** The id is a folder: if `<libraries>/<id>` exists without a record it
+  is the player's and is never written (`LibraryFromHost.decide` answers `own`; for the asked-for
+  library that is an error `own_copy`, for a dependency the player's copy simply serves).
+  Installing the whole collection from a file over a from-host one is the ordinary Replace flow
+  and always reads as an upgrade; afterwards it is the player's own.
+- **Consent.** Asked once per collection id plus source hash. The question names the collection,
+  its author, the number of items and the download size (Download / Skip). After a Download the
+  record keeps `auto_delta`, so later deltas of the same collection and hash download WITHOUT a
+  question while the delta is under `LibraryFromHost.AUTO_DELTA_BYTES` (5 MB; `auto_delta_limit`
+  in tests); a bigger delta, another source hash or version, or a cleared cache asks again. A Skip
+  is remembered for the session only (`LibraryTransferChannel._skipped`, key `id|hash`; the
+  second map in the session does not ask again, the next session does). The 256 MB size-cap
+  refusal (no question) is unchanged and also refuses a covered delta.
+- **Last used and the size cap.** `MapLibraryGate.run` calls `LibraryFromHost.note_open_map(ids)`:
+  it stamps `last_used` of the from-host collections the opened map uses and remembers the ids as
+  in use. The cap (`[library] cache_cap_mb` in settings.cfg, 1024 by default, floor 64; the
+  manager's "Limit" menu) is checked before each install: the least recently used from-host
+  collections that are neither in the bundle nor used by the open map are removed until the new
+  bytes fit (`evict_to_fit`). A collection in use is never evicted, so the cache may sit over the
+  cap while maps use more than fits.
+- **Managing it.** The manager's `LibraryCacheSection` row (visible once something was downloaded,
+  attached by one line in `LibraryManager._on_panel_ready`): "N collections downloaded from hosts:
+  X of 1.0 GB", the Limit menu and "Clear downloaded collections", which confirms with how many
+  collections, how many MB and how many saved maps use them (`MapDocumentIO.peek_libraries`
+  through `LibraryInstall.levels_using`, on demand), then removes only records-bearing folders
+  (`LibraryFromHost.clear_all` -> `LibraryInstall.remove` -> `SafeDelete.tree`; a junction inside
+  stops that folder and is reported, the rest is still cleared). One collection is removed through
+  the ordinary Remove, whose confirmation adds that the host asks first when a map needs it again.
+  The detail card says "From host: <label>" and, for a partial copy, a "Partial copy" chip with
+  "Holds only what the host's maps used." (the switch is live, Show in folder and Remove are
+  there, "New biome from this" is not).
+- **Behaviour changes of 2026-10-25.** Removed: `LibraryReceivedStore` (and `promote`, `sweep_
+  session`, `sweep_leftovers`), the `.received` source and its precedence rule, the Keep toast
+  (`offer_keep`, `LibraryTransferChannel.keep`). A newer host version no longer overlays the
+  player's own copy for the session: it is blocked as `older` and the player is told.
+- **Tests.** `test_library_transfer_install.gd` (kept as a user library, persistence across a
+  simulated restart, delta merge, tampered and contradicting deltas, changed host copy, the
+  player's own copy, hostile bundles), `test_library_transfer_flow.gd` (the whole flow: consent
+  once, delta, Skip per session, changed copy), `test_library_transfer_consent.gd`,
+  `test_library_from_host.gd` (inventory, LRU, open-map spare, last used, clear, junction,
+  marker, `.received` migration, import cannot forge the record), `test_library_manager.gd`
+  (the cache row, Clear, the card, the limit, the word scan), `test_safe_delete.gd`.
 
 ## Authoring
 
@@ -839,8 +919,8 @@ the project. A root that is empty, relative or unset therefore turns "delete the
 into "delete the project's `x`", and `remove_tree("")` or `remove_tree(".")` into "delete the
 project". Reproduced on the old code, each in its own scratch project: `remove_tree("")`,
 `remove_tree(".")` and the tests' own `World.remove_tree("")` (all 4031 tracked files), an
-`incoming_override` of `"."` through `sweep_incoming` (4018), `LibraryReceivedStore.sweep_leftovers(".")`
-(4018), and, with `user_root` empty, `LibraryInstall.remove("scenes")` / `install(replace)` /
+`incoming_override` of `"."` through `sweep_incoming` (4018), the old received store's
+`sweep_leftovers(".")` (4018; the store was replaced by `LibraryFromHost` on 2026-10-25), and, with `user_root` empty, `LibraryInstall.remove("scenes")` / `install(replace)` /
 `ReceivedStore.write_library("", "scenes", ...)` (the project's `scenes` folder, 470 files: a
 library id is any `[a-z][a-z0-9_-]{1,31}`, so it can be the name of a project folder). A sweep
 with `user_root` empty alone only reached `./.incoming`. Not reproduced: how `user_root` got
@@ -855,7 +935,8 @@ The fix is at the root, not only a guard:
   Empty, whitespace, relative, `res://`, any `..` segment, a bare drive or root, the user data
   folder itself, its parents, the project folder or a parent of it: all refused. The named roots
   `libraries()` (`LibraryRegistry.user_root`), `incoming()` (`<libraries>/.incoming` or the test
-  override), `received()` (`<libraries>/.received`) and `cache()` (`SurfaceCache.root`) resolve the
+  override), `received()` (`<libraries>/.received`, the old session-only folder, read only to
+  adopt it) and `cache()` (`SurfaceCache.root`) resolve the
   configured string each time they are asked, so an unset root fails closed. `child(root, name)`
   accepts one plain segment only (a library id can never carry a separator, `.` or `..`).
 - **`SafeDelete`** (`utils/library/safe_delete.gd`) is the ONE recursive delete. `tree(path,
@@ -872,13 +953,18 @@ The fix is at the root, not only a guard:
 - **Where the marker is written** (lazily, where our code creates the folder): `stage` writes it
   into the quarantine folder before extracting (a `.tt-owned` inside an archive is dropped as
   junk by `inspect`, so an archive cannot forge one); the staged folder keeps it when `install`
-  renames it to `<libraries>/<id>`; `LibraryReceivedStore` marks `.staging-<id>` and `<id>`;
-  `SurfaceCache.write` marks `library_cache/<id>`. The registry excludes the root marker from a
-  library's file list, so it is never part of a library's hash, size or transfer.
+  renames it to `<libraries>/<id>`; `LibraryFromHost.commit` marks `.fromhost-staging-<id>` (the
+  folder keeps the marker when it is swapped to `<libraries>/<id>`); `SurfaceCache.write` marks
+  `library_cache/<id>`. The registry excludes the root marker and the from-host record from a
+  library's file list, so they are never part of a library's hash, size or transfer, and the
+  importer drops a `.tt-from-host.json` from an import. Everything that removes a downloaded
+  collection (Clear, one Remove, the size-cap eviction) is `LibraryInstall.remove` ->
+  `SafeDelete.tree`; `LibraryFromHost.remove` refuses an id whose folder has no record.
 - **Migration** (a folder without a marker is never deleted): `LibraryRegistry.refresh()` marks
   every direct child of the user's libraries folder that has a valid library id and a
-  `library.json` (a library installed before the marker existed); a received folder is adopted
-  when its `<id>.received.json` record sits beside it or it is a `.staging-` folder; a surface
+  `library.json` (a library installed before the marker existed); an old `.received/<id>` folder
+  is moved into the libraries folder as a from-host collection when its `<id>.received.json`
+  record sits beside it and it passes `LibraryPartial.inspect` (else reported and left); a surface
   cache folder is adopted when it holds nothing but `.ttimg` and `.tmp` files. Anything else
   stays, and `Remove` says "was not put there by the game; delete its folder by hand". Quarantine
   folders made before the marker existed are left by the sweep (`last_sweep_skipped`).
@@ -931,6 +1017,17 @@ plantgen is regenerated by `compile_library_cli --contract` (uncommitted there).
 
 ## History
 
+- 2026-10-25: libcache: a collection a host sends is an ordinary user library marked from host
+  (`LibraryFromHost`, `.tt-from-host.json`), not a session-only copy. Removed:
+  `LibraryReceivedStore`, the `.received` source, `LibraryRegistry.received_root`, the Keep toast
+  and `promote`, the resolver's received-beats-installed rule. Added: a content-addressed cache
+  with delta requests and merge (`LibraryPartialMerge`, `LibraryTransferInstall`), consent asked
+  once per collection and source hash (a small delta of an agreed collection downloads without a
+  question), a 1 GB size cap with least-recently-used eviction that spares what an open map uses,
+  the manager's "downloaded from hosts" row with Clear, the "From host" and "Partial copy" card
+  text, migration of a leftover `.received` folder, and every transfer string through
+  `LibraryNames` (no "plants", `count_of` for plurals). A host's newer version no longer overlays
+  the player's own copy (blocked as `older`). See "The cache of downloaded collections".
 - 2026-10-25: step S10, off treecube: `res://libraries/core` ships (route K, see "The core
   library"), `assets/palette` (160 MB: 384 LFS files, the imported palette), `PaletteOverlay`,
   `PaletteLibrary.overlay_package`, `LegacyHabit` and the scatter key lists, the

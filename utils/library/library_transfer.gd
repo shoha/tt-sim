@@ -4,8 +4,10 @@ extends RefCounted
 ## Multiplayer transfer of the library assets a map uses (docs/systems/library.md "Multiplayer").
 ## The host serves a PARTIAL library (LibraryPartial: the used assets, the biome-defs of the
 ## biomes the map uses with only their used rules, the surfaces those biomes use) and the client
-## installs it into a TRANSIENT cache (LibraryRegistry.received_root(), `user://libraries/.received/
-## <id>/`), never into the user's libraries unless the player chooses to keep it (promote()).
+## keeps it as an ordinary user library marked "from host" (LibraryFromHost: `user://libraries/
+## <id>/` plus a record file). A later request for the same collection only EXTENDS it with what
+## is missing (a delta, LibraryPartialMerge), and nothing is ever written over a library the
+## player installed themselves.
 ##
 ## The three halves, none of which touches the network or the scene tree:
 ## - client: plan(doc) says which libraries to ask the host for, and which cannot be asked for;
@@ -13,7 +15,8 @@ extends RefCounted
 ##   and build_bundle() (the wire bytes), reading the host's library folder;
 ## - client: verify_and_install() decodes, inspects (LibraryPartial.inspect: caps, portable names,
 ##   extensions, no extra file, reserved ids, sha256 and size of every GLB, GlbGuard, the reader,
-##   a compile dry-run) and only then writes, atomically per library, with an LRU cap.
+##   a compile dry-run) and only then writes (LibraryTransferInstall), all or nothing, evicting old
+##   from-host collections over the size cap.
 ##
 ## LibraryTransferChannel (autoloads/ side: scenes/library_transfer_channel.gd) carries the
 ## messages and the chunked bytes (AssetStreamer's windowed transfer).
@@ -62,7 +65,7 @@ static func plan(
 		var verdict := _verdict(id, wanted, infos.get(id, {}), lacking)
 		if verdict["kind"] == "request":
 			(out["requests"] as Array).append(
-				_request(doc, id, wanted, used, infos, String(verdict["reason"]))
+				_request(doc, id, wanted, used, infos, String(verdict["reason"]), lacking)
 			)
 		elif verdict["kind"] == "blocked":
 			(out["blocked"] as Array).append(
@@ -102,17 +105,23 @@ static func _verdict(
 			)
 	if lacking.is_empty():
 		return {"kind": "satisfied"}
-	if String(local.get("source", "")) == "received":
-		return {"kind": "request", "reason": "more"}
-	if want_version != "" and LibraryVersions.compare(have_version, want_version) < 0:
-		if String(local.get("source", "")) == "user":
-			return {"kind": "request", "reason": "newer"}
-	return _blocked(
-		"lacks",
-		(
-			"%s %s lacks %d plants this map uses."
-			% [local.get("name", id), have_version, lacking.size()]
+	var older := want_version != "" and LibraryVersions.compare(have_version, want_version) < 0
+	if not (local.get("from_host", {}) as Dictionary).is_empty():
+		# A copy an earlier host sent: ours to extend (the missing items only) or, when the map
+		# was saved with a newer version, to replace.
+		return {"kind": "request", "reason": "newer" if older else "more"}
+	# The player's own copy is never replaced by a host's: they are told what it lacks.
+	var count := LibraryNames.count_of(lacking.size(), "item")
+	if older:
+		return _blocked(
+			"older",
+			(
+				"%s %s is installed; the map was saved with %s, which has %s this one lacks."
+				% [local.get("name", id), have_version, want_version, count]
+			)
 		)
+	return _blocked(
+		"lacks", "%s %s lacks %s this map uses." % [local.get("name", id), have_version, count]
 	)
 
 
@@ -133,7 +142,8 @@ static func _request(
 	wanted: Dictionary,
 	used: PackedStringArray,
 	infos: Dictionary,
-	reason: String
+	reason: String,
+	lacking: Array[String] = []
 ) -> Dictionary:
 	var biomes: Array[String] = []
 	for biome_id in doc.biome_ids:
@@ -156,7 +166,7 @@ static func _request(
 			have[other] = String(entry.get("version", ""))
 	var asset_ids: Array[String] = []
 	asset_ids.assign(Array(used))
-	return {
+	var request := {
 		"protocol": LibraryPartial.PROTOCOL,
 		"library": id,
 		"version": String(wanted.get("version", "")),
@@ -167,6 +177,32 @@ static func _request(
 		"have": have,
 		"reason": reason,
 	}
+	if reason == "more":
+		# A copy kept from this host already holds the rest: ask for what is missing only. The
+		# whole request stays in `full` for the case the host's copy changed since.
+		request["full"] = request.duplicate(true)
+		var held: Dictionary = (infos.get(id, {}) as Dictionary).get("partial", {})
+		request["assets"] = lacking.duplicate()
+		request["biomes"] = _not_held(biomes, held.get("biomes", []), id, true)
+		request["surfaces"] = _not_held(surfaces, held.get("surfaces", []), id, false)
+		request["held_surfaces"] = (held.get("surfaces", []) as Array).duplicate()
+	return request
+
+
+## `names` (runtime biome ids or surface names of library `id`) minus the ones the kept copy
+## `held` already lists (their local names). Pure.
+static func _not_held(names: Array[String], held: Array, id: String, biome: bool) -> Array[String]:
+	var out: Array[String] = []
+	for runtime in names:
+		var local := runtime
+		if biome:
+			var parsed := LibraryIds.parse_runtime_biome(runtime)
+			local = String(parsed.get("biome", runtime))
+		else:
+			local = runtime.trim_prefix(id + LibraryIds.SEPARATOR)
+		if not local in held:
+			out.append(runtime)
+	return out
 
 
 ## The request skeleton for library `id` as `doc` uses it (what a host announces when it starts
@@ -296,7 +332,12 @@ static func prepare(request: Dictionary, with_data: bool, served: Variant = null
 		count += int(part["count"])
 	if total > MAX_REQUEST_BYTES or count > LibraryPartial.MAX_ENTRIES:
 		return _fail(
-			out, "caps", "the plants for this map are %s, over the limit" % format_bytes(total)
+			out,
+			"caps",
+			(
+				"the %s for this map are %s, over the limit"
+				% [LibraryNames.lower(2), format_bytes(total)]
+			)
 		)
 	out["parts"] = parts
 	out["ok"] = true
@@ -373,6 +414,7 @@ static func _part(
 			"name": String(library.get("name", id)),
 			"version": String(library.get("version", "")),
 			"author": String(library.get("author", "")),
+			"hash": String(found.get("hash", "")),
 			"assets_only": only != null,
 			"files": built["files"],
 			"sizes": built["sizes"],
@@ -497,6 +539,7 @@ static func quote(request: Dictionary, served: Variant = null) -> Dictionary:
 					"name": part["name"],
 					"version": part["version"],
 					"author": part["author"],
+					"hash": part["hash"],
 					"assets": part["assets"],
 					"files": part["count"],
 					"bytes": size,
@@ -532,13 +575,23 @@ static func build_bundle(request: Dictionary, served: Variant = null) -> PackedB
 # ---- client: checking and installing ----
 
 
-## Decodes, inspects and installs a received bundle. `ctx`: {library (the requested id),
-## wanted_version, root (default LibraryRegistry.received_root()), official_ids (default: the
-## game's), surfaces (default: the palette's), now (unix time, default the clock), cap (cache
-## cap, default CACHE_CAP_BYTES)}. Returns {ok, errors: [{code, text}], libraries: [ids],
-## bytes, files}. Nothing is written unless every library in the bundle passes.
+## Decodes, inspects and installs a received bundle into the user's libraries as from-host
+## collections (LibraryTransferInstall). `ctx`: {library (the requested id), wanted_version, host
+## (the label the record keeps), official_ids (default: the game's), surfaces (default: the
+## palette's), now (unix time, default the clock), cap (cache cap in bytes, default
+## LibraryFromHost.cap_bytes())}. Returns {ok, errors: [{code, text}], libraries: [ids written],
+## merged: [ids a delta was merged into], evicted: [ids removed to fit], bytes, files}. Nothing is
+## written unless every library in the bundle passes.
 static func verify_and_install(bundle: Variant, ctx: Dictionary) -> Dictionary:
-	var out := {"ok": false, "errors": [], "libraries": [] as Array[String], "bytes": 0, "files": 0}
+	var out := {
+		"ok": false,
+		"errors": [],
+		"libraries": [] as Array[String],
+		"merged": [] as Array[String],
+		"evicted": [] as Array[String],
+		"bytes": 0,
+		"files": 0,
+	}
 	var errors: Array = out["errors"]
 	var files: Dictionary
 	if bundle is PackedByteArray:
@@ -594,40 +647,7 @@ static func verify_and_install(bundle: Variant, ctx: Dictionary) -> Dictionary:
 			)
 	if not errors.is_empty():
 		return out
-	return _install(split, reads, ctx, out)
-
-
-static func _install(
-	split: Dictionary, reads: Dictionary, ctx: Dictionary, out: Dictionary
-) -> Dictionary:
-	var root := String(ctx.get("root", LibraryRegistry.received_root()))
-	var now := int(ctx.get("now", Time.get_unix_time_from_system()))
-	var total := 0
-	var count := 0
-	for id: String in split:
-		for data: PackedByteArray in (split[id] as Dictionary).values():
-			total += data.size()
-		count += (split[id] as Dictionary).size()
-	var keep: Array[String] = []
-	keep.assign(split.keys())
-	var cap := int(ctx.get("cap", LibraryReceivedStore.CACHE_CAP_BYTES))
-	LibraryReceivedStore.evict_to_fit(total, keep, cap, root)
-	var written: Array[String] = []
-	for id: String in split:
-		var problem := LibraryReceivedStore.write_library(
-			root, id, split[id], now, reads[id]["library"]
-		)
-		if problem != "":
-			for done in written:
-				LibraryReceivedStore.remove(done, root)
-			(out["errors"] as Array).append({"code": "io", "text": problem})
-			return out
-		written.append(id)
-	out["libraries"] = written
-	out["bytes"] = total
-	out["files"] = count
-	out["ok"] = true
-	return out
+	return LibraryTransferInstall.run(split, reads, expect, ctx, out)
 
 
 ## The ids of libraries that ship with the game (official folders) and core.

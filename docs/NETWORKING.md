@@ -714,10 +714,13 @@ real peers by the ENet scenario `enet_prefetch`.
 
 A map made with a content library (a non-core collection of plants, see
 [systems/library.md](systems/library.md) "Multiplayer") names it in `manifest.json`
-`libraries`. A client that lacks the library asks the host for the plants the map uses, and
-only those: a PARTIAL library, kept for the session. Decision (user, 2026-10-24): non-core
-libraries transfer automatically in multiplayer, ideally only the assets used in a given map.
-"Automatically" means the request starts on its own; the player still says yes (below).
+`libraries`. A client that lacks the library asks the host for the items the map uses, and
+only those: a PARTIAL library, kept on the client's computer as an ordinary collection marked
+"From host" (a cache, 2026-10-25: [systems/library.md](systems/library.md) "The cache of
+downloaded collections"). Decision (user, 2026-10-24): non-core libraries transfer automatically
+in multiplayer, ideally only the assets used in a given map. "Automatically" means the request
+starts on its own; the player says yes ONCE per collection and source hash (below), and a later
+map of the same host that needs more of it asks for the missing items only.
 
 Messages, on `AssetManager.library_transfer` (`LibraryTransferChannel`,
 `autoloads/library_transfer_channel.gd`, RPCs at `/root/AssetManager/LibraryTransfer` on every
@@ -725,8 +728,8 @@ peer), protocol `LibraryPartial.PROTOCOL` = 1:
 
 | Message | Direction | Payload |
 |---------|-----------|---------|
-| `_rpc_library_quote(request_id, request)` | client -> host | library id, the version and hash the map names, the used asset, biome and surface ids, the libraries the client has (`have`) |
-| `_rpc_library_quote_reply(request_id, reply)` | host -> client | the quote (per library: name, version, author, asset count, files, bytes) or a refusal `{ok: false, code, error}` |
+| `_rpc_library_quote(request_id, request)` | client -> host | library id, the version and hash the map names, the used asset, biome and surface ids (only the MISSING ones when the client keeps an earlier download of this collection, plus `held_surfaces`, the surfaces it already holds), the libraries the client has (`have`) |
+| `_rpc_library_quote_reply(request_id, reply)` | host -> client | the quote (per library: name, version, author, `hash` (the library's source hash), asset count, files, bytes) or a refusal `{ok: false, code, error}` |
 | pack `_library_parts`, asset id = request number | client -> host through `AssetStreamer` | the same chunked, windowed, resumable and cancellable stream as a map file; the host builds the bundle (`LibraryTransfer.build_bundle`) from the request it quoted |
 | `_rpc_library_hint(hint)` | host -> clients | a request skeleton for a library the table's map started using (a live edit) |
 
@@ -734,8 +737,15 @@ peer), protocol `LibraryPartial.PROTOCOL` = 1:
   every peer has the channel; the protocol number rides in the request and the reply, and a
   reply with another one fails visibly ("the host speaks another library transfer version"). A
   host that does not answer within 15 s ends the request with "The host did not answer. Is it
-  running the same version of the game?". The old "Open without those plants" dialog follows any
-  skip, refusal or failure.
+  running the same version of the game?". The "Open without those collections" dialog follows any
+  skip, refusal or failure. When the quote shows another version or source hash than the copy
+  the client keeps, the client sends the whole request again and the answer replaces the kept
+  copy; the host needs no new message for that.
+- **Consent.** The client asks (Download / Skip) once per collection and source hash. After a
+  Download, later small deltas (under 5 MB) of the same collection and hash download without a
+  question; a bigger one, a new version or a cleared cache asks again; a Skip lasts the session.
+  A quote over the 256 MB size cap is refused without a question. Nothing is ever written over
+  a collection the player installed themselves.
 - **Untrusted input, both ways.** The host answers only for ids that a map it serves uses (the
   table's live document, `LiveEdits.documents_provider`, and the shelf maps' files, usage cached
   by modified time), for a library it serves that is not official, within the bundle caps, and
@@ -751,18 +761,22 @@ peer), protocol `LibraryPartial.PROTOCOL` = 1:
 - **Mid-session edits.** `LiveEdits` (host) announces a library the first time its document uses
   it, and again when its used assets grow, before the edit's op is sent; a client runs the
   ordinary request for the hint, and its `LiveEdits` holds incoming ops while a transfer runs
-  (`LibraryTransferChannel.is_busy()`, `idle`), so an edit that uses the new plants is not
+  (`LibraryTransferChannel.is_busy()`, `idle`), so an edit that uses the new items is not
   refused for lack of them.
-- **The end.** When the session ends (`ConnectionState.OFFLINE`) the received libraries are
-  removed (`LibraryReceivedStore.sweep_session`), and a start-up sweep removes what a crashed session
-  left. A library received while the cache holds more than 512 MB evicts the least recently used
-  first.
+- **The end.** When the session ends (`ConnectionState.OFFLINE`) the channel forgets its requests
+  and Skips; what was downloaded STAYS (a collection like any other: switch it off, remove it,
+  or clear every downloaded collection in the manager). Start-up removes the leftovers of a crash
+  and adopts a `.received` folder of the earlier session-only cache. A download that would take
+  the downloaded collections over the size cap (1 GB by default, a setting) evicts the least
+  recently used ones no open map uses first.
 
 Tests: `test_library_transfer.gd` (plan, authorize, quote, bundle), `test_library_transfer_install.gd`
-(hostile bundles, the cache, the registry's received source), `test_library_transfer_consent.gd`
-(the player's side as a UI-free model) and `test_library_transfer_flow.gd` (a client and a host
-channel over two `AssetStreamer` doubles and a message queue: the whole request, skip, cancel,
-refusal, timeout, protocol mismatch, tampering, the map gate, hints, deltas, the session end).
+(hostile bundles, the kept copy, the delta merge, the player's own copy),
+`test_library_transfer_consent.gd` (the player's side as a UI-free model),
+`test_library_from_host.gd` (the cache: LRU, clear, migration) and `test_library_transfer_flow.gd`
+(a client and a host channel over two `AssetStreamer` doubles and a message queue: the whole
+request, skip, cancel, refusal, timeout, protocol mismatch, tampering, the map gate, hints,
+deltas, consent once, the session end).
 
 ---
 

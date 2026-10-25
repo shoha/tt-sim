@@ -38,18 +38,16 @@ const PURE_MODULES: Array[String] = [
 ## The one other module that touches a folder: it creates and replaces its own cache files and
 ## lists nothing (checked below).
 const CACHE_WRITER := "surface_cache.gd"
-## And the store of libraries received from a host: it writes, lists and removes only under
-## `LibraryRegistry.received_root()` (it never reads a library's files; the registry scans that
-## root as its own source).
-const RECEIVED_STORE := "library_received_store.gd"
+## And the cache of collections downloaded from a host: it writes, lists and removes only under
+## the user's libraries folder, and only the folders that carry its own record file. It does not
+## decide what is installed or served (the registry scans those folders as any user library).
+const RECEIVED_STORE := "library_from_host.gd"
 ## The import step (S6) reads the player's import source, writes and empties the quarantine
 ## folder, moves a staged library into place and deletes one the player removed. It never
 ## DISCOVERS libraries: nothing there decides what is installed, the registry still does.
 ## SafeDelete is the one recursive delete of all of them: it removes a marked folder inside a
 ## managed root and lists nothing to decide what is installed.
-const IMPORT_STEP: Array[String] = [
-	"library_importer.gd", "library_install.gd", "safe_delete.gd"
-]
+const IMPORT_STEP: Array[String] = ["library_importer.gd", "library_install.gd", "safe_delete.gd"]
 
 var _saved_settings_path: String = ""
 var _saved_official: String = ""
@@ -455,7 +453,9 @@ func test_apply_lays_the_library_over_the_palette_and_loads_its_glbs() -> void:
 	assert_true(result["applied"])
 	assert_eq(result["library"], "mini")
 	assert_eq(result["biomes"], [RUNTIME])
-	assert_eq(AssetStore.stats["parses"], parses_before, "no GLB is read until a plant is asked for")
+	assert_eq(
+		AssetStore.stats["parses"], parses_before, "no GLB is read until a plant is asked for"
+	)
 	assert_eq(AssetStore.assets_of("mini", BASE).size(), 3, "AssetStore holds the three assets")
 	var ids := PaletteLibrary.biomes(BASE).map(func(b: Dictionary) -> String: return b["id"])
 	assert_eq(ids, ["forest_summer_s1", RUNTIME], "another biome is left alone")

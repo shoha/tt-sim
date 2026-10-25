@@ -46,15 +46,19 @@ static func apply(root: String = PaletteLibrary.DEFAULT_ROOT) -> Dictionary:
 	return {"ok": content["ok"], "error": content["error"], "content_library": content}
 
 
-## apply() at startup, before any map or the graphics warm-up reads the palette: libraries
-## received from a host in a session that never ended cleanly are swept first, and a persisted
-## developer path (settings.cfg `[library] dev_path`) becomes the override.
+## apply() at startup, before any map or the graphics warm-up reads the palette: a persisted
+## developer path (settings.cfg `[library] dev_path`) becomes the override, then the housekeeping
+## of the downloaded-collections cache runs (a crashed install's leftovers go, a `.received`
+## folder of the earlier session-only cache is adopted once; LibraryFromHost.startup) and the
+## libraries are served again when it adopted any.
 static func apply_saved() -> void:
-	LibraryReceivedStore.sweep_leftovers()
 	LibraryRegistry.use_saved_override()
 	var result := apply()
 	if not result["ok"]:
 		push_warning("FoliageLibrary: %s" % result["error"])
+	var started := LibraryFromHost.startup()
+	if not (started["adopted"] as Array).is_empty():
+		apply()
 
 
 ## Serves the libraries again (one was enabled, disabled, installed or removed, or the override
@@ -110,9 +114,7 @@ static func adapt_async(
 	var snapshot := ScatterRegen.snapshot(doc)
 	var out := {}
 	var task := WorkerThreadPool.add_task(
-		func() -> void: _run_all(regen, snapshot, out),
-		false,
-		"FoliageLibrary regenerate scatter"
+		func() -> void: _run_all(regen, snapshot, out), false, "FoliageLibrary regenerate scatter"
 	)
 	while not WorkerThreadPool.is_task_completed(task):
 		await tree.process_frame
@@ -130,9 +132,12 @@ static func describe(report: Dictionary) -> String:
 	if not report.get("regenerated", false):
 		return ""
 	var text := (
-		"Foliage: scatter rebuilt from the biome painting (%d plants; the saved rows named %d"
-		+ " assets the installed libraries lack)."
-	) % [report["rows"], (report["missing_ids"] as PackedStringArray).size()]
+		(
+			"Foliage: scatter rebuilt from the biome painting (%d plants; the saved rows named %d"
+			+ " assets the installed libraries lack)."
+		)
+		% [report["rows"], (report["missing_ids"] as PackedStringArray).size()]
+	)
 	if report["props_missing"] > 0:
 		text += " %d hand-placed assets are missing and skipped." % report["props_missing"]
 	return text

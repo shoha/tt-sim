@@ -681,18 +681,26 @@ func _code_of(source: String) -> String:
 	return "\n".join(lines)
 
 
-func test_a_partial_copy_from_the_host_is_said_not_replaced() -> void:
-	World.write_alien(LibraryRegistry.received_root() + "/alienworld", "0.2.0", [], false)
+func test_a_partial_copy_from_a_host_is_completed_by_the_whole_one_whatever_its_version() -> void:
+	var folder := LibraryRegistry.user_root + "/alienworld"
+	World.write_alien(folder, "9.0.0", [], false)
+	assert_true(SafeDelete.mark(folder, "test", LibraryRegistry.user_root))
+	assert_true(
+		LibraryFromHost.write_record(
+			folder,
+			{"format": 1, "id": "alienworld", "host": "Ann", "version": "9.0.0", "partial": true}
+		)
+	)
 	var card := _card_of(_entries())
 	assert_true(card["can_install"], str(card["errors"]))
-	assert_true(
-		card["existing"].is_empty(), "nothing to replace: the received copy is not installed"
+	assert_false(card["existing"].is_empty(), "it is an installed copy like any other")
+	assert_eq(
+		card["relation"], LibraryInstall.RELATION_NEWER, "an upgrade although 9.0.0 is higher"
 	)
-	assert_eq(card["relation"], LibraryInstall.RELATION_NEW)
-	assert_true(_has_line(card["warnings"], "came from the host"), str(card["warnings"]))
-	var done := LibraryInstall.install(card)
+	assert_true(_has_line(card["warnings"], "came from a host"), str(card["warnings"]))
+	var done := LibraryInstall.install(card, true)
 	assert_true(done["ok"], str(done["error"]))
-	assert_true(DirAccess.dir_exists_absolute(LibraryRegistry.received_root() + "/alienworld"))
+	assert_true(LibraryFromHost.record_of("alienworld").is_empty(), "now the player's own")
 
 
 func test_nothing_outside_the_user_folders_is_ever_deleted() -> void:

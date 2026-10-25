@@ -43,7 +43,7 @@ func before_each() -> void:
 	DirAccess.make_dir_recursive_absolute(_client_user)
 	LibraryRegistry.clear()
 	PaletteLibrary.clear_cache()
-	LibraryReceivedStore._this_session.clear()
+	LibraryFromHost.open_ids = {}
 	LibraryRegistry.settings_path = _root() + "/settings.cfg"
 	LibraryRegistry.official_root = _paths["official"]
 	LibraryRegistry.user_root = _paths["user"]
@@ -100,7 +100,6 @@ func _ctx(extra: Dictionary = {}) -> Dictionary:
 	var ctx := {
 		"library": "alienworld",
 		"wanted_version": "0.3.1",
-		"root": LibraryRegistry.received_root(),
 		"official_ids": ["core"],
 		"surfaces": PaletteLibrary.get_palette(_paths["base"])["surfaces"],
 		"now": 1000,
@@ -113,8 +112,9 @@ func _codes(made: Dictionary) -> Array:
 	return (made["errors"] as Array).map(func(e: Dictionary) -> String: return e["code"])
 
 
-func _received_root() -> String:
-	return LibraryRegistry.received_root()
+## Where library `id` is kept on this (client) install: an ordinary user library folder.
+func _installed_path(id: String) -> String:
+	return LibraryRegistry.user_root.path_join(id)
 
 
 func _has_dir(path: String) -> bool:

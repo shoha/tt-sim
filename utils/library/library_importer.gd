@@ -28,8 +28,11 @@ const LIBRARY_FILE := "library.json"
 const KIB := 1024
 const MIB := 1024 * 1024
 ## Names a zip tool or a file manager adds by itself; left out of the import with a note.
-## (The ownership marker is one: a library never carries it in, the game writes its own.)
-const JUNK_NAMES: Array[String] = [".ds_store", "thumbs.db", "desktop.ini", ".tt-owned"]
+## (The ownership marker and the from-host record are such names: a library never carries them
+## in, the game writes its own, so an import cannot pass for a host's download.)
+const JUNK_NAMES: Array[String] = [
+	".ds_store", "thumbs.db", "desktop.ini", ".tt-owned", ".tt-from-host.json"
+]
 const JUNK_FOLDERS: Array[String] = ["__macosx", ".git", ".github", ".svn", ".hg"]
 ## The most error lines one answer carries (the rest are counted).
 const MAX_LINES := 12
@@ -87,8 +90,10 @@ static func incoming_root() -> String:
 static func is_quarantined(path: String) -> bool:
 	var root := LibraryPaths.incoming()
 	var target := LibraryPaths.resolve(path)
-	return bool(root["ok"]) and bool(target["ok"]) and LibraryPaths.inside(
-		String(target["path"]), String(root["path"])
+	return (
+		bool(root["ok"])
+		and bool(target["ok"])
+		and LibraryPaths.inside(String(target["path"]), String(root["path"]))
 	)
 
 
