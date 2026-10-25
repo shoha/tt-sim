@@ -4,9 +4,11 @@ extends RefCounted
 ## Compiles a read library (LibraryReader.read's result) into exactly the palette form
 ## PaletteLibrary validates and the scatter solver consumes: the `biomes` list and the `assets`
 ## table of a palette.json, one palette biome per season, in the same dictionaries a treecube or
-## plantgen package carries, plus the authoring fields the palette does not read yet (`role`,
-## `habit`, `weight`, `library` on a rule, `library` on a biome). validate_palette drops those
-## silently until the step that makes the scatter code read them extends its whitelist (S2).
+## plantgen package carries, plus the authoring fields `role`, `habit`, `weight` and `library`
+## on a rule and `library` on a biome. validate_palette keeps `role`, `habit` and `weight` of a
+## rule since S2 (PaletteValidator._library_fields; the scatter code reads `habit` through
+## ScatterGround.habit_of) and still drops `library` silently: each new field is whitelisted in
+## the step that makes the scatter code read it.
 ##
 ## This build compiles the minimal subset (design doc 6.1): rules select assets by explicit
 ## `query.match[].ref` only, numbers are explicit (a missing density takes the class default

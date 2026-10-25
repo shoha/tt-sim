@@ -28,8 +28,8 @@ extends RefCounted
 ## weight) bank species (willow, poplar, ferns) gather, trees keep off the waterline, shrubs
 ## and tall cover thin to short cover, flowers thin, cacti keep out of it altogether, and
 ## short grass, ground cover and rocks stay.
-## Which species are edge species is a key rule (EMERGENT_KEYS, BANK_KEYS; plan_role() puts
-## it in the plan's ground_role as bits): the palette has no field for it yet.
+## Which species are edge species is the rule's `habit` (habit_of(); plan_role() puts it in the
+## plan's ground_role as bits); a rule without one takes the LEGACY key lists (LegacyHabit).
 ##
 ## Crossings (phase 4b): nothing grows under a bridge deck or its stones, nor on the bank
 ## landings past its anchors (CrossingGeometry.clearance, rocks included), so no plant stands
@@ -127,10 +127,11 @@ const PAVED_CLEAR_FULL := 0.4
 const ROLE_BITS := 7
 const EDGE_BANK := 8
 const EDGE_EMERGENT := 16
-## Species keys of the water's edge (no palette field says so yet; contract section 9 may
-## take one later): the palette's wetland reeds and riparian trees, and ferns.
-const EMERGENT_KEYS := ["reeds", "rushes", "cattail", "sedge"]
-const BANK_KEYS := ["willow", "poplar", "alder", "fern", "fern_small"]
+## LEGACY: species keys of the water's edge, for a rule whose palette entry carries no `habit`
+## (treecube's palette, plantgen's package). The lists live in LegacyHabit; a content-library
+## rule says it itself (habit.water "emergent" or "bank"), and habit_of() reads that first.
+const EMERGENT_KEYS := LegacyHabit.EMERGENT_KEYS
+const BANK_KEYS := LegacyHabit.BANK_KEYS
 ## Nothing roots in the water: plants clear over this ramp of the bed weight (WaterDressing R,
 ## about 1 cm under the waterline to 5 cm deep); emergent species over this depth instead.
 const WET_CLEAR_START := 0.15
@@ -157,39 +158,50 @@ const FLOWER_KIND := "flower"
 const FLOWER_BIT := 32
 ## Dry-country species (cacti) keep out of the whole bank band: a saguaro at the waterline
 ## reads wrong. Kinds, their role bit, and the shore weight over which they clear.
-const ARID_KINDS := ["cactus"]
+## ARID_KINDS is the LEGACY kind check (habit.water "arid" says it for a library rule).
+const ARID_KINDS := LegacyHabit.ARID_KINDS
 const ARID_BIT := 64
 ## Fire (2026-10-11, user: fire burns away the small plants under it). Painted ash (the
 ## surfaces named here) clears ground cover, tall cover and shrubs through the paved response,
 ## as built paint does, but never rocks or trees: trees under a fire become the burnt forest's
 ## snags instead (FireEditor), and a rock stays. The burnt forest's own charred species live on
-## ash and carry CHARRED_BIT (by key, as the edge species are), so the ash leaves them.
+## ash and carry CHARRED_BIT (habit.charred, or the LEGACY CHARRED_KEYS list), so the ash
+## leaves them.
 const SCORCHED_SURFACES := ["ash"]
-const CHARRED_KEYS := [
-	"snag", "snag_conifer", "high_stump", "stump", "branches", "log", "char_litter"
-]
+const CHARRED_KEYS := LegacyHabit.CHARRED_KEYS
 const CHARRED_BIT := 128
 const ARID_SHORE_START := 0.05
 const ARID_SHORE_FULL := 0.35
 
 
+## The habit of a species rule, {water: "" | "bank" | "emergent" | "arid", charred: bool}: the
+## rule's own `habit` when the palette carries one (a content-library rule, through its role),
+## else the LEGACY key and kind lists (LegacyHabit.for_key) for treecube and package palettes.
+static func habit_of(rule: Dictionary) -> Dictionary:
+	var habit: Variant = rule.get("habit")
+	if habit is Dictionary:
+		return habit
+	return LegacyHabit.for_key(String(rule.get("key", "")), String(rule.get("kind", "")))
+
+
 ## The role a ScatterPlan entry carries (ground_role): role_of() plus the water bits
-## (EDGE_EMERGENT or EDGE_BANK by species key, FLOWER_BIT for flowers). Rocks carry none, so
-## a rock's ground_role is exactly ROLE_ROCK.
+## (EDGE_EMERGENT, EDGE_BANK or ARID_BIT from habit_of(), CHARRED_BIT, FLOWER_BIT for
+## flowers). Rocks carry none, so a rock's ground_role is exactly ROLE_ROCK.
 static func plan_role(rule: Dictionary) -> int:
 	var role := role_of(rule)
 	if role == ROLE_ROCK:
 		return role
-	var key := String(rule.get("key", ""))
-	if key in EMERGENT_KEYS:
-		role |= EDGE_EMERGENT
-	elif key in BANK_KEYS:
-		role |= EDGE_BANK
+	var habit := habit_of(rule)
+	match String(habit.get("water", "")):
+		"emergent":
+			role |= EDGE_EMERGENT
+		"bank":
+			role |= EDGE_BANK
+		"arid":
+			role |= ARID_BIT
 	if rule.get("kind", "") == FLOWER_KIND:
 		role |= FLOWER_BIT
-	if rule.get("kind", "") in ARID_KINDS:
-		role |= ARID_BIT
-	if key in CHARRED_KEYS:
+	if habit.get("charred", false) == true:
 		role |= CHARRED_BIT
 	return role
 

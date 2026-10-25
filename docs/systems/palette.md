@@ -11,7 +11,10 @@ rules, shipped inside tt-sim under `assets/palette/` (Git LFS) and installed by 
 
 | File | Class | Role |
 |------|-------|------|
-| `utils/palette_library.gd` | `PaletteLibrary` | Static, cached per root, default root `res://assets/palette`. Reads `palette.json` lazily on first use; the read access, `resolver()` and `resolve()` |
+| `utils/palette_library.gd` | `PaletteLibrary` | Static, cached per root, default root `res://assets/palette`. Reads `palette.json` lazily on first use; the read access, `resolver()` and `resolve()`. The public names (the constants, `validate_palette`) are unchanged by the S2 split below |
+| `utils/palette_validator.gd`, `palette_surfaces.gd`, `palette_fields.gd` | `PaletteValidator extends PaletteSurfaces extends PaletteFields` | The validation, split out of `PaletteLibrary` in step S2: `PaletteFields` the constants and the untrusted-value checks, `PaletteSurfaces` the surfaces table and a biome's ground fields, `PaletteValidator` assets, biomes and rules (the whitelist of rule fields is `_validate_species`); `PaletteLibrary` re-exports the constants and `validate_palette` delegates |
+| `utils/palette_asset_files.gd` | `PaletteAssetFiles` | `load_mesh` / `load_scene`: an asset GLB's Mesh from the imported scene or a runtime parse |
+| `utils/legacy_habit.gd` | `LegacyHabit` | The legacy key and kind lists (emergent, bank, arid, charred) and `for_key`; the fallback for a rule with no `habit` |
 | `assets/palette/` | | The built-in palette: `palette.json`, the asset GLBs and their committed `.glb.import` sidecars |
 | `utils/scatter_glb_utils.gd` | `ScatterGlbUtils` | `build_scatter()`, the resolver-driven scatter core that `process_scatter_instances()` wraps for GLB maps |
 | `utils/wind_foliage.gd` | `WindFoliage` | `apply_material`, which mutates surface materials in place; `classify_category()`; `reset_caches()` (the warm-up representatives) |

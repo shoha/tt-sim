@@ -411,14 +411,17 @@ editor API the Water tool (P4-4) calls.
   wins on the face itself: [waterfalls.md](waterfalls.md)).
 - **Plants** (`ScatterGround.wet_factor`, the plan's `ground_role` carrying water bits from
   `ScatterGround.plan_role`): nothing roots in the water (the bed weight clears everything,
-  rocks included), except emergent species (reeds, rushes: key rule, `EMERGENT_KEYS`), which
+  rocks included), except emergent species (reeds, rushes: `habit.water` "emergent"), which
   stand in water up to 0.2-0.4 m and gather at the waterline; on the shore, bank species
-  (willow, poplar, ferns: `BANK_KEYS`) gather (x 1 + 1.5 shore, density capped at 1), trees
+  (willow, poplar, ferns: `habit.water` "bank") gather (x 1 + 1.5 shore, density capped at 1), trees
   keep off the waterline, shrubs keep 30 %, tall cover (the grass clumps of
   `GRASS_TALL_COVER_M` among it, as before the grass rework) thins to short cover, flowers thin
-  by half, cacti keep out of the whole band, and short grass, ground cover and rocks stay. A
-  key rule, not a contract field: the palette has one emergent species and a few riparian
-  trees, and a producer field would need a treecube rebuild for no visible gain yet. P4-4: a bank
+  by half, cacti (`habit.water` "arid") keep out of the whole band, and short grass, ground cover
+  and rocks stay. The habit is the rule's own `habit` field when the palette carries one (a
+  content-library rule gets it from its role, [library.md](library.md)); treecube's palette and
+  plantgen's package carry none, so `ScatterGround.habit_of` falls back to the legacy key lists
+  (`LegacyHabit`: `EMERGENT_KEYS`, `BANK_KEYS`, `CHARRED_KEYS`, kind `cactus`), which give the
+  same plans (`test_legacy_habit.gd`). P4-4: a bank
   species' boost above 1 on the shore reaches the generator (`ScatterGround.species_density`
   leaves it uncapped for `EDGE_BANK`), which lets a clumped one (the forest's ferns) grow along
   the water beyond its clumps (`ScatterGenerator._evaluate`: the clump keep becomes at least
