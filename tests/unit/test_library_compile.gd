@@ -25,6 +25,7 @@ const PURE_MODULES: Array[String] = [
 	"library_ids",
 	"library_reader",
 	"biome_compiler",
+	"library_query",
 	"surface_bake",
 	"surface_reader",
 	"library_bindings",

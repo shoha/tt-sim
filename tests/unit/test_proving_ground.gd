@@ -68,7 +68,9 @@ func test_the_ridge_stands_in_the_north_east() -> void:
 	var flank := middle + Vector2(float(regions["ridge"]["half_width"]) * 0.5, 0.0)
 	var slope := _slope_deg(flank)
 	assert_true(slope > 25.0 and slope < 55.0, "a flank of %.0f degrees" % slope)
-	assert_almost_eq(_height_at(middle + Vector2(float(regions["ridge"]["half_width"]) * 1.2, 0.0)), 0.0, 0.2)
+	assert_almost_eq(
+		_height_at(middle + Vector2(float(regions["ridge"]["half_width"]) * 1.2, 0.0)), 0.0, 0.2
+	)
 
 
 func test_the_water_channel_has_banks_and_a_wet_dressing() -> void:

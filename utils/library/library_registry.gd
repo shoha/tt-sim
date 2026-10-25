@@ -783,9 +783,17 @@ static func _serve_surfaces(root: String, entry: Dictionary, compiled: Dictionar
 # ---- the biome designer (S8a) ----
 
 
+## Whether the biome designer may write the biomes of library `library_id` served from `source`:
+## the player's own libraries and the developer-override folder, never the official ones, and
+## never `core` (whichever folder serves it: its biome-defs are built by plantgen, and a save
+## here would be overwritten by the next export).
+static func designer_writable(library_id: String, source: String) -> bool:
+	return (source == "user" or source == "dev") and library_id != LibraryContracts.CORE_ID
+
+
 ## What the biome designer needs to edit and compile a biome of library `library_id`: {ok,
-## error, id, name, version, source ("user", "dev" or "official"), official, writable (a user or
-## developer-override folder), folder, read (LibraryReader's result), files, hash, dependencies
+## error, id, name, version, source ("user", "dev" or "official"), official, writable
+## (designer_writable), folder, read (LibraryReader's result), files, hash, dependencies
 ## (the compile context of its declared dependencies), dependency_list ([{id, version}]),
 ## biomes (local ids), surfaces (the palette's surface table now)}. The folder that is served wins
 ## when two entries share the id; the built-in core, which has no folder, answers ok false.
@@ -813,7 +821,7 @@ static func designer_context(
 		"version": found["version"],
 		"source": found["source"],
 		"official": found["official"],
-		"writable": found["source"] == "user" or found["source"] == "dev",
+		"writable": designer_writable(library_id, String(found["source"])),
 		"folder": found["folder"],
 		"read": read,
 		"files": found["files"],

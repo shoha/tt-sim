@@ -23,7 +23,9 @@ func test_set_and_its_inverse_restore_the_value() -> void:
 
 func test_set_of_a_new_key_is_undone_by_erasing_it() -> void:
 	var doc := _doc()
-	var undo := DesignerPatch.apply(doc, [DesignerPatch.set_op(["rules", 1, "habit"], {"water": "bank"})])
+	var undo := DesignerPatch.apply(
+		doc, [DesignerPatch.set_op(["rules", 1, "habit"], {"water": "bank"})]
+	)
 	assert_true(doc["rules"][1].has("habit"))
 	assert_eq(undo[0]["op"], "erase")
 	DesignerPatch.apply(doc, undo)
@@ -70,14 +72,17 @@ func test_values_are_copied_in_and_out() -> void:
 func test_a_bad_path_is_a_noop_inverse() -> void:
 	var doc := _doc()
 	var before := doc.duplicate(true)
-	var undo := DesignerPatch.apply(
-		doc,
-		[
-			DesignerPatch.set_op(["rules", 9, "weight"], 1),
-			DesignerPatch.erase_op(["ground", "nothing"]),
-			DesignerPatch.remove_op(["rules"], 9),
-			DesignerPatch.insert_op(["name"], 0, 1),
-		]
+	var undo := (
+		DesignerPatch
+		. apply(
+			doc,
+			[
+				DesignerPatch.set_op(["rules", 9, "weight"], 1),
+				DesignerPatch.erase_op(["ground", "nothing"]),
+				DesignerPatch.remove_op(["rules"], 9),
+				DesignerPatch.insert_op(["name"], 0, 1),
+			]
+		)
 	)
 	assert_eq(doc, before)
 	for op: Dictionary in undo:

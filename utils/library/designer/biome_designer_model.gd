@@ -115,6 +115,11 @@ func has_rule(key: String) -> bool:
 	return rule_index(key) >= 0
 
 
+## Whether the model was built (no `error`).
+func valid() -> bool:
+	return error == ""
+
+
 ## A copy of rule `key`'s biome-def, {} when there is none.
 func rule(key: String) -> Dictionary:
 	var at := rule_index(key)
@@ -366,6 +371,11 @@ func add_clause(key: String, clause: Dictionary) -> int:
 	return index
 
 
+## Adds `{ref: ref}` to rule `key`'s query unless it is there; true when it is in the query now.
+func add_ref(key: String, ref: String) -> bool:
+	return add_clause(key, {"ref": ref}) >= 0
+
+
 func remove_clause(key: String, index: int) -> bool:
 	var at := rule_index(key)
 	var path: Array = ["rules", at, "query", "match"]
@@ -512,19 +522,14 @@ func compile() -> Dictionary:
 		var read: Dictionary = (context["read"] as Dictionary).duplicate()
 		read["biomes"] = [{"file": biome_id + ".json", "def": def.duplicate(true)}]
 		read["locks"] = {biome_id: {"rules": locks.duplicate(true)}}
-		var compiled := (
-			BiomeCompiler
-			. compile(
-				read,
-				{
-					"folder": folder,
-					"surfaces": context["surfaces"],
-					"hash": String(context["hash"]),
-					"files": context["files"],
-					"dependencies": context["dependencies"],
-				}
-			)
-		)
+		var options := {
+			"folder": folder,
+			"surfaces": context["surfaces"],
+			"hash": String(context["hash"]),
+			"files": context["files"],
+			"dependencies": context["dependencies"],
+		}
+		var compiled := BiomeCompiler.compile(read, options)
 		var warnings: Array[String] = []
 		warnings.assign(verdict["warnings"])
 		result["compiled"] = compiled

@@ -106,7 +106,9 @@ func test_a_tree_density_edit_regenerates_the_same_rows_as_a_full_run() -> void:
 	var partial := _partial(before, after)
 	var delta: Dictionary = partial["delta"]
 	assert_true((delta["indices"] as PackedInt32Array).has(at))
-	gut.p("tree density edit: %d of %d species regenerated" % [delta["indices"].size(), after.size()])
+	gut.p(
+		"tree density edit: %d of %d species regenerated" % [delta["indices"].size(), after.size()]
+	)
 	assert_true(_same(partial, _full(after)), "partial rows equal a full regeneration")
 
 
@@ -118,7 +120,9 @@ func test_a_ground_cover_edit_touches_few_species_and_matches_a_full_run() -> vo
 	after[at]["slope_max_deg"] = 20.0
 	var partial := _partial(before, after)
 	var delta: Dictionary = partial["delta"]
-	assert_true(delta["indices"].size() < after.size() / 2, "only a few of %d species" % after.size())
+	assert_true(
+		delta["indices"].size() < after.size() / 2, "only a few of %d species" % after.size()
+	)
 	assert_true(_same(partial, _full(after)))
 
 

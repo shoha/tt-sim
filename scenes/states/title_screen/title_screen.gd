@@ -64,6 +64,8 @@ signal play_solo_requested(level_info: Dictionary)
 signal build_map_requested(preset: Dictionary)
 ## A map's Edit map: open its map in authoring mode.
 signal edit_map_requested(level_info: Dictionary)
+## Design a biome: Root opens the designer's picker (BiomeDesignerPicker).
+signal design_biome_requested
 
 const SettingsMenuScene := preload("res://scenes/ui/settings_menu.tscn")
 const ENTRANCE_STAGGER := Constants.ANIM_ENTRANCE_STAGGER
@@ -95,6 +97,8 @@ var resume_entry: ResumeEntry
 var avatars_button: Button
 ## Opens the collections manager (LibraryManager); its word is LibraryNames.
 var libraries_button: Button
+## Opens the biome designer's picker (BiomeDesignerPicker).
+var design_button: Button
 var settings_button: Button
 var quit_button: Button
 var grid: LevelGrid
@@ -198,6 +202,9 @@ func _build_top_bar() -> void:
 	libraries_button = _tool(LibraryNames.title(2), "trees", tools)
 	libraries_button.tooltip_text = "Add plants and ground to start new maps from"
 	libraries_button.pressed.connect(_on_libraries_pressed)
+	design_button = _tool("Design a biome", "leaf", tools)
+	design_button.tooltip_text = "Shape how a place grows: its plants, where they stand, how dense"
+	design_button.pressed.connect(design_biome_requested.emit)
 	settings_button = _tool("Settings", "settings", tools)
 	settings_button.pressed.connect(_on_settings_pressed)
 	quit_button = _tool(QUIT, QUIT_ICON, tools)
