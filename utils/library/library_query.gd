@@ -420,11 +420,7 @@ static func _count_of(query: Dictionary, available: int) -> int:
 
 
 static func _locked(
-	lock: Dictionary,
-	query: Dictionary,
-	by_ref: Dictionary,
-	label: String,
-	warnings: Array[String]
+	lock: Dictionary, query: Dictionary, by_ref: Dictionary, label: String, warnings: Array[String]
 ) -> Array[Dictionary]:
 	var none: Array[Dictionary] = []
 	if String(lock.get("query", "")) != query_hash(query):
@@ -434,7 +430,10 @@ static func _locked(
 	for ref in _strings(lock.get("assets")):
 		if not by_ref.has(ref):
 			warnings.append(
-				"%s: the lock file names '%s', which the catalogs lack; resolved again" % [label, ref]
+				(
+					"%s: the lock file names '%s', which the catalogs lack; resolved again"
+					% [label, ref]
+				)
 			)
 			return none
 		out.append(by_ref[ref])

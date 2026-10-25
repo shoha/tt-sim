@@ -209,6 +209,11 @@ func has_biome(biome_id: String) -> bool:
 	return _biomes.has(biome_id)
 
 
+## Stops regenerating `biome_id` (the designer left a season for another).
+func forget_biome(biome_id: String) -> void:
+	_biomes.erase(biome_id)
+
+
 ## Every asset id the registered rules of `biome_id` place.
 func assets_of(biome_id: String) -> PackedStringArray:
 	var out := PackedStringArray()

@@ -76,7 +76,9 @@ func test_move_point_snaps_clamps_and_never_passes_a_neighbour() -> void:
 
 func test_the_height_axis_widens_the_view_for_points_outside_it() -> void:
 	assert_eq(ResponseCurve.display_range("height"), Vector2(-2.0, 12.0))
-	assert_eq(ResponseCurve.display_range("height", [[-5.0, 1.0], [40.0, 0.0]]), Vector2(-5.0, 40.0))
+	assert_eq(
+		ResponseCurve.display_range("height", [[-5.0, 1.0], [40.0, 0.0]]), Vector2(-5.0, 40.0)
+	)
 	assert_eq(ResponseCurve.axis_range("height"), Vector2(-500.0, 5000.0))
 
 

@@ -11,9 +11,6 @@ extends RefCounted
 ## they are. Static functions over an AuthoredScatter (they use its scheduler and job list, which
 ## is why they live beside it and not in it: scatter.gd is at the lint cap).
 
-## Seconds a cancelled or finished regeneration needs no more, for a caller's polling.
-const POLL_SECONDS := 0.05
-
 
 ## Re-registers `biome_id`'s rules from the palette and requests the regeneration of the map
 ## for the species they changed (`whole`: for every species of the biome). Returns {"species"
@@ -92,3 +89,19 @@ static func cancel(scatter: AuthoredScatter) -> void:
 			(entry.cancel as Semaphore).post()
 			entry["cancelled"] = true
 	scatter._finished.clear()
+
+
+## What the scatter holds now: {"counts": {asset id: instances}, "cells": {asset id: cells that
+## hold it}, "instances": total}. The budget meter's input.
+static func counts(scatter: AuthoredScatter) -> Dictionary:
+	var by_asset := {}
+	var cells := {}
+	var total := 0
+	for cell: Vector2i in scatter._cells:
+		var held: Dictionary = scatter._cells[cell]
+		for asset_id: String in held:
+			var n := (held[asset_id] as PackedFloat32Array).size() / MapDocument.ROW_STRIDE
+			by_asset[asset_id] = by_asset.get(asset_id, 0) + n
+			cells[asset_id] = cells.get(asset_id, 0) + 1
+			total += n
+	return {"counts": by_asset, "cells": cells, "instances": total}

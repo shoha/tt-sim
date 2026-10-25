@@ -81,7 +81,9 @@ func test_fnv1a32_matches_the_reference_vectors() -> void:
 	assert_eq(LibraryQuery.fnv1a32(""), 0x811C9DC5)
 	assert_eq(LibraryQuery.fnv1a32("a"), 0xE40C292C)
 	assert_eq(LibraryQuery.fnv1a32("foobar"), 0xBF9CF968)
-	assert_eq(LibraryQuery.group_hash("meadow/trees", "oak"), LibraryQuery.fnv1a32("meadow/trees|oak"))
+	assert_eq(
+		LibraryQuery.group_hash("meadow/trees", "oak"), LibraryQuery.fnv1a32("meadow/trees|oak")
+	)
 
 
 func test_query_hash_ignores_whole_float_versus_int_and_key_order() -> void:
@@ -114,10 +116,14 @@ func test_group_ids_and_role_clauses() -> void:
 	var entries := _trees(["oak", "pine"])
 	entries.append(_entry("Shrub_A", "shrub_a", "bush", [], "medium", [], ["shrub"]))
 	var context := _context(entries)
-	assert_eq(_ids(_select({"match": [{"group": "pine"}]}, context)), ["Tree_pine_v0", "Tree_pine_v1"])
+	assert_eq(
+		_ids(_select({"match": [{"group": "pine"}]}, context)), ["Tree_pine_v0", "Tree_pine_v1"]
+	)
 	assert_eq(_ids(_select({"match": [{"ids": ["Tree_oak_v1"]}]}, context)), ["Tree_oak_v1"])
 	assert_eq(_ids(_select({"match": [{"role": "shrub"}]}, context)), ["Shrub_A"])
-	assert_eq(_ids(_select({"match": [{"library": "mini", "role": "shrub"}]}, context)), ["Shrub_A"])
+	assert_eq(
+		_ids(_select({"match": [{"library": "mini", "role": "shrub"}]}, context)), ["Shrub_A"]
+	)
 
 
 func test_shared_tag_and_size_filters() -> void:
@@ -297,14 +303,20 @@ func test_a_dependencys_assets_are_candidates_under_a_prefixed_local_id() -> voi
 	assert_eq(result["found"][0]["folder"], "D:/core")
 	assert_eq(result["found"][0]["library"], "core")
 	assert_eq(_ids(_select({"match": [{"group": "core:oak"}]}, context)), ["core__Tree_oak_v0"])
-	assert_eq(_ids(_select({"match": [{"ids": ["core:Tree_oak_v0"]}]}, context)), ["core__Tree_oak_v0"])
-	assert_eq(_ids(_select({"match": [{"library": "mini", "group": "oak"}]}, context)), ["Tree_oak_v0"])
+	assert_eq(
+		_ids(_select({"match": [{"ids": ["core:Tree_oak_v0"]}]}, context)), ["core__Tree_oak_v0"]
+	)
+	assert_eq(
+		_ids(_select({"match": [{"library": "mini", "group": "oak"}]}, context)), ["Tree_oak_v0"]
+	)
 
 
 func test_a_ref_naming_a_group_expands_to_its_variants() -> void:
 	var context := _context(_trees(TREES))
 	assert_eq(LibraryQuery.group_members("oak", context).size(), 2)
-	assert_true(LibraryQuery.group_members("Tree_oak_v0", context).is_empty(), "an entry is no group")
+	assert_true(
+		LibraryQuery.group_members("Tree_oak_v0", context).is_empty(), "an entry is no group"
+	)
 	assert_true(LibraryQuery.group_members("nonesuch", context).is_empty())
 	var dep := _dependency_context()
 	assert_eq(LibraryQuery.group_members("core:oak", dep).size(), 1)
@@ -318,22 +330,27 @@ func test_why_not_names_the_failed_conditions() -> void:
 	assert_true("category is tree, not rock" in why)
 	assert_true("lacks tag wet" in why)
 	assert_true("not in season summer" in why)
-	assert_true(LibraryQuery.why_not({"match": [{"category": "tree"}]}, all[0], "winter").is_empty())
+	assert_true(
+		LibraryQuery.why_not({"match": [{"category": "tree"}]}, all[0], "winter").is_empty()
+	)
 
 
 # ---- reader and compiler ----
 
 
 func _library_text() -> String:
-	return JSON.stringify(
-		{
-			"format": "ttsim-library",
-			"format_version": 1,
-			"id": "mini",
-			"name": "Mini",
-			"version": "0.1.0",
-			"contract": 1,
-		}
+	return (
+		JSON
+		. stringify(
+			{
+				"format": "ttsim-library",
+				"format_version": 1,
+				"id": "mini",
+				"name": "Mini",
+				"version": "0.1.0",
+				"contract": 1,
+			}
+		)
 	)
 
 
@@ -355,12 +372,15 @@ func _read(rule_query: Dictionary, extra: Dictionary = {}) -> Dictionary:
 		"ground": {},
 		"rules": [rule],
 	}
-	return LibraryReader.read(
-		{
-			"library": _library_text(),
-			"catalog": JSON.stringify(catalog),
-			"biomes": {"meadow.json": JSON.stringify(biome)},
-		}
+	return (
+		LibraryReader
+		. read(
+			{
+				"library": _library_text(),
+				"catalog": JSON.stringify(catalog),
+				"biomes": {"meadow.json": JSON.stringify(biome)},
+			}
+		)
 	)
 
 
@@ -388,7 +408,13 @@ func test_the_compiler_selects_by_query_and_prefixes_the_biome() -> void:
 
 
 func test_refs_come_first_and_a_ref_only_query_compiles_as_before() -> void:
-	var refs := _read({"match": [{"ref": "Tree_oak_v1"}, {"ref": "Tree_oak_v0"}], "count": "all", "order": "explicit"})
+	var refs := _read(
+		{
+			"match": [{"ref": "Tree_oak_v1"}, {"ref": "Tree_oak_v0"}],
+			"count": "all",
+			"order": "explicit"
+		}
+	)
 	assert_eq(
 		_compiled_assets(refs),
 		["mini__meadow_summer_s1/Tree_oak_v1", "mini__meadow_summer_s1/Tree_oak_v0"],
@@ -415,19 +441,19 @@ func test_a_lock_in_the_read_result_pins_the_selection() -> void:
 		"format": "ttsim-biome-lock",
 		"format_version": 1,
 		"rules":
-		{
-			"summer/trees":
-			{"query": LibraryQuery.query_hash(query), "assets": ["Tree_birch_v0"]}
-		},
+		{"summer/trees": {"query": LibraryQuery.query_hash(query), "assets": ["Tree_birch_v0"]}},
 	}
 	var catalog := {"format": "ttsim-catalog", "format_version": 1, "assets": _trees(TREES)}
-	var with_lock := LibraryReader.read(
-		{
-			"library": _library_text(),
-			"catalog": JSON.stringify(catalog),
-			"biomes": read_biomes(query),
-			"locks": {"meadow.lock.json": JSON.stringify(lock)},
-		}
+	var with_lock := (
+		LibraryReader
+		. read(
+			{
+				"library": _library_text(),
+				"catalog": JSON.stringify(catalog),
+				"biomes": read_biomes(query),
+				"locks": {"meadow.lock.json": JSON.stringify(lock)},
+			}
+		)
 	)
 	assert_true(with_lock["ok"], str(with_lock["errors"]))
 	assert_eq(_compiled_assets(with_lock), ["mini__meadow_summer_s1/Tree_birch_v0"])
@@ -442,21 +468,27 @@ func read_biomes(query: Dictionary) -> Dictionary:
 		"name": "Meadow",
 		"seasons": [{"id": "summer", "seed": 1}],
 		"ground": {},
-		"rules":
-		[{"key": "trees", "role": "canopy_tree", "density_per_m2": 0.01, "query": query}],
+		"rules": [{"key": "trees", "role": "canopy_tree", "density_per_m2": 0.01, "query": query}],
 	}
 	return {"meadow.json": JSON.stringify(biome)}
 
 
 func test_a_malformed_lock_is_a_warning_not_an_error() -> void:
 	var catalog := {"format": "ttsim-catalog", "format_version": 1, "assets": _trees(TREES)}
-	var read := LibraryReader.read(
-		{
-			"library": _library_text(),
-			"catalog": JSON.stringify(catalog),
-			"biomes": read_biomes({"match": [{"category": "tree"}]}),
-			"locks": {"meadow.lock.json": "{not json", "b.lock.json": '{"format": "ttsim-biome-lock", "rules": {"x": 3}}'},
-		}
+	var read := (
+		LibraryReader
+		. read(
+			{
+				"library": _library_text(),
+				"catalog": JSON.stringify(catalog),
+				"biomes": read_biomes({"match": [{"category": "tree"}]}),
+				"locks":
+				{
+					"meadow.lock.json": "{not json",
+					"b.lock.json": '{"format": "ttsim-biome-lock", "rules": {"x": 3}}'
+				},
+			}
+		)
 	)
 	assert_true(read["ok"], str(read["errors"]))
 	assert_true("not a readable lock file" in str(read["warnings"]))
@@ -466,7 +498,8 @@ func test_a_malformed_lock_is_a_warning_not_an_error() -> void:
 func test_the_reader_checks_query_clauses_and_filters() -> void:
 	var good := _read(
 		{
-			"match": [{"category": "tree", "subtype": "oak", "role": "canopy_tree"}, {"ref": "oak"}],
+			"match":
+			[{"category": "tree", "subtype": "oak", "role": "canopy_tree"}, {"ref": "oak"}],
 			"tags_any": ["dry"],
 			"size_class": ["large"],
 			"seasons": "auto",

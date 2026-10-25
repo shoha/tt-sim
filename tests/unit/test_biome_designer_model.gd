@@ -5,6 +5,7 @@ extends GutTest
 ## collection". The library is built from strings in the test, so nothing depends on a library
 ## on disk except the scratch folder the save tests write.
 
+const Fixture := preload("res://tests/unit/designer_fixture.gd")
 const ROOT := "user://test_biome_designer"
 
 var _folder: String = ""
@@ -33,112 +34,20 @@ func _remove_tree(path: String) -> void:
 # ---- fixture ----
 
 
-func _entry(id: String, group: String, category: String, size_class: String, tags: Array) -> Dictionary:
-	return {
-		"id": id,
-		"group": group,
-		"name": group,
-		"category": category,
-		"subtype": group,
-		"tags": tags,
-		"seasons": [],
-		"roles": [],
-		"size_class": size_class,
-		"wind_category": "tree" if category == "tree" else "",
-		"dimensions_m": [3.0, 5.0, 3.0],
-		"triangles": 100,
-		"file": "assets/%s.glb" % id,
-		"node": id + "_LOD0",
-	}
+func _entry(
+	id: String, group: String, category: String, size_class: String, tags: Array
+) -> Dictionary:
+	return Fixture.entry(id, group, category, size_class, tags)
 
 
 func _catalog() -> Dictionary:
-	var assets: Array = []
-	for group in ["oak", "birch", "pine"]:
-		for v in 2:
-			assets.append(_entry("Tree_%s_v%d" % [group, v], group, "tree", "large", ["deciduous"]))
-	for group in ["rock_a", "rock_b"]:
-		assets.append(_entry("Rock_%s" % group, group, "rock", "small", ["mineral"]))
-	assets.append(_entry("Bush_a", "bush_a", "bush", "medium", ["shrub"]))
-	return {"format": "ttsim-catalog", "format_version": 1, "assets": assets}
-
-
-func _biome() -> Dictionary:
-	return {
-		"format": "ttsim-biome",
-		"format_version": 1,
-		"id": "meadow",
-		"name": "Meadow",
-		"surfaces": "legacy",
-		"seasons": [{"id": "summer", "seed": 1}, {"id": "autumn", "seed": 2}],
-		"ground": {"surface": "grass", "paths": []},
-		"rules":
-		[
-			{
-				"key": "oak",
-				"role": "canopy_tree",
-				"weight": 1,
-				"density_per_m2": 0.01,
-				"spacing_m": 4.5,
-				"slope_max_deg": 35,
-				"near": [],
-				"avoid": [],
-				"query": {"match": [{"ref": "Tree_oak_v0"}, {"ref": "Tree_oak_v1"}]},
-			},
-			{
-				"key": "stones",
-				"role": "stones",
-				"density_per_m2": 0.06,
-				"near": [{"rule": "oak", "distance_m": 3, "influence": 0.4, "transition_m": 2}],
-				"avoid": [],
-				"query": {"match": [{"category": "rock"}], "count": 1},
-			},
-			{
-				"key": "bushes",
-				"role": "shrub",
-				"density_per_m2": 0.05,
-				"near": [],
-				"avoid": [{"rule": "stones", "distance_m": 1, "influence": 0.5, "transition_m": 1}],
-				"query": {"match": [{"ref": "Bush_a"}]},
-			},
-		],
-	}
+	return Fixture.catalog()
 
 
 func _context(writable: bool = true) -> Dictionary:
-	var library := {
-		"format": "ttsim-library",
-		"format_version": 1,
-		"id": "mini",
-		"name": "Mini",
-		"version": "0.2.0",
-		"contract": 1,
-	}
-	var read := LibraryReader.read(
-		{
-			"library": JSON.stringify(library),
-			"catalog": JSON.stringify(_catalog()),
-			"biomes": {"meadow.json": JSON.stringify(_biome())},
-		}
-	)
-	assert_true(read["ok"], str(read["errors"]))
-	return {
-		"ok": true,
-		"id": "mini",
-		"name": "Mini",
-		"version": "0.2.0",
-		"source": "user" if writable else "official",
-		"official": not writable,
-		"writable": writable,
-		"folder": _folder,
-		"read": read,
-		"files": [],
-		"hash": "abc12345",
-		"dependencies": {},
-		"dependency_list": [],
-		"biomes": ["meadow"],
-		"surfaces": {},
-	}
+	var made := Fixture.context(_folder, writable)
+	assert_true(made["read"]["ok"], str(made["read"]["errors"]))
+	return made
 
 
 func _model(writable: bool = true) -> BiomeDesignerModel:
@@ -156,9 +65,13 @@ func test_the_model_reads_the_draft() -> void:
 	assert_eq(model.value("oak", "spacing_m"), 4.5)
 	assert_eq(model.value("stones", "spacing_m", "none"), "none")
 	assert_eq(model.runtime_ids(), ["mini__meadow_summer_s1", "mini__meadow_autumn_s2"])
-	assert_eq(model.rules_by_role(), {"canopy_tree": ["oak"], "stones": ["stones"], "shrub": ["bushes"]})
+	assert_eq(
+		model.rules_by_role(), {"canopy_tree": ["oak"], "stones": ["stones"], "shrub": ["bushes"]}
+	)
 	assert_false(model.is_dirty())
-	assert_almost_eq(model.effective_number("stones", "spacing_m"), 0.8, 0.0001, "small class default")
+	assert_almost_eq(
+		model.effective_number("stones", "spacing_m"), 0.8, 0.0001, "small class default"
+	)
 	assert_almost_eq(model.effective_number("oak", "spacing_m"), 4.5, 0.0001)
 
 
@@ -177,7 +90,9 @@ func test_add_remove_duplicate_move_rename_and_undo_all_of_it() -> void:
 	var original := model.def.duplicate(true)
 	var key := model.add_rule("canopy_tree", {}, "Birch Grove")
 	assert_eq(key, "birch_grove")
-	assert_eq(model.rule_keys(), ["oak", "birch_grove", "stones", "bushes"], "after the last of its role")
+	assert_eq(
+		model.rule_keys(), ["oak", "birch_grove", "stones", "bushes"], "after the last of its role"
+	)
 	assert_eq(model.duplicate_rule("oak"), "oak_2")
 	assert_true(model.move_rule("oak_2", 3))
 	assert_eq(model.rename_rule("stones", "pebbles"), "pebbles")
@@ -271,9 +186,14 @@ func test_set_role_moves_a_default_size_class_along() -> void:
 func test_query_edits_and_pins() -> void:
 	var model := _model()
 	assert_eq(model.add_clause("stones", {"ref": "Rock_rock_a"}), 1)
-	assert_eq(model.add_clause("stones", {"ref": "Rock_rock_a"}), 1, "the same clause is not added twice")
+	assert_eq(
+		model.add_clause("stones", {"ref": "Rock_rock_a"}), 1, "the same clause is not added twice"
+	)
 	assert_true(model.remove_clause("stones", 1))
-	assert_false(model.remove_clause("stones", 0) and model.remove_clause("stones", 0), "never the last clause")
+	assert_false(
+		model.remove_clause("stones", 0) and model.remove_clause("stones", 0),
+		"never the last clause"
+	)
 	assert_true(model.set_query_field("stones", "tags_any", ["mineral"]))
 	assert_true(model.set_query_field("stones", "tags_any", []))
 	assert_false(model.rule("stones")["query"].has("tags_any"))
@@ -344,7 +264,9 @@ func test_validation_names_the_rule_and_field() -> void:
 	assert_true(DesignerValidation.has_error(verdict, "stones", "density_per_m2"))
 	assert_true(DesignerValidation.has_error(verdict, "bushes", "slope_max_deg"))
 	assert_false(DesignerValidation.has_error(verdict, "oak"))
-	assert_eq(DesignerValidation.field_of("biomes/x.json rule 'a': weight must be a number"), "weight")
+	assert_eq(
+		DesignerValidation.field_of("biomes/x.json rule 'a': weight must be a number"), "weight"
+	)
 	assert_eq(DesignerValidation.rule_of("biomes/x.json rule 'abc': spacing_m"), "abc")
 	assert_eq(DesignerValidation.rule_of("biome b_summer_s1 rule oak: no asset resolves"), "oak")
 
@@ -357,7 +279,10 @@ func test_compile_makes_one_palette_biome_per_season() -> void:
 	assert_eq(compiled["biome_ids"], ["mini__meadow_summer_s1", "mini__meadow_autumn_s2"])
 	var biome: Dictionary = compiled["palette"]["biomes"][0]
 	assert_eq(biome["species"].size(), 3)
-	assert_eq(biome["species"][0]["assets"], ["mini__meadow_summer_s1/Tree_oak_v0", "mini__meadow_summer_s1/Tree_oak_v1"])
+	assert_eq(
+		biome["species"][0]["assets"],
+		["mini__meadow_summer_s1/Tree_oak_v0", "mini__meadow_summer_s1/Tree_oak_v1"]
+	)
 	assert_eq(biome["species"][1]["assets"].size(), 1, "the filter picked one rock group")
 	assert_true(float(result["msec"]) < 500.0)
 	model.set_field("stones", "slope_min_deg", 20)
@@ -385,7 +310,9 @@ func test_the_biome_edits() -> void:
 	assert_true(DesignerBiomeEdits.set_ground(model, "cliff", ""))
 	assert_eq(DesignerBiomeEdits.ground_value(model, "cliff"), null)
 	assert_false(DesignerBiomeEdits.set_ground(model, "sky", "x"))
-	assert_true(DesignerBiomeEdits.set_accents(model, [{"surface": "dirt", "coverage": 0.2, "scale_m": 3}]))
+	assert_true(
+		DesignerBiomeEdits.set_accents(model, [{"surface": "dirt", "coverage": 0.2, "scale_m": 3}])
+	)
 	assert_true(DesignerBiomeEdits.set_ground_look(model, {"zones": {"tint": 0.2}}))
 	assert_true(DesignerBiomeEdits.set_ground_look(model, null))
 	assert_true(DesignerBiomeEdits.set_density_scale(model, "large", 0.5))
@@ -465,21 +392,39 @@ func test_locking_freezes_the_selection_and_survives_a_save() -> void:
 	assert_true(model.is_dirty(), "locking is an unsaved change")
 	assert_true(model.save()["ok"])
 	assert_true(FileAccess.file_exists(_folder + "/biomes/meadow.lock.json"))
-	var lock := JSON.parse_string(FileAccess.get_file_as_string(_folder + "/biomes/meadow.lock.json")) as Dictionary
+	var lock := (
+		JSON.parse_string(FileAccess.get_file_as_string(_folder + "/biomes/meadow.lock.json"))
+		as Dictionary
+	)
 	assert_eq(lock["format"], "ttsim-biome-lock")
 	assert_eq((lock["rules"] as Dictionary).keys(), ["autumn/stones", "summer/stones"])
 	assert_eq(lock["rules"]["summer/stones"]["assets"], [before[0]["ref"]])
 	# A reader of the folder's files compiles to the locked asset even if the catalog grows.
 	var catalog := _catalog()
 	catalog["assets"].append(_entry("Rock_aaa", "aaa", "rock", "small", ["mineral"]))
-	var library := {"format": "ttsim-library", "format_version": 1, "id": "mini", "name": "Mini", "version": "0.2.0", "contract": 1}
-	var read := LibraryReader.read(
-		{
-			"library": JSON.stringify(library),
-			"catalog": JSON.stringify(catalog),
-			"biomes": {"meadow.json": FileAccess.get_file_as_string(_folder + "/biomes/meadow.json")},
-			"locks": {"meadow.lock.json": FileAccess.get_file_as_string(_folder + "/biomes/meadow.lock.json")},
-		}
+	var library := {
+		"format": "ttsim-library",
+		"format_version": 1,
+		"id": "mini",
+		"name": "Mini",
+		"version": "0.2.0",
+		"contract": 1
+	}
+	var read := (
+		LibraryReader
+		. read(
+			{
+				"library": JSON.stringify(library),
+				"catalog": JSON.stringify(catalog),
+				"biomes":
+				{"meadow.json": FileAccess.get_file_as_string(_folder + "/biomes/meadow.json")},
+				"locks":
+				{
+					"meadow.lock.json":
+					FileAccess.get_file_as_string(_folder + "/biomes/meadow.lock.json")
+				},
+			}
+		)
 	)
 	assert_true(read["ok"], str(read["errors"]))
 	var compiled := BiomeCompiler.compile(read, {"surfaces": {}})
@@ -502,34 +447,54 @@ func test_duplicate_as_new_collection_depends_on_the_source() -> void:
 	)
 	assert_true(made["ok"], str(made))
 	var folder: String = made["folder"]
-	var library := JSON.parse_string(FileAccess.get_file_as_string(folder + "/library.json")) as Dictionary
+	var library := (
+		JSON.parse_string(FileAccess.get_file_as_string(folder + "/library.json")) as Dictionary
+	)
 	assert_eq(library["id"], "my_meadow")
 	assert_eq(library["dependencies"], [{"id": "mini", "version": "^0.2"}])
-	var biome := JSON.parse_string(FileAccess.get_file_as_string(folder + "/biomes/meadow.json")) as Dictionary
+	var biome := (
+		JSON.parse_string(FileAccess.get_file_as_string(folder + "/biomes/meadow.json"))
+		as Dictionary
+	)
 	assert_eq(biome["rules"][0]["query"]["match"][0], {"ref": "mini:Tree_oak_v0"})
 	assert_eq(biome["rules"][1]["query"]["pin"], ["mini:Rock_rock_b"])
 	assert_eq(biome["surfaces"], "library")
 	# The copy reads clean and compiles against the source as its dependency.
-	var read := LibraryReader.read(
-		{
-			"library": FileAccess.get_file_as_string(folder + "/library.json"),
-			"catalog": FileAccess.get_file_as_string(folder + "/assets/catalog.json"),
-			"biomes": {"meadow.json": FileAccess.get_file_as_string(folder + "/biomes/meadow.json")},
-		}
+	var read := (
+		LibraryReader
+		. read(
+			{
+				"library": FileAccess.get_file_as_string(folder + "/library.json"),
+				"catalog": FileAccess.get_file_as_string(folder + "/assets/catalog.json"),
+				"biomes":
+				{"meadow.json": FileAccess.get_file_as_string(folder + "/biomes/meadow.json")},
+			}
+		)
 	)
 	assert_true(read["ok"], str(read["errors"]))
 	var compiled := BiomeCompiler.compile(
-		read, {"surfaces": {}, "dependencies": {"mini": {"read": model.context["read"], "folder": _folder}}}
+		read,
+		{
+			"surfaces": {},
+			"dependencies": {"mini": {"read": model.context["read"], "folder": _folder}}
+		}
 	)
 	var species: Array = compiled["palette"]["biomes"][0]["species"]
 	assert_eq(species.size(), 3)
 	assert_eq(species[0]["assets"][0], "my_meadow__meadow_summer_s1/mini__Tree_oak_v0")
 	assert_eq(species[0]["assets"].size(), 3)
-	var again := LibraryWriter.create_collection(ROOT + "/user", "my_meadow", "x", model.context, "meadow", model.def)
+	var again := LibraryWriter.create_collection(
+		ROOT + "/user", "my_meadow", "x", model.context, "meadow", model.def
+	)
 	assert_false(again["ok"], "an existing library is never overwritten")
 	for reserved in ["core", "draft", "Bad Id", ""]:
 		assert_false(
-			LibraryWriter.create_collection(ROOT + "/user", reserved, "x", model.context, "meadow", model.def)["ok"],
+			(
+				LibraryWriter
+				. create_collection(
+					ROOT + "/user", reserved, "x", model.context, "meadow", model.def
+				)["ok"]
+			),
 			"refused: '%s'" % reserved
 		)
 
@@ -538,3 +503,31 @@ func test_dependency_ranges() -> void:
 	assert_eq(LibraryWriter.dependency_range("1.0.0-dev"), "^1.0")
 	assert_eq(LibraryWriter.dependency_range("2.3.4"), "^2.3")
 	assert_eq(LibraryWriter.dependency_range("weird"), "*")
+
+
+# ---- the architecture ----
+
+
+func test_the_pure_designer_modules_touch_no_files_or_nodes() -> void:
+	var forbidden: Array[String] = [
+		"FileAccess", "DirAccess", "ResourceLoader", "EventBus", "get_tree", "Engine.", "OS."
+	]
+	for module in [
+		"biome_designer_model",
+		"designer_patch",
+		"designer_validation",
+		"designer_catalog",
+		"designer_budget",
+		"designer_slots",
+		"designer_response_edits",
+		"designer_biome_edits",
+		"designer_picking",
+		"response_curve",
+	]:
+		var path := "res://utils/library/designer/%s.gd" % module
+		var code := ""
+		for line in FileAccess.get_file_as_string(path).split("\n"):
+			if not line.strip_edges().begins_with("#"):
+				code += line + "\n"
+		for word in forbidden:
+			assert_false(word in code, "%s must not use %s" % [module, word])

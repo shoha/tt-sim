@@ -68,7 +68,9 @@ static func build(biome_id: String, options: Dictionary = {}) -> MapDocument:
 	_paint_biome(doc, biome_id, regions)
 	var paths: Array = biome.get("path_surfaces", [])
 	var path_surface := String(paths[0]) if not paths.is_empty() else FALLBACK_PATH
-	StartingLandform.paint_line(doc, path_surface, regions["path"]["line"], PATH_WIDTH_M, PATH_SOFT_M)
+	StartingLandform.paint_line(
+		doc, path_surface, regions["path"]["line"], PATH_WIDTH_M, PATH_SOFT_M
+	)
 	return doc
 
 
@@ -99,19 +101,18 @@ static func layout(doc: MapDocument) -> Dictionary:
 	var zones: Array[Dictionary] = []
 	var third := meadow.size.x / 3.0
 	for i in DENSITY_ZONES.size():
-		zones.append(
-			{
-				"rect": Rect2(meadow.position + Vector2(third * i, 0.0), Vector2(third, meadow.size.y)),
-				"density": DENSITY_ZONES[i],
-			}
-		)
+		var from := meadow.position + Vector2(third * i, 0.0)
+		var area := Rect2(from, Vector2(third, meadow.size.y))
+		zones.append({"rect": area, "density": DENSITY_ZONES[i]})
 	var dome_centre := DOME_CENTRE * scale
 	var ridge_z := RIDGE_Z * scale
+	var ridge_top := Vector2(RIDGE_X * scale, ridge_z.x)
+	var ridge_bottom := Vector2(RIDGE_X * scale, ridge_z.y)
 	return {
 		"dome": {"centre": dome_centre, "radius": DOME_RADIUS * scale},
 		"ridge":
 		{
-			"line": PackedVector2Array([Vector2(RIDGE_X * scale, ridge_z.x), Vector2(RIDGE_X * scale, ridge_z.y)]),
+			"line": PackedVector2Array([ridge_top, ridge_bottom]),
 			"half_width": RIDGE_HALF_WIDTH * scale,
 			"height": RIDGE_HEIGHT_M,
 		},
@@ -167,9 +168,7 @@ static func _water(doc: MapDocument, regions: Dictionary) -> void:
 	var river: Dictionary = regions["river"]
 	var course := StartingLandform.map_line(doc, river["line"], 1.0, 1.0)
 	if course.size() >= 2:
-		StartingLandform.carve_river(
-			doc, course, float(river["half_width"]), WaterBody.Depth.WAIST
-		)
+		StartingLandform.carve_river(doc, course, float(river["half_width"]), WaterBody.Depth.WAIST)
 	if not doc.water_bodies.is_empty():
 		doc.water_dressing = WaterDressing.refresh(doc)
 
