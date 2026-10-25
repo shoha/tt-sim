@@ -10,6 +10,7 @@
 		"res://tests/unit/test_audio_manager.gd",
 		"res://tests/unit/test_avatar_drag_place.gd",
 		"res://tests/unit/test_biome_designer_ui.gd",
+		"res://tests/unit/test_library_asset_thumbnails.gd",
 		"res://tests/unit/test_biome_thumbnail.gd",
 		"res://tests/unit/test_color_pane.gd",
 		"res://tests/unit/test_confirmation_dialog_variants.gd",
