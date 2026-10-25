@@ -3,7 +3,8 @@ extends GutTest
 ## The terrain response of a rule (step S12a): `slope_min_deg` and the `response` curves on the
 ## slope, height and wet axes, in the GDScript generator. Analytic ramps give exact expectations;
 ## the identity and region-independence tests run on real palette biomes. The library chain
-## (reader, compiler, validator) is test_library_response.gd.
+## (reader, compiler, validator) is test_library_response.gd; the water_dist axis (S12c, its
+## distance grid) is test_water_distance.gd.
 
 const ALPINE := "alpine_meadow_summer_s1"
 const BOREAL := "boreal_taiga_summer_s1"
@@ -12,6 +13,7 @@ const IDENTITY := {
 	"slope": [[0.0, 1.0], [90.0, 1.0]],
 	"height": [[-500.0, 1.0], [5000.0, 1.0]],
 	"wet": [[0.0, 1.0], [1.0, 1.0]],
+	"water_dist": [[0.0, 1.0], [64.0, 1.0]],
 }
 
 
@@ -286,20 +288,23 @@ func test_the_wet_curve_reads_the_shore_weight_and_is_zero_without_one() -> void
 	assert_eq(_points(_run([rule], bounds)).size(), 0, "no wet field reads 0 everywhere")
 
 
-func test_water_dist_is_planned_but_acts_as_one() -> void:
+func test_water_dist_is_planned_and_evaluated_and_reads_the_cap_without_a_field() -> void:
 	var bounds := _square(15.0)
 	var rule := _species("sedge", {"density_per_m2": 3.0})
 	var base := _run([rule], bounds, _hills, _hill_height)
 	var curved := rule.duplicate(true)
 	curved["response"] = {"water_dist": [[0, 1], [20, 0]]}
-	ScatterPlan._warned_unsupported.clear()
 	var entry: Dictionary = ScatterPlan.build("test", [curved], 1).species[0]
-	ScatterPlan.build("test", [curved], 1)
-	assert_engine_error(1, "one warning per rule, not one per plan")
 	assert_eq(entry.curve_water_dist.size(), 4, "the curve is planned")
-	assert_false(entry.has_response, "and not evaluated")
-	assert_false(ScatterPlan.has_terrain_response(curved))
-	assert_eq(_run([curved], bounds, _hills, _hill_height), base)
+	assert_true(entry.has_response, "and evaluated")
+	assert_true(ScatterPlan.has_terrain_response(curved))
+	assert_true(ScatterPlan.has_water_dist(curved))
+	assert_false(ScatterPlan.has_water_dist(rule))
+	# No distance field: every point reads the cap (64 m), where this curve is 0.
+	assert_eq(_points(_run([curved], bounds, _hills, _hill_height)).size(), 0)
+	curved["response"] = {"water_dist": [[0, 1], [70, 0.5]]}
+	assert_gt(_points(_run([curved], bounds, _hills, _hill_height)).size(), 0)
+	assert_eq(_run([rule], bounds, _hills, _hill_height), base)
 
 
 func test_a_cell_with_curves_is_identical_alone_with_neighbours_and_in_the_whole_map() -> void:
@@ -423,8 +428,11 @@ func test_native_jobs_with_terrain_response_are_refused_without_the_capability()
 		pending("forced to GDScript")
 		return
 	assert_eq(ScatterNative._refusal(legacy), "")
-	assert_eq(ScatterNative._refusal(water_only), "", "an unevaluated axis does not matter")
 	if ScatterNative.version().contains(ScatterNative.CAPABILITY_CURVES):
 		assert_eq(ScatterNative._refusal(curved), "")
 	else:
 		assert_eq(ScatterNative._refusal(curved), "curves", ScatterNative.version())
+	if ScatterNative.version().contains(ScatterNative.CAPABILITY_WATER):
+		assert_eq(ScatterNative._refusal(water_only), "")
+	elif ScatterNative.version().contains(ScatterNative.CAPABILITY_CURVES):
+		assert_eq(ScatterNative._refusal(water_only), "water", ScatterNative.version())

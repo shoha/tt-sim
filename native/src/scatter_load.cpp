@@ -175,6 +175,7 @@ static void load_consts(const Dictionary &d, Consts &c) {
 	c.fringe_full = num(d, "fringe_full");
 	c.arid_bit = (int)inum(d, "arid_bit");
 	c.depth_scale = num(d, "depth_scale", 1.0);
+	c.water_dist_max_m = num(d, "water_dist_max_m", 64.0);
 	c.wet_clear_start = num(d, "wet_clear_start");
 	c.wet_clear_full = num(d, "wet_clear_full");
 	c.emergent_depth_start_m = num(d, "emergent_depth_start_m");
@@ -323,6 +324,7 @@ bool Job::load(const Dictionary &d) {
 		entry.curve_slope = doubles(at(e, "curve_slope"));
 		entry.curve_height = doubles(at(e, "curve_height"));
 		entry.curve_wet = doubles(at(e, "curve_wet"));
+		entry.curve_water_dist = doubles(at(e, "curve_water_dist"));
 		entry.has_response = flag(e, "has_response");
 		entry.influence = num(e, "influence");
 		entry.scale_influence = num(e, "scale_influence");
@@ -431,6 +433,9 @@ bool Job::load(const Dictionary &d) {
 	grids.water_hold = at(g, "water");
 	grids.wet = grids.water_hold.size() == count * 4;
 	grids.water = grids.wet ? grids.water_hold.ptr() : nullptr;
+	grids.water_dist_hold = at(g, "water_dist");
+	grids.water_dist_ok = grids.water_dist_hold.size() == count;
+	grids.water_dist = grids.water_dist_ok ? grids.water_dist_hold.ptr() : nullptr;
 	godot::PackedFloat64Array crossings_in = at(g, "crossings");
 	for (int64_t i = 0; i + 4 < crossings_in.size(); i += 5) {
 		CrossingSpan span;

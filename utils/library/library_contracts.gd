@@ -114,17 +114,18 @@ const CLASS_DEFAULTS := {
 ## The axes of a rule's `response` curves (step S12) and the range of each axis' x values:
 ## slope in degrees, height in world metres (the ground's y), wet the shore weight 0..1 (the
 ## stored wet dressing, which reaches 2.4 m from the waterline) and water_dist metres to the
-## nearest water (designed but not evaluated yet: S12c). A curve is RESPONSE_MIN_POINTS to
-## RESPONSE_MAX_POINTS [x, y] points, x strictly ascending, y 0..1, piecewise linear and flat
-## beyond its ends; axes multiply and only ever lower a rule's density.
+## nearest water (S12c: 0 on water, capped at 64 m, ScatterTerrain.water_distance_grid). A curve is
+## RESPONSE_MIN_POINTS to RESPONSE_MAX_POINTS [x, y] points, x strictly ascending, y 0..1,
+## piecewise linear and flat beyond its ends; axes multiply and only ever lower a rule's density.
 const RESPONSE_AXES := {
 	"slope": [0.0, 90.0],
 	"height": [-500.0, 5000.0],
 	"wet": [0.0, 1.0],
-	"water_dist": [0.0, 200.0],
+	"water_dist": [0.0, 64.0],
 }
-## Axes the contract names that this build's scatter does not evaluate yet (they warn and act as 1).
-const RESPONSE_UNSUPPORTED: Array[String] = ["water_dist"]
+## Axes the contract names that this build's scatter does not evaluate (they warn and act as 1):
+## none since S12c. Kept so a future axis can be named before its engine half lands.
+const RESPONSE_UNSUPPORTED: Array[String] = []
 const RESPONSE_MIN_POINTS := 2
 const RESPONSE_MAX_POINTS := 8
 

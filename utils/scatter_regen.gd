@@ -593,7 +593,8 @@ static func _generate(
 		anchors,
 		fields.density_ceiling_at,
 		cancel,
-		fields.wet_at
+		fields.wet_at,
+		fields.water_dist_at
 	)
 
 

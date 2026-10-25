@@ -1,0 +1,44 @@
+{
+ "out_dir": "render_jobs/library-s12c_water_dist",
+ "timeout_s": 900,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "wetland_riparian_summer_s1", "size": 150, "seed": 5, "landform": "lakeshore"},
+  {"op": "wait_ready", "settle": 3.0}, {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/tree_fade.gd", "factor": 0},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "nocursor"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "wind", "freeze": true},
+  {"op": "home"}, {"op": "settle"},
+  {"op": "capture", "name": "a_before_home", "desc": "wetland lakeshore 150 ft seed 5 under the shipped core library (no water_dist curves), home view, fades off, wind frozen"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "look", "at": "stage"},
+  {"op": "zoom", "size": 24}, {"op": "settle"},
+  {"op": "capture", "name": "a_before_shore", "desc": "the same, size 24 at the landform's stage on the shore"},
+
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "library_dev", "path": "D:/dev/plantgen/out/lib_s12c"},
+  {"op": "wait", "s": 2.0},
+  {"op": "new_map", "biome": "wetland_riparian_summer_s1", "size": 150, "seed": 5, "landform": "lakeshore"},
+  {"op": "wait_ready", "settle": 3.0}, {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/close_zoom.gd", "action": "fade", "on": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/tree_fade.gd", "factor": 0},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ground_parity.gd", "action": "nocursor"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "wind", "freeze": true},
+  {"op": "home"}, {"op": "settle"},
+  {"op": "capture", "name": "b_after_home", "desc": "the same new map (same seed and landform) under a copy of core whose wetland rules carry water_dist curves: willow and poplar hug the water, reeds and sedge a tight band, ferns a ring behind it, bushes keep back; same camera"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/landform.gd", "action": "look", "at": "stage"},
+  {"op": "zoom", "size": 24}, {"op": "settle"},
+  {"op": "capture", "name": "b_after_shore", "desc": "the same, size 24 at the stage"},
+
+  {"op": "library_dev", "path": ""},
+  {"op": "wait", "s": 2.0},
+  {"op": "title"}, {"op": "wait", "s": 1.0},
+  {"op": "index", "title": "water_dist response: willows, reeds, ferns and shrubs by distance to water", "intro": "A new 150 ft wetland lakeshore (seed 5), never saved. a_* serves the shipped core library; b_* serves a copy of core (the dev override) whose wetland_riparian rules willow, poplar, reeds, sedge, fern and bush carry response.water_dist curves (see JOBS.md). Same cameras; fades off, wind frozen."}
+ ]
+}

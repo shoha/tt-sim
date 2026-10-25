@@ -31,6 +31,17 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   curve; same cameras (4 captures, 8 PNGs). The second map is built anew because a library switch
   keeps an open map's baked rows. Seen 2026-10-24: acacias and the low shrub domes leave the
   flat ground, the dry grass leaves the flats and stays on the slopes. `docs/systems/library.md`.
+- `jobs/library_s12c_water_dist.json`: the `water_dist` axis (about 45 s, keeps no level): a new
+  150 ft wetland lakeshore (seed 5) under the shipped core (home view, then the stage), then the
+  same map built anew under `D:/dev/plantgen/out/lib_s12c`, a copy of `libraries/core` whose
+  `biomes/wetland_riparian.json` rules carry `response.water_dist`: willow `[[0,1],[8,0.55],
+  [24,0.08]]`, poplar `[[0,1],[10,0.5],[30,0.05]]`, reeds `[[0,1],[5,0.7],[10,0]]`, sedge
+  `[[0,1],[4,0.6],[9,0]]`, fern `[[0,0],[2,0],[5,1],[14,1],[26,0.2]]` (a ring behind the reeds),
+  bush `[[0,0],[5,0.15],[16,1]]`; same cameras (4 captures, 8 PNGs). Seen 2026-10-25 (the
+  copy used for the run lived in the session scratchpad; make `lib_s12c` before re-running):
+  the inland willow grove thins to the trees nearest the water, the reeds and sedge close up
+  into a band along the shore and the islet, the shrubs and flowers fill the ground behind it.
+  `docs/systems/library.md`.
 - `jobs/library_s4_two_libraries.json`: a second content library beside core (about 35 s, keeps
   no level): needs a user library `alienworld` in the run's `user://libraries/` (the worktree's
   `%APPDATA%/TTSim_<topic>/libraries/alienworld`: plantgen `out/lib_core`'s badlands assets and

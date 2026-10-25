@@ -36,7 +36,7 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
   overlaps), so dense ground cover forms drifts.
 - Terrain response (content library step S12a, 2026-10-24; fields in
   [library.md](library.md) "Terrain response"): a rule may carry `slope_min_deg` and
-  `response` curves on the `slope`, `height` and `wet` axes. They are one more keep in
+  `response` curves on the `slope`, `height`, `wet` and `water_dist` axes. They are one more keep in
   `ScatterGenerator._evaluate`, after the slope-maximum block and before footing, behind
   `entry.has_response`: a legacy rule never runs the block, so its arithmetic and rows are
   exactly as before (the golden digests are unchanged). `_terrain_keep` multiplies the slope
@@ -47,23 +47,49 @@ the rules the code keeps (moved from `AGENTS.md` Key Conventions on 2026-10-09).
   and a curve that peaks at 1 there). Every axis is a pure function of the point (the angle of
   `normal_at`, `height_at`, the stored shore weight `wet_at`), so region independence holds
   (`test_scatter_curves.gd`). The curves multiply with the painted density, the rock and scree
-  terms of `ScatterGround` and the landform; they do not replace them. `water_dist` is validated
-  and planned (`curve_water_dist`) but not evaluated: it needs a distance grid (S12c) and warns
-  once per rule when planned.
-- Native (S12b): the library evaluates the same block (`scatter_gen.cpp` `terrain_keep` and
+  terms of `ScatterGround` and the landform; they do not replace them.
+- The `water_dist` axis (S12c, 2026-10-25): metres from the candidate to the nearest water,
+  bilinear on the derived distance grid `ScatterTerrain.water_distance_grid(doc)`. Definition:
+  a sample is water when WaterDressing's wet-line byte (channel A) is 255, which `compute`
+  writes exactly for a sample under the water, on a riffle or on a fall's face (one sample
+  away it is under 0.96), so the axis reads the same data as the wet and shore dressing; the
+  grid holds, per sample, the exact Euclidean distance in metres to the nearest water sample
+  (`DistanceField`, over the water's bounding rect grown by 64 m), 0 on the water itself
+  (never negative: placement on the water is already removed by the bed weight in
+  `ScatterGround.wet_factor`, and an emergent rule asks for 0 there), capped at
+  `ScatterTerrain.WATER_DIST_MAX_M` = 64 (the axis range's end; a point past it, or on a map with
+  no water, reads exactly 64, so a curve's last value applies). The grid is a pure function of
+  the stored dressing, never of a scatter window, so a cell generated alone, with neighbours or in
+  the whole map reads the same distance: the halo is the whole document, and the 64 m cap is only
+  the transform's padding (outside the padded rect every sample is at the cap by construction).
+  It is built lazily, on the first `water_dist_at` call of a job (a job whose rules have no such
+  curve never pays), and cached by content (two newest, behind a mutex, workers share it; the
+  key is a copy of the dressing, since packed arrays are shared by reference and a brush writes
+  them in place), so a document pays one transform per water change: 6 ms for a 24 m map, 31 ms
+  for a 200 ft map (245 x 245 samples), 200 ms at the 638 x 638 maximum (GDScript, measured
+  2026-10-25); a lookup is 0.02 ms. The sampler (`water_dist_sampler`, `sample_grid`) uses
+  `WaterDressing.sample`'s corners and weights over one float32 grid; `document_fields` returns
+  it as `water_dist_at` and `generate_species_cells` takes it after `wet_at`. Tests:
+  `test_water_distance.gd`.
+- Native (S12b, S12c): the library evaluates the same block (`scatter_gen.cpp` `terrain_keep` and
   `curve_value`, expression for expression, after the slope-maximum block and behind
   `Entry::has_response`; `Ground::wet_at` reads the whole-document shore weight like
-  `ScatterTerrain.wet_sampler`) and `version()` is `ttscatter 4 curves`. The plan keys
-  (`slope_min`, `slope_min_cos`, `curve_slope`, `curve_height`, `curve_wet`, `has_response`) are
-  keyed reads with neutral defaults, so a legacy plan loads as before. A library without the
-  word `curves` (built before S12b; `native/bin` is gitignored and survives a pull) would load
-  and silently ignore those keys, so `ScatterNative._refusal(species)` sends a job with
-  evaluated terrain response to GDScript (fallback reason `curves`) and
+  `ScatterTerrain.wet_sampler`, and `Ground::water_dist_at` mirrors `sample_grid` over the grid
+  `ScatterNative.pack` adds to the job's `source` as `water_dist`, only for a job with a
+  `water_dist` curve; the cap travels in the constants table as `water_dist_max_m`) and
+  `version()` is `ttscatter 5 curves water`. The plan keys
+  (`slope_min`, `slope_min_cos`, `curve_slope`, `curve_height`, `curve_wet`, `curve_water_dist`,
+  `has_response`) are keyed reads with neutral defaults, so a legacy plan loads as before. A
+  library without the word `curves` (built before S12b; `native/bin` is gitignored and survives
+  a pull) would load and silently ignore those keys, so `ScatterNative._refusal(species)` sends
+  a job with evaluated terrain response to GDScript (fallback reason `curves`; `water` for a
+  `water_dist` curve and a library without that word) and
   `test_scatter_native.gd` fails (it does not pend) until the library is rebuilt. Cost
   (`PERFORMANCE.md` "Terrain response"): under 1 percent of the library's time, about 20 ns a
   candidate that reaches the block; a curved probe-cell job is 20.7 ms native against 768 ms in
   GDScript. Parity: `test_scatter_native.gd` (curves on terraces and rolling ground, dry and with
-  a shore weight, each kind alone, region independence) and the valley and lakeshore whole maps
+  a shore weight and beside a lake, each kind alone water_dist included, region independence)
+  and the valley and lakeshore whole maps
   with curved rules in `test_scatter_native_landforms_dry.gd` and `_wet.gd`, rows and anchors
   byte-identical to forced GDScript.
 - Grass masses (ground ship, contract section 9 "Ground look and grass masses"): a clump with

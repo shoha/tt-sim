@@ -101,6 +101,9 @@ public:
 	/// ScatterTerrain.wet_sampler: the shore weight (channel G) at the map position `p`, 0 on a
 	/// document with no wet dressing.
 	double wet_at(Vector2 p) const;
+	/// ScatterTerrain.water_dist_sampler: metres to the nearest water at the map position `p`,
+	/// bilinear on the job's distance grid; WATER_DIST_MAX_M without one.
+	double water_dist_at(Vector2 p) const;
 
 	static double triangle_height(const Grid &grid, int columns, int rows, Vector2 at);
 	static Vector3 triangle_normal(const Grid &grid, int columns, int rows, Vector2 at, Vector2 step);

@@ -145,9 +145,8 @@ const RULE_DEFAULTS := {
 	"assets": [],
 }
 
-## The response axes ScatterGenerator evaluates (a rule's `response`, step S12a); water_dist is
-## validated and planned (curve_water_dist) but acts as 1 with a warning until S12c.
-const RESPONSE_EVALUATED: Array[String] = ["slope", "height", "wet"]
+## The response axes ScatterGenerator evaluates (a rule's `response`, steps S12a and S12c).
+const RESPONSE_EVALUATED: Array[String] = ["slope", "height", "wet", "water_dist"]
 
 ## Matern III coverage curve for spacing r: packing time t = candidate intensity times
 ## pi (r/2)^2 against coverage theta = survivor density times pi (r/2)^2. Measured
@@ -211,8 +210,6 @@ const _MASK32 := 0xFFFFFFFF
 ## clump to four or five, which reads as drifts. A static switch so a probe can render both
 ## in one run; the generator reads it on worker threads, so change it only between jobs.
 static var additive_clumps: bool = true
-## Rule keys whose unsupported water_dist curve has already warned (once per run, not per job).
-static var _warned_unsupported: Dictionary = {}
 
 
 ## The plan for one biome: {"species": [...], "fields": [...]}. Each species entry carries
@@ -324,7 +321,7 @@ static func curve_value(points: PackedFloat64Array, x: float) -> float:
 
 
 ## Whether a rule carries terrain response the generator evaluates: a slope minimum or a curve
-## on an axis in RESPONSE_EVALUATED (water_dist is planned but not evaluated, S12c).
+## on an axis in RESPONSE_EVALUATED.
 static func has_terrain_response(rule: Dictionary) -> bool:
 	if float(rule.get("slope_min_deg", 0.0)) > 0.0:
 		return true
@@ -335,6 +332,12 @@ static func has_terrain_response(rule: Dictionary) -> bool:
 		if (response as Dictionary).get(axis) is Array:
 			return true
 	return false
+
+
+## Whether a rule carries a water_dist curve (the axis that needs the distance grid).
+static func has_water_dist(rule: Dictionary) -> bool:
+	var response: Variant = rule.get("response")
+	return response is Dictionary and (response as Dictionary).get("water_dist") is Array
 
 
 ## Whether a rule asks for clumps (a clump block with parents and a radius).
@@ -428,16 +431,11 @@ static func _plan_species(species: Array[Dictionary], i: int, index_of: Dictiona
 ## A rule's terrain response, flattened for the per-candidate path (S12a): `slope_min` degrees and
 ## its cosine (-2 = off), the curves as [x0, y0, x1, y1, ...] arrays (empty = none), and
 ## `has_response`, whether any of it is evaluated. A rule without the fields gets the neutral
-## values, so a legacy plan runs exactly the arithmetic it always did. A water_dist curve is kept
-## in curve_water_dist but not evaluated: it warns once per rule (the distance grid is S12c).
+## values, so a legacy plan runs exactly the arithmetic it always did. The water_dist curve reads
+## the distance grid (ScatterTerrain.water_distance_grid, S12c).
 static func _plan_terrain(rule: Dictionary) -> Dictionary:
 	var slope_min := clampf(float(rule.get("slope_min_deg", 0.0)), 0.0, 90.0)
 	var curves: Dictionary = rule.response if rule.get("response") is Dictionary else {}
-	if curves.get("water_dist") is Array and not _warned_unsupported.has(rule.key):
-		_warned_unsupported[rule.key] = true
-		push_warning(
-			"ScatterPlan: rule '%s' has a water_dist response, not evaluated yet (S12c)" % rule.key
-		)
 	return {
 		"slope_min": slope_min,
 		"slope_min_cos": cos(deg_to_rad(slope_min)) if slope_min > 0.0 else -2.0,

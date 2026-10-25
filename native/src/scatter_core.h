@@ -229,11 +229,11 @@ struct Entry {
 	double yaw_range = 0.0, scale_spread = 0.0, scale_floor = 0.0;
 	double response_lead = 1.0, response_lag = 1.0;
 	/// Terrain response (S12b; ScatterTerrain.keep): the slope minimum in degrees and its cosine
-	/// (-2 = off) and the flattened [x0, y0, x1, y1, ...] curves on the slope, height and wet axes
-	/// (empty = none). `has_response` gates the whole block, so legacy rules skip it.
-	/// curve_water_dist is planned but not evaluated, as in GDScript.
+	/// (-2 = off) and the flattened [x0, y0, x1, y1, ...] curves on the slope, height, wet and
+	/// water_dist (S12c) axes (empty = none). `has_response` gates the whole block, so legacy
+	/// rules skip it.
 	double slope_min = 0.0, slope_min_cos = -2.0;
-	std::vector<double> curve_slope, curve_height, curve_wet;
+	std::vector<double> curve_slope, curve_height, curve_wet, curve_water_dist;
 	bool has_response = false;
 	double mass_stretch = 1.0, mass_core = 1.0, mass_core_y = 1.0, mass_core_y_max = 0.0;
 	double mass_core_hold = 0.0, clump_jitter = 0.0, clump_shrink = 0.0;
@@ -299,6 +299,8 @@ struct Consts {
 	// ScatterGround's wet factor and WaterDressing
 	int arid_bit = 64;
 	double depth_scale = 1.0, wet_clear_start = 0.0, wet_clear_full = 1.0;
+	/// ScatterTerrain.WATER_DIST_MAX_M: the water_dist axis' cap and the value without a grid.
+	double water_dist_max_m = 64.0;
 	double emergent_depth_start_m = 0.0, emergent_depth_full_m = 1.0;
 	double tree_shore_start = 0.0, tree_shore_full = 1.0, shrub_shore_start = 0.0, shrub_shore_full = 1.0;
 	double shrub_shore_keep = 0.0, tall_shore_start = 0.0, tall_shore_full = 1.0, flower_shore_thin = 0.0;
@@ -346,6 +348,11 @@ struct Grids {
 	/// WaterDressing's field (CHANNELS bytes per sample) when `wet`.
 	godot::PackedByteArray water_hold;
 	const uint8_t *water = nullptr;
+	/// ScatterTerrain.water_distance_grid (one float per sample, metres to the nearest water,
+	/// capped at WATER_DIST_MAX_M) when `water_dist_ok`; otherwise the cap is read everywhere.
+	godot::PackedFloat32Array water_dist_hold;
+	const float *water_dist = nullptr;
+	bool water_dist_ok = false;
 	std::vector<CrossingSpan> crossings;
 	bool paints = false, fringed = false, wet = false;
 };

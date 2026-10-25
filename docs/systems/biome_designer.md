@@ -165,7 +165,7 @@ The screen (all of it through the theme: glass leaf over the live map, `Sheet`, 
   a value that differs from the class default is marked and resets with a right-click); Mix of the class;
   Assets (the matched groups with pins, the query as removable chips, add a category/subtype filter or the
   rule's role, tags, size class, count, order, season mode, and the near misses with the one condition each
-  fails); Terrain response (slope, height and wetness curves in `CurveEditor`: drag a point, double-click to
+  fails); Terrain response (slope, height, wetness and distance-to-water curves in `CurveEditor`: drag a point, double-click to
   add, right-click or Delete to remove, Shift for free movement, a preset menu); Habit, clump and company
   (water habit, charred, align, clump presets with their four numbers, near and avoid relations to a rule or
   a role).
@@ -207,7 +207,8 @@ up: the A/B split view and the season scrub with per-season overrides (the compi
 through untouched); thumbnails (S9: the tiles show category icons); the manager's own entry
 ("Design a biome" is on the title only); hover highlight and the density-heat, slope-map and role
 overlays; "Request asset" (`wanted.json`); the lock file's editing UI beyond the per-rule toggle; the
-`water_dist` response axis (S12c) and exporting a library from the designer (the manager does it).
+exporting a library from the designer (the manager does it). (The `water_dist` response axis landed
+in S12c: `ResponseCurve.axes()` lists it, since `LibraryContracts.RESPONSE_UNSUPPORTED` is empty.)
 
 ## History
 
