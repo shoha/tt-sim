@@ -263,12 +263,11 @@ func show_failure(message: String, can_retry: bool = true) -> void:
 	_notice.add_child(row)
 	var mark := _mark("alert-circle", ThemeColors.DANGER, row)
 	mark.name = "ErrorIcon"
-	error_label = _label(message, &"Body", row)
+	error_label = _label(message, &"BodyDanger", row)
 	error_label.name = "ErrorText"
 	error_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	error_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	error_label.custom_minimum_size.x = 160
-	_tint_when_ready(error_label, row, ThemeColors.DANGER)
 	for child in _footer.get_children():
 		_footer.remove_child(child)
 		child.queue_free()
@@ -421,14 +420,9 @@ func _lines(lines: Array, icon: String, role: StringName, parent: Control) -> VB
 	return box
 
 
-## Tints `item` (an icon, or a label's font) with `role` once it is in the tree.
+## Tints the icon `item` with `role` once it is in the tree.
 func _tint_when_ready(item: Control, row: Control, role: StringName) -> void:
-	var apply := func() -> void:
-		var colour := ThemeColors.of(row, role)
-		if item is Label:
-			item.add_theme_color_override(&"font_color", colour)
-		else:
-			item.self_modulate = colour
+	var apply := func() -> void: item.self_modulate = ThemeColors.of(row, role)
 	if row.is_inside_tree():
 		apply.call()
 	else:

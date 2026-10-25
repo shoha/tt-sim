@@ -133,7 +133,7 @@ func set_selected(on: bool) -> void:
 static func attention_pill() -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.name = "Attention"
-	panel.theme_type_variation = &"Chip"
+	panel.theme_type_variation = &"AttentionChip"
 	var line := HBoxContainer.new()
 	line.theme_type_variation = &"BoxContainerTight"
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -149,21 +149,12 @@ static func attention_pill() -> PanelContainer:
 	line.add_child(mark)
 	var label := Label.new()
 	label.name = "Label"
-	label.theme_type_variation = &"Caption"
+	label.theme_type_variation = &"CaptionDanger"
 	label.text = LibraryNames.NEEDS_ATTENTION
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	line.add_child(label)
 	panel.tree_entered.connect(
-		func() -> void:
-			var danger := ThemeColors.of(panel, ThemeColors.DANGER)
-			mark.self_modulate = danger
-			label.add_theme_color_override(&"font_color", danger)
-			var base := panel.get_theme_stylebox(&"panel") as StyleBoxFlat
-			if base != null:
-				var edged := base.duplicate() as StyleBoxFlat
-				edged.border_color = danger
-				edged.set_border_width_all(2)
-				panel.add_theme_stylebox_override(&"panel", edged)
+		func() -> void: mark.self_modulate = ThemeColors.of(panel, ThemeColors.DANGER)
 	)
 	return panel
 

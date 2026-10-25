@@ -1152,8 +1152,11 @@ Button shadows (`ShadowGutter`, `scenes/ui/primitives/shadow_gutter.gd`): a rais
 outside its rect, and a `ScrollContainer` (or any `clip_contents` or `clip_children` control)
 clips to its own rect, so a button flush with the container's edge lost its shadow there (Verify in
 this card, 2026-10-25). Every scroll that hosts buttons is wrapped with `ShadowGutter.wrap(scroll,
-kind)` (RING, GLASS_RING, BUTTON or CARD room; `outset` keeps the content where it was by growing
-the clip outward), and `test_shadow_gutter.gd` instantiates the screens and sheets and fails on any
+kind)` (RING, GLASS_RING, BUTTON or CARD room: it sets the `ShadowRoomRing`, `ShadowRoomGlassRing`,
+`ShadowRoomButton` or `ShadowRoomCard` ScrollContainer variation, which `painted_theme_base.gd`
+defines in both themes from the same constants; `outset` keeps the content where it was by
+growing the clip outward, a `ShadowOutset` holder), and `test_shadow_gutter.gd` instantiates the
+screens and sheets and fails on any
 button whose shadow a clipping ancestor would cut and on any constant that no longer equals what
 the themes draw. A new panel with a scroll around buttons wraps it, and adds itself to that test.
 
