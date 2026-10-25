@@ -191,6 +191,9 @@ static func request_problem(request: Variant) -> String:
 		problem = _ids_problem(data.get("biomes"), "biomes", MAX_REQUEST_BIOMES, false)
 	if problem == "":
 		problem = _ids_problem(data.get("surfaces"), "surfaces", MAX_REQUEST_SURFACES, false)
+	if problem == "" and data.has("held_surfaces"):
+		# The local names of surfaces a kept copy already holds: the host does not send them again.
+		problem = _ids_problem(data["held_surfaces"], "held_surfaces", MAX_REQUEST_SURFACES, false)
 	if problem != "":
 		return problem
 	var have: Variant = data.get("have", {})
@@ -282,10 +285,20 @@ static func select(read: Dictionary, request: Dictionary) -> Dictionary:
 		"assets": out_assets,
 		"dependency_assets": deps_out,
 		"biomes": biomes,
-		"surfaces": surfaces_used(read, biomes, request),
+		"surfaces": _without_held(surfaces_used(read, biomes, request), request),
 		"skipped": skipped,
 		"biome_names": names_out,
 	}
+
+
+## `names` without the surfaces the request says a kept copy already holds (`held_surfaces`).
+static func _without_held(names: Array[String], request: Dictionary) -> Array[String]:
+	var held: Variant = request.get("held_surfaces", [])
+	var out: Array[String] = []
+	for item in names:
+		if not (held is Array and item in held):
+			out.append(item)
+	return out
 
 
 ## select() for a dependency that only supplies assets: `locals` are its catalog ids. No biome and

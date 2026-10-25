@@ -120,18 +120,15 @@ static func _check_identity(card: Dictionary) -> void:
 		card["reserved"] = true
 		errors.append((RESERVED_ID % id) + RESERVED_HINT)
 		return
-	# The copy this would replace: an official, built-in or installed one. A developer copy and a
-	# PARTIAL copy received from a host for the session (LibraryTransfer) are not replaced: they
-	# are said, and the installed library takes the place of the received one at the next serve.
+	# The copy this would replace: an official, built-in or installed one (a PARTIAL copy a host
+	# sent is an installed one: it is said, and the whole one completes it). A developer copy is
+	# not replaced: it is said.
 	var existing := {}
 	for item in LibraryRegistry.list():
 		if item["id"] != id:
 			continue
 		if item["source"] == "dev":
 			(card["warnings"] as Array).append("A developer copy of '%s' is set for this run." % id)
-		elif item["source"] == "received":
-			var from_host := "A partial copy of '%s' came from the host for this session; "
-			(card["warnings"] as Array).append((from_host % id) + "this one replaces it.")
 		elif existing.is_empty():
 			existing = item
 	card["existing"] = existing
@@ -148,6 +145,12 @@ static func _check_identity(card: Dictionary) -> void:
 		card["relation"] = RELATION_OLDER
 	else:
 		card["relation"] = RELATION_SAME
+	if not (existing.get("from_host", {}) as Dictionary).is_empty():
+		# What a host sent holds only part of it: the whole one is an upgrade whatever its version.
+		var sent := "The copy of '%s' that came from a host holds only part of it; this one replaces it."
+		(card["warnings"] as Array).append(sent % id)
+		if order <= 0:
+			card["relation"] = RELATION_NEWER
 
 
 ## Compiles the staged library alone, through the dependencies installed, adding what it says
@@ -318,7 +321,8 @@ static func remove(library_id: String) -> Dictionary:
 		if DirAccess.dir_exists_absolute(folder) and not SafeDelete.is_owned(folder):
 			return {
 				"ok": false,
-				"error": "'%s' was not put there by the game; delete its folder by hand." % library_id
+				"error":
+				"'%s' was not put there by the game; delete its folder by hand." % library_id
 			}
 		return {"ok": false, "error": "Some files of '%s' could not be deleted." % library_id}
 	# Its baked surface maps (SurfaceCache) go with it; nothing else prunes that cache.
