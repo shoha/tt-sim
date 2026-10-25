@@ -278,3 +278,11 @@ that conflicts with one stops and asks. Add each new verdict here with its date.
   tool; the rails say where trees catch, narrowing over about one half-width where only the
   ground burns; chalk_soft only for a path refused whole, as the refused Circle. No tool's ring
   at rest carries a mark of its shape: the chip's words tell the shapes apart.
+- **2026-10-25** Collections manager (the owner's review). A collection that fails shows a legible
+  "Needs attention" pill in place of its on switch, in a column every row shares, its row dimmed;
+  reasons are one plain sentence and what to do, the technical text behind a Details toggle; an
+  older file than the installed copy is refused, the same version is a Reinstall; no dialog says
+  "plants" (the collection word, through LibraryNames); the folders are rescanned on open, on
+  focus and on Refresh and never watched; a button's shadow is never clipped by the scroll that
+  holds it (ShadowGutter and its audit); an error is on the card and in the footer in red with an
+  icon, never only a toast, and a toast always draws above a scrim.
