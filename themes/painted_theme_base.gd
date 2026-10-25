@@ -100,6 +100,13 @@ func _define_labels() -> void:
 		"BodyState", "Label", inherit({font = font_body, font_size = SIZE_BODY}, in_state)
 	)
 	define_variant_style("CaptionState", "Label", inherit(caption, in_state))
+	# A failure said in words (the install card's error, the collections footer): the danger role,
+	# always beside an alert icon, never colour alone.
+	var in_danger := {font_color = c(ThemeColors.DANGER)}
+	define_variant_style(
+		"BodyDanger", "Label", inherit({font = font_body, font_size = SIZE_BODY}, in_danger)
+	)
+	define_variant_style("CaptionDanger", "Label", inherit(caption, in_danger))
 	# A code someone reads aloud (the room code): never Fraunces, whose 0, o, 1 and l blur.
 	define_variant_style("Code", "Label", {font = font_code, font_size = SIZE_HEADING})
 	# Names the earlier scenes use, kept as aliases of the roles above.
@@ -555,6 +562,23 @@ func _define_containers() -> void:
 		Color(c(ThemeColors.SURFACE), 0.0), 0, SPACE_5, SPACE_3, {content_margin_bottom = SPACE_6}
 	)
 	define_variant_style("LibraryGrid", "ScrollContainer", {panel = library_room})
+	# Every other scroll that hosts buttons: room for the shadow and ring of a button at its edge
+	# (ShadowGutter.wrap picks one; its constants are what the themes draw, pinned by
+	# test_shadow_gutter.gd).
+	for kind: int in ShadowGutter.Kind.values():
+		var room := ShadowGutter.margins(kind as ShadowGutter.Kind)
+		var margins := {
+			content_margin_left = room.x,
+			content_margin_top = room.y,
+			content_margin_right = room.z,
+			content_margin_bottom = room.w,
+		}
+		var clear := Color(c(ThemeColors.SURFACE), 0.0)
+		define_variant_style(
+			ShadowGutter.variation_of(kind as ShadowGutter.Kind),
+			"ScrollContainer",
+			{panel = box(clear, 0, 0, 0, margins)}
+		)
 
 
 ## Small status surfaces: chips that label the board (a ruler's distance, the input hints),
@@ -569,6 +593,12 @@ func _define_status() -> void:
 		var pencil := edge(1, c(ThemeColors.EDGE))
 		chip = box(c(ThemeColors.SURFACE_RAISED), RADIUS_CHIP, SPACE_3, SPACE_1, pencil)
 	define_variant_style("Chip", "PanelContainer", {panel = chip})
+	# "Needs attention": a chip with a danger edge, an alert icon and its words inside (the
+	# collections manager's pill, standing where a failing row's switch would be).
+	var attention := box(
+		c(ThemeColors.SURFACE_RAISED), RADIUS_CHIP, SPACE_3, SPACE_1, edge(2, c(ThemeColors.DANGER))
+	)
+	define_variant_style("AttentionChip", "PanelContainer", {panel = attention})
 	define_variant_style(
 		"CountBadge", "PanelContainer", {panel = box(c(ThemeColors.ACCENT), RADIUS_PILL, 6, 0)}
 	)

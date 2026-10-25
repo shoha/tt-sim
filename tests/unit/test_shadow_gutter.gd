@@ -154,14 +154,41 @@ func test_wrap_gives_a_scroll_the_room_of_its_kind() -> void:
 	}
 	for kind: int in cases:
 		var scroll := ShadowGutter.wrap(ScrollContainer.new(), kind as ShadowGutter.Kind)
-		var box := scroll.get_theme_stylebox(&"panel")
+		var variation := ShadowGutter.variation_of(kind as ShadowGutter.Kind)
+		assert_eq(scroll.theme_type_variation, variation)
 		var want: Array = cases[kind]
-		assert_eq(box.get_margin(SIDE_LEFT), float(want[0]))
-		assert_eq(box.get_margin(SIDE_TOP), float(want[1]))
-		assert_eq(box.get_margin(SIDE_RIGHT), float(want[2]))
-		assert_eq(box.get_margin(SIDE_BOTTOM), float(want[3]))
 		assert_eq(ShadowGutter.extra_height(kind as ShadowGutter.Kind), float(want[1] + want[3]))
 		scroll.free()
+		# Both themes define the variation, with the room the constants name.
+		for path in THEMES:
+			var theme := load(path) as Theme
+			assert_true(theme.has_stylebox(&"panel", variation), "%s: %s" % [path, variation])
+			var box := theme.get_stylebox(&"panel", variation)
+			assert_eq(box.get_margin(SIDE_LEFT), float(want[0]), path)
+			assert_eq(box.get_margin(SIDE_TOP), float(want[1]), path)
+			assert_eq(box.get_margin(SIDE_RIGHT), float(want[2]), path)
+			assert_eq(box.get_margin(SIDE_BOTTOM), float(want[3]), path)
+
+
+func test_outset_keeps_the_content_where_it_was_and_reaches_the_clip_out() -> void:
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var rows := VBoxContainer.new()
+	rows.custom_minimum_size = Vector2(100, 60)
+	scroll.add_child(rows)
+	var holder := ShadowGutter.outset(scroll, ShadowGutter.Kind.RING)
+	var column := VBoxContainer.new()
+	column.size = Vector2(300, 200)
+	_host.add_child(column)
+	column.add_child(holder)
+	await wait_process_frames(3)
+	assert_eq(holder.size.x, 300.0, "the holder fills the column")
+	var room := ShadowGutter.margins(ShadowGutter.Kind.RING)
+	assert_almost_eq(scroll.size.x, 300.0 + room.x + room.z, 0.5, "the clip reaches out")
+	assert_almost_eq(rows.global_position.x, holder.global_position.x, 0.5, "the content stays")
+	assert_almost_eq(holder.get_combined_minimum_size().y, 60.0, 0.5, "and its need is the same")
+	column.free()
 
 
 func test_the_audit_finds_a_button_flush_with_a_clipping_scroll_and_passes_a_wrapped_one() -> void:

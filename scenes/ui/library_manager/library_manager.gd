@@ -626,19 +626,15 @@ func _say(text: String, kind: String = "") -> void:
 	status_label.text = text
 	status_kind = kind
 	status_icon.visible = kind != ""
+	# An error's words are in the danger role (a theme variation), its icon an alert.
+	status_label.theme_type_variation = &"CaptionDanger" if kind == STATUS_ERROR else &"Caption"
 	if kind == "":
-		status_label.remove_theme_color_override(&"font_color")
 		return
 	var role := ThemeColors.DANGER if kind == STATUS_ERROR else ThemeColors.SUCCESS
 	status_icon.texture = IconButton.load_icon(
 		"alert-circle" if kind == STATUS_ERROR else "circle-check"
 	)
-	var colour := ThemeColors.of(status_label, role)
-	status_icon.self_modulate = colour
-	if kind == STATUS_ERROR:
-		status_label.add_theme_color_override(&"font_color", colour)
-	else:
-		status_label.remove_theme_color_override(&"font_color")
+	status_icon.self_modulate = ThemeColors.of(status_label, role)
 
 
 # ---- layout and closing ----

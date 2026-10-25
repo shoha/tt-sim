@@ -50,34 +50,36 @@ const CARD_BOTTOM := 26
 ## content gets narrower by the sides and the scroll needs the top and bottom more height: a
 ## caller that sized the scroll to its content adds `extra_height(kind)`.
 static func wrap(scroll: ScrollContainer, kind: Kind = Kind.BUTTON) -> ScrollContainer:
-	var room := margins(kind)
-	var box := StyleBoxEmpty.new()
-	box.content_margin_left = room.x
-	box.content_margin_top = room.y
-	box.content_margin_right = room.z
-	box.content_margin_bottom = room.w
-	scroll.add_theme_stylebox_override(&"panel", box)
-	scroll.set_meta(&"shadow_gutter", int(kind))
+	# The room is a theme variation of ScrollContainer (themes/painted_theme_base.gd defines one
+	# per kind from these constants): no per-node style override.
+	scroll.theme_type_variation = variation_of(kind)
 	return scroll
 
 
-## `scroll`, wrapped, inside a holder whose negative margins reach out by the room of `kind`: the
+## The theme type variation of ScrollContainer that holds the room of `kind`.
+static func variation_of(kind: Kind) -> StringName:
+	match kind:
+		Kind.RING:
+			return &"ShadowRoomRing"
+		Kind.GLASS_RING:
+			return &"ShadowRoomGlassRing"
+		Kind.CARD:
+			return &"ShadowRoomCard"
+	return &"ShadowRoomButton"
+
+
+## `scroll`, wrapped, inside a holder (ShadowOutset) that reaches out by the room of `kind`: the
 ## holder takes the place of a scroll that must keep its content exactly where it was (rows that
 ## line up with their neighbours), while the clip is wider by the room. Add the holder to the
 ## container in place of the scroll; the scroll stays reachable as the holder's child. The
 ## holder expands as the scroll does.
-static func outset(scroll: ScrollContainer, kind: Kind = Kind.RING) -> MarginContainer:
+static func outset(scroll: ScrollContainer, kind: Kind = Kind.RING) -> ShadowOutset:
 	ShadowGutter.wrap(scroll, kind)
-	var room := margins(kind)
-	var holder := MarginContainer.new()
+	var holder := ShadowOutset.new()
 	holder.name = scroll.name + "Outset"
-	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.room = margins(kind)
 	holder.size_flags_horizontal = scroll.size_flags_horizontal
 	holder.size_flags_vertical = scroll.size_flags_vertical
-	holder.add_theme_constant_override(&"margin_left", -int(room.x))
-	holder.add_theme_constant_override(&"margin_top", -int(room.y))
-	holder.add_theme_constant_override(&"margin_right", -int(room.z))
-	holder.add_theme_constant_override(&"margin_bottom", -int(room.w))
 	holder.add_child(scroll)
 	return holder
 
