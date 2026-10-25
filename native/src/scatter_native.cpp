@@ -18,7 +18,7 @@ void TTScatterNative::_bind_methods() {
 }
 
 String TTScatterNative::version() const {
-	return String("ttscatter 3");
+	return String("ttscatter 4 curves");
 }
 
 int64_t TTScatterNative::ping(int64_t value) const {

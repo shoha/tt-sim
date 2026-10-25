@@ -18,3 +18,8 @@ func test_valley_with_a_crossing_equals_gdscript() -> void:
 
 func test_terraces_equal_gdscript() -> void:
 	Parity.check(self, "terraces")
+
+
+## Terrain response on every rule (S12b): the valley's slopes and crossing, native and GDScript.
+func test_valley_with_terrain_response_equals_gdscript() -> void:
+	Parity.check(self, "valley", true)

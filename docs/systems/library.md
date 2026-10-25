@@ -69,8 +69,8 @@ surfaces without editor imports (`SurfaceStore`) and the library bindings. Step 
   `contract.json` (`response`: `axes`, `min_points`, `max_points`, `unsupported_axes`), and
   `LibraryContracts.response_problem` is the one check both validators use. The compiler copies
   both fields into the compiled rule only when present. Scatter: [scatter.md](scatter.md)
-  "Terrain response"; a job whose biome has any evaluated response runs in GDScript only until
-  S12b ports it (about 17 times slower, `../PERFORMANCE.md` "Terrain response").
+  "Terrain response"; the native library evaluates it too since S12b (`version()` carries
+  `curves`; a stale library is refused to GDScript, `../PERFORMANCE.md` "Terrain response").
 - **Runtime ids (S0 P4).** Core keeps today's ids (`savanna_summer_s1`, assets
   `savanna_summer_s1/Tree_Acacia_v0`); another library `<lib>__<biome>_<season>_s<seed>`, and
   its palette `biome` field is `<lib>__<biome>`. No `/` in a library id, biome name or local
@@ -271,6 +271,9 @@ surfaces) or `LibraryBindings.TABLE`.
 
 ## History
 
+- 2026-10-24: step S12b: the native scatter library evaluates `slope_min_deg` and the slope,
+  height and wet curves (`version()` `ttscatter 4 curves`), rows byte-identical to GDScript's;
+  a library built before it is refused to GDScript and fails `test_scatter_native`.
 - 2026-10-24: step S12a: rule fields `slope_min_deg` and `response` (slope, height, wet curves;
   water_dist validated and planned, not evaluated) through contract, reader, compiler, validator,
   `ScatterPlan` and `ScatterGenerator` (GDScript only; `ScatterNative` refuses such jobs until

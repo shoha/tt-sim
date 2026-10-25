@@ -316,6 +316,14 @@ bool Job::load(const Dictionary &d) {
 		entry.clearance_m = num(e, "clearance_m");
 		entry.slope_max = num(e, "slope_max");
 		entry.slope_cos = num(e, "slope_cos", -2.0);
+		// Terrain response (S12b): absent keys give the neutral values, so a legacy plan loads
+		// as before (the capability check in ScatterNative keeps a stale library out).
+		entry.slope_min = num(e, "slope_min");
+		entry.slope_min_cos = num(e, "slope_min_cos", -2.0);
+		entry.curve_slope = doubles(at(e, "curve_slope"));
+		entry.curve_height = doubles(at(e, "curve_height"));
+		entry.curve_wet = doubles(at(e, "curve_wet"));
+		entry.has_response = flag(e, "has_response");
 		entry.influence = num(e, "influence");
 		entry.scale_influence = num(e, "scale_influence");
 		entry.ground_role = (int)inum(e, "ground_role");

@@ -85,7 +85,6 @@ class Ground {
 	Vector2 painted_lookup(Vector2 xz) const;
 	bool scorches(int role) const;
 	double plain_at(Vector2 p) const;
-	Vector3 water_at(Vector2 s) const;
 	double wet_factor(int role, Vector3 water) const;
 	double clearance(Vector2 p, double extra) const;
 
@@ -96,6 +95,12 @@ public:
 	double density_ceiling_at(Vector2 p, int role) const;
 	double height_at(Vector2 p) const;
 	Vector3 normal_at(Vector2 p) const;
+	/// WaterDressing.sample at sample coordinates `s` (bed, shore, depth), bilinear over the
+	/// whole-document field; the caller checks `g.wet`.
+	Vector3 water_at(Vector2 s) const;
+	/// ScatterTerrain.wet_sampler: the shore weight (channel G) at the map position `p`, 0 on a
+	/// document with no wet dressing.
+	double wet_at(Vector2 p) const;
 
 	static double triangle_height(const Grid &grid, int columns, int rows, Vector2 at);
 	static Vector3 triangle_normal(const Grid &grid, int columns, int rows, Vector2 at, Vector2 step);
