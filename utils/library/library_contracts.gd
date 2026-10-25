@@ -14,6 +14,7 @@ const FORMAT_CONTRACT := "ttsim-contract"
 const FORMAT_LIBRARY := "ttsim-library"
 const FORMAT_CATALOG := "ttsim-catalog"
 const FORMAT_BIOME := "ttsim-biome"
+const FORMAT_LOCK := "ttsim-biome-lock"
 ## The only format version of each library file this build reads; a higher one is refused.
 const FORMAT_VERSION := 1
 
@@ -251,6 +252,21 @@ const RULE_KEYS: Array[String] = [
 const QUERY_KEYS: Array[String] = [
 	"match", "tags_all", "tags_any", "tags_none", "size_class", "seasons", "count", "order", "pin"
 ]
+## The keys of one `query.match` clause: `ref` names one asset (or a whole group) explicitly; the
+## others are AND-ed filters over the catalog (LibraryQuery, design doc 2.6.3).
+const QUERY_CLAUSE_KEYS: Array[String] = [
+	"ref", "category", "subtype", "group", "ids", "role", "library"
+]
+## query.order: groups by FNV-1a hash of "<biome id>/<rule key>|<group>", by group id, or as
+## the clause's `ids` list names them.
+const QUERY_ORDERS: Array[String] = ["hash", "id", "explicit"]
+## query.seasons: "auto" keeps assets whose `seasons` is empty or lists the season being
+## compiled; "any" keeps all.
+const QUERY_SEASON_MODES: Array[String] = ["auto", "any"]
+## Assets a query's selection may expand to (variants of the taken groups), and the most tags,
+## ids and pins a query may list.
+const QUERY_MAX_ASSETS := 64
+const QUERY_MAX_LIST := 64
 ## Names Windows reserves as devices; a file or id with one cannot exist on every platform.
 const RESERVED_DEVICE_NAMES: Array[String] = [
 	"con",
@@ -373,6 +389,13 @@ static func export_json() -> String:
 		"legacy_habit": LegacyHabit.export_table(),
 		"note":
 		"Exported by tt-sim LibraryContracts.export_json (utils/library/library_contracts.gd).",
+		"query":
+		{
+			"clause_keys": QUERY_CLAUSE_KEYS.duplicate(),
+			"max_assets": QUERY_MAX_ASSETS,
+			"orders": QUERY_ORDERS.duplicate(),
+			"season_modes": QUERY_SEASON_MODES.duplicate(),
+		},
 		"response":
 		{
 			"axes": axes,

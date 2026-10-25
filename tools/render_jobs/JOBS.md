@@ -1009,6 +1009,12 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   `firefeat_look --only "day_zs_new,sunset_zs_new"` run into `render_jobs/fire_shards_before` and
   `render_jobs/fire_shards_after` (left before, right after).
 
+### Biome designer (S8a)
+
+- `designer_smoke.json`: opens the designer on the core temperate biome (served with `library_dev`), the proving ground behind the panels, then the picker, a rule selected and the budget meter; full-size captures at 1600x900.
+- `designer_flow.json`: the core loop: add a rule from the picker, edit density, a response curve and the slope minimum, remove and undo a rule, Save as a new collection, Leave; reads the edit-to-new-rows latency from the probe `designer.gd` (`edit_timed`).
+- `designer_perf.json`: windowed, vsync off, debounce 0: compile, serve and request times and the edit-to-scatter latency of tree density, ground cover, curve and rule removal, partial against whole-biome regeneration (`whole`). Summarise with the `designer.gd` `report` action.
+
 ## Caveats
 
 - **The judgment set assumes palette content.** Its composition strokes use the palette ids

@@ -1,0 +1,60 @@
+{
+ "out_dir": "render_jobs/designer_perf",
+ "timeout_s": 900,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "wait_title"},
+  {"op": "library_dev", "path": "D:/dev/plantgen/out/lib_core"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "open", "library": "core", "biome": "temperate_forest"},
+  {"op": "wait_ready", "settle": 3.0},
+  {"op": "no_autosave"},
+  {"op": "vsync_off"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "debounce", "seconds": 0.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "report"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "full"},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "stats", "label": "FULL regeneration of every rule (1)"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "full"},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "stats", "label": "FULL regeneration of every rule (2)"},
+
+  {"op": "expand", "values": [0.02, 0.01, 0.02, 0.01, 0.02, 0.01], "template": [
+    {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "edit_timed", "rule": "oak", "field": "density_per_m2", "value": "{value}"},
+    {"op": "wait_ready", "settle": 0.5},
+    {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "stats", "label": "TREE density edit (oak) to {value}"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "whole", "on": true},
+  {"op": "expand", "values": [0.02, 0.01, 0.02, 0.01, 0.02, 0.01], "template": [
+    {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "edit_timed", "rule": "oak", "field": "density_per_m2", "value": "{value}"},
+    {"op": "wait_ready", "settle": 0.5},
+    {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "stats", "label": "WHOLE-biome regeneration after a TREE density edit (oak) to {value}"}
+  ]},
+  {"op": "expand", "values": [30, 50, 30, 50, 30, 50], "template": [
+    {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "edit_timed", "rule": "grass", "field": "slope_max_deg", "value": "{value}"},
+    {"op": "wait_ready", "settle": 0.5},
+    {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "stats", "label": "WHOLE-biome regeneration after a GROUND COVER edit (grass) to {value}"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "whole", "on": false},
+  {"op": "expand", "values": [30, 50, 30, 50, 30, 50], "template": [
+    {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "edit_timed", "rule": "grass", "field": "slope_max_deg", "value": "{value}"},
+    {"op": "wait_ready", "settle": 0.5},
+    {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "stats", "label": "GROUND COVER edit (grass slope max) to {value}"}
+  ]},
+  {"op": "expand", "values": ["ramp_down", "none", "ramp_down", "none", "ramp_down", "none"], "template": [
+    {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "curve", "rule": "fern", "axis": "slope", "preset": "{value}"},
+    {"op": "wait_ready", "settle": 0.5},
+    {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "stats", "label": "SMALL class response curve (fern slope) {value}"}
+  ]},
+  {"op": "expand", "values": [1, 2, 3], "template": [
+    {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "remove_rule", "rule": "stump"},
+    {"op": "wait_ready", "settle": 0.5},
+    {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "stats", "label": "REMOVE rule stump ({value})"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "undo"},
+    {"op": "wait_ready", "settle": 0.5},
+    {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "stats", "label": "UNDO the removal ({value})"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/designer.gd", "action": "report"},
+  {"op": "title"}, {"op": "wait", "s": 1.0}
+ ]
+}
