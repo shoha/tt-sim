@@ -19,54 +19,33 @@ extends RefCounted
 
 const DEFAULT_ROOT := "res://assets/palette"
 const PALETTE_FILE := "palette.json"
-const FORMAT := 1
-const WIND_CATEGORIES := ["tree", "grass", ""]
-const ALIGN_MODES := ["upright", "normal"]
-const SURFACE_MAPS := ["albedo", "normal", "orm", "height"]
-## What a surface is for (contract section 9): soft ground sampled top-down, rock for steep
-## faces sampled sideways, walkable paving painted as paths. A missing role is ground.
-const SURFACE_ROLES := ["ground", "cliff", "built"]
-
-## Hard caps, checked before anything is kept. Sized an order of magnitude above what
-## treecube builds today (8 biomes, about 25 assets and species each, a dozen surfaces),
-## so they only ever bite on a corrupt or hostile document.
+## The palette contract's constants live in PaletteFields (the validators' shared base) and are
+## re-exported here so every caller keeps reading them as PaletteLibrary.<NAME>.
+const FORMAT := PaletteFields.FORMAT
+const WIND_CATEGORIES := PaletteFields.WIND_CATEGORIES
+const ALIGN_MODES := PaletteFields.ALIGN_MODES
+const SURFACE_MAPS := PaletteFields.SURFACE_MAPS
+const SURFACE_ROLES := PaletteFields.SURFACE_ROLES
+const MAX_BIOMES := PaletteFields.MAX_BIOMES
+const MAX_SPECIES_PER_BIOME := PaletteFields.MAX_SPECIES_PER_BIOME
+const MAX_ASSETS := PaletteFields.MAX_ASSETS
+const MAX_ASSETS_PER_SPECIES := PaletteFields.MAX_ASSETS_PER_SPECIES
+const MAX_SURFACES := PaletteFields.MAX_SURFACES
+const MAX_RELATIONS := PaletteFields.MAX_RELATIONS
+const MAX_ACCENTS := PaletteFields.MAX_ACCENTS
+const MAX_PATH_SURFACES := PaletteFields.MAX_PATH_SURFACES
+const MAX_PATTERN_KEYS := PaletteFields.MAX_PATTERN_KEYS
+const MAX_VERBATIM_DEPTH := PaletteFields.MAX_VERBATIM_DEPTH
+const MAX_ID_LENGTH := PaletteFields.MAX_ID_LENGTH
+const MAX_TEXT_LENGTH := PaletteFields.MAX_TEXT_LENGTH
+const MAX_PATH_LENGTH := PaletteFields.MAX_PATH_LENGTH
+const DEFAULT_ACCENT_SCALE_M := PaletteFields.DEFAULT_ACCENT_SCALE_M
+const MAX_ACCENT_SCALE_M := PaletteFields.MAX_ACCENT_SCALE_M
+const WATER_SURFACE_DEFAULTS := PaletteFields.WATER_SURFACE_DEFAULTS
+const DEFAULT_WATER_SURFACES := PaletteFields.DEFAULT_WATER_SURFACES
+## Hard caps on the palette file and on one asset GLB (docs/ASSET_PIPELINE.md section 9).
 const MAX_FILE_BYTES := 4 * 1024 * 1024
-const MAX_ASSET_FILE_BYTES := 64 * 1024 * 1024
-const MAX_BIOMES := 128
-const MAX_SPECIES_PER_BIOME := 128
-const MAX_ASSETS := 8192
-const MAX_ASSETS_PER_SPECIES := 64
-const MAX_SURFACES := 128
-const MAX_RELATIONS := 32
-## Per biome: ground accents and path surfaces (a handful of each in practice).
-const MAX_ACCENTS := 8
-const MAX_PATH_SURFACES := 32
-const MAX_PATTERN_KEYS := 64
-const MAX_VERBATIM_DEPTH := 4
-const MAX_ID_LENGTH := 160
-const MAX_TEXT_LENGTH := 128
-const MAX_PATH_LENGTH := 256
-## A ground accent's patch size when the palette gives none or a non-positive one (contract
-## section 9), and the largest one kept.
-const DEFAULT_ACCENT_SCALE_M := 6.0
-const MAX_ACCENT_SCALE_M := 200.0
-## A biome's water surfaces when the palette names none (contract section 9, optional
-## water_bed_surface and shore_surface, P4-3), by biome key: [bed, shore]. Judged at the game
-## camera on carved rivers (P4-4: forest banks are moss, which the ferns gathering there
-## grow on; bare mud under a canopy read as a scar); unknown biomes take
-## DEFAULT_WATER_SURFACES. A default the
-## palette lacks as a ground surface is dropped ("": the ground stays).
-const WATER_SURFACE_DEFAULTS := {
-	"alpine_meadow": ["riverbed", "gravel"],
-	"birch_woodland": ["riverbed", "moss"],
-	"boreal_taiga": ["riverbed", "moss"],
-	"grassland_meadow": ["riverbed", "mud"],
-	"rocky_badlands": ["gravel_sandstone", "gravel_sandstone"],
-	"savanna": ["riverbed", "sand"],
-	"temperate_forest": ["riverbed", "moss"],
-	"wetland_riparian": ["riverbed", "mud"],
-}
-const DEFAULT_WATER_SURFACES := ["riverbed", "mud"]
+const MAX_ASSET_FILE_BYTES := PaletteAssetFiles.MAX_ASSET_FILE_BYTES
 ## At most this many individual warnings are printed per palette load; the rest are
 ## summarised in one line so a badly broken file cannot flood the log.
 const MAX_WARNINGS_PRINTED := 20
@@ -206,7 +185,7 @@ static func ground_look(biome_id: String, root: String = DEFAULT_ROOT) -> Dictio
 
 ## The names of the surfaces with `role` ("ground", "cliff" or "built"), in file order.
 static func surfaces_with_role(role: String, root: String = DEFAULT_ROOT) -> Array[String]:
-	return _names_with_role(get_palette(root)["surfaces"], role)
+	return PaletteSurfaces.names_with_role(get_palette(root)["surfaces"], role)
 
 
 ## The ground accents of one biome ({surface, coverage, scale_m}, priority order), or [] for
@@ -277,22 +256,7 @@ static func resolver(root: String = DEFAULT_ROOT) -> Callable:
 ##  "biomes": Array[Dictionary], "assets": Dictionary}. Assets are validated first, so a
 ## species keeps only asset ids that resolve, and a species left with none is dropped.
 static func validate_palette(data: Variant) -> Dictionary:
-	var warnings: Array[String] = []
-	var palette := _empty_palette()
-	if not data is Dictionary:
-		warnings.append("palette.json is not a JSON object")
-		return {"palette": palette, "warnings": warnings}
-	var format: Variant = data.get("format")
-	if not (format is float or format is int) or int(format) != FORMAT:
-		warnings.append("unsupported palette format %s (expected %d)" % [str(format), FORMAT])
-		return {"palette": palette, "warnings": warnings}
-	palette["palette_version"] = _text_or(data.get("palette_version"), MAX_TEXT_LENGTH, "")
-	palette["surfaces"] = _validate_surfaces(data.get("surfaces"), warnings)
-	palette["assets"] = _validate_assets(data.get("assets"), warnings)
-	palette["biomes"] = _validate_biomes(
-		data.get("biomes"), palette["assets"], palette["surfaces"], warnings
-	)
-	return {"palette": palette, "warnings": warnings}
+	return PaletteValidator.validate_palette(data)
 
 
 ## Loads and validates <root>/palette.json. A root without one is an empty palette and a
@@ -301,14 +265,14 @@ static func _load_palette(root: String) -> Dictionary:
 	var path := root.path_join(PALETTE_FILE)
 	if not FileAccess.file_exists(path):
 		push_warning("PaletteLibrary: no palette at %s; the palette is empty" % path)
-		return _empty_palette()
+		return PaletteValidator.empty_palette()
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		push_warning("PaletteLibrary: cannot open %s; the palette is empty" % path)
-		return _empty_palette()
+		return PaletteValidator.empty_palette()
 	if file.get_length() > MAX_FILE_BYTES:
 		push_warning("PaletteLibrary: %s exceeds %d bytes; ignored" % [path, MAX_FILE_BYTES])
-		return _empty_palette()
+		return PaletteValidator.empty_palette()
 	var text := file.get_as_text()
 	file.close()
 	var json := JSON.new()
@@ -319,7 +283,7 @@ static func _load_palette(root: String) -> Dictionary:
 				% [path, json.get_error_line(), json.get_error_message()]
 			)
 		)
-		return _empty_palette()
+		return PaletteValidator.empty_palette()
 	var result := validate_palette(json.data)
 	_print_warnings(path, result["warnings"])
 	return result["palette"]
@@ -337,19 +301,12 @@ static func _print_warnings(path: String, warnings: Array[String]) -> void:
 		)
 
 
-static func _empty_palette() -> Dictionary:
-	var no_biomes: Array[Dictionary] = []
-	return {
-		"format": FORMAT, "palette_version": "", "surfaces": {}, "biomes": no_biomes, "assets": {}
-	}
-
-
 ## The cached source mesh for one asset, loading its GLB on first use.
 static func _source_mesh(root: String, asset_id: String, entry: Dictionary) -> Mesh:
 	var cache_key := root + "|" + asset_id
 	if not _source_meshes.has(cache_key):
 		var path := root.path_join(entry["file"])
-		var mesh := _load_asset_mesh(path, entry["node"])
+		var mesh := PaletteAssetFiles.load_mesh(path, entry["node"])
 		if mesh == null:
 			push_warning(
 				"PaletteLibrary: asset '%s' could not be loaded from %s" % [asset_id, path]
@@ -358,643 +315,3 @@ static func _source_mesh(root: String, asset_id: String, entry: Dictionary) -> M
 		# After caching, so the guard's own resolve of the representative cannot recurse here.
 		WindFoliage.check_layout(root, asset_id, mesh, String(entry.get("wind_category", "")))
 	return _source_meshes[cache_key]
-
-
-## Loads the Mesh of node `node_name` from an asset GLB. The built-in res:// palette goes
-## through Godot's editor import (ResourceLoader on the imported PackedScene): an
-## exported game ships only the imported .scn, never the raw .glb, so FileAccess finds
-## nothing there. Its import settings (committed .glb.import sidecars: textures embedded
-## uncompressed, no LODs, no shadow meshes) and the evidence for them are in
-## docs/ASSET_PIPELINE.md section 9 "Import path". A GLB with no import (a user:// palette,
-## the unit-test fixture) is parsed at runtime through GLTFDocument instead, the path
-## GlbUtils uses for user:// maps. Both give the same materials, vertex colours and
-## unmipmapped textures, but not the same vertex buffers: the import compresses the vertex
-## attributes of some surfaces and reorders every surface's vertices, while this parse
-## compresses every surface (lookbench capture probe, 2026-10-20). So the two paths draw
-## alike to the eye but not bit for bit (PaletteOverlay parses with compression off, which
-## comes closest).
-##
-## Returns null (the caller warns) for a missing, oversized or unparseable file or a
-## missing node. Treecube exports the asset node at the identity transform; one that is
-## not would be placed without that offset, since only its Mesh is used, so it warns.
-static func _load_asset_mesh(path: String, node_name: String) -> Mesh:
-	var scene := _load_asset_scene(path)
-	if scene == null:
-		return null
-	var node := GlbUtils.find_node_by_name(scene, node_name)
-	if node == null:
-		node = GlbUtils.find_node_by_name(scene, node_name.validate_node_name())
-	var mesh: Mesh = null
-	if node is MeshInstance3D:
-		mesh = (node as MeshInstance3D).mesh
-		if (node as Node3D).transform != Transform3D.IDENTITY:
-			push_warning("PaletteLibrary: node '%s' in %s is not at the origin" % [node_name, path])
-	scene.free()
-	return mesh
-
-
-## The instantiated scene of an asset GLB (the caller frees it), or null. Imported
-## resources win over the raw file so the editor exercises the same path as an export.
-static func _load_asset_scene(path: String) -> Node:
-	if ResourceLoader.exists(path, "PackedScene"):
-		var packed := ResourceLoader.load(path, "PackedScene") as PackedScene
-		return packed.instantiate() if packed != null else null
-	if not FileAccess.file_exists(path):
-		return null
-	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null or file.get_length() > MAX_ASSET_FILE_BYTES:
-		return null
-	var buffer := file.get_buffer(file.get_length())
-	file.close()
-	var document := GLTFDocument.new()
-	var state := GLTFState.new()
-	if document.append_from_buffer(buffer, "", state) != OK:
-		return null
-	return document.generate_scene(state)
-
-
-static func _validate_surfaces(raw: Variant, warnings: Array[String]) -> Dictionary:
-	var result := {}
-	if raw == null:
-		return result
-	if not raw is Dictionary:
-		warnings.append("surfaces is not an object")
-		return result
-	for kind in _capped_keys(raw, MAX_SURFACES, "surfaces", warnings):
-		var name: Variant = _text(kind, MAX_TEXT_LENGTH)
-		var entry: Variant = raw[kind]
-		if name == null or not entry is Dictionary:
-			warnings.append("surface '%s' skipped: malformed" % _label(kind))
-			continue
-		var tile: Variant = _number(entry.get("tile_m"), 0.001, 10000.0)
-		var albedo := _path_or(entry.get("albedo"), "")
-		if tile == null or albedo == "":
-			warnings.append("surface '%s' skipped: needs albedo and tile_m" % name)
-			continue
-		var role: Variant = entry.get("role")
-		if role == null:
-			role = "ground"  # a palette from before roles: every surface was ground
-		elif not role is String or not role in SURFACE_ROLES:
-			warnings.append(
-				"surface '%s': unknown role '%s', treated as ground" % [name, _label(role)]
-			)
-			role = "ground"
-		var surface := {
-			"tile_m": tile, "kind": _text_or(entry.get("kind"), MAX_TEXT_LENGTH, ""), "role": role
-		}
-		for map_name in SURFACE_MAPS:
-			surface[map_name] = _path_or(entry.get(map_name), "")
-		# Optional (section 9): the albedo map's mean linear colour, a ground look's light
-		# reference (GroundLookUniforms.ref_linear measures it when absent or malformed).
-		var mean: Variant = entry.get("albedo_mean_linear")
-		var numeric := func(v: Variant) -> bool: return v is float or v is int
-		if mean is Array and mean.size() == 3 and mean.all(numeric):
-			surface["albedo_mean_linear"] = mean.map(
-				func(v: Variant) -> float: return clampf(float(v), 0.0, 1.0)
-			)
-		elif mean != null:
-			warnings.append("surface '%s': malformed albedo_mean_linear ignored" % name)
-		result[name] = surface
-	return result
-
-
-static func _names_with_role(known: Dictionary, role: String) -> Array[String]:
-	var names: Array[String] = []
-	for name in known:
-		if known[name]["role"] == role:
-			names.append(name)
-	return names
-
-
-## A biome's cliff_surface: the named surface when it is a cliff; else (with a warning
-## when a name was given) the first cliff surface in file order, or "" when there is none.
-static func _cliff_surface_of(
-	entry: Dictionary, id: String, known: Dictionary, warnings: Array[String]
-) -> String:
-	var fallback := ""
-	var cliffs := _names_with_role(known, "cliff")
-	if not cliffs.is_empty():
-		fallback = cliffs[0]
-	var raw: Variant = entry.get("cliff_surface")
-	if raw == null:
-		return fallback
-	var cliff := _text_or(raw, MAX_TEXT_LENGTH, "")
-	if known.has(cliff) and known[cliff]["role"] == "cliff":
-		return cliff
-	warnings.append(
-		(
-			"biome '%s': cliff surface '%s' is not a cliff surface, using '%s'"
-			% [id, _label(raw), fallback]
-		)
-	)
-	return fallback
-
-
-## A biome's scree_surface: the named surface when it is ground, else "" (the foot keeps
-## the biome ground), with a warning when a name was given.
-static func _scree_surface_of(
-	entry: Dictionary, id: String, known: Dictionary, warnings: Array[String]
-) -> String:
-	var raw: Variant = entry.get("scree_surface")
-	if raw == null:
-		return ""
-	var scree := _text_or(raw, MAX_TEXT_LENGTH, "")
-	if known.has(scree) and known[scree]["role"] == "ground":
-		return scree
-	warnings.append("biome '%s': scree surface '%s' is not a ground surface" % [id, _label(raw)])
-	return ""
-
-
-## A biome's water bed (`key` "water_bed_surface", index 0 of the defaults) or shore surface
-## ("shore_surface", index 1): the named surface when it is ground; absent, the default for
-## the biome key (WATER_SURFACE_DEFAULTS) when the palette has it as ground, else ""; named
-## but absent or not ground, a warning and the default.
-static func _water_surface_of(
-	entry: Dictionary,
-	id: String,
-	key: String,
-	index: int,
-	known: Dictionary,
-	warnings: Array[String]
-) -> String:
-	var defaults: Array = WATER_SURFACE_DEFAULTS.get(
-		_text_or(entry.get("biome"), MAX_TEXT_LENGTH, ""), DEFAULT_WATER_SURFACES
-	)
-	var fallback := String(defaults[index])
-	if not known.has(fallback) or known[fallback]["role"] != "ground":
-		fallback = ""
-	var raw: Variant = entry.get(key)
-	if raw == null:
-		return fallback
-	var named := _text_or(raw, MAX_TEXT_LENGTH, "")
-	if known.has(named) and known[named]["role"] == "ground":
-		return named
-	warnings.append(
-		"biome '%s': %s '%s' is not a ground surface, using '%s'" % [id, key, _label(raw), fallback]
-	)
-	return fallback
-
-
-## A biome's ground_accents (contract section 9, "Accents and path surfaces degrade, never
-## fail"): absent is [] silently; not an array warns and is []; an entry that is not an
-## object, has no numeric coverage, or names a surface that is absent, not role ground or
-## the biome's own ground warns and is dropped, as is a second entry for one surface;
-## coverage is clamped to 0..1; a missing scale_m is DEFAULT_ACCENT_SCALE_M silently, a
-## non-numeric or non-positive one warns and is too. Order is kept (priority order).
-static func _ground_accents_of(
-	entry: Dictionary, id: String, ground: String, known: Dictionary, warnings: Array[String]
-) -> Array[Dictionary]:
-	var result: Array[Dictionary] = []
-	var raw: Variant = entry.get("ground_accents")
-	if raw == null:
-		return result
-	var where := "biome '%s' ground_accents" % id
-	if not raw is Array:
-		warnings.append("%s is not an array, ignored" % where)
-		return result
-	for accent in _capped(raw, MAX_ACCENTS, where, warnings):
-		var surface: Variant = _text(
-			accent.get("surface") if accent is Dictionary else null, MAX_TEXT_LENGTH
-		)
-		var coverage: Variant = _number(
-			accent.get("coverage") if accent is Dictionary else null, 0.0, 1.0
-		)
-		if surface == null or coverage == null:
-			warnings.append("%s: malformed entry '%s' dropped" % [where, _label(accent)])
-			continue
-		if not known.has(surface) or known[surface]["role"] != "ground" or surface == ground:
-			warnings.append(
-				(
-					"%s: '%s' is not a ground surface other than the biome's own, dropped"
-					% [where, _label(surface)]
-				)
-			)
-			continue
-		if result.any(func(kept: Dictionary) -> bool: return kept["surface"] == surface):
-			warnings.append("%s: '%s' listed twice, the second dropped" % [where, surface])
-			continue
-		var scale_m := DEFAULT_ACCENT_SCALE_M
-		var raw_scale: Variant = accent.get("scale_m")
-		if raw_scale != null:
-			var number: Variant = _number(raw_scale, -INF, MAX_ACCENT_SCALE_M)
-			if number != null and number > 0.0:
-				scale_m = number
-			else:
-				warnings.append(
-					"%s: '%s' scale_m is not positive, using %.0f" % [where, surface, scale_m]
-				)
-		result.append({"surface": surface, "coverage": coverage, "scale_m": scale_m})
-	return result
-
-
-## A biome's path_surfaces: absent is [] silently; not an array warns and is []; a name that
-## is absent or not role built warns and is dropped; a duplicate is ignored silently.
-static func _path_surfaces_of(
-	entry: Dictionary, id: String, known: Dictionary, warnings: Array[String]
-) -> Array[String]:
-	var result: Array[String] = []
-	var raw: Variant = entry.get("path_surfaces")
-	if raw == null:
-		return result
-	var where := "biome '%s' path_surfaces" % id
-	if not raw is Array:
-		warnings.append("%s is not an array, ignored" % where)
-		return result
-	for name in _capped(raw, MAX_PATH_SURFACES, where, warnings):
-		var surface: Variant = _text(name, MAX_TEXT_LENGTH)
-		if surface == null or not known.has(surface) or known[surface]["role"] != "built":
-			warnings.append("%s: '%s' is not a built surface, dropped" % [where, _label(name)])
-			continue
-		if not surface in result:
-			result.append(surface)
-	return result
-
-
-static func _validate_assets(raw: Variant, warnings: Array[String]) -> Dictionary:
-	var result := {}
-	if not raw is Dictionary:
-		warnings.append("assets is missing or not an object")
-		return result
-	for id in _capped_keys(raw, MAX_ASSETS, "assets", warnings):
-		var entry: Variant = raw[id]
-		if not _is_asset_id(id) or not entry is Dictionary:
-			warnings.append("asset '%s' skipped: malformed id or entry" % _label(id))
-			continue
-		var file := _path_or(entry.get("file"), "")
-		var node: Variant = _text(entry.get("node"), MAX_TEXT_LENGTH)
-		if file == "" or not file.to_lower().ends_with(".glb") or node == null or node == "":
-			warnings.append("asset '%s' skipped: needs a .glb file and a node name" % id)
-			continue
-		var category: Variant = entry.get("wind_category")
-		if not category is String or not category in WIND_CATEGORIES:
-			# An unknown category (a newer producer) still places the asset, just still.
-			warnings.append("asset '%s': unknown wind_category, treated as none" % id)
-			category = ""
-		result[id] = {
-			"file": file,
-			"node": node,
-			"wind_category": category,
-			"size_class": _text_or(entry.get("size_class"), MAX_TEXT_LENGTH, ""),
-			"dimensions_m": _vector3_or_zero(entry.get("dimensions_m")),
-		}
-	return result
-
-
-static func _validate_biomes(
-	raw: Variant, assets: Dictionary, known: Dictionary, warnings: Array[String]
-) -> Array[Dictionary]:
-	var result: Array[Dictionary] = []
-	if not raw is Array:
-		warnings.append("biomes is missing or not an array")
-		return result
-	var seen := {}
-	for entry in _capped(raw, MAX_BIOMES, "biomes", warnings):
-		var id: Variant = _text(entry.get("id") if entry is Dictionary else null, MAX_ID_LENGTH)
-		if id == null or id == "" or seen.has(id):
-			warnings.append("biome '%s' skipped: missing or duplicate id" % _label(id))
-			continue
-		seen[id] = true
-		var ground := _text_or(entry.get("ground_surface"), MAX_TEXT_LENGTH, "")
-		if ground != "" and not known.has(ground):
-			warnings.append("biome '%s': ground surface '%s' not in surfaces" % [id, ground])
-			ground = ""
-		var seed_value: Variant = _number(entry.get("seed"), -2147483648.0, 2147483647.0)
-		var species_rules := _validate_species_list(entry.get("species"), id, assets, warnings)
-		if species_rules.is_empty():
-			warnings.append("biome '%s' skipped: no usable species" % id)
-			continue
-		(
-			result
-			. append(
-				{
-					"id": id,
-					"biome": _text_or(entry.get("biome"), MAX_TEXT_LENGTH, ""),
-					"season": _text_or(entry.get("season"), MAX_TEXT_LENGTH, ""),
-					"seed": int(seed_value) if seed_value != null else 0,
-					"name": _text_or(entry.get("name"), MAX_TEXT_LENGTH, id),
-					"climate": _text_or(entry.get("climate"), MAX_TEXT_LENGTH, ""),
-					"thumbnail": _path_or(entry.get("thumbnail"), ""),
-					"ground_surface": ground,
-					"cliff_surface": _cliff_surface_of(entry, id, known, warnings),
-					"scree_surface": _scree_surface_of(entry, id, known, warnings),
-					"water_bed_surface":
-					_water_surface_of(entry, id, "water_bed_surface", 0, known, warnings),
-					"shore_surface": _water_surface_of(entry, id, "shore_surface", 1, known, warnings),
-					"ground_accents": _ground_accents_of(entry, id, ground, known, warnings),
-					"path_surfaces": _path_surfaces_of(entry, id, known, warnings),
-					"ground_look":
-					GroundLook.validate(entry.get("ground_look"), id, ground, known, warnings),
-					"species": species_rules,
-				}
-			)
-		)
-	return result
-
-
-static func _validate_species_list(
-	raw: Variant, biome_id: String, assets: Dictionary, warnings: Array[String]
-) -> Array[Dictionary]:
-	var result: Array[Dictionary] = []
-	if not raw is Array:
-		warnings.append("biome '%s': species is not an array" % biome_id)
-		return result
-	var where := "biome '%s'" % biome_id
-	for entry in _capped(raw, MAX_SPECIES_PER_BIOME, where + " species", warnings):
-		var rule := _validate_species(entry, where, assets, warnings)
-		if rule.is_empty():
-			continue
-		if result.any(func(kept: Dictionary) -> bool: return kept["key"] == rule["key"]):
-			warnings.append("%s: duplicate species '%s' skipped" % [where, rule["key"]])
-			continue
-		result.append(rule)
-	# Relations may only name species that survived validation in the same biome.
-	var keys := result.map(func(kept: Dictionary) -> String: return kept["key"])
-	for rule in result:
-		for relation_kind in ["near", "avoid"]:
-			var kept_relations: Array[Dictionary] = []
-			for relation in rule[relation_kind]:
-				if relation["species"] in keys:
-					kept_relations.append(relation)
-				else:
-					warnings.append(
-						(
-							"%s species '%s': %s relation to unknown species '%s' dropped"
-							% [where, rule["key"], relation_kind, relation["species"]]
-						)
-					)
-			rule[relation_kind] = kept_relations
-	return result
-
-
-## One species rule, or {} (with a warning) when it is unusable. Required: key, kind,
-## density_per_m2 and at least one asset id that resolves. Optional fields fall back to
-## the neutral default when absent and warn when present with the wrong type; numbers
-## outside their contract range are clamped rather than rejected.
-static func _validate_species(
-	entry: Variant, where: String, assets: Dictionary, warnings: Array[String]
-) -> Dictionary:
-	if not entry is Dictionary:
-		warnings.append("%s: species entry is not an object" % where)
-		return {}
-	var key: Variant = _text(entry.get("key"), MAX_TEXT_LENGTH)
-	var kind: Variant = _text(entry.get("kind"), MAX_TEXT_LENGTH)
-	var density: Variant = _number(entry.get("density_per_m2"), 0.0, 1000.0)
-	if key == null or key == "" or kind == null or density == null:
-		warnings.append("%s: species '%s' skipped: needs key, kind, density" % [where, _label(key)])
-		return {}
-	var label := "%s species '%s'" % [where, key]
-	var asset_ids: Array[String] = []
-	var raw_assets: Variant = entry.get("assets")
-	for id in _capped(
-		raw_assets if raw_assets is Array else [], MAX_ASSETS_PER_SPECIES, label, warnings
-	):
-		if id is String and assets.has(id):
-			if not id in asset_ids:
-				asset_ids.append(id)
-		else:
-			warnings.append("%s: asset '%s' not in the palette, skipped" % [label, _label(id)])
-	if asset_ids.is_empty():
-		warnings.append("%s skipped: no asset resolves" % label)
-		return {}
-	var align := _text_or(entry.get("align"), MAX_TEXT_LENGTH, "upright")
-	if not align in ALIGN_MODES:
-		warnings.append("%s: unknown align '%s', using upright" % [label, align])
-		align = "upright"
-	return {
-		"key": key,
-		"kind": kind,
-		"keep_colour": entry.get("keep_colour") == true,
-		"size_class": _text_or(entry.get("size_class"), MAX_TEXT_LENGTH, ""),
-		"density_per_m2": density,
-		"min_spacing_m":
-		_optional_number(entry, "min_spacing_m", 0.0, 1000.0, 0.0, label, warnings),
-		"slope_max_deg": _optional_number(entry, "slope_max_deg", 0.0, 90.0, 90.0, label, warnings),
-		"scale_spread": _optional_number(entry, "scale_spread", 0.0, 0.9, 0.0, label, warnings),
-		"scale_floor": _optional_number(entry, "scale_floor", 0.0, 100.0, null, label, warnings),
-		"yaw_random_deg":
-		_optional_number(entry, "yaw_random_deg", 0.0, 360.0, 360.0, label, warnings),
-		"align": align,
-		"pattern": _validate_pattern(entry.get("pattern"), label, warnings),
-		"clump": _validate_clump(entry.get("clump"), label, warnings),
-		"near": _validate_relations(entry.get("near"), label + " near", warnings),
-		"avoid": _validate_relations(entry.get("avoid"), label + " avoid", warnings),
-		"avoid_bare": _optional_number(entry, "avoid_bare", 0.0, 1.0, 0.0, label, warnings),
-		"assets": asset_ids,
-	}
-
-
-## {influence, scale_influence, geoscatter_pattern} or null. geoscatter_pattern is
-## Geoscatter's s_pattern1_* settings carried verbatim for later calibration (contract
-## section 9), including a nested texture dict, so it is copied structurally rather than
-## field by field: see _verbatim.
-static func _validate_pattern(raw: Variant, label: String, warnings: Array[String]) -> Variant:
-	if raw == null:
-		return null
-	if not raw is Dictionary:
-		warnings.append("%s: pattern is not an object, ignored" % label)
-		return null
-	var noise: Variant = _verbatim(raw.get("geoscatter_pattern"), 0)
-	return {
-		"influence": _optional_number(raw, "influence", 0.0, 1.0, 0.0, label, warnings),
-		"scale_influence": _optional_number(raw, "scale_influence", 0.0, 1.0, 0.0, label, warnings),
-		"geoscatter_pattern": noise if noise is Dictionary else {},
-	}
-
-
-## A bounded copy of an opaque JSON value tt-sim stores but does not interpret: numbers,
-## bools and short strings as-is, objects and arrays up to MAX_VERBATIM_DEPTH levels and
-## MAX_PATTERN_KEYS entries each. Anything else (and anything deeper) becomes null, and a
-## null is dropped from an object, so the result is always small and plain.
-static func _verbatim(value: Variant, depth: int) -> Variant:
-	if value is bool or value is int:
-		return value
-	if value is float:
-		return value if not (is_nan(value) or is_inf(value)) else null
-	if value is String:
-		return value if value.length() <= MAX_TEXT_LENGTH else null
-	if depth >= MAX_VERBATIM_DEPTH:
-		return null
-	if value is Array:
-		var items: Array = []
-		for item in value.slice(0, MAX_PATTERN_KEYS):
-			items.append(_verbatim(item, depth + 1))
-		return items
-	if value is Dictionary:
-		var copy := {}
-		for key in value.keys().slice(0, MAX_PATTERN_KEYS):
-			var name: Variant = _text(key, MAX_TEXT_LENGTH)
-			var inner: Variant = _verbatim(value[key], depth + 1)
-			if name != null and inner != null:
-				copy[name] = inner
-		return copy
-	return null
-
-
-static func _validate_clump(raw: Variant, label: String, warnings: Array[String]) -> Variant:
-	if raw == null:
-		return null
-	if not raw is Dictionary:
-		warnings.append("%s: clump is not an object, ignored" % label)
-		return null
-	var clump := {}
-	for field in ["parents_per_m2", "radius_m", "transition_m", "children_spacing_m"]:
-		clump[field] = _optional_number(raw, field, 0.0, 1000.0, 0.0, label, warnings)
-	# The grass-mass fields (ScatterPlan.MASS_FIELDS), read only with mass 1 and kept only when
-	# given, clamped; zone_keep and zone_family are four-element arrays.
-	if _optional_number(raw, "mass", 0.0, 1.0, 0.0, label, warnings) < 0.5:
-		return clump
-	for field: String in ScatterPlan.MASS_FIELDS:
-		var limits: Array = ScatterPlan.MASS_FIELDS[field]
-		var value: Variant = _optional_number(
-			raw, field, limits[0], limits[1], null, label, warnings
-		)
-		if value != null:
-			clump[field] = value
-	for field: String in ScatterPlan.MASS_ARRAYS:
-		var limits: Array = ScatterPlan.MASS_ARRAYS[field]
-		var items: Variant = raw.get(field)
-		if items == null:
-			continue
-		var values := []
-		for item: Variant in items if items is Array and items.size() == 4 else []:
-			var number: Variant = _number(item, limits[0], limits[1])
-			if number != null:
-				values.append(roundf(number) if field == "zone_family" else number)
-		if values.size() == 4:
-			clump[field] = values
-		else:
-			warnings.append("%s: %s is not four numbers, using the default" % [label, field])
-	return clump
-
-
-static func _validate_relations(
-	raw: Variant, label: String, warnings: Array[String]
-) -> Array[Dictionary]:
-	var result: Array[Dictionary] = []
-	if raw == null:
-		return result
-	if not raw is Array:
-		warnings.append("%s is not an array, ignored" % label)
-		return result
-	for entry in _capped(raw, MAX_RELATIONS, label, warnings):
-		var target: Variant = _text(
-			entry.get("species") if entry is Dictionary else null, MAX_TEXT_LENGTH
-		)
-		if target == null or target == "":
-			warnings.append("%s: relation without a species skipped" % label)
-			continue
-		(
-			result
-			. append(
-				{
-					"species": target,
-					"distance_m":
-					_optional_number(entry, "distance_m", 0.0, 1000.0, 0.0, label, warnings),
-					"transition_m":
-					_optional_number(entry, "transition_m", 0.0, 1000.0, 0.0, label, warnings),
-					"influence":
-					_optional_number(entry, "influence", 0.0, 1.0, 1.0, label, warnings),
-				}
-			)
-		)
-	return result
-
-
-## `<package id>/<object>` (`<biome>_<season>_s<seed>/<object>`): one slash, both halves
-## non-empty, no path tricks. The package half is not parsed further; ids are opaque keys.
-static func _is_asset_id(id: Variant) -> bool:
-	if not id is String or id.length() > MAX_ID_LENGTH or id.count("/") != 1:
-		return false
-	var halves: PackedStringArray = id.split("/")
-	return halves[0] != "" and halves[1] != "" and not ".." in id and not "\\" in id
-
-
-## The value as a String when it is one and fits, else null.
-static func _text(value: Variant, max_length: int) -> Variant:
-	if value is String and value.length() <= max_length:
-		return value
-	if value is StringName and String(value).length() <= max_length:
-		return String(value)
-	return null
-
-
-static func _text_or(value: Variant, max_length: int, fallback: String) -> String:
-	var text: Variant = _text(value, max_length)
-	return text if text != null else fallback
-
-
-## A palette-relative path, or `fallback` when the value could escape the palette root
-## (absolute, a scheme, a parent segment, a backslash) or is not a short String.
-static func _path_or(value: Variant, fallback: String) -> String:
-	var text: Variant = _text(value, MAX_PATH_LENGTH)
-	if text == null or text == "":
-		return fallback
-	if text.begins_with("/") or ":" in text or "\\" in text:
-		return fallback
-	if ".." in text.split("/"):
-		return fallback
-	return text
-
-
-## The value as a float clamped to [low, high], or null when it is not a finite number.
-static func _number(value: Variant, low: float, high: float) -> Variant:
-	if value is bool or not (value is float or value is int):
-		return null
-	var number := float(value)
-	if is_nan(number) or is_inf(number):
-		return null
-	return clampf(number, low, high)
-
-
-## An optional numeric field: `fallback` when absent (or explicitly null), a warning plus
-## `fallback` when present with the wrong type, else clamped.
-static func _optional_number(
-	entry: Dictionary,
-	field: String,
-	low: float,
-	high: float,
-	fallback: Variant,
-	label: String,
-	warnings: Array[String]
-) -> Variant:
-	var value: Variant = entry.get(field)
-	if value == null:
-		return fallback
-	var number: Variant = _number(value, low, high)
-	if number == null:
-		warnings.append("%s: %s is not a number, using the default" % [label, field])
-		return fallback
-	return number
-
-
-static func _vector3_or_zero(value: Variant) -> Vector3:
-	if not value is Array or value.size() != 3:
-		return Vector3.ZERO
-	var parts: Array[float] = []
-	for component in value:
-		var number: Variant = _number(component, 0.0, 10000.0)
-		if number == null:
-			return Vector3.ZERO
-		parts.append(number)
-	return Vector3(parts[0], parts[1], parts[2])
-
-
-## The first `cap` entries of an array; one warning when the rest are dropped.
-static func _capped(items: Array, cap: int, label: String, warnings: Array[String]) -> Array:
-	if items.size() <= cap:
-		return items
-	warnings.append("%s: %d entries over the cap of %d ignored" % [label, items.size() - cap, cap])
-	return items.slice(0, cap)
-
-
-## The first `cap` keys of a Dictionary (insertion order, i.e. file order for JSON).
-static func _capped_keys(
-	items: Dictionary, cap: int, label: String, warnings: Array[String]
-) -> Array:
-	return _capped(items.keys(), cap, label, warnings)
-
-
-## A short printable form of an untrusted value for a warning message.
-static func _label(value: Variant) -> String:
-	var text := str(value)
-	return text if text.length() <= 48 else text.substr(0, 48) + "..."
