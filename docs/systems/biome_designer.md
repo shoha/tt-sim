@@ -337,6 +337,10 @@ the ground strip scrolls at 1280 wide, where its second row (the paths) is below
 
 ## History
 
+- 2026-10-25: **Thumbnail** button in the header: renders the draft's biome picture on the standard
+  map (docs/systems/library.md "Biome thumbnails") and saves it to the library's `thumbnails/`
+  folder (user libraries and the developer override only; the proving ground returns afterwards).
+
 - 2026-10-25: step S9: per-season overrides (`BiomeSeasons`, the reader's checks, the contract's `seasons`,
   `density_scale` applied), the season scrub and menus, the A/B split view (one map, two biomes, a
   draggable divider), the ground look editor with an in-place re-bake, the lock UI (states, Lock all,

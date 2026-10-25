@@ -105,6 +105,11 @@ static func write_thumbnail(folder: String, biome_id: String, bytes: PackedByteA
 	var def_path := folder.path_join("biomes").path_join(biome_id + ".json")
 	var def: Variant = _read_json(def_path)
 	var relative := LibraryThumbnailer.file_of(def if def is Dictionary else {}, biome_id)
+	var previous_size := (
+		FileAccess.get_file_as_bytes(folder.path_join(relative)).size()
+		if FileAccess.file_exists(folder.path_join(relative))
+		else 0
+	)
 	var problem := _write_bytes(folder.path_join(relative), bytes)
 	if problem == "" and def is Dictionary and (def as Dictionary).get("thumbnail") != relative:
 		problem = _write(def_path, json_text(LibraryThumbnailer.with_field(def, relative)))
@@ -113,7 +118,9 @@ static func write_thumbnail(folder: String, biome_id: String, bytes: PackedByteA
 		var library_path := folder.path_join("library.json")
 		var library: Variant = _read_json(library_path)
 		if library is Dictionary:
-			var recorded := LibraryThumbnailer.record_hashes(library, {relative: digest})
+			var recorded := LibraryThumbnailer.record_hashes(
+				library, {relative: digest}, bytes.size() - previous_size
+			)
 			if recorded.hash() != (library as Dictionary).hash():
 				problem = _write(library_path, json_text(recorded))
 	if problem != "":

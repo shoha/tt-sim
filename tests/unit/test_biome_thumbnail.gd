@@ -13,16 +13,15 @@ func _chroma(c: Color) -> float:
 	return maxf(c.r, maxf(c.g, c.b)) - minf(c.r, minf(c.g, c.b))
 
 
-func test_the_picture_is_sky_over_ground_not_grey() -> void:
+func test_the_picture_is_painted_landscape_not_studio_grey() -> void:
 	var texture := BiomeThumbnail.of(_biome("temperate_forest_summer_s1"), 64)
 	assert_not_null(texture)
 	var image := texture.get_image()
 	assert_eq(image.get_size(), Vector2i(64, 64))
-	var sky := image.get_pixel(2, 2)
-	assert_gt(sky.b, sky.r, "the top corner is sky blue")
-	assert_gt(_chroma(sky), 0.1, "and not studio grey")
-	var foot := image.get_pixel(2, 61)
-	assert_gt(_chroma(foot), 0.1, "the foot is painted ground, not studio grey")
+	# The picture is rendered from the game (docs/systems/library.md "Biome thumbnails"):
+	# ground and plants fill the frame, so no corner is the old studio grey.
+	for corner: Vector2i in [Vector2i(2, 2), Vector2i(61, 2), Vector2i(2, 61), Vector2i(61, 61)]:
+		assert_gt(_chroma(image.get_pixel(corner.x, corner.y)), 0.1, "%s is not grey" % corner)
 
 
 ## A dull ground surface lifts into a luminous one at its own hue.
