@@ -69,6 +69,12 @@ static var _order: Array[int] = []
 static var _scanned: bool = false
 
 
+## Where libraries received from a host live for the session (LibraryTransfer): a dot folder of
+## the user root, so the user scan skips it and refresh() scans it as the `received` source.
+static func received_root() -> String:
+	return user_root.path_join(".received")
+
+
 # ---- the developer override ----
 
 
@@ -184,11 +190,14 @@ static func refresh(root: String = PaletteLibrary.DEFAULT_ROOT) -> Array[Diction
 	for item: Array in [[official_root, "official"], [user_root, "user"]]:
 		for folder in _library_folders(String(item[0])):
 			found.append(_entry_of(folder, String(item[1])))
+	for folder in _library_folders(received_root()):
+		found.append(_entry_of(folder, "received"))
 	if _dev_path != "":
 		found.append(_entry_of(_dev_path, "dev"))
 	var disabled := disabled_ids()
 	for entry in found:
-		entry["enabled"] = entry["source"] == "dev" or not String(entry["id"]) in disabled
+		var always: bool = entry["source"] == "dev" or entry["source"] == "received"
+		entry["enabled"] = always or not String(entry["id"]) in disabled
 	var resolved := LibraryResolver.resolve(found, _builtin(root))
 	_entries.assign(resolved["entries"])
 	_order.assign(resolved["order"])
@@ -366,6 +375,8 @@ static func _builtin_info(root: String) -> Dictionary:
 		"provides": {},
 		"served": true,
 		"thumbnail": "",
+		"partial": {},
+		"received": false,
 	}
 
 
@@ -433,6 +444,8 @@ static func _public(entry: Dictionary) -> Dictionary:
 		"provides": (entry["provides"] as Dictionary).duplicate(),
 		"served": not served_info.is_empty() and served_info.get("folder") == entry["folder"],
 		"thumbnail": thumbnail,
+		"partial": (entry["partial"] as Dictionary).duplicate(true),
+		"received": entry["source"] == "received",
 	}
 
 
@@ -473,6 +486,7 @@ static func _entry_of(folder: String, source: String) -> Dictionary:
 		"files": [] as Array,
 		"bytes": 0,
 		"dependencies": [] as Array,
+		"partial": {},
 	}
 	var sources := read_sources(folder)
 	if sources.has("error"):
@@ -483,6 +497,13 @@ static func _entry_of(folder: String, source: String) -> Dictionary:
 	entry["read"] = read
 	entry["hash"] = _hash_of(sources)
 	entry["files"] = sources["files"]
+	# A partial library (multiplayer transfer, LibraryTransfer) keeps the identity of the library
+	# it was cut from, so a map saved while it is served records the full library's hash.
+	var partial: Variant = library.get(LibraryPartial.PARTIAL_KEY)
+	if partial is Dictionary:
+		entry["partial"] = (partial as Dictionary).duplicate(true)
+		if source == "received" and (partial as Dictionary).get("source_hash") is String:
+			entry["hash"] = String((partial as Dictionary)["source_hash"])
 	(entry["reasons"] as Array).append_array(read["errors"])
 	(entry["warnings"] as Array).append_array(read["warnings"])
 	if library.get("id") is String and String(library["id"]) != "":
@@ -644,21 +665,28 @@ static func _serve(entry: Dictionary, root: String, official_of: Dictionary) -> 
 	for warning: String in compiled["palette_warnings"]:
 		(out["warnings"] as Array).append("palette: " + warning)
 	(entry["warnings"] as Array).append_array(out["warnings"])
-	if (compiled["biome_ids"] as Array).is_empty():
+	# A received dependency pool (partial, assets only) has no biome: it only feeds the refs of
+	# the library that depends on it, so it is recorded as served and lays nothing.
+	var pool: bool = (
+		(compiled["biome_ids"] as Array).is_empty()
+		and bool((entry["partial"] as Dictionary).get("assets_only", false))
+	)
+	if (compiled["biome_ids"] as Array).is_empty() and not pool:
 		out["error"] = "no biome of the library compiled"
 		return out
-	var report := PaletteLibrary.install_overlay(
-		PaletteOverlay.read_palette(
-			compiled["palette"], folder, PaletteLibrary.get_palette(root), root, [], true
-		),
-		root
-	)
-	out["report"] = report
-	if not report["ok"]:
-		out["error"] = String(report["error"])
-		return out
-	AssetStore.register_library(root, compiled["origins"], entry["official"], official_of)
-	_serve_surfaces(root, entry, compiled)
+	if not pool:
+		var report := PaletteLibrary.install_overlay(
+			PaletteOverlay.read_palette(
+				compiled["palette"], folder, PaletteLibrary.get_palette(root), root, [], true
+			),
+			root
+		)
+		out["report"] = report
+		if not report["ok"]:
+			out["error"] = String(report["error"])
+			return out
+		AssetStore.register_library(root, compiled["origins"], entry["official"], official_of)
+		_serve_surfaces(root, entry, compiled)
 	var library: Dictionary = read["library"]
 	_served[entry["id"]] = {
 		"id": entry["id"],

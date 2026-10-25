@@ -34,6 +34,9 @@ const GUT_ROOT_PREFIX: String = "gut_"
 
 # Special pack ID for map streaming (used by AssetStreamer)
 const LEVEL_MAPS_PACK_ID: String = "_level_maps"
+# Special pack ID for the partial libraries a host sends for the plants a map uses
+# (LibraryTransferChannel); the asset id is the request number, never a file name.
+const LIBRARY_PARTS_PACK_ID: String = "_library_parts"
 # The map files of a level folder, and the streaming variant id that names each one. A
 # level has a Blender-made map.glb, an authored map.ttmap, or both.
 const LEVEL_MAP_NAME: String = "map.glb"

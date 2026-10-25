@@ -61,6 +61,9 @@ var events: TerrainEvents = null
 
 ## The GM's side: {"entry", "undo"} recorded but not yet sent, in order.
 var _pending: Array[Dictionary] = []
+## A client's ops [key, index, bytes] held while a library transfer runs: an edit that uses a
+## library the host just started using is refused until its plants are here.
+var _held: Array = []
 ## A client's queue of checked ops.
 var _queue: LiveEditCodec.Queue = null
 ## A client's catch-up: the log length its header promised until it is in, else -1.
@@ -111,6 +114,8 @@ static func create(
 func _ready() -> void:
 	var game_sync := NetworkManager.game_sync
 	if sends:
+		# The host serves library plants for what this table uses now, edits included.
+		AssetManager.library_transfer.documents_provider = _documents
 		game_sync.live_edit_log_requested.connect(send_log_to)
 		# A client that loaded first asked before this existed: tell every client the table.
 		game_sync.send_live_edit_log(0, table_key, op_log)
@@ -121,6 +126,8 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	if AssetManager.library_transfer.documents_provider == _documents:
+		AssetManager.library_transfer.documents_provider = Callable()
 	var game_sync := NetworkManager.game_sync
 	for connection in [
 		[game_sync.live_edit_log_requested, send_log_to],
@@ -186,6 +193,21 @@ func _replay(ops: Array[PackedByteArray]) -> void:
 
 func _on_recorded(entry: Dictionary) -> void:
 	_pending.append({"entry": entry, "undo": false})
+	# Before its op goes out, clients hear of a library this edit started using.
+	AssetManager.library_transfer.announce_document(editor.document)
+
+
+## The documents the host is playing in memory (LibraryTransferChannel.documents_provider).
+func _documents() -> Array:
+	return [editor.document]
+
+
+## A client: applies the ops held while a library transfer ran, in the order they came.
+func _flush_held() -> void:
+	var held := _held
+	_held = []
+	for item: Array in held:
+		receive_op(item[0], item[1], item[2])
 
 
 func _on_undone(entry: Dictionary) -> void:
@@ -230,6 +252,12 @@ func receive_log(key: int, count: int) -> void:
 ## next one, else dropped (another table's, before the header, twice, or past a gap).
 func receive_op(key: int, index: int, bytes: PackedByteArray) -> void:
 	if sends or problem != "" or table_key == 0 or key != table_key:
+		return
+	if AssetManager.library_transfer.is_busy() or not _held.is_empty():
+		_held.append([key, index, bytes])
+		var library_channel := AssetManager.library_transfer
+		if not library_channel.idle.is_connected(_flush_held):
+			library_channel.idle.connect(_flush_held, CONNECT_ONE_SHOT)
 		return
 	if index != op_log.size():
 		return
