@@ -142,7 +142,7 @@ static func _overlay_asset(
 	var node_name := String(entry["node"])
 	var mesh := parse_mesh(package.path_join(file), node_name)
 	if mesh is ArrayMesh:
-		var installed := PaletteLibrary._load_asset_mesh(root.path_join(file), node_name)
+		var installed := PaletteAssetFiles.load_mesh(root.path_join(file), node_name)
 		mesh = compressed_like(mesh as ArrayMesh, installed as ArrayMesh)
 	report["meshes"][key] = mesh
 	report["failed" if mesh == null else "parsed"].append(key)
@@ -165,8 +165,10 @@ static func compressed_like(mesh: ArrayMesh, like: ArrayMesh) -> ArrayMesh:
 	var compress: Array[bool] = []
 	for s in mesh.get_surface_count():
 		compress.append(
-			s < like.get_surface_count()
-			and (like.surface_get_format(s) & Mesh.ARRAY_FLAG_COMPRESS_ATTRIBUTES) != 0
+			(
+				s < like.get_surface_count()
+				and (like.surface_get_format(s) & Mesh.ARRAY_FLAG_COMPRESS_ATTRIBUTES) != 0
+			)
 		)
 	if not compress.has(true):
 		return mesh
