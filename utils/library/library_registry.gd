@@ -190,15 +190,16 @@ static func config_signature() -> String:
 	return "%s|%s|%s|%s" % [official_root, user_root, _dev_path, settings_path]
 
 
-## A cheap fingerprint of the libraries on disk: the folder names under the user, received and
-## official roots and each folder's library.json and catalog modified times, one directory listing
-## per root and two stat calls per folder, no file is read. The manager compares it with the last
+## A cheap fingerprint of the libraries on disk: the folder names under the user and official
+## roots (a collection a host sent is a folder of the user root) and each user folder's
+## library.json and catalog modified times, one directory listing per root and two stat calls per
+## folder, no file is read. The manager compares it with the last
 ## one when it opens, when the window regains focus and on Refresh, and rescans only when it
 ## differs: nothing watches the disk in the background (owner, 2026-10-25: wary of file watches).
 ## The official root is `res://`, which does not change at run time, so it adds names only.
 static func disk_signature() -> String:
 	var parts := PackedStringArray()
-	for item: Array in [[official_root, false], [user_root, true], [received_root(), true]]:
+	for item: Array in [[official_root, false], [user_root, true]]:
 		var root := String(item[0])
 		parts.append(root)
 		for folder in _library_folders(root):

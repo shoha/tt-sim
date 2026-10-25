@@ -638,19 +638,22 @@ the biome designer ([biome_designer.md](biome_designer.md), step S8a; S9 follows
   mismatch dialog of a map that names a library this game lacks has a third choice, "Manage
   collections", which answers Cancel (the open returns to the title) and opens the manager over
   it so the library can be added and the map opened again.
-- **The sheet** (`LibraryManager`, 960 wide, the manager's own scrim, shared with a dialog under
-  it: one scrim, UI_TASTE G1). The list at the left, one row per `LibraryRegistry.list()` entry
-  (core first): name, version and author, "2 assets, 1 biome · 5 KB" (or, for a
-  library that fails, the first reason, with a mark), a Built in (official) / Yours / From host chip and an
-  on switch (core and a developer override cannot be switched off; a library that needs a
-  switched-off one fails and says so). The card at the right (`LibraryDetail`): heading, version,
-  author and licence, the origin and state chips (On, Off, Needs attention), the description,
-  Holds / Size / Needs (each dependency with its state: met, missing, outside its range, off,
-  failing) / Link / Folder, the biomes as the pictures the New map dialog uses (a served library
-  only), every reason and warning the reader and the compiler had, then Verify, Show in folder
-  and Remove (the last two only for a library the player installed). Footer: the last thing that
-  happened in words (the toast sits under the scrim, so the footer says it too), Import file...,
-  Import folder... and Done (the one primary).
+- **The sheet** (`LibraryManager`, 1120 wide, the manager's own scrim, shared with a dialog under
+  it: one scrim, UI_TASTE G1). The list at the left, one `LibraryRow` per `LibraryRegistry.list()`
+  entry (core first): name, version and author, "2 assets, 1 biome · 5 KB" (or, for a library that
+  fails, its first reason in one plain sentence), a Built in (official) / Yours / From host chip
+  and an on switch in two fixed columns (a library that fails shows the "Needs attention" pill in
+  place of the switch; core and a developer override cannot be switched off; a library that needs
+  a switched-off one fails and says so). The card at the right (`LibraryDetail`): heading,
+  version, author and licence, the origin and state chips (On, Off, Needs attention), the
+  description, the reasons first when it fails, Holds / Size / Needs (each dependency with its
+  state: met, missing, outside its range, off, failing) / Link / Folder (with Copy path), the
+  biomes as the pictures the New map dialog uses (a served library only), every warning the reader
+  and the compiler had, then Verify, Show in folder and Remove (the last two only for a library the
+  player installed). Footer: the last thing that happened in words and an icon (red with an alert
+  icon for an error; the toast draws above the scrim too), Refresh, Import file..., Import
+  folder... and Done (the one primary). Full description: docs/UI_SYSTEMS.md "Collections
+  Manager" and "Collections manager UX pass" below.
 - **Switching, installing, removing** each call `LibraryRegistry.set_enabled` / `LibraryInstall`,
   then `LibraryImportFlow.refresh_all()`: `LibraryRegistry.refresh()` and
   `FoliageLibrary.refresh_libraries()`, which serves the libraries again and emits
@@ -707,6 +710,68 @@ the biome designer ([biome_designer.md](biome_designer.md), step S8a; S9 follows
      the Blender map check. With the manager open the title ignores drops (a scrim is up) and the
      manager takes the first dropped path whatever it is, so a wrong file gets the refusal sheet
      instead of silence.
+
+### Collections manager UX pass (2026-10-25)
+
+The owner reviewed the manager (49 stories, UX-1 to UX-12, plantgen
+`docs/library_manager_review/`) and decided the rest; what changed, and where:
+
+- **Needs attention** (UX-4): a failing row is dimmed and shows the pill in the state column
+  where the others have the switch (`LibraryRow`; the chip columns are fixed and a test measures
+  their x). A second folder with an id already listed is its own row (key `id@folder`, the folder
+  in its caption) and Remove leads and is Danger; `LibraryInstall.remove_folder` deletes by folder
+  so it never takes the copy that stays. The list top says "2 collections need attention".
+- **Plain reasons** (UX-3): `LibraryReasons.explain` turns each raw reason into `{message, action,
+  details, kind}`: one sentence ("This collection needs Core 9 or newer; this game has 1.0.") and
+  what to do ("Update the game or remove it."), the technical text behind "Show details". No
+  `user://` path, `sha256` or JSON in the first line; Verify's file errors are plain too
+  (`LibraryVerify.plain_error`).
+- **Replace, Reinstall, refuse** (UX-5): `LibraryInstall._check_identity` refuses a file OLDER than
+  the installed copy ("This is version 0.2.0; 0.4.0 is installed. Remove the installed one first if
+  you want the older version."), the same version is "Reinstall" (a repair), a newer one reads
+  "Replace v0.3.1 with v0.4.0" with how many more or fewer assets and biomes it holds
+  (`change_line`, counts only). A copy a host sent is exempt: the whole one is an upgrade whatever
+  its version.
+- **An install that fails** (S24, UX-2): `LibraryInstallCard` goes busy on Install and the flow
+  answers `dismiss()` or `show_failure(message, can_retry)`: the error stays on the card in red
+  with an icon, Retry when `LibraryInstall.install`'s `retry` says it can work (a refused move, a
+  folder that cannot be made, a folder in use; not staged files that are gone) and Close, which
+  empties the quarantine; the manager's footer shows it too (`install_failed`), and the toast draws
+  above the scrim (`Constants.LAYER_TOAST` 108). Seams for tests: `LibraryInstall.rename_override`
+  and `make_dir_override`.
+- **Layers** (UX-1): `BiomeDesignerPicker` is on `LAYER_SUBDIALOG` (101), above the manager's scrim
+  (it drew under it and left a ghost).
+- **Words** (UX-6): no dialog says "plants"; every phrase goes through `LibraryNames`
+  (`mismatch_title`, `open_without`, `host_uses_title`, `remove_tail`, `count_of`, `license_text`,
+  `drop_hint`, `attention_summary`; `CATALOG_URL`, empty until the owner names a catalogue, hides
+  the "Find collections" button). "Built in" is the one term; core's placeholder licence ("TBD
+  (...)") reads "Included with the game" (its `library.json` is not edited).
+- **The mismatch dialog** (UX-7): `LibraryMismatchDialog`: the link when the map's record (an
+  optional `url` of a `libraries` entry, written from the library's own `url`) or the installed copy
+  has one, Import file... and Import folder... in place (a successful install ends it with
+  `MapLibraryGate.RETRY` and `run` checks the map again), Manage collections opens the manager over
+  its own scrim (a frame after the dialog leaves).
+- **Discoverability and the card** (UX-9, UX-10): the persistent hint, the install card names the file
+  it read and leaves the manager visible, dimmed behind it, the biome strips are three across and
+  the sheet taller so core's nine are whole rows at 1600x900, Copy path on the folder row.
+- **Verify** (UX-11): Stop works (at least one file a frame) and is tested; Verify all
+  (`LibraryVerifyAll`) checks every served collection with a bar and Stop and shows ONE result list.
+- **Keyboard** (UX-12): see docs/UI_SYSTEMS.md; `test_library_manager_ux.gd`.
+- **Rescan, no file watch** (owner question 8): `LibraryRegistry.disk_signature()` (one directory
+  listing per root, two stat calls per user folder, no file read) is compared with the one the last
+  `refresh()` saw when the manager opens, when the window regains focus
+  (`NOTIFICATION_APPLICATION_FOCUS_IN`) and on Refresh; only a difference (or the button) rescans
+  and serves again. Cost with the sheet closed: none. Cost open and idle: none (no timer, no
+  per-frame work). A check is about a millisecond for a dozen collections; the rescan it avoids
+  reads every `library.json` and `catalog.json`.
+- **Extension points** for the cache work and others: `LibraryManager.list_extras` (a box under the
+  list), `footer_extras` (a box in the footer), `LibraryDetail.detail_extensions` (callables run at
+  the end of `show_library`), and `LibraryCacheSection.attach` (one line in `_on_panel_ready`).
+- **Button shadows** (the owner's report): root cause and the audit in docs/UI_SYSTEMS.md "Collections
+  Manager" (`ShadowGutter`). The audit found and fixed nine scroll sites: the manager's list and
+  card, the designer picker's sections, the New map dialog's fields, the avatar roster's grid, the
+  designer's slot list and ground strip, `PaneStack` (every pane of the authoring and Visuals
+  drawers and the avatar builder) and the room's shelf.
 
 ## Verification
 
@@ -1017,6 +1082,18 @@ plantgen is regenerated by `compile_library_cli --contract` (uncommitted there).
 
 ## History
 
+- 2026-10-25: libmgr-ux: the collections manager after the owner's review: the Needs attention
+  pill and the fixed chip columns, plain reasons (`LibraryReasons`), the older file refused and
+  Reinstall, an install that fails stays on the card with Retry (`LibraryInstall.install` returns
+  `code` and `retry`), toasts above every scrim (`LAYER_TOAST` 108) and the picker above the manager
+  (`LAYER_SUBDIALOG`), one word and no "plants", the mismatch dialog's link and import
+  (`LibraryMismatchDialog`, an optional `url` in a map's `libraries` record), Verify Stop and Verify
+  all, the keyboard, rescan on open, focus and Refresh (`disk_signature`), and `ShadowGutter` with
+  its audit (`test_shadow_gutter.gd`) after the clipped shadow of Verify. Findings: a GDScript class
+  with a static method named `wrap` must call it as `ShadowGutter.wrap` inside itself (the global
+  `wrap()` wins); `NOTIFICATION_APPLICATION_FOCUS_IN` reaches every node; a `Control.theme_type_variation`
+  lookup in a script run before the tree settles returns the base type's style, so extents are read
+  from the `Theme` itself (`ShadowGutter.extents_in_theme`).
 - 2026-10-25: libcache: a collection a host sends is an ordinary user library marked from host
   (`LibraryFromHost`, `.tt-from-host.json`), not a session-only copy. Removed:
   `LibraryReceivedStore`, the `.received` source, `LibraryRegistry.received_root`, the Keep toast

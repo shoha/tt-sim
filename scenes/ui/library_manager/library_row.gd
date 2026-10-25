@@ -18,7 +18,8 @@ signal switched(on: bool, key: String)
 
 const ROW_HEIGHT := 76.0
 const ORIGIN_SLOT := 84.0
-const STATE_SLOT := 136.0
+## At least as wide as the "Needs attention" pill, or the failing rows' columns would shift.
+const STATE_SLOT := 152.0
 const ICON_PX := 20.0
 const MARKER_PX := 14.0
 const DIM_ALPHA := 0.62

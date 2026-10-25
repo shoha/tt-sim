@@ -684,7 +684,12 @@ func test_the_manager_rescans_on_open_on_focus_and_on_refresh_never_in_the_backg
 	var second := _manager()
 	await _settle()
 	assert_true("alienworld" in second.keys())
-	assert_eq(manager.find_children("*", "Timer", true, false).size(), 0, "no timer, no watch")
+	# Nothing runs in the background: the manager has no timer and no per-frame work of its own.
+	var source := FileAccess.get_file_as_string(
+		"res://scenes/ui/library_manager/library_manager.gd"
+	)
+	for forbidden in ["Timer.new", "create_timer", "func _process", "func _physics_process"]:
+		assert_false(forbidden in source, "the manager has no %s" % forbidden)
 
 
 func test_the_disk_signature_follows_the_folders_and_costs_no_read() -> void:
@@ -835,21 +840,16 @@ func test_no_dialog_string_says_plants() -> void:
 			assert_false("plant" in literal.to_lower(), '%s: "%s"' % [path.get_file(), literal])
 
 
-func test_the_transfer_dialogs_name_the_collection_through_the_one_word() -> void:
-	# libcache owns library_transfer_ui.gd and the received store; this scan is explicit about
-	# the one file it can read. When libcache's work lands it adds its own files to the list in
-	# test_library_manager.gd (WORDED_FILES) and this note goes away.
-	var source := FileAccess.get_file_as_string("res://scenes/ui/library_transfer_ui.gd")
-	for literal in _string_literals(source):
-		var lowered := literal.to_lower()
-		assert_false(
-			LibraryNames.lower() in lowered or LibraryNames.lower(2) in lowered,
-			'library_transfer_ui.gd: "%s"' % literal
-		)
+func test_the_transfer_and_cache_strings_come_from_the_one_word() -> void:
+	# The transfer dialogs and the cache row (the libcache work, merged first) are in
+	# test_library_manager.gd's WORDED_FILES; here the helpers they share are pinned.
 	assert_eq(
 		LibraryNames.host_uses_title(), "The host uses %s you do not have" % LibraryNames.lower(2)
 	)
-	pending("libcache: add its transfer files to WORDED_FILES once they use LibraryNames")
+	assert_eq(
+		LibraryNames.receiving_from_host(), "Receiving %s from the host" % LibraryNames.lower(2)
+	)
+	assert_eq(LibraryNames.count_of(1, "asset"), "1 asset", "no '(1 assets)' slip")
 
 
 func _string_literals(source: String) -> PackedStringArray:

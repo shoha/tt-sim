@@ -156,18 +156,20 @@ static func _check_identity(card: Dictionary) -> void:
 	if order > 0:
 		card["relation"] = RELATION_NEWER
 	elif order < 0:
-		# Owner decision 2026-10-25: a file older than the installed copy is refused, not offered
-		# as a replacement; the player removes the installed one first if they want it back.
 		card["relation"] = RELATION_OLDER
-		errors.append(downgrade_refusal(String(card["version"]), String(existing["version"])))
 	else:
 		card["relation"] = RELATION_SAME
 	if not (existing.get("from_host", {}) as Dictionary).is_empty():
 		# What a host sent holds only part of it: the whole one is an upgrade whatever its version.
-		var sent := "The copy of '%s' that came from a host holds only part of it; this one replaces it."
+		var sent := "The copy of '%s' that came from a host holds only part of it; this one "
+		sent += "replaces it."
 		(card["warnings"] as Array).append(sent % id)
 		if order <= 0:
 			card["relation"] = RELATION_NEWER
+	elif order < 0:
+		# Owner decision 2026-10-25: a file older than the installed copy is refused, not offered
+		# as a replacement; the player removes the installed one first if they want it back.
+		errors.append(downgrade_refusal(String(card["version"]), String(existing["version"])))
 
 
 ## The refusal of a file older than the installed copy.

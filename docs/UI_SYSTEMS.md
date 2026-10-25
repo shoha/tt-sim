@@ -1074,38 +1074,88 @@ string literal in the files that show it holds the word, so a rename is a one-li
 Internals, files, settings keys and docs keep "library".
 
 `LibraryManager` (`scenes/ui/library_manager/`, an `AnimatedCanvasLayerPanel` built in code on
-`LAYER_DIALOG`, the sheet at the 960 width token and no wider than the canvas less its margins)
-follows the menu design language: a `MenuHeader` ("Collections", a caption that says they hold
-art and settings, never programs, closable), the body, and a footer with Import file... and
-Import folder... (Secondary, icons upload and folder) and Done (the one Primary). The body is
-two columns divided by a rule: at the left a scrolling list, at the right the selected one's card
-(`LibraryDetail`), each scrolling inside a height the canvas allows (the sheet fits the 1280x720
-canvas, `test_library_manager.gd`). A list row is a `ListRow` toggle button holding three lines
-(name in `Body`, "v0.3.1 by Author" and "2 assets, 1 biome · 5 KB" or, for a library that fails, its
-first reason, in `Caption`, which turn to the `...OnSelected` variations on the selected fill),
-an origin `Chip` (Official, Yours, Built in), a danger-tinted mark when it fails, and a
-`CheckButton` outside the row button: the switch. Core's and a developer override's is disabled
-with a tooltip saying so. The card is a heading, the version / author / licence line, the origin
-and state `Chip`s, the description, a `FactsGrid` (Holds, Size, Needs with a tinted icon per
-dependency, Link, Folder), the biomes as the strips the New map dialog draws, the reasons and
-warnings as icon lines (`alert-circle` in the danger role, `alert-triangle` in the warning role),
-and the actions Verify (`circle-check`), Show in folder and Remove (`x`), the last two only for a
-library the player installed; Remove opens `show_danger_confirmation` naming the saved maps that
-use it. Verify draws a bar, a line of words, Stop, and one icon line per failing file. The footer's
-left says the last thing that happened in words ("Beta Marsh added."), because a toast sits on
-layer 90, under the scrim of a sheet.
+`LAYER_DIALOG`, the sheet 1120 wide and no wider than the canvas less its margins) follows the
+menu design language: a `MenuHeader` ("Collections", a caption that says they hold art and
+settings, never programs, closable), the body, and a footer with the last thing that happened
+(an icon and words), Refresh, Import file... and Import folder... (Secondary, icons
+rotate-clockwise, upload and folder) and Done (the one Primary). The body is two columns divided
+by a rule: at the left the summary ("2 collections need attention", with an alert icon, hidden
+when none does), a scrolling list, Verify all and its one result list, the cache row of the
+downloaded collections and the persistent hint ("Drop a .ttlib or .zip here, or use Import.", and
+a "Find collections" button only when `LibraryNames.CATALOG_URL` names a catalogue); at the right
+the selected one's card (`LibraryDetail`), each scrolling inside a height the canvas allows (the
+sheet fits the 1280x720 canvas, `test_library_manager.gd`).
+
+A list row is a `LibraryRow`: the `ListRow` toggle button holding three lines (name in `Body`,
+"v0.3.1 by Author" and "2 assets, 1 biome · 5 KB" or, for a collection that fails, its plain first
+sentence, in `Caption`, which turn to the `...OnSelected` variations on the selected fill), then TWO
+FIXED COLUMNS that every row has, so chips line up (`test_library_manager_ux.gd` measures their x):
+the origin `Chip` (Built in, Yours, From host) in an 84 px slot, and the state in a 152 px slot, which
+holds the `CheckButton` switch, or, for a collection that fails, the "Needs attention" pill
+(alert icon and words in the danger tone on a `Chip` with a danger edge) INSTEAD of the switch
+(owner decision 2026-10-25: failing collections show no ON switch). A failing row's text and chip
+are dimmed to 62 percent, never its pill; the selected row carries a chevron marker; an off
+collection says "Off" in its caption; a second folder holding an id already listed shows its
+folder's name in the caption and is addressed by the key `id@folder`. Core's and a developer
+override's switch is disabled with a tooltip saying so.
+
+The card is a heading, the version / author / licence line (the game's placeholder licence reads
+"Included with the game"), the origin and state `Chip`s, the description, the reasons first when
+the collection fails (each a plain sentence and what to do, `LibraryReasons`: "This collection
+needs Core 9 or newer; this game has 1.0. Update the game or remove it."; the technical text sits
+behind a "Show details" toggle), a `FactsGrid` (Holds, Size, Needs with a tinted icon per
+dependency, Link, Folder with a Copy path button), the biomes as three-across strips, the warnings
+as icon lines, and the actions in a wrapping row: Verify (`circle-check`), Show in folder and Remove
+(`x`), the last two only for a collection the player installed (a duplicate's Remove leads, in the
+Danger style); Remove opens `show_danger_confirmation` naming the saved maps that use it. Verify
+draws a bar, a line of words, Stop (which stops it: `test_verify_stop_ends_the_check_early`) and one
+icon line per failing file in plain words.
 
 `LibraryInstallCard` is the sheet an import goes through (600 wide, scroll inside it): while the
-archive is read it shows a bar and Cancel; then the facts, the dependency lines, every warning and
-the line "This collection only contains art and settings, never programs." with Cancel and
-Install (the primary), or, for an id already installed, Cancel and "Replace v0.3.1" with a sentence
-putting the two versions side by side; a file the importer or the reader refuses shows "This file
-cannot be imported", its reasons and Close alone. It stands on the manager's scrim when the
-manager is open (one scrim, UI_TASTE G1: the manager's sheet fades out while it is up) and on its
-own over the title. Drops: the title routes a `.ttlib`, a `.zip` or a folder that holds a
-`library.json` to the card and everything else to the Blender map check; the open manager takes
-any dropped path and shows the refusal for a wrong one. The mismatch dialog of a map whose
-library is missing has a third choice, "Manage collections", that opens the manager.
+archive is read it shows a bar and Cancel; then the facts (the first row names the file it was read
+from), the dependency lines, every warning and the line "This collection only contains art and
+settings, never programs." with Cancel and Install (the primary). For an id already installed the
+primary and the sentence follow how the file compares with the installed one: a newer file
+"Replace v0.3.1 with v0.4.0" (and how many more assets it holds), the same version "Reinstall" (a
+repair), and an OLDER file is refused ("This is version 0.2.0; 0.4.0 is installed. Remove the
+installed one first if you want the older version.", Close alone). A file the importer or the reader
+refuses shows "This file cannot be imported", its reasons and Close alone. Pressing Install does
+not close the card: it goes busy ("Installing...") and the flow answers. On a FAILURE (a refused
+move, a disk that cannot make the folder, staged files that are gone) the card STAYS with the reason
+in red with an alert icon under its content, Retry (when trying again can work) and Close; the
+manager's footer says it too and a toast draws above the scrim. The card stands on the manager's
+scrim when the manager is open (one scrim, UI_TASTE G1) and leaves the manager visible but
+dimmed behind it (`AnimatedCanvasLayerPanel._dims_panel_below`). Drops: the title routes a
+`.ttlib`, a `.zip` or a folder that holds a `library.json` to the card and everything else to the
+Blender map check; the open manager takes any dropped path and shows the refusal for a wrong one.
+
+The mismatch dialog of a map whose collection is missing (`LibraryMismatchDialog`) says in one
+sentence per collection what is missing, shows its link when the map's record or the installed copy
+has one, offers Import file... and Import folder... in place (a successful install ends it with
+`MapLibraryGate.RETRY` and the gate checks the map again before it asks), Manage collections (the
+manager opens over its own scrim, a frame after the dialog has left) and "Open without those
+collections".
+
+Keyboard: Up and Down move the selection through the list, Right goes from a row to its switch and
+Left back, Enter and Space act as on any button, Escape closes an open card first and then the
+manager. Every state has a cue that is not colour alone: the switch position, "Off" in the caption,
+the pill's icon and words, the marker on the selected row.
+
+Rescanning (nothing watches the disk, owner 2026-10-25): the folders are read again when the sheet
+opens, when the window regains focus while it is open and on Refresh, each behind a cheap
+fingerprint of the folders (`LibraryRegistry.disk_signature`: one directory listing per root and
+two stat calls per folder); a full rescan runs only when that differs, or on the button. With the
+sheet closed it costs nothing.
+
+Button shadows (`ShadowGutter`, `scenes/ui/primitives/shadow_gutter.gd`): a raised button's shadow
+(paper: size 10 dropped 4; a lifted card 18 dropped 8) and its focus ring (4, 8 on glass) lie
+outside its rect, and a `ScrollContainer` (or any `clip_contents` or `clip_children` control)
+clips to its own rect, so a button flush with the container's edge lost its shadow there (Verify in
+this card, 2026-10-25). Every scroll that hosts buttons is wrapped with `ShadowGutter.wrap(scroll,
+kind)` (RING, GLASS_RING, BUTTON or CARD room; `outset` keeps the content where it was by growing
+the clip outward), and `test_shadow_gutter.gd` instantiates the screens and sheets and fails on any
+button whose shadow a clipping ancestor would cut and on any constant that no longer equals what
+the themes draw. A new panel with a scroll around buttons wraps it, and adds itself to that test.
 
 Judge it from `tools/render_jobs/jobs/library_manager.json` (1600x900 and 1280x800; JOBS.md).
 
@@ -2179,10 +2229,15 @@ UI elements are organized by layer for proper z-ordering. All layer numbers are 
 | 8     | `LAYER_MEASURE_OVERLAY`| MeasureTool        | Distance measurement lines & labels |
 | 10    | `LAYER_PAUSE`          | PauseOverlay       | Pause menu                         |
 | 1     | `LAYER_INPUT_HINTS`    | InputHints         | Keybinding hints (bottom-center)   |
-| 90    | `LAYER_TOAST`          | ToastContainer     | Notifications (bottom-center)      |
 | 95    | `LAYER_SETTINGS`       | SettingsMenu       | Settings overlay (centered)        |
 | 100   | `LAYER_DIALOG`         | ConfirmationDialog | Modals, download queue             |
+| 101   | `LAYER_SUBDIALOG`      | BiomeDesignerPicker | A sheet opened over a dialog (the picker over the collections manager) |
 | 105   | `LAYER_LOADING`        | LoadingOverlay     | Loading screen (full-screen)       |
+| 108   | `LAYER_TOAST`          | ToastContainer     | Notifications (bottom-center), above every scrim and sheet |
 | 110   | `LAYER_TRANSITION`     | TransitionOverlay  | Scene transitions (full-screen)    |
+
+Toasts sit above the dialogs (since 2026-10-25): a toast that drew under a scrim was a dark
+sliver, and an error toast must be readable whatever is open. A sheet opened over a dialog that
+shares its scrim goes on `LAYER_SUBDIALOG`, or the dialog's own scrim draws over it.
 
 Higher layers appear on top of lower layers. When creating CanvasLayers in code, always use `Constants.LAYER_*` constants instead of magic numbers.
