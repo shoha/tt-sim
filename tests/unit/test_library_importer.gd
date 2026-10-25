@@ -679,3 +679,42 @@ func _code_of(source: String) -> String:
 		var at := line.find("#")
 		lines.append(line if at < 0 else line.substr(0, at))
 	return "\n".join(lines)
+
+
+func test_a_partial_copy_from_the_host_is_said_not_replaced() -> void:
+	World.write_alien(LibraryRegistry.received_root() + "/alienworld", "0.2.0", [], false)
+	var card := _card_of(_entries())
+	assert_true(card["can_install"], str(card["errors"]))
+	assert_true(
+		card["existing"].is_empty(), "nothing to replace: the received copy is not installed"
+	)
+	assert_eq(card["relation"], LibraryInstall.RELATION_NEW)
+	assert_true(_has_line(card["warnings"], "came from the host"), str(card["warnings"]))
+	var done := LibraryInstall.install(card)
+	assert_true(done["ok"], str(done["error"]))
+	assert_true(DirAccess.dir_exists_absolute(LibraryRegistry.received_root() + "/alienworld"))
+
+
+func test_nothing_outside_the_user_folders_is_ever_deleted() -> void:
+	# Pins the guard that stands between an empty or relative quarantine root and a deletion of
+	# the working directory (a worktree was emptied that way on 2026-10-24).
+	for bad in ["", "abc", ".incoming", "res://x/y/z", "C:/", "D:", "user://", "/", "../x/y/z/w/v"]:
+		assert_false(LibraryImporter.is_safe_path(bad), "'%s' is not safe" % bad)
+	for good in ["user://libraries/.incoming/ab12", "D:/dev/tabletop/scratch/x/y"]:
+		assert_true(LibraryImporter.is_safe_path(good), good)
+	var saved := LibraryRegistry.user_root
+	LibraryRegistry.user_root = ""
+	assert_eq(LibraryImporter.sweep_incoming(), 0, "no root, no sweep")
+	var plan := _plan_of(_entries())
+	var staged := LibraryImporter.stage(plan)
+	assert_false(staged["ok"], "nowhere to stage")
+	assert_false(LibraryImporter.is_quarantined(SOURCE))
+	# A relative path that does not exist, never the project's own folders: if the guard were
+	# broken this test must not be the one that deletes them.
+	assert_false(LibraryImporter.remove_tree("zz_not_a_folder"))
+	assert_push_error("refusing to delete")
+	assert_false(
+		LibraryInstall.install({"can_install": true, "id": "alienworld", "folder": SOURCE})["ok"]
+	)
+	LibraryRegistry.user_root = saved
+	assert_true(DirAccess.dir_exists_absolute("res://scenes"), "the project is still there")

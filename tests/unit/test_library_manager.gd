@@ -723,3 +723,22 @@ func test_the_missing_library_dialog_offers_the_manager() -> void:
 	await wait_process_frames(2)
 	assert_eq(answers, [false], "the open is cancelled, as the title it returns to expects")
 	assert_not_null(get_tree().root.find_child("LibraryManager", true, false), "the manager opened")
+
+
+# ---- a library the host sent ----
+
+
+func test_a_library_received_from_the_host_is_marked_and_cannot_be_removed() -> void:
+	World.write_alien(LibraryRegistry.received_root() + "/alienworld", "0.3.1", [], false)
+	var manager := _manager()
+	await _settle()
+	var row := manager.row_of("alienworld")
+	assert_not_null(row, "listed")
+	assert_eq((row.get_node("Inner/Origin/Label") as Label).text, LibraryDetail.BADGE_RECEIVED)
+	assert_true(manager.toggle_of("alienworld").disabled, "on for the session, not a choice")
+	manager.select("alienworld")
+	assert_not_null(manager.detail.get_node_or_null("ReceivedNote"))
+	assert_false(manager.detail.remove_button.visible)
+	assert_false(manager.detail.folder_button.visible)
+	manager._on_remove_requested("alienworld")
+	assert_true(DirAccess.dir_exists_absolute(LibraryRegistry.received_root() + "/alienworld"))

@@ -27,6 +27,7 @@ const ROW_HEIGHT := 76.0
 const ICON_PX := 20.0
 const VERIFY_SLICE_USEC := 6000
 const ALWAYS_ON := "This one comes with the game and is always on."
+const RECEIVED_ON := "The host sent this one; it is on for this session."
 
 var header: MenuHeader
 var list_box: VBoxContainer
@@ -307,10 +308,11 @@ func _add_row(item: Dictionary) -> void:
 	toggle.name = "Toggle"
 	toggle.button_pressed = bool(item["enabled"])
 	toggle.focus_mode = Control.FOCUS_ALL
-	var locked := id == LibraryContracts.CORE_ID or String(item["source"]) == "dev"
+	var received := bool(item.get("received", false))
+	var locked := id == LibraryContracts.CORE_ID or String(item["source"]) == "dev" or received
 	toggle.disabled = locked
 	toggle.tooltip_text = (
-		ALWAYS_ON
+		(RECEIVED_ON if received else ALWAYS_ON)
 		if locked
 		else ("Turn off %s" if toggle.button_pressed else "Turn on %s") % String(item["name"])
 	)

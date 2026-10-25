@@ -120,7 +120,20 @@ static func _check_identity(card: Dictionary) -> void:
 		card["reserved"] = true
 		errors.append((RESERVED_ID % id) + RESERVED_HINT)
 		return
-	var existing := LibraryRegistry.info(id)
+	# The copy this would replace: an official, built-in or installed one. A developer copy and a
+	# PARTIAL copy received from a host for the session (LibraryTransfer) are not replaced: they
+	# are said, and the installed library takes the place of the received one at the next serve.
+	var existing := {}
+	for item in LibraryRegistry.list():
+		if item["id"] != id:
+			continue
+		if item["source"] == "dev":
+			(card["warnings"] as Array).append("A developer copy of '%s' is set for this run." % id)
+		elif item["source"] == "received":
+			var from_host := "A partial copy of '%s' came from the host for this session; "
+			(card["warnings"] as Array).append((from_host % id) + "this one replaces it.")
+		elif existing.is_empty():
+			existing = item
 	card["existing"] = existing
 	if existing.is_empty():
 		return
@@ -128,8 +141,6 @@ static func _check_identity(card: Dictionary) -> void:
 		card["reserved"] = true
 		errors.append("'%s' comes with the game and cannot be replaced." % id)
 		return
-	if String(existing["source"]) == "dev":
-		(card["warnings"] as Array).append("A developer copy of '%s' is set for this run." % id)
 	var order := LibraryVersions.compare(String(card["version"]), String(existing["version"]))
 	if order > 0:
 		card["relation"] = RELATION_NEWER
@@ -251,7 +262,7 @@ static func install(card: Dictionary, replace: bool = false) -> Dictionary:
 		out["error"] = "The staged files are gone; import the %s again." % LibraryNames.lower()
 		return out
 	var root := LibraryRegistry.user_root
-	if DirAccess.make_dir_recursive_absolute(root) != OK:
+	if not LibraryImporter.is_safe_path(root) or DirAccess.make_dir_recursive_absolute(root) != OK:
 		out["error"] = "The %s folder cannot be created." % LibraryNames.lower(2)
 		return out
 	var target := root.path_join(id)
