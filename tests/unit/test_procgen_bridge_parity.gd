@@ -191,7 +191,7 @@ func test_routed_wood_carries_unit_tangents_for_the_normal_map() -> void:
 	assert_lt(worst, 0.001, "unit tangents")
 
 
-func test_the_cache_key_changes_with_the_switch_for_the_kinds_the_module_builds() -> void:
+func test_the_cache_key_changes_with_the_switch_for_every_kind() -> void:
 	var doc := _doc(1.5)
 	var plank := _placed(doc, Vector2(0.3, -1), Vector2(0, 1))
 	var off := CrossingCache.key_of(doc, plank)
@@ -207,17 +207,18 @@ func test_the_cache_key_changes_with_the_switch_for_the_kinds_the_module_builds(
 	var stones_off := CrossingCache.key_of(doc, stones)
 	ProcgenCrossing.enabled = true
 	assert_ne(CrossingCache.key_of(doc, stones), stones_off, "stones are rebuilt too")
-	var ford := Crossing.new()
-	ford.id = 3
-	ford.kind = Crossing.Kind.FORD
-	ford.start = plank.start
-	ford.end = plank.end
-	ford.levels = plank.levels
-	var ford_on := CrossingCache.key_of(doc, ford)
+	for kind in [Crossing.Kind.ARCH, Crossing.Kind.FORD]:
+		var other := Crossing.new()
+		other.id = 3
+		other.kind = kind
+		other.start = plank.start
+		other.end = plank.end
+		other.levels = plank.levels
+		ProcgenCrossing.enabled = false
+		var off_key := CrossingCache.key_of(doc, other)
+		ProcgenCrossing.enabled = true
+		assert_ne(CrossingCache.key_of(doc, other), off_key, "kind %d is rebuilt too" % kind)
 	ProcgenCrossing.enabled = false
-	assert_eq(
-		CrossingCache.key_of(doc, ford), ford_on, "a kind with no recipe does not depend on it"
-	)
 
 
 # --- stepping stones -------------------------------------------------------------------
@@ -341,3 +342,61 @@ func test_a_diagonal_arch_with_a_wide_deck_matches() -> void:
 	var doc := _doc(5.5)
 	var crossing := _placed(doc, Vector2(-2, -8), Vector2(2, 8), 2.8, Crossing.Kind.ARCH)
 	_check_arch(doc, crossing, "diagonal arch")
+
+
+# --- ford --------------------------------------------------------------------------------
+
+
+func _check_ford(doc: MapDocument, crossing: Crossing, label: String) -> void:
+	var ours := CrossingGeometry.build_one(doc, crossing)
+	ProcgenCrossing.enabled = true
+	var theirs := CrossingGeometry.build_one(doc, crossing)
+	ProcgenCrossing.enabled = false
+	assert_false((theirs.gravel as Array).is_empty(), "%s: the module builds gravel" % label)
+	# The bar is the same grid sampled the same way: the same vertex count, the same indices, and
+	# its heights agree sample for sample (the noise streams differ, so not exactly).
+	var our_gravel: Array = ours.gravel
+	var their_gravel: Array = theirs.gravel
+	var our_vertices: PackedVector3Array = our_gravel[Mesh.ARRAY_VERTEX]
+	var their_vertices: PackedVector3Array = their_gravel[Mesh.ARRAY_VERTEX]
+	assert_eq(their_vertices.size(), our_vertices.size(), "%s: same bar grid" % label)
+	assert_eq(
+		their_gravel[Mesh.ARRAY_INDEX], our_gravel[Mesh.ARRAY_INDEX], "%s: same indices" % label
+	)
+	var worst_xz := 0.0
+	var worst_y := 0.0
+	for k in mini(our_vertices.size(), their_vertices.size()):
+		var a := our_vertices[k]
+		var b := their_vertices[k]
+		worst_xz = maxf(worst_xz, Vector2(a.x, a.z).distance_to(Vector2(b.x, b.z)))
+		worst_y = maxf(worst_y, absf(a.y - b.y))
+	# The edges wander by a random phase per stream, so positions differ a little; the heights
+	# by the crest noise (0.03 each way) and the ground the shifted sample sees.
+	assert_lt(worst_xz, 0.2, "%s: bar samples agree in plan (worst %f m)" % [label, worst_xz])
+	assert_lt(worst_y, 0.25, "%s: bar heights agree (worst %f m)" % [label, worst_y])
+	# The marker stones: the same count, on the same side of the line.
+	var our_stones: PackedVector3Array = (ours.stone as Array)[Mesh.ARRAY_VERTEX]
+	var their_stones: PackedVector3Array = (theirs.stone as Array)[Mesh.ARRAY_VERTEX]
+	assert_gt(our_stones.size(), 0, "%s: stones exist" % label)
+	assert_eq(their_stones.size(), our_stones.size(), "%s: same number of marker stones" % label)
+	var our_box := _bounds(our_stones)
+	var their_box := _bounds(their_stones)
+	assert_lt(
+		our_box.get_center().distance_to(their_box.get_center()), 0.4, "%s: stones agree" % label
+	)
+	assert_eq(
+		theirs.collision.size(), ours.collision.size(), "%s: bar and stones both walk" % label
+	)
+	assert_lt(absf(float(theirs.top) - float(ours.top)), 0.06, "%s: tops agree" % label)
+
+
+func test_a_ford_matches() -> void:
+	var doc := _doc(1.5)
+	var crossing := _placed(doc, Vector2(0.3, -1), Vector2(0, 1), -1.0, Crossing.Kind.FORD)
+	_check_ford(doc, crossing, "ford")
+
+
+func test_a_wide_ford_matches() -> void:
+	var doc := _doc(5.5)
+	var crossing := _placed(doc, Vector2(0.3, -1), Vector2(0, 1), -1.0, Crossing.Kind.FORD)
+	_check_ford(doc, crossing, "wide ford")

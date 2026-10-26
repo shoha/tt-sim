@@ -15,12 +15,14 @@ extends RefCounted
 const PLANK_RECIPE := "res://procgen/recipes/plank_bridge.json"
 const STONES_RECIPE := "res://procgen/recipes/stepping_stones.json"
 const ARCH_RECIPE := "res://procgen/recipes/stone_arch.json"
+const FORD_RECIPE := "res://procgen/recipes/ford.json"
 ## The recipe of each crossing kind the module builds (a kind absent here is built by
 ## CrossingGeometry's own code).
 const RECIPES := {
 	Crossing.Kind.PLANK: PLANK_RECIPE,
 	Crossing.Kind.STONES: STONES_RECIPE,
 	Crossing.Kind.ARCH: ARCH_RECIPE,
+	Crossing.Kind.FORD: FORD_RECIPE,
 }
 
 ## The switch: plank bridges are built by the module (CrossingGeometry.build_one) while this is
@@ -44,6 +46,11 @@ class Ground:
 	func water_at(u: float, v: float) -> float:
 		var at := ProcgenCrossing.map_xz(crossing, u, v)
 		return WaterGeometry.level_at(doc, at, -1, courses)
+
+	func flow_at(u: float, v: float) -> Vector2:
+		var flow := CrossingFord.flow_at(doc, ProcgenCrossing.map_xz(crossing, u, v), courses)
+		var d := crossing.direction()
+		return Vector2(flow.dot(d), flow.dot(Vector2(-d.y, d.x)))
 
 
 ## Map XZ of the local point (u along, v across).
@@ -186,8 +193,14 @@ static func _arrays_in_map(crossing: Crossing, surface: PlantSurface) -> Array:
 		# CrossingGeometry's _Mesh.triangle writes.
 		var tangents := PackedFloat32Array()
 		tangents.resize(vertices.size() * 4)
+		# The ford's gravel runs its tangent along the span (CrossingFord._bar).
+		var along := (
+			dir_to_map(crossing, Vector3.RIGHT) if surface.kind == "gravel" else Vector3.RIGHT
+		)
 		for k in vertices.size():
-			tangents[k * 4] = 1.0
+			tangents[k * 4] = along.x
+			tangents[k * 4 + 1] = along.y
+			tangents[k * 4 + 2] = along.z
 			tangents[k * 4 + 3] = 1.0
 		arrays[Mesh.ARRAY_TANGENT] = tangents
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
