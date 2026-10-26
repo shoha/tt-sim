@@ -13,6 +13,13 @@ extends RefCounted
 
 ## The plank bridge recipe, until a library carries structures.
 const PLANK_RECIPE := "res://procgen/recipes/plank_bridge.json"
+const STONES_RECIPE := "res://procgen/recipes/stepping_stones.json"
+## The recipe of each crossing kind the module builds (a kind absent here is built by
+## CrossingGeometry's own code).
+const RECIPES := {
+	Crossing.Kind.PLANK: PLANK_RECIPE,
+	Crossing.Kind.STONES: STONES_RECIPE,
+}
 
 ## The switch: plank bridges are built by the module (CrossingGeometry.build_one) while this is
 ## true. Off by default. It changes geometry only (collision, top and the walking surface are
@@ -64,7 +71,7 @@ static func load_recipe(path: String = PLANK_RECIPE) -> PlantGraphDocument:
 static func inputs_for(doc: MapDocument, crossing: Crossing) -> ProcgenStructureInputs:
 	var inputs := ProcgenStructureInputs.new()
 	inputs.guide = ProcgenGuide.span(crossing.span_m(), crossing.levels)
-	inputs.params = {"width": crossing.width_m}
+	inputs.params = {"width": crossing.width_m, "stride": doc.cell_size_m}
 	var ground := Ground.new()
 	ground.doc = doc
 	ground.crossing = crossing
@@ -97,14 +104,18 @@ static func build(doc: MapDocument, crossing: Crossing, recipe: PlantGraphDocume
 	return out
 
 
-## A plank crossing's parts in CrossingGeometry's shape ({"wood": arrays, "collision", "top"}),
-## or {} when the recipe is missing or fails, so the caller falls back to its own code.
-static func plank_parts(doc: MapDocument, crossing: Crossing) -> Dictionary:
-	var built := build(doc, crossing, load_recipe())
-	var wood: Array = built.surfaces.get("wood", [])
-	if wood.is_empty() or not built.errors.is_empty():
+## A crossing's parts in CrossingGeometry's shape ({"wood" | "stone" | "paving" | "gravel": mesh
+## arrays, "collision", "top"}), or {} when the kind has no recipe, the recipe is missing or it
+## fails, so the caller falls back to its own code.
+static func parts_of(doc: MapDocument, crossing: Crossing) -> Dictionary:
+	if not RECIPES.has(crossing.kind):
 		return {}
-	return {"wood": wood, "collision": built.collision, "top": built.top}
+	var built := build(doc, crossing, load_recipe(RECIPES[crossing.kind]))
+	if built.surfaces.is_empty() or not built.errors.is_empty():
+		return {}
+	var parts := {"collision": built.collision, "top": built.top}
+	parts.merge(built.surfaces)
+	return parts
 
 
 ## Tangents for quads of four vertices in order (a box face), pointing along +U with the
@@ -150,7 +161,17 @@ static func _arrays_in_map(crossing: Crossing, surface: PlantSurface) -> Array:
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
-	arrays[Mesh.ARRAY_TANGENT] = _quad_tangents(vertices, normals, surface.uvs)
+	if surface.kind == "wood":
+		arrays[Mesh.ARRAY_TANGENT] = _quad_tangents(vertices, normals, surface.uvs)
+	else:
+		# Triplanar masonry and gravel (no UVs): +X with a positive binormal sign, as
+		# CrossingGeometry's _Mesh.triangle writes.
+		var tangents := PackedFloat32Array()
+		tangents.resize(vertices.size() * 4)
+		for k in vertices.size():
+			tangents[k * 4] = 1.0
+			tangents[k * 4 + 3] = 1.0
+		arrays[Mesh.ARRAY_TANGENT] = tangents
 	arrays[Mesh.ARRAY_TEX_UV] = surface.uvs
 	arrays[Mesh.ARRAY_COLOR] = surface.colors
 	arrays[Mesh.ARRAY_INDEX] = surface.indices
