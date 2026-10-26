@@ -61,3 +61,30 @@ the code-built bridge: the jitter streams differ and the first capture of the ol
 a tree.
 
 Cleanup later: `ProcgenBox` copies this project's `planks` UV swatch numbers (`CrossingGeometry.WOOD_SWATCHES`); they belong in the surface's `surface.json` so the module takes them from the surface (procgen `README.md`, "Cleanup list").
+
+## The other spans (2026-10-26)
+
+Stepping stones, the stone arch and the ford are recipes too (`procgen/recipes/stepping_stones.json`,
+`stone_arch.json`, `ford.json`), so `ProcgenCrossing.RECIPES` covers all four crossing kinds and the
+one switch routes them. The adapter gained what they need from the world: `Ground.water_at` (the
+river level, `WaterGeometry.level_at` with the courses near the crossing) and `Ground.flow_at` (the
+river's direction, `CrossingFord.flow_at`, turned into the crossing's own frame); the cell size goes in
+as the `stride` parameter. A masonry facet's moss key (one non-zero UV in the module's local frame) is
+mapped to the map frame in the adapter, so `AuthoredCrossings.moss_split` reads the same field as before;
+the arch paving keeps its UVs (metres along and across); the ford's gravel keeps its tangent along the span.
+
+`tests/unit/test_procgen_bridge_parity.gd` now also pins, against `CrossingGeometry.build_one`:
+- stones: the same number of stones, collision size, tops within the jitter, bounds within 0.45 m;
+- arch (short, with a pier, diagonal with a 2.8 m deck): collision identical to 0.1 mm, `top` equal, the
+  same vertex and index counts in stone and paving, bounds within 0.25 m, the same number of moss-keyed
+  vertices, keys near the crossing;
+- ford (narrow, wide): the same bar grid and indices, samples within 0.2 m in plan and 0.25 m in height,
+  the same number of marker stones, bar and stones both walk.
+
+With the switch forced on, the crossing, bridge-tool, authored-terrain, load-prep, terrain-event and
+play-event suites all pass. In the game (render job `procgen_spans_look`): the arch reads as a stone
+arch with paving, parapets and mossy coping stones, the ford as gravel landings with marker stones in
+the water, the stones as before, and in play tokens stand on the arch deck, the plank and a stepping stone
+and wade the ford (bed -0.31, surface -0.15). An arch of 5.5 m builds the same 1696 stone vertices the
+code-built one is documented to.
+
