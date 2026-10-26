@@ -5,7 +5,11 @@ node-graph document, the pull evaluator, `ProcgenRegistry`, the generator nodes 
 geometry primitives, as pure GDScript with no scene tree, so it can run on worker threads like
 `CrossingGeometry`. Plan and rationale: plantgen `docs/parametric_structures_research.md`.
 
-Status (2026-10-26): mounted and tested, nothing in the game uses it yet.
+Status (2026-10-26): mounted and tested, nothing in the game uses it yet. The module now has the
+structure foundation (`ProcgenGuide`, `ProcgenEnvironment`, `ProcgenStructureInputs`, document
+parameters bound by `"@name"`, `collision`/`top` on the geometry) and the first bridge nodes (Guide,
+Planks, Deck Collision); the self-check also builds a 6 m bridge sample and pins its mesh and deck
+collision. Design: plantgen `docs/structures_design.md`.
 
 - `tests/unit/test_procgen_module.gd` runs the module's `ProcgenSelfCheck` here: a graph built in
   code evaluates, repeats exactly, builds the same mesh on `WorkerThreadPool` as on one thread, and
