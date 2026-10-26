@@ -14,11 +14,13 @@ extends RefCounted
 ## The plank bridge recipe, until a library carries structures.
 const PLANK_RECIPE := "res://procgen/recipes/plank_bridge.json"
 const STONES_RECIPE := "res://procgen/recipes/stepping_stones.json"
+const ARCH_RECIPE := "res://procgen/recipes/stone_arch.json"
 ## The recipe of each crossing kind the module builds (a kind absent here is built by
 ## CrossingGeometry's own code).
 const RECIPES := {
 	Crossing.Kind.PLANK: PLANK_RECIPE,
 	Crossing.Kind.STONES: STONES_RECIPE,
+	Crossing.Kind.ARCH: ARCH_RECIPE,
 }
 
 ## The switch: plank bridges are built by the module (CrossingGeometry.build_one) while this is
@@ -33,9 +35,15 @@ class Ground:
 	extends ProcgenEnvironment
 	var doc: MapDocument = null
 	var crossing: Crossing = null
+	## WaterGeometry.river_courses of the area round the crossing, made once.
+	var courses: Dictionary = {}
 
 	func ground_at(u: float, v: float) -> float:
 		return WaterGeometry.ground_at(doc, ProcgenCrossing.map_xz(crossing, u, v))
+
+	func water_at(u: float, v: float) -> float:
+		var at := ProcgenCrossing.map_xz(crossing, u, v)
+		return WaterGeometry.level_at(doc, at, -1, courses)
 
 
 ## Map XZ of the local point (u along, v across).
@@ -75,6 +83,8 @@ static func inputs_for(doc: MapDocument, crossing: Crossing) -> ProcgenStructure
 	var ground := Ground.new()
 	ground.doc = doc
 	ground.crossing = crossing
+	var near := Rect2(crossing.start, Vector2.ZERO).expand(crossing.end)
+	ground.courses = WaterGeometry.river_courses(doc, near.grow(crossing.width_m * 0.5 + 2.0))
 	inputs.env = ground
 	inputs.seed_value = hash([doc.map_seed, crossing.id, crossing.kind])
 	return inputs
@@ -161,8 +171,16 @@ static func _arrays_in_map(crossing: Crossing, surface: PlantSurface) -> Array:
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
-	if surface.kind == "wood":
-		arrays[Mesh.ARRAY_TANGENT] = _quad_tangents(vertices, normals, surface.uvs)
+	var uvs := surface.uvs
+	if surface.kind == "stone":
+		# A non-zero UV on masonry is a moss key in the structure's local (u, v): the moss field
+		# reads it in the map frame (CrossingArch's coping stones and caps), so map it there.
+		uvs = surface.uvs.duplicate()
+		for k in uvs.size():
+			if uvs[k] != Vector2.ZERO:
+				uvs[k] = map_xz(crossing, uvs[k].x, uvs[k].y)
+	if surface.kind == "wood" or surface.kind == "paving":
+		arrays[Mesh.ARRAY_TANGENT] = _quad_tangents(vertices, normals, uvs)
 	else:
 		# Triplanar masonry and gravel (no UVs): +X with a positive binormal sign, as
 		# CrossingGeometry's _Mesh.triangle writes.
@@ -172,7 +190,7 @@ static func _arrays_in_map(crossing: Crossing, surface: PlantSurface) -> Array:
 			tangents[k * 4] = 1.0
 			tangents[k * 4 + 3] = 1.0
 		arrays[Mesh.ARRAY_TANGENT] = tangents
-	arrays[Mesh.ARRAY_TEX_UV] = surface.uvs
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_COLOR] = surface.colors
 	arrays[Mesh.ARRAY_INDEX] = surface.indices
 	return arrays
