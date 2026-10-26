@@ -11,6 +11,8 @@ const RIVER_LEVEL := -0.2
 const BED := -1.0
 const BOX_VERTICES := 24
 const BOUNDS_TOLERANCE_M := 0.15
+## Vertices of one stepping stone: 9 sides, 9 facets a side, 3 vertices a facet.
+const STONE_VERTICES := 9 * 9 * 3
 
 
 func _doc(half_width: float) -> MapDocument:
@@ -29,8 +31,14 @@ func _doc(half_width: float) -> MapDocument:
 	return doc
 
 
-func _placed(doc: MapDocument, from: Vector2, to: Vector2, width: float = -1.0) -> Crossing:
-	var placed := CrossingPlacement.place(doc, from, to, Crossing.Kind.PLANK, width)
+func _placed(
+	doc: MapDocument,
+	from: Vector2,
+	to: Vector2,
+	width: float = -1.0,
+	kind: Crossing.Kind = Crossing.Kind.PLANK
+) -> Crossing:
+	var placed := CrossingPlacement.place(doc, from, to, kind, width)
 	assert_eq(placed.refusal, &"", "placed")
 	var crossing: Crossing = placed.crossing
 	crossing.id = 1
@@ -183,7 +191,7 @@ func test_routed_wood_carries_unit_tangents_for_the_normal_map() -> void:
 	assert_lt(worst, 0.001, "unit tangents")
 
 
-func test_the_cache_key_changes_with_the_switch_for_planks_only() -> void:
+func test_the_cache_key_changes_with_the_switch_for_the_kinds_the_module_builds() -> void:
 	var doc := _doc(1.5)
 	var plank := _placed(doc, Vector2(0.3, -1), Vector2(0, 1))
 	var off := CrossingCache.key_of(doc, plank)
@@ -195,6 +203,60 @@ func test_the_cache_key_changes_with_the_switch_for_planks_only() -> void:
 	stones.start = plank.start
 	stones.end = plank.end
 	stones.levels = plank.levels
-	var stones_on := CrossingCache.key_of(doc, stones)
 	ProcgenCrossing.enabled = false
-	assert_eq(CrossingCache.key_of(doc, stones), stones_on, "stones do not depend on the switch")
+	var stones_off := CrossingCache.key_of(doc, stones)
+	ProcgenCrossing.enabled = true
+	assert_ne(CrossingCache.key_of(doc, stones), stones_off, "stones are rebuilt too")
+	var ford := Crossing.new()
+	ford.id = 3
+	ford.kind = Crossing.Kind.FORD
+	ford.start = plank.start
+	ford.end = plank.end
+	ford.levels = plank.levels
+	var ford_on := CrossingCache.key_of(doc, ford)
+	ProcgenCrossing.enabled = false
+	assert_eq(
+		CrossingCache.key_of(doc, ford), ford_on, "a kind with no recipe does not depend on it"
+	)
+
+
+# --- stepping stones -------------------------------------------------------------------
+
+
+func test_stepping_stones_match_in_count_top_and_place() -> void:
+	var doc := _doc(5.5)
+	var crossing := _placed(doc, Vector2(0.3, -1), Vector2(0, 1), -1.0, Crossing.Kind.STONES)
+	var ours := CrossingGeometry.build_one(doc, crossing)
+	ProcgenCrossing.enabled = true
+	var theirs := CrossingGeometry.build_one(doc, crossing)
+	var our_vertices: PackedVector3Array = (ours.stone as Array)[Mesh.ARRAY_VERTEX]
+	var their_vertices: PackedVector3Array = (theirs.stone as Array)[Mesh.ARRAY_VERTEX]
+	assert_gt(our_vertices.size(), 0, "stones exist")
+	assert_eq(their_vertices.size(), our_vertices.size(), "the same number of stones")
+	assert_eq(their_vertices.size() % STONE_VERTICES, 0, "whole stones of 81 triangles")
+	assert_eq(theirs.collision.size(), ours.collision.size(), "collision is the stones' triangles")
+	assert_lt(absf(float(theirs.top) - float(ours.top)), 0.05, "tops agree within the jitter")
+	var our_box := _bounds(our_vertices)
+	var their_box := _bounds(their_vertices)
+	assert_lt(our_box.position.distance_to(their_box.position), 0.45, "near bounds agree")
+	assert_lt(our_box.end.distance_to(their_box.end), 0.45, "far bounds agree")
+	assert_true((theirs.wood as Array).is_empty(), "stones have no wood")
+
+
+func test_module_stones_face_their_normals_clockwise_and_are_rooted() -> void:
+	var doc := _doc(5.5)
+	var crossing := _placed(doc, Vector2(0.3, -1), Vector2(0, 1), -1.0, Crossing.Kind.STONES)
+	ProcgenCrossing.enabled = true
+	var arrays: Array = CrossingGeometry.build_one(doc, crossing).stone
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	var wrong := 0
+	for tri in indices.size() / 3:
+		var a := vertices[indices[tri * 3]]
+		var b := vertices[indices[tri * 3 + 1]]
+		var c := vertices[indices[tri * 3 + 2]]
+		if (b - a).cross(c - a).dot(normals[indices[tri * 3]]) >= 0.0:
+			wrong += 1
+	assert_eq(wrong, 0, "every facet is clockwise seen from its normal's side")
+	assert_lt(_bounds(vertices).position.y, BED, "the roots go under the bed")
