@@ -21,3 +21,23 @@ collision. Design: plantgen `docs/structures_design.md`.
   node types and `output_rules` by subclassing `ProcgenRegistry`. Keep the `.gd.uid` files.
 
 Next: a structure Output node and a bridge graph, then `CrossingGeometry` calling the module.
+
+## Plank bridge parity (2026-10-26)
+
+`ProcgenCrossing` (`utils/procgen_crossing.gd`, pure and worker-safe) turns a `Crossing` and the
+document into the recipe's inputs (a span guide from the length and three levels, `width_m` as the
+`width` parameter, the document's ground as the environment, a seed from map seed, id and kind) and
+returns the module's geometry in the map frame. The recipe is `procgen/recipes/plank_bridge.json`
+(planks, stringers, sills, posts and rail, piles, deck collision).
+
+`tests/unit/test_procgen_bridge_parity.gd` compares it with `CrossingGeometry.build_one` on
+`test_crossings.gd`'s rivers (narrow, wide, a diagonal with a 2.6 m deck): the deck collision is the
+same faces in the same order to 0.1 mm, `top` is equal, the number of boxes (boards, beams, sills,
+posts, rails, piles) is equal, the wood bounds agree within a hand's width (the jitter streams
+differ), every triangle is clockwise, and the build repeats on four worker threads. Nothing in the
+game calls `ProcgenCrossing` yet: `CrossingGeometry` still builds every crossing itself.
+
+Not covered by the parity test: tangents (the module writes none), the moss split, the wood UVs
+(the module uses the copied swatch table, see procgen `README.md`), `deck_field`, collapse, the
+cache key.
+
