@@ -260,3 +260,84 @@ func test_module_stones_face_their_normals_clockwise_and_are_rooted() -> void:
 			wrong += 1
 	assert_eq(wrong, 0, "every facet is clockwise seen from its normal's side")
 	assert_lt(_bounds(vertices).position.y, BED, "the roots go under the bed")
+
+
+# --- stone arch ------------------------------------------------------------------------
+
+
+func _keyed_vertices(arrays: Array) -> int:
+	var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
+	var keyed := 0
+	for uv in uvs:
+		if uv != Vector2.ZERO:
+			keyed += 1
+	return keyed
+
+
+func _check_arch(doc: MapDocument, crossing: Crossing, label: String) -> void:
+	var ours := CrossingGeometry.build_one(doc, crossing)
+	ProcgenCrossing.enabled = true
+	var theirs := CrossingGeometry.build_one(doc, crossing)
+	ProcgenCrossing.enabled = false
+	# The walking surface is the deck strip.
+	assert_eq(theirs.collision.size(), ours.collision.size(), "%s: collision size" % label)
+	var worst := 0.0
+	for k in mini(ours.collision.size(), theirs.collision.size()):
+		worst = maxf(worst, (ours.collision[k] as Vector3).distance_to(theirs.collision[k]))
+	assert_lt(worst, 0.0001, "%s: collision points agree (worst %f m)" % [label, worst])
+	assert_almost_eq(float(theirs.top), float(ours.top), 0.00001, "%s: same top" % label)
+	# The same construction, so the same number of facets in each material.
+	for part in ["stone", "paving"]:
+		var a: Array = ours[part]
+		var b: Array = theirs[part]
+		assert_false(b.is_empty(), "%s: the module builds %s" % [label, part])
+		assert_eq(
+			(b[Mesh.ARRAY_VERTEX] as PackedVector3Array).size(),
+			(a[Mesh.ARRAY_VERTEX] as PackedVector3Array).size(),
+			"%s: same number of %s vertices" % [label, part]
+		)
+		assert_eq(
+			(b[Mesh.ARRAY_INDEX] as PackedInt32Array).size(),
+			(a[Mesh.ARRAY_INDEX] as PackedInt32Array).size(),
+			"%s: same number of %s indices" % [label, part]
+		)
+		var box_a := _bounds(a[Mesh.ARRAY_VERTEX])
+		var box_b := _bounds(b[Mesh.ARRAY_VERTEX])
+		assert_lt(
+			box_a.position.distance_to(box_b.position), 0.25, "%s: %s near bounds" % [label, part]
+		)
+		assert_lt(box_a.end.distance_to(box_b.end), 0.25, "%s: %s far bounds" % [label, part])
+	assert_eq(
+		_keyed_vertices(theirs.stone),
+		_keyed_vertices(ours.stone),
+		"%s: same moss-keyed facets" % label
+	)
+	# The moss keys are in the map frame: near the crossing, not near the local origin.
+	var uvs: PackedVector2Array = (theirs.stone as Array)[Mesh.ARRAY_TEX_UV]
+	var near := Rect2(crossing.start, Vector2.ZERO).expand(crossing.end).grow(9.0)
+	for uv in uvs:
+		if uv != Vector2.ZERO:
+			assert_true(
+				near.has_point(uv), "%s: a moss key lies by the crossing (%s)" % [label, uv]
+			)
+			break
+
+
+func test_a_short_arch_matches() -> void:
+	var doc := _doc(1.5)
+	var crossing := _placed(doc, Vector2(0.3, -1), Vector2(0, 1), -1.0, Crossing.Kind.ARCH)
+	assert_lt(crossing.span_m(), 9.0, "no pier")
+	_check_arch(doc, crossing, "arch")
+
+
+func test_a_long_arch_with_a_pier_matches() -> void:
+	var doc := _doc(5.5)
+	var crossing := _placed(doc, Vector2(0.3, -1), Vector2(0, 1), -1.0, Crossing.Kind.ARCH)
+	assert_gt(crossing.span_m(), 9.0, "a pier")
+	_check_arch(doc, crossing, "pier arch")
+
+
+func test_a_diagonal_arch_with_a_wide_deck_matches() -> void:
+	var doc := _doc(5.5)
+	var crossing := _placed(doc, Vector2(-2, -8), Vector2(2, 8), 2.8, Crossing.Kind.ARCH)
+	_check_arch(doc, crossing, "diagonal arch")
