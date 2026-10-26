@@ -60,3 +60,4 @@ stand on the deck and at its end in play after a save and reload. Not compared p
 the code-built bridge: the jitter streams differ and the first capture of the old bridge was behind
 a tree.
 
+Cleanup later: `ProcgenBox` copies this project's `planks` UV swatch numbers (`CrossingGeometry.WOOD_SWATCHES`); they belong in the surface's `surface.json` so the module takes them from the surface (procgen `README.md`, "Cleanup list").
