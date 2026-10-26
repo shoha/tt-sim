@@ -1,7 +1,6 @@
 # procgen (shared generator module)
 
-`procgen/` is a git submodule shared with plantgen (repo `D:/dev/procgen`; the `.gitmodules` url
-is a local path until the repo has a remote, change it before pushing this branch). It holds the
+`procgen/` is a git submodule shared with plantgen (`github.com/shoha/procgen`, private). It holds the
 node-graph document, the pull evaluator, `ProcgenRegistry`, the generator nodes and meshers and the
 geometry primitives, as pure GDScript with no scene tree, so it can run on worker threads like
 `CrossingGeometry`. Plan and rationale: plantgen `docs/parametric_structures_research.md`.
