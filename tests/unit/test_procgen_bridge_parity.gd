@@ -11,6 +11,8 @@ const RIVER_LEVEL := -0.2
 const BED := -1.0
 const BOX_VERTICES := 24
 const BOUNDS_TOLERANCE_M := 0.15
+## Vertices of one stepping stone: 9 sides, 9 facets a side, 3 vertices a facet.
+const STONE_VERTICES := 9 * 9 * 3
 
 
 func _doc(half_width: float) -> MapDocument:
@@ -29,8 +31,14 @@ func _doc(half_width: float) -> MapDocument:
 	return doc
 
 
-func _placed(doc: MapDocument, from: Vector2, to: Vector2, width: float = -1.0) -> Crossing:
-	var placed := CrossingPlacement.place(doc, from, to, Crossing.Kind.PLANK, width)
+func _placed(
+	doc: MapDocument,
+	from: Vector2,
+	to: Vector2,
+	width: float = -1.0,
+	kind: Crossing.Kind = Crossing.Kind.PLANK
+) -> Crossing:
+	var placed := CrossingPlacement.place(doc, from, to, kind, width)
 	assert_eq(placed.refusal, &"", "placed")
 	var crossing: Crossing = placed.crossing
 	crossing.id = 1
@@ -183,7 +191,7 @@ func test_routed_wood_carries_unit_tangents_for_the_normal_map() -> void:
 	assert_lt(worst, 0.001, "unit tangents")
 
 
-func test_the_cache_key_changes_with_the_switch_for_planks_only() -> void:
+func test_the_cache_key_changes_with_the_switch_for_every_kind() -> void:
 	var doc := _doc(1.5)
 	var plank := _placed(doc, Vector2(0.3, -1), Vector2(0, 1))
 	var off := CrossingCache.key_of(doc, plank)
@@ -195,6 +203,200 @@ func test_the_cache_key_changes_with_the_switch_for_planks_only() -> void:
 	stones.start = plank.start
 	stones.end = plank.end
 	stones.levels = plank.levels
-	var stones_on := CrossingCache.key_of(doc, stones)
 	ProcgenCrossing.enabled = false
-	assert_eq(CrossingCache.key_of(doc, stones), stones_on, "stones do not depend on the switch")
+	var stones_off := CrossingCache.key_of(doc, stones)
+	ProcgenCrossing.enabled = true
+	assert_ne(CrossingCache.key_of(doc, stones), stones_off, "stones are rebuilt too")
+	for kind in [Crossing.Kind.ARCH, Crossing.Kind.FORD]:
+		var other := Crossing.new()
+		other.id = 3
+		other.kind = kind
+		other.start = plank.start
+		other.end = plank.end
+		other.levels = plank.levels
+		ProcgenCrossing.enabled = false
+		var off_key := CrossingCache.key_of(doc, other)
+		ProcgenCrossing.enabled = true
+		assert_ne(CrossingCache.key_of(doc, other), off_key, "kind %d is rebuilt too" % kind)
+	ProcgenCrossing.enabled = false
+
+
+# --- stepping stones -------------------------------------------------------------------
+
+
+func test_stepping_stones_match_in_count_top_and_place() -> void:
+	var doc := _doc(5.5)
+	var crossing := _placed(doc, Vector2(0.3, -1), Vector2(0, 1), -1.0, Crossing.Kind.STONES)
+	var ours := CrossingGeometry.build_one(doc, crossing)
+	ProcgenCrossing.enabled = true
+	var theirs := CrossingGeometry.build_one(doc, crossing)
+	var our_vertices: PackedVector3Array = (ours.stone as Array)[Mesh.ARRAY_VERTEX]
+	var their_vertices: PackedVector3Array = (theirs.stone as Array)[Mesh.ARRAY_VERTEX]
+	assert_gt(our_vertices.size(), 0, "stones exist")
+	assert_eq(their_vertices.size(), our_vertices.size(), "the same number of stones")
+	assert_eq(their_vertices.size() % STONE_VERTICES, 0, "whole stones of 81 triangles")
+	assert_eq(theirs.collision.size(), ours.collision.size(), "collision is the stones' triangles")
+	assert_lt(absf(float(theirs.top) - float(ours.top)), 0.05, "tops agree within the jitter")
+	var our_box := _bounds(our_vertices)
+	var their_box := _bounds(their_vertices)
+	assert_lt(our_box.position.distance_to(their_box.position), 0.45, "near bounds agree")
+	assert_lt(our_box.end.distance_to(their_box.end), 0.45, "far bounds agree")
+	assert_true((theirs.wood as Array).is_empty(), "stones have no wood")
+
+
+func test_module_stones_face_their_normals_clockwise_and_are_rooted() -> void:
+	var doc := _doc(5.5)
+	var crossing := _placed(doc, Vector2(0.3, -1), Vector2(0, 1), -1.0, Crossing.Kind.STONES)
+	ProcgenCrossing.enabled = true
+	var arrays: Array = CrossingGeometry.build_one(doc, crossing).stone
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	var wrong := 0
+	for tri in indices.size() / 3:
+		var a := vertices[indices[tri * 3]]
+		var b := vertices[indices[tri * 3 + 1]]
+		var c := vertices[indices[tri * 3 + 2]]
+		if (b - a).cross(c - a).dot(normals[indices[tri * 3]]) >= 0.0:
+			wrong += 1
+	assert_eq(wrong, 0, "every facet is clockwise seen from its normal's side")
+	assert_lt(_bounds(vertices).position.y, BED, "the roots go under the bed")
+
+
+# --- stone arch ------------------------------------------------------------------------
+
+
+func _keyed_vertices(arrays: Array) -> int:
+	var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
+	var keyed := 0
+	for uv in uvs:
+		if uv != Vector2.ZERO:
+			keyed += 1
+	return keyed
+
+
+func _check_arch(doc: MapDocument, crossing: Crossing, label: String) -> void:
+	var ours := CrossingGeometry.build_one(doc, crossing)
+	ProcgenCrossing.enabled = true
+	var theirs := CrossingGeometry.build_one(doc, crossing)
+	ProcgenCrossing.enabled = false
+	# The walking surface is the deck strip.
+	assert_eq(theirs.collision.size(), ours.collision.size(), "%s: collision size" % label)
+	var worst := 0.0
+	for k in mini(ours.collision.size(), theirs.collision.size()):
+		worst = maxf(worst, (ours.collision[k] as Vector3).distance_to(theirs.collision[k]))
+	assert_lt(worst, 0.0001, "%s: collision points agree (worst %f m)" % [label, worst])
+	assert_almost_eq(float(theirs.top), float(ours.top), 0.00001, "%s: same top" % label)
+	# The same construction, so the same number of facets in each material.
+	for part in ["stone", "paving"]:
+		var a: Array = ours[part]
+		var b: Array = theirs[part]
+		assert_false(b.is_empty(), "%s: the module builds %s" % [label, part])
+		assert_eq(
+			(b[Mesh.ARRAY_VERTEX] as PackedVector3Array).size(),
+			(a[Mesh.ARRAY_VERTEX] as PackedVector3Array).size(),
+			"%s: same number of %s vertices" % [label, part]
+		)
+		assert_eq(
+			(b[Mesh.ARRAY_INDEX] as PackedInt32Array).size(),
+			(a[Mesh.ARRAY_INDEX] as PackedInt32Array).size(),
+			"%s: same number of %s indices" % [label, part]
+		)
+		var box_a := _bounds(a[Mesh.ARRAY_VERTEX])
+		var box_b := _bounds(b[Mesh.ARRAY_VERTEX])
+		assert_lt(
+			box_a.position.distance_to(box_b.position), 0.25, "%s: %s near bounds" % [label, part]
+		)
+		assert_lt(box_a.end.distance_to(box_b.end), 0.25, "%s: %s far bounds" % [label, part])
+	assert_eq(
+		_keyed_vertices(theirs.stone),
+		_keyed_vertices(ours.stone),
+		"%s: same moss-keyed facets" % label
+	)
+	# The moss keys are in the map frame: near the crossing, not near the local origin.
+	var uvs: PackedVector2Array = (theirs.stone as Array)[Mesh.ARRAY_TEX_UV]
+	var near := Rect2(crossing.start, Vector2.ZERO).expand(crossing.end).grow(9.0)
+	for uv in uvs:
+		if uv != Vector2.ZERO:
+			assert_true(
+				near.has_point(uv), "%s: a moss key lies by the crossing (%s)" % [label, uv]
+			)
+			break
+
+
+func test_a_short_arch_matches() -> void:
+	var doc := _doc(1.5)
+	var crossing := _placed(doc, Vector2(0.3, -1), Vector2(0, 1), -1.0, Crossing.Kind.ARCH)
+	assert_lt(crossing.span_m(), 9.0, "no pier")
+	_check_arch(doc, crossing, "arch")
+
+
+func test_a_long_arch_with_a_pier_matches() -> void:
+	var doc := _doc(5.5)
+	var crossing := _placed(doc, Vector2(0.3, -1), Vector2(0, 1), -1.0, Crossing.Kind.ARCH)
+	assert_gt(crossing.span_m(), 9.0, "a pier")
+	_check_arch(doc, crossing, "pier arch")
+
+
+func test_a_diagonal_arch_with_a_wide_deck_matches() -> void:
+	var doc := _doc(5.5)
+	var crossing := _placed(doc, Vector2(-2, -8), Vector2(2, 8), 2.8, Crossing.Kind.ARCH)
+	_check_arch(doc, crossing, "diagonal arch")
+
+
+# --- ford --------------------------------------------------------------------------------
+
+
+func _check_ford(doc: MapDocument, crossing: Crossing, label: String) -> void:
+	var ours := CrossingGeometry.build_one(doc, crossing)
+	ProcgenCrossing.enabled = true
+	var theirs := CrossingGeometry.build_one(doc, crossing)
+	ProcgenCrossing.enabled = false
+	assert_false((theirs.gravel as Array).is_empty(), "%s: the module builds gravel" % label)
+	# The bar is the same grid sampled the same way: the same vertex count, the same indices, and
+	# its heights agree sample for sample (the noise streams differ, so not exactly).
+	var our_gravel: Array = ours.gravel
+	var their_gravel: Array = theirs.gravel
+	var our_vertices: PackedVector3Array = our_gravel[Mesh.ARRAY_VERTEX]
+	var their_vertices: PackedVector3Array = their_gravel[Mesh.ARRAY_VERTEX]
+	assert_eq(their_vertices.size(), our_vertices.size(), "%s: same bar grid" % label)
+	assert_eq(
+		their_gravel[Mesh.ARRAY_INDEX], our_gravel[Mesh.ARRAY_INDEX], "%s: same indices" % label
+	)
+	var worst_xz := 0.0
+	var worst_y := 0.0
+	for k in mini(our_vertices.size(), their_vertices.size()):
+		var a := our_vertices[k]
+		var b := their_vertices[k]
+		worst_xz = maxf(worst_xz, Vector2(a.x, a.z).distance_to(Vector2(b.x, b.z)))
+		worst_y = maxf(worst_y, absf(a.y - b.y))
+	# The edges wander by a random phase per stream, so positions differ a little; the heights
+	# by the crest noise (0.03 each way) and the ground the shifted sample sees.
+	assert_lt(worst_xz, 0.2, "%s: bar samples agree in plan (worst %f m)" % [label, worst_xz])
+	assert_lt(worst_y, 0.25, "%s: bar heights agree (worst %f m)" % [label, worst_y])
+	# The marker stones: the same count, on the same side of the line.
+	var our_stones: PackedVector3Array = (ours.stone as Array)[Mesh.ARRAY_VERTEX]
+	var their_stones: PackedVector3Array = (theirs.stone as Array)[Mesh.ARRAY_VERTEX]
+	assert_gt(our_stones.size(), 0, "%s: stones exist" % label)
+	assert_eq(their_stones.size(), our_stones.size(), "%s: same number of marker stones" % label)
+	var our_box := _bounds(our_stones)
+	var their_box := _bounds(their_stones)
+	assert_lt(
+		our_box.get_center().distance_to(their_box.get_center()), 0.4, "%s: stones agree" % label
+	)
+	assert_eq(
+		theirs.collision.size(), ours.collision.size(), "%s: bar and stones both walk" % label
+	)
+	assert_lt(absf(float(theirs.top) - float(ours.top)), 0.06, "%s: tops agree" % label)
+
+
+func test_a_ford_matches() -> void:
+	var doc := _doc(1.5)
+	var crossing := _placed(doc, Vector2(0.3, -1), Vector2(0, 1), -1.0, Crossing.Kind.FORD)
+	_check_ford(doc, crossing, "ford")
+
+
+func test_a_wide_ford_matches() -> void:
+	var doc := _doc(5.5)
+	var crossing := _placed(doc, Vector2(0.3, -1), Vector2(0, 1), -1.0, Crossing.Kind.FORD)
+	_check_ford(doc, crossing, "wide ford")
