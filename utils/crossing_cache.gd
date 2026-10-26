@@ -58,6 +58,7 @@ static func key_of(doc: MapDocument, crossing: Crossing) -> int:
 			crossing.levels,
 			crossing.width_m,
 			crossing.style,
+			crossing.is_plank() and ProcgenCrossing.enabled,
 			doc.map_seed,
 			doc.cell_size_m,
 			doc.sample_spacing_m,

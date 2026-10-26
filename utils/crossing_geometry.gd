@@ -260,11 +260,19 @@ static func build_one(doc: MapDocument, crossing: Crossing) -> Dictionary:
 	if crossing.span_m() <= 0.0:
 		return parts
 	if crossing.is_plank():
-		var wood := _Mesh.new()
-		_plank_bridge(doc, crossing, wood)
-		parts.wood = wood.to_arrays()
-		parts.collision = deck_collision(crossing)
-		parts.top = deck_top(crossing)
+		# The shared procgen module builds the plank bridge when the switch is on and its recipe
+		# loads (ProcgenCrossing, docs/systems/procgen.md); otherwise the code below does.
+		var built := ProcgenCrossing.plank_parts(doc, crossing) if ProcgenCrossing.enabled else {}
+		if not built.is_empty():
+			parts.wood = built.wood
+			parts.collision = built.collision
+			parts.top = built.top
+		else:
+			var wood := _Mesh.new()
+			_plank_bridge(doc, crossing, wood)
+			parts.wood = wood.to_arrays()
+			parts.collision = deck_collision(crossing)
+			parts.top = deck_top(crossing)
 	elif crossing.is_arch():
 		var masonry := _Mesh.new()
 		var paving := _Mesh.new()
