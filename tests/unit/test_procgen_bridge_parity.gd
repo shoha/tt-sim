@@ -141,3 +141,60 @@ func test_the_build_is_deterministic_and_worker_safe() -> void:
 		assert_eq(built.collision, first.collision, "collision repeats")
 		var wood: Array = built.surfaces.wood
 		assert_eq(wood[Mesh.ARRAY_VERTEX], first.surfaces.wood[Mesh.ARRAY_VERTEX], "wood repeats")
+
+
+# --- the switch ------------------------------------------------------------------------
+
+
+func after_each() -> void:
+	ProcgenCrossing.enabled = false
+
+
+func test_the_switch_is_off_by_default_and_routes_build_one_when_on() -> void:
+	assert_false(ProcgenCrossing.enabled, "off unless a rollout turns it on")
+	var doc := _doc(5.5)
+	var crossing := _placed(doc, Vector2(0.3, -1), Vector2(0, 1))
+	var legacy := CrossingGeometry.build_one(doc, crossing)
+	ProcgenCrossing.enabled = true
+	var routed := CrossingGeometry.build_one(doc, crossing)
+	assert_ne(
+		(routed.wood as Array)[Mesh.ARRAY_VERTEX],
+		(legacy.wood as Array)[Mesh.ARRAY_VERTEX],
+		"the module's boards are a different set of vertices"
+	)
+	assert_eq(routed.collision, legacy.collision, "the walking surface is the same")
+	assert_almost_eq(float(routed.top), float(legacy.top), 0.00001, "and so is the top")
+	assert_true((routed.stone as Array).is_empty(), "a plank bridge has no stone")
+
+
+func test_routed_wood_carries_unit_tangents_for_the_normal_map() -> void:
+	var doc := _doc(1.5)
+	var crossing := _placed(doc, Vector2(0.3, -1), Vector2(0, 1))
+	ProcgenCrossing.enabled = true
+	var wood: Array = CrossingGeometry.build_one(doc, crossing).wood
+	var vertices: PackedVector3Array = wood[Mesh.ARRAY_VERTEX]
+	var tangents: PackedFloat32Array = wood[Mesh.ARRAY_TANGENT]
+	assert_eq(tangents.size(), vertices.size() * 4, "four floats a vertex")
+	var worst := 0.0
+	for k in vertices.size():
+		var t := Vector3(tangents[k * 4], tangents[k * 4 + 1], tangents[k * 4 + 2])
+		worst = maxf(worst, absf(t.length() - 1.0))
+		assert_true(absf(tangents[k * 4 + 3]) == 1.0, "binormal sign is plus or minus one")
+	assert_lt(worst, 0.001, "unit tangents")
+
+
+func test_the_cache_key_changes_with_the_switch_for_planks_only() -> void:
+	var doc := _doc(1.5)
+	var plank := _placed(doc, Vector2(0.3, -1), Vector2(0, 1))
+	var off := CrossingCache.key_of(doc, plank)
+	ProcgenCrossing.enabled = true
+	assert_ne(CrossingCache.key_of(doc, plank), off, "a plank is rebuilt when the switch flips")
+	var stones := Crossing.new()
+	stones.id = 2
+	stones.kind = Crossing.Kind.STONES
+	stones.start = plank.start
+	stones.end = plank.end
+	stones.levels = plank.levels
+	var stones_on := CrossingCache.key_of(doc, stones)
+	ProcgenCrossing.enabled = false
+	assert_eq(CrossingCache.key_of(doc, stones), stones_on, "stones do not depend on the switch")
