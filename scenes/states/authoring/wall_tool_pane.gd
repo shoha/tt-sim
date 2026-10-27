@@ -32,13 +32,24 @@ const KIND_TILES: Array[Dictionary] = [
 		"tooltip":
 		"A stone building with a door and a gable roof: drag from one corner to the opposite one",
 	},
+	{
+		"kind": Wall.Kind.ROW,
+		"id": &"wall_row",
+		"label": "Street",
+		"icon": "street",
+		"tooltip":
+		"A street of varied buildings, doors to the street: drag along where the street runs",
+	},
 ]
 const HINT := (
 	"Drag along the ground to lay a side. Start the next drag at the end of a wall to carry on, and"
 	+ " end one at the wall's first end to close the loop. Shift + scroll or [ and ] set the"
 	+ " height. Hold Ctrl and click a wall to remove it. A wall follows later edits to the ground"
 	+ " under it. A building: drag from one corner to the opposite one, and turn it with Q and E"
-	+ " first (Shift for a quarter turn); its door is on the side the drag starts along."
+	+ " first (Shift for a quarter turn); its door is on the side the drag starts along. A street:"
+	+ " drag along its line (carry on from its end for bends); Q and E pick the side, R mixes the"
+	+ " buildings afresh (over a street already laid, it remixes that one), and the height keys set"
+	+ " how far back the buildings stand."
 )
 
 var kind_field: TileField

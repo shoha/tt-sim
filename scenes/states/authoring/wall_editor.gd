@@ -25,6 +25,8 @@ const REFUSED_POINTS := &"points"
 const REFUSED_INVALID := &"invalid"
 ## A drag begins or ends on a wall's free end within this of it (world metres).
 const SNAP_M := 0.6
+## A row shorter than this has no room for a building (world metres).
+const ROW_MIN_LENGTH_M := 6.0
 ## An edit reaches walls whose footprint (WallGeometry.clear_bounds) comes within this of its
 ## area (map metres).
 const FOLLOW_REACH_M := 1.0
@@ -68,8 +70,17 @@ func get_wall(wall_id: int) -> Wall:
 ##
 ## A building is a rectangle: `from` and `to` are its opposite corners, its sides turned `yaw`
 ## radians from the map's X axis (the first side, from `from` along that axis, carries the door).
+##
+## A row (a street of buildings) is drawn like a wall, side by side; `height` is its setback, and
+## `variation` ({"seed": the variation seed, "side": 0 left, 1 right, 2 both}) is what a new row
+## starts with (an extended row keeps its own).
 func plan(
-	kind: Wall.Kind, from: Vector3, to: Vector3, height: float = -1.0, yaw: float = 0.0
+	kind: Wall.Kind,
+	from: Vector3,
+	to: Vector3,
+	height: float = -1.0,
+	yaw: float = 0.0,
+	variation: Dictionary = {}
 ) -> Wall:
 	var e := _editor()
 	var doc := e.document
@@ -109,6 +120,11 @@ func plan(
 			clampf(base / e.map_scale(), Wall.MIN_HEIGHT_M[kind], Wall.MAX_HEIGHT_M[kind]),
 			CrossingPlacement.style_at(doc, (a + b) * 0.5)
 		)
+		wall.seed_value = clampi(int(variation.get("seed", 0)), 0, Wall.MAX_SEED)
+		wall.side = clampi(int(variation.get("side", 2)), 0, Wall.ROW_SIDES - 1)
+	if wall.is_row() and wall.length_m() < ROW_MIN_LENGTH_M / e.map_scale():
+		last_refusal = REFUSED_SHORT
+		return null
 	var problem := MapWallIO.wall_problem(wall, doc.extent_m())
 	if problem != "":
 		last_refusal = _refusal_for(wall)
@@ -160,9 +176,14 @@ static func building_corners(a: Vector2, b: Vector2, yaw: float) -> PackedVector
 
 ## plan() and add(): the wall's id, or -1 (last_refusal says why).
 func place(
-	kind: Wall.Kind, from: Vector3, to: Vector3, height: float = -1.0, yaw: float = 0.0
+	kind: Wall.Kind,
+	from: Vector3,
+	to: Vector3,
+	height: float = -1.0,
+	yaw: float = 0.0,
+	variation: Dictionary = {}
 ) -> int:
-	var wall := plan(kind, from, to, height, yaw)
+	var wall := plan(kind, from, to, height, yaw, variation)
 	if wall == null:
 		return -1
 	return add(wall)
@@ -197,6 +218,27 @@ func add(wall: Wall) -> int:
 	return laid.id
 
 
+## Gives row `wall_id` a new seed (the same street, its buildings varied again) as one history
+## entry. False when there is no such row.
+func reroll(wall_id: int) -> bool:
+	var doc := _editor().document
+	var old := doc.wall(wall_id)
+	if old == null or not old.is_row():
+		return false
+	var changed := old.copy()
+	changed.seed_value = next_seed(old.seed_value)
+	var after: Array[Wall] = []
+	for entry in doc.walls:
+		after.append(changed if entry.id == wall_id else entry)
+	_change("Reroll row", after, [old, changed])
+	return true
+
+
+## The seed after `current` (a fixed step round the seed range, so a reroll is repeatable).
+static func next_seed(current: int) -> int:
+	return (current * 7919 + 104729) % Wall.MAX_SEED
+
+
 ## Removes wall `wall_id` as one history entry. False when there is none.
 func remove(wall_id: int) -> bool:
 	var doc := _editor().document
@@ -220,11 +262,25 @@ func wall_at(point: Vector3, margin: float = 0.5) -> int:
 	var best := -1
 	var best_distance := INF
 	for wall in e.document.walls:
-		var distance := distance_to_line(wall, p)
+		var distance := (
+			row_distance(e.document, wall, p) if wall.is_row() else distance_to_line(wall, p)
+		)
 		if distance <= reach and distance < best_distance:
 			best = wall.id
 			best_distance = distance
 	return best
+
+
+## The distance from map point `p` to row `wall`: 0 over one of its buildings, else the distance
+## to its street's line (map metres).
+static func row_distance(doc: MapDocument, wall: Wall, p: Vector2) -> float:
+	for lot in WallGeometry.row_lots(doc, wall):
+		var corners := PackedVector2Array()
+		for q: Vector3 in lot.points:
+			corners.append(Vector2(q.x, q.z))
+		if Geometry2D.is_point_in_polygon(p, corners):
+			return 0.0
+	return distance_to_line(wall, p)
 
 
 ## The distance from map point `p` to the line of `wall` (map metres). Pure.
@@ -353,4 +409,6 @@ static func _area_of(touched: Array[Wall]) -> Rect2:
 static func _label(wall: Wall) -> String:
 	if wall.is_building():
 		return "building"
+	if wall.is_row():
+		return "street"
 	return "fence" if wall.is_fence() else "wall"

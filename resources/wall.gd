@@ -15,17 +15,23 @@ extends RefCounted
 ## uses the planks. `id` is stable for the wall's lifetime (1..MAX_ID, unique in the document)
 ## and seeds its variation with the map seed.
 
-enum Kind { STONE, FENCE, BUILDING }
+enum Kind { STONE, FENCE, BUILDING, ROW }
 
 ## The names Kind takes in walls.json.
-const KIND_NAMES: Array[String] = ["stone", "fence", "building"]
+const KIND_NAMES: Array[String] = ["stone", "fence", "building", "row"]
 const MAX_ID := 255
 const MIN_POINTS := 2
 const MAX_POINTS := 64
 ## Height above the ground, metres, per Kind (a building's is its walls', under the roof).
-const MIN_HEIGHT_M: Array[float] = [0.4, 0.5, 1.6]
-const MAX_HEIGHT_M: Array[float] = [2.0, 2.0, 5.0]
-const DEFAULT_HEIGHT_M: Array[float] = [0.9, 1.0, 2.4]
+const MIN_HEIGHT_M: Array[float] = [0.4, 0.5, 1.6, 1.5]
+const MAX_HEIGHT_M: Array[float] = [2.0, 2.0, 5.0, 10.0]
+const DEFAULT_HEIGHT_M: Array[float] = [0.9, 1.0, 2.4, 3.0]
+## A row (a street of buildings along an open line) keeps its street's setback, in metres, in
+## `height_m` (the range above is then the setback's), the `side` of the street the buildings stand
+## on (ROW_SIDES: left, right, both) and the `seed` that varies them. Its buildings are made from
+## these (procgen's street_row recipe), never stored one by one.
+const ROW_SIDES := 3
+const MAX_SEED := 1000000000
 ## A building is a closed rectangle of four points (its first side carries the door), each side
 ## within these bounds, metres.
 const BUILDING_POINTS := 4
@@ -40,6 +46,10 @@ var kind: Kind = Kind.STONE
 var points: PackedVector2Array = PackedVector2Array()
 var closed: bool = false
 var height_m: float = 0.9
+## A row's variation seed and the side of its street the buildings stand on (0 left, 1 right, 2
+## both); unused by the other kinds.
+var seed_value: int = 0
+var side: int = 2
 ## Palette biome id for the rock, or "".
 var style: String = ""
 
@@ -80,6 +90,10 @@ func is_building() -> bool:
 	return kind == Kind.BUILDING
 
 
+func is_row() -> bool:
+	return kind == Kind.ROW
+
+
 ## The line's bounding rectangle in map XZ (empty for no points).
 func bounds() -> Rect2:
 	if points.is_empty():
@@ -92,7 +106,10 @@ func bounds() -> Rect2:
 
 ## A copy (the point array is copied, so editing one never moves the other).
 func copy() -> Wall:
-	return make(id, kind, points.duplicate(), closed, height_m, style)
+	var copied := make(id, kind, points.duplicate(), closed, height_m, style)
+	copied.seed_value = seed_value
+	copied.side = side
+	return copied
 
 
 ## True when `other` holds the same fields.
@@ -105,4 +122,6 @@ func same_as(other: Wall) -> bool:
 		and other.closed == closed
 		and other.height_m == height_m
 		and other.style == style
+		and other.seed_value == seed_value
+		and other.side == side
 	)
