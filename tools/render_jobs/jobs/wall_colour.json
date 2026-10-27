@@ -1,0 +1,218 @@
+{
+ "out_dir": "render_jobs/wall_colour",
+ "timeout_s": 600,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "alpine_meadow_summer_s1",
+   "size": 150,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "place",
+   "kind": "stone",
+   "from": [
+    9,
+    9
+   ],
+   "to": [
+    21,
+    9
+   ]
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "look_at",
+   "at": [
+    15,
+    9
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 9.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "alpine",
+   "desc": "alpine: a stone wall beside the boulders"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "rocky_badlands_summer_s1",
+   "size": 150,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "place",
+   "kind": "stone",
+   "from": [
+    9,
+    -1
+   ],
+   "to": [
+    21,
+    -1
+   ]
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "look_at",
+   "at": [
+    15,
+    -1
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 9.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "badlands",
+   "desc": "badlands: a stone wall beside the boulders"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "temperate_forest_summer_s1",
+   "size": 150,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "place",
+   "kind": "stone",
+   "from": [
+    9,
+    9
+   ],
+   "to": [
+    21,
+    9
+   ]
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "look_at",
+   "at": [
+    15,
+    9
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 9.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "forest",
+   "desc": "forest: a stone wall beside the boulders"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  }
+ ]
+}
