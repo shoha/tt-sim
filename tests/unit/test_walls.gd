@@ -325,6 +325,107 @@ func test_a_sculpt_under_a_wall_refreshes_it() -> void:
 	assert_true(editor.walls.follow(Rect2(8, 8, 1, 1)).is_empty(), "a far edit reaches none")
 
 
+# --- buildings ---------------------------------------------------------------------------
+
+
+func test_a_building_is_a_rectangle_from_two_corners_turned_by_the_yaw() -> void:
+	var square := WallEditor.building_corners(Vector2(0, 0), Vector2(6, 4), 0.0)
+	assert_eq(
+		square, PackedVector2Array([Vector2(0, 0), Vector2(6, 0), Vector2(6, 4), Vector2(0, 4)])
+	)
+	var turned := WallEditor.building_corners(Vector2(0, 0), Vector2(6, 4), PI * 0.5)
+	assert_almost_eq(turned[1].x, 0.0, 1e-4, "the first side runs along the turned axis")
+	assert_almost_eq(turned[1].y, 4.0, 1e-4)
+	assert_eq(turned[2], Vector2(6, 4), "the opposite corner stays where it was dragged")
+	var editor := _editor()
+	var plan := editor.walls.plan(Wall.Kind.BUILDING, Vector3(0, 0, 0), Vector3(6, 0, 4), -1.0, 0.0)
+	assert_not_null(plan)
+	assert_true(plan.is_building() and plan.closed and plan.points.size() == 4)
+	assert_eq(plan.height_m, Wall.DEFAULT_HEIGHT_M[Wall.Kind.BUILDING])
+	assert_null(editor.walls.plan(Wall.Kind.BUILDING, Vector3(0, 0, 0), Vector3(1, 0, 6)))
+	assert_eq(editor.walls.last_refusal, WallEditor.REFUSED_SHORT, "a side under 2 m is refused")
+
+
+func test_a_building_is_laid_picked_over_its_footprint_and_removed() -> void:
+	var editor := _editor()
+	var id := editor.walls.place(Wall.Kind.BUILDING, Vector3(-3, 0, -2), Vector3(3, 0, 2))
+	assert_eq(_history.undo(), "Place building")
+	_history.redo()
+	assert_not_null(_nodes().get_wall_node(id))
+	var node := _nodes().get_wall_node(id)
+	assert_not_null(node.get_node_or_null("Stone"), "masonry")
+	assert_not_null(node.get_node_or_null("Wood"), "and a roof")
+	assert_not_null(node.get_node_or_null("Collision"), "to stand on")
+	assert_eq(editor.walls.wall_at(Vector3(0, 0, 0)), id, "picked in the middle of it")
+	assert_eq(editor.walls.wall_at(Vector3(0, 0, 6)), -1, "and not beside it")
+	assert_true(editor.walls.remove(id))
+
+
+func test_a_building_clears_plants_over_its_whole_footprint() -> void:
+	var building := Wall.make(
+		1,
+		Wall.Kind.BUILDING,
+		WallEditor.building_corners(Vector2(0, 0), Vector2(8, 6), 0.0),
+		true,
+		2.4
+	)
+	_doc.walls.append(building)
+	var spans := WallGeometry.clearance_crossings(_doc)
+	assert_eq(spans.size(), 5, "four sides and the interior")
+	assert_eq(CrossingGeometry.clearance(spans, Vector2(4, 3)), 0.0, "nothing grows inside")
+	assert_eq(CrossingGeometry.clearance(spans, Vector2(4, 12)), 1.0, "outside it does")
+
+
+func test_the_writer_refuses_a_building_that_is_not_a_square_rectangle() -> void:
+	var slanted := Wall.make(
+		1,
+		Wall.Kind.BUILDING,
+		PackedVector2Array([Vector2(0, 0), Vector2(6, 0), Vector2(7, 4), Vector2(0, 4)]),
+		true,
+		2.4
+	)
+	assert_ne(MapWallIO.wall_problem(slanted, _doc.extent_m()), "", "not square")
+	var open := Wall.make(1, Wall.Kind.BUILDING, _line(), false, 2.4)
+	assert_ne(MapWallIO.wall_problem(open, _doc.extent_m()), "", "not closed")
+	var good := Wall.make(
+		1,
+		Wall.Kind.BUILDING,
+		WallEditor.building_corners(Vector2(0, 0), Vector2(8, 8), 0.5236),
+		true,
+		2.4
+	)
+	assert_eq(MapWallIO.wall_problem(good, _doc.extent_m()), "", "a turned rectangle is fine")
+
+
+func test_rotating_turns_the_yaw_in_notches_and_quarters() -> void:
+	var tool := BrushTool.new()
+	add_child_autofree(tool)
+	var brush := WallBrush.new()
+	brush.kind = Wall.Kind.BUILDING
+	brush.rotate(tool, 1)
+	assert_almost_eq(brush.yaw, deg_to_rad(15.0), 1e-5, "one notch")
+	brush.rotate(tool, 6)
+	assert_almost_eq(brush.yaw, deg_to_rad(105.0), 1e-5, "a quarter more")
+	brush.rotate(tool, -8)
+	assert_almost_eq(brush.yaw, TAU - deg_to_rad(15.0), 1e-5, "and round the other way")
+
+
+func test_q_and_e_turn_a_buildings_footprint_only() -> void:
+	var brush := WallBrush.new()
+	assert_false(brush.rotates(), "not a wall")
+	brush.kind = Wall.Kind.BUILDING
+	assert_true(brush.rotates())
+	assert_eq(BrushTool.decide(_key(KEY_E), false, false, false), BrushTool.Action.TURN_RIGHT)
+	assert_eq(BrushTool.decide(_key(KEY_Q), false, false, false), BrushTool.Action.TURN_LEFT)
+
+
+func _key(code: Key) -> InputEventKey:
+	var key := InputEventKey.new()
+	key.keycode = code
+	key.pressed = true
+	return key
+
+
 # --- the gesture -------------------------------------------------------------------------
 
 

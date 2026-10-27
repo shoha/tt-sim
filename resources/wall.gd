@@ -15,17 +15,22 @@ extends RefCounted
 ## uses the planks. `id` is stable for the wall's lifetime (1..MAX_ID, unique in the document)
 ## and seeds its variation with the map seed.
 
-enum Kind { STONE, FENCE }
+enum Kind { STONE, FENCE, BUILDING }
 
 ## The names Kind takes in walls.json.
-const KIND_NAMES: Array[String] = ["stone", "fence"]
+const KIND_NAMES: Array[String] = ["stone", "fence", "building"]
 const MAX_ID := 255
 const MIN_POINTS := 2
 const MAX_POINTS := 64
-## Height above the ground, metres, per Kind.
-const MIN_HEIGHT_M: Array[float] = [0.4, 0.5]
-const MAX_HEIGHT_M: Array[float] = [2.0, 2.0]
-const DEFAULT_HEIGHT_M: Array[float] = [0.9, 1.0]
+## Height above the ground, metres, per Kind (a building's is its walls', under the roof).
+const MIN_HEIGHT_M: Array[float] = [0.4, 0.5, 1.6]
+const MAX_HEIGHT_M: Array[float] = [2.0, 2.0, 5.0]
+const DEFAULT_HEIGHT_M: Array[float] = [0.9, 1.0, 2.4]
+## A building is a closed rectangle of four points (its first side carries the door), each side
+## within these bounds, metres.
+const BUILDING_POINTS := 4
+const BUILDING_MIN_SIDE_M := 2.0
+const BUILDING_MAX_SIDE_M := 24.0
 ## A segment shorter than this is not a wall; the whole line may not exceed MAX_LENGTH_M.
 const MIN_SEGMENT_M := 0.3
 const MAX_LENGTH_M := 120.0
@@ -69,6 +74,10 @@ func length_m() -> float:
 
 func is_fence() -> bool:
 	return kind == Kind.FENCE
+
+
+func is_building() -> bool:
+	return kind == Kind.BUILDING
 
 
 ## The line's bounding rectangle in map XZ (empty for no points).

@@ -24,12 +24,21 @@ const KIND_TILES: Array[Dictionary] = [
 		"icon": "fence",
 		"tooltip": "A post and rail fence: posts every couple of metres, two rails between",
 	},
+	{
+		"kind": Wall.Kind.BUILDING,
+		"id": &"wall_building",
+		"label": "Building",
+		"icon": "home",
+		"tooltip":
+		"A stone building with a door and a gable roof: drag from one corner to the opposite one",
+	},
 ]
 const HINT := (
 	"Drag along the ground to lay a side. Start the next drag at the end of a wall to carry on, and"
 	+ " end one at the wall's first end to close the loop. Shift + scroll or [ and ] set the"
 	+ " height. Hold Ctrl and click a wall to remove it. A wall follows later edits to the ground"
-	+ " under it."
+	+ " under it. A building: drag from one corner to the opposite one, and turn it with Q and E"
+	+ " first (Shift for a quarter turn); its door is on the side the drag starts along."
 )
 
 var kind_field: TileField
