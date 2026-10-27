@@ -251,6 +251,9 @@ func setup(lpc: LevelPlayController, events_pane: EventsPane) -> void:
 		func(kind: int) -> void: _set_mode(BridgeTool.ID, "kind", kind)
 	)
 	pane.wall_kind_selected.connect(func(kind: int) -> void: _set_mode(WallTool.ID, "kind", kind))
+	pane.wall_preset_selected.connect(
+		func(preset: int) -> void: _set_mode(WallTool.ID, "row_preset", preset)
+	)
 	pane.brush_size_changed.connect(func(radius: float) -> void: _wired_brush().set_radius(radius))
 	pane.brush_strength_changed.connect(func(flow: float) -> void: _wired_brush().set_flow(flow))
 	pane.visibility_changed.connect(refresh)

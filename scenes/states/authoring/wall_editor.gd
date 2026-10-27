@@ -72,7 +72,8 @@ func get_wall(wall_id: int) -> Wall:
 ## radians from the map's X axis (the first side, from `from` along that axis, carries the door).
 ##
 ## A row (a street of buildings) is drawn like a wall, side by side; `height` is its setback, and
-## `variation` ({"seed": the variation seed, "side": 0 left, 1 right, 2 both}) is what a new row
+## `variation` ({"seed": the variation seed, "side": 0 left, 1 right, 2 both, "preset": the
+## species}) is what a new row
 ## starts with (an extended row keeps its own).
 func plan(
 	kind: Wall.Kind,
@@ -122,6 +123,7 @@ func plan(
 		)
 		wall.seed_value = clampi(int(variation.get("seed", 0)), 0, Wall.MAX_SEED)
 		wall.side = clampi(int(variation.get("side", 2)), 0, Wall.ROW_SIDES - 1)
+		wall.preset = clampi(int(variation.get("preset", 0)), 0, Wall.ROW_PRESETS - 1)
 	if wall.is_row() and wall.length_m() < ROW_MIN_LENGTH_M / e.map_scale():
 		last_refusal = REFUSED_SHORT
 		return null

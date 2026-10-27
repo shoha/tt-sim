@@ -59,7 +59,9 @@ static func inputs_for(doc: MapDocument, wall: Wall) -> ProcgenStructureInputs:
 	inputs.params = {"height": wall.height_m}
 	if wall.is_row():
 		# A row's `height_m` is its setback; its side and seed vary the buildings.
-		inputs.params = {"setback": wall.height_m, "side": float(wall.side)}
+		inputs.params = {
+			"setback": wall.height_m, "side": float(wall.side), "preset": float(wall.preset)
+		}
 	var ground := Ground.new()
 	ground.doc = doc
 	inputs.env = ground
@@ -77,7 +79,9 @@ static func row_lots(doc: MapDocument, wall: Wall) -> Array[Dictionary]:
 		return []
 	var inputs := inputs_for(doc, wall)
 	var node := RowNode.new()
-	var p := node.coerce_params({"setback": wall.height_m, "side": wall.side})
+	var p := node.coerce_params(
+		{"setback": wall.height_m, "side": wall.side, "preset": wall.preset}
+	)
 	var node_seed := node.node_seed(
 		p, {"seed": inputs.seed_value, "node_id": recipe.resolve_node("street_row")}
 	)
@@ -143,6 +147,7 @@ static func key_of(doc: MapDocument, wall: Wall) -> int:
 			wall.style,
 			wall.seed_value,
 			wall.side,
+			wall.preset,
 			samples,
 		]
 	)
@@ -174,7 +179,10 @@ static func clearance_crossings(doc: MapDocument) -> Array[Crossing]:
 		if wall.is_row():
 			# Under each building, not along the street.
 			for lot in row_lots(doc, wall):
-				var q: PackedVector3Array = lot.points
+				# The yard's plot when it has one, else the building.
+				var q: PackedVector3Array = (
+					lot.plot if not (lot.plot as PackedVector3Array).is_empty() else lot.points
+				)
 				var front := Vector2(q[0].x, q[0].z)
 				var front_end := Vector2(q[1].x, q[1].z)
 				out.append(

@@ -80,6 +80,8 @@ static func wall_problem(wall: Wall, extent: Vector2) -> String:
 		return "a row is an open line with a seed 0..%d" % Wall.MAX_SEED
 	elif wall.is_row() and (wall.side < 0 or wall.side >= Wall.ROW_SIDES):
 		return "a row's side is outside 0..%d" % (Wall.ROW_SIDES - 1)
+	elif wall.is_row() and (wall.preset < 0 or wall.preset >= Wall.ROW_PRESETS):
+		return "a row's species is outside 0..%d" % (Wall.ROW_PRESETS - 1)
 	elif wall.length_m() > Wall.MAX_LENGTH_M:
 		return "longer than %s m" % Wall.MAX_LENGTH_M
 	var low: float = Wall.MIN_HEIGHT_M[wall.kind]
@@ -144,6 +146,7 @@ static func wall_json(wall: Wall) -> Dictionary:
 	if wall.is_row():
 		out["seed"] = wall.seed_value
 		out["side"] = wall.side
+		out["preset"] = wall.preset
 	return out
 
 
@@ -217,8 +220,14 @@ static func _wall_from(value: Variant) -> Variant:
 		var side_read: Variant = MapDocumentIO._integer(value.get("side", 2), 0, Wall.ROW_SIDES - 1)
 		if seed_read == null or side_read == null:
 			return "a row's seed or side is not a whole number in range"
+		var preset_read: Variant = MapDocumentIO._integer(
+			value.get("preset", 0), 0, Wall.ROW_PRESETS - 1
+		)
+		if preset_read == null:
+			return "a row's species is not a whole number in range"
 		wall.seed_value = seed_read
 		wall.side = side_read
+		wall.preset = preset_read
 	return wall
 
 

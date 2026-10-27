@@ -97,8 +97,15 @@ Cost (procgen docs): about 1000 triangles a building, 13 buildings on 40 m in 48
 under each building. Verified with the `street_tool` render job (drag, laid in two drags, remixed,
 reloaded in play).
 
-Not yet: breaking a street into individual buildings, corner plots, yards and fences per lot, and a
-control for the lot sizes (they use the node's defaults).
+Species (2026-10-27): a street carries a `preset` (`walls.json` `preset` 0 to 4, rows only) picked on
+the pane's Street tiles (shown only while Street is picked): Mixed, Terrace, Guild houses, Village (fenced
+yards), Cottages (low stone-walled yards). A species replaces the lot sizes, spacing, heights, roofs and
+yards (procgen `ProcgenRow.PRESETS`); the setback and side stay the street's. Scatter clears under each
+plot, yard included. Verified with the `street_species` render job (the tiles and a street of each
+species, the village's fences visible).
+
+Not yet: breaking a street into individual buildings, corner plots, and a yard that is not fence or
+low wall (gardens, trees), plus finer control than the species.
 
 ## In play
 

@@ -494,6 +494,48 @@ func test_a_street_builds_buildings_and_clears_plants_under_them() -> void:
 	assert_eq(editor.walls.wall_at(inside), id, "picked over one of its buildings")
 
 
+func test_a_streets_species_is_kept_laid_and_changes_the_buildings() -> void:
+	var editor := _editor()
+	var id := _street(editor, {"preset": 3, "seed": 5})
+	assert_eq(_doc.wall(id).preset, 3, "the brush's species is laid")
+	assert_eq(MapDocumentIO.write(_doc, SAVE_PATH), OK)
+	var read: MapDocument = MapDocumentIO.read(SAVE_PATH)["document"]
+	assert_eq(read.walls[0].preset, 3, "and saved")
+	var bad := _doc.wall(id).copy()
+	bad.preset = 9
+	assert_ne(MapWallIO.wall_problem(bad, _doc.extent_m()), "", "species 0 to 4")
+	var village := WallGeometry.row_lots(_doc, _doc.wall(id))
+	var terrace_wall := _doc.wall(id).copy()
+	terrace_wall.preset = 1
+	var terrace := WallGeometry.row_lots(_doc, terrace_wall)
+	assert_ne(village.size(), terrace.size(), "another species, another street")
+	assert_ne(
+		WallGeometry.key_of(_doc, terrace_wall), WallGeometry.key_of(_doc, _doc.wall(id)), "its key"
+	)
+	assert_eq(village[0].yard, 1, "a village is fenced")
+	# Plants clear over the yard, not only the building.
+	assert_eq(WallGeometry.clearance_crossings(_doc).size(), village.size(), "one clearing per lot")
+
+
+func test_the_pane_offers_the_species_only_for_a_street() -> void:
+	var pane := WallToolPane.new()
+	add_child_autofree(pane)
+	assert_false(pane.preset_field.visible, "hidden for a wall")
+	assert_eq(WallToolPane.PRESET_TILES.size(), Wall.ROW_PRESETS, "a tile per species")
+	for tile in WallToolPane.PRESET_TILES:
+		assert_not_null(IconButton.load_icon(String(tile.icon)), String(tile.icon))
+	pane.kind_field.tiles.selection_changed.emit(&"wall_row")
+	assert_true(pane.preset_field.visible, "shown for a street")
+	watch_signals(pane)
+	pane.preset_field.tiles.selection_changed.emit(&"street_village")
+	assert_signal_emitted_with_parameters(pane, "preset_selected", [3])
+	pane.select_kind(Wall.Kind.STONE)
+	assert_false(pane.preset_field.visible, "and hidden again")
+	assert_eq(
+		WallBrush.readout_row(8, 0, 0.0, 0.0, 0.0, "", 3), "Street  Village, 8 buildings, left side"
+	)
+
+
 func test_q_e_and_r_choose_a_streets_side_and_mix() -> void:
 	var tool := BrushTool.new()
 	add_child_autofree(tool)

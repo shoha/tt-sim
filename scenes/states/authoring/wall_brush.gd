@@ -24,6 +24,8 @@ const SHADOW := Color(0.05, 0.04, 0.05, 0.55)
 const KIND_LABELS: Array[String] = ["Stone wall", "Fence", "Building", "Street"]
 ## A building turns this much per Q or E notch, and the idle ghost of one is this big (world
 ## metres: along its first side, across).
+## The species' names in the readout (Wall.preset).
+const ROW_PRESET_NAMES: Array[String] = ["Mixed", "Terrace", "Guild houses", "Village", "Cottages"]
 const YAW_STEP := deg_to_rad(15.0)
 const GHOST_SIZE_M := Vector2(4.0, 3.0)
 ## The door mark is this wide on the first side (metres), and the footprint fill alpha.
@@ -63,6 +65,8 @@ var heights: Array[float] = [
 ## A new street's side (0 left, 1 right, 2 both; Q and E) and variation seed (R).
 var row_side: int = 2
 var row_seed: int = 0
+## A new street's species (Wall.preset).
+var row_preset: int = 0
 ## The turn of a building footprint (radians from the map X axis; Q and E).
 var yaw: float = 0.0
 ## A side being drawn: its press point (world) and the pointer's last ground point.
@@ -140,15 +144,22 @@ static func readout_building(
 ## The readout beside the cursor for a street: how many buildings and on which side ("Street  11
 ## buildings, both sides"), or with no count (`buildings` < 0) its setback and the keys. Pure.
 static func readout_row(
-	buildings: int, side: int, setback_m: float, cell_m: float, per_cell: float, label: String
+	buildings: int,
+	side: int,
+	setback_m: float,
+	cell_m: float,
+	per_cell: float,
+	label: String,
+	preset: int = 0
 ) -> String:
 	var sides: String = ["left side", "right side", "both sides"][clampi(side, 0, 2)]
+	var species := "" if preset <= 0 else "%s, " % ROW_PRESET_NAMES[clampi(preset, 0, 4)]
 	if buildings >= 0:
-		return "Street  %d buildings, %s" % [buildings, sides]
+		return "Street  %s%d buildings, %s" % [species, buildings, sides]
 	var set_back := ScaleUtils.world_to_display(setback_m, cell_m, per_cell)
 	return (
-		"Street  %s %s back, %s  (Q/E side, R new mix)"
-		% [BridgeBrush.short_number(set_back), label, sides]
+		"Street  %s%s %s back, %s  (Q/E side, R new mix)"
+		% [species, BridgeBrush.short_number(set_back), label, sides]
 	)
 
 
@@ -192,7 +203,12 @@ func track(editor: AuthoringEditor, hit: Vector3, erasing: bool) -> void:
 func _plan(editor: AuthoringEditor) -> void:
 	var started := Time.get_ticks_usec()
 	preview = editor.walls.plan(
-		kind as Wall.Kind, from, to, height(), yaw, {"seed": row_seed, "side": row_side}
+		kind as Wall.Kind,
+		from,
+		to,
+		height(),
+		yaw,
+		{"seed": row_seed, "side": row_side, "preset": row_preset}
 	)
 	refusal = editor.walls.last_refusal
 	last_plan_usec = Time.get_ticks_usec() - started
@@ -382,7 +398,8 @@ func draw(
 				0.0,
 				0.0,
 				0.0,
-				""
+				"",
+				preview.preset
 			)
 		elif ok:
 			text = readout(kind, from.distance_to(to), 0.0, cell_m, per_cell, label)
@@ -410,7 +427,7 @@ func draw(
 		canvas,
 		camera.unproject_position(hit),
 		(
-			readout_row(-1, row_side, height(), cell_m, per_cell, label)
+			readout_row(-1, row_side, height(), cell_m, per_cell, label, row_preset)
 			if kind == Wall.Kind.ROW
 			else readout(kind, 0.0, height(), cell_m, per_cell, label)
 		),

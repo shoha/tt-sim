@@ -71,6 +71,12 @@ func connect_pane(controller: AuthoringController, pane: Control) -> void:
 	var wall_pane := pane as WallToolPane
 	if wall_pane == null:
 		return
+	wall_pane.preset_selected.connect(
+		func(value: int) -> void:
+			if controller.brush != null:
+				of(controller.brush).row_preset = value
+				controller.brush.redraw()
+	)
 	wall_pane.kind_selected.connect(
 		func(value: int) -> void:
 			if controller.brush != null:
