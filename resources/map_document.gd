@@ -123,6 +123,8 @@ const MAX_RIVER_POINTS := 512
 const MAX_FLOW_TEXELS := 1024
 ## Crossings (bridges, stepping stones) per document.
 const MAX_CROSSINGS := 64
+## Walls and fences per document.
+const MAX_WALLS := 64
 
 var palette_version: String = ""
 ## The content libraries this map used when it was saved: [{id, version, hash}], one per
@@ -171,6 +173,8 @@ var water_flow: PackedByteArray = PackedByteArray()
 var water_flow_size: Vector2i = Vector2i.ZERO
 ## Plank bridges and stepping stones over the water (Crossing), at most MAX_CROSSINGS.
 var crossings: Array[Crossing] = []
+## Stone walls and fences along a line (Wall), at most MAX_WALLS.
+var walls: Array[Wall] = []
 ## One byte per sample: the persistent ground fire's intensity 0..255 (0 = no fire), painted by
 ## the Fire tool and drawn by FireField. Empty = no fire. The ash it leaves is a painted
 ## surface, a separate layer, so putting fire out never touches it.
@@ -498,6 +502,32 @@ func next_crossing_id() -> int:
 	if highest < Crossing.MAX_ID:
 		return highest + 1
 	for candidate in range(1, Crossing.MAX_ID + 1):
+		if not used.has(candidate):
+			return candidate
+	return -1
+
+
+## The wall with id `wall_id`, or null.
+func wall(wall_id: int) -> Wall:
+	for entry in walls:
+		if entry.id == wall_id:
+			return entry
+	return null
+
+
+## The id a new wall gets: one past the highest in use, else the lowest free id; -1 when the
+## document already holds MAX_WALLS walls.
+func next_wall_id() -> int:
+	if walls.size() >= MAX_WALLS:
+		return -1
+	var used := {}
+	var highest := 0
+	for entry in walls:
+		used[entry.id] = true
+		highest = maxi(highest, entry.id)
+	if highest < Wall.MAX_ID:
+		return highest + 1
+	for candidate in range(1, Wall.MAX_ID + 1):
 		if not used.has(candidate):
 			return candidate
 	return -1

@@ -152,11 +152,11 @@ static func readout(
 		var span := roundi(ScaleUtils.world_to_display(span_m, cell_m, per_cell))
 		return "%s  %d %s" % [title, span, label]
 	var wide := ScaleUtils.world_to_display(width_m, cell_m, per_cell)
-	return "%s  %s %s wide" % [title, _short_number(wide), label]
+	return "%s  %s %s wide" % [title, short_number(wide), label]
 
 
 ## `value` to the nearest half ("5", "3.5"; whole from 10 up).
-static func _short_number(value: float) -> String:
+static func short_number(value: float) -> String:
 	var half := roundf(value * 2.0) * 0.5
 	if value >= 10.0:
 		return "%d" % roundi(value)
@@ -336,7 +336,7 @@ func draw(
 		var ok := preview != null
 		if ok:
 			draw_crossing(canvas, camera, editor, preview, _kind_tint(preview.kind), 1.0)
-		_draw_line(canvas, camera, from, to, TINT if ok else ERASE_TINT, not ok)
+		draw_drag_line(canvas, camera, from, to, TINT if ok else ERASE_TINT, not ok)
 		var text := (
 			readout(kind, preview.span_m() * editor.map_scale(), 0.0, cell_m, per_cell, label)
 			if ok
@@ -357,9 +357,9 @@ func draw(
 				REFUSED_COLOR
 			)
 			return
-		_draw_marker(canvas, camera, hit, ERASE_TINT)
+		draw_marker(canvas, camera, hit, ERASE_TINT)
 		return
-	_draw_marker(canvas, camera, hit, _kind_tint(kind))
+	draw_marker(canvas, camera, hit, _kind_tint(kind))
 	draw_pill(
 		canvas,
 		camera.unproject_position(hit),
@@ -482,7 +482,7 @@ static func _fill_band(
 ## alike at any zoom (P4b-3: a 1.75 px dash alone was lost over a forest floor). A refused
 ## line (`refused`) is drawn heavier still: it is the one thing on screen that says why
 ## nothing will be placed.
-static func _draw_line(
+static func draw_drag_line(
 	canvas: Control, camera: Camera3D, a: Vector3, b: Vector3, tint: Color, refused: bool
 ) -> void:
 	var sa := camera.unproject_position(a)
@@ -498,7 +498,7 @@ static func _draw_line(
 
 
 ## A small ring on the ground at `at` (the idle cursor).
-static func _draw_marker(canvas: Control, camera: Camera3D, at: Vector3, tint: Color) -> void:
+static func draw_marker(canvas: Control, camera: Camera3D, at: Vector3, tint: Color) -> void:
 	var points := PackedVector2Array()
 	for k in 25:
 		var angle := TAU * k / 24.0

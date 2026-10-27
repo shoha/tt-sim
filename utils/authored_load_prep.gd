@@ -19,6 +19,7 @@ extends RefCounted
 ##   SKIRT            RiverExitMesh.skirt_parts: the skirt's arrays, and the channel and
 ##                    water of the rivers that leave the map (P6-1)
 ##   CROSSINGS        CrossingGeometry.build (AuthoredCrossings' geometry), only with crossings
+##   WALLS            WallGeometry.build (AuthoredWalls' geometry), only with walls
 ## Summary: docs/ARCHITECTURE.md Map Loading Flow.
 
 const DRESSING := "dressing"
@@ -27,6 +28,7 @@ const FIELDS := "fields"
 const CHUNKS := "chunks"
 const SKIRT := "skirt"
 const CROSSINGS := "crossings"
+const WALLS := "walls"
 
 var _tasks: PackedInt64Array = PackedInt64Array()
 var _outs: Array[Dictionary] = []
@@ -40,6 +42,8 @@ static func start(doc: MapDocument) -> AuthoredLoadPrep:
 		parts.append(WATER)
 	if not doc.crossings.is_empty():
 		parts.append(CROSSINGS)
+	if not doc.walls.is_empty():
+		parts.append(WALLS)
 	for part in parts:
 		var out := {}
 		prep._outs.append(out)
@@ -74,10 +78,12 @@ func finish() -> Dictionary:
 ## Everything start() and finish() would give, on the calling thread (tests).
 static func compute(doc: MapDocument) -> Dictionary:
 	var out := {}
-	for part in [DRESSING, FIELDS, SKIRT, WATER, CROSSINGS]:
+	for part in [DRESSING, FIELDS, SKIRT, WATER, CROSSINGS, WALLS]:
 		if part == WATER and doc.water_bodies.is_empty():
 			continue
 		if part == CROSSINGS and doc.crossings.is_empty():
+			continue
+		if part == WALLS and doc.walls.is_empty():
 			continue
 		work(doc, part, out)
 	return out
@@ -92,6 +98,8 @@ static func work(doc: MapDocument, part: String, out: Dictionary) -> void:
 			out[WATER] = WaterMeshBuilder.build(doc)
 		CROSSINGS:
 			out[CROSSINGS] = CrossingGeometry.build(doc)
+		WALLS:
+			out[WALLS] = WallGeometry.build(doc)
 		FIELDS:
 			var fields := TerrainMeshBuilder.grid_fields(doc)
 			var chunks := {}
