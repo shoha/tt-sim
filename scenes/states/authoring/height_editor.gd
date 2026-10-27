@@ -162,6 +162,7 @@ func end_stroke() -> bool:
 	var area := regenerated_area(stroke.changed)
 	var changed_world := MaskBrush.sample_rect_to_world(e.document, stroke.changed)
 	record["crossings"] = e.crossings.follow(changed_world)
+	record["walls"] = e.walls.follow(changed_world)
 	# The water follows the ground (P4-3); rocks and plants wait for its dressing's worker.
 	e.water.refresh(
 		func() -> void:
@@ -231,6 +232,7 @@ func apply_diff(diff: Dictionary, redo: bool, record: Dictionary, spread: bool =
 	var before := e.document.heights.duplicate()
 	var rect := HeightStroke.apply_diff(e.document, diff, redo)
 	e.crossings.restore(record.get("crossings", {}), redo)
+	e.walls.restore(record.get("walls", {}), redo)
 	if not rect.has_area():
 		return
 	# Props take their recorded rows, not a snap.
@@ -367,7 +369,9 @@ func work(everything: bool = false) -> void:
 	started = Time.get_ticks_usec()
 	# Not mid-stroke: the brush reads the document meanwhile (raycast_ground).
 	var collide := (
-		_collision_dirty and _stroke == null and is_instance_valid(e.terrain)
+		_collision_dirty
+		and _stroke == null
+		and is_instance_valid(e.terrain)
 		and (everything or not busy)
 	)
 	if collide:
@@ -405,7 +409,9 @@ func regenerated_area(rect: Rect2i) -> Rect2:
 	# Normals need one step more than request_region() adds, the rules read curvature
 	# CURVATURE_RADIUS_M out and face proximity FACE_NEAR_RADIUS_M more.
 	var reach := TerrainRules.CURVATURE_RADIUS_M + ScatterGround.FACE_NEAR_RADIUS_M
-	return MaskBrush.sample_rect_to_world(doc, rect).grow(maxf(cell_step.x, cell_step.y) * 2.0 + reach)
+	return MaskBrush.sample_rect_to_world(doc, rect).grow(
+		maxf(cell_step.x, cell_step.y) * 2.0 + reach
+	)
 
 
 # ============================================================================

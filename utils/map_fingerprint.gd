@@ -21,6 +21,7 @@ extends RefCounted
 ##                  and lower level, which its UV2 carries): "<verts> <aabb>", sorted.
 ##   falls_count    how many falls that grouping found.
 ##   crossings      per AuthoredCrossings child: "<name> <kind> <verts> <aabb>".
+##   walls          per AuthoredWalls child: "<name> <verts> <aabb>".
 ##   edge           the skirt's river-exit parts: "<name> <verts>" for Channel and Ribbon,
 ##                  or [] when no water leaves the map.
 ##   scatter        per asset in every AuthoredScatter: "<asset> <rows>", sorted.
@@ -33,6 +34,7 @@ const ROUND_M := 0.001
 ## Hex digits kept from a SHA-256.
 const HASH_CHARS := 16
 const CROSSINGS_NODE := "AuthoredCrossings"
+const WALLS_NODE := "AuthoredWalls"
 const WATER_NODE := "AuthoredWater"
 const FALLS_MESH := "AuthoredWater-falls"
 const EDGE_NAMES: Array[String] = ["Channel", "Ribbon"]
@@ -52,6 +54,7 @@ static func of(root: Node, doc: MapDocument) -> Dictionary:
 		"falls": [],
 		"falls_count": 0,
 		"crossings": [],
+		"walls": [],
 		"edge": [],
 		"scatter": [],
 		"scatter_hash": "",
@@ -72,6 +75,7 @@ static func of(root: Node, doc: MapDocument) -> Dictionary:
 	out.falls = _falls(root)
 	out.falls_count = (out.falls as Array).size()
 	out.crossings = _crossings(root)
+	out.walls = _walls(root)
 	out.edge = _edge(meshes)
 	var scatter := _scatter(root)
 	out.scatter = scatter[0]
@@ -259,6 +263,29 @@ static func _crossings(root: Node) -> Array:
 			box = part if first else box.merge(part)
 			first = false
 		out.append("%s %s %d %s" % [crossing.name, kind, verts, aabb_text(box)])
+	out.sort()
+	return out
+
+
+## Per wall node: "<name> <verts> <aabb of its meshes>".
+static func _walls(root: Node) -> Array:
+	var holder := root.get_node_or_null(NodePath(WALLS_NODE))
+	if holder == null:
+		return []
+	var out: Array = []
+	for wall in holder.get_children():
+		var meshes: Array = []
+		_collect_meshes(wall, _relative(root, wall), meshes)
+		var verts := 0
+		var box := AABB()
+		var first := true
+		for entry: Array in meshes:
+			var instance := entry[0] as MeshInstance3D
+			verts += _vertex_count(instance.mesh)
+			var part := (entry[1] as Transform3D) * instance.mesh.get_aabb()
+			box = part if first else box.merge(part)
+			first = false
+		out.append("%s %d %s" % [wall.name, verts, aabb_text(box)])
 	out.sort()
 	return out
 

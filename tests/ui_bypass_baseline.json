@@ -24,6 +24,9 @@
 		"res://scenes/states/authoring/bridge_brush.gd": {
 			"colour": 21
 		},
+		"res://scenes/states/authoring/wall_brush.gd": {
+			"colour": 10
+		},
 		"res://scenes/states/authoring/bridge_tool_pane.gd": {
 			"override": 1
 		},
