@@ -10,6 +10,7 @@ extends RefCounted
 
 const STONE_RECIPE := "res://procgen/recipes/stone_wall.json"
 const FENCE_RECIPE := "res://procgen/recipes/wood_fence.json"
+const BUILDING_RECIPE := "res://procgen/recipes/building.json"
 ## The ground under a wall is sampled this far apart (metres) along its line for its cache key.
 const KEY_STEP_M := 0.5
 ## The width plants clear across a wall's side (its thickness and a margin), metres.
@@ -29,7 +30,12 @@ class Ground:
 
 ## The recipe path for `kind`.
 static func recipe_path(kind: Wall.Kind) -> String:
-	return FENCE_RECIPE if kind == Wall.Kind.FENCE else STONE_RECIPE
+	match kind:
+		Wall.Kind.FENCE:
+			return FENCE_RECIPE
+		Wall.Kind.BUILDING:
+			return BUILDING_RECIPE
+	return STONE_RECIPE
 
 
 ## The recipe document at `path`, null when the file is missing or not a graph.
@@ -146,6 +152,19 @@ static func clearance_crossings(doc: MapDocument) -> Array[Crossing]:
 					wall.points[(k + 1) % count],
 					Vector3.ZERO,
 					CLEAR_WIDTH_M
+				)
+			)
+		if wall.is_building() and count == Wall.BUILDING_POINTS:
+			# The whole footprint clears, not only its sides: a strip across it from the middle of
+			# the first side to the middle of the third, as wide as the first side is long.
+			out.append(
+				Crossing.make(
+					0,
+					Crossing.Kind.PLANK,
+					(wall.points[0] + wall.points[1]) * 0.5,
+					(wall.points[2] + wall.points[3]) * 0.5,
+					Vector3.ZERO,
+					wall.points[0].distance_to(wall.points[1])
 				)
 			)
 	return out

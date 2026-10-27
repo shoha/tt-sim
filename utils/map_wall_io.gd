@@ -6,7 +6,7 @@ extends RefCounted
 ## way MapCrossingIO does for crossings. Summary: docs/systems/walls.md.
 ##
 ##   walls.json   {"version": 1, "walls": [wall, ...]}
-##                wall: {"id", "kind": "stone" | "fence", "points": [[x, z], ...],
+##                wall: {"id", "kind": "stone" | "fence" | "building", "points": [[x, z], ...],
 ##                       "closed": bool, "height_m", "style": palette biome id or ""}
 ##
 ## Everything read is untrusted: a wall with any problem (id outside 1..255 or repeated, unknown
@@ -19,6 +19,8 @@ extends RefCounted
 
 const ENTRY := "walls.json"
 const VERSION := 1
+## How far from square a building's corners may be (the cosine of the angle between sides).
+const RIGHT_ANGLE_TOLERANCE := 0.02
 
 
 ## Adds walls.json for `doc` to `entries` (nothing when it has no wall). Assumes problem(doc)
@@ -70,7 +72,11 @@ static func wall_problem(wall: Wall, extent: Vector2) -> String:
 	for k in segments:
 		if wall.points[k].distance_to(wall.points[(k + 1) % count]) < Wall.MIN_SEGMENT_M:
 			return "a side is shorter than %s m" % Wall.MIN_SEGMENT_M
-	if wall.length_m() > Wall.MAX_LENGTH_M:
+	if wall.is_building():
+		var shape := _building_problem(wall)
+		if shape != "":
+			return shape
+	elif wall.length_m() > Wall.MAX_LENGTH_M:
 		return "longer than %s m" % Wall.MAX_LENGTH_M
 	var low: float = Wall.MIN_HEIGHT_M[wall.kind]
 	var high: float = Wall.MAX_HEIGHT_M[wall.kind]
@@ -78,6 +84,21 @@ static func wall_problem(wall: Wall, extent: Vector2) -> String:
 		return "height outside %s..%s m" % [low, high]
 	if wall.style.length() > MapDocumentIO.MAX_ID_LENGTH:
 		return "style is too long"
+	return ""
+
+
+## What is wrong with `wall` as a building (a closed rectangle of four points whose sides are
+## within Wall.BUILDING_MIN_SIDE_M..BUILDING_MAX_SIDE_M), or "".
+static func _building_problem(wall: Wall) -> String:
+	if not wall.closed or wall.points.size() != Wall.BUILDING_POINTS:
+		return "a building is a closed rectangle of %d points" % Wall.BUILDING_POINTS
+	for k in Wall.BUILDING_POINTS:
+		var side := wall.points[(k + 1) % 4] - wall.points[k]
+		var next := wall.points[(k + 2) % 4] - wall.points[(k + 1) % 4]
+		if side.length() < Wall.BUILDING_MIN_SIDE_M or side.length() > Wall.BUILDING_MAX_SIDE_M:
+			return "a side outside %s..%s m" % [Wall.BUILDING_MIN_SIDE_M, Wall.BUILDING_MAX_SIDE_M]
+		if absf(side.normalized().dot(next.normalized())) > RIGHT_ANGLE_TOLERANCE:
+			return "a building's corners are not square"
 	return ""
 
 

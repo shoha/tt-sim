@@ -85,7 +85,8 @@ const TOOL_HINTS := {
 	WallTool.ID:
 	(
 		"Drag along the ground to lay a stone wall or a fence; start the next drag at its end to carry"
-		+ " on. Hold Ctrl and click one to remove it."
+		+ " on. A building goes corner to corner; Q and E turn it. Hold Ctrl and click one to"
+		+ " remove it."
 	),
 	EventPresets.COLLAPSE: "Click a bridge: it breaks and falls into the water for everyone.",
 	EventPresets.TOPPLE:

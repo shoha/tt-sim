@@ -5,6 +5,7 @@ extends RefCounted
 ##   report            every wall of the open document (authoring) with its node, vertices,
 ##                     height, top and body; in play, the AuthoredWalls under the map root.
 ##   place {kind, from, to}  lays one wall side through the editor API (world XZ).
+##   rotate {steps}    turns a building footprint, as Q (-1) and E (1) do.
 ##   kind {kind}       picks the brush kind ("stone" or "fence") as its pane tile does.
 ##   save {folder}     crossing.gd's save (a _p4b1_ test level only).
 
@@ -19,6 +20,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _kind(base, String(step.get("kind", "stone")))
 		"place":
 			return _place(base, step)
+		"rotate":
+			return _rotate(base, int(step.get("steps", 1)))
 		"save":
 			return CROSSING.run(base, {"action": "save", "folder": step.get("folder", "")})
 	return "unknown action %s" % step.get("action", "")
@@ -77,3 +80,12 @@ static func _place(base: Node, step: Dictionary) -> String:
 		Vector3(float(b[0]), 0, float(b[1]))
 	)
 	return "placed wall %d" % id if id >= 0 else "refused: %s" % ctrl.editor.walls.last_refusal
+
+
+static func _rotate(base: Node, steps: int) -> String:
+	var gm := base.get("_game_map") as GameMap
+	if gm == null or gm.get_brush_tool() == null:
+		return "no brush"
+	var mode := WallTool.of(gm.get_brush_tool())
+	mode.rotate(gm.get_brush_tool(), steps)
+	return "yaw %.1f degrees" % rad_to_deg(mode.yaw)

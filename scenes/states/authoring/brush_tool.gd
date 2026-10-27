@@ -58,7 +58,21 @@ signal gesture_started
 ## follow it.
 signal shape_toggled
 
-enum Action { NONE, POINTER, BEGIN, END, CANCEL, DESELECT, GROW, SHRINK, REMOVE, SWALLOW, SHAPE }
+enum Action {
+	NONE,
+	POINTER,
+	BEGIN,
+	END,
+	CANCEL,
+	DESELECT,
+	GROW,
+	SHRINK,
+	REMOVE,
+	SWALLOW,
+	SHAPE,
+	TURN_LEFT,
+	TURN_RIGHT
+}
 
 const MIN_RADIUS := 1.0
 const MAX_RADIUS := 12.0
@@ -194,6 +208,11 @@ static func decide(event: InputEvent, picks: bool, held: bool, over_target: bool
 				return Action.GROW
 			KEY_BRACKETLEFT:
 				return Action.SHRINK
+			KEY_Q, KEY_E:
+				# Turning a mode's footprint (BrushMode.rotates); Ctrl, Alt and Meta are others'.
+				if key.ctrl_pressed or key.alt_pressed or key.meta_pressed:
+					return Action.NONE
+				return Action.TURN_RIGHT if key.keycode == KEY_E else Action.TURN_LEFT
 			KEY_DELETE, KEY_BACKSPACE:
 				if picks and over_target and not held:
 					return Action.REMOVE
@@ -394,6 +413,14 @@ func handle_input(event: InputEvent) -> bool:
 			return true
 		Action.GROW, Action.SHRINK:
 			mode.step(self, 1 if action == Action.GROW else -1)
+			return true
+		Action.TURN_LEFT, Action.TURN_RIGHT:
+			if not mode.rotates():
+				return false
+			# Shift turns a quarter, a bare press a notch; a held key's repeats turn on.
+			var quarter := (event as InputEventKey).shift_pressed
+			var steps := (6 if quarter else 1) * (1 if action == Action.TURN_RIGHT else -1)
+			mode.rotate(self, steps)
 			return true
 		Action.REMOVE:
 			mode.remove_target(self)

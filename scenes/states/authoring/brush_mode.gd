@@ -103,6 +103,17 @@ func step(brush: BrushTool, steps: int) -> void:
 	brush.set_radius(BrushTool.stepped_radius(brush.get_radius(), steps))
 
 
+## True while the mode turns something (the Wall tool's building footprint): Q and E are then the
+## brush's, `steps` notches of rotate() each.
+func rotates() -> bool:
+	return false
+
+
+## Q or E, `steps` notches (positive turns clockwise on screen, E), when rotates() is true.
+func rotate(_brush: BrushTool, _steps: int) -> void:
+	pass
+
+
 ## RMB or Delete over the target under the pointer (see `picks`).
 func remove_target(_brush: BrushTool) -> void:
 	pass

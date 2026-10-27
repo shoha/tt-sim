@@ -65,12 +65,19 @@ func get_wall(wall_id: int) -> Wall:
 ## (for a new wall) `height` world metres (<= 0: the kind's default); the whole wall as it
 ## would stand, with `closed` set when the drag closes it. Null with last_refusal set when the
 ## drag makes none. Changes nothing: the tool's live preview, and what add() lays.
-func plan(kind: Wall.Kind, from: Vector3, to: Vector3, height: float = -1.0) -> Wall:
+##
+## A building is a rectangle: `from` and `to` are its opposite corners, its sides turned `yaw`
+## radians from the map's X axis (the first side, from `from` along that axis, carries the door).
+func plan(
+	kind: Wall.Kind, from: Vector3, to: Vector3, height: float = -1.0, yaw: float = 0.0
+) -> Wall:
 	var e := _editor()
 	var doc := e.document
 	last_refusal = &""
 	var a := e.to_map_xz(from)
 	var b := e.to_map_xz(to)
+	if kind == Wall.Kind.BUILDING:
+		return _plan_building(a, b, height, yaw)
 	if a.distance_to(b) < Wall.MIN_SEGMENT_M:
 		last_refusal = REFUSED_SHORT
 		return null
@@ -109,9 +116,53 @@ func plan(kind: Wall.Kind, from: Vector3, to: Vector3, height: float = -1.0) -> 
 	return wall
 
 
+## The building with opposite corners `a` and `b` (map XZ) turned `yaw`, of `height` world metres
+## (<= 0: the default), or null with last_refusal set.
+func _plan_building(a: Vector2, b: Vector2, height: float, yaw: float) -> Wall:
+	var e := _editor()
+	var doc := e.document
+	if doc.next_wall_id() < 0:
+		last_refusal = REFUSED_FULL
+		return null
+	var corners := building_corners(a, b, yaw)
+	var wall := Wall.make(
+		doc.next_wall_id(),
+		Wall.Kind.BUILDING,
+		corners,
+		true,
+		clampf(
+			(height if height > 0.0 else Wall.DEFAULT_HEIGHT_M[Wall.Kind.BUILDING]) / e.map_scale(),
+			Wall.MIN_HEIGHT_M[Wall.Kind.BUILDING],
+			Wall.MAX_HEIGHT_M[Wall.Kind.BUILDING]
+		),
+		CrossingPlacement.style_at(doc, (a + b) * 0.5)
+	)
+	if (
+		corners[0].distance_to(corners[1]) < Wall.BUILDING_MIN_SIDE_M
+		or corners[1].distance_to(corners[2]) < Wall.BUILDING_MIN_SIDE_M
+	):
+		last_refusal = REFUSED_SHORT
+		return null
+	if MapWallIO.wall_problem(wall, doc.extent_m()) != "":
+		last_refusal = _refusal_for(wall)
+		return null
+	return wall
+
+
+## The four corners of the rectangle with opposite corners `a` and `b` whose sides run `yaw`
+## radians from +X: `a`, the corner along that axis, `b`, the corner across. Pure.
+static func building_corners(a: Vector2, b: Vector2, yaw: float) -> PackedVector2Array:
+	var u := Vector2(cos(yaw), sin(yaw))
+	var v := Vector2(-u.y, u.x)
+	var d := b - a
+	return PackedVector2Array([a, a + u * d.dot(u), b, a + v * d.dot(v)])
+
+
 ## plan() and add(): the wall's id, or -1 (last_refusal says why).
-func place(kind: Wall.Kind, from: Vector3, to: Vector3, height: float = -1.0) -> int:
-	var wall := plan(kind, from, to, height)
+func place(
+	kind: Wall.Kind, from: Vector3, to: Vector3, height: float = -1.0, yaw: float = 0.0
+) -> int:
+	var wall := plan(kind, from, to, height, yaw)
 	if wall == null:
 		return -1
 	return add(wall)
@@ -178,6 +229,9 @@ func wall_at(point: Vector3, margin: float = 0.5) -> int:
 
 ## The distance from map point `p` to the line of `wall` (map metres). Pure.
 static func distance_to_line(wall: Wall, p: Vector2) -> float:
+	# A building is picked anywhere over its footprint.
+	if wall.is_building() and Geometry2D.is_point_in_polygon(p, wall.points):
+		return 0.0
 	var count := wall.points.size()
 	var sides := count if wall.closed else count - 1
 	var best := INF
@@ -297,4 +351,6 @@ static func _area_of(touched: Array[Wall]) -> Rect2:
 
 
 static func _label(wall: Wall) -> String:
+	if wall.is_building():
+		return "building"
 	return "fence" if wall.is_fence() else "wall"

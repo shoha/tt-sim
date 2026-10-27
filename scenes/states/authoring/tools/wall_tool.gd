@@ -17,7 +17,7 @@ const UNAVAILABLE_TOOLTIP := "Wall: not on a Blender map, whose ground is the ma
 func _init() -> void:
 	id = ID
 	label = LABEL
-	summary = "Build a stone wall or a fence along a line."
+	summary = "Build a stone wall, a fence or a building."
 	icon = "wall"
 	brush_mode = WallBrush
 	contexts = AUTHORING | PLAY
@@ -28,6 +28,14 @@ func _init() -> void:
 			"Lay a side of a wall or fence; start the next drag at its end to carry on",
 		],
 		["Close (Wall)", "End a drag at the first end of an open wall to close the loop"],
+		[
+			"Left Drag (Building)",
+			"Drag from one corner to the opposite one: a building with a door"
+		],
+		[
+			"Q / E (Building)",
+			"Turn the footprint 15 degrees (Shift: a quarter turn) before the drag"
+		],
 		["Ctrl + Click (Wall)", "Remove the wall under the cursor"],
 	]
 

@@ -58,6 +58,25 @@ starts above `world_top()`. Materials: the biome's cliff rock with the palette m
 - Network: a `"walls"` live edit kind (`LiveEditCodec`, `LiveEditReader`) carries the list as JSON,
   validated by `MapWallIO.parse_list`. `MapFingerprint` has a `walls` key.
 
+## Buildings (2026-10-27)
+
+`Wall.Kind.BUILDING` is a closed rectangle of four points (`MapWallIO` refuses anything else: sides
+2 to 24 m, corners square within 0.02 of the cosine), built by procgen's `building.json` (stone walls
+with a level top and a door in the first side, a gable roof of planks, stone gable ends;
+`height_m` is the wall height, default 2.4 m). The node has a stone mesh, a wood mesh (the roof) and
+one collision body: the walls' hull split at the door plus a solid roof, so tokens stand on the roof
+(the door is not walkable: there is no floor). Scatter clears over the whole footprint.
+
+The brush draws a building from two opposite corners (press one, drag to the other; Ctrl+click
+erases it, picked anywhere over its footprint). `WallEditor.building_corners(a, b, yaw)` makes the
+rectangle: its first side runs from `a` along the turn (`yaw`, radians from the map's X axis) and
+carries the door. Q and E turn the next footprint 15 degrees (Shift: 90) through
+`BrushMode.rotates()` / `rotate()` and the brush's `TURN_LEFT` / `TURN_RIGHT` actions; before the
+press an idle ghost of 4 by 3 m shows the turn and the door side, while dragging the rectangle is
+filled faintly on the ground with its outline, top, posts, a door bar and the size. A drag whose
+sides come under 2 m is refused with a line saying so. Verified with the `building_tool` render job
+(idle ghost, turned ghost, drag, laid, save and reload, a token on the roof).
+
 ## In play
 
 The GM's Events pane lists the Wall brush (`EventsPane.wall_pane`, the kind tiles, its header hidden;

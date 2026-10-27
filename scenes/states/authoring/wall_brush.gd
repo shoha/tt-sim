@@ -21,7 +21,14 @@ const FENCE_TINT := Color(0.98, 0.84, 0.58)
 const ERASE_TINT := BrushCursor.CLEAR_TINT
 const SHADOW := Color(0.05, 0.04, 0.05, 0.55)
 ## The readout's name per Wall.Kind.
-const KIND_LABELS: Array[String] = ["Stone wall", "Fence"]
+const KIND_LABELS: Array[String] = ["Stone wall", "Fence", "Building"]
+## A building turns this much per Q or E notch, and the idle ghost of one is this big (world
+## metres: along its first side, across).
+const YAW_STEP := deg_to_rad(15.0)
+const GHOST_SIZE_M := Vector2(4.0, 3.0)
+## The door mark is this wide on the first side (metres), and the footprint fill alpha.
+const DOOR_MARK_M := 1.0
+const FOOTPRINT_ALPHA := 0.2
 ## The pointer's ground point moves this far (metres) before the preview is planned again.
 const REPLAN_M := 0.08
 ## Height change per Shift+wheel notch or bracket key (multiplicative, like the brush size).
@@ -35,6 +42,7 @@ const READOUT_COLOR := Color(1.0, 0.95, 0.6)
 const REFUSED_COLOR := Color(1.0, 0.72, 0.62)
 ## Plain-words reasons a side makes no wall (refusal_text()).
 const SHORT := "Drag a longer line to lay a wall."
+const SHORT_BUILDING := "Drag from one corner to the opposite one, at least 2 m each way."
 const FULL := "The map holds as many walls as it can. Remove one to make room."
 const LONG := "That wall is too long. End it and start another."
 const POINTS := "That wall has as many corners as it can. End it and start another."
@@ -47,8 +55,12 @@ const FADE_M := 2.5
 var kind: int = Wall.Kind.STONE
 ## The height per kind (world metres) a new wall gets.
 var heights: Array[float] = [
-	Wall.DEFAULT_HEIGHT_M[Wall.Kind.STONE], Wall.DEFAULT_HEIGHT_M[Wall.Kind.FENCE]
+	Wall.DEFAULT_HEIGHT_M[Wall.Kind.STONE],
+	Wall.DEFAULT_HEIGHT_M[Wall.Kind.FENCE],
+	Wall.DEFAULT_HEIGHT_M[Wall.Kind.BUILDING],
 ]
+## The turn of a building footprint (radians from the map X axis; Q and E).
+var yaw: float = 0.0
 ## A side being drawn: its press point (world) and the pointer's last ground point.
 var drawing: bool = false
 var from: Vector3 = Vector3.INF
@@ -70,10 +82,10 @@ func _init() -> void:
 
 
 ## The reason a side makes no wall, in plain words. Pure.
-static func refusal_text(reason: StringName) -> String:
+static func refusal_text(reason: StringName, wall_kind: int = Wall.Kind.STONE) -> String:
 	match reason:
 		WallEditor.REFUSED_SHORT:
-			return SHORT
+			return SHORT_BUILDING if wall_kind == Wall.Kind.BUILDING else SHORT
 		WallEditor.REFUSED_FULL:
 			return FULL
 		WallEditor.REFUSED_LONG:
@@ -110,6 +122,15 @@ static func readout(
 		return "%s  %d %s" % [title, length, label]
 	var high := ScaleUtils.world_to_display(height_m, cell_m, per_cell)
 	return "%s  %s %s high" % [title, BridgeBrush.short_number(high), label]
+
+
+## The readout beside the cursor for a building: its two sides ("Building  14 x 10 ft"). Pure.
+static func readout_building(
+	along_m: float, across_m: float, cell_m: float, per_cell: float, label: String
+) -> String:
+	var a := roundi(ScaleUtils.world_to_display(along_m, cell_m, per_cell))
+	var b := roundi(ScaleUtils.world_to_display(across_m, cell_m, per_cell))
+	return "Building  %d x %d %s" % [a, b, label]
 
 
 ## The picked kind's height (world metres).
@@ -151,7 +172,7 @@ func track(editor: AuthoringEditor, hit: Vector3, erasing: bool) -> void:
 
 func _plan(editor: AuthoringEditor) -> void:
 	var started := Time.get_ticks_usec()
-	preview = editor.walls.plan(kind as Wall.Kind, from, to, height())
+	preview = editor.walls.plan(kind as Wall.Kind, from, to, height(), yaw)
 	refusal = editor.walls.last_refusal
 	last_plan_usec = Time.get_ticks_usec() - started
 	_planned_to = to
@@ -171,7 +192,7 @@ func finish(editor: AuthoringEditor) -> int:
 		if placed < 0:
 			refusal = editor.walls.last_refusal
 	if placed < 0:
-		_message = refusal_text(refusal)
+		_message = refusal_text(refusal, kind)
 	preview = null
 	return placed
 
@@ -243,6 +264,18 @@ func step(brush: BrushTool, steps: int) -> void:
 	brush.redraw()
 
 
+## A building footprint turns with Q and E.
+func rotates() -> bool:
+	return kind == Wall.Kind.BUILDING
+
+
+## Q or E: the footprint turns `steps` notches of YAW_STEP (E clockwise on screen).
+func rotate(brush: BrushTool, steps: int) -> void:
+	yaw = wrapf(yaw + steps * YAW_STEP, 0.0, TAU)
+	_planned_to = Vector3.INF
+	brush.redraw()
+
+
 ## The side being drawn stays in view under a canopy: the focus is its middle.
 func fade_focus(brush: BrushTool) -> Vector4:
 	var centre := (from + brush.hit) * 0.5 if drawing else brush.hit
@@ -280,14 +313,27 @@ func draw(
 		var ok := preview != null
 		if ok:
 			draw_wall(canvas, camera, editor, preview, _kind_tint(preview.kind), 1.0)
-		BridgeBrush.draw_drag_line(
-			canvas, camera, from, to, _kind_tint(kind) if ok else ERASE_TINT, not ok
-		)
-		var text := (
-			readout(kind, from.distance_to(to), 0.0, cell_m, per_cell, label)
-			if ok
-			else refusal_text(refusal)
-		)
+		var building := kind == Wall.Kind.BUILDING
+		if building:
+			# Two opposite corners: a dot on each, the rectangle between them.
+			for corner in [from, to]:
+				BridgeBrush.draw_marker(canvas, camera, corner, _kind_tint(kind))
+		else:
+			BridgeBrush.draw_drag_line(
+				canvas, camera, from, to, _kind_tint(kind) if ok else ERASE_TINT, not ok
+			)
+		var text := refusal_text(refusal, kind)
+		if ok and building:
+			var scale := editor.map_scale()
+			text = readout_building(
+				preview.points[0].distance_to(preview.points[1]) * scale,
+				preview.points[1].distance_to(preview.points[2]) * scale,
+				cell_m,
+				per_cell,
+				label
+			)
+		elif ok:
+			text = readout(kind, from.distance_to(to), 0.0, cell_m, per_cell, label)
 		BridgeBrush.draw_pill(
 			canvas, camera.unproject_position(to), text, READOUT_COLOR if ok else REFUSED_COLOR
 		)
@@ -305,6 +351,8 @@ func draw(
 			return
 		BridgeBrush.draw_marker(canvas, camera, hit, ERASE_TINT)
 		return
+	if kind == Wall.Kind.BUILDING and hit != Vector3.INF:
+		_draw_idle_building(canvas, camera, editor, hit)
 	BridgeBrush.draw_marker(canvas, camera, hit, _kind_tint(kind))
 	BridgeBrush.draw_pill(
 		canvas,
@@ -317,6 +365,23 @@ func draw(
 ## Pale stone for a wall, warm wood for a fence.
 static func _kind_tint(wall_kind: int) -> Color:
 	return FENCE_TINT if wall_kind == Wall.Kind.FENCE else STONE_TINT
+
+
+## The footprint a building would have if it were pressed here at the default size and the
+## brush turn, so the turn shows before the drag.
+func _draw_idle_building(
+	canvas: Control, camera: Camera3D, editor: AuthoringEditor, hit: Vector3
+) -> void:
+	var scale := editor.map_scale()
+	var centre := editor.to_map_xz(hit)
+	var u := Vector2(cos(yaw), sin(yaw))
+	var v := Vector2(-u.y, u.x)
+	var half := GHOST_SIZE_M * 0.5 / scale
+	var corners := WallEditor.building_corners(
+		centre - u * half.x - v * half.y, centre + u * half.x + v * half.y, yaw
+	)
+	var ghost := Wall.make(0, Wall.Kind.BUILDING, corners, true, height() / scale)
+	draw_wall(canvas, camera, editor, ghost, _kind_tint(kind), 0.7)
 
 
 ## A wall's ghost (map frame) on `canvas`: its line on the ground, its top a height above, and a
@@ -368,3 +433,49 @@ static func draw_wall(
 		var at := camera.unproject_position(editor.to_world(Vector3(p.x, ground + 0.03, p.y)))
 		canvas.draw_circle(at, 4.5, Color(SHADOW, 0.7 * strength))
 		canvas.draw_circle(at, 3.0, Color(tint, strength))
+	if wall.is_building() and count == Wall.BUILDING_POINTS:
+		_draw_footprint(canvas, camera, editor, wall, tint, strength)
+
+
+## A building footprint: the rectangle filled faintly on the ground and the door marked on its
+## first side (a bar the door width, and a tick out from it).
+static func _draw_footprint(
+	canvas: Control,
+	camera: Camera3D,
+	editor: AuthoringEditor,
+	wall: Wall,
+	tint: Color,
+	strength: float
+) -> void:
+	var doc := editor.document
+	var screen := func(p: Vector2, lift: float) -> Vector2:
+		var y := WaterGeometry.ground_at(doc, p) + lift
+		return camera.unproject_position(editor.to_world(Vector3(p.x, y, p.y)))
+	var ring := PackedVector2Array()
+	for p in wall.points:
+		ring.append(screen.call(p, 0.04))
+	var centre := (ring[0] + ring[1] + ring[2] + ring[3]) * 0.25
+	var fan := ring.duplicate()
+	fan.append(centre)
+	var colors := PackedColorArray()
+	colors.resize(fan.size())
+	colors.fill(Color(tint, FOOTPRINT_ALPHA * strength))
+	RenderingServer.canvas_item_add_triangle_array(
+		canvas.get_canvas_item(), BrushCursor.fan_indices(ring.size()), fan, colors
+	)
+	var side := wall.points[1] - wall.points[0]
+	var mid := (wall.points[0] + wall.points[1]) * 0.5
+	var along := side.normalized()
+	var middle_of_all := (wall.points[0] + wall.points[1] + wall.points[2] + wall.points[3]) * 0.25
+	var out := Vector2(-along.y, along.x)
+	if out.dot(middle_of_all - mid) > 0.0:
+		out = -out
+	var door := DOOR_MARK_M / editor.map_scale()
+	var left: Vector2 = screen.call(mid - along * door * 0.5, 0.05)
+	var right: Vector2 = screen.call(mid + along * door * 0.5, 0.05)
+	var step: Vector2 = screen.call(mid + out * door * 0.6, 0.05)
+	var middle: Vector2 = screen.call(mid, 0.05)
+	canvas.draw_line(left, right, Color(SHADOW, 0.8 * strength), 7.0, true)
+	canvas.draw_line(left, right, Color(1.0, 1.0, 1.0, strength), 4.0, true)
+	canvas.draw_line(middle, step, Color(SHADOW, 0.8 * strength), 5.0, true)
+	canvas.draw_line(middle, step, Color(1.0, 1.0, 1.0, strength), 2.5, true)
