@@ -121,6 +121,22 @@ func test_ids_are_free_ones_and_the_document_is_capped() -> void:
 	assert_eq(_doc.next_wall_id(), -1, "full")
 
 
+func test_the_procgen_crossings_flag_is_a_map_fact() -> void:
+	assert_false(_doc.procgen_crossings, "an older map keeps the code-built crossings")
+	assert_false(ProcgenCrossing.active(_doc))
+	assert_eq(MapDocumentIO.write(_doc, SAVE_PATH), OK)
+	var plain: MapDocument = MapDocumentIO.read(SAVE_PATH)["document"]
+	assert_false(plain.procgen_crossings, "no key in the manifest reads as false")
+	_doc.procgen_crossings = true
+	assert_true(ProcgenCrossing.active(_doc))
+	assert_eq(MapDocumentIO.write(_doc, SAVE_PATH), OK)
+	var read: MapDocument = MapDocumentIO.read(SAVE_PATH)["document"]
+	assert_true(read.procgen_crossings, "the flag survives a save")
+	assert_true(ProcgenCrossing.active(read))
+	var made := NewMap.create(50, NewMap.BARE_BIOME, 7)
+	assert_true(made.procgen_crossings, "a new map says yes")
+
+
 # --- the geometry ------------------------------------------------------------------------
 
 

@@ -32,6 +32,13 @@ const RECIPES := {
 static var enabled := false
 
 
+## True when `doc`'s crossings are built by the module: the document says so (a map fact, saved in
+## its manifest, so every peer builds the same one; new maps say yes, older ones keep the look
+## they were laid with) or the static `enabled` override is on (tests, render jobs).
+static func active(doc: MapDocument) -> bool:
+	return enabled or (doc != null and doc.procgen_crossings)
+
+
 ## The ground a structure asks about, in the crossing's local (u, v).
 class Ground:
 	extends ProcgenEnvironment

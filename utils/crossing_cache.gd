@@ -58,7 +58,7 @@ static func key_of(doc: MapDocument, crossing: Crossing) -> int:
 			crossing.levels,
 			crossing.width_m,
 			crossing.style,
-			ProcgenCrossing.enabled and ProcgenCrossing.RECIPES.has(crossing.kind),
+			ProcgenCrossing.active(doc) and ProcgenCrossing.RECIPES.has(crossing.kind),
 			doc.map_seed,
 			doc.cell_size_m,
 			doc.sample_spacing_m,

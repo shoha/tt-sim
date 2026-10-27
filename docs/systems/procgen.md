@@ -41,6 +41,16 @@ Not covered by the parity test: tangents (the module writes none), the moss spli
 (the module uses the copied swatch table, see procgen `README.md`), `deck_field`, collapse, the
 cache key.
 
+## The switch is a map fact (2026-10-27)
+
+`MapDocument.procgen_crossings` (manifest key `procgen_crossings`, written only when true) says the
+map's crossings are built by the module; `ProcgenCrossing.active(doc)` is that flag or the static
+`enabled` override (tests, render jobs). A new map (`NewMap.create`) sets it; a map saved before has no
+key and reads false, so it keeps the look its crossings were laid with. Every peer reads the flag
+from the document, so peers build the same geometry (the per-machine gap below is closed for saved
+maps). A dressed Blender map's document leaves it false. Changing a map's flag rebuilds its crossings
+(`CrossingCache.key_of` includes it). No UI toggles it yet.
+
 ## The switch (2026-10-26)
 
 `ProcgenCrossing.enabled` (a static var, off by default) routes `CrossingGeometry.build_one`'s plank

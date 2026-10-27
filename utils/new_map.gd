@@ -133,6 +133,8 @@ static func create(
 	var doc := MapDocument.create_flat(
 		size_cells(size_ft, depth_ft), surface, PaletteLibrary.palette_version(root), seed_value
 	)
+	# A new map's crossings are the procgen module's (see ProcgenCrossing.active).
+	doc.procgen_crossings = true
 	var stage := Vector2.ZERO
 	var glade := {}
 	var clearings: Array = []

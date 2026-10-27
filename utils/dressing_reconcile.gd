@@ -113,6 +113,7 @@ static func regrid(doc: MapDocument, cells: Vector2i) -> MapDocument:
 	out.surface_ids = doc.surface_ids
 	out.water_bodies = doc.water_bodies
 	out.crossings = doc.crossings
+	out.procgen_crossings = doc.procgen_crossings
 	var nearest := nearest_samples(doc, out)
 	var heights := PackedFloat32Array()
 	heights.resize(nearest.size())

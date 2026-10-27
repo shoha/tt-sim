@@ -173,6 +173,10 @@ var water_flow: PackedByteArray = PackedByteArray()
 var water_flow_size: Vector2i = Vector2i.ZERO
 ## Plank bridges and stepping stones over the water (Crossing), at most MAX_CROSSINGS.
 var crossings: Array[Crossing] = []
+## True when this map's crossings are built by the shared procgen module (ProcgenCrossing.active),
+## a map fact saved in the manifest so every peer builds the same geometry. False for a map made
+## before the module built them.
+var procgen_crossings: bool = false
 ## Stone walls and fences along a line (Wall), at most MAX_WALLS.
 var walls: Array[Wall] = []
 ## One byte per sample: the persistent ground fire's intensity 0..255 (0 = no fire), painted by
