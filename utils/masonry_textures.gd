@@ -8,7 +8,7 @@ extends RefCounted
 
 const FOLDER := "res://assets/textures/masonry/"
 ## One tile covers this much wall, metres (the UVs of a textured wall are metres).
-const TILE_M := 3.0
+const TILE_M := 6.0
 const TILE_H_M := 1.2
 ## The mean sRGB tone of the albedo's stones, which a tint divides out to land on a target colour.
 const MEAN_TONE := 0.6
