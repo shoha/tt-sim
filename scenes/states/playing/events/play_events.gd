@@ -170,6 +170,9 @@ static func hints_for(
 		BridgeTool.ID:
 			rows = [["Left-drag", "Lay a crossing"], ["Ctrl+click", "Remove one"]]
 			size = "Width"
+		WallTool.ID:
+			rows = [["Left-drag", "Lay a wall"], ["Ctrl+click", "Remove one"]]
+			size = "Height"
 		EventPresets.COLLAPSE:
 			rows = [["Click", EventPresets.DROP_LABEL]]
 			size = ""
@@ -247,6 +250,7 @@ func setup(lpc: LevelPlayController, events_pane: EventsPane) -> void:
 	pane.bridge_kind_selected.connect(
 		func(kind: int) -> void: _set_mode(BridgeTool.ID, "kind", kind)
 	)
+	pane.wall_kind_selected.connect(func(kind: int) -> void: _set_mode(WallTool.ID, "kind", kind))
 	pane.brush_size_changed.connect(func(radius: float) -> void: _wired_brush().set_radius(radius))
 	pane.brush_strength_changed.connect(func(flow: float) -> void: _wired_brush().set_flow(flow))
 	pane.visibility_changed.connect(refresh)

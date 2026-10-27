@@ -1,0 +1,135 @@
+{
+ "out_dir": "render_jobs/wall_play",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait_title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "temperate_forest_summer_s1",
+   "size": 100,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/events_pane.gd",
+   "action": "save",
+   "folder": "_gm_events_table"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "play",
+   "folder": "_gm_events_table"
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/events_pane.gd",
+   "action": "window",
+   "size": "1920x1080"
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/events_pane.gd",
+   "action": "open"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/events_pane.gd",
+   "action": "arm",
+   "tool": "wall"
+  },
+  {
+   "op": "wait",
+   "s": 0.8
+  },
+  {
+   "op": "capture",
+   "name": "01_wall_pane",
+   "desc": "The GM's Events pane with the Wall brush picked: the kind tiles"
+  },
+  {
+   "op": "gesture",
+   "points": [
+    [
+     -4,
+     -3
+    ],
+    [
+     3,
+     -3
+    ]
+   ],
+   "speed": 3.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "gesture",
+   "points": [
+    [
+     3,
+     -3
+    ],
+    [
+     3,
+     3
+    ]
+   ],
+   "speed": 3.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "report"
+  },
+  {
+   "op": "capture",
+   "name": "02_wall_laid",
+   "desc": "Two sides laid in play"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}

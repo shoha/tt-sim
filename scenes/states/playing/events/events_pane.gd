@@ -50,6 +50,7 @@ signal ignite_shape_selected(shape: int)
 signal water_depth_selected(depth: int)
 signal water_speed_changed(speed: float)
 signal bridge_kind_selected(kind: int)
+signal wall_kind_selected(kind: int)
 signal brush_size_changed(radius: float)
 signal brush_strength_changed(flow: float)
 
@@ -81,6 +82,11 @@ const TOOL_HINTS := {
 	),
 	BridgeTool.ID:
 	"Drag a line across a river or pond, bank to bank. Hold Ctrl and click a crossing to remove it.",
+	WallTool.ID:
+	(
+		"Drag along the ground to lay a stone wall or a fence; start the next drag at its end to carry"
+		+ " on. Hold Ctrl and click one to remove it."
+	),
 	EventPresets.COLLAPSE: "Click a bridge: it breaks and falls into the water for everyone.",
 	EventPresets.TOPPLE:
 	"Click in a forest: the marked trees fall away from the click. Drag out for a wider stand.",
@@ -123,6 +129,7 @@ var paint_fields: Dictionary = {}
 var fire_pane: FireToolPane
 var water_pane: WaterToolPane
 var bridge_pane: BridgeToolPane
+var wall_pane: WallToolPane
 ## Start a fire's Shape field (IGNITE_SHAPE_TILES), and the shape it shows.
 var ignite_shape_field: TileField
 var ignite_shape: int = IgniteMode.Shape.CIRCLE
@@ -194,7 +201,7 @@ func show_tool(tool_id: StringName, pressed: bool = true) -> void:
 	var above: Control = (preset_note as Control) if preset else tool_field
 	move_child(_options_holder, above.get_index() + 1)
 	move_child(_advanced, _options_holder.get_index() + 1)
-	var sized := tool_id != &"" and not tool_id in [WaterTool.ID, BridgeTool.ID]
+	var sized := tool_id != &"" and not tool_id in [WaterTool.ID, BridgeTool.ID, WallTool.ID]
 	_advanced.visible = sized and tool_id != EventPresets.COLLAPSE
 	_strength_row.visible = not preset
 	var path := tool_id == EventPresets.IGNITE and ignite_shape == IgniteMode.Shape.PATH
@@ -349,6 +356,12 @@ func _build_tool_options(tool_id: StringName) -> Control:
 			(bridge_pane.get_node("BridgeHint") as Label).text = String(TOOL_HINTS[tool_id])
 			bridge_pane.kind_selected.connect(bridge_kind_selected.emit)
 			return bridge_pane
+		WallTool.ID:
+			wall_pane = WallToolPane.new()
+			wall_pane.get_node("WallHeader").visible = false
+			(wall_pane.get_node("WallHint") as Label).text = String(TOOL_HINTS[tool_id])
+			wall_pane.kind_selected.connect(wall_kind_selected.emit)
+			return wall_pane
 	var box := VBoxContainer.new()
 	box.name = String(tool_id).to_pascal_case() + "Options"
 	# The gesture line belongs to the group under it (S2), but its tiles' heading still has
