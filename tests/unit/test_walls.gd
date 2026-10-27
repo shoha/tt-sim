@@ -169,6 +169,17 @@ func test_the_geometry_is_the_same_each_time_and_its_key_moves_with_the_ground()
 	assert_ne(WallGeometry.key_of(_doc, taller), WallGeometry.key_of(_doc, wall))
 
 
+func test_plants_are_cleared_along_a_wall() -> void:
+	_doc.walls.append(_wall(Wall.Kind.STONE, false))
+	var sides := WallGeometry.clearance_crossings(_doc)
+	assert_eq(sides.size(), 2, "one per side of the open line")
+	assert_eq(CrossingGeometry.clearance(sides, Vector2(-1, 0)), 0.0, "nothing on the wall")
+	assert_eq(CrossingGeometry.clearance(sides, Vector2(-1, 6)), 1.0, "far away it grows")
+	var closed := _wall(Wall.Kind.STONE, true)
+	_doc.walls[0] = closed
+	assert_eq(WallGeometry.clearance_crossings(_doc).size(), 3, "a closed wall has its last side")
+
+
 # --- the nodes ---------------------------------------------------------------------------
 
 

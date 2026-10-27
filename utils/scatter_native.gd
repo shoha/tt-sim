@@ -202,7 +202,7 @@ static func source_for(
 			kinds[s] = 3
 	var wet := doc.water_dressing.size() == count * WaterDressing.CHANNELS
 	var spans := PackedFloat64Array()
-	for crossing in doc.crossings:
+	for crossing in doc.crossings + WallGeometry.clearance_crossings(doc):
 		spans.append_array(
 			[crossing.start.x, crossing.start.y, crossing.end.x, crossing.end.y, crossing.width_m]
 		)
@@ -292,7 +292,7 @@ static func grids_for(
 	# The library reads WaterDressing's field as 4 bytes per sample.
 	var wet := doc.water_dressing.size() == count * WaterDressing.CHANNELS
 	var spans := PackedFloat64Array()
-	for crossing in doc.crossings:
+	for crossing in doc.crossings + WallGeometry.clearance_crossings(doc):
 		spans.append_array(
 			[crossing.start.x, crossing.start.y, crossing.end.x, crossing.end.y, crossing.width_m]
 		)
