@@ -25,6 +25,14 @@ var _controller: LevelPlayController
 var _loader: LevelPlayLoader
 
 
+func before_all() -> void:
+	# Loading a document goes through the library gate (MapLibraryGate), which checks the map's
+	# libraries against the ones served: serve them here rather than rely on an earlier test
+	# having done it (alone, or after other shards, the gate found `core` unserved and opened its
+	# dialog, which a headless run never answers).
+	LibraryRegistry.apply()
+
+
 func before_each() -> void:
 	DirAccess.make_dir_recursive_absolute(Paths.get_level_folder(FOLDER))
 	_controller = LevelPlayController.new()
