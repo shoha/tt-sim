@@ -21,6 +21,16 @@ const NODE_NAME := "AuthoredWalls"
 ## Set on every stone wall's collision body: the wall's id.
 const WALL_META := &"tt_wall"
 const STONE_NORMAL_SCALE := 0.8
+## A wall's masonry is lifted and warmed over a stepping stone's tint: its flat-shaded faces, the
+## block shade and the dark foot average well under the palette boulders' value, and the cliff
+## surfaces read blue-grey beside their warm rocks (judged on alpine, badlands and forest, side by
+## side with the boulders, 2026-10-27).
+const WALL_STONE_TINT := Color(1.2, 1.2, 1.17)
+## The cold biomes' basalt cliff is near black and blue; their boulders are olive grey. The
+## badlands' sandstone reads pink beside their golden boulders.
+const WALL_SURFACE_TINTS := {
+	"cliff_basalt": Color(1.95, 1.85, 1.45), "cliff_sandstone": Color(1.3, 1.27, 1.06)
+}
 const WOOD_NORMAL_SCALE := 0.6
 
 ## Highest wall top, map Y (-INF with none), and a counter that changes with every rebuild.
@@ -231,9 +241,7 @@ func _stone_material(style: String) -> Material:
 	if _materials.has(key):
 		return _materials[key]
 	var surface := AuthoredCrossings.stone_surface(style, _palette_root)
-	var tint: Color = AuthoredCrossings.STONE_SURFACE_TINTS.get(
-		surface, AuthoredCrossings.STONE_TINT
-	)
+	var tint: Color = WALL_SURFACE_TINTS.get(surface, WALL_STONE_TINT)
 	var material := AuthoredCrossings.surface_material(
 		_palette_root, surface, tint, STONE_NORMAL_SCALE
 	)

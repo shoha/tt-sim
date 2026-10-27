@@ -66,6 +66,8 @@ starts above `world_top()`. Materials: the biome's cliff rock with the palette m
 - No wall in play or Events panes (the tool is authoring only); no collapse or other events.
 - A fence blocks nothing and a stone wall is a surface to stand on, not a barrier tokens cannot
   cross: blocking movement is a game rule decision still to make.
-- The look is the module's first pass (brick-regular, pale); the wood UVs are the copied swatch
-  table (see procgen's README cleanup list).
+- The look: the module's courses and blocks (procgen look pass, 2026-10-27) with a wall tint
+  (`AuthoredWalls.WALL_STONE_TINT`, per-surface `WALL_SURFACE_TINTS` for basalt and sandstone)
+  judged beside the palette boulders on alpine, badlands and forest (`wall_colour` render job). The
+  wood UVs are the copied swatch table (see procgen's README cleanup list).
 - The procgen switch (`ProcgenCrossing.enabled`) does not affect walls: they always use the module.
