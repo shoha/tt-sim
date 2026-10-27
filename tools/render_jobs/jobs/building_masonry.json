@@ -1,0 +1,162 @@
+{
+ "out_dir": "render_jobs/building_masonry",
+ "timeout_s": 500,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "temperate_forest_summer_s1",
+   "size": 150,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel._on_rail_item_pressed(\"wall\")"
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel.close()"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 22.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "textured",
+   "on": true
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "kind",
+   "kind": "row"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "preset",
+   "preset": 3
+  },
+  {
+   "op": "gesture",
+   "points": [
+    [
+     -14,
+     0
+    ],
+    [
+     14,
+     0
+    ]
+   ],
+   "speed": 8.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "01_textured",
+   "desc": "A village street, masonry in the texture"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -4,
+    -3
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 9.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "02_textured_close",
+   "desc": "Close: textured"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "textured",
+   "on": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "rebuild"
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "03_modelled_close",
+   "desc": "Close: modelled blocks, same street"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 22.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "04_modelled",
+   "desc": "The same street, modelled blocks"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}

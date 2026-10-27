@@ -107,6 +107,21 @@ species, the village's fences visible).
 Not yet: breaking a street into individual buildings, corner plots, and a yard that is not fence or
 low wall (gardens, trees), plus finer control than the species.
 
+## Textured masonry (spike, 2026-10-27; off by default)
+
+`WallGeometry.textured` (a static, false) asks procgen's `textured` option of the stone wall, building
+and street recipes: the courses are faces with UVs in metres (a `masonry` surface, `AuthoredWalls`
+`Masonry` mesh) wearing a baked tileable set (`assets/textures/masonry/`: albedo, normal, ORM; raw PNGs,
+importer keep; `MasonryTextures`, 3 by 1.2 m, shown 1.5 times larger, tinted from the rock's mean
+colour) in place of modelled blocks; the coping, the door's lintel course, yard walls' coping and
+the collision hull are unchanged. The set is baked by plantgen's `tools/bake_masonry_cli.gd`.
+Measured (procgen, triangles): a building 2220 to 388, a mixed street of 13 on 40 m 11 160 to 3050,
+a terrace 28 138 to 5802, a village 12 528 to 6742 (its fences and roofs remain). Judged in the game
+(`building_masonry` and `wall_masonry` render jobs): a street of houses reads well at the home zoom, a
+lone low wall reads as brick (the tile is too regular) and basalt biomes tint too dark and blue (the
+per-surface tint table of the modelled walls is not applied). So it stays off until the tile is more
+irregular and the tints are tuned; flip the static (or the probe's `textured` action) to compare.
+
 ## In play
 
 The GM's Events pane lists the Wall brush (`EventsPane.wall_pane`, the kind tiles, its header hidden;

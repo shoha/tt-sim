@@ -21,6 +21,10 @@ const ROW_REACH_M := 9.0
 ## Marks a wall with no top (no recipe, or nothing built).
 const NONE := -INF
 
+## True: a wall carries its courses in the masonry texture (MasonryTextures), the coping modelled,
+## a fraction of the triangles; false: modelled blocks. A static for comparing the two.
+static var textured := false
+
 
 ## The ground a wall asks about: the document's heights at a map point.
 class Ground:
@@ -62,6 +66,8 @@ static func inputs_for(doc: MapDocument, wall: Wall) -> ProcgenStructureInputs:
 		inputs.params = {
 			"setback": wall.height_m, "side": float(wall.side), "preset": float(wall.preset)
 		}
+	if textured and wall.kind != Wall.Kind.FENCE and MasonryTextures.available():
+		inputs.params["textured"] = 1.0
 	var ground := Ground.new()
 	ground.doc = doc
 	inputs.env = ground
@@ -97,6 +103,7 @@ static func build_one(doc: MapDocument, wall: Wall) -> Dictionary:
 		"kind": wall.kind,
 		"style": wall.style,
 		"stone": [],
+		"masonry": [],
 		"wood": [],
 		"collision": PackedVector3Array(),
 		"top": NONE,
@@ -148,6 +155,7 @@ static func key_of(doc: MapDocument, wall: Wall) -> int:
 			wall.seed_value,
 			wall.side,
 			wall.preset,
+			textured,
 			samples,
 		]
 	)
@@ -233,7 +241,7 @@ static func _arrays(surface: PlantSurface) -> Array:
 	arrays[Mesh.ARRAY_TEX_UV] = surface.uvs
 	arrays[Mesh.ARRAY_COLOR] = surface.colors
 	arrays[Mesh.ARRAY_INDEX] = surface.indices
-	if surface.kind == "wood":
+	if surface.kind == "wood" or surface.kind == "masonry":
 		arrays[Mesh.ARRAY_TANGENT] = ProcgenCrossing.quad_tangents(
 			surface.vertices, surface.normals, surface.uvs
 		)
