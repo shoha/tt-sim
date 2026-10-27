@@ -23,7 +23,7 @@ const NONE := -INF
 
 ## True: a wall carries its courses in the masonry texture (MasonryTextures), the coping modelled,
 ## a fraction of the triangles; false: modelled blocks. A static for comparing the two.
-static var textured := false
+static var textured := true
 
 
 ## The ground a wall asks about: the document's heights at a map point.

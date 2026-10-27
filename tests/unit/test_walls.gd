@@ -199,7 +199,7 @@ func test_plants_are_cleared_along_a_wall() -> void:
 func test_textured_masonry_is_a_part_of_stone_buildings_and_streets() -> void:
 	assert_true(MasonryTextures.available(), "the baked set is in the project")
 	var before := WallGeometry.textured
-	assert_false(before, "off until the look is judged")
+	assert_true(before, "on: it reads as well as modelled blocks at a tenth of the triangles")
 	WallGeometry.textured = true
 	var street := Wall.make(
 		1, Wall.Kind.ROW, PackedVector2Array([Vector2(-10, 0), Vector2(10, 0)]), false, 3.0

@@ -23,7 +23,9 @@ const WALL_META := &"tt_wall"
 const STONE_NORMAL_SCALE := 0.8
 ## What a textured wall's tint is lifted by over the rock's mean colour (judged beside the
 ## boulders).
-const WALL_MASONRY_LIFT := Color(1.45, 1.4, 1.35)
+const WALL_MASONRY_LIFT := Color(1.25, 1.3, 1.35)
+## Per rock surface, a stronger lift (the basalt cliff's mean is near black and blue).
+const WALL_MASONRY_LIFTS := {"cliff_basalt": Color(2.0, 1.9, 1.55)}
 ## The masonry tile is shown this much larger than baked: stones as big as the modelled ones.
 const MASONRY_SCALE_UP := 1.5
 ## A wall's masonry is lifted and warmed over a stepping stone's tint: its flat-shaded faces, the
@@ -279,7 +281,9 @@ func _masonry_material(style: String) -> Material:
 	var surface_name := AuthoredCrossings.stone_surface(style, _palette_root)
 	var surface: Dictionary = PaletteLibrary.surfaces(_palette_root).get(surface_name, {})
 	var mean: Array = surface.get("albedo_mean_linear", [0.3, 0.3, 0.3])
-	material.albedo_color = MasonryTextures.tint_of(mean, WALL_MASONRY_LIFT)
+	material.albedo_color = MasonryTextures.tint_of(
+		mean, WALL_MASONRY_LIFTS.get(surface_name, WALL_MASONRY_LIFT)
+	)
 	if not textures.is_empty():
 		material.albedo_texture = textures.albedo
 		material.normal_enabled = true
