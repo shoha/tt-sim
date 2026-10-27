@@ -1,0 +1,129 @@
+{
+ "out_dir": "render_jobs/put_down",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "temperate_forest_summer_s1",
+   "size": 150,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 14.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel._on_rail_item_pressed(\"wall\")"
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "wait",
+   "s": 0.8
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "move",
+     "at": [
+      1400,
+      500
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.3
+  },
+  {
+   "op": "capture",
+   "name": "01_brush_out",
+   "desc": "The Wall brush out: its ring on the map, no notice"
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "press",
+     "at": [
+      1400,
+      500
+     ],
+     "button": "right"
+    },
+    {
+     "type": "release",
+     "at": [
+      1400,
+      500
+     ],
+     "button": "right"
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.6
+  },
+  {
+   "op": "capture",
+   "name": "02_put_down",
+   "desc": "After a right click: the Brush put down card above the pane, with Pick up Wall"
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel.find_child(\"PutDownPickUp\", true, false).pressed.emit()"
+  },
+  {
+   "op": "wait",
+   "s": 0.6
+  },
+  {
+   "op": "eval",
+   "expr": "_game_map.get_brush_tool().is_active()"
+  },
+  {
+   "op": "capture",
+   "name": "03_picked_up",
+   "desc": "After Pick up: the brush is out again and the card is gone"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}

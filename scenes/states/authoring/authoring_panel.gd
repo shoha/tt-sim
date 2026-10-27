@@ -52,6 +52,8 @@ signal redo_pressed
 signal name_changed(new_name: String)
 signal biome_selected(biome_id: String)
 signal tool_selected(tool_id: StringName)
+## The Pick up button of the put-down notice: the tool whose brush was put down.
+signal pick_up_requested(tool_id: StringName)
 ## A Place tile was picked: species `species_key` of palette biome `biome_id`.
 signal place_selected(biome_id: String, species_key: String)
 ## A Sculpt tile was picked: HeightBrush.RAISE, SMOOTH, FLATTEN or TIER.
@@ -190,6 +192,8 @@ var _paint_order_biomes: PackedStringArray = PackedStringArray()
 var _active_tool: StringName = &""
 ## True while the controller's leave prompt is on screen, so Escape does not stack another.
 var _leave_pending: bool = false
+## The card a right click puts up while a brush is down (PutDownNotice).
+var _put_down: PutDownNotice
 
 
 func _on_ready() -> void:
@@ -208,6 +212,9 @@ func _on_ready() -> void:
 			margin_node.add_theme_constant_override(side, 16)
 
 	_build_name_field()
+	_put_down = PutDownNotice.new()
+	_put_down.pick_up_requested.connect(func(id: StringName) -> void: pick_up_requested.emit(id))
+	content_container.add_child(_put_down)
 	_stack = PaneStack.new()
 	_stack.name = "PaneStack"
 	_stack.slide_from_right = false
@@ -876,6 +883,26 @@ func set_active_tool(tool_id: StringName) -> void:
 	_active_tool = tool_id
 	if tool_id != &"":
 		set_rail_item_active(tool_id, true)
+		hide_put_down()
+
+
+## Says the brush of tool `tool_id` was put down with a right click and how to pick it up
+## (PutDownNotice): a card above the pane, and the pane's tiles drawn unpicked, until a brush is
+## out again.
+func show_put_down(tool_id: StringName) -> void:
+	var tool := ToolRegistry.find(tool_id)
+	if tool != null:
+		_put_down.show_for(tool, tool_pane(tool_id))
+
+
+func hide_put_down() -> void:
+	if _put_down != null:
+		_put_down.hide_notice()
+
+
+## True while the put-down notice is showing.
+func is_put_down_shown() -> bool:
+	return _put_down != null and _put_down.visible
 
 
 func get_active_tool() -> StringName:

@@ -114,6 +114,11 @@ func setup(game_map: GameMap) -> void:
 	tokens.edited.connect(mark_edited)
 	_build_ui()
 	brush.toggled.connect(_on_brush_toggled)
+	brush.put_down.connect(
+		func(put_away: ToolDescriptor) -> void:
+			if put_away != null:
+				panel.show_put_down(put_away.id)
+	)
 	brush.refused.connect(
 		func(reason: String) -> void: UIManager.show_toast(reason, UIManager.TOAST_WARNING, 5.0)
 	)
@@ -156,6 +161,7 @@ func _build_ui() -> void:
 	panel.water_depth_selected.connect(_on_water_depth_selected)
 	panel.water_speed_changed.connect(func(speed: float) -> void: WaterTool.of(brush).speed = speed)
 	panel.bridge_kind_selected.connect(_on_bridge_kind_selected)
+	panel.pick_up_requested.connect(_select_tool)
 	panel.brush_size_changed.connect(func(radius: float) -> void: brush.set_radius(radius))
 	panel.brush_strength_changed.connect(func(flow: float) -> void: brush.set_flow(flow))
 	# A tool that brings its own pane wires it here; the panel's own panes signal above.
