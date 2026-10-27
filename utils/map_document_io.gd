@@ -308,6 +308,8 @@ static func _manifest(doc: MapDocument) -> Dictionary:
 		"base_surface": doc.base_surface,
 		"has_base_map": doc.has_base_map,
 	}
+	if doc.procgen_crossings:
+		manifest["procgen_crossings"] = true
 	if not libraries.is_empty():
 		manifest["libraries"] = libraries
 	return manifest
@@ -664,6 +666,12 @@ static func _parse_manifest(
 	if not base_map is bool:
 		warn_log.add("manifest.json: has_base_map missing or not a bool, using false")
 	doc.has_base_map = base_map if base_map is bool else false
+	# Optional: a map made before the module built its crossings has no key, and keeps the look
+	# its crossings were laid with.
+	var procgen: Variant = data.get("procgen_crossings", false)
+	if not procgen is bool:
+		warn_log.add("manifest.json: procgen_crossings is not a bool, using false")
+	doc.procgen_crossings = procgen if procgen is bool else false
 	return doc
 
 

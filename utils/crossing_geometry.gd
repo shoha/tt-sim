@@ -261,7 +261,7 @@ static func build_one(doc: MapDocument, crossing: Crossing) -> Dictionary:
 		return parts
 	# The shared procgen module builds the kinds that have a recipe when the switch is on and the
 	# recipe loads (ProcgenCrossing, docs/systems/procgen.md); otherwise the code below does.
-	if ProcgenCrossing.enabled:
+	if ProcgenCrossing.active(doc):
 		var built := ProcgenCrossing.parts_of(doc, crossing)
 		if not built.is_empty():
 			parts.merge(built, true)
