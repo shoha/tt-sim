@@ -32,7 +32,9 @@ const HEIGHT_BYTES := 4
 const DRESSING_BYTES := 4
 const COMPRESSION := FileAccess.COMPRESSION_ZSTD
 ## Arguments of each op kind (LiveEditCodec.KINDS).
-const ARITY := {"mask": 1, "surface": 1, "height": 2, "water": 2, "crossings": 2, "props": 2}
+const ARITY := {
+	"mask": 1, "surface": 1, "height": 2, "water": 2, "crossings": 2, "walls": 2, "props": 2
+}
 
 ## palette root -> {"palette": the PaletteLibrary dictionary the tables were built from,
 ## "biomes", "surfaces", "assets": id -> true}.
@@ -108,6 +110,8 @@ func read(kind: String, args: Array, redo: bool = true) -> Array:
 			out = [_height_diff(args[0], true), _record(args[1], true)]
 		"crossings":
 			out = [_crossing_list(args[0]), _area(args[1])]
+		"walls":
+			out = [_wall_list(args[0]), _area(args[1])]
 		"props":
 			out = [args[0], _cell_rows(args[0], args[1])]
 	return out if problem == "" else []
@@ -272,7 +276,13 @@ func _record(value: Variant, water: bool) -> Dictionary:
 		"props_" + _side: _cells(value.get("props_" + _side)),
 		"kept": _cells(value.get("kept")),
 		"crossings": {},
+		"walls": {},
 	}
+	var walls_followed: Variant = value.get("walls", {})
+	if walls_followed is Dictionary and not (walls_followed as Dictionary).is_empty():
+		out.walls = {"area": _area(walls_followed.get("area"))}
+	elif not walls_followed is Dictionary:
+		_fail("followed walls are not an object")
 	var followed: Variant = value.get("crossings")
 	if followed is Dictionary and not (followed as Dictionary).is_empty():
 		out.crossings = {
@@ -331,6 +341,14 @@ func _crossing_list(value: Variant) -> Array[Crossing]:
 	)
 	if not warn_log.items.is_empty():
 		_fail("crossings: " + warn_log.items[0])
+	return list
+
+
+func _wall_list(value: Variant) -> Array[Wall]:
+	var warn_log := MapDocumentIO._WarningLog.new()
+	var list := MapWallIO.parse_list(value if value is Array else [null], _doc.extent_m(), warn_log)
+	if not warn_log.items.is_empty():
+		_fail("walls: " + warn_log.items[0])
 	return list
 
 

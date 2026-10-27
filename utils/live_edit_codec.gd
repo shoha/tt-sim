@@ -51,7 +51,7 @@ const MAX_BYTES := 4 * 1024 * 1024
 const CHUNK_BYTES := 64 * 1024
 ## Most chunks one op takes (MAX_BYTES / CHUNK_BYTES).
 const MAX_CHUNKS := 64
-const KINDS: Array[String] = ["mask", "surface", "height", "water", "crossings", "props"]
+const KINDS: Array[String] = ["mask", "surface", "height", "water", "crossings", "walls", "props"]
 ## Kinds whose apply method takes the side to apply (redo true: after; false: before).
 const SIDED: Array[String] = ["mask", "surface", "height", "water"]
 
@@ -74,6 +74,8 @@ static func op_of(entry: Dictionary, editor: AuthoringEditor, undo: bool = false
 		key = "water." + key
 	elif target is CrossingEditor:
 		key = "crossings." + key
+	elif target is WallEditor:
+		key = "walls." + key
 	elif not target is AuthoringEditor:
 		return {}
 	match key:
@@ -91,6 +93,8 @@ static func op_of(entry: Dictionary, editor: AuthoringEditor, undo: bool = false
 			return _op("water", water_args, args[1])
 		"crossings.apply_list":
 			return _op("crossings", [_crossings_json(args[0]), args[1]])
+		"walls.apply_list":
+			return _op("walls", [_walls_json(args[0]), args[1]])
 	return {}
 
 
@@ -172,6 +176,8 @@ static func apply(op: Dictionary, editor: AuthoringEditor) -> void:
 			editor.water.apply_edit(args[0], redo, args[1], true)
 		"crossings":
 			editor.crossings.apply_list(args[0], args[1])
+		"walls":
+			editor.walls.apply_list(args[0], args[1])
 		"props":
 			editor.set_prop_cell(args[0], args[1])
 
@@ -214,7 +220,8 @@ static func _record_side(record: Dictionary, redo: bool) -> Dictionary:
 	var out := {"props_" + side: record.get("props_" + side, {}), "kept": record.get("kept", {})}
 	var followed: Dictionary = record.get("crossings", {})
 	out["crossings"] = (
-		{} if followed.is_empty()
+		{}
+		if followed.is_empty()
 		else {side: _crossings_json(followed[side]), "area": followed.area}
 	)
 	if record.has("water_" + side):
@@ -227,6 +234,14 @@ static func _record_side(record: Dictionary, redo: bool) -> Dictionary:
 		}
 		out["dressing_" + side] = record["dressing_" + side]
 		out["region"] = record.region
+	out["walls"] = record.get("walls", {})
+	return out
+
+
+static func _walls_json(list: Array) -> Array:
+	var out: Array = []
+	for wall: Wall in list:
+		out.append(MapWallIO.wall_json(wall))
 	return out
 
 
