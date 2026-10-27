@@ -564,7 +564,9 @@ func bedded(point: Vector3) -> Vector3:
 func _crossing_bodies() -> Array[RID]:
 	if editor == null:
 		return []
-	return AuthoredCrossings.exclude_of(editor.map_root)
+	var bodies := AuthoredCrossings.exclude_of(editor.map_root)
+	bodies.append_array(AuthoredWalls.exclude_of(editor.map_root))
+	return bodies
 
 
 func redraw() -> void:

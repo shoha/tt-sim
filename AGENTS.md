@@ -68,6 +68,7 @@ you need rather than all of it.
 - **Authored terrain** – `AuthoredTerrain`, the ground layers and the terrain's self-dressing rules: `docs/systems/authored_terrain.md`
 - **Authoring mode and brushes** – `Root.State.AUTHORING`, `AuthoringController`, `BrushTool`, `AuthoringEditor`, save, autosave and undo: `docs/systems/authoring.md`
 - **Authored water, waterfalls and crossings (phases 4, 4b, 4c)** – each has a system doc that is the single home for its map and rules: `docs/systems/water.md`, `docs/systems/waterfalls.md`, `docs/systems/crossings.md`; read the one you touch before editing its code
+- **Walls and fences (2026-10-26)** – the Wall tool lays dry-stone walls and post and rail fences along a line, built by the procgen module's recipes (`Wall`, `WallGeometry`, `AuthoredWalls`, `WallEditor`, `walls.json`): `docs/systems/walls.md`
 - **Spatial foliage chunking** – Scatter species are split into world-space cells at import by `ScatterChunker` (`utils/scatter_chunker.gd`) so frustum culling can discard off-screen foliage. A species occupying a single cell keeps its unsuffixed `<Species>_MultiMesh` name; a split species gets a `_c<x>_<z>` suffix. See `docs/PERFORMANCE.md`
 - **Environment system** – Environment settings use a layering model: `PROPERTY_DEFAULTS` → map defaults → named preset → user overrides. See `docs/lighting-and-environment.md`. Key points:
   - `LevelData.environment_preset` defaults to `""` (empty = use map defaults)

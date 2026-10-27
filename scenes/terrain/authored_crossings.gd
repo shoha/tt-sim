@@ -670,19 +670,27 @@ static func surfaces_for_styles(
 ## An ORM material of palette surface `surface_name` (albedo, normal, ORM maps) with vertex
 ## colour multiplying the albedo and `tint` over it; a missing surface draws the tint alone.
 func _surface_material(surface_name: String, tint: Color, normal_scale: float) -> ORMMaterial3D:
+	return surface_material(_palette_root, surface_name, tint, normal_scale)
+
+
+## An ORM material of palette surface `surface_name` in palette `root` (see _surface_material;
+## AuthoredWalls takes its materials the same way).
+static func surface_material(
+	root: String, surface_name: String, tint: Color, normal_scale: float
+) -> ORMMaterial3D:
 	var material := ORMMaterial3D.new()
 	material.vertex_color_use_as_albedo = true
 	material.albedo_color = tint
-	var surface: Dictionary = PaletteLibrary.surfaces(_palette_root).get(surface_name, {})
-	var albedo := GroundPalette.load_texture(_palette_root, surface.get("albedo", ""))
+	var surface: Dictionary = PaletteLibrary.surfaces(root).get(surface_name, {})
+	var albedo := GroundPalette.load_texture(root, surface.get("albedo", ""))
 	if albedo != null:
 		material.albedo_texture = albedo
-	var normal := GroundPalette.load_texture(_palette_root, surface.get("normal", ""))
+	var normal := GroundPalette.load_texture(root, surface.get("normal", ""))
 	if normal != null:
 		material.normal_enabled = true
 		material.normal_texture = normal
 		material.normal_scale = normal_scale
-	var orm := GroundPalette.load_texture(_palette_root, surface.get("orm", ""))
+	var orm := GroundPalette.load_texture(root, surface.get("orm", ""))
 	if orm != null:
 		material.orm_texture = orm
 	else:

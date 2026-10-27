@@ -201,6 +201,8 @@ func _build_async(glb_path: String, cells: Dictionary) -> Node3D:
 	# GLB's root gets them here.
 	if root.get_node_or_null(NodePath(AuthoredCrossings.NODE_NAME)) == null:
 		add_authored_crossings(root, document, separate_props)
+	if root.get_node_or_null(NodePath(AuthoredWalls.NODE_NAME)) == null:
+		add_authored_walls(root, document)
 	add_fire_field(root, document)
 
 	var groups: Array = [[SCATTER_NODE, cells.get(SCATTER_NODE, {})]]
@@ -265,6 +267,18 @@ static func add_authored_crossings(
 	return crossings
 
 
+## Adds the document's walls and fences (AuthoredWalls) to a map root. Nothing without a
+## document or a wall. `built` is the geometry a worker built (AuthoredWalls.create).
+static func add_authored_walls(
+	root: Node3D, doc: MapDocument, built: Dictionary = {}
+) -> AuthoredWalls:
+	if doc == null or doc.walls.is_empty():
+		return null
+	var walls := AuthoredWalls.create(doc, built)
+	root.add_child(walls)
+	return walls
+
+
 ## Adds the document's persistent fire (FireField) to a map root whose ground is the
 ## document's (the Fire tool works there only), even with no fire yet, so the Fire tool and an
 ## undo always have it. Nothing without a document or on a dressed GLB. Returns the node or
@@ -298,6 +312,7 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 	var threaded := GlbUtils.threaded_loads_safe()
 	var paths := AuthoredTerrain.texture_paths(doc)
 	paths.append_array(AuthoredCrossings.texture_paths(doc))
+	paths.append_array(AuthoredWalls.texture_paths(doc))
 	for path in paths if threaded else PackedStringArray():
 		if pending.has(path) or ResourceLoader.has_cached(path):
 			continue
@@ -347,6 +362,12 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 			root.free()
 			return null
 		add_authored_crossings(root, doc, false, prepared.get(AuthoredLoadPrep.CROSSINGS, {}))
+	if not doc.walls.is_empty():
+		await tree.process_frame
+		if is_superseded.call():
+			root.free()
+			return null
+		add_authored_walls(root, doc, prepared.get(AuthoredLoadPrep.WALLS, {}))
 	held.clear()
 	return root
 
@@ -511,8 +532,10 @@ func fit_dressing_ground_async(map: Node3D, game_map: GameMap, doc: MapDocument)
 		LevelEnvironmentManager.compute_map_bounds(map).end.y
 		+ DragPlaceController.TERRAIN_DOWNCAST_HEIGHT
 	)
+	var excluded := AuthoredCrossings.exclude_of(map)
+	excluded.append_array(AuthoredWalls.exclude_of(map))
 	var sampler := DressingGround.begin(
-		doc, map.get_world_3d(), map.global_transform, top, AuthoredCrossings.exclude_of(map)
+		doc, map.get_world_3d(), map.global_transform, top, excluded
 	)
 	while not sampler.step(FRAME_BUDGET_USEC):
 		await tree.process_frame

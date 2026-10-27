@@ -137,7 +137,7 @@ static func parts_of(doc: MapDocument, crossing: Crossing) -> Dictionary:
 
 ## Tangents for quads of four vertices in order (a box face), pointing along +U with the
 ## binormal sign in w, as CrossingGeometry's _Mesh.quad writes them for the normal-mapped wood.
-static func _quad_tangents(
+static func quad_tangents(
 	vertices: PackedVector3Array, normals: PackedVector3Array, uvs: PackedVector2Array
 ) -> PackedFloat32Array:
 	var tangents := PackedFloat32Array()
@@ -187,7 +187,7 @@ static func _arrays_in_map(crossing: Crossing, surface: PlantSurface) -> Array:
 			if uvs[k] != Vector2.ZERO:
 				uvs[k] = map_xz(crossing, uvs[k].x, uvs[k].y)
 	if surface.kind == "wood" or surface.kind == "paving":
-		arrays[Mesh.ARRAY_TANGENT] = _quad_tangents(vertices, normals, uvs)
+		arrays[Mesh.ARRAY_TANGENT] = quad_tangents(vertices, normals, uvs)
 	else:
 		# Triplanar masonry and gravel (no UVs): +X with a positive binormal sign, as
 		# CrossingGeometry's _Mesh.triangle writes.
