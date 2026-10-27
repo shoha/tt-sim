@@ -31,6 +31,8 @@ const DEFAULT_HEIGHT_M: Array[float] = [0.9, 1.0, 2.4, 3.0]
 ## on (ROW_SIDES: left, right, both) and the `seed` that varies them. Its buildings are made from
 ## these (procgen's street_row recipe), never stored one by one.
 const ROW_SIDES := 3
+## The species of street (ProcgenRow.PRESET_NAMES): mixed, terrace, guild houses, village, cottages.
+const ROW_PRESETS := 5
 const MAX_SEED := 1000000000
 ## A building is a closed rectangle of four points (its first side carries the door), each side
 ## within these bounds, metres.
@@ -50,6 +52,8 @@ var height_m: float = 0.9
 ## both); unused by the other kinds.
 var seed_value: int = 0
 var side: int = 2
+## A row's species (0 mixed, 1 terrace, 2 guild houses, 3 village, 4 cottages).
+var preset: int = 0
 ## Palette biome id for the rock, or "".
 var style: String = ""
 
@@ -109,6 +113,7 @@ func copy() -> Wall:
 	var copied := make(id, kind, points.duplicate(), closed, height_m, style)
 	copied.seed_value = seed_value
 	copied.side = side
+	copied.preset = preset
 	return copied
 
 
@@ -124,4 +129,5 @@ func same_as(other: Wall) -> bool:
 		and other.style == style
 		and other.seed_value == seed_value
 		and other.side == side
+		and other.preset == preset
 	)

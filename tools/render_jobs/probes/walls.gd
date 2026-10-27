@@ -5,6 +5,8 @@ extends RefCounted
 ##   report            every wall of the open document (authoring) with its node, vertices,
 ##                     height, top and body; in play, the AuthoredWalls under the map root.
 ##   place {kind, from, to}  lays one wall side through the editor API (world XZ).
+##   preset {preset}   picks the street species (0 mixed, 1 terrace, 2 guild, 3 village,
+##                     4 cottages).
 ##   reroll            R: remixes the street under the pointer, else the next one.
 ##   rotate {steps}    turns a building footprint, as Q (-1) and E (1) do.
 ##   kind {kind}       picks the brush kind ("stone" or "fence") as its pane tile does.
@@ -25,6 +27,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _rotate(base, int(step.get("steps", 1)))
 		"reroll":
 			return _reroll(base)
+		"preset":
+			return _preset(base, int(step.get("preset", 0)))
 		"save":
 			return CROSSING.run(base, {"action": "save", "folder": step.get("folder", "")})
 	return "unknown action %s" % step.get("action", "")
@@ -101,3 +105,11 @@ static func _reroll(base: Node) -> String:
 	var mode := WallTool.of(gm.get_brush_tool())
 	mode.reroll(gm.get_brush_tool())
 	return "rerolled (next seed %d)" % mode.row_seed
+
+
+static func _preset(base: Node, preset: int) -> String:
+	var gm := base.get("_game_map") as GameMap
+	if gm == null or gm.get_brush_tool() == null:
+		return "no brush"
+	WallTool.of(gm.get_brush_tool()).row_preset = preset
+	return "street species %d" % preset

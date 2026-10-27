@@ -7,6 +7,8 @@ extends VBoxContainer
 
 ## A tile was picked: the wall kind (Wall.Kind).
 signal kind_selected(kind: int)
+## A species tile was picked (a street's Wall.preset).
+signal preset_selected(preset: int)
 
 const TILE_SIZE := Vector2(64, 56)
 const KIND_TILES: Array[Dictionary] = [
@@ -41,18 +43,55 @@ const KIND_TILES: Array[Dictionary] = [
 		"A street of varied buildings, doors to the street: drag along where the street runs",
 	},
 ]
+## The streets' species, one tile each (ProcgenRow.PRESET_NAMES order).
+const PRESET_TILES: Array[Dictionary] = [
+	{
+		"preset": 0,
+		"id": &"street_mixed",
+		"label": "Mixed",
+		"icon": "street",
+		"tooltip": "A bit of everything: houses of different sizes, a gap here and there",
+	},
+	{
+		"preset": 1,
+		"id": &"street_terrace",
+		"label": "Terrace",
+		"icon": "grid-dots",
+		"tooltip": "A terrace: tall narrow houses wall to wall, no yards",
+	},
+	{
+		"preset": 2,
+		"id": &"street_guild",
+		"label": "Guild",
+		"icon": "chess",
+		"tooltip": "Guild houses: wide, tall, gable-fronted, almost touching",
+	},
+	{
+		"preset": 3,
+		"id": &"street_village",
+		"label": "Village",
+		"icon": "fence",
+		"tooltip": "A village: houses with fenced yards, gates to the street, gaps between",
+	},
+	{
+		"preset": 4,
+		"id": &"street_cottages",
+		"label": "Cottages",
+		"icon": "home",
+		"tooltip": "Cottages: small low houses far apart, each with a low stone-walled yard",
+	},
+]
 const HINT := (
-	"Drag along the ground to lay a side. Start the next drag at the end of a wall to carry on, and"
-	+ " end one at the wall's first end to close the loop. Shift + scroll or [ and ] set the"
-	+ " height. Hold Ctrl and click a wall to remove it. A wall follows later edits to the ground"
-	+ " under it. A building: drag from one corner to the opposite one, and turn it with Q and E"
-	+ " first (Shift for a quarter turn); its door is on the side the drag starts along. A street:"
-	+ " drag along its line (carry on from its end for bends); Q and E pick the side, R mixes the"
-	+ " buildings afresh (over a street already laid, it remixes that one), and the height keys set"
-	+ " how far back the buildings stand."
+	"Drag along the ground to lay a wall or fence; start the next drag at its end to carry on, and"
+	+ " end one at its first end to close the loop. Shift + scroll or [ and ] set the height. A"
+	+ " building goes corner to corner: turn it first with Q and E. A street is dragged along its"
+	+ " line: Q and E pick the side, R mixes the buildings afresh, and the height keys set how far"
+	+ " back they stand. Ctrl and click removes one."
 )
 
 var kind_field: TileField
+## The species of a street; shown while the Street tile is picked.
+var preset_field: TileField
 
 
 func _init() -> void:
@@ -80,9 +119,28 @@ func _init() -> void:
 		func(id: StringName) -> void:
 			for tile in KIND_TILES:
 				if tile.id == id:
+					preset_field.visible = int(tile.kind) == Wall.Kind.ROW
 					kind_selected.emit(int(tile.kind))
 	)
 	add_child(kind_field)
+	preset_field = TileField.new()
+	preset_field.name = "WallPresetField"
+	preset_field.caption = "Street"
+	preset_field.tiles.tile_min_size = TILE_SIZE
+	preset_field.tiles.columns = 3
+	for tile in PRESET_TILES:
+		preset_field.tiles.add_tile(
+			tile.id, String(tile.label), String(tile.icon), String(tile.tooltip)
+		)
+	preset_field.tiles.select(&"street_mixed")
+	preset_field.tiles.selection_changed.connect(
+		func(id: StringName) -> void:
+			for tile in PRESET_TILES:
+				if tile.id == id:
+					preset_selected.emit(int(tile.preset))
+	)
+	preset_field.visible = false
+	add_child(preset_field)
 
 
 ## Selects a kind tile without emitting kind_selected.
@@ -90,6 +148,14 @@ func select_kind(kind: int) -> void:
 	for tile in KIND_TILES:
 		if int(tile.kind) == kind:
 			kind_field.tiles.select(tile.id)
+	preset_field.visible = kind == Wall.Kind.ROW
+
+
+## Selects a species tile without emitting preset_selected.
+func select_preset(preset: int) -> void:
+	for tile in PRESET_TILES:
+		if int(tile.preset) == preset:
+			preset_field.tiles.select(tile.id)
 
 
 func _caption(node_name: String, text: String) -> Label:
