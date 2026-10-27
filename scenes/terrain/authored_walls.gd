@@ -21,6 +21,11 @@ const NODE_NAME := "AuthoredWalls"
 ## Set on every stone wall's collision body: the wall's id.
 const WALL_META := &"tt_wall"
 const STONE_NORMAL_SCALE := 0.8
+## What a textured wall's tint is lifted by over the rock's mean colour (judged beside the
+## boulders).
+const WALL_MASONRY_LIFT := Color(1.45, 1.4, 1.35)
+## The masonry tile is shown this much larger than baked: stones as big as the modelled ones.
+const MASONRY_SCALE_UP := 1.5
 ## A wall's masonry is lifted and warmed over a stepping stone's tint: its flat-shaded faces, the
 ## block shade and the dark foot average well under the palette boulders' value, and the cliff
 ## surfaces read blue-grey beside their warm rocks (judged on alpine, badlands and forest, side by
@@ -204,6 +209,15 @@ func _wall_node(parts: Dictionary) -> Node3D:
 		instance.name = "Stone"
 		instance.mesh = mesh
 		node.add_child(instance)
+	var masonry: Array = parts.get("masonry", [])
+	if not masonry.is_empty():
+		var textured_mesh := ArrayMesh.new()
+		textured_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, masonry)
+		textured_mesh.surface_set_material(0, _masonry_material(style))
+		var masonry_instance := MeshInstance3D.new()
+		masonry_instance.name = "Masonry"
+		masonry_instance.mesh = textured_mesh
+		node.add_child(masonry_instance)
 	var wood: Array = parts.get("wood", [])
 	if not wood.is_empty():
 		var mesh := ArrayMesh.new()
@@ -249,6 +263,33 @@ func _stone_material(style: String) -> Material:
 	material.uv1_triplanar = true
 	material.uv1_triplanar_sharpness = 4.0
 	material.uv1_scale = Vector3.ONE / maxf(tile * AuthoredCrossings.STONE_TILE_SCALE, 0.1)
+	_materials[key] = material
+	return material
+
+
+## The baked masonry set (MasonryTextures) tinted by the style's rock colour: UVs are metres, the
+## tile 3 by 1.2 m, the normal map and the joints' occlusion from the bake.
+func _masonry_material(style: String) -> Material:
+	var key := "masonry:" + style
+	if _materials.has(key):
+		return _materials[key]
+	var textures := MasonryTextures.textures()
+	var material := ORMMaterial3D.new()
+	material.vertex_color_use_as_albedo = true
+	var surface_name := AuthoredCrossings.stone_surface(style, _palette_root)
+	var surface: Dictionary = PaletteLibrary.surfaces(_palette_root).get(surface_name, {})
+	var mean: Array = surface.get("albedo_mean_linear", [0.3, 0.3, 0.3])
+	material.albedo_color = MasonryTextures.tint_of(mean, WALL_MASONRY_LIFT)
+	if not textures.is_empty():
+		material.albedo_texture = textures.albedo
+		material.normal_enabled = true
+		material.normal_texture = textures.normal
+		material.normal_scale = 1.0
+		material.orm_texture = textures.orm
+	material.uv1_scale = (
+		Vector3(1.0 / MasonryTextures.TILE_M, 1.0 / MasonryTextures.TILE_H_M, 1.0)
+		/ MASONRY_SCALE_UP
+	)
 	_materials[key] = material
 	return material
 

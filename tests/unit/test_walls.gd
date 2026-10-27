@@ -196,6 +196,26 @@ func test_plants_are_cleared_along_a_wall() -> void:
 	assert_eq(WallGeometry.clearance_crossings(_doc).size(), 3, "a closed wall has its last side")
 
 
+func test_textured_masonry_is_a_part_of_stone_buildings_and_streets() -> void:
+	assert_true(MasonryTextures.available(), "the baked set is in the project")
+	var before := WallGeometry.textured
+	assert_false(before, "off until the look is judged")
+	WallGeometry.textured = true
+	var street := Wall.make(
+		1, Wall.Kind.ROW, PackedVector2Array([Vector2(-10, 0), Vector2(10, 0)]), false, 3.0
+	)
+	assert_eq(
+		WallGeometry.inputs_for(_doc, street).params.get("textured"), 1.0, "asked of the recipe"
+	)
+	var parts := WallGeometry.build_one(_doc, street)
+	assert_false((parts.masonry as Array).is_empty(), "a street's walls are masonry")
+	var fence := _wall(Wall.Kind.FENCE)
+	assert_false(WallGeometry.inputs_for(_doc, fence).params.has("textured"), "a fence has none")
+	WallGeometry.textured = false
+	assert_true((WallGeometry.build_one(_doc, street).masonry as Array).is_empty(), "switched off")
+	WallGeometry.textured = before
+
+
 # --- the nodes ---------------------------------------------------------------------------
 
 

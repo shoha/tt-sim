@@ -7,6 +7,8 @@ extends RefCounted
 ##   place {kind, from, to}  lays one wall side through the editor API (world XZ).
 ##   preset {preset}   picks the street species (0 mixed, 1 terrace, 2 guild, 3 village,
 ##                     4 cottages).
+##   textured {on}     the textured masonry switch for walls laid after this (WallGeometry).
+##   rebuild           brings the wall nodes up to the document (after a switch changed their keys).
 ##   reroll            R: remixes the street under the pointer, else the next one.
 ##   rotate {steps}    turns a building footprint, as Q (-1) and E (1) do.
 ##   kind {kind}       picks the brush kind ("stone" or "fence") as its pane tile does.
@@ -27,6 +29,11 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _rotate(base, int(step.get("steps", 1)))
 		"reroll":
 			return _reroll(base)
+		"rebuild":
+			return _rebuild(base)
+		"textured":
+			WallGeometry.textured = bool(step.get("on", true))
+			return "textured masonry %s" % ("on" if WallGeometry.textured else "off")
 		"preset":
 			return _preset(base, int(step.get("preset", 0)))
 		"save":
@@ -113,3 +120,11 @@ static func _preset(base: Node, preset: int) -> String:
 		return "no brush"
 	WallTool.of(gm.get_brush_tool()).row_preset = preset
 	return "street species %d" % preset
+
+
+static func _rebuild(base: Node) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	if ctrl == null or ctrl.map_root == null:
+		return "no map"
+	var walls := AuthoredWalls.refresh_map(ctrl.map_root, ctrl.document)
+	return "rebuilt %d" % walls.last_rebuilt
