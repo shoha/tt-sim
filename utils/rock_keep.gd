@@ -212,6 +212,7 @@ static func snapshot(
 	var wet: PackedByteArray = dressing if dressing is PackedByteArray else doc.water_dressing
 	copy.water_dressing = wet.duplicate()
 	copy.crossings = doc.crossings.duplicate()
+	copy.walls = doc.walls.duplicate()
 	return copy
 
 

@@ -525,6 +525,7 @@ static func snapshot(doc: MapDocument) -> MapDocument:
 	copy.surface_weights = doc.surface_weights.duplicate()
 	copy.water_dressing = doc.water_dressing.duplicate()
 	copy.crossings = doc.crossings.duplicate()
+	copy.walls = doc.walls.duplicate()
 	return copy
 
 

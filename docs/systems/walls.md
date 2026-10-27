@@ -60,8 +60,9 @@ starts above `world_top()`. Materials: the biome's cliff rock with the palette m
 
 ## Not yet
 
-- Scatter (plants, rocks) is not cleared under a wall (crossings clear it; the native scatter
-  reads crossings only).
+- Scatter clears along every side (`WallGeometry.clearance_crossings`: each side is fed to the
+  crossing clearance, GDScript and the native span list alike; no C++ change). The clearance is the
+  crossing's, so it also keeps 0.9 m past each end of a side.
 - No wall in play or Events panes (the tool is authoring only); no collapse or other events.
 - A fence blocks nothing and a stone wall is a surface to stand on, not a barrier tokens cannot
   cross: blocking movement is a game rule decision still to make.

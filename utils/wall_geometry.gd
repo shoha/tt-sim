@@ -12,6 +12,8 @@ const STONE_RECIPE := "res://procgen/recipes/stone_wall.json"
 const FENCE_RECIPE := "res://procgen/recipes/wood_fence.json"
 ## The ground under a wall is sampled this far apart (metres) along its line for its cache key.
 const KEY_STEP_M := 0.5
+## The width plants clear across a wall's side (its thickness and a margin), metres.
+const CLEAR_WIDTH_M := 0.7
 ## Marks a wall with no top (no recipe, or nothing built).
 const NONE := -INF
 
@@ -125,6 +127,28 @@ static func keys_of(doc: MapDocument) -> Dictionary:
 ## an edit near it reaches.
 static func clear_bounds(wall: Wall) -> Rect2:
 	return wall.bounds().grow(1.0)
+
+
+## Each side of every wall as a plank-like Crossing (anchors, a width of the wall's thickness
+## and a little), the shape ScatterGround and the native scatter clear plants by: nothing grows
+## on a wall's footprint or the strip beside it. Pure; the levels are unused.
+static func clearance_crossings(doc: MapDocument) -> Array[Crossing]:
+	var out: Array[Crossing] = []
+	for wall in doc.walls:
+		var count := wall.points.size()
+		var sides := count if wall.closed else count - 1
+		for k in maxi(sides, 0):
+			out.append(
+				Crossing.make(
+					0,
+					Crossing.Kind.PLANK,
+					wall.points[k],
+					wall.points[(k + 1) % count],
+					Vector3.ZERO,
+					CLEAR_WIDTH_M
+				)
+			)
+	return out
 
 
 static func _arrays(surface: PlantSurface) -> Array:
