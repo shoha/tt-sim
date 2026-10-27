@@ -732,6 +732,12 @@ func _refresh_paint_order() -> void:
 		use_surface(panel.get_paint_surface())
 
 
+## Picks tool `tool_id` again: what a tile of a registry tool's own pane does (ToolDescriptor
+## .connect_pane), so a brush put down with a right click comes back with the pick.
+func pick_tool(tool_id: StringName) -> void:
+	_select_tool(tool_id)
+
+
 ## Switches the brush to tool `tool_id` (a ToolRegistry id) and activates it, as its
 ## descriptor allows: a tool the open map cannot take is refused (Sculpt and Paint need a
 ## map whose ground is the document's), and a tool with nothing to work with yet is switched

@@ -1,0 +1,142 @@
+{
+ "out_dir": "render_jobs/wall_rmb",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "temperate_forest_summer_s1",
+   "size": 150,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 14.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel._on_rail_item_pressed(\"wall\")"
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  },
+  {
+   "op": "eval",
+   "expr": "_game_map.get_brush_tool().is_active()"
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "move",
+     "at": [
+      0,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.3
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "press",
+     "at": [
+      0,
+      0
+     ],
+     "button": "right"
+    },
+    {
+     "type": "release",
+     "at": [
+      0,
+      0
+     ],
+     "button": "right"
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  },
+  {
+   "op": "eval",
+   "expr": "_game_map.get_brush_tool().is_active()"
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel.find_child(\"WallPane\", true, false).kind_field.tiles.selection_changed.emit(\"wall_fence\")"
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  },
+  {
+   "op": "eval",
+   "expr": "_game_map.get_brush_tool().is_active()"
+  },
+  {
+   "op": "gesture",
+   "points": [
+    [
+     -4,
+     0
+    ],
+    [
+     4,
+     0
+    ]
+   ],
+   "speed": 4.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "report"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}

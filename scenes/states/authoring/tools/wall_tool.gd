@@ -66,7 +66,8 @@ func build_pane(_panel: AuthoringPanel) -> Control:
 	return WallToolPane.new()
 
 
-## The kind tiles set the brush's kind.
+## The kind and species tiles set the brush's, and pick the tool again, so a brush put down with
+## a right click comes back with any tile.
 func connect_pane(controller: AuthoringController, pane: Control) -> void:
 	var wall_pane := pane as WallToolPane
 	if wall_pane == null:
@@ -75,11 +76,11 @@ func connect_pane(controller: AuthoringController, pane: Control) -> void:
 		func(value: int) -> void:
 			if controller.brush != null:
 				of(controller.brush).row_preset = value
-				controller.brush.redraw()
+				controller.pick_tool(ID)
 	)
 	wall_pane.kind_selected.connect(
 		func(value: int) -> void:
 			if controller.brush != null:
 				of(controller.brush).kind = value
-				controller.brush.redraw()
+				controller.pick_tool(ID)
 	)
