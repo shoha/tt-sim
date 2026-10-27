@@ -84,12 +84,13 @@ func connect_pane(controller: AuthoringController, pane: Control) -> void:
 		func(value: int) -> void:
 			if controller.brush != null:
 				of(controller.brush).shape = value
-				controller.brush.redraw()
+				controller.pick_tool(ID)
 	)
 	fire_pane.intensity_selected.connect(
 		func(value: int) -> void:
 			if controller.brush != null:
 				of(controller.brush).intensity = value
+				controller.pick_tool(ID)
 	)
 	if controller.brush != null:
 		controller.brush.shape_toggled.connect(

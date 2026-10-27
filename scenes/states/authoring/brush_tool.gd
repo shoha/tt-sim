@@ -57,6 +57,8 @@ signal gesture_started
 ## Tab switched the mode's shape (BrushMode.toggle_shape): the pane's tiles and the hint bar
 ## follow it.
 signal shape_toggled
+## The author put the brush down with a right click (the panel says so and offers to pick it up).
+signal put_down(tool: ToolDescriptor)
 
 enum Action {
 	NONE,
@@ -415,7 +417,9 @@ func handle_input(event: InputEvent) -> bool:
 			cancel_gesture()
 			return true
 		Action.DESELECT:
+			var was := tool
 			deactivate()
+			put_down.emit(was)
 			return true
 		Action.GROW, Action.SHRINK:
 			mode.step(self, 1 if action == Action.GROW else -1)

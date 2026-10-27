@@ -122,6 +122,15 @@ func select(id: StringName) -> void:
 		_mark_chosen_off(_tiles[tile_id])
 
 
+## Shows no tile picked, without signals (the brush a pane belongs to was put down): the next
+## pick of any tile, the one that was picked before included, is a selection change again.
+func clear_selection() -> void:
+	selected = &""
+	for tile_id in _tiles:
+		_tiles[tile_id].set_pressed_no_signal(false)
+		_mark_chosen_off(_tiles[tile_id])
+
+
 ## Multi-select sync without signals.
 func set_tile_on(id: StringName, on: bool) -> void:
 	if _tiles.has(id):
