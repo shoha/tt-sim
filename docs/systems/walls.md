@@ -107,20 +107,19 @@ species, the village's fences visible).
 Not yet: breaking a street into individual buildings, corner plots, and a yard that is not fence or
 low wall (gardens, trees), plus finer control than the species.
 
-## Textured masonry (spike, 2026-10-27; off by default)
+## Textured masonry (on by default since 2026-10-27)
 
-`WallGeometry.textured` (a static, false) asks procgen's `textured` option of the stone wall, building
+`WallGeometry.textured` (a static, true) asks procgen's `textured` option of the stone wall, building
 and street recipes: the courses are faces with UVs in metres (a `masonry` surface, `AuthoredWalls`
 `Masonry` mesh) wearing a baked tileable set (`assets/textures/masonry/`: albedo, normal, ORM; raw PNGs,
-importer keep; `MasonryTextures`, 3 by 1.2 m, shown 1.5 times larger, tinted from the rock's mean
-colour) in place of modelled blocks; the coping, the door's lintel course, yard walls' coping and
-the collision hull are unchanged. The set is baked by plantgen's `tools/bake_masonry_cli.gd`.
-Measured (procgen, triangles): a building 2220 to 388, a mixed street of 13 on 40 m 11 160 to 3050,
-a terrace 28 138 to 5802, a village 12 528 to 6742 (its fences and roofs remain). Judged in the game
-(`building_masonry` and `wall_masonry` render jobs): a street of houses reads well at the home zoom, a
-lone low wall reads as brick (the tile is too regular) and basalt biomes tint too dark and blue (the
-per-surface tint table of the modelled walls is not applied). So it stays off until the tile is more
-irregular and the tints are tuned; flip the static (or the probe's `textured` action) to compare.
+importer keep; `MasonryTextures`, a 3 by 1.2 m tile shown 1.5 times larger, tinted from the rock's mean
+colour with `WALL_MASONRY_LIFT`, a stronger lift for basalt) in place of modelled blocks. The coping
+(its ends culled), the door's lintel course, yard walls' coping and the collision hull are unchanged.
+The set is baked by plantgen's `tools/bake_masonry_cli.gd` (rerun it and copy the three PNGs to change
+the look); the modelled blocks stay behind `textured = false`. Triangles: a building 284 (was 2220), a
+mixed street of 13 on 40 m 2430 (was 11 160), a terrace 4586 (was 28 138). Judged beside the palette
+boulders on alpine, badlands and forest (`wall_masonry`, `building_masonry` render jobs). The key of a
+wall includes the switch, so flipping it needs a rebuild (`AuthoredWalls.refresh`).
 
 ## In play
 
