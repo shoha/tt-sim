@@ -1,0 +1,140 @@
+{
+ "out_dir": "render_jobs/masonry_variety",
+ "timeout_s": 400,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "temperate_forest_summer_s1",
+   "size": 150,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel._on_rail_item_pressed(\"wall\")"
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel.close()"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    2
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 24.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "kind",
+   "kind": "stone"
+  },
+  {
+   "op": "gesture",
+   "points": [
+    [
+     -12,
+     -8
+    ],
+    [
+     12,
+     -8
+    ]
+   ],
+   "speed": 8.0
+  },
+  {
+   "op": "wait",
+   "s": 0.8
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "kind",
+   "kind": "row"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "preset",
+   "preset": 3
+  },
+  {
+   "op": "gesture",
+   "points": [
+    [
+     -14,
+     2
+    ],
+    [
+     14,
+     2
+    ]
+   ],
+   "speed": 8.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "01_wall_and_village",
+   "desc": "A long stone wall (runs offset and mirrored) and a village street, each house its own shade of stone"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -6,
+    2
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 12.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "02_close",
+   "desc": "Close"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}
