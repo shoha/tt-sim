@@ -36,6 +36,14 @@ func _init() -> void:
 			"Q / E (Building)",
 			"Turn the footprint 15 degrees (Shift: a quarter turn) before the drag"
 		],
+		[
+			"Left Drag (Street)",
+			"Drag along the street's line: varied buildings with their doors to it"
+		],
+		[
+			"Q / E, R (Street)",
+			"Q and E pick the side (left, right, both); R mixes the buildings afresh"
+		],
 		["Ctrl + Click (Wall)", "Remove the wall under the cursor"],
 	]
 

@@ -11,10 +11,13 @@ extends RefCounted
 const STONE_RECIPE := "res://procgen/recipes/stone_wall.json"
 const FENCE_RECIPE := "res://procgen/recipes/wood_fence.json"
 const BUILDING_RECIPE := "res://procgen/recipes/building.json"
+const STREET_ROW_RECIPE := "res://procgen/recipes/street_row.json"
 ## The ground under a wall is sampled this far apart (metres) along its line for its cache key.
 const KEY_STEP_M := 0.5
 ## The width plants clear across a wall's side (its thickness and a margin), metres.
 const CLEAR_WIDTH_M := 0.7
+## How far past its setback a row's buildings reach (the deepest lot, with its roof), metres.
+const ROW_REACH_M := 9.0
 ## Marks a wall with no top (no recipe, or nothing built).
 const NONE := -INF
 
@@ -35,6 +38,8 @@ static func recipe_path(kind: Wall.Kind) -> String:
 			return FENCE_RECIPE
 		Wall.Kind.BUILDING:
 			return BUILDING_RECIPE
+		Wall.Kind.ROW:
+			return STREET_ROW_RECIPE
 	return STONE_RECIPE
 
 
@@ -52,11 +57,31 @@ static func inputs_for(doc: MapDocument, wall: Wall) -> ProcgenStructureInputs:
 		line.append(Vector3(p.x, 0.0, p.y))
 	inputs.guide = ProcgenGuide.polyline(line, wall.closed)
 	inputs.params = {"height": wall.height_m}
+	if wall.is_row():
+		# A row's `height_m` is its setback; its side and seed vary the buildings.
+		inputs.params = {"setback": wall.height_m, "side": float(wall.side)}
 	var ground := Ground.new()
 	ground.doc = doc
 	inputs.env = ground
-	inputs.seed_value = hash([doc.map_seed, wall.id, 100 + wall.kind])
+	inputs.seed_value = hash([doc.map_seed, wall.id, 100 + wall.kind, wall.seed_value])
 	return inputs
+
+
+## The lots of row `wall` (ProcgenRow.plan: each {"points" (four corners, the first side the
+## front), "height", "pitch", "ridge", "side", "index"}), made exactly as the recipe makes them
+## (the same node seed and parameters). [] when the recipe is missing. Cheap and pure: the tool
+## draws them as the preview, and scatter clears under them.
+static func row_lots(doc: MapDocument, wall: Wall) -> Array[Dictionary]:
+	var recipe := load_recipe(STREET_ROW_RECIPE)
+	if recipe == null or not wall.is_row():
+		return []
+	var inputs := inputs_for(doc, wall)
+	var node := RowNode.new()
+	var p := node.coerce_params({"setback": wall.height_m, "side": wall.side})
+	var node_seed := node.node_seed(
+		p, {"seed": inputs.seed_value, "node_id": recipe.resolve_node("street_row")}
+	)
+	return ProcgenRow.plan(inputs.guide, PlantRng.new(node_seed), p)
 
 
 ## One wall's parts: {"id", "kind", "style", "stone": mesh arrays or [], "wood": mesh arrays or
@@ -116,6 +141,8 @@ static func key_of(doc: MapDocument, wall: Wall) -> int:
 			wall.closed,
 			wall.height_m,
 			wall.style,
+			wall.seed_value,
+			wall.side,
 			samples,
 		]
 	)
@@ -132,6 +159,9 @@ static func keys_of(doc: MapDocument) -> Dictionary:
 ## The footprint of `wall` in map XZ, grown by its thickness: the area a scatter pass clears and
 ## an edit near it reaches.
 static func clear_bounds(wall: Wall) -> Rect2:
+	if wall.is_row():
+		# The buildings stand up to a setback and a depth off the street's line.
+		return wall.bounds().grow(wall.height_m + ROW_REACH_M)
 	return wall.bounds().grow(1.0)
 
 
@@ -141,6 +171,23 @@ static func clear_bounds(wall: Wall) -> Rect2:
 static func clearance_crossings(doc: MapDocument) -> Array[Crossing]:
 	var out: Array[Crossing] = []
 	for wall in doc.walls:
+		if wall.is_row():
+			# Under each building, not along the street.
+			for lot in row_lots(doc, wall):
+				var q: PackedVector3Array = lot.points
+				var front := Vector2(q[0].x, q[0].z)
+				var front_end := Vector2(q[1].x, q[1].z)
+				out.append(
+					Crossing.make(
+						0,
+						Crossing.Kind.PLANK,
+						(front + front_end) * 0.5,
+						(Vector2(q[2].x, q[2].z) + Vector2(q[3].x, q[3].z)) * 0.5,
+						Vector3.ZERO,
+						front.distance_to(front_end)
+					)
+				)
+			continue
 		var count := wall.points.size()
 		var sides := count if wall.closed else count - 1
 		for k in maxi(sides, 0):

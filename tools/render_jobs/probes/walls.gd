@@ -5,6 +5,7 @@ extends RefCounted
 ##   report            every wall of the open document (authoring) with its node, vertices,
 ##                     height, top and body; in play, the AuthoredWalls under the map root.
 ##   place {kind, from, to}  lays one wall side through the editor API (world XZ).
+##   reroll            R: remixes the street under the pointer, else the next one.
 ##   rotate {steps}    turns a building footprint, as Q (-1) and E (1) do.
 ##   kind {kind}       picks the brush kind ("stone" or "fence") as its pane tile does.
 ##   save {folder}     crossing.gd's save (a _p4b1_ test level only).
@@ -22,6 +23,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _place(base, step)
 		"rotate":
 			return _rotate(base, int(step.get("steps", 1)))
+		"reroll":
+			return _reroll(base)
 		"save":
 			return CROSSING.run(base, {"action": "save", "folder": step.get("folder", "")})
 	return "unknown action %s" % step.get("action", "")
@@ -89,3 +92,12 @@ static func _rotate(base: Node, steps: int) -> String:
 	var mode := WallTool.of(gm.get_brush_tool())
 	mode.rotate(gm.get_brush_tool(), steps)
 	return "yaw %.1f degrees" % rad_to_deg(mode.yaw)
+
+
+static func _reroll(base: Node) -> String:
+	var gm := base.get("_game_map") as GameMap
+	if gm == null or gm.get_brush_tool() == null:
+		return "no brush"
+	var mode := WallTool.of(gm.get_brush_tool())
+	mode.reroll(gm.get_brush_tool())
+	return "rerolled (next seed %d)" % mode.row_seed

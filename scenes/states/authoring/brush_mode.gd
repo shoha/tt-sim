@@ -114,6 +114,17 @@ func rotate(_brush: BrushTool, _steps: int) -> void:
 	pass
 
 
+## True while the mode has something to reroll (the Wall tool's street of buildings): R is then
+## the brush's, and reroll() does it.
+func rerolls() -> bool:
+	return false
+
+
+## R, when rerolls() is true: vary what is under the pointer, or what is laid next, afresh.
+func reroll(_brush: BrushTool) -> void:
+	pass
+
+
 ## RMB or Delete over the target under the pointer (see `picks`).
 func remove_target(_brush: BrushTool) -> void:
 	pass

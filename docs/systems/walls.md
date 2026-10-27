@@ -77,6 +77,29 @@ filled faintly on the ground with its outline, top, posts, a door bar and the si
 sides come under 2 m is refused with a line saying so. Verified with the `building_tool` render job
 (idle ghost, turned ghost, drag, laid, save and reload, a token on the roof).
 
+## Streets (2026-10-27)
+
+`Wall.Kind.ROW` is a street of varied buildings along an open line, one record for the whole row
+(procgen's `street_row.json`, `ProcgenRow`): its `points` are the street's centre line, `height_m` is
+the setback of the fronts from it (1.5 to 10 m, default 3), `side` which side the buildings stand on
+(0 left, 1 right, 2 both) and `seed_value` varies them (`walls.json` carries `seed` and `side` for
+rows only). The buildings are never stored: `WallGeometry.row_lots` makes the lots exactly as the
+recipe does (same node seed and parameters), for the ghost, the pick and the scatter clearing.
+
+Drawn like a wall: drag along the street's line, and start the next drag at its end for a bend or a
+longer street (an extended street keeps its mix; the lots before the new end do not change). A
+street needs 6 m. Q and E pick the side for the next street, R mixes it afresh: over a street already
+laid it remixes that one (one history entry, "Reroll row"), else it changes the seed the next street
+gets (`BrushMode.rerolls()` / `reroll()`, the brush's `REROLL` action). Shift+wheel or the bracket keys
+set the setback. The ghost is the street's line and each building's footprint with its door mark, the
+readout says how many buildings and which side. Ctrl+click picks a street over any of its buildings.
+Cost (procgen docs): about 1000 triangles a building, 13 buildings on 40 m in 48 ms. Scatter clears
+under each building. Verified with the `street_tool` render job (drag, laid in two drags, remixed,
+reloaded in play).
+
+Not yet: breaking a street into individual buildings, corner plots, yards and fences per lot, and a
+control for the lot sizes (they use the node's defaults).
+
 ## In play
 
 The GM's Events pane lists the Wall brush (`EventsPane.wall_pane`, the kind tiles, its header hidden;

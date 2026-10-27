@@ -21,7 +21,7 @@ const FENCE_TINT := Color(0.98, 0.84, 0.58)
 const ERASE_TINT := BrushCursor.CLEAR_TINT
 const SHADOW := Color(0.05, 0.04, 0.05, 0.55)
 ## The readout's name per Wall.Kind.
-const KIND_LABELS: Array[String] = ["Stone wall", "Fence", "Building"]
+const KIND_LABELS: Array[String] = ["Stone wall", "Fence", "Building", "Street"]
 ## A building turns this much per Q or E notch, and the idle ghost of one is this big (world
 ## metres: along its first side, across).
 const YAW_STEP := deg_to_rad(15.0)
@@ -58,7 +58,11 @@ var heights: Array[float] = [
 	Wall.DEFAULT_HEIGHT_M[Wall.Kind.STONE],
 	Wall.DEFAULT_HEIGHT_M[Wall.Kind.FENCE],
 	Wall.DEFAULT_HEIGHT_M[Wall.Kind.BUILDING],
+	Wall.DEFAULT_HEIGHT_M[Wall.Kind.ROW],
 ]
+## A new street's side (0 left, 1 right, 2 both; Q and E) and variation seed (R).
+var row_side: int = 2
+var row_seed: int = 0
 ## The turn of a building footprint (radians from the map X axis; Q and E).
 var yaw: float = 0.0
 ## A side being drawn: its press point (world) and the pointer's last ground point.
@@ -133,6 +137,21 @@ static func readout_building(
 	return "Building  %d x %d %s" % [a, b, label]
 
 
+## The readout beside the cursor for a street: how many buildings and on which side ("Street  11
+## buildings, both sides"), or with no count (`buildings` < 0) its setback and the keys. Pure.
+static func readout_row(
+	buildings: int, side: int, setback_m: float, cell_m: float, per_cell: float, label: String
+) -> String:
+	var sides: String = ["left side", "right side", "both sides"][clampi(side, 0, 2)]
+	if buildings >= 0:
+		return "Street  %d buildings, %s" % [buildings, sides]
+	var set_back := ScaleUtils.world_to_display(setback_m, cell_m, per_cell)
+	return (
+		"Street  %s %s back, %s  (Q/E side, R new mix)"
+		% [BridgeBrush.short_number(set_back), label, sides]
+	)
+
+
 ## The picked kind's height (world metres).
 func height() -> float:
 	return heights[kind]
@@ -172,7 +191,9 @@ func track(editor: AuthoringEditor, hit: Vector3, erasing: bool) -> void:
 
 func _plan(editor: AuthoringEditor) -> void:
 	var started := Time.get_ticks_usec()
-	preview = editor.walls.plan(kind as Wall.Kind, from, to, height(), yaw)
+	preview = editor.walls.plan(
+		kind as Wall.Kind, from, to, height(), yaw, {"seed": row_seed, "side": row_side}
+	)
 	refusal = editor.walls.last_refusal
 	last_plan_usec = Time.get_ticks_usec() - started
 	_planned_to = to
@@ -264,15 +285,37 @@ func step(brush: BrushTool, steps: int) -> void:
 	brush.redraw()
 
 
-## A building footprint turns with Q and E.
+## A building footprint turns with Q and E, and a street changes its side.
 func rotates() -> bool:
-	return kind == Wall.Kind.BUILDING
+	return kind == Wall.Kind.BUILDING or kind == Wall.Kind.ROW
 
 
-## Q or E: the footprint turns `steps` notches of YAW_STEP (E clockwise on screen).
+## Q or E: a building footprint turns `steps` notches of YAW_STEP (E clockwise on screen); a
+## street's side steps round left, right, both.
 func rotate(brush: BrushTool, steps: int) -> void:
-	yaw = wrapf(yaw + steps * YAW_STEP, 0.0, TAU)
+	if kind == Wall.Kind.ROW:
+		row_side = posmod(row_side + signi(steps), Wall.ROW_SIDES)
+	else:
+		yaw = wrapf(yaw + steps * YAW_STEP, 0.0, TAU)
 	_planned_to = Vector3.INF
+	brush.redraw()
+
+
+## R varies a street: the one under the pointer, else the next one laid.
+func rerolls() -> bool:
+	return kind == Wall.Kind.ROW
+
+
+func reroll(brush: BrushTool) -> void:
+	var editor := brush.editor
+	if editor == null:
+		return
+	var under := editor.walls.wall_at(brush.hit, PICK_MARGIN_M) if brush.hit != Vector3.INF else -1
+	if under >= 0 and editor.document.wall(under).is_row():
+		editor.walls.reroll(under)
+	else:
+		row_seed = WallEditor.next_seed(row_seed)
+		_planned_to = Vector3.INF
 	brush.redraw()
 
 
@@ -332,6 +375,15 @@ func draw(
 				per_cell,
 				label
 			)
+		elif ok and kind == Wall.Kind.ROW:
+			text = readout_row(
+				WallGeometry.row_lots(editor.document, preview).size(),
+				preview.side,
+				0.0,
+				0.0,
+				0.0,
+				""
+			)
 		elif ok:
 			text = readout(kind, from.distance_to(to), 0.0, cell_m, per_cell, label)
 		BridgeBrush.draw_pill(
@@ -357,7 +409,11 @@ func draw(
 	BridgeBrush.draw_pill(
 		canvas,
 		camera.unproject_position(hit),
-		readout(kind, 0.0, height(), cell_m, per_cell, label),
+		(
+			readout_row(-1, row_side, height(), cell_m, per_cell, label)
+			if kind == Wall.Kind.ROW
+			else readout(kind, 0.0, height(), cell_m, per_cell, label)
+		),
 		READOUT_COLOR
 	)
 
@@ -395,6 +451,9 @@ static func draw_wall(
 	tint: Color,
 	strength: float
 ) -> void:
+	if wall.is_row():
+		_draw_row(canvas, camera, editor, wall, tint, strength)
+		return
 	var count := wall.points.size()
 	if count < 2:
 		return
@@ -435,6 +494,37 @@ static func draw_wall(
 		canvas.draw_circle(at, 3.0, Color(tint, strength))
 	if wall.is_building() and count == Wall.BUILDING_POINTS:
 		_draw_footprint(canvas, camera, editor, wall, tint, strength)
+
+
+## A street's ghost: its line on the ground and every building's footprint with its door.
+static func _draw_row(
+	canvas: Control,
+	camera: Camera3D,
+	editor: AuthoringEditor,
+	wall: Wall,
+	tint: Color,
+	strength: float
+) -> void:
+	var doc := editor.document
+	var street := PackedVector2Array()
+	for p in wall.points:
+		var y := WaterGeometry.ground_at(doc, p) + 0.04
+		street.append(camera.unproject_position(editor.to_world(Vector3(p.x, y, p.y))))
+	canvas.draw_polyline(street, Color(SHADOW, 0.6 * strength), 3.5, true)
+	canvas.draw_polyline(street, Color(tint, 0.9 * strength), 1.75, true)
+	for lot in WallGeometry.row_lots(doc, wall):
+		var corners := PackedVector2Array()
+		for q: Vector3 in lot.points:
+			corners.append(Vector2(q.x, q.z))
+		var house := Wall.make(0, Wall.Kind.BUILDING, corners, true, lot.height)
+		var ring := PackedVector2Array()
+		for p in corners:
+			var y := WaterGeometry.ground_at(doc, p) + 0.04
+			ring.append(camera.unproject_position(editor.to_world(Vector3(p.x, y, p.y))))
+		ring.append(ring[0])
+		canvas.draw_polyline(ring, Color(SHADOW, 0.5 * strength), 3.0, true)
+		canvas.draw_polyline(ring, Color(tint, 0.9 * strength), 1.5, true)
+		_draw_footprint(canvas, camera, editor, house, tint, strength)
 
 
 ## A building footprint: the rectangle filled faintly on the ground and the door marked on its

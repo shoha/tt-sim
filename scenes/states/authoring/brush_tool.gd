@@ -71,7 +71,8 @@ enum Action {
 	SWALLOW,
 	SHAPE,
 	TURN_LEFT,
-	TURN_RIGHT
+	TURN_RIGHT,
+	REROLL
 }
 
 const MIN_RADIUS := 1.0
@@ -208,6 +209,11 @@ static func decide(event: InputEvent, picks: bool, held: bool, over_target: bool
 				return Action.GROW
 			KEY_BRACKETLEFT:
 				return Action.SHRINK
+			KEY_R:
+				# Varying a mode's street (BrushMode.rerolls); with a modifier it is someone else's.
+				if key.ctrl_pressed or key.alt_pressed or key.meta_pressed or key.shift_pressed:
+					return Action.NONE
+				return Action.REROLL
 			KEY_Q, KEY_E:
 				# Turning a mode's footprint (BrushMode.rotates); Ctrl, Alt and Meta are others'.
 				if key.ctrl_pressed or key.alt_pressed or key.meta_pressed:
@@ -413,6 +419,13 @@ func handle_input(event: InputEvent) -> bool:
 			return true
 		Action.GROW, Action.SHRINK:
 			mode.step(self, 1 if action == Action.GROW else -1)
+			return true
+		Action.REROLL:
+			if not mode.rerolls():
+				return false
+			# A held key's repeats reroll nothing more.
+			if not (event as InputEventKey).echo:
+				mode.reroll(self)
 			return true
 		Action.TURN_LEFT, Action.TURN_RIGHT:
 			if not mode.rotates():

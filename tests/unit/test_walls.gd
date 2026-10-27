@@ -419,6 +419,97 @@ func test_q_and_e_turn_a_buildings_footprint_only() -> void:
 	assert_eq(BrushTool.decide(_key(KEY_Q), false, false, false), BrushTool.Action.TURN_LEFT)
 
 
+# --- streets -----------------------------------------------------------------------------
+
+
+func _street(editor: AuthoringEditor, variation: Dictionary = {}) -> int:
+	return editor.walls.place(
+		Wall.Kind.ROW, Vector3(-12, 0, 0), Vector3(12, 0, 0), -1.0, 0.0, variation
+	)
+
+
+func test_a_street_keeps_its_seed_side_and_setback_through_a_save() -> void:
+	var street := Wall.make(
+		1, Wall.Kind.ROW, PackedVector2Array([Vector2(-10, 0), Vector2(10, 0)]), false, 4.0
+	)
+	street.seed_value = 12345
+	street.side = 0
+	_doc.walls.append(street)
+	assert_eq(MapDocumentIO.write(_doc, SAVE_PATH), OK)
+	var read: MapDocument = MapDocumentIO.read(SAVE_PATH)["document"]
+	assert_eq(read.walls.size(), 1)
+	assert_true(read.walls[0].same_as(street), "seed, side and setback come back")
+	var closed := street.copy()
+	closed.closed = true
+	assert_ne(MapWallIO.wall_problem(closed, _doc.extent_m()), "", "a street is an open line")
+	var bad_side := street.copy()
+	bad_side.side = 7
+	assert_ne(MapWallIO.wall_problem(bad_side, _doc.extent_m()), "", "side 0 to 2")
+
+
+func test_a_street_is_laid_extended_and_remixed_with_undo() -> void:
+	var editor := _editor()
+	var id := _street(editor, {"seed": 99, "side": 1})
+	assert_gt(id, 0, "a 24 m street is laid")
+	var street := _doc.wall(id)
+	assert_true(street.is_row())
+	assert_eq([street.seed_value, street.side], [99, 1], "the brush's seed and side")
+	assert_eq(
+		editor.walls.place(Wall.Kind.ROW, Vector3(12, 0, 0), Vector3(12, 0, 12)), id, "carried on"
+	)
+	assert_eq(_doc.wall(id).seed_value, 99, "an extended street keeps its own mix")
+	assert_eq(_doc.wall(id).points.size(), 3)
+	var before := _doc.wall(id).seed_value
+	assert_true(editor.walls.reroll(id))
+	assert_ne(_doc.wall(id).seed_value, before, "another mix")
+	assert_eq(_history.undo(), "Reroll row")
+	assert_eq(_doc.wall(id).seed_value, before, "undone")
+	assert_null(editor.walls.plan(Wall.Kind.ROW, Vector3(0, 0, 8), Vector3(2, 0, 8)))
+	assert_eq(editor.walls.last_refusal, WallEditor.REFUSED_SHORT, "too short for a building")
+	assert_false(editor.walls.reroll(9999))
+
+
+func test_a_street_builds_buildings_and_clears_plants_under_them() -> void:
+	var editor := _editor()
+	var id := _street(editor)
+	var street := _doc.wall(id)
+	var lots := WallGeometry.row_lots(_doc, street)
+	assert_gt(lots.size(), 4, "a good few buildings along 24 m")
+	var node := _nodes().get_wall_node(id)
+	assert_not_null(node.get_node_or_null("Stone"), "masonry")
+	assert_not_null(node.get_node_or_null("Wood"), "roofs")
+	assert_not_null(node.get_node_or_null("Collision"), "and a hull")
+	assert_eq(WallGeometry.row_lots(_doc, street).size(), lots.size(), "the lots repeat")
+	assert_eq(
+		WallGeometry.clearance_crossings(_doc).size(), lots.size(), "one clearing per building"
+	)
+	var other := street.copy()
+	other.seed_value = 4242
+	var a: PackedVector3Array = lots[0].points
+	var b: PackedVector3Array = WallGeometry.row_lots(_doc, other)[0].points
+	assert_ne(a, b, "another seed, another street")
+	assert_ne(WallGeometry.key_of(_doc, other), WallGeometry.key_of(_doc, street), "and its key")
+	# The first lot's middle is over a building; the street's own line is not.
+	var inside := Vector3((a[0].x + a[2].x) * 0.5, 0.0, (a[0].z + a[2].z) * 0.5)
+	assert_eq(editor.walls.wall_at(inside), id, "picked over one of its buildings")
+
+
+func test_q_e_and_r_choose_a_streets_side_and_mix() -> void:
+	var tool := BrushTool.new()
+	add_child_autofree(tool)
+	var brush := WallBrush.new()
+	assert_false(brush.rerolls(), "not for walls")
+	brush.kind = Wall.Kind.ROW
+	assert_true(brush.rotates() and brush.rerolls())
+	assert_eq(brush.row_side, 2)
+	brush.rotate(tool, 1)
+	assert_eq(brush.row_side, 0, "round to the left")
+	brush.rotate(tool, -1)
+	assert_eq(brush.row_side, 2, "and back")
+	assert_eq(BrushTool.decide(_key(KEY_R), false, false, false), BrushTool.Action.REROLL)
+	assert_eq(WallBrush.readout_row(5, 1, 0.0, 0.0, 0.0, ""), "Street  5 buildings, right side")
+
+
 func _key(code: Key) -> InputEventKey:
 	var key := InputEventKey.new()
 	key.keycode = code
