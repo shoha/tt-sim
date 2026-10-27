@@ -150,9 +150,22 @@ func test_the_pane_lists_the_play_brushes_only() -> void:
 	assert_eq(pane.tool_ids(), ids)
 	assert_false(pane.tool_field.tiles.has_tile(PlaceTool.ID), "Place is authoring's alone")
 	for id in [
-		SculptTool.ID, PaintTool.ID, FireTool.ID, BiomeTool.ID, ThinTool.ID, WaterTool.ID, BridgeTool.ID
+		SculptTool.ID,
+		PaintTool.ID,
+		FireTool.ID,
+		BiomeTool.ID,
+		ThinTool.ID,
+		WaterTool.ID,
+		BridgeTool.ID,
+		WallTool.ID
 	]:
 		assert_true(id in ids, "%s is a play brush" % id)
+	# Walls: the kind tiles, the header hidden, and the pane's pick reaches the signal.
+	assert_not_null(pane.wall_pane, "Wall has its controls")
+	assert_false(pane.wall_pane.get_node("WallHeader").visible, "the tile above names it")
+	watch_signals(pane)
+	pane.wall_pane.kind_field.tiles.selection_changed.emit(&"wall_fence")
+	assert_signal_emitted_with_parameters(pane, "wall_kind_selected", [Wall.Kind.FENCE])
 	# Fire's controls are its authoring pane's intensity tiles, its header hidden.
 	assert_not_null(pane.fire_pane, "Fire has its controls")
 	assert_false(pane.fire_pane.get_node("FireHeader").visible, "the tile above names it")
@@ -185,7 +198,9 @@ func test_each_brush_leads_the_hint_bar_and_ends_on_size_undo_and_its_name() -> 
 		assert_eq(hints[-2]["action"], "Undo")
 		assert_eq(hints[-1]["action"], "Put away " + tool.label, "Esc names the brush")
 		for hint in hints:
-			assert_false(hint["key"].begins_with("Shift+scroll"), "no Shift size key: Sculpt's Smooth")
+			assert_false(
+				hint["key"].begins_with("Shift+scroll"), "no Shift size key: Sculpt's Smooth"
+			)
 	assert_eq(PlayEvents.hints_for(SculptTool.ID, HeightBrush.TIER)[0]["action"], "Tier")
 
 
@@ -205,7 +220,9 @@ func test_a_large_edit_toast_says_what_was_done_on_one_line() -> void:
 	var toasts: ToastContainer = TOASTS_SCENE.instantiate()
 	add_child_autofree(toasts)
 	var text := PlayEvents.UNDO_TOAST % PlayEvents.done_phrase("Erase water")
-	toasts.show_toast(text, ToastContainer.ToastType.INFO, 30.0, "Undo", func(): pass, "arrow-back-up")
+	toasts.show_toast(
+		text, ToastContainer.ToastType.INFO, 30.0, "Undo", func(): pass, "arrow-back-up"
+	)
 	await wait_process_frames(2)
 	var toast := toasts.toast_vbox.get_child(0) as Control
 	var label := toast.get_child(0).get_child(1) as Label
@@ -317,7 +334,9 @@ func test_the_presets_stand_above_the_brushes_and_lead_their_hints() -> void:
 	for preset in EventPresets.all():
 		assert_not_null(IconButton.load_icon(preset.icon), "%s has its own icon" % preset.id)
 		for tool in ToolRegistry.tools(ToolDescriptor.PLAY):
-			assert_ne(preset.icon, tool.icon, "%s does not repeat %s's picture" % [preset.id, tool.id])
+			assert_ne(
+				preset.icon, tool.icon, "%s does not repeat %s's picture" % [preset.id, tool.id]
+			)
 	var collapse := PlayEvents.hints_for(EventPresets.COLLAPSE)
 	assert_eq(collapse[0], {"key": "Click", "action": "Drop bridge"})
 	assert_eq(collapse[-1], {"key": "Esc", "action": "Put away"}, "the first key names it")

@@ -45,7 +45,7 @@ starts above `world_top()`. Materials: the biome's cliff rock with the palette m
 
 ## Tool
 
-`WallTool` (`tools/wall_tool.gd`, authoring only), `WallBrush` (gesture and ghost), `WallToolPane`
+`WallTool` (`tools/wall_tool.gd`, authoring and play), `WallBrush` (gesture and ghost), `WallToolPane`
 (Stone and Fence tiles), `WallEditor` (`AuthoringEditor.walls`, one history entry per change).
 
 - Drag along the ground to lay a side. A drag that starts within 0.6 m of the free end of an open
@@ -58,12 +58,19 @@ starts above `world_top()`. Materials: the biome's cliff rock with the palette m
 - Network: a `"walls"` live edit kind (`LiveEditCodec`, `LiveEditReader`) carries the list as JSON,
   validated by `MapWallIO.parse_list`. `MapFingerprint` has a `walls` key.
 
+## In play
+
+The GM's Events pane lists the Wall brush (`EventsPane.wall_pane`, the kind tiles, its header hidden;
+`PlayEvents` hints; `wall_kind_selected` sets the brush kind). A wall laid there is an ordinary live
+edit (`"walls"` op) that reaches every peer, with the Undo toast the other brushes give. Verified
+with the `wall_play` render job (pane, two sides laid, the toasts).
+
 ## Not yet
 
 - Scatter clears along every side (`WallGeometry.clearance_crossings`: each side is fed to the
   crossing clearance, GDScript and the native span list alike; no C++ change). The clearance is the
   crossing's, so it also keeps 0.9 m past each end of a side.
-- No wall in play or Events panes (the tool is authoring only); no collapse or other events.
+- No wall event (a collapse or the like).
 - A fence blocks nothing and a stone wall is a surface to stand on, not a barrier tokens cannot
   cross: blocking movement is a game rule decision still to make.
 - The look: the module's courses and blocks (procgen look pass, 2026-10-27) with a wall tint

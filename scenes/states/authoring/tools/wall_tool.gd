@@ -6,7 +6,8 @@ extends ToolDescriptor
 ## gesture, WallEditor the edit, AuthoredWalls the nodes). The geometry is the shared procgen
 ## module's wall and fence recipes (WallGeometry, docs/systems/walls.md). Its pane is
 ## WallToolPane. A dressed Blender map's ground is the GLB's, so there the tool is disabled with
-## a tooltip saying why, as Paint is.
+## a tooltip saying why, as Paint is. A play brush too: the GM's Events pane lists it with the
+## kind tiles, and what it lays reaches every peer as a "walls" live edit (LiveEditCodec).
 
 const ID := &"wall"
 const LABEL := "Wall"
@@ -19,7 +20,7 @@ func _init() -> void:
 	summary = "Build a stone wall or a fence along a line."
 	icon = "wall"
 	brush_mode = WallBrush
-	contexts = AUTHORING
+	contexts = AUTHORING | PLAY
 	unavailable_tooltip = UNAVAILABLE_TOOLTIP
 	help = [
 		[

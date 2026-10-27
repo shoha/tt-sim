@@ -349,7 +349,7 @@ func test_the_tool_is_registered_with_a_pane_and_a_brush() -> void:
 	var tool := ToolRegistry.find(WallTool.ID)
 	assert_not_null(tool)
 	assert_true(tool.exists_in(ToolDescriptor.AUTHORING))
-	assert_false(tool.exists_in(ToolDescriptor.PLAY), "walls are laid in authoring")
+	assert_true(tool.exists_in(ToolDescriptor.PLAY), "and by the GM in play")
 	assert_eq(tool.brush_mode, WallBrush)
 	var pane := WallToolPane.new()
 	add_child_autofree(pane)
