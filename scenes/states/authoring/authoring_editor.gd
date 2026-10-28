@@ -58,6 +58,8 @@ var water: WaterEditor = null
 var crossings: CrossingEditor = null
 ## The wall and fence edits, made by create().
 var walls: WallEditor = null
+## The structure (building) edits, made by create().
+var structures: StructureEditor = null
 ## The fire edits, and the map's fire drawing (null without one).
 var fire: FireEditor = null
 var fire_field: FireField = null
@@ -95,6 +97,7 @@ static func create(
 	editor.water = WaterEditor.create(editor)
 	editor.crossings = CrossingEditor.create(editor)
 	editor.walls = WallEditor.create(editor)
+	editor.structures = StructureEditor.create(editor)
 	editor.fire = FireEditor.create(editor)
 	editor._rng.randomize()
 	return editor

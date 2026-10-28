@@ -33,7 +33,14 @@ const DRESSING_BYTES := 4
 const COMPRESSION := FileAccess.COMPRESSION_ZSTD
 ## Arguments of each op kind (LiveEditCodec.KINDS).
 const ARITY := {
-	"mask": 1, "surface": 1, "height": 2, "water": 2, "crossings": 2, "walls": 2, "props": 2
+	"mask": 1,
+	"surface": 1,
+	"height": 2,
+	"water": 2,
+	"crossings": 2,
+	"walls": 2,
+	"structures": 2,
+	"props": 2
 }
 
 ## palette root -> {"palette": the PaletteLibrary dictionary the tables were built from,
@@ -112,6 +119,8 @@ func read(kind: String, args: Array, redo: bool = true) -> Array:
 			out = [_crossing_list(args[0]), _area(args[1])]
 		"walls":
 			out = [_wall_list(args[0]), _area(args[1])]
+		"structures":
+			out = [_structure_list(args[0]), _area(args[1])]
 		"props":
 			out = [args[0], _cell_rows(args[0], args[1])]
 	return out if problem == "" else []
@@ -349,6 +358,16 @@ func _wall_list(value: Variant) -> Array[Wall]:
 	var list := MapWallIO.parse_list(value if value is Array else [null], _doc.extent_m(), warn_log)
 	if not warn_log.items.is_empty():
 		_fail("walls: " + warn_log.items[0])
+	return list
+
+
+func _structure_list(value: Variant) -> Array[Structure]:
+	var warn_log := MapDocumentIO._WarningLog.new()
+	var list := MapStructureIO.parse_list(
+		value if value is Array else [null], _doc.extent_m(), warn_log
+	)
+	if not warn_log.items.is_empty():
+		_fail("structures: " + warn_log.items[0])
 	return list
 
 

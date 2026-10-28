@@ -30,6 +30,10 @@ system's map and the rules the code keeps (moved from `AGENTS.md` Key Convention
   that first. Unknown entries are ignored.
 - `LevelData.map_document` (`""` or `"map.ttmap"`) sits beside `map_path`. Use `has_map()`
   rather than testing `map_path` for "is this level playable".
+- Structures (2026-10-28, card S1): `MapDocument.structures`, saved as `structures.json` (cap 1 MB,
+  at most 128, no format bump; `MapStructureIO`), read as untrusted like `walls.json`, with the
+  `MapFingerprint` key `structures` and the live-edit kind `structures`. Rules and shape:
+  [structures.md](structures.md).
 - Fire (2026-10-11, card F1): `MapDocument.fire_mask`, one intensity byte per height sample
   (0 none), saved as `fire.png` (8-bit greyscale, cap 4 MB, no format bump). Read as untrusted:
   the size is checked before the read, a wrong-sized or broken image is skipped with a warning

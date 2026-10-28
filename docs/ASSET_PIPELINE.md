@@ -1993,10 +1993,13 @@ with a smaller one under a dressing document, and loads the result through
 A real terrain-paint export has not yet been through it; the first one through the
 library's Import is the producer-side check.
 
-## 12. Structures (PROPOSED 2026-10-28, not built)
+## 12. Structures (partly built 2026-10-28)
 
-Proposed only: nothing below is implemented. The full design is the gitignored
-`docs/plans/2026-10-28-structures/design.md`.
+Status per part. **Built (card S1):** the map entry `structures.json`, the `Structure` record, its
+validation, the live edit and the fingerprint key (the **Map** bullet below; model and rules in
+`systems/structures.md`). **Proposed, not built:** everything else here (recipe resolution, the
+library kind, geometry, determinism gate, budgets, the role table). The full design is the
+gitignored `docs/plans/2026-10-28-structures/design.md`.
 
 Producers: procgen (the generator core), structgen (the editor); consumer: tt-sim. Buildings are
 NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuilds.
@@ -2019,9 +2022,19 @@ NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuil
 - **Library.** `structures/index.json` (format `ttsim-structures` 1), `structures/<id>.structure.json`,
   `thumbnails/structures/<id>.jpg`; core adds `structures/pins.txt` (an md5 digest and triangle
   count per structure at its default footprint). Not part of `assets/catalog.json`.
-- **Map.** `structures.json` in `map.ttmap`: `{id, recipe: "<library>:<id>", footprint, seed,
-  params, style}`; points are float32 values written to centimetres. The `libraries` record
-  names the libraries whose recipes the map uses.
+- **Map (built).** `structures.json` in `map.ttmap`: `{"version": 1, "structures": [{id,
+  recipe: "<library>:<id>", footprint, seed, params, style}]}`. `id` 1..255 and unique; at most
+  128 structures and 1 MB; `recipe` a `LibraryIds` reference (library id, structure id
+  `[a-z][a-z0-9_]*` without `__`); `footprint` 3 to 24 `[x, z]` points in map metres, finite, on
+  the map, at most 64 m across, edge 0 the front (the shared plan rules, `ProcgenPlan`, are a seam
+  not yet wired); `seed` a whole number 0..1e9; `params` at most 16 entries, each a bool or a
+  finite number within 1e6 rounded to 0.01; `style` a short string. Footprint points are float32
+  values (the editor snaps them to 1 cm) and the file is byte-identical across a load and a save.
+  A bad record is skipped with a warning; the writer refuses a bad document. The same list
+  travels as the live-edit kind `structures` (whole list, validated by the same reader). The
+  `libraries` record will name the libraries whose recipes the map uses (library card, not
+  built); `MapFingerprint` has the key `structures`. Code: `Structure`, `MapStructureIO`,
+  `StructureEditor`; hub: `systems/structures.md`.
 - **Determinism.** The same recipe, inputs and seed must build the same mesh on every peer. Measured
   on Windows only: repeated and worker-thread builds give identical digests (12 cases). Linux
   is covered for the self-check samples; the 42 building digests are not yet run on every

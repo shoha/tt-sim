@@ -22,6 +22,8 @@ extends RefCounted
 ##   falls_count    how many falls that grouping found.
 ##   crossings      per AuthoredCrossings child: "<name> <kind> <verts> <aabb>".
 ##   walls          per AuthoredWalls child: "<name> <verts> <aabb>".
+##   structures     per document structure "record <id> <recipe> <sha prefix of its JSON>", then
+##                  per AuthoredStructures child "node <name> <verts> <aabb>", sorted.
 ##   edge           the skirt's river-exit parts: "<name> <verts>" for Channel and Ribbon,
 ##                  or [] when no water leaves the map.
 ##   scatter        per asset in every AuthoredScatter: "<asset> <rows>", sorted.
@@ -35,6 +37,7 @@ const ROUND_M := 0.001
 const HASH_CHARS := 16
 const CROSSINGS_NODE := "AuthoredCrossings"
 const WALLS_NODE := "AuthoredWalls"
+const STRUCTURES_NODE := "AuthoredStructures"
 const WATER_NODE := "AuthoredWater"
 const FALLS_MESH := "AuthoredWater-falls"
 const EDGE_NAMES: Array[String] = ["Channel", "Ribbon"]
@@ -55,6 +58,7 @@ static func of(root: Node, doc: MapDocument) -> Dictionary:
 		"falls_count": 0,
 		"crossings": [],
 		"walls": [],
+		"structures": [],
 		"edge": [],
 		"scatter": [],
 		"scatter_hash": "",
@@ -64,6 +68,7 @@ static func of(root: Node, doc: MapDocument) -> Dictionary:
 		out.heights = _heights(doc)
 		out.fire = _fire(doc)
 		out.water = _water(doc)
+		out.structures = _structures(null, doc)
 	if root == null:
 		return out
 	var meshes: Array = []
@@ -76,6 +81,7 @@ static func of(root: Node, doc: MapDocument) -> Dictionary:
 	out.falls_count = (out.falls as Array).size()
 	out.crossings = _crossings(root)
 	out.walls = _walls(root)
+	out.structures = _structures(root, doc)
 	out.edge = _edge(meshes)
 	var scatter := _scatter(root)
 	out.scatter = scatter[0]
@@ -269,7 +275,34 @@ static func _crossings(root: Node) -> Array:
 
 ## Per wall node: "<name> <verts> <aabb of its meshes>".
 static func _walls(root: Node) -> Array:
-	var holder := root.get_node_or_null(NodePath(WALLS_NODE))
+	return _child_summaries(root, WALLS_NODE)
+
+
+## The structures key: one "record <id> <recipe> <sha prefix>" per document record (the
+## record's JSON form, so a footprint, seed, param or style change moves it before any geometry
+## exists), then one "node <name> <verts> <aabb>" per child of AuthoredStructures once the build
+## card adds them, sorted.
+static func _structures(root: Node, doc: MapDocument) -> Array:
+	var out: Array = []
+	if doc != null:
+		for structure in doc.structures:
+			var text := JSON.stringify(MapStructureIO.structure_json(structure), "", true)
+			out.append(
+				(
+					"record %d %s %s"
+					% [structure.id, structure.recipe, text.sha256_text().substr(0, HASH_CHARS)]
+				)
+			)
+	if root != null:
+		for line: String in _child_summaries(root, STRUCTURES_NODE):
+			out.append("node " + line)
+	out.sort()
+	return out
+
+
+## Per child of the node `holder_name` under `root`: "<name> <verts> <aabb of its meshes>".
+static func _child_summaries(root: Node, holder_name: String) -> Array:
+	var holder := root.get_node_or_null(NodePath(holder_name))
 	if holder == null:
 		return []
 	var out: Array = []

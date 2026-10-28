@@ -27,6 +27,7 @@ extends RefCounted
 ##   water_flow.png         the baked flow map, RG8 as RGB              (MapWaterIO)
 ##   crossings.json         plank bridges and stepping stones           (MapCrossingIO)
 ##   walls.json             stone walls and fences                      (MapWallIO)
+##   structures.json        buildings: recipe, footprint, seed, params  (MapStructureIO)
 ##   fire.png               8-bit greyscale fire intensity on the sample grid, 0 = no fire;
 ##                          never written all zero, and an all-zero one reads as none
 ##   mass_anchors.json      grass-mass anchors, (dx, dz) per scatter row   (MapAnchorsIO)
@@ -91,6 +92,7 @@ const KNOWN_ENTRIES: Array[String] = [
 	MapWaterIO.FLOW_ENTRY,
 	MapCrossingIO.ENTRY,
 	MapWallIO.ENTRY,
+	MapStructureIO.ENTRY,
 	FIRE_ENTRY,
 	MapAnchorsIO.ENTRY,
 ]
@@ -121,6 +123,7 @@ const ENTRY_CAPS := {
 	MapWaterIO.FLOW_ENTRY: 4 * 1024 * 1024,
 	MapCrossingIO.ENTRY: 256 * 1024,
 	MapWallIO.ENTRY: 1024 * 1024,
+	MapStructureIO.ENTRY: 1024 * 1024,
 	FIRE_ENTRY: 4 * 1024 * 1024,
 	MapAnchorsIO.ENTRY: 16 * 1024 * 1024,
 }
@@ -254,6 +257,7 @@ static func serialize(doc: MapDocument) -> Dictionary:
 	MapWaterIO.serialize(doc, entries)
 	MapCrossingIO.serialize(doc, entries)
 	MapWallIO.serialize(doc, entries)
+	MapStructureIO.serialize(doc, entries)
 	if has_fire(doc.fire_mask):
 		entries[FIRE_ENTRY] = _png(doc.fire_mask, doc, Image.FORMAT_L8)
 	MapAnchorsIO.serialize(doc, entries)
@@ -437,6 +441,9 @@ static func _writable_problem(doc: MapDocument) -> String:
 	var walls := MapWallIO.problem(doc)
 	if walls != "":
 		return walls
+	var structures := MapStructureIO.problem(doc)
+	if structures != "":
+		return structures
 	var total_rows := 0
 	for rows_by_asset in [doc.props, doc.scatter]:
 		var rows_problem := _rows_problem(rows_by_asset)
@@ -580,6 +587,7 @@ static func _parse_document(entries: Dictionary, warn_log: _WarningLog) -> MapDo
 	MapWaterIO.parse(blobs, doc, warn_log)
 	MapCrossingIO.parse(blobs, doc, warn_log)
 	MapWallIO.parse(blobs, doc, warn_log)
+	MapStructureIO.parse(blobs, doc, warn_log)
 	if blobs.has(FIRE_ENTRY):
 		var fire := _parse_mask(blobs[FIRE_ENTRY], doc, Image.FORMAT_L8, FIRE_ENTRY, warn_log)
 		doc.fire_mask = fire if has_fire(fire) else PackedByteArray()
