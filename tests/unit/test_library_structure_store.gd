@@ -352,7 +352,22 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 	)
 	ids.sort()
 	assert_eq(
-		ids, ["cottage", "cottage_chimneyed", "stone_house", "townhouse", "townhouse_trimmed"]
+		ids,
+		[
+			"cottage",
+			"cottage_chimneyed",
+			"cottage_hip",
+			"house_flat",
+			"house_hip",
+			"stone_house",
+			"townhouse",
+			"townhouse_chimneyed",
+			"townhouse_end",
+			"townhouse_flat",
+			"townhouse_hip",
+			"townhouse_timber",
+			"townhouse_trimmed"
+		]
 	)
 	var pins := (
 		FileAccess
@@ -360,7 +375,7 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 		. strip_edges()
 		. split("\n")
 	)
-	assert_eq(pins.size(), 5)
+	assert_eq(pins.size(), 13)
 	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
 	var plan := PackedVector2Array([Vector2(-3, -2), Vector2(3, -2), Vector2(3, 2), Vector2(-3, 2)])
 	var moved := PackedStringArray()

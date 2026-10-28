@@ -290,7 +290,11 @@ func test_variants_are_the_same_familys_other_recipes_and_a_lone_recipe_has_none
 		refs.append(String(row["ref"]))
 	assert_true(COTTAGE in refs and CHIMNEYED in refs, "%s" % [refs])
 	assert_false(TOWNHOUSE in refs, "another family is not a variant")
-	assert_true(StructureEdit.variants_of(STONE_HOUSE).is_empty(), "the lone stone house has none")
+	var houses: Array[String] = []
+	for row in StructureEdit.variants_of(STONE_HOUSE):
+		houses.append(String(row["ref"]))
+	houses.sort()
+	assert_eq(houses, ["core:house_flat", "core:house_hip", "core:stone_house"] as Array[String])
 	assert_true(StructureEdit.variants_of("core:no_such").is_empty())
 
 
@@ -715,8 +719,8 @@ func test_the_bar_offers_only_what_the_recipe_exposes() -> void:
 	var editor := _editor()
 	var id := _lay(editor, Vector2.ZERO, STONE_HOUSE)
 	pane.show_selection(_doc.structure(id))
-	assert_null(pane.variant_field, "the lone stone house has no variants")
 	assert_false((pane.steppers["floors"]["row"] as Control).visible, "it has no floors")
+	assert_true((pane.steppers["ridge"]["row"] as Control).visible, "it can turn its ridge")
 	assert_false((pane.steppers["chimneys"]["row"] as Control).visible)
 	assert_true((pane.steppers["roof_pitch"]["row"] as Control).visible)
 	var cottage := _lay(editor, Vector2(12, 0), COTTAGE)

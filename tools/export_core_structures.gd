@@ -20,40 +20,61 @@ extends SceneTree
 const PIN_SEED := 5
 var pin_plan := PackedVector2Array([Vector2(-3, -2), Vector2(3, -2), Vector2(3, 2), Vector2(-3, 2)])
 
-## The starter set. `builder` is the ProcgenRecipes function that makes the document.
+## The starter set. `recipe` says how ProcgenRecipes.building makes the document (every recipe is
+## glazed and exposes the `ridge` choice; the keys are `roof`, `walls`, `style`, `trim` ("" or the
+## set's name: "townhouse" or "cottage"), `furniture`, and the interface defaults `height`,
+## `chimneys`, `ridge` and `window_width` where they differ from the builder's). A starter's
+## default ridge is 0 (the plan's longer side) unless its recipe says otherwise, so the first five
+## keep the pins they had before `ridge` existed (their recipe files gain only the interface entry).
 const STARTERS: Array[Dictionary] = [
 	{
 		"id": "stone_house",
-		"builder": "building",
+		"recipe": {"roof": "gable", "walls": "stone", "style": "", "trim": "", "furniture": []},
 		"name": "Stone house",
 		"family": "house",
 		"variant": "Stone",
 		"tags": ["house", "stone", "gable"],
 		"max_side_m": 12.0,
 		"max_area_m2": 100.0,
-		"expose": ["height", "roof_pitch"],
+		"expose": ["height", "roof_pitch", "ridge"],
 	},
 	{
 		"id": "cottage",
-		"builder": "cottage",
+		"recipe":
+		{"roof": "gable", "walls": "timber", "style": "cottage", "trim": "", "furniture": []},
 		"name": "Cottage",
 		"family": "cottage",
 		"variant": "Timber",
 		"tags": ["house", "timber", "gable"],
-		"expose": ["height", "floors", "roof_pitch"],
+		"expose": ["height", "floors", "roof_pitch", "ridge"],
 	},
 	{
 		"id": "cottage_chimneyed",
-		"builder": "cottage_chimneyed",
+		"recipe":
+		{
+			"roof": "gable",
+			"walls": "timber",
+			"style": "cottage",
+			"trim": "cottage",
+			"furniture": ["chimneys"]
+		},
 		"name": "Cottage with chimney",
 		"family": "cottage",
 		"variant": "Timber, chimney",
 		"tags": ["house", "timber", "gable", "chimney", "shutters"],
-		"expose": ["height", "floors", "roof_pitch", "chimneys"],
+		"expose": ["height", "floors", "roof_pitch", "chimneys", "ridge"],
 	},
 	{
 		"id": "townhouse",
-		"builder": "townhouse",
+		"recipe":
+		{
+			"roof": "gable",
+			"walls": "stone",
+			"style": "townhouse",
+			"trim": "",
+			"furniture": [],
+			"height": 5.2
+		},
 		"name": "Townhouse",
 		"family": "townhouse",
 		"variant": "Plain",
@@ -61,11 +82,19 @@ const STARTERS: Array[Dictionary] = [
 		"min_side_m": 3.0,
 		"max_side_m": 16.0,
 		"max_area_m2": 150.0,
-		"expose": ["height", "floors", "roof_pitch"],
+		"expose": ["height", "floors", "roof_pitch", "ridge"],
 	},
 	{
 		"id": "townhouse_trimmed",
-		"builder": "townhouse_trimmed",
+		"recipe":
+		{
+			"roof": "gable",
+			"walls": "stone",
+			"style": "townhouse",
+			"trim": "townhouse",
+			"furniture": [],
+			"height": 5.2
+		},
 		"name": "Townhouse, trimmed",
 		"family": "townhouse",
 		"variant": "Trimmed",
@@ -73,7 +102,167 @@ const STARTERS: Array[Dictionary] = [
 		"min_side_m": 3.0,
 		"max_side_m": 16.0,
 		"max_area_m2": 150.0,
-		"expose": ["height", "floors", "roof_pitch"],
+		"expose": ["height", "floors", "roof_pitch", "ridge"],
+	},
+	# The street-split card's widening (2026-10-28): the roofs, walls and chimneys a street's
+	# species draw that the five above cannot show.
+	{
+		"id": "townhouse_timber",
+		"recipe":
+		{
+			"roof": "gable",
+			"walls": "timber",
+			"style": "townhouse",
+			"trim": "townhouse",
+			"furniture": [],
+			"height": 5.2
+		},
+		"name": "Timber townhouse",
+		"family": "townhouse",
+		"variant": "Timber",
+		"tags": ["house", "timber", "gable", "townhouse", "trim", "quoins"],
+		"min_side_m": 3.0,
+		"max_side_m": 16.0,
+		"max_area_m2": 150.0,
+		"expose": ["height", "floors", "roof_pitch", "ridge"],
+	},
+	{
+		"id": "townhouse_chimneyed",
+		"recipe":
+		{
+			"roof": "gable",
+			"walls": "stone",
+			"style": "townhouse",
+			"trim": "townhouse",
+			"furniture": ["end_chimneys"],
+			"height": 5.2,
+			"chimneys": 2
+		},
+		"name": "Townhouse with chimneys",
+		"family": "townhouse",
+		"variant": "Chimneys",
+		"tags": ["house", "stone", "gable", "townhouse", "trim", "quoins", "chimney"],
+		"min_side_m": 3.0,
+		"max_side_m": 16.0,
+		"max_area_m2": 150.0,
+		"expose": ["height", "floors", "roof_pitch", "chimneys", "ridge"],
+	},
+	{
+		"id": "townhouse_end",
+		"recipe":
+		{
+			"roof": "gable",
+			"walls": "stone",
+			"style": "townhouse",
+			"trim": "townhouse",
+			"furniture": ["end_chimneys"],
+			"height": 5.2,
+			"chimneys": 2,
+			"ridge": 2
+		},
+		"name": "Terrace-end house",
+		"family": "townhouse",
+		"variant": "Gable to the front",
+		"tags": ["house", "stone", "gable", "townhouse", "trim", "quoins", "chimney", "end"],
+		"min_side_m": 3.0,
+		"max_side_m": 20.0,
+		"max_area_m2": 180.0,
+		"expose": ["height", "floors", "roof_pitch", "chimneys", "ridge"],
+	},
+	{
+		"id": "townhouse_flat",
+		"recipe":
+		{
+			"roof": "flat",
+			"walls": "stone",
+			"style": "townhouse",
+			"trim": "townhouse",
+			"furniture": [],
+			"height": 5.2
+		},
+		"name": "Flat-roofed townhouse",
+		"family": "townhouse",
+		"variant": "Flat roof",
+		"tags": ["house", "stone", "flat", "townhouse", "trim", "quoins"],
+		"min_side_m": 3.0,
+		"max_side_m": 16.0,
+		"max_area_m2": 150.0,
+		"expose": ["height", "floors"],
+	},
+	{
+		"id": "townhouse_hip",
+		"recipe":
+		{
+			"roof": "hip",
+			"walls": "stone",
+			"style": "townhouse",
+			"trim": "townhouse",
+			"furniture": ["end_chimneys"],
+			"height": 5.2,
+			"chimneys": 2
+		},
+		"name": "Hip-roof townhouse",
+		"family": "townhouse",
+		"variant": "Hip roof",
+		"tags": ["house", "stone", "hip", "townhouse", "trim", "quoins", "chimney"],
+		"min_side_m": 3.0,
+		"max_side_m": 16.0,
+		"max_area_m2": 150.0,
+		"expose": ["height", "floors", "roof_pitch", "chimneys", "ridge"],
+	},
+	{
+		"id": "cottage_hip",
+		"recipe":
+		{
+			"roof": "hip",
+			"walls": "timber",
+			"style": "cottage",
+			"trim": "cottage",
+			"furniture": ["chimneys"]
+		},
+		"name": "Hip-roof cottage",
+		"family": "cottage",
+		"variant": "Timber, hip roof",
+		"tags": ["house", "timber", "hip", "chimney", "shutters"],
+		"expose": ["height", "floors", "roof_pitch", "chimneys", "ridge"],
+	},
+	{
+		"id": "house_hip",
+		"recipe":
+		{
+			"roof": "hip",
+			"walls": "stone",
+			"style": "",
+			"trim": "",
+			"furniture": [],
+			"window_width": 0.9
+		},
+		"name": "Stone house, hip roof",
+		"family": "house",
+		"variant": "Stone, hip roof",
+		"tags": ["house", "stone", "hip"],
+		"max_side_m": 12.0,
+		"max_area_m2": 100.0,
+		"expose": ["height", "roof_pitch", "window_width", "ridge"],
+	},
+	{
+		"id": "house_flat",
+		"recipe":
+		{
+			"roof": "flat",
+			"walls": "stone",
+			"style": "",
+			"trim": "",
+			"furniture": [],
+			"window_width": 0.9
+		},
+		"name": "Stone house, flat roof",
+		"family": "house",
+		"variant": "Stone, flat roof",
+		"tags": ["house", "stone", "flat"],
+		"max_side_m": 12.0,
+		"max_area_m2": 100.0,
+		"expose": ["height", "window_width"],
 	},
 ]
 
@@ -121,7 +310,7 @@ func _make() -> Dictionary:
 	var texts := {}
 	for starter in STARTERS:
 		var id := String(starter["id"])
-		var doc := _document_of(String(starter["builder"]))
+		var doc := _document_of(starter["recipe"] as Dictionary)
 		var text := doc.to_json()
 		# The shipped recipes are procgen's builders with glazing on (a pane in every window, a leaf
 		# in every door), so they differ from procgen's committed `recipes/` files by that node.
@@ -178,27 +367,27 @@ func _make() -> Dictionary:
 	return {"files": files, "pins": pins, "warnings": warnings}
 
 
-## The ProcgenRecipes document of builder `name`, with glazing on (ProcgenRecipes.building's last
-## argument; the named builders do not pass it, so their arguments are repeated here).
-func _document_of(name: String) -> PlantGraphDocument:
-	var doc: PlantGraphDocument = null
-	match name:
-		"building":
-			doc = ProcgenRecipes.building("gable", "stone", "", [], [], true)
-		"cottage":
-			doc = ProcgenRecipes.building("gable", "timber", "cottage", [], [], true)
-		"cottage_chimneyed":
-			doc = ProcgenRecipes.building(
-				"gable", "timber", "cottage", ProcgenRecipes.COTTAGE_TRIM, ["chimneys"], true
-			)
+## The ProcgenRecipes document of starter recipe `spec` (see STARTERS), with glazing and the ridge
+## choice on (ProcgenRecipes.building's last two arguments; the named builders do not pass them).
+func _document_of(spec: Dictionary) -> PlantGraphDocument:
+	var trim: Array = []
+	match String(spec.get("trim", "")):
 		"townhouse":
-			doc = ProcgenRecipes.building("gable", "stone", "townhouse", [], [], true)
-			_set_default(doc, "height", 5.2)
-		"townhouse_trimmed":
-			doc = ProcgenRecipes.building(
-				"gable", "stone", "townhouse", ProcgenRecipes.TOWNHOUSE_TRIM, [], true
-			)
-			_set_default(doc, "height", 5.2)
+			trim = ProcgenRecipes.TOWNHOUSE_TRIM
+		"cottage":
+			trim = ProcgenRecipes.COTTAGE_TRIM
+	var doc := ProcgenRecipes.building(
+		String(spec["roof"]),
+		String(spec["walls"]),
+		String(spec["style"]),
+		trim,
+		spec["furniture"] as Array,
+		true,
+		true
+	)
+	for key: String in ["height", "chimneys", "ridge", "window_width"]:
+		if spec.has(key):
+			_set_default(doc, key, float(spec[key]))
 	return doc
 
 

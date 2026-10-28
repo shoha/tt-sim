@@ -34,6 +34,7 @@ const STEPPED := [
 	{"param": "floors", "caption": "Floors", "auto_zero": true},
 	{"param": "roof_pitch", "caption": "Roof pitch", "auto_zero": false},
 	{"param": "chimneys", "caption": "Chimneys", "auto_zero": false},
+	{"param": "ridge", "caption": "Ridge", "auto_zero": true},
 ]
 const TILE_COLUMNS := 2
 const THUMB_PX := 56
@@ -195,10 +196,13 @@ func show_selection(structure: Structure) -> void:
 		(stepper["plus"] as Button).disabled = value >= float(spec.get("max", value)) - 0.001
 
 
-## How a stepped value reads: whole numbers plain, floors 0 as "Auto", pitch in degrees.
+## How a stepped value reads: whole numbers plain, floors and the ridge 0 as "Auto", pitch in
+## degrees, the ridge 1 as "Eave" (the eave to the front) and 2 as "Gable" (a gable to it).
 static func _value_text(item: Dictionary, value: float) -> String:
 	if bool(item["auto_zero"]) and value < 0.5:
 		return "Auto"
+	if String(item["param"]) == "ridge":
+		return "Eave" if value < 1.5 else "Gable"
 	var text := str(roundi(value)) if is_equal_approx(value, roundf(value)) else "%.1f" % value
 	return text + " deg" if String(item["param"]) == "roof_pitch" else text
 

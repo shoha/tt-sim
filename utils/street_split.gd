@@ -18,17 +18,22 @@ extends RefCounted
 ##   params     the lot's height and roof pitch (and window width, chimney count and masonry
 ##              when the recipe declares them), only where they differ from the recipe's default.
 ##
-## What does not carry over: a lot's yard (its fence or low wall and gate), the roof's ridge
-## direction (the street turns some gables to the street; a structure recipe has no such
-## parameter), and the trim details a recipe does not offer. The silhouettes follow the lot
-## (footprint, height, pitch); the dressing follows the library's structures.
+## What does not carry over: a lot's yard (its fence or low wall and gate), and the trim details a
+## recipe does not offer. The silhouettes follow the lot (footprint, height, pitch, roof kind and
+## ridge direction, where the library has a recipe with that roof); the dressing follows the
+## library's structures.
 
 ## Score weights of match_row().
 const W_STYLE := 6
 const W_STYLE_ALIAS := 4
 const W_WALLS := 3
 const W_WALLS_MISMATCH := -1
-const W_ROOF := 1
+## The roof kind weighs as much as the walls: a hip or flat lot should not become a gable one while
+## a recipe with its roof exists.
+const W_ROOF := 3
+## A "end" recipe (its ridge defaults across, a gable to the front) for a lot whose gable faces the
+## street, and against it for a lot whose eave does.
+const W_RIDGE := 1
 const W_DETAIL := 1
 const W_TRIM := 2
 const W_NOT_TOWNHOUSE := -4
@@ -127,6 +132,8 @@ static func score(lot: Dictionary, row: Dictionary) -> int:
 		value += W_WALLS_MISMATCH
 	if String(lot.get("roof", "gable")) in tags:
 		value += W_ROOF
+	if "end" in tags:
+		value += W_RIDGE if int(lot.get("ridge", 1)) == 2 else -W_RIDGE
 	var stacks := int(lot.get("chimneys", 0))
 	if "chimney" in tags:
 		value += W_DETAIL if stacks > 0 else -W_DETAIL
@@ -163,8 +170,9 @@ static func footprint_of(lot: Dictionary, row: Dictionary) -> PackedVector2Array
 
 
 ## The parameters of the record for `lot` on `recipe`: the lot's height, roof pitch, window
-## width, chimney count and masonry, kept where the recipe declares the parameter, clamped to its
-## range, and only where they differ from its default (the record's rule). Pure.
+## width, chimney count, masonry and ridge direction (1 eave to the street, 2 gable), kept where
+## the recipe declares the parameter, clamped to its range, and only where they differ from its
+## default (the record's rule). Pure.
 static func params_of(lot: Dictionary, recipe: PlantGraphDocument) -> Dictionary:
 	if recipe == null:
 		return {}
@@ -175,6 +183,8 @@ static func params_of(lot: Dictionary, recipe: PlantGraphDocument) -> Dictionary
 		"window_width": float(lot.get("window_width", 0.0)),
 		"chimneys": float(lot.get("chimneys", 0)),
 		"textured": 0.0 if walls == "timber" else 1.0,
+		# 1 the eave to the street, 2 a gable to it: the lot's own, so a terrace keeps its eaves out.
+		"ridge": float(lot.get("ridge", 0)),
 	}
 	var clamped := StructureRecipes.clamp_params(recipe, wanted)
 	var out := {}

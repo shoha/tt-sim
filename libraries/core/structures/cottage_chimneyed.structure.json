@@ -128,6 +128,15 @@
       "name": "lit",
       "tip": "The share of windows that glow warm, as if lit from within.",
       "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Ridge",
+      "max": 2,
+      "min": 0,
+      "name": "ridge",
+      "tip": "0 along the longer side, 1 along the front (the eave to the street), 2 across.",
+      "type": "float"
     }
   ],
   "nodes": [
@@ -144,6 +153,7 @@
       "id": "building_layout_2",
       "params": {
         "height": "@height",
+        "ridge": "@ridge",
         "roof": "gable",
         "roof_pitch": "@roof_pitch",
         "window_width": "@window_width"

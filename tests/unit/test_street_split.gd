@@ -161,11 +161,18 @@ func test_a_terrace_becomes_townhouses_and_a_village_cottages() -> void:
 			var local := structure.recipe.get_slice(":", 1)
 			if preset == 1 and local.begins_with("townhouse"):
 				matching += 1
-			if preset == 3 and (local.begins_with("cottage") or local == "stone_house"):
+			if (
+				preset == 3
+				and (
+					local.begins_with("cottage")
+					or local.begins_with("house")
+					or local == "stone_house"
+				)
+			):
 				matching += 1
 		counts[preset] = [matching, structures.size()]
 	assert_gt(counts[1][0], 0, "a terrace's tall fronts are townhouses")
-	assert_eq(counts[3][0], counts[3][1], "a village is cottages and stone houses")
+	assert_eq(counts[3][0], counts[3][1], "a village is cottages and houses")
 
 
 # --- matching a lot to a structure ------------------------------------------------------
@@ -179,7 +186,7 @@ func test_plain_lots_take_the_house_that_has_their_walls() -> void:
 
 func test_a_named_style_wins_over_the_walls() -> void:
 	assert_eq(_ref(_lot({"style": "townhouse"})), "core:townhouse")
-	assert_eq(_ref(_lot({"style": "townhouse", "walls": "timber"})), "core:townhouse")
+	assert_eq(_ref(_lot({"style": "townhouse", "walls": "timber"})), "core:townhouse_timber")
 	var dressed := _lot(
 		{"style": "townhouse", "trim": ["sills", "lintels", "floor_bands", "quoins"]}
 	)
@@ -189,6 +196,45 @@ func test_a_named_style_wins_over_the_walls() -> void:
 		"core:cottage_chimneyed",
 		"a chimney and shutters"
 	)
+
+
+func test_the_roof_walls_and_chimneys_of_a_lot_pick_the_recipe_that_has_them() -> void:
+	assert_eq(_ref(_lot({"roof": "hip"})), "core:house_hip", "a plain stone hip")
+	assert_eq(_ref(_lot({"roof": "flat"})), "core:house_flat", "a plain stone flat roof")
+	assert_eq(
+		_ref(_lot({"style": "cottage", "walls": "timber", "roof": "hip", "chimneys": 1})),
+		"core:cottage_hip",
+		"a timber cottage under a hip"
+	)
+	assert_eq(_ref(_lot({"style": "townhouse", "roof": "flat"})), "core:townhouse_flat")
+	var dressed := {
+		"style": "townhouse",
+		"trim": ["sills", "lintels", "floor_bands", "quoins"],
+		"chimneys": 2,
+		"chimney_ends": true,
+		"ridge": 1,
+	}
+	assert_eq(_ref(_lot(dressed)), "core:townhouse_chimneyed", "party-wall stacks")
+	assert_eq(
+		_ref(_lot(dressed.merged({"roof": "hip"}, true))),
+		"core:townhouse_hip",
+		"a hip terrace house"
+	)
+	assert_eq(
+		_ref(_lot(dressed.merged({"ridge": 2}, true))),
+		"core:townhouse_end",
+		"its gable to the street"
+	)
+	var timber := _lot({"style": "townhouse", "walls": "timber", "trim": ["sills", "quoins"]})
+	assert_eq(_ref(timber), "core:townhouse_timber", "a guild house")
+
+
+func test_the_lots_ridge_is_kept_on_recipes_that_declare_one() -> void:
+	var recipe := StructureRecipes.document("core:townhouse_trimmed")
+	assert_eq(StreetSplit.params_of(_lot({"ridge": 1}), recipe).get("ridge"), 1.0, "eave out")
+	assert_eq(StreetSplit.params_of(_lot({"ridge": 2}), recipe).get("ridge"), 2.0, "gable out")
+	var flat := StructureRecipes.document("core:house_flat")
+	assert_false(StreetSplit.params_of(_lot({"ridge": 1}), flat).has("ridge"), "no ridge on flat")
 
 
 func test_a_tie_is_broken_by_the_lots_seed_and_a_street_is_not_one_house() -> void:

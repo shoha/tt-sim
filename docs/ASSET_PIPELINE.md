@@ -2003,7 +2003,7 @@ triangle budgets (12k soft, 25k hard, enforced per structure), a first role tabl
 of the starter set at `tests/fixtures/structure_digests.txt`. **Built (card S3):** the library kind
 (the **Library** bullet below: `structures/` files, reader, registry, partial bundles and transfer,
 the importer's card counts, Verify, tiles rendered by tt-sim), the core starter set (five
-structures, in the `core-library` repo and `libraries/core/`), and the resolver that reads the
+structures, thirteen since 2026-10-28, in the `core-library` repo and `libraries/core/`), and the resolver that reads the
 registry; a recipe nobody serves builds a placeholder plot. **Built (card S8):** the Wall tool's
 `building` kind is gone (the **Streets** bullet below) and a street splits into Structure records.
 **Proposed, not built:** the

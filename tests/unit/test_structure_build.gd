@@ -102,7 +102,7 @@ func _nodes() -> AuthoredStructures:
 
 
 func test_the_starter_set_resolves_and_an_unknown_reference_does_not() -> void:
-	assert_eq(StructureRecipes.core_refs().size(), 5)
+	assert_eq(StructureRecipes.core_refs().size(), 13)
 	for ref in StructureRecipes.core_refs():
 		assert_true(StructureRecipes.exists(ref), ref)
 		assert_eq(StructureRecipes.digest(ref).length(), 64, "a sha256")
@@ -319,7 +319,12 @@ func test_the_starter_set_matches_its_pinned_digests() -> void:
 				% [ref, StructureGeometry.digest_of(parts), StructureGeometry.triangle_count(parts)]
 			)
 		)
+	# Both sorted: the library lists structures by family and variant, the file by the starter table.
+	now.sort()
 	var pinned := FileAccess.get_file_as_string(PIN_FILE).strip_edges().split("\n")
+	for k in pinned.size():
+		pinned[k] = pinned[k].strip_edges()
+	pinned.sort()
 	var moved := PackedStringArray()
 	for k in maxi(now.size(), pinned.size()):
 		var got := now[k] if k < now.size() else "(none)"
