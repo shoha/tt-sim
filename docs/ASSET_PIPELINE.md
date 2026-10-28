@@ -1992,3 +1992,42 @@ with a smaller one under a dressing document, and loads the result through
 `GlbUtils.load_map`: the footprint the check reported matches the loaded ground's bounds.
 A real terrain-paint export has not yet been through it; the first one through the
 library's Import is the producer-side check.
+
+## 12. Structures (PROPOSED 2026-10-28, not built)
+
+Proposed only: nothing below is implemented. The full design is the gitignored
+`docs/plans/2026-10-28-structures/design.md`.
+
+Producers: procgen (the generator core), structgen (the editor); consumer: tt-sim. Buildings are
+NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuilds.
+
+- **Recipe.** A `.structure.json` in the procgen graph format (`plantgen-graph`). Its document
+  `interface` is the parameter contract (name, default, min, max); a node param `"@name"` binds
+  to it. structgen's custom footprint (the Guide node's `host_footprint` param) is a preview
+  default only; tt-sim ignores it.
+- **Inputs tt-sim supplies** (`ProcgenStructureInputs`): `guide` a closed polygon in map XZ
+  metres (3 to 24 points, simple, edge 0 is the front and carries the door, winding as
+  `ProcgenGuide.plan_area` defines), `params` (only values that differ from the defaults),
+  `env` the map's ground, `seed_value` an integer stored with the structure (never derived from
+  a Variant `hash`).
+- **Outputs tt-sim reads** (`evaluate_structure(..., with_layout)`): surfaces of kind `stone`,
+  `masonry` (UVs in metres, textured form) and `wood`; per-vertex provenance `tags` into
+  `tag_table` (node id, then slot path); `collision` faces, `top`, `openings` and the final layout
+  (volumes, openings with slot provenance). Triangle winding clockwise, meshes closed (the
+  `ProcgenMeshCheck` rule). Material roles are derived from the node type of a tag's node:
+  wall, roof, trim, chimney, opening (one table, shared by structgen's palette and tt-sim).
+- **Library.** `structures/index.json` (format `ttsim-structures` 1), `structures/<id>.structure.json`,
+  `thumbnails/structures/<id>.jpg`; core adds `structures/pins.txt` (an md5 digest and triangle
+  count per structure at its default footprint). Not part of `assets/catalog.json`.
+- **Map.** `structures.json` in `map.ttmap`: `{id, recipe: "<library>:<id>", footprint, seed,
+  params, style}`; points are float32 values written to centimetres. The `libraries` record
+  names the libraries whose recipes the map uses.
+- **Determinism.** The same recipe, inputs and seed must build the same mesh on every peer. Measured
+  on Windows only: repeated and worker-thread builds give identical digests (12 cases). Linux
+  is covered for the self-check samples; the 42 building digests are not yet run on every
+  shipped platform. Nothing authoritative may depend on bit-equality of a built structure.
+- **Budgets (proposal).** Per structure 12k triangles soft, 25k hard; per map about 150k;
+  textured masonry is the default for core; evaluation of a starter structure is 2 to 45 ms.
+- **Round trip.** A structure change is done when a recipe from a library folder builds through
+  tt-sim's `StructureGeometry` with its pinned digest, a token stands on its roof, and the map
+  saves and reloads with the same fingerprint.
