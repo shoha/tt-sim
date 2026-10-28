@@ -125,12 +125,6 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 	var meshes: Array = []
 	for surface in geometry.merged_by_kind():
 		meshes.append_array(_split(surface, roles))
-	var panes := _panes(geometry.openings)
-	if not panes.is_empty():
-		meshes.append(panes)
-		parts.triangles = (
-			triangles + (panes.arrays[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
-		)
 	meshes.sort_custom(_by_role)
 	parts.meshes = meshes
 	parts.tag_table = PackedStringArray(geometry.tag_table)
@@ -399,44 +393,6 @@ static func _by_role(a: Dictionary, b: Dictionary) -> bool:
 	if ra != rb:
 		return ra < rb
 	return String(a.kind) < String(b.kind)
-
-
-## One mesh of panes, a quad in the middle of every opening box (its first two axes span the pane,
-## the third runs through the wall): a window's dark glass, a door's leaf. Without them the
-## recipes' hollow walls show the ground through every window. {} with no openings.
-static func _panes(openings: Array) -> Dictionary:
-	if openings.is_empty():
-		return {}
-	var vertices := PackedVector3Array()
-	var normals := PackedVector3Array()
-	var uvs := PackedVector2Array()
-	var colors := PackedColorArray()
-	var indices := PackedInt32Array()
-	for box: Dictionary in openings:
-		var axes: Array = box.axes
-		var across: Vector3 = axes[0]
-		var up: Vector3 = axes[1]
-		var through: Vector3 = axes[2]
-		var half: Vector3 = box.half
-		var centre: Vector3 = box.centre
-		var is_window := String(box.get("kind", "")) == "window"
-		var color := StructureLook.WINDOW_COLOR if is_window else StructureLook.DOOR_COLOR
-		var base := vertices.size()
-		for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
-			vertices.append(centre + across * half.x * corner.x + up * half.y * corner.y)
-			normals.append(through)
-			uvs.append((corner + Vector2.ONE) * 0.5)
-			colors.append(color)
-		indices.append_array(PackedInt32Array([base, base + 1, base + 2, base, base + 2, base + 3]))
-	var tags := PackedInt32Array()
-	tags.resize(vertices.size())
-	tags.fill(-1)
-	return {
-		"kind": StructureLook.GLASS_KIND,
-		"role": StructureLook.OPENING,
-		"arrays": _arrays(StructureLook.GLASS_KIND, vertices, normals, uvs, colors, indices),
-		"tags": tags,
-	}
 
 
 ## `surface` cut into one mesh per material role: every triangle goes to the role of the node that
