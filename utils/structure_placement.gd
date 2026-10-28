@@ -164,12 +164,13 @@ static func occupied(doc: MapDocument, plan: PackedVector2Array, except_id: int 
 	return ""
 
 
-## Why a lot cannot stand on `plan`: ground_problem(), else occupied(), else "".
+## Why a lot cannot stand on `plan`: ground_problem(), else occupied(), else "". The structure
+## `except_id` (one being edited) is not counted as in the way.
 static func lot_problem(
-	doc: MapDocument, plan: PackedVector2Array, courses: Dictionary = {}
+	doc: MapDocument, plan: PackedVector2Array, courses: Dictionary = {}, except_id: int = -1
 ) -> String:
 	var ground := ground_problem(doc, plan, courses)
-	return ground if ground != "" else occupied(doc, plan)
+	return ground if ground != "" else occupied(doc, plan, except_id)
 
 
 ## The legal spot nearest `want` (a plan centre) for a lot of `size` turned `yaw`: {"centre",

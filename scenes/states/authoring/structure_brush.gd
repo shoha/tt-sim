@@ -19,8 +19,42 @@ extends BrushMode
 ##
 ## A lot that fits nowhere within StructurePlacement.REACH_M says why in plain words beside the
 ## cursor; a release then lays nothing and says the same as a toast.
+##
+## Selection (card S5). A click on a building selects it (a tint and outline, a dot at each corner
+## and a tab beside each side: StructureEdit's handles); Escape, a click on bare ground, or
+## another tool lets it go, and while one is selected no lot follows the pointer. A drag then
+## carries out one gesture, each a single history entry: on a corner dot, resize (the plan keeps
+## its square corners; Shift moves just that point); on a side tab, push that side out or in, and a
+## plain click on it makes that side the front, where the door goes; on the building's body, move
+## it (it settles on the nearest legal ground). The result is clamped, never refused: the sides
+## keep to the recipe's range, the plan to ProcgenPlan's rules, the ground to the lot rules, and a
+## stopped handle goes warm with a thin line to where the pointer is asking. The building itself
+## follows the drag about ten times a second (StructureEditor.preview), the outline at once;
+## Escape or a right click drops the drag, back to the plan it began with. Q and E turn the
+## selected building, R draws it afresh, Ctrl+D copies it beside itself, Delete over it removes it.
+## The pane (StructureToolPane) shows the variants, a floors stepper and the rest for the
+## selection (`selection_changed`).
+
+## The selection changed: the selected structure's id, or -1 for none.
+signal selection_changed(structure_id: int)
 
 const YAW_STEP := deg_to_rad(15.0)
+## A handle is picked within this many pixels of its dot, and a press that moves the pointer less
+## than CLICK_PX pixels is a click on it.
+const PICK_PX := 20.0
+const CLICK_PX := 6.0
+## The pick radius (document metres) when no camera can say how big a pixel is.
+const PICK_FALLBACK_M := 0.6
+## A dragged building is built again about this often (seconds).
+const PREVIEW_S := 0.1
+## The selection's tint, and the warm tint of a handle that has been stopped.
+const SELECT_TINT := Color(1.0, 0.93, 0.62)
+const CUE_TINT := Color(1.0, 0.72, 0.42)
+const HANDLE_RADIUS := 6.5
+## Plain words for the few hints and refusals of the selection.
+const DOOR_HINT := "Click: door here. Drag: push this side."
+const NO_TURN_TEXT := "There is no room to turn it here."
+const NO_COPY_TEXT := "There is no room beside it for a copy."
 ## A press and release moving the pointer less than this (world metres) is a click.
 const DRAG_MIN_M := 0.75
 ## The pointer's ground point moves this far (metres) before a drag's lot is planned again.
@@ -80,7 +114,28 @@ var problem: String = ""
 var ghost_size: Vector2 = Vector2.ZERO
 ## The structure under the pointer (its id), or -1.
 var hover_id: int = -1
+## The selected structure's id, or -1.
+var selected_id: int = -1
+## The handle under the pointer while one is selected (StructureEdit.pick_handle), or {}.
+var hover_handle: Dictionary = {}
+## The gesture on the selection in progress, or {}: "kind" (&"corner", &"edge" or &"move"),
+## "handle", "before" (the structure as it was) and "before_list" (the document's list before the
+## first preview), "start" (the press, map XZ), "grab" (the press's offset from the handle),
+## "plan" (what the drag gives now), "clamped" (the pointer asks for more than it gets), "at" (the
+## pointer, map XZ), "dragged" (it left the click's reach).
+var edit: Dictionary = {}
 
+var _bar_key: Variant = null
+var _single: bool = false
+var _pick_radius_m: float = PICK_FALLBACK_M
+## What the pointer is over on the screen: the camera, the pointer (INF before there is one) and
+## the id of the structure whose roof or wall the pointer's ray meets (BrushTool.
+## structure_under_pointer), or -1. Handles and buildings are picked by these.
+var _camera: Camera3D = null
+var _pointer: Vector2 = Vector2.INF
+var _body_id: int = -1
+var _shown_plan: PackedVector2Array = PackedVector2Array()
+var _preview_ticks: int = 0
 var _message: String = ""
 var _planned_to: Vector3 = Vector3.INF
 var _wanted: Dictionary = {}
@@ -212,6 +267,12 @@ func begin(hit: Vector3) -> void:
 func track(editor: AuthoringEditor, hit: Vector3, delta: float) -> void:
 	if editor == null:
 		return
+	if not edit.is_empty():
+		if hit != Vector3.INF:
+			edit["at"] = editor.to_map_xz(hit)
+		if edit["dragged"]:
+			edit_to(editor, edit["at"], _single)
+		return
 	if drawing:
 		if hit != Vector3.INF:
 			to = hit
@@ -219,7 +280,23 @@ func track(editor: AuthoringEditor, hit: Vector3, delta: float) -> void:
 			_plan(editor)
 		_ease(delta)
 		return
-	hover_id = editor.structures.structure_at(hit) if hit != Vector3.INF else -1
+	hover_id = _body_id
+	if hover_id < 0 and hit != Vector3.INF:
+		hover_id = editor.structures.structure_at(hit)
+	if selected_id >= 0:
+		hover_handle = {}
+		var held := editor.document.structure(selected_id)
+		if held == null:
+			deselect()
+			return
+		# An undo or redo (or a peer) changed what the bar shows: say so again.
+		var key := [held.recipe, held.params]
+		if key != _bar_key:
+			_bar_key = key
+			selection_changed.emit(selected_id)
+		var at := editor.to_map_xz(hit) if hit != Vector3.INF else Vector2.INF
+		hover_handle = _pick(editor, held.footprint, at)
+		return
 	if hit == Vector3.INF or row().is_empty():
 		return
 	ghost_size = default_size(editor)
@@ -311,14 +388,221 @@ func finish(editor: AuthoringEditor) -> int:
 
 ## Removes the structure under world point `hit` (a Ctrl press). False, with message() set, when
 ## there is none.
-func erase_at(editor: AuthoringEditor, hit: Vector3) -> bool:
+func erase_at(editor: AuthoringEditor, hit: Vector3, body: int = -1) -> bool:
 	_message = ""
-	var found := editor.structures.structure_at(hit)
+	var found := body if body >= 0 else editor.structures.structure_at(hit)
 	if found < 0 or not editor.structures.remove(found):
 		_message = NOTHING
 		return false
 	hover_id = -1
 	_wanted = {}
+	if found == selected_id:
+		deselect()
+	return true
+
+
+# ============================================================================
+# Selection and its gestures
+# ============================================================================
+
+
+## Selects structure `structure_id` (-1: none). The ghost lot steps aside while one is selected.
+func select(structure_id: int) -> void:
+	if structure_id == selected_id:
+		return
+	selected_id = structure_id
+	_bar_key = null
+	hover_handle = {}
+	edit = {}
+	_shown_plan = PackedVector2Array()
+	ghost_centre = Vector2.INF
+	target_centre = Vector2.INF
+	_wanted = {}
+	selection_changed.emit(structure_id)
+
+
+func deselect() -> void:
+	select(-1)
+
+
+func has_selection() -> bool:
+	return selected_id >= 0
+
+
+## The selected structure in `editor`'s document (not a copy), or null.
+func selected(editor: AuthoringEditor) -> Structure:
+	return editor.document.structure(selected_id) if selected_id >= 0 else null
+
+
+## How many document metres `pixels` screen pixels span at world point `at` (the handles are
+## picked by what the author sees, not by metres). PICK_FALLBACK_M without a camera.
+static func metres_for_pixels(camera: Camera3D, at: Vector3, pixels: float, scale: float) -> float:
+	if camera == null or at == Vector3.INF:
+		return PICK_FALLBACK_M
+	var right := camera.global_transform.basis.x
+	var one := camera.unproject_position(at).distance_to(camera.unproject_position(at + right))
+	if one < 0.5:
+		return PICK_FALLBACK_M
+	return pixels / one / maxf(scale, 0.001)
+
+
+## The handle of `plan` under the pointer: by screen distance (PICK_PX) when the brush has a
+## camera, else (a test, a probe) by map distance from map point `at`.
+func _pick(editor: AuthoringEditor, plan: PackedVector2Array, at: Vector2) -> Dictionary:
+	if _camera == null or _pointer == Vector2.INF:
+		return StructureEdit.pick_handle(plan, at, _pick_radius_m)
+	var found := StructureEdit.handles(plan)
+	var positions := PackedVector2Array()
+	for handle in found:
+		positions.append(StructureSelectionView.project(editor, _camera, handle["at"], 0.06))
+	return StructureEdit.pick_among(found, positions, _pointer, PICK_PX)
+
+
+## Aims the brush's picking at the pointer now (the camera, the pointer, the structure under it).
+func _aim(brush: BrushTool) -> void:
+	_camera = brush.cursor.camera
+	_pointer = brush.pointer if brush.has_pointer else Vector2.INF
+	_body_id = brush.structure_under_pointer()
+
+
+## Begins a gesture on the selection at map point `at`: a handle's drag if one is within reach, a
+## move if the pointer is on the body (`on_body`: the building's roof or wall is under it, else
+## `at` inside the plan). False when it is neither. The `editor`'s list before is kept
+## for the history entry (and for a cancel).
+func begin_edit(editor: AuthoringEditor, at: Vector2, on_body: bool = false) -> bool:
+	var held := selected(editor)
+	if held == null:
+		return false
+	var handle := _pick(editor, held.footprint, at)
+	var kind: StringName = &"move"
+	if not handle.is_empty():
+		kind = handle["kind"]
+	elif not on_body and not Geometry2D.is_point_in_polygon(at, held.footprint):
+		return false
+	edit = {
+		"kind": kind,
+		"handle": handle,
+		"before": held.copy(),
+		"before_list": editor.structures.list(),
+		"start": at,
+		"grab": at - handle["at"] if not handle.is_empty() else Vector2.ZERO,
+		"plan": held.footprint,
+		"clamped": false,
+		"at": at,
+		"dragged": false,
+	}
+	_shown_plan = held.footprint
+	_preview_ticks = 0
+	return true
+
+
+## The drag's plan with the pointer at map point `at` (Shift `single`: one point alone): the
+## outline follows at once, the building about every PREVIEW_S.
+func edit_to(editor: AuthoringEditor, at: Vector2, single: bool = false) -> void:
+	if edit.is_empty():
+		return
+	var before: Structure = edit["before"]
+	edit["dragged"] = true
+	edit["at"] = at
+	var found: Dictionary
+	if edit["kind"] == &"move":
+		var moved := StructureEdit.move_legal(
+			editor.document, before.footprint, at - edit["start"], before.id
+		)
+		found = {"plan": moved["plan"], "clamped": moved["problem"] != ""}
+	else:
+		var sized := scaled_row(LibraryStructureStore.structure(before.recipe), editor.map_scale())
+		found = StructureEdit.drag(
+			before.footprint,
+			edit["handle"],
+			at - edit["grab"],
+			sized,
+			editor.document,
+			before.id,
+			single
+		)
+	edit["plan"] = found["plan"]
+	edit["clamped"] = found["clamped"]
+	var now := Time.get_ticks_msec()
+	if found["plan"] != _shown_plan and now - _preview_ticks >= int(PREVIEW_S * 1000.0):
+		_show(editor)
+		_preview_ticks = now
+
+
+## Builds the drag's plan now (the preview).
+func _show(editor: AuthoringEditor) -> void:
+	var changed: Structure = (edit["before"] as Structure).copy()
+	changed.footprint = edit["plan"]
+	if editor.structures.preview(changed):
+		_shown_plan = edit["plan"]
+
+
+## Ends the gesture in progress as one history entry: a drag that changed the plan commits it
+## (resize, push or move), a plain click on a side tab makes that side the front. A drag that
+## changed nothing puts the document back as it was. True when an entry was made.
+func finish_edit(editor: AuthoringEditor) -> bool:
+	if edit.is_empty():
+		return false
+	var info := edit
+	edit = {}
+	var before: Structure = info["before"]
+	var before_list: Array[Structure] = []
+	before_list.assign(info["before_list"])
+	var committed := false
+	if info["dragged"]:
+		var plan: PackedVector2Array = info["plan"]
+		if plan != before.footprint:
+			var label := (
+				{&"move": "Move", &"corner": "Resize", &"edge": "Push"}[info["kind"]] as String
+			)
+			committed = editor.structures.set_plan(before.id, plan, label, before_list)
+	elif info["kind"] == &"edge" and int(info["handle"]["index"]) > 0:
+		committed = editor.structures.set_front(before.id, int(info["handle"]["index"]))
+	if not committed and _shown_plan != before.footprint:
+		editor.structures.apply_list(before_list, Rect2())
+	_shown_plan = PackedVector2Array()
+	return committed
+
+
+## Drops the gesture in progress, the document back as it was before it.
+func abort_edit(editor: AuthoringEditor) -> void:
+	if edit.is_empty():
+		return
+	var before_list: Array[Structure] = []
+	before_list.assign(edit["before_list"])
+	if editor != null and _shown_plan != (edit["before"] as Structure).footprint:
+		editor.structures.apply_list(before_list, Rect2())
+	edit = {}
+	_shown_plan = PackedVector2Array()
+
+
+## The pane's calls on the selection (each one history entry); false when it did nothing.
+func swap_variant(editor: AuthoringEditor, new_ref: String) -> bool:
+	return selected_id >= 0 and editor.structures.swap_recipe(selected_id, new_ref)
+
+
+func step_selected(editor: AuthoringEditor, param: String, direction: int) -> bool:
+	return selected_id >= 0 and editor.structures.step_param(selected_id, param, direction)
+
+
+func door_next(editor: AuthoringEditor) -> bool:
+	return selected_id >= 0 and editor.structures.set_front(selected_id, 1)
+
+
+func duplicate_selected(editor: AuthoringEditor) -> bool:
+	if selected_id < 0:
+		return false
+	var copy := editor.structures.duplicate(selected_id)
+	if copy < 0:
+		return false
+	select(copy)
+	return true
+
+
+func delete_selected(editor: AuthoringEditor) -> bool:
+	if selected_id < 0 or not editor.structures.remove(selected_id):
+		return false
+	deselect()
 	return true
 
 
@@ -357,9 +641,28 @@ func reroll_at(editor: AuthoringEditor, under: int) -> void:
 
 ## Starts a lot, or with Ctrl erases the structure under the press (a miss says why).
 func press(brush: BrushTool) -> bool:
+	_aim(brush)
 	if brush.press_ctrl:
-		if not erase_at(brush.editor, brush.hit):
+		if not erase_at(brush.editor, brush.hit, _body_id):
 			brush.refused.emit(message())
+		return false
+	var editor := brush.editor
+	var at := editor.to_map_xz(brush.hit)
+	# The selection's handles and body first, then any other building (selected, and carried
+	# if the press turns into a drag), then bare ground: a selected building lets go first. A
+	# building is what the pointer's ray meets (its roof, its wall), else the one whose plan
+	# holds the ground point.
+	if begin_edit(editor, at, _body_id >= 0 and _body_id == selected_id):
+		return false
+	var under := _body_id
+	if under < 0:
+		under = StructurePlacement.structure_at(editor.document, at)
+	if under >= 0:
+		select(under)
+		begin_edit(editor, at, true)
+		return false
+	if selected_id >= 0:
+		deselect()
 		return false
 	if row().is_empty():
 		brush.refused.emit(NONE_PICKED)
@@ -368,9 +671,10 @@ func press(brush: BrushTool) -> bool:
 	return false
 
 
-## True when the press began a lot (an erase is silent, as a prop's removal is).
+## True when the press began a lot or a gesture on the selection (an erase is silent, as a
+## prop's removal is).
 func took_press() -> bool:
-	return drawing
+	return drawing or not edit.is_empty()
 
 
 func has_target() -> bool:
@@ -378,6 +682,18 @@ func has_target() -> bool:
 
 
 func frame(brush: BrushTool) -> void:
+	_pick_radius_m = metres_for_pixels(
+		brush.cursor.camera,
+		brush.hit,
+		PICK_PX,
+		brush.editor.map_scale() if brush.editor != null else 1.0
+	)
+	_single = brush.shift
+	_aim(brush)
+	if not edit.is_empty() and brush.pressed:
+		edit["dragged"] = (
+			edit["dragged"] or brush.pointer.distance_to(brush.press_position) >= CLICK_PX
+		)
 	var now := Time.get_ticks_usec()
 	var delta := 0.0 if _last_ticks == 0 else minf(float(now - _last_ticks) / 1.0e6, 0.1)
 	_last_ticks = now
@@ -389,14 +705,25 @@ func end(brush: BrushTool) -> void:
 	if drawing and brush.editor != null:
 		if finish(brush.editor) < 0:
 			brush.refused.emit(message())
+	if not edit.is_empty() and brush.editor != null:
+		finish_edit(brush.editor)
 	reset()
 
 
-func cancel(_brush: BrushTool) -> void:
-	reset()
+## RMB or Escape: a drag on the selection or a lot being sized is dropped; with neither, the
+## selection lets go.
+func cancel(brush: BrushTool) -> void:
+	if not edit.is_empty():
+		abort_edit(brush.editor)
+	elif drawing:
+		reset()
+	else:
+		deselect()
 
 
-func leave(_brush: BrushTool) -> void:
+func leave(brush: BrushTool) -> void:
+	abort_edit(brush.editor)
+	deselect()
 	reset()
 	hover_id = -1
 	ghost_centre = Vector2.INF
@@ -423,8 +750,14 @@ func rotates() -> bool:
 	return true
 
 
+## Q and E: the selected building turns (a notch each; no room to turn says so), else the next
+## lot does.
 func rotate(brush: BrushTool, steps: int) -> void:
-	turn(steps)
+	if selected_id >= 0 and brush.editor != null:
+		if edit.is_empty() and not brush.editor.structures.turn(selected_id, steps * YAW_STEP):
+			brush.refused.emit(NO_TURN_TEXT)
+	else:
+		turn(steps)
 	brush.redraw()
 
 
@@ -432,15 +765,27 @@ func rerolls() -> bool:
 	return true
 
 
+## R: the selected building is drawn afresh, else the one under the pointer, else the next lot.
 func reroll(brush: BrushTool) -> void:
-	reroll_at(brush.editor, hover_id)
+	reroll_at(brush.editor, selected_id if selected_id >= 0 else hover_id)
 	_wanted = {}
+	brush.redraw()
+
+
+func duplicates() -> bool:
+	return selected_id >= 0
+
+
+## Ctrl+D: a copy of the selected building beside it, which is then the selection.
+func duplicate(brush: BrushTool) -> void:
+	if brush.editor != null and edit.is_empty() and not duplicate_selected(brush.editor):
+		brush.refused.emit(NO_COPY_TEXT)
 	brush.redraw()
 
 
 ## RMB or Delete over a structure.
 func remove_target(brush: BrushTool) -> void:
-	if brush.editor != null and not erase_at(brush.editor, brush.hit):
+	if brush.editor != null and not erase_at(brush.editor, brush.hit, _body_id):
 		brush.refused.emit(message())
 
 
@@ -481,6 +826,9 @@ func draw(
 	var per_cell: float = units[1]
 	var label: String = units[2]
 	var scale := editor.map_scale()
+	if selected_id >= 0 and not drawing:
+		StructureSelectionView.draw(self, canvas, camera, editor, units)
+		return
 	if not drawing and hover_id >= 0:
 		var hovered := editor.document.structure(hover_id)
 		if hovered != null:
@@ -494,7 +842,8 @@ func draw(
 					"Remove " + String(hovered.recipe.get_slice(":", 1)).replace("_", " "),
 					WallBrush.REFUSED_COLOR
 				)
-				return
+			# A click on a building selects it, so no lot follows the pointer over one.
+			return
 	elif erasing and not drawing:
 		if hit != Vector3.INF:
 			BridgeBrush.draw_marker(canvas, camera, hit, WallBrush.ERASE_TINT)
@@ -511,7 +860,7 @@ func draw(
 		return
 	var ok := problem == "" and (not drawing or preview != null)
 	var tint := WallBrush.STONE_TINT if ok else WallBrush.REFUSED_COLOR
-	var high := _height_of(ref) / scale
+	var high := height_of(ref) / scale
 	draw_plan(canvas, camera, editor, plan, high, tint, 1.0 if drawing else 0.8)
 	if drawing:
 		for corner in [from, to]:
@@ -530,7 +879,7 @@ func draw(
 
 
 ## The recipe's default wall height in metres (cached per structure).
-func _height_of(structure_ref: String) -> float:
+func height_of(structure_ref: String) -> float:
 	if not _heights.has(structure_ref):
 		var height := LibraryStructures.TILE_DEFAULT_HEIGHT_M
 		var recipe := StructureRecipes.document(structure_ref)

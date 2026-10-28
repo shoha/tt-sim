@@ -1078,3 +1078,15 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   then a save as `_structs4_tool`, a reload in play and a capture of both buildings; the probe
   `probes/structure_tool.gd` (`report`, `pick`, `rotate`, `reroll`, `flush`, `save`, `cleanup`)
   and `crossing.gd`'s save and cleanup (prefix `_structs4_`) keep and delete the test level.
+- `jobs/structure_select.json` (about 60 s, keeps no level: a new unsaved 150 ft meadow, nothing
+  saved; the structures topic's editing card, S5): a cottage laid by the probe, then real input on
+  it with the panel closed: a click on the roof selects it, the pointer over a side tab (capture
+  `01_selected`: dots, tabs, the door hint), a corner dot dragged past the largest size
+  (`02_drag_clamped`: the outline stops, the dot goes warm, a thin line to the pointer, the
+  readout; the building follows), the release, a click on the far side tab (the door moves), the
+  bar's buttons through the probe (`bar`: variant, floors twice), then the panel reopened with the
+  bar showing (`03_result_and_bar`). The probe `probes/structure_select.gd` (`lay`, `bar`, `report`,
+  `flush`); `report` also says what the pointer's ray found. Inputs take a third number in `at` (the
+  height to aim at; 0 for the ground under a roof, where a handle is drawn). The camera takes about
+  3 s to settle after a `look_at`: wait before aiming real input. `structure_thumbs` (above) was
+  re-run for this card (the tiles predate glazing).

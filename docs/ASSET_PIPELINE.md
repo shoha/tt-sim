@@ -2068,8 +2068,10 @@ NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuil
 - **Roles (first table, S2).** Material roles come from the node type of a vertex's tag: wall
   (`building_walls`, `building_timber`, `facade`), roof (`roof_gable`, `roof_hip`, `roof_flat`; its
   own material only where the surface is planks), trim (`facade_trim`, `cornice`, `quoins`), chimney
-  (`roof_furniture`). tt-sim adds a pane (opening) quad in the middle of each opening box, since the
-  recipes' walls are hollow. The table is `StructureLook`; the painterly version is card S6.
+  (`roof_furniture`), opening (`glazing`: procgen's glazing node puts a recessed pane in every
+  window and a leaf in every door, surface kind `glass`, tags `<glazing id>/<opening path>/pane` or
+  `/leaf`, flat vertex colours; the recipes' walls are hollow, so tt-sim draws no quads of its own).
+  The table is `StructureLook`; the painterly version is card S6.
 - **Round trip.** A structure change is done when a recipe from a library folder builds through
   tt-sim's `StructureGeometry` with its pinned digest, a token stands on its roof, and the map
   saves and reloads with the same fingerprint (`test_structure_build.gd` does all three for the

@@ -9,7 +9,8 @@ clearance, a simple material split and the plan rules. S3 makes recipes a librar
 `structures/` folder, index, registry, partial bundles, Verify, tiles; core ships five), swaps the
 temporary resolver for the registry and shows a placeholder plot where a recipe is missing. S4 adds
 the Building tool (palette strip, ghost lot, click and drag, turn, re-roll, removal, live edit: "The
-tool" below); the cards that add handles and variants grow this page. The design is the
+tool" below); S5 adds selection, handles, the door edge, variants and the bar ("Editing a
+building"). The design is the
 gitignored `docs/plans/2026-10-28-structures/design.md`; the contract with procgen and structgen is
 `ASSET_PIPELINE.md` section 12.
 
@@ -243,16 +244,78 @@ pure (`utils/structure_placement.gd`).
   gesture). The Events pane lists the brush like the Wall tool's: the tiles as `structure_pane`
   (`EventsPane.structure_selected`, `structure_reroll_requested`), the hint bar rows in
   `PlayEvents.hints_for`.
-- **Not in this card.** Select by click, corner and edge handles, the turn ring, the door edge,
-  variant tiles and the floors stepper are card S5; non-rectangular plans (`plans` in the entry)
-  are not offered yet; the rise animation of a laid building and the retirement of the Building
-  kind and its pane fields are card S8 and a look card.
+- **Not in this card.** Selection and editing are card S5 (next section); non-rectangular plans
+  (`plans` in the entry) are not offered yet; the rise animation of a laid building and the
+  retirement of the Building kind and its pane fields are card S8 and a look card.
+
+## Editing a building
+
+Card S5 (2026-10-28): a building laid is edited by direct gestures with the same tool. The rules
+are pure (`utils/structure_edit.gd`, `StructureEdit`), the gesture state is `StructureBrush`, the
+drawing is `StructureSelectionView`, the edits are `StructureEditor`, and the bar is
+`StructureToolPane`.
+
+- **Select.** A click on a building selects it (a tint and outline, the height ring, the door mark,
+  a round dot at each corner and a diamond tab beside each side). A building is what the pointer's
+  ray meets (`BrushTool.structure_under_pointer`: its roof or wall; the brush's ordinary ray
+  excludes structures, so it would land on the ground behind the roof), else the building whose plan
+  holds the ground point. While one is selected no lot follows the pointer, and hovering another
+  building outlines it (no lot ghost over a building either: a click there selects). Escape, a click
+  on bare ground (which only lets go, it lays nothing), `Done` in the bar, or another tool lets
+  go. A new lot is not selected when laid.
+- **Handles are picked on the screen** (20 px of the dot, corners ahead of tabs), not on the ground,
+  because a house in front of a handle hides the ground behind it. The pure fallback picks in map
+  metres (tests, probes).
+- **Corner dot: resize.** A rectangle (any turn: the rules work in the plan's own frame, x along
+  edge 0) keeps its square corners as structgen's plan editor does (`StructPlan.move_point` with
+  `keep_axes`): the opposite corner stays, the sizes snap to 0.5 m and clamp **per axis** to the
+  recipe's `min_side_m`, `max_side_m` and `max_area_m2` (`StructurePlacement.clamp_size`), and a
+  corner never folds over its opposite one. Shift moves that corner alone (the plan leaves the
+  square; ProcgenPlan's rules still hold). A plan the rules or the ground refuse (water, a steep
+  bank, another building: the lot rules, the structure itself not counting) is **walked back along
+  the drag** (ten bisections) to the last plan that stands: never an error.
+- **Side tab: push, or the door.** A drag pushes that side out or in (the neighbouring sides grow
+  or shrink, corners stay square; same clamps). A plain click (under 6 px) on a tab other than the
+  front makes that side the front: `StructureEdit.front_to` rotates the point order so the chosen
+  edge is edge 0 and the door side follows (the building is otherwise the same). The bar's `Door to
+  the next side` does `front_to(1)`.
+- **Body: move.** A drag carries the building by the pointer (offsets snap to 0.25 m); a spot that
+  is not legal settles on the nearest legal one in rings (as a new lot does), and the building stays
+  put when nowhere within reach is legal.
+- **Clamps show, never speak.** Under a drag the outline is the drag's plan at once and a readout
+  gives the size in the level's units. A handle the rules stopped turns warm (amber) with a thin
+  line to where the pointer is asking; no error text. The one hint is over a side tab ("Click: door
+  here. Drag: push this side.").
+- **Live edit.** The building itself follows a drag about ten times a second
+  (`StructureEditor.preview`: no history entry, the worker builds latest-wins), the release records
+  the whole gesture as one entry that undoes to the list from before the first preview
+  (`edit(changed, label, before)`), and Escape or a right click mid-drag puts the document back. The
+  `structures` live edit carries the release, never a drag frame.
+- **Keys.** Q and E turn the selected building about its middle (15 degrees, Shift a quarter; the
+  nearest legal ground if the turned plan would not stand, else a toast), R redraws it (the next seed
+  of the series), Ctrl+D copies it beside itself (same recipe, seed, parameters and style; the copy
+  becomes the selection; `StructureEdit.beside`), Delete or a right click over it removes it.
+  `BrushMode` gained `has_selection`, `duplicates` and `duplicate` for these, and `BrushTool.decide`
+  takes `selected` (Escape lets go) and `duplicates` (Ctrl+D).
+- **The bar** replaces the palette while a building is selected (`StructureToolPane.show_selection`):
+  the building's name, **Style** tiles (the other recipes of its family in its library:
+  `StructureEdit.variants_of`; `StructureEditor.swap_recipe` keeps the footprint, brought within the
+  new recipe's sides by `refit`, the seed, and the parameters the new recipe also declares), a
+  stepper for each of **floors** (0 reads Auto, the recipe's own), **roof pitch** (5 degree notches,
+  15 to 55) and **chimneys** (`StructureEdit.PARAM_STEPS`), each only where the index entry's
+  `expose` lists it and the recipe declares it (so the stone house has no floors and no variants, the
+  plain cottage no chimneys), then Door to the next side, Redraw, Copy, Remove and Done. A stepped
+  value equal to the recipe's default is not stored. Each press is one history entry; the bar is
+  shown again from the record after it, and when the brush sees the selected record change (an undo,
+  a peer). Not offered: wall height (floors cover it), window width, and a colour or biome style (the
+  record's `style` is the biome under it; the look is card S6's). The GM's Events pane has the
+  gestures and keys but no bar.
+- **Not offered yet:** a turn ring, wings (L, T, U), edge handles that insert points, the rise
+  animation.
 
 ## Not yet
 
-- Handles, variants, a floors stepper (card S5); retiring `Wall.Kind.BUILDING` (card S8).
-- The tiles under `thumbnails/structures/` are from before the glazing change (card S5 re-renders
-  them with the `structure_thumbs` job).
+- Retiring `Wall.Kind.BUILDING` (card S8).
 - The painterly roles (a roof tile texture, slate, window glow), the look pass on three biomes, the
   frame cost of a 20-structure town (card S6; PERFORMANCE.md has no structure line until it is
   measured with the pinned procedure).
@@ -277,6 +340,17 @@ rules and the nearest legal spot, the editor's lot and re-roll, the brush's stat
 input table, the eased ghost, the palette pane, the registration, the live edit and a save and
 reload of what a gesture laid) and the render job `tools/render_jobs/jobs/structure_tool.json`
 (`render_jobs/JOBS.md`).
+
+Card S5: `tests/unit/test_structure_select.gd` (authoring subset: the handles and the pick, a
+corner and a side dragged with their clamps, a turned house, Shift, water and neighbours walking a
+drag back, the door edge, a move and a turn, the stepped parameters, the variants, each edit as one
+undoable history entry and a live edit, the brush's select, drag, abort and keys, the pane's bar and
+the input table) and the render job `tools/render_jobs/jobs/structure_select.json` (probe
+`probes/structure_select.gd`: a roof click, a hovered tab, a corner dragged past the clamp, the door
+click, the bar's buttons; keeps no level; three captures). The driver's `input` op takes a third
+number in `at`, the height to aim at (0: the ground under a roof, where a handle is drawn). The five
+tiles under `thumbnails/structures/` were re-rendered with `structure_thumbs` after the glazing
+change (2026-10-28: panes and door leaves show).
 
 Card S3: `test_library_structures.gd`, `test_library_structure_store.gd` and
 `test_library_structure_transfer.gd` (authoring subset; [library.md](library.md) "Structures" lists
