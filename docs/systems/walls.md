@@ -154,3 +154,8 @@ with the `wall_play` render job (pane, two sides laid, the toasts).
   judged beside the palette boulders on alpine, badlands and forest (`wall_colour` render job). The
   wood UVs are the copied swatch table (see procgen's README cleanup list).
 - The procgen switch (`ProcgenCrossing.enabled`) does not affect walls: they always use the module.
+- Next (2026-10-27): door and window parts, street species that pick building styles, more roofs
+  and walls, interiors (deferred), a break-a-street-into-buildings action, wall events. The design
+  notes and the see-through check that guards every recipe are in plantgen
+  `docs/structures_design.md` section 17; the state at the end of the session is in plantgen
+  `docs/agents_open_work.md`.
