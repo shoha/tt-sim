@@ -4157,3 +4157,34 @@ per job and never by a legacy rule:
   adds one array to the job's source (`ScatterNative.pack` shares it by reference), no copy.
 - Probe: `godot --headless --path <project> --script res://tools/native_scatter_run.gd --
   --task=curves` (it now dresses a lake first and prints the grid build time).
+
+## Structures: the painterly look (card S6, 2026-10-28)
+
+**Indicative, not the full pinned pass.** The GPU was shared (`nvidia-smi` read 39 % and P3 before the
+run; the user was using it), so every number is a median over about 1,200 to 1,550 frames of one
+8 s window and the p95 and worst values swing with other work (a window's p95 went from 3.1 to
+9 ms between two identical states). Render job `structures_s6_perf` (a real 1920x1080 window, vsync
+off, debug build, new unsaved 300 ft temperate forest, seed 1234, home zoom 60), 20 structures laid
+by probe `structures.gd many` (the four starter recipes in turn, a 5 by 4 grid 14 m apart, each its
+own seed and yaw; 27,565 triangles over the 20 structures).
+
+| State | World GPU median (ms) | CPU median (ms) | Visible prims | Shadow prims | Scatter instances |
+|---|---|---|---|---|---|
+| No structures (first window) | 4.65 | 5.16 | 1.47M | 435k | 13,315 |
+| 20 structures, painterly materials | 4.41 | 4.97 | 1.35M | 392k | 12,050 |
+| The same, every mesh one plain `StandardMaterial3D` (control) | 4.16 | 4.89 | | | |
+| 20 structures, painterly again | 4.50 | 5.07 | | | |
+| No structures again (last window) | 4.91 | 5.47 | | | |
+
+Reading it: the structures' footprints clear scatter (1,265 fewer plant instances, 120k fewer
+visible primitives), which pays for the structures' own 28k triangles and shadow casting, so the
+town costs no more than the map without it (the two no-structure windows differ by 0.26 ms, which is the
+noise floor). Against the plain-material control the painterly shaders cost about 0.25 to 0.35 ms
+GPU median at this view (the whole town fills about a fifth of the screen), which is the price of the
+two custom `light()` functions and the noise; two of the three windows say so, the third (p95 9 ms) is
+contaminated. Cost follows how much screen the buildings fill. Per structure: a cottage 1,1k and a
+townhouse 0.9 to 2.5k triangles, within the 12k soft budget; a street of lots is about 1,000 each.
+Shader terms: no extra texture read over the old ORM materials (masonry samples the same three
+textures, a roof none), one 3D value noise (8 hashes) per fragment, no uniform branch, specular off.
+Not run on the Compatibility or Mobile renderers; both support the built-ins used and a `light()`
+function, as the foliage shaders do.

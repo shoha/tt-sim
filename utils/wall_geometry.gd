@@ -23,6 +23,8 @@ const CLEAR_WIDTH_M := 0.7
 const ROW_REACH_M := 9.0
 ## Marks a wall with no top (no recipe, or nothing built).
 const NONE := -INF
+## The key of a street's roof mesh arrays in a wall's parts (rows only; the roofs of the lots).
+const ROOF_PART := "roof"
 
 ## True: a wall carries its courses in the masonry texture (MasonryTextures), the coping modelled,
 ## a fraction of the triangles; false: modelled blocks. A static for comparing the two.
@@ -125,6 +127,7 @@ static func build_one(doc: MapDocument, wall: Wall) -> Dictionary:
 		"masonry": [],
 		"wood": [],
 		"glass": [],
+		ROOF_PART: [],
 		"collision": PackedVector3Array(),
 		"top": NONE,
 	}
@@ -136,11 +139,44 @@ static func build_one(doc: MapDocument, wall: Wall) -> Dictionary:
 	if plant == null or not evaluator.errors.is_empty():
 		return parts
 	var geometry: PlantGeometry = plant["lods"][0]
-	for surface in geometry.merged_by_kind():
-		parts[surface.kind] = _arrays(surface)
+	if wall.is_row():
+		_row_surfaces(parts, doc, wall, geometry)
+	else:
+		for surface in geometry.merged_by_kind():
+			parts[surface.kind] = _arrays(surface)
 	parts.collision = geometry.collision
 	parts.top = geometry.top if geometry.triangle_count() > 0 else NONE
 	return parts
+
+
+## A street's surfaces in `parts`, painted like a Structure (card S6): the roofs split off the
+## planks into "roof" (found from each vertex's provenance path), and each lot given its own roof
+## tile colour and wall lean (StructurePaint), so a street and a structure wear one look.
+static func _row_surfaces(
+	parts: Dictionary, doc: MapDocument, wall: Wall, geometry: PlantGeometry
+) -> void:
+	var roles := PackedStringArray()
+	var groups := PackedInt32Array()
+	var lots := {}
+	var palettes: Array = []
+	for path in geometry.tag_table:
+		var roof := StructureLook.role_of_tag_path(path) == StructureLook.ROOF
+		roles.append(StructureLook.ROOF if roof else StructureLook.WALL)
+		var lot := StructureLook.lot_of_tag_path(path)
+		if not lots.has(lot):
+			lots[lot] = palettes.size()
+			palettes.append(
+				StructurePaint.palette_of(
+					hash([doc.map_seed, wall.id, wall.seed_value]), lot.hash()
+				)
+			)
+		groups.append(lots[lot])
+	var meshes: Array = []
+	for surface in geometry.merged_by_kind():
+		meshes.append_array(StructureGeometry.split_surface(surface, roles))
+	StructurePaint.paint(meshes, groups, palettes)
+	for mesh: Dictionary in meshes:
+		parts[ROOF_PART if mesh.role == StructureLook.ROOF else String(mesh.kind)] = mesh.arrays
 
 
 ## Every wall of `doc`: {"walls": [parts, ...]}.
