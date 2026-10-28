@@ -49,7 +49,7 @@ const CORNER_BIAS := 0.8
 ## Seats a duplicate may take beside its original (metres between).
 const COPY_GAP_M := 0.6
 ## Stepped recipe parameters: how far one press of the stepper moves each.
-const PARAM_STEPS := {"floors": 1.0, "roof_pitch": 5.0, "chimneys": 1.0}
+const PARAM_STEPS := {"floors": 1.0, "roof_pitch": 5.0, "chimneys": 1.0, "ridge": 1.0}
 
 # ============================================================================
 # Handles

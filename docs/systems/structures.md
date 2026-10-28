@@ -6,7 +6,7 @@ peer rebuilds it, as walls, crossings and avatar tokens are. S1 added the record
 `structures.json` entry of `map.ttmap`, the editor's data calls, the live edit and the fingerprint key.
 S2 builds the record into the game: geometry, the nodes and their collision, the worker prep, scatter
 clearance, a simple material split and the plan rules. S3 makes recipes a library kind (a
-`structures/` folder, index, registry, partial bundles, Verify, tiles; core ships five), swaps the
+`structures/` folder, index, registry, partial bundles, Verify, tiles; core ships five, thirteen since the street-split follow-up), swaps the
 temporary resolver for the registry and shows a placeholder plot where a recipe is missing. S4 adds
 the Building tool (palette strip, ghost lot, click and drag, turn, re-roll, removal, live edit: "The
 tool" below); S5 adds selection, handles, the door edge, variants and the bar ("Editing a
@@ -90,8 +90,15 @@ the recipes are a library kind ([library.md](library.md) "Structures"): `Library
 `StructureRecipes` asks it. The `core` library ships the starter set as data (`libraries/core/
 structures/`, built from procgen's recipes by `tools/export_core_structures.gd`): `core:stone_house`
 (the building recipe, gable roof, stone), `core:cottage` (timber), `core:cottage_chimneyed`,
-`core:townhouse` and `core:townhouse_trimmed`, each with an index entry (name, family and variant,
-default and limit sizes, exposed parameters, tile) and a line in `pins.txt`. Lookup order: the test
+`core:townhouse` and `core:townhouse_trimmed`, and, since the street-split follow-up (2026-10-28,
+branch `structures-starters`), eight more that widen the palette: `townhouse_timber` (a guild house),
+`townhouse_chimneyed` (stacks at the ridge's ends, the party walls of a terrace), `townhouse_end`
+(a terrace-end house whose ridge defaults across, a gable to the front, sides to 20 m),
+`townhouse_hip`, `townhouse_flat`, `cottage_hip`, `house_hip` and `house_flat` (plain stone with
+0.9 m windows). Families: cottage, house, townhouse. Every recipe is glazed and exposes `ridge`
+(procgen's layout choice: 0 the longer side, 1 the eave to the front, 2 a gable to it; none on a flat
+roof). Each has an index entry (name, family and variant, default and limit sizes, exposed
+parameters, tile) and a line in `pins.txt`. Lookup order: the test
 `resolver` (a `Callable(ref) -> {"text": recipe JSON}`), the store, then, only with
 `procgen_fallback` on (off in the game), procgen's committed `recipes/` folder. Parsing refuses a
 text over the recipe caps (`LibraryStructures.recipe_problem`), then the digest (sha256 of the
@@ -388,24 +395,30 @@ The planning is pure (`utils/street_split.gd`, `StreetSplit.plan`):
 - **Ids and limits.** The records take the lowest free ids; a document that cannot hold them
   (`MAX_STRUCTURES`) refuses the whole split and keeps the street.
 
-What a split loses, honestly (render job `street_split`, a terrace and a village street before and
-after): the buildings stand on the same plots at the same heights and pitches, with the same walls
-(stone, textured stone, timber) and a roof tile colour per building, but
-- the **yards** (the village's fences, the cottages' low walls) are not structure records and go;
-- the **roof ridge** direction is not kept: the street turns some gables to the street (the lot's
-  `ridge`), while a structure recipe has no ridge parameter, so a terrace that had its eaves to the
-  street comes out gable-end to the street (this is the largest change in the silhouette);
-- **hip and flat roofs** become gables (the starter set has only gable recipes), and the terrace's
-  party-wall chimneys are lost (only the chimneyed cottage has stacks);
-- **timber guild houses** become stone townhouses (no timber townhouse in the set), and the street
-  species' trim (shutters, sills, door frames) follows what the picked recipe offers, not what the lot
-  drew;
-- facade windows follow the recipe, not the species' window width unless the recipe exposes it.
+Widened 2026-10-28 (the starters card): the roof weighs +3 (as much as the walls, so a hip or flat lot
+takes a hip or flat recipe while one exists), a recipe tagged "end" gets +1 for a lot whose gable
+faces the street (`ridge` 2) and -1 for one whose eave does, and the record's `params` also carry the
+lot's `ridge` (1 the eave to the street, 2 a gable to it) wherever the recipe declares it. With the
+thirteen: a plain stone lot under a hip or flat roof is `house_hip` or `house_flat`, a timber cottage
+lot under a hip `cottage_hip`, a tall lot under a hip or flat roof `townhouse_hip` or
+`townhouse_flat`, a timber guild house `townhouse_timber`, and a dressed terrace house with stacks at
+the party walls `townhouse_chimneyed` (or `townhouse_end` when its gable faces the street). The
+Structure tool's bar steps `ridge` too (Auto, Eave, Gable) on a recipe that exposes it.
 
-The footprints, heights and count are close; the silhouette is a plausible neighbour of the street's
-rather than the same buildings. Matching improves with the library: a timber townhouse, a hip roof
-cottage and a recipe parameter for the ridge in the structure set would close most of the gap (a
-core-library and procgen change, not made here).
+What a split still loses, honestly (render job `street_split`, a terrace and a village street before
+and after; before the widening the terrace came out gable-end to the street, hip roofs became
+gables and the party-wall chimneys were gone): the buildings stand on the same plots at the same
+heights and pitches, with the same walls (stone, textured stone, timber), the lot's roof kind and
+ridge direction and a roof tile colour per building, but
+- the **yards** (the village's fences, the cottages' low walls) are not structure records and go;
+- the **trim** (shutters, sills, door frames) follows what the picked recipe offers, not what the lot
+  drew, and a lot whose species gives a flat-roofed cottage or a shuttered timber townhouse still
+  gets the nearest recipe;
+- facade windows follow the recipe, not the species' window width unless the recipe exposes it
+  (`house_hip` and `house_flat` do).
+
+The footprints, heights, roofs and count are close; the silhouette is a recognisable cousin of the
+street's rather than the same buildings, and the terrace keeps its eaves and party-wall stacks.
 
 ## Not yet
 

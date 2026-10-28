@@ -51,9 +51,14 @@ static func ensure_served() -> void:
 	PaletteLibrary.get_palette()
 
 
-## The references of the built-in starter set, in table order.
+## The references of the built-in starter set: the structures the served core library lists (the
+## store's order: family, variant, id), else the CORE table's five in table order.
 static func core_refs() -> PackedStringArray:
 	var out := PackedStringArray()
+	for row in LibraryStructureStore.structures(CORE_LIBRARY):
+		out.append(String(row["ref"]))
+	if not out.is_empty():
+		return out
 	for local_id: String in CORE:
 		out.append("%s:%s" % [CORE_LIBRARY, local_id])
 	return out

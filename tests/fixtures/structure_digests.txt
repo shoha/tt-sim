@@ -3,3 +3,11 @@ core:cottage dbe03b6e949d901737c6e2a3f56b4b95 1114
 core:cottage_chimneyed c3d5fc450411ef5b586d5c574d447680 1522
 core:townhouse d70724d9514968c74436fa16fd77385c 882
 core:townhouse_trimmed a1371715d99a8ef3ba21a817cc6486aa 2516
+core:townhouse_timber fbde7fb349402073af9bf0684726d551 3328
+core:townhouse_chimneyed fadd316cc7c5882f0eabb15bc98ade91 2592
+core:townhouse_end d14eb09906e23216d154ec66d04adef9 2592
+core:townhouse_flat e5206d8c6fa1b1ed4b1d402a65df8a48 2490
+core:townhouse_hip ed4c8edec829f5d11b25ae8fdcb91d32 2536
+core:cottage_hip 399583d64a2a5be4f31ce68a94f5edef 1504
+core:house_hip 45ce31446663d5f609a0c418667550aa 644
+core:house_flat f8de0847a31ad9bdeb56aa72386a4c41 636

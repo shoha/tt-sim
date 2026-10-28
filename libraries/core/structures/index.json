@@ -9,7 +9,8 @@
 			],
 			"expose": [
 				"height",
-				"roof_pitch"
+				"roof_pitch",
+				"ridge"
 			],
 			"family": "house",
 			"file": "structures/stone_house.structure.json",
@@ -38,7 +39,8 @@
 			"expose": [
 				"height",
 				"floors",
-				"roof_pitch"
+				"roof_pitch",
+				"ridge"
 			],
 			"family": "cottage",
 			"file": "structures/cottage.structure.json",
@@ -68,7 +70,8 @@
 				"height",
 				"floors",
 				"roof_pitch",
-				"chimneys"
+				"chimneys",
+				"ridge"
 			],
 			"family": "cottage",
 			"file": "structures/cottage_chimneyed.structure.json",
@@ -99,7 +102,8 @@
 			"expose": [
 				"height",
 				"floors",
-				"roof_pitch"
+				"roof_pitch",
+				"ridge"
 			],
 			"family": "townhouse",
 			"file": "structures/townhouse.structure.json",
@@ -129,7 +133,8 @@
 			"expose": [
 				"height",
 				"floors",
-				"roof_pitch"
+				"roof_pitch",
+				"ridge"
 			],
 			"family": "townhouse",
 			"file": "structures/townhouse_trimmed.structure.json",
@@ -152,6 +157,267 @@
 			"textured": true,
 			"thumb": "thumbnails/structures/townhouse_trimmed.jpg",
 			"variant": "Trimmed"
+		},
+		{
+			"default_size_m": [
+				6,
+				4
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"ridge"
+			],
+			"family": "townhouse",
+			"file": "structures/townhouse_timber.structure.json",
+			"id": "townhouse_timber",
+			"max_area_m2": 150.0,
+			"max_side_m": 16.0,
+			"min_side_m": 3.0,
+			"name": "Timber townhouse",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"timber",
+				"gable",
+				"townhouse",
+				"trim",
+				"quoins"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/townhouse_timber.jpg",
+			"variant": "Timber"
+		},
+		{
+			"default_size_m": [
+				6,
+				4
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"chimneys",
+				"ridge"
+			],
+			"family": "townhouse",
+			"file": "structures/townhouse_chimneyed.structure.json",
+			"id": "townhouse_chimneyed",
+			"max_area_m2": 150.0,
+			"max_side_m": 16.0,
+			"min_side_m": 3.0,
+			"name": "Townhouse with chimneys",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stone",
+				"gable",
+				"townhouse",
+				"trim",
+				"quoins",
+				"chimney"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/townhouse_chimneyed.jpg",
+			"variant": "Chimneys"
+		},
+		{
+			"default_size_m": [
+				6,
+				4
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"chimneys",
+				"ridge"
+			],
+			"family": "townhouse",
+			"file": "structures/townhouse_end.structure.json",
+			"id": "townhouse_end",
+			"max_area_m2": 180.0,
+			"max_side_m": 20.0,
+			"min_side_m": 3.0,
+			"name": "Terrace-end house",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stone",
+				"gable",
+				"townhouse",
+				"trim",
+				"quoins",
+				"chimney",
+				"end"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/townhouse_end.jpg",
+			"variant": "Gable to the front"
+		},
+		{
+			"default_size_m": [
+				6,
+				4
+			],
+			"expose": [
+				"height",
+				"floors"
+			],
+			"family": "townhouse",
+			"file": "structures/townhouse_flat.structure.json",
+			"id": "townhouse_flat",
+			"max_area_m2": 150.0,
+			"max_side_m": 16.0,
+			"min_side_m": 3.0,
+			"name": "Flat-roofed townhouse",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stone",
+				"flat",
+				"townhouse",
+				"trim",
+				"quoins"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/townhouse_flat.jpg",
+			"variant": "Flat roof"
+		},
+		{
+			"default_size_m": [
+				6,
+				4
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"chimneys",
+				"ridge"
+			],
+			"family": "townhouse",
+			"file": "structures/townhouse_hip.structure.json",
+			"id": "townhouse_hip",
+			"max_area_m2": 150.0,
+			"max_side_m": 16.0,
+			"min_side_m": 3.0,
+			"name": "Hip-roof townhouse",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stone",
+				"hip",
+				"townhouse",
+				"trim",
+				"quoins",
+				"chimney"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/townhouse_hip.jpg",
+			"variant": "Hip roof"
+		},
+		{
+			"default_size_m": [
+				6,
+				4
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"chimneys",
+				"ridge"
+			],
+			"family": "cottage",
+			"file": "structures/cottage_hip.structure.json",
+			"id": "cottage_hip",
+			"max_area_m2": 120.0,
+			"max_side_m": 14.0,
+			"min_side_m": 2.5,
+			"name": "Hip-roof cottage",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"timber",
+				"hip",
+				"chimney",
+				"shutters"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/cottage_hip.jpg",
+			"variant": "Timber, hip roof"
+		},
+		{
+			"default_size_m": [
+				6,
+				4
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"window_width",
+				"ridge"
+			],
+			"family": "house",
+			"file": "structures/house_hip.structure.json",
+			"id": "house_hip",
+			"max_area_m2": 100.0,
+			"max_side_m": 12.0,
+			"min_side_m": 2.5,
+			"name": "Stone house, hip roof",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stone",
+				"hip"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/house_hip.jpg",
+			"variant": "Stone, hip roof"
+		},
+		{
+			"default_size_m": [
+				6,
+				4
+			],
+			"expose": [
+				"height",
+				"window_width"
+			],
+			"family": "house",
+			"file": "structures/house_flat.structure.json",
+			"id": "house_flat",
+			"max_area_m2": 100.0,
+			"max_side_m": 12.0,
+			"min_side_m": 2.5,
+			"name": "Stone house, flat roof",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stone",
+				"flat"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/house_flat.jpg",
+			"variant": "Stone, flat roof"
 		}
 	]
 }

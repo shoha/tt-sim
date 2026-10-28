@@ -531,9 +531,11 @@ structures/index.json> [--out <folder to write into>] [--serve 1] [--only a,b] [
 `--library <tt-sim>/libraries/core --out <core-library>`, then copy the tiles to
 `libraries/core/thumbnails/structures/`. `--serve 1` lays a not yet installed library over the game first.
 
-Core's starter set is data in the `core-library` repo (`structures/`: five recipes, the index and
+Core's starter set is data in the `core-library` repo (`structures/`: thirteen recipes (five at S3, eight added
+2026-10-28: timber, chimneyed, terrace-end, hip and flat variants), the index and
 `pins.txt`; the tiles in `thumbnails/structures/`), made by `tools/export_core_structures.gd` from
-procgen's `ProcgenRecipes` (`--check 1` shows a drift without writing; without it, it re-pins on
+procgen's `ProcgenRecipes` (its `STARTERS` table says per structure how `ProcgenRecipes.building` is
+called, every recipe glazed with the `ridge` choice; `--check 1` shows a drift without writing; without it, it re-pins on
 purpose). The copy in `libraries/core/structures/` and `libraries/core/thumbnails/structures/` ships
 with the game like the rest of core. Updating core's structures: change the recipe in procgen, run the
 export tool into `core-library`, re-render the tiles (above), copy both folders over `libraries/core/`,
