@@ -656,6 +656,7 @@ func _finish(
 		# Crossings follow their water and banks, in this edit's entry (P4b-2).
 		"crossings": e.crossings.follow(MaskBrush.sample_rect_to_world(doc, region)),
 		"walls": e.walls.follow(MaskBrush.sample_rect_to_world(doc, region)),
+		"structures": e.structures.follow(MaskBrush.sample_rect_to_world(doc, region)),
 	}
 	var started_props := e.heights.props_started()
 	for cell in started_props:
@@ -743,6 +744,7 @@ func _land_edit(record: Dictionary, redo: bool) -> void:
 	var doc := e.document
 	e.crossings.restore(record.get("crossings", {}), redo)
 	e.walls.restore(record.get("walls", {}), redo)
+	e.structures.restore(record.get("structures", {}), redo)
 	var prop_rows: Dictionary = record.props_after if redo else record.props_before
 	for cell in prop_rows:
 		e.set_prop_cell(cell, prop_rows[cell], false)

@@ -13,7 +13,7 @@ extends RefCounted
 ## Everything read is untrusted: a structure with any problem (id outside 1..255 or repeated, a
 ## recipe that is not a well formed `<library>:<structure>` reference, fewer than
 ## Structure.MIN_POINTS or more than Structure.MAX_POINTS footprint points, a point NaN, Inf or
-## off the map, a footprint wider than MAX_SPAN_M, a footprint the plan rules refuse, a seed
+## off the map, a footprint wider than MAX_SPAN_M, a footprint ProcgenPlan refuses, a seed
 ## outside 0..Structure.MAX_SEED, params that are not at most Structure.MAX_PARAMS well named
 ## numbers or bools, a style that is not a short string) is skipped with a warning, as are
 ## structures past MapDocument.MAX_STRUCTURES. The writer refuses a document breaking any of
@@ -128,12 +128,13 @@ static func footprint_problem(plan: PackedVector2Array, extent: Vector2) -> Stri
 	return _plan_problem(plan)
 
 
-## What the shared plan rules say about `plan` (a simple polygon, sides and corners within
-## bounds), or "". TODO(structures S0): procgen's ProcgenPlan did not exist in the procgen pin
-## when this card was written (dcf0c4d), so this seam accepts everything; replace the body with
-## a ProcgenPlan call when the pin moves rather than copying structgen's StructPlan rules here.
-static func _plan_problem(_plan: PackedVector2Array) -> String:
-	return ""
+## What the shared plan rules (procgen's ProcgenPlan, the same ones structgen edits by) say about
+## `plan`, or "": a simple polygon wound the way the presets are, no side shorter than 0.5 m,
+## none closer than 0.3 m to another it does not meet, no corner sharper than 15 degrees, an
+## area of at least 2 m2. The first problem is returned.
+static func _plan_problem(plan: PackedVector2Array) -> String:
+	var problems := ProcgenPlan.problems(plan)
+	return "" if problems.is_empty() else problems[0]
 
 
 ## What is wrong with the params `overrides`, or "": at most Structure.MAX_PARAMS entries, each a

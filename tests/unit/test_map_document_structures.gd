@@ -125,10 +125,19 @@ func test_random_footprints_and_params_keep_their_bytes() -> void:
 	for k in 40:
 		var count := rng.randi_range(Structure.MIN_POINTS, Structure.MAX_POINTS)
 		var plan := PackedVector2Array()
-		for i in count:
-			# Both unsnapped and 1 cm snapped values: float32 must come back bit for bit.
-			var raw := Vector2(rng.randf_range(-9.0, 9.0), rng.randf_range(-9.0, 9.0))
-			plan.append(raw if k % 2 == 0 else raw.snappedf(Structure.FOOTPRINT_STEP_M))
+		# A star shaped plan around a random centre, redrawn until the shared plan rules
+		# (ProcgenPlan) accept it. Both unsnapped and 1 cm snapped values: float32 must come
+		# back bit for bit.
+		for attempt in 500:
+			plan = PackedVector2Array()
+			var centre := Vector2(rng.randf_range(-2.0, 2.0), rng.randf_range(-2.0, 2.0))
+			for i in count:
+				var turn := TAU * (i + rng.randf_range(-0.2, 0.2)) / count
+				var raw := centre + Vector2.from_angle(turn) * rng.randf_range(5.0, 9.0)
+				plan.append(raw if k % 2 == 0 else raw.snappedf(Structure.FOOTPRINT_STEP_M))
+			if ProcgenPlan.is_valid(plan):
+				break
+		assert_true(ProcgenPlan.is_valid(plan), "a valid plan of %d points was drawn" % count)
 		var structure := Structure.make(
 			k % Structure.MAX_ID + 1,
 			"core:cottage",

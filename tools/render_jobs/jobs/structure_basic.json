@@ -1,0 +1,32 @@
+{
+ "out_dir": "render_jobs/structure_basic",
+ "timeout_s": 240,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 150, "seed": 1234},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/structures.gd", "action": "street", "from": [-15, 13], "to": [13, 13], "preset": 3},
+  {"op": "call", "script": "res://tools/render_jobs/probes/structures.gd", "action": "town"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/structures.gd", "action": "report"},
+  {"op": "wait", "s": 4.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/structures.gd", "action": "inside"},
+  {"op": "look_at", "at": [0, 4]},
+  {"op": "zoom", "size": 26.0},
+  {"op": "wait", "s": 2.0},
+  {"op": "capture", "name": "01_town", "desc": "Four structures and a street, home camera"},
+  {"op": "look_at", "at": [-2, -3]},
+  {"op": "zoom", "size": 12.0},
+  {"op": "wait", "s": 1.5},
+  {"op": "capture", "name": "02_cottage_townhouse", "desc": "The chimneyed cottage and the trimmed townhouse, close"},
+  {"op": "look_at", "at": [7, 3]},
+  {"op": "zoom", "size": 12.0},
+  {"op": "wait", "s": 1.5},
+  {"op": "capture", "name": "03_l_townhouse", "desc": "The townhouse on an L plan, close"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/structures.gd", "action": "remove_all"},
+  {"op": "title"}
+ ]
+}

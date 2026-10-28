@@ -245,6 +245,7 @@ static func _record_side(record: Dictionary, redo: bool) -> Dictionary:
 		out["dressing_" + side] = record["dressing_" + side]
 		out["region"] = record.region
 	out["walls"] = record.get("walls", {})
+	out["structures"] = record.get("structures", {})
 	return out
 
 

@@ -1058,3 +1058,9 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   (`bound_extent` zeroed through `ghost_params`: the old behaviour in the same run); taiga also has
   `avatars_*` and `home_*` pairs. The ghost must not draw on the token itself in the open and must
   draw on the legs a bush or trunk covers. Docs: `docs/PERFORMANCE.md` "Token ghost: self-occlusion".
+- `jobs/structure_basic.json` (about 25 s, keeps no level): the structures topic's build card (S2)
+  in a new unsaved 150 ft temperate forest (seed 1234): a village street (a Wall row), a chimneyed
+  cottage, a trimmed townhouse, a townhouse on an L plan and a stone house, laid through
+  `probes/structures.gd` (there is no Structure tool yet), then a report of each node's triangles
+  per role, a check that no scatter row stands inside a footprint, and three captures (home view,
+  the cottage and townhouse close, the L townhouse close). `docs/systems/structures.md`.

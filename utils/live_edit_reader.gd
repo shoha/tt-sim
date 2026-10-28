@@ -286,7 +286,13 @@ func _record(value: Variant, water: bool) -> Dictionary:
 		"kept": _cells(value.get("kept")),
 		"crossings": {},
 		"walls": {},
+		"structures": {},
 	}
+	var structures_followed: Variant = value.get("structures", {})
+	if structures_followed is Dictionary and not (structures_followed as Dictionary).is_empty():
+		out.structures = {"area": _area(structures_followed.get("area"))}
+	elif not structures_followed is Dictionary:
+		_fail("followed structures are not an object")
 	var walls_followed: Variant = value.get("walls", {})
 	if walls_followed is Dictionary and not (walls_followed as Dictionary).is_empty():
 		out.walls = {"area": _area(walls_followed.get("area"))}
