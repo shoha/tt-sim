@@ -1071,3 +1071,10 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   wall height, the driver's `thumbnail` op with `structure: true` writing `thumbnails/structures/<id>.jpg`,
   and a `tile_<id>` capture of each for a look. Output folder `render_jobs/structure_thumbs`.
   `docs/systems/library.md` "Structures" has the command.
+- `jobs/structure_tool.json` (about 40 s, keeps no level; the structures topic's tool card, S4):
+  the Building tool on a new unsaved 150 ft meadow (seed 1234), driven by real input: the pane
+  (library tiles by family), the idle ghost, a turn, a corner drag with its readout, the lot
+  laid, a second lot hovered where it overlaps the first (it eases to free ground) and clicked,
+  then a save as `_structs4_tool`, a reload in play and a capture of both buildings; the probe
+  `probes/structure_tool.gd` (`report`, `pick`, `rotate`, `reroll`, `flush`, `save`, `cleanup`)
+  and `crossing.gd`'s save and cleanup (prefix `_structs4_`) keep and delete the test level.

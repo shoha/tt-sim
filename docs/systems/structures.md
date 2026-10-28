@@ -7,8 +7,9 @@ peer rebuilds it, as walls, crossings and avatar tokens are. S1 added the record
 S2 builds the record into the game: geometry, the nodes and their collision, the worker prep, scatter
 clearance, a simple material split and the plan rules. S3 makes recipes a library kind (a
 `structures/` folder, index, registry, partial bundles, Verify, tiles; core ships five), swaps the
-temporary resolver for the registry and shows a placeholder plot where a recipe is missing. There is
-no tool and no palette yet: the cards that add them grow this page. The design is the
+temporary resolver for the registry and shows a placeholder plot where a recipe is missing. S4 adds
+the Building tool (palette strip, ghost lot, click and drag, turn, re-roll, removal, live edit: "The
+tool" below); the cards that add handles and variants grow this page. The design is the
 gitignored `docs/plans/2026-10-28-structures/design.md`; the contract with procgen and structgen is
 `ASSET_PIPELINE.md` section 12.
 
@@ -197,11 +198,61 @@ for walls).
   both parts run; a build still in flight has no node line yet). Design note: the design named only
   the node part; the record part is what makes the key useful before a build lands.
 
+## The tool
+
+Card S4 (2026-10-28): the **Building tool** (`StructureTool`, rail id `structure`, icon `home`),
+registered after the Wall tool in map building and, as a live brush, in the GM's Events pane. It
+replaces the Wall tool's Building tile (`Wall.Kind.BUILDING` and its code stay until card S8). Like
+the other tools it is a descriptor (`scenes/states/authoring/tools/structure_tool.gd`), a brush
+mode (`structure_brush.gd`), a pane (`structure_tool_pane.gd`) and a test; its placement rules are
+pure (`utils/structure_placement.gd`).
+
+- **Palette strip.** `StructureToolPane`: a tile per structure the served libraries offer
+  (`LibraryStructureStore.structures()`), grouped by family under the family's name, each tile the
+  library's rendered picture (`StructureThumbnail`, a paper square when there is none) and the
+  structure's name, the first preselected, and a Mix afresh button. A tile sets the brush's `ref` and
+  picks the tool again (as the Wall tool's tiles do, so a brush put down with RMB comes back).
+- **Ghost lot.** With a structure picked, the pointer carries a ghost: the footprint on the ground
+  (faintly filled), the recipe's default height as a ring over it, the door bar and tick on the
+  front edge, a readout ("Cottage  20 x 13 ft", in the level's units). Its size is the index
+  entry's `default_size_m` times a scale the bracket keys step (0.6 to 2.5, a notch of 1.1),
+  clamped to the entry's `min_side_m`, `max_side_m` and `max_area_m2`. At turn 0 the front faces +Z
+  (the home camera); Q and E turn it 15 degrees (Shift a quarter turn).
+- **Legal ground, eased.** `StructurePlacement.lot_problem`: no sampled point under water
+  (`WaterGeometry.is_wet_at`), no sampled slope over 0.445 (the 24 degree bank procgen's mesh check
+  was run on), inside the map, 0.4 m clear of every structure standing. The ghost does not turn red
+  over bad ground: `nearest_legal` looks in rings of 1 m out to 7 m for the closest legal spot on
+  the 0.5 m grid and the ghost slides there (an exponential ease, 22 per second, straight there the
+  first frame). Only when nothing within reach is legal does it turn warm and say why beside the
+  cursor, and a release then lays nothing and toasts the same words. The search is a function of the
+  snapped centre alone, so the ghost and the click after it agree.
+- **Click and drag.** A press and release moving less than 0.75 m lays the ghost's lot. A drag is the
+  corner-to-corner gesture: the press is one corner, the pointer the opposite, the rectangle turned
+  by the current turn; its size clamps to the entry's range and the ghost shows the clamp (a drag
+  held past the largest size grows no further), and the whole rectangle settles on the nearest legal
+  spot. The release lays it as one history entry (`StructureEditor.add`; the seed shown is the seed
+  laid, then the brush takes the next in a fixed series, so each lot differs). The new record's
+  style is the biome under it. RMB or Escape during a drag drops it.
+- **Remove, re-roll.** RMB or Delete over a structure removes it (the brush `picks`; the footprint
+  under the pointer is outlined while hovering), Ctrl and a click does too; R re-rolls the structure
+  under the pointer (`StructureEditor.reroll`, one history entry, the next seed of the series) or,
+  over bare ground, draws the next lot afresh. Tooltips, the F1 help rows and the pane's hint say
+  these keys.
+- **Peers and play.** Every edit is one history entry holding the list before and after, so the
+  existing `structures` live edit carries it (`LiveEditCodec.op_of`, tested end to end from a
+  gesture). The Events pane lists the brush like the Wall tool's: the tiles as `structure_pane`
+  (`EventsPane.structure_selected`, `structure_reroll_requested`), the hint bar rows in
+  `PlayEvents.hints_for`.
+- **Not in this card.** Select by click, corner and edge handles, the turn ring, the door edge,
+  variant tiles and the floors stepper are card S5; non-rectangular plans (`plans` in the entry)
+  are not offered yet; the rise animation of a laid building and the retirement of the Building
+  kind and its pane fields are card S8 and a look card.
+
 ## Not yet
 
-- Structure tiles in a palette: the tiles exist (`thumbnails/structures/`), nothing shows them yet
-  (the library manager lists no structures either; Verify does check them).
-- The tool, the palette, handles, variants; retiring `Wall.Kind.BUILDING`.
+- Handles, variants, a floors stepper (card S5); retiring `Wall.Kind.BUILDING` (card S8).
+- The tiles under `thumbnails/structures/` are from before the glazing change (card S5 re-renders
+  them with the `structure_thumbs` job).
 - The painterly roles (a roof tile texture, slate, window glow), the look pass on three biomes, the
   frame cost of a 20-structure town (card S6; PERFORMANCE.md has no structure line until it is
   measured with the pinned procedure).
@@ -220,6 +271,12 @@ why in the commit. The render job `tools/render_jobs/jobs/structure_basic.json` 
 `probes/structures.gd`) lays a street, a chimneyed cottage, a trimmed townhouse, a townhouse on an L plan
 and a stone house in a new unsaved map and captures the home and two close views; it logs how many
 scatter rows stand inside a footprint (0 after the fix above).
+
+Card S4: `tests/unit/test_structure_tool.gd` (authoring subset: plans and size clamps, the ground
+rules and the nearest legal spot, the editor's lot and re-roll, the brush's state machine and its
+input table, the eased ghost, the palette pane, the registration, the live edit and a save and
+reload of what a gesture laid) and the render job `tools/render_jobs/jobs/structure_tool.json`
+(`render_jobs/JOBS.md`).
 
 Card S3: `test_library_structures.gd`, `test_library_structure_store.gd` and
 `test_library_structure_transfer.gd` (authoring subset; [library.md](library.md) "Structures" lists

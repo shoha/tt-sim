@@ -173,6 +173,8 @@ static func hints_for(
 		WallTool.ID:
 			rows = [["Left-drag", "Lay a wall"], ["Ctrl+click", "Remove one"]]
 			size = "Height"
+		StructureTool.ID:
+			rows = [["Left-drag", "Put a building down"], ["Q / E", "Turn it"]]
 		EventPresets.COLLAPSE:
 			rows = [["Click", EventPresets.DROP_LABEL]]
 			size = ""
@@ -256,6 +258,12 @@ func setup(lpc: LevelPlayController, events_pane: EventsPane) -> void:
 	)
 	pane.wall_style_selected.connect(
 		func(style: int) -> void: _set_mode(WallTool.ID, "building_style", style)
+	)
+	pane.structure_selected.connect(
+		func(ref: String) -> void: _set_mode(StructureTool.ID, "ref", ref)
+	)
+	pane.structure_reroll_requested.connect(
+		func() -> void: StructureTool.of(_wired_brush()).reroll_at(_wired_brush().editor, -1)
 	)
 	pane.brush_size_changed.connect(func(radius: float) -> void: _wired_brush().set_radius(radius))
 	pane.brush_strength_changed.connect(func(flow: float) -> void: _wired_brush().set_flow(flow))

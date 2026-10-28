@@ -83,9 +83,10 @@ sides come under 2 m is refused with a line saying so. Verified with the `buildi
 1 hip or 2 flat (`Wall.BUILDING_STYLES`, 6). Style 0 is the stone building with a gable roof, built
 from the committed `building.json`; any other builds `ProcgenRecipes.building(roof, walls)`, the same
 graph with its wall node (`building_walls` or `building_timber`) and roof node (`roof_gable`,
-`roof_hip`, `roof_flat`) swapped (`WallGeometry.recipe_for`). The Wall tool's pane shows a Walls and a
-Roof row while the Building tile is picked (`WallToolPane.style_selected`; the brush's
-`building_style`, also reached from the GM Events pane), the readout names a non-default style, and
+`roof_hip`, `roof_flat`) swapped (`WallGeometry.recipe_for`). Since the structures card S4
+(2026-10-28) the Wall tool's pane has no Building tile: single buildings are the Building tool's
+([structures.md](structures.md) "The tool"), and this kind's code (the brush's `building_style`, the
+pane's Walls and Roof rows) stays only until card S8 deletes it. The readout names a non-default style, and
 the style is saved in `walls.json` as `preset` (only when it is not 0, so older maps are unchanged).
 Timber walls and hip or flat roofs are wood-kind surfaces, so they take the biome's wood material;
 the street species still use the stone and gable building. Verified with the `styles` render job.

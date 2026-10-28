@@ -604,7 +604,9 @@ func test_the_pane_offers_a_buildings_walls_and_roof() -> void:
 	var pane := WallToolPane.new()
 	add_child_autofree(pane)
 	assert_false(pane.walls_field.visible, "hidden for a wall")
-	pane.kind_field.tiles.selection_changed.emit(&"wall_building")
+	# No tile reaches the Building kind since card S4 (the Structure tool took it); its fields go
+	# with the kind in card S8.
+	pane.select_kind(Wall.Kind.BUILDING)
 	assert_true(pane.walls_field.visible and pane.roof_field.visible, "shown for a building")
 	watch_signals(pane)
 	pane.walls_field.tiles.select(&"walls_timber")
@@ -688,7 +690,8 @@ func test_the_tool_is_registered_with_a_pane_and_a_brush() -> void:
 	assert_eq(tool.brush_mode, WallBrush)
 	var pane := WallToolPane.new()
 	add_child_autofree(pane)
-	assert_eq(WallToolPane.KIND_TILES.size(), Wall.Kind.size())
+	# The Building kind is the Structure tool's now (card S4); its code stays until card S8.
+	assert_eq(WallToolPane.KIND_TILES.size(), Wall.Kind.size() - 1)
 	for tile in WallToolPane.KIND_TILES:
 		assert_not_null(IconButton.load_icon(String(tile.icon)), String(tile.icon))
 	assert_eq(pane.kind_field.tiles.selected, &"wall_stone", "Stone preselected")
