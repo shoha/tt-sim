@@ -2015,8 +2015,10 @@ NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuil
 
 - **Recipe.** A `.structure.json` in the procgen graph format (`plantgen-graph`). Its document
   `interface` is the parameter contract (name, default, min, max); a node param `"@name"` binds
-  to it. structgen's custom footprint (the Guide node's `host_footprint` param) is a preview
-  default only; tt-sim ignores it.
+  to it. structgen's custom footprint (the Guide node's `host_footprint` param, a list of
+  pairs) is a preview default only: structgen strips it on export to a library and writes the
+  default footprint into the index entry as `default_size_m`, because the reader refuses a node
+  param holding a table.
 - **Inputs tt-sim supplies** (`ProcgenStructureInputs`): `guide` a closed polygon in map XZ
   metres (3 to 24 points, simple, edge 0 is the front and carries the door, winding as
   `ProcgenGuide.plan_area` defines), `params` (only values that differ from the defaults),

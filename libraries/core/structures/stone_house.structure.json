@@ -80,6 +80,15 @@
       "name": "textured",
       "tip": "1 carries the courses in a masonry texture instead of modelled blocks.",
       "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Lit windows",
+      "max": 1,
+      "min": 0,
+      "name": "lit",
+      "tip": "The share of windows that glow warm, as if lit from within.",
+      "type": "float"
     }
   ],
   "nodes": [
@@ -138,7 +147,9 @@
     },
     {
       "id": "glazing_6",
-      "params": {},
+      "params": {
+        "lit": "@lit"
+      },
       "position": [
         720.0,
         420.0
