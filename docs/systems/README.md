@@ -31,6 +31,9 @@ Documents here:
   fall carve, the curtain / foam ring / mist mesh and shader, the fall material.
 - [crossings.md](crossings.md): plank bridges, stepping stones, stone arches and fords,
   including the refusal by a waterfall and the per-crossing rebuild cache.
+- [structures.md](structures.md): buildings as a library recipe plus footprint, seed and params
+  (`Structure`, the `structures.json` entry, validation, the live edit, the fingerprint key); the
+  data layer only so far. Walls and fences are in `walls.md`.
 - [landforms.md](landforms.md): the starting landforms a new map opens with (Valley, Hilltop,
   Terraces, Lakeshore, Gorge): the seeded frame, the shared steps, each recipe, the stage and
   the open path.

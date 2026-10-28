@@ -125,6 +125,8 @@ const MAX_FLOW_TEXELS := 1024
 const MAX_CROSSINGS := 64
 ## Walls and fences per document.
 const MAX_WALLS := 64
+## Structures (buildings built from a library recipe) per document.
+const MAX_STRUCTURES := 128
 
 var palette_version: String = ""
 ## The content libraries this map used when it was saved: [{id, version, hash}], one per
@@ -179,6 +181,9 @@ var crossings: Array[Crossing] = []
 var procgen_crossings: bool = false
 ## Stone walls and fences along a line (Wall), at most MAX_WALLS.
 var walls: Array[Wall] = []
+## Buildings built from a library recipe, a footprint and a seed (Structure), at most
+## MAX_STRUCTURES. Summary: docs/systems/structures.md.
+var structures: Array[Structure] = []
 ## One byte per sample: the persistent ground fire's intensity 0..255 (0 = no fire), painted by
 ## the Fire tool and drawn by FireField. Empty = no fire. The ash it leaves is a painted
 ## surface, a separate layer, so putting fire out never touches it.
@@ -532,6 +537,32 @@ func next_wall_id() -> int:
 	if highest < Wall.MAX_ID:
 		return highest + 1
 	for candidate in range(1, Wall.MAX_ID + 1):
+		if not used.has(candidate):
+			return candidate
+	return -1
+
+
+## The structure with id `structure_id`, or null.
+func structure(structure_id: int) -> Structure:
+	for entry in structures:
+		if entry.id == structure_id:
+			return entry
+	return null
+
+
+## The id a new structure gets: one past the highest in use, else the lowest free id; -1 when
+## the document already holds MAX_STRUCTURES structures.
+func next_structure_id() -> int:
+	if structures.size() >= MAX_STRUCTURES:
+		return -1
+	var used := {}
+	var highest := 0
+	for entry in structures:
+		used[entry.id] = true
+		highest = maxi(highest, entry.id)
+	if highest < Structure.MAX_ID:
+		return highest + 1
+	for candidate in range(1, Structure.MAX_ID + 1):
 		if not used.has(candidate):
 			return candidate
 	return -1
