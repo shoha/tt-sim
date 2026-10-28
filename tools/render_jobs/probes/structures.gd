@@ -9,6 +9,8 @@ extends RefCounted
 ##   flush             waits for every building in flight (AuthoredStructures.flush).
 ##   report            the structure nodes of the open map: triangles, meshes per role, top, notes.
 ##   remove_all        removes every structure (one history entry each), for a clean run.
+##   tile {ref, width, depth, yaw, seed}  (card S3, tools/render_structure_thumbnails.gd) removes
+##                     every structure and lays this one alone at the map's centre.
 
 const BASIC_LOTS: Array = [
 	# recipe, centre x, centre z, width, depth, yaw degrees, seed
@@ -33,7 +35,31 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _remove_all(base)
 		"inside":
 			return _inside(base)
+		"tile":
+			return _tile(base, step)
 	return "unknown action %s" % step.get("action", "")
+
+
+## One structure alone at the centre (the thumbnail scene), the front turned `yaw` degrees.
+static func _tile(base: Node, step: Dictionary) -> String:
+	var editor := _editor(base)
+	if editor == null:
+		return "no authoring editor"
+	_remove_all(base)
+	var plan := _rect(
+		float(step.get("width", 6.0)),
+		float(step.get("depth", 4.0)),
+		float(step.get("yaw", 0.0)),
+		Vector2.ZERO
+	)
+	var structure := Structure.make(0, String(step.get("ref", "")), plan, int(step.get("seed", 5)))
+	var id := editor.structures.add(structure)
+	var nodes := _nodes(base)
+	if nodes != null:
+		nodes.flush()
+	if id < 0:
+		return "refused: %s" % editor.structures.last_refusal
+	return "tile %s -> %d" % [step.get("ref", ""), id]
 
 
 ## How many scatter rows (plants, rocks) of the map root stand inside a structure's footprint,

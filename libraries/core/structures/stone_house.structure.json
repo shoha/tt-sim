@@ -1,0 +1,130 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "building_layout_2",
+      "to_port": 0
+    },
+    {
+      "from": "building_layout_2",
+      "from_port": 0,
+      "to": "building_walls_3",
+      "to_port": 0
+    },
+    {
+      "from": "building_layout_2",
+      "from_port": 0,
+      "to": "roof_gable_4",
+      "to_port": 0
+    },
+    {
+      "from": "building_walls_3",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "roof_gable_4",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "interface": [
+    {
+      "default": 2.4,
+      "label": "Wall height",
+      "max": 5,
+      "min": 1.6,
+      "name": "height",
+      "tip": "Height of the walls above the highest ground.",
+      "type": "float"
+    },
+    {
+      "default": 34,
+      "label": "Roof pitch",
+      "max": 55,
+      "min": 15,
+      "name": "roof_pitch",
+      "tip": "Slope of the roof in degrees.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Window width",
+      "max": 1.6,
+      "min": 0,
+      "name": "window_width",
+      "tip": "Width of each window, fitted along every side; 0 for none.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Textured masonry",
+      "max": 1,
+      "min": 0,
+      "name": "textured",
+      "tip": "1 carries the courses in a masonry texture instead of modelled blocks.",
+      "type": "float"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        120.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "building_layout_2",
+      "params": {
+        "height": "@height",
+        "textured": "@textured",
+        "window_width": "@window_width"
+      },
+      "position": [
+        250.0,
+        120.0
+      ],
+      "type": "building_layout"
+    },
+    {
+      "id": "building_walls_3",
+      "params": {},
+      "position": [
+        480.0,
+        20.0
+      ],
+      "type": "building_walls"
+    },
+    {
+      "id": "roof_gable_4",
+      "params": {
+        "roof_pitch": "@roof_pitch"
+      },
+      "position": [
+        480.0,
+        220.0
+      ],
+      "type": "roof_gable"
+    },
+    {
+      "id": "output_5",
+      "params": {
+        "name": "Building"
+      },
+      "position": [
+        720.0,
+        120.0
+      ],
+      "type": "output"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

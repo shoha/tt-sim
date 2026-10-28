@@ -228,7 +228,10 @@ func announce_document(doc: MapDocument) -> void:
 		if id == LibraryContracts.CORE_ID:
 			continue
 		var used: PackedStringArray = by_library.get(id, PackedStringArray())
-		var signature := "%d:%d" % [used.size(), doc.biome_ids.size()]
+		var refs: PackedStringArray = LibraryStructureStore.used_by(doc).get(
+			id, PackedStringArray()
+		)
+		var signature := "%d:%d:%d" % [used.size(), doc.biome_ids.size(), refs.size()]
 		if _announced.get(id) == signature:
 			continue
 		_announced[id] = signature

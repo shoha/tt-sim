@@ -39,6 +39,11 @@ const CLEAR_MAX_STRIPS := 12
 const CLEAR_TRIM_M := 0.55
 ## How far past its footprint a structure reaches for scatter and edits, metres.
 const REACH_M := 1.6
+## The placeholder plot (a recipe this game lacks): how high it stands above the ground and how
+## deep it sinks, metres, and its surface kind (modelled stone in the trim tone).
+const PLOT_HEIGHT_M := 0.15
+const PLOT_SINK_M := 0.1
+const PLOT_KIND := "stone"
 
 ## True: masonry courses in the texture (a tenth of the triangles); false: modelled blocks. Applies
 ## to a recipe that declares a `textured` parameter the record does not set itself.
@@ -92,7 +97,7 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 	var recipe := StructureRecipes.document(structure.recipe)
 	if recipe == null:
 		parts.problem = "recipe %s is unknown" % structure.recipe
-		return parts
+		return _with_plot(parts, doc, structure)
 	var evaluator := PlantGraphEvaluator.new(recipe.registry)
 	var plant: Variant = evaluator.evaluate_structure(
 		recipe, inputs_for(doc, structure, recipe), true
@@ -100,7 +105,7 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 	if plant == null or not evaluator.errors.is_empty():
 		var why := String(evaluator.errors[0]) if not evaluator.errors.is_empty() else "no result"
 		parts.problem = "recipe %s failed: %s" % [structure.recipe, why]
-		return parts
+		return _with_plot(parts, doc, structure)
 	var geometry: PlantGeometry = plant["lods"][0]
 	var triangles := geometry.triangle_count()
 	parts.triangles = triangles
@@ -289,8 +294,90 @@ static func triangle_count(parts: Dictionary) -> int:
 	return total
 
 
+## `parts` with the placeholder plot of `structure` as its only mesh, for a recipe this game does
+## not have or cannot build (a peer whose library transfer is still running, a library removed,
+## a recipe that fails): a low pale slab on the footprint that follows the ground, so the place of
+## the building stays visible and nothing is a hole. No collision, no top.
+static func _with_plot(parts: Dictionary, doc: MapDocument, structure: Structure) -> Dictionary:
+	var plot := _plot(doc, structure.footprint)
+	if plot.is_empty():
+		return parts
+	parts.meshes = [plot]
+	parts.placeholder = true
+	parts.triangles = (plot.arrays[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
+	return parts
+
+
+## The plot mesh for plan `plan` (a role mesh like build_one's): the top face PLOT_HEIGHT_M above
+## the ground at each corner and a skirt PLOT_SINK_M into it. {} when the plan cannot be
+## triangulated.
+static func _plot(doc: MapDocument, plan: PackedVector2Array) -> Dictionary:
+	var cuts := Geometry2D.triangulate_polygon(plan)
+	if cuts.is_empty():
+		return {}
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var indices := PackedInt32Array()
+	var ground := PackedFloat32Array()
+	for p in plan:
+		ground.append(WaterGeometry.ground_at(doc, p))
+	for k in range(0, cuts.size(), 3):
+		var base := vertices.size()
+		var corners: Array[Vector3] = []
+		for c in 3:
+			var at: int = cuts[k + c]
+			corners.append(Vector3(plan[at].x, ground[at] + PLOT_HEIGHT_M, plan[at].y))
+		vertices.append_array(PackedVector3Array(corners))
+		for c in 3:
+			normals.append(Vector3.UP)
+		indices.append_array(
+			_facing(corners[0], corners[1], corners[2], Vector3.UP, [base, base + 1, base + 2])
+		)
+	var count := plan.size()
+	for k in count:
+		var a := plan[k]
+		var b := plan[(k + 1) % count]
+		var side := (b - a).orthogonal().normalized()
+		if Geometry2D.is_point_in_polygon((a + b) * 0.5 + side * 0.02, plan):
+			side = -side
+		var out := Vector3(side.x, 0.0, side.y)
+		var base := vertices.size()
+		var low_a := Vector3(a.x, ground[k] - PLOT_SINK_M, a.y)
+		var low_b := Vector3(b.x, ground[(k + 1) % count] - PLOT_SINK_M, b.y)
+		var high_a := Vector3(a.x, ground[k] + PLOT_HEIGHT_M, a.y)
+		var high_b := Vector3(b.x, ground[(k + 1) % count] + PLOT_HEIGHT_M, b.y)
+		vertices.append_array(PackedVector3Array([low_a, low_b, high_b, high_a]))
+		for c in 4:
+			normals.append(out)
+		indices.append_array(_facing(low_a, low_b, high_b, out, [base, base + 1, base + 2]))
+		indices.append_array(_facing(low_a, high_b, high_a, out, [base, base + 2, base + 3]))
+	var uvs := PackedVector2Array()
+	uvs.resize(vertices.size())
+	var colors := PackedColorArray()
+	colors.resize(vertices.size())
+	colors.fill(Color.WHITE)
+	var tags := PackedInt32Array()
+	tags.resize(vertices.size())
+	tags.fill(-1)
+	return {
+		"kind": PLOT_KIND,
+		"role": StructureLook.TRIM,
+		"arrays": _arrays(PLOT_KIND, vertices, normals, uvs, colors, indices),
+		"tags": tags,
+	}
+
+
+## The indices `at` (three) of triangle (a, b, c), ordered so the face points along `normal`.
+static func _facing(
+	a: Vector3, b: Vector3, c: Vector3, normal: Vector3, at: Array[int]
+) -> PackedInt32Array:
+	var ordered := (b - a).cross(c - a).dot(normal) >= 0.0
+	return PackedInt32Array([at[0], at[1], at[2]] if ordered else [at[0], at[2], at[1]])
+
+
 static func _empty(structure: Structure) -> Dictionary:
 	return {
+		"placeholder": false,
 		"id": structure.id,
 		"recipe": structure.recipe,
 		"style": structure.style,

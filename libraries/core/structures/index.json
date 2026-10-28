@@ -1,0 +1,157 @@
+{
+	"format": "ttsim-structures",
+	"format_version": 1,
+	"structures": [
+		{
+			"default_size_m": [
+				6,
+				4
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "house",
+			"file": "structures/stone_house.structure.json",
+			"id": "stone_house",
+			"max_area_m2": 100.0,
+			"max_side_m": 12.0,
+			"min_side_m": 2.5,
+			"name": "Stone house",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stone",
+				"gable"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/stone_house.jpg",
+			"variant": "Stone"
+		},
+		{
+			"default_size_m": [
+				6,
+				4
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch"
+			],
+			"family": "cottage",
+			"file": "structures/cottage.structure.json",
+			"id": "cottage",
+			"max_area_m2": 120.0,
+			"max_side_m": 14.0,
+			"min_side_m": 2.5,
+			"name": "Cottage",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"timber",
+				"gable"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/cottage.jpg",
+			"variant": "Timber"
+		},
+		{
+			"default_size_m": [
+				6,
+				4
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"chimneys"
+			],
+			"family": "cottage",
+			"file": "structures/cottage_chimneyed.structure.json",
+			"id": "cottage_chimneyed",
+			"max_area_m2": 120.0,
+			"max_side_m": 14.0,
+			"min_side_m": 2.5,
+			"name": "Cottage with chimney",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"timber",
+				"gable",
+				"chimney",
+				"shutters"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/cottage_chimneyed.jpg",
+			"variant": "Timber, chimney"
+		},
+		{
+			"default_size_m": [
+				6,
+				4
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch"
+			],
+			"family": "townhouse",
+			"file": "structures/townhouse.structure.json",
+			"id": "townhouse",
+			"max_area_m2": 150.0,
+			"max_side_m": 16.0,
+			"min_side_m": 3.0,
+			"name": "Townhouse",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stone",
+				"gable",
+				"townhouse"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/townhouse.jpg",
+			"variant": "Plain"
+		},
+		{
+			"default_size_m": [
+				6,
+				4
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch"
+			],
+			"family": "townhouse",
+			"file": "structures/townhouse_trimmed.structure.json",
+			"id": "townhouse_trimmed",
+			"max_area_m2": 150.0,
+			"max_side_m": 16.0,
+			"min_side_m": 3.0,
+			"name": "Townhouse, trimmed",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stone",
+				"gable",
+				"townhouse",
+				"trim",
+				"quoins"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/townhouse_trimmed.jpg",
+			"variant": "Trimmed"
+		}
+	]
+}

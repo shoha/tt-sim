@@ -48,6 +48,7 @@ static func start(doc: MapDocument) -> AuthoredLoadPrep:
 		parts.append(WALLS)
 	if not doc.structures.is_empty():
 		parts.append(STRUCTURES)
+		StructureRecipes.ensure_served()
 	for part in parts:
 		var out := {}
 		prep._outs.append(out)
@@ -82,6 +83,8 @@ func finish() -> Dictionary:
 ## Everything start() and finish() would give, on the calling thread (tests).
 static func compute(doc: MapDocument) -> Dictionary:
 	var out := {}
+	if not doc.structures.is_empty():
+		StructureRecipes.ensure_served()
 	for part in [DRESSING, FIELDS, SKIRT, WATER, CROSSINGS, WALLS, STRUCTURES]:
 		if part == WATER and doc.water_bodies.is_empty():
 			continue

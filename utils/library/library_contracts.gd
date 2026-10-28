@@ -15,6 +15,8 @@ const FORMAT_LIBRARY := "ttsim-library"
 const FORMAT_CATALOG := "ttsim-catalog"
 const FORMAT_BIOME := "ttsim-biome"
 const FORMAT_LOCK := "ttsim-biome-lock"
+## structures/index.json (docs/ASSET_PIPELINE.md section 12, docs/systems/library.md "Structures").
+const FORMAT_STRUCTURES := "ttsim-structures"
 ## The only format version of each library file this build reads; a higher one is refused.
 const FORMAT_VERSION := 1
 
@@ -140,6 +142,17 @@ const CAPS := {
 	"library_json_bytes": 1048576,
 	"rules_per_biome": 128,
 }
+## Caps of the `structures/` kind, kept apart from CAPS so contract.json (which plantgen vendors)
+## does not change: structures in one library, bytes of the index and of one recipe document,
+## nodes in one recipe, and the most a recipe file's interface may expose.
+const STRUCTURE_CAPS := {
+	"structures": 128,
+	"index_bytes": 262144,
+	"recipe_bytes": 262144,
+	"recipe_nodes": 128,
+	"recipe_connections": 512,
+	"expose": 16,
+}
 ## Text and name limits of the reader (not part of contract.json).
 const MAX_TEXT_LENGTH := 128
 const MAX_DESCRIPTION_LENGTH := 1024
@@ -180,6 +193,25 @@ const LIBRARY_KEYS: Array[String] = [
 	"partial",
 ]
 const CATALOG_KEYS: Array[String] = ["format", "format_version", "assets"]
+const STRUCTURE_KEYS: Array[String] = ["format", "format_version", "structures"]
+const STRUCTURE_ENTRY_KEYS: Array[String] = [
+	"id",
+	"name",
+	"family",
+	"variant",
+	"tags",
+	"file",
+	"default_size_m",
+	"min_side_m",
+	"max_side_m",
+	"max_area_m2",
+	"plans",
+	"expose",
+	"textured",
+	"thumb",
+]
+## The footprint kinds a structure's `plans` may name.
+const STRUCTURE_PLANS: Array[String] = ["rect", "l", "t", "u"]
 const CATALOG_ENTRY_KEYS: Array[String] = [
 	"id",
 	"group",

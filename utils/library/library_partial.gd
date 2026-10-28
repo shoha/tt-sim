@@ -44,6 +44,7 @@ const FILE_CAPS := {
 const MAX_REQUEST_ASSETS := 8192
 const MAX_REQUEST_BIOMES := 256
 const MAX_REQUEST_SURFACES := 64
+const MAX_REQUEST_STRUCTURES := 128
 const MAX_REQUEST_HAVE := 32
 const MAX_ID_TEXT := 160
 
@@ -191,6 +192,12 @@ static func request_problem(request: Variant) -> String:
 		problem = _ids_problem(data.get("biomes"), "biomes", MAX_REQUEST_BIOMES, false)
 	if problem == "":
 		problem = _ids_problem(data.get("surfaces"), "surfaces", MAX_REQUEST_SURFACES, false)
+	if problem == "" and data.has("structures"):
+		problem = _structures_problem(data["structures"], String(data["library"]))
+	if problem == "" and data.has("held_structures"):
+		problem = _ids_problem(
+			data["held_structures"], "held_structures", MAX_REQUEST_STRUCTURES, false
+		)
 	if problem == "" and data.has("held_surfaces"):
 		# The local names of surfaces a kept copy already holds: the host does not send them again.
 		problem = _ids_problem(data["held_surfaces"], "held_surfaces", MAX_REQUEST_SURFACES, false)
@@ -204,6 +211,21 @@ static func request_problem(request: Variant) -> String:
 			return "have holds a non-text entry"
 		if String((have as Dictionary)[id]).length() > 64:
 			return "have holds a long version"
+	return ""
+
+
+## `structures` of a request: at most MAX_REQUEST_STRUCTURES references `<library>:<id>` of the
+## requested library, each well formed.
+static func _structures_problem(value: Variant, library_id: String) -> String:
+	var problem := _ids_problem(value, "structures", MAX_REQUEST_STRUCTURES, false)
+	if problem != "":
+		return problem
+	for item: Variant in value as Array:
+		var ref := String(item)
+		if MapStructureIO.recipe_problem(ref) != "":
+			return "structures holds a bad reference"
+		if LibraryIds.split_ref(ref)["library"] != library_id:
+			return "structures holds a reference to another library"
 	return ""
 
 
@@ -272,6 +294,20 @@ static func select(read: Dictionary, request: Dictionary) -> Dictionary:
 		if catalog.has(local):
 			out_assets.append(local)
 	out_assets.sort()
+	var have_structures := {}
+	for item: Dictionary in read.get("structures", []):
+		have_structures[String(item["id"])] = true
+	var out_structures: Array[String] = []
+	for raw: Variant in request.get("structures", []):
+		var parts := LibraryIds.split_ref(String(raw))
+		if parts.is_empty() or String(parts["library"]) != library_id:
+			continue
+		if have_structures.has(String(parts["local"])):
+			if not String(parts["local"]) in out_structures:
+				out_structures.append(String(parts["local"]))
+		else:
+			skipped.append(String(raw))
+	out_structures.sort()
 	var deps_out := {}
 	for dep: String in dependency_assets:
 		var names: Array[String] = []
@@ -286,6 +322,7 @@ static func select(read: Dictionary, request: Dictionary) -> Dictionary:
 		"dependency_assets": deps_out,
 		"biomes": biomes,
 		"surfaces": _without_held(surfaces_used(read, biomes, request), request),
+		"structures": out_structures,
 		"skipped": skipped,
 		"biome_names": names_out,
 	}
@@ -318,6 +355,7 @@ static func select_assets_only(read: Dictionary, locals: Array) -> Dictionary:
 		"dependency_assets": {},
 		"biomes": {},
 		"surfaces": [] as Array[String],
+		"structures": [] as Array[String],
 		"skipped": skipped,
 		"biome_names": [] as Array[String],
 	}
@@ -511,8 +549,20 @@ static func sources_of(files: Dictionary) -> Dictionary:
 	var biomes := {}
 	var surfaces := {}
 	var png := {}
+	var structure_index := ""
+	var structure_recipes := {}
 	for relative: String in names:
 		var data: PackedByteArray = files[relative]
+		if relative == LibraryStructures.INDEX_FILE:
+			structure_index = data.get_string_from_utf8().replace("\r\n", "\n")
+		elif (
+			relative.begins_with(LibraryStructures.DIR)
+			and relative.count("/") == 1
+			and relative.ends_with(LibraryStructures.RECIPE_SUFFIX)
+		):
+			structure_recipes[relative.get_file()] = (data.get_string_from_utf8().replace(
+				"\r\n", "\n"
+			))
 		if (
 			relative.begins_with("biomes/")
 			and relative.count("/") == 1
@@ -533,6 +583,7 @@ static func sources_of(files: Dictionary) -> Dictionary:
 		"biomes": biomes,
 		"surfaces": surfaces,
 		"png": png,
+		"structures": {"index": structure_index, "recipes": structure_recipes},
 		"files": names,
 	}
 
@@ -651,7 +702,7 @@ static func _check_partial(library: Dictionary, errors: Array) -> Dictionary:
 		errors.append(
 			{"code": E_PARTIAL, "text": "partial.format %s is not %d" % [info["format"], FORMAT]}
 		)
-	for field in ["assets", "biomes", "surfaces"]:
+	for field in ["assets", "biomes", "surfaces", "structures"]:
 		if not info.get(field, []) is Array:
 			errors.append({"code": E_PARTIAL, "text": "partial.%s is not a list" % field})
 	return info
@@ -669,6 +720,14 @@ static func _check_extra(files: Dictionary, read: Dictionary, errors: Array) -> 
 		allowed["surfaces/%s/%s" % [name, SurfaceReader.INFO_FILE]] = true
 		for kind: String in (read["surfaces"][name] as Dictionary).get("maps", []):
 			allowed["surfaces/%s/%s.png" % [name, kind]] = true
+	var structures: Array = read.get("structures", [])
+	if not structures.is_empty():
+		allowed[LibraryStructures.INDEX_FILE] = true
+	for item: Dictionary in structures:
+		allowed[String(item["file"])] = true
+		var thumb := String((item["entry"] as Dictionary).get("thumb", ""))
+		if thumb != "":
+			allowed[thumb] = true
 	for path: String in files:
 		if not allowed.has(path):
 			errors.append({"code": E_EXTRA, "text": "unexpected file %s" % _short(path)})
@@ -725,7 +784,11 @@ static func _dry_run(
 		)
 	)
 	warnings.append_array(compiled.get("warnings", []))
-	if (compiled.get("biome_ids", []) as Array).is_empty() and not assets_only:
+	if (
+		(compiled.get("biome_ids", []) as Array).is_empty()
+		and not assets_only
+		and not LibraryStructureStore.buildings_only(read)
+	):
 		errors.append({"code": E_COMPILE, "text": "no biome of the received library compiles"})
 
 

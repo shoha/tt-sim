@@ -1,12 +1,14 @@
 # Structures
 
-Status: data layer (card S1) and build (card S2), 2026-10-28, topic `structures`. A structure is a
-building recorded as a library recipe plus the author's inputs; every peer rebuilds it, as walls,
-crossings and avatar tokens are. S1 added the record, the `structures.json` entry of `map.ttmap`,
-the editor's data calls, the live edit and the fingerprint key. S2 builds the record into the game:
-geometry, the nodes and their collision, the worker prep, scatter clearance, a simple material
-split and the plan rules. There is no tool, no palette and no library kind yet (a temporary
-resolver reads procgen's recipes): the cards that add them grow this page. The design is the
+Status: data layer (card S1), build (card S2) and the library kind (card S3), 2026-10-28, topic
+`structures`. A structure is a building recorded as a library recipe plus the author's inputs; every
+peer rebuilds it, as walls, crossings and avatar tokens are. S1 added the record, the
+`structures.json` entry of `map.ttmap`, the editor's data calls, the live edit and the fingerprint key.
+S2 builds the record into the game: geometry, the nodes and their collision, the worker prep, scatter
+clearance, a simple material split and the plan rules. S3 makes recipes a library kind (a
+`structures/` folder, index, registry, partial bundles, Verify, tiles; core ships five), swaps the
+temporary resolver for the registry and shows a placeholder plot where a recipe is missing. There is
+no tool and no palette yet: the cards that add them grow this page. The design is the
 gitignored `docs/plans/2026-10-28-structures/design.md`; the contract with procgen and structgen is
 `ASSET_PIPELINE.md` section 12.
 
@@ -78,17 +80,29 @@ changed. `follow(area)` and `restore(record)` make the nodes follow a sculpt or 
 ground under them: `HeightEditor` and `WaterEditor` record them in their history entries beside the
 walls' and crossings', and `LiveEditCodec` and `LiveEditReader` carry the record to peers.
 
-## Recipes (temporary resolver)
+## Recipes
 
-`StructureRecipes` (`utils/structure_recipes.gd`) turns a reference into a recipe document. Until the
-library card, the `core` starter set is the committed JSON of procgen's recipes
-(`res://procgen/recipes/*.json`): `core:stone_house` (the building recipe, gable roof, stone),
-`core:cottage` (timber), `core:cottage_chimneyed`, `core:townhouse` and `core:townhouse_trimmed`. The
-seam is `StructureRecipes.resolver`, a `Callable(ref) -> {"text": recipe JSON}` that replaces the
-table (the library registry sets it in S3); parsing, the digest (sha256 of the text), the
-interface clamp (`clamp_params`: a name the recipe does not declare is dropped, a number is clamped
-to its min and max) and the thread safety stay here. Every call parses a fresh document, so an
-evaluation never shares one; texts and digests are cached under a mutex.
+`StructureRecipes` (`utils/structure_recipes.gd`) turns a reference into a recipe document. Since S3
+the recipes are a library kind ([library.md](library.md) "Structures"): `LibraryStructureStore`
+(filled by `LibraryRegistry.apply`) holds each served library's structures by `<library>:<id>`, and
+`StructureRecipes` asks it. The `core` library ships the starter set as data (`libraries/core/
+structures/`, built from procgen's recipes by `tools/export_core_structures.gd`): `core:stone_house`
+(the building recipe, gable roof, stone), `core:cottage` (timber), `core:cottage_chimneyed`,
+`core:townhouse` and `core:townhouse_trimmed`, each with an index entry (name, family and variant,
+default and limit sizes, exposed parameters, tile) and a line in `pins.txt`. Lookup order: the test
+`resolver` (a `Callable(ref) -> {"text": recipe JSON}`), the store, then, only with
+`procgen_fallback` on (off in the game), procgen's committed `recipes/` folder. Parsing refuses a
+text over the recipe caps (`LibraryStructures.recipe_problem`), then the digest (sha256 of the
+text), the interface clamp (`clamp_params`: a name the recipe does not declare is dropped, a number
+is clamped to its min and max) and the thread safety live here. Every call parses a fresh
+document, so an evaluation never shares one; the store is replaced whole under a mutex, so a
+worker reads a consistent table while libraries are re-served. `ensure_served()` (main thread) makes
+sure the libraries are served first.
+
+A reference nobody serves (a transfer still running, a removed library) or a recipe that fails to
+build gives a **placeholder plot**: a pale slab 15 cm above the ground on the footprint, following
+the ground, no collision, `top` NONE, parts `placeholder` true and `problem` saying why. The recipe
+digest is in the key, so the plot becomes the building when the recipe arrives.
 
 ## Geometry
 
@@ -183,9 +197,8 @@ for walls).
 
 ## Not yet
 
-- The library kind (`structures/` folder, index, registry, partial bundles, `MapLibraries`): recipes
-  come from procgen's folder through the temporary resolver; a missing recipe builds nothing and logs
-  a warning (the transfer placeholder is the library card's).
+- Structure tiles in a palette: the tiles exist (`thumbnails/structures/`), nothing shows them yet
+  (the library manager lists no structures either; Verify does check them).
 - The tool, the palette, handles, variants; retiring `Wall.Kind.BUILDING`.
 - The painterly roles (a roof tile texture, slate, window glow), the look pass on three biomes, the
   frame cost of a 20-structure town (card S6; PERFORMANCE.md has no structure line until it is
@@ -205,3 +218,10 @@ why in the commit. The render job `tools/render_jobs/jobs/structure_basic.json` 
 `probes/structures.gd`) lays a street, a chimneyed cottage, a trimmed townhouse, a townhouse on an L plan
 and a stone house in a new unsaved map and captures the home and two close views; it logs how many
 scatter rows stand inside a footprint (0 after the fix above).
+
+Card S3: `test_library_structures.gd`, `test_library_structure_store.gd` and
+`test_library_structure_transfer.gd` (authoring subset; [library.md](library.md) "Structures" lists
+what each covers). The pins now also live with the data: `libraries/core/structures/pins.txt` (`<id>
+<pipeline md5> <triangles> <procgen md5>`, the first three agree with the fixture above, and
+`test_library_structure_store.gd` compares them). The tiles are rendered by
+`tools/render_structure_thumbnails.gd` (the render job `structure_thumbs`, kept no level).

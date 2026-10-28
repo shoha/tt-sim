@@ -42,6 +42,13 @@ static func merge(current: Dictionary, delta: Dictionary) -> Dictionary:
 	if catalog.has("error"):
 		return _fail(out, E_MERGE, String(catalog["error"]))
 	files[LibraryPartial.CATALOG_FILE] = LibraryPartial.json_bytes(catalog)
+	if current.has(LibraryStructures.INDEX_FILE) or delta.has(LibraryStructures.INDEX_FILE):
+		var united := LibraryStructures.merge_index(
+			current.get(LibraryStructures.INDEX_FILE), delta.get(LibraryStructures.INDEX_FILE)
+		)
+		if not united["ok"]:
+			return _fail(out, E_MERGE, String(united["error"]))
+		files[LibraryStructures.INDEX_FILE] = String(united["text"]).to_utf8_buffer()
 	for path: String in delta:
 		if not (path.begins_with("biomes/") and path.ends_with(".json")):
 			continue
@@ -168,7 +175,7 @@ static func _merge_library(left: Dictionary, right: Dictionary, files: Dictionar
 	var out := left.duplicate(true)
 	var info: Dictionary = out[LibraryPartial.PARTIAL_KEY]
 	var other: Dictionary = right[LibraryPartial.PARTIAL_KEY]
-	for field in ["assets", "biomes", "surfaces"]:
+	for field in ["assets", "biomes", "surfaces", "structures"]:
 		var united := {}
 		for source: Dictionary in [info, other]:
 			for item: Variant in source.get(field, []) as Array:
@@ -190,6 +197,7 @@ static func _is_special(path: String) -> bool:
 	return (
 		path == LibraryPartial.LIBRARY_FILE
 		or path == LibraryPartial.CATALOG_FILE
+		or path == LibraryStructures.INDEX_FILE
 		or (path.begins_with("biomes/") and path.ends_with(".json"))
 	)
 
