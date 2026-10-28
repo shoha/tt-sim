@@ -113,7 +113,9 @@ reloaded in play).
 Species (2026-10-27): a street carries a `preset` (`walls.json` `preset` 0 to 4, rows only) picked on
 the pane's Street tiles (shown only while Street is picked): Mixed, Terrace, Guild houses, Village (fenced
 yards), Cottages (low stone-walled yards). A species replaces the lot sizes, spacing, heights, roofs and
-yards (procgen `ProcgenRow.PRESETS`); the setback and side stay the street's. Scatter clears under each
+yards, and since procgen `82073db` also each lot's walls (stone, textured, timber), roof (gable, hip, flat) and
+facade style (windows, floors), all drawn from species data (procgen `ProcgenStreetSpecies`,
+`recipes/species/*.json`); the setback and side stay the street's. Scatter clears under each
 plot, yard included. Verified with the `street_species` render job (the tiles and a street of each
 species, the village's fences visible).
 
