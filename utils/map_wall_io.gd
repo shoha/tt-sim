@@ -76,6 +76,8 @@ static func wall_problem(wall: Wall, extent: Vector2) -> String:
 		var shape := _building_problem(wall)
 		if shape != "":
 			return shape
+		if wall.preset < 0 or wall.preset >= Wall.BUILDING_STYLES:
+			return "a building's style is outside 0..%d" % (Wall.BUILDING_STYLES - 1)
 	elif wall.is_row() and (wall.closed or wall.seed_value < 0 or wall.seed_value > Wall.MAX_SEED):
 		return "a row is an open line with a seed 0..%d" % Wall.MAX_SEED
 	elif wall.is_row() and (wall.side < 0 or wall.side >= Wall.ROW_SIDES):
@@ -146,6 +148,8 @@ static func wall_json(wall: Wall) -> Dictionary:
 	if wall.is_row():
 		out["seed"] = wall.seed_value
 		out["side"] = wall.side
+		out["preset"] = wall.preset
+	elif wall.is_building() and wall.preset > 0:
 		out["preset"] = wall.preset
 	return out
 
@@ -228,6 +232,13 @@ static func _wall_from(value: Variant) -> Variant:
 		wall.seed_value = seed_read
 		wall.side = side_read
 		wall.preset = preset_read
+	elif wall.is_building():
+		var style_read: Variant = MapDocumentIO._integer(
+			value.get("preset", 0), 0, Wall.BUILDING_STYLES - 1
+		)
+		if style_read == null:
+			return "a building's style is not a whole number in range"
+		wall.preset = style_read
 	return wall
 
 

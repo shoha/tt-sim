@@ -69,7 +69,8 @@ func get_wall(wall_id: int) -> Wall:
 ## drag makes none. Changes nothing: the tool's live preview, and what add() lays.
 ##
 ## A building is a rectangle: `from` and `to` are its opposite corners, its sides turned `yaw`
-## radians from the map's X axis (the first side, from `from` along that axis, carries the door).
+## radians from the map's X axis (the first side, from `from` along that axis, carries the door);
+## `variation.preset` is its style (Wall.BUILDING_STYLES: walls, then roof).
 ##
 ## A row (a street of buildings) is drawn like a wall, side by side; `height` is its setback, and
 ## `variation` ({"seed": the variation seed, "side": 0 left, 1 right, 2 both, "preset": the
@@ -89,7 +90,7 @@ func plan(
 	var a := e.to_map_xz(from)
 	var b := e.to_map_xz(to)
 	if kind == Wall.Kind.BUILDING:
-		return _plan_building(a, b, height, yaw)
+		return _plan_building(a, b, height, yaw, variation)
 	if a.distance_to(b) < Wall.MIN_SEGMENT_M:
 		last_refusal = REFUSED_SHORT
 		return null
@@ -123,7 +124,7 @@ func plan(
 		)
 		wall.seed_value = clampi(int(variation.get("seed", 0)), 0, Wall.MAX_SEED)
 		wall.side = clampi(int(variation.get("side", 2)), 0, Wall.ROW_SIDES - 1)
-		wall.preset = clampi(int(variation.get("preset", 0)), 0, Wall.ROW_PRESETS - 1)
+		wall.preset = clampi(int(variation.get("preset", 0)), 0, wall.preset_count() - 1)
 	if wall.is_row() and wall.length_m() < ROW_MIN_LENGTH_M / e.map_scale():
 		last_refusal = REFUSED_SHORT
 		return null
@@ -136,7 +137,9 @@ func plan(
 
 ## The building with opposite corners `a` and `b` (map XZ) turned `yaw`, of `height` world metres
 ## (<= 0: the default), or null with last_refusal set.
-func _plan_building(a: Vector2, b: Vector2, height: float, yaw: float) -> Wall:
+func _plan_building(
+	a: Vector2, b: Vector2, height: float, yaw: float, variation: Dictionary
+) -> Wall:
 	var e := _editor()
 	var doc := e.document
 	if doc.next_wall_id() < 0:
@@ -155,6 +158,7 @@ func _plan_building(a: Vector2, b: Vector2, height: float, yaw: float) -> Wall:
 		),
 		CrossingPlacement.style_at(doc, (a + b) * 0.5)
 	)
+	wall.preset = clampi(int(variation.get("preset", 0)), 0, Wall.BUILDING_STYLES - 1)
 	if (
 		corners[0].distance_to(corners[1]) < Wall.BUILDING_MIN_SIDE_M
 		or corners[1].distance_to(corners[2]) < Wall.BUILDING_MIN_SIDE_M

@@ -77,6 +77,19 @@ filled faintly on the ground with its outline, top, posts, a door bar and the si
 sides come under 2 m is refused with a line saying so. Verified with the `building_tool` render job
 (idle ghost, turned ghost, drag, laid, save and reload, a token on the roof).
 
+### Styles: any wall under any roof (2026-10-27)
+
+`Wall.preset` of a building is its style, `walls * 3 + roof`: walls 0 stone or 1 timber, roof 0 gable,
+1 hip or 2 flat (`Wall.BUILDING_STYLES`, 6). Style 0 is the stone building with a gable roof, built
+from the committed `building.json`; any other builds `ProcgenRecipes.building(roof, walls)`, the same
+graph with its wall node (`building_walls` or `building_timber`) and roof node (`roof_gable`,
+`roof_hip`, `roof_flat`) swapped (`WallGeometry.recipe_for`). The Wall tool's pane shows a Walls and a
+Roof row while the Building tile is picked (`WallToolPane.style_selected`; the brush's
+`building_style`, also reached from the GM Events pane), the readout names a non-default style, and
+the style is saved in `walls.json` as `preset` (only when it is not 0, so older maps are unchanged).
+Timber walls and hip or flat roofs are wood-kind surfaces, so they take the biome's wood material;
+the street species still use the stone and gable building. Verified with the `styles` render job.
+
 ## Streets (2026-10-27)
 
 `Wall.Kind.ROW` is a street of varied buildings along an open line, one record for the whole row

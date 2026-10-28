@@ -12,6 +12,7 @@ extends RefCounted
 ##   reroll            R: remixes the street under the pointer, else the next one.
 ##   rotate {steps}    turns a building footprint, as Q (-1) and E (1) do.
 ##   kind {kind}       picks the brush kind ("stone" or "fence") as its pane tile does.
+##   style {style}     picks the building style (walls * 3 + roof) the brush lays.
 ##   save {folder}     crossing.gd's save (a _p4b1_ test level only).
 
 const CROSSING := preload("res://tools/render_jobs/probes/crossing.gd")
@@ -23,6 +24,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _report(base)
 		"kind":
 			return _kind(base, String(step.get("kind", "stone")))
+		"style":
+			return _style(base, int(step.get("style", 0)))
 		"place":
 			return _place(base, step)
 		"rotate":
@@ -47,6 +50,14 @@ static func _root(base: Node) -> Node:
 		return ctrl.map_root
 	var gm := base.get("_game_map") as GameMap
 	return gm.get_node_or_null("LevelMap") if gm != null else null
+
+
+static func _style(base: Node, style: int) -> String:
+	var gm := base.get("_game_map") as GameMap
+	if gm == null or gm.get_brush_tool() == null:
+		return "no brush"
+	WallTool.of(gm.get_brush_tool()).building_style = style
+	return "building style %d" % style
 
 
 static func _kind(base: Node, kind: String) -> String:

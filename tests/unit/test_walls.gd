@@ -556,6 +556,71 @@ func test_the_pane_offers_the_species_only_for_a_street() -> void:
 	)
 
 
+func _building(editor: AuthoringEditor, style: int) -> Wall:
+	var id := editor.walls.place(
+		Wall.Kind.BUILDING, Vector3(-3, 0, -2), Vector3(3, 0, 2), 0.0, 0.0, {"preset": style}
+	)
+	return _doc.wall(id)
+
+
+func test_a_building_takes_its_walls_and_roof_from_its_style() -> void:
+	var editor := _editor()
+	var plain := _building(editor, 0)
+	assert_not_null(plain, "the default building is laid")
+	assert_eq(plain.preset, 0, "a stone building with a gable roof")
+	for style in Wall.BUILDING_STYLES:
+		var wall := plain.copy()
+		wall.preset = style
+		var parts := WallGeometry.build_one(_doc, wall)
+		assert_ne(parts.top, WallGeometry.NONE, "style %d builds" % style)
+		assert_gt((parts.collision as PackedVector3Array).size(), 0, "style %d has a hull" % style)
+		assert_gt((parts.wood as Array).size(), 0, "style %d has a wooden roof or walls" % style)
+		var has_stone: bool = (parts.stone as Array).size() + (parts.masonry as Array).size() > 0
+		assert_eq(
+			has_stone, style < Wall.BUILDING_ROOFS, "style %d: stone only for stone walls" % style
+		)
+
+
+func test_a_buildings_style_is_kept_through_a_save_and_checked() -> void:
+	var editor := _editor()
+	var wall := _building(editor, 4)
+	assert_eq(wall.preset, 4, "the brush's style is laid")
+	assert_eq(MapDocumentIO.write(_doc, SAVE_PATH), OK)
+	var read: MapDocument = MapDocumentIO.read(SAVE_PATH)["document"]
+	assert_eq(read.walls[0].preset, 4, "and saved")
+	var bad := wall.copy()
+	bad.preset = Wall.BUILDING_STYLES
+	assert_ne(MapWallIO.wall_problem(bad, _doc.extent_m()), "", "styles 0 to 5")
+	var stone := Wall.make(2, Wall.Kind.STONE, _line(), false, 0.9, "")
+	assert_eq(MapWallIO.wall_json(stone).has("preset"), false, "a stone wall has none")
+	assert_ne(
+		WallGeometry.key_of(_doc, wall),
+		WallGeometry.key_of(_doc, _doc.wall(_building(editor, 0).id)),
+		"another style, another key"
+	)
+
+
+func test_the_pane_offers_a_buildings_walls_and_roof() -> void:
+	var pane := WallToolPane.new()
+	add_child_autofree(pane)
+	assert_false(pane.walls_field.visible, "hidden for a wall")
+	pane.kind_field.tiles.selection_changed.emit(&"wall_building")
+	assert_true(pane.walls_field.visible and pane.roof_field.visible, "shown for a building")
+	watch_signals(pane)
+	pane.walls_field.tiles.select(&"walls_timber")
+	pane.walls_field.tiles.selection_changed.emit(&"walls_timber")
+	pane.roof_field.tiles.select(&"roof_hip")
+	pane.roof_field.tiles.selection_changed.emit(&"roof_hip")
+	assert_signal_emitted_with_parameters(pane, "style_selected", [Wall.BUILDING_ROOFS + 1], 1)
+	assert_eq(pane.current_style(), Wall.BUILDING_ROOFS + 1, "timber under a hip roof")
+	pane.select_style(0)
+	assert_eq(pane.current_style(), 0, "stone under a gable roof")
+	pane.select_kind(Wall.Kind.ROW)
+	assert_false(pane.walls_field.visible, "hidden for a street")
+	assert_eq(WallBrush.building_style_suffix(0), "", "the default says nothing")
+	assert_eq(WallBrush.building_style_suffix(4), "  (timber, hip roof)")
+
+
 func test_q_e_and_r_choose_a_streets_side_and_mix() -> void:
 	var tool := BrushTool.new()
 	add_child_autofree(tool)
