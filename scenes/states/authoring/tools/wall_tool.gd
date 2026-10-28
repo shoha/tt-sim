@@ -37,6 +37,12 @@ func _init() -> void:
 			"Q and E pick the side (left, right, both); R mixes the buildings afresh"
 		],
 		["Ctrl + Click (Wall)", "Remove the wall under the cursor"],
+		["Click a street", "Pick it; the pane then offers to split it into separate buildings"],
+		[
+			"Split (picked street)",
+			"Replace the street with one Building per house, to move or restyle one by one",
+		],
+		["Escape (picked street)", "Let go of the street"],
 	]
 
 
@@ -70,15 +76,38 @@ func connect_pane(controller: AuthoringController, pane: Control) -> void:
 				of(controller.brush).row_preset = value
 				controller.pick_tool(ID)
 	)
-	wall_pane.style_selected.connect(
-		func(value: int) -> void:
-			if controller.brush != null:
-				of(controller.brush).building_style = value
-				controller.pick_tool(ID)
-	)
 	wall_pane.kind_selected.connect(
 		func(value: int) -> void:
 			if controller.brush != null:
 				of(controller.brush).kind = value
 				controller.pick_tool(ID)
 	)
+	_connect_selection(controller, wall_pane)
+
+
+## The picked street's bar (card S8): the brush says which street is picked and the bar shows it;
+## Split is one call on the brush (one history entry). The brush's mode outlives the pane, so the
+## old connections (to a pane that is gone) are dropped first.
+func _connect_selection(controller: AuthoringController, pane: WallToolPane) -> void:
+	if controller.brush == null:
+		return
+	var mode := of(controller.brush)
+	for link: Dictionary in mode.selection_changed.get_connections():
+		mode.selection_changed.disconnect(link["callable"])
+	mode.selection_changed.connect(
+		func(wall_id: int) -> void:
+			var held := (
+				controller.brush.editor.document.wall(wall_id)
+				if wall_id >= 0 and controller.brush != null and controller.brush.editor != null
+				else null
+			)
+			pane.show_selection(held.copy() if held != null else null)
+	)
+	pane.split_requested.connect(
+		func() -> void:
+			if controller.brush == null or controller.brush.editor == null:
+				return
+			if mode.split_selected(controller.brush.editor) < 0:
+				controller.brush.refused.emit(mode.message())
+	)
+	pane.done_requested.connect(mode.deselect)

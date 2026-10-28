@@ -23,6 +23,8 @@ const REFUSED_FULL := &"full"
 const REFUSED_LONG := &"long"
 const REFUSED_POINTS := &"points"
 const REFUSED_INVALID := &"invalid"
+## A street with no building the library can stand in for (split_street).
+const REFUSED_NOTHING := &"nothing"
 ## A drag begins or ends on a wall's free end within this of it (world metres).
 const SNAP_M := 0.6
 ## A row shorter than this has no room for a building (world metres).
@@ -33,6 +35,8 @@ const FOLLOW_REACH_M := 1.0
 
 ## Why the last plan() or add() made nothing, or &"".
 var last_refusal: StringName = &""
+## How many lots of the last split_street() made no valid record.
+var last_split_skipped: int = 0
 ## Microseconds of the last change's refresh, for measurement.
 var last_refresh_usec: int = 0
 ## The editor (weak: it owns this object).
@@ -68,29 +72,17 @@ func get_wall(wall_id: int) -> Wall:
 ## would stand, with `closed` set when the drag closes it. Null with last_refusal set when the
 ## drag makes none. Changes nothing: the tool's live preview, and what add() lays.
 ##
-## A building is a rectangle: `from` and `to` are its opposite corners, its sides turned `yaw`
-## radians from the map's X axis (the first side, from `from` along that axis, carries the door);
-## `variation.preset` is its style (Wall.BUILDING_STYLES: walls, then roof).
-##
 ## A row (a street of buildings) is drawn like a wall, side by side; `height` is its setback, and
 ## `variation` ({"seed": the variation seed, "side": 0 left, 1 right, 2 both, "preset": the
-## species}) is what a new row
-## starts with (an extended row keeps its own).
+## species}) is what a new row starts with (an extended row keeps its own).
 func plan(
-	kind: Wall.Kind,
-	from: Vector3,
-	to: Vector3,
-	height: float = -1.0,
-	yaw: float = 0.0,
-	variation: Dictionary = {}
+	kind: Wall.Kind, from: Vector3, to: Vector3, height: float = -1.0, variation: Dictionary = {}
 ) -> Wall:
 	var e := _editor()
 	var doc := e.document
 	last_refusal = &""
 	var a := e.to_map_xz(from)
 	var b := e.to_map_xz(to)
-	if kind == Wall.Kind.BUILDING:
-		return _plan_building(a, b, height, yaw, variation)
 	if a.distance_to(b) < Wall.MIN_SEGMENT_M:
 		last_refusal = REFUSED_SHORT
 		return null
@@ -135,61 +127,11 @@ func plan(
 	return wall
 
 
-## The building with opposite corners `a` and `b` (map XZ) turned `yaw`, of `height` world metres
-## (<= 0: the default), or null with last_refusal set.
-func _plan_building(
-	a: Vector2, b: Vector2, height: float, yaw: float, variation: Dictionary
-) -> Wall:
-	var e := _editor()
-	var doc := e.document
-	if doc.next_wall_id() < 0:
-		last_refusal = REFUSED_FULL
-		return null
-	var corners := building_corners(a, b, yaw)
-	var wall := Wall.make(
-		doc.next_wall_id(),
-		Wall.Kind.BUILDING,
-		corners,
-		true,
-		clampf(
-			(height if height > 0.0 else Wall.DEFAULT_HEIGHT_M[Wall.Kind.BUILDING]) / e.map_scale(),
-			Wall.MIN_HEIGHT_M[Wall.Kind.BUILDING],
-			Wall.MAX_HEIGHT_M[Wall.Kind.BUILDING]
-		),
-		CrossingPlacement.style_at(doc, (a + b) * 0.5)
-	)
-	wall.preset = clampi(int(variation.get("preset", 0)), 0, Wall.BUILDING_STYLES - 1)
-	if (
-		corners[0].distance_to(corners[1]) < Wall.BUILDING_MIN_SIDE_M
-		or corners[1].distance_to(corners[2]) < Wall.BUILDING_MIN_SIDE_M
-	):
-		last_refusal = REFUSED_SHORT
-		return null
-	if MapWallIO.wall_problem(wall, doc.extent_m()) != "":
-		last_refusal = _refusal_for(wall)
-		return null
-	return wall
-
-
-## The four corners of the rectangle with opposite corners `a` and `b` whose sides run `yaw`
-## radians from +X: `a`, the corner along that axis, `b`, the corner across. Pure.
-static func building_corners(a: Vector2, b: Vector2, yaw: float) -> PackedVector2Array:
-	var u := Vector2(cos(yaw), sin(yaw))
-	var v := Vector2(-u.y, u.x)
-	var d := b - a
-	return PackedVector2Array([a, a + u * d.dot(u), b, a + v * d.dot(v)])
-
-
 ## plan() and add(): the wall's id, or -1 (last_refusal says why).
 func place(
-	kind: Wall.Kind,
-	from: Vector3,
-	to: Vector3,
-	height: float = -1.0,
-	yaw: float = 0.0,
-	variation: Dictionary = {}
+	kind: Wall.Kind, from: Vector3, to: Vector3, height: float = -1.0, variation: Dictionary = {}
 ) -> int:
-	var wall := plan(kind, from, to, height, yaw, variation)
+	var wall := plan(kind, from, to, height, variation)
 	if wall == null:
 		return -1
 	return add(wall)
@@ -245,6 +187,43 @@ static func next_seed(current: int) -> int:
 	return (current * 7919 + 104729) % Wall.MAX_SEED
 
 
+## Replaces street `wall_id` with one Structure record per building it was built with (StreetSplit),
+## as one history entry (a group: the structures laid, then the street removed; one undo takes
+## both back). Returns how many buildings it made, or -1 with last_refusal set (REFUSED_INVALID:
+## no such street; REFUSED_NOTHING: it has no building the library can stand in for; REFUSED_FULL:
+## the document cannot hold them). `last_split_skipped` counts lots that made no valid record.
+func split_street(wall_id: int) -> int:
+	var e := _editor()
+	var doc := e.document
+	last_refusal = &""
+	last_split_skipped = 0
+	var old := doc.wall(wall_id)
+	if old == null or not old.is_row():
+		last_refusal = REFUSED_INVALID
+		return -1
+	var made := StreetSplit.plan(doc, old, e.map_scale())
+	var found: Array[Structure] = []
+	found.assign(made["structures"])
+	last_split_skipped = int(made["skipped"])
+	if found.is_empty():
+		last_refusal = REFUSED_NOTHING
+		return -1
+	var ids := StreetSplit.free_ids(doc, found.size())
+	if ids.size() < found.size():
+		last_refusal = REFUSED_FULL
+		return -1
+	for k in found.size():
+		found[k].id = ids[k]
+	e.history.begin_group()
+	var laid := e.structures.lay_all(found, "Place buildings")
+	var removed := laid and remove(wall_id)
+	e.history.end_group("Split street into buildings")
+	if not removed:
+		last_refusal = e.structures.last_refusal if not laid else REFUSED_INVALID
+		return -1
+	return found.size()
+
+
 ## Removes wall `wall_id` as one history entry. False when there is none.
 func remove(wall_id: int) -> bool:
 	var doc := _editor().document
@@ -291,9 +270,6 @@ static func row_distance(doc: MapDocument, wall: Wall, p: Vector2) -> float:
 
 ## The distance from map point `p` to the line of `wall` (map metres). Pure.
 static func distance_to_line(wall: Wall, p: Vector2) -> float:
-	# A building is picked anywhere over its footprint.
-	if wall.is_building() and Geometry2D.is_point_in_polygon(p, wall.points):
-		return 0.0
 	var count := wall.points.size()
 	var sides := count if wall.closed else count - 1
 	var best := INF
@@ -413,8 +389,6 @@ static func _area_of(touched: Array[Wall]) -> Rect2:
 
 
 static func _label(wall: Wall) -> String:
-	if wall.is_building():
-		return "building"
 	if wall.is_row():
 		return "street"
 	return "fence" if wall.is_fence() else "wall"

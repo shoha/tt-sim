@@ -10,9 +10,10 @@ extends RefCounted
 ##   textured {on}     the textured masonry switch for walls laid after this (WallGeometry).
 ##   rebuild           brings the wall nodes up to the document (after a switch changed their keys).
 ##   reroll            R: remixes the street under the pointer, else the next one.
-##   rotate {steps}    turns a building footprint, as Q (-1) and E (1) do.
-##   kind {kind}       picks the brush kind ("stone" or "fence") as its pane tile does.
-##   style {style}     picks the building style (walls * 3 + roof) the brush lays.
+##   rotate {steps}    steps a street's side, as Q (-1) and E (1) do.
+##   kind {kind}       picks the brush kind ("stone", "fence" or "row") as its pane tile does.
+##   split {id}        splits street `id` (default: the first) into Structure records, as the
+##                     pane's Split button does (one history entry), and reports what it made.
 ##   save {folder}     crossing.gd's save (a _p4b1_ test level only).
 
 const CROSSING := preload("res://tools/render_jobs/probes/crossing.gd")
@@ -24,8 +25,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _report(base)
 		"kind":
 			return _kind(base, String(step.get("kind", "stone")))
-		"style":
-			return _style(base, int(step.get("style", 0)))
+		"split":
+			return _split(base, int(step.get("id", -1)))
 		"place":
 			return _place(base, step)
 		"rotate":
@@ -52,12 +53,33 @@ static func _root(base: Node) -> Node:
 	return gm.get_node_or_null("LevelMap") if gm != null else null
 
 
-static func _style(base: Node, style: int) -> String:
-	var gm := base.get("_game_map") as GameMap
-	if gm == null or gm.get_brush_tool() == null:
-		return "no brush"
-	WallTool.of(gm.get_brush_tool()).building_style = style
-	return "building style %d" % style
+static func _split(base: Node, wall_id: int) -> String:
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	if ctrl == null or ctrl.editor == null:
+		return "no authoring editor"
+	var target := wall_id
+	if target < 0:
+		for wall in ctrl.document.walls:
+			if wall.is_row():
+				target = wall.id
+				break
+	var made := ctrl.editor.walls.split_street(target)
+	if made < 0:
+		return "refused: %s" % ctrl.editor.walls.last_refusal
+	var refs := PackedStringArray()
+	for structure in ctrl.document.structures:
+		refs.append(structure.recipe.get_slice(":", 1))
+	return (
+		"split street %d into %d buildings (%d lots skipped); structures %d: %s; walls %d"
+		% [
+			target,
+			made,
+			ctrl.editor.walls.last_split_skipped,
+			ctrl.document.structures.size(),
+			",".join(refs),
+			ctrl.document.walls.size(),
+		]
+	)
 
 
 static func _kind(base: Node, kind: String) -> String:
@@ -113,7 +135,7 @@ static func _rotate(base: Node, steps: int) -> String:
 		return "no brush"
 	var mode := WallTool.of(gm.get_brush_tool())
 	mode.rotate(gm.get_brush_tool(), steps)
-	return "yaw %.1f degrees" % rad_to_deg(mode.yaw)
+	return "street side %d" % mode.row_side
 
 
 static func _reroll(base: Node) -> String:

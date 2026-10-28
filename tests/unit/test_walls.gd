@@ -345,107 +345,116 @@ func test_a_sculpt_under_a_wall_refreshes_it() -> void:
 	assert_true(editor.walls.follow(Rect2(8, 8, 1, 1)).is_empty(), "a far edit reaches none")
 
 
-# --- buildings ---------------------------------------------------------------------------
+# --- the removed building kind (card S8) -------------------------------------------------
 
 
-func test_a_building_is_a_rectangle_from_two_corners_turned_by_the_yaw() -> void:
-	var square := WallEditor.building_corners(Vector2(0, 0), Vector2(6, 4), 0.0)
+## A walls.json an older build wrote: a fence, a building (a closed square, style 4) and a street.
+func _old_walls_json() -> Dictionary:
+	var building := {
+		"id": 2,
+		"kind": "building",
+		"points": [[0.0, 0.0], [6.0, 0.0], [6.0, 4.0], [0.0, 4.0]],
+		"closed": true,
+		"height_m": 2.4,
+		"style": "",
+		"preset": 4,
+	}
+	var street := MapWallIO.wall_json(
+		Wall.make(3, Wall.Kind.ROW, PackedVector2Array([Vector2(-8, 4), Vector2(8, 4)]), false, 3.0)
+	)
+	return {
+		"version": 1,
+		"walls": [MapWallIO.wall_json(_wall(Wall.Kind.FENCE)), building, street],
+	}
+
+
+func test_the_building_kind_is_gone_and_the_others_keep_their_names() -> void:
+	assert_eq(Wall.KIND_NAMES, ["stone", "fence", "row"] as Array[String])
+	assert_eq(Wall.KIND_NAMES.size(), Wall.Kind.size())
+	assert_eq(Wall.MIN_HEIGHT_M.size(), Wall.Kind.size())
+	assert_eq(Wall.MAX_HEIGHT_M.size(), Wall.Kind.size())
+	assert_eq(Wall.DEFAULT_HEIGHT_M.size(), Wall.Kind.size())
+	assert_eq(Wall.KIND_NAMES[Wall.Kind.ROW], "row")
+
+
+func test_a_building_entry_of_an_old_map_is_skipped_with_a_warning() -> void:
+	var warn_log := MapDocumentIO._WarningLog.new()
+	var list := MapWallIO.parse_list(_old_walls_json()["walls"], _doc.extent_m(), warn_log)
+	assert_eq(list.size(), 2, "the fence and the street load")
+	assert_eq([list[0].kind, list[1].kind], [Wall.Kind.FENCE, Wall.Kind.ROW])
+	assert_eq(warn_log.items.size(), 1, "and the building is said once")
+	assert_string_contains(warn_log.items[0], "building")
+	assert_string_contains(warn_log.items[0], "Structure tool")
+
+
+func test_a_whole_old_map_with_a_building_entry_loads_without_it() -> void:
+	var entries: Dictionary = MapDocumentIO.serialize(_doc)["entries"]
+	entries["walls.json"] = JSON.stringify(_old_walls_json()).to_utf8_buffer()
+	var packer := ZIPPacker.new()
+	assert_eq(packer.open(SAVE_PATH), OK)
+	for entry_name: String in entries:
+		packer.start_file(entry_name)
+		packer.write_file(entries[entry_name])
+		packer.close_file()
+	packer.close()
+	var result := MapDocumentIO.read(SAVE_PATH)
+	assert_not_null(result["document"], "the map opens")
+	var read: MapDocument = result["document"]
+	assert_eq(read.walls.size(), 2, "without the building")
+	assert_eq(read.walls[1].kind, Wall.Kind.ROW)
+	assert_eq(read.wall(2), null, "its id is free again")
+	assert_eq((result["warnings"] as PackedStringArray).size(), 1, "one warning")
+	# The next save is plain: no building entry comes back, and the walls re-save byte for byte.
+	assert_eq(MapDocumentIO.write(read, SAVE_PATH), OK)
+	var again: MapDocument = MapDocumentIO.read(SAVE_PATH)["document"]
+	assert_eq(MapDocumentIO.write(again, SAVE_PATH + ".b"), OK)
 	assert_eq(
-		square, PackedVector2Array([Vector2(0, 0), Vector2(6, 0), Vector2(6, 4), Vector2(0, 4)])
+		FileAccess.get_file_as_bytes(SAVE_PATH + ".b"), FileAccess.get_file_as_bytes(SAVE_PATH)
 	)
-	var turned := WallEditor.building_corners(Vector2(0, 0), Vector2(6, 4), PI * 0.5)
-	assert_almost_eq(turned[1].x, 0.0, 1e-4, "the first side runs along the turned axis")
-	assert_almost_eq(turned[1].y, 4.0, 1e-4)
-	assert_eq(turned[2], Vector2(6, 4), "the opposite corner stays where it was dragged")
-	var editor := _editor()
-	var plan := editor.walls.plan(Wall.Kind.BUILDING, Vector3(0, 0, 0), Vector3(6, 0, 4), -1.0, 0.0)
-	assert_not_null(plan)
-	assert_true(plan.is_building() and plan.closed and plan.points.size() == 4)
-	assert_eq(plan.height_m, Wall.DEFAULT_HEIGHT_M[Wall.Kind.BUILDING])
-	assert_null(editor.walls.plan(Wall.Kind.BUILDING, Vector3(0, 0, 0), Vector3(1, 0, 6)))
-	assert_eq(editor.walls.last_refusal, WallEditor.REFUSED_SHORT, "a side under 2 m is refused")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH + ".b"))
 
 
-func test_a_building_is_laid_picked_over_its_footprint_and_removed() -> void:
-	var editor := _editor()
-	var id := editor.walls.place(Wall.Kind.BUILDING, Vector3(-3, 0, -2), Vector3(3, 0, 2))
-	assert_eq(_history.undo(), "Place building")
-	_history.redo()
-	assert_not_null(_nodes().get_wall_node(id))
-	var node := _nodes().get_wall_node(id)
-	assert_not_null(node.get_node_or_null("Stone"), "masonry")
-	assert_not_null(node.get_node_or_null("Wood"), "and a roof")
-	assert_not_null(node.get_node_or_null("Collision"), "to stand on")
-	assert_eq(editor.walls.wall_at(Vector3(0, 0, 0)), id, "picked in the middle of it")
-	assert_eq(editor.walls.wall_at(Vector3(0, 0, 6)), -1, "and not beside it")
-	assert_true(editor.walls.remove(id))
+func test_other_bad_kind_values_are_skipped_not_fatal() -> void:
+	var bad: Array = []
+	for value: Variant in ["Building", "", null, 2, 1.5, ["row"], {"kind": "row"}, "row "]:
+		var json := MapWallIO.wall_json(_wall())
+		json["kind"] = value
+		bad.append(json)
+	var warn_log := MapDocumentIO._WarningLog.new()
+	var list := MapWallIO.parse_list(bad, _doc.extent_m(), warn_log)
+	assert_eq(list.size(), 0, "none is read as a wall")
+	assert_eq(warn_log.items.size(), bad.size(), "and each is said")
 
 
-func test_a_building_clears_plants_over_its_whole_footprint() -> void:
-	var building := Wall.make(
-		1,
-		Wall.Kind.BUILDING,
-		WallEditor.building_corners(Vector2(0, 0), Vector2(8, 6), 0.0),
-		true,
-		2.4
+func test_a_wall_of_a_kind_past_the_end_is_refused_by_the_writer() -> void:
+	var wall := _wall()
+	wall.kind = Wall.KIND_NAMES.size() as Wall.Kind
+	assert_eq(MapWallIO.wall_problem(wall, _doc.extent_m()), "unknown kind")
+
+
+func test_walls_and_streets_keep_their_geometry_after_the_kind_was_removed() -> void:
+	# A street's seed counted its kind as 3 while the building kind existed; it still does.
+	var street := Wall.make(
+		5, Wall.Kind.ROW, PackedVector2Array([Vector2(-10, 0), Vector2(10, 0)]), false, 3.0
 	)
-	_doc.walls.append(building)
-	var spans := WallGeometry.clearance_crossings(_doc)
-	assert_eq(spans.size(), 5, "four sides and the interior")
-	assert_eq(CrossingGeometry.clearance(spans, Vector2(4, 3)), 0.0, "nothing grows inside")
-	assert_eq(CrossingGeometry.clearance(spans, Vector2(4, 12)), 1.0, "outside it does")
-
-
-func test_the_writer_refuses_a_building_that_is_not_a_square_rectangle() -> void:
-	var slanted := Wall.make(
-		1,
-		Wall.Kind.BUILDING,
-		PackedVector2Array([Vector2(0, 0), Vector2(6, 0), Vector2(7, 4), Vector2(0, 4)]),
-		true,
-		2.4
+	street.seed_value = 17
+	var expected := hash([_doc.map_seed, 5, 103, 17])
+	assert_eq(WallGeometry.inputs_for(_doc, street).seed_value, expected)
+	var stone := _wall(Wall.Kind.STONE)
+	assert_eq(
+		WallGeometry.inputs_for(_doc, stone).seed_value,
+		hash([_doc.map_seed, stone.id, 100, stone.seed_value])
 	)
-	assert_ne(MapWallIO.wall_problem(slanted, _doc.extent_m()), "", "not square")
-	var open := Wall.make(1, Wall.Kind.BUILDING, _line(), false, 2.4)
-	assert_ne(MapWallIO.wall_problem(open, _doc.extent_m()), "", "not closed")
-	var good := Wall.make(
-		1,
-		Wall.Kind.BUILDING,
-		WallEditor.building_corners(Vector2(0, 0), Vector2(8, 8), 0.5236),
-		true,
-		2.4
-	)
-	assert_eq(MapWallIO.wall_problem(good, _doc.extent_m()), "", "a turned rectangle is fine")
-
-
-func test_rotating_turns_the_yaw_in_notches_and_quarters() -> void:
-	var tool := BrushTool.new()
-	add_child_autofree(tool)
-	var brush := WallBrush.new()
-	brush.kind = Wall.Kind.BUILDING
-	brush.rotate(tool, 1)
-	assert_almost_eq(brush.yaw, deg_to_rad(15.0), 1e-5, "one notch")
-	brush.rotate(tool, 6)
-	assert_almost_eq(brush.yaw, deg_to_rad(105.0), 1e-5, "a quarter more")
-	brush.rotate(tool, -8)
-	assert_almost_eq(brush.yaw, TAU - deg_to_rad(15.0), 1e-5, "and round the other way")
-
-
-func test_q_and_e_turn_a_buildings_footprint_only() -> void:
-	var brush := WallBrush.new()
-	assert_false(brush.rotates(), "not a wall")
-	brush.kind = Wall.Kind.BUILDING
-	assert_true(brush.rotates())
-	assert_eq(BrushTool.decide(_key(KEY_E), false, false, false), BrushTool.Action.TURN_RIGHT)
-	assert_eq(BrushTool.decide(_key(KEY_Q), false, false, false), BrushTool.Action.TURN_LEFT)
+	assert_eq(WallGeometry.recipe_path(Wall.Kind.ROW), WallGeometry.STREET_ROW_RECIPE)
+	assert_eq(WallGeometry.recipe_path(Wall.Kind.STONE), WallGeometry.STONE_RECIPE)
+	assert_eq(WallGeometry.recipe_path(Wall.Kind.FENCE), WallGeometry.FENCE_RECIPE)
 
 
 # --- streets -----------------------------------------------------------------------------
 
 
 func _street(editor: AuthoringEditor, variation: Dictionary = {}) -> int:
-	return editor.walls.place(
-		Wall.Kind.ROW, Vector3(-12, 0, 0), Vector3(12, 0, 0), -1.0, 0.0, variation
-	)
+	return editor.walls.place(Wall.Kind.ROW, Vector3(-12, 0, 0), Vector3(12, 0, 0), -1.0, variation)
 
 
 func test_a_street_keeps_its_seed_side_and_setback_through_a_save() -> void:
@@ -556,73 +565,6 @@ func test_the_pane_offers_the_species_only_for_a_street() -> void:
 	)
 
 
-func _building(editor: AuthoringEditor, style: int) -> Wall:
-	var id := editor.walls.place(
-		Wall.Kind.BUILDING, Vector3(-3, 0, -2), Vector3(3, 0, 2), 0.0, 0.0, {"preset": style}
-	)
-	return _doc.wall(id)
-
-
-func test_a_building_takes_its_walls_and_roof_from_its_style() -> void:
-	var editor := _editor()
-	var plain := _building(editor, 0)
-	assert_not_null(plain, "the default building is laid")
-	assert_eq(plain.preset, 0, "a stone building with a gable roof")
-	for style in Wall.BUILDING_STYLES:
-		var wall := plain.copy()
-		wall.preset = style
-		var parts := WallGeometry.build_one(_doc, wall)
-		assert_ne(parts.top, WallGeometry.NONE, "style %d builds" % style)
-		assert_gt((parts.collision as PackedVector3Array).size(), 0, "style %d has a hull" % style)
-		assert_gt((parts.wood as Array).size(), 0, "style %d has a wooden roof or walls" % style)
-		var has_stone: bool = (parts.stone as Array).size() + (parts.masonry as Array).size() > 0
-		assert_eq(
-			has_stone, style < Wall.BUILDING_ROOFS, "style %d: stone only for stone walls" % style
-		)
-
-
-func test_a_buildings_style_is_kept_through_a_save_and_checked() -> void:
-	var editor := _editor()
-	var wall := _building(editor, 4)
-	assert_eq(wall.preset, 4, "the brush's style is laid")
-	assert_eq(MapDocumentIO.write(_doc, SAVE_PATH), OK)
-	var read: MapDocument = MapDocumentIO.read(SAVE_PATH)["document"]
-	assert_eq(read.walls[0].preset, 4, "and saved")
-	var bad := wall.copy()
-	bad.preset = Wall.BUILDING_STYLES
-	assert_ne(MapWallIO.wall_problem(bad, _doc.extent_m()), "", "styles 0 to 5")
-	var stone := Wall.make(2, Wall.Kind.STONE, _line(), false, 0.9, "")
-	assert_eq(MapWallIO.wall_json(stone).has("preset"), false, "a stone wall has none")
-	assert_ne(
-		WallGeometry.key_of(_doc, wall),
-		WallGeometry.key_of(_doc, _doc.wall(_building(editor, 0).id)),
-		"another style, another key"
-	)
-
-
-func test_the_pane_offers_a_buildings_walls_and_roof() -> void:
-	var pane := WallToolPane.new()
-	add_child_autofree(pane)
-	assert_false(pane.walls_field.visible, "hidden for a wall")
-	# No tile reaches the Building kind since card S4 (the Structure tool took it); its fields go
-	# with the kind in card S8.
-	pane.select_kind(Wall.Kind.BUILDING)
-	assert_true(pane.walls_field.visible and pane.roof_field.visible, "shown for a building")
-	watch_signals(pane)
-	pane.walls_field.tiles.select(&"walls_timber")
-	pane.walls_field.tiles.selection_changed.emit(&"walls_timber")
-	pane.roof_field.tiles.select(&"roof_hip")
-	pane.roof_field.tiles.selection_changed.emit(&"roof_hip")
-	assert_signal_emitted_with_parameters(pane, "style_selected", [Wall.BUILDING_ROOFS + 1], 1)
-	assert_eq(pane.current_style(), Wall.BUILDING_ROOFS + 1, "timber under a hip roof")
-	pane.select_style(0)
-	assert_eq(pane.current_style(), 0, "stone under a gable roof")
-	pane.select_kind(Wall.Kind.ROW)
-	assert_false(pane.walls_field.visible, "hidden for a street")
-	assert_eq(WallBrush.building_style_suffix(0), "", "the default says nothing")
-	assert_eq(WallBrush.building_style_suffix(4), "  (timber, hip roof)")
-
-
 func test_q_e_and_r_choose_a_streets_side_and_mix() -> void:
 	var tool := BrushTool.new()
 	add_child_autofree(tool)
@@ -690,8 +632,7 @@ func test_the_tool_is_registered_with_a_pane_and_a_brush() -> void:
 	assert_eq(tool.brush_mode, WallBrush)
 	var pane := WallToolPane.new()
 	add_child_autofree(pane)
-	# The Building kind is the Structure tool's now (card S4); its code stays until card S8.
-	assert_eq(WallToolPane.KIND_TILES.size(), Wall.Kind.size() - 1)
+	assert_eq(WallToolPane.KIND_TILES.size(), Wall.Kind.size(), "a tile per kind")
 	for tile in WallToolPane.KIND_TILES:
 		assert_not_null(IconButton.load_icon(String(tile.icon)), String(tile.icon))
 	assert_eq(pane.kind_field.tiles.selected, &"wall_stone", "Stone preselected")

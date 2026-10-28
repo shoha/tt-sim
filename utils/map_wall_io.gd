@@ -6,8 +6,13 @@ extends RefCounted
 ## way MapCrossingIO does for crossings. Summary: docs/systems/walls.md.
 ##
 ##   walls.json   {"version": 1, "walls": [wall, ...]}
-##                wall: {"id", "kind": "stone" | "fence" | "building", "points": [[x, z], ...],
-##                       "closed": bool, "height_m", "style": palette biome id or ""}
+##                wall: {"id", "kind": "stone" | "fence" | "row", "points": [[x, z], ...],
+##                       "closed": bool, "height_m", "style": palette biome id or "",
+##                       rows also "seed", "side", "preset"}
+##
+## A "building" entry (a kind removed in card S8 of the structures topic: single buildings are
+## Structure records) is skipped with a warning naming the Structure tool, like any other
+## unknown kind.
 ##
 ## Everything read is untrusted: a wall with any problem (id outside 1..255 or repeated, unknown
 ## kind, fewer than Wall.MIN_POINTS or more than Wall.MAX_POINTS points, a point NaN, Inf or off
@@ -19,8 +24,8 @@ extends RefCounted
 
 const ENTRY := "walls.json"
 const VERSION := 1
-## How far from square a building's corners may be (the cosine of the angle between sides).
-const RIGHT_ANGLE_TOLERANCE := 0.02
+## Kind names an older build wrote that no longer exist: skipped with a reason of their own.
+const REMOVED_KINDS: Array[String] = ["building"]
 
 
 ## Adds walls.json for `doc` to `entries` (nothing when it has no wall). Assumes problem(doc)
@@ -72,19 +77,13 @@ static func wall_problem(wall: Wall, extent: Vector2) -> String:
 	for k in segments:
 		if wall.points[k].distance_to(wall.points[(k + 1) % count]) < Wall.MIN_SEGMENT_M:
 			return "a side is shorter than %s m" % Wall.MIN_SEGMENT_M
-	if wall.is_building():
-		var shape := _building_problem(wall)
-		if shape != "":
-			return shape
-		if wall.preset < 0 or wall.preset >= Wall.BUILDING_STYLES:
-			return "a building's style is outside 0..%d" % (Wall.BUILDING_STYLES - 1)
-	elif wall.is_row() and (wall.closed or wall.seed_value < 0 or wall.seed_value > Wall.MAX_SEED):
+	if wall.is_row() and (wall.closed or wall.seed_value < 0 or wall.seed_value > Wall.MAX_SEED):
 		return "a row is an open line with a seed 0..%d" % Wall.MAX_SEED
-	elif wall.is_row() and (wall.side < 0 or wall.side >= Wall.ROW_SIDES):
+	if wall.is_row() and (wall.side < 0 or wall.side >= Wall.ROW_SIDES):
 		return "a row's side is outside 0..%d" % (Wall.ROW_SIDES - 1)
-	elif wall.is_row() and (wall.preset < 0 or wall.preset >= Wall.ROW_PRESETS):
+	if wall.is_row() and (wall.preset < 0 or wall.preset >= Wall.ROW_PRESETS):
 		return "a row's species is outside 0..%d" % (Wall.ROW_PRESETS - 1)
-	elif wall.length_m() > Wall.MAX_LENGTH_M:
+	if wall.length_m() > Wall.MAX_LENGTH_M:
 		return "longer than %s m" % Wall.MAX_LENGTH_M
 	var low: float = Wall.MIN_HEIGHT_M[wall.kind]
 	var high: float = Wall.MAX_HEIGHT_M[wall.kind]
@@ -92,21 +91,6 @@ static func wall_problem(wall: Wall, extent: Vector2) -> String:
 		return "height outside %s..%s m" % [low, high]
 	if wall.style.length() > MapDocumentIO.MAX_ID_LENGTH:
 		return "style is too long"
-	return ""
-
-
-## What is wrong with `wall` as a building (a closed rectangle of four points whose sides are
-## within Wall.BUILDING_MIN_SIDE_M..BUILDING_MAX_SIDE_M), or "".
-static func _building_problem(wall: Wall) -> String:
-	if not wall.closed or wall.points.size() != Wall.BUILDING_POINTS:
-		return "a building is a closed rectangle of %d points" % Wall.BUILDING_POINTS
-	for k in Wall.BUILDING_POINTS:
-		var side := wall.points[(k + 1) % 4] - wall.points[k]
-		var next := wall.points[(k + 2) % 4] - wall.points[(k + 1) % 4]
-		if side.length() < Wall.BUILDING_MIN_SIDE_M or side.length() > Wall.BUILDING_MAX_SIDE_M:
-			return "a side outside %s..%s m" % [Wall.BUILDING_MIN_SIDE_M, Wall.BUILDING_MAX_SIDE_M]
-		if absf(side.normalized().dot(next.normalized())) > RIGHT_ANGLE_TOLERANCE:
-			return "a building's corners are not square"
 	return ""
 
 
@@ -149,8 +133,6 @@ static func wall_json(wall: Wall) -> Dictionary:
 		out["seed"] = wall.seed_value
 		out["side"] = wall.side
 		out["preset"] = wall.preset
-	elif wall.is_building() and wall.preset > 0:
-		out["preset"] = wall.preset
 	return out
 
 
@@ -190,8 +172,14 @@ static func parse_list(
 static func _wall_from(value: Variant) -> Variant:
 	if not value is Dictionary:
 		return "not an object"
-	var kind := Wall.KIND_NAMES.find(str(value.get("kind", "")))
+	var kind_name := str(value.get("kind", ""))
+	var kind := Wall.KIND_NAMES.find(kind_name)
 	if kind < 0:
+		if REMOVED_KINDS.has(kind_name):
+			return (
+				'a "%s" wall is no longer a kind (single buildings are made with the Structure tool)'
+				% kind_name
+			)
 		return "unknown kind"
 	var id: Variant = MapDocumentIO._integer(value.get("id"), 1, Wall.MAX_ID)
 	if id == null:
@@ -232,13 +220,6 @@ static func _wall_from(value: Variant) -> Variant:
 		wall.seed_value = seed_read
 		wall.side = side_read
 		wall.preset = preset_read
-	elif wall.is_building():
-		var style_read: Variant = MapDocumentIO._integer(
-			value.get("preset", 0), 0, Wall.BUILDING_STYLES - 1
-		)
-		if style_read == null:
-			return "a building's style is not a whole number in range"
-		wall.preset = style_read
 	return wall
 
 
