@@ -1,0 +1,149 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "building_layout_2",
+      "to_port": 0
+    },
+    {
+      "from": "building_layout_2",
+      "from_port": 0,
+      "to": "facade_6",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "building_timber_3",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "roof_gable_4",
+      "to_port": 0
+    },
+    {
+      "from": "building_timber_3",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "roof_gable_4",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "interface": [
+    {
+      "default": 2.4,
+      "label": "Wall height",
+      "max": 8,
+      "min": 1.6,
+      "name": "height",
+      "tip": "Height of the walls above the highest ground.",
+      "type": "float"
+    },
+    {
+      "default": 34,
+      "label": "Roof pitch",
+      "max": 55,
+      "min": 15,
+      "name": "roof_pitch",
+      "tip": "Slope of the roof in degrees.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Window width",
+      "max": 2,
+      "min": 0,
+      "name": "window_width",
+      "tip": "Width of the main windows (the others keep their proportion); 0 for the style's own, or for none under the style none.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Floors",
+      "max": 6,
+      "min": 0,
+      "name": "floors",
+      "tip": "How many floors; 0 for the style's own (by the wall height).",
+      "type": "float"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        120.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "building_layout_2",
+      "params": {
+        "height": "@height",
+        "window_width": "@window_width"
+      },
+      "position": [
+        250.0,
+        120.0
+      ],
+      "type": "building_layout"
+    },
+    {
+      "id": "building_timber_3",
+      "params": {},
+      "position": [
+        710.0,
+        20.0
+      ],
+      "type": "building_timber"
+    },
+    {
+      "id": "roof_gable_4",
+      "params": {
+        "gable_role": "wood",
+        "roof_pitch": "@roof_pitch"
+      },
+      "position": [
+        710.0,
+        220.0
+      ],
+      "type": "roof_gable"
+    },
+    {
+      "id": "output_5",
+      "params": {
+        "name": "Building"
+      },
+      "position": [
+        950.0,
+        120.0
+      ],
+      "type": "output"
+    },
+    {
+      "id": "facade_6",
+      "params": {
+        "floors": "@floors",
+        "style": "cottage",
+        "window_width": "@window_width"
+      },
+      "position": [
+        480.0,
+        120.0
+      ],
+      "type": "facade"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

@@ -2000,8 +2000,11 @@ validation, the live edit and the fingerprint key (the **Map** bullet below; mod
 `systems/structures.md`). **Built (card S2):** the build (`StructureGeometry`, `AuthoredStructures`,
 worker prep, collision, scatter clearance), the plan rules (`ProcgenPlan` in the map reader), the
 triangle budgets (12k soft, 25k hard, enforced per structure), a first role table and pinned digests
-of the starter set at `tests/fixtures/structure_digests.txt`; recipes come from procgen's
-`recipes/` folder through a temporary resolver. **Proposed, not built:** the library kind, the
+of the starter set at `tests/fixtures/structure_digests.txt`. **Built (card S3):** the library kind
+(the **Library** bullet below: `structures/` files, reader, registry, partial bundles and transfer,
+the importer's card counts, Verify, tiles rendered by tt-sim), the core starter set (five
+structures, in the `core-library` repo and `libraries/core/`), and the resolver that reads the
+registry; a recipe nobody serves builds a placeholder plot. **Proposed, not built:** the
 determinism gate on every platform, the painterly role table and the per-map budget. The full
 design is the gitignored `docs/plans/2026-10-28-structures/design.md`.
 
@@ -2023,9 +2026,24 @@ NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuil
   (volumes, openings with slot provenance). Triangle winding clockwise, meshes closed (the
   `ProcgenMeshCheck` rule). Material roles are derived from the node type of a tag's node:
   wall, roof, trim, chimney, opening (one table, shared by structgen's palette and tt-sim).
-- **Library.** `structures/index.json` (format `ttsim-structures` 1), `structures/<id>.structure.json`,
-  `thumbnails/structures/<id>.jpg`; core adds `structures/pins.txt` (an md5 digest and triangle
-  count per structure at its default footprint). Not part of `assets/catalog.json`.
+- **Library (built, card S3).** `structures/index.json` (format `ttsim-structures` 1),
+  `structures/<id>.structure.json`, `thumbnails/structures/<id>.jpg`; core adds `structures/pins.txt`
+  (`<id> <pipeline md5> <triangles> <procgen md5>` per structure at 6 x 4 m, seed 5, flat ground,
+  textured). Not part of `assets/catalog.json`; a library without the folder is unchanged and the
+  contract number stays 1 (an older reader warns about files it does not know at most). The index
+  entry: `id` (`[a-z][a-z0-9_]*`, at most 48, no `__`), `name`, `family`, `variant`, `tags`, `file` (the
+  id's own path), `default_size_m`, `min_side_m`, `max_side_m`, `max_area_m2` (the default fits them),
+  `plans` (`rect` `l` `t` `u`), `expose` (names of the recipe's interface the UI may show), `textured`
+  (the recipe declares `textured`), `thumb`. Caps, all warnings that leave out the one structure: 128
+  structures, 256 KB for the index and for a recipe, 128 nodes and 512 connections, node types the
+  procgen structure registry knows, no nested tables in node parameters (a recipe is data run by a
+  fixed set of node types; see `systems/library.md` "Structures"). The caps live in
+  `LibraryContracts.STRUCTURE_CAPS`, not in `CAPS`, so the contract plantgen vendors is unchanged.
+  Structures are part of the library hash. A reference is `<library id>:<structure id>`; a partial
+  library (transfer) holds the index cut to the requested references with their recipes and tiles; a
+  collection of buildings may have no biome-def and no asset. A missing recipe builds a placeholder
+  plot (a low slab on the footprint, no collision) and Verify builds each recipe at its default
+  footprint (flagged over 60000 triangles or 400 ms).
 - **Map (built).** `structures.json` in `map.ttmap`: `{"version": 1, "structures": [{id,
   recipe: "<library>:<id>", footprint, seed, params, style}]}`. `id` 1..255 and unique; at most
   128 structures and 1 MB; `recipe` a `LibraryIds` reference (library id, structure id
@@ -2036,8 +2054,9 @@ NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuil
   values (the editor snaps them to 1 cm) and the file is byte-identical across a load and a save.
   A bad record is skipped with a warning; the writer refuses a bad document. The same list
   travels as the live-edit kind `structures` (whole list, validated by the same reader). The
-  `libraries` record will name the libraries whose recipes the map uses (library card, not
-  built); `MapFingerprint` has the key `structures`. Code: `Structure`, `MapStructureIO`,
+  `libraries` record names the libraries whose recipes the map uses (built, card S3:
+  `MapLibraries.used_ids` counts every reference's library); `MapFingerprint` has the key
+  `structures`. Code: `Structure`, `MapStructureIO`,
   `StructureEditor`; hub: `systems/structures.md`.
 - **Determinism.** The same recipe, inputs and seed must build the same mesh on every peer. Measured
   on Windows only: repeated and worker-thread builds give identical digests (12 cases). Linux

@@ -41,6 +41,7 @@ static func plan(
 		assets if assets is Dictionary else PaletteLibrary.get_palette()["assets"]
 	)
 	var by_library := LibraryRegistry.assets_used_by(doc)
+	var structures_by_library := LibraryStructureStore.used_by(doc)
 	for library: String in extra:
 		var held: PackedStringArray = by_library.get(library, PackedStringArray())
 		for asset_id: Variant in extra[library] as Array:
@@ -62,10 +63,28 @@ static func plan(
 		for asset_id in used:
 			if not known.has(asset_id):
 				lacking.append(asset_id)
-		var verdict := _verdict(id, wanted, infos.get(id, {}), lacking)
+		# The structures a map holds count as items the library must supply, like assets.
+		var refs: PackedStringArray = structures_by_library.get(id, PackedStringArray())
+		var lacking_structures: Array[String] = []
+		for ref in refs:
+			if not LibraryStructureStore.has(ref):
+				lacking_structures.append(ref)
+		var missing: Array[String] = lacking.duplicate()
+		missing.append_array(lacking_structures)
+		var verdict := _verdict(id, wanted, infos.get(id, {}), missing)
 		if verdict["kind"] == "request":
 			(out["requests"] as Array).append(
-				_request(doc, id, wanted, used, infos, String(verdict["reason"]), lacking)
+				_request(
+					doc,
+					id,
+					wanted,
+					used,
+					infos,
+					String(verdict["reason"]),
+					lacking,
+					Array(refs),
+					lacking_structures
+				)
 			)
 		elif verdict["kind"] == "blocked":
 			(out["blocked"] as Array).append(
@@ -143,7 +162,9 @@ static func _request(
 	used: PackedStringArray,
 	infos: Dictionary,
 	reason: String,
-	lacking: Array[String] = []
+	lacking: Array[String] = [],
+	structures: Array = [],
+	lacking_structures: Array[String] = []
 ) -> Dictionary:
 	var biomes: Array[String] = []
 	for biome_id in doc.biome_ids:
@@ -174,6 +195,7 @@ static func _request(
 		"assets": asset_ids,
 		"biomes": biomes,
 		"surfaces": surfaces,
+		"structures": structures.duplicate(),
 		"have": have,
 		"reason": reason,
 	}
@@ -186,6 +208,8 @@ static func _request(
 		request["biomes"] = _not_held(biomes, held.get("biomes", []), id, true)
 		request["surfaces"] = _not_held(surfaces, held.get("surfaces", []), id, false)
 		request["held_surfaces"] = (held.get("surfaces", []) as Array).duplicate()
+		request["structures"] = lacking_structures.duplicate()
+		request["held_structures"] = (held.get("structures", []) as Array).duplicate()
 	return request
 
 
@@ -214,8 +238,12 @@ static func hint_of(doc: MapDocument, id: String) -> Dictionary:
 	for record in MapLibraries.record_for(doc):
 		if String(record.get("id", "")) == id:
 			wanted = record
-	var hint := _request(doc, id, wanted, used, {}, "hint")
-	if used.size() > LibraryPartial.MAX_REQUEST_ASSETS:
+	var refs: PackedStringArray = LibraryStructureStore.used_by(doc).get(id, PackedStringArray())
+	var hint := _request(doc, id, wanted, used, {}, "hint", [], Array(refs))
+	if (
+		used.size() > LibraryPartial.MAX_REQUEST_ASSETS
+		or refs.size() > LibraryPartial.MAX_REQUEST_STRUCTURES
+	):
 		return {}
 	return hint
 
@@ -232,6 +260,10 @@ static func document_of_hint(hint: Dictionary) -> MapDocument:
 		doc.biome_ids.append(String(biome_id))
 	for surface: Variant in hint["surfaces"] as Array:
 		doc.surface_ids.append(String(surface))
+	# Only the references matter to a plan: a unit plot stands in for each structure.
+	var plot := PackedVector2Array([Vector2.ZERO, Vector2(4, 0), Vector2(0, 4)])
+	for ref: Variant in hint.get("structures", []) as Array:
+		doc.structures.append(Structure.make(doc.structures.size() + 1, String(ref), plot))
 	doc.libraries.append({"id": hint["library"], "version": hint["version"], "hash": hint["hash"]})
 	return doc
 
@@ -254,10 +286,12 @@ static func _view_of(ids: Array[String]) -> Dictionary:
 ## What the maps being served use: {assets: {id: true}, biomes: {id: true}, surfaces: {name:
 ## true}} over `docs` (the table map's live document and the shelf maps').
 static func usage_of(docs: Array) -> Dictionary:
-	var usage := {"assets": {}, "biomes": {}, "surfaces": {}}
+	var usage := {"assets": {}, "biomes": {}, "surfaces": {}, "structures": {}}
 	for doc: MapDocument in docs:
 		if doc == null:
 			continue
+		for structure in doc.structures:
+			usage["structures"][structure.recipe] = true
 		for source: Dictionary in [doc.scatter, doc.props]:
 			for asset_id: String in source:
 				usage["assets"][asset_id] = true
@@ -272,14 +306,21 @@ static func usage_of(docs: Array) -> Dictionary:
 
 ## Adds the ids of usage `other` (usage_of's form) to `into`.
 static func merge_usage(into: Dictionary, other: Dictionary) -> void:
-	for field in ["assets", "biomes", "surfaces"]:
+	for field in ["assets", "biomes", "surfaces", "structures"]:
+		if not into.has(field):
+			into[field] = {}
 		(into[field] as Dictionary).merge(other.get(field, {}))
 
 
 ## "" when every asset, biome and surface of `request` is used by a served map, else why not. A
 ## client can only ask for what the table or the shelf holds, never an arbitrary library file.
 static func authorize(request: Dictionary, usage: Dictionary) -> String:
-	for field in [["assets", "assets"], ["biomes", "biomes"], ["surfaces", "surfaces"]]:
+	for field in [
+		["assets", "assets"],
+		["biomes", "biomes"],
+		["surfaces", "surfaces"],
+		["structures", "structures"]
+	]:
 		var allowed: Dictionary = usage.get(field[1], {})
 		for item: Variant in request.get(field[0], []) as Array:
 			if not allowed.has(String(item)):
@@ -421,6 +462,7 @@ static func _part(
 			"bytes": built["bytes"],
 			"count": built["sizes"].size(),
 			"assets": selection["assets"].size(),
+			"structures": selection["structures"].size(),
 			"skipped": selection["skipped"].size(),
 		},
 	}
@@ -463,11 +505,24 @@ static func _files_of(
 				sizes[relative] = int(data["size"])
 				payload += int(data["size"])
 				files[relative] = data["data"]
+	var structure_entries := LibraryStructures.entries_of(read, selection["structures"])
+	for entry: Dictionary in structure_entries:
+		var wanted: Array[String] = [String(entry["file"])]
+		if String(entry.get("thumb", "")) != "":
+			wanted.append(String(entry["thumb"]))
+		for relative in wanted:
+			var data := _read_file(folder, relative, with_data)
+			if data.has("error"):
+				return data
+			sizes[relative] = int(data["size"])
+			payload += int(data["size"])
+			files[relative] = data["data"]
 	var info := {
 		"format": LibraryPartial.FORMAT,
 		"source_version": String(found.get("version", "")),
 		"source_hash": String(found.get("hash", "")),
 		"assets": kept,
+		"structures": selection["structures"],
 		"biomes":
 		(selection["biomes"] as Dictionary).keys().map(
 			func(file: String) -> String: return file.get_basename()
@@ -484,6 +539,10 @@ static func _files_of(
 	files[LibraryPartial.CATALOG_FILE] = catalog_bytes if with_data else PackedByteArray()
 	sizes[LibraryPartial.LIBRARY_FILE] = library_bytes.size()
 	sizes[LibraryPartial.CATALOG_FILE] = catalog_bytes.size()
+	if not structure_entries.is_empty():
+		var index_bytes := LibraryStructures.index_text(structure_entries).to_utf8_buffer()
+		files[LibraryStructures.INDEX_FILE] = index_bytes if with_data else PackedByteArray()
+		sizes[LibraryStructures.INDEX_FILE] = index_bytes.size()
 	for file_name: String in selection["biomes"]:
 		var biome_bytes := LibraryPartial.json_bytes(selection["biomes"][file_name])
 		files["biomes/" + file_name] = biome_bytes if with_data else PackedByteArray()
@@ -541,6 +600,7 @@ static func quote(request: Dictionary, served: Variant = null) -> Dictionary:
 					"author": part["author"],
 					"hash": part["hash"],
 					"assets": part["assets"],
+					"structures": part["structures"],
 					"files": part["count"],
 					"bytes": size,
 					"assets_only": part["assets_only"],

@@ -75,6 +75,34 @@ static func write_biome(
 	return {"ok": problem == "", "error": problem}
 
 
+## Writes the tile of structure `structure_id` (JPEG `bytes`, which must pass
+## LibraryThumbnailer.jpg_problem) to `thumbnails/structures/<id>.jpg` of the library folder
+## `folder` (the structure render job's op). Nothing else in the library changes: a structure's
+## tile is named by its index entry, not recorded in library.json. Never deletes anything.
+## Returns {ok, error, file (library-relative), sha256, bytes}.
+static func write_structure_thumbnail(
+	folder: String, structure_id: String, bytes: PackedByteArray
+) -> Dictionary:
+	var out := {"ok": false, "error": "", "file": "", "sha256": "", "bytes": bytes.size()}
+	var refusal := _refusal(folder)
+	if refusal == "":
+		refusal = LibraryThumbnailer.target_problem(folder)
+	if refusal == "" and not LibraryIds.biome_problems(structure_id).is_empty():
+		refusal = "'%s' is not a structure id" % structure_id
+	if refusal == "":
+		var why := LibraryThumbnailer.jpg_problem(bytes)
+		refusal = "" if why == "" else "the tile of %s %s" % [structure_id, why]
+	if refusal == "":
+		refusal = _write_bytes(folder.path_join(LibraryStructures.thumb_path(structure_id)), bytes)
+	if refusal != "":
+		out["error"] = refusal
+		return out
+	out["ok"] = true
+	out["file"] = LibraryStructures.thumb_path(structure_id)
+	out["sha256"] = LibraryThumbnailer.sha256(bytes)
+	return out
+
+
 ## Writes the picture of biome `biome_id` (JPEG `bytes`, which must pass
 ## LibraryThumbnailer.jpg_problem) to the file its biome-def names (`thumbnails/<id>.jpg` when
 ## it names none), and records it: the biome-def on disk gains the `thumbnail` field when it

@@ -76,6 +76,7 @@ static func examine(folder: String) -> Dictionary:
 		var biome := {"id": String(def["id"]), "name": String(def.get("name", def["id"]))}
 		(card["biomes"] as Array).append(biome)
 	card["biome_count"] = (card["biomes"] as Array).size()
+	card["structure_count"] = (read.get("structures", []) as Array).size()
 	card["id"] = String(library.get("id", ""))
 	_check_identity(card)
 	card["dependencies"] = dependency_states(library)
@@ -114,6 +115,7 @@ static func _empty_card(folder: String) -> Dictionary:
 		"file_count": 0,
 		"asset_count": 0,
 		"biome_count": 0,
+		"structure_count": 0,
 		"biomes": [] as Array[Dictionary],
 		"dependencies": [] as Array[Dictionary],
 		"relation": RELATION_NEW,
@@ -189,6 +191,9 @@ static func change_line(card: Dictionary) -> String:
 	var parts := PackedStringArray()
 	var assets := int(card["asset_count"]) - int(existing.get("asset_count", 0))
 	var biomes := int(card["biome_count"]) - int(existing.get("biome_count", 0))
+	var structures := int(card.get("structure_count", 0)) - int(existing.get("structure_count", 0))
+	if structures != 0:
+		parts.append(_more_or_fewer(structures, "building"))
 	if assets != 0:
 		parts.append(_more_or_fewer(assets, "asset"))
 	if biomes != 0:
@@ -220,7 +225,9 @@ static func _dry_run(
 	(card["warnings"] as Array).append_array(compiled["warnings"])
 	for line: String in compiled["palette_warnings"]:
 		(card["warnings"] as Array).append("palette: " + line)
-	if (compiled["biome_ids"] as Array).is_empty():
+	# A collection of buildings has no biome-def and needs none (the registry serves it as a pool).
+	var buildings_only := LibraryStructureStore.buildings_only(read)
+	if (compiled["biome_ids"] as Array).is_empty() and not buildings_only:
 		(card["errors"] as Array).append("No biome of this %s compiles." % LibraryNames.lower())
 
 

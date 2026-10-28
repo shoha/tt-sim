@@ -2,15 +2,20 @@ class_name StructureRecipes
 extends RefCounted
 
 ## Turns a structure's recipe reference (`<library id>:<structure id>`, Structure.recipe) into the
-## procgen document that builds it. TEMPORARY resolver (card S2): the starter set of the `core`
-## library is read from the shared module's committed recipes (res://procgen/recipes/*.json),
-## because the library kind (`structures/` folder, index, registry) is card S3. The seam is
-## `resolver`: S3 sets a Callable (ref: String) -> Dictionary with the keys {"text": the recipe's
-## JSON text} (or {} when the reference names nothing), and nothing else changes: parsing, the
-## digest (sha256 of the text, so a library update rebuilds) and the parameter clamps live here.
+## procgen document that builds it. Since card S3 the references are served by LibraryRegistry
+## (the `structures/` kind of each library: `LibraryStructureStore.recipe`); this class parses
+## the text, digests it (sha256 of the text, so a library update rebuilds) and clamps parameters.
+## Lookup order: `resolver` (a Callable (ref: String) -> Dictionary {"text": the recipe's JSON text}
+## or {} for an unknown reference; tests lay one), then the registry, then, only when
+## `procgen_fallback` is on, the shared module's committed recipes (res://procgen/recipes/*.json,
+## the S2 starter set; off in the game, on for a test that builds without serving libraries).
+## An unknown reference gives null/"" and the caller shows a placeholder plot.
+##
+## A recipe is untrusted data whoever supplied it: document() refuses a text over the recipe caps
+## (LibraryStructures.recipe_problem: bytes, nodes, connections, registered node types).
 ##
 ## Safe on any thread. Every call parses a fresh document (a document is never shared between
-## evaluations); the texts and digests are cached under a mutex.
+## evaluations); the built-in texts and digests are cached under a mutex.
 ##
 ## The starter set (design.md "Core starter set"): stone house (the building recipe, gable roof),
 ## cottage (timber), cottage with chimney and shutters, townhouse, townhouse with trim.
@@ -27,13 +32,23 @@ const CORE: Dictionary = {
 }
 const RECIPE_FOLDER := "res://procgen/recipes/"
 
-## A Callable (reference: String) -> Dictionary {"text": String} that replaces the built-in table
-## when valid (the library registry, card S3). {} or no "text" means the reference is unknown.
+## A Callable (reference: String) -> Dictionary {"text": String} that replaces every other source
+## when valid (a test). {} or no "text" means the reference is unknown.
 static var resolver: Callable = Callable()
+## Read the S2 starter set from res://procgen/recipes when neither the resolver nor the registry
+## knows a reference. Off in the game.
+static var procgen_fallback: bool = false
 
 static var _mutex := Mutex.new()
 ## Reference -> {"text": String, "digest": String}, only for built-in references.
 static var _cache: Dictionary = {}
+
+
+## Makes sure the libraries are served (the first read of the default palette serves them), so the
+## registry holds the recipes before a worker asks for one. Call it on the main thread before
+## building structures; it costs nothing once the libraries are served.
+static func ensure_served() -> void:
+	PaletteLibrary.get_palette()
 
 
 ## The references of the built-in starter set, in table order.
@@ -49,7 +64,10 @@ static func document(ref: String) -> PlantGraphDocument:
 	var text := text_of(ref)
 	if text == "":
 		return null
-	return PlantGraphDocument.from_json(text, ProcgenStructureRegistry.new())
+	var registry := ProcgenStructureRegistry.new()
+	if LibraryStructures.recipe_problem(text, registry) != "":
+		return null
+	return PlantGraphDocument.from_json(text, registry)
 
 
 ## The digest of `ref`'s recipe text (sha256, hex), "" when unknown. A key part: a changed recipe
@@ -101,6 +119,11 @@ static func _find(ref: String) -> Dictionary:
 		if made is Dictionary and (made as Dictionary).has("text"):
 			var text := String((made as Dictionary)["text"])
 			return {"text": text, "digest": text.sha256_text()}
+		return {}
+	var served := LibraryStructureStore.recipe(ref)
+	if not served.is_empty():
+		return served
+	if not procgen_fallback:
 		return {}
 	_mutex.lock()
 	var cached: Variant = _cache.get(ref)

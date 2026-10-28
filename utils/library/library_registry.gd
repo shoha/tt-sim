@@ -29,17 +29,14 @@ extends RefCounted
 ## Which libraries can be served and in what order is LibraryResolver's decision (duplicates,
 ## dependencies and their version ranges, disabled libraries); a library that cannot be served is
 ## an entry with status "error" and reasons in list(), never a crash.
-##
 ## Enabling: settings.cfg `[library] disabled` lists the ids the user turned off (all are enabled
 ## by default, `core` cannot be). set_enabled() persists; the change is served by the next
 ## apply() (FoliageLibrary.refresh_libraries() applies it and rebuilds the open map).
-##
 ## A map names the libraries it uses (MapLibraries); record_of() gives the {id, version, hash}
-## it stores and assets_used_by() the (library, asset ids) a map needs, which a later step uses
-## to send only those over the network.
-## PaletteLibrary.get_palette(DEFAULT_ROOT) calls apply() on first use, and FoliageLibrary.apply()
-## clears the caches and calls it again after a library changes. Map and model:
-## docs/systems/library.md.
+## it stores and assets_used_by() the (library, asset ids) a map needs. The `structures/` kind is
+## served by LibraryStructureStore. PaletteLibrary.get_palette(DEFAULT_ROOT) calls apply() on
+## first use, and FoliageLibrary.apply() clears the caches and calls it again after a library
+## changes. Map and model: docs/systems/library.md.
 
 const SECTION := "library"
 const KEY_DEV_PATH := "dev_path"
@@ -226,6 +223,7 @@ static func seen_signature() -> String:
 static func clear() -> void:
 	_dev_path = ""
 	_served.clear()
+	LibraryStructureStore.clear()
 	_entries.clear()
 	_order.clear()
 	_scanned = false
@@ -439,6 +437,7 @@ static func _public(entry: Dictionary) -> Dictionary:
 		"bytes": entry["bytes"],
 		"asset_count": (read.get("catalog_order", []) as Array).size(),
 		"biome_count": biomes.size(),
+		"structure_count": (read.get("structures", []) as Array).size(),
 		"biomes": biomes,
 		"biome_ids": runtime_ids,
 		"default_biome": default_runtime,
@@ -520,6 +519,7 @@ static func _entry_of(folder: String, source: String) -> Dictionary:
 	entry["read"] = read
 	entry["hash"] = _hash_of(sources)
 	entry["files"] = sources["files"]
+	entry["structure_texts"] = LibraryStructureStore.texts_of(sources, read)
 	# A partial library (multiplayer transfer, LibraryTransfer) keeps the identity of the library
 	# it was cut from, so a map saved while it is served records the full library's hash.
 	var partial: Variant = library.get(LibraryPartial.PARTIAL_KEY)
@@ -633,6 +633,7 @@ static func apply(root: String = PaletteLibrary.DEFAULT_ROOT) -> Dictionary:
 		"report": {},
 	}
 	_served.clear()
+	LibraryStructureStore.begin()
 	# Only this root's registrations go: a read of the default palette by incidental code (its first
 	# read serves it) must not wipe what a scratch root laid.
 	SurfaceStore.clear_libraries_of(root)
@@ -643,6 +644,7 @@ static func apply(root: String = PaletteLibrary.DEFAULT_ROOT) -> Dictionary:
 		PaletteLibrary.note_default_served()
 	refresh(root)
 	if _entries.is_empty():
+		LibraryStructureStore.publish()
 		return result
 	var official_of := {}
 	for entry in _entries:
@@ -660,6 +662,7 @@ static func apply(root: String = PaletteLibrary.DEFAULT_ROOT) -> Dictionary:
 		(result["libraries"] as Array[String]).append(String(entry["id"]))
 		(result["biomes"] as Array[String]).append_array(made["biome_ids"])
 		result["report"] = made["report"]
+	LibraryStructureStore.publish()
 	for i in failed:
 		_entries[i]["status"] = LibraryResolver.ERROR
 		(_entries[i]["reasons"] as Array).append(String(failed[i]))
@@ -700,9 +703,13 @@ static func _serve(entry: Dictionary, root: String, official_of: Dictionary) -> 
 	(entry["warnings"] as Array).append_array(out["warnings"])
 	# A received dependency pool (partial, assets only) has no biome: it only feeds the refs of
 	# the library that depends on it, so it is recorded as served and lays nothing.
+	# (A collection of buildings with no biome-def is the same kind of pool.)
 	var pool: bool = (
 		(compiled["biome_ids"] as Array).is_empty()
-		and bool((entry["partial"] as Dictionary).get("assets_only", false))
+		and (
+			bool((entry["partial"] as Dictionary).get("assets_only", false))
+			or LibraryStructureStore.buildings_only(read)
+		)
 	)
 	if (compiled["biome_ids"] as Array).is_empty() and not pool:
 		out["error"] = "no biome of the library compiled"
@@ -718,6 +725,7 @@ static func _serve(entry: Dictionary, root: String, official_of: Dictionary) -> 
 		AssetStore.register_library(root, compiled["origins"], entry["official"], official_of)
 		_serve_surfaces(root, entry, compiled)
 	var library: Dictionary = read["library"]
+	LibraryStructureStore.register(entry)
 	_served[entry["id"]] = {
 		"id": entry["id"],
 		"name": entry["name"],
@@ -915,6 +923,7 @@ static func read_sources(folder: String) -> Dictionary:
 		"locks": locks,
 		"surfaces": surfaces,
 		"png": png,
+		"structures": LibraryStructureStore.sources_of(folder, files, _text),
 		"files": files,
 	}
 
@@ -953,33 +962,7 @@ static func _text(path: String, cap: int) -> String:
 
 ## A short content hash of the library's JSON files (the identity a map records).
 static func _hash_of(sources: Dictionary) -> String:
-	var hashing := HashingContext.new()
-	hashing.start(HashingContext.HASH_SHA256)
-	for text: String in [String(sources.get("library", "")), String(sources.get("catalog", ""))]:
-		_feed(hashing, text)
-	var biomes: Dictionary = sources.get("biomes", {})
-	var names: Array = biomes.keys()
-	names.sort()
-	for biome_name: String in names:
-		_feed(hashing, String(biomes[biome_name]))
-	var surfaces: Dictionary = sources.get("surfaces", {})
-	var surface_names: Array = surfaces.keys()
-	surface_names.sort()
-	for surface_name: String in surface_names:
-		_feed(hashing, String(surfaces[surface_name]))
-	# Lock files change what a query selects; a library with none hashes as it always did.
-	var locks: Dictionary = sources.get("locks", {})
-	var lock_names: Array = locks.keys()
-	lock_names.sort()
-	for lock_name: String in lock_names:
-		_feed(hashing, String(locks[lock_name]))
-	return hashing.finish().hex_encode().substr(0, HASH_LENGTH)
-
-
-## Adds `text` to the hash; an empty text adds nothing (HashingContext rejects empty input).
-static func _feed(hashing: HashingContext, text: String) -> void:
-	if text != "":
-		hashing.update(text.to_utf8_buffer())
+	return LibraryHash.of(sources, HASH_LENGTH)
 
 
 static func _setting(key: String, fallback: Variant) -> Variant:

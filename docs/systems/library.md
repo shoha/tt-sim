@@ -55,7 +55,10 @@ treecube is gone ("The core library"). Step S9 (2026-10-25): per-season override
 | `utils/library/library_names.gd` | `LibraryNames` | (S6) The ONE place the player-facing word for a library lives: `TITLE_SINGULAR` / `TITLE_PLURAL` (today "Collection" / "Collections"), the helpers every label is built from (`title`, `lower`, `counted`, `article`, the install card's promise line, the manager's caption). A rename is a one-line change; `test_library_manager.gd` fails when a string literal in the manager, importer, title or New map dialog holds the word |
 | `utils/library/library_importer.gd` | `LibraryImporter` | (S6, no scene tree) `inspect(path)` judges a `.ttlib`/`.zip` or a folder BEFORE anything is written (the caps, extensions, portable names, links, encrypted entries, case twins, ratio), `stage(plan, progress)` extracts or copies into the quarantine `<libraries>/.incoming/<random>/` (a worker-thread-safe call with a `Progress` for the bar and Cancel), `is_candidate(path)` sniffs a drop, `sweep_incoming`, `discard`, `limits` (a test can lower them) |
 | `utils/library/library_install.gd` | `LibraryInstall` | (S6) `examine(folder)` reads a staged folder with `LibraryReader` and compiles it in a dry run through the libraries installed, giving the install card (identity, size, counts, dependencies with their state, warnings, the relation to an installed copy, reserved ids); `install(card, replace)` moves it into `<libraries>/<id>/`; `remove(id)`; `levels_using(id, levels_dir)` (a lazy scan of the saved maps' manifests with `MapDocumentIO.peek_libraries`) |
-| `utils/library/library_verify.gd` | `LibraryVerify` | (S6) Verify: `plan(id)`, `check(asset)` (`AssetStore.verify`), `summarize`, one asset at a time so the sheet keeps drawing |
+| `utils/library/library_verify.gd` | `LibraryVerify` | (S6) Verify: `plan(id)`, `check(asset)` (`AssetStore.verify`), `summarize`, one asset at a time so the sheet keeps drawing. Since structures (S3) `plan` also lists `structure:<library>:<id>` and `check` builds that recipe at its default footprint ("Structures" below) |
+| `utils/library/library_structures.gd` | `LibraryStructures` | (structures S3, pure) The `structures/` kind: `read` (the index and the recipe texts: caps, id grammar, size limits, `expose` against the recipe's interface, every problem a warning), `recipe_problem` (a recipe is checked before it is built), the paths (`recipe_path`, `thumb_path`, `ref_of`), `index_text`, `entries_of`, `merge_index`, `thumbnail_job` (the render job for the tiles) |
+| `utils/library/library_structure_store.gd` | `LibraryStructureStore` | (structures S3) The structures the served libraries offer, by `<library>:<id>`: `structures(library)` (palette rows), `structure(ref)`, `has`, `recipe(ref)` (text and digest, what `StructureRecipes` reads), `used_by(doc)` (a map's references per library); `LibraryRegistry.apply` fills it (`begin`, `register`, `publish`) and it is swapped whole under a mutex, so a worker can read it while libraries are re-served |
+| `utils/library/library_hash.gd` | `LibraryHash` | (pure) The short content hash a map records for a library (`of(sources, length)`); moved out of the registry at the structures card, same bytes for a library without structures |
 | `scenes/ui/library_manager/` | `LibraryManager`, `LibraryDetail`, `LibraryInstallCard`, `LibraryImportFlow` | (S6) The sheet (list at the left, the selected library's card at the right, Import file... / Import folder... / Done), its card, the install sheet and the one flow behind the picker, the folder picker and a drop (inspect, stage on a worker thread, examine, ask, install, `refresh_all`). All built in code |
 | `utils/zip_entry_sizes.gd` | `ZipEntrySizes` | (S6) Gained `read_directory` and `parse_central_records` (flags, method, attributes, sizes) beside the sizes the map reader uses |
 | `tools/compile_library_cli.gd` | | Headless: prints or writes the compiled palette JSON of a library folder, or `--contract <file>` |
@@ -436,6 +439,106 @@ Facts of the S5 build (still true of the shipped folder):
 - **Catalog `roles`.** plantgen's catalog entries carry `roles` (the contract roles of the
   rules that use the asset); `LibraryContracts.CATALOG_ENTRY_KEYS` knows the key, so the nine
   biomes read with no warnings.
+
+## Structures
+
+Card S3 of the structures topic ([structures.md](structures.md); the contract is
+`ASSET_PIPELINE.md` section 12). A library may hold buildings as recipes, a kind beside assets,
+biomes and surfaces. A library without the folder reads exactly as before and hashes as it did.
+
+Files (all `.json`, `.jpg` and `.txt`, so the extension whitelist is unchanged):
+
+```
+structures/index.json              {"format": "ttsim-structures", "format_version": 1, "structures": [entry, ...]}
+structures/<id>.structure.json     the recipe: a procgen graph document (plantgen-graph), unmodified
+thumbnails/structures/<id>.jpg     the palette tile (512 px, rendered by tt-sim)
+structures/pins.txt                core only: "<id> <pipeline md5> <triangles> <procgen md5>"
+```
+
+An index entry: `id` (`[a-z][a-z0-9_]*`, at most 48, no `__`; also the file stem), `name`, `family` and
+`variant` (a picker groups a family's variants), `tags`, `file` (must be the id's own path),
+`default_size_m` `[w, d]`, `min_side_m`, `max_side_m`, `max_area_m2` (the default footprint must fit
+them), `plans` (`rect` `l` `t` `u`, the footprint kinds a tool offers), `expose` (interface names the
+UI may show; a name the recipe's interface lacks is dropped), `textured` (the recipe declares the
+`textured` switch), `thumb`. Missing fields take the defaults (6 x 4 m, 2.5 to 14 m a side, 120 m2).
+A reference is `<library id>:<structure id>`, the cross-library grammar; a map stores it in
+`Structure.recipe`.
+
+Reading (`LibraryStructures.read`, called by `LibraryReader.read` with the `structures` part of its
+sources). Everything is untrusted input and **every problem is a warning**: the structure is left
+out, the library still reads and serves. Caps (`LibraryContracts.STRUCTURE_CAPS`, apart from `CAPS`
+so the vendored `contract.json` does not change): 128 structures, 256 KB for the index and for a
+recipe, 128 nodes and 512 connections in a recipe, 16 `expose` names. A recipe is checked BEFORE
+`PlantGraphDocument.from_json` sees it (`recipe_problem`: bytes, JSON, the `plantgen-graph` format,
+every node an object with a text id, a type the `ProcgenStructureRegistry` knows and no nested table
+in its parameters, connections between known nodes, a well formed interface), because `from_dict`
+indexes keys directly. A recipe is data run by a fixed set of node types: a hostile library can be
+expensive, not harmful, and GDScript cannot interrupt an evaluation, so the cost is bounded by these
+input caps and by the footprint caps of `MapStructureIO`. `StructureRecipes.document` runs the same
+check on whatever text it is given.
+
+Serving. `LibraryRegistry.read_sources` reads the files (line ends made LF, so a CRLF checkout digests
+like a pack), `_entry_of` keeps the accepted recipes' texts, `_serve` hands them to
+`LibraryStructureStore.register`, and `apply` publishes the whole table at the end. A library with
+structures and no biome-def (a collection of buildings) is a pool: it lays nothing on the palette and
+serves its structures (as an `assets_only` partial does). The index and the recipes are part of the
+library hash (`LibraryHash`), so a map records a changed recipe like any other change. The registry's
+`info` has `structure_count`; the install card has it, and its change line says "N more buildings".
+
+Maps. `MapLibraries.used_ids` counts the library of every structure's reference, so `record_for`
+lists it (format 3 for a library other than core) and the open-time check reports it missing or
+incompatible like any other. `LibraryStructureStore.used_by(doc)` is the per-library list of
+references; `assets_used_by` stays about palette assets (a structure is none, and a transfer asks for
+structures in their own list). "Open without those plants" leaves the structure records in place: they
+build a placeholder.
+
+Builder seam. `StructureRecipes` looks a reference up in this order: the test `resolver`, the store,
+and only with `procgen_fallback` on (off in the game) procgen's committed recipes.
+`StructureRecipes.ensure_served()` makes sure the libraries are served before a worker asks (the first
+read of the default palette serves them; `AuthoredLoadPrep` and `AuthoredStructures` call it). A
+reference nobody serves, or a recipe that fails to build, builds a **placeholder plot**
+(`StructureGeometry`): a pale low slab on the footprint that follows the ground, no collision, no
+top, `placeholder` true in the parts and the reason in `problem`. A peer whose transfer is still
+running, a removed library and a recipe that fails all show a plot where the building goes, never a
+hole; the build key holds the recipe digest, so the plot becomes the building when the library
+arrives. (A structure over the 25k hard budget is still refused with nothing built.)
+
+Transfer. A request carries `structures` (the references of the requested library the map uses; at
+most 128, checked by `request_problem`). `plan` counts a structure the install lacks like a missing
+asset (a copy the player installed is never replaced: the player is told what it lacks), `authorize`
+allows only references a served map uses (`usage_of`), and the host's partial (`LibraryPartial.select`,
+`LibraryTransfer._files_of`) holds the index cut to the requested structures, their recipes and
+tiles, and `partial.structures` in library.json. A partial with structures and no biome is valid
+(`LibraryStructureStore.buildings_only`). The client's `inspect` allows exactly those files and reads
+every recipe through `LibraryStructures.read` (a recipe that does not pass is an unexpected file), and
+`LibraryPartialMerge` unites a delta's index with the kept copy's by id (a clash is refused).
+
+Verify. `LibraryVerify.plan` lists `structure:<ref>` after the assets; `check` builds the recipe at the
+entry's default footprint on flat ground and fails it when it does not build (placeholder or
+`problem`), builds over 60000 triangles, or takes over 400 ms (`STRUCTURE_MAX_TRIANGLES`,
+`STRUCTURE_MAX_MSEC`). Tests: `test_library_structures.gd` (pure), `test_library_structure_store.gd`
+(registry, maps, the seam, the placeholder, Verify, core's pins), `test_library_structure_transfer.gd`.
+
+Tiles. tt-sim renders them, because only the game has the real materials:
+`tools/render_structure_thumbnails.gd` (the twin of `render_library_thumbnails.gd`) builds the job
+`LibraryStructures.thumbnail_job` makes: a new 100 ft meadow, one building at a time at its default
+footprint through the editor API (`probes/structures.gd` action `tile`), the camera framed from its
+size and wall height, the driver's `thumbnail` op with `structure: true`
+(`LibraryWriter.write_structure_thumbnail`); each tile is also a capture in the job's folder. Run it
+windowed and short (about 40 s, GPU shared): `godot --path <tt-sim> --windowed --resolution 1920x1080
+--position 320,120 --script res://tools/render_structure_thumbnails.gd -- --library <folder with
+structures/index.json> [--out <folder to write into>] [--serve 1] [--only a,b] [--list 1]`. For core:
+`--library <tt-sim>/libraries/core --out <core-library>`, then copy the tiles to
+`libraries/core/thumbnails/structures/`. `--serve 1` lays a not yet installed library over the game first.
+
+Core's starter set is data in the `core-library` repo (`structures/`: five recipes, the index and
+`pins.txt`; the tiles in `thumbnails/structures/`), made by `tools/export_core_structures.gd` from
+procgen's `ProcgenRecipes` (`--check 1` shows a drift without writing; without it, it re-pins on
+purpose). The copy in `libraries/core/structures/` and `libraries/core/thumbnails/structures/` ships
+with the game like the rest of core. Updating core's structures: change the recipe in procgen, run the
+export tool into `core-library`, re-render the tiles (above), copy both folders over `libraries/core/`,
+run `--import` for the `.jpg.import` sidecars and the gate (`test_library_structure_store.gd` compares
+the pins).
 
 ## Runtime
 

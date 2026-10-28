@@ -783,7 +783,14 @@ func _thumbnail(step: Dictionary) -> bool:
 
 func _grab_thumbnail(step: Dictionary) -> void:
 	var bytes := LibraryThumbnailer.encode(ThumbnailShot.grab(gm()))
-	var result := LibraryWriter.write_thumbnail(String(step.folder), String(step.biome), bytes)
+	# A step with `"structure": true` draws a structure's tile and names it in `biome` (the
+	# result key stays, so the harness reads one list).
+	var write: Callable = (
+		LibraryWriter.write_structure_thumbnail
+		if bool(step.get("structure", false))
+		else LibraryWriter.write_thumbnail
+	)
+	var result: Dictionary = write.call(String(step.folder), String(step.biome), bytes)
 	result["biome"] = String(step.biome)
 	var results: Array = get_tree().root.get_meta("thumbnail_results", [])
 	results.append(result)

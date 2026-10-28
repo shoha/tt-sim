@@ -63,6 +63,7 @@ var _reported: Dictionary = {}
 static func create(
 	doc: MapDocument, built: Dictionary = {}, root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> AuthoredStructures:
+	StructureRecipes.ensure_served()
 	var structures := AuthoredStructures.new()
 	structures.name = NODE_NAME
 	structures._palette_root = root
@@ -110,6 +111,7 @@ static func exclude_of(root: Node) -> Array[RID]:
 ## or queues (on a worker) the node of every structure whose key differs from the one its node was
 ## built with. A queued build lands within a few frames (_process), or at once with flush().
 func refresh(doc: MapDocument, use_workers: bool = true) -> void:
+	StructureRecipes.ensure_served()
 	var keys := StructureGeometry.keys_of(doc)
 	var changed := false
 	for child in get_children():

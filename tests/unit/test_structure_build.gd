@@ -22,6 +22,7 @@ func before_each() -> void:
 	add_child_autofree(_map)
 	_history = AuthoringHistory.new()
 	_doc = MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
+	StructureRecipes.ensure_served()
 
 
 func after_each() -> void:
@@ -243,7 +244,8 @@ func test_an_l_plan_builds_and_a_bad_plan_or_recipe_builds_nothing() -> void:
 	assert_eq(parts.problem, "")
 	assert_gt(int(parts.triangles), 1000)
 	var unknown := StructureGeometry.build_one(_doc, _structure("core:castle"))
-	assert_true((unknown.meshes as Array).is_empty())
+	assert_eq((unknown.meshes as Array).size(), 1, "a recipe the game lacks shows a plot")
+	assert_true(unknown.placeholder)
 	assert_string_contains(unknown.problem, "unknown")
 	assert_eq(unknown.top, StructureGeometry.NONE)
 	var sliver := _structure()

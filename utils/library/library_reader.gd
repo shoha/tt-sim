@@ -17,9 +17,12 @@ extends RefCounted
 ##    "surfaces": {"<surface name>": the text of its surface.json} and
 ##    "png": {"<library-relative .png path>": SurfaceBake.png_header's result} (both optional;
 ##    LibraryRegistry reads the first 33 bytes of each map), and
-##    "locks": {"<biome id>.lock.json": String} (optional; the designer's lock files)}
-## The result also holds `surfaces` ({name: {info, maps}} for each valid surfaces/<name>/ set,
-## `maps` the kinds present) and `surface_order`.
+##    "locks": {"<biome id>.lock.json": String} (optional; the designer's lock files), and
+##    "structures": {"index": String (structures/index.json), "recipes": {"<id>.structure.json":
+##    String}} (optional; LibraryStructures reads it, and every problem there is a warning)}
+## The result also holds `structures` ({id, file, entry, digest, height_m} per usable structure) and
+## `surfaces` ({name: {info, maps}} for each valid surfaces/<name>/ set, `maps` the kinds
+## present) and `surface_order`.
 
 const BIOME_DIR := "biomes/"
 const SURFACE_DIR := "surfaces/"
@@ -43,6 +46,7 @@ static func read(sources: Dictionary) -> Dictionary:
 		"surfaces": {},
 		"surface_order": [] as Array[String],
 		"locks": {},
+		"structures": [] as Array[Dictionary],
 	}
 	var errors: Array[String] = result["errors"]
 	var warnings: Array[String] = result["warnings"]
@@ -92,6 +96,7 @@ static func read(sources: Dictionary) -> Dictionary:
 	if have_files:
 		_read_surfaces(sources, files, result)
 	_read_locks(sources.get("locks"), result)
+	LibraryStructures.read(sources.get("structures"), files, have_files, result)
 	result["ok"] = errors.is_empty() and not library.is_empty() and not catalog.is_empty()
 	return result
 
@@ -397,8 +402,13 @@ static func _check_entry_fields(entry: Dictionary, label: String, errors: Array[
 	if digest != null and not (digest is String and LibraryIds.is_sha256(digest)):
 		errors.append("%s: sha256 must be 64 lower-case hex characters" % label)
 	var size: Variant = entry.get("bytes")
-	if size != null and (
-		not _is_whole(size) or float(size) < 0.0 or float(size) > LibraryContracts.CAPS["glb_bytes"]
+	if (
+		size != null
+		and (
+			not _is_whole(size)
+			or float(size) < 0.0
+			or float(size) > LibraryContracts.CAPS["glb_bytes"]
+		)
 	):
 		errors.append("%s: bytes must be a whole number within the GLB cap" % label)
 
@@ -743,13 +753,14 @@ static func _check_query_shared(query: Dictionary, label: String, errors: Array[
 	if query.has("count"):
 		var count: Variant = query["count"]
 		var top := float(LibraryContracts.QUERY_MAX_ASSETS)
-		var fine: bool = (count is String and count == "all") or (
-			_is_whole(count) and float(count) >= 1.0 and float(count) <= top
+		var fine: bool = (
+			(count is String and count == "all")
+			or (_is_whole(count) and float(count) >= 1.0 and float(count) <= top)
 		)
 		if not fine:
 			errors.append(
 				(
-					"%s: query count must be \"all\" or a whole number from 1 to %d"
+					'%s: query count must be "all" or a whole number from 1 to %d'
 					% [label, LibraryContracts.QUERY_MAX_ASSETS]
 				)
 			)

@@ -26,7 +26,8 @@ const MAX_LINK := 300
 
 
 ## The library ids `doc` uses, sorted: the prefix of every biome id, scatter and props asset id
-## and painted surface name (a name without a `<lib>__` prefix is core's).
+## and painted surface name (a name without a `<lib>__` prefix is core's), and the library of
+## every structure's recipe reference.
 static func used_ids(doc: MapDocument) -> Array[String]:
 	var seen := {}
 	for biome_id in doc.biome_ids:
@@ -38,6 +39,8 @@ static func used_ids(doc: MapDocument) -> Array[String]:
 		seen[surface_library(surface)] = true
 	if doc.base_surface != "":
 		seen[surface_library(doc.base_surface)] = true
+	for library in LibraryStructureStore.used_by(doc):
+		seen[library] = true
 	var out: Array[String] = []
 	out.assign(seen.keys())
 	out.sort()

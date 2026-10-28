@@ -1064,3 +1064,10 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   `probes/structures.gd` (there is no Structure tool yet), then a report of each node's triangles
   per role, a check that no scatter row stands inside a footprint, and three captures (home view,
   the cottage and townhouse close, the L townhouse close). `docs/systems/structures.md`.
+- `structure_thumbs` (about 40 s, keeps no level; **not a file in `jobs/`**: `tools/render_structure_thumbnails.gd`
+  builds it from a library folder, as `render_library_thumbnails.gd` builds the biome one; the structures
+  card S3): one new unsaved 100 ft meadow, each structure of the library alone at its default
+  footprint (probe `structures.gd` action `tile`), the camera framed from the building's size and
+  wall height, the driver's `thumbnail` op with `structure: true` writing `thumbnails/structures/<id>.jpg`,
+  and a `tile_<id>` capture of each for a look. Output folder `render_jobs/structure_thumbs`.
+  `docs/systems/library.md` "Structures" has the command.
