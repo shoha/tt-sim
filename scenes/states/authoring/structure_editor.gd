@@ -134,6 +134,132 @@ func add(structure: Structure) -> int:
 	return laid.id
 
 
+## Shows `changed` (a copy of a standing structure with a new plan, say) in the document and the
+## nodes without a history entry: the live look of a handle being dragged. Pair it with edit() (the
+## release, which records the whole gesture from `before`, the list taken before the first
+## preview) or apply_list(before, Rect2()) (a cancel). False when the document holds no such id.
+func preview(changed: Structure) -> bool:
+	var doc := _editor().document
+	if doc.structure(changed.id) == null:
+		return false
+	var after: Array[Structure] = []
+	for entry in doc.structures:
+		after.append(changed if entry.id == changed.id else entry)
+	apply_list(after, Rect2())
+	return true
+
+
+## Puts `changed` in place of the structure with its id as one history entry labelled `label`. With
+## `before` (the list from before a preview) the entry undoes to that list. False, with
+## last_refusal set, when the document has no such structure or the writer would refuse it.
+func edit(changed: Structure, label: String, before: Array[Structure] = []) -> bool:
+	var doc := _editor().document
+	last_refusal = &""
+	if doc.structure(changed.id) == null:
+		last_refusal = REFUSED_UNKNOWN
+		return false
+	if MapStructureIO.structure_problem(changed, doc.extent_m()) != "":
+		last_refusal = REFUSED_INVALID
+		return false
+	var base: Array[Structure] = before if not before.is_empty() else _current()
+	var after: Array[Structure] = []
+	for entry in base:
+		after.append(changed if entry.id == changed.id else entry)
+	_change(label, after, base)
+	return true
+
+
+## Reshapes structure `structure_id` to `plan` (a drag of a handle, a move): one history entry.
+func set_plan(
+	structure_id: int, plan: PackedVector2Array, label: String, before: Array[Structure] = []
+) -> bool:
+	var old := _editor().document.structure(structure_id)
+	if old == null:
+		return false
+	var changed := old.copy()
+	changed.footprint = plan
+	return edit(changed, label + " " + _label(old), before)
+
+
+## Makes edge `edge` of structure `structure_id` its front (the door side): the point order is
+## rotated, so the building is otherwise the same. False when there is no such edge.
+func set_front(structure_id: int, edge: int) -> bool:
+	var old := _editor().document.structure(structure_id)
+	if old == null or edge <= 0 or edge >= old.footprint.size():
+		return false
+	return set_plan(structure_id, StructureEdit.front_to(old.footprint, edge), "Door of")
+
+
+## Turns structure `structure_id` about its middle by `radians`, settling on the nearest legal
+## ground if the turned plan would not stand where it is. False when there is nowhere legal.
+func turn(structure_id: int, radians: float) -> bool:
+	var doc := _editor().document
+	var old := doc.structure(structure_id)
+	if old == null:
+		return false
+	var found := StructureEdit.move_legal(
+		doc, StructureEdit.turned(old.footprint, radians), Vector2.ZERO, structure_id
+	)
+	if found["problem"] != "":
+		return false
+	return set_plan(structure_id, found["plan"], "Turn")
+
+
+## Gives structure `structure_id` another recipe of its family (`ref`), keeping its plan (brought
+## within the new recipe's sizes), seed and the parameters the new recipe also declares. False
+## when no served library offers `ref` or the structure is gone.
+func swap_recipe(structure_id: int, ref: String) -> bool:
+	var doc := _editor().document
+	var old := doc.structure(structure_id)
+	var row := LibraryStructureStore.structure(ref)
+	var recipe := StructureRecipes.document(ref)
+	if old == null or row.is_empty() or recipe == null:
+		return false
+	if old.recipe == ref:
+		return true
+	var changed := old.copy()
+	changed.recipe = ref
+	changed.params = StructureEdit.kept_params(old.params, recipe.interface)
+	changed.footprint = StructureEdit.refit(
+		old.footprint, StructureBrush.scaled_row(row, _editor().map_scale())
+	)
+	return edit(changed, "Restyle " + _label(old))
+
+
+## Steps parameter `param` of structure `structure_id` one notch (direction 1 or -1) within the
+## recipe's range. False when the recipe does not declare it or it is already at its limit.
+func step_param(structure_id: int, param: String, direction: int) -> bool:
+	var old := _editor().document.structure(structure_id)
+	var recipe := StructureRecipes.document(old.recipe) if old != null else null
+	if recipe == null:
+		return false
+	var params := StructureEdit.stepped_params(old.params, recipe.interface, param, direction)
+	if params == old.params:
+		return false
+	var changed := old.copy()
+	changed.params = params
+	return edit(changed, "Change " + param.replace("_", " ") + " of " + _label(old))
+
+
+## Adds a copy of structure `structure_id` beside it (the same look: recipe, seed, parameters and
+## style), as one history entry; its id, or -1 when there is nowhere within reach or the document
+## is full.
+func duplicate(structure_id: int) -> int:
+	var doc := _editor().document
+	var old := doc.structure(structure_id)
+	last_refusal = &""
+	if old == null:
+		return -1
+	var plan := StructureEdit.beside(doc, old)
+	if plan.is_empty():
+		last_refusal = REFUSED_INVALID
+		return -1
+	var copy := old.copy()
+	copy.id = 0
+	copy.footprint = plan
+	return add(copy)
+
+
 ## Removes structure `structure_id` as one history entry. False when there is none.
 func remove(structure_id: int) -> bool:
 	var doc := _editor().document
@@ -213,14 +339,15 @@ func _current() -> Array[Structure]:
 	return out
 
 
-## Sets the document's structures to `after` and records it.
-func _change(label: String, after: Array[Structure]) -> void:
+## Sets the document's structures to `after` and records it. `from` is the list the entry undoes
+## to (the document's now when empty; a gesture that previewed passes the list before it).
+func _change(label: String, after: Array[Structure], from: Array[Structure] = []) -> void:
 	var e := _editor()
 	e.commit_prop_edit()
 	if e.is_stroking():
 		e.end_stroke()
 	e.finish_height_work()
-	var before := _current()
+	var before: Array[Structure] = from if not from.is_empty() else _current()
 	var area := _area_of(before, after)
 	apply_list(after, area)
 	(

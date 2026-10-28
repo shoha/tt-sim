@@ -74,7 +74,8 @@ enum Action {
 	SHAPE,
 	TURN_LEFT,
 	TURN_RIGHT,
-	REROLL
+	REROLL,
+	DUPLICATE
 }
 
 const MIN_RADIUS := 1.0
@@ -175,7 +176,14 @@ var _sound_at: Vector3 = Vector3.INF
 ## What an input event means to the brush, given whether the mode `picks` targets, whether a
 ## press is held and whether a target is under the pointer. Pure: the whole input table in
 ## one place, and what the tests exercise.
-static func decide(event: InputEvent, picks: bool, held: bool, over_target: bool) -> Action:
+static func decide(
+	event: InputEvent,
+	picks: bool,
+	held: bool,
+	over_target: bool,
+	selected: bool = false,
+	duplicates: bool = false
+) -> Action:
 	if event is InputEventMouseButton:
 		var button := event as InputEventMouseButton
 		match button.button_index:
@@ -225,10 +233,15 @@ static func decide(event: InputEvent, picks: bool, held: bool, over_target: bool
 				if picks and over_target and not held:
 					return Action.REMOVE
 			KEY_ESCAPE:
-				# While a stroke or placement is held, Escape cancels it like RMB; otherwise
-				# it goes on to the drawer (close, then leave).
-				if held:
+				# While a stroke or placement is held, Escape cancels it like RMB; a mode
+				# holding a selection (BrushMode.has_selection) lets it go; otherwise it goes
+				# on to the drawer (close, then leave).
+				if held or selected:
 					return Action.CANCEL
+			KEY_D:
+				# Copying a mode's selected target (BrushMode.duplicates): Ctrl+D only.
+				if duplicates and key.ctrl_pressed and not key.alt_pressed and not held:
+					return Action.DUPLICATE
 			KEY_TAB:
 				# A bare Tab switches the shape between gestures; mid-press it does nothing,
 				# and with a modifier it is GUI focus navigation's.
@@ -391,7 +404,9 @@ func handle_input(event: InputEvent) -> bool:
 			ctrl = ctrl_now
 			shift = shift_now
 			redraw()
-	var action := decide(event, mode.picks, pressed, mode.has_target())
+	var action := decide(
+		event, mode.picks, pressed, mode.has_target(), mode.has_selection(), mode.duplicates()
+	)
 	match action:
 		Action.POINTER:
 			pointer = (event as InputEventMouseMotion).position
@@ -441,6 +456,9 @@ func handle_input(event: InputEvent) -> bool:
 			return true
 		Action.REMOVE:
 			mode.remove_target(self)
+			return true
+		Action.DUPLICATE:
+			mode.duplicate(self)
 			return true
 		Action.SHAPE:
 			if not mode.has_shapes():
@@ -583,6 +601,33 @@ func _resolve_hit() -> void:
 	hit_normal = result.normal
 
 
+## The id of the authored structure whose collision (a roof, a wall) the pointer's ray meets first,
+## or -1 (nothing, or something else first: a bridge). What a person sees under the pointer is the
+## building, not the ground behind it that the brush ray reaches with the structures excluded,
+## so the Structure tool picks by this.
+func structure_under_pointer() -> int:
+	if not has_pointer or _camera == null or _world_viewport == null:
+		return -1
+	if _over_gui.is_valid() and _over_gui.call() and not pressed:
+		return -1
+	var space := _world_viewport.find_world_3d().direct_space_state
+	if space == null:
+		return -1
+	var origin := _camera.project_ray_origin(pointer)
+	var direction := _camera.project_ray_normal(pointer)
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * RAY_LENGTH)
+	query.collision_mask = TERRAIN_LAYER
+	if editor != null:
+		var excluded := AuthoredCrossings.exclude_of(editor.map_root)
+		excluded.append_array(AuthoredWalls.exclude_of(editor.map_root))
+		query.exclude = excluded
+	var result := space.intersect_ray(query)
+	if result.is_empty():
+		return -1
+	var body := result.get("collider") as Node
+	return int(body.get_meta(AuthoredStructures.STRUCTURE_META, -1)) if body != null else -1
+
+
 ## A mode that `fades` makes the cursor the canopy fade's brush window (BrushMode.fade_focus),
 ## so the canopy over it opens up; any other mode, no ground under the pointer, or no press
 ## held under `fade_held_only`, lets it close.
@@ -620,6 +665,8 @@ func redraw() -> void:
 
 ## The cursor is the mode's to draw, at the pointer's ground point.
 func _on_draw() -> void:
-	if not _active or _camera == null or hit == Vector3.INF:
+	# A mode holding a selection keeps drawing it while the pointer is off the ground (over the
+	# pane, say), so the selected building does not vanish when its bar is reached for.
+	if not _active or _camera == null or (hit == Vector3.INF and not mode.has_selection()):
 		return
 	mode.draw_cursor(self, cursor)

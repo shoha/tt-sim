@@ -30,6 +30,11 @@ func _init() -> void:
 		["[ ] (Building)", "Make the building a click lays smaller or bigger"],
 		["R (Building)", "Draw the next building afresh, or the one under the cursor"],
 		["Right-click, Delete (Building)", "Remove the building under the cursor"],
+		["Click a building", "Select it: corner dots resize, side tabs push, the body moves"],
+		["Click a side tab (selected)", "Put the door on that side"],
+		["Shift + drag a corner (selected)", "Move just that corner, off the square"],
+		["Ctrl+D (selected)", "Copy the building beside itself"],
+		["Escape (selected)", "Let go of the building"],
 	]
 
 
@@ -68,3 +73,44 @@ func connect_pane(controller: AuthoringController, pane: Control) -> void:
 			if controller.brush != null:
 				of(controller.brush).reroll_at(controller.brush.editor, -1)
 	)
+	_connect_selection(controller, structure_pane)
+
+
+## The selected building's bar (card S5): the brush says which building is selected and the bar
+## shows it; each button is one call on the brush, one history entry, and the bar is shown again
+## from the record afterwards. The brush's mode outlives the pane, so the old connections (to a
+## pane that is gone) are dropped first.
+func _connect_selection(controller: AuthoringController, pane: StructureToolPane) -> void:
+	if controller.brush == null:
+		return
+	var mode := of(controller.brush)
+	for link: Dictionary in mode.selection_changed.get_connections():
+		mode.selection_changed.disconnect(link["callable"])
+	var editor := controller.brush.editor
+	var show := func(structure_id: int) -> void:
+		var held := (
+			controller.brush.editor.document.structure(structure_id)
+			if structure_id >= 0 and controller.brush != null and controller.brush.editor != null
+			else null
+		)
+		pane.show_selection(held.copy() if held != null else null)
+	mode.selection_changed.connect(show)
+	var act := func(call: Callable) -> void:
+		if controller.brush != null and controller.brush.editor != null:
+			call.call(controller.brush.editor)
+		show.call(mode.selected_id)
+	pane.variant_picked.connect(func(ref: String) -> void: act.call(mode.swap_variant.bind(ref)))
+	pane.param_stepped.connect(
+		func(param: String, direction: int) -> void:
+			act.call(mode.step_selected.bind(param, direction))
+	)
+	pane.door_requested.connect(func() -> void: act.call(mode.door_next))
+	pane.redraw_requested.connect(
+		func() -> void:
+			act.call(func(e: AuthoringEditor) -> void: e.structures.reroll(mode.selected_id))
+	)
+	pane.copy_requested.connect(func() -> void: act.call(mode.duplicate_selected))
+	pane.remove_requested.connect(func() -> void: act.call(mode.delete_selected))
+	pane.done_requested.connect(mode.deselect)
+	if editor != null:
+		show.call(mode.selected_id)

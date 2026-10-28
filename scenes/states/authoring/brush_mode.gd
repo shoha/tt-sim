@@ -130,6 +130,23 @@ func remove_target(_brush: BrushTool) -> void:
 	pass
 
 
+## True while the mode holds a selected target (the Structure tool's selected building): Escape
+## with no press held is then the brush's, and cancel() drops the selection.
+func has_selection() -> bool:
+	return false
+
+
+## True while the mode can copy its selected target: Ctrl+D is then the brush's, and duplicate()
+## does it.
+func duplicates() -> bool:
+	return false
+
+
+## Ctrl+D, when duplicates() is true: copy the selected target.
+func duplicate(_brush: BrushTool) -> void:
+	pass
+
+
 ## True for a mode with two shapes, a line and an area (Water's River and Pond, Fire's Line
 ## and Area), which Tab switches between (toggle_shape()): while such a mode is out, Tab is
 ## the brush's, not the room drawer's.

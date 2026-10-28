@@ -562,9 +562,14 @@ func _set_pointer(brush: BrushTool, world: Vector3) -> void:
 
 ## The screen point of map point `at` ([x, z]) on the top walkable surface there (a downward
 ## ray on layer 1: the ground, a bridge deck or a stone; the document's ground when the ray
-## misses): where a real pointer over what is drawn at that point would be.
+## misses): where a real pointer over what is drawn at that point would be. A third number in
+## `at` is the height to aim at instead (0: the flat ground itself, not the top of whatever
+## stands there: a handle drawn on the ground under a roof, card S5).
 func _screen_of(at: Array) -> Vector2:
 	var world := Vector3(float(at[0]), 0.0, float(at[1]))
+	if at.size() > 2:
+		world.y = float(at[2])
+		return gm().camera_node.unproject_position(world)
 	var space := gm().world_viewport.find_world_3d().direct_space_state
 	var top := DragPlaceController.raycast_terrain_down(space, world, 200.0)
 	if top != Vector3.INF:
