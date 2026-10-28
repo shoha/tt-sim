@@ -747,6 +747,11 @@ func _resolve_drag_ground(point: Vector3, draft: float = WaterSurface.DRAFT_M) -
 			walls = walls.get_node_or_null(NodePath(AuthoredWalls.NODE_NAME))
 		if walls is AuthoredWalls:
 			top = maxf(top, (walls as AuthoredWalls).world_top())
+		var structures := _ground_terrain.get_parent()
+		if structures != null:
+			structures = structures.get_node_or_null(NodePath(AuthoredStructures.NODE_NAME))
+		if structures is AuthoredStructures:
+			top = maxf(top, (structures as AuthoredStructures).world_top())
 		return WaterSurface.landing_below(space, point, top + DRAG_GROUND_CAST_CLEARANCE_M, draft)
 	if not _has_water:
 		return Vector3.INF

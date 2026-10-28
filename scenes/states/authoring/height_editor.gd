@@ -163,6 +163,7 @@ func end_stroke() -> bool:
 	var changed_world := MaskBrush.sample_rect_to_world(e.document, stroke.changed)
 	record["crossings"] = e.crossings.follow(changed_world)
 	record["walls"] = e.walls.follow(changed_world)
+	record["structures"] = e.structures.follow(changed_world)
 	# The water follows the ground (P4-3); rocks and plants wait for its dressing's worker.
 	e.water.refresh(
 		func() -> void:
@@ -233,6 +234,7 @@ func apply_diff(diff: Dictionary, redo: bool, record: Dictionary, spread: bool =
 	var rect := HeightStroke.apply_diff(e.document, diff, redo)
 	e.crossings.restore(record.get("crossings", {}), redo)
 	e.walls.restore(record.get("walls", {}), redo)
+	e.structures.restore(record.get("structures", {}), redo)
 	if not rect.has_area():
 		return
 	# Props take their recorded rows, not a snap.

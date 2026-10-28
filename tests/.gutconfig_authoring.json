@@ -142,6 +142,7 @@
 		"res://tests/unit/test_shape_field.gd",
 		"res://tests/unit/test_starting_landform.gd",
 		"res://tests/unit/test_stroke_path.gd",
+		"res://tests/unit/test_structure_build.gd",
 		"res://tests/unit/test_stroke_sound.gd",
 		"res://tests/unit/test_submerged_cue.gd",
 		"res://tests/unit/test_surface_store.gd",

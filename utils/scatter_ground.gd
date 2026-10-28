@@ -279,6 +279,8 @@ static func sampler(
 	# Walls and fences clear plants along their sides as a footbridge's deck does.
 	var crossings: Array[Crossing] = doc.crossings.duplicate()
 	crossings.append_array(WallGeometry.clearance_crossings(doc))
+	# Structures clear everything under their footprint and a margin around it.
+	crossings.append_array(StructureGeometry.clearance_crossings(doc))
 	facts["fringed"] = not fringe.is_empty()
 	facts["wet"] = wet_on
 	return func(p: Vector2, role: int) -> Vector3:

@@ -1,12 +1,14 @@
 # Structures
 
-Status: data layer only (2026-10-28, topic `structures`, card S1, branch `structures-s1`). A
-structure is a building recorded as a library recipe plus the author's inputs; every peer rebuilds
-it, as walls, crossings and avatar tokens are. This card adds the record, the `structures.json`
-entry of `map.ttmap`, the editor's data calls, the live edit and the fingerprint key. There is no
-geometry, no node, no tool and no library kind yet: the cards that add them grow this page. The
-design is the gitignored `docs/plans/2026-10-28-structures/design.md`; the contract with procgen and
-structgen is `ASSET_PIPELINE.md` section 12.
+Status: data layer (card S1) and build (card S2), 2026-10-28, topic `structures`. A structure is a
+building recorded as a library recipe plus the author's inputs; every peer rebuilds it, as walls,
+crossings and avatar tokens are. S1 added the record, the `structures.json` entry of `map.ttmap`,
+the editor's data calls, the live edit and the fingerprint key. S2 builds the record into the game:
+geometry, the nodes and their collision, the worker prep, scatter clearance, a simple material
+split and the plan rules. There is no tool, no palette and no library kind yet (a temporary
+resolver reads procgen's recipes): the cards that add them grow this page. The design is the
+gitignored `docs/plans/2026-10-28-structures/design.md`; the contract with procgen and structgen is
+`ASSET_PIPELINE.md` section 12.
 
 ## Data
 
@@ -53,10 +55,13 @@ from the document's ground when built (the Build card), exactly as a wall's is.
   values mismatched 1838 times), so they are never rounded by the I/O. Numeric params are float64
   and are rounded to 0.01 on every read and write. `test_map_document_structures.gd` checks the
   entry's bytes across a save and load, and 40 random plans (snapped and unsnapped).
-- **The plan rules are not here yet.** `MapStructureIO._plan_problem()` is the seam for procgen's
-  `ProcgenPlan` (simple polygon, edge length, corner angle), which did not exist in the procgen pin
-  (`dcf0c4d`) when S1 was written. It accepts everything until the pin moves; S2 wires it in. Until
-  then only the record's caps run (count, finite, on the map, span).
+- **The plan rules** are procgen's `ProcgenPlan.problems()` (pin `0ff1712`), the rules structgen
+  edits by: at least 3 and at most 24 points, no side under 0.5 m, no two sides that do not meet
+  closer than 0.3 m or crossing, no corner under 15 degrees, wound the way the presets are (signed
+  area positive, x right and z down) and at least 2 m2. `MapStructureIO._plan_problem()` returns the
+  first problem, after the record's own caps (count, finite, on the map, span), so a bow tie, a
+  sliver, a 0.3 m wall, a plan wound the wrong way or a 1 m square are skipped with a warning by the
+  reader and refused by the writer and the editor.
 
 `MapLibraries.record_for` and `LibraryRegistry.assets_used_by` do not count structure refs yet
 (the library card does that); a map with a non-core recipe will then list its library.
@@ -67,8 +72,101 @@ from the document's ground when built (the Build card), exactly as a wall's is.
 `list()`, `get_structure()`, `add()` (a new id is taken from `MapDocument.next_structure_id()`; an
 existing id replaces; -1 with `last_refusal` `full` or `invalid`), `remove()` and `apply_list()`.
 Every change is one history entry holding the whole list before and after. `apply_list()` is the
-one method the history's undo and redo and a live edit call; it only sets the document's list now,
-and the Build card refreshes the nodes from it.
+one method the history's undo and redo and a live edit call: it sets the document's list, brings the
+map's `AuthoredStructures` up to it (below) and asks the scatter to regrow over the footprints that
+changed. `follow(area)` and `restore(record)` make the nodes follow a sculpt or water edit of the
+ground under them: `HeightEditor` and `WaterEditor` record them in their history entries beside the
+walls' and crossings', and `LiveEditCodec` and `LiveEditReader` carry the record to peers.
+
+## Recipes (temporary resolver)
+
+`StructureRecipes` (`utils/structure_recipes.gd`) turns a reference into a recipe document. Until the
+library card, the `core` starter set is the committed JSON of procgen's recipes
+(`res://procgen/recipes/*.json`): `core:stone_house` (the building recipe, gable roof, stone),
+`core:cottage` (timber), `core:cottage_chimneyed`, `core:townhouse` and `core:townhouse_trimmed`. The
+seam is `StructureRecipes.resolver`, a `Callable(ref) -> {"text": recipe JSON}` that replaces the
+table (the library registry sets it in S3); parsing, the digest (sha256 of the text), the
+interface clamp (`clamp_params`: a name the recipe does not declare is dropped, a number is clamped
+to its min and max) and the thread safety stay here. Every call parses a fresh document, so an
+evaluation never shares one; texts and digests are cached under a mutex.
+
+## Geometry
+
+`StructureGeometry` (`utils/structure_geometry.gd`) is pure and safe on a worker: record, recipe and
+the document's ground go into `evaluate_structure(doc, inputs, true)` and come back as parts in the
+map frame. The footprint is the closed plan guide (`ProcgenPlan.to_guide`), the stored seed is the
+evaluation seed (no engine hash), the params are the record's clamped, plus `textured` = 1 where
+the recipe declares it (`StructureGeometry.textured`, on, as for walls). Parts per structure:
+
+- `meshes`: one entry per (material role, surface kind): `kind` (`masonry`, `stone`, `wood`, `glass`),
+  `role`, `arrays` (with tangents, as `WallGeometry`) and `tags`, the per-vertex provenance ids;
+  `tag_table` holds the paths (node id, then slot path). The tags are kept, not dropped as walls drop
+  them; `AuthoredStructures.provenance_at()` answers which node made a triangle.
+- `collision` faces and `top` (the recipe's walkable surface: a closed hull plus a solid roof),
+  `openings` (doors and windows as oriented boxes) and `layout` (the final `ProcgenBuildingLayout`:
+  volumes, openings with slot provenance). Nothing reads layout or openings in play yet (no vision or
+  navigation exists); they are kept so a later rule can treat a building as a blocker with doors as its
+  portals.
+- `problem` (why nothing was built: invalid record, unknown recipe, a recipe error, over budget) and
+  `warning` (over the soft budget). A refused structure has empty parts and `top` -INF, not a crash.
+
+**Roles** (`StructureLook`): the node type that made a vertex gives its role: `building_walls`,
+`building_timber`, `facade` wall; `roof_gable`, `roof_hip`, `roof_flat` roof; `facade_trim`, `cornice`,
+`quoins` trim; `roof_furniture` chimney. A roof is its own material only where its surface is planks
+(`wood`): a gable's end triangles are masonry and a flat roof's coping is stone, and they stay wall.
+A sixth part, `opening`, is not procgen surface: the recipes build hollow walls, so each opening box
+gets a quad (a window's dark pane, a door's leaf) in its middle plane, two triangles each; without
+them every window shows the ground through the house. Roles split a surface by triangle (the role of
+its first vertex) and keep vertex order, so quad tangents stay valid.
+
+**Budgets** (design.md): a structure over `SOFT_TRIANGLES` 12000 builds and warns, over
+`HARD_TRIANGLES` 25000 is refused with a reason (`parts.problem`; `AuthoredStructures` logs it once and
+keeps it in `notes`). Measured 2026-10-28 (headless, one thread): the starter set at 6 x 4 m is 316,
+1112, 1520, 880 and 2514 triangles (stone house, cottage, chimneyed cottage, townhouse, trimmed
+townhouse; textured stone, panes included); a 40 x 20 m trimmed townhouse in modelled stone is 48k
+triangles (refused, 200 ms to find out). The per-map 150k budget is not enforced.
+
+**Key and clearance.** `key_of()` hashes the recipe digest, reference, footprint, params (as sorted
+JSON), seed, style, `textured`, the mesh format version and the ground sampled along the outline and
+across the inside (every 0.5 m, a coarser grid past 2048 samples). A single sample bump between
+the grid points can miss (the grid is 0.5 m, the document's samples 0.25 m); a sculpt covers many.
+`clearance_crossings()` turns every footprint into strips (a Crossing is a width and two anchors, the
+shape both scatter paths already clear by): rows along the front edge every 0.75 m across the plan,
+cut where the polygon is, so an L plan leaves its notch open, shortened so the clearing reaches about
+0.35 m past the walls. `ScatterGround.sampler` and `ScatterNative` add them to the walls' and
+crossings'; `ScatterRegen.snapshot` and `RockKeep.snapshot` carry `structures` to their workers (the
+first draft of this card forgot, and the plants grew through the houses: measured 86 rows inside
+footprints, then 0 with the copy).
+
+## Nodes
+
+`AuthoredStructures` (`scenes/terrain/authored_structures.gd`), a child of the map root like
+`AuthoredWalls`, identity transform. Per structure a `Structure_<id>` node holds a MeshInstance3D per
+mesh (`wall_masonry`, `roof_wood`, `trim_stone`, `chimney_stone`, `opening_glass`, ...) and a
+`Collision` StaticBody3D (terrain layer, meta `tt_structure` = id) built from the recipe's faces, so
+a token lands on a roof or a wall top as on the ground; `exclude_of(root)` lists the bodies for
+the ground tools (`BrushTool`, the dressing sampler and `GameMap`'s drop height skip or include them as
+for walls).
+
+- **Load.** `AuthoredLoadPrep` has the part `STRUCTURES` (`StructureGeometry.build`), one worker task;
+  `MapSourceLoader._create_authored_root_async` makes the nodes in a frame after the walls
+  (`add_authored_structures`). `AuthoredStructures.create()` seeds the key and the cache from the
+  worker's parts.
+- **Edit.** `refresh(doc)` compares each key with the key its node was built from. A changed
+  structure is built on a `WorkerThreadPool` task from a copy of the record and a ground snapshot
+  (`ground_snapshot`: size, spacing and the shared height array, so a sculpt cannot race it); the old
+  node stays until the new one is ready (`_process` lands it, `built` is emitted; `flush()` waits for
+  all, for tests and tools). Newest edit wins: a structure edited again while its build runs has the
+  older job forgotten (its task finishes and is dropped), and an edit back to what is on show cancels
+  the build. Built parts are kept by key (48 of them), so an undo or redo makes its node at once.
+  `refresh(doc, false)` builds on the calling thread.
+- **Materials.** The wall materials of `AuthoredWalls` (rock by style, the masonry tile tinted by the
+  rock's mean colour, planks by climate) with `StructureLook.ROLE_TINTS` over them: a warm terracotta
+  roof over the planks, a lifted light trim, chimney stone as it is. Panes are unshaded flat
+  vertex colours (a shaded pane went black on the side away from the sun). This is the simplest split;
+  card S6 owns the painterly role table and a roof tile surface.
+- **Fingerprint.** `MapFingerprint`'s `structures` key now has its `node <name> <verts> <aabb>` lines
+  (the part S1 left a seam for).
 
 ## Live edit and fingerprint
 
@@ -78,17 +176,32 @@ and the Build card refreshes the nodes from it.
   It takes no direction: an undo is the same op with the list before. 128 structures are at most
   about 128 KB of JSON-shaped values, sent once per committed edit, never per drag frame.
 - `MapFingerprint` has the key `structures`: `record <id> <recipe> <sha prefix of the record's
-  JSON>` per document record (moves with any change of footprint, seed, param, style or recipe
-  before geometry exists), plus `node <name> <verts> <aabb>` per child of `AuthoredStructures`
-  once the Build card adds that node. Design note: the design named only the node part; the record
-  part is what makes the key useful now.
+  JSON>` per document record (moves with any change of footprint, seed, param, style or recipe),
+  plus `node <name> <verts> <aabb>` per child of `AuthoredStructures` (the nodes are built, so
+  both parts run; a build still in flight has no node line yet). Design note: the design named only
+  the node part; the record part is what makes the key useful before a build lands.
 
 ## Not yet
 
-- Geometry (`StructureGeometry`), the nodes and collision (`AuthoredStructures`), the load prep.
-- The library kind (`structures/` folder, index, registry, partial bundles), so recipes cannot be
-  resolved yet; `ProcgenPlan` for the footprint rules.
+- The library kind (`structures/` folder, index, registry, partial bundles, `MapLibraries`): recipes
+  come from procgen's folder through the temporary resolver; a missing recipe builds nothing and logs
+  a warning (the transfer placeholder is the library card's).
 - The tool, the palette, handles, variants; retiring `Wall.Kind.BUILDING`.
-- Scatter clearance under the footprint, following sculpt and water edits.
+- The painterly roles (a roof tile texture, slate, window glow), the look pass on three biomes, the
+  frame cost of a 20-structure town (card S6; PERFORMANCE.md has no structure line until it is
+  measured with the pinned procedure).
+- Cross-platform digests (the pins were taken on Windows only; card S9).
 
-Tests: `tests/unit/test_map_document_structures.gd` (in the authoring subset).
+## Tests and render job
+
+`tests/unit/test_map_document_structures.gd` (the record and the map entry) and
+`tests/unit/test_structure_build.gd` (recipes, geometry, key, budgets, nodes, collision, scatter
+clearance, asynchronous edits, load prep, fingerprint, the plan rules), both in the authoring subset.
+`tests/fixtures/structure_digests.txt` pins `<ref> <md5> <triangles>` for the starter set at a 6 x 4 m
+plan, seed 5, flat ground (`StructureGeometry.digest_of`: every mesh's kind, role, vertices, normals,
+UVs, colours and indices, the collision and the top). A recipe change in procgen, the role table, the
+pane colours or the split moves them on purpose: the test prints the new lines; regenerate the file and say
+why in the commit. The render job `tools/render_jobs/jobs/structure_basic.json` (probe
+`probes/structures.gd`) lays a street, a chimneyed cottage, a trimmed townhouse, a townhouse on an L plan
+and a stone house in a new unsaved map and captures the home and two close views; it logs how many
+scatter rows stand inside a footprint (0 after the fix above).

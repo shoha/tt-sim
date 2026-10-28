@@ -370,5 +370,6 @@ static func _scatter(root: Node) -> Array:
 		lines.append_array(asset_rows)
 	var ctx := HashingContext.new()
 	ctx.start(HashingContext.HASH_SHA256)
-	ctx.update("\n".join(lines).to_utf8_buffer())
+	if not lines.is_empty():
+		ctx.update("\n".join(lines).to_utf8_buffer())
 	return [counts, ctx.finish().hex_encode().substr(0, HASH_CHARS)]

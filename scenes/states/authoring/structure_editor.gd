@@ -1,13 +1,18 @@
 class_name StructureEditor
 extends RefCounted
 
-## AuthoringEditor's structure edits (reached as `AuthoringEditor.structures`), data only for
-## now: adding and removing structure records and putting a whole list into the document, each
-## change one history entry holding the list before and after (structures are small values,
-## replaced whole, never edited in place), as WallEditor does for walls. There is no geometry
-## yet: the build and the nodes arrive with the Build card, which refreshes them from
-## apply_list() (the one method the history's undo and redo and a live structures edit call).
-## Frames: document (map XZ metres). Summary: docs/systems/structures.md.
+## AuthoringEditor's structure edits (reached as `AuthoringEditor.structures`): adding and removing
+## structure records and putting a whole list into the document, each change one history entry
+## holding the list before and after (structures are small values, replaced whole, never edited in
+## place), as WallEditor does for walls. apply_list() is the one method the history's undo and
+## redo and a live structures edit call: it sets the document's list, brings the map's
+## AuthoredStructures up to it (a changed structure builds on a worker and appears when ready) and
+## asks the scatter to regrow where a footprint changed. follow() and restore() make the nodes
+## follow a sculpt or water edit of the ground under them. Frames: document (map XZ metres).
+## Summary: docs/systems/structures.md.
+
+## An edit reaches structures whose footprint comes within this of its area (metres).
+const FOLLOW_REACH_M := 1.0
 
 ## Why the last add() made nothing (last_refusal).
 const REFUSED_FULL := &"full"
@@ -84,12 +89,62 @@ func remove(structure_id: int) -> bool:
 	return true
 
 
-## Puts `structures` into the document: the undo and redo of a structure edit, and a live
-## structures edit. `area` (map XZ, the edit's reach) is for the geometry refresh to come.
-func apply_list(structures: Array[Structure], _area: Rect2) -> void:
+## Refreshes the structures near an edit of the ground or water over `area` (map XZ; an empty
+## rectangle: everywhere), without a history entry of its own: AuthoredStructures rebuilds the
+## structures whose ground changed. Returns what the edit's entry needs to refresh them again on
+## undo and redo ({"area": area}), or {} when the edit reached no structure.
+func follow(area: Rect2) -> Dictionary:
+	for structure in _editor().document.structures:
+		if (
+			not area.has_area()
+			or StructureGeometry.clear_bounds(structure).grow(FOLLOW_REACH_M).intersects(area)
+		):
+			apply_list(_current(), Rect2())
+			return {"area": area}
+	return {}
+
+
+## Refreshes the structures again after an edit's undo or redo put its ground back (a follow()
+## record). {} does nothing.
+func restore(record: Dictionary, _redo: bool) -> void:
+	if record.is_empty():
+		return
+	apply_list(_current(), Rect2())
+
+
+## Puts `structures` into the document and refreshes the nodes (and the scatter over `area`, map
+## XZ): the undo and redo of a structure edit, and a live structures edit.
+func apply_list(structures: Array[Structure], area: Rect2) -> void:
+	var e := _editor()
 	var copied: Array[Structure] = []
 	copied.assign(structures)
-	_editor().document.structures = copied
+	e.document.structures = copied
+	if is_instance_valid(e.map_root):
+		AuthoredStructures.refresh_map(e.map_root, e.document)
+	if is_instance_valid(e.scatter) and area.has_area():
+		e.scatter.request_region(area)
+
+
+## The area a change from `before` to `after` reaches: the footprints (grown) of every structure
+## that was added, removed or changed.
+static func _area_of(before: Array[Structure], after: Array[Structure]) -> Rect2:
+	var area := Rect2()
+	var kept := {}
+	for structure in before:
+		kept[structure.id] = structure
+	var touched: Array[Structure] = []
+	for structure in after:
+		var old: Structure = kept.get(structure.id)
+		if old == null or not old.same_as(structure):
+			touched.append(structure)
+			if old != null:
+				touched.append(old)
+		kept.erase(structure.id)
+	touched.append_array(kept.values())
+	for structure in touched:
+		var bounds := StructureGeometry.clear_bounds(structure)
+		area = bounds if not area.has_area() else area.merge(bounds)
+	return area
 
 
 ## The document's structures as a new list of the same objects.
@@ -107,7 +162,7 @@ func _change(label: String, after: Array[Structure]) -> void:
 		e.end_stroke()
 	e.finish_height_work()
 	var before := _current()
-	var area := Rect2()
+	var area := _area_of(before, after)
 	apply_list(after, area)
 	(
 		e

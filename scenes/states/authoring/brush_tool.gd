@@ -610,6 +610,7 @@ func _crossing_bodies() -> Array[RID]:
 		return []
 	var bodies := AuthoredCrossings.exclude_of(editor.map_root)
 	bodies.append_array(AuthoredWalls.exclude_of(editor.map_root))
+	bodies.append_array(AuthoredStructures.exclude_of(editor.map_root))
 	return bodies
 
 

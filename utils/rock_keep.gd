@@ -213,6 +213,7 @@ static func snapshot(
 	copy.water_dressing = wet.duplicate()
 	copy.crossings = doc.crossings.duplicate()
 	copy.walls = doc.walls.duplicate()
+	copy.structures = doc.structures.duplicate()
 	return copy
 
 

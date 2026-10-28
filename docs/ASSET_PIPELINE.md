@@ -1997,9 +1997,13 @@ library's Import is the producer-side check.
 
 Status per part. **Built (card S1):** the map entry `structures.json`, the `Structure` record, its
 validation, the live edit and the fingerprint key (the **Map** bullet below; model and rules in
-`systems/structures.md`). **Proposed, not built:** everything else here (recipe resolution, the
-library kind, geometry, determinism gate, budgets, the role table). The full design is the
-gitignored `docs/plans/2026-10-28-structures/design.md`.
+`systems/structures.md`). **Built (card S2):** the build (`StructureGeometry`, `AuthoredStructures`,
+worker prep, collision, scatter clearance), the plan rules (`ProcgenPlan` in the map reader), the
+triangle budgets (12k soft, 25k hard, enforced per structure), a first role table and pinned digests
+of the starter set at `tests/fixtures/structure_digests.txt`; recipes come from procgen's
+`recipes/` folder through a temporary resolver. **Proposed, not built:** the library kind, the
+determinism gate on every platform, the painterly role table and the per-map budget. The full
+design is the gitignored `docs/plans/2026-10-28-structures/design.md`.
 
 Producers: procgen (the generator core), structgen (the editor); consumer: tt-sim. Buildings are
 NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuilds.
@@ -2026,8 +2030,8 @@ NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuil
   recipe: "<library>:<id>", footprint, seed, params, style}]}`. `id` 1..255 and unique; at most
   128 structures and 1 MB; `recipe` a `LibraryIds` reference (library id, structure id
   `[a-z][a-z0-9_]*` without `__`); `footprint` 3 to 24 `[x, z]` points in map metres, finite, on
-  the map, at most 64 m across, edge 0 the front (the shared plan rules, `ProcgenPlan`, are a seam
-  not yet wired); `seed` a whole number 0..1e9; `params` at most 16 entries, each a bool or a
+  the map, at most 64 m across, edge 0 the front, and accepted by `ProcgenPlan.problems()` (simple,
+  wound positively, sides at least 0.5 m, corners at least 15 degrees, at least 2 m2); `seed` a whole number 0..1e9; `params` at most 16 entries, each a bool or a
   finite number within 1e6 rounded to 0.01; `style` a short string. Footprint points are float32
   values (the editor snaps them to 1 cm) and the file is byte-identical across a load and a save.
   A bad record is skipped with a warning; the writer refuses a bad document. The same list
@@ -2039,8 +2043,15 @@ NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuil
   on Windows only: repeated and worker-thread builds give identical digests (12 cases). Linux
   is covered for the self-check samples; the 42 building digests are not yet run on every
   shipped platform. Nothing authoritative may depend on bit-equality of a built structure.
-- **Budgets (proposal).** Per structure 12k triangles soft, 25k hard; per map about 150k;
-  textured masonry is the default for core; evaluation of a starter structure is 2 to 45 ms.
+- **Budgets.** Per structure 12k triangles soft (a warning), 25k hard (refused with a reason; built
+  in S2); per map about 150k (proposal, not enforced); textured masonry is the default for core;
+  evaluation of a starter structure is 2 to 45 ms.
+- **Roles (first table, S2).** Material roles come from the node type of a vertex's tag: wall
+  (`building_walls`, `building_timber`, `facade`), roof (`roof_gable`, `roof_hip`, `roof_flat`; its
+  own material only where the surface is planks), trim (`facade_trim`, `cornice`, `quoins`), chimney
+  (`roof_furniture`). tt-sim adds a pane (opening) quad in the middle of each opening box, since the
+  recipes' walls are hollow. The table is `StructureLook`; the painterly version is card S6.
 - **Round trip.** A structure change is done when a recipe from a library folder builds through
   tt-sim's `StructureGeometry` with its pinned digest, a token stands on its roof, and the map
-  saves and reloads with the same fingerprint.
+  saves and reloads with the same fingerprint (`test_structure_build.gd` does all three for the
+  starter set).
