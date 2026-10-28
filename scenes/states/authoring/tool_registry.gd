@@ -77,4 +77,5 @@ static func _make() -> Array[ToolDescriptor]:
 		WaterTool.new(),
 		BridgeTool.new(),
 		WallTool.new(),
+		StructureTool.new(),
 	]

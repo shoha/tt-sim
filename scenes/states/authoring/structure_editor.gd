@@ -17,6 +17,7 @@ const FOLLOW_REACH_M := 1.0
 ## Why the last add() made nothing (last_refusal).
 const REFUSED_FULL := &"full"
 const REFUSED_INVALID := &"invalid"
+const REFUSED_UNKNOWN := &"unknown"
 
 ## Why the last add() made nothing, or &"".
 var last_refusal: StringName = &""
@@ -47,6 +48,64 @@ func list() -> Array[Structure]:
 func get_structure(structure_id: int) -> Structure:
 	var found := _editor().document.structure(structure_id)
 	return found.copy() if found != null else null
+
+
+## The structure a tool lays for recipe `ref` on `plan` (map XZ, StructurePlacement's plans), seed
+## `seed_value`: a record with no id yet (add() takes one), its style the biome under the plan's
+## middle. Null with last_refusal set when the document is full, the recipe is not served
+## (REFUSED_UNKNOWN) or the plan is not one the writer takes. Changes nothing: the tool's preview
+## and what add() lays.
+func lot(ref: String, plan: PackedVector2Array, seed_value: int) -> Structure:
+	var doc := _editor().document
+	last_refusal = &""
+	if doc.next_structure_id() < 0:
+		last_refusal = REFUSED_FULL
+		return null
+	if not LibraryStructureStore.has(ref):
+		last_refusal = REFUSED_UNKNOWN
+		return null
+	var middle := Vector2.ZERO
+	for p in plan:
+		middle += p / maxf(plan.size(), 1.0)
+	var structure := Structure.make(
+		doc.next_structure_id(),
+		ref,
+		plan,
+		clampi(seed_value, 0, Structure.MAX_SEED),
+		{},
+		CrossingPlacement.style_at(doc, middle)
+	)
+	if MapStructureIO.structure_problem(structure, doc.extent_m()) != "":
+		last_refusal = REFUSED_INVALID
+		return null
+	return structure
+
+
+## The id of the structure whose footprint holds world point `point`, or -1.
+func structure_at(point: Vector3) -> int:
+	var e := _editor()
+	return StructurePlacement.structure_at(e.document, e.to_map_xz(point))
+
+
+## Gives structure `structure_id` a new seed (the next one in the repeatable series) as one
+## history entry: the same plan and recipe, drawn afresh. False when there is none.
+func reroll(structure_id: int) -> bool:
+	var doc := _editor().document
+	var old := doc.structure(structure_id)
+	if old == null:
+		return false
+	var changed := old.copy()
+	changed.seed_value = next_seed(old.seed_value)
+	var after: Array[Structure] = []
+	for entry in doc.structures:
+		after.append(changed if entry.id == structure_id else entry)
+	_change("Re-roll " + _label(old), after)
+	return true
+
+
+## The seed after `current` (a fixed step round the seed range, so a re-roll is repeatable).
+static func next_seed(current: int) -> int:
+	return (current * 7919 + 104729) % Structure.MAX_SEED
 
 
 ## Lays `structure` as one history entry: a structure whose id the document holds replaces it,

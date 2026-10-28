@@ -29,14 +29,6 @@ const KIND_TILES: Array[Dictionary] = [
 		"tooltip": "A post and rail fence: posts every couple of metres, two rails between",
 	},
 	{
-		"kind": Wall.Kind.BUILDING,
-		"id": &"wall_building",
-		"label": "Building",
-		"icon": "home",
-		"tooltip":
-		"A stone building with a door and a gable roof: drag from one corner to the opposite one",
-	},
-	{
 		"kind": Wall.Kind.ROW,
 		"id": &"wall_row",
 		"label": "Street",
@@ -121,9 +113,9 @@ const ROOF_TILES: Array[Dictionary] = [
 const HINT := (
 	"Drag along the ground to lay a wall or fence; start the next drag at its end to carry on, and"
 	+ " end one at its first end to close the loop. Shift + scroll or [ and ] set the height. A"
-	+ " building goes corner to corner: turn it first with Q and E. A street is dragged along its"
-	+ " line: Q and E pick the side, R mixes the buildings afresh, and the height keys set how far"
-	+ " back they stand. Ctrl and click removes one."
+	+ " street is dragged along its line: Q and E pick the side, R mixes the buildings afresh, and"
+	+ " the height keys set how far back they stand. Ctrl and click removes one. Single buildings"
+	+ " are the Building tool's."
 )
 
 var kind_field: TileField

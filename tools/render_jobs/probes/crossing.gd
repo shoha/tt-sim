@@ -32,7 +32,7 @@ extends RefCounted
 
 ## Test level prefixes `save` writes and `cleanup` deletes (P4b-1's look pass, P4b-3's
 ## judgment set and performance pass).
-const TEST_PREFIXES: Array[String] = ["_p4b1_", "_p4b3_"]
+const TEST_PREFIXES: Array[String] = ["_p4b1_", "_p4b3_", "_structs4_"]
 const WATER := preload("res://tools/render_jobs/probes/water.gd")
 
 static var _found: Dictionary = {}

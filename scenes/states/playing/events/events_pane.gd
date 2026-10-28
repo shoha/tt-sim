@@ -53,6 +53,8 @@ signal bridge_kind_selected(kind: int)
 signal wall_kind_selected(kind: int)
 signal wall_preset_selected(preset: int)
 signal wall_style_selected(style: int)
+signal structure_selected(ref: String)
+signal structure_reroll_requested
 signal brush_size_changed(radius: float)
 signal brush_strength_changed(flow: float)
 
@@ -87,8 +89,14 @@ const TOOL_HINTS := {
 	WallTool.ID:
 	(
 		"Drag along the ground to lay a stone wall or a fence; start the next drag at its end to carry"
-		+ " on. A building goes corner to corner; Q and E turn it. A street is dragged along its"
-		+ " line; Q and E pick the side, R mixes it afresh. Hold Ctrl and click one to remove it."
+		+ " on. A street is dragged along its line; Q and E pick the side, R mixes it afresh."
+		+ " Hold Ctrl and click one to remove it."
+	),
+	StructureTool.ID:
+	(
+		"Pick a building, then click the board to put it down, or drag out a corner to size it."
+		+ " It settles on dry, level ground. Q and E turn it; R draws it afresh."
+		+ " Right-click or Delete removes the one under the cursor."
 	),
 	EventPresets.COLLAPSE: "Click a bridge: it breaks and falls into the water for everyone.",
 	EventPresets.TOPPLE:
@@ -133,6 +141,7 @@ var fire_pane: FireToolPane
 var water_pane: WaterToolPane
 var bridge_pane: BridgeToolPane
 var wall_pane: WallToolPane
+var structure_pane: StructureToolPane
 ## Start a fire's Shape field (IGNITE_SHAPE_TILES), and the shape it shows.
 var ignite_shape_field: TileField
 var ignite_shape: int = IgniteMode.Shape.CIRCLE
@@ -204,7 +213,10 @@ func show_tool(tool_id: StringName, pressed: bool = true) -> void:
 	var above: Control = (preset_note as Control) if preset else tool_field
 	move_child(_options_holder, above.get_index() + 1)
 	move_child(_advanced, _options_holder.get_index() + 1)
-	var sized := tool_id != &"" and not tool_id in [WaterTool.ID, BridgeTool.ID, WallTool.ID]
+	var sized := (
+		tool_id != &""
+		and not tool_id in [WaterTool.ID, BridgeTool.ID, WallTool.ID, StructureTool.ID]
+	)
 	_advanced.visible = sized and tool_id != EventPresets.COLLAPSE
 	_strength_row.visible = not preset
 	var path := tool_id == EventPresets.IGNITE and ignite_shape == IgniteMode.Shape.PATH
@@ -367,6 +379,13 @@ func _build_tool_options(tool_id: StringName) -> Control:
 			wall_pane.preset_selected.connect(wall_preset_selected.emit)
 			wall_pane.style_selected.connect(wall_style_selected.emit)
 			return wall_pane
+		StructureTool.ID:
+			structure_pane = StructureToolPane.new()
+			structure_pane.get_node("StructureHeader").visible = false
+			(structure_pane.get_node("StructureHint") as Label).text = String(TOOL_HINTS[tool_id])
+			structure_pane.structure_selected.connect(structure_selected.emit)
+			structure_pane.reroll_requested.connect(structure_reroll_requested.emit)
+			return structure_pane
 	var box := VBoxContainer.new()
 	box.name = String(tool_id).to_pascal_case() + "Options"
 	# The gesture line belongs to the group under it (S2), but its tiles' heading still has
