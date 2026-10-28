@@ -1,0 +1,132 @@
+class_name StructureMaterials
+extends RefCounted
+
+## The materials of built structures and street lots (card S6), one per (surface kind, role, style)
+## that the nodes share: the painterly wall shader over the baked masonry set or the planks, the
+## roof tile shader, the modelled-stone material and the unshaded panes. The look and the budget are
+## in docs/systems/structures.md "Look"; the shaders are shaders/structure_wall.gdshader and
+## structure_roof.gdshader (both include structure_painterly.gdshaderinc). Main thread only: it
+## makes resources.
+
+const WALL_SHADER := preload("res://shaders/structure_wall.gdshader")
+const ROOF_SHADER := preload("res://shaders/structure_roof.gdshader")
+
+## The lift toward cream a grey rock gets (saturation about the texture's luminance, then a warm
+## bias), for masonry, and for planks (already warm, so less).
+const MASONRY_SATURATION := 1.2
+const MASONRY_WARM := Vector3(1.14, 1.10, 1.0)
+## How much of a rock's own hue is replaced by cream (the rest keeps a biome's stone its own).
+const MASONRY_CREAM := 0.75
+const TIMBER_SATURATION := 1.2
+const TIMBER_WARM := Vector3(1.04, 0.98, 0.90)
+
+
+## The material of surface `kind` in `role` for style `style`, with the palette at `root`.
+static func make(kind: String, role: String, style: String, root: String) -> Material:
+	var material: Material = null
+	match kind:
+		StructureLook.GLASS_KIND:
+			return pane()
+		"masonry":
+			material = _masonry(style, root, role)
+		"wood":
+			material = _roof() if role == StructureLook.ROOF else _timber(style, root, role)
+		_:
+			var stone := _stone(style, root)
+			stone.albedo_color *= StructureLook.tint_of(role)
+			material = stone
+	return material
+
+
+## Panes and door leaves: the vertex colour as a flat painted tone, seen from both sides. Unshaded,
+## because a pane in the shade of its own reveal went black when lit (judged 2026-10-28).
+static func pane() -> ORMMaterial3D:
+	var material := ORMMaterial3D.new()
+	material.vertex_color_use_as_albedo = true
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	return material
+
+
+static func _roof() -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = ROOF_SHADER
+	return material
+
+
+## Textured masonry: the baked courses, the rock's mean colour as the tint, lifted toward cream.
+static func _masonry(style: String, root: String, role: String) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = WALL_SHADER
+	var textures := MasonryTextures.textures()
+	var surface_name := AuthoredCrossings.stone_surface(style, root)
+	var surface: Dictionary = PaletteLibrary.surfaces(root).get(surface_name, {})
+	var mean: Array = surface.get("albedo_mean_linear", [0.3, 0.3, 0.3])
+	var tint := (
+		MasonryTextures.tint_of(
+			mean,
+			AuthoredWalls.WALL_MASONRY_LIFTS.get(surface_name, AuthoredWalls.WALL_MASONRY_LIFT)
+		)
+		* StructureLook.tint_of(role)
+	)
+	material.set_shader_parameter("albedo_tint", Vector3(tint.r, tint.g, tint.b))
+	if not textures.is_empty():
+		material.set_shader_parameter("albedo_tex", textures.albedo)
+		material.set_shader_parameter("normal_tex", textures.normal)
+		material.set_shader_parameter("orm_tex", textures.orm)
+	material.set_shader_parameter(
+		"uv_scale",
+		(
+			Vector2(1.0 / MasonryTextures.TILE_M, 1.0 / MasonryTextures.TILE_H_M)
+			/ AuthoredWalls.MASONRY_SCALE_UP
+		)
+	)
+	material.set_shader_parameter("normal_scale", 1.0)
+	material.set_shader_parameter("saturation", MASONRY_SATURATION)
+	material.set_shader_parameter("warm_bias", MASONRY_WARM)
+	material.set_shader_parameter("cream_amount", MASONRY_CREAM)
+	return material
+
+
+## Timber: the library's planks tinted by climate, kept honey-warm.
+static func _timber(style: String, root: String, role: String) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = WALL_SHADER
+	var biome := PaletteLibrary.biome(style, root) if style != "" else {}
+	var tint: Color = (
+		AuthoredCrossings.WOOD_TINTS.get(
+			String(biome.get("climate", "")), AuthoredCrossings.DEFAULT_WOOD_TINT
+		)
+		* StructureLook.tint_of(role)
+	)
+	var surface: Dictionary = PaletteLibrary.surfaces(root).get(
+		LibraryBindings.crossing_planks(), {}
+	)
+	var albedo := GroundPalette.load_texture(root, surface.get("albedo", ""))
+	if albedo != null:
+		material.set_shader_parameter("albedo_tex", albedo)
+	var normal := GroundPalette.load_texture(root, surface.get("normal", ""))
+	if normal != null:
+		material.set_shader_parameter("normal_tex", normal)
+	var orm := GroundPalette.load_texture(root, surface.get("orm", ""))
+	if orm != null:
+		material.set_shader_parameter("orm_tex", orm)
+	material.set_shader_parameter("albedo_tint", Vector3(tint.r, tint.g, tint.b))
+	material.set_shader_parameter("normal_scale", AuthoredWalls.WOOD_NORMAL_SCALE)
+	material.set_shader_parameter("saturation", TIMBER_SATURATION)
+	material.set_shader_parameter("warm_bias", TIMBER_WARM)
+	return material
+
+
+## Modelled stone (coping, the placeholder plot): the wall materials of AuthoredWalls, triplanar.
+static func _stone(style: String, root: String) -> ORMMaterial3D:
+	var surface := AuthoredCrossings.stone_surface(style, root)
+	var tint: Color = AuthoredWalls.WALL_SURFACE_TINTS.get(surface, AuthoredWalls.WALL_STONE_TINT)
+	var material := AuthoredCrossings.surface_material(
+		root, surface, tint, AuthoredWalls.STONE_NORMAL_SCALE
+	)
+	var tile := float(PaletteLibrary.surfaces(root).get(surface, {}).get("tile_m", 3.0))
+	material.uv1_triplanar = true
+	material.uv1_triplanar_sharpness = 4.0
+	material.uv1_scale = Vector3.ONE / maxf(tile * AuthoredCrossings.STONE_TILE_SCALE, 0.1)
+	return material

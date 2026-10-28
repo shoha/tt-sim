@@ -497,7 +497,7 @@ func test_a_street_builds_buildings_and_clears_plants_under_them() -> void:
 	assert_gt(lots.size(), 4, "a good few buildings along 24 m")
 	var node := _nodes().get_wall_node(id)
 	assert_not_null(node.get_node_or_null("Stone"), "masonry")
-	assert_not_null(node.get_node_or_null("Wood"), "roofs")
+	assert_not_null(node.get_node_or_null("Roof"), "roofs, a mesh of their own since card S6")
 	assert_not_null(node.get_node_or_null("Collision"), "and a hull")
 	assert_eq(WallGeometry.row_lots(_doc, street).size(), lots.size(), "the lots repeat")
 	assert_eq(

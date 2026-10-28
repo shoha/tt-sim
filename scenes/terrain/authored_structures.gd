@@ -18,7 +18,8 @@ extends Node3D
 ## dropped). Built parts are kept by key (CACHE_LIMIT), so an undo, or a drag back to a shape seen
 ## before, makes its node at once. A load builds the parts on a worker (AuthoredLoadPrep) and
 ## create() only makes the nodes. Materials come from the palette as a wall's do, split by role
-## (StructureLook). Summary: docs/systems/structures.md.
+## (StructureLook) and drawn by the painterly shaders (StructureMaterials, StructurePaint).
+## Summary: docs/systems/structures.md.
 
 ## Emitted when nodes were made or freed after an asynchronous build (the count of structures).
 signal built(count: int)
@@ -433,81 +434,14 @@ static func _body(faces: PackedVector3Array, structure_id: int) -> StaticBody3D:
 # --- materials ---------------------------------------------------------------------------
 
 
-## The material of surface `kind` in `role` for a structure of style `style`: the wall materials of
-## AuthoredWalls (rock, masonry, planks) with the role's tint over them, one shared per triple.
+## The material of surface `kind` in `role` for a structure of style `style` (StructureMaterials:
+## the painterly wall and roof shaders over the rock's masonry and the planks), one shared per
+## triple.
 func _material(kind: String, role: String, style: String) -> Material:
 	var key := "%s:%s:%s" % [kind, role, style]
-	if _materials.has(key):
-		return _materials[key]
-	var material: ORMMaterial3D = null
-	match kind:
-		"masonry":
-			material = _masonry_material(style)
-		"wood":
-			material = _wood_material(style)
-		StructureLook.GLASS_KIND:
-			material = _pane_material()
-		_:
-			material = _stone_material(style)
-	material.albedo_color *= StructureLook.tint_of(role)
-	_materials[key] = material
-	return material
-
-
-## Panes and door leaves: the vertex colour as a flat painted tone, seen from both sides. Unshaded,
-## because a pane in the shade of its own reveal went black when lit (judged 2026-10-28).
-func _pane_material() -> ORMMaterial3D:
-	var material := ORMMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	return material
-
-
-func _stone_material(style: String) -> ORMMaterial3D:
-	var surface := AuthoredCrossings.stone_surface(style, _palette_root)
-	var tint: Color = AuthoredWalls.WALL_SURFACE_TINTS.get(surface, AuthoredWalls.WALL_STONE_TINT)
-	var material := AuthoredCrossings.surface_material(
-		_palette_root, surface, tint, AuthoredWalls.STONE_NORMAL_SCALE
-	)
-	var tile := float(PaletteLibrary.surfaces(_palette_root).get(surface, {}).get("tile_m", 3.0))
-	material.uv1_triplanar = true
-	material.uv1_triplanar_sharpness = 4.0
-	material.uv1_scale = Vector3.ONE / maxf(tile * AuthoredCrossings.STONE_TILE_SCALE, 0.1)
-	return material
-
-
-func _masonry_material(style: String) -> ORMMaterial3D:
-	var textures := MasonryTextures.textures()
-	var material := ORMMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	var surface_name := AuthoredCrossings.stone_surface(style, _palette_root)
-	var surface: Dictionary = PaletteLibrary.surfaces(_palette_root).get(surface_name, {})
-	var mean: Array = surface.get("albedo_mean_linear", [0.3, 0.3, 0.3])
-	material.albedo_color = MasonryTextures.tint_of(
-		mean, AuthoredWalls.WALL_MASONRY_LIFTS.get(surface_name, AuthoredWalls.WALL_MASONRY_LIFT)
-	)
-	if not textures.is_empty():
-		material.albedo_texture = textures.albedo
-		material.normal_enabled = true
-		material.normal_texture = textures.normal
-		material.normal_scale = 1.0
-		material.orm_texture = textures.orm
-	material.uv1_scale = (
-		Vector3(1.0 / MasonryTextures.TILE_M, 1.0 / MasonryTextures.TILE_H_M, 1.0)
-		/ AuthoredWalls.MASONRY_SCALE_UP
-	)
-	return material
-
-
-func _wood_material(style: String) -> ORMMaterial3D:
-	var biome := PaletteLibrary.biome(style, _palette_root) if style != "" else {}
-	var tint: Color = AuthoredCrossings.WOOD_TINTS.get(
-		String(biome.get("climate", "")), AuthoredCrossings.DEFAULT_WOOD_TINT
-	)
-	return AuthoredCrossings.surface_material(
-		_palette_root, LibraryBindings.crossing_planks(), tint, AuthoredWalls.WOOD_NORMAL_SCALE
-	)
+	if not _materials.has(key):
+		_materials[key] = StructureMaterials.make(kind, role, style, _palette_root)
+	return _materials[key]
 
 
 ## Resource paths of every palette texture the structures of `doc` bind (the loader requests them on

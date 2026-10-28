@@ -37,7 +37,88 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _inside(base)
 		"tile":
 			return _tile(base, step)
+		"many":
+			return _many(base, step)
+		"plain":
+			return _plain(base, bool(step.get("on", true)))
 	return "unknown action %s" % step.get("action", "")
+
+
+## `count` structures on a grid around the map's centre (card S6 perf pass): the four recipes of
+## BASIC_LOTS in turn, 14 m apart, each with its own seed, then waits for the builds. Returns the
+## triangles they add up to.
+static func _many(base: Node, step: Dictionary) -> String:
+	var editor := _editor(base)
+	if editor == null:
+		return "no authoring editor"
+	var count := int(step.get("count", 20))
+	var columns := int(ceil(sqrt(float(count))))
+	var laid := 0
+	var refusals := {}
+	for k in count:
+		var lot: Array = BASIC_LOTS[k % BASIC_LOTS.size()]
+		var at := Vector2(
+			(float(k % columns) - (columns - 1) * 0.5) * 14.0,
+			(float(k / columns) - (columns - 1) * 0.5) * 14.0
+		)
+		var plan := _rect(float(lot[3]), float(lot[4]), float(lot[5]) + k * 7.0, at)
+		var structure := Structure.make(0, String(lot[0]), plan, 100 + k)
+		if String(lot[0]) == "core:townhouse":
+			structure.footprint = _l_shape(at)
+		if editor.structures.add(structure) >= 0:
+			laid += 1
+		else:
+			refusals["%d:%s" % [k, editor.structures.last_refusal]] = true
+	var nodes := _nodes(base)
+	var triangles := 0
+	if nodes != null:
+		nodes.flush()
+		for child in nodes.get_children():
+			for mesh in child.get_children():
+				if mesh is MeshInstance3D:
+					var instance := mesh as MeshInstance3D
+					triangles += (
+						(
+							(
+								instance.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX]
+								as PackedInt32Array
+							)
+							. size()
+						)
+						/ 3
+					)
+	return (
+		"laid %d of %d structures, %d triangles%s"
+		% [
+			laid,
+			count,
+			triangles,
+			"" if refusals.is_empty() else " (refused: " + str(refusals.keys()) + ")"
+		]
+	)
+
+
+## Draws every structure mesh with one plain white StandardMaterial3D (on), or with its own
+## materials again (off, which needs the originals kept: it rebuilds the nodes), so a run can split
+## the cost of the geometry and shadows from the cost of the painterly shaders.
+static func _plain(base: Node, on: bool) -> String:
+	var nodes := _nodes(base)
+	if nodes == null:
+		return "no structures"
+	var plain := StandardMaterial3D.new()
+	plain.vertex_color_use_as_albedo = true
+	var changed := 0
+	for child in nodes.get_children():
+		for mesh in child.get_children():
+			if mesh is MeshInstance3D and (mesh as MeshInstance3D).mesh != null:
+				var instance := mesh as MeshInstance3D
+				if on:
+					instance.set_meta("tt_s6_material", instance.mesh.surface_get_material(0))
+					instance.mesh.surface_set_material(0, plain)
+				elif instance.has_meta("tt_s6_material"):
+					instance.mesh.surface_set_material(0, instance.get_meta("tt_s6_material"))
+				changed += 1
+	return "%s %d meshes" % ["plain" if on else "restored", changed]
 
 
 ## One structure alone at the centre (the thumbnail scene), the front turned `yaw` degrees.

@@ -177,13 +177,51 @@ for walls).
   older job forgotten (its task finishes and is dropped), and an edit back to what is on show cancels
   the build. Built parts are kept by key (48 of them), so an undo or redo makes its node at once.
   `refresh(doc, false)` builds on the calling thread.
-- **Materials.** The wall materials of `AuthoredWalls` (rock by style, the masonry tile tinted by the
-  rock's mean colour, planks by climate) with `StructureLook.ROLE_TINTS` over them: a warm terracotta
-  roof over the planks, a lifted light trim, chimney stone as it is. Panes are unshaded flat
-  vertex colours (a shaded pane went black on the side away from the sun). This is the simplest split;
-  card S6 owns the painterly role table and a roof tile surface.
+- **Materials.** `StructureMaterials.make(kind, role, style, root)`, one per triple, shared by every
+  structure and by street lots (see "Look"). Panes are unshaded flat vertex colours (a shaded pane
+  went black on the side away from the sun); modelled `stone` (coping, the plot) stays an
+  `ORMMaterial3D` with the role tint.
 - **Fingerprint.** `MapFingerprint`'s `structures` key now has its `node <name> <verts> <aabb>` lines
   (the part S1 left a seam for).
+
+## Look
+
+Card S6 (2026-10-28). The bar is the suite's painterly one: a few bold soft-edged shapes, luminous
+colour, suggestion over literal detail, nothing grey. Three parts, no new asset:
+
+- **Per building palette** (`StructurePaint`, `StructureLook.ROOF_PALETTE` / `WALL_LEANS`). A
+  structure's seed and id draw (a 32-bit integer mix, the same on every peer) one roof tile colour
+  from six (terracotta, clay, slate, thatch, moss, heather; weights 4, 2, 3, 2, 1.5, 0.7) with a small
+  value and warmth jitter, and one wall lean from five (cream, rose, ochre, sage, cool pale).
+  `StructureGeometry.build_one` bakes them into the mesh arrays: roof vertex colour = tile colour times
+  the slab's own tone, wall, trim and chimney vertex colour times the lean; `parts.palette` names the
+  roof colour. The alpha carries a height the shaders grade by: roofs 0 at the eave to 1 at the
+  ridge of that building's roof, walls height above the building's foot in sixteenths of a metre.
+  Panes and leaves stay as procgen made them. A street (`WallGeometry._row_surfaces`) does the same
+  per LOT: roles and lots come from the provenance paths (`street_row_2/left/lot0/roof_gable_4`:
+  `StructureLook.role_of_tag_path` / `lot_of_tag_path`, since the lots are sub-graphs), the roofs
+  are split off the planks into their own `roof` part (`WallGeometry.ROOF_PART`, a `Roof` mesh in
+  `AuthoredWalls`) and each lot is painted from the street's seed and its lot path. Fences, walls and
+  the old Building kind keep their materials.
+- **Roof shader** (`shaders/structure_roof.gdshader`). Tiles are suggested from the face normal and
+  the object position, so it needs no UVs and serves gable, hip and flat roofs: courses 0.42 m deep
+  across the slope with a soft shadow under each lip, tiles 0.62 m wide offset every other course,
+  each tile a little lighter or darker and warmer or cooler, joints barely there (fading to nothing
+  when a course is under about two pixels), a deeper cooler eave grading to a paler ridge, and broad
+  warm and cool patches (one 3D value noise).
+- **Wall shader** (`shaders/structure_wall.gdshader`). The baked masonry set or the library's planks
+  times the rock or climate tint times the vertex colour, the hue then replaced 75 % by warm cream
+  (times the texture's luminance, so the stones' light and dark stay) for masonry and lifted for
+  timber, a cooler damper foot, paler toward the eaves, broad warm and cool washes.
+- **Light** (`shaders/structure_painterly.gdshaderinc`, shared). A wrapped terminator and a rose
+  lavender shadow fill instead of a grey one (directional lights only; other lights add lambert), a
+  faint warm rim. Specular is off. No `lit` window glow yet (see "Not yet").
+
+Budget: no extra texture reads over the old materials, one noise per fragment, no uniform branches;
+the shaders use only built-ins and a custom `light()`, which the Compatibility and Mobile renderers
+take (not run on either, as with the other tt-sim shaders judged on Forward+). Measured cost is in
+PERFORMANCE.md "Structures: the painterly look". Tunables are the shader uniforms and the constants
+in `StructureMaterials` and `StructureLook`.
 
 ## Live edit and fingerprint
 
@@ -253,9 +291,9 @@ pure (`utils/structure_placement.gd`).
 - Handles, variants, a floors stepper (card S5); retiring `Wall.Kind.BUILDING` (card S8).
 - The tiles under `thumbnails/structures/` are from before the glazing change (card S5 re-renders
   them with the `structure_thumbs` job).
-- The painterly roles (a roof tile texture, slate, window glow), the look pass on three biomes, the
-  frame cost of a 20-structure town (card S6; PERFORMANCE.md has no structure line until it is
-  measured with the pinned procedure).
+- Window glow: procgen's `glazing` node has a `lit` share, but the recipes do not expose it, so no
+  window glows yet (card S6 asked for it "if cheap"; it needs a recipe parameter or a stamp, a
+  procgen request). The look pass on three biomes (S6 judged one: temperate forest).
 - Cross-platform digests (the pins were taken on Windows only; card S9).
 
 ## Tests and render job
@@ -266,7 +304,8 @@ clearance, asynchronous edits, load prep, fingerprint, the plan rules), both in 
 `tests/fixtures/structure_digests.txt` pins `<ref> <md5> <triangles>` for the starter set at a 6 x 4 m
 plan, seed 5, flat ground (`StructureGeometry.digest_of`: every mesh's kind, role, vertices, normals,
 UVs, colours and indices, the collision and the top). A recipe change in procgen, the role table, the
-pane colours or the split moves them on purpose: the test prints the new lines; regenerate the file and say
+pane colours, the split or the painted palette (`StructurePaint`) moves them on purpose (card S6 did, by
+baking the tile colours into the vertex colours; `libraries/core/structures/pins.txt` moved with them): the test prints the new lines; regenerate the file and say
 why in the commit. The render job `tools/render_jobs/jobs/structure_basic.json` (probe
 `probes/structures.gd`) lays a street, a chimneyed cottage, a trimmed townhouse, a townhouse on an L plan
 and a stone house in a new unsaved map and captures the home and two close views; it logs how many
