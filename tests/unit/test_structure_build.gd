@@ -629,17 +629,20 @@ func test_the_scatter_snapshot_carries_the_structures_so_workers_clear_under_the
 # --- panes ---------------------------------------------------------------------------------
 
 
-func test_every_opening_gets_a_pane_in_its_own_colour() -> void:
+func test_the_recipes_glazing_gives_panes_and_leaves_in_the_opening_role() -> void:
 	var parts := StructureGeometry.build_one(_doc, _structure("core:townhouse"))
 	var panes: Dictionary = {}
 	for mesh: Dictionary in parts.meshes:
 		if mesh.role == StructureLook.OPENING:
 			panes = mesh
 	assert_false(panes.is_empty(), "panes")
-	var indices: PackedInt32Array = panes.arrays[Mesh.ARRAY_INDEX]
-	assert_eq(indices.size() / 3, (parts.openings as Array).size() * 2, "a quad per opening")
-	var colors: PackedColorArray = panes.arrays[Mesh.ARRAY_COLOR]
-	assert_true(colors.has(StructureLook.WINDOW_COLOR) and colors.has(StructureLook.DOOR_COLOR))
+	assert_eq(panes.kind, StructureLook.GLASS_KIND)
+	var seen := {}
+	for tag: int in panes.tags:
+		var path := String((parts.tag_table as PackedStringArray)[tag])
+		assert_true(path.begins_with("glazing_"), path)
+		seen[path.get_slice("/", path.get_slice_count("/") - 1).replace("panel", "leaf")] = true
+	assert_true(seen.has("pane") and seen.has("leaf"), "a window pane and a door leaf: %s" % seen)
 	var nodes := AuthoredStructures.new()
 	_map.add_child(nodes)
 	nodes.apply({"structures": [parts]})

@@ -14,16 +14,13 @@ const WALL := "wall"
 const ROOF := "roof"
 const TRIM := "trim"
 const CHIMNEY := "chimney"
-## The doors and windows: a dark pane set in each opening (StructureGeometry), not procgen surface.
+## The panes and door leaves: procgen's `glazing` node (surface kind `glass`, flat vertex colours).
 const OPENING := "opening"
 ## Every role, in the order a structure's meshes are made.
 const ROLES: Array[String] = [WALL, ROOF, TRIM, CHIMNEY, OPENING]
-## The surface kind of the opening panes.
+## The surface kind of the panes and leaves (ProcgenGlazing.KIND); drawn unshaded from the vertex
+## colours.
 const GLASS_KIND := "glass"
-## A window's pane (a deep sky blue-grey) and a door's leaf (dark honey wood), as flat vertex
-## colours (the pane material is unshaded).
-const WINDOW_COLOR := Color(0.12, 0.2, 0.3)
-const DOOR_COLOR := Color(0.2, 0.11, 0.06)
 
 ## Procgen node type -> role. A type not listed is a wall.
 const NODE_ROLES: Dictionary = {
@@ -37,6 +34,7 @@ const NODE_ROLES: Dictionary = {
 	"cornice": TRIM,
 	"quoins": TRIM,
 	"roof_furniture": CHIMNEY,
+	"glazing": OPENING,
 }
 
 ## What each role multiplies a surface's tint by (a roof is warm terracotta over the planks, trim is

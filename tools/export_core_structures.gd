@@ -123,16 +123,8 @@ func _make() -> Dictionary:
 		var id := String(starter["id"])
 		var doc := _document_of(String(starter["builder"]))
 		var text := doc.to_json()
-		# The committed recipe file is named after the builder (`building.json` for building()).
-		var committed := (
-			FileAccess
-			. get_file_as_string("res://procgen/recipes/%s.json" % starter["builder"])
-			. replace("\r\n", "\n")
-		)
-		if committed != text:
-			warnings.append(
-				"%s: ProcgenRecipes differs from procgen/recipes (the generated text is used)" % id
-			)
+		# The shipped recipes are procgen's builders with glazing on (a pane in every window, a leaf
+		# in every door), so they differ from procgen's committed `recipes/` files by that node.
 		files[LibraryStructures.recipe_path(id)] = text
 		texts["core:" + id] = text
 		var declares_textured := false
@@ -186,20 +178,34 @@ func _make() -> Dictionary:
 	return {"files": files, "pins": pins, "warnings": warnings}
 
 
-## The ProcgenRecipes document of builder `name`.
+## The ProcgenRecipes document of builder `name`, with glazing on (ProcgenRecipes.building's last
+## argument; the named builders do not pass it, so their arguments are repeated here).
 func _document_of(name: String) -> PlantGraphDocument:
+	var doc: PlantGraphDocument = null
 	match name:
 		"building":
-			return ProcgenRecipes.building()
+			doc = ProcgenRecipes.building("gable", "stone", "", [], [], true)
 		"cottage":
-			return ProcgenRecipes.cottage()
+			doc = ProcgenRecipes.building("gable", "timber", "cottage", [], [], true)
 		"cottage_chimneyed":
-			return ProcgenRecipes.cottage_chimneyed()
+			doc = ProcgenRecipes.building(
+				"gable", "timber", "cottage", ProcgenRecipes.COTTAGE_TRIM, ["chimneys"], true
+			)
 		"townhouse":
-			return ProcgenRecipes.townhouse()
+			doc = ProcgenRecipes.building("gable", "stone", "townhouse", [], [], true)
+			_set_default(doc, "height", 5.2)
 		"townhouse_trimmed":
-			return ProcgenRecipes.townhouse_trimmed()
-	return null
+			doc = ProcgenRecipes.building(
+				"gable", "stone", "townhouse", ProcgenRecipes.TOWNHOUSE_TRIM, [], true
+			)
+			_set_default(doc, "height", 5.2)
+	return doc
+
+
+static func _set_default(doc: PlantGraphDocument, name: String, value: float) -> void:
+	for entry in doc.interface:
+		if entry["name"] == name:
+			entry["default"] = value
 
 
 ## procgen's own digest of the same build (ProcgenBuildingCases.digest of the first LOD).

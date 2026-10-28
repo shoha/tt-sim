@@ -229,6 +229,17 @@ func _wall_node(parts: Dictionary) -> Node3D:
 		instance.name = "Wood"
 		instance.mesh = mesh
 		node.add_child(instance)
+	# A street's panes and door leaves (procgen's glazing node, surface kind "glass").
+	var glass: Array = parts.get("glass", [])
+	if not glass.is_empty():
+		var glass_mesh := ArrayMesh.new()
+		glass_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, glass)
+		glass_mesh.surface_set_material(0, _glass_material())
+		var glass_instance := MeshInstance3D.new()
+		glass_instance.name = "Glass"
+		glass_instance.mesh = glass_mesh
+		glass_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.add_child(glass_instance)
 	var faces: PackedVector3Array = parts.get("collision", PackedVector3Array())
 	if not faces.is_empty():
 		node.add_child(_body(faces, int(parts.id)))
@@ -250,6 +261,19 @@ static func _body(faces: PackedVector3Array, wall_id: int) -> StaticBody3D:
 	collision.shape = shape
 	body.add_child(collision)
 	return body
+
+
+## Panes and door leaves: the vertex colour as a flat painted tone, seen from both sides and
+## unshaded (as AuthoredStructures draws them).
+func _glass_material() -> Material:
+	if _materials.has("glass"):
+		return _materials["glass"]
+	var material := ORMMaterial3D.new()
+	material.vertex_color_use_as_albedo = true
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_materials["glass"] = material
+	return material
 
 
 func _stone_material(style: String) -> Material:

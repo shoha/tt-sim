@@ -71,6 +71,18 @@
       "from_port": 0,
       "to": "output_5",
       "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "glazing_10",
+      "to_port": 0
+    },
+    {
+      "from": "glazing_10",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
     }
   ],
   "format": "plantgen-graph",
@@ -226,6 +238,15 @@
         820.0
       ],
       "type": "quoins"
+    },
+    {
+      "id": "glazing_10",
+      "params": {},
+      "position": [
+        950.0,
+        420.0
+      ],
+      "type": "glazing"
     }
   ],
   "seed": 1234,

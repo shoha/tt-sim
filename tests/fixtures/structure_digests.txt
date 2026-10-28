@@ -1,5 +1,5 @@
-core:stone_house 2924d8c485acf734e00a23a1099be9e3 316
-core:cottage ddfcd4f0383c7bc49b5d7cc7cdb3839c 1112
-core:cottage_chimneyed 3bedf6f5c61039bbab2164e3f2d188d5 1520
-core:townhouse 89b321b2455a53b4e99a22f665120461 880
-core:townhouse_trimmed b02543ac11fccb73f58e360c24553616 2514
+core:stone_house f7b6dd9ff4c450a66086cede274c07dc 318
+core:cottage 912c2f8367e50c8275f8516173363c9b 1114
+core:cottage_chimneyed 628d6cc1e3cb452b535bfa694af1a3d5 1522
+core:townhouse 8601066f6d3528e62430b6f4cb55f50b 882
+core:townhouse_trimmed ff2274b39f03cdcbf793deab3df7e4f5 2516

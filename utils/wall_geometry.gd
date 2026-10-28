@@ -80,7 +80,10 @@ static func inputs_for(doc: MapDocument, wall: Wall) -> ProcgenStructureInputs:
 	if wall.is_row():
 		# A row's `height_m` is its setback; its side and seed vary the buildings.
 		inputs.params = {
-			"setback": wall.height_m, "side": float(wall.side), "preset": float(wall.preset)
+			"setback": wall.height_m,
+			"side": float(wall.side),
+			"preset": float(wall.preset),
+			"glazing": 1.0,
 		}
 	if textured and wall.kind != Wall.Kind.FENCE and MasonryTextures.available():
 		inputs.params["textured"] = 1.0
@@ -121,6 +124,7 @@ static func build_one(doc: MapDocument, wall: Wall) -> Dictionary:
 		"stone": [],
 		"masonry": [],
 		"wood": [],
+		"glass": [],
 		"collision": PackedVector3Array(),
 		"top": NONE,
 	}

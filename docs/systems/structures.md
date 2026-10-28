@@ -128,9 +128,11 @@ the recipe declares it (`StructureGeometry.textured`, on, as for walls). Parts p
 `building_timber`, `facade` wall; `roof_gable`, `roof_hip`, `roof_flat` roof; `facade_trim`, `cornice`,
 `quoins` trim; `roof_furniture` chimney. A roof is its own material only where its surface is planks
 (`wood`): a gable's end triangles are masonry and a flat roof's coping is stone, and they stay wall.
-A sixth part, `opening`, is not procgen surface: the recipes build hollow walls, so each opening box
-gets a quad (a window's dark pane, a door's leaf) in its middle plane, two triangles each; without
-them every window shows the ground through the house. Roles split a surface by triangle (the role of
+A fifth role, `opening`, is procgen's `glazing` node (surface kind `glass`, tags
+`<glazing id>/<opening path>/pane|leaf`, flat vertex colours): the recipes build hollow walls, and
+the core recipes are exported with glazing on (`tools/export_core_structures.gd`), so every window
+has a pane and every door a leaf; street rows are built with `glazing` 1 too (`AuthoredWalls` draws
+their `glass` kind unshaded). tt-sim draws no quads of its own. Roles split a surface by triangle (the role of
 its first vertex) and keep vertex order, so quad tangents stay valid.
 
 **Budgets** (design.md): a structure over `SOFT_TRIANGLES` 12000 builds and warns, over
