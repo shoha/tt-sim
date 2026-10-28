@@ -67,6 +67,8 @@ var row_side: int = 2
 var row_seed: int = 0
 ## A new street's species (Wall.preset).
 var row_preset: int = 0
+## A new building's style (Wall.preset: walls * Wall.BUILDING_ROOFS + roof).
+var building_style: int = 0
 ## The turn of a building footprint (radians from the map X axis; Q and E).
 var yaw: float = 0.0
 ## A side being drawn: its press point (world) and the pointer's last ground point.
@@ -130,6 +132,18 @@ static func readout(
 		return "%s  %d %s" % [title, length, label]
 	var high := ScaleUtils.world_to_display(height_m, cell_m, per_cell)
 	return "%s  %s %s high" % [title, BridgeBrush.short_number(high), label]
+
+
+## What a building style adds to a readout ("  (timber, hip roof)"), "" for the stone and
+## gable one every building starts as. Pure.
+static func building_style_suffix(style: int) -> String:
+	if style <= 0:
+		return ""
+	var walls := (["stone", "timber"] as Array[String])[clampi(
+		style / Wall.BUILDING_ROOFS, 0, Wall.BUILDING_WALLS - 1
+	)]
+	var roof := (["gable", "hip", "flat"] as Array[String])[style % Wall.BUILDING_ROOFS]
+	return "  (%s, %s roof)" % [walls, roof]
 
 
 ## The readout beside the cursor for a building: its two sides ("Building  14 x 10 ft"). Pure.
@@ -208,11 +222,20 @@ func _plan(editor: AuthoringEditor) -> void:
 		to,
 		height(),
 		yaw,
-		{"seed": row_seed, "side": row_side, "preset": row_preset}
+		{"seed": row_seed, "side": row_side, "preset": _variation_preset()}
 	)
 	refusal = editor.walls.last_refusal
 	last_plan_usec = Time.get_ticks_usec() - started
 	_planned_to = to
+
+
+## The preset a new wall of the brush's kind takes: a street's species, a building's style.
+func _variation_preset() -> int:
+	if kind == Wall.Kind.ROW:
+		return row_preset
+	if kind == Wall.Kind.BUILDING:
+		return building_style
+	return 0
 
 
 ## Lays the side being drawn (the release): the wall's id, or -1 with message() saying why.
@@ -429,7 +452,10 @@ func draw(
 		(
 			readout_row(-1, row_side, height(), cell_m, per_cell, label, row_preset)
 			if kind == Wall.Kind.ROW
-			else readout(kind, 0.0, height(), cell_m, per_cell, label)
+			else (
+				readout(kind, 0.0, height(), cell_m, per_cell, label)
+				+ building_style_suffix(building_style if kind == Wall.Kind.BUILDING else 0)
+			)
 		),
 		READOUT_COLOR
 	)

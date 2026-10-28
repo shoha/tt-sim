@@ -254,6 +254,9 @@ func setup(lpc: LevelPlayController, events_pane: EventsPane) -> void:
 	pane.wall_preset_selected.connect(
 		func(preset: int) -> void: _set_mode(WallTool.ID, "row_preset", preset)
 	)
+	pane.wall_style_selected.connect(
+		func(style: int) -> void: _set_mode(WallTool.ID, "building_style", style)
+	)
 	pane.brush_size_changed.connect(func(radius: float) -> void: _wired_brush().set_radius(radius))
 	pane.brush_strength_changed.connect(func(flow: float) -> void: _wired_brush().set_flow(flow))
 	pane.visibility_changed.connect(refresh)

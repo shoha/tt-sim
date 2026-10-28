@@ -33,6 +33,12 @@ const DEFAULT_HEIGHT_M: Array[float] = [0.9, 1.0, 2.4, 3.0]
 const ROW_SIDES := 3
 ## The species of street (ProcgenRow.PRESET_NAMES): mixed, terrace, guild houses, village, cottages.
 const ROW_PRESETS := 5
+## A building's style (Wall.preset) is its walls and its roof: walls * BUILDING_ROOFS + roof,
+## walls 0 stone or 1 timber, roof 0 gable, 1 hip or 2 flat (the parts of procgen's building
+## recipe). 0 is the stone building with a gable roof.
+const BUILDING_ROOFS := 3
+const BUILDING_WALLS := 2
+const BUILDING_STYLES := BUILDING_ROOFS * BUILDING_WALLS
 const MAX_SEED := 1000000000
 ## A building is a closed rectangle of four points (its first side carries the door), each side
 ## within these bounds, metres.
@@ -52,7 +58,8 @@ var height_m: float = 0.9
 ## both); unused by the other kinds.
 var seed_value: int = 0
 var side: int = 2
-## A row's species (0 mixed, 1 terrace, 2 guild houses, 3 village, 4 cottages).
+## A row's species (0 mixed, 1 terrace, 2 guild houses, 3 village, 4 cottages), or a building's
+## style (BUILDING_STYLES); 0 for the other kinds.
 var preset: int = 0
 ## Palette biome id for the rock, or "".
 var style: String = ""
@@ -96,6 +103,15 @@ func is_building() -> bool:
 
 func is_row() -> bool:
 	return kind == Kind.ROW
+
+
+## How many values `preset` takes for this kind.
+func preset_count() -> int:
+	if kind == Kind.ROW:
+		return ROW_PRESETS
+	if kind == Kind.BUILDING:
+		return BUILDING_STYLES
+	return 1
 
 
 ## The line's bounding rectangle in map XZ (empty for no points).

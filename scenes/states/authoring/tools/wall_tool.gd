@@ -78,6 +78,12 @@ func connect_pane(controller: AuthoringController, pane: Control) -> void:
 				of(controller.brush).row_preset = value
 				controller.pick_tool(ID)
 	)
+	wall_pane.style_selected.connect(
+		func(value: int) -> void:
+			if controller.brush != null:
+				of(controller.brush).building_style = value
+				controller.pick_tool(ID)
+	)
 	wall_pane.kind_selected.connect(
 		func(value: int) -> void:
 			if controller.brush != null:

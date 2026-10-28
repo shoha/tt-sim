@@ -12,6 +12,9 @@ const STONE_RECIPE := "res://procgen/recipes/stone_wall.json"
 const FENCE_RECIPE := "res://procgen/recipes/wood_fence.json"
 const BUILDING_RECIPE := "res://procgen/recipes/building.json"
 const STREET_ROW_RECIPE := "res://procgen/recipes/street_row.json"
+## A building's roofs and walls, in Wall.preset order (walls * Wall.BUILDING_ROOFS + roof).
+const BUILDING_ROOFS: Array[String] = ["gable", "hip", "flat"]
+const BUILDING_WALLS: Array[String] = ["stone", "timber"]
 ## The ground under a wall is sampled this far apart (metres) along its line for its cache key.
 const KEY_STEP_M := 0.5
 ## The width plants clear across a wall's side (its thickness and a margin), metres.
@@ -45,6 +48,19 @@ static func recipe_path(kind: Wall.Kind) -> String:
 		Wall.Kind.ROW:
 			return STREET_ROW_RECIPE
 	return STONE_RECIPE
+
+
+## The recipe `wall` is built from: its kind's committed recipe, or for a building of another
+## style the building recipe with its walls and roof parts swapped. Null when missing.
+static func recipe_for(wall: Wall) -> PlantGraphDocument:
+	if wall.is_building() and wall.preset > 0:
+		var style := clampi(wall.preset, 0, Wall.BUILDING_STYLES - 1)
+		var doc := ProcgenRecipes.building(
+			BUILDING_ROOFS[style % Wall.BUILDING_ROOFS], BUILDING_WALLS[style / Wall.BUILDING_ROOFS]
+		)
+		doc.registry = ProcgenStructureRegistry.new()
+		return doc
+	return load_recipe(recipe_path(wall.kind))
 
 
 ## The recipe document at `path`, null when the file is missing or not a graph.
@@ -108,7 +124,7 @@ static func build_one(doc: MapDocument, wall: Wall) -> Dictionary:
 		"collision": PackedVector3Array(),
 		"top": NONE,
 	}
-	var recipe := load_recipe(recipe_path(wall.kind))
+	var recipe := recipe_for(wall)
 	if recipe == null or wall.points.size() < Wall.MIN_POINTS:
 		return parts
 	var evaluator := PlantGraphEvaluator.new(recipe.registry)
