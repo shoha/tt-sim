@@ -194,6 +194,7 @@ func _wall_node(parts: Dictionary) -> Node3D:
 	var node := Node3D.new()
 	node.name = "Wall_%d" % int(parts.id)
 	var style: String = parts.get("style", "")
+	var row: bool = int(parts.get("kind", -1)) == Wall.Kind.ROW
 	var stone: Array = parts.get("stone", [])
 	if not stone.is_empty():
 		var amount := AuthoredCrossings.moss_amount(style, _palette_root)
@@ -215,7 +216,9 @@ func _wall_node(parts: Dictionary) -> Node3D:
 	if not masonry.is_empty():
 		var textured_mesh := ArrayMesh.new()
 		textured_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, masonry)
-		textured_mesh.surface_set_material(0, _masonry_material(style))
+		textured_mesh.surface_set_material(
+			0, _row_material("masonry", style) if row else _masonry_material(style)
+		)
 		var masonry_instance := MeshInstance3D.new()
 		masonry_instance.name = "Masonry"
 		masonry_instance.mesh = textured_mesh
@@ -224,11 +227,21 @@ func _wall_node(parts: Dictionary) -> Node3D:
 	if not wood.is_empty():
 		var mesh := ArrayMesh.new()
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, wood)
-		mesh.surface_set_material(0, _wood_material(style))
+		mesh.surface_set_material(0, _row_material("wood", style) if row else _wood_material(style))
 		var instance := MeshInstance3D.new()
 		instance.name = "Wood"
 		instance.mesh = mesh
 		node.add_child(instance)
+	# A street's roofs (WallGeometry.ROOF_PART), drawn with the roof tile shader of the structures.
+	var roof: Array = parts.get(WallGeometry.ROOF_PART, [])
+	if not roof.is_empty():
+		var roof_mesh := ArrayMesh.new()
+		roof_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, roof)
+		roof_mesh.surface_set_material(0, _row_material("wood", style, true))
+		var roof_instance := MeshInstance3D.new()
+		roof_instance.name = "Roof"
+		roof_instance.mesh = roof_mesh
+		node.add_child(roof_instance)
 	# A street's panes and door leaves (procgen's glazing node, surface kind "glass").
 	var glass: Array = parts.get("glass", [])
 	if not glass.is_empty():
@@ -274,6 +287,16 @@ func _glass_material() -> Material:
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_materials["glass"] = material
 	return material
+
+
+## The painterly material a street's lots share with the structures (StructureMaterials): masonry
+## and timber walls in the wall role, or, with `roof`, the roof tiles.
+func _row_material(kind: String, style: String, roof: bool = false) -> Material:
+	var role := StructureLook.ROOF if roof else StructureLook.WALL
+	var key := "row:%s:%s:%s" % [kind, role, style]
+	if not _materials.has(key):
+		_materials[key] = StructureMaterials.make(kind, role, style, _palette_root)
+	return _materials[key]
 
 
 func _stone_material(style: String) -> Material:

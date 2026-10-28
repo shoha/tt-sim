@@ -1064,6 +1064,15 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   `probes/structures.gd` (there is no Structure tool yet), then a report of each node's triangles
   per role, a check that no scatter row stands inside a footprint, and three captures (home view,
   the cottage and townhouse close, the L townhouse close). `docs/systems/structures.md`.
+- `jobs/structures_s6.json` (about 25 s, keeps no level): `structure_basic`'s scene plus a fourth
+  capture of the street, for the painterly look (card S6): roofs in a per building tile colour,
+  warm cream stone, honey timber, streets and structures alike. Pass `--out render_jobs/<name>` to
+  keep rounds apart.
+- `jobs/structures_s6_perf.json` (about 65 s, keeps no level; GPU shared, indicative): a new unsaved
+  300 ft temperate forest, home zoom 60, vsync off; GPU and CPU frame time over 8 s windows with no
+  structures, with 20 (probe `structures.gd` `many`), with every structure mesh in one plain
+  StandardMaterial3D (`plain`, the shader-free control), with the painterly materials again and with
+  none again. `docs/PERFORMANCE.md` "Structures: the painterly look".
 - `structure_thumbs` (about 40 s, keeps no level; **not a file in `jobs/`**: `tools/render_structure_thumbnails.gd`
   builds it from a library folder, as `render_library_thumbnails.gd` builds the biome one; the structures
   card S3): one new unsaved 100 ft meadow, each structure of the library alone at its default

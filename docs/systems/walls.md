@@ -120,6 +120,13 @@ facade style (windows, floors), all drawn from species data (procgen `ProcgenStr
 plot, yard included. Verified with the `street_species` render job (the tiles and a street of each
 species, the village's fences visible).
 
+Look (card S6, 2026-10-28): a street's lots wear the structures' look. `WallGeometry` splits a
+row's roofs off its planks (found from each vertex's provenance path, `StructureLook.role_of_tag_path`)
+into a `roof` part, which `AuthoredWalls` draws as a `Roof` mesh with the structures' roof tile shader,
+and paints every lot from the street's seed (a roof tile colour and a wall lean, `StructurePaint`); the
+masonry and timber use the structures' wall shader (`StructureMaterials`). Fences, stone walls and
+Building kind walls are unchanged. `docs/systems/structures.md` "Look" has the details.
+
 Not yet: breaking a street into individual buildings, corner plots, and a yard that is not fence or
 low wall (gardens, trees), plus finer control than the species.
 
