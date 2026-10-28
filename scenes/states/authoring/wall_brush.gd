@@ -2,11 +2,12 @@ class_name WallBrush
 extends BrushMode
 
 ## The Wall tool's mode (WallTool): the drawn side, its live preview, the refusal hint, the Ctrl
-## erase hover and the height a Shift+wheel sets. BrushTool routes the tool's press, frames,
-## release and cancel to it (the BrushMode hooks below), and a release or Ctrl press that makes
-## nothing emits the brush's `refused` with the reason. Where a wall goes is WallEditor's rule
-## (`AuthoringEditor.walls`: a drag starting at the free end of a wall of the same kind extends
-## it, and ending at its other end closes it); this only wires the gesture to it.
+## erase hover, the height a Shift+wheel sets and the street picked by a click (which the pane
+## offers to split into buildings, WallEditor.split_street). BrushTool routes the tool's press,
+## frames, release and cancel to it (the BrushMode hooks below), and a release or Ctrl press that
+## makes nothing emits the brush's `refused` with the reason. Where a wall goes is WallEditor's
+## rule (`AuthoringEditor.walls`: a drag starting at the free end of a wall of the same kind
+## extends it, and ending at its other end closes it); this only wires the gesture to it.
 ##
 ## Gesture. A press on the ground starts a side; every frame the pointer moves at least
 ## REPLAN_M the wall it would make is planned again (WallEditor.plan, which changes nothing) and
@@ -14,20 +15,23 @@ extends BrushMode
 ## The release lays the plan as one history entry. A side that makes nothing is drawn red with
 ## the reason in plain words beside the cursor. Ctrl at the press erases the wall under the
 ## pointer (hovering with Ctrl held outlines it in red first). RMB or Escape drops a side being
-## drawn.
+## drawn. A click (a press that ends where it began) on a street picks it, outlined in gold; Escape
+## or a click elsewhere lets go.
+
+## The street picked changed: its id, or -1 for none.
+signal selection_changed(wall_id: int)
 
 const STONE_TINT := Color(0.88, 0.9, 0.86)
 const FENCE_TINT := Color(0.98, 0.84, 0.58)
 const ERASE_TINT := BrushCursor.CLEAR_TINT
 const SHADOW := Color(0.05, 0.04, 0.05, 0.55)
 ## The readout's name per Wall.Kind.
-const KIND_LABELS: Array[String] = ["Stone wall", "Fence", "Building", "Street"]
-## A building turns this much per Q or E notch, and the idle ghost of one is this big (world
-## metres: along its first side, across).
+const KIND_LABELS: Array[String] = ["Stone wall", "Fence", "Street"]
 ## The species' names in the readout (Wall.preset).
 const ROW_PRESET_NAMES: Array[String] = ["Mixed", "Terrace", "Guild houses", "Village", "Cottages"]
-const YAW_STEP := deg_to_rad(15.0)
-const GHOST_SIZE_M := Vector2(4.0, 3.0)
+## A press that ends within this of where it began (world metres) is a click, which picks the
+## street under it rather than laying a side.
+const CLICK_M := 0.25
 ## The door mark is this wide on the first side (metres), and the footprint fill alpha.
 const DOOR_MARK_M := 1.0
 const FOOTPRINT_ALPHA := 0.2
@@ -44,12 +48,14 @@ const READOUT_COLOR := Color(1.0, 0.95, 0.6)
 const REFUSED_COLOR := Color(1.0, 0.72, 0.62)
 ## Plain-words reasons a side makes no wall (refusal_text()).
 const SHORT := "Drag a longer line to lay a wall."
-const SHORT_BUILDING := "Drag from one corner to the opposite one, at least 2 m each way."
 const FULL := "The map holds as many walls as it can. Remove one to make room."
 const LONG := "That wall is too long. End it and start another."
 const POINTS := "That wall has as many corners as it can. End it and start another."
 const INVALID := "A wall cannot stand there."
 const NOTHING := "There is no wall here to remove."
+const SPLIT_NOTHING := "No building of the library stands in for this street."
+const SPLIT_FULL := "The map cannot hold that many more buildings."
+const SPLIT_GONE := "That street is gone."
 ## The canopy fade's reach around the cursor (metres, before the brush's fade factor).
 const FADE_M := 2.5
 
@@ -59,7 +65,6 @@ var kind: int = Wall.Kind.STONE
 var heights: Array[float] = [
 	Wall.DEFAULT_HEIGHT_M[Wall.Kind.STONE],
 	Wall.DEFAULT_HEIGHT_M[Wall.Kind.FENCE],
-	Wall.DEFAULT_HEIGHT_M[Wall.Kind.BUILDING],
 	Wall.DEFAULT_HEIGHT_M[Wall.Kind.ROW],
 ]
 ## A new street's side (0 left, 1 right, 2 both; Q and E) and variation seed (R).
@@ -67,10 +72,8 @@ var row_side: int = 2
 var row_seed: int = 0
 ## A new street's species (Wall.preset).
 var row_preset: int = 0
-## A new building's style (Wall.preset: walls * Wall.BUILDING_ROOFS + roof).
-var building_style: int = 0
-## The turn of a building footprint (radians from the map X axis; Q and E).
-var yaw: float = 0.0
+## The street picked by a click (its id), or -1: the pane offers to split it into buildings.
+var selected_id: int = -1
 ## A side being drawn: its press point (world) and the pointer's last ground point.
 var drawing: bool = false
 var from: Vector3 = Vector3.INF
@@ -92,10 +95,10 @@ func _init() -> void:
 
 
 ## The reason a side makes no wall, in plain words. Pure.
-static func refusal_text(reason: StringName, wall_kind: int = Wall.Kind.STONE) -> String:
+static func refusal_text(reason: StringName) -> String:
 	match reason:
 		WallEditor.REFUSED_SHORT:
-			return SHORT_BUILDING if wall_kind == Wall.Kind.BUILDING else SHORT
+			return SHORT
 		WallEditor.REFUSED_FULL:
 			return FULL
 		WallEditor.REFUSED_LONG:
@@ -132,27 +135,6 @@ static func readout(
 		return "%s  %d %s" % [title, length, label]
 	var high := ScaleUtils.world_to_display(height_m, cell_m, per_cell)
 	return "%s  %s %s high" % [title, BridgeBrush.short_number(high), label]
-
-
-## What a building style adds to a readout ("  (timber, hip roof)"), "" for the stone and
-## gable one every building starts as. Pure.
-static func building_style_suffix(style: int) -> String:
-	if style <= 0:
-		return ""
-	var walls := (["stone", "timber"] as Array[String])[clampi(
-		style / Wall.BUILDING_ROOFS, 0, Wall.BUILDING_WALLS - 1
-	)]
-	var roof := (["gable", "hip", "flat"] as Array[String])[style % Wall.BUILDING_ROOFS]
-	return "  (%s, %s roof)" % [walls, roof]
-
-
-## The readout beside the cursor for a building: its two sides ("Building  14 x 10 ft"). Pure.
-static func readout_building(
-	along_m: float, across_m: float, cell_m: float, per_cell: float, label: String
-) -> String:
-	var a := roundi(ScaleUtils.world_to_display(along_m, cell_m, per_cell))
-	var b := roundi(ScaleUtils.world_to_display(across_m, cell_m, per_cell))
-	return "Building  %d x %d %s" % [a, b, label]
 
 
 ## The readout beside the cursor for a street: how many buildings and on which side ("Street  11
@@ -221,7 +203,6 @@ func _plan(editor: AuthoringEditor) -> void:
 		from,
 		to,
 		height(),
-		yaw,
 		{"seed": row_seed, "side": row_side, "preset": _variation_preset()}
 	)
 	refusal = editor.walls.last_refusal
@@ -229,13 +210,9 @@ func _plan(editor: AuthoringEditor) -> void:
 	_planned_to = to
 
 
-## The preset a new wall of the brush's kind takes: a street's species, a building's style.
+## The preset a new wall of the brush's kind takes: a street's species.
 func _variation_preset() -> int:
-	if kind == Wall.Kind.ROW:
-		return row_preset
-	if kind == Wall.Kind.BUILDING:
-		return building_style
-	return 0
+	return row_preset if kind == Wall.Kind.ROW else 0
 
 
 ## Lays the side being drawn (the release): the wall's id, or -1 with message() saying why.
@@ -252,7 +229,7 @@ func finish(editor: AuthoringEditor) -> int:
 		if placed < 0:
 			refusal = editor.walls.last_refusal
 	if placed < 0:
-		_message = refusal_text(refusal, kind)
+		_message = refusal_text(refusal)
 	preview = null
 	return placed
 
@@ -301,21 +278,83 @@ func took_press() -> bool:
 	return drawing
 
 
-## Ctrl held while hovering (not pressed) looks up the wall to outline.
+## Ctrl held while hovering (not pressed) looks up the wall to outline; a picked street that an
+## undo took away is let go.
 func frame(brush: BrushTool) -> void:
 	track(brush.editor, brush.hit, brush.ctrl and not brush.pressed)
+	if selected_id >= 0 and brush.editor != null and not _is_street(brush.editor, selected_id):
+		deselect()
 
 
-## Lays the side being drawn (a side that makes nothing says why).
+## Lays the side being drawn (a side that makes nothing says why). A click, not a drag, picks the
+## street under it, or lets go of the picked one.
 func end(brush: BrushTool) -> void:
 	if drawing and brush.editor != null:
+		if from.distance_to(to) <= CLICK_M:
+			var under := brush.editor.walls.wall_at(from, PICK_MARGIN_M)
+			if under >= 0 and _is_street(brush.editor, under):
+				select(under)
+				reset()
+				return
+			deselect()
 		if finish(brush.editor) < 0:
 			brush.refused.emit(message())
 	reset()
 
 
+## Escape or a right click: drops a side being drawn, else lets go of the picked street.
 func cancel(_brush: BrushTool) -> void:
+	if not drawing:
+		deselect()
 	reset()
+
+
+## Escape with no press held is the brush's while a street is picked, and lets go of it.
+func has_selection() -> bool:
+	return selected_id >= 0
+
+
+## The tool is put down or another is picked: let go of the street.
+func leave(_brush: BrushTool) -> void:
+	deselect()
+
+
+## Picks street `wall_id`.
+func select(wall_id: int) -> void:
+	if wall_id == selected_id:
+		return
+	selected_id = wall_id
+	selection_changed.emit(wall_id)
+
+
+func deselect() -> void:
+	if selected_id < 0:
+		return
+	selected_id = -1
+	selection_changed.emit(-1)
+
+
+## Splits the picked street into buildings (WallEditor.split_street) and lets go of it. The
+## number of buildings made, or -1 with message() saying why.
+func split_selected(editor: AuthoringEditor) -> int:
+	_message = ""
+	if selected_id < 0 or not _is_street(editor, selected_id):
+		_message = SPLIT_GONE
+		deselect()
+		return -1
+	var made := editor.walls.split_street(selected_id)
+	if made < 0:
+		_message = (
+			SPLIT_FULL if editor.walls.last_refusal == WallEditor.REFUSED_FULL else SPLIT_NOTHING
+		)
+		return -1
+	deselect()
+	return made
+
+
+static func _is_street(editor: AuthoringEditor, wall_id: int) -> bool:
+	var wall := editor.document.wall(wall_id)
+	return wall != null and wall.is_row()
 
 
 ## Shift+wheel or a bracket key: the picked kind's height.
@@ -324,18 +363,14 @@ func step(brush: BrushTool, steps: int) -> void:
 	brush.redraw()
 
 
-## A building footprint turns with Q and E, and a street changes its side.
+## A street changes its side with Q and E.
 func rotates() -> bool:
-	return kind == Wall.Kind.BUILDING or kind == Wall.Kind.ROW
+	return kind == Wall.Kind.ROW
 
 
-## Q or E: a building footprint turns `steps` notches of YAW_STEP (E clockwise on screen); a
-## street's side steps round left, right, both.
+## Q or E: a street's side steps round left, right, both.
 func rotate(brush: BrushTool, steps: int) -> void:
-	if kind == Wall.Kind.ROW:
-		row_side = posmod(row_side + signi(steps), Wall.ROW_SIDES)
-	else:
-		yaw = wrapf(yaw + steps * YAW_STEP, 0.0, TAU)
+	row_side = posmod(row_side + signi(steps), Wall.ROW_SIDES)
 	_planned_to = Vector3.INF
 	brush.redraw()
 
@@ -391,30 +426,18 @@ func draw(
 	var cell_m: float = units[0]
 	var per_cell: float = units[1]
 	var label: String = units[2]
+	var picked := editor.document.wall(selected_id) if selected_id >= 0 else null
+	if picked != null:
+		draw_wall(canvas, camera, editor, picked, READOUT_COLOR, 1.0)
 	if drawing:
 		var ok := preview != null
 		if ok:
 			draw_wall(canvas, camera, editor, preview, _kind_tint(preview.kind), 1.0)
-		var building := kind == Wall.Kind.BUILDING
-		if building:
-			# Two opposite corners: a dot on each, the rectangle between them.
-			for corner in [from, to]:
-				BridgeBrush.draw_marker(canvas, camera, corner, _kind_tint(kind))
-		else:
-			BridgeBrush.draw_drag_line(
-				canvas, camera, from, to, _kind_tint(kind) if ok else ERASE_TINT, not ok
-			)
-		var text := refusal_text(refusal, kind)
-		if ok and building:
-			var scale := editor.map_scale()
-			text = readout_building(
-				preview.points[0].distance_to(preview.points[1]) * scale,
-				preview.points[1].distance_to(preview.points[2]) * scale,
-				cell_m,
-				per_cell,
-				label
-			)
-		elif ok and kind == Wall.Kind.ROW:
+		BridgeBrush.draw_drag_line(
+			canvas, camera, from, to, _kind_tint(kind) if ok else ERASE_TINT, not ok
+		)
+		var text := refusal_text(refusal)
+		if ok and kind == Wall.Kind.ROW:
 			text = readout_row(
 				WallGeometry.row_lots(editor.document, preview).size(),
 				preview.side,
@@ -443,8 +466,6 @@ func draw(
 			return
 		BridgeBrush.draw_marker(canvas, camera, hit, ERASE_TINT)
 		return
-	if kind == Wall.Kind.BUILDING and hit != Vector3.INF:
-		_draw_idle_building(canvas, camera, editor, hit)
 	BridgeBrush.draw_marker(canvas, camera, hit, _kind_tint(kind))
 	BridgeBrush.draw_pill(
 		canvas,
@@ -452,10 +473,7 @@ func draw(
 		(
 			readout_row(-1, row_side, height(), cell_m, per_cell, label, row_preset)
 			if kind == Wall.Kind.ROW
-			else (
-				readout(kind, 0.0, height(), cell_m, per_cell, label)
-				+ building_style_suffix(building_style if kind == Wall.Kind.BUILDING else 0)
-			)
+			else readout(kind, 0.0, height(), cell_m, per_cell, label)
 		),
 		READOUT_COLOR
 	)
@@ -464,23 +482,6 @@ func draw(
 ## Pale stone for a wall, warm wood for a fence.
 static func _kind_tint(wall_kind: int) -> Color:
 	return FENCE_TINT if wall_kind == Wall.Kind.FENCE else STONE_TINT
-
-
-## The footprint a building would have if it were pressed here at the default size and the
-## brush turn, so the turn shows before the drag.
-func _draw_idle_building(
-	canvas: Control, camera: Camera3D, editor: AuthoringEditor, hit: Vector3
-) -> void:
-	var scale := editor.map_scale()
-	var centre := editor.to_map_xz(hit)
-	var u := Vector2(cos(yaw), sin(yaw))
-	var v := Vector2(-u.y, u.x)
-	var half := GHOST_SIZE_M * 0.5 / scale
-	var corners := WallEditor.building_corners(
-		centre - u * half.x - v * half.y, centre + u * half.x + v * half.y, yaw
-	)
-	var ghost := Wall.make(0, Wall.Kind.BUILDING, corners, true, height() / scale)
-	draw_wall(canvas, camera, editor, ghost, _kind_tint(kind), 0.7)
 
 
 ## A wall's ghost (map frame) on `canvas`: its line on the ground, its top a height above, and a
@@ -535,8 +536,6 @@ static func draw_wall(
 		var at := camera.unproject_position(editor.to_world(Vector3(p.x, ground + 0.03, p.y)))
 		canvas.draw_circle(at, 4.5, Color(SHADOW, 0.7 * strength))
 		canvas.draw_circle(at, 3.0, Color(tint, strength))
-	if wall.is_building() and count == Wall.BUILDING_POINTS:
-		_draw_footprint(canvas, camera, editor, wall, tint, strength)
 
 
 ## A street's ghost: its line on the ground and every building's footprint with its door.
@@ -559,7 +558,6 @@ static func _draw_row(
 		var corners := PackedVector2Array()
 		for q: Vector3 in lot.points:
 			corners.append(Vector2(q.x, q.z))
-		var house := Wall.make(0, Wall.Kind.BUILDING, corners, true, lot.height)
 		var ring := PackedVector2Array()
 		for p in corners:
 			var y := WaterGeometry.ground_at(doc, p) + 0.04
@@ -567,16 +565,16 @@ static func _draw_row(
 		ring.append(ring[0])
 		canvas.draw_polyline(ring, Color(SHADOW, 0.5 * strength), 3.0, true)
 		canvas.draw_polyline(ring, Color(tint, 0.9 * strength), 1.5, true)
-		_draw_footprint(canvas, camera, editor, house, tint, strength)
+		_draw_footprint(canvas, camera, editor, corners, tint, strength)
 
 
-## A building footprint: the rectangle filled faintly on the ground and the door marked on its
-## first side (a bar the door width, and a tick out from it).
+## A building footprint (`corners`, four map points): the rectangle filled faintly on the ground
+## and the door marked on its first side (a bar the door width, and a tick out from it).
 static func _draw_footprint(
 	canvas: Control,
 	camera: Camera3D,
 	editor: AuthoringEditor,
-	wall: Wall,
+	corners: PackedVector2Array,
 	tint: Color,
 	strength: float
 ) -> void:
@@ -585,7 +583,7 @@ static func _draw_footprint(
 		var y := WaterGeometry.ground_at(doc, p) + lift
 		return camera.unproject_position(editor.to_world(Vector3(p.x, y, p.y)))
 	var ring := PackedVector2Array()
-	for p in wall.points:
+	for p in corners:
 		ring.append(screen.call(p, 0.04))
 	var centre := (ring[0] + ring[1] + ring[2] + ring[3]) * 0.25
 	var fan := ring.duplicate()
@@ -596,10 +594,10 @@ static func _draw_footprint(
 	RenderingServer.canvas_item_add_triangle_array(
 		canvas.get_canvas_item(), BrushCursor.fan_indices(ring.size()), fan, colors
 	)
-	var side := wall.points[1] - wall.points[0]
-	var mid := (wall.points[0] + wall.points[1]) * 0.5
+	var side := corners[1] - corners[0]
+	var mid := (corners[0] + corners[1]) * 0.5
 	var along := side.normalized()
-	var middle_of_all := (wall.points[0] + wall.points[1] + wall.points[2] + wall.points[3]) * 0.25
+	var middle_of_all := (corners[0] + corners[1] + corners[2] + corners[3]) * 0.25
 	var out := Vector2(-along.y, along.x)
 	if out.dot(middle_of_all - mid) > 0.0:
 		out = -out

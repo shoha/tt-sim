@@ -134,6 +134,32 @@ func add(structure: Structure) -> int:
 	return laid.id
 
 
+## Lays every structure of `laid` (each with its own free id, as StreetSplit.free_ids gives) as
+## one history entry labelled `label`. False, with last_refusal set and nothing changed, when
+## the document would hold too many, an id is taken or repeated, or the writer would refuse one.
+func lay_all(laid: Array[Structure], label: String) -> bool:
+	var doc := _editor().document
+	last_refusal = &""
+	if laid.is_empty() or doc.structures.size() + laid.size() > MapDocument.MAX_STRUCTURES:
+		last_refusal = REFUSED_FULL
+		return false
+	var seen := {}
+	for entry in doc.structures:
+		seen[entry.id] = true
+	var after: Array[Structure] = _current()
+	for structure in laid:
+		if (
+			seen.has(structure.id)
+			or (MapStructureIO.structure_problem(structure, doc.extent_m()) != "")
+		):
+			last_refusal = REFUSED_INVALID
+			return false
+		seen[structure.id] = true
+		after.append(structure.copy())
+	_change(label, after)
+	return true
+
+
 ## Shows `changed` (a copy of a standing structure with a new plan, say) in the document and the
 ## nodes without a history entry: the live look of a handle being dragged. Pair it with edit() (the
 ## release, which records the whole gesture from `before`, the list taken before the first

@@ -52,7 +52,6 @@ signal water_speed_changed(speed: float)
 signal bridge_kind_selected(kind: int)
 signal wall_kind_selected(kind: int)
 signal wall_preset_selected(preset: int)
-signal wall_style_selected(style: int)
 signal structure_selected(ref: String)
 signal structure_reroll_requested
 signal brush_size_changed(radius: float)
@@ -377,7 +376,6 @@ func _build_tool_options(tool_id: StringName) -> Control:
 			(wall_pane.get_node("WallHint") as Label).text = String(TOOL_HINTS[tool_id])
 			wall_pane.kind_selected.connect(wall_kind_selected.emit)
 			wall_pane.preset_selected.connect(wall_preset_selected.emit)
-			wall_pane.style_selected.connect(wall_style_selected.emit)
 			return wall_pane
 		StructureTool.ID:
 			structure_pane = StructureToolPane.new()

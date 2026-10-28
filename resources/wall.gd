@@ -15,17 +15,19 @@ extends RefCounted
 ## uses the planks. `id` is stable for the wall's lifetime (1..MAX_ID, unique in the document)
 ## and seeds its variation with the map seed.
 
-enum Kind { STONE, FENCE, BUILDING, ROW }
+enum Kind { STONE, FENCE, ROW }
 
-## The names Kind takes in walls.json.
-const KIND_NAMES: Array[String] = ["stone", "fence", "building", "row"]
+## The names Kind takes in walls.json. (A "building" kind existed until card S8 of the structures
+## topic; single buildings are Structure records now, and a walls.json entry of that kind is
+## skipped with a warning, MapWallIO.REMOVED_KINDS.)
+const KIND_NAMES: Array[String] = ["stone", "fence", "row"]
 const MAX_ID := 255
 const MIN_POINTS := 2
 const MAX_POINTS := 64
-## Height above the ground, metres, per Kind (a building's is its walls', under the roof).
-const MIN_HEIGHT_M: Array[float] = [0.4, 0.5, 1.6, 1.5]
-const MAX_HEIGHT_M: Array[float] = [2.0, 2.0, 5.0, 10.0]
-const DEFAULT_HEIGHT_M: Array[float] = [0.9, 1.0, 2.4, 3.0]
+## Height above the ground, metres, per Kind (a row's is its setback).
+const MIN_HEIGHT_M: Array[float] = [0.4, 0.5, 1.5]
+const MAX_HEIGHT_M: Array[float] = [2.0, 2.0, 10.0]
+const DEFAULT_HEIGHT_M: Array[float] = [0.9, 1.0, 3.0]
 ## A row (a street of buildings along an open line) keeps its street's setback, in metres, in
 ## `height_m` (the range above is then the setback's), the `side` of the street the buildings stand
 ## on (ROW_SIDES: left, right, both) and the `seed` that varies them. Its buildings are made from
@@ -33,18 +35,7 @@ const DEFAULT_HEIGHT_M: Array[float] = [0.9, 1.0, 2.4, 3.0]
 const ROW_SIDES := 3
 ## The species of street (ProcgenRow.PRESET_NAMES): mixed, terrace, guild houses, village, cottages.
 const ROW_PRESETS := 5
-## A building's style (Wall.preset) is its walls and its roof: walls * BUILDING_ROOFS + roof,
-## walls 0 stone or 1 timber, roof 0 gable, 1 hip or 2 flat (the parts of procgen's building
-## recipe). 0 is the stone building with a gable roof.
-const BUILDING_ROOFS := 3
-const BUILDING_WALLS := 2
-const BUILDING_STYLES := BUILDING_ROOFS * BUILDING_WALLS
 const MAX_SEED := 1000000000
-## A building is a closed rectangle of four points (its first side carries the door), each side
-## within these bounds, metres.
-const BUILDING_POINTS := 4
-const BUILDING_MIN_SIDE_M := 2.0
-const BUILDING_MAX_SIDE_M := 24.0
 ## A segment shorter than this is not a wall; the whole line may not exceed MAX_LENGTH_M.
 const MIN_SEGMENT_M := 0.3
 const MAX_LENGTH_M := 120.0
@@ -58,8 +49,8 @@ var height_m: float = 0.9
 ## both); unused by the other kinds.
 var seed_value: int = 0
 var side: int = 2
-## A row's species (0 mixed, 1 terrace, 2 guild houses, 3 village, 4 cottages), or a building's
-## style (BUILDING_STYLES); 0 for the other kinds.
+## A row's species (0 mixed, 1 terrace, 2 guild houses, 3 village, 4 cottages); 0 for the other
+## kinds.
 var preset: int = 0
 ## Palette biome id for the rock, or "".
 var style: String = ""
@@ -97,10 +88,6 @@ func is_fence() -> bool:
 	return kind == Kind.FENCE
 
 
-func is_building() -> bool:
-	return kind == Kind.BUILDING
-
-
 func is_row() -> bool:
 	return kind == Kind.ROW
 
@@ -109,8 +96,6 @@ func is_row() -> bool:
 func preset_count() -> int:
 	if kind == Kind.ROW:
 		return ROW_PRESETS
-	if kind == Kind.BUILDING:
-		return BUILDING_STYLES
 	return 1
 
 

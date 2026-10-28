@@ -12,7 +12,7 @@ refined later (docs/systems/procgen.md).
 | Field | Meaning |
 |-------|---------|
 | `id` | 1..255, stable, unique; seeds the variation with the map seed |
-| `kind` | `STONE` or `FENCE` |
+| `kind` | `STONE`, `FENCE` or `ROW` (a street, below); `walls.json` names them `stone`, `fence`, `row` |
 | `points` | the line's vertices in map XZ (2 to 64; sides at least 0.3 m, line at most 120 m) |
 | `closed` | the last point joins back to the first (needs three points) |
 | `height_m` | height above the ground (stone 0.4 to 2.0, fence 0.5 to 2.0) |
@@ -23,6 +23,8 @@ No height is stored along the line: the wall reads the document's ground when it
 `map.ttmap` gets a `walls.json` entry (`MapWallIO`, `{"version": 1, "walls": [...]}`), validated like
 `crossings.json`: a bad wall is skipped with a warning on read and refused on write. An older build
 ignores the entry and loads the map without walls. `MapDocumentIO.ENTRY_CAPS` holds its 1 MB cap.
+A `"building"` entry (the kind removed in card S8, below) is skipped with a warning that names the
+Structure tool, like any other unknown kind (`MapWallIO.REMOVED_KINDS`); there is no migration.
 
 ## Geometry
 
@@ -58,38 +60,25 @@ starts above `world_top()`. Materials: the biome's cliff rock with the palette m
 - Network: a `"walls"` live edit kind (`LiveEditCodec`, `LiveEditReader`) carries the list as JSON,
   validated by `MapWallIO.parse_list`. `MapFingerprint` has a `walls` key.
 
-## Buildings (2026-10-27)
+## Buildings: the kind is gone (card S8, 2026-10-28)
 
-`Wall.Kind.BUILDING` is a closed rectangle of four points (`MapWallIO` refuses anything else: sides
-2 to 24 m, corners square within 0.02 of the cosine), built by procgen's `building.json` (stone walls
-with a level top and a door in the first side, a gable roof of planks, stone gable ends;
-`height_m` is the wall height, default 2.4 m). The node has a stone mesh, a wood mesh (the roof) and
-one collision body: the walls' hull split at the door plus a solid roof, so tokens stand on the roof
-(the door is not walkable: there is no floor). Scatter clears over the whole footprint.
+`Wall.Kind.BUILDING` (a closed rectangle drawn from two corners, with a style of walls and roof) was
+the first single building. The Structure tool replaced it (card S4, [structures.md](structures.md)
+"The tool"), and card S8 deleted it: the enum value, its recipe path and style swap in
+`WallGeometry` (`ProcgenRecipes.building` is no longer called from the Wall code), the rectangle
+planner (`WallEditor.building_corners`, the building plan and pick), its validation and JSON in
+`MapWallIO`, the brush's yaw, idle ghost, readouts and `building_style`, and the pane's Walls and
+Roof rows (and the Events pane's `wall_style_selected`). `Wall.Kind` is now `STONE`, `FENCE`, `ROW`
+(`KIND_NAMES` `stone`, `fence`, `row`). A street still draws its lots' footprints with the door mark
+(`WallBrush._draw_footprint`), now from plain corner lists.
 
-The brush draws a building from two opposite corners (press one, drag to the other; Ctrl+click
-erases it, picked anywhere over its footprint). `WallEditor.building_corners(a, b, yaw)` makes the
-rectangle: its first side runs from `a` along the turn (`yaw`, radians from the map's X axis) and
-carries the door. Q and E turn the next footprint 15 degrees (Shift: 90) through
-`BrushMode.rotates()` / `rotate()` and the brush's `TURN_LEFT` / `TURN_RIGHT` actions; before the
-press an idle ghost of 4 by 3 m shows the turn and the door side, while dragging the rectangle is
-filled faintly on the ground with its outline, top, posts, a door bar and the size. A drag whose
-sides come under 2 m is refused with a line saying so. Verified with the `building_tool` render job
-(idle ghost, turned ghost, drag, laid, save and reload, a token on the roof).
-
-### Styles: any wall under any roof (2026-10-27)
-
-`Wall.preset` of a building is its style, `walls * 3 + roof`: walls 0 stone or 1 timber, roof 0 gable,
-1 hip or 2 flat (`Wall.BUILDING_STYLES`, 6). Style 0 is the stone building with a gable roof, built
-from the committed `building.json`; any other builds `ProcgenRecipes.building(roof, walls)`, the same
-graph with its wall node (`building_walls` or `building_timber`) and roof node (`roof_gable`,
-`roof_hip`, `roof_flat`) swapped (`WallGeometry.recipe_for`). Since the structures card S4
-(2026-10-28) the Wall tool's pane has no Building tile: single buildings are the Building tool's
-([structures.md](structures.md) "The tool"), and this kind's code (the brush's `building_style`, the
-pane's Walls and Roof rows) stays only until card S8 deletes it. The readout names a non-default style, and
-the style is saved in `walls.json` as `preset` (only when it is not 0, so older maps are unchanged).
-Timber walls and hip or flat roofs are wood-kind surfaces, so they take the biome's wood material;
-the street species still use the stone and gable building. Verified with the `styles` render job.
+Old maps: a `walls.json` entry of kind `"building"` is skipped when the map loads, with a warning
+("a \"building\" wall is no longer a kind (single buildings are made with the Structure tool)"), and
+the rest of the map loads; the next save has no such entry. Any other kind value (wrong case, a
+number, an object) is skipped the same way as before. There is no migration (the suite has no real
+users): a map's old buildings are re-laid with the Building tool. A street's variation seed still
+counts its kind as 3 (`WallGeometry.ROW_SEED_KIND`), so streets laid before the removal keep the
+same buildings.
 
 ## Streets (2026-10-27)
 
@@ -124,11 +113,24 @@ Look (card S6, 2026-10-28): a street's lots wear the structures' look. `WallGeom
 row's roofs off its planks (found from each vertex's provenance path, `StructureLook.role_of_tag_path`)
 into a `roof` part, which `AuthoredWalls` draws as a `Roof` mesh with the structures' roof tile shader,
 and paints every lot from the street's seed (a roof tile colour and a wall lean, `StructurePaint`); the
-masonry and timber use the structures' wall shader (`StructureMaterials`). Fences, stone walls and
-Building kind walls are unchanged. `docs/systems/structures.md` "Look" has the details.
+masonry and timber use the structures' wall shader (`StructureMaterials`). Fences and stone walls
+are unchanged. `docs/systems/structures.md` "Look" has the details.
 
-Not yet: breaking a street into individual buildings, corner plots, and a yard that is not fence or
-low wall (gardens, trees), plus finer control than the species.
+Split into buildings (card S8, 2026-10-28): a click (a press that ends within 0.25 m of where it
+began) on a street picks it (outlined in gold; Escape, a right click, a click on bare ground or
+putting the tool down lets go), and the pane then shows "Split into buildings" and "Done". Split
+replaces the street with one Structure record per lot and removes the street, as one history entry
+(a group: the structures laid, then the street removed, so one undo brings the street back and
+leaves no building; the live edit codec sends the two parts as a "structures" and a "walls" op).
+`WallEditor.split_street(id)` does it and returns the number of buildings, or -1 with a refusal (not
+a street, no building to stand in for it, too many structures for the document, `MAX_STRUCTURES`).
+How a lot becomes a record, and what it loses, is in [structures.md](structures.md) "Splitting a
+street". The brush's picked street is `WallBrush.selected_id` (`selection_changed`), a mode that
+holds a selection takes Escape (`BrushMode.has_selection`). The Events pane (the GM's live brush)
+has no Split button.
+
+Not yet: corner plots, and a yard that is not fence or low wall (gardens, trees), plus finer
+control than the species.
 
 ## Textured masonry (on by default since 2026-10-27)
 
@@ -165,7 +167,8 @@ with the `wall_play` render job (pane, two sides laid, the toasts).
   wood UVs are the copied swatch table (see procgen's README cleanup list).
 - The procgen switch (`ProcgenCrossing.enabled`) does not affect walls: they always use the module.
 - Next (2026-10-27): door and window parts, street species that pick building styles, more roofs
-  and walls, interiors (deferred), a break-a-street-into-buildings action, wall events. The design
+  and walls, interiors (deferred), wall events (the break-a-street-into-buildings action is built,
+  card S8). The design
   notes and the see-through check that guards every recipe are in plantgen
   `docs/structures_design.md` section 17; the state at the end of the session is in plantgen
   `docs/agents_open_work.md`.

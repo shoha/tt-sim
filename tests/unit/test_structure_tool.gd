@@ -432,11 +432,9 @@ func test_the_tool_is_registered_with_a_pane_a_brush_and_help() -> void:
 	assert_gt(tool.help_rows().size(), 4, "the keys and the mouse have rows")
 	assert_true(ResourceLoader.exists("res://assets/icons/ui/%s.svg" % tool.icon))
 	assert_true(tool.works_on(_editor()))
-	assert_true(
-		WallToolPane.KIND_TILES.size() < Wall.Kind.size(), "the Wall tool lost its Building"
-	)
+	assert_false("building" in Wall.KIND_NAMES, "the Wall tool lost its Building (card S8)")
 	for tile in WallToolPane.KIND_TILES:
-		assert_ne(int(tile.kind), Wall.Kind.BUILDING)
+		assert_true(int(tile.kind) < Wall.KIND_NAMES.size())
 
 
 func test_the_pane_lists_the_librarys_buildings_by_family_with_pictures() -> void:

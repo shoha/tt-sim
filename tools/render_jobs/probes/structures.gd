@@ -237,7 +237,6 @@ static func _street(base: Node, step: Dictionary) -> String:
 		Vector3(float(a[0]), 0, float(a[1])),
 		Vector3(float(b[0]), 0, float(b[1])),
 		-1.0,
-		0.0,
 		{"seed": 7, "side": 0, "preset": int(step.get("preset", 3))}
 	)
 	return "street %d" % id if id >= 0 else "refused: %s" % editor.walls.last_refusal

@@ -1073,6 +1073,12 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   structures, with 20 (probe `structures.gd` `many`), with every structure mesh in one plain
   StandardMaterial3D (`plain`, the shader-free control), with the painterly materials again and with
   none again. `docs/PERFORMANCE.md` "Structures: the painterly look".
+- `jobs/street_split.json` (about 25 s, keeps no level): the structures topic's card S8 in a new
+  unsaved 150 ft temperate forest (seed 1234): a terrace street and a village street laid as Wall
+  rows (probe `structures.gd` `street`), a capture, both split into Structure records (probe
+  `walls.gd` `split`, the pane button's call: one history entry each), a flush and report of the
+  nodes, and the same view again. Two windowed captures: `01_streets_before`, `02_streets_after`.
+  `docs/systems/structures.md` "Splitting a street".
 - `structure_thumbs` (about 40 s, keeps no level; **not a file in `jobs/`**: `tools/render_structure_thumbnails.gd`
   builds it from a library folder, as `render_library_thumbnails.gd` builds the biome one; the structures
   card S3): one new unsaved 100 ft meadow, each structure of the library alone at its default

@@ -256,9 +256,6 @@ func setup(lpc: LevelPlayController, events_pane: EventsPane) -> void:
 	pane.wall_preset_selected.connect(
 		func(preset: int) -> void: _set_mode(WallTool.ID, "row_preset", preset)
 	)
-	pane.wall_style_selected.connect(
-		func(style: int) -> void: _set_mode(WallTool.ID, "building_style", style)
-	)
 	pane.structure_selected.connect(
 		func(ref: String) -> void: _set_mode(StructureTool.ID, "ref", ref)
 	)

@@ -241,8 +241,8 @@ in `StructureMaterials` and `StructureLook`.
 
 Card S4 (2026-10-28): the **Building tool** (`StructureTool`, rail id `structure`, icon `home`),
 registered after the Wall tool in map building and, as a live brush, in the GM's Events pane. It
-replaces the Wall tool's Building tile (`Wall.Kind.BUILDING` and its code stay until card S8). Like
-the other tools it is a descriptor (`scenes/states/authoring/tools/structure_tool.gd`), a brush
+replaced the Wall tool's Building tile (`Wall.Kind.BUILDING` and its code were deleted in card S8,
+"Splitting a street" below). Like the other tools it is a descriptor (`scenes/states/authoring/tools/structure_tool.gd`), a brush
 mode (`structure_brush.gd`), a pane (`structure_tool_pane.gd`) and a test; its placement rules are
 pure (`utils/structure_placement.gd`).
 
@@ -283,8 +283,8 @@ pure (`utils/structure_placement.gd`).
   (`EventsPane.structure_selected`, `structure_reroll_requested`), the hint bar rows in
   `PlayEvents.hints_for`.
 - **Not in this card.** Selection and editing are card S5 (next section); non-rectangular plans
-  (`plans` in the entry) are not offered yet; the rise animation of a laid building and the
-  retirement of the Building kind and its pane fields are card S8 and a look card.
+  (`plans` in the entry) are not offered yet; the rise animation of a laid building is a look card.
+  The Building kind and its pane fields were retired in card S8.
 
 ## Editing a building
 
@@ -351,9 +351,64 @@ drawing is `StructureSelectionView`, the edits are `StructureEditor`, and the ba
 - **Not offered yet:** a turn ring, wings (L, T, U), edge handles that insert points, the rise
   animation.
 
+## Splitting a street
+
+Card S8 (2026-10-28): `Wall.Kind.BUILDING` is deleted (see [walls.md](walls.md) "Buildings: the kind
+is gone"; an old map's `"building"` wall is skipped with a warning), and a generated street becomes
+editable buildings through **Split into buildings**: click a street with the Wall tool, press the
+pane's button. `WallEditor.split_street` lays one Structure record per lot (`StructureEditor.lay_all`)
+and removes the street, as one history group (one undo restores the street and removes the records).
+The planning is pure (`utils/street_split.gd`, `StreetSplit.plan`):
+
+- **Where.** The lots are `WallGeometry.row_lots` (the street's own recipe seed and parameters), so a
+  record stands where its building did. The footprint is the lot's rectangle, its front (edge 0) the
+  street side and wound positive (a street's right side comes wound the other way, so its corners
+  are reordered, not rotated), its sides clamped to the matched recipe's `min_side_m`, `max_side_m` and
+  `max_area_m2` (scaled to the map as the Building tool does), points snapped to 1 cm. A lot whose
+  record the writer would refuse is skipped and counted (`WallEditor.last_split_skipped`). No ground
+  or crowding check is made: the street already stood there, and a split must not drop buildings
+  silently. The record's `style` is the biome under it, as the tool's.
+- **Which recipe.** `StreetSplit.match_row` scores each structure of the core library (else every
+  served one) against what the street's species drew for the lot (`walls`, `roof`, `style`, `trim`,
+  `chimneys`): a named facade style that is the row's family or tag +6 (a plain lot or a cottage lot
+  takes any plain "house" at +4), walls of the row's tags +3 (the other material -1), the roof +1, a
+  chimney, shutters, quoins and trim +1 or +2 where the row has them and the lot was dressed with
+  them (the same tag without the lot's dressing the same amount less), and a townhouse for a lot that
+  is not one -4. The best score wins; a tie is broken by the lot's seed, so a street is not one house
+  repeated; under 4 nothing resembles the lot and the seed picks from the whole table. With the
+  starter set: a plain stone lot is the stone house, plain timber the cottage, a tall terrace front
+  or guild house the (trimmed, when it was dressed) townhouse, a village timber lot the chimneyed
+  cottage, and a village stone lot the stone house or the chimneyed cottage by its seed.
+- **Seed and look.** The record's `seed_value` is the lot's own building seed (derived from the map
+  seed, the wall id and seed, the side and the index; folded into 0..`Structure.MAX_SEED`).
+  `params` holds the lot's height and roof pitch, and window width, chimney count and textured
+  masonry where the recipe declares them, clamped to its range, only where they differ from its
+  default. A split is a function of the document and the library: the same street always splits into
+  the same records.
+- **Ids and limits.** The records take the lowest free ids; a document that cannot hold them
+  (`MAX_STRUCTURES`) refuses the whole split and keeps the street.
+
+What a split loses, honestly (render job `street_split`, a terrace and a village street before and
+after): the buildings stand on the same plots at the same heights and pitches, with the same walls
+(stone, textured stone, timber) and a roof tile colour per building, but
+- the **yards** (the village's fences, the cottages' low walls) are not structure records and go;
+- the **roof ridge** direction is not kept: the street turns some gables to the street (the lot's
+  `ridge`), while a structure recipe has no ridge parameter, so a terrace that had its eaves to the
+  street comes out gable-end to the street (this is the largest change in the silhouette);
+- **hip and flat roofs** become gables (the starter set has only gable recipes), and the terrace's
+  party-wall chimneys are lost (only the chimneyed cottage has stacks);
+- **timber guild houses** become stone townhouses (no timber townhouse in the set), and the street
+  species' trim (shutters, sills, door frames) follows what the picked recipe offers, not what the lot
+  drew;
+- facade windows follow the recipe, not the species' window width unless the recipe exposes it.
+
+The footprints, heights and count are close; the silhouette is a plausible neighbour of the street's
+rather than the same buildings. Matching improves with the library: a timber townhouse, a hip roof
+cottage and a recipe parameter for the ridge in the structure set would close most of the gap (a
+core-library and procgen change, not made here).
+
 ## Not yet
 
-- Retiring `Wall.Kind.BUILDING` (card S8).
 - Window glow: procgen's `glazing` node has a `lit` share, but the recipes do not expose it, so no
   window glows yet (card S6 asked for it "if cheap"; it needs a recipe parameter or a stamp, a
   procgen request). The look pass on three biomes (S6 judged one: temperate forest).

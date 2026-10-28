@@ -10,11 +10,10 @@ extends RefCounted
 
 const STONE_RECIPE := "res://procgen/recipes/stone_wall.json"
 const FENCE_RECIPE := "res://procgen/recipes/wood_fence.json"
-const BUILDING_RECIPE := "res://procgen/recipes/building.json"
 const STREET_ROW_RECIPE := "res://procgen/recipes/street_row.json"
-## A building's roofs and walls, in Wall.preset order (walls * Wall.BUILDING_ROOFS + roof).
-const BUILDING_ROOFS: Array[String] = ["gable", "hip", "flat"]
-const BUILDING_WALLS: Array[String] = ["stone", "timber"]
+## What a row's seed has counted its kind as since before the building kind was removed (S8):
+## kept so existing streets keep their buildings.
+const ROW_SEED_KIND := 3
 ## The ground under a wall is sampled this far apart (metres) along its line for its cache key.
 const KEY_STEP_M := 0.5
 ## The width plants clear across a wall's side (its thickness and a margin), metres.
@@ -45,23 +44,13 @@ static func recipe_path(kind: Wall.Kind) -> String:
 	match kind:
 		Wall.Kind.FENCE:
 			return FENCE_RECIPE
-		Wall.Kind.BUILDING:
-			return BUILDING_RECIPE
 		Wall.Kind.ROW:
 			return STREET_ROW_RECIPE
 	return STONE_RECIPE
 
 
-## The recipe `wall` is built from: its kind's committed recipe, or for a building of another
-## style the building recipe with its walls and roof parts swapped. Null when missing.
+## The recipe `wall` is built from: its kind's committed recipe. Null when missing.
 static func recipe_for(wall: Wall) -> PlantGraphDocument:
-	if wall.is_building() and wall.preset > 0:
-		var style := clampi(wall.preset, 0, Wall.BUILDING_STYLES - 1)
-		var doc := ProcgenRecipes.building(
-			BUILDING_ROOFS[style % Wall.BUILDING_ROOFS], BUILDING_WALLS[style / Wall.BUILDING_ROOFS]
-		)
-		doc.registry = ProcgenStructureRegistry.new()
-		return doc
 	return load_recipe(recipe_path(wall.kind))
 
 
@@ -92,7 +81,14 @@ static func inputs_for(doc: MapDocument, wall: Wall) -> ProcgenStructureInputs:
 	var ground := Ground.new()
 	ground.doc = doc
 	inputs.env = ground
-	inputs.seed_value = hash([doc.map_seed, wall.id, 100 + wall.kind, wall.seed_value])
+	inputs.seed_value = hash(
+		[
+			doc.map_seed,
+			wall.id,
+			100 + (ROW_SEED_KIND if wall.is_row() else wall.kind),
+			wall.seed_value
+		]
+	)
 	return inputs
 
 
@@ -271,19 +267,6 @@ static func clearance_crossings(doc: MapDocument) -> Array[Crossing]:
 					wall.points[(k + 1) % count],
 					Vector3.ZERO,
 					CLEAR_WIDTH_M
-				)
-			)
-		if wall.is_building() and count == Wall.BUILDING_POINTS:
-			# The whole footprint clears, not only its sides: a strip across it from the middle of
-			# the first side to the middle of the third, as wide as the first side is long.
-			out.append(
-				Crossing.make(
-					0,
-					Crossing.Kind.PLANK,
-					(wall.points[0] + wall.points[1]) * 0.5,
-					(wall.points[2] + wall.points[3]) * 0.5,
-					Vector3.ZERO,
-					wall.points[0].distance_to(wall.points[1])
 				)
 			)
 	return out

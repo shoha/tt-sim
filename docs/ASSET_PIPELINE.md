@@ -2004,7 +2004,9 @@ of the starter set at `tests/fixtures/structure_digests.txt`. **Built (card S3):
 (the **Library** bullet below: `structures/` files, reader, registry, partial bundles and transfer,
 the importer's card counts, Verify, tiles rendered by tt-sim), the core starter set (five
 structures, in the `core-library` repo and `libraries/core/`), and the resolver that reads the
-registry; a recipe nobody serves builds a placeholder plot. **Proposed, not built:** the
+registry; a recipe nobody serves builds a placeholder plot. **Built (card S8):** the Wall tool's
+`building` kind is gone (the **Streets** bullet below) and a street splits into Structure records.
+**Proposed, not built:** the
 determinism gate on every platform, the painterly role table and the per-map budget. The full
 design is the gitignored `docs/plans/2026-10-28-structures/design.md`.
 
@@ -2058,6 +2060,20 @@ NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuil
   `MapLibraries.used_ids` counts every reference's library); `MapFingerprint` has the key
   `structures`. Code: `Structure`, `MapStructureIO`,
   `StructureEditor`; hub: `systems/structures.md`.
+- **Streets (built, card S8).** The `walls.json` kind `building` (a closed square with a walls and
+  roof style, built from procgen's `building.json`) no longer exists: the kinds are `stone`, `fence`
+  and `row`, and a `building` entry is skipped with a warning when a map loads (no migration; the
+  Building tool lays the same building as a Structure record). A street (`row`) stays a Wall record
+  built by procgen's `street_row.json` and can be turned into Structure records by the Wall tool's
+  "Split into buildings" (`StreetSplit`, `WallEditor.split_street`): one record per lot, `recipe` the
+  library structure that best matches the lot's walls, roof, facade style and dressing (ties broken
+  by the lot's seed), `footprint` the lot's rectangle (edge 0 the street side), `seed` the lot's
+  building seed, `params` its height, pitch, window width, chimneys and masonry where the recipe
+  declares them; the street record is removed in the same history entry. The split reads the
+  library's index rows (`family`, `tags`, size limits) and recipe interfaces only, so a library
+  that tags its structures like core (`house`, `townhouse`, `cottage`, `stone`, `timber`, `chimney`,
+  `shutters`, `trim`, `quoins`) is matched well; anything else gets a seeded pick. A yard and a
+  street's roof ridge direction are not carried over (a recipe has no ridge parameter).
 - **Determinism.** The same recipe, inputs and seed must build the same mesh on every peer. Measured
   on Windows only: repeated and worker-thread builds give identical digests (12 cases). Linux
   is covered for the self-check samples; the 42 building digests are not yet run on every
