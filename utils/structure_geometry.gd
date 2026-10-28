@@ -10,7 +10,7 @@ extends RefCounted
 ## on a worker, in a test and on another peer (docs/systems/structures.md "Geometry").
 ##
 ## Parts of one structure (build_one):
-##   {"id", "recipe", "style",
+##   {"id", "recipe", "style", "palette" (the roof tile colour's name, StructurePaint),
 ##    "meshes": [{"kind": surface kind, "role": StructureLook role, "arrays": mesh arrays,
 ##                "tags": per vertex tag ids into "tag_table"}, ...],
 ##    "tag_table": provenance paths (node id, then slot path), "collision": faces,
@@ -29,7 +29,7 @@ const HARD_TRIANGLES := 25000
 const KEY_STEP_M := 0.5
 const KEY_MAX_SAMPLES := 2048
 ## Bumped when the mesh layout of the parts changes, so cached parts rebuild.
-const FORMAT_VERSION := 1
+const FORMAT_VERSION := 2
 ## Marks a structure with no top (no recipe, or nothing built).
 const NONE := -INF
 ## Scatter clearance: strips this wide (at most CLEAR_MAX_STRIPS per structure) cover the footprint;
@@ -124,8 +124,12 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 		roles.append(StructureLook.role_of_path(recipe, path))
 	var meshes: Array = []
 	for surface in geometry.merged_by_kind():
-		meshes.append_array(_split(surface, roles))
+		meshes.append_array(split_surface(surface, roles))
 	meshes.sort_custom(_by_role)
+	# The building's own roof tile colour and wall lean, from its seed and id (the same on every peer).
+	var palette := StructurePaint.palette_of(structure.seed_value, structure.id)
+	parts.palette = palette.name
+	StructurePaint.paint(meshes, PackedInt32Array(), [palette])
 	parts.meshes = meshes
 	parts.tag_table = PackedStringArray(geometry.tag_table)
 	parts.collision = geometry.collision
@@ -372,6 +376,7 @@ static func _facing(
 static func _empty(structure: Structure) -> Dictionary:
 	return {
 		"placeholder": false,
+		"palette": "",
 		"id": structure.id,
 		"recipe": structure.recipe,
 		"style": structure.style,
@@ -398,7 +403,7 @@ static func _by_role(a: Dictionary, b: Dictionary) -> bool:
 ## `surface` cut into one mesh per material role: every triangle goes to the role of the node that
 ## made its first vertex (`roles` maps a tag id to a role). Vertices keep their relative order, so
 ## the quads the tangents rely on stay four in a row.
-static func _split(surface: PlantSurface, roles: PackedStringArray) -> Array:
+static func split_surface(surface: PlantSurface, roles: PackedStringArray) -> Array:
 	var tags := surface.tags
 	var indices := surface.indices
 	var triangles := indices.size() / 3
