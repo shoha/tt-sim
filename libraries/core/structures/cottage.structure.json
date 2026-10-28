@@ -86,6 +86,15 @@
       "name": "floors",
       "tip": "How many floors; 0 for the style's own (by the wall height).",
       "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Lit windows",
+      "max": 1,
+      "min": 0,
+      "name": "lit",
+      "tip": "The share of windows that glow warm, as if lit from within.",
+      "type": "float"
     }
   ],
   "nodes": [
@@ -157,7 +166,9 @@
     },
     {
       "id": "glazing_7",
-      "params": {},
+      "params": {
+        "lit": "@lit"
+      },
       "position": [
         950.0,
         420.0

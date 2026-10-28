@@ -32,6 +32,8 @@ const KEY_MAX_SAMPLES := 2048
 const FORMAT_VERSION := 2
 ## Marks a structure with no top (no recipe, or nothing built).
 const NONE := -INF
+## digest_of rounds vertices and collision to this many metres (0.1 mm), as procgen's digests do.
+const DIGEST_SNAP_M := 0.0001
 ## Scatter clearance: strips this wide (at most CLEAR_MAX_STRIPS per structure) cover the footprint;
 ## each strip is shortened at both ends because a Crossing clears past its anchors.
 const CLEAR_STRIP_M := 0.75
@@ -274,14 +276,32 @@ static func digest_of(parts: Dictionary) -> String:
 		ctx.update(String(mesh.kind).to_utf8_buffer())
 		ctx.update(String(mesh.role).to_utf8_buffer())
 		var arrays: Array = mesh.arrays
-		ctx.update((arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).to_byte_array())
+		ctx.update(_snapped(arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).to_byte_array())
 		ctx.update((arrays[Mesh.ARRAY_NORMAL] as PackedVector3Array).to_byte_array())
 		ctx.update((arrays[Mesh.ARRAY_TEX_UV] as PackedVector2Array).to_byte_array())
 		ctx.update((arrays[Mesh.ARRAY_COLOR] as PackedColorArray).to_byte_array())
 		ctx.update((arrays[Mesh.ARRAY_INDEX] as PackedInt32Array).to_byte_array())
-	ctx.update((parts.get("collision", PackedVector3Array()) as PackedVector3Array).to_byte_array())
-	ctx.update(str(parts.get("top", NONE)).to_utf8_buffer())
+	var collision := parts.get("collision", PackedVector3Array()) as PackedVector3Array
+	ctx.update(_snapped(collision).to_byte_array())
+	var top: Variant = parts.get("top", NONE)
+	var top_text := "%.4f" % float(top) if top is float else str(top)
+	ctx.update(top_text.to_utf8_buffer())
 	return ctx.finish().hex_encode()
+
+
+## `points` rounded to DIGEST_SNAP_M, -0 written as 0: a one-ulp difference in a libm (Windows,
+## glibc, macOS) must not move a pin.
+static func _snapped(points: PackedVector3Array) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	out.resize(points.size())
+	for i in points.size():
+		var p := points[i]
+		out[i] = Vector3(_snap(p.x), _snap(p.y), _snap(p.z))
+	return out
+
+
+static func _snap(value: float) -> float:
+	return snappedf(value, DIGEST_SNAP_M) + 0.0
 
 
 ## The triangles of `parts` in all its meshes.
