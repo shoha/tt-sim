@@ -41,6 +41,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _many(base, step)
 		"plain":
 			return _plain(base, bool(step.get("on", true)))
+		"dressing":
+			return _dressing(base, bool(step.get("on", true)))
 	return "unknown action %s" % step.get("action", "")
 
 
@@ -119,6 +121,22 @@ static func _plain(base: Node, on: bool) -> String:
 					instance.mesh.surface_set_material(0, instance.get_meta("tt_s6_material"))
 				changed += 1
 	return "%s %d meshes" % ["plain" if on else "restored", changed]
+
+
+## Switches the buildings' yards (StructureDressing: soft ground, path, plants) on or off and
+## rebuilds every structure, so a perf run can split their cost.
+static func _dressing(base: Node, on: bool) -> String:
+	StructureDressing.enabled = on
+	var nodes := _nodes(base)
+	var editor := _editor(base)
+	if nodes == null or editor == null:
+		return "dressing %s (no structures yet)" % ["on" if on else "off"]
+	nodes.refresh(editor.document)
+	nodes.flush()
+	var meshes := 0
+	for child in nodes.get_children():
+		meshes += child.find_children("dressing_*", "MeshInstance3D", false, false).size()
+	return "dressing %s, %d yard meshes" % ["on" if on else "off", meshes]
 
 
 ## One structure alone at the centre (the thumbnail scene), the front turned `yaw` degrees.
