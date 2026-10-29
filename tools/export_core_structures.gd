@@ -511,6 +511,62 @@ const STARTERS: Array[Dictionary] = [
 		"family": "castle",
 		"variant": "Twin towers, arched gate",
 	},
+	# Half-timber framing (architecture-styles card 7, 2026-10-29): the Framing node's four looks.
+	# Each is a draw of `half_timber` or `tudor_framed` with the framing pattern pinned in a
+	# `style_patch` (arrays replace), so the four differ by pattern, stud spacing and plaster tone.
+	{
+		"id": "half_timber_house",
+		"bundle": "half_timber",
+		"seed": 0,
+		"name": "Half-timber house",
+		"family": "house",
+		"variant": "Half-timber, braces",
+		"style_patch":
+		{
+			"framing": {"pattern": [["braces", 1]], "stud_spacing": [[0.0, 1]]},
+			"palette": {"wall": ["#F2DDA2", "#EDD596"]},
+		},
+	},
+	{
+		"id": "tudor_framed",
+		"bundle": "tudor_framed",
+		"seed": 0,
+		"name": "Framed Tudor townhouse",
+		"family": "townhouse",
+		"variant": "Tudor, jettied, cross-braced",
+		"tags_add": ["english"],
+		"style_patch":
+		{
+			"framing": {"pattern": [["cross", 1]], "stud_spacing": [[0.0, 1]]},
+			"palette": {"wall": ["#F0D9A0", "#EBD08E"]},
+		},
+	},
+	{
+		"id": "herringbone_cottage",
+		"bundle": "half_timber",
+		"seed": 3,
+		"name": "Herringbone cottage",
+		"family": "cottage",
+		"variant": "Ochre plaster, herringbone",
+		"style_patch":
+		{
+			"framing": {"pattern": [["herringbone", 1]], "stud_spacing": [[0.0, 1]]},
+			"palette": {"wall": ["#E0B25C", "#D9A64E", "#E6BE70"]},
+		},
+	},
+	{
+		"id": "close_studded_house",
+		"bundle": "half_timber",
+		"seed": 5,
+		"name": "Close-studded house",
+		"family": "house",
+		"variant": "Close studding, panels",
+		"style_patch":
+		{
+			"framing": {"pattern": [["panels", 1]], "stud_spacing": [[0.6, 1]]},
+			"palette": {"wall": ["#F5E8B8", "#F2E2AE"]},
+		},
+	},
 	# Round and polygonal plans (styles integration card, 2026-10-28): each is a regular polygon
 	# (plan kind "round", the `sides:<n>` tag), built by ProcgenRecipesRound. `round` says how:
 	# {"kind": a ProcgenRecipesRound kind, "shape": a tower's roof shape} or {"make": the options

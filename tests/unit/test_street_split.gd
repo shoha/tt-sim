@@ -170,7 +170,16 @@ func test_a_terrace_becomes_townhouses_and_a_village_cottages() -> void:
 					# An English village's region (StreetSplit.SPECIES_REGIONS) joins its thatch and slate.
 					or (
 						local
-						in ["thatched_cottage", "slate_house", "brick_terrace", "tudor_townhouse"]
+						in [
+							"thatched_cottage",
+							"slate_house",
+							"brick_terrace",
+							"tudor_townhouse",
+							"tudor_framed",
+							"herringbone_cottage",
+							"half_timber_house",
+							"close_studded_house",
+						]
 					)
 				)
 			):
@@ -203,6 +212,13 @@ func test_a_split_never_picks_a_ruin_whatever_the_streets_region() -> void:
 		english.append(String(row["ref"]))
 	assert_true("core:tudor_townhouse" in english, "the English region takes the tudor")
 	assert_true("core:half_hip_cottage" in english, "and the English half-hip cottage")
+	for framed: String in [
+		"core:half_timber_house",
+		"core:tudor_framed",
+		"core:herringbone_cottage",
+		"core:close_studded_house",
+	]:
+		assert_true(framed in english, "%s joins the English street" % framed)
 
 
 func test_new_regional_rows_join_regions_and_a_street_never_gets_a_castle_or_barn() -> void:

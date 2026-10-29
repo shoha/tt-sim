@@ -1,0 +1,181 @@
+{
+ "out_dir": "render_jobs/framing_thumbs",
+ "timeout_s": 300,
+ "hang_s": 120,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "wait_title"
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 100,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:half_timber_house",
+   "width": 7.0,
+   "depth": 5.0,
+   "sides": 0,
+   "seed": 5
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.082,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "half_timber_house",
+   "folder": "D:/dev/tabletop/worktrees/core-library-framing"
+  },
+  {
+   "op": "capture",
+   "name": "tile_half_timber_house",
+   "desc": "tile half_timber_house"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:tudor_framed",
+   "width": 5.0,
+   "depth": 7.0,
+   "sides": 0,
+   "seed": 5
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.614,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "tudor_framed",
+   "folder": "D:/dev/tabletop/worktrees/core-library-framing"
+  },
+  {
+   "op": "capture",
+   "name": "tile_tudor_framed",
+   "desc": "tile tudor_framed"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:herringbone_cottage",
+   "width": 7.0,
+   "depth": 5.0,
+   "sides": 0,
+   "seed": 5
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.291,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "herringbone_cottage",
+   "folder": "D:/dev/tabletop/worktrees/core-library-framing"
+  },
+  {
+   "op": "capture",
+   "name": "tile_herringbone_cottage",
+   "desc": "tile herringbone_cottage"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:close_studded_house",
+   "width": 7.0,
+   "depth": 5.0,
+   "sides": 0,
+   "seed": 5
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.158,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "close_studded_house",
+   "folder": "D:/dev/tabletop/worktrees/core-library-framing"
+  },
+  {
+   "op": "capture",
+   "name": "tile_close_studded_house",
+   "desc": "tile close_studded_house"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  }
+ ]
+}

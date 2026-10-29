@@ -1,0 +1,248 @@
+{
+ "out_dir": "render_jobs/structures_framing",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 320,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "styles3",
+   "lots": [
+    [
+     "core:half_timber_house",
+     -24.0,
+     0.0,
+     7.0,
+     5.0,
+     0.0,
+     201
+    ],
+    [
+     "core:tudor_framed",
+     -12.0,
+     0.0,
+     5.0,
+     7.0,
+     0.0,
+     202
+    ],
+    [
+     "core:herringbone_cottage",
+     0.0,
+     0.0,
+     7.0,
+     5.0,
+     0.0,
+     203
+    ],
+    [
+     "core:close_studded_house",
+     12.0,
+     0.0,
+     7.0,
+     5.0,
+     0.0,
+     204
+    ],
+    [
+     "core:tudor_townhouse",
+     24.0,
+     0.0,
+     5.0,
+     7.0,
+     0.0,
+     205
+    ]
+   ]
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "report"
+  },
+  {
+   "op": "wait",
+   "s": 4.0
+  },
+  {
+   "op": "zoom",
+   "size": 40.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "01_row",
+   "desc": "Four framed styles and the beams Tudor, left to right"
+  },
+  {
+   "op": "zoom",
+   "size": 11.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -24,
+    0
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "02_half_timber",
+   "desc": "Half-timber house, braces"
+  },
+  {
+   "op": "zoom",
+   "size": 11.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -12,
+    0
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "03_tudor_framed",
+   "desc": "Framed Tudor townhouse, cross-braced, jettied"
+  },
+  {
+   "op": "zoom",
+   "size": 11.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "04_herringbone",
+   "desc": "Herringbone ochre cottage"
+  },
+  {
+   "op": "zoom",
+   "size": 11.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    12,
+    0
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "05_close_studded",
+   "desc": "Close-studded house"
+  },
+  {
+   "op": "zoom",
+   "size": 11.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    24,
+    0
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "06_tudor_beams",
+   "desc": "Beams Tudor for comparison"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "remove_all"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}

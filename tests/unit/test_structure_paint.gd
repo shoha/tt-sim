@@ -171,6 +171,27 @@ func test_beams_vigas_and_ladders_are_the_frame_role_and_keep_their_dark_timber(
 	assert_lt(timber, plaster * 0.6, "dark honey-brown timber over pale plaster")
 
 
+func test_half_timber_framing_is_the_frame_role_and_dark_oak_over_plaster() -> void:
+	assert_eq(StructureLook.role_of_type("framing"), StructureLook.FRAME)
+	for ref: String in ["core:half_timber_house", "core:tudor_framed", "core:herringbone_cottage"]:
+		var parts := StructureGeometry.build_one(_doc, Structure.make(1, ref, _plan(), 5))
+		assert_eq(parts.problem, "", ref)
+		var frame := _mesh(parts, StructureLook.FRAME)
+		var wall := _mesh(parts, StructureLook.WALL, "plaster")
+		assert_false(frame.is_empty(), "%s: the framing is a mesh of its own" % ref)
+		assert_false(wall.is_empty(), "%s: the plaster stays a wall" % ref)
+		var timber := 0.0
+		for c: Color in frame.arrays[Mesh.ARRAY_COLOR]:
+			timber += c.get_luminance()
+		timber /= float(frame.arrays[Mesh.ARRAY_COLOR].size())
+		var plaster := 0.0
+		for c: Color in wall.arrays[Mesh.ARRAY_COLOR]:
+			plaster += c.get_luminance()
+		plaster /= float(wall.arrays[Mesh.ARRAY_COLOR].size())
+		assert_lt(timber, plaster * 0.6, "%s: dark oak over pale plaster" % ref)
+		assert_gt(timber, 0.05, "%s: oak, not black" % ref)
+
+
 func test_panes_keep_their_procgen_colours() -> void:
 	var parts := StructureGeometry.build_one(_doc, Structure.make(1, "core:cottage", _plan(), 5))
 	for mesh: Dictionary in parts.meshes:

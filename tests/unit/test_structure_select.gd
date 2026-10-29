@@ -299,6 +299,8 @@ func test_variants_are_the_same_familys_other_recipes_and_a_lone_recipe_has_none
 		"core:adobe_parapet",
 		"core:adobe_rounded",
 		"core:alpine_chalet",
+		"core:close_studded_house",
+		"core:half_timber_house",
 		"core:house_flat",
 		"core:house_hip",
 		"core:minka",

@@ -1396,6 +1396,162 @@
 		},
 		{
 			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "house",
+			"file": "structures/half_timber_house.structure.json",
+			"id": "half_timber_house",
+			"max_area_m2": 70.0,
+			"max_side_m": 10.0,
+			"min_side_m": 4.0,
+			"name": "Half-timber house",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"plaster",
+				"timber",
+				"half_timber",
+				"framing",
+				"gable",
+				"chimney",
+				"english",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/half_timber_house.jpg",
+			"variant": "Half-timber, braces"
+		},
+		{
+			"default_size_m": [
+				5.0,
+				7.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"jetty",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "townhouse",
+			"file": "structures/tudor_framed.structure.json",
+			"id": "tudor_framed",
+			"max_area_m2": 70.0,
+			"max_side_m": 9.0,
+			"min_side_m": 3.5,
+			"name": "Framed Tudor townhouse",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"plaster",
+				"timber",
+				"half_timber",
+				"framing",
+				"jetty",
+				"gable",
+				"chimney",
+				"tudor",
+				"town",
+				"english",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/tudor_framed.jpg",
+			"variant": "Tudor, jettied, cross-braced"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "cottage",
+			"file": "structures/herringbone_cottage.structure.json",
+			"id": "herringbone_cottage",
+			"max_area_m2": 70.0,
+			"max_side_m": 10.0,
+			"min_side_m": 4.0,
+			"name": "Herringbone cottage",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"plaster",
+				"timber",
+				"half_timber",
+				"framing",
+				"gable",
+				"chimney",
+				"english",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/herringbone_cottage.jpg",
+			"variant": "Ochre plaster, herringbone"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "house",
+			"file": "structures/close_studded_house.structure.json",
+			"id": "close_studded_house",
+			"max_area_m2": 70.0,
+			"max_side_m": 10.0,
+			"min_side_m": 4.0,
+			"name": "Close-studded house",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"plaster",
+				"timber",
+				"half_timber",
+				"framing",
+				"gable",
+				"chimney",
+				"english",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/close_studded_house.jpg",
+			"variant": "Close studding, panels"
+		},
+		{
+			"default_size_m": [
 				7.2,
 				7.2
 			],
