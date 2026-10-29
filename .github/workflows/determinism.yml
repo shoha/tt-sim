@@ -18,9 +18,8 @@ name: Determinism
 # It needs the private procgen submodule (github.com/shoha/procgen). The default GITHUB_TOKEN
 # cannot read another private repository, so the repository secret PROCGEN_READ_TOKEN must hold
 # a fine-grained token with read access to the contents of shoha/procgen (see the step that uses
-# it). It needs no LFS objects and no native library: the structure pipeline reads procgen's
-# recipes only, and the import runs with the LFS pointer files (a few texture import errors,
-# none in the report).
+# it). It needs the LFS objects (the starter structures are served by the core library, which
+# is not served from pointer files; the cache steps are build.yml's) but no native library.
 
 on:
   workflow_dispatch:
@@ -99,6 +98,25 @@ jobs:
         uses: ./.github/actions/procgen-submodule
         with:
           token: ${{ secrets.PROCGEN_READ_TOKEN }}
+
+      # The starter structures are served by the core library (libraries/core), which only
+      # validates with its LFS objects present (with pointer files it is not served and the
+      # report sees the five built-in references with no recipes). Same cached restore as
+      # build.yml, so the LFS bandwidth is spent once per change of an LFS file.
+      - name: List LFS objects
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git lfs ls-files --long | cut -d ' ' -f1 | sort > .lfs-assets-id
+
+      - name: Restore LFS cache
+        uses: actions/cache@v4
+        with:
+          path: .git/lfs
+          key: lfs-${{ hashFiles('.lfs-assets-id') }}
+          enableCrossOsArchive: true
+
+      - name: Pull LFS objects
+        run: git lfs pull
 
       - name: Import project
         run: |
