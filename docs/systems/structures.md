@@ -229,6 +229,20 @@ colour, suggestion over literal detail, nothing grey. Three parts, no new asset:
   0.25) so shade holds its colour. Broad value masses (`s_mass`, soft-edged, from the existing
   noise), a grass-green bounce and dark in the first 0.9 m of wall (`contact_amount`), a faint warm
   rim. Directional lights only (others add lambert). Specular is off. No `lit` window glow yet.
+- **Balance and panes** (look integration, 2026-10-28). The crowns' lavender shade, tuned for leaves,
+  made shaded stone mauve-grey and slate deep violet, so a wall material overrides the shared
+  uniforms (`StructureMaterials._balance_wall`: a sandy-olive shade tint and floor, stone lit gain
+  1.24/1.18/1.08, timber 1.5/1.38/1.15 with a honey `cream_amount` 0.5 and warm bias) and the roof
+  material a lighter, less violet shade and eave (`_roof`); slate is `(0.50, 0.62, 0.64)`. Panes and
+  leaves use `shaders/structure_pane.gdshader` (`StructureMaterials.pane`, also the street lots'
+  glass): unshaded as before, but a cool pane (blue at least as strong as red; amber glow and
+  wooden leaves are left alone) is scaled to a mid tone and pulled 40 % toward one sky teal with a
+  breath of warm reflected light, so panes keep their variety but stop reading as pale stickers.
+- **Handmade starters.** The core starters are generated with procgen's `handmade` option
+  (`tools/export_core_structures.gd`: `wonk` 0.7 default and exposed, `fringe` 0.35 m on the two
+  timber gable cottages, window bars on): bowed ridges and eaves, leaning, tapering walls, a shaggy
+  thatch eave. `top_y` is the highest point of the displaced roof, so a token landing on the ridge
+  centre can stand a hand below it.
 
 Budget: no extra texture reads over the old materials, one noise per fragment, no uniform branches;
 the shaders use only built-ins and a custom `light()`, which the Compatibility and Mobile renderers
@@ -260,10 +274,19 @@ nothing is stored. Two meshes per structure (`dressing_ground`, `dressing_props`
 - **Key.** `key_of` also holds the ground in a ring 1.6 m past the walls and along the door's path, so a
   sculpt beside a house redraws its yard; `StructureDressing.enabled` (also in the key) is the A/B switch of
   `jobs/structures_dressing_perf.json`.
-- **Not done:** the water around a yard is not known to the worker (the ground snapshot holds heights
-  only), so a yard beside a pond can reach into it; the yard does not look at neighbours (a path can
-  run into the next house of a terrace); wall-foot moss was not built (a shader band would touch the wall shader; the skirt and plants already
-  hide the foot line).
+- **Clearance** (look integration, 2026-10-28). The worker's ground snapshot
+  (`StructureGeometry.ground_snapshot`) now carries private copies of the water bodies, the pond
+  mask and every structure's footprint. A yard never reaches into water or another structure: the
+  skirt's reach is pulled in (x 0.6, up to four times, to at least 0.35 m) until its edge is dry and
+  0.35 m clear of the neighbouring footprints, the path stops at water or a neighbour (0.4 m), and
+  plants, rocks and planters are skipped when their centre is wet or within 1 m
+  (`NEIGHBOUR_CLEAR_M`) of another footprint (only footprints within 14 m are considered). The key
+  also holds those footprints and whether the ring around the walls is wet, so moving a neighbour or
+  a pond redraws the yard. The skirt has a deeper drip line at the wall and an alpha of 0.9 out to
+  72 % of its reach so it reads against green ground in shade. Props near water are placed by
+  their centre only, so a large shrub can overhang a shore by a few tens of centimetres.
+- **Not done:** wall-foot moss was not built (a shader band would touch the wall shader; the skirt
+  and plants already hide the foot line).
 
 ## Live edit and fingerprint
 

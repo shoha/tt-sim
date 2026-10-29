@@ -18,6 +18,9 @@ extends SceneTree
 ## same inputs as tests/fixtures/structure_digests.txt.
 
 const PIN_SEED := 5
+## The starters' default `wonk` (0..1) and the thatched cottages' `fringe` (metres).
+const HANDMADE_WONK := 0.7
+const THATCH_FRINGE_M := 0.35
 var pin_plan := PackedVector2Array([Vector2(-3, -2), Vector2(3, -2), Vector2(3, 2), Vector2(-3, 2)])
 
 ## The starter set. `recipe` says how ProcgenRecipes.building makes the document (every recipe is
@@ -41,7 +44,14 @@ const STARTERS: Array[Dictionary] = [
 	{
 		"id": "cottage",
 		"recipe":
-		{"roof": "gable", "walls": "timber", "style": "cottage", "trim": "", "furniture": []},
+		{
+			"roof": "gable",
+			"walls": "timber",
+			"style": "cottage",
+			"trim": "",
+			"furniture": [],
+			"fringe": THATCH_FRINGE_M
+		},
 		"name": "Cottage",
 		"family": "cottage",
 		"variant": "Timber",
@@ -56,7 +66,8 @@ const STARTERS: Array[Dictionary] = [
 			"walls": "timber",
 			"style": "cottage",
 			"trim": "cottage",
-			"furniture": ["chimneys"]
+			"furniture": ["chimneys"],
+			"fringe": THATCH_FRINGE_M
 		},
 		"name": "Cottage with chimney",
 		"family": "cottage",
@@ -335,7 +346,7 @@ func _make() -> Dictionary:
 					"max_area_m2":
 					starter.get("max_area_m2", LibraryStructures.DEFAULT_MAX_AREA_M2),
 					"plans": ["rect"],
-					"expose": starter["expose"],
+					"expose": _exposed(starter),
 					"textured": declares_textured,
 					"thumb": LibraryStructures.thumb_path(id),
 				}
@@ -367,8 +378,11 @@ func _make() -> Dictionary:
 	return {"files": files, "pins": pins, "warnings": warnings}
 
 
-## The ProcgenRecipes document of starter recipe `spec` (see STARTERS), with glazing and the ridge
-## choice on (ProcgenRecipes.building's last two arguments; the named builders do not pass them).
+## The ProcgenRecipes document of starter recipe `spec` (see STARTERS), with glazing, the ridge
+## choice and the handmade look on (ProcgenRecipes.building's last three arguments; the named
+## builders do not pass them). The handmade look is the starter set's default (2026-10-28 look
+## integration): `wonk` (default 0.7) for every starter, `fringe` (the ragged thatch edge, metres)
+## only where the recipe names it, on the timber gable cottages.
 func _document_of(spec: Dictionary) -> PlantGraphDocument:
 	var trim: Array = []
 	match String(spec.get("trim", "")):
@@ -383,12 +397,23 @@ func _document_of(spec: Dictionary) -> PlantGraphDocument:
 		trim,
 		spec["furniture"] as Array,
 		true,
+		true,
 		true
 	)
-	for key: String in ["height", "chimneys", "ridge", "window_width"]:
+	_set_default(doc, "wonk", float(spec.get("wonk", HANDMADE_WONK)))
+	for key: String in ["height", "chimneys", "ridge", "window_width", "fringe"]:
 		if spec.has(key):
 			_set_default(doc, key, float(spec[key]))
 	return doc
+
+
+## The starter's `expose` list plus the handmade look's controls (`wonk` on all, `fringe` where set).
+static func _exposed(starter: Dictionary) -> Array:
+	var out: Array = (starter["expose"] as Array).duplicate()
+	out.append("wonk")
+	if (starter["recipe"] as Dictionary).has("fringe"):
+		out.append("fringe")
+	return out
 
 
 static func _set_default(doc: PlantGraphDocument, name: String, value: float) -> void:

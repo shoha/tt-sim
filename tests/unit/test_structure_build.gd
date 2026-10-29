@@ -395,7 +395,9 @@ func test_a_token_stands_on_the_roof() -> void:
 	var space := _map.get_world_3d().direct_space_state
 	var landing := WaterSurface.landing_below(space, Vector3(0, 0, 0), 12.0)
 	assert_ne(landing, Vector3.INF, "something to stand on")
-	assert_almost_eq(landing.y, structures.top_y, 0.15, "on the ridge")
+	# The starters are handmade (wonk 0.7): the ridge sags in the middle where this ray lands, while
+	# `top_y` is the highest point of the displaced roof, so the landing sits up to a hand below it.
+	assert_between(landing.y, structures.top_y - 0.5, structures.top_y + 0.15, "on the ridge")
 	var beside := WaterSurface.landing_below(space, Vector3(9, 0, 0), 12.0)
 	assert_eq(beside, Vector3.INF, "the structure is the only ground in this test map")
 	var skipped := WaterSurface.cast_down(

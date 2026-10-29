@@ -34,6 +34,13 @@ const KEY_REACH_M := 1.6
 const KEY_STEP_M := 1.0
 ## Paths and aprons end when the ground is steeper than this (rise over run).
 const PATH_MAX_SLOPE := 0.6
+## Plants and rocks keep this far from another structure's footprint, metres.
+const NEIGHBOUR_CLEAR_M := 1.0
+## Other structures nearer than this to a building (their footprints' bounds) are considered.
+const NEIGHBOUR_RANGE_M := 14.0
+## The farthest a yard's own parts reach from the walls (the widest skirt at the door and the
+## path), metres: the area the water is asked about.
+const REACH_MAX_M := 6.5
 
 const FOLIAGE := [
 	Color(0.31, 0.6, 0.22),
@@ -164,9 +171,10 @@ static func build(doc: MapDocument, structure: Structure, layout: Variant) -> Di
 	var ground := _Soup.new()
 	var props := _Soup.new()
 	var earth := _earth_of(family, rng)
-	_skirt(ground, doc, plan, outward, door, family, earth, rng)
-	_path(ground, props, doc, door, family, earth, rng)
-	_plant(props, doc, plan, outward, door, family, rng)
+	var clear := _Clear.new(doc, structure)
+	_skirt(ground, doc, plan, outward, door, family, earth, rng, clear)
+	_path(ground, props, doc, door, family, earth, rng, clear)
+	_plant(props, doc, plan, outward, door, family, rng, clear)
 	out.ground = ground.arrays()
 	out.props = props.arrays()
 	out.triangles = ground.triangles() + props.triangles()
@@ -182,13 +190,38 @@ static func ground_samples(doc: MapDocument, plan: PackedVector2Array) -> Packed
 	var outward := _outward_sign(plan)
 	var length := _perimeter(plan)
 	var count := clampi(ceili(length / KEY_STEP_M), 8, 256)
+	var courses := WaterGeometry.river_courses(doc, bounds_of(plan).grow(REACH_MAX_M))
 	for i in count:
 		var frame := _frame_at(plan, length * float(i) / count, outward)
-		samples.append(WaterGeometry.ground_at(doc, frame.p + frame.n * KEY_REACH_M))
+		var ring_point: Vector2 = frame.p + frame.n * KEY_REACH_M
+		samples.append(WaterGeometry.ground_at(doc, ring_point))
+		# Water decides how far the yard reaches, so a pond raised or dug beside it redraws it.
+		samples.append(1.0 if WaterGeometry.is_wet_at(doc, ring_point, -1, courses) else 0.0)
 	var door := _door(plan, null, outward)
 	for s in [1.0, 2.5, 4.0, 5.5]:
 		samples.append(WaterGeometry.ground_at(doc, door.at + door.out * float(s)))
 	return samples
+
+
+## The footprints of the other structures of `doc` whose bounds come within NEIGHBOUR_RANGE_M of
+## `structure`'s own.
+static func neighbours(doc: MapDocument, structure: Structure) -> Array[PackedVector2Array]:
+	var out: Array[PackedVector2Array] = []
+	var mine := bounds_of(structure.footprint).grow(NEIGHBOUR_RANGE_M)
+	for other in doc.structures:
+		if other.id == structure.id or other.footprint.size() < 3:
+			continue
+		if mine.intersects(bounds_of(other.footprint)):
+			out.append(other.footprint)
+	return out
+
+
+## The bounding rectangle of `plan` (empty at the origin for no points).
+static func bounds_of(plan: PackedVector2Array) -> Rect2:
+	var rect := Rect2(plan[0], Vector2.ZERO) if not plan.is_empty() else Rect2()
+	for p in plan:
+		rect = rect.expand(p)
+	return rect
 
 
 # --- layout -------------------------------------------------------------------------------
@@ -278,7 +311,8 @@ static func _skirt(
 	door: Dictionary,
 	family: String,
 	earth: Color,
-	rng: _Rng
+	rng: _Rng,
+	clear: _Clear
 ) -> void:
 	var reach_range: Vector2 = SKIRT_REACH_M[family]
 	var length := _perimeter(plan)
@@ -302,13 +336,21 @@ static func _skirt(
 		)
 		var near_door := smoothstep(2.4, 0.0, (frame.p as Vector2).distance_to(door.at))
 		reach *= 1.0 + near_door * 0.55
+		# The yard never runs into water or a neighbour's walls: the reach is pulled in until its
+		# edge is clear (a drawn-in yard beside a pond or a terrace's next house).
+		for _try in 4:
+			if clear.is_open(frame.p + normal * reach, 0.35):
+				break
+			reach = maxf(reach * 0.6, 0.35)
 		var offsets := [-SKIRT_INSET_M, 0.25, reach * 0.72, reach]
-		var alphas := [1.0, 0.97, 0.82, 0.0]
+		var alphas := [1.0, 1.0, 0.9, 0.0]
 		var ring: Array = []
 		for b in 4:
 			var at: Vector2 = frame.p + normal * float(offsets[b])
-			var tone := 1.0 + (rng.f() - 0.5) * 0.1
-			var lighter := earth.lerp(Color(0.8, 0.72, 0.45), 0.25 * float(b) / 3.0)
+			# A deeper drip line at the wall and a lighter, warmer wash outward: the patch reads
+			# against green ground in sun and in shade alike.
+			var tone := (1.0 + (rng.f() - 0.5) * 0.1) * (0.8 if b == 0 else 1.0)
+			var lighter := earth.lerp(Color(0.86, 0.76, 0.46), 0.35 * float(b) / 3.0)
 			var color := Color(
 				lighter.r * tone, lighter.g * tone, lighter.b * tone, float(alphas[b])
 			)
@@ -331,7 +373,8 @@ static func _path(
 	door: Dictionary,
 	family: String,
 	earth: Color,
-	rng: _Rng
+	rng: _Rng,
+	clear: _Clear
 ) -> void:
 	var out: Vector2 = door.out
 	var at: Vector2 = door.at
@@ -367,6 +410,9 @@ static func _path(
 		var k0 := mini(int(knot), 1)
 		var bend := lerpf(sway[k0], sway[k0 + 1], smoothstep(0.0, 1.0, knot - float(k0)))
 		var centre := at + out * s + side * bend * sway_amp * u
+		if not clear.is_open(centre, 0.4):
+			length = s - 0.15
+			stopped = true
 		if (
 			i > 0
 			and (
@@ -452,7 +498,8 @@ static func _plant(
 	outward: float,
 	door: Dictionary,
 	family: String,
-	rng: _Rng
+	rng: _Rng,
+	clear: _Clear
 ) -> void:
 	var length := _perimeter(plan)
 	var s := rng.between(0.0, 1.2)
@@ -460,7 +507,7 @@ static func _plant(
 	var made_woodpile := false
 	var door_normal: Vector2 = door.out
 	var gap: float = {"cottage": 0.95, "house": 1.25, "townhouse": 2.4}[family]
-	if family == "townhouse":
+	if family == "townhouse" and clear.is_open(door.at + door_normal * 0.4, NEIGHBOUR_CLEAR_M):
 		_planters(props, doc, door, rng)
 	while s < length and clusters < MAX_CLUSTERS:
 		var frame := _frame_at(plan, s, outward)
@@ -472,6 +519,9 @@ static func _plant(
 		if at.distance_to(door.at) < DOOR_CLEAR_M + 0.3 * float(normal.dot(door_normal) > 0.7):
 			continue
 		if Geometry2D.is_point_in_polygon(at, plan):
+			continue
+		# Nothing is planted within a metre of another house, or in water.
+		if not clear.is_open(at, NEIGHBOUR_CLEAR_M):
 			continue
 		var on_front := normal.dot(door_normal) > 0.85
 		var roll := rng.f()
@@ -784,6 +834,35 @@ static func _slab(
 	var t3 := soup.vertex(Vector3(corners[3].x, top, corners[3].y), Vector3.UP, lid)
 	soup.tri(t0, t1, t2)
 	soup.tri(t0, t2, t3)
+
+
+## The footprints of the other structures near a building (NEIGHBOUR_RANGE_M) and the document's
+## water, to ask whether a point of its yard is free: not under water and not near another house.
+class _Clear:
+	extends RefCounted
+	var _doc: MapDocument
+	var _others: Array[PackedVector2Array] = []
+	var _courses: Dictionary = {}
+
+	func _init(doc: MapDocument, structure: Structure) -> void:
+		_doc = doc
+		_others = StructureDressing.neighbours(doc, structure)
+		_courses = WaterGeometry.river_courses(
+			doc,
+			StructureDressing.bounds_of(structure.footprint).grow(StructureDressing.REACH_MAX_M)
+		)
+
+	## True when `at` is dry and farther than `margin` from every neighbouring footprint.
+	func is_open(at: Vector2, margin: float) -> bool:
+		for plan in _others:
+			if Geometry2D.is_point_in_polygon(at, plan):
+				return false
+			for k in plan.size():
+				var edge_end := plan[(k + 1) % plan.size()]
+				var closest := Geometry2D.get_closest_point_to_segment(at, plan[k], edge_end)
+				if at.distance_to(closest) < margin:
+					return false
+		return not WaterGeometry.is_wet_at(_doc, at, -1, _courses)
 
 
 ## The mesh arrays pieces are added to (vertex, normal, colour, index).

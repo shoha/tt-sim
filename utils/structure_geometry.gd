@@ -57,13 +57,21 @@ static var textured := true
 
 
 ## A document that holds only the ground of `doc` (size, spacing and the height array, which is
-## shared copy-on-write), safe to read on a worker while the real document is edited.
+## shared copy-on-write), its water and its structures' footprints, safe to read on a worker while
+## the real document is edited.
 static func ground_snapshot(doc: MapDocument) -> MapDocument:
 	var ground := MapDocument.new()
 	ground.size_cells = doc.size_cells
 	ground.cell_size_m = doc.cell_size_m
 	ground.sample_spacing_m = doc.sample_spacing_m
 	ground.heights = doc.heights
+	# What a yard keeps clear of (StructureDressing): water, and the other structures' footprints.
+	# Private copies, so the worker never reads what the main thread edits.
+	ground.pond_mask = doc.pond_mask
+	for body in doc.water_bodies:
+		ground.water_bodies.append(body.copy())
+	for structure in doc.structures:
+		ground.structures.append(structure.copy())
 	return ground
 
 
@@ -170,6 +178,11 @@ static func key_of(doc: MapDocument, structure: Structure) -> int:
 			StructureDressing.enabled,
 			ground_samples(doc, structure.footprint),
 			StructureDressing.ground_samples(doc, structure.footprint),
+			(
+				StructureDressing.neighbours(doc, structure)
+				if StructureDressing.enabled
+				else ([] as Array[PackedVector2Array])
+			),
 		]
 	)
 

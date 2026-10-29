@@ -10,6 +10,7 @@ extends RefCounted
 
 const WALL_SHADER := preload("res://shaders/structure_wall.gdshader")
 const ROOF_SHADER := preload("res://shaders/structure_roof.gdshader")
+const PANE_SHADER := preload("res://shaders/structure_pane.gdshader")
 
 ## The lift toward cream a grey rock gets (saturation about the texture's luminance, then a warm
 ## bias), for masonry, and for planks (already warm, so less).
@@ -17,8 +18,17 @@ const MASONRY_SATURATION := 1.2
 const MASONRY_WARM := Vector3(1.14, 1.10, 1.0)
 ## How much of a rock's own hue is replaced by cream (the rest keeps a biome's stone its own).
 const MASONRY_CREAM := 0.75
-const TIMBER_SATURATION := 1.2
-const TIMBER_WARM := Vector3(1.04, 0.98, 0.90)
+const TIMBER_SATURATION := 1.1
+const TIMBER_WARM := Vector3(1.16, 1.07, 0.90)
+## Planks lean toward honey as stone leans toward cream (the wall shader's `cream`, here a share).
+const TIMBER_CREAM := 0.5
+## The plants' light model's balance for walls (structure_painterly.gdshaderinc defaults, tuned for
+## roofs): shade leans sandy and olive where the plants' leans lavender, so a shaded stone face
+## stays a colour instead of a mauve grey (look integration 2026-10-28). Timber takes more light.
+const WALL_SHADE_TINT := Vector3(0.92, 0.88, 0.90)
+const WALL_SHADE_FLOOR := Vector3(0.25, 0.21, 0.21)
+const STONE_LIT_GAIN := Vector3(1.24, 1.18, 1.08)
+const TIMBER_LIT_GAIN := Vector3(1.5, 1.38, 1.15)
 
 
 ## The material of surface `kind` in `role` for style `style`, with the palette at `root`.
@@ -40,11 +50,9 @@ static func make(kind: String, role: String, style: String, root: String) -> Mat
 
 ## Panes and door leaves: the vertex colour as a flat painted tone, seen from both sides. Unshaded,
 ## because a pane in the shade of its own reveal went black when lit (judged 2026-10-28).
-static func pane() -> ORMMaterial3D:
-	var material := ORMMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+static func pane() -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = PANE_SHADER
 	return material
 
 
@@ -76,6 +84,10 @@ static func dressing_props() -> ORMMaterial3D:
 static func _roof() -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = ROOF_SHADER
+	# Slate and tile sit lighter and less violet in the shade than the plants' crowns do.
+	material.set_shader_parameter("ramp_shade_tint", Vector3(0.91, 0.88, 0.94))
+	material.set_shader_parameter("lit_gain", Vector3(1.28, 1.2, 1.1))
+	material.set_shader_parameter("eave_tone", Vector3(0.85, 0.81, 0.90))
 	return material
 
 
@@ -110,6 +122,7 @@ static func _masonry(style: String, root: String, role: String) -> ShaderMateria
 	material.set_shader_parameter("saturation", MASONRY_SATURATION)
 	material.set_shader_parameter("warm_bias", MASONRY_WARM)
 	material.set_shader_parameter("cream_amount", MASONRY_CREAM)
+	_balance_wall(material, STONE_LIT_GAIN)
 	return material
 
 
@@ -140,7 +153,16 @@ static func _timber(style: String, root: String, role: String) -> ShaderMaterial
 	material.set_shader_parameter("normal_scale", AuthoredWalls.WOOD_NORMAL_SCALE)
 	material.set_shader_parameter("saturation", TIMBER_SATURATION)
 	material.set_shader_parameter("warm_bias", TIMBER_WARM)
+	material.set_shader_parameter("cream_amount", TIMBER_CREAM)
+	_balance_wall(material, TIMBER_LIT_GAIN)
 	return material
+
+
+## The light balance of a wall material (see WALL_SHADE_TINT).
+static func _balance_wall(material: ShaderMaterial, lit_gain: Vector3) -> void:
+	material.set_shader_parameter("ramp_shade_tint", WALL_SHADE_TINT)
+	material.set_shader_parameter("shade_floor", WALL_SHADE_FLOOR)
+	material.set_shader_parameter("lit_gain", lit_gain)
 
 
 ## Modelled stone (coping, the placeholder plot): the wall materials of AuthoredWalls, triplanar.

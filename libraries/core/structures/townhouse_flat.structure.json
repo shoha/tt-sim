@@ -1,6 +1,12 @@
 {
   "connections": [
     {
+      "from": "wonk_6",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
       "from": "guide_1",
       "from_port": 0,
       "to": "building_layout_2",
@@ -9,17 +15,17 @@
     {
       "from": "building_layout_2",
       "from_port": 0,
-      "to": "facade_6",
+      "to": "facade_7",
       "to_port": 0
     },
     {
-      "from": "facade_6",
+      "from": "facade_7",
       "from_port": 0,
       "to": "building_walls_3",
       "to_port": 0
     },
     {
-      "from": "facade_6",
+      "from": "facade_7",
       "from_port": 0,
       "to": "roof_flat_4",
       "to_port": 0
@@ -27,61 +33,61 @@
     {
       "from": "building_walls_3",
       "from_port": 0,
-      "to": "output_5",
+      "to": "wonk_6",
       "to_port": 0
     },
     {
       "from": "roof_flat_4",
       "from_port": 0,
-      "to": "output_5",
+      "to": "wonk_6",
       "to_port": 0
     },
     {
-      "from": "facade_6",
+      "from": "facade_7",
       "from_port": 0,
-      "to": "facade_trim_7",
+      "to": "facade_trim_8",
       "to_port": 0
     },
     {
-      "from": "facade_trim_7",
+      "from": "facade_trim_8",
       "from_port": 0,
-      "to": "output_5",
+      "to": "wonk_6",
       "to_port": 0
     },
     {
-      "from": "facade_6",
+      "from": "facade_7",
       "from_port": 0,
-      "to": "cornice_8",
+      "to": "cornice_9",
       "to_port": 0
     },
     {
-      "from": "cornice_8",
+      "from": "cornice_9",
       "from_port": 0,
-      "to": "output_5",
+      "to": "wonk_6",
       "to_port": 0
     },
     {
-      "from": "facade_6",
+      "from": "facade_7",
       "from_port": 0,
-      "to": "quoins_9",
+      "to": "quoins_10",
       "to_port": 0
     },
     {
-      "from": "quoins_9",
+      "from": "quoins_10",
       "from_port": 0,
-      "to": "output_5",
+      "to": "wonk_6",
       "to_port": 0
     },
     {
-      "from": "facade_6",
+      "from": "facade_7",
       "from_port": 0,
-      "to": "glazing_10",
+      "to": "glazing_11",
       "to_port": 0
     },
     {
-      "from": "glazing_10",
+      "from": "glazing_11",
       "from_port": 0,
-      "to": "output_5",
+      "to": "wonk_6",
       "to_port": 0
     }
   ],
@@ -131,6 +137,15 @@
       "name": "lit",
       "tip": "The share of windows that glow warm, as if lit from within.",
       "type": "float"
+    },
+    {
+      "default": 0.7,
+      "label": "Wonk",
+      "max": 1,
+      "min": 0,
+      "name": "wonk",
+      "tip": "How hand-made the building looks: sagging roof, uneven tops, leaning walls.",
+      "type": "float"
     }
   ],
   "nodes": [
@@ -168,7 +183,9 @@
     },
     {
       "id": "roof_flat_4",
-      "params": {},
+      "params": {
+        "segments": 6
+      },
       "position": [
         710.0,
         220.0
@@ -187,7 +204,18 @@
       "type": "output"
     },
     {
-      "id": "facade_6",
+      "id": "wonk_6",
+      "params": {
+        "wonk": "@wonk"
+      },
+      "position": [
+        950.0,
+        20.0
+      ],
+      "type": "wonk"
+    },
+    {
+      "id": "facade_7",
       "params": {
         "floors": "@floors",
         "style": "townhouse",
@@ -200,7 +228,7 @@
       "type": "facade"
     },
     {
-      "id": "facade_trim_7",
+      "id": "facade_trim_8",
       "params": {
         "door_frame": true,
         "frames": false,
@@ -216,7 +244,7 @@
       "type": "facade_trim"
     },
     {
-      "id": "cornice_8",
+      "id": "cornice_9",
       "params": {
         "eave": true,
         "floor_bands": true
@@ -228,7 +256,7 @@
       "type": "cornice"
     },
     {
-      "id": "quoins_9",
+      "id": "quoins_10",
       "params": {},
       "position": [
         710.0,
@@ -237,9 +265,10 @@
       "type": "quoins"
     },
     {
-      "id": "glazing_10",
+      "id": "glazing_11",
       "params": {
-        "lit": "@lit"
+        "lit": "@lit",
+        "muntins": true
       },
       "position": [
         950.0,
