@@ -221,9 +221,14 @@ colour, suggestion over literal detail, nothing grey. Three parts, no new asset:
   times the rock or climate tint times the vertex colour, the hue then replaced 75 % by warm cream
   (times the texture's luminance, so the stones' light and dark stay) for masonry and lifted for
   timber, a cooler damper foot, paler toward the eaves, broad warm and cool washes.
-- **Light** (`shaders/structure_painterly.gdshaderinc`, shared). A wrapped terminator and a rose
-  lavender shadow fill instead of a grey one (directional lights only; other lights add lambert), a
-  faint warm rim. Specular is off. No `lit` window glow yet (see "Not yet").
+- **Light** (`shaders/structure_painterly.gdshaderinc`, shared; probe A, 2026-10-28: the plants'
+  model at a building's albedo). The crowns' rules from `wind_foliage_include.gdshaderinc`: the
+  published `foliage_sun` drives a sun-ward albedo ramp (a deeper lavender shade tint away from the
+  sun), `light()` is a wide soft N.L band over a tinted shade floor (no lifted fill; a cast shadow
+  pulls the lit tone 70 % of the way), and ambient is kept at 0.5 under a full sun (the crowns keep
+  0.25) so shade holds its colour. Broad value masses (`s_mass`, soft-edged, from the existing
+  noise), a grass-green bounce and dark in the first 0.9 m of wall (`contact_amount`), a faint warm
+  rim. Directional lights only (others add lambert). Specular is off. No `lit` window glow yet.
 
 Budget: no extra texture reads over the old materials, one noise per fragment, no uniform branches;
 the shaders use only built-ins and a custom `light()`, which the Compatibility and Mobile renderers

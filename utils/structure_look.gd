@@ -56,11 +56,11 @@ const ROLE_TINTS: Dictionary = {
 ## (StructurePaint.palette_of), so every peer paints the same town. The shader multiplies this by a
 ## soft tile pattern and grades it from a deeper eave to a paler ridge.
 const ROOF_PALETTE: Array[Dictionary] = [
-	{"name": "terracotta", "srgb": Color(0.82, 0.40, 0.27), "weight": 4.0},
-	{"name": "clay", "srgb": Color(0.90, 0.54, 0.31), "weight": 2.0},
-	{"name": "slate", "srgb": Color(0.40, 0.53, 0.60), "weight": 3.0},
-	{"name": "thatch", "srgb": Color(0.86, 0.69, 0.36), "weight": 2.0},
-	{"name": "moss", "srgb": Color(0.48, 0.62, 0.38), "weight": 1.5},
+	{"name": "terracotta", "srgb": Color(0.80, 0.36, 0.28), "weight": 4.0},
+	{"name": "clay", "srgb": Color(0.86, 0.50, 0.31), "weight": 2.0},
+	{"name": "slate", "srgb": Color(0.40, 0.50, 0.62), "weight": 3.0},
+	{"name": "thatch", "srgb": Color(0.84, 0.66, 0.34), "weight": 2.0},
+	{"name": "moss", "srgb": Color(0.52, 0.64, 0.34), "weight": 1.5},
 	{"name": "heather", "srgb": Color(0.64, 0.47, 0.52), "weight": 0.7},
 ]
 

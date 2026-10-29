@@ -9,12 +9,22 @@
 // Cost: no extra texture reads, one 3D value noise per fragment (8 hashes), no branches on
 // uniforms, specular off. light() runs for directional lights only; other lights add plain lambert.
 
-uniform vec3 shadow_tint : source_color = vec3(0.92, 0.72, 0.78);
-uniform float shadow_fill : hint_range(0.0, 1.0) = 0.8;
-uniform float wrap : hint_range(0.0, 0.5) = 0.2;
+// The plants' light model (wind_foliage_include.gdshaderinc, FOLIAGE_PAINTED_LIGHT), at a building's
+// albedo: the sun published for the crowns, a sun-ward albedo ramp (lit tint toward the sun, a deeper
+// saturated shade tint away from it), a wide soft N.L band with a tinted shade floor instead of a
+// lifted fill, and less ambient under a full sun so the shade keeps its colour.
+global uniform vec4 foliage_sun;
+uniform vec3 ramp_lit_tint = vec3(1.06, 1.03, 0.98);
+uniform vec3 ramp_shade_tint = vec3(0.86, 0.84, 0.96);
+uniform vec3 shade_floor = vec3(0.21, 0.16, 0.25);
+uniform vec3 lit_gain = vec3(1.22, 1.17, 1.08);
+uniform float shadow_cast : hint_range(0.0, 1.0) = 0.7;
+uniform float wrap : hint_range(0.0, 0.5) = 0.15;
+// The share of ambient a surface keeps under a full sun (the crowns keep 0.25).
+uniform float ambient_keep : hint_range(0.0, 2.0) = 0.5;
 // Rim of warm light on edges turned away from the camera (a painter's lost-and-found edge).
 uniform vec3 rim_color : source_color = vec3(1.0, 0.86, 0.62);
-uniform float rim_amount : hint_range(0.0, 0.5) = 0.10;
+uniform float rim_amount : hint_range(0.0, 0.5) = 0.12;
 
 varying vec3 s_pos;
 varying vec3 s_normal;
@@ -61,13 +71,29 @@ vec3 s_rim(vec3 painted, vec3 normal, vec3 view) {
 	return rim_color * rim * rim_amount * painted;
 }
 
+// The foliage's sun-ward albedo ramp: `normal` is the view-space normal, `inv_view` INV_VIEW_MATRIX.
+vec3 s_ramp(vec3 painted, vec3 normal, mat4 inv_view) {
+	vec3 ramp_dir = normalize(foliage_sun.xyz + vec3(0.0, 0.5, 0.0));
+	float t = smoothstep(-0.5, 0.8, dot(normalize(mat3(inv_view) * normal), ramp_dir));
+	return painted * mix(ramp_shade_tint, ramp_lit_tint, t);
+}
+
+// The ambient share (for AO): the crowns' rule, eased back to 1 as the sun fades.
+float s_ambient() {
+	return mix(1.0, ambient_keep, clamp(foliage_sun.w, 0.0, 1.0));
+}
+
+// A broad soft-edged value shape from a 0..1 noise: bold masses with soft edges, as in a crown.
+float s_mass(float n, float amount) {
+	return 1.0 + (smoothstep(0.30, 0.70, n) - 0.5) * amount;
+}
+
 void light() {
 	float nl = dot(NORMAL, LIGHT);
 	if (LIGHT_IS_DIRECTIONAL) {
-		float lit = smoothstep(-wrap, 0.6, nl) * ATTENUATION;
-		DIFFUSE_LIGHT += LIGHT_COLOR * lit / PI;
-		// The unlit side leans to the cool tint (multiplied by the albedo afterwards).
-		DIFFUSE_LIGHT += shadow_tint * shadow_fill * (1.0 - lit) * 0.30;
+		float lit = smoothstep(-wrap, 0.9, nl);
+		float k = lit * mix(1.0 - shadow_cast, 1.0, ATTENUATION);
+		DIFFUSE_LIGHT += LIGHT_COLOR / PI * mix(shade_floor, lit_gain, k);
 	} else {
 		DIFFUSE_LIGHT += LIGHT_COLOR * max(nl, 0.0) * ATTENUATION / PI;
 	}
