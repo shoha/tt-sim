@@ -231,6 +231,35 @@ take (not run on either, as with the other tt-sim shaders judged on Forward+). M
 PERFORMANCE.md "Structures: the painterly look". Tunables are the shader uniforms and the constants
 in `StructureMaterials` and `StructureLook`.
 
+## Dressing
+
+Probe B (2026-10-28, branch `probe-b`): a building is settled into its place by a yard,
+`StructureDressing` (`utils/structure_dressing.gd`), built beside the building's meshes in
+`StructureGeometry.build_one` and carried in `parts.dressing` (not in `digest_of`, so no pin moved, and
+not in the building's triangle budget). A pure function of the record, the recipe's door
+(`ProcgenBuildingLayout.door_opening()`, else the middle of edge 0) and the ground; the random stream
+is `StructurePaint.mix(seed, id)`, so every peer derives the same yard, a re-roll draws a new one and
+nothing is stored. Two meshes per structure (`dressing_ground`, `dressing_props` under the
+`Structure_<id>` node; no collision):
+
+- **Ground** (alpha blended over the terrain, no shadow, `StructureMaterials.dressing_ground`): a soft
+  worn-earth skirt from just inside the wall line out to a wobbling 0.7 to 2 m (wider at the door) that
+  covers the hard ring the scatter clearing leaves, and a path from the door that sways and fades (a
+  pale paved apron for a townhouse). It lies 5 to 8 cm above the terrain's own triangles
+  (`ScatterGenerator.triangle_height`, not the bilinear `ground_at`, which buried it).
+- **Props** (opaque vertex-colour blobs, blades and slabs, `StructureMaterials.dressing_props`): by
+  family, from the recipe id (`cottage*`, `townhouse*`, else house): a cottage gets flower shrubs,
+  stepping stones, tufts and, half the time, a woodpile; a house shrubs, boulders, tufts and a step; a
+  townhouse a paved step and two planters. Nothing within 1.5 m of the door. At most 11 clusters; about
+  250 to 650 triangles and 2 draw calls per building.
+- **Key.** `key_of` also holds the ground in a ring 1.6 m past the walls and along the door's path, so a
+  sculpt beside a house redraws its yard; `StructureDressing.enabled` (also in the key) is the A/B switch of
+  `jobs/structures_dressing_perf.json`.
+- **Not done:** the water around a yard is not known to the worker (the ground snapshot holds heights
+  only), so a yard beside a pond can reach into it; the yard does not look at neighbours (a path can
+  run into the next house of a terrace); wall-foot moss was not built (a shader band would touch the wall shader; the skirt and plants already
+  hide the foot line).
+
 ## Live edit and fingerprint
 
 - The live-edit kind `"structures"` (`LiveEditCodec`, `LiveEditReader`) carries

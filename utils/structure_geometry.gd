@@ -17,7 +17,9 @@ extends RefCounted
 ##    "top": highest walkable point (NONE when nothing was built), "openings": the boxes procgen
 ##    reports, "layout": the final ProcgenBuildingLayout or null (volumes, openings with slot
 ##    provenance, kept for the day a vision rule needs them), "triangles": int,
-##    "problem": why nothing was built, or "", "warning": a soft budget note, or ""}
+##    "dressing": StructureDressing.build's yard (soft ground patch, path, plants; not in digest_of
+##    or the building's triangle budget), "problem": why nothing was built, or "", "warning": a soft
+##    budget note, or ""}
 ## Budgets (design.md "Triangle budgets"): over SOFT_TRIANGLES a structure builds and warns; over
 ## HARD_TRIANGLES it is refused (empty parts, `problem` says why).
 
@@ -29,7 +31,7 @@ const HARD_TRIANGLES := 25000
 const KEY_STEP_M := 0.5
 const KEY_MAX_SAMPLES := 2048
 ## Bumped when the mesh layout of the parts changes, so cached parts rebuild.
-const FORMAT_VERSION := 2
+const FORMAT_VERSION := 3
 ## Marks a structure with no top (no recipe, or nothing built).
 const NONE := -INF
 ## digest_of rounds vertices and collision to this many metres (0.1 mm), as procgen's digests do.
@@ -138,6 +140,7 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 	parts.top = geometry.top if triangles > 0 else NONE
 	parts.openings = geometry.openings
 	parts.layout = plant.get("layout")
+	parts.dressing = StructureDressing.build(doc, structure, parts.layout)
 	return parts
 
 
@@ -164,7 +167,9 @@ static func key_of(doc: MapDocument, structure: Structure) -> int:
 			structure.style,
 			textured,
 			FORMAT_VERSION,
+			StructureDressing.enabled,
 			ground_samples(doc, structure.footprint),
+			StructureDressing.ground_samples(doc, structure.footprint),
 		]
 	)
 
@@ -406,6 +411,7 @@ static func _empty(structure: Structure) -> Dictionary:
 		"top": NONE,
 		"openings": [],
 		"layout": null,
+		"dressing": {},
 		"triangles": 0,
 		"problem": "",
 		"warning": "",

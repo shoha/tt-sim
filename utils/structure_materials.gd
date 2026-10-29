@@ -48,6 +48,31 @@ static func pane() -> ORMMaterial3D:
 	return material
 
 
+## The soft ground patch and path of a building's yard (StructureDressing "ground"): vertex colour
+## with alpha, blended over the terrain, no specular, seen from both sides.
+static func dressing_ground() -> ORMMaterial3D:
+	var material := ORMMaterial3D.new()
+	material.vertex_color_use_as_albedo = true
+	material.vertex_color_is_srgb = true
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.roughness = 1.0
+	material.metallic_specular = 0.0
+	return material
+
+
+## The plants, stones and slabs of a building's yard (StructureDressing "props"): vertex colour,
+## matte, seen from both sides (the grass blades are single triangles).
+static func dressing_props() -> ORMMaterial3D:
+	var material := ORMMaterial3D.new()
+	material.vertex_color_use_as_albedo = true
+	material.vertex_color_is_srgb = true
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	material.roughness = 1.0
+	material.metallic_specular = 0.0
+	return material
+
+
 static func _roof() -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = ROOF_SHADER
