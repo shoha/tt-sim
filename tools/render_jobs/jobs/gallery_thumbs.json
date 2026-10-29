@@ -1,0 +1,185 @@
+{
+ "out_dir": "render_jobs/gallery_thumbs",
+ "timeout_s": 300,
+ "hang_s": 120,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "wait_title"
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 100,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:porch_cottage",
+   "width": 7.0,
+   "depth": 5.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 180.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.082,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "porch_cottage",
+   "folder": "D:/dev/tabletop/worktrees/core-library-gallery"
+  },
+  {
+   "op": "capture",
+   "name": "tile_porch_cottage",
+   "desc": "tile porch_cottage"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:veranda_cottage",
+   "width": 7.0,
+   "depth": 5.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 180.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.082,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "veranda_cottage",
+   "folder": "D:/dev/tabletop/worktrees/core-library-gallery"
+  },
+  {
+   "op": "capture",
+   "name": "tile_veranda_cottage",
+   "desc": "tile veranda_cottage"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:inn_gallery",
+   "width": 9.0,
+   "depth": 5.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 180.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 19.0,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "inn_gallery",
+   "folder": "D:/dev/tabletop/worktrees/core-library-gallery"
+  },
+  {
+   "op": "capture",
+   "name": "tile_inn_gallery",
+   "desc": "tile inn_gallery"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:dormered_house",
+   "width": 7.0,
+   "depth": 5.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 180.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.082,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "dormered_house",
+   "folder": "D:/dev/tabletop/worktrees/core-library-gallery"
+  },
+  {
+   "op": "capture",
+   "name": "tile_dormered_house",
+   "desc": "tile dormered_house"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  }
+ ]
+}

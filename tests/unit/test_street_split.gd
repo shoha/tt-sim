@@ -179,6 +179,7 @@ func test_a_terrace_becomes_townhouses_and_a_village_cottages() -> void:
 							"herringbone_cottage",
 							"half_timber_house",
 							"close_studded_house",
+							"inn_gallery",
 						]
 					)
 				)
@@ -217,6 +218,7 @@ func test_a_split_never_picks_a_ruin_whatever_the_streets_region() -> void:
 		"core:tudor_framed",
 		"core:herringbone_cottage",
 		"core:close_studded_house",
+		"core:inn_gallery",
 	]:
 		assert_true(framed in english, "%s joins the English street" % framed)
 

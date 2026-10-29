@@ -1552,6 +1552,162 @@
 		},
 		{
 			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "cottage",
+			"file": "structures/porch_cottage.structure.json",
+			"id": "porch_cottage",
+			"max_area_m2": 80.0,
+			"max_side_m": 11.0,
+			"min_side_m": 4.5,
+			"name": "Porch cottage",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"timber",
+				"boards",
+				"shingle",
+				"gable",
+				"chimney",
+				"porch",
+				"dormers",
+				"american",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/porch_cottage.jpg",
+			"variant": "Porch over the door"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "cottage",
+			"file": "structures/veranda_cottage.structure.json",
+			"id": "veranda_cottage",
+			"max_area_m2": 80.0,
+			"max_side_m": 11.0,
+			"min_side_m": 4.5,
+			"name": "Veranda cottage",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"timber",
+				"boards",
+				"shingle",
+				"gable",
+				"chimney",
+				"porch",
+				"dormers",
+				"american",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/veranda_cottage.jpg",
+			"variant": "Veranda along the front"
+		},
+		{
+			"default_size_m": [
+				9.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "inn",
+			"file": "structures/inn_gallery.structure.json",
+			"id": "inn_gallery",
+			"max_area_m2": 110.0,
+			"max_side_m": 14.0,
+			"min_side_m": 5.0,
+			"name": "Galleried inn",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"inn",
+				"plaster",
+				"timber",
+				"tile",
+				"gable",
+				"chimney",
+				"gallery",
+				"balcony",
+				"town",
+				"tavern",
+				"english",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/inn_gallery.jpg",
+			"variant": "Upper gallery"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "house",
+			"file": "structures/dormered_house.structure.json",
+			"id": "dormered_house",
+			"max_area_m2": 75.0,
+			"max_side_m": 10.0,
+			"min_side_m": 4.5,
+			"name": "Dormered house",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"plaster",
+				"tile",
+				"slate",
+				"gable",
+				"hip",
+				"chimney",
+				"dormers",
+				"steep",
+				"town",
+				"french",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/dormered_house.jpg",
+			"variant": "Dormers on a steep roof"
+		},
+		{
+			"default_size_m": [
 				7.2,
 				7.2
 			],

@@ -1,0 +1,224 @@
+{
+ "out_dir": "render_jobs/structures_gallery",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 320,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "styles3",
+   "lots": [
+    [
+     "core:porch_cottage",
+     -24.0,
+     0.0,
+     7.0,
+     5.0,
+     0.0,
+     301
+    ],
+    [
+     "core:veranda_cottage",
+     -12.0,
+     0.0,
+     7.0,
+     5.0,
+     0.0,
+     302
+    ],
+    [
+     "core:inn_gallery",
+     2.0,
+     0.0,
+     9.0,
+     5.0,
+     0.0,
+     303
+    ],
+    [
+     "core:dormered_house",
+     16.0,
+     0.0,
+     7.0,
+     5.0,
+     0.0,
+     304
+    ],
+    [
+     "core:tudor_townhouse",
+     28.0,
+     0.0,
+     5.0,
+     7.0,
+     0.0,
+     305
+    ]
+   ]
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "report"
+  },
+  {
+   "op": "wait",
+   "s": 4.0
+  },
+  {
+   "op": "zoom",
+   "size": 48.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    2,
+    0
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "01_row",
+   "desc": "Four framed styles and the beams Tudor, left to right"
+  },
+  {
+   "op": "zoom",
+   "size": 11.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -24,
+    0
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "02_porch",
+   "desc": "Porch cottage"
+  },
+  {
+   "op": "zoom",
+   "size": 11.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -12,
+    0
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "03_veranda",
+   "desc": "Veranda cottage"
+  },
+  {
+   "op": "zoom",
+   "size": 13.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    2,
+    0
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "04_inn",
+   "desc": "Galleried inn"
+  },
+  {
+   "op": "zoom",
+   "size": 11.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    16,
+    0
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "05_dormered",
+   "desc": "Dormered house"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "remove_all"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}

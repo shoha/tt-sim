@@ -444,6 +444,25 @@ and the half-timber vanished), so the timber keeps procgen's dark oak tone over 
 The plaster tones are warmer creams than the styles' (the shaded face of a pale cream reads mauve).
 Render job `structures_framing` (five houses in a row, the beams-based Tudor for comparison).
 
+### Styles 9: porches, galleries and dormers (2026-10-29, branch `gallery`)
+
+Four more core structures (58 in all) from procgen's Gallery and Dormer nodes (architecture-styles
+cards 9a, 9b), each a `STARTERS` entry whose `style_patch` pins the feature so the draw always has
+it: `porch_cottage` (`cottage`, american, a pent porch over the door with balusters, a gable
+dormer) 1898 triangles at the pin, `veranda_cottage` (the same style, a veranda along the front
+with a panel rail, no dormers) 1700, `inn_gallery` (`inn`, two floors, an upper gallery on posts,
+`english` added to its tags so it joins English streets) 1482 and `dormered_house` (`house`,
+steep slate roof, a gable dormer over the front, `french` added) 1092. All four are `regional`.
+The look fix: both node types emit parts of several roles, so `StructureLook.role_of_slot` reads
+the slot path after the node id: a gallery's deck, posts, brackets and rails are `frame` (its
+`.../roof` and hood roofs are `roof`, its plinth `trim`), a dormer's `roof<j>` is `roof` (the
+main roof's tile), its `sill` and `head` are `trim`, its `pane` an `opening` and its `wall` a wall.
+`role_of_tag_path` (street rows) passes the segments after the node's name the same way. The wall
+tones of `inn_gallery` and `dormered_house` are warm creams, as the framed houses'. The inn's
+footprint default is 9 by 5 m; at the 6 by 4 m pin it still builds (two floors, gallery and all).
+Render jobs `structures_gallery` (the row, one close-up each) and `gallery_thumbs` (tiles at yaw 180
+so the feature faces the camera).
+
 ## Dressing
 
 Probe B (2026-10-28, branch `probe-b`): a building is settled into its place by a yard,
