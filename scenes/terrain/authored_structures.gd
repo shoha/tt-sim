@@ -408,10 +408,36 @@ func _structure_node(id: int, parts: Dictionary) -> Node3D:
 		instance.set_meta(TAGS_META, mesh.tags)
 		node.add_child(instance)
 	node.set_meta(TAGS_META, parts.get("tag_table", PackedStringArray()))
+	_add_dressing(node, parts.get("dressing", {}))
 	var faces: PackedVector3Array = parts.get("collision", PackedVector3Array())
 	if not faces.is_empty():
 		node.add_child(_body(faces, id))
 	return node
+
+
+## The yard of a building (StructureDressing): the soft ground patch and path (no shadow) and the
+## plants and slabs along the walls. Shared materials, no collision.
+func _add_dressing(node: Node3D, dressing: Dictionary) -> void:
+	for part: String in ["ground", "props"]:
+		var mesh: Dictionary = (dressing as Dictionary).get(part, {})
+		if mesh.is_empty():
+			continue
+		var array_mesh := ArrayMesh.new()
+		array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh.arrays)
+		var key := "dressing:%s" % part
+		if not _materials.has(key):
+			_materials[key] = (
+				StructureMaterials.dressing_ground()
+				if part == "ground"
+				else StructureMaterials.dressing_props()
+			)
+		array_mesh.surface_set_material(0, _materials[key])
+		var instance := MeshInstance3D.new()
+		instance.name = "dressing_%s" % part
+		instance.mesh = array_mesh
+		if part == "ground":
+			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.add_child(instance)
 
 
 static func _body(faces: PackedVector3Array, structure_id: int) -> StaticBody3D:
