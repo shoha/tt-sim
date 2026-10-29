@@ -37,6 +37,11 @@ const W_RIDGE := 1
 const W_DETAIL := 1
 const W_TRIM := 2
 const W_NOT_TOWNHOUSE := -4
+## The tag of a structure that belongs to one region's architecture (a Mediterranean villa, a turf
+## longhouse): the street rows' generic lots (stone or timber, gable, hip or flat) would match them
+## by their materials and roof and turn an English village into a mix of cultures, so a split does
+## not pick a row with it. The Building tool still offers them.
+const REGIONAL_TAG := "regional"
 ## A best score under this means no structure resembles the lot: a seeded pick from the table.
 const MIN_MATCH := 4
 ## Other tags that satisfy a facade style: a cottage lot may be built as any plain house.
@@ -83,11 +88,18 @@ static func plan(doc: MapDocument, wall: Wall, scale: float) -> Dictionary:
 	return out
 
 
-## The library rows a split picks from: the core library's structures, else every served one.
+## The library rows a split picks from: the core library's structures without the regional ones
+## (REGIONAL_TAG; all of them when nothing else is left), else every served one.
 static func candidates() -> Array[Dictionary]:
 	StructureRecipes.ensure_served()
 	var rows := LibraryStructureStore.structures(StructureRecipes.CORE_LIBRARY)
-	return rows if not rows.is_empty() else LibraryStructureStore.structures()
+	if rows.is_empty():
+		return LibraryStructureStore.structures()
+	var generic: Array[Dictionary] = []
+	for row in rows:
+		if not REGIONAL_TAG in (row.get("tags", []) as Array):
+			generic.append(row)
+	return generic if not generic.is_empty() else rows
 
 
 ## The row of `rows` that looks most like `lot` (one of ProcgenRow.plan's: "walls", "roof",

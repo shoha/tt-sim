@@ -294,7 +294,16 @@ func test_variants_are_the_same_familys_other_recipes_and_a_lone_recipe_has_none
 	for row in StructureEdit.variants_of(STONE_HOUSE):
 		houses.append(String(row["ref"]))
 	houses.sort()
-	assert_eq(houses, ["core:house_flat", "core:house_hip", "core:stone_house"] as Array[String])
+	var expected: Array[String] = [
+		"core:adobe_house",
+		"core:alpine_chalet",
+		"core:house_flat",
+		"core:house_hip",
+		"core:slate_house",
+		"core:stone_house",
+		"core:villa_stucco",
+	]
+	assert_eq(houses, expected, "the house family holds the stone houses and the styles' houses")
 	assert_true(StructureEdit.variants_of("core:no_such").is_empty())
 
 

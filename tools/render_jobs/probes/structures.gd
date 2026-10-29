@@ -11,6 +11,22 @@ extends RefCounted
 ##   remove_all        removes every structure (one history entry each), for a clean run.
 ##   tile {ref, width, depth, yaw, seed}  (card S3, tools/render_structure_thumbnails.gd) removes
 ##                     every structure and lays this one alone at the map's centre.
+##   styles            (architecture styles card 1) lays the ten style starters in two rows of five
+##                     (STYLE_LOTS), then waits for their builds.
+
+const STYLE_LOTS: Array = [
+	# recipe, centre x, centre z, width, depth, yaw degrees, seed
+	["core:villa_stucco", -30.0, -14.0, 7.0, 5.0, 0.0, 51],
+	["core:adobe_house", -15.0, -14.0, 6.0, 5.0, 0.0, 52],
+	["core:slate_house", 0.0, -14.0, 7.0, 5.0, 0.0, 53],
+	["core:alpine_chalet", 15.0, -14.0, 7.0, 5.0, 0.0, 54],
+	["core:canal_house", 30.0, -14.0, 5.0, 8.0, 0.0, 55],
+	["core:thatched_cottage", -30.0, 14.0, 6.0, 4.0, 0.0, 56],
+	["core:log_cabin", -15.0, 14.0, 6.0, 4.0, 0.0, 57],
+	["core:turf_longhouse", 0.0, 14.0, 9.0, 4.0, 0.0, 58],
+	["core:brick_terrace", 15.0, 14.0, 5.0, 7.0, 0.0, 59],
+	["core:barn", 30.0, 14.0, 9.0, 6.0, 0.0, 60],
+]
 
 const BASIC_LOTS: Array = [
 	# recipe, centre x, centre z, width, depth, yaw degrees, seed
@@ -25,6 +41,8 @@ static func run(base: Node, step: Dictionary) -> String:
 	match String(step.get("action", "")):
 		"town":
 			return _town(base)
+		"styles":
+			return _styles(base)
 		"street":
 			return _street(base, step)
 		"flush":
@@ -235,6 +253,24 @@ static func _town(base: Node) -> String:
 		if String(lot[0]) == "core:townhouse":
 			structure.footprint = _l_shape(Vector2(lot[1], lot[2]))
 		var id := editor.structures.add(structure)
+		lines.append(
+			"%s -> %d%s" % [lot[0], id, "" if id >= 0 else " " + editor.structures.last_refusal]
+		)
+	var nodes := _nodes(base)
+	if nodes != null:
+		nodes.flush()
+	return "laid: " + "; ".join(lines)
+
+
+## The ten style starters (STYLE_LOTS), laid through the editor API.
+static func _styles(base: Node) -> String:
+	var editor := _editor(base)
+	if editor == null:
+		return "no authoring editor"
+	var lines := PackedStringArray()
+	for lot: Array in STYLE_LOTS:
+		var plan := _rect(float(lot[3]), float(lot[4]), float(lot[5]), Vector2(lot[1], lot[2]))
+		var id := editor.structures.add(Structure.make(0, String(lot[0]), plan, int(lot[6])))
 		lines.append(
 			"%s -> %d%s" % [lot[0], id, "" if id >= 0 else " " + editor.structures.last_refusal]
 		)

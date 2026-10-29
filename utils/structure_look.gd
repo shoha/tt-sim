@@ -18,6 +18,14 @@ const TRIM := "trim"
 const CHIMNEY := "chimney"
 ## The panes and door leaves: procgen's `glazing` node (surface kind `glass`, flat vertex colours).
 const OPENING := "opening"
+## The surface kinds a roof role is its own material for (card S6 had only planks): "wood" and
+## "tile" the tile shader, slate, shingle, thatch and turf the style roof shader. A roof surface of
+## any other kind (a gable end in plaster, a flat roof in adobe) is drawn as a wall.
+const ROOF_KINDS: Array[String] = ["wood", "tile", "slate", "shingle", "thatch", "turf"]
+## The wall kinds the style wall shader draws (plaster, adobe, brick, log), in its `pattern` order.
+const STYLE_WALL_KINDS: Array[String] = ["plaster", "adobe", "brick", "log"]
+## The roof kinds the style roof shader draws, in its `pattern` order.
+const STYLE_ROOF_KINDS: Array[String] = ["slate", "shingle", "thatch", "turf"]
 ## Every role, in the order a structure's meshes are made.
 const ROLES: Array[String] = [WALL, ROOF, TRIM, CHIMNEY, OPENING]
 ## The surface kind of the panes and leaves (ProcgenGlazing.KIND); drawn unshaded from the vertex
@@ -110,13 +118,33 @@ static func lot_of_tag_path(path: String) -> String:
 	return ""
 
 
-## The role a (surface kind, role) pair is drawn with. A roof is its own material only where it is
-## planks ("wood"): a gable's end triangles are masonry and a flat roof's coping is stone, and they
-## belong to the walls.
+## The role a (surface kind, role) pair is drawn with. A roof is its own material only where its
+## kind is a roofing (ROOF_KINDS: planks "wood", or one of a style's): a gable's end triangles are
+## masonry (or plaster, brick, ...) and a flat roof's coping is stone, and they belong to the walls.
 static func material_role(kind: String, role: String) -> String:
-	if role == ROOF and kind != "wood":
+	if role == ROOF and not ROOF_KINDS.has(kind):
 		return WALL
 	return role
+
+
+## The palette hints of the recipe `doc` (a building style's, written on its Output node by
+## ProcgenRecipes.building_from): {"wall": Array[Color], "roof": Array[Color]} in sRGB, a key only
+## when the recipe lists tones for it. {} for a recipe without hints, which keeps StructurePaint's
+## own draw (ROOF_PALETTE, WALL_LEANS).
+static func palette_hints(doc: PlantGraphDocument) -> Dictionary:
+	var out := {}
+	if doc == null:
+		return out
+	for node_id in doc.nodes_of_type("output"):
+		var params := doc.node_params(node_id)
+		for part: String in ["wall", "roof"]:
+			var tones: Array[Color] = []
+			for hex: String in String(params.get("palette_" + part, "")).split(",", false):
+				if hex.strip_edges().is_valid_html_color():
+					tones.append(Color.html(hex.strip_edges()))
+			if not tones.is_empty():
+				out[part] = tones
+	return out
 
 
 ## The tint a role puts over its surface.

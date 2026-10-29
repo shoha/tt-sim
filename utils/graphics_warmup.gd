@@ -39,6 +39,8 @@ const COVERED_SHADERS := [
 	"res://shaders/selection_glow.gdshader",
 	"res://shaders/structure_pane.gdshader",
 	"res://shaders/structure_roof.gdshader",
+	"res://shaders/structure_style_roof.gdshader",
+	"res://shaders/structure_style_wall.gdshader",
 	"res://shaders/structure_wall.gdshader",
 	"res://shaders/submerged_marker.gdshader",
 	"res://shaders/texel_copy_blit.gdshader",
