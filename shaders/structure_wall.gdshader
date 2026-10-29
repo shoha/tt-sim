@@ -46,9 +46,9 @@ void fragment() {
 	// The clump-sized octave: blotches about as wide as a crown, a little taller on a wall.
 	float clump = s_noise(s_pos * vec3(0.24, 0.30, 0.24) + 19.0);
 	col *= s_lean(smoothstep(0.25, 0.75, wash), wash_amount);
-	col *= s_mass(wash, 0.5 * wash_amount) * s_break(clump, 1.0);
+	col *= s_mass(wash, 0.5 * wash_amount) * s_break(clump, 1.0, 0.12);
 	col = s_ramp(col, NORMAL, INV_VIEW_MATRIX);
-	col = s_ink(col, NORMAL, VIEW, 0.0);
+	col = s_ink(col, NORMAL, VIEW, 0.0, 1.0);
 
 	vec3 orm = texture(orm_tex, uv).rgb;
 	NORMAL_MAP = texture(normal_tex, uv).rgb;

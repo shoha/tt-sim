@@ -15,23 +15,23 @@ const PANE_SHADER := preload("res://shaders/structure_pane.gdshader")
 ## The lift toward cream a grey rock gets (saturation about the texture's luminance, then a warm
 ## bias), for masonry, and for planks (already warm, so less).
 const MASONRY_SATURATION := 1.2
-const MASONRY_WARM := Vector3(1.14, 1.10, 1.0)
+const MASONRY_WARM := Vector3(1.12, 1.13, 1.07)
 ## How much of a rock's own hue is replaced by cream (the rest keeps a biome's stone its own).
 const MASONRY_CREAM := 0.75
 const TIMBER_SATURATION := 1.1
-const TIMBER_WARM := Vector3(1.16, 1.07, 0.90)
+const TIMBER_WARM := Vector3(1.12, 1.08, 0.95)
 ## Planks lean toward honey as stone leans toward cream (the wall shader's `cream`, here a share).
-const TIMBER_CREAM := 0.8
+const TIMBER_CREAM := 0.6
 ## A lift on the planks' tint: the library's oak read a deep brown on a big barn (2026-10-28).
-const TIMBER_LIFT := Vector3(1.6, 1.5, 1.25)
+const TIMBER_LIFT := Vector3(1.5, 1.5, 1.3)
 ## The plants' light model's balance for walls (structure_painterly.gdshaderinc defaults, tuned for
 ## roofs): shade leans a soft cream-lavender, lighter and warmer than the crowns' violet, so a
 ## shaded stone face stays a colour instead of a brown or a mauve grey (look integration and ink
 ## card, 2026-10-28). Timber takes more light.
-const WALL_SHADE_TINT := Vector3(0.94, 0.90, 1.0)
-const WALL_SHADE_FLOOR := Vector3(0.26, 0.22, 0.31)
-const STONE_LIT_GAIN := Vector3(1.34, 1.27, 1.15)
-const TIMBER_LIT_GAIN := Vector3(1.5, 1.38, 1.15)
+const WALL_SHADE_TINT := Vector3(0.96, 0.92, 1.0)
+const WALL_SHADE_FLOOR := Vector3(0.31, 0.27, 0.36)
+const STONE_LIT_GAIN := Vector3(1.42, 1.35, 1.2)
+const TIMBER_LIT_GAIN := Vector3(1.6, 1.5, 1.25)
 
 
 ## The material of surface `kind` in `role` for style `style`, with the palette at `root`.

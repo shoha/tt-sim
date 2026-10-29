@@ -247,9 +247,12 @@ colour, suggestion over literal detail, nothing grey. Three parts, no new asset:
   ground is not found (that would need a depth read or an inverted hull, and the meshes have split
   vertices), so a flat-faced building gets ink at its corners and folds, not round its outline.
   `s_break` is the clump octave: one more 3D value noise at about tree-clump scale (0.22 to 0.3 per
-  metre) shifting value and hue in soft blotches (damp sage to warm ochre), on walls instead of the
-  old fine mottle and on roofs beside the existing patch. Palette: timber lifted (`TIMBER_LIFT`,
-  `TIMBER_CREAM` 0.8), stone shade a cream-lavender and its lit gain raised, slate now a teal-slate
+  metre) shifting hue in soft blotches (damp sage to warm ochre), on walls instead of the old fine
+  mottle (walls at a near-constant value, `value` 0.12, so they never darken; roofs 0.58) and on
+  roofs beside the existing patch. Walls use the soft ink (`softness` 1: a light lavender, little
+  on grazing faces; roofs keep the deep plum). Palette: timber lifted (`TIMBER_LIFT`,
+  `TIMBER_CREAM` 0.6), stone shade a light cream-lavender (floor 0.31/0.27/0.36) with its lit gain
+  raised to 1.42/1.35/1.2 and a cooler-cream warm bias, slate now a teal-slate
   `(0.46, 0.62, 0.59)`. Tunables: `ink_tint`, `ink_silhouette`, `ink_crease`, `break_amount`.
 - **Handmade starters.** The core starters are generated with procgen's `handmade` option
   (`tools/export_core_structures.gd`: `wonk` 0.7 default and exposed, `fringe` 0.35 m on the two
