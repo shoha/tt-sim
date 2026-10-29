@@ -392,6 +392,45 @@ table also takes `style_patch`, a deep merge over the style file, `kit_index` (o
   a step's `lots` lays a comparison instead): two rows of five on a meadow. Captures from
   2026-10-28 are in `docs/plans/2026-10-28-structures/captures/styles2/` (not tracked).
 
+### Styles 3: profile roofs, towers, battlements, gables, arches (2026-10-28)
+
+Thirteen more core structures (50 in all) from procgen's architecture-styles cards 4 and 5, each one
+`STARTERS` entry with a `bundle` and a `seed` (the footprint at the pin is still the 6 by 4 m
+rectangle; a tower or pagoda recipe builds at it, and a corner or side tower stands OUTSIDE the main
+plan, so the footprint rules govern the main building only). Triangles at the pin: `gambrel_barn`
+(family `farm`) 1064, `mansard_townhouse` (`townhouse`) 3108, `dutch_canal_house` (stepped gable,
+`townhouse`) 3702, `dutch_bell_house` (bell gable) 3678, `minka` (`house`) 1800, `half_hip_cottage`
+(`cottage`) 1170, `saltbox_house` (`cottage`) 1716, `chapel` (`hall`, side bell tower and spire) 3863,
+`market_hall` (`hall`, arcade) 2036, `chinese_hall` (`hall`) 1416, `pagoda_tower` (`tower`) 2284,
+`castle_keep` (`castle`, four corner turrets, battlements) 3292, `gatehouse` (`castle`, twin towers) 3052.
+The two Dutch rows are the style's first and third `kit` patches (`kit_index`). Culture tags come from
+the styles: `dutch`, `american`, `french`, `english`, `colonial`, `japanese`, `chinese`, `medieval`.
+Exposed controls are what each style lists and its drawn recipe declares (height, floors, roof pitch,
+chimneys, ridge, wonk, fringe); the roof-form numbers (`sweep`, `tiers`, `break`) are fixed per draw
+and NOT on the interface, so the Structure tool does not offer them.
+
+- **Look fixes.** `StructureLook.NODE_ROLES` had no `roof_profile` or `roof_round`: gambrel, mansard,
+  half-hip, saltbox, upswept and pagoda roofs, and every cone, dome and spire over a round plan or
+  tower, were painted and shaded as WALLS. Both are the `roof` role now, so their roof kind (tile,
+  slate, shingle, thatch) shades them; a pagoda's `body_role` `plaster`, a gable end's `plaster` and a
+  castle's `stone` roof slabs stay walls (`material_role`). The roundhouse, hut, watchtower, hex tower
+  and dome hall pins moved for that. Slate leans toward teal (`StructureMaterials.SLATE_TONE_SHIFT`,
+  the roof shader's `tone_shift`; the styles' slate tones are navy blue greys). The style brick is
+  weathered toward a rosy brown (`brick_weather`). Moss on a style wall (brick, plaster, adobe): the
+  shaders read moss from the colour as green over red and blue, which a red or orange wall with
+  procgen's multiplied green never shows, so `StructurePaint` bakes the green in and lets a building's
+  strongest moss climb its first metre (`MOSS_FULL_M`, `MOSS_CLIMB_M`), because procgen puts moss on the
+  lowest strip of a brick wall only. Boards get no moss (procgen's Ruin node puts none on timber).
+- **Tiles.** `LibraryStructures.default_height` counts a tower's `extra` and roof and a pagoda's tiers,
+  so a tall building is framed whole. The tiles are in `thumbnails/structures/`.
+- **Streets.** `StreetSplit.FARM_TAG`: a row tagged `farm` (the barns) never joins a street, whatever
+  its region tags (the gambrel barn is `dutch` and would join a canal street). The Dutch canal rows
+  join `dutch` streets and the half-hip cottage `english` ones; the rest (mansard, minka, chapel,
+  castle, pagoda, halls, saltbox) have no region a street gives, so they are for the Building tool.
+- **Render job** `structures_styles3` (probe action `styles3`, lots STYLES3_LOTS): three rows on a
+  320 ft meadow (the map side limit is 320 ft, so 13 buildings need three rows), nine captures.
+  Captures are in `docs/plans/2026-10-28-structures/captures/styles3/` (not tracked).
+
 ## Dressing
 
 Probe B (2026-10-28, branch `probe-b`): a building is settled into its place by a yard,

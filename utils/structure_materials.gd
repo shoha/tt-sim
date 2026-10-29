@@ -36,6 +36,9 @@ const WALL_SHADE_TINT := Vector3(0.96, 0.92, 1.0)
 const WALL_SHADE_FLOOR := Vector3(0.31, 0.27, 0.36)
 const STONE_LIT_GAIN := Vector3(1.42, 1.35, 1.2)
 const TIMBER_LIT_GAIN := Vector3(1.6, 1.5, 1.25)
+## Slate leans from the styles' navy blue greys toward a teal slate (structure_style_roof
+## `tone_shift`; styles integration 3, after the last look round called it navy).
+const SLATE_TONE_SHIFT := Vector3(0.78, 1.5, 1.36)
 
 
 ## The material of surface `kind` in `role` for style `style`, with the palette at `root`.
@@ -126,6 +129,10 @@ static func _style_roof(kind: String) -> ShaderMaterial:
 			material.set_shader_parameter("lit_gain", Vector3(1.3, 1.26, 1.1))
 			material.set_shader_parameter("eave_tone", Vector3(0.9, 0.9, 0.86))
 			material.set_shader_parameter("ridge_tone", Vector3(1.06, 1.06, 0.96))
+		"slate":
+			material.set_shader_parameter("tone_shift", SLATE_TONE_SHIFT)
+			material.set_shader_parameter("lit_gain", Vector3(1.3, 1.24, 1.1))
+			material.set_shader_parameter("eave_tone", Vector3(0.85, 0.83, 0.88))
 		_:
 			material.set_shader_parameter("lit_gain", Vector3(1.28, 1.2, 1.1))
 			material.set_shader_parameter("eave_tone", Vector3(0.85, 0.81, 0.90))

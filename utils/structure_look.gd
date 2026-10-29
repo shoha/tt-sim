@@ -44,6 +44,10 @@ const NODE_ROLES: Dictionary = {
 	"roof_gable": ROOF,
 	"roof_hip": ROOF,
 	"roof_flat": ROOF,
+	# Profile roofs (gambrel, mansard, half-hip, saltbox, curved gable, upswept hip, pagoda) and the
+	# cones, domes and spires over round plans and towers (styles integration 3, 2026-10-28).
+	"roof_profile": ROOF,
+	"roof_round": ROOF,
 	"facade_trim": TRIM,
 	"cornice": TRIM,
 	"quoins": TRIM,

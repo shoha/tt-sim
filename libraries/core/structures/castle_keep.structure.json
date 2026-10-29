@@ -1,0 +1,884 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "building_layout_2",
+      "to_port": 0
+    },
+    {
+      "from": "building_layout_2",
+      "from_port": 0,
+      "to": "facade_6",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "building_walls_3",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "roof_flat_4",
+      "to_port": 0
+    },
+    {
+      "from": "building_walls_3",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "roof_flat_4",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "facade_trim_7",
+      "to_port": 0
+    },
+    {
+      "from": "facade_trim_7",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "cornice_8",
+      "to_port": 0
+    },
+    {
+      "from": "cornice_8",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "glazing_9",
+      "to_port": 0
+    },
+    {
+      "from": "glazing_9",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "arch_heads_10",
+      "to_port": 0
+    },
+    {
+      "from": "arch_heads_10",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "crenellations_11",
+      "to_port": 0
+    },
+    {
+      "from": "crenellations_11",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "tower_12",
+      "to_port": 0
+    },
+    {
+      "from": "tower_12",
+      "from_port": 0,
+      "to": "facade_13",
+      "to_port": 0
+    },
+    {
+      "from": "facade_13",
+      "from_port": 0,
+      "to": "building_walls_14",
+      "to_port": 0
+    },
+    {
+      "from": "building_walls_14",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_13",
+      "from_port": 0,
+      "to": "roof_round_15",
+      "to_port": 0
+    },
+    {
+      "from": "roof_round_15",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_13",
+      "from_port": 0,
+      "to": "glazing_16",
+      "to_port": 0
+    },
+    {
+      "from": "glazing_16",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_13",
+      "from_port": 0,
+      "to": "arch_heads_17",
+      "to_port": 0
+    },
+    {
+      "from": "arch_heads_17",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "tower_18",
+      "to_port": 0
+    },
+    {
+      "from": "tower_18",
+      "from_port": 0,
+      "to": "facade_19",
+      "to_port": 0
+    },
+    {
+      "from": "facade_19",
+      "from_port": 0,
+      "to": "building_walls_20",
+      "to_port": 0
+    },
+    {
+      "from": "building_walls_20",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_19",
+      "from_port": 0,
+      "to": "roof_round_21",
+      "to_port": 0
+    },
+    {
+      "from": "roof_round_21",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_19",
+      "from_port": 0,
+      "to": "glazing_22",
+      "to_port": 0
+    },
+    {
+      "from": "glazing_22",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_19",
+      "from_port": 0,
+      "to": "arch_heads_23",
+      "to_port": 0
+    },
+    {
+      "from": "arch_heads_23",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "tower_24",
+      "to_port": 0
+    },
+    {
+      "from": "tower_24",
+      "from_port": 0,
+      "to": "facade_25",
+      "to_port": 0
+    },
+    {
+      "from": "facade_25",
+      "from_port": 0,
+      "to": "building_walls_26",
+      "to_port": 0
+    },
+    {
+      "from": "building_walls_26",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_25",
+      "from_port": 0,
+      "to": "roof_round_27",
+      "to_port": 0
+    },
+    {
+      "from": "roof_round_27",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_25",
+      "from_port": 0,
+      "to": "glazing_28",
+      "to_port": 0
+    },
+    {
+      "from": "glazing_28",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_25",
+      "from_port": 0,
+      "to": "arch_heads_29",
+      "to_port": 0
+    },
+    {
+      "from": "arch_heads_29",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "tower_30",
+      "to_port": 0
+    },
+    {
+      "from": "tower_30",
+      "from_port": 0,
+      "to": "facade_31",
+      "to_port": 0
+    },
+    {
+      "from": "facade_31",
+      "from_port": 0,
+      "to": "building_walls_32",
+      "to_port": 0
+    },
+    {
+      "from": "building_walls_32",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_31",
+      "from_port": 0,
+      "to": "roof_flat_33",
+      "to_port": 0
+    },
+    {
+      "from": "roof_flat_33",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_31",
+      "from_port": 0,
+      "to": "crenellations_34",
+      "to_port": 0
+    },
+    {
+      "from": "crenellations_34",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_31",
+      "from_port": 0,
+      "to": "glazing_35",
+      "to_port": 0
+    },
+    {
+      "from": "glazing_35",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_31",
+      "from_port": 0,
+      "to": "arch_heads_36",
+      "to_port": 0
+    },
+    {
+      "from": "arch_heads_36",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "interface": [
+    {
+      "default": 7.83,
+      "label": "Wall height",
+      "max": 8,
+      "min": 1.6,
+      "name": "height",
+      "tip": "Height of the walls above the highest ground.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Window width",
+      "max": 2,
+      "min": 0,
+      "name": "window_width",
+      "tip": "Width of the main windows (the others keep their proportion); 0 for the style's own, or for none under the style none.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Floors",
+      "max": 6,
+      "min": 0,
+      "name": "floors",
+      "tip": "How many floors; 0 for the style's own (by the wall height).",
+      "type": "float"
+    },
+    {
+      "default": 1,
+      "label": "Textured masonry",
+      "max": 1,
+      "min": 0,
+      "name": "textured",
+      "tip": "1 carries the courses in a masonry texture instead of modelled blocks.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Lit windows",
+      "max": 1,
+      "min": 0,
+      "name": "lit",
+      "tip": "The share of windows that glow warm, as if lit from within.",
+      "type": "float"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        120.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "building_layout_2",
+      "params": {
+        "height": "@height",
+        "roof": "flat",
+        "textured": "@textured",
+        "window_width": "@window_width"
+      },
+      "position": [
+        250.0,
+        120.0
+      ],
+      "type": "building_layout"
+    },
+    {
+      "id": "building_walls_3",
+      "params": {
+        "role": "stone"
+      },
+      "position": [
+        710.0,
+        20.0
+      ],
+      "type": "building_walls"
+    },
+    {
+      "id": "roof_flat_4",
+      "params": {
+        "overhang": 0.1,
+        "roof_role": "stone",
+        "roof_thickness": 0.2
+      },
+      "position": [
+        710.0,
+        220.0
+      ],
+      "type": "roof_flat"
+    },
+    {
+      "id": "output_5",
+      "params": {
+        "name": "Castle keep",
+        "palette_accent": "#B5342B,#2F4F7F",
+        "palette_roof": "#6E7A8A,#7B6E64,#5E6A78",
+        "palette_wall": "#A8A59A,#9C9A90,#B3AB98,#8F9096"
+      },
+      "position": [
+        950.0,
+        120.0
+      ],
+      "type": "output"
+    },
+    {
+      "id": "facade_6",
+      "params": {
+        "floors": "@floors",
+        "style": "keep",
+        "window_width": "@window_width"
+      },
+      "position": [
+        480.0,
+        120.0
+      ],
+      "type": "facade"
+    },
+    {
+      "id": "facade_trim_7",
+      "params": {
+        "door_frame": true,
+        "frames": false,
+        "lintels": false,
+        "shutters": false,
+        "sills": false,
+        "step": true
+      },
+      "position": [
+        710.0,
+        420.0
+      ],
+      "type": "facade_trim"
+    },
+    {
+      "id": "cornice_8",
+      "params": {
+        "eave": false,
+        "floor_bands": true
+      },
+      "position": [
+        710.0,
+        620.0
+      ],
+      "type": "cornice"
+    },
+    {
+      "id": "glazing_9",
+      "params": {
+        "lit": "@lit",
+        "muntins": false
+      },
+      "position": [
+        950.0,
+        420.0
+      ],
+      "type": "glazing"
+    },
+    {
+      "id": "arch_heads_10",
+      "params": {
+        "role": "stone"
+      },
+      "position": [
+        1410.0,
+        120.0
+      ],
+      "type": "arch_heads"
+    },
+    {
+      "id": "crenellations_11",
+      "params": {
+        "base_height": 0.76,
+        "crenel_width": 0.41,
+        "machicolation": 0,
+        "merlon_height": 0.52,
+        "merlon_width": 0.6,
+        "overhang": 0.1,
+        "role": "stone"
+      },
+      "position": [
+        1650.0,
+        120.0
+      ],
+      "type": "crenellations"
+    },
+    {
+      "id": "tower_12",
+      "params": {
+        "attach": "corner",
+        "corner": 0,
+        "extra": 2.9,
+        "overhang": 0.35,
+        "roof": "cone",
+        "roof_pitch": 64.29,
+        "sides": 8,
+        "size": 3.02
+      },
+      "position": [
+        480.0,
+        820.0
+      ],
+      "type": "tower"
+    },
+    {
+      "id": "facade_13",
+      "params": {
+        "floors": 0,
+        "style": "turret",
+        "window_width": 0
+      },
+      "position": [
+        710.0,
+        820.0
+      ],
+      "type": "facade"
+    },
+    {
+      "id": "building_walls_14",
+      "params": {
+        "role": "stone"
+      },
+      "position": [
+        940.0,
+        820.0
+      ],
+      "type": "building_walls"
+    },
+    {
+      "id": "roof_round_15",
+      "params": {
+        "finial": 0.38,
+        "fringe": 0,
+        "overhang": 0.35,
+        "roof_pitch": 64.29,
+        "roof_role": "stone",
+        "shape": "cone",
+        "top": 0
+      },
+      "position": [
+        940.0,
+        1020.0
+      ],
+      "type": "roof_round"
+    },
+    {
+      "id": "glazing_16",
+      "params": {
+        "lit": "@lit",
+        "muntins": false
+      },
+      "position": [
+        1180.0,
+        1220.0
+      ],
+      "type": "glazing"
+    },
+    {
+      "id": "arch_heads_17",
+      "params": {
+        "role": "stone"
+      },
+      "position": [
+        1180.0,
+        1420.0
+      ],
+      "type": "arch_heads"
+    },
+    {
+      "id": "tower_18",
+      "params": {
+        "attach": "corner",
+        "corner": 1,
+        "extra": 2.2,
+        "overhang": 0.35,
+        "roof": "cone",
+        "roof_pitch": 66.88,
+        "sides": 8,
+        "size": 2.94
+      },
+      "position": [
+        480.0,
+        1520.0
+      ],
+      "type": "tower"
+    },
+    {
+      "id": "facade_19",
+      "params": {
+        "floors": 0,
+        "style": "turret",
+        "window_width": 0
+      },
+      "position": [
+        710.0,
+        1520.0
+      ],
+      "type": "facade"
+    },
+    {
+      "id": "building_walls_20",
+      "params": {
+        "role": "stone"
+      },
+      "position": [
+        940.0,
+        1520.0
+      ],
+      "type": "building_walls"
+    },
+    {
+      "id": "roof_round_21",
+      "params": {
+        "finial": 0.2,
+        "fringe": 0,
+        "overhang": 0.35,
+        "roof_pitch": 66.88,
+        "roof_role": "stone",
+        "shape": "cone",
+        "top": 0
+      },
+      "position": [
+        940.0,
+        1720.0
+      ],
+      "type": "roof_round"
+    },
+    {
+      "id": "glazing_22",
+      "params": {
+        "lit": "@lit",
+        "muntins": false
+      },
+      "position": [
+        1180.0,
+        1920.0
+      ],
+      "type": "glazing"
+    },
+    {
+      "id": "arch_heads_23",
+      "params": {
+        "role": "stone"
+      },
+      "position": [
+        1180.0,
+        2120.0
+      ],
+      "type": "arch_heads"
+    },
+    {
+      "id": "tower_24",
+      "params": {
+        "attach": "corner",
+        "corner": 2,
+        "extra": 2.26,
+        "overhang": 0.35,
+        "roof": "cone",
+        "roof_pitch": 61.55,
+        "sides": 8,
+        "size": 2.99
+      },
+      "position": [
+        480.0,
+        2220.0
+      ],
+      "type": "tower"
+    },
+    {
+      "id": "facade_25",
+      "params": {
+        "floors": 0,
+        "style": "turret",
+        "window_width": 0
+      },
+      "position": [
+        710.0,
+        2220.0
+      ],
+      "type": "facade"
+    },
+    {
+      "id": "building_walls_26",
+      "params": {
+        "role": "stone"
+      },
+      "position": [
+        940.0,
+        2220.0
+      ],
+      "type": "building_walls"
+    },
+    {
+      "id": "roof_round_27",
+      "params": {
+        "finial": 0.02,
+        "fringe": 0,
+        "overhang": 0.35,
+        "roof_pitch": 61.55,
+        "roof_role": "stone",
+        "shape": "cone",
+        "top": 0
+      },
+      "position": [
+        940.0,
+        2420.0
+      ],
+      "type": "roof_round"
+    },
+    {
+      "id": "glazing_28",
+      "params": {
+        "lit": "@lit",
+        "muntins": false
+      },
+      "position": [
+        1180.0,
+        2620.0
+      ],
+      "type": "glazing"
+    },
+    {
+      "id": "arch_heads_29",
+      "params": {
+        "role": "stone"
+      },
+      "position": [
+        1180.0,
+        2820.0
+      ],
+      "type": "arch_heads"
+    },
+    {
+      "id": "tower_30",
+      "params": {
+        "attach": "corner",
+        "corner": 3,
+        "extra": 3.36,
+        "overhang": 0.1,
+        "roof": "flat",
+        "sides": 8,
+        "size": 2.97
+      },
+      "position": [
+        480.0,
+        2920.0
+      ],
+      "type": "tower"
+    },
+    {
+      "id": "facade_31",
+      "params": {
+        "floors": 0,
+        "style": "turret",
+        "window_width": 0
+      },
+      "position": [
+        710.0,
+        2920.0
+      ],
+      "type": "facade"
+    },
+    {
+      "id": "building_walls_32",
+      "params": {
+        "role": "stone"
+      },
+      "position": [
+        940.0,
+        2920.0
+      ],
+      "type": "building_walls"
+    },
+    {
+      "id": "roof_flat_33",
+      "params": {
+        "overhang": 0.1,
+        "roof_role": "stone",
+        "roof_thickness": 0.12
+      },
+      "position": [
+        940.0,
+        3120.0
+      ],
+      "type": "roof_flat"
+    },
+    {
+      "id": "crenellations_34",
+      "params": {
+        "crenel_width": 0.36,
+        "machicolation": 0.25,
+        "merlon_width": 0.5,
+        "overhang": 0.1,
+        "role": "stone"
+      },
+      "position": [
+        1180.0,
+        3120.0
+      ],
+      "type": "crenellations"
+    },
+    {
+      "id": "glazing_35",
+      "params": {
+        "lit": "@lit",
+        "muntins": false
+      },
+      "position": [
+        1180.0,
+        3320.0
+      ],
+      "type": "glazing"
+    },
+    {
+      "id": "arch_heads_36",
+      "params": {
+        "role": "stone"
+      },
+      "position": [
+        1180.0,
+        3520.0
+      ],
+      "type": "arch_heads"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

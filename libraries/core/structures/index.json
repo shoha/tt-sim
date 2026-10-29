@@ -934,6 +934,468 @@
 		},
 		{
 			"default_size_m": [
+				10.0,
+				7.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"ridge",
+				"wonk"
+			],
+			"family": "farm",
+			"file": "structures/gambrel_barn.structure.json",
+			"id": "gambrel_barn",
+			"max_area_m2": 200.0,
+			"max_side_m": 20.0,
+			"min_side_m": 5.0,
+			"name": "Gambrel barn",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"barn",
+				"timber",
+				"shingle",
+				"gambrel",
+				"farm",
+				"dutch",
+				"american",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/gambrel_barn.jpg",
+			"variant": "Gambrel roof"
+		},
+		{
+			"default_size_m": [
+				6.0,
+				8.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "townhouse",
+			"file": "structures/mansard_townhouse.structure.json",
+			"id": "mansard_townhouse",
+			"max_area_m2": 110.0,
+			"max_side_m": 14.0,
+			"min_side_m": 4.0,
+			"name": "Mansard townhouse",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"plaster",
+				"slate",
+				"mansard",
+				"townhouse",
+				"trim",
+				"quoins",
+				"french",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/mansard_townhouse.jpg",
+			"variant": "Mansard, slate"
+		},
+		{
+			"default_size_m": [
+				5.0,
+				8.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"ridge",
+				"wonk"
+			],
+			"family": "townhouse",
+			"file": "structures/dutch_canal_house.structure.json",
+			"id": "dutch_canal_house",
+			"max_area_m2": 120.0,
+			"max_side_m": 14.0,
+			"min_side_m": 3.0,
+			"name": "Dutch gable house",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"brick",
+				"tile",
+				"gable",
+				"townhouse",
+				"trim",
+				"quoins",
+				"dutch",
+				"stepped_gable",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/dutch_canal_house.jpg",
+			"variant": "Stepped gable"
+		},
+		{
+			"default_size_m": [
+				5.0,
+				8.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"ridge",
+				"wonk"
+			],
+			"family": "townhouse",
+			"file": "structures/dutch_bell_house.structure.json",
+			"id": "dutch_bell_house",
+			"max_area_m2": 120.0,
+			"max_side_m": 14.0,
+			"min_side_m": 3.0,
+			"name": "Dutch bell-gable house",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"brick",
+				"tile",
+				"gable",
+				"townhouse",
+				"trim",
+				"quoins",
+				"dutch",
+				"bell_gable",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/dutch_bell_house.jpg",
+			"variant": "Bell gable"
+		},
+		{
+			"default_size_m": [
+				9.0,
+				7.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"ridge",
+				"wonk",
+				"fringe"
+			],
+			"family": "house",
+			"file": "structures/minka.structure.json",
+			"id": "minka",
+			"max_area_m2": 150.0,
+			"max_side_m": 16.0,
+			"min_side_m": 5.0,
+			"name": "Minka",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"plaster",
+				"thatch",
+				"upswept",
+				"hip",
+				"deep_eave",
+				"minka",
+				"japanese",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/minka.jpg",
+			"variant": "Thatched, upswept hip"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "cottage",
+			"file": "structures/half_hip_cottage.structure.json",
+			"id": "half_hip_cottage",
+			"max_area_m2": 90.0,
+			"max_side_m": 12.0,
+			"min_side_m": 3.5,
+			"name": "Half-hip cottage",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"plaster",
+				"tile",
+				"half_hip",
+				"jerkinhead",
+				"chimney",
+				"english",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/half_hip_cottage.jpg",
+			"variant": "Jerkinhead, tile"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "cottage",
+			"file": "structures/saltbox_house.structure.json",
+			"id": "saltbox_house",
+			"max_area_m2": 90.0,
+			"max_side_m": 12.0,
+			"min_side_m": 3.5,
+			"name": "Saltbox house",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"timber",
+				"shingle",
+				"saltbox",
+				"catslide",
+				"chimney",
+				"colonial",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/saltbox_house.jpg",
+			"variant": "Catslide, shingle"
+		},
+		{
+			"default_size_m": [
+				5.0,
+				9.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"wonk"
+			],
+			"family": "hall",
+			"file": "structures/chapel.structure.json",
+			"id": "chapel",
+			"max_area_m2": 110.0,
+			"max_side_m": 14.0,
+			"min_side_m": 4.0,
+			"name": "Chapel",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"chapel",
+				"church",
+				"stone",
+				"gable",
+				"tower",
+				"spire",
+				"pointed",
+				"medieval",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/chapel.jpg",
+			"variant": "Bell tower, spire"
+		},
+		{
+			"default_size_m": [
+				6.5,
+				10.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"wonk"
+			],
+			"family": "hall",
+			"file": "structures/market_hall.structure.json",
+			"id": "market_hall",
+			"max_area_m2": 140.0,
+			"max_side_m": 16.0,
+			"min_side_m": 5.0,
+			"name": "Market hall",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"hall",
+				"market",
+				"arcade",
+				"arches",
+				"stone",
+				"hip",
+				"medieval",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/market_hall.jpg",
+			"variant": "Arcaded, hip roof"
+		},
+		{
+			"default_size_m": [
+				11.0,
+				7.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"ridge",
+				"wonk"
+			],
+			"family": "hall",
+			"file": "structures/chinese_hall.structure.json",
+			"id": "chinese_hall",
+			"max_area_m2": 190.0,
+			"max_side_m": 18.0,
+			"min_side_m": 6.0,
+			"name": "Chinese hall",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"hall",
+				"plaster",
+				"tile",
+				"upswept",
+				"hip",
+				"columns",
+				"chinese",
+				"temple",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/chinese_hall.jpg",
+			"variant": "Upswept hip, tile"
+		},
+		{
+			"default_size_m": [
+				6.0,
+				6.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"wonk"
+			],
+			"family": "tower",
+			"file": "structures/pagoda_tower.structure.json",
+			"id": "pagoda_tower",
+			"max_area_m2": 100.0,
+			"max_side_m": 10.0,
+			"min_side_m": 5.0,
+			"name": "Pagoda",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"tower",
+				"pagoda",
+				"tiers",
+				"tile",
+				"upswept",
+				"temple",
+				"chinese",
+				"japanese",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/pagoda_tower.jpg",
+			"variant": "Tiered, upswept"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				7.0
+			],
+			"expose": [
+				"height"
+			],
+			"family": "castle",
+			"file": "structures/castle_keep.structure.json",
+			"id": "castle_keep",
+			"max_area_m2": 100.0,
+			"max_side_m": 11.0,
+			"min_side_m": 5.0,
+			"name": "Castle keep",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"keep",
+				"castle",
+				"stone",
+				"flat",
+				"tower",
+				"crenellated",
+				"medieval",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/castle_keep.jpg",
+			"variant": "Corner turrets, battlements"
+		},
+		{
+			"default_size_m": [
+				9.0,
+				5.0
+			],
+			"expose": [
+				"height"
+			],
+			"family": "castle",
+			"file": "structures/gatehouse.structure.json",
+			"id": "gatehouse",
+			"max_area_m2": 90.0,
+			"max_side_m": 13.0,
+			"min_side_m": 5.0,
+			"name": "Gatehouse",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"gatehouse",
+				"castle",
+				"stone",
+				"flat",
+				"tower",
+				"crenellated",
+				"medieval",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/gatehouse.jpg",
+			"variant": "Twin towers, arched gate"
+		},
+		{
+			"default_size_m": [
 				7.2,
 				7.2
 			],
