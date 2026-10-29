@@ -21,3 +21,8 @@ core:turf_longhouse 853df8c6c7a5b67765870e48a5f1e0d5 986
 core:brick_terrace df71aea7f13b8dc798602e73549227c3 3000
 core:canal_house 17906be11142c0f5aedef3ffce10398f 3552
 core:barn 51eec583e9bd1d60e850fd4a98a45178 950
+core:roundhouse 5f80e32a1ffab51e3f21124301980d89 1234
+core:round_hut 030356c01277df2d728230eaa4aa37ce 864
+core:watchtower f72199f122dd9520405fea7cbe41f75d 528
+core:tower_hex d04cd8488f2f09f30fe0ad4d003ff2f3 724
+core:dome_hall 600bc61feb75f24c688b66d51d60ff22 1302

@@ -17,6 +17,15 @@ extends RefCounted
 ## rings round the wanted centre for the closest legal spot, so a drop eases to ground that
 ## takes a house rather than failing.
 
+## Round plans. A structure whose `plans` names ROUND_PLAN is a regular polygon of `sides_of(row)`
+## sides (its `sides:<n>` tag): its lot is a circle of radius size.x / 2 (size is the diameter, a
+## square Vector2, so every size rule below applies as it is), the front (edge 0) facing +Z at turn
+## 0. It scales, moves and turns as one piece; `min_side_m` and `max_side_m` are its least and
+## largest diameters.
+const ROUND_PLAN := "round"
+const SIDES_TAG := "sides:"
+const DEFAULT_SIDES := 8
+
 ## Plan centres snap to this (metres), as the ghost shows.
 const SNAP_M := 0.5
 ## The steepest ground a structure stands on: rise over run, tan of the 24 degree bank procgen's
@@ -38,6 +47,61 @@ const OFF_MAP := "off_map"
 const OCCUPIED := "occupied"
 ## Structures keep this much (metres) between them.
 const GAP_M := 0.4
+
+
+## Whether the library row (a LibraryStructureStore row) is a round structure.
+static func is_round(row: Dictionary) -> bool:
+	var plans: Variant = row.get("plans")
+	return plans is Array and ROUND_PLAN in (plans as Array)
+
+
+## The sides of a round row's polygon (its `sides:<n>` tag, 3..Structure.MAX_POINTS), 0 for any
+## other row.
+static func sides_of(row: Dictionary) -> int:
+	if not is_round(row):
+		return 0
+	for tag: Variant in row.get("tags", []) as Array:
+		var text := String(tag)
+		if text.begins_with(SIDES_TAG) and text.trim_prefix(SIDES_TAG).is_valid_int():
+			return clampi(int(text.trim_prefix(SIDES_TAG)), 3, Structure.MAX_POINTS)
+	return DEFAULT_SIDES
+
+
+## The regular polygon of `sides` corners on a circle of `radius` about `centre`, turned `yaw`
+## radians (the front, edge 0, faces +Z at yaw 0), each point snapped to Structure.FOOTPRINT_STEP_M.
+## Pure.
+static func round_plan(
+	centre: Vector2, radius: float, yaw: float, sides: int
+) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for p in ProcgenPlan.regular_polygon(sides, radius, PI * 0.5 + yaw, centre):
+		out.append(ProcgenPlan.snap(p, Structure.FOOTPRINT_STEP_M))
+	return out
+
+
+## The plan of a lot of `size` about `centre` turned `yaw`: the rectangle, or with `sides` above 0
+## the regular polygon of diameter size.x.
+static func lot_plan(
+	centre: Vector2, size: Vector2, yaw: float, sides: int = 0
+) -> PackedVector2Array:
+	if sides > 0:
+		return round_plan(centre, size.x * 0.5, yaw, sides)
+	return rect_plan(centre, size, yaw)
+
+
+## The default footprint of library row `row` about the origin: the rectangle of its
+## `default_size_m`, or its regular polygon. What a pin, a tile and a verify build.
+static func default_plan(row: Dictionary) -> PackedVector2Array:
+	var size := default_size(row)
+	return lot_plan(Vector2.ZERO, size, 0.0, sides_of(row))
+
+
+## The footprint the starters' pins are built at (tools/export_core_structures.gd): a 6 by 4 m
+## rectangle about the origin, or for a round row its default regular polygon.
+static func pin_plan(row: Dictionary) -> PackedVector2Array:
+	if is_round(row):
+		return default_plan(row)
+	return PackedVector2Array([Vector2(-3, -2), Vector2(3, -2), Vector2(3, 2), Vector2(-3, 2)])
 
 
 ## The rectangle `size` (x along the front edge, y deep) about `centre`, turned `yaw` radians,
@@ -80,6 +144,14 @@ static func clamp_size(size: Vector2, row: Dictionary) -> Vector2:
 	var low := float(row.get("min_side_m", LibraryStructures.DEFAULT_MIN_SIDE_M))
 	var high := float(row.get("max_side_m", LibraryStructures.DEFAULT_MAX_SIDE_M))
 	var area := float(row.get("max_area_m2", LibraryStructures.DEFAULT_MAX_AREA_M2))
+	if is_round(row):
+		# One diameter, whichever side was asked for; the polygon's own area is under its limit.
+		var sides := sides_of(row)
+		var diameter := clampf(maxf(size.x, size.y), low, high)
+		var polygon := 0.5 * sides * pow(diameter * 0.5, 2.0) * sin(TAU / sides)
+		if polygon > area:
+			diameter = maxf(diameter * sqrt(area / polygon), low)
+		return Vector2(diameter, diameter)
 	var out := Vector2(clampf(size.x, low, high), clampf(size.y, low, high))
 	if out.x * out.y > area:
 		var shrink := sqrt(area / (out.x * out.y))
@@ -177,11 +249,13 @@ static func lot_problem(
 ## "plan", "moved" (it is not `want`), "problem" ("" when a legal spot was found, else the
 ## reason `want` itself fails)}. Searches rings of RING_STEP_M out to REACH_M, a dozen spots on
 ## each, on the SNAP_M grid, and takes the first ring's closest legal spot.
-static func nearest_legal(doc: MapDocument, want: Vector2, size: Vector2, yaw: float) -> Dictionary:
+static func nearest_legal(
+	doc: MapDocument, want: Vector2, size: Vector2, yaw: float, sides: int = 0
+) -> Dictionary:
 	# Everything is asked of the snapped centre, so a hover and the click after it give one answer.
 	var centre := snapped_centre(want)
 	want = centre
-	var plan := rect_plan(centre, size, yaw)
+	var plan := lot_plan(centre, size, yaw, sides)
 	var area := Rect2(want, Vector2.ZERO).grow(REACH_M + maxf(size.x, size.y))
 	var courses := WaterGeometry.river_courses(doc, area) if not doc.water_bodies.is_empty() else {}
 	var problem := lot_problem(doc, plan, courses)
@@ -194,13 +268,16 @@ static func nearest_legal(doc: MapDocument, want: Vector2, size: Vector2, yaw: f
 		var spots := maxi(8, ceili(TAU * ring / RING_STEP_M))
 		for k in spots:
 			var at := snapped_centre(want + Vector2.from_angle(TAU * k / spots) * ring)
-			var candidate := rect_plan(at, size, yaw)
+			var candidate := lot_plan(at, size, yaw, sides)
 			if at.distance_to(want) < best_distance and lot_problem(doc, candidate, courses) == "":
 				best = at
 				best_distance = at.distance_to(want)
 		if best != Vector2.INF:
 			return {
-				"centre": best, "plan": rect_plan(best, size, yaw), "moved": true, "problem": ""
+				"centre": best,
+				"plan": lot_plan(best, size, yaw, sides),
+				"moved": true,
+				"problem": ""
 			}
 		ring += RING_STEP_M
 	return {"centre": centre, "plan": plan, "moved": false, "problem": problem}

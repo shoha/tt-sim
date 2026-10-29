@@ -13,6 +13,8 @@ extends RefCounted
 ##                     every structure and lays this one alone at the map's centre.
 ##   styles            (architecture styles card 1) lays the ten style starters in two rows of five
 ##                     (STYLE_LOTS), then waits for their builds.
+##   rounds            (styles integration card) lays the five round starters as a hamlet
+##                     (ROUND_LOTS), then waits for their builds. tile also takes {sides}.
 
 const STYLE_LOTS: Array = [
 	# recipe, centre x, centre z, width, depth, yaw degrees, seed
@@ -26,6 +28,18 @@ const STYLE_LOTS: Array = [
 	["core:turf_longhouse", 0.0, 14.0, 9.0, 4.0, 0.0, 58],
 	["core:brick_terrace", 15.0, 14.0, 5.0, 7.0, 0.0, 59],
 	["core:barn", 30.0, 14.0, 9.0, 6.0, 0.0, 60],
+]
+
+const ROUND_LOTS: Array = [
+	# recipe, centre x, centre z, diameter, yaw degrees, seed (the hero roundhouse at the origin is
+	# the one the selection captures edit)
+	["core:roundhouse", 0.0, 0.0, 7.2, 0.0, 71],
+	["core:roundhouse", -13.0, -7.0, 8.0, 20.0, 72],
+	["core:round_hut", 12.0, -6.0, 5.6, -10.0, 73],
+	["core:round_hut", -10.0, 10.0, 6.0, 30.0, 74],
+	["core:watchtower", 17.0, 7.0, 4.8, 15.0, 75],
+	["core:tower_hex", -19.0, 3.0, 5.2, 0.0, 76],
+	["core:dome_hall", 6.0, 15.0, 9.2, -15.0, 77],
 ]
 
 const BASIC_LOTS: Array = [
@@ -43,6 +57,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _town(base)
 		"styles":
 			return _styles(base)
+		"rounds":
+			return _rounds(base)
 		"street":
 			return _street(base, step)
 		"flush":
@@ -169,6 +185,16 @@ static func _tile(base: Node, step: Dictionary) -> String:
 		float(step.get("yaw", 0.0)),
 		Vector2.ZERO
 	)
+	var sides := int(step.get("sides", 0))
+	if sides > 0:
+		# A round structure: `width` is its diameter.
+		var diameter := float(step.get("width", 6.0))
+		plan = StructurePlacement.lot_plan(
+			Vector2.ZERO,
+			Vector2(diameter, diameter),
+			deg_to_rad(float(step.get("yaw", 0.0))),
+			sides
+		)
 	var structure := Structure.make(0, String(step.get("ref", "")), plan, int(step.get("seed", 5)))
 	var id := editor.structures.add(structure)
 	var nodes := _nodes(base)
@@ -271,6 +297,32 @@ static func _styles(base: Node) -> String:
 	for lot: Array in STYLE_LOTS:
 		var plan := _rect(float(lot[3]), float(lot[4]), float(lot[5]), Vector2(lot[1], lot[2]))
 		var id := editor.structures.add(Structure.make(0, String(lot[0]), plan, int(lot[6])))
+		lines.append(
+			"%s -> %d%s" % [lot[0], id, "" if id >= 0 else " " + editor.structures.last_refusal]
+		)
+	var nodes := _nodes(base)
+	if nodes != null:
+		nodes.flush()
+	return "laid: " + "; ".join(lines)
+
+
+## The round structures (styles integration card): the five round starters as a small hamlet
+## (ROUND_LOTS), laid through the editor with the polygon plans the Structure tool makes.
+static func _rounds(base: Node) -> String:
+	var editor := _editor(base)
+	if editor == null:
+		return "no authoring editor"
+	var lines := PackedStringArray()
+	for lot: Array in ROUND_LOTS:
+		var row := LibraryStructureStore.structure(String(lot[0]))
+		var diameter := float(lot[3])
+		var plan := StructurePlacement.lot_plan(
+			Vector2(lot[1], lot[2]),
+			Vector2(diameter, diameter),
+			deg_to_rad(float(lot[4])),
+			StructurePlacement.sides_of(row)
+		)
+		var id := editor.structures.add(Structure.make(0, String(lot[0]), plan, int(lot[5])))
 		lines.append(
 			"%s -> %d%s" % [lot[0], id, "" if id >= 0 else " " + editor.structures.last_refusal]
 		)

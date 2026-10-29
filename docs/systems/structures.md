@@ -305,6 +305,54 @@ hip and flat roofs.
   family as before; a culture filter is not built. Render job `structures_styles` lays the ten among
   meadow plants (probe action `styles`).
 
+### Round plans (styles integration, 2026-10-28)
+
+Five core structures are regular polygons, built by procgen's `ProcgenRecipesRound` (`STARTERS`
+entries with a `round` table: a `kind` or `make` options, and `sides` / `radius` / `radius_min` /
+`radius_max` over the kind's `info`): `roundhouse` (thatched, 8 sides, family `roundhouse`),
+`round_hut` (timber, 12 sides, `roundhouse`), `watchtower` (square, pyramid roof, family `tower`),
+`tower_hex` (6 sides, cone roof, `tower`), `dome_hall` (10 sides, stone, dome, family `hall`).
+Adding one is one table entry; the exporter writes the rest.
+
+- **Data.** The index entry has `plans: ["round"]` (`LibraryContracts.STRUCTURE_PLANS`; plantgen's
+  validator holds a copy and warns "plans holds a bad entry" until it adds the kind), the tags
+  `round`, `regional` and `sides:<n>` (the polygon's sides: there is no `sides` key because plantgen's
+  validator refuses an unknown index key), and sizes that are DIAMETERS: `default_size_m` is
+  `[2 r, 2 r]`, `min_side_m` and `max_side_m` the least and largest diameter (twice the kind's
+  `radius_min` and `radius_max`), `max_area_m2` the square of the largest. A footprint is
+  `StructurePlacement.round_plan(centre, radius, yaw, sides)`: `ProcgenPlan.regular_polygon` with the
+  front (edge 0, the door) facing +Z at turn 0, so every plan is a valid polygon by construction
+  (the sizes keep every side at least 0.5 m).
+- **Pins.** A round starter is pinned at its own default polygon, not the 6 by 4 m rectangle
+  (`StructurePlacement.pin_plan(row)`; `tests/fixtures/structure_digests.txt` and `pins.txt` hold the
+  same digest and triangle count): roundhouse 1234 triangles, hut 864, watchtower 528, hex tower 724,
+  dome hall 1302.
+- **The tool.** The ghost is the polygon (`StructurePlacement.lot_plan` with `sides_of(row)`); a click
+  lays it at the nearest legal spot, a press-and-drag draws it from its middle outward (the press is
+  the centre, the pointer the rim; the radius clamps to the row), the bracket keys scale it, Q and E
+  turn it. `clamp_size` returns one square diameter for a round row. The selection's handles are the
+  polygon's corners and side tabs, and a drag of either is a UNIFORM SCALE about the middle
+  (`StructureEdit._round_scaled`): the radius is the pointer's distance (a corner), or the pointer's
+  distance along the side's normal (a tab), snapped to 0.5 m on the diameter and clamped to the row,
+  keeping the turn and the middle; Shift changes nothing, the shape is fixed and always a valid
+  polygon. A click on a side tab still makes that side the front (the door), a body drag moves it,
+  Q and E turn it. `fits_row` and `refit` read the circumradius for a round row.
+- **Streets.** A street's lots are rectangles, so `StreetSplit.candidates` never offers a row tagged
+  `round`, and a `regional` row only for a street of its region (below).
+
+### Regions in a street split (styles integration, 2026-10-28)
+
+`StreetSplit.region_of(doc, wall)` names a street's region tags: the palette biome under its middle
+(`BIOME_REGIONS`: savanna `desert`, `mediterranean`; rocky badlands `desert`; alpine meadow `alpine`;
+boreal taiga `nordic`, `alpine`; birch woodland `nordic`; wetland `dutch`), else, when the biome names
+none, its species' (`SPECIES_REGIONS`: terrace `english`, `dutch`; guild houses `dutch`; village and
+cottages `english`; mixed none, so a default street is what it was). A `regional` row whose tags hold
+a region tag joins the candidates. A biome region in `EXCLUSIVE_REGIONS` (`desert`, `mediterranean`,
+`alpine`, `nordic`) REPLACES the generic set (a savanna street is adobe houses and stucco villas); a
+flavour region (`english`, `dutch`) joins it and a joining row scores `W_REGION` (4) more, so an
+English village gets thatched cottages and slate houses among its stone houses. All of it is a function of
+the document and the street, so a split stays deterministic.
+
 ## Dressing
 
 Probe B (2026-10-28, branch `probe-b`): a building is settled into its place by a yard,

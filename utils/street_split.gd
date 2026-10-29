@@ -40,8 +40,39 @@ const W_NOT_TOWNHOUSE := -4
 ## The tag of a structure that belongs to one region's architecture (a Mediterranean villa, a turf
 ## longhouse): the street rows' generic lots (stone or timber, gable, hip or flat) would match them
 ## by their materials and roof and turn an English village into a mix of cultures, so a split does
-## not pick a row with it. The Building tool still offers them.
+## not pick a row with it, unless the street is of that region (see BIOME_REGIONS below). The
+## Building tool offers them all.
 const REGIONAL_TAG := "regional"
+## The tag of a round structure (a regular polygon): a street's lots are rectangles, so a split
+## never picks one.
+const ROUND_TAG := "round"
+## A regional row whose tags hold one of the street's region tags is a candidate for it. Where the
+## region is a place of its own (EXCLUSIVE_REGIONS: a desert, the alps), its rows replace the
+## generic ones, so a desert street is adobe, not stone houses; where it is a flavour on the
+## generic set (an English village, a Dutch canal street), they join it and score W_REGION for the
+## tag.
+const W_REGION := 4
+const EXCLUSIVE_REGIONS: Array[String] = ["desert", "mediterranean", "alpine", "nordic"]
+## The region tags of the palette biome under a street (its midpoint's), table-driven: a biome
+## that is no region of its own (a meadow, a temperate forest) has none. A row names its region by
+## its tags (the culture tags of procgen's building styles).
+const BIOME_REGIONS: Dictionary = {
+	"savanna": ["desert", "mediterranean"],
+	"rocky_badlands": ["desert"],
+	"alpine_meadow": ["alpine"],
+	"boreal_taiga": ["nordic", "alpine"],
+	"birch_woodland": ["nordic"],
+	"wetland_riparian": ["dutch"],
+}
+## The region tags a street's species (Wall.preset, ProcgenRow.PRESET_*) suggests when its biome
+## names none: an English village keeps its thatch and slate, a guild street its canal houses. The
+## mixed species (0) suggests none, so a default street is what it was.
+const SPECIES_REGIONS: Dictionary = {
+	1: ["english", "dutch"],
+	2: ["dutch"],
+	3: ["english"],
+	4: ["english"],
+}
 ## A best score under this means no structure resembles the lot: a seeded pick from the table.
 const MIN_MATCH := 4
 ## Other tags that satisfy a facade style: a cottage lot may be built as any plain house.
@@ -60,13 +91,14 @@ static func plan(doc: MapDocument, wall: Wall, scale: float) -> Dictionary:
 	var out := {"structures": structures, "lots": 0, "skipped": 0}
 	if not wall.is_row():
 		return out
-	var rows := candidates()
+	var region := region_of(doc, wall)
+	var rows := candidates(region)
 	if rows.is_empty():
 		return out
 	var lots := WallGeometry.row_lots(doc, wall)
 	out["lots"] = lots.size()
 	for lot in lots:
-		var row := match_row(lot, rows)
+		var row := match_row(lot, rows, region)
 		var recipe := StructureRecipes.document(String(row["ref"]))
 		var footprint := footprint_of(lot, StructureBrush.scaled_row(row, scale))
 		var middle := Vector2.ZERO
@@ -88,29 +120,75 @@ static func plan(doc: MapDocument, wall: Wall, scale: float) -> Dictionary:
 	return out
 
 
+## The region tags of the street `wall` (BIOME_REGIONS of the palette biome at its middle, else
+## its wall style, else the species' SPECIES_REGIONS). Deterministic: the document and the wall
+## decide, nothing else.
+static func region_of(doc: MapDocument, wall: Wall) -> Array[String]:
+	var middle := Vector2.ZERO
+	for p in wall.points:
+		middle += p
+	middle /= maxf(wall.points.size(), 1)
+	var biome := CrossingPlacement.style_at(doc, middle)
+	if biome == "":
+		biome = wall.style
+	return region_tags(biome, wall.preset)
+
+
+## The region tags of a street in palette biome `biome` of species `preset`. Pure.
+static func region_tags(biome: String, preset: int) -> Array[String]:
+	var out: Array[String] = []
+	var named: Variant = BIOME_REGIONS.get(biome, SPECIES_REGIONS.get(preset, []))
+	for tag: Variant in named as Array:
+		out.append(String(tag))
+	return out
+
+
 ## The library rows a split picks from: the core library's structures without the regional ones
-## (REGIONAL_TAG; all of them when nothing else is left), else every served one.
-static func candidates() -> Array[Dictionary]:
+## (REGIONAL_TAG), except those whose tags hold one of the street's `region` tags, and without the
+## round ones (ROUND_TAG); all of them when nothing else is left; else every served one.
+static func candidates(region: Array[String] = []) -> Array[Dictionary]:
 	StructureRecipes.ensure_served()
 	var rows := LibraryStructureStore.structures(StructureRecipes.CORE_LIBRARY)
 	if rows.is_empty():
 		return LibraryStructureStore.structures()
 	var generic: Array[Dictionary] = []
+	var exclusive: Array[Dictionary] = []
+	var exclusive_tags: Array[String] = []
+	for tag in region:
+		if tag in EXCLUSIVE_REGIONS:
+			exclusive_tags.append(tag)
 	for row in rows:
-		if not REGIONAL_TAG in (row.get("tags", []) as Array):
+		var tags: Array = row.get("tags", [])
+		if ROUND_TAG in tags:
+			continue
+		if not REGIONAL_TAG in tags or _in_region(tags, region):
 			generic.append(row)
+		if REGIONAL_TAG in tags and _in_region(tags, exclusive_tags):
+			exclusive.append(row)
+	if not exclusive.is_empty():
+		return exclusive
 	return generic if not generic.is_empty() else rows
+
+
+## Whether `tags` hold one of the street's `region` tags.
+static func _in_region(tags: Array, region: Array[String]) -> bool:
+	for tag in region:
+		if tag in tags:
+			return true
+	return false
 
 
 ## The row of `rows` that looks most like `lot` (one of ProcgenRow.plan's: "walls", "roof",
 ## "style", "trim", "chimneys", "seed"): the best score (see score()), the tie broken by the lot's
 ## seed. Under MIN_MATCH nothing resembles the lot, and the pick is the seed's from the whole table.
-## `rows` must not be empty. Pure.
-static func match_row(lot: Dictionary, rows: Array[Dictionary]) -> Dictionary:
+## `rows` must not be empty. `region` (region_of) favours the rows of the street's region. Pure.
+static func match_row(
+	lot: Dictionary, rows: Array[Dictionary], region: Array[String] = []
+) -> Dictionary:
 	var best := -INF
 	var tied: Array[Dictionary] = []
 	for row in rows:
-		var value := score(lot, row)
+		var value := score(lot, row, region)
 		if value > best:
 			best = value
 			tied = [row]
@@ -125,11 +203,11 @@ static func match_row(lot: Dictionary, rows: Array[Dictionary]) -> Dictionary:
 ## the row's family or tag; a plain lot or a cottage takes a "house"), its walls (stone or
 ## timber; a textured lot is stone), its roof, and the chimney, shutters, quoins and trim the lot
 ## was dressed with. A row that is a townhouse for a lot that is not takes a penalty. Pure.
-static func score(lot: Dictionary, row: Dictionary) -> int:
+static func score(lot: Dictionary, row: Dictionary, region: Array[String] = []) -> int:
 	var tags: Array = row.get("tags", [])
 	var family := String(row.get("family", ""))
 	var style := String(lot.get("style", "none"))
-	var value := 0
+	var value := W_REGION if REGIONAL_TAG in tags and _in_region(tags, region) else 0
 	if style != "none" and (style in tags or family == style):
 		value += W_STYLE
 	elif STYLE_ALIASES.has(style) and String(STYLE_ALIASES[style]) in tags:

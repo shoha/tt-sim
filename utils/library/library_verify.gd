@@ -67,6 +67,8 @@ static func check_structure(item: String) -> Dictionary:
 			Vector2(-half.x, half.y)
 		]
 	)
+	if StructurePlacement.is_round(row):
+		plan = StructurePlacement.default_plan(row)
 	var started := Time.get_ticks_usec()
 	var parts := StructureGeometry.build_one(doc, Structure.make(1, ref, plan, STRUCTURE_SEED))
 	out["msec"] = float(Time.get_ticks_usec() - started) / 1000.0

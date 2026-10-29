@@ -223,6 +223,8 @@ static func _attempt(
 	plan: PackedVector2Array, handle: Dictionary, target: Vector2, row: Dictionary, single: bool
 ) -> Dictionary:
 	var index: int = handle["index"]
+	if StructurePlacement.is_round(row):
+		return _round_scaled(plan, handle, target, row)
 	if handle["kind"] == EDGE:
 		# The pointer holds the tab, which sits EDGE_OUT_M outside its side.
 		var normal := ProcgenPlan.outward(plan, index)
@@ -236,6 +238,48 @@ static func _attempt(
 	if is_rect(plan) and not single:
 		return _rect_corner(plan, index, target, row)
 	return {"plan": _corner_moved(plan, index, target, single), "clamped": false}
+
+
+## The circle of a regular polygon `plan`: {"centre", "radius" (the circumradius), "yaw" (the turn
+## that StructurePlacement.round_plan was given: the front, edge 0, faces +Z at 0)}.
+static func round_of(plan: PackedVector2Array) -> Dictionary:
+	var centre := Vector2.ZERO
+	for p in plan:
+		centre += p
+	centre /= maxf(plan.size(), 1)
+	var radius := 0.0
+	for p in plan:
+		radius += p.distance_to(centre)
+	radius /= maxf(plan.size(), 1)
+	var yaw := 0.0
+	if plan.size() >= 3 and ProcgenPlan.edge_length(plan, 0) > 1e-6:
+		yaw = wrapf(ProcgenPlan.outward(plan, 0).angle() - PI * 0.5, -PI, PI)
+	return {"centre": centre, "radius": radius, "yaw": yaw}
+
+
+## A round plan scaled by a handle drag: a corner or a side tab both set the radius from the
+## pointer's distance to the middle (a side tab by its own distance, along its normal), so the
+## polygon stays regular and keeps its turn and its middle; Shift does not break it. The diameter
+## snaps to SIZE_SNAP_M and clamps to the row (`clamped` says the pointer asks for more).
+static func _round_scaled(
+	plan: PackedVector2Array, handle: Dictionary, target: Vector2, row: Dictionary
+) -> Dictionary:
+	var around := round_of(plan)
+	var centre: Vector2 = around["centre"]
+	var radius := 0.0
+	if handle["kind"] == EDGE:
+		var normal := ProcgenPlan.outward(plan, int(handle["index"]))
+		var apothem := maxf((target - normal * EDGE_OUT_M - centre).dot(normal), 0.0)
+		radius = apothem / cos(PI / plan.size())
+	else:
+		radius = target.distance_to(centre)
+	var wanted := snappedf(radius * 2.0, SIZE_SNAP_M)
+	var diameter := StructurePlacement.clamp_size(Vector2(wanted, wanted), row).x
+	return {
+		"plan":
+		StructurePlacement.round_plan(centre, diameter * 0.5, float(around["yaw"]), plan.size()),
+		"clamped": not is_equal_approx(diameter, wanted)
+	}
 
 
 ## A rectangle with corner `index` dragged to `target`: the opposite corner stays, the sides
@@ -366,6 +410,13 @@ static func fits_row(plan: PackedVector2Array, row: Dictionary) -> bool:
 	var low := float(row.get("min_side_m", LibraryStructures.DEFAULT_MIN_SIDE_M))
 	var high := float(row.get("max_side_m", LibraryStructures.DEFAULT_MAX_SIDE_M))
 	var area := float(row.get("max_area_m2", LibraryStructures.DEFAULT_MAX_AREA_M2))
+	if StructurePlacement.is_round(row):
+		var diameter: float = round_of(plan)["radius"] * 2.0
+		return (
+			diameter >= low - 0.02
+			and diameter <= high + 0.02
+			and absf(ProcgenPlan.area(plan)) <= area + 0.05
+		)
 	var box := extent_of(plan)
 	return (
 		box.x >= low - 0.01
@@ -439,6 +490,15 @@ static func beside(doc: MapDocument, source: Structure) -> PackedVector2Array:
 ## `plan` with its sides brought back inside `row`'s range about its middle (a rectangle; any
 ## other plan is returned as it is). Used when a structure takes another recipe's limits.
 static func refit(plan: PackedVector2Array, row: Dictionary) -> PackedVector2Array:
+	if StructurePlacement.is_round(row) and plan.size() >= 3:
+		var around := round_of(plan)
+		var diameter := float(around["radius"]) * 2.0
+		var fitted_round := StructurePlacement.clamp_size(Vector2(diameter, diameter), row).x
+		if is_equal_approx(fitted_round, diameter):
+			return plan
+		return StructurePlacement.round_plan(
+			around["centre"], fitted_round * 0.5, float(around["yaw"]), plan.size()
+		)
 	if not is_rect(plan):
 		return plan
 	var size := extent_of(plan)

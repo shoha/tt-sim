@@ -167,6 +167,8 @@ func test_a_terrace_becomes_townhouses_and_a_village_cottages() -> void:
 					local.begins_with("cottage")
 					or local.begins_with("house")
 					or local == "stone_house"
+					# An English village's region (StreetSplit.SPECIES_REGIONS) joins its thatch and slate.
+					or local in ["thatched_cottage", "slate_house", "brick_terrace"]
 				)
 			):
 				matching += 1

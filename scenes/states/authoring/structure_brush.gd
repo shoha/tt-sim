@@ -246,7 +246,9 @@ func default_size(editor: AuthoringEditor) -> Vector2:
 func ghost_plan() -> PackedVector2Array:
 	if ghost_centre == Vector2.INF or ghost_size == Vector2.ZERO:
 		return PackedVector2Array()
-	return StructurePlacement.rect_plan(ghost_centre, ghost_size, yaw)
+	return StructurePlacement.lot_plan(
+		ghost_centre, ghost_size, yaw, StructurePlacement.sides_of(row())
+	)
 
 
 ## Starts a lot at world point `hit`.
@@ -301,9 +303,10 @@ func track(editor: AuthoringEditor, hit: Vector3, delta: float) -> void:
 		return
 	ghost_size = default_size(editor)
 	var want := editor.to_map_xz(hit)
-	var key := [StructurePlacement.snapped_centre(want), ghost_size, yaw, _signature(editor)]
+	var sides := StructurePlacement.sides_of(row())
+	var key := [StructurePlacement.snapped_centre(want), ghost_size, yaw, _signature(editor), sides]
 	if _wanted.get("key") != key:
-		var spot := StructurePlacement.nearest_legal(editor.document, want, ghost_size, yaw)
+		var spot := StructurePlacement.nearest_legal(editor.document, want, ghost_size, yaw, sides)
 		_wanted = {"key": key, "spot": spot}
 	var found: Dictionary = _wanted["spot"]
 	target_centre = found["centre"]
@@ -347,12 +350,18 @@ func _plan(editor: AuthoringEditor) -> void:
 	var sized := scaled_row(found, scale)
 	var size := default_size(editor)
 	var centre := a
+	var sides := StructurePlacement.sides_of(found)
 	if a.distance_to(b) * scale >= DRAG_MIN_M:
-		var corners := StructurePlacement.corner_plan(a, b, yaw, sized)
-		size = corners["size"]
-		centre = corners["centre"]
+		if sides > 0:
+			# A round lot is drawn from its middle: the press is the centre, the pointer the rim.
+			var diameter := a.distance_to(b) * 2.0
+			size = StructurePlacement.clamp_size(Vector2(diameter, diameter), sized)
+		else:
+			var corners := StructurePlacement.corner_plan(a, b, yaw, sized)
+			size = corners["size"]
+			centre = corners["centre"]
 	ghost_size = size
-	var spot := StructurePlacement.nearest_legal(editor.document, centre, size, yaw)
+	var spot := StructurePlacement.nearest_legal(editor.document, centre, size, yaw, sides)
 	target_centre = spot["centre"]
 	eased = bool(spot["moved"])
 	problem = String(spot["problem"])

@@ -790,6 +790,178 @@
 			"textured": false,
 			"thumb": "thumbnails/structures/barn.jpg",
 			"variant": "Barn"
+		},
+		{
+			"default_size_m": [
+				7.2,
+				7.2
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"overhang",
+				"fringe",
+				"finial",
+				"textured",
+				"wonk"
+			],
+			"family": "roundhouse",
+			"file": "structures/roundhouse.structure.json",
+			"id": "roundhouse",
+			"max_area_m2": 144.0,
+			"max_side_m": 12.0,
+			"min_side_m": 5.2,
+			"name": "Thatched roundhouse",
+			"plans": [
+				"round"
+			],
+			"tags": [
+				"house",
+				"stone",
+				"thatch",
+				"roundhouse",
+				"round",
+				"sides:8",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/roundhouse.jpg",
+			"variant": "Thatched"
+		},
+		{
+			"default_size_m": [
+				5.6,
+				5.6
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"overhang"
+			],
+			"family": "roundhouse",
+			"file": "structures/round_hut.structure.json",
+			"id": "round_hut",
+			"max_area_m2": 64.0,
+			"max_side_m": 8.0,
+			"min_side_m": 4.0,
+			"name": "Round timber hut",
+			"plans": [
+				"round"
+			],
+			"tags": [
+				"house",
+				"timber",
+				"hut",
+				"roundhouse",
+				"round",
+				"sides:12",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/round_hut.jpg",
+			"variant": "Timber hut"
+		},
+		{
+			"default_size_m": [
+				4.8,
+				4.8
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"overhang",
+				"textured"
+			],
+			"family": "tower",
+			"file": "structures/watchtower.structure.json",
+			"id": "watchtower",
+			"max_area_m2": 81.0,
+			"max_side_m": 9.0,
+			"min_side_m": 3.6,
+			"name": "Stone watchtower",
+			"plans": [
+				"round"
+			],
+			"tags": [
+				"tower",
+				"stone",
+				"watchtower",
+				"round",
+				"sides:4",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/watchtower.jpg",
+			"variant": "Square, pyramid roof"
+		},
+		{
+			"default_size_m": [
+				5.2,
+				5.2
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"overhang",
+				"textured",
+				"finial"
+			],
+			"family": "tower",
+			"file": "structures/tower_hex.structure.json",
+			"id": "tower_hex",
+			"max_area_m2": 81.0,
+			"max_side_m": 9.0,
+			"min_side_m": 4.0,
+			"name": "Hex tower",
+			"plans": [
+				"round"
+			],
+			"tags": [
+				"tower",
+				"stone",
+				"cone",
+				"round",
+				"sides:6",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/tower_hex.jpg",
+			"variant": "Hexagonal, cone roof"
+		},
+		{
+			"default_size_m": [
+				9.2,
+				9.2
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"overhang",
+				"textured"
+			],
+			"family": "hall",
+			"file": "structures/dome_hall.structure.json",
+			"id": "dome_hall",
+			"max_area_m2": 196.0,
+			"max_side_m": 14.0,
+			"min_side_m": 6.8,
+			"name": "Domed hall",
+			"plans": [
+				"round"
+			],
+			"tags": [
+				"hall",
+				"stone",
+				"dome",
+				"round",
+				"sides:10",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/dome_hall.jpg",
+			"variant": "Stone, dome"
 		}
 	]
 }

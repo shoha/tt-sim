@@ -531,10 +531,11 @@ structures/index.json> [--out <folder to write into>] [--serve 1] [--only a,b] [
 `--library <tt-sim>/libraries/core --out <core-library>`, then copy the tiles to
 `libraries/core/thumbnails/structures/`. `--serve 1` lays a not yet installed library over the game first.
 
-Core's starter set is data in the `core-library` repo (`structures/`: twenty-three recipes (five at S3, eight added
+Core's starter set is data in the `core-library` repo (`structures/`: twenty-eight recipes (five at S3, eight added
 2026-10-28: timber, chimneyed, terrace-end, hip and flat variants, ten added 2026-10-29 from procgen's
 building styles: `STARTERS` entries with a `bundle` and a `seed` instead of a `recipe`, see
-`structures.md` "Styles"), the index and
+`structures.md` "Styles", and five round plans on 2026-10-28, `STARTERS` entries with a `round`
+table and `plans: ["round"]`, see `structures.md` "Round plans"), the index and
 `pins.txt`; the tiles in `thumbnails/structures/`), made by `tools/export_core_structures.gd` from
 procgen's `ProcgenRecipes` (its `STARTERS` table says per structure how `ProcgenRecipes.building` is
 called, every recipe glazed with the `ridge` choice; `--check 1` shows a drift without writing; without it, it re-pins on

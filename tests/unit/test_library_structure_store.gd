@@ -362,12 +362,16 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 			"cottage",
 			"cottage_chimneyed",
 			"cottage_hip",
+			"dome_hall",
 			"house_flat",
 			"house_hip",
 			"log_cabin",
+			"round_hut",
+			"roundhouse",
 			"slate_house",
 			"stone_house",
 			"thatched_cottage",
+			"tower_hex",
 			"townhouse",
 			"townhouse_chimneyed",
 			"townhouse_end",
@@ -376,7 +380,8 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 			"townhouse_timber",
 			"townhouse_trimmed",
 			"turf_longhouse",
-			"villa_stucco"
+			"villa_stucco",
+			"watchtower"
 		]
 	)
 	var pins := (
@@ -385,12 +390,12 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 		. strip_edges()
 		. split("\n")
 	)
-	assert_eq(pins.size(), 23)
+	assert_eq(pins.size(), 28)
 	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
-	var plan := PackedVector2Array([Vector2(-3, -2), Vector2(3, -2), Vector2(3, 2), Vector2(-3, 2)])
 	var moved := PackedStringArray()
 	for line in pins:
 		var cells := line.split(" ")
+		var plan := StructurePlacement.pin_plan(LibraryStructureStore.structure("core:" + cells[0]))
 		var parts := StructureGeometry.build_one(
 			doc, Structure.make(1, "core:" + cells[0], plan, 5)
 		)
