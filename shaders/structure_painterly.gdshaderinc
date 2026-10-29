@@ -104,6 +104,22 @@ vec3 s_break(float n, float amount, float value) {
 	return mix(vec3(1.0), hue * (1.0 - 0.5 * value + value * t), amount * break_amount);
 }
 
+// How mossy a wall vertex is, 0..1, from its colour alone: a ruin's moss is a multiplied green
+// (procgen ProcgenRuin.MOSS_TINT) that StructurePaint keeps in the vertex colour, so green over the
+// larger of red and blue says it (a cream or sage lean sits near 0 or just under the threshold).
+float s_moss_of(vec3 vertex_color) {
+	return smoothstep(0.015, 0.2, vertex_color.g - max(vertex_color.r, vertex_color.b));
+}
+
+// `painted` pulled toward a bright painterly moss green where `moss` is, keeping its light and dark
+// (the same luminance trick as the cream of a masonry wall, which would otherwise flatten the tint
+// back to stone). `amount` is how far at full moss.
+vec3 s_mossy(vec3 painted, float moss, float amount) {
+	float luma = dot(painted, vec3(0.299, 0.587, 0.114));
+	vec3 green = vec3(0.58, 1.28, 0.34) * luma * (1.0 + 0.28 * (1.0 - luma));
+	return mix(painted, green, clamp(moss * amount, 0.0, 1.0));
+}
+
 // The foliage's sun-ward albedo ramp: `normal` is the view-space normal, `inv_view` INV_VIEW_MATRIX.
 vec3 s_ramp(vec3 painted, vec3 normal, mat4 inv_view) {
 	vec3 ramp_dir = normalize(foliage_sun.xyz + vec3(0.0, 0.5, 0.0));

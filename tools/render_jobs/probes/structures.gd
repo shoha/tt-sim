@@ -13,6 +13,8 @@ extends RefCounted
 ##                     every structure and lays this one alone at the map's centre.
 ##   styles            (architecture styles card 1) lays the ten style starters in two rows of five
 ##                     (STYLE_LOTS), then waits for their builds.
+##   styles2           (styles integration 2) lays tudor, pueblo, two adobe kits, a round hut and the
+##                     five ruins (STYLES2_LOTS), then waits for their builds.
 ##   rounds            (styles integration card) lays the five round starters as a hamlet
 ##                     (ROUND_LOTS), then waits for their builds. tile also takes {sides}.
 
@@ -28,6 +30,20 @@ const STYLE_LOTS: Array = [
 	["core:turf_longhouse", 0.0, 14.0, 9.0, 4.0, 0.0, 58],
 	["core:brick_terrace", 15.0, 14.0, 5.0, 7.0, 0.0, 59],
 	["core:barn", 30.0, 14.0, 9.0, 6.0, 0.0, 60],
+]
+
+const STYLES2_LOTS: Array = [
+	# recipe, centre x, centre z, width, depth, yaw degrees, seed (a round row's width is its diameter)
+	["core:tudor_townhouse", -30.0, -14.0, 5.0, 7.0, 0.0, 81],
+	["core:pueblo", -15.0, -14.0, 8.0, 6.0, 0.0, 82],
+	["core:adobe_parapet", 0.0, -14.0, 6.0, 5.0, 0.0, 83],
+	["core:adobe_rounded", 15.0, -14.0, 6.0, 5.0, 0.0, 84],
+	["core:round_hut", 30.0, -14.0, 5.6, 5.6, 0.0, 85],
+	["core:ruin_cottage", -30.0, 14.0, 6.0, 4.5, 0.0, 86],
+	["core:ruin_chapel", -15.0, 14.0, 9.0, 5.5, 0.0, 92],
+	["core:ruin_townhouse", 0.0, 14.0, 5.0, 8.0, 0.0, 88],
+	["core:ruin_tower", 15.0, 14.0, 5.2, 5.2, 0.0, 89],
+	["core:ruin_barn", 30.0, 14.0, 9.0, 6.0, 0.0, 90],
 ]
 
 const ROUND_LOTS: Array = [
@@ -59,6 +75,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _styles(base)
 		"rounds":
 			return _rounds(base)
+		"styles2":
+			return _styles2(base, step)
 		"street":
 			return _street(base, step)
 		"flush":
@@ -297,6 +315,35 @@ static func _styles(base: Node) -> String:
 	for lot: Array in STYLE_LOTS:
 		var plan := _rect(float(lot[3]), float(lot[4]), float(lot[5]), Vector2(lot[1], lot[2]))
 		var id := editor.structures.add(Structure.make(0, String(lot[0]), plan, int(lot[6])))
+		lines.append(
+			"%s -> %d%s" % [lot[0], id, "" if id >= 0 else " " + editor.structures.last_refusal]
+		)
+	var nodes := _nodes(base)
+	if nodes != null:
+		nodes.flush()
+	return "laid: " + "; ".join(lines)
+
+
+## The stacked, kit and ruin starters of the second styles integration (STYLES2_LOTS): two rows of
+## five, a round row laid as its polygon. A step's `lots` (same rows, an optional eighth entry the
+## recipe parameters) replaces the table, so a job can lay a comparison.
+static func _styles2(base: Node, step: Dictionary) -> String:
+	var editor := _editor(base)
+	if editor == null:
+		return "no authoring editor"
+	var lines := PackedStringArray()
+	for lot: Array in step.get("lots", STYLES2_LOTS) as Array:
+		var row := LibraryStructureStore.structure(String(lot[0]))
+		var plan := StructurePlacement.lot_plan(
+			Vector2(lot[1], lot[2]),
+			Vector2(float(lot[3]), float(lot[4])),
+			deg_to_rad(float(lot[5])),
+			StructurePlacement.sides_of(row)
+		)
+		var record := Structure.make(0, String(lot[0]), plan, int(lot[6]))
+		if lot.size() > 7:
+			record.params = lot[7] as Dictionary
+		var id := editor.structures.add(record)
 		lines.append(
 			"%s -> %d%s" % [lot[0], id, "" if id >= 0 else " " + editor.structures.last_refusal]
 		)

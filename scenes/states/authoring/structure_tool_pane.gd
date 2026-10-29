@@ -35,6 +35,8 @@ const STEPPED := [
 	{"param": "roof_pitch", "caption": "Roof pitch", "auto_zero": false},
 	{"param": "chimneys", "caption": "Chimneys", "auto_zero": false},
 	{"param": "ridge", "caption": "Ridge", "auto_zero": true},
+	{"param": "jetty", "caption": "Jetty", "auto_zero": false},
+	{"param": "ruin", "caption": "Ruin", "auto_zero": false},
 ]
 const TILE_COLUMNS := 2
 const THUMB_PX := 56
@@ -197,12 +199,17 @@ func show_selection(structure: Structure) -> void:
 
 
 ## How a stepped value reads: whole numbers plain, floors and the ridge 0 as "Auto", pitch in
-## degrees, the ridge 1 as "Eave" (the eave to the front) and 2 as "Gable" (a gable to it).
+## degrees, the ridge 1 as "Eave" (the eave to the front) and 2 as "Gable" (a gable to it), a ruin
+## in percent and a jetty in metres.
 static func _value_text(item: Dictionary, value: float) -> String:
 	if bool(item["auto_zero"]) and value < 0.5:
 		return "Auto"
 	if String(item["param"]) == "ridge":
 		return "Eave" if value < 1.5 else "Gable"
+	if String(item["param"]) == "ruin":
+		return "%d %%" % roundi(value * 100.0)
+	if String(item["param"]) == "jetty":
+		return "%.1f m" % value
 	var text := str(roundi(value)) if is_equal_approx(value, roundf(value)) else "%.1f" % value
 	return text + " deg" if String(item["param"]) == "roof_pitch" else text
 

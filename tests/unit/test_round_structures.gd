@@ -330,6 +330,15 @@ func test_the_region_choice_is_deterministic_and_a_desert_street_splits_into_ado
 	for k in a.size():
 		assert_eq(a[k].recipe, b[k].recipe)
 		assert_true(
-			a[k].recipe in ["core:adobe_house", "core:villa_stucco"],
+			(
+				a[k].recipe
+				in [
+					"core:adobe_house",
+					"core:adobe_parapet",
+					"core:adobe_rounded",
+					"core:pueblo",
+					"core:villa_stucco"
+				]
+			),
 			"%s in a savanna" % a[k].recipe
 		)

@@ -197,8 +197,10 @@ static func _read_entry(
 
 
 ## The default of the recipe's `height` interface parameter (the wall height in metres), 2.4 when
-## it declares none: what a tile's framing needs to fit a tall building.
+## it declares none, plus the height of every `stack` node (a storey on top, a number in its
+## params): what a tile's framing needs to fit a tall building.
 static func default_height(recipe: Dictionary) -> float:
+	var base := TILE_DEFAULT_HEIGHT_M
 	var declared: Variant = recipe.get("interface")
 	if declared is Array:
 		for item: Variant in declared as Array:
@@ -210,8 +212,15 @@ static func default_height(recipe: Dictionary) -> float:
 					or (item as Dictionary).get("default") is int
 				)
 			):
-				return clampf(float((item as Dictionary)["default"]), 1.0, 16.0)
-	return TILE_DEFAULT_HEIGHT_M
+				base = float((item as Dictionary)["default"])
+	var nodes: Variant = recipe.get("nodes")
+	if nodes is Array:
+		for node: Variant in nodes as Array:
+			if node is Dictionary and (node as Dictionary).get("type") == "stack":
+				var params: Variant = (node as Dictionary).get("params")
+				if params is Dictionary and (params as Dictionary).get("height") is float:
+					base += float((params as Dictionary)["height"])
+	return clampf(base, 1.0, 16.0)
 
 
 ## The index entry with every field checked and defaulted, or {} (with a warning) when its size

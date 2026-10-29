@@ -359,6 +359,46 @@ const STARTERS: Array[Dictionary] = [
 		"family": "farm",
 		"variant": "Barn",
 	},
+	# Styles integration 2 (2026-10-28): the stacked, jettied and flat-roof-kit styles. A starter may
+	# also name `style_patch` (a dictionary deep-merged over the style file's, arrays replaced),
+	# `kit_index` (the style's kit patch number, always drawn) and `tags_add` / `expose_add`.
+	{
+		"id": "tudor_townhouse",
+		"bundle": "tudor_townhouse",
+		"seed": 0,
+		"name": "Tudor townhouse",
+		"family": "townhouse",
+		"variant": "Tudor, jettied",
+		"tags_add": ["english", "jetty", "beams"],
+	},
+	{
+		"id": "pueblo",
+		"bundle": "pueblo",
+		"seed": 0,
+		"name": "Pueblo",
+		"family": "house",
+		"variant": "Pueblo, stepped",
+	},
+	{
+		"id": "adobe_parapet",
+		"bundle": "adobe_house",
+		"seed": 5,
+		"kit_index": 1,
+		"name": "Adobe house, parapet",
+		"family": "house",
+		"variant": "Adobe, parapet",
+		"tags_add": ["parapet"],
+	},
+	{
+		"id": "adobe_rounded",
+		"bundle": "adobe_house",
+		"seed": 6,
+		"kit_index": 2,
+		"name": "Adobe house, rounded",
+		"family": "house",
+		"variant": "Adobe, vigas",
+		"tags_add": ["parapet", "vigas", "rounded"],
+	},
 	# Round and polygonal plans (styles integration card, 2026-10-28): each is a regular polygon
 	# (plan kind "round", the `sides:<n>` tag), built by ProcgenRecipesRound. `round` says how:
 	# {"kind": a ProcgenRecipesRound kind, "shape": a tower's roof shape} or {"make": the options
@@ -426,6 +466,90 @@ const STARTERS: Array[Dictionary] = [
 		"variant": "Stone, dome",
 		"tags": ["hall", "stone", "dome"],
 		"expose": ["height", "roof_pitch", "overhang", "textured"],
+	},
+	# Ruins (styles integration 2): a style drawn with a `ruin` amount (ProcgenRuin: a ragged skyline,
+	# standing doorways and gables, rubble, moss). The family is "ruin", the tag `ruin` keeps a
+	# street's lots off them (StreetSplit.RUIN_TAG), and `ruin` is exposed as a slider.
+	{
+		"id": "ruin_cottage",
+		"bundle": "slate_house",
+		"seed": 1,
+		"overrides": {"ruin": 0.55, "moss": 0.8},
+		"name": "Ruined stone cottage",
+		"family": "ruin",
+		"variant": "Cottage",
+		"tags_add": ["ruin", "cottage"],
+		"tags_drop": ["chimney", "trim"],
+		"expose_add": ["ruin"],
+		"style_patch": {"size": {"default": [6, 4.5], "max_area": 70.0}},
+	},
+	{
+		"id": "ruin_chapel",
+		"bundle": "slate_house",
+		"seed": 2,
+		"overrides": {"ruin": 0.45, "moss": 0.9},
+		"name": "Ruined chapel",
+		"family": "ruin",
+		"variant": "Chapel, gables standing",
+		"tags_add": ["ruin", "chapel"],
+		"tags_drop": ["chimney", "trim"],
+		"expose_add": ["ruin"],
+		"style_patch":
+		{
+			"defaults": {"height": [4.8, 5.4], "roof_pitch": [46, 52], "wonk": 0.3, "textured": 1},
+			"size": {"default": [9, 5.5], "min_side": 4.0, "max_side": 14.0, "max_area": 110.0},
+		},
+	},
+	{
+		"id": "ruin_townhouse",
+		"bundle": "canal_house",
+		"seed": 1,
+		"overrides": {"ruin": 0.5, "moss": 0.7},
+		"name": "Ruined townhouse",
+		"family": "ruin",
+		"variant": "Townhouse, brick",
+		"tags_add": ["ruin", "townhouse"],
+		"tags_drop": ["trim", "quoins"],
+		"expose_add": ["ruin"],
+	},
+	{
+		"id": "ruin_barn",
+		"bundle": "barn",
+		"seed": 3,
+		"overrides": {"ruin": 0.6, "moss": 0.5},
+		"name": "Ruined barn",
+		"family": "ruin",
+		"variant": "Barn, timber",
+		"tags_add": ["ruin", "barn"],
+		"expose_add": ["ruin"],
+	},
+	{
+		"id": "ruin_tower",
+		"round":
+		{
+			"make":
+			{
+				"walls": "stone",
+				"style": "tower",
+				"shape": "cone",
+				"height": [7.0, 3.0, 12.0],
+				"pitch": [52.0, 30.0, 75.0],
+				"overhang": 0.4,
+				"floors": true,
+				"trim": ["sills", "door_frame", "step", "cornice"],
+				"ruin": 0.55,
+				"moss": 0.8,
+			},
+			"sides": 8,
+			"radius": 2.6,
+			"radius_min": 2.0,
+			"radius_max": 4.0,
+		},
+		"name": "Ruined tower",
+		"family": "ruin",
+		"variant": "Tower, octagon",
+		"tags": ["ruin", "tower", "stone"],
+		"expose": ["height", "floors", "roof_pitch", "ruin"],
 	},
 ]
 
@@ -609,7 +733,25 @@ func _pin_plan_of(starter: Dictionary) -> PackedVector2Array:
 
 ## The building style a starter is a draw of ({} for a starter written as a `recipe`).
 static func _style_of(starter: Dictionary) -> Dictionary:
-	return ProcgenBuildingStyles.named(String(starter["bundle"])) if starter.has("bundle") else {}
+	if not starter.has("bundle"):
+		return {}
+	var style := ProcgenBuildingStyles.named(String(starter["bundle"]))
+	if starter.has("kit_index"):
+		# One of the style's kit patches, always drawn.
+		var kit: Array = style.get("kit", [])
+		style["kit"] = [[(kit[int(starter["kit_index"])] as Array)[0], 1]]
+	return _merged(style, starter.get("style_patch", {}) as Dictionary)
+
+
+## `patch` laid over `base`: dictionaries merge key by key, anything else (an array too) replaces.
+static func _merged(base: Dictionary, patch: Dictionary) -> Dictionary:
+	var out := base.duplicate(true)
+	for key: String in patch:
+		if out.get(key) is Dictionary and patch[key] is Dictionary:
+			out[key] = _merged(out[key] as Dictionary, patch[key] as Dictionary)
+		else:
+			out[key] = patch[key]
+	return out
 
 
 ## The tags of `starter`: its own, else its style's and `regional` (StreetSplit.REGIONAL_TAG: a
@@ -626,6 +768,11 @@ static func _tags_of(starter: Dictionary, style: Dictionary) -> Array:
 	if starter.has("tags"):
 		return starter["tags"]
 	var tags: Array = (style.get("tags", []) as Array).duplicate()
+	for gone: Variant in starter.get("tags_drop", []) as Array:
+		tags.erase(gone)
+	for extra: Variant in starter.get("tags_add", []) as Array:
+		if not extra in tags:
+			tags.append(extra)
 	if starter.has("bundle"):
 		tags.append(StreetSplit.REGIONAL_TAG)
 	return tags
@@ -666,8 +813,10 @@ static func _exposed(starter: Dictionary, style: Dictionary, doc: PlantGraphDocu
 		for entry in doc.interface:
 			names.append(String(entry["name"]))
 		var kept: Array = []
-		for name: Variant in style.get("expose", []) as Array:
-			if String(name) in names:
+		var wanted: Array = (style.get("expose", []) as Array).duplicate()
+		wanted.append_array(starter.get("expose_add", []) as Array)
+		for name: Variant in wanted:
+			if String(name) in names and not name in kept:
 				kept.append(name)
 		return kept
 	var out: Array = (starter["expose"] as Array).duplicate()

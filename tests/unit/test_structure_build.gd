@@ -102,7 +102,7 @@ func _nodes() -> AuthoredStructures:
 
 
 func test_the_starter_set_resolves_and_an_unknown_reference_does_not() -> void:
-	assert_eq(StructureRecipes.core_refs().size(), 28)
+	assert_eq(StructureRecipes.core_refs().size(), 37)
 	for ref in StructureRecipes.core_refs():
 		assert_true(StructureRecipes.exists(ref), ref)
 		assert_eq(StructureRecipes.digest(ref).length(), 64, "a sha256")

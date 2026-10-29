@@ -49,7 +49,14 @@ const CORNER_BIAS := 0.8
 ## Seats a duplicate may take beside its original (metres between).
 const COPY_GAP_M := 0.6
 ## Stepped recipe parameters: how far one press of the stepper moves each.
-const PARAM_STEPS := {"floors": 1.0, "roof_pitch": 5.0, "chimneys": 1.0, "ridge": 1.0}
+const PARAM_STEPS := {
+	"floors": 1.0,
+	"roof_pitch": 5.0,
+	"chimneys": 1.0,
+	"ridge": 1.0,
+	"ruin": 0.1,
+	"jetty": 0.1,
+}
 
 # ============================================================================
 # Handles
@@ -572,13 +579,19 @@ static func kept_params(params: Dictionary, interface: Array) -> Dictionary:
 
 
 ## The other structures of `ref`'s family in its library (the variants a swap offers), as palette
-## rows, `ref` itself included, in the store's order; empty when it has none.
+## rows, `ref` itself included, in the store's order; empty when it has none. Only rows of the same
+## plan kind: a family may hold a round tower beside rectangular ruins, and a swap keeps the
+## footprint, which a rectangle is not for a polygon.
 static func variants_of(ref: String) -> Array[Dictionary]:
 	var row := LibraryStructureStore.structure(ref)
 	var out: Array[Dictionary] = []
 	if row.is_empty():
 		return out
+	var round_plan := StructurePlacement.is_round(row)
 	for other in LibraryStructureStore.structures(String(row["library"])):
-		if String(other["family"]) == String(row["family"]):
+		if (
+			String(other["family"]) == String(row["family"])
+			and StructurePlacement.is_round(other) == round_plan
+		):
 			out.append(other)
 	return out if out.size() > 1 else ([] as Array[Dictionary])

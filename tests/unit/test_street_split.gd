@@ -168,13 +168,40 @@ func test_a_terrace_becomes_townhouses_and_a_village_cottages() -> void:
 					or local.begins_with("house")
 					or local == "stone_house"
 					# An English village's region (StreetSplit.SPECIES_REGIONS) joins its thatch and slate.
-					or local in ["thatched_cottage", "slate_house", "brick_terrace"]
+					or (
+						local
+						in ["thatched_cottage", "slate_house", "brick_terrace", "tudor_townhouse"]
+					)
 				)
 			):
 				matching += 1
 		counts[preset] = [matching, structures.size()]
 	assert_gt(counts[1][0], 0, "a terrace's tall fronts are townhouses")
 	assert_eq(counts[3][0], counts[3][1], "a village is cottages and houses")
+
+
+func test_a_split_never_picks_a_ruin_whatever_the_streets_region() -> void:
+	var regions: Array = [
+		[] as Array[String],
+		["english"] as Array[String],
+		["dutch"] as Array[String],
+		["desert"] as Array[String],
+		["highland", "english"] as Array[String],
+	]
+	for region: Array[String] in regions:
+		var refs: Array[String] = []
+		for row in StreetSplit.candidates(region):
+			refs.append(String(row["ref"]))
+			assert_false(
+				"ruin" in (row["tags"] as Array), "%s offered to %s" % [row["ref"], region]
+			)
+		assert_gt(refs.size(), 0, "a street always has candidates")
+	# The tudor townhouse is English: it joins an English village's candidates, a desert street's
+	# exclusive set is adobe, and neither holds a ruin.
+	var english: Array[String] = []
+	for row in StreetSplit.candidates(["english"] as Array[String]):
+		english.append(String(row["ref"]))
+	assert_true("core:tudor_townhouse" in english, "the English region takes the tudor")
 
 
 # --- matching a lot to a structure ------------------------------------------------------

@@ -24,6 +24,20 @@ const TEXTURED_WALL_GAIN := 1.7
 const STYLE_TONE_KEEP := 0.3
 ## Height above a foot the wall alpha spans, metres.
 const WALL_ALPHA_SPAN_M := 16.0
+## The green a ruin multiplies into the stone at its foot (procgen's ProcgenRuin.MOSS_TINT) and how
+## the share is read back from a colour: the stone's own green over red sits at about 1.03 to 1.06,
+## full moss at about 1.45.
+const MOSS_TINT := Color(0.66, 0.96, 0.4)
+const MOSS_G_OVER_R_FROM := 1.08
+const MOSS_G_OVER_R_SPAN := 0.37
+
+
+## How mossy a procgen wall colour is, 0..1: a ruin's moss is that multiplied green, and a style's
+## wall tone replaces the colour, so the share is read off the green over red and put back.
+static func moss_of(c: Color) -> float:
+	if c.r < 0.02:
+		return 0.0
+	return clampf((c.g / c.r - MOSS_G_OVER_R_FROM) / MOSS_G_OVER_R_SPAN, 0.0, 1.0)
 
 
 ## A 32-bit mix of two integers (murmur-style finaliser), the same on every platform.
@@ -158,15 +172,26 @@ static func paint(meshes: Array, group_of_tag: PackedInt32Array, palettes: Array
 					lean = Color.WHITE
 				var metres := vertices[v].y - (foot[g] if foot[g] < INF else 0.0)
 				var alpha := clampf(metres / WALL_ALPHA_SPAN_M, 0.0, 1.0)
-				if mesh.role == StructureLook.WALL and palette.has("wall"):
-					# A style's own wall tone, kept under each face's slight variation.
+				if mesh.role == StructureLook.FRAME:
+					# Beams, vigas and ladders keep the tone procgen gave them (dark timber), not
+					# the wall's, so half-timber reads as framing over the plaster.
+					out[v] = Color(c.r, c.g, c.b, alpha)
+				elif mesh.role == StructureLook.WALL and palette.has("wall"):
+					# A style's own wall tone, kept under each face's slight variation, and a
+					# ruin's moss (a green multiplied into the stone, which `tone` would drop).
 					var tint: Color = palette.wall
 					var tone := c.r / WALL_REFERENCE_TONE
 					if TEXTURED_KINDS.has(String(mesh.kind)):
 						tone *= TEXTURED_WALL_GAIN
 					else:
 						tone = 1.0 + (tone - 1.0) * STYLE_TONE_KEEP
-					out[v] = Color(tint.r * tone, tint.g * tone, tint.b * tone, alpha)
+					var moss := moss_of(c)
+					out[v] = Color(
+						tint.r * tone * lerpf(1.0, MOSS_TINT.r, moss),
+						tint.g * tone * lerpf(1.0, MOSS_TINT.g, moss),
+						tint.b * tone * lerpf(1.0, MOSS_TINT.b, moss),
+						alpha
+					)
 				else:
 					out[v] = Color(
 						minf(c.r * lean.r, 1.0),
