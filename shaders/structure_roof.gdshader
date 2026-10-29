@@ -51,9 +51,11 @@ void fragment() {
 	float h = clamp(COLOR.a, 0.0, 1.0);
 	vec3 grade = mix(eave_tone, ridge_tone, smoothstep(0.0, 1.0, h));
 	float broad = s_noise(s_pos * 0.45 + 3.0);
-	vec3 patch_c = s_lean(smoothstep(0.25, 0.75, broad), 1.0) * (1.0 + (broad - 0.5) * 0.45);
-	vec3 painted = COLOR.rgb * tile_c * grade * patch_c;
+	vec3 patch_c = s_lean(smoothstep(0.25, 0.75, broad), 1.0) * s_mass(broad, 0.55);
+	vec3 painted = s_ramp(COLOR.rgb * tile_c * grade * patch_c, NORMAL, INV_VIEW_MATRIX);
 	ALBEDO = painted;
+	AO = s_ambient();
+	AO_LIGHT_AFFECT = 1.0;
 	EMISSION = s_rim(painted, NORMAL, VIEW);
 	ROUGHNESS = 0.9;
 }
