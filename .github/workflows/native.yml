@@ -45,10 +45,16 @@ jobs:
     env:
       PYTHON: /opt/python/cp312-cp312/bin/python
     steps:
+      # Only godot-cpp: `submodules: true` would also clone the private procgen, which the native
+      # build does not need and the default token cannot read.
       - name: Checkout
         uses: actions/checkout@v5
-        with:
-          submodules: true
+
+      - name: Fetch godot-cpp
+        shell: bash
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git submodule update --init native/godot-cpp
 
       - name: Install SCons
         shell: bash
@@ -90,8 +96,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-        with:
-          submodules: true
+
+      - name: Fetch godot-cpp
+        shell: bash
+        run: git submodule update --init native/godot-cpp
 
       - name: Install llvm-mingw
         shell: bash
@@ -148,8 +156,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-        with:
-          submodules: true
+
+      - name: Fetch godot-cpp
+        shell: bash
+        run: git submodule update --init native/godot-cpp
 
       - name: Install SCons
         shell: bash
@@ -208,6 +218,7 @@ jobs:
     if: github.event_name == 'push' && github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/')
     needs: [windows, macos]
     uses: ./.github/workflows/native-parity.yml
+    secrets: inherit
 
   # Branch runs only: what build.yml's test and export jobs do with the libraries, without
   # signing, release or Steam. Runs the whole test suite with the Linux library (the Linux
@@ -226,6 +237,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Fetch procgen
+        uses: ./.github/actions/procgen-submodule
+        with:
+          token: ${{ secrets.PROCGEN_READ_TOKEN }}
 
       # LFS objects from build.yml's cache, restored only and checked out offline: a branch
       # run spends no LFS bandwidth (build.yml's comment on the test job has the budget).
