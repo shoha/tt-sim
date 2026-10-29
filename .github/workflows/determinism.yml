@@ -1,0 +1,141 @@
+name: Determinism
+
+# Does a structure build the same on every platform tt-sim ships? A placed structure is a small
+# recipe that each peer rebuilds from procgen's geometry (sin, cos, pow, float32 maths), and the
+# pins that guard it were taken on Windows only. This workflow rebuilds every pinned case on
+# Linux, Windows and macOS (arm64 and, under Rosetta, x86_64) with the official Godot binary and
+# prints one compact line per case (tools/determinism_report.gd): MATCH, or DIFF with the digest
+# computed here, the pinned one and the digest's parts, so a mismatch can be diagnosed from the
+# log. The cases: procgen's 49 building and street cases (procgen/tests/expected_building_digests.txt),
+# its two self-check samples and the starter set (tests/fixtures/structure_digests.txt).
+# docs/systems/structures.md "Determinism" has the results and what a DIFF means.
+#
+# Not part of the release pipeline (card S9, 2026-10-28): this is its own workflow, no job of
+# build.yml needs it and it needs none of them, so it can neither block nor delay a release,
+# signing or the Steam upload. A mismatch shows as a red run of this workflow on its own. Promote
+# it (add it to build.yml as a job that sign-* wait for) once it is green on every platform.
+#
+# It needs the private procgen submodule (github.com/shoha/procgen). The default GITHUB_TOKEN
+# cannot read another private repository, so the repository secret PROCGEN_READ_TOKEN must hold
+# a fine-grained token with read access to the contents of shoha/procgen (see the step that uses
+# it). It needs no LFS objects and no native library: the structure pipeline reads procgen's
+# recipes only, and the import runs with the LFS pointer files (a few texture import errors,
+# none in the report).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, "ci/**"]
+    paths:
+      - "procgen"
+      - "utils/structure_*.gd"
+      - "utils/map_structure_io.gd"
+      - "resources/structure*.gd"
+      - "tests/fixtures/structure_digests.txt"
+      - "tools/determinism_report.gd"
+      - ".github/workflows/determinism.yml"
+
+concurrency:
+  group: determinism-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.7.2"
+
+jobs:
+  digests:
+    name: Digests ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            runner: ubuntu-latest
+            zip: Godot_v4.7.2-stable_linux.x86_64.zip
+            sha256: cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4
+            godot: .ci-godot/Godot_v4.7.2-stable_linux.x86_64
+          - name: Windows
+            runner: windows-latest
+            zip: Godot_v4.7.2-stable_win64.exe.zip
+            sha256: 731980f9608d61333e5baf54a2ef17210acc7a538446c0cb9969f002aca1e953
+            godot: .ci-godot/Godot_v4.7.2-stable_win64_console.exe
+          - name: macOS
+            runner: macos-latest
+            zip: Godot_v4.7.2-stable_macos.universal.zip
+            sha256: c58a24e31d720be9d62f60cb5627c4e695fb72f21b0cfe1bc9ccaa9a3b3ba63e
+            godot: .ci-godot/Godot.app/Contents/MacOS/Godot
+    env:
+      GODOT: ${{ matrix.godot }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download Godot
+        shell: bash
+        run: |
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/$GODOT_VERSION-stable/${{ matrix.zip }}"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            echo "${{ matrix.sha256 }}  godot.zip" | shasum -a 256 -c -
+          else
+            echo "${{ matrix.sha256 }}  godot.zip" | sha256sum -c -
+          fi
+          mkdir .ci-godot
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            pwsh -NoProfile -Command "Expand-Archive godot.zip -DestinationPath .ci-godot"
+          else
+            unzip -q godot.zip -d .ci-godot
+            chmod +x "$GODOT"
+          fi
+          rm godot.zip
+          "$GODOT" --version
+
+      # procgen is a private repository: the composite action clones it with the read token.
+      - name: Fetch procgen
+        uses: ./.github/actions/procgen-submodule
+        with:
+          token: ${{ secrets.PROCGEN_READ_TOKEN }}
+
+      - name: Import project
+        run: |
+          "$GODOT" --headless --path . --import 2>&1 | tail -n 3 || true
+
+      # One compact line per case; the step is red when any case differs from the Windows pins.
+      - name: Rebuild the pinned structures and compare
+        id: report
+        run: |
+          set -o pipefail
+          report="$RUNNER_TEMP/determinism.txt"
+          status=0
+          "$GODOT" --headless --path . --script res://tools/determinism_report.gd 2>&1 |
+            grep -E '^(platform:|MATCH|DIFF|      parts:|determinism:)' > "$report" || status=$?
+          cat "$report"
+          {
+            echo '### Determinism, ${{ matrix.name }}'
+            echo '```'
+            grep -E '^(platform:|DIFF|      parts:|determinism:)' "$report" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+      # Intel Macs: the x86_64 slice of Godot under Rosetta, which is what those players run.
+      - name: Rebuild under Rosetta (x86_64) and compare
+        if: runner.os == 'macOS' && (steps.report.outcome == 'success' || steps.report.outcome == 'failure')
+        run: |
+          set -o pipefail
+          report="$RUNNER_TEMP/determinism_x86.txt"
+          status=0
+          arch -x86_64 "$GODOT" --headless --path . --script res://tools/determinism_report.gd 2>&1 |
+            grep -E '^(platform:|MATCH|DIFF|      parts:|determinism:)' > "$report" || status=$?
+          cat "$report"
+          {
+            echo '### Determinism, macOS x86_64 under Rosetta'
+            echo '```'
+            grep -E '^(platform:|DIFF|      parts:|determinism:)' "$report" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
