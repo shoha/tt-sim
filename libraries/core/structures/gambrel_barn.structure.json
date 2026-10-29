@@ -140,6 +140,26 @@
       "name": "fringe",
       "tip": "How far pointed teeth reach down past the eaves, as thatch does; 0 for a clean edge.",
       "type": "float"
+    },
+    {
+      "default": 61.74,
+      "label": "Steep slope",
+      "max": 80,
+      "min": 40,
+      "name": "steep",
+      "step": 1,
+      "tip": "The gambrel roof's steep slope.",
+      "type": "float"
+    },
+    {
+      "default": 0.32,
+      "label": "Break",
+      "max": 0.7,
+      "min": 0.1,
+      "name": "break",
+      "step": 0.01,
+      "tip": "The gambrel roof's break.",
+      "type": "float"
     }
   ],
   "nodes": [
@@ -187,7 +207,7 @@
     {
       "id": "roof_profile_4",
       "params": {
-        "break": 0.32,
+        "break": "@break",
         "form": "gambrel",
         "fringe": "@fringe",
         "gable_role": "boards",
@@ -196,7 +216,7 @@
         "roof_role": "shingle",
         "roof_thickness": 0.16,
         "segments": 6,
-        "steep": 61.74
+        "steep": "@steep"
       },
       "position": [
         710.0,

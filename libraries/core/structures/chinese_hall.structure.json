@@ -161,6 +161,26 @@
       "name": "fringe",
       "tip": "How far pointed teeth reach down past the eaves, as thatch does; 0 for a clean edge.",
       "type": "float"
+    },
+    {
+      "default": 0.97,
+      "label": "Sweep",
+      "max": 1.5,
+      "min": 0,
+      "name": "sweep",
+      "step": 0.05,
+      "tip": "The upswept hip roof's sweep.",
+      "type": "float"
+    },
+    {
+      "default": 0.49,
+      "label": "Eave flick",
+      "max": 1.2,
+      "min": 0,
+      "name": "flick",
+      "step": 0.05,
+      "tip": "The upswept hip roof's eave flick.",
+      "type": "float"
     }
   ],
   "nodes": [
@@ -210,7 +230,7 @@
     {
       "id": "roof_profile_4",
       "params": {
-        "flick": 0.49,
+        "flick": "@flick",
         "form": "upswept_hip",
         "fringe": "@fringe",
         "gable_role": "plaster",
@@ -219,7 +239,7 @@
         "roof_role": "tile",
         "roof_thickness": 0.24,
         "segments": 6,
-        "sweep": 0.97
+        "sweep": "@sweep"
       },
       "position": [
         710.0,
@@ -233,7 +253,7 @@
         "name": "Chinese hall",
         "palette_accent": "#B63A2B,#A8372A,#C24632",
         "palette_roof": "#4F7A5C,#5B8A68,#D4A93E,#6A6F73",
-        "palette_wall": "#F1EADB,#EDE3CF,#E8DCC4"
+        "palette_wall": "#F2E7C9,#EEE0BE,#E9D8B0"
       },
       "position": [
         950.0,

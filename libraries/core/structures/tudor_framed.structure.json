@@ -489,7 +489,8 @@
         "dark": 0.38,
         "detail": 1,
         "pattern": "cross",
-        "stud_spacing": 0
+        "stud_spacing": 0,
+        "upper_light": true
       },
       "position": [
         1190.0,
@@ -503,7 +504,8 @@
         "dark": 0.38,
         "detail": 1,
         "pattern": "cross",
-        "stud_spacing": 0
+        "stud_spacing": 0,
+        "upper_light": true
       },
       "position": [
         1190.0,

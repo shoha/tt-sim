@@ -161,6 +161,16 @@
       "name": "fringe",
       "tip": "How far pointed teeth reach down past the eaves, as thatch does; 0 for a clean edge.",
       "type": "float"
+    },
+    {
+      "default": 0.55,
+      "label": "Ridge lean",
+      "max": 0.8,
+      "min": -0.8,
+      "name": "lean",
+      "step": 0.05,
+      "tip": "The saltbox roof's ridge lean.",
+      "type": "float"
     }
   ],
   "nodes": [
@@ -209,7 +219,7 @@
         "form": "saltbox",
         "fringe": "@fringe",
         "gable_role": "boards",
-        "lean": 0.55,
+        "lean": "@lean",
         "overhang": 0.31,
         "roof_pitch": "@roof_pitch",
         "roof_role": "shingle",

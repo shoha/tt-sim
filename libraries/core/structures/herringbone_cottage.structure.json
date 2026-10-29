@@ -322,6 +322,7 @@
       "params": {
         "dark": 0.42,
         "detail": 1,
+        "floor_band": 0.3,
         "pattern": "herringbone",
         "stud_spacing": 0
       },

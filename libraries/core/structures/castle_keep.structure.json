@@ -451,7 +451,8 @@
         "name": "Castle keep",
         "palette_accent": "#B5342B,#2F4F7F",
         "palette_roof": "#6E7A8A,#7B6E64,#5E6A78",
-        "palette_wall": "#A8A59A,#9C9A90,#B3AB98,#8F9096"
+        "palette_wall": "#A8A59A,#9C9A90,#B3AB98,#8F9096",
+        "stone_tone": "grey"
       },
       "position": [
         950.0,

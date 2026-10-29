@@ -140,6 +140,56 @@
       "name": "fringe",
       "tip": "How far pointed teeth reach down past the eaves, as thatch does; 0 for a clean edge.",
       "type": "float"
+    },
+    {
+      "default": 0.96,
+      "label": "Sweep",
+      "max": 1.5,
+      "min": 0,
+      "name": "sweep",
+      "step": 0.05,
+      "tip": "The pagoda roof's sweep.",
+      "type": "float"
+    },
+    {
+      "default": 0.45,
+      "label": "Eave flick",
+      "max": 1.2,
+      "min": 0,
+      "name": "flick",
+      "step": 0.05,
+      "tip": "The pagoda roof's eave flick.",
+      "type": "float"
+    },
+    {
+      "default": 3.26,
+      "label": "Tiers",
+      "max": 6,
+      "min": 2,
+      "name": "tiers",
+      "step": 1,
+      "tip": "The pagoda roof's tiers.",
+      "type": "float"
+    },
+    {
+      "default": 0.85,
+      "label": "Tier setback",
+      "max": 2,
+      "min": 0.4,
+      "name": "tier_step",
+      "step": 0.05,
+      "tip": "The pagoda roof's tier setback.",
+      "type": "float"
+    },
+    {
+      "default": 1.52,
+      "label": "Tier height",
+      "max": 3,
+      "min": 0.8,
+      "name": "tier_height",
+      "step": 0.1,
+      "tip": "The pagoda roof's tier height.",
+      "type": "float"
     }
   ],
   "nodes": [
@@ -190,7 +240,7 @@
       "params": {
         "body_role": "plaster",
         "finial": 1.41,
-        "flick": 0.45,
+        "flick": "@flick",
         "form": "pagoda",
         "fringe": "@fringe",
         "gable_role": "plaster",
@@ -199,10 +249,10 @@
         "roof_role": "tile",
         "roof_thickness": 0.2,
         "segments": 6,
-        "sweep": 0.96,
-        "tier_height": 1.52,
-        "tier_step": 0.85,
-        "tiers": 3.26
+        "sweep": "@sweep",
+        "tier_height": "@tier_height",
+        "tier_step": "@tier_step",
+        "tiers": "@tiers"
       },
       "position": [
         710.0,

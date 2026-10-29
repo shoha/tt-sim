@@ -194,6 +194,36 @@
       "name": "fringe",
       "tip": "How far pointed teeth reach down past the eaves, as thatch does; 0 for a clean edge.",
       "type": "float"
+    },
+    {
+      "default": 71.78,
+      "label": "Steep slope",
+      "max": 80,
+      "min": 40,
+      "name": "steep",
+      "step": 1,
+      "tip": "The mansard roof's steep slope.",
+      "type": "float"
+    },
+    {
+      "default": 0.32,
+      "label": "Break",
+      "max": 0.7,
+      "min": 0.1,
+      "name": "break",
+      "step": 0.01,
+      "tip": "The mansard roof's break.",
+      "type": "float"
+    },
+    {
+      "default": 0.2,
+      "label": "Flat deck",
+      "max": 0.8,
+      "min": 0,
+      "name": "flat_top",
+      "step": 0.05,
+      "tip": "The mansard roof's flat deck.",
+      "type": "float"
     }
   ],
   "nodes": [
@@ -241,8 +271,8 @@
     {
       "id": "roof_profile_4",
       "params": {
-        "break": 0.32,
-        "flat_top": 0.2,
+        "break": "@break",
+        "flat_top": "@flat_top",
         "form": "mansard",
         "fringe": "@fringe",
         "gable_role": "plaster",
@@ -251,7 +281,7 @@
         "roof_role": "slate",
         "roof_thickness": 0.14,
         "segments": 6,
-        "steep": 71.78
+        "steep": "@steep"
       },
       "position": [
         710.0,
@@ -265,7 +295,7 @@
         "name": "Mansard townhouse",
         "palette_accent": "#3E4A5A,#7A8794",
         "palette_roof": "#5C6572,#4E5764,#69727E",
-        "palette_wall": "#E7DCC4,#DFD2B6,#E9E0CC,#D8CBAE"
+        "palette_wall": "#EBDDB8,#E4D3A8,#EDE0BE,#DCC9A0"
       },
       "position": [
         950.0,

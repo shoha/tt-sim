@@ -170,6 +170,26 @@
       "name": "fringe",
       "tip": "How far pointed teeth reach down past the eaves, as thatch does; 0 for a clean edge.",
       "type": "float"
+    },
+    {
+      "default": 1.15,
+      "label": "Hip run",
+      "max": 4,
+      "min": 0.3,
+      "name": "hip_run",
+      "step": 0.1,
+      "tip": "The half hip roof's hip run.",
+      "type": "float"
+    },
+    {
+      "default": 0.6,
+      "label": "Hip clip",
+      "max": 0.9,
+      "min": 0.2,
+      "name": "clip",
+      "step": 0.05,
+      "tip": "The half hip roof's hip clip.",
+      "type": "float"
     }
   ],
   "nodes": [
@@ -217,11 +237,11 @@
     {
       "id": "roof_profile_4",
       "params": {
-        "clip": 0.6,
+        "clip": "@clip",
         "form": "half_hip",
         "fringe": "@fringe",
         "gable_role": "plaster",
-        "hip_run": 1.15,
+        "hip_run": "@hip_run",
         "overhang": 0.36,
         "roof_pitch": "@roof_pitch",
         "roof_role": "tile",
@@ -240,7 +260,7 @@
         "name": "Half-hip cottage",
         "palette_accent": "#4D7A5A,#7A4A3A",
         "palette_roof": "#B5583B,#A24D36,#8C6B4A,#7A6048",
-        "palette_wall": "#F1E6CC,#EADBB8,#E2CFA6,#D9C7A0"
+        "palette_wall": "#F2E4BE,#EBD9AA,#E4CE9A,#DCC592"
       },
       "position": [
         950.0,

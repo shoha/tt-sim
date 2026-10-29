@@ -161,6 +161,26 @@
       "name": "fringe",
       "tip": "How far pointed teeth reach down past the eaves, as thatch does; 0 for a clean edge.",
       "type": "float"
+    },
+    {
+      "default": 0.57,
+      "label": "Sweep",
+      "max": 1.5,
+      "min": 0,
+      "name": "sweep",
+      "step": 0.05,
+      "tip": "The upswept hip roof's sweep.",
+      "type": "float"
+    },
+    {
+      "default": 0.24,
+      "label": "Eave flick",
+      "max": 1.2,
+      "min": 0,
+      "name": "flick",
+      "step": 0.05,
+      "tip": "The upswept hip roof's eave flick.",
+      "type": "float"
     }
   ],
   "nodes": [
@@ -210,7 +230,7 @@
     {
       "id": "roof_profile_4",
       "params": {
-        "flick": 0.24,
+        "flick": "@flick",
         "form": "upswept_hip",
         "fringe": "@fringe",
         "gable_role": "plaster",
@@ -219,7 +239,7 @@
         "roof_role": "thatch",
         "roof_thickness": 0.26,
         "segments": 6,
-        "sweep": 0.57
+        "sweep": "@sweep"
       },
       "position": [
         710.0,
@@ -233,7 +253,7 @@
         "name": "Minka",
         "palette_accent": "#3A2C22,#4A3A2C",
         "palette_roof": "#B79A62,#A8895A,#C2A670,#8F7A52",
-        "palette_wall": "#EFE6D0,#E7DBC0,#F1E9D6"
+        "palette_wall": "#F1E4C0,#EAD9B2,#F3E8C8"
       },
       "position": [
         950.0,
