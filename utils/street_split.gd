@@ -49,6 +49,10 @@ const ROUND_TAG := "round"
 ## The tag of a ruin (a broken building): a street is lived in, so a split never picks one, whatever
 ## region tags it carries (an English ruin would otherwise join an English village's candidates).
 const RUIN_TAG := "ruin"
+## The tag of a farm building (a barn): a street's lots are houses, so a split never picks one,
+## whatever region tags it carries (the Dutch-American gambrel barn would otherwise join a Dutch
+## canal street).
+const FARM_TAG := "farm"
 ## A regional row whose tags hold one of the street's region tags is a candidate for it. Where the
 ## region is a place of its own (EXCLUSIVE_REGIONS: a desert, the alps), its rows replace the
 ## generic ones, so a desert street is adobe, not stone houses; where it is a flavour on the
@@ -148,8 +152,8 @@ static func region_tags(biome: String, preset: int) -> Array[String]:
 
 ## The library rows a split picks from: the core library's structures without the regional ones
 ## (REGIONAL_TAG), except those whose tags hold one of the street's `region` tags, and without the
-## round ones (ROUND_TAG) and the ruins (RUIN_TAG); all of them when nothing else is left; else
-## every served one.
+## round ones (ROUND_TAG), the ruins (RUIN_TAG) and the farm buildings (FARM_TAG); all of them when
+## nothing else is left; else every served one.
 static func candidates(region: Array[String] = []) -> Array[Dictionary]:
 	StructureRecipes.ensure_served()
 	var rows := LibraryStructureStore.structures(StructureRecipes.CORE_LIBRARY)
@@ -163,7 +167,7 @@ static func candidates(region: Array[String] = []) -> Array[Dictionary]:
 			exclusive_tags.append(tag)
 	for row in rows:
 		var tags: Array = row.get("tags", [])
-		if ROUND_TAG in tags or RUIN_TAG in tags:
+		if ROUND_TAG in tags or RUIN_TAG in tags or FARM_TAG in tags:
 			continue
 		if not REGIONAL_TAG in tags or _in_region(tags, region):
 			generic.append(row)

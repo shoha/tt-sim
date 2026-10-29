@@ -301,6 +301,7 @@ func test_variants_are_the_same_familys_other_recipes_and_a_lone_recipe_has_none
 		"core:alpine_chalet",
 		"core:house_flat",
 		"core:house_hip",
+		"core:minka",
 		"core:pueblo",
 		"core:slate_house",
 		"core:stone_house",

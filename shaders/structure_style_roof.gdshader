@@ -16,6 +16,9 @@ uniform int pattern = 0;
 uniform vec3 eave_tone = vec3(0.82, 0.78, 0.90);
 uniform vec3 ridge_tone = vec3(1.12, 1.08, 0.96);
 uniform vec3 soil_tone = vec3(0.34, 0.24, 0.15);
+// A multiplier on the roof's own tone: slate leans from navy toward a teal slate (the roof tone
+// lists of the styles are blue greys; the painterly reference is greener, styles integration 3).
+uniform vec3 tone_shift = vec3(1.0);
 
 void fragment() {
 	vec3 n = normalize(s_normal);
@@ -31,7 +34,7 @@ void fragment() {
 	float h = clamp(COLOR.a, 0.0, 1.0);
 	vec3 m = vec3(1.0);
 	vec3 grade = mix(eave_tone, ridge_tone, smoothstep(0.0, 1.0, h));
-	vec3 col = COLOR.rgb;
+	vec3 col = COLOR.rgb * tone_shift;
 
 	if (pattern == 0) {
 		float r = s / 0.30;

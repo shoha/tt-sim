@@ -30,6 +30,12 @@ const WALL_ALPHA_SPAN_M := 16.0
 const MOSS_TINT := Color(0.66, 0.96, 0.4)
 const MOSS_G_OVER_R_FROM := 1.08
 const MOSS_G_OVER_R_SPAN := 0.37
+## How far full moss pulls a style wall's baked colour to green (`_mossed`).
+const MOSS_BAKE := 0.8
+## A style wall's moss is full up to this many metres above the building's lowest vertex and fades
+## out by the second (which is about a metre above the ground: the skirt sits 0.2 m below it).
+const MOSS_FULL_M := 0.4
+const MOSS_CLIMB_M := 1.4
 
 
 ## How mossy a procgen wall colour is, 0..1: a ruin's moss is that multiplied green, and a style's
@@ -128,10 +134,13 @@ static func paint(meshes: Array, group_of_tag: PackedInt32Array, palettes: Array
 	roof_high.fill(-INF)
 	foot.resize(palettes.size())
 	foot.fill(INF)
+	var moss_peak := PackedFloat32Array()
+	moss_peak.resize(palettes.size())
 	for mesh: Dictionary in meshes:
 		if not _paints(mesh):
 			continue
 		var vertices: PackedVector3Array = mesh.arrays[Mesh.ARRAY_VERTEX]
+		var source: PackedColorArray = mesh.arrays[Mesh.ARRAY_COLOR]
 		var tags: PackedInt32Array = mesh.tags
 		var roof: bool = mesh.role == StructureLook.ROOF
 		for v in vertices.size():
@@ -142,6 +151,8 @@ static func paint(meshes: Array, group_of_tag: PackedInt32Array, palettes: Array
 				roof_high[g] = maxf(roof_high[g], y)
 			else:
 				foot[g] = minf(foot[g], y)
+				if mesh.role == StructureLook.WALL and v < source.size():
+					moss_peak[g] = maxf(moss_peak[g], moss_of(source[v]))
 	for mesh: Dictionary in meshes:
 		if not _paints(mesh):
 			continue
@@ -186,12 +197,23 @@ static func paint(meshes: Array, group_of_tag: PackedInt32Array, palettes: Array
 					else:
 						tone = 1.0 + (tone - 1.0) * STYLE_TONE_KEEP
 					var moss := moss_of(c)
-					out[v] = Color(
+					if not TEXTURED_KINDS.has(String(mesh.kind)):
+						# procgen's moss sits on the lowest strip of a style wall (a quarter metre
+						# of its brick or plaster courses), which is too thin a band to read once it
+						# is interpolated: the building's strongest moss climbs the first metre.
+						moss = maxf(
+							moss,
+							moss_peak[g] * (1.0 - smoothstep(MOSS_FULL_M, MOSS_CLIMB_M, metres))
+						)
+					var toned := Color(
 						tint.r * tone * lerpf(1.0, MOSS_TINT.r, moss),
 						tint.g * tone * lerpf(1.0, MOSS_TINT.g, moss),
 						tint.b * tone * lerpf(1.0, MOSS_TINT.b, moss),
 						alpha
 					)
+					if moss > 0.0 and not TEXTURED_KINDS.has(String(mesh.kind)):
+						toned = _mossed(toned, moss)
+					out[v] = toned
 				else:
 					out[v] = Color(
 						minf(c.r * lean.r, 1.0),
@@ -200,6 +222,16 @@ static func paint(meshes: Array, group_of_tag: PackedInt32Array, palettes: Array
 						alpha
 					)
 		arrays[Mesh.ARRAY_COLOR] = out
+
+
+## `c` pulled toward a moss green by `moss`, keeping its light and dark. The wall shaders read moss
+## back from the colour as green over red and blue (s_moss_of), which a red brick or an orange
+## adobe with a multiplied green never shows (its red stays the largest), so the style kinds get
+## the green baked in here and the shader's pull then finds it.
+static func _mossed(c: Color, moss: float) -> Color:
+	var luma := c.r * 0.299 + c.g * 0.587 + c.b * 0.114
+	var green := Color(0.5 * luma * 1.2, 1.15 * luma * 1.2, 0.34 * luma * 1.2, c.a)
+	return c.lerp(green, clampf(moss * MOSS_BAKE, 0.0, 1.0))
 
 
 static func _paints(mesh: Dictionary) -> bool:

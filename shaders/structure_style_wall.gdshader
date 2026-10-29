@@ -24,6 +24,8 @@ uniform float brick_m = 0.40;
 uniform vec3 mortar_tone = vec3(0.92, 0.86, 0.74);
 // How far a mossy vertex (a ruin's green foot, StructurePaint) is pulled to a painterly moss green.
 uniform float moss_amount : hint_range(0.0, 1.0) = 0.6;
+// Brick only: how far the baked tone is pulled from a saturated orange red toward a rosy brown.
+uniform float brick_weather : hint_range(0.0, 1.0) = 0.28;
 
 void fragment() {
 	vec3 n = normalize(s_normal);
@@ -66,6 +68,9 @@ void fragment() {
 		float patch_m = smoothstep(0.70, 0.78, lost) * (1.0 - smoothstep(0.0, 3.2, metres));
 		col = mix(col, col * vec3(0.80, 0.64, 0.52), patch_m * (adobe ? 0.35 : 0.7));
 	} else if (pattern == 2) {
+		// The styles' brick tones are saturated orange reds; weather them toward a rosy brown.
+		float luma = dot(col, vec3(0.299, 0.587, 0.114));
+		col = mix(col, vec3(1.08, 0.94, 0.84) * luma, brick_weather * (1.0 - s_moss_of(COLOR.rgb)));
 		float r = v / course_m;
 		float row = floor(r);
 		float c = u / brick_m + 0.5 * mod(row, 2.0);

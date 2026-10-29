@@ -284,6 +284,23 @@ func test_the_thumbnail_job_draws_one_tile_per_structure() -> void:
 	assert_false(served_ops.has("library_dev"), "core is already served")
 
 
+func test_a_tall_tower_or_a_pagodas_tiers_raise_the_tiles_framing_height() -> void:
+	var plain := {"interface": [{"name": "height", "default": 3.0}], "nodes": []}
+	assert_eq(LibraryStructures.default_height(plain), 3.0)
+	var towered := {
+		"interface": [{"name": "height", "default": 3.0}],
+		"nodes": [{"type": "tower", "params": {"extra": 4.0, "size": 3.0}}],
+	}
+	assert_almost_eq(LibraryStructures.default_height(towered), 9.4, 0.001, "wall, extra, a roof")
+	var pagoda := {
+		"interface": [{"name": "height", "default": 3.0}],
+		"nodes": [{"type": "roof_profile", "params": {"tiers": 3.0, "tier_height": 1.5, "finial": 1.0}}],
+	}
+	assert_almost_eq(LibraryStructures.default_height(pagoda), 8.5, 0.001, "tiers and finial")
+	var huge := {"nodes": [{"type": "tower", "params": {"extra": 40.0, "size": 3.0}}]}
+	assert_eq(LibraryStructures.default_height(huge), 16.0, "clamped")
+
+
 func test_the_writer_puts_a_tile_under_thumbnails_structures_and_refuses_bad_places() -> void:
 	var root := "user://test_library_structures_writer"
 	World.remove_tree(root)

@@ -214,13 +214,43 @@ static func default_height(recipe: Dictionary) -> float:
 			):
 				base = float((item as Dictionary)["default"])
 	var nodes: Variant = recipe.get("nodes")
+	var top := base
 	if nodes is Array:
 		for node: Variant in nodes as Array:
-			if node is Dictionary and (node as Dictionary).get("type") == "stack":
-				var params: Variant = (node as Dictionary).get("params")
-				if params is Dictionary and (params as Dictionary).get("height") is float:
-					base += float((params as Dictionary)["height"])
-	return clampf(base, 1.0, 16.0)
+			if not node is Dictionary:
+				continue
+			var params: Variant = (node as Dictionary).get("params")
+			if not params is Dictionary:
+				continue
+			var values: Dictionary = params
+			match (node as Dictionary).get("type"):
+				"stack":
+					if values.get("height") is float:
+						base += float(values["height"])
+						top = maxf(top, base)
+				"tower":
+					# A tower stands `extra` above the building under a roof about as high as 0.8 of
+					# its width (a spire more, a flat top none).
+					top = maxf(
+						top, base + _num(values.get("extra")) + 0.8 * _num(values.get("size"))
+					)
+				"roof_profile":
+					# A pagoda's tiers pile up above the wall.
+					var tiers := _num(values.get("tiers"))
+					if tiers > 0.0:
+						top = maxf(
+							top,
+							(
+								base
+								+ tiers * _num(values.get("tier_height"))
+								+ _num(values.get("finial"))
+							)
+						)
+	return clampf(maxf(base, top), 1.0, 16.0)
+
+
+static func _num(value: Variant) -> float:
+	return float(value) if value is float or value is int else 0.0
 
 
 ## The index entry with every field checked and defaulted, or {} (with a warning) when its size

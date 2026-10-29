@@ -1,0 +1,273 @@
+{
+ "out_dir": "render_jobs/structures_styles3",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 320,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "styles3"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "report"
+  },
+  {
+   "op": "wait",
+   "s": 4.0
+  },
+  {
+   "op": "zoom",
+   "size": 78.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "01_overview",
+   "desc": "All thirteen: row one barn to saltbox, row two half-hip cottage to Chinese hall, row three chapel to gatehouse"
+  },
+  {
+   "op": "zoom",
+   "size": 24.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -30,
+    -24
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "02_barn_mansard",
+   "desc": "Gambrel barn and mansard townhouse"
+  },
+  {
+   "op": "zoom",
+   "size": 21.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    10,
+    -24
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "03_dutch_pair",
+   "desc": "Dutch stepped-gable and bell-gable canal houses"
+  },
+  {
+   "op": "zoom",
+   "size": 13.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    40,
+    -24
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "04_saltbox",
+   "desc": "Saltbox house"
+  },
+  {
+   "op": "zoom",
+   "size": 24.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -20,
+    0
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "05_halfhip_minka",
+   "desc": "Half-hip cottage and minka (thatched upswept hip)"
+  },
+  {
+   "op": "zoom",
+   "size": 26.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    20,
+    0
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "06_market_chinese",
+   "desc": "Market hall (arcade) and Chinese hall (upswept hip, tile)"
+  },
+  {
+   "op": "zoom",
+   "size": 17.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -30,
+    24
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "07_chapel",
+   "desc": "Chapel with side bell tower and spire"
+  },
+  {
+   "op": "zoom",
+   "size": 17.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -10,
+    24
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "08_pagoda",
+   "desc": "Pagoda: tiers"
+  },
+  {
+   "op": "zoom",
+   "size": 26.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    20,
+    24
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "09_castle_gate",
+   "desc": "Castle keep (corner turrets) and gatehouse (twin towers)"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "remove_all"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}

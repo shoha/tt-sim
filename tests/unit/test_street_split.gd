@@ -202,6 +202,38 @@ func test_a_split_never_picks_a_ruin_whatever_the_streets_region() -> void:
 	for row in StreetSplit.candidates(["english"] as Array[String]):
 		english.append(String(row["ref"]))
 	assert_true("core:tudor_townhouse" in english, "the English region takes the tudor")
+	assert_true("core:half_hip_cottage" in english, "and the English half-hip cottage")
+
+
+func test_new_regional_rows_join_regions_and_a_street_never_gets_a_castle_or_barn() -> void:
+	var dutch: Array[String] = []
+	for row in StreetSplit.candidates(["dutch"] as Array[String]):
+		dutch.append(String(row["ref"]))
+	assert_true("core:dutch_canal_house" in dutch, "the stepped gable joins a Dutch street")
+	assert_true("core:dutch_bell_house" in dutch, "so does the bell gable")
+	var everywhere: Array = []
+	for region: Array[String] in [
+		[] as Array[String],
+		["english"] as Array[String],
+		["dutch"] as Array[String],
+		["english", "dutch"] as Array[String],
+	]:
+		for row in StreetSplit.candidates(region):
+			everywhere.append(String(row["ref"]))
+	for gone: String in [
+		"core:gambrel_barn",
+		"core:barn",
+		"core:castle_keep",
+		"core:gatehouse",
+		"core:chapel",
+		"core:pagoda_tower",
+		"core:chinese_hall",
+		"core:minka",
+		"core:mansard_townhouse",
+		"core:market_hall",
+		"core:saltbox_house",
+	]:
+		assert_false(gone in everywhere, "%s is not a street's lot" % gone)
 
 
 # --- matching a lot to a structure ------------------------------------------------------

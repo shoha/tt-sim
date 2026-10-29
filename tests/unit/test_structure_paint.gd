@@ -128,6 +128,25 @@ func test_a_ruins_moss_survives_the_styles_wall_tone() -> void:
 	)
 	assert_gt(_mossy_vertices("core:ruin_cottage"), 20, "the ruin's foot is green in the colours")
 	assert_eq(_mossy_vertices("core:slate_house"), 0, "an intact house under the same tone is not")
+	assert_gt(
+		_mossy_vertices("core:ruin_townhouse"),
+		20,
+		"a red brick's moss is baked green too: the shader reads green over red and blue"
+	)
+
+
+func test_profile_and_round_roofs_are_roofs_and_a_pagoda_body_is_a_wall() -> void:
+	assert_eq(StructureLook.role_of_type("roof_profile"), StructureLook.ROOF)
+	assert_eq(StructureLook.role_of_type("roof_round"), StructureLook.ROOF)
+	assert_eq(StructureLook.material_role("tile", StructureLook.ROOF), StructureLook.ROOF)
+	assert_eq(StructureLook.material_role("plaster", StructureLook.ROOF), StructureLook.WALL)
+	assert_eq(StructureLook.material_role("stone", StructureLook.ROOF), StructureLook.WALL)
+	for ref: String in ["core:gambrel_barn", "core:mansard_townhouse", "core:pagoda_tower"]:
+		var parts := StructureGeometry.build_one(_doc, Structure.make(1, ref, _plan(), 5))
+		assert_eq(parts.problem, "", ref)
+		assert_false(_mesh(parts, StructureLook.ROOF).is_empty(), "%s has a roof mesh" % ref)
+	var tower := StructureGeometry.build_one(_doc, Structure.make(1, "core:watchtower", _plan(), 5))
+	assert_false(_mesh(tower, StructureLook.ROOF).is_empty(), "a tower's cone is a roof")
 
 
 func test_beams_vigas_and_ladders_are_the_frame_role_and_keep_their_dark_timber() -> void:

@@ -15,6 +15,8 @@ extends RefCounted
 ##                     (STYLE_LOTS), then waits for their builds.
 ##   styles2           (styles integration 2) lays tudor, pueblo, two adobe kits, a round hut and the
 ##                     five ruins (STYLES2_LOTS), then waits for their builds.
+##   styles3           (styles integration 3) lays the thirteen profile-roof, tower, battlement and
+##                     arched styles (STYLES3_LOTS), then waits for their builds.
 ##   rounds            (styles integration card) lays the five round starters as a hamlet
 ##                     (ROUND_LOTS), then waits for their builds. tile also takes {sides}.
 
@@ -44,6 +46,24 @@ const STYLES2_LOTS: Array = [
 	["core:ruin_townhouse", 0.0, 14.0, 5.0, 8.0, 0.0, 88],
 	["core:ruin_tower", 15.0, 14.0, 5.2, 5.2, 0.0, 89],
 	["core:ruin_barn", 30.0, 14.0, 9.0, 6.0, 0.0, 90],
+]
+
+const STYLES3_LOTS: Array = [
+	# recipe, centre x, centre z, width, depth, yaw degrees, seed: the profile-roof, tower, battlement,
+	# stepped-gable and arched styles of styles integration 3 (2026-10-28), in two rows
+	["core:gambrel_barn", -40.0, -24.0, 10.0, 7.0, 0.0, 101],
+	["core:mansard_townhouse", -20.0, -24.0, 6.0, 8.0, 0.0, 102],
+	["core:dutch_canal_house", 0.0, -24.0, 5.0, 8.0, 0.0, 103],
+	["core:dutch_bell_house", 20.0, -24.0, 5.0, 8.0, 0.0, 104],
+	["core:saltbox_house", 40.0, -24.0, 7.0, 5.0, 0.0, 105],
+	["core:half_hip_cottage", -30.0, 0.0, 7.0, 5.0, 0.0, 106],
+	["core:minka", -10.0, 0.0, 9.0, 7.0, 0.0, 107],
+	["core:market_hall", 10.0, 0.0, 6.5, 10.0, 0.0, 108],
+	["core:chinese_hall", 30.0, 0.0, 11.0, 7.0, 0.0, 109],
+	["core:chapel", -30.0, 24.0, 5.0, 9.0, 0.0, 110],
+	["core:pagoda_tower", -10.0, 24.0, 6.0, 6.0, 0.0, 111],
+	["core:castle_keep", 10.0, 24.0, 7.0, 7.0, 0.0, 112],
+	["core:gatehouse", 30.0, 24.0, 9.0, 5.0, 0.0, 113],
 ]
 
 const ROUND_LOTS: Array = [
@@ -77,6 +97,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _rounds(base)
 		"styles2":
 			return _styles2(base, step)
+		"styles3":
+			return _styles2(base, {"lots": step.get("lots", STYLES3_LOTS)})
 		"street":
 			return _street(base, step)
 		"flush":
