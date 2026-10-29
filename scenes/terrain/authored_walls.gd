@@ -277,14 +277,11 @@ static func _body(faces: PackedVector3Array, wall_id: int) -> StaticBody3D:
 
 
 ## Panes and door leaves: the vertex colour as a flat painted tone, seen from both sides and
-## unshaded (as AuthoredStructures draws them).
+## unshaded, settled toward the sky (StructureMaterials.pane, as AuthoredStructures draws them).
 func _glass_material() -> Material:
 	if _materials.has("glass"):
 		return _materials["glass"]
-	var material := ORMMaterial3D.new()
-	material.vertex_color_use_as_albedo = true
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var material := StructureMaterials.pane()
 	_materials["glass"] = material
 	return material
 

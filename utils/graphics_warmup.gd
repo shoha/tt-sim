@@ -37,6 +37,7 @@ const COVERED_SHADERS := [
 	"res://shaders/lofi_canvas.gdshader",
 	"res://shaders/occlusion_fade.gdshader",
 	"res://shaders/selection_glow.gdshader",
+	"res://shaders/structure_pane.gdshader",
 	"res://shaders/structure_roof.gdshader",
 	"res://shaders/structure_wall.gdshader",
 	"res://shaders/submerged_marker.gdshader",

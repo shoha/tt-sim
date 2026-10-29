@@ -10,7 +10,8 @@
 			"expose": [
 				"height",
 				"roof_pitch",
-				"ridge"
+				"ridge",
+				"wonk"
 			],
 			"family": "house",
 			"file": "structures/stone_house.structure.json",
@@ -40,7 +41,9 @@
 				"height",
 				"floors",
 				"roof_pitch",
-				"ridge"
+				"ridge",
+				"wonk",
+				"fringe"
 			],
 			"family": "cottage",
 			"file": "structures/cottage.structure.json",
@@ -71,7 +74,9 @@
 				"floors",
 				"roof_pitch",
 				"chimneys",
-				"ridge"
+				"ridge",
+				"wonk",
+				"fringe"
 			],
 			"family": "cottage",
 			"file": "structures/cottage_chimneyed.structure.json",
@@ -103,7 +108,8 @@
 				"height",
 				"floors",
 				"roof_pitch",
-				"ridge"
+				"ridge",
+				"wonk"
 			],
 			"family": "townhouse",
 			"file": "structures/townhouse.structure.json",
@@ -134,7 +140,8 @@
 				"height",
 				"floors",
 				"roof_pitch",
-				"ridge"
+				"ridge",
+				"wonk"
 			],
 			"family": "townhouse",
 			"file": "structures/townhouse_trimmed.structure.json",
@@ -167,7 +174,8 @@
 				"height",
 				"floors",
 				"roof_pitch",
-				"ridge"
+				"ridge",
+				"wonk"
 			],
 			"family": "townhouse",
 			"file": "structures/townhouse_timber.structure.json",
@@ -201,7 +209,8 @@
 				"floors",
 				"roof_pitch",
 				"chimneys",
-				"ridge"
+				"ridge",
+				"wonk"
 			],
 			"family": "townhouse",
 			"file": "structures/townhouse_chimneyed.structure.json",
@@ -236,7 +245,8 @@
 				"floors",
 				"roof_pitch",
 				"chimneys",
-				"ridge"
+				"ridge",
+				"wonk"
 			],
 			"family": "townhouse",
 			"file": "structures/townhouse_end.structure.json",
@@ -269,7 +279,8 @@
 			],
 			"expose": [
 				"height",
-				"floors"
+				"floors",
+				"wonk"
 			],
 			"family": "townhouse",
 			"file": "structures/townhouse_flat.structure.json",
@@ -303,7 +314,8 @@
 				"floors",
 				"roof_pitch",
 				"chimneys",
-				"ridge"
+				"ridge",
+				"wonk"
 			],
 			"family": "townhouse",
 			"file": "structures/townhouse_hip.structure.json",
@@ -338,7 +350,8 @@
 				"floors",
 				"roof_pitch",
 				"chimneys",
-				"ridge"
+				"ridge",
+				"wonk"
 			],
 			"family": "cottage",
 			"file": "structures/cottage_hip.structure.json",
@@ -370,7 +383,8 @@
 				"height",
 				"roof_pitch",
 				"window_width",
-				"ridge"
+				"ridge",
+				"wonk"
 			],
 			"family": "house",
 			"file": "structures/house_hip.structure.json",
@@ -398,7 +412,8 @@
 			],
 			"expose": [
 				"height",
-				"window_width"
+				"window_width",
+				"wonk"
 			],
 			"family": "house",
 			"file": "structures/house_flat.structure.json",
