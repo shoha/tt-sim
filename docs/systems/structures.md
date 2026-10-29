@@ -238,6 +238,22 @@ colour, suggestion over literal detail, nothing grey. Three parts, no new asset:
   glass): unshaded as before, but a cool pane (blue at least as strong as red; amber glow and
   wooden leaves are left alone) is scaled to a mid tone and pulled 40 % toward one sky teal with a
   breath of warm reflected light, so panes keep their variety but stop reading as pale stickers.
+- **Ink and clump patches** (card structures-ink, 2026-10-28). Two shared terms in
+  `structure_painterly.gdshaderinc`, both free of mesh data and texture reads. `s_ink` is the plants'
+  silhouette ink (`foliage_view_ink`) at a building's scale: the albedo is multiplied toward a deep
+  plum (`ink_tint`) where the geometry normal turns from the camera (a fresnel term) and along
+  creases, found from `fwidth` of the view-space normal (a wall corner, a roof fold, about a pixel
+  wide); roofs add a little at the eave lip (`COLOR.a` near 0). A true silhouette against sky or
+  ground is not found (that would need a depth read or an inverted hull, and the meshes have split
+  vertices), so a flat-faced building gets ink at its corners and folds, not round its outline.
+  `s_break` is the clump octave: one more 3D value noise at about tree-clump scale (0.22 to 0.3 per
+  metre) shifting hue in soft blotches (damp sage to warm ochre), on walls instead of the old fine
+  mottle (walls at a near-constant value, `value` 0.12, so they never darken; roofs 0.58) and on
+  roofs beside the existing patch. Walls use the soft ink (`softness` 1: a light lavender, little
+  on grazing faces; roofs keep the deep plum). Palette: timber lifted (`TIMBER_LIFT`,
+  `TIMBER_CREAM` 0.6), stone shade a light cream-lavender (floor 0.31/0.27/0.36) with its lit gain
+  raised to 1.42/1.35/1.2 and a cooler-cream warm bias, slate now a teal-slate
+  `(0.46, 0.62, 0.59)`. Tunables: `ink_tint`, `ink_silhouette`, `ink_crease`, `break_amount`.
 - **Handmade starters.** The core starters are generated with procgen's `handmade` option
   (`tools/export_core_structures.gd`: `wonk` 0.7 default and exposed, `fringe` 0.35 m on the two
   timber gable cottages, window bars on): bowed ridges and eaves, leaning, tapering walls, a shaggy
