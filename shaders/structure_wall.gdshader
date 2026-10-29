@@ -43,10 +43,12 @@ void fragment() {
 	col *= mix(vec3(1.0), vec3(1.05, 1.03, 0.95), smoothstep(2.0, 6.0, metres));
 
 	float wash = s_noise(s_pos * 0.32 + 41.0);
-	float mottle = s_noise(s_pos * 1.1 + 7.0);
+	// The clump-sized octave: blotches about as wide as a crown, a little taller on a wall.
+	float clump = s_noise(s_pos * vec3(0.24, 0.30, 0.24) + 19.0);
 	col *= s_lean(smoothstep(0.25, 0.75, wash), wash_amount);
-	col *= s_mass(wash, 0.5 * wash_amount) * (1.0 + (mottle - 0.5) * 0.12 * wash_amount);
+	col *= s_mass(wash, 0.5 * wash_amount) * s_break(clump, 1.0);
 	col = s_ramp(col, NORMAL, INV_VIEW_MATRIX);
+	col = s_ink(col, NORMAL, VIEW, 0.0);
 
 	vec3 orm = texture(orm_tex, uv).rgb;
 	NORMAL_MAP = texture(normal_tex, uv).rgb;

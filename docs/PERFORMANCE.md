@@ -4188,3 +4188,22 @@ Shader terms: no extra texture read over the old ORM materials (masonry samples 
 textures, a roof none), one 3D value noise (8 hashes) per fragment, no uniform branch, specular off.
 Not run on the Compatibility or Mobile renderers; both support the built-ins used and a `light()`
 function, as the foliage shaders do.
+
+### Structures: ink and clump patches (card structures-ink, 2026-10-28)
+
+Indicative (GPU shared, 37 to 38 % busy and P3 before both runs; the second run's whole map drifted
+0.8 ms slower, so compare within a run). Job `structures_s6_perf`, run on main then on the branch, back
+to back. GPU median ms over about 1,400 to 1,700 frames per 8 s window:
+
+| State | main | with ink and clump patches |
+|---|---|---|
+| No structures (first) | 4.45 | 5.26 |
+| 20 structures, painterly | 4.32 | 5.07 |
+| Same, plain material (control) | 4.04 | 5.04 |
+| 20 structures, painterly again | 4.42 | 5.07 |
+| No structures (last) | 4.80 | 5.54 |
+
+Painterly minus plain control: 0.28 and 0.38 ms on main, 0.03 ms on the branch, so the new terms
+(one more 3D value noise per wall and roof fragment, one `fwidth` of the normal, a fresnel) add no
+cost the noise floor shows; the old fine-mottle noise on walls was replaced, so walls evaluate the
+same two noises as before. No new texture reads.

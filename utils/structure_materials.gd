@@ -21,13 +21,16 @@ const MASONRY_CREAM := 0.75
 const TIMBER_SATURATION := 1.1
 const TIMBER_WARM := Vector3(1.16, 1.07, 0.90)
 ## Planks lean toward honey as stone leans toward cream (the wall shader's `cream`, here a share).
-const TIMBER_CREAM := 0.5
+const TIMBER_CREAM := 0.8
+## A lift on the planks' tint: the library's oak read a deep brown on a big barn (2026-10-28).
+const TIMBER_LIFT := Vector3(1.6, 1.5, 1.25)
 ## The plants' light model's balance for walls (structure_painterly.gdshaderinc defaults, tuned for
-## roofs): shade leans sandy and olive where the plants' leans lavender, so a shaded stone face
-## stays a colour instead of a mauve grey (look integration 2026-10-28). Timber takes more light.
-const WALL_SHADE_TINT := Vector3(0.92, 0.88, 0.90)
-const WALL_SHADE_FLOOR := Vector3(0.25, 0.21, 0.21)
-const STONE_LIT_GAIN := Vector3(1.24, 1.18, 1.08)
+## roofs): shade leans a soft cream-lavender, lighter and warmer than the crowns' violet, so a
+## shaded stone face stays a colour instead of a brown or a mauve grey (look integration and ink
+## card, 2026-10-28). Timber takes more light.
+const WALL_SHADE_TINT := Vector3(0.94, 0.90, 1.0)
+const WALL_SHADE_FLOOR := Vector3(0.26, 0.22, 0.31)
+const STONE_LIT_GAIN := Vector3(1.34, 1.27, 1.15)
 const TIMBER_LIT_GAIN := Vector3(1.5, 1.38, 1.15)
 
 
@@ -149,7 +152,7 @@ static func _timber(style: String, root: String, role: String) -> ShaderMaterial
 	var orm := GroundPalette.load_texture(root, surface.get("orm", ""))
 	if orm != null:
 		material.set_shader_parameter("orm_tex", orm)
-	material.set_shader_parameter("albedo_tint", Vector3(tint.r, tint.g, tint.b))
+	material.set_shader_parameter("albedo_tint", Vector3(tint.r, tint.g, tint.b) * TIMBER_LIFT)
 	material.set_shader_parameter("normal_scale", AuthoredWalls.WOOD_NORMAL_SCALE)
 	material.set_shader_parameter("saturation", TIMBER_SATURATION)
 	material.set_shader_parameter("warm_bias", TIMBER_WARM)
