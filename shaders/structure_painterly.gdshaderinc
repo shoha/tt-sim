@@ -26,6 +26,17 @@ uniform float ambient_keep : hint_range(0.0, 2.0) = 0.5;
 uniform vec3 rim_color : source_color = vec3(1.0, 0.86, 0.62);
 uniform float rim_amount : hint_range(0.0, 0.5) = 0.12;
 
+// Silhouette and crease ink, the plants' term (foliage_view_ink, wind_foliage_include.gdshaderinc
+// apply_painted_albedo) at a building's scale: the albedo is multiplied toward a deep tinted edge
+// (a plum that keeps the colour, never black) where a face turns away from the camera, and along
+// creases (a wall corner, an eave lip), found from how fast the shading normal changes across the
+// screen (fwidth, no mesh data and no texture read).
+uniform vec3 ink_tint = vec3(0.42, 0.31, 0.46);
+uniform float ink_silhouette : hint_range(0.0, 1.0) = 0.8;
+uniform float ink_crease : hint_range(0.0, 1.0) = 1.0;
+// How strongly the larger painted patches break a wall or roof (value and hue, tree-clump size).
+uniform float break_amount : hint_range(0.0, 1.0) = 0.85;
+
 varying vec3 s_pos;
 varying vec3 s_normal;
 
@@ -69,6 +80,24 @@ void vertex() {
 vec3 s_rim(vec3 painted, vec3 normal, vec3 view) {
 	float rim = pow(1.0 - clamp(dot(normal, view), 0.0, 1.0), 3.0);
 	return rim_color * rim * rim_amount * painted;
+}
+
+// The ink: `normal` is the view-space geometry normal, `view` VIEW, `extra` 0..1 more ink where the
+// shader knows an edge (an eave). Multiplies the albedo toward `ink_tint`.
+vec3 s_ink(vec3 painted, vec3 normal, vec3 view, float extra) {
+	float graze = 1.0 - clamp(abs(dot(normal, view)), 0.0, 1.0);
+	float silhouette = smoothstep(0.45, 0.9, graze) * ink_silhouette;
+	float crease = smoothstep(0.18, 0.6, length(fwidth(normal))) * ink_crease;
+	float ink = clamp(silhouette + crease + extra, 0.0, 0.85);
+	return painted * mix(vec3(1.0), ink_tint, ink);
+}
+
+// A painted patch the size of a tree clump: value and hue shift in soft-edged blotches (damp sage,
+// warm ochre) from a 0..1 noise, so a large wall or roof is never one smooth gradient.
+vec3 s_break(float n, float amount) {
+	float t = smoothstep(0.38, 0.62, n);
+	vec3 hue = mix(vec3(0.84, 1.06, 0.97), vec3(1.14, 0.96, 0.80), t);
+	return mix(vec3(1.0), hue * (0.70 + 0.58 * t), amount * break_amount);
 }
 
 // The foliage's sun-ward albedo ramp: `normal` is the view-space normal, `inv_view` INV_VIEW_MATRIX.
