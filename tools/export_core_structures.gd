@@ -275,6 +275,91 @@ const STARTERS: Array[Dictionary] = [
 		"max_area_m2": 100.0,
 		"expose": ["height", "window_width"],
 	},
+	# Architecture styles (card 1, 2026-10-29): each starter is one seeded draw of a procgen building
+	# style (`procgen/recipes/building_styles/<bundle>.json`, ProcgenBuildingStyles.draw with `seed`,
+	# `overrides` over the draw). The style supplies the default size, the tags (culture among them),
+	# the exposed controls and the palette hints (written on the recipe's Output node); a starter
+	# names only the id, the label and family and the seed.
+	{
+		"id": "villa_stucco",
+		"bundle": "mediterranean_villa",
+		"seed": 3,
+		"name": "Stucco villa",
+		"family": "house",
+		"variant": "Stucco villa",
+	},
+	{
+		"id": "adobe_house",
+		"bundle": "adobe_house",
+		"seed": 2,
+		"name": "Adobe house",
+		"family": "house",
+		"variant": "Adobe",
+	},
+	{
+		"id": "slate_house",
+		"bundle": "slate_house",
+		"seed": 0,
+		"name": "Slate-roofed stone house",
+		"family": "house",
+		"variant": "Slate roof",
+	},
+	{
+		"id": "alpine_chalet",
+		"bundle": "alpine_chalet",
+		"seed": 0,
+		"name": "Alpine chalet",
+		"family": "house",
+		"variant": "Alpine chalet",
+	},
+	{
+		"id": "thatched_cottage",
+		"bundle": "thatched_cottage",
+		"seed": 3,
+		"name": "Thatched cottage",
+		"family": "cottage",
+		"variant": "Thatched",
+	},
+	{
+		"id": "log_cabin",
+		"bundle": "log_cabin",
+		"seed": 2,
+		"name": "Log cabin",
+		"family": "cottage",
+		"variant": "Log cabin",
+	},
+	{
+		"id": "turf_longhouse",
+		"bundle": "turf_longhouse",
+		"seed": 1,
+		"name": "Turf-roof longhouse",
+		"family": "cottage",
+		"variant": "Turf longhouse",
+	},
+	{
+		"id": "brick_terrace",
+		"bundle": "brick_terrace",
+		"seed": 0,
+		"name": "Brick terrace house",
+		"family": "townhouse",
+		"variant": "Brick, slate roof",
+	},
+	{
+		"id": "canal_house",
+		"bundle": "canal_house",
+		"seed": 0,
+		"name": "Canal house",
+		"family": "townhouse",
+		"variant": "Brick, gable to the street",
+	},
+	{
+		"id": "barn",
+		"bundle": "barn",
+		"seed": 2,
+		"name": "Barn",
+		"family": "farm",
+		"variant": "Barn",
+	},
 ]
 
 
@@ -321,7 +406,8 @@ func _make() -> Dictionary:
 	var texts := {}
 	for starter in STARTERS:
 		var id := String(starter["id"])
-		var doc := _document_of(starter["recipe"] as Dictionary)
+		var style := _style_of(starter)
+		var doc := _document_of_starter(starter, style)
 		var text := doc.to_json()
 		# The shipped recipes are procgen's builders with glazing on (a pane in every window, a leaf
 		# in every door), so they differ from procgen's committed `recipes/` files by that node.
@@ -330,6 +416,7 @@ func _make() -> Dictionary:
 		var declares_textured := false
 		for entry in doc.interface:
 			declares_textured = declares_textured or String(entry.get("name", "")) == "textured"
+		var size: Dictionary = style.get("size", {})
 		(
 			entries
 			. append(
@@ -338,15 +425,23 @@ func _make() -> Dictionary:
 					"name": starter["name"],
 					"family": starter["family"],
 					"variant": starter["variant"],
-					"tags": starter["tags"],
+					"tags": _tags_of(starter, style),
 					"file": LibraryStructures.recipe_path(id),
-					"default_size_m": [6, 4],
-					"min_side_m": starter.get("min_side_m", LibraryStructures.DEFAULT_MIN_SIDE_M),
-					"max_side_m": starter.get("max_side_m", LibraryStructures.DEFAULT_MAX_SIDE_M),
+					"default_size_m": size.get("default", [6, 4]),
+					"min_side_m":
+					starter.get(
+						"min_side_m", size.get("min_side", LibraryStructures.DEFAULT_MIN_SIDE_M)
+					),
+					"max_side_m":
+					starter.get(
+						"max_side_m", size.get("max_side", LibraryStructures.DEFAULT_MAX_SIDE_M)
+					),
 					"max_area_m2":
-					starter.get("max_area_m2", LibraryStructures.DEFAULT_MAX_AREA_M2),
+					starter.get(
+						"max_area_m2", size.get("max_area", LibraryStructures.DEFAULT_MAX_AREA_M2)
+					),
 					"plans": ["rect"],
-					"expose": _exposed(starter),
+					"expose": _exposed(starter, style, doc),
 					"textured": declares_textured,
 					"thumb": LibraryStructures.thumb_path(id),
 				}
@@ -407,8 +502,47 @@ func _document_of(spec: Dictionary) -> PlantGraphDocument:
 	return doc
 
 
-## The starter's `expose` list plus the handmade look's controls (`wonk` on all, `fringe` where set).
-static func _exposed(starter: Dictionary) -> Array:
+## The building style a starter is a draw of ({} for a starter written as a `recipe`).
+static func _style_of(starter: Dictionary) -> Dictionary:
+	return ProcgenBuildingStyles.named(String(starter["bundle"])) if starter.has("bundle") else {}
+
+
+## The tags of `starter`: its own, else its style's and `regional` (StreetSplit.REGIONAL_TAG: a
+## street's generic lots do not pick a regional style).
+static func _tags_of(starter: Dictionary, style: Dictionary) -> Array:
+	if starter.has("tags"):
+		return starter["tags"]
+	var tags: Array = (style.get("tags", []) as Array).duplicate()
+	if starter.has("bundle"):
+		tags.append(StreetSplit.REGIONAL_TAG)
+	return tags
+
+
+## The recipe document of `starter`: a seeded draw of its style (`bundle`, `seed`, `overrides`), or
+## the builder's document of its `recipe`.
+func _document_of_starter(starter: Dictionary, style: Dictionary) -> PlantGraphDocument:
+	if starter.has("bundle"):
+		return ProcgenRecipes.building_from(
+			ProcgenBuildingStyles.draw(
+				style, int(starter.get("seed", 0)), starter.get("overrides", {}) as Dictionary
+			)
+		)
+	return _document_of(starter["recipe"] as Dictionary)
+
+
+## The starter's `expose` list plus the handmade look's controls (`wonk` on all, `fringe` where
+## set). A style's own list is kept to the names its drawn recipe declares (the interface differs by roof
+## and furniture), and already holds what its style wants.
+static func _exposed(starter: Dictionary, style: Dictionary, doc: PlantGraphDocument) -> Array:
+	if starter.has("bundle"):
+		var names := PackedStringArray()
+		for entry in doc.interface:
+			names.append(String(entry["name"]))
+		var kept: Array = []
+		for name: Variant in style.get("expose", []) as Array:
+			if String(name) in names:
+				kept.append(name)
+		return kept
 	var out: Array = (starter["expose"] as Array).duplicate()
 	out.append("wonk")
 	if (starter["recipe"] as Dictionary).has("fringe"):

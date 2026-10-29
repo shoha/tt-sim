@@ -1068,6 +1068,11 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   capture of the street, for the painterly look (card S6): roofs in a per building tile colour,
   warm cream stone, honey timber, streets and structures alike. Pass `--out render_jobs/<name>` to
   keep rounds apart.
+- `jobs/structures_styles.json` (about 31 s, keeps no level): the ten architecture-style starters
+  (stucco villa, adobe, slate house, alpine chalet, canal house; thatched cottage, log cabin, turf
+  longhouse, brick terrace, barn) in two rows of five on a 300 ft meadow map (probe action `styles`,
+  lots in `structures.gd` STYLE_LOTS), an overview and six close pairs (card 1 of the styles roadmap;
+  `docs/systems/structures.md` "Styles").
 - `jobs/structures_s6_perf.json` (about 65 s, keeps no level; GPU shared, indicative): a new unsaved
   300 ft temperate forest, home zoom 60, vsync off; GPU and CPU frame time over 8 s windows with no
   structures, with 20 (probe `structures.gd` `many`), with every structure mesh in one plain
