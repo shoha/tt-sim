@@ -1,0 +1,45 @@
+name: Fetch the procgen submodule
+description: >
+  Checks out procgen/ (the private shoha/procgen repo, mounted as a git submodule) with a read
+  token. The default GITHUB_TOKEN cannot read another private repo, so a job that imports or tests
+  the project passes the repository secret PROCGEN_READ_TOKEN here after its checkout.
+
+# Why not `submodules: true` on the checkout: that would use the default token for every
+# submodule and fail with "repository not found" on procgen. Here the token reaches git through
+# GIT_CONFIG_* environment variables (a url rewrite for procgen's address only), so it is never
+# on a command line or written to the repository's config, and the rest of the job keeps the
+# default token (LFS and the other submodule are unaffected).
+#
+# The secret is a fine-grained personal access token, resource owner shoha, repository access
+# only shoha/procgen, permission Contents: read-only. Create it at
+# https://github.com/settings/personal-access-tokens/new and store it with
+#   gh secret set PROCGEN_READ_TOKEN -R shoha/tt-sim
+# Fine-grained tokens expire (set the longest the account allows and note the date in
+# docs/systems/structures.md); an expired or missing token fails this step with a clear message.
+
+inputs:
+  token:
+    description: The repository secret PROCGEN_READ_TOKEN.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Fetch procgen
+      shell: bash
+      env:
+        PROCGEN_READ_TOKEN: ${{ inputs.token }}
+      run: |
+        if [ -z "$PROCGEN_READ_TOKEN" ]; then
+          echo "::error::the repository secret PROCGEN_READ_TOKEN is missing or empty: procgen is a private repository (see .github/actions/procgen-submodule/action.yml)"
+          exit 1
+        fi
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        export GIT_CONFIG_COUNT=1
+        export GIT_CONFIG_KEY_0="url.https://x-access-token:${PROCGEN_READ_TOKEN}@github.com/shoha/procgen.git.insteadOf"
+        export GIT_CONFIG_VALUE_0="https://github.com/shoha/procgen.git"
+        if ! git submodule update --init procgen; then
+          echo "::error::could not fetch procgen: PROCGEN_READ_TOKEN is expired, revoked or lacks Contents: read on shoha/procgen"
+          exit 1
+        fi
+        git submodule status procgen

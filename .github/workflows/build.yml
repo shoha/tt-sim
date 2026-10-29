@@ -31,6 +31,7 @@ jobs:
     name: Native parity
     needs: native
     uses: ./.github/workflows/native-parity.yml
+    secrets: inherit
 
   test:
     name: Run tests and lint
@@ -41,6 +42,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      # procgen/ is a private repo: the default token cannot read it (same step in the export
+      # job and in native-parity.yml, the jobs that import the project).
+      - name: Fetch procgen
+        uses: ./.github/actions/procgen-submodule
+        with:
+          token: ${{ secrets.PROCGEN_READ_TOKEN }}
 
       # LFS objects come from the Actions cache instead of LFS bandwidth. GitHub Free
       # includes 10 GiB of LFS bandwidth a month and LFS is disabled for the rest of the
@@ -149,6 +157,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Fetch procgen
+        uses: ./.github/actions/procgen-submodule
+        with:
+          token: ${{ secrets.PROCGEN_READ_TOKEN }}
 
       # See the test job: LFS objects from the Actions cache, not LFS bandwidth.
       - name: List LFS objects
