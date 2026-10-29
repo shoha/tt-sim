@@ -57,6 +57,10 @@ const NODE_ROLES: Dictionary = {
 	# Half-timber framing (architecture-styles card 7): posts, rails, studs, braces, bressummer and
 	# joist ends, all the "frame/..." tags of one node.
 	"framing": FRAME,
+	# Porches, balconies and galleries (card 9a): timber by default, role_of_slot picks the roofs
+	# and the plinth out; the Dormer (9b) is a wall by default, role_of_slot picks its parts.
+	"gallery": FRAME,
+	"dormer": WALL,
 	"vigas": FRAME,
 	"roof_props": FRAME,
 }
@@ -106,11 +110,39 @@ static func role_of_type(node_type: String) -> String:
 ## The role of the vertices tagged `path` ("<node id>" or "<node id>/<slot path>") in `doc`.
 static func role_of_path(doc: PlantGraphDocument, path: String) -> String:
 	var node_id := path.get_slice("/", 0)
-	return role_of_type(doc.node_type(node_id))
+	return role_of_slot(doc.node_type(node_id), path.substr(node_id.length() + 1))
+
+
+## The role of the vertices a node of type `node_type` tagged with the slot path `slot` (what
+## follows the node id: "porch/hood/roof", "dormer0/sill"). Most node types are one role; the
+## Gallery and the Dormer emit parts of several (architecture-styles card 9): a gallery's hoods and
+## pent roof are roofs, its plinth is stone trim and the rest (deck, posts, brackets, rails) is
+## timber; a dormer's roof is a roof, its sill and head trim, its pane an opening, its wall a wall.
+## Pure.
+static func role_of_slot(node_type: String, slot: String) -> String:
+	var last := slot.get_slice("/", slot.get_slice_count("/") - 1)
+	match node_type:
+		"gallery":
+			if last == "roof":
+				return ROOF
+			if last == "plinth":
+				return TRIM
+		"dormer":
+			match last.rstrip("0123456789"):
+				"roof":
+					return ROOF
+				"sill", "head":
+					return TRIM
+				"pane":
+					return OPENING
+				_:
+					return WALL
+	return role_of_type(node_type)
 
 
 ## The role of a provenance path inside a street row ("street_row_2/left/lot0/roof_gable_4"): the
-## last segment whose name (without its trailing node number) is in NODE_ROLES, WALL if none.
+## last segment whose name (without its trailing node number) is in NODE_ROLES, WALL if none; the
+## segments after it are the node's slot path (role_of_slot).
 ## The row's lots are sub-graphs, so their nodes are not in the row's document.
 static func role_of_tag_path(path: String) -> String:
 	var segments := path.split("/")
@@ -120,7 +152,7 @@ static func role_of_tag_path(path: String) -> String:
 		if cut > 0 and seg_name.substr(cut + 1).is_valid_int():
 			seg_name = seg_name.substr(0, cut)
 		if NODE_ROLES.has(seg_name):
-			return String(NODE_ROLES[seg_name])
+			return role_of_slot(seg_name, "/".join(segments.slice(k + 1)))
 	return WALL
 
 

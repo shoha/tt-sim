@@ -567,6 +567,59 @@ const STARTERS: Array[Dictionary] = [
 			"palette": {"wall": ["#F5E8B8", "#F2E2AE"]},
 		},
 	},
+	# Porches, galleries and dormers (architecture-styles cards 9a, 9b, 2026-10-29): the Gallery and
+	# Dormer nodes' looks, each pinned in a `style_patch` so the draw always has the feature.
+	{
+		"id": "porch_cottage",
+		"bundle": "porch_cottage",
+		"seed": 0,
+		"name": "Porch cottage",
+		"family": "cottage",
+		"variant": "Porch over the door",
+		"style_patch":
+		{
+			"gallery": {"span": [["door", 1]], "roof": [["pent", 1]], "rail": [["balusters", 1]]},
+			"dormers": [[{"form": "gable", "side": "front"}, 1]],
+		},
+	},
+	{
+		"id": "veranda_cottage",
+		"bundle": "porch_cottage",
+		"seed": 2,
+		"name": "Veranda cottage",
+		"family": "cottage",
+		"variant": "Veranda along the front",
+		"style_patch":
+		{
+			"gallery": {"span": [["front", 1]], "roof": [["pent", 1]], "rail": [["panel", 1]]},
+			"dormers": [[false, 1]],
+		},
+	},
+	{
+		"id": "inn_gallery",
+		"bundle": "inn_gallery",
+		"seed": 0,
+		"name": "Galleried inn",
+		"family": "inn",
+		"variant": "Upper gallery",
+		"tags_add": ["english"],
+		"style_patch": {"palette": {"wall": ["#F0E2BC", "#EAD8A8", "#F2E6C6"]}},
+	},
+	{
+		"id": "dormered_house",
+		"bundle": "dormered_house",
+		"seed": 0,
+		"name": "Dormered house",
+		"family": "house",
+		"variant": "Dormers on a steep roof",
+		"tags_add": ["french"],
+		"style_patch":
+		{
+			"dormers": {"form": [["gable", 1]], "side": "front", "width": [0.9, 1.2]},
+			# Warm creams: the shaded face of a pale grey plaster reads mauve (as the framed houses').
+			"palette": {"wall": ["#EEDDB4", "#E9D4A6", "#F0E2BC"]},
+		},
+	},
 	# Round and polygonal plans (styles integration card, 2026-10-28): each is a regular polygon
 	# (plan kind "round", the `sides:<n>` tag), built by ProcgenRecipesRound. `round` says how:
 	# {"kind": a ProcgenRecipesRound kind, "shape": a tower's roof shape} or {"make": the options

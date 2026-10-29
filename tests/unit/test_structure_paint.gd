@@ -192,6 +192,47 @@ func test_half_timber_framing_is_the_frame_role_and_dark_oak_over_plaster() -> v
 		assert_gt(timber, 0.05, "%s: oak, not black" % ref)
 
 
+func test_gallery_and_dormer_parts_take_their_roles_from_the_slot_tag() -> void:
+	var look := StructureLook
+	assert_eq(look.role_of_type("gallery"), look.FRAME)
+	assert_eq(look.role_of_slot("gallery", "porch/deck"), look.FRAME)
+	assert_eq(look.role_of_slot("gallery", "porch/post0"), look.FRAME)
+	assert_eq(look.role_of_slot("gallery", "porch/rail/0/top"), look.FRAME)
+	assert_eq(look.role_of_slot("gallery", "balcony1/bracket0"), look.FRAME)
+	assert_eq(look.role_of_slot("gallery", "porch/hood/roof"), look.ROOF)
+	assert_eq(look.role_of_slot("gallery", "gallery/roof"), look.ROOF)
+	assert_eq(look.role_of_slot("gallery", "balcony0/roof"), look.ROOF)
+	assert_eq(look.role_of_slot("gallery", "porch/plinth"), look.TRIM)
+	assert_eq(look.role_of_slot("dormer", "dormer0/wall"), look.WALL)
+	assert_eq(look.role_of_slot("dormer", "dormer12/roof1"), look.ROOF)
+	assert_eq(look.role_of_slot("dormer", "dormer0/sill"), look.TRIM)
+	assert_eq(look.role_of_slot("dormer", "dormer0/head"), look.TRIM)
+	assert_eq(look.role_of_slot("dormer", "dormer0/pane"), look.OPENING)
+	assert_eq(look.role_of_slot("roof_gable", "anything/at/all"), look.ROOF, "other types as ever")
+	assert_eq(look.role_of_slot("framing", "frame/post0"), look.FRAME)
+	# A street row's provenance path: the node's slot path is what follows its (numbered) name.
+	var lot := "street_row_2/left/lot0/"
+	assert_eq(look.role_of_tag_path(lot + "dormer_5/dormer0/roof0"), look.ROOF)
+	assert_eq(look.role_of_tag_path(lot + "dormer_5/dormer1/sill"), look.TRIM)
+	assert_eq(look.role_of_tag_path(lot + "dormer_5/dormer1/wall"), look.WALL)
+	assert_eq(look.role_of_tag_path(lot + "gallery_4/porch/hood/roof"), look.ROOF)
+	assert_eq(look.role_of_tag_path(lot + "gallery_4/porch/deck"), look.FRAME)
+	assert_eq(look.role_of_tag_path(lot + "roof_gable_3"), look.ROOF)
+
+
+func test_porches_galleries_and_dormers_build_with_timber_roofs_and_a_frame_mesh() -> void:
+	for ref: String in ["core:porch_cottage", "core:veranda_cottage", "core:inn_gallery"]:
+		var parts := StructureGeometry.build_one(_doc, Structure.make(1, ref, _plan(), 5))
+		assert_eq(parts.problem, "", ref)
+		assert_false(_mesh(parts, StructureLook.FRAME).is_empty(), "%s: deck, posts and rails" % ref)
+		assert_false(_mesh(parts, StructureLook.ROOF).is_empty(), "%s: a roof" % ref)
+	var dormered := StructureGeometry.build_one(
+		_doc, Structure.make(1, "core:dormered_house", _plan(), 5)
+	)
+	assert_eq(dormered.problem, "", "the dormered house builds at the pin footprint")
+	assert_false(_mesh(dormered, StructureLook.ROOF).is_empty(), "dormered_house: a roof")
+
+
 func test_panes_keep_their_procgen_colours() -> void:
 	var parts := StructureGeometry.build_one(_doc, Structure.make(1, "core:cottage", _plan(), 5))
 	for mesh: Dictionary in parts.meshes:
