@@ -474,8 +474,16 @@ func test_the_newest_edit_wins() -> void:
 	var parts := StructureGeometry.build_one(_doc, second)
 	assert_eq(
 		structures.get_structure_node(1).get_child_count(),
-		(parts.meshes as Array).size() + 1,
-		"the chimneyed cottage's meshes and its body"
+		(
+			(parts.meshes as Array).size()
+			+ (
+				["ground", "props"]
+				. filter(func(k: String) -> bool: return not parts.dressing[k].is_empty())
+				. size()
+			)
+			+ 1
+		),
+		"the chimneyed cottage's meshes, its yard's two meshes and its body"
 	)
 	assert_eq(structures.keys()[1], StructureGeometry.key_of(_doc, second))
 

@@ -436,11 +436,13 @@ func test_the_live_building_follows_an_edit_and_an_undo_brings_it_back() -> void
 	assert_lt(_node_width(nodes.get_structure_node(id)), 8.0, "and the undo narrows it again")
 
 
-## The x extent (world) of every mesh under a structure node.
+## The x extent (world) of every building mesh under a structure node (not its yard).
 func _node_width(node: Node) -> float:
 	var low := INF
 	var high := -INF
 	for mesh in node.find_children("*", "MeshInstance3D", true, false):
+		if String(mesh.name).begins_with("dressing_"):
+			continue
 		var box := (mesh as MeshInstance3D).global_transform * (mesh as MeshInstance3D).get_aabb()
 		low = minf(low, box.position.x)
 		high = maxf(high, box.end.x)
