@@ -296,15 +296,49 @@ func test_variants_are_the_same_familys_other_recipes_and_a_lone_recipe_has_none
 	houses.sort()
 	var expected: Array[String] = [
 		"core:adobe_house",
+		"core:adobe_parapet",
+		"core:adobe_rounded",
 		"core:alpine_chalet",
 		"core:house_flat",
 		"core:house_hip",
+		"core:pueblo",
 		"core:slate_house",
 		"core:stone_house",
 		"core:villa_stucco",
 	]
 	assert_eq(houses, expected, "the house family holds the stone houses and the styles' houses")
 	assert_true(StructureEdit.variants_of("core:no_such").is_empty())
+
+
+func test_the_ruin_family_swaps_among_rectangles_and_the_tower_has_no_variants() -> void:
+	var ruins: Array[String] = []
+	for row in StructureEdit.variants_of("core:ruin_cottage"):
+		ruins.append(String(row["ref"]))
+	ruins.sort()
+	assert_eq(
+		ruins,
+		["core:ruin_barn", "core:ruin_chapel", "core:ruin_cottage", "core:ruin_townhouse"],
+		"the round tower is not offered for a rectangle (a swap keeps the footprint)"
+	)
+	assert_true(StructureEdit.variants_of("core:ruin_tower").is_empty(), "alone of its plan kind")
+
+
+func test_ruin_and_jetty_step_in_tenths_within_their_range() -> void:
+	var chapel := StructureRecipes.document("core:ruin_chapel")
+	var more := StructureEdit.stepped_params({}, chapel.interface, "ruin", 1)
+	assert_almost_eq(float(more["ruin"]), 0.55, 0.001, "a notch is a tenth over the default 0.45")
+	var gone := StructureEdit.stepped_params({"ruin": 0.95}, chapel.interface, "ruin", 1)
+	assert_almost_eq(float(gone["ruin"]), 1.0, 0.001, "clamped at the recipe's top")
+	assert_true(
+		(
+			(StructureEdit.stepped_params({"ruin": 1.0}, chapel.interface, "ruin", 1)).get("ruin")
+			== 1.0
+		)
+	)
+	var tudor := StructureRecipes.document("core:tudor_townhouse")
+	var deeper := StructureEdit.stepped_params({}, tudor.interface, "jetty", 1)
+	assert_true(deeper.has("jetty"), "the tudor's jetty steps")
+	assert_eq(StructureEdit.stepped_params({}, chapel.interface, "jetty", 1), {}, "a ruin has none")
 
 
 func test_a_recipe_keeps_only_the_parameters_it_declares() -> void:

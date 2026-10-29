@@ -793,6 +793,147 @@
 		},
 		{
 			"default_size_m": [
+				5.0,
+				7.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"jetty",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "townhouse",
+			"file": "structures/tudor_townhouse.structure.json",
+			"id": "tudor_townhouse",
+			"max_area_m2": 70.0,
+			"max_side_m": 9.0,
+			"min_side_m": 3.5,
+			"name": "Tudor townhouse",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"plaster",
+				"timber",
+				"jetty",
+				"gable",
+				"chimney",
+				"tudor",
+				"town",
+				"english",
+				"beams",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/tudor_townhouse.jpg",
+			"variant": "Tudor, jettied"
+		},
+		{
+			"default_size_m": [
+				8.0,
+				6.0
+			],
+			"expose": [
+				"height",
+				"wonk"
+			],
+			"family": "house",
+			"file": "structures/pueblo.structure.json",
+			"id": "pueblo",
+			"max_area_m2": 110.0,
+			"max_side_m": 14.0,
+			"min_side_m": 4.0,
+			"name": "Pueblo",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"adobe",
+				"flat",
+				"stepped",
+				"desert",
+				"pueblo",
+				"vigas",
+				"ladder",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/pueblo.jpg",
+			"variant": "Pueblo, stepped"
+		},
+		{
+			"default_size_m": [
+				6.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"wonk"
+			],
+			"family": "house",
+			"file": "structures/adobe_parapet.structure.json",
+			"id": "adobe_parapet",
+			"max_area_m2": 100.0,
+			"max_side_m": 12.0,
+			"min_side_m": 3.0,
+			"name": "Adobe house, parapet",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"adobe",
+				"flat",
+				"desert",
+				"parapet",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/adobe_parapet.jpg",
+			"variant": "Adobe, parapet"
+		},
+		{
+			"default_size_m": [
+				6.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"wonk"
+			],
+			"family": "house",
+			"file": "structures/adobe_rounded.structure.json",
+			"id": "adobe_rounded",
+			"max_area_m2": 100.0,
+			"max_side_m": 12.0,
+			"min_side_m": 3.0,
+			"name": "Adobe house, rounded",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"adobe",
+				"flat",
+				"desert",
+				"parapet",
+				"vigas",
+				"rounded",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/adobe_rounded.jpg",
+			"variant": "Adobe, vigas"
+		},
+		{
+			"default_size_m": [
 				7.2,
 				7.2
 			],
@@ -962,6 +1103,187 @@
 			"textured": true,
 			"thumb": "thumbnails/structures/dome_hall.jpg",
 			"variant": "Stone, dome"
+		},
+		{
+			"default_size_m": [
+				6,
+				4.5
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"ridge",
+				"wonk",
+				"ruin"
+			],
+			"family": "ruin",
+			"file": "structures/ruin_cottage.structure.json",
+			"id": "ruin_cottage",
+			"max_area_m2": 70.0,
+			"max_side_m": 14.0,
+			"min_side_m": 3.0,
+			"name": "Ruined stone cottage",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stone",
+				"slate",
+				"gable",
+				"english",
+				"highland",
+				"ruin",
+				"cottage",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/ruin_cottage.jpg",
+			"variant": "Cottage"
+		},
+		{
+			"default_size_m": [
+				9,
+				5.5
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"ridge",
+				"wonk",
+				"ruin"
+			],
+			"family": "ruin",
+			"file": "structures/ruin_chapel.structure.json",
+			"id": "ruin_chapel",
+			"max_area_m2": 110.0,
+			"max_side_m": 14.0,
+			"min_side_m": 4.0,
+			"name": "Ruined chapel",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stone",
+				"slate",
+				"gable",
+				"english",
+				"highland",
+				"ruin",
+				"chapel",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/ruin_chapel.jpg",
+			"variant": "Chapel, gables standing"
+		},
+		{
+			"default_size_m": [
+				5.0,
+				8.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"ridge",
+				"wonk",
+				"ruin"
+			],
+			"family": "ruin",
+			"file": "structures/ruin_townhouse.structure.json",
+			"id": "ruin_townhouse",
+			"max_area_m2": 120.0,
+			"max_side_m": 14.0,
+			"min_side_m": 3.0,
+			"name": "Ruined townhouse",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"brick",
+				"tile",
+				"gable",
+				"townhouse",
+				"dutch",
+				"ruin",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/ruin_townhouse.jpg",
+			"variant": "Townhouse, brick"
+		},
+		{
+			"default_size_m": [
+				9.0,
+				6.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"ridge",
+				"wonk",
+				"ruin"
+			],
+			"family": "ruin",
+			"file": "structures/ruin_barn.structure.json",
+			"id": "ruin_barn",
+			"max_area_m2": 180.0,
+			"max_side_m": 18.0,
+			"min_side_m": 4.0,
+			"name": "Ruined barn",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"barn",
+				"timber",
+				"shingle",
+				"gable",
+				"farm",
+				"ruin",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/ruin_barn.jpg",
+			"variant": "Barn, timber"
+		},
+		{
+			"default_size_m": [
+				5.2,
+				5.2
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"ruin"
+			],
+			"family": "ruin",
+			"file": "structures/ruin_tower.structure.json",
+			"id": "ruin_tower",
+			"max_area_m2": 64.0,
+			"max_side_m": 8.0,
+			"min_side_m": 4.0,
+			"name": "Ruined tower",
+			"plans": [
+				"round"
+			],
+			"tags": [
+				"ruin",
+				"tower",
+				"stone",
+				"round",
+				"sides:8",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/ruin_tower.jpg",
+			"variant": "Tower, octagon"
 		}
 	]
 }

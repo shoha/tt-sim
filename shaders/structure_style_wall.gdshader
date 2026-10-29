@@ -22,6 +22,8 @@ uniform float contact_amount : hint_range(0.0, 1.0) = 0.6;
 uniform float course_m = 0.16;
 uniform float brick_m = 0.40;
 uniform vec3 mortar_tone = vec3(0.92, 0.86, 0.74);
+// How far a mossy vertex (a ruin's green foot, StructurePaint) is pulled to a painterly moss green.
+uniform float moss_amount : hint_range(0.0, 1.0) = 0.6;
 
 void fragment() {
 	vec3 n = normalize(s_normal);
@@ -34,7 +36,7 @@ void fragment() {
 	float v = s_pos.y;
 	float metres = COLOR.a * 16.0;
 
-	vec3 col = COLOR.rgb;
+	vec3 col = s_mossy(COLOR.rgb, s_moss_of(COLOR.rgb), moss_amount);
 	vec3 m = vec3(1.0);
 	float wash = s_noise(s_pos * 0.32 + 41.0);
 	float mottle = s_noise(s_pos * 1.1 + 7.0);

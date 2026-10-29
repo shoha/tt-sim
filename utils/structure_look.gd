@@ -18,6 +18,10 @@ const TRIM := "trim"
 const CHIMNEY := "chimney"
 ## The panes and door leaves: procgen's `glazing` node (surface kind `glass`, flat vertex colours).
 const OPENING := "opening"
+## The timber a building carries on its walls: the Timber Beams of a half-timbered storey, the vigas
+## of an adobe, a roof ladder and hatch (styles integration 2). Its own role so the beams keep their
+## own dark honey tone instead of taking the plaster's wall tone (StructurePaint).
+const FRAME := "frame"
 ## The surface kinds a roof role is its own material for (card S6 had only planks): "wood" and
 ## "tile" the tile shader, slate, shingle, thatch and turf the style roof shader. A roof surface of
 ## any other kind (a gable end in plaster, a flat roof in adobe) is drawn as a wall.
@@ -27,7 +31,7 @@ const STYLE_WALL_KINDS: Array[String] = ["plaster", "adobe", "brick", "log"]
 ## The roof kinds the style roof shader draws, in its `pattern` order.
 const STYLE_ROOF_KINDS: Array[String] = ["slate", "shingle", "thatch", "turf"]
 ## Every role, in the order a structure's meshes are made.
-const ROLES: Array[String] = [WALL, ROOF, TRIM, CHIMNEY, OPENING]
+const ROLES: Array[String] = [WALL, ROOF, TRIM, CHIMNEY, OPENING, FRAME]
 ## The surface kind of the panes and leaves (ProcgenGlazing.KIND); drawn unshaded from the vertex
 ## colours.
 const GLASS_KIND := "glass"
@@ -45,6 +49,9 @@ const NODE_ROLES: Dictionary = {
 	"quoins": TRIM,
 	"roof_furniture": CHIMNEY,
 	"glazing": OPENING,
+	"beams": FRAME,
+	"vigas": FRAME,
+	"roof_props": FRAME,
 }
 
 ## What each role multiplies a surface's tint by. A painterly wall or roof is drawn by the
@@ -57,6 +64,7 @@ const ROLE_TINTS: Dictionary = {
 	TRIM: Color(1.3, 1.26, 1.16),
 	CHIMNEY: Color(1.25, 0.9, 0.78),
 	OPENING: Color(1.0, 1.0, 1.0),
+	FRAME: Color(1.0, 1.0, 1.0),
 }
 
 ## The roof tile colours a building draws from (sRGB, as a painter names them), each with the share

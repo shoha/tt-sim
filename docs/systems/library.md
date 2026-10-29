@@ -531,7 +531,8 @@ structures/index.json> [--out <folder to write into>] [--serve 1] [--only a,b] [
 `--library <tt-sim>/libraries/core --out <core-library>`, then copy the tiles to
 `libraries/core/thumbnails/structures/`. `--serve 1` lays a not yet installed library over the game first.
 
-Core's starter set is data in the `core-library` repo (`structures/`: twenty-eight recipes (five at S3, eight added
+Core's starter set is data in the `core-library` repo (`structures/`: thirty-seven recipes (nine added 2026-10-28: tudor, pueblo, two adobe kits and five ruins, see
+`structures.md` "Stacked, kit and ruin starters"; five at S3, eight added
 2026-10-28: timber, chimneyed, terrace-end, hip and flat variants, ten added 2026-10-29 from procgen's
 building styles: `STARTERS` entries with a `bundle` and a `seed` instead of a `recipe`, see
 `structures.md` "Styles", and five round plans on 2026-10-28, `STARTERS` entries with a `round`

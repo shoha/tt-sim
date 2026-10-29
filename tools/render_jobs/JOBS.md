@@ -1073,6 +1073,12 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   longhouse, brick terrace, barn) in two rows of five on a 300 ft meadow map (probe action `styles`,
   lots in `structures.gd` STYLE_LOTS), an overview and six close pairs (card 1 of the styles roadmap;
   `docs/systems/structures.md` "Styles").
+- `jobs/structures_styles2.json` (about 45 s, keeps no level): the second styles integration: tudor
+  townhouse, pueblo, the two adobe kit variants and a round hut in the back row, the ruined cottage,
+  chapel, townhouse, tower and barn in the front (probe action `styles2`, lots in `structures.gd`
+  STYLES2_LOTS; a step's `lots` lays any rows, with an optional eighth entry of recipe parameters),
+  an overview and seven close captures. Zoom BEFORE `look_at`: the pan offset depends on the zoom
+  (`docs/systems/structures.md` "Stacked, kit and ruin starters").
 - `jobs/structures_round.json` (about 30 s, keeps no level): the five round starters as a hamlet on a
   200 ft meadow map (probe action `rounds`, lots in `structures.gd` ROUND_LOTS) with the round hut's
   ghost following the pointer, then the hero roundhouse selected by a click and a corner dot dragged

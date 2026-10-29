@@ -25,6 +25,8 @@ uniform float damp_amount : hint_range(0.0, 1.0) = 0.6;
 uniform float damp_height = 1.1;
 uniform float wash_amount : hint_range(0.0, 1.0) = 0.7;
 uniform float contact_amount : hint_range(0.0, 1.0) = 0.7;
+// How far a mossy vertex (a ruin's green foot, StructurePaint) is pulled to a painterly moss green.
+uniform float moss_amount : hint_range(0.0, 1.0) = 0.95;
 
 void fragment() {
 	vec2 uv = UV * uv_scale;
@@ -33,6 +35,8 @@ void fragment() {
 	col = mix(vec3(luma), col, saturation);
 	// A grey rock turned to warm cream stone: the texture's light and dark kept, the hue replaced.
 	col = mix(col, vec3(luma) * cream, cream_amount) * warm_bias;
+	// Moss, after the cream (which replaces the hue and would turn a mossy foot back to stone).
+	col = s_mossy(col, s_moss_of(COLOR.rgb), moss_amount);
 
 	float metres = COLOR.a * 16.0;
 	float foot = (1.0 - smoothstep(0.0, damp_height, metres)) * damp_amount;

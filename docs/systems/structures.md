@@ -353,6 +353,45 @@ flavour region (`english`, `dutch`) joins it and a joining row scores `W_REGION`
 English village gets thatched cottages and slate houses among its stone houses. All of it is a function of
 the document and the street, so a split stays deterministic.
 
+### Stacked, kit and ruin starters (styles integration 2, 2026-10-28)
+
+Nine more core structures put procgen's cards 3 and 6 into the palette (`STARTERS` entries; the
+table also takes `style_patch`, a deep merge over the style file, `kit_index` (one of the style's
+`kit` patches, always drawn), `tags_add`, `tags_drop` and `expose_add`):
+
+- **Stacked and flat-roof kit.** `tudor_townhouse` (family `townhouse`, variant "Tudor, jettied": a
+  plaster ground floor, a jettied timber storey with dark beams and joist ends, a third storey by
+  chance; exposes `jetty`; tags `tudor`, `english`, `jetty`, `beams`), `pueblo` (family `house`:
+  stepped, rounded terraces, vigas, a ladder), `adobe_parapet` and `adobe_rounded` (`house`: the
+  adobe style's second and third `kit` patches, a parapet, and rounded corners with vigas).
+- **Ruins.** Family `ruin`, tags `ruin` and `regional`, and `ruin` exposed (0 to 1): `ruin_cottage`
+  (slate-house style, textured stone), `ruin_chapel` (a longer, steeper stone house at 0.45, so both
+  gable ends and part of the roof stand), `ruin_townhouse` (the canal house in brick, gable to the
+  street), `ruin_barn` (timber boards), `ruin_tower` (an octagon from `ProcgenRecipesRound.make`
+  with `ruin`, plan kind round). A ruin recipe has no glazing, chimneys or trim by design. An L plan
+  is not offered by the tool, so there is no "ruined L townhouse"; any rectangle works.
+- **Sizes.** Every starter was built at its least and largest footprints (least side by the longest
+  allowed, three seeds each, `StructureGeometry.build_one`): all build with no problem, 600 to
+  4600 triangles, 12 to 60 ms. A jetty or a set-back stays inside the plan's rules (the plan is the
+  ground storey; an upper storey that overhangs is not part of the footprint check).
+- **Look.** A new role `frame` (`StructureLook.FRAME`; node types `beams`, `vigas`, `roof_props`)
+  keeps procgen's own timber tone (`StructurePaint`): beams were painted the plaster's wall tone
+  before, so half-timber vanished. Moss (`ProcgenRuin.MOSS_TINT`, a multiplied green) is read back
+  from the colour (`StructurePaint.moss_of`) and kept under a style's wall tone, and the wall shaders
+  pull a mossy vertex toward a bright green (`s_moss_of` / `s_mossy` in
+  `structure_painterly.gdshaderinc`; `structure_wall` applies it after its cream, `structure_style_wall`
+  on the vertex colour). Moss is procgen's tint on the foot of the walls (1 m) and the rubble.
+- **The tool.** `ruin` and `jetty` are steppers (`STEPPED`; `PARAM_STEPS` 0.1 each, a ruin reads in
+  percent, a jetty in metres), offered when the row exposes them. The `ruin` family is its own tile
+  group; the selection's Style tiles swap among the four rectangular ruins (`variants_of` offers only
+  rows of the same plan kind, since a swap keeps the footprint: the round tower has no Style tiles).
+- **Streets.** `StreetSplit.RUIN_TAG`: a split never picks a row tagged `ruin`, whatever region
+  tags it carries. The tudor townhouse (`english`) and the desert adobe and pueblo rows join their
+  regions' candidates like the other regional rows.
+- **Render job** `structures_styles2` (probe action `styles2`, lots in `structures.gd` STYLES2_LOTS;
+  a step's `lots` lays a comparison instead): two rows of five on a meadow. Captures from
+  2026-10-28 are in `docs/plans/2026-10-28-structures/captures/styles2/` (not tracked).
+
 ## Dressing
 
 Probe B (2026-10-28, branch `probe-b`): a building is settled into its place by a yard,

@@ -108,6 +108,50 @@ func test_walls_carry_height_above_the_foot() -> void:
 		assert_almost_eq(colors[k].a, expected, 0.001)
 
 
+func _mossy_vertices(ref: String) -> int:
+	var parts := StructureGeometry.build_one(_doc, Structure.make(1, ref, _plan(), 5))
+	var mossy := 0
+	for mesh: Dictionary in parts.meshes:
+		if mesh.role != StructureLook.WALL:
+			continue
+		for c: Color in mesh.arrays[Mesh.ARRAY_COLOR]:
+			if c.g > c.r:
+				mossy += 1
+	return mossy
+
+
+func test_a_ruins_moss_survives_the_styles_wall_tone() -> void:
+	assert_eq(StructurePaint.moss_of(Color(0.9, 0.9, 0.9)), 0.0, "grey stone")
+	assert_eq(StructurePaint.moss_of(Color(0.9, 0.93, 0.9)), 0.0, "the stone's own slight green")
+	assert_eq(
+		StructurePaint.moss_of(Color(0.9 * 0.66, 0.9 * 0.96, 0.9 * 0.4)), 1.0, "procgen's full moss"
+	)
+	assert_gt(_mossy_vertices("core:ruin_cottage"), 20, "the ruin's foot is green in the colours")
+	assert_eq(_mossy_vertices("core:slate_house"), 0, "an intact house under the same tone is not")
+
+
+func test_beams_vigas_and_ladders_are_the_frame_role_and_keep_their_dark_timber() -> void:
+	assert_eq(StructureLook.role_of_type("beams"), StructureLook.FRAME)
+	assert_eq(StructureLook.role_of_type("vigas"), StructureLook.FRAME)
+	assert_eq(StructureLook.role_of_type("roof_props"), StructureLook.FRAME)
+	var parts := StructureGeometry.build_one(
+		_doc, Structure.make(1, "core:tudor_townhouse", _plan(), 5)
+	)
+	var frame := _mesh(parts, StructureLook.FRAME)
+	var wall := _mesh(parts, StructureLook.WALL, "plaster")
+	assert_false(frame.is_empty(), "the beams are a mesh of their own")
+	assert_false(wall.is_empty(), "the plaster stays a wall")
+	var timber := 0.0
+	for c: Color in frame.arrays[Mesh.ARRAY_COLOR]:
+		timber += c.get_luminance()
+	timber /= float(frame.arrays[Mesh.ARRAY_COLOR].size())
+	var plaster := 0.0
+	for c: Color in wall.arrays[Mesh.ARRAY_COLOR]:
+		plaster += c.get_luminance()
+	plaster /= float(wall.arrays[Mesh.ARRAY_COLOR].size())
+	assert_lt(timber, plaster * 0.6, "dark honey-brown timber over pale plaster")
+
+
 func test_panes_keep_their_procgen_colours() -> void:
 	var parts := StructureGeometry.build_one(_doc, Structure.make(1, "core:cottage", _plan(), 5))
 	for mesh: Dictionary in parts.meshes:

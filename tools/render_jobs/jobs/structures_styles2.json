@@ -1,0 +1,249 @@
+{
+ "out_dir": "render_jobs/structures_styles2",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 300,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "styles2"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "report"
+  },
+  {
+   "op": "wait",
+   "s": 4.0
+  },
+  {
+   "op": "zoom",
+   "size": 60.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "01_overview",
+   "desc": "Tudor, pueblo, two adobe kits, round hut; ruined cottage, chapel, townhouse, tower, barn"
+  },
+  {
+   "op": "zoom",
+   "size": 11.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -30,
+    -14
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "02_tudor",
+   "desc": "Tudor townhouse: jetty, dark beams over plaster"
+  },
+  {
+   "op": "zoom",
+   "size": 13.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -15,
+    -14
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "03_pueblo",
+   "desc": "Pueblo: stepped terraces, vigas, ladder"
+  },
+  {
+   "op": "zoom",
+   "size": 15.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    7.5,
+    -14
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "04_adobe_kits",
+   "desc": "Adobe house with parapet and the rounded one with vigas"
+  },
+  {
+   "op": "zoom",
+   "size": 9.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    30,
+    -14
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "05_hut",
+   "desc": "Round timber hut"
+  },
+  {
+   "op": "zoom",
+   "size": 17.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -22.5,
+    14
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "06_ruin_cottage_chapel",
+   "desc": "Ruined stone cottage and ruined chapel"
+  },
+  {
+   "op": "zoom",
+   "size": 17.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    7.5,
+    14
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "07_ruin_townhouse_tower",
+   "desc": "Ruined townhouse and ruined tower"
+  },
+  {
+   "op": "zoom",
+   "size": 12.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    30,
+    14
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "08_ruin_barn",
+   "desc": "Ruined barn"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "remove_all"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}
