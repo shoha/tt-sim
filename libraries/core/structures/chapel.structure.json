@@ -296,7 +296,8 @@
         "name": "Chapel with a spire",
         "palette_accent": "#8A3B2E,#33507A",
         "palette_roof": "#58606E,#6A5E58,#7A4E3E",
-        "palette_wall": "#C9C3B4,#B9B4A6,#D3CCB8,#A9A79E"
+        "palette_wall": "#C9C3B4,#B9B4A6,#D3CCB8,#A9A79E",
+        "stone_tone": "grey"
       },
       "position": [
         950.0,

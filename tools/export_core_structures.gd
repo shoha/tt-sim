@@ -1010,11 +1010,18 @@ func _document_of_starter(starter: Dictionary, style: Dictionary) -> PlantGraphD
 			return ProcgenRecipesRound.tower(String(spec.get("shape", "pyramid")))
 		return ProcgenRecipesRound.named(String(spec["kind"]))
 	if starter.has("bundle"):
-		return ProcgenRecipes.building_from(
+		var doc := ProcgenRecipes.building_from(
 			ProcgenBuildingStyles.draw(
 				style, int(starter.get("seed", 0)), starter.get("overrides", {}) as Dictionary
 			)
 		)
+		# A draw keeps one wall tone; a library structure keeps the style's whole list, so each
+		# placement draws its own (StructurePaint.palette_of).
+		var walls: Array = (style.get("palette", {}) as Dictionary).get("wall", [])
+		if walls.size() > 1:
+			for id in doc.nodes_of_type("output"):
+				doc.set_param(id, "palette_wall", ",".join(PackedStringArray(walls)))
+		return doc
 	return _document_of(starter["recipe"] as Dictionary)
 
 

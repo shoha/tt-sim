@@ -322,6 +322,7 @@
       "params": {
         "dark": 0.49,
         "detail": 1,
+        "floor_band": 0.3,
         "pattern": "braces",
         "stud_spacing": 0
       },
