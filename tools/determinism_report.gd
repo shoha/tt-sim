@@ -153,9 +153,9 @@ func _structure_cases() -> void:
 	var pinned := _read_pins(STRUCTURE_PINS)
 	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
 	StructureRecipes.ensure_served()
-	var plan := PackedVector2Array([Vector2(-3, -2), Vector2(3, -2), Vector2(3, 2), Vector2(-3, 2)])
 	for ref in StructureRecipes.core_refs():
 		_cases += 1
+		var plan := StructurePlacement.pin_plan(LibraryStructureStore.structure(ref))
 		var parts := StructureGeometry.build_one(doc, Structure.make(1, ref, plan, 5))
 		var got := (
 			"%s %d" % [StructureGeometry.digest_of(parts), StructureGeometry.triangle_count(parts)]

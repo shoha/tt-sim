@@ -473,6 +473,7 @@ static func thumbnail_job(
 					"ref": ref_of(library_id, String(item["id"])),
 					"width": float(size[0]),
 					"depth": float(size[1]),
+					"sides": StructurePlacement.sides_of(entry),
 					"seed": TILE_STRUCTURE_SEED,
 				}
 			)

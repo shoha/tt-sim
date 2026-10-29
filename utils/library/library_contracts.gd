@@ -210,8 +210,11 @@ const STRUCTURE_ENTRY_KEYS: Array[String] = [
 	"textured",
 	"thumb",
 ]
-## The footprint kinds a structure's `plans` may name.
-const STRUCTURE_PLANS: Array[String] = ["rect", "l", "t", "u"]
+## The footprint kinds a structure's `plans` may name. "round" is a regular polygon (the round
+## recipes, ProcgenRecipesRound): the tool places and scales it as a whole, and its number of sides
+## is the `sides:<n>` tag (StructurePlacement.sides_of). plantgen's validator holds a copy of this
+## list and warns about "round" until it is added there.
+const STRUCTURE_PLANS: Array[String] = ["rect", "l", "t", "u", "round"]
 const CATALOG_ENTRY_KEYS: Array[String] = [
 	"id",
 	"group",

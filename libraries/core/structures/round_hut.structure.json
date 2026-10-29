@@ -1,0 +1,236 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "building_layout_2",
+      "to_port": 0
+    },
+    {
+      "from": "building_layout_2",
+      "from_port": 0,
+      "to": "facade_3",
+      "to_port": 0
+    },
+    {
+      "from": "facade_3",
+      "from_port": 0,
+      "to": "building_timber_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_3",
+      "from_port": 0,
+      "to": "roof_round_5",
+      "to_port": 0
+    },
+    {
+      "from": "building_timber_4",
+      "from_port": 0,
+      "to": "output_6",
+      "to_port": 0
+    },
+    {
+      "from": "roof_round_5",
+      "from_port": 0,
+      "to": "output_6",
+      "to_port": 0
+    },
+    {
+      "from": "facade_3",
+      "from_port": 0,
+      "to": "facade_trim_7",
+      "to_port": 0
+    },
+    {
+      "from": "facade_trim_7",
+      "from_port": 0,
+      "to": "output_6",
+      "to_port": 0
+    },
+    {
+      "from": "facade_3",
+      "from_port": 0,
+      "to": "glazing_8",
+      "to_port": 0
+    },
+    {
+      "from": "glazing_8",
+      "from_port": 0,
+      "to": "output_6",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "interface": [
+    {
+      "default": 2.2,
+      "label": "Wall height",
+      "max": 3.2,
+      "min": 1.8,
+      "name": "height",
+      "tip": "Wall height.",
+      "type": "float"
+    },
+    {
+      "default": 40,
+      "label": "Roof pitch",
+      "max": 60,
+      "min": 25,
+      "name": "roof_pitch",
+      "tip": "Slope in degrees.",
+      "type": "float"
+    },
+    {
+      "default": 0.45,
+      "label": "Eave overhang",
+      "max": 1,
+      "min": 0,
+      "name": "overhang",
+      "tip": "How far the roof reaches past the walls.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Window width",
+      "max": 1.2,
+      "min": 0,
+      "name": "window_width",
+      "tip": "Width of the main windows; 0 for the style's own.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Ragged edge",
+      "max": 0.6,
+      "min": 0,
+      "name": "fringe",
+      "tip": "Thatch-like teeth.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Finial",
+      "max": 1,
+      "min": 0,
+      "name": "finial",
+      "tip": "A spike on the point.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Lit windows",
+      "max": 1,
+      "min": 0,
+      "name": "lit",
+      "tip": "The share of windows that glow warm.",
+      "type": "float"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        120.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "building_layout_2",
+      "params": {
+        "height": "@height",
+        "overhang": "@overhang",
+        "roof": "cone",
+        "roof_pitch": "@roof_pitch",
+        "window_width": "@window_width"
+      },
+      "position": [
+        250.0,
+        120.0
+      ],
+      "type": "building_layout"
+    },
+    {
+      "id": "facade_3",
+      "params": {
+        "floors": 0,
+        "style": "{\"bay_width\":2.6,\"floor_height_target\":2.4,\"floors\":1,\"ground_floor_height\":0.0,\"name\":\"round_hut\",\"patterns\":{\"back\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"window\"}]}]},\"front\":{\"ground\":[{\"size\":\"~1\",\"symbol\":\"door\"}]}},\"symbols\":{\"blank\":{\"kind\":\"blank\"},\"door\":{\"kind\":\"door\"},\"slit\":{\"height\":0.9,\"kind\":\"window\",\"sill\":0.8,\"width\":0.3},\"window\":{\"height\":0.8,\"kind\":\"window\",\"sill\":0.95,\"width\":0.55}}}",
+        "window_width": "@window_width"
+      },
+      "position": [
+        480.0,
+        120.0
+      ],
+      "type": "facade"
+    },
+    {
+      "id": "building_timber_4",
+      "params": {},
+      "position": [
+        710.0,
+        20.0
+      ],
+      "type": "building_timber"
+    },
+    {
+      "id": "roof_round_5",
+      "params": {
+        "finial": "@finial",
+        "fringe": "@fringe",
+        "overhang": "@overhang",
+        "roof_pitch": "@roof_pitch",
+        "shape": "cone",
+        "top": 0.12
+      },
+      "position": [
+        710.0,
+        220.0
+      ],
+      "type": "roof_round"
+    },
+    {
+      "id": "output_6",
+      "params": {
+        "name": "Round building"
+      },
+      "position": [
+        950.0,
+        120.0
+      ],
+      "type": "output"
+    },
+    {
+      "id": "facade_trim_7",
+      "params": {
+        "door_frame": true,
+        "frames": false,
+        "lintels": false,
+        "role": "wood",
+        "shutters": false,
+        "sills": false,
+        "step": true
+      },
+      "position": [
+        710.0,
+        420.0
+      ],
+      "type": "facade_trim"
+    },
+    {
+      "id": "glazing_8",
+      "params": {
+        "lit": "@lit",
+        "muntins": false
+      },
+      "position": [
+        950.0,
+        420.0
+      ],
+      "type": "glazing"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

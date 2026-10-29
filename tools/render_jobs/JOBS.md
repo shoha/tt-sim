@@ -1073,6 +1073,13 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   longhouse, brick terrace, barn) in two rows of five on a 300 ft meadow map (probe action `styles`,
   lots in `structures.gd` STYLE_LOTS), an overview and six close pairs (card 1 of the styles roadmap;
   `docs/systems/structures.md` "Styles").
+- `jobs/structures_round.json` (about 30 s, keeps no level): the five round starters as a hamlet on a
+  200 ft meadow map (probe action `rounds`, lots in `structures.gd` ROUND_LOTS) with the round hut's
+  ghost following the pointer, then the hero roundhouse selected by a click and a corner dot dragged
+  outward (the whole polygon scales about its middle, the readout shows the diameter): captures
+  `01_hamlet_and_ghost`, `03_selected`, `04_scaling`, `05_scaled` (styles integration card;
+  `docs/systems/structures.md` "Round plans"). The look_at wait is long: the camera takes seconds to
+  settle, and a pointer parked off the window edge pans it.
 - `jobs/structures_s6_perf.json` (about 65 s, keeps no level; GPU shared, indicative): a new unsaved
   300 ft temperate forest, home zoom 60, vsync off; GPU and CPU frame time over 8 s windows with no
   structures, with 20 (probe `structures.gd` `many`), with every structure mesh in one plain

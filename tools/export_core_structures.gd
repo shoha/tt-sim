@@ -21,7 +21,6 @@ const PIN_SEED := 5
 ## The starters' default `wonk` (0..1) and the thatched cottages' `fringe` (metres).
 const HANDMADE_WONK := 0.7
 const THATCH_FRINGE_M := 0.35
-var pin_plan := PackedVector2Array([Vector2(-3, -2), Vector2(3, -2), Vector2(3, 2), Vector2(-3, 2)])
 
 ## The starter set. `recipe` says how ProcgenRecipes.building makes the document (every recipe is
 ## glazed and exposes the `ridge` choice; the keys are `roof`, `walls`, `style`, `trim` ("" or the
@@ -360,6 +359,74 @@ const STARTERS: Array[Dictionary] = [
 		"family": "farm",
 		"variant": "Barn",
 	},
+	# Round and polygonal plans (styles integration card, 2026-10-28): each is a regular polygon
+	# (plan kind "round", the `sides:<n>` tag), built by ProcgenRecipesRound. `round` says how:
+	# {"kind": a ProcgenRecipesRound kind, "shape": a tower's roof shape} or {"make": the options
+	# of ProcgenRecipesRound.make, with "sides", "radius", "radius_min" and "radius_max"}; a kind's
+	# sides and radius ranges are ProcgenRecipesRound.info's, and any key of the table overrides
+	# them. The index sizes are diameters (2 * radius). Adding a round structure is one entry.
+	{
+		"id": "roundhouse",
+		"round": {"kind": "roundhouse"},
+		"name": "Thatched roundhouse",
+		"family": "roundhouse",
+		"variant": "Thatched",
+		"tags": ["house", "stone", "thatch", "roundhouse"],
+		"expose": ["height", "roof_pitch", "overhang", "fringe", "finial", "textured", "wonk"],
+	},
+	{
+		"id": "round_hut",
+		"round": {"kind": "hut"},
+		"name": "Round timber hut",
+		"family": "roundhouse",
+		"variant": "Timber hut",
+		"tags": ["house", "timber", "hut", "roundhouse"],
+		"expose": ["height", "roof_pitch", "overhang"],
+	},
+	{
+		"id": "watchtower",
+		"round": {"kind": "tower", "shape": "pyramid"},
+		"name": "Stone watchtower",
+		"family": "tower",
+		"variant": "Square, pyramid roof",
+		"tags": ["tower", "stone", "watchtower"],
+		"expose": ["height", "floors", "roof_pitch", "overhang", "textured"],
+	},
+	{
+		"id": "tower_hex",
+		"round": {"kind": "tower", "shape": "cone", "sides": 6, "radius": 2.6, "radius_min": 2.0},
+		"name": "Hex tower",
+		"family": "tower",
+		"variant": "Hexagonal, cone roof",
+		"tags": ["tower", "stone", "cone"],
+		"expose": ["height", "floors", "roof_pitch", "overhang", "textured", "finial"],
+	},
+	{
+		"id": "dome_hall",
+		"round":
+		{
+			"make":
+			{
+				"walls": "stone",
+				"style": "round_hall",
+				"shape": "dome",
+				"height": [3.4, 2.4, 6.0],
+				"pitch": [50.0, 30.0, 70.0],
+				"overhang": 0.3,
+				"trim": ["sills", "door_frame", "step", "cornice"],
+				"glazing": true,
+			},
+			"sides": 10,
+			"radius": 4.6,
+			"radius_min": 3.4,
+			"radius_max": 7.0,
+		},
+		"name": "Domed hall",
+		"family": "hall",
+		"variant": "Stone, dome",
+		"tags": ["hall", "stone", "dome"],
+		"expose": ["height", "roof_pitch", "overhang", "textured"],
+	},
 ]
 
 
@@ -417,6 +484,15 @@ func _make() -> Dictionary:
 		for entry in doc.interface:
 			declares_textured = declares_textured or String(entry.get("name", "")) == "textured"
 		var size: Dictionary = style.get("size", {})
+		var round_spec := _round_spec(starter)
+		if not round_spec.is_empty():
+			var rmax: float = round_spec["radius_max"]
+			size = {
+				"default": [2.0 * float(round_spec["radius"]), 2.0 * float(round_spec["radius"])],
+				"min_side": 2.0 * float(round_spec["radius_min"]),
+				"max_side": 2.0 * rmax,
+				"max_area": 4.0 * rmax * rmax,
+			}
 		(
 			entries
 			. append(
@@ -440,7 +516,8 @@ func _make() -> Dictionary:
 					starter.get(
 						"max_area_m2", size.get("max_area", LibraryStructures.DEFAULT_MAX_AREA_M2)
 					),
-					"plans": ["rect"],
+					"plans":
+					[StructurePlacement.ROUND_PLAN] if not round_spec.is_empty() else ["rect"],
 					"expose": _exposed(starter, style, doc),
 					"textured": declares_textured,
 					"thumb": LibraryStructures.thumb_path(id),
@@ -454,7 +531,8 @@ func _make() -> Dictionary:
 	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
 	for starter in STARTERS:
 		var ref := "core:" + String(starter["id"])
-		var parts := StructureGeometry.build_one(doc, Structure.make(1, ref, pin_plan, PIN_SEED))
+		var plan := _pin_plan_of(starter)
+		var parts := StructureGeometry.build_one(doc, Structure.make(1, ref, plan, PIN_SEED))
 		if String(parts["problem"]) != "":
 			warnings.append("%s: %s" % [ref, parts["problem"]])
 		pins.append(
@@ -464,7 +542,7 @@ func _make() -> Dictionary:
 					starter["id"],
 					StructureGeometry.digest_of(parts),
 					StructureGeometry.triangle_count(parts),
-					_raw_digest(doc, ref)
+					_raw_digest(doc, ref, plan)
 				]
 			)
 		)
@@ -502,6 +580,33 @@ func _document_of(spec: Dictionary) -> PlantGraphDocument:
 	return doc
 
 
+## What a round starter is made for: {"sides", "radius", "radius_min", "radius_max"} (metres), the
+## kind's ProcgenRecipesRound.info with the starter's own keys over it; {} for any other starter.
+static func _round_spec(starter: Dictionary) -> Dictionary:
+	if not starter.has("round"):
+		return {}
+	var spec: Dictionary = starter["round"]
+	var info: Dictionary = ProcgenRecipesRound.info(String(spec.get("kind", "")))
+	var out := {
+		"sides": int(spec.get("sides", info.get("sides", 8))),
+		"radius": float(spec.get("radius", info.get("radius", 3.0))),
+		"radius_min": float(spec.get("radius_min", info.get("radius_min", 2.0))),
+		"radius_max": float(spec.get("radius_max", info.get("radius_max", 5.0))),
+	}
+	return out
+
+
+## The footprint the starter is pinned at: the fixed 6 by 4 m rectangle, or a round starter's own
+## regular polygon at its default radius (turn 0).
+func _pin_plan_of(starter: Dictionary) -> PackedVector2Array:
+	var round_spec := _round_spec(starter)
+	if round_spec.is_empty():
+		return StructurePlacement.pin_plan({})
+	return StructurePlacement.round_plan(
+		Vector2.ZERO, float(round_spec["radius"]), 0.0, int(round_spec["sides"])
+	)
+
+
 ## The building style a starter is a draw of ({} for a starter written as a `recipe`).
 static func _style_of(starter: Dictionary) -> Dictionary:
 	return ProcgenBuildingStyles.named(String(starter["bundle"])) if starter.has("bundle") else {}
@@ -510,6 +615,14 @@ static func _style_of(starter: Dictionary) -> Dictionary:
 ## The tags of `starter`: its own, else its style's and `regional` (StreetSplit.REGIONAL_TAG: a
 ## street's generic lots do not pick a regional style).
 static func _tags_of(starter: Dictionary, style: Dictionary) -> Array:
+	var round_spec := _round_spec(starter)
+	if not round_spec.is_empty():
+		# A round plan is never a street's lot (its lots are rectangles) and belongs to a region.
+		var tags: Array = (starter.get("tags", []) as Array).duplicate()
+		tags.append(StructurePlacement.ROUND_PLAN)
+		tags.append("%s%d" % [StructurePlacement.SIDES_TAG, int(round_spec["sides"])])
+		tags.append(StreetSplit.REGIONAL_TAG)
+		return tags
 	if starter.has("tags"):
 		return starter["tags"]
 	var tags: Array = (style.get("tags", []) as Array).duplicate()
@@ -521,6 +634,13 @@ static func _tags_of(starter: Dictionary, style: Dictionary) -> Array:
 ## The recipe document of `starter`: a seeded draw of its style (`bundle`, `seed`, `overrides`), or
 ## the builder's document of its `recipe`.
 func _document_of_starter(starter: Dictionary, style: Dictionary) -> PlantGraphDocument:
+	if starter.has("round"):
+		var spec: Dictionary = starter["round"]
+		if spec.has("make"):
+			return ProcgenRecipesRound.make(spec["make"] as Dictionary)
+		if String(spec["kind"]) == "tower":
+			return ProcgenRecipesRound.tower(String(spec.get("shape", "pyramid")))
+		return ProcgenRecipesRound.named(String(spec["kind"]))
 	if starter.has("bundle"):
 		return ProcgenRecipes.building_from(
 			ProcgenBuildingStyles.draw(
@@ -534,6 +654,13 @@ func _document_of_starter(starter: Dictionary, style: Dictionary) -> PlantGraphD
 ## set). A style's own list is kept to the names its drawn recipe declares (the interface differs by roof
 ## and furniture), and already holds what its style wants.
 static func _exposed(starter: Dictionary, style: Dictionary, doc: PlantGraphDocument) -> Array:
+	if starter.has("round"):
+		var declared := PackedStringArray()
+		for entry in doc.interface:
+			declared.append(String(entry["name"]))
+		return (starter["expose"] as Array).filter(
+			func(name: Variant) -> bool: return String(name) in declared
+		)
 	if starter.has("bundle"):
 		var names := PackedStringArray()
 		for entry in doc.interface:
@@ -557,11 +684,11 @@ static func _set_default(doc: PlantGraphDocument, name: String, value: float) ->
 
 
 ## procgen's own digest of the same build (ProcgenBuildingCases.digest of the first LOD).
-func _raw_digest(doc: MapDocument, ref: String) -> String:
+func _raw_digest(doc: MapDocument, ref: String, plan: PackedVector2Array) -> String:
 	var recipe := StructureRecipes.document(ref)
 	if recipe == null:
 		return "-"
-	var structure := Structure.make(1, ref, pin_plan, PIN_SEED)
+	var structure := Structure.make(1, ref, plan, PIN_SEED)
 	var evaluator := PlantGraphEvaluator.new(recipe.registry)
 	var plant: Variant = evaluator.evaluate_structure(
 		recipe, StructureGeometry.inputs_for(doc, structure, recipe), true

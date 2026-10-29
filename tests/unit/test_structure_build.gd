@@ -102,7 +102,7 @@ func _nodes() -> AuthoredStructures:
 
 
 func test_the_starter_set_resolves_and_an_unknown_reference_does_not() -> void:
-	assert_eq(StructureRecipes.core_refs().size(), 23)
+	assert_eq(StructureRecipes.core_refs().size(), 28)
 	for ref in StructureRecipes.core_refs():
 		assert_true(StructureRecipes.exists(ref), ref)
 		assert_eq(StructureRecipes.digest(ref).length(), 64, "a sha256")
@@ -311,7 +311,8 @@ func test_the_starter_set_matches_its_pinned_digests() -> void:
 	assert_true(FileAccess.file_exists(PIN_FILE), "the pin file")
 	var now := PackedStringArray()
 	for ref in StructureRecipes.core_refs():
-		var parts := StructureGeometry.build_one(_doc, Structure.make(1, ref, _plan(), 5))
+		var plan := StructurePlacement.pin_plan(LibraryStructureStore.structure(ref))
+		var parts := StructureGeometry.build_one(_doc, Structure.make(1, ref, plan, 5))
 		assert_eq(parts.problem, "", ref)
 		now.append(
 			(
@@ -358,7 +359,8 @@ func test_a_structure_over_the_hard_budget_is_refused_with_a_reason() -> void:
 
 func test_a_starter_structure_is_well_under_the_soft_budget() -> void:
 	for ref in StructureRecipes.core_refs():
-		var parts := StructureGeometry.build_one(_doc, Structure.make(1, ref, _plan(), 5))
+		var plan := StructurePlacement.pin_plan(LibraryStructureStore.structure(ref))
+		var parts := StructureGeometry.build_one(_doc, Structure.make(1, ref, plan, 5))
 		assert_lt(int(parts.triangles), StructureGeometry.SOFT_TRIANGLES, ref)
 		assert_eq(parts.warning, "")
 
