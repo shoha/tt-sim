@@ -6,8 +6,9 @@ name: Determinism
 # Linux, Windows and macOS (arm64 and, under Rosetta, x86_64) with the official Godot binary and
 # prints one compact line per case (tools/determinism_report.gd): MATCH, or DIFF with the digest
 # computed here, the pinned one and the digest's parts, so a mismatch can be diagnosed from the
-# log. The cases: procgen's 49 building and street cases (procgen/tests/expected_building_digests.txt),
-# its two self-check samples and the starter set (tests/fixtures/structure_digests.txt).
+# log. The cases: procgen's building and street cases (procgen/tests/expected_building_digests.txt,
+# 64 on 2026-10-28), its two self-check samples and the starter set
+# (tests/fixtures/structure_digests.txt, 13): 79 in all, equal on every platform on 2026-10-28.
 # docs/systems/structures.md "Determinism" has the results and what a DIFF means.
 #
 # Not part of the release pipeline (card S9, 2026-10-28): this is its own workflow, no job of
@@ -24,9 +25,12 @@ name: Determinism
 on:
   workflow_dispatch:
   push:
-    branches: [main, "ci/**"]
+    # Only main (and workflow_dispatch on any branch, for a ci/<topic> test run: `gh workflow run
+    # Determinism --ref ci/<topic>`): a macOS leg is about 9 minutes of a metered runner.
+    branches: [main]
     paths:
       - "procgen"
+      - "libraries/core/structures/**"
       - "utils/structure_*.gd"
       - "utils/map_structure_io.gd"
       - "resources/structure*.gd"
