@@ -43,8 +43,8 @@ core:round_hut 5f0456207de8c6da47fdb660a02f57a5 864
 core:watchtower 5a436455531fafb4596e87a9428e4d76 528
 core:tower_hex ee46239f1865a872ea1ce8cdf33128fe 724
 core:dome_hall 6f2a2b17ac2019c6988de30d776f6461 1302
-core:ruin_cottage 3fcb8c8ff0347abfac70baa786e11f2f 1080
-core:ruin_chapel 673e751efc8303439ca20688813a0711 1208
-core:ruin_townhouse f348ba4a617645ec3286c3a3445d3c81 1160
-core:ruin_barn cf5ba57f1324e4731ce48c9b135ef8de 1040
-core:ruin_tower d7f1ad673c5c0f7e67713ba9b62ec12c 874
+core:ruin_cottage 0518b5e00a7130afd5a1ee9d6e9116aa 1080
+core:ruin_chapel 47cb469199e32373b0990dd071a12903 1204
+core:ruin_townhouse 03095be64617f177bde39951018cec62 1160
+core:ruin_barn 2e193301c7c02b1ae41eaa9b28615adb 1164
+core:ruin_tower 0dadc3a97b0a2ade74e7155f584b88f6 870
