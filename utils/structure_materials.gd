@@ -11,6 +11,10 @@ extends RefCounted
 const WALL_SHADER := preload("res://shaders/structure_wall.gdshader")
 const ROOF_SHADER := preload("res://shaders/structure_roof.gdshader")
 const PANE_SHADER := preload("res://shaders/structure_pane.gdshader")
+## The architecture styles' materials: plaster, adobe, brick and log walls; slate, shingle, thatch
+## and turf roofs (docs/systems/structures.md "Styles").
+const STYLE_WALL_SHADER := preload("res://shaders/structure_style_wall.gdshader")
+const STYLE_ROOF_SHADER := preload("res://shaders/structure_style_roof.gdshader")
 
 ## The lift toward cream a grey rock gets (saturation about the texture's luminance, then a warm
 ## bias), for masonry, and for planks (already warm, so less).
@@ -44,6 +48,14 @@ static func make(kind: String, role: String, style: String, root: String) -> Mat
 			material = _masonry(style, root, role)
 		"wood":
 			material = _roof() if role == StructureLook.ROOF else _timber(style, root, role)
+		"boards":
+			material = _timber(style, root, role)
+		"tile":
+			material = _roof()
+		"slate", "shingle", "thatch", "turf":
+			material = _style_roof(kind)
+		"plaster", "adobe", "brick", "log":
+			material = _style_wall(kind)
 		_:
 			var stone := _stone(style, root)
 			stone.albedo_color *= StructureLook.tint_of(role)
@@ -91,6 +103,52 @@ static func _roof() -> ShaderMaterial:
 	material.set_shader_parameter("ramp_shade_tint", Vector3(0.91, 0.88, 0.94))
 	material.set_shader_parameter("lit_gain", Vector3(1.28, 1.2, 1.1))
 	material.set_shader_parameter("eave_tone", Vector3(0.85, 0.81, 0.90))
+	return material
+
+
+## The roof of a style's roofing `kind` (slate, shingle, thatch, turf): one shader, a `pattern`
+## uniform and the light balance each wants. No textures; the colour is the building's own roof
+## tone.
+static func _style_roof(kind: String) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = STYLE_ROOF_SHADER
+	material.set_shader_parameter("pattern", StructureLook.STYLE_ROOF_KINDS.find(kind))
+	material.set_shader_parameter("ramp_shade_tint", Vector3(0.91, 0.88, 0.94))
+	match kind:
+		"thatch":
+			# Straw is warm and light-catching, and its shade stays golden.
+			material.set_shader_parameter("ramp_shade_tint", Vector3(0.94, 0.88, 0.84))
+			material.set_shader_parameter("lit_gain", Vector3(1.3, 1.22, 1.08))
+			material.set_shader_parameter("eave_tone", Vector3(0.88, 0.84, 0.78))
+			material.set_shader_parameter("ridge_tone", Vector3(1.08, 1.05, 0.95))
+		"turf":
+			material.set_shader_parameter("ramp_shade_tint", Vector3(0.88, 0.92, 0.90))
+			material.set_shader_parameter("lit_gain", Vector3(1.3, 1.26, 1.1))
+			material.set_shader_parameter("eave_tone", Vector3(0.9, 0.9, 0.86))
+			material.set_shader_parameter("ridge_tone", Vector3(1.06, 1.06, 0.96))
+		_:
+			material.set_shader_parameter("lit_gain", Vector3(1.28, 1.2, 1.1))
+			material.set_shader_parameter("eave_tone", Vector3(0.85, 0.81, 0.90))
+	return material
+
+
+## The wall of a style's `kind` (plaster, adobe, brick, log): one shader, a `pattern` uniform; the
+## wall's own tone is its vertex colour (StructurePaint), so one material serves every style.
+static func _style_wall(kind: String) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = STYLE_WALL_SHADER
+	material.set_shader_parameter("pattern", StructureLook.STYLE_WALL_KINDS.find(kind))
+	_balance_wall(material, STONE_LIT_GAIN)
+	match kind:
+		"plaster":
+			# A pale wall under the full gain would blow out: it takes less.
+			material.set_shader_parameter("lit_gain", Vector3(1.12, 1.07, 1.0))
+		"adobe":
+			material.set_shader_parameter("lit_gain", Vector3(1.18, 1.1, 1.0))
+		"brick":
+			material.set_shader_parameter("lit_gain", Vector3(1.3, 1.2, 1.08))
+		"log":
+			material.set_shader_parameter("lit_gain", TIMBER_LIT_GAIN)
 	return material
 
 

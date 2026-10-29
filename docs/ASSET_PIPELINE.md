@@ -2030,6 +2030,13 @@ NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuil
   (volumes, openings with slot provenance). Triangle winding clockwise, meshes closed (the
   `ProcgenMeshCheck` rule). Material roles are derived from the node type of a tag's node:
   wall, roof, trim, chimney, opening (one table, shared by structgen's palette and tt-sim).
+  Since 2026-10-29 (architecture styles card 1) the kind is free text a style chooses: walls
+  `plaster`, `adobe`, `brick`, `log`, `boards`, roofs `tile`, `slate`, `shingle`, `thatch`, `turf`
+  (and an `adobe` flat roof), besides the three above; a roof surface is its own material role only
+  for a roofing kind (`wood`, `tile`, `slate`, `shingle`, `thatch`, `turf`), any other kind on a roof
+  node (a plaster gable end) is a wall. A style's colour hints are three string params of the Output
+  node, `palette_wall`, `palette_roof`, `palette_accent` (comma separated hex), which tt-sim bakes
+  into vertex colours (`StructurePaint`); a host that knows neither falls back to the nearest old kind.
 - **Library (built, card S3).** `structures/index.json` (format `ttsim-structures` 1),
   `structures/<id>.structure.json`, `thumbnails/structures/<id>.jpg`; core adds `structures/pins.txt`
   (`<id> <pipeline md5> <triangles> <procgen md5>` per structure at 6 x 4 m, seed 5, flat ground,

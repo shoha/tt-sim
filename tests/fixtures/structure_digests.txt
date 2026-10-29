@@ -11,3 +11,13 @@ core:townhouse_hip b481dd282e8d7f7e6e7beb6e119c1f3e 2612
 core:cottage_hip 08b24b833d60844487a09f24986f260a 1536
 core:house_hip 51ba6465a1c25b39414016a4aafcf4f0 680
 core:house_flat 9171d9c165338050b230a83ece7f28dc 1236
+core:villa_stucco 6c1a9ff8a6452cc32beeb28d9760986b 1442
+core:adobe_house 254f5fc2e6c863f7ffa15e2d2eef0b16 960
+core:slate_house c8f793a8d0b1f2ed2f7fae4b4d68a2b9 2752
+core:alpine_chalet 8c9e8ae6d02b88dc76cbbccc99e1e193 2774
+core:thatched_cottage d8c9cf46e0c701f18812c287ed70cdf7 2010
+core:log_cabin cd4f829b996bde3b0995e320798721f7 1734
+core:turf_longhouse 853df8c6c7a5b67765870e48a5f1e0d5 986
+core:brick_terrace df71aea7f13b8dc798602e73549227c3 3000
+core:canal_house 17906be11142c0f5aedef3ffce10398f 3552
+core:barn 51eec583e9bd1d60e850fd4a98a45178 950

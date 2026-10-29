@@ -205,3 +205,74 @@ func test_a_fence_and_a_wall_keep_their_old_materials() -> void:
 	var wood := walls.get_wall_node(1).get_node("Wood") as MeshInstance3D
 	assert_true(wood.mesh.surface_get_material(0) is ORMMaterial3D)
 	assert_null(walls.get_wall_node(1).get_node_or_null("Roof"))
+
+
+# --- architecture styles (card 1): kinds, palette hints -----------------------------------------
+
+
+func test_a_roofing_kind_is_a_roof_and_a_gable_end_in_plaster_is_a_wall() -> void:
+	for kind in StructureLook.ROOF_KINDS:
+		assert_eq(StructureLook.material_role(kind, StructureLook.ROOF), StructureLook.ROOF, kind)
+	for kind in ["plaster", "adobe", "brick", "log", "boards", "masonry", "stone"]:
+		assert_eq(StructureLook.material_role(kind, StructureLook.ROOF), StructureLook.WALL, kind)
+	assert_eq(StructureLook.material_role("plaster", StructureLook.TRIM), StructureLook.TRIM)
+
+
+func test_every_style_kind_has_its_own_material_and_pattern() -> void:
+	for kind in StructureLook.STYLE_WALL_KINDS:
+		var material := StructureMaterials.make(kind, StructureLook.WALL, "", "") as ShaderMaterial
+		assert_eq(material.shader, StructureMaterials.STYLE_WALL_SHADER, kind)
+		assert_eq(
+			material.get_shader_parameter("pattern"),
+			StructureLook.STYLE_WALL_KINDS.find(kind),
+			kind
+		)
+	for kind in StructureLook.STYLE_ROOF_KINDS:
+		var material := StructureMaterials.make(kind, StructureLook.ROOF, "", "") as ShaderMaterial
+		assert_eq(material.shader, StructureMaterials.STYLE_ROOF_SHADER, kind)
+		assert_eq(
+			material.get_shader_parameter("pattern"),
+			StructureLook.STYLE_ROOF_KINDS.find(kind),
+			kind
+		)
+	var tile := StructureMaterials.make("tile", StructureLook.ROOF, "", "") as ShaderMaterial
+	assert_eq(tile.shader, StructureMaterials.ROOF_SHADER, "tile is the tile shader")
+
+
+func test_a_recipe_without_hints_has_none_and_a_style_recipe_lists_its_tones() -> void:
+	assert_true(StructureLook.palette_hints(StructureRecipes.document("core:cottage")).is_empty())
+	assert_true(StructureLook.palette_hints(null).is_empty())
+	var hints := StructureLook.palette_hints(StructureRecipes.document("core:brick_terrace"))
+	assert_eq((hints["wall"] as Array).size(), 5, "five brick tones")
+	assert_eq((hints["roof"] as Array).size(), 3, "three slate tones")
+	assert_false(hints.has("accent"))
+	var tone: Color = (hints["wall"] as Array)[0]
+	assert_eq(tone.to_html(false).to_upper(), "B65A40")
+
+
+func test_hints_replace_the_roof_draw_and_add_a_wall_tone_without_moving_the_unhinted() -> void:
+	var plain := StructurePaint.palette_of(5, 1)
+	assert_eq(StructurePaint.palette_of(5, 1, {}), plain, "no hints is the old draw")
+	var hints := {"wall": [Color.html("#B65A40")], "roof": [Color.html("#6B8791")]}
+	var styled := StructurePaint.palette_of(5, 1, hints)
+	assert_eq(styled.name, "style")
+	assert_true(styled.has("wall"))
+	assert_eq(styled.lean, plain.lean, "the lean draw is not shifted")
+	assert_ne(styled.roof, plain.roof, "the style's roof tone")
+	assert_eq(StructurePaint.palette_of(5, 1, hints), styled, "repeatable")
+
+
+func test_a_style_wall_tone_is_baked_into_wall_vertices_only() -> void:
+	var parts := StructureGeometry.build_one(
+		_doc, Structure.make(1, "core:brick_terrace", _plan(), 5)
+	)
+	assert_eq(parts.problem, "")
+	assert_eq(parts.palette, "style")
+	var wall := _mesh(parts, StructureLook.WALL, "brick")
+	assert_false(wall.is_empty(), "the brick strips are a wall mesh")
+	var colors: PackedColorArray = wall.arrays[Mesh.ARRAY_COLOR]
+	var tint := Color.html("#B65A40").srgb_to_linear()
+	assert_gt(colors[0].r, colors[0].g * 2.0, "red over green: the wall tone, not a grey lean")
+	assert_lt(colors[0].r, tint.r * 1.4)
+	var roof := _mesh(parts, StructureLook.ROOF, "slate")
+	assert_false(roof.is_empty(), "the slate roof is a roof mesh")

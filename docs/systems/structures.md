@@ -266,6 +266,45 @@ take (not run on either, as with the other tt-sim shaders judged on Forward+). M
 PERFORMANCE.md "Structures: the painterly look". Tunables are the shader uniforms and the constants
 in `StructureMaterials` and `StructureLook`.
 
+## Styles (architecture styles card 1, 2026-10-29)
+
+Procgen's building styles (`procgen/recipes/building_styles/*.json`, `docs/building_generation.md`
+"Building styles and material kinds"; design `procgen/docs/architecture_styles.md`) put new surface
+KINDS into a recipe, which tt-sim shades; the geometry is the old board and masonry walls and gable,
+hip and flat roofs.
+
+- **Kinds to materials** (`StructureMaterials.make`, one shared material per kind and role): walls
+  `plaster`, `adobe`, `brick`, `log` are one shader, `structure_style_wall.gdshader`, with a `pattern`
+  uniform and no textures (the colour is the vertex colour; the pattern comes from the position and
+  the face normal, so a rotated building keeps it): plaster is a soft lime wash with trowel marks,
+  rain streaks and a lost-plaster patch near the foot; adobe the same rounder and earthier with
+  baked layers and a darker packed-earth top on a flat roof; brick small courses and a stylised
+  chunky size with per-brick value and warmth, a light mortar and a shadow under every course; log a
+  horizontal round of 0.3 m with a dark seam, a lit belly and a grain. Pattern details fade where a
+  course is under about two pixels. `boards` is the planks (`_timber`) under a kind the gable ends
+  share. Roofs: `tile` (and the old `wood`) the tile shader; `slate`, `shingle`, `thatch`, `turf`
+  are `structure_style_roof.gdshader` (`pattern` uniform, the roof shader's slope axes): small cool
+  slates, scalloped shingles, shaggy straw strands in bundles greening toward the eave, and broad
+  green turf with tufts, a sprinkle of wildflowers and soil edges. Both shaders are in
+  `GraphicsWarmup.COVERED_SHADERS`; one noise per fragment, no textures. The roofing kinds are
+  `StructureLook.ROOF_KINDS`; a roof surface of any other kind (a plaster gable end, an adobe flat
+  roof) is drawn as a wall (`material_role`).
+- **Palette hints** (`StructureLook.palette_hints`, `StructurePaint.palette_of(seed, id, hints)`): a
+  style's wall, roof and accent tones are written on the recipe's Output node (`palette_wall`,
+  `palette_roof`, `palette_accent`, hex lists). With hints the roof colour is drawn from the style's
+  roof list (the palette name is `style`) and wall meshes get a wall tone from its wall list in
+  place of the lean (kept under each face's slight variation: fully for the textured kinds with a
+  gain of 1.7, 30 percent for plaster, adobe, brick and log so boards under a wash do not stripe).
+  A recipe without hints is painted exactly as before. The accent list is carried but not used yet.
+- **Starters**: ten core structures from the styles (`tools/export_core_structures.gd` STARTERS
+  entries with a `bundle` and a `seed`: the style's drawn recipe, default size, culture tags and
+  exposed controls come from the style file): stucco villa, adobe house, slate-roofed stone house and
+  alpine chalet (family `house`), thatched cottage, log cabin and turf-roof longhouse (`cottage`),
+  brick terrace house and canal house (`townhouse`), barn (`farm`). Culture tags: `mediterranean`,
+  `desert`, `highland`, `english`, `alpine`, `nordic`, `dutch`, `farm`. The Structure tool groups by
+  family as before; a culture filter is not built. Render job `structures_styles` lays the ten among
+  meadow plants (probe action `styles`).
+
 ## Dressing
 
 Probe B (2026-10-28, branch `probe-b`): a building is settled into its place by a yard,
