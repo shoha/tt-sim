@@ -24,6 +24,7 @@ uniform float cream_amount : hint_range(0.0, 1.0) = 0.0;
 uniform float damp_amount : hint_range(0.0, 1.0) = 0.6;
 uniform float damp_height = 1.1;
 uniform float wash_amount : hint_range(0.0, 1.0) = 0.7;
+uniform float contact_amount : hint_range(0.0, 1.0) = 0.7;
 
 void fragment() {
 	vec2 uv = UV * uv_scale;
@@ -36,17 +37,21 @@ void fragment() {
 	float metres = COLOR.a * 16.0;
 	float foot = (1.0 - smoothstep(0.0, damp_height, metres)) * damp_amount;
 	col *= mix(vec3(1.0), vec3(0.74, 0.82, 1.02), foot);
+	// Ground contact: the grass's green bounce and a close dark, hugging the first metre.
+	float contact = 1.0 - smoothstep(0.0, 0.9, metres);
+	col *= mix(vec3(1.0), vec3(0.66, 0.78, 0.64), contact * contact_amount);
 	col *= mix(vec3(1.0), vec3(1.05, 1.03, 0.95), smoothstep(2.0, 6.0, metres));
 
 	float wash = s_noise(s_pos * 0.32 + 41.0);
 	float mottle = s_noise(s_pos * 1.1 + 7.0);
 	col *= s_lean(smoothstep(0.25, 0.75, wash), wash_amount);
-	col *= 1.0 + ((wash - 0.5) * 0.30 + (mottle - 0.5) * 0.12) * wash_amount;
+	col *= s_mass(wash, 0.5 * wash_amount) * (1.0 + (mottle - 0.5) * 0.12 * wash_amount);
+	col = s_ramp(col, NORMAL, INV_VIEW_MATRIX);
 
 	vec3 orm = texture(orm_tex, uv).rgb;
 	NORMAL_MAP = texture(normal_tex, uv).rgb;
 	NORMAL_MAP_DEPTH = normal_scale;
-	AO = orm.r;
+	AO = orm.r * s_ambient();
 	AO_LIGHT_AFFECT = 0.6;
 	ROUGHNESS = max(orm.g, 0.7);
 	ALBEDO = col;
