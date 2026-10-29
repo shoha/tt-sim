@@ -431,6 +431,19 @@ and NOT on the interface, so the Structure tool does not offer them.
   320 ft meadow (the map side limit is 320 ft, so 13 buildings need three rows), nine captures.
   Captures are in `docs/plans/2026-10-28-structures/captures/styles3/` (not tracked).
 
+### Styles 7: half-timber framing (2026-10-29, branch `framing`)
+
+Four more core structures (54 in all) from procgen's Framing node (architecture-styles card 7), each
+a `STARTERS` entry whose `style_patch` pins the framing pattern: `half_timber_house` (`house`,
+braces) 1574 triangles at the pin, `tudor_framed` (`townhouse`, jettied, cross bracing; `english`
+added to its tags) 3018, `herringbone_cottage` (`cottage`, ochre plaster, herringbone) 1734 and
+`close_studded_house` (`house`, panels at 0.6 m studs) 1542. All four are `regional` and `english`,
+so they join English streets. The look fix: the node type `framing` is the `frame` role
+(`StructureLook.NODE_ROLES`; before, its posts, rails and braces were painted as plaster walls
+and the half-timber vanished), so the timber keeps procgen's dark oak tone over the plaster.
+The plaster tones are warmer creams than the styles' (the shaded face of a pale cream reads mauve).
+Render job `structures_framing` (five houses in a row, the beams-based Tudor for comparison).
+
 ## Dressing
 
 Probe B (2026-10-28, branch `probe-b`): a building is settled into its place by a yard,

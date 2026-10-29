@@ -38,6 +38,10 @@ core:chinese_hall 2bf925d05822b28d85e12f29e4fc9672 1416
 core:pagoda_tower 4e3afdfac1af3aa908325cb4fec3ed31 2284
 core:castle_keep ab151905e8f62a94ddd0ea7969a84a89 3292
 core:gatehouse 337ded9e439d1a9320b09bddbe19551b 3052
+core:half_timber_house 82564256e8ff20abd32ee9003ccbb8a2 1574
+core:tudor_framed c5ab0d36c234387298fe7516c32e43ea 3018
+core:herringbone_cottage 04de1e84246524a8162b0543b41e6f15 1734
+core:close_studded_house bd74e58acce25a02ff3211bc025325da 1542
 core:roundhouse b626a2b96c911dc2458d62f249cd8552 1234
 core:round_hut 5f0456207de8c6da47fdb660a02f57a5 864
 core:watchtower 5a436455531fafb4596e87a9428e4d76 528

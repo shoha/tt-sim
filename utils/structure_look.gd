@@ -54,6 +54,9 @@ const NODE_ROLES: Dictionary = {
 	"roof_furniture": CHIMNEY,
 	"glazing": OPENING,
 	"beams": FRAME,
+	# Half-timber framing (architecture-styles card 7): posts, rails, studs, braces, bressummer and
+	# joist ends, all the "frame/..." tags of one node.
+	"framing": FRAME,
 	"vigas": FRAME,
 	"roof_props": FRAME,
 }
