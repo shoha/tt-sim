@@ -482,7 +482,42 @@ street's rather than the same buildings, and the terrace keeps its eaves and par
 - Window glow: procgen's `glazing` node has a `lit` share, but the recipes do not expose it, so no
   window glows yet (card S6 asked for it "if cheap"; it needs a recipe parameter or a stamp, a
   procgen request). The look pass on three biomes (S6 judged one: temperate forest).
-- Cross-platform digests (the pins were taken on Windows only; card S9).
+## Determinism
+
+Every peer rebuilds a structure from its recipe, so the build must agree across machines. The pins
+(`tests/fixtures/structure_digests.txt`, procgen's `tests/expected_building_digests.txt`, the
+self-check digests) were taken on Windows; card S9 (2026-10-28) checks the other platforms.
+
+**Result, 2026-10-28 (workflow run 40805097469, branch `ci/determinism`):** all 79 pinned cases (64
+procgen building and street cases, the self-check sample and bridge, 13 starter structures) equal the
+Windows pins on Windows, Linux x86_64 (ubuntu-latest), macOS arm64 and macOS x86_64 under Rosetta, all
+with the official 4.7.2 binary. The earlier Linux difference (2 of 57 cases) was float noise in values
+that are 0 in exact arithmetic (about 1e-17 from `cos` of a quarter turn); it is gone since procgen
+flushes its output (`PlantGeometry.flushed`, under 1e-9 becomes 0) and the digests round vertices to
+0.1 mm (`ProcgenBuildingCases.digest`, `StructureGeometry.digest_of`, the self-check). Rule: nothing
+authoritative reads building geometry bit-for-bit.
+
+**The check.** `tools/determinism_report.gd` rebuilds every pinned case on the machine it runs on and
+prints one line each: `MATCH <kind> <name> <digest> <triangles>`, or `DIFF ... got <digest> pinned
+<digest>` followed by a `parts:` line; it uses the same digest functions as the tests and exits 1 on a
+DIFF. Run it as `godot --headless --path <project> --script res://tools/determinism_report.gd` (`--
+--parts` adds the parts line to every case, to diff two machines' output). A `parts:` line hashes each
+piece of the digest (8 hex): `v` vertices, `n` normals, `uv`, `c` colours, `i` indices, `coll`
+collision, `top`, `open` openings; `vq`, `nq`, `uvq`, `collq` are the same rounded to a millimetre,
+`vf` is the vertices with every float under 1e-9 flushed to 0, and `tiny` counts the vertex floats
+that are not 0 but under 1e-9. A raw part that differs while its `q` or `f` part agrees with the
+Windows line moved by libm noise; a differing triangle count or index hash is a real divergence (a
+`floor` or `ceil` flipped at a boundary: a different window count, a roof off by a bay).
+
+**The workflow.** `.github/workflows/determinism.yml` is its own workflow: no job of `build.yml` needs
+it and it needs none, so it cannot block, delay or publish a release (promote it into `build.yml` as a
+job the signing jobs wait for only if the owner wants that). It starts on `workflow_dispatch` (test a
+CI change with `gh workflow run Determinism --ref ci/<topic>`) and on a push to `main` that touches
+`procgen`, `libraries/core/structures/`, the structure scripts, the fixture, the report or the
+workflow itself. It needs the secret `PROCGEN_READ_TOKEN` (the `procgen-submodule` action) and the LFS
+objects (restored from the shared Actions cache; with pointer files the core library is not served
+and the report sees only five references with no recipes, 10 triangles each). Cost: about 3 minutes
+on Linux and Windows, 9 on macOS (the Rosetta leg alone is 2).
 
 ## Tests and render job
 

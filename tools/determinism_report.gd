@@ -6,7 +6,7 @@ extends SceneTree
 ##   godot --headless --path <project> --script res://tools/determinism_report.gd
 ##
 ## Rebuilds, on THIS machine, every pinned structure and compares the digest with the pin that was
-## taken on Windows: procgen's 49 building and street cases
+## taken on Windows: procgen's building and street cases
 ## (procgen/tests/expected_building_digests.txt), the two self-check samples, and tt-sim's starter
 ## set (tests/fixtures/structure_digests.txt). One compact line per case:
 ##
