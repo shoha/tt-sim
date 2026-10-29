@@ -433,6 +433,363 @@
 			"textured": true,
 			"thumb": "thumbnails/structures/house_flat.jpg",
 			"variant": "Stone, flat roof"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"ridge",
+				"wonk"
+			],
+			"family": "house",
+			"file": "structures/villa_stucco.structure.json",
+			"id": "villa_stucco",
+			"max_area_m2": 120.0,
+			"max_side_m": 14.0,
+			"min_side_m": 3.0,
+			"name": "Stucco villa",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"plaster",
+				"tile",
+				"villa",
+				"mediterranean",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/villa_stucco.jpg",
+			"variant": "Stucco villa"
+		},
+		{
+			"default_size_m": [
+				6.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"wonk"
+			],
+			"family": "house",
+			"file": "structures/adobe_house.structure.json",
+			"id": "adobe_house",
+			"max_area_m2": 100.0,
+			"max_side_m": 12.0,
+			"min_side_m": 3.0,
+			"name": "Adobe house",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"adobe",
+				"flat",
+				"desert",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/adobe_house.jpg",
+			"variant": "Adobe"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "house",
+			"file": "structures/slate_house.structure.json",
+			"id": "slate_house",
+			"max_area_m2": 120.0,
+			"max_side_m": 14.0,
+			"min_side_m": 3.0,
+			"name": "Slate-roofed stone house",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stone",
+				"slate",
+				"gable",
+				"chimney",
+				"trim",
+				"english",
+				"highland",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/slate_house.jpg",
+			"variant": "Slate roof"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "house",
+			"file": "structures/alpine_chalet.structure.json",
+			"id": "alpine_chalet",
+			"max_area_m2": 110.0,
+			"max_side_m": 14.0,
+			"min_side_m": 3.0,
+			"name": "Alpine chalet",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"timber",
+				"shingle",
+				"gable",
+				"chimney",
+				"shutters",
+				"alpine",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/alpine_chalet.jpg",
+			"variant": "Alpine chalet"
+		},
+		{
+			"default_size_m": [
+				6.0,
+				4.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk",
+				"fringe"
+			],
+			"family": "cottage",
+			"file": "structures/thatched_cottage.structure.json",
+			"id": "thatched_cottage",
+			"max_area_m2": 90.0,
+			"max_side_m": 12.0,
+			"min_side_m": 2.5,
+			"name": "Thatched cottage",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"plaster",
+				"thatch",
+				"gable",
+				"chimney",
+				"shutters",
+				"english",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/thatched_cottage.jpg",
+			"variant": "Thatched"
+		},
+		{
+			"default_size_m": [
+				6.0,
+				4.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "cottage",
+			"file": "structures/log_cabin.structure.json",
+			"id": "log_cabin",
+			"max_area_m2": 90.0,
+			"max_side_m": 12.0,
+			"min_side_m": 2.5,
+			"name": "Log cabin",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"log",
+				"timber",
+				"shingle",
+				"gable",
+				"chimney",
+				"nordic",
+				"alpine",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/log_cabin.jpg",
+			"variant": "Log cabin"
+		},
+		{
+			"default_size_m": [
+				9.0,
+				4.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"ridge",
+				"wonk"
+			],
+			"family": "cottage",
+			"file": "structures/turf_longhouse.structure.json",
+			"id": "turf_longhouse",
+			"max_area_m2": 110.0,
+			"max_side_m": 16.0,
+			"min_side_m": 3.0,
+			"name": "Turf-roof longhouse",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"log",
+				"turf",
+				"gable",
+				"longhouse",
+				"nordic",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/turf_longhouse.jpg",
+			"variant": "Turf longhouse"
+		},
+		{
+			"default_size_m": [
+				6.0,
+				6.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "townhouse",
+			"file": "structures/brick_terrace.structure.json",
+			"id": "brick_terrace",
+			"max_area_m2": 150.0,
+			"max_side_m": 16.0,
+			"min_side_m": 3.0,
+			"name": "Brick terrace house",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"brick",
+				"slate",
+				"gable",
+				"townhouse",
+				"trim",
+				"quoins",
+				"chimney",
+				"english",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/brick_terrace.jpg",
+			"variant": "Brick, slate roof"
+		},
+		{
+			"default_size_m": [
+				5.0,
+				8.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"ridge",
+				"wonk"
+			],
+			"family": "townhouse",
+			"file": "structures/canal_house.structure.json",
+			"id": "canal_house",
+			"max_area_m2": 120.0,
+			"max_side_m": 14.0,
+			"min_side_m": 3.0,
+			"name": "Canal house",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"brick",
+				"tile",
+				"gable",
+				"townhouse",
+				"trim",
+				"quoins",
+				"dutch",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/canal_house.jpg",
+			"variant": "Brick, gable to the street"
+		},
+		{
+			"default_size_m": [
+				9.0,
+				6.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"ridge",
+				"wonk"
+			],
+			"family": "farm",
+			"file": "structures/barn.structure.json",
+			"id": "barn",
+			"max_area_m2": 180.0,
+			"max_side_m": 18.0,
+			"min_side_m": 4.0,
+			"name": "Barn",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"barn",
+				"timber",
+				"shingle",
+				"gable",
+				"farm",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/barn.jpg",
+			"variant": "Barn"
 		}
 	]
 }

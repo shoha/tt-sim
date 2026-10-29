@@ -538,3 +538,19 @@ func test_the_wall_tool_lists_the_click_and_the_split_in_its_help() -> void:
 		text += " ".join(row) + "\n"
 	assert_string_contains(text, "Click a street")
 	assert_string_contains(text, "Split")
+
+
+func test_a_split_never_picks_a_regional_style() -> void:
+	var regional := 0
+	for row in LibraryStructureStore.structures(StructureRecipes.CORE_LIBRARY):
+		if StreetSplit.REGIONAL_TAG in (row["tags"] as Array):
+			regional += 1
+	assert_gt(regional, 5, "the core library ships regional styles")
+	for row in StreetSplit.candidates():
+		assert_false(StreetSplit.REGIONAL_TAG in (row["tags"] as Array), String(row["ref"]))
+	for seed_value in 16:
+		for walls in ["stone", "timber"]:
+			for roof in ["gable", "hip", "flat"]:
+				var ref := _ref(_lot({"walls": walls, "roof": roof, "seed": seed_value}))
+				var row := LibraryStructureStore.structure(ref)
+				assert_false(StreetSplit.REGIONAL_TAG in (row.get("tags", []) as Array), ref)

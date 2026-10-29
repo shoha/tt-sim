@@ -1,0 +1,325 @@
+{
+  "connections": [
+    {
+      "from": "wonk_6",
+      "from_port": 0,
+      "to": "output_5",
+      "to_port": 0
+    },
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "building_layout_2",
+      "to_port": 0
+    },
+    {
+      "from": "building_layout_2",
+      "from_port": 0,
+      "to": "facade_7",
+      "to_port": 0
+    },
+    {
+      "from": "facade_7",
+      "from_port": 0,
+      "to": "building_timber_3",
+      "to_port": 0
+    },
+    {
+      "from": "facade_7",
+      "from_port": 0,
+      "to": "roof_gable_4",
+      "to_port": 0
+    },
+    {
+      "from": "building_timber_3",
+      "from_port": 0,
+      "to": "wonk_6",
+      "to_port": 0
+    },
+    {
+      "from": "roof_gable_4",
+      "from_port": 0,
+      "to": "wonk_6",
+      "to_port": 0
+    },
+    {
+      "from": "facade_7",
+      "from_port": 0,
+      "to": "facade_trim_8",
+      "to_port": 0
+    },
+    {
+      "from": "facade_trim_8",
+      "from_port": 0,
+      "to": "wonk_6",
+      "to_port": 0
+    },
+    {
+      "from": "facade_7",
+      "from_port": 0,
+      "to": "cornice_9",
+      "to_port": 0
+    },
+    {
+      "from": "cornice_9",
+      "from_port": 0,
+      "to": "wonk_6",
+      "to_port": 0
+    },
+    {
+      "from": "facade_7",
+      "from_port": 0,
+      "to": "roof_furniture_10",
+      "to_port": 0
+    },
+    {
+      "from": "roof_furniture_10",
+      "from_port": 0,
+      "to": "wonk_6",
+      "to_port": 0
+    },
+    {
+      "from": "facade_7",
+      "from_port": 0,
+      "to": "glazing_11",
+      "to_port": 0
+    },
+    {
+      "from": "glazing_11",
+      "from_port": 0,
+      "to": "wonk_6",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "interface": [
+    {
+      "default": 4.88,
+      "label": "Wall height",
+      "max": 8,
+      "min": 1.6,
+      "name": "height",
+      "tip": "Height of the walls above the highest ground.",
+      "type": "float"
+    },
+    {
+      "default": 23.11,
+      "label": "Roof pitch",
+      "max": 55,
+      "min": 15,
+      "name": "roof_pitch",
+      "tip": "Slope of the roof in degrees.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Window width",
+      "max": 2,
+      "min": 0,
+      "name": "window_width",
+      "tip": "Width of the main windows (the others keep their proportion); 0 for the style's own, or for none under the style none.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Floors",
+      "max": 6,
+      "min": 0,
+      "name": "floors",
+      "tip": "How many floors; 0 for the style's own (by the wall height).",
+      "type": "float"
+    },
+    {
+      "default": 1,
+      "label": "Chimneys",
+      "max": 4,
+      "min": 0,
+      "name": "chimneys",
+      "tip": "How many chimney stacks rise through the roof.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Lit windows",
+      "max": 1,
+      "min": 0,
+      "name": "lit",
+      "tip": "The share of windows that glow warm, as if lit from within.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Ridge",
+      "max": 2,
+      "min": 0,
+      "name": "ridge",
+      "tip": "0 along the longer side, 1 along the front (the eave to the street), 2 across.",
+      "type": "float"
+    },
+    {
+      "default": 0.6,
+      "label": "Wonk",
+      "max": 1,
+      "min": 0,
+      "name": "wonk",
+      "tip": "How hand-made the building looks: sagging roof, uneven tops, leaning walls.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Ragged eave",
+      "max": 0.6,
+      "min": 0,
+      "name": "fringe",
+      "tip": "How far pointed teeth reach down past the eaves, as thatch does; 0 for a clean edge.",
+      "type": "float"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        120.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "building_layout_2",
+      "params": {
+        "height": "@height",
+        "ridge": "@ridge",
+        "roof": "gable",
+        "roof_pitch": "@roof_pitch",
+        "window_width": "@window_width"
+      },
+      "position": [
+        250.0,
+        120.0
+      ],
+      "type": "building_layout"
+    },
+    {
+      "id": "building_timber_3",
+      "params": {
+        "role": "boards"
+      },
+      "position": [
+        710.0,
+        20.0
+      ],
+      "type": "building_timber"
+    },
+    {
+      "id": "roof_gable_4",
+      "params": {
+        "fringe": "@fringe",
+        "gable_role": "boards",
+        "overhang": 1,
+        "roof_pitch": "@roof_pitch",
+        "roof_role": "shingle",
+        "roof_thickness": 0.16,
+        "segments": 6
+      },
+      "position": [
+        710.0,
+        220.0
+      ],
+      "type": "roof_gable"
+    },
+    {
+      "id": "output_5",
+      "params": {
+        "name": "Alpine chalet",
+        "palette_accent": "#A63A2C,#3F6A4A",
+        "palette_roof": "#857262,#928070,#76665A",
+        "palette_wall": "#A27C52,#94704A,#AD8558"
+      },
+      "position": [
+        950.0,
+        120.0
+      ],
+      "type": "output"
+    },
+    {
+      "id": "wonk_6",
+      "params": {
+        "wonk": "@wonk"
+      },
+      "position": [
+        950.0,
+        20.0
+      ],
+      "type": "wonk"
+    },
+    {
+      "id": "facade_7",
+      "params": {
+        "floors": "@floors",
+        "style": "townhouse",
+        "window_width": "@window_width"
+      },
+      "position": [
+        480.0,
+        120.0
+      ],
+      "type": "facade"
+    },
+    {
+      "id": "facade_trim_8",
+      "params": {
+        "door_frame": true,
+        "frames": false,
+        "lintels": false,
+        "role": "wood",
+        "shutters": true,
+        "sills": true,
+        "step": true
+      },
+      "position": [
+        710.0,
+        420.0
+      ],
+      "type": "facade_trim"
+    },
+    {
+      "id": "cornice_9",
+      "params": {
+        "eave": false,
+        "floor_bands": true,
+        "role": "wood"
+      },
+      "position": [
+        710.0,
+        620.0
+      ],
+      "type": "cornice"
+    },
+    {
+      "id": "roof_furniture_10",
+      "params": {
+        "chimneys": "@chimneys"
+      },
+      "position": [
+        710.0,
+        820.0
+      ],
+      "type": "roof_furniture"
+    },
+    {
+      "id": "glazing_11",
+      "params": {
+        "lit": "@lit",
+        "muntins": true
+      },
+      "position": [
+        950.0,
+        420.0
+      ],
+      "type": "glazing"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

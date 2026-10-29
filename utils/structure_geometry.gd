@@ -139,7 +139,11 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 		meshes.append_array(split_surface(surface, roles))
 	meshes.sort_custom(_by_role)
 	# The building's own roof tile colour and wall lean, from its seed and id (the same on every peer).
-	var palette := StructurePaint.palette_of(structure.seed_value, structure.id)
+	# A building style's palette hints, written on the recipe's Output, replace the draw's roof colour
+	# and give the walls their own tone.
+	var palette := StructurePaint.palette_of(
+		structure.seed_value, structure.id, StructureLook.palette_hints(recipe)
+	)
 	parts.palette = palette.name
 	StructurePaint.paint(meshes, PackedInt32Array(), [palette])
 	parts.meshes = meshes
@@ -519,7 +523,7 @@ static func _arrays(
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_COLOR] = colors
 	arrays[Mesh.ARRAY_INDEX] = indices
-	if kind == "wood" or kind == "masonry":
+	if kind == "wood" or kind == "boards" or kind == "masonry":
 		arrays[Mesh.ARRAY_TANGENT] = ProcgenCrossing.quad_tangents(vertices, normals, uvs)
 	else:
 		# Triplanar stone (no UVs): +X with a positive binormal sign, as WallGeometry gives it.
