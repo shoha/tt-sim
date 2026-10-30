@@ -5,10 +5,11 @@ extends Node3D
 ## transform (the map frame, like AuthoredWalls). Per structure, a Node3D `Structure_<id>` holds one
 ## MeshInstance3D per (material role, surface kind) of its build (StructureGeometry: `wall_masonry`,
 ## `roof_wood`, `trim_stone`, ...) and one StaticBody3D `Collision` on the terrain layer (layer 1,
-## mask 0, not ray pickable, STRUCTURE_META = its id) made of the recipe's collision faces: a token
-## lands on a roof or a wall's top as on the ground, the drop indicator and measure tool hit it,
-## and the tools that edit the ground skip it (exclude_of()). `top_y` is the highest top (map Y,
-## -INF with none).
+## mask 0, not ray pickable, STRUCTURE_META = its id) made of the recipe's collision faces plus the
+## walkable faces of its decks, stair treads, platforms and piles (StructureWalkable): a token
+## lands on a roof, a wall's top or a deck as on the ground, the drop indicator and measure tool
+## hit it, and the tools that edit the ground skip it (exclude_of()). `top_y` is the highest top
+## (map Y, -INF with none).
 ##
 ## Edits. refresh(doc) compares each structure's key (StructureGeometry.key_of: recipe digest,
 ## footprint, params, seed, style and the ground under the footprint) with the key its node was
@@ -410,6 +411,8 @@ func _structure_node(id: int, parts: Dictionary) -> Node3D:
 	node.set_meta(TAGS_META, parts.get("tag_table", PackedStringArray()))
 	_add_dressing(node, parts.get("dressing", {}))
 	var faces: PackedVector3Array = parts.get("collision", PackedVector3Array())
+	# The decks, stair treads, platforms and piles procgen gives no collision (StructureWalkable).
+	faces = faces + (parts.get("walkable", PackedVector3Array()) as PackedVector3Array)
 	if not faces.is_empty():
 		node.add_child(_body(faces, id))
 	return node

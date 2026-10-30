@@ -126,6 +126,8 @@ the recipe declares it (`StructureGeometry.textured`, on, as for walls). Parts p
   `tag_table` holds the paths (node id, then slot path). The tags are kept, not dropped as walls drop
   them; `AuthoredStructures.provenance_at()` answers which node made a triangle.
 - `collision` faces and `top` (the recipe's walkable surface: a closed hull plus a solid roof),
+  and `walkable` (2026-10-29, topic `stilt_collision`): the extra faces `StructureWalkable` derives
+  from the tags, see "Collision of raised parts" below (not in `digest_of`),
   `openings` (doors and windows as oriented boxes) and `layout` (the final `ProcgenBuildingLayout`:
   volumes, openings with slot provenance). Nothing reads layout or openings in play yet (no vision or
   navigation exists); they are kept so a later rule can treat a building as a blocker with doors as its
@@ -172,6 +174,27 @@ mesh (`wall_masonry`, `roof_wood`, `trim_stone`, `chimney_stone`, `opening_glass
 a token lands on a roof or a wall top as on the ground; `exclude_of(root)` lists the bodies for
 the ground tools (`BrushTool`, the dressing sampler and `GameMap`'s drop height skip or include them as
 for walls).
+
+**Collision of raised parts** (2026-10-29, topic `stilt_collision`). Established empirically first:
+procgen's `collision` is the walls' hull and roof only; its Stilts and Gallery nodes "add no
+collision", so a stilt house's deck, stair and platform, a stabbur's raised floor and a porch,
+balcony or gallery deck let a dropped token fall to the ground, and the piles did not block. A token
+lands by a downcast from its top on the terrain layer (`WaterSurface.landing_below`), so anything
+solid on that layer is standable. `StructureWalkable` (`utils/structure_walkable.gd`, pure) reads
+the per-vertex tags every build already carries and adds the pieces to the same `Collision` body
+(`parts.walkable`, merged in `AuthoredStructures._structure_node`), so the ground tools and the
+Building tool skip them as they skip the walls (`exclude_of`):
+
+- walkable, upward faces only (a token under a deck is not caught by its underside):
+  `stilt/slab/<k>`, `stilt/deck`, `stilt/stair/tread<k>`, `porch/deck`, `porch/plinth`,
+  `balcony<k>/deck`, `gallery/deck` (the slot path after the node id; `WALKABLE_PATTERN`);
+- blocking, every face: `stilt/pile/<k>`, `stilt/pad/<k>`, `stilt/cap/<k>` (`BLOCKING_PATTERN`);
+- visual only: rails, posts, braces, bearers, stringers, ladder rungs, hoods, brackets and roofs.
+
+The stair is walkable by its treads (a stepped surface, no ramp). A ladder is not walkable. About
+200 triangles for a stilt house (mostly piles), 2 for a porch. The wall hull is unchanged, so
+the pinned `collision` digests did not move; a new tag in procgen needs a line in the two patterns
+and a case in `tests/unit/test_structure_walkable.gd`.
 
 - **Load.** `AuthoredLoadPrep` has the part `STRUCTURES` (`StructureGeometry.build`), one worker task;
   `MapSourceLoader._create_authored_root_async` makes the nodes in a frame after the walls
