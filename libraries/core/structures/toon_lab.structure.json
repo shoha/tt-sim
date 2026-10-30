@@ -287,7 +287,8 @@
       "id": "glazing_9",
       "params": {
         "lit": "@lit",
-        "muntins": false
+        "muntins": false,
+        "tone": "sea"
       },
       "position": [
         950.0,

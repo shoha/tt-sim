@@ -120,6 +120,25 @@ static func exclude_of(root: Node) -> Array[RID]:
 	return rids
 
 
+## The kinds of `requested` ornaments that structure `structure_id` of the map under `root` was
+## built without (they found no room), by ProcgenOrnaments.missing_kinds on its build's placed
+## kinds. [] while the structure has no built node yet (its build is still on a worker).
+static func missing_kinds_in(root: Node, structure_id: int, requested: Array) -> Array[String]:
+	var structures := root.get_node_or_null(NODE_NAME) as AuthoredStructures if root != null else null
+	if structures == null or not structures._details.has(structure_id):
+		return [] as Array[String]
+	var placed: Array = (structures._details[structure_id] as Dictionary).get("placed_kinds", [])
+	var held := {}
+	for kind: Variant in placed:
+		held[str(kind)] = true
+	var out: Array[String] = []
+	for entry: Variant in requested:
+		var kind := str(entry)
+		if kind != "" and not held.has(kind) and not out.has(kind):
+			out.append(kind)
+	return out
+
+
 ## Brings the nodes up to `doc`: frees the nodes of structures that left, makes (from the cache, or
 ## from a build on the calling thread when `use_workers` is false or the node is outside the tree)
 ## or queues (on a worker) the node of every structure whose key differs from the one its node was
@@ -420,7 +439,11 @@ func _install(id: int, key: int, parts: Dictionary) -> void:
 func _add_node(id: int, parts: Dictionary) -> void:
 	add_child(_structure_node(id, parts))
 	_tops[id] = float(parts.top)
-	_details[id] = {"layout": parts.get("layout"), "openings": parts.get("openings", [])}
+	_details[id] = {
+		"layout": parts.get("layout"),
+		"openings": parts.get("openings", []),
+		"placed_kinds": parts.get("placed_kinds", [])
+	}
 
 
 ## Logs a refused or over-soft-budget build once per build, and keeps the text in `notes`.

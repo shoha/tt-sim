@@ -270,7 +270,8 @@
       "id": "glazing_9",
       "params": {
         "lit": "@lit",
-        "muntins": false
+        "muntins": false,
+        "tone": "violet"
       },
       "position": [
         950.0,

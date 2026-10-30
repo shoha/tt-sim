@@ -2482,6 +2482,40 @@
 		},
 		{
 			"default_size_m": [
+				9.0,
+				6.0
+			],
+			"expose": [
+				"height"
+			],
+			"family": "toon",
+			"file": "structures/toon_gym_court.structure.json",
+			"id": "toon_gym_court",
+			"max_area_m2": 70.0,
+			"max_side_m": 10.0,
+			"min_side_m": 5.0,
+			"name": "Toon gym court",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"toon",
+				"bright",
+				"saturated",
+				"flat_colour",
+				"gym",
+				"house",
+				"flat_roof",
+				"canopy",
+				"parapet",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/toon_gym_court.jpg",
+			"variant": "Pent canopy, stepped parapet"
+		},
+		{
+			"default_size_m": [
 				7.0,
 				5.0
 			],

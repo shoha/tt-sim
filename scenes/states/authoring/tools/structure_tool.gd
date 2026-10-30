@@ -12,6 +12,8 @@ extends ToolDescriptor
 
 const ID := &"structure"
 const LABEL := "Building"
+## Set on the map's AuthoredStructures while one sync_missing check waits for its next build.
+const WATCH_META := &"tt_missing_watch"
 const UNAVAILABLE_TOOLTIP := "Building: not on a Blender map, whose ground is the map file's"
 
 
@@ -101,6 +103,34 @@ func _connect_selection(controller: AuthoringController, pane: StructureToolPane
 		connect_selection(controller.brush, pane, controller.refresh_tool_hints)
 
 
+## Marks the Decorate chips whose ornament the structure's build found no room for (the build's
+## placed kinds against the kinds asked in `params`). A build lands on a worker some frames after
+## an edit, so while the structure has no built node yet the check repeats once when the map's
+## structures next report a build.
+static func sync_missing(
+	map_root: Node, pane: StructureToolPane, structure_id: int, params: Dictionary
+) -> void:
+	if map_root == null or pane == null:
+		return
+	var asked := StructureOrnaments.kinds_of(params)
+	pane.ornaments_section.show_missing(
+		AuthoredStructures.missing_kinds_in(map_root, structure_id, asked)
+	)
+	var structures := map_root.get_node_or_null(AuthoredStructures.NODE_NAME) as AuthoredStructures
+	if structures == null or structures.has_meta(WATCH_META) or asked.is_empty():
+		return
+	structures.set_meta(WATCH_META, true)
+	structures.built.connect(
+		func(_count: int) -> void:
+			structures.remove_meta(WATCH_META)
+			if is_instance_valid(pane) and is_instance_valid(map_root):
+				pane.ornaments_section.show_missing(
+					AuthoredStructures.missing_kinds_in(map_root, structure_id, asked)
+				),
+		CONNECT_ONE_SHOT
+	)
+
+
 ## The selected building's bar: the brush says which building is selected and the bar shows it;
 ## each button is one call on the brush, one history entry, and the bar is shown again from the
 ## record afterwards. The brush's mode outlives the pane, so the old connections (to a pane that
@@ -126,6 +156,8 @@ func connect_selection(brush: BrushTool, pane: StructureToolPane, hints_changed:
 			else null
 		)
 		pane.show_selection(held.copy() if held != null else null)
+		if held != null:
+			sync_missing(brush.editor.map_root, pane, held.id, held.params)
 	mode.selection_changed.connect(show)
 	mode.selection_changed.connect(func(_structure_id: int) -> void: hints_changed.call())
 	var act := func(call: Callable) -> void:
