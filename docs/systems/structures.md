@@ -532,8 +532,8 @@ jobs `courtyard_rows` (the three at default size and at the minimum) and `courty
 
 ### Toon styles (2026-10-30, branch `toon_look`)
 
-Eight bright "toon town" structures from procgen's `docs/toon_styles.md` (72 core structures in
-all): `toon_clinic`, `toon_shop`, `toon_gym`, `toon_lab` (12-gon), `toon_cafe`, `toon_cottage`,
+Eight bright "toon town" structures from procgen's `docs/toon_styles.md` (72 core structures at
+that time, 83 now): `toon_clinic`, `toon_shop`, `toon_gym`, `toon_lab` (12-gon), `toon_cafe`, `toon_cottage`,
 `toon_lighthouse` (8-gon) and `toon_hall`, family `toon`, all `regional` (no street split picks
 one), with the style's tags (`toon`, `bright`, `saturated`, `flat_colour`, the building type). The
 two round ones are listed with plan `round` and `sides` (the exporter reads the polygon from
@@ -555,6 +555,45 @@ saturation 0.5 at value 0.7. The adobe wall's mud-roof tone for up-facing faces 
 Render jobs `toon_look` (the family on a 160 m map; lots must stand within about 25 m of the map
 centre, wider ones are refused) and `toon_look_thumbs` (the regenerated tiles). `dormered_house`
 takes dormer width 1.5 and wall height 1.2 in the exporter's style patch.
+
+### The style range and windmills (2026-10-30, branch `range_look`)
+
+Eleven more structures from procgen's `docs/style_range.md` and `architecture_styles.md` section 8
+(83 core structures in all), all `regional`: `windmill_tower` (12-gon) and `windmill_dutch`
+(8-gon), family `windmill`; `flemish_stepped` and `hanseatic` (crow-stepped gables, family
+`townhouse`); `porthole_cafe` and `lantern_cottage` (round and octagonal windows, glass tone), and
+`toon_clinic_wing` and `toon_gym_lobby` (family `toon`); `ivy_manor` (`house`), `bartizan_keep`
+(`castle`) and `chapel_rose` (`hall`), which carry procgen ornaments in the recipe (a player's
+Decorate row still adds more). The windmills are round styles (`_round_style_spec`), sizes from
+the style. Render jobs `range_look` and `range_look_thumbs`; the `rounds` probe action takes `lots`.
+
+Look verdicts: the pane shader no longer washes a violet tint (green under red) to sky teal
+(`structure_pane.gdshader`; warm, rose, sea and cool were already right). The windmill's Sails node
+is role FRAME (the timber's own honey tone; the sails, gallery, curb and rail are `wood`) and its
+`cloth` slot is TRIM (a pale canvas in the plaster kind, never the brick's red). Round-window rings
+and spandrels need nothing: the ring takes the style's `ring_role` and the spandrels are wall.
+
+**Windmills turn.** `StructureMill.split` (pure, called by `StructureGeometry.build_one` after the
+walkable faces) cuts the WHEEL (every triangle whose first vertex is tagged `sails/...`) and the CAP
+(ROOF-role triangles lying wholly above the top of `windmill/curb`) out of `parts.meshes` into
+`parts.mill` (`wheel`, `cap`, `hub`, `axis`, `centre`, `curb_top`). The hub is the centroid of the
+`sails/hub` vertices; the axis is the horizontal direction from the centre of the `windmill/curb`
+ring to the hub (the contract's outward normal turned by `yaw`, as procgen put the hub there, so the
+host needs no yaw); the cap turns about the vertical through that centre. Collision, the walkable
+faces and `top` are made from the whole building and do not change. `digest_of` and
+`triangle_count` cover `meshes` plus the mill, so only the two windmills' pins differ in kind;
+no existing pin moved (`FORMAT_VERSION` 4 only renews cache keys).
+`AuthoredStructures.mill_node` builds a `MillMotion` (`scenes/terrain/mill_motion.gd`) named `Mill`
+at the centre, holding the cap meshes (`cap_<role>_<kind>`) and the child `Wheel` at the hub holding
+the sail meshes (`wheel_...`); the meshes keep their map-frame vertices and sit at minus the pivot.
+Two transforms change per frame and no mesh is rebuilt: the wheel about the axis at about 0.29 rad/s
+(22 s a turn, +-25 percent per building by id) and the cap's yaw, set to face `MillMotion.WIND_FROM`
+with a gentle sway. tt-sim has no global wind value (the weather renderer's wind particles use a
+fixed direction and plants sway on their own shader parameters), so the speed is constant; the
+weather's direction was not used because it put the wheel edge-on to the default camera. A
+`VisibleOnScreenNotifier3D` stops `_process` off screen, and `UiMotion.reduced()` (the OS setting;
+there is no in-game one) keeps the wheel still. `provenance_at` finds a mesh under the pivots by name.
+Tests: `tests/unit/test_structure_mill.gd`.
 
 ## Dressing
 

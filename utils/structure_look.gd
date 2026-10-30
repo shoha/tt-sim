@@ -85,6 +85,10 @@ const NODE_ROLES: Dictionary = {
 	# trim; role_of_slot picks the dome and cone out as roof, a sign's face as wall, the lantern's
 	# panes as an opening.
 	"roof_cap": TRIM,
+	# The windmill's Sails node (range_look): the curb, gallery, rail, hub, stocks and lattice are
+	# timber (surface kind `wood`); role_of_slot takes the cloth out as TRIM (a pale canvas that does
+	# not take the wall's tone: a brick mill has white-ish sails, not red ones).
+	"sails": FRAME,
 	# Ornaments (ProcgenOrnaments): see ORNAMENT.
 	"ornament": ORNAMENT,
 }
@@ -167,6 +171,10 @@ static func role_of_slot(node_type: String, slot: String) -> String:
 					return WALL
 				"glass":
 					return OPENING
+		"sails":
+			# Slots "arm0/cloth", "arm0/frame", "arm0/stock", "hub", "axle", "windmill/curb", ...
+			if last == "cloth":
+				return TRIM
 		"dormer":
 			match last.rstrip("0123456789"):
 				"roof":

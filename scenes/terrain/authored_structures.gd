@@ -268,7 +268,8 @@ func openings_of(structure_id: int) -> Array:
 ## `surface` of structure `structure_id`'s mesh `mesh_name`, or "".
 func provenance_at(structure_id: int, mesh_name: String, triangle: int) -> String:
 	var node := get_structure_node(structure_id)
-	var instance := node.get_node_or_null(NodePath(mesh_name)) as MeshInstance3D if node else null
+	# A windmill's turning meshes sit under its Mill and Wheel pivots (names "cap_...", "wheel_...").
+	var instance := node.find_child(mesh_name, true, false) as MeshInstance3D if node else null
 	if instance == null:
 		return ""
 	var tags: PackedInt32Array = instance.get_meta(TAGS_META, PackedInt32Array())
@@ -477,18 +478,10 @@ func _structure_node(id: int, parts: Dictionary) -> Node3D:
 	var style: String = parts.get("style", "")
 	var tone: String = parts.get("stone_tone", "")
 	for mesh: Dictionary in parts.get("meshes", []):
-		var array_mesh := ArrayMesh.new()
-		array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh.arrays)
-		array_mesh.surface_set_material(
-			0, _material(String(mesh.kind), String(mesh.role), style, tone)
-		)
-		var instance := MeshInstance3D.new()
-		instance.name = "%s_%s" % [mesh.role, mesh.kind]
-		instance.mesh = array_mesh
-		if mesh.role == StructureLook.OPENING:
-			instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		instance.set_meta(TAGS_META, mesh.tags)
-		node.add_child(instance)
+		node.add_child(_mesh_instance(mesh, "", style, tone))
+	var mill: Dictionary = parts.get("mill", {})
+	if not mill.is_empty():
+		node.add_child(mill_node(mill, int(parts.get("id", 0)), style, tone))
 	node.set_meta(TAGS_META, parts.get("tag_table", PackedStringArray()))
 	_add_dressing(node, parts.get("dressing", {}))
 	var faces: PackedVector3Array = parts.get("collision", PackedVector3Array())
@@ -497,6 +490,65 @@ func _structure_node(id: int, parts: Dictionary) -> Node3D:
 	if not faces.is_empty():
 		node.add_child(_body(faces, id))
 	return node
+
+
+## One mesh dictionary (StructureGeometry) as a MeshInstance3D with the shared material of its kind
+## and role; `prefix` goes before its name.
+func _mesh_instance(
+	mesh: Dictionary, prefix: String, style: String, tone: String
+) -> MeshInstance3D:
+	var array_mesh := ArrayMesh.new()
+	array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh.arrays)
+	array_mesh.surface_set_material(0, _material(String(mesh.kind), String(mesh.role), style, tone))
+	var instance := MeshInstance3D.new()
+	instance.name = "%s%s_%s" % [prefix, mesh.role, mesh.kind]
+	instance.mesh = array_mesh
+	if mesh.role == StructureLook.OPENING:
+		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	instance.set_meta(TAGS_META, mesh.tags)
+	return instance
+
+
+## A windmill's turning parts (StructureMill.split's `mill`, without "rest") as a MillMotion node
+## named "Mill": it stands at the tower's centre and holds the cap meshes (prefix "cap_") and its
+## child "Wheel", which stands at the hub and holds the sail meshes (prefix "wheel_"). The meshes
+## keep their map-frame vertices and sit at minus the pivot, so the pose at rest is the built one.
+func mill_node(mill: Dictionary, seed_value: int, style: String, tone: String) -> MillMotion:
+	var centre: Vector3 = mill.centre
+	var hub: Vector3 = mill.hub
+	var pivot := MillMotion.new()
+	pivot.name = "Mill"
+	pivot.position = centre
+	var wheel := Node3D.new()
+	wheel.name = "Wheel"
+	wheel.position = hub - centre
+	pivot.add_child(wheel)
+	var reach := 0.0
+	var cap_box := AABB()
+	var boxed := false
+	for mesh: Dictionary in mill.get("cap", []):
+		var instance := _mesh_instance(mesh, "cap_", style, tone)
+		instance.position = -centre
+		pivot.add_child(instance)
+		var box := instance.get_aabb()
+		box.position += instance.position
+		cap_box = box if not boxed else cap_box.merge(box)
+		boxed = true
+	for mesh: Dictionary in mill.get("wheel", []):
+		var instance := _mesh_instance(mesh, "wheel_", style, tone)
+		instance.position = -hub
+		wheel.add_child(instance)
+		for vertex: Vector3 in mesh.arrays[Mesh.ARRAY_VERTEX]:
+			reach = maxf(reach, vertex.distance_to(hub))
+	# Everything the pose can reach, in the pivot's frame: the cap and a ball round the hub.
+	var swing := AABB(wheel.position - Vector3.ONE * reach, Vector3.ONE * reach * 2.0)
+	var notifier := VisibleOnScreenNotifier3D.new()
+	notifier.aabb = swing.merge(cap_box) if boxed else swing
+	notifier.screen_entered.connect(pivot.on_screen_entered)
+	notifier.screen_exited.connect(pivot.on_screen_exited)
+	pivot.add_child(notifier)
+	pivot.setup(wheel, mill.axis, seed_value)
+	return pivot
 
 
 ## The yard of a building (StructureDressing): the soft ground patch and path (no shadow) and the

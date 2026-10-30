@@ -2197,6 +2197,400 @@
 		},
 		{
 			"default_size_m": [
+				5.6,
+				5.6
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "windmill",
+			"file": "structures/windmill_tower.structure.json",
+			"id": "windmill_tower",
+			"max_area_m2": 56.25,
+			"max_side_m": 7.5,
+			"min_side_m": 4.5,
+			"name": "Windmill tower",
+			"plans": [
+				"round"
+			],
+			"sides": 12,
+			"tags": [
+				"windmill",
+				"mill",
+				"round",
+				"tower",
+				"dome",
+				"sails",
+				"turning_cap",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/windmill_tower.jpg",
+			"variant": "Plaster tower, dome cap, four sails"
+		},
+		{
+			"default_size_m": [
+				6.2,
+				6.2
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "windmill",
+			"file": "structures/windmill_dutch.structure.json",
+			"id": "windmill_dutch",
+			"max_area_m2": 72.25,
+			"max_side_m": 8.5,
+			"min_side_m": 5.0,
+			"name": "Dutch windmill",
+			"plans": [
+				"round"
+			],
+			"sides": 8,
+			"tags": [
+				"windmill",
+				"mill",
+				"round",
+				"tower",
+				"octagon",
+				"thatch",
+				"sails",
+				"turning_cap",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/windmill_dutch.jpg",
+			"variant": "Brick octagon, thatched cone"
+		},
+		{
+			"default_size_m": [
+				5.0,
+				8.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"ridge",
+				"wonk"
+			],
+			"family": "townhouse",
+			"file": "structures/flemish_stepped.structure.json",
+			"id": "flemish_stepped",
+			"max_area_m2": 90.0,
+			"max_side_m": 10.0,
+			"min_side_m": 3.0,
+			"name": "Flemish stepped gable",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"plaster",
+				"tile",
+				"gable",
+				"townhouse",
+				"trim",
+				"dutch",
+				"flemish",
+				"stepped_gable",
+				"profile_roof",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/flemish_stepped.jpg",
+			"variant": "Cream plaster, crow steps"
+		},
+		{
+			"default_size_m": [
+				5.0,
+				9.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"ridge",
+				"wonk"
+			],
+			"family": "townhouse",
+			"file": "structures/hanseatic.structure.json",
+			"id": "hanseatic",
+			"max_area_m2": 90.0,
+			"max_side_m": 10.0,
+			"min_side_m": 3.0,
+			"name": "Hanseatic merchant house",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"brick",
+				"tile",
+				"gable",
+				"townhouse",
+				"trim",
+				"quoins",
+				"hanseatic",
+				"stepped_gable",
+				"profile_roof",
+				"tall",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/hanseatic.jpg",
+			"variant": "Dark brick, tall stepped gable"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "toon",
+			"file": "structures/porthole_cafe.structure.json",
+			"id": "porthole_cafe",
+			"max_area_m2": 70.0,
+			"max_side_m": 10.0,
+			"min_side_m": 5.0,
+			"name": "Porthole cafe",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"toon",
+				"bright",
+				"saturated",
+				"flat_colour",
+				"cafe",
+				"house",
+				"round_windows",
+				"porthole",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/porthole_cafe.jpg",
+			"variant": "Round windows, cool glass"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "toon",
+			"file": "structures/lantern_cottage.structure.json",
+			"id": "lantern_cottage",
+			"max_area_m2": 70.0,
+			"max_side_m": 10.0,
+			"min_side_m": 5.0,
+			"name": "Lantern cottage",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"toon",
+				"bright",
+				"saturated",
+				"flat_colour",
+				"cottage",
+				"house",
+				"round_windows",
+				"octagon",
+				"warm_glass",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/lantern_cottage.jpg",
+			"variant": "Octagon windows, warm glass"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "toon",
+			"file": "structures/toon_clinic_wing.structure.json",
+			"id": "toon_clinic_wing",
+			"max_area_m2": 70.0,
+			"max_side_m": 10.0,
+			"min_side_m": 5.0,
+			"name": "Toon clinic with wing",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"toon",
+				"bright",
+				"saturated",
+				"flat_colour",
+				"clinic",
+				"house",
+				"wing",
+				"gable_porch",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/toon_clinic_wing.jpg",
+			"variant": "Hip wing, gabled porch"
+		},
+		{
+			"default_size_m": [
+				9.0,
+				6.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "toon",
+			"file": "structures/toon_gym_lobby.structure.json",
+			"id": "toon_gym_lobby",
+			"max_area_m2": 70.0,
+			"max_side_m": 10.0,
+			"min_side_m": 5.0,
+			"name": "Toon gym with lobby",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"toon",
+				"bright",
+				"saturated",
+				"flat_colour",
+				"gym",
+				"house",
+				"lobby",
+				"canopy",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/toon_gym_lobby.jpg",
+			"variant": "Lower lobby block, dome cap"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"chimneys",
+				"ridge",
+				"wonk"
+			],
+			"family": "house",
+			"file": "structures/ivy_manor.structure.json",
+			"id": "ivy_manor",
+			"max_area_m2": 120.0,
+			"max_side_m": 14.0,
+			"min_side_m": 4.5,
+			"name": "Ivy manor",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stone",
+				"slate",
+				"gable",
+				"chimney",
+				"ivy",
+				"flower_boxes",
+				"ornaments",
+				"english",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/ivy_manor.jpg",
+			"variant": "Stone, ivy and flower boxes"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				7.0
+			],
+			"expose": [
+				"height"
+			],
+			"family": "castle",
+			"file": "structures/bartizan_keep.structure.json",
+			"id": "bartizan_keep",
+			"max_area_m2": 100.0,
+			"max_side_m": 11.0,
+			"min_side_m": 5.0,
+			"name": "Bartizan keep",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"keep",
+				"castle",
+				"stone",
+				"flat",
+				"crenellated",
+				"bartizan",
+				"banners",
+				"ornaments",
+				"medieval",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/bartizan_keep.jpg",
+			"variant": "Crenellated, corner turrets, banners"
+		},
+		{
+			"default_size_m": [
+				5.0,
+				9.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"wonk"
+			],
+			"family": "hall",
+			"file": "structures/chapel_rose.structure.json",
+			"id": "chapel_rose",
+			"max_area_m2": 110.0,
+			"max_side_m": 14.0,
+			"min_side_m": 4.0,
+			"name": "Rose window chapel",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"chapel",
+				"church",
+				"stone",
+				"gable",
+				"rose_window",
+				"buttress",
+				"finial",
+				"ornaments",
+				"medieval",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/chapel_rose.jpg",
+			"variant": "Buttresses, rose window, finials"
+		},
+		{
+			"default_size_m": [
 				7.2,
 				7.2
 			],

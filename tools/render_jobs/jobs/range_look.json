@@ -1,0 +1,252 @@
+{
+ "out_dir": "render_jobs/range_look_r3",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 160,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "styles3",
+   "lots": [
+    [
+     "core:flemish_stepped",
+     -18.0,
+     -17.0,
+     5.0,
+     8.0,
+     0.0,
+     701
+    ],
+    [
+     "core:hanseatic",
+     -6.0,
+     -17.0,
+     5.0,
+     9.0,
+     0.0,
+     702
+    ],
+    [
+     "core:porthole_cafe",
+     6.0,
+     -17.0,
+     7.0,
+     5.0,
+     0.0,
+     703
+    ],
+    [
+     "core:lantern_cottage",
+     18.0,
+     -17.0,
+     7.0,
+     5.0,
+     0.0,
+     704
+    ],
+    [
+     "core:toon_clinic_wing",
+     -18.0,
+     -3.0,
+     7.0,
+     5.0,
+     0.0,
+     705
+    ],
+    [
+     "core:toon_gym_lobby",
+     -4.0,
+     -3.0,
+     9.0,
+     6.0,
+     0.0,
+     706
+    ],
+    [
+     "core:ivy_manor",
+     8.0,
+     -3.0,
+     7.0,
+     5.0,
+     0.0,
+     707
+    ],
+    [
+     "core:bartizan_keep",
+     19.0,
+     -3.0,
+     7.0,
+     7.0,
+     0.0,
+     708
+    ],
+    [
+     "core:chapel_rose",
+     -18.0,
+     13.0,
+     5.0,
+     9.0,
+     0.0,
+     709
+    ]
+   ]
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "rounds",
+   "lots": [
+    [
+     "core:windmill_tower",
+     -5.0,
+     13.0,
+     6.2,
+     0.0,
+     710
+    ],
+    [
+     "core:windmill_dutch",
+     9.0,
+     13.0,
+     6.2,
+     0.0,
+     711
+    ]
+   ]
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "report"
+  },
+  {
+   "op": "wait",
+   "s": 4.0
+  },
+  {
+   "op": "zoom",
+   "size": 44.0
+  },
+  {
+   "op": "wait",
+   "s": 4.0
+  },
+  {
+   "op": "zoom",
+   "size": 16.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    2,
+    13
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "01_mills_a",
+   "desc": "both windmills, new facing"
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "02_mills_b",
+   "desc": "3 s later"
+  },
+  {
+   "op": "zoom",
+   "size": 7.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -5,
+    13
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "capture",
+   "name": "03_tower_cap",
+   "desc": "tower windmill cap close"
+  },
+  {
+   "op": "zoom",
+   "size": 44.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    -3
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "04_all",
+   "desc": "all eleven"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "remove_all"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}

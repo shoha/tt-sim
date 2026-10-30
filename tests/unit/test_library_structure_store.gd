@@ -359,10 +359,12 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 			"adobe_rounded",
 			"alpine_chalet",
 			"barn",
+			"bartizan_keep",
 			"brick_terrace",
 			"canal_house",
 			"castle_keep",
 			"chapel",
+			"chapel_rose",
 			"chinese_hall",
 			"close_studded_house",
 				"coaching_inn",
@@ -373,22 +375,27 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 			"dormered_house",
 			"dutch_bell_house",
 			"dutch_canal_house",
+			"flemish_stepped",
 			"gambrel_barn",
 			"gatehouse",
 			"half_hip_cottage",
 			"half_timber_house",
+			"hanseatic",
 			"herringbone_cottage",
 				"hof_farm",
 			"house_flat",
 			"house_hip",
 			"inn_gallery",
+			"ivy_manor",
 			"lake_dwelling",
+			"lantern_cottage",
 			"log_cabin",
 			"mansard_townhouse",
 			"market_hall",
 			"minka",
 			"pagoda_tower",
 			"porch_cottage",
+			"porthole_cafe",
 			"pueblo",
 			"round_hut",
 			"roundhouse",
@@ -406,8 +413,10 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 			"thatched_cottage",
 			"toon_cafe",
 			"toon_clinic",
+			"toon_clinic_wing",
 			"toon_cottage",
 			"toon_gym",
+			"toon_gym_lobby",
 			"toon_hall",
 			"toon_lab",
 			"toon_lighthouse",
@@ -425,7 +434,9 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 			"turf_longhouse",
 			"veranda_cottage",
 			"villa_stucco",
-			"watchtower"
+			"watchtower",
+			"windmill_dutch",
+			"windmill_tower"
 		]
 	)
 	var pins := (
@@ -434,7 +445,7 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 		. strip_edges()
 		. split("\n")
 	)
-	assert_eq(pins.size(), 72)
+	assert_eq(pins.size(), 83)
 	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
 	var moved := PackedStringArray()
 	for line in pins:

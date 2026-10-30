@@ -1,0 +1,433 @@
+{
+ "hang_s": 120,
+ "out_dir": "render_jobs/range_look_thumbs",
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "wait_title"
+  },
+  {
+   "biome": "grassland_meadow_summer_s1",
+   "op": "new_map",
+   "seed": 1234,
+   "size": 100
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "action": "tile",
+   "depth": 5.59999990463257,
+   "op": "call",
+   "ref": "core:windmill_tower",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "seed": 5,
+   "sides": 12,
+   "width": 5.59999990463257
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "at": [
+    0.0,
+    0.0
+   ],
+   "op": "thumbnail_prepare",
+   "zoom": 18.3939999141693
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "biome": "windmill_tower",
+   "folder": "D:/dev/tabletop/worktrees/core-library-range_look",
+   "op": "thumbnail",
+   "structure": true
+  },
+  {
+   "desc": "The tile of Windmill tower",
+   "name": "tile_windmill_tower",
+   "op": "capture"
+  },
+  {
+   "action": "tile",
+   "depth": 6.19999980926514,
+   "op": "call",
+   "ref": "core:windmill_dutch",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "seed": 5,
+   "sides": 8,
+   "width": 6.19999980926514
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "at": [
+    0.0,
+    0.0
+   ],
+   "op": "thumbnail_prepare",
+   "zoom": 20.8339998283386
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "biome": "windmill_dutch",
+   "folder": "D:/dev/tabletop/worktrees/core-library-range_look",
+   "op": "thumbnail",
+   "structure": true
+  },
+  {
+   "desc": "The tile of Dutch windmill",
+   "name": "tile_windmill_dutch",
+   "op": "capture"
+  },
+  {
+   "action": "tile",
+   "depth": 8.0,
+   "op": "call",
+   "ref": "core:flemish_stepped",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "seed": 5,
+   "sides": 0,
+   "width": 5.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "at": [
+    0.0,
+    0.0
+   ],
+   "op": "thumbnail_prepare",
+   "zoom": 19.889
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "biome": "flemish_stepped",
+   "folder": "D:/dev/tabletop/worktrees/core-library-range_look",
+   "op": "thumbnail",
+   "structure": true
+  },
+  {
+   "desc": "The tile of Flemish stepped gable",
+   "name": "tile_flemish_stepped",
+   "op": "capture"
+  },
+  {
+   "action": "tile",
+   "depth": 9.0,
+   "op": "call",
+   "ref": "core:hanseatic",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "seed": 5,
+   "sides": 0,
+   "width": 5.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "at": [
+    0.0,
+    0.0
+   ],
+   "op": "thumbnail_prepare",
+   "zoom": 23.012
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "biome": "hanseatic",
+   "folder": "D:/dev/tabletop/worktrees/core-library-range_look",
+   "op": "thumbnail",
+   "structure": true
+  },
+  {
+   "desc": "The tile of Hanseatic merchant house",
+   "name": "tile_hanseatic",
+   "op": "capture"
+  },
+  {
+   "action": "tile",
+   "depth": 5.0,
+   "op": "call",
+   "ref": "core:porthole_cafe",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "seed": 5,
+   "sides": 0,
+   "width": 7.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "at": [
+    0.0,
+    0.0
+   ],
+   "op": "thumbnail_prepare",
+   "zoom": 12.605
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "biome": "porthole_cafe",
+   "folder": "D:/dev/tabletop/worktrees/core-library-range_look",
+   "op": "thumbnail",
+   "structure": true
+  },
+  {
+   "desc": "The tile of Porthole cafe",
+   "name": "tile_porthole_cafe",
+   "op": "capture"
+  },
+  {
+   "action": "tile",
+   "depth": 5.0,
+   "op": "call",
+   "ref": "core:lantern_cottage",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "seed": 5,
+   "sides": 0,
+   "width": 7.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "at": [
+    0.0,
+    0.0
+   ],
+   "op": "thumbnail_prepare",
+   "zoom": 12.757
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "biome": "lantern_cottage",
+   "folder": "D:/dev/tabletop/worktrees/core-library-range_look",
+   "op": "thumbnail",
+   "structure": true
+  },
+  {
+   "desc": "The tile of Lantern cottage",
+   "name": "tile_lantern_cottage",
+   "op": "capture"
+  },
+  {
+   "action": "tile",
+   "depth": 5.0,
+   "op": "call",
+   "ref": "core:toon_clinic_wing",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "seed": 5,
+   "sides": 0,
+   "width": 7.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "at": [
+    0.0,
+    0.0
+   ],
+   "op": "thumbnail_prepare",
+   "zoom": 15.7894
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "biome": "toon_clinic_wing",
+   "folder": "D:/dev/tabletop/worktrees/core-library-range_look",
+   "op": "thumbnail",
+   "structure": true
+  },
+  {
+   "desc": "The tile of Toon clinic with wing",
+   "name": "tile_toon_clinic_wing",
+   "op": "capture"
+  },
+  {
+   "action": "tile",
+   "depth": 6.0,
+   "op": "call",
+   "ref": "core:toon_gym_lobby",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "seed": 5,
+   "sides": 0,
+   "width": 9.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "at": [
+    0.0,
+    0.0
+   ],
+   "op": "thumbnail_prepare",
+   "zoom": 20.4204
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "biome": "toon_gym_lobby",
+   "folder": "D:/dev/tabletop/worktrees/core-library-range_look",
+   "op": "thumbnail",
+   "structure": true
+  },
+  {
+   "desc": "The tile of Toon gym with lobby",
+   "name": "tile_toon_gym_lobby",
+   "op": "capture"
+  },
+  {
+   "action": "tile",
+   "depth": 5.0,
+   "op": "call",
+   "ref": "core:ivy_manor",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "seed": 5,
+   "sides": 0,
+   "width": 7.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "at": [
+    0.0,
+    0.0
+   ],
+   "op": "thumbnail_prepare",
+   "zoom": 15.797
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "biome": "ivy_manor",
+   "folder": "D:/dev/tabletop/worktrees/core-library-range_look",
+   "op": "thumbnail",
+   "structure": true
+  },
+  {
+   "desc": "The tile of Ivy manor",
+   "name": "tile_ivy_manor",
+   "op": "capture"
+  },
+  {
+   "action": "tile",
+   "depth": 7.0,
+   "op": "call",
+   "ref": "core:bartizan_keep",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "seed": 5,
+   "sides": 0,
+   "width": 7.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "at": [
+    0.0,
+    0.0
+   ],
+   "op": "thumbnail_prepare",
+   "zoom": 21.117
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "biome": "bartizan_keep",
+   "folder": "D:/dev/tabletop/worktrees/core-library-range_look",
+   "op": "thumbnail",
+   "structure": true
+  },
+  {
+   "desc": "The tile of Bartizan keep",
+   "name": "tile_bartizan_keep",
+   "op": "capture"
+  },
+  {
+   "action": "tile",
+   "depth": 9.0,
+   "op": "call",
+   "ref": "core:chapel_rose",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "seed": 5,
+   "sides": 0,
+   "width": 5.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "at": [
+    0.0,
+    0.0
+   ],
+   "op": "thumbnail_prepare",
+   "zoom": 18.243
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "biome": "chapel_rose",
+   "folder": "D:/dev/tabletop/worktrees/core-library-range_look",
+   "op": "thumbnail",
+   "structure": true
+  },
+  {
+   "desc": "The tile of Rose window chapel",
+   "name": "tile_chapel_rose",
+   "op": "capture"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  }
+ ],
+ "timeout_s": 900
+}
