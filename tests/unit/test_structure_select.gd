@@ -507,7 +507,7 @@ func _tool(editor: AuthoringEditor) -> BrushTool:
 	return tool
 
 
-func test_a_click_on_a_building_selects_it_and_bare_ground_lets_go_without_laying() -> void:
+func test_a_click_on_a_building_selects_it_and_bare_ground_then_lays_a_new_one() -> void:
 	var editor := _editor()
 	var id := _lay(editor)
 	var brush := StructureBrush.new()
@@ -524,25 +524,13 @@ func test_a_click_on_a_building_selects_it_and_bare_ground_lets_go_without_layin
 	assert_eq(_doc.structures.size(), 1)
 	assert_eq(_history.undo_count(), 1, "a click only selects: the lay is the one entry")
 	tool.hit = Vector3(12, 0, 12)
-	assert_false(brush.press(tool))
-	assert_false(brush.took_press(), "the bare click did not begin a lot")
-	assert_eq(brush.selected_id, -1, "it let go")
-	assert_eq(_doc.structures.size(), 1, "and laid nothing")
 	assert_false(brush.press(tool), "a lot is not a dab stroke")
-	assert_true(brush.drawing, "the next click on bare ground begins a lot again")
-
-
-func test_while_selected_no_lot_follows_the_pointer() -> void:
-	var editor := _editor()
-	_lay(editor)
-	var brush := StructureBrush.new()
-	brush.pick(COTTAGE)
-	brush.track(editor, Vector3(10, 0, 8), 0.1)
-	assert_ne(brush.ghost_centre, Vector2.INF, "idle, a lot follows")
-	brush.select(1)
-	assert_eq(brush.ghost_centre, Vector2.INF, "selected, it steps aside")
-	brush.track(editor, Vector3(10, 0, 8), 0.1)
-	assert_eq(brush.ghost_centre, Vector2.INF)
+	assert_true(brush.drawing, "bare ground with a pick armed begins a lot, selection or not")
+	assert_eq(brush.selected_id, id, "the selection stays until the lot is laid")
+	brush.end(tool)
+	assert_eq(_doc.structures.size(), 2, "the click laid a building")
+	assert_eq(brush.selected_id, 2, "and the new building is the selection")
+	assert_eq(_history.undo_count(), 2, "one history entry")
 
 
 func test_dragging_a_corner_dot_resizes_in_one_entry_and_shows_the_building_as_it_goes() -> void:

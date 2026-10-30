@@ -33,6 +33,7 @@ func _init() -> void:
 		["R (Building)", "Draw the next building afresh, or the one under the cursor"],
 		["Right-click, Delete (Building)", "Remove the building under the cursor"],
 		["Click a building", "Select it: corner dots resize, side tabs push, the body moves"],
+		["Click bare ground (selected)", "Put another building down; the new one is selected"],
 		["Click a side tab (selected)", "Put the door on that side"],
 		["Shift + drag a corner (selected)", "Move just that corner, off the square"],
 		["Ctrl+D (selected)", "Copy the building beside itself"],

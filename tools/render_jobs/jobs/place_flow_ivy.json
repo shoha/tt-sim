@@ -1,0 +1,214 @@
+{
+ "out_dir": "render_jobs/place_flow_ivy",
+ "timeout_s": 240,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 150,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    1200,
+    540
+   ]
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 16.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel._on_rail_item_pressed(\"structure\")"
+  },
+  {
+   "op": "wait",
+   "s": 0.8
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_tool.gd",
+   "action": "pick",
+   "ref": "core:townhouse"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "lay",
+   "ref": "core:townhouse",
+   "at": [
+    0,
+    0
+   ],
+   "size": [
+    8,
+    7
+   ]
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "flush"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "move",
+     "at": [
+      0,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "press",
+     "at": [
+      0,
+      0
+     ]
+    },
+    {
+     "type": "release",
+     "at": [
+      0,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.6
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "bar",
+   "press": "ornament",
+   "kind": "ivy"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "flush"
+  },
+  {
+   "op": "wait",
+   "s": 2.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "flush"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "bar",
+   "press": "done"
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel.close()"
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "move",
+     "at": [
+      30,
+      30
+     ]
+    }
+   ]
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    -7
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 11.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "01_ivy_townhouse",
+   "desc": "Townhouse with the Ivy chip on, game zoom"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    -7
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 7.0
+  },
+  {
+   "op": "wait",
+   "s": 2.0
+  },
+  {
+   "op": "capture",
+   "name": "02_ivy_close",
+   "desc": "Same, close"
+  }
+ ]
+}

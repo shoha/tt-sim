@@ -1132,3 +1132,5 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   after one click laid a building (`09_hint_faded`: the Click key has left). The probe
   `probes/building_ui2.gd` (`chip`, `hover`, `hints`, `note`, `small`) clears the run's hint memory
   at the start and the end (the settings file of the run's user folder).
+
+- `jobs/place_flow.json` (about 60 s, keeps no level: a new unsaved 150 ft meadow; topic place_flow): a cottage selected with the ghost lot following over bare ground and the hint bar's selected keys (`01_selected_ghost_follows`), the pointer over a building (ghost hidden, `02_over_building_no_ghost`), then five placement clicks that lay five buildings (`03_five_laid`). Clears the run's hint memory. `jobs/place_flow_ivy.json` (about 45 s): a townhouse with the Ivy chip on at game zoom and close (`01_ivy_townhouse`, `02_ivy_close`).
