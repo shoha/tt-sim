@@ -10,6 +10,9 @@ const SECTION := "ui"
 const KEY_SHOW_VALUES := "show_values"
 ## The Interface size choice: InterfaceSize.AUTO (0) or a percent from InterfaceSize.CHOICES.
 const KEY_INTERFACE_SIZE := "interface_size"
+## The Building tool's hint-bar keys already done once, and the palette's small-tiles choice.
+const KEY_STRUCTURE_HINTS_DONE := "structure_hints_done"
+const KEY_STRUCTURE_TILES_SMALL := "structure_tiles_small"
 
 static var settings_path: String = Paths.SETTINGS_PATH
 
@@ -31,6 +34,31 @@ static func load_interface_size() -> int:
 
 static func save_interface_size(choice: int) -> void:
 	_save(KEY_INTERFACE_SIZE, InterfaceSize.sanitize(choice))
+
+
+## The Building tool's gestures this user has done once (StructureHints); empty when none are
+## saved. Anything in the file that is not a string is dropped.
+static func load_structure_hints_done() -> Array[String]:
+	var out: Array[String] = []
+	var saved: Variant = _load().get_value(SECTION, KEY_STRUCTURE_HINTS_DONE, [])
+	if saved is Array:
+		for item: Variant in saved:
+			if item is String or item is StringName:
+				out.append(String(item))
+	return out
+
+
+static func save_structure_hints_done(done: Array) -> void:
+	_save(KEY_STRUCTURE_HINTS_DONE, done.map(func(id: Variant) -> String: return String(id)))
+
+
+## Whether the Building palette's tiles are the small size (StructurePalette.tile_metrics).
+static func load_structure_tiles_small() -> bool:
+	return bool(_load().get_value(SECTION, KEY_STRUCTURE_TILES_SMALL, false))
+
+
+static func save_structure_tiles_small(small: bool) -> void:
+	_save(KEY_STRUCTURE_TILES_SMALL, small)
 
 
 static func _load() -> ConfigFile:

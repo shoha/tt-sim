@@ -58,6 +58,8 @@ const LARGE_EDIT_BYTES := 12 * 1024
 ## History methods of whole-feature edits (WaterEditor.apply_edit, CrossingEditor.apply_list).
 const WHOLE_FEATURE_METHODS: Array[StringName] = [&"apply_edit", &"apply_list"]
 const NOT_GM := "Only the GM can change the map during play."
+## Set on the Events pane's Building pane once its selection bar is wired (_wire_structure_bar).
+const BAR_WIRED_META := &"structure_bar_wired"
 const NOT_HOST := "Only the host can change the map during play."
 const NOT_READY := "The map is still being set out; its brushes are ready in a moment."
 ## A large edit's toast: its label in the past tense (done_phrase), "Cleared for everyone at
@@ -346,6 +348,7 @@ func pick(tool_id: StringName) -> void:
 		refresh()
 		return
 	_prepare(tool_id)
+	_wire_structure_bar(tool_id, wired)
 	var mode := wired.mode_for(tool)
 	if mode.has_signal(&"fired") and not mode.is_connected(&"fired", _on_fired):
 		mode.connect(&"fired", _on_fired)
@@ -478,6 +481,23 @@ func _prepare(tool_id: StringName) -> void:
 		WaterTool.ID:
 			AuthoredWater.warm_fall_material()
 			AuthoredWater.warm_flow_carrier()
+
+
+## Gives the Events pane's own Building pane the selected building's bar (the Decorate row, the
+## steppers, the style tiles), wired as authoring's pane is (StructureTool.connect_selection):
+## without it a click on a building selected it with no bar to edit it by. Once per pane. The
+## brush is GameMap's, shared with authoring, whose own pane takes the connections back when it is
+## built again.
+func _wire_structure_bar(tool_id: StringName, wired: BrushTool) -> void:
+	var structure_pane := pane.structure_pane if pane != null else null
+	if tool_id != StructureTool.ID or structure_pane == null or not is_instance_valid(structure_pane):
+		return
+	if structure_pane.has_meta(BAR_WIRED_META):
+		return
+	structure_pane.set_meta(BAR_WIRED_META, true)
+	(find_tool(StructureTool.ID) as StructureTool).connect_selection(
+		wired, structure_pane, _show_hints
+	)
 
 
 func _set_armed(tool_id: StringName) -> void:

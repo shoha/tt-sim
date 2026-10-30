@@ -652,6 +652,38 @@ pure (`utils/structure_placement.gd`).
   gesture). The Events pane lists the brush like the Wall tool's: the tiles as `structure_pane`
   (`EventsPane.structure_selected`, `structure_reroll_requested`), the hint bar rows in
   `PlayEvents.hints_for`.
+- **Palette round 2 (card building_ui2, 2026-10-30).** The pane is a drawer of key facts, the
+  gestures live on the hint bar:
+  - *Filter chips* (`StructurePalette.CHIPS`: Home, Farm, Inn, Castle, Church, Shop, Ruin, Toon,
+    Regional, Stone, Timber, Thatch) above the tiles, multi-select, with the search box and a Clear
+    (with the tally, "14 of 72"). A chip matches a row by its family or one of its tags. Chips of one
+    group (kind, look, material) widen the choice, chips of different groups narrow it; a chip's count is
+    what it would show given the search and the other groups' chips, and a chip that would show nothing
+    is greyed. All pure (`passes_chips`, `chip_counts`, `toggled`).
+  - *Tiles* are 80 px pictures (a "Small tiles" switch gives 48 px, remembered in the settings
+    file's [ui] section); the column count follows the pane width (`StructurePalette.tile_metrics`,
+    two at least, refit on `resized`). A hover card (`StructureCard`, a top-level plaque on the board beside
+    the drawer, shown 0.12 s after the pointer rests) gives a 128 px picture, the name, the family
+    and a few tags, and the starting size; tiles carry no tooltip.
+  - *Key caps, not prose.* While the brush is down the hint bar (`InputHints`, the app's key-chip
+    bar, bottom centre) carries the tool's keys: `ToolDescriptor.key_hints(brush)`, lit by
+    `AuthoringController.refresh_tool_hints()` (on pick, on put-away, when the rows change).
+    `StructureHints` holds the rows (Click, Drag, Q / E, R, Del; with a building selected Drag, Q / E, R,
+    Ctrl+D, Del, Esc) and drops each key once its gesture was done once (`StructureBrush.gesture_done`
+    -> `StructureHints.mark`, kept in the settings file per user; `reset(true)` forgets). The pane and
+    selection hints are one short line.
+  - *Live note beside the ghost.* `StructureNote.live` gives `{text, level}`: BLOCKED (red: the
+    `refusal_text` words, a release lays nothing and toasts them as before), NOTE (amber: the lot
+    was eased off water, a bank, the map edge or a building - `StructurePlacement.nearest_legal`'s new
+    `why` - or held to the recipe's size range, stated in the level's units), else none. It is worked
+    out once per input change (`StructureBrush._refresh_note` keys on the problem, the why, the asked
+    and given sizes and the units), not per frame; the ghost's lines wear the level's colour and the
+    note stacks under the name and size chip (`StructurePlanView.draw_pills`).
+  - *GM Events pane.* It lists the tool and, since this card, wires the selection bar too
+    (`StructureTool.connect_selection(brush, pane, hints_changed)`, called by
+    `PlayEvents._wire_structure_bar` once per pane), so a click on a building in play shows the
+    steppers, Decorate row and style tiles as in authoring. The brush is GameMap's, shared with
+    authoring: whichever pane was built or armed last owns the selection connections.
 - **Not in this card.** Selection and editing are card S5 (next section); non-rectangular plans
   (`plans` in the entry) are not offered yet; the rise animation of a laid building is a look card.
   The Building kind and its pane fields were retired in card S8.
@@ -900,3 +932,9 @@ what each covers). The pins now also live with the data: `libraries/core/structu
 <pipeline md5> <triangles> <procgen md5>`, the first three agree with the fixture above, and
 `test_library_structure_store.gd` compares them). The tiles are rendered by
 `tools/render_structure_thumbnails.gd` (the render job `structure_thumbs`, kept no level).
+
+Card building_ui2: `tests/unit/test_building_ui2.gd` (chips, counts, tile measures, the card's
+words, the hint rows and their fade, the settings round trip, the live note's mapping, `nearest_legal`'s
+`why`, the pane's chips and columns, `connect_selection`) and the render job
+`tools/render_jobs/jobs/building_ui2.json` (probe `probes/building_ui2.gd`; a meadow with a pond,
+nine captures; keeps no level, but clears the run's hint memory).

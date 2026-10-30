@@ -114,6 +114,14 @@ func has_tile(id: StringName) -> bool:
 	return _tiles.has(id)
 
 
+## Tile `id`'s rectangle on the screen (its hover scale not counted), or an empty rectangle for
+## an id that is not here. A host places a hover card beside it.
+func tile_global_rect(id: StringName) -> Rect2:
+	if not _tiles.has(id):
+		return Rect2()
+	return (_tiles[id] as Button).get_global_rect()
+
+
 ## Single-select sync without signals.
 func select(id: StringName) -> void:
 	selected = id
