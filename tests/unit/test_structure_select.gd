@@ -322,7 +322,13 @@ func test_the_ruin_family_swaps_among_rectangles_and_the_tower_has_no_variants()
 	ruins.sort()
 	assert_eq(
 		ruins,
-		["core:ruin_barn", "core:ruin_chapel", "core:ruin_cottage", "core:ruin_townhouse"],
+		[
+			"core:ruin_barn",
+			"core:ruin_chapel",
+			"core:ruin_cottage",
+			"core:ruin_townhouse",
+			"core:ruined_chapel"
+		],
 		"the round tower is not offered for a rectangle (a swap keeps the footprint)"
 	)
 	assert_true(StructureEdit.variants_of("core:ruin_tower").is_empty(), "alone of its plan kind")

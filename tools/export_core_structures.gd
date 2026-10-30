@@ -845,6 +845,146 @@ const STARTERS: Array[Dictionary] = [
 		"family": "hall",
 		"variant": "Buttresses, rose window, finials",
 	},
+	# The world and fantasy styles (topic world_look, 2026-10-30; procgen docs/world_styles.md), all
+	# `regional`. Round ones (yurt, tulou, trullo, wizard_tower, mushroom_cottage, crystal_spire) read
+	# their polygon through `_round_style_spec`; the fantasy family holds the six invented ones.
+	{
+		"id": "yurt",
+		"bundle": "yurt",
+		"seed": 0,
+		"name": "Yurt",
+		"family": "roundhouse",
+		"variant": "Felt wall, low cone, crown",
+	},
+	{
+		"id": "tulou",
+		"bundle": "tulou",
+		"seed": 0,
+		"name": "Tulou",
+		"family": "roundhouse",
+		"variant": "Rammed-earth ring, tiled roof",
+	},
+	{
+		"id": "trullo",
+		"bundle": "trullo",
+		"seed": 0,
+		"name": "Trullo",
+		"family": "roundhouse",
+		"variant": "White drum, grey stone cone",
+	},
+	{
+		"id": "blackhouse",
+		"bundle": "blackhouse",
+		"seed": 0,
+		"name": "Blackhouse",
+		"family": "cottage",
+		"variant": "Low stone, hip thatch",
+	},
+	{
+		"id": "riad",
+		"bundle": "riad",
+		"seed": 0,
+		"name": "Riad",
+		"family": "courtyard",
+		"variant": "Arched wings round a paved yard",
+	},
+	{
+		"id": "sahel_mosque",
+		"bundle": "sahel_mosque",
+		"seed": 0,
+		"name": "Sahel mosque",
+		"family": "temple",
+		"variant": "Stepped adobe, wood spikes",
+	},
+	{
+		"id": "stave_church",
+		"bundle": "stave_church",
+		"seed": 0,
+		"name": "Stave church",
+		"family": "temple",
+		"variant": "Tar boards, shingle, spired tower",
+		# Tar-dark, but a step lighter than the style's #3E2D20 and #2E2A28: those render black.
+		"style_patch":
+		{
+			"palette":
+			{
+				"wall": ["#6B4A33", "#5E412D", "#785639"],
+				"roof": ["#4E4640", "#5A4C42", "#6A5848"],
+			},
+		},
+	},
+	{
+		"id": "wizard_tower",
+		"bundle": "wizard_tower",
+		"seed": 0,
+		"name": "Wizard tower",
+		"family": "fantasy",
+		"variant": "Tapered, banded, pointed hat",
+		"style_patch": {"stone_tone": "grey"},
+	},
+	{
+		"id": "mushroom_cottage",
+		"bundle": "mushroom_cottage",
+		"seed": 0,
+		"name": "Mushroom cottage",
+		"family": "fantasy",
+		"variant": "Cream stalk, bright dome cap",
+	},
+	{
+		"id": "treehouse",
+		"bundle": "treehouse",
+		"seed": 0,
+		"name": "Treehouse",
+		"family": "fantasy",
+		"variant": "Hut on posts, deck and ladder",
+	},
+	{
+		"id": "elven_hall",
+		"bundle": "elven_hall",
+		"seed": 0,
+		"name": "Elven hall",
+		"family": "fantasy",
+		"variant": "Pale hall, upswept roof, gold trim",
+	},
+	{
+		"id": "dwarven_gatehall",
+		"bundle": "dwarven_gatehall",
+		"seed": 0,
+		"name": "Dwarven gatehall",
+		"family": "fantasy",
+		"variant": "Dark stone, fat towers, bronze bands",
+		# The style's blue-greys (#585D68 to #767A80) render near black under the game's light; one
+		# step lighter keeps the bronze bands and the gate reading (look round 1, world_look).
+		"style_patch":
+		{
+			"stone_tone": "grey",
+			"palette":
+			{
+				"wall": ["#8E939C", "#80858F", "#989CA2", "#7A808C"],
+				"roof": ["#6A707A", "#767C84"],
+			},
+		},
+	},
+	{
+		"id": "crystal_spire",
+		"bundle": "crystal_spire",
+		"seed": 0,
+		"name": "Crystal spire",
+		"family": "fantasy",
+		"variant": "Pale obelisk, luminous cone",
+		# Plaster, not the style's masonry: the game's stone texture turned the pale lavender wall
+		# tones (#DDF2F6 and kin) into a brick brown; plaster takes them as painted.
+		"style_patch": {"wall_kind": "plaster"},
+	},
+	{
+		"id": "ruined_chapel",
+		"bundle": "ruined_chapel",
+		"seed": 0,
+		"name": "Overgrown chapel ruin",
+		"family": "ruin",
+		"variant": "Rose chapel, moss and ivy",
+		"expose_add": ["ruin"],
+	},
 	# Round and polygonal plans (styles integration card, 2026-10-28): each is a regular polygon
 	# (plan kind "round", the index entry's `sides` key), built by ProcgenRecipesRound. `round` says how:
 	# {"kind": a ProcgenRecipesRound kind, "shape": a tower's roof shape} or {"make": the options

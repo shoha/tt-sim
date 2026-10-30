@@ -1,0 +1,311 @@
+{
+  "connections": [
+    {
+      "from": "taper_7",
+      "from_port": 0,
+      "to": "output_6",
+      "to_port": 0
+    },
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "building_layout_2",
+      "to_port": 0
+    },
+    {
+      "from": "building_layout_2",
+      "from_port": 0,
+      "to": "facade_3",
+      "to_port": 0
+    },
+    {
+      "from": "facade_3",
+      "from_port": 0,
+      "to": "building_walls_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_3",
+      "from_port": 0,
+      "to": "roof_round_5",
+      "to_port": 0
+    },
+    {
+      "from": "facade_3",
+      "from_port": 0,
+      "to": "taper_7",
+      "to_port": 1
+    },
+    {
+      "from": "building_walls_4",
+      "from_port": 0,
+      "to": "taper_7",
+      "to_port": 0
+    },
+    {
+      "from": "roof_round_5",
+      "from_port": 0,
+      "to": "taper_7",
+      "to_port": 0
+    },
+    {
+      "from": "facade_3",
+      "from_port": 0,
+      "to": "facade_trim_8",
+      "to_port": 0
+    },
+    {
+      "from": "facade_trim_8",
+      "from_port": 0,
+      "to": "taper_7",
+      "to_port": 0
+    },
+    {
+      "from": "facade_3",
+      "from_port": 0,
+      "to": "cornice_9",
+      "to_port": 0
+    },
+    {
+      "from": "cornice_9",
+      "from_port": 0,
+      "to": "taper_7",
+      "to_port": 0
+    },
+    {
+      "from": "facade_3",
+      "from_port": 0,
+      "to": "glazing_10",
+      "to_port": 0
+    },
+    {
+      "from": "glazing_10",
+      "from_port": 0,
+      "to": "taper_7",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "interface": [
+    {
+      "default": 8.27,
+      "label": "Wall height",
+      "max": 10,
+      "min": 5,
+      "name": "height",
+      "tip": "Wall height.",
+      "type": "float"
+    },
+    {
+      "default": 73.11,
+      "label": "Roof pitch",
+      "max": 78,
+      "min": 68,
+      "name": "roof_pitch",
+      "tip": "Slope in degrees.",
+      "type": "float"
+    },
+    {
+      "default": 0.25,
+      "label": "Eave overhang",
+      "max": 1,
+      "min": 0,
+      "name": "overhang",
+      "tip": "How far the roof reaches past the walls.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Floors",
+      "max": 6,
+      "min": 0,
+      "name": "floors",
+      "tip": "How many floors; 0 for the style's own.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Window width",
+      "max": 1.2,
+      "min": 0,
+      "name": "window_width",
+      "tip": "Width of the main windows; 0 for the style's own.",
+      "type": "float"
+    },
+    {
+      "default": 1,
+      "label": "Textured masonry",
+      "max": 1,
+      "min": 0,
+      "name": "textured",
+      "tip": "1 carries the courses in a texture.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Ragged edge",
+      "max": 0.6,
+      "min": 0,
+      "name": "fringe",
+      "tip": "Thatch-like teeth.",
+      "type": "float"
+    },
+    {
+      "default": 1.2,
+      "label": "Finial",
+      "max": 1,
+      "min": 0,
+      "name": "finial",
+      "tip": "A spike on the point.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Lit windows",
+      "max": 1,
+      "min": 0,
+      "name": "lit",
+      "tip": "The share of windows that glow warm.",
+      "type": "float"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        120.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "building_layout_2",
+      "params": {
+        "height": "@height",
+        "overhang": "@overhang",
+        "roof": "cone",
+        "roof_pitch": "@roof_pitch",
+        "textured": "@textured",
+        "window_width": "@window_width"
+      },
+      "position": [
+        250.0,
+        120.0
+      ],
+      "type": "building_layout"
+    },
+    {
+      "id": "facade_3",
+      "params": {
+        "floors": "@floors",
+        "style": "{\"bay_width\":2.4,\"floor_height_target\":3.0,\"floors\":\"auto\",\"ground_floor_height\":3.2,\"name\":\"tower\",\"patterns\":{\"back\":{\"upper\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"slit\"}]}]},\"front\":{\"ground\":[{\"size\":\"~1\",\"symbol\":\"door\"}],\"upper\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"slit\"}]}]},\"side\":{\"upper\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"slit\"}]}]}},\"symbols\":{\"blank\":{\"kind\":\"blank\"},\"door\":{\"kind\":\"door\"},\"slit\":{\"height\":0.9,\"kind\":\"window\",\"sill\":0.8,\"width\":0.3},\"window\":{\"height\":0.8,\"kind\":\"window\",\"sill\":0.95,\"width\":0.55}}}",
+        "window_width": "@window_width"
+      },
+      "position": [
+        480.0,
+        120.0
+      ],
+      "type": "facade"
+    },
+    {
+      "id": "building_walls_4",
+      "params": {
+        "role": "plaster",
+        "wall_kind": "plaster"
+      },
+      "position": [
+        710.0,
+        20.0
+      ],
+      "type": "building_walls"
+    },
+    {
+      "id": "roof_round_5",
+      "params": {
+        "finial": "@finial",
+        "fringe": "@fringe",
+        "overhang": "@overhang",
+        "roof_pitch": "@roof_pitch",
+        "roof_role": "tile",
+        "shape": "cone",
+        "top": 0
+      },
+      "position": [
+        710.0,
+        220.0
+      ],
+      "type": "roof_round"
+    },
+    {
+      "id": "output_6",
+      "params": {
+        "name": "Crystal spire",
+        "palette_accent": "#FFFFFF,#F8E58A",
+        "palette_roof": "#6FD6E8,#B58AF2,#7AE8C0,#F28AD0",
+        "palette_wall": "#DDF2F6,#E6E0F8,#D8F4EA"
+      },
+      "position": [
+        950.0,
+        120.0
+      ],
+      "type": "output"
+    },
+    {
+      "id": "taper_7",
+      "params": {
+        "taper": 0.74
+      },
+      "position": [
+        950.0,
+        220.0
+      ],
+      "type": "taper"
+    },
+    {
+      "id": "facade_trim_8",
+      "params": {
+        "door_frame": true,
+        "frames": false,
+        "lintels": false,
+        "role": "trim",
+        "shutters": false,
+        "sills": false,
+        "step": true,
+        "step_role": "trim"
+      },
+      "position": [
+        710.0,
+        420.0
+      ],
+      "type": "facade_trim"
+    },
+    {
+      "id": "cornice_9",
+      "params": {
+        "eave": false,
+        "floor_bands": true
+      },
+      "position": [
+        710.0,
+        620.0
+      ],
+      "type": "cornice"
+    },
+    {
+      "id": "glazing_10",
+      "params": {
+        "lit": "@lit",
+        "muntins": false,
+        "tone": "cool"
+      },
+      "position": [
+        950.0,
+        420.0
+      ],
+      "type": "glazing"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

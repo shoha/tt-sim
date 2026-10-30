@@ -2625,6 +2625,497 @@
 		},
 		{
 			"default_size_m": [
+				6.0,
+				6.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "roundhouse",
+			"file": "structures/yurt.structure.json",
+			"id": "yurt",
+			"max_area_m2": 64.0,
+			"max_side_m": 8.0,
+			"min_side_m": 4.0,
+			"name": "Yurt",
+			"plans": [
+				"round"
+			],
+			"sides": 12,
+			"tags": [
+				"house",
+				"tent",
+				"round",
+				"felt",
+				"yurt",
+				"steppe",
+				"nomad",
+				"cone",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/yurt.jpg",
+			"variant": "Felt wall, low cone, crown"
+		},
+		{
+			"default_size_m": [
+				15.0,
+				15.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "roundhouse",
+			"file": "structures/tulou.structure.json",
+			"id": "tulou",
+			"max_area_m2": 361.0,
+			"max_side_m": 19.0,
+			"min_side_m": 11.0,
+			"name": "Tulou",
+			"plans": [
+				"round"
+			],
+			"sides": 16,
+			"tags": [
+				"fortress",
+				"earth",
+				"round",
+				"tulou",
+				"hakka",
+				"communal",
+				"tile",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/tulou.jpg",
+			"variant": "Rammed-earth ring, tiled roof"
+		},
+		{
+			"default_size_m": [
+				5.4,
+				5.4
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "roundhouse",
+			"file": "structures/trullo.structure.json",
+			"id": "trullo",
+			"max_area_m2": 49.0,
+			"max_side_m": 7.0,
+			"min_side_m": 4.0,
+			"name": "Trullo",
+			"plans": [
+				"round"
+			],
+			"sides": 10,
+			"tags": [
+				"house",
+				"stone",
+				"round",
+				"trullo",
+				"cone",
+				"apulia",
+				"dry_stone",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/trullo.jpg",
+			"variant": "White drum, grey stone cone"
+		},
+		{
+			"default_size_m": [
+				8.0,
+				4.2
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"wonk"
+			],
+			"family": "cottage",
+			"file": "structures/blackhouse.structure.json",
+			"id": "blackhouse",
+			"max_area_m2": 70.0,
+			"max_side_m": 13.0,
+			"min_side_m": 3.0,
+			"name": "Blackhouse",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stone",
+				"thatch",
+				"hip",
+				"blackhouse",
+				"hebridean",
+				"rounded",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/blackhouse.jpg",
+			"variant": "Low stone, hip thatch"
+		},
+		{
+			"default_size_m": [
+				12.0,
+				10.0
+			],
+			"expose": [
+				"height",
+				"wing_depth",
+				"wonk"
+			],
+			"family": "courtyard",
+			"file": "structures/riad.structure.json",
+			"id": "riad",
+			"max_area_m2": 220.0,
+			"max_side_m": 22.0,
+			"min_side_m": 9.0,
+			"name": "Riad",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"courtyard",
+				"riad",
+				"flat",
+				"arch",
+				"moorish",
+				"plaster",
+				"souk",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/riad.jpg",
+			"variant": "Arched wings round a paved yard"
+		},
+		{
+			"default_size_m": [
+				9.0,
+				7.0
+			],
+			"expose": [
+				"height",
+				"wonk"
+			],
+			"family": "temple",
+			"file": "structures/sahel_mosque.structure.json",
+			"id": "sahel_mosque",
+			"max_area_m2": 110.0,
+			"max_side_m": 14.0,
+			"min_side_m": 6.0,
+			"name": "Sahel mosque",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"temple",
+				"adobe",
+				"mud_brick",
+				"sahel",
+				"mosque",
+				"torons",
+				"buttress",
+				"minaret",
+				"flat",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/sahel_mosque.jpg",
+			"variant": "Stepped adobe, wood spikes"
+		},
+		{
+			"default_size_m": [
+				6.0,
+				9.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"wonk"
+			],
+			"family": "temple",
+			"file": "structures/stave_church.structure.json",
+			"id": "stave_church",
+			"max_area_m2": 90.0,
+			"max_side_m": 12.0,
+			"min_side_m": 4.5,
+			"name": "Stave church",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"temple",
+				"timber",
+				"stave",
+				"nordic",
+				"tar",
+				"shingle",
+				"finial",
+				"steep",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/stave_church.jpg",
+			"variant": "Tar boards, shingle, spired tower"
+		},
+		{
+			"default_size_m": [
+				5.2,
+				5.2
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"wonk"
+			],
+			"family": "fantasy",
+			"file": "structures/wizard_tower.structure.json",
+			"id": "wizard_tower",
+			"max_area_m2": 49.0,
+			"max_side_m": 7.0,
+			"min_side_m": 4.0,
+			"name": "Wizard tower",
+			"plans": [
+				"round"
+			],
+			"sides": 8,
+			"tags": [
+				"tower",
+				"fantasy",
+				"wizard",
+				"round",
+				"tapered",
+				"leaning",
+				"pointed_hat",
+				"magic",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/wizard_tower.jpg",
+			"variant": "Tapered, banded, pointed hat"
+		},
+		{
+			"default_size_m": [
+				5.4,
+				5.4
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "fantasy",
+			"file": "structures/mushroom_cottage.structure.json",
+			"id": "mushroom_cottage",
+			"max_area_m2": 49.0,
+			"max_side_m": 7.0,
+			"min_side_m": 4.0,
+			"name": "Mushroom cottage",
+			"plans": [
+				"round"
+			],
+			"sides": 10,
+			"tags": [
+				"house",
+				"fantasy",
+				"whimsical",
+				"round",
+				"mushroom",
+				"dome",
+				"fey",
+				"cottage",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/mushroom_cottage.jpg",
+			"variant": "Cream stalk, bright dome cap"
+		},
+		{
+			"default_size_m": [
+				5.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"ridge",
+				"wonk",
+				"fringe"
+			],
+			"family": "fantasy",
+			"file": "structures/treehouse.structure.json",
+			"id": "treehouse",
+			"max_area_m2": 45.0,
+			"max_side_m": 7.5,
+			"min_side_m": 3.5,
+			"name": "Treehouse",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"fantasy",
+				"treehouse",
+				"stilts",
+				"timber",
+				"forest",
+				"elevated",
+				"platform",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/treehouse.jpg",
+			"variant": "Hut on posts, deck and ladder"
+		},
+		{
+			"default_size_m": [
+				12.0,
+				6.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"wonk",
+				"fringe"
+			],
+			"family": "fantasy",
+			"file": "structures/elven_hall.structure.json",
+			"id": "elven_hall",
+			"max_area_m2": 150.0,
+			"max_side_m": 18.0,
+			"min_side_m": 6.0,
+			"name": "Elven hall",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"hall",
+				"fantasy",
+				"elven",
+				"curved_eaves",
+				"slender",
+				"white",
+				"luminous",
+				"upswept",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/elven_hall.jpg",
+			"variant": "Pale hall, upswept roof, gold trim"
+		},
+		{
+			"default_size_m": [
+				11.0,
+				6.0
+			],
+			"expose": [
+				"height"
+			],
+			"family": "fantasy",
+			"file": "structures/dwarven_gatehall.structure.json",
+			"id": "dwarven_gatehall",
+			"max_area_m2": 130.0,
+			"max_side_m": 16.0,
+			"min_side_m": 5.0,
+			"name": "Dwarven gatehall",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"gate",
+				"hall",
+				"fantasy",
+				"dwarven",
+				"stone",
+				"heavy",
+				"rune_bands",
+				"crenellated",
+				"bronze",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/dwarven_gatehall.jpg",
+			"variant": "Dark stone, fat towers, bronze bands"
+		},
+		{
+			"default_size_m": [
+				6.0,
+				6.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "fantasy",
+			"file": "structures/crystal_spire.structure.json",
+			"id": "crystal_spire",
+			"max_area_m2": 64.0,
+			"max_side_m": 8.0,
+			"min_side_m": 4.4,
+			"name": "Crystal spire",
+			"plans": [
+				"round"
+			],
+			"sides": 6,
+			"tags": [
+				"tower",
+				"fantasy",
+				"crystal",
+				"spire",
+				"round",
+				"tapered",
+				"magic",
+				"luminous",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/crystal_spire.jpg",
+			"variant": "Pale obelisk, luminous cone"
+		},
+		{
+			"default_size_m": [
+				5.0,
+				9.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"wonk",
+				"ruin"
+			],
+			"family": "ruin",
+			"file": "structures/ruined_chapel.structure.json",
+			"id": "ruined_chapel",
+			"max_area_m2": 110.0,
+			"max_side_m": 14.0,
+			"min_side_m": 4.0,
+			"name": "Overgrown chapel ruin",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"chapel",
+				"ruin",
+				"overgrown",
+				"moss",
+				"ivy",
+				"medieval",
+				"fantasy",
+				"abandoned",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/ruined_chapel.jpg",
+			"variant": "Rose chapel, moss and ivy"
+		},
+		{
+			"default_size_m": [
 				7.2,
 				7.2
 			],
