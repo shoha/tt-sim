@@ -55,6 +55,12 @@ var _cache: Dictionary = {}
 var _cache_order: Array[int] = []
 ## Structure id -> {"task": int, "key": int, "out": Dictionary} for the build in flight.
 var _jobs: Dictionary = {}
+## Structure id -> {"structure": Structure, "key": int, "ground": MapDocument}: the newest edit
+## that arrived while the id's build was still running. It starts when that build lands (which
+## shows its older result meanwhile), so a drag faster than a build still sees the building move
+## at the build's pace instead of waiting for the pointer to stop (struct_perf: a 20 by 16 m
+## courtyard takes 100 to 200 ms, and 40 previews at 10 Hz landed none).
+var _pending: Dictionary = {}
 ## Tasks whose result a newer edit replaced; reaped when they finish.
 var _stale: PackedInt64Array = PackedInt64Array()
 var _reported: Dictionary = {}
@@ -135,6 +141,10 @@ func refresh(doc: MapDocument, use_workers: bool = true) -> void:
 			_drop_job(structure.id)
 			continue
 		if _jobs.has(structure.id) and _jobs[structure.id].key == key:
+			# The newest edit is the one running: anything queued behind it is obsolete.
+			_pending.erase(structure.id)
+			continue
+		if _pending.has(structure.id) and _pending[structure.id].key == key:
 			continue
 		var cached: Variant = _cache.get(key)
 		if cached is Dictionary:
@@ -180,10 +190,13 @@ func apply(built: Dictionary) -> void:
 ## Waits for every build in flight and makes its node. Returns how many nodes it made.
 func flush() -> int:
 	var made := 0
-	for id: int in _jobs.keys():
-		var job: Dictionary = _jobs[id]
-		WorkerThreadPool.wait_for_task_completion(job.task)
-		made += _land(id)
+	# A landing may start the edit queued behind it, so go round until nothing is in flight; an
+	# older result with a newer edit behind it is not shown (the caller wants the final state).
+	while not _jobs.is_empty():
+		for id: int in _jobs.keys():
+			var job: Dictionary = _jobs[id]
+			WorkerThreadPool.wait_for_task_completion(job.task)
+			made += _land(id, not _pending.has(id))
 	_reap_stale(true)
 	if made > 0:
 		_recompute_top()
@@ -287,10 +300,14 @@ func _notification(what: int) -> void:
 			WorkerThreadPool.wait_for_task_completion(task)
 
 
-## Queues the build of `structure` (a private copy) at `key`; an older job of the same id is
-## replaced (its task finishes and is dropped).
+## Queues the build of `structure` (a private copy) at `key`. While a build of the same id is
+## running the edit waits behind it (_pending), replacing any older waiting edit: at most one
+## build per structure runs and one waits, and the newest edit always gets its turn.
 func _start(structure: Structure, key: int, ground: MapDocument) -> void:
-	_drop_job(structure.id)
+	if _jobs.has(structure.id):
+		_pending[structure.id] = {"structure": structure, "key": key, "ground": ground}
+		set_process(true)
+		return
 	var out := {}
 	var task := WorkerThreadPool.add_task(
 		func() -> void: out["parts"] = StructureGeometry.build_one(ground, structure),
@@ -303,6 +320,7 @@ func _start(structure: Structure, key: int, ground: MapDocument) -> void:
 
 ## Forgets the build in flight for `id`; its task is reaped later.
 func _drop_job(id: int) -> void:
+	_pending.erase(id)
 	if not _jobs.has(id):
 		return
 	_stale.append(_jobs[id].task)
@@ -319,16 +337,23 @@ func _reap_stale(wait: bool) -> void:
 	_stale = keep
 
 
-## Makes the node of the finished job of `id`; 1 when it did, else 0.
-func _land(id: int) -> int:
+## Makes the node of the finished job of `id` (unless `install` is false: the result is only
+## cached), then starts the edit that waited behind it. 1 when it made a node, else 0.
+func _land(id: int, install: bool = true) -> int:
 	var job: Dictionary = _jobs[id]
 	_jobs.erase(id)
+	var made := 0
 	var parts: Variant = (job.out as Dictionary).get("parts")
-	if not parts is Dictionary:
-		return 0
-	_cache_put(job.key, parts)
-	_install(id, job.key, parts)
-	return 1
+	if parts is Dictionary:
+		_cache_put(job.key, parts)
+		if install:
+			_install(id, job.key, parts)
+			made = 1
+	if _pending.has(id):
+		var next: Dictionary = _pending[id]
+		_pending.erase(id)
+		_start(next.structure, next.key, next.ground)
+	return made
 
 
 func _install(id: int, key: int, parts: Dictionary) -> void:
