@@ -314,10 +314,14 @@ func _notification(what: int) -> void:
 ## running the edit waits behind it (_pending), replacing any older waiting edit: at most one
 ## build per structure runs and one waits, and the newest edit always gets its turn.
 func _start(structure: Structure, key: int, ground: MapDocument) -> void:
-	if _jobs.has(structure.id):
+	if _jobs.has(structure.id) and _jobs[structure.id].task != NOT_STARTED:
 		_pending[structure.id] = {"structure": structure, "key": key, "ground": ground}
 		set_process(true)
 		return
+	# A build still queued (no worker has it) is simply replaced by the newer edit, keeping its
+	# place in the queue: every add changes the keys of the dozen structures around it, and a
+	# queue of 100 would otherwise build each of them once per neighbour added.
+	_pending.erase(structure.id)
 	_jobs[structure.id] = {
 		"task": NOT_STARTED, "key": key, "out": {}, "structure": structure, "ground": ground
 	}

@@ -9,10 +9,13 @@
     {"op": "wait_ready", "settle": 1.0},
     {"op": "no_autosave"},
     {"op": "hide_ui"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "base"},
     {"op": "call", "script": "res://tools/render_jobs/probes/structures.gd", "action": "village", "count": 100},
     {"op": "wait", "s": 2.0},
     {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "v100"},
     {"op": "call", "script": "res://tools/render_jobs/probes/structures.gd", "action": "remove_all"},
+    {"op": "wait", "s": 3.0},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "after_remove"},
     {"op": "title"}
   ]
 }
