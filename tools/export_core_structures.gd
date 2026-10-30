@@ -742,9 +742,6 @@ const STARTERS: Array[Dictionary] = [
 		"id": "toon_hall",
 		"bundle": "toon_hall",
 		"seed": 0,
-		# The style's size has min_side 7 under its 10 by 6 default, which the index reader refuses
-		# (default_size_m must fit the sides): the row takes 6.
-		"min_side_m": 6.0,
 		"name": "Toon town hall",
 		"family": "toon",
 		"variant": "Hip roof, corner dome tower",

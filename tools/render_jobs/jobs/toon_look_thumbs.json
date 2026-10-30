@@ -265,7 +265,7 @@
   },
   {
    "op": "thumbnail_prepare",
-   "zoom": 24.0,
+   "zoom": 31.0,
    "at": [
     0.0,
     0.0
@@ -302,7 +302,7 @@
   },
   {
    "op": "thumbnail_prepare",
-   "zoom": 29.0,
+   "zoom": 35.0,
    "at": [
     0.0,
     0.0
