@@ -115,6 +115,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _many(base, step)
 		"village":
 			return _village(base, step)
+		"load_build":
+			return _load_build(base, step)
 		"plain":
 			return _plain(base, bool(step.get("on", true)))
 		"dressing":
@@ -180,6 +182,56 @@ static func _many(base: Node, step: Dictionary) -> String:
 ## own seed and yaw) on a square grid `spacing` m apart, then the cost of laying them: the time to
 ## queue every build, the time until the last lands, and what the nodes hold (mesh instances, unique
 ## materials, triangles, collision faces).
+##
+## (struct_perf2) Action `load_build` {count, mode}: builds the same `count` structures as a load does
+## (StructureGeometry.build of a document, without laying them through the editor), mode "seq" one
+## after another or "par" as a worker group, and reports the time, the static memory peak since the
+## process began (run one mode per job) and a digest of every result, to compare the two modes.
+static func _load_build(base: Node, step: Dictionary) -> String:
+	var editor := _editor(base)
+	if editor == null:
+		return "no authoring editor"
+	var count := int(step.get("count", 100))
+	var rows := LibraryStructureStore.structures("core")
+	var columns := int(ceil(sqrt(float(count))))
+	var spacing := float(step.get("span", 88.0)) / columns
+	var doc := StructureGeometry.ground_snapshot(editor.document)
+	doc.structures.clear()
+	for k in count:
+		var row: Dictionary = rows[k % rows.size()]
+		var size: Array = row["default_size_m"]
+		var at := Vector2(
+			(float(k % columns) - (columns - 1) * 0.5) * spacing,
+			(float(k / columns) - (columns - 1) * 0.5) * spacing
+		)
+		var fit := minf(1.0, (spacing - 2.0) / maxf(float(size[0]), float(size[1])))
+		var plan := _rect(float(size[0]) * fit, float(size[1]) * fit, float((k * 37) % 360), at)
+		doc.structures.append(Structure.make(k + 1, String(row["ref"]), plan, 100 + k))
+	StructureRecipes.ensure_served()
+	var mode := String(step.get("mode", "par"))
+	var t0 := Time.get_ticks_usec()
+	var built := StructureGeometry.build(doc, mode == "par")
+	var ms := (Time.get_ticks_usec() - t0) / 1000.0
+	var digests := PackedStringArray()
+	var refused := 0
+	for parts: Dictionary in built["structures"]:
+		if (parts.meshes as Array).is_empty():
+			refused += 1
+		else:
+			digests.append(StructureGeometry.digest_of(parts))
+	# What a load then does: makes the nodes (ArrayMeshes, collision) and seeds the parts cache.
+	var nodes := AuthoredStructures.create(doc, built)
+	var text := (
+		"load_build %s: %d structures (%d refused) in %.0f ms, with nodes static %.0f MB peak %.0f MB, digest %d"
+		% [
+			mode, count, refused, ms, OS.get_static_memory_usage() / 1048576.0,
+			OS.get_static_memory_peak_usage() / 1048576.0, hash(digests)
+		]
+	)
+	nodes.free()
+	return text
+
+
 static func _village(base: Node, step: Dictionary) -> String:
 	var editor := _editor(base)
 	if editor == null:
@@ -210,6 +262,16 @@ static func _village(base: Node, step: Dictionary) -> String:
 	var t1 := Time.get_ticks_usec()
 	nodes.flush()
 	var flush_ms := (Time.get_ticks_usec() - t1) / 1000.0
+	# What the parts cache keeps beside the nodes: the mesh arrays, and the collision faces.
+	var cached_bytes := 0
+	for parts: Dictionary in nodes._cache.values():
+		for mesh: Dictionary in parts.get("meshes", []):
+			for column: Variant in mesh["arrays"]:
+				if column is Object or column == null:
+					continue
+				cached_bytes += var_to_bytes(column).size()
+		cached_bytes += (parts.get("collision", PackedVector3Array()) as PackedVector3Array).size() * 12
+	print("village parts cache: %d entries, %.1f MB" % [nodes._cache.size(), cached_bytes / 1048576.0])
 	var instances := 0
 	var triangles := 0
 	var collision_faces := 0

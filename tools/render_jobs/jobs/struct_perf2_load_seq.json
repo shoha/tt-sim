@@ -1,0 +1,15 @@
+{
+  "out_dir": "render_jobs/struct_perf2_load_seq",
+  "timeout_s": 200,
+  "hang_s": 120,
+  "remove_override": true,
+  "steps": [
+    {"op": "wait", "s": 1.0},
+    {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 320, "seed": 1234},
+    {"op": "wait_ready", "settle": 1.0},
+    {"op": "no_autosave"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "mem", "name": "before"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/structures.gd", "action": "load_build", "count": 100, "mode": "seq"},
+    {"op": "title"}
+  ]
+}

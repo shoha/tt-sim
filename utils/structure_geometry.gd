@@ -161,10 +161,26 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 
 
 ## Every structure of `doc`: {"structures": [parts, ...]} (AuthoredLoadPrep's part).
-static func build(doc: MapDocument) -> Dictionary:
+## With `parallel` (and two or more structures) the structures build as one WorkerThreadPool group,
+## on at most AuthoredStructures.load_threads() threads, and the result keeps the document's order
+## (each task writes its own slot). Builds read the document and write nothing shared, so the
+## output is the same either way (the pinned digests).
+static func build(doc: MapDocument, parallel: bool = true) -> Dictionary:
+	var list: Array[Structure] = doc.structures
 	var out: Array = []
-	for structure in doc.structures:
-		out.append(build_one(doc, structure))
+	if not parallel or list.size() < 2:
+		for structure in list:
+			out.append(build_one(doc, structure))
+		return {"structures": out}
+	out.resize(list.size())
+	var group := WorkerThreadPool.add_group_task(
+		func(index: int) -> void: out[index] = build_one(doc, list[index]),
+		list.size(),
+		mini(list.size(), AuthoredStructures.load_threads()),
+		false,
+		"StructureGeometry.build"
+	)
+	WorkerThreadPool.wait_for_group_task_completion(group)
 	return {"structures": out}
 
 
@@ -172,7 +188,10 @@ static func build(doc: MapDocument) -> Dictionary:
 ## of its text), footprint, params, seed, style, the `textured` switch, the mesh format and the
 ## ground sampled along its outline and across its inside. AuthoredStructures rebuilds a structure
 ## only when its key moved, and keeps built parts by key.
-static func key_of(doc: MapDocument, structure: Structure) -> int:
+static func key_of(
+	doc: MapDocument, structure: Structure, boxes: Dictionary = {}, samples: Array = []
+) -> int:
+	var under: Array = samples if not samples.is_empty() else _ground_samples_of(doc, structure)
 	return hash(
 		[
 			StructureRecipes.digest(structure.recipe),
@@ -184,10 +203,10 @@ static func key_of(doc: MapDocument, structure: Structure) -> int:
 			textured,
 			FORMAT_VERSION,
 			StructureDressing.enabled,
-			ground_samples(doc, structure.footprint),
-			StructureDressing.ground_samples(doc, structure.footprint),
+			under[0],
+			under[1],
 			(
-				StructureDressing.neighbours(doc, structure)
+				StructureDressing.neighbours(doc, structure, boxes)
 				if StructureDressing.enabled
 				else ([] as Array[PackedVector2Array])
 			),
@@ -197,10 +216,106 @@ static func key_of(doc: MapDocument, structure: Structure) -> int:
 
 ## Keys of every structure of `doc` (id -> key).
 static func keys_of(doc: MapDocument) -> Dictionary:
+	var boxes := _boxes_of(doc)
 	var out := {}
 	for structure in doc.structures:
-		out[structure.id] = key_of(doc, structure)
+		out[structure.id] = key_of(doc, structure, boxes)
 	return out
+
+
+## keys_of() with a memo (id -> {"sig", "key", "gsig", "samples"}, the caller's to keep between
+## calls). Sampling the ground under a plan is the cost of a key, and it grew with every structure
+## standing (struct_perf2: 100 sequential adds spent 2.0 s of 2.3 on it). Two levels of reuse:
+## a structure whose whole signature is unchanged keeps its key; one whose neighbours changed
+## (every add alters the keys of the 10 or so around it) keeps its ground samples, which depend
+## only on its footprint and the ground. The signature holds everything key_of() reads but the
+## samples: the structure's own fields, the recipe digest, its neighbours' footprints and
+## ground_fingerprint(), a hash of every ground input, so any edit of the ground, water or ponds
+## changes it and no version counter has to be bumped by every writer of those public fields.
+## The keys equal keys_of().
+static func keys_memoised(doc: MapDocument, memo: Dictionary) -> Dictionary:
+	var boxes := _boxes_of(doc)
+	var ground := ground_fingerprint(doc)
+	var out := {}
+	var live := {}
+	for structure in doc.structures:
+		var near: Array[PackedVector2Array] = (
+			StructureDressing.neighbours(doc, structure, boxes)
+			if StructureDressing.enabled
+			else ([] as Array[PackedVector2Array])
+		)
+		var sig := hash(
+			[
+				ground,
+				StructureRecipes.digest(structure.recipe),
+				structure.recipe,
+				structure.footprint,
+				JSON.stringify(structure.params, "", true),
+				structure.seed_value,
+				structure.style,
+				textured,
+				StructureDressing.enabled,
+				near,
+			]
+		)
+		var gsig := hash([ground, structure.footprint, StructureDressing.enabled])
+		var seen: Dictionary = memo.get(structure.id, {})
+		var entry := seen
+		if seen.get("sig") != sig:
+			var samples: Array = (
+				seen["samples"] if seen.get("gsig") == gsig else _ground_samples_of(doc, structure)
+			)
+			entry = {
+				"sig": sig,
+				"gsig": gsig,
+				"samples": samples,
+				"key": key_of(doc, structure, boxes, samples),
+			}
+			memo[structure.id] = entry
+		live[structure.id] = true
+		out[structure.id] = entry["key"]
+	for id: int in memo.keys():
+		if not live.has(id):
+			memo.erase(id)
+	return out
+
+
+## The two ground reads of a key: [ground_samples, StructureDressing.ground_samples] of the plan.
+static func _ground_samples_of(doc: MapDocument, structure: Structure) -> Array:
+	return [
+		ground_samples(doc, structure.footprint),
+		StructureDressing.ground_samples(doc, structure.footprint),
+	]
+
+
+## Per structure id, the bounds of its footprint (what neighbour tests compare), none when the
+## yard is off.
+static func _boxes_of(doc: MapDocument) -> Dictionary:
+	var boxes := {}
+	if StructureDressing.enabled:
+		for structure in doc.structures:
+			boxes[structure.id] = StructureDressing.bounds_of(structure.footprint)
+	return boxes
+
+
+## A hash of everything the ground under a structure depends on: the sampling grid, the heights,
+## the pond mask and every water body (its kind, depth, level, speed and courses). Any change to
+## these changes it, so a cached key is reused only while the ground is as it was.
+static func ground_fingerprint(doc: MapDocument) -> int:
+	var bodies: Array = []
+	for body in doc.water_bodies:
+		bodies.append(
+			[
+				body.id, body.kind, body.depth, body.level_m, body.speed, body.points,
+				body.half_widths, body.beyond, body.beyond_up
+			]
+		)
+	return hash(
+		[
+			doc.size_cells, doc.cell_size_m, doc.sample_spacing_m, hash(doc.heights),
+			hash(doc.pond_mask), bodies
+		]
+	)
 
 
 ## The ground under a plan: along every side every KEY_STEP_M, then across the inside on a grid of
