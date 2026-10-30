@@ -243,7 +243,8 @@ static func lot_problem(
 
 ## The legal spot nearest `want` (a plan centre) for a lot of `size` turned `yaw`: {"centre",
 ## "plan", "moved" (it is not `want`), "problem" ("" when a legal spot was found, else the
-## reason `want` itself fails)}. Searches rings of RING_STEP_M out to REACH_M, a dozen spots on
+## reason `want` itself fails), "why" (the reason `want` itself fails, "" when it stands: what a
+## lot that moved was moved off)}. Searches rings of RING_STEP_M out to REACH_M, a dozen spots on
 ## each, on the SNAP_M grid, and takes the first ring's closest legal spot.
 static func nearest_legal(
 	doc: MapDocument, want: Vector2, size: Vector2, yaw: float, sides: int = 0
@@ -256,7 +257,7 @@ static func nearest_legal(
 	var courses := WaterGeometry.river_courses(doc, area) if not doc.water_bodies.is_empty() else {}
 	var problem := lot_problem(doc, plan, courses)
 	if problem == "":
-		return {"centre": centre, "plan": plan, "moved": false, "problem": ""}
+		return {"centre": centre, "plan": plan, "moved": false, "problem": "", "why": ""}
 	var ring := RING_STEP_M
 	while ring <= REACH_M:
 		var best := Vector2.INF
@@ -273,10 +274,11 @@ static func nearest_legal(
 				"centre": best,
 				"plan": lot_plan(best, size, yaw, sides),
 				"moved": true,
-				"problem": ""
+				"problem": "",
+				"why": problem
 			}
 		ring += RING_STEP_M
-	return {"centre": centre, "plan": plan, "moved": false, "problem": problem}
+	return {"centre": centre, "plan": plan, "moved": false, "problem": problem, "why": problem}
 
 
 ## The id of the structure whose footprint holds map point `p` (the topmost, the last laid), or

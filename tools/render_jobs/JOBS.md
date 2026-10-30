@@ -1123,3 +1123,12 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   height to aim at; 0 for the ground under a roof, where a handle is drawn). The camera takes about
   3 s to settle after a `look_at`: wait before aiming real input. `structure_thumbs` (above) was
   re-run for this card (the tiles predate glazing).
+- `jobs/building_ui2.json` (about 35 s, keeps no level: a new unsaved 150 ft meadow with a pond
+  drawn in; topic building_ui2): the Building pane with its filter chips (`01_palette`, `03_chips`
+  with Home and Stone on), the hover card (`02_hover_card`), small tiles (`04_small_tiles`), then
+  real pointer input for the ghost's live note: eased off the pond (`05_moved_note`, amber), in the
+  pond's middle (`06_blocked_note`, red), a drag past the largest size (`07_size_stop`), the
+  selection bar with the Decorate row and the hint bar's selected keys (`08_selected`), and the bar
+  after one click laid a building (`09_hint_faded`: the Click key has left). The probe
+  `probes/building_ui2.gd` (`chip`, `hover`, `hints`, `note`, `small`) clears the run's hint memory
+  at the start and the end (the settings file of the run's user folder).

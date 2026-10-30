@@ -92,11 +92,7 @@ const TOOL_HINTS := {
 		+ " Hold Ctrl and click one to remove it."
 	),
 	StructureTool.ID:
-	(
-		"Pick a building, then click the board to put it down, or drag out a corner to size it."
-		+ " It settles on dry, level ground. Q and E turn it; R draws it afresh."
-		+ " Right-click or Delete removes the one under the cursor."
-	),
+	"Pick a building, then click the board, or drag out a corner to size it. Keys: the bar below.",
 	EventPresets.COLLAPSE: "Click a bridge: it breaks and falls into the water for everyone.",
 	EventPresets.TOPPLE:
 	"Click in a forest: the marked trees fall away from the click. Drag out for a wider stand.",

@@ -25,11 +25,11 @@ signal done_requested
 signal ornaments_requested(kinds: Array, label: String)
 signal ivy_requested(amount: float)
 
-const TILE_SIZE := Vector2(96, 92)
+const VARIANT_THUMB_PX := 56
 const VARIANT_TILE_SIZE := Vector2(96, 78)
+## The keys are the hint bar's key caps (StructureHints); the pane keeps one line of what to reach.
 const SELECTION_HINT := (
-	"Drag a corner dot to resize, a tab to push a side, the body to move it. Click a tab to put the"
-	+ " door there. Q and E turn it. Escape or a click on bare ground lets go."
+	"Corner dots resize, tabs push a side (click one for the door), the body moves it."
 )
 ## The recipe parameters the bar steps, in order, with their captions and how a value reads
 ## (value 0 of floors is the recipe's own, "Auto").
@@ -41,15 +41,19 @@ const STEPPED := [
 	{"param": "jetty", "caption": "Jetty", "auto_zero": false},
 	{"param": "ruin", "caption": "Ruin", "auto_zero": false},
 ]
-const TILE_COLUMNS := 2
-const THUMB_PX := 56
-const HINT := (
-	"Click the ground to put the building down, or drag out a corner to size it. Q and E turn it,"
-	+ " [ and ] shrink or grow it, R draws it afresh, right-click removes one."
-)
+## The pane's width before it has been laid out (the drawer's), for the first column count.
+const FALLBACK_WIDTH_PX := 196.0
+## One line: the gestures are key caps on the hint bar (StructureHints), not prose.
+const HINT := "Pick a building, then click the ground, or drag out a corner to size it."
 const EMPTY := "No library this map uses offers a building."
 const SEARCH_PLACEHOLDER := "Find a building"
 const NO_MATCH := "No building matches that. Try a family such as cottage, inn or ruin."
+const NO_MATCH_CHIPS := "No building has all of those. Switch one off, or clear them."
+const CLEAR_CHIPS_TIP := "Switch every filter off and clear the search"
+const SMALL_TILES_TIP := "Smaller pictures, so more of the list shows at once"
+## How long the hover card waits before it shows (seconds), so a sweep across tiles stays calm.
+const CARD_DELAY_S := 0.12
+const CARD_PICTURE_PX := 128
 const REROLL_TOOLTIP := "Draw the next building's look afresh (R); over a building, redraw that one"
 
 ## The family fields, in tile order.
@@ -57,6 +61,16 @@ var family_fields: Array[TileField] = []
 var reroll_button: Button
 ## Filters the tiles by name, family and tags (StructurePalette.matches).
 var search_edit: LineEdit
+## The filter chips by id (StructurePalette.CHIPS), the toggle buttons of the row above the tiles.
+var chip_buttons: Dictionary = {}
+var clear_button: Button
+var small_tiles_button: Button
+## The hover card: the structure's picture, name, family and size, beside the tile pointed at.
+var card: PanelContainer
+var card_picture: TextureRect
+var card_title: Label
+var card_detail: Label
+var card_size: Label
 
 ## The selected building's bar, shown in place of the palette while a building is selected.
 var selection_box: VBoxContainer
@@ -81,6 +95,15 @@ var _picked: String = ""
 var _served: int = 0
 var _found_none: bool = false
 var _tools_row: HBoxContainer
+var _chip_flow: HFlowContainer
+var _filter_row: HBoxContainer
+## The chips switched on (ids, in StructurePalette.CHIPS order), whether the tiles are the small
+## size, the rows the libraries serve, and the hover card's pending show.
+var _active_chips: Array[String] = []
+var _small_tiles: bool = false
+var _columns: int = 0
+var _card_tween: Tween
+var _card_for: String = ""
 var _refs: Array[String] = []
 var _variant_refs: Array[String] = []
 var _selected_ref: String = ""
@@ -121,9 +144,15 @@ func _init() -> void:
 	reroll_button.focus_mode = Control.FOCUS_NONE
 	reroll_button.pressed.connect(reroll_requested.emit)
 	_tools_row.add_child(reroll_button)
+	_build_filters()
 	_no_match = _caption("StructureNoMatch", NO_MATCH)
 	_no_match.visible = false
 	add_child(_no_match)
+	_build_card()
+	resized.connect(_fit_tiles)
+	visibility_changed.connect(_hide_card)
+	_small_tiles = UiPreferences.load_structure_tiles_small()
+	small_tiles_button.set_pressed_no_signal(_small_tiles)
 	refresh()
 
 
@@ -147,8 +176,11 @@ func refresh() -> void:
 	family_fields.clear()
 	_refs.clear()
 	StructureRecipes.ensure_served()
+	_hide_card()
 	var rows := LibraryStructureStore.structures()
-	var found := StructurePalette.sections(rows, search_edit.text)
+	var found := StructurePalette.sections(rows, search_edit.text, _active_chips)
+	var metrics := _metrics()
+	var shown := 0
 	for section: Dictionary in found:
 		var key := String(section["key"])
 		var members: Array = section["rows"]
@@ -156,23 +188,24 @@ func refresh() -> void:
 		field.name = "StructureFamily_" + key.replace(":", "_")
 		field.caption = StructurePalette.section_caption(String(section["family"]), members.size())
 		field.tiles.photo_icons = true
-		field.tiles.tile_min_size = TILE_SIZE
-		field.tiles.columns = TILE_COLUMNS
+		field.tiles.tile_min_size = metrics["tile"]
+		field.tiles.columns = int(metrics["columns"])
 		for row: Dictionary in members:
 			var ref := String(row["ref"])
+			# No tooltip: the hover card (below) says more, sooner.
 			field.tiles.add_tile(
-				StringName(ref),
-				String(row["name"]),
-				"",
-				_tooltip(row),
-				StructureThumbnail.of(row, THUMB_PX)
+				StringName(ref), String(row["name"]), "", "", StructureThumbnail.of(row, int(metrics["thumb"]))
 			)
 			_refs.append(ref)
+			shown += 1
 		field.tiles.selection_changed.connect(_on_tile.bind(field))
+		field.tiles.tile_hovered.connect(_on_tile_hovered.bind(field))
+		field.tiles.tile_unhovered.connect(func(_id: StringName) -> void: _hide_card())
 		add_child(field)
 		family_fields.append(field)
 	_served = rows.size()
 	_found_none = found.is_empty()
+	_update_filters(rows, shown)
 	var served_refs := PackedStringArray()
 	for row: Dictionary in rows:
 		served_refs.append(String(row["ref"]))
@@ -275,7 +308,7 @@ func _show_variants(ref: String) -> void:
 					String(row["variant"]),
 					"",
 					"%s: swap the look, keep the footprint." % row["name"],
-					StructureThumbnail.of(row, THUMB_PX)
+					StructureThumbnail.of(row, VARIANT_THUMB_PX)
 				)
 			variant_field.tiles.selection_changed.connect(
 				func(id: StringName) -> void: variant_picked.emit(String(id))
@@ -285,7 +318,188 @@ func _show_variants(ref: String) -> void:
 		variant_field.tiles.select(StringName(ref))
 
 
-## Shows or hides the palette parts (the hint, the family tiles, Mix afresh).
+## The tile measures for the pane's width now (StructurePalette.tile_metrics).
+func _metrics() -> Dictionary:
+	var width := size.x if size.x > 1.0 else FALLBACK_WIDTH_PX
+	var metrics := StructurePalette.tile_metrics(_small_tiles, width)
+	_columns = int(metrics["columns"])
+	return metrics
+
+
+## Sets every family's column count from the pane's width again (a resize, a drawer opening or
+## closing): as many tiles as fit across, two at least.
+func _fit_tiles() -> void:
+	var before := _columns
+	var metrics := _metrics()
+	if _columns == before:
+		return
+	for field in family_fields:
+		if is_instance_valid(field):
+			field.tiles.columns = int(metrics["columns"])
+
+
+## The chip row, then the row with Clear and the small-tiles switch. Chips are toggles: one group's
+## chips widen the choice, another group's narrow it (StructurePalette.CHIPS).
+func _build_filters() -> void:
+	_chip_flow = HFlowContainer.new()
+	_chip_flow.name = "StructureChips"
+	_chip_flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_chip_flow.theme_type_variation = &"FactsFlow"
+	add_child(_chip_flow)
+	for item: Dictionary in StructurePalette.CHIPS:
+		var id := String(item["id"])
+		var chip := Button.new()
+		chip.name = "Chip_" + id
+		chip.text = String(item["label"])
+		chip.toggle_mode = true
+		chip.theme_type_variation = &"Chip"
+		chip.focus_mode = Control.FOCUS_NONE
+		chip.toggled.connect(_on_chip_toggled.bind(id))
+		_chip_flow.add_child(chip)
+		chip_buttons[id] = chip
+	_filter_row = HBoxContainer.new()
+	_filter_row.name = "StructureFilterRow"
+	_filter_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_filter_row)
+	clear_button = Button.new()
+	clear_button.name = "StructureClear"
+	clear_button.text = "Clear"
+	clear_button.tooltip_text = CLEAR_CHIPS_TIP
+	clear_button.focus_mode = Control.FOCUS_NONE
+	clear_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	clear_button.pressed.connect(clear_filters)
+	_filter_row.add_child(clear_button)
+	small_tiles_button = Button.new()
+	small_tiles_button.name = "StructureSmallTiles"
+	small_tiles_button.text = "Small tiles"
+	small_tiles_button.toggle_mode = true
+	small_tiles_button.tooltip_text = SMALL_TILES_TIP
+	small_tiles_button.focus_mode = Control.FOCUS_NONE
+	small_tiles_button.toggled.connect(
+		func(on: bool) -> void:
+			_small_tiles = on
+			UiPreferences.save_structure_tiles_small(on)
+			refresh()
+	)
+	_filter_row.add_child(small_tiles_button)
+
+
+## The chips switched on (ids).
+func active_chips() -> Array[String]:
+	return _active_chips
+
+
+## Switches chip `chip_id` on or off, as a click would.
+func set_chip(chip_id: String, on: bool) -> void:
+	_active_chips = StructurePalette.toggled(_active_chips, chip_id, on)
+	refresh()
+
+
+## Switches every chip off and empties the search.
+func clear_filters() -> void:
+	_active_chips = []
+	search_edit.text = ""
+	refresh()
+
+
+func _on_chip_toggled(on: bool, chip_id: String) -> void:
+	set_chip(chip_id, on)
+
+
+## Shows each chip's count (what it would show with the search and the other groups' chips), greys
+## one that would show nothing, and shows Clear with the tally while a filter is on.
+func _update_filters(rows: Array, shown: int) -> void:
+	var counts := StructurePalette.chip_counts(rows, search_edit.text, _active_chips)
+	for item: Dictionary in StructurePalette.CHIPS:
+		var id := String(item["id"])
+		var chip: Button = chip_buttons[id]
+		var count := int(counts[id])
+		chip.text = "%s %d" % [item["label"], count]
+		chip.set_pressed_no_signal(id in _active_chips)
+		chip.disabled = count == 0 and not id in _active_chips
+	var filtering := not _active_chips.is_empty() or search_edit.text.strip_edges() != ""
+	clear_button.disabled = not filtering
+	var tally := StructurePalette.tally(shown, rows.size(), filtering)
+	clear_button.text = "Clear (%s)" % tally if filtering else "Clear"
+	_no_match.text = NO_MATCH_CHIPS if not _active_chips.is_empty() else NO_MATCH
+
+
+## The hover card: built once, shown beside the tile under the pointer.
+func _build_card() -> void:
+	card = PanelContainer.new()
+	card.name = "StructureCard"
+	card.theme_type_variation = &"Plaque"
+	card.top_level = true
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.visible = false
+	add_child(card)
+	var box := VBoxContainer.new()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.theme_type_variation = &"BoxContainerSnug"
+	box.custom_minimum_size = Vector2(CARD_PICTURE_PX, 0)
+	card.add_child(box)
+	card_picture = TextureRect.new()
+	card_picture.name = "CardPicture"
+	card_picture.custom_minimum_size = Vector2(CARD_PICTURE_PX, CARD_PICTURE_PX)
+	card_picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	card_picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	card_picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(card_picture)
+	card_title = Label.new()
+	card_title.name = "CardTitle"
+	card_title.theme_type_variation = &"Heading"
+	box.add_child(card_title)
+	card_detail = _caption("CardDetail", "")
+	card_detail.custom_minimum_size = Vector2(CARD_PICTURE_PX, 0)
+	box.add_child(card_detail)
+	card_size = _caption("CardSize", "")
+	card_size.custom_minimum_size = Vector2(CARD_PICTURE_PX, 0)
+	box.add_child(card_size)
+
+
+## The card for the tile `id` of `from_field` shows after CARD_DELAY_S, beside the tile.
+func _on_tile_hovered(id: StringName, from_field: TileField) -> void:
+	_card_for = String(id)
+	if _card_tween != null:
+		_card_tween.kill()
+	_card_tween = create_tween()
+	_card_tween.tween_interval(CARD_DELAY_S)
+	_card_tween.tween_callback(_show_card.bind(String(id), from_field))
+
+
+func _show_card(ref: String, from_field: TileField) -> void:
+	if _card_for != ref or not is_instance_valid(from_field):
+		return
+	var row := LibraryStructureStore.structure(ref)
+	if row.is_empty():
+		return
+	var lines := StructurePalette.card(row)
+	card_picture.texture = StructureThumbnail.of(row, CARD_PICTURE_PX)
+	card_title.text = lines["title"]
+	card_detail.text = lines["detail"]
+	card_size.text = lines["size"]
+	var tile_rect := from_field.tiles.tile_global_rect(StringName(ref))
+	card.reset_size()
+	var view := get_viewport_rect().size
+	# On the board beside the drawer (and its rail), never over the tiles it is about.
+	var board := DrawerContainer.free_span(get_viewport())
+	var at := Vector2(maxf(tile_rect.end.x + 8.0, board.x + 8.0), tile_rect.position.y)
+	at.y = clampf(at.y, 4.0, maxf(4.0, view.y - card.size.y - 4.0))
+	at.x = minf(at.x, maxf(board.x, view.x - card.size.x - 4.0))
+	card.global_position = at
+	card.visible = true
+
+
+func _hide_card() -> void:
+	_card_for = ""
+	if _card_tween != null:
+		_card_tween.kill()
+		_card_tween = null
+	if card != null:
+		card.visible = false
+
+
+## Shows or hides the palette parts (the hint, the chips, the family tiles, Mix afresh).
 func _show_palette(shown: bool) -> void:
 	_hint.visible = shown
 	for field in family_fields:
@@ -293,6 +507,10 @@ func _show_palette(shown: bool) -> void:
 			field.visible = shown
 	_tools_row.visible = shown and _served > 0
 	reroll_button.visible = _tools_row.visible
+	_chip_flow.visible = _tools_row.visible
+	_filter_row.visible = _tools_row.visible
+	if not shown:
+		_hide_card()
 	_no_match.visible = shown and _served > 0 and _found_none
 	_empty.visible = shown and _served == 0
 
@@ -416,18 +634,6 @@ func _on_tile(id: StringName, from_field: TileField) -> void:
 		if field != from_field:
 			field.tiles.clear_selection()
 	structure_selected.emit(String(id))
-
-
-## A tile's tooltip: what the structure is, its tags, and the size it starts at.
-static func _tooltip(row: Dictionary) -> String:
-	var size := StructurePlacement.default_size(row)
-	var tags := PackedStringArray()
-	for tag: Variant in row.get("tags", []):
-		tags.append(String(tag))
-	return (
-		"%s: %s, about %d x %d m. Drag it out to make it bigger or smaller."
-		% [row["name"], ", ".join(tags), roundi(size.x), roundi(size.y)]
-	)
 
 
 func _caption(node_name: String, text: String) -> Label:

@@ -56,6 +56,12 @@ func build_pane(_panel: AuthoringPanel) -> Control:
 	return StructureToolPane.new()
 
 
+## The key caps on the hint bar: the gestures this user has not done once yet, for a lot
+## following the pointer or a selected building (StructureHints).
+func key_hints(brush: BrushTool) -> Array:
+	return StructureHints.rows(StructureHints.done(), of(brush).has_selection())
+
+
 ## Puts the brush and the pane on one pick: the brush's own when it has one the pane lists, else
 ## the tile the pane preselects (the first in its display order, which is not the store's).
 static func sync_pick(mode: StructureBrush, pane: StructureToolPane) -> void:
@@ -89,28 +95,42 @@ func connect_pane(controller: AuthoringController, pane: Control) -> void:
 	_connect_selection(controller, structure_pane)
 
 
-## The selected building's bar (card S5): the brush says which building is selected and the bar
-## shows it; each button is one call on the brush, one history entry, and the bar is shown again
-## from the record afterwards. The brush's mode outlives the pane, so the old connections (to a
-## pane that is gone) are dropped first.
+## The selected building's bar (card S5), on the authoring controller's brush.
 func _connect_selection(controller: AuthoringController, pane: StructureToolPane) -> void:
-	if controller.brush == null:
-		return
-	var mode := of(controller.brush)
+	if controller.brush != null:
+		connect_selection(controller.brush, pane, controller.refresh_tool_hints)
+
+
+## The selected building's bar: the brush says which building is selected and the bar shows it;
+## each button is one call on the brush, one history entry, and the bar is shown again from the
+## record afterwards. The brush's mode outlives the pane, so the old connections (to a pane that
+## is gone) are dropped first. `hints_changed` is called when the hint bar's rows change (a
+## selection, a gesture done once). Authoring and the GM's Events pane both call it.
+func connect_selection(brush: BrushTool, pane: StructureToolPane, hints_changed: Callable) -> void:
+	var mode := of(brush)
 	for link: Dictionary in mode.selection_changed.get_connections():
 		mode.selection_changed.disconnect(link["callable"])
-	var editor := controller.brush.editor
+	for link: Dictionary in mode.gesture_done.get_connections():
+		mode.gesture_done.disconnect(link["callable"])
+	var editor := brush.editor
+	# A gesture done once is remembered per user, and its key fades from the bar.
+	mode.gesture_done.connect(
+		func(id: StringName) -> void:
+			if StructureHints.mark(id):
+				hints_changed.call()
+	)
 	var show := func(structure_id: int) -> void:
 		var held := (
-			controller.brush.editor.document.structure(structure_id)
-			if structure_id >= 0 and controller.brush != null and controller.brush.editor != null
+			brush.editor.document.structure(structure_id)
+			if structure_id >= 0 and brush.editor != null
 			else null
 		)
 		pane.show_selection(held.copy() if held != null else null)
 	mode.selection_changed.connect(show)
+	mode.selection_changed.connect(func(_structure_id: int) -> void: hints_changed.call())
 	var act := func(call: Callable) -> void:
-		if controller.brush != null and controller.brush.editor != null:
-			call.call(controller.brush.editor)
+		if brush.editor != null:
+			call.call(brush.editor)
 		show.call(mode.selected_id)
 	pane.variant_picked.connect(func(ref: String) -> void: act.call(mode.swap_variant.bind(ref)))
 	pane.param_stepped.connect(
