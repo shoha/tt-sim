@@ -1,9 +1,9 @@
 extends GutTest
 
 ## Round and polygonal structures (styles integration card, 2026-10-28): the core library's regular
-## polygon starters (plan kind "round", the `sides:<n>` tag), StructurePlacement's round plans
-## and size rules, StructureEdit's uniform-scale handles, the brush's ghost and the street split's
-## guard and region rules. Summary: docs/systems/structures.md "Round plans".
+## polygon starters (plan kind "round", the index entry's `sides` key), StructurePlacement's round
+## plans and size rules, StructureEdit's uniform-scale handles, the brush's ghost and the street
+## split's guard and region rules. Summary: docs/systems/structures.md "Round plans".
 
 const ROUND_REFS: Array[String] = [
 	"core:roundhouse",
@@ -63,7 +63,7 @@ func test_the_core_library_ships_the_round_starters_as_round_plans() -> void:
 	assert_eq(StructurePlacement.sides_of(_row("core:watchtower")), 4)
 	assert_eq(StructurePlacement.sides_of(_row("core:tower_hex")), 6)
 	assert_eq(StructurePlacement.sides_of(_row("core:dome_hall")), 10)
-	assert_eq(StructurePlacement.sides_of(_row("core:cottage")), 0, "a rectangle has no sides tag")
+	assert_eq(StructurePlacement.sides_of(_row("core:cottage")), 0, "a rectangle has no sides")
 
 
 func test_every_sizes_extreme_is_a_valid_plan_and_a_building() -> void:

@@ -193,28 +193,13 @@ const LIBRARY_KEYS: Array[String] = [
 	"partial",
 ]
 const CATALOG_KEYS: Array[String] = ["format", "format_version", "assets"]
-const STRUCTURE_KEYS: Array[String] = ["format", "format_version", "structures"]
-const STRUCTURE_ENTRY_KEYS: Array[String] = [
-	"id",
-	"name",
-	"family",
-	"variant",
-	"tags",
-	"file",
-	"default_size_m",
-	"min_side_m",
-	"max_side_m",
-	"max_area_m2",
-	"plans",
-	"expose",
-	"textured",
-	"thumb",
-]
-## The footprint kinds a structure's `plans` may name. "round" is a regular polygon (the round
-## recipes, ProcgenRecipesRound): the tool places and scales it as a whole, and its number of sides
-## is the `sides:<n>` tag (StructurePlacement.sides_of). plantgen's validator holds a copy of this
-## list and warns about "round" until it is added there.
-const STRUCTURE_PLANS: Array[String] = ["rect", "l", "t", "u", "round"]
+## The structure index's keys, an entry's keys and the footprint kinds a `plans` may name are
+## procgen's ProcgenStructureIndex, which plantgen's validator reads too. "round" is a regular
+## polygon (the round recipes, ProcgenRecipesRound): the tool places and scales it as a whole, and
+## its number of sides is the entry's `sides` key (StructurePlacement.sides_of).
+const STRUCTURE_KEYS: Array[String] = ProcgenStructureIndex.INDEX_KEYS
+const STRUCTURE_ENTRY_KEYS: Array[String] = ProcgenStructureIndex.ENTRY_KEYS
+const STRUCTURE_PLANS: Array[String] = ProcgenStructureIndex.PLANS
 const CATALOG_ENTRY_KEYS: Array[String] = [
 	"id",
 	"group",

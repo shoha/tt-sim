@@ -18,13 +18,11 @@ extends RefCounted
 ## takes a house rather than failing.
 
 ## Round plans. A structure whose `plans` names ROUND_PLAN is a regular polygon of `sides_of(row)`
-## sides (its `sides:<n>` tag): its lot is a circle of radius size.x / 2 (size is the diameter, a
+## sides (its `sides` key): its lot is a circle of radius size.x / 2 (size is the diameter, a
 ## square Vector2, so every size rule below applies as it is), the front (edge 0) facing +Z at turn
 ## 0. It scales, moves and turns as one piece; `min_side_m` and `max_side_m` are its least and
 ## largest diameters.
-const ROUND_PLAN := "round"
-const SIDES_TAG := "sides:"
-const DEFAULT_SIDES := 8
+const ROUND_PLAN := ProcgenStructureIndex.ROUND
 ## A row whose least side is this or more is pinned at its default rectangle, not the 6 by 4 m one
 ## (the other rows' least sides are at most 6.8 m; the courtyards' is 9 m).
 const PIN_DEFAULT_MIN_SIDE_M := 8.0
@@ -54,20 +52,13 @@ const GAP_M := 0.4
 
 ## Whether the library row (a LibraryStructureStore row) is a round structure.
 static func is_round(row: Dictionary) -> bool:
-	var plans: Variant = row.get("plans")
-	return plans is Array and ROUND_PLAN in (plans as Array)
+	return ProcgenStructureIndex.is_round(row)
 
 
-## The sides of a round row's polygon (its `sides:<n>` tag, 3..Structure.MAX_POINTS), 0 for any
-## other row.
+## The sides of a round row's polygon (its `sides` key, else a legacy `sides:<n>` tag, 3..
+## Structure.MAX_POINTS; ProcgenStructureIndex.sides_of), 0 for any other row.
 static func sides_of(row: Dictionary) -> int:
-	if not is_round(row):
-		return 0
-	for tag: Variant in row.get("tags", []) as Array:
-		var text := String(tag)
-		if text.begins_with(SIDES_TAG) and text.trim_prefix(SIDES_TAG).is_valid_int():
-			return clampi(int(text.trim_prefix(SIDES_TAG)), 3, Structure.MAX_POINTS)
-	return DEFAULT_SIDES
+	return ProcgenStructureIndex.sides_of(row)
 
 
 ## The regular polygon of `sides` corners on a circle of `radius` about `centre`, turned `yaw`

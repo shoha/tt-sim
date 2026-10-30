@@ -2044,8 +2044,11 @@ NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuil
   contract number stays 1 (an older reader warns about files it does not know at most). The index
   entry: `id` (`[a-z][a-z0-9_]*`, at most 48, no `__`), `name`, `family`, `variant`, `tags`, `file` (the
   id's own path), `default_size_m`, `min_side_m`, `max_side_m`, `max_area_m2` (the default fits them),
-  `plans` (`rect` `l` `t` `u`), `expose` (names of the recipe's interface the UI may show), `textured`
-  (the recipe declares `textured`), `thumb`. Caps, all warnings that leave out the one structure: 128
+  `plans` (`rect` `l` `t` `u` `round`), `sides` (a round entry's corner count, 3 to 24; it used to ride in a
+  `sides:<n>` tag, which a reader still honours when there is no key), `expose` (names of the recipe's
+  interface the UI may show), `textured` (the recipe declares `textured`), `thumb`. The key lists,
+  the plans and the `sides` rules live once, in procgen's `ProcgenStructureIndex`, which tt-sim's
+  `LibraryContracts` and plantgen's validator both read. Caps, all warnings that leave out the one structure: 128
   structures, 256 KB for the index and for a recipe, 128 nodes and 512 connections, node types the
   procgen structure registry knows, no nested tables in node parameters (a recipe is data run by a
   fixed set of node types; see `systems/library.md` "Structures"). The caps live in

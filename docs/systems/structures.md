@@ -337,10 +337,10 @@ entries with a `round` table: a `kind` or `make` options, and `sides` / `radius`
 `tower_hex` (6 sides, cone roof, `tower`), `dome_hall` (10 sides, stone, dome, family `hall`).
 Adding one is one table entry; the exporter writes the rest.
 
-- **Data.** The index entry has `plans: ["round"]` (`LibraryContracts.STRUCTURE_PLANS`; plantgen's
-  validator holds a copy and warns "plans holds a bad entry" until it adds the kind), the tags
-  `round`, `regional` and `sides:<n>` (the polygon's sides: there is no `sides` key because plantgen's
-  validator refuses an unknown index key), and sizes that are DIAMETERS: `default_size_m` is
+- **Data.** The index entry has `plans: ["round"]` (`LibraryContracts.STRUCTURE_PLANS`, which is
+  procgen's `ProcgenStructureIndex.PLANS`, as plantgen's validator reads it), the tags `round` and
+  `regional`, a `sides` key (the polygon's corner count, `ProcgenStructureIndex.sides_of`; a legacy
+  `sides:<n>` tag is read when there is no key, and the reader fills the key in), and sizes that are DIAMETERS: `default_size_m` is
   `[2 r, 2 r]`, `min_side_m` and `max_side_m` the least and largest diameter (twice the kind's
   `radius_min` and `radius_max`), `max_area_m2` the square of the largest. A footprint is
   `StructurePlacement.round_plan(centre, radius, yaw, sides)`: `ProcgenPlan.regular_polygon` with the
