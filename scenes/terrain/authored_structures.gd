@@ -32,6 +32,8 @@ const STRUCTURE_META := &"tt_structure"
 const TAGS_META := &"tt_tags"
 const NORMAL_SCALE := 0.8
 const CACHE_LIMIT := 48
+## A queued build's task id until a worker takes it (see max_running()).
+const NOT_STARTED := -1
 
 ## Highest structure top, map Y (-INF with none), and a counter that changes with every rebuild.
 var top_y: float = -INF
@@ -47,13 +49,17 @@ var _palette_root: String = PaletteLibrary.DEFAULT_ROOT
 var _materials: Dictionary = {}
 ## Per structure id, the StructureGeometry key its node was built from.
 var _keys: Dictionary = {}
+## Per structure id, {"sig", "key"}: what StructureGeometry.keys_memoised keeps so a refresh only
+## samples the ground under structures whose inputs changed.
+var _key_memo: Dictionary = {}
 var _tops: Dictionary = {}
 ## Per structure id, {"layout", "openings"} of its build (the day a vision rule needs them).
 var _details: Dictionary = {}
 ## Key -> built parts, oldest first in _cache_order.
 var _cache: Dictionary = {}
 var _cache_order: Array[int] = []
-## Structure id -> {"task": int, "key": int, "out": Dictionary} for the build in flight.
+## Structure id -> {"task": int (NOT_STARTED while queued), "key": int, "out": Dictionary,
+## "structure", "ground" (until a worker takes it)} for the build in flight.
 var _jobs: Dictionary = {}
 ## Structure id -> {"structure": Structure, "key": int, "ground": MapDocument}: the newest edit
 ## that arrived while the id's build was still running. It starts when that build lands (which
@@ -120,7 +126,7 @@ static func exclude_of(root: Node) -> Array[RID]:
 ## built with. A queued build lands within a few frames (_process), or at once with flush().
 func refresh(doc: MapDocument, use_workers: bool = true) -> void:
 	StructureRecipes.ensure_served()
-	var keys := StructureGeometry.keys_of(doc)
+	var keys := StructureGeometry.keys_memoised(doc, _key_memo)
 	var changed := false
 	for child in get_children():
 		if not keys.has(_id_of(child)):
@@ -193,6 +199,7 @@ func flush() -> int:
 	# A landing may start the edit queued behind it, so go round until nothing is in flight; an
 	# older result with a newer edit behind it is not shown (the caller wants the final state).
 	while not _jobs.is_empty():
+		_launch_queued(1 << 30)
 		for id: int in _jobs.keys():
 			var job: Dictionary = _jobs[id]
 			WorkerThreadPool.wait_for_task_completion(job.task)
@@ -277,9 +284,11 @@ func provenance_at(structure_id: int, mesh_name: String, triangle: int) -> Strin
 func _process(_delta: float) -> void:
 	var made := 0
 	for id: int in _jobs.keys():
-		if WorkerThreadPool.is_task_completed(_jobs[id].task):
-			WorkerThreadPool.wait_for_task_completion(_jobs[id].task)
+		var task: int = _jobs[id].task
+		if task != NOT_STARTED and WorkerThreadPool.is_task_completed(task):
+			WorkerThreadPool.wait_for_task_completion(task)
 			made += _land(id)
+	_launch_queued(max_running())
 	_reap_stale(false)
 	if made > 0:
 		_recompute_top()
@@ -295,7 +304,8 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
 		# A task holds only its own copies, but never leave one running past its owner.
 		for id: int in _jobs.keys():
-			WorkerThreadPool.wait_for_task_completion(_jobs[id].task)
+			if _jobs[id].task != NOT_STARTED:
+				WorkerThreadPool.wait_for_task_completion(_jobs[id].task)
 		for task in _stale:
 			WorkerThreadPool.wait_for_task_completion(task)
 
@@ -304,18 +314,60 @@ func _notification(what: int) -> void:
 ## running the edit waits behind it (_pending), replacing any older waiting edit: at most one
 ## build per structure runs and one waits, and the newest edit always gets its turn.
 func _start(structure: Structure, key: int, ground: MapDocument) -> void:
-	if _jobs.has(structure.id):
+	if _jobs.has(structure.id) and _jobs[structure.id].task != NOT_STARTED:
 		_pending[structure.id] = {"structure": structure, "key": key, "ground": ground}
 		set_process(true)
 		return
-	var out := {}
-	var task := WorkerThreadPool.add_task(
-		func() -> void: out["parts"] = StructureGeometry.build_one(ground, structure),
-		false,
-		"AuthoredStructures %d" % structure.id
-	)
-	_jobs[structure.id] = {"task": task, "key": key, "out": out}
+	# A build still queued (no worker has it) is simply replaced by the newer edit, keeping its
+	# place in the queue: every add changes the keys of the dozen structures around it, and a
+	# queue of 100 would otherwise build each of them once per neighbour added.
+	_pending.erase(structure.id)
+	_jobs[structure.id] = {
+		"task": NOT_STARTED, "key": key, "out": {}, "structure": structure, "ground": ground
+	}
+	_launch_queued(max_running())
 	set_process(true)
+
+
+## How many builds may run at once: a sixth of the logical cores, at least 2. Builds on every core
+## left the main thread 14 times slower while they ran (struct_perf2, 24 threads: a 4 ms refresh
+## took 57 ms; builds allocate heavily and the main thread waits on the same locks and cores), so
+## 100 sequential adds stalled the editor for seconds. 4 builds at once (24 cores) keep an add at
+## 2 to 8 ms and finish 100 builds in about 2.6 s, against 2.5 s with every core.
+static func max_running() -> int:
+	return maxi(2, OS.get_processor_count() / 6)
+
+
+## How many threads a load's group build (StructureGeometry.build) may use: a quarter of the logical
+## cores, at least 2. Measured on 24 cores for 100 structures: 3.1 s on one thread, 0.90 s on 6,
+## 1.16 s on 3 and 1.37 s on 12 or 24 (more threads only fight over the allocator).
+static func load_threads() -> int:
+	return maxi(2, OS.get_processor_count() / 4)
+
+
+## Starts queued builds (task NOT_STARTED, oldest first) until `limit` are running.
+func _launch_queued(limit: int) -> void:
+	var running := 0
+	for job: Dictionary in _jobs.values():
+		if job.task != NOT_STARTED and not WorkerThreadPool.is_task_completed(job.task):
+			running += 1
+	for id: int in _jobs.keys():
+		if running >= limit:
+			return
+		var job: Dictionary = _jobs[id]
+		if job.task != NOT_STARTED:
+			continue
+		var out: Dictionary = job.out
+		var structure: Structure = job.structure
+		var ground: MapDocument = job.ground
+		job.task = WorkerThreadPool.add_task(
+			func() -> void: out["parts"] = StructureGeometry.build_one(ground, structure),
+			false,
+			"AuthoredStructures %d" % id
+		)
+		job.erase("structure")
+		job.erase("ground")
+		running += 1
 
 
 ## Forgets the build in flight for `id`; its task is reaped later.
@@ -323,7 +375,8 @@ func _drop_job(id: int) -> void:
 	_pending.erase(id)
 	if not _jobs.has(id):
 		return
-	_stale.append(_jobs[id].task)
+	if _jobs[id].task != NOT_STARTED:
+		_stale.append(_jobs[id].task)
 	_jobs.erase(id)
 
 

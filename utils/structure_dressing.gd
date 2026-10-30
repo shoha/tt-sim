@@ -205,13 +205,20 @@ static func ground_samples(doc: MapDocument, plan: PackedVector2Array) -> Packed
 
 ## The footprints of the other structures of `doc` whose bounds come within NEIGHBOUR_RANGE_M of
 ## `structure`'s own.
-static func neighbours(doc: MapDocument, structure: Structure) -> Array[PackedVector2Array]:
+## `boxes` (structure id -> bounds_of its footprint) saves measuring every footprint again for every
+## structure when a caller asks about all of them (StructureGeometry.keys_of); empty: measured here.
+static func neighbours(
+	doc: MapDocument, structure: Structure, boxes: Dictionary = {}
+) -> Array[PackedVector2Array]:
 	var out: Array[PackedVector2Array] = []
 	var mine := bounds_of(structure.footprint).grow(NEIGHBOUR_RANGE_M)
 	for other in doc.structures:
 		if other.id == structure.id or other.footprint.size() < 3:
 			continue
-		if mine.intersects(bounds_of(other.footprint)):
+		var box: Rect2 = (
+			boxes[other.id] if boxes.has(other.id) else bounds_of(other.footprint)
+		)
+		if mine.intersects(box):
 			out.append(other.footprint)
 	return out
 
