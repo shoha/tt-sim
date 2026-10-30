@@ -530,6 +530,32 @@ least size). Known procgen gap: the roofs of abutting wings interpenetrate at th
 jobs `courtyard_rows` (the three at default size and at the minimum) and `courtyard_thumbs`
 (tiles at yaw 0, so the gate faces the camera).
 
+### Toon styles (2026-10-30, branch `toon_look`)
+
+Eight bright "toon town" structures from procgen's `docs/toon_styles.md` (72 core structures in
+all): `toon_clinic`, `toon_shop`, `toon_gym`, `toon_lab` (12-gon), `toon_cafe`, `toon_cottage`,
+`toon_lighthouse` (8-gon) and `toon_hall`, family `toon`, all `regional` (no street split picks
+one), with the style's tags (`toon`, `bright`, `saturated`, `flat_colour`, the building type). The
+two round ones are listed with plan `round` and `sides` (the exporter reads the polygon from
+`ProcgenRecipesToon.footprint(style)`, `_round_style_spec`) and pin at their default radius. The
+hall row sets `min_side_m` 6: the style's own `size` has min_side 7 under a 10 by 6 default, which
+the index reader refuses (an unreadable row made the recipe "unknown"; procgen-side data).
+
+Host support: the `trim` surface kind is the accent tone. `StructureLook.palette_hints` reads
+`palette_accent` beside the wall and roof lists; `StructurePaint.palette_of` draws one roof tone and
+one accent tone per building from its seed (`mix(h, 53)`; no list gives a timber brown) and paints
+every `trim`-kind piece in it, under the piece's grey brightness shade, whatever its role (a dome
+with `roof_role: trim` is a roof by node but an accent by kind, so it skips the roof grade). The
+plaster wall shader draws it (`StructureMaterials.make`). The Roof Cap node (`roof_cap`) is trim
+by default; `role_of_slot` makes `cap/dome` and `cap/cone` roof, `cap/inner` wall and `cap/glass`
+an opening. Nothing desaturates a toon colour: the roof tile shader multiplies the vertex colour
+by a soft pattern and a lit gain, and `tests/unit/test_toon_look.gd` holds the painted roofs above
+saturation 0.5 at value 0.7. The adobe wall's mud-roof tone for up-facing faces is now gentle
+(0.95, 0.91, 0.86 and half the patches), since every up face, a parapet's cap included, takes it.
+Render jobs `toon_look` (the family on a 160 m map; lots must stand within about 25 m of the map
+centre, wider ones are refused) and `toon_look_thumbs` (the regenerated tiles). `dormered_house`
+takes dormer width 1.5 and wall height 1.2 in the exporter's style patch.
+
 ## Dressing
 
 Probe B (2026-10-28, branch `probe-b`): a building is settled into its place by a yard,

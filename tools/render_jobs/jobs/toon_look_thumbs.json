@@ -1,0 +1,666 @@
+{
+ "out_dir": "render_jobs/toon_look_thumbs",
+ "timeout_s": 420,
+ "hang_s": 120,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "wait_title"
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 100,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:toon_clinic",
+   "width": 7.0,
+   "depth": 5.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.16,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "toon_clinic",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_toon_clinic",
+   "desc": "tile toon_clinic"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:toon_shop",
+   "width": 7.0,
+   "depth": 5.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.16,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "toon_shop",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_toon_shop",
+   "desc": "tile toon_shop"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:toon_gym",
+   "width": 9.0,
+   "depth": 6.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 18.6,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "toon_gym",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_toon_gym",
+   "desc": "tile toon_gym"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:toon_lab",
+   "width": 6.8,
+   "depth": 6.8,
+   "sides": 12,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 17.28,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "toon_lab",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_toon_lab",
+   "desc": "tile toon_lab"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:toon_cafe",
+   "width": 7.0,
+   "depth": 5.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.16,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "toon_cafe",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_toon_cafe",
+   "desc": "tile toon_cafe"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:toon_cottage",
+   "width": 7.0,
+   "depth": 5.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.16,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "toon_cottage",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_toon_cottage",
+   "desc": "tile toon_cottage"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:toon_lighthouse",
+   "width": 4.6,
+   "depth": 4.6,
+   "sides": 8,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 24.0,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "toon_lighthouse",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_toon_lighthouse",
+   "desc": "tile toon_lighthouse"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:toon_hall",
+   "width": 10.0,
+   "depth": 6.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 29.0,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "toon_hall",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_toon_hall",
+   "desc": "tile toon_hall"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:dormered_house",
+   "width": 7.0,
+   "depth": 5.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 180.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.16,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "dormered_house",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_dormered_house",
+   "desc": "tile dormered_house"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:coaching_inn",
+   "width": 14.0,
+   "depth": 12.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 26.98,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "coaching_inn",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_coaching_inn",
+   "desc": "tile coaching_inn"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:siheyuan",
+   "width": 14.0,
+   "depth": 12.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 26.98,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "siheyuan",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_siheyuan",
+   "desc": "tile siheyuan"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:hof_farm",
+   "width": 16.0,
+   "depth": 14.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 30.09,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "hof_farm",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_hof_farm",
+   "desc": "tile hof_farm"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:tudor_framed",
+   "width": 5.0,
+   "depth": 7.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.16,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "tudor_framed",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_tudor_framed",
+   "desc": "tile tudor_framed"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:tudor_townhouse",
+   "width": 5.0,
+   "depth": 7.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.16,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "tudor_townhouse",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_tudor_townhouse",
+   "desc": "tile tudor_townhouse"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:adobe_parapet",
+   "width": 6.0,
+   "depth": 5.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 15.29,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "adobe_parapet",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_adobe_parapet",
+   "desc": "tile adobe_parapet"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:adobe_house",
+   "width": 6.0,
+   "depth": 5.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 15.29,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "adobe_house",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_adobe_house",
+   "desc": "tile adobe_house"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:adobe_rounded",
+   "width": 6.0,
+   "depth": 5.0,
+   "sides": 0,
+   "seed": 5,
+   "yaw": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 15.29,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "thumbnail",
+   "structure": true,
+   "biome": "adobe_rounded",
+   "folder": "D:/dev/tabletop/worktrees/core-library-toon_look"
+  },
+  {
+   "op": "capture",
+   "name": "tile_adobe_rounded",
+   "desc": "tile adobe_rounded"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  }
+ ]
+}

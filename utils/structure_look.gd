@@ -35,6 +35,12 @@ const ROLES: Array[String] = [WALL, ROOF, TRIM, CHIMNEY, OPENING, FRAME]
 ## The surface kind of the panes and leaves (ProcgenGlazing.KIND); drawn unshaded from the vertex
 ## colours.
 const GLASS_KIND := "glass"
+## The surface kind of a building style's accent (procgen toon styles: eave and floor bands, door
+## frames, porch posts, sign rims): coloured from the style's `palette_accent`, whatever its role.
+## Without a palette it falls back to a timber brown (the contract says wood, then stone).
+const ACCENT_KIND := "trim"
+## The accent a recipe without `palette_accent` falls back to (sRGB, a honey timber).
+const ACCENT_FALLBACK := Color(0.55, 0.38, 0.22)
 
 ## Procgen node type -> role. A type not listed is a wall.
 const NODE_ROLES: Dictionary = {
@@ -66,6 +72,10 @@ const NODE_ROLES: Dictionary = {
 	# Stilts (card 10): the platform, piles, braces, stair, ladder and deck are timber; role_of_slot
 	# picks the stone footings and staddle caps out as trim.
 	"stilts": FRAME,
+	# The Roof Cap (toon styles): sign discs, boards, domes and lanterns on the ridge. Mostly accent
+	# trim; role_of_slot picks the dome and cone out as roof, a sign's face as wall, the lantern's
+	# panes as an opening.
+	"roof_cap": TRIM,
 }
 
 ## What each role multiplies a surface's tint by. A painterly wall or roof is drawn by the
@@ -137,6 +147,15 @@ static func role_of_slot(node_type: String, slot: String) -> String:
 			var part := slot.get_slice("/", 1) if slot.get_slice_count("/") > 1 else ""
 			if part == "pad" or part == "cap":
 				return TRIM
+		"roof_cap":
+			# Slots "cap/dome", "cap/cone", "cap/inner", "cap/glass", "cap/disc", ...
+			match last:
+				"dome", "cone":
+					return ROOF
+				"inner":
+					return WALL
+				"glass":
+					return OPENING
 		"dormer":
 			match last.rstrip("0123456789"):
 				"roof":
@@ -185,7 +204,8 @@ static func material_role(kind: String, role: String) -> String:
 
 
 ## The palette hints of the recipe `doc` (a building style's, written on its Output node by
-## ProcgenRecipes.building_from): {"wall": Array[Color], "roof": Array[Color]} in sRGB, a key only
+## ProcgenRecipes.building_from): {"wall": Array[Color], "roof": Array[Color], "accent":
+## Array[Color]} in sRGB, a key only
 ## when the recipe lists tones for it, plus "stone_tone" (String, "grey" or "warm") when the style
 ## sets the masonry hint (StructureMaterials reads it). {} for a recipe without hints, which keeps
 ## StructurePaint's own draw (ROOF_PALETTE, WALL_LEANS).
@@ -195,7 +215,7 @@ static func palette_hints(doc: PlantGraphDocument) -> Dictionary:
 		return out
 	for node_id in doc.nodes_of_type("output"):
 		var params := doc.node_params(node_id)
-		for part: String in ["wall", "roof"]:
+		for part: String in ["wall", "roof", "accent"]:
 			var tones: Array[Color] = []
 			for hex: String in String(params.get("palette_" + part, "")).split(",", false):
 				if hex.strip_edges().is_valid_html_color():

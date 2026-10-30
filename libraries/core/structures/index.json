@@ -1934,6 +1934,269 @@
 		},
 		{
 			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "toon",
+			"file": "structures/toon_clinic.structure.json",
+			"id": "toon_clinic",
+			"max_area_m2": 70.0,
+			"max_side_m": 10.0,
+			"min_side_m": 5.0,
+			"name": "Toon clinic",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"toon",
+				"bright",
+				"saturated",
+				"flat_colour",
+				"clinic",
+				"house",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/toon_clinic.jpg",
+			"variant": "Coral hip roof, round sign"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "toon",
+			"file": "structures/toon_shop.structure.json",
+			"id": "toon_shop",
+			"max_area_m2": 70.0,
+			"max_side_m": 10.0,
+			"min_side_m": 5.0,
+			"name": "Toon shop",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"toon",
+				"bright",
+				"saturated",
+				"flat_colour",
+				"shop",
+				"house",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/toon_shop.jpg",
+			"variant": "Blue gable, board sign"
+		},
+		{
+			"default_size_m": [
+				9.0,
+				6.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "toon",
+			"file": "structures/toon_gym.structure.json",
+			"id": "toon_gym",
+			"max_area_m2": 70.0,
+			"max_side_m": 10.0,
+			"min_side_m": 5.0,
+			"name": "Toon gym",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"toon",
+				"bright",
+				"saturated",
+				"flat_colour",
+				"gym",
+				"house",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/toon_gym.jpg",
+			"variant": "Wide orange hip, dome cap"
+		},
+		{
+			"default_size_m": [
+				6.8,
+				6.8
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "toon",
+			"file": "structures/toon_lab.structure.json",
+			"id": "toon_lab",
+			"max_area_m2": 81.0,
+			"max_side_m": 9.0,
+			"min_side_m": 5.0,
+			"name": "Toon laboratory",
+			"plans": [
+				"round"
+			],
+			"sides": 12,
+			"tags": [
+				"toon",
+				"bright",
+				"saturated",
+				"flat_colour",
+				"lab",
+				"round",
+				"dome",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/toon_lab.jpg",
+			"variant": "Round, dome roof"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "toon",
+			"file": "structures/toon_cafe.structure.json",
+			"id": "toon_cafe",
+			"max_area_m2": 70.0,
+			"max_side_m": 10.0,
+			"min_side_m": 5.0,
+			"name": "Toon cafe",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"toon",
+				"bright",
+				"saturated",
+				"flat_colour",
+				"cafe",
+				"house",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/toon_cafe.jpg",
+			"variant": "Half-hip, veranda, disc sign"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "toon",
+			"file": "structures/toon_cottage.structure.json",
+			"id": "toon_cottage",
+			"max_area_m2": 70.0,
+			"max_side_m": 10.0,
+			"min_side_m": 5.0,
+			"name": "Toon cottage",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"toon",
+				"bright",
+				"saturated",
+				"flat_colour",
+				"cottage",
+				"house",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/toon_cottage.jpg",
+			"variant": "Steep red gable, porch"
+		},
+		{
+			"default_size_m": [
+				4.6,
+				4.6
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "toon",
+			"file": "structures/toon_lighthouse.structure.json",
+			"id": "toon_lighthouse",
+			"max_area_m2": 36.0,
+			"max_side_m": 6.0,
+			"min_side_m": 4.0,
+			"name": "Toon lighthouse",
+			"plans": [
+				"round"
+			],
+			"sides": 8,
+			"tags": [
+				"toon",
+				"bright",
+				"saturated",
+				"flat_colour",
+				"lighthouse",
+				"round",
+				"tower",
+				"cone",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/toon_lighthouse.jpg",
+			"variant": "Round, striped, lantern"
+		},
+		{
+			"default_size_m": [
+				10.0,
+				6.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch"
+			],
+			"family": "toon",
+			"file": "structures/toon_hall.structure.json",
+			"id": "toon_hall",
+			"max_area_m2": 100.0,
+			"max_side_m": 14.0,
+			"min_side_m": 6.0,
+			"name": "Toon town hall",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"toon",
+				"bright",
+				"saturated",
+				"flat_colour",
+				"hall",
+				"tower",
+				"dome",
+				"civic",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/toon_hall.jpg",
+			"variant": "Hip roof, corner dome tower"
+		},
+		{
+			"default_size_m": [
 				7.2,
 				7.2
 			],

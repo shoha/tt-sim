@@ -45,7 +45,7 @@ core:close_studded_house c6d615e2ef6ea30e4521fb7fcfd40363 1542
 core:porch_cottage dc656922c9c9708b8572b0a1d5eae4bc 1898
 core:veranda_cottage 6ffc53583ca3fed21de0b910eeb8f561 1700
 core:inn_gallery 1e4d7a7c6def86a50dfa73fd96cdafdc 1482
-core:dormered_house 7f88e4ed70e518e9df1ef01566e31d3f 1092
+core:dormered_house 5fc2638fa630a54ab8f3cc9e0bffb73b 1092
 core:stilt_house fb4de841bbe72db67f3a219febe18c8b 1690
 core:lake_dwelling 5fa8ca8d14ea27e3169d09e53d24bfe2 2100
 core:stabbur 02993bc651629cbe6a058dc7736a15ec 1210
@@ -62,3 +62,11 @@ core:ruin_tower cf5a4a3c183f20cb18605670fb4ad61a 1020
 core:coaching_inn 1e65a24ae5a2804a324e9bb6610d0304 6696
 core:siheyuan e232e341e9f54b9536c46434a3b00576 4250
 core:hof_farm 9b50c48e01e4d0980adcf79caf881c74 6296
+core:toon_clinic a45788fe78e9aef62e02c01d18fb2fc8 1447
+core:toon_shop a96a989c327d73a99b4f06aa40f9d451 1441
+core:toon_gym 961ad3196f4ec63badd4092ea87b9a6f 1291
+core:toon_lab 89453707319b8da9b168c3f0915a1c7a 1358
+core:toon_cafe 6dc983697133f66c4a17c73babedef99 1711
+core:toon_cottage 348ef9a12092b00db7c8a8221b80bb52 1511
+core:toon_lighthouse eccc0205287414b6604af7bc34b5088d 1232
+core:toon_hall e74328512ae5bb3dcf7f3f4e495c1913 1781

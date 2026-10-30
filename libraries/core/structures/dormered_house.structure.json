@@ -330,7 +330,8 @@
         "role": "plaster",
         "roof_role": "tile",
         "side": "front",
-        "width": 1.08
+        "wall_height": 1.2,
+        "width": 1.5
       },
       "position": [
         1670.0,

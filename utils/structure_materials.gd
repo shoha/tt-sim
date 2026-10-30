@@ -77,6 +77,10 @@ static func make(
 			material = _style_roof(kind)
 		"plaster", "adobe", "brick", "log":
 			material = _style_wall(kind)
+		StructureLook.ACCENT_KIND:
+			# The accent (toon styles): a flat painted tone from the vertex colours (StructurePaint),
+			# drawn by the plainest wall shader.
+			material = _style_wall("plaster")
 		_:
 			var stone := _stone(style, root)
 			stone.albedo_color *= StructureLook.tint_of(role)
