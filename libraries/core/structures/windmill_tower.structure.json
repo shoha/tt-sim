@@ -7,6 +7,12 @@
       "to_port": 0
     },
     {
+      "from": "taper_8",
+      "from_port": 0,
+      "to": "wonk_7",
+      "to_port": 0
+    },
+    {
       "from": "guide_1",
       "from_port": 0,
       "to": "building_layout_2",
@@ -31,61 +37,67 @@
       "to_port": 0
     },
     {
+      "from": "facade_3",
+      "from_port": 0,
+      "to": "taper_8",
+      "to_port": 1
+    },
+    {
       "from": "building_walls_4",
       "from_port": 0,
-      "to": "wonk_7",
+      "to": "taper_8",
       "to_port": 0
     },
     {
       "from": "roof_round_5",
       "from_port": 0,
-      "to": "wonk_7",
+      "to": "taper_8",
       "to_port": 0
     },
     {
       "from": "facade_3",
       "from_port": 0,
-      "to": "facade_trim_8",
+      "to": "facade_trim_9",
       "to_port": 0
     },
     {
-      "from": "facade_trim_8",
+      "from": "facade_trim_9",
       "from_port": 0,
-      "to": "wonk_7",
+      "to": "taper_8",
       "to_port": 0
     },
     {
       "from": "facade_3",
       "from_port": 0,
-      "to": "cornice_9",
+      "to": "cornice_10",
       "to_port": 0
     },
     {
-      "from": "cornice_9",
+      "from": "cornice_10",
       "from_port": 0,
-      "to": "wonk_7",
+      "to": "taper_8",
       "to_port": 0
     },
     {
       "from": "facade_3",
       "from_port": 0,
-      "to": "glazing_10",
+      "to": "glazing_11",
       "to_port": 0
     },
     {
-      "from": "glazing_10",
+      "from": "glazing_11",
       "from_port": 0,
-      "to": "wonk_7",
+      "to": "taper_8",
       "to_port": 0
     },
     {
       "from": "facade_3",
       "from_port": 0,
-      "to": "sails_11",
+      "to": "sails_12",
       "to_port": 0
     },
     {
-      "from": "sails_11",
+      "from": "sails_12",
       "from_port": 0,
       "to": "output_6",
       "to_port": 0
@@ -298,7 +310,18 @@
       "type": "wonk"
     },
     {
-      "id": "facade_trim_8",
+      "id": "taper_8",
+      "params": {
+        "taper": 0.78
+      },
+      "position": [
+        950.0,
+        220.0
+      ],
+      "type": "taper"
+    },
+    {
+      "id": "facade_trim_9",
       "params": {
         "door_frame": true,
         "frames": false,
@@ -314,7 +337,7 @@
       "type": "facade_trim"
     },
     {
-      "id": "cornice_9",
+      "id": "cornice_10",
       "params": {
         "eave": false,
         "floor_bands": true
@@ -326,7 +349,7 @@
       "type": "cornice"
     },
     {
-      "id": "glazing_10",
+      "id": "glazing_11",
       "params": {
         "lit": "@lit",
         "muntins": true
@@ -338,7 +361,7 @@
       "type": "glazing"
     },
     {
-      "id": "sails_11",
+      "id": "sails_12",
       "params": {
         "angle": 34.98,
         "arms": 4,
@@ -346,6 +369,7 @@
         "gallery": true,
         "gallery_at": 0.39,
         "hub_at": 0.42,
+        "taper": 0.78,
         "yaw": 6.07
       },
       "position": [

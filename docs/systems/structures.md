@@ -583,6 +583,13 @@ host needs no yaw); the cap turns about the vertical through that centre. Collis
 faces and `top` are made from the whole building and do not change. `digest_of` and
 `triangle_count` cover `meshes` plus the mill, so only the two windmills' pins differ in kind;
 no existing pin moved (`FORMAT_VERSION` 4 only renews cache keys).
+
+**Pin a47d686 (2026-10-30, branch `pins_final`).** Procgen's polish round moved fourteen digests: the
+windmills (tapered towers, Sails follow), the eight toon styles and `toon_clinic_wing` and
+`toon_gym_lobby` (glass tone per style, wider toon windows) and `ivy_manor` and `bartizan_keep`
+(ivy blankets, ornament placement). `toon_gym_court` (a pent canopy and a stepped parapet,
+`regional`, family `toon`) is the 84th core structure. Tiles of all fifteen were regenerated; the
+windmills have more headroom.
 `AuthoredStructures.mill_node` builds a `MillMotion` (`scenes/terrain/mill_motion.gd`) named `Mill`
 at the centre, holding the cap meshes (`cap_<role>_<kind>`) and the child `Wheel` at the hub holding
 the sail meshes (`wheel_...`); the meshes keep their map-frame vertices and sit at minus the pivot.

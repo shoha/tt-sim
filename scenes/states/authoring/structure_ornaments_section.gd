@@ -21,7 +21,9 @@ const SURPRISE_TIP := (
 	"Draw a pleasing set of ornaments for this kind of building. Press again for another."
 )
 const CLEAR_TIP := "Take away the ornaments you added."
-const IVY_TIP := "How far the ivy climbs and how thickly it grows."
+const NO_ROOM_TIP := "No room for it on this building, so nothing was added."
+const NO_ROOM_ALPHA := 0.5
+const IVY_TIP :="How far the ivy climbs and how thickly it grows."
 
 ## Chip buttons by kind.
 var chips: Dictionary = {}
@@ -137,6 +139,8 @@ func show_for(structure: Structure) -> void:
 			else "%s %s" % [tips[kind], state["reason"]]
 		)
 		_can_decorate = _can_decorate or bool(state["enabled"])
+		chip.modulate = Color.WHITE
+		chip.set_meta(&"base_tip", chip.tooltip_text)
 	surprise_button.disabled = not _can_decorate
 	clear_button.disabled = _asked.is_empty()
 	var ivy_on := _asked.has("ivy")
@@ -145,6 +149,23 @@ func show_for(structure: Structure) -> void:
 	ivy_slider.value = StructureOrnaments.ivy_amount(structure.params)
 	_syncing = false
 	_update_ivy_text()
+
+
+## Marks the chips of `kinds` (requested, but the build found no room for them: the host reads
+## ProcgenOrnaments.placed_kinds off the built structure) in a muted "no room" state with a tooltip
+## that says so; the chip stays pressed and clickable (a click takes it off). Every other chip is
+## shown as show_for left it. Call it with [] to clear.
+func show_missing(kinds: Array) -> void:
+	for kind: String in chips:
+		var chip: Button = chips[kind]
+		var base := String(chip.get_meta(&"base_tip", chip.tooltip_text))
+		if kinds.has(kind) and chip.button_pressed:
+			chip.modulate = Color.WHITE
+			chip.modulate.a = NO_ROOM_ALPHA
+			chip.tooltip_text = "%s %s" % [base, NO_ROOM_TIP]
+		else:
+			chip.modulate = Color.WHITE
+			chip.tooltip_text = base
 
 
 ## The kinds a Surprise me press would draw next for the building last shown (the building's own

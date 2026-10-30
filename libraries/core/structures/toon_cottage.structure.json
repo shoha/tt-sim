@@ -255,7 +255,7 @@
       "id": "facade_6",
       "params": {
         "floors": "@floors",
-        "style": "{\"bay_width\":2.4,\"floor_height_target\":3.0,\"floors\":1.0,\"ground_floor_height\":0.0,\"name\":\"toon_front\",\"patterns\":{\"back\":{\"ground\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"window\"}]}]},\"front\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"window\"}]},{\"size\":\"~bay\",\"symbol\":\"door\"},{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"window\"}]}]},\"side\":{\"ground\":[{\"repeat\":[{\"size\":\"~1.3bay\",\"symbol\":\"narrow\"}]}]}},\"symbols\":{\"blank\":{\"kind\":\"blank\"},\"door\":{\"head\":\"round\",\"kind\":\"door\",\"rise\":0.5},\"narrow\":{\"head\":\"round\",\"height\":1.2,\"kind\":\"window\",\"rise\":0.42,\"sill\":0.85,\"width\":0.85},\"window\":{\"head\":\"round\",\"height\":1.4,\"kind\":\"window\",\"rise\":0.6,\"sill\":0.75,\"width\":1.2}}}",
+        "style": "{\"bay_width\":2.4,\"floor_height_target\":3.0,\"floors\":1.0,\"ground_floor_height\":0.0,\"name\":\"toon_front\",\"patterns\":{\"back\":{\"ground\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"window\"}]}]},\"front\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"window\"}]},{\"size\":\"~bay\",\"symbol\":\"door\"},{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"window\"}]}]},\"side\":{\"ground\":[{\"repeat\":[{\"size\":\"~1.3bay\",\"symbol\":\"narrow\"}]}]}},\"symbols\":{\"blank\":{\"kind\":\"blank\"},\"door\":{\"head\":\"round\",\"kind\":\"door\",\"rise\":0.5},\"narrow\":{\"head\":\"round\",\"height\":1.2,\"kind\":\"window\",\"rise\":0.42,\"sill\":0.85,\"width\":0.85},\"window\":{\"head\":\"round\",\"height\":1.4,\"kind\":\"window\",\"rise\":0.6,\"sill\":0.75,\"width\":1.45}}}",
         "window_width": "@window_width"
       },
       "position": [
@@ -313,7 +313,8 @@
       "id": "glazing_10",
       "params": {
         "lit": "@lit",
-        "muntins": false
+        "muntins": false,
+        "tone": "rose"
       },
       "position": [
         950.0,

@@ -23,6 +23,8 @@ extends RefCounted
 ##    "top": highest walkable point (NONE when nothing was built), "openings": the boxes procgen
 ##    reports, "layout": the final ProcgenBuildingLayout or null (volumes, openings with slot
 ##    provenance, kept for the day a vision rule needs them), "triangles": int,
+##    "placed_kinds": the ornament kinds the evaluated building holds pieces of
+##    (ProcgenOrnaments.placed_kinds; a requested kind missing found no room; not in digest_of),
 ##    "dressing": StructureDressing.build's yard (soft ground patch, path, plants; not in digest_of
 ##    or the building's triangle budget), "problem": why nothing was built, or "", "warning": a soft
 ##    budget note, or ""}
@@ -169,6 +171,7 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 	parts.top = geometry.top if triangles > 0 else NONE
 	parts.openings = geometry.openings
 	parts.layout = plant.get("layout")
+	parts.placed_kinds = ProcgenOrnaments.placed_kinds(geometry)
 	parts.dressing = StructureDressing.build(doc, structure, parts.layout)
 	return parts
 
@@ -606,6 +609,7 @@ static func _empty(structure: Structure) -> Dictionary:
 		"top": NONE,
 		"openings": [],
 		"layout": null,
+		"placed_kinds": [] as Array[String],
 		"dressing": {},
 		"triangles": 0,
 		"problem": "",

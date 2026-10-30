@@ -814,6 +814,14 @@ const STARTERS: Array[Dictionary] = [
 		"variant": "Lower lobby block, dome cap",
 	},
 	{
+		"id": "toon_gym_court",
+		"bundle": "toon_gym_court",
+		"seed": 0,
+		"name": "Toon gym court",
+		"family": "toon",
+		"variant": "Pent canopy, stepped parapet",
+	},
+	{
 		"id": "ivy_manor",
 		"bundle": "ivy_manor",
 		"seed": 0,

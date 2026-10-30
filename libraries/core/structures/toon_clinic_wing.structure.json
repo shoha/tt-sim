@@ -342,7 +342,8 @@
       "id": "glazing_9",
       "params": {
         "lit": "@lit",
-        "muntins": false
+        "muntins": false,
+        "tone": "cool"
       },
       "position": [
         950.0,
@@ -445,7 +446,8 @@
       "id": "glazing_16",
       "params": {
         "lit": "@lit",
-        "muntins": false
+        "muntins": false,
+        "tone": "cool"
       },
       "position": [
         1180.0,

@@ -44,6 +44,8 @@ const TILE_ZOOM_PER_M := 0.9
 ## Each metre of wall height above TILE_DEFAULT_HEIGHT_M (a one storey cottage) adds this much.
 const TILE_DEFAULT_HEIGHT_M := 2.4
 const TILE_ZOOM_PER_HEIGHT_M := 1.9
+## A windmill's tip and sails stand well above its wall height: its tile is framed this much wider.
+const TILE_WINDMILL_ZOOM_FACTOR := 1.45
 const TILE_LOOK_Z := 0.0
 const TILE_SETTLE_S := 3.0
 const TILE_JOB_TIMEOUT_S := 900
@@ -513,6 +515,8 @@ static func thumbnail_job(
 		var entry: Dictionary = item["entry"]
 		var size: Array = entry["default_size_m"]
 		var longest := maxf(float(size[0]), float(size[1]))
+		var height := float(item.get("height_m", TILE_DEFAULT_HEIGHT_M))
+		var zoom := _tile_zoom(longest, height) * _family_zoom(entry)
 		(
 			steps
 			. append(
@@ -534,7 +538,7 @@ static func thumbnail_job(
 			. append(
 				{
 					"op": "thumbnail_prepare",
-					"zoom": _tile_zoom(longest, float(item.get("height_m", TILE_DEFAULT_HEIGHT_M))),
+					"zoom": zoom,
 					"at": [0.0, TILE_LOOK_Z],
 				}
 			)
@@ -566,6 +570,11 @@ static func thumbnail_job(
 		"hang_s": 120,
 		"steps": steps,
 	}
+
+
+## The factor a family's tile is framed wider by (1.0 for most).
+static func _family_zoom(entry: Dictionary) -> float:
+	return TILE_WINDMILL_ZOOM_FACTOR if String(entry.get("family", "")) == "windmill" else 1.0
 
 
 ## The camera size of a tile for a building whose longest side is `longest` and whose walls are

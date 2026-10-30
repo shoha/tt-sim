@@ -356,3 +356,59 @@ func test_the_tool_turns_a_click_into_an_edit_and_the_bar_shows_it() -> void:
 	assert_ne(_doc.structure(id).params, {} as Dictionary, "Surprise me dresses it")
 	pane.ornaments_section.clear_button.pressed.emit()
 	assert_eq(_doc.structure(id).params, {} as Dictionary, "Clear takes them off")
+
+
+# --- the placed kinds ----------------------------------------------------------------------
+
+
+func test_a_build_reports_the_kinds_it_placed_and_leaves_the_digest_alone() -> void:
+	var plain := _built(COTTAGE, {})
+	assert_eq(plain["placed_kinds"], [] as Array[String], "nothing asked, nothing placed")
+	var dressed := _built(COTTAGE, StructureOrnaments.with_kinds({}, ["ivy", "vane", "banner"]))
+	var placed: Array = dressed["placed_kinds"]
+	assert_true(placed.has("ivy") and placed.has("vane") and placed.has("banner"), str(placed))
+	assert_eq(
+		StructureGeometry.digest_of(plain),
+		StructureGeometry.digest_of(_built(COTTAGE, {})),
+		"the field is not in the digest"
+	)
+
+
+func test_the_row_mutes_a_chip_that_found_no_room_and_says_so() -> void:
+	var editor := _editor()
+	var id := _lay(editor)
+	var held := _doc.structure(id).copy()
+	held.params = StructureOrnaments.with_kinds({}, ["ivy", "sign"])
+	var section := StructureOrnamentsSection.new()
+	add_child_autofree(section)
+	section.show_for(held)
+	var plain_tip := (section.chips["sign"] as Button).tooltip_text
+	section.show_missing(["sign", "vane"])
+	var sign_chip: Button = section.chips["sign"]
+	assert_lt(sign_chip.modulate.a, 1.0, "muted")
+	assert_true(sign_chip.button_pressed, "still on, so a click takes it off")
+	assert_false(sign_chip.disabled)
+	assert_string_contains(sign_chip.tooltip_text, "No room")
+	assert_eq((section.chips["ivy"] as Button).modulate, Color.WHITE, "a placed chip is not muted")
+	assert_eq((section.chips["vane"] as Button).modulate, Color.WHITE, "not asked, not muted")
+	section.show_missing([])
+	assert_eq(sign_chip.modulate, Color.WHITE)
+	assert_eq(sign_chip.tooltip_text, plain_tip)
+
+
+func test_the_map_reports_the_requested_kinds_a_build_lacks() -> void:
+	var root := Node3D.new()
+	add_child_autofree(root)
+	var structures := AuthoredStructures.new()
+	structures.name = AuthoredStructures.NODE_NAME
+	root.add_child(structures)
+	assert_eq(
+		AuthoredStructures.missing_kinds_in(root, 4, ["ivy"]), [] as Array[String], "not built yet"
+	)
+	structures._details[4] = {"placed_kinds": ["ivy"] as Array[String]}
+	assert_eq(
+		AuthoredStructures.missing_kinds_in(root, 4, ["ivy", "sign", "sign"]),
+		["sign"] as Array[String],
+		"the one asked and not placed, once"
+	)
+	assert_eq(AuthoredStructures.missing_kinds_in(null, 4, ["ivy"]), [] as Array[String])
