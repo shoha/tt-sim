@@ -648,6 +648,35 @@ const STARTERS: Array[Dictionary] = [
 		"family": "granary",
 		"variant": "Log granary on stone staddles",
 	},
+	# Courtyards (architecture-styles card 11, courtyard_rows 2026-10-29): wings round a paved yard,
+	# from the styles' own size (default 14 by 12 m, least side 9 m, since procgen shows the plain
+	# building under 9 by 8 m). Each is `regional` (a street's lots never pick one; the Building
+	# tool does), the style's tags give `inn` and `farm`. The pin is the default rectangle
+	# (StructurePlacement.pin_plan: a row whose least side is over 4 m).
+	{
+		"id": "coaching_inn",
+		"bundle": "coaching_inn",
+		"seed": 0,
+		"name": "Coaching inn",
+		"family": "courtyard",
+		"variant": "Galleried inn round a yard",
+	},
+	{
+		"id": "siheyuan",
+		"bundle": "siheyuan",
+		"seed": 0,
+		"name": "Siheyuan",
+		"family": "courtyard",
+		"variant": "Courtyard house",
+	},
+	{
+		"id": "hof_farm",
+		"bundle": "hof_farm",
+		"seed": 0,
+		"name": "Hof farmstead",
+		"family": "courtyard",
+		"variant": "Barns round a yard",
+	},
 	# Round and polygonal plans (styles integration card, 2026-10-28): each is a regular polygon
 	# (plan kind "round", the `sides:<n>` tag), built by ProcgenRecipesRound. `round` says how:
 	# {"kind": a ProcgenRecipesRound kind, "shape": a tower's roof shape} or {"make": the options
@@ -900,11 +929,14 @@ func _make() -> Dictionary:
 	files[LibraryStructures.INDEX_FILE] = LibraryStructures.index_text(entries)
 	StructureRecipes.resolver = func(ref: String) -> Dictionary:
 		return {"text": texts[ref]} if texts.has(ref) else {}
+	var rows := {}
+	for entry: Dictionary in entries:
+		rows[String(entry["id"])] = entry
 	var pins: Array[String] = []
 	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
 	for starter in STARTERS:
 		var ref := "core:" + String(starter["id"])
-		var plan := _pin_plan_of(starter)
+		var plan := _pin_plan_of(starter, rows[String(starter["id"])] as Dictionary)
 		var parts := StructureGeometry.build_one(doc, Structure.make(1, ref, plan, PIN_SEED))
 		if String(parts["problem"]) != "":
 			warnings.append("%s: %s" % [ref, parts["problem"]])
@@ -970,11 +1002,13 @@ static func _round_spec(starter: Dictionary) -> Dictionary:
 
 
 ## The footprint the starter is pinned at: the fixed 6 by 4 m rectangle, or a round starter's own
-## regular polygon at its default radius (turn 0).
-func _pin_plan_of(starter: Dictionary) -> PackedVector2Array:
+## regular polygon at its default radius (turn 0), or for a row whose least side is 8 m or more (the
+## courtyards, which show the plain building under their 9 by 8 m minimum) its default rectangle.
+## `row` is the starter's index entry (StructurePlacement.pin_plan decides).
+func _pin_plan_of(starter: Dictionary, row: Dictionary) -> PackedVector2Array:
 	var round_spec := _round_spec(starter)
 	if round_spec.is_empty():
-		return StructurePlacement.pin_plan({})
+		return StructurePlacement.pin_plan(row)
 	return StructurePlacement.round_plan(
 		Vector2.ZERO, float(round_spec["radius"]), 0.0, int(round_spec["sides"])
 	)

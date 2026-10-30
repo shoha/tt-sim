@@ -25,6 +25,9 @@ extends RefCounted
 const ROUND_PLAN := "round"
 const SIDES_TAG := "sides:"
 const DEFAULT_SIDES := 8
+## A row whose least side is this or more is pinned at its default rectangle, not the 6 by 4 m one
+## (the other rows' least sides are at most 6.8 m; the courtyards' is 9 m).
+const PIN_DEFAULT_MIN_SIDE_M := 8.0
 
 ## Plan centres snap to this (metres), as the ghost shows.
 const SNAP_M := 0.5
@@ -97,9 +100,11 @@ static func default_plan(row: Dictionary) -> PackedVector2Array:
 
 
 ## The footprint the starters' pins are built at (tools/export_core_structures.gd): a 6 by 4 m
-## rectangle about the origin, or for a round row its default regular polygon.
+## rectangle about the origin, or for a round row its default regular polygon. A row whose least
+## side is 8 m or more (a courtyard: procgen shows the plain building under 9 by 8 m) is pinned at
+## its default rectangle, since the 6 by 4 m one would pin the fallback.
 static func pin_plan(row: Dictionary) -> PackedVector2Array:
-	if is_round(row):
+	if is_round(row) or float(row.get("min_side_m", 0.0)) >= PIN_DEFAULT_MIN_SIDE_M:
 		return default_plan(row)
 	return PackedVector2Array([Vector2(-3, -2), Vector2(3, -2), Vector2(3, 2), Vector2(-3, 2)])
 

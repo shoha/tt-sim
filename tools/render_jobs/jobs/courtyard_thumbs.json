@@ -1,0 +1,33 @@
+{
+ "out_dir": "render_jobs/courtyard_rows_thumbs",
+ "timeout_s": 300,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "wait_title"},
+  {"op": "new_map", "biome": "grassland_meadow_summer_s1", "size": 100, "seed": 1234},
+  {"op": "wait_ready", "settle": 3.0},
+  {"op": "no_autosave"},
+  {"op": "hide_ui"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/structures.gd", "action": "tile", "ref": "core:coaching_inn", "width": 14.0, "depth": 12.0, "sides": 0, "seed": 5, "yaw": 0.0},
+  {"op": "wait", "s": 1.0},
+  {"op": "thumbnail_prepare", "zoom": 27.0, "at": [0.0, 0.0]},
+  {"op": "settle"},
+  {"op": "thumbnail", "structure": true, "biome": "coaching_inn", "folder": "D:/dev/tabletop/worktrees/core-library-courtyard_rows"},
+  {"op": "capture", "name": "tile_coaching_inn", "desc": "tile coaching_inn"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/structures.gd", "action": "tile", "ref": "core:siheyuan", "width": 14.0, "depth": 12.0, "sides": 0, "seed": 5, "yaw": 0.0},
+  {"op": "wait", "s": 1.0},
+  {"op": "thumbnail_prepare", "zoom": 27.0, "at": [0.0, 0.0]},
+  {"op": "settle"},
+  {"op": "thumbnail", "structure": true, "biome": "siheyuan", "folder": "D:/dev/tabletop/worktrees/core-library-courtyard_rows"},
+  {"op": "capture", "name": "tile_siheyuan", "desc": "tile siheyuan"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/structures.gd", "action": "tile", "ref": "core:hof_farm", "width": 16.0, "depth": 14.0, "sides": 0, "seed": 5, "yaw": 0.0},
+  {"op": "wait", "s": 1.0},
+  {"op": "thumbnail_prepare", "zoom": 31.0, "at": [0.0, 0.0]},
+  {"op": "settle"},
+  {"op": "thumbnail", "structure": true, "biome": "hof_farm", "folder": "D:/dev/tabletop/worktrees/core-library-courtyard_rows"},
+  {"op": "capture", "name": "tile_hof_farm", "desc": "tile hof_farm"},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

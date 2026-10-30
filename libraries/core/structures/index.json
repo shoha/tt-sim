@@ -1823,6 +1823,117 @@
 		},
 		{
 			"default_size_m": [
+				14.0,
+				12.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"wing_depth",
+				"chimneys",
+				"wonk"
+			],
+			"family": "courtyard",
+			"file": "structures/coaching_inn.structure.json",
+			"id": "coaching_inn",
+			"max_area_m2": 330.0,
+			"max_side_m": 24.0,
+			"min_side_m": 9.0,
+			"name": "Coaching inn",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"inn",
+				"courtyard",
+				"plaster",
+				"tile",
+				"gable",
+				"gallery",
+				"gate",
+				"chimney",
+				"town",
+				"tavern",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/coaching_inn.jpg",
+			"variant": "Galleried inn round a yard"
+		},
+		{
+			"default_size_m": [
+				14.0,
+				12.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"wing_depth",
+				"wonk"
+			],
+			"family": "courtyard",
+			"file": "structures/siheyuan.structure.json",
+			"id": "siheyuan",
+			"max_area_m2": 330.0,
+			"max_side_m": 24.0,
+			"min_side_m": 9.0,
+			"name": "Siheyuan",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"courtyard",
+				"house",
+				"brick",
+				"tile",
+				"gable",
+				"gate",
+				"chinese",
+				"lattice",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/siheyuan.jpg",
+			"variant": "Courtyard house"
+		},
+		{
+			"default_size_m": [
+				16.0,
+				14.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"wing_depth",
+				"wonk"
+			],
+			"family": "courtyard",
+			"file": "structures/hof_farm.structure.json",
+			"id": "hof_farm",
+			"max_area_m2": 380.0,
+			"max_side_m": 26.0,
+			"min_side_m": 9.0,
+			"name": "Hof farmstead",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"courtyard",
+				"farm",
+				"timber",
+				"shingle",
+				"gable",
+				"barn",
+				"gate",
+				"alpine",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/hof_farm.jpg",
+			"variant": "Barns round a yard"
+		},
+		{
+			"default_size_m": [
 				7.2,
 				7.2
 			],
