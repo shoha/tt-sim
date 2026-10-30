@@ -255,6 +255,9 @@ func test_new_regional_rows_join_regions_and_a_street_never_gets_a_castle_or_bar
 		"core:stilt_house",
 		"core:lake_dwelling",
 		"core:stabbur",
+		"core:coaching_inn",
+		"core:siheyuan",
+		"core:hof_farm",
 	]:
 		assert_false(gone in everywhere, "%s is not a street's lot" % gone)
 
