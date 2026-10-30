@@ -15,6 +15,12 @@ const PANE_SHADER := preload("res://shaders/structure_pane.gdshader")
 ## and turf roofs (docs/systems/structures.md "Styles").
 const STYLE_WALL_SHADER := preload("res://shaders/structure_style_wall.gdshader")
 const STYLE_ROOF_SHADER := preload("res://shaders/structure_style_roof.gdshader")
+## The ornaments' soft and small parts (StructureOrnaments): foliage, cloth, metal, small wood.
+const ORNAMENT_SHADER := preload("res://shaders/structure_ornament.gdshader")
+## Metal is lifted toward a warm gold, cloth a little brighter so a stripe stays a colour in shade.
+const METAL_TONE := Vector3(1.25, 1.12, 0.9)
+const CLOTH_TONE := Vector3(1.1, 1.08, 1.05)
+const LEAF_TONE := Vector3(0.92, 1.18, 0.82)
 
 ## The lift toward cream a grey rock gets (saturation about the texture's luminance, then a warm
 ## bias), for masonry, and for planks (already warm, so less).
@@ -62,6 +68,8 @@ static func make(
 	kind: String, role: String, style: String, root: String, tone: String = ""
 ) -> Material:
 	var material: Material = null
+	if role == StructureLook.ORNAMENT and kind != StructureLook.GLASS_KIND:
+		return ornament(kind)
 	match kind:
 		StructureLook.GLASS_KIND:
 			return pane()
@@ -85,6 +93,25 @@ static func make(
 			var stone := _stone(style, root)
 			stone.albedo_color *= StructureLook.tint_of(role)
 			material = stone
+	return material
+
+
+## The soft and small ornament parts (StructureLook.ORNAMENT_KINDS): the vertex colour under the
+## painterly light, seen from both sides. Foliage breaks into soft blotches, metal is lifted warm.
+static func ornament(kind: String) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = ORNAMENT_SHADER
+	match kind:
+		"leaf", "leaf_b":
+			# A little more green than procgen paints, so ivy in the shade of a wall stays a leaf
+			# green instead of an olive grey (the fourth render round's look).
+			material.set_shader_parameter("tone", LEAF_TONE)
+			material.set_shader_parameter("blotch", 0.6)
+		"metal":
+			material.set_shader_parameter("tone", METAL_TONE)
+			material.set_shader_parameter("roughness_amount", 0.5)
+		"cloth":
+			material.set_shader_parameter("tone", CLOTH_TONE)
 	return material
 
 

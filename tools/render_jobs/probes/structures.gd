@@ -362,7 +362,13 @@ static func _tile(base: Node, step: Dictionary) -> String:
 			deg_to_rad(float(step.get("yaw", 0.0))),
 			sides
 		)
-	var structure := Structure.make(0, String(step.get("ref", "")), plan, int(step.get("seed", 5)))
+	# `ornaments`: kind names the Decorate row would have on (StructureOrnaments), `ivy` the amount.
+	var params := StructureOrnaments.with_kinds({}, step.get("ornaments", []))
+	if step.has("ivy"):
+		params = StructureOrnaments.with_ivy_amount(params, float(step["ivy"]))
+	var structure := Structure.make(
+		0, String(step.get("ref", "")), plan, int(step.get("seed", 5)), params
+	)
 	var id := editor.structures.add(structure)
 	var nodes := _nodes(base)
 	if nodes != null:

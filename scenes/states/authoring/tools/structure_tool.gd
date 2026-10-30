@@ -117,6 +117,27 @@ func _connect_selection(controller: AuthoringController, pane: StructureToolPane
 		func(param: String, direction: int) -> void:
 			act.call(mode.step_selected.bind(param, direction))
 	)
+	# The Decorate row: the ornaments ride in the record's params (StructureOrnaments), so one
+	# click is one set_ornaments edit, one history entry, which every peer's build follows.
+	pane.ornaments_requested.connect(
+		func(kinds: Array, label: String) -> void:
+			act.call(
+				func(e: AuthoringEditor) -> void:
+					if mode.selected_id >= 0:
+						e.structures.set_ornaments(mode.selected_id, kinds, label)
+			)
+	)
+	pane.ivy_requested.connect(
+		func(amount: float) -> void:
+			act.call(
+				func(e: AuthoringEditor) -> void:
+					var held := e.document.structure(mode.selected_id)
+					if held != null:
+						e.structures.set_ornaments(
+							held.id, StructureOrnaments.kinds_of(held.params), "Change ivy of", amount
+						)
+			)
+	)
 	pane.door_requested.connect(func() -> void: act.call(mode.door_next))
 	pane.redraw_requested.connect(
 		func() -> void:

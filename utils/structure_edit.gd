@@ -569,11 +569,13 @@ static func stepped_params(
 	return out
 
 
-## `params` without the names `interface` does not declare (the parameters a variant keeps).
+## `params` without the names `interface` does not declare (the parameters a variant keeps), but
+## with the ornaments a player added (StructureOrnaments.RESERVED), which belong to the building,
+## not to its recipe.
 static func kept_params(params: Dictionary, interface: Array) -> Dictionary:
 	var out := {}
 	for key: String in params:
-		if not param_spec(interface, key).is_empty():
+		if StructureOrnaments.RESERVED.has(key) or not param_spec(interface, key).is_empty():
 			out[key] = params[key]
 	return out
 

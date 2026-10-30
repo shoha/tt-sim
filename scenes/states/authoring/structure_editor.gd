@@ -267,6 +267,24 @@ func step_param(structure_id: int, param: String, direction: int) -> bool:
 	return edit(changed, "Change " + param.replace("_", " ") + " of " + _label(old))
 
 
+## Gives structure `structure_id` the ornaments `kinds` (StructureOrnaments; the ivy at `ivy`, or
+## its own amount when negative) as one history entry labelled `label`. They ride in the record's
+## params, so they save, undo, copy and sync like any parameter. False when nothing would change
+## or the structure is gone.
+func set_ornaments(structure_id: int, kinds: Array, label: String, ivy: float = -1.0) -> bool:
+	var old := _editor().document.structure(structure_id)
+	if old == null:
+		return false
+	var params := StructureOrnaments.with_kinds(old.params, kinds)
+	if ivy >= 0.0:
+		params = StructureOrnaments.with_ivy_amount(params, ivy)
+	if params == old.params:
+		return false
+	var changed := old.copy()
+	changed.params = params
+	return edit(changed, label + " " + _label(old))
+
+
 ## Adds a copy of structure `structure_id` beside it (the same look: recipe, seed, parameters and
 ## style), as one history entry; its id, or -1 when there is nowhere within reach or the document
 ## is full.

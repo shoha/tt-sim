@@ -721,6 +721,43 @@ drawing is `StructureSelectionView`, the edits are `StructureEditor`, and the ba
 - **Not offered yet:** a turn ring, wings (L, T, U), edge handles that insert points, the rise
   animation.
 
+## Ornaments (card ornaments_ui, 2026-10-30)
+
+A selected building's bar has a **Decorate** row (`StructureOrnamentsSection`, in the selection
+bar between the steppers and the Style tiles): nine chips for procgen's ornament kinds (Ivy,
+Corner turret, Buttresses, Rose window, Weathervane, Hanging sign, Flower boxes, Awning, Banners),
+**Surprise me** (a seeded set of two or three for the building's theme: fort, chapel, shop or home,
+from its name, family and tags; each press is another draw), **Clear**, and, while ivy is on, one
+slider for how much. A click is one history entry (`StructureEditor.set_ornaments`) and the standing
+building follows at once, like any edit.
+
+- **Storage:** no new field. Two reserved `Structure.params` entries, `ornaments` (a bit mask,
+  bit i for `StructureOrnaments.KIND_BITS[i]`: never reorder, a saved map stores the bits) and
+  `ivy_amount` (0.2 to 1.0, absent for the default 0.55), so a set saves in `structures.json`,
+  undoes, copies, restyles (`StructureEdit.kept_params` keeps the reserved names), reaches every
+  peer in the "structures" live edit and moves the build key, by the paths a stepped parameter
+  uses. `StructureRecipes.clamp_params` drops the names from the recipe's inputs.
+- **Build:** `StructureGeometry.build_one` calls `StructureOrnaments.apply(recipe, params, seed)`,
+  which adds one Ornament node per kind to that build's own copy of the recipe document
+  (`ProcgenRecipesOrnaments.apply_to_document`: ground kinds read the ground storey's Facade, top
+  kinds the top storey's, a vane the roof furniture; a kind the style already draws is skipped).
+  Sign, awning and banners take a colour from a small jewel palette drawn from the structure's
+  seed (`paint_of`, a plain integer hash, the same on every peer).
+- **Greyed chips:** a ruin (a ruin recipe), a courtyard ring and a recipe with no layout take none
+  (`problem_for`; the tooltip says why); a kind the building's style already draws shows on and
+  locked. A kind that finds no room (a rose window on a low cottage, a turret where towers stand)
+  adds nothing and its chip stays on: the build does not report it back yet.
+- **Look:** the ornament node's parts take the new role `ornament` (`StructureLook.ORNAMENT`) only
+  for the soft and small surface kinds (`leaf`, `leaf_b`, `cloth`, `metal`, `wood`, `glass`);
+  its hard parts (a turret, buttresses) are in the wall's own kind and become `wall`, so they match
+  the building. Ornament meshes keep procgen's vertex colours and draw with
+  `shaders/structure_ornament.gdshader` (painterly light, both sides; `StructureMaterials.ornament`
+  tints leaf green, cloth bright and metal warm gold). `StructurePaint` leaves their colour alone.
+- **Tests and render:** `tests/unit/test_structure_ornaments.gd`; render jobs `ornaments_ui_look`
+  (cottage, townhouse, keep, chapel before and after) and `ornaments_ui_bar` (the bar and the
+  live preview through the real pane); the probe's `tile` action takes `ornaments` and `ivy`, the
+  select probe's `bar` presses `ornament` and `surprise`.
+
 ## Splitting a street
 
 Card S8 (2026-10-28): `Wall.Kind.BUILDING` is deleted (see [walls.md](walls.md) "Buildings: the kind
