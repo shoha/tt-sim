@@ -114,6 +114,13 @@ static func palette_of(seed_value: int, id: int, hints: Dictionary = {}) -> Dict
 			)
 			. srgb_to_linear()
 		)
+	# One accent per building, drawn from the style's list; never lifted or dulled, so a bright trim
+	# stays bright. No list: the timber fallback (the contract says wood, then stone).
+	var accents: Array = hints.get("accent", [])
+	var accent: Color = StructureLook.ACCENT_FALLBACK
+	if not accents.is_empty():
+		accent = accents[mix(h, 53) % accents.size()]
+	palette["accent"] = accent.srgb_to_linear()
 	return palette
 
 
@@ -142,7 +149,7 @@ static func paint(meshes: Array, group_of_tag: PackedInt32Array, palettes: Array
 		var vertices: PackedVector3Array = mesh.arrays[Mesh.ARRAY_VERTEX]
 		var source: PackedColorArray = mesh.arrays[Mesh.ARRAY_COLOR]
 		var tags: PackedInt32Array = mesh.tags
-		var roof: bool = mesh.role == StructureLook.ROOF
+		var roof := _is_roof(mesh)
 		for v in vertices.size():
 			var g := _group(group_of_tag, tags, v, palettes.size())
 			var y := vertices[v].y
@@ -160,14 +167,27 @@ static func paint(meshes: Array, group_of_tag: PackedInt32Array, palettes: Array
 		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 		var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
 		var tags: PackedInt32Array = mesh.tags
-		var roof: bool = mesh.role == StructureLook.ROOF
+		var roof := _is_roof(mesh)
+		var accent: bool = mesh.kind == StructureLook.ACCENT_KIND
 		var out := PackedColorArray()
 		out.resize(vertices.size())
 		for v in vertices.size():
 			var g := _group(group_of_tag, tags, v, palettes.size())
 			var palette: Dictionary = palettes[g]
 			var c: Color = colors[v] if v < colors.size() else Color.WHITE
-			if roof:
+			if accent:
+				# The accent tone (palette_accent) under the piece's grey brightness shade, drawn
+				# by the plaster material whatever the piece's role; height alpha as a wall's.
+				var shade := c.r
+				var metres_up := vertices[v].y - (foot[g] if foot[g] < INF else 0.0)
+				var a: Color = palette.accent
+				out[v] = Color(
+					minf(a.r * shade, 1.0),
+					minf(a.g * shade, 1.0),
+					minf(a.b * shade, 1.0),
+					clampf(metres_up / WALL_ALPHA_SPAN_M, 0.0, 1.0)
+				)
+			elif roof:
 				var span := maxf(roof_high[g] - roof_low[g], 0.1)
 				var tone := c.r / ROOF_REFERENCE_TONE
 				var tile: Color = palette.roof
@@ -232,6 +252,12 @@ static func _mossed(c: Color, moss: float) -> Color:
 	var luma := c.r * 0.299 + c.g * 0.587 + c.b * 0.114
 	var green := Color(0.5 * luma * 1.2, 1.15 * luma * 1.2, 0.34 * luma * 1.2, c.a)
 	return c.lerp(green, clampf(moss * MOSS_BAKE, 0.0, 1.0))
+
+
+## A mesh drawn with the roof shader's eave-to-ridge grade: a roof role, except accent pieces (a
+## sign's rim or a dome with `roof_role: trim`), which are drawn as walls.
+static func _is_roof(mesh: Dictionary) -> bool:
+	return mesh.role == StructureLook.ROOF and mesh.kind != StructureLook.ACCENT_KIND
 
 
 static func _paints(mesh: Dictionary) -> bool:

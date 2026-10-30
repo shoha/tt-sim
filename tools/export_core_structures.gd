@@ -615,7 +615,8 @@ const STARTERS: Array[Dictionary] = [
 		"tags_add": ["french"],
 		"style_patch":
 		{
-			"dormers": {"form": [["gable", 1]], "side": "front", "width": [0.9, 1.2]},
+			# A wide, tall dormer (width 1.5, wall 1.2 m): the 1.08 m default read as a slit.
+			"dormers": {"form": [["gable", 1]], "side": "front", "width": 1.5, "wall_height": 1.2},
 			# Warm creams: the shaded face of a pale grey plaster reads mauve (as the framed houses').
 			"palette": {"wall": ["#EEDDB4", "#E9D4A6", "#F0E2BC"]},
 		},
@@ -676,6 +677,77 @@ const STARTERS: Array[Dictionary] = [
 		"name": "Hof farmstead",
 		"family": "courtyard",
 		"variant": "Barns round a yard",
+	},
+	# The bright toon town (topic toon_look, 2026-10-30; procgen docs/toon_styles.md): eight
+	# styles, each `regional` (a street's lots never pick one; the Building tool does). The lab
+	# and the lighthouse are round styles: `_round_style_spec` reads their polygon from
+	# ProcgenRecipesToon.footprint, so they are listed with the plan kind "round" and `sides`.
+	{
+		"id": "toon_clinic",
+		"bundle": "toon_clinic",
+		"seed": 0,
+		"name": "Toon clinic",
+		"family": "toon",
+		"variant": "Coral hip roof, round sign",
+	},
+	{
+		"id": "toon_shop",
+		"bundle": "toon_shop",
+		"seed": 0,
+		"name": "Toon shop",
+		"family": "toon",
+		"variant": "Blue gable, board sign",
+	},
+	{
+		"id": "toon_gym",
+		"bundle": "toon_gym",
+		"seed": 0,
+		"name": "Toon gym",
+		"family": "toon",
+		"variant": "Wide orange hip, dome cap",
+	},
+	{
+		"id": "toon_lab",
+		"bundle": "toon_lab",
+		"seed": 0,
+		"name": "Toon laboratory",
+		"family": "toon",
+		"variant": "Round, dome roof",
+	},
+	{
+		"id": "toon_cafe",
+		"bundle": "toon_cafe",
+		"seed": 0,
+		"name": "Toon cafe",
+		"family": "toon",
+		"variant": "Half-hip, veranda, disc sign",
+	},
+	{
+		"id": "toon_cottage",
+		"bundle": "toon_cottage",
+		"seed": 0,
+		"name": "Toon cottage",
+		"family": "toon",
+		"variant": "Steep red gable, porch",
+	},
+	{
+		"id": "toon_lighthouse",
+		"bundle": "toon_lighthouse",
+		"seed": 0,
+		"name": "Toon lighthouse",
+		"family": "toon",
+		"variant": "Round, striped, lantern",
+	},
+	{
+		"id": "toon_hall",
+		"bundle": "toon_hall",
+		"seed": 0,
+		# The style's size has min_side 7 under its 10 by 6 default, which the index reader refuses
+		# (default_size_m must fit the sides): the row takes 6.
+		"min_side_m": 6.0,
+		"name": "Toon town hall",
+		"family": "toon",
+		"variant": "Hip roof, corner dome tower",
 	},
 	# Round and polygonal plans (styles integration card, 2026-10-28): each is a regular polygon
 	# (plan kind "round", the index entry's `sides` key), built by ProcgenRecipesRound. `round` says how:
@@ -993,7 +1065,7 @@ func _document_of(spec: Dictionary) -> PlantGraphDocument:
 ## kind's ProcgenRecipesRound.info with the starter's own keys over it; {} for any other starter.
 static func _round_spec(starter: Dictionary) -> Dictionary:
 	if not starter.has("round"):
-		return {}
+		return _round_style_spec(starter)
 	var spec: Dictionary = starter["round"]
 	var info: Dictionary = ProcgenRecipesRound.info(String(spec.get("kind", "")))
 	var out := {
@@ -1003,6 +1075,26 @@ static func _round_spec(starter: Dictionary) -> Dictionary:
 		"radius_max": float(spec.get("radius_max", info.get("radius_max", 5.0))),
 	}
 	return out
+
+
+## The round spec of a starter whose building STYLE has a `round` key (the toon lab and lighthouse):
+## the corner count is that of ProcgenRecipesToon.footprint(style), the radius the style's own, and
+## the limits half its size range. {} for any other starter.
+static func _round_style_spec(starter: Dictionary) -> Dictionary:
+	if not starter.has("bundle"):
+		return {}
+	var style := ProcgenBuildingStyles.named(String(starter["bundle"]))
+	var polygon := ProcgenRecipesToon.footprint(style)
+	if polygon.is_empty():
+		return {}
+	var size: Dictionary = style.get("size", {})
+	var radius: float = float((style["round"] as Dictionary).get("radius", 3.0))
+	return {
+		"sides": polygon.size(),
+		"radius": radius,
+		"radius_min": float(size.get("min_side", 2.0 * radius * 0.6)) * 0.5,
+		"radius_max": float(size.get("max_side", 2.0 * radius * 1.6)) * 0.5,
+	}
 
 
 ## The footprint the starter is pinned at: the fixed 6 by 4 m rectangle, or a round starter's own
@@ -1056,9 +1148,10 @@ static func _tags_of(starter: Dictionary, style: Dictionary) -> Array:
 	var round_spec := _round_spec(starter)
 	if not round_spec.is_empty():
 		# A round plan is never a street's lot (its lots are rectangles) and belongs to a region.
-		var tags: Array = (starter.get("tags", []) as Array).duplicate()
-		tags.append(StructurePlacement.ROUND_PLAN)
-		tags.append(StreetSplit.REGIONAL_TAG)
+		var tags: Array = (starter.get("tags", style.get("tags", [])) as Array).duplicate()
+		for extra: String in [StructurePlacement.ROUND_PLAN, StreetSplit.REGIONAL_TAG]:
+			if not extra in tags:
+				tags.append(extra)
 		return tags
 	if starter.has("tags"):
 		return starter["tags"]

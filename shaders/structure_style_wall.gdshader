@@ -57,11 +57,14 @@ void fragment() {
 			m *= 1.0 + (layer - 0.5) * 0.14;
 			m *= mix(1.0, 1.07, smoothstep(2.0, 5.0, metres));
 			m *= 1.0 + (mottle - 0.5) * 0.28;
-			// A mud roof: darker packed earth in broad patches, dry and dusty.
+			// A mud roof: slightly darker packed earth in broad patches, dry and dusty. Every
+			// up-facing face takes it, a thin parapet cap included, so it is a gentle tone and
+			// never a dark one (the old 0.84, 0.76, 0.66 made a parapet's rim read as a dark
+			// line, toon_look 2026-10-30).
 			float top = smoothstep(0.6, 0.9, n.y);
 			float packed = s_noise(s_pos * 1.3 + 31.0);
-			col *= mix(vec3(1.0), vec3(0.84, 0.76, 0.66), top);
-			m *= 1.0 + (packed - 0.5) * 0.45 * top;
+			col *= mix(vec3(1.0), vec3(0.95, 0.91, 0.86), top);
+			m *= 1.0 + (packed - 0.5) * 0.24 * top;
 		}
 		// Lime wash lost at the foot, showing the warmer coat under it in a few soft patches.
 		float lost = s_noise(s_pos * 1.7 + 23.0);

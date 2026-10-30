@@ -2037,6 +2037,13 @@ NOT exported as GLBs: a structure is a recipe plus inputs that every peer rebuil
   node (a plaster gable end) is a wall. A style's colour hints are three string params of the Output
   node, `palette_wall`, `palette_roof`, `palette_accent` (comma separated hex), which tt-sim bakes
   into vertex colours (`StructurePaint`); a host that knows neither falls back to the nearest old kind.
+  The toon styles add the surface kind `trim` (the accent tone, from `palette_accent`: eave and floor
+  bands, door frames, porch posts, sign rims, domes with `roof_role: trim`; whatever its node role it
+  is drawn as a wall in the accent colour, falling back to wood, then stone) and the Roof Cap node
+  (`roof_cap`, pieces tagged `cap/...`: `cap/dome` and `cap/cone` are roof, `cap/inner` wall,
+  `cap/glass` an opening, the rest trim). A palette list is kept whole in the recipe and each lot
+  draws one tone of it by its seed; toon colours are never desaturated (docs/systems/structures.md
+  "Toon styles").
 - **Library (built, card S3).** `structures/index.json` (format `ttsim-structures` 1),
   `structures/<id>.structure.json`, `thumbnails/structures/<id>.jpg`; core adds `structures/pins.txt`
   (`<id> <pipeline md5> <triangles> <procgen md5>` per structure at 6 x 4 m, seed 5, flat ground,
