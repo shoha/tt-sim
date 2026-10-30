@@ -37,6 +37,9 @@ extends BrushMode
 
 ## The selection changed: the selected structure's id, or -1 for none.
 signal selection_changed(structure_id: int)
+## A gesture was done: its id in StructureHints (&"click", &"drag", &"turn", &"again", &"remove",
+## &"edit", &"copy", &"esc"). The hint bar fades the key of one the player has done once.
+signal gesture_done(id: StringName)
 
 const YAW_STEP := deg_to_rad(15.0)
 ## A handle is picked within this many pixels of its dot, and a press that moves the pointer less
@@ -74,7 +77,7 @@ const FADE_M := 2.5
 ## Plain-words reasons a lot cannot be laid.
 const WATER_TEXT := "Not on the water. Move onto dry ground."
 const STEEP_TEXT := "That ground is too steep to build on."
-const OFF_MAP_TEXT := "Keep the building on the map."
+const OFF_MAP_TEXT :="Keep the building on the map."
 const OCCUPIED_TEXT := "There is a building here already."
 const FULL_TEXT := "The map holds as many buildings as it can. Remove one to make room."
 const UNKNOWN_TEXT := "That building is not in a library this map has."
@@ -110,6 +113,9 @@ var ghost_centre: Vector2 = Vector2.INF
 var target_centre: Vector2 = Vector2.INF
 var eased: bool = false
 var problem: String = ""
+## The note drawn beside the readout, {"text", "level"} (StructureNote.live, worked out again only
+## when one of its inputs changes).
+var note: Dictionary = {}
 ## The size of the lot the ghost shows (map metres) and its plan.
 var ghost_size: Vector2 = Vector2.ZERO
 ## The structure under the pointer (its id), or -1.
@@ -125,6 +131,11 @@ var hover_handle: Dictionary = {}
 ## pointer, map XZ), "dragged" (it left the click's reach).
 var edit: Dictionary = {}
 
+## What the pointer's own spot fails on when the ghost eased away from it (StructurePlacement's
+## "why"), the size asked for before the recipe's range held it, and what the note was made from.
+var _why: String = ""
+var _asked: Vector2 = Vector2.ZERO
+var _note_key: Array = []
 var _bar_key: Variant = null
 var _single: bool = false
 var _pick_radius_m: float = PICK_FALLBACK_M
@@ -242,6 +253,16 @@ func default_size(editor: AuthoringEditor) -> Vector2:
 	return StructurePlacement.clamp_size(StructurePlacement.default_size(sized) * size_scale, sized)
 
 
+## The size a click asks for before the recipe's range holds it: the recipe's default times
+## `size_scale` (map metres). The ghost's note says when the range held it.
+func _asked_size(editor: AuthoringEditor) -> Vector2:
+	var found := row()
+	if found.is_empty():
+		return Vector2.ZERO
+	var sized := scaled_row(found, editor.map_scale())
+	return StructurePlacement.default_size(sized) * size_scale
+
+
 ## The ghost lot's footprint now (map XZ), or empty with no ghost.
 func ghost_plan() -> PackedVector2Array:
 	if ghost_centre == Vector2.INF or ghost_size == Vector2.ZERO:
@@ -302,6 +323,7 @@ func track(editor: AuthoringEditor, hit: Vector3, delta: float) -> void:
 	if hit == Vector3.INF or row().is_empty():
 		return
 	ghost_size = default_size(editor)
+	_asked = _asked_size(editor)
 	var want := editor.to_map_xz(hit)
 	var sides := StructurePlacement.sides_of(row())
 	var key := [StructurePlacement.snapped_centre(want), ghost_size, yaw, _signature(editor), sides]
@@ -312,6 +334,7 @@ func track(editor: AuthoringEditor, hit: Vector3, delta: float) -> void:
 	target_centre = found["centre"]
 	eased = bool(found["moved"])
 	problem = String(found["problem"])
+	_why = String(found["why"])
 	_ease(delta)
 
 
@@ -351,12 +374,17 @@ func _plan(editor: AuthoringEditor) -> void:
 	var size := default_size(editor)
 	var centre := a
 	var sides := StructurePlacement.sides_of(found)
+	_asked = _asked_size(editor)
 	if a.distance_to(b) * scale >= DRAG_MIN_M:
 		if sides > 0:
 			# A round lot is drawn from its middle: the press is the centre, the pointer the rim.
 			var diameter := a.distance_to(b) * 2.0
-			size = StructurePlacement.clamp_size(Vector2(diameter, diameter), sized)
+			_asked = Vector2(diameter, diameter)
+			size = StructurePlacement.clamp_size(_asked, sized)
 		else:
+			var along := Vector2(cos(yaw), sin(yaw))
+			var across := Vector2(-along.y, along.x)
+			_asked = Vector2(absf((b - a).dot(along)), absf((b - a).dot(across)))
 			var corners := StructurePlacement.corner_plan(a, b, yaw, sized)
 			size = corners["size"]
 			centre = corners["centre"]
@@ -365,6 +393,7 @@ func _plan(editor: AuthoringEditor) -> void:
 	target_centre = spot["centre"]
 	eased = bool(spot["moved"])
 	problem = String(spot["problem"])
+	_why = String(spot["why"])
 	if problem != "":
 		refusal = problem
 		return
@@ -387,6 +416,7 @@ func finish(editor: AuthoringEditor) -> int:
 		if placed >= 0:
 			seed_value = StructureEditor.next_seed(seed_value)
 			_wanted = {}
+			gesture_done.emit(&"drag" if from.distance_to(to) >= DRAG_MIN_M else &"click")
 		else:
 			refusal = String(editor.structures.last_refusal)
 	if placed < 0:
@@ -407,6 +437,7 @@ func erase_at(editor: AuthoringEditor, hit: Vector3, body: int = -1) -> bool:
 	_wanted = {}
 	if found == selected_id:
 		deselect()
+	gesture_done.emit(&"remove")
 	return true
 
 
@@ -570,6 +601,8 @@ func finish_edit(editor: AuthoringEditor) -> bool:
 	if not committed and _shown_plan != before.footprint:
 		editor.structures.apply_list(before_list, Rect2())
 	_shown_plan = PackedVector2Array()
+	if committed:
+		gesture_done.emit(&"edit")
 	return committed
 
 
@@ -605,6 +638,7 @@ func duplicate_selected(editor: AuthoringEditor) -> bool:
 	if copy < 0:
 		return false
 	select(copy)
+	gesture_done.emit(&"copy")
 	return true
 
 
@@ -612,6 +646,7 @@ func delete_selected(editor: AuthoringEditor) -> bool:
 	if selected_id < 0 or not editor.structures.remove(selected_id):
 		return false
 	deselect()
+	gesture_done.emit(&"remove")
 	return true
 
 
@@ -633,10 +668,12 @@ func turn(steps: int) -> void:
 	yaw = wrapf(yaw + steps * YAW_STEP, 0.0, TAU)
 	_planned_to = Vector3.INF
 	_wanted = {}
+	gesture_done.emit(&"turn")
 
 
 ## Draws the next lot afresh, or re-rolls the structure under world point `hit` (-1 for none).
 func reroll_at(editor: AuthoringEditor, under: int) -> void:
+	gesture_done.emit(&"again")
 	if under >= 0 and editor != null:
 		editor.structures.reroll(under)
 		return
@@ -727,6 +764,8 @@ func cancel(brush: BrushTool) -> void:
 	elif drawing:
 		reset()
 	else:
+		if selected_id >= 0:
+			gesture_done.emit(&"esc")
 		deselect()
 
 
@@ -763,8 +802,11 @@ func rotates() -> bool:
 ## lot does.
 func rotate(brush: BrushTool, steps: int) -> void:
 	if selected_id >= 0 and brush.editor != null:
-		if edit.is_empty() and not brush.editor.structures.turn(selected_id, steps * YAW_STEP):
-			brush.refused.emit(NO_TURN_TEXT)
+		if edit.is_empty():
+			if brush.editor.structures.turn(selected_id, steps * YAW_STEP):
+				gesture_done.emit(&"turn")
+			else:
+				brush.refused.emit(NO_TURN_TEXT)
 	else:
 		turn(steps)
 	brush.redraw()
@@ -843,7 +885,7 @@ func draw(
 		if hovered != null:
 			var strength := 1.0 if erasing else 0.45
 			var tint := WallBrush.ERASE_TINT if erasing else WallBrush.STONE_TINT
-			draw_plan(canvas, camera, editor, hovered.footprint, 0.0, tint, strength)
+			StructurePlanView.draw_plan(canvas, camera, editor, hovered.footprint, 0.0, tint, strength)
 			if erasing:
 				BridgeBrush.draw_pill(
 					canvas,
@@ -868,23 +910,40 @@ func draw(
 	if plan.is_empty():
 		return
 	var ok := problem == "" and (not drawing or preview != null)
-	var tint := WallBrush.STONE_TINT if ok else WallBrush.REFUSED_COLOR
+	_refresh_note(scale, units, ok)
+	var level: int = note["level"]
+	var tint := StructureNote.ghost_tint(level)
 	var high := height_of(ref) / scale
-	draw_plan(canvas, camera, editor, plan, high, tint, 1.0 if drawing else 0.8)
+	StructurePlanView.draw_plan(canvas, camera, editor, plan, high, tint, 1.0 if drawing else 0.8)
 	if drawing:
 		for corner in [from, to]:
 			BridgeBrush.draw_marker(canvas, camera, corner, tint)
 	var ground := WaterGeometry.ground_at(editor.document, ghost_centre)
 	var anchor := editor.to_world(Vector3(ghost_centre.x, ground, ghost_centre.y))
-	var text := refusal_text(refusal if drawing else problem)
-	if ok:
-		text = readout(title(), ghost_size.x * scale, ghost_size.y * scale, cell_m, per_cell, label)
-	BridgeBrush.draw_pill(
-		canvas,
-		camera.unproject_position(anchor),
-		text,
-		WallBrush.READOUT_COLOR if ok else WallBrush.REFUSED_COLOR
+	var at := camera.unproject_position(anchor)
+	var text := readout(title(), ghost_size.x * scale, ghost_size.y * scale, cell_m, per_cell, label)
+	# The name and size always; a note (amber) or the reason a lot cannot stand (red) beneath.
+	var lines: Array[Dictionary] = [{"text": text, "color": WallBrush.READOUT_COLOR}]
+	if level != StructureNote.Level.NONE:
+		lines.append({"text": note["text"], "color": StructureNote.colour(level)})
+	StructurePlanView.draw_pills(canvas, at, lines)
+
+
+## Works the ghost's note out again when something it reads changed (the spot's problem, what the
+## lot was moved off, the size asked and given, the units, a lot being sized and why the editor
+## refused it): the per-frame draw only reads the cached note.
+func _refresh_note(scale: float, units: Array, ok: bool) -> void:
+	var stop := refusal if drawing else problem
+	if not ok and stop == "":
+		stop = refusal if refusal != "" else String(StructureEditor.REFUSED_INVALID)
+	var key := [stop, _why, eased, _asked, ghost_size, scale, units, ok]
+	if key == _note_key:
+		return
+	_note_key = key
+	var clamp := StructureNote.clamp_text(
+		_asked * scale, ghost_size * scale, float(units[0]), float(units[1]), String(units[2])
 	)
+	note = StructureNote.live(stop if not ok else "", _why, eased, clamp)
 
 
 ## The recipe's default wall height in metres (cached per structure).
@@ -898,76 +957,3 @@ func height_of(structure_ref: String) -> float:
 					height = float(item.get("default", height))
 		_heights[structure_ref] = height
 	return _heights[structure_ref]
-
-
-## A footprint (map XZ) on `canvas`: its outline on the ground, faintly filled, a ring `height`
-## (document metres) above it joined by a pole at each corner, and the door marked on its front
-## edge (edge 0: a bar the door width and a tick out from it). Every point sits on the
-## document's ground.
-static func draw_plan(
-	canvas: Control,
-	camera: Camera3D,
-	editor: AuthoringEditor,
-	plan: PackedVector2Array,
-	height: float,
-	tint: Color,
-	strength: float
-) -> void:
-	var count := plan.size()
-	if count < 3:
-		return
-	var doc := editor.document
-	var screen := func(p: Vector2, lift: float) -> Vector2:
-		var y := WaterGeometry.ground_at(doc, p) + lift
-		return camera.unproject_position(editor.to_world(Vector3(p.x, y, p.y)))
-	var base := PackedVector2Array()
-	var top := PackedVector2Array()
-	var corners := PackedVector2Array()
-	for k in count:
-		var a := plan[k]
-		var b := plan[(k + 1) % count]
-		var pieces := maxi(1, ceili(a.distance_to(b) / LINE_STEP_M))
-		corners.append(screen.call(a, 0.04))
-		for s in pieces:
-			var xz := a.lerp(b, float(s) / pieces)
-			base.append(screen.call(xz, 0.04))
-			top.append(screen.call(xz, height))
-	base.append(base[0])
-	top.append(top[0])
-	var fill := Geometry2D.triangulate_polygon(plan)
-	if not fill.is_empty():
-		var vertices := PackedVector2Array()
-		for p in plan:
-			vertices.append(screen.call(p, 0.04))
-		var colors := PackedColorArray()
-		colors.resize(vertices.size())
-		colors.fill(faded(tint, FOOTPRINT_ALPHA * strength))
-		RenderingServer.canvas_item_add_triangle_array(
-			canvas.get_canvas_item(), fill, vertices, colors
-		)
-	if height > 0.0:
-		for k in count:
-			var pole_base: Vector2 = screen.call(plan[k], 0.04)
-			var pole_top: Vector2 = screen.call(plan[k], height)
-			canvas.draw_line(pole_base, pole_top, faded(tint, 0.3 * strength), 1.0, true)
-		canvas.draw_polyline(top, faded(WallBrush.SHADOW, 0.6 * strength), 3.0, true)
-		canvas.draw_polyline(top, faded(tint, 0.7 * strength), 1.5, true)
-	canvas.draw_polyline(base, faded(WallBrush.SHADOW, 0.6 * strength), 3.5, true)
-	canvas.draw_polyline(base, faded(tint, 0.95 * strength), 1.75, true)
-	for p in corners:
-		canvas.draw_circle(p, 4.5, faded(WallBrush.SHADOW, 0.7 * strength))
-		canvas.draw_circle(p, 3.0, faded(tint, strength))
-	var scale := editor.map_scale()
-	var door := DOOR_MARK_M / scale
-	var middle := ProcgenPlan.edge_middle(plan, 0)
-	var along := (ProcgenPlan.edge_end(plan, 0) - ProcgenPlan.edge_start(plan, 0)).normalized()
-	var out := ProcgenPlan.outward(plan, 0)
-	var left: Vector2 = screen.call(middle - along * door * 0.5, 0.05)
-	var right: Vector2 = screen.call(middle + along * door * 0.5, 0.05)
-	var step: Vector2 = screen.call(middle + out * door * 0.6, 0.05)
-	var centre: Vector2 = screen.call(middle, 0.05)
-	var white := faded(Color.WHITE, strength)
-	canvas.draw_line(left, right, faded(WallBrush.SHADOW, 0.8 * strength), 7.0, true)
-	canvas.draw_line(left, right, white, 4.0, true)
-	canvas.draw_line(centre, step, faded(WallBrush.SHADOW, 0.8 * strength), 5.0, true)
-	canvas.draw_line(centre, step, white, 2.5, true)

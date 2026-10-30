@@ -761,12 +761,22 @@ func _select_tool(tool_id: StringName) -> void:
 	tool.prepare(self)
 	brush.activate()
 	panel.set_active_tool(tool_id)
+	refresh_tool_hints()
 
 
 ## Tints the rail item of the tool whose brush is active.
 func _on_brush_toggled(active: bool) -> void:
 	var tool := brush.tool if active else null
 	panel.set_active_tool(tool.id if tool != null else &"")
+	refresh_tool_hints()
+
+
+## Lays the active tool's own keys on the hint bar (ToolDescriptor.key_hints), or clears the
+## layer while no brush is down. A tool calls it again when its rows change (a gesture done once
+## fades its key).
+func refresh_tool_hints() -> void:
+	var active := brush != null and brush.is_active() and brush.tool != null
+	UIManager.set_tool_hints(brush.tool.key_hints(brush) if active else [])
 
 
 ## The cursor tint of a biome: its thumbnail's mean colour, lifted toward white so the ring

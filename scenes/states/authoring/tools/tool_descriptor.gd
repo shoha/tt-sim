@@ -138,3 +138,10 @@ func build_pane(_panel: AuthoringPanel) -> Control:
 ## reach the controller through AuthoringPanel's signals instead).
 func connect_pane(_controller: AuthoringController, _pane: Control) -> void:
 	pass
+
+
+## The keys the hint bar shows while the tool's brush is down, each {"key", "action"} (the
+## bar's key caps, InputHints.set_tool_hints) for `brush`, whose mode may hold a selection.
+## Default: none, the bar keeps the base keys.
+func key_hints(_brush: BrushTool) -> Array:
+	return []
