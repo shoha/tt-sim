@@ -235,6 +235,8 @@ func test_new_regional_rows_join_regions_and_a_street_never_gets_a_castle_or_bar
 		["english"] as Array[String],
 		["dutch"] as Array[String],
 		["english", "dutch"] as Array[String],
+		["nordic", "alpine"] as Array[String],
+		["desert", "mediterranean"] as Array[String],
 	]:
 		for row in StreetSplit.candidates(region):
 			everywhere.append(String(row["ref"]))
@@ -250,6 +252,9 @@ func test_new_regional_rows_join_regions_and_a_street_never_gets_a_castle_or_bar
 		"core:mansard_townhouse",
 		"core:market_hall",
 		"core:saltbox_house",
+		"core:stilt_house",
+		"core:lake_dwelling",
+		"core:stabbur",
 	]:
 		assert_false(gone in everywhere, "%s is not a street's lot" % gone)
 

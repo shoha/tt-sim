@@ -463,6 +463,27 @@ footprint default is 9 by 5 m; at the 6 by 4 m pin it still builds (two floors, 
 Render jobs `structures_gallery` (the row, one close-up each) and `gallery_thumbs` (tiles at yaw 180
 so the feature faces the camera).
 
+### Styles 10: houses on stilts (2026-10-29, branch `stilts`)
+
+Three more core structures (61 in all) from procgen's Stilts node (architecture-styles card 10):
+`stilt_house` (the `stilt_house` style, posts with cross or diagonal bracing, a veranda deck and a
+stair) 1690 triangles at the 6 by 4 m pin, `lake_dwelling` (reed thatch, a panel-railed deck)
+2100, and `stabbur` (a Nordic log granary on stone staddles under a turf roof, a short stair)
+1210; on a 0.25 slope they grow to 1726, 2148 and 1258 (the piles are cut to the ground under each
+corner and sink 0.3 m below it, so none hangs). All three are `regional` and none carries a region
+tag a street asks for (the styles' tags are `tropical`, `lake` and `nordic`; the stabbur is also
+`farm`), so a street split never picks one and the Building tool is where they are placed. The
+look fix: `StructureLook` gives the `stilts` node type the `frame` role (slab, bearers, piles,
+braces, stair, ladder and deck keep procgen's timber tone) and `role_of_slot` reads the part after
+`stilt/`: `pad` (a footing under a post) and `cap` (a staddle's cap) are `trim`. A staddle's shaft
+is a `pile` and keeps its stone kind, drawn as stone. The `family` of the stabbur is `granary`, so
+it is not offered as a variant of a house. The magenta flecks the procgen contact sheet shows on
+the thatch and turf roofs are ProcgenSketch's backface mark, not a fault: every triangle of the
+three built structures has a winding that agrees with its vertex normals (probed on the final
+meshes), no vertex colour is magenta, and the real shaders show none from any of four yaws.
+Render jobs `structures_stilts` (row and close-ups), `structures_stilts_yaws` (the same three at
+yaw 90, 180 and 270) and `stilts_thumbs` (tiles at yaw 180, which shows the stair).
+
 ## Dressing
 
 Probe B (2026-10-28, branch `probe-b`): a building is settled into its place by a yard,

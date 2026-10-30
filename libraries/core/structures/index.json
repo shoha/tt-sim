@@ -1708,6 +1708,121 @@
 		},
 		{
 			"default_size_m": [
+				5.0,
+				4.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"ridge",
+				"wonk"
+			],
+			"family": "stilt_house",
+			"file": "structures/stilt_house.structure.json",
+			"id": "stilt_house",
+			"max_area_m2": 40.0,
+			"max_side_m": 8.0,
+			"min_side_m": 3.0,
+			"name": "Stilt house",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stilts",
+				"raised",
+				"timber",
+				"boards",
+				"thatch",
+				"gable",
+				"veranda",
+				"tropical",
+				"village",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/stilt_house.jpg",
+			"variant": "Raised on posts, veranda deck"
+		},
+		{
+			"default_size_m": [
+				7.0,
+				4.0
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"ridge",
+				"wonk",
+				"fringe"
+			],
+			"family": "stilt_house",
+			"file": "structures/lake_dwelling.structure.json",
+			"id": "lake_dwelling",
+			"max_area_m2": 60.0,
+			"max_side_m": 12.0,
+			"min_side_m": 4.0,
+			"name": "Lake dwelling",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"stilts",
+				"raised",
+				"timber",
+				"boards",
+				"thatch",
+				"reed",
+				"gable",
+				"deck",
+				"lake",
+				"water",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/lake_dwelling.jpg",
+			"variant": "Reed thatch over the water"
+		},
+		{
+			"default_size_m": [
+				4.0,
+				3.2
+			],
+			"expose": [
+				"height",
+				"roof_pitch",
+				"ridge",
+				"wonk"
+			],
+			"family": "granary",
+			"file": "structures/stabbur.structure.json",
+			"id": "stabbur",
+			"max_area_m2": 24.0,
+			"max_side_m": 6.0,
+			"min_side_m": 2.8,
+			"name": "Stabbur granary",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"granary",
+				"storehouse",
+				"stilts",
+				"staddle",
+				"log",
+				"turf",
+				"gable",
+				"nordic",
+				"farm",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/stabbur.jpg",
+			"variant": "Log granary on stone staddles"
+		},
+		{
+			"default_size_m": [
 				7.2,
 				7.2
 			],

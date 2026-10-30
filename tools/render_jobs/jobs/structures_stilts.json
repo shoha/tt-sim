@@ -1,0 +1,48 @@
+{
+ "out_dir": "render_jobs/structures_stilts",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "grassland_meadow_summer_s1", "size": 320, "seed": 1234},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "styles3",
+   "lots": [
+    ["core:stilt_house", -14.0, 0.0, 6.0, 4.0, 0.0, 401],
+    ["core:lake_dwelling", 0.0, 0.0, 7.0, 4.0, 0.0, 402],
+    ["core:stabbur", 12.0, 0.0, 4.0, 3.2, 0.0, 403],
+    ["core:thatched_cottage", 24.0, 0.0, 6.0, 4.0, 0.0, 404]
+   ]
+  },
+  {"op": "call", "script": "res://tools/render_jobs/probes/structures.gd", "action": "report"},
+  {"op": "wait", "s": 4.0},
+  {"op": "zoom", "size": 44.0},
+  {"op": "settle", "timeout": 12},
+  {"op": "look_at", "at": [5, 0]},
+  {"op": "wait", "s": 1.2},
+  {"op": "capture", "name": "01_row", "desc": "Stilt house, lake dwelling, stabbur and a thatched cottage for comparison"},
+  {"op": "zoom", "size": 11.0},
+  {"op": "settle", "timeout": 12},
+  {"op": "look_at", "at": [-14, 0]},
+  {"op": "wait", "s": 1.2},
+  {"op": "capture", "name": "02_stilt_house", "desc": "Stilt house"},
+  {"op": "zoom", "size": 12.0},
+  {"op": "settle", "timeout": 12},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "wait", "s": 1.2},
+  {"op": "capture", "name": "03_lake_dwelling", "desc": "Lake dwelling"},
+  {"op": "zoom", "size": 9.0},
+  {"op": "settle", "timeout": 12},
+  {"op": "look_at", "at": [12, 0]},
+  {"op": "wait", "s": 1.2},
+  {"op": "capture", "name": "04_stabbur", "desc": "Stabbur"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/structures.gd", "action": "remove_all"},
+  {"op": "title"}
+ ]
+}
