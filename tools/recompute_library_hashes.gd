@@ -3,7 +3,7 @@ extends SceneTree
 ## Recomputes stats.file_sha256, stats.surface_bytes and stats.thumb_bytes of a built library's
 ## library.json from the files beside it (LibraryHashes), after a tile or picture was regenerated
 ## without touching library.json. No asset file is changed.
-##   godot --headless --path D:/dev/tabletop/tt-sim --script res://tools/recompute_library_hashes.gd -- \
+##   godot --headless --path <tt-sim> --script res://tools/recompute_library_hashes.gd -- \
 ##       --library <folder holding library.json> [--check 1]
 ## With --check 1 nothing is written and the exit code says whether the stats agree.
 
