@@ -1,0 +1,255 @@
+{
+ "out_dir": "render_jobs/polish3_ui1",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 150,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    1200,
+    540
+   ]
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/building_ui2.gd",
+   "action": "hints",
+   "reset": true
+  },
+  {
+   "op": "look_at",
+   "at": [
+    4,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 22.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel._on_rail_item_pressed(\"structure\")"
+  },
+  {
+   "op": "wait",
+   "s": 0.8
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_tool.gd",
+   "action": "pick",
+   "ref": "core:cottage"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "lay",
+   "ref": "core:cottage",
+   "at": [
+    -6,
+    0
+   ],
+   "size": [
+    6,
+    4
+   ]
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "flush"
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "move",
+     "at": [
+      -6,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.35
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "press",
+     "at": [
+      -6,
+      0
+     ]
+    },
+    {
+     "type": "release",
+     "at": [
+      -6,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "move",
+     "at": [
+      4,
+      -6
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.8
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/building_ui2.gd",
+   "action": "hints"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/polish3.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/polish3.gd",
+   "action": "decorate",
+   "kinds": [
+    "ivy",
+    "flower_boxes",
+    
+    "sign",
+    
+    "vane"
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "01_selected_strip",
+   "desc": "Cottage selected: Place another strip, hint bar Click-bare-ground row from the start, Decorate chips"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "lay",
+   "ref": "core:wizard_tower",
+   "at": [
+    8,
+    -8
+   ],
+   "size": [
+    5,
+    5
+   ]
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "flush"
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "look_at",
+   "at": [
+    8,
+    -8
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 12.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/polish3.gd",
+   "action": "report"
+  },
+  {
+   "op": "capture",
+   "name": "02_wizard",
+   "desc": "Wizard tower selected: roof texture, Style tile names, Decorate chips"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/polish3.gd",
+   "action": "browse",
+   "on": true
+  },
+  {
+   "op": "wait",
+   "s": 0.8
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/polish3.gd",
+   "action": "report"
+  },
+  {
+   "op": "capture",
+   "name": "03_browsing",
+   "desc": "Place another opened: grouped chips Kind and Material"
+  }
+ ]
+}

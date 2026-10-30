@@ -171,6 +171,26 @@ func _define_buttons() -> void:
 		ThemeColors.ON_ACCENT
 	)
 	define_variant_style("Primary", "Button", primary)
+	# A toggle chip (the building filters, the Decorate row): a quiet pill off, and the state role
+	# (lake: it shows state, never the accent that means "do") filled behind chalk words when on, so
+	# an on chip is seen across the pane.
+	var pill := box(
+		c(ThemeColors.SURFACE_RAISED),
+		RADIUS_PILL,
+		SPACE_3,
+		SPACE_1,
+		edge(1, Color(c(ThemeColors.TEXT_SOFT), 0.45))
+	)
+	var pill_on := box(
+		c(ThemeColors.STATE), RADIUS_PILL, SPACE_3, SPACE_1, edge(1, c(ThemeColors.STATE))
+	)
+	var toggle_chip := _button(
+		pill, inherit(pill, {bg_color = c(ThemeColors.SURFACE_HOVER)}), pill_on, ThemeColors.TEXT
+	)
+	toggle_chip.font_size = SIZE_CAPTION
+	for state: String in ["pressed_", "hover_pressed_"]:
+		toggle_chip["font_%scolor" % state] = c(ThemeColors.ON_STATE)
+	define_variant_style("ToggleChip", "Button", toggle_chip)
 	# Madder has one step: the press reads through the dropped shadow.
 	var danger := ThemeColors.DANGER_FILL
 	define_variant_style("Danger", "Button", _filled(danger, danger, danger, ThemeColors.ON_DANGER))

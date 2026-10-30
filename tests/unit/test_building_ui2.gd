@@ -104,7 +104,7 @@ func test_every_chip_names_a_real_group_and_nothing_is_empty_in_the_core_library
 	for item in StructurePalette.CHIPS:
 		assert_false(ids.has(item["id"]), "chip ids are unique")
 		ids[item["id"]] = true
-		assert_true(item["group"] in ["kind", "look", "material"])
+		assert_true(item["group"] in ["kind", "material"])
 		assert_gt(int(counts[item["id"]]), 0, "%s has buildings in core" % item["id"])
 
 
@@ -314,8 +314,8 @@ func test_chips_and_search_work_together_and_clear_resets_both() -> void:
 func test_two_chips_with_no_common_building_say_so_and_keep_the_chips() -> void:
 	var pane := _pane()
 	pane.set_chip("toon", true)
-	pane.set_chip("church", true)
-	assert_true(pane.refs().is_empty(), "no toon building is a church")
+	pane.set_chip("thatch", true)
+	assert_true(pane.refs().is_empty(), "no toon building is thatched")
 	assert_true((pane.get_node("StructureNoMatch") as Label).visible)
 	assert_eq((pane.get_node("StructureNoMatch") as Label).text, StructureToolPane.NO_MATCH_CHIPS)
 	assert_true((pane.chip_buttons["toon"] as Button).button_pressed, "the chips stay to switch off")
