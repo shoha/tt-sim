@@ -864,24 +864,48 @@ records** (`ProcgenOrnaments.anchors`; fields in procgen `docs/architecture_styl
   it, so no biome rule selects one (test `test_the_scatter_never_selects_a_decor_asset`).
 - **Placement** (`StructureDecor.placements`, pure): ivy takes the smallest class that covers the
   patch (one variant by the anchor's seed), uniform scale from the larger of width and height
-  ratio, clamped 0.75 to 1; a patch wider or taller than the largest class is tiled; a patch with
-  openings in it is cut into columns of the smallest class's width and a column an opening covers
-  by 40% or more is dropped. The transform is `Transform3D(Basis(along, up, normal) * s, origin)`
+  ratio, clamped 0.75 to 1; a patch wider or taller than the largest class is tiled. The
+  transform is `Transform3D(Basis(along, up, normal) * s, origin)`
   (ivy: origin at the foot centre of the patch; the asset's origin is its foot centre). A planter
   takes the class nearest the box's width, uniform scale 0.8 to 1.25, at the anchor's origin (the
-  centre of the trough's top). Exclusions are passed to the instance record in its own frame but the
-  baked assets cannot honour them (option (a): no runtime climber in tt-sim), so leaves reach over
-  window edges; columns and the drop rule limit it.
+  centre of the trough's top). Every placement carries `extent` (class size times scale: what it
+  covers on the wall).
+- **Window clearance** (card plant_decor2, 2026-10-30). The baked assets cannot honour exclusions
+  (option (a): no runtime climber in tt-sim) and their leaves overhang the patch by about 0.1 m a
+  side, so a patch with openings is cut around them instead: `StructureDecor.free_rects` grows each
+  opening by `OPENING_MARGIN` (0.2 m, more than the overhang) and returns the free rectangles of the
+  patch (the wall beside a window as one tall rectangle, the bands above and below it as short
+  ones). Each rectangle is tiled on its own (`_fit`): the extent of every plant lies inside it, the
+  class and a stack of up to 3 plants chosen for the most cover, each plant shrunk uniformly
+  to `FIT_MIN_SCALE` (0.4) at the least, and a rectangle nothing fits in stays bare. So no plant
+  extent meets a grown opening (test `test_no_plant_reaches_an_opening_grown_by_the_margin`); the
+  cost is sparser ivy beside windows, with small-leaved plants in the narrow gaps. The old
+  columns-and-40%-drop rule is gone. Patches with no opening tile as before.
+- **Triangle cap.** `StructureDecor.MAX_TRIANGLES` (3,000, ivy and planters together):
+  `AuthoredStructures._add_decor` counts each placed asset's triangles (`_triangles_of`, full-detail
+  index arrays) and `StructureDecor.cap_triangles` drops plants until the total fits: ivy before
+  planters (a flower box is cheap and reads as lived in), the smallest wall area first, then the
+  highest, the survivors keeping their order.
 - **Nodes.** `AuthoredStructures._add_decor`: one `MultiMeshInstance3D` per decor asset per
   structure (`decor_<local>`), shadows off, the mesh dressed with `WindFoliage.apply_material` for
   the asset's wind category (`climber`) and shared by every structure of the node, meta
   `wind_foliage_category`. They are children of the structure's node, so they are freed, rebuilt
   and cached with it; nothing new is stored (the ornaments mask and `ivy_amount` already are, and
   the amount reshapes the anchors' patches).
-- **Cost** (core, seed 5, one decorated building): about 2,300 to 4,700 triangles of plants against
-  about 300 of blobs, 8 to 10 surfaces (leaf and bark per asset) in 4 to 5 multimeshes, outside the
-  structure's 12,000 triangle budget. `climber` wind: a low sway with a quick flutter, no base
-  darkening.
+- **Cost** (core, seed 5, one decorated building, after plant_decor2): 1,536 (cottage) to 2,976
+  (ivy_manor) triangles of plants against about 300 of blobs, 12 to 16 surfaces (leaf and bark per
+  asset) in 6 to 8 multimeshes (before: 2,256 to 4,704 triangles, 8 to 10 surfaces, 4 to 5
+  multimeshes), outside the structure's 12,000 triangle budget. `climber` wind: a low sway with a
+  quick flutter, no base darkening.
+- **Why the ivy was dark** (measured, plant_decor2). The leaf colours and the preset were fine. The
+  painted foliage light (`wind_foliage_painted`) lights a card by N.L of its smooth normal, and the
+  climber's normals were mostly horizontal (`normal_up_bias` 0.4: out of the wall), so on a vertical
+  wall most cards sat in the shade half of the ramp, a flat dark green beside the bushes' upward
+  normals. Fixed at the cause in plantgen (`species_wall.gd`): `normal_up_bias` 2.5 on `Ivy wall`
+  (every facing catches the sun) and a leaf colour a little lighter and more yellow (0.44, 0.70,
+  0.24; shade 0.16, 0.40, 0.17). Rendered mean luminance of the ivy leaves against the bush leaves
+  beside them: 54 percent before (cottage) and 39 percent (ivy_manor), 57 percent after on
+  ivy_manor (normals alone took the cottage to 65 percent).
 - **Tests and render:** `tests/unit/test_structure_decor.gd`; render job `plant_decor_look` (the
   probe's `tile` takes `decor` false for the blobs).
 
