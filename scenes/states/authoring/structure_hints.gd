@@ -40,7 +40,9 @@ static var _loaded: bool = false
 static func rows(done: Array, selected: bool) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for gesture: Dictionary in SELECTED if selected else PLACING:
-		if not done.has(String(gesture["id"])):
+		# "Put another down" stays while a building is selected: the palette is not on view, so
+		# this row is the only place that says a click on bare ground lays another.
+		if not done.has(String(gesture["id"])) or (selected and gesture["id"] == &"lay"):
 			out.append({"key": gesture["key"], "action": gesture["action"]})
 	return out
 

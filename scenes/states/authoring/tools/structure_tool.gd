@@ -20,7 +20,7 @@ const UNAVAILABLE_TOOLTIP := "Building: not on a Blender map, whose ground is th
 func _init() -> void:
 	id = ID
 	label = LABEL
-	summary = "Put down a house, a cottage or a townhouse."
+	summary = StructureToolPane.SUMMARY
 	icon = "home"
 	brush_mode = StructureBrush
 	contexts = AUTHORING | PLAY

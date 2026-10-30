@@ -68,7 +68,7 @@ func _init() -> void:
 		chip.name = "Ornament_" + kind
 		chip.text = String(item["label"])
 		chip.toggle_mode = true
-		chip.theme_type_variation = &"Chip"
+		chip.theme_type_variation = &"ToggleChip"
 		chip.focus_mode = Control.FOCUS_NONE
 		chip.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		chip.tooltip_text = String(item["tip"])

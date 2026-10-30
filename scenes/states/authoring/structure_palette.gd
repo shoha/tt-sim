@@ -8,10 +8,18 @@ extends RefCounted
 const FIRST_FAMILIES: Array[String] = ["cottage", "house", "townhouse", "inn", "barn"]
 
 
+## The chip groups, in the order shown, each with the small caption above its chips. Chips of one
+## group widen the choice (Farm and Inn: both), chips of different groups narrow it (Home and Stone:
+## homes of stone).
+const GROUPS: Array[Dictionary] = [
+	{"id": "kind", "caption": "Kind"},
+	{"id": "material", "caption": "Material"},
+]
+
 ## The filter chips above the tiles: {"id", "label", "group", "families", "tags"}. A building has a
 ## chip when its family is one of the chip's families or one of its tags is one of the chip's tags.
-## Chips of one group widen the choice (Farm and Inn: both), chips of different groups narrow it
-## (Home and Stone: homes of stone). Order is the order shown.
+## Order is the order shown. The "regional" tag is no chip: 85 of 98 buildings carry it, so it
+## filtered nothing (it stays a tag, which street picking reads).
 const CHIPS: Array[Dictionary] = [
 	{
 		"id": "home",
@@ -49,9 +57,15 @@ const CHIPS: Array[Dictionary] = [
 		"families": [],
 		"tags": ["shop", "market", "cafe"],
 	},
-	{"id": "ruin", "label": "Ruin", "group": "look", "families": ["ruin"], "tags": ["ruin"]},
-	{"id": "toon", "label": "Toon", "group": "look", "families": ["toon"], "tags": ["toon"]},
-	{"id": "regional", "label": "Regional", "group": "look", "families": [], "tags": ["regional"]},
+	{"id": "ruin", "label": "Ruin", "group": "kind", "families": ["ruin"], "tags": ["ruin"]},
+	{
+		"id": "fantasy",
+		"label": "Fantasy",
+		"group": "kind",
+		"families": ["fantasy"],
+		"tags": ["fantasy"],
+	},
+	{"id": "toon", "label": "Toon", "group": "kind", "families": ["toon"], "tags": ["toon"]},
 	{"id": "stone", "label": "Stone", "group": "material", "families": [], "tags": ["stone"]},
 	{"id": "timber", "label": "Timber", "group": "material", "families": [], "tags": ["timber"]},
 	{"id": "thatch", "label": "Thatch", "group": "material", "families": [], "tags": ["thatch"]},

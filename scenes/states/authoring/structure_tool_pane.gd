@@ -25,8 +25,19 @@ signal done_requested
 signal ornaments_requested(kinds: Array, label: String)
 signal ivy_requested(amount: float)
 
+## The panel's title and subtitle: the whole catalogue, not only houses. (The tool itself stays
+## "Building" on the rail and in key tooltips.)
+const TITLE := "Buildings"
+const SUMMARY := "Cottages, castles, windmills and more: click to place, drag to size."
 const VARIANT_THUMB_PX := 56
-const VARIANT_TILE_SIZE := Vector2(96, 78)
+## Tall enough for a Style name on two lines (long names wrap rather than end in dots).
+const VARIANT_TILE_SIZE := Vector2(96, 94)
+const PLACE_THUMB_PX := 40
+const PLACE_CAPTION := "Next one down"
+const PLACE_BROWSE := "Change"
+const PLACE_BACK := "Back"
+const PLACE_BROWSE_TIP := "Choose another building to put down next, from the whole list"
+const PLACE_BACK_TIP := "Back to the selected building"
 ## The keys are the hint bar's key caps (StructureHints); the pane keeps one line of what to reach.
 const SELECTION_HINT := (
 	"Corner dots resize, tabs push a side (click one for the door), the body moves it."
@@ -86,6 +97,16 @@ var done_button: Button
 ## The Decorate row, between the steppers and the Style tiles.
 var ornaments_section: StructureOrnamentsSection
 
+## "Place another": the strip under the header while a building is selected, so the palette is
+## never lost. It names the armed pick (the next building a click on bare ground lays) and
+## opens the whole palette in place of the bar until a tile is chosen.
+var place_strip: HBoxContainer
+var place_thumb: TextureRect
+var place_name: Label
+var place_button: Button
+
+var _browsing: bool = false
+var _has_selection: bool = false
 var _hint: Label
 var _empty: Label
 var _no_match: Label
@@ -95,7 +116,7 @@ var _picked: String = ""
 var _served: int = 0
 var _found_none: bool = false
 var _tools_row: HBoxContainer
-var _chip_flow: HFlowContainer
+var _chip_flow: VBoxContainer
 var _filter_row: HBoxContainer
 ## The chips switched on (ids, in StructurePalette.CHIPS order), whether the tiles are the small
 ## size, the rows the libraries serve, and the hover card's pending show.
@@ -116,9 +137,12 @@ func _init() -> void:
 	theme_type_variation = &"BoxContainerSnug"
 	var header := MenuHeader.new()
 	header.name = "StructureHeader"
-	var tool := ToolRegistry.find(StructureTool.ID)
-	header.setup(tool.label, tool.summary)
+	header.setup(TITLE, SUMMARY)
+	# The subtitle wraps to the pane's width: a long line must not widen the pane under the rail.
+	header.caption_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	header.caption_label.custom_minimum_size = Vector2(1, 0)
 	add_child(header)
+	_build_place_strip()
 	_build_selection()
 	_hint = _caption("StructureHint", HINT)
 	add_child(_hint)
@@ -227,6 +251,7 @@ func select_ref(ref: String) -> void:
 			field.tiles.select(StringName(ref))
 		else:
 			field.tiles.clear_selection()
+	_update_place_strip()
 
 
 ## The reference of the building picked, or "".
@@ -238,8 +263,12 @@ func picked_ref() -> String:
 ## with null, the palette again. The palette steps aside while a building is selected, since a
 ## click then edits that building rather than laying a new one.
 func show_selection(structure: Structure) -> void:
-	selection_box.visible = structure != null
-	_show_palette(structure == null)
+	_has_selection = structure != null
+	# A click on the board (another building selected, or none) ends browsing the palette.
+	_browsing = false
+	selection_box.visible = _has_selection and not _browsing
+	_show_palette(not selection_box.visible)
+	_update_place_strip()
 	if structure == null:
 		_selected_ref = ""
 		return
@@ -303,13 +332,15 @@ func _show_variants(ref: String) -> void:
 			variant_field.tiles.tile_min_size = VARIANT_TILE_SIZE
 			variant_field.tiles.columns = 2
 			for row in rows:
-				variant_field.tiles.add_tile(
+				var tile := variant_field.tiles.add_tile(
 					StringName(String(row["ref"])),
 					String(row["variant"]),
 					"",
 					"%s: swap the look, keep the footprint." % row["name"],
 					StructureThumbnail.of(row, VARIANT_THUMB_PX)
 				)
+				# A long Style name wraps to a second line (the full name is also the tooltip).
+				tile.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			variant_field.tiles.selection_changed.connect(
 				func(id: StringName) -> void: variant_picked.emit(String(id))
 			)
@@ -341,22 +372,35 @@ func _fit_tiles() -> void:
 ## The chip row, then the row with Clear and the small-tiles switch. Chips are toggles: one group's
 ## chips widen the choice, another group's narrow it (StructurePalette.CHIPS).
 func _build_filters() -> void:
-	_chip_flow = HFlowContainer.new()
+	_chip_flow = VBoxContainer.new()
 	_chip_flow.name = "StructureChips"
 	_chip_flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_chip_flow.theme_type_variation = &"FactsFlow"
+	_chip_flow.theme_type_variation = &"BoxContainerSnug"
 	add_child(_chip_flow)
-	for item: Dictionary in StructurePalette.CHIPS:
-		var id := String(item["id"])
-		var chip := Button.new()
-		chip.name = "Chip_" + id
-		chip.text = String(item["label"])
-		chip.toggle_mode = true
-		chip.theme_type_variation = &"Chip"
-		chip.focus_mode = Control.FOCUS_NONE
-		chip.toggled.connect(_on_chip_toggled.bind(id))
-		_chip_flow.add_child(chip)
-		chip_buttons[id] = chip
+	# One captioned wrapping row per axis (Kind, Material), so the two axes never read as one list.
+	for group: Dictionary in StructurePalette.GROUPS:
+		var group_id := String(group["id"])
+		var caption := _caption("ChipGroup_" + group_id, String(group["caption"]))
+		_chip_flow.add_child(caption)
+		var flow := HFlowContainer.new()
+		flow.name = "ChipRow_" + group_id
+		flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		flow.theme_type_variation = &"FactsFlow"
+		_chip_flow.add_child(flow)
+		for item: Dictionary in StructurePalette.CHIPS:
+			if String(item["group"]) != group_id:
+				continue
+			var id := String(item["id"])
+			var chip := Button.new()
+			chip.name = "Chip_" + id
+			chip.text = String(item["label"])
+			chip.toggle_mode = true
+			chip.theme_type_variation = &"ToggleChip"
+			chip.focus_mode = Control.FOCUS_NONE
+			chip.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+			chip.toggled.connect(_on_chip_toggled.bind(id))
+			flow.add_child(chip)
+			chip_buttons[id] = chip
 	_filter_row = HBoxContainer.new()
 	_filter_row.name = "StructureFilterRow"
 	_filter_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -515,6 +559,66 @@ func _show_palette(shown: bool) -> void:
 	_empty.visible = shown and _served == 0
 
 
+## The "Place another" strip: the armed pick's picture and name, and the button that opens the
+## whole palette in place of the bar. Shown while a building is selected.
+func _build_place_strip() -> void:
+	place_strip = HBoxContainer.new()
+	place_strip.name = "StructurePlaceStrip"
+	place_strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	place_strip.visible = false
+	add_child(place_strip)
+	place_thumb = TextureRect.new()
+	place_thumb.name = "PlaceThumb"
+	place_thumb.custom_minimum_size = Vector2(PLACE_THUMB_PX, PLACE_THUMB_PX)
+	place_thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	place_thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	place_thumb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	place_strip.add_child(place_thumb)
+	var words := VBoxContainer.new()
+	words.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	words.theme_type_variation = &"BoxContainerSnug"
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	place_strip.add_child(words)
+	words.add_child(_caption("PlaceCaption", PLACE_CAPTION))
+	place_name = Label.new()
+	place_name.name = "PlaceName"
+	place_name.clip_text = true
+	place_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	place_name.custom_minimum_size = Vector2(1, 0)
+	words.add_child(place_name)
+	place_button = Button.new()
+	place_button.name = "PlaceBrowse"
+	place_button.text = PLACE_BROWSE
+	place_button.tooltip_text = PLACE_BROWSE_TIP
+	place_button.focus_mode = Control.FOCUS_NONE
+	place_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	place_button.pressed.connect(func() -> void: set_browsing(not _browsing))
+	place_strip.add_child(place_button)
+
+
+## Opens the whole palette in place of the selected building's bar (`on`), or closes it again. A
+## pick made in it closes it. No effect without a selection.
+func set_browsing(on: bool) -> void:
+	_browsing = on and _has_selection
+	selection_box.visible = _has_selection and not _browsing
+	_show_palette(not selection_box.visible)
+	_update_place_strip()
+
+
+func is_browsing() -> bool:
+	return _browsing
+
+
+func _update_place_strip() -> void:
+	place_strip.visible = _has_selection
+	var row := LibraryStructureStore.structure(_picked)
+	place_name.text = String(row.get("name", ""))
+	place_thumb.texture = StructureThumbnail.of(row, PLACE_THUMB_PX) if not row.is_empty() else null
+	place_button.text = PLACE_BACK if _browsing else PLACE_BROWSE
+	place_button.tooltip_text = PLACE_BACK_TIP if _browsing else PLACE_BROWSE_TIP
+
+
 ## The selected building's bar: its name, the variant tiles (made when a selection shows), a
 ## stepper per recipe parameter the library exposes, and the buttons.
 func _build_selection() -> void:
@@ -634,6 +738,10 @@ func _on_tile(id: StringName, from_field: TileField) -> void:
 		if field != from_field:
 			field.tiles.clear_selection()
 	structure_selected.emit(String(id))
+	# A pick made while browsing from a selected building is the answer: back to the bar.
+	if _browsing:
+		set_browsing(false)
+	_update_place_strip()
 
 
 func _caption(node_name: String, text: String) -> Label:
