@@ -25,17 +25,29 @@ const PLANTER_SCALE_MIN := 0.8
 const PLANTER_SCALE_MAX := 1.25
 ## Tolerance when a patch is compared with a class: a patch 1 cm over still fits.
 const FIT_EPS := 0.01
-## Ivy keeps this far from every opening (card plant_decor2, 2026-10-30): the baked leaves overhang
-## their patch by about 0.1 m a side, so a plant stays 0.2 m off a window or door and its leaves
-## never reach the glass.
-const OPENING_MARGIN := 0.2
+## Ivy keeps this far from every opening (plant_decor2 set 0.2 m, plant_decor3 2026-10-30 lowered it
+## to 0.10): the baked leaves overhang their patch by about 0.1 m a side, so a leaf may just touch
+## a frame's edge, the way real ivy does, and does not reach the glass.
+const OPENING_MARGIN := 0.10
 ## Beside an opening a plant may shrink this far (uniform) to fit the free rectangle; below it the
-## plant is left out.
-const FIT_MIN_SCALE := 0.4
-## Plants stacked in one free rectangle beside an opening, at most, and the cover a taller stack
-## must have over a shorter one to be taken.
-const MAX_STACK := 3
-const FIT_GAIN := 1.15
+## plant is left out (plant_decor3: 0.6, was 0.4, so no plant is shrunk to a scrap; a smaller gap is
+## filled by a narrower or flatter asset, or stays bare).
+const FIT_MIN_SCALE := 0.6
+## Plants in one free rectangle beside an opening, at most, per row and per column, and the cover a
+## layout with more plants must have over one with fewer to be taken.
+const MAX_STACK := 5
+const MAX_COLUMNS := 12
+const FIT_GAIN := 1.08
+## Plants in a row or column of one rectangle may overlap by this much of their extent (the second
+## variant over the first), which fills a rectangle more densely than tiles that only touch.
+const MAX_OVERLAP := 0.25
+## The shapes of ivy assets by the aspect (width over height) of their patch: a pier strip is at
+## most this wide for its height, a band at least this wide, anything between is a square patch.
+const STRIP_MAX_ASPECT := 0.5
+const BAND_MIN_ASPECT := 2.0
+const SHAPE_STRIP := "strip"
+const SHAPE_BAND := "band"
+const SHAPE_SQUARE := "square"
 ## The most triangles of plants one structure draws (ivy and planters together). Past it the lowest
 ## value anchors go first (cap_triangles).
 const MAX_TRIANGLES := 3000
@@ -125,7 +137,9 @@ static func classes_of(rows: Array[Dictionary], kind: String) -> Array[Dictionar
 			continue
 		var key := str(row.group) if str(row.group) != "" else str(row.size)
 		if not by_group.has(key):
-			by_group[key] = {"size": row.size, "ids": [] as Array[String]}
+			by_group[key] = {
+				"size": row.size, "ids": [] as Array[String], "shape": shape_of(row.size)
+			}
 		(by_group[key].ids as Array[String]).append(str(row.id))
 	var out: Array[Dictionary] = []
 	for key: String in by_group:
@@ -138,6 +152,32 @@ static func classes_of(rows: Array[Dictionary], kind: String) -> Array[Dictionar
 				return a.size.x < b.size.x
 			return a.size.x * a.size.y < b.size.x * b.size.y
 	)
+	return out
+
+
+## The shape of an ivy patch of `size`: strip (tall and narrow, for the piers between windows), band
+## (wide and short, under a sill or over a door) or square (everything between).
+static func shape_of(size: Vector2) -> String:
+	var aspect := size.x / size.y
+	if aspect <= STRIP_MAX_ASPECT + FIT_EPS:
+		return SHAPE_STRIP
+	if aspect >= BAND_MIN_ASPECT - FIT_EPS:
+		return SHAPE_BAND
+	return SHAPE_SQUARE
+
+
+## The shape to try first for a free rectangle `width` by `height`: the same aspect rule as the
+## assets (tall narrow rectangle: strip; wide short: band; else square).
+static func shape_for(width: float, height: float) -> String:
+	return shape_of(Vector2(width, height))
+
+
+## The classes of `classes` that have `shape`.
+static func of_shape(classes: Array[Dictionary], shape: String) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for item in classes:
+		if item.get("shape") == shape:
+			out.append(item)
 	return out
 
 
@@ -204,7 +244,6 @@ static func _ivy_placements(
 		return out
 	var width := float(anchor.width)
 	var height := float(anchor.height)
-	var largest: Vector2 = classes[classes.size() - 1].size
 	var open: Array = anchor.get("exclusions", [])
 	# A patch with no opening is tiled whole; with openings, each free rectangle around them is
 	# tiled on its own and a plant is fitted inside it (the baked leaves cannot be cut around glass).
@@ -227,8 +266,8 @@ static func _ivy_placements(
 		var size: Vector2 = chosen.size
 		for row in rows:
 			for col in cols:
-				var centre_x := float(run[0]) + (col + 0.5) * tile_w
-				var foot_y := float(run[1]) + row * tile_h
+				var centre_x := float(run[0]) + float(fit.x0) + col * float(fit.pitch_x)
+				var foot_y := float(run[1]) + row * float(fit.pitch_y)
 				var origin: Vector3 = (
 					anchor.origin
 					+ (anchor.along as Vector3) * centre_x
@@ -262,28 +301,92 @@ static func _ivy_placements(
 static func _fit(
 	classes: Array[Dictionary], run_w: float, run_h: float, bounded: bool
 ) -> Dictionary:
-	var largest: Vector2 = classes[classes.size() - 1].size
-	var cols := maxi(1, ceili(run_w / largest.x - FIT_EPS))
 	if not bounded:
+		var squares := of_shape(classes, SHAPE_SQUARE)
+		var pool := squares if not squares.is_empty() else classes
+		var largest: Vector2 = pool[pool.size() - 1].size
+		var cols := maxi(1, ceili(run_w / largest.x - FIT_EPS))
 		var rows := maxi(1, ceili(run_h / largest.y - FIT_EPS))
-		var chosen := ivy_class(classes, run_w / cols, run_h / rows)
+		var chosen := ivy_class(pool, run_w / cols, run_h / rows)
 		var size: Vector2 = chosen.size
 		# The larger ratio: a narrow column of a tall patch keeps its height (it may overlap its
 		# neighbours), a squat one keeps its width.
 		var scale := clampf(maxf(run_w / cols / size.x, run_h / rows / size.y), MIN_SCALE, 1.0)
-		return {"chosen": chosen, "scale": scale, "cols": cols, "rows": rows}
+		return {
+			"chosen": chosen,
+			"scale": scale,
+			"cols": cols,
+			"rows": rows,
+			"x0": run_w / cols * 0.5,
+			"pitch_x": run_w / cols,
+			"pitch_y": run_h / rows,
+		}
+	# Beside an opening: the shape for the rectangle's aspect first, then the others, so a gap no
+	# strip fits can still take a square.
+	var first := shape_for(run_w, run_h)
+	var shapes: Array[String] = [first]
+	for shape in [SHAPE_SQUARE, SHAPE_STRIP, SHAPE_BAND]:
+		if not shapes.has(shape):
+			shapes.append(shape)
+	for shape in shapes:
+		var fit := _best_layout(of_shape(classes, shape), run_w, run_h)
+		if not fit.is_empty():
+			return fit
+	return {}
+
+
+## The layout of the classes `pool` in a `run_w` by `run_h` rectangle that covers the most of it
+## with every plant's extent inside, no plant shrunk below FIT_MIN_SCALE and neighbours overlapping
+## by at most MAX_OVERLAP: {chosen, scale, cols, rows, x0, pitch_x, pitch_y}, or {} when nothing
+## fits. A layout with more plants has to cover FIT_GAIN more than one with fewer.
+static func _best_layout(pool: Array[Dictionary], run_w: float, run_h: float) -> Dictionary:
 	var best: Dictionary = {}
 	var best_cover := 0.0
-	for rows in range(1, MAX_STACK + 1):
-		for item in classes:
+	var min_size := Vector2(INF, INF)
+	for item in pool:
+		min_size = Vector2(minf(min_size.x, item.size.x), minf(min_size.y, item.size.y))
+	if pool.is_empty():
+		return best
+	var max_cols := clampi(ceili(run_w / min_size.x) + 1, 1, MAX_COLUMNS)
+	var max_rows := clampi(ceili(run_h / min_size.y) + 1, 1, MAX_STACK)
+	var layouts: Array[Vector2i] = []
+	for cols in range(1, max_cols + 1):
+		for rows in range(1, max_rows + 1):
+			layouts.append(Vector2i(cols, rows))
+	# Fewer plants first, so a bigger layout has to beat a smaller by FIT_GAIN.
+	layouts.sort_custom(
+		func(a: Vector2i, b: Vector2i) -> bool:
+			return a.x * a.y < b.x * b.y or (a.x * a.y == b.x * b.y and a.x < b.x)
+	)
+	for layout in layouts:
+		for item in pool:
 			var size: Vector2 = item.size
-			var scale := minf(1.0, minf(run_w / cols / size.x, run_h / rows / size.y))
+			# The largest scale at which a full-overlap-limit run still fits the rectangle.
+			var span_x := 1.0 + (layout.x - 1) * (1.0 - MAX_OVERLAP)
+			var span_y := 1.0 + (layout.y - 1) * (1.0 - MAX_OVERLAP)
+			var scale := minf(1.0, minf(run_w / (size.x * span_x), run_h / (size.y * span_y)))
 			if scale < FIT_MIN_SCALE:
 				continue
-			var cover := size.x * size.y * scale * scale * cols * rows
+			var ext := size * scale
+			var pitch_x := (run_w - ext.x) / (layout.x - 1) if layout.x > 1 else 0.0
+			var pitch_y := (run_h - ext.y) / (layout.y - 1) if layout.y > 1 else 0.0
+			# Covered extent: a run of plants covers its first plant plus a pitch (at most one
+			# extent) per further plant, per axis.
+			var cover_x := ext.x + (layout.x - 1) * minf(pitch_x, ext.x)
+			var cover_y := ext.y + (layout.y - 1) * minf(pitch_y, ext.y)
+			# Weighted by scale, so one full-size plant beats two shrunken ones of the same cover.
+			var cover := cover_x * cover_y * (0.6 + 0.4 * scale)
 			if best.is_empty() or cover > best_cover * FIT_GAIN:
 				best_cover = cover
-				best = {"chosen": item, "scale": scale, "cols": cols, "rows": rows}
+				best = {
+					"chosen": item,
+					"scale": scale,
+					"cols": layout.x,
+					"rows": layout.y,
+					"x0": ext.x * 0.5 if layout.x > 1 else run_w * 0.5,
+					"pitch_x": pitch_x,
+					"pitch_y": pitch_y,
+				}
 	return best
 
 

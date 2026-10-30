@@ -843,7 +843,8 @@ records** (`ProcgenOrnaments.anchors`; fields in procgen `docs/architecture_styl
 `kind` ivy or box, `origin`, `normal`, `along`, `up`, `width`, `height`, `depth`, `seed`,
 `exclusions` [x0,y0,x1,y1] in patch coordinates); a library whose catalog carries decor assets
 (`placement.scatter` false with a `mount` of `wall` or `sill` and a `size_m`: plantgen's
-`Bush_IvyWall_S/M/L_v0..2`, 1.2x1.2, 1.6x2.0 and 2.2x2.6 m patches, and
+`Bush_IvyWall_S/M/L_v0..2`, 1.2x1.2, 1.6x2.0 and 2.2x2.6 m patches, `Bush_IvyStrip_N/W_v0..2`
+(0.5 and 0.8 x 2.2 m), `Bush_IvyBand_S/M_v0..1` (1.2 x 0.5 and 1.8 x 0.6 m), and
 `Flower_WindowPlanter_W08/W12/W16_v0..1`, 0.8, 1.2 and 1.6 m wide) gets a plant on each anchor.
 
 - **Switch.** `StructureGeometry.build_one(doc, structure, decor)` (also `build`, `key_of`, `keys_of`,
@@ -873,14 +874,25 @@ records** (`ProcgenOrnaments.anchors`; fields in procgen `docs/architecture_styl
 - **Window clearance** (card plant_decor2, 2026-10-30). The baked assets cannot honour exclusions
   (option (a): no runtime climber in tt-sim) and their leaves overhang the patch by about 0.1 m a
   side, so a patch with openings is cut around them instead: `StructureDecor.free_rects` grows each
-  opening by `OPENING_MARGIN` (0.2 m, more than the overhang) and returns the free rectangles of the
+  opening by `OPENING_MARGIN` (0.10 m since plant_decor3; 0.2 m before, which left little room, and
+  a leaf may now just touch a frame) and returns the free rectangles of the
   patch (the wall beside a window as one tall rectangle, the bands above and below it as short
-  ones). Each rectangle is tiled on its own (`_fit`): the extent of every plant lies inside it, the
-  class and a stack of up to 3 plants chosen for the most cover, each plant shrunk uniformly
-  to `FIT_MIN_SCALE` (0.4) at the least, and a rectangle nothing fits in stays bare. So no plant
-  extent meets a grown opening (test `test_no_plant_reaches_an_opening_grown_by_the_margin`); the
-  cost is sparser ivy beside windows, with small-leaved plants in the narrow gaps. The old
-  columns-and-40%-drop rule is gone. Patches with no opening tile as before.
+  ones). Each rectangle is filled on its own (`_fit`): the extent of every plant lies inside it.
+  **Shapes** (plant_decor3, 2026-10-30): the ivy assets come in three shapes by patch aspect
+  (`shape_of`: width over height at most 0.5 strip, at least 2.0 band, else square): the squares
+  `Bush_IvyWall_S/M/L`, the pier strips `Bush_IvyStrip_N` (0.5 x 2.2) and `_W` (0.8 x 2.2), the bands
+  `Bush_IvyBand_S` (1.2 x 0.5) and `_M` (1.8 x 0.6, under sills and over doors). A free rectangle
+  tries the shape of its own aspect first (`shape_for`: tall narrow strips, wide short bands, else
+  squares), then the others when none fits. Within a shape `_best_layout` picks the class and a grid
+  of up to `MAX_COLUMNS` by `MAX_STACK` plants for the most covered extent (weighted by scale; more
+  plants must cover `FIT_GAIN` 1.08 more), each shrunk uniformly to `FIT_MIN_SCALE` (0.6, was 0.4)
+  at the least; neighbours are spaced evenly edge to edge and may overlap by `MAX_OVERLAP` (25
+  percent), and a rectangle nothing fits in stays bare. So no plant extent meets a grown opening
+  (tests `test_no_plant_reaches_an_opening_grown_by_the_margin`,
+  `test_shaped_plants_never_reach_an_opening_grown_by_the_margin`). Patches with no opening tile
+  with the squares as before. Measured (render job `plant_decor3_look`, round 2): window glass
+  stays clear on cottage, ivy_manor, keep and townhouse; ivy leaf luminance against the bushes
+  beside it 67 percent on ivy_manor and 69 on the keep (61 and 66 before the leaf colour lift).
 - **Triangle cap.** `StructureDecor.MAX_TRIANGLES` (3,000, ivy and planters together):
   `AuthoredStructures._add_decor` counts each placed asset's triangles (`_triangles_of`, full-detail
   index arrays) and `StructureDecor.cap_triangles` drops plants until the total fits: ivy before

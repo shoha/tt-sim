@@ -13,8 +13,9 @@ extends GutTest
 
 const CORE_FOLDER := "res://libraries/core"
 const BIOME_COUNT := 9
-## 268 scatter assets and 15 decor assets (ivy and window planters, wind category climber).
-const ASSET_COUNT := 283
+## 268 scatter assets and 25 decor assets (ivy squares, strips and bands, window planters, wind
+## category climber).
+const ASSET_COUNT := 293
 ## The palette lists an asset once per biome that places it (shared stems appear several times).
 const PALETTE_ASSET_COUNT := 288
 const SURFACE_COUNT := 36

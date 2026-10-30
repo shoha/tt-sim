@@ -31,8 +31,8 @@
 	"license": "CC BY 4.0",
 	"name": "Core",
 	"stats": {
-		"assets": 283,
-		"bytes": 35640854,
+		"assets": 293,
+		"bytes": 37358850,
 		"file_sha256": {
 			"assets/thumbs/Bush_Agave_v0_rocky_badlands.png": "558cfbf07d40b03100ba41251dbd174ee2a981c17778a78e9875651f2d9dbdc7",
 			"assets/thumbs/Bush_Agave_v0_wetland_riparian.png": "ec383054555327c72eeba844ac3482b455d99c59caeaad8f6fcedf43631c00d7",
@@ -66,6 +66,16 @@
 			"assets/thumbs/Bush_DeadShrub_v1_rocky_badlands.png": "4f94ae46f119719674a02444fbec7acb8b374515c0b5a2a1441a98c3ea13e63c",
 			"assets/thumbs/Bush_DeadShrub_v1_savanna.png": "4d8242ee52e4150feb419f80c7b5a39064fc38038b3828e38c6f083262a4c440",
 			"assets/thumbs/Bush_FloweringBush_v0.png": "cd8c65d6c0dc3ccc98ede46691e2960f93701c8ec5003110a25c7e2a1be2fcfd",
+			"assets/thumbs/Bush_IvyBand_M_v0.png": "83d6e5adce5130cce673791a8bc410752c1394fb534c385d441c4a9e41bd34f9",
+			"assets/thumbs/Bush_IvyBand_M_v1.png": "74d0b439f53fda64c04ec6a36e12932673f64cd2cfa252beabd41b192eb13d4c",
+			"assets/thumbs/Bush_IvyBand_S_v0.png": "fc5a4bf50ab00dd261f69e79348f36b71c6b62165e908ec3b1b96a6c372cdcc1",
+			"assets/thumbs/Bush_IvyBand_S_v1.png": "30c014816a99670e9b976b166cb5e2ad9245401d177f1625472dd5398bfbfa76",
+			"assets/thumbs/Bush_IvyStrip_N_v0.png": "796b00715d51186f550413fb6efdd6f5dfe4c93ce5ac517854b05b94e18578f7",
+			"assets/thumbs/Bush_IvyStrip_N_v1.png": "452574b94ff3521304e10a62416be5abdb8f5dd91ec2d018855c6ed88a15ae5f",
+			"assets/thumbs/Bush_IvyStrip_N_v2.png": "15578b1d85049643ec18cfd85cce67cf96fb3726ac7d170a76a52a5f30931b39",
+			"assets/thumbs/Bush_IvyStrip_W_v0.png": "8f473ff7aa8c0794d586db7cbf8298882fa2f55ea4e551836a3837363d6f80ca",
+			"assets/thumbs/Bush_IvyStrip_W_v1.png": "5799a4982655fa2ada4495343aa4970a87a9f6df07d06c9064a082b91decdd49",
+			"assets/thumbs/Bush_IvyStrip_W_v2.png": "ed387148218684cd9313d684b9aa269a7e91f7243596f48be5833f031d64e18b",
 			"assets/thumbs/Bush_IvyWall_L_v0.png": "b1b74b1548b36015f1b2bda4acb7758425ac05b6227feca7866597fbdd112e33",
 			"assets/thumbs/Bush_IvyWall_L_v1.png": "cd7b84507f60ddcabe401391ecbe91a18729adf560673d274c7a99cb6e612dd2",
 			"assets/thumbs/Bush_IvyWall_L_v2.png": "adffcc8fec103a445145dfe550841d249154942663af8806e192006b4123450c",
@@ -593,9 +603,9 @@
 		},
 		"surface_bytes": 145096153,
 		"surfaces": 36,
-		"thumb_bytes": 3499151,
-		"thumbs": 283,
-		"triangles": 152215
+		"thumb_bytes": 3661121,
+		"thumbs": 293,
+		"triangles": 154011
 	},
 	"tags": [
 		"official"
