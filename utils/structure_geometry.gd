@@ -11,6 +11,7 @@ extends RefCounted
 ##
 ## Parts of one structure (build_one):
 ##   {"id", "recipe", "style", "palette" (the roof tile colour's name, StructurePaint),
+##    "stone_tone" (the style's masonry hint, "grey", "warm" or ""; StructureMaterials),
 ##    "meshes": [{"kind": surface kind, "role": StructureLook role, "arrays": mesh arrays,
 ##                "tags": per vertex tag ids into "tag_table"}, ...],
 ##    "tag_table": provenance paths (node id, then slot path), "collision": faces,
@@ -143,10 +144,10 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 	# The building's own roof tile colour and wall lean, from its seed and id (the same on every peer).
 	# A building style's palette hints, written on the recipe's Output, replace the draw's roof colour
 	# and give the walls their own tone.
-	var palette := StructurePaint.palette_of(
-		structure.seed_value, structure.id, StructureLook.palette_hints(recipe)
-	)
+	var hints := StructureLook.palette_hints(recipe)
+	var palette := StructurePaint.palette_of(structure.seed_value, structure.id, hints)
 	parts.palette = palette.name
+	parts.stone_tone = String(hints.get("stone_tone", ""))
 	StructurePaint.paint(meshes, PackedInt32Array(), [palette])
 	parts.meshes = meshes
 	parts.tag_table = PackedStringArray(geometry.tag_table)
@@ -422,6 +423,7 @@ static func _empty(structure: Structure) -> Dictionary:
 	return {
 		"placeholder": false,
 		"palette": "",
+		"stone_tone": "",
 		"id": structure.id,
 		"recipe": structure.recipe,
 		"style": structure.style,

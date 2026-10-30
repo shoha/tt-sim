@@ -392,6 +392,26 @@ func test_a_recipe_without_hints_has_none_and_a_style_recipe_lists_its_tones() -
 	assert_eq(tone.to_html(false).to_upper(), "B65A40")
 
 
+func test_a_castle_style_carries_its_grey_stone_tone_to_the_masonry_material() -> void:
+	assert_false(
+		StructureLook.palette_hints(StructureRecipes.document("core:brick_terrace")).has("stone_tone")
+	)
+	for id in ["core:castle_keep", "core:gatehouse", "core:chapel"]:
+		var hints := StructureLook.palette_hints(StructureRecipes.document(id))
+		assert_eq(hints.get("stone_tone", ""), "grey", id)
+	var root := PaletteLibrary.DEFAULT_ROOT
+	var warm := StructureMaterials.make("masonry", StructureLook.WALL, "", root) as ShaderMaterial
+	var grey := (
+		StructureMaterials.make(
+			"masonry", StructureLook.WALL, "", root, StructureMaterials.GREY_TONE
+		)
+		as ShaderMaterial
+	)
+	assert_eq(warm.get_shader_parameter("cream_amount"), StructureMaterials.MASONRY_CREAM)
+	assert_eq(grey.get_shader_parameter("cream"), StructureMaterials.GREY_STONE_CREAM)
+	assert_ne(grey.get_shader_parameter("cream_amount"), StructureMaterials.MASONRY_CREAM)
+
+
 func test_hints_replace_the_roof_draw_and_add_a_wall_tone_without_moving_the_unhinted() -> void:
 	var plain := StructurePaint.palette_of(5, 1)
 	assert_eq(StructurePaint.palette_of(5, 1, {}), plain, "no hints is the old draw")
