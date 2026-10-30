@@ -44,31 +44,47 @@ times, with the longest gap 0.34 s and 0.31 s. A test fails on the old behaviour
   (their footprints clear scatter, so a village is cheaper than the forest it replaces). Merging or LOD
   would save at most that 0.4 ms and give up per-structure picking, so it is not worth doing now. Revisit
   if 128 or more structures run on the Mobile renderer.
-- Load: building the 64 core structures one after another is 2.64 s, so about 1.2 s for 30 and 4.1 s for
-  100 on one load-prep worker. Building them as a `WorkerThreadPool` group would bring 100 under about 1 s.
-- Memory: static 446 MB for an empty map and 533 MB with 100 structures, with a peak of 882 MB while the
-  builds finish. The 48-entry parts cache keeps full arrays beside the `ArrayMesh` copies.
+- Load (struct_perf2): `StructureGeometry.build` now builds a document's structures as a
+  `WorkerThreadPool` group in document order: 100 structures 3.1 s on one thread, 0.90 s on 6 threads
+  (`AuthoredStructures.load_threads()`, a quarter of the logical cores). More threads are slower (1.16 s
+  on 3, 1.37 s on 12 or 24): builds allocate heavily and fight over the allocator. Digests are identical
+  to the sequential build (test). Probe: job `struct_perf2_load_seq` / `_par`, action `load_build`.
+- Memory: static 446 MB for an empty map and about 530 MB with 100 structures (+83; main at the same
+  commit measured +46 in the same job, an unexplained difference that does not depend on the build cap or
+  the key memo). The 882 MB peak of the first report is not reproduced: the peak is about 530 MB in both.
+  The 48-entry parts cache holds only 13 MB of arrays and collision faces (measured), so dropping
+  `arrays` would save at most 13 MB and make undo rebuild nodes from nothing: not done.
 - `StructureWalkable` collision: 570 faces across all 64 structures (max 234) against 20,286 for the hull
   collision, and 0.6 to 1.9 ms per structure on the worker. Negligible.
 
 ## Adding a structure while many stand
 
-100 sequential `StructureEditor.add` calls blocked the main thread 23.2 s before the `key_of` fix and
-12.6 s after (30 structures: 3.25 s to 1.07 s), about 126 ms per add at around 50 standing. `keys_of`,
-the snapshot and the plan check do not account for it. Not yet profiled: scatter `request_region`, and the
-rebuilds queued for neighbours whose keys change because each add alters the neighbour list.
+Profiled (struct_perf2, job `struct_perf2_add`): of 2.3 s for 100 adds, `keys_of` was 2.0 s, scatter
+`request_region` 23 ms, the history and area work 11 ms. Two causes:
+
+- Each add re-sampled the ground under every standing structure, and every add changes the keys of the
+  dozen structures around it. `StructureGeometry.keys_memoised` (used by `AuthoredStructures.refresh`)
+  keeps each structure's key and its ground samples between refreshes. A hash of the heights, pond mask
+  and every water body field (`ground_fingerprint`, 0.17 ms for a 97 m map) is part of the signature, so
+  any ground edit invalidates it by content and no writer of those public fields has to bump a version
+  counter. Tests cover sculpts, in-place height writes, rivers, ponds and the pond mask.
+- With builds on every core the main thread ran 14 times slower (a 4 ms refresh took 57 ms; builds
+  allocate heavily and share cores and locks with it). `AuthoredStructures.max_running()` now lets a
+  sixth of the logical cores build at once (4 on 24), and a build still queued is replaced by the newer
+  edit instead of running first.
+
+100 sequential adds, queue time on the main thread: 2.3 to 3.0 s before, 0.49 s after (2 to 8 ms per add,
+was up to 60 ms at 90 standing). Time until the last of the 100 builds lands: 1.2 s before, 0.8 s after
+the queued-replace change. The remaining growth with N is the signature loop (about 4 ms at 100).
 
 ## Open follow-ups, ranked
 
 1. Procgen: profile and speed up `evaluate_structure` on the facade, layout and courtyard nodes, starting
    with `hof_farm`, `coaching_inn`, `dutch_bell_house`, `canal_house`. Digests must stay identical.
-2. Profile and fix the add path with many structures standing (above).
-3. Build structures on load as a `WorkerThreadPool` group, keeping result order.
-4. Drop `arrays` from cached parts once the node exists, or cap the cache by bytes (up to about 300 MB
-   transient).
-5. Skip `keys_of` for unchanged structures, with a ground version counter on `MapDocument` so sculpts and
-   water invalidate it (36 ms to about 3 ms per preview step at 100).
-6. Vectorise `StructurePaint.paint` and `split_surface`.
-7. structgen: the size sweep's mesh check dominates (2.6 s for the inn up to 22.6 s for `townhouse`,
+2. Vectorise `StructurePaint.paint` and `split_surface` (not done in struct_perf2; needs a gain of 20
+   percent of build time and byte-identical output).
+3. Builds scale badly past 4 to 6 threads (allocator contention); a build that allocates less would help
+   edits and loads alike.
+4. structgen: the size sweep's mesh check dominates (2.6 s for the inn up to 22.6 s for `townhouse`,
    already on a worker). A coarser or early-out `ProcgenMeshCheck.holes` would help. Edit evaluation runs
    on the main thread behind a 50 ms debounce and costs 13 to 80 ms.

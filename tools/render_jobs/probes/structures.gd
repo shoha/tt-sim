@@ -262,6 +262,16 @@ static func _village(base: Node, step: Dictionary) -> String:
 	var t1 := Time.get_ticks_usec()
 	nodes.flush()
 	var flush_ms := (Time.get_ticks_usec() - t1) / 1000.0
+	# What the parts cache keeps beside the nodes: the mesh arrays, and the collision faces.
+	var cached_bytes := 0
+	for parts: Dictionary in nodes._cache.values():
+		for mesh: Dictionary in parts.get("meshes", []):
+			for column: Variant in mesh["arrays"]:
+				if column is Object or column == null:
+					continue
+				cached_bytes += var_to_bytes(column).size()
+		cached_bytes += (parts.get("collision", PackedVector3Array()) as PackedVector3Array).size() * 12
+	print("village parts cache: %d entries, %.1f MB" % [nodes._cache.size(), cached_bytes / 1048576.0])
 	var instances := 0
 	var triangles := 0
 	var collision_faces := 0
