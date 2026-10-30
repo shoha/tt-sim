@@ -397,10 +397,13 @@ func _structure_node(id: int, parts: Dictionary) -> Node3D:
 	var node := Node3D.new()
 	node.name = "Structure_%d" % id
 	var style: String = parts.get("style", "")
+	var tone: String = parts.get("stone_tone", "")
 	for mesh: Dictionary in parts.get("meshes", []):
 		var array_mesh := ArrayMesh.new()
 		array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh.arrays)
-		array_mesh.surface_set_material(0, _material(String(mesh.kind), String(mesh.role), style))
+		array_mesh.surface_set_material(
+			0, _material(String(mesh.kind), String(mesh.role), style, tone)
+		)
 		var instance := MeshInstance3D.new()
 		instance.name = "%s_%s" % [mesh.role, mesh.kind]
 		instance.mesh = array_mesh
@@ -465,11 +468,13 @@ static func _body(faces: PackedVector3Array, structure_id: int) -> StaticBody3D:
 
 ## The material of surface `kind` in `role` for a structure of style `style` (StructureMaterials:
 ## the painterly wall and roof shaders over the rock's masonry and the planks), one shared per
-## triple.
-func _material(kind: String, role: String, style: String) -> Material:
+## triple (masonry also by the style's `stone_tone` hint).
+func _material(kind: String, role: String, style: String, tone: String = "") -> Material:
 	var key := "%s:%s:%s" % [kind, role, style]
+	if kind == "masonry" and tone != "":
+		key += ":" + tone
 	if not _materials.has(key):
-		_materials[key] = StructureMaterials.make(kind, role, style, _palette_root)
+		_materials[key] = StructureMaterials.make(kind, role, style, _palette_root, tone)
 	return _materials[key]
 
 
