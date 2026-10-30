@@ -602,6 +602,34 @@ weather's direction was not used because it put the wheel edge-on to the default
 there is no in-game one) keeps the wheel still. `provenance_at` finds a mesh under the pivots by name.
 Tests: `tests/unit/test_structure_mill.gd`.
 
+### World and fantasy styles (2026-10-30, branch `world_look`)
+
+Fourteen structures from procgen's `docs/world_styles.md` (pin e83d8d9; 98 core structures), all
+`regional` and data only (no new node, no new host contract, no existing digest moved):
+`yurt`, `tulou`, `trullo` (family `roundhouse`; round plans, 12, 16 and 10 corners), `blackhouse`
+(`cottage`), `riad` (`courtyard`), `sahel_mosque` and `stave_church` (family `temple`, so the Church
+chip finds them by tag), `wizard_tower` (8-gon), `mushroom_cottage` (10-gon), `treehouse`,
+`elven_hall`, `dwarven_gatehall` and `crystal_spire` (6-gon), family `fantasy`, and `ruined_chapel`
+(`ruin`, the Ruin chip). The exporter reads the round ones through `_round_style_spec`. Surface
+kinds needed no new role: the new nodes' kinds (thatch, shingle, slate, spikes as `vigas`, glass,
+metal) were already roled.
+
+Host-side choices made from the look round (software tiles, `render_jobs/world_look_thumbs`):
+`crystal_spire` takes `wall_kind: plaster` in its style patch (its pale lavender wall tones came out
+a brick brown through the masonry texture), and `stone_tone: grey` on `wizard_tower`; the dwarven
+gatehall and the stave church take lighter palette lists in their patches (the style's own
+`#585D68` stone and `#2E2A28` roof render black). Tile framing: `TILE_ZOOM_FACTORS` in
+`library_structures.gd` (a cone, a hat or a lift over a low wall height says little about the
+height; the treehouse stands on 3 to 4 m posts, which `default_height` does not count).
+
+Look verdicts (tabletop angle, the game's own materials): strong are yurt, trullo, sahel_mosque,
+wizard_tower, mushroom_cottage and ruined_chapel; good are elven_hall (green upswept roof, tall
+pointed windows), treehouse (a hut on posts with a deck, no trunk) and riad (reads as a courtyard
+house only from the open side); fair are tulou (a big brown drum: reads as a granary, no yard),
+blackhouse (modest, close to the thatched cottage), stave_church (dark timber and a spired tower,
+still the darkest tile) and crystal_spire (pale and tall; its cone is a bright teal, not luminous);
+weakest is dwarven_gatehall (the roof planks and tower tops stay near black under the bright meadow).
+
 ## Dressing
 
 Probe B (2026-10-28, branch `probe-b`): a building is settled into its place by a yard,

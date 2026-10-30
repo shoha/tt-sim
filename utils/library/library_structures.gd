@@ -46,6 +46,21 @@ const TILE_DEFAULT_HEIGHT_M := 2.4
 const TILE_ZOOM_PER_HEIGHT_M := 1.9
 ## A windmill's tip and sails stand well above its wall height: its tile is framed this much wider.
 const TILE_WINDMILL_ZOOM_FACTOR := 1.45
+## Structures whose wall height says little about how tall they stand (a cone or a hat over a low
+## wall, a hut lifted on posts) or how wide they read (a big drum): the factor their tile's framing
+## is scaled by (world_look, 2026-10-30: measured from the first round of the 14 world tiles).
+const TILE_ZOOM_FACTORS: Dictionary = {
+	"trullo": 1.45,
+	"mushroom_cottage": 1.1,
+	"elven_hall": 1.1,
+	"tulou": 0.85,
+	"sahel_mosque": 0.8,
+	"stave_church": 0.95,
+	"dwarven_gatehall": 0.85,
+	"wizard_tower": 1.2,
+	"crystal_spire": 1.6,
+	"treehouse": 2.1,
+}
 const TILE_LOOK_Z := 0.0
 const TILE_SETTLE_S := 3.0
 const TILE_JOB_TIMEOUT_S := 900
@@ -572,8 +587,11 @@ static func thumbnail_job(
 	}
 
 
-## The factor a family's tile is framed wider by (1.0 for most).
+## The factor a structure's tile is framed wider by (1.0 for most): its own in TILE_ZOOM_FACTORS,
+## else its family's (the windmills').
 static func _family_zoom(entry: Dictionary) -> float:
+	if TILE_ZOOM_FACTORS.has(String(entry.get("id", ""))):
+		return float(TILE_ZOOM_FACTORS[String(entry.get("id", ""))])
 	return TILE_WINDMILL_ZOOM_FACTOR if String(entry.get("family", "")) == "windmill" else 1.0
 
 

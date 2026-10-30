@@ -1,0 +1,726 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "building_layout_2",
+      "to_port": 0
+    },
+    {
+      "from": "wonk_4",
+      "from_port": 0,
+      "to": "output_3",
+      "to_port": 0
+    },
+    {
+      "from": "building_layout_2",
+      "from_port": 0,
+      "to": "courtyard_wing_5",
+      "to_port": 0
+    },
+    {
+      "from": "courtyard_wing_5",
+      "from_port": 0,
+      "to": "facade_6",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "building_walls_7",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "roof_flat_8",
+      "to_port": 0
+    },
+    {
+      "from": "building_walls_7",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "roof_flat_8",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "facade_trim_9",
+      "to_port": 0
+    },
+    {
+      "from": "facade_trim_9",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "glazing_10",
+      "to_port": 0
+    },
+    {
+      "from": "glazing_10",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_6",
+      "from_port": 0,
+      "to": "arch_heads_11",
+      "to_port": 0
+    },
+    {
+      "from": "arch_heads_11",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "building_layout_2",
+      "from_port": 0,
+      "to": "courtyard_wing_12",
+      "to_port": 0
+    },
+    {
+      "from": "courtyard_wing_12",
+      "from_port": 0,
+      "to": "facade_13",
+      "to_port": 0
+    },
+    {
+      "from": "facade_13",
+      "from_port": 0,
+      "to": "building_walls_14",
+      "to_port": 0
+    },
+    {
+      "from": "facade_13",
+      "from_port": 0,
+      "to": "roof_flat_15",
+      "to_port": 0
+    },
+    {
+      "from": "building_walls_14",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "roof_flat_15",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_13",
+      "from_port": 0,
+      "to": "facade_trim_16",
+      "to_port": 0
+    },
+    {
+      "from": "facade_trim_16",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_13",
+      "from_port": 0,
+      "to": "glazing_17",
+      "to_port": 0
+    },
+    {
+      "from": "glazing_17",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_13",
+      "from_port": 0,
+      "to": "arch_heads_18",
+      "to_port": 0
+    },
+    {
+      "from": "arch_heads_18",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_13",
+      "from_port": 0,
+      "to": "gallery_19",
+      "to_port": 0
+    },
+    {
+      "from": "gallery_19",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "building_layout_2",
+      "from_port": 0,
+      "to": "courtyard_wing_20",
+      "to_port": 0
+    },
+    {
+      "from": "courtyard_wing_20",
+      "from_port": 0,
+      "to": "facade_21",
+      "to_port": 0
+    },
+    {
+      "from": "facade_21",
+      "from_port": 0,
+      "to": "building_walls_22",
+      "to_port": 0
+    },
+    {
+      "from": "facade_21",
+      "from_port": 0,
+      "to": "roof_flat_23",
+      "to_port": 0
+    },
+    {
+      "from": "building_walls_22",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "roof_flat_23",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_21",
+      "from_port": 0,
+      "to": "facade_trim_24",
+      "to_port": 0
+    },
+    {
+      "from": "facade_trim_24",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_21",
+      "from_port": 0,
+      "to": "glazing_25",
+      "to_port": 0
+    },
+    {
+      "from": "glazing_25",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_21",
+      "from_port": 0,
+      "to": "arch_heads_26",
+      "to_port": 0
+    },
+    {
+      "from": "arch_heads_26",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_21",
+      "from_port": 0,
+      "to": "gallery_27",
+      "to_port": 0
+    },
+    {
+      "from": "gallery_27",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "building_layout_2",
+      "from_port": 0,
+      "to": "courtyard_yard_28",
+      "to_port": 0
+    },
+    {
+      "from": "courtyard_yard_28",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "interface": [
+    {
+      "default": 3.21,
+      "label": "Wall height",
+      "max": 8,
+      "min": 1.6,
+      "name": "height",
+      "tip": "Height of the walls above the highest ground.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Window width",
+      "max": 2,
+      "min": 0,
+      "name": "window_width",
+      "tip": "Width of the main windows; 0 for the style's own, or for none without a style.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Floors",
+      "max": 6,
+      "min": 0,
+      "name": "floors",
+      "tip": "How many floors; 0 for the style's own.",
+      "type": "float"
+    },
+    {
+      "default": 1,
+      "label": "Textured masonry",
+      "max": 1,
+      "min": 0,
+      "name": "textured",
+      "tip": "1 carries the courses in a masonry texture instead of modelled blocks.",
+      "type": "float"
+    },
+    {
+      "default": 2.93,
+      "label": "Wing depth",
+      "max": 4,
+      "min": 2.5,
+      "name": "wing_depth",
+      "tip": "How deep the wings are, wall to wall; the yard is what remains.",
+      "type": "float"
+    },
+    {
+      "default": 0,
+      "label": "Lit windows",
+      "max": 1,
+      "min": 0,
+      "name": "lit",
+      "tip": "The share of windows that glow warm, as if lit from within.",
+      "type": "float"
+    },
+    {
+      "default": 0.25,
+      "label": "Wonk",
+      "max": 1,
+      "min": 0,
+      "name": "wonk",
+      "tip": "How hand-made the building looks: sagging roof, uneven tops, leaning walls.",
+      "type": "float"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        120.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "building_layout_2",
+      "params": {
+        "door_height": 2.5,
+        "door_width": 1.5,
+        "height": "@height",
+        "roof": "flat",
+        "textured": "@textured",
+        "window_width": "@window_width"
+      },
+      "position": [
+        250.0,
+        120.0
+      ],
+      "type": "building_layout"
+    },
+    {
+      "id": "output_3",
+      "params": {
+        "name": "Riad (arched court house)",
+        "palette_accent": "#2F7F8F,#3E6F92,#B5432E,#C99A2B",
+        "palette_roof": "#D9B98C,#CDA878",
+        "palette_wall": "#E8CDA0,#E6C8A0,#EAD3AA,#E2C492"
+      },
+      "position": [
+        1180.0,
+        120.0
+      ],
+      "type": "output"
+    },
+    {
+      "id": "wonk_4",
+      "params": {
+        "wonk": "@wonk"
+      },
+      "position": [
+        1180.0,
+        20.0
+      ],
+      "type": "wonk"
+    },
+    {
+      "id": "courtyard_wing_5",
+      "params": {
+        "depth": "@wing_depth",
+        "extra": 0.68,
+        "overhang": 0.05,
+        "plan": "u",
+        "ridge": 1,
+        "roof": "flat",
+        "roof_thickness": 0.3,
+        "wing": 1
+      },
+      "position": [
+        480.0,
+        820.0
+      ],
+      "type": "courtyard_wing"
+    },
+    {
+      "id": "facade_6",
+      "params": {
+        "floors": "@floors",
+        "style": "{\"bay_width\":3.3,\"floor_height_target\":2.9,\"floors\":\"auto\",\"ground_floor_height\":0.0,\"name\":\"riad\",\"patterns\":{\"back\":{\"ground\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"blank\"}]}],\"upper\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"slit\"}]}]},\"front\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"blank\"}]},{\"size\":\"~bay\",\"symbol\":\"door\"},{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"blank\"}]}],\"upper\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"slit\"}]}]},\"side\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"arch\"}]}],\"upper\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"arch\"}]}]}},\"symbols\":{\"arch\":{\"head\":\"round\",\"height\":1.5,\"kind\":\"window\",\"sill\":0.8,\"width\":0.9},\"blank\":{\"kind\":\"blank\"},\"door\":{\"head\":\"round\",\"kind\":\"door\"},\"slit\":{\"height\":0.7,\"kind\":\"window\",\"sill\":1.2,\"width\":0.5}}}",
+        "window_width": "@window_width"
+      },
+      "position": [
+        710.0,
+        820.0
+      ],
+      "type": "facade"
+    },
+    {
+      "id": "building_walls_7",
+      "params": {
+        "role": "plaster",
+        "wall_kind": "plaster"
+      },
+      "position": [
+        940.0,
+        820.0
+      ],
+      "type": "building_walls"
+    },
+    {
+      "id": "roof_flat_8",
+      "params": {
+        "overhang": 0.05,
+        "roof_role": "adobe",
+        "roof_thickness": 0.3,
+        "segments": 6
+      },
+      "position": [
+        940.0,
+        1020.0
+      ],
+      "type": "roof_flat"
+    },
+    {
+      "id": "facade_trim_9",
+      "params": {
+        "door_frame": true,
+        "frames": false,
+        "lintels": false,
+        "shutters": false,
+        "sills": true,
+        "step": true
+      },
+      "position": [
+        940.0,
+        1220.0
+      ],
+      "type": "facade_trim"
+    },
+    {
+      "id": "glazing_10",
+      "params": {
+        "lit": "@lit",
+        "muntins": true
+      },
+      "position": [
+        1180.0,
+        1220.0
+      ],
+      "type": "glazing"
+    },
+    {
+      "id": "arch_heads_11",
+      "params": {
+        "kind": "plaster",
+        "role": "plaster"
+      },
+      "position": [
+        1180.0,
+        1420.0
+      ],
+      "type": "arch_heads"
+    },
+    {
+      "id": "courtyard_wing_12",
+      "params": {
+        "depth": "@wing_depth",
+        "extra": 0.11,
+        "overhang": 0,
+        "plan": "u",
+        "ridge": 1,
+        "roof": "flat",
+        "roof_thickness": 0.3,
+        "wing": 2
+      },
+      "position": [
+        480.0,
+        1520.0
+      ],
+      "type": "courtyard_wing"
+    },
+    {
+      "id": "facade_13",
+      "params": {
+        "floors": "@floors",
+        "style": "{\"bay_width\":3.3,\"floor_height_target\":2.9,\"floors\":\"auto\",\"ground_floor_height\":0.0,\"name\":\"riad\",\"patterns\":{\"back\":{\"ground\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"blank\"}]}],\"upper\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"slit\"}]}]},\"front\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"blank\"}]},{\"size\":\"~bay\",\"symbol\":\"door\"},{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"blank\"}]}],\"upper\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"slit\"}]}]},\"side\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"arch\"}]}],\"upper\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"arch\"}]}]}},\"symbols\":{\"arch\":{\"head\":\"round\",\"height\":1.5,\"kind\":\"window\",\"sill\":0.8,\"width\":0.9},\"blank\":{\"kind\":\"blank\"},\"door\":{\"head\":\"round\",\"kind\":\"door\"},\"slit\":{\"height\":0.7,\"kind\":\"window\",\"sill\":1.2,\"width\":0.5}}}",
+        "window_width": "@window_width"
+      },
+      "position": [
+        710.0,
+        1520.0
+      ],
+      "type": "facade"
+    },
+    {
+      "id": "building_walls_14",
+      "params": {
+        "role": "plaster",
+        "wall_kind": "plaster"
+      },
+      "position": [
+        940.0,
+        1520.0
+      ],
+      "type": "building_walls"
+    },
+    {
+      "id": "roof_flat_15",
+      "params": {
+        "overhang": 0,
+        "roof_role": "adobe",
+        "roof_thickness": 0.3,
+        "segments": 6
+      },
+      "position": [
+        940.0,
+        1720.0
+      ],
+      "type": "roof_flat"
+    },
+    {
+      "id": "facade_trim_16",
+      "params": {
+        "door_frame": true,
+        "frames": false,
+        "lintels": false,
+        "shutters": false,
+        "sills": true,
+        "step": true
+      },
+      "position": [
+        940.0,
+        1920.0
+      ],
+      "type": "facade_trim"
+    },
+    {
+      "id": "glazing_17",
+      "params": {
+        "lit": "@lit",
+        "muntins": true
+      },
+      "position": [
+        1180.0,
+        1920.0
+      ],
+      "type": "glazing"
+    },
+    {
+      "id": "arch_heads_18",
+      "params": {
+        "kind": "plaster",
+        "role": "plaster"
+      },
+      "position": [
+        1180.0,
+        2120.0
+      ],
+      "type": "arch_heads"
+    },
+    {
+      "id": "gallery_19",
+      "params": {
+        "depth": 1.5,
+        "face": "front",
+        "kind": "porch",
+        "rail": "none",
+        "roof": "pent",
+        "roof_role": "adobe",
+        "span": "front"
+      },
+      "position": [
+        1180.0,
+        1720.0
+      ],
+      "type": "gallery"
+    },
+    {
+      "id": "courtyard_wing_20",
+      "params": {
+        "depth": "@wing_depth",
+        "extra": -0.09,
+        "overhang": 0,
+        "plan": "u",
+        "ridge": 1,
+        "roof": "flat",
+        "roof_thickness": 0.3,
+        "wing": 3
+      },
+      "position": [
+        480.0,
+        2220.0
+      ],
+      "type": "courtyard_wing"
+    },
+    {
+      "id": "facade_21",
+      "params": {
+        "floors": "@floors",
+        "style": "{\"bay_width\":3.3,\"floor_height_target\":2.9,\"floors\":\"auto\",\"ground_floor_height\":0.0,\"name\":\"riad\",\"patterns\":{\"back\":{\"ground\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"blank\"}]}],\"upper\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"slit\"}]}]},\"front\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"blank\"}]},{\"size\":\"~bay\",\"symbol\":\"door\"},{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"blank\"}]}],\"upper\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"slit\"}]}]},\"side\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"arch\"}]}],\"upper\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"arch\"}]}]}},\"symbols\":{\"arch\":{\"head\":\"round\",\"height\":1.5,\"kind\":\"window\",\"sill\":0.8,\"width\":0.9},\"blank\":{\"kind\":\"blank\"},\"door\":{\"head\":\"round\",\"kind\":\"door\"},\"slit\":{\"height\":0.7,\"kind\":\"window\",\"sill\":1.2,\"width\":0.5}}}",
+        "window_width": "@window_width"
+      },
+      "position": [
+        710.0,
+        2220.0
+      ],
+      "type": "facade"
+    },
+    {
+      "id": "building_walls_22",
+      "params": {
+        "role": "plaster",
+        "wall_kind": "plaster"
+      },
+      "position": [
+        940.0,
+        2220.0
+      ],
+      "type": "building_walls"
+    },
+    {
+      "id": "roof_flat_23",
+      "params": {
+        "overhang": 0,
+        "roof_role": "adobe",
+        "roof_thickness": 0.3,
+        "segments": 6
+      },
+      "position": [
+        940.0,
+        2420.0
+      ],
+      "type": "roof_flat"
+    },
+    {
+      "id": "facade_trim_24",
+      "params": {
+        "door_frame": true,
+        "frames": false,
+        "lintels": false,
+        "shutters": false,
+        "sills": true,
+        "step": true
+      },
+      "position": [
+        940.0,
+        2620.0
+      ],
+      "type": "facade_trim"
+    },
+    {
+      "id": "glazing_25",
+      "params": {
+        "lit": "@lit",
+        "muntins": true
+      },
+      "position": [
+        1180.0,
+        2620.0
+      ],
+      "type": "glazing"
+    },
+    {
+      "id": "arch_heads_26",
+      "params": {
+        "kind": "plaster",
+        "role": "plaster"
+      },
+      "position": [
+        1180.0,
+        2820.0
+      ],
+      "type": "arch_heads"
+    },
+    {
+      "id": "gallery_27",
+      "params": {
+        "depth": 1.5,
+        "face": "front",
+        "kind": "porch",
+        "rail": "none",
+        "roof": "pent",
+        "roof_role": "adobe",
+        "span": "front"
+      },
+      "position": [
+        1180.0,
+        2420.0
+      ],
+      "type": "gallery"
+    },
+    {
+      "id": "courtyard_yard_28",
+      "params": {
+        "depth": "@wing_depth",
+        "plan": "u",
+        "role": "stone"
+      },
+      "position": [
+        480.0,
+        2920.0
+      ],
+      "type": "courtyard_yard"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

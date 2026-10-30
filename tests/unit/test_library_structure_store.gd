@@ -360,6 +360,7 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 			"alpine_chalet",
 			"barn",
 			"bartizan_keep",
+				"blackhouse",
 			"brick_terrace",
 			"canal_house",
 			"castle_keep",
@@ -371,10 +372,13 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 			"cottage",
 			"cottage_chimneyed",
 			"cottage_hip",
+				"crystal_spire",
 			"dome_hall",
 			"dormered_house",
 			"dutch_bell_house",
 			"dutch_canal_house",
+				"dwarven_gatehall",
+				"elven_hall",
 			"flemish_stepped",
 			"gambrel_barn",
 			"gatehouse",
@@ -393,10 +397,12 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 			"mansard_townhouse",
 			"market_hall",
 			"minka",
+				"mushroom_cottage",
 			"pagoda_tower",
 			"porch_cottage",
 			"porthole_cafe",
 			"pueblo",
+				"riad",
 			"round_hut",
 			"roundhouse",
 			"ruin_barn",
@@ -404,10 +410,13 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 			"ruin_cottage",
 			"ruin_tower",
 			"ruin_townhouse",
+				"ruined_chapel",
+				"sahel_mosque",
 			"saltbox_house",
 				"siheyuan",
 			"slate_house",
 			"stabbur",
+				"stave_church",
 			"stilt_house",
 			"stone_house",
 			"thatched_cottage",
@@ -430,14 +439,19 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 			"townhouse_hip",
 			"townhouse_timber",
 			"townhouse_trimmed",
+				"treehouse",
+				"trullo",
 			"tudor_framed",
 			"tudor_townhouse",
+				"tulou",
 			"turf_longhouse",
 			"veranda_cottage",
 			"villa_stucco",
 			"watchtower",
 			"windmill_dutch",
-			"windmill_tower"
+			"windmill_tower",
+				"wizard_tower",
+				"yurt"
 		]
 	)
 	var pins := (
@@ -446,7 +460,7 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 		. strip_edges()
 		. split("\n")
 	)
-	assert_eq(pins.size(), 84)
+	assert_eq(pins.size(), 98)
 	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
 	var moved := PackedStringArray()
 	for line in pins:
@@ -473,3 +487,21 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 	)
 	for row in LibraryStructureStore.structures("core"):
 		assert_ne(String(row["thumb"]), "", "%s has a tile in the index" % row["ref"])
+
+
+func test_the_world_styles_are_regional_and_their_rows_are_valid() -> void:
+	LibraryRegistry.official_root = LibraryRegistry.OFFICIAL_ROOT
+	LibraryRegistry.user_root = ROOT + "/no_user_libraries"
+	LibraryRegistry.clear()
+	PaletteLibrary.clear_cache()
+	LibraryRegistry.apply(PaletteLibrary.DEFAULT_ROOT)
+	var round_ids := ["yurt", "tulou", "trullo", "wizard_tower", "mushroom_cottage", "crystal_spire"]
+	for id: String in round_ids + ["blackhouse", "riad", "sahel_mosque", "stave_church"]:
+		var row := LibraryStructureStore.structure("core:" + id)
+		assert_false(row.is_empty(), "%s is in core" % id)
+		assert_true(StreetSplit.REGIONAL_TAG in (row["tags"] as Array), "%s is regional" % id)
+		var size: Array = row["default_size_m"]
+		var least := minf(float(size[0]), float(size[1]))
+		assert_gte(least, float(row["min_side_m"]), "%s default fits" % id)
+		var is_round := StructurePlacement.sides_of(row) > 0
+		assert_eq(is_round, id in round_ids, "%s is round only with a round plan" % id)
