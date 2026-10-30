@@ -87,6 +87,14 @@ past 900 s, and keeps each shard's log under `user://gut_shards/`. If you stop i
 shards keep running: run the process check and stop them by id. The serial command (Godot CLI
 below) is for running one ordered process, for example when debugging an order-dependent failure.
 
+Never run two sharded gates at once, and never run one while a render job is using the same user
+folder (2026-10-30): every worktree without its own `config/custom_user_dir_name` shares
+`user://gut_shards/` and the rest of the `TTSim` user data, so overlapping runs overwrite each
+other's shard files. It looked like a code failure twice in one day: a cluster of unrelated
+`test_surface_store` failures, then a run that reported FAILED after half the tests. The
+affected files passed alone. With agents in several worktrees, run the gate one at a time, and
+treat a cluster of failures in files nobody touched as a collision until the rerun in quiet.
+
 Run the `gdlint` line with `D:/dev/tabletop/tt-sim` as the working directory: gdlint reads `.gdlintrc`
 only from the current directory, and run from `D:/dev/tabletop` it reports false max-public-methods and
 max-returns failures that the repo config relaxes. All three must be clean before pushing. Do
