@@ -28,10 +28,11 @@ void fragment() {
 	// Downhill on the face (the normal tilts downhill), and across it.
 	vec2 down = flat_len > 0.02 ? flat_n / flat_len : vec2(0.0, 1.0);
 	vec2 across = vec2(-down.y, down.x);
-	float s = dot(s_pos.xz, down) / max(up, 0.35);
+	float s = dot(s_pos.xz, down) / max(up, 0.12);
 	float t = dot(s_pos.xz, across);
-	// Tiles only on faces that look up; slab edges and the ridge beam get the colour alone.
-	float tiled = smoothstep(0.25, 0.5, up);
+	// Tiles only on faces that look up at all (a cone or spire's face is steep, its normal only a
+	// little up); vertical slab edges and the ridge beam get the colour alone.
+	float tiled = smoothstep(0.06, 0.2, up);
 	float r = s / course_m;
 	float row = floor(r);
 	float c = t / tile_m + 0.5 * mod(row, 2.0);
