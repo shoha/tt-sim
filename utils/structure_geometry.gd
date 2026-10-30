@@ -14,6 +14,8 @@ extends RefCounted
 ##    "meshes": [{"kind": surface kind, "role": StructureLook role, "arrays": mesh arrays,
 ##                "tags": per vertex tag ids into "tag_table"}, ...],
 ##    "tag_table": provenance paths (node id, then slot path), "collision": faces,
+##    "walkable": the extra faces of decks, stairs, platforms and piles (StructureWalkable; not in
+##    digest_of),
 ##    "top": highest walkable point (NONE when nothing was built), "openings": the boxes procgen
 ##    reports, "layout": the final ProcgenBuildingLayout or null (volumes, openings with slot
 ##    provenance, kept for the day a vision rule needs them), "triangles": int,
@@ -149,6 +151,7 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 	parts.meshes = meshes
 	parts.tag_table = PackedStringArray(geometry.tag_table)
 	parts.collision = geometry.collision
+	parts.walkable = StructureWalkable.faces(meshes, parts.tag_table)
 	parts.top = geometry.top if triangles > 0 else NONE
 	parts.openings = geometry.openings
 	parts.layout = plant.get("layout")
@@ -425,6 +428,7 @@ static func _empty(structure: Structure) -> Dictionary:
 		"meshes": [],
 		"tag_table": PackedStringArray(),
 		"collision": PackedVector3Array(),
+		"walkable": PackedVector3Array(),
 		"top": NONE,
 		"openings": [],
 		"layout": null,
