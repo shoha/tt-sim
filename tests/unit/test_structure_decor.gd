@@ -182,8 +182,152 @@ func test_free_rects_are_the_patch_minus_the_grown_openings() -> void:
 	assert_eq(door.size(), 3, "a door from the foot: both sides and the strip over it")
 
 
-func test_the_margin_is_more_than_the_leaf_overhang() -> void:
-	assert_gt(StructureDecor.OPENING_MARGIN, 0.1, "the baked leaves overhang the patch by 0.1 m")
+func test_the_margin_is_a_little_under_the_leaf_overhang() -> void:
+	# The baked leaves overhang their patch by about 0.1 m: a leaf may just touch a frame.
+	assert_between(StructureDecor.OPENING_MARGIN, 0.08, 0.10, "0.08 to 0.10 m")
+	assert_almost_eq(StructureDecor.FIT_MIN_SCALE, 0.6, 0.0001, "no plant is shrunk to a scrap")
+
+
+func _shaped_catalog() -> Dictionary:
+	var out := _catalog()
+	out["Strip_N_v0"] = _entry("strip_n", "wall", [0.5, 2.2])
+	out["Strip_W_v0"] = _entry("strip_w", "wall", [0.8, 2.2])
+	out["Strip_W_v1"] = _entry("strip_w", "wall", [0.8, 2.2])
+	out["Band_S_v0"] = _entry("band_s", "wall", [1.2, 0.5])
+	out["Band_M_v0"] = _entry("band_m", "wall", [1.8, 0.6])
+	return out
+
+
+func _shaped_rows() -> Array[Dictionary]:
+	return StructureDecor.rows_of("core", _shaped_catalog())
+
+
+# Two windows 1.0 m apart on a 3 m by 2.5 m wall: a pier between them, bands under and over.
+func _pier_windows() -> Array:
+	return [[-1.5, 0.5, -0.6, 2.0], [0.6, 0.5, 1.5, 2.0]]
+
+
+func test_shapes_follow_the_aspect_of_the_patch() -> void:
+	assert_eq(StructureDecor.shape_of(Vector2(0.5, 2.2)), StructureDecor.SHAPE_STRIP)
+	assert_eq(StructureDecor.shape_of(Vector2(0.8, 2.2)), StructureDecor.SHAPE_STRIP)
+	assert_eq(StructureDecor.shape_of(Vector2(1.2, 0.5)), StructureDecor.SHAPE_BAND)
+	assert_eq(StructureDecor.shape_of(Vector2(1.8, 0.6)), StructureDecor.SHAPE_BAND)
+	assert_eq(StructureDecor.shape_of(Vector2(1.2, 1.2)), StructureDecor.SHAPE_SQUARE)
+	assert_eq(StructureDecor.shape_of(Vector2(2.2, 2.6)), StructureDecor.SHAPE_SQUARE)
+	assert_eq(StructureDecor.shape_for(0.8, 2.5), StructureDecor.SHAPE_STRIP, "tall and narrow")
+	assert_eq(StructureDecor.shape_for(3.0, 0.4), StructureDecor.SHAPE_BAND, "wide and short")
+	assert_eq(StructureDecor.shape_for(1.6, 2.0), StructureDecor.SHAPE_SQUARE)
+	var classes := StructureDecor.classes_of(_shaped_rows(), "ivy")
+	assert_eq(StructureDecor.of_shape(classes, StructureDecor.SHAPE_STRIP).size(), 2)
+	assert_eq(StructureDecor.of_shape(classes, StructureDecor.SHAPE_BAND).size(), 2)
+	assert_eq(StructureDecor.of_shape(classes, StructureDecor.SHAPE_SQUARE).size(), 3)
+
+
+func test_a_pier_takes_strips_and_a_band_gap_takes_bands() -> void:
+	var out := StructureDecor.placements(
+		[_anchor("ivy", 3.0, 2.5, _pier_windows())], _shaped_rows()
+	)
+	var strips := 0
+	var bands := 0
+	for plant in out:
+		var id := str(plant.id)
+		var centre_x: float = (plant.transform as Transform3D).origin.x - 2.0
+		var foot_y: float = (plant.transform as Transform3D).origin.y - 0.5
+		if id.contains("Strip"):
+			strips += 1
+			assert_true(absf(centre_x) < 0.5, "a strip stands in the pier: %s" % centre_x)
+		elif id.contains("Band"):
+			bands += 1
+			assert_true(foot_y < 0.5 or foot_y >= 2.0 - 0.001, "a band under or over the windows")
+	assert_gt(strips, 0, "the pier gets a strip")
+	assert_gt(bands, 0, "the bands under and over the windows get a band")
+
+
+func test_a_plant_beside_an_opening_is_never_shrunk_below_the_floor() -> void:
+	for width in [2.5, 3.0, 4.0, 5.0]:
+		var out := StructureDecor.placements(
+			[_anchor("ivy", width, 2.5, _pier_windows())], _shaped_rows()
+		)
+		for plant in out:
+			var scale: float = (plant.transform as Transform3D).basis.get_scale().x
+			assert_gte(scale, StructureDecor.FIT_MIN_SCALE - 0.0001, "%s wide: %s" % [width, plant.id])
+
+
+func test_shaped_plants_never_reach_an_opening_grown_by_the_margin() -> void:
+	var windows := [[-0.5, 0.8, 0.5, 1.8], [1.2, 0.8, 2.0, 1.8], [-2.2, 0.0, -1.5, 2.0]]
+	for width in [2.5, 3.0, 4.0, 5.0, 7.0]:
+		for height in [1.5, 2.5, 3.5]:
+			var open := windows.filter(
+				func(r: Array) -> bool: return r[0] >= -float(width) * 0.5 and r[2] <= float(width) * 0.5
+			)
+			var out := StructureDecor.placements(
+				[_anchor("ivy", width, height, open)], _shaped_rows()
+			)
+			for plant in out:
+				assert_false(
+					_overlaps_grown(plant, open, StructureDecor.OPENING_MARGIN),
+					"%s x %s: %s at %s" % [width, height, plant.id, plant.transform.origin]
+				)
+
+
+func test_a_pier_is_filled_not_left_to_one_small_plant() -> void:
+	var rect := StructureDecor.free_rects(3.0, 2.5, _pier_windows(), StructureDecor.OPENING_MARGIN)
+	var pier: Array = []
+	for r: Array in rect:
+		if float(r[0]) > -0.55 and float(r[2]) < 0.55 and float(r[3]) - float(r[1]) > 2.0:
+			pier = r
+	assert_false(pier.is_empty(), "the pier is a free rectangle")
+	var area := (float(pier[2]) - float(pier[0])) * (float(pier[3]) - float(pier[1]))
+	var out := StructureDecor.placements(
+		[_anchor("ivy", 3.0, 2.5, _pier_windows())], _shaped_rows()
+	)
+	var covered := 0.0
+	for plant in out:
+		var centre_x: float = (plant.transform as Transform3D).origin.x - 2.0
+		if absf(centre_x) < 0.5:
+			covered += plant.extent.x * plant.extent.y
+	assert_gte(covered, area * 0.6, "the pier is at least 60 percent covered")
+
+
+func test_plants_in_a_rectangle_overlap_by_at_most_the_limit() -> void:
+	var out := StructureDecor.placements(
+		[_anchor("ivy", 1.0, 6.0, [[-0.5, 5.0, 0.5, 5.5]])], _shaped_rows()
+	)
+	# One column at x: plants stacked below the band are spaced by at least extent less the limit.
+	var by_x := {}
+	for plant in out:
+		if (plant.transform as Transform3D).origin.y - 0.5 < 4.5:
+			var key := "%.3f" % (plant.transform as Transform3D).origin.x
+			if not by_x.has(key):
+				by_x[key] = []
+			(by_x[key] as Array).append(plant)
+	assert_gt(by_x.size(), 0)
+	for key: String in by_x:
+		var column: Array = by_x[key]
+		column.sort_custom(
+			func(a: Dictionary, b: Dictionary) -> bool:
+				return (a.transform as Transform3D).origin.y < (b.transform as Transform3D).origin.y
+		)
+		for i in range(1, column.size()):
+			var pitch: float = (
+				(column[i].transform as Transform3D).origin.y
+				- (column[i - 1].transform as Transform3D).origin.y
+			)
+			var ext_h: float = column[i - 1].extent.y
+			assert_gte(pitch, ext_h * (1.0 - StructureDecor.MAX_OVERLAP) - 0.001, "stack pitch %s" % pitch)
+
+
+func test_the_shaped_cap_still_holds_three_thousand_triangles() -> void:
+	var anchors: Array[Dictionary] = [
+		_anchor("ivy", 3.0, 2.5, _pier_windows()), _anchor("ivy", 7.0, 3.5, [[-0.5, 0.8, 0.5, 1.8]])
+	]
+	var placed := StructureDecor.placements(anchors, _shaped_rows())
+	var cost := {}
+	for plant in placed:
+		cost[plant.id] = 400
+	var capped := StructureDecor.cap_triangles(placed, cost)
+	assert_lte(capped.size() * 400, StructureDecor.MAX_TRIANGLES)
+	assert_gt(placed.size() * 400, StructureDecor.MAX_TRIANGLES, "the probe is over the cap to start")
 
 
 func test_exclusions_are_passed_on_in_the_plants_frame() -> void:
@@ -348,7 +492,7 @@ func test_the_scatter_never_selects_a_decor_asset() -> void:
 
 func test_the_shipped_core_serves_its_decor_assets() -> void:
 	var rows := AssetStore.decor_rows(PaletteLibrary.DEFAULT_ROOT)
-	assert_eq(rows.size(), 15, "nine ivy and six planters")
+	assert_eq(rows.size(), 25, "nineteen ivy (nine squares, six strips, four bands) and six planters")
 	assert_true(StructureDecor.available())
 	for row in rows:
 		assert_eq(row.wind_category, "climber")
@@ -439,7 +583,8 @@ func test_a_dressed_cottages_plants_stand_on_its_wall() -> void:
 		var out := t.basis.z.normalized()
 		var hit := _wall_distance(walls, t.origin + out * 0.5 + Vector3.UP * 0.4, -out)
 		assert_gt(hit.distance, 0.0, "a wall behind the plant")
-		assert_almost_eq(float(hit.distance), 0.5, 0.03, "ivy foot within 3 cm of the wall")
+		# A band under a sill or a strip by a frame may stand beside trim that is proud of the wall.
+		assert_almost_eq(float(hit.distance), 0.5, 0.06, "ivy foot within 6 cm of the wall")
 		assert_gt(out.dot(hit.normal), 0.99, "the plant faces out of the wall")
 		checked += 1
 	assert_gt(checked, 0)

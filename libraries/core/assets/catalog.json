@@ -1410,7 +1410,507 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 194712,
+			"bytes": 171036,
+			"category": "bush",
+			"dimensions_m": [
+				2.036,
+				0.825,
+				0.313
+			],
+			"file": "assets/bush/Bush_IvyBand_M_v0.glb",
+			"game_kind": "bush",
+			"group": "bush_ivyband_m",
+			"id": "Bush_IvyBand_M_v0",
+			"lods": [
+				{
+					"node": "Bush_IvyBand_M_v0_LOD0",
+					"triangles": 172
+				}
+			],
+			"name": "Bush Ivyband M",
+			"node": "Bush_IvyBand_M_v0_LOD0",
+			"package_stem": "Bush_IvyBand_M_v0",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					1.8,
+					0.6
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "c8501106d61e0729ce575f10088115d33c3e290970a7831f9793d6e84f10e5ab",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyBand_M_v0.png",
+			"triangles": 172,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 171040,
+			"category": "bush",
+			"dimensions_m": [
+				1.937,
+				0.891,
+				0.337
+			],
+			"file": "assets/bush/Bush_IvyBand_M_v1.glb",
+			"game_kind": "bush",
+			"group": "bush_ivyband_m",
+			"id": "Bush_IvyBand_M_v1",
+			"lods": [
+				{
+					"node": "Bush_IvyBand_M_v1_LOD0",
+					"triangles": 172
+				}
+			],
+			"name": "Bush Ivyband M",
+			"node": "Bush_IvyBand_M_v1_LOD0",
+			"package_stem": "Bush_IvyBand_M_v1",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					1.8,
+					0.6
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "04d6b130b96c002d502f6cfea83cf6c87d620a1f5ccf72ff859851e9da409a54",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyBand_M_v1.png",
+			"triangles": 172,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 165124,
+			"category": "bush",
+			"dimensions_m": [
+				1.421,
+				0.725,
+				0.313
+			],
+			"file": "assets/bush/Bush_IvyBand_S_v0.glb",
+			"game_kind": "bush",
+			"group": "bush_ivyband_s",
+			"id": "Bush_IvyBand_S_v0",
+			"lods": [
+				{
+					"node": "Bush_IvyBand_S_v0_LOD0",
+					"triangles": 96
+				}
+			],
+			"name": "Bush Ivyband S",
+			"node": "Bush_IvyBand_S_v0_LOD0",
+			"package_stem": "Bush_IvyBand_S_v0",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					1.2,
+					0.5
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "49d1aaacee110a501884c50880cc5822167e93dc5001aa93ac42cd1bfaef12d5",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyBand_S_v0.png",
+			"triangles": 96,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 165120,
+			"category": "bush",
+			"dimensions_m": [
+				1.418,
+				0.798,
+				0.334
+			],
+			"file": "assets/bush/Bush_IvyBand_S_v1.glb",
+			"game_kind": "bush",
+			"group": "bush_ivyband_s",
+			"id": "Bush_IvyBand_S_v1",
+			"lods": [
+				{
+					"node": "Bush_IvyBand_S_v1_LOD0",
+					"triangles": 96
+				}
+			],
+			"name": "Bush Ivyband S",
+			"node": "Bush_IvyBand_S_v1_LOD0",
+			"package_stem": "Bush_IvyBand_S_v1",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					1.2,
+					0.5
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "e6486638289d617fa26c55c121b40cb7a74ef69976f3f228ad96de2973d9e237",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyBand_S_v1.png",
+			"triangles": 96,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 170368,
+			"category": "bush",
+			"dimensions_m": [
+				0.746,
+				1.318,
+				0.314
+			],
+			"file": "assets/bush/Bush_IvyStrip_N_v0.glb",
+			"game_kind": "bush",
+			"group": "bush_ivystrip_n",
+			"id": "Bush_IvyStrip_N_v0",
+			"lods": [
+				{
+					"node": "Bush_IvyStrip_N_v0_LOD0",
+					"triangles": 160
+				}
+			],
+			"name": "Bush Ivystrip N",
+			"node": "Bush_IvyStrip_N_v0_LOD0",
+			"package_stem": "Bush_IvyStrip_N_v0",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					0.5,
+					2.2
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "40be500c1a0d4605b42859e246f5970f1a7763347bdf33d7d11737374b0217da",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyStrip_N_v0.png",
+			"triangles": 160,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 170364,
+			"category": "bush",
+			"dimensions_m": [
+				0.753,
+				2.344,
+				0.308
+			],
+			"file": "assets/bush/Bush_IvyStrip_N_v1.glb",
+			"game_kind": "bush",
+			"group": "bush_ivystrip_n",
+			"id": "Bush_IvyStrip_N_v1",
+			"lods": [
+				{
+					"node": "Bush_IvyStrip_N_v1_LOD0",
+					"triangles": 160
+				}
+			],
+			"name": "Bush Ivystrip N",
+			"node": "Bush_IvyStrip_N_v1_LOD0",
+			"package_stem": "Bush_IvyStrip_N_v1",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					0.5,
+					2.2
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "b2d88ac635e13060dc7439ce425689f04ad15145046e78c6484fa3483b3dcef8",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyStrip_N_v1.png",
+			"triangles": 160,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 170372,
+			"category": "bush",
+			"dimensions_m": [
+				0.734,
+				1.223,
+				0.307
+			],
+			"file": "assets/bush/Bush_IvyStrip_N_v2.glb",
+			"game_kind": "bush",
+			"group": "bush_ivystrip_n",
+			"id": "Bush_IvyStrip_N_v2",
+			"lods": [
+				{
+					"node": "Bush_IvyStrip_N_v2_LOD0",
+					"triangles": 160
+				}
+			],
+			"name": "Bush Ivystrip N",
+			"node": "Bush_IvyStrip_N_v2_LOD0",
+			"package_stem": "Bush_IvyStrip_N_v2",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					0.5,
+					2.2
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "e38f47d472db86e95ef7899fd69c9c74eaa4de68525de210d74e1cad8ba05b0f",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyStrip_N_v2.png",
+			"triangles": 160,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 177912,
+			"category": "bush",
+			"dimensions_m": [
+				1.048,
+				1.376,
+				0.313
+			],
+			"file": "assets/bush/Bush_IvyStrip_W_v0.glb",
+			"game_kind": "bush",
+			"group": "bush_ivystrip_w",
+			"id": "Bush_IvyStrip_W_v0",
+			"lods": [
+				{
+					"node": "Bush_IvyStrip_W_v0_LOD0",
+					"triangles": 260
+				}
+			],
+			"name": "Bush Ivystrip W",
+			"node": "Bush_IvyStrip_W_v0_LOD0",
+			"package_stem": "Bush_IvyStrip_W_v0",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					0.8,
+					2.2
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "30d7834e4f86b41d939a1507edca17c711c5a80b5d4c01d04a81b5c6d94428c1",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyStrip_W_v0.png",
+			"triangles": 260,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 177912,
+			"category": "bush",
+			"dimensions_m": [
+				1.051,
+				2.344,
+				0.335
+			],
+			"file": "assets/bush/Bush_IvyStrip_W_v1.glb",
+			"game_kind": "bush",
+			"group": "bush_ivystrip_w",
+			"id": "Bush_IvyStrip_W_v1",
+			"lods": [
+				{
+					"node": "Bush_IvyStrip_W_v1_LOD0",
+					"triangles": 260
+				}
+			],
+			"name": "Bush Ivystrip W",
+			"node": "Bush_IvyStrip_W_v1_LOD0",
+			"package_stem": "Bush_IvyStrip_W_v1",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					0.8,
+					2.2
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "22fd5c07aee5ba7392b73f4ea8766a97f8cc53fae763fe63023abdb08942257f",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyStrip_W_v1.png",
+			"triangles": 260,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 177908,
+			"category": "bush",
+			"dimensions_m": [
+				1.036,
+				2.265,
+				0.328
+			],
+			"file": "assets/bush/Bush_IvyStrip_W_v2.glb",
+			"game_kind": "bush",
+			"group": "bush_ivystrip_w",
+			"id": "Bush_IvyStrip_W_v2",
+			"lods": [
+				{
+					"node": "Bush_IvyStrip_W_v2_LOD0",
+					"triangles": 260
+				}
+			],
+			"name": "Bush Ivystrip W",
+			"node": "Bush_IvyStrip_W_v2_LOD0",
+			"package_stem": "Bush_IvyStrip_W_v2",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					0.8,
+					2.2
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "ba797ed02e2a51c3c39ebff2a25897c6c8062875128fb832674ef7258ed0fc53",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyStrip_W_v2.png",
+			"triangles": 260,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 194804,
 			"category": "bush",
 			"dimensions_m": [
 				2.45,
@@ -1441,7 +1941,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "84a415007e9031dd92e967f431373e732c54e3c45a1b232dba88f01a07f98102",
+			"sha256": "3026a27cd038789e49ab67dfaed1cc1ab97138e9bd76c9f060722fed16a4d44e",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1460,7 +1960,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 194712,
+			"bytes": 194804,
 			"category": "bush",
 			"dimensions_m": [
 				2.382,
@@ -1491,7 +1991,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "01f05119709981cba3039a40b63a2f0319d91758f7749825383a164b17fc0886",
+			"sha256": "6a2139522d7698646ea3ffd0af248ad18c6db3988f5546bca7864823448e51ca",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1510,7 +2010,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 194708,
+			"bytes": 194800,
 			"category": "bush",
 			"dimensions_m": [
 				2.423,
@@ -1541,7 +2041,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "2352790b3036ffe7429506e2ab583e45d6d303bef15bed703f43310e74bffd7f",
+			"sha256": "99168402567381c0fee2bd89e92a7212a6393133c6df144304ff7930f8e0bcf4",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1560,7 +2060,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 179732,
+			"bytes": 179824,
 			"category": "bush",
 			"dimensions_m": [
 				1.836,
@@ -1591,7 +2091,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "33cc215a946769438b2da1f947ae1a6cb9e935ad813e934477764d20b254328e",
+			"sha256": "0e82dbb4dd2b493271f8ae1ae9affec6e1c88550710187071b2ad1e168c5cc60",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1610,7 +2110,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 179728,
+			"bytes": 179824,
 			"category": "bush",
 			"dimensions_m": [
 				1.8,
@@ -1641,7 +2141,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "bb5cb96faace0fd4cb81d830d30af3fbb81ac6033990edb18e7fc50d39294fc6",
+			"sha256": "ed35a1a12a88ef26943c9643906386ad6c5d84f0099b0b752511e8e09bf224d6",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1660,7 +2160,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 179728,
+			"bytes": 179824,
 			"category": "bush",
 			"dimensions_m": [
 				1.799,
@@ -1691,7 +2191,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "e2639e47b15f4f49228cde9eef633425aaff6184fcab2fe93f72e1eb5744cca8",
+			"sha256": "9016b5ad48638220544b64d6f07f6e805fbec82a8f0c5d01232903cc91512899",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1710,7 +2210,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 168420,
+			"bytes": 168512,
 			"category": "bush",
 			"dimensions_m": [
 				1.421,
@@ -1741,7 +2241,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "00672d211819c493632f3c58d48268030f48702ea3407600a964acdc56cc7181",
+			"sha256": "d2d2b97240ebda359518e95492544f541d13b32aa73ab6f7152be511a4b02fe5",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1760,7 +2260,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 168420,
+			"bytes": 168512,
 			"category": "bush",
 			"dimensions_m": [
 				1.418,
@@ -1791,7 +2291,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "3176f2355ef5b13bb4529c28963cf4b407a23cf0b9c1d9f0c16c81ce1bad634d",
+			"sha256": "d28fbb65738802de0d4982ebc5c635385f062d4fff14f9fb8d08b348d510b498",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1810,7 +2310,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 168420,
+			"bytes": 168516,
 			"category": "bush",
 			"dimensions_m": [
 				1.358,
@@ -1841,7 +2341,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "dc1fb6c2964c518428fe51887470533173d80680aad712b1d96db0fe9d5f4f5c",
+			"sha256": "72ffe25a464af8396581b2bb3c1cfb89d9b688551c4bc9200a8a7747466ac8ca",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
