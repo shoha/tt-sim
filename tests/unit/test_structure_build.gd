@@ -462,6 +462,36 @@ func test_a_node_lands_by_itself_within_a_few_frames() -> void:
 	assert_eq(structures.builds, 1)
 
 
+func test_a_drag_faster_than_the_build_still_shows_the_building_move() -> void:
+	# struct_perf: a courtyard takes 100 to 200 ms to build, and a handle drag previews at 10 Hz or
+	# faster. Dropping the running build for every newer edit meant none ever landed (40 previews at
+	# 10 Hz, 0 landings); now the newest edit waits behind the running build, so landings keep coming.
+	var structure := Structure.make(1, "core:siheyuan", _plan(), 5)
+	structure.footprint = PackedVector2Array(
+		[Vector2(-7, -6), Vector2(7, -6), Vector2(7, 6), Vector2(-7, 6)]
+	)
+	_doc.structures.append(structure)
+	var structures := AuthoredStructures.create(_doc)
+	_map.add_child(structures)
+	var landed_before := structures.builds
+	for i in 15:
+		var next := _doc.structures[0].copy()
+		next.footprint = PackedVector2Array(
+			[Vector2(-7, -6), Vector2(7.0 + 0.1 * i, -6), Vector2(7.0 + 0.1 * i, 6), Vector2(-7, 6)]
+		)
+		_doc.structures[0] = next
+		structures.refresh(_doc)
+		await get_tree().create_timer(0.04).timeout
+	assert_gt(structures.builds, landed_before, "a build landed while the drag was still going")
+	assert_eq(structures.flush() >= 0, true)
+	assert_eq(structures.pending_count(), 0, "nothing waits after a flush")
+	assert_eq(
+		structures.keys()[1],
+		StructureGeometry.key_of(_doc, _doc.structures[0]),
+		"the final state is the newest edit"
+	)
+
+
 func test_the_newest_edit_wins() -> void:
 	_doc.structures.append(_structure())
 	var structures := AuthoredStructures.create(_doc)
@@ -805,3 +835,23 @@ func test_the_reader_skips_a_bad_footprint_with_a_warning_and_the_writer_refuses
 	assert_ne(MapStructureIO.problem(_doc), "", "the writer's check")
 	assert_ne(MapDocumentIO.write(_doc, SAVE_PATH), OK, "a document with it does not save")
 	assert_engine_error("not writing")
+
+
+func test_ground_samples_read_the_ground_exactly_as_a_call_per_point_does() -> void:
+	# struct_perf: ground_samples batches its reads (WaterGeometry.grounds_at); the key must not move,
+	# so every sample equals ground_at() at the same point, on a slope with a bump, for a plan inside
+	# the map, an L and a plan hanging off the map's edge (where the read clamps).
+	_slope()
+	_raise(Vector2(1, 1), 0.7)
+	var edge := _plan(Vector2(_doc.extent_m().x * 0.5 - 1.0, 0.0))
+	for plan: PackedVector2Array in [_plan(), _l_plan(), edge]:
+		var points := StructureGeometry.sample_points(plan)
+		var samples := StructureGeometry.ground_samples(_doc, plan)
+		assert_gt(points.size(), 8)
+		assert_eq(samples.size(), points.size())
+		var mismatches := 0
+		for i in points.size():
+			if samples[i] != PackedFloat32Array([WaterGeometry.ground_at(_doc, points[i])])[0]:
+				mismatches += 1
+		assert_eq(mismatches, 0, "every sample is ground_at() at its point")
+	assert_eq(StructureGeometry.ground_samples(_doc, PackedVector2Array()).size(), 0)
