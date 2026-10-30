@@ -1956,13 +1956,13 @@
 			"plans": [
 				"round"
 			],
+			"sides": 8,
 			"tags": [
 				"house",
 				"stone",
 				"thatch",
 				"roundhouse",
 				"round",
-				"sides:8",
 				"regional"
 			],
 			"textured": true,
@@ -1989,13 +1989,13 @@
 			"plans": [
 				"round"
 			],
+			"sides": 12,
 			"tags": [
 				"house",
 				"timber",
 				"hut",
 				"roundhouse",
 				"round",
-				"sides:12",
 				"regional"
 			],
 			"textured": false,
@@ -2024,12 +2024,12 @@
 			"plans": [
 				"round"
 			],
+			"sides": 4,
 			"tags": [
 				"tower",
 				"stone",
 				"watchtower",
 				"round",
-				"sides:4",
 				"regional"
 			],
 			"textured": true,
@@ -2059,12 +2059,12 @@
 			"plans": [
 				"round"
 			],
+			"sides": 6,
 			"tags": [
 				"tower",
 				"stone",
 				"cone",
 				"round",
-				"sides:6",
 				"regional"
 			],
 			"textured": true,
@@ -2092,12 +2092,12 @@
 			"plans": [
 				"round"
 			],
+			"sides": 10,
 			"tags": [
 				"hall",
 				"stone",
 				"dome",
 				"round",
-				"sides:10",
 				"regional"
 			],
 			"textured": true,
@@ -2273,12 +2273,12 @@
 			"plans": [
 				"round"
 			],
+			"sides": 8,
 			"tags": [
 				"ruin",
 				"tower",
 				"stone",
 				"round",
-				"sides:8",
 				"regional"
 			],
 			"textured": true,

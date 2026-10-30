@@ -678,7 +678,7 @@ const STARTERS: Array[Dictionary] = [
 		"variant": "Barns round a yard",
 	},
 	# Round and polygonal plans (styles integration card, 2026-10-28): each is a regular polygon
-	# (plan kind "round", the `sides:<n>` tag), built by ProcgenRecipesRound. `round` says how:
+	# (plan kind "round", the index entry's `sides` key), built by ProcgenRecipesRound. `round` says how:
 	# {"kind": a ProcgenRecipesRound kind, "shape": a tower's roof shape} or {"make": the options
 	# of ProcgenRecipesRound.make, with "sides", "radius", "radius_min" and "radius_max"}; a kind's
 	# sides and radius ranges are ProcgenRecipesRound.info's, and any key of the table overrides
@@ -898,32 +898,36 @@ func _make() -> Dictionary:
 		(
 			entries
 			. append(
-				{
-					"id": id,
-					"name": starter["name"],
-					"family": starter["family"],
-					"variant": starter["variant"],
-					"tags": _tags_of(starter, style),
-					"file": LibraryStructures.recipe_path(id),
-					"default_size_m": size.get("default", [6, 4]),
-					"min_side_m":
-					starter.get(
-						"min_side_m", size.get("min_side", LibraryStructures.DEFAULT_MIN_SIDE_M)
-					),
-					"max_side_m":
-					starter.get(
-						"max_side_m", size.get("max_side", LibraryStructures.DEFAULT_MAX_SIDE_M)
-					),
-					"max_area_m2":
-					starter.get(
-						"max_area_m2", size.get("max_area", LibraryStructures.DEFAULT_MAX_AREA_M2)
-					),
-					"plans":
-					[StructurePlacement.ROUND_PLAN] if not round_spec.is_empty() else ["rect"],
-					"expose": _exposed(starter, style, doc),
-					"textured": declares_textured,
-					"thumb": LibraryStructures.thumb_path(id),
-				}
+				_with_sides(
+					{
+						"id": id,
+						"name": starter["name"],
+						"family": starter["family"],
+						"variant": starter["variant"],
+						"tags": _tags_of(starter, style),
+						"file": LibraryStructures.recipe_path(id),
+						"default_size_m": size.get("default", [6, 4]),
+						"min_side_m":
+						starter.get(
+							"min_side_m", size.get("min_side", LibraryStructures.DEFAULT_MIN_SIDE_M)
+						),
+						"max_side_m":
+						starter.get(
+							"max_side_m", size.get("max_side", LibraryStructures.DEFAULT_MAX_SIDE_M)
+						),
+						"max_area_m2":
+						starter.get(
+							"max_area_m2",
+							size.get("max_area", LibraryStructures.DEFAULT_MAX_AREA_M2)
+						),
+						"plans":
+						[StructurePlacement.ROUND_PLAN] if not round_spec.is_empty() else ["rect"],
+						"expose": _exposed(starter, style, doc),
+						"textured": declares_textured,
+						"thumb": LibraryStructures.thumb_path(id),
+					},
+					round_spec
+				)
 			)
 		)
 	files[LibraryStructures.INDEX_FILE] = LibraryStructures.index_text(entries)
@@ -1037,6 +1041,15 @@ static func _merged(base: Dictionary, patch: Dictionary) -> Dictionary:
 	return out
 
 
+## `entry` with the `sides` key of a round starter (its `round_spec`, empty for a rectangle).
+static func _with_sides(entry: Dictionary, round_spec: Dictionary) -> Dictionary:
+	if round_spec.is_empty():
+		return entry
+	var out := entry.duplicate()
+	out["sides"] = int(round_spec["sides"])
+	return out
+
+
 ## The tags of `starter`: its own, else its style's and `regional` (StreetSplit.REGIONAL_TAG: a
 ## street's generic lots do not pick a regional style).
 static func _tags_of(starter: Dictionary, style: Dictionary) -> Array:
@@ -1045,7 +1058,6 @@ static func _tags_of(starter: Dictionary, style: Dictionary) -> Array:
 		# A round plan is never a street's lot (its lots are rectangles) and belongs to a region.
 		var tags: Array = (starter.get("tags", []) as Array).duplicate()
 		tags.append(StructurePlacement.ROUND_PLAN)
-		tags.append("%s%d" % [StructurePlacement.SIDES_TAG, int(round_spec["sides"])])
 		tags.append(StreetSplit.REGIONAL_TAG)
 		return tags
 	if starter.has("tags"):

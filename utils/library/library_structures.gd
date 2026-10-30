@@ -289,6 +289,12 @@ static func _clean_entry(
 			warnings.append("%s: plans holds a bad entry (dropped)" % where)
 	if plans.is_empty():
 		plans = ["rect"]
+	# The cleaned plans decide whether the entry is round; the index's own `sides` and tags give the
+	# corner count.
+	var shape := entry.duplicate()
+	shape["plans"] = plans
+	for problem: String in ProcgenStructureIndex.sides_errors(shape):
+		warnings.append("%s: %s (ignored)" % [where, problem])
 	var thumb := thumb_path(id)
 	if entry.get("thumb") is String:
 		var given := String(entry["thumb"])
@@ -302,7 +308,7 @@ static func _clean_entry(
 			thumb = given
 		else:
 			warnings.append("%s: thumb must be a thumbnails/ .jpg path (default used)" % where)
-	return {
+	var clean := {
 		"id": id,
 		"name": name,
 		"family": _text(entry.get("family"), MAX_NAME, id),
@@ -318,6 +324,11 @@ static func _clean_entry(
 		"textured": entry.get("textured") == true,
 		"thumb": thumb,
 	}
+	# A round entry always carries its corner count, as a key (a legacy `sides:<n>` tag or the
+	# default fills it in); a rectangle has none.
+	if ProcgenStructureIndex.is_round(clean):
+		clean["sides"] = ProcgenStructureIndex.sides_of(shape)
+	return clean
 
 
 static func _tags(raw: Variant, where: String, warnings: Array[String]) -> Array:

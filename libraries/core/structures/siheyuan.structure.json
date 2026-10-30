@@ -73,61 +73,13 @@
       "to_port": 0
     },
     {
-      "from": "building_layout_2",
+      "from": "facade_6",
       "from_port": 0,
-      "to": "courtyard_wing_11",
+      "to": "gallery_11",
       "to_port": 0
     },
     {
-      "from": "courtyard_wing_11",
-      "from_port": 0,
-      "to": "facade_12",
-      "to_port": 0
-    },
-    {
-      "from": "facade_12",
-      "from_port": 0,
-      "to": "building_walls_13",
-      "to_port": 0
-    },
-    {
-      "from": "facade_12",
-      "from_port": 0,
-      "to": "roof_gable_14",
-      "to_port": 0
-    },
-    {
-      "from": "building_walls_13",
-      "from_port": 0,
-      "to": "wonk_4",
-      "to_port": 0
-    },
-    {
-      "from": "roof_gable_14",
-      "from_port": 0,
-      "to": "wonk_4",
-      "to_port": 0
-    },
-    {
-      "from": "facade_12",
-      "from_port": 0,
-      "to": "facade_trim_15",
-      "to_port": 0
-    },
-    {
-      "from": "facade_trim_15",
-      "from_port": 0,
-      "to": "wonk_4",
-      "to_port": 0
-    },
-    {
-      "from": "facade_12",
-      "from_port": 0,
-      "to": "glazing_16",
-      "to_port": 0
-    },
-    {
-      "from": "glazing_16",
+      "from": "gallery_11",
       "from_port": 0,
       "to": "wonk_4",
       "to_port": 0
@@ -135,119 +87,71 @@
     {
       "from": "building_layout_2",
       "from_port": 0,
-      "to": "courtyard_wing_17",
+      "to": "courtyard_wing_12",
       "to_port": 0
     },
     {
-      "from": "courtyard_wing_17",
+      "from": "courtyard_wing_12",
       "from_port": 0,
-      "to": "facade_18",
+      "to": "facade_13",
       "to_port": 0
     },
     {
-      "from": "facade_18",
+      "from": "facade_13",
       "from_port": 0,
-      "to": "building_walls_19",
+      "to": "building_walls_14",
       "to_port": 0
     },
     {
-      "from": "facade_18",
+      "from": "facade_13",
       "from_port": 0,
-      "to": "roof_gable_20",
+      "to": "roof_gable_15",
       "to_port": 0
     },
     {
-      "from": "building_walls_19",
-      "from_port": 0,
-      "to": "wonk_4",
-      "to_port": 0
-    },
-    {
-      "from": "roof_gable_20",
+      "from": "building_walls_14",
       "from_port": 0,
       "to": "wonk_4",
       "to_port": 0
     },
     {
-      "from": "facade_18",
-      "from_port": 0,
-      "to": "facade_trim_21",
-      "to_port": 0
-    },
-    {
-      "from": "facade_trim_21",
+      "from": "roof_gable_15",
       "from_port": 0,
       "to": "wonk_4",
       "to_port": 0
     },
     {
-      "from": "facade_18",
+      "from": "facade_13",
       "from_port": 0,
-      "to": "glazing_22",
+      "to": "facade_trim_16",
       "to_port": 0
     },
     {
-      "from": "glazing_22",
-      "from_port": 0,
-      "to": "wonk_4",
-      "to_port": 0
-    },
-    {
-      "from": "building_layout_2",
-      "from_port": 0,
-      "to": "courtyard_wing_23",
-      "to_port": 0
-    },
-    {
-      "from": "courtyard_wing_23",
-      "from_port": 0,
-      "to": "facade_24",
-      "to_port": 0
-    },
-    {
-      "from": "facade_24",
-      "from_port": 0,
-      "to": "building_walls_25",
-      "to_port": 0
-    },
-    {
-      "from": "facade_24",
-      "from_port": 0,
-      "to": "roof_gable_26",
-      "to_port": 0
-    },
-    {
-      "from": "building_walls_25",
+      "from": "facade_trim_16",
       "from_port": 0,
       "to": "wonk_4",
       "to_port": 0
     },
     {
-      "from": "roof_gable_26",
+      "from": "facade_13",
+      "from_port": 0,
+      "to": "glazing_17",
+      "to_port": 0
+    },
+    {
+      "from": "glazing_17",
       "from_port": 0,
       "to": "wonk_4",
       "to_port": 0
     },
     {
-      "from": "facade_24",
+      "from": "facade_13",
       "from_port": 0,
-      "to": "facade_trim_27",
+      "to": "gallery_18",
       "to_port": 0
     },
     {
-      "from": "facade_trim_27",
-      "from_port": 0,
-      "to": "wonk_4",
-      "to_port": 0
-    },
-    {
-      "from": "facade_24",
-      "from_port": 0,
-      "to": "glazing_28",
-      "to_port": 0
-    },
-    {
-      "from": "glazing_28",
+      "from": "gallery_18",
       "from_port": 0,
       "to": "wonk_4",
       "to_port": 0
@@ -255,11 +159,155 @@
     {
       "from": "building_layout_2",
       "from_port": 0,
-      "to": "courtyard_yard_29",
+      "to": "courtyard_wing_19",
       "to_port": 0
     },
     {
-      "from": "courtyard_yard_29",
+      "from": "courtyard_wing_19",
+      "from_port": 0,
+      "to": "facade_20",
+      "to_port": 0
+    },
+    {
+      "from": "facade_20",
+      "from_port": 0,
+      "to": "building_walls_21",
+      "to_port": 0
+    },
+    {
+      "from": "facade_20",
+      "from_port": 0,
+      "to": "roof_gable_22",
+      "to_port": 0
+    },
+    {
+      "from": "building_walls_21",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "roof_gable_22",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_20",
+      "from_port": 0,
+      "to": "facade_trim_23",
+      "to_port": 0
+    },
+    {
+      "from": "facade_trim_23",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_20",
+      "from_port": 0,
+      "to": "glazing_24",
+      "to_port": 0
+    },
+    {
+      "from": "glazing_24",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_20",
+      "from_port": 0,
+      "to": "gallery_25",
+      "to_port": 0
+    },
+    {
+      "from": "gallery_25",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "building_layout_2",
+      "from_port": 0,
+      "to": "courtyard_wing_26",
+      "to_port": 0
+    },
+    {
+      "from": "courtyard_wing_26",
+      "from_port": 0,
+      "to": "facade_27",
+      "to_port": 0
+    },
+    {
+      "from": "facade_27",
+      "from_port": 0,
+      "to": "building_walls_28",
+      "to_port": 0
+    },
+    {
+      "from": "facade_27",
+      "from_port": 0,
+      "to": "roof_gable_29",
+      "to_port": 0
+    },
+    {
+      "from": "building_walls_28",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "roof_gable_29",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_27",
+      "from_port": 0,
+      "to": "facade_trim_30",
+      "to_port": 0
+    },
+    {
+      "from": "facade_trim_30",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_27",
+      "from_port": 0,
+      "to": "glazing_31",
+      "to_port": 0
+    },
+    {
+      "from": "glazing_31",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "facade_27",
+      "from_port": 0,
+      "to": "gallery_32",
+      "to_port": 0
+    },
+    {
+      "from": "gallery_32",
+      "from_port": 0,
+      "to": "wonk_4",
+      "to_port": 0
+    },
+    {
+      "from": "building_layout_2",
+      "from_port": 0,
+      "to": "courtyard_yard_33",
+      "to_port": 0
+    },
+    {
+      "from": "courtyard_yard_33",
       "from_port": 0,
       "to": "wonk_4",
       "to_port": 0
@@ -493,7 +541,24 @@
       "type": "glazing"
     },
     {
-      "id": "courtyard_wing_11",
+      "id": "gallery_11",
+      "params": {
+        "depth": 1.5,
+        "face": "front",
+        "kind": "porch",
+        "rail": "bars",
+        "roof": "pent",
+        "roof_role": "tile",
+        "span": "front"
+      },
+      "position": [
+        1180.0,
+        320.0
+      ],
+      "type": "gallery"
+    },
+    {
+      "id": "courtyard_wing_12",
       "params": {
         "depth": "@wing_depth",
         "extra": 0.39,
@@ -512,7 +577,7 @@
       "type": "courtyard_wing"
     },
     {
-      "id": "facade_12",
+      "id": "facade_13",
       "params": {
         "floors": "@floors",
         "style": "{\"bay_width\":2.6,\"floor_height_target\":3.2,\"floors\":1.0,\"ground_floor_height\":0.0,\"name\":\"siheyuan\",\"patterns\":{\"back\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"blank\"}]}]},\"front\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"lattice\"}]},{\"size\":\"~bay\",\"symbol\":\"door\"},{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"lattice\"}]}]},\"side\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"blank\"}]}]}},\"symbols\":{\"blank\":{\"kind\":\"blank\"},\"door\":{\"kind\":\"door\"},\"lattice\":{\"height\":1.6,\"kind\":\"window\",\"sill\":0.8,\"width\":1.2}}}",
@@ -525,7 +590,7 @@
       "type": "facade"
     },
     {
-      "id": "building_walls_13",
+      "id": "building_walls_14",
       "params": {
         "role": "stone",
         "wall_kind": "brick"
@@ -537,7 +602,7 @@
       "type": "building_walls"
     },
     {
-      "id": "roof_gable_14",
+      "id": "roof_gable_15",
       "params": {
         "fringe": "@fringe",
         "gable_role": "brick",
@@ -554,7 +619,7 @@
       "type": "roof_gable"
     },
     {
-      "id": "facade_trim_15",
+      "id": "facade_trim_16",
       "params": {
         "door_frame": true,
         "frames": false,
@@ -570,7 +635,7 @@
       "type": "facade_trim"
     },
     {
-      "id": "glazing_16",
+      "id": "glazing_17",
       "params": {
         "lit": "@lit",
         "muntins": true
@@ -582,11 +647,28 @@
       "type": "glazing"
     },
     {
-      "id": "courtyard_wing_17",
+      "id": "gallery_18",
+      "params": {
+        "depth": 1.5,
+        "face": "front",
+        "kind": "porch",
+        "rail": "bars",
+        "roof": "pent",
+        "roof_role": "tile",
+        "span": "front"
+      },
+      "position": [
+        1180.0,
+        1020.0
+      ],
+      "type": "gallery"
+    },
+    {
+      "id": "courtyard_wing_19",
       "params": {
         "depth": "@wing_depth",
         "extra": -0.07,
-        "overhang": 0.71,
+        "overhang": 0,
         "plan": "ring",
         "ridge": 1,
         "roof": "gable",
@@ -601,7 +683,7 @@
       "type": "courtyard_wing"
     },
     {
-      "id": "facade_18",
+      "id": "facade_20",
       "params": {
         "floors": "@floors",
         "style": "{\"bay_width\":2.6,\"floor_height_target\":3.2,\"floors\":1.0,\"ground_floor_height\":0.0,\"name\":\"siheyuan\",\"patterns\":{\"back\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"blank\"}]}]},\"front\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"lattice\"}]},{\"size\":\"~bay\",\"symbol\":\"door\"},{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"lattice\"}]}]},\"side\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"blank\"}]}]}},\"symbols\":{\"blank\":{\"kind\":\"blank\"},\"door\":{\"kind\":\"door\"},\"lattice\":{\"height\":1.6,\"kind\":\"window\",\"sill\":0.8,\"width\":1.2}}}",
@@ -614,7 +696,7 @@
       "type": "facade"
     },
     {
-      "id": "building_walls_19",
+      "id": "building_walls_21",
       "params": {
         "role": "stone",
         "wall_kind": "brick"
@@ -626,11 +708,11 @@
       "type": "building_walls"
     },
     {
-      "id": "roof_gable_20",
+      "id": "roof_gable_22",
       "params": {
         "fringe": "@fringe",
         "gable_role": "brick",
-        "overhang": 0.71,
+        "overhang": 0,
         "roof_pitch": "@roof_pitch",
         "roof_role": "tile",
         "roof_thickness": 0.18,
@@ -643,7 +725,7 @@
       "type": "roof_gable"
     },
     {
-      "id": "facade_trim_21",
+      "id": "facade_trim_23",
       "params": {
         "door_frame": true,
         "frames": false,
@@ -659,7 +741,7 @@
       "type": "facade_trim"
     },
     {
-      "id": "glazing_22",
+      "id": "glazing_24",
       "params": {
         "lit": "@lit",
         "muntins": true
@@ -671,11 +753,28 @@
       "type": "glazing"
     },
     {
-      "id": "courtyard_wing_23",
+      "id": "gallery_25",
+      "params": {
+        "depth": 1.5,
+        "face": "front",
+        "kind": "porch",
+        "rail": "bars",
+        "roof": "pent",
+        "roof_role": "tile",
+        "span": "front"
+      },
+      "position": [
+        1180.0,
+        1720.0
+      ],
+      "type": "gallery"
+    },
+    {
+      "id": "courtyard_wing_26",
       "params": {
         "depth": "@wing_depth",
         "extra": -0.21,
-        "overhang": 0.71,
+        "overhang": 0,
         "plan": "ring",
         "ridge": 1,
         "roof": "gable",
@@ -690,7 +789,7 @@
       "type": "courtyard_wing"
     },
     {
-      "id": "facade_24",
+      "id": "facade_27",
       "params": {
         "floors": "@floors",
         "style": "{\"bay_width\":2.6,\"floor_height_target\":3.2,\"floors\":1.0,\"ground_floor_height\":0.0,\"name\":\"siheyuan\",\"patterns\":{\"back\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"blank\"}]}]},\"front\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"lattice\"}]},{\"size\":\"~bay\",\"symbol\":\"door\"},{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"lattice\"}]}]},\"side\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"blank\"}]}]}},\"symbols\":{\"blank\":{\"kind\":\"blank\"},\"door\":{\"kind\":\"door\"},\"lattice\":{\"height\":1.6,\"kind\":\"window\",\"sill\":0.8,\"width\":1.2}}}",
@@ -703,7 +802,7 @@
       "type": "facade"
     },
     {
-      "id": "building_walls_25",
+      "id": "building_walls_28",
       "params": {
         "role": "stone",
         "wall_kind": "brick"
@@ -715,11 +814,11 @@
       "type": "building_walls"
     },
     {
-      "id": "roof_gable_26",
+      "id": "roof_gable_29",
       "params": {
         "fringe": "@fringe",
         "gable_role": "brick",
-        "overhang": 0.71,
+        "overhang": 0,
         "roof_pitch": "@roof_pitch",
         "roof_role": "tile",
         "roof_thickness": 0.18,
@@ -732,7 +831,7 @@
       "type": "roof_gable"
     },
     {
-      "id": "facade_trim_27",
+      "id": "facade_trim_30",
       "params": {
         "door_frame": true,
         "frames": false,
@@ -748,7 +847,7 @@
       "type": "facade_trim"
     },
     {
-      "id": "glazing_28",
+      "id": "glazing_31",
       "params": {
         "lit": "@lit",
         "muntins": true
@@ -760,7 +859,24 @@
       "type": "glazing"
     },
     {
-      "id": "courtyard_yard_29",
+      "id": "gallery_32",
+      "params": {
+        "depth": 1.5,
+        "face": "front",
+        "kind": "porch",
+        "rail": "bars",
+        "roof": "pent",
+        "roof_role": "tile",
+        "span": "front"
+      },
+      "position": [
+        1180.0,
+        2420.0
+      ],
+      "type": "gallery"
+    },
+    {
+      "id": "courtyard_yard_33",
       "params": {
         "depth": "@wing_depth",
         "plan": "ring",

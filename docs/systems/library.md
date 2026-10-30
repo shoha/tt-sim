@@ -458,7 +458,8 @@ structures/pins.txt                core only: "<id> <pipeline md5> <triangles> <
 An index entry: `id` (`[a-z][a-z0-9_]*`, at most 48, no `__`; also the file stem), `name`, `family` and
 `variant` (a picker groups a family's variants), `tags`, `file` (must be the id's own path),
 `default_size_m` `[w, d]`, `min_side_m`, `max_side_m`, `max_area_m2` (the default footprint must fit
-them), `plans` (`rect` `l` `t` `u`, the footprint kinds a tool offers), `expose` (interface names the
+them), `plans` (`rect` `l` `t` `u` `round`, the footprint kinds a tool offers), `sides` (a round entry's corner
+count; the key lists live in procgen's `ProcgenStructureIndex`), `expose` (interface names the
 UI may show; a name the recipe's interface lacks is dropped), `textured` (the recipe declares the
 `textured` switch), `thumb`. Missing fields take the defaults (6 x 4 m, 2.5 to 14 m a side, 120 m2).
 A reference is `<library id>:<structure id>`, the cross-library grammar; a map stores it in
