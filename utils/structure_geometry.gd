@@ -161,10 +161,26 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 
 
 ## Every structure of `doc`: {"structures": [parts, ...]} (AuthoredLoadPrep's part).
-static func build(doc: MapDocument) -> Dictionary:
+## With `parallel` (and two or more structures) the structures build as one WorkerThreadPool group,
+## on at most AuthoredStructures.load_threads() threads, and the result keeps the document's order
+## (each task writes its own slot). Builds read the document and write nothing shared, so the
+## output is the same either way (the pinned digests).
+static func build(doc: MapDocument, parallel: bool = true) -> Dictionary:
+	var list: Array[Structure] = doc.structures
 	var out: Array = []
-	for structure in doc.structures:
-		out.append(build_one(doc, structure))
+	if not parallel or list.size() < 2:
+		for structure in list:
+			out.append(build_one(doc, structure))
+		return {"structures": out}
+	out.resize(list.size())
+	var group := WorkerThreadPool.add_group_task(
+		func(index: int) -> void: out[index] = build_one(doc, list[index]),
+		list.size(),
+		mini(list.size(), AuthoredStructures.load_threads()),
+		false,
+		"StructureGeometry.build"
+	)
+	WorkerThreadPool.wait_for_group_task_completion(group)
 	return {"structures": out}
 
 
