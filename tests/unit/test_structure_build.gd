@@ -377,6 +377,20 @@ func test_more_builds_than_workers_all_land_and_start_in_order() -> void:
 	assert_eq(structures.keys(), StructureGeometry.keys_of(_doc), "keys are the plain keys")
 
 
+func test_a_group_build_gives_the_same_parts_in_the_same_order() -> void:
+	var refs := ["core:cottage", "core:townhouse", "core:cottage_chimneyed", "core:stone_house"]
+	for k in 8:
+		var at := Vector2((float(k % 4) - 1.5) * 7.0, (float(k / 4) - 0.5) * 6.0)
+		_doc.structures.append(_structure(refs[k % refs.size()], k + 1, at))
+	var one_by_one := StructureGeometry.build(_doc, false)["structures"] as Array
+	var grouped := StructureGeometry.build(_doc, true)["structures"] as Array
+	assert_eq(grouped.size(), 8)
+	for k in 8:
+		assert_eq(int(grouped[k].id), k + 1, "slot %d holds structure %d" % [k, k + 1])
+		var want := StructureGeometry.digest_of(one_by_one[k])
+		assert_eq(StructureGeometry.digest_of(grouped[k]), want, str(k))
+
+
 func test_the_recipe_digest_is_part_of_the_key() -> void:
 	var structure := _structure("mylib:hut")
 	var text := FileAccess.get_file_as_string("res://procgen/recipes/cottage.json")

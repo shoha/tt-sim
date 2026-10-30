@@ -334,6 +334,13 @@ static func max_running() -> int:
 	return maxi(2, OS.get_processor_count() / 6)
 
 
+## How many threads a load's group build (StructureGeometry.build) may use: a quarter of the logical
+## cores, at least 2. Measured on 24 cores for 100 structures: 3.1 s on one thread, 0.90 s on 6,
+## 1.16 s on 3 and 1.37 s on 12 or 24 (more threads only fight over the allocator).
+static func load_threads() -> int:
+	return maxi(2, OS.get_processor_count() / 4)
+
+
 ## Starts queued builds (task NOT_STARTED, oldest first) until `limit` are running.
 func _launch_queued(limit: int) -> void:
 	var running := 0
