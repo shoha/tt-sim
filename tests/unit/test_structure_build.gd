@@ -32,6 +32,10 @@ func after_each() -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
 
 
+func _key(s: Structure) -> int:
+	return StructureGeometry.key_of(_doc, s, {}, [], StructureDecor.available())
+
+
 func _plan(centre: Vector2 = Vector2.ZERO) -> PackedVector2Array:
 	return PackedVector2Array(
 		[
@@ -374,7 +378,8 @@ func test_more_builds_than_workers_all_land_and_start_in_order() -> void:
 	assert_eq(structures.flush(), count, "all landed")
 	assert_eq(structures.get_child_count(), count)
 	assert_eq(structures.pending_count(), 0)
-	assert_eq(structures.keys(), StructureGeometry.keys_of(_doc), "keys are the plain keys")
+	var plain := StructureGeometry.keys_of(_doc, StructureDecor.available())
+	assert_eq(structures.keys(), plain, "keys are the plain keys")
 
 
 func test_a_group_build_gives_the_same_parts_in_the_same_order() -> void:
@@ -540,7 +545,7 @@ func test_an_edit_builds_on_a_worker_and_the_old_node_stays_until_it_is_ready() 
 	assert_eq(structures.flush(), 1)
 	assert_ne(structures.get_structure_node(1), before)
 	assert_eq(structures.pending_count(), 0)
-	assert_eq(structures.keys()[1], StructureGeometry.key_of(_doc, _doc.structures[0]))
+	assert_eq(structures.keys()[1], _key(_doc.structures[0]))
 
 
 func test_a_node_lands_by_itself_within_a_few_frames() -> void:
@@ -580,7 +585,7 @@ func test_a_drag_faster_than_the_build_still_shows_the_building_move() -> void:
 	assert_eq(structures.pending_count(), 0, "nothing waits after a flush")
 	assert_eq(
 		structures.keys()[1],
-		StructureGeometry.key_of(_doc, _doc.structures[0]),
+		_key(_doc.structures[0]),
 		"the final state is the newest edit"
 	)
 
@@ -612,7 +617,7 @@ func test_the_newest_edit_wins() -> void:
 		),
 		"the chimneyed cottage's meshes, its yard's two meshes and its body"
 	)
-	assert_eq(structures.keys()[1], StructureGeometry.key_of(_doc, second))
+	assert_eq(structures.keys()[1], _key(second))
 
 
 func test_an_edit_back_to_what_is_shown_cancels_a_build() -> void:

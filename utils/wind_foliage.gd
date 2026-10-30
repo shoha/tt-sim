@@ -62,6 +62,18 @@ const PRESETS := {
 		"flutter_speed": 4.0,
 		"gust_strength": 0.7,
 	},
+	# Wall climbers and window planters (decor assets): held by their wall or box, so a small, quick
+	# sway with a lively leaf flutter and no base darkening (a wall, not the ground, is behind them).
+	"climber":
+	{
+		"sway_speed": 1.2,
+		"sway_amplitude": 0.02,
+		"sway_frequency": 0.3,
+		"backlight": 0.0,
+		"flutter_amplitude": 0.022,
+		"flutter_speed": 4.5,
+		"gust_strength": 0.5,
+	},
 }
 
 ## Default albedo darkening at a grass blade's base (see wind_foliage_include.gdshaderinc's
@@ -178,7 +190,7 @@ static func _collect_wind_foliage_multimeshes(
 	for child in node.get_children():
 		if child is MultiMeshInstance3D and child.visible:
 			var category: String = child.get_meta("wind_foliage_category", "")
-			if category == "tree" or category == "grass":
+			if PRESETS.has(category):
 				result.append(child as MultiMeshInstance3D)
 		_collect_wind_foliage_multimeshes(child, result)
 
@@ -194,7 +206,7 @@ static func _collect_all_wind_foliage_multimeshes(
 	for child in node.get_children():
 		if child is MultiMeshInstance3D:
 			var category: String = child.get_meta("wind_foliage_category", "")
-			if category == "tree" or category == "grass":
+			if PRESETS.has(category):
 				result.append(child as MultiMeshInstance3D)
 		_collect_all_wind_foliage_multimeshes(child, result)
 

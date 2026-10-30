@@ -723,6 +723,14 @@ static func _serve(entry: Dictionary, root: String, official_of: Dictionary) -> 
 			out["error"] = String(report["error"])
 			return out
 		AssetStore.register_library(root, compiled["origins"], entry["official"], official_of)
+		# Decor plants (wall climbers, window planters) belong to no biome: the structure builder
+		# asks the store for them (StructureDecor).
+		AssetStore.register_decor(
+			root,
+			StructureDecor.rows_of(String(entry["id"]), read["catalog"]),
+			folder,
+			entry["official"]
+		)
 		_serve_surfaces(root, entry, compiled)
 	var library: Dictionary = read["library"]
 	LibraryStructureStore.register(entry)

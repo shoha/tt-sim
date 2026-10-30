@@ -25,6 +25,10 @@ extends RefCounted
 ##    provenance, kept for the day a vision rule needs them), "triangles": int,
 ##    "placed_kinds": the ornament kinds the evaluated building holds pieces of
 ##    (ProcgenOrnaments.placed_kinds; a requested kind missing found no room; not in digest_of),
+##    "anchors": ProcgenOrnaments.anchors, the ivy blankets and flower boxes where a host with decor
+##    plants (StructureDecor) places them; "decor": true when the build was asked for `soft:
+##    "anchors"` (the blobs are then NOT in "meshes"); neither is in digest_of. A build made with
+##    decor false draws procgen's flat blobs, the fallback of a library without decor assets,
 ##    "dressing": StructureDressing.build's yard (soft ground patch, path, plants; not in digest_of
 ##    or the building's triangle budget), "problem": why nothing was built, or "", "warning": a soft
 ##    budget note, or ""}
@@ -39,7 +43,7 @@ const HARD_TRIANGLES := 25000
 const KEY_STEP_M := 0.5
 const KEY_MAX_SAMPLES := 2048
 ## Bumped when the mesh layout of the parts changes, so cached parts rebuild.
-const FORMAT_VERSION := 4
+const FORMAT_VERSION := 5
 ## Marks a structure with no top (no recipe, or nothing built).
 const NONE := -INF
 ## digest_of rounds vertices and collision to this many metres (0.1 mm), as procgen's digests do.
@@ -108,7 +112,9 @@ static func inputs_for(
 
 ## One structure's parts (see the header). Empty parts, with `problem` set, when the record is
 ## invalid, its recipe is unknown or fails, or the result is over the hard budget.
-static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
+## With `decor` the ornaments' soft pieces (ivy blobs, flower-box foliage) are left out and the host
+## places library plants on the anchors instead (StructureDecor); false draws the blobs.
+static func build_one(doc: MapDocument, structure: Structure, decor: bool = false) -> Dictionary:
 	var parts := _empty(structure)
 	var reason := MapStructureIO.structure_problem(structure, doc.extent_m())
 	if reason != "":
@@ -121,6 +127,9 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 	# The ornaments the player added are nodes beside the walls of this build's own copy of the
 	# recipe (documents are never shared), so the roles below find them too.
 	StructureOrnaments.apply(recipe, structure.params, structure.seed_value)
+	if decor:
+		StructureOrnaments.soften(recipe)
+	parts.decor = decor
 	var evaluator := PlantGraphEvaluator.new(recipe.registry)
 	var plant: Variant = evaluator.evaluate_structure(
 		recipe, inputs_for(doc, structure, recipe), true
@@ -171,7 +180,11 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 	parts.top = geometry.top if triangles > 0 else NONE
 	parts.openings = geometry.openings
 	parts.layout = plant.get("layout")
-	parts.placed_kinds = ProcgenOrnaments.placed_kinds(geometry)
+	parts.anchors = ProcgenOrnaments.anchors(geometry)
+	# With soft: "anchors" an ivy blanket or flower box that found room has an anchor but no blob.
+	parts.placed_kinds = StructureDecor.placed_kinds_with(
+		ProcgenOrnaments.placed_kinds(geometry), parts.anchors
+	)
 	parts.dressing = StructureDressing.build(doc, structure, parts.layout)
 	return parts
 
@@ -181,23 +194,23 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 ## on at most AuthoredStructures.load_threads() threads, and the result keeps the document's order
 ## (each task writes its own slot). Builds read the document and write nothing shared, so the
 ## output is the same either way (the pinned digests).
-static func build(doc: MapDocument, parallel: bool = true) -> Dictionary:
+static func build(doc: MapDocument, parallel: bool = true, decor: bool = false) -> Dictionary:
 	var list: Array[Structure] = doc.structures
 	var out: Array = []
 	if not parallel or list.size() < 2:
 		for structure in list:
-			out.append(build_one(doc, structure))
-		return {"structures": out}
+			out.append(build_one(doc, structure, decor))
+		return {"structures": out, "decor": decor}
 	out.resize(list.size())
 	var group := WorkerThreadPool.add_group_task(
-		func(index: int) -> void: out[index] = build_one(doc, list[index]),
+		func(index: int) -> void: out[index] = build_one(doc, list[index], decor),
 		list.size(),
 		mini(list.size(), AuthoredStructures.load_threads()),
 		false,
 		"StructureGeometry.build"
 	)
 	WorkerThreadPool.wait_for_group_task_completion(group)
-	return {"structures": out}
+	return {"structures": out, "decor": decor}
 
 
 ## A key that changes when anything a structure's geometry depends on does: its recipe (the digest
@@ -205,7 +218,11 @@ static func build(doc: MapDocument, parallel: bool = true) -> Dictionary:
 ## ground sampled along its outline and across its inside. AuthoredStructures rebuilds a structure
 ## only when its key moved, and keeps built parts by key.
 static func key_of(
-	doc: MapDocument, structure: Structure, boxes: Dictionary = {}, samples: Array = []
+	doc: MapDocument,
+	structure: Structure,
+	boxes: Dictionary = {},
+	samples: Array = [],
+	decor: bool = false
 ) -> int:
 	var under: Array = samples if not samples.is_empty() else _ground_samples_of(doc, structure)
 	return hash(
@@ -218,6 +235,7 @@ static func key_of(
 			structure.style,
 			textured,
 			FORMAT_VERSION,
+			decor,
 			StructureDressing.enabled,
 			under[0],
 			under[1],
@@ -231,11 +249,11 @@ static func key_of(
 
 
 ## Keys of every structure of `doc` (id -> key).
-static func keys_of(doc: MapDocument) -> Dictionary:
+static func keys_of(doc: MapDocument, decor: bool = false) -> Dictionary:
 	var boxes := _boxes_of(doc)
 	var out := {}
 	for structure in doc.structures:
-		out[structure.id] = key_of(doc, structure, boxes)
+		out[structure.id] = key_of(doc, structure, boxes, [], decor)
 	return out
 
 
@@ -249,7 +267,7 @@ static func keys_of(doc: MapDocument) -> Dictionary:
 ## ground_fingerprint(), a hash of every ground input, so any edit of the ground, water or ponds
 ## changes it and no version counter has to be bumped by every writer of those public fields.
 ## The keys equal keys_of().
-static func keys_memoised(doc: MapDocument, memo: Dictionary) -> Dictionary:
+static func keys_memoised(doc: MapDocument, memo: Dictionary, decor: bool = false) -> Dictionary:
 	var boxes := _boxes_of(doc)
 	var ground := ground_fingerprint(doc)
 	var out := {}
@@ -270,6 +288,7 @@ static func keys_memoised(doc: MapDocument, memo: Dictionary) -> Dictionary:
 				structure.seed_value,
 				structure.style,
 				textured,
+				decor,
 				StructureDressing.enabled,
 				near,
 			]
@@ -285,7 +304,7 @@ static func keys_memoised(doc: MapDocument, memo: Dictionary) -> Dictionary:
 				"sig": sig,
 				"gsig": gsig,
 				"samples": samples,
-				"key": key_of(doc, structure, boxes, samples),
+				"key": key_of(doc, structure, boxes, samples, decor),
 			}
 			memo[structure.id] = entry
 		live[structure.id] = true
@@ -322,14 +341,25 @@ static func ground_fingerprint(doc: MapDocument) -> int:
 	for body in doc.water_bodies:
 		bodies.append(
 			[
-				body.id, body.kind, body.depth, body.level_m, body.speed, body.points,
-				body.half_widths, body.beyond, body.beyond_up
+				body.id,
+				body.kind,
+				body.depth,
+				body.level_m,
+				body.speed,
+				body.points,
+				body.half_widths,
+				body.beyond,
+				body.beyond_up
 			]
 		)
 	return hash(
 		[
-			doc.size_cells, doc.cell_size_m, doc.sample_spacing_m, hash(doc.heights),
-			hash(doc.pond_mask), bodies
+			doc.size_cells,
+			doc.cell_size_m,
+			doc.sample_spacing_m,
+			hash(doc.heights),
+			hash(doc.pond_mask),
+			bodies
 		]
 	)
 
@@ -610,6 +640,8 @@ static func _empty(structure: Structure) -> Dictionary:
 		"openings": [],
 		"layout": null,
 		"placed_kinds": [] as Array[String],
+		"anchors": [] as Array[Dictionary],
+		"decor": false,
 		"dressing": {},
 		"triangles": 0,
 		"problem": "",

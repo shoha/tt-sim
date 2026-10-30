@@ -13,7 +13,8 @@ extends GutTest
 
 const CORE_FOLDER := "res://libraries/core"
 const BIOME_COUNT := 9
-const ASSET_COUNT := 268
+## 268 scatter assets and 15 decor assets (ivy and window planters, wind category climber).
+const ASSET_COUNT := 283
 ## The palette lists an asset once per biome that places it (shared stems appear several times).
 const PALETTE_ASSET_COUNT := 288
 const SURFACE_COUNT := 36
@@ -71,7 +72,9 @@ func test_the_palette_is_the_served_core_library() -> void:
 func test_core_is_a_folder_with_no_palette_json_and_the_default_root_is_virtual() -> void:
 	assert_true(FileAccess.file_exists(CORE_FOLDER.path_join("library.json")))
 	assert_false(FileAccess.file_exists(PaletteLibrary.DEFAULT_ROOT.path_join("palette.json")))
-	assert_false(DirAccess.dir_exists_absolute("res://assets/palette"), "treecube's palette is gone")
+	assert_false(
+		DirAccess.dir_exists_absolute("res://assets/palette"), "treecube's palette is gone"
+	)
 
 
 func test_every_png_glb_and_jpg_ships_raw_through_a_constant_keep_sidecar() -> void:

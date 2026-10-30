@@ -224,8 +224,13 @@ static func _load_build(base: Node, step: Dictionary) -> String:
 	var text := (
 		"load_build %s: %d structures (%d refused) in %.0f ms, with nodes static %.0f MB peak %.0f MB, digest %d"
 		% [
-			mode, count, refused, ms, OS.get_static_memory_usage() / 1048576.0,
-			OS.get_static_memory_peak_usage() / 1048576.0, hash(digests)
+			mode,
+			count,
+			refused,
+			ms,
+			OS.get_static_memory_usage() / 1048576.0,
+			OS.get_static_memory_peak_usage() / 1048576.0,
+			hash(digests)
 		]
 	)
 	nodes.free()
@@ -270,8 +275,12 @@ static func _village(base: Node, step: Dictionary) -> String:
 				if column is Object or column == null:
 					continue
 				cached_bytes += var_to_bytes(column).size()
-		cached_bytes += (parts.get("collision", PackedVector3Array()) as PackedVector3Array).size() * 12
-	print("village parts cache: %d entries, %.1f MB" % [nodes._cache.size(), cached_bytes / 1048576.0])
+		cached_bytes += (
+			(parts.get("collision", PackedVector3Array()) as PackedVector3Array).size() * 12
+		)
+	print(
+		"village parts cache: %d entries, %.1f MB" % [nodes._cache.size(), cached_bytes / 1048576.0]
+	)
 	var instances := 0
 	var triangles := 0
 	var collision_faces := 0
@@ -285,18 +294,31 @@ static func _village(base: Node, step: Dictionary) -> String:
 				meshes[instance.mesh.get_rid()] = true
 				materials[instance.mesh.surface_get_material(0).get_rid()] = true
 				triangles += (
-					(instance.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX] as PackedInt32Array).size()
+					(
+						(instance.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX] as PackedInt32Array)
+						. size()
+					)
 					/ 3
 				)
 			elif part is StaticBody3D:
 				for shape in part.get_children():
 					if shape is CollisionShape3D and shape.shape is ConcavePolygonShape3D:
-						collision_faces += (shape.shape as ConcavePolygonShape3D).get_faces().size() / 3
+						collision_faces += (
+							(shape.shape as ConcavePolygonShape3D).get_faces().size() / 3
+						)
 	return (
 		"village laid %d of %d: queue %.0f ms (main), flush wait %.0f ms; %d nodes, %d mesh instances, %d unique meshes, %d unique materials, %d triangles, %d collision faces"
 		% [
-			laid, count, queued_ms, flush_ms, nodes.get_child_count(), instances, meshes.size(),
-			materials.size(), triangles, collision_faces
+			laid,
+			count,
+			queued_ms,
+			flush_ms,
+			nodes.get_child_count(),
+			instances,
+			meshes.size(),
+			materials.size(),
+			triangles,
+			collision_faces
 		]
 	)
 
@@ -369,13 +391,35 @@ static func _tile(base: Node, step: Dictionary) -> String:
 	var structure := Structure.make(
 		0, String(step.get("ref", "")), plan, int(step.get("seed", 5)), params
 	)
+	# `decor` false keeps procgen's flat blobs (the "before" of the plant_decor look captures).
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	var nodes := AuthoredStructures.of_map(ctrl.map_root)
+	nodes.plants = bool(step.get("decor", true))
 	var id := editor.structures.add(structure)
-	var nodes := _nodes(base)
-	if nodes != null:
-		nodes.flush()
+	nodes.flush()
 	if id < 0:
 		return "refused: %s" % editor.structures.last_refusal
-	return "tile %s -> %d" % [step.get("ref", ""), id]
+	var report := ""
+	if nodes != null:
+		var node := nodes.get_structure_node(id)
+		var multis := 0
+		var triangles := 0
+		var surfaces := 0
+		if node != null:
+			for child in node.get_children():
+				if child is MultiMeshInstance3D:
+					var multi := (child as MultiMeshInstance3D).multimesh
+					multis += 1
+					for s in multi.mesh.get_surface_count():
+						surfaces += 1
+						var index: PackedInt32Array = multi.mesh.surface_get_arrays(s)[
+							Mesh.ARRAY_INDEX
+						]
+						triangles += index.size() / 3 * multi.instance_count
+		report = (
+			"; decor: %d multimeshes, %d surfaces, %d triangles" % [multis, surfaces, triangles]
+		)
+	return "tile %s -> %d%s" % [step.get("ref", ""), id, report]
 
 
 ## How many scatter rows (plants, rocks) of the map root stand inside a structure's footprint,

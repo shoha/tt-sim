@@ -110,7 +110,7 @@ static func work(doc: MapDocument, part: String, out: Dictionary) -> void:
 		WALLS:
 			out[WALLS] = WallGeometry.build(doc)
 		STRUCTURES:
-			out[STRUCTURES] = StructureGeometry.build(doc)
+			out[STRUCTURES] = StructureGeometry.build(doc, true, StructureDecor.available())
 		FIELDS:
 			var fields := TerrainMeshBuilder.grid_fields(doc)
 			var chunks := {}

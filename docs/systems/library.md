@@ -436,6 +436,18 @@ Facts of the S5 build (still true of the shipped folder):
   (4 MiB and header-size caps, shrunk to 256 px), trimmed of the render's transparent border,
   cached with a 512-texture LRU, null on any failure so the tile keeps its category icon.
   `test_library_asset_thumbnails.gd` pins files, sizes and hashes.
+- **Decor assets and `placement` (2026-10-30).** The core catalog has 15 decor entries (nine
+  `Bush_IvyWall_*`, six `Flower_WindowPlanter_*`, wind category `climber`, `roles` empty) whose
+  `placement` block says `scatter: false`, a `mount` (`wall` or `sill`), an `origin` and a `size_m`.
+  `placement` is in `CATALOG_ENTRY_KEYS`; `LibraryContracts.scatters(entry)` is false for them and
+  `LibraryQuery.candidates` leaves them out, so no query, group or pin can select one. They belong
+  to no biome, so the compiled palette does not hold them: `LibraryRegistry._serve` registers them
+  with `AssetStore.register_decor` (`StructureDecor.rows_of`) for the structure builder
+  (`docs/systems/structures.md` "Decor plants"). `climber` is a wind category
+  (`LibraryContracts.WIND_CATEGORIES`, `WindFoliage.PRESETS`); `packaging/contract.json` in plantgen
+  equals `compile_library_cli --contract` of this build. The 15 GLBs, sidecars and thumbnails were
+  added from plantgen's rebuild; the old 268 thumbnails were kept (a rebuild re-renders 34 of them
+  with different bytes), so `stats.file_sha256` keeps their recorded hashes.
 - **Catalog `roles`.** plantgen's catalog entries carry `roles` (the contract roles of the
   rules that use the asset); `LibraryContracts.CATALOG_ENTRY_KEYS` knows the key, so the nine
   biomes read with no warnings.

@@ -21,7 +21,9 @@ const FORMAT_STRUCTURES := "ttsim-structures"
 const FORMAT_VERSION := 1
 
 const SIZE_CLASSES: Array[String] = ["large", "medium", "small", "ground"]
-const WIND_CATEGORIES: Array[String] = ["tree", "grass", ""]
+## "climber" (2026-10-30): a plant held by a wall or a box (ivy, window planters); the structure
+## builder places those on procgen's ornament anchors (docs/systems/structures.md "Decor plants").
+const WIND_CATEGORIES: Array[String] = ["tree", "grass", "climber", ""]
 const CATEGORIES: Array[String] = [
 	"tree", "bush", "ground_cover", "flower", "deadwood", "rock", "prop", "structure", "other"
 ]
@@ -223,6 +225,7 @@ const CATALOG_ENTRY_KEYS: Array[String] = [
 	"bytes",
 	"sha256",
 	"package_stem",
+	"placement",
 ]
 const BIOME_KEYS: Array[String] = [
 	"format",
@@ -377,6 +380,17 @@ static func habit_for(role_id: String, overrides: Variant = null) -> Dictionary:
 ## The default align of a role: rocks lie on the slope, the rest stand upright.
 static func align_of(role_id: String) -> String:
 	return "normal" if kind_of(role_id) == "rock" else "upright"
+
+
+## False for a decor asset: a catalog entry whose `placement` block says `scatter: false` (a wall
+## climber, a window planter) is mounted by a host on a structure and no biome rule may select it.
+static func scatters(entry: Variant) -> bool:
+	if not entry is Dictionary:
+		return true
+	var placement: Variant = (entry as Dictionary).get("placement", {})
+	if not placement is Dictionary:
+		return true
+	return bool((placement as Dictionary).get("scatter", true))
 
 
 ## Why `points` is not a valid curve on `axis` (RESPONSE_AXES), or "" when it is: a list of
