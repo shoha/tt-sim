@@ -836,6 +836,55 @@ building follows at once, like any edit.
   live preview through the real pane); the probe's `tile` action takes `ornaments` and `ivy`, the
   select probe's `bar` presses `ornament` and `surprise`.
 
+### Decor plants (card plant_decor, 2026-10-30, branch `plant_decor`)
+
+Ivy and flower boxes are plants where the library has them. procgen's ornaments emit **anchor
+records** (`ProcgenOrnaments.anchors`; fields in procgen `docs/architecture_styles.md` section 8:
+`kind` ivy or box, `origin`, `normal`, `along`, `up`, `width`, `height`, `depth`, `seed`,
+`exclusions` [x0,y0,x1,y1] in patch coordinates); a library whose catalog carries decor assets
+(`placement.scatter` false with a `mount` of `wall` or `sill` and a `size_m`: plantgen's
+`Bush_IvyWall_S/M/L_v0..2`, 1.2x1.2, 1.6x2.0 and 2.2x2.6 m patches, and
+`Flower_WindowPlanter_W08/W12/W16_v0..1`, 0.8, 1.2 and 1.6 m wide) gets a plant on each anchor.
+
+- **Switch.** `StructureGeometry.build_one(doc, structure, decor)` (also `build`, `key_of`, `keys_of`,
+  `keys_memoised`; default false) asks procgen for `soft: "anchors"` through
+  `StructureOrnaments.soften(recipe)`, which sets it on every Ornament node of that build's own
+  recipe copy (the player's and the style's own: `ivy_manor`'s ivy too). The blobs are then NOT in
+  `meshes`. `AuthoredStructures` (and `AuthoredLoadPrep`) pass `decor` true only when
+  `StructureDecor.available(root)`: the palette's `AssetStore.decor_rows` hold an ivy and a planter.
+  Without them (a library lacking the assets, a scratch library in a test, `AuthoredStructures.plants`
+  false) the build is what it was and procgen draws the flat blobs: that is the **fallback**. `decor`
+  is part of `key_of`; `FORMAT_VERSION` is 5. Every pinned digest (`structure_digests.txt`) is made
+  with decor false and is untouched; `parts.anchors`, `parts.decor` and the `placed_kinds` merged with
+  the anchors' kinds (an ivy or box that found room has an anchor and no tag) are not in `digest_of`.
+- **Registry.** `LibraryRegistry._serve` registers each served library's decor rows
+  (`StructureDecor.rows_of(library, catalog)`) with `AssetStore.register_decor`: GLBs under the id
+  `decor:<library>:<local>`, rows from `AssetStore.decor_rows(root)`; `assets_of` does not list them.
+  `LibraryContracts.scatters(entry)` is false for a decor entry and `LibraryQuery.candidates` skips
+  it, so no biome rule selects one (test `test_the_scatter_never_selects_a_decor_asset`).
+- **Placement** (`StructureDecor.placements`, pure): ivy takes the smallest class that covers the
+  patch (one variant by the anchor's seed), uniform scale from the larger of width and height
+  ratio, clamped 0.75 to 1; a patch wider or taller than the largest class is tiled; a patch with
+  openings in it is cut into columns of the smallest class's width and a column an opening covers
+  by 40% or more is dropped. The transform is `Transform3D(Basis(along, up, normal) * s, origin)`
+  (ivy: origin at the foot centre of the patch; the asset's origin is its foot centre). A planter
+  takes the class nearest the box's width, uniform scale 0.8 to 1.25, at the anchor's origin (the
+  centre of the trough's top). Exclusions are passed to the instance record in its own frame but the
+  baked assets cannot honour them (option (a): no runtime climber in tt-sim), so leaves reach over
+  window edges; columns and the drop rule limit it.
+- **Nodes.** `AuthoredStructures._add_decor`: one `MultiMeshInstance3D` per decor asset per
+  structure (`decor_<local>`), shadows off, the mesh dressed with `WindFoliage.apply_material` for
+  the asset's wind category (`climber`) and shared by every structure of the node, meta
+  `wind_foliage_category`. They are children of the structure's node, so they are freed, rebuilt
+  and cached with it; nothing new is stored (the ornaments mask and `ivy_amount` already are, and
+  the amount reshapes the anchors' patches).
+- **Cost** (core, seed 5, one decorated building): about 2,300 to 4,700 triangles of plants against
+  about 300 of blobs, 8 to 10 surfaces (leaf and bark per asset) in 4 to 5 multimeshes, outside the
+  structure's 12,000 triangle budget. `climber` wind: a low sway with a quick flutter, no base
+  darkening.
+- **Tests and render:** `tests/unit/test_structure_decor.gd`; render job `plant_decor_look` (the
+  probe's `tile` takes `decor` false for the blobs).
+
 ## Splitting a street
 
 Card S8 (2026-10-28): `Wall.Kind.BUILDING` is deleted (see [walls.md](walls.md) "Buildings: the kind

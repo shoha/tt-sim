@@ -1408,6 +1408,456 @@
 		},
 		{
 			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 194652,
+			"category": "bush",
+			"dimensions_m": [
+				2.45,
+				2.794,
+				0.322
+			],
+			"file": "assets/bush/Bush_IvyWall_L_v0.glb",
+			"game_kind": "bush",
+			"group": "bush_ivywall_l",
+			"id": "Bush_IvyWall_L_v0",
+			"lods": [
+				{
+					"node": "Bush_IvyWall_L_v0_LOD0",
+					"triangles": 480
+				}
+			],
+			"name": "Bush Ivywall L",
+			"node": "Bush_IvyWall_L_v0_LOD0",
+			"package_stem": "Bush_IvyWall_L_v0",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					2.2,
+					2.6
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "3b2caa8da03169c28009e5c513a4d3bb17f41c2773b2081df847432c912b5079",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyWall_L_v0.png",
+			"triangles": 480,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 194652,
+			"category": "bush",
+			"dimensions_m": [
+				2.382,
+				2.672,
+				0.337
+			],
+			"file": "assets/bush/Bush_IvyWall_L_v1.glb",
+			"game_kind": "bush",
+			"group": "bush_ivywall_l",
+			"id": "Bush_IvyWall_L_v1",
+			"lods": [
+				{
+					"node": "Bush_IvyWall_L_v1_LOD0",
+					"triangles": 480
+				}
+			],
+			"name": "Bush Ivywall L",
+			"node": "Bush_IvyWall_L_v1_LOD0",
+			"package_stem": "Bush_IvyWall_L_v1",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					2.2,
+					2.6
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "52316ef414419948c703f458f64b9f7cb4c3ce613253b4b416afc71e93f9aee8",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyWall_L_v1.png",
+			"triangles": 480,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 194648,
+			"category": "bush",
+			"dimensions_m": [
+				2.423,
+				2.385,
+				0.348
+			],
+			"file": "assets/bush/Bush_IvyWall_L_v2.glb",
+			"game_kind": "bush",
+			"group": "bush_ivywall_l",
+			"id": "Bush_IvyWall_L_v2",
+			"lods": [
+				{
+					"node": "Bush_IvyWall_L_v2_LOD0",
+					"triangles": 480
+				}
+			],
+			"name": "Bush Ivywall L",
+			"node": "Bush_IvyWall_L_v2_LOD0",
+			"package_stem": "Bush_IvyWall_L_v2",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					2.2,
+					2.6
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "9861d3e8f874bc445bf275e17a01eb1925c70a64ee71b44ebf59253eca1941eb",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyWall_L_v2.png",
+			"triangles": 480,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 179672,
+			"category": "bush",
+			"dimensions_m": [
+				1.836,
+				2.219,
+				0.315
+			],
+			"file": "assets/bush/Bush_IvyWall_M_v0.glb",
+			"game_kind": "bush",
+			"group": "bush_ivywall_m",
+			"id": "Bush_IvyWall_M_v0",
+			"lods": [
+				{
+					"node": "Bush_IvyWall_M_v0_LOD0",
+					"triangles": 288
+				}
+			],
+			"name": "Bush Ivywall M",
+			"node": "Bush_IvyWall_M_v0_LOD0",
+			"package_stem": "Bush_IvyWall_M_v0",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					1.6,
+					2
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "2f3d72e7c23d2a985651b4b6ff7019ee6235dfbe4b25640ad2301fc98a5053e4",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyWall_M_v0.png",
+			"triangles": 288,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 179672,
+			"category": "bush",
+			"dimensions_m": [
+				1.8,
+				2.138,
+				0.337
+			],
+			"file": "assets/bush/Bush_IvyWall_M_v1.glb",
+			"game_kind": "bush",
+			"group": "bush_ivywall_m",
+			"id": "Bush_IvyWall_M_v1",
+			"lods": [
+				{
+					"node": "Bush_IvyWall_M_v1_LOD0",
+					"triangles": 288
+				}
+			],
+			"name": "Bush Ivywall M",
+			"node": "Bush_IvyWall_M_v1_LOD0",
+			"package_stem": "Bush_IvyWall_M_v1",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					1.6,
+					2
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "4fcdff4a67f8061680500b18b9f27536f6263a864f750ddad91125aaa5e1fefc",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyWall_M_v1.png",
+			"triangles": 288,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 179672,
+			"category": "bush",
+			"dimensions_m": [
+				1.799,
+				1.824,
+				0.341
+			],
+			"file": "assets/bush/Bush_IvyWall_M_v2.glb",
+			"game_kind": "bush",
+			"group": "bush_ivywall_m",
+			"id": "Bush_IvyWall_M_v2",
+			"lods": [
+				{
+					"node": "Bush_IvyWall_M_v2_LOD0",
+					"triangles": 288
+				}
+			],
+			"name": "Bush Ivywall M",
+			"node": "Bush_IvyWall_M_v2_LOD0",
+			"package_stem": "Bush_IvyWall_M_v2",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					1.6,
+					2
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "5587479785888a2ddeb95744d9d6c1f7ef5d5a0d10ac5a396b8e401d71661a64",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyWall_M_v2.png",
+			"triangles": 288,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 168360,
+			"category": "bush",
+			"dimensions_m": [
+				1.421,
+				1.425,
+				0.313
+			],
+			"file": "assets/bush/Bush_IvyWall_S_v0.glb",
+			"game_kind": "bush",
+			"group": "bush_ivywall_s",
+			"id": "Bush_IvyWall_S_v0",
+			"lods": [
+				{
+					"node": "Bush_IvyWall_S_v0_LOD0",
+					"triangles": 144
+				}
+			],
+			"name": "Bush Ivywall S",
+			"node": "Bush_IvyWall_S_v0_LOD0",
+			"package_stem": "Bush_IvyWall_S_v0",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					1.2,
+					1.2
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "242900ae8896001a2dd13962a8963ccff31018cd7f4d7808efe42c1af5284e45",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyWall_S_v0.png",
+			"triangles": 144,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 168364,
+			"category": "bush",
+			"dimensions_m": [
+				1.418,
+				1.444,
+				0.337
+			],
+			"file": "assets/bush/Bush_IvyWall_S_v1.glb",
+			"game_kind": "bush",
+			"group": "bush_ivywall_s",
+			"id": "Bush_IvyWall_S_v1",
+			"lods": [
+				{
+					"node": "Bush_IvyWall_S_v1_LOD0",
+					"triangles": 144
+				}
+			],
+			"name": "Bush Ivywall S",
+			"node": "Bush_IvyWall_S_v1_LOD0",
+			"package_stem": "Bush_IvyWall_S_v1",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					1.2,
+					1.2
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "f39f9cb9ca1cb68a7587255d1b964428e9b9f17638156b9c5449d93ecc95bbd4",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyWall_S_v1.png",
+			"triangles": 144,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"temperate_forest"
+			],
+			"bytes": 168364,
+			"category": "bush",
+			"dimensions_m": [
+				1.358,
+				1.134,
+				0.329
+			],
+			"file": "assets/bush/Bush_IvyWall_S_v2.glb",
+			"game_kind": "bush",
+			"group": "bush_ivywall_s",
+			"id": "Bush_IvyWall_S_v2",
+			"lods": [
+				{
+					"node": "Bush_IvyWall_S_v2_LOD0",
+					"triangles": 144
+				}
+			],
+			"name": "Bush Ivywall S",
+			"node": "Bush_IvyWall_S_v2_LOD0",
+			"package_stem": "Bush_IvyWall_S_v2",
+			"placement": {
+				"mount": "wall",
+				"origin": "foot_centre",
+				"scatter": false,
+				"size_m": [
+					1.2,
+					1.2
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "c7403b20d3a7548d9cc693703a2d4a32bf37890ff99c56fb02e941f7de6de804",
+			"sidecar": null,
+			"size_class": "medium",
+			"subtype": "ivy",
+			"tags": [
+				"vine",
+				"climber",
+				"decor",
+				"wall",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Bush_IvyWall_S_v2.png",
+			"triangles": 144,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
 				"birch_woodland",
 				"boreal_taiga",
 				"temperate_forest",
@@ -3569,6 +4019,312 @@
 			"thumb": "assets/thumbs/Flower_Poppy_v1.png",
 			"triangles": 336,
 			"wind_category": "grass"
+		},
+		{
+			"biomes": [
+				"grassland_meadow"
+			],
+			"bytes": 23312,
+			"category": "flower",
+			"dimensions_m": [
+				0.794,
+				0.386,
+				0.369
+			],
+			"file": "assets/flower/Flower_WindowPlanter_W08_v0.glb",
+			"game_kind": "flower",
+			"group": "flower_windowplanter_w08",
+			"id": "Flower_WindowPlanter_W08_v0",
+			"lods": [
+				{
+					"node": "Flower_WindowPlanter_W08_v0_LOD0",
+					"triangles": 120
+				}
+			],
+			"name": "Flower Windowplanter W 08",
+			"node": "Flower_WindowPlanter_W08_v0_LOD0",
+			"package_stem": "Flower_WindowPlanter_W08_v0",
+			"placement": {
+				"mount": "sill",
+				"origin": "base_centre",
+				"scatter": false,
+				"size_m": [
+					0.8,
+					0.4
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "510bd63301168adc0dad3ab47d08f31449fc7ff4bc683b823af6d08eb1f2081e",
+			"sidecar": null,
+			"size_class": "small",
+			"subtype": "planter",
+			"tags": [
+				"flower",
+				"flowering",
+				"decor",
+				"planter",
+				"window",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Flower_WindowPlanter_W08_v0.png",
+			"triangles": 120,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"grassland_meadow"
+			],
+			"bytes": 23312,
+			"category": "flower",
+			"dimensions_m": [
+				0.819,
+				0.391,
+				0.407
+			],
+			"file": "assets/flower/Flower_WindowPlanter_W08_v1.glb",
+			"game_kind": "flower",
+			"group": "flower_windowplanter_w08",
+			"id": "Flower_WindowPlanter_W08_v1",
+			"lods": [
+				{
+					"node": "Flower_WindowPlanter_W08_v1_LOD0",
+					"triangles": 120
+				}
+			],
+			"name": "Flower Windowplanter W 08",
+			"node": "Flower_WindowPlanter_W08_v1_LOD0",
+			"package_stem": "Flower_WindowPlanter_W08_v1",
+			"placement": {
+				"mount": "sill",
+				"origin": "base_centre",
+				"scatter": false,
+				"size_m": [
+					0.8,
+					0.4
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "5e0cd538ee091b83ef0143b02c17673750a71fc607610dcd4255dc3703d7c0c8",
+			"sidecar": null,
+			"size_class": "small",
+			"subtype": "planter",
+			"tags": [
+				"flower",
+				"flowering",
+				"decor",
+				"planter",
+				"window",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Flower_WindowPlanter_W08_v1.png",
+			"triangles": 120,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"grassland_meadow"
+			],
+			"bytes": 28028,
+			"category": "flower",
+			"dimensions_m": [
+				1.212,
+				0.396,
+				0.426
+			],
+			"file": "assets/flower/Flower_WindowPlanter_W12_v0.glb",
+			"game_kind": "flower",
+			"group": "flower_windowplanter_w12",
+			"id": "Flower_WindowPlanter_W12_v0",
+			"lods": [
+				{
+					"node": "Flower_WindowPlanter_W12_v0_LOD0",
+					"triangles": 192
+				}
+			],
+			"name": "Flower Windowplanter W 12",
+			"node": "Flower_WindowPlanter_W12_v0_LOD0",
+			"package_stem": "Flower_WindowPlanter_W12_v0",
+			"placement": {
+				"mount": "sill",
+				"origin": "base_centre",
+				"scatter": false,
+				"size_m": [
+					1.2,
+					0.4
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "ca559d98072a0e8a62de70c74e3d51a838505dfaf85ce55ba48c05f4339a8b78",
+			"sidecar": null,
+			"size_class": "small",
+			"subtype": "planter",
+			"tags": [
+				"flower",
+				"flowering",
+				"decor",
+				"planter",
+				"window",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Flower_WindowPlanter_W12_v0.png",
+			"triangles": 192,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"grassland_meadow"
+			],
+			"bytes": 28024,
+			"category": "flower",
+			"dimensions_m": [
+				1.248,
+				0.425,
+				0.476
+			],
+			"file": "assets/flower/Flower_WindowPlanter_W12_v1.glb",
+			"game_kind": "flower",
+			"group": "flower_windowplanter_w12",
+			"id": "Flower_WindowPlanter_W12_v1",
+			"lods": [
+				{
+					"node": "Flower_WindowPlanter_W12_v1_LOD0",
+					"triangles": 192
+				}
+			],
+			"name": "Flower Windowplanter W 12",
+			"node": "Flower_WindowPlanter_W12_v1_LOD0",
+			"package_stem": "Flower_WindowPlanter_W12_v1",
+			"placement": {
+				"mount": "sill",
+				"origin": "base_centre",
+				"scatter": false,
+				"size_m": [
+					1.2,
+					0.4
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "76b6430bca2a86ab9cb14bc5414b5d7db49848d74917d167904fa81eb800fa2b",
+			"sidecar": null,
+			"size_class": "small",
+			"subtype": "planter",
+			"tags": [
+				"flower",
+				"flowering",
+				"decor",
+				"planter",
+				"window",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Flower_WindowPlanter_W12_v1.png",
+			"triangles": 192,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"grassland_meadow"
+			],
+			"bytes": 31168,
+			"category": "flower",
+			"dimensions_m": [
+				1.615,
+				0.424,
+				0.471
+			],
+			"file": "assets/flower/Flower_WindowPlanter_W16_v0.glb",
+			"game_kind": "flower",
+			"group": "flower_windowplanter_w16",
+			"id": "Flower_WindowPlanter_W16_v0",
+			"lods": [
+				{
+					"node": "Flower_WindowPlanter_W16_v0_LOD0",
+					"triangles": 240
+				}
+			],
+			"name": "Flower Windowplanter W 16",
+			"node": "Flower_WindowPlanter_W16_v0_LOD0",
+			"package_stem": "Flower_WindowPlanter_W16_v0",
+			"placement": {
+				"mount": "sill",
+				"origin": "base_centre",
+				"scatter": false,
+				"size_m": [
+					1.6,
+					0.4
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "a37fa460c794b31acab40d752c21aef3b831d09135ffe5d27b05f94ebfa5da28",
+			"sidecar": null,
+			"size_class": "small",
+			"subtype": "planter",
+			"tags": [
+				"flower",
+				"flowering",
+				"decor",
+				"planter",
+				"window",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Flower_WindowPlanter_W16_v0.png",
+			"triangles": 240,
+			"wind_category": "climber"
+		},
+		{
+			"biomes": [
+				"grassland_meadow"
+			],
+			"bytes": 31168,
+			"category": "flower",
+			"dimensions_m": [
+				1.594,
+				0.425,
+				0.578
+			],
+			"file": "assets/flower/Flower_WindowPlanter_W16_v1.glb",
+			"game_kind": "flower",
+			"group": "flower_windowplanter_w16",
+			"id": "Flower_WindowPlanter_W16_v1",
+			"lods": [
+				{
+					"node": "Flower_WindowPlanter_W16_v1_LOD0",
+					"triangles": 240
+				}
+			],
+			"name": "Flower Windowplanter W 16",
+			"node": "Flower_WindowPlanter_W16_v1_LOD0",
+			"package_stem": "Flower_WindowPlanter_W16_v1",
+			"placement": {
+				"mount": "sill",
+				"origin": "base_centre",
+				"scatter": false,
+				"size_m": [
+					1.6,
+					0.4
+				]
+			},
+			"roles": [],
+			"seasons": [],
+			"sha256": "28bc4c14ecd6038e61138343368792850e54411d3efff92953c8ea97efb774e4",
+			"sidecar": null,
+			"size_class": "small",
+			"subtype": "planter",
+			"tags": [
+				"flower",
+				"flowering",
+				"decor",
+				"planter",
+				"window",
+				"garden"
+			],
+			"thumb": "assets/thumbs/Flower_WindowPlanter_W16_v1.png",
+			"triangles": 240,
+			"wind_category": "climber"
 		},
 		{
 			"biomes": [

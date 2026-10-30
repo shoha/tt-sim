@@ -212,6 +212,21 @@ static func apply(recipe: PlantGraphDocument, params: Dictionary, seed_value: in
 	return ProcgenRecipesOrnaments.apply_to_document(recipe, asked)
 
 
+## Asks every Ornament node of `recipe` (the ones just added and the style's own, ivy_manor's ivy)
+## for `soft: "anchors"`: procgen then emits the anchor records and leaves the flat blobs out, for a
+## host that places library plants (StructureDecor). Edits the document, which is this build's own
+## copy. How many nodes were changed.
+static func soften(recipe: PlantGraphDocument) -> int:
+	if recipe == null:
+		return 0
+	var changed := 0
+	for id in recipe.nodes_of_type("ornament"):
+		if str(recipe.node_params(id).get("soft", "")) != "anchors":
+			recipe.set_param(id, "soft", "anchors")
+			changed += 1
+	return changed
+
+
 ## Why `recipe` with `params` cannot take ornaments ("" when it can): a ruin (the recipe's own, or
 ## the Ruin stepper above nothing), a courtyard, a recipe with no walls.
 static func problem_for(recipe: PlantGraphDocument, params: Dictionary) -> String:

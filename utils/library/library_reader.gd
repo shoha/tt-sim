@@ -387,7 +387,7 @@ static func _check_entry_fields(entry: Dictionary, label: String, errors: Array[
 	if not _one_of(entry.get("size_class"), LibraryContracts.SIZE_CLASSES):
 		errors.append("%s: size_class must be one of %s" % [label, LibraryContracts.SIZE_CLASSES])
 	if not _one_of(entry.get("wind_category"), LibraryContracts.WIND_CATEGORIES):
-		errors.append("%s: wind_category must be tree, grass or empty" % label)
+		errors.append("%s: wind_category must be tree, grass, climber or empty" % label)
 	var node: Variant = entry.get("node")
 	if not node is String or node == "" or String(node).length() > LibraryContracts.MAX_TEXT_LENGTH:
 		errors.append("%s: node must be a node name" % label)

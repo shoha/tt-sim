@@ -95,7 +95,9 @@ func test_the_ivy_amount_is_stored_only_while_ivy_is_on_and_off_the_default() ->
 	assert_eq(StructureOrnaments.ivy_amount(ivy), StructureOrnaments.IVY_DEFAULT)
 	var thick := StructureOrnaments.with_ivy_amount(ivy, 0.93)
 	assert_almost_eq(StructureOrnaments.ivy_amount(thick), 0.95, 0.001, "snapped to a step")
-	assert_false(StructureOrnaments.with_ivy_amount(thick, 0.55).has("ivy_amount"), "default erased")
+	assert_false(
+		StructureOrnaments.with_ivy_amount(thick, 0.55).has("ivy_amount"), "default erased"
+	)
 	assert_false(StructureOrnaments.with_kind(thick, "ivy", false).has("ivy_amount"), "ivy off")
 	var entry := StructureOrnaments.entries(thick, 3)[0]
 	assert_eq(entry["kind"], "ivy")
@@ -122,14 +124,17 @@ func test_surprise_me_is_seeded_small_themed_and_skips_what_cannot_be_added() ->
 	for theme: String in StructureOrnaments.THEMES:
 		for draw in 12:
 			var set_a := StructureOrnaments.surprise(theme, draw, ["ivy"])
-			assert_eq(set_a, StructureOrnaments.surprise(theme, draw, ["ivy"]), "same draw, same set")
+			assert_eq(
+				set_a, StructureOrnaments.surprise(theme, draw, ["ivy"]), "same draw, same set"
+			)
 			assert_between(set_a.size(), 2, 3, "%s draw %d" % [theme, draw])
 			assert_false(set_a.has("ivy"), "a skipped kind is never drawn")
 			var roof_tops := (1 if set_a.has("vane") else 0) + (1 if set_a.has("banner") else 0)
 			assert_lte(roof_tops, 1, "one thing on the roof")
 			for kind in set_a:
 				assert_true(
-					(StructureOrnaments.THEMES[theme] as Array).has(kind), "%s fits %s" % [kind, theme]
+					(StructureOrnaments.THEMES[theme] as Array).has(kind),
+					"%s fits %s" % [kind, theme]
 				)
 	var seen := {}
 	for draw in 30:
@@ -222,8 +227,12 @@ func test_a_set_is_one_history_entry_that_undoes_and_survives_a_restyle_and_a_co
 	var entries := _history.undo_count()
 	assert_true(editor.structures.set_ornaments(id, ["ivy", "vane"], "Add ivy to"))
 	assert_eq(_history.undo_count(), entries + 1, "one entry")
-	assert_eq(StructureOrnaments.kinds_of(_doc.structure(id).params), ["ivy", "vane"] as Array[String])
-	assert_false(editor.structures.set_ornaments(id, ["ivy", "vane"], "again"), "no change, no entry")
+	assert_eq(
+		StructureOrnaments.kinds_of(_doc.structure(id).params), ["ivy", "vane"] as Array[String]
+	)
+	assert_false(
+		editor.structures.set_ornaments(id, ["ivy", "vane"], "again"), "no change, no entry"
+	)
 	assert_true(editor.structures.set_ornaments(id, ["ivy", "vane"], "Change ivy of", 0.9))
 	assert_almost_eq(StructureOrnaments.ivy_amount(_doc.structure(id).params), 0.9, 0.001)
 	assert_true(editor.structures.swap_recipe(id, CHIMNEYED), "restyle")
@@ -256,7 +265,12 @@ func test_the_standing_building_follows_an_edit_and_undo() -> void:
 	editor.structures.set_ornaments(id, ["ivy", "banner"], "Add")
 	nodes.flush()
 	var after := _mesh_names(nodes)
-	assert_true("ornament_leaf" in after, "the standing building grew its ivy: %s" % str(after))
+	# The ivy is blobs (ornament_leaf) or, where the library has decor plants, multimeshes of them.
+	var plants := nodes.find_children("decor_*", "MultiMeshInstance3D", true, false)
+	assert_true(
+		"ornament_leaf" in after or not plants.is_empty(),
+		"the standing building grew its ivy: %s" % str(after)
+	)
 	assert_true("ornament_cloth" in after, "and its banners")
 	_history.undo()
 	nodes.flush()

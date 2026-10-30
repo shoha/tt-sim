@@ -490,11 +490,20 @@ and cacti carry no COLOR_0.
   ],
   "assets": {
     "<asset id>": {"file": "assets/<package id>/<object>.glb", "node": "<object>",
-                   "wind_category": "tree" | "grass" | "",
+                   "wind_category": "tree" | "grass" | "climber" | "",
                    "size_class": "...", "dimensions_m": [x, height, depth]}
   }
 }
 ```
+
+`climber` (2026-10-30) is the wind category of decor assets: wall climbers and window planters a
+host mounts on a structure. Their catalog entries carry a `placement` block `{scatter: false,
+mount: "wall" | "sill", origin: "foot_centre" | "base_centre", size_m: [w, h]}` (a known catalog
+key); `scatter: false` keeps them out of every biome query. tt-sim places them on procgen's
+ornament anchors (`docs/systems/structures.md` "Decor plants"): ivy `Bush_IvyWall_<S|M|L>_v<n>`
+with its origin at the foot centre of a wall patch, x along the wall, y up, z out of it, never
+scaled non-uniformly; `Flower_WindowPlanter_W<08|12|16>_v<n>` with its origin at the centre of the
+trough's top. A library without them leaves procgen's flat blobs in place (the fallback).
 
 Field notes:
 

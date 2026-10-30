@@ -35,6 +35,8 @@ static var _entries: Dictionary = {}
 static var _meshes: Dictionary = {}
 ## "<root>|<asset id>" -> why the load failed.
 static var _errors: Dictionary = {}
+## "<root>|<decor id>" -> StructureDecor row (the decor assets, also in _entries).
+static var _decor: Dictionary = {}
 ## Counters tests read: parses (GLBs decoded), cache_hits, hash_checks, refused.
 static var stats: Dictionary = {"parses": 0, "cache_hits": 0, "hash_checks": 0, "refused": 0}
 
@@ -65,6 +67,42 @@ static func register_library(
 	_lock.unlock()
 
 
+## Registers a library's decor assets (StructureDecor.rows_of: plants a host mounts on a structure,
+## not scattered) for the palette at `root`: their GLBs are served like any asset under their
+## decor id, and the rows are what decor_rows() lists. `rows` of a second call for the same
+## library replace the first's.
+static func register_decor(
+	root: String, rows: Array[Dictionary], folder: String, official: bool
+) -> void:
+	var origins := {}
+	for row in rows:
+		origins[row.id] = {
+			"library": row.library,
+			"path": folder.path_join(str(row.file)) if folder != "" else "",
+			"node": row.node,
+			"sha256": row.sha256,
+			"bytes": row.bytes,
+		}
+	register_library(root, origins, official)
+	_lock.lock()
+	for row in rows:
+		_decor[_key(root, str(row.id))] = row
+	_lock.unlock()
+
+
+## The decor rows served for the palette at `root`, sorted by id (StructureDecor.rows_of's rows).
+static func decor_rows(root: String = PaletteLibrary.DEFAULT_ROOT) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var prefix := root + "|"
+	_lock.lock()
+	for key: String in _decor:
+		if key.begins_with(prefix):
+			out.append(_decor[key])
+	_lock.unlock()
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a.id) < str(b.id))
+	return out
+
+
 ## register_library() for the assets the store does not serve yet at that path, so a biome
 ## designer laying a draft over and over leaves the meshes it already parsed alone.
 static func register_missing(
@@ -74,7 +112,10 @@ static func register_missing(
 	_lock.lock()
 	for asset_id: String in origins:
 		var held: Dictionary = _entries.get(_key(root, asset_id), {})
-		if held.is_empty() or String(held["path"]) != String((origins[asset_id] as Dictionary)["path"]):
+		if (
+			held.is_empty()
+			or String(held["path"]) != String((origins[asset_id] as Dictionary)["path"])
+		):
 			fresh[asset_id] = origins[asset_id]
 	_lock.unlock()
 	register_library(root, fresh, official, official_of)
@@ -86,6 +127,7 @@ static func clear() -> void:
 	_entries.clear()
 	_meshes.clear()
 	_errors.clear()
+	_decor.clear()
 	_lock.unlock()
 
 
@@ -94,7 +136,7 @@ static func clear() -> void:
 static func clear_root(root: String) -> void:
 	var prefix := root + "|"
 	_lock.lock()
-	for table: Dictionary in [_entries, _meshes, _errors]:
+	for table: Dictionary in [_entries, _meshes, _errors, _decor]:
 		for key: String in table.keys():
 			if key.begins_with(prefix):
 				table.erase(key)
@@ -142,7 +184,8 @@ static func assets_of(
 	_lock.lock()
 	for key: String in _entries:
 		if key.begins_with(root + "|") and _entries[key]["library"] == library_id:
-			out.append(key.substr(root.length() + 1))
+			if not _decor.has(key):
+				out.append(key.substr(root.length() + 1))
 	_lock.unlock()
 	out.sort()
 	return out
@@ -192,14 +235,19 @@ static func mesh_for(asset_id: String, root: String = PaletteLibrary.DEFAULT_ROO
 	_meshes[key] = loaded["mesh"]
 	_lock.unlock()
 	if loaded["mesh"] == null:
-		push_warning("AssetStore: asset '%s' (%s): %s" % [asset_id, entry["library"], loaded["error"]])
+		push_warning(
+			"AssetStore: asset '%s' (%s): %s" % [asset_id, entry["library"], loaded["error"]]
+		)
 	return loaded["mesh"]
 
 
 ## A duplicate of the asset's mesh dressed like a built-in asset: WindFoliage.apply_material
-## for `category` ("tree", "grass" or "" for none). null when the mesh cannot be had.
+## for `category` ("tree", "grass", "climber" or "" for none). null when the mesh cannot be had.
 static func instance(
-	library_id: String, asset_id: String, category: String, root: String = PaletteLibrary.DEFAULT_ROOT
+	library_id: String,
+	asset_id: String,
+	category: String,
+	root: String = PaletteLibrary.DEFAULT_ROOT
 ) -> Mesh:
 	var source := mesh(library_id, asset_id, root)
 	if source == null:

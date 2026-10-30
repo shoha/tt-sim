@@ -44,6 +44,9 @@ var builds: int = 0
 var last_rebuilt: int = 0
 ## Problems and budget notes of the builds installed so far (also logged), id -> text.
 var notes: Dictionary = {}
+## False keeps procgen's flat blobs for ivy and flower boxes even when the library has decor plants
+## (a render job's before and after, a debugging switch); takes effect with the next build.
+var plants: bool = true
 
 var _palette_root: String = PaletteLibrary.DEFAULT_ROOT
 var _materials: Dictionary = {}
@@ -70,6 +73,8 @@ var _pending: Dictionary = {}
 ## Tasks whose result a newer edit replaced; reaped when they finish.
 var _stale: PackedInt64Array = PackedInt64Array()
 var _reported: Dictionary = {}
+## Decor row id -> {"source": instance id of the library's mesh, "mesh": its wind-dressed copy}.
+var _decor_meshes: Dictionary = {}
 
 
 ## The structures of `doc` as nodes, from `built` (StructureGeometry.build(doc), which a loader's
@@ -81,9 +86,12 @@ static func create(
 	var structures := AuthoredStructures.new()
 	structures.name = NODE_NAME
 	structures._palette_root = root
-	var made := built if not built.is_empty() else StructureGeometry.build(doc)
+	# Parts a loader built with another decor setting (the library was not served yet) are rebuilt.
+	var decor := StructureDecor.available(root)
+	var fresh := not built.is_empty() and bool(built.get("decor", false)) == decor
+	var made := built if fresh else StructureGeometry.build(doc, true, decor)
 	structures.apply(made)
-	var keys := StructureGeometry.keys_of(doc)
+	var keys := StructureGeometry.keys_of(doc, decor)
 	structures._keys = keys
 	var list: Array = made.get("structures", [])
 	for k in mini(doc.structures.size(), list.size()):
@@ -124,7 +132,9 @@ static func exclude_of(root: Node) -> Array[RID]:
 ## built without (they found no room), by ProcgenOrnaments.missing_kinds on its build's placed
 ## kinds. [] while the structure has no built node yet (its build is still on a worker).
 static func missing_kinds_in(root: Node, structure_id: int, requested: Array) -> Array[String]:
-	var structures := root.get_node_or_null(NODE_NAME) as AuthoredStructures if root != null else null
+	var structures := (
+		root.get_node_or_null(NODE_NAME) as AuthoredStructures if root != null else null
+	)
 	if structures == null or not structures._details.has(structure_id):
 		return [] as Array[String]
 	var placed: Array = (structures._details[structure_id] as Dictionary).get("placed_kinds", [])
@@ -145,7 +155,8 @@ static func missing_kinds_in(root: Node, structure_id: int, requested: Array) ->
 ## built with. A queued build lands within a few frames (_process), or at once with flush().
 func refresh(doc: MapDocument, use_workers: bool = true) -> void:
 	StructureRecipes.ensure_served()
-	var keys := StructureGeometry.keys_memoised(doc, _key_memo)
+	var decor := _decor()
+	var keys := StructureGeometry.keys_memoised(doc, _key_memo, decor)
 	var changed := false
 	for child in get_children():
 		if not keys.has(_id_of(child)):
@@ -183,7 +194,7 @@ func refresh(doc: MapDocument, use_workers: bool = true) -> void:
 			_start(structure.copy(), key, ground)
 		else:
 			_drop_job(structure.id)
-			var parts := StructureGeometry.build_one(doc, structure)
+			var parts := StructureGeometry.build_one(doc, structure, decor)
 			_cache_put(key, parts)
 			_install(structure.id, key, parts)
 			rebuilt += 1
@@ -368,6 +379,7 @@ static func load_threads() -> int:
 ## Starts queued builds (task NOT_STARTED, oldest first) until `limit` are running.
 func _launch_queued(limit: int) -> void:
 	var running := 0
+	var decor := _decor()
 	for job: Dictionary in _jobs.values():
 		if job.task != NOT_STARTED and not WorkerThreadPool.is_task_completed(job.task):
 			running += 1
@@ -381,7 +393,7 @@ func _launch_queued(limit: int) -> void:
 		var structure: Structure = job.structure
 		var ground: MapDocument = job.ground
 		job.task = WorkerThreadPool.add_task(
-			func() -> void: out["parts"] = StructureGeometry.build_one(ground, structure),
+			func() -> void: out["parts"] = StructureGeometry.build_one(ground, structure, decor),
 			false,
 			"AuthoredStructures %d" % id
 		)
@@ -507,6 +519,7 @@ func _structure_node(id: int, parts: Dictionary) -> Node3D:
 		node.add_child(mill_node(mill, int(parts.get("id", 0)), style, tone))
 	node.set_meta(TAGS_META, parts.get("tag_table", PackedStringArray()))
 	_add_dressing(node, parts.get("dressing", {}))
+	_add_decor(node, parts)
 	var faces: PackedVector3Array = parts.get("collision", PackedVector3Array())
 	# The decks, stair treads, platforms and piles procgen gives no collision (StructureWalkable).
 	faces = faces + (parts.get("walkable", PackedVector3Array()) as PackedVector3Array)
@@ -572,6 +585,67 @@ func mill_node(mill: Dictionary, seed_value: int, style: String, tone: String) -
 	pivot.add_child(notifier)
 	pivot.setup(wheel, mill.axis, seed_value)
 	return pivot
+
+
+## True when the library serves decor plants: structures are then built with `soft: "anchors"`.
+func _decor() -> bool:
+	return plants and StructureDecor.available(_palette_root)
+
+
+## The decor plants of a structure (StructureDecor.placements on its anchors): one
+## MultiMeshInstance3D per decor asset, so a structure draws each asset once (per surface),
+## shadows off, dressed with the wind shader of its category as AssetStore.instance() dresses a
+## library asset. Freed with the node.
+func _add_decor(node: Node3D, parts: Dictionary) -> void:
+	if not bool(parts.get("decor", false)):
+		return
+	var anchors: Array[Dictionary] = []
+	anchors.assign(parts.get("anchors", []))
+	if anchors.is_empty():
+		return
+	var rows := AssetStore.decor_rows(_palette_root)
+	var by_id := {}
+	for row in rows:
+		by_id[row.id] = row
+	var groups := {}
+	for placement in StructureDecor.placements(anchors, rows):
+		if not groups.has(placement.id):
+			groups[placement.id] = [] as Array[Transform3D]
+		(groups[placement.id] as Array[Transform3D]).append(placement.transform)
+	var ids: Array = groups.keys()
+	ids.sort()
+	for id: String in ids:
+		var row: Dictionary = by_id[id]
+		var mesh := _decor_mesh(row)
+		if mesh == null:
+			continue
+		var transforms: Array[Transform3D] = groups[id]
+		var multi := MultiMesh.new()
+		multi.transform_format = MultiMesh.TRANSFORM_3D
+		multi.mesh = mesh
+		multi.instance_count = transforms.size()
+		for i in transforms.size():
+			multi.set_instance_transform(i, transforms[i])
+		var instance := MultiMeshInstance3D.new()
+		instance.name = "decor_%s" % row.local
+		instance.multimesh = multi
+		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		instance.set_meta(&"wind_foliage_category", row.wind_category)
+		node.add_child(instance)
+
+
+## The wind-dressed mesh of a decor row, shared by every structure of this node.
+func _decor_mesh(row: Dictionary) -> Mesh:
+	var source := AssetStore.mesh(str(row.library), str(row.id), _palette_root)
+	if source == null:
+		return null
+	var held: Variant = _decor_meshes.get(row.id)
+	if held is Dictionary and held.source == source.get_instance_id():
+		return held.mesh
+	var copy := source.duplicate() as Mesh
+	WindFoliage.apply_material(copy, str(row.wind_category))
+	_decor_meshes[row.id] = {"source": source.get_instance_id(), "mesh": copy}
+	return copy
 
 
 ## The yard of a building (StructureDressing): the soft ground patch and path (no shadow) and the

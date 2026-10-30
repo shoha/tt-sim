@@ -1,0 +1,381 @@
+{
+ "out_dir": "render_jobs/plant_decor_r3",
+ "timeout_s": 400,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "wait_title"
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 100,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "ivy",
+    "flower_boxes"
+   ],
+   "ref": "core:cottage",
+   "width": 6.0,
+   "depth": 4.0,
+   "yaw": 50.0,
+   "seed": 5,
+   "decor": false
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 7.5,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "cottage_a_blobs",
+   "desc": "cottage a_blobs"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "ivy",
+    "flower_boxes"
+   ],
+   "ref": "core:cottage",
+   "width": 6.0,
+   "depth": 4.0,
+   "yaw": 50.0,
+   "seed": 5,
+   "decor": true
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 7.5,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "cottage_b_plants",
+   "desc": "cottage b_plants"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "ivy",
+    "flower_boxes"
+   ],
+   "ref": "core:cottage",
+   "width": 6.0,
+   "depth": 4.0,
+   "yaw": 50.0,
+   "seed": 5,
+   "decor": false
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 3.8,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "cottage_close_a_blobs",
+   "desc": "cottage_close a_blobs"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "ivy",
+    "flower_boxes"
+   ],
+   "ref": "core:cottage",
+   "width": 6.0,
+   "depth": 4.0,
+   "yaw": 50.0,
+   "seed": 5,
+   "decor": true
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 3.8,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "cottage_close_b_plants",
+   "desc": "cottage_close b_plants"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "flower_boxes"
+   ],
+   "ref": "core:ivy_manor",
+   "width": 8.0,
+   "depth": 6.0,
+   "yaw": 50.0,
+   "seed": 5,
+   "decor": false
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 9.5,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "manor_a_blobs",
+   "desc": "manor a_blobs"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "flower_boxes"
+   ],
+   "ref": "core:ivy_manor",
+   "width": 8.0,
+   "depth": 6.0,
+   "yaw": 50.0,
+   "seed": 5,
+   "decor": true
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 9.5,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "manor_b_plants",
+   "desc": "manor b_plants"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "ivy"
+   ],
+   "ref": "core:castle_keep",
+   "width": 8.0,
+   "depth": 8.0,
+   "yaw": 50.0,
+   "seed": 5,
+   "decor": false
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 12.0,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "keep_a_blobs",
+   "desc": "keep a_blobs"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "ivy"
+   ],
+   "ref": "core:castle_keep",
+   "width": 8.0,
+   "depth": 8.0,
+   "yaw": 50.0,
+   "seed": 5,
+   "decor": true
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 12.0,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "keep_b_plants",
+   "desc": "keep b_plants"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "flower_boxes",
+    "ivy"
+   ],
+   "ref": "core:townhouse",
+   "width": 5.0,
+   "depth": 7.0,
+   "yaw": 50.0,
+   "seed": 5,
+   "decor": false
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 9.0,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "townhouse_a_blobs",
+   "desc": "townhouse a_blobs"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "flower_boxes",
+    "ivy"
+   ],
+   "ref": "core:townhouse",
+   "width": 5.0,
+   "depth": 7.0,
+   "yaw": 50.0,
+   "seed": 5,
+   "decor": true
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 9.0,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "townhouse_b_plants",
+   "desc": "townhouse b_plants"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "remove_all"
+  }
+ ]
+}

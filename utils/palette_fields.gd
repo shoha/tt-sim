@@ -10,7 +10,7 @@ extends RefCounted
 ## Pure: no files, no caches, no log.
 
 const FORMAT := 1
-const WIND_CATEGORIES := ["tree", "grass", ""]
+const WIND_CATEGORIES := ["tree", "grass", "climber", ""]
 const ALIGN_MODES := ["upright", "normal"]
 const SURFACE_MAPS := ["albedo", "normal", "orm", "height"]
 ## What a surface is for (contract section 9): soft ground sampled top-down, rock for steep

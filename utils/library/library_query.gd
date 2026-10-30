@@ -95,6 +95,8 @@ static func candidates(context: Dictionary) -> Array[Dictionary]:
 	var own := String(context["library"])
 	var catalog: Dictionary = context["catalog"]
 	for id: String in catalog:
+		if not LibraryContracts.scatters(catalog[id]):
+			continue
 		out.append(_candidate(own, id, id, catalog[id], String(context.get("folder", "")), own))
 	var deps: Dictionary = context.get("deps", {})
 	for library: String in deps:
@@ -103,7 +105,7 @@ static func candidates(context: Dictionary) -> Array[Dictionary]:
 		var retired := _retired(read.get("library", {}))
 		var dep_catalog: Dictionary = read.get("catalog", {})
 		for id: String in dep_catalog:
-			if id in retired:
+			if id in retired or not LibraryContracts.scatters(dep_catalog[id]):
 				continue
 			out.append(
 				_candidate(
