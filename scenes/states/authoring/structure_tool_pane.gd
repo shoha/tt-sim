@@ -24,9 +24,8 @@ signal done_requested
 const TILE_SIZE := Vector2(96, 92)
 const VARIANT_TILE_SIZE := Vector2(96, 78)
 const SELECTION_HINT := (
-	"Drag a corner dot to resize, or a tab to push a side. Click a tab to put the door on that"
-	+ " side. Drag the building to move it. Q and E turn it, R redraws it, Ctrl+D copies it, Delete"
-	+ " removes it. Escape or a click on bare ground lets go."
+	"Drag a corner dot to resize, a tab to push a side, the body to move it. Click a tab to put the"
+	+ " door there. Q and E turn it. Escape or a click on bare ground lets go."
 )
 ## The recipe parameters the bar steps, in order, with their captions and how a value reads
 ## (value 0 of floors is the recipe's own, "Auto").
@@ -41,17 +40,19 @@ const STEPPED := [
 const TILE_COLUMNS := 2
 const THUMB_PX := 56
 const HINT := (
-	"Pick a building, then click the ground to put it down, or drag out a corner to size it. It"
-	+ " settles on the nearest dry, level ground. Q and E turn it, [ and ] make a click's building"
-	+ " smaller or bigger, R draws it afresh. Right-click or Delete removes the one under the"
-	+ " cursor."
+	"Click the ground to put the building down, or drag out a corner to size it. Q and E turn it,"
+	+ " [ and ] shrink or grow it, R draws it afresh, right-click removes one."
 )
 const EMPTY := "No library this map uses offers a building."
+const SEARCH_PLACEHOLDER := "Find a building"
+const NO_MATCH := "No building matches that. Try a family such as cottage, inn or ruin."
 const REROLL_TOOLTIP := "Draw the next building's look afresh (R); over a building, redraw that one"
 
 ## The family fields, in tile order.
 var family_fields: Array[TileField] = []
 var reroll_button: Button
+## Filters the tiles by name, family and tags (StructurePalette.matches).
+var search_edit: LineEdit
 
 ## The selected building's bar, shown in place of the palette while a building is selected.
 var selection_box: VBoxContainer
@@ -67,6 +68,13 @@ var done_button: Button
 
 var _hint: Label
 var _empty: Label
+var _no_match: Label
+## The building picked (kept while a search hides its tile), how many the libraries serve, and
+## whether the search found none.
+var _picked: String = ""
+var _served: int = 0
+var _found_none: bool = false
+var _tools_row: HBoxContainer
 var _refs: Array[String] = []
 var _variant_refs: Array[String] = []
 var _selected_ref: String = ""
@@ -87,14 +95,35 @@ func _init() -> void:
 	add_child(_hint)
 	_empty = _caption("StructureEmpty", EMPTY)
 	add_child(_empty)
+	# Search and Mix afresh share one row above the tiles, so neither is lost below 60 of them.
+	_tools_row = HBoxContainer.new()
+	_tools_row.name = "StructureTools"
+	_tools_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_tools_row)
+	search_edit = LineEdit.new()
+	search_edit.name = "StructureSearch"
+	search_edit.placeholder_text = SEARCH_PLACEHOLDER
+	search_edit.tooltip_text = "Type part of a name, a family or a tag to narrow the tiles"
+	search_edit.clear_button_enabled = true
+	search_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	search_edit.text_changed.connect(func(_text: String) -> void: refresh())
+	_tools_row.add_child(search_edit)
 	reroll_button = Button.new()
 	reroll_button.name = "StructureReroll"
 	reroll_button.text = "Mix afresh"
 	reroll_button.tooltip_text = REROLL_TOOLTIP
 	reroll_button.focus_mode = Control.FOCUS_NONE
 	reroll_button.pressed.connect(reroll_requested.emit)
-	add_child(reroll_button)
+	_tools_row.add_child(reroll_button)
+	_no_match = _caption("StructureNoMatch", NO_MATCH)
+	_no_match.visible = false
+	add_child(_no_match)
 	refresh()
+
+
+## True when the libraries serve `ref` (whether or not the search shows its tile).
+func has_ref(ref: String) -> bool:
+	return not LibraryStructureStore.structure(ref).is_empty()
 
 
 ## The references the pane lists, in tile order.
@@ -113,17 +142,13 @@ func refresh() -> void:
 	_refs.clear()
 	StructureRecipes.ensure_served()
 	var rows := LibraryStructureStore.structures()
-	var by_family: Dictionary = {}
-	for row in rows:
-		var key := "%s:%s" % [row["library"], row["family"]]
-		if not by_family.has(key):
-			by_family[key] = []
-		(by_family[key] as Array).append(row)
-	for key: String in by_family:
-		var members: Array = by_family[key]
+	var found := StructurePalette.sections(rows, search_edit.text)
+	for section: Dictionary in found:
+		var key := String(section["key"])
+		var members: Array = section["rows"]
 		var field := TileField.new()
 		field.name = "StructureFamily_" + key.replace(":", "_")
-		field.caption = String(members[0]["family"]).capitalize()
+		field.caption = StructurePalette.section_caption(String(section["family"]), members.size())
 		field.tiles.photo_icons = true
 		field.tiles.tile_min_size = TILE_SIZE
 		field.tiles.columns = TILE_COLUMNS
@@ -139,19 +164,25 @@ func refresh() -> void:
 			_refs.append(ref)
 		field.tiles.selection_changed.connect(_on_tile.bind(field))
 		add_child(field)
-		move_child(field, reroll_button.get_index())
 		family_fields.append(field)
-	_empty.visible = rows.is_empty()
-	reroll_button.visible = not rows.is_empty()
-	if picked != "" and picked in _refs:
+	_served = rows.size()
+	_found_none = found.is_empty()
+	var served_refs := PackedStringArray()
+	for row: Dictionary in rows:
+		served_refs.append(String(row["ref"]))
+	if picked != "" and picked in served_refs:
 		select_ref(picked)
 	elif not _refs.is_empty():
 		select_ref(_refs[0])
+	else:
+		_picked = ""
 	_show_palette(not selection_box.visible)
 
 
-## Shows `ref` picked, without emitting structure_selected.
+## Shows `ref` picked, without emitting structure_selected. A pick the search hides stays the
+## pane's pick (the brush still lays it); its tile shows again when the search lets it through.
 func select_ref(ref: String) -> void:
+	_picked = ref
 	for field in family_fields:
 		if field.tiles.has_tile(StringName(ref)):
 			field.tiles.select(StringName(ref))
@@ -159,12 +190,9 @@ func select_ref(ref: String) -> void:
 			field.tiles.clear_selection()
 
 
-## The reference of the tile picked, or "".
+## The reference of the building picked, or "".
 func picked_ref() -> String:
-	for field in family_fields:
-		if is_instance_valid(field) and field.tiles.selected != &"":
-			return String(field.tiles.selected)
-	return ""
+	return _picked
 
 
 ## Shows the bar for `structure` (a record of the open document: its recipe and parameters), or,
@@ -246,7 +274,6 @@ func _show_variants(ref: String) -> void:
 				func(id: StringName) -> void: variant_picked.emit(String(id))
 			)
 			selection_box.add_child(variant_field)
-			selection_box.move_child(variant_field, selection_title.get_index() + 1)
 	if variant_field != null:
 		variant_field.tiles.select(StringName(ref))
 
@@ -257,8 +284,10 @@ func _show_palette(shown: bool) -> void:
 	for field in family_fields:
 		if is_instance_valid(field):
 			field.visible = shown
-	reroll_button.visible = shown and not _refs.is_empty()
-	_empty.visible = shown and _refs.is_empty()
+	_tools_row.visible = shown and _served > 0
+	reroll_button.visible = _tools_row.visible
+	_no_match.visible = shown and _served > 0 and _found_none
+	_empty.visible = shown and _served == 0
 
 
 ## The selected building's bar: its name, the variant tiles (made when a selection shows), a
@@ -272,6 +301,7 @@ func _build_selection() -> void:
 	add_child(selection_box)
 	selection_title = Label.new()
 	selection_title.name = "SelectionTitle"
+	selection_title.theme_type_variation = &"Heading"
 	selection_box.add_child(selection_title)
 	selection_box.add_child(_caption("SelectionHint", SELECTION_HINT))
 	for item: Dictionary in STEPPED:
@@ -296,24 +326,35 @@ func _build_selection() -> void:
 		row.add_child(plus)
 		selection_box.add_child(row)
 		steppers[param] = {"row": row, "value": value, "minus": minus, "plus": plus}
+	# The buttons sit in pairs, the safe ones first, Remove apart from Done. New actions (such as
+	# an ornaments picker) add a row or a section to selection_box before the buttons: use
+	# add_selection_section().
+	var door_row := _button_row("SelectionRowDoor")
 	door_button = _action_button(
+		door_row,
 		"SelectionDoor",
 		"Door to the next side",
-		"Put the door on the next side round",
+		"Put the door on the next side round (or click a side tab)",
 		door_requested
 	)
+	var make_row := _button_row("SelectionRowMake")
 	redraw_button = _action_button(
-		"SelectionRedraw", "Redraw", "Draw this building afresh (R)", redraw_requested
+		make_row, "SelectionRedraw", "Redraw", "Draw this building afresh (R)", redraw_requested
 	)
 	copy_button = _action_button(
-		"SelectionCopy", "Copy", "A copy beside it (Ctrl+D)", copy_requested
+		make_row, "SelectionCopy", "Copy", "A copy beside it (Ctrl+D)", copy_requested
 	)
+	var end_row := _button_row("SelectionRowEnd")
 	remove_button = _action_button(
-		"SelectionRemove", "Remove", "Take this building away (Delete)", remove_requested
+		end_row, "SelectionRemove", "Remove", "Take this building away (Delete)", remove_requested
 	)
 	done_button = _action_button(
-		"SelectionDone", "Done", "Let go of the building (Escape)", done_requested
+		end_row, "SelectionDone", "Done", "Let go of the building (Escape)", done_requested
 	)
+	# The buttons go right under the name (Redraw and Copy, the door, then Remove and Done): the
+	# Style tiles below are long, and a button must never be a scroll away.
+	for at in 3:
+		selection_box.move_child([make_row, door_row, end_row][at], 1 + at)
 
 
 func _stepper_button(button_name: String, text: String, tip: String) -> Button:
@@ -326,18 +367,41 @@ func _stepper_button(button_name: String, text: String, tip: String) -> Button:
 	return button
 
 
-func _action_button(button_name: String, text: String, tip: String, done: Signal) -> Button:
+## The extension point for the selected building's bar: adds `section` (a Control, named and
+## built by the caller, filled in show_selection's wake from selection_changed) below the
+## steppers and above the Style tiles, and returns it. The buttons stay at the top, so Done and
+## Remove never scroll away behind a long tile grid.
+func add_selection_section(section: Control) -> Control:
+	selection_box.add_child(section)
+	if variant_field != null:
+		selection_box.move_child(section, variant_field.get_index())
+	return section
+
+
+func _button_row(row_name: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = row_name
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	selection_box.add_child(row)
+	return row
+
+
+func _action_button(
+	row: HBoxContainer, button_name: String, text: String, tip: String, done: Signal
+) -> Button:
 	var button := Button.new()
 	button.name = button_name
 	button.text = text
 	button.tooltip_text = tip
 	button.focus_mode = Control.FOCUS_NONE
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.pressed.connect(done.emit)
-	selection_box.add_child(button)
+	row.add_child(button)
 	return button
 
 
 func _on_tile(id: StringName, from_field: TileField) -> void:
+	_picked = String(id)
 	for field in family_fields:
 		if field != from_field:
 			field.tiles.clear_selection()

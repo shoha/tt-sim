@@ -445,8 +445,9 @@ func test_the_pane_lists_the_librarys_buildings_by_family_with_pictures() -> voi
 	assert_gt(pane.family_fields.size(), 1, "grouped by family")
 	var families := {}
 	for field in pane.family_fields:
-		families[field.caption] = true
+		families[field.caption.get_slice(" (", 0)] = true
 	assert_true(families.has("Cottage") and families.has("Townhouse"), "%s" % [families.keys()])
+	assert_eq(pane.family_fields[0].caption.get_slice(" (", 0), "Cottage", "cottages come first")
 	for row in served:
 		var texture := StructureThumbnail.of(row, StructureToolPane.THUMB_PX)
 		assert_eq(texture.get_width(), StructureToolPane.THUMB_PX)
@@ -468,7 +469,13 @@ func test_a_pick_in_the_pane_reaches_the_brush_and_the_first_pick_is_the_panes()
 	assert_false(brush.row().is_empty(), "with no pick the brush takes the first served")
 	var pane := StructureToolPane.new()
 	add_child_autofree(pane)
-	assert_eq(brush.ref, pane.picked_ref(), "which is the tile the pane shows picked")
+	assert_eq(pane.picked_ref(), pane.refs()[0], "the pane preselects its first tile")
+	var fresh := tool.brush_mode.new() as StructureBrush
+	StructureTool.sync_pick(fresh, pane)
+	assert_eq(fresh.ref, pane.picked_ref(), "a fresh brush follows the pane")
+	pane.select_ref(TOWNHOUSE)
+	StructureTool.sync_pick(brush, pane)
+	assert_eq(pane.picked_ref(), brush.ref, "a brush with a pick of its own is shown on the pane")
 
 
 func test_the_events_pane_carries_the_tool_for_the_gm() -> void:
