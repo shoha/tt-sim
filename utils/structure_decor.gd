@@ -25,8 +25,20 @@ const PLANTER_SCALE_MIN := 0.8
 const PLANTER_SCALE_MAX := 1.25
 ## Tolerance when a patch is compared with a class: a patch 1 cm over still fits.
 const FIT_EPS := 0.01
-## A tile an opening covers by at least this share of its area is dropped.
-const DROP_COVERED := 0.4
+## Ivy keeps this far from every opening (card plant_decor2, 2026-10-30): the baked leaves overhang
+## their patch by about 0.1 m a side, so a plant stays 0.2 m off a window or door and its leaves
+## never reach the glass.
+const OPENING_MARGIN := 0.2
+## Beside an opening a plant may shrink this far (uniform) to fit the free rectangle; below it the
+## plant is left out.
+const FIT_MIN_SCALE := 0.4
+## Plants stacked in one free rectangle beside an opening, at most, and the cover a taller stack
+## must have over a shorter one to be taken.
+const MAX_STACK := 3
+const FIT_GAIN := 1.15
+## The most triangles of plants one structure draws (ivy and planters together). Past it the lowest
+## value anchors go first (cap_triangles).
+const MAX_TRIANGLES := 3000
 const ID_PREFIX := "decor:"
 
 
@@ -165,9 +177,12 @@ static func variant_of(ids: Array[String], seed_value: int, salt: int) -> String
 ## size (Vector2: the patch the plant stands for), exclusions (rectangles [x0, y0, x1, y1] in the
 ## PLANT's own frame: x from its centre, y up from its foot, the anchor's openings moved into it;
 ## the baked asset cannot honour them, they say where glass is for a test and a later runtime
-## climber)}]. Ivy: a patch bigger than the largest class is tiled, one with an opening in it is cut
-## into columns, and a tile an opening covers by DROP_COVERED is dropped. Planters: the class
-## nearest the box's width. Nothing when `rows` lack the kind.
+## climber), extent (Vector2: what the plant covers on the wall, its class size times its scale)}].
+## Ivy: a patch bigger than the largest class is tiled; one with an opening in it is cut into the
+## free rectangles around the openings grown by OPENING_MARGIN (free_rects), each tiled with the
+## biggest class that fits inside it (shrunk to FIT_MIN_SCALE), so no plant's extent meets an
+## opening and a rectangle nothing fits in stays bare. Planters: the class nearest the box's width.
+## Nothing when `rows` lack the kind.
 static func placements(anchors: Array[Dictionary], rows: Array[Dictionary]) -> Array[Dictionary]:
 	var ivy_classes := classes_of(rows, KIND_IVY)
 	var planter_classes := classes_of(rows, KIND_PLANTER)
@@ -191,46 +206,138 @@ static func _ivy_placements(
 	var height := float(anchor.height)
 	var largest: Vector2 = classes[classes.size() - 1].size
 	var open: Array = anchor.get("exclusions", [])
-	var cols := maxi(1, ceili(width / largest.x - FIT_EPS))
-	var rows := maxi(1, ceili(height / largest.y - FIT_EPS))
+	# A patch with no opening is tiled whole; with openings, each free rectangle around them is
+	# tiled on its own and a plant is fitted inside it (the baked leaves cannot be cut around glass).
+	var runs: Array = [[-width * 0.5, 0.0, width * 0.5, height]]
 	if not open.is_empty():
-		# The baked plants cannot leave a window clear, so a patch with an opening in it is cut into
-		# columns of the smallest class's width: the columns the opening covers are dropped and the
-		# rest hang beside it.
-		var smallest: Vector2 = classes[0].size
-		cols = maxi(cols, ceili(width / smallest.x - FIT_EPS))
-	var tile_w := width / cols
-	var tile_h := height / rows
-	var chosen := ivy_class(classes, tile_w, tile_h)
-	var size: Vector2 = chosen.size
-	# The larger ratio: a narrow column of a tall patch keeps its height (it may overlap its
-	# neighbours), a squat one keeps its width.
-	var scale := clampf(maxf(tile_w / size.x, tile_h / size.y), MIN_SCALE, 1.0)
-	for row in rows:
-		for col in cols:
-			var centre_x := -width * 0.5 + (col + 0.5) * tile_w
-			var foot_y := row * tile_h
-			var tile_open := _shifted(open, centre_x, foot_y)
-			if _covered(tile_open, tile_w, tile_h):
-				continue
-			var origin: Vector3 = (
-				anchor.origin
-				+ (anchor.along as Vector3) * centre_x
-				+ (anchor.up as Vector3) * foot_y
-			)
-			(
-				out
-				. append(
-					{
-						"id": variant_of(chosen.ids, int(anchor.get("seed", 0)), row * cols + col),
-						"kind": KIND_IVY,
-						"transform": _frame(anchor, origin, scale),
-						"anchor": index,
-						"size": Vector2(tile_w, tile_h),
-						"exclusions": tile_open,
-					}
+		runs = free_rects(width, height, open, OPENING_MARGIN)
+	var salt := 0
+	for run: Array in runs:
+		var run_w := float(run[2]) - float(run[0])
+		var run_h := float(run[3]) - float(run[1])
+		var fit := _fit(classes, run_w, run_h, not open.is_empty())
+		if fit.is_empty():
+			continue
+		var chosen: Dictionary = fit.chosen
+		var scale: float = fit.scale
+		var cols: int = fit.cols
+		var rows: int = fit.rows
+		var tile_w := run_w / cols
+		var tile_h := run_h / rows
+		var size: Vector2 = chosen.size
+		for row in rows:
+			for col in cols:
+				var centre_x := float(run[0]) + (col + 0.5) * tile_w
+				var foot_y := float(run[1]) + row * tile_h
+				var origin: Vector3 = (
+					anchor.origin
+					+ (anchor.along as Vector3) * centre_x
+					+ (anchor.up as Vector3) * foot_y
 				)
-			)
+				(
+					out
+					. append(
+						{
+							"id": variant_of(chosen.ids, int(anchor.get("seed", 0)), salt),
+							"kind": KIND_IVY,
+							"transform": _frame(anchor, origin, scale),
+							"anchor": index,
+							"size": Vector2(tile_w, tile_h),
+							"extent": size * scale,
+							"exclusions": _shifted(open, centre_x, foot_y),
+						}
+					)
+				)
+				salt += 1
+	return out
+
+
+## The layout of a `run_w` by `run_h` rectangle: {chosen (class), scale, cols, rows}. Free
+## (`bounded` false): tiles of the largest class's size, the smallest class that covers a tile,
+## scaled down to it (MIN_SCALE floor), as a plain wall always was. `bounded` (beside an opening):
+## the extent of every plant lies inside the rectangle. Columns as the largest class needs, then
+## the class and a stack of up to MAX_STACK plants (each shrunk uniformly to fit, at least
+## FIT_MIN_SCALE) that cover the most wall; a taller stack must beat a shorter one by FIT_GAIN,
+## since a plant costs the same triangles at any scale. {} when nothing fits.
+static func _fit(
+	classes: Array[Dictionary], run_w: float, run_h: float, bounded: bool
+) -> Dictionary:
+	var largest: Vector2 = classes[classes.size() - 1].size
+	var cols := maxi(1, ceili(run_w / largest.x - FIT_EPS))
+	if not bounded:
+		var rows := maxi(1, ceili(run_h / largest.y - FIT_EPS))
+		var chosen := ivy_class(classes, run_w / cols, run_h / rows)
+		var size: Vector2 = chosen.size
+		# The larger ratio: a narrow column of a tall patch keeps its height (it may overlap its
+		# neighbours), a squat one keeps its width.
+		var scale := clampf(maxf(run_w / cols / size.x, run_h / rows / size.y), MIN_SCALE, 1.0)
+		return {"chosen": chosen, "scale": scale, "cols": cols, "rows": rows}
+	var best: Dictionary = {}
+	var best_cover := 0.0
+	for rows in range(1, MAX_STACK + 1):
+		for item in classes:
+			var size: Vector2 = item.size
+			var scale := minf(1.0, minf(run_w / cols / size.x, run_h / rows / size.y))
+			if scale < FIT_MIN_SCALE:
+				continue
+			var cover := size.x * size.y * scale * scale * cols * rows
+			if best.is_empty() or cover > best_cover * FIT_GAIN:
+				best_cover = cover
+				best = {"chosen": item, "scale": scale, "cols": cols, "rows": rows}
+	return best
+
+
+## The rectangles [x0, y0, x1, y1] (anchor frame: x from the centre, y up from the foot) of a
+## `width` by `height` patch that no opening of `open` ([x0, y0, x1, y1] each) touches once grown
+## by `margin` on every side. Sliced by the grown openings' x edges, then the free runs of a slice
+## are joined with the neighbouring slice's run when they match, so a wall beside a window is one
+## tall rectangle and the bands above and below it are two short ones.
+static func free_rects(width: float, height: float, open: Array, margin: float) -> Array:
+	var grown: Array = []
+	for rect: Array in open:
+		var x0 := maxf(float(rect[0]) - margin, -width * 0.5)
+		var x1 := minf(float(rect[2]) + margin, width * 0.5)
+		var y0 := maxf(float(rect[1]) - margin, 0.0)
+		var y1 := minf(float(rect[3]) + margin, height)
+		if x1 > x0 and y1 > y0:
+			grown.append([x0, y0, x1, y1])
+	var xs: Array[float] = [-width * 0.5, width * 0.5]
+	for rect: Array in grown:
+		xs.append(float(rect[0]))
+		xs.append(float(rect[2]))
+	xs.sort()
+	var out: Array = []
+	var live := {}
+	for i in xs.size() - 1:
+		var a := xs[i]
+		var b := xs[i + 1]
+		if b - a < 1e-4:
+			continue
+		var blocked: Array = []
+		for rect: Array in grown:
+			if float(rect[2]) > a + 1e-6 and float(rect[0]) < b - 1e-6:
+				blocked.append([float(rect[1]), float(rect[3])])
+		blocked.sort_custom(func(p: Array, q: Array) -> bool: return p[0] < q[0])
+		var runs: Array = []
+		var floor_y := 0.0
+		for span: Array in blocked:
+			if float(span[0]) - floor_y > 1e-4:
+				runs.append([floor_y, float(span[0])])
+			floor_y = maxf(floor_y, float(span[1]))
+		if height - floor_y > 1e-4:
+			runs.append([floor_y, height])
+		var next_live := {}
+		for run: Array in runs:
+			var key := "%.4f,%.4f" % [run[0], run[1]]
+			if live.has(key):
+				var joined: Array = live[key]
+				joined[2] = b
+				next_live[key] = joined
+			else:
+				var made := [a, run[0], b, run[1]]
+				out.append(made)
+				next_live[key] = made
+		live = next_live
 	return out
 
 
@@ -252,6 +359,7 @@ static func _planter_placements(
 				"transform": _frame(anchor, anchor.origin, scale),
 				"anchor": index,
 				"size": Vector2(float(anchor.width), float(anchor.height)),
+				"extent": size * scale,
 				"exclusions": [] as Array,
 			}
 		)
@@ -274,11 +382,52 @@ static func _shifted(open: Array, dx: float, dy: float) -> Array:
 	return out
 
 
-## True when one rectangle of `open` covers at least DROP_COVERED of the tile (-w/2..w/2 by 0..h).
-static func _covered(open: Array, tile_w: float, tile_h: float) -> bool:
-	for r: Array in open:
-		var x := minf(float(r[2]), tile_w * 0.5) - maxf(float(r[0]), -tile_w * 0.5)
-		var y := minf(float(r[3]), tile_h) - maxf(float(r[1]), 0.0)
-		if x > 0.0 and y > 0.0 and x * y >= DROP_COVERED * tile_w * tile_h:
-			return true
-	return false
+## `placed` held to `cap` triangles in all: `cost` maps a plant's id to its triangle count. The
+## plants that go first are the lowest value: ivy before planters (a flower box is cheap and the
+## best read of a lived-in house), then the smallest area of wall covered, then the highest (the
+## least seen from tabletop zoom). The survivors keep their order.
+static func cap_triangles(
+	placed: Array[Dictionary], cost: Dictionary, cap: int = MAX_TRIANGLES
+) -> Array[Dictionary]:
+	var total := 0
+	for plant in placed:
+		total += int(cost.get(plant.id, 0))
+	if total <= cap:
+		return placed
+	var order: Array[int] = []
+	for i in placed.size():
+		order.append(i)
+	order.sort_custom(
+		func(a: int, b: int) -> bool:
+			var pa := placed[a]
+			var pb := placed[b]
+			var ka := 1 if pa.kind == KIND_PLANTER else 0
+			var kb := 1 if pb.kind == KIND_PLANTER else 0
+			if ka != kb:
+				return ka < kb
+			var area_a := _area_of(pa)
+			var area_b := _area_of(pb)
+			if not is_equal_approx(area_a, area_b):
+				return area_a < area_b
+			var ya := (pa.transform as Transform3D).origin.y
+			var yb := (pb.transform as Transform3D).origin.y
+			if not is_equal_approx(ya, yb):
+				return ya > yb
+			return a < b
+	)
+	var dropped := {}
+	for i in order:
+		if total <= cap:
+			break
+		total -= int(cost.get(placed[i].id, 0))
+		dropped[i] = true
+	var out: Array[Dictionary] = []
+	for i in placed.size():
+		if not dropped.has(i):
+			out.append(placed[i])
+	return out
+
+
+static func _area_of(plant: Dictionary) -> float:
+	var extent: Vector2 = plant.get("extent", plant.size)
+	return extent.x * extent.y

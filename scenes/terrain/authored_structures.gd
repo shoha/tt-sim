@@ -608,7 +608,13 @@ func _add_decor(node: Node3D, parts: Dictionary) -> void:
 	for row in rows:
 		by_id[row.id] = row
 	var groups := {}
-	for placement in StructureDecor.placements(anchors, rows):
+	var placed := StructureDecor.placements(anchors, rows)
+	var cost := {}
+	for placement in placed:
+		if not cost.has(placement.id) and by_id.has(placement.id):
+			cost[placement.id] = _triangles_of(_decor_mesh(by_id[placement.id]))
+	# At most StructureDecor.MAX_TRIANGLES of plants a structure: the lowest-value anchors go first.
+	for placement in StructureDecor.cap_triangles(placed, cost):
 		if not groups.has(placement.id):
 			groups[placement.id] = [] as Array[Transform3D]
 		(groups[placement.id] as Array[Transform3D]).append(placement.transform)
@@ -632,6 +638,19 @@ func _add_decor(node: Node3D, parts: Dictionary) -> void:
 		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		instance.set_meta(&"wind_foliage_category", row.wind_category)
 		node.add_child(instance)
+
+
+## The triangles of `mesh` (every surface, the full-detail index arrays); 0 for null.
+static func _triangles_of(mesh: Mesh) -> int:
+	if mesh == null:
+		return 0
+	var total := 0
+	for surface in mesh.get_surface_count():
+		var arrays := mesh.surface_get_arrays(surface)
+		var index: Variant = arrays[Mesh.ARRAY_INDEX]
+		if index is PackedInt32Array:
+			total += (index as PackedInt32Array).size() / 3
+	return total
 
 
 ## The wind-dressed mesh of a decor row, shared by every structure of this node.

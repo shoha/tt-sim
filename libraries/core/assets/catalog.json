@@ -1410,7 +1410,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 194652,
+			"bytes": 194712,
 			"category": "bush",
 			"dimensions_m": [
 				2.45,
@@ -1441,7 +1441,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "3b2caa8da03169c28009e5c513a4d3bb17f41c2773b2081df847432c912b5079",
+			"sha256": "84a415007e9031dd92e967f431373e732c54e3c45a1b232dba88f01a07f98102",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1460,7 +1460,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 194652,
+			"bytes": 194712,
 			"category": "bush",
 			"dimensions_m": [
 				2.382,
@@ -1491,7 +1491,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "52316ef414419948c703f458f64b9f7cb4c3ce613253b4b416afc71e93f9aee8",
+			"sha256": "01f05119709981cba3039a40b63a2f0319d91758f7749825383a164b17fc0886",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1510,7 +1510,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 194648,
+			"bytes": 194708,
 			"category": "bush",
 			"dimensions_m": [
 				2.423,
@@ -1541,7 +1541,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "9861d3e8f874bc445bf275e17a01eb1925c70a64ee71b44ebf59253eca1941eb",
+			"sha256": "2352790b3036ffe7429506e2ab583e45d6d303bef15bed703f43310e74bffd7f",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1560,7 +1560,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 179672,
+			"bytes": 179732,
 			"category": "bush",
 			"dimensions_m": [
 				1.836,
@@ -1591,7 +1591,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "2f3d72e7c23d2a985651b4b6ff7019ee6235dfbe4b25640ad2301fc98a5053e4",
+			"sha256": "33cc215a946769438b2da1f947ae1a6cb9e935ad813e934477764d20b254328e",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1610,7 +1610,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 179672,
+			"bytes": 179728,
 			"category": "bush",
 			"dimensions_m": [
 				1.8,
@@ -1641,7 +1641,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "4fcdff4a67f8061680500b18b9f27536f6263a864f750ddad91125aaa5e1fefc",
+			"sha256": "bb5cb96faace0fd4cb81d830d30af3fbb81ac6033990edb18e7fc50d39294fc6",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1660,7 +1660,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 179672,
+			"bytes": 179728,
 			"category": "bush",
 			"dimensions_m": [
 				1.799,
@@ -1691,7 +1691,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "5587479785888a2ddeb95744d9d6c1f7ef5d5a0d10ac5a396b8e401d71661a64",
+			"sha256": "e2639e47b15f4f49228cde9eef633425aaff6184fcab2fe93f72e1eb5744cca8",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1710,7 +1710,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 168360,
+			"bytes": 168420,
 			"category": "bush",
 			"dimensions_m": [
 				1.421,
@@ -1741,7 +1741,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "242900ae8896001a2dd13962a8963ccff31018cd7f4d7808efe42c1af5284e45",
+			"sha256": "00672d211819c493632f3c58d48268030f48702ea3407600a964acdc56cc7181",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1760,7 +1760,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 168364,
+			"bytes": 168420,
 			"category": "bush",
 			"dimensions_m": [
 				1.418,
@@ -1791,7 +1791,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "f39f9cb9ca1cb68a7587255d1b964428e9b9f17638156b9c5449d93ecc95bbd4",
+			"sha256": "3176f2355ef5b13bb4529c28963cf4b407a23cf0b9c1d9f0c16c81ce1bad634d",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",
@@ -1810,7 +1810,7 @@
 			"biomes": [
 				"temperate_forest"
 			],
-			"bytes": 168364,
+			"bytes": 168420,
 			"category": "bush",
 			"dimensions_m": [
 				1.358,
@@ -1841,7 +1841,7 @@
 			},
 			"roles": [],
 			"seasons": [],
-			"sha256": "c7403b20d3a7548d9cc693703a2d4a32bf37890ff99c56fb02e941f7de6de804",
+			"sha256": "dc1fb6c2964c518428fe51887470533173d80680aad712b1d96db0fe9d5f4f5c",
 			"sidecar": null,
 			"size_class": "medium",
 			"subtype": "ivy",

@@ -155,20 +155,120 @@ func test_a_patch_bigger_than_the_largest_class_is_tiled() -> void:
 	assert_almost_eq(ys[1] - ys[0], 2.5, 0.001, "the second tile starts where the first ends")
 
 
-func test_exclusions_are_passed_on_in_the_plants_frame_and_a_covered_tile_is_dropped() -> void:
-	var door := [-0.2, 0.0, 0.2, 2.0]
-	var out := StructureDecor.placements([_anchor("ivy", 1.1, 1.1, [door])], _rows())
-	assert_eq(out.size(), 1)
-	var rect: Array = out[0].exclusions[0]
-	assert_almost_eq(float(rect[0]), -0.2, 0.001)
-	assert_almost_eq(float(rect[3]), 2.0, 0.001)
-	# A patch with an opening is cut into columns of the smallest class's width (5 m: 5 columns of
-	# 1 m); the opening, 1.7 m wide at the middle, covers only the middle column enough to drop it.
-	var wide := [-0.85, 0.0, 0.85, 2.5]
-	var tiled := StructureDecor.placements([_anchor("ivy", 5.0, 2.0, [wide])], _rows())
-	assert_eq(tiled.size(), 4, "the middle column lies in the opening")
+func _sorted_rects(rects: Array) -> Array:
+	var out := rects.duplicate()
+	out.sort_custom(
+		func(a: Array, b: Array) -> bool: return a[0] < b[0] or (a[0] == b[0] and a[1] < b[1])
+	)
+	return out
+
+
+func test_free_rects_are_the_patch_minus_the_grown_openings() -> void:
+	var window := [-0.5, 0.8, 0.5, 1.8]
+	var rects := _sorted_rects(StructureDecor.free_rects(5.0, 2.5, [window], 0.2))
+	# The window grown by 0.2: x -0.7..0.7, y 0.6..2.0.
+	var want := [
+		[-2.5, 0.0, -0.7, 2.5], [-0.7, 0.0, 0.7, 0.6], [-0.7, 2.0, 0.7, 2.5], [0.7, 0.0, 2.5, 2.5]
+	]
+	assert_eq(rects.size(), 4, "the wall left of it, the band below, the band above, the wall right")
+	for i in 4:
+		for k in 4:
+			assert_almost_eq(float(rects[i][k]), float(want[i][k]), 0.0001, "rect %d edge %d" % [i, k])
+	assert_eq(StructureDecor.free_rects(2.0, 1.0, [], 0.2).size(), 1, "no opening: the patch")
+	assert_eq(
+		StructureDecor.free_rects(1.0, 1.0, [[-0.5, 0.0, 0.5, 1.0]], 0.2).size(), 0, "all covered"
+	)
+	var door := StructureDecor.free_rects(4.0, 2.6, [[-0.4, 0.0, 0.4, 1.9]], 0.2)
+	assert_eq(door.size(), 3, "a door from the foot: both sides and the strip over it")
+
+
+func test_the_margin_is_more_than_the_leaf_overhang() -> void:
+	assert_gt(StructureDecor.OPENING_MARGIN, 0.1, "the baked leaves overhang the patch by 0.1 m")
+
+
+func test_exclusions_are_passed_on_in_the_plants_frame() -> void:
+	var window := [-0.5, 0.8, 0.5, 1.8]
+	var out := StructureDecor.placements([_anchor("ivy", 5.0, 2.5, [window])], _rows())
+	assert_gt(out.size(), 0)
+	for plant in out:
+		var centre_x: float = (plant.transform as Transform3D).origin.x - 2.0
+		var foot_y: float = (plant.transform as Transform3D).origin.y - 0.5
+		var rect: Array = plant.exclusions[0]
+		assert_almost_eq(float(rect[0]), -0.5 - centre_x, 0.001)
+		assert_almost_eq(float(rect[3]), 1.8 - foot_y, 0.001)
+
+
+func _overlaps_grown(plant: Dictionary, open: Array, margin: float) -> bool:
+	var t: Transform3D = plant.transform
+	var extent: Vector2 = plant.extent
+	var x0 := t.origin.x - 2.0 - extent.x * 0.5
+	var y0 := t.origin.y - 0.5
+	for rect: Array in open:
+		if (
+			x0 + extent.x > float(rect[0]) - margin + 0.0001
+			and x0 < float(rect[2]) + margin - 0.0001
+			and y0 + extent.y > float(rect[1]) - margin + 0.0001
+			and y0 < float(rect[3]) + margin - 0.0001
+		):
+			return true
+	return false
+
+
+func test_no_plant_reaches_an_opening_grown_by_the_margin() -> void:
+	var windows := [[-0.5, 0.8, 0.5, 1.8], [1.2, 0.8, 2.0, 1.8], [-2.2, 0.0, -1.5, 2.0]]
+	for width in [2.5, 4.0, 5.0, 7.0]:
+		for height in [1.5, 2.5, 3.5]:
+			var open := windows.filter(
+				func(r: Array) -> bool: return r[0] >= -float(width) * 0.5 and r[2] <= float(width) * 0.5
+			)
+			var out := StructureDecor.placements([_anchor("ivy", width, height, open)], _rows())
+			for plant in out:
+				assert_false(
+					_overlaps_grown(plant, open, StructureDecor.OPENING_MARGIN),
+					(
+						"%s x %s: a plant reaches an opening: at %s extent %s open %s"
+						% [width, height, plant.transform.origin, plant.extent, open]
+					)
+				)
+
+
+func test_a_wall_beside_a_window_keeps_plants_and_a_squeezed_gap_stays_bare() -> void:
+	var window := [-0.5, 0.8, 0.5, 1.8]
+	var beside := StructureDecor.placements([_anchor("ivy", 5.0, 2.5, [window])], _rows())
+	var xs := beside.map(
+		func(p: Dictionary) -> float: return (p.transform as Transform3D).origin.x - 2.0
+	)
+	assert_true(xs.any(func(x: float) -> bool: return x < -0.7), "ivy left of the window")
+	assert_true(xs.any(func(x: float) -> bool: return x > 0.7), "ivy right of it")
+	var squeezed := StructureDecor.placements(
+		[_anchor("ivy", 1.0, 1.0, [[-0.3, 0.2, 0.3, 0.8]])], _rows()
+	)
+	assert_eq(squeezed.size(), 0, "no room left around it")
 	var plain := StructureDecor.placements([_anchor("ivy", 5.0, 2.0)], _rows())
 	assert_eq(plain.size(), 3, "no opening: the largest class's tiles")
+
+
+func test_the_triangle_cap_drops_ivy_first_smallest_then_highest() -> void:
+	var anchors: Array[Dictionary] = [
+		_anchor("ivy", 5.0, 5.0), _anchor("ivy", 1.1, 1.1), _anchor("box", 1.15, 0.2)
+	]
+	var placed := StructureDecor.placements(anchors, _rows())
+	var cost := {}
+	for plant in placed:
+		cost[plant.id] = 1000
+	var total := placed.size() * 1000
+	assert_eq(StructureDecor.cap_triangles(placed, cost, total).size(), placed.size(), "under")
+	var capped := StructureDecor.cap_triangles(placed, cost, total - 1)
+	assert_eq(capped.size(), placed.size() - 1)
+	assert_eq(capped.filter(func(p: Dictionary) -> bool: return p.kind == "planter").size(), 1)
+	var ivy := placed.filter(func(p: Dictionary) -> bool: return p.kind == "ivy")
+	ivy.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			return a.extent.x * a.extent.y < b.extent.x * b.extent.y
+	)
+	assert_false(capped.has(ivy[0]), "the smallest ivy patch went first")
+	assert_eq(StructureDecor.cap_triangles(placed, cost, 0).size(), 0, "a cap of 0 drops all")
+	assert_eq(StructureDecor.MAX_TRIANGLES, 3000)
 
 
 func test_a_planter_takes_the_class_of_its_box_and_sits_at_the_anchor() -> void:
