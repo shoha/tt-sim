@@ -298,6 +298,85 @@ func test_the_key_moves_with_everything_the_geometry_depends_on() -> void:
 	assert_ne(StructureGeometry.key_of(_doc, structure), key, "the textured switch")
 
 
+## The memoised keys (keys_memoised) must equal keys_of() after every kind of edit, and the memo
+## must never serve a key for a ground it did not see: each edit below changes some ground input
+## (struct_perf2: the signature hashes the heights, the pond mask and every water body field).
+func test_memoised_keys_equal_the_plain_keys_after_every_ground_edit() -> void:
+	_doc.structures.append(_structure("core:cottage", 1, Vector2(-5, 0)))
+	_doc.structures.append(_structure("core:cottage", 2, Vector2(5, 0)))
+	var memo := {}
+	assert_eq(StructureGeometry.keys_memoised(_doc, memo), StructureGeometry.keys_of(_doc), "cold")
+	assert_eq(StructureGeometry.keys_memoised(_doc, memo), StructureGeometry.keys_of(_doc), "hit")
+	var before := StructureGeometry.keys_of(_doc)
+	var edits: Dictionary[String, Callable] = {
+		"sculpt under a structure": func() -> void: _raise(Vector2(-5, 0), 0.4),
+		"in-place height write":
+		func() -> void:
+			_doc.heights[_doc.sample_index(20, 20)] += 0.3
+			_raise(Vector2(5, 0), 0.0),
+		"a river beside it":
+		func() -> void:
+			_doc.water_bodies.append(
+				WaterBody.river(
+					1,
+					PackedVector2Array([Vector2(-8, 4), Vector2(8, 4)]),
+					PackedFloat32Array([1.5, 1.5]),
+					WaterBody.Depth.WAIST,
+					-0.2
+				)
+			),
+		"the river's level": func() -> void: _doc.water_bodies[0].level_m = 0.9,
+		"the river's course": func() -> void: _doc.water_bodies[0].points[0] = Vector2(-8, 3),
+		"a pond": func() -> void: _doc.water_bodies.append(WaterBody.pond(2, WaterBody.Depth.WAIST, 0.5)),
+		"the pond mask":
+		func() -> void:
+			var mask := PackedByteArray()
+			mask.resize(_doc.sample_count())
+			mask[_doc.sample_index(30, 30)] = 2
+			_doc.pond_mask = mask,
+	}
+	for label in edits:
+		edits[label].call()
+		var plain := StructureGeometry.keys_of(_doc)
+		assert_eq(StructureGeometry.keys_memoised(_doc, memo), plain, label)
+		if label in ["sculpt under a structure", "the river's level"]:
+			assert_ne(plain, before, label + " moves a key")
+		before = plain
+	var moved := _structure("core:cottage", 2, Vector2(6, 0))
+	_doc.structures[1] = moved
+	assert_eq(StructureGeometry.keys_memoised(_doc, memo), StructureGeometry.keys_of(_doc), "moved")
+	_doc.structures.remove_at(0)
+	assert_eq(StructureGeometry.keys_memoised(_doc, memo), StructureGeometry.keys_of(_doc), "gone")
+	assert_eq(memo.size(), 1, "the memo forgets a structure that left")
+
+
+func test_a_new_neighbour_changes_the_key_but_not_the_samples_taken() -> void:
+	_doc.structures.append(_structure("core:cottage", 1, Vector2(-4, 0)))
+	var memo := {}
+	var alone := StructureGeometry.keys_memoised(_doc, memo)
+	var samples: Array = memo[1]["samples"]
+	_doc.structures.append(_structure("core:cottage", 2, Vector2(6, 0)))
+	var joined := StructureGeometry.keys_memoised(_doc, memo)
+	assert_ne(joined[1], alone[1], "the yard of 1 sees its new neighbour")
+	assert_same(memo[1]["samples"], samples, "the ground under 1 was not sampled again")
+	assert_eq(joined, StructureGeometry.keys_of(_doc), "same as the plain keys")
+
+
+func test_more_builds_than_workers_all_land_and_start_in_order() -> void:
+	_scatter_node()
+	var structures := AuthoredStructures.of_map(_map)
+	var count := AuthoredStructures.max_running() * 3 + 1
+	for k in count:
+		var at := Vector2((float(k % 4) - 1.5) * 7.0, (float(k / 4) - 1.5) * 6.0)
+		_doc.structures.append(_structure("core:cottage", k + 1, at))
+	structures.refresh(_doc)
+	assert_eq(structures.pending_count(), count, "all queued")
+	assert_eq(structures.flush(), count, "all landed")
+	assert_eq(structures.get_child_count(), count)
+	assert_eq(structures.pending_count(), 0)
+	assert_eq(structures.keys(), StructureGeometry.keys_of(_doc), "keys are the plain keys")
+
+
 func test_the_recipe_digest_is_part_of_the_key() -> void:
 	var structure := _structure("mylib:hut")
 	var text := FileAccess.get_file_as_string("res://procgen/recipes/cottage.json")
