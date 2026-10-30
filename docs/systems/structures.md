@@ -459,7 +459,7 @@ and NOT on the interface, so the Structure tool does not offer them.
 Four more core structures (54 in all) from procgen's Framing node (architecture-styles card 7), each
 a `STARTERS` entry whose `style_patch` pins the framing pattern: `half_timber_house` (`house`,
 braces) 1574 triangles at the pin, `tudor_framed` (`townhouse`, jettied, cross bracing; `english`
-added to its tags) 3018, `herringbone_cottage` (`cottage`, ochre plaster, herringbone) 1734 and
+added to its tags) 3174 (3018 before procgen 0983204 closed the soffit under a jetty), `herringbone_cottage` (`cottage`, ochre plaster, herringbone) 1734 and
 `close_studded_house` (`house`, panels at 0.6 m studs) 1542. All four are `regional` and `english`,
 so they join English streets. The look fix: the node type `framing` is the `frame` role
 (`StructureLook.NODE_ROLES`; before, its posts, rails and braces were painted as plaster walls

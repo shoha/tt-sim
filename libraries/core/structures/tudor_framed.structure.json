@@ -308,6 +308,7 @@
       "id": "roof_flat_4",
       "params": {
         "overhang": 0,
+        "reach": "@jetty",
         "roof_role": "tile",
         "roof_thickness": 0.14,
         "segments": 6
