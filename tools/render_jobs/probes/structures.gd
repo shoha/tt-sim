@@ -94,7 +94,7 @@ static func run(base: Node, step: Dictionary) -> String:
 		"styles":
 			return _styles(base)
 		"rounds":
-			return _rounds(base)
+			return _rounds(base, step.get("lots", ROUND_LOTS))
 		"styles2":
 			return _styles2(base, step)
 		"styles3":
@@ -510,12 +510,12 @@ static func _styles2(base: Node, step: Dictionary) -> String:
 
 ## The round structures (styles integration card): the five round starters as a small hamlet
 ## (ROUND_LOTS), laid through the editor with the polygon plans the Structure tool makes.
-static func _rounds(base: Node) -> String:
+static func _rounds(base: Node, lots: Array = ROUND_LOTS) -> String:
 	var editor := _editor(base)
 	if editor == null:
 		return "no authoring editor"
 	var lines := PackedStringArray()
-	for lot: Array in ROUND_LOTS:
+	for lot: Array in lots:
 		var row := LibraryStructureStore.structure(String(lot[0]))
 		var diameter := float(lot[3])
 		var plan := StructurePlacement.lot_plan(

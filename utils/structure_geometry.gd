@@ -14,6 +14,9 @@ extends RefCounted
 ##    "stone_tone" (the style's masonry hint, "grey", "warm" or ""; StructureMaterials),
 ##    "meshes": [{"kind": surface kind, "role": StructureLook role, "arrays": mesh arrays,
 ##                "tags": per vertex tag ids into "tag_table"}, ...],
+##    "mill": {} or, for a windmill, StructureMill.split's moving parts without "rest" ("wheel" and
+##    "cap" meshes, "hub", "axis", "centre", "curb_top"); they are NOT in "meshes" but are in
+##    digest_of and triangle_count (all_meshes),
 ##    "tag_table": provenance paths (node id, then slot path), "collision": faces,
 ##    "walkable": the extra faces of decks, stairs, platforms and piles (StructureWalkable; not in
 ##    digest_of),
@@ -34,7 +37,7 @@ const HARD_TRIANGLES := 25000
 const KEY_STEP_M := 0.5
 const KEY_MAX_SAMPLES := 2048
 ## Bumped when the mesh layout of the parts changes, so cached parts rebuild.
-const FORMAT_VERSION := 3
+const FORMAT_VERSION := 4
 ## Marks a structure with no top (no recipe, or nothing built).
 const NONE := -INF
 ## digest_of rounds vertices and collision to this many metres (0.1 mm), as procgen's digests do.
@@ -156,6 +159,13 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 	parts.tag_table = PackedStringArray(geometry.tag_table)
 	parts.collision = geometry.collision
 	parts.walkable = StructureWalkable.faces(meshes, parts.tag_table)
+	# A windmill's sails and cap leave `meshes` for `mill` (they turn in the game); collision, the
+	# walkable faces and the top above were made from the whole building and stay as they were.
+	var mill := StructureMill.split(meshes, parts.tag_table, _centre_of(structure.footprint))
+	if not mill.is_empty():
+		parts.meshes = mill.rest
+		mill.erase("rest")
+		parts.mill = mill
 	parts.top = geometry.top if triangles > 0 else NONE
 	parts.openings = geometry.openings
 	parts.layout = plant.get("layout")
@@ -431,7 +441,7 @@ static func footprint_strips(plan: PackedVector2Array) -> Array[Crossing]:
 static func digest_of(parts: Dictionary) -> String:
 	var ctx := HashingContext.new()
 	ctx.start(HashingContext.HASH_MD5)
-	for mesh: Dictionary in parts.get("meshes", []):
+	for mesh: Dictionary in all_meshes(parts):
 		ctx.update(String(mesh.kind).to_utf8_buffer())
 		ctx.update(String(mesh.role).to_utf8_buffer())
 		var arrays: Array = mesh.arrays
@@ -440,6 +450,13 @@ static func digest_of(parts: Dictionary) -> String:
 		ctx.update((arrays[Mesh.ARRAY_TEX_UV] as PackedVector2Array).to_byte_array())
 		ctx.update((arrays[Mesh.ARRAY_COLOR] as PackedColorArray).to_byte_array())
 		ctx.update((arrays[Mesh.ARRAY_INDEX] as PackedInt32Array).to_byte_array())
+	var mill: Dictionary = parts.get("mill", {})
+	if not mill.is_empty():
+		# The pivots and axis of a windmill's moving parts (nothing is added for any other building).
+		var pivots := PackedVector3Array(
+			[mill.hub as Vector3, mill.axis as Vector3, mill.centre as Vector3]
+		)
+		ctx.update(_snapped(pivots).to_byte_array())
 	var collision := parts.get("collision", PackedVector3Array()) as PackedVector3Array
 	ctx.update(_snapped(collision).to_byte_array())
 	var top: Variant = parts.get("top", NONE)
@@ -466,9 +483,30 @@ static func _snap(value: float) -> float:
 ## The triangles of `parts` in all its meshes.
 static func triangle_count(parts: Dictionary) -> int:
 	var total := 0
-	for mesh: Dictionary in parts.get("meshes", []):
+	for mesh: Dictionary in all_meshes(parts):
 		total += (mesh.arrays[Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
 	return total
+
+
+## Every mesh of `parts`: the static `meshes`, then a windmill's turning `mill.wheel` and
+## `mill.cap` (StructureMill).
+static func all_meshes(parts: Dictionary) -> Array:
+	var mill: Dictionary = parts.get("mill", {})
+	if mill.is_empty():
+		return parts.get("meshes", [])
+	return (
+		(parts.get("meshes", []) as Array)
+		+ (mill.get("wheel", []) as Array)
+		+ (mill.get("cap", []) as Array)
+	)
+
+
+## The middle of the plan `footprint` (the mean of its corners), the windmill cap's fallback centre.
+static func _centre_of(footprint: PackedVector2Array) -> Vector2:
+	var sum := Vector2.ZERO
+	for corner in footprint:
+		sum += corner
+	return sum / float(maxi(footprint.size(), 1))
 
 
 ## `parts` with the placeholder plot of `structure` as its only mesh, for a recipe this game does
@@ -561,6 +599,7 @@ static func _empty(structure: Structure) -> Dictionary:
 		"recipe": structure.recipe,
 		"style": structure.style,
 		"meshes": [],
+		"mill": {},
 		"tag_table": PackedStringArray(),
 		"collision": PackedVector3Array(),
 		"walkable": PackedVector3Array(),

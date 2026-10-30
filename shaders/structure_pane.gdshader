@@ -19,6 +19,10 @@ void fragment() {
 	vec3 col = COLOR.rgb;
 	// 1 for a cool pane (blue at least as strong as red), 0 for amber glow and wooden leaves.
 	float cool = 1.0 - smoothstep(0.02, 0.2, col.r - col.b);
+	// A violet tint (blue over red, but green under red) is not sky glass: it keeps its hue, as the
+	// warm and rose tints do (GlazingNode.tone, range_look 2026-10-30). Teal, sea and cool blues
+	// have green at least level with red.
+	cool *= smoothstep(-0.08, -0.01, col.g - col.r);
 	vec3 deep = mix(col * pane_tone, sky_teal, sky_share);
 	deep = mix(deep, warm_reflect, warm_share);
 	// A door leaf's paint is sRGB like every other vertex colour, but ALBEDO is linear: unconverted,
