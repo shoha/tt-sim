@@ -449,8 +449,8 @@ func test_the_pane_lists_the_librarys_buildings_by_family_with_pictures() -> voi
 	assert_true(families.has("Cottage") and families.has("Townhouse"), "%s" % [families.keys()])
 	assert_eq(pane.family_fields[0].caption.get_slice(" (", 0), "Cottage", "cottages come first")
 	for row in served:
-		var texture := StructureThumbnail.of(row, StructureToolPane.THUMB_PX)
-		assert_eq(texture.get_width(), StructureToolPane.THUMB_PX)
+		var texture := StructureThumbnail.of(row, StructurePalette.LARGE_THUMB_PX)
+		assert_eq(texture.get_width(), StructurePalette.LARGE_THUMB_PX)
 	assert_eq(pane.picked_ref(), pane.refs()[0], "the first is preselected")
 	watch_signals(pane)
 	pane.family_fields[1].tiles.selection_changed.emit(StringName(COTTAGE))

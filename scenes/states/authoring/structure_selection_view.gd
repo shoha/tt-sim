@@ -25,7 +25,7 @@ static func draw(
 	var plan: PackedVector2Array = edit["plan"] if dragging else held.footprint
 	var stopped: bool = dragging and bool(edit["clamped"])
 	var tint := StructureBrush.CUE_TINT if stopped else StructureBrush.SELECT_TINT
-	StructureBrush.draw_plan(
+	StructurePlanView.draw_plan(
 		canvas, camera, editor, plan, brush.height_of(held.recipe) / scale, tint, 1.0
 	)
 	var active: Dictionary = edit["handle"] if editing else hover
