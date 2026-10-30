@@ -56,12 +56,25 @@ func build_pane(_panel: AuthoringPanel) -> Control:
 	return StructureToolPane.new()
 
 
+## Puts the brush and the pane on one pick: the brush's own when it has one the pane lists, else
+## the tile the pane preselects (the first in its display order, which is not the store's).
+static func sync_pick(mode: StructureBrush, pane: StructureToolPane) -> void:
+	if mode.ref != "" and pane.has_ref(mode.ref):
+		pane.select_ref(mode.ref)
+	elif pane.picked_ref() != "":
+		mode.pick(pane.picked_ref())
+
+
 ## The tiles set the brush's structure and pick the tool again, so a brush put down with a right
 ## click comes back with any tile; Mix afresh draws the next lot's look afresh.
 func connect_pane(controller: AuthoringController, pane: Control) -> void:
 	var structure_pane := pane as StructureToolPane
 	if structure_pane == null:
 		return
+	# The pane and the brush start on one pick: the brush's own when it has one (a rebuilt pane
+	# shows it), else the tile the pane preselects.
+	if controller.brush != null:
+		sync_pick(of(controller.brush), structure_pane)
 	structure_pane.structure_selected.connect(
 		func(ref: String) -> void:
 			if controller.brush != null:
