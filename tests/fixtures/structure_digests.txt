@@ -46,6 +46,9 @@ core:porch_cottage dc656922c9c9708b8572b0a1d5eae4bc 1898
 core:veranda_cottage 6ffc53583ca3fed21de0b910eeb8f561 1700
 core:inn_gallery 1e4d7a7c6def86a50dfa73fd96cdafdc 1482
 core:dormered_house 7f88e4ed70e518e9df1ef01566e31d3f 1092
+core:stilt_house fb4de841bbe72db67f3a219febe18c8b 1690
+core:lake_dwelling 5fa8ca8d14ea27e3169d09e53d24bfe2 2100
+core:stabbur 02993bc651629cbe6a058dc7736a15ec 1210
 core:roundhouse b626a2b96c911dc2458d62f249cd8552 1234
 core:round_hut 5f0456207de8c6da47fdb660a02f57a5 864
 core:watchtower 5a436455531fafb4596e87a9428e4d76 528

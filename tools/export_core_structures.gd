@@ -620,6 +620,34 @@ const STARTERS: Array[Dictionary] = [
 			"palette": {"wall": ["#EEDDB4", "#E9D4A6", "#F0E2BC"]},
 		},
 	},
+	# Houses on stilts (architecture-styles card 10, 2026-10-29): a raised floor on piles or
+	# staddles with a stair or ladder to the door. Each is `regional` (the styles' own culture
+	# tags are none of a street's region tags, and the stabbur is also `farm`), so a street split
+	# never picks one; the Building tool offers them.
+	{
+		"id": "stilt_house",
+		"bundle": "stilt_house",
+		"seed": 0,
+		"name": "Stilt house",
+		"family": "stilt_house",
+		"variant": "Raised on posts, veranda deck",
+	},
+	{
+		"id": "lake_dwelling",
+		"bundle": "lake_dwelling",
+		"seed": 0,
+		"name": "Lake dwelling",
+		"family": "stilt_house",
+		"variant": "Reed thatch over the water",
+	},
+	{
+		"id": "stabbur",
+		"bundle": "stabbur",
+		"seed": 0,
+		"name": "Stabbur granary",
+		"family": "granary",
+		"variant": "Log granary on stone staddles",
+	},
 	# Round and polygonal plans (styles integration card, 2026-10-28): each is a regular polygon
 	# (plan kind "round", the `sides:<n>` tag), built by ProcgenRecipesRound. `round` says how:
 	# {"kind": a ProcgenRecipesRound kind, "shape": a tower's roof shape} or {"make": the options

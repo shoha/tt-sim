@@ -63,6 +63,9 @@ const NODE_ROLES: Dictionary = {
 	"dormer": WALL,
 	"vigas": FRAME,
 	"roof_props": FRAME,
+	# Stilts (card 10): the platform, piles, braces, stair, ladder and deck are timber; role_of_slot
+	# picks the stone footings and staddle caps out as trim.
+	"stilts": FRAME,
 }
 
 ## What each role multiplies a surface's tint by. A painterly wall or roof is drawn by the
@@ -126,6 +129,13 @@ static func role_of_slot(node_type: String, slot: String) -> String:
 			if last == "roof":
 				return ROOF
 			if last == "plinth":
+				return TRIM
+		"stilts":
+			# "stilt/<part>/...": the footing under a post ("pad") and a staddle's cap are stone
+			# trim; the rest (slab, bearer, pile, brace, stair, ladder, deck) is timber. A
+			# staddle's shaft is a "pile" too but keeps its stone kind, so it is drawn as stone.
+			var part := slot.get_slice("/", 1) if slot.get_slice_count("/") > 1 else ""
+			if part == "pad" or part == "cap":
 				return TRIM
 		"dormer":
 			match last.rstrip("0123456789"):

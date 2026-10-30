@@ -210,6 +210,23 @@ func test_gallery_and_dormer_parts_take_their_roles_from_the_slot_tag() -> void:
 	assert_eq(look.role_of_slot("dormer", "dormer0/pane"), look.OPENING)
 	assert_eq(look.role_of_slot("roof_gable", "anything/at/all"), look.ROOF, "other types as ever")
 	assert_eq(look.role_of_slot("framing", "frame/post0"), look.FRAME)
+	assert_eq(look.role_of_slot("stilts", "stilt/pad/3"), look.TRIM)
+	assert_eq(look.role_of_slot("stilts", "stilt/cap/3"), look.TRIM)
+	for timber: String in [
+		"stilt/slab/0",
+		"stilt/bearer/0",
+		"stilt/pile/3",
+		"stilt/brace/f1/0/0",
+		"stilt/stair/tread3",
+		"stilt/stair/stringer0",
+		"stilt/ladder/rung3",
+		"stilt/deck",
+		"stilt/deck/post0",
+		"stilt/deck/rail/0/top",
+	]:
+		assert_eq(look.role_of_slot("stilts", timber), look.FRAME, timber)
+	assert_eq(look.role_of_tag_path("street_row_2/left/lot0/stilts_4/stilt/pad/1"), look.TRIM)
+	assert_eq(look.role_of_tag_path("stilts_4/stilt/stair/tread0"), look.FRAME)
 	# A street row's provenance path: the node's slot path is what follows its (numbered) name.
 	var lot := "street_row_2/left/lot0/"
 	assert_eq(look.role_of_tag_path(lot + "dormer_5/dormer0/roof0"), look.ROOF)
