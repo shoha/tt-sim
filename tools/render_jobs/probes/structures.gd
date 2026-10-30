@@ -113,6 +113,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _tile(base, step)
 		"many":
 			return _many(base, step)
+		"village":
+			return _village(base, step)
 		"plain":
 			return _plain(base, bool(step.get("on", true)))
 		"dressing":
@@ -170,6 +172,69 @@ static func _many(base: Node, step: Dictionary) -> String:
 			count,
 			triangles,
 			"" if refusals.is_empty() else " (refused: " + str(refusals.keys()) + ")"
+		]
+	)
+
+
+## (struct_perf) `count` structures of the served core library in turn (each at its default size, its
+## own seed and yaw) on a square grid `spacing` m apart, then the cost of laying them: the time to
+## queue every build, the time until the last lands, and what the nodes hold (mesh instances, unique
+## materials, triangles, collision faces).
+static func _village(base: Node, step: Dictionary) -> String:
+	var editor := _editor(base)
+	if editor == null:
+		return "no authoring editor"
+	var count := int(step.get("count", 100))
+	var rows := LibraryStructureStore.structures("core")
+	var columns := int(ceil(sqrt(float(count))))
+	# The map is at most 97 m across: the lots share `span` m, and a footprint larger than its lot
+	# is scaled down to fit (a village is dense, not a refused row).
+	var spacing := float(step.get("span", 88.0)) / columns
+	var t0 := Time.get_ticks_usec()
+	var laid := 0
+	for k in count:
+		var row: Dictionary = rows[k % rows.size()]
+		var size: Array = row["default_size_m"]
+		var at := Vector2(
+			(float(k % columns) - (columns - 1) * 0.5) * spacing,
+			(float(k / columns) - (columns - 1) * 0.5) * spacing
+		)
+		var fit := minf(1.0, (spacing - 2.0) / maxf(float(size[0]), float(size[1])))
+		var plan := _rect(float(size[0]) * fit, float(size[1]) * fit, float((k * 37) % 360), at)
+		if editor.structures.add(Structure.make(0, String(row["ref"]), plan, 100 + k)) >= 0:
+			laid += 1
+	var queued_ms := (Time.get_ticks_usec() - t0) / 1000.0
+	var nodes := _nodes(base)
+	if nodes == null:
+		return "no structures node"
+	var t1 := Time.get_ticks_usec()
+	nodes.flush()
+	var flush_ms := (Time.get_ticks_usec() - t1) / 1000.0
+	var instances := 0
+	var triangles := 0
+	var collision_faces := 0
+	var materials := {}
+	var meshes := {}
+	for child in nodes.get_children():
+		for part in child.get_children():
+			if part is MeshInstance3D:
+				var instance := part as MeshInstance3D
+				instances += 1
+				meshes[instance.mesh.get_rid()] = true
+				materials[instance.mesh.surface_get_material(0).get_rid()] = true
+				triangles += (
+					(instance.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX] as PackedInt32Array).size()
+					/ 3
+				)
+			elif part is StaticBody3D:
+				for shape in part.get_children():
+					if shape is CollisionShape3D and shape.shape is ConcavePolygonShape3D:
+						collision_faces += (shape.shape as ConcavePolygonShape3D).get_faces().size() / 3
+	return (
+		"village laid %d of %d: queue %.0f ms (main), flush wait %.0f ms; %d nodes, %d mesh instances, %d unique meshes, %d unique materials, %d triangles, %d collision faces"
+		% [
+			laid, count, queued_ms, flush_ms, nodes.get_child_count(), instances, meshes.size(),
+			materials.size(), triangles, collision_faces
 		]
 	)
 

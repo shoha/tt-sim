@@ -207,9 +207,24 @@ static func keys_of(doc: MapDocument) -> Dictionary:
 ## KEY_STEP_M (coarser for a very wide plan, KEY_MAX_SAMPLES at most).
 static func ground_samples(doc: MapDocument, plan: PackedVector2Array) -> PackedFloat32Array:
 	var samples := PackedFloat32Array()
+	var points := sample_points(plan)
+	samples.resize(points.size())
+	# One batched read of the grid (WaterGeometry.grounds_at, the same arithmetic as ground_at, so
+	# the key does not move): the per-point call was 90 % of key_of, which runs on the main thread
+	# for every structure at every refresh.
+	var grounds := WaterGeometry.grounds_at(doc, points)
+	for i in points.size():
+		samples[i] = grounds[i]
+	return samples
+
+
+## The points ground_samples() reads: along every side every KEY_STEP_M, then across the inside on a
+## grid of KEY_STEP_M (coarser for a very wide plan, KEY_MAX_SAMPLES at most). Empty under 3 points.
+static func sample_points(plan: PackedVector2Array) -> PackedVector2Array:
+	var points := PackedVector2Array()
 	var count := plan.size()
 	if count < 3:
-		return samples
+		return points
 	var box := Rect2(plan[0], Vector2.ZERO)
 	for k in count:
 		var a := plan[k]
@@ -217,7 +232,7 @@ static func ground_samples(doc: MapDocument, plan: PackedVector2Array) -> Packed
 		box = box.expand(b)
 		var steps := maxi(1, ceili(a.distance_to(b) / KEY_STEP_M))
 		for s in steps:
-			samples.append(WaterGeometry.ground_at(doc, a.lerp(b, float(s) / steps)))
+			points.append(a.lerp(b, float(s) / steps))
 	var step := maxf(KEY_STEP_M, sqrt(box.get_area() / KEY_MAX_SAMPLES))
 	var y := box.position.y + step * 0.5
 	while y < box.end.y:
@@ -225,10 +240,10 @@ static func ground_samples(doc: MapDocument, plan: PackedVector2Array) -> Packed
 		while x < box.end.x:
 			var at := Vector2(x, y)
 			if Geometry2D.is_point_in_polygon(at, plan):
-				samples.append(WaterGeometry.ground_at(doc, at))
+				points.append(at)
 			x += step
 		y += step
-	return samples
+	return points
 
 
 ## The area a structure's scatter clearance and an edit of it reach: its footprint grown by REACH_M.
