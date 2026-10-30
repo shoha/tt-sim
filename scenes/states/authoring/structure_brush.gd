@@ -21,8 +21,10 @@ extends BrushMode
 ## cursor; a release then lays nothing and says the same as a toast.
 ##
 ## Selection (card S5). A click on a building selects it (a tint and outline, a dot at each corner
-## and a tab beside each side: StructureEdit's handles); Escape, a click on bare ground, or
-## another tool lets it go, and while one is selected no lot follows the pointer. A drag then
+## and a tab beside each side: StructureEdit's handles); Escape, the bar's Done, or another tool
+## lets it go (the pick stays armed). Placing flows on over a selection (place_flow): the ghost
+## still follows over bare ground, a click there lays a lot and selects it, a drag from bare ground
+## sizes one, and over a building or a handle the ghost steps aside. A drag on the selection then
 ## carries out one gesture, each a single history entry: on a corner dot, resize (the plan keeps
 ## its square corners; Shift moves just that point); on a side tab, push that side out or in, and a
 ## plain click on it makes that side the front, where the door goes; on the building's body, move
@@ -152,6 +154,8 @@ var _planned_to: Vector3 = Vector3.INF
 var _wanted: Dictionary = {}
 var _last_ticks: int = 0
 var _heights: Dictionary = {}
+## For each lot laid over a selection: the id that was selected then (-1 for none).
+var _came_from: Dictionary = {}
 
 
 func _init() -> void:
@@ -310,7 +314,11 @@ func track(editor: AuthoringEditor, hit: Vector3, delta: float) -> void:
 		hover_handle = {}
 		var held := editor.document.structure(selected_id)
 		if held == null:
+			# Gone (an undo, a peer): the selection it replaced comes back if it stands.
+			var back: int = _came_from.get(selected_id, -1)
 			deselect()
+			if back >= 0 and editor.document.structure(back) != null:
+				select(back)
 			return
 		# An undo or redo (or a peer) changed what the bar shows: say so again.
 		var key := [held.recipe, held.params]
@@ -319,7 +327,10 @@ func track(editor: AuthoringEditor, hit: Vector3, delta: float) -> void:
 			selection_changed.emit(selected_id)
 		var at := editor.to_map_xz(hit) if hit != Vector3.INF else Vector2.INF
 		hover_handle = _pick(editor, held.footprint, at)
-		return
+		if hover_id >= 0 or not hover_handle.is_empty():
+			ghost_centre = Vector2.INF
+			target_centre = Vector2.INF
+			return
 	if hit == Vector3.INF or row().is_empty():
 		return
 	ghost_size = default_size(editor)
@@ -416,6 +427,12 @@ func finish(editor: AuthoringEditor) -> int:
 		if placed >= 0:
 			seed_value = StructureEditor.next_seed(seed_value)
 			_wanted = {}
+			# The new building is the selection; the old one is remembered for an undo.
+			var laid_over := selected_id >= 0
+			_came_from[placed] = selected_id
+			select(placed)
+			if laid_over:
+				gesture_done.emit(&"lay")
 			gesture_done.emit(&"drag" if from.distance_to(to) >= DRAG_MIN_M else &"click")
 		else:
 			refusal = String(editor.structures.last_refusal)
@@ -706,13 +723,15 @@ func press(brush: BrushTool) -> bool:
 	if under >= 0:
 		select(under)
 		begin_edit(editor, at, true)
-		return false
-	if selected_id >= 0:
-		deselect()
+		gesture_done.emit(&"choose")
 		return false
 	if row().is_empty():
-		brush.refused.emit(NONE_PICKED)
+		if selected_id >= 0:
+			deselect()
+		else:
+			brush.refused.emit(NONE_PICKED)
 		return false
+	# Bare ground with a pick armed lays a lot, selection or not (finish selects it).
 	begin(brush.hit)
 	return false
 
@@ -777,6 +796,7 @@ func leave(brush: BrushTool) -> void:
 	ghost_centre = Vector2.INF
 	target_centre = Vector2.INF
 	_wanted = {}
+	_came_from = {}
 	_last_ticks = 0
 
 
@@ -877,29 +897,29 @@ func draw(
 	var per_cell: float = units[1]
 	var label: String = units[2]
 	var scale := editor.map_scale()
-	if selected_id >= 0 and not drawing:
+	var selecting := selected_id >= 0 and not drawing
+	if selecting:
 		StructureSelectionView.draw(self, canvas, camera, editor, units)
-		return
-	if not drawing and hover_id >= 0:
-		var hovered := editor.document.structure(hover_id)
-		if hovered != null:
-			var strength := 1.0 if erasing else 0.45
-			var tint := WallBrush.ERASE_TINT if erasing else WallBrush.STONE_TINT
-			StructurePlanView.draw_plan(canvas, camera, editor, hovered.footprint, 0.0, tint, strength)
-			if erasing:
-				BridgeBrush.draw_pill(
-					canvas,
-					camera.unproject_position(hit),
-					"Remove " + String(hovered.recipe.get_slice(":", 1)).replace("_", " "),
-					WallBrush.REFUSED_COLOR
-				)
-			# A click on a building selects it, so no lot follows the pointer over one.
+		# The ghost lot follows over bare ground; it steps aside over a building or a handle.
+		if hover_id >= 0 and hover_id != selected_id:
+			_draw_hovered(canvas, camera, editor, hit, erasing)
+		if not edit.is_empty() or hover_id >= 0 or not hover_handle.is_empty():
 			return
+		if erasing:
+			if hit != Vector3.INF:
+				BridgeBrush.draw_marker(canvas, camera, hit, WallBrush.ERASE_TINT)
+			return
+	elif not drawing and hover_id >= 0:
+		_draw_hovered(canvas, camera, editor, hit, erasing)
+		# A click on a building selects it, so no lot follows the pointer over one.
+		return
 	elif erasing and not drawing:
 		if hit != Vector3.INF:
 			BridgeBrush.draw_marker(canvas, camera, hit, WallBrush.ERASE_TINT)
 		return
 	if row().is_empty():
+		if selecting:
+			return
 		if hit != Vector3.INF:
 			BridgeBrush.draw_marker(canvas, camera, hit, WallBrush.STONE_TINT)
 			BridgeBrush.draw_pill(
@@ -927,6 +947,26 @@ func draw(
 	if level != StructureNote.Level.NONE:
 		lines.append({"text": note["text"], "color": StructureNote.colour(level)})
 	StructurePlanView.draw_pills(canvas, at, lines)
+
+
+## The building under the pointer, tinted (a click selects it), or with Ctrl `erasing` red with a
+## pill saying what a click removes.
+func _draw_hovered(
+	canvas: Control, camera: Camera3D, editor: AuthoringEditor, hit: Vector3, erasing: bool
+) -> void:
+	var hovered := editor.document.structure(hover_id)
+	if hovered == null:
+		return
+	var strength := 1.0 if erasing else 0.45
+	var tint := WallBrush.ERASE_TINT if erasing else WallBrush.STONE_TINT
+	StructurePlanView.draw_plan(canvas, camera, editor, hovered.footprint, 0.0, tint, strength)
+	if erasing:
+		BridgeBrush.draw_pill(
+			canvas,
+			camera.unproject_position(hit),
+			"Remove " + String(hovered.recipe.get_slice(":", 1)).replace("_", " "),
+			WallBrush.REFUSED_COLOR
+		)
 
 
 ## Works the ghost's note out again when something it reads changed (the spot's problem, what the

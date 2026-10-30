@@ -1,0 +1,432 @@
+{
+ "out_dir": "render_jobs/place_flow",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 150,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    1200,
+    540
+   ]
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/building_ui2.gd",
+   "action": "hints",
+   "reset": true
+  },
+  {
+   "op": "look_at",
+   "at": [
+    4,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 22.0
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel._on_rail_item_pressed(\"structure\")"
+  },
+  {
+   "op": "wait",
+   "s": 0.8
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_tool.gd",
+   "action": "pick",
+   "ref": "core:cottage"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "lay",
+   "ref": "core:cottage",
+   "at": [
+    -6,
+    0
+   ],
+   "size": [
+    6,
+    4
+   ]
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "flush"
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "move",
+     "at": [
+      -6,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.35
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "press",
+     "at": [
+      -6,
+      0
+     ]
+    },
+    {
+     "type": "release",
+     "at": [
+      -6,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "move",
+     "at": [
+      4,
+      -6
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.8
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/building_ui2.gd",
+   "action": "hints"
+  },
+  {
+   "op": "capture",
+   "name": "01_selected_ghost_follows",
+   "desc": "A cottage is selected (bar open, handles) and the ghost lot still follows the pointer over bare ground; the hint bar names Click for bare ground and for a building"
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "move",
+     "at": [
+      4,
+      -6
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.35
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "press",
+     "at": [
+      4,
+      -6
+     ]
+    },
+    {
+     "type": "release",
+     "at": [
+      4,
+      -6
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "report"
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "move",
+     "at": [
+      13,
+      -6
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.35
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "press",
+     "at": [
+      13,
+      -6
+     ]
+    },
+    {
+     "type": "release",
+     "at": [
+      13,
+      -6
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "report"
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "move",
+     "at": [
+      -6,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.6
+  },
+  {
+   "op": "capture",
+   "name": "02_over_building_no_ghost",
+   "desc": "After two clicks laid two: the pointer over the first cottage hides the ghost and tints it (a click selects)"
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "move",
+     "at": [
+      4,
+      6
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.35
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "press",
+     "at": [
+      4,
+      6
+     ]
+    },
+    {
+     "type": "release",
+     "at": [
+      4,
+      6
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "report"
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "move",
+     "at": [
+      13,
+      6
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.35
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "press",
+     "at": [
+      13,
+      6
+     ]
+    },
+    {
+     "type": "release",
+     "at": [
+      13,
+      6
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "report"
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "move",
+     "at": [
+      13,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.35
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "press",
+     "at": [
+      13,
+      0
+     ]
+    },
+    {
+     "type": "release",
+     "at": [
+      13,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "flush"
+  },
+  {
+   "op": "input",
+   "events": [
+    {
+     "type": "move",
+     "at": [
+      4,
+      13
+     ]
+    }
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structure_select.gd",
+   "action": "report"
+  },
+  {
+   "op": "capture",
+   "name": "03_five_laid",
+   "desc": "Five clicks while a building was selected laid five buildings; the newest is selected, the ghost follows on"
+  }
+ ]
+}

@@ -745,10 +745,19 @@ drawing is `StructureSelectionView`, the edits are `StructureEditor`, and the ba
   a round dot at each corner and a diamond tab beside each side). A building is what the pointer's
   ray meets (`BrushTool.structure_under_pointer`: its roof or wall; the brush's ordinary ray
   excludes structures, so it would land on the ground behind the roof), else the building whose plan
-  holds the ground point. While one is selected no lot follows the pointer, and hovering another
-  building outlines it (no lot ghost over a building either: a click there selects). Escape, a click
-  on bare ground (which only lets go, it lays nothing), `Done` in the bar, or another tool lets
-  go. A new lot is not selected when laid.
+  holds the ground point. Escape, `Done` in the bar, or another tool lets go (the palette pick stays
+  armed).
+- **Placing flows on over a selection** (card place_flow, 2026-10-30; the first end-to-end check
+  found 30 placement clicks laying 7 buildings, the rest silently re-selecting or letting go). The
+  pick stays armed whatever is selected, so: over bare ground the ghost lot follows the pointer
+  with the selection and its bar still showing; a click there lays the lot as one history entry and
+  the new building becomes the selection (the old one lets go); a press-drag from bare ground sizes
+  a new lot; over a building (outlined) or over a handle the ghost steps aside, because a click on
+  a building selects it and a press on a handle or on the selected body edits it (those win).
+  Illegal ground says its reason beside the cursor as before and lays nothing. An undo of a lot laid
+  over a selection removes it and gives the earlier selection back (`StructureBrush._came_from`).
+  With no pick at all, bare ground only lets go. The hint bar's selected rows (`StructureHints.
+  SELECTED`) name the two clicks: "Bare ground: put another down" and "A building: select it".
 - **Handles are picked on the screen** (20 px of the dot, corners ahead of tabs), not on the ground,
   because a house in front of a handle hides the ground behind it. The pure fallback picks in map
   metres (tests, probes).

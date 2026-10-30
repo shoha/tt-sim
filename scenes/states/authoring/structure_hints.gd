@@ -17,8 +17,11 @@ const PLACING: Array[Dictionary] = [
 	{"id": &"again", "key": "R", "action": "Draw it afresh"},
 	{"id": &"remove", "key": "Del", "action": "Remove one"},
 ]
-## The gestures with a building selected.
+## The gestures with a building selected (the ghost lot still follows over bare ground, so a click
+## there lays another and the new building becomes the selection).
 const SELECTED: Array[Dictionary] = [
+	{"id": &"lay", "key": "Click", "action": "Bare ground: put another down"},
+	{"id": &"choose", "key": "Click", "action": "A building: select it"},
 	{"id": &"edit", "key": "Drag", "action": "Move or resize"},
 	{"id": &"turn", "key": "Q / E", "action": "Turn it"},
 	{"id": &"again", "key": "R", "action": "Draw it afresh"},

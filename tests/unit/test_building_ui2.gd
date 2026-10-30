@@ -160,7 +160,7 @@ func test_the_hint_rows_drop_the_gestures_done_once() -> void:
 func test_progress_counts_the_gestures_done() -> void:
 	assert_eq(StructureHints.progress([], false), {"done": 0, "total": 5})
 	assert_eq(StructureHints.progress(["click", "again", "edit"], false), {"done": 2, "total": 5})
-	assert_eq(StructureHints.progress(["edit", "copy"], true), {"done": 2, "total": 6})
+	assert_eq(StructureHints.progress(["edit", "copy"], true), {"done": 2, "total": 8})
 
 
 func test_marking_a_gesture_is_once_and_remembered_in_the_settings_file() -> void:
