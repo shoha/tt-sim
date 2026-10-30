@@ -1,0 +1,48 @@
+{
+ "out_dir": "render_jobs/courtyard_rows",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "grassland_meadow_summer_s1", "size": 320, "seed": 1234},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "styles3",
+   "lots": [
+    ["core:coaching_inn", -24.0, 0.0, 14.0, 12.0, 0.0, 501],
+    ["core:siheyuan", 0.0, 0.0, 14.0, 12.0, 0.0, 502],
+    ["core:hof_farm", 26.0, 0.0, 16.0, 14.0, 0.0, 503],
+    ["core:coaching_inn", -24.0, 26.0, 9.0, 9.0, 0.0, 504],
+    ["core:siheyuan", 0.0, 26.0, 9.0, 9.0, 0.0, 505],
+    ["core:hof_farm", 26.0, 26.0, 24.0, 13.0, 0.0, 506]
+   ]
+  },
+  {"op": "call", "script": "res://tools/render_jobs/probes/structures.gd", "action": "report"},
+  {"op": "wait", "s": 4.0},
+  {"op": "zoom", "size": 80.0},
+  {"op": "settle", "timeout": 12},
+  {"op": "look_at", "at": [0, 13]},
+  {"op": "wait", "s": 1.2},
+  {"op": "capture", "name": "01_all", "desc": "Top row: the three courtyards at their default sizes; bottom row: coaching inn and siheyuan at the 9 by 9 minimum, hof farm at 24 by 13"},
+  {"op": "zoom", "size": 34.0},
+  {"op": "settle", "timeout": 12},
+  {"op": "look_at", "at": [-24, 0]},
+  {"op": "wait", "s": 1.2},
+  {"op": "capture", "name": "02_coaching_inn", "desc": "Coaching inn, 14 by 12"},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "wait", "s": 1.2},
+  {"op": "capture", "name": "03_siheyuan", "desc": "Siheyuan, 14 by 12"},
+  {"op": "zoom", "size": 38.0},
+  {"op": "settle", "timeout": 12},
+  {"op": "look_at", "at": [26, 0]},
+  {"op": "wait", "s": 1.2},
+  {"op": "capture", "name": "04_hof_farm", "desc": "Hof farm, 16 by 14"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/structures.gd", "action": "remove_all"},
+  {"op": "title"}
+ ]
+}
