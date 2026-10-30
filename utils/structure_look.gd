@@ -186,8 +186,9 @@ static func material_role(kind: String, role: String) -> String:
 
 ## The palette hints of the recipe `doc` (a building style's, written on its Output node by
 ## ProcgenRecipes.building_from): {"wall": Array[Color], "roof": Array[Color]} in sRGB, a key only
-## when the recipe lists tones for it. {} for a recipe without hints, which keeps StructurePaint's
-## own draw (ROOF_PALETTE, WALL_LEANS).
+## when the recipe lists tones for it, plus "stone_tone" (String, "grey" or "warm") when the style
+## sets the masonry hint (StructureMaterials reads it). {} for a recipe without hints, which keeps
+## StructurePaint's own draw (ROOF_PALETTE, WALL_LEANS).
 static func palette_hints(doc: PlantGraphDocument) -> Dictionary:
 	var out := {}
 	if doc == null:
@@ -201,6 +202,9 @@ static func palette_hints(doc: PlantGraphDocument) -> Dictionary:
 					tones.append(Color.html(hex.strip_edges()))
 			if not tones.is_empty():
 				out[part] = tones
+		var stone_tone := String(params.get("stone_tone", "")).strip_edges().to_lower()
+		if stone_tone != "":
+			out["stone_tone"] = stone_tone
 	return out
 
 

@@ -34,7 +34,21 @@ const TIMBER_LIFT := Vector3(1.5, 1.5, 1.3)
 ## card, 2026-10-28). Timber takes more light.
 const WALL_SHADE_TINT := Vector3(0.96, 0.92, 1.0)
 const WALL_SHADE_FLOOR := Vector3(0.31, 0.27, 0.36)
+## Plaster's shade (structure_look2, 2026-10-29): the shade FLOOR, not the ramp tint, is the light a
+## shaded face gets (the ramp tint is a small multiplier on top, which is why a warmer one changed
+## nothing). WALL_SHADE_FLOOR's red over green (1.15) multiplied a warm cream's own red over green
+## and read salmon; plaster takes a floor whose red sits under its green (0.93) and a neutral ramp,
+## so the shade is a soft lavender over cream, a warm grey beige.
+const PLASTER_SHADE_TINT := Vector3(0.92, 0.95, 1.0)
+const PLASTER_SHADE_FLOOR := Vector3(0.26, 0.30, 0.35)
 const STONE_LIT_GAIN := Vector3(1.42, 1.35, 1.2)
+## A castle's grey stone (the style's `stone_tone` hint): the rock's light and dark kept, its hue
+## replaced by a cool grey instead of warm cream.
+const GREY_TONE := "grey"
+const GREY_STONE_CREAM := Vector3(0.9, 1.0, 1.03)
+const GREY_STONE_AMOUNT := 0.9
+const GREY_STONE_WARM := Vector3(1.22, 1.22, 1.22)
+const GREY_STONE_SATURATION := 1.0
 const TIMBER_LIT_GAIN := Vector3(1.6, 1.5, 1.25)
 ## Slate leans from the styles' navy blue greys toward a teal slate (structure_style_roof
 ## `tone_shift`; styles integration 3, after the last look round called it navy).
@@ -42,13 +56,17 @@ const SLATE_TONE_SHIFT := Vector3(0.78, 1.5, 1.36)
 
 
 ## The material of surface `kind` in `role` for style `style`, with the palette at `root`.
-static func make(kind: String, role: String, style: String, root: String) -> Material:
+## `tone` is the style's `stone_tone` hint ("grey" for castles, "" or "warm" for the cream default);
+## only masonry reads it.
+static func make(
+	kind: String, role: String, style: String, root: String, tone: String = ""
+) -> Material:
 	var material: Material = null
 	match kind:
 		StructureLook.GLASS_KIND:
 			return pane()
 		"masonry":
-			material = _masonry(style, root, role)
+			material = _masonry(style, root, role, tone)
 		"wood":
 			material = _roof() if role == StructureLook.ROOF else _timber(style, root, role)
 		"boards":
@@ -150,6 +168,8 @@ static func _style_wall(kind: String) -> ShaderMaterial:
 		"plaster":
 			# A pale wall under the full gain would blow out: it takes less.
 			material.set_shader_parameter("lit_gain", Vector3(1.12, 1.07, 1.0))
+			material.set_shader_parameter("ramp_shade_tint", PLASTER_SHADE_TINT)
+			material.set_shader_parameter("shade_floor", PLASTER_SHADE_FLOOR)
 		"adobe":
 			material.set_shader_parameter("lit_gain", Vector3(1.18, 1.1, 1.0))
 		"brick":
@@ -160,7 +180,7 @@ static func _style_wall(kind: String) -> ShaderMaterial:
 
 
 ## Textured masonry: the baked courses, the rock's mean colour as the tint, lifted toward cream.
-static func _masonry(style: String, root: String, role: String) -> ShaderMaterial:
+static func _masonry(style: String, root: String, role: String, tone: String) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = WALL_SHADER
 	var textures := MasonryTextures.textures()
@@ -190,6 +210,11 @@ static func _masonry(style: String, root: String, role: String) -> ShaderMateria
 	material.set_shader_parameter("saturation", MASONRY_SATURATION)
 	material.set_shader_parameter("warm_bias", MASONRY_WARM)
 	material.set_shader_parameter("cream_amount", MASONRY_CREAM)
+	if tone == GREY_TONE:
+		material.set_shader_parameter("saturation", GREY_STONE_SATURATION)
+		material.set_shader_parameter("warm_bias", GREY_STONE_WARM)
+		material.set_shader_parameter("cream", GREY_STONE_CREAM)
+		material.set_shader_parameter("cream_amount", GREY_STONE_AMOUNT)
 	_balance_wall(material, STONE_LIT_GAIN)
 	return material
 
