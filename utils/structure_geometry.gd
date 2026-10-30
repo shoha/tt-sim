@@ -113,6 +113,9 @@ static func build_one(doc: MapDocument, structure: Structure) -> Dictionary:
 	if recipe == null:
 		parts.problem = "recipe %s is unknown" % structure.recipe
 		return _with_plot(parts, doc, structure)
+	# The ornaments the player added are nodes beside the walls of this build's own copy of the
+	# recipe (documents are never shared), so the roles below find them too.
+	StructureOrnaments.apply(recipe, structure.params, structure.seed_value)
 	var evaluator := PlantGraphEvaluator.new(recipe.registry)
 	var plant: Variant = evaluator.evaluate_structure(
 		recipe, inputs_for(doc, structure, recipe), true

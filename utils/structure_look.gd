@@ -22,6 +22,15 @@ const OPENING := "opening"
 ## of an adobe, a roof ladder and hatch (styles integration 2). Its own role so the beams keep their
 ## own dark honey tone instead of taking the plaster's wall tone (StructurePaint).
 const FRAME := "frame"
+## The ornaments a player adds (ivy, a vane, an awning, banners, StructureOrnaments): procgen's
+## `ornament` node. Its hard parts (a turret, buttresses) are in the wall's own kind and take the
+## WALL role (material_role), so they match the wall; its soft and small parts, whose surface kinds
+## are ORNAMENT_KINDS, keep their own painted vertex colours (StructureMaterials.ornament).
+const ORNAMENT := "ornament"
+## The surface kinds that keep the ORNAMENT role: foliage (`leaf`, `leaf_b`), `cloth` and `metal`
+## (new free kinds: a host without their own shading falls back to masonry, wood or stone),
+## the small `wood` parts and the rose window's `glass`.
+const ORNAMENT_KINDS: Array[String] = ["leaf", "leaf_b", "cloth", "metal", "wood", "glass"]
 ## The surface kinds a roof role is its own material for (card S6 had only planks): "wood" and
 ## "tile" the tile shader, slate, shingle, thatch and turf the style roof shader. A roof surface of
 ## any other kind (a gable end in plaster, a flat roof in adobe) is drawn as a wall.
@@ -31,7 +40,7 @@ const STYLE_WALL_KINDS: Array[String] = ["plaster", "adobe", "brick", "log"]
 ## The roof kinds the style roof shader draws, in its `pattern` order.
 const STYLE_ROOF_KINDS: Array[String] = ["slate", "shingle", "thatch", "turf"]
 ## Every role, in the order a structure's meshes are made.
-const ROLES: Array[String] = [WALL, ROOF, TRIM, CHIMNEY, OPENING, FRAME]
+const ROLES: Array[String] = [WALL, ROOF, TRIM, CHIMNEY, OPENING, FRAME, ORNAMENT]
 ## The surface kind of the panes and leaves (ProcgenGlazing.KIND); drawn unshaded from the vertex
 ## colours.
 const GLASS_KIND := "glass"
@@ -76,6 +85,8 @@ const NODE_ROLES: Dictionary = {
 	# trim; role_of_slot picks the dome and cone out as roof, a sign's face as wall, the lantern's
 	# panes as an opening.
 	"roof_cap": TRIM,
+	# Ornaments (ProcgenOrnaments): see ORNAMENT.
+	"ornament": ORNAMENT,
 }
 
 ## What each role multiplies a surface's tint by. A painterly wall or roof is drawn by the
@@ -199,6 +210,8 @@ static func lot_of_tag_path(path: String) -> String:
 ## masonry (or plaster, brick, ...) and a flat roof's coping is stone, and they belong to the walls.
 static func material_role(kind: String, role: String) -> String:
 	if role == ROOF and not ROOF_KINDS.has(kind):
+		return WALL
+	if role == ORNAMENT and not ORNAMENT_KINDS.has(kind):
 		return WALL
 	return role
 

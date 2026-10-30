@@ -20,6 +20,10 @@ signal redraw_requested
 signal copy_requested
 signal remove_requested
 signal done_requested
+## The Decorate row (StructureOrnamentsSection): the ornaments now asked for and the history label,
+## and the ivy amount let go at.
+signal ornaments_requested(kinds: Array, label: String)
+signal ivy_requested(amount: float)
 
 const TILE_SIZE := Vector2(96, 92)
 const VARIANT_TILE_SIZE := Vector2(96, 78)
@@ -65,6 +69,8 @@ var redraw_button: Button
 var copy_button: Button
 var remove_button: Button
 var done_button: Button
+## The Decorate row, between the steppers and the Style tiles.
+var ornaments_section: StructureOrnamentsSection
 
 var _hint: Label
 var _empty: Label
@@ -209,6 +215,7 @@ func show_selection(structure: Structure) -> void:
 	var row := LibraryStructureStore.structure(structure.recipe)
 	selection_title.text = String(row.get("name", structure.recipe.get_slice(":", 1).capitalize()))
 	_show_variants(structure.recipe)
+	ornaments_section.show_for(structure)
 	var recipe := StructureRecipes.document(structure.recipe)
 	var interface: Array = recipe.interface if recipe != null else []
 	var exposed: Array = row.get("expose", [])
@@ -326,9 +333,12 @@ func _build_selection() -> void:
 		row.add_child(plus)
 		selection_box.add_child(row)
 		steppers[param] = {"row": row, "value": value, "minus": minus, "plus": plus}
-	# The buttons sit in pairs, the safe ones first, Remove apart from Done. New actions (such as
-	# an ornaments picker) add a row or a section to selection_box before the buttons: use
-	# add_selection_section().
+	ornaments_section = StructureOrnamentsSection.new()
+	ornaments_section.ornaments_requested.connect(ornaments_requested.emit)
+	ornaments_section.ivy_requested.connect(ivy_requested.emit)
+	add_selection_section(ornaments_section)
+	# The buttons sit in pairs, the safe ones first, Remove apart from Done. New actions add a row
+	# or a section to selection_box before the buttons: use add_selection_section().
 	var door_row := _button_row("SelectionRowDoor")
 	door_button = _action_button(
 		door_row,

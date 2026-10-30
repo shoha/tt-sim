@@ -1,0 +1,347 @@
+{
+ "out_dir": "render_jobs/ornaments_ui_look",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "wait_title"
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 100,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:cottage",
+   "width": 6.0,
+   "depth": 4.0,
+   "yaw": 140.0,
+   "seed": 5,
+   "ornaments": []
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 12.0,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "cottage_before",
+   "desc": "cottage before decorating (plain)"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:cottage",
+   "width": 6.0,
+   "depth": 4.0,
+   "yaw": 140.0,
+   "seed": 5,
+   "ornaments": [
+    "ivy",
+    "flower_boxes",
+    "vane",
+    "sign"
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 12.0,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "cottage_after",
+   "desc": "cottage after decorating (ivy,flower_boxes,vane,sign)"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:townhouse",
+   "width": 6.0,
+   "depth": 4.0,
+   "yaw": 140.0,
+   "seed": 5,
+   "ornaments": []
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.0,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "townhouse_before",
+   "desc": "townhouse before decorating (plain)"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:townhouse",
+   "width": 6.0,
+   "depth": 4.0,
+   "yaw": 140.0,
+   "seed": 5,
+   "ornaments": [
+    "awning",
+    "flower_boxes",
+    "banner",
+    "sign"
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 16.0,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "townhouse_after",
+   "desc": "townhouse after decorating (awning,flower_boxes,banner,sign)"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:castle_keep",
+   "width": 7.0,
+   "depth": 7.0,
+   "yaw": 40.0,
+   "seed": 5,
+   "ornaments": []
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 30.0,
+   "at": [
+    0.0,
+    -4.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "keep_before",
+   "desc": "keep before decorating (plain)"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:castle_keep",
+   "width": 7.0,
+   "depth": 7.0,
+   "yaw": 40.0,
+   "seed": 5,
+   "ornaments": [
+    "bartizan",
+    "banner",
+    "buttress",
+    "ivy"
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 30.0,
+   "at": [
+    0.0,
+    -4.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "keep_after",
+   "desc": "keep after decorating (bartizan,banner,buttress,ivy)"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:chapel",
+   "width": 5.0,
+   "depth": 9.0,
+   "yaw": 200.0,
+   "seed": 5,
+   "ornaments": []
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 30.0,
+   "at": [
+    0.0,
+    -4.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "chapel_before",
+   "desc": "chapel before decorating (plain)"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:chapel",
+   "width": 5.0,
+   "depth": 9.0,
+   "yaw": 200.0,
+   "seed": 5,
+   "ornaments": [
+    "rose",
+    "buttress",
+    "vane",
+    "ivy"
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 30.0,
+   "at": [
+    0.0,
+    -4.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "chapel_after",
+   "desc": "chapel after decorating (rose,buttress,vane,ivy)"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ref": "core:cottage",
+   "width": 6.0,
+   "depth": 4.0,
+   "yaw": 320.0,
+   "seed": 5,
+   "ornaments": [
+    "ivy",
+    "flower_boxes",
+    "bartizan",
+    "buttress"
+   ],
+   "ivy": 0.9
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 12.0,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "cottage_back_after",
+   "desc": "cottage from the back with thick ivy, a turret and buttresses"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "remove_all"
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  }
+ ]
+}

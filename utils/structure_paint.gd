@@ -175,7 +175,12 @@ static func paint(meshes: Array, group_of_tag: PackedInt32Array, palettes: Array
 			var g := _group(group_of_tag, tags, v, palettes.size())
 			var palette: Dictionary = palettes[g]
 			var c: Color = colors[v] if v < colors.size() else Color.WHITE
-			if accent:
+			if mesh.role == StructureLook.ORNAMENT:
+				# An ornament keeps the colour procgen painted (a stripe, a leaf green); only the
+				# height above the foot goes into alpha, as a wall's, for the foot's darkening.
+				var up := vertices[v].y - (foot[g] if foot[g] < INF else 0.0)
+				out[v] = Color(c.r, c.g, c.b, clampf(up / WALL_ALPHA_SPAN_M, 0.0, 1.0))
+			elif accent:
 				# The accent tone (palette_accent) under the piece's grey brightness shade, drawn
 				# by the plaster material whatever the piece's role; height alpha as a wall's.
 				var shade := c.r

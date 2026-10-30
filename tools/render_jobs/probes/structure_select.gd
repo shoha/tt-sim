@@ -84,6 +84,14 @@ static func _bar(base: Node, step: Dictionary) -> String:
 			pane.remove_requested.emit()
 		"done":
 			pane.done_requested.emit()
+		"ornament":
+			# A click on the Decorate row's chip of kind `kind` (card ornaments_ui).
+			var chip := pane.ornaments_section.chips.get(String(step.get("kind", ""))) as Button
+			if chip == null or chip.disabled:
+				return "no chip %s" % step.get("kind", "")
+			chip.button_pressed = not chip.button_pressed
+		"surprise":
+			pane.ornaments_section.surprise_button.pressed.emit()
 		_:
 			return "unknown press %s" % step.get("press", "")
 	return "pressed %s" % step.get("press", "")
