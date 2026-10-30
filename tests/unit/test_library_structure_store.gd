@@ -365,6 +365,7 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 			"chapel",
 			"chinese_hall",
 			"close_studded_house",
+				"coaching_inn",
 			"cottage",
 			"cottage_chimneyed",
 			"cottage_hip",
@@ -377,6 +378,7 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 			"half_hip_cottage",
 			"half_timber_house",
 			"herringbone_cottage",
+				"hof_farm",
 			"house_flat",
 			"house_hip",
 			"inn_gallery",
@@ -396,6 +398,7 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 			"ruin_tower",
 			"ruin_townhouse",
 			"saltbox_house",
+				"siheyuan",
 			"slate_house",
 			"stabbur",
 			"stilt_house",
@@ -423,7 +426,7 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 		. strip_edges()
 		. split("\n")
 	)
-	assert_eq(pins.size(), 61)
+	assert_eq(pins.size(), 64)
 	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
 	var moved := PackedStringArray()
 	for line in pins:

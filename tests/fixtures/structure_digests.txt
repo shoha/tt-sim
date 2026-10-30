@@ -59,3 +59,6 @@ core:ruin_chapel a1c804bd3db9a298c81301321d531491 1292
 core:ruin_townhouse 6cb97523299b587e6d225e9b9b812404 1248
 core:ruin_barn 2e193301c7c02b1ae41eaa9b28615adb 1164
 core:ruin_tower cf5a4a3c183f20cb18605670fb4ad61a 1020
+core:coaching_inn 78083e86b700cdaf636d92bb1bae2c72 6400
+core:siheyuan 1d6192ebf31516c0f569166e124e83e7 3108
+core:hof_farm 157dd6c0c8a5b785e3a0dd5008f71d40 6296

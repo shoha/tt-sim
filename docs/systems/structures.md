@@ -488,7 +488,7 @@ so the feature faces the camera).
 
 ### Styles 10: houses on stilts (2026-10-29, branch `stilts`)
 
-Three more core structures (61 in all) from procgen's Stilts node (architecture-styles card 10):
+Three more core structures (61 at that point) from procgen's Stilts node (architecture-styles card 10):
 `stilt_house` (the `stilt_house` style, posts with cross or diagonal bracing, a veranda deck and a
 stair) 1690 triangles at the 6 by 4 m pin, `lake_dwelling` (reed thatch, a panel-railed deck)
 2100, and `stabbur` (a Nordic log granary on stone staddles under a turf roof, a short stair)
@@ -506,6 +506,29 @@ three built structures has a winding that agrees with its vertex normals (probed
 meshes), no vertex colour is magenta, and the real shaders show none from any of four yaws.
 Render jobs `structures_stilts` (row and close-ups), `structures_stilts_yaws` (the same three at
 yaw 90, 180 and 270) and `stilts_thumbs` (tiles at yaw 180, which shows the stair).
+
+### Styles 11: courtyards (2026-10-29, branch `courtyard_rows`)
+
+Three more core structures (64 in all) from procgen's courtyard styles (architecture-styles card 11):
+`coaching_inn` (a galleried inn round a paved yard), `siheyuan` (a courtyard house) and `hof_farm`
+(barn wings round a farmyard), family `courtyard`, all `regional` (so no street split picks one;
+`inn` and `farm` come from the style's own tags). A click lays one at its default size and a drag
+sizes it, the same Building tool path as any row; only the row's numbers differ: `default_size_m`
+14 by 12 m (the hof 16 by 14), `min_side_m` 9, `max_side_m` 24 (hof 26) and `max_area_m2` 330
+(hof 380), taken from the styles' `size`. procgen builds the courtyard plan only from 9 by 8 m up
+(below that it shows the plain building), and `min_side_m` 9 on both sides keeps every lot above
+it: a drag below the minimum clamps up to 9 by 9 (`StructurePlacement.clamp_size`), it never
+fails; a drag past the area limit scales both sides down together (24 by 24 asked gives 18.2 by
+18.2). The pin footprint is the one thing that assumed 6 by 4 m: that rectangle is below the
+courtyard minimum, so pinning there would pin the plain building. `StructurePlacement.pin_plan`
+now returns the default rectangle for a row whose `min_side_m` is 8 or more
+(`PIN_DEFAULT_MIN_SIDE_M`; the other rows' least sides are at most 6.8 m, so no existing pin
+moved); the exporter passes it the row. Triangles at the default size: coaching inn 6400, siheyuan
+3108, hof farm 6296 (soft budget 12000). `tests/unit/test_courtyard_rows.gd` holds the checks
+(regional tags and limits, street split, pin plan, clamps, a built courtyard at default and at the
+least size). Known procgen gap: the roofs of abutting wings interpenetrate at the corners. Render
+jobs `courtyard_rows` (the three at default size and at the minimum) and `courtyard_thumbs`
+(tiles at yaw 0, so the gate faces the camera).
 
 ## Dressing
 
