@@ -874,8 +874,9 @@ The owner reviewed the manager (49 stories, UX-1 to UX-12, plantgen
 - **Words** (UX-6): no dialog says "plants"; every phrase goes through `LibraryNames`
   (`mismatch_title`, `open_without`, `host_uses_title`, `remove_tail`, `count_of`, `license_text`,
   `drop_hint`, `attention_summary`; `CATALOG_URL`, empty until the owner names a catalogue, hides
-  the "Find collections" button). "Built in" is the one term; core's placeholder licence ("TBD
-  (...)") reads "Included with the game" (its `library.json` is not edited).
+  the "Find collections" button). "Built in" is the one term; core's licence is CC BY 4.0
+  (attribution, decided) and `license_text` shows it as written; a placeholder licence that begins
+  "TBD" reads "Included with the game".
 - **The mismatch dialog** (UX-7): `LibraryMismatchDialog`: the link when the map's record (an
   optional `url` of a `libraries` entry, written from the library's own `url`) or the installed copy
   has one, Import file... and Import folder... in place (a successful install ends it with
