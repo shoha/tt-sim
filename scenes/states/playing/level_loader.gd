@@ -354,6 +354,8 @@ func load_map_sources_async(glb_path: String, document_path: String) -> Node3D:
 	loader.is_superseded = func() -> bool: return _superseded(generation)
 	# Every peer builds a document's map the same editable way, for the table's live edits.
 	loader.keep_props_apart = document_path != ""
+	# The structures' nodes are made a few a frame; _finalize_map_loading waits for them.
+	loader.staged_structures = true
 	# A map that names a library this game lacks asks first (MapLibraryGate).
 	loader.library_choice = MapLibraryGate.ask_dialog
 	# A client asks the host for the library plants the map uses and it lacks (with consent).
@@ -406,6 +408,16 @@ func _finalize_map_loading(map: Node3D) -> void:
 	_level_play_controller._view_fit.fit(map, _level_play_controller.loaded_map_document)
 	_apply_foliage_density_and_notify(map)
 	var generation := _load_generation
+	# The structures' nodes come a few a frame; play starts (and tokens are set down) only once
+	# every one stands, and the ground fit below sees their collision.
+	var standing := await StructureLoadWait.wait_async(
+		_level_play_controller.get_tree(),
+		map,
+		func() -> bool: return _superseded(generation),
+		_report_structure_progress
+	)
+	if not standing:
+		return
 	var loader := MapSourceLoader.new(_level_play_controller.get_tree())
 	loader.is_superseded = func() -> bool: return _superseded(generation)
 	var document := _level_play_controller.loaded_map_document
@@ -421,6 +433,15 @@ func _finalize_map_loading(map: Node3D) -> void:
 		and _queued_level_data == null
 	):
 		_level_play_controller.start_live_edits()
+
+
+## The loading screen's bar while the structures' nodes are made: the share between "Loading map"
+## (0.05) and the token models (0.2).
+func _report_structure_progress(done: int, total: int) -> void:
+	level_loading_progress.emit(
+		0.05 + 0.15 * float(done) / float(maxi(total, 1)),
+		"Building structures... (%d/%d)" % [done, total]
+	)
 
 
 ## Applies the player's foliage density setting to a freshly loaded map, and tells them
