@@ -711,6 +711,7 @@
       "id": "courtyard_yard_28",
       "params": {
         "depth": "@wing_depth",
+        "fountain": 1.2,
         "plan": "u",
         "role": "stone"
       },

@@ -89,6 +89,18 @@
       "from_port": 0,
       "to": "wonk_6",
       "to_port": 0
+    },
+    {
+      "from": "facade_7",
+      "from_port": 0,
+      "to": "tree_core_12",
+      "to_port": 0
+    },
+    {
+      "from": "tree_core_12",
+      "from_port": 0,
+      "to": "wonk_6",
+      "to_port": 0
     }
   ],
   "format": "plantgen-graph",
@@ -311,7 +323,7 @@
         "deck_span": "all",
         "kind": "post",
         "max_piles": 4,
-        "post_width": 0.65,
+        "post_width": 0.38,
         "rail": "balusters",
         "spacing": 6
       },
@@ -320,6 +332,20 @@
         1620.0
       ],
       "type": "stilts"
+    },
+    {
+      "id": "tree_core_12",
+      "params": {
+        "canopy": 4.01,
+        "canopy_size": 2.62,
+        "reach": 1.95,
+        "trunk": 0.61
+      },
+      "position": [
+        1670.0,
+        1820.0
+      ],
+      "type": "tree_core"
     }
   ],
   "seed": 1234,

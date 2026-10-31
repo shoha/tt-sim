@@ -74,6 +74,16 @@ vec3 s_lean(float warmth, float amount) {
 void vertex() {
 	s_pos = VERTEX;
 	s_normal = NORMAL;
+#ifdef S_SWAY
+	// A shader that defines S_SWAY declares `uniform float sway` before this include (the ornament
+	// shader: a treehouse crown): a slow sideways drift whose phase follows the world position.
+	if (sway > 0.0) {
+		vec3 w = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+		float p = w.x * 0.7 + w.z * 0.9;
+		VERTEX.x += sin(TIME * 0.9 + p) * sway;
+		VERTEX.z += cos(TIME * 0.7 + p * 1.3) * sway * 0.7;
+	}
+#endif
 }
 
 // The faint warm rim, from the albedo, the geometry normal and the view vector.

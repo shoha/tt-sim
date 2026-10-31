@@ -863,6 +863,9 @@ const STARTERS: Array[Dictionary] = [
 		"name": "Tulou",
 		"family": "roundhouse",
 		"variant": "Rammed-earth ring, tiled roof",
+		# The style's browns (#6B5646 ...) made the roof ring one more brown on the brown wall; a
+		# dark grey-blue tile (the Hakka roofs) separates it (world_pins, 2026-10-30).
+		"style_patch": {"palette": {"roof": ["#7E858C", "#6E767E", "#8D9298"]}},
 	},
 	{
 		"id": "trullo",
@@ -958,6 +961,9 @@ const STARTERS: Array[Dictionary] = [
 		"style_patch":
 		{
 			"stone_tone": "grey",
+			# The flat roof, deck and merlons are kind `stone` (modelled stone, drawn near black); as
+			# slate they take the roof palette and the style roof light (world_pins, 2026-10-30).
+			"roof_kind": "slate",
 			"palette":
 			{
 				"wall": ["#8E939C", "#80858F", "#989CA2", "#7A808C"],
@@ -984,6 +990,27 @@ const STARTERS: Array[Dictionary] = [
 		"family": "ruin",
 		"variant": "Rose chapel, moss and ivy",
 		"expose_add": ["ruin"],
+	},
+	# Two more world styles (topic world_pins, 2026-10-30; procgen docs/world_styles.md section 5),
+	# both regional rectangles: a long street house with a porch canopy and a pale hip-roofed lodge.
+	{
+		"id": "moorish_souk",
+		"bundle": "moorish_souk",
+		"seed": 0,
+		"name": "Moorish souk house",
+		"family": "house",
+		"variant": "Flat roof, arched windows, porch canopy",
+	},
+	{
+		"id": "ice_lodge",
+		"bundle": "ice_lodge",
+		"seed": 0,
+		"name": "Ice lodge",
+		"family": "fantasy",
+		"variant": "Pale blue hip roof, glass",
+		# Plaster, not the style's boards: the planks' texture turned the near-white wall tones into
+		# a brown timber; plaster takes them as painted, a cool pale wall under the blue roof.
+		"style_patch": {"wall_kind": "plaster"},
 	},
 	# Round and polygonal plans (styles integration card, 2026-10-28): each is a regular polygon
 	# (plan kind "round", the index entry's `sides` key), built by ProcgenRecipesRound. `round` says how:

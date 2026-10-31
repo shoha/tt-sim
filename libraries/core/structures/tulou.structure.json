@@ -45,11 +45,11 @@
     {
       "from": "facade_3",
       "from_port": 0,
-      "to": "facade_trim_8",
+      "to": "round_court_8",
       "to_port": 0
     },
     {
-      "from": "facade_trim_8",
+      "from": "round_court_8",
       "from_port": 0,
       "to": "wonk_7",
       "to_port": 0
@@ -57,11 +57,11 @@
     {
       "from": "facade_3",
       "from_port": 0,
-      "to": "cornice_9",
+      "to": "facade_trim_9",
       "to_port": 0
     },
     {
-      "from": "cornice_9",
+      "from": "facade_trim_9",
       "from_port": 0,
       "to": "wonk_7",
       "to_port": 0
@@ -69,11 +69,11 @@
     {
       "from": "facade_3",
       "from_port": 0,
-      "to": "glazing_10",
+      "to": "cornice_10",
       "to_port": 0
     },
     {
-      "from": "glazing_10",
+      "from": "cornice_10",
       "from_port": 0,
       "to": "wonk_7",
       "to_port": 0
@@ -81,13 +81,13 @@
     {
       "from": "facade_3",
       "from_port": 0,
-      "to": "roof_cap_11",
+      "to": "glazing_11",
       "to_port": 0
     },
     {
-      "from": "roof_cap_11",
+      "from": "glazing_11",
       "from_port": 0,
-      "to": "output_6",
+      "to": "wonk_7",
       "to_port": 0
     }
   ],
@@ -103,10 +103,10 @@
       "type": "float"
     },
     {
-      "default": 14.59,
+      "default": 25.11,
       "label": "Roof pitch",
-      "max": 20,
-      "min": 9,
+      "max": 34,
+      "min": 18,
       "name": "roof_pitch",
       "tip": "Slope in degrees.",
       "type": "float"
@@ -240,12 +240,13 @@
       "params": {
         "finial": "@finial",
         "fringe": "@fringe",
+        "hole": 0.62,
         "overhang": "@overhang",
         "roof_pitch": "@roof_pitch",
         "roof_role": "tile",
         "segments": 3,
         "shape": "cone",
-        "top": 0.62
+        "top": 0
       },
       "position": [
         710.0,
@@ -258,7 +259,7 @@
       "params": {
         "name": "Tulou (round earth building)",
         "palette_accent": "#3A2C22,#E8DCC0",
-        "palette_roof": "#6B5646,#5A4A3E,#7A5F4A",
+        "palette_roof": "#7E858C,#6E767E,#8D9298",
         "palette_wall": "#B98E5E,#A97F52,#C49A68"
       },
       "position": [
@@ -279,7 +280,20 @@
       "type": "wonk"
     },
     {
-      "id": "facade_trim_8",
+      "id": "round_court_8",
+      "params": {
+        "gallery": true,
+        "hole": 0.62,
+        "role": "adobe"
+      },
+      "position": [
+        710.0,
+        340.0
+      ],
+      "type": "round_court"
+    },
+    {
+      "id": "facade_trim_9",
       "params": {
         "door_frame": true,
         "frames": false,
@@ -295,7 +309,7 @@
       "type": "facade_trim"
     },
     {
-      "id": "cornice_9",
+      "id": "cornice_10",
       "params": {
         "band_depth": 0.2,
         "band_height": 0.3,
@@ -310,7 +324,7 @@
       "type": "cornice"
     },
     {
-      "id": "glazing_10",
+      "id": "glazing_11",
       "params": {
         "lit": "@lit",
         "muntins": true
@@ -320,21 +334,6 @@
         420.0
       ],
       "type": "glazing"
-    },
-    {
-      "id": "roof_cap_11",
-      "params": {
-        "cut": 0.62,
-        "kind": "dome",
-        "role": "tile",
-        "roof_role": "tile",
-        "size": 1.86
-      },
-      "position": [
-        1400.0,
-        120.0
-      ],
-      "type": "roof_cap"
     }
   ],
   "seed": 1234,

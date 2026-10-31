@@ -39,6 +39,25 @@ func test_the_roof_cap_takes_its_role_from_the_slot() -> void:
 	assert_eq(StructureLook.role_of_tag_path("a/roof_cap_3/cap/dome"), StructureLook.ROOF)
 
 
+func test_the_world_gap_nodes_take_their_roles_from_the_slot() -> void:
+	# Round Court (tulou): timber that keeps its tone, the panes an opening, the wall a wall.
+	assert_eq(StructureLook.role_of_slot("round_court", "court/gallery"), StructureLook.FRAME)
+	assert_eq(StructureLook.role_of_slot("round_court", "court/rail"), StructureLook.FRAME)
+	assert_eq(StructureLook.role_of_slot("round_court", "court/door"), StructureLook.FRAME)
+	assert_eq(StructureLook.role_of_slot("round_court", "court/window"), StructureLook.OPENING)
+	assert_eq(StructureLook.role_of_slot("round_court", "court/wall"), StructureLook.WALL)
+	# Courtyard Paving fountain: the pool and jet are water, the basin and pillar stay paving.
+	assert_eq(StructureLook.role_of_slot("courtyard_yard", "fountain/water"), StructureLook.WATER)
+	assert_eq(StructureLook.role_of_slot("courtyard_yard", "fountain/jet"), StructureLook.WATER)
+	assert_eq(StructureLook.role_of_slot("courtyard_yard", "fountain/basin"), StructureLook.WALL)
+	# Tree Core: the crown is its own material, trunk and rope are painted ornaments.
+	assert_eq(StructureLook.role_of_slot("tree_core", "tree/canopy"), StructureLook.CANOPY)
+	assert_eq(StructureLook.role_of_slot("tree_core", "tree/trunk"), StructureLook.ORNAMENT)
+	assert_eq(StructureLook.material_role("bark", StructureLook.ORNAMENT), StructureLook.ORNAMENT)
+	assert_true(StructureMaterials.make("glass", StructureLook.WATER, "", "") is ShaderMaterial)
+	assert_true(StructureMaterials.make("leaf", StructureLook.CANOPY, "", "") is ShaderMaterial)
+
+
 func test_the_palette_lists_are_read_whole() -> void:
 	var hints := _hints("toon_clinic")
 	assert_eq((hints["roof"] as Array).size(), 3, "the whole roof list")

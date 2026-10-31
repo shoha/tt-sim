@@ -175,7 +175,7 @@ static func paint(meshes: Array, group_of_tag: PackedInt32Array, palettes: Array
 			var g := _group(group_of_tag, tags, v, palettes.size())
 			var palette: Dictionary = palettes[g]
 			var c: Color = colors[v] if v < colors.size() else Color.WHITE
-			if mesh.role == StructureLook.ORNAMENT:
+			if mesh.role == StructureLook.ORNAMENT or mesh.role == StructureLook.CANOPY:
 				# An ornament keeps the colour procgen painted (a stripe, a leaf green); only the
 				# height above the foot goes into alpha, as a wall's, for the foot's darkening.
 				var up := vertices[v].y - (foot[g] if foot[g] < INF else 0.0)
