@@ -144,6 +144,14 @@ func connect_selection(brush: BrushTool, pane: StructureToolPane, hints_changed:
 	for link: Dictionary in mode.gesture_done.get_connections():
 		mode.gesture_done.disconnect(link["callable"])
 	var editor := brush.editor
+	# "Show hints" forgets the gestures done (saved too) and shows the bar's rows again.
+	for link: Dictionary in pane.hints_requested.get_connections():
+		pane.hints_requested.disconnect(link["callable"])
+	pane.hints_requested.connect(
+		func() -> void:
+			StructureHints.reset(true)
+			hints_changed.call()
+	)
 	# A gesture done once is remembered per user, and its key fades from the bar.
 	mode.gesture_done.connect(
 		func(id: StringName) -> void:

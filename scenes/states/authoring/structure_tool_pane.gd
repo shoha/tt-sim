@@ -11,6 +11,8 @@ extends VBoxContainer
 signal structure_selected(ref: String)
 ## "Mix afresh" was pressed.
 signal reroll_requested
+## "Show hints" was pressed: the key hints the player has outgrown come back.
+signal hints_requested
 ## The selected building's bar (card S5): a variant tile (the reference), a stepper pressed (the
 ## parameter and -1 or 1), the door, redraw, copy, remove and done buttons.
 signal variant_picked(ref: String)
@@ -64,11 +66,15 @@ const SMALL_TILES_TIP := "Smaller pictures, so more of the list shows at once"
 ## How long the hover card waits before it shows (seconds), so a sweep across tiles stays calm.
 const CARD_DELAY_S := 0.12
 const CARD_PICTURE_PX := 128
+const HINTS_TEXT := "Show hints"
+const HINTS_TOOLTIP := "Bring back the key hints on the bar, including the ones you have done"
 const REROLL_TOOLTIP := "Draw the next building's look afresh (R); over a building, redraw that one"
 
 ## The family fields, in tile order.
 var family_fields: Array[TileField] = []
 var reroll_button: Button
+## The small "Show hints" link under the pane's hint (StructureHints.reset(true), then the bar).
+var hints_button: Button
 ## Filters the tiles by name, family and tags (StructurePalette.matches).
 var search_edit: LineEdit
 ## The filter chips by id (StructurePalette.CHIPS), the toggle buttons of the row above the tiles.
@@ -145,6 +151,18 @@ func _init() -> void:
 	_build_selection()
 	_hint = _caption("StructureHint", HINT)
 	add_child(_hint)
+	# A Ghost button, the theme's link look (the engine's LinkButton colour reads as nothing); it
+	# keeps keyboard focus, and stays when the palette steps aside for a selection.
+	hints_button = Button.new()
+	hints_button.name = "StructureShowHints"
+	hints_button.text = HINTS_TEXT
+	hints_button.tooltip_text = HINTS_TOOLTIP
+	hints_button.theme_type_variation = &"Ghost"
+	hints_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	hints_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	hints_button.focus_mode = Control.FOCUS_ALL
+	hints_button.pressed.connect(hints_requested.emit)
+	add_child(hints_button)
 	_empty = _caption("StructureEmpty", EMPTY)
 	add_child(_empty)
 	# Search and Mix afresh share one row above the tiles, so neither is lost below 60 of them.

@@ -115,8 +115,7 @@ var ghost_centre: Vector2 = Vector2.INF
 var target_centre: Vector2 = Vector2.INF
 var eased: bool = false
 var problem: String = ""
-## The note drawn beside the readout, {"text", "level"} (StructureNote.live, worked out again only
-## when one of its inputs changes).
+## The note beside the readout, {"text", "level"} (StructureNote.live, redone when inputs change).
 var note: Dictionary = {}
 ## The size of the lot the ghost shows (map metres) and its plan.
 var ghost_size: Vector2 = Vector2.ZERO
@@ -138,6 +137,7 @@ var edit: Dictionary = {}
 var _why: String = ""
 var _asked: Vector2 = Vector2.ZERO
 var _note_key: Array = []
+var _rest := StructureNote.Rest.new()  # when the pointer last moved (the amber note's delay)
 var _bar_key: Variant = null
 var _single: bool = false
 var _pick_radius_m: float = PICK_FALLBACK_M
@@ -336,6 +336,7 @@ func track(editor: AuthoringEditor, hit: Vector3, delta: float) -> void:
 	ghost_size = default_size(editor)
 	_asked = _asked_size(editor)
 	var want := editor.to_map_xz(hit)
+	_rest.see(want)
 	var sides := StructurePlacement.sides_of(row())
 	var key := [StructurePlacement.snapped_centre(want), ghost_size, yaw, _signature(editor), sides]
 	if _wanted.get("key") != key:
@@ -944,7 +945,7 @@ func draw(
 	var text := readout(title(), ghost_size.x * scale, ghost_size.y * scale, cell_m, per_cell, label)
 	# The name and size always; a note (amber) or the reason a lot cannot stand (red) beneath.
 	var lines: Array[Dictionary] = [{"text": text, "color": WallBrush.READOUT_COLOR}]
-	if level != StructureNote.Level.NONE:
+	if StructureNote.shown(level, String(note["text"]), _rest.rested()):
 		lines.append({"text": note["text"], "color": StructureNote.colour(level)})
 	StructurePlanView.draw_pills(canvas, at, lines)
 
@@ -957,7 +958,7 @@ func _draw_hovered(
 	var hovered := editor.document.structure(hover_id)
 	if hovered == null:
 		return
-	var strength := 1.0 if erasing else 0.45
+	var strength := 1.0 if erasing else StructureNote.HOVER_STRENGTH
 	var tint := WallBrush.ERASE_TINT if erasing else WallBrush.STONE_TINT
 	StructurePlanView.draw_plan(canvas, camera, editor, hovered.footprint, 0.0, tint, strength)
 	if erasing:
