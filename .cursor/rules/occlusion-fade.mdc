@@ -48,7 +48,7 @@ The dither uses a recursively constructed 16x16 Bayer matrix (bayer2 → bayer4 
 The dither grid must align with the lo-fi post-process pixel grid, or moiré artifacts appear. The `lofi_pixelation` uniform mirrors the lo-fi shader's pixelation value. When active, dither coordinates are snapped to the lo-fi grid: `floor(uv * scale / lofi_cell)`. The `lofi_dither_scale` allows finer subdivision but values > 1 cause blurring (lo-fi point sampling picks random sub-cells). Keep scale at 1 for clean results.
 
 ### Per-token fade radius
-Each token gets its own fade radius derived from its collision shape's horizontal AABB extent (`max(x, z) * 0.5 * multiplier`). Small tokens like Kakuna get tight zones; large tokens like Charizard get bigger ones. The full 3D diagonal was too generous for tall models.
+Each token gets its own fade radius derived from its collision shape's horizontal AABB extent (`max(x, z) * 0.5 * multiplier`). Small tokens get tight zones; large tokens get bigger ones. The full 3D diagonal was too generous for tall models.
 
 ### Floor exclusion
 The shader transforms the fragment normal to world space and skips surfaces where `normal.y > floor_threshold`. Without this, floors beneath tokens dither because they're technically closer to the camera than the token center.

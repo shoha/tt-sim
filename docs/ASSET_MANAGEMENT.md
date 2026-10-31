@@ -45,15 +45,15 @@ The asset management system provides:
 
 ```
 AssetManager
-├── AssetPack (pack_id: "trainers")
-│   ├── AssetEntry (asset_id: "pikachu")
+├── AssetPack (pack_id: "creatures")
+│   ├── AssetEntry (asset_id: "wolf")
 │   │   ├── AssetVariant (variant_id: "default")
-│   │   │   ├── model_path: "models/pikachu.glb"
-│   │   │   └── icon_path: "icons/pikachu.png"
+│   │   │   ├── model_path: "models/wolf.glb"
+│   │   │   └── icon_path: "icons/wolf.png"
 │   │   └── AssetVariant (variant_id: "shiny")
-│   │       ├── model_path: "models/pikachu_shiny.glb"
-│   │       └── icon_path: "icons/pikachu_shiny.png"
-│   └── AssetEntry (asset_id: "charizard")
+│   │       ├── model_path: "models/wolf_shiny.glb"
+│   │       └── icon_path: "icons/wolf_shiny.png"
+│   └── AssetEntry (asset_id: "ogre")
 │       └── ...
 └── AssetPack (pack_id: "custom_minis")
     └── ...
@@ -365,8 +365,8 @@ Loaded model scenes are cached in memory for fast instantiation:
 
 ```
 AssetManager._model_cache
-├── "user://asset_cache/pokemon/pikachu/default.glb" -> Node3D template
-├── "user://user_assets/trainers/models/trainer.glb" -> Node3D template
+├── "user://asset_cache/creatures/wolf/default.glb" -> Node3D template
+├── "user://user_assets/creatures/models/ogre.glb" -> Node3D template
 └── ...
 ```
 
