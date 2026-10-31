@@ -121,6 +121,12 @@
       "to_port": 0
     },
     {
+      "from": "tower_10",
+      "from_port": 0,
+      "to": "ornament_15",
+      "to_port": 2
+    },
+    {
       "from": "ornament_15",
       "from_port": 0,
       "to": "wonk_6",

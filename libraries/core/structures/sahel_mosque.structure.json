@@ -307,6 +307,18 @@
       "to_port": 0
     },
     {
+      "from": "tower_24",
+      "from_port": 0,
+      "to": "ornament_34",
+      "to_port": 2
+    },
+    {
+      "from": "tower_29",
+      "from_port": 0,
+      "to": "ornament_34",
+      "to_port": 2
+    },
+    {
       "from": "ornament_34",
       "from_port": 0,
       "to": "wonk_7",

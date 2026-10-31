@@ -28,7 +28,7 @@
       "id": "prop_2",
       "params": {
         "prop": "yard_gate",
-        "spec": "{\"name\":\"Yard gate\",\"palette\":{\"accent\":[\"#D8603A\",\"#3F82B8\",\"#4E9E66\",\"#E3B03A\",\"#8A5CA8\",\"#E0707A\"],\"roof\":[\"#EBC45A\",\"#F2D273\",\"#E0B04C\"],\"wall\":[\"#C98B52\",\"#B97B46\",\"#D9A261\",\"#A9714A\",\"#CF9A5E\"]},\"prop\":\"yard_gate\",\"radius_m\":1.3,\"size\":[2.4,0.4],\"tones\":{\"accent\":\"#4E9E66\",\"roof\":\"#E0B04C\",\"wall\":\"#CF9A5E\"},\"variant\":{\"open\":\"open\",\"side\":-1.0,\"style\":\"boards\"}}"
+        "spec": "{\"name\":\"Yard gate\",\"palette\":{\"accent\":[\"#D8603A\",\"#3F82B8\",\"#4E9E66\",\"#E3B03A\",\"#8A5CA8\",\"#E0707A\"],\"roof\":[\"#EBC45A\",\"#F2D273\",\"#E0B04C\"],\"wall\":[\"#C98B52\",\"#B97B46\",\"#D9A261\",\"#A9714A\",\"#CF9A5E\"]},\"prop\":\"yard_gate\",\"radius_m\":1.3,\"size\":[2.4,0.5],\"tones\":{\"accent\":\"#4E9E66\",\"roof\":\"#E0B04C\",\"wall\":\"#CF9A5E\"},\"variant\":{\"open\":\"open\",\"side\":-1.0,\"style\":\"boards\"}}"
       },
       "position": [
         250.0,
