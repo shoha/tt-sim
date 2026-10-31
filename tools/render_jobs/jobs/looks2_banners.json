@@ -1,0 +1,53 @@
+{
+ "out_dir": "render_jobs/looks2_banners",
+ "timeout_s": 240,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "grassland_meadow_summer_s1", "size": 100, "seed": 1234},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": ["banner"],
+   "ref": "core:thatched_cottage",
+   "width": 6.0,
+   "depth": 4.0,
+   "yaw": 0.0,
+   "seed": 3,
+   "decor": false
+  },
+  {"op": "wait", "s": 1.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/wind.gd", "action": "set", "preset": "calm", "clock": 0.0},
+  {"op": "thumbnail_prepare", "zoom": 14.0, "at": [0, -2.0]},
+  {"op": "settle"},
+  {"op": "capture", "name": "cottage_home_calm", "desc": "cottage with banners, home camera, calm"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/wind.gd", "action": "set", "preset": "windy", "clock": 3.0},
+  {"op": "wait", "s": 0.4},
+  {"op": "capture", "name": "cottage_home_windy", "desc": "cottage with banners, home camera, windy"},
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": ["banner"],
+   "ref": "core:castle_keep",
+   "width": 8.0,
+   "depth": 8.0,
+   "yaw": 0.0,
+   "seed": 5,
+   "decor": false
+  },
+  {"op": "wait", "s": 1.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/wind.gd", "action": "set", "preset": "calm", "clock": 0.0},
+  {"op": "thumbnail_prepare", "zoom": 26.0, "at": [0, -12.0]},
+  {"op": "settle"},
+  {"op": "capture", "name": "keep_home_calm", "desc": "keep with banners, home camera, calm"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/wind.gd", "action": "set", "preset": "windy", "clock": 3.0},
+  {"op": "wait", "s": 0.4},
+  {"op": "capture", "name": "keep_home_windy", "desc": "keep with banners, home camera, windy"}
+ ]
+}

@@ -340,11 +340,14 @@ func test_cloth_keeps_its_wind_weights_in_the_baked_surface() -> void:
 
 
 func test_the_bake_turns_a_prop_so_its_front_faces_the_yaw() -> void:
-	var item := {"position": Vector2(2, 3), "yaw": PI * 0.5, "scale": 2.0}
+	var item := {"position": Vector2(2, 3), "yaw": PI * 0.5, "scale": 1.0}
 	var transform := SettlementBake.transform_of(item, 1.0)
 	assert_eq(transform.origin, Vector3(2, 1, 3))
 	assert_almost_eq(
-		(transform.basis * Vector3.BACK).x, 2.0, 0.001, "front +z turns to +x at a quarter turn"
+		(transform.basis * Vector3.BACK).x,
+		SettlementBake.PROP_VISUAL_SCALE,
+		0.001,
+		"front +z turns to +x at a quarter turn"
 	)
 
 
@@ -368,7 +371,9 @@ func test_kinds_that_look_alike_share_a_surface_and_the_rest_stay_apart() -> voi
 		assert_eq(other.shader, wood.shader, kind)
 		for param in ["tone", "exposure", "saturation", "lit_gain", "cloth_wind"]:
 			assert_eq(
-				other.get_shader_parameter(param), wood.get_shader_parameter(param), "%s %s" % [kind, param]
+				other.get_shader_parameter(param),
+				wood.get_shader_parameter(param),
+				"%s %s" % [kind, param]
 			)
 
 
@@ -378,17 +383,25 @@ func test_props_are_drawn_larger_but_never_smaller_and_door_props_less() -> void
 	var door := {"slot": "w1l:l0/door_barrel/d0r", "scale": 1.0}
 	assert_almost_eq(SettlementBake.visual_scale(door), SettlementBake.DOOR_VISUAL_SCALE, 0.0001)
 	assert_lt(SettlementBake.visual_scale(door), SettlementBake.visual_scale(plain))
-	var big := {"slot": "w1l:l0/yard_cart/y0", "scale": 1.6}
+	var hero := {"slot": "w1l:l0/hero_street/s0", "scale": 1.6}
+	assert_almost_eq(
+		SettlementBake.visual_scale(hero), 1.6 * SettlementBake.PROP_VISUAL_SCALE, 0.0001, "a hero"
+	)
+	var big := {"slot": "w1l:l0/yard_cart/y0", "scale": 1.9}
 	assert_almost_eq(SettlementBake.visual_scale(big), SettlementBake.MAX_VISUAL_SCALE, 0.0001)
-	var huge := {"slot": "x", "scale": 2.0}
-	assert_almost_eq(SettlementBake.visual_scale(huge), 2.0, 0.0001, "never below its own scale")
+	var huge := {"slot": "x", "scale": 3.0}
+	assert_almost_eq(SettlementBake.visual_scale(huge), 3.0, 0.0001, "never below its own scale")
 
 
 func test_a_prop_leans_to_the_ground_by_at_most_twelve_degrees_and_never_flips() -> void:
-	assert_true(SettlementBake.tilt_of(Vector3.UP).is_equal_approx(Basis.IDENTITY), "flat is identity")
+	assert_true(
+		SettlementBake.tilt_of(Vector3.UP).is_equal_approx(Basis.IDENTITY), "flat is identity"
+	)
 	var twenty := Vector3(sin(deg_to_rad(20.0)), cos(deg_to_rad(20.0)), 0.0)
 	var tilted := SettlementBake.tilt_of(twenty) * Vector3.UP
-	assert_almost_eq(rad_to_deg(tilted.angle_to(Vector3.UP)), 12.0, 0.01, "a 20 degree slope leans 12")
+	assert_almost_eq(
+		rad_to_deg(tilted.angle_to(Vector3.UP)), 12.0, 0.01, "a 20 degree slope leans 12"
+	)
 	assert_gt(tilted.x, 0.0, "toward the normal")
 	var five := Vector3(sin(deg_to_rad(5.0)), cos(deg_to_rad(5.0)), 0.0)
 	assert_almost_eq(

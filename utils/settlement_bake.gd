@@ -7,7 +7,6 @@ extends RefCounted
 ## StructureGeometry.build_one, which also carry the cloth wind weights in the second UV set.
 ## A source is {"surfaces": [{"key": "<role>:<kind>", "role", "kind", "arrays": Mesh arrays}]}.
 
-
 ## Props are drawn this much larger than the plan's metres (tabletop exaggeration, as decor plants
 ## are): at the home camera a barrel at true size is a speck. The plan (and its digests) keep true
 ## size; only the drawn mesh grows, about the prop's origin.
@@ -15,8 +14,10 @@ const PROP_VISUAL_SCALE := 1.35
 ## A prop beside a door or an entrance (slot ids with "/d" or "/e", as the plan's own clearance
 ## rule reads them) grows only this much, so the door's path stays as wide as the plan made it.
 const DOOR_VISUAL_SCALE := 1.12
-## The most a drawn prop may be scaled, whatever the placement asks for.
-const MAX_VISUAL_SCALE := 1.7
+## The most a drawn prop may be scaled, whatever the placement asks for. A hero prop (a kit entry
+## with a scale of 1.1 to 1.7, procgen docs/props_and_settlements.md section 10) is drawn at its own
+## scale times PROP_VISUAL_SCALE, up to 2.3; the global 1.35 is unchanged.
+const MAX_VISUAL_SCALE := 2.4
 ## A prop leans toward the ground's normal by at most this many degrees.
 const TILT_MAX_DEG := 12.0
 ## The material kinds a prop's surfaces keep apart: StructureMaterials.prop gives every other kind
@@ -60,9 +61,7 @@ static func look_kind(role: String, kind: String) -> String:
 ## The world transform of placement `item` standing at height `y` on ground of `normal`: yaw about
 ## +y (the prop's front +z turns to (sin yaw, cos yaw)), the drawn scale (visual_scale), leaned
 ## toward the ground (tilt_of), at map XZ.
-static func transform_of(
-	item: Dictionary, y: float, normal: Vector3 = Vector3.UP
-) -> Transform3D:
+static func transform_of(item: Dictionary, y: float, normal: Vector3 = Vector3.UP) -> Transform3D:
 	var at: Vector2 = item["position"]
 	var basis := (
 		tilt_of(normal)

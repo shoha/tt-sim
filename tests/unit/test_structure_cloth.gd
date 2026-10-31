@@ -136,7 +136,8 @@ func test_a_build_carries_the_weights_and_leaves_the_digest_alone() -> void:
 	var moving := 0
 	var held := 0
 	for w in weights:
-		assert_between(w.x, 0.0, 1.6)
+		# The weight is the cloth's extent in metres: a round-two pennant runs to about 2 m.
+		assert_between(w.x, 0.0, 3.0)
 		assert_between(w.y, 0.0, 1.0)
 		if w.x > 0.05:
 			moving += 1

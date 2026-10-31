@@ -644,7 +644,9 @@ Deviations and what was learned:
    (toward the right and away) a pennant is foreshortened to a sliver in the storm; with the wind
    across the screen (`dir_deg` 0) the cottage's and townhouse's pennants stream clearly. The cloth is
    small by design (about half a metre), so at home zoom it reads as a lifted, streaming triangle, not
-   a rippling banner.
+   a rippling banner. (Looks round two, 2026-10-31: the cloth is now 1.2 to 1.8 m and modelled to rest
+   toward the default wind turned a little toward the screen's right; see structures.md "Banners, round
+   two". The reading above is the history.)
 3. **The keep's banners were still not seen.** In the framings reached the keep (castle_keep with the
    banner mask) showed no pole in frame; the cottage and townhouse banners and the awning were the
    evidence. The keep's cloth uses the same shader and weights, so its motion is verified by the weight

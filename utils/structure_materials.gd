@@ -19,6 +19,12 @@ const STYLE_ROOF_SHADER := preload("res://shaders/structure_style_roof.gdshader"
 const ORNAMENT_SHADER := preload("res://shaders/structure_ornament.gdshader")
 ## A fountain's pool and jet (StructureLook.WATER): luminous aqua with a gentle shimmer.
 const WATER_SHADER := preload("res://shaders/structure_water.gdshader")
+## A lantern's glass (a prop's `glass` part: street lamp, shrine light): a steady warm emissive that
+## the environment's glow lifts a halo round (topic looks2, 2026-10-31).
+const LANTERN_SHADER := preload("res://shaders/structure_lantern.gdshader")
+## The lantern's brightness (above EnvironmentGlow.HDR_THRESHOLD so the glow takes it); the one
+## number a future time-of-day control would drive.
+const LANTERN_ENERGY := 1.35
 ## Metal is lifted toward a warm gold, cloth a little brighter so a stripe stays a colour in shade.
 const METAL_TONE := Vector3(1.25, 1.12, 0.9)
 const CLOTH_TONE := Vector3(1.1, 1.08, 1.05)
@@ -86,8 +92,9 @@ static func make(
 		return water()
 	if role == StructureLook.CANOPY:
 		return canopy()
-	if role == StructureLook.PROP and kind != StructureLook.GLASS_KIND:
-		return prop(kind)
+	if role == StructureLook.PROP:
+		# The glass of a prop is its lantern (a well's and a trough's water is the WATER role above).
+		return lantern() if kind == StructureLook.GLASS_KIND else prop(kind)
 	if role == StructureLook.ORNAMENT and kind != StructureLook.GLASS_KIND:
 		return ornament(kind)
 	match kind:
@@ -164,6 +171,15 @@ static func canopy() -> ShaderMaterial:
 	material.set_shader_parameter("exposure", CANOPY_EXPOSURE)
 	material.set_shader_parameter("blotch", 0.95)
 	material.set_shader_parameter("sway", CANOPY_SWAY_M)
+	return material
+
+
+## A lantern's glass: unshaded warm light pushed past white so the glow blooms round it, deeper at
+## the edges (shaders/structure_lantern). Steady: there is no day and night to dim or brighten it.
+static func lantern() -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = LANTERN_SHADER
+	material.set_shader_parameter("energy", LANTERN_ENERGY)
 	return material
 
 

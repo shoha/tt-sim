@@ -138,7 +138,8 @@ static func _report(editor: AuthoringEditor) -> String:
 
 
 ## Puts the camera on the `index`th placement of prop `prop` ("laundry_line", "market_stall") in
-## the dressed streets, zoomed to `zoom` (follow with a `settle`), and logs what is placed.
+## the dressed streets (`min_scale`: only a placement drawn at least that big, so 1.2 finds a hero),
+## zoomed to `zoom` (follow with a `settle`), and logs what is placed and which heroes stand.
 static func _aim(base: Node, editor: AuthoringEditor, step: Dictionary) -> String:
 	var layer := _layer(editor)
 	var gm := base.get("_game_map") as GameMap
@@ -147,14 +148,20 @@ static func _aim(base: Node, editor: AuthoringEditor, step: Dictionary) -> Strin
 	var wanted := String(step.get("prop", "laundry_line"))
 	var found: Array[Vector2] = []
 	var counts := {}
+	var heroes := PackedStringArray()
 	for settlement in editor.document.settlements:
 		for row in layer.standing(settlement.id):
 			var name_of := String(row["item"]["prop"])
 			counts[name_of] = int(counts.get(name_of, 0)) + 1
-			if name_of == wanted:
+			if float(row["item"]["scale"]) > 1.11:
+				heroes.append("%s %.2f" % [name_of, float(row["item"]["scale"])])
+			if (
+				name_of == wanted
+				and float(row["item"]["scale"]) >= float(step.get("min_scale", 0.0))
+			):
 				found.append(row["item"]["position"])
 	if found.is_empty():
-		return "no %s among %s" % [wanted, str(counts)]
+		return "no %s among %s; heroes %s" % [wanted, str(counts), ", ".join(heroes)]
 	var at := found[mini(int(step.get("index", 0)), found.size() - 1)]
 	var cc := gm.get_camera_controller()
 	var off: Vector2 = cc.call("_get_view_center_ground_offset")
@@ -162,7 +169,10 @@ static func _aim(base: Node, editor: AuthoringEditor, step: Dictionary) -> Strin
 	holder.global_position = Vector3(at.x - off.x, holder.global_position.y, at.y - off.y)
 	if step.has("zoom"):
 		cc.set("_target_zoom", float(step["zoom"]))
-	return "aimed at %s %d of %d at %s; %s" % [wanted, int(step.get("index", 0)), found.size(), str(at), str(counts)]
+	return (
+		"aimed at %s %d of %d at %s; %s; heroes %s"
+		% [wanted, int(step.get("index", 0)), found.size(), str(at), str(counts), ", ".join(heroes)]
+	)
 
 
 ## Scatter rows (per asset file) standing inside each street's corridor (within the setback of its
@@ -194,8 +204,10 @@ static func _corridor(ctrl: AuthoringController) -> String:
 					total += 1
 					inside[asset_id.get_file()] = int(inside.get(asset_id.get_file(), 0)) + 1
 		lines.append(
-			"street %d setback %.1f: %d of %d scatter rows in the corridor %s"
-			% [wall.id, wall.height_m, total, all, str(inside)]
+			(
+				"street %d setback %.1f: %d of %d scatter rows in the corridor %s"
+				% [wall.id, wall.height_m, total, all, str(inside)]
+			)
 		)
 	return "\n".join(lines)
 

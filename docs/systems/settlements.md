@@ -102,6 +102,30 @@ Undo restores the street and the link.
   flip). The slope limit (0.8 rise over run) uses the same reach. The tilt is in the cell key.
 - **Cells.** `CELL_M` 48 and one surface per material look: see `docs/PERFORMANCE.md` "Settlement furnishings".
 
+## Looks round two (topic looks2, 2026-10-31)
+
+- **Hero props.** The four kits draw a few larger props per street (procgen `docs/props_and_settlements.md`
+  section 10): a pick entry with a `scale` of 1.25 to 1.7 (wells 1.4 to 1.7, hand carts 1.35 to 1.5,
+  haystacks and crate stacks 1.4 to 1.6, stalls 1.25 to 1.5), about one to one and a half per 60 m of
+  street side (procgen's measurement), two to three at a plaza. The global 1.35 (`PROP_VISUAL_SCALE`) is unchanged; the drawn scale is
+  the placement's scale times it, so a hero is drawn at up to 2.3, and `MAX_VISUAL_SCALE` is 2.4 (was
+  1.7, which would have flattened every hero to the same size). Heroes ask the strip for less
+  (`fit` 1.0): tt-sim's strip is 0.75 of the setback, 2.25 m at the Street tool's default, which an
+  ordinary-fit prop of a hero's size would never find room in. The plan and its pins use true metres as
+  before; a hero's clearance disc is `radius_m` times its scale. Measured on the two-street render job
+  `looks2_street` (hamlet and market town, default setback): 31 and 46 placements before, 33 and 48
+  after, 4 heroes (cart 1.38, haystack 1.57, well 1.63, cart 1.40), triangles 5836 and 14040 before,
+  6420 and 15180 after (the hamlet 4 surfaces before, 5 after; both streets 13 before, 14 after: a prop
+  kind new to a street, here a well, adds its surfaces), so one more draw per street at most.
+  The home camera still hides most of a street's props behind the near house row; a hero at the kerb of
+  the far side or in a plaza is what it sees.
+- **Lantern glow.** A prop's `glass` part (the lamp posts' and wayside shrines' lanterns) is drawn by
+  `StructureMaterials.lantern`, `shaders/structure_lantern.gdshader`: unshaded, the painted warm tone
+  pulled toward amber and pushed to 1.35 so the environment glow takes it, a little deeper at the
+  glass's edges. Steady. tt-sim has no day and night cycle, so there is nothing to brighten at dusk;
+  when a time-of-day control exists, `energy` is the one number to drive. Wells' and troughs' water is
+  unchanged (the WATER role). Test: `tests/unit/test_prop_look.gd`.
+
 ## Not done (phase 1 scope)
 
 Ground painting (roads, door paths, plazas), the Dress row on the Buildings bar, the Village tool, plazas,

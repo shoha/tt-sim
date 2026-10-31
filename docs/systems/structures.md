@@ -631,6 +631,22 @@ owner found the cloth barely visible at home zoom): lean `strength * (0.24 + 0.6
 `strength * (0.08 + 0.24 * gust)` with `strength = clamp(0.25 + speed / 10, 0, 1.6)`, and an awning's
 up-and-down flap held at 0.75 of the flutter (the full doubling folded it over itself at a storm).
 
+**Banners, round two (topic looks2, 2026-10-31).** Procgen's banner ornament now draws cloth 1.2 to 1.8 m
+long (a pennant) or tall (a hanging banner; was 0.95 by 0.38 and 0.5 by 1.0 m), three per building by
+default (was two), on 2.6 m poles, and models the rest pose streaming toward the default wind
+(`WindPresets.DEFAULT_DIR_ANGLE`, toward (0.707, 0, -0.707)) turned 7 to 29 degrees toward the screen's
+right, with the pole lifted over a roof it streams across (`docs/architecture_styles.md` "Banners, round
+two" in procgen). The host's weights are unchanged (a pennant is still a flag by `FLAG_RATIO`, a banner
+still hangs), and the shader's lean now lengthens a pennant at calm instead of folding it against its
+pole. Only the rest pose follows the default direction: a level whose wind direction is set elsewhere
+keeps the lean and flutter but the cloth is modelled for the default. Looks: render job `looks2_banners`
+(cottage and keep, calm and windy), before and after in `render_jobs/looks2_banners_before` and
+`_after`: the keep's pennants were a speck at the tower tips and are now readable flags; the cottage's
+three pennants read as streaming flags at home zoom. Core's `bartizan_keep` was re-exported (its style's
+banner row changed, and the extra `length` draw moved the keep's random draws so its optional ivy patch
+no longer appears: 1559 to 1352 triangles, pin `2afe936a`); its tile in `thumbnails/structures/` was not
+redrawn.
+
 **Weathervane.** `StructureVane.split` (pure, called by `AuthoredStructures._structure_node`, not by
 `build_one`, so `parts` and the digest are unchanged) cuts the triangles tagged
 `ornament/vane/{shaft, arrow, tail}` out of the static meshes; `vane_node` makes a `VaneMotion`

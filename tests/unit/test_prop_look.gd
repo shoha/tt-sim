@@ -48,7 +48,9 @@ func test_a_prop_node_is_the_prop_role_and_its_water_is_water() -> void:
 	for kind in ["wood", "stone", "thatch", "accent", "cloth", "glass"]:
 		assert_eq(StructureLook.material_role(kind, StructureLook.PROP), StructureLook.PROP, kind)
 	assert_true(StructureLook.PROP in StructureLook.ROLES)
-	assert_eq(StructureLook.ROLES.back(), StructureLook.PROP, "the new role is last: no digest moves")
+	assert_eq(
+		StructureLook.ROLES.back(), StructureLook.PROP, "the new role is last: no digest moves"
+	)
 
 
 func test_a_prop_part_is_drawn_by_the_ornament_shader_with_the_prop_balance() -> void:
@@ -64,7 +66,12 @@ func test_a_prop_part_is_drawn_by_the_ornament_shader_with_the_prop_balance() ->
 	var wood := StructureMaterials.make("wood", StructureLook.PROP, "", "") as ShaderMaterial
 	assert_eq(wood.get_shader_parameter("cloth_wind"), null, "wood does not")
 	var glass := StructureMaterials.make("glass", StructureLook.PROP, "", "") as ShaderMaterial
-	assert_eq(glass.shader, StructureMaterials.PANE_SHADER, "a lantern is an unshaded pane")
+	assert_eq(glass.shader, StructureMaterials.LANTERN_SHADER, "a lantern glows")
+	assert_gt(
+		float(glass.get_shader_parameter("energy")),
+		EnvironmentGlow.HDR_THRESHOLD,
+		"brighter than the glow's threshold"
+	)
 	var water := StructureMaterials.make("glass", StructureLook.WATER, "", "") as ShaderMaterial
 	assert_eq(water.shader, StructureMaterials.WATER_SHADER)
 
@@ -85,9 +92,7 @@ func test_prop_cloth_groups_name_what_sways() -> void:
 	]:
 		assert_eq(StructureCloth.group_of(path), "", path)
 	# The banner and awning ornaments of a building group as they did.
-	assert_eq(
-		StructureCloth.group_of("x/ornament/awning0/stripe3"), "x/ornament/awning0"
-	)
+	assert_eq(StructureCloth.group_of("x/ornament/awning0/stripe3"), "x/ornament/awning0")
 	assert_eq(StructureCloth.group_of("x/ornament/banner1/cloth"), "x/ornament/banner1/cloth")
 
 
@@ -117,7 +122,7 @@ func test_a_market_stall_cloth_carries_weights_and_its_goods_stay_still() -> voi
 	var still := {}
 	for path: String in _cloth_tags(parts):
 		var weight := 0.0
-		for hit: Array in (_cloth_tags(parts)[path] as Array):
+		for hit: Array in _cloth_tags(parts)[path] as Array:
 			var arrays: Array = (hit[0] as Dictionary).arrays
 			var uv2 := PackedVector2Array()
 			if arrays[Mesh.ARRAY_TEX_UV2] != null:
