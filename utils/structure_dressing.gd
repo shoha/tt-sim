@@ -36,8 +36,13 @@ const KEY_STEP_M := 1.0
 const PATH_MAX_SLOPE := 0.6
 ## Plants and rocks keep this far from another structure's footprint, metres.
 const NEIGHBOUR_CLEAR_M := 1.0
-## Other structures nearer than this to a building (their footprints' bounds) are considered.
-const NEIGHBOUR_RANGE_M := 14.0
+## Other structures nearer than this to a building (their footprints' bounds) are considered. It
+## must reach REACH_MAX_M + NEIGHBOUR_CLEAR_M (7.5 m), the farthest a yard tests another footprint;
+## it was 14 m (perf3: an add rebuilt the 19 buildings round it, now the 8 round it; the pinned
+## digests did not move).
+const NEIGHBOUR_RANGE_M := 8.0
+## The cell size of neighbour_grid.
+const GRID_CELL_M := 8.0
 ## The farthest a yard's own parts reach from the walls (the widest skirt at the door and the
 ## path), metres: the area the water is asked about.
 const REACH_MAX_M := 6.5
@@ -207,19 +212,70 @@ static func ground_samples(doc: MapDocument, plan: PackedVector2Array) -> Packed
 ## `structure`'s own.
 ## `boxes` (structure id -> bounds_of its footprint) saves measuring every footprint again for every
 ## structure when a caller asks about all of them (StructureGeometry.keys_of); empty: measured here.
+## `grid` (neighbour_grid) limits the test to the structures in the cells the range reaches
+## (perf3: the all-pairs loop was 90 ms for 126 structures, and every add, edit and removal ran it
+## again); the result is the same list in the same (document) order.
 static func neighbours(
-	doc: MapDocument, structure: Structure, boxes: Dictionary = {}
+	doc: MapDocument, structure: Structure, boxes: Dictionary = {}, grid: Dictionary = {}
 ) -> Array[PackedVector2Array]:
 	var out: Array[PackedVector2Array] = []
 	var mine := bounds_of(structure.footprint).grow(NEIGHBOUR_RANGE_M)
+	if not grid.is_empty():
+		for index in _grid_candidates(grid, mine):
+			var other: Structure = doc.structures[index]
+			if other.id != structure.id and mine.intersects(grid.rects[index]):
+				out.append(other.footprint)
+		return out
 	for other in doc.structures:
 		if other.id == structure.id or other.footprint.size() < 3:
 			continue
-		var box: Rect2 = (
-			boxes[other.id] if boxes.has(other.id) else bounds_of(other.footprint)
-		)
+		var box: Rect2 = boxes[other.id] if boxes.has(other.id) else bounds_of(other.footprint)
 		if mine.intersects(box):
 			out.append(other.footprint)
+	return out
+
+
+## A uniform grid over the footprint bounds of `doc`'s structures with three or more corners:
+## {"cells": Vector2i -> PackedInt32Array of indices into doc.structures, "rects": Array[Rect2] by
+## index}. Built once per refresh, it makes "who is near" proportional to the neighbours, not to
+## every structure on the map.
+static func neighbour_grid(doc: MapDocument, boxes: Dictionary = {}) -> Dictionary:
+	var cells := {}
+	var rects: Array[Rect2] = []
+	for index in doc.structures.size():
+		var structure: Structure = doc.structures[index]
+		var box := Rect2()
+		if structure.footprint.size() >= 3:
+			box = boxes[structure.id] if boxes.has(structure.id) else bounds_of(structure.footprint)
+			var low := _cell_of(box.position)
+			var high := _cell_of(box.end)
+			for cx in range(low.x, high.x + 1):
+				for cy in range(low.y, high.y + 1):
+					var key := Vector2i(cx, cy)
+					var held: PackedInt32Array = cells.get(key, PackedInt32Array())
+					held.append(index)
+					cells[key] = held
+		rects.append(box)
+	return {"cells": cells, "rects": rects}
+
+
+static func _cell_of(point: Vector2) -> Vector2i:
+	return Vector2i(floori(point.x / GRID_CELL_M), floori(point.y / GRID_CELL_M))
+
+
+## The indices (ascending, once each) of the structures with a cell the rectangle `area` touches.
+static func _grid_candidates(grid: Dictionary, area: Rect2) -> PackedInt32Array:
+	var seen := {}
+	var low := _cell_of(area.position)
+	var high := _cell_of(area.end)
+	for cx in range(low.x, high.x + 1):
+		for cy in range(low.y, high.y + 1):
+			var held: Variant = (grid.cells as Dictionary).get(Vector2i(cx, cy))
+			if held != null:
+				for index in held as PackedInt32Array:
+					seen[index] = true
+	var out := PackedInt32Array(seen.keys())
+	out.sort()
 	return out
 
 

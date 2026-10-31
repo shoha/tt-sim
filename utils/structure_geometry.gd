@@ -114,7 +114,14 @@ static func inputs_for(
 ## invalid, its recipe is unknown or fails, or the result is over the hard budget.
 ## With `decor` the ornaments' soft pieces (ivy blobs, flower-box foliage) are left out and the host
 ## places library plants on the anchors instead (StructureDecor); false draws the blobs.
-static func build_one(doc: MapDocument, structure: Structure, decor: bool = false) -> Dictionary:
+## `info` ({"rows", "cost", "sig"}, AuthoredStructures' decor_info) lets the build also place the
+## decor plants (`decor_plan`, StructureDecor.plan: placement, triangle cap and grouping are pure
+## and
+## the biggest part of the host's per-building work), so the main thread only makes meshes. It is
+## not part of digest_of; the plan carries the info's `sig` and is made again when that moved.
+static func build_one(
+	doc: MapDocument, structure: Structure, decor: bool = false, info: Dictionary = {}
+) -> Dictionary:
 	var parts := _empty(structure)
 	var reason := MapStructureIO.structure_problem(structure, doc.extent_m())
 	if reason != "":
@@ -183,6 +190,10 @@ static func build_one(doc: MapDocument, structure: Structure, decor: bool = fals
 	parts.openings = geometry.openings
 	parts.layout = plant.get("layout")
 	parts.anchors = ProcgenOrnaments.anchors(geometry)
+	if decor and not info.is_empty() and not (parts.anchors as Array).is_empty():
+		var anchors: Array[Dictionary] = []
+		anchors.assign(parts.anchors)
+		parts.decor_plan = StructureDecor.plan(anchors, info.rows, info.cost, int(info.sig))
 	# With soft: "anchors" an ivy blanket or flower box that found room has an anchor but no blob.
 	parts.placed_kinds = StructureDecor.placed_kinds_with(
 		ProcgenOrnaments.placed_kinds(geometry), parts.anchors
@@ -196,16 +207,18 @@ static func build_one(doc: MapDocument, structure: Structure, decor: bool = fals
 ## on at most AuthoredStructures.load_threads() threads, and the result keeps the document's order
 ## (each task writes its own slot). Builds read the document and write nothing shared, so the
 ## output is the same either way (the pinned digests).
-static func build(doc: MapDocument, parallel: bool = true, decor: bool = false) -> Dictionary:
+static func build(
+	doc: MapDocument, parallel: bool = true, decor: bool = false, info: Dictionary = {}
+) -> Dictionary:
 	var list: Array[Structure] = doc.structures
 	var out: Array = []
 	if not parallel or list.size() < 2:
 		for structure in list:
-			out.append(build_one(doc, structure, decor))
+			out.append(build_one(doc, structure, decor, info))
 		return {"structures": out, "decor": decor}
 	out.resize(list.size())
 	var group := WorkerThreadPool.add_group_task(
-		func(index: int) -> void: out[index] = build_one(doc, list[index], decor),
+		func(index: int) -> void: out[index] = build_one(doc, list[index], decor, info),
 		list.size(),
 		mini(list.size(), AuthoredStructures.load_threads()),
 		false,
@@ -224,7 +237,8 @@ static func key_of(
 	structure: Structure,
 	boxes: Dictionary = {},
 	samples: Array = [],
-	decor: bool = false
+	decor: bool = false,
+	near: Variant = null
 ) -> int:
 	var under: Array = samples if not samples.is_empty() else _ground_samples_of(doc, structure)
 	return hash(
@@ -242,9 +256,13 @@ static func key_of(
 			under[0],
 			under[1],
 			(
-				StructureDressing.neighbours(doc, structure, boxes)
-				if StructureDressing.enabled
-				else ([] as Array[PackedVector2Array])
+				near
+				if near != null
+				else (
+					StructureDressing.neighbours(doc, structure, boxes)
+					if StructureDressing.enabled
+					else ([] as Array[PackedVector2Array])
+				)
 			),
 		]
 	)
@@ -253,9 +271,15 @@ static func key_of(
 ## Keys of every structure of `doc` (id -> key).
 static func keys_of(doc: MapDocument, decor: bool = false) -> Dictionary:
 	var boxes := _boxes_of(doc)
+	var grid := _grid_of(doc, boxes)
 	var out := {}
 	for structure in doc.structures:
-		out[structure.id] = key_of(doc, structure, boxes, [], decor)
+		var near: Variant = (
+			StructureDressing.neighbours(doc, structure, boxes, grid)
+			if not grid.is_empty()
+			else null
+		)
+		out[structure.id] = key_of(doc, structure, boxes, [], decor, near)
 	return out
 
 
@@ -271,12 +295,13 @@ static func keys_of(doc: MapDocument, decor: bool = false) -> Dictionary:
 ## The keys equal keys_of().
 static func keys_memoised(doc: MapDocument, memo: Dictionary, decor: bool = false) -> Dictionary:
 	var boxes := _boxes_of(doc)
+	var grid := _grid_of(doc, boxes)
 	var ground := ground_fingerprint(doc)
 	var out := {}
 	var live := {}
 	for structure in doc.structures:
 		var near: Array[PackedVector2Array] = (
-			StructureDressing.neighbours(doc, structure, boxes)
+			StructureDressing.neighbours(doc, structure, boxes, grid)
 			if StructureDressing.enabled
 			else ([] as Array[PackedVector2Array])
 		)
@@ -306,7 +331,7 @@ static func keys_memoised(doc: MapDocument, memo: Dictionary, decor: bool = fals
 				"sig": sig,
 				"gsig": gsig,
 				"samples": samples,
-				"key": key_of(doc, structure, boxes, samples, decor),
+				"key": key_of(doc, structure, boxes, samples, decor, near),
 			}
 			memo[structure.id] = entry
 		live[structure.id] = true
@@ -323,6 +348,11 @@ static func _ground_samples_of(doc: MapDocument, structure: Structure) -> Array:
 		ground_samples(doc, structure.footprint),
 		StructureDressing.ground_samples(doc, structure.footprint),
 	]
+
+
+## The neighbour grid of `doc` (StructureDressing.neighbour_grid), {} when the yard is off.
+static func _grid_of(doc: MapDocument, boxes: Dictionary) -> Dictionary:
+	return StructureDressing.neighbour_grid(doc, boxes) if StructureDressing.enabled else {}
 
 
 ## Per structure id, the bounds of its footprint (what neighbour tests compare), none when the

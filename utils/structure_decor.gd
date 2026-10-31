@@ -266,6 +266,89 @@ static func placements(
 	return out
 
 
+## The plants of a building, ready to bake: `placements` on `anchors` (with the under-layer), held
+## to
+## MAX_TRIANGLES by `cap_triangles` (`cost` maps a plant's id to its triangles; a missing id is 0)
+## and grouped by plant id: {"sig": `sig`, "ids": the ids sorted, "groups": {id: Array[placement]}}.
+## Pure (arrays and numbers in and out), so a build worker runs it; `sig` names the library
+## state the
+## rows and costs came from, so a cached plan can be told from a stale one.
+static func plan(
+	anchors: Array[Dictionary], rows: Array[Dictionary], cost: Dictionary, sig: int = 0
+) -> Dictionary:
+	var groups := {}
+	for placement in cap_triangles(placements(anchors, rows, true), cost):
+		if not groups.has(placement.id):
+			groups[placement.id] = [] as Array[Dictionary]
+		(groups[placement.id] as Array[Dictionary]).append(placement)
+	var ids: Array = groups.keys()
+	ids.sort()
+	return {"sig": sig, "ids": ids, "groups": groups}
+
+
+## Gives every part in `list` that has anchors, decor and no plan made from `info` its `decor_plan`,
+## as a worker group on `threads` threads (a loader's workers could not read the library).
+static func plan_missing(list: Array, info: Dictionary, threads: int) -> void:
+	var todo: Array[Dictionary] = []
+	for parts: Dictionary in list:
+		var held: Dictionary = parts.get("decor_plan", {})
+		if (
+			bool(parts.get("decor", false))
+			and not (parts.get("anchors", []) as Array).is_empty()
+			and int(held.get("sig", -1)) != int(info.sig)
+		):
+			todo.append(parts)
+	var make := func(index: int) -> void:
+		var anchors: Array[Dictionary] = []
+		anchors.assign(todo[index].anchors)
+		todo[index]["decor_plan"] = plan(anchors, info.rows, info.cost, int(info.sig))
+	if todo.size() < 2:
+		for index in todo.size():
+			make.call(index)
+		return
+	var group := WorkerThreadPool.add_group_task(
+		make, todo.size(), mini(todo.size(), threads), false, "StructureDecor.plan_missing"
+	)
+	WorkerThreadPool.wait_for_group_task_completion(group)
+
+
+## The wind category of the baked decor (the assets of one library share it; the first id wins).
+static func category_of(by_id: Dictionary, ids: Array) -> String:
+	for id: String in ids:
+		return str((by_id[id] as Dictionary).wind_category)
+	return ""
+
+
+## The triangles of `mesh` (every surface, the full-detail index arrays); 0 for null.
+static func triangles_of(mesh: Mesh) -> int:
+	if mesh == null:
+		return 0
+	var total := 0
+	for surface in mesh.get_surface_count():
+		var index: Variant = mesh.surface_get_arrays(surface)[Mesh.ARRAY_INDEX]
+		if index is PackedInt32Array:
+			total += (index as PackedInt32Array).size() / 3
+	return total
+
+
+## A short hash of the albedo texture of a wind `material` (its pixels, so two assets that carry
+## the same picture share a baked surface), or "none".
+static func texture_key(material: ShaderMaterial) -> String:
+	var texture: Variant = material.get_shader_parameter("albedo_texture")
+	if not texture is Texture2D:
+		return "none"
+	var image := (texture as Texture2D).get_image()
+	if image == null:
+		return "none"
+	var hashing := HashingContext.new()
+	hashing.start(HashingContext.HASH_SHA256)
+	hashing.update(image.get_data())
+	return (
+		"%dx%d:%s"
+		% [image.get_width(), image.get_height(), hashing.finish().hex_encode().substr(0, 16)]
+	)
+
+
 static func _ivy_placements(
 	anchor: Dictionary, index: int, classes: Array[Dictionary], layered: bool
 ) -> Array[Dictionary]:

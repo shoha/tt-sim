@@ -1,0 +1,19 @@
+{
+  "out_dir": "render_jobs/perf3_profile",
+  "timeout_s": 240,
+  "hang_s": 120,
+  "remove_override": true,
+  "steps": [
+    {"op": "wait", "s": 1.0},
+    {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 320, "seed": 1234},
+    {"op": "wait_ready", "settle": 1.0},
+    {"op": "no_autosave"},
+    {"op": "hide_ui"},
+    {"op": "vsync_off"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/structure_perf3.gd", "action": "fill", "from": 0, "to": 126},
+    {"op": "wait", "s": 2.0},
+    {"op": "call", "script": "res://tools/render_jobs/probes/structure_perf3.gd", "action": "profile"},
+    {"op": "call", "script": "res://tools/render_jobs/probes/structure_perf3.gd", "action": "profile"},
+    {"op": "title"}
+  ]
+}
