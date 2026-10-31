@@ -8,11 +8,68 @@ extends RefCounted
 ## A source is {"surfaces": [{"key": "<role>:<kind>", "role", "kind", "arrays": Mesh arrays}]}.
 
 
-## The world transform of placement `item` standing at height `y`: yaw about +y (the prop's front
-## +z turns to (sin yaw, cos yaw)), uniform scale, at map XZ.
-static func transform_of(item: Dictionary, y: float) -> Transform3D:
+## Props are drawn this much larger than the plan's metres (tabletop exaggeration, as decor plants
+## are): at the home camera a barrel at true size is a speck. The plan (and its digests) keep true
+## size; only the drawn mesh grows, about the prop's origin.
+const PROP_VISUAL_SCALE := 1.35
+## A prop beside a door or an entrance (slot ids with "/d" or "/e", as the plan's own clearance
+## rule reads them) grows only this much, so the door's path stays as wide as the plan made it.
+const DOOR_VISUAL_SCALE := 1.12
+## The most a drawn prop may be scaled, whatever the placement asks for.
+const MAX_VISUAL_SCALE := 1.7
+## A prop leans toward the ground's normal by at most this many degrees.
+const TILT_MAX_DEG := 12.0
+
+
+## The drawn scale of placement `item`: its own scale times PROP_VISUAL_SCALE (DOOR_VISUAL_SCALE
+## beside a door), clamped to MAX_VISUAL_SCALE and never below the placement's own scale.
+static func visual_scale(item: Dictionary) -> float:
+	var own := float(item["scale"])
+	var slot := String(item.get("slot", ""))
+	var factor := (
+		DOOR_VISUAL_SCALE if slot.contains("/d") or slot.contains("/e") else PROP_VISUAL_SCALE
+	)
+	return maxf(minf(own * factor, MAX_VISUAL_SCALE), own)
+
+
+## The rotation that leans +y toward `normal` by at most `max_deg` degrees: the identity on flat
+## ground, never a flip (a normal that points down, or zero, is the identity).
+static func tilt_of(normal: Vector3, max_deg: float = TILT_MAX_DEG) -> Basis:
+	if normal.length() < 0.0001 or normal.y <= 0.0:
+		return Basis.IDENTITY
+	var n := normal.normalized()
+	var axis := Vector3.UP.cross(n)
+	if axis.length() < 0.0001:
+		return Basis.IDENTITY
+	var angle := minf(acos(clampf(n.y, -1.0, 1.0)), deg_to_rad(max_deg))
+	return Basis(axis.normalized(), angle)
+
+
+## The material kinds a prop's surfaces keep apart: StructureMaterials.prop gives every other kind
+## (wood, accent, thatch, boards ...) the same shader and parameters (the colour is in the vertices),
+## so they share one surface and one draw.
+const DISTINCT_KINDS: Array[String] = ["leaf", "leaf_b", "metal", "cloth", "stone", "glass"]
+
+
+## The kind whose material draws a surface of `kind` in `role`: itself, or "wood" for the prop kinds
+## that look the same.
+static func look_kind(role: String, kind: String) -> String:
+	if role != StructureLook.PROP or DISTINCT_KINDS.has(kind):
+		return kind
+	return "wood"
+
+
+## The world transform of placement `item` standing at height `y` on ground of `normal`: yaw about
+## +y (the prop's front +z turns to (sin yaw, cos yaw)), the drawn scale (visual_scale), leaned
+## toward the ground (tilt_of), at map XZ.
+static func transform_of(
+	item: Dictionary, y: float, normal: Vector3 = Vector3.UP
+) -> Transform3D:
 	var at: Vector2 = item["position"]
-	var basis := Basis(Vector3.UP, float(item["yaw"])).scaled(Vector3.ONE * float(item["scale"]))
+	var basis := (
+		tilt_of(normal)
+		* Basis(Vector3.UP, float(item["yaw"])).scaled(Vector3.ONE * visual_scale(item))
+	)
 	return Transform3D(basis, Vector3(at.x, y, at.y))
 
 
@@ -28,12 +85,13 @@ static func bake(placed: Array[Dictionary], sources: Dictionary) -> Array[Dictio
 		var transform: Transform3D = item["transform"]
 		var turn := Transform3D(transform.basis.orthonormalized(), Vector3.ZERO)
 		for surface: Dictionary in source["surfaces"]:
-			var key := String(surface["key"])
+			var kind := look_kind(String(surface["role"]), String(surface["kind"]))
+			var key := "%s:%s" % [surface["role"], kind]
 			if not by_key.has(key):
 				by_key[key] = {
 					"key": key,
 					"role": surface["role"],
-					"kind": surface["kind"],
+					"kind": kind,
 					"vertices": PackedVector3Array(),
 					"normals": PackedVector3Array(),
 					"colors": PackedColorArray(),

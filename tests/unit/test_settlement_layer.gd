@@ -326,7 +326,11 @@ func test_cloth_keeps_its_wind_weights_in_the_baked_surface() -> void:
 	for surface in stall["surfaces"] as Array:
 		triangles += (surface["arrays"][Mesh.ARRAY_INDEX] as PackedInt32Array).size() / 3
 	assert_eq(SettlementBake.triangle_count(baked), triangles * 2)
-	assert_eq(baked.size(), (stall["surfaces"] as Array).size(), "one surface per material kind")
+	var looks := {}
+	for surface in stall["surfaces"] as Array:
+		looks[SettlementBake.look_kind(String(surface["role"]), String(surface["kind"]))] = true
+	assert_eq(baked.size(), looks.size(), "one surface per look of material")
+	assert_lte(baked.size(), (stall["surfaces"] as Array).size())
 	for surface in baked:
 		if String(surface["kind"]) == "cloth":
 			assert_eq(
@@ -342,3 +346,56 @@ func test_the_bake_turns_a_prop_so_its_front_faces_the_yaw() -> void:
 	assert_almost_eq(
 		(transform.basis * Vector3.BACK).x, 2.0, 0.001, "front +z turns to +x at a quarter turn"
 	)
+
+
+func test_kinds_that_look_alike_share_a_surface_and_the_rest_stay_apart() -> void:
+	for kind in ["wood", "accent", "thatch", "boards", "trim"]:
+		assert_eq(SettlementBake.look_kind("prop", kind), "wood", kind)
+	for kind in ["cloth", "stone", "glass", "metal", "leaf"]:
+		assert_eq(SettlementBake.look_kind("prop", kind), kind, kind)
+	assert_eq(SettlementBake.look_kind("wall", "accent"), "accent", "only props merge")
+	# Merged kinds really are one material: same shader, same parameters.
+	var wood := StructureMaterials.make("wood", "prop", "", PaletteLibrary.DEFAULT_ROOT) as ShaderMaterial
+	for kind in ["accent", "thatch", "boards"]:
+		var other := StructureMaterials.make(kind, "prop", "", PaletteLibrary.DEFAULT_ROOT) as ShaderMaterial
+		assert_eq(other.shader, wood.shader, kind)
+		for param in ["tone", "exposure", "saturation", "lit_gain", "cloth_wind"]:
+			assert_eq(
+				other.get_shader_parameter(param), wood.get_shader_parameter(param), "%s %s" % [kind, param]
+			)
+
+
+func test_props_are_drawn_larger_but_never_smaller_and_door_props_less() -> void:
+	var plain := {"slot": "w1l:l0/yard_cart/y0", "scale": 1.0}
+	assert_almost_eq(SettlementBake.visual_scale(plain), SettlementBake.PROP_VISUAL_SCALE, 0.0001)
+	var door := {"slot": "w1l:l0/door_barrel/d0r", "scale": 1.0}
+	assert_almost_eq(SettlementBake.visual_scale(door), SettlementBake.DOOR_VISUAL_SCALE, 0.0001)
+	assert_lt(SettlementBake.visual_scale(door), SettlementBake.visual_scale(plain))
+	var big := {"slot": "w1l:l0/yard_cart/y0", "scale": 1.6}
+	assert_almost_eq(SettlementBake.visual_scale(big), SettlementBake.MAX_VISUAL_SCALE, 0.0001)
+	var huge := {"slot": "x", "scale": 2.0}
+	assert_almost_eq(SettlementBake.visual_scale(huge), 2.0, 0.0001, "never below its own scale")
+
+
+func test_a_prop_leans_to_the_ground_by_at_most_twelve_degrees_and_never_flips() -> void:
+	assert_true(SettlementBake.tilt_of(Vector3.UP).is_equal_approx(Basis.IDENTITY), "flat is identity")
+	var twenty := Vector3(sin(deg_to_rad(20.0)), cos(deg_to_rad(20.0)), 0.0)
+	var tilted := SettlementBake.tilt_of(twenty) * Vector3.UP
+	assert_almost_eq(rad_to_deg(tilted.angle_to(Vector3.UP)), 12.0, 0.01, "a 20 degree slope leans 12")
+	assert_gt(tilted.x, 0.0, "toward the normal")
+	var five := Vector3(sin(deg_to_rad(5.0)), cos(deg_to_rad(5.0)), 0.0)
+	assert_almost_eq(
+		rad_to_deg((SettlementBake.tilt_of(five) * Vector3.UP).angle_to(Vector3.UP)), 5.0, 0.01
+	)
+	for normal in [Vector3.DOWN, Vector3.ZERO, Vector3(1, -0.2, 0), Vector3.RIGHT]:
+		var up := SettlementBake.tilt_of(normal) * Vector3.UP
+		assert_gte(up.y, cos(deg_to_rad(12.0)) - 0.0001, "never inverted: %s" % normal)
+
+
+func test_a_prop_stands_at_the_lowest_ground_under_it_and_reads_the_slope() -> void:
+	var five := PackedFloat32Array([1.0, 1.3, 0.7, 1.0, 1.0])
+	assert_almost_eq(AuthoredSettlements.ground_under(five), 0.7, 0.0001)
+	var normal := AuthoredSettlements.ground_normal(five, 0.6)
+	assert_lt(normal.x, 0.0, "the ground rises toward +x, so its normal leans to -x")
+	assert_almost_eq(normal.z, 0.0, 0.0001)
+	assert_gt(normal.y, 0.0)

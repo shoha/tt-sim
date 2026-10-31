@@ -24,11 +24,11 @@ const METAL_TONE := Vector3(1.25, 1.12, 0.9)
 const CLOTH_TONE := Vector3(1.1, 1.08, 1.05)
 const LEAF_TONE := Vector3(0.92, 1.18, 0.82)
 ## A prop (StructureMaterials.prop): exposure, saturation and light balance over the ornament's.
-const PROP_EXPOSURE := 0.8
-const PROP_SATURATION := 1.4
+const PROP_EXPOSURE := 0.86
+const PROP_SATURATION := 1.6
 const PROP_SHADE_TINT := Vector3(0.95, 0.9, 0.96)
 const PROP_SHADE_FLOOR := Vector3(0.34, 0.28, 0.31)
-const PROP_LIT_GAIN := Vector3(1.28, 1.2, 1.08)
+const PROP_LIT_GAIN := Vector3(1.34, 1.22, 1.06)
 const PROP_STONE_TONE := Vector3(1.04, 0.98, 0.86)
 ## A treehouse crown is painted with less light than ivy (it is a big, lit mass) and sways this far.
 const CANOPY_EXPOSURE := 0.5

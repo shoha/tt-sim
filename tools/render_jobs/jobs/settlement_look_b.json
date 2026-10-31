@@ -15,6 +15,8 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "street", "from": [18, -26], "to": [18, 26], "preset": 7, "seed": 11},
   {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "dress", "id": 1, "kit": "harbour_town", "wealth": 0.6, "density": 1.0},
   {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "dress", "id": 2, "kit": "hill_fort_village", "wealth": 0.3, "density": 1.0},
+  {"op": "settle"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "corridor"},
   {"op": "hide_ui"},
   {"op": "look_at", "at": [0, 0]},
   {"op": "zoom", "size": 60.0},

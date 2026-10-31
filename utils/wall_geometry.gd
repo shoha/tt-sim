@@ -254,9 +254,14 @@ static func clear_bounds(wall: Wall) -> Rect2:
 	return wall.bounds().grow(1.0)
 
 
+## How far past each facade line the street's corridor reaches, so a tree's trunk stands behind
+## the houses and its crown does not hang over the street (a crown is 2 to 4 m wide).
+const STREET_CLEAR_EXTRA_M := 2.0
+
+
 ## The corridor of street `wall` (a row) as one plank-like Crossing per segment of its centre
-## line, as wide as the two facade lines are apart (twice the setback, kept in `height_m`).
-## The yards' fronts are cleared by the lots' own strips (clearance_crossings).
+## line, as wide as the two facade lines are apart (twice the setback, kept in `height_m`)
+## plus STREET_CLEAR_EXTRA_M each side. The yards are cleared by the lots' own strips.
 static func street_corridor(wall: Wall) -> Array[Crossing]:
 	var out: Array[Crossing] = []
 	for k in maxi(wall.points.size() - 1, 0):
@@ -267,7 +272,7 @@ static func street_corridor(wall: Wall) -> Array[Crossing]:
 				wall.points[k],
 				wall.points[k + 1],
 				Vector3.ZERO,
-				wall.height_m * 2.0
+				(wall.height_m + STREET_CLEAR_EXTRA_M) * 2.0
 			)
 		)
 	return out
