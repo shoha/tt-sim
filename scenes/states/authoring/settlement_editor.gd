@@ -7,14 +7,28 @@ extends RefCounted
 ## change is one history entry holding the settlement list before and after (records are small
 ## values, replaced whole), and refreshes the map's AuthoredSettlements. A live "settlements" edit
 ## carries the same list (LiveEditCodec). Summary: docs/systems/settlements.md.
+##
+## Ground (villages phase 2). A first Dress, a change of character, `pave` and `add_plaza` also
+## paint the kit's road, door paths and plaza into the map's painted surfaces (SettlementGround
+## plans, SettlementPaint writes through SurfaceStroke). The paint and the record change are ONE
+## history group, so a single undo takes back the dressing and its ground, and a peer receives the
+## paint as ordinary `surface` ops and the record as a `settlements` op. A re-dress, a feel change
+## and Clear leave the paint alone (it is the map's now; Clear keeps it, as the author may have
+## painted over it), and the road does not follow later street edits.
 
 ## Why the last dress() or change made nothing (last_refusal).
 const REFUSED_STREET := &"street"
 const REFUSED_FULL := &"full"
 const REFUSED_KIT := &"kit"
 const REFUSED_INVALID := &"invalid"
+const REFUSED_PLAZA := &"plaza"
 
 var last_refusal: StringName = &""
+## What the last paving did: SettlementGround.plan's result without its strokes ({} when nothing
+## was planned): for the bar's note, the probes and the tests.
+var last_ground: Dictionary = {}
+## False dresses without painting (the A/B switch of the performance probe and of tests).
+var lays_ground: bool = true
 ## The editor (weak: it owns this object).
 var _owner: WeakRef = null
 
@@ -80,7 +94,13 @@ func dress(wall_id: int, kit: String, wealth: float = -1.0, density: float = -1.
 		changed.density = clampf(
 			snappedf(density, Settlement.WEALTH_STEP), 0.0, Settlement.MAX_DENSITY
 		)
-	return _replace(held, changed, "Re-dress street" if held != null else "Dress street")
+	var paves := held == null or held.kit != kit
+	return _replace(
+		held,
+		changed,
+		"Re-dress street" if held != null else "Dress street",
+		SettlementGround.PAINT_ORDER if paves else ([] as Array[String])
+	)
 
 
 ## Gives settlement `settlement_id` the next seed (its overrides are dropped: they named slots
@@ -108,7 +128,58 @@ func set_kit(settlement_id: int, kit: String) -> bool:
 	changed.removed = PackedStringArray()
 	changed.pinned = {}
 	changed.swapped = {}
-	return _replace(held, changed, "Change village character") > 0
+	return _replace(held, changed, "Change village character", SettlementGround.PAINT_ORDER) > 0
+
+
+## Lays the road, door paths and plaza of settlement `settlement_id` (its kit's ground) as one
+## history entry: for a street dressed before the ground existed, or one whose road the author
+## erased. Paint over paint changes little (the same surfaces saturate); false when it planned
+## nothing or the record is unknown.
+func pave(settlement_id: int) -> bool:
+	var held := _editor().document.settlement(settlement_id)
+	if held == null:
+		return false
+	_replace(held, held.copy(), "Pave village", SettlementGround.PAINT_ORDER)
+	return not last_ground.get("roles", []).is_empty()
+
+
+## Opens a plaza of `radius` metres at map XZ `at` for settlement `settlement_id`, paves it with
+## the kit's plaza surface and lets the kit's plaza rules furnish it (the record keeps at most
+## Settlement.MAX_PLAZAS). One history group. False (last_refusal) when the settlement is unknown,
+## the disc is not allowed or the settlement holds four.
+func add_plaza(settlement_id: int, at: Vector2, radius: float) -> bool:
+	var held := _editor().document.settlement(settlement_id)
+	last_refusal = &""
+	if held == null:
+		last_refusal = REFUSED_STREET
+		return false
+	var plaza := {
+		"at": Vector2(snappedf(at.x, Settlement.PLAZA_STEP_M), snappedf(at.y, Settlement.PLAZA_STEP_M)),
+		"radius": snappedf(radius, Settlement.PLAZA_STEP_M),
+	}
+	if held.plazas.size() >= Settlement.MAX_PLAZAS:
+		last_refusal = REFUSED_FULL
+		return false
+	var changed := held.copy()
+	changed.plazas.append(plaza)
+	if MapSettlementIO.settlement_problem(changed) != "":
+		last_refusal = REFUSED_PLAZA
+		return false
+	# Only the new disc is paved: the plan reads a copy that holds it alone.
+	var only := held.copy()
+	only.plazas = [plaza]
+	var roles: Array[String] = ["plaza"]
+	return _replace(held, changed, "Add plaza", roles, only) > 0
+
+
+## Removes plaza `index` of settlement `settlement_id` (its paving stays: it is the map's paint).
+func remove_plaza(settlement_id: int, index: int) -> bool:
+	var held := _editor().document.settlement(settlement_id)
+	if held == null or index < 0 or index >= held.plazas.size():
+		return false
+	var changed := held.copy()
+	changed.plazas.remove_at(index)
+	return _replace(held, changed, "Remove plaza") > 0
 
 
 ## Sets how rich (0 shabby .. 1 wealthy) and how busy (0 sparse .. MAX_DENSITY) settlement
@@ -183,11 +254,29 @@ static func next_seed(current: int) -> int:
 	return (current * 7919 + 104729) % Settlement.MAX_SEED
 
 
-func _replace(held: Settlement, changed: Settlement, label: String) -> int:
+## Replaces `held` (null: adds) with `changed` as one history entry. `roles`
+## (SettlementGround roles) also paves those roles of the kit's ground first, planned on `paved`
+## (default `changed`); the paint and the record go into one history group.
+func _replace(
+	held: Settlement,
+	changed: Settlement,
+	label: String,
+	roles: Array[String] = [],
+	paved: Settlement = null
+) -> int:
 	var doc := _editor().document
 	if MapSettlementIO.settlement_problem(changed) != "":
 		last_refusal = REFUSED_INVALID
 		return -1
+	last_ground = {}
+	var strokes: Array[Dictionary] = []
+	if lays_ground and not roles.is_empty() and _editor().can_paint():
+		_settle()
+		var began := Time.get_ticks_usec()
+		last_ground = _plan_ground(paved if paved != null else changed, roles)
+		last_ground["plan_ms"] = (Time.get_ticks_usec() - began) / 1000.0
+		strokes.assign(last_ground.get("strokes", []))
+		last_ground.erase("strokes")
 	var after: Array[Settlement] = []
 	var found := false
 	for entry in doc.settlements:
@@ -198,8 +287,37 @@ func _replace(held: Settlement, changed: Settlement, label: String) -> int:
 			after.append(entry)
 	if not found:
 		after.append(changed)
+	if strokes.is_empty():
+		_change(label, after, [])
+		return changed.id
+	var history := _editor().history
+	history.begin_group()
+	var painting := Time.get_ticks_usec()
+	last_ground["entries"] = SettlementPaint.lay(_editor(), strokes)
+	last_ground["paint_ms"] = (Time.get_ticks_usec() - painting) / 1000.0
+	last_ground["strokes"] = strokes.size()
 	_change(label, after, [])
+	history.end_group(label)
 	return changed.id
+
+
+## The strokes that pave `settlement`'s `roles` with its kit's ground: SettlementGround.plan's
+## result (empty when the kit names none).
+func _plan_ground(settlement: Settlement, roles: Array[String]) -> Dictionary:
+	var e := _editor()
+	var ground := ProcgenSettlement.ground_of(ProcgenSettlement.kit_named(settlement.kit))
+	return SettlementGround.plan(
+		e.document, settlement, ground, PaletteLibrary.surfaces(e.palette_root), roles
+	)
+
+
+## What a change finishes before it reads or writes the map: a prop edit, a stroke, height work.
+func _settle() -> void:
+	var e := _editor()
+	e.commit_prop_edit()
+	if e.is_stroking():
+		e.end_stroke()
+	e.finish_height_work()
 
 
 func _current() -> Array[Settlement]:
@@ -211,10 +329,7 @@ func _current() -> Array[Settlement]:
 ## Sets the document's settlements to `after` and records it as one history entry.
 func _change(label: String, after: Array[Settlement], _touched: Array[Settlement]) -> void:
 	var e := _editor()
-	e.commit_prop_edit()
-	if e.is_stroking():
-		e.end_stroke()
-	e.finish_height_work()
+	_settle()
 	var before := _current()
 	apply_list(after, Rect2())
 	(

@@ -17,6 +17,12 @@ extends RefCounted
 ## are not drawn, `swapped` maps a slot to another prop, `pinned` maps a slot to a placement that
 ## is drawn as recorded whatever the rules now say (a pin has to carry its placement, or a
 ## re-dress would lose it).
+##
+## `plazas` are up to MAX_PLAZAS discs {"at": Vector2 (map XZ, 1 cm), "radius": metres (0.1)} the
+## street opens into: the kit's plaza rules furnish them (the first frontage carries them to
+## ProcgenSettlement) and the Dress paves them with the kit's plaza surface. Discs only for now
+## (polygons wait for the Village tool). They are saved with the record and round trip byte for
+## byte; the paint itself is the map's (SettlementGround).
 
 ## The characters: procgen's settlement kits, in its order (a saved map stores the name).
 const KIND_NAMES: Array[String] = ProcgenSettlement.NAMES
@@ -30,6 +36,12 @@ const MAX_TEXT := 64
 const WEALTH_STEP := 0.01
 const DEFAULT_WEALTH := 0.5
 const DEFAULT_DENSITY := 0.6
+const MAX_PLAZAS := 4
+const PLAZA_MIN_RADIUS_M := 2.0
+const PLAZA_MAX_RADIUS_M := 16.0
+const PLAZA_STEP_M := 0.01
+## A plaza's centre stays within this of the map's middle (a map is at most 640 m a side).
+const PLAZA_MAX_REACH_M := 1000.0
 
 var id: int = 0
 var kit: String = KIND_NAMES[0]
@@ -41,6 +53,7 @@ var frozen: Array[Dictionary] = []
 var removed: PackedStringArray = PackedStringArray()
 var pinned: Dictionary = {}
 var swapped: Dictionary = {}
+var plazas: Array[Dictionary] = []
 
 
 static func make(settlement_id: int, kit_name: String, street: int, seed_number: int) -> Settlement:
@@ -60,6 +73,7 @@ func copy() -> Settlement:
 	out.removed = removed.duplicate()
 	out.pinned = pinned.duplicate(true)
 	out.swapped = swapped.duplicate()
+	out.plazas = plazas.duplicate(true)
 	return out
 
 

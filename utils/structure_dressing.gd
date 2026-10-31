@@ -178,7 +178,9 @@ static func build(doc: MapDocument, structure: Structure, layout: Variant) -> Di
 	var earth := _earth_of(family, rng)
 	var clear := _Clear.new(doc, structure)
 	_skirt(ground, doc, plan, outward, door, family, earth, rng, clear)
-	_path(ground, props, doc, door, family, earth, rng, clear)
+	# Paint already running out of the door (a Dress's door path) takes the ribbon's place.
+	var ribbon := _Soup.new() if StructureDoorPaint.joined(doc, door.at, door.out) > 0.5 else ground
+	_path(ribbon, props, doc, door, family, earth, rng, clear)
 	_plant(props, doc, plan, outward, door, family, rng, clear)
 	out.ground = ground.arrays()
 	out.props = props.arrays()
@@ -205,6 +207,7 @@ static func ground_samples(doc: MapDocument, plan: PackedVector2Array) -> Packed
 	var door := _door(plan, null, outward)
 	for s in [1.0, 2.5, 4.0, 5.5]:
 		samples.append(WaterGeometry.ground_at(doc, door.at + door.out * float(s)))
+	samples.append(StructureDoorPaint.joined(doc, door.at, door.out))
 	return samples
 
 

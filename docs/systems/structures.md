@@ -796,7 +796,9 @@ nothing is stored. Two meshes per structure (`dressing_ground`, `dressing_props`
   250 to 650 triangles and 2 draw calls per building.
 - **Key.** `key_of` also holds the ground in a ring 1.6 m past the walls and along the door's path, so a
   sculpt beside a house redraws its yard; `StructureDressing.enabled` (also in the key) is the A/B switch of
-  `jobs/structures_dressing_perf.json`.
+  `jobs/structures_dressing_perf.json`. The key also holds whether the map's paint already runs out of the
+  door (`StructureDoorPaint.joined`, villages2): then the alpha path ribbon is left out (the stones and
+  steps stay), see `docs/systems/settlements.md` "Ground".
 - **Clearance** (look integration, 2026-10-28). The worker's ground snapshot
   (`StructureGeometry.ground_snapshot`) now carries private copies of the water bodies, the pond
   mask and every structure's footprint. A yard never reaches into water or another structure: the

@@ -5,7 +5,8 @@ extends RefCounted
 ##   street {from, to, preset, side, seed, setback}   lays a street through the editor (world XZ)
 ##   dress {id, kit, wealth, density}    dresses street `id` (default: the first), bakes the cells
 ##                                       now and reports them
-##   redress / clear {id}                the Re-dress and Clear buttons (settlement id, default 1)
+##   plaza {id, at, radius}              opens a paved plaza disc for settlement `id` (world XZ)
+##   redress / clear {id}              the Re-dress and Clear buttons (settlement id, default 1)
 ##   select {id}                         picks the street in the Street tool, so its bar shows
 ##   report                              cells, surfaces, triangles, placements, skipped
 ##   perf {...}                          lays a long street, dresses it and measures the layer
@@ -22,6 +23,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _street(ctrl.editor, step)
 		"dress":
 			return _dress(ctrl.editor, step)
+		"plaza":
+			return _plaza(ctrl.editor, step)
 		"redress":
 			var id := int(step.get("id", 1))
 			var ok := ctrl.editor.settlements.redress(id)
@@ -65,6 +68,7 @@ static func _dress(editor: AuthoringEditor, step: Dictionary) -> String:
 	var street := int(step.get("id", -1))
 	if street < 0 and not editor.document.walls.is_empty():
 		street = editor.document.walls[0].id
+	editor.settlements.lays_ground = bool(step.get("ground", true))
 	var started := Time.get_ticks_usec()
 	var id := editor.settlements.dress(
 		street,
@@ -72,12 +76,61 @@ static func _dress(editor: AuthoringEditor, step: Dictionary) -> String:
 		float(step.get("wealth", -1.0)),
 		float(step.get("density", -1.0))
 	)
+	var dress_ms := (Time.get_ticks_usec() - started) / 1000.0
 	var layer := _layer(editor)
 	var made := layer.flush() if layer != null else 0
+	editor.settlements.lays_ground = true
 	return (
-		"dressed settlement %d on street %d: %d cells baked in %.1f ms; %s"
-		% [id, street, made, (Time.get_ticks_usec() - started) / 1000.0, _report(editor)]
+		"dressed settlement %d on street %d: dress call %.1f ms, %d cells baked in %.1f ms; %s; %s"
+		% [
+			id,
+			street,
+			dress_ms,
+			made,
+			(Time.get_ticks_usec() - started) / 1000.0,
+			_ground_note(editor),
+			_report(editor)
+		]
 	)
+
+
+## The last paving: strokes by role are not kept, so the plan's counts, the slots and the entries.
+static func _ground_note(editor: AuthoringEditor) -> String:
+	var g: Dictionary = editor.settlements.last_ground
+	if g.is_empty():
+		return "no ground laid"
+	return (
+		(
+			"ground roles %s, surfaces %s, road %.1f m, %d door paths, %d strokes, plan %.1f ms,"
+			+ " paint %.1f ms, refused %s, entries %s, slots used %d of %d"
+		)
+		% [
+			str(g.get("roles", [])),
+			str(g.get("surfaces", [])),
+			float(g.get("road_m", 0.0)),
+			int(g.get("doors", 0)),
+			int(g.get("strokes", 0)),
+			float(g.get("plan_ms", 0.0)),
+			float(g.get("paint_ms", 0.0)),
+			str(g.get("refused", {})),
+			str(g.get("entries", 0)),
+			editor.document.surface_ids.size(),
+			MapDocument.PAINT_SURFACE_LIMIT
+		]
+	)
+
+
+static func _plaza(editor: AuthoringEditor, step: Dictionary) -> String:
+	var at: Array = step.get("at", [0, 0])
+	var ok := editor.settlements.add_plaza(
+		int(step.get("id", 1)), Vector2(float(at[0]), float(at[1])), float(step.get("radius", 5.0))
+	)
+	var layer := _layer(editor)
+	if layer != null:
+		layer.flush()
+	return "plaza %s (refusal %s); %s; %s" % [
+		str(ok), str(editor.settlements.last_refusal), _ground_note(editor), _report(editor)
+	]
 
 
 static func _select(base: Node, wall_id: int) -> String:

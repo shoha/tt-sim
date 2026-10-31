@@ -10,19 +10,29 @@ extends RefCounted
 ## gives the same list on every peer.
 
 
-## The frontages that `settlement` dresses in `doc`: its street's, or the frozen ones. [] when
-## its street is gone.
+## The frontages that `settlement` dresses in `doc`: its street's, or the frozen ones, the first
+## carrying the record's plazas (one side owns a plaza, so its props are not drawn twice). []
+## when its street is gone.
 static func frontages_of(doc: MapDocument, settlement: Settlement) -> Array[ProcgenFrontage]:
 	var out: Array[ProcgenFrontage] = []
 	if settlement.source > 0:
 		var wall := doc.wall(settlement.source)
 		if wall != null and wall.is_row():
 			out.assign(SettlementFrontage.of_street(doc, wall))
-		return out
-	for data in settlement.frozen:
-		var frontage := ProcgenFrontage.from_dict(data)
-		if frontage.problems().is_empty():
-			out.append(frontage)
+	else:
+		for data in settlement.frozen:
+			var frontage := ProcgenFrontage.from_dict(data)
+			if frontage.problems().is_empty():
+				out.append(frontage)
+	if not out.is_empty():
+		for k in settlement.plazas.size():
+			out[0].plazas.append(
+				{
+					"id": "p%d" % k,
+					"at": settlement.plazas[k]["at"],
+					"radius": settlement.plazas[k]["radius"],
+				}
+			)
 	return out
 
 
