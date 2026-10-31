@@ -20,7 +20,9 @@ extends RefCounted
 ##                    water of the rivers that leave the map (P6-1)
 ##   CROSSINGS        CrossingGeometry.build (AuthoredCrossings' geometry), only with crossings
 ##   WALLS            WallGeometry.build (AuthoredWalls' geometry), only with walls
-##   STRUCTURES       StructureGeometry.build (AuthoredStructures' geometry), only with structures
+##   STRUCTURES       StructureGeometry.build (AuthoredStructures' geometry), only with structures,
+##                    with the decor library info, the plant plans and the keys
+##                    (StructureLoadInfo.prepare)
 ## Summary: docs/ARCHITECTURE.md Map Loading Flow.
 
 const DRESSING := "dressing"
@@ -49,12 +51,15 @@ static func start(doc: MapDocument) -> AuthoredLoadPrep:
 	if not doc.structures.is_empty():
 		parts.append(STRUCTURES)
 		StructureRecipes.ensure_served()
+	# A worker reads the decor library's GLBs only where threaded loads are safe (not the dummy
+	# renderer).
+	var with_info := GlbUtils.threaded_loads_safe()
 	for part in parts:
 		var out := {}
 		prep._outs.append(out)
 		prep._tasks.append(
 			WorkerThreadPool.add_task(
-				func() -> void: work(doc, part, out), false, "AuthoredLoadPrep " + part
+				func() -> void: work(doc, part, out, with_info), false, "AuthoredLoadPrep " + part
 			)
 		)
 	return prep
@@ -99,7 +104,7 @@ static func compute(doc: MapDocument) -> Dictionary:
 
 
 ## One part (see the header) into `out`. Touches no Node.
-static func work(doc: MapDocument, part: String, out: Dictionary) -> void:
+static func work(doc: MapDocument, part: String, out: Dictionary, with_info: bool = true) -> void:
 	match part:
 		DRESSING:
 			out[DRESSING] = WaterDressing.field_of(doc)
@@ -110,7 +115,7 @@ static func work(doc: MapDocument, part: String, out: Dictionary) -> void:
 		WALLS:
 			out[WALLS] = WallGeometry.build(doc)
 		STRUCTURES:
-			out[STRUCTURES] = StructureGeometry.build(doc, true, StructureDecor.available())
+			out[STRUCTURES] = StructureLoadInfo.prepare(doc, PaletteLibrary.DEFAULT_ROOT, with_info)
 		FIELDS:
 			var fields := TerrainMeshBuilder.grid_fields(doc)
 			var chunks := {}
