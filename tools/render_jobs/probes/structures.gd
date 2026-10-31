@@ -20,6 +20,8 @@ extends RefCounted
 ##   rounds            (styles integration card) lays the five round starters as a hamlet
 ##                     (ROUND_LOTS), then waits for their builds. tile also takes {sides}.
 
+const CLOTH_AIM := preload("res://tools/render_jobs/probes/cloth_aim.gd")
+
 const STYLE_LOTS: Array = [
 	# recipe, centre x, centre z, width, depth, yaw degrees, seed
 	["core:villa_stucco", -30.0, -14.0, 7.0, 5.0, 0.0, 51],
@@ -111,6 +113,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _inside(base)
 		"tile":
 			return _tile(base, step)
+		"aim_cloth", "aim_wind":
+			return CLOTH_AIM.run(base, step)
 		"many":
 			return _many(base, step)
 		"village":
