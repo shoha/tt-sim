@@ -133,7 +133,9 @@ func _handle_command(cmd: Dictionary) -> void:
 	match cmd.get("cmd", ""):
 		"screenshot":
 			await RenderingServer.frame_post_draw
-			response = _cmd_screenshot()
+			response = _cmd_screenshot(cmd)
+		"type":
+			response = await _cmd_type(cmd)
 		"state":
 			response = _cmd_state()
 		"input":
@@ -170,10 +172,36 @@ func _send_response(response: Dictionary) -> void:
 # ---------------------------------------------------------------------------
 
 
-func _cmd_screenshot() -> Dictionary:
+## Without `path` the PNG comes back base64 in the reply. With an absolute `path` inside the user
+## data folder or the OS temp folder (BridgeTyping.screenshot_path_error is the policy) the PNG is
+## written there and the reply carries only the path, size and byte count, so a look loop can read
+## downscaled copies or probe pixels without paying image tokens for each capture.
+func _cmd_screenshot(cmd: Dictionary = {}) -> Dictionary:
+	var out_path: String = str(cmd.get("path", ""))
+	if cmd.has("path"):
+		var reason := BridgeTyping.screenshot_path_error(
+			out_path, BridgeTyping.default_roots(), OS.get_name() == "Windows"
+		)
+		if not reason.is_empty():
+			return {"ok": false, "error": "Screenshot path rejected: %s" % reason}
 	var image := get_viewport().get_texture().get_image()
 	if image == null:
 		return {"ok": false, "error": "Failed to capture viewport"}
+	if cmd.has("path"):
+		var norm := BridgeTyping.normalize_path(out_path)
+		DirAccess.make_dir_recursive_absolute(norm.get_base_dir())
+		var err := image.save_png(norm)
+		if err != OK:
+			return {"ok": false, "error": "Could not write %s (%s)" % [norm, error_string(err)]}
+		var written := FileAccess.open(norm, FileAccess.READ)
+		var size := written.get_length() if written != null else 0
+		return {
+			"ok": true,
+			"path": norm,
+			"width": image.get_width(),
+			"height": image.get_height(),
+			"bytes": size,
+		}
 	var png_buffer := image.save_png_to_buffer()
 	var base64_str := Marshalls.raw_to_base64(png_buffer)
 	return {
@@ -518,6 +546,60 @@ func _inject_key(key_string: String) -> void:
 	release.alt_pressed = alt
 	release.pressed = false
 	Input.parse_input_event(release)
+
+
+## Types `text` into a LineEdit or TextEdit the way a keyboard does (see BridgeTyping for the
+## model): focus the field, optionally select all and delete (`clear`), send one key press and
+## release per character, optionally press Enter (`submit`). The field is `control` (node path,
+## node name, text or placeholder text, or a label that sits before the field) or, when omitted, the
+## one that has focus. Replies with the field's resulting text and whether (and how often)
+## `text_changed` and `text_submitted` fired. TextEdit has no `text_submitted`, so that stays false.
+func _cmd_type(cmd: Dictionary) -> Dictionary:
+	var target := BridgeTyping.resolve_target(get_tree().root, str(cmd.get("control", "")))
+	if not target["ok"]:
+		return target
+	var field: Control = target["control"]
+	if not BridgeTyping.is_editable(field):
+		return {"ok": false, "error": "%s is not editable" % field.get_path()}
+	if not field.has_focus():
+		field.grab_focus()
+	await _advance_one_step()
+	if not field.has_focus():
+		return {"ok": false, "error": "%s did not take focus" % field.get_path()}
+
+	var watch := BridgeTyping.TypeWatch.new(field)
+	if bool(cmd.get("clear", false)):
+		field.call(&"select_all")
+		_send_key_pairs(BridgeTyping.key_pair(KEY_BACKSPACE))
+	else:
+		BridgeTyping.caret_to_end(field)
+	_send_key_pairs(BridgeTyping.key_events_for_text(str(cmd.get("text", ""))))
+	if bool(cmd.get("submit", false)):
+		_send_key_pairs(BridgeTyping.key_pair(KEY_ENTER))
+	await _advance_one_step()
+	await _advance_one_step()
+	watch.stop()
+	if not is_instance_valid(field):
+		return {"ok": true, "note": "the field was freed while typing (a submit handler closed it)"}
+	return {
+		"ok": true,
+		"control": str(field.get_path()),
+		"type": field.get_class(),
+		"text": BridgeTyping.text_of(field),
+		"text_changed": watch.changed > 0,
+		"text_changed_count": watch.changed,
+		"text_submitted": watch.submitted > 0,
+		"text_submitted_count": watch.submitted,
+		"has_focus": field.has_focus(),
+	}
+
+
+## Sends key events one at a time, flushing after each so a handler that reads the field between
+## characters (a search box filtering as you type) sees every intermediate state.
+func _send_key_pairs(events: Array[InputEventKey]) -> void:
+	for event in events:
+		Input.parse_input_event(event)
+		Input.flush_buffered_events()
 
 
 func _inject_scroll(x: float, y: float, delta: float) -> void:

@@ -363,11 +363,12 @@ For visuals and anything a scripted run can repeat, use a render job first (`too
 | `game_launch` | Start Godot with the validation bridge. Call this first. Optional `scene` parameter for a specific scene |
 | `game_stop` | Kill the running Godot instance |
 | `game_reload` | Stop and relaunch. Use after code changes |
-| `game_screenshot` | Capture the game window as PNG image |
+| `game_screenshot` | Capture the game window as PNG image. Optional `path` (absolute `.png` inside the project's user data folder or the OS temp folder, else rejected): writes the file and returns only `{path, width, height, bytes}`, no image tokens. Example: `{"path": "C:/Users/<you>/AppData/Local/Temp/shots/a.png"}` |
 | `game_state` | Query game state: app state, tokens, UI panels, camera, scene tree, console errors, plus `frozen` and `time_scale` |
 | `game_click` | Click at (x, y) window coords (same space as `game_screenshot` pixels, and what `game_controls`' `window_point` reports). Optional `button`: "left" (default), "right", "middle" |
 | `game_drag` | Drag from (x1, y1) to (x2, y2) with interpolated motion |
 | `game_key` | Press a key by name (e.g. "M", "Escape", "Home", "Space", "G"), or a modifier chord (e.g. "Ctrl+Z", "Shift+Alt+F") |
+| `game_type` | Type `text` into a `LineEdit` or `TextEdit` the way a keyboard does: the field gets focus and each character goes in as a key event, so the game's handlers run. Optional `control` (node path, node name, the field's text or placeholder, or the text of the label before it; default: the focused field), `clear` (select all and replace, default append at the end) and `submit` (press Enter after). Replies with the field's resulting `text`, `text_changed` and `text_submitted` (and counts; the engine coalesces a frame's edits into one `text_changed`; a `TextEdit` has no `text_submitted`). A newline in `text` is an Enter key. Example: `{"text": "Mossy Hollow", "control": "Map name", "clear": true, "submit": true}`; honours the field's own limits (`max_length` cut `Hello 42 more` to `Hello 42 m` on the title screen's Seed field) |
 | `game_scroll` | Mouse wheel at (x, y). Positive delta = zoom in, negative = zoom out |
 | `game_wait` | Wait N seconds for animations/transitions to settle |
 | `game_interact` | **Preferred for multi-step validation.** Execute a sequence of actions and return collected screenshots + state in one call |
@@ -393,7 +394,17 @@ Instead of making 10 tool calls, send one batch:
 }
 ```
 
-Returns all screenshots and the final state in one response.
+Returns all screenshots and the final state in one response. Steps also include `type` (same fields as `game_type`, its report is returned) and `screenshot` with an optional `path` (the step then returns the file report instead of an image):
+
+```json
+{
+  "steps": [
+    {"action": "click_control", "query": "Advanced"},
+    {"action": "type", "text": "BridgeTyped", "control": "Seed", "clear": true, "submit": true},
+    {"action": "screenshot", "path": "C:/Users/<you>/AppData/Local/Temp/shots/seed.png"}
+  ]
+}
+```
 
 ### game_state Response
 
@@ -441,7 +452,8 @@ The bridge only activates when Godot is launched with `-- --validation-bridge`. 
 - **"Game is not running"**: call `game_launch` first
 - **Launch timeout**: check that `godot` is on PATH, or set `GODOT_PATH` env var
 - **Bridge not connecting**: port 7777 may be in use from a previous session. `game_stop` then `game_launch`
-- **MCP server fails with `CONNECTION_CLOSED` at session start**: `node` is not on the PATH Claude Code inherits (fnm only sets it in the interactive PowerShell profile; `node --version` fails in both the Bash and PowerShell tools). `tools/mcp/run-server.cmd` resolves the newest fnm node itself, but only helps once the user-scope registration in `~/.claude.json` has `command` set to that file with no `args`. To run node from a tool call directly, prepend the fnm installation dir to PATH (`~/AppData/Roaming/fnm/node-versions/<version>/installation`). Fallback needing no MCP at all: launch `godot --path /d/dev/tabletop/tt-sim --windowed res://tests/test_play_level.tscn -- --validation-bridge` in the background and talk newline-delimited JSON to `127.0.0.1:7777`, one response per request (`state`, `screenshot`, `wait`, `input`, `freeze`, `step`, `step_until`, `resume`, `eval`, `controls`)
+- **MCP server fails with `CONNECTION_CLOSED` at session start**: `node` is not on the PATH Claude Code inherits (fnm only sets it in the interactive PowerShell profile; `node --version` fails in both the Bash and PowerShell tools). `tools/mcp/run-server.cmd` resolves the newest fnm node itself, but only helps once the user-scope registration in `~/.claude.json` has `command` set to that file with no `args`. To run node from a tool call directly, prepend the fnm installation dir to PATH (`~/AppData/Roaming/fnm/node-versions/<version>/installation`). Fallback needing no MCP at all: launch `godot --path /d/dev/tabletop/tt-sim --windowed res://tests/test_play_level.tscn -- --validation-bridge` in the background and talk newline-delimited JSON to `127.0.0.1:7777`, one response per request (`state`, `screenshot`, `wait`, `input`, `freeze`, `step`, `step_until`, `resume`, `eval`, `controls`, `type`; `screenshot` takes an optional `path`)
+- **A new or changed MCP tool is missing**: the server runs `tools/mcp/dist/server.js`, which is built (not committed; `dist/` is gitignored) with `npm run build` in `tools/mcp` (plain `tsc`, so `tsc -p tools/mcp/tsconfig.json` is the typecheck), and the MCP client must be restarted to pick it up. The game side (`addons/validation_bridge/`) is live on every `game_launch`. `game_screenshot`'s `path` is compared as spelled with the user data folder and the `TEMP`/`TMP`/`TMPDIR` folders (case-insensitive on Windows, dot segments resolved): if a Windows `TEMP` is an 8.3 short name, write the path in that spelling
 - **Stale errors after reload**: `console_errors` accumulates since launch. Check timestamps/context
 - **Clicks land on nothing / buttons do not react**: almost always a coordinate-space mismatch, not a broken bridge. `game_state` reports `viewport.window_size`, `viewport.viewport_size` and `viewport.hovered_control` — check `hovered_control` after a click to confirm what you actually hit before concluding anything else. `game_click_control` avoids this problem — the bridge converts the Control's canvas-space centre into window space with `get_viewport().get_final_transform()` before injecting, so the caller does no coordinate math — and is the right default; reach for `game_click` with raw coordinates only for 3D world clicks, or with a `game_controls` entry's `window_point` (the same conversion, already applied) when a raw click is still needed. (This conversion was missing until it was measured: `click_control` used to inject the unconverted centre, miss the Control, and still answer `{"ok": true}`, because it only ever checked that it had *found* the Control. Verify with `hovered_control` if a named click ever looks wrong.)
 - **Controls on an overlay `CanvasLayer` are clickable, including the F3 debug render panel.** This project's code and notes used to say the `DebugRenderToggles` checkbox panel "cannot be driven by the validation bridge's injected mouse clicks" and that the cause was "still unexplained". Both claims were wrong. `game_click_control` on `Baked foliage AO` flips `toggle_baked_foliage_ao` reliably (measured 8/8 at a 1278x1360 window over a 1920x2043 viewport, frozen and running), and `hovered_control` afterwards names the `CheckBox` itself. What actually failed was a raw `game_click` sent at the centre `game_controls` reported: canvas `(163, 679)` as a window coordinate lands at canvas `(245, 1020)`, which `hovered_control` shows as the `SubViewportContainer` — the 3D map — while the command still answers `{"ok": true}`. The same click at the converted window point `(108.5, 452)` toggles the checkbox. Three things that look like plausible causes are not: the perf-overlay container's `MOUSE_FILTER_IGNORE` (Godot skips only the IGNORE node itself and still hit-tests its children), the overlay `CanvasLayer`'s transform (identity), and the full-screen `TransitionOverlay`/`ToastContainer` Controls sitting on higher layers (both `MOUSE_FILTER_IGNORE`). The digit-key shortcuts (1-9, 0) remain the faster way to sweep all ten switches, but they are a convenience now, not a workaround
