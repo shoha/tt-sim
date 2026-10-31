@@ -47,7 +47,7 @@ stays in `AGENTS.md` "Adding Features" ("New authoring tool").
   and disabled; token drag stays on while no brush is active).
 - Authoring is a faithful preview of play (2026-10-09; there is no "Try" step). The level's
   tokens spawn as play spawns them (`AuthoringTokens`: models preloaded, then
-  `BoardTokenFactory.create_from_placement_async` into the same DragAndDrop3D), so occlusion
+  `BoardTokenFactory.create_from_placement_async` into the same DragController), so occlusion
   fade, drag landing, the float rule and grid snap come from `GameMap` as in play. A move,
   turn or resize is one `AuthoringHistory` entry and marks the session unsaved; a save
   copies every token back into its placement (`write_placements`). Authoring adds and

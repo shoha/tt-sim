@@ -190,7 +190,7 @@ Rules that apply every time the bridge is used:
 - **The bridge is repo source, not infrastructure.** When it misbehaves, open
   `addons/validation_bridge/validation_bridge.gd` and find the failure path before declaring a
   check impossible. "Escape hangs the bridge" was one line (`PROCESS_MODE_ALWAYS`); "drags never
-  register" was a stale cursor read in the DragAndDrop3D addon. State the real symptom, not a
+  register" was a stale cursor read in the old DragAndDrop3D addon (now our own `DragController`). State the real symptom, not a
   capability claim. Declaring something untestable quietly drops verification coverage.
 - **If the MCP server reports `CONNECTION_CLOSED` at session start**, `node` is not on the PATH
   Claude Code launches servers with (fnm only sets it in the PowerShell profile). The committed

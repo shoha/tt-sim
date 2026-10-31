@@ -97,13 +97,13 @@ All on `main`, working tree clean, nothing unpushed, no sharded gates running at
         shipped) and Inter (OFL 1.1).
       - Fixed: `assets/fonts/Inter-OFL.txt` (the standard OFL 1.1 text with Inter's copyright
         line, "Copyright (c) 2016 The Inter Project Authors", read from the upstream licence).
-      - `addons/DragAndDrop3D` ("Easy Drag and Drop 3D", author DevDrache, upstream
-        github.com/derdrache/DragAndDrop3D): the Godot asset library lists it as MIT, but the
-        addon folder has no licence file. Copy the upstream LICENSE in (needs the upstream
-        text, not a paraphrase). `addons/brackeys_particle_controls` (Brackeys): licence
+      - `addons/DragAndDrop3D` ("Easy Drag and Drop 3D", author DevDrache): REMOVED
+        2026-10-31 (owner decision: carry no outside licence). Replaced by our own drag code
+        (`scenes/drag/`, `utils/drag_math.gd`, `utils/drag_state.gd`).
+        `addons/brackeys_particle_controls` (Brackeys): licence
         not found online by search; the Brackeys VFX bundle says its assets are CC0, which
-        does not necessarily cover the plugin code. Both need a file from upstream, or a
-        replacement. GAP, AGENT after the owner confirms the upstreams.
+        does not necessarily cover the plugin code. It needs a file from upstream, or a
+        replacement. GAP, AGENT after the owner confirms the upstream.
       - GAP, OWNER: the 36 PBR surface sets in `core` (`surfaces/`, 26 ground, 7 built, 3 cliff)
         have no recorded provenance in either repository. `NOTICE.md` claims no third-party
         material, and CC BY 4.0 cannot be applied to textures you do not hold. If they came

@@ -93,7 +93,6 @@ Each addon under `addons/` carries its own licence file:
 | Icon Explorer | `addons/icon_explorer/LICENSE.md` |
 | theme_gen | `addons/theme_gen/LICENSE.md` |
 | theme_gen_save_sync | `addons/theme_gen_save_sync/LICENSE.md` |
-| DragAndDrop3D | see `addons/DragAndDrop3D/` |
 | brackeys_particle_controls | see `addons/brackeys_particle_controls/` |
 | GodotSteam | see `addons/godotsteam/` |
 

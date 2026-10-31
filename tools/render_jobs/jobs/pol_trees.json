@@ -168,7 +168,7 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "drag", "token": 0, "to": [11, -3], "phase": "look", "for": "p_drag_z13"},
   {"op": "wait", "s": 1.0, "phase": "look", "for": "p_drag_z13"},
   {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "report", "phase": "look", "for": "p_drag_z13"},
-  {"op": "capture", "name": "p_drag_z13", "desc": "Play, home zoom: a token dragged through DragAndDrop3D (its ray starts on the near plane behind the camera) onto (11, -3)"},
+  {"op": "capture", "name": "p_drag_z13", "desc": "Play, home zoom: a token dragged through DragController (its ray starts on the near plane behind the camera) onto (11, -3)"},
   {"op": "zoom", "size": 6.0, "phase": "look", "for": "p_tok_z6*"},
   {"op": "look_at", "at": [8, -10], "phase": "look", "for": "p_tok_z6*"},
   {"op": "wait", "s": 1.5, "phase": "look", "for": "p_tok_z6*"},

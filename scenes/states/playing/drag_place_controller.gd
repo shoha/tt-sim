@@ -4,7 +4,7 @@ extends Node
 ## Handles drag-to-place: dragging an asset (or a saved avatar, begin_drag) from the
 ## asset browser and dropping it onto the map to spawn a new token, including the ghost icon
 ## that follows the cursor and the ground-position/grid-snap math used to
-## resolve the drop point. Distinct from DragAndDrop3D-based dragging of
+## resolve the drop point. Distinct from DragController-based dragging of
 ## already-placed tokens on the board, which this controller does not touch.
 ##
 ## Created as a child Node of GameMap in _ready() (mirrors the AssetManager

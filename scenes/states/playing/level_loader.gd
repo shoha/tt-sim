@@ -149,7 +149,7 @@ func _play_level_async(level_data: LevelData) -> void:
 
 	var drag_and_drop = _level_play_controller._game_map.drag_and_drop_node
 	if not drag_and_drop:
-		push_error("LevelPlayLoader: Could not find DragAndDrop3D node")
+		push_error("LevelPlayLoader: Could not find DragController node")
 		_abort_loading()
 		return
 

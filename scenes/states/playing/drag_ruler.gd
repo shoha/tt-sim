@@ -13,7 +13,7 @@ extends Node
 ## Usage:
 ##   1. Call setup() after instantiation to provide camera, viewport, and overlay parent.
 ##   2. Call configure() after a level loads to provide scale settings.
-##   3. GameMap connects DragAndDrop3D signals to activate() / deactivate().
+##   3. GameMap connects DragController signals to activate() / deactivate().
 
 const LINE_WIDTH_PX: float = 2.5
 const ENDPOINT_RADIUS_PX: float = 5.0
@@ -28,7 +28,7 @@ const IN_FIRE_TEXT := "In fire"
 ## References — set once via setup()
 var _camera: Camera3D
 var _world_viewport: SubViewport
-var _drag_and_drop: DragAndDrop3D
+var _drag_and_drop: DragController
 
 ## Scale configuration — updated via configure()
 var _grid_cell_size: float = LevelData.DEFAULT_GRID_CELL_SIZE
@@ -82,7 +82,7 @@ func setup(
 	cam: Camera3D,
 	viewport: SubViewport,
 	overlay_parent: Node,
-	drag_and_drop: DragAndDrop3D,
+	drag_and_drop: DragController,
 ) -> void:
 	_camera = cam
 	_world_viewport = viewport
@@ -112,10 +112,10 @@ func configure(
 # ============================================================================
 
 
-func _on_dragging_started(dragging_object: DraggingObject3D) -> void:
-	if not dragging_object or not dragging_object.objectBody:
+func _on_dragging_started(dragging_object: Draggable3D) -> void:
+	if not dragging_object or not dragging_object.body:
 		return
-	_start_pos = dragging_object.objectBody.global_position
+	_start_pos = dragging_object.body.global_position
 	_start_ground_y = _ground_below(_start_pos)
 	_fire = get_tree().get_first_node_in_group(FireField.GROUP) as FireField
 	_active = true
@@ -123,7 +123,7 @@ func _on_dragging_started(dragging_object: DraggingObject3D) -> void:
 	_needs_redraw = true
 
 
-func _on_dragging_stopped(_dragging_object: DraggingObject3D) -> void:
+func _on_dragging_stopped(_dragging_object: Draggable3D) -> void:
 	_active = false
 	_clear_visuals()
 	set_process(false)
@@ -154,8 +154,8 @@ func _do_redraw() -> void:
 		return
 
 	# Read the snap target (not the lerping body position) for a crisp endpoint
-	var end_pos := _drag_and_drop._target_drag_position
-	if not _drag_and_drop._has_target_position:
+	var end_pos := _drag_and_drop.get_target_position()
+	if not _drag_and_drop.has_target():
 		_clear_visuals()
 		return
 
@@ -262,11 +262,11 @@ func _ground_below(point: Vector3) -> float:
 func _on_draw_control_draw() -> void:
 	if not _active or not _camera or not _drag_and_drop:
 		return
-	if not _drag_and_drop._has_target_position:
+	if not _drag_and_drop.has_target():
 		return
 
 	var screen_start := _camera.unproject_position(_start_pos)
-	var screen_end := _camera.unproject_position(_drag_and_drop._target_drag_position)
+	var screen_end := _camera.unproject_position(_drag_and_drop.get_target_position())
 
 	# Draw the ruler line
 	var total_dist := screen_start.distance_to(screen_end)

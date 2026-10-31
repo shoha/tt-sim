@@ -8,7 +8,7 @@ extends Node
 ## Follows the MeasureTool contract exactly (is_active/activate/deactivate/
 ## toggle/handle_input, plus a `toggled` signal), because GameMap dispatches both
 ## from the same place in _input() and CameraController suppresses RMB pan for
-## both. Being modal is what keeps it from conflicting with DragAndDrop3D token
+## both. Being modal is what keeps it from conflicting with DragController token
 ## dragging: tokens are not draggable while the gizmo is active.
 ##
 ## The compass mapping is done in WORLD space on the Y=0 ground plane, not in

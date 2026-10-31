@@ -148,7 +148,7 @@ var token = BoardToken.new()
 
 ```
 BoardToken (Node3D)
-├── DraggableToken (DraggingObject3D)
+├── DraggableToken (Draggable3D)
 │   ├── RigidBody3D
 │   │   ├── CollisionShape3D
 │   │   ├── SelectionGlowRenderer (QuadMesh with selection_glow.gdshader)
@@ -331,14 +331,23 @@ Camera zoom uses `_input()` instead of `_unhandled_input()` because events from 
 
 ## Drag and Drop Integration
 
-### DragAndDrop3D Addon
+### The drag system
 
-The addon (`addons/DragAndDrop3D/`) provides the core drag-and-drop system:
+Our own code (`scenes/drag/`, `utils/drag_math.gd`, `utils/drag_state.gd`); the third-party
+DragAndDrop3D addon it replaced (2026-10-31) is gone, so no outside licence is carried.
 
-1. `DraggingObject3D` finds its first `CollisionObject3D` child
-2. On left-click, emits `object_body_mouse_down`
-3. `DragAndDrop3D` starts tracking after mouse exceeds `drag_threshold_px` (5px)
-4. Each frame, raycasts to the ground and lerps the object toward the hit point
+1. `Draggable3D` finds its first `CollisionObject3D` below it (its `body`)
+2. On a left press on the body it calls `DragController.press()` (the controller is found
+   through the `drag_controller` group)
+3. `DragController` arms a `DragState`; the drag begins once the mouse has travelled
+   `drag_threshold_px` (5px) from the press, and emits `dragging_started`
+4. Each frame, raycasts to the ground (once per frame, from the last pointer event) and eases the
+   body toward the hit point (`DragMath.eased`)
+5. Left release drops it on the exact target XZ (`dragging_stopped`); right click or Escape
+   cancels (`dragging_cancelled`); the mouse wheel steps the held height
+6. The rules without a scene (threshold, snap and ground resolve, easing, landing, edge pan) are
+   `DragMath`; the idle / pending / active machine is `DragState`; both have unit tests
+   (`test_drag_math.gd`, `test_drag_state.gd`, `test_drag_controller.gd`)
 
 ### Physics Conventions
 
@@ -354,9 +363,9 @@ The addon (`addons/DragAndDrop3D/`) provides the core drag-and-drop system:
 
 ### DraggableToken Extensions
 
-`DraggableToken` extends `DraggingObject3D` with:
+`DraggableToken` extends `Draggable3D` with:
 - `dragging_allowed` gate (for permission checks)
-- `heightOffset` for pickup height (updated when scale or collision changes)
+- `height_offset` for pickup height (updated when scale or collision changes)
 - Network interpolation: `set_network_target()` / `set_transform_immediate()`
 - `input_ray_pickable = false` during settle animation to prevent re-picking
 

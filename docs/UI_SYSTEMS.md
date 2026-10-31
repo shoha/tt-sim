@@ -1997,7 +1997,7 @@ Distance labels use the active level's scale settings (`grid_cell_size`, `displa
 
 ### Interaction Guards
 
-- **Drag prevention**: `DragAndDrop3D.dragging_enabled` is set to `false` while the tool is active (via the `toggled` signal).
+- **Drag prevention**: `DragController.dragging_enabled` is set to `false` while the tool is active (via the `toggled` signal).
 - **GUI click guard**: `GameMap._input()` checks `_is_mouse_over_gui()` before forwarding mouse clicks to the tool.
 - **Context menu suppression**: When the tool consumes an input event, `get_viewport().set_input_as_handled()` prevents token context menus from opening.
 - **Level lifecycle**: The tool is deactivated automatically when a level is cleared or a new level is loaded.
@@ -2073,7 +2073,7 @@ Uses `MapOverlayUtils` for overlay and label creation. Renders on `Constants.LAY
 ### Lifecycle
 
 - Created by `GameMap.setup_drag_ruler()` during level setup.
-- Connects to `DragAndDrop3D` signals: `dragging_started`, `dragging_stopped`, `dragging_cancelled`.
+- Connects to `DragController` signals: `dragging_started`, `dragging_stopped`, `dragging_cancelled`.
 - Deactivated automatically on level clear via `GameMap.reset_grid_state()`.
 
 ---

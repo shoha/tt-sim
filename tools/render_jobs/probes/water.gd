@@ -14,7 +14,7 @@ extends RefCounted
 ##   tokens {points, assets}     in play: spawns one token per point (`assets` [[pack, id]],
 ##                               cycled, or the first locally cached asset that is not a
 ##                               light), each dropped onto the ground as a browser drop does.
-##   drag {token, to}            in play: drags token i through DragAndDrop3D to world XZ `to`
+##   drag {token, to}            in play: drags token i through DragController to world XZ `to`
 ##                               (begin, one pointer update at the point's screen position,
 ##                               stop), then waits for the settle; see `report`.
 ##   report                      every token: base height, bed, surface, floating, sinking.
@@ -828,13 +828,13 @@ static func _drag(gm: GameMap, index: int, to: Vector2) -> String:
 	if index >= tokens.size():
 		return "no token %d" % index
 	var token := tokens[index]
-	var dnd := gm.drag_and_drop_node as DragAndDrop3D
+	var dnd := gm.drag_and_drop_node
 	var space := gm.world_viewport.find_world_3d().direct_space_state
 	var surface := WaterSurface.surface_below(space, Vector3(to.x, 0, to.y), 50.0)
 	var screen := gm.camera_node.unproject_position(surface)
-	dnd.call("_begin_drag", token)
-	dnd.call("_update_target_position", screen)
-	var target: Vector3 = dnd.get("_target_drag_position")
+	dnd.begin_drag(token)
+	dnd.update_target_position(screen)
+	var target: Vector3 = dnd.get_target_position()
 	var ground := dnd.get_target_ground_position()
 	token.rigid_body.global_position = target
 	dnd.stop_drag()
@@ -844,7 +844,7 @@ static func _drag(gm: GameMap, index: int, to: Vector2) -> String:
 			token.get_parent().name,
 			str(to),
 			str(screen),
-			dnd.collisionMask,
+			dnd.collision_mask,
 			str(ground),
 			str(gm.call("_resolve_drag_ground", Vector3(to.x, ground.y, to.y))),
 		]
@@ -997,8 +997,8 @@ static func _state(gm: GameMap) -> String:
 					str(field.has_water()) if field else "-",
 					str(tex.get_size()) if tex else "-",
 					str(tex.get_image().get_format()) if tex else "-",
-					(gm.drag_and_drop_node as DragAndDrop3D).collisionMask,
-					str((gm.drag_and_drop_node as DragAndDrop3D).ground_resolver.is_valid()),
+					gm.drag_and_drop_node.collision_mask,
+					str(gm.drag_and_drop_node.ground_resolver.is_valid()),
 				]
 			)
 		)

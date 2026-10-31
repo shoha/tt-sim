@@ -19,7 +19,7 @@
  *   │   └── SubViewportContainer (with this shader as material)
  *   │       └── SubViewport
  *   │           ├── CameraHolder/Camera3D
- *   │           ├── DragAndDrop3D
+ *   │           ├── DragController
  *   │           └── (tokens, map, etc.)
  *   └── GameplayMenu (CanvasLayer - UI on top)
  * 

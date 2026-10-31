@@ -26,14 +26,14 @@ func _flat_doc(cells: int = 10) -> MapDocument:
 	return MapDocument.create_flat(Vector2i(cells, cells), GRASS, "test", 5)
 
 
-# --- DragAndDrop3D.resolve_target_ground ---------------------------------------------
+# --- DragMath.resolve_target_ground --------------------------------------------------
 
 
 func test_snapped_cell_across_a_tier_edge_takes_the_tier_height() -> void:
 	# The cursor hits the low ground just short of the edge; the cell centre it snaps to is
 	# on the plateau.
 	var hit := Vector3(0.4, 0.0, 0.3)
-	var target := DragAndDrop3D.resolve_target_ground(hit, true, CELL, Vector2.ZERO, _two_tiers)
+	var target := DragMath.resolve_target_ground(hit, true, CELL, Vector2.ZERO, _two_tiers)
 	assert_almost_eq(target.x, CELL * 0.5, EPSILON, "snapped to the cell centre")
 	assert_almost_eq(target.z, CELL * 0.5, EPSILON)
 	assert_almost_eq(target.y, TIER, EPSILON, "on the tier the cell is on")
@@ -42,7 +42,7 @@ func test_snapped_cell_across_a_tier_edge_takes_the_tier_height() -> void:
 func test_snapped_cell_off_a_tier_drops_to_the_low_ground() -> void:
 	# The cursor hits the plateau's rim; the cell centre (x = 0 with this origin) is below it.
 	var hit := Vector3(0.6, TIER, 0.3)
-	var target := DragAndDrop3D.resolve_target_ground(
+	var target := DragMath.resolve_target_ground(
 		hit, true, CELL, Vector2(-CELL * 0.5, 0.0), _two_tiers
 	)
 	assert_almost_eq(target.x, 0.0, EPSILON, "the cell centre is on the low side")
@@ -51,7 +51,7 @@ func test_snapped_cell_off_a_tier_drops_to_the_low_ground() -> void:
 
 func test_free_move_keeps_the_hit_xz_and_still_resolves_the_height() -> void:
 	var hit := Vector3(0.6, 0.3, -2.0)
-	var target := DragAndDrop3D.resolve_target_ground(hit, false, CELL, Vector2.ZERO, _two_tiers)
+	var target := DragMath.resolve_target_ground(hit, false, CELL, Vector2.ZERO, _two_tiers)
 	assert_eq(Vector2(target.x, target.z), Vector2(0.6, -2.0))
 	assert_almost_eq(target.y, TIER, EPSILON)
 
@@ -59,14 +59,14 @@ func test_free_move_keeps_the_hit_xz_and_still_resolves_the_height() -> void:
 func test_without_a_resolver_the_snap_keeps_the_hit_height() -> void:
 	# Blender maps: no resolver, exactly ScaleUtils.snap_to_grid as before.
 	var hit := Vector3(-0.1, 0.37, 0.3)
-	var target := DragAndDrop3D.resolve_target_ground(hit, true, CELL, Vector2.ZERO, Callable())
+	var target := DragMath.resolve_target_ground(hit, true, CELL, Vector2.ZERO, Callable())
 	assert_eq(target, ScaleUtils.snap_to_grid(hit, CELL, Vector2.ZERO))
-	assert_eq(DragAndDrop3D.resolve_target_ground(hit, false, CELL, Vector2.ZERO, Callable()), hit)
+	assert_eq(DragMath.resolve_target_ground(hit, false, CELL, Vector2.ZERO, Callable()), hit)
 
 
 func test_a_resolver_miss_keeps_the_hit_height() -> void:
 	var hit := Vector3(-0.1, 0.37, 0.3)
-	var target := DragAndDrop3D.resolve_target_ground(hit, true, CELL, Vector2.ZERO, _miss)
+	var target := DragMath.resolve_target_ground(hit, true, CELL, Vector2.ZERO, _miss)
 	assert_almost_eq(target.y, 0.37, EPSILON)
 	assert_almost_eq(target.x, -CELL * 0.5, EPSILON)
 

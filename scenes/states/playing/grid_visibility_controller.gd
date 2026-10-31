@@ -50,19 +50,19 @@ func set_auto_show_measure(active: bool) -> void:
 	_update_grid_visibility()
 
 
-func _on_drag_started_grid(obj: DraggingObject3D) -> void:
+func _on_drag_started_grid(obj: Draggable3D) -> void:
 	_grid_auto_show_drag = true
 	_update_grid_visibility()
 	# Show "Shift: Free move" hint when grid snap is active
 	if _game_map.drag_and_drop_node and _game_map.drag_and_drop_node.grid_snap_enabled:
 		UIManager.add_hint(InputProfile.label(&"free_move"), "Free move")
 	# Start cell highlighting
-	if obj and obj.objectBody:
+	if obj and obj.body:
 		_drag_highlight_active = true
-		_drag_highlight_start_pos = obj.objectBody.global_position
+		_drag_highlight_start_pos = obj.body.global_position
 
 
-func _on_drag_stopped_grid(_obj: DraggingObject3D) -> void:
+func _on_drag_stopped_grid(_obj: Draggable3D) -> void:
 	_grid_auto_show_drag = false
 	_drag_highlight_active = false
 	_update_grid_visibility()
@@ -74,7 +74,7 @@ func _on_drag_stopped_grid(_obj: DraggingObject3D) -> void:
 
 ## Update the grid shader's highlighted cell each frame during a drag. Only pushes to
 ## GridOverlay when the snapped cell actually changed since the last push -- GridOverlay
-## snaps drag_node._target_drag_position to an integer cell (see set_drag_highlight()),
+## snaps drag_node.get_target_position() to an integer cell (see set_drag_highlight()),
 ## and the raw world position changes every frame during a drag even though the cell it
 ## snaps to usually doesn't, so recomputing the same snap here avoids three redundant
 ## shader-parameter writes per frame while a token sits still within one cell.
@@ -86,14 +86,14 @@ func _update_drag_cell_highlight() -> void:
 	):
 		return
 	var drag_node := _game_map.drag_and_drop_node
-	if not drag_node.is_dragging() or not drag_node._has_target_position:
+	if not drag_node.is_dragging() or not drag_node.has_target():
 		return
-	var current_cell := _game_map._grid_overlay.snapped_cell(drag_node._target_drag_position)
+	var current_cell := _game_map._grid_overlay.snapped_cell(drag_node.get_target_position())
 	if current_cell == _last_highlight_cell:
 		return
 	_last_highlight_cell = current_cell
 	_game_map._grid_overlay.set_drag_highlight(
-		drag_node._target_drag_position, _drag_highlight_start_pos
+		drag_node.get_target_position(), _drag_highlight_start_pos
 	)
 
 
@@ -128,7 +128,7 @@ func configure_grid(level_data: LevelData) -> void:
 		_game_map._grid_overlay.set_floor_level(floor_y, tolerance)
 	_update_grid_visibility()
 
-	# Configure drag snap on the DragAndDrop3D node
+	# Configure drag snap on the DragController node
 	if _game_map.drag_and_drop_node:
 		_game_map.drag_and_drop_node.grid_snap_enabled = level_data.grid_snap_enabled
 		_game_map.drag_and_drop_node.grid_cell_size = level_data.grid_cell_size

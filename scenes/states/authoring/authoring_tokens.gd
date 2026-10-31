@@ -4,7 +4,7 @@ extends RefCounted
 ## The level's tokens in authoring mode, so what the author sees on the map is what players
 ## get on it, figures included. The placements spawn the way a play-time load spawns them
 ## (LevelPlayLoader: models preloaded, BoardTokenFactory.create_from_placement_async, set
-## down on ground that moved, TokenGrounding), into the same DragAndDrop3D, so occlusion
+## down on ground that moved, TokenGrounding), into the same DragController, so occlusion
 ## fade, drag landing on tiers, decks and stones, the float rule and grid snap all come from
 ## GameMap as in play. Drag is on while no brush is active (GameMap._update_dragging_enabled).
 ##

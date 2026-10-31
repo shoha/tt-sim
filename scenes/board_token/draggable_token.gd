@@ -1,7 +1,7 @@
 @tool
 
 class_name DraggableToken
-extends DraggingObject3D
+extends Draggable3D
 
 ## Adds drag-and-drop functionality to a token's RigidBody3D
 ## Handles visual feedback during dragging (drop indicators, lean effects, settle animations)
@@ -107,9 +107,9 @@ func _ready() -> void:
 
 
 ## Override base class input handler to gate drag initiation on dragging_allowed.
-## The base class emits object_body_mouse_down on left-click, which triggers
-## DragAndDrop3D to start a drag. We suppress that when dragging is disallowed.
-func _on_object_body_3d_input_event(
+## The base class hands a left press to the DragController, which starts a drag. We suppress
+## that when dragging is disallowed.
+func _on_body_input_event(
 	camera: Node, event: InputEvent, event_position: Vector3, normal: Vector3, shape_idx: int
 ) -> void:
 	if not dragging_allowed:
@@ -153,7 +153,7 @@ func update_height_offset() -> void:
 	var shape_top = scaled_collision_position.y + scaled_aabb_position.y + scaled_aabb_size.y
 
 	_base_height_offset = shape_top / 2
-	heightOffset = shape_top / 2
+	height_offset = shape_top / 2
 
 	water.refresh_marker()
 
@@ -221,7 +221,7 @@ func _on_dragging_started() -> void:
 	(
 		_pickup_tween
 		. tween_property(
-			self, "heightOffset", _base_height_offset + PICKUP_HEIGHT, PICKUP_SPRING_DURATION
+			self, "height_offset", _base_height_offset + PICKUP_HEIGHT, PICKUP_SPRING_DURATION
 		)
 		. from(_base_height_offset)
 		. set_trans(Tween.TRANS_BACK)
@@ -266,7 +266,7 @@ func _on_dragging_stopped() -> void:
 
 	# Kill any active pickup tween
 	_kill_pickup_tween()
-	heightOffset = _base_height_offset
+	height_offset = _base_height_offset
 
 	# Hide drop indicator
 	if _drop_indicator:
@@ -305,7 +305,7 @@ func _on_dragging_cancelled() -> void:
 
 	# Kill any active pickup tween
 	_kill_pickup_tween()
-	heightOffset = _base_height_offset
+	height_offset = _base_height_offset
 
 	# Hide drop indicator
 	if _drop_indicator:
@@ -808,14 +808,14 @@ func set_transform_immediate(p_position: Vector3, p_rotation: Vector3, p_scale: 
 
 
 ## Cancel an in-progress drag because the host denied our lock claim.
-## Uses DragAndDrop3D.cancel_drag() so all state is cleaned up correctly.
+## Uses DragController.cancel_drag() so all state is cleaned up correctly.
 ## No-op if not currently dragging.
 func cancel_from_lock_denied() -> void:
 	if not _is_currently_dragging:
 		return
-	var drag_and_drop := get_tree().get_first_node_in_group("DragAndDrop3D") as DragAndDrop3D
-	if drag_and_drop:
-		drag_and_drop.cancel_drag()
+	var controller := get_tree().get_first_node_in_group(DragController.GROUP) as DragController
+	if controller:
+		controller.cancel_drag()
 
 
 ## Send a drag lock claim to the host (client) or grant it to ourselves (host). The host's

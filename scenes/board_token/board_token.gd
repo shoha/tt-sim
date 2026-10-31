@@ -10,7 +10,7 @@ extends Node3D
 ##
 ## Runtime Scene Tree Structure (built by BoardTokenFactory):
 ## BoardToken (Node3D) - this script
-## ├── DraggingObject3D (DraggableToken)
+## ├── Draggable3D (DraggableToken)
 ## │   └── RigidBody3D
 ## │       ├── CollisionShape3D
 ## │       ├── SelectionGlow (SelectionGlowRenderer) - hover/selection highlight
