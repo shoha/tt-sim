@@ -254,6 +254,25 @@ static func clear_bounds(wall: Wall) -> Rect2:
 	return wall.bounds().grow(1.0)
 
 
+## The corridor of street `wall` (a row) as one plank-like Crossing per segment of its centre
+## line, as wide as the two facade lines are apart (twice the setback, kept in `height_m`).
+## The yards' fronts are cleared by the lots' own strips (clearance_crossings).
+static func street_corridor(wall: Wall) -> Array[Crossing]:
+	var out: Array[Crossing] = []
+	for k in maxi(wall.points.size() - 1, 0):
+		out.append(
+			Crossing.make(
+				0,
+				Crossing.Kind.PLANK,
+				wall.points[k],
+				wall.points[k + 1],
+				Vector3.ZERO,
+				wall.height_m * 2.0
+			)
+		)
+	return out
+
+
 ## Each side of every wall as a plank-like Crossing (anchors, a width of the wall's thickness
 ## and a little), the shape ScatterGround and the native scatter clear plants by: nothing grows
 ## on a wall's footprint or the strip beside it. Pure; the levels are unused.
@@ -261,7 +280,9 @@ static func clearance_crossings(doc: MapDocument) -> Array[Crossing]:
 	var out: Array[Crossing] = []
 	for wall in doc.walls:
 		if wall.is_row():
-			# Under each building, not along the street.
+			# The street's corridor (dressed or not: a street must not read as a forest clearing
+			# with trees along it), then the ground under each building.
+			out.append_array(street_corridor(wall))
 			for lot in row_lots(doc, wall):
 				# The yard's plot when it has one, else the building.
 				var q: PackedVector3Array = (

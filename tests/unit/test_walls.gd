@@ -510,7 +510,9 @@ func test_a_street_builds_buildings_and_clears_plants_under_them() -> void:
 	assert_not_null(node.get_node_or_null("Collision"), "and a hull")
 	assert_eq(WallGeometry.row_lots(_doc, street).size(), lots.size(), "the lots repeat")
 	assert_eq(
-		WallGeometry.clearance_crossings(_doc).size(), lots.size(), "one clearing per building"
+		WallGeometry.clearance_crossings(_doc).size(),
+		lots.size() + street.points.size() - 1,
+		"one clearing per building and one per segment of the street"
 	)
 	var other := street.copy()
 	other.seed_value = 4242
@@ -545,7 +547,31 @@ func test_a_streets_species_is_kept_laid_and_changes_the_buildings() -> void:
 	)
 	assert_eq(village[0].yard, 1, "a village is fenced")
 	# Plants clear over the yard, not only the building.
-	assert_eq(WallGeometry.clearance_crossings(_doc).size(), village.size(), "one clearing per lot")
+	assert_eq(
+		WallGeometry.clearance_crossings(_doc).size(),
+		village.size() + _doc.wall(id).points.size() - 1,
+		"one clearing per lot, and the street's corridor"
+	)
+
+
+func test_a_streets_corridor_is_clear_of_plants_to_the_facade_line() -> void:
+	var editor := _editor()
+	var id := _street(editor)
+	var street := _doc.wall(id)
+	var strips := WallGeometry.clearance_crossings(_doc)
+	var a := street.points[0]
+	var b := street.points[1]
+	var along := (b - a).normalized()
+	var across := Vector2(-along.y, along.x)
+	var setback := street.height_m
+	for t in [0.3, 0.5, 0.9]:
+		var mid := a.lerp(b, t)
+		for off in [0.0, setback * 0.5, setback - 0.2, -(setback - 0.2)]:
+			assert_eq(
+				CrossingGeometry.clearance(strips, mid + across * off), 0.0, "clear %s %s" % [t, off]
+			)
+	var far := a.lerp(b, 0.5) + across * (setback + 14.0)
+	assert_eq(CrossingGeometry.clearance(strips, far), 1.0, "and plants grow well off the street")
 
 
 ## What a street's built parts hold, as one number: the meshes of every part and its hull.
