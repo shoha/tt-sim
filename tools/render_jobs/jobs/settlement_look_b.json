@@ -1,0 +1,33 @@
+{
+ "out_dir": "render_jobs/settlement_look_b",
+ "timeout_s": 400,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "temperate_forest_summer_s1", "size": 250, "seed": 1234},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "wind", "freeze": true},
+  {"op": "eval", "expr": "_authoring_controller.panel._on_rail_item_pressed(\"wall\")"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/walls.gd", "action": "kind", "kind": "row"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "street", "from": [-18, -26], "to": [-18, 26], "preset": 8, "seed": 41},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "street", "from": [18, -26], "to": [18, 26], "preset": 7, "seed": 11},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "dress", "id": 1, "kit": "harbour_town", "wealth": 0.6, "density": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "dress", "id": 2, "kit": "hill_fort_village", "wealth": 0.3, "density": 1.0},
+  {"op": "hide_ui"},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "zoom", "size": 60.0},
+  {"op": "settle"},
+  {"op": "capture", "name": "01_home", "desc": "Harbour town street (left) and hill fort village street (right), forest, home"},
+  {"op": "look_at", "at": [-18, 0]},
+  {"op": "zoom", "size": 24.0},
+  {"op": "settle"},
+  {"op": "capture", "name": "02_harbour", "desc": "Harbour town street, close"},
+  {"op": "look_at", "at": [18, 0]},
+  {"op": "settle"},
+  {"op": "capture", "name": "03_hillfort", "desc": "Hill fort village street, close"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "report"},
+  {"op": "index", "title": "Settlement look B", "intro": "Harbour town and hill fort village in forest"}
+ ]
+}

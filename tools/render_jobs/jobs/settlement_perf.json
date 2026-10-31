@@ -1,0 +1,21 @@
+{
+ "out_dir": "render_jobs/settlement_perf",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "new_map", "biome": "", "size": 250, "seed": 1234},
+  {"op": "wait_ready", "settle": 1.0},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "eval", "expr": "_authoring_controller.panel._on_rail_item_pressed(\"wall\")"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/walls.gd", "action": "kind", "kind": "row"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "street", "from": [-26, -30], "to": [26, -30], "preset": 2, "seed": 3},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "street", "from": [-26, 0], "to": [26, 0], "preset": 2, "seed": 4},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "street", "from": [-26, 30], "to": [26, 30], "preset": 2, "seed": 5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "perf", "kit": "market_town", "density": 1.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "dress", "id": 2, "kit": "market_town", "density": 1.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "dress", "id": 3, "kit": "market_town", "density": 1.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/perf.gd", "action": "info"}
+ ]
+}

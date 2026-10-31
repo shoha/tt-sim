@@ -537,3 +537,22 @@ and map files, use `Furnishing` in tt-sim: `Settlement` record, `settlement_prop
 Smaller calls this doc made on its own (reverse freely): `family: "prop"` inside the existing `structures/`
 kind rather than a new library kind; four starting characters; roads painted via the Paint layer rather than
 a derived mesh; props named `Furnishing` in tt-sim to avoid the existing hero-prop `props` kind.
+
+## 7. Phase 1 as built (host step B, topic `settlement`, 2026-10-31)
+
+The record, codec, layer and the Dress bar are built; see `docs/systems/settlements.md`. Deviations from the
+design above:
+
+- Named `Settlement` (record, editor, layer `AuthoredSettlements`); no `Furnishing` class (the placements are
+  plain dictionaries). Map entry `settlements.json`, cap 8, ids 1 to 32.
+- `pinned` stores the whole placement (a pin must survive a re-dress), not a bare slot id.
+- A removed street leaves its settlement in the document (draws nothing, returns on undo) instead of
+  deleting it.
+- Split freezes the frontage (props stay put); following later house moves is not built.
+- Cells have 4 to 5 surfaces each (opaque wood, stone, thatch, accent, cloth, glass, water), so a dressed
+  52 m two-sided street is 4 to 5 cells and 21 to 25 surfaces: more than the estimate of 18 to 27 draws for
+  150 props. Measured numbers in `docs/PERFORMANCE.md` "Settlement furnishings".
+- Streets still let the scatter grow trees and rocks in the street strip, so in a forest the props are
+  half hidden among trees. The painted road of phase 2 (role `built` clears plants) is the planned fix.
+- Props sit 3 cm in the ground at the sampled centre height; a cart or stall on a slope may float on one
+  side. Slopes over 0.8 rise and water skip the placement.

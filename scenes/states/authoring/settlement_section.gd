@@ -46,7 +46,7 @@ const CHIPS: Array[Dictionary] = [
 const DRESS_TIP := "Furnish this street with the chosen character"
 const REDRESS_TIP := "Furnish this street again: the same character, a new arrangement"
 const CLEAR_TIP := "Take the furnishings away"
-const WEALTH_TIP := "How well off the street is: bare and mended to the left, lamps and awnings right"
+const WEALTH_TIP := "How well off the street is: bare to the left, lamps and awnings to the right"
 const DENSITY_TIP := "How much stands in the street: a few things to the left, crowded to the right"
 
 ## Chip buttons by kit.

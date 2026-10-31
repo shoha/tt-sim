@@ -105,7 +105,6 @@ func _connect_selection(controller: AuthoringController, pane: WallToolPane) -> 
 				pane.show_selection(null)
 	)
 	SettlementBarLink.connect_pane(controller, mode, pane)
-	SettlementBarLink.follow_edits(controller, mode, pane)
 	pane.split_requested.connect(
 		func() -> void:
 			if controller.brush == null or controller.brush.editor == null:
