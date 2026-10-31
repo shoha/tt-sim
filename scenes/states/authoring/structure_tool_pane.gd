@@ -25,9 +25,8 @@ signal done_requested
 signal ornaments_requested(kinds: Array, label: String)
 signal ivy_requested(amount: float)
 
-## The panel's title and subtitle: the whole catalogue, not only houses. (The tool itself stays
-## "Building" on the rail and in key tooltips.)
-const TITLE := "Buildings"
+## The panel's subtitle (the title is the tool's label, "Buildings"): the whole catalogue, not only
+## houses.
 const SUMMARY := "Cottages, castles, windmills and more: click to place, drag to size."
 const VARIANT_THUMB_PX := 56
 ## Tall enough for a Style name on two lines (long names wrap rather than end in dots).
@@ -137,7 +136,7 @@ func _init() -> void:
 	theme_type_variation = &"BoxContainerSnug"
 	var header := MenuHeader.new()
 	header.name = "StructureHeader"
-	header.setup(TITLE, SUMMARY)
+	header.setup(StructureTool.LABEL, SUMMARY)
 	# The subtitle wraps to the pane's width: a long line must not widen the pane under the rail.
 	header.caption_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	header.caption_label.custom_minimum_size = Vector2(1, 0)
