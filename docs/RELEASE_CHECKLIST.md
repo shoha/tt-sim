@@ -86,8 +86,30 @@ All on `main`, working tree clean, nothing unpushed, no sharded gates running at
 - [ ] Third-party attributions that exist today: `THIRD_PARTY_LICENSES.md` (Tabler Icons, MIT;
       ambientCG sky HDRIs, CC0, with a source table). Owner, 2026-10-31: run the audit now.
       A pass over the shipped fonts, audio (`docs/SOUND_EFFECTS.md`), GodotSteam, godot-cpp
-      and the Godot engine notice, so that each has an entry. Status: not done yet. The
-      core-library `NOTICE.md` says third-party material: none.
+      and the Godot engine notice, so that each has an entry. Status 2026-10-31: pass done,
+      findings below, fixes marked. The core-library `NOTICE.md` says third-party material:
+      none.
+      - Covered already: Tabler Icons (MIT), ambientCG skies (CC0), every recorded sound
+        (CC0, with sources), GUT, Icon Explorer, theme_gen, theme_gen_save_sync (each has its
+        licence file), GodotSteam (`addons/godotsteam/license.md`, MIT), FastNoiseLite and
+        godot-cpp (MIT).
+      - Fixed in `THIRD_PARTY_LICENSES.md`: a Fonts section for Fraunces (OFL 1.1, text
+        shipped) and Inter (OFL 1.1).
+      - GAP, AGENT can fix: no OFL text file for Inter beside the font. The OFL asks that the
+        licence travel with the font; take the file from the Inter release the TTF came from.
+      - GAP, OWNER or AGENT: `addons/DragAndDrop3D` (author "DevDrache" in plugin.cfg) and
+        `addons/brackeys_particle_controls` carry no licence file and the table only says
+        "see the directory". Find each upstream licence and copy it in, or replace the addon.
+      - GAP, OWNER: the 36 PBR surface sets in `core` (`surfaces/`, 26 ground, 7 built, 3 cliff)
+        have no recorded provenance in either repository. `NOTICE.md` claims no third-party
+        material, and CC BY 4.0 cannot be applied to textures you do not hold. If they came
+        from a CC0 source (ambientCG, Poly Haven) say which in `NOTICE.md` and here; if they
+        were made in house, say so; if neither, they must not ship under CC BY.
+      - GAP, AGENT can fix: the game has no Licences screen. The Godot engine's MIT notice and
+        its third-party notices should be reachable in the shipped game (the engine exposes
+        `Engine.get_license_text()` and `Engine.get_license_info()`), or shipped as a file in
+        the export. Valve's `steam_api64.dll` also needs its Steamworks SDK redistribution
+        terms noted.
 - [ ] The game's own licence: **all rights reserved** (owner, 2026-10-31). Still to do, once
       the audit is in: a short `LICENSE` file at the tt-sim root (copyright holder and year,
       all rights reserved, and a pointer that the built-in Core library is CC BY 4.0 under its
