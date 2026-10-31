@@ -121,6 +121,8 @@ static func ornament(kind: String) -> ShaderMaterial:
 			material.set_shader_parameter("roughness_amount", 0.5)
 		"cloth":
 			material.set_shader_parameter("tone", CLOTH_TONE)
+			# Banner, pennant and awning cloth moves in the wind (StructureCloth writes the weights).
+			material.set_shader_parameter("cloth_wind", 1.0)
 	return material
 
 

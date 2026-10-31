@@ -168,6 +168,8 @@ static func build_one(doc: MapDocument, structure: Structure, decor: bool = fals
 	StructurePaint.paint(meshes, PackedInt32Array(), [palette])
 	parts.meshes = meshes
 	parts.tag_table = PackedStringArray(geometry.tag_table)
+	# Banner, pennant and awning cloth gets its wind weights in the second UV set (not in digest_of).
+	StructureCloth.attach(meshes, parts.tag_table)
 	parts.collision = geometry.collision
 	parts.walkable = StructureWalkable.faces(meshes, parts.tag_table)
 	# A windmill's sails and cap leave `meshes` for `mill` (they turn in the game); collision, the
