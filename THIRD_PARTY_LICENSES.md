@@ -76,6 +76,13 @@ in `SHOTS`, faded in and out (raised cosine) and peak-normalized to -3 dBFS, 16-
 | `sculpt_start`, `sculpt_settle` | Digging in wet course sand (raw file); (2) | f3bbbo | https://freesound.org/people/f3bbbo/sounds/651294/, .../651293/ | CC0 1.0 |
 | `sculpt_tick` | Digging Into Soft Soil with Small Trowell.wav | dhallcomposer | https://freesound.org/people/dhallcomposer/sounds/696531/ | CC0 1.0 |
 
+## Fonts (assets/fonts/)
+
+| File | Font | Licence |
+|---|---|---|
+| `assets/fonts/fraunces/Fraunces-Variable.ttf`, `Fraunces-Italic-Variable.ttf` | Fraunces, Copyright 2018 The Fraunces Project Authors (https://github.com/undercasetype/Fraunces) | SIL Open Font License 1.1, `assets/fonts/fraunces/OFL.txt` |
+| `assets/fonts/Inter-VariableFont_opsz,wght.ttf` | Inter, The Inter Project Authors (https://github.com/rsms/inter) | SIL Open Font License 1.1 (the licence text file is not in the repository yet, see the release checklist) |
+
 ## Vendored addons
 
 Each addon under `addons/` carries its own licence file:
