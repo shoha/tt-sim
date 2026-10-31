@@ -1,0 +1,49 @@
+Sound recordings (assets/audio/)
+
+Every other sound in assets/audio/ is synthesized in house. The recordings below are released
+under the Creative Commons CC0 1.0 Universal Public Domain Dedication
+(https://creativecommons.org/publicdomain/zero/1.0/); no attribution is required, and the
+sources are listed for provenance. Each was edited (filtered, trimmed, faded and normalised).
+
+Fire (fire_roar)
+  R27-25-Large Fire Burning.wav (pack "Vintage Fire (Red Lib)") by craigsmith
+  https://freesound.org/people/craigsmith/sounds/483318/
+
+Planting (plant_*)
+  Rustling foilage 1.wav and 3.wav by GUS_MAN
+  https://freesound.org/people/GUS_MAN/sounds/190641/
+  https://freesound.org/people/GUS_MAN/sounds/190639/
+
+Props, undo and redo (prop_*, undo, redo)
+  Balsa hit 1.wav, 2.wav, 4.wav and 5.wav by LloydEvans09
+  https://freesound.org/people/LloydEvans09/sounds/186401/
+  https://freesound.org/people/LloydEvans09/sounds/186400/
+  https://freesound.org/people/LloydEvans09/sounds/186398/
+  https://freesound.org/people/LloydEvans09/sounds/186405/
+
+Water (water_start)
+  Small Water Splash and Water Splash by qubodup
+  https://freesound.org/people/qubodup/sounds/737233/
+  https://freesound.org/people/qubodup/sounds/737234/
+
+Water (water_tick)
+  Quick Splash (dropping grapes into a glass of water) by asherkaye2
+  https://freesound.org/people/asherkaye2/sounds/538143/
+
+Water (water_*)
+  water_splash_10shots.wav by vibe_crc
+  https://freesound.org/people/vibe_crc/sounds/50623/
+
+Painting (paint_*)
+  normal paint strokes_1-2.aif and slowpaintstrokes_1-2.aif by acrober
+  https://freesound.org/people/acrober/sounds/86113/
+  https://freesound.org/people/acrober/sounds/86114/
+
+Sculpting (sculpt_start, sculpt_settle)
+  Digging in wet course sand (raw file) and (2) by f3bbbo
+  https://freesound.org/people/f3bbbo/sounds/651294/
+  https://freesound.org/people/f3bbbo/sounds/651293/
+
+Sculpting (sculpt_tick)
+  Digging Into Soft Soil with Small Trowell.wav by dhallcomposer
+  https://freesound.org/people/dhallcomposer/sounds/696531/

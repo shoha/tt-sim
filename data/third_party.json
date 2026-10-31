@@ -1,0 +1,128 @@
+{
+	"_comment": "What the Licences page (Settings, About) lists, beyond the Godot engine's own notices (Engine.get_license_text and friends, added at runtime). One entry per third-party item that ships in an export. covers: the names THIRD_PARTY_LICENSES.md uses for the item (tests/unit/test_third_party_licences.gd keeps the two in step). paths: the addon folders it stands for. text: the notice inline, or text_path: a file that ships in the export (export_presets.cfg include_filter). not_shipped: addons the export filter leaves out, so the page does not list them.",
+	"entries": [
+		{
+			"id": "game",
+			"group": "This game",
+			"name": "TTSim",
+			"what": "The game, its source code, scenes, shaders and tools.",
+			"licence": "All rights reserved",
+			"reflow": true,
+			"text_path": "res://LICENSE"
+		},
+		{
+			"id": "core_library",
+			"group": "This game",
+			"name": "Core library",
+			"what": "The built-in library of scenery, biomes and ground surfaces.",
+			"licence": "CC BY 4.0",
+			"credit": "Core library by Hannah Shore, CC BY 4.0",
+			"reflow": true,
+			"text_path": "res://libraries/core/LICENSE.md"
+		},
+		{
+			"id": "godotsteam",
+			"group": "Code",
+			"name": "GodotSteam",
+			"what": "Steam integration for Godot, by GP Garcia, Chris Ridenour and contributors.",
+			"licence": "MIT",
+			"covers": ["GodotSteam"],
+			"paths": ["addons/godotsteam"],
+			"reflow": true,
+			"text_path": "res://addons/godotsteam/license.md"
+		},
+		{
+			"id": "steamworks",
+			"group": "Code",
+			"name": "Steamworks redistributable",
+			"what": "Valve's steam_api64.dll (and the steam_api libraries for the other platforms) in the Steam builds.",
+			"licence": "Valve's Steamworks terms",
+			"text": "The Steamworks redistributable (steam_api64.dll on Windows, with the matching steam_api libraries on macOS and Linux) belongs to Valve. It is used under Valve's Steamworks terms, is not covered by this game's licence, and keeps Valve's own signature.\n\nSteamworks is available at https://partner.steamgames.com/"
+		},
+		{
+			"id": "drag_and_drop_3d",
+			"group": "Code",
+			"name": "Easy Drag and Drop 3D",
+			"what": "Dragging and dropping 3D bodies, by DevDrache.",
+			"licence": "MIT (as listed in the Godot Asset Library)",
+			"covers": ["DragAndDrop3D"],
+			"paths": ["addons/DragAndDrop3D"],
+			"text": "Easy Drag and Drop 3D by DevDrache, https://github.com/derdrache/DragAndDrop3D\n\nThe Godot Asset Library lists this addon under the MIT licence. The addon folder does not carry its own copy of the licence text yet."
+		},
+		{
+			"id": "fastnoiselite",
+			"group": "Code",
+			"name": "FastNoiseLite",
+			"what": "Noise functions in the native scatter library, by Jordan Peck and contributors.",
+			"licence": "MIT",
+			"covers": ["native/thirdparty/FastNoiseLite.h"],
+			"reflow": true,
+			"text_path": "res://data/licences/fastnoiselite.txt"
+		},
+		{
+			"id": "godot_cpp",
+			"group": "Code",
+			"name": "godot-cpp",
+			"what": "The C++ bindings the native scatter library is built with.",
+			"licence": "MIT",
+			"covers": ["native/godot-cpp/"],
+			"reflow": true,
+			"text_path": "res://data/licences/godot-cpp.txt"
+		},
+		{
+			"id": "tabler",
+			"group": "Art, sound and type",
+			"name": "Tabler Icons",
+			"what": "The interface icons, by Paweł Kuna.",
+			"licence": "MIT",
+			"covers": ["Tabler Icons"],
+			"reflow": true,
+			"text_path": "res://data/licences/tabler-icons.txt"
+		},
+		{
+			"id": "skies",
+			"group": "Art, sound and type",
+			"name": "Sky panoramas",
+			"what": "Seven HDRI skies from ambientCG.",
+			"licence": "CC0 1.0",
+			"covers": ["Sky HDRIs"],
+			"text_path": "res://data/licences/sky-hdris.txt"
+		},
+		{
+			"id": "sounds",
+			"group": "Art, sound and type",
+			"name": "Sound recordings",
+			"what": "Field recordings from Freesound behind the fire, planting, props, water, painting and sculpting sounds.",
+			"licence": "CC0 1.0",
+			"covers": ["Sound recordings"],
+			"text_path": "res://data/licences/sound-recordings.txt"
+		},
+		{
+			"id": "fraunces",
+			"group": "Art, sound and type",
+			"name": "Fraunces",
+			"what": "The display typeface, by The Fraunces Project Authors.",
+			"licence": "SIL Open Font License 1.1",
+			"covers": ["assets/fonts/fraunces/Fraunces-Variable.ttf"],
+			"reflow": true,
+			"text_path": "res://assets/fonts/fraunces/OFL.txt"
+		},
+		{
+			"id": "inter",
+			"group": "Art, sound and type",
+			"name": "Inter",
+			"what": "The interface typeface, by The Inter Project Authors.",
+			"licence": "SIL Open Font License 1.1",
+			"covers": ["assets/fonts/Inter-VariableFont_opsz,wght.ttf"],
+			"reflow": true,
+			"text_path": "res://assets/fonts/Inter-OFL.txt"
+		}
+	],
+	"not_shipped": [
+		{"name": "GUT", "path": "addons/gut", "reason": "test framework, left out of the export"},
+		{"name": "Icon Explorer", "path": "addons/icon_explorer", "reason": "editor tool, left out of the export"},
+		{"name": "theme_gen", "path": "addons/theme_gen", "reason": "editor tool, left out of the export"},
+		{"name": "theme_gen_save_sync", "path": "addons/theme_gen_save_sync", "reason": "editor tool, left out of the export"},
+		{"name": "validation_bridge", "path": "addons/validation_bridge", "reason": "this project's own test bridge, left out of the export"}
+	]
+}

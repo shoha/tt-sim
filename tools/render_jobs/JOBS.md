@@ -508,6 +508,11 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (the input hint bar). `probes/ui_primitives.gd report` logs the underline against the
   selected item's centre, the chevron's rect against its title and the hint bar's rect
   against the window. The job deletes `_u1_ui_hud` at the end (`cleanup`).
+- `jobs/licences_look.json`: the Licences page (about 25 s), at 1600x900: Settings on About, the
+  page as opened, the Core library (credit line), Tabler Icons with the notice pane focused,
+  the engine's own notice and the engine components list scrolled
+  (`probes/licences.gd`: `about`, `open`, `select`, `scroll`, `focus_text`, `report`, `close`).
+  No level is made.
 - `jobs/play_together.json`: the title's Play together card and Resume (50 captures, about 60
   s), over a staged library and staged saved sessions (`probes/ui_play_together.gd`; nothing
   is hosted, joined or written), at 1280x720 and 1920x1080: rest, both hovers and keyboard
