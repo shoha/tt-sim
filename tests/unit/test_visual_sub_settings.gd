@@ -51,7 +51,9 @@ func test_lofi_copy_is_independent() -> void:
 func test_weather_defaults_are_zero_and_round_trip() -> void:
 	var weather := WeatherSettings.default()
 	for key in WeatherSettings.KEYS:
-		assert_eq(float(weather.get(key)), 0.0, key)
+		# Every key defaults to 0 except the wind direction, whose "default direction" is -1.
+		var expected := WeatherSettings.WIND_DIRECTION_AUTO if key == "wind_direction_deg" else 0.0
+		assert_eq(float(weather.get(key)), expected, key)
 	weather.rain_intensity = 0.7
 	var back := WeatherSettings.from_dict(weather.to_dict())
 	assert_almost_eq(back.rain_intensity, 0.7, 0.000001)

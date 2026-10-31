@@ -1174,10 +1174,14 @@ before, serialized under the `weather_overrides` key:
     "snow_intensity": 0.0,
     "fog_intensity": 0.0,
     "wind_intensity": 0.0,
+    "wind_seed": 0.0,           # phases the gust fronts; 0 = derive from the level folder
+    "wind_direction_deg": -1.0, # degrees on (x, z), 0 = +x, 90 = +z; below 0 = the default (-z)
 }
 ```
 
-All values default to 0.0. An empty dictionary means no weather. Multiple effects can be active simultaneously.
+All values default to 0.0 (`wind_direction_deg` to -1.0, "default direction"); saved levels without the two wind fields load with those defaults. An empty dictionary means no weather. Multiple effects can be active simultaneously.
+
+`wind_intensity` is also the strength dial of the one global wind (`Wind` autoload, [systems/wind.md](systems/wind.md)): plants sway and gust by it whether or not the Wind tile's particles are on. Rain, snow and the wind streaks still slant with their own fixed direction until phase (b) of that design.
 
 ### UI Controls
 
@@ -1226,7 +1230,8 @@ All intensity changes animate smoothly over 1 second via tweens on `amount_ratio
 | `scenes/states/playing/gameplay_menu_controller.gd` | Signal routing, snapshot/revert, network broadcast |
 | `scenes/states/playing/level_play_controller.gd` | Lifecycle (setup, network sync, teardown) |
 | `scenes/states/playing/game_map.gd` | `setup_weather()`, `apply_weather_overrides()`, `clear_weather()` |
-| `utils/wind_foliage.gd` | `PRESETS`, `get_effective_preset()` — foliage wind-sway classification and per-category preset merging |
+| `utils/wind_foliage.gd` | `PRESETS`, `get_effective_preset()` — foliage wind-sway classification and per-category preset merging (`wind_response` = how far a category follows the global sway scale) |
+| `autoloads/wind.gd`, `utils/wind_model.gd`, `utils/wind_presets.gd`, `utils/wind_state.gd` | The global wind the foliage shaders read through the `wind_dir`, `wind_phase` and `wind_gust` global uniforms (direction, gust fronts and their clock are no longer per-material or per-peer): [systems/wind.md](systems/wind.md) |
 | `utils/glb_utils.gd` | Bakes `foliage_overrides` into wind `ShaderMaterial`s at map-load time (`process_scatter_instances()`) |
 | `resources/level_data.gd` | `foliage` field (typed `FoliageSettings`; serialization, duplication) |
 | `scenes/states/playing/level_environment_manager.gd` | `store_wind_materials()`, `apply_foliage_overrides()` — live re-tuning of already-loaded materials |

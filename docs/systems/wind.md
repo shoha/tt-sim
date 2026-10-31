@@ -8,10 +8,11 @@ and performance before new styles. The bar it is judged against is the suite's: 
 at tabletop zoom (a gust you can watch cross a meadow, not a uniform shimmer), painterly, lively,
 and never the same wind everywhere (`AGENTS.md` at the suite root, "Guiding principle").
 
-Status: DESIGN ONLY. No code changed, nothing measured (another agent held the game's user
-folder, so no Godot process was run). Every number marked "start" is a tuning start, to be set in
-a render round; every cost marked "budget" is a target to be measured with the
-[PERFORMANCE.md](../PERFORMANCE.md) procedure, not a result.
+Status (2026-10-30): phase (a) DONE on branch `wind_a` (see "Phase (a) as built" below); phases
+(b) particles, (c) mills and cloth, (d) decor, (e) GM controls, (f) optional are NOT STARTED, and
+the rest of this document is still the design they build from. Where the design and the code
+disagree, the code is right and the section below says so. Every number marked "start" is a tuning
+start; the ones phase (a) tuned are listed below, the rest wait for their phase's render round.
 
 ## 1. Inventory: what moves today
 
@@ -367,6 +368,88 @@ Chimney smoke lean (`fire_smoke*.gdshader` take `wind_dir` for a drift vector, a
 motes drifting with the wind, a faint chop on water (`water.gdshader` wave amplitude times a
 `wind_dir.z`-derived factor). Each is independently measured and none blocks the others.
 
+### Phase (a) as built (2026-10-30, branch `wind_a`)
+
+Owner decisions of 2026-10-30 applied: the default direction is toward -z, rain and snow will
+always slant with the wind (phase b), windmills will follow the wind clamped to 50 degrees of the
+camera-friendly bearing (phase c), the gust front speed is constant.
+
+What exists:
+
+- **`autoloads/wind.gd`** (`Wind`, registered last in `[autoload]`): `state` (the immutable
+  `WindState` being drawn), `target`, `set_preset(name)`, `set_from_weather(settings, level_key)`,
+  `apply_weather_dict(dict, level_key)` (a sparse dictionary keeps the other keys), `wind_at(pos)`,
+  `direction_at(pos)` (unit, y = 0), `clock()`, `set_clock_override(s)` / `clear_clock_override()` /
+  `is_clock_pinned()` (the pinned clock render jobs and tests use; `steady.freeze_wind` and
+  `ThumbnailShot` pin it at 0 and release it), `snap()`, `publish(t)`, `set_wind_motion(v)` and
+  `motion_scale()`. `_process` eases `state` toward `target` over 2.5 s (exponential) and publishes.
+- **`utils/wind_state.gd`, `utils/wind_presets.gd`, `utils/wind_model.gd`**: the pure parts, no scene
+  tree. `WindPresets.STOPS` is the table of 2.5 (linear between stops, the ripple eased);
+  `WindModel.wind_at`, `gust_at`, `direction_at`, `phases(t)` and `uniforms(state, t, motion)`.
+- **Globals** in `project.godot` `[shader_globals]` with calm defaults: `wind_dir` (x, z unit
+  direction, mean speed, sway scale), `wind_phase` (three front phases, the fourth unused), `wind_gust`
+  (gust amplitude, ripple, the seed's phase, **motion scale**). Each is set only when its value
+  changed (counted in `Wind.publish_count`); the phases change every frame, the others on a change.
+- **Plant shaders** (`wind_foliage_include.gdshaderinc`, which every variant including burn and the
+  debug ones shares): the per-material `wind_direction` and `gust_speed` uniforms are gone; the gust
+  field is `wind_gust_field(xz)`, the same two sines as before plus the storm ripple, reading the
+  globals; `gust_strength` is now the calm value and rises with `wind_gust.x / 0.35` (capped at 1.2);
+  sway, lean and flutter scale by the motion scale. A new per-category uniform `wind_response`
+  (`WindFoliage.PRESETS`) says how far a category follows the sway scale: the amplitude factor is
+  `1 + (sway_scale - 1) * wind_response`, so calm is untouched.
+- **WeatherSettings**: `wind_seed` (float in the dictionary, 24 bits, 0 = unseeded; with a level
+  key it derives from the level folder name) and `wind_direction_deg` (-1 = the default, -z). Old
+  saved levels load with those defaults. `GameMap.apply_weather_overrides` feeds the wind (also
+  when no weather renderer exists), `clear_weather` sets calm.
+- **Accessibility**: `UiMotion.reduced()` is polled once a second; the player's `[graphics]
+  wind_motion` setting (default 1.0, loaded at startup, `Wind.set_wind_motion`; UI is phase e)
+  multiplies amplitudes. Motion scale 0 holds every plant at its rest pose and stops the phase
+  publishing. It scales amplitudes only, never the clock.
+- **Tests**: `tests/unit/test_wind_model.gd`, `tests/unit/test_wind_autoload.gd`. Render job
+  `jobs/wind_a_look.json` (presets at two pinned clocks, a cost probe) and `jobs/wind_a_ab.json`
+  (the calm A/B), probe `probes/wind.gd` (`set`, `report`, `cost`).
+
+Deviations from the design, and what was learned:
+
+1. **Motion scale lives in `wind_gust.w`, not in `wind_dir.w`.** `wind_dir.w` is the preset's
+   sway scale alone, so a category's `wind_response` can blend it toward 1 without also blending a
+   motion scale of 0 toward 1.
+2. **Front speeds are not both 3 m/s.** The first front moves at 3 m/s, the second (19 m) at 0.8 of
+   it, as the shader always did. So the field is not one rigid translation; the unit test checks the
+   first front's phase and that the field repeats exactly after 380 s, when both have completed
+   whole cycles.
+3. **Tree `wind_response` is 0.5, not 1.0.** In the render round a storm (sway scale 3.2, gust 1.0)
+   on trees sheared crown leaf cards off their limbs (a lone card stretched across the frame).
+   At 0.5 the trees lean 1.6x at windy and 2.1x at storm and the shear is gone; grass keeps 1.25
+   (a blade tip moves only centimetres) and climbers 0.6. The cap of 0.35 m at a tree tip in 2.5
+   was not met by the code even at calm (an authored tip at 6 m moves up to 0.8 m with a gust), so
+   it was not enforced; judge by the render. The gust gain is capped at 1.2 times `gust_strength`.
+4. **The calm look is the old look only with the old direction.** The design kept the plant gust
+   direction (0.857, 0.514) at calm; the owner's default of -z changes it. The A/B was run with
+   `wind_direction_deg` 30.94 (the old direction), the wind frozen (clock 0, sway and flutter speeds 0).
+   Result: mean channel difference 0.007 at home zoom, 0.15 to 0.26 at close zoom, against 0.12 to
+   0.24 between two runs of the same code, so the shader change matches main within the renderer's
+   run-to-run noise. Per-peer `TIME` no longer decides where a front is.
+5. **`global_shader_parameter_get` returns null outside the editor** (the engine logs "should never
+   be used outside the editor"), so the probe reports `Wind._published`, the last value pushed.
+6. **`steady.freeze_wind` and `ThumbnailShot`** zeroed `gust_speed`; that uniform no longer exists,
+   so they pin the wind clock at 0 instead (and keep zeroing `sway_speed` and `flutter_speed`).
+   Biome thumbnails therefore take the default -z gust at clock 0, not the old direction.
+7. **Not done in phase (a), as the design says**: nothing in the weather renderer or the mill reads
+   the wind yet, and per-plant sway (`sin(TIME * sway_speed + phase)`) still reads `TIME`, so it keeps
+   its hourly wrap. `Wind.debug_disable` and `Wind.debug_state` of 5 and 6 were not built; the
+   pinned clock and `probes/wind.gd set` cover the tuning use.
+
+How the look reads (renders in `render_jobs/wind_a_look`, forest map, calm, windy and storm at two
+clocks 6 s apart, default -z and +x): trees lean together, by different amounts across the view, and
+the lean moves between the two clocks (a front passed); the storm reads stronger by lean and
+shear, not by faster fronts, as designed. Grass is too small on this map's view for individual
+blades to read as a wave at tabletop zoom: the travelling gust reads on the tree crowns, and a
+meadow-only map should be judged next. With the default -z direction the lean runs along the
+view axis, so crowns appear to rise and sink more than to swing sideways; a direction with a lateral
+component (the owner's call, open question 1 again) would show gusts more clearly. Two stills
+cannot prove travel: a 20 s capture is still the judgment to make in phase (b).
+
 ## 5. Look, tuning and accessibility
 
 ### How gusts should read
@@ -475,3 +558,5 @@ working days including the pinned-clock A/B. Phase (b) next (rain and snow, abou
 ## History
 
 - 2026-10-30: design written (branch `wind_design`), no code.
+- 2026-10-30: phase (a) built on branch `wind_a` (autoload, pure model, global uniforms, plant
+  shaders, reduce-motion and wind-motion scale, tests, render and cost measurements).

@@ -39,7 +39,9 @@ const _TREE_KEYWORDS := ["tree", "oak", "pine", "birch", "branch", "canopy"]
 # sway_frequency, not exposed for per-level tuning: the flutter is treecube's graded
 # per-card rustle (small on purpose -- 3 cm of it read as a shimmer at the home zoom),
 # and the gust field is what makes neighbouring plants bend together (see
-# wind_gust in wind_foliage_include.gdshaderinc). Grass gets a stronger gust and a
+# wind_gust_field in wind_foliage_include.gdshaderinc). The wind itself (direction, front
+# phases, strength) is global: autoloads/wind.gd publishes it, and wind_response says how far
+# a category follows the global sway scale (docs/systems/wind.md). Grass gets a stronger gust and a
 # livelier flutter than trees because its cards are short and the whole tuft is tip.
 const PRESETS := {
 	"tree":
@@ -51,6 +53,9 @@ const PRESETS := {
 		"flutter_amplitude": 0.012,
 		"flutter_speed": 3.0,
 		"gust_strength": 0.6,
+		# 0.5, not the design's 1.0: at 1.0 a storm (sway scale 3.2) sheared a crown's leaf cards
+		# off the limbs in the wind_a render round (2026-10-30); 0.5 gives 1.6 at windy, 2.1 storm.
+		"wind_response": 0.5,
 	},
 	"grass":
 	{
@@ -61,6 +66,7 @@ const PRESETS := {
 		"flutter_amplitude": 0.02,
 		"flutter_speed": 4.0,
 		"gust_strength": 0.7,
+		"wind_response": 1.25,
 	},
 	# Wall climbers and window planters (decor assets): held by their wall or box, so a small, quick
 	# sway with a lively leaf flutter and no base darkening (a wall, not the ground, is behind them).
@@ -73,6 +79,7 @@ const PRESETS := {
 		"flutter_amplitude": 0.022,
 		"flutter_speed": 4.5,
 		"gust_strength": 0.5,
+		"wind_response": 0.6,
 	},
 }
 

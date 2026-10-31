@@ -1,0 +1,254 @@
+{
+ "out_dir": "render_jobs/wind_a_look",
+ "timeout_s": 600,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/landform.gd",
+   "action": "new",
+   "biome": "temperate_forest_summer_s1",
+   "size": 150,
+   "seed": 1234,
+   "landform": "flat"
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/close_zoom.gd",
+   "action": "fade",
+   "on": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tree_fade.gd",
+   "factor": 0
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ground_parity.gd",
+   "action": "nocursor"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "clock": 0.0,
+   "sway": false
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "calm_t0_home",
+   "desc": "calm, clock 0 s, default direction (-z)"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "clock": 6.0,
+   "sway": false
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "calm_t6_home",
+   "desc": "calm, clock 6 s, default direction (-z)"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "windy",
+   "clock": 0.0,
+   "sway": false
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "windy_t0_home",
+   "desc": "windy, clock 0 s, default direction (-z)"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "windy",
+   "clock": 6.0,
+   "sway": false
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "windy_t6_home",
+   "desc": "windy, clock 6 s, default direction (-z)"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 0.0,
+   "sway": false
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "storm_t0_home",
+   "desc": "storm, clock 0 s, default direction (-z)"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 6.0,
+   "sway": false
+  },
+  {
+   "op": "home"
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "storm_t6_home",
+   "desc": "storm, clock 6 s, default direction (-z)"
+  },
+  {
+   "op": "zoom",
+   "size": 14
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "windy",
+   "clock": 0.0,
+   "sway": false,
+   "dir_deg": 0
+  },
+  {
+   "op": "capture",
+   "name": "windy_x_t0_close",
+   "desc": "windy, clock 0 s, toward +x, close"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "windy",
+   "clock": 6.0,
+   "sway": false,
+   "dir_deg": 0
+  },
+  {
+   "op": "capture",
+   "name": "windy_x_t6_close",
+   "desc": "windy, clock 6 s, toward +x, close"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 0.0,
+   "sway": false,
+   "dir_deg": 0
+  },
+  {
+   "op": "capture",
+   "name": "storm_x_t0_close",
+   "desc": "storm, clock 0 s, toward +x, close"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 6.0,
+   "sway": false,
+   "dir_deg": 0
+  },
+  {
+   "op": "capture",
+   "name": "storm_x_t6_close",
+   "desc": "storm, clock 6 s, toward +x, close"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "cost",
+   "n": 20000
+  }
+ ]
+}

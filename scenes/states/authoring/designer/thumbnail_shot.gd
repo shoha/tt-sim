@@ -9,7 +9,9 @@ extends RefCounted
 ## off) and the camera on the map's centre at the standard zoom, so two takes of one document
 ## on one machine draw the same pixels. `restore` puts everything back.
 
-const WIND_SPEEDS: Array[String] = ["sway_speed", "flutter_speed", "gust_speed"]
+## The gust field no longer reads a material's speed: it follows the global wind clock, which
+## `freeze` pins at 0 (Wind.set_clock_override) and `restore` releases.
+const WIND_SPEEDS: Array[String] = ["sway_speed", "flutter_speed"]
 
 
 ## Freezes the wind and the canopy fades of `game_map` and frames the camera. Returns what
@@ -30,6 +32,7 @@ static func prepare(
 ## `prepare` brings new ones), adding them to `held`. Returns how many were new.
 static func freeze(game_map: GameMap, held: Dictionary) -> int:
 	var fresh := 0
+	Wind.set_clock_override(0.0)
 	var parts: Dictionary = held["parts"]
 	var winds: Dictionary = held["winds"]
 	for material in WindFoliage.collect_foliage_shader_materials(game_map.map_container):
@@ -52,6 +55,7 @@ static func freeze(game_map: GameMap, held: Dictionary) -> int:
 ## Puts back what `prepare` and `freeze` changed (not the camera).
 static func restore(held: Dictionary) -> void:
 	CanopyFade.enabled = bool(held.get("fade", CanopyFade.enabled))
+	Wind.clear_clock_override()
 	var parts: Dictionary = held.get("parts", {})
 	for material: Variant in parts:
 		if is_instance_valid(material):
