@@ -72,7 +72,9 @@ func test_ease_converges_and_never_overshoots() -> void:
 		x = StructureWind.ease_toward(x, 1.0, 0.016, StructureWind.EASE_SECONDS)
 		assert_lte(x, 1.0)
 	assert_gt(x, 0.99)
-	var one := StructureWind.ease_toward(0.0, 1.0, StructureWind.EASE_SECONDS, StructureWind.EASE_SECONDS)
+	var one := StructureWind.ease_toward(
+		0.0, 1.0, StructureWind.EASE_SECONDS, StructureWind.EASE_SECONDS
+	)
 	assert_almost_eq(one, 1.0 - exp(-1.0), 0.0001, "one time constant covers 63 percent")
 
 
@@ -113,3 +115,38 @@ func test_mill_eases_and_stills() -> void:
 	var spin := pivot.spin()
 	pivot.step_wind(0.5, storm, 0.0)
 	assert_almost_eq(pivot.spin(), spin, 0.001)
+
+
+func test_cost_of_ten_mills_and_thirty_vanes_per_frame() -> void:
+	# The card's budget is 0.05 ms for the three consumers (the cloth costs the CPU nothing). The
+	# assert is loose (a loaded machine runs this); the printed numbers are the measurement.
+	var mills: Array[MillMotion] = []
+	for i in 10:
+		var m := MillMotion.new()
+		var wheel := Node3D.new()
+		m.add_child(wheel)
+		m.position = Vector3(i * 9.0, 0.0, i * 3.0)
+		m.setup(wheel, Vector3(0.0, 0.0, 1.0), i)
+		add_child_autofree(m)
+		mills.append(m)
+	var vanes: Array[VaneMotion] = []
+	for i in 30:
+		var v := VaneMotion.new()
+		v.position = Vector3(i * 7.0, 0.0, -i * 2.0)
+		v.setup(Vector3.RIGHT)
+		add_child_autofree(v)
+		vanes.append(v)
+	var frames := 2000
+	var t0 := Time.get_ticks_usec()
+	for f in frames:
+		for m in mills:
+			m.step(0.016)
+	var t1 := Time.get_ticks_usec()
+	for f in frames:
+		for v in vanes:
+			v.step(0.016)
+	var t2 := Time.get_ticks_usec()
+	var mill_us := float(t1 - t0) / frames
+	var vane_us := float(t2 - t1) / frames
+	gut.p("10 mills %.1f us/frame, 30 vanes %.1f us/frame" % [mill_us, vane_us])
+	assert_lt(mill_us + vane_us, 500.0)

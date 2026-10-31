@@ -48,11 +48,11 @@ vec3 s_cloth_wind(vec3 vertex, vec2 weight, mat4 model) {
 	float strength = clamp(0.25 + wind_dir.z / 10.0, 0.0, 1.6);
 	vec3 down = vec3(wind_dir.x, 0.0, wind_dir.y);
 	vec3 across = vec3(-wind_dir.y, 0.0, wind_dir.x);
-	float lean = strength * (0.10 + 0.22 * g) * weight.y;
+	float lean = strength * (0.12 + 0.34 * g) * weight.y;
 	float ph = TIME * (2.0 + strength * 2.5) + dot(w.xz, vec2(1.7, 2.3)) + weight.x * 3.0;
 	float f1 = sin(ph);
 	float f2 = sin(ph * 1.7 + 1.3);
-	float amp = strength * (0.03 + 0.08 * g);
+	float amp = strength * (0.04 + 0.12 * g);
 	// A flag flutters across the wind and along it; an awning (lean 0) flaps up and down.
 	vec3 flutter = across * f1 * amp + down * f2 * amp * 0.5 * weight.y + vec3(0.0, 1.0, 0.0) * f2 * amp * (1.2 - weight.y * 0.9);
 	return weight.x * motion * (down * lean + flutter);

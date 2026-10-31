@@ -44,7 +44,11 @@ func test_the_split_keeps_every_triangle_and_the_digest() -> void:
 		for tag in mesh.tags:
 			var path: String = parts.tag_table[tag]
 			assert_true(
-				path.ends_with("vane/arrow") or path.ends_with("vane/shaft") or path.ends_with("vane/tail"),
+				(
+					path.ends_with("vane/arrow")
+					or path.ends_with("vane/shaft")
+					or path.ends_with("vane/tail")
+				),
 				path
 			)
 
@@ -99,4 +103,6 @@ func test_the_gust_wobble_is_zero_at_an_average_gust_and_grows_with_the_wind() -
 	assert_lt(StructureWind.vane_wobble(1.0, 14.0), 0.3)
 	assert_gt(StructureWind.vane_wobble(1.0, 14.0), StructureWind.vane_wobble(1.0, 4.0))
 	assert_lt(StructureWind.vane_wobble(0.0, 14.0), 0.0)
-	assert_almost_eq(StructureWind.vane_wobble(1.0, 140.0), StructureWind.vane_wobble(1.0, 14.0), 0.0001)
+	assert_almost_eq(
+		StructureWind.vane_wobble(1.0, 140.0), StructureWind.vane_wobble(1.0, 14.0), 0.0001
+	)

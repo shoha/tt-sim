@@ -1,12 +1,13 @@
 class_name MillMotion
 extends Node3D
 
-## A windmill's cap pivot (topic range_look, 2026-10-30; wind_c, 2026-10-30): this node stands at the
-## tower's centre and carries the cap meshes; its child `wheel` stands at the hub and carries the
-## sails. The cap turns to face into the global wind (the Wind autoload), clamped to a cone of 50
-## degrees about WIND_FROM, and the wheel turns about the axis from the centre to the hub at a speed
-## that rises with the wind. Only two transforms change per frame, no mesh is rebuilt. StructureMill
-## cuts the parts out; AuthoredStructures.mill_node builds this from a build's `mill` parts.
+## A windmill's cap pivot (topic range_look, 2026-10-30; wind_c, 2026-10-30): this node stands at
+## the tower's centre and carries the cap meshes; its child `wheel` stands at the hub and carries
+## the sails. The cap turns to face into the global wind (the Wind autoload), clamped to a cone of
+## 50 degrees about WIND_FROM, and the wheel turns about the axis from the centre to the hub at a
+## speed that rises with the wind. Only two transforms change per frame, no mesh is rebuilt.
+## StructureMill cuts the parts out; AuthoredStructures.mill_node builds this from a build's `mill`
+## parts.
 ##
 ## The cone: the weather's own direction would put the sails edge-on to the default camera, where
 ## they vanish (the first render round, 2026-10-30), so the cap follows the wind only within
@@ -36,6 +37,10 @@ var _facing := 0.0
 var _offset := 0.0
 ## The eased sail speed, radians per second, before the per-building factor.
 var _speed := 0.0
+## The wind and motion scale of the last sample, and the seconds since it.
+var _wind := Vector3.ZERO
+var _motion_now := 1.0
+var _age := 0.0
 
 
 ## Sets the pivots up. `seed_value` varies the speed per building. The cap and the sails start in
@@ -47,7 +52,10 @@ func setup(wheel_pivot: Node3D, axis: Vector3, seed_value: int) -> void:
 	spin_speed = 1.0 + (unit - 0.5) * 2.0 * SPIN_SPREAD
 	_spin = unit * TAU
 	_facing = facing_angle(axis, WIND_FROM)
-	snap_to(_sample(), _motion())
+	_wind = _sample()
+	_motion_now = _motion()
+	_age = unit * StructureWind.SAMPLE_SECONDS
+	snap_to(_wind, _motion_now)
 	set_process(true)
 
 
@@ -75,7 +83,13 @@ func snap_to(wind: Vector3, motion: float) -> void:
 
 ## Advances the animation by `delta` seconds for the global wind and poses the pivots.
 func step(delta: float) -> void:
-	step_wind(delta, _sample(), _motion())
+	# The wind is sampled every StructureWind.SAMPLE_SECONDS (the easing smooths between samples).
+	_age += delta
+	if _age >= StructureWind.SAMPLE_SECONDS:
+		_age = 0.0
+		_wind = _sample()
+		_motion_now = _motion()
+	step_wind(delta, _wind, _motion_now)
 
 
 ## Advances by `delta` seconds for a given wind vector and motion scale, easing the cap and the

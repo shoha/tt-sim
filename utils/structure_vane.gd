@@ -11,7 +11,9 @@ extends RefCounted
 ##
 ## Pure and thread-safe.
 
-const TURNING_SLOTS: Array[String] = ["ornament/vane/shaft", "ornament/vane/arrow", "ornament/vane/tail"]
+const TURNING_SLOTS: Array[String] = [
+	"ornament/vane/shaft", "ornament/vane/arrow", "ornament/vane/tail"
+]
 const POLE_SLOT := "ornament/vane/pole"
 const ARROW_SLOT := "ornament/vane/arrow"
 const TAIL_SLOT := "ornament/vane/tail"
