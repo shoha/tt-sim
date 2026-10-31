@@ -162,8 +162,8 @@ and the token grounding see every roof's collision, and a superseded load cancel
 (`StructureLoadWait.cancel`). `StructureLoadWait.settle` installs the queue at once before an edit
 (`StructureEditor.apply_list`), so a refresh never rebuilds a structure whose finished build is queued. The
 wait is bounded: at least one structure a frame, and after `MAX_FRAMES` (600) or when the node is outside
-the tree the rest is made at once. The client download path calls `_finalize_map_loading` without awaiting
-it, so there the wait runs behind the play start (installs still finish within the budget a frame).
+the tree the rest is made at once. (The client download path called `_finalize_map_loading` without awaiting
+it, so the wait ran behind the play start; fixed in the fifth round.)
 
 Measured with `probes/structure_perf3.gd` `load` and `load_staged` (job `perf4_staged`, 128 lots of the
 core recipes with ornament masks, 320 m map; indicative, the GPU was shared), two runs each:
@@ -185,17 +185,67 @@ less); the worst ten (`hof_farm`, `coaching_inn`, `riad`, `siheyuan`, `hanseatic
 `castle_keep`, ...) summed 650 and 672 ms before, 488 and 486 ms after (25 to 27 percent). Alone, split fell from
 370 to 170 ms and paint from 719 to 153 ms over the 172. Over the 15 percent bar, so kept.
 
-What is left in the one create frame (headless probe, 128 cottages with ornaments): the decor library info
+What was left in the one create frame (headless probe, 128 cottages with ornaments): the decor library info
 (`_decor_info`, 108 ms the first time, loading plant meshes), the plant plans for a loader's parts (44 ms,
-`plan_missing`) and the keys (25 ms, the ground under every footprint). A loader that read the library on its
-worker (`AuthoredLoadPrep` with decor info) would take the first two off the main thread.
+`plan_missing`) and the keys (25 ms, the ground under every footprint). The fifth round took all three off
+the main thread.
+
+## Fifth round: the create frame goes to the worker, the client waits too (staged_load2, 2026-10-31)
+
+**Worker prep.** `AuthoredLoadPrep`'s `STRUCTURES` task now runs `StructureLoadInfo.prepare`: the decor
+library info (`StructureLoadInfo.info_of`: `AssetStore.decor_rows`, the triangle cost of each plant's source
+mesh, `sig`), `StructureGeometry.build` with that info (so each part carries its `decor_plan`), and
+`StructureGeometry.keys_of`. `AuthoredStructures.create` reuses them (`info_for`, `keys_for`) when they still
+match the library's rows and the document's structure ids, else makes them itself as before; `_decor_info`
+is the same `info_of` (the cost is the source mesh's triangle count, equal to its wind-dressed copy's). The
+wind-dressed copies and baked surfaces (`_decor_entry`) stay main-thread resources, made per structure as its
+node installs. `AssetStore` already guards its tables with a mutex and parses a GLB on any thread; a worker
+parses only where `GlbUtils.threaded_loads_safe()` (not the headless dummy renderer), otherwise `create`
+reads the library as before. Unchanged: the parts, keys and digests (test
+`test_structure_load_info.gd`: costs equal the old path's, keys equal `keys_of`, plans and node vertices equal
+a create that made them itself, stale info or ids are made again; `tests/fixtures` digests did not move).
+
+Measured with `jobs/staged_load2.json` (after) and `staged_load2_before.json` (`"prepared": false` on the
+probe's `load_staged`, the geometry alone as before), a rendered window, 128 lots, 320 m map, shared GPU
+(indicative); two runs each, the first staged load of a process (cold: the plant meshes unparsed) and the second:
+
+| main-thread `create`, 128 structures | cold | warm |
+|---|---|---|
+| before | 169.0 and 179.3 ms | 105.4 and 109.6 ms |
+| after | 1.2 ms (run 1) and 1.1 ms (run 2) | 1.1 and 1.1 ms |
+
+The work moved to the worker (the probe runs `prepare` itself on the main thread before `create`, so the cold
+parse is paid once there). The staged frames after `create` are unchanged within noise: worst frame 226 and
+227 ms cold before, 226 and 248 ms after (the first installs, with the shader compile and the first
+wind-dressed copies); warm 99.5 ms before, 76 and 74 ms after; 76 to 82 frames, median 22 to 26 ms
+(the 128 lots, unpinned machine).
+
+**Client download path.** `MapDownloadCoordinator._load_downloaded_map` now awaits the finalise, and
+`is_busy()` is true from the request until the downloaded map is built, finalised and its structures stand
+(a reset, a replaced request or a failure ends it). `LevelPlayLoader._play_level_async` waits right after the
+map step in `MapDownloadWait.wait_async` ("Downloading map..." on the loading bar) before it preloads models or
+sets any token down, so a client's tokens no longer land before the map exists or before the last roof has
+collision (before, the client spawned its tokens while the files were still coming). The structure wait
+inside the finalise is still bounded (`MAX_FRAMES`, 600); it now logs a warning when it hits the cap and then
+makes the rest at once. The download itself is not time-limited by the wait: the streamer's failure
+signals, a level change or a reset end it, and the loader then goes on without the map as before.
+Tests: `test_map_download_wait.gd` (the wait ends with the finalise, before the first token; one
+announcement; a superseded load drops), `test_map_download_coordinator.gd` (`is_busy` over download, load,
+finalise, reset, failure).
+
+**Live edits during the wait.** No gap: a client's `LiveEdits` service is made only after the structures
+stand (`start_live_edits`, last in `_finalize_map_loading`), so ops the host broadcasts earlier reach no
+listener, and the service's first act is `request_live_edit_log`, which the host answers with the whole log
+(the late-joiner path, `test_live_edits_table.gd`: "an op before the header is dropped", then the header and
+every op catch the map up at once). Nothing is lost; nothing needs queuing.
 
 ## Open follow-ups, ranked
 
 1. Procgen: profile and speed up `evaluate_structure` on the facade, layout and courtyard nodes, starting
    with `hof_farm`, `coaching_inn`, `dutch_bell_house`, `canal_house`. Digests must stay identical.
-2. (Done in perf4: paint and split, 24 to 27 percent of build time, byte-identical.) Left: the one-frame
-   `create` of a staged load (decor info 108 ms, plant plans 44 ms, keys 25 ms for 128).
+2. (Done in perf4: paint and split, 24 to 27 percent of build time, byte-identical; done in staged_load2:
+   the one-frame `create` of a staged load, now about 1 ms.) Left: the first install frames of a cold
+   load (worst frame about 230 ms: shader compile and the first wind-dressed copies).
 3. Builds scale badly past 4 to 6 threads (allocator contention); a build that allocates less would help
    edits and loads alike.
 4. structgen: the size sweep's mesh check dominates (2.6 s for the inn up to 22.6 s for `townhouse`,
