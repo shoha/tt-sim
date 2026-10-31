@@ -1,0 +1,56 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "prop_2",
+      "to_port": 0
+    },
+    {
+      "from": "prop_2",
+      "from_port": 0,
+      "to": "output_3",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        40.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "prop_2",
+      "params": {
+        "prop": "woodpile",
+        "spec": "{\"name\":\"Woodpile\",\"palette\":{\"accent\":[\"#D8603A\",\"#3F82B8\",\"#4E9E66\",\"#E3B03A\",\"#8A5CA8\",\"#E0707A\"],\"roof\":[\"#EBC45A\",\"#F2D273\",\"#E0B04C\"],\"wall\":[\"#B9794A\",\"#A9714A\",\"#C98B52\",\"#9C6A45\"]},\"prop\":\"woodpile\",\"radius_m\":0.8,\"size\":[1.6,0.9],\"tones\":{\"accent\":\"#8A5CA8\",\"roof\":\"#EBC45A\",\"wall\":\"#C98B52\"},\"variant\":{\"base\":4.0,\"block\":false,\"rows\":3.0}}"
+      },
+      "position": [
+        250.0,
+        40.0
+      ],
+      "type": "prop"
+    },
+    {
+      "id": "output_3",
+      "params": {
+        "name": "Woodpile",
+        "palette_accent": "#D8603A,#3F82B8,#4E9E66,#E3B03A,#8A5CA8,#E0707A",
+        "palette_roof": "#EBC45A,#F2D273,#E0B04C",
+        "palette_wall": "#B9794A,#A9714A,#C98B52,#9C6A45"
+      },
+      "position": [
+        480.0,
+        40.0
+      ],
+      "type": "output"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

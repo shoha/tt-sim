@@ -1,0 +1,56 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "prop_2",
+      "to_port": 0
+    },
+    {
+      "from": "prop_2",
+      "from_port": 0,
+      "to": "output_3",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        40.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "prop_2",
+      "params": {
+        "prop": "hand_cart",
+        "spec": "{\"name\":\"Hand cart\",\"palette\":{\"accent\":[\"#D8603A\",\"#3F82B8\",\"#4E9E66\",\"#E3B03A\",\"#8A5CA8\",\"#E0707A\"],\"cloth\":[\"#C8323C\",\"#2F63B5\",\"#2E8F5E\",\"#E8A42B\",\"#7B4BB0\",\"#1F9AA0\",\"#E0607E\",\"#F0B429\"],\"roof\":[\"#EBC45A\",\"#F2D273\",\"#E0B04C\"],\"wall\":[\"#C98B52\",\"#B97B46\",\"#D9A261\",\"#A9714A\",\"#CF9A5E\"]},\"prop\":\"hand_cart\",\"radius_m\":1.3,\"size\":[1.3,2.3],\"tones\":{\"accent\":\"#E0707A\",\"cloth\":\"#E0607E\",\"cloth2\":\"#F0B429\",\"roof\":\"#F2D273\",\"wall\":\"#CF9A5E\"},\"variant\":{\"load\":\"sacks\",\"wheels\":\"wood\"}}"
+      },
+      "position": [
+        250.0,
+        40.0
+      ],
+      "type": "prop"
+    },
+    {
+      "id": "output_3",
+      "params": {
+        "name": "Hand cart",
+        "palette_accent": "#D8603A,#3F82B8,#4E9E66,#E3B03A,#8A5CA8,#E0707A",
+        "palette_roof": "#EBC45A,#F2D273,#E0B04C",
+        "palette_wall": "#C98B52,#B97B46,#D9A261,#A9714A,#CF9A5E"
+      },
+      "position": [
+        480.0,
+        40.0
+      ],
+      "type": "output"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

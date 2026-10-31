@@ -26,11 +26,29 @@ const END_SHARE := 0.15
 const CURVE := 1.5
 ## Shorter than this (metres) a piece has no usable direction and stays still.
 const MIN_EXTENT_M := 0.05
+## A prop's cloth (tags `prop/<name>/<part>`, procgen ProcgenProps) that moves in the wind, by the
+## tag path after `prop/`: the market stall's awning (an awning: attached at the post edge, the
+## free edge moves), its valance and apron (hang from their top edge), and the laundry line's
+## washing (every piece its own, hanging from the line). The stall's bolts of cloth, a wagon's
+## cover and the scarecrow's coat are cloth in colour only: they stay still.
+const PROP_MARK := "prop/"
+const PROP_CLOTH: PackedStringArray = [
+	"market_stall/awning",
+	"market_stall/valance",
+	"market_stall/apron",
+	"laundry_line/cloth",
+]
+## The part whose pieces each move on their own (disjoint sheets sharing one tag).
+const PROP_PIECES := "laundry_line/cloth"
 
 
 ## The group a tag path moves with, or "" when its cloth is not wind cloth: a banner's cloth is one
-## group, an awning's stripes all form one (so the whole awning shares one attachment line).
+## group, an awning's stripes all form one (so the whole awning shares one attachment line), and a
+## prop's cloth (PROP_CLOTH) is the group of its tag.
 static func group_of(path: String) -> String:
+	var prop := path.find(PROP_MARK)
+	if prop >= 0 and not path.contains("ornament/"):
+		return path if PROP_CLOTH.has(path.substr(prop + PROP_MARK.length())) else ""
 	var at := path.find("ornament/")
 	if at < 0:
 		return ""
@@ -54,13 +72,16 @@ static func attach(meshes: Array, tag_table: PackedStringArray) -> void:
 	if group_of_tag.is_empty():
 		return
 	var points := {}
-	for mesh: Dictionary in meshes:
+	var groups_of_mesh := {}
+	for at in meshes.size():
+		var mesh: Dictionary = meshes[at]
 		if mesh.kind != KIND:
 			continue
 		var vertices: PackedVector3Array = mesh.arrays[Mesh.ARRAY_VERTEX]
-		var tags: PackedInt32Array = mesh.tags
+		var groups := _groups_of(mesh, group_of_tag)
+		groups_of_mesh[at] = groups
 		for v in vertices.size():
-			var group: String = group_of_tag.get(tags[v] if v < tags.size() else -1, "")
+			var group := groups[v]
 			if group == "":
 				continue
 			var held: PackedVector3Array = points.get(group, PackedVector3Array())
@@ -70,17 +91,21 @@ static func attach(meshes: Array, tag_table: PackedStringArray) -> void:
 		return
 	var weights := {}
 	for group: String in points:
-		weights[group] = weights_of(points[group], group.contains("/awning"))
+		var is_prop := group.contains(PROP_MARK) and not group.contains("ornament/")
+		weights[group] = weights_of(
+			points[group], group.contains("/awning"), is_prop and not group.contains("/awning")
+		)
 	var cursor := {}
-	for mesh: Dictionary in meshes:
+	for at in meshes.size():
+		var mesh: Dictionary = meshes[at]
 		if mesh.kind != KIND:
 			continue
 		var vertices: PackedVector3Array = mesh.arrays[Mesh.ARRAY_VERTEX]
-		var tags: PackedInt32Array = mesh.tags
+		var groups: PackedStringArray = groups_of_mesh[at]
 		var uv2 := PackedVector2Array()
 		uv2.resize(vertices.size())
 		for v in vertices.size():
-			var group: String = group_of_tag.get(tags[v] if v < tags.size() else -1, "")
+			var group := groups[v]
 			if group == "":
 				continue
 			var k: int = cursor.get(group, 0)
@@ -89,11 +114,59 @@ static func attach(meshes: Array, tag_table: PackedStringArray) -> void:
 		mesh.arrays[Mesh.ARRAY_TEX_UV2] = uv2
 
 
+## The group of each vertex of `mesh`: the group of its tag (`group_of_tag`, tag id -> group), and
+## for a prop part whose pieces move on their own (PROP_PIECES) the group with `#<piece>` added,
+## the piece being the set of vertices the mesh's triangles join. "" for a vertex that stays still.
+static func _groups_of(mesh: Dictionary, group_of_tag: Dictionary) -> PackedStringArray:
+	var vertices: PackedVector3Array = mesh.arrays[Mesh.ARRAY_VERTEX]
+	var tags: PackedInt32Array = mesh.tags
+	var out := PackedStringArray()
+	out.resize(vertices.size())
+	var parent := PackedInt32Array()
+	var joined := false
+	for v in vertices.size():
+		var group: String = group_of_tag.get(tags[v] if v < tags.size() else -1, "")
+		out[v] = group
+		if group.ends_with(PROP_PIECES):
+			joined = true
+	if not joined:
+		return out
+	parent.resize(vertices.size())
+	for v in vertices.size():
+		parent[v] = v
+	var indices: PackedInt32Array = mesh.arrays[Mesh.ARRAY_INDEX]
+	for k in range(0, indices.size() - 2, 3):
+		_union(parent, indices[k], indices[k + 1])
+		_union(parent, indices[k], indices[k + 2])
+	for v in vertices.size():
+		if out[v].ends_with(PROP_PIECES):
+			out[v] = "%s#%d" % [out[v], _root(parent, v)]
+	return out
+
+
+static func _root(parent: PackedInt32Array, v: int) -> int:
+	var at := v
+	while parent[at] != at:
+		parent[at] = parent[parent[at]]
+		at = parent[at]
+	return at
+
+
+static func _union(parent: PackedInt32Array, a: int, b: int) -> void:
+	var ra := _root(parent, a)
+	var rb := _root(parent, b)
+	if ra != rb:
+		parent[maxi(ra, rb)] = mini(ra, rb)
+
+
 ## The weight of each of `points` (one piece, or one awning's stripes together): (metres of reach
 ## from the attachment, lean). `awning` takes the attachment as the wall edge (the outward
 ## direction is where the surface falls); otherwise a piece longer than tall is a flag held at the
-## end with the taller edge, and any other piece hangs from its top edge.
-static func weights_of(points: PackedVector3Array, awning: bool) -> PackedVector2Array:
+## end with the taller edge, and any other piece hangs from its top edge. `hanging` makes every
+## piece hang, however wide (a prop's valance, apron and washing).
+static func weights_of(
+	points: PackedVector3Array, awning: bool, hanging: bool = false
+) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	out.resize(points.size())
 	if points.size() < 3:
@@ -134,7 +207,7 @@ static func weights_of(points: PackedVector3Array, awning: bool) -> PackedVector
 		s_max = maxf(s_max, s)
 	var along := s_max - s_min
 	var tall := y_max - y_min
-	if along >= FLAG_RATIO * tall and along > MIN_EXTENT_M:
+	if not hanging and along >= FLAG_RATIO * tall and along > MIN_EXTENT_M:
 		var low_span := _span_at(points, mean, axis, s_min, s_min + along * END_SHARE)
 		var high_span := _span_at(points, mean, axis, s_max - along * END_SHARE, s_max)
 		# The pole holds the taller end; the weight grows away from it.

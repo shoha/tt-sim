@@ -14,6 +14,9 @@ extends RefCounted
 
 ## ref -> {library, id, entry (the cleaned index entry), text (the recipe document), digest
 ## (sha256 of the text), folder}.
+## The key of a prop variant's text in `structure_texts` (`barrel.v1`; '.' is no id character).
+const VARIANT_KEY := "%s.v%d"
+
 static var _mutex := Mutex.new()
 static var _table: Dictionary = {}
 static var _building: Dictionary = {}
@@ -48,6 +51,10 @@ static func texts_of(sources: Dictionary, read: Dictionary) -> Dictionary:
 	var texts := {}
 	for item: Dictionary in read["structures"]:
 		texts[String(item["id"])] = String(recipes.get(String(item["file"]).get_file(), ""))
+		for variant: Dictionary in item.get("variants", []):
+			texts[VARIANT_KEY % [item["id"], int(variant["seed"])]] = String(
+				recipes.get(String(variant["file"]).get_file(), "")
+			)
 	return texts
 
 
@@ -92,6 +99,23 @@ static func register(entry: Dictionary) -> void:
 			"digest": String(item["digest"]),
 			"folder": String(entry["folder"]),
 		}
+		# A prop's other draws are served beside it under `<id>_v<k>`, no rows of their own.
+		for variant: Dictionary in item.get("variants", []):
+			var seed_value := int(variant["seed"])
+			var variant_text := String(texts.get(VARIANT_KEY % [id, seed_value], ""))
+			if variant_text == "":
+				continue
+			var variant_id := LibraryStructures.variant_id(id, seed_value)
+			_building[LibraryStructures.ref_of(String(entry["id"]), variant_id)] = {
+				"library": String(entry["id"]),
+				"id": variant_id,
+				"entry": item["entry"],
+				"text": variant_text,
+				"digest": String(variant["digest"]),
+				"folder": String(entry["folder"]),
+				"variant_of": id,
+				"seed": seed_value,
+			}
 
 
 ## Makes the table begin() and register() built the one the readers see.
@@ -108,13 +132,46 @@ static func publish() -> void:
 ## The structures served now as palette rows: {ref, library, id, name, family, variant, tags,
 ## default_size_m, min_side_m, max_side_m, max_area_m2, plans, expose, textured, thumb (absolute
 ## path of the thumbnail file, "" when it has none), digest}. `library_id` "" lists every library;
-## sorted by library, family, variant, id.
+## sorted by library, family, variant, id. These are the structures a hand can place: family `prop`
+## rows (props) and a prop's other draws are not among them.
 static func structures(library_id: String = "") -> Array[Dictionary]:
+	return _listed(library_id, false)
+
+
+## The props the served libraries offer (family `prop`, one row per prop; `library_id` "" lists
+## every library), sorted like structures(). Each row also holds `slots`, `radius_m`, `blocks` and
+## `tint` as the index gave them.
+static func props(library_id: String = "") -> Array[Dictionary]:
+	return _listed(library_id, true)
+
+
+## The row of prop `prop_name` (an index id) of draw seed `seed_value` (0 to
+## LibraryStructures.PROP_VARIANTS - 1) of library `library_id`, plus `seed`, the draw seed, and
+## `base`, the prop's own reference. Its `ref` is the one to build (seed 0: the prop's own, else
+## `<id>_v<k>`). {} when the library does not serve that prop or draw.
+static func prop(prop_name: String, seed_value: int, library_id: String = "core") -> Dictionary:
+	var ref := LibraryStructures.ref_of(
+		library_id, LibraryStructures.variant_id(prop_name, seed_value)
+	)
+	var held: Variant = _current().get(ref)
+	if not held is Dictionary or not ProcgenStructureIndex.is_prop((held as Dictionary)["entry"]):
+		return {}
+	var row := _row(ref, held)
+	row["seed"] = maxi(seed_value, 0)
+	row["base"] = LibraryStructures.ref_of(library_id, prop_name)
+	return row
+
+
+static func _listed(library_id: String, want_props: bool) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var table := _current()
 	for ref: String in table:
 		var held: Dictionary = table[ref]
-		if library_id == "" or String(held["library"]) == library_id:
+		if library_id != "" and String(held["library"]) != library_id:
+			continue
+		if held.has("variant_of"):
+			continue
+		if ProcgenStructureIndex.is_prop(held["entry"]) == want_props:
 			out.append(_row(ref, held))
 	out.sort_custom(
 		func(a: Dictionary, b: Dictionary) -> bool:

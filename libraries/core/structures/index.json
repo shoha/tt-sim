@@ -3542,6 +3542,703 @@
 			"textured": true,
 			"thumb": "thumbnails/structures/ruin_tower.jpg",
 			"variant": "Tower, octagon"
+		},
+		{
+			"blocks": "stand",
+			"default_size_m": [
+				1.5,
+				1.2
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/barrel.structure.json",
+			"id": "barrel",
+			"max_area_m2": 7.2,
+			"max_side_m": 3.0,
+			"min_side_m": 0.6,
+			"name": "Barrel",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.65,
+			"slots": [
+				"beside_door",
+				"street_edge",
+				"side_gap"
+			],
+			"tags": [
+				"prop",
+				"prop/barrel",
+				"barrel",
+				"cooper",
+				"cask",
+				"beside_door",
+				"street_edge",
+				"side_gap"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/barrel.jpg",
+			"tint": "wood",
+			"variant": ""
+		},
+		{
+			"blocks": "stand",
+			"default_size_m": [
+				1.3,
+				1.0
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/crate_stack.structure.json",
+			"id": "crate_stack",
+			"max_area_m2": 5.2,
+			"max_side_m": 2.6,
+			"min_side_m": 0.5,
+			"name": "Crate stack",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.6,
+			"slots": [
+				"beside_door",
+				"side_gap",
+				"water_edge"
+			],
+			"tags": [
+				"prop",
+				"prop/crate_stack",
+				"crate",
+				"store",
+				"market",
+				"quay",
+				"beside_door",
+				"side_gap",
+				"water_edge"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/crate_stack.jpg",
+			"tint": "wood",
+			"variant": ""
+		},
+		{
+			"blocks": "solid",
+			"default_size_m": [
+				1.8,
+				1.8
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/well.structure.json",
+			"id": "well",
+			"max_area_m2": 12.96,
+			"max_side_m": 3.6,
+			"min_side_m": 0.9,
+			"name": "Well",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 1.0,
+			"slots": [
+				"plaza",
+				"junction",
+				"front_yard",
+				"back_yard"
+			],
+			"tags": [
+				"prop",
+				"prop/well",
+				"well",
+				"water",
+				"village-centre",
+				"plaza",
+				"junction",
+				"front_yard",
+				"back_yard"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/well.jpg",
+			"tint": "none",
+			"variant": ""
+		},
+		{
+			"blocks": "solid",
+			"default_size_m": [
+				0.8,
+				0.6
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/lamp_post.structure.json",
+			"id": "lamp_post",
+			"max_area_m2": 1.92,
+			"max_side_m": 1.6,
+			"min_side_m": 0.3,
+			"name": "Lamp post",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.35,
+			"slots": [
+				"street_edge",
+				"plaza",
+				"junction"
+			],
+			"tags": [
+				"prop",
+				"prop/lamp_post",
+				"lamp",
+				"light",
+				"street",
+				"street_edge",
+				"plaza",
+				"junction"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/lamp_post.jpg",
+			"tint": "none",
+			"variant": ""
+		},
+		{
+			"blocks": "stand",
+			"default_size_m": [
+				1.8,
+				0.6
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/bench.structure.json",
+			"id": "bench",
+			"max_area_m2": 4.32,
+			"max_side_m": 3.6,
+			"min_side_m": 0.3,
+			"name": "Bench",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.9,
+			"slots": [
+				"street_edge",
+				"plaza",
+				"front_yard"
+			],
+			"tags": [
+				"prop",
+				"prop/bench",
+				"bench",
+				"seat",
+				"street",
+				"street_edge",
+				"plaza",
+				"front_yard"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/bench.jpg",
+			"tint": "wood",
+			"variant": ""
+		},
+		{
+			"blocks": "solid",
+			"default_size_m": [
+				2.2,
+				2.0
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/haystack.structure.json",
+			"id": "haystack",
+			"max_area_m2": 17.6,
+			"max_side_m": 4.4,
+			"min_side_m": 1.0,
+			"name": "Hay stack",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 1.1,
+			"slots": [
+				"back_yard",
+				"front_yard",
+				"side_gap",
+				"field"
+			],
+			"tags": [
+				"prop",
+				"prop/haystack",
+				"hay",
+				"farm",
+				"stack",
+				"back_yard",
+				"front_yard",
+				"side_gap",
+				"field"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/haystack.jpg",
+			"tint": "none",
+			"variant": ""
+		},
+		{
+			"blocks": "solid",
+			"default_size_m": [
+				1.6,
+				0.9
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/woodpile.structure.json",
+			"id": "woodpile",
+			"max_area_m2": 5.76,
+			"max_side_m": 3.2,
+			"min_side_m": 0.45,
+			"name": "Woodpile",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.8,
+			"slots": [
+				"beside_door",
+				"back_yard",
+				"side_gap"
+			],
+			"tags": [
+				"prop",
+				"prop/woodpile",
+				"wood",
+				"logs",
+				"farm",
+				"firewood",
+				"beside_door",
+				"back_yard",
+				"side_gap"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/woodpile.jpg",
+			"tint": "wood",
+			"variant": ""
+		},
+		{
+			"blocks": "solid",
+			"default_size_m": [
+				0.8,
+				0.8
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/signpost.structure.json",
+			"id": "signpost",
+			"max_area_m2": 2.56,
+			"max_side_m": 1.6,
+			"min_side_m": 0.4,
+			"name": "Signpost",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.45,
+			"slots": [
+				"junction",
+				"village_edge",
+				"street_edge"
+			],
+			"tags": [
+				"prop",
+				"prop/signpost",
+				"sign",
+				"signpost",
+				"crossroads",
+				"junction",
+				"village_edge",
+				"street_edge"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/signpost.jpg",
+			"tint": "none",
+			"variant": ""
+		},
+		{
+			"blocks": "stand",
+			"default_size_m": [
+				2.4,
+				1.7
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/market_stall.structure.json",
+			"id": "market_stall",
+			"max_area_m2": 9.79,
+			"max_side_m": 4.5,
+			"min_side_m": 0.85,
+			"name": "Market stall",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 1.7,
+			"slots": [
+				"plaza",
+				"street_edge"
+			],
+			"tags": [
+				"prop",
+				"prop/market_stall",
+				"market_stall",
+				"stall",
+				"market",
+				"awning",
+				"plaza",
+				"street_edge"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/market_stall.jpg",
+			"tint": "jewel",
+			"variant": ""
+		},
+		{
+			"blocks": "stand",
+			"default_size_m": [
+				1.3,
+				2.3
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/hand_cart.structure.json",
+			"id": "hand_cart",
+			"max_area_m2": 7.18,
+			"max_side_m": 2.6,
+			"min_side_m": 0.65,
+			"name": "Hand cart",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 1.3,
+			"slots": [
+				"street_edge",
+				"front_yard",
+				"back_yard",
+				"side_gap"
+			],
+			"tags": [
+				"prop",
+				"prop/hand_cart",
+				"hand_cart",
+				"cart",
+				"wheel",
+				"street_edge",
+				"front_yard",
+				"back_yard",
+				"side_gap"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/hand_cart.jpg",
+			"tint": "wood",
+			"variant": ""
+		},
+		{
+			"blocks": "stand",
+			"default_size_m": [
+				1.8,
+				3.4
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/farm_wagon.structure.json",
+			"id": "farm_wagon",
+			"max_area_m2": 14.69,
+			"max_side_m": 3.6,
+			"min_side_m": 0.9,
+			"name": "Farm wagon",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 2.0,
+			"slots": [
+				"side_gap",
+				"back_yard",
+				"front_yard",
+				"street_edge"
+			],
+			"tags": [
+				"prop",
+				"prop/farm_wagon",
+				"farm_wagon",
+				"wagon",
+				"cart",
+				"wheel",
+				"farm",
+				"side_gap",
+				"back_yard",
+				"front_yard",
+				"street_edge"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/farm_wagon.jpg",
+			"tint": "wood",
+			"variant": ""
+		},
+		{
+			"blocks": "none",
+			"default_size_m": [
+				3.2,
+				0.5
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/laundry_line.structure.json",
+			"id": "laundry_line",
+			"max_area_m2": 3.84,
+			"max_side_m": 6.0,
+			"min_side_m": 0.25,
+			"name": "Laundry line",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 1.0,
+			"slots": [
+				"back_yard",
+				"front_yard"
+			],
+			"tags": [
+				"prop",
+				"prop/laundry_line",
+				"laundry_line",
+				"laundry",
+				"washing",
+				"cloth",
+				"yard",
+				"back_yard",
+				"front_yard"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/laundry_line.jpg",
+			"tint": "jewel",
+			"variant": ""
+		},
+		{
+			"blocks": "stand",
+			"default_size_m": [
+				1.1,
+				1.1
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/wayside_shrine.structure.json",
+			"id": "wayside_shrine",
+			"max_area_m2": 2.9,
+			"max_side_m": 2.2,
+			"min_side_m": 0.55,
+			"name": "Wayside shrine",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.9,
+			"slots": [
+				"village_edge",
+				"junction"
+			],
+			"tags": [
+				"prop",
+				"prop/wayside_shrine",
+				"wayside_shrine",
+				"shrine",
+				"stone",
+				"cross",
+				"menhir",
+				"wayside",
+				"village_edge",
+				"junction"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/wayside_shrine.jpg",
+			"tint": "none",
+			"variant": ""
+		},
+		{
+			"blocks": "stand",
+			"default_size_m": [
+				3.6,
+				0.5
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/field_gate.structure.json",
+			"id": "field_gate",
+			"max_area_m2": 4.32,
+			"max_side_m": 6.0,
+			"min_side_m": 0.25,
+			"name": "Field gate",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 1.9,
+			"slots": [
+				"village_edge",
+				"back_yard"
+			],
+			"tags": [
+				"prop",
+				"prop/field_gate",
+				"field_gate",
+				"gate",
+				"fence",
+				"field",
+				"village_edge",
+				"back_yard"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/field_gate.jpg",
+			"tint": "wood",
+			"variant": ""
+		},
+		{
+			"blocks": "stand",
+			"default_size_m": [
+				2.4,
+				0.4
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/yard_gate.structure.json",
+			"id": "yard_gate",
+			"max_area_m2": 2.3,
+			"max_side_m": 4.0,
+			"min_side_m": 0.2,
+			"name": "Yard gate",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 1.3,
+			"slots": [
+				"front_yard",
+				"back_yard",
+				"side_gap"
+			],
+			"tags": [
+				"prop",
+				"prop/yard_gate",
+				"yard_gate",
+				"gate",
+				"fence",
+				"yard",
+				"front_yard",
+				"back_yard",
+				"side_gap"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/yard_gate.jpg",
+			"tint": "wood",
+			"variant": ""
+		},
+		{
+			"blocks": "stand",
+			"default_size_m": [
+				1.8,
+				0.8
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/water_trough.structure.json",
+			"id": "water_trough",
+			"max_area_m2": 3.46,
+			"max_side_m": 3.6,
+			"min_side_m": 0.4,
+			"name": "Water trough",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 1.1,
+			"slots": [
+				"front_yard",
+				"back_yard",
+				"plaza",
+				"street_edge"
+			],
+			"tags": [
+				"prop",
+				"prop/water_trough",
+				"water_trough",
+				"trough",
+				"water",
+				"pump",
+				"farm",
+				"front_yard",
+				"back_yard",
+				"plaza",
+				"street_edge"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/water_trough.jpg",
+			"tint": "wood",
+			"variant": ""
+		},
+		{
+			"blocks": "stand",
+			"default_size_m": [
+				1.6,
+				1.0
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/beehive_skeps.structure.json",
+			"id": "beehive_skeps",
+			"max_area_m2": 3.84,
+			"max_side_m": 3.2,
+			"min_side_m": 0.5,
+			"name": "Beehive skeps",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.9,
+			"slots": [
+				"back_yard",
+				"front_yard"
+			],
+			"tags": [
+				"prop",
+				"prop/beehive_skeps",
+				"beehive_skeps",
+				"skep",
+				"bees",
+				"garden",
+				"back_yard",
+				"front_yard"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/beehive_skeps.jpg",
+			"tint": "wood",
+			"variant": ""
+		},
+		{
+			"blocks": "stand",
+			"default_size_m": [
+				0.9,
+				0.9
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/scarecrow.structure.json",
+			"id": "scarecrow",
+			"max_area_m2": 1.94,
+			"max_side_m": 1.8,
+			"min_side_m": 0.45,
+			"name": "Scarecrow",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.6,
+			"slots": [
+				"back_yard",
+				"village_edge"
+			],
+			"tags": [
+				"prop",
+				"prop/scarecrow",
+				"scarecrow",
+				"field",
+				"farm",
+				"back_yard",
+				"village_edge"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/scarecrow.jpg",
+			"tint": "jewel",
+			"variant": ""
 		}
 	]
 }

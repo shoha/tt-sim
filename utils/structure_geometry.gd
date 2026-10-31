@@ -198,7 +198,9 @@ static func build_one(
 	parts.placed_kinds = StructureDecor.placed_kinds_with(
 		ProcgenOrnaments.placed_kinds(geometry), parts.anchors
 	)
-	parts.dressing = StructureDressing.build(doc, structure, parts.layout)
+	# A prop (barrel, well, stall) has no yard: no ground patch, path or plants under it.
+	if not ProcgenStructureIndex.is_prop(LibraryStructureStore.structure(structure.recipe)):
+		parts.dressing = StructureDressing.build(doc, structure, parts.layout)
 	return parts
 
 
@@ -523,7 +525,9 @@ static func digest_of(parts: Dictionary) -> String:
 		)
 		ctx.update(_snapped(pivots).to_byte_array())
 	var collision := parts.get("collision", PackedVector3Array()) as PackedVector3Array
-	ctx.update(_snapped(collision).to_byte_array())
+	# A prop has no collision hull; an empty update is an engine error (and changes nothing).
+	if not collision.is_empty():
+		ctx.update(_snapped(collision).to_byte_array())
 	var top: Variant = parts.get("top", NONE)
 	var top_text := "%.4f" % float(top) if top is float else str(top)
 	ctx.update(top_text.to_utf8_buffer())

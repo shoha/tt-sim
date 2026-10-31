@@ -717,6 +717,37 @@ from the thatch), moorish_souk weak to fair (a plain flat box with a porch).
   tile or slate, minka pale plaster with thatch or dark tile: the species read as themselves and the lots
   differ in roof tone. The canal street stays one red.
 
+### Props in the core library (2026-10-30, branch `props_host`; procgen pin 6cfe112; 118 entries)
+
+- **Entries.** The 18 procgen props are index entries of family `prop` (plans `["prop"]`, tags
+  `prop`, `prop/<name>`, the style's tags and slots, and `slots`, `radius_m`, `blocks`, `tint` from the
+  style; `ProcgenStructureIndex.prop_errors` and `plan_errors` refuse a bad one). Each prop has four
+  recipes (draw seeds 0 to 3): `structures/<id>.structure.json` and `<id>.v1..v3.structure.json`,
+  served as `core:<id>` and `core:<id>_v<k>` (no index entries). `LibraryStructureStore.structures()`
+  lists only what a hand can place (the palette stays "of 100", the street split and Verify never
+  see a prop); `props()` lists the 18 rows and `prop(name, seed)` returns a draw's row (`ref`, `seed`,
+  `base`). Props are no structure records of a map (`MAX_STRUCTURES`); the Settlement layer will
+  place them as transforms of the cached variants.
+- **Footprint.** `MapStructureIO.structure_problem` judges a prop's footprint by `ProcgenPlan.KIND_PROP`
+  (down to 0.5 m edges, 0.25 m2); a prop is built with `StructureGeometry.build_one` over
+  `ProcgenProps.footprint(size)` (front +z), at its index `default_size_m`. No yard is made for it
+  (`dressing` stays `{}`).
+- **Look.** `StructureLook.PROP` (last in ROLES, so no building digest moves): every part keeps the
+  colours procgen painted and is drawn by `structure_ornament.gdshader` with the prop balance
+  (`StructureMaterials.prop`: exposure 0.8, saturation 1.4, warmer light; stone a touch warmer and
+  deeper). `cloth` is the ornament cloth (wind sway), `glass` the unshaded pane (the lantern reads
+  warm), and a `water` part (well, trough) is the WATER role. `StructureCloth` weights the stall's
+  awning (an awning), valance and apron (hanging) and every piece of the washing (pieces found by
+  triangle connectivity, hanging); bolts of cloth, a wagon's cover and the scarecrow's coat stay still.
+- **Pins.** `libraries/core/structures/prop_pins.txt` (`<id> <seed> <digest> <triangles> <procgen
+  digest>`) and `tests/fixtures/prop_digests.txt` (first four columns), tested by `test_library_props`.
+  `tools/export_core_structures.gd` writes the props, the variants and `prop_pins.txt`. Known
+  discrepancy: the exporter's digests of `yard_gate` (4 lines) and nine old house recipes of `pins.txt`
+  differ from what the GUT environment builds (the tests are the truth; the committed lines are the
+  tests' values; the exporter says "differs" for `pins.txt` already at main).
+- **Tiles.** `LibraryStructures.TILE_PROP_*` frame a prop by its footprint (`1.3 + 0.85 * longest`
+  metres), with a zoom factor and a look offset for the tall ones.
+
 ## Dressing
 
 Probe B (2026-10-28, branch `probe-b`): a building is settled into its place by a yard,

@@ -1,0 +1,56 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "prop_2",
+      "to_port": 0
+    },
+    {
+      "from": "prop_2",
+      "from_port": 0,
+      "to": "output_3",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        40.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "prop_2",
+      "params": {
+        "prop": "lamp_post",
+        "spec": "{\"name\":\"Lamp post\",\"palette\":{\"accent\":[\"#D8603A\",\"#3F82B8\",\"#4E9E66\",\"#E3B03A\",\"#8A5CA8\",\"#E0707A\"],\"roof\":[\"#EBC45A\",\"#F2D273\",\"#E0B04C\"],\"stone\":[\"#CFC6B6\",\"#C4BDB0\",\"#D8CDB8\"],\"wall\":[\"#5B4A44\",\"#3F4A5C\",\"#6B5237\",\"#4A5A4E\"]},\"prop\":\"lamp_post\",\"radius_m\":0.35,\"size\":[0.8,0.6],\"tones\":{\"accent\":\"#4E9E66\",\"roof\":\"#E0B04C\",\"stone\":\"#D8CDB8\",\"wall\":\"#4A5A4E\"},\"variant\":{\"style\":\"twin\"}}"
+      },
+      "position": [
+        250.0,
+        40.0
+      ],
+      "type": "prop"
+    },
+    {
+      "id": "output_3",
+      "params": {
+        "name": "Lamp post",
+        "palette_accent": "#D8603A,#3F82B8,#4E9E66,#E3B03A,#8A5CA8,#E0707A",
+        "palette_roof": "#EBC45A,#F2D273,#E0B04C",
+        "palette_wall": "#5B4A44,#3F4A5C,#6B5237,#4A5A4E"
+      },
+      "position": [
+        480.0,
+        40.0
+      ],
+      "type": "output"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

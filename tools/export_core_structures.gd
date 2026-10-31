@@ -18,6 +18,9 @@ extends SceneTree
 ## same inputs as tests/fixtures/structure_digests.txt.
 
 const PIN_SEED := 5
+## The props' pins (one line per prop and draw seed), beside pins.txt, which keeps its lines for the
+## placeable structures only.
+const PROP_PINS_FILE := "structures/prop_pins.txt"
 ## The starters' default `wonk` (0..1) and the thatched cottages' `fringe` (metres).
 const HANDMADE_WONK := 0.7
 const THATCH_FRINGE_M := 0.35
@@ -1265,9 +1268,20 @@ func _make() -> Dictionary:
 				)
 			)
 		)
+	var prop_rows: Array[Dictionary] = []
+	for prop_name in ProcgenProps.NAMES:
+		var prop_style := ProcgenPropStyles.named(prop_name)
+		var prop_entry := _prop_entry(prop_name, prop_style)
+		entries.append(prop_entry)
+		prop_rows.append(prop_entry)
+		for k in LibraryStructures.PROP_VARIANTS:
+			var prop_text := ProcgenPropStyles.document(prop_style, k).to_json()
+			files[LibraryStructures.variant_path(prop_name, k)] = prop_text
+			texts["core:" + LibraryStructures.variant_id(prop_name, k)] = prop_text
 	files[LibraryStructures.INDEX_FILE] = LibraryStructures.index_text(entries)
 	StructureRecipes.resolver = func(ref: String) -> Dictionary:
 		return {"text": texts[ref]} if texts.has(ref) else {}
+	_serve_props(files, warnings)
 	var rows := {}
 	for entry: Dictionary in entries:
 		rows[String(entry["id"])] = entry
@@ -1291,8 +1305,90 @@ func _make() -> Dictionary:
 			)
 		)
 	files[LibraryStructures.PINS_FILE] = "\n".join(pins) + "\n"
+	# The props' pins: one line per prop and draw seed, `<id> <seed> <digest> <triangles> <procgen
+	# digest>`, built at the prop's own default footprint (ProcgenProps.footprint) and PIN_SEED.
+	var prop_pins: Array[String] = []
+	for entry: Dictionary in prop_rows:
+		var size_m: Array = entry["default_size_m"]
+		var prop_plan := ProcgenProps.footprint(Vector2(float(size_m[0]), float(size_m[1])))
+		for k in LibraryStructures.PROP_VARIANTS:
+			var prop_ref := "core:" + LibraryStructures.variant_id(String(entry["id"]), k)
+			var parts := StructureGeometry.build_one(doc, Structure.make(1, prop_ref, prop_plan, PIN_SEED))
+			if String(parts["problem"]) != "":
+				warnings.append("%s: %s" % [prop_ref, parts["problem"]])
+			prop_pins.append(
+				(
+					"%s %d %s %d %s"
+					% [
+						entry["id"],
+						k,
+						StructureGeometry.digest_of(parts),
+						StructureGeometry.triangle_count(parts),
+						_raw_digest(doc, prop_ref, prop_plan)
+					]
+				)
+			)
+	files[PROP_PINS_FILE] = "\n".join(prop_pins) + "\n"
+	pins.append_array(prop_pins)
+	LibraryStructureStore.clear()
 	StructureRecipes.resolver = Callable()
 	return {"files": files, "pins": pins, "warnings": warnings}
+
+
+## The index entry of built-in prop `prop_name` from its `style` (ProcgenPropStyles.named): the
+## style's own size, clearance, slots, collision hint and tint; the tags `prop`, `prop/<name>`, the
+## style's and the slots.
+static func _prop_entry(prop_name: String, style: Dictionary) -> Dictionary:
+	var size: Dictionary = style.get("size", {})
+	var tags: Array = ["prop", "prop/" + prop_name]
+	for tag: Variant in (style.get("tags", []) as Array) + (style.get("slots", []) as Array):
+		if tags.size() < LibraryStructures.MAX_TAGS and not tag in tags:
+			tags.append(tag)
+	return {
+		"id": prop_name,
+		"name": style.get("label", prop_name),
+		"family": ProcgenStructureIndex.PROP,
+		"variant": "",
+		"tags": tags,
+		"file": LibraryStructures.recipe_path(prop_name),
+		"default_size_m": size.get("default", [1.0, 1.0]),
+		"min_side_m": size.get("min_side", 0.5),
+		"max_side_m": size.get("max_side", 4.0),
+		"max_area_m2": size.get("max_area", 12.0),
+		"plans": [ProcgenStructureIndex.PROP],
+		"expose": [],
+		"textured": false,
+		"thumb": LibraryStructures.thumb_path(prop_name),
+		"slots": style.get("slots", []),
+		"radius_m": style.get("radius_m", 0.5),
+		"blocks": style.get("blocks", "none"),
+		"tint": style.get("tint", "none"),
+	}
+
+
+## Serves the made structures index and recipes through the real reader and the store (as the
+## registry would), so the prop plan rules see a prop row; reader warnings are export warnings.
+static func _serve_props(files: Dictionary, warnings: Array[String]) -> void:
+	var recipes := {}
+	for relative: String in files:
+		if relative.begins_with(LibraryStructures.DIR) and relative.ends_with(LibraryStructures.RECIPE_SUFFIX):
+			recipes[relative.get_file()] = files[relative]
+	var read := {"warnings": [] as Array[String]}
+	var raw := {"index": files[LibraryStructures.INDEX_FILE], "recipes": recipes}
+	LibraryStructures.read(raw, [], false, read)
+	for warning: String in read["warnings"]:
+		warnings.append("reader: " + warning)
+	var sources := {"structures": raw}
+	LibraryStructureStore.begin()
+	LibraryStructureStore.register(
+		{
+			"id": "core",
+			"folder": "",
+			"read": read,
+			"structure_texts": LibraryStructureStore.texts_of(sources, read),
+		}
+	)
+	LibraryStructureStore.publish()
 
 
 ## The ProcgenRecipes document of starter recipe `spec` (see STARTERS), with glazing, the ridge
