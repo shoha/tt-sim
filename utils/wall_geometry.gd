@@ -24,6 +24,14 @@ const ROW_REACH_M := 9.0
 const NONE := -INF
 ## The key of a street's roof mesh arrays in a wall's parts (rows only; the roofs of the lots).
 const ROOF_PART := "roof"
+## The key of a street's other surfaces in a wall's parts: [{"kind", "roof" (bool), "arrays"}] for
+## what the species' building styles draw beyond stone, masonry, wood and glass (plaster, adobe,
+## brick, log and boards walls; tile, slate, shingle, thatch and turf roofs), each with its own
+## material (StructureMaterials). Without them a pueblo, canal, Tudor or minka street drew only
+## its windows and roofs (batch_c, 2026-10-30).
+const EXTRA_PART := "extra"
+## The kinds a wall's parts hold under their own key (the others go to EXTRA_PART).
+const OWN_KINDS: Array[String] = ["stone", "masonry", "wood", "glass"]
 
 ## True: a wall carries its courses in the masonry texture (MasonryTextures), the coping modelled,
 ## a fraction of the triangles; false: modelled blocks. A static for comparing the two.
@@ -124,6 +132,7 @@ static func build_one(doc: MapDocument, wall: Wall) -> Dictionary:
 		"wood": [],
 		"glass": [],
 		ROOF_PART: [],
+		EXTRA_PART: [],
 		"collision": PackedVector3Array(),
 		"top": NONE,
 	}
@@ -171,8 +180,17 @@ static func _row_surfaces(
 	for surface in geometry.merged_by_kind():
 		meshes.append_array(StructureGeometry.split_surface(surface, roles))
 	StructurePaint.paint(meshes, groups, palettes)
+	var extra: Array[Dictionary] = []
 	for mesh: Dictionary in meshes:
-		parts[ROOF_PART if mesh.role == StructureLook.ROOF else String(mesh.kind)] = mesh.arrays
+		var roof: bool = mesh.role == StructureLook.ROOF
+		var kind := String(mesh.kind)
+		if roof and kind == "wood":
+			parts[ROOF_PART] = mesh.arrays
+		elif not roof and OWN_KINDS.has(kind):
+			parts[kind] = mesh.arrays
+		else:
+			extra.append({"kind": kind, "roof": roof, "arrays": mesh.arrays})
+	parts[EXTRA_PART] = extra
 
 
 ## Every wall of `doc`: {"walls": [parts, ...]}.

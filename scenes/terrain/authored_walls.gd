@@ -253,6 +253,16 @@ func _wall_node(parts: Dictionary) -> Node3D:
 		glass_instance.mesh = glass_mesh
 		glass_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		node.add_child(glass_instance)
+	# The street's other surfaces (WallGeometry.EXTRA_PART): plaster, adobe, brick, log and boards
+	# walls, tile, slate, shingle, thatch and turf roofs, each in the material of its kind.
+	for extra: Dictionary in parts.get(WallGeometry.EXTRA_PART, []):
+		var extra_mesh := ArrayMesh.new()
+		extra_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, extra.arrays)
+		extra_mesh.surface_set_material(0, _row_material(String(extra.kind), style, bool(extra.roof)))
+		var extra_instance := MeshInstance3D.new()
+		extra_instance.name = "%s_%s" % ["Roof" if extra.roof else "Wall", extra.kind]
+		extra_instance.mesh = extra_mesh
+		node.add_child(extra_instance)
 	var faces: PackedVector3Array = parts.get("collision", PackedVector3Array())
 	if not faces.is_empty():
 		node.add_child(_body(faces, int(parts.id)))

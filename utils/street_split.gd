@@ -144,7 +144,9 @@ static func region_of(doc: MapDocument, wall: Wall) -> Array[String]:
 ## The region tags of a street in palette biome `biome` of species `preset`. Pure.
 static func region_tags(biome: String, preset: int) -> Array[String]:
 	var out: Array[String] = []
-	var named: Variant = BIOME_REGIONS.get(biome, SPECIES_REGIONS.get(preset, []))
+	# Species 1..4 keep SPECIES_REGIONS; the newer ones (5..10) bring their own tags from procgen.
+	var species: Variant = SPECIES_REGIONS.get(preset, StreetSpeciesInfo.regions(preset))
+	var named: Variant = BIOME_REGIONS.get(biome, species)
 	for tag: Variant in named as Array:
 		out.append(String(tag))
 	return out

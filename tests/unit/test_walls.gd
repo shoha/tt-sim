@@ -531,8 +531,10 @@ func test_a_streets_species_is_kept_laid_and_changes_the_buildings() -> void:
 	var read: MapDocument = MapDocumentIO.read(SAVE_PATH)["document"]
 	assert_eq(read.walls[0].preset, 3, "and saved")
 	var bad := _doc.wall(id).copy()
-	bad.preset = 9
-	assert_ne(MapWallIO.wall_problem(bad, _doc.extent_m()), "", "species 0 to 4")
+	bad.preset = Wall.ROW_PRESETS
+	assert_ne(MapWallIO.wall_problem(bad, _doc.extent_m()), "", "one past the last species")
+	bad.preset = Wall.ROW_PRESETS - 1
+	assert_eq(MapWallIO.wall_problem(bad, _doc.extent_m()), "", "the last species is allowed")
 	var village := WallGeometry.row_lots(_doc, _doc.wall(id))
 	var terrace_wall := _doc.wall(id).copy()
 	terrace_wall.preset = 1
@@ -546,13 +548,108 @@ func test_a_streets_species_is_kept_laid_and_changes_the_buildings() -> void:
 	assert_eq(WallGeometry.clearance_crossings(_doc).size(), village.size(), "one clearing per lot")
 
 
+## What a street's built parts hold, as one number: the meshes of every part and its hull.
+func _parts_digest(parts: Dictionary) -> int:
+	return hash(
+		[
+			parts.stone,
+			parts.masonry,
+			parts.wood,
+			parts.glass,
+			parts[WallGeometry.ROOF_PART],
+			parts[WallGeometry.EXTRA_PART],
+			parts.collision
+		]
+	)
+
+
+## Phase 0 of the villages plan (batch_c): every one of procgen's street species is reachable. For
+## each: a 24 m street builds, its shell is closed under procgen's mesh check at the default
+## settings, and the same buildings come back from a saved map and from a live edit.
+func test_every_street_species_builds_closes_saves_and_survives_the_live_edit() -> void:
+	assert_eq(Wall.ROW_PRESETS, 11, "procgen has eleven street species")
+	for preset in Wall.ROW_PRESETS:
+		var species: String = ProcgenStreetSpecies.NAMES[preset]
+		_doc = MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
+		var street := Wall.make(
+			1, Wall.Kind.ROW, PackedVector2Array([Vector2(-12, 0), Vector2(12, 0)]), false, 4.0
+		)
+		street.preset = preset
+		street.seed_value = 11
+		_doc.walls.append(street)
+		assert_eq(MapWallIO.wall_problem(street, _doc.extent_m()), "", "%s is valid" % species)
+		var parts := WallGeometry.build_one(_doc, street)
+		assert_gt(parts.collision.size(), 0, "%s builds a hull" % species)
+		var wall_extras: Array = (parts[WallGeometry.EXTRA_PART] as Array).filter(
+			func(part: Dictionary) -> bool: return not part.roof
+		)
+		assert_true(
+			(
+				not parts.stone.is_empty()
+				or not parts.masonry.is_empty()
+				or not parts.wood.is_empty()
+				or not wall_extras.is_empty()
+			),
+			"%s draws its walls (a kind with no part leaves only windows and roofs)" % species
+		)
+		assert_gt(WallGeometry.row_lots(_doc, street).size(), 1, "%s lays lots" % species)
+		var digest := _parts_digest(parts)
+		assert_eq(_parts_digest(WallGeometry.build_one(_doc, street)), digest, "%s repeats" % species)
+		# The shell is closed (the module's own gate runs the same check at its sweep's settings).
+		var recipe := WallGeometry.recipe_for(street)
+		var inputs := WallGeometry.inputs_for(_doc, street)
+		var evaluator := PlantGraphEvaluator.new(recipe.registry)
+		var plant: Variant = evaluator.evaluate_structure(recipe, inputs)
+		var holes := ProcgenMeshCheck.holes(plant["lods"][0], inputs.env)
+		# Known: procgen's Tudor lane leaks one ray on flat ground (test_street_bundles.gd).
+		var allowed := 1 if species == "tudor_lane" else 0
+		assert_lte(holes.size(), allowed, "%s: %d holes" % [species, holes.size()])
+		# A saved map.
+		assert_eq(MapDocumentIO.write(_doc, SAVE_PATH), OK)
+		var read: MapDocument = MapDocumentIO.read(SAVE_PATH)["document"]
+		assert_true(read.walls[0].same_as(street), "%s: saved as laid" % species)
+		assert_eq(read.walls[0].preset, preset, "%s keeps its index" % species)
+		assert_eq(_parts_digest(WallGeometry.build_one(read, read.walls[0])), digest, species)
+		# A live edit: the peer applies the wall and builds the same buildings.
+		var op := {
+			"v": LiveEditCodec.VERSION,
+			"kind": "walls",
+			"args": [[MapWallIO.wall_json(street)], Rect2()],
+			"redo": true,
+		}
+		var peer_doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
+		var decoded := LiveEditCodec.decode(LiveEditCodec.encode(op), peer_doc)
+		assert_eq(decoded.problem, "", "%s: the live edit is accepted" % species)
+		var peer_map := Node3D.new()
+		add_child_autofree(peer_map)
+		peer_map.add_child(AuthoredTerrain.create(peer_doc))
+		var peer := AuthoringEditor.create(peer_doc, peer_map, AuthoringHistory.new())
+		LiveEditCodec.apply(decoded.op, peer)
+		assert_eq(peer_doc.walls.size(), 1, species)
+		assert_true(peer_doc.walls[0].same_as(street), "%s: the peer has the street" % species)
+		assert_eq(
+			_parts_digest(WallGeometry.build_one(peer_doc, peer_doc.walls[0])), digest, species
+		)
+
+
 func test_the_pane_offers_the_species_only_for_a_street() -> void:
 	var pane := WallToolPane.new()
 	add_child_autofree(pane)
 	assert_false(pane.preset_field.visible, "hidden for a wall")
-	assert_eq(WallToolPane.PRESET_TILES.size(), Wall.ROW_PRESETS, "a tile per species")
-	for tile in WallToolPane.PRESET_TILES:
+	var tiles := StreetSpeciesInfo.tiles()
+	assert_eq(tiles.size(), Wall.ROW_PRESETS, "a tile per species")
+	assert_eq(Wall.ROW_PRESETS, ProcgenStreetSpecies.NAMES.size(), "procgen's list, not a copy")
+	var ids := {}
+	for tile in tiles:
 		assert_not_null(IconButton.load_icon(String(tile.icon)), String(tile.icon))
+		assert_ne(String(tile.tooltip), "", "%s has a tooltip" % tile.label)
+		assert_true(pane.preset_field.tiles.has_tile(tile.id), "%s is in the pane" % tile.label)
+		ids[tile.id] = true
+	assert_eq(ids.size(), tiles.size(), "tile ids are unique")
+	assert_eq(tiles[0].id, &"street_mixed", "the first five keep their numbering and ids")
+	assert_eq(tiles[4].id, &"street_cottages")
+	assert_eq(StreetSpeciesInfo.readout_name(2), "Guild houses")
+	assert_eq(StreetSpeciesInfo.readout_name(10), "Minka village")
 	pane.kind_field.tiles.selection_changed.emit(&"wall_row")
 	assert_true(pane.preset_field.visible, "shown for a street")
 	watch_signals(pane)

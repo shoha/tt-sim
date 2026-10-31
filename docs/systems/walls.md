@@ -100,9 +100,11 @@ Cost (procgen docs): about 1000 triangles a building, 13 buildings on 40 m in 48
 under each building. Verified with the `street_tool` render job (drag, laid in two drags, remixed,
 reloaded in play).
 
-Species (2026-10-27): a street carries a `preset` (`walls.json` `preset` 0 to 4, rows only) picked on
+Species (2026-10-27, eleven since batch_c): a street carries a `preset` (`walls.json` `preset` 0 to
+10, rows only; the index into `ProcgenStreetSpecies.NAMES`, see `StreetSpeciesInfo`) picked on
 the pane's Street tiles (shown only while Street is picked): Mixed, Terrace, Guild houses, Village (fenced
-yards), Cottages (low stone-walled yards). A species replaces the lot sizes, spacing, heights, roofs and
+yards), Cottages (low stone-walled yards), then Pueblo, Villas, Alpine, Canal, Tudor and Minka
+(`docs/systems/villages.md` phase 0 has the numbering). A species replaces the lot sizes, spacing, heights, roofs and
 yards, and since procgen `82073db` also each lot's walls (stone, textured, timber), roof (gable, hip, flat) and
 facade style (windows, floors), all drawn from species data (procgen `ProcgenStreetSpecies`,
 `recipes/species/*.json`); the setback and side stay the street's. Scatter clears under each

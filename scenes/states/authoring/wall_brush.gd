@@ -27,8 +27,6 @@ const ERASE_TINT := BrushCursor.CLEAR_TINT
 const SHADOW := Color(0.05, 0.04, 0.05, 0.55)
 ## The readout's name per Wall.Kind.
 const KIND_LABELS: Array[String] = ["Stone wall", "Fence", "Street"]
-## The species' names in the readout (Wall.preset).
-const ROW_PRESET_NAMES: Array[String] = ["Mixed", "Terrace", "Guild houses", "Village", "Cottages"]
 ## A press that ends within this of where it began (world metres) is a click, which picks the
 ## street under it rather than laying a side.
 const CLICK_M := 0.25
@@ -149,7 +147,7 @@ static func readout_row(
 	preset: int = 0
 ) -> String:
 	var sides: String = ["left side", "right side", "both sides"][clampi(side, 0, 2)]
-	var species := "" if preset <= 0 else "%s, " % ROW_PRESET_NAMES[clampi(preset, 0, 4)]
+	var species := "" if preset <= 0 else "%s, " % StreetSpeciesInfo.readout_name(preset)
 	if buildings >= 0:
 		return "Street  %s%d buildings, %s" % [species, buildings, sides]
 	var set_back := ScaleUtils.world_to_display(setback_m, cell_m, per_cell)

@@ -53,9 +53,26 @@ There is no separate Street tool. A street is `Wall.Kind.ROW`, one of the Wall t
 - **Species.** `ProcgenStreetSpecies` (`recipes/species/*.json`, 11 of them) replaces the lot sizes, gaps,
   heights, roofs and yard, and draws walls, roofs, facade styles, trims and chimneys by weight; the six newer
   ones (pueblo, villa, alpine, canal, tudor, minka) draw whole building styles ("bundles") and carry `region`
-  tags. **Finding:** tt-sim exposes only the first five. `Wall.ROW_PRESETS` is 5 (`resources/wall.gd:37`),
-  `WallBrush.ROW_PRESET_NAMES` has five names (`wall_brush.gd:31`), `MapWallIO` refuses a `preset` over 4
-  (`utils/map_wall_io.gd:84`, 216). So six finished village characters are unreachable from the UI today.
+  tags. **Phase 0 done (batch_c, 2026-10-30):** the Street tool offers all 11. `Wall.ROW_PRESETS` is
+  `ProcgenRow.PRESET_MINKA + 1` (11), the pane's tiles, the readout names and the tooltips come from
+  `StreetSpeciesInfo` (built from `ProcgenStreetSpecies.NAMES`, only the plain label, icon and tooltip
+  are tt-sim's), `MapWallIO` and the live-edit codec take 0 to 10, and `StreetSplit.region_tags` takes
+  the newer species' tags from procgen. Numbering (saved as the index, never reorder): 0 mixed, 1 terrace,
+  2 guild houses, 3 village, 4 cottages, 5 pueblo village, 6 villa street, 7 alpine hamlet, 8 canal row,
+  9 tudor lane, 10 minka village; the first five keep their indices and tile ids.
+  **A bug the phase found:** the six newer species draw plaster, adobe, brick, log and boards walls and
+  tile, slate, shingle, thatch and turf roofs, which `WallGeometry` filed under a key `AuthoredWalls`
+  never drew, so a pueblo, canal, Tudor or minka street showed only windows and roofs. Fixed host-side:
+  `WallGeometry.EXTRA_PART` carries those surfaces and `AuthoredWalls._wall_node` draws each in the
+  material of its kind (`StructureMaterials.make`). Tests: `test_every_street_species_builds_closes_
+  saves_and_survives_the_live_edit` (build, walls drawn, procgen mesh check closed at its default
+  settings with Tudor's known single leaked ray allowed, a saved map, the live-edit round trip, the
+  same digest of the parts each time). Render job `batch_c_streets` (the pane with all 11 tiles, one
+  24 m street of each newer species): all six read as buildings of their kind. Procgen-side notes (not
+  fixed): the Tudor lane leaks one ray on flat ground (known); all six species share one roof
+  palette (orange, green, grey and red tile), so a pueblo has no flat adobe-coloured roof difference and a
+  minka looks like a Western farm with a thatch tone; wall tones are pale (pueblo, Tudor, minka read
+  nearly white under the game light); the species have no yard dressing beyond a fence or low wall.
 - **Yards.** The only yard dressing a street draws is a post and rail fence (1.0 m) or a low stone wall
   (0.7 m) round the plot with a 1.4 m gate gap in front (`row_gen.gd:48-55`, `_yard` at :222). Species
   "village" uses the fence, "cottages" the wall; others none. There is no garden, tree, path or prop inside
@@ -426,7 +443,7 @@ one agent including tests and a render look round.
 
 | Phase | Content | Size | Touches |
 |-------|---------|------|---------|
-| 0. Reach the species | Expose the six hidden street species: `Wall.ROW_PRESETS` 5 to 11, `MapWallIO` range, pane tiles, `WallBrush.ROW_PRESET_NAMES`, `StreetSplit.SPECIES_REGIONS` entries; tests and a render of each | 1 | tt-sim |
+| 0. Reach the species (DONE, batch_c) | Expose the six hidden street species: `Wall.ROW_PRESETS` 5 to 11, `MapWallIO` range, pane tiles (`StreetSpeciesInfo`), readout names, region tags; tests and a render of each; plus the street surfaces the newer species need (`WallGeometry.EXTRA_PART`) | 1 | tt-sim |
 | 1. First dressing | `prop` family: 8 props (barrel, crate stack, well, lamp post, bench, hay stack, woodpile, signpost); `ProcgenSettlement` rules v1 with slots `street_edge`, `beside_door`, `back_yard`, `side_gap`; 2 kits (farming hamlet, market town); `Settlement` record, editor, IO, live edit, fingerprint; derived baked cells; **Dress this street** button | 6-8 | procgen, core-library, tt-sim |
 | 2. Ground and yards | remaining props 9 to 14; road, door-path and yard paint at Dress time; gate prop in the yard fence; a decor `ground` mount in plantgen (hedge, garden bed); back-yard garden rule | 5-6 | procgen, plantgen, core-library, tt-sim |
 | 3. Gestures | Village tool: plaza drag, garden/field paint, prop select/remove/swap/pin; character picker with thumbnails; wealth and density sliders in the bar | 6-8 | tt-sim (Village tool, pane, hints), procgen |
