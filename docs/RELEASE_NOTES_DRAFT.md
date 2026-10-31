@@ -1,9 +1,10 @@
 # Release notes (DRAFT)
 
 **DRAFT. Not for publication until the owner approves.** Nothing is tagged, versioned or released;
-this page only collects what changed. The version number is not decided (see
-`docs/RELEASE_CHECKLIST.md`, "Version decision"). Compiled 2026-10-31 from the history since
-the last release, v0.3.0 (2026-10-25): 173 commits in this repository.
+this page only collects what changed. The owner chose version 0.4.0 on 2026-10-31 (see
+`docs/RELEASE_CHECKLIST.md`, "Version decision"); `project.godot` still says 0.3.1 until the cut.
+Compiled 2026-10-31 from the history since the last release, v0.3.0 (2026-10-25): 173
+commits in this repository.
 
 Items marked TODO could not be verified from the repositories and need the owner before
 publication.
@@ -111,15 +112,6 @@ Wind is part of the level environment: the Weather pane sets strength and direct
 Wind motion setting scales how much movement each player sees. Windmill sails and caps, vanes,
 banners, awnings and prop cloth all read it.
 
-### The structures editor (structgen)
-
-A separate editor for authoring building styles as a node graph, with a live 3D preview.
-Click any piece of a building and the editor selects the node that made it. A style gallery
-shows a picture of every building style, and a Decorate row previews the ornaments. One click
-on Add to game library places your structure in your own "My structures" collection (it asks
-once the first time). TODO: confirm with the owner that structgen is meant to be mentioned
-to authors in these notes, since it is a separate tool and not part of the game download.
-
 ### Library and licence
 
 The built-in Core library ships with the game and is licensed under Creative Commons
@@ -130,8 +122,8 @@ thumbnails, biomes), give credit with this line:
 
 The licence text is at https://creativecommons.org/licenses/by/4.0/ . The game shows the
 licence on the library's detail page in the collections manager. The game itself is not
-covered by this licence. TODO: state the game's own terms once the owner decides them (the
-repository has no licence file for the game today).
+covered by this licence: all rights reserved (owner, 2026-10-31; the `LICENSE` file at the
+repository root is still to be added, see the checklist).
 
 ---
 
@@ -144,7 +136,3 @@ repository has no licence file for the game today).
 - Wind covers plants, weather, windmills, vanes and cloth; effects such as drifting smoke,
   dust and water chop are not built.
 - Some wind motion on cloth reads strongly at storm strength when you are very close.
-- TODO: downloading a map over Steam (host sending a map with buildings to a Steam client) has
-  not been tested end to end this cycle. Do not announce Steam map download until the
-  checklist run is done.
-- The Core library is still versioned 1.0.0-dev.
