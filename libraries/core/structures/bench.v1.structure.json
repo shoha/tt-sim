@@ -1,0 +1,56 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "prop_2",
+      "to_port": 0
+    },
+    {
+      "from": "prop_2",
+      "from_port": 0,
+      "to": "output_3",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        40.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "prop_2",
+      "params": {
+        "prop": "bench",
+        "spec": "{\"name\":\"Bench\",\"palette\":{\"accent\":[\"#D8603A\",\"#3F82B8\",\"#4E9E66\",\"#E3B03A\",\"#8A5CA8\",\"#E0707A\"],\"roof\":[\"#EBC45A\",\"#F2D273\",\"#E0B04C\"],\"stone\":[\"#CFC6B6\",\"#C4BDB0\",\"#D8CDB8\"],\"wall\":[\"#C98B52\",\"#B97B46\",\"#D9A261\",\"#A9714A\",\"#CF9A5E\"]},\"prop\":\"bench\",\"radius_m\":0.9,\"size\":[1.8,0.6],\"tones\":{\"accent\":\"#8A5CA8\",\"roof\":\"#EBC45A\",\"stone\":\"#CFC6B6\",\"wall\":\"#A9714A\"},\"variant\":{\"paint\":false,\"style\":\"stone\"}}"
+      },
+      "position": [
+        250.0,
+        40.0
+      ],
+      "type": "prop"
+    },
+    {
+      "id": "output_3",
+      "params": {
+        "name": "Bench",
+        "palette_accent": "#D8603A,#3F82B8,#4E9E66,#E3B03A,#8A5CA8,#E0707A",
+        "palette_roof": "#EBC45A,#F2D273,#E0B04C",
+        "palette_wall": "#C98B52,#B97B46,#D9A261,#A9714A,#CF9A5E"
+      },
+      "position": [
+        480.0,
+        40.0
+      ],
+      "type": "output"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

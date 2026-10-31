@@ -84,7 +84,9 @@ static func structure_problem(structure: Structure, extent: Vector2) -> String:
 	var recipe := recipe_problem(structure.recipe)
 	if recipe != "":
 		return recipe
-	var plan := footprint_problem(structure.footprint, extent)
+	var served := LibraryStructureStore.structure(structure.recipe)
+	var kind := ProcgenPlan.KIND_PROP if ProcgenStructureIndex.is_prop(served) else ""
+	var plan := footprint_problem(structure.footprint, extent, kind)
 	if plan != "":
 		return plan
 	if structure.seed_value < 0 or structure.seed_value > Structure.MAX_SEED:
@@ -113,7 +115,9 @@ static func recipe_problem(recipe: String) -> String:
 
 ## What is wrong with `plan` as a footprint on a map of `extent` metres, or "". The record's own
 ## caps first (point count, finite, on the map, MAX_SPAN_M), then the plan rules.
-static func footprint_problem(plan: PackedVector2Array, extent: Vector2) -> String:
+static func footprint_problem(
+	plan: PackedVector2Array, extent: Vector2, kind: String = ""
+) -> String:
 	var count := plan.size()
 	if count < Structure.MIN_POINTS or count > Structure.MAX_POINTS:
 		return "%d points outside %d..%d" % [count, Structure.MIN_POINTS, Structure.MAX_POINTS]
@@ -125,15 +129,16 @@ static func footprint_problem(plan: PackedVector2Array, extent: Vector2) -> Stri
 		box = box.expand(p)
 	if box.size.x > MAX_SPAN_M or box.size.y > MAX_SPAN_M:
 		return "wider than %s m" % MAX_SPAN_M
-	return _plan_problem(plan)
+	return _plan_problem(plan, kind)
 
 
 ## What the shared plan rules (procgen's ProcgenPlan, the same ones structgen edits by) say about
 ## `plan`, or "": a simple polygon wound the way the presets are, no side shorter than 0.5 m,
 ## none closer than 0.3 m to another it does not meet, no corner sharper than 15 degrees, an
-## area of at least 2 m2. The first problem is returned.
-static func _plan_problem(plan: PackedVector2Array) -> String:
-	var problems := ProcgenPlan.problems(plan)
+## area of at least 2 m2 (a prop's `kind` has ProcgenPlan's smaller prop limits). The first
+## problem is returned.
+static func _plan_problem(plan: PackedVector2Array, kind: String = "") -> String:
+	var problems := ProcgenPlan.problems_of(plan, kind)
 	return "" if problems.is_empty() else problems[0]
 
 

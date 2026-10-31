@@ -1,0 +1,56 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "prop_2",
+      "to_port": 0
+    },
+    {
+      "from": "prop_2",
+      "from_port": 0,
+      "to": "output_3",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        40.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "prop_2",
+      "params": {
+        "prop": "haystack",
+        "spec": "{\"name\":\"Hay stack\",\"palette\":{\"accent\":[\"#D8603A\",\"#3F82B8\",\"#4E9E66\"],\"roof\":[\"#EBC45A\",\"#F2D273\",\"#E0B04C\"],\"wall\":[\"#C98B52\",\"#B97B46\",\"#D9A261\",\"#A9714A\",\"#CF9A5E\"]},\"prop\":\"haystack\",\"radius_m\":1.1,\"size\":[2.2,2.0],\"tones\":{\"accent\":\"#4E9E66\",\"roof\":\"#EBC45A\",\"wall\":\"#A9714A\"},\"variant\":{\"shape\":\"twin\",\"tiers\":3.0}}"
+      },
+      "position": [
+        250.0,
+        40.0
+      ],
+      "type": "prop"
+    },
+    {
+      "id": "output_3",
+      "params": {
+        "name": "Hay stack",
+        "palette_accent": "#D8603A,#3F82B8,#4E9E66",
+        "palette_roof": "#EBC45A,#F2D273,#E0B04C",
+        "palette_wall": "#C98B52,#B97B46,#D9A261,#A9714A,#CF9A5E"
+      },
+      "position": [
+        480.0,
+        40.0
+      ],
+      "type": "output"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

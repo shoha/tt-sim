@@ -70,9 +70,13 @@ uniform float exposure : hint_range(0.2, 1.0) = 0.66;
 // A broad hue/value shift in soft blotches, so a clump of leaves is never one flat green.
 uniform float blotch : hint_range(0.0, 1.0) = 0.0;
 uniform float roughness_amount : hint_range(0.0, 1.0) = 0.92;
+// How far the painted colour is pushed from its grey (1 keeps it). A prop's palette is saturated
+// (honey wood, ruby cloth) and the painterly light grey-washes it, so props ask for more.
+uniform float saturation : hint_range(0.5, 2.0) = 1.0;
 
 void fragment() {
 	vec3 col = COLOR.rgb * tone * exposure;
+	col = mix(vec3(dot(col, vec3(0.299, 0.587, 0.114))), col, saturation);
 	float metres = COLOR.a * 16.0;
 	col *= s_break(s_noise(s_pos * 1.7 + 3.0), blotch, 0.3);
 	float foot = 1.0 - smoothstep(0.0, 0.5, metres);

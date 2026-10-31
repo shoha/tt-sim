@@ -65,6 +65,43 @@ const TILE_LOOK_Z := 0.0
 const TILE_SETTLE_S := 3.0
 const TILE_JOB_TIMEOUT_S := 900
 
+## Props (family `prop`, villages.md): each is one index entry with PROP_VARIANTS recipes, the
+## entry's own (draw seed 0) and `<id>.v<k>.structure.json` for the draw seeds 1 to 3. A variant is
+## served as the reference `<library>:<id>_v<k>` (variant_ref) and is no entry of the index, so the
+## palette, the street split and every count of structures never meet one.
+const PROP_VARIANTS := 4
+## A prop tile is framed on its footprint alone (no wall height): this base plus this per metre.
+const TILE_PROP_ZOOM_BASE_M := 1.3
+const TILE_PROP_ZOOM_PER_M := 0.85
+## Props whose tile needs more room than their footprint says (a lamp post and a scarecrow stand
+## tall, a wagon's pole reaches out): the factor their framing is scaled by.
+const TILE_PROP_ZOOM_FACTORS: Dictionary = {
+	"lamp_post": 2.3,
+	"scarecrow": 1.9,
+	"wayside_shrine": 1.5,
+	"signpost": 1.8,
+	"well": 1.55,
+	"market_stall": 1.75,
+	"laundry_line": 1.15,
+	"farm_wagon": 1.1,
+	"field_gate": 1.2,
+	"yard_gate": 1.3,
+}
+## Where a tall prop's tile looks: metres along z from the map's centre (negative moves the prop
+## down in the picture, so its top is not cut off).
+const TILE_PROP_LOOK_Z: Dictionary = {
+	"lamp_post": -2.0,
+	"scarecrow": -0.9,
+	"wayside_shrine": -0.45,
+	"signpost": -0.8,
+	"well": -0.6,
+	"market_stall": -0.9,
+	"laundry_line": -0.35,
+	"yard_gate": -0.25,
+	"field_gate": -0.25,
+	"haystack": -0.3,
+}
+
 static var _param_re: RegEx = _compile("^[a-z][a-z0-9_]*$")
 
 
@@ -77,6 +114,18 @@ static func _compile(pattern: String) -> RegEx:
 ## The library-relative file of structure `id`'s recipe.
 static func recipe_path(id: String) -> String:
 	return "%s%s%s" % [DIR, id, RECIPE_SUFFIX]
+
+
+## The library-relative file of prop `id`'s recipe for draw seed `seed_value` (0 is recipe_path).
+static func variant_path(id: String, seed_value: int) -> String:
+	if seed_value <= 0:
+		return recipe_path(id)
+	return "%s%s.v%d%s" % [DIR, id, seed_value, RECIPE_SUFFIX]
+
+
+## The local id prop `id`'s draw seed `seed_value` is served under (`barrel_v1`; seed 0 is `id`).
+static func variant_id(id: String, seed_value: int) -> String:
+	return id if seed_value <= 0 else "%s_v%d" % [id, seed_value]
 
 
 ## The library-relative file of structure `id`'s thumbnail.
@@ -204,13 +253,25 @@ static func _read_entry(
 			"%s: thumbnail %s is missing (the tile shows a placeholder)" % [where, thumb]
 		)
 		clean["thumb"] = ""
-	return {
+	var made := {
 		"id": id,
 		"file": file,
 		"entry": clean,
 		"digest": text.sha256_text(),
 		"height_m": default_height(recipe),
 	}
+	if ProcgenStructureIndex.is_prop(clean):
+		# The other draws of a prop: those that are missing or are no recipe are left out.
+		var variants: Array[Dictionary] = []
+		for k in range(1, PROP_VARIANTS):
+			var variant_file := variant_path(id, k)
+			var variant_text := String(recipes.get(variant_file.get_file(), ""))
+			if variant_text == "" or recipe_problem(variant_text, registry) != "":
+				warnings.append("%s: variant %s is missing or no recipe (left out)" % [where, variant_file])
+				continue
+			variants.append({"seed": k, "file": variant_file, "digest": variant_text.sha256_text()})
+		made["variants"] = variants
+	return made
 
 
 ## The default of the recipe's `height` interface parameter (the wall height in metres), 2.4 when
@@ -345,6 +406,17 @@ static func _clean_entry(
 	# default fills it in); a rectangle has none.
 	if ProcgenStructureIndex.is_round(clean):
 		clean["sides"] = ProcgenStructureIndex.sides_of(shape)
+	# A prop carries its slots, clearance radius, collision hint and tint; every other row holding
+	# one of them, or the prop plan, is refused (ProcgenStructureIndex says why).
+	var refused: Array[String] = ProcgenStructureIndex.prop_errors(entry)
+	refused.append_array(ProcgenStructureIndex.plan_errors(shape))
+	if not refused.is_empty():
+		warnings.append("%s: %s (ignored)" % [where, refused[0]])
+		return {}
+	if ProcgenStructureIndex.is_prop(entry):
+		for key in ProcgenStructureIndex.PROP_KEYS:
+			if entry.has(key):
+				clean[key] = entry[key]
 	return clean
 
 
@@ -532,6 +604,13 @@ static func thumbnail_job(
 		var longest := maxf(float(size[0]), float(size[1]))
 		var height := float(item.get("height_m", TILE_DEFAULT_HEIGHT_M))
 		var zoom := _tile_zoom(longest, height) * _family_zoom(entry)
+		var look_z := TILE_LOOK_Z
+		if ProcgenStructureIndex.is_prop(entry):
+			look_z = float(TILE_PROP_LOOK_Z.get(String(item["id"]), TILE_LOOK_Z))
+			zoom = (
+				(TILE_PROP_ZOOM_BASE_M + longest * TILE_PROP_ZOOM_PER_M)
+				* float(TILE_PROP_ZOOM_FACTORS.get(String(item["id"]), 1.0))
+			)
 		(
 			steps
 			. append(
@@ -554,7 +633,7 @@ static func thumbnail_job(
 				{
 					"op": "thumbnail_prepare",
 					"zoom": zoom,
-					"at": [0.0, TILE_LOOK_Z],
+					"at": [0.0, look_z],
 				}
 			)
 		)

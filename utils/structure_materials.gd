@@ -23,6 +23,13 @@ const WATER_SHADER := preload("res://shaders/structure_water.gdshader")
 const METAL_TONE := Vector3(1.25, 1.12, 0.9)
 const CLOTH_TONE := Vector3(1.1, 1.08, 1.05)
 const LEAF_TONE := Vector3(0.92, 1.18, 0.82)
+## A prop (StructureMaterials.prop): exposure, saturation and light balance over the ornament's.
+const PROP_EXPOSURE := 0.8
+const PROP_SATURATION := 1.4
+const PROP_SHADE_TINT := Vector3(0.95, 0.9, 0.96)
+const PROP_SHADE_FLOOR := Vector3(0.34, 0.28, 0.31)
+const PROP_LIT_GAIN := Vector3(1.28, 1.2, 1.08)
+const PROP_STONE_TONE := Vector3(1.04, 0.98, 0.86)
 ## A treehouse crown is painted with less light than ivy (it is a big, lit mass) and sways this far.
 const CANOPY_EXPOSURE := 0.5
 const CANOPY_SWAY_M := 0.05
@@ -77,6 +84,8 @@ static func make(
 		return water()
 	if role == StructureLook.CANOPY:
 		return canopy()
+	if role == StructureLook.PROP and kind != StructureLook.GLASS_KIND:
+		return prop(kind)
 	if role == StructureLook.ORNAMENT and kind != StructureLook.GLASS_KIND:
 		return ornament(kind)
 	match kind:
@@ -123,6 +132,24 @@ static func ornament(kind: String) -> ShaderMaterial:
 			material.set_shader_parameter("tone", CLOTH_TONE)
 			# Banner, pennant and awning cloth moves in the wind (StructureCloth writes the weights).
 			material.set_shader_parameter("cloth_wind", 1.0)
+	return material
+
+
+## A prop's part (StructureLook.PROP): the ornament material with a lighter exposure, more
+## saturation and a warm light balance, so the palette procgen drew (honey wood, ruby cloth, bright
+## hay) stays a colour. Cloth is the ornament's cloth, with its wind sway (StructureCloth).
+static func prop(kind: String) -> ShaderMaterial:
+	var material := ornament(kind)
+	material.set_shader_parameter("exposure", PROP_EXPOSURE)
+	material.set_shader_parameter("saturation", PROP_SATURATION)
+	material.set_shader_parameter("ramp_shade_tint", PROP_SHADE_TINT)
+	material.set_shader_parameter("shade_floor", PROP_SHADE_FLOOR)
+	material.set_shader_parameter("lit_gain", PROP_LIT_GAIN)
+	if kind == "stone":
+		# Curbs and plinths read a pale lavender grey under the cool shade; warmer and a touch
+		# deeper they stay a sunlit stone.
+		material.set_shader_parameter("tone", PROP_STONE_TONE)
+		material.set_shader_parameter("exposure", PROP_EXPOSURE * 0.9)
 	return material
 
 

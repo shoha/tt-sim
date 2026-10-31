@@ -34,6 +34,12 @@ const CANOPY := "canopy"
 ## A fountain's pool and jet (the Courtyard Paving's `fountain/water` and `fountain/jet`, surface
 ## kind `glass`): a luminous cool tint with a gentle shimmer (StructureMaterials.water), not a pane.
 const WATER := "water"
+## A prop's part (procgen's `prop` node, ProcgenProps: barrel, well, stall, ...; surface kinds wood,
+## stone, thatch, accent, cloth and glass). Every part keeps the colour procgen painted from the
+## prop's own palette (StructurePaint keeps it like an ornament's) and is drawn by the ornament
+## shader, cloth with its wind sway, glass as an unshaded pane; the water of a well or a trough is
+## the WATER role (role_of_slot).
+const PROP := "prop"
 ## The surface kinds that keep the ORNAMENT role: foliage (`leaf`, `leaf_b`), `cloth` and `metal`
 ## (new free kinds: a host without their own shading falls back to masonry, wood or stone),
 ## the small `wood` parts, the rose window's `glass` and the Tree Core's `bark` (painted trunk).
@@ -47,7 +53,9 @@ const STYLE_WALL_KINDS: Array[String] = ["plaster", "adobe", "brick", "log"]
 ## The roof kinds the style roof shader draws, in its `pattern` order.
 const STYLE_ROOF_KINDS: Array[String] = ["slate", "shingle", "thatch", "turf"]
 ## Every role, in the order a structure's meshes are made.
-const ROLES: Array[String] = [WALL, ROOF, TRIM, CHIMNEY, OPENING, FRAME, ORNAMENT, WATER, CANOPY]
+const ROLES: Array[String] = [
+	WALL, ROOF, TRIM, CHIMNEY, OPENING, FRAME, ORNAMENT, WATER, CANOPY, PROP
+]
 ## The surface kind of the panes and leaves (ProcgenGlazing.KIND); drawn unshaded from the vertex
 ## colours.
 const GLASS_KIND := "glass"
@@ -101,6 +109,8 @@ const NODE_ROLES: Dictionary = {
 	# The Tree Core (treehouse): bark trunk and roots, leaf canopy and rope ladder all keep the
 	# colours procgen painted and take the soft ornament light (ORNAMENT_KINDS holds `bark`).
 	"tree_core": ORNAMENT,
+	# A prop (ProcgenProps): see PROP.
+	"prop": PROP,
 }
 
 ## What each role multiplies a surface's tint by. A painterly wall or roof is drawn by the
@@ -188,6 +198,11 @@ static func role_of_slot(node_type: String, slot: String) -> String:
 			# Slots "fountain/basin", "fountain/pillar" (the paving's stone), "fountain/water",
 			# "fountain/jet" (glass kind): the pool and jet are water.
 			if last == "water" or last == "jet":
+				return WATER
+		"prop":
+			# Slots "prop/<name>/<part>": the well's and the trough's `water` is water, whatever its
+			# kind (glass); every other part is a prop part.
+			if last == "water":
 				return WATER
 		"roof_cap":
 			# Slots "cap/dome", "cap/cone", "cap/inner", "cap/glass", "cap/disc", ...
