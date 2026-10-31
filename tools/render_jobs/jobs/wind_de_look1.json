@@ -1,0 +1,445 @@
+{
+ "out_dir": "render_jobs/wind_de_look1",
+ "timeout_s": 600,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 160,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "styles3",
+   "lots": [
+    [
+     "core:castle_keep",
+     -12.0,
+     12.0,
+     8.0,
+     8.0,
+     0.0,
+     801,
+     {
+      "ornaments": 256.0
+     }
+    ],
+    [
+     "core:castle_keep",
+     12.0,
+     12.0,
+     8.0,
+     8.0,
+     180.0,
+     801,
+     {
+      "ornaments": 256.0
+     }
+    ],
+    [
+     "core:townhouse",
+     0.0,
+     0.0,
+     5.0,
+     7.0,
+     0.0,
+     802,
+     {
+      "ornaments": 128.0
+     }
+    ],
+    [
+     "core:cottage_chimneyed",
+     6.0,
+     -6.0,
+     6.0,
+     5.0,
+     0.0,
+     803,
+     {
+      "ornaments": 16.0
+     }
+    ]
+   ]
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "report"
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "zoom",
+   "size": 9.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -12,
+    12
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 4.0
+  },
+  {
+   "op": "capture",
+   "name": "keepA_calm",
+   "desc": "keepA calm"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 4.0
+  },
+  {
+   "op": "capture",
+   "name": "keepA_storm",
+   "desc": "keepA storm"
+  },
+  {
+   "op": "zoom",
+   "size": 9.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    12,
+    12
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "windy",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 4.0
+  },
+  {
+   "op": "capture",
+   "name": "keepB_windy",
+   "desc": "keepB windy"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 4.0
+  },
+  {
+   "op": "capture",
+   "name": "keepB_storm",
+   "desc": "keepB storm"
+  },
+  {
+   "op": "zoom",
+   "size": 5.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -3.3,
+    0.6
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 4.0
+  },
+  {
+   "op": "capture",
+   "name": "town_storm",
+   "desc": "town storm"
+  },
+  {
+   "op": "zoom",
+   "size": 6.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    6,
+    -6
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 4.0
+  },
+  {
+   "op": "capture",
+   "name": "cottage_storm",
+   "desc": "cottage storm"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "remove_all"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "ivy",
+    "flower_boxes"
+   ],
+   "ref": "core:ivy_manor",
+   "width": 8.0,
+   "depth": 6.0,
+   "yaw": 50.0,
+   "seed": 5,
+   "decor": true
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 7.0,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "decor_ivy_manor_calm",
+   "desc": "core:ivy_manor calm"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "windy",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "decor_ivy_manor_windy",
+   "desc": "core:ivy_manor windy"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "decor_ivy_manor_storm",
+   "desc": "core:ivy_manor storm"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "remove_all"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "ivy",
+    "flower_boxes"
+   ],
+   "ref": "core:cottage",
+   "width": 6.0,
+   "depth": 4.0,
+   "yaw": 50.0,
+   "seed": 5,
+   "decor": true
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 4.2,
+   "at": [
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "decor_cottage_calm",
+   "desc": "core:cottage calm"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "windy",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "decor_cottage_windy",
+   "desc": "core:cottage windy"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "decor_cottage_storm",
+   "desc": "core:cottage storm"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "remove_all"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}
