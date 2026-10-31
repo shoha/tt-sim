@@ -42,9 +42,17 @@ void fragment() {
 	float tile_rnd2 = s_hash2(id + 37.0);
 	// Fewer details where a course is under about two pixels, so a far roof stays calm.
 	float detail = 1.0 - smoothstep(0.30, 0.80, fwidth(r));
-	float lip = smoothstep(0.0, 0.40, fract(r));
-	float joint = smoothstep(0.0, 0.07, fract(c)) * smoothstep(0.0, 0.07, 1.0 - fract(c));
-	float shape = 1.0 - course_shadow * (1.0 - lip) - 0.05 * (1.0 - joint);
+	// Bolder courses on steep faces only (cones, spires, domes: owner, 2026-10-30): the shadow
+	// under each lip is darker and thicker and the joints a little heavier, scaled by how steep
+	// the face is (0 at a normal 0.55 up and above, so shingle roofs, gables and thatch are as
+	// they were). The surface is seen edge-on, so its courses need the weight to read.
+	float steep = (1.0 - smoothstep(0.30, 0.55, up)) * tiled;
+	float lip = smoothstep(0.0, 0.40 + 0.22 * steep, fract(r));
+	float joint_w = 0.07 + 0.08 * steep;
+	float joint = smoothstep(0.0, joint_w, fract(c)) * smoothstep(0.0, joint_w, 1.0 - fract(c));
+	float shape = (
+		1.0 - (course_shadow + 0.22 * steep) * (1.0 - lip) - (0.05 + 0.10 * steep) * (1.0 - joint)
+	);
 	shape += (tile_rnd - 0.5) * tile_value;
 	vec3 tile_c = s_lean(tile_rnd2, tile_lean) * shape;
 	tile_c = mix(vec3(1.0), tile_c, detail * tiled);
