@@ -50,6 +50,10 @@ const FORMAT_VERSION := 6
 const NONE := -INF
 ## digest_of rounds vertices and collision to this many metres (0.1 mm), as procgen's digests do.
 const DIGEST_SNAP_M := 0.0001
+## digest_of also rounds normals and UVs to this step (a thousandth of a unit: 0.06 degrees, a
+## thousandth of a tile). Raw, one float bit moved the whole digest on macOS arm64 (2026-10-31,
+## docs/systems/structures.md "Determinism"), while every part rounded to a millimetre agreed.
+const DIGEST_SNAP_UNIT := 0.001
 ## Scatter clearance: strips this wide (at most CLEAR_MAX_STRIPS per structure) cover the footprint;
 ## each strip is shortened at both ends because a Crossing clears past its anchors.
 const CLEAR_STRIP_M := 0.75
@@ -213,6 +217,13 @@ static func build_one(
 ## on at most AuthoredStructures.load_threads() threads, and the result keeps the document's order
 ## (each task writes its own slot). Builds read the document and write nothing shared, so the
 ## output is the same either way (the pinned digests).
+## The group is HIGH priority on purpose (2026-10-31, CI hang): AuthoredLoadPrep calls this from
+## one of its own low-priority pool tasks and waits for the group there. The pool lets low-priority
+## tasks use only `clamp(0.3 * threads, 1, threads - 1)` threads, which is 1 on a 4-core runner:
+## the waiting task held that one thread, the group's low-priority tasks never got a thread, and
+## the load never finished (every test that loads structures through the prep hung for 900 s in
+## CI, where a 24-core dev machine has 7 low-priority threads and never showed it).
+## tests/unit/test_structure_pool.gd keeps every low-priority thread busy to prove it.
 static func build(
 	doc: MapDocument, parallel: bool = true, decor: bool = false, info: Dictionary = {}
 ) -> Dictionary:
@@ -227,7 +238,7 @@ static func build(
 		func(index: int) -> void: out[index] = build_one(doc, list[index], decor, info),
 		list.size(),
 		mini(list.size(), AuthoredStructures.load_threads()),
-		false,
+		true,
 		"StructureGeometry.build"
 	)
 	WorkerThreadPool.wait_for_group_task_completion(group)
@@ -507,7 +518,8 @@ static func footprint_strips(plan: PackedVector2Array) -> Array[Crossing]:
 
 
 ## An MD5 over everything a host reads from `parts`: each mesh's kind, role, vertices, normals,
-## UVs, colours and indices, the collision faces and the top. The pins in
+## UVs, colours and indices, the collision faces and the top, with vertices and collision rounded
+## to DIGEST_SNAP_M and normals and UVs to DIGEST_SNAP_UNIT. The pins in
 ## tests/fixtures/structure_digests.txt are made with it.
 static func digest_of(parts: Dictionary) -> String:
 	var ctx := HashingContext.new()
@@ -517,8 +529,9 @@ static func digest_of(parts: Dictionary) -> String:
 		ctx.update(String(mesh.role).to_utf8_buffer())
 		var arrays: Array = mesh.arrays
 		ctx.update(_snapped(arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).to_byte_array())
-		ctx.update((arrays[Mesh.ARRAY_NORMAL] as PackedVector3Array).to_byte_array())
-		ctx.update((arrays[Mesh.ARRAY_TEX_UV] as PackedVector2Array).to_byte_array())
+		var normals := _snapped(arrays[Mesh.ARRAY_NORMAL] as PackedVector3Array, DIGEST_SNAP_UNIT)
+		ctx.update(normals.to_byte_array())
+		ctx.update(_snapped_uv(arrays[Mesh.ARRAY_TEX_UV] as PackedVector2Array).to_byte_array())
 		ctx.update((arrays[Mesh.ARRAY_COLOR] as PackedColorArray).to_byte_array())
 		ctx.update((arrays[Mesh.ARRAY_INDEX] as PackedInt32Array).to_byte_array())
 	var mill: Dictionary = parts.get("mill", {})
@@ -540,17 +553,27 @@ static func digest_of(parts: Dictionary) -> String:
 
 ## `points` rounded to DIGEST_SNAP_M, -0 written as 0: a one-ulp difference in a libm (Windows,
 ## glibc, macOS) must not move a pin.
-static func _snapped(points: PackedVector3Array) -> PackedVector3Array:
+static func _snapped(points: PackedVector3Array, step: float = DIGEST_SNAP_M) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	out.resize(points.size())
 	for i in points.size():
 		var p := points[i]
-		out[i] = Vector3(_snap(p.x), _snap(p.y), _snap(p.z))
+		out[i] = Vector3(_snap(p.x, step), _snap(p.y, step), _snap(p.z, step))
 	return out
 
 
-static func _snap(value: float) -> float:
-	return snappedf(value, DIGEST_SNAP_M) + 0.0
+## The UVs rounded to DIGEST_SNAP_UNIT (see there).
+static func _snapped_uv(uvs: PackedVector2Array) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	out.resize(uvs.size())
+	for i in uvs.size():
+		var p := uvs[i]
+		out[i] = Vector2(_snap(p.x, DIGEST_SNAP_UNIT), _snap(p.y, DIGEST_SNAP_UNIT))
+	return out
+
+
+static func _snap(value: float, step: float) -> float:
+	return snappedf(value, step) + 0.0
 
 
 ## The triangles of `parts` in all its meshes.
