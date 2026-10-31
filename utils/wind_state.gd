@@ -6,7 +6,7 @@ extends RefCounted
 ## state and the Wind autoload blends from the old one. Never mutated after construction.
 
 ## Radians in the map plane: the direction the wind blows TOWARD, (cos, sin) on (x, z).
-var dir_angle: float = -PI * 0.5
+var dir_angle: float = WindPresets.DEFAULT_DIR_ANGLE
 ## Mean speed, m/s.
 var speed: float = 1.5
 ## 0..1: how far gusts rise above and fall below the mean.

@@ -3,7 +3,7 @@ extends RefCounted
 ## Render-job probe (`call` op) for the global wind (card wind_a, docs/systems/wind.md).
 ## `action`:
 ## - `set`: puts the Wind autoload in a known state. `preset` (calm, breezy, windy, storm) or
-##   `strength` (0..1); `dir_deg` (below 0 = the default, -z); `seed`; `clock` (pins the wind
+##   `strength` (0..1); `dir_deg` (below 0 = the default, toward (0.707, 0, -0.707)); `seed`; `clock` (pins the wind
 ##   clock at that many seconds; `"unpin": true` releases it); `motion` (the player's wind
 ##   motion scale, 0..1); `sway` (false: holds every foliage material's sway and flutter speed
 ##   at 0 so only the gust field moves, the gust following the pinned clock). The state is

@@ -7,11 +7,9 @@ extends Node3D
 
 const TRANSITION_DURATION := 1.0
 const EMISSION_MARGIN := 1.25  # 25% beyond visible area to prevent pop-in at edges
-const WIND_DIRECTION := Vector3(0.707107, 0.0, -0.707107)  # Vector3(1, 0, -1).normalized()
-const RAIN_BASE_GRAVITY := Vector3(0, -9.8, 0)
-const SNOW_BASE_GRAVITY := Vector3(0, -1.5, 0)
-const RAIN_WIND_STRENGTH := 6.0  # horizontal m/s^2 at wind intensity 1.0
-const SNOW_WIND_STRENGTH := 2.0
+const RAIN_VELOCITY_MIN := 12.0
+const RAIN_VELOCITY_MAX := 16.0
+const WIND_ALPHA := 0.4  # wind streak colour alpha in a lull; brightens with gustiness
 const FOG_DENSITY_PER_INTENSITY := 0.05  # density added at base per unit of fog intensity
 
 # Baseline (local-space) visibility_aabb half-extents, matching the AABB each
@@ -19,11 +17,25 @@ const FOG_DENSITY_PER_INTENSITY := 0.05  # density added at base per unit of fog
 const BASE_VISIBILITY_HALF_EXTENT := 30.0
 const BASE_VISIBILITY_HALF_HEIGHT := 15.0
 
+## Number of times the wind was written to the materials (tests and the perf probe read it).
+var wind_apply_count := 0
+
 # Intensity targets (0.0-1.0)
 var _rain_intensity := 0.0
 var _snow_intensity := 0.0
 var _fog_intensity := 0.0
 var _wind_intensity := 0.0
+
+# Global wind (docs/systems/wind.md phase b): the particles follow Wind, sampled at the view
+# centre and written to the process materials at most WindParticles.UPDATE_INTERVAL apart, only
+# when the smoothed value moved.
+var _view_center := Vector3.ZERO
+var _wind_accum := 0.0
+var _wind_primed := false
+var _wind_smooth := Vector3.ZERO
+var _gust_smooth := 0.0
+var _wind_applied := Vector3.ZERO
+var _gust_applied := 0.0
 
 # Particle emitters
 var _rain_emitter: GPUParticles3D = null
@@ -58,10 +70,47 @@ func setup(camera: Camera3D, environment_manager: LevelEnvironmentManager) -> vo
 	_refresh_process_state()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not _camera or not is_instance_valid(_camera):
 		return
 	_update_emitter_positions()
+	if wind_due(delta):
+		var state: WindState = Wind.state
+		var motion: float = Wind.motion_scale()
+		var gust := WindModel.gust_at(state, _view_center, Wind.clock())
+		step_wind(
+			Wind.wind_at(_view_center) * motion, state.gust_amp * gust * motion
+		)
+
+
+## Accumulates [param delta] and says whether the wind should be sampled now: at once when the
+## particles were just switched on, else every WindParticles.UPDATE_INTERVAL.
+func wind_due(delta: float) -> bool:
+	_wind_accum += delta
+	if _wind_primed and _wind_accum < WindParticles.UPDATE_INTERVAL:
+		return false
+	return true
+
+
+## Feeds one wind sample (already scaled by the player's motion scale) through the smoothing and
+## the change rule; writes the materials only when it moved. Returns whether it wrote.
+func step_wind(wind: Vector3, gustiness: float) -> bool:
+	var dt := _wind_accum
+	_wind_accum = 0.0
+	if not _wind_primed:
+		_wind_primed = true
+		_wind_smooth = wind
+		_gust_smooth = gustiness
+	else:
+		_wind_smooth = WindParticles.smooth_toward(_wind_smooth, wind, dt)
+		_gust_smooth = WindParticles.smooth_scalar(_gust_smooth, gustiness, dt)
+		var moved := WindParticles.changed_enough(
+			_wind_applied, _wind_smooth, _gust_applied, _gust_smooth
+		)
+		if not moved:
+			return false
+	_write_wind(_wind_smooth, _gust_smooth)
+	return true
 
 
 ## Enable _process only while at least one emitter is actively emitting -- called
@@ -103,8 +152,8 @@ func _create_rain_emitter() -> GPUParticles3D:
 	var mat := ParticleProcessMaterial.new()
 	mat.direction = Vector3(0, -1, 0)
 	mat.spread = 3.0
-	mat.initial_velocity_min = 12.0
-	mat.initial_velocity_max = 16.0
+	mat.initial_velocity_min = RAIN_VELOCITY_MIN
+	mat.initial_velocity_max = RAIN_VELOCITY_MAX
 	mat.gravity = Vector3(0, -9.8, 0)
 	mat.damping_min = 0.0
 	mat.damping_max = 0.0
@@ -159,7 +208,7 @@ func _create_snow_emitter() -> GPUParticles3D:
 	mat.spread = 15.0
 	mat.initial_velocity_min = 1.0
 	mat.initial_velocity_max = 2.0
-	mat.gravity = Vector3(0, -1.5, 0)
+	mat.gravity = Vector3(0, -WindParticles.SNOW_BASE_FALL, 0)
 	mat.damping_min = 0.5
 	mat.damping_max = 1.5
 	mat.turbulence_enabled = true
@@ -212,16 +261,17 @@ func _create_wind_emitter() -> GPUParticles3D:
 	emitter.visibility_aabb = AABB(Vector3(-30, -15, -30), Vector3(60, 30, 60))
 
 	var mat := ParticleProcessMaterial.new()
-	mat.direction = Vector3(1, 0, -1).normalized()
+	# Direction, speed and brightness follow the global wind (_write_wind); this is the default.
+	mat.direction = WindPresets.default_direction()
 	mat.spread = 15.0
-	mat.initial_velocity_min = 6.0
-	mat.initial_velocity_max = 10.0
+	mat.initial_velocity_min = WindParticles.streak_speed(0.0) * 0.8
+	mat.initial_velocity_max = WindParticles.streak_speed(0.0) * 1.2
 	mat.gravity = Vector3(0, -0.3, 0)
 	mat.damping_min = 0.0
 	mat.damping_max = 0.5
 	mat.scale_min = 0.3
 	mat.scale_max = 0.8
-	mat.color = Color(0.85, 0.85, 0.8, 0.4)
+	mat.color = Color(0.85, 0.85, 0.8, WIND_ALPHA)
 	# Align Y axis to velocity so streaks elongate along travel direction
 	mat.particle_flag_align_y = true
 
@@ -260,6 +310,7 @@ func _update_emitter_positions() -> void:
 	if not holder:
 		return
 	var center: Vector3 = holder.global_position
+	_view_center = center
 	var rain_pos := Vector3(center.x, center.y + 10.0, center.z)
 	var snow_pos := Vector3(center.x, center.y + 8.0, center.z)
 	var wind_pos := Vector3(center.x, center.y + 2.0, center.z)
@@ -321,7 +372,14 @@ func apply_weather(overrides: Dictionary) -> void:
 
 	_transition_emitter("rain", _rain_emitter, _rain_intensity, rain)
 	_transition_emitter("snow", _snow_emitter, _snow_intensity, snow)
-	_transition_emitter("wind", _wind_emitter, _wind_intensity, wind)
+	# The streaks are a view of the global wind: the tile only says how many show (the amount
+	# ratio); direction, speed and brightness come from Wind (see _write_wind).
+	_transition_emitter(
+		"wind",
+		_wind_emitter,
+		WindParticles.streak_ratio(_wind_intensity),
+		WindParticles.streak_ratio(wind)
+	)
 	_transition_fog(fog)
 
 	_rain_intensity = rain
@@ -329,17 +387,42 @@ func apply_weather(overrides: Dictionary) -> void:
 	_fog_intensity = fog
 	_wind_intensity = wind
 
-	_apply_wind_to_precipitation()
+
+## Writes the (smoothed, motion-scaled) wind to the three process materials: rain leans and
+## speeds up, snow drifts and swirls, the streaks point and speed along the wind. Only the
+## materials change; nothing runs per particle.
+func _write_wind(wind: Vector3, gustiness: float) -> void:
+	wind_apply_count += 1
+	_wind_applied = wind
+	_gust_applied = gustiness
+	var speed := wind.length()
+	var rain := _material_of(_rain_emitter)
+	if rain:
+		rain.direction = WindParticles.rain_direction(wind)
+		rain.gravity = WindParticles.rain_gravity(wind)
+		var launch_scale := WindParticles.rain_speed_scale(wind)
+		rain.initial_velocity_min = RAIN_VELOCITY_MIN * launch_scale
+		rain.initial_velocity_max = RAIN_VELOCITY_MAX * launch_scale
+	var snow := _material_of(_snow_emitter)
+	if snow:
+		snow.gravity = WindParticles.snow_gravity(wind)
+		snow.turbulence_noise_strength = WindParticles.snow_turbulence(speed, gustiness)
+		snow.turbulence_noise_speed = WindParticles.snow_swirl(wind)
+	var streak := _material_of(_wind_emitter)
+	if streak:
+		streak.direction = WindParticles.horizontal_direction(wind)
+		var streak_speed := WindParticles.streak_speed(speed)
+		streak.initial_velocity_min = streak_speed * 0.8
+		streak.initial_velocity_max = streak_speed * 1.2
+		streak.color = Color(0.85, 0.85, 0.8, WIND_ALPHA * (0.7 + 0.6 * clampf(gustiness, 0.0, 1.0)))
+		# Reduced motion (wind sample 0) hides the streaks; rain and snow keep falling.
+		_wind_emitter.visible = speed > 1e-3
 
 
-func _apply_wind_to_precipitation() -> void:
-	var wind_offset := WIND_DIRECTION * _wind_intensity
-	if _rain_emitter and _rain_emitter.process_material:
-		var mat := _rain_emitter.process_material as ParticleProcessMaterial
-		mat.gravity = RAIN_BASE_GRAVITY + wind_offset * RAIN_WIND_STRENGTH
-	if _snow_emitter and _snow_emitter.process_material:
-		var mat := _snow_emitter.process_material as ParticleProcessMaterial
-		mat.gravity = SNOW_BASE_GRAVITY + wind_offset * SNOW_WIND_STRENGTH
+func _material_of(emitter: GPUParticles3D) -> ParticleProcessMaterial:
+	if not emitter:
+		return null
+	return emitter.process_material as ParticleProcessMaterial
 
 
 func _transition_emitter(
@@ -351,6 +434,7 @@ func _transition_emitter(
 	if from <= 0.0 and to > 0.0:
 		emitter.amount_ratio = 0.0
 		emitter.emitting = true
+		_wind_primed = false  # sample the wind at once for the emitter that just switched on
 		_refresh_process_state()
 
 	var existing_tween: Tween = _emitter_tweens.get(emitter_name)
