@@ -96,7 +96,8 @@ func test_the_ivy_amount_is_stored_only_while_ivy_is_on_and_off_the_default() ->
 	var thick := StructureOrnaments.with_ivy_amount(ivy, 0.93)
 	assert_almost_eq(StructureOrnaments.ivy_amount(thick), 0.95, 0.001, "snapped to a step")
 	assert_false(
-		StructureOrnaments.with_ivy_amount(thick, 0.55).has("ivy_amount"), "default erased"
+		StructureOrnaments.with_ivy_amount(thick, StructureOrnaments.IVY_DEFAULT).has("ivy_amount"),
+		"default erased"
 	)
 	assert_false(StructureOrnaments.with_kind(thick, "ivy", false).has("ivy_amount"), "ivy off")
 	var entry := StructureOrnaments.entries(thick, 3)[0]
@@ -216,6 +217,27 @@ func test_chip_states_show_a_styles_own_ornaments_on_and_locked() -> void:
 		assert_eq(bool(states[kind]["on"]), own.has(kind), "%s on iff built in" % kind)
 		assert_eq(bool(states[kind]["enabled"]), not own.has(kind), "%s locked iff built in" % kind)
 	assert_eq(StructureOrnaments.apply(styled, StructureOrnaments.with_kinds({}, own), 1), 0)
+
+
+func test_soften_enlarges_ivy_within_procgens_limits_and_leaves_other_kinds_alone() -> void:
+	var cottage := StructureRecipes.document(COTTAGE)
+	var params := StructureOrnaments.with_kinds({}, ["ivy", "vane"])
+	assert_gt(StructureOrnaments.apply(cottage, params, 3), 0)
+	var before := {}
+	for id in cottage.nodes_of_type("ornament"):
+		before[id] = cottage.node_params(id).duplicate()
+	assert_eq(StructureOrnaments.soften(cottage), before.size())
+	for id in cottage.nodes_of_type("ornament"):
+		var after := cottage.node_params(id)
+		assert_eq(str(after.get("soft", "")), "anchors")
+		if str(after.get("kind", "")) == "ivy":
+			var cov: float = after.get("coverage")
+			var was: float = (before[id] as Dictionary).get("coverage", 0.55)
+			assert_gte(cov, minf(was, 1.0) - 0.0001, "coverage did not shrink")
+			assert_lte(cov, 1.0, "within procgen's limit")
+			assert_lte(float(after.get("height")), 1.0)
+		else:
+			assert_eq(after.get("height"), (before[id] as Dictionary).get("height"), "vane untouched")
 
 
 # --- the edit ------------------------------------------------------------------------------
