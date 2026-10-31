@@ -27,6 +27,8 @@ Documents here:
 
 - [water.md](water.md): the water model and flow bake, authored water at runtime, carving and
   wet dressing, rivers and ponds past the map edge.
+- [wind.md](wind.md): the global wind design (design only): the WindState model, shader globals,
+  weather and structure consumers, play-together sync, phases.
 - [waterfalls.md](waterfalls.md): the fall-or-riffle rule, the plan-time lips and set-back, the
   fall carve, the curtain / foam ring / mist mesh and shader, the fall material.
 - [crossings.md](crossings.md): plank bridges, stepping stones, stone arches and fords,

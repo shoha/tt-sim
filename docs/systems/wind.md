@@ -1,0 +1,477 @@
+# Wind
+
+Design for one global wind that every moving thing in a level reads: plants and grass, rain, snow,
+wind streaks, windmills, banners, awnings and weathervanes. Written 2026-10-30 on branch
+`wind_design` after the owner's decision "Build a global wind. We should also reconcile the windy
+weather effect along with rain and snow to interact with this global wind." Priority: core systems
+and performance before new styles. The bar it is judged against is the suite's: motion that reads
+at tabletop zoom (a gust you can watch cross a meadow, not a uniform shimmer), painterly, lively,
+and never the same wind everywhere (`AGENTS.md` at the suite root, "Guiding principle").
+
+Status: DESIGN ONLY. No code changed, nothing measured (another agent held the game's user
+folder, so no Godot process was run). Every number marked "start" is a tuning start, to be set in
+a render round; every cost marked "budget" is a target to be measured with the
+[PERFORMANCE.md](../PERFORMANCE.md) procedure, not a result.
+
+## 1. Inventory: what moves today
+
+There is no global wind value. Four independent wind-like things exist, and they disagree about
+which way the wind blows.
+
+| Consumer | Where | Direction it uses | Time source | Parameters come from |
+|---|---|---|---|---|
+| Plant sway and gusts (grass, trees, decor climbers) | `shaders/wind_foliage_include.gdshaderinc:226-264` (sway), `:209-218` (gust field) | `uniform vec2 wind_direction = (0.857, 0.514)` (x, z), `:64`; never set from GDScript (grep: no `set_shader_parameter("wind_direction"`) | Godot `TIME` (per peer, wraps) | per-material uniforms set once from `WindFoliage.PRESETS` (`utils/wind_foliage.gd:44-77`, applied at `:308-312`); `sway_speed` and `sway_amplitude` re-tunable live through `LevelEnvironmentManager._tune_wind_materials` (`level_environment_manager.gd:236-243`) |
+| Rain and snow slant | `scenes/effects/weather_renderer.gd:335-342` | `WIND_DIRECTION = (0.707, 0, -0.707)` (`:10`), to the right of the default view | engine particle time | `gravity = base + WIND_DIRECTION * wind_intensity * STRENGTH` (6.0 rain, 2.0 snow, `:13-14`), set only when `apply_weather` runs |
+| Wind streak particles | `weather_renderer.gd:206-254` | the same vector typed again as a literal (`:215`), so a change to the const would not reach it | engine particle time | fixed 6-10 m/s, 200 particles, on only while `wind_intensity > 0` (`:322-324`) |
+| Windmill cap and sails | `scenes/terrain/mill_motion.gd` | `WIND_FROM = (0.2, 0, 1)` (`:20`), the wind comes FROM there | accumulated `delta` | constants `SPIN_RAD_S 0.29`, sway `0.12 rad` at `0.13 rad/s` (`:22-26`), a per-building spread from the seed (`:44-52`) |
+
+Three different directions (shader, weather, mill) and three different clocks. The mill file and
+`structures.md:593-602` already say this is a placeholder ("tt-sim has no global wind value").
+
+Other motion, for completeness:
+
+- **Plant categories.** `WindFoliage.PRESETS` holds three: `tree`, `grass`, `climber` (`wind_foliage.gd:44-77`).
+  `classify_category` returns only `tree`, `grass` or the empty string for rocks (`:258-269`); the
+  climber preset is assigned to structure decor through the decor row's `wind_category`
+  (`scenes/terrain/authored_structures.gd:660-718`). There is no separate bush or flower category
+  in code; both fall in `grass` (flowers) or `tree` (by name keyword). The design below names the
+  three that exist.
+- **Per-level tuning.** `FoliageSettings` keeps four values: tree and grass sway speed and amplitude
+  (`resources/foliage_settings.gd:9-14`). Climber is not tunable per level.
+- **Structure decor plants** (ivy, window planters) are baked into one node per building, dressed with
+  `WindFoliage.apply_material(..., "climber")` (`structures.md:944-966`). They already use the
+  foliage shader, so they get the global wind for free once the shader reads it.
+- **Water** animates on raw `TIME` and a flow bake (`shaders/water.gdshader:383-406`); not wind aware.
+  Out of scope here (see section 6).
+- **Sky and fog.** The sky is a static panorama (`utils/environment_presets.gd:75`, `PanoramaSkyMaterial`)
+  and fog is an `Environment` density tween (`weather_renderer.gd:371-401`), so there is nothing
+  that drifts. The sky is not rotated on purpose (the HDRI's lit clouds are baked to its sun).
+- **Cloth and vanes.** Weathervane, awning and banner ornaments exist (`utils/structure_ornaments.gd:26`,
+  kinds `vane`, `awning`, `banner`; at most one vane or banner per building, `:303-305`) and are static.
+  Their parts use the `cloth` and `metal` surface kinds with `structure_ornament.gdshader`
+  (`utils/structure_materials.gd:98-117`, `utils/structure_look.gd:30-33`). No flags exist.
+- **Lightning, puddles, rain ripples:** none exist (grep over `scenes/`, `utils/`, `shaders/`).
+  The design leaves room for them and changes nothing there.
+
+### Cost today
+
+| Item | Cost | Source |
+|---|---|---|
+| Foliage sway | vertex-stage only: one `sin` for sway, two `sin` plus a `smoothstep` for the gust, one more `sin` for flutter on vertex-weighted meshes; no extra draw calls (wind is the material the MultiMesh already draws with) | `wind_foliage_include.gdshaderinc:209-264` |
+| Foliage uniforms | about 8 wind uniforms per `ShaderMaterial` (one per species and category), set once at build; live tuning is `set_shader_parameter` on every cached material (a loop, only on slider moves) | `wind_foliage.gd:308-312`, `level_environment_manager.gd:208-215` |
+| Weather particles | rain 1000, snow 600, wind 200 GPU particles (`weather_renderer.gd:99,153,210`); `_process` runs only while an emitter emits (`:67-77`) and moves three emitters and grows three AABBs | `weather_renderer.gd` |
+| Windmill | two transforms per frame per visible mill; stops off screen | `mill_motion.gd:65-92` |
+| Global shader params | precedent: `canopy_fade_*` (4 vec4) are published each frame but only when changed | `scenes/states/playing/canopy_fade.gd:150-163`, `project.godot` `[shader_globals]` |
+
+Two faults found while reading, both fixed by this design:
+
+1. **Gusts are not the same on two screens.** The gust field is a function of per-peer `TIME`
+   (`wind_foliage_include.gdshaderinc:215-216`), so two players watching one table see fronts at
+   different places. Today nothing is synced, and nothing needs to be (plants only), but it is
+   the property we want ("wind must look the same for every peer").
+2. **`TIME` wraps.** The project sets no `rendering/limits/time/time_rollover_secs` (grep of
+   `project.godot`), so the engine default (3600 s) applies and every `TIME`-driven phase jumps once
+   an hour. The wind clock below is computed in double precision on the CPU and wrapped per
+   frequency, so it never jumps.
+
+## 2. The model
+
+### 2.1 State
+
+One small value type, owned by a new autoload `Wind` (`autoloads/wind.gd`, registered beside the
+others at `project.godot` `[autoload]`, line 29-43). It holds the current `WindState` and the
+published uniforms, and ticks in `_process`.
+
+```
+class_name WindState extends RefCounted
+var dir_angle: float      # radians in the map plane (x, z); the direction the wind blows TOWARD
+var speed: float          # mean speed, m/s
+var gust_amp: float       # 0..1, how far gusts rise above and fall below the mean
+var gust_ripple: float    # 0..1, extra fast short-wavelength ripple (storm only)
+var veer_amp: float       # radians, slow swing of the direction about dir_angle
+var veer_period: float    # seconds
+var sway_scale: float     # multiplier on every plant's sway amplitude (1.0 = today's look)
+var seed: int             # phases the veer and the fronts; from the level (see 3)
+```
+
+`WindState` is built from the level's weather settings by a pure table
+(`WindPresets.state_for(strength: float, direction_override: float, seed: int) -> WindState`) and
+is immutable once built; a change makes a new one and the autoload blends from the old (see 2.5).
+
+### 2.2 The function
+
+```
+static func wind_at(state: WindState, pos: Vector3, t: float) -> Vector3
+static func gust_at(state: WindState, pos: Vector3, t: float) -> float   # 0..1, same shape the shader uses
+static func direction_at(state: WindState, t: float) -> float            # veered angle
+```
+
+Rules:
+
+- **Pure.** The result depends only on `state`, `pos` (x and z) and `t`. No node, no tree, no
+  randomness except `state.seed` through fixed phase offsets.
+- **Same shape as the shader's gust** (`wind_foliage_include.gdshaderinc:209-218`): two sines with
+  12 m and 19 m wavelengths travelling along the direction, a small cross-wind term so fronts are
+  not straight lines, then `smoothstep(-0.2, 0.9, wave)`. Reusing it keeps the first phase's look
+  identical at calm. A third term, the ripple (7 m wavelength, 9 m/s front speed), is added
+  scaled by `gust_ripple`, so a storm has fast streaks running through slower swells.
+- **Front speed is constant** (3.0 m/s, today's `gust_speed`, `:66`; ripple 9 m/s) and does NOT
+  depend on the preset. Reason: with a time-dependent phase `phi = omega * t`, changing `omega`
+  when the GM changes the preset makes `phi` jump on every peer. Keeping omega fixed and
+  scaling only amplitudes makes the field continuous through any preset change. Storm reads as
+  stronger through lean, ripple and particles, not through faster fronts. This is a deliberate
+  trade-off; open question 3 asks if it is acceptable.
+- **Veer** is `dir_angle + veer_amp * sin(TAU * t / veer_period + seed_phase)`: slow (60 to 240 s),
+  continuous, a pure function of time.
+- **No allocation.** Returns a `Vector3` (a value type), the state is reused, no arrays or
+  dictionaries are built per call. The autoload calls `wind_at` for at most a handful of points a
+  frame (the view centre for particles, one per visible mill); it is not called per plant. Plants
+  evaluate the same field on the GPU.
+
+### 2.3 Wind clock
+
+`Wind.clock()` returns seconds as a double:
+`Time.get_unix_time_from_system() - EPOCH` with `EPOCH` a fixed constant (2026-01-01 UTC), see
+section 3 for why. The CPU computes each phase in double precision and wraps it:
+
+```
+phase_a = fposmod(t * K1 * FRONT_SPEED, TAU)      # 12 m front
+phase_b = fposmod(t * K2 * FRONT_SPEED * 0.8, TAU)  # 19 m front
+phase_c = fposmod(t * K3 * RIPPLE_SPEED, TAU)       # 7 m ripple
+```
+
+The shader never receives a large time, so float32 precision does not degrade over a long
+session (a unix time near 1.8e9 would have none left). Each phase wraps on its own period, so
+there is no seam: the wave is `sin(along * k - phase)` and `phase` is already reduced mod TAU.
+
+### 2.4 Shader interface (global uniforms)
+
+Declared in `project.godot` `[shader_globals]` with calm defaults (so any scene without the
+autoload ticking, such as structure previews and thumbnail shots, renders calm wind), read by
+`wind_foliage_include.gdshaderinc` and, later, the cloth shader:
+
+| Name | Type | Contents | Updated |
+|---|---|---|---|
+| `wind_dir` | `vec4` | x, z unit direction (veered), mean speed m/s, `sway_scale * motion_scale` | each frame while veering or blending; else on change |
+| `wind_phase` | `vec4` | `phase_a`, `phase_b`, `phase_c`, flutter phase (fast, wrapped) | each frame while any consumer is visible; skipped when `motion_scale == 0` |
+| `wind_gust` | `vec4` | `gust_amp`, `gust_ripple`, 0, 0 (two spare) | on change (preset or blend step) |
+
+Three `vec4`, so three `global_shader_parameter_set` calls, each pushed only when the value
+changed (the `canopy_fade.gd:150-163` pattern). This lands in one global uniform buffer upload per
+frame. Budget: under 0.1 ms CPU per frame (the autoload tick plus three sets), zero extra draw
+calls, no per-instance data, no per-material `set_shader_parameter` after startup.
+
+In the shader, the per-material `wind_direction` and `gust_speed` uniforms are removed
+(`gust_strength`, `sway_speed`,
+`sway_amplitude`, `flutter_*` stay as the per-category character). The sway amplitude becomes
+`sway_amplitude * wind_dir.w`, the lean in a gust uses the global direction, and the gust envelope
+uses `wind_phase` and `wind_gust` instead of `time * gust_speed`. Per-plant oscillation
+(`time * sway_speed + phase`, `:233`) stays on `TIME`: it is a local jitter, each plant a different
+phase, and does not need to agree between peers.
+
+Per-category response. Add `wind_response` to `WindFoliage.PRESETS` (start: tree 1.0, grass 1.25,
+climber 0.6) so one `sway_scale` moves a meadow more than an oak and ivy stays held by its wall.
+This is a new preset key, set once at build like the others.
+
+### 2.5 Presets, one dial
+
+The weather document already has a wind intensity, 0 to 1 (`WeatherSettings.wind_intensity`,
+`resources/weather_settings.gd:19`, a "Wind" tile in `WeatherPane`, `weather_pane.gd:11-16`). It
+stays the single strength dial; presets are named stops on it, so levels saved today keep their
+meaning with no migration (and the owner's rule is that migration is not needed anyway).
+
+| Preset | Strength | Speed m/s | Gust amp | Ripple | Sway scale | Veer (rad / period s) | Reads as |
+|---|---|---|---|---|---|---|---|
+| calm | 0.00 | 1.5 | 0.35 | 0 | 1.0 | 0 | today's look, exactly |
+| breezy | 0.33 | 4 | 0.55 | 0 | 1.5 | 0.10 / 150 | meadow ripples, canopy nods, banners lift |
+| windy | 0.66 | 8 | 0.75 | 0.25 | 2.2 | 0.20 / 110 | clear fronts, trees lean, rain slants |
+| storm | 1.00 | 14 | 1.00 | 0.70 | 3.2 | 0.35 / 80 | heavy lean, ripples, sails fast, rain near 35 degrees |
+
+Between stops the table interpolates linearly (and `smoothstep` on the ripple so it fades in
+late). All start values; the dials most worth tuning live are sway scale, gust amp and the
+direction. Hard caps: the sway offset after scaling must stay under about 0.35 m at a tree tip
+and 0.12 m at a grass tip (tip heights in the assets are about 6 m and 0.3 m), else crowns
+shear, which the existing "bend, not translate" droop (`:259-262`) only partly hides.
+
+Blending: when the target state changes, `Wind` eases `speed`, `gust_amp`, `gust_ripple`,
+`sway_scale` and the direction toward the new values over 2.5 s with an exponential approach
+(the existing weather transition is 1.0 s, `weather_renderer.gd:8`; wind should lag precipitation).
+Because phases do not depend on the state, the blend never pops. The blend itself is local; every
+peer reaches the same target from the same message and ends identical.
+
+### 2.6 Reconciling the weather effects
+
+The "Wind" tile stops being a separate fixed-direction effect. It becomes the strength dial. Rain,
+snow and wind streaks all read the wind whether or not the Wind tile is on:
+
+- **Rain.** Today: `gravity += WIND_DIRECTION * wind_intensity * 6.0` (`weather_renderer.gd:339`).
+  New: each rain frame the renderer (already ticking in `_process` while emitting) samples
+  `wind_at` at the view centre and sets the process material's `direction` so the streak slants
+  by `tan(slant) = clamp(wind_speed * 0.045, 0, 0.7)` (about 4 degrees calm, 20 at windy, 32 at
+  storm; start), plus a gust factor (speed rises by up to `gust_amp * 0.4` inside a gust, so
+  streaks lean harder as a front passes). `particle_flag_align_y` already aligns the streak to
+  velocity (`:115`), so the lean shows without mesh changes. Material parameters change at most
+  10 times a second (smoothed), not 60.
+- **Snow.** Horizontal drift is half the wind speed (start; flakes lag), capped at 4 m/s;
+  `turbulence_noise_strength` (`:166`, now 1.0) becomes `1 + 2.5 * gust_amp * strength` so it
+  swirls more in gusts; amount stays. Clumping in a gust is approximated by the same turbulence
+  rise, not by spatial density (see the next point).
+- **Wind streaks.** Direction and speed come from `wind_at`; visible above strength 0.15, amount
+  scaling with strength (start 40 to 200). Today's fixed 6-10 m/s becomes `2 + speed` m/s.
+  The duplicated literal at `:215` goes away. The streak lives at 2 m above the view centre
+  (`:265`); in a gust it brightens (alpha curve scaled by `gust_at`).
+- **Spatial coherence is the plant shader's job.** CPU-set particle parameters sample one point
+  (the view centre) so a rain front does not visibly cross the screen. A custom particles shader
+  reading the same globals would make streaks and flakes bend in the same waves as the grass.
+  This is an optional follow-up to phase (b), because `ParticleProcessMaterial` collision hide-on-contact
+  (`:130`, `:186`) would need re-implementing and that is not obviously cheap.
+- **Fog and cloud drift.** Fog is only a density tween, so there is nothing to drift. If fog later
+  becomes volumetric with a density texture, its scroll takes `wind_dir`; not done now.
+- **Not changed:** the fog density tween, emission box and AABB growth, rain collision, amounts,
+  the transition tweens. Puddle, ripple and lightning effects do not exist; if added they keep
+  their own parameters and may read `Wind` for lean only.
+
+## 3. Synchronisation in play-together
+
+Wind must match on every screen with no per-frame traffic. The wind is a pure function of the
+clock, the seed and the settings, so the only things that cross the network are the settings.
+
+What the code provides today:
+
+| Need | Existing mechanism | Evidence |
+|---|---|---|
+| Live setting edit by the GM | the Weather pane emits `weather_changed(overrides)`; the controller applies it, copies it into `active_level_data.weather` and queues `{"weather_overrides": overrides}` for the host's visual broadcast | `gameplay_menu_controller.gd:549-558` |
+| Reaching clients | `NetworkGameSync.broadcast_visual_settings` (RPC to all, batched by the queue) | `network_game_sync.gd:144-158` |
+| Late joiner | the same call patches the stored level snapshot with `LevelVisualState.patch_level_dict`, so a joiner later receives the current `weather_overrides` | `network_game_sync.gd:160-166`, `resources/level_visual_state.gd:41-49` (the key is in `LEVEL_DICT_MIRROR_KEYS`) |
+| Applying on load | `MapSourceLoader` applies `level.weather.to_dict()` to the fresh renderer; `apply_visual_state` re-applies on revert | `map_source_loader.gd:655-659`, `level_play_controller.gd:316` |
+| A synced clock | none. The only clocks are local (`Time.get_ticks_msec`, `network_game_sync.gd:364`) | grep of `autoloads/` |
+
+So the weather settings already travel to everyone, including late joiners. What must be added:
+
+1. **A clock peers agree on.** Recommended: `Time.get_unix_time_from_system()` on every machine.
+   No traffic and nothing for a late joiner to learn. Error equals the skew between two OS clocks,
+   normally under a second with the OS's time sync on; with the front moving 3 m/s that is a shift
+   of a few metres, not noticeable. Fallback if testing shows large skew: the host adds a one-time
+   `wind_clock_offset` to the join snapshot (`host_unix - client_unix` at join, with half the
+   round trip subtracted), and `Wind.clock()` adds it. That is one number once, not a stream.
+2. **A seed.** `wind_seed: int` in `WeatherSettings` (new key beside the four intensities), default 0
+   meaning "derive from the level": `hash(level_folder_name)`. It phases the veer and the fronts
+   so two levels never share a wind. Carried by the same `weather_overrides` dictionary, so it
+   reaches clients and joiners with no new plumbing.
+3. **A direction override.** `wind_direction_deg: float` in `WeatherSettings`, `-1` = use the
+   default direction (see open question 1). Same dictionary again.
+
+`WeatherSettings.KEYS` (`weather_settings.gd:9-14`) drives `to_dict`/`from_dict` as floats, so the
+two new keys are added there; `wind_seed` is stored as a float in the dictionary and cast to `int`
+at the edge (floats hold integers exactly to 2^24; limit the seed to 24 bits). Tests that pin the
+key list (`test_level_data_typed_settings.gd`, `test_visual_sub_settings.gd`,
+`test_weather_pane.gd`) change with it.
+
+The wind clock is not paused on the host's pause (there is none) and not tied to the map: a table
+that reloads a level picks up the same wind mid-stream, which is correct.
+
+Sail angle, plant per-card oscillation and veer phases are local or pure and need no sync. Mill
+sail speed follows the synced wind speed, but the angle itself is cosmetic and local (it already is,
+`mill_motion.gd:37-40`), so two screens show the same speed at different angles. Acceptable.
+
+## 4. Consumers and migration plan
+
+Six phases (a to f), each shippable on its own, each measured. Order is by value and risk.
+
+| Phase | Touches | New or changed files | Test | Cost budget |
+|---|---|---|---|---|
+| a. Wind autoload and global uniforms; plants read them | Wind system, foliage shaders | new `autoloads/wind.gd`, `utils/wind_state.gd`, `utils/wind_presets.gd`; edit `project.godot`, `wind_foliage_include.gdshaderinc`, `utils/wind_foliage.gd` (`wind_response`, drop `wind_direction` use), the three `wind_foliage_debug_*` shaders if they include the sway | pure unit tests of `wind_at`/`gust_at`/table; a probe printing `global_shader_parameter_get` after `Wind` ticks; render job calm A/B against main | tick plus 3 sets under 0.1 ms CPU, 0 draws; foliage vertex cost unchanged to within noise |
+| b. Weather particles read the wind | weather renderer | edit `weather_renderer.gd` (remove `WIND_DIRECTION`, the literal at `:215`, `RAIN_WIND_STRENGTH`, `SNOW_WIND_STRENGTH`), `weather_settings.gd` keys | unit: slant function, snow drift function; render job windy/storm rain and snow | `_process` already runs while emitting; add one `wind_at` and at most 10 material writes per second |
+| c. Mills, cloth, vanes | structures | edit `mill_motion.gd` (read `Wind`), new `shaders/structure_cloth.gdshader` (or a define in `structure_ornament.gdshader`), `structure_materials.gd` (`cloth` kind picks it), new `scenes/terrain/vane_motion.gd` and a split like `StructureMill.split` for `ornament/vane`, `authored_structures.gd` | unit: sail rate function, vane yaw function; render jobs: banner, awning, vane, mill at windy | 0 added draws for cloth (material swap); one `MeshInstance3D` per vane, one transform per frame; cloth is vertex-only |
+| d. Structure decor plants | decor | nothing structural; set `climber` `wind_response`, check the baked decor `mesh_height` override still holds | render job: ivy manor at calm and storm | none |
+| e. GM controls and document fields | UI, document | `weather_pane.gd` (preset chips, direction, seed), `weather_settings.gd`, `LevelVisualState` mirror (already mirrors the whole `weather_overrides`), Settings entry for wind motion | existing pane tests extended; two-instance sync probe | none per frame |
+| f. Optional | smoke, motes | `fire_smoke*.gdshader` lean, dust motes | render | measured per effect |
+
+### a. Autoload and uniforms (first phase)
+
+Add `Wind` as an autoload with `current: WindState`, `set_target(state)`, `clock()`, and a
+`_process(delta)` that blends, computes the three vec4 in double precision, and publishes changed
+values. `set_target` is called from `GameMap.apply_weather_overrides` (`game_map.gd:859-862`) and
+from `MapSourceLoader` (`:655-659`), the two places that already receive `level.weather`; the
+renderer-less path (a level with no weather renderer yet) still sets the wind. `clear_weather`
+(`game_map.gd:871-876`) sets calm.
+
+Look identity at calm: with `calm` the new globals must reproduce today's field. Today's
+`wind_direction` (0.857, 0.514) and `gust_speed 3.0` are the calm defaults of the globals, and
+`sway_scale 1.0` multiplies nothing. The one visible difference is that the gust now agrees between
+peers and no longer jumps at the hourly `TIME` wrap. Verify with a render job at calm pose on
+main versus the branch at a fixed `Wind.clock()` override (a test hook, `Wind.set_clock_override`),
+since `TIME` makes two runs of main differ from each other and "byte identical" is only
+possible when the clock is pinned. Expect pixel differences only where the phase differs because
+the old gust used a `TIME` near 0 at launch; pin the old shader's `TIME` by the hot-swap method
+([PERFORMANCE.md](../PERFORMANCE.md) "In-run shader A/B by hot-swapping `Shader.code`").
+
+`LevelEnvironmentManager` needs no change: `_tune_wind_materials` keeps handling the four
+per-level sway values (`:236-243`). The Foliage sliders now scale the calm base, and the wind
+multiplies on top.
+
+### b. Weather particles
+
+Described in 2.6. Order inside the renderer's `_process`: the view centre is already computed
+(`weather_renderer.gd:259-262`); add `var w := Wind.wind_at(center, Wind.clock())` and push to the
+three materials through one helper `_apply_wind_to_emitters(w)` throttled to 10 Hz. The Wind tile
+turns the streak emitter on above strength 0.15; rain and snow slant regardless of the tile.
+
+### c. Mills, cloth, vanes
+
+- **Mill.** `SPIN_RAD_S` stops being a constant. Target rate `0.29 * clamp(speed / 1.5, 0.3, 3.0)`
+  rad/s (calm 0.29 as today; storm 0.87, about 7 s a turn, slow enough not to strobe at 60 fps),
+  smoothed with a 2 s exponential. The cap's facing target is `facing_angle(axis, -wind_dir)`,
+  turned at no more than 0.3 rad/s, so it follows veer and GM changes without snapping; the existing
+  sway (`:25-26`, `:73`) is kept and scaled by gust. The edge-on problem noted in the file header
+  (the weather's direction put the wheel edge-on to the default camera) is real: if the wind
+  comes across the screen the sails vanish. Mitigation: the mill clamps its yaw to within 50 degrees
+  of the camera-friendly bearing `(0.2, 0, 1)` (today's `WIND_FROM`), so a mill always shows its
+  sails three-quarter on. Open question 2.
+- **Cloth shader.** `cloth` surface parts (banners, awnings, the windmill's sail cloth) get a vertex
+  sway: weight is the distance from the part's attachment, offset along the wind in object space
+  (`inverse(mat3(MODEL_MATRIX)) * wind`), a travelling sine along the cloth with phase from
+  `wind_phase.w`, amplitude `0.06 m * speed / 4` capped at 0.25 m, gust lifts the free edge. The
+  weight source must be checked when the phase starts: either a vertex colour channel the build
+  already writes (probe `StructureOrnaments` meshes) or a new custom channel. Banners stream
+  fully, awnings flap lightly (weight 0.25 of a banner). A flag-like penant gets the same.
+  `metal` is not swayed; a swaying `metal` part would be the vane.
+- **Vane.** A `VaneMotion` node like `MillMotion`: a yaw pivot at the vane's post, cut out of the
+  ornament mesh by the part name (like `StructureMill.split`, `structures.md:576-584`), turning to
+  `-wind_dir` with a 1.2 s lag and a small wobble scaled by gust. Because it is a pure function of
+  the synced wind plus a fixed lag, two screens show the same pointing within the lag.
+  One `MeshInstance3D` per vane, at most one vane or banner roof top per building
+  (`structure_ornaments.gd:303-305`).
+
+### d. Decor plants
+
+The climber preset already runs through the foliage shader, so phase (a) moves ivy and planters.
+Check three things in the render round: `wind_response` 0.6 keeps ivy from detaching at storm;
+the baked decor still takes `mesh_height` from vertex red (`structures.md:951-956`); the direction
+is the same on every wall (it already is in the structure frame, and the global wind is the world
+frame, a small visible change to note in the doc).
+
+### e. GM controls and document
+
+The control is the Weather pane in the level edit panel (`weather_pane.gd`; the Events pane is for
+terrain events and has no weather). Change the Wind tile's row into: preset chips (Calm, Breezy,
+Windy, Storm; they set the strength to 0, 0.33, 0.66, 1.0), the strength slider (existing), a
+direction dial or compass row with an Auto toggle (`wind_direction_deg = -1`), and a seed
+"reroll" in a small advanced row. Live editing, undo (Cancel restores the snapshot), broadcast and
+late joiners ride the existing `weather_changed` path unchanged. The Settings menu gets a "Wind
+motion" slider, 0 to 100 percent (see section 5).
+
+### f. Optional
+
+Chimney smoke lean (`fire_smoke*.gdshader` take `wind_dir` for a drift vector, a few lines), dust
+motes drifting with the wind, a faint chop on water (`water.gdshader` wave amplitude times a
+`wind_dir.z`-derived factor). Each is independently measured and none blocks the others.
+
+## 5. Look, tuning and accessibility
+
+### How gusts should read
+
+At the default zoom the eye needs to see a front, not a shimmer: a bright-to-dark band of leaning
+grass about 6 to 10 m wide (half of the 12 m wavelength) moving across the meadow at about 3 m/s
+(crossing a 40 m view in 13 s), trees nodding a beat after the grass (their `sway_frequency` phase
+is the lower 0.15 against grass 0.4, `wind_foliage.gd:49,59`), banners snapping as it passes,
+rain leaning harder inside it, and calm between fronts (the `smoothstep` threshold gives bursts with
+quiet gaps, `wind_foliage_include.gdshaderinc:217`). Storm adds the 7 m ripples inside the swells so
+it never looks like the whole forest rocking in unison. Seed offsets and the veer keep two maps from
+sharing a pattern. Judge by a 20 s capture at windy, not a still frame.
+
+### Starting values and what to tune live
+
+| Quantity | Calm | Windy | Storm | Live? |
+|---|---|---|---|---|
+| Mean speed m/s | 1.5 | 8 | 14 | derived from strength |
+| Gust amplitude | 0.35 | 0.75 | 1.0 | yes (render-job parameter, later a debug row) |
+| Sway scale | 1.0 | 2.2 | 3.2 | yes |
+| Rain slant (degrees) | 4 | 20 | 32 | yes, constants in `WindPresets` |
+| Front speed m/s | 3 | 3 | 3 (ripple 9) | no, fixed by the sync argument |
+| Direction | default | default | default, veer 0.35 rad | yes (GM) |
+
+Tuning goes through a debug override on the autoload (`Wind.debug_state`) that the render-job
+runner and the F3 overlay can set, so a look can be dialled without rebuilding.
+
+### Accessibility
+
+- **OS reduce-motion.** `UiMotion.reduced()` (`utils/ui_motion.gd:15`) reads
+  `DisplayServer.accessibility_should_reduce_animation()`. Today it is used only by UI
+  and by `MillMotion` (`mill_motion.gd:52,88`); the foliage shaders ignore it. `Wind` polls it
+  once per second (cheap, avoids a stale value after the user flips the OS setting) and sets
+  `motion_scale = 0` when true. At zero: sway, lean, flutter and gust modulation are multiplied
+  out by `wind_dir.w` (plants stand still), `wind_phase` publishing stops, cloth hangs, sails stop
+  and the cap and vane are set to the target once, with no easing. Rain and snow still fall
+  and still slant (a static slant, no gusts), because they are the weather, not decoration; wind
+  streak particles are off.
+- **A setting to scale wind motion.** A `[graphics] wind_motion` float, 0 to 1, default 1, saved
+  with the other graphics values in `user://settings.cfg` and applied by the same loader pattern
+  as `canopy_fade_enabled` (`visual_effects_controller.gd:182-190`). Effective
+  `motion_scale = 0 if reduced else wind_motion`. It scales amplitudes only, never the clock,
+  so peers stay in step whatever each player prefers (their screens differ in amplitude, not in
+  phase). This is a per-player value, not a level field.
+- **Frame cost of zero.** At `motion_scale == 0` the autoload skips phase publishing.
+
+## 6. Risks and open questions
+
+Risks, in order of concern:
+
+1. **Foliage look drift.** The shader edit touches every plant. Mitigation: phase (a) is gated on a
+   pinned-clock A/B at calm; a debug toggle (`Wind.debug_disable`) restores the old constant field for
+   one run. The four `wind_foliage_debug_*` shaders and `wind_foliage_burn.gdshader` have their
+   own `TIME` use (grep: all include `TIME`); check each still compiles and the sway stays in step,
+   because the burn variant keeps its own `vertex()` (`wind_foliage_main.gdshaderinc:6-7`).
+2. **Storm shear on tall assets.** `sway_scale 3.2` on a 6 m tree tip is about 0.6 m before the cap.
+   The cap in 2.5 handles it; tune per category with `wind_response`.
+3. **Particle collision.** The optional follow-up to phase (b) (a particles shader for coherent rain) may not preserve
+   hide-on-contact. It stays optional until probed.
+4. **Clock skew** between peers exceeding a few seconds. The offset fallback in section 3 is small.
+5. **Warm-up.** Changing the foliage shaders changes the pipeline cache; `graphics_warmup` and
+   the warm-up tests (`test_graphics_warmup_samples.gd`) must be rerun.
+
+Open questions for the owner (only the ones that need a decision):
+
+1. **Default direction.** Calm keeps today's plant gust direction toward (0.857, 0.514) so phase (a)
+   changes nothing. Which direction should the world's default wind blow? Across the screen (toward
+   (0.707, 0, -0.707), what the weather particles use) makes rain slant most readable but turns
+   mills edge-on; toward -z (from the camera side) keeps mills three-quarter but rain slants
+   diagonally. Recommendation: toward -z with a clamp on the mill (section 4c), decided in the
+   phase (b) render round.
+2. **Mills follow the wind exactly, or stay readable?** Recommendation: clamp to 50 degrees
+   of the camera-friendly bearing, so a storm turns the sails faster but never edge-on.
+3. **Constant front speed.** Storm gusts travel at the same 3 m/s as calm gusts and look stronger
+   by lean, ripple and particles only (the price of staying pure and continuous, 2.2). If the
+   owner wants faster storm fronts, the cost is a stamped `(t0, phase0)` pair in the weather
+   document and a visible nudge for peers on each slider tick.
+4. **Do rain and snow always slant** even when the Wind tile is off? Recommendation: yes
+   (wind belongs to the whole level; "no wind" is the Calm preset). The alternative keeps today's
+   behaviour, where precipitation falls straight unless the tile is on.
+
+## 7. Recommendation and first phase
+
+Do phase (a) first, alone: it gives every plant one wind, makes gusts agree between screens, fixes
+the hourly `TIME` jump, and costs one autoload, three global uniforms and a small shader edit, with
+no look change at calm and no UI. It is the foundation the other phases read. Estimated size:
+about 400 lines of GDScript (autoload, `WindState`, presets, tests), about 60 lines of shader
+change, one render job, one performance section appended to `PERFORMANCE.md`; roughly one to two
+working days including the pinned-clock A/B. Phase (b) next (rain and snow, about 150 lines), then
+(e) (controls and fields, so the GM can use it), then (c) (the visible payoff in structures), then
+(d) and (f).
+
+## Verification (planned)
+
+- Unit: `tests/unit/test_wind_model.gd` (purity: same inputs same output; continuity through a
+  preset change; phase wrap at `t` near 1e9; gust 0..1 range; veer bounds; table monotonic in
+  strength), `test_wind_presets.gd` (stop values and interpolation), `test_weather_settings` (new
+  keys round trip, old dictionaries load), `test_mill_motion` (rate function, clamp).
+- Probe: a render-job probe that ticks `Wind`, reads the three globals back with
+  `RenderingServer.global_shader_parameter_get` (the `render_state.gd` probe already lists globals,
+  `tools/render_jobs/probes/render_state.gd:82-83`) and checks the reduce-motion path.
+- Look: render jobs at calm, windy, storm with a pinned clock; a 20 s capture for gust travel.
+- Performance: per [PERFORMANCE.md](../PERFORMANCE.md) "How to measure without fooling yourself":
+  pinned viewport, vsync off, in-run toggle (`Wind.debug_disable`), compare deltas within one run.
+
+## History
+
+- 2026-10-30: design written (branch `wind_design`), no code.
