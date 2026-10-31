@@ -75,9 +75,21 @@ func rail_tooltip() -> String:
 	return label if key == "" else "%s (%s)" % [label, key]
 
 
+## What the rail icon's tooltip says (owner, 2026-10-30: every icon explains itself): the name with
+## its shortcut, then the one-line summary in plain words ("Biome (B)", a line, "Paint a place
+## onto the map."). Never empty for a tool with a label.
+func rail_tip() -> String:
+	return rail_tooltip() if summary == "" else "%s\n%s" % [rail_tooltip(), summary]
+
+
+## The tooltip while the open map cannot take the tool: why, else the usual tip (never empty).
+func rail_tip_for(available: bool) -> String:
+	return rail_tip() if available or unavailable_tooltip == "" else unavailable_tooltip
+
+
 ## The tool's entry in DrawerContainer.rail_items.
 func rail_item() -> Dictionary:
-	return {"id": id, "icon": icon, "tooltip": rail_tooltip()}
+	return {"id": id, "icon": icon, "tooltip": rail_tip()}
 
 
 ## The tool's F1 help rows: its name row (the rail tooltip and the summary), then `help`.
