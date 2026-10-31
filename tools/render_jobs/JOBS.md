@@ -1151,3 +1151,10 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   Dress laid is gone, the hamlet stays paved), a fresh Dress and plaza (`redressed_home`, `redressed_market`) and two
   re-dresses (`redressed_twice_market`: the same road, new furnishings). The probe's `redress` and `clear` log the take-back
   entries and milliseconds.
+- `jobs/villagetool_look.json` (about 55 s, keeps no level; topic villagetool): two dressed streets, then the Village tool
+  through real input (`gesture`, `input`): the pane with two villages (`b_village_tool`), the ghost plaza (`c_ghost`), a drag
+  that opens a market plaza (`d_market_plaza`), a click that opens the hamlet's (`e_hamlet_click`), the rim hover
+  (`f_rim_hover`), the rim dragged out with the preview ring held (`g_resize_drag`) and let go (`h_resized`), the market
+  village switched to Harbour town by its tile (`i_kit_harbour`), home zoom (`j_home`), then the window at 1600x900
+  (`k_1600_plaza`, `l_1600_home`). Run with `--full` for the verdict captures; the final ones are under
+  `user://render_jobs/villagetool_*`.
