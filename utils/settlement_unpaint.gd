@@ -48,6 +48,10 @@ static func remove(doc: MapDocument, strokes: Array[Dictionary]) -> Dictionary:
 	var width := doc.samples_x()
 	var seen := PackedByteArray()
 	seen.resize(count)
+	# The weight plane of the replay: a sample it left bare (most of a capsule's rectangle) has
+	# nothing to take back, which _unpaint_sample would find out after two array allocations.
+	var laid := scratch.surface_weights
+	var plane := count * CHANNELS
 	for stroke in strokes:
 		var rect := MaskBrush.capsule_rect(doc, stroke["from"], stroke["to"], stroke["radius"])
 		for z in range(rect.position.y, rect.end.y):
@@ -55,7 +59,9 @@ static func remove(doc: MapDocument, strokes: Array[Dictionary]) -> Dictionary:
 				var i := z * width + x
 				if seen[i] == 0:
 					seen[i] = 1
-					_unpaint_sample(doc, scratch, real_of, i, count)
+					var at := plane + i * CHANNELS
+					if laid[at] != 0 or laid[at + 1] != 0 or laid[at + 2] != 0 or laid[at + 3] != 0:
+						_unpaint_sample(doc, scratch, real_of, i, count)
 	return _finish(doc, before, ids_before)
 
 

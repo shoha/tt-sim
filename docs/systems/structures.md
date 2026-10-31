@@ -1157,6 +1157,9 @@ records** (`ProcgenOrnaments.anchors`; fields in procgen `docs/architecture_styl
   (`_triangles_of`, full-detail index arrays) and `StructureDecor.cap_triangles` drops plants until
   the total fits: the under-layer first, then ivy before planters (a flower box is cheap and reads
   as lived in), the smallest wall area first, then the highest, the survivors keeping their order.
+  `StructureDecor.triangles_of` counts them with `ArrayMesh.surface_get_array_index_len / 3` (a
+  surface with no index counts 0, as before) and never copies the arrays: copying them for all 25 decor rows cost 9.5
+  to 11.7 ms on every `info_of` call and was most of a placement's 15 ms (hitches round 1).
 - **Lusher ivy (batch_c, 2026-10-30).** Owner: lush, no visible rows, windows clear (leaves may cross
   a frame slightly). Measured first (render job `batch_c_look`, the probe's tile report): the plants
   already covered 104 to 115 percent of the free patch area (the sum of their extents over the

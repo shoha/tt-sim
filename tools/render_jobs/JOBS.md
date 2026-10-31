@@ -1151,3 +1151,9 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   Dress laid is gone, the hamlet stays paved), a fresh Dress and plaza (`redressed_home`, `redressed_market`) and two
   re-dresses (`redressed_twice_market`: the same road, new furnishings). The probe's `redress` and `clear` log the take-back
   entries and milliseconds.
+- `jobs/hitches_profile.json` (about 90 s, keeps no level; topic hitches): the frame-time record of building on a 300 ft
+  forest map with vsync off: idle, one building cold and warm, 32 placed one per frame and in one frame, three streets,
+  Dress twice, re-dress twice, Clear, then idle again (`docs/PERFORMANCE.md` "Build hitches, round 1"). Probe
+  `probes/hitches.gd`: `rec` (`mode` begin or end, prints worst frames with their index), `place` (`count`, `per_frame`,
+  `seed`), `split`, `info`, `dress`, `redress`, `clear`, `paint_split`, `save`, `cleanup`. `jobs/hitches_load.json`:
+  saves a map with 44 structures as `_hitches_load`, opens it with the record running and removes it afterwards.
