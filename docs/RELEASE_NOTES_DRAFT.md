@@ -77,8 +77,9 @@ become gentler or hold still.
 - Players joining a game now wait for the buildings to stand before the table opens.
 - Ivy rows no longer form a visible grid; they vary in size, turn and overlap.
 - Buildings no longer have banners and ornaments buried inside their towers.
-- Tudor jetties, steep cone roofs and domes read properly (course lines and undersides).
-- Several loading and launcher problems with the building tools were fixed.
+- Tudor jetties and steep cone roofs read properly (closed undersides, visible roof courses).
+- Maps with many buildings load more smoothly: buildings appear over a few frames instead of one
+  long pause.
 
 ### Please note
 
