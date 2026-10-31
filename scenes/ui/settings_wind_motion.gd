@@ -55,6 +55,17 @@ static func on_changed(value: float, menu: SettingsMenu) -> void:
 	menu._slider_tick()
 
 
+## Puts the wind back to the scale saved in the settings file at [param path] (the default when
+## the file or the value is missing). The menu calls it as it closes: the slider changes the wind
+## at once, so a close without Apply must not keep the moved value until the next start (after
+## Apply the saved value is the applied one, so the same call leaves it alone). Returns the scale.
+static func revert(path: String = Paths.SETTINGS_PATH) -> float:
+	var config := ConfigFile.new()
+	var scale := stored(config) if config.load(path) == OK else DEFAULT
+	Wind.set_wind_motion(scale)
+	return scale
+
+
 static func apply_tooltip(menu: SettingsMenu) -> void:
 	menu.wind_motion_slider.tooltip_text = TOOLTIP
 

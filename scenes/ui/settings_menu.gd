@@ -356,6 +356,7 @@ func _on_panel_ready() -> void:
 
 
 func _on_before_animate_out() -> void:
+	SettingsWindMotion.revert()
 	if InputProfile.profile_changed.is_connected(_on_input_profile_changed):
 		InputProfile.profile_changed.disconnect(_on_input_profile_changed)
 	UIManager.unregister_overlay($ColorRect as Control)
