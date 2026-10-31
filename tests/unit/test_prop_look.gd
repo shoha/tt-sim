@@ -59,7 +59,8 @@ func test_a_prop_part_is_drawn_by_the_ornament_shader_with_the_prop_balance() ->
 		assert_eq(shader.shader, StructureMaterials.ORNAMENT_SHADER, kind)
 		assert_eq(shader.get_shader_parameter("saturation"), StructureMaterials.PROP_SATURATION)
 	var cloth := StructureMaterials.make("cloth", StructureLook.PROP, "", "") as ShaderMaterial
-	assert_eq(cloth.get_shader_parameter("cloth_wind"), 1.0, "cloth sways")
+	assert_eq(cloth.get_shader_parameter("cloth_wind"), StructureMaterials.PROP_CLOTH_WIND)
+	assert_gt(StructureMaterials.PROP_CLOTH_WIND, 1.0, "a prop's cloth sways more than a banner's")
 	var wood := StructureMaterials.make("wood", StructureLook.PROP, "", "") as ShaderMaterial
 	assert_eq(wood.get_shader_parameter("cloth_wind"), null, "wood does not")
 	var glass := StructureMaterials.make("glass", StructureLook.PROP, "", "") as ShaderMaterial
