@@ -120,15 +120,10 @@ All on `main`, working tree clean, nothing unpushed, no sharded gates running at
       line to. The repository is public, so the file also tells readers that viewing the source
       is not a licence to reuse it. It holds only if the owner holds the rights, see the next
       item.
-- [ ] OWNER: Pokemon-derived content ships. `data/pokemon.json` (and
-      `tools/generate_pokemon_manifest.py`) is in the export (the filter excludes `tools/`
-      and `docs/` only), and the bundled map "Oak's Lab" (`assets/models/maps/oakslabpainted.glb`,
-      shown under "Bundled with TTSim", textures such as "Pokemon Tower Floor") appears to be
-      built on Pokemon material. The repository is public and the game goes to Steam. Provenance
-      is not recorded anywhere; if the map or the data is not wholly the owner's own work, "all
-      rights reserved" does not cover it and it is a takedown and Steam-review risk. Decide:
-      own work (say so in `THIRD_PARTY_LICENSES.md`), replace or remove before the release, or
-      keep out of the shipped build.
+- [x] Third-party-derived content removed (owner, 2026-10-31): a bundled map, its textures,
+      an asset-data file and the script that read it were of unclear provenance, and are
+      purged from the tree and the history. The game bundles no map now, so the title's
+      "Bundled with TTSim" section is empty until the owner ships one of their own.
 
 ## 4. Notes and changelog (OWNER approves)
 

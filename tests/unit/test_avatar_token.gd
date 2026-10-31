@@ -85,8 +85,8 @@ func test_level_save_and_load_keeps_the_avatar() -> void:
 	var level := LevelData.new()
 	level.level_name = "_avatartoken_test"
 	var pack := TokenPlacement.new()
-	pack.pack_id = "pokemon"
-	pack.asset_id = "bulbasaur"
+	pack.pack_id = "creatures"
+	pack.asset_id = "wolf"
 	var avatar := TokenPlacement.new()
 	avatar.avatar_recipe = RECIPE.duplicate(true)
 	avatar.token_name = "Plum"
@@ -99,7 +99,7 @@ func test_level_save_and_load_keeps_the_avatar() -> void:
 
 	assert_eq(loaded.token_placements.size(), 2)
 	assert_false(loaded.token_placements[0].is_avatar())
-	assert_eq(loaded.token_placements[0].asset_id, "bulbasaur")
+	assert_eq(loaded.token_placements[0].asset_id, "wolf")
 	var restored: TokenPlacement = loaded.token_placements[1]
 	assert_eq(restored.avatar_recipe, RECIPE)
 	assert_eq(restored.token_name, "Plum")
@@ -115,10 +115,10 @@ func test_old_level_without_the_field_loads_unchanged() -> void:
 		[
 			{
 				"placement_id": "1_1",
-				"pack_id": "pokemon",
-				"asset_id": "bulbasaur",
+				"pack_id": "creatures",
+				"asset_id": "wolf",
 				"variant_id": "shiny",
-				"token_name": "Bulba",
+				"token_name": "Fang",
 			}
 		],
 	}

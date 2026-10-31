@@ -35,7 +35,7 @@ extends RefCounted
 ## Sample saved sessions, newest first: name, maps, days before now.
 const SAMPLE_SESSIONS := [
 	["Old Mill", 3, 1],
-	["Oak's Lab", 1, 4],
+	["Moon Keep", 1, 4],
 	["Fen Crossing", 2, 12],
 ]
 const DAY_S := 86400

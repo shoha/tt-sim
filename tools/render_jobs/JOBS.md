@@ -450,9 +450,9 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   (`biglf_base`); `--saved` reloads the levels for a look-only run (`--full` for the
   verdict). `jobs/biglf_cleanup.json` (`landform.gd cleanup`) deletes every `_biglf_` level.
 - `jobs/grid_ground.json`: the grid on Blender maps' ground (P3-3c, about 50 s):
-  `deciduous_clusters`, `river` and the built-in Oak's lab in play with G, the measure
+  `deciduous_clusters` and `river` in play with G, the measure
   tool and a token drag's auto-show, the load's grid ground fit and a sampling survey
-  logged for each; then `river` opened for dressing with G. 11 captures and `INDEX.md`.
+  logged for each; then `river` opened for dressing with G. 10 captures and `INDEX.md`.
 - `jobs/avatar_kit_look.json`: avatar figures from figurine's kit (AvatarKit, about 60 s to
   build, 50 s to look plus 70 s of perf): a new 150 ft temperate forest map with a placed
   oak, saved as `_avatarkit_forest` and played; `probes/avatar_kit.gd` stands figurine's
@@ -585,7 +585,7 @@ and which test levels it keeps. How to run one, the flags and the build / look l
   640x360, smaller than any player sees: judge 720p legibility on a `--full` run.
 - `jobs/import_thumb.json`: the map library's import (the level core card, about 35 s, no
   map open): `probes/import_thumb.gd check` logs `GlbCheck` on terrain-paint's
-  `deciduous_clusters`, `sandyclearing` and `terrain` exports and the built-in Oak's Lab
+  `deciduous_clusters`, `sandyclearing` and `terrain` exports
   (MB, footprint, floor and top, extras, warning codes, the check's time); then imports
   `deciduous_clusters` as `_test_library_thumb` (`MapImport.import_glb`, the offscreen
   thumbnail a headless run cannot draw), `report` copies the saved 320x180 thumbnail to

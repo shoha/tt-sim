@@ -497,7 +497,6 @@ tests/                      # GUT unit tests + runnable test scenes (F6 in edito
 tools/                      # Python scripts (audio normalization, hooks, manifest generation)
 tools/mcp/                  # TypeScript MCP server for agent validation bridge
 addons/validation_bridge/   # In-game validation TCP server, started by autoloads/validation_bridge_loader.gd
-data/                       # Static data files (pokemon.json)
 docs/                       # Authoritative documentation
 assets/                     # Audio, icons, models, maps
 .github/                    # CI/CD workflows

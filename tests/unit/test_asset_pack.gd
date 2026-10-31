@@ -52,12 +52,12 @@ func test_get_all_assets_sorted_after_manifest_with_lexicographic_key_order() ->
 	# Simulates loading a manifest that was re-saved by JSON.stringify() with sort_keys=true,
 	# which turns numeric keys "1","2","10" into lexicographic order "1","10","2".
 	var manifest := {
-		"pack_id": "pokemon",
-		"display_name": "Pokemon",
+		"pack_id": "numbered",
+		"display_name": "Numbered",
 		"assets": {
-			"1": {"display_name": "Bulbasaur", "variants": {"default": {"model": "1.glb"}}},
-			"10": {"display_name": "Caterpie", "variants": {"default": {"model": "10.glb"}}},
-			"2": {"display_name": "Ivysaur", "variants": {"default": {"model": "2.glb"}}},
+			"1": {"display_name": "Goblin", "variants": {"default": {"model": "1.glb"}}},
+			"10": {"display_name": "Ogre", "variants": {"default": {"model": "10.glb"}}},
+			"2": {"display_name": "Wolf", "variants": {"default": {"model": "2.glb"}}},
 		}
 	}
 	var pack := AssetPack.from_manifest(manifest)

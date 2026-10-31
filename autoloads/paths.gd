@@ -52,9 +52,6 @@ const IMPORT_SOURCES_NAME: String = "import_sources.cfg"
 ## The local index of when each map was last played here (LibraryPlays), beside it.
 const LIBRARY_PLAYS_NAME: String = "library_plays.cfg"
 
-# Data files
-const POKEMON_DATA_PATH: String = "res://data/pokemon.json"
-
 # Asset directories
 const ASSETS_DIR: String = "res://assets/"
 const MODELS_DIR: String = "res://assets/models/"

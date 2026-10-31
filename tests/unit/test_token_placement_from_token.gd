@@ -45,15 +45,15 @@ func test_sync_from_board_token_copies_is_alive_and_status_effects() -> void:
 func test_sync_from_board_token_does_not_touch_asset_ids() -> void:
 	var token := _make_dead_token()
 	var placement := TokenPlacement.new()
-	placement.pack_id = "pokemon"
-	placement.asset_id = "bulbasaur"
+	placement.pack_id = "creatures"
+	placement.asset_id = "wolf"
 	placement.variant_id = "shiny"
 	var original_id := placement.placement_id
 
 	placement.sync_from_board_token(token)
 
-	assert_eq(placement.pack_id, "pokemon")
-	assert_eq(placement.asset_id, "bulbasaur")
+	assert_eq(placement.pack_id, "creatures")
+	assert_eq(placement.asset_id, "wolf")
 	assert_eq(placement.variant_id, "shiny")
 	assert_eq(placement.placement_id, original_id)
 

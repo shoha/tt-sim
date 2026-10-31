@@ -187,7 +187,7 @@ static func button_text(session: Dictionary, now: int, bias: int) -> String:
 
 
 ## A menu line for an older session: the button's words and its maps, "Thursday's session:
-## Oak's Lab and 1 more". Pure.
+## Old Mill and 1 more". Pure.
 static func menu_text(session: Dictionary, now: int, bias: int) -> String:
 	var words := button_text(session, now, bias).trim_prefix("Resume ")
 	words = words[0].to_upper() + words.substr(1)

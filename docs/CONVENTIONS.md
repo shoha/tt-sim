@@ -478,13 +478,13 @@ user://levels/
   "token_placements": [
     {
       "placement_id": "1700000000_1234",
-      "pack_id": "pokemon",
-      "asset_id": "pikachu",
+      "pack_id": "creatures",
+      "asset_id": "wolf",
       "variant_id": "default",
       "position": {"x": 0.0, "y": 0.0, "z": 0.0},
       "rotation_y": 0.0,
       "scale": {"x": 1.0, "y": 1.0, "z": 1.0},
-      "token_name": "Pikachu",
+      "token_name": "Wolf",
       "is_player_controlled": false,
       "max_health": 100,
       "current_health": 100,

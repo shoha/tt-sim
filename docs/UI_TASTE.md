@@ -123,7 +123,7 @@ sizes per file against `tests/ui_bypass_baseline.json`, and a count may only fal
   "End the session? Everyone goes back to their title screen." / "End session".
 - **W3** Errors say what failed, why when known, and how to recover; no codes. "No room has
   that code. Check it with your host."
-- **W4** Loading names the real operation ("Loading Oak's Lab"), determinate when it can be;
+- **W4** Loading names the real operation ("Loading Old Mill"), determinate when it can be;
   no invented progress.
 - **W5** One word per concept: session, room, table, shelf, map, GM, party, avatar, token.
   "Level" stays internal.

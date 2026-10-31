@@ -149,8 +149,8 @@ func test_the_track_has_an_edge_in_the_track_role() -> void:
 
 func test_a_map_load_names_its_map() -> void:
 	var level := LevelData.new()
-	level.level_name = "Oak's Lab"
-	assert_eq(LoadingOverlay.setting_out_text(level), "Setting out Oak's Lab")
+	level.level_name = "Moon Keep"
+	assert_eq(LoadingOverlay.setting_out_text(level), "Setting out Moon Keep")
 	assert_eq(LoadingOverlay.setting_out_text(null), LoadingOverlay.SETTING_OUT_ANY)
 	level.level_name = "  "
 	assert_eq(LoadingOverlay.setting_out_text(level), LoadingOverlay.SETTING_OUT_ANY)

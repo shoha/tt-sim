@@ -595,8 +595,7 @@ Two traps found while installing the result, both now guarded in `terrain-paint`
 
 The refreshed source is now `sandyclearing_rebaked2.blend` (built from the user's
 `sandyclearing_rebaked.blend`, so it keeps the re-baked terrain); the previous installed
-map is kept as `map.glb.pre-2026-09-17c` beside `map.glb`. `Baked/Pokemon` (4 biomes) is
-not part of either pack and was not re-baked.
+map is kept as `map.glb.pre-2026-09-17c` beside `map.glb`.
 
 ## Environment Overrides
 

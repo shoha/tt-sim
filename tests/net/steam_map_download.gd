@@ -26,7 +26,7 @@ const NETWORK_MANAGER_SCRIPT := preload("res://autoloads/network_manager.gd")
 const APP_ID := 480
 const LEVEL_PREFIX := "_nettest_"
 const DEFAULT_LEVEL := "_nettest_map"
-const DEFAULT_SOURCE := "res://assets/models/maps/oakslabpainted.glb"
+const DEFAULT_SOURCE := "res://tests/fixtures/net_map.glb"
 ## Leave time for Steam to deliver the disconnect before the process exits.
 const QUIT_DELAY_S := 1.0
 

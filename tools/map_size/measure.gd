@@ -58,10 +58,6 @@ func _init() -> void:
 		return
 	for map_name in MAPS:
 		_measure_map(map_name)
-	var glb := FileAccess.get_file_as_bytes("user://oakslabpainted.glb")
-	if not glb.is_empty():
-		var z := glb.compress(FileAccess.COMPRESSION_ZSTD).size()
-		print("MS| GLB oakslabpainted raw %d zstd %d (%.1f s)" % [glb.size(), z, z / RATE])
 	quit()
 
 

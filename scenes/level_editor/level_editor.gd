@@ -29,7 +29,8 @@ var _popup_tween: Tween
 # Delegated undo/redo + autosave handler (initialised in _ready)
 var _history: LevelEditorHistory
 
-var _filtered_pokemon: Array = []
+## Every asset of every installed pack, as {pack_id, asset_id, display_name}, sorted by name.
+var _token_choices: Array[Dictionary] = []
 var _selected_level_path_for_delete: String = ""
 var _is_updating_ui: bool = false  # Flag to prevent feedback loops when setting UI values
 var _pending_map_source_path: String = ""  # Source map to bundle on save (new/edited levels)
@@ -49,13 +50,13 @@ var _metadata_debounce_timer: Timer
 @onready var map_scale_slider_spin: SliderSpinBox = %MapScaleSliderSpin
 
 @onready var token_list: ItemList = %TokenList
-@onready var pokemon_search: LineEdit = %PokemonSearch
+@onready var token_search: LineEdit = %TokenSearch
 @onready var add_token_button: Button = %AddTokenButton
 
 @onready var right_panel: VBoxContainer = $MainContainer/VBox/ContentSplit/RightPanel
 @onready var placement_panel: PanelContainer = %PlacementPanel
 @onready var placement_name_edit: LineEdit = %PlacementNameEdit
-@onready var placement_pokemon_label: Label = %PlacementPokemonLabel
+@onready var placement_asset_label: Label = %PlacementAssetLabel
 @onready var placement_shiny_check: CheckBox = %PlacementShinyCheck
 @onready var placement_player_check: CheckBox = %PlacementPlayerCheck
 @onready var placement_max_hp_spin: SpinBox = %PlacementMaxHPSpin
@@ -85,11 +86,11 @@ var _metadata_debounce_timer: Timer
 @onready var status_label: Label = %StatusLabel
 @onready var play_button: Button = %PlayButton
 
-# Pokemon selector popup
-@onready var pokemon_selector_popup: Window = %PokemonSelectorPopup
-@onready var pokemon_selector_list: ItemList = %PokemonSelectorList
-@onready var pokemon_selector_search: LineEdit = %PokemonSelectorSearch
-@onready var pokemon_selector_shiny: CheckBox = %PokemonSelectorShiny
+# Token selector popup
+@onready var token_selector_popup: Window = %TokenSelectorPopup
+@onready var token_selector_list: ItemList = %TokenSelectorList
+@onready var token_selector_search: LineEdit = %TokenSelectorSearch
+@onready var token_selector_shiny: CheckBox = %TokenSelectorShiny
 
 @onready var main_container: MarginContainer = $MainContainer
 @onready var level_title_caption: Label = %LevelTitleCaption
@@ -113,7 +114,7 @@ func _ready() -> void:
 
 	_connect_signals()
 	_setup_file_dialogs()
-	_populate_pokemon_list()
+	_populate_token_choices()
 
 	_history = LevelEditorHistory.new(
 		self,
@@ -157,9 +158,9 @@ func _connect_signals() -> void:
 	export_dialog.file_selected.connect(_on_export_file_selected)
 	import_dialog.file_selected.connect(_on_import_file_selected)
 
-	pokemon_selector_popup.close_requested.connect(_on_pokemon_selector_closed)
-	pokemon_selector_list.item_activated.connect(_on_pokemon_selector_activated)
-	pokemon_selector_search.text_changed.connect(_on_pokemon_selector_search_changed)
+	token_selector_popup.close_requested.connect(_on_token_selector_closed)
+	token_selector_list.item_activated.connect(_on_token_selector_activated)
+	token_selector_search.text_changed.connect(_on_token_selector_search_changed)
 
 	level_name_edit.text_changed.connect(_on_level_metadata_changed)
 	level_description_edit.text_changed.connect(_on_level_metadata_changed)
@@ -193,31 +194,38 @@ func _setup_file_dialogs() -> void:
 	import_dialog.filters = ["*.json ; JSON Files"]
 
 
-func _populate_pokemon_list() -> void:
-	_filtered_pokemon = []
-	for asset in AssetManager.get_assets("pokemon"):
-		_filtered_pokemon.append(asset.asset_id)
-	_filtered_pokemon.sort_custom(func(a, b): return int(a) < int(b))
-	_update_pokemon_selector_list()
+## Collects every asset of every installed pack for the token selector.
+func _populate_token_choices() -> void:
+	_token_choices = []
+	for entry in AssetManager.get_all_assets():
+		_token_choices.append(
+			{
+				"pack_id": String(entry.pack_id),
+				"asset_id": String(entry.asset_id),
+				"display_name": String(entry.asset.display_name),
+			}
+		)
+	_token_choices.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool: return a.display_name < b.display_name
+	)
+	_update_token_selector_list()
 
 
-func _update_pokemon_selector_list() -> void:
-	pokemon_selector_list.clear()
-	var search_text = pokemon_selector_search.text.to_lower() if pokemon_selector_search else ""
+func _update_token_selector_list() -> void:
+	token_selector_list.clear()
+	var search_text := token_selector_search.text.to_lower() if token_selector_search else ""
 
-	for asset_id in _filtered_pokemon:
-		var display_name = AssetManager.get_asset_display_name("pokemon", asset_id)
-
+	for choice in _token_choices:
+		var display_name: String = choice.display_name
 		if (
 			search_text != ""
 			and not display_name.to_lower().contains(search_text)
-			and not asset_id.contains(search_text)
+			and not String(choice.asset_id).contains(search_text)
 		):
 			continue
 
-		var display_text = "#%s %s" % [asset_id, display_name]
-		pokemon_selector_list.add_item(display_text)
-		pokemon_selector_list.set_item_metadata(pokemon_selector_list.item_count - 1, asset_id)
+		token_selector_list.add_item(display_name)
+		token_selector_list.set_item_metadata(token_selector_list.item_count - 1, choice)
 
 
 func _create_new_level() -> void:
@@ -345,7 +353,7 @@ func _update_placement_panel(placement: TokenPlacement) -> void:
 
 	# Display asset info using pack-based system
 	var asset_name = AssetManager.get_asset_display_name(placement.pack_id, placement.asset_id)
-	placement_pokemon_label.text = "#%s %s" % [placement.asset_id, asset_name]
+	placement_asset_label.text = asset_name
 
 	placement_shiny_check.button_pressed = (placement.variant_id == "shiny")
 	placement_player_check.button_pressed = placement.is_player_controlled
@@ -462,31 +470,31 @@ func _on_map_file_selected(path: String) -> void:
 
 
 func _on_add_token_pressed() -> void:
-	pokemon_selector_search.text = ""
-	_update_pokemon_selector_list()
-	pokemon_selector_popup.popup_centered(POPUP_SIZE_SMALL)
-	var popup_content = pokemon_selector_popup.get_node("VBox")
-	_animate_popup_in(pokemon_selector_popup, popup_content)
+	token_selector_search.text = ""
+	_populate_token_choices()
+	token_selector_popup.popup_centered(POPUP_SIZE_SMALL)
+	var popup_content = token_selector_popup.get_node("VBox")
+	_animate_popup_in(token_selector_popup, popup_content)
 
 
-func _on_pokemon_selector_closed() -> void:
-	var popup_content = pokemon_selector_popup.get_node("VBox")
-	_animate_popup_out(pokemon_selector_popup, popup_content)
+func _on_token_selector_closed() -> void:
+	var popup_content = token_selector_popup.get_node("VBox")
+	_animate_popup_out(token_selector_popup, popup_content)
 
 
-func _on_pokemon_selector_activated(index: int) -> void:
-	var pokemon_number = pokemon_selector_list.get_item_metadata(index)
-	var is_shiny = pokemon_selector_shiny.button_pressed
+func _on_token_selector_activated(index: int) -> void:
+	var choice: Dictionary = token_selector_list.get_item_metadata(index)
+	var is_shiny = token_selector_shiny.button_pressed
 
 	var placement = TokenPlacement.new()
 	# Use pack-based asset system
-	placement.pack_id = "pokemon"
-	placement.asset_id = pokemon_number
+	placement.pack_id = choice.pack_id
+	placement.asset_id = choice.asset_id
 	placement.variant_id = "shiny" if is_shiny else "default"
 	placement.position = Vector3.ZERO
 
 	# Set default name from asset pack
-	placement.token_name = AssetManager.get_asset_display_name("pokemon", pokemon_number)
+	placement.token_name = choice.display_name
 
 	_history.save_undo_snapshot()
 	current_level.add_token_placement(placement)
@@ -496,14 +504,14 @@ func _on_pokemon_selector_activated(index: int) -> void:
 	token_list.select(token_list.item_count - 1)
 	_on_token_list_item_selected(token_list.item_count - 1)
 
-	var popup_content = pokemon_selector_popup.get_node("VBox")
-	_animate_popup_out(pokemon_selector_popup, popup_content)
+	var popup_content = token_selector_popup.get_node("VBox")
+	_animate_popup_out(token_selector_popup, popup_content)
 	_set_status("Added token: " + placement.token_name)
 	AudioManager.play(&"success")
 
 
-func _on_pokemon_selector_search_changed(_text: String) -> void:
-	_update_pokemon_selector_list()
+func _on_token_selector_search_changed(_text: String) -> void:
+	_update_token_selector_list()
 
 
 func _on_token_list_item_selected(index: int) -> void:

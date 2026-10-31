@@ -17,7 +17,9 @@ extends Node
 ## Each process writes its log and one final `NET_RESULT {json}` line to --out and stdout,
 ## then quits with exit code 0 (pass) or 1 (fail).
 
-const MAP_SOURCE := "res://assets/models/maps/oakslabpainted.glb"
+## The shipped-map stand-in every peer has in its own res:// (a flat 20 m ground written by
+## GlbFixtures.write_map), so the client needs no download.
+const MAP_SOURCE := "res://tests/fixtures/net_map.glb"
 const LEVEL_NAME := "Late joiner table"
 const DEFAULT_PORT := 28471
 const QUIT_DELAY_S := 1.0
