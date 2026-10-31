@@ -77,8 +77,33 @@ the same history group: `source` becomes 0 and the furnishings stay where they w
 later house moves after a split (the design's "group of structures along the former street" is phase 3).
 Undo restores the street and the link.
 
+## Look pass (topic settlement_look, 2026-10-31)
+
+- **Street clearance.** `WallGeometry.street_corridor` gives every row wall one plank-like clearing per
+  segment of its centre line, as wide as the facade lines are apart plus `STREET_CLEAR_EXTRA_M` (2 m) each side,
+  so a trunk stands behind the houses and a crown does not hang over the street. It is the scatter's existing
+  mechanism (`WallGeometry.clearance_crossings`, read by `ScatterGround.sampler` and the native scatter), with no
+  second one, and it applies to every street whether dressed or not. The yards keep their own clearings
+  (the lots' plots). Deterministic and regenerated with the scatter, so no saved map changes. Measured in
+  forest renders: 0 of about 5,700 scatter rows inside the corridor rectangle. Phase 2's painted road (role
+  `built`) stacks with it: the corridor is a floor under the paint, and a road narrower than the corridor
+  leaves bare ground beside it, not plants.
+- **Scale.** `SettlementBake.PROP_VISUAL_SCALE` 1.35 (`DOOR_VISUAL_SCALE` 1.12 for slots with `/d` or `/e`, the
+  plan's door and entrance slots, so the door path keeps its width; the product is clamped to
+  `MAX_VISUAL_SCALE` 1.7 and never below the placement's own scale). The plan and its digests keep true metres;
+  only the drawn mesh grows, about its origin. The plan keeps props 0.7 of a radius plus 0.2 m apart, so at 1.35
+  neighbours may touch at most.
+- **Colour.** The prop role (`StructureMaterials.prop`): exposure 0.86, saturation 1.6, lit gain
+  (1.34, 1.22, 1.06); the prop cloth leans and flutters 1.8 times a banner (`PROP_CLOTH_WIND`). Building
+  materials are untouched.
+- **Slopes.** The ground is read at the centre and 0.8 of the drawn radius (0.3 to 1.6 m) to each side
+  (`AuthoredSettlements.footprint_reach`); a prop stands at the LOWEST of the five heights minus 3 cm and leans
+  toward the ground's normal by at most 12 degrees (`SettlementBake.tilt_of`: identity on flat ground, never a
+  flip). The slope limit (0.8 rise over run) uses the same reach. The tilt is in the cell key.
+- **Cells.** `CELL_M` 48 and one surface per material look: see `docs/PERFORMANCE.md` "Settlement furnishings".
+
 ## Not done (phase 1 scope)
 
 Ground painting (roads, door paths, plazas), the Dress row on the Buildings bar, the Village tool, plazas,
 garden paint, GM Events pane wiring, pin/remove/swap gestures (the record and plan support them), collision
-`stand`/`solid`, scatter clearance in the street strip (see villages.md "Phase 1 as built").
+`stand`/`solid`.

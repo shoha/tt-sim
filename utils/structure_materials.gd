@@ -26,6 +26,8 @@ const LEAF_TONE := Vector3(0.92, 1.18, 0.82)
 ## A prop (StructureMaterials.prop): exposure, saturation and light balance over the ornament's.
 const PROP_EXPOSURE := 0.86
 const PROP_SATURATION := 1.6
+## A prop's cloth leans and flutters this many times a banner's (the ornament cloth is 1.0).
+const PROP_CLOTH_WIND := 1.8
 const PROP_SHADE_TINT := Vector3(0.95, 0.9, 0.96)
 const PROP_SHADE_FLOOR := Vector3(0.34, 0.28, 0.31)
 const PROP_LIT_GAIN := Vector3(1.34, 1.22, 1.06)
@@ -145,6 +147,9 @@ static func prop(kind: String) -> ShaderMaterial:
 	material.set_shader_parameter("ramp_shade_tint", PROP_SHADE_TINT)
 	material.set_shader_parameter("shade_floor", PROP_SHADE_FLOOR)
 	material.set_shader_parameter("lit_gain", PROP_LIT_GAIN)
+	if kind == "cloth":
+		# Laundry and awnings are small at the home camera: lean and flutter further than a banner's.
+		material.set_shader_parameter("cloth_wind", PROP_CLOTH_WIND)
 	if kind == "stone":
 		# Curbs and plinths read a pale lavender grey under the cool shade; warmer and a touch
 		# deeper they stay a sunlit stone.

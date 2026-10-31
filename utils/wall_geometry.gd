@@ -32,6 +32,9 @@ const ROOF_PART := "roof"
 const EXTRA_PART := "extra"
 ## The kinds a wall's parts hold under their own key (the others go to EXTRA_PART).
 const OWN_KINDS: Array[String] = ["stone", "masonry", "wood", "glass"]
+## How far past each facade line the street's corridor reaches, so a tree's trunk stands behind
+## the houses and its crown does not hang over the street (a crown is 2 to 4 m wide).
+const STREET_CLEAR_EXTRA_M := 2.0
 
 ## True: a wall carries its courses in the masonry texture (MasonryTextures), the coping modelled,
 ## a fraction of the triangles; false: modelled blocks. A static for comparing the two.
@@ -252,11 +255,6 @@ static func clear_bounds(wall: Wall) -> Rect2:
 		# The buildings stand up to a setback and a depth off the street's line.
 		return wall.bounds().grow(wall.height_m + ROW_REACH_M)
 	return wall.bounds().grow(1.0)
-
-
-## How far past each facade line the street's corridor reaches, so a tree's trunk stands behind
-## the houses and its crown does not hang over the street (a crown is 2 to 4 m wide).
-const STREET_CLEAR_EXTRA_M := 2.0
 
 
 ## The corridor of street `wall` (a row) as one plank-like Crossing per segment of its centre

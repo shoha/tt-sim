@@ -4293,3 +4293,12 @@ dressed market_town at density 1.5): 154 furnishings in 14 baked cells, 62 draw 
 first dress. No collision. The design's estimate (18 to 27 draws per 150 props) is exceeded about 2.5 times
 because 24 m cells cut a street into 4 to 5 cells of 4 to 5 materials; a 48 m cell would roughly halve it
 (not tried). Probe: `probes/settlements.gd` action `perf`.
+
+Look pass (topic settlement_look, 2026-10-31), headless count of the same three streets (152 placements after
+the slope and wet-ground skips, 28.2k triangles, unchanged): 24 m cells with one surface per kind 13 cells and
+64 surfaces; kinds that share a material merged (`SettlementBake.look_kind`: wood, accent, thatch, boards and
+trim are one surface; stone, cloth, glass, metal and leaf stay apart) and 48 m cells (`CELL_M`) 8 cells and 34
+surfaces, 47 percent fewer draws, a cell holding 3 to 5 surfaces. A cell spans at most about 27 m of street
+along its axis (the grid cuts a street at x = 0 and 48 m), 3 m high and 12 to 27 m across, so a distant cell
+still culls on its AABB. Triangles do not move. The measuring script is a few lines over `AuthoringEditor`
+(place three row walls, `settlements.dress`, `flush`, read each cell's surface count).
