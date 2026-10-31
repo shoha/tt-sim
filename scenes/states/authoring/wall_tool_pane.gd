@@ -38,44 +38,6 @@ const KIND_TILES: Array[Dictionary] = [
 		"A street of varied buildings, doors to the street: drag along where the street runs",
 	},
 ]
-## The streets' species, one tile each (ProcgenRow.PRESET_NAMES order).
-const PRESET_TILES: Array[Dictionary] = [
-	{
-		"preset": 0,
-		"id": &"street_mixed",
-		"label": "Mixed",
-		"icon": "street",
-		"tooltip": "A bit of everything: houses of different sizes, a gap here and there",
-	},
-	{
-		"preset": 1,
-		"id": &"street_terrace",
-		"label": "Terrace",
-		"icon": "grid-dots",
-		"tooltip": "A terrace: tall narrow houses wall to wall, no yards",
-	},
-	{
-		"preset": 2,
-		"id": &"street_guild",
-		"label": "Guild",
-		"icon": "chess",
-		"tooltip": "Guild houses: wide, tall, gable-fronted, almost touching",
-	},
-	{
-		"preset": 3,
-		"id": &"street_village",
-		"label": "Village",
-		"icon": "fence",
-		"tooltip": "A village: houses with fenced yards, gates to the street, gaps between",
-	},
-	{
-		"preset": 4,
-		"id": &"street_cottages",
-		"label": "Cottages",
-		"icon": "home",
-		"tooltip": "Cottages: small low houses far apart, each with a low stone-walled yard",
-	},
-]
 const HINT := (
 	"Drag along the ground to lay a wall or fence; start the next drag at its end to carry on, and"
 	+ " end one at its first end to close the loop. Shift + scroll or [ and ] set the height. A"
@@ -132,14 +94,15 @@ func _init() -> void:
 	preset_field.caption = "Street"
 	preset_field.tiles.tile_min_size = TILE_SIZE
 	preset_field.tiles.columns = 3
-	for tile in PRESET_TILES:
+	# One tile per procgen street species, named and described by StreetSpeciesInfo.
+	for tile in StreetSpeciesInfo.tiles():
 		preset_field.tiles.add_tile(
 			tile.id, String(tile.label), String(tile.icon), String(tile.tooltip)
 		)
 	preset_field.tiles.select(&"street_mixed")
 	preset_field.tiles.selection_changed.connect(
 		func(id: StringName) -> void:
-			for tile in PRESET_TILES:
+			for tile in StreetSpeciesInfo.tiles():
 				if tile.id == id:
 					preset_selected.emit(int(tile.preset))
 	)
@@ -193,7 +156,7 @@ func _build_selection() -> void:
 
 ## Selects a species tile without emitting preset_selected.
 func select_preset(preset: int) -> void:
-	for tile in PRESET_TILES:
+	for tile in StreetSpeciesInfo.tiles():
 		if int(tile.preset) == preset:
 			preset_field.tiles.select(tile.id)
 

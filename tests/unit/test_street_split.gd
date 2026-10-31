@@ -120,7 +120,7 @@ func test_the_front_edge_faces_the_street_on_both_sides_of_it() -> void:
 		)
 
 
-func test_all_five_species_split_into_valid_records_of_the_librarys_set() -> void:
+func test_every_species_splits_into_valid_records_of_the_librarys_set() -> void:
 	var refs := StructureRecipes.core_refs()
 	for preset in Wall.ROW_PRESETS:
 		_doc = MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)

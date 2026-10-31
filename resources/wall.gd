@@ -33,8 +33,11 @@ const DEFAULT_HEIGHT_M: Array[float] = [0.9, 1.0, 3.0]
 ## on (ROW_SIDES: left, right, both) and the `seed` that varies them. Its buildings are made from
 ## these (procgen's street_row recipe), never stored one by one.
 const ROW_SIDES := 3
-## The species of street (ProcgenRow.PRESET_NAMES): mixed, terrace, guild houses, village, cottages.
-const ROW_PRESETS := 5
+## The species of street: procgen's, in its order (ProcgenStreetSpecies.NAMES; a `preset` is an
+## index into it and a saved map stores the index, so the order never changes): 0 mixed, 1 terrace,
+## 2 guild houses, 3 village, 4 cottages, 5 pueblo village, 6 villa street, 7 alpine hamlet,
+## 8 canal row, 9 tudor lane, 10 minka village (StreetSpeciesInfo).
+const ROW_PRESETS := ProcgenRow.PRESET_MINKA + 1
 const MAX_SEED := 1000000000
 ## A segment shorter than this is not a wall; the whole line may not exceed MAX_LENGTH_M.
 const MIN_SEGMENT_M := 0.3
