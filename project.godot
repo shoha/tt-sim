@@ -41,6 +41,7 @@ EventBus="*res://autoloads/event_bus.gd"
 AssetManager="*res://autoloads/asset_manager.gd"
 ValidationBridge="*res://autoloads/validation_bridge_loader.gd"
 PerformanceMonitor="*res://autoloads/performance_monitor.gd"
+Wind="*res://autoloads/wind.gd"
 
 [debug]
 
@@ -150,6 +151,18 @@ water_ambient_reflection_color={
 occlusion_token_count={
 "type": "int",
 "value": 0
+}
+wind_dir={
+"type": "vec4",
+"value": Vector4(0, -1, 1.5, 1)
+}
+wind_phase={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
+}
+wind_gust={
+"type": "vec4",
+"value": Vector4(0.35, 0, 0, 1)
 }
 canopy_fade_centre={
 "type": "vec4",

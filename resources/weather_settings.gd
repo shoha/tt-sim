@@ -11,12 +11,22 @@ const KEYS: Array[String] = [
 	"snow_intensity",
 	"fog_intensity",
 	"wind_intensity",
+	"wind_seed",
+	"wind_direction_deg",
 ]
+
+## wind_direction_deg value meaning "the default direction" (see WindPresets.DEFAULT_DIR_ANGLE).
+const WIND_DIRECTION_AUTO := -1.0
 
 @export var rain_intensity: float = 0.0
 @export var snow_intensity: float = 0.0
 @export var fog_intensity: float = 0.0
 @export var wind_intensity: float = 0.0
+## Phases the wind's gust fronts and veer (docs/systems/wind.md section 3). Stored as a float
+## in the dictionary, so keep it under 2^24; 0 = derive it from the level.
+@export var wind_seed: float = 0.0
+## Degrees on the map plane (0 = +x, 90 = +z) the wind blows toward; below 0 = the default.
+@export var wind_direction_deg: float = WIND_DIRECTION_AUTO
 
 
 static func default() -> WeatherSettings:

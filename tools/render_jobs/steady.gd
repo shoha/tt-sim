@@ -9,7 +9,9 @@ extends RefCounted
 ## speeds; with those at 0 the plants hold still at their rest offsets, whatever the clock.
 
 ## The wind shader include's speed uniforms (shaders/wind_foliage_include.gdshaderinc).
-const WIND_SPEEDS: Array[String] = ["sway_speed", "flutter_speed", "gust_speed"]
+## The gust field follows the global wind clock instead (autoloads/wind.gd): freeze_wind pins
+## it at 0 and thaw_wind releases it.
+const WIND_SPEEDS: Array[String] = ["sway_speed", "flutter_speed"]
 
 
 ## Sets the wind speeds of every ShaderMaterial under `root` that has them to 0, recording
@@ -19,6 +21,8 @@ const WIND_SPEEDS: Array[String] = ["sway_speed", "flutter_speed", "gust_speed"]
 ## first time.
 static func freeze_wind(root: Node, saved: Dictionary) -> int:
 	var frozen := 0
+	if not Wind.is_clock_pinned():
+		Wind.set_clock_override(0.0)
 	var has_wind := {}
 	for material: ShaderMaterial in _shader_materials(root):
 		if material.shader == null:
@@ -41,6 +45,7 @@ static func freeze_wind(root: Node, saved: Dictionary) -> int:
 ## Puts back the speeds freeze_wind() saved and empties `saved`. Returns how many.
 static func thaw_wind(saved: Dictionary) -> int:
 	var count := 0
+	Wind.clear_clock_override()
 	for material: Variant in saved:
 		if not is_instance_valid(material):
 			continue

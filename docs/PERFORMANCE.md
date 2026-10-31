@@ -4216,3 +4216,31 @@ Ivy and flower-box plants of a decorated building were one MultiMesh per decor a
 buildings, zoom 30 for 12): draws 4,530 to 3,798 for 30 decorated buildings, 2,548 to 2,378 for 12;
 CPU frame median unchanged (5.8 and 5.3 ms); `_add_decor` 3.8-4.3 ms to 1.2-1.8 ms per building;
 baked mesh memory 10.8 MB for 30 buildings. Decision line was 40 MB.
+
+## Wind (wind_a, 2026-10-30)
+
+The global wind ([systems/wind.md](systems/wind.md) phase (a)): the `Wind` autoload publishes three
+global `vec4` uniforms and the foliage include reads them in place of its per-material gust vector
+and `TIME`. Shared GPU, indicative numbers, not a pinned pass.
+
+- **Autoload CPU.** Render job `wind_a_look`, probe `wind.gd cost`: `Wind.publish` (the model for
+  the three vec4s, the change check, and the sets that did change; the clock moving so the phases
+  change every call) 2.87 microseconds per call, `Wind.wind_at` 3.37 microseconds per call, 20,000
+  calls each. A frame costs one `publish` (about 0.003 ms against the 0.1 ms budget) plus the 1 s
+  reduce-motion poll. Uniform sets are pushed only for the vec4s whose value changed: with a pinned
+  clock and a settled state a frame makes zero sets (unit test `test_wind_autoload.gd`).
+- **Draw calls.** Unchanged: no new material, node or pass; the globals are one uniform buffer
+  the renderer already uploads.
+- **Shader (GPU).** Same job on main and on the branch, forest map (`temperate_forest_summer_s1`,
+  150 ft), 1920x1080, vsync off, 4 s samples of the world viewport's GPU time: close zoom 3.72 ms
+  median on both (main 3.717, 3.719, 3.727, 3.723; branch 3.715, 3.713, 3.736, 3.727), home zoom
+  3.27 to 3.68 on main and 3.28 to 3.63 on the branch (the clock drifted the same way on both
+  runs). The vertex stage gained one `sin` (the storm ripple, evaluated also at ripple 0) and a few
+  multiplies and lost a `normalize`; the difference is below the noise floor.
+- **Why TIME stays for sway.** Each plant's own oscillation still reads `TIME` (a per-plant jitter
+  that does not need to agree between peers), so it keeps its hourly wrap; only the gust fronts
+  moved to the wind clock.
+- **Look A/B at calm.** Main against the branch, wind frozen (clock 0), the wind's direction set to
+  the old gust direction: the mean channel difference over 1920x1080 is 0.007 at home zoom (410
+  pixels over 8) and 0.15 to 0.26 at close zoom, against 0.12 to 0.24 between two runs of the same
+  code (the scatter and shadows differ a little run to run).

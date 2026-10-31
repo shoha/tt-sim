@@ -53,17 +53,33 @@ uniform float mesh_height : hint_range(0.0, 100.0) = 1.0;
 uniform float flutter_amplitude : hint_range(0.0, 0.5) = 0.012;
 uniform float flutter_speed : hint_range(0.0, 20.0) = 3.0;
 
-// Gust field: a slow envelope that travels across the map along wind_direction (two
-// wavelengths, 12 m and 19 m, so it never repeats cleanly) and modulates the sway.
-// During a gust every plant leans over in the wind direction in proportion to its
-// sway weight and springs back as the front passes, so neighbouring trees bend
-// together and the eye reads wind moving across the forest rather than each tree
-// rocking on its own. gust_strength 0 disables it (the sway is then the pure
-// per-vertex oscillation it was before); gust_speed is the front's travel speed in
-// metres per second. Per-category value from WindFoliage.PRESETS, not per-level.
-uniform vec2 wind_direction = vec2(0.857, 0.514);
+// Gust field: a slow envelope that travels across the map along the global wind direction
+// (two wavelengths, 12 m and 19 m, so it never repeats cleanly, plus a 7 m ripple in storms)
+// and modulates the sway. During a gust every plant leans over in the wind direction in
+// proportion to its sway weight and springs back as the front passes, so neighbouring trees
+// bend together and the eye reads wind moving across the forest rather than each tree
+// rocking on its own. gust_strength 0 disables it (the sway is then the pure per-vertex
+// oscillation it was before). Per-category value from WindFoliage.PRESETS, not per-level.
+//
+// The wind itself is global (autoloads/wind.gd, docs/systems/wind.md): the Wind autoload
+// publishes these three vec4s only when they change, so every peer and every material reads
+// one wind and no TIME is involved in the gust (TIME is per peer and wraps hourly). The front
+// phases arrive already reduced to 0..TAU in double precision on the CPU.
+// wind_dir: xz the unit direction the wind blows toward (veered), z unused here, w sway scale.
+global uniform vec4 wind_dir;
+// wind_phase: the three front phases (12 m, 19 m, 7 m), w spare.
+global uniform vec4 wind_phase;
+// wind_gust: x gust amplitude (0.35 at calm), y ripple 0..1, z the seed's phase offset in
+// radians, w the player's motion scale (0 stills every plant: reduce motion, Wind motion).
+global uniform vec4 wind_gust;
 uniform float gust_strength : hint_range(0.0, 1.0) = 0.6;
-uniform float gust_speed : hint_range(0.0, 20.0) = 3.0;
+// How strongly this category follows the wind's sway scale: 1 follows it fully, 0 ignores it
+// (a meadow moves more than an oak, ivy stays held by its wall). At calm (scale 1) it changes
+// nothing. Per-category value from WindFoliage.PRESETS.
+uniform float wind_response : hint_range(0.0, 2.0) = 1.0;
+// Gust amplitude the calm preset publishes (WindModel.CALM_GUST_AMP): a material's
+// gust_strength is the calm value and rises with wind_gust.x / this.
+const float WIND_CALM_GUST_AMP = 0.35;
 
 // Base-dark/tip-light gradient, grass-category only (see WindFoliage.apply_material) --
 // replaces the contact-darkening a real shadow would have given grass now that it no
@@ -206,14 +222,18 @@ const float FOLIAGE_NEAR_CAP = 0.8;
 // direction, softly thresholded so gusts arrive as bursts with calm between them
 // rather than as a constant rocking. A little cross-wind term breaks the fronts up so
 // they are not straight lines across the map.
-float wind_gust(vec2 world_xz, float time) {
-	vec2 dir = normalize(wind_direction);
+// Mirrors WindModel.gust_at (utils/wind_model.gd) term for term.
+float wind_gust_field(vec2 world_xz) {
+	vec2 dir = wind_dir.xy;
 	float along = dot(world_xz, dir);
 	float across = dot(world_xz, vec2(-dir.y, dir.x));
 	float k1 = 6.2831853 / 12.0;
 	float k2 = 6.2831853 / 19.0;
-	float wave = 0.55 * sin(along * k1 - time * gust_speed * k1)
-		+ 0.45 * sin(along * k2 + across * 0.25 - time * gust_speed * 0.8 * k2 + 1.7);
+	float k3 = 6.2831853 / 7.0;
+	float sp = wind_gust.z;
+	float wave = 0.55 * sin(along * k1 - wind_phase.x + sp)
+		+ 0.45 * sin(along * k2 + across * 0.25 - wind_phase.y + 1.7 + sp * 1.618);
+	wave += wind_gust.y * 0.3 * sin(along * k3 + across * 0.35 - wind_phase.z + 0.6 + sp * 2.414);
 	return smoothstep(-0.2, 0.9, wave);
 }
 
@@ -231,7 +251,11 @@ vec3 wind_sway_vertex_offset(vec3 vertex, vec4 color, mat4 model_matrix, float t
 	vec3 world_pos = (model_matrix * vec4(vertex, 1.0)).xyz;
 	float phase = (world_pos.x + world_pos.z) * sway_frequency;
 	float t = time * sway_speed + phase;
-	float sway = sin(t) * sway_amplitude;
+	// The global wind scales every amplitude: wind_gust.w is the player's motion scale (0 holds
+	// the plant at rest) and wind_dir.w the preset's sway scale, followed as far as this
+	// category's wind_response says (1.0 everywhere at calm).
+	float amp = sway_amplitude * wind_gust.w * (1.0 + (wind_dir.w - 1.0) * wind_response);
+	float sway = sin(t) * amp;
 	// Local (object-space) height weights the sway so a card's base -- assumed to sit
 	// at/near the mesh's local Y origin, the standard authoring convention for
 	// grass/foliage cards -- barely moves while its tip sways the most. Deliberately
@@ -245,15 +269,17 @@ vec3 wind_sway_vertex_offset(vec3 vertex, vec4 color, mat4 model_matrix, float t
 	// Gust: the oscillation grows a little inside a gust, and on top of it the plant
 	// leans over along the wind while the gust passes (1.5x the amplitude at full
 	// strength, weighted by the same height/sway weight so a stiff trunk stays put).
-	float gust = gust_strength > 0.0 ? wind_gust(world_pos.xz, time) : 0.0;
-	sway *= 1.0 + gust_strength * (gust - 0.4);
-	vec2 dir = normalize(wind_direction);
-	float lean = sway_amplitude * gust_strength * gust * 1.5 * height_weight;
+	// gust_strength is the calm value; a stronger wind raises it by wind_gust.x / calm.
+	float gust_k = min(gust_strength * wind_gust.x / WIND_CALM_GUST_AMP, 1.2);
+	float gust = gust_strength > 0.0 ? wind_gust_field(world_pos.xz) : 0.0;
+	sway *= 1.0 + gust_k * (gust - 0.4);
+	vec2 dir = wind_dir.xy;
+	float lean = amp * gust_k * gust * 1.5 * height_weight;
 	vec3 offset = vec3(sway * height_weight + lean * dir.x, 0.0, sway * height_weight * 0.6 + lean * dir.y);
 	if (use_vertex_wind) {
 		// Flutter: small, quick, per-limb/card phase from B, graded across each card
 		// by G; leaves rustle more inside a gust.
-		float flutter = sin(time * flutter_speed + color.b * 6.2831853 + phase) * flutter_amplitude * color.g * (0.6 + 0.8 * gust);
+		float flutter = sin(time * flutter_speed + color.b * 6.2831853 + phase) * flutter_amplitude * wind_gust.w * color.g * (0.6 + 0.8 * gust);
 		offset += vec3(flutter, flutter * 0.4, -flutter * 0.5);
 	}
 	// Bend, not translate: a vertex swung sideways on a stalk of its own height drops

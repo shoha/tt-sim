@@ -858,8 +858,18 @@ func setup_weather(environment_manager: LevelEnvironmentManager) -> void:
 
 ## Forward weather override parameters to the active WeatherRenderer.
 func apply_weather_overrides(overrides: Dictionary) -> void:
+	# The wind is global and outlives the renderer (a level with no renderer yet still blows).
+	Wind.apply_weather_dict(overrides, _level_key())
 	if _weather_renderer:
 		_weather_renderer.apply_weather(overrides)
+
+
+## What seeds a level whose weather sets no wind seed: its folder name ("" when it has none,
+## which leaves the wind unphased).
+func _level_key() -> String:
+	if _level_play_controller and _level_play_controller.active_level_data:
+		return _level_play_controller.active_level_data.level_folder
+	return ""
 
 
 ## Let the weather renderer re-add its fog on top of a freshly applied environment.
@@ -871,6 +881,7 @@ func rebase_weather_fog() -> void:
 ## Remove all active weather effects and free the renderer.
 ## A fresh renderer is created on the next setup_weather() call.
 func clear_weather() -> void:
+	Wind.set_from_weather(WeatherSettings.default())
 	if _weather_renderer:
 		_weather_renderer.queue_free()
 		_weather_renderer = null

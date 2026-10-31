@@ -180,6 +180,7 @@ with a new peer id gets its grants back and its avatar travels between maps with
 | --------------------- | ----------------------------------- | --------------------------------------------- |
 | `UpdateManager`       | `autoloads/update_manager.gd`       | GitHub release checking and in-app updates     |
 | `PerformanceMonitor`  | `autoloads/performance_monitor.gd`  | Custom timer registration for the F3 performance overlay |
+| `Wind`                | `autoloads/wind.gd`                 | The one global wind: eases a `WindState`, publishes the `wind_dir`/`wind_phase`/`wind_gust` shader globals (docs/systems/wind.md) |
 
 ### UIManager Responsibilities
 
