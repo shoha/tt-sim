@@ -1134,3 +1134,10 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   at the start and the end (the settings file of the run's user folder).
 
 - `jobs/place_flow.json` (about 60 s, keeps no level: a new unsaved 150 ft meadow; topic place_flow): a cottage selected with the ghost lot following over bare ground and the hint bar's selected keys (`01_selected_ghost_follows`), the pointer over a building (ghost hidden, `02_over_building_no_ghost`), then five placement clicks that lay five buildings (`03_five_laid`). Clears the run's hint memory. `jobs/place_flow_ivy.json` (about 45 s): a townhouse with the Ivy chip on at game zoom and close (`01_ivy_townhouse`, `02_ivy_close`).
+- `jobs/villages2_street.json` (about 45 s, keeps no level; topic villages2): two bare two-sided streets (`before_home`,
+  `before_market_close`), then a farming hamlet and a market town dressed with their ground and a plaza each
+  (`after_home`, `after_market_close`, `after_hamlet_close`, `after_market_plaza`, `after_hamlet_doors`), then an undo of the
+  last plaza. `jobs/villages2_lane.json`: the same with one-sided streets (the row on the far side) so the road is not hidden
+  behind the near houses. `jobs/villages2_perf.json` (about 50 s): three streets on a forest map dressed bare and with ground,
+  twice, with `record` and `gpu` windows (`docs/PERFORMANCE.md` "Settlement ground"). Probe `probes/settlements.gd`: `plaza`,
+  and `dress` with `ground` false.

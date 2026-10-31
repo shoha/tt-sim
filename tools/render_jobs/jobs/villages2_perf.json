@@ -1,0 +1,393 @@
+{
+ "out_dir": "render_jobs/villages2_perf",
+ "timeout_s": 500,
+ "hang_s": 120,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "temperate_forest_summer_s1",
+   "size": 250,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.5
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "vsync_off"
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel._on_rail_item_pressed(\"wall\")"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "kind",
+   "kind": "row"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "street",
+   "from": [
+    -26,
+    -28
+   ],
+   "to": [
+    26,
+    -28
+   ],
+   "preset": 2,
+   "seed": 3
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "street",
+   "from": [
+    -26,
+    0
+   ],
+   "to": [
+    26,
+    0
+   ],
+   "preset": 2,
+   "seed": 4
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "street",
+   "from": [
+    -26,
+    28
+   ],
+   "to": [
+    26,
+    28
+   ],
+   "preset": 2,
+   "seed": 5
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 60.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "record",
+   "on": true,
+   "name": "rec_bare0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 1,
+   "kit": "market_town",
+   "wealth": 0.7,
+   "density": 1.0,
+   "ground": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 2,
+   "kit": "market_town",
+   "wealth": 0.7,
+   "density": 1.0,
+   "ground": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 3,
+   "kit": "market_town",
+   "wealth": 0.7,
+   "density": 1.0,
+   "ground": false
+  },
+  {
+   "op": "settle",
+   "timeout": 30
+  },
+  {
+   "op": "record",
+   "on": false,
+   "name": "rec_bare0"
+  },
+  {
+   "op": "gpu",
+   "name": "gpu_bare0",
+   "s": 3.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "undo"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "undo"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "undo"
+  },
+  {
+   "op": "settle",
+   "timeout": 30
+  },
+  {
+   "op": "record",
+   "on": true,
+   "name": "rec_ground0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 1,
+   "kit": "market_town",
+   "wealth": 0.7,
+   "density": 1.0,
+   "ground": true
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 2,
+   "kit": "market_town",
+   "wealth": 0.7,
+   "density": 1.0,
+   "ground": true
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 3,
+   "kit": "market_town",
+   "wealth": 0.7,
+   "density": 1.0,
+   "ground": true
+  },
+  {
+   "op": "settle",
+   "timeout": 30
+  },
+  {
+   "op": "record",
+   "on": false,
+   "name": "rec_ground0"
+  },
+  {
+   "op": "gpu",
+   "name": "gpu_ground0",
+   "s": 3.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "undo"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "undo"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "undo"
+  },
+  {
+   "op": "settle",
+   "timeout": 30
+  },
+  {
+   "op": "record",
+   "on": true,
+   "name": "rec_bare1"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 1,
+   "kit": "market_town",
+   "wealth": 0.7,
+   "density": 1.0,
+   "ground": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 2,
+   "kit": "market_town",
+   "wealth": 0.7,
+   "density": 1.0,
+   "ground": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 3,
+   "kit": "market_town",
+   "wealth": 0.7,
+   "density": 1.0,
+   "ground": false
+  },
+  {
+   "op": "settle",
+   "timeout": 30
+  },
+  {
+   "op": "record",
+   "on": false,
+   "name": "rec_bare1"
+  },
+  {
+   "op": "gpu",
+   "name": "gpu_bare1",
+   "s": 3.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "undo"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "undo"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "undo"
+  },
+  {
+   "op": "settle",
+   "timeout": 30
+  },
+  {
+   "op": "record",
+   "on": true,
+   "name": "rec_ground1"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 1,
+   "kit": "market_town",
+   "wealth": 0.7,
+   "density": 1.0,
+   "ground": true
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 2,
+   "kit": "market_town",
+   "wealth": 0.7,
+   "density": 1.0,
+   "ground": true
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 3,
+   "kit": "market_town",
+   "wealth": 0.7,
+   "density": 1.0,
+   "ground": true
+  },
+  {
+   "op": "settle",
+   "timeout": 30
+  },
+  {
+   "op": "record",
+   "on": false,
+   "name": "rec_ground1"
+  },
+  {
+   "op": "gpu",
+   "name": "gpu_ground1",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "perf_home",
+   "desc": "three market streets, ground, forest"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "undo"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "undo"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "undo"
+  },
+  {
+   "op": "settle",
+   "timeout": 30
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "report"
+  }
+ ]
+}

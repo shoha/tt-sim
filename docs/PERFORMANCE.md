@@ -4302,3 +4302,21 @@ surfaces, 47 percent fewer draws, a cell holding 3 to 5 surfaces. A cell spans a
 along its axis (the grid cuts a street at x = 0 and 48 m), 3 m high and 12 to 27 m across, so a distant cell
 still culls on its AABB. Triangles do not move. The measuring script is a few lines over `AuthoringEditor`
 (place three row walls, `settlements.dress`, `flush`, read each cell's surface count).
+
+## Settlement ground (topic villages2, 2026-10-31)
+
+Indicative (shared GPU; in-run A/B inside `jobs/villages2_perf.json`: a 250 ft temperate forest map, three
+52 m two-sided market_town streets dressed bare then with the ground, undone, twice; vsync off, home
+zoom 60, wind frozen; `probes/settlements.gd` `dress` with `ground` false or true). Per street the ground is
+22 strokes (2 road capsules, 20 door-path strokes), 1 painted slot (2 with a plaza, 3 for two villages with
+plazas of different kits), one history group. Main-thread cost of the `dress` call: bare 36.7, 47.6 and 58.8
+ms (streets 1 to 3), with ground 88.2, 101.3 and 90.1 ms (second round; first round 109.5, 89.0, 101.0),
+so about 40 to 55 ms more: plan 3 to 13 ms, paint 30 to 70 ms (stroke begin and dabs about 15 ms, ending
+the stroke 2 ms, `apply_surface_diff` 14 to 53 ms: the ground update of the changed rectangle and the
+scatter request that clears plants, the first of a run the dearest). It is a one-off click hitch: the
+worst CPU frame while three streets were dressed was 124 to 148 ms with the ground and 77 to 162 ms bare
+(the bare record covered 7 frames only). Settled GPU render time (3 s, median): bare 2.60 and 2.82 ms,
+ground 2.86 and 2.89 ms: +0.07 to +0.26 ms, inside the run's own drift (the two bare runs differ by 0.22).
+Stroke merging (nearly straight road runs into one capsule) took the road from 35 strokes to 2 and the
+`paint` figure from 49 to about 30 ms for the second and third street. Adding a structure pays one more
+`StructureDoorPaint.joined` read (two array reads) in its key.

@@ -19,6 +19,7 @@ or sent, and every peer derives the same list.
 | `removed` | slot ids not drawn (at most 64) |
 | `swapped` | slot id to another prop name |
 | `pinned` | slot id to a placement `{prop, at, yaw, scale, seed}` drawn as recorded |
+| `plazas` | up to 4 discs `{at: map XZ (1 cm), radius: 2..16 m}` (villages2); the first frontage carries them to procgen's `plaza.centre` and `plaza.edge` rules, and the Dress paves them. Left out of the saved entry when empty, so older maps re-save byte for byte |
 
 One street has at most one settlement. A settlement whose street is gone draws nothing and returns with the
 street on undo (it is not deleted with the street: undoing the removal must bring both back).
@@ -126,8 +127,72 @@ Undo restores the street and the link.
   when a time-of-day control exists, `energy` is the one number to drive. Wells' and troughs' water is
   unchanged (the WATER role). Test: `tests/unit/test_prop_look.gd`.
 
-## Not done (phase 1 scope)
+## Ground (topic villages2, 2026-10-31; villages phase 2, first slice)
 
-Ground painting (roads, door paths, plazas), the Dress row on the Buildings bar, the Village tool, plazas,
-garden paint, GM Events pane wiring, pin/remove/swap gestures (the record and plan support them), collision
-`stand`/`solid`.
+A Dress gives the street a ground: a road along its centre line, a path from every door, and paving in
+plazas. They are ordinary painted surfaces (the Paint tool's `SurfaceStroke` on the map's surface weights),
+laid at Dress time, so they clear plants under them (the kits name `built`-role surfaces), tint their
+surroundings with the trampled broad edge, show in the Paint tool, and reach every peer as the existing
+`surface` live edit. There is no new live-edit kind.
+
+- **The kit names the surfaces.** Each kit JSON carries `"ground": {"road", "door_path", "plaza"}`
+  (procgen `ProcgenSettlement.ground_of`; at most 3 different surfaces, so at most 3 of the map's 64 painted
+  slots, and two roles may share one). Farming hamlet: dirt_road_packed road and door paths (one slot),
+  flagstone_sandstone plaza. Market town: flagstone_sandstone road and door paths, cobblestone plaza.
+  Harbour town: dirt_road_caliche road, planks door paths, flagstone_sandstone plaza. Hill fort village:
+  dirt_road_caliche road and door paths, flagstone_sandstone plaza. Chosen by eye: the dark cobblestone and
+  stone_tiles sets read as a grey band as a road at game light, the warm sandstone and caliche read lit and
+  painterly; cobblestone stays as a plaza accent. A surface missing from the palette is skipped (`unknown`).
+- **The plan** (`SettlementGround`, `utils/settlement_ground.gd`, pure, tests in
+  `tests/unit/test_settlement_ground.gd`): capsule strokes `{role, surface, from, to, radius, seconds}` in map
+  metres. Road: the centre line resampled every 1.5 m (corners kept), half width `0.58 x setback` clamped to
+  0.9 to 2.4 m (1.74 m at the default 3 m), brush radius 1.4 times that for the soft edge, nearly straight
+  runs merged into one capsule (at most 30 m, under 4 degrees of drift), which cuts the dab cost about five
+  times. A sample is refused (and the road stops there) when the centre or an edge is wet
+  (`WaterGeometry.is_wet_at`), the ground rises more than 0.5 along or 0.7 across, or the road would touch a
+  `Structure` footprint. Door paths: two strokes from each lot's door on the facade line to just inside the
+  road's edge (half the half width), bent sideways up to 25 cm by a hash of street, side and lot (never the
+  seed, so a re-dress moves no path), radius 0.75 m (1.05 m with the soft edge), refused when wet, steeper
+  than 0.6, blocked, or the road stretch they join was refused. Plazas: one disc stroke at 1.12 times the
+  radius, refused when the centre or a quarter of the rim is wet or the disc spans more than 0.45 slope.
+  Paint order: road, plaza, door paths (the newest paint wins a sample). Counts of every refusal are in
+  `plan["refused"]`.
+- **The slot budget** (`SettlementGround.affordable`): roles are served road, door path, plaza; a surface the
+  map already paints costs no slot, each new one takes one of the 64 (`MapDocument.PAINT_SURFACE_LIMIT`); a
+  role with no slot left is skipped and counted (`refused.slots`), and the street is still dressed.
+- **One history entry.** `SettlementEditor` opens a history group, `SettlementPaint.lay` writes each run of
+  strokes on one surface as a `SurfaceStroke` (one `surface` entry each, applied through
+  `AuthoringEditor.apply_surface_diff`), then the record change is recorded, and the group ends: one Ctrl+Z
+  takes back the props, the record, the paint and the slots. A peer receives `LiveEditCodec.ops_of(entry)`:
+  the surface ops, then the `settlements` op (`test_a_peer_receives_the_paint_as_surface_ops_...` applies
+  them to a second document and compares the weights byte for byte, and an undo the same way).
+- **When it paints.** `dress` on a street with no settlement, `set_kit` (the new character's surfaces; the
+  old paint stays under it), `pave(id)` (a street dressed earlier, or one whose road was erased) and
+  `add_plaza(id, at, radius)` (just that disc; one entry; at most 4; `REFUSED_PLAZA` for a disc the record
+  refuses). Re-dress, `set_feel` and Clear leave the paint alone (it is the map's now; Clear keeps it) and
+  the road does not follow later street edits. `remove_plaza` keeps the paving. `last_ground` holds the last
+  plan's counts and the plan, paint and entry numbers; `lays_ground` false is the A/B switch.
+- **Plazas have no tool UI yet.** They are created through `SettlementEditor.add_plaza` (the probe action
+  `plaza`); the Village tool's drag is phase 3. Discs only (the design allowed polygons); a hand-placed
+  building inside a plaza is not refused.
+- **The building's own path gives way.** `StructureDressing` leaves out its alpha path ribbon (stones and
+  steps stay) where the map's paint already covers the ground 0.8 m and 1.8 m out of the door
+  (`StructureDoorPaint`, cover of 128 of 255 or more, any surface); the answer is part of the structure's
+  key (`ground_samples`). A street's lots are not Structures, so this is for the buildings of a split street
+  (whose door paths stay painted) and for a path the author painted. A paint stroke alone does not rebuild a
+  yard: it follows at the next structure rebuild (a split, any structure edit).
+- **Measured** (2026-10-31, indicative, shared GPU): `jobs/villages2_perf.json`, a 250 ft forest map, three
+  52 m two-sided market streets, in-run A/B twice: a street's 22 strokes (2 road capsules and 20 door-path
+  strokes), 1 painted slot (2 with a plaza), cost 36 to 60 ms to dress bare and 88 to 131 ms with the ground
+  (plan 3 to 13 ms, paint 30 to 70 ms of which the ground update and scatter request are 14 to 53 ms, the
+  first of a run the dearest), a one-off click hitch; the worst CPU frame of the three dresses stayed 124 to
+  148 ms either way, and the settled GPU render time was 2.60 and 2.82 ms bare against 2.86 and 2.89 ms with
+  paint (a rise inside the 0.2 ms drift of the run). `docs/PERFORMANCE.md` "Settlement ground".
+
+## Not done
+
+The Dress row on the Buildings bar, the Village tool (plaza drag and resize, garden paint, prop select, move,
+swap, pin), plaza polygons, a yard surface, bridges, boundary walls and fields, GM Events pane wiring,
+pin/remove/swap gestures (the record and plan support them), collision `stand`/`solid`, the settlement
+following later house moves after a split, an erase that removes only the dressing's paint, and a rebuild of
+a building's yard after a paint stroke alone.

@@ -400,7 +400,8 @@ All gestures write the `Settlement` record; none edits a prop directly unless th
 
 ### 3e. Paths, ground and bridges
 
-- **Roads and door paths use the existing Paint layer, written at Dress time.** The Dress command paints
+- **Roads and door paths use the existing Paint layer, written at Dress time (BUILT, topic villages2,
+  2026-10-31: section 8).** The Dress command paints
   the kit's `road` surface along the street's centre line (width from the setback), joins each door to the
   street with the kit's `door_path` surface (a few world-metre strokes), and fills plazas with `plaza`
   surface. These are `SurfaceStroke`s through the paint editor, in the same history entry, so they undo
@@ -445,7 +446,7 @@ one agent including tests and a render look round.
 |-------|---------|------|---------|
 | 0. Reach the species (DONE, batch_c) | Expose the six hidden street species: `Wall.ROW_PRESETS` 5 to 11, `MapWallIO` range, pane tiles (`StreetSpeciesInfo`), readout names, region tags; tests and a render of each; plus the street surfaces the newer species need (`WallGeometry.EXTRA_PART`) | 1 | tt-sim |
 | 1. First dressing | `prop` family: 8 props (barrel, crate stack, well, lamp post, bench, hay stack, woodpile, signpost); `ProcgenSettlement` rules v1 with slots `street_edge`, `beside_door`, `back_yard`, `side_gap`; 2 kits (farming hamlet, market town); `Settlement` record, editor, IO, live edit, fingerprint; derived baked cells; **Dress this street** button | 6-8 | procgen, core-library, tt-sim |
-| 2. Ground and yards | remaining props 9 to 14; road, door-path and yard paint at Dress time; gate prop in the yard fence; a decor `ground` mount in plantgen (hedge, garden bed); back-yard garden rule | 5-6 | procgen, plantgen, core-library, tt-sim |
+| 2. Ground and yards (road, door paths and plaza paint DONE, villages2) | remaining props 9 to 14; road, door-path and yard paint at Dress time; gate prop in the yard fence; a decor `ground` mount in plantgen (hedge, garden bed); back-yard garden rule | 5-6 | procgen, plantgen, core-library, tt-sim |
 | 3. Gestures | Village tool: plaza drag, garden/field paint, prop select/remove/swap/pin; character picker with thumbnails; wealth and density sliders in the bar | 6-8 | tt-sim (Village tool, pane, hints), procgen |
 | 4. Characters and library kind | harbour and hill-fort kits (jetty, boat, shrine, standing stone, water-edge and village-edge rules); kits become a library kind (`kits/` folder: reader, hash, transfer, Verify, structgen kit editor view); boundary hull | 6-8 | procgen, tt-sim, core-library, structgen |
 | 5. Water and bridges | auto-suggest a bridge where a street crosses water; harbour quays; merge chunk LOD if measured necessary | 3-4 | tt-sim, procgen |
@@ -560,3 +561,22 @@ design above:
   phase 2 still comes on top. Cloth sway reads at storm strength at close zoom; calm is subtle, and the
   default camera sees the back of the near house row, so a street's own props are mostly hidden at home zoom
   (a camera matter, not a clearance one).
+
+## 8. Phase 2, first slice as built (topic villages2, 2026-10-31)
+
+The first bullet of section 3e plus the `plazas` record field; details and numbers in
+`docs/systems/settlements.md` "Ground". What changed against the design above:
+
+- The kit's `ground` block did not exist in the kit JSON (the design only sketched it): procgen now carries
+  `"ground": {"road", "door_path", "plaza"}` in the four kits and `ProcgenSettlement.ground_of` validates it
+  (three surfaces at most, two roles may share a slot).
+- Road width is `0.58 x setback` a side (1.74 m at the default), door paths are two strokes bent a few
+  centimetres, a plaza is one disc stroke; all refused on water, steep ground and buildings, counted.
+- Plazas are discs (not polygons yet), up to 4 per settlement, created through `SettlementEditor.add_plaza`
+  only; the Village tool is phase 3.
+- Dress is one history group: props, record and paint undo together, and the paint reaches peers as `surface`
+  ops (no new kind). Re-dress, feel changes and Clear leave the paint; the road does not follow street edits.
+- The alpha path ribbon of a building's yard gives way where paint already runs out of its door
+  (`StructureDoorPaint`); a street's lots are not structures, so it matters after a split.
+- Still to do from this section: the yard surface, bridges (3e second bullet), boundary walls and fields, the
+  Village tool, and the dressing following house moves after a split.

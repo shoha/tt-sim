@@ -8,7 +8,8 @@ extends RefCounted
 ##                     settlement: {"id", "kit", "seed", "wealth", "density", "source",
 ##                       "frozen": [frontage, ...], "removed": [slot, ...],
 ##                       "pinned": {slot: {"prop", "at": [x, z], "yaw", "scale", "seed"}},
-##                       "swapped": {slot: prop}}
+##                       "swapped": {slot: prop},
+##                       "plazas": [{"at": [x, z], "radius"}, ...]  (left out when there are none)}
 ##
 ## A map written before settlements has no such entry and loads unchanged; an older build ignores
 ## the entry (MapDocumentIO.KNOWN_ENTRIES) and drops it on its next save. Everything read is
@@ -82,6 +83,11 @@ static func settlement_problem(settlement: Settlement) -> String:
 		or settlement.swapped.size() > Settlement.MAX_OVERRIDES
 	):
 		return "more than %d overrides" % Settlement.MAX_OVERRIDES
+	if settlement.plazas.size() > Settlement.MAX_PLAZAS:
+		return "more than %d plazas" % Settlement.MAX_PLAZAS
+	for plaza in settlement.plazas:
+		if _plaza_problem(plaza) != "":
+			return "a plaza is not usable (%s)" % _plaza_problem(plaza)
 	for slot in settlement.removed:
 		if not _slot_ok(slot):
 			return "a removed slot is not a short text"
@@ -135,7 +141,7 @@ static func settlement_json(settlement: Settlement) -> Dictionary:
 	var swapped := {}
 	for slot: Variant in settlement.swapped:
 		swapped[str(slot)] = str(settlement.swapped[slot])
-	return {
+	var out := {
 		"id": settlement.id,
 		"kit": settlement.kit,
 		"seed": settlement.seed_value,
@@ -147,6 +153,18 @@ static func settlement_json(settlement: Settlement) -> Dictionary:
 		"pinned": pinned,
 		"swapped": swapped,
 	}
+	if not settlement.plazas.is_empty():
+		var plazas: Array = []
+		for plaza in settlement.plazas:
+			var at: Vector2 = plaza["at"]
+			plazas.append(
+				{
+					"at": [snappedf(at.x, Settlement.PLAZA_STEP_M), snappedf(at.y, Settlement.PLAZA_STEP_M)],
+					"radius": snappedf(float(plaza["radius"]), Settlement.PLAZA_STEP_M),
+				}
+			)
+		out["plazas"] = plazas
+	return out
 
 
 # --- reading ------------------------------------------------------------------------
@@ -218,6 +236,14 @@ static func _settlement_from(value: Variant) -> Variant:
 		return "swapped is not a short object"
 	for slot: Variant in swapped:
 		settlement.swapped[str(slot)] = str(swapped[slot])
+	var plazas: Variant = value.get("plazas", [])
+	if not plazas is Array or (plazas as Array).size() > Settlement.MAX_PLAZAS:
+		return "plazas is not a short list"
+	for entry: Variant in plazas:
+		var plaza: Variant = _plaza_from(entry)
+		if plaza == null:
+			return "a plaza is not usable"
+		settlement.plazas.append(plaza)
 	var pinned: Variant = value.get("pinned", {})
 	if not pinned is Dictionary or (pinned as Dictionary).size() > Settlement.MAX_OVERRIDES:
 		return "pinned is not a short object"
@@ -227,6 +253,34 @@ static func _settlement_from(value: Variant) -> Variant:
 			return "a pinned placement is not usable"
 		settlement.pinned[str(slot)] = pin
 	return settlement
+
+
+static func _plaza_from(value: Variant) -> Variant:
+	if not value is Dictionary:
+		return null
+	var at: Variant = value.get("at")
+	if not at is Array or (at as Array).size() != 2:
+		return null
+	var plaza := {
+		"at": Vector2(_number_or_nan(at[0]), _number_or_nan(at[1])),
+		"radius": _number_or_nan(value.get("radius")),
+	}
+	return plaza if _plaza_problem(plaza) == "" else null
+
+
+## What is wrong with a plaza disc {"at": Vector2, "radius"}, or "".
+static func _plaza_problem(plaza: Variant) -> String:
+	if not plaza is Dictionary or not plaza.get("at") is Vector2:
+		return "not a disc"
+	var at: Vector2 = plaza["at"]
+	var reach := Settlement.PLAZA_MAX_REACH_M
+	if not _within(at.x, -reach, reach) or not _within(at.y, -reach, reach):
+		return "position"
+	if not _within(
+		float(plaza.get("radius", NAN)), Settlement.PLAZA_MIN_RADIUS_M, Settlement.PLAZA_MAX_RADIUS_M
+	):
+		return "radius"
+	return ""
 
 
 static func _pin_from(value: Variant) -> Variant:
