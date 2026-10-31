@@ -517,8 +517,15 @@ func _structure_node(id: int, parts: Dictionary) -> Node3D:
 	node.name = "Structure_%d" % id
 	var style: String = parts.get("style", "")
 	var tone: String = parts.get("stone_tone", "")
-	for mesh: Dictionary in parts.get("meshes", []):
+	var meshes: Array = parts.get("meshes", [])
+	# A weathervane's arrow, shaft and tail turn in the wind (StructureVane): they leave the static meshes.
+	var vane := StructureVane.split(meshes, parts.get("tag_table", PackedStringArray()))
+	if not vane.is_empty():
+		meshes = vane.rest
+	for mesh: Dictionary in meshes:
 		node.add_child(_mesh_instance(mesh, "", style, tone))
+	if not vane.is_empty():
+		node.add_child(vane_node(vane, style, tone))
 	var mill: Dictionary = parts.get("mill", {})
 	if not mill.is_empty():
 		node.add_child(mill_node(mill, int(parts.get("id", 0)), style, tone))
@@ -589,6 +596,26 @@ func mill_node(mill: Dictionary, seed_value: int, style: String, tone: String) -
 	notifier.screen_exited.connect(pivot.on_screen_exited)
 	pivot.add_child(notifier)
 	pivot.setup(wheel, mill.axis, seed_value)
+	return pivot
+
+
+## A weathervane's turning parts (StructureVane.split's `turning`) as a VaneMotion node "Vane" at the
+## pole, its meshes at minus the pivot (the pose at rest is the built one), with a notifier so it
+## only moves on screen.
+func vane_node(vane: Dictionary, style: String, tone: String) -> VaneMotion:
+	var pivot := VaneMotion.new()
+	pivot.name = "Vane"
+	pivot.position = vane.pivot
+	for mesh: Dictionary in vane.turning:
+		var instance := _mesh_instance(mesh, "vane_", style, tone)
+		instance.position = -(vane.pivot as Vector3)
+		pivot.add_child(instance)
+	var notifier := VisibleOnScreenNotifier3D.new()
+	notifier.aabb = AABB(Vector3(-1.2, -0.6, -1.2), Vector3(2.4, 1.2, 2.4))
+	notifier.screen_entered.connect(pivot.on_screen_entered)
+	notifier.screen_exited.connect(pivot.on_screen_exited)
+	pivot.add_child(notifier)
+	pivot.setup(vane.tip)
 	return pivot
 
 

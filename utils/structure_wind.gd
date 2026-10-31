@@ -21,7 +21,7 @@ const EASE_SECONDS := 2.0
 const VANE_OMEGA := 2.6
 const VANE_ZETA := 0.35
 ## The wobble a gust drives into the vane's target, radians at full wind (14 m/s and up).
-const VANE_WOBBLE_RAD := 0.3
+const VANE_WOBBLE_RAD := 0.2
 const VANE_WOBBLE_FULL_MS := 14.0
 ## The largest step the spring integrates in one go (seconds); longer frames take several.
 const VANE_MAX_STEP := 0.02
