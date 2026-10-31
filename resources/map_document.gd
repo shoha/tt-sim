@@ -127,6 +127,8 @@ const MAX_CROSSINGS := 64
 const MAX_WALLS := 64
 ## Structures (buildings built from a library recipe) per document.
 const MAX_STRUCTURES := 128
+## Dressed streets (Settlement) per document.
+const MAX_SETTLEMENTS := 8
 
 var palette_version: String = ""
 ## The content libraries this map used when it was saved: [{id, version, hash}], one per
@@ -184,6 +186,9 @@ var walls: Array[Wall] = []
 ## Buildings built from a library recipe, a footprint and a seed (Structure), at most
 ## MAX_STRUCTURES. Summary: docs/systems/structures.md.
 var structures: Array[Structure] = []
+## Dressed streets (Settlement): the furnishings are derived from these, never stored. At most
+## MAX_SETTLEMENTS. Summary: docs/systems/settlements.md.
+var settlements: Array[Settlement] = []
 ## One byte per sample: the persistent ground fire's intensity 0..255 (0 = no fire), painted by
 ## the Fire tool and drawn by FireField. Empty = no fire. The ash it leaves is a painted
 ## surface, a separate layer, so putting fire out never touches it.
@@ -537,6 +542,35 @@ func next_wall_id() -> int:
 	if highest < Wall.MAX_ID:
 		return highest + 1
 	for candidate in range(1, Wall.MAX_ID + 1):
+		if not used.has(candidate):
+			return candidate
+	return -1
+
+
+## The settlement with id `settlement_id`, or null.
+func settlement(settlement_id: int) -> Settlement:
+	for entry in settlements:
+		if entry.id == settlement_id:
+			return entry
+	return null
+
+
+## The settlement that dresses street `wall_id`, or null.
+func settlement_of_street(wall_id: int) -> Settlement:
+	for entry in settlements:
+		if entry.source == wall_id and wall_id > 0:
+			return entry
+	return null
+
+
+## The id a new settlement gets (the lowest free), or -1 when the document holds MAX_SETTLEMENTS.
+func next_settlement_id() -> int:
+	if settlements.size() >= MAX_SETTLEMENTS:
+		return -1
+	var used := {}
+	for entry in settlements:
+		used[entry.id] = true
+	for candidate in range(1, Settlement.MAX_ID + 1):
 		if not used.has(candidate):
 			return candidate
 	return -1

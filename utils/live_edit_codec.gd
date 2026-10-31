@@ -14,8 +14,9 @@ extends RefCounted
 ## which redraws the peer's fire), "surface" apply_surface_diff,
 ## "props" set_prop_cell, "height" HeightEditor.apply_diff, "water" WaterEditor.apply_edit,
 ## "crossings" CrossingEditor.apply_list, "walls" WallEditor.apply_list, "structures"
-## StructureEditor.apply_list (the whole list as JSON forms, like walls). One side of an entry
-## travels: a redo (and a fresh
+## StructureEditor.apply_list (the whole list as JSON forms, like walls), "settlements"
+## SettlementEditor.apply_list (likewise; the furnishings are derived, never sent). One side of
+## an entry travels: a redo (and a fresh
 ## record) its after side, diffs with their "after" blocks and records with their *_after
 ## fields; an undo its before side ("redo" false), diffs with their "before" blocks and records
 ## with their *_before fields, applied through the same method with redo false, so a kept
@@ -54,7 +55,7 @@ const CHUNK_BYTES := 64 * 1024
 ## Most chunks one op takes (MAX_BYTES / CHUNK_BYTES).
 const MAX_CHUNKS := 64
 const KINDS: Array[String] = [
-	"mask", "surface", "height", "water", "crossings", "walls", "structures", "props"
+	"mask", "surface", "height", "water", "crossings", "walls", "structures", "props", "settlements"
 ]
 ## Kinds whose apply method takes the side to apply (redo true: after; false: before).
 const SIDED: Array[String] = ["mask", "surface", "height", "water"]
@@ -82,6 +83,8 @@ static func op_of(entry: Dictionary, editor: AuthoringEditor, undo: bool = false
 		key = "walls." + key
 	elif target is StructureEditor:
 		key = "structures." + key
+	elif target is SettlementEditor:
+		key = "settlements." + key
 	elif not target is AuthoringEditor:
 		return {}
 	match key:
@@ -103,6 +106,8 @@ static func op_of(entry: Dictionary, editor: AuthoringEditor, undo: bool = false
 			return _op("walls", [_walls_json(args[0]), args[1]])
 		"structures.apply_list":
 			return _op("structures", [_structures_json(args[0]), args[1]])
+		"settlements.apply_list":
+			return _op("settlements", [_settlements_json(args[0]), args[1]])
 	return {}
 
 
@@ -188,6 +193,8 @@ static func apply(op: Dictionary, editor: AuthoringEditor) -> void:
 			editor.walls.apply_list(args[0], args[1])
 		"structures":
 			editor.structures.apply_list(args[0], args[1])
+		"settlements":
+			editor.settlements.apply_list(args[0], args[1])
 		"props":
 			editor.set_prop_cell(args[0], args[1])
 
@@ -253,6 +260,13 @@ static func _walls_json(list: Array) -> Array:
 	var out: Array = []
 	for wall: Wall in list:
 		out.append(MapWallIO.wall_json(wall))
+	return out
+
+
+static func _settlements_json(list: Array) -> Array:
+	var out: Array = []
+	for settlement: Settlement in list:
+		out.append(MapSettlementIO.settlement_json(settlement))
 	return out
 
 

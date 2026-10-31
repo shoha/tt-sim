@@ -12,6 +12,11 @@ signal preset_selected(preset: int)
 ## The picked street's buttons: split it into buildings, let go of it.
 signal split_requested
 signal done_requested
+## The Dress this street section's requests, passed on from it (SettlementSection).
+signal dress_requested(kit: String, wealth: float, density: float)
+signal kit_requested(kit: String)
+signal feel_requested(wealth: float, density: float)
+signal clear_requested
 
 const TILE_SIZE := Vector2(64, 56)
 const KIND_TILES: Array[Dictionary] = [
@@ -58,6 +63,8 @@ var preset_field: TileField
 var selection_box: VBoxContainer
 var split_button: Button
 var done_button: Button
+## The Dress this street section of the picked street's bar.
+var settlement_section: SettlementSection
 
 
 func _init() -> void:
@@ -125,8 +132,9 @@ func _show_for_kind(kind: int) -> void:
 
 
 ## Shows the bar of the picked street (`wall`, a row of the open document), or with null hides it.
-func show_selection(wall: Wall) -> void:
+func show_selection(wall: Wall, settlement: Settlement = null) -> void:
 	selection_box.visible = wall != null
+	settlement_section.show_for(settlement)
 
 
 ## The picked street's bar: what splitting does, the Split button and Done.
@@ -136,6 +144,12 @@ func _build_selection() -> void:
 	selection_box.theme_type_variation = &"BoxContainerSnug"
 	selection_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	selection_box.visible = false
+	settlement_section = SettlementSection.new()
+	settlement_section.dress_requested.connect(dress_requested.emit)
+	settlement_section.kit_requested.connect(kit_requested.emit)
+	settlement_section.feel_requested.connect(feel_requested.emit)
+	settlement_section.clear_requested.connect(clear_requested.emit)
+	selection_box.add_child(settlement_section)
 	selection_box.add_child(_caption("WallSelectionHint", SELECTION_HINT))
 	split_button = Button.new()
 	split_button.name = "WallSplit"

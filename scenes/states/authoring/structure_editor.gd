@@ -350,6 +350,7 @@ func apply_list(structures: Array[Structure], area: Rect2) -> void:
 	e.document.structures = copied
 	if is_instance_valid(e.map_root):
 		AuthoredStructures.refresh_map(e.map_root, e.document)
+		AuthoredSettlements.refresh_map(e.map_root, e.document)
 	if is_instance_valid(e.scatter) and area.has_area():
 		e.scatter.request_region(area)
 

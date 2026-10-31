@@ -216,6 +216,9 @@ func split_street(wall_id: int) -> int:
 		found[k].id = ids[k]
 	e.history.begin_group()
 	var laid := e.structures.lay_all(found, "Place buildings")
+	# A dressed street keeps its furnishings: the frontage it had is frozen into the settlement.
+	if laid:
+		e.settlements.freeze_street(wall_id)
 	var removed := laid and remove(wall_id)
 	e.history.end_group("Split street into buildings")
 	if not removed:
@@ -351,6 +354,7 @@ func apply_list(walls: Array[Wall], area: Rect2) -> void:
 	var started := Time.get_ticks_usec()
 	if is_instance_valid(e.map_root):
 		AuthoredWalls.refresh_map(e.map_root, e.document)
+		AuthoredSettlements.refresh_map(e.map_root, e.document)
 	last_refresh_usec = Time.get_ticks_usec() - started
 	if is_instance_valid(e.scatter) and area.has_area():
 		e.scatter.request_region(area)

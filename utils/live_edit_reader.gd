@@ -40,6 +40,7 @@ const ARITY := {
 	"crossings": 2,
 	"walls": 2,
 	"structures": 2,
+	"settlements": 2,
 	"props": 2
 }
 
@@ -121,6 +122,8 @@ func read(kind: String, args: Array, redo: bool = true) -> Array:
 			out = [_wall_list(args[0]), _area(args[1])]
 		"structures":
 			out = [_structure_list(args[0]), _area(args[1])]
+		"settlements":
+			out = [_settlement_list(args[0]), _area(args[1])]
 		"props":
 			out = [args[0], _cell_rows(args[0], args[1])]
 	return out if problem == "" else []
@@ -364,6 +367,14 @@ func _wall_list(value: Variant) -> Array[Wall]:
 	var list := MapWallIO.parse_list(value if value is Array else [null], _doc.extent_m(), warn_log)
 	if not warn_log.items.is_empty():
 		_fail("walls: " + warn_log.items[0])
+	return list
+
+
+func _settlement_list(value: Variant) -> Array[Settlement]:
+	var warn_log := MapDocumentIO._WarningLog.new()
+	var list := MapSettlementIO.parse_list(value if value is Array else [null], warn_log)
+	if not warn_log.items.is_empty():
+		_fail("settlements: " + warn_log.items[0])
 	return list
 
 

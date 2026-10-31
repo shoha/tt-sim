@@ -24,6 +24,8 @@ extends RefCounted
 ##   walls          per AuthoredWalls child: "<name> <verts> <aabb>".
 ##   structures     per document structure "record <id> <recipe> <sha prefix of its JSON>", then
 ##                  per AuthoredStructures child "node <name> <verts> <aabb>", sorted.
+##   settlements    per document settlement "record <id> <sha prefix of its JSON>", then per
+##                  AuthoredSettlements cell "node <name> <verts> <aabb>", sorted.
 ##   edge           the skirt's river-exit parts: "<name> <verts>" for Channel and Ribbon,
 ##                  or [] when no water leaves the map.
 ##   scatter        per asset in every AuthoredScatter: "<asset> <rows>", sorted.
@@ -38,6 +40,7 @@ const HASH_CHARS := 16
 const CROSSINGS_NODE := "AuthoredCrossings"
 const WALLS_NODE := "AuthoredWalls"
 const STRUCTURES_NODE := "AuthoredStructures"
+const SETTLEMENTS_NODE := "AuthoredSettlements"
 const WATER_NODE := "AuthoredWater"
 const FALLS_MESH := "AuthoredWater-falls"
 const EDGE_NAMES: Array[String] = ["Channel", "Ribbon"]
@@ -59,6 +62,7 @@ static func of(root: Node, doc: MapDocument) -> Dictionary:
 		"crossings": [],
 		"walls": [],
 		"structures": [],
+		"settlements": [],
 		"edge": [],
 		"scatter": [],
 		"scatter_hash": "",
@@ -69,6 +73,7 @@ static func of(root: Node, doc: MapDocument) -> Dictionary:
 		out.fire = _fire(doc)
 		out.water = _water(doc)
 		out.structures = _structures(null, doc)
+		out.settlements = _settlements(null, doc)
 	if root == null:
 		return out
 	var meshes: Array = []
@@ -82,6 +87,7 @@ static func of(root: Node, doc: MapDocument) -> Dictionary:
 	out.crossings = _crossings(root)
 	out.walls = _walls(root)
 	out.structures = _structures(root, doc)
+	out.settlements = _settlements(root, doc)
 	out.edge = _edge(meshes)
 	var scatter := _scatter(root)
 	out.scatter = scatter[0]
@@ -295,6 +301,21 @@ static func _structures(root: Node, doc: MapDocument) -> Array:
 			)
 	if root != null:
 		for line: String in _child_summaries(root, STRUCTURES_NODE):
+			out.append("node " + line)
+	out.sort()
+	return out
+
+
+## The settlements key: one "record <id> <sha prefix of its JSON>" per document settlement, then one
+## "node <name> <verts> <aabb>" per baked cell of AuthoredSettlements, sorted.
+static func _settlements(root: Node, doc: MapDocument) -> Array:
+	var out: Array = []
+	if doc != null:
+		for settlement in doc.settlements:
+			var text := JSON.stringify(MapSettlementIO.settlement_json(settlement), "", true)
+			out.append("record %d %s" % [settlement.id, text.sha256_text().substr(0, HASH_CHARS)])
+	if root != null:
+		for line: String in _child_summaries(root, SETTLEMENTS_NODE):
 			out.append("node " + line)
 	out.sort()
 	return out
