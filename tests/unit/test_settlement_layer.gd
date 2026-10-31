@@ -348,16 +348,23 @@ func test_the_bake_turns_a_prop_so_its_front_faces_the_yaw() -> void:
 	)
 
 
+func _prop_material(kind: String) -> ShaderMaterial:
+	return StructureMaterials.make(kind, "prop", "", PaletteLibrary.DEFAULT_ROOT) as ShaderMaterial
+
+
 func test_kinds_that_look_alike_share_a_surface_and_the_rest_stay_apart() -> void:
 	for kind in ["wood", "accent", "thatch", "boards", "trim"]:
 		assert_eq(SettlementBake.look_kind("prop", kind), "wood", kind)
 	for kind in ["cloth", "stone", "glass", "metal", "leaf"]:
 		assert_eq(SettlementBake.look_kind("prop", kind), kind, kind)
 	assert_eq(SettlementBake.look_kind("wall", "accent"), "accent", "only props merge")
+	var cloth := _prop_material("cloth")
+	assert_eq(cloth.get_shader_parameter("cloth_wind"), StructureMaterials.PROP_CLOTH_WIND)
+	assert_eq(StructureMaterials.ornament("cloth").get_shader_parameter("cloth_wind"), 1.0)
 	# Merged kinds really are one material: same shader, same parameters.
-	var wood := StructureMaterials.make("wood", "prop", "", PaletteLibrary.DEFAULT_ROOT) as ShaderMaterial
+	var wood := _prop_material("wood")
 	for kind in ["accent", "thatch", "boards"]:
-		var other := StructureMaterials.make(kind, "prop", "", PaletteLibrary.DEFAULT_ROOT) as ShaderMaterial
+		var other := _prop_material(kind)
 		assert_eq(other.shader, wood.shader, kind)
 		for param in ["tone", "exposure", "saturation", "lit_gain", "cloth_wind"]:
 			assert_eq(

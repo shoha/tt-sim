@@ -552,7 +552,11 @@ design above:
 - Cells have 4 to 5 surfaces each (opaque wood, stone, thatch, accent, cloth, glass, water), so a dressed
   52 m two-sided street is 4 to 5 cells and 21 to 25 surfaces: more than the estimate of 18 to 27 draws for
   150 props. Measured numbers in `docs/PERFORMANCE.md` "Settlement furnishings".
-- Streets still let the scatter grow trees and rocks in the street strip, so in a forest the props are
-  half hidden among trees. The painted road of phase 2 (role `built` clears plants) is the planned fix.
-- Props sit 3 cm in the ground at the sampled centre height; a cart or stall on a slope may float on one
-  side. Slopes over 0.8 rise and water skip the placement.
+- Addendum (topic settlement_look, 2026-10-31; `docs/systems/settlements.md` "Look pass"): the scatter now
+  keeps out of every street's corridor (facade line to facade line plus 2 m, dressed or not) through the
+  existing wall clearance; props are drawn 1.35 times larger (1.12 at doors), the prop role is more saturated
+  and warm, props stand at the lowest ground under their footprint and lean up to 12 degrees to the slope, cells
+  are 48 m and look-alike prop kinds share a surface (64 to 34 surfaces for 152 props). The painted road of
+  phase 2 still comes on top. Cloth sway reads at storm strength at close zoom; calm is subtle, and the
+  default camera sees the back of the near house row, so a street's own props are mostly hidden at home zoom
+  (a camera matter, not a clearance one).

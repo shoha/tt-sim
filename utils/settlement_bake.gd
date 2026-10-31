@@ -19,6 +19,10 @@ const DOOR_VISUAL_SCALE := 1.12
 const MAX_VISUAL_SCALE := 1.7
 ## A prop leans toward the ground's normal by at most this many degrees.
 const TILT_MAX_DEG := 12.0
+## The material kinds a prop's surfaces keep apart: StructureMaterials.prop gives every other kind
+## (wood, accent, thatch, boards ...) the same shader and parameters (the colour is in the
+## vertices), so they share one surface and one draw.
+const DISTINCT_KINDS: Array[String] = ["leaf", "leaf_b", "metal", "cloth", "stone", "glass"]
 
 
 ## The drawn scale of placement `item`: its own scale times PROP_VISUAL_SCALE (DOOR_VISUAL_SCALE
@@ -43,12 +47,6 @@ static func tilt_of(normal: Vector3, max_deg: float = TILT_MAX_DEG) -> Basis:
 		return Basis.IDENTITY
 	var angle := minf(acos(clampf(n.y, -1.0, 1.0)), deg_to_rad(max_deg))
 	return Basis(axis.normalized(), angle)
-
-
-## The material kinds a prop's surfaces keep apart: StructureMaterials.prop gives every other kind
-## (wood, accent, thatch, boards ...) the same shader and parameters (the colour is in the vertices),
-## so they share one surface and one draw.
-const DISTINCT_KINDS: Array[String] = ["leaf", "leaf_b", "metal", "cloth", "stone", "glass"]
 
 
 ## The kind whose material draws a surface of `kind` in `role`: itself, or "wood" for the prop kinds

@@ -1,0 +1,256 @@
+{
+ "out_dir": "render_jobs/settlement_cloth",
+ "timeout_s": 400,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "",
+   "size": 250,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel._on_rail_item_pressed(\"wall\")"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "kind",
+   "kind": "row"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "street",
+   "from": [
+    -18,
+    -26
+   ],
+   "to": [
+    -18,
+    26
+   ],
+   "preset": 3,
+   "seed": 21
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "street",
+   "from": [
+    18,
+    -26
+   ],
+   "to": [
+    18,
+    26
+   ],
+   "preset": 2,
+   "seed": 31
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 1,
+   "kit": "farming_hamlet",
+   "wealth": 0.3,
+   "density": 1.2
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 2,
+   "kit": "market_town",
+   "wealth": 0.7,
+   "density": 1.2
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "aim",
+   "prop": "laundry_line",
+   "index": 0,
+   "zoom": 7.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "dir_deg": 0,
+   "clock": 3.0
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "capture",
+   "name": "laundry_calm_3",
+   "desc": "laundry, calm wind from 0 deg, clock 3 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "dir_deg": 0,
+   "clock": 5.0
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "capture",
+   "name": "laundry_calm_5",
+   "desc": "laundry, calm wind from 0 deg, clock 5 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "dir_deg": 0,
+   "clock": 3.0
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "capture",
+   "name": "laundry_storm_3",
+   "desc": "laundry, storm wind from 0 deg, clock 3 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "dir_deg": 0,
+   "clock": 5.0
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "capture",
+   "name": "laundry_storm_5",
+   "desc": "laundry, storm wind from 0 deg, clock 5 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "aim",
+   "prop": "market_stall",
+   "index": 0,
+   "zoom": 7.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "dir_deg": 0,
+   "clock": 3.0
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "capture",
+   "name": "stall_calm_3",
+   "desc": "stall, calm wind from 0 deg, clock 3 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "dir_deg": 0,
+   "clock": 5.0
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "capture",
+   "name": "stall_calm_5",
+   "desc": "stall, calm wind from 0 deg, clock 5 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "dir_deg": 0,
+   "clock": 3.0
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "capture",
+   "name": "stall_storm_3",
+   "desc": "stall, storm wind from 0 deg, clock 3 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "dir_deg": 0,
+   "clock": 5.0
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "capture",
+   "name": "stall_storm_5",
+   "desc": "stall, storm wind from 0 deg, clock 5 s"
+  },
+  {
+   "op": "index",
+   "title": "Settlement cloth",
+   "intro": "Laundry line and market stall cloth, calm and storm, clocks 2 s apart"
+  }
+ ]
+}

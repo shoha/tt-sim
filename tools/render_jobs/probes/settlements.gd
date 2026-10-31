@@ -39,6 +39,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _perf(ctrl.editor, step)
 		"corridor":
 			return _corridor(ctrl)
+		"aim":
+			return _aim(base, ctrl.editor, step)
 	return _report(ctrl.editor)
 
 
@@ -133,6 +135,34 @@ static func _report(editor: AuthoringEditor) -> String:
 			layer.skipped_missing,
 		]
 	)
+
+
+## Puts the camera on the `index`th placement of prop `prop` ("laundry_line", "market_stall") in
+## the dressed streets, zoomed to `zoom` (follow with a `settle`), and logs what is placed.
+static func _aim(base: Node, editor: AuthoringEditor, step: Dictionary) -> String:
+	var layer := _layer(editor)
+	var gm := base.get("_game_map") as GameMap
+	if layer == null or gm == null:
+		return "no layer or map"
+	var wanted := String(step.get("prop", "laundry_line"))
+	var found: Array[Vector2] = []
+	var counts := {}
+	for settlement in editor.document.settlements:
+		for row in layer.standing(settlement.id):
+			var name_of := String(row["item"]["prop"])
+			counts[name_of] = int(counts.get(name_of, 0)) + 1
+			if name_of == wanted:
+				found.append(row["item"]["position"])
+	if found.is_empty():
+		return "no %s among %s" % [wanted, str(counts)]
+	var at := found[mini(int(step.get("index", 0)), found.size() - 1)]
+	var cc := gm.get_camera_controller()
+	var off: Vector2 = cc.call("_get_view_center_ground_offset")
+	var holder := gm.cameraholder_node
+	holder.global_position = Vector3(at.x - off.x, holder.global_position.y, at.y - off.y)
+	if step.has("zoom"):
+		cc.set("_target_zoom", float(step["zoom"]))
+	return "aimed at %s %d of %d at %s; %s" % [wanted, int(step.get("index", 0)), found.size(), str(at), str(counts)]
 
 
 ## Scatter rows (per asset file) standing inside each street's corridor (within the setback of its

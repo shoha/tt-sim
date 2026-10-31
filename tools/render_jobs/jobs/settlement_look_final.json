@@ -1,0 +1,574 @@
+{
+ "out_dir": "render_jobs/settlement_look_final",
+ "timeout_s": 560,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "temperate_forest_summer_s1",
+   "size": 250,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel._on_rail_item_pressed(\"wall\")"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "kind",
+   "kind": "row"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "street",
+   "from": [
+    -18,
+    -26
+   ],
+   "to": [
+    -18,
+    26
+   ],
+   "preset": 3,
+   "seed": 21
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "street",
+   "from": [
+    18,
+    -26
+   ],
+   "to": [
+    18,
+    26
+   ],
+   "preset": 2,
+   "seed": 31
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 1,
+   "kit": "farming_hamlet",
+   "wealth": 0.3,
+   "density": 0.9
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 2,
+   "kit": "market_town",
+   "wealth": 0.7,
+   "density": 1.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "corridor"
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 60.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "forest_hamlet_market_home",
+   "desc": "forest_hamlet_market home zoom: farming hamlet (left), market town (right)"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -18,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 24.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "forest_hamlet_market_hamlet",
+   "desc": "forest_hamlet_market hamlet close"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    18,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 24.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "forest_hamlet_market_market",
+   "desc": "forest_hamlet_market market close"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "aim",
+   "prop": "laundry_line",
+   "index": 0,
+   "zoom": 7.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "dir_deg": 0,
+   "clock": 3.0
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "capture",
+   "name": "cloth_calm_3",
+   "desc": "laundry calm clock 3"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "dir_deg": 0,
+   "clock": 3.0
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "capture",
+   "name": "cloth_storm_3",
+   "desc": "laundry storm clock 3"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "dir_deg": 0,
+   "clock": 5.0
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "capture",
+   "name": "cloth_storm_5",
+   "desc": "laundry storm clock 5"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "temperate_forest_summer_s1",
+   "size": 250,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel._on_rail_item_pressed(\"wall\")"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "kind",
+   "kind": "row"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "street",
+   "from": [
+    -18,
+    -26
+   ],
+   "to": [
+    -18,
+    26
+   ],
+   "preset": 8,
+   "seed": 41
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "street",
+   "from": [
+    18,
+    -26
+   ],
+   "to": [
+    18,
+    26
+   ],
+   "preset": 7,
+   "seed": 11
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 1,
+   "kit": "harbour_town",
+   "wealth": 0.6,
+   "density": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 2,
+   "kit": "hill_fort_village",
+   "wealth": 0.3,
+   "density": 1.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "corridor"
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 60.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "forest_harbour_hillfort_home",
+   "desc": "forest_harbour_hillfort home zoom: harbour town (left), hill fort village (right)"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -18,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 24.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "forest_harbour_hillfort_harbour",
+   "desc": "forest_harbour_hillfort harbour close"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    18,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 24.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "forest_harbour_hillfort_hillfort",
+   "desc": "forest_harbour_hillfort hillfort close"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 250,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "eval",
+   "expr": "_authoring_controller.panel._on_rail_item_pressed(\"wall\")"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/walls.gd",
+   "action": "kind",
+   "kind": "row"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/terrain_shapes.gd",
+   "action": "hill",
+   "at": [
+    0,
+    0
+   ],
+   "height": 6.0,
+   "radius": 28.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "street",
+   "from": [
+    -18,
+    -26
+   ],
+   "to": [
+    -18,
+    26
+   ],
+   "preset": 3,
+   "seed": 21
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "street",
+   "from": [
+    18,
+    -26
+   ],
+   "to": [
+    18,
+    26
+   ],
+   "preset": 2,
+   "seed": 31
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 1,
+   "kit": "farming_hamlet",
+   "wealth": 0.3,
+   "density": 0.9
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "dress",
+   "id": 2,
+   "kit": "market_town",
+   "wealth": 0.7,
+   "density": 1.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "corridor"
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 60.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "meadow_hamlet_market_home",
+   "desc": "meadow_hamlet_market home zoom: farming hamlet (left), market town (right), on a hill"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -18,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 24.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "meadow_hamlet_market_hamlet",
+   "desc": "meadow_hamlet_market hamlet close"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    18,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 24.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "meadow_hamlet_market_market",
+   "desc": "meadow_hamlet_market market close"
+  },
+  {
+   "op": "look_at",
+   "at": [
+    18,
+    -10
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 10.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "capture",
+   "name": "meadow_slope_detail",
+   "desc": "props on the hillside, very close"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/settlements.gd",
+   "action": "report"
+  },
+  {
+   "op": "index",
+   "title": "Settlement look final",
+   "intro": "Characters in forest and meadow, clearance, scale, slopes, cloth"
+  }
+ ]
+}
