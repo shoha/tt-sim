@@ -1260,6 +1260,32 @@ objects (restored from the shared Actions cache; with pointer files the core lib
 and the report sees only five references with no recipes, 10 triangles each). Cost: about 3 minutes
 on Linux and Windows, 9 on macOS (the Rosetta leg alone is 2).
 
+**The digest split (2026-10-30, topic `digest_split`).** The exporter (`tools/export_core_structures.gd`)
+and the tests once pinned different digests for the same structures: nine houses (`house_flat`,
+`house_hip`, `stone_house`, the townhouse and its chimneyed, end, flat, hip and trimmed variants) at
+about ten times the triangles, and the four `yard_gate` draws. Two causes, neither in the build:
+1. **A `--script` main script is compiled before the autoloads exist.** Everything it names that
+   (through its dependencies) names an autoload (`Wind` in `mill_motion.gd` and `vane_motion.gd`, since
+   the wind work) fails to compile, StructureGeometry among them, and a script that failed to compile
+   runs with its `static var` initialisers skipped: `StructureGeometry.textured` (`:= true`) read
+   false, so masonry was modelled instead of textured. GUT, the game and any script loaded after
+   `_initialize` see the autoloads and are right. The exporter is now a launcher that loads
+   `tools/export_core_structures_run.gd` in `_initialize`, and `_make` sets `textured` itself and puts
+   it back. `tools/determinism_report.gd` (CI) has the same shape and the same launcher.
+2. **The exporter pinned a prop at the style's default footprint, the game at the served one.**
+   `yard_gate`'s style says 2.4 x 0.4 m; the reader clamps the index row to its 0.5 m minimum side, so
+   the game, GUT and `prop_pins.txt` build 2.4 x 0.5 m. The exporter now reads the footprint from the
+   served row (`LibraryStructureStore.props`). The committed pipeline digests were right; only the
+   raw (fifth) column of the four `yard_gate` lines of `prop_pins.txt` had been written at 0.4 m and
+   was re-pinned (nothing reads that column but the exporter's `--check`). The style still declares a
+   default below its own minimum: a procgen cleanup.
+In-game builds were never affected: the game compiles with its autoloads and builds from the served
+row. Protection: `tests/unit/test_core_pin_paths.gd` builds every structure and prop draw in three
+orders in one process and against the pins, runs the exporter's build path with `textured` on and off,
+and runs the exporter as a `--script` process with `--check 1` against `libraries/core/`. Rule for
+tools: a `--script` tool must not name a game class in its own file; make its main script a launcher
+that loads the implementation in `_initialize`.
+
 ## Tests and render job
 
 `tests/unit/test_map_document_structures.gd` (the record and the map entry) and
