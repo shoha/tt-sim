@@ -23,7 +23,9 @@ const TILT_MAX_DEG := 12.0
 ## The material kinds a prop's surfaces keep apart: StructureMaterials.prop gives every other kind
 ## (wood, accent, thatch, boards ...) the same shader and parameters (the colour is in the
 ## vertices), so they share one surface and one draw.
-const DISTINCT_KINDS: Array[String] = ["leaf", "leaf_b", "metal", "cloth", "stone", "glass"]
+const DISTINCT_KINDS: Array[String] = [
+	"leaf", "leaf_b", "metal", "cloth", "stone", "glass", StructureGlow.KIND
+]
 
 
 ## The drawn scale of placement `item`: its own scale times PROP_VISUAL_SCALE (DOOR_VISUAL_SCALE
@@ -97,7 +99,7 @@ static func bake(placed: Array[Dictionary], sources: Dictionary) -> Array[Dictio
 					"indices": PackedInt32Array(),
 					"has_uv2": false,
 				}
-			_append(by_key[key], surface["arrays"], transform, turn)
+			_append(by_key[key], surface["arrays"], transform, turn, kind == StructureGlow.KIND)
 	var keys: Array = by_key.keys()
 	keys.sort()
 	var out: Array[Dictionary] = []
@@ -125,7 +127,11 @@ static func triangle_count(surfaces: Array[Dictionary]) -> int:
 
 
 static func _append(
-	into: Dictionary, arrays: Array, transform: Transform3D, turn: Transform3D
+	into: Dictionary,
+	arrays: Array,
+	transform: Transform3D,
+	turn: Transform3D,
+	sized: bool = false
 ) -> void:
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var count := vertices.size()
@@ -169,7 +175,15 @@ static func _append(
 			# Earlier surfaces had none: their vertices get zero weights.
 			all_uv2.resize(base)
 			into["has_uv2"] = true
-		all_uv2.append_array(uv2)
+		if sized:
+			# A halo's half-size (x, metres) grows with the prop the way the mesh does.
+			var grown := PackedVector2Array(uv2)
+			var scale := transform.basis.get_scale().x
+			for i in grown.size():
+				grown[i].x *= scale
+			all_uv2.append_array(grown)
+		else:
+			all_uv2.append_array(uv2)
 	elif bool(into["has_uv2"]):
 		var blank := PackedVector2Array()
 		blank.resize(count)

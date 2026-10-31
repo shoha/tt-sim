@@ -17,6 +17,8 @@ extends RefCounted
 ##    "mill": {} or, for a windmill, StructureMill.split's moving parts without "rest" ("wheel" and
 ##    "cap" meshes, "hub", "axis", "centre", "curb_top"); they are NOT in "meshes" but are in
 ##    digest_of and triangle_count (all_meshes),
+##    "glow": [] or one mesh of kind StructureGlow.KIND holding a halo quad per lantern (not in
+##    "meshes", digest_of or triangle_count; the host draws it beside the meshes),
 ##    "tag_table": provenance paths (node id, then slot path), "collision": faces,
 ##    "walkable": the extra faces of decks, stairs, platforms and piles (StructureWalkable; not in
 ##    digest_of),
@@ -43,7 +45,7 @@ const HARD_TRIANGLES := 25000
 const KEY_STEP_M := 0.5
 const KEY_MAX_SAMPLES := 2048
 ## Bumped when the mesh layout of the parts changes, so cached parts rebuild.
-const FORMAT_VERSION := 5
+const FORMAT_VERSION := 6
 ## Marks a structure with no top (no recipe, or nothing built).
 const NONE := -INF
 ## digest_of rounds vertices and collision to this many metres (0.1 mm), as procgen's digests do.
@@ -177,6 +179,8 @@ static func build_one(
 	parts.tag_table = PackedStringArray(geometry.tag_table)
 	# Banner, pennant and awning cloth gets its wind weights in the second UV set (not in digest_of).
 	StructureCloth.attach(meshes, parts.tag_table)
+	# A prop's lanterns get a halo quad each, kept beside `meshes` (not in digest_of or the budget).
+	parts.glow = StructureGlow.of(meshes)
 	parts.collision = geometry.collision
 	parts.walkable = StructureWalkable.faces(meshes, parts.tag_table)
 	# A windmill's sails and cap leave `meshes` for `mill` (they turn in the game); collision, the
@@ -669,6 +673,7 @@ static func _empty(structure: Structure) -> Dictionary:
 		"style": structure.style,
 		"meshes": [],
 		"mill": {},
+		"glow": [],
 		"tag_table": PackedStringArray(),
 		"collision": PackedVector3Array(),
 		"walkable": PackedVector3Array(),

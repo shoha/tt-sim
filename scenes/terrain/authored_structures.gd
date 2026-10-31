@@ -628,6 +628,8 @@ func _structure_node(id: int, parts: Dictionary) -> Node3D:
 		meshes = vane.rest
 	for mesh: Dictionary in meshes:
 		node.add_child(_mesh_instance(mesh, "", style, tone))
+	for mesh: Dictionary in parts.get("glow", []):
+		node.add_child(_mesh_instance(mesh, "", style, tone))
 	if not vane.is_empty():
 		node.add_child(vane_node(vane, style, tone))
 	var mill: Dictionary = parts.get("mill", {})
@@ -655,8 +657,11 @@ func _mesh_instance(
 	var instance := MeshInstance3D.new()
 	instance.name = "%s%s_%s" % [prefix, mesh.role, mesh.kind]
 	instance.mesh = array_mesh
-	if mesh.role == StructureLook.OPENING:
+	if mesh.role == StructureLook.OPENING or mesh.kind == StructureGlow.KIND:
 		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if mesh.kind == StructureGlow.KIND:
+		# A halo's four vertices share one point: its bounds are empty, so give it room to be seen.
+		instance.extra_cull_margin = StructureGlow.CULL_MARGIN_M
 	instance.set_meta(TAGS_META, mesh.tags)
 	return instance
 
