@@ -1,0 +1,45 @@
+{
+ "out_dir": "render_jobs/licences_look",
+ "timeout_s": 120,
+ "hang_s": 45,
+ "steps": [
+  {"op": "wait_title"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "window", "size": "1600x900"},
+  {"op": "wait", "s": 1.0},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/licences.gd", "action": "about"},
+  {"op": "wait", "s": 1.0},
+  {"op": "capture", "name": "licences_1_about", "desc": "Settings, About: version, copyright, the View licences button and the Core library credit"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/licences.gd", "action": "open"},
+  {"op": "wait", "s": 1.2},
+  {"op": "call", "script": "res://tools/render_jobs/probes/licences.gd", "action": "report"},
+  {"op": "capture", "name": "licences_2_page_first", "desc": "The Licences page as opened: the list at the left, the game's own licence at the right"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/licences.gd", "action": "select", "id": "core_library"},
+  {"op": "wait", "s": 0.5},
+  {"op": "capture", "name": "licences_3_core", "desc": "The Core library selected: its credit line above the notice"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/licences.gd", "action": "select", "id": "tabler"},
+  {"op": "wait", "s": 0.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/licences.gd", "action": "focus_text"},
+  {"op": "wait", "s": 0.4},
+  {"op": "capture", "name": "licences_4_tabler_text_focus", "desc": "Tabler Icons selected, the notice pane focused (the ring on the pane)"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/licences.gd", "action": "select", "id": "godot"},
+  {"op": "wait", "s": 0.5},
+  {"op": "capture", "name": "licences_5_godot", "desc": "The Godot engine's own notice, from Engine.get_license_text()"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/licences.gd", "action": "select", "id": "godot_components"},
+  {"op": "wait", "s": 0.3},
+  {"op": "call", "script": "res://tools/render_jobs/probes/licences.gd", "action": "scroll", "to": 0.4},
+  {"op": "wait", "s": 0.4},
+  {"op": "call", "script": "res://tools/render_jobs/probes/licences.gd", "action": "report"},
+  {"op": "capture", "name": "licences_6_components_scrolled", "desc": "The engine components list scrolled partway, the scroll bar showing"},
+
+  {"op": "call", "script": "res://tools/render_jobs/probes/licences.gd", "action": "close"},
+  {"op": "wait", "s": 1.0},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

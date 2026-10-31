@@ -750,6 +750,77 @@ theme_type_variation = &"Caption"
 text = "Updates are checked automatically at startup."
 horizontal_alignment = 1
 
+[node name="About" type="ScrollContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer"]
+visible = false
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Margin" type="MarginContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/About"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"TabContentMargin"
+
+[node name="Content" type="VBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/About/Margin"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"BoxContainerSpaced"
+
+[node name="AboutVersion" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/About/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/About/Margin/Content/AboutVersion"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+theme_type_variation = &"Body"
+text = "TTSim"
+
+[node name="AboutVersionLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/About/Margin/Content/AboutVersion"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"Caption"
+text = "v0.0.0-dev"
+horizontal_alignment = 2
+
+[node name="AboutCopyright" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/About/Margin/Content"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Copyright (c) 2026 Hannah Shore. All rights reserved."
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/About/Margin/Content"]
+layout_mode = 2
+
+[node name="Licences" type="HBoxContainer" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/About/Margin/Content"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/About/Margin/Content/Licences"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"Body"
+text = "Licences"
+
+[node name="LicencesButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/About/Margin/Content/Licences"]
+script = ExtResource("animated_btn")
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Secondary"
+text = "View licences"
+
+[node name="LicencesInfo" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/About/Margin/Content"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "The Godot engine, the libraries, art and sounds
+this game is made with, and the terms they are shared under."
+horizontal_alignment = 1
+
+[node name="CoreCredit" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TabContainer/About/Margin/Content"]
+layout_mode = 2
+theme_type_variation = &"Caption"
+text = "Core library by Hannah Shore, CC BY 4.0"
+horizontal_alignment = 1
+
 [node name="HSeparator2" type="HSeparator" parent="CenterContainer/PanelContainer/VBoxContainer"]
 layout_mode = 2
 

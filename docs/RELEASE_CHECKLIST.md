@@ -100,20 +100,18 @@ All on `main`, working tree clean, nothing unpushed, no sharded gates running at
       - `addons/DragAndDrop3D` ("Easy Drag and Drop 3D", author DevDrache, upstream
         github.com/derdrache/DragAndDrop3D): the Godot asset library lists it as MIT, but the
         addon folder has no licence file. Copy the upstream LICENSE in (needs the upstream
-        text, not a paraphrase). `addons/brackeys_particle_controls` (Brackeys): licence
-        not found online by search; the Brackeys VFX bundle says its assets are CC0, which
-        does not necessarily cover the plugin code. Both need a file from upstream, or a
-        replacement. GAP, AGENT after the owner confirms the upstreams.
+        text, not a paraphrase). The Licences page lists it meanwhile with the Asset Library's
+        MIT note. `addons/brackeys_particle_controls` (Brackeys, no licence file found): an
+        editor-only preview dock that nothing used; removed 2026-10-31 (branch `licences`).
       - GAP, OWNER: the 36 PBR surface sets in `core` (`surfaces/`, 26 ground, 7 built, 3 cliff)
         have no recorded provenance in either repository. `NOTICE.md` claims no third-party
         material, and CC BY 4.0 cannot be applied to textures you do not hold. If they came
         from a CC0 source (ambientCG, Poly Haven) say which in `NOTICE.md` and here; if they
         were made in house, say so; if neither, they must not ship under CC BY.
-      - GAP, AGENT can fix: the game has no Licences screen. The Godot engine's MIT notice and
-        its third-party notices should be reachable in the shipped game (the engine exposes
-        `Engine.get_license_text()` and `Engine.get_license_info()`), or shipped as a file in
-        the export. Valve's `steam_api64.dll` also needs its Steamworks SDK redistribution
-        terms noted.
+      - Fixed (branch `licences`, 2026-10-31): Settings, About, Licences lists the Godot
+        engine's notices (`Engine.get_license_text()`, `get_copyright_info()`,
+        `get_license_info()`), every shipped item of `THIRD_PARTY_LICENSES.md` from
+        `data/third_party.json`, the Core library credit line and Valve's Steamworks note.
 - [x] The game's own licence: **all rights reserved** (owner, 2026-10-31). `LICENSE` at the
       tt-sim root is written (copyright Hannah Shore 2026, third-party material and addons
       excluded, Core library pointed at its CC BY 4.0 terms). There is no root README to add a

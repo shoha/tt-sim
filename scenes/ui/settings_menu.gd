@@ -48,6 +48,7 @@ const SECTIONS := [
 	["Controls", "mouse"],
 	["Network", "network"],
 	["Updates", "download"],
+	["About", "info-circle"],
 ]
 
 var header: MenuHeader
@@ -116,6 +117,10 @@ var _reset_tween: Tween
 @onready var prereleases_check: CheckButton = %PrereleasesCheck
 @onready var check_updates_button: Button = %CheckUpdatesButton
 @onready var update_status_label: Label = %UpdateStatus
+
+# About
+@onready var about_version_label: Label = %AboutVersionLabel
+@onready var licences_button: Button = %LicencesButton
 
 # Buttons
 @onready var reset_button: Button = %ResetButton
@@ -329,6 +334,9 @@ func _on_panel_ready() -> void:
 	# Updates
 	prereleases_check.toggled.connect(_on_prereleases_toggled)
 	check_updates_button.pressed.connect(_on_check_updates_pressed)
+
+	# About
+	licences_button.pressed.connect(_on_licences_pressed)
 
 	# Hide Updates tab for Steam users — Steam handles updates
 	if not OS.get_environment("SteamAppId").is_empty():
@@ -861,49 +869,7 @@ func _on_clear_cache_pressed() -> void:
 
 
 func _update_cache_info() -> void:
-	var cache_size = _get_cache_size()
-	var size_text = _format_size(cache_size)
-	cache_info_label.text = "Cache size: %s\nClearing will force re-download of assets." % size_text
-
-
-func _get_cache_size() -> int:
-	if not DirAccess.dir_exists_absolute(Paths.ASSET_CACHE_DIR):
-		return 0
-	return _get_dir_size(Paths.ASSET_CACHE_DIR)
-
-
-func _get_dir_size(path: String) -> int:
-	var total_size = 0
-	var dir = DirAccess.open(path)
-	if not dir:
-		return 0
-
-	dir.list_dir_begin()
-	var file_name = dir.get_next()
-	while file_name != "":
-		var full_path = path + "/" + file_name
-		if dir.current_is_dir():
-			if not file_name.begins_with("."):
-				total_size += _get_dir_size(full_path)
-		else:
-			var file = FileAccess.open(full_path, FileAccess.READ)
-			if file:
-				total_size += file.get_length()
-				file.close()
-		file_name = dir.get_next()
-	dir.list_dir_end()
-
-	return total_size
-
-
-func _format_size(bytes: int) -> String:
-	if bytes < 1024:
-		return "%d B" % bytes
-	if bytes < 1024 * 1024:
-		return "%.1f KB" % (bytes / 1024.0)
-	if bytes < 1024 * 1024 * 1024:
-		return "%.1f MB" % (bytes / (1024.0 * 1024.0))
-	return "%.1f GB" % (bytes / (1024.0 * 1024.0 * 1024.0))
+	cache_info_label.text = SettingsCacheInfo.caption()
 
 
 func _on_apply_pressed() -> void:
@@ -958,6 +924,13 @@ func _relaunch_with_rendering_method(value: String) -> void:
 
 func _update_version_info() -> void:
 	version_label.text = "v" + UpdateManager.get_current_version()
+	about_version_label.text = version_label.text
+
+
+## Opens the Licences page over Settings (the base class steps this sheet back and returns it,
+## with its focus, when the page closes).
+func _on_licences_pressed() -> void:
+	LicencesPanel.open(get_tree().root)
 
 
 func _on_prereleases_toggled(pressed: bool) -> void:

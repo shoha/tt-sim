@@ -1,0 +1,14 @@
+Sky panoramas (assets/skies/)
+
+The panoramas in assets/skies/ are ambientCG HDRIs released under the Creative Commons CC0 1.0
+Universal Public Domain Dedication (https://creativecommons.org/publicdomain/zero/1.0/). They
+were downscaled to 1024x512 and exposure-normalised; no attribution is required, and the
+sources are listed for provenance.
+
+clear_day.exr: Day Sky HDRI 055 A, https://ambientcg.com/a/DaySkyHDRI055A
+cloudy.exr: Day Sky HDRI 067 B, https://ambientcg.com/a/DaySkyHDRI067B
+overcast.exr: Day Sky HDRI 021 A, https://ambientcg.com/a/DaySkyHDRI021A
+morning.exr: Morning Sky HDRI 009 B, https://ambientcg.com/a/MorningSkyHDRI009B
+sunset.exr: Evening Sky HDRI 032 A, https://ambientcg.com/a/EveningSkyHDRI032A
+dusk.exr: Evening Sky HDRI 022 B, https://ambientcg.com/a/EveningSkyHDRI022B
+storm.exr: Day Sky HDRI 061 A, https://ambientcg.com/a/DaySkyHDRI061A

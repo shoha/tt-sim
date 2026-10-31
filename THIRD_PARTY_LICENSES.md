@@ -81,7 +81,7 @@ in `SHOTS`, faded in and out (raised cosine) and peak-normalized to -3 dBFS, 16-
 | File | Font | Licence |
 |---|---|---|
 | `assets/fonts/fraunces/Fraunces-Variable.ttf`, `Fraunces-Italic-Variable.ttf` | Fraunces, Copyright 2018 The Fraunces Project Authors (https://github.com/undercasetype/Fraunces) | SIL Open Font License 1.1, `assets/fonts/fraunces/OFL.txt` |
-| `assets/fonts/Inter-VariableFont_opsz,wght.ttf` | Inter, The Inter Project Authors (https://github.com/rsms/inter) | SIL Open Font License 1.1 (the licence text file is not in the repository yet, see the release checklist) |
+| `assets/fonts/Inter-VariableFont_opsz,wght.ttf` | Inter, The Inter Project Authors (https://github.com/rsms/inter) | SIL Open Font License 1.1, `assets/fonts/Inter-OFL.txt` |
 
 ## Vendored addons
 
@@ -94,8 +94,14 @@ Each addon under `addons/` carries its own licence file:
 | theme_gen | `addons/theme_gen/LICENSE.md` |
 | theme_gen_save_sync | `addons/theme_gen_save_sync/LICENSE.md` |
 | DragAndDrop3D | see `addons/DragAndDrop3D/` |
-| brackeys_particle_controls | see `addons/brackeys_particle_controls/` |
-| GodotSteam | see `addons/godotsteam/` |
+| GodotSteam | `addons/godotsteam/license.md` |
+
+`addons/brackeys_particle_controls` (Brackeys' Particle Controls, no licence file) was an
+editor-only preview dock that nothing in the game used; it was removed on 2026-10-31.
+
+Valve's Steamworks redistributable (`steam_api64.dll`, with the matching libraries for macOS and
+Linux, shipped inside `addons/godotsteam/`) belongs to Valve and is used under Valve's Steamworks
+terms; it is not covered by this project's licence.
 
 ## Native scatter library (native/)
 
@@ -106,3 +112,13 @@ carries these third-party sources:
 |---|---|---|
 | `native/thirdparty/FastNoiseLite.h` | FastNoiseLite by Jordan Peck and contributors, as vendored in Godot 4.7.2-stable (`thirdparty/misc/FastNoiseLite.h`, https://github.com/godotengine/godot), unmodified | MIT, header of the file |
 | `native/godot-cpp/` (submodule) | godot-cpp 10.0.0-stable, https://github.com/godotengine/godot-cpp | MIT, `native/godot-cpp/LICENSE.md` |
+
+## Licences page
+
+The game lists all of the above, the Core library's CC BY 4.0 credit line and the Godot
+engine's own notices (`Engine.get_license_text()`, `get_copyright_info()`, `get_license_info()`)
+under Settings, About, Licences. The page reads `data/third_party.json`; add an entry there for
+every item added to this file (`tests/unit/test_third_party_licences.gd` fails when the two
+differ). Addons the export filter leaves out (GUT, Icon Explorer, theme_gen) are listed in that
+file's `not_shipped`, not on the page. The licence texts it points at ship through the export
+presets' `include_filter`.
