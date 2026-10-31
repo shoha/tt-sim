@@ -150,7 +150,8 @@ func test_the_cap_faces_the_wind() -> void:
 	var pivot := nodes.mill_node(parts.mill, 2, "", "")
 	add_child_autofree(pivot)
 	var facing := pivot.basis * (parts.mill.axis as Vector3)
-	assert_gt(facing.dot(upwind), 0.9, "the sails face into the wind, within the sway")
+	var cone := cos(StructureWind.MILL_CONE_RAD)
+	assert_gt(facing.dot(upwind), cone - 0.001, "the sails stay within the cone about WIND_FROM")
 
 
 func test_mills_are_not_in_step_and_a_built_structure_carries_the_pivot() -> void:
