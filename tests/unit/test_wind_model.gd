@@ -31,10 +31,10 @@ func test_direction_is_a_unit_vector_and_wind_points_along_it() -> void:
 			assert_eq(w.y, 0.0)
 
 
-func test_default_direction_is_toward_minus_z() -> void:
+func test_default_direction_is_the_weather_particles_diagonal() -> void:
 	var dir := WindModel.direction_vec(WindPresets.state_for(0.0, -1.0, 0), 10.0)
-	assert_almost_eq(dir.x, 0.0, 0.00001)
-	assert_almost_eq(dir.y, -1.0, 0.00001)
+	assert_almost_eq(dir.x, 0.707107, 0.00001)
+	assert_almost_eq(dir.y, -0.707107, 0.00001)
 
 
 func test_no_nan_and_gust_in_range_over_a_grid() -> void:

@@ -6,9 +6,11 @@ extends RefCounted
 ## interpolates linearly, the ripple eased so it fades in late. Start values, tuned in the
 ## wind_a render round (docs/systems/wind.md "Phase (a) as built").
 
-## The direction the wind blows toward when a level sets none: -z, away from the default
-## camera (owner, 2026-10-30).
-const DEFAULT_DIR_ANGLE := -PI * 0.5
+## The direction the wind blows toward when a level sets none, the one place it is defined:
+## toward (0.707, 0, -0.707), the direction the weather particles always used (owner,
+## 2026-10-30, wind_b: a lateral component, so rain slant and gusts read against the camera and
+## the plants). Radians on (x, z), 0 = +x, 90 degrees = +z.
+const DEFAULT_DIR_ANGLE := -PI * 0.25
 
 ## Preset name -> its strength on the dial.
 const STRENGTH := {"calm": 0.0, "breezy": 0.33, "windy": 0.66, "storm": 1.0}
@@ -29,6 +31,17 @@ const COL_RIPPLE := 3
 const COL_VEER_AMP := 4
 const COL_VEER_PERIOD := 5
 const COL_SWAY := 6
+
+
+## The default direction as a unit vector on the map plane (y = 0).
+static func default_direction() -> Vector3:
+	return Vector3(cos(DEFAULT_DIR_ANGLE), 0.0, sin(DEFAULT_DIR_ANGLE))
+
+
+## The default direction in degrees as wind_direction_deg would spell it (0 = +x, 90 = +z,
+## wrapped into 0..360 so it is not the "default" sentinel below 0).
+static func default_direction_deg() -> float:
+	return fposmod(rad_to_deg(DEFAULT_DIR_ANGLE), 360.0)
 
 
 ## The state for [param strength] (clamped 0..1). [param direction_deg] below 0 means the
