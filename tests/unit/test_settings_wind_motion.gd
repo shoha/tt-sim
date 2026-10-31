@@ -92,3 +92,30 @@ func test_the_slider_row_is_named_and_explained() -> void:
 	assert_eq((menu.wind_motion_slider.get_parent().get_node("Label") as Label).text, "Wind motion")
 	assert_true(menu.wind_motion_slider.tooltip_text.contains("reduce-motion"))
 	assert_true(menu.wind_motion_slider.tooltip_text.contains("0 holds everything still"))
+
+
+func test_closing_without_apply_puts_the_saved_wind_back() -> void:
+	var config := ConfigFile.new()
+	config.set_value("graphics", "wind_motion", 0.3)
+	assert_eq(config.save(TEMP_PATH), OK)
+	var menu: SettingsMenu = SETTINGS_SCENE.instantiate()
+	add_child_autofree(menu)
+	menu.wind_motion_slider.value = 90.0
+	assert_almost_eq(Wind.wind_motion(), 0.9, 0.0001, "the slider moves the wind at once")
+	assert_almost_eq(SettingsWindMotion.revert(TEMP_PATH), 0.3, 0.0001)
+	assert_almost_eq(Wind.wind_motion(), 0.3, 0.0001, "a close without Apply reverts it")
+
+
+func test_closing_after_apply_keeps_the_applied_wind() -> void:
+	var menu: SettingsMenu = SETTINGS_SCENE.instantiate()
+	add_child_autofree(menu)
+	menu.wind_motion_slider.value = 40.0
+	menu._save_settings(TEMP_PATH)
+	assert_almost_eq(SettingsWindMotion.revert(TEMP_PATH), 0.4, 0.0001)
+	assert_almost_eq(Wind.wind_motion(), 0.4, 0.0001, "Apply saved it, so the close leaves it")
+
+
+func test_a_missing_settings_file_reverts_to_full_motion() -> void:
+	Wind.set_wind_motion(0.2)
+	assert_eq(SettingsWindMotion.revert("user://no_such_settings_file.cfg"), 1.0)
+	assert_eq(Wind.wind_motion(), 1.0)
