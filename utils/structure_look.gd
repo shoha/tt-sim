@@ -27,10 +27,17 @@ const FRAME := "frame"
 ## WALL role (material_role), so they match the wall; its soft and small parts, whose surface kinds
 ## are ORNAMENT_KINDS, keep their own painted vertex colours (StructureMaterials.ornament).
 const ORNAMENT := "ornament"
+## A Tree Core's leaf canopy (`tree/canopy`, surface kind `leaf`): painted like an ornament (the
+## greens procgen painted are kept) but drawn deeper, blotchier and with a faint sway
+## (StructureMaterials.canopy), so a crown reads as foliage and not as a pale hat.
+const CANOPY := "canopy"
+## A fountain's pool and jet (the Courtyard Paving's `fountain/water` and `fountain/jet`, surface
+## kind `glass`): a luminous cool tint with a gentle shimmer (StructureMaterials.water), not a pane.
+const WATER := "water"
 ## The surface kinds that keep the ORNAMENT role: foliage (`leaf`, `leaf_b`), `cloth` and `metal`
 ## (new free kinds: a host without their own shading falls back to masonry, wood or stone),
-## the small `wood` parts and the rose window's `glass`.
-const ORNAMENT_KINDS: Array[String] = ["leaf", "leaf_b", "cloth", "metal", "wood", "glass"]
+## the small `wood` parts, the rose window's `glass` and the Tree Core's `bark` (painted trunk).
+const ORNAMENT_KINDS: Array[String] = ["leaf", "leaf_b", "cloth", "metal", "wood", "glass", "bark"]
 ## The surface kinds a roof role is its own material for (card S6 had only planks): "wood" and
 ## "tile" the tile shader, slate, shingle, thatch and turf the style roof shader. A roof surface of
 ## any other kind (a gable end in plaster, a flat roof in adobe) is drawn as a wall.
@@ -40,7 +47,7 @@ const STYLE_WALL_KINDS: Array[String] = ["plaster", "adobe", "brick", "log"]
 ## The roof kinds the style roof shader draws, in its `pattern` order.
 const STYLE_ROOF_KINDS: Array[String] = ["slate", "shingle", "thatch", "turf"]
 ## Every role, in the order a structure's meshes are made.
-const ROLES: Array[String] = [WALL, ROOF, TRIM, CHIMNEY, OPENING, FRAME, ORNAMENT]
+const ROLES: Array[String] = [WALL, ROOF, TRIM, CHIMNEY, OPENING, FRAME, ORNAMENT, WATER, CANOPY]
 ## The surface kind of the panes and leaves (ProcgenGlazing.KIND); drawn unshaded from the vertex
 ## colours.
 const GLASS_KIND := "glass"
@@ -91,6 +98,9 @@ const NODE_ROLES: Dictionary = {
 	"sails": FRAME,
 	# Ornaments (ProcgenOrnaments): see ORNAMENT.
 	"ornament": ORNAMENT,
+	# The Tree Core (treehouse): bark trunk and roots, leaf canopy and rope ladder all keep the
+	# colours procgen painted and take the soft ornament light (ORNAMENT_KINDS holds `bark`).
+	"tree_core": ORNAMENT,
 }
 
 ## What each role multiplies a surface's tint by. A painterly wall or roof is drawn by the
@@ -162,6 +172,23 @@ static func role_of_slot(node_type: String, slot: String) -> String:
 			var part := slot.get_slice("/", 1) if slot.get_slice_count("/") > 1 else ""
 			if part == "pad" or part == "cap":
 				return TRIM
+		"tree_core":
+			# Slots "tree/root", "tree/trunk", "tree/canopy", "tree/rope", "tree/rung".
+			if last == "canopy":
+				return CANOPY
+		"round_court":
+			# Slots "court/wall", "court/window", "court/door", "court/gallery", "court/rail": the
+			# galleries, rails and doors are timber that keeps its own tone, the panes an opening.
+			match last:
+				"gallery", "rail", "door":
+					return FRAME
+				"window":
+					return OPENING
+		"courtyard_yard":
+			# Slots "fountain/basin", "fountain/pillar" (the paving's stone), "fountain/water",
+			# "fountain/jet" (glass kind): the pool and jet are water.
+			if last == "water" or last == "jet":
+				return WATER
 		"roof_cap":
 			# Slots "cap/dome", "cap/cone", "cap/inner", "cap/glass", "cap/disc", ...
 			match last:

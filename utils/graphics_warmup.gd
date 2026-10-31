@@ -43,6 +43,7 @@ const COVERED_SHADERS := [
 	"res://shaders/structure_style_roof.gdshader",
 	"res://shaders/structure_style_wall.gdshader",
 	"res://shaders/structure_wall.gdshader",
+	"res://shaders/structure_water.gdshader",
 	"res://shaders/submerged_marker.gdshader",
 	"res://shaders/texel_copy_blit.gdshader",
 	"res://shaders/token_ghost.gdshader",

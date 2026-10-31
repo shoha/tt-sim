@@ -17,10 +17,15 @@ const STYLE_WALL_SHADER := preload("res://shaders/structure_style_wall.gdshader"
 const STYLE_ROOF_SHADER := preload("res://shaders/structure_style_roof.gdshader")
 ## The ornaments' soft and small parts (StructureOrnaments): foliage, cloth, metal, small wood.
 const ORNAMENT_SHADER := preload("res://shaders/structure_ornament.gdshader")
+## A fountain's pool and jet (StructureLook.WATER): luminous aqua with a gentle shimmer.
+const WATER_SHADER := preload("res://shaders/structure_water.gdshader")
 ## Metal is lifted toward a warm gold, cloth a little brighter so a stripe stays a colour in shade.
 const METAL_TONE := Vector3(1.25, 1.12, 0.9)
 const CLOTH_TONE := Vector3(1.1, 1.08, 1.05)
 const LEAF_TONE := Vector3(0.92, 1.18, 0.82)
+## A treehouse crown is painted with less light than ivy (it is a big, lit mass) and sways this far.
+const CANOPY_EXPOSURE := 0.5
+const CANOPY_SWAY_M := 0.05
 
 ## The lift toward cream a grey rock gets (saturation about the texture's luminance, then a warm
 ## bias), for masonry, and for planks (already warm, so less).
@@ -68,6 +73,10 @@ static func make(
 	kind: String, role: String, style: String, root: String, tone: String = ""
 ) -> Material:
 	var material: Material = null
+	if role == StructureLook.WATER:
+		return water()
+	if role == StructureLook.CANOPY:
+		return canopy()
 	if role == StructureLook.ORNAMENT and kind != StructureLook.GLASS_KIND:
 		return ornament(kind)
 	match kind:
@@ -112,6 +121,22 @@ static func ornament(kind: String) -> ShaderMaterial:
 			material.set_shader_parameter("roughness_amount", 0.5)
 		"cloth":
 			material.set_shader_parameter("tone", CLOTH_TONE)
+	return material
+
+
+## A treehouse crown: the leaf ornament material deeper and blotchier than ivy, swaying a little.
+static func canopy() -> ShaderMaterial:
+	var material := ornament("leaf")
+	material.set_shader_parameter("exposure", CANOPY_EXPOSURE)
+	material.set_shader_parameter("blotch", 0.95)
+	material.set_shader_parameter("sway", CANOPY_SWAY_M)
+	return material
+
+
+## A fountain's pool and jet: unshaded luminous aqua with a slow shimmer (shaders/structure_water).
+static func water() -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = WATER_SHADER
 	return material
 
 

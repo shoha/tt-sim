@@ -630,6 +630,40 @@ blackhouse (modest, close to the thatched cottage), stave_church (dark timber an
 still the darkest tile) and crystal_spire (pale and tall; its cone is a bright teal, not luminous);
 weakest is dwarven_gatehall (the roof planks and tower tops stay near black under the bright meadow).
 
+### World gaps in the host (2026-10-30, branch `world_pins`; procgen pin 616644d; 100 core structures)
+
+Procgen's `world_gaps` card (`docs/world_styles.md` section 5) re-pinned `tulou`, `riad`, `treehouse`,
+`blackhouse` and `dwarven_gatehall` (no other digest moved; the courtyard paving's new `fountain: 0` default
+touched the recipe files of `coaching_inn`, `hof_farm` and `siheyuan`, not their pins) and added
+`moorish_souk` (family `house`, regional, 12 by 5 m) and `ice_lodge` (family `fantasy`, regional).
+Host side, in the real shaders:
+
+- **Round Court** (`tulou`): `round_court` is a wall node; its `court/gallery`, `court/rail` and `court/door`
+  are `FRAME` (timber keeping its own tone), `court/window` an `OPENING` (`StructureLook.role_of_slot`).
+  The tulou's roof palette is patched to a grey-blue tile (the style's browns made the ring one more brown
+  on the brown drum). The open court reads from the tabletop angle as a ring around a hole; the
+  galleries are not visible from outside.
+- **Fountain** (`riad`): `fountain/water` and `fountain/jet` (kind `glass`) take the new role `WATER`,
+  drawn by `shaders/structure_water.gdshader` (`StructureMaterials.water`): unshaded luminous aqua pulled
+  from the painted colour, two slow shimmer bands and a rim. The basin and pillar stay paving.
+- **Tree Core** (`treehouse`): `tree_core` is an `ORNAMENT` node and `bark` an ornament kind, so the trunk,
+  roots, rope and rungs keep procgen's painted colours under the soft ornament light. The crown
+  (`tree/canopy`, kind `leaf`) is the role `CANOPY` (`StructureMaterials.canopy`): the leaf material at
+  exposure 0.5 and blotch 0.95 with a 5 cm sway (`sway` uniform of the ornament shader, switched on by
+  `#define S_SWAY` in the shader; the painterly include's `vertex()` applies it).
+- `dwarven_gatehall`: the style's roof kind `stone` (flat roof, deck, merlons) came out near black as
+  modelled stone; the style patch takes it as `slate`, which the roof palette and style roof light draw
+  (a blue-grey slate; the merlons stay the darkest part). `ice_lodge`: `wall_kind: plaster` (the style's
+  boards rendered the near-white wall tones a brown timber). Tile framing: `TILE_ZOOM_FACTORS` tulou 1.0,
+  treehouse 2.6.
+
+Look verdicts (tabletop angle, tiles and `render_jobs/world_pins_*`): ice_lodge good (pale walls, blue
+slate hip, orange shutters), dwarven_gatehall fair to good (no black roof now), tulou fair to good (a
+ring around an open court, grey tile roof), treehouse fair (a hut on posts with a trunk stump and a
+blotchy green crown; the crown's flat facets still read low-poly), riad fair (the fountain's glow is
+visible only from the open side, behind the veranda rails), blackhouse fair (sod roof green, distinct
+from the thatch), moorish_souk weak to fair (a plain flat box with a porch).
+
 ## Dressing
 
 Probe B (2026-10-28, branch `probe-b`): a building is settled into its place by a yard,

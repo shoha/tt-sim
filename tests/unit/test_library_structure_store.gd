@@ -389,6 +389,7 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 				"hof_farm",
 			"house_flat",
 			"house_hip",
+			"ice_lodge",
 			"inn_gallery",
 			"ivy_manor",
 			"lake_dwelling",
@@ -397,6 +398,7 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 			"mansard_townhouse",
 			"market_hall",
 			"minka",
+			"moorish_souk",
 				"mushroom_cottage",
 			"pagoda_tower",
 			"porch_cottage",
@@ -460,7 +462,7 @@ func test_core_ships_the_five_starter_structures_with_matching_pins() -> void:
 		. strip_edges()
 		. split("\n")
 	)
-	assert_eq(pins.size(), 98)
+	assert_eq(pins.size(), 100)
 	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
 	var moved := PackedStringArray()
 	for line in pins:
@@ -496,7 +498,9 @@ func test_the_world_styles_are_regional_and_their_rows_are_valid() -> void:
 	PaletteLibrary.clear_cache()
 	LibraryRegistry.apply(PaletteLibrary.DEFAULT_ROOT)
 	var round_ids := ["yurt", "tulou", "trullo", "wizard_tower", "mushroom_cottage", "crystal_spire"]
-	for id: String in round_ids + ["blackhouse", "riad", "sahel_mosque", "stave_church"]:
+	for id: String in (
+		round_ids + ["blackhouse", "riad", "sahel_mosque", "stave_church", "moorish_souk", "ice_lodge"]
+	):
 		var row := LibraryStructureStore.structure("core:" + id)
 		assert_false(row.is_empty(), "%s is in core" % id)
 		assert_true(StreetSplit.REGIONAL_TAG in (row["tags"] as Array), "%s is regional" % id)
