@@ -32,6 +32,35 @@ const MASKS: Array = [
 	["flower_boxes", "awning"],
 ]
 const HITCH := "Perf3Hitch"
+const STAGED := "Perf4Staged"
+
+
+## Records the frame times from a staged create until no structure is pending.
+class StagedRecorder:
+	extends Node
+	var nodes: AuthoredStructures
+	var create_ms := 0.0
+	var frames := PackedFloat64Array()
+	var done := false
+	var total_ms := 0.0
+	var _last_us := 0
+	var _start_us := 0
+
+	func begin() -> void:
+		process_mode = Node.PROCESS_MODE_ALWAYS
+		process_priority = 97
+		_start_us = Time.get_ticks_usec()
+		_last_us = _start_us
+
+	func _process(_delta: float) -> void:
+		if done or not is_instance_valid(nodes):
+			return
+		var now := Time.get_ticks_usec()
+		frames.append((now - _last_us) / 1000.0)
+		_last_us = now
+		if nodes.pending_count() == 0:
+			done = true
+			total_ms = (now - _start_us) / 1000.0
 
 
 class Hitch:
@@ -76,6 +105,10 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _fill(base, editor, int(step.get("from", 0)), int(step.get("to", 128)))
 		"load":
 			return _load(editor, int(step.get("count", 128)))
+		"load_staged":
+			return _load_staged(base, editor, int(step.get("count", 128)))
+		"load_staged_report":
+			return _load_staged_report(base)
 		"cap":
 			return _cap(base, editor)
 		"hitch_start":
@@ -150,6 +183,73 @@ static func _load(editor: AuthoringEditor, count: int) -> String:
 		% [count, worker_ms, str(decor), main_ms, main_ms / maxf(count, 1), nodes.get_child_count()]
 	)
 	nodes.free()
+	return text
+
+
+## `load` with the nodes staged (perf4, what a play load does now): a second AuthoredStructures
+## `count` lots strong is created with staged = true under the map root and a sampler records
+## every frame until nothing is pending. Read the result with `load_staged_report`.
+static func _load_staged(base: Node, editor: AuthoringEditor, count: int) -> String:
+	var rows := LibraryStructureStore.structures("core")
+	var doc := StructureGeometry.ground_snapshot(editor.document)
+	doc.structures.clear()
+	for k in count:
+		var structure := lot(rows, k)
+		structure.id = k + 1
+		doc.structures.append(structure)
+	StructureRecipes.ensure_served()
+	var built := StructureGeometry.build(doc, true, StructureDecor.available())
+	var old := base.get_tree().root.get_node_or_null(STAGED)
+	if old != null:
+		old.free()
+	var recorder := StagedRecorder.new()
+	recorder.name = STAGED
+	base.get_tree().root.add_child(recorder)
+	var t0 := Time.get_ticks_usec()
+	var nodes := AuthoredStructures.create(doc, built, PaletteLibrary.DEFAULT_ROOT, true)
+	nodes.name = "AuthoredStructuresStaged"
+	var create_ms := (Time.get_ticks_usec() - t0) / 1000.0
+	var ctrl: AuthoringController = base.get("_authoring_controller")
+	var t1 := Time.get_ticks_usec()
+	StructureGeometry.keys_of(doc, StructureDecor.available())
+	var keys_ms := (Time.get_ticks_usec() - t1) / 1000.0
+	print("load_staged: keys_of %.1f ms of the create (the rest: plant plans, cache)" % keys_ms)
+	ctrl.map_root.add_child(nodes)
+	recorder.nodes = nodes
+	recorder.create_ms = create_ms
+	recorder.begin()
+	return "load_staged %d: create %.1f ms main, %d pending" % [count, create_ms, nodes.pending_count()]
+
+
+static func _load_staged_report(base: Node) -> String:
+	var recorder := base.get_tree().root.get_node_or_null(STAGED) as StagedRecorder
+	if recorder == null:
+		return "no staged sampler"
+	var sorted := recorder.frames.duplicate()
+	sorted.sort()
+	var over20 := 0
+	for ms in sorted:
+		over20 += 1 if ms > 20.0 else 0
+	var text := (
+		(
+			"load_staged: done %s after %d frames (%.0f ms), create %.1f ms, worst frame %.1f ms, "
+			+ "median %.1f, over 20 ms: %d, %d nodes, pending %d"
+		)
+		% [
+			str(recorder.done),
+			sorted.size(),
+			recorder.total_ms,
+			recorder.create_ms,
+			sorted[sorted.size() - 1] if sorted.size() > 0 else 0.0,
+			sorted[sorted.size() / 2] if sorted.size() > 0 else 0.0,
+			over20,
+			recorder.nodes.get_child_count() if is_instance_valid(recorder.nodes) else -1,
+			recorder.nodes.pending_count() if is_instance_valid(recorder.nodes) else -1
+		]
+	)
+	if is_instance_valid(recorder.nodes):
+		recorder.nodes.free()
+	recorder.free()
 	return text
 
 

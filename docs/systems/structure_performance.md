@@ -151,6 +151,33 @@ What changed in the code:
   over 20 ms from 33 to 22. It is not zero: the remaining hitches are the main thread waiting on the
   allocator while four workers rebuild neighbours, and the add itself (36 ms).
 
+## Fourth round: the staged load (perf4, 2026-10-31)
+
+A play load now makes the structures' nodes a few a frame. `MapSourceLoader.staged_structures` (set by
+`LevelPlayLoader.load_map_sources_async` only; authoring and tools keep the synchronous create) passes
+`staged = true` to `AuthoredStructures.create`, and `LevelPlayLoader._finalize_map_loading` then waits in
+`StructureLoadWait.wait_async` until `pending_count() == 0`, reporting "Building structures... (n/total)" on
+the loading bar (the 0.05 to 0.2 share). So play never starts with a structure missing, the grid-ground fit
+and the token grounding see every roof's collision, and a superseded load cancels the queue
+(`StructureLoadWait.cancel`). `StructureLoadWait.settle` installs the queue at once before an edit
+(`StructureEditor.apply_list`), so a refresh never rebuilds a structure whose finished build is queued. The
+wait is bounded: at least one structure a frame, and after `MAX_FRAMES` (600) or when the node is outside
+the tree the rest is made at once. The client download path calls `_finalize_map_loading` without awaiting
+it, so there the wait runs behind the play start (installs still finish within the budget a frame).
+
+Measured with `probes/structure_perf3.gd` `load` and `load_staged` (job `perf4_staged`, 128 lots of the
+core recipes with ornament masks, 320 m map; indicative, the GPU was shared), two runs each:
+
+| | main-thread make | worst frame while installing | frames |
+|---|---|---|---|
+| before (synchronous create) | 612 ms, 339 ms in one frame | the same frame | 1 |
+| after (staged) | create 159 and 165 ms, then 3 ms a frame | 116 and 58 ms (the first installs) | 51 |
+
+What is left in the one create frame (headless probe, 128 cottages with ornaments): the decor library info
+(`_decor_info`, 108 ms the first time, loading plant meshes), the plant plans for a loader's parts (44 ms,
+`plan_missing`) and the keys (25 ms, the ground under every footprint). A loader that read the library on its
+worker (`AuthoredLoadPrep` with decor info) would take the first two off the main thread.
+
 ## Open follow-ups, ranked
 
 1. Procgen: profile and speed up `evaluate_structure` on the facade, layout and courtyard nodes, starting

@@ -58,6 +58,10 @@ var separate_props: bool = false
 ## water and crossing nodes stay as play makes them; an edit that needs one makes it
 ## (AuthoredWater.refresh_map, AuthoredCrossings.of_map).
 var keep_props_apart: bool = false
+## Play makes the structures' nodes a few a frame (AuthoredStructures.create's `staged`) and
+## its load waits for them (StructureLoadWait.wait_async) instead of holding one frame for all of
+## them. Authoring and tools leave it false: their structures stand when the load returns.
+var staged_structures: bool = false
 ## func() -> bool: true when a newer load or a reset replaced this one while it waited;
 ## everything built is freed and the load returns null.
 var is_superseded: Callable = func() -> bool: return false
@@ -204,7 +208,7 @@ func _build_async(glb_path: String, cells: Dictionary) -> Node3D:
 	if root.get_node_or_null(NodePath(AuthoredWalls.NODE_NAME)) == null:
 		add_authored_walls(root, document)
 	if root.get_node_or_null(NodePath(AuthoredStructures.NODE_NAME)) == null:
-		add_authored_structures(root, document)
+		add_authored_structures(root, document, {}, staged_structures)
 	if root.get_node_or_null(NodePath(AuthoredSettlements.NODE_NAME)) == null:
 		add_authored_settlements(root, document)
 	add_fire_field(root, document)
@@ -292,13 +296,14 @@ static func add_authored_settlements(root: Node3D, doc: MapDocument) -> Authored
 
 
 ## Adds the document's structures (AuthoredStructures) to a map root. Nothing without a document
-## or a structure. `built` is the geometry a worker built (AuthoredStructures.create).
+## or a structure. `built` is the geometry a worker built (AuthoredStructures.create); `staged`
+## leaves the nodes to be made a few a frame (StructureLoadWait waits for them).
 static func add_authored_structures(
-	root: Node3D, doc: MapDocument, built: Dictionary = {}
+	root: Node3D, doc: MapDocument, built: Dictionary = {}, staged: bool = false
 ) -> AuthoredStructures:
 	if doc == null or doc.structures.is_empty():
 		return null
-	var structures := AuthoredStructures.create(doc, built)
+	var structures := AuthoredStructures.create(doc, built, PaletteLibrary.DEFAULT_ROOT, staged)
 	root.add_child(structures)
 	return structures
 
@@ -398,7 +403,9 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 		if is_superseded.call():
 			root.free()
 			return null
-		add_authored_structures(root, doc, prepared.get(AuthoredLoadPrep.STRUCTURES, {}))
+		add_authored_structures(
+			root, doc, prepared.get(AuthoredLoadPrep.STRUCTURES, {}), staged_structures
+		)
 	if not doc.settlements.is_empty():
 		await tree.process_frame
 		if is_superseded.call():
