@@ -20,15 +20,25 @@ const MOUNT_KINDS := {"wall": KIND_IVY, "sill": KIND_PLANTER}
 const ANCHOR_KINDS := {"ivy": KIND_IVY, "box": KIND_PLANTER}
 ## A patch smaller than the smallest ivy class scales a plant down, but never below this (uniform).
 const MIN_SCALE := 0.75
-## A planter is scaled to its box by at most this much either way (uniform).
+## A planter is scaled by at most this much either way (uniform). plant_decor4: a planter is drawn
+## PLANTER_BOOST times its asset size (the class chosen is the one nearest the box width over the
+## boost), but never wider than the box plus PLANTER_OVERHANG.
 const PLANTER_SCALE_MIN := 0.8
-const PLANTER_SCALE_MAX := 1.25
+const PLANTER_SCALE_MAX := 1.5
+const PLANTER_BOOST := 1.5
+const PLANTER_OVERHANG := 0.10
+## Ivy dressing (plant_decor4): scale variation either way (uniform), the most a plant turns about
+## the wall normal, and the most it moves off its slot as a share of its own size.
+const SCALE_VARIATION := 0.15
+const MAX_TURN_DEGREES := 8.0
+const JITTER := 0.15
 ## Tolerance when a patch is compared with a class: a patch 1 cm over still fits.
 const FIT_EPS := 0.01
-## Ivy keeps this far from every opening (plant_decor2 set 0.2 m, plant_decor3 2026-10-30 lowered it
-## to 0.10): the baked leaves overhang their patch by about 0.1 m a side, so a leaf may just touch
-## a frame's edge, the way real ivy does, and does not reach the glass.
-const OPENING_MARGIN := 0.10
+## Ivy keeps this far from every opening (plant_decor2 set 0.2 m, plant_decor3 0.10, plant_decor4
+## 0.03 on the owner's word, 2026-10-30): the baked leaves overhang their patch by about 0.1 m a
+## side, so a leaf may cross a frame slightly, the way real ivy does; the render check keeps the
+## glass clear.
+const OPENING_MARGIN := 0.03
 ## Beside an opening a plant may shrink this far (uniform) to fit the free rectangle; below it the
 ## plant is left out (plant_decor3: 0.6, was 0.4, so no plant is shrunk to a scrap; a smaller gap is
 ## filled by a narrower or flatter asset, or stays bare).
@@ -40,7 +50,7 @@ const MAX_COLUMNS := 12
 const FIT_GAIN := 1.08
 ## Plants in a row or column of one rectangle may overlap by this much of their extent (the second
 ## variant over the first), which fills a rectangle more densely than tiles that only touch.
-const MAX_OVERLAP := 0.25
+const MAX_OVERLAP := 0.35
 ## The shapes of ivy assets by the aspect (width over height) of their patch: a pier strip is at
 ## most this wide for its height, a band at least this wide, anything between is a square patch.
 const STRIP_MAX_ASPECT := 0.5
@@ -257,23 +267,53 @@ static func _ivy_placements(
 	if not open.is_empty():
 		runs = free_rects(width, height, open, OPENING_MARGIN)
 	var salt := 0
+	var seed_value := int(anchor.get("seed", 0)) + index * 7919
+	var bounded := not open.is_empty()
 	for run: Array in runs:
 		var run_w := float(run[2]) - float(run[0])
 		var run_h := float(run[3]) - float(run[1])
-		var fit := _fit(classes, run_w, run_h, not open.is_empty())
+		var fit := _fit(classes, run_w, run_h, bounded)
 		if fit.is_empty():
 			continue
 		var chosen: Dictionary = fit.chosen
-		var scale: float = fit.scale
 		var cols: int = fit.cols
 		var rows: int = fit.rows
 		var tile_w := run_w / cols
 		var tile_h := run_h / rows
 		var size: Vector2 = chosen.size
+		var ids: Array[String] = []
+		ids.assign(chosen.ids)
+		var picked := {}
 		for row in rows:
 			for col in cols:
-				var centre_x := float(run[0]) + float(fit.x0) + col * float(fit.pitch_x)
-				var foot_y := float(run[1]) + row * float(fit.pitch_y)
+				var dressed := dress(
+					{
+						"seed": seed_value,
+						"salt": salt,
+						"run": run,
+						"size": size,
+						"scale": float(fit.scale),
+						"bounded": bounded,
+						"centre_x": float(run[0]) + float(fit.x0) + col * float(fit.pitch_x),
+						"foot_y": float(run[1]) + row * float(fit.pitch_y),
+						"pitch_x": float(fit.pitch_x),
+						"row": row,
+						"col": col,
+						"cols": cols,
+						"rows": rows,
+						"pitch_y": float(fit.pitch_y),
+					}
+				)
+				var id := _unlike(
+					ids,
+					seed_value,
+					salt,
+					[picked.get(Vector2i(col - 1, row)), picked.get(Vector2i(col, row - 1))]
+				)
+				picked[Vector2i(col, row)] = id
+				var scale: float = dressed.scale
+				var centre_x: float = dressed.origin.x
+				var foot_y: float = dressed.origin.y
 				var origin: Vector3 = (
 					anchor.origin
 					+ (anchor.along as Vector3) * centre_x
@@ -283,18 +323,125 @@ static func _ivy_placements(
 					out
 					. append(
 						{
-							"id": variant_of(chosen.ids, int(anchor.get("seed", 0)), salt),
+							"id": id,
 							"kind": KIND_IVY,
-							"transform": _frame(anchor, origin, scale),
+							"transform": _frame(anchor, origin, scale, float(dressed.angle)),
 							"anchor": index,
 							"size": Vector2(tile_w, tile_h),
 							"extent": size * scale,
+							"angle": float(dressed.angle),
 							"exclusions": _shifted(open, centre_x, foot_y),
 						}
 					)
 				)
 				salt += 1
 	return out
+
+
+## A variant of `ids` for draw `salt` that differs from every id of `avoid` (the neighbours to the
+## left and below) when another variant exists.
+static func _unlike(ids: Array[String], seed_value: int, salt: int, avoid: Array) -> String:
+	var first := variant_of(ids, seed_value, salt)
+	if ids.size() < 2:
+		return first
+	var at := ids.find(first)
+	for step in ids.size():
+		var candidate := ids[(at + step) % ids.size()]
+		if not avoid.has(candidate):
+			return candidate
+	return first
+
+
+## A number in [-1, 1] for the `channel` of draw `salt` of an anchor seeded `seed_value`: integer
+## hashing only, so every peer dresses a wall the same way.
+static func unit(seed_value: int, salt: int, channel: int) -> float:
+	var h := (seed_value * 73856093) ^ (salt * 19349663) ^ (channel * 83492791)
+	h = (h ^ (h >> 13)) * 1274126177
+	h = h ^ (h >> 16)
+	return float(posmod(h, 2001)) / 1000.0 - 1.0
+
+
+## The unrotated plant sizes: the box (width, height) of a `size` by `scale` plant turned `angle`.
+static func turned_box(size: Vector2, scale: float, angle: float) -> Vector2:
+	var w := size.x * scale
+	var h := size.y * scale
+	var c := absf(cos(angle))
+	var s := absf(sin(angle))
+	return Vector2(w * c + h * s, w * s + h * c)
+
+
+## One ivy plant of a tier dressed so a wall does not read as a grid (plant_decor4, 2026-10-30):
+## `cell` {seed, salt, run [x0, y0, x1, y1], size (class), scale (fit), bounded, centre_x, foot_y
+## (the grid slot), pitch_x, pitch_y, row, col, cols, rows}. Returns {origin (Vector2: foot centre,
+## anchor frame, after the plant is turned about its own centre), scale, angle}. The scale varies
+## 0.85 to 1.15
+## (uniform), the plant turns up to MAX_TURN about the wall normal, moves by up to JITTER of its
+## size and odd tiers are shifted by half a pitch. Beside an opening (`bounded`) the turned box
+## stays inside the run and the scale stays within [FIT_MIN_SCALE, the largest that fits], so the
+## margin from the glass holds exactly; on an open wall only the ground and the run's sides limit
+## it.
+static func dress(cell: Dictionary) -> Dictionary:
+	var seed_value: int = cell.seed
+	var salt: int = cell.salt
+	var run: Array = cell.run
+	var size: Vector2 = cell.size
+	var bounded: bool = cell.bounded
+	var fit_scale: float = cell.scale
+	var run_w := float(run[2]) - float(run[0])
+	var run_h := float(run[3]) - float(run[1])
+	var scale := fit_scale * (1.0 + SCALE_VARIATION * unit(seed_value, salt, 0))
+	if bounded:
+		var biggest := minf(run_w / size.x, run_h / size.y)
+		scale = clampf(scale, minf(FIT_MIN_SCALE, biggest), maxf(biggest, fit_scale))
+	else:
+		scale = maxf(scale, MIN_SCALE)
+	var angle := deg_to_rad(MAX_TURN_DEGREES) * unit(seed_value, salt, 1)
+	var box := turned_box(size, scale, angle)
+	for _i in 3:
+		if not bounded or (box.x <= run_w + 1e-4 and box.y <= run_h + 1e-4):
+			break
+		angle *= 0.5
+		box = turned_box(size, scale, angle)
+	if bounded and (box.x > run_w + 1e-4 or box.y > run_h + 1e-4):
+		angle = 0.0
+		box = turned_box(size, scale, angle)
+	var w := size.x * scale
+	var h := size.y * scale
+	var cols: int = cell.cols
+	var pitch_x: float = cell.pitch_x
+	# Odd tiers are staggered: half a pitch for three columns or more, a quarter for two (the row is
+	# compressed toward its far side so it stays inside the run and keeps its neighbours apart), a
+	# quarter of a plant to the side for one column.
+	var shift := 0.0
+	var spacing := pitch_x
+	if int(cell.row) % 2 == 1:
+		if cols > 1:
+			var stagger := pitch_x * (0.5 if cols >= 3 else 0.25)
+			shift = stagger * (1.0 - float(cell.col) / (cols - 1))
+			spacing = pitch_x - stagger / (cols - 1)
+		else:
+			shift = w * 0.25 * (1.0 if (int(cell.row) >> 1) % 2 == 0 else -1.0)
+	# Jitter, held so neighbours never overlap by more than half a plant (a lone one moves freely).
+	var amp_x := JITTER * w if cols <= 1 else clampf((spacing - 0.5 * w) * 0.5, 0.0, JITTER * w)
+	var rows: int = cell.rows
+	var pitch_y: float = cell.pitch_y
+	var amp_y := JITTER * h if rows <= 1 else clampf((pitch_y - 0.5 * h) * 0.5, 0.0, JITTER * h)
+	shift += amp_x * unit(seed_value, salt, 2)
+	var lift := amp_y * unit(seed_value, salt, 3)
+	var cx: float = float(cell.centre_x) + shift
+	var cy: float = float(cell.foot_y) + h * 0.5 + lift
+	var x_lo := float(run[0]) + box.x * 0.5
+	var x_hi := float(run[2]) - box.x * 0.5
+	var y_lo := float(run[1]) + box.y * 0.5
+	if bounded:
+		cx = clampf(cx, x_lo, maxf(x_lo, x_hi))
+		cy = clampf(cy, y_lo, maxf(y_lo, float(run[3]) - box.y * 0.5))
+	else:
+		cx = clampf(cx, float(run[0]), float(run[2]))
+		cy = maxf(cy, y_lo)
+	# The foot centre of the plant turned about (cx, cy).
+	var foot := Vector2(cx + sin(angle) * h * 0.5, cy - cos(angle) * h * 0.5)
+	return {"origin": foot, "scale": scale, "angle": angle}
 
 
 ## The layout of a `run_w` by `run_h` rectangle: {chosen (class), scale, cols, rows}. Free
@@ -454,11 +601,19 @@ static func _planter_placements(
 	anchor: Dictionary, index: int, classes: Array[Dictionary]
 ) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	var chosen := planter_class(classes, float(anchor.width))
+	# plant_decor4 (owner, 2026-10-30): planters read small at tabletop zoom, so a smaller class is
+	# drawn PLANTER_BOOST times larger (uniform, about its foot, so it still sits on the sill), never
+	# wider than the box plus PLANTER_OVERHANG.
+	var chosen := planter_class(classes, float(anchor.width) / PLANTER_BOOST)
 	if chosen.is_empty():
 		return out
 	var size: Vector2 = chosen.size
-	var scale := clampf(float(anchor.width) / size.x, PLANTER_SCALE_MIN, PLANTER_SCALE_MAX)
+	var scale := clampf(
+		minf(PLANTER_BOOST, float(anchor.width) * (1.0 + PLANTER_OVERHANG) / size.x),
+		PLANTER_SCALE_MIN,
+		PLANTER_SCALE_MAX
+	)
+	scale = minf(scale, float(anchor.width) * (1.0 + PLANTER_OVERHANG) / size.x)
 	(
 		out
 		. append(
@@ -477,8 +632,10 @@ static func _planter_placements(
 
 
 ## The frame of an anchor at `origin`: x along the wall, y up, z out of it, uniformly scaled.
-static func _frame(anchor: Dictionary, origin: Vector3, scale: float) -> Transform3D:
-	var basis := Basis(anchor.along, anchor.up, anchor.normal)
+static func _frame(
+	anchor: Dictionary, origin: Vector3, scale: float, angle: float = 0.0
+) -> Transform3D:
+	var basis := Basis(anchor.normal, angle) * Basis(anchor.along, anchor.up, anchor.normal)
 	return Transform3D(basis.scaled(Vector3.ONE * scale), origin)
 
 

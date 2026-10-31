@@ -117,22 +117,25 @@ func test_an_ivy_anchor_gives_one_plant_in_the_anchors_frame() -> void:
 	var plant := out[0]
 	assert_eq(plant.id, "decor:core:Ivy_M_v0")
 	var t: Transform3D = plant.transform
-	assert_true(t.origin.is_equal_approx(Vector3(2.0, 0.5, 3.0)))
-	assert_true(t.basis.x.is_equal_approx(Vector3(1, 0, 0)), "x along the wall")
-	assert_true(t.basis.y.is_equal_approx(Vector3.UP))
-	assert_true(t.basis.z.is_equal_approx(Vector3(0, 0, 1)), "z out of the wall")
-	assert_almost_eq(t.basis.get_scale().x, 1.0, 0.0001)
+	# Dressed (plant_decor4): within a jitter of its slot, turned only about the wall normal.
+	assert_lt(absf(t.origin.x - 2.0), 0.6, "near the slot's centre")
+	assert_true(t.basis.z.normalized().is_equal_approx(Vector3(0, 0, 1)), "z out of the wall")
+	assert_almost_eq(t.origin.z, 3.0, 0.0001, "the foot stays on the wall plane")
+	var turn := t.basis.x.normalized().angle_to(Vector3(1, 0, 0))
+	assert_lte(turn, deg_to_rad(StructureDecor.MAX_TURN_DEGREES) + 0.0001, "x along the wall")
+	var scale := t.basis.get_scale().x
+	assert_between(scale, 0.85 - 0.0001, 1.15 + 0.0001, "scale variation")
 
 
 func test_a_plant_is_scaled_uniformly_and_never_below_the_floor() -> void:
 	var tiny := StructureDecor.placements([_anchor("ivy", 0.5, 0.4)], _rows())[0]
 	var scale: Vector3 = (tiny.transform as Transform3D).basis.get_scale()
-	assert_almost_eq(scale.x, StructureDecor.MIN_SCALE, 0.0001)
+	assert_gte(scale.x, StructureDecor.MIN_SCALE - 0.0001)
 	assert_almost_eq(scale.y, scale.x, 0.0001)
 	assert_almost_eq(scale.z, scale.x, 0.0001)
 	var near := StructureDecor.placements([_anchor("ivy", 1.1, 1.1)], _rows())[0]
 	var near_scale: Vector3 = (near.transform as Transform3D).basis.get_scale()
-	assert_almost_eq(near_scale.x, 1.1 / 1.2, 0.0001, "a patch a little under S scales to fit")
+	assert_between(near_scale.x, 1.1 / 1.2 * 0.85 - 0.001, 1.1 / 1.2 * 1.15 + 0.001, "near its fit")
 
 
 func test_a_patch_bigger_than_the_largest_class_is_tiled() -> void:
@@ -143,16 +146,16 @@ func test_a_patch_bigger_than_the_largest_class_is_tiled() -> void:
 		xs.append((plant.transform as Transform3D).origin.x)
 		assert_true(plant.size.x <= 2.2 + 0.001)
 	xs.sort()
-	# along is +x: the tiles are centred at -2.5 + (i + 0.5) * 5/3 along it.
-	assert_almost_eq(xs[0], 2.0 + (-2.5 + 0.5 * 5.0 / 3.0), 0.001)
-	assert_almost_eq(xs[2], 2.0 + (-2.5 + 2.5 * 5.0 / 3.0), 0.001)
+	# along is +x: the tiles are centred at -2.5 + (i + 0.5) * 5/3 along it, then dressed.
+	assert_almost_eq(xs[0], 2.0 + (-2.5 + 0.5 * 5.0 / 3.0), 0.5)
+	assert_almost_eq(xs[2], 2.0 + (-2.5 + 2.5 * 5.0 / 3.0), 0.5)
 	var tall := StructureDecor.placements([_anchor("ivy", 1.0, 5.0)], _rows())
 	assert_eq(tall.size(), 2)
 	var ys: Array[float] = []
 	for plant in tall:
 		ys.append((plant.transform as Transform3D).origin.y)
 	ys.sort()
-	assert_almost_eq(ys[1] - ys[0], 2.5, 0.001, "the second tile starts where the first ends")
+	assert_almost_eq(ys[1] - ys[0], 2.5, 1.0, "the second tile starts about where the first ends")
 
 
 func _sorted_rects(rects: Array) -> Array:
@@ -170,10 +173,14 @@ func test_free_rects_are_the_patch_minus_the_grown_openings() -> void:
 	var want := [
 		[-2.5, 0.0, -0.7, 2.5], [-0.7, 0.0, 0.7, 0.6], [-0.7, 2.0, 0.7, 2.5], [0.7, 0.0, 2.5, 2.5]
 	]
-	assert_eq(rects.size(), 4, "the wall left of it, the band below, the band above, the wall right")
+	assert_eq(
+		rects.size(), 4, "the wall left of it, the band below, the band above, the wall right"
+	)
 	for i in 4:
 		for k in 4:
-			assert_almost_eq(float(rects[i][k]), float(want[i][k]), 0.0001, "rect %d edge %d" % [i, k])
+			assert_almost_eq(
+				float(rects[i][k]), float(want[i][k]), 0.0001, "rect %d edge %d" % [i, k]
+			)
 	assert_eq(StructureDecor.free_rects(2.0, 1.0, [], 0.2).size(), 1, "no opening: the patch")
 	assert_eq(
 		StructureDecor.free_rects(1.0, 1.0, [[-0.5, 0.0, 0.5, 1.0]], 0.2).size(), 0, "all covered"
@@ -182,9 +189,10 @@ func test_free_rects_are_the_patch_minus_the_grown_openings() -> void:
 	assert_eq(door.size(), 3, "a door from the foot: both sides and the strip over it")
 
 
-func test_the_margin_is_a_little_under_the_leaf_overhang() -> void:
-	# The baked leaves overhang their patch by about 0.1 m: a leaf may just touch a frame.
-	assert_between(StructureDecor.OPENING_MARGIN, 0.08, 0.10, "0.08 to 0.10 m")
+func test_the_margin_lets_a_leaf_cross_a_frame_slightly() -> void:
+	# The baked leaves overhang their patch by about 0.1 m: the owner asked for leaves that cross
+	# a frame slightly (2026-10-30), so the margin is a few centimetres.
+	assert_between(StructureDecor.OPENING_MARGIN, 0.02, 0.05, "about 0.03 m")
 	assert_almost_eq(StructureDecor.FIT_MIN_SCALE, 0.6, 0.0001, "no plant is shrunk to a scrap")
 
 
@@ -250,7 +258,9 @@ func test_a_plant_beside_an_opening_is_never_shrunk_below_the_floor() -> void:
 		)
 		for plant in out:
 			var scale: float = (plant.transform as Transform3D).basis.get_scale().x
-			assert_gte(scale, StructureDecor.FIT_MIN_SCALE - 0.0001, "%s wide: %s" % [width, plant.id])
+			assert_gte(
+				scale, StructureDecor.FIT_MIN_SCALE - 0.0001, "%s wide: %s" % [width, plant.id]
+			)
 
 
 func test_shaped_plants_never_reach_an_opening_grown_by_the_margin() -> void:
@@ -258,7 +268,8 @@ func test_shaped_plants_never_reach_an_opening_grown_by_the_margin() -> void:
 	for width in [2.5, 3.0, 4.0, 5.0, 7.0]:
 		for height in [1.5, 2.5, 3.5]:
 			var open := windows.filter(
-				func(r: Array) -> bool: return r[0] >= -float(width) * 0.5 and r[2] <= float(width) * 0.5
+				func(r: Array) -> bool:
+					return r[0] >= -float(width) * 0.5 and r[2] <= float(width) * 0.5
 			)
 			var out := StructureDecor.placements(
 				[_anchor("ivy", width, height, open)], _shaped_rows()
@@ -274,7 +285,7 @@ func test_a_pier_is_filled_not_left_to_one_small_plant() -> void:
 	var rect := StructureDecor.free_rects(3.0, 2.5, _pier_windows(), StructureDecor.OPENING_MARGIN)
 	var pier: Array = []
 	for r: Array in rect:
-		if float(r[0]) > -0.55 and float(r[2]) < 0.55 and float(r[3]) - float(r[1]) > 2.0:
+		if float(r[0]) > -0.6 and float(r[2]) < 0.6 and float(r[3]) - float(r[1]) > 2.0:
 			pier = r
 	assert_false(pier.is_empty(), "the pier is a free rectangle")
 	var area := (float(pier[2]) - float(pier[0])) * (float(pier[3]) - float(pier[1]))
@@ -284,7 +295,7 @@ func test_a_pier_is_filled_not_left_to_one_small_plant() -> void:
 	var covered := 0.0
 	for plant in out:
 		var centre_x: float = (plant.transform as Transform3D).origin.x - 2.0
-		if absf(centre_x) < 0.5:
+		if absf(centre_x) < 0.6:
 			covered += plant.extent.x * plant.extent.y
 	assert_gte(covered, area * 0.6, "the pier is at least 60 percent covered")
 
@@ -293,28 +304,34 @@ func test_plants_in_a_rectangle_overlap_by_at_most_the_limit() -> void:
 	var out := StructureDecor.placements(
 		[_anchor("ivy", 1.0, 6.0, [[-0.5, 5.0, 0.5, 5.5]])], _shaped_rows()
 	)
-	# One column at x: plants stacked below the band are spaced by at least extent less the limit.
-	var by_x := {}
+	# One column below the band: dressed plants (each moves up to JITTER of its height either way)
+	# are spaced by at least extent less the limit and the two jitters.
+	var column: Array = []
 	for plant in out:
 		if (plant.transform as Transform3D).origin.y - 0.5 < 4.5:
-			var key := "%.3f" % (plant.transform as Transform3D).origin.x
-			if not by_x.has(key):
-				by_x[key] = []
-			(by_x[key] as Array).append(plant)
-	assert_gt(by_x.size(), 0)
-	for key: String in by_x:
-		var column: Array = by_x[key]
-		column.sort_custom(
-			func(a: Dictionary, b: Dictionary) -> bool:
-				return (a.transform as Transform3D).origin.y < (b.transform as Transform3D).origin.y
+			column.append(plant)
+	assert_gt(column.size(), 0)
+	# The centres of the turned plants (a plant turns about its centre, so its foot moves).
+	var centres: Array[Dictionary] = []
+	for plant in column:
+		var box := _plant_box(plant)
+		centres.append(
+			{
+				"x": (box[0] + box[2]) * 0.5,
+				"y": (box[1] + box[3]) * 0.5,
+				"w": plant.extent.x,
+				"h": plant.extent.y
+			}
 		)
-		for i in range(1, column.size()):
-			var pitch: float = (
-				(column[i].transform as Transform3D).origin.y
-				- (column[i - 1].transform as Transform3D).origin.y
-			)
-			var ext_h: float = column[i - 1].extent.y
-			assert_gte(pitch, ext_h * (1.0 - StructureDecor.MAX_OVERLAP) - 0.001, "stack pitch %s" % pitch)
+	centres.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.y < b.y)
+	var stacked := 0
+	for i in range(1, centres.size()):
+		if absf(centres[i].x - centres[i - 1].x) > 0.5 * float(centres[i - 1].w):
+			continue  # side by side, not stacked
+		stacked += 1
+		var pitch: float = centres[i].y - centres[i - 1].y
+		assert_gte(pitch, 0.5 * float(centres[i - 1].h), "stack pitch %s" % pitch)
+	assert_gt(stacked, 0, "the probe has stacked plants")
 
 
 func test_the_shaped_cap_still_holds_three_thousand_triangles() -> void:
@@ -327,7 +344,9 @@ func test_the_shaped_cap_still_holds_three_thousand_triangles() -> void:
 		cost[plant.id] = 400
 	var capped := StructureDecor.cap_triangles(placed, cost)
 	assert_lte(capped.size() * 400, StructureDecor.MAX_TRIANGLES)
-	assert_gt(placed.size() * 400, StructureDecor.MAX_TRIANGLES, "the probe is over the cap to start")
+	assert_gt(
+		placed.size() * 400, StructureDecor.MAX_TRIANGLES, "the probe is over the cap to start"
+	)
 
 
 func test_exclusions_are_passed_on_in_the_plants_frame() -> void:
@@ -342,17 +361,31 @@ func test_exclusions_are_passed_on_in_the_plants_frame() -> void:
 		assert_almost_eq(float(rect[3]), 1.8 - foot_y, 0.001)
 
 
-func _overlaps_grown(plant: Dictionary, open: Array, margin: float) -> bool:
+## The box [x0, y0, x1, y1] (anchor frame of _anchor: x from the centre, y up from the foot) a
+## plant covers once turned about its own centre.
+func _plant_box(plant: Dictionary) -> Array[float]:
 	var t: Transform3D = plant.transform
 	var extent: Vector2 = plant.extent
-	var x0 := t.origin.x - 2.0 - extent.x * 0.5
-	var y0 := t.origin.y - 0.5
+	var angle: float = plant.angle
+	var box := StructureDecor.turned_box(extent, 1.0, angle)
+	var centre_x := t.origin.x - 2.0 - sin(angle) * extent.y * 0.5
+	var centre_y := t.origin.y - 0.5 + cos(angle) * extent.y * 0.5
+	return [
+		centre_x - box.x * 0.5,
+		centre_y - box.y * 0.5,
+		centre_x + box.x * 0.5,
+		centre_y + box.y * 0.5
+	]
+
+
+func _overlaps_grown(plant: Dictionary, open: Array, margin: float) -> bool:
+	var box := _plant_box(plant)
 	for rect: Array in open:
 		if (
-			x0 + extent.x > float(rect[0]) - margin + 0.0001
-			and x0 < float(rect[2]) + margin - 0.0001
-			and y0 + extent.y > float(rect[1]) - margin + 0.0001
-			and y0 < float(rect[3]) + margin - 0.0001
+			box[2] > float(rect[0]) - margin + 0.0001
+			and box[0] < float(rect[2]) + margin - 0.0001
+			and box[3] > float(rect[1]) - margin + 0.0001
+			and box[1] < float(rect[3]) + margin - 0.0001
 		):
 			return true
 	return false
@@ -363,7 +396,8 @@ func test_no_plant_reaches_an_opening_grown_by_the_margin() -> void:
 	for width in [2.5, 4.0, 5.0, 7.0]:
 		for height in [1.5, 2.5, 3.5]:
 			var open := windows.filter(
-				func(r: Array) -> bool: return r[0] >= -float(width) * 0.5 and r[2] <= float(width) * 0.5
+				func(r: Array) -> bool:
+					return r[0] >= -float(width) * 0.5 and r[2] <= float(width) * 0.5
 			)
 			var out := StructureDecor.placements([_anchor("ivy", width, height, open)], _rows())
 			for plant in out:
@@ -415,19 +449,116 @@ func test_the_triangle_cap_drops_ivy_first_smallest_then_highest() -> void:
 	assert_eq(StructureDecor.MAX_TRIANGLES, 3000)
 
 
-func test_a_planter_takes_the_class_of_its_box_and_sits_at_the_anchor() -> void:
+func test_a_planter_is_drawn_larger_from_a_smaller_class_and_sits_at_the_anchor() -> void:
 	var out := StructureDecor.placements([_anchor("box", 1.15, 0.2)], _rows())
 	assert_eq(out.size(), 1)
-	assert_eq(out[0].id, "decor:core:Planter_W12_v0")
+	assert_eq(out[0].id, "decor:core:Planter_W08_v0", "the class nearest width / boost")
 	var t: Transform3D = out[0].transform
-	assert_true(t.origin.is_equal_approx(Vector3(2.0, 0.5, 3.0)))
-	assert_almost_eq(t.basis.get_scale().x, 1.15 / 1.2, 0.0001)
+	assert_true(t.origin.is_equal_approx(Vector3(2.0, 0.5, 3.0)), "anchored at its foot")
+	assert_almost_eq(t.basis.get_scale().x, StructureDecor.PLANTER_BOOST, 0.0001)
+	assert_almost_eq(t.basis.get_scale().y, t.basis.get_scale().x, 0.0001, "uniform")
 	var huge := StructureDecor.placements([_anchor("box", 3.0, 0.2)], _rows())[0]
 	assert_almost_eq(
 		(huge.transform as Transform3D).basis.get_scale().x,
 		StructureDecor.PLANTER_SCALE_MAX,
 		0.0001
 	)
+
+
+func test_a_planter_is_never_wider_than_its_window_plus_ten_percent() -> void:
+	for width in [0.6, 0.8, 0.95, 1.15, 1.4, 1.8, 3.0]:
+		var plant := StructureDecor.placements([_anchor("box", width, 0.2)], _rows())[0]
+		var wide: float = plant.extent.x
+		var cap: float = width * (1.0 + StructureDecor.PLANTER_OVERHANG)
+		# The floor scale of a tiny window may exceed the cap; no real planter box is that small.
+		if width >= 0.8:
+			assert_lte(wide, cap + 0.0001, "window %s" % width)
+		assert_gte(
+			(plant.transform as Transform3D).basis.get_scale().x,
+			StructureDecor.PLANTER_SCALE_MIN - 0.0001
+		)
+
+
+func _dressed_wall(seed_value: int) -> Array[Dictionary]:
+	var anchor := _anchor("ivy", 7.0, 5.2)
+	anchor["seed"] = seed_value
+	return StructureDecor.placements([anchor], _rows())
+
+
+func test_dressing_is_deterministic_per_seed_and_changes_with_it() -> void:
+	var a := _dressed_wall(4)
+	var b := _dressed_wall(4)
+	assert_eq(a.size(), b.size())
+	for i in a.size():
+		assert_eq(a[i].id, b[i].id)
+		assert_eq(a[i].transform, b[i].transform)
+	var other := _dressed_wall(11)
+	var moved := false
+	for i in mini(a.size(), other.size()):
+		moved = moved or a[i].transform != other[i].transform
+	assert_true(moved, "another seed dresses the wall differently")
+
+
+func test_a_tiled_wall_is_not_a_grid() -> void:
+	# 7.0 x 5.2 with no opening: four columns by two tiers of the largest class. The x offsets from
+	# the grid columns must vary (variance above 2 cm), and no two plants stacked on each other
+	# share an x.
+	for seed_value in [1, 4, 9]:
+		var out := _dressed_wall(seed_value)
+		assert_eq(out.size(), 8, "four columns, two tiers")
+		var offsets: Array[float] = []
+		for plant in out:
+			var x: float = (plant.transform as Transform3D).origin.x - 2.0
+			var col := clampi(int(floor((x + 3.5) / 1.75)), 0, 3)
+			offsets.append(x - (-3.5 + (col + 0.5) * 1.75))
+		var mean := 0.0
+		for o in offsets:
+			mean += o / offsets.size()
+		var variance := 0.0
+		for o in offsets:
+			variance += (o - mean) * (o - mean) / offsets.size()
+		assert_gt(variance, 0.0004, "seed %s: tier x offsets vary" % seed_value)
+		for i in out.size():
+			for k in range(i + 1, out.size()):
+				var pa: Transform3D = out[i].transform
+				var pb: Transform3D = out[k].transform
+				if absf(pa.origin.y - pb.origin.y) > 1.0 and absf(pa.origin.x - pb.origin.x) < 1.0:
+					assert_gt(absf(pa.origin.x - pb.origin.x), 0.01, "stacked plants differ in x")
+
+
+func test_every_dressed_plant_stays_within_the_turn_and_scale_limits() -> void:
+	for seed_value in [1, 4, 9, 16]:
+		for plant in _dressed_wall(seed_value):
+			var t: Transform3D = plant.transform
+			assert_lte(
+				absf(float(plant.angle)), deg_to_rad(StructureDecor.MAX_TURN_DEGREES) + 0.0001
+			)
+			assert_true(
+				t.basis.z.normalized().is_equal_approx(Vector3(0, 0, 1)), "turn about the normal"
+			)
+			var scale := t.basis.get_scale()
+			assert_almost_eq(scale.x, scale.y, 0.0001)
+			assert_almost_eq(scale.x, scale.z, 0.0001)
+			assert_between(scale.x, StructureDecor.MIN_SCALE - 0.0001, 1.15 * 1.0 + 0.0001)
+			assert_gte(_plant_box(plant)[1], -0.0001, "no leaf below the ground")
+
+
+func test_neighbouring_plants_use_different_variants_when_there_are_some() -> void:
+	var catalog := _catalog()
+	catalog["Ivy_L_v1"] = _entry("ivy_l", "wall", [2.2, 2.6])
+	catalog["Ivy_L_v2"] = _entry("ivy_l", "wall", [2.2, 2.6])
+	var rows := StructureDecor.rows_of("core", catalog)
+	for seed_value in [1, 4, 9]:
+		var anchor := _anchor("ivy", 7.0, 5.2)
+		anchor["seed"] = seed_value
+		var out := StructureDecor.placements([anchor], rows)
+		assert_eq(out.size(), 8)
+		# Row-major: four columns by two tiers.
+		for i in out.size():
+			if i % 4 > 0:
+				assert_ne(out[i].id, out[i - 1].id, "left neighbour differs")
+			if i >= 4:
+				assert_ne(out[i].id, out[i - 4].id, "the plant below differs")
 
 
 func test_variants_follow_the_seed_and_nothing_is_placed_without_assets() -> void:
@@ -492,7 +623,9 @@ func test_the_scatter_never_selects_a_decor_asset() -> void:
 
 func test_the_shipped_core_serves_its_decor_assets() -> void:
 	var rows := AssetStore.decor_rows(PaletteLibrary.DEFAULT_ROOT)
-	assert_eq(rows.size(), 25, "nineteen ivy (nine squares, six strips, four bands) and six planters")
+	assert_eq(
+		rows.size(), 25, "nineteen ivy (nine squares, six strips, four bands) and six planters"
+	)
 	assert_true(StructureDecor.available())
 	for row in rows:
 		assert_eq(row.wind_category, "climber")
