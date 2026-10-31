@@ -1361,3 +1361,13 @@ nine captures; keeps no level, but clears the run's hint memory).
 - **library.json stats:** `LibraryHashes` and `tools/recompute_library_hashes.gd` recompute
   `stats.file_sha256` and the byte totals from the files after a tile is regenerated host-side
   (`--check 1` only reports). On 2026-10-30 the hashes were right and `surface_bytes` was 556,876 short.
+
+### Banner pins (2026-10-31, branch `banner_pins`; procgen pin ef57ddb)
+
+Ornaments keep out of towers (`procgen/docs/architecture_styles.md` section 8): banners fly from tower
+tips once per tower, wall kinds skip the wall a tower stands in front of. Re-export moved only
+`sahel_mosque` (2562 -> 2514 triangles); `stave_church` gained the tower-to-ornament edge with its pin
+unchanged; the four `yard_gate` prop pins moved because their recipes now carry the style's 0.5 m
+default depth (the pin e848237 already read it; the committed recipes still said 0.4). Looked at on
+`castle_keep`: pole, gold ball and coloured pennant read from the tower tips, about 0.5 to 0.9 m of
+cloth, a small flag at home zoom and a speck in wide frames; storm streams it downwind.
