@@ -1,13 +1,14 @@
 class_name StructureCloth
 extends RefCounted
 
-## How far each vertex of a banner, pennant or awning may move in the wind (topic wind_c, 2026-10-30;
-## docs/systems/structures.md "Cloth in the wind"). procgen draws the cloth as plain sheets tagged
-## `ornament/banner<k>/cloth` and `ornament/awning<k>/stripe<n>`; the host writes a weight per vertex
-## into the second UV set (x metres of reach from the attachment, y how far the piece leans downwind)
-## and structure_ornament.gdshader moves the vertex by it under the global wind. The weight is derived
-## from the piece's own shape, so procgen needs no change; the colour array is untouched, so
-## StructureGeometry.digest_of (which hashes colours, not the second UV set) does not move.
+## How far each vertex of a banner, pennant or awning may move in the wind (topic wind_c,
+## 2026-10-30; docs/systems/structures.md "Cloth in the wind"). procgen draws the cloth as plain
+## sheets tagged `ornament/banner<k>/cloth` and `ornament/awning<k>/stripe<n>`; the host writes a
+## weight per vertex into the second UV set (x metres of reach from the attachment, y how far the
+## piece leans downwind) and structure_ornament.gdshader moves the vertex by it under the global
+## wind. The weight is derived from the piece's own shape, so procgen needs no change; the colour
+## array is untouched, so StructureGeometry.digest_of (which hashes colours, not the second UV set)
+## does not move.
 ##
 ## Pure and thread-safe (StructureGeometry.build_one calls it on a worker).
 
@@ -89,9 +90,9 @@ static func attach(meshes: Array, tag_table: PackedStringArray) -> void:
 
 
 ## The weight of each of `points` (one piece, or one awning's stripes together): (metres of reach
-## from the attachment, lean). `awning` takes the attachment as the wall edge (the outward direction
-## is where the surface falls); otherwise a piece longer than tall is a flag held at the end with the
-## taller edge, and any other piece hangs from its top edge.
+## from the attachment, lean). `awning` takes the attachment as the wall edge (the outward
+## direction is where the surface falls); otherwise a piece longer than tall is a flag held at the
+## end with the taller edge, and any other piece hangs from its top edge.
 static func weights_of(points: PackedVector3Array, awning: bool) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	out.resize(points.size())

@@ -1,0 +1,284 @@
+{
+ "out_dir": "render_jobs/wind_c_look4",
+ "timeout_s": 420,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 160,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "styles3",
+   "lots": [
+    [
+     "core:castle_keep",
+     -12.0,
+     12.0,
+     8.0,
+     8.0,
+     0.0,
+     801,
+     {
+      "ornaments": 256.0
+     }
+    ],
+    [
+     "core:townhouse",
+     0.0,
+     0.0,
+     5.0,
+     7.0,
+     0.0,
+     802,
+     {
+      "ornaments": 128.0
+     }
+    ],
+    [
+     "core:cottage_chimneyed",
+     6.0,
+     -6.0,
+     6.0,
+     5.0,
+     0.0,
+     803,
+     {
+      "ornaments": 16.0
+     }
+    ]
+   ]
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "rounds",
+   "lots": [
+    [
+     "core:windmill_tower",
+     -6.0,
+     6.0,
+     6.2,
+     0.0,
+     710
+    ],
+    [
+     "core:windmill_dutch",
+     12.0,
+     -12.0,
+     6.2,
+     0.0,
+     711
+    ]
+   ]
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "report"
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "zoom",
+   "size": 5.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -3.3,
+    0.6
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 5.0
+  },
+  {
+   "op": "capture",
+   "name": "awning_calm_t0",
+   "desc": "awning, calm, clock 0.0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "clock": 2.0
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "capture",
+   "name": "awning_calm_t2",
+   "desc": "awning, calm, clock 2.0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 5.0
+  },
+  {
+   "op": "capture",
+   "name": "awning_storm_t0",
+   "desc": "awning, storm, clock 0.0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 2.0
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "capture",
+   "name": "awning_storm_t2",
+   "desc": "awning, storm, clock 2.0"
+  },
+  {
+   "op": "zoom",
+   "size": 6.0
+  },
+  {
+   "op": "settle",
+   "timeout": 12
+  },
+  {
+   "op": "look_at",
+   "at": [
+    -0.35,
+    -12.35
+   ]
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 5.0
+  },
+  {
+   "op": "capture",
+   "name": "vane_calm_t0",
+   "desc": "vane, calm, clock 0.0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "clock": 2.0
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "capture",
+   "name": "vane_calm_t2",
+   "desc": "vane, calm, clock 2.0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 5.0
+  },
+  {
+   "op": "capture",
+   "name": "vane_storm_t0",
+   "desc": "vane, storm, clock 0.0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 2.0
+  },
+  {
+   "op": "wait",
+   "s": 0.4
+  },
+  {
+   "op": "capture",
+   "name": "vane_storm_t2",
+   "desc": "vane, storm, clock 2.0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "remove_all"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}

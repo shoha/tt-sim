@@ -1,21 +1,27 @@
 class_name StructureWind
 extends RefCounted
 
-## The pure parts of how a building's moving pieces follow the global wind (topic wind_c, 2026-10-30;
-## docs/systems/wind.md "Phase (c) as built"): a windmill's cap yaw (clamped to a cone about a
-## camera-friendly bearing), its sail speed, a weathervane's spring, and the easing both use. Nodes
-## (MillMotion, VaneMotion) read the Wind autoload and call these; nothing here touches the scene tree
-## or allocates beyond a Vector2.
+## The pure parts of how a building's moving pieces follow the global wind (topic wind_c,
+## 2026-10-30; docs/systems/wind.md "Phase (c) as built"): a windmill's cap yaw (clamped to a cone
+## about a camera-friendly bearing), its sail speed, a weathervane's spring, and the easing both
+## use. Nodes (MillMotion, VaneMotion) read the Wind autoload and call these; nothing here touches
+## the scene tree or allocates beyond a Vector2.
 
-## The cap may turn this far (radians, 50 degrees) from the camera-friendly bearing, so the sails never
-## go edge-on to the default camera however the wind blows.
-const MILL_CONE_RAD := 0.8726646
+## The cap may turn this far (radians, 30 degrees) from the camera-friendly bearing, so the sails
+## never go edge-on to the default camera however the wind blows. The brief said 50 degrees; the
+## first render round showed the default diagonal wind pinning the cap 50 degrees round, 84 degrees
+## off face-on to the camera (the sails a hairline). At 30 degrees the worst case is 64 degrees off
+## face-on, a sail still about half its width.
+const MILL_CONE_RAD := 0.5235988
 ## Sail speed, radians per second: a base turn plus a share of the wind speed, capped.
 const MILL_SPEED_BASE := 0.12
 const MILL_SPEED_PER_MS := 0.045
 const MILL_SPEED_MAX := 1.1
 ## The time constant (seconds) of the cap's yaw and the sails' speed following the wind.
 const EASE_SECONDS := 2.0
+## How often (seconds) a mill or vane samples the wind field; the easing and the spring smooth
+## between samples. Sampling every frame cost 5.5 us a mill and 7.4 us a vane (headless, measured).
+const SAMPLE_SECONDS := 0.1
 ## A weathervane is a damped spring on its yaw: natural angular frequency (rad/s) and damping ratio.
 ## Under-damped (0.35), so a change of direction overshoots once or twice and settles.
 const VANE_OMEGA := 2.6
@@ -74,7 +80,8 @@ static func vane_wobble(gust: float, speed: float) -> float:
 
 
 ## One step of the vane's spring: `state` is (angle, angular velocity), `target` the angle it is
-## pulled to. Semi-implicit Euler in substeps of at most VANE_MAX_STEP, so a slow frame stays stable.
+## pulled to. Semi-implicit Euler in substeps of at most VANE_MAX_STEP, so a slow frame stays
+## stable.
 static func vane_step(state: Vector2, target: float, delta: float) -> Vector2:
 	var angle := state.x
 	var velocity := state.y

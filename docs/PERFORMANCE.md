@@ -4262,3 +4262,24 @@ indicative; CPU microseconds are less affected by the GPU than frame times):
 - **Counts and draws.** Rain 1000, snow 600 and streaks 200 particles as before; no node, mesh,
   material or pass was added, so the draw calls are unchanged by construction (not re-counted).
   The streaks' `visible` flag changes only when the wind sample crosses zero (reduce-motion).
+
+### Mills, vanes and cloth follow the wind (wind_c, 2026-10-30)
+
+Phase (c). CPU measured by `tests/unit/test_structure_wind.gd`
+(`test_cost_of_ten_mills_and_thirty_vanes_per_frame`: headless on the editor binary, 2000 frames of
+`step(0.016)` on nodes outside the tree, so a release build is faster); the card's aim is 0.05 ms:
+
+- **Mills** 2.8 microseconds each per frame, so 10 mills 0.028 ms. Before the 0.1 s wind sample it
+  was 5.5 each (0.055 ms): the sample (`Wind.wind_at`: direction, gust, three phases) was most of
+  it; the rest is two exponential eases and two `Basis` writes.
+- **Weathervanes** 2.7 microseconds each (7.4 before sampling every 0.1 s), so 30 vanes 0.08 ms.
+  Only nodes whose `VisibleOnScreenNotifier3D` is on screen run: 5 on screen cost 0.014 ms, and
+  30 at once is the extreme, over the aim. All 40 together: 0.107 ms.
+- **Cloth** costs the CPU nothing per frame (a vertex shader branch; `StructureCloth.attach` runs
+  once per build on the worker). The GPU work is one gust field (three sines) plus three sines and a
+  few multiplies per vertex of the `cloth` surface only (16 to 40 vertices a building); not
+  separable from noise on the shared GPU.
+- **Draw calls**: cloth and windmills unchanged (one `ornament_cloth` surface per building as
+  before). A building with a weathervane gains one draw: its arrow, shaft and tail leave the
+  `ornament_metal` mesh for one `vane_ornament_metal` mesh under the `Vane` node (32 triangles
+  of the 56 the metal held on the cottage of the render job).

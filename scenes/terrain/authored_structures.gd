@@ -303,7 +303,8 @@ func openings_of(structure_id: int) -> Array:
 ## `surface` of structure `structure_id`'s mesh `mesh_name`, or "".
 func provenance_at(structure_id: int, mesh_name: String, triangle: int) -> String:
 	var node := get_structure_node(structure_id)
-	# A windmill's turning meshes sit under its Mill and Wheel pivots (names "cap_...", "wheel_...").
+	# A windmill's turning meshes sit under its Mill and Wheel pivots (names "cap_...",
+	# "wheel_...").
 	var instance := node.find_child(mesh_name, true, false) as MeshInstance3D if node else null
 	if instance == null:
 		return ""
@@ -518,7 +519,8 @@ func _structure_node(id: int, parts: Dictionary) -> Node3D:
 	var style: String = parts.get("style", "")
 	var tone: String = parts.get("stone_tone", "")
 	var meshes: Array = parts.get("meshes", [])
-	# A weathervane's arrow, shaft and tail turn in the wind (StructureVane): they leave the static meshes.
+	# A weathervane's arrow, shaft and tail turn in the wind (StructureVane): they leave the static
+	# meshes.
 	var vane := StructureVane.split(meshes, parts.get("tag_table", PackedStringArray()))
 	if not vane.is_empty():
 		meshes = vane.rest
@@ -599,9 +601,9 @@ func mill_node(mill: Dictionary, seed_value: int, style: String, tone: String) -
 	return pivot
 
 
-## A weathervane's turning parts (StructureVane.split's `turning`) as a VaneMotion node "Vane" at the
-## pole, its meshes at minus the pivot (the pose at rest is the built one), with a notifier so it
-## only moves on screen.
+## A weathervane's turning parts (StructureVane.split's `turning`) as a VaneMotion node "Vane" at
+## the pole, its meshes at minus the pivot (the pose at rest is the built one), with a notifier so
+## it only moves on screen.
 func vane_node(vane: Dictionary, style: String, tone: String) -> VaneMotion:
 	var pivot := VaneMotion.new()
 	pivot.name = "Vane"

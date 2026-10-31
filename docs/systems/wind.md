@@ -516,6 +516,74 @@ harness captures stills only, so the 12 to 20 s moving capture was replaced by t
 - At zoom 22 (the map's wide view) all three are close to invisible (the rain boxes are 0.02 m
   wide); that was already so before this phase and was not changed.
 
+### Phase (c) as built (2026-10-30, branch `wind_c`)
+
+Windmills, cloth (banners, pennants, awnings) and the weathervane follow the global wind.
+
+What exists:
+
+- **`utils/structure_wind.gd` (`StructureWind`)**: the pure parts and their constants, tested by
+  `tests/unit/test_structure_wind.gd`: `mill_cap_offset(wind_toward, centre)` (the turn from the
+  camera-friendly bearing onto the wind's source, clamped to `MILL_CONE_RAD`), `mill_speed(speed)`
+  (`0.12 + 0.045 * speed`, capped at 1.1 rad/s), `ease_toward` / `ease_angle` (exponential, time
+  constant `EASE_SECONDS` 2 s, the short way round across +-180), `vane_step` (a damped spring,
+  omega 2.6 rad/s, zeta 0.35, substeps of 0.02 s) and `vane_wobble(gust, speed)`.
+- **Mills** (`MillMotion`): the cap yaw is `facing(WIND_FROM) + offset`, the offset eased toward
+  `mill_cap_offset(wind, WIND_FROM) * motion`; the sails turn at `eased mill_speed(|wind|) * motion`
+  times the building's +-25 percent factor. The wind is sampled (`Wind.wind_at` at the node) every
+  `StructureWind.SAMPLE_SECONDS` (0.1 s, staggered per building); a mill starts in the pose the wind
+  asks for, so it never swings into place. Motion scale 0 (reduce-motion, `wind_motion` 0) eases the
+  sails to a stop and the cap onto `WIND_FROM`; between 0 and 1 it scales both.
+- **Cloth** (`StructureCloth`, `shaders/structure_ornament.gdshader`): see structures.md "Cloth in
+  the wind". A vertex branch (`S_WIND`, hooked in `structure_painterly.gdshaderinc`) reads the global
+  `wind_dir` / `wind_phase` / `wind_gust` (the gust field is a copy of `wind_gust_field`, term for
+  term) and moves each vertex by its weight: a lean downwind that rises with the local gust and
+  the wind speed, plus a flutter across and along the wind (an awning flaps up and down). Everything
+  scales by `wind_gust.w`, so reduce-motion and `wind_motion` still the cloth at no CPU cost.
+- **Weathervane** (`StructureVane`, `VaneMotion`): see structures.md "Weathervane". The arrow
+  assembly is a spring on the yaw toward the wind's source, the gust pushing the target a few
+  degrees. Motion scale 0 holds the built pose.
+
+Deviations and what was learned:
+
+1. **The cone is 30 degrees, not 50.** The first render round showed the default diagonal wind
+   (from bearing 135 degrees) pinning the cap at the 50 degree edge, 84 degrees off face-on to the
+   default camera: the sails were a hairline. At 30 degrees the default pins the cap 64 degrees off
+   face-on, a sail still about half its width (the later rounds read well). `WIND_FROM` is the
+   centre as decided; the owner may want the cone or the centre moved (open question).
+2. **The cloth weight is in the second UV set, not vertex colour red.** The colour array is in
+   `digest_of`, so the weight rides in `ARRAY_TEX_UV2` (x metres of reach, y lean), which the digest
+   does not hash: `tests/fixtures/structure_digests.txt` did not move.
+3. **The crossbars stay put.** The card listed the cross pieces in the vane's pivot; a weathervane's
+   cross is the compass and does not turn, so only the shaft, arrow and tail do (the base, pole,
+   crossbars and balls are static).
+4. **The vane is split at node creation, not in `build_one`**, so `parts.meshes` and the digest are
+   untouched (a vane split in the build would reorder the digest's meshes).
+5. **Cloth displacement never follows the normal**: the two faces of a sheet and its extruded edges
+   share vertex positions but not normals, and a normal-driven flutter splits them. Directions
+   come from the wind and the up axis only.
+6. **Wind sampling is every 0.1 s**, not every frame: per frame it cost 5.5 us a mill and 7.4 us a
+   vane, sampled it costs 2.8 and 2.7 us (see PERFORMANCE.md "Wind").
+7. The structure's transform is the identity (`AuthoredStructures` sits at the map origin), so the
+   cloth shader moves vertices in object space with a world-space wind; a rotated host would need the
+   model matrix's inverse.
+
+How the look reads (render jobs `wind_c_look` to `wind_c_look4`; a village of keep, townhouse,
+cottage and two windmills laid across the view, calm, windy and storm at wind clocks 0 and 2):
+- **Mills: good.** At the wide view both caps face the clamped direction three-quarter on, sails
+  readable, none edge-on; calm and storm differ in sail speed (stills cannot show it).
+- **Vane: good.** The arrow points left, into a wind blowing right, at both calm and storm; the
+  tail fin sits downwind. Calm and storm look alike by design (the default direction does not
+  change with strength); the wobble and the spring cannot be judged from stills.
+- **Awning: subtle.** At zoom 5 the storm awning shows a slight shear and a lifted hem against the
+  calm one; at the home zoom it is not readable. Banners and pennants on the keep were not in
+  frame in any capture (they sit on the back corners of the roof), so their lean is not verified
+  by eye, only by the weight tests. Amplitudes were raised once (lean 0.12 + 0.34 gust, flutter
+  0.04 + 0.12 gust, both times a strength of 0.25 + speed / 10) after the third round. Honest
+  verdict: correct and safe, but cloth at tabletop zoom reads as little more than a twitch; if the
+  owner wants it legible at home zoom the amplitudes can be doubled without structural change (two
+  constants in the shader).
+
 ## 5. Look, tuning and accessibility
 
 ### How gusts should read

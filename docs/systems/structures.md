@@ -602,6 +602,31 @@ weather's direction was not used because it put the wheel edge-on to the default
 there is no in-game one) keeps the wheel still. `provenance_at` finds a mesh under the pivots by name.
 Tests: `tests/unit/test_structure_mill.gd`.
 
+**Since wind_c (2026-10-30)** the mill follows the global wind instead of a fixed facing: the cap yaw
+is clamped to 30 degrees about `MillMotion.WIND_FROM`, the sails' speed is `0.12 + 0.045 * wind speed`
+rad/s (cap 1.1) and both ease with a 2 s time constant (`StructureWind`; docs/systems/wind.md
+"Phase (c) as built").
+
+**Cloth in the wind.** `StructureCloth.attach` (pure, called by `build_one` after the tag table is
+set) writes a weight per vertex of the `cloth` meshes into the second UV set (`ARRAY_TEX_UV2`: x
+metres of reach from the attachment, y the lean downwind), and `structure_ornament.gdshader` moves
+the vertex by it under the global wind. The weight comes from the piece's own shape: an
+`ornament/banner<k>/cloth` longer than tall is a flag held at the end with the taller edge (the
+pole; weight grows with the distance, lean 1), otherwise it hangs from its top edge (weight grows
+with the drop, lean 0.6); the stripes of one `ornament/awning<k>` form a group whose wall edge is
+found from where the surface falls (the correlation of height with position), weight growing out to
+the hem (lean 0, it flaps). The weight is `extent * t^1.5` so the free end bends most. UV2 is not in
+`digest_of` (colour is), so no pin moved. Other meshes get no UV2 (zero weight). Tests:
+`tests/unit/test_structure_cloth.gd`.
+
+**Weathervane.** `StructureVane.split` (pure, called by `AuthoredStructures._structure_node`, not by
+`build_one`, so `parts` and the digest are unchanged) cuts the triangles tagged
+`ornament/vane/{shaft, arrow, tail}` out of the static meshes; `vane_node` makes a `VaneMotion`
+(`scenes/terrain/vane_motion.gd`) named `Vane` at the pole with those meshes (`vane_<role>_<kind>`)
+and a `VisibleOnScreenNotifier3D`. The yaw is a damped spring toward the wind's source with a gust
+wobble; the base, pole, crossbars and balls stay. Only a building with exactly one vane pole and an
+arrow gets one (a finial has no arrow). Tests: `tests/unit/test_structure_vane.gd`.
+
 ### World and fantasy styles (2026-10-30, branch `world_look`)
 
 Fourteen structures from procgen's `docs/world_styles.md` (pin e83d8d9; 98 core structures), all
