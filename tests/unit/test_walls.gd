@@ -572,6 +572,20 @@ func test_a_streets_corridor_is_clear_of_plants_to_the_facade_line() -> void:
 			)
 	var far := a.lerp(b, 0.5) + across * (setback + 14.0)
 	assert_eq(CrossingGeometry.clearance(strips, far), 1.0, "and plants grow well off the street")
+	# The ground sampler the scatter reads (every role) leaves nothing in the corridor.
+	var ground := ScatterGround.sampler(
+		_doc,
+		_doc.heights,
+		Rect2i(0, 0, _doc.samples_x(), _doc.samples_z()),
+		PackedStringArray(),
+		PackedStringArray()
+	)
+	for role in [ScatterGround.ROLE_TREE, ScatterGround.ROLE_SHRUB, ScatterGround.ROLE_COVER]:
+		for off in [0.0, setback + 1.0, -(setback + 1.0)]:
+			var open: Vector3 = ground.call(a.lerp(b, 0.5) + across * off, role)
+			assert_eq(open.x, 0.0, "no plant of role %s at %s" % [role, off])
+		var outside: Vector3 = ground.call(far, role)
+		assert_gt(outside.x, 0.5, "and some off the street")
 
 
 ## What a street's built parts hold, as one number: the meshes of every part and its hull.

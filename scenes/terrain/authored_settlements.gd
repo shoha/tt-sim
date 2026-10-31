@@ -14,7 +14,7 @@ extends Node3D
 ## once, one per frame budget step, and kept for every map. Summary: docs/systems/settlements.md.
 
 const NODE_NAME := "AuthoredSettlements"
-const CELL_M := 24.0
+const CELL_M := 48.0
 ## Wall-clock budget of the work _process does in a frame (a variant build or a cell bake each).
 const INSTALL_BUDGET_MS := 3.0
 ## Sample offset for the slope test, and the steepest rise over its 2x run that holds a prop.
@@ -230,7 +230,7 @@ func cells_of(doc: MapDocument, settlement: Settlement) -> Array[Dictionary]:
 				lines
 				. append(
 					(
-						"%s %s %d %d %d %d %d"
+						"%s %s %d %d %d %d %d %d %d"
 						% [
 							item["slot"],
 							row["ref"],
@@ -239,6 +239,8 @@ func cells_of(doc: MapDocument, settlement: Settlement) -> Array[Dictionary]:
 							roundi(float(item["yaw"]) * 1000.0),
 							roundi(float(item["scale"]) * 100.0),
 							roundi(float(row["y"]) * 1000.0),
+								roundi((row["normal"] as Vector3).x * 100.0),
+								roundi((row["normal"] as Vector3).z * 100.0),
 						]
 					)
 				)
@@ -261,20 +263,24 @@ func cells_of(doc: MapDocument, settlement: Settlement) -> Array[Dictionary]:
 ## does not serve is left out.
 func _stand(doc: MapDocument, items: Array[Dictionary]) -> Array[Dictionary]:
 	var points := PackedVector2Array()
+	var reaches := PackedFloat32Array()
 	for item in items:
 		var at: Vector2 = item["position"]
+		var reach := footprint_reach(str(item["prop"]), SettlementBake.visual_scale(item))
+		reaches.append(reach)
 		points.append(at)
-		points.append(at + Vector2(SLOPE_STEP_M, 0.0))
-		points.append(at - Vector2(SLOPE_STEP_M, 0.0))
-		points.append(at + Vector2(0.0, SLOPE_STEP_M))
-		points.append(at - Vector2(0.0, SLOPE_STEP_M))
+		points.append(at + Vector2(reach, 0.0))
+		points.append(at - Vector2(reach, 0.0))
+		points.append(at + Vector2(0.0, reach))
+		points.append(at - Vector2(0.0, reach))
 	var heights := WaterGeometry.grounds_at(doc, points)
 	var rows: Array[Dictionary] = []
 	for k in items.size():
 		var item := items[k]
 		var at: Vector2 = item["position"]
 		var base := k * 5
-		var run := SLOPE_STEP_M * 2.0
+		var reach := reaches[k]
+		var run := reach * 2.0
 		var rise := maxf(
 			absf(heights[base + 1] - heights[base + 2]), absf(heights[base + 3] - heights[base + 4])
 		)
@@ -285,8 +291,36 @@ func _stand(doc: MapDocument, items: Array[Dictionary]) -> Array[Dictionary]:
 		if row.is_empty():
 			skipped_missing += 1
 			continue
-		rows.append({"item": item, "y": heights[base] - SINK_M, "ref": String(row["ref"])})
+		var five := PackedFloat32Array(
+			[heights[base], heights[base + 1], heights[base + 2], heights[base + 3], heights[base + 4]]
+		)
+		rows.append(
+			{
+				"item": item,
+				"y": ground_under(five) - SINK_M,
+				"normal": ground_normal(five, reach),
+				"ref": String(row["ref"]),
+			}
+		)
 	return rows
+
+
+## How far from a prop's origin the ground is read: 0.8 of its drawn radius, within 0.3 to 1.6 m.
+static func footprint_reach(prop: String, drawn_scale: float) -> float:
+	return clampf(ProcgenPropStyles.radius_of(prop) * drawn_scale * 0.8, 0.3, 1.6)
+
+
+## The lowest of the five ground heights read under a prop (centre, +x, -x, +z, -z).
+static func ground_under(five: PackedFloat32Array) -> float:
+	var low := five[0]
+	for h in five:
+		low = minf(low, h)
+	return low
+
+
+## The ground's normal from the five heights read `reach` metres from the centre.
+static func ground_normal(five: PackedFloat32Array, reach: float) -> Vector3:
+	return Vector3(five[2] - five[1], reach * 2.0, five[4] - five[3]).normalized()
 
 
 ## The rows of a cached plan with the ground read again (a sculpt moved it; the plan did not).
@@ -343,7 +377,7 @@ func _bake_cell(cell: Dictionary) -> void:
 			. append(
 				{
 					"variant": row["ref"],
-					"transform": SettlementBake.transform_of(row["item"], float(row["y"])),
+					"transform": SettlementBake.transform_of(row["item"], float(row["y"]), row["normal"]),
 				}
 			)
 		)

@@ -37,6 +37,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _flush(ctrl.editor, "undo " + label)
 		"perf":
 			return _perf(ctrl.editor, step)
+		"corridor":
+			return _corridor(ctrl)
 	return _report(ctrl.editor)
 
 
@@ -131,6 +133,41 @@ static func _report(editor: AuthoringEditor) -> String:
 			layer.skipped_missing,
 		]
 	)
+
+
+## Scatter rows (per asset file) standing inside each street's corridor (within the setback of its
+## centre line), and the ground sampler's open share on the centre line.
+static func _corridor(ctrl: AuthoringController) -> String:
+	var doc := ctrl.document
+	var rows: Dictionary = ctrl.scatter.rows_by_asset() if ctrl.scatter else {}
+	var lines := PackedStringArray()
+	for wall in doc.walls:
+		if not wall.is_row():
+			continue
+		var inside := {}
+		var total := 0
+		var all := 0
+		for asset_id: String in rows:
+			var flat: PackedFloat32Array = rows[asset_id]
+			for r in range(0, flat.size(), MapDocument.ROW_STRIDE):
+				all += 1
+				var p := Vector2(flat[r], flat[r + 2])
+				var best := INF
+				for k in wall.points.size() - 1:
+					var a := wall.points[k]
+					var along := (wall.points[k + 1] - a).normalized()
+					var t := (p - a).dot(along)
+					if t < 0.0 or t > a.distance_to(wall.points[k + 1]):
+						continue
+					best = minf(best, absf((p - a).dot(Vector2(-along.y, along.x))))
+				if best <= wall.height_m + WallGeometry.STREET_CLEAR_EXTRA_M - 0.5:
+					total += 1
+					inside[asset_id.get_file()] = int(inside.get(asset_id.get_file(), 0)) + 1
+		lines.append(
+			"street %d setback %.1f: %d of %d scatter rows in the corridor %s"
+			% [wall.id, wall.height_m, total, all, str(inside)]
+		)
+	return "\n".join(lines)
 
 
 ## A long street dressed and measured: the layer's draws, bake times and memory.
