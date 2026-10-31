@@ -199,7 +199,16 @@ and a case in `tests/unit/test_structure_walkable.gd`.
 - **Load.** `AuthoredLoadPrep` has the part `STRUCTURES` (`StructureGeometry.build`), one worker task;
   `MapSourceLoader._create_authored_root_async` makes the nodes in a frame after the walls
   (`add_authored_structures`). `AuthoredStructures.create()` seeds the key and the cache from the
-  worker's parts.
+  worker's parts. The same worker task also reads the decor library (`StructureLoadInfo.info_of`:
+  rows, plant triangle costs, `sig`; the GLB parse is the cost), places the plants (`decor_plan`) and
+  computes the keys (`StructureLoadInfo.prepare`, parts "info", "root", "keys"), so `create` takes
+  them as they are (`info_for`, `keys_for`: used only while the rows still equal
+  `AssetStore.decor_rows` and the structure ids match, else made on the main thread as before) and
+  costs about 1 ms for 128 structures. Under the headless dummy renderer
+  (`GlbUtils.threaded_loads_safe` false) the worker leaves the info out and `create` reads it.
+  Play (`staged`) then makes the nodes a few a frame and the load waits for them
+  (`StructureLoadWait`; docs/systems/structure_performance.md "Fourth" and "Fifth round"); a client
+  that downloads the map waits too (`MapDownloadWait`, docs/NETWORKING.md "Live map edits").
 - **Edit.** `refresh(doc)` compares each key with the key its node was built from. A changed
   structure is built on a `WorkerThreadPool` task from a copy of the record and a ground snapshot
   (`ground_snapshot`: size, spacing and the shared height array, so a sculpt cannot race it); the old

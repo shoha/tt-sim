@@ -1468,7 +1468,10 @@ joiner included, ends with the same map. The ops and their checks are
 
 - **One service a table, every peer** (`LiveEdits`, `scenes/states/playing/live_edits.gd`):
   `LevelPlayController.start_live_edits()` makes it once a map built from a map document is
-  installed (`LevelPlayLoader._finalize_map_loading`, the download path too) and frees it
+  installed and its structures stand (`LevelPlayLoader._finalize_map_loading`, the download path
+  too: `MapDownloadCoordinator` awaits it and the client's level load waits for the coordinator,
+  `MapDownloadWait`, before it sets any token down; a live edit the host sends meanwhile is
+  recovered by the new service's log request) and frees it
   with the map, so the log clears when the table changes. A map with no document (a Blender
   map played as it is) gets none: `LevelPlayController.live_edits` is null and
   `LiveEdits.refusal(null)` says why. Play loads a document's map with its props apart
