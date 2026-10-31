@@ -100,13 +100,19 @@ func test_hover_lifts_the_shadow_and_leaves_the_icons_still() -> void:
 	assert_eq(card._shadow.theme_type_variation, &"WashShadow")
 
 
-## The seam eases over MOTION_WASH, not at once.
+## The seam eases over MOTION_WASH, not at once. The tween is stepped by hand (no await, so no
+## frame runs it behind our back): the result does not depend on how busy the machine is.
 func test_the_seam_eases() -> void:
 	var card := _card()
 	card.set_hot(PlayTogetherCard.Face.JOIN)
-	await wait_seconds(PlayTogetherCard.MOTION_WASH * 0.4)
+	assert_almost_eq(card.wash().split, 0.5, 0.0001, "no jump on set")
+	var tween: Tween = card._wash_tween
+	assert_not_null(tween, "the seam is tweened")
+	tween.custom_step(PlayTogetherCard.MOTION_WASH * 0.4)
 	var part: float = card.wash().split
 	assert_between(part, 0.5 - PlayTogetherCard.SWING + 0.001, 0.499, "part way: %f" % part)
+	tween.custom_step(PlayTogetherCard.MOTION_WASH)
+	assert_almost_eq(card.wash().split, 0.5 - PlayTogetherCard.SWING, 0.001, "lands")
 
 
 ## Focus picks Host; Right picks Join; Right again on Join is not consumed (focus moves on);
