@@ -8,6 +8,10 @@
 shader_type spatial;
 render_mode specular_disabled, diffuse_burley, cull_disabled;
 
+// A slow sideways sway of the whole piece, metres (a treehouse crown); 0 keeps a part still.
+#define S_SWAY
+uniform float sway : hint_range(0.0, 0.3) = 0.0;
+
 #include "res://shaders/structure_painterly.gdshaderinc"
 
 // A multiplier on the painted colour: metal is lifted a little warm so it reads as gold and iron,

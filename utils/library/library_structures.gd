@@ -53,13 +53,13 @@ const TILE_ZOOM_FACTORS: Dictionary = {
 	"trullo": 1.45,
 	"mushroom_cottage": 1.1,
 	"elven_hall": 1.1,
-	"tulou": 0.85,
+	"tulou": 1.0,
 	"sahel_mosque": 0.8,
 	"stave_church": 0.95,
 	"dwarven_gatehall": 0.85,
 	"wizard_tower": 1.2,
 	"crystal_spire": 1.6,
-	"treehouse": 2.1,
+	"treehouse": 2.6,
 }
 const TILE_LOOK_Z := 0.0
 const TILE_SETTLE_S := 3.0
