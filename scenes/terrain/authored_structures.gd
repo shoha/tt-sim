@@ -37,6 +37,11 @@ const CACHE_LIMIT := 48
 ## material kind; an asset that cannot be baked keeps a MultiMeshInstance3D "decor_<asset>".
 const DECOR_NODE := "decor_baked"
 const NOT_STARTED := -1
+## Milliseconds of node making (installs of landed builds) one frame may spend (perf3). A landed
+## build waits in _installs (StructureInstallQueue) until its turn: at least one is made per frame,
+## and the rest wait once this much has been spent, so adding 20 structures or loading 128 staged
+## never holds a frame.
+const INSTALL_BUDGET_MS := 3.0
 
 ## Highest structure top, map Y (-INF with none), and a counter that changes with every rebuild.
 var top_y: float = -INF
@@ -80,12 +85,25 @@ var _reported: Dictionary = {}
 var _decor_meshes: Dictionary = {}
 ## Surface key -> the ShaderMaterial the baked decor surfaces of that key share.
 var _decor_baked_materials: Dictionary = {}
+## Landed builds whose node is not made yet, at most one per structure id.
+var _installs := StructureInstallQueue.new()
+## Counts the builds started; a later build has a higher number (its install goes first).
+var _seq: int = 0
+## The decor info (_decor_info) of the batch being installed or launched, {} outside one.
+var _info: Dictionary = {}
 
 
 ## The structures of `doc` as nodes, from `built` (StructureGeometry.build(doc), which a loader's
 ## worker ran) or, when that is empty, from a build on the calling thread.
+## With `staged` the nodes are not made here: the builds wait in the install queue and _process
+## makes them INSTALL_BUDGET_MS a frame (install_pending() or flush() make them at once), so a
+## load of 128
+## structures holds no frame; the collision of a structure exists once its node does.
 static func create(
-	doc: MapDocument, built: Dictionary = {}, root: String = PaletteLibrary.DEFAULT_ROOT
+	doc: MapDocument,
+	built: Dictionary = {},
+	root: String = PaletteLibrary.DEFAULT_ROOT,
+	staged: bool = false
 ) -> AuthoredStructures:
 	StructureRecipes.ensure_served()
 	var structures := AuthoredStructures.new()
@@ -93,14 +111,23 @@ static func create(
 	structures._palette_root = root
 	# Parts a loader built with another decor setting (the library was not served yet) are rebuilt.
 	var decor := StructureDecor.available(root)
+	var info := structures._decor_info() if decor else {}
+	structures._info = info
 	var fresh := not built.is_empty() and bool(built.get("decor", false)) == decor
-	var made := built if fresh else StructureGeometry.build(doc, true, decor)
-	structures.apply(made)
-	var keys := StructureGeometry.keys_of(doc, decor)
-	structures._keys = keys
+	var made := built if fresh else StructureGeometry.build(doc, true, decor, info)
 	var list: Array = made.get("structures", [])
+	if decor:
+		# A loader's worker could not read the library: place the plants of its parts now, as a group.
+		StructureDecor.plan_missing(list, info, load_threads())
+	var keys := StructureGeometry.keys_of(doc, decor)
+	if staged:
+		structures._stage(doc, list, keys)
+	else:
+		structures.apply(made)
+		structures._keys = keys
 	for k in mini(doc.structures.size(), list.size()):
 		structures._cache_put(keys[doc.structures[k].id], list[k])
+	structures._info = {}
 	return structures
 
 
@@ -170,6 +197,8 @@ func refresh(doc: MapDocument, use_workers: bool = true) -> void:
 	for id: int in _jobs.keys():
 		if not keys.has(id):
 			_drop_job(id)
+	_installs.retain(keys)
+	_info = {}
 	var rebuilt := 0
 	var ground: MapDocument = null
 	for structure in doc.structures:
@@ -199,11 +228,14 @@ func refresh(doc: MapDocument, use_workers: bool = true) -> void:
 			_start(structure.copy(), key, ground)
 		else:
 			_drop_job(structure.id)
-			var parts := StructureGeometry.build_one(doc, structure, decor)
+			var parts := StructureGeometry.build_one(
+				doc, structure, decor, _info_now() if decor else {}
+			)
 			_cache_put(key, parts)
 			_install(structure.id, key, parts)
 			rebuilt += 1
 			changed = true
+	_info = {}
 	builds += rebuilt
 	last_rebuilt = rebuilt
 	if changed:
@@ -216,6 +248,7 @@ func refresh(doc: MapDocument, use_workers: bool = true) -> void:
 func apply(built: Dictionary) -> void:
 	for id: int in _jobs.keys():
 		_drop_job(id)
+	_installs.clear()
 	for child in get_children():
 		remove_child(child)
 		child.free()
@@ -224,6 +257,7 @@ func apply(built: Dictionary) -> void:
 	_details.clear()
 	for parts: Dictionary in built.get("structures", []):
 		_add_node(int(parts.id), parts)
+	_info = {}
 	_recompute_top()
 	version += 1
 
@@ -240,6 +274,8 @@ func flush() -> int:
 			WorkerThreadPool.wait_for_task_completion(job.task)
 			made += _land(id, not _pending.has(id))
 	_reap_stale(true)
+	made += _install_queued(1 << 30)
+	_info = {}
 	if made > 0:
 		_recompute_top()
 		version += 1
@@ -249,9 +285,34 @@ func flush() -> int:
 	return made
 
 
-## How many builds are in flight.
+## How many builds are in flight or landed and waiting for their node.
 func pending_count() -> int:
-	return _jobs.size()
+	return _jobs.size() + _installs.size()
+
+
+## True when structure `id` has a node (the install queue serves a replacement first).
+func _standing(id: int) -> bool:
+	return get_structure_node(id) != null
+
+
+## Makes the nodes of the landed builds waiting in the install queue, up to `budget_ms` of work
+## (at least one), edits and prioritize()d ones first. Returns how many it made.
+func install_pending(budget_ms: float = INSTALL_BUDGET_MS) -> int:
+	var made := _install_queued(budget_ms)
+	_info = {}
+	if made > 0:
+		_recompute_top()
+		version += 1
+		builds += made
+		last_rebuilt = made
+		built.emit(made)
+	return made
+
+
+## Moves the queued install of structure `structure_id` (if any) to the front of the line: the
+## structure the player has selected or is dragging should not wait behind a burst of new ones.
+func prioritize(structure_id: int) -> void:
+	_installs.prioritize(structure_id)
 
 
 ## The key each structure's node was built with (id -> key; tests).
@@ -319,21 +380,15 @@ func provenance_at(structure_id: int, mesh_name: String, triangle: int) -> Strin
 
 
 func _process(_delta: float) -> void:
-	var made := 0
 	for id: int in _jobs.keys():
 		var task: int = _jobs[id].task
 		if task != NOT_STARTED and WorkerThreadPool.is_task_completed(task):
 			WorkerThreadPool.wait_for_task_completion(task)
-			made += _land(id)
+			_land(id, true, true)
 	_launch_queued(max_running())
 	_reap_stale(false)
-	if made > 0:
-		_recompute_top()
-		version += 1
-		builds += made
-		last_rebuilt = made
-		built.emit(made)
-	if _jobs.is_empty() and _stale.is_empty():
+	install_pending(INSTALL_BUDGET_MS)
+	if _jobs.is_empty() and _stale.is_empty() and _installs.is_empty():
 		set_process(false)
 
 
@@ -359,8 +414,14 @@ func _start(structure: Structure, key: int, ground: MapDocument) -> void:
 	# place in the queue: every add changes the keys of the dozen structures around it, and a
 	# queue of 100 would otherwise build each of them once per neighbour added.
 	_pending.erase(structure.id)
+	_seq += 1
 	_jobs[structure.id] = {
-		"task": NOT_STARTED, "key": key, "out": {}, "structure": structure, "ground": ground
+		"task": NOT_STARTED,
+		"key": key,
+		"out": {},
+		"structure": structure,
+		"ground": ground,
+		"seq": _seq
 	}
 	_launch_queued(max_running())
 	set_process(true)
@@ -386,6 +447,7 @@ static func load_threads() -> int:
 func _launch_queued(limit: int) -> void:
 	var running := 0
 	var decor := _decor()
+	var info: Dictionary = {}
 	for job: Dictionary in _jobs.values():
 		if job.task != NOT_STARTED and not WorkerThreadPool.is_task_completed(job.task):
 			running += 1
@@ -398,8 +460,11 @@ func _launch_queued(limit: int) -> void:
 		var out: Dictionary = job.out
 		var structure: Structure = job.structure
 		var ground: MapDocument = job.ground
+		if decor and info.is_empty():
+			info = _info_now()
 		job.task = WorkerThreadPool.add_task(
-			func() -> void: out["parts"] = StructureGeometry.build_one(ground, structure, decor),
+			func() -> void:
+				out["parts"] = StructureGeometry.build_one(ground, structure, decor, info),
 			false,
 			"AuthoredStructures %d" % id
 		)
@@ -411,6 +476,7 @@ func _launch_queued(limit: int) -> void:
 ## Forgets the build in flight for `id`; its task is reaped later.
 func _drop_job(id: int) -> void:
 	_pending.erase(id)
+	_installs.erase(id)
 	if not _jobs.has(id):
 		return
 	if _jobs[id].task != NOT_STARTED:
@@ -429,15 +495,19 @@ func _reap_stale(wait: bool) -> void:
 
 
 ## Makes the node of the finished job of `id` (unless `install` is false: the result is only
-## cached), then starts the edit that waited behind it. 1 when it made a node, else 0.
-func _land(id: int, install: bool = true) -> int:
+## cached), then starts the edit that waited behind it. 1 when it made a node, else 0. With `defer`
+## the node is not made here: the result joins the install queue (_process makes it within the frame
+## budget) and this returns 0.
+func _land(id: int, install: bool = true, defer: bool = false) -> int:
 	var job: Dictionary = _jobs[id]
 	_jobs.erase(id)
 	var made := 0
 	var parts: Variant = (job.out as Dictionary).get("parts")
 	if parts is Dictionary:
 		_cache_put(job.key, parts)
-		if install:
+		if install and defer:
+			_enqueue(id, job.key, parts, int(job.get("seq", 0)))
+		elif install:
 			_install(id, job.key, parts)
 			made = 1
 	if _pending.has(id):
@@ -447,7 +517,38 @@ func _land(id: int, install: bool = true) -> int:
 	return made
 
 
+## Puts a landed build in the install queue (replacing the one of the same id).
+func _enqueue(id: int, key: int, parts: Dictionary, seq: int) -> void:
+	_installs.push(id, key, parts, seq)
+	set_process(true)
+
+
+## Makes the nodes of queued installs, the best ranked first (StructureInstallQueue), until
+## `budget_ms` is spent (one at least).
+func _install_queued(budget_ms: float) -> int:
+	var made := 0
+	var started := Time.get_ticks_usec()
+	while not _installs.is_empty():
+		var chosen: Dictionary = _installs.pop_best(_standing)
+		_install(int(chosen.id), int(chosen.key), chosen.parts)
+		made += 1
+		if (Time.get_ticks_usec() - started) / 1000.0 >= budget_ms:
+			break
+	return made
+
+
+## Queues the nodes of `list` (the parts of doc's structures in order, `keys` their keys) for
+## installing within the frame budget (create's `staged`).
+func _stage(doc: MapDocument, list: Array, keys: Dictionary) -> void:
+	_installs.clear()
+	for k in mini(doc.structures.size(), list.size()):
+		var id := doc.structures[k].id
+		_installs.push(id, keys[id], list[k], k)
+	set_process(not _installs.is_empty())
+
+
 func _install(id: int, key: int, parts: Dictionary) -> void:
+	_installs.erase(id)
 	_free_structure_node(id)
 	_add_node(id, parts)
 	_keys[id] = key
@@ -621,6 +722,27 @@ func vane_node(vane: Dictionary, style: String, tone: String) -> VaneMotion:
 	return pivot
 
 
+## What the pure decor work reads from the library, made on the main thread (the wind-dressed
+## meshes are main-thread resources): {"rows" (AssetStore.decor_rows), "by_id", "cost" (id ->
+## triangles of its mesh, 0 without one), "sig" (a hash of rows and costs: a plan made from another
+## state is made again)}.
+func _decor_info() -> Dictionary:
+	var rows := AssetStore.decor_rows(_palette_root)
+	var by_id := {}
+	var cost := {}
+	for row in rows:
+		by_id[row.id] = row
+		cost[row.id] = int(_decor_entry(row).get("tris", 0))
+	return {"rows": rows, "by_id": by_id, "cost": cost, "sig": hash([rows, cost])}
+
+
+## The decor info of the batch in hand, made once per batch (refresh, install, flush, create).
+func _info_now() -> Dictionary:
+	if _info.is_empty():
+		_info = _decor_info()
+	return _info
+
+
 ## True when the library serves decor plants: structures are then built with `soft: "anchors"`.
 func _decor() -> bool:
 	return plants and StructureDecor.available(_palette_root)
@@ -639,23 +761,16 @@ func _add_decor(node: Node3D, parts: Dictionary) -> void:
 	anchors.assign(parts.get("anchors", []))
 	if anchors.is_empty():
 		return
-	var rows := AssetStore.decor_rows(_palette_root)
-	var by_id := {}
-	for row in rows:
-		by_id[row.id] = row
-	var groups := {}
-	var placed := StructureDecor.placements(anchors, rows, true)
-	var cost := {}
-	for placement in placed:
-		if not cost.has(placement.id) and by_id.has(placement.id):
-			cost[placement.id] = int(_decor_entry(by_id[placement.id]).get("tris", 0))
-	# At most StructureDecor.MAX_TRIANGLES of plants a structure: the lowest-value anchors go first.
-	for placement in StructureDecor.cap_triangles(placed, cost):
-		if not groups.has(placement.id):
-			groups[placement.id] = [] as Array[Dictionary]
-		(groups[placement.id] as Array[Dictionary]).append(placement)
-	var ids: Array = groups.keys()
-	ids.sort()
+	var info := _info_now()
+	var by_id: Dictionary = info.by_id
+	# The placement, the cap of StructureDecor.MAX_TRIANGLES plants a structure (the lowest-value
+	# anchors go first) and the grouping are pure: a build worker made them (parts.decor_plan,
+	# perf3); a plan from another library state, or none (a synchronous or loader build), is made here.
+	var plan: Dictionary = parts.get("decor_plan", {})
+	if plan.is_empty() or int(plan.sig) != int(info.sig):
+		plan = StructureDecor.plan(anchors, info.rows, info.cost, int(info.sig))
+	var groups: Dictionary = plan.groups
+	var ids: Array = plan.ids
 	# Plants whose asset can be baked (every surface a wind material with vertex weights) go into
 	# one mesh a structure draws once per surface kind; the rest keep a MultiMesh each.
 	var baked: Array[Dictionary] = []
@@ -669,12 +784,15 @@ func _add_decor(node: Node3D, parts: Dictionary) -> void:
 		if not (entry.bake as Array).is_empty():
 			sources[id] = entry.bake
 			for placement in group:
-				baked.append(
-					{
-						"id": id,
-						"transform": placement.transform,
-						"under": bool(placement.get("under", false)),
-					}
+				(
+					baked
+					. append(
+						{
+							"id": id,
+							"transform": placement.transform,
+							"under": bool(placement.get("under", false)),
+						}
+					)
 				)
 			continue
 		var transforms: Array[Transform3D] = []
@@ -695,7 +813,7 @@ func _add_decor(node: Node3D, parts: Dictionary) -> void:
 	instance.name = DECOR_NODE
 	instance.mesh = array_mesh
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	instance.set_meta(&"wind_foliage_category", _decor_category(by_id, ids))
+	instance.set_meta(&"wind_foliage_category", StructureDecor.category_of(by_id, ids))
 	node.add_child(instance)
 
 
@@ -715,26 +833,6 @@ func _add_decor_multimesh(
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	instance.set_meta(&"wind_foliage_category", row.wind_category)
 	node.add_child(instance)
-
-
-## The wind category of the baked decor (the assets of one library share it; the first wins).
-static func _decor_category(by_id: Dictionary, ids: Array) -> String:
-	for id: String in ids:
-		return str((by_id[id] as Dictionary).wind_category)
-	return ""
-
-
-## The triangles of `mesh` (every surface, the full-detail index arrays); 0 for null.
-static func _triangles_of(mesh: Mesh) -> int:
-	if mesh == null:
-		return 0
-	var total := 0
-	for surface in mesh.get_surface_count():
-		var arrays := mesh.surface_get_arrays(surface)
-		var index: Variant = arrays[Mesh.ARRAY_INDEX]
-		if index is PackedInt32Array:
-			total += (index as PackedInt32Array).size() / 3
-	return total
 
 
 ## The wind-dressed mesh of a decor row, shared by every structure of this node.
@@ -757,7 +855,7 @@ func _decor_entry(row: Dictionary) -> Dictionary:
 	var entry := {
 		"source": source.get_instance_id(),
 		"mesh": copy,
-		"tris": _triangles_of(copy),
+		"tris": StructureDecor.triangles_of(copy),
 		"bake": _bake_surfaces(copy, str(row.wind_category)),
 	}
 	_decor_meshes[row.id] = entry
@@ -782,7 +880,10 @@ func _bake_surfaces(mesh: Mesh, category: String) -> Array[Dictionary]:
 			or not arrays[Mesh.ARRAY_INDEX] is PackedInt32Array
 		):
 			return [] as Array[Dictionary]
-		var key := "%s|%s|%s" % [category, material.shader.resource_path, _texture_key(material)]
+		var key := (
+			"%s|%s|%s"
+			% [category, material.shader.resource_path, StructureDecor.texture_key(material)]
+		)
 		if not _decor_baked_materials.has(key):
 			var shared := material.duplicate() as ShaderMaterial
 			shared.set_shader_parameter("mesh_height", StructureDecor.BAKE_MESH_HEIGHT)
@@ -805,24 +906,6 @@ func _bake_surfaces(mesh: Mesh, category: String) -> Array[Dictionary]:
 			)
 		)
 	return out
-
-
-## A short hash of the albedo texture of a wind `material` (its pixels, so two assets that carry
-## the same picture share a baked surface), or "none".
-static func _texture_key(material: ShaderMaterial) -> String:
-	var texture: Variant = material.get_shader_parameter("albedo_texture")
-	if not texture is Texture2D:
-		return "none"
-	var image := (texture as Texture2D).get_image()
-	if image == null:
-		return "none"
-	var hashing := HashingContext.new()
-	hashing.start(HashingContext.HASH_SHA256)
-	hashing.update(image.get_data())
-	return (
-		"%dx%d:%s"
-		% [image.get_width(), image.get_height(), hashing.finish().hex_encode().substr(0, 16)]
-	)
 
 
 ## The yard of a building (StructureDressing): the soft ground patch and path (no shadow) and the
