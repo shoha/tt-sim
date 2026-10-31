@@ -21,7 +21,7 @@ core:turf_longhouse 853df8c6c7a5b67765870e48a5f1e0d5 986
 core:brick_terrace df71aea7f13b8dc798602e73549227c3 3000
 core:canal_house 17906be11142c0f5aedef3ffce10398f 3552
 core:barn 51eec583e9bd1d60e850fd4a98a45178 950
-core:tudor_townhouse 6159e31226b7e6032081e58fa13b6db2 3094
+core:tudor_townhouse d74fedfe23bb7349c0217454f55a097f 3182
 core:pueblo 777a690a02b8642e4a3539f7d538180a 2238
 core:adobe_parapet 81533da91bc407386769f14b33b5e15f 1136
 core:adobe_rounded 2b3c364f1f644a7994c8df7500d933ca 1140
@@ -39,7 +39,7 @@ core:pagoda_tower 4e3afdfac1af3aa908325cb4fec3ed31 2284
 core:castle_keep ab151905e8f62a94ddd0ea7969a84a89 3292
 core:gatehouse 337ded9e439d1a9320b09bddbe19551b 3052
 core:half_timber_house 61e71aec8aec168315d06d59be1459e0 1574
-core:tudor_framed a96bab4df5990bc4121751e246d0ac4f 3174
+core:tudor_framed 6c6491c02b5d1365e7f90cb96fbf19fb 3218
 core:herringbone_cottage 0b72e7eae7a0db943ba1fe0e18ddecca 1734
 core:close_studded_house c6d615e2ef6ea30e4521fb7fcfd40363 1542
 core:porch_cottage dc656922c9c9708b8572b0a1d5eae4bc 1898

@@ -664,6 +664,31 @@ blotchy green crown; the crown's flat facets still read low-poly), riad fair (th
 visible only from the open side, behind the veranda rails), blackhouse fair (sod roof green, distinct
 from the thatch), moorish_souk weak to fair (a plain flat box with a porch).
 
+### Ivy anchors, jetty undersides and street palettes (2026-10-30, branch `ivy_pins`; procgen pin 657a90f)
+
+- **Digests.** Of the 100 core structures only `tudor_townhouse` (3,094 to 3,182 triangles) and
+  `tudor_framed` (3,174 to 3,218) moved: procgen's jetty joist ends keep their undersides
+  (`keep_bottom`). `ivy_manor` and the rest hold (ivy blankets are in `anchors`, not in the digest);
+  the two tiles were redrawn (`tools/make_tile_job.gd`, `docs/systems/library.md`).
+- **Ivy anchors mode** spends no blob budget: more, wider and taller patches, up to four walls (front,
+  sides, back), `anchor_budget` (24 per node). The decor switch's `DECOR_IVY` multipliers still apply, so a
+  decorated build now has more anchors than the plain one (cottage 6 against 10;
+  `test_anchors_are_in_the_parts_but_not_in_the_digest` asserts at least as many). `StructureDecor`'s caps
+  held: about 57 plants placed, 26 kept under the 4,500 triangle cap (under-layer and the smallest
+  patches go first), baked tris 52,288 to 52,980 over 12 decorated buildings, still one baked node with 2
+  to 4 surfaces. `_add_decor` went from 2.1 ms to 3.1-3.5 ms per building (12 buildings) and 5.1-5.5 ms
+  over the 30-building run (placement of the larger patch set is about 1.8 ms of it, the cap and groups
+  2, the bake 1.1). No `DECOR_IVY` change: on the cottage, ivy_manor, keep and townhouse the ivy is
+  lush but not smothering, windows clear, no rows.
+- **Street lots paint from their own palette.** `ProcgenRow.plan` lots carry `palette` ({wall, roof hex,
+  accent []}, drawn per lot from the species). `WallGeometry._row_surfaces` turns it into
+  `StructureLook.lot_hints` (a one-tone wall and roof list, the accents) for `StructurePaint.palette_of`,
+  so each lot's wall and roof take that tone (the same 10 percent jitter) and a lot without palette data keeps the global draw.
+  Looks (real shaders, `render_jobs/ivy_pins_look1`): pueblo adobe, villa cream plaster under terracotta,
+  alpine dark timber under slate or brown shingle, canal red brick and red tile, tudor warm plaster and
+  tile or slate, minka pale plaster with thatch or dark tile: the species read as themselves and the lots
+  differ in roof tone. The canal street stays one red.
+
 ## Dressing
 
 Probe B (2026-10-28, branch `probe-b`): a building is settled into its place by a yard,

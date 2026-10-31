@@ -156,10 +156,16 @@ static func build_one(doc: MapDocument, wall: Wall) -> Dictionary:
 
 ## A street's surfaces in `parts`, painted like a Structure (card S6): the roofs split off the
 ## planks into "roof" (found from each vertex's provenance path), and each lot given its own roof
-## tile colour and wall lean (StructurePaint), so a street and a structure wear one look.
+## tile colour and wall lean (StructurePaint), so a street and a structure wear one look. A lot
+## that carries a `palette` (ProcgenRow.lot_palette, drawn from its species) is painted from it:
+## its wall and roof tones are the base tones and its accents the trim (StructureLook.lot_hints);
+## a lot without one keeps the global draw.
 static func _row_surfaces(
 	parts: Dictionary, doc: MapDocument, wall: Wall, geometry: PlantGeometry
 ) -> void:
+	var lot_hints := {}
+	for lot in row_lots(doc, wall):
+		lot_hints[ProcgenRow.lot_path(lot)] = StructureLook.lot_hints(lot.get("palette", {}))
 	var roles := PackedStringArray()
 	var groups := PackedInt32Array()
 	var lots := {}
@@ -172,7 +178,7 @@ static func _row_surfaces(
 			lots[lot] = palettes.size()
 			palettes.append(
 				StructurePaint.palette_of(
-					hash([doc.map_seed, wall.id, wall.seed_value]), lot.hash()
+					hash([doc.map_seed, wall.id, wall.seed_value]), lot.hash(), lot_hints.get(lot, {})
 				)
 			)
 		groups.append(lots[lot])
