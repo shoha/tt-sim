@@ -1,0 +1,274 @@
+{
+ "out_dir": "render_jobs/perf3_banners",
+ "timeout_s": 240,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 100,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "banner",
+    "bartizan",
+    "vane",
+    "awning"
+   ],
+   "ref": "core:castle_keep",
+   "width": 8.0,
+   "depth": 8.0,
+   "yaw": 0.0,
+   "seed": 5,
+   "decor": false
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 30.0,
+   "at": [
+    0,
+    -12.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 0.0,
+   "dir_deg": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 2.0
+  },
+  {
+   "op": "capture",
+   "name": "A_storm_t0",
+   "desc": "zoom 30"
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 14.0,
+   "at": [
+    0,
+    -9.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 0.0,
+   "dir_deg": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 2.0
+  },
+  {
+   "op": "capture",
+   "name": "C_storm_t0",
+   "desc": "zoom 14"
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 20.0,
+   "at": [
+    0,
+    -10.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "clock": 0.0,
+   "dir_deg": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 2.0
+  },
+  {
+   "op": "capture",
+   "name": "B_calm_t0",
+   "desc": "keep calm clock 0.0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "clock": 2.0,
+   "dir_deg": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 2.0
+  },
+  {
+   "op": "capture",
+   "name": "B_calm_t2",
+   "desc": "keep calm clock 2.0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "windy",
+   "clock": 0.0,
+   "dir_deg": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 2.0
+  },
+  {
+   "op": "capture",
+   "name": "B_windy_t0",
+   "desc": "keep windy clock 0.0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "windy",
+   "clock": 2.0,
+   "dir_deg": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 2.0
+  },
+  {
+   "op": "capture",
+   "name": "B_windy_t2",
+   "desc": "keep windy clock 2.0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 0.0,
+   "dir_deg": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 2.0
+  },
+  {
+   "op": "capture",
+   "name": "B_storm_t0",
+   "desc": "keep storm clock 0.0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 2.0,
+   "dir_deg": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 2.0
+  },
+  {
+   "op": "capture",
+   "name": "B_storm_t2",
+   "desc": "keep storm clock 2.0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "banner",
+    "bartizan",
+    "vane",
+    "awning"
+   ],
+   "ref": "core:castle_keep",
+   "width": 8.0,
+   "depth": 8.0,
+   "yaw": 180.0,
+   "seed": 5,
+   "decor": false
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 20.0,
+   "at": [
+    0,
+    -10.0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 0.0,
+   "dir_deg": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 2.0
+  },
+  {
+   "op": "capture",
+   "name": "B_back_storm_t0",
+   "desc": "yaw 180"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "remove_all"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}
