@@ -12,6 +12,52 @@ render_mode specular_disabled, diffuse_burley, cull_disabled;
 #define S_SWAY
 uniform float sway : hint_range(0.0, 0.3) = 0.0;
 
+// Cloth in the wind (topic wind_c): banner, pennant and awning cloth lean downwind and flutter in the
+// gusts. The Wind autoload publishes the three global vec4s (autoloads/wind.gd); the gust field below
+// mirrors wind_foliage_include.gdshaderinc's wind_gust_field term for term. The per-vertex reach comes
+// from StructureCloth in the second UV set: x the metres from the cloth's attachment, grown with the
+// distance (0 at the pole side or the wall, the free edge or hem biggest), y how far the piece leans
+// downwind (a pennant 1, a hanging banner 0.6, an awning 0 and a flap instead). Every displacement is a
+// function of the world position and the weight alone (never the normal), so the two faces of a sheet
+// and its edges move together and never split. `cloth_wind` is 0 for every other ornament kind.
+#define S_WIND
+global uniform vec4 wind_dir;
+global uniform vec4 wind_phase;
+global uniform vec4 wind_gust;
+uniform float cloth_wind : hint_range(0.0, 2.0) = 0.0;
+
+float s_gust_field(vec2 world_xz) {
+	vec2 dir = wind_dir.xy;
+	float along = dot(world_xz, dir);
+	float across = dot(world_xz, vec2(-dir.y, dir.x));
+	float sp = wind_gust.z;
+	float wave = 0.55 * sin(along * (6.2831853 / 12.0) - wind_phase.x + sp)
+		+ 0.45 * sin(along * (6.2831853 / 19.0) + across * 0.25 - wind_phase.y + 1.7 + sp * 1.618);
+	wave += wind_gust.y * 0.3 * sin(along * (6.2831853 / 7.0) + across * 0.35 - wind_phase.z + 0.6 + sp * 2.414);
+	return smoothstep(-0.2, 0.9, wave);
+}
+
+vec3 s_cloth_wind(vec3 vertex, vec2 weight, mat4 model) {
+	float motion = wind_gust.w * cloth_wind;
+	if (motion <= 0.0 || weight.x <= 0.0) {
+		return vec3(0.0);
+	}
+	vec3 w = (model * vec4(vertex, 1.0)).xyz;
+	float g = s_gust_field(w.xz);
+	// Wind strength: a calm day stirs the cloth (0.4), windy fills it (1.05), a storm snaps it (1.6).
+	float strength = clamp(0.25 + wind_dir.z / 10.0, 0.0, 1.6);
+	vec3 down = vec3(wind_dir.x, 0.0, wind_dir.y);
+	vec3 across = vec3(-wind_dir.y, 0.0, wind_dir.x);
+	float lean = strength * (0.10 + 0.22 * g) * weight.y;
+	float ph = TIME * (2.0 + strength * 2.5) + dot(w.xz, vec2(1.7, 2.3)) + weight.x * 3.0;
+	float f1 = sin(ph);
+	float f2 = sin(ph * 1.7 + 1.3);
+	float amp = strength * (0.03 + 0.08 * g);
+	// A flag flutters across the wind and along it; an awning (lean 0) flaps up and down.
+	vec3 flutter = across * f1 * amp + down * f2 * amp * 0.5 * weight.y + vec3(0.0, 1.0, 0.0) * f2 * amp * (1.2 - weight.y * 0.9);
+	return weight.x * motion * (down * lean + flutter);
+}
+
 #include "res://shaders/structure_painterly.gdshaderinc"
 
 // A multiplier on the painted colour: metal is lifted a little warm so it reads as gold and iron,

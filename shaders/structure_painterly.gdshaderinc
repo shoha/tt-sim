@@ -84,6 +84,12 @@ void vertex() {
 		VERTEX.z += cos(TIME * 0.7 + p * 1.3) * sway * 0.7;
 	}
 #endif
+#ifdef S_WIND
+	// A shader that defines S_WIND defines `vec3 s_cloth_wind(vec3 vertex, vec2 weight, mat4 model)`
+	// before this include (the ornament shader: banner, pennant and awning cloth). The weight is the
+	// second UV set, written by StructureCloth.
+	VERTEX += s_cloth_wind(VERTEX, UV2, MODEL_MATRIX);
+#endif
 }
 
 // The faint warm rim, from the albedo, the geometry normal and the view vector.
