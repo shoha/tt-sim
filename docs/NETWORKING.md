@@ -954,6 +954,16 @@ the client in the box.
   swims, so its ring shows only when at most `SWIM_SUBMERGED_SHARE` of it stands clear, and
   the check is that each wet token's ring is what `WaterSurface.is_submerged` gives for its
   depth (a waist-deep avatar shows none). Passed so on both sides on 2026-10-10 (run p4).
+  Since 2026-10-31 the build job also lays the four town buildings (probe `structures.gd`
+  `town`), so the transferred `map.ttmap` carries structures and the fingerprint's `structures`
+  key compares their records and built bounds. Passed on both sides that day (host and client
+  both headless, client 17.0 s from join to compare; four records, same hashes; no mismatch).
+  Run notes: the main Steam client must be running unsandboxed (the host fails at once with
+  "Cannot create IPC pipe" otherwise); the box's `OpenFilePath` folder may have been deleted
+  with an old scratchpad, and adding one needs the user's OK, so read the boxed client's log
+  from its private copy (`C:\Sandbox\<user>\SteamAlt\user\current\AppData\...`, the same path
+  under the box's user profile); a client left running after a failed host is stopped with
+  `Stop-Process -Id <id> -Force` (not the box's `/terminate`, which also kills its Steam).
 - Session: `tests/net/steam_session.tscn`, the hosted session over real Steam (the ENet
   scenarios' flow with the game's own Steam path). Run the host unsandboxed and the client in
   the box with the same `--rendezvous` prefix (its files are `<prefix>.*`; the host deletes an
