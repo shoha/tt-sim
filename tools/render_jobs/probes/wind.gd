@@ -20,7 +20,96 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _apply(base, wind, step)
 		"cost":
 			return _cost(wind, int(step.get("n", 20000)))
+		"weather":
+			return _weather(base, wind, step)
+		"particle_cost":
+			return _particle_cost(base, int(step.get("n", 20000)))
 	return _report(wind)
+
+
+## `weather` (card wind_b): rain, snow (0..1) and `preset` or `strength` (the wind dial, which is
+## also the Wind tile's intensity) through GameMap.apply_weather_overrides, setting the weather
+## renderer up first when the open map has none. The wind is snapped (and the clock pinned at
+## `clock` when given) so a capture is repeatable; the renderer's smoothing needs about 1.5 s.
+static func _weather(base: Node, wind: Node, step: Dictionary) -> String:
+	var game_map: GameMap = base.get("_game_map")
+	if game_map.get("_weather_renderer") == null:
+		var manager: LevelEnvironmentManager = base.ctrl().get("_environment")
+		game_map.setup_weather(manager)
+	var strength := float(step.get("strength", 0.0))
+	if step.has("preset"):
+		strength = WindPresets.strength_of(String(step["preset"]))
+	game_map.apply_weather_overrides(
+		{
+			"rain_intensity": float(step.get("rain", 0.0)),
+			"snow_intensity": float(step.get("snow", 0.0)),
+			"fog_intensity": 0.0,
+			"wind_intensity": strength,
+			"wind_direction_deg": float(step.get("dir_deg", -1.0)),
+			"wind_seed": float(step.get("seed", 0)),
+		}
+	)
+	wind.snap()
+	if step.has("motion"):
+		wind.set_wind_motion(float(step["motion"]))
+	if bool(step.get("unpin", false)):
+		wind.clear_clock_override()
+	elif step.has("clock"):
+		wind.set_clock_override(float(step["clock"]))
+	wind.publish(wind.clock())
+	return _particles_report(game_map)
+
+
+static func _particles_report(game_map: GameMap) -> String:
+	var renderer: WeatherRenderer = game_map.get("_weather_renderer")
+	if renderer == null:
+		return "no weather renderer"
+	var rain := renderer._rain_emitter.process_material as ParticleProcessMaterial
+	var snow := renderer._snow_emitter.process_material as ParticleProcessMaterial
+	var streak := renderer._wind_emitter.process_material as ParticleProcessMaterial
+	return (
+		"particles: writes %d, wind %s; rain dir %s grav %s; snow grav %s turb %.2f; "
+		% [renderer.wind_apply_count, renderer._wind_smooth, rain.direction, rain.gravity,
+			snow.gravity, snow.turbulence_noise_strength]
+		+ "streak dir %s v %.1f-%.1f visible %s ratio %.2f"
+		% [streak.direction, streak.initial_velocity_min, streak.initial_velocity_max,
+			renderer._wind_emitter.visible, renderer._wind_emitter.amount_ratio]
+	)
+
+
+## `particle_cost` (`n`): CPU microseconds of the renderer's per-frame wind work with the open
+## map's weather renderer: wind_due alone (the common frame), the sample plus step_wind (one frame
+## in six at 60 fps), and the whole _process for reference.
+static func _particle_cost(base: Node, n: int) -> String:
+	var game_map: GameMap = base.get("_game_map")
+	var renderer: WeatherRenderer = game_map.get("_weather_renderer")
+	if renderer == null:
+		return "no weather renderer"
+	var t0 := Time.get_ticks_usec()
+	var due := 0
+	for i in range(n):
+		if renderer.wind_due(0.0):
+			due += 1
+	var due_us := float(Time.get_ticks_usec() - t0) / float(n)
+	var state: WindState = Wind.state
+	t0 = Time.get_ticks_usec()
+	var writes := 0
+	for i in range(n):
+		var pos := Vector3(float(i % 40), 0.0, 3.0)
+		var gust := WindModel.gust_at(state, pos, Wind.clock() + float(i) * 0.1)
+		renderer._wind_accum = 0.1
+		if renderer.step_wind(Wind.wind_at(pos), state.gust_amp * gust):
+			writes += 1
+	var step_us := float(Time.get_ticks_usec() - t0) / float(n)
+	t0 = Time.get_ticks_usec()
+	for i in range(n):
+		renderer._process(0.016)
+	var process_us := float(Time.get_ticks_usec() - t0) / float(n)
+	return (
+		"wind_due %.3f us/call, sample+step_wind %.2f us/call (%d of %d wrote), _process %.2f us/call; "
+		% [due_us, step_us, writes, n, process_us]
+		+ "amortized wind work at 60 fps %.3f us/frame" % [due_us + step_us / 6.0]
+	)
 
 
 static func _apply(base: Node, wind: Node, step: Dictionary) -> String:

@@ -4244,3 +4244,21 @@ and `TIME`. Shared GPU, indicative numbers, not a pinned pass.
   the old gust direction: the mean channel difference over 1920x1080 is 0.007 at home zoom (410
   pixels over 8) and 0.15 to 0.26 at close zoom, against 0.12 to 0.24 between two runs of the same
   code (the scatter and shadows differ a little run to run).
+
+### Weather particles follow the wind (wind_b, 2026-10-30)
+
+Phase (b): the weather renderer samples the wind and writes the particle materials a few times a
+second. Render job `wind_b_look`, probe `wind.gd particle_cost` (20,000 calls, shared GPU,
+indicative; CPU microseconds are less affected by the GPU than frame times):
+
+- **`wind_due` (every frame, the common case)** 0.16 to 0.17 microseconds per call.
+- **Sample plus smoothing plus change check plus material write** (`gust_at`, `wind_at`, `step_wind`
+  with 63 percent of the calls writing, because the test moves the sample position and clock
+  hard) 9.6 microseconds per call; in play one frame in six at most (the 0.1 s interval) and a
+  steady wind writes nothing.
+- **Amortised cost per frame** about 1.8 microseconds (0.0018 ms), against the 0.05 ms aim.
+  The whole `_process` (emitter positions, extents and AABBs, which existed before) is about
+  6 microseconds.
+- **Counts and draws.** Rain 1000, snow 600 and streaks 200 particles as before; no node, mesh,
+  material or pass was added, so the draw calls are unchanged by construction (not re-counted).
+  The streaks' `visible` flag changes only when the wind sample crosses zero (reduce-motion).

@@ -1175,13 +1175,13 @@ before, serialized under the `weather_overrides` key:
     "fog_intensity": 0.0,
     "wind_intensity": 0.0,
     "wind_seed": 0.0,           # phases the gust fronts; 0 = derive from the level folder
-    "wind_direction_deg": -1.0, # degrees on (x, z), 0 = +x, 90 = +z; below 0 = the default (-z)
+    "wind_direction_deg": -1.0, # degrees on (x, z), 0 = +x, 90 = +z; below 0 = the default (toward 0.707, 0, -0.707)
 }
 ```
 
 All values default to 0.0 (`wind_direction_deg` to -1.0, "default direction"); saved levels without the two wind fields load with those defaults. An empty dictionary means no weather. Multiple effects can be active simultaneously.
 
-`wind_intensity` is also the strength dial of the one global wind (`Wind` autoload, [systems/wind.md](systems/wind.md)): plants sway and gust by it whether or not the Wind tile's particles are on. Rain, snow and the wind streaks still slant with their own fixed direction until phase (b) of that design.
+`wind_intensity` is also the strength dial of the one global wind (`Wind` autoload, [systems/wind.md](systems/wind.md)): plants sway and gust by it whether or not the Wind tile's streaks are on. Rain, snow and the wind streaks follow that same wind (phase (b), see "Wind-driven particles" below), so "no wind" is the calm preset (intensity 0), not a missing Wind tile.
 
 ### UI Controls
 
@@ -1201,10 +1201,40 @@ While the drawer is open, live edits are applied to the local viewport immediate
 
 | Effect | Particles | Mesh | Key Properties |
 |--------|-----------|------|----------------|
-| Rain | 1000 | BoxMesh (thin streak) | Fast fall (12-16 vel), `particle_flag_align_y`, collision via `GPUParticlesCollisionHeightField3D` |
-| Snow | 600 | SphereMesh | Slow drift (1-2 vel), turbulence enabled for natural lateral movement |
-| Wind | 200 | BoxMesh (elongated wisp) | Diagonal travel, `particle_flag_align_y`, medium speed (6-10 vel) |
+| Rain | 1000 | BoxMesh (thin streak) | Fast fall (12-16 vel, up to 25 percent faster at the slant cap), `particle_flag_align_y`, leans with the wind, collision via `GPUParticlesCollisionHeightField3D` |
+| Snow | 600 | SphereMesh | Slow fall (1-2 vel, eased in wind), drifts along the wind, turbulence rises in gusts |
+| Wind | 200 | BoxMesh (elongated wisp) | Travels along the wind at `2 + 0.6 * speed` m/s (x 0.8..1.2), `particle_flag_align_y`; the amount ratio is 0.2..1 over the tile's intensity, hidden at motion 0 |
 | Fog | N/A | N/A | Adds up to 0.05 to base `fog_density` at max intensity |
+
+### Wind-driven particles
+
+Phase (b) of [systems/wind.md](systems/wind.md). The weather renderer holds no wind vector of its own:
+every number comes from the `Wind` autoload through the pure functions of `utils/wind_particles.gd`
+(`WindParticles`), and rain and snow follow it whether or not the Wind tile is on.
+
+- **Sampling.** At most every 0.1 s (`WindParticles.UPDATE_INTERVAL`) `WeatherRenderer._process` samples
+  `Wind.wind_at` at the view centre (so the gust field leans the rain harder as a front passes and
+  relaxes it in a lull), multiplies by `Wind.motion_scale()`, smooths it (0.4 s exponential) and writes
+  the three process materials only if the smoothed wind moved more than 0.15 m/s (or the gust
+  factor 0.04). Nothing runs per particle; a steady wind makes no writes. One sample drives the
+  whole screen, so a front is not seen crossing the rain (a custom particle shader would be needed
+  for that, see wind.md).
+- **Rain.** The lean is `tan = clamp(speed * 0.045, 0, 0.7)` (about 4 degrees at calm, 20 at windy,
+  32 at storm, 35 at the cap): `direction` is down plus that lean, and the acceleration gets the same
+  ratio horizontally (`gravity = (lean * 9.8, -9.8)`) so a streak keeps its lean as it speeds up.
+  Launch speed rises up to 25 percent at the cap.
+- **Snow.** Horizontal acceleration equals half the wind speed (capped 4), which the flakes' damping
+  turns into a drift of about that speed; gravity eases by up to 30 percent at 14 m/s;
+  `turbulence_noise_strength = 1 + 2.5 * gust_amp * local_gust * clamp(speed / 14, 0, 1)`, and the
+  noise field slides along the wind (`0.03 * speed`) for a gentle swirl.
+- **Streaks.** Direction is the wind's, speed `2 + 0.6 * speed`, colour alpha 0.28..0.52 with the
+  local gust. The Wind tile sets how many show (amount ratio 0.2 at the lowest setting to 1); at
+  calm (intensity 0) none do.
+- **Reduce-motion and the player's wind motion.** The sample is scaled by the motion scale, so lean,
+  drift and gust turbulence fade out together and at 0 the rain and snow fall straight at their
+  normal speed; the streaks are hidden (`visible = false`). The falling itself is never scaled.
+- **Clouds, fog and sky.** None of them moves today (a static panorama and a density tween), so
+  nothing drifts and nothing was added.
 
 ### Camera Tracking
 
@@ -1224,7 +1254,8 @@ All intensity changes animate smoothly over 1 second via tweens on `amount_ratio
 
 | File | Purpose |
 |------|---------|
-| `scenes/effects/weather_renderer.gd` | Core renderer class (emitters, fog, camera tracking, transitions) |
+| `scenes/effects/weather_renderer.gd` | Core renderer class (emitters, fog, camera tracking, transitions, the rate-limited wind write) |
+| `utils/wind_particles.gd` | Pure slant, drift, turbulence, streak and smoothing functions the renderer applies |
 | `resources/level_data.gd` | `weather` field (typed `WeatherSettings`; serialization, duplication) |
 | `scenes/states/playing/level_edit_panel.gd` | Weather UI section (sliders, signals) |
 | `scenes/states/playing/gameplay_menu_controller.gd` | Signal routing, snapshot/revert, network broadcast |

@@ -8,9 +8,12 @@ and performance before new styles. The bar it is judged against is the suite's: 
 at tabletop zoom (a gust you can watch cross a meadow, not a uniform shimmer), painterly, lively,
 and never the same wind everywhere (`AGENTS.md` at the suite root, "Guiding principle").
 
-Status (2026-10-30): phase (a) DONE on branch `wind_a` (see "Phase (a) as built" below); phases
-(b) particles, (c) mills and cloth, (d) decor, (e) GM controls, (f) optional are NOT STARTED, and
-the rest of this document is still the design they build from. Where the design and the code
+Status (2026-10-30): phase (a) DONE on branch `wind_a` (see "Phase (a) as built" below); phase
+(b) particles DONE on branch `wind_b` (see "Phase (b) as built", after phase (a)'s section); phases
+(c) mills and cloth, (d) decor, (e) GM controls, (f) optional are NOT STARTED, and
+the rest of this document is still the design they build from. The default wind now blows toward
+(0.707, 0, -0.707), not -z (owner, 2026-10-30; mentions of -z in the sections below are the
+phase (a) text). Where the design and the code
 disagree, the code is right and the section below says so. Every number marked "start" is a tuning
 start; the ones phase (a) tuned are listed below, the rest wait for their phase's render round.
 
@@ -450,6 +453,69 @@ view axis, so crowns appear to rise and sink more than to swing sideways; a dire
 component (the owner's call, open question 1 again) would show gusts more clearly. Two stills
 cannot prove travel: a 20 s capture is still the judgment to make in phase (b).
 
+### Phase (b) as built (2026-10-30, branch `wind_b`)
+
+Owner decisions applied: the default direction is the weather particles' old one, toward
+(0.707, 0, -0.707), so rain slant and gusts read against the camera and the plants (open question 1
+is settled; the mills' clamp in 4c still applies when phase (c) lands); rain and snow follow the wind
+whether or not the Wind tile is on; the wind streaks are a view of the same wind.
+
+What exists:
+
+- **The default direction is defined once**: `WindPresets.DEFAULT_DIR_ANGLE = -PI / 4`, with
+  `default_direction()` (unit vector) and `default_direction_deg()` (315) derived from it;
+  `WindState`'s default and the weather renderer's streak emitter read it. `-1` in
+  `wind_direction_deg` still means "the default", so saved levels keep their meaning (they now
+  blow toward the diagonal where they blew toward -z).
+- **`utils/wind_particles.gd` (`WindParticles`)**: the pure functions (rain slant, direction and
+  gravity, snow drift, gravity and turbulence, streak speed and ratio, smoothing, the change rule)
+  and their constants. Tested by `tests/unit/test_wind_particles.gd`, which also holds the guard that
+  no weather script keeps a literal wind vector.
+- **`WeatherRenderer`** loses `WIND_DIRECTION`, `RAIN_WIND_STRENGTH`, `SNOW_WIND_STRENGTH` and the
+  duplicated literal in the streak emitter. `_process` calls `wind_due(delta)` and, at most every
+  0.1 s, samples `Wind.wind_at` and the local gust at the view centre, scaled by the motion scale,
+  and `step_wind` smooths it (0.4 s) and writes the materials only when it moved (0.15 m/s or gust
+  0.04). Constants as designed: rain `tan = clamp(speed * 0.045, 0, 0.7)`; snow drift half the wind,
+  capped at 4 m/s; streak speed `2 + 0.6 * speed`.
+- **Reduce-motion and `wind_motion`** scale the sampled wind, so lean, drift, gust turbulence and the
+  streaks fade out together; rain and snow still fall at their normal speed (tested and captured).
+- **Clouds, fog, sky**: nothing drifts today, so nothing was added (as the card says).
+
+Deviations and what was learned:
+
+1. **Streak speed is `2 + 0.6 * speed`, not `2 + speed`.** At the design's rate a storm streak ran
+   12 to 18 m/s, crossing the whole emission box in under 3 s; at 0.6 it reads as drifting wisps.
+2. **The Wind tile sets the streak amount (0.2..1), not a threshold.** The tile and the wind strength
+   are the same dial, so "visible in proportion to wind speed, hidden at calm" is the tile's intensity
+   itself; the 0.15 threshold of 2.6 was dropped. The streaks brighten with the local gust
+   (alpha 0.28..0.52).
+3. **Reduce-motion hides the streaks and straightens the rain** (card item 6), where 2.6 had left a
+   static slant. Rain and snow keep falling at full speed.
+4. **One sample for the whole screen.** The wind is read at the view centre, so a gust leans all the
+   rain at once; the spatial wave in the plants does not reach the rain. The optional particle shader
+   would fix it and was not attempted.
+5. **Snow drift goes through gravity**, the one parameter that survives collision hide-on-contact:
+   the horizontal acceleration is the drift speed, and the flakes' damping (0.5 to 1.5) makes the
+   terminal drift 0.7 to 2 times that, so flakes differ from each other.
+6. **The phase (a) captures changed with the default direction**: against the earlier run of
+   `wind_a_look` (forest map), mean channel difference at home zoom 5.2 and 4.6 (calm, clocks 0 and 6),
+   10.3 and 10.9 (windy), 12.0 and 13.4 (storm), and 0.6 for the two close captures that set
+   `dir_deg` 0 explicitly (run-to-run noise). Trees now lean across the view as well as along it.
+
+How the look reads (render job `wind_b_look`, `grassland_meadow_summer_s1`, 150 ft, zoom 10, calm,
+windy and storm at wind clocks 0 and 6, plus a live-clock series of four stills 1.5 s apart; the
+harness captures stills only, so the 12 to 20 s moving capture was replaced by those):
+- Rain, calm: nearly vertical, a few degrees. Windy: a clear lean of about 20 degrees, still orderly.
+  Storm: about 30 degrees and the live series shows the lean breathing between roughly 15 and 35
+  degrees as gusts pass; strong but not chaotic. Motion 0: vertical at full fall speed.
+- Snow, calm: sparse flakes falling slowly. Windy and storm: flakes drift off along the wind, a loose
+  swirl in the storm; the 600 flakes spread thin over a large view, so the drift reads weakly at
+  zoom 22 and well at zoom 10. Honest verdict: good at windy, a little sparse at storm.
+- Streaks: faint thin wisps, readable at storm along the wind direction; at windy they are few. They
+  do not compete with the plants. Hidden at calm and at motion 0.
+- At zoom 22 (the map's wide view) all three are close to invisible (the rain boxes are 0.02 m
+  wide); that was already so before this phase and was not changed.
+
 ## 5. Look, tuning and accessibility
 
 ### How gusts should read
@@ -560,3 +626,5 @@ working days including the pinned-clock A/B. Phase (b) next (rain and snow, abou
 - 2026-10-30: design written (branch `wind_design`), no code.
 - 2026-10-30: phase (a) built on branch `wind_a` (autoload, pure model, global uniforms, plant
   shaders, reduce-motion and wind-motion scale, tests, render and cost measurements).
+- 2026-10-30: phase (b) built on branch `wind_b` (default direction toward 0.707, 0, -0.707, defined
+  once; rain, snow and the wind streaks follow the wind; tests; look and cost measured).

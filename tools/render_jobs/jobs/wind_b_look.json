@@ -1,0 +1,571 @@
+{
+ "out_dir": "render_jobs/wind_b_look2",
+ "timeout_s": 900,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/landform.gd",
+   "action": "new",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 150,
+   "seed": 1234,
+   "landform": "flat"
+  },
+  {
+   "op": "wait_ready",
+   "settle": 3.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/close_zoom.gd",
+   "action": "fade",
+   "on": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/tree_fade.gd",
+   "factor": 0
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ground_parity.gd",
+   "action": "nocursor"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "wind",
+   "freeze": true
+  },
+  {
+   "op": "zoom",
+   "size": 10.0
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "clock": 0.0,
+   "sway": false
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "calm",
+   "rain": 1.0,
+   "snow": 0.0,
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "rain_calm_t0",
+   "desc": "rain, calm, clock 0 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "calm",
+   "rain": 1.0,
+   "snow": 0.0,
+   "clock": 6.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "rain_calm_t6",
+   "desc": "rain, calm, clock 6 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "windy",
+   "rain": 1.0,
+   "snow": 0.0,
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "rain_windy_t0",
+   "desc": "rain, windy, clock 0 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "windy",
+   "rain": 1.0,
+   "snow": 0.0,
+   "clock": 6.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "rain_windy_t6",
+   "desc": "rain, windy, clock 6 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "storm",
+   "rain": 1.0,
+   "snow": 0.0,
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "rain_storm_t0",
+   "desc": "rain, storm, clock 0 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "storm",
+   "rain": 1.0,
+   "snow": 0.0,
+   "clock": 6.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "rain_storm_t6",
+   "desc": "rain, storm, clock 6 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "calm",
+   "rain": 0.0,
+   "snow": 1.0,
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 5.0
+  },
+  {
+   "op": "capture",
+   "name": "snow_calm_t0",
+   "desc": "snow, calm, clock 0 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "calm",
+   "rain": 0.0,
+   "snow": 1.0,
+   "clock": 6.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "snow_calm_t6",
+   "desc": "snow, calm, clock 6 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "windy",
+   "rain": 0.0,
+   "snow": 1.0,
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 5.0
+  },
+  {
+   "op": "capture",
+   "name": "snow_windy_t0",
+   "desc": "snow, windy, clock 0 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "windy",
+   "rain": 0.0,
+   "snow": 1.0,
+   "clock": 6.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "snow_windy_t6",
+   "desc": "snow, windy, clock 6 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "storm",
+   "rain": 0.0,
+   "snow": 1.0,
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 5.0
+  },
+  {
+   "op": "capture",
+   "name": "snow_storm_t0",
+   "desc": "snow, storm, clock 0 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "storm",
+   "rain": 0.0,
+   "snow": 1.0,
+   "clock": 6.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "snow_storm_t6",
+   "desc": "snow, storm, clock 6 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "windy",
+   "rain": 0.0,
+   "snow": 0.0,
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "streaks_windy_t0",
+   "desc": "streaks, windy, clock 0 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "windy",
+   "rain": 0.0,
+   "snow": 0.0,
+   "clock": 6.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "streaks_windy_t6",
+   "desc": "streaks, windy, clock 6 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "storm",
+   "rain": 0.0,
+   "snow": 0.0,
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "streaks_storm_t0",
+   "desc": "streaks, storm, clock 0 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "storm",
+   "rain": 0.0,
+   "snow": 0.0,
+   "clock": 6.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "streaks_storm_t6",
+   "desc": "streaks, storm, clock 6 s"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "storm",
+   "rain": 1.0,
+   "snow": 0.0,
+   "clock": 0.0,
+   "motion": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "rain_storm_motion0",
+   "desc": "storm rain, wind motion 0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "report"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "storm",
+   "rain": 0.0,
+   "snow": 0.0,
+   "clock": 0.0,
+   "motion": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 2.0
+  },
+  {
+   "op": "capture",
+   "name": "streaks_storm_motion0",
+   "desc": "storm streaks, motion 0 (hidden)"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "storm",
+   "rain": 1.0,
+   "snow": 0.0,
+   "motion": 1.0,
+   "unpin": true
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "seq_rain_storm_0",
+   "desc": "storm rain, live clock, still 0"
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "seq_rain_storm_1",
+   "desc": "storm rain, live clock, still 1"
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "seq_rain_storm_2",
+   "desc": "storm rain, live clock, still 2"
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "seq_rain_storm_3",
+   "desc": "storm rain, live clock, still 3"
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "windy",
+   "rain": 0.0,
+   "snow": 1.0,
+   "motion": 1.0,
+   "unpin": true
+  },
+  {
+   "op": "wait",
+   "s": 5.0
+  },
+  {
+   "op": "capture",
+   "name": "seq_snow_windy_0",
+   "desc": "windy snow, live clock, still 0"
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "seq_snow_windy_1",
+   "desc": "windy snow, live clock, still 1"
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "seq_snow_windy_2",
+   "desc": "windy snow, live clock, still 2"
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "seq_snow_windy_3",
+   "desc": "windy snow, live clock, still 3"
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "particle_cost",
+   "n": 20000
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "weather",
+   "preset": "calm",
+   "rain": 0.0,
+   "snow": 0.0
+  }
+ ]
+}

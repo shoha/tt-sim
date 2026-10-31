@@ -90,6 +90,11 @@ func test_horizontal_direction_is_unit_with_a_default_fallback() -> void:
 	assert_eq(WindParticles.horizontal_direction(Vector3.ZERO), WindPresets.default_direction())
 
 
+func test_streak_speed_rises_with_the_wind() -> void:
+	assert_almost_eq(WindParticles.streak_speed(0.0), WindParticles.STREAK_BASE_SPEED, 0.0001)
+	assert_true(WindParticles.streak_speed(14.0) > WindParticles.streak_speed(4.0))
+
+
 func test_streak_ratio_is_zero_off_then_monotonic() -> void:
 	assert_eq(WindParticles.streak_ratio(0.0), 0.0)
 	assert_almost_eq(WindParticles.streak_ratio(0.01), WindParticles.STREAK_MIN_RATIO, 0.01)
