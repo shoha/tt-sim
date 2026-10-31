@@ -87,7 +87,7 @@ core:tulou f4881d65650ea8323f3c49eced56f4d8 3546
 core:trullo 6b95e87ee7f19ebe64b6e17b57f7f8ce 738
 core:blackhouse 41f1bbf245d6345310220aa1acd84642 648
 core:riad da8ab4a01527af626adf81cbca11a576 4843
-core:sahel_mosque 4edb3fc3a3f72760e6d309c3a3c75eeb 2562
+core:sahel_mosque d36ac14bea1ab897665afa99efe27104 2514
 core:stave_church 9b4e16530d69859e1c26c95408806eb5 1618
 core:wizard_tower 8773824e2bdc09b1bdd079a7d9aa5b56 1132
 core:mushroom_cottage fcee01ca5ec590c0908d393c529abf73 774

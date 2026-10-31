@@ -4090,7 +4090,7 @@
 			"blocks": "stand",
 			"default_size_m": [
 				2.4,
-				0.4
+				0.5
 			],
 			"expose": [],
 			"family": "prop",
