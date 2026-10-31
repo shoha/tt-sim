@@ -136,6 +136,17 @@ func _play_level_async(level_data: LevelData) -> void:
 		_abort_loading()
 		return
 
+	# A client that has to download the map waits for it: the files, the build and the structures
+	# standing (the coordinator awaits _finalize_map_loading), before models load and tokens land.
+	var in_hand := await MapDownloadWait.wait_async(
+		_level_play_controller.get_tree(),
+		_level_play_controller._map_download_coordinator.is_busy,
+		func() -> bool: return _should_abort_load(generation),
+		func() -> void: level_loading_progress.emit(0.05, "Downloading map...")
+	)
+	if not in_hand:
+		return
+
 	var drag_and_drop = _level_play_controller._game_map.drag_and_drop_node
 	if not drag_and_drop:
 		push_error("LevelPlayLoader: Could not find DragAndDrop3D node")

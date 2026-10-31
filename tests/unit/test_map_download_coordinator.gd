@@ -151,6 +151,59 @@ func test_a_load_finishing_after_a_reset_is_discarded() -> void:
 	assert_eq(_finalized, [])
 
 
+## A finalize that takes `frames` frames, as _finalize_map_loading does behind the structure wait.
+func _slow_finalize(map: Node3D, frames: int) -> void:
+	await wait_process_frames(frames)
+	_finalized.append(map)
+
+
+func test_the_coordinator_is_busy_until_the_map_is_finalised() -> void:
+	_coordinator.setup(_load, func(map: Node3D) -> void: await _slow_finalize(map, 3))
+	assert_false(_coordinator.is_busy())
+	_coordinator.request_map_download(FOLDER, ["map"])
+	assert_true(_coordinator.is_busy(), "downloading")
+	_streamer.receive("map", "user://cache/map.glb")
+	assert_true(_coordinator.is_busy(), "loading")
+	await wait_process_frames(2)
+	assert_true(_coordinator.is_busy(), "finalising: the structures are still being made")
+	assert_eq(_finalized, [])
+	await wait_process_frames(6)
+	assert_eq(_finalized.size(), 1)
+	assert_false(_coordinator.is_busy(), "done")
+
+
+func test_a_reset_or_a_failure_ends_the_busy_state() -> void:
+	_coordinator.setup(_load, func(map: Node3D) -> void: await _slow_finalize(map, 5))
+	_coordinator.request_map_download(FOLDER, ["map"])
+	_streamer.receive("map", "user://cache/map.glb")
+	await wait_process_frames(2)
+	assert_true(_coordinator.is_busy())
+	_coordinator.reset()
+	assert_false(_coordinator.is_busy(), "a reset frees the load that waits on it")
+	_coordinator.connect_asset_streamer()
+	_coordinator.request_map_download(FOLDER, ["map"])
+	_streamer.fail("map")
+	assert_false(_coordinator.is_busy(), "a failed download too")
+	assert_push_error(1)
+	await wait_process_frames(8)
+
+
+func test_a_failed_load_ends_the_busy_state_too() -> void:
+	_coordinator.setup(
+		func(_glb: String, _doc: String) -> Node3D:
+			await get_tree().process_frame
+			return null,
+		func(_map: Node3D) -> void: pass
+	)
+	_coordinator.request_map_download(FOLDER, ["map"])
+	_streamer.receive("map", "user://cache/map.glb")
+	assert_true(_coordinator.is_busy())
+	await wait_process_frames(3)
+	assert_false(_coordinator.is_busy())
+	assert_eq(_failures, [[FOLDER, "Failed to load map file"]])
+	assert_push_error(1)
+
+
 func test_disabled_streaming_refuses_the_request() -> void:
 	_streamer.enabled = false
 	assert_false(_coordinator.request_map_download(FOLDER, ["map"]))
