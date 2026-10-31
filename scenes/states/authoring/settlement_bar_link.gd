@@ -9,6 +9,8 @@ extends RefCounted
 
 ## Shows street `wall_id` (-1: none) and its settlement on `pane`.
 static func show(pane: WallToolPane, editor: AuthoringEditor, wall_id: int) -> void:
+	pane.set_meta(&"street", wall_id)
+	_follow(pane, editor)
 	var held: Wall = editor.document.wall(wall_id) if wall_id >= 0 else null
 	var settlement: Settlement = null
 	if held != null:
@@ -55,16 +57,16 @@ static func connect_pane(
 	)
 
 
-## Re-shows the picked street on `pane` after an undo, redo or edit.
-static func follow_edits(
-	controller: AuthoringController, mode: WallBrush, pane: WallToolPane
-) -> void:
-	var editor := _editor(controller)
-	if editor == null:
+## Re-shows the picked street on `pane` after an undo, redo or edit (connected the first time a
+## street is shown, when the editor exists).
+static func _follow(pane: WallToolPane, editor: AuthoringEditor) -> void:
+	if pane.has_meta(&"follows_edits"):
 		return
+	pane.set_meta(&"follows_edits", true)
 	var again := func() -> void:
-		if is_instance_valid(pane) and mode.selected_id >= 0:
-			show(pane, editor, mode.selected_id)
+		var street: int = pane.get_meta(&"street", -1)
+		if is_instance_valid(pane) and street >= 0:
+			show(pane, editor, street)
 	editor.edited.connect(again)
 	pane.tree_exiting.connect(
 		func() -> void:

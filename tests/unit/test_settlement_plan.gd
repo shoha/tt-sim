@@ -211,6 +211,34 @@ func test_removed_swapped_and_pinned_slots() -> void:
 	assert_eq(SettlementPlan.placements(_doc, edited).size(), items.size())
 
 
+func test_furnishings_stand_in_the_street_strip_never_inside_a_lot() -> void:
+	var street := _street(3)
+	var polygons: Array[PackedVector2Array] = []
+	for lot in WallGeometry.row_lots(_doc, street):
+		var corners := PackedVector2Array()
+		for q: Vector3 in lot["points"]:
+			corners.append(Vector2(q.x, q.z))
+		polygons.append(corners)
+	for kit in Settlement.KIND_NAMES:
+		var settlement := _settlement(street.id, kit)
+		settlement.density = 1.5
+		var items := SettlementPlan.placements(_doc, settlement)
+		assert_gt(items.size(), 0, kit)
+		var yard_rules := {}
+		for rule: Dictionary in ProcgenSettlement.kit_named(kit)["rules"]:
+			if String(rule["slot"]).ends_with("_yard") or rule["slot"] == "side_gap":
+				yard_rules[String(rule.get("id", rule["slot"]))] = true
+		for item in items:
+			var at: Vector2 = item["position"]
+			# Yard props (front and back yards) stand on the lot's own ground, not in the strip.
+			if not yard_rules.has(String(item["rule"])):
+				assert_lte(absf(at.y), street.height_m + 0.1, "%s %s: street side" % [kit, at])
+			for polygon in polygons:
+				assert_false(
+					Geometry2D.is_point_in_polygon(at, polygon), "%s %s in a lot" % [kit, at]
+				)
+
+
 func test_moving_a_house_changes_only_its_own_frontage() -> void:
 	var street := _street(3)
 	var settlement := _settlement(street.id)

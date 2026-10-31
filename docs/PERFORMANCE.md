@@ -4283,3 +4283,13 @@ Phase (c). CPU measured by `tests/unit/test_structure_wind.gd`
   before). A building with a weathervane gains one draw: its arrow, shaft and tail leave the
   `ornament_metal` mesh for one `vane_ornament_metal` mesh under the `Vane` node (32 triangles
   of the 56 the metal held on the cottage of the render job).
+
+## Settlement furnishings (card settlement, 2026-10-31)
+
+Indicative (shared GPU, `jobs/settlement_perf.json`, a 250 ft map, three 52 m two-sided guild-house streets
+dressed market_town at density 1.5): 154 furnishings in 14 baked cells, 62 draw surfaces (4 to 5 per cell),
+29.7k triangles, 89k vertices (about 10 MB of arrays). Cold first dress (four variants of every prop used,
+4 cells): 74 ms bake after a 25 ms plan; a re-dress with warm variants 48 ms; static memory +1.9 MB for the
+first dress. No collision. The design's estimate (18 to 27 draws per 150 props) is exceeded about 2.5 times
+because 24 m cells cut a street into 4 to 5 cells of 4 to 5 materials; a 48 m cell would roughly halve it
+(not tried). Probe: `probes/settlements.gd` action `perf`.
