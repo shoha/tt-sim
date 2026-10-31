@@ -130,15 +130,45 @@ server.tool(
 // Query tools
 // ---------------------------------------------------------------------------
 
+const ScreenshotPath = z
+  .string()
+  .optional()
+  .describe(
+    "Absolute .png path inside the project's user data folder or the OS temp folder (anything " +
+      "else is rejected). When given, the PNG is written there and only {path, width, height, " +
+      "bytes} comes back instead of the image, so look loops can read downscaled copies or probe " +
+      "pixels without image tokens."
+  );
+
+/** The bridge command for a screenshot, with the optional output path. */
+function screenshotCommand(path: string | undefined): Record<string, unknown> {
+  return path === undefined ? { cmd: "screenshot" } : { cmd: "screenshot", path };
+}
+
+/** One content item for a successful screenshot reply: the image, or the file report. */
+function screenshotContent(result: BridgeResponse): ContentItem {
+  if (typeof result.path === "string") {
+    const report = {
+      path: result.path,
+      width: result.width,
+      height: result.height,
+      bytes: result.bytes,
+    };
+    return { type: "text", text: JSON.stringify(report) };
+  }
+  return { type: "image", data: result.png_base64 as string, mimeType: "image/png" };
+}
+
 server.tool(
   "game_screenshot",
-  "Capture a screenshot of the game window. Returns the image.",
-  {},
-  async () => {
+  "Capture a screenshot of the game window. Returns the image, or, with 'path', writes the PNG " +
+    "to that file and returns only its path, width, height and byte count.",
+  { path: ScreenshotPath },
+  async ({ path }) => {
     const err = requireBridge();
     if (err) return { content: [{ type: "text" as const, text: err }], isError: true };
 
-    const result = await pm.bridge.send({ cmd: "screenshot" });
+    const result = await pm.bridge.send(screenshotCommand(path));
     if (!result.ok) {
       return {
         content: [{ type: "text" as const, text: `Screenshot failed: ${result.error}` }],
@@ -146,9 +176,7 @@ server.tool(
       };
     }
 
-    const content: ContentItem[] = [
-      { type: "image", data: result.png_base64 as string, mimeType: "image/png" },
-    ];
+    const content: ContentItem[] = [screenshotContent(result)];
     const errors = pm.getErrors();
     if (errors.length > 0) {
       content.push({ type: "text", text: `Console errors:\n${errors.join("\n")}` });
@@ -247,6 +275,62 @@ server.tool(
       content: [
         { type: "text" as const, text: result.ok ? `Key '${key}' pressed.` : `Error: ${result.error}` },
       ],
+    };
+  }
+);
+
+const TypeControl = z
+  .string()
+  .optional()
+  .describe(
+    "Which text field: a node path, node name, the field's text or placeholder text, or the text " +
+      "of the label beside it (as game_click_control finds controls). Default: the field that " +
+      "currently has focus."
+  );
+const TypeClear = z
+  .boolean()
+  .optional()
+  .describe("Select all and delete before typing (replace the text). Default: append at the end.");
+const TypeSubmit = z
+  .boolean()
+  .optional()
+  .describe("Press Enter after typing (fires a LineEdit's text_submitted).");
+
+/** The bridge command for typing text; omitted options stay out of the message. */
+function typeCommand(
+  text: string,
+  control: string | undefined,
+  clear: boolean | undefined,
+  submit: boolean | undefined
+): Record<string, unknown> {
+  const cmd: Record<string, unknown> = { cmd: "type", text };
+  if (control !== undefined) cmd.control = control;
+  if (clear !== undefined) cmd.clear = clear;
+  if (submit !== undefined) cmd.submit = submit;
+  return cmd;
+}
+
+server.tool(
+  "game_type",
+  "Type text into a LineEdit or TextEdit the way a keyboard does: the field gets focus and each " +
+    "character is sent as a key event, so the game's own handlers run (text_changed fires, once " +
+    "for the whole string when the engine coalesces it; submit fires text_submitted). Replies with the field's resulting text and whether " +
+    "text_changed / text_submitted fired. Use instead of game_key for anything longer than a " +
+    "shortcut. A newline in 'text' is an Enter key; a TextEdit has no text_submitted.",
+  {
+    text: z.string().describe("Text to type"),
+    control: TypeControl,
+    clear: TypeClear,
+    submit: TypeSubmit,
+  },
+  async ({ text, control, clear, submit }) => {
+    const err = requireBridge();
+    if (err) return { content: [{ type: "text" as const, text: err }], isError: true };
+
+    const result = await pm.bridge.send(typeCommand(text, control, clear, submit));
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+      isError: !result.ok,
     };
   }
 );
@@ -463,9 +547,16 @@ const StepSchema = z.discriminatedUnion("action", [
           "prefixes joined by '+' (e.g. 'Ctrl+Z', 'Shift+Alt+F')"
       ),
   }),
+  z.object({
+    action: z.literal("type"),
+    text: z.string().describe("Text to type into a LineEdit or TextEdit (see game_type)"),
+    control: TypeControl,
+    clear: TypeClear,
+    submit: TypeSubmit,
+  }),
   z.object({ action: z.literal("scroll"), x: z.number(), y: z.number(), delta: z.number() }),
   z.object({ action: z.literal("wait"), seconds: z.number() }),
-  z.object({ action: z.literal("screenshot") }),
+  z.object({ action: z.literal("screenshot"), path: ScreenshotPath }),
   z.object({ action: z.literal("state") }),
   z.object({ action: z.literal("freeze") }),
   z.object({ action: z.literal("resume") }),
@@ -523,6 +614,13 @@ server.tool(
           }
           break;
         }
+        case "type": {
+          const result = await pm.bridge.send(
+            typeCommand(step.text, step.control, step.clear, step.submit)
+          );
+          content.push({ type: "text", text: JSON.stringify(result, null, 2) });
+          break;
+        }
         case "scroll": {
           const result = await pm.bridge.send({
             cmd: "input", type: "scroll",
@@ -541,13 +639,9 @@ server.tool(
           break;
         }
         case "screenshot": {
-          const result = await pm.bridge.send({ cmd: "screenshot" });
+          const result = await pm.bridge.send(screenshotCommand(step.path));
           if (result.ok) {
-            content.push({
-              type: "image",
-              data: result.png_base64 as string,
-              mimeType: "image/png",
-            });
+            content.push(screenshotContent(result));
           } else {
             content.push({ type: "text", text: `Screenshot failed: ${result.error}` });
           }
