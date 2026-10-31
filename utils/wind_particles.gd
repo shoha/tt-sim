@@ -28,9 +28,11 @@ const SNOW_SWIRL_PER_MS := 0.03
 ## The wind speed that counts as "full" for scaling (the storm preset's mean).
 const REFERENCE_SPEED := 14.0
 
-## Streaks: travel speed is STREAK_BASE_SPEED plus the wind speed; the amount ratio runs from
-## STREAK_MIN_RATIO (tile just on) to 1 (tile full).
+## Streaks: travel speed is STREAK_BASE_SPEED plus STREAK_SPEED_GAIN times the wind speed;
+## the amount ratio
+## runs from STREAK_MIN_RATIO (tile just on) to 1 (tile full).
 const STREAK_BASE_SPEED := 2.0
+const STREAK_SPEED_GAIN := 0.6
 const STREAK_MIN_RATIO := 0.2
 
 ## Rate limit and smoothing for writing material parameters.
@@ -102,7 +104,7 @@ static func snow_swirl(wind: Vector3) -> Vector3:
 
 
 static func streak_speed(speed: float) -> float:
-	return STREAK_BASE_SPEED + speed
+	return STREAK_BASE_SPEED + speed * STREAK_SPEED_GAIN
 
 
 ## Amount ratio of the wind streaks for the Wind tile's intensity: 0 off, then from
