@@ -81,6 +81,8 @@ var _reset_tween: Tween
 @onready var token_ghost_check: CheckButton = %TokenGhostCheck
 @onready var occlusion_fade_check: CheckButton = %OcclusionFadeCheck
 @onready var canopy_fade_check: CheckButton = %CanopyFadeCheck
+@onready var wind_motion_slider: HSlider = %WindMotionSlider
+@onready var wind_motion_label: Label = %WindMotionLabel
 @onready var antialiasing_option: OptionButton = %AntialiasingOption
 @onready var shadow_quality_option: OptionButton = %ShadowQualityOption
 @onready var water_quality_option: OptionButton = %WaterQualityOption
@@ -304,6 +306,7 @@ func _on_panel_ready() -> void:
 	# Apply reads and applies them (_apply_settings). Interface size is the exception: it saves
 	# and applies the moment it is picked, so the menu itself shows the new size.
 	foliage_density_slider.value_changed.connect(_on_foliage_density_changed)
+	wind_motion_slider.value_changed.connect(SettingsWindMotion.on_changed.bind(self))
 	InterfaceSize.fill_option(
 		interface_size_option, get_tree().root, UIManager.get_interface_size()
 	)
@@ -476,6 +479,7 @@ func _show_saved_values(config: ConfigFile) -> void:
 	vsync_check.set_pressed_no_signal(config.get_value("graphics", "vsync", true))
 	lofi_check.set_pressed_no_signal(config.get_value("graphics", "lofi_enabled", true))
 	SettingsSeeThrough.show_saved(self, config)
+	SettingsWindMotion.show_saved(self, config)
 	ssao_check.set_pressed_no_signal(
 		config.get_value(
 			"graphics", "ssao_enabled", Constants.RENDERING_TOGGLES_DEFAULTS["ssao_enabled"]
@@ -530,6 +534,7 @@ func _save_settings(path: String = Paths.SETTINGS_PATH) -> void:
 	config.set_value("graphics", "vsync", vsync_check.button_pressed)
 	config.set_value("graphics", "lofi_enabled", lofi_check.button_pressed)
 	SettingsSeeThrough.save(self, config)
+	SettingsWindMotion.save(self, config)
 	config.set_value("graphics", "ssao_enabled", ssao_check.button_pressed)
 	config.set_value("graphics", "ssr_enabled", ssr_check.button_pressed)
 	config.set_value("graphics", "sdfgi_enabled", sdfgi_check.button_pressed)
@@ -813,6 +818,7 @@ func _show_defaults() -> void:
 	tw.tween_property(line_thickness_slider, "value", 2.0, 0.3)
 	tw.tween_property(fade_distance_slider, "value", 30.0, 0.3)
 	tw.tween_property(foliage_density_slider, "value", 8.0, 0.3)
+	tw.tween_property(wind_motion_slider, "value", 100.0, 0.3)
 
 	# Snap toggles immediately (no meaningful tween for booleans)
 	fullscreen_check.set_pressed_no_signal(false)

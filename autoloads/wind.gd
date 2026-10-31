@@ -80,14 +80,21 @@ func motion_scale() -> float:
 	return 0.0 if _reduced else _wind_motion
 
 
-## The player's wind motion scale (0..1), the [graphics] wind_motion setting. UI is phase e.
+## The player's wind motion scale (0..1), the [graphics] wind_motion setting (the Settings
+## menu's Wind motion slider calls this as it moves, so the change shows at once).
 func set_wind_motion(value: float) -> void:
 	_wind_motion = clampf(value, 0.0, 1.0)
 
 
-func load_settings() -> void:
+## The player's scale before the OS reduce-motion override.
+func wind_motion() -> float:
+	return _wind_motion
+
+
+## Reads [graphics] wind_motion from the settings file at [param path] (tests pass their own).
+func load_settings(path: String = Paths.SETTINGS_PATH) -> void:
 	var config := ConfigFile.new()
-	if config.load(Paths.SETTINGS_PATH) == OK:
+	if config.load(path) == OK:
 		set_wind_motion(float(config.get_value("graphics", SETTING_KEY, DEFAULT_WIND_MOTION)))
 
 
