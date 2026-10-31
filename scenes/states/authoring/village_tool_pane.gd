@@ -26,9 +26,9 @@ const EMPTY := (
 	+ " here to open a plaza on it."
 )
 const PICK_NOTE := "Click a plaza on the board to size or remove it."
-const ROOM := "%d more plazas for this village"
-const ROOM_ONE := "1 more plaza for this village"
-const ROOM_NONE := "This village holds four plazas, as many as it can"
+const ROOM := "Room for %d more plazas"
+const ROOM_ONE := "Room for 1 more plaza"
+const ROOM_NONE := "Four plazas: the village is full"
 const KIT_TIP := "%s: %s streets round a %s plaza"
 const REMOVE_TIP := "Remove the picked plaza and its paving (Delete)"
 const SIZE_TIP := "How wide the picked plaza is"
@@ -177,6 +177,7 @@ func _build_plaza_box() -> void:
 	plaza_title.name = "VillagePlazaTitle"
 	plaza_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	plaza_title.custom_minimum_size = Vector2(1, 0)
+	plaza_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	plaza_box.add_child(plaza_title)
 	pick_note = _caption("VillagePickNote", PICK_NOTE)
 	plaza_box.add_child(pick_note)

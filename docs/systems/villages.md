@@ -663,8 +663,8 @@ villages each street carries a glass chip with its name ("Village 2", gold when 
 character ("Character of village 2"), four tiles each a small painted vignette of the kit's plaza (`VillageSwatch`,
 generated in code: the kit's plaza paving as a disc on a ground colour of its own, meadow green, warm ochre, harbour
 blue, heather slate, with a well, a striped stall, barrels or a lamp; the tooltip names the road and plaza surfaces in
-plain words); then the plazas: a body line saying how many more the village can hold ("3 more plazas for this
-village"), and for the picked plaza (or the one a drag is sizing) one row with the size slider (shown as the width
+plain words); then the plazas: a body line saying how many more the village can hold ("Room for 3 more
+plazas", "Four plazas: the village is full"; short so it never meets the pane's edge, and it wraps), and for the picked plaza (or the one a drag is sizing) one row with the size slider (shown as the width
 across in the level's units; keys reach it) and Remove. With no plaza picked the row is gone (no disabled boxes) and a
 caption says to click one. With no village it says to dress a street with the Wall tool first. At 1280x720 the whole
 pane fits without scrolling (capture `k_720_pane`). A character tile calls
