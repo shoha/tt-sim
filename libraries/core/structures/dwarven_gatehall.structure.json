@@ -302,8 +302,8 @@
     {
       "id": "building_layout_2",
       "params": {
-        "door_height": 3.9,
-        "door_width": 3.2,
+        "door_height": 4.8,
+        "door_width": 4,
         "height": "@height",
         "roof": "flat",
         "textured": "@textured",
@@ -330,7 +330,7 @@
       "id": "roof_flat_4",
       "params": {
         "overhang": 0.1,
-        "roof_role": "stone",
+        "roof_role": "slate",
         "roof_thickness": 0.2
       },
       "position": [
@@ -386,8 +386,8 @@
     {
       "id": "cornice_8",
       "params": {
-        "band_depth": 0.28,
-        "band_height": 0.4,
+        "band_depth": 0.34,
+        "band_height": 0.55,
         "eave": true,
         "floor_bands": true,
         "role": "trim"
@@ -482,7 +482,7 @@
       "id": "roof_flat_15",
       "params": {
         "overhang": 0.25,
-        "roof_role": "stone",
+        "roof_role": "slate",
         "roof_thickness": 0.12
       },
       "position": [
@@ -575,7 +575,7 @@
       "id": "roof_flat_22",
       "params": {
         "overhang": 0.25,
-        "roof_role": "stone",
+        "roof_role": "slate",
         "roof_thickness": 0.12
       },
       "position": [

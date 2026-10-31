@@ -213,10 +213,10 @@
     {
       "id": "roof_hip_5",
       "params": {
-        "overhang": 0.19,
+        "overhang": 0.11,
         "roof_pitch": "@roof_pitch",
-        "roof_role": "thatch",
-        "roof_thickness": 0.34
+        "roof_role": "turf",
+        "roof_thickness": 0.55
       },
       "position": [
         710.0,
@@ -227,9 +227,9 @@
     {
       "id": "output_6",
       "params": {
-        "name": "Hebridean blackhouse",
+        "name": "Hebridean blackhouse (turf roof)",
         "palette_accent": "#3A2C22",
-        "palette_roof": "#9C8453,#8A7648,#A8905C,#7A6A48",
+        "palette_roof": "#6E8A46,#7C9650,#5F7B40,#8C8A4C",
         "palette_wall": "#8E8A7C,#9A9484,#7F7C70"
       },
       "position": [

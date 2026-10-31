@@ -979,6 +979,7 @@
       "id": "courtyard_yard_37",
       "params": {
         "depth": "@wing_depth",
+        "fountain": 0,
         "plan": "ring",
         "role": "stone"
       },

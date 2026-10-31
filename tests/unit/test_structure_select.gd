@@ -306,6 +306,7 @@ func test_variants_are_the_same_familys_other_recipes_and_a_lone_recipe_has_none
 		"core:house_hip",
 		"core:ivy_manor",
 		"core:minka",
+		"core:moorish_souk",
 		"core:pueblo",
 		"core:slate_house",
 		"core:stone_house",

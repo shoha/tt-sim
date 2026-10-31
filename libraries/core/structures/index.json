@@ -2754,6 +2754,8 @@
 				"blackhouse",
 				"hebridean",
 				"rounded",
+				"turf",
+				"sod",
 				"regional"
 			],
 			"textured": true,
@@ -3011,7 +3013,7 @@
 		},
 		{
 			"default_size_m": [
-				11.0,
+				12.0,
 				6.0
 			],
 			"expose": [
@@ -3113,6 +3115,80 @@
 			"textured": true,
 			"thumb": "thumbnails/structures/ruined_chapel.jpg",
 			"variant": "Rose chapel, moss and ivy"
+		},
+		{
+			"default_size_m": [
+				12.0,
+				5.0
+			],
+			"expose": [
+				"height",
+				"wonk"
+			],
+			"family": "house",
+			"file": "structures/moorish_souk.structure.json",
+			"id": "moorish_souk",
+			"max_area_m2": 110.0,
+			"max_side_m": 16.0,
+			"min_side_m": 4.0,
+			"name": "Moorish souk house",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"market",
+				"house",
+				"souk",
+				"moorish",
+				"arch",
+				"flat",
+				"plaster",
+				"canopy",
+				"arcade",
+				"regional"
+			],
+			"textured": true,
+			"thumb": "thumbnails/structures/moorish_souk.jpg",
+			"variant": "Flat roof, arched windows, porch canopy"
+		},
+		{
+			"default_size_m": [
+				8.0,
+				6.0
+			],
+			"expose": [
+				"height",
+				"floors",
+				"roof_pitch",
+				"ridge",
+				"wonk"
+			],
+			"family": "fantasy",
+			"file": "structures/ice_lodge.structure.json",
+			"id": "ice_lodge",
+			"max_area_m2": 100.0,
+			"max_side_m": 14.0,
+			"min_side_m": 4.0,
+			"name": "Ice lodge",
+			"plans": [
+				"rect"
+			],
+			"tags": [
+				"house",
+				"lodge",
+				"fantasy",
+				"ice",
+				"frost",
+				"snow",
+				"hip",
+				"steep",
+				"cool",
+				"glass",
+				"regional"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/ice_lodge.jpg",
+			"variant": "Pale blue hip roof, glass"
 		},
 		{
 			"default_size_m": [
