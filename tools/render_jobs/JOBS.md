@@ -1151,10 +1151,12 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   Dress laid is gone, the hamlet stays paved), a fresh Dress and plaza (`redressed_home`, `redressed_market`) and two
   re-dresses (`redressed_twice_market`: the same road, new furnishings). The probe's `redress` and `clear` log the take-back
   entries and milliseconds.
-- `jobs/villagetool_look.json` (about 55 s, keeps no level; topic villagetool): two dressed streets, then the Village tool
-  through real input (`gesture`, `input`): the pane with two villages (`b_village_tool`), the ghost plaza (`c_ghost`), a drag
-  that opens a market plaza (`d_market_plaza`), a click that opens the hamlet's (`e_hamlet_click`), the rim hover
-  (`f_rim_hover`), the rim dragged out with the preview ring held (`g_resize_drag`) and let go (`h_resized`), the market
-  village switched to Harbour town by its tile (`i_kit_harbour`), home zoom (`j_home`), then the window at 1600x900
-  (`k_1600_plaza`, `l_1600_home`). Run with `--full` for the verdict captures; the final ones are under
-  `user://render_jobs/villagetool_*`.
+- `jobs/villagetool_look.json` (about 70 s, keeps no level; topic villagetool, round 2 writes `villagetool2_look`): two
+  dressed streets, then the Village tool through real input (`gesture`, `input`): home zoom with both villages' number
+  chips and the two-village pane (`a_home_two_villages`), the ghost before any pick over the market and the hamlet, the pane
+  following it (`b_ghost_market`, `c_ghost_hamlet`), a drag that opens a market plaza (`d_market_plaza_5m`), the rim hover
+  (`e_rim_hover`), the rim dragged out with the paving disc and the pane's size read live (`f_resize_drag`) and let go
+  (`g_resized`), both villages switched to Harbour town and Hill fort village and their ghosts (`h_ghost_harbour`,
+  `i_ghost_hillfort`), the four ghosts on one sheet (`sheet_ghosts`), market plazas of 5, 6 and 7 m side by side
+  (`j_market_5_6_7`, the evidence for the market's 6 m floor), then the window at 1280x720 with a picked plaza
+  (`k_720_pane`). Run with `--full` for the verdict captures.

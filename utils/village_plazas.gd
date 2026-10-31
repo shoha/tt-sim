@@ -26,6 +26,15 @@ const PICKED_SLACK_M := 6.0
 const PAVING_FACTOR := 1.12
 ## The match of a stroke to a plaza (both are held to a hundredth).
 const STROKE_TOLERANCE_M := 0.02
+## The smallest plaza the tool makes, the record's own floor.
+const MIN_RADIUS_M := Settlement.PLAZA_MIN_RADIUS_M
+## A kit whose edge furnishings crowd a small plaza out of sight has a larger floor in the tool (the
+## record still takes anything): the market town's stalls line a plaza's edge every 7 m, and at
+## 5 m they hide the cobble while at 6 m it reads paved (villagetool2, capture j_market_5_6_7).
+## A click lays the larger of DEFAULT_RADIUS_M and this.
+const KIT_MIN_RADIUS_M := {"market_town": 6.0}
+## The four handle dots on a plaza's rim sit at these turns from +X (a quarter apart).
+const HANDLE_ANGLE := 0.4
 
 const PART_RIM := &"rim"
 const PART_INSIDE := &"inside"
@@ -34,31 +43,49 @@ const PART_INSIDE := &"inside"
 static var _grounds: Dictionary = {}
 
 
-## `radius` held to the plaza range, in tenths of a metre.
-static func clamp_radius(radius: float) -> float:
-	return clampf(
-		snappedf(radius, 0.1), Settlement.PLAZA_MIN_RADIUS_M, Settlement.PLAZA_MAX_RADIUS_M
-	)
+## The smallest plaza the tool makes for kit `kit` ("" for any kit: the record's floor).
+static func min_radius(kit: String = "") -> float:
+	return float(KIT_MIN_RADIUS_M.get(kit, MIN_RADIUS_M))
 
 
-## The radius a drag from `centre` to `to` makes: a click or a short drag is DEFAULT_RADIUS_M.
-static func radius_for_drag(centre: Vector2, to: Vector2) -> float:
+## `radius` held to the plaza range of kit `kit`, in tenths of a metre.
+static func clamp_radius(radius: float, kit: String = "") -> float:
+	return clampf(snappedf(radius, 0.1), min_radius(kit), Settlement.PLAZA_MAX_RADIUS_M)
+
+
+## The four handle dots of a plaza at `at` of `radius`, on its rim.
+static func handle_points(at: Vector2, radius: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for k in 4:
+		out.append(at + Vector2.from_angle(TAU * k / 4.0 + HANDLE_ANGLE) * radius)
+	return out
+
+
+## The radius a drag from `centre` to `to` makes for kit `kit`: a click or a short drag is
+## DEFAULT_RADIUS_M (or the kit's floor, min_radius, when that is larger).
+static func radius_for_drag(centre: Vector2, to: Vector2, kit: String = "") -> float:
 	var reach := centre.distance_to(to)
-	return DEFAULT_RADIUS_M if reach < DRAG_MIN_M else clamp_radius(reach)
+	return clamp_radius(DEFAULT_RADIUS_M if reach < DRAG_MIN_M else reach, kit)
 
 
 ## The radius a drag on the rim of a plaza of `start_radius` makes, the pointer having been
 ## `grabbed_at` metres from the centre when it grabbed and being `now_at` now (so the rim follows
-## the pointer without jumping where it was grabbed).
-static func radius_for_rim_drag(start_radius: float, grabbed_at: float, now_at: float) -> float:
-	return clamp_radius(start_radius + now_at - grabbed_at)
+## the pointer without jumping where it was grabbed), held at `floor_m` or above.
+static func radius_for_rim_drag(
+	start_radius: float, grabbed_at: float, now_at: float, floor_m: float = MIN_RADIUS_M
+) -> float:
+	var radius := snappedf(start_radius + now_at - grabbed_at, 0.1)
+	return clampf(radius, floor_m, Settlement.PLAZA_MAX_RADIUS_M)
 
 
 ## The plaza under map point `p` among the plazas of `settlements`, as
 ## `{"settlement": id, "index": plaza index, "part": PART_RIM or PART_INSIDE}`, or {}. The rim band
 ## (`rim_m` each side of the edge) wins over the inside; among several the nearest rim, or the
-## smallest disc, wins.
-static func pick(settlements: Array[Settlement], p: Vector2, rim_m: float) -> Dictionary:
+## smallest disc, wins. Within `handle_m` of one of a plaza's handle dots (handle_points) is on
+## its rim too: the dots are the larger target the author aims at.
+static func pick(
+	settlements: Array[Settlement], p: Vector2, rim_m: float, handle_m: float = 0.0
+) -> Dictionary:
 	var best := {}
 	var best_score := INF
 	for settlement in settlements:
@@ -66,8 +93,12 @@ static func pick(settlements: Array[Settlement], p: Vector2, rim_m: float) -> Di
 			var plaza := settlement.plazas[index]
 			var reach := p.distance_to(plaza["at"] as Vector2)
 			var radius := float(plaza["radius"])
-			if absf(reach - radius) <= rim_m and absf(reach - radius) < best_score:
-				best_score = absf(reach - radius)
+			var score := absf(reach - radius)
+			for dot in handle_points(plaza["at"], radius):
+				if p.distance_to(dot) <= handle_m:
+					score = minf(score, 0.0)
+			if (score <= rim_m or score == 0.0) and score < best_score:
+				best_score = score
 				best = {"settlement": settlement.id, "index": index, "part": PART_RIM}
 	if not best.is_empty():
 		return best
@@ -96,6 +127,32 @@ static func lines(doc: MapDocument, settlement: Settlement) -> Array[PackedVecto
 		if line.size() >= 2:
 			out.append(line)
 	return out
+
+
+## Where `settlement`'s number is shown on the board: the middle of its first line (the street),
+## else its first plaza's centre, else Vector2.INF.
+static func anchor_of(doc: MapDocument, settlement: Settlement) -> Vector2:
+	var found := lines(doc, settlement)
+	if not found.is_empty():
+		var line: PackedVector2Array = found[0]
+		var half := 0.0
+		for k in line.size() - 1:
+			half += line[k].distance_to(line[k + 1])
+		half *= 0.5
+		for k in line.size() - 1:
+			var step := line[k].distance_to(line[k + 1])
+			if half <= step:
+				return line[k].lerp(line[k + 1], half / maxf(step, 0.0001))
+			half -= step
+		return line[line.size() - 1]
+	if not settlement.plazas.is_empty():
+		return settlement.plazas[0]["at"]
+	return Vector2.INF
+
+
+## The author-facing name of village `id`, the one word the pane, the board and the hint share.
+static func village_name(id: int) -> String:
+	return "Village %d" % id
 
 
 ## How far map point `p` is from `settlement`: from its street line or the edge of one of its
@@ -169,6 +226,7 @@ static func state_of(doc: MapDocument, village: int, plaza: int) -> Dictionary:
 		"road": "",
 		"plaza_ground": "",
 		"full": false,
+		"sizing": false,
 	}
 	var held := doc.settlement(village) if village > 0 else null
 	if held == null:
@@ -184,6 +242,15 @@ static func state_of(doc: MapDocument, village: int, plaza: int) -> Dictionary:
 		state["plaza"] = plaza
 		state["radius"] = float(held.plazas[plaza]["radius"])
 	return state
+
+
+## `state` (state_of) while a drag is sizing a plaza to `radius` metres: the pane's size reads
+## the drag live (`sizing` true, `radius` the preview) before anything is laid.
+static func with_preview(state: Dictionary, radius: float) -> Dictionary:
+	var out := state.duplicate()
+	out["sizing"] = true
+	out["radius"] = radius
+	return out
 
 
 ## The ground block of kit `kit` ({"road", "door_path", "plaza"}: palette surface ids), cached.

@@ -96,5 +96,7 @@ static func refresh_pane(brush: BrushTool, mode: VillageBrush, pane: VillageTool
 		return
 	var editor := brush.editor
 	var state := VillagePlazas.state_of(editor.document, mode.selected_village, mode.selected_plaza)
-	var k := ScaleUtils.world_to_display(editor.map_scale(), brush.unit_cell_m, brush.unit_per_cell)
+	if mode.sizing():
+		state = VillagePlazas.with_preview(state, mode.preview_radius())
+	var k :=ScaleUtils.world_to_display(editor.map_scale(), brush.unit_cell_m, brush.unit_per_cell)
 	pane.show_state(state, k, brush.unit_label)

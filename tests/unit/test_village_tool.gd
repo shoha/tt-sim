@@ -187,19 +187,29 @@ func test_the_panes_state_names_the_picked_village_and_plaza() -> void:
 	assert_eq(VillagePlazas.state_of(_doc, 1, 7)["plaza"], -1, "an index past the end is none")
 
 
-func test_the_kit_swatch_joins_road_and_plaza_along_the_diagonal() -> void:
-	var road := Image.create(8, 8, false, Image.FORMAT_RGBA8)
-	road.fill(Color.RED)
-	var plaza := Image.create(8, 8, false, Image.FORMAT_RGBA8)
-	plaza.fill(Color.BLUE)
-	var joined := VillageSwatch.split(road, plaza)
-	assert_eq(joined.get_pixel(0, 0), Color.RED, "road to the upper left")
-	assert_eq(joined.get_pixel(7, 7), Color.BLUE, "plaza to the lower right")
-	assert_eq(joined.get_pixel(5, 0), Color.RED)
-	assert_eq(joined.get_pixel(0, 5), Color.RED)
-	assert_eq(joined.get_pixel(7, 4), Color.BLUE)
-	assert_ne(joined.get_pixel(3, 4), Color.RED, "the seam between them")
-	assert_ne(joined.get_pixel(3, 4), Color.BLUE)
+func test_a_kit_vignette_is_its_paving_on_its_own_ground_with_a_piece() -> void:
+	var paving := Image.create(48, 48, false, Image.FORMAT_RGBA8)
+	paving.fill(Color(0.8, 0.78, 0.7))
+	var means: Array[Color] = []
+	for kit in Settlement.KIND_NAMES:
+		var picture := VillageSwatch.vignette(kit, paving)
+		assert_eq(picture.get_width(), 48, kit)
+		var ground: Color = VillageSwatch.LOOKS[kit]["ground"]
+		var corner := picture.get_pixel(1, 46)
+		assert_lt(_distance(corner, ground), 0.2, "%s: the corner is the kit's ground" % kit)
+		var on_disc := picture.get_pixel(7, 28)
+		assert_lt(_distance(on_disc, paving.get_pixel(7, 28)), 0.08, "%s: the disc is the paving" % kit)
+		assert_false(VillageSwatch.piece_layers(VillageSwatch.LOOKS[kit]["piece"]).is_empty(), kit)
+		var copy := picture.duplicate() as Image
+		copy.resize(1, 1, Image.INTERPOLATE_BILINEAR)
+		means.append(copy.get_pixel(0, 0))
+	for a in means.size():
+		for b in range(a + 1, means.size()):
+			assert_gt(_distance(means[a], means[b]), 0.08, "two kits paved alike still read apart")
+
+
+func _distance(a: Color, b: Color) -> float:
+	return Vector3(a.r - b.r, a.g - b.g, a.b - b.b).length()
 
 
 func test_every_kit_has_a_picture_of_its_own_ground() -> void:
@@ -207,6 +217,30 @@ func test_every_kit_has_a_picture_of_its_own_ground() -> void:
 		var texture := VillageSwatch.kit_texture(kit, PaletteLibrary.DEFAULT_ROOT, 24)
 		assert_eq(texture.get_width(), 24, kit)
 		assert_ne(VillagePlazas.ground_of(kit).get("road", ""), "", kit)
+		var paving := VillageSwatch.paving_color(kit, PaletteLibrary.DEFAULT_ROOT)
+		assert_eq(paving.a, 1.0, "%s: the preview tint is opaque until drawn" % kit)
+
+
+func test_a_handle_dot_is_a_rim_target_wider_than_the_band() -> void:
+	var records := _list([_village([{"at": Vector2(0, 0), "radius": 4.0}])])
+	var dot: Vector2 = VillagePlazas.handle_points(Vector2.ZERO, 4.0)[0]
+	var off := dot + (dot - Vector2.ZERO).normalized() * 1.5
+	assert_true(VillagePlazas.pick(records, off, 0.9).is_empty(), "past the band alone")
+	assert_eq(VillagePlazas.pick(records, off, 0.9, 2.0)["part"], VillagePlazas.PART_RIM)
+	var halfway := Vector2.from_angle(VillagePlazas.HANDLE_ANGLE + TAU / 8.0) * 5.5
+	assert_true(VillagePlazas.pick(records, halfway, 0.9, 2.0).is_empty(), "between dots, the band")
+
+
+func test_a_villages_number_sits_on_its_street_and_the_preview_reads_live() -> void:
+	var editor := _editor()
+	var id := editor.settlements.dress(_street(editor), "market_town")
+	var anchor := VillagePlazas.anchor_of(_doc, _doc.settlement(id))
+	assert_lt(anchor.length(), 0.05, "the street's middle")
+	assert_eq(VillagePlazas.village_name(id), "Village %d" % id)
+	var state := VillagePlazas.with_preview(VillagePlazas.state_of(_doc, id, -1), 7.5)
+	assert_true(state["sizing"])
+	assert_eq(state["radius"], 7.5)
+	assert_false(VillagePlazas.state_of(_doc, id, -1)["sizing"], "the document's state is not")
 
 
 # --- the editor: resize and remove -------------------------------------------------------------
@@ -364,9 +398,29 @@ func test_a_click_on_bare_ground_opens_a_default_plaza_in_one_entry_and_picks_it
 	assert_false(mode.took_press(), "the gesture is over")
 
 
-func test_dragging_from_bare_ground_sizes_the_new_plaza() -> void:
+func test_a_market_plaza_is_never_laid_smaller_than_its_stalls_allow() -> void:
 	var editor := _editor()
 	var id := editor.settlements.dress(_street(editor), "market_town")
+	assert_eq(VillagePlazas.min_radius("market_town"), 6.0)
+	assert_eq(VillagePlazas.min_radius("farming_hamlet"), Settlement.PLAZA_MIN_RADIUS_M)
+	var mode := VillageBrush.new()
+	var tool := _tool(editor)
+	_frame(mode, tool, Vector3(0, 0, 9))
+	mode.press(tool)
+	mode.end(tool)
+	assert_eq(_doc.settlement(id).plazas[0]["radius"], 6.0, "a click lays the market's floor")
+	_frame(mode, tool, Vector3(-6, 0, -9))
+	mode.press(tool)
+	_frame(mode, tool, Vector3(-3, 0, -9))
+	mode.end(tool)
+	assert_eq(_doc.settlement(id).plazas[1]["radius"], 6.0, "a short drag too")
+	assert_eq(VillagePlazas.radius_for_rim_drag(4.0, 4.0, 3.0, 4.0), 4.0, "a grab never shrinks")
+	assert_eq(VillagePlazas.radius_for_rim_drag(4.0, 4.0, 5.0, 4.0), 5.0)
+
+
+func test_dragging_from_bare_ground_sizes_the_new_plaza() -> void:
+	var editor := _editor()
+	var id := editor.settlements.dress(_street(editor), "farming_hamlet")
 	var mode := VillageBrush.new()
 	var tool := _tool(editor)
 	_frame(mode, tool, Vector3(0, 0, 9))
@@ -463,7 +517,7 @@ func test_delete_removes_the_plaza_under_the_pointer_and_keeps_the_pick_in_step(
 
 func test_brackets_step_the_plaza_under_the_pointer_a_metre() -> void:
 	var editor := _editor()
-	var id := editor.settlements.dress(_street(editor), "market_town")
+	var id := editor.settlements.dress(_street(editor), "farming_hamlet")
 	assert_true(editor.settlements.add_plaza(id, Vector2(0, 10), 4.0))
 	var mode := VillageBrush.new()
 	var tool := _tool(editor)
@@ -528,6 +582,43 @@ func test_the_view_changes_when_the_document_does() -> void:
 	assert_signal_emitted(mode, "view_changed")
 
 
+## The round 1 critic saw the pane name the first village while the ghost's hint named the other
+## (the pane followed the mode's first pick, the ghost the village a press would join).
+func test_the_pane_and_the_ghost_name_one_village_and_a_pick_stays() -> void:
+	_doc = MapDocument.create_flat(Vector2i(64, 64), "grass", "v", 9)
+	var editor := _editor()
+	var ends := [[-20, "farming_hamlet"], [20, "market_town"]]
+	var ids: Array[int] = []
+	for pair in ends:
+		var z := float(pair[0])
+		var wall := editor.walls.place(
+			Wall.Kind.ROW, Vector3(-12, 0, z), Vector3(12, 0, z), -1.0, {"seed": 5, "side": 2, "preset": 3}
+		)
+		ids.append(editor.settlements.dress(wall, String(pair[1])))
+	var a := ids[0]
+	var b := ids[1]
+	var mode := VillageBrush.new()
+	var tool := _tool(editor)
+	for at in [Vector3(0, 0, 27), Vector3(0, 0, -13), Vector3(0, 0, 27)]:
+		_frame(mode, tool, at)
+		var ghost := mode.ghost_village(editor, editor.to_map_xz(at))
+		var shown := VillagePlazas.state_of(_doc, mode.selected_village, mode.selected_plaza)
+		assert_eq(shown["village"], ghost, "the pane names the village the ghost joins")
+	assert_eq(mode.selected_village, b)
+	assert_eq(VillageBrush.ghost_hint(_doc, b), VillageBrush.IDLE_IN % ("village %d" % b))
+	mode.press(tool)
+	mode.end(tool)
+	assert_eq(_doc.settlement(b).plazas.size(), 1, "the press joined the village the pane named")
+	_frame(mode, tool, Vector3(0, 0, -13))
+	assert_eq(mode.selected_village, b, "a pick stays while the pointer is elsewhere")
+	assert_eq(mode.ghost_village(editor, editor.to_map_xz(Vector3(0, 0, -13))), a)
+	mode.press(tool)
+	mode.end(tool)
+	assert_eq(mode.selected_village, a, "a press elsewhere picks that village")
+	var plaza: Dictionary = _doc.settlement(mode.selected_village).plazas[mode.selected_plaza]
+	assert_eq(plaza["at"], editor.to_map_xz(Vector3(0, 0, -13)), "and the pane is on its new plaza")
+
+
 # --- the pane and the registry -----------------------------------------------------------------
 
 
@@ -555,9 +646,13 @@ func test_the_pane_shows_what_to_do_first_then_the_kits_with_their_ground() -> v
 	for item in SettlementSection.CHIPS:
 		assert_true(pane.kit_field.tiles.has_tile(StringName("village_kit_" + String(item["kit"]))))
 	assert_eq(pane.kit_field.tiles.selected, &"village_kit_market_town")
-	assert_true(pane.ground_note.text.begins_with("Road: "))
+	assert_eq(pane.kit_field.caption, "Character")
 	assert_true(pane.plaza_box.visible)
+	assert_eq(pane.plaza_title.text, "3 more plazas for this village")
+	assert_ne(pane.plaza_title.theme_type_variation, &"SectionHeader", "a row is body text (T3)")
 	assert_false(pane.remove_button.disabled)
+	assert_true(pane.remove_button.visible)
+	assert_false(pane.pick_note.visible)
 	assert_eq(pane.size_slider.value, 4.0)
 	assert_eq(pane.size_value.text, "26 ft", "the width across, in the level's units")
 	assert_false(pane.village_field.visible, "one village needs no row of them")
@@ -589,6 +684,26 @@ func test_the_pane_offers_a_row_of_villages_when_there_are_several() -> void:
 	assert_eq(pane.village_field.tiles.selected, &"village_2")
 	assert_true(pane.size_slider.editable == false, "no plaza picked: the size is not editable")
 	assert_true(pane.remove_button.disabled)
+	assert_false(pane.size_row.visible, "nothing to size is not shown as a disabled box")
+	assert_false(pane.pick_note.visible, "no plaza yet to click")
+	var tile := pane.village_field.tiles.get_node("village_2") as Button
+	assert_eq(tile.text, "Village 2", "one word, the board's and the hint's")
+	assert_eq(pane.kit_field.caption, "Character of village 2", "the kit is the village's")
 	watch_signals(pane)
 	pane.village_field.tiles.get_node("village_1").button_pressed = true
 	assert_signal_emitted_with_parameters(pane, "village_picked", [1])
+
+
+func test_the_pane_reads_a_held_drag_live_and_counts_the_room_left() -> void:
+	var pane := VillageToolPane.new()
+	add_child_autofree(pane)
+	_doc.settlements = _list([_village([{"at": Vector2(0, 9), "radius": 4.0}])])
+	pane.show_state(VillagePlazas.state_of(_doc, 1, -1), 3.28, "ft")
+	assert_true(pane.pick_note.visible, "a plaza to click")
+	pane.show_state(VillagePlazas.with_preview(VillagePlazas.state_of(_doc, 1, -1), 6.0), 3.28, "ft")
+	assert_true(pane.size_row.visible)
+	assert_eq(pane.size_value.text, "39 ft", "the drag's width, not the last plaza's")
+	assert_false(pane.size_slider.editable, "the drag owns the size until it is let go")
+	assert_false(pane.remove_button.visible)
+	assert_eq(VillageToolPane.room_text(3), "1 more plaza for this village")
+	assert_eq(VillageToolPane.room_text(4), VillageToolPane.ROOM_NONE)
