@@ -62,6 +62,10 @@ plan is cached per record and lot fingerprint. Prop variants (4 per prop, `Struc
 tests); `_process` builds variants and then cells within 3 ms a frame, `flush()` does all at once.
 Refresh hooks: `WallEditor.apply_list` and `StructureEditor.apply_list` (so a sculpt, a street edit or a moved
 house re-derives), `SettlementEditor.apply_list`.
+A refresh that finds a plan's `sig` and the ground print it was stood on unchanged keeps the plan's stood rows (and
+its skipped count) instead of standing them again: the print is `StructureGeometry.ground_fingerprint(doc)`, taken once
+per refresh, and a plan with anything missing is always re-stood (hitches round 1: a Clear's refresh 16.9 to 3.1 ms;
+`tests/unit/test_build_hitches.gd`).
 
 ## Editor and bar
 

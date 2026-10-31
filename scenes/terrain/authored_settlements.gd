@@ -89,9 +89,13 @@ func refresh(doc: MapDocument) -> void:
 	skipped_missing = 0
 	var wanted := {}
 	var live := {}
+	# One fingerprint of the ground for every settlement (it is read twice per street otherwise).
+	var ground_print := 0
+	if not doc.settlements.is_empty():
+		ground_print = StructureGeometry.ground_fingerprint(doc)
 	for settlement in doc.settlements:
 		live[settlement.id] = true
-		for cell: Dictionary in cells_of(doc, settlement):
+		for cell: Dictionary in cells_of(doc, settlement, ground_print):
 			wanted[cell["name"]] = true
 			if (
 				_keys.get(cell["name"]) == cell["key"]
@@ -199,19 +203,27 @@ func _step(budget_ms: float) -> int:
 
 ## The cells of `settlement` as {"name", "key", "settlement", "items": [{"item", "y", "ref"}]},
 ## from its placements with the ground applied. Pure of the node tree (the layer's counters
-## aside); the plan is cached per record and lots.
-func cells_of(doc: MapDocument, settlement: Settlement) -> Array[Dictionary]:
+## aside); the plan is cached per record and lots, and its rows are stood on the ground again only
+## when the ground moved (`ground_print`: StructureGeometry.ground_fingerprint(doc), made once by
+## refresh; 0 reads it here).
+func cells_of(
+	doc: MapDocument, settlement: Settlement, ground_print: int = 0
+) -> Array[Dictionary]:
 	var frontages := SettlementPlan.frontages_of(doc, settlement)
 	var sig := settlement.fingerprint()
 	for frontage in frontages:
 		sig += "|" + JSON.stringify(frontage.to_dict(), "", true, true).md5_text()
 	var plan: Dictionary = _plans.get(settlement.id, {})
+	var ground := ground_print if ground_print != 0 else StructureGeometry.ground_fingerprint(doc)
 	if plan.get("sig", "") != sig:
-		var items := SettlementPlan.place(settlement, frontages)
-		plan = {"sig": sig, "items": items, "rows": _stand(doc, items)}
+		plan = {"sig": sig, "items": SettlementPlan.place(settlement, frontages)}
+		_stand_plan(doc, plan, ground)
 		_plans[settlement.id] = plan
+	elif plan.get("ground") == ground and int(plan.get("missing", 0)) == 0:
+		# The ground and the lots are as the rows were stood on: they stand as they did.
+		skipped_ground += int(plan.get("skipped", 0))
 	else:
-		plan["rows"] = _restand(doc, plan)
+		_stand_plan(doc, plan, ground)
 	var by_cell := {}
 	for row: Dictionary in plan["rows"]:
 		var at: Vector2 = row["item"]["position"]
@@ -324,10 +336,15 @@ static func ground_normal(five: PackedFloat32Array, reach: float) -> Vector3:
 
 
 ## The rows of a cached plan with the ground read again (a sculpt moved it; the plan did not).
-func _restand(doc: MapDocument, plan: Dictionary) -> Array[Dictionary]:
+func _stand_plan(doc: MapDocument, plan: Dictionary, ground: int) -> void:
 	var items: Array[Dictionary] = []
 	items.assign(plan["items"])
-	return _stand(doc, items)
+	var ground_before := skipped_ground
+	var missing_before := skipped_missing
+	plan["rows"] = _stand(doc, items)
+	plan["ground"] = ground
+	plan["skipped"] = skipped_ground - ground_before
+	plan["missing"] = skipped_missing - missing_before
 
 
 # --- building -----------------------------------------------------------------------------

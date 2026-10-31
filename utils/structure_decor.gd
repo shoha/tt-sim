@@ -324,7 +324,13 @@ static func triangles_of(mesh: Mesh) -> int:
 	if mesh == null:
 		return 0
 	var total := 0
+	var array_mesh := mesh as ArrayMesh
 	for surface in mesh.get_surface_count():
+		if array_mesh != null:
+			# The index count is kept with the surface: no copy of its arrays (surface_get_arrays
+			# reads them back, which cost a refresh of a structure several milliseconds).
+			total += array_mesh.surface_get_array_index_len(surface) / 3
+			continue
 		var index: Variant = mesh.surface_get_arrays(surface)[Mesh.ARRAY_INDEX]
 		if index is PackedInt32Array:
 			total += (index as PackedInt32Array).size() / 3

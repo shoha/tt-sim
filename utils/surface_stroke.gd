@@ -53,6 +53,11 @@ const FULL_REASON := (
 )
 ## Surface roles whose paint changes what grows (ScatterGround): built and painted rock.
 const PLANT_ROLES := ["built", "cliff"]
+## How many exposure tables _amount_table keeps before it starts over.
+const MAX_TABLES := 64
+
+## Exposure tables by (seconds, erasing), shared by every stroke (read-only once made).
+static var _tables: Dictionary = {}
 
 var doc: MapDocument = null
 var erasing: bool = false
@@ -270,12 +275,21 @@ func dab(from: Vector2, to: Vector2, radius: float, seconds: float) -> bool:
 	return true
 
 
+## The exposure table of one dab: AMOUNT_STEPS exp() calls, which a dressed street's 22 strokes
+## (a handful of distinct exposures) paid 22 times. Kept per (exposure, erasing), a few at most.
 func _amount_table(seconds: float) -> PackedFloat32Array:
+	var key := Vector2(seconds, 1.0 if erasing else 0.0)
+	var held: Variant = _tables.get(key)
+	if held is PackedFloat32Array:
+		return held
 	var rate := MaskBrush.RATE * SURFACE_GAIN * (ERASE_GAIN if erasing else 1.0)
 	var table := PackedFloat32Array()
 	table.resize(AMOUNT_STEPS)
 	for q in AMOUNT_STEPS:
 		table[q] = MaskBrush.amount(float(q) / float(AMOUNT_STEPS - 1), seconds, rate)
+	if _tables.size() >= MAX_TABLES:
+		_tables.clear()
+	_tables[key] = table
 	return table
 
 

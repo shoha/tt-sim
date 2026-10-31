@@ -4334,3 +4334,59 @@ paint of a dress in the same run. So a re-dress is a one-off hitch of about 200 
 was about 50 to 100 ms, and a Clear is about 115 ms; neither touches the frame cost afterwards. The per-sample
 walk (`SettlementUnpaint._unpaint_sample`, a few thousand samples) is the obvious thing to move native or to
 skip faster if it ever matters; no GPU or draw-call numbers changed (the paint is the same surfaces).
+
+## Build hitches, round 1 (topic hitches, 2026-10-31)
+
+Owner decision 2026-10-31: cut the main-thread hitches of building (place a building, place 32, Dress a street,
+re-dress, Clear, load a map with 44 structures) without changing the look or determinism (saves, digests and
+live-edit peers byte-identical). Goal: the top three hitches fall by a third, or show why they cannot.
+
+Procedure. `jobs/hitches_profile.json` (about 90 s) and `jobs/hitches_load.json` with `probes/hitches.gd`: a 300 ft
+temperate forest map (seed 1234), 1920x1080, vsync off after the map is ready, home zoom 60, wind frozen, debug build,
+shared RTX 3080 (33 to 43 percent busy and P3 before each run). `rec` records every frame time between `begin` and
+`end` and prints the worst frames with their frame index; `place` lays N buildings (per_frame 1 or all in one frame),
+`dress`, `redress` and `clear` time the call and the settlement layer refresh, `paint_split` times the lay and
+take-back stages, `split` times the install of one structure. Same code run twice before the change (runs 1 and 2) and
+once after; idle median 4.7 ms at the start and 4.2 ms at the end in every run (no drift between runs), idle worst
+frame 10.6 to 12.7 ms (the noise floor, about 11). Worst-frame figures are indicative; the table gives before (runs 1/2)
+and after.
+
+| Action | Before | After |
+|--------|--------|-------|
+| Place 1 building, first of the session (cold) | worst 218/193 ms, 2nd frame 97/94 | 170 ms, 83 (not changed) |
+| Place 1 building, warm | worst 28 ms | 17 ms |
+| Place 32, one per frame | worst 94/43/42/40, 14 to 17 frames over 33 ms, jank 537 to 640 ms | worst 71.5 (the one cold style install), then 20; 1 frame over 33 ms; jank 67 ms |
+| Place 32 in one frame (burst) | worst 461/396 ms, jank 547 to 635 | worst 110 ms, jank 108 |
+| Per structure add, main thread | 14.5 to 15.3 ms | 4.2 ms |
+| Dress street 1 (first: ground retable) | call 123 to 126 ms, worst frames 139 to 143 and 75 to 87 | call 122.8, frames 139 and 76 |
+| Dress street 2 | call 86 to 88, worst 102 to 105 | call 76.9, worst 95 |
+| Re-dress | call 155 to 168, worst frame 170 to 186 | call 144, worst 161 |
+| Clear | call 82 to 86, worst frame 97 to 105 | call 69, worst 86 |
+| Load a map with 44 structures (39 laid, 5 refused) | worst 297/101/90/83/82/77, jank 638 to 654 | worst 310/99/95/87/84/73, jank 657 and 634 |
+
+What moved. Placement: `StructureDecor.triangles_of` copied every surface's arrays (`surface_get_arrays`) of the
+25 decor rows on every `StructureLoadInfo.info_of`, which runs once per refresh and again per `_process` launch:
+9.5 to 11.7 ms per call. It now reads `ArrayMesh.surface_get_array_index_len / 3` (the same 5636 triangles, 0.01 ms).
+That alone took the per-add cost from about 15 to 4 ms; the burst of 32 went from 461 to 110 ms and the one-per-frame
+jank from about 590 to 67 ms. What is left per add: the `edited` listeners (about 2.5 ms, the authoring controller's
+tool refresh) and the key hash (about 1.2 ms, grows with N). Clear: the settlement layer refresh re-stood every plan
+on every ground change; it now keeps a plan's rows when its `sig` and the `StructureGeometry.ground_fingerprint` it was
+stood on are unchanged and nothing was missing (16.9 to 3.1 ms in a Clear; the stand output is identical). The
+unpaint walk skips samples whose replay weight is all zero, and the exposure tables of `SurfaceStroke` are cached by
+(seconds, erasing) instead of rebuilt per dab (about 1 ms per lay). All outputs byte-identical
+(`tests/unit/test_build_hitches.gd` pins the triangle count, the cached tables and the keep-or-re-stand rule).
+
+What did not reach a third, and why. Of the top three, only placement (burst or sequence) fell by far more than a
+third. Clear fell about 18 percent, re-dress about 6 to 10, Dress 0 to 8. The remaining cost is GDScript per-sample
+work: `SurfaceStroke.dab` about 17 ms and the per-painted-sample `_unpaint_sample` loop about 33 ms of the 63 ms
+take-back (replay about 15, finish 7, apply and ground update about 13); `ProcgenSettlement.place` 21 to 25 ms on the
+main thread (pure, but the layer refresh is synchronous: a worker means an async refresh, not attempted); the first
+Dress retables the ground layers (32 ms plus 12 ms broad); each stroke diff finishes with a zstd pass of about 7 ms
+twice. Not fixed, with the idea for each: a native `dab` and unpaint walk (a DLL rebuild and float-exactness risk); an
+`_unpaint_sample` with inline byte reads and no per-sample arrays (estimated 25 of the 63 ms); skipping unlay and lay
+when a re-dress plan equals the record (changes Pave and erased-road semantics, so rejected); one ground refresh
+across unlay and lay (about 10 ms); the cold first-use costs (first `info_of` loads the decor GLBs on the main thread,
+70 to 95 ms; the first install of a style creates its materials, 60 to 90 ms), which a warm-up on opening the tool
+would hide; the map-open frame of 300 ms; and a second 75 to 85 ms frame about 15 frames after the first Dress, whose
+cause was not identified. Map load installs nodes cheaply (0.4 to 0.6 ms per structure), so its spikes are elsewhere
+(the open itself and the settlement layers), unchanged.
