@@ -16,6 +16,7 @@ extends Node
 const THIS := "res://tools/render_jobs/probes/drag_check.gd"
 const MOVE_STEPS := 12
 const HOLD_FRAMES := 45
+const PRESS_HEIGHT_M := 0.7
 const SHEET_FRAMES: Array[int] = [1, 4, 8, 12, 17, 23]
 
 static var _lines: PackedStringArray = PackedStringArray()
@@ -62,9 +63,12 @@ func _tokens() -> Array[BoardToken]:
 	return out
 
 
+## Where to press on a token: the body of the figure, 0.7 m above the shape's origin (its feet).
+## Aiming at the feet themselves is a coin toss, since the ray reaches the ground at the same
+## point as the hull's base edge and the terrain can win the pick.
 func _screen_of(token: BoardToken) -> Vector2:
 	var shape: Node3D = token.get_dragging_object().collision_shape
-	return _gm.camera_node.unproject_position(shape.global_position)
+	return _gm.camera_node.unproject_position(shape.global_position + Vector3(0, PRESS_HEIGHT_M, 0))
 
 
 func _mask() -> int:
@@ -176,6 +180,17 @@ func _scenarios(gm: GameMap, lpc: LevelPlayController, out: String) -> void:
 	await _frames(150)
 	_say("token at %s mask %d grid_snap %s" % [_fmt(_body(token)), _mask(), str(_dnd.get("grid_snap_enabled"))])
 	_gm.camera_node.get_viewport().gui_release_focus()
+	# The press point must land on the token, not the ground beside it: say what a camera ray
+	# through it hits (all layers), so a probe aimed wrong shows up here and not as a "dead" drag.
+	var press_at := _screen_of(token)
+	var press_q := PhysicsRayQueryParameters3D.create(
+		_gm.camera_node.project_ray_origin(press_at),
+		_gm.camera_node.project_position(press_at, 100.0),
+		0xFFFFF
+	)
+	press_q.collide_with_areas = true
+	var press_hit := space.intersect_ray(press_q)
+	_say("press ray hits the token body: %s" % str(press_hit.get("collider") == token.rigid_body))
 
 	# 1. A click that never moves is not a drag.
 	_events.clear()
@@ -193,6 +208,11 @@ func _scenarios(gm: GameMap, lpc: LevelPlayController, out: String) -> void:
 	at = await _press_on(token)
 	var target := at + Vector2(240, 130)
 	var expected := _ground_at(target, token)
+	if bool(_dnd.get("grid_snap_enabled")):
+		# The map has a grid: the token aims at the cell centre under the cursor, not the raw hit.
+		expected = ScaleUtils.snap_to_grid(
+			expected, float(_dnd.get("grid_cell_size")), _dnd.get("grid_origin")
+		)
 	_say("drag: start %s screen %s target screen %s expected ground %s" % [_fmt(start), str(at), str(target), _fmt(expected)])
 	await _drag_to(at, target)
 	_say("drag: events %s dragging %s" % [str(_events), str(_dnd.call("is_dragging"))])
