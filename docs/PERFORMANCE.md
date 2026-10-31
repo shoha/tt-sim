@@ -4320,3 +4320,17 @@ ground 2.86 and 2.89 ms: +0.07 to +0.26 ms, inside the run's own drift (the two 
 Stroke merging (nearly straight road runs into one capsule) took the road from 35 strokes to 2 and the
 `paint` figure from 49 to about 30 ms for the second and third street. Adding a structure pays one more
 `StructureDoorPaint.joined` read (two array reads) in its key.
+
+Villages3 (2026-10-31): the record keeps its strokes and Clear, a re-dress, a change of character and `pave` take the
+previous strokes back (`SettlementUnpaint`) before laying the new plan. The take-back replays the list on a scratch
+grid through the same `SurfaceStroke` dabs (so it costs about what laying costs) and then walks the samples the
+strokes reach once in GDScript; it is one more click hitch of the same kind, one history entry with no new draws
+or memory in the frame. The wider road (`0.77 x setback`, 2.31 m a side at the default) paints about a third more
+samples under the same 2 road capsules and the same door strokes. Numbers (indicative, shared GPU, one run of
+`jobs/villages3_clear.json`, the same 52 m two-sided streets with a plaza, 23 strokes): the take-back of a Clear
+or re-dress call took 113.3, 112.9 and 119.0 ms (replay on the scratch grid, the per-sample walk in GDScript, then
+`apply_surface_diff`, whose ground update and scatter request are the shared cost), against 37 to 86 ms for the
+paint of a dress in the same run. So a re-dress is a one-off hitch of about 200 ms (take-back plus lay) where it
+was about 50 to 100 ms, and a Clear is about 115 ms; neither touches the frame cost afterwards. The per-sample
+walk (`SettlementUnpaint._unpaint_sample`, a few thousand samples) is the obvious thing to move native or to
+skip faster if it ever matters; no GPU or draw-call numbers changed (the paint is the same surfaces).

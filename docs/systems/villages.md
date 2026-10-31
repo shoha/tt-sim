@@ -575,8 +575,28 @@ The first bullet of section 3e plus the `plazas` record field; details and numbe
 - Plazas are discs (not polygons yet), up to 4 per settlement, created through `SettlementEditor.add_plaza`
   only; the Village tool is phase 3.
 - Dress is one history group: props, record and paint undo together, and the paint reaches peers as `surface`
-  ops (no new kind). Re-dress, feel changes and Clear leave the paint; the road does not follow street edits.
+  ops (no new kind). (Villages3 changed the rest of this bullet: see section 9.)
 - The alpha path ribbon of a building's yard gives way where paint already runs out of its door
   (`StructureDoorPaint`); a street's lots are not structures, so it matters after a split.
 - Still to do from this section: the yard surface, bridges (3e second bullet), boundary walls and fields, the
   Village tool, and the dressing following house moves after a split.
+
+## 9. Phase 2, second slice as built (topic villages3, 2026-10-31)
+
+Two owner decisions after the villages2 look: "Clear removes only the paint Dress laid" and "widen roads by
+about a third". Details and numbers in `docs/systems/settlements.md` "Ground".
+
+- The settlement record now carries `ground`, the compact list of paint strokes its Dress laid (up to 256
+  capsules, 4 surfaces, a hundredth of a metre; validated, serialized like plazas, left out when empty, round
+  trip byte for byte, hostile input skips the record). It is what turns the paint from "the map's now" into
+  something the village can take back.
+- Clear takes the record's strokes back with the record (one history entry, undo restores both); a re-dress,
+  a change of character and `pave` take the previous strokes back and lay the new plan in one entry, so the
+  road follows street edits made since. Ground painted by hand is never in the list and is left alone. The
+  removal replays the list on a scratch grid through the Paint tool's own code and subtracts what it left,
+  so a Dress then Clear restores the weights byte for byte (`SettlementUnpaint`); the cost of a take-back is
+  about that of laying (settlements.md "Ground", PERFORMANCE.md "Settlement ground").
+- The road is a third wider: `0.77 x setback` a side clamped to 1.2 to 3.2 m (2.31 m at the default setback,
+  was 1.74 m).
+- Still open: where two dressed streets cross, taking one back thins the other at the crossing; the Village
+  tool; a paint stroke alone does not rebuild a building's yard.

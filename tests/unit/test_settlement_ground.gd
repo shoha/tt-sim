@@ -134,7 +134,7 @@ func test_the_road_follows_the_centre_line_at_a_width_from_the_setback() -> void
 			var p: Vector2 = stroke[key]
 			assert_almost_eq(p.y, 0.0, 0.01, "on the centre line")
 			assert_between(p.x, -12.01, 12.01, "within the street")
-		assert_almost_eq(float(stroke["radius"]), half * SettlementGround.EDGE_REACH, 0.001)
+		assert_almost_eq(float(stroke["radius"]), half * SettlementGround.EDGE_REACH, 0.006)
 		assert_eq(stroke["surface"], _ground("farming_hamlet")["road"])
 	assert_almost_eq(float(plan["road_m"]), 24.0, 0.2, "the whole street is laid")
 	var wide := _doc.wall(street)
@@ -143,6 +143,10 @@ func test_the_road_follows_the_centre_line_at_a_width_from_the_setback() -> void
 		SettlementGround.road_half_width(6.0), half, "a wider setback gets a wider road"
 	)
 	assert_lte(SettlementGround.road_half_width(50.0), SettlementGround.ROAD_HALF_MAX_M)
+	# Villages3: about a third wider than the 0.58 share (1.74 m) and 0.9..2.4 m limits it had.
+	assert_almost_eq(SettlementGround.road_half_width(3.0) / 1.74, 1.33, 0.02, "a third wider")
+	assert_almost_eq(SettlementGround.ROAD_HALF_MIN_M / 0.9, 1.33, 0.02)
+	assert_almost_eq(SettlementGround.ROAD_HALF_MAX_M / 2.4, 1.33, 0.02)
 
 
 func test_a_bent_street_gets_a_stroke_a_straight_run_and_the_strokes_meet() -> void:
@@ -357,13 +361,17 @@ func test_painted_cells_under_the_road_hold_the_road_surface() -> void:
 	assert_gt(found, 200, "the road is near full cover on its centre line")
 
 
-func test_a_redress_and_a_feel_change_leave_the_paint_alone() -> void:
+func test_a_redress_repaints_the_same_ground_and_a_feel_change_paints_nothing() -> void:
 	var editor := _editor()
 	var street := _street(editor)
 	var id := editor.settlements.dress(street, "farming_hamlet")
 	var painted := _paint_state(_doc)
+	var laid := _doc.settlement(id).ground.duplicate(true)
 	var entries := _history.undo_count()
 	assert_true(editor.settlements.redress(id))
+	assert_eq(_history.undo_count(), entries + 1, "a re-dress is one entry")
+	assert_eq(_paint_state(_doc), painted, "taken back and laid again: byte for byte the same ground")
+	assert_eq(_doc.settlement(id).ground, laid, "the record lists the same strokes")
 	assert_true(editor.settlements.set_feel(id, 0.2, 1.0))
 	assert_eq(_paint_state(_doc), painted)
 	assert_eq(_history.undo_count(), entries + 2)
@@ -378,6 +386,7 @@ func test_a_new_character_paves_its_own_ground_in_the_same_entry() -> void:
 	assert_true(editor.settlements.set_kit(id, "market_town"))
 	assert_eq(_history.undo_count(), entries + 1)
 	assert_true(_doc.surface_ids.has("flagstone_sandstone"), "the market town's road")
+	assert_false(_doc.surface_ids.has("dirt_road_packed"), "the hamlet's road was taken back")
 	_history.undo()
 	assert_eq(_paint_state(_doc), painted)
 	assert_eq(_doc.settlement(id).kit, "farming_hamlet")

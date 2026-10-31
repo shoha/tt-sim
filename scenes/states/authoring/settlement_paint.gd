@@ -7,6 +7,10 @@ extends RefCounted
 ## as the ordinary `surface` op. Each run of strokes on one surface is one SurfaceStroke and one
 ## history entry; SettlementEditor opens a history group round the lot, so a Dress is one Ctrl+Z.
 ## Summary: docs/systems/settlements.md "Ground".
+##
+## unlay() is the other direction: it takes back the strokes a record remembers (SettlementUnpaint)
+## as one `surface` history entry of the same kind, so Clear and a re-dress remove exactly the
+## dressing's paint, in the caller's group, and undo and peers need nothing new.
 
 
 ## Paints `strokes` (SettlementGround.plan's, in order) into `editor`'s document and records each
@@ -26,6 +30,28 @@ static func lay(editor: AuthoringEditor, strokes: Array[Dictionary]) -> int:
 			run.dab(stroke["from"], stroke["to"], stroke["radius"], stroke["seconds"])
 	recorded += _finish(editor, run, surface)
 	return recorded
+
+
+## Takes back the paint of `strokes` (a record's `ground`) from `editor`'s document and records it
+## as one history entry (inside the caller's group). Returns 1 when it changed anything, else 0.
+static func unlay(editor: AuthoringEditor, strokes: Array[Dictionary]) -> int:
+	var diff := SettlementUnpaint.remove(editor.document, strokes)
+	if diff.is_empty():
+		return 0
+	editor.apply_surface_diff(diff, true)
+	(
+		editor
+		. history
+		. record(
+			{
+				"label": "Take back paving",
+				"undo": editor.apply_surface_diff.bind(diff, false),
+				"redo": editor.apply_surface_diff.bind(diff, true),
+				"bytes": int(diff.bytes),
+			}
+		)
+	)
+	return 1
 
 
 ## Ends `run`, applies its diff to the ground and records it. 1 when it changed anything.

@@ -20,6 +20,7 @@ or sent, and every peer derives the same list.
 | `swapped` | slot id to another prop name |
 | `pinned` | slot id to a placement `{prop, at, yaw, scale, seed}` drawn as recorded |
 | `plazas` | up to 4 discs `{at: map XZ (1 cm), radius: 2..16 m}` (villages2); the first frontage carries them to procgen's `plaza.centre` and `plaza.edge` rules, and the Dress paves them. Left out of the saved entry when empty, so older maps re-save byte for byte |
+| `ground` | up to 256 paint strokes the last Dress laid (villages3; `SettlementGroundIO`): `{surface, from, to, radius, seconds}` capsules in paint order, held to a hundredth. Saved as `"ground": {"surfaces": [...], "strokes": [[surface index, ax, az, bx, bz, radius, seconds], ...]}` (at most 4 surfaces), left out when empty; Clear and a re-dress take back exactly these |
 
 One street has at most one settlement. A settlement whose street is gone draws nothing and returns with the
 street on undo (it is not deleted with the street: undoing the removal must bring both back).
@@ -145,8 +146,10 @@ surroundings with the trampled broad edge, show in the Paint tool, and reach eve
   painterly; cobblestone stays as a plaza accent. A surface missing from the palette is skipped (`unknown`).
 - **The plan** (`SettlementGround`, `utils/settlement_ground.gd`, pure, tests in
   `tests/unit/test_settlement_ground.gd`): capsule strokes `{role, surface, from, to, radius, seconds}` in map
-  metres. Road: the centre line resampled every 1.5 m (corners kept), half width `0.58 x setback` clamped to
-  0.9 to 2.4 m (1.74 m at the default 3 m), brush radius 1.4 times that for the soft edge, nearly straight
+  metres (each held to a hundredth, so the record and the paint agree). Road: the centre line resampled every
+  1.5 m (corners kept), half width `0.77 x setback` clamped to 1.2 to 3.2 m (2.31 m at the default 3 m; villages3
+  widened it a third from 0.58 and 0.9 to 2.4 m, 1.74 m, because at home zoom the road hid behind the near
+  house rows), brush radius 1.4 times that for the soft edge, nearly straight
   runs merged into one capsule (at most 30 m, under 4 degrees of drift), which cuts the dab cost about five
   times. A sample is refused (and the road stops there) when the centre or an edge is wet
   (`WaterGeometry.is_wet_at`), the ground rises more than 0.5 along or 0.7 across, or the road would touch a
@@ -166,12 +169,29 @@ surroundings with the trampled broad edge, show in the Paint tool, and reach eve
   takes back the props, the record, the paint and the slots. A peer receives `LiveEditCodec.ops_of(entry)`:
   the surface ops, then the `settlements` op (`test_a_peer_receives_the_paint_as_surface_ops_...` applies
   them to a second document and compares the weights byte for byte, and an undo the same way).
-- **When it paints.** `dress` on a street with no settlement, `set_kit` (the new character's surfaces; the
-  old paint stays under it), `pave(id)` (a street dressed earlier, or one whose road was erased) and
-  `add_plaza(id, at, radius)` (just that disc; one entry; at most 4; `REFUSED_PLAZA` for a disc the record
-  refuses). Re-dress, `set_feel` and Clear leave the paint alone (it is the map's now; Clear keeps it) and
-  the road does not follow later street edits. `remove_plaza` keeps the paving. `last_ground` holds the last
-  plan's counts and the plan, paint and entry numbers; `lays_ground` false is the A/B switch.
+- **When it paints.** `dress` (a new settlement, or a re-dress), `redress`, `set_kit` and `pave(id)` take back
+  the strokes the record lists and then lay the new plan, in the same history group, so a re-dress after the
+  street was moved or bent lays the road where the street is now; `add_plaza(id, at, radius)` adds just that
+  disc to the list (one entry; at most 4; `REFUSED_PLAZA` for a disc the record refuses). `set_feel` paints
+  nothing. `remove_plaza` keeps the paving (it stays in the list and goes with the next re-dress or Clear).
+  `last_ground` holds the last plan's counts and the plan, paint, take-back and entry numbers; `lays_ground`
+  false is the A/B switch (it neither paints nor takes back). If the list would pass 256 strokes the tail (door
+  paths) is not painted.
+- **Taking the paint back** (villages3, `SettlementUnpaint`, `utils/settlement_unpaint.gd`; tests
+  `tests/unit/test_settlement_unpaint.gd`). Paint blends (the newest wins a sample and scales the rest down), so
+  a stroke cannot be subtracted from the map alone. The record's list is replayed on an empty scratch grid
+  through the same `SurfaceStroke` code, which gives what the dressing left on its own, per sample and per
+  surface; the map loses that much weight on the surfaces the dressing laid (never below 0), and where the
+  dressing's paint is still whole on a full sample the author's paint of other surfaces, which it squeezed, is
+  scaled back up by the room it gave. Where nothing of the dressing remains (the author painted over it, or
+  erased it) the sample is left as it is. The result is an ordinary `SurfaceStroke` diff recorded by
+  `SettlementPaint.unlay` as one `surface` entry in the caller's group, so undo and a peer's `surface` op need
+  nothing new. A clean Dress then Clear (or re-dress) restores the weights and the slot list byte for byte
+  (tests); ground painted by hand is untouched away from the dressing and comes back under it to within a few
+  of 255. Limits: two dressed streets that cross share one surface there, so taking one back thins the other
+  a little at the crossing (re-dress it); a sliver of author paint that a stroke squeezed to almost nothing
+  comes back as that sliver (the weight it had is not recorded); a settlement dressed before villages3 has no
+  list, so its first re-dress lays the new ground over the old and only the new strokes are remembered.
 - **Plazas have no tool UI yet.** They are created through `SettlementEditor.add_plaza` (the probe action
   `plaza`); the Village tool's drag is phase 3. Discs only (the design allowed polygons); a hand-placed
   building inside a plaza is not refused.
@@ -188,11 +208,18 @@ surroundings with the trampled broad edge, show in the Paint tool, and reach eve
   first of a run the dearest), a one-off click hitch; the worst CPU frame of the three dresses stayed 124 to
   148 ms either way, and the settled GPU render time was 2.60 and 2.82 ms bare against 2.86 and 2.89 ms with
   paint (a rise inside the 0.2 ms drift of the run). `docs/PERFORMANCE.md` "Settlement ground".
+- **Measured, villages3** (indicative): taking a street's 23 strokes back (Clear, re-dress, change of character) costs
+  113 to 119 ms on the same 52 m street, so a re-dress is about 200 ms once (take-back plus lay) and a Clear about
+  115 ms; no frame cost afterwards.
+- **Look, villages3** (full-size captures `render_jobs/villages3_street`, `villages3_before`, `villages3_clear`
+  under `user://`): a road a third wider reads almost the same at home zoom as before, because on a two-sided
+  street the camera still sees the road only through gaps between the near houses; it shows at street ends,
+  yard gaps and the plaza (not re-checked on a one-sided street, `jobs/villages2_lane.json`). Clear removes the market's road, door paths and plaza paving and leaves the hamlet's; a fresh Dress or a
+  re-dress lays the same ground byte for byte.
 
 ## Not done
 
 The Dress row on the Buildings bar, the Village tool (plaza drag and resize, garden paint, prop select, move,
 swap, pin), plaza polygons, a yard surface, bridges, boundary walls and fields, GM Events pane wiring,
 pin/remove/swap gestures (the record and plan support them), collision `stand`/`solid`, the settlement
-following later house moves after a split, an erase that removes only the dressing's paint, and a rebuild of
-a building's yard after a paint stroke alone.
+following later house moves after a split, and a rebuild of a building's yard after a paint stroke alone.

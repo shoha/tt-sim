@@ -9,7 +9,8 @@ extends RefCounted
 ##                       "frozen": [frontage, ...], "removed": [slot, ...],
 ##                       "pinned": {slot: {"prop", "at": [x, z], "yaw", "scale", "seed"}},
 ##                       "swapped": {slot: prop},
-##                       "plazas": [{"at": [x, z], "radius"}, ...]  (left out when there are none)}
+##                       "plazas": [{"at": [x, z], "radius"}, ...]  (left out when there are none),
+##                       "ground": SettlementGroundIO's form  (left out when there are none)}
 ##
 ## A map written before settlements has no such entry and loads unchanged; an older build ignores
 ## the entry (MapDocumentIO.KNOWN_ENTRIES) and drops it on its next save. Everything read is
@@ -88,6 +89,9 @@ static func settlement_problem(settlement: Settlement) -> String:
 	for plaza in settlement.plazas:
 		if _plaza_problem(plaza) != "":
 			return "a plaza is not usable (%s)" % _plaza_problem(plaza)
+	var ground_reason := SettlementGroundIO.problem(settlement.ground)
+	if ground_reason != "":
+		return ground_reason
 	for slot in settlement.removed:
 		if not _slot_ok(slot):
 			return "a removed slot is not a short text"
@@ -164,6 +168,8 @@ static func settlement_json(settlement: Settlement) -> Dictionary:
 				}
 			)
 		out["plazas"] = plazas
+	if not settlement.ground.is_empty():
+		out["ground"] = SettlementGroundIO.to_json(settlement.ground)
 	return out
 
 
@@ -244,6 +250,11 @@ static func _settlement_from(value: Variant) -> Variant:
 		if plaza == null:
 			return "a plaza is not usable"
 		settlement.plazas.append(plaza)
+	if value.has("ground"):
+		var ground: Variant = SettlementGroundIO.from_json(value["ground"])
+		if ground == null:
+			return "the ground strokes are not usable"
+		settlement.ground.assign(ground)
 	var pinned: Variant = value.get("pinned", {})
 	if not pinned is Dictionary or (pinned as Dictionary).size() > Settlement.MAX_OVERRIDES:
 		return "pinned is not a short object"
