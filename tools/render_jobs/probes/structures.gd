@@ -139,6 +139,7 @@ static func _many(base: Node, step: Dictionary) -> String:
 	var columns := int(ceil(sqrt(float(count))))
 	var laid := 0
 	var refusals := {}
+	var started_us := Time.get_ticks_usec()
 	for k in count:
 		var lot: Array = BASIC_LOTS[k % BASIC_LOTS.size()]
 		var at := Vector2(
@@ -153,10 +154,14 @@ static func _many(base: Node, step: Dictionary) -> String:
 			laid += 1
 		else:
 			refusals["%d:%s" % [k, editor.structures.last_refusal]] = true
+	var add_ms := float(Time.get_ticks_usec() - started_us) / 1000.0
 	var nodes := _nodes(base)
 	var triangles := 0
+	var flush_us := Time.get_ticks_usec()
 	if nodes != null:
 		nodes.flush()
+		var flush_ms := float(Time.get_ticks_usec() - flush_us) / 1000.0
+		print("RJ|many|flush wait %.1f ms for %d builds" % [flush_ms, count])
 		for child in nodes.get_children():
 			for mesh in child.get_children():
 				if mesh is MeshInstance3D:
@@ -172,11 +177,13 @@ static func _many(base: Node, step: Dictionary) -> String:
 						/ 3
 					)
 	return (
-		"laid %d of %d structures, %d triangles%s"
+		"laid %d of %d structures, %d triangles, adds %.1f ms main thread (%.2f ms each)%s"
 		% [
 			laid,
 			count,
 			triangles,
+			add_ms,
+			add_ms / maxf(count, 1),
 			"" if refusals.is_empty() else " (refused: " + str(refusals.keys()) + ")"
 		]
 	)
