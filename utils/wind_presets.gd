@@ -15,6 +15,13 @@ const DEFAULT_DIR_ANGLE := -PI * 0.25
 ## Preset name -> its strength on the dial.
 const STRENGTH := {"calm": 0.0, "breezy": 0.33, "windy": 0.66, "storm": 1.0}
 
+## The presets in the order the Weather pane's chips show them.
+const PRESET_ORDER: Array[String] = ["calm", "breezy", "windy", "storm"]
+## How close a strength must be to a preset's stop for the chip to show as picked.
+const PRESET_TOLERANCE := 0.02
+## The largest wind seed (WeatherSettings stores it as a float, exact to 2^24).
+const SEED_MAX := 0xFFFFFF
+
 ## One row per stop: [strength, speed m/s, gust amp, ripple, veer amp rad, veer period s,
 ## sway scale].
 const STOPS: Array = [
@@ -82,6 +89,50 @@ static func row_at(strength: float) -> Array:
 ## Strength of a named preset, or -1.0 for an unknown name.
 static func strength_of(preset_name: String) -> float:
 	return float(STRENGTH.get(preset_name.to_lower(), -1.0))
+
+
+## The preset whose stop [param strength] sits on (within PRESET_TOLERANCE), or "" between stops
+## (the strength slider was dragged to a custom value).
+static func name_for(strength: float) -> String:
+	for preset_name in PRESET_ORDER:
+		if absf(strength - float(STRENGTH[preset_name])) <= PRESET_TOLERANCE:
+			return preset_name
+	return ""
+
+
+## The plain-words tooltip of a preset chip: what it does to the plants and the weather.
+static func preset_tooltip(preset_name: String) -> String:
+	var strength := strength_of(preset_name)
+	if strength < 0.0:
+		return ""
+	var row := row_at(strength)
+	var words := (
+		"%s: wind of about %d metres a second. Plants lean %s, cloth and sails move to match, "
+		+ "and rain and snow slant with it."
+	)
+	return (
+		words % [preset_name.capitalize(), int(round(float(row[COL_SPEED]))), _lean_words(strength)]
+	)
+
+
+## A new seed for the gust pattern, from [param entropy] (any int, the pane's random draw): a
+## whole number in 1..SEED_MAX that differs from [param current] (0 and the current seed are
+## never returned, so the re-roll always changes the pattern).
+static func reroll_seed(current: float, entropy: int) -> float:
+	var drawn := 1 + posmod(entropy, SEED_MAX)
+	if float(drawn) == current:
+		drawn = 1 + posmod(drawn, SEED_MAX)
+	return float(drawn)
+
+
+static func _lean_words(strength: float) -> String:
+	if strength < 0.2:
+		return "only a little"
+	if strength < 0.5:
+		return "gently"
+	if strength < 0.8:
+		return "clearly"
+	return "hard"
 
 
 ## A state a fraction [param u] of the way from [param a] to [param b] (direction by the
