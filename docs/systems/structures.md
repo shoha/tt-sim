@@ -781,7 +781,15 @@ pure (`utils/structure_placement.gd`).
     `StructureHints` holds the rows (Click, Drag, Q / E, R, Del; with a building selected Drag, Q / E, R,
     Ctrl+D, Del, Esc) and drops each key once its gesture was done once (`StructureBrush.gesture_done`
     -> `StructureHints.mark`, kept in the settings file per user; `reset(true)` forgets). The pane and
-    selection hints are one short line.
+    selection hints are one short line. A small "Show hints" link under the pane's hint
+    (`StructureToolPane.hints_button`, Ghost look, tooltip, keyboard focus; wired in
+    `StructureTool.connect_selection`) calls `StructureHints.reset(true)` and shows the bar again
+    (owner D12, 2026-10-30).
+  - *Hover and rest.* An unselected building under the pointer is outlined at
+    `StructureNote.HOVER_STRENGTH` 0.7 (0.45 before; Ctrl erasing 1.0, owner D09). The amber "Moved
+    ..." note shows only after the pointer rests `StructureNote.REST_S` (0.4 s, owner D10:
+    `StructureNote.Rest`, fed each frame by `StructureBrush.track`; `StructureNote.shown` is the
+    pure rule): red reasons and held-size notes show at once, since a held size follows a drag.
   - *Live note beside the ghost.* `StructureNote.live` gives `{text, level}`: BLOCKED (red: the
     `refusal_text` words, a release lays nothing and toasts them as before), NOTE (amber: the lot
     was eased off water, a bank, the map edge or a building - `StructurePlacement.nearest_legal`'s new
@@ -941,14 +949,17 @@ records** (`ProcgenOrnaments.anchors`; fields in procgen `docs/architecture_styl
   ratio, clamped 0.75 to 1; a patch wider or taller than the largest class is tiled. The
   transform is `Transform3D(Basis(along, up, normal) * s, origin)`
   (ivy: origin at the foot centre of the patch; the asset's origin is its foot centre). A planter
-  takes the class nearest the box's width, uniform scale 0.8 to 1.25, at the anchor's origin (the
+  takes the class nearest the box's width over `PLANTER_BOOST` (1.5), drawn `PLANTER_BOOST` times
+  its asset size (uniform, about its foot, so it still sits on the sill) but never wider than the
+  box plus `PLANTER_OVERHANG` (10 percent), scale 0.8 to 1.5 (plant_decor4, owner D02, 2026-10-30:
+  planters read small; was the class nearest the width at 0.8 to 1.25), at the anchor's origin (the
   centre of the trough's top). Every placement carries `extent` (class size times scale: what it
-  covers on the wall).
+  covers on the wall) and, for ivy, `angle` (the turn below).
 - **Window clearance** (card plant_decor2, 2026-10-30). The baked assets cannot honour exclusions
   (option (a): no runtime climber in tt-sim) and their leaves overhang the patch by about 0.1 m a
   side, so a patch with openings is cut around them instead: `StructureDecor.free_rects` grows each
-  opening by `OPENING_MARGIN` (0.10 m since plant_decor3; 0.2 m before, which left little room, and
-  a leaf may now just touch a frame) and returns the free rectangles of the
+  opening by `OPENING_MARGIN` (0.03 m since plant_decor4, owner D01: "let leaves cross window frames
+  slightly"; 0.10 m in plant_decor3, 0.2 m before) and returns the free rectangles of the
   patch (the wall beside a window as one tall rectangle, the bands above and below it as short
   ones). Each rectangle is filled on its own (`_fit`): the extent of every plant lies inside it.
   **Shapes** (plant_decor3, 2026-10-30): the ivy assets come in three shapes by patch aspect
@@ -959,13 +970,35 @@ records** (`ProcgenOrnaments.anchors`; fields in procgen `docs/architecture_styl
   squares), then the others when none fits. Within a shape `_best_layout` picks the class and a grid
   of up to `MAX_COLUMNS` by `MAX_STACK` plants for the most covered extent (weighted by scale; more
   plants must cover `FIT_GAIN` 1.08 more), each shrunk uniformly to `FIT_MIN_SCALE` (0.6, was 0.4)
-  at the least; neighbours are spaced evenly edge to edge and may overlap by `MAX_OVERLAP` (25
-  percent), and a rectangle nothing fits in stays bare. So no plant extent meets a grown opening
+  at the least; neighbours are spaced evenly edge to edge and may overlap by `MAX_OVERLAP` (35
+  percent since plant_decor4), and a rectangle nothing fits in stays bare.
+  **No grid** (plant_decor4, owner D01: the lusher picture "has visible rows"): `StructureDecor.dress`
+  moves every ivy plant off its slot, by integer hashing of the anchor seed so every peer agrees:
+  scale varies 0.85 to 1.15 (uniform; beside an opening kept within `FIT_MIN_SCALE` and what fits
+  the rectangle), a turn of up to `MAX_TURN_DEGREES` (8) about the wall normal (about the plant's
+  centre, so the foot moves; shrunk to nothing when the turned box would not fit the rectangle),
+  a jitter of up to `JITTER` (15 percent of its size, held so neighbours never overlap by more
+  than half a plant), odd tiers staggered (half a pitch for three columns or more, a quarter for two,
+  the tier compressed toward its far side so it stays inside the run), and `_unlike` picks a
+  variant that differs from the left and lower neighbours. Beside an opening the turned box stays
+  inside the free rectangle, so the margin holds exactly. Tests: `test_a_tiled_wall_is_not_a_grid`
+  (variance of tier x offsets above 0.0004, no two stacked plants share an x),
+  `test_dressing_is_deterministic_per_seed_and_changes_with_it`, `test_neighbouring_plants_use_
+  different_variants_when_there_are_some`. So no plant extent meets a grown opening
   (tests `test_no_plant_reaches_an_opening_grown_by_the_margin`,
   `test_shaped_plants_never_reach_an_opening_grown_by_the_margin`). Patches with no opening tile
   with the squares as before. Measured (render job `plant_decor3_look`, round 2): window glass
   stays clear on cottage, ivy_manor, keep and townhouse; ivy leaf luminance against the bushes
   beside it 67 percent on ivy_manor and 69 on the keep (61 and 66 before the leaf colour lift).
+- **Rail tooltips** (owner D13, 2026-10-30). Every authoring rail icon has a tooltip in plain words:
+  `ToolDescriptor.rail_tip()` is the name with its key, then the one-line summary
+  (`rail_tip_for(available)` never gives an empty tip for a tool the map cannot take); the footer's
+  undo, redo, save and leave carry theirs. `test_every_authoring_rail_button_has_a_tooltip` fails on
+  an empty one.
+- **Cone roofs** (owner D07). `shaders/structure_roof.gdshader` scales its course shadow, lip width
+  and joints by `steep` (0 at a face normal 0.55 up or more, 1 at 0.30 or less), so cones, spires
+  and domes read their courses and shingle, gable and thatch roofs are unchanged (renders
+  `polish3_roof` before and after, notes folder `images/v4`).
 - **Triangle cap.** `StructureDecor.MAX_TRIANGLES` (3,000, ivy and planters together):
   `AuthoredStructures._add_decor` counts each placed asset's triangles (`_triangles_of`, full-detail
   index arrays) and `StructureDecor.cap_triangles` drops plants until the total fits: ivy before
