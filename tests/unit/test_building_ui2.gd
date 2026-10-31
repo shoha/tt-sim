@@ -125,13 +125,16 @@ func test_tile_columns_follow_the_pane_width_and_the_size_choice() -> void:
 
 
 func test_the_card_names_the_family_and_a_few_tags_without_repeating() -> void:
-	var card := StructurePalette.card(
-		{
-			"name": "Saltbox house",
-			"family": "house",
-			"tags": ["house", "regional", "gable", "timber", "chimney", "porch", "trim"],
-			"default_size_m": [6.0, 4.0],
-		}
+	var card := (
+		StructurePalette
+		. card(
+			{
+				"name": "Saltbox house",
+				"family": "house",
+				"tags": ["house", "regional", "gable", "timber", "chimney", "porch", "trim"],
+				"default_size_m": [6.0, 4.0],
+			}
+		)
 	)
 	assert_eq(card["title"], "Saltbox house")
 	assert_eq(card["detail"], "House: gable, timber, chimney, porch")
@@ -270,7 +273,75 @@ func test_nearest_legal_says_what_the_pointers_own_spot_failed_on() -> void:
 	assert_eq(edge["why"], StructurePlacement.OFF_MAP)
 
 
+func test_the_moved_note_waits_for_the_pointer_to_rest_but_a_block_does_not() -> void:
+	assert_almost_eq(StructureNote.REST_S, 0.4, 0.0001)
+	assert_false(StructureNote.rested(10.2, 10.0), "0.2 s: still moving")
+	assert_false(StructureNote.rested(10.39, 10.0))
+	assert_true(StructureNote.rested(10.4, 10.0), "0.4 s: rested")
+	assert_true(StructureNote.rested(5.0, -INF), "never moved: rested")
+	var moved := StructureNote.MOVED_OCCUPIED
+	var amber := StructureNote.Level.NOTE
+	var red := StructureNote.Level.BLOCKED
+	assert_false(StructureNote.shown(amber, moved, false), "an amber move note waits")
+	assert_true(StructureNote.shown(amber, moved, true), "then shows")
+	var held := StructureNote.clamp_text(Vector2(40, 30), Vector2(12, 9), 1.0, 3.0, "ft")
+	assert_true(StructureNote.shown(amber, held, false), "a held size follows a drag at once")
+	assert_true(StructureNote.shown(red, "Water.", false), "a red reason shows at once")
+	assert_false(StructureNote.shown(StructureNote.Level.NONE, "", true))
+	for text in [
+		StructureNote.MOVED_WATER,
+		StructureNote.MOVED_STEEP,
+		StructureNote.MOVED_OFF_MAP,
+		StructureNote.MOVED_OCCUPIED,
+		StructureNote.MOVED_ELSEWHERE
+	]:
+		assert_true(StructureNote.is_moved_text(text), text)
+	assert_false(StructureNote.is_moved_text(held))
+
+
+func test_the_pointer_counts_as_moved_past_a_couple_of_centimetres() -> void:
+	assert_true(StructureNote.pointer_moved(Vector2.INF, Vector2(1, 1)), "the first frame")
+	assert_false(StructureNote.pointer_moved(Vector2(1, 1), Vector2(1.005, 1)), "jitter")
+	assert_true(StructureNote.pointer_moved(Vector2(1, 1), Vector2(1.1, 1)))
+
+
+func test_an_unselected_building_under_the_pointer_is_outlined_at_seventy_percent() -> void:
+	assert_almost_eq(StructureNote.HOVER_STRENGTH, 0.7, 0.0001)
+	var rest := StructureNote.Rest.new()
+	rest.see(Vector2(1, 1))
+	assert_false(rest.rested(), "just moved")
+	rest.see(Vector2(1, 1))
+	assert_false(rest.rested(), "still within the delay")
+
+
 # --- the pane ------------------------------------------------------------------------------
+
+
+func test_show_hints_brings_the_forgotten_hints_back_and_tells_the_bar() -> void:
+	var tool := ToolRegistry.find(StructureTool.ID) as StructureTool
+	var brush := BrushTool.new()
+	add_child_autofree(brush)
+	var pane := _pane()
+	var told: Array[int] = [0]
+	tool.connect_selection(brush, pane, func() -> void: told[0] += 1)
+	assert_not_null(pane.hints_button)
+	assert_eq(pane.hints_button.text, "Show hints")
+	assert_ne(pane.hints_button.tooltip_text, "")
+	assert_ne(pane.hints_button.focus_mode, Control.FOCUS_NONE, "reachable by keyboard")
+	assert_eq(pane.hints_button.theme_type_variation, &"Ghost", "the theme's link look")
+	for gesture in StructureHints.PLACING:
+		StructureHints.mark(StringName(gesture["id"]))
+	assert_true(tool.key_hints(brush).is_empty(), "every gesture done: the bar steps aside")
+	pane.hints_button.pressed.emit()
+	assert_eq(told[0], 1, "the hint bar is shown again")
+	assert_eq(tool.key_hints(brush).size(), StructureHints.PLACING.size(), "every row is back")
+	StructureHints.reset()
+	assert_eq(StructureHints.done(), [] as Array[String], "forgotten for good, not just for now")
+	# A rebuilt pane's connection replaces the first.
+	var again := _pane()
+	tool.connect_selection(brush, again, func() -> void: told[0] += 10)
+	again.hints_button.pressed.emit()
+	assert_eq(told[0], 11)
 
 
 func _pane() -> StructureToolPane:
@@ -318,7 +389,9 @@ func test_two_chips_with_no_common_building_say_so_and_keep_the_chips() -> void:
 	assert_true(pane.refs().is_empty(), "no toon building is thatched")
 	assert_true((pane.get_node("StructureNoMatch") as Label).visible)
 	assert_eq((pane.get_node("StructureNoMatch") as Label).text, StructureToolPane.NO_MATCH_CHIPS)
-	assert_true((pane.chip_buttons["toon"] as Button).button_pressed, "the chips stay to switch off")
+	assert_true(
+		(pane.chip_buttons["toon"] as Button).button_pressed, "the chips stay to switch off"
+	)
 	assert_false((pane.chip_buttons["home"] as Button).button_pressed)
 
 
