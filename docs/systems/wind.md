@@ -9,9 +9,10 @@ at tabletop zoom (a gust you can watch cross a meadow, not a uniform shimmer), p
 and never the same wind everywhere (`AGENTS.md` at the suite root, "Guiding principle").
 
 Status (2026-10-30): phase (a) DONE on branch `wind_a` (see "Phase (a) as built" below); phase
-(b) particles DONE on branch `wind_b` (see "Phase (b) as built", after phase (a)'s section); phases
-(c) mills and cloth, (d) decor, (e) GM controls, (f) optional are NOT STARTED, and
-the rest of this document is still the design they build from. The default wind now blows toward
+(b) particles DONE on branch `wind_b` (see "Phase (b) as built", after phase (a)'s section); (c) mills,
+cloth and the vane DONE on `wind_c`; (d) decor plants and (e) GM controls and the player setting DONE
+on `wind_de` (see "Phase (d) and (e) as built"). Only phase (f), optional (smoke, dust, water chop),
+remains, and the rest of this document is still the design the phases were built from. The default wind now blows toward
 (0.707, 0, -0.707), not -z (owner, 2026-10-30; mentions of -z in the sections below are the
 phase (a) text). Where the design and the code
 disagree, the code is right and the section below says so. Every number marked "start" is a tuning
@@ -584,6 +585,76 @@ cottage and two windmills laid across the view, calm, windy and storm at wind cl
   owner wants it legible at home zoom the amplitudes can be doubled without structural change (two
   constants in the shader).
 
+### Phase (d) and (e) as built (2026-10-30, branch `wind_de`)
+
+**(d) Ivy and planters: no retune.** The climber preset (`wind_response` 0.6, so a sway scale of 3.2
+becomes 2.3 at a storm, between the trees' 2.1 and the grass's 3.75) was judged in `wind_de_look1`
+(`ivy_manor` and `cottage` with ivy and flower boxes, `decor` true, calm, windy and storm at wind clock
+0). The baked decor node (`0 multimeshes, 4 surfaces`, one mesh per structure) responds: the
+difference image between calm and storm shows the ivy blankets' and boxes' outlines moving along with the
+grass beside them, a few pixels at the half-size capture, and no card is sheared off its wall or
+detached. Honest limits: the thumbnail scene pins the clock at 0 and zeroes the per-plant sway speeds,
+so the stills show the gust's static lean, not the flutter, and a few pixels is what a wall-held plant
+should do; the red-channel `mesh_height` weights hold (the tips move more than the roots). The world
+frame direction note of 4d stands (ivy now leans with the global wind, not the structure's frame).
+
+**(e) GM controls (the Weather pane, nowhere else).** Under the four intensity rows
+(`scenes/states/playing/visual_panes/weather_pane.gd`):
+
+- **Wind strength chips** Calm, Breezy, Windy, Storm (a `TileRow`, the pane's own tile style, keyboard
+  focus enabled on the tiles, tooltips from `WindPresets.preset_tooltip`: "Windy: wind of about 8
+  metres a second. ..."). Picking one writes `wind_intensity` 0, 0.33, 0.66 or 1.0 (the design's stops of
+  1.5, 4, 8 and 14 m/s with the matching sway scale come from `WindPresets.STOPS`), moves the Wind tile
+  and its slider to match, and the chip shows picked whenever the strength is within 0.02 of a stop
+  (`WindPresets.name_for`); a dragged custom strength picks none. The Wind tile and its Light to Heavy
+  row stay, the preset being the same dial.
+- **Wind direction**, an eight-way compass with Auto in the middle (NW N NE / W Auto E / SW S SE, a
+  three-column `TileRow`), writing `wind_direction_deg` (`WindCompass`: where the wind comes FROM is
+  what players say, so "N" writes 90 degrees, toward +z; north is -z, up the default view; Auto is -1,
+  the default diagonal from the south-west). A readout under it, `WindCompass.readout`: "Wind from the
+  north-west", "Wind from the south-west (automatic)", "Wind from roughly the north-west" for a
+  direction between points (a hand-edited level; no tile is picked then).
+- **New gust pattern**, a button writing a new `wind_seed` (`WindPresets.reroll_seed`, a whole number in
+  1..2^24-1 that is never 0 or the current seed; the pane draws the entropy).
+- All three go into `WeatherSettings` and out through the pane's existing `weather_changed` payload
+  (the whole `to_dict`), so they save with the level, apply live through `GameMap.apply_weather_overrides`
+  to `Wind`, sync through `weather_overrides` and reach late joiners through `patch_level_dict`
+  (all unchanged code; `WindCompass`, the pane and the codec are covered by
+  `tests/unit/test_wind_controls.gd` and `test_weather_pane.gd`, including an old level without the two
+  keys loading the defaults). `WeatherSettings` already carried both fields from phase (a).
+- **Player setting.** `[graphics] wind_motion` has a Settings, Graphics slider "Wind motion" (0 to 100
+  percent, step 5, `SettingsWindMotion`, `scenes/ui/settings_wind_motion.gd`): it applies to the `Wind`
+  autoload as it moves (`Wind.set_wind_motion` clamps to 0..1) and Apply saves it; the autoload reads
+  it at startup (`load_settings(path)` now takes a path for tests); 0 holds everything still and the OS
+  reduce-motion setting wins (unchanged, tested in `test_wind_autoload.gd`). Tests:
+  `tests/unit/test_settings_wind_motion.gd`.
+
+**Cloth legibility.** The two cloth constants were doubled as the phase (c) report recommended: lean
+`0.24 + 0.68 * gust` and flutter `0.08 + 0.24 * gust` (times strength). The first render of the doubled
+awning at storm folded it over itself, so its up-and-down flap factor went from `1.2 - 0.9 * lean` to
+`0.75 - 0.45 * lean` (an awning flaps about 0.4 m at a storm, a pennant keeps its lean).
+
+Deviations and what was learned:
+
+1. **Camera framing cost four rounds.** `look_at` aims at a ground point, so the roof corners of a tall
+   keep are above the frame unless the target is moved well toward the far side. `thumbnail_prepare`
+   with `at` [0, -9] at zoom 14 shows the keep's top at last; the render jobs `wind_de_look1` to
+   `wind_de_look3` keep the working framings (a `tile` of one building, `at` shifted toward -z).
+2. **Pennant size and direction decide legibility more than amplitude.** With the default diagonal
+   (toward the right and away) a pennant is foreshortened to a sliver in the storm; with the wind
+   across the screen (`dir_deg` 0) the cottage's and townhouse's pennants stream clearly. The cloth is
+   small by design (about half a metre), so at home zoom it reads as a lifted, streaming triangle, not
+   a rippling banner.
+3. **The keep's banners were still not seen.** In the framings reached the keep (castle_keep with the
+   banner mask) showed no pole in frame; the cottage and townhouse banners and the awning were the
+   evidence. The keep's cloth uses the same shader and weights, so its motion is verified by the weight
+   tests only.
+4. **A re-roll jumps the pattern.** `WindPresets.blend` takes the new seed at once (a seed is not
+   blendable), so the gust fronts move to new positions between two frames; the lean amplitudes do not
+   jump. It is a deliberate "draw again", every peer making the same jump when the message arrives.
+5. **The Wind motion slider applies live, ahead of Apply.** Closing Settings without Apply leaves the
+   moved value in force until the next restart, while the saved file keeps the old one.
+
 ## 5. Look, tuning and accessibility
 
 ### How gusts should read
@@ -696,3 +767,5 @@ working days including the pinned-clock A/B. Phase (b) next (rain and snow, abou
   shaders, reduce-motion and wind-motion scale, tests, render and cost measurements).
 - 2026-10-30: phase (b) built on branch `wind_b` (default direction toward 0.707, 0, -0.707, defined
   once; rain, snow and the wind streaks follow the wind; tests; look and cost measured).
+- 2026-10-30: phases (d) and (e) built on branch `wind_de` (ivy and planters checked, cloth amplitudes
+  doubled, Weather pane strength chips, compass, readout and gust re-roll, the Wind motion setting).

@@ -617,7 +617,10 @@ with the drop, lean 0.6); the stripes of one `ornament/awning<k>` form a group w
 found from where the surface falls (the correlation of height with position), weight growing out to
 the hem (lean 0, it flaps). The weight is `extent * t^1.5` so the free end bends most. UV2 is not in
 `digest_of` (colour is), so no pin moved. Other meshes get no UV2 (zero weight). Tests:
-`tests/unit/test_structure_cloth.gd`.
+`tests/unit/test_structure_cloth.gd`. Amplitudes (card `wind_de`, doubled from phase (c) after the
+owner found the cloth barely visible at home zoom): lean `strength * (0.24 + 0.68 * gust)`, flutter
+`strength * (0.08 + 0.24 * gust)` with `strength = clamp(0.25 + speed / 10, 0, 1.6)`, and an awning's
+up-and-down flap held at 0.75 of the flutter (the full doubling folded it over itself at a storm).
 
 **Weathervane.** `StructureVane.split` (pure, called by `AuthoredStructures._structure_node`, not by
 `build_one`, so `parts` and the digest are unchanged) cuts the triangles tagged
