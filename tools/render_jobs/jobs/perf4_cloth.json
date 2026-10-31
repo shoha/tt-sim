@@ -1,0 +1,251 @@
+{
+ "out_dir": "render_jobs/perf4_cloth",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 100,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "banner",
+    "vane"
+   ],
+   "ref": "core:castle_keep",
+   "width": 8.0,
+   "depth": 8.0,
+   "yaw": 0.0,
+   "seed": 5,
+   "decor": false
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 20.0,
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "aim_cloth",
+   "fill": 0.09,
+   "off_deg": 45.0,
+   "preset": "windy",
+   "clock": 0.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "capture",
+   "name": "P_wide",
+   "desc": "P wide"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "aim_cloth",
+   "fill": 0.3,
+   "off_deg": 45.0,
+   "preset": "calm",
+   "clock": 0.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "aim_wind",
+   "preset": "calm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "P_calm_t0",
+   "desc": "P calm clock 0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "aim_wind",
+   "preset": "storm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "P_storm_t0",
+   "desc": "P storm clock 0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "aim_wind",
+   "preset": "storm",
+   "clock": 2.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "P_storm_t2",
+   "desc": "P storm clock 2"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "banner",
+    "vane"
+   ],
+   "ref": "core:townhouse",
+   "width": 6.0,
+   "depth": 5.0,
+   "yaw": 0.0,
+   "seed": 6,
+   "decor": false
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 20.0,
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "aim_cloth",
+   "fill": 0.09,
+   "off_deg": 45.0,
+   "preset": "windy",
+   "clock": 0.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "capture",
+   "name": "Q_wide",
+   "desc": "Q wide"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "aim_cloth",
+   "fill": 0.3,
+   "off_deg": 45.0,
+   "preset": "calm",
+   "clock": 0.0
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "aim_wind",
+   "preset": "calm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "Q_calm_t0",
+   "desc": "Q calm clock 0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "aim_wind",
+   "preset": "storm",
+   "clock": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "Q_storm_t0",
+   "desc": "Q storm clock 0"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "aim_wind",
+   "preset": "storm",
+   "clock": 2.0
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "Q_storm_t2",
+   "desc": "Q storm clock 2"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "remove_all"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}
