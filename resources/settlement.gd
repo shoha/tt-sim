@@ -23,6 +23,11 @@ extends RefCounted
 ## ProcgenSettlement) and the Dress paves them with the kit's plaza surface. Discs only for now
 ## (polygons wait for the Village tool). They are saved with the record and round trip byte for
 ## byte; the paint itself is the map's (SettlementGround).
+##
+## `ground` lists the paint strokes the last Dress laid for this settlement (SettlementGroundIO:
+## up to MAX_STROKES capsules in paint order, held to a hundredth). It is how Clear and a re-dress
+## take back exactly that paint (SettlementUnpaint) and nothing the author painted by hand. Saved
+## with the record, left out when empty.
 
 ## The characters: procgen's settlement kits, in its order (a saved map stores the name).
 const KIND_NAMES: Array[String] = ProcgenSettlement.NAMES
@@ -54,6 +59,7 @@ var removed: PackedStringArray = PackedStringArray()
 var pinned: Dictionary = {}
 var swapped: Dictionary = {}
 var plazas: Array[Dictionary] = []
+var ground: Array[Dictionary] = []
 
 
 static func make(settlement_id: int, kit_name: String, street: int, seed_number: int) -> Settlement:
@@ -74,6 +80,7 @@ func copy() -> Settlement:
 	out.pinned = pinned.duplicate(true)
 	out.swapped = swapped.duplicate()
 	out.plazas = plazas.duplicate(true)
+	out.ground = ground.duplicate(true)
 	return out
 
 

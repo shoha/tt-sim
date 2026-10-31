@@ -26,9 +26,11 @@ extends RefCounted
 
 ## The road is sampled this far apart along the centre line.
 const ROAD_STEP_M := 1.5
-const ROAD_HALF_SHARE := 0.58
-const ROAD_HALF_MIN_M := 0.9
-const ROAD_HALF_MAX_M := 2.4
+## The road's half width is this share of the setback, within the limits (all about a third more
+## than villages2's 0.58 and 0.9..2.4 m: at home zoom the road hid behind the near house rows).
+const ROAD_HALF_SHARE := 0.77
+const ROAD_HALF_MIN_M := 1.2
+const ROAD_HALF_MAX_M := 3.2
 ## Rise over run limits: along the road, across it, along a door path or across a plaza.
 const ROAD_MAX_SLOPE := 0.5
 const CROSS_MAX_SLOPE := 0.7
@@ -143,9 +145,11 @@ static func plan(
 					)
 					result["doors"] = int(made.size() * 0.5)
 		for stroke in made:
-			stroke["role"] = role
 			stroke["surface"] = granted[role]
-			strokes.append(stroke)
+			# Held to a hundredth (SettlementGroundIO), so the record and the paint agree.
+			var held := SettlementGroundIO.snapped_stroke(stroke)
+			held["role"] = role
+			strokes.append(held)
 		if not made.is_empty():
 			(result["roles"] as Array[String]).append(role)
 			if not (result["surfaces"] as Array[String]).has(granted[role]):

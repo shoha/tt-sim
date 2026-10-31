@@ -1141,3 +1141,8 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   behind the near houses. `jobs/villages2_perf.json` (about 50 s): three streets on a forest map dressed bare and with ground,
   twice, with `record` and `gpu` windows (`docs/PERFORMANCE.md` "Settlement ground"). Probe `probes/settlements.gd`: `plaza`,
   and `dress` with `ground` false.
+- `jobs/villages3_clear.json` (about 45 s, keeps no level; topic villages3): the two dressed streets (hamlet left, market
+  right) with their ground (`dressed_market`), then Clear of the market (`cleared_market`, `cleared_home`: only the paint the
+  Dress laid is gone, the hamlet stays paved), a fresh Dress and plaza (`redressed_home`, `redressed_market`) and two
+  re-dresses (`redressed_twice_market`: the same road, new furnishings). The probe's `redress` and `clear` log the take-back
+  entries and milliseconds.

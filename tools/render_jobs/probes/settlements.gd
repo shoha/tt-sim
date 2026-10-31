@@ -28,11 +28,15 @@ static func run(base: Node, step: Dictionary) -> String:
 		"redress":
 			var id := int(step.get("id", 1))
 			var ok := ctrl.editor.settlements.redress(id)
-			return _flush(ctrl.editor, "redress %d %s" % [id, str(ok)])
+			return _flush(
+				ctrl.editor, "redress %d %s; %s" % [id, str(ok), _ground_note(ctrl.editor)]
+			)
 		"clear":
 			var id := int(step.get("id", 1))
 			var ok := ctrl.editor.settlements.clear(id)
-			return _flush(ctrl.editor, "clear %d %s" % [id, str(ok)])
+			return _flush(
+				ctrl.editor, "clear %d %s; %s" % [id, str(ok), _ground_note(ctrl.editor)]
+			)
 		"select":
 			return _select(base, int(step.get("id", 1)))
 		"undo":
@@ -102,7 +106,8 @@ static func _ground_note(editor: AuthoringEditor) -> String:
 	return (
 		(
 			"ground roles %s, surfaces %s, road %.1f m, %d door paths, %d strokes, plan %.1f ms,"
-			+ " paint %.1f ms, refused %s, entries %s, slots used %d of %d"
+			+ " paint %.1f ms, refused %s, entries %s, slots used %d of %d,"
+				+ " taken back %d entries in %.1f ms"
 		)
 		% [
 			str(g.get("roles", [])),
@@ -115,7 +120,9 @@ static func _ground_note(editor: AuthoringEditor) -> String:
 			str(g.get("refused", {})),
 			str(g.get("entries", 0)),
 			editor.document.surface_ids.size(),
-			MapDocument.PAINT_SURFACE_LIMIT
+			MapDocument.PAINT_SURFACE_LIMIT,
+			int(g.get("unpaved", 0)),
+			float(g.get("unpaint_ms", 0.0)),
 		]
 	)
 
