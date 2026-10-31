@@ -7,8 +7,8 @@ extends RefCounted
 ## the staged maps are infos with no folder on disk, and the thumbnails, the import and Replace
 ## files and the level they replace live under PROBE_ROOT, with LevelManager.levels_dir and
 ## ImportSources.path pointed there until `cleanup`. `action`:
-## - `thumbs`: start rendering real thumbnails (THUMBS: the shipped Oak's Lab map.glb, and
-##   maps made here from a seed and a landform) into PROBE_ROOT/thumbs/; `stage` uses those
+## - `thumbs`: start rendering real thumbnails (THUMBS: maps made here from a seed and a
+##   landform) into PROBE_ROOT/thumbs/; `stage` uses those
 ##   written by then. `thumbs_status` says how many are done.
 ## - `stage`: the library shows STAGED (seven maps of every source, one Bundled, played and
 ##   edited over the last fortnight; Willow Green's source newer in Blender), the panel's sizes
@@ -59,10 +59,10 @@ const DESCRIPTIONS := {
 	"Willow Green": ["A ford under old willows, where the road meets the river", "Hannah"],
 	"Violet Fen": ["Reed beds and a sunken causeway at dusk", ""],
 }
-## Real thumbnails: the staged map's name, then the shipped GLB, or a biome, landform and seed
+## Real thumbnails: the staged map's name, then a GLB path, or a biome, landform and seed
 ## made here. The rest keep their painted placeholders, as a map with no picture yet does.
 const THUMBS := [
-	["Willow Green", "res://assets/models/maps/oakslabpainted.glb"],
+	["Willow Green", "temperate_forest_summer_s1", "valley", 5],
 	["Hayfield Rise", "grassland_meadow_summer_s1", "hilltop", 4],
 	["Violet Fen", "temperate_forest_summer_s1", "lakeshore", 3],
 	["Moonwell", "birch_woodland_summer_s1", "valley", 2],

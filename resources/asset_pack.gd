@@ -14,10 +14,10 @@ extends Resource
 ## Version string for the pack
 @export var version: String = "1.0"
 
-## Base path to the pack directory for local assets (e.g., "user://user_assets/pokemon/")
+## Base path to the pack directory for local assets (e.g., "user://user_assets/my_pack/")
 @export var base_path: String = ""
 
-## Base URL for remote assets (e.g., "https://raw.githubusercontent.com/user/repo/main/pokemon/")
+## Base URL for remote assets (e.g., "https://raw.githubusercontent.com/user/repo/main/my_pack/")
 ## If set, assets will be downloaded from this URL when not available locally
 @export var base_url: String = ""
 
@@ -187,7 +187,7 @@ static func from_directory(pack_path: String, folder_name: String) -> AssetPack:
 	return pack
 
 
-## Represents a single asset within a pack (e.g., one Pokemon, one miniature)
+## Represents a single asset within a pack (e.g., one creature, one miniature)
 class AssetEntry:
 	## Unique identifier within the pack
 	var asset_id: String = ""

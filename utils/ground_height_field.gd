@@ -52,9 +52,9 @@ const MAX_SAMPLES := 65536
 ## A GLB map keeps the fixed Y = 0 band when at least FLAT_SHARE of its sampled ground lies
 ## within FLAT_BAND_M of world Y = 0 (the band's smallest tolerance): the ground is the
 ## band's already, and the rest is furniture, walls and props that the band keeps the grid
-## off. Measured at 4000 random points (P3-3c): Oak's lab 87 % of its collision within
-## 0.5 m of Y = 0; Deciduous clusters 63 % and River 61 %, whose clearing and riverbed sit
-## about 1.2 m lower.
+## off. Measured at 4000 random points (P3-3c): an indoor room map had 87 % of its collision
+## within 0.5 m of Y = 0; Deciduous clusters 63 % and River 61 %, whose clearing and riverbed
+## sit about 1.2 m lower.
 const FLAT_BAND_M := 0.5
 const FLAT_SHARE := 0.8
 ## The deck texture's value where there is no deck (deck_image; the grid shader tests below

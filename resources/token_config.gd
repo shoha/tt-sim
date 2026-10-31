@@ -4,7 +4,7 @@ extends Resource
 ## Configuration resource for token creation
 ## Defines how a token should be built from a model scene
 
-## The model scene to use (e.g., a Pokemon GLTF import)
+## The model scene to use (e.g., a creature GLTF import)
 @export var model_scene: PackedScene
 
 ## Optional custom animation tree scene (uses default if not set)

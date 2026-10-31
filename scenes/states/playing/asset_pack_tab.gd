@@ -182,8 +182,8 @@ func _add_item_to_list(item: Dictionary) -> void:
 ## Decode the icon PNG on a worker thread via Image.load() rather than
 ## ResourceLoader.load_threaded_request() -- the threaded ResourceLoader path is prone to
 ## spurious "resource file not found" failures for files that demonstrably exist when a
-## pack's icon count causes many concurrent load requests (e.g. the 65+ asset trainers/
-## pokemon packs), a known Godot reliability gap. Image.load() has no such issue.
+## pack's icon count causes many concurrent load requests (e.g. a pack of 65+
+## assets), a known Godot reliability gap. Image.load() has no such issue.
 ##
 ## Static, and handed only the tab's instance id: the worker (and the deferred call it
 ## queues) must not hold a reference to the tab, because the tab can be freed at any point

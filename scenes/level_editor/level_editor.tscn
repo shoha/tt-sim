@@ -328,11 +328,11 @@ layout_mode = 2
 theme_type_variation = &"Secondary"
 text = "+ Add Token"
 
-[node name="PokemonSearch" type="LineEdit" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel/TokensVBox"]
+[node name="TokenSearch" type="LineEdit" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel/TokensVBox"]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-placeholder_text = "Search pokemon..."
+placeholder_text = "Search tokens..."
 
 [node name="TokenList" type="ItemList" parent="MainContainer/VBox/ContentSplit/LeftPanel/TokensPanel/TokensVBox"]
 unique_name_in_owner = true
@@ -359,11 +359,11 @@ layout_mode = 2
 theme_type_variation = &"SectionHeader"
 text = "Token Properties"
 
-[node name="PlacementPokemonLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
+[node name="PlacementAssetLabel" type="Label" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"Body"
-text = "#25 Pikachu"
+text = "Token"
 
 [node name="NameRow" type="VBoxContainer" parent="MainContainer/VBox/ContentSplit/RightPanel/PlacementPanel/PlacementVBox"]
 layout_mode = 2
@@ -621,14 +621,14 @@ title = "Import Level from JSON"
 size = Vector2i(800, 600)
 ok_button_text = "Import"
 
-[node name="PokemonSelectorPopup" type="Window" parent="."]
+[node name="TokenSelectorPopup" type="Window" parent="."]
 unique_name_in_owner = true
 oversampling_override = 1.0
-title = "Select Pokemon"
+title = "Select Token"
 size = Vector2i(400, 500)
 visible = false
 
-[node name="VBox" type="VBoxContainer" parent="PokemonSelectorPopup"]
+[node name="VBox" type="VBoxContainer" parent="TokenSelectorPopup"]
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -638,22 +638,22 @@ offset_right = -10.0
 offset_bottom = -10.0
 theme_type_variation = &"BoxContainerSpaced"
 
-[node name="PokemonSelectorSearch" type="LineEdit" parent="PokemonSelectorPopup/VBox"]
+[node name="TokenSelectorSearch" type="LineEdit" parent="TokenSelectorPopup/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-placeholder_text = "Search pokemon..."
+placeholder_text = "Search tokens..."
 
-[node name="PokemonSelectorShiny" type="CheckBox" parent="PokemonSelectorPopup/VBox"]
+[node name="TokenSelectorShiny" type="CheckBox" parent="TokenSelectorPopup/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "Shiny Variant"
 
-[node name="PokemonSelectorList" type="ItemList" parent="PokemonSelectorPopup/VBox"]
+[node name="TokenSelectorList" type="ItemList" parent="TokenSelectorPopup/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="Hint" type="Label" parent="PokemonSelectorPopup/VBox"]
+[node name="Hint" type="Label" parent="TokenSelectorPopup/VBox"]
 layout_mode = 2
 theme_type_variation = &"Caption"
 text = "Double-click to add token"
