@@ -49,6 +49,14 @@ times, with the longest gap 0.34 s and 0.31 s. A test fails on the old behaviour
   (`AuthoredStructures.load_threads()`, a quarter of the logical cores). More threads are slower (1.16 s
   on 3, 1.37 s on 12 or 24): builds allocate heavily and fight over the allocator. Digests are identical
   to the sequential build (test). Probe: job `struct_perf2_load_seq` / `_par`, action `load_build`.
+  The group is HIGH priority (2026-10-31): `AuthoredLoadPrep` runs `build` inside one of its own
+  low-priority pool tasks and waits there, and the pool lets low-priority tasks use only
+  `clamp(0.3 * threads, 1, threads - 1)` threads (7 on 24 cores, 1 on the 4-core CI runner). A
+  low-priority group queued behind the task waiting for it and hung every structure load for good:
+  CI's "Run tests and lint" stalled 900 s on every push from `ae26e1e2`. Reproduced locally with
+  `threading/worker_pool/max_threads=4` in an `override.cfg`; `test_structure_pool.gd` keeps every
+  low-priority thread busy so it fails on any core count. Any task that waits for another pool task
+  must not need a thread of the class it is holding.
 - Memory: static 446 MB for an empty map and about 530 MB with 100 structures (+83; main at the same
   commit measured +46 in the same job, an unexplained difference that does not depend on the build cap or
   the key memo). The 882 MB peak of the first report is not reproduced: the peak is about 530 MB in both.

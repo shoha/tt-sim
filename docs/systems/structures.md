@@ -1332,6 +1332,27 @@ objects (restored from the shared Actions cache; with pointer files the core lib
 and the report sees only five references with no recipes, 10 triangles each). Cost: about 3 minutes
 on Linux and Windows, 9 on macOS (the Rosetta leg alone is 2).
 
+**macOS arm64 and the rounded corners (2026-10-31, topic `cifix`).** The workflow was red from
+2026-10-29 (the first pins with rounded corners) on macOS arm64 only: `adobe_rounded` and `pueblo`,
+from 2026-10-30 also `blackhouse` and `sahel_mosque`, exactly the four recipes with a `round_corners`
+node (triangle counts equal; every millimetre-rounded part of the `parts:` line equal, only the raw
+`v`, `n`, `uv` and `coll` hashes differ). The Rosetta leg never ran on those runs (its `if` had the
+implicit `success()`; now `!cancelled()`), so Intel Macs were not checked. The cause is a last-bit
+float difference in the arc facets' normals and UVs, which `digest_of` hashed raw (vertices and
+collision were already rounded to 0.1 mm); the exact libm call that moves the bit was not found
+(axis-aligned arcs rule out `atan2f`, the wonked starters' other maths is shared with the 174 that
+match). So `digest_of` now rounds normals and UVs to `DIGEST_SNAP_UNIT` (0.001) too, the way it
+rounds the vertices, and every structure and prop pin was re-taken (`structure_digests.txt`,
+`prop_digests.txt`, `pins.txt`, `prop_pins.txt`; the procgen column of `pins.txt` is unchanged).
+Checked on Windows by a natural experiment: a procgen change that moved `blackhouse` and
+`adobe_rounded` by a last float bit (raw digests differed) left all 100 new digests identical.
+Unproven until a macOS run, and a coordinate that falls on a rounding boundary can still flip a
+digest (about 1e-4 per noisy float): if it does, the `parts:` line says which part. Peers do not
+compare these digests at run time (`digest_of` is read only by tests and tools; the multiplayer
+parity check, `MapFingerprint`, rounds to 1 mm), so a remaining last-bit difference is a red CI job,
+not a desync. The `core-library` repo keeps copies of `pins.txt` and `prop_pins.txt`: copy the two
+files there.
+
 **The digest split (2026-10-30, topic `digest_split`).** The exporter (`tools/export_core_structures.gd`)
 and the tests once pinned different digests for the same structures: nine houses (`house_flat`,
 `house_hip`, `stone_house`, the townhouse and its chimneyed, end, flat, hip and trimmed variants) at

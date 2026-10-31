@@ -146,7 +146,9 @@ jobs:
 
       # Intel Macs: the x86_64 slice of Godot under Rosetta, which is what those players run.
       - name: Rebuild under Rosetta (x86_64) and compare
-        if: runner.os == 'macOS' && (steps.report.outcome == 'success' || steps.report.outcome == 'failure')
+        # !cancelled(): an `if` with no status function gets an implicit success(), so this step was
+        # skipped on exactly the runs that needed it (a DIFF on arm64; 2026-10-31).
+        if: ${{ !cancelled() && runner.os == 'macOS' && (steps.report.outcome == 'success' || steps.report.outcome == 'failure') }}
         run: |
           set -o pipefail
           report="$RUNNER_TEMP/determinism_x86.txt"
