@@ -40,16 +40,6 @@
 			"text": "The Steamworks redistributable (steam_api64.dll on Windows, with the matching steam_api libraries on macOS and Linux) belongs to Valve. It is used under Valve's Steamworks terms, is not covered by this game's licence, and keeps Valve's own signature.\n\nSteamworks is available at https://partner.steamgames.com/"
 		},
 		{
-			"id": "drag_and_drop_3d",
-			"group": "Code",
-			"name": "Easy Drag and Drop 3D",
-			"what": "Dragging and dropping 3D bodies, by DevDrache.",
-			"licence": "MIT (as listed in the Godot Asset Library)",
-			"covers": ["DragAndDrop3D"],
-			"paths": ["addons/DragAndDrop3D"],
-			"text": "Easy Drag and Drop 3D by DevDrache, https://github.com/derdrache/DragAndDrop3D\n\nThe Godot Asset Library lists this addon under the MIT licence. The addon folder does not carry its own copy of the licence text yet."
-		},
-		{
 			"id": "fastnoiselite",
 			"group": "Code",
 			"name": "FastNoiseLite",

@@ -7,7 +7,7 @@ extends RefCounted
 ##                                `surface` at the nearest sample. For the path-meets-water fix.
 ##   cues                         in play: every token's height, base, the water surface over
 ##                                it and whether its submerged cue (SubmergedMarker) shows.
-##   hold {token, to}             in play: picks token i up through DragAndDrop3D and holds it
+##   hold {token, to}             in play: picks token i up through DragController and holds it
 ##                                over map XZ `to` (the drag stays active, the token eases
 ##                                there over the next frames), for a capture mid-drag.
 ##   drop                         ends a held drag as a release does.
@@ -32,7 +32,7 @@ static func run(root: Node, step: Dictionary) -> String:
 				root.get("_game_map") as GameMap, int(step.get("token", 0)), _vec(step.get("to"))
 			)
 		"drop":
-			var dnd := (root.get("_game_map") as GameMap).drag_and_drop_node as DragAndDrop3D
+			var dnd := (root.get("_game_map") as GameMap).drag_and_drop_node
 			dnd.stop_drag()
 			dnd.edge_pan_enabled = true
 			return "dropped"
@@ -80,14 +80,14 @@ static func _hold(gm: GameMap, index: int, to: Vector2) -> String:
 	if index >= tokens.size():
 		return "no token %d" % index
 	var token := tokens[index]
-	var dnd := gm.drag_and_drop_node as DragAndDrop3D
+	var dnd := gm.drag_and_drop_node
 	var space := gm.world_viewport.find_world_3d().direct_space_state
 	var surface := WaterSurface.surface_below(space, Vector3(to.x, 0, to.y), 50.0)
 	var screen := gm.camera_node.unproject_position(surface)
 	# Edge pan reads the real OS cursor, which may sit outside the window: off until `drop`.
 	dnd.edge_pan_enabled = false
-	dnd.call("_begin_drag", token)
-	dnd.call("_update_target_position", screen)
+	dnd.begin_drag(token)
+	dnd.update_target_position(screen)
 	return "holding %s over %s (screen %s)" % [token.get_parent().name, str(to), str(screen)]
 
 
@@ -259,7 +259,7 @@ static func _load_profile(folder: String, runs: int) -> String:
 		##                                `surface` at the nearest sample. For the path-meets-water fix.
 		##   cues                         in play: every token's height, base, the water surface over
 		##                                it and whether its submerged cue (SubmergedMarker) shows.
-		##   hold {token, to}             in play: picks token i up through DragAndDrop3D and holds it
+		##   hold {token, to}             in play: picks token i up through DragController and holds it
 		##                                over map XZ `to` (the drag stays active, the token eases
 		##                                there over the next frames), for a capture mid-drag.
 		##   drop                         ends a held drag as a release does.
@@ -280,7 +280,7 @@ static func _load_profile(folder: String, runs: int) -> String:
 ##                                `surface` at the nearest sample. For the path-meets-water fix.
 ##   cues                         in play: every token's height, base, the water surface over
 ##                                it and whether its submerged cue (SubmergedMarker) shows.
-##   hold {token, to}             in play: picks token i up through DragAndDrop3D and holds it
+##   hold {token, to}             in play: picks token i up through DragController and holds it
 ##                                over map XZ `to` (the drag stays active, the token eases
 ##                                there over the next frames), for a capture mid-drag.
 ##   drop                         ends a held drag as a release does.
@@ -306,7 +306,7 @@ static func _load_profile(folder: String, runs: int) -> String:
 ##                                `surface` at the nearest sample. For the path-meets-water fix.
 ##   cues                         in play: every token's height, base, the water surface over
 ##                                it and whether its submerged cue (SubmergedMarker) shows.
-##   hold {token, to}             in play: picks token i up through DragAndDrop3D and holds it
+##   hold {token, to}             in play: picks token i up through DragController and holds it
 ##                                over map XZ `to` (the drag stays active, the token eases
 ##                                there over the next frames), for a capture mid-drag.
 ##   drop                         ends a held drag as a release does.
@@ -335,7 +335,7 @@ static func _load_profile(folder: String, runs: int) -> String:
 		##                                `surface` at the nearest sample. For the path-meets-water fix.
 		##   cues                         in play: every token's height, base, the water surface over
 		##                                it and whether its submerged cue (SubmergedMarker) shows.
-		##   hold {token, to}             in play: picks token i up through DragAndDrop3D and holds it
+		##   hold {token, to}             in play: picks token i up through DragController and holds it
 		##                                over map XZ `to` (the drag stays active, the token eases
 		##                                there over the next frames), for a capture mid-drag.
 		##   drop                         ends a held drag as a release does.
@@ -356,7 +356,7 @@ static func _load_profile(folder: String, runs: int) -> String:
 ##                                `surface` at the nearest sample. For the path-meets-water fix.
 ##   cues                         in play: every token's height, base, the water surface over
 ##                                it and whether its submerged cue (SubmergedMarker) shows.
-##   hold {token, to}             in play: picks token i up through DragAndDrop3D and holds it
+##   hold {token, to}             in play: picks token i up through DragController and holds it
 ##                                over map XZ `to` (the drag stays active, the token eases
 ##                                there over the next frames), for a capture mid-drag.
 ##   drop                         ends a held drag as a release does.
@@ -382,7 +382,7 @@ static func _load_profile(folder: String, runs: int) -> String:
 ##                                `surface` at the nearest sample. For the path-meets-water fix.
 ##   cues                         in play: every token's height, base, the water surface over
 ##                                it and whether its submerged cue (SubmergedMarker) shows.
-##   hold {token, to}             in play: picks token i up through DragAndDrop3D and holds it
+##   hold {token, to}             in play: picks token i up through DragController and holds it
 ##                                over map XZ `to` (the drag stays active, the token eases
 ##                                there over the next frames), for a capture mid-drag.
 ##   drop                         ends a held drag as a release does.
@@ -406,7 +406,7 @@ static func _load_profile(folder: String, runs: int) -> String:
 ##                                `surface` at the nearest sample. For the path-meets-water fix.
 ##   cues                         in play: every token's height, base, the water surface over
 ##                                it and whether its submerged cue (SubmergedMarker) shows.
-##   hold {token, to}             in play: picks token i up through DragAndDrop3D and holds it
+##   hold {token, to}             in play: picks token i up through DragController and holds it
 ##                                over map XZ `to` (the drag stays active, the token eases
 ##                                there over the next frames), for a capture mid-drag.
 ##   drop                         ends a held drag as a release does.

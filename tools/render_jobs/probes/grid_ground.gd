@@ -111,14 +111,14 @@ static func _drag(gm: GameMap, on: bool) -> String:
 		ctrl._on_drag_stopped_grid(null)
 		return "drag stopped"
 	var tokens := gm.get_tree().get_nodes_in_group("board_tokens")
-	var obj: DraggingObject3D = null
+	var obj: Draggable3D = null
 	for node in tokens:
-		var found := (node as Node).find_children("*", "DraggingObject3D", true, false)
+		var found := (node as Node).find_children("*", "Draggable3D", true, false)
 		if not found.is_empty():
-			obj = found[0] as DraggingObject3D
+			obj = found[0] as Draggable3D
 			break
 	ctrl._on_drag_started_grid(obj)
-	return "drag started with %s" % (str(obj.objectBody.global_position) if obj else "no token")
+	return "drag started with %s" % (str(obj.body.global_position) if obj else "no token")
 
 
 static func _survey(gm: GameMap, step: Dictionary) -> String:

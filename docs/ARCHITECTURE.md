@@ -54,7 +54,7 @@ Root (Node3D)
 │   │           ├── CameraHolder / Camera3D
 │   │           │   └── GridOverlay (MeshInstance3D) - depth-projected grid overlay shader
 │   │           ├── MapContainer (Node3D) - map geometry added here
-│   │           ├── DragAndDrop3D - tokens added here (grid snap support)
+│   │           ├── DragController - tokens added here (grid snap support)
 │   │           └── [Dynamic] WeatherRenderer (Node3D) - particle weather effects
 │   ├── MeasureTool (Node) - distance measurement, 2D overlay on LAYER_MEASURE_OVERLAY
 │   ├── DragRuler (Node) - movement distance during token drag, 2D overlay on LAYER_DRAG_RULER
@@ -1921,24 +1921,24 @@ The fixed band (`grid_y_level` / `grid_y_tolerance`) prevents the grid from proj
 
 ### Grid-Snapped Movement
 
-When `LevelData.grid_snap_enabled` is `true`, dragged tokens snap to the nearest grid cell center on XZ. This is implemented directly in `DragAndDrop3D._update_target_position()` via `ScaleUtils.snap_to_grid()`.
+When `LevelData.grid_snap_enabled` is `true`, dragged tokens snap to the nearest grid cell center on XZ. This is implemented directly in `DragController.update_target_position()` via `DragMath.resolve_target_ground()` and `ScaleUtils.snap_to_grid()`.
 
-On release, `DragAndDrop3D.stop_drag()` writes the last snapped target's X and Z onto the body before emitting `dragging_stopped`, so the token lands on the cell the drag ruler and grid highlight showed rather than wherever the frame-rate-dependent follow lerp happened to leave it. Y is left to `DraggableToken`'s settle tween.
+On release, `DragController.stop_drag()` (the placement is `DragMath.landing`) writes the last snapped target's X and Z onto the body before emitting `dragging_stopped`, so the token lands on the cell the drag ruler and grid highlight showed rather than wherever the frame-rate-dependent follow lerp happened to leave it. Y is left to `DraggableToken`'s settle tween.
 
 - **Shift modifier**: Hold Shift during drag to bypass grid snap (free move). Shift always means "free move" regardless of settings.
-- **Configuration**: `GameMap.configure_grid()` sets `DragAndDrop3D.grid_snap_enabled`, `grid_cell_size`, and `grid_origin` from `LevelData`.
+- **Configuration**: `GameMap.configure_grid()` sets `DragController.grid_snap_enabled`, `grid_cell_size`, and `grid_origin` from `LevelData`.
 
-**On relief (P3-3b).** The snap keeps the height the cursor ray hit, which at a tier edge is the wrong tier: the pointer on the low ground at a cliff foot can snap to a cell centre on the plateau. On a map with authored terrain, `GameMap.set_ground_terrain()` sets `DragAndDrop3D.ground_resolver` (`GameMap._resolve_drag_ground`: `DragPlaceController.raycast_terrain_down` at the snapped XZ from 1 m above the terrain's highest ground, the same re-resolve a browser drop does). `DragAndDrop3D.resolve_target_ground()` (pure, tested in `test_relief_gameplay.gd`) snaps, then takes the resolver's ground height; a miss keeps the hit height. `_target_ground_position` keeps that ground point (before the token's height offsets) for the drag ruler. With a resolver, `stop_drag()` also lifts a body still rising toward a higher tier to the target height (`max(body.y, target.y)`), so it never settles from inside the cliff. `TokenWater.landing_position()` (a DraggableToken's `water`) casts from the token's top rather than its bottom, so a token whose bottom ended just below the ground (a scroll-lowered drag, a quick drop) still lands on it; starting at the top, not above the whole map, keeps an overhang above the token (a bridge, a roof on a Blender map) out of the cast. Blender maps have no resolver unless they have water: their drag target and drop are as before (checked on `deciduous_clusters` in play). With water (phase 4) the resolver and the landing apply the float rule and the cursor ray also hits water surfaces ([systems/water.md](systems/water.md) Runtime). Network sync is unchanged: the dragging peer is authoritative, sends throttled transforms while dragging and the settled transform at the end; peers never re-resolve.
+**On relief (P3-3b).** The snap keeps the height the cursor ray hit, which at a tier edge is the wrong tier: the pointer on the low ground at a cliff foot can snap to a cell centre on the plateau. On a map with authored terrain, `GameMap.set_ground_terrain()` sets `DragController.ground_resolver` (`GameMap._resolve_drag_ground`: `DragPlaceController.raycast_terrain_down` at the snapped XZ from 1 m above the terrain's highest ground, the same re-resolve a browser drop does). `DragMath.resolve_target_ground()` (pure, tested in `test_relief_gameplay.gd`) snaps, then takes the resolver's ground height; a miss keeps the hit height. `_target_ground_position` keeps that ground point (before the token's height offsets) for the drag ruler. With a resolver, `stop_drag()` also lifts a body still rising toward a higher tier to the target height (`max(body.y, target.y)`), so it never settles from inside the cliff. `TokenWater.landing_position()` (a DraggableToken's `water`) casts from the token's top rather than its bottom, so a token whose bottom ended just below the ground (a scroll-lowered drag, a quick drop) still lands on it; starting at the top, not above the whole map, keeps an overhang above the token (a bridge, a roof on a Blender map) out of the cast. Blender maps have no resolver unless they have water: their drag target and drop are as before (checked on `deciduous_clusters` in play). With water (phase 4) the resolver and the landing apply the float rule and the cursor ray also hits water surfaces ([systems/water.md](systems/water.md) Runtime). Network sync is unchanged: the dragging peer is authoritative, sends throttled transforms while dragging and the settled transform at the end; peers never re-resolve.
 
 ### Drag Ruler
 
-`DragRuler` (`scenes/states/playing/drag_ruler.gd`) shows a distance line from a token's start position to its current position during drags. It activates automatically via `DragAndDrop3D.dragging_started` and deactivates on `dragging_stopped`/`dragging_cancelled`.
+`DragRuler` (`scenes/states/playing/drag_ruler.gd`) shows a distance line from a token's start position to its current position during drags. It activates automatically via `DragController.dragging_started` and deactivates on `dragging_stopped`/`dragging_cancelled`.
 
 - Renders on `CanvasLayer` at `Constants.LAYER_DRAG_RULER` (layer 7, below the measure overlay).
 - Uses `MapOverlayUtils` for overlay and label creation.
 - Shows formatted distance (e.g. "30 ft") and cell count when grid snap is active (e.g. "6 cells / 30 ft").
-- Shows the elevation change like the measure tool when it passes `MeasureTool.ELEVATION_THRESHOLD` (0.15 m): "2 cells / 11 ft  |  +5 ft elev  |  12 ft direct" (`DragRuler.ruler_text`, through `ScaleUtils.format_distance_with_elevation`). The change is ground to ground: from the walkable surface under the token at drag start to the one under `DragAndDrop3D.get_target_ground_position()` (`WaterSurface.surface_below`: the terrain from 0.5 m above the point, or a water surface above it, so across a river the ruler measures along the surface the grid lies on, not down to a wading token's bed), so the token's pickup lift and scroll height, which the settle undoes, never count.
-- Reads `DragAndDrop3D._target_drag_position` (the snapped target) for the endpoint, not the lerping visual position.
+- Shows the elevation change like the measure tool when it passes `MeasureTool.ELEVATION_THRESHOLD` (0.15 m): "2 cells / 11 ft  |  +5 ft elev  |  12 ft direct" (`DragRuler.ruler_text`, through `ScaleUtils.format_distance_with_elevation`). The change is ground to ground: from the walkable surface under the token at drag start to the one under `DragController.get_target_ground_position()` (`WaterSurface.surface_below`: the terrain from 0.5 m above the point, or a water surface above it, so across a river the ruler measures along the surface the grid lies on, not down to a wading token's bed), so the token's pickup lift and scroll height, which the settle undoes, never count.
+- Reads `DragController.get_target_position()` (the snapped target) for the endpoint, not the lerping visual position.
 - Adds "In fire" after the other parts ("6 cells / 30 ft  |  In fire") while the drop point stands in the map's persistent fire at the flames band or above (`DragRuler.in_fire`: `FireField.mask_at` on this peer's own document, at least `FireField.FLAME_MIN`; embers do not count). The map's `FireField` is found by its group (`FireField.GROUP`) at drag start and the point taken into its frame. Nothing is synced and the token is not changed (fire is a rules matter for the GM). The chip shows for a short step into fire too, and resets its size after each text change so it never keeps a longer label's width.
 
 ### Shared Overlay Infrastructure (MapOverlayUtils)
@@ -1985,7 +1985,7 @@ The tool renders entirely in 2D to avoid the lo-fi post-processing shader applie
 - GUI click guard: mouse clicks over UI elements (checked via `_is_mouse_over_gui()`) are not forwarded to the measure tool.
 - When the tool consumes an event, `get_viewport().set_input_as_handled()` prevents propagation to `_unhandled_input` (blocking token context menus, etc.).
 - Ctrl held during measurement snaps to token base positions instead of terrain.
-- The `toggled(active)` signal disables `DragAndDrop3D.dragging_enabled` while measuring to prevent accidental token drags.
+- The `toggled(active)` signal disables `DragController.dragging_enabled` while measuring to prevent accidental token drags.
 
 **Lifecycle:**
 
@@ -2008,7 +2008,7 @@ The tool renders entirely in 2D to avoid the lo-fi post-processing shader applie
 | `scenes/states/playing/level_play_controller.gd` | Lifecycle (deactivation on level clear, grid configuration) |
 | `scenes/states/playing/gameplay_menu_controller.gd` | Scale config routing |
 | `utils/scale_utils.gd` | Distance conversion, formatting, and grid snapping |
-| `addons/DragAndDrop3D/nodes/drag_and_drop_3d.gd` | Grid snap in drag system (Shift override) |
+| `scenes/drag/drag_controller.gd`, `utils/drag_math.gd` | Grid snap in drag system (Shift override) |
 
 ---
 
@@ -2020,7 +2020,7 @@ Physical game tokens representing assets from packs. **Must be created via `Boar
 
 ```
 BoardToken (Node3D)
-├── DraggableToken (DraggingObject3D)
+├── DraggableToken (Draggable3D)
 │   ├── RigidBody3D
 │   │   ├── CollisionShape3D
 │   │   ├── SelectionGlowRenderer (selection_glow.gdshader on QuadMesh)
@@ -2061,7 +2061,7 @@ Spawning: `LevelPlayController.spawn_avatar(recipe, name, position, settle)` (th
 
 ### Drag-to-Place (Asset Browser)
 
-`DragPlaceController` (`scenes/states/playing/drag_place_controller.gd`), a child `Node` of `GameMap`, handles dragging an asset out of the asset browser and dropping it on the map to spawn a new token — distinct from `DragAndDrop3D`'s dragging of already-placed tokens on the board.
+`DragPlaceController` (`scenes/states/playing/drag_place_controller.gd`), a child `Node` of `GameMap`, handles dragging an asset out of the asset browser and dropping it on the map to spawn a new token — distinct from `DragController`'s dragging of already-placed tokens on the board.
 
 - `raycast_terrain(camera, space_state, screen_pos)` — a static, independently-testable raycast against physics layer 1 (terrain/board) only, up to 1000 world meters, used to find the terrain surface (including slopes) under the cursor.
 - Falls back to the existing Y=0 ground-plane intersection when the terrain raycast misses (e.g. camera pointed off the map).
@@ -2264,7 +2264,7 @@ project/
 │   ├── audio/           # UI and SFX sound files
 │   ├── icons/ui/        # SVG/PNG UI icons
 │   └── models/maps/     # Built-in map scenes and textures
-├── addons/              # Third-party addons (netfox, DragAndDrop3D, etc.)
+├── addons/              # Third-party addons (netfox, etc.)
 └── .github/workflows/   # CI/CD (Godot build, export, releases)
 ```
 

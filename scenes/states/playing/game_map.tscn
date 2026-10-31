@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://ybc3vhthi6i5" path="res://scenes/states/playing/game_map.gd" id="1_5384n"]
 [ext_resource type="PackedScene" uid="uid://y7g8xy3ginxi" path="res://scenes/states/playing/gameplay_menu.tscn" id="2_stlim"]
-[ext_resource type="Script" uid="uid://md8k6faseouk" path="res://addons/DragAndDrop3D/nodes/drag_and_drop_3d.gd" id="2_tyn2t"]
+[ext_resource type="Script" path="res://scenes/drag/drag_controller.gd" id="2_tyn2t"]
 [ext_resource type="Shader" uid="uid://cxn1njji80mb1" path="res://shaders/lofi_canvas.gdshader" id="5_lofi_canvas"]
 [ext_resource type="Script" uid="uid://2xyvhnhgntl" path="res://scenes/states/playing/occlusion_fade_manager.gd" id="6_occfade"]
 
@@ -62,9 +62,8 @@ far = 1000.0
 
 [node name="MapContainer" type="Node3D" parent="WorldViewportLayer/SubViewportContainer/SubViewport" unique_id=482917301]
 
-[node name="DragAndDrop3D" type="Node3D" parent="WorldViewportLayer/SubViewportContainer/SubViewport" unique_id=390056310 groups=["DragAndDrop3D"]]
+[node name="DragController" type="Node3D" parent="WorldViewportLayer/SubViewportContainer/SubViewport" unique_id=390056310]
 script = ExtResource("2_tyn2t")
-metadata/_custom_type_script = "uid://md8k6faseouk"
 
 [node name="OcclusionFadeManager" type="Node3D" parent="WorldViewportLayer/SubViewportContainer/SubViewport" unique_id=1128785975]
 script = ExtResource("6_occfade")

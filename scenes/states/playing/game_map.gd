@@ -17,7 +17,7 @@ extends Node3D
 ##   │       └── SubViewport
 ##   │           ├── CameraHolder/Camera3D
 ##   │           ├── MapContainer (map geometry, environment)
-##   │           ├── DragAndDrop3D (tokens)
+##   │           ├── DragController (tokens)
 ##   │           └── OcclusionFadeManager (fades geometry hiding tokens)
 ##   └── GameplayMenu (CanvasLayer - UI on top)
 ##
@@ -73,7 +73,9 @@ var cameraholder_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubView
 @onready
 var map_container: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/MapContainer
 @onready
-var drag_and_drop_node: Node3D = $WorldViewportLayer/SubViewportContainer/SubViewport/DragAndDrop3D
+var drag_and_drop_node: DragController = (
+	$WorldViewportLayer/SubViewportContainer/SubViewport/DragController
+)
 
 # OcclusionFadeManager - type resolved at runtime after editor imports the new script
 @onready var occlusion_fade: Node3D = get_node(
@@ -585,7 +587,7 @@ func get_grid_overlay() -> GridOverlay:
 
 
 ## Create and configure the DragRuler.
-## Connects to DragAndDrop3D signals for automatic activation during drags.
+## Connects to DragController signals for automatic activation during drags.
 func setup_drag_ruler() -> void:
 	if _drag_ruler:
 		return
@@ -688,7 +690,7 @@ func reset_grid_state() -> void:
 ## The map's authored terrain (MapSourceLoader.install passes it, or null for a Blender map
 ## without one): the grid overlay draws on its ground instead of the fixed Y = 0 band
 ## (set_grid_ground), and a dragged token's height is re-resolved on it at the snapped cell
-## (DragAndDrop3D.ground_resolver) so a drag across a tier edge lands on the right tier. With
+## (DragController.ground_resolver) so a drag across a tier edge lands on the right tier. With
 ## null both keep their Blender-map behaviour (the grid's ground may be set later from the
 ## map's collision, set_grid_ground).
 ##
@@ -701,7 +703,7 @@ func set_ground_terrain(terrain: AuthoredTerrain, has_water: bool = false) -> vo
 	_has_water = has_water
 	set_grid_ground(GroundHeightField.from_terrain(terrain))
 	if drag_and_drop_node:
-		drag_and_drop_node.collisionMask = WaterSurface.WALKABLE_MASK
+		drag_and_drop_node.collision_mask = WaterSurface.WALKABLE_MASK
 		drag_and_drop_node.ground_resolver = (
 			_resolve_drag_ground if terrain != null or has_water else Callable()
 		)

@@ -243,7 +243,7 @@ static func _build_draggable_token(
 	rigid_body: RigidBody3D, collision_shape: CollisionShape3D
 ) -> DraggableToken:
 	var draggable = DraggableToken.new()
-	draggable.name = "DraggingObject3D"
+	draggable.name = "Draggable3D"
 	draggable.rigid_body = rigid_body
 	draggable.collision_shape = collision_shape
 	return draggable

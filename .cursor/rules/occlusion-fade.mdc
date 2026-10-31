@@ -59,7 +59,7 @@ Token positions are derived from the CollisionShape3D's AABB center, not the Rig
 ### Click-through map geometry
 `GlbUtils.disable_static_body_picking()` sets `input_ray_pickable = false` on all map StaticBody3D nodes. This lets Godot's viewport picking ray pass through terrain to reach tokens behind it. This is separate from the visual fade — tokens are selectable even without the dither effect.
 
-**Important:** This covers StaticBody3D nodes created both by Godot's GLB importer (via `nodes/use_name_suffixes=true` in import settings) AND by `process_collision_meshes()`. The `disable_static_body_picking()` call is in `load_map()` and all `load_map_async()` code paths. DragAndDrop3D's drop-position raycast (PhysicsDirectSpaceState, mask=1) is unaffected.
+**Important:** This covers StaticBody3D nodes created both by Godot's GLB importer (via `nodes/use_name_suffixes=true` in import settings) AND by `process_collision_meshes()`. The `disable_static_body_picking()` call is in `load_map()` and all `load_map_async()` code paths. DragController's drop-position raycast (PhysicsDirectSpaceState, mask=1) is unaffected.
 
 ## Settings Integration
 

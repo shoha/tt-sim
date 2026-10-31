@@ -103,7 +103,7 @@ The measure tool (`scenes/states/playing/measure_tool.gd`) is a `Node` child of 
 - **Setup**: `GameMap.setup_measure_tool()` creates it and calls `setup(camera, world_viewport, overlay_parent)`
 - **Input routing**: `GameMap._input()` forwards M key and mouse events to `MeasureTool.handle_input()`. Always check `_is_mouse_over_gui()` before forwarding mouse clicks
 - **Scale config**: Call `MeasureTool.configure(grid_cell_size, display_unit, display_unit_per_cell)` when scale changes. Use `ScaleUtils` for distance formatting
-- **Lifecycle**: Deactivated by `LevelPlayController.clear_level()`. The `toggled(active)` signal syncs `DragAndDrop3D.dragging_enabled`
+- **Lifecycle**: Deactivated by `LevelPlayController.clear_level()`. The `toggled(active)` signal syncs `DragController.dragging_enabled`
 - **Rendering**: 2D overlay on `Constants.LAYER_MEASURE_OVERLAY` (layer 8) — uses `Control._draw()`, not 3D meshes. This keeps lines crisp above the lo-fi shader
 - **Adding new gameplay tools**: Follow the same pattern — `Node` child of `GameMap`, own CanvasLayer, input routed through `GameMap._input()` with GUI guard, `set_input_as_handled()` to prevent propagation
 
@@ -112,21 +112,21 @@ The measure tool (`scenes/states/playing/measure_tool.gd`) is a `Node` child of 
 The grid overlay (`scenes/states/playing/grid_overlay.gd`) is a `MeshInstance3D` child of `Camera3D` inside the SubViewport. Key integration points:
 
 - **Setup**: `GameMap.setup_grid_overlay()` creates it via `GridOverlay.create(camera_node)`
-- **Configuration**: `GameMap.configure_grid(level_data)` sets shader uniforms (cell_size, origin, color), floor level, and configures DragAndDrop3D snap settings
+- **Configuration**: `GameMap.configure_grid(level_data)` sets shader uniforms (cell_size, origin, color), floor level, and configures DragController snap settings
 - **Visibility**: Managed by `GameMap._update_grid_visibility()` — combines explicit toggle (G key), auto-show (measure/drag), and LevelData defaults. Never set `GridOverlay.visible` directly
 - **Show/hide**: Use `show_grid()` / `hide_grid()` for animated transitions (0.2s fade). Use `hide_grid_immediate()` for level clear/reset (no animation). `is_grid_visible()` returns the intended state via `_showing` flag
 - **Floor level**: `set_floor_level(y_level, tolerance)` sets the height filter. Default: Y=0.0, tolerance = `max(cell_size * 0.4, 0.5)`. Do NOT use `_map_bounds.position.y` — it includes mesh undersides
 - **Shader pipeline**: `shaders/grid_overlay.gdshader` — depth-buffer projection → edge rejection → height filter → normal filter → grid math → three-layer compositing (cell tint → drag highlight → grid lines) → opacity multiplier
 - **Cell tint**: `cell_tint_color` (theme `color_surface1` at 65%) with `cell_tint_inset` (10%) creates visible cell boundaries. Grid lines (`line_color`) are an optional additional layer (currently 0% opacity)
 - **Drag highlights**: `set_drag_highlight(current_pos, start_pos)` / `clear_drag_highlight()` control per-cell highlighting during drags. Converts world positions to integer cell indices for the shader
-- **Grid snap**: Integrated into `DragAndDrop3D._update_target_position()` via `ScaleUtils.snap_to_grid()`. Snaps to cell **centers** (not intersections). Shift held during drag bypasses snap
+- **Grid snap**: Integrated into `DragController.update_target_position()` via `DragMath.resolve_target_ground()` and `ScaleUtils.snap_to_grid()`. Snaps to cell **centers** (not intersections). Shift held during drag bypasses snap
 - **Tuning shader visuals**: Modify uniforms in `grid_overlay.gdshader` for appearance changes. `LevelData.grid_color` overrides `line_color` at runtime — changing the shader default alone won't work if `configure()` is called after
 
 ### Working with the Drag Ruler
 
 The drag ruler (`scenes/states/playing/drag_ruler.gd`) is a `Node` child of `GameMap`. Key integration points:
 
-- **Setup**: `GameMap.setup_drag_ruler()` creates it and connects DragAndDrop3D signals
+- **Setup**: `GameMap.setup_drag_ruler()` creates it and connects DragController signals
 - **Activation**: Automatic — starts on `dragging_started`, stops on `dragging_stopped`/`dragging_cancelled`
 - **Scale config**: `DragRuler.configure(grid_cell_size, display_unit, display_unit_per_cell, grid_snap_enabled)` — called from `GameMap.configure_grid()`
 - **Rendering**: 2D overlay on `Constants.LAYER_DRAG_RULER` (layer 7) — uses `MapOverlayUtils` for shared overlay and label creation
@@ -201,8 +201,8 @@ D:\dev\tabletop\tt-sim\cursor_hints\
 - **Grid floor level**: The height filter uses Y=0 as the floor, NOT `_map_bounds.position.y` (which includes mesh undersides/foundations). If the grid is invisible, the floor Y or tolerance is likely wrong
 - **Grid shader defaults vs runtime**: `LevelData.grid_color` is written to the `line_color` shader uniform by `configure()`. Changing the shader default alone has no effect if `configure()` runs after. Same applies to any uniform set by `configure()` or `set_floor_level()`
 - **Grid cell tint compositing**: The shader composites three layers with a priority system (cell tint → drag highlight → grid lines). Drag highlights REPLACE the tint; grid lines sit on top via `max(alpha)`. Do not use `mix()` with `step()` on `final_alpha` — the tint makes alpha always > 0, breaking conditional blending
-- **Grid snap**: Implemented in `DragAndDrop3D._update_target_position()` via `ScaleUtils.snap_to_grid()`. Snaps to cell **centers** (half-cell offset), not intersections. Shift bypasses. Configure via `GameMap.configure_grid(level_data)`
-- **Drag ruler endpoint**: `DragRuler` reads `DragAndDrop3D._target_drag_position` (the snapped target), not the lerping `objectBody.global_position`
+- **Grid snap**: Implemented in `DragController.update_target_position()` via `DragMath.resolve_target_ground()` and `ScaleUtils.snap_to_grid()`. Snaps to cell **centers** (half-cell offset), not intersections. Shift bypasses. Configure via `GameMap.configure_grid(level_data)`
+- **Drag ruler endpoint**: `DragRuler` reads `DragController.get_target_position()` (the snapped target), not the lerping `body.global_position`
 - **MapOverlayUtils returns Dictionary**: The factory methods return untyped Dictionaries — always type the receiving variable as `var result: Dictionary` to avoid GDScript type inference errors
 
 For full details on all conventions, see `docs/CONVENTIONS.md`.

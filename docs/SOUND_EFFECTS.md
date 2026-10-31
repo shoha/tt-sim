@@ -314,7 +314,7 @@ rustle, a knock, a splash) is a CC0 recording cut into takes, as the authoring s
 
 | Proposed Sound    | Description                                    | Where to Wire                          |
 |-------------------|------------------------------------------------|----------------------------------------|
-| `token_snap`      | Token snapping to grid position                | `drag_and_drop_3d.gd` snap logic       |
+| `token_snap`      | Token snapping to grid position                | `drag_controller.gd` snap logic        |
 | `token_rotate`    | Token rotation snap                            | `board_token_controller.gd` rotation   |
 | `token_scale`     | Token scale change                             | `board_token_controller.gd` scaling    |
 | `token_cancel`    | Drag cancelled / token returns to origin       | `draggable_token.gd` cancel handler    |

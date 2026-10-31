@@ -63,7 +63,7 @@ func test_an_avatar_token_takes_the_swim_draft() -> void:
 	scene.free()
 
 
-## The drag target (DragAndDrop3D.resolve_target_ground through the dragged object's
+## The drag target (DragMath.resolve_target_ground through the dragged object's
 ## drag_resolver) carries the token's own draft, so a dragged avatar shows its swim depth over
 ## deep water, not the ordinary float height it would leave on the drop.
 func test_a_dragged_avatar_resolves_at_its_swim_depth() -> void:
@@ -78,13 +78,13 @@ func test_a_dragged_avatar_resolves_at_its_swim_depth() -> void:
 	var deep_water := func(point: Vector3, draft: float = WaterSurface.DRAFT_M) -> Vector3:
 		return Vector3(point.x, WaterSurface.landing_y(-3.0, 0.0, true, draft), point.z)
 	var hit := Vector3(2.0, 0.0, -1.0)
-	var target := DragAndDrop3D.resolve_target_ground(
+	var target := DragMath.resolve_target_ground(
 		hit, false, 1.0, Vector2.ZERO, drag.drag_resolver(deep_water)
 	)
 	assert_almost_eq(target.y, -drag.water_draft(), 0.0001, "the avatar's swim depth")
 	assert_lt(target.y, -WaterSurface.DRAFT_M - 0.5, "well below the float height")
-	var plain := DraggingObject3D.new()
-	var shared := DragAndDrop3D.resolve_target_ground(
+	var plain := Draggable3D.new()
+	var shared := DragMath.resolve_target_ground(
 		hit, false, 1.0, Vector2.ZERO, plain.drag_resolver(deep_water)
 	)
 	assert_almost_eq(shared.y, -WaterSurface.DRAFT_M, 0.0001, "the shared resolver floats")

@@ -381,7 +381,7 @@ The fix:
   `is_mouse_over_token`'s ray and the measure tool's grew to 1000 m (the play camera's top
   edge at zoom 20 is now about 116 m from its ray origin; it was 57 m). Measured near values:
   -61 m at home, -59 at zoom 20, -63 at zoom 6, -64 at zoom 2, -53 at a 150 ft map's full
-  authoring zoom-out (size 39.3), far 1000 throughout. A token drag through DragAndDrop3D
+  authoring zoom-out (size 39.3), far 1000 throughout. A token drag through DragController
   resolves to the same ground cell with the old and the new near, and `is_mouse_over_token`
   finds the same token.
 - The foliage shader dissolves the canopies in front of the view-centre ground over a soft

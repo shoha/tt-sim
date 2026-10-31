@@ -7,14 +7,15 @@ var _original_current_scene: Node
 var _dummy_scene_root: Node
 
 
-## DraggableToken extends DraggingObject3D (addons/DragAndDrop3D), whose _ready() reads
-## get_tree().current_scene.is_node_ready() unconditionally. gut_cmdln's headless runner never
-## assigns a current_scene, so that call would crash on a null reference.
+## DraggableToken extended a third-party base (since replaced by Draggable3D) whose _ready() read
+## get_tree().current_scene.is_node_ready() unconditionally, and gut_cmdln's headless runner never
+## assigns a current_scene. Draggable3D no longer reads it; the stand-in scene stays because it
+## costs nothing and keeps the test as it was.
 ##
 ## SceneTree.set_current_scene() only accepts a node that is a direct child of the tree root
 ## (engine-side assertion) -- this test script itself is nested under GUT's runner, so pointing
 ## current_scene at `self` silently fails. Instead, spin up a throwaway root-level Node for the
-## duration of the test so DraggingObject3D's _ready() path runs the way it does in a real game
+## duration of the test so DraggableToken's _ready() path runs the way it does in a real game
 ## scene, then tear it down and restore the original value so other test scripts in the same run
 ## aren't affected.
 func before_each() -> void:

@@ -59,7 +59,7 @@ const FOLIAGE_FLOOR_THRESHOLD := 2.0
 # References (set via setup())
 var _camera: Camera3D
 var _map_container: Node3D
-var _tokens_container: Node3D  # DragAndDrop3D
+var _tokens_container: Node3D  # DragController
 
 # The occlusion fade shader resource (loaded once)
 var _shader: Shader

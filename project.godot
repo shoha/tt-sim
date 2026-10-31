@@ -28,7 +28,6 @@ buses/default_bus_layout="uid://rmc2eog1qlvw"
 
 [autoload]
 
-DragAndDropGroupHelper="*uid://d21uumvllljay"
 LevelManager="*res://autoloads/level_manager.gd"
 InputProfile="*res://autoloads/input_profile.gd"
 UIManager="*res://autoloads/ui_manager.gd"
@@ -57,7 +56,7 @@ window/stretch/aspect="expand"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/DragAndDrop3D/plugin.cfg")
+enabled=PackedStringArray()
 
 [gui]
 

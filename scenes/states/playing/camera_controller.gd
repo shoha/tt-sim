@@ -740,7 +740,7 @@ func notify_map_clearing() -> void:
 
 
 ## Handle camera edge-panning when dragging a token near screen edges.
-## Reads the edge_pan_direction from DragAndDrop3D and smoothly interpolates
+## Reads the edge_pan_direction from DragController and smoothly interpolates
 ## to provide a gentle ramp-up entering the zone and coast-out when leaving.
 func _handle_edge_pan(delta: float) -> void:
 	var drag_and_drop_node := _game_map.drag_and_drop_node

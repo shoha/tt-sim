@@ -13,9 +13,9 @@ var _original_current_scene: Node
 var _dummy_scene_root: Node
 
 
-## DraggableToken extends DraggingObject3D (addons/DragAndDrop3D), whose _ready() reads
-## get_tree().current_scene.is_node_ready() unconditionally. gut_cmdln's headless runner
-## never assigns a current_scene, so that call would crash on a null reference. See
+## DraggableToken once extended a third-party base whose _ready() read
+## get_tree().current_scene.is_node_ready() unconditionally (Draggable3D does not). The
+## headless runner never assigns a current_scene, so a stand-in is still set up. See
 ## test_draggable_token_submerge.gd's before_each() for the full rationale -- same
 ## throwaway-root-node workaround, reused here since these tests also build a real
 ## DraggableToken hierarchy.
