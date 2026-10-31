@@ -85,10 +85,12 @@ void vertex() {
 	}
 #endif
 #ifdef S_WIND
-	// A shader that defines S_WIND defines `vec3 s_cloth_wind(vec3 vertex, vec2 weight, mat4 model)`
+	// A shader that defines S_WIND defines `vec3 s_cloth_wind(vec3 vertex, vec2 weight, mat4 model, inout vec3 normal)`
 	// before this include (the ornament shader: banner, pennant and awning cloth). The weight is the
 	// second UV set, written by StructureCloth.
-	VERTEX += s_cloth_wind(VERTEX, UV2, MODEL_MATRIX);
+	vec3 s_bent = NORMAL;
+	VERTEX += s_cloth_wind(VERTEX, UV2, MODEL_MATRIX, s_bent);
+	NORMAL = s_bent;
 #endif
 }
 

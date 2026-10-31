@@ -25,6 +25,8 @@ const LANTERN_SHADER := preload("res://shaders/structure_lantern.gdshader")
 ## The lantern's brightness (above EnvironmentGlow.HDR_THRESHOLD so the glow takes it); the one
 ## number a future time-of-day control would drive.
 const LANTERN_ENERGY := 1.35
+## The halo round a lantern (StructureGlow): an alpha-soft disc, camera-facing, steady.
+const GLOW_SHADER := preload("res://shaders/structure_glow.gdshader")
 ## Metal is lifted toward a warm gold, cloth a little brighter so a stripe stays a colour in shade.
 const METAL_TONE := Vector3(1.25, 1.12, 0.9)
 const CLOTH_TONE := Vector3(1.1, 1.08, 1.05)
@@ -92,6 +94,8 @@ static func make(
 		return water()
 	if role == StructureLook.CANOPY:
 		return canopy()
+	if kind == StructureGlow.KIND:
+		return glow()
 	if role == StructureLook.PROP:
 		# The glass of a prop is its lantern (a well's and a trough's water is the WATER role above).
 		return lantern() if kind == StructureLook.GLASS_KIND else prop(kind)
@@ -180,6 +184,14 @@ static func lantern() -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = LANTERN_SHADER
 	material.set_shader_parameter("energy", LANTERN_ENERGY)
+	return material
+
+
+## The halo round a lantern (StructureGlow.KIND): a warm gold disc blended over the scene, steady
+## (shaders/structure_glow).
+static func glow() -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = GLOW_SHADER
 	return material
 
 

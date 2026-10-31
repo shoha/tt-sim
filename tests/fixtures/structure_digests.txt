@@ -79,7 +79,7 @@ core:lantern_cottage f901d644a48923ae8e600a5149e3e585 1617
 core:toon_clinic_wing 406ddbafd28afece29cffba3451b70b5 2008
 core:toon_gym_lobby 80994204820db9e2cb07081d311e47af 1731
 core:ivy_manor f768359fe0782b74abb28e0d99cbb5b7 3011
-core:bartizan_keep 2afe936a8799c9bf59effecd6c6416dd 1352
+core:bartizan_keep 9b37d53d711b06d52a927c8437728c15 1456
 core:chapel_rose 91dd09685fbc70f344ba4ad08d2b9683 2616
 core:toon_gym_court 7212bed8c557c70ef36916c00f97f0b1 1471
 core:yurt 670f701fe56525e8524354e2722f4436 1028

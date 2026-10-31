@@ -37,7 +37,13 @@ float s_gust_field(vec2 world_xz) {
 	return smoothstep(-0.2, 0.9, wave);
 }
 
-vec3 s_cloth_wind(vec3 vertex, vec2 weight, mat4 model) {
+// A flag or a hanging banner (lean above 0.5) ripples: a wave runs from the pole (or the top edge)
+// to the free edge, across the wind and up and down, and the sheet's normal is tilted by the wave's
+// slope so the folds catch the light (a flat normal made a pennant read as a stiff paper triangle,
+// owner 2026-10-31). `normal` is the vertex normal in the mesh's frame, tilted in place. The calm
+// ripple is slow and shallow (about 2.6 s a wave, a tenth of a metre of swing per metre of reach);
+// windy is quicker, tighter and deeper, a storm snaps.
+vec3 s_cloth_wind(vec3 vertex, vec2 weight, mat4 model, inout vec3 normal) {
 	float motion = wind_gust.w * cloth_wind;
 	if (motion <= 0.0 || weight.x <= 0.0) {
 		return vec3(0.0);
@@ -53,9 +59,28 @@ vec3 s_cloth_wind(vec3 vertex, vec2 weight, mat4 model) {
 	float f1 = sin(ph);
 	float f2 = sin(ph * 1.7 + 1.3);
 	float amp = strength * (0.08 + 0.24 * g);
-	// A flag flutters across the wind and along it; an awning (lean 0) flaps up and down.
+	// An awning (lean 0) flaps up and down; a hanging banner and a flag take the ripple below.
 	vec3 flutter = across * f1 * amp + down * f2 * amp * 0.5 * weight.y + vec3(0.0, 1.0, 0.0) * f2 * amp * (0.75 - weight.y * 0.45);
-	return weight.x * motion * (down * lean + flutter);
+	float rippling = smoothstep(0.4, 0.6, weight.y);
+	vec3 ripple = vec3(0.0);
+	if (rippling > 0.0) {
+		float u = clamp((strength - 0.4) / 1.2, 0.0, 1.0);
+		float k = mix(6.0, 7.5, u);
+		float omega = mix(2.4, 7.5, u);
+		float swing = mix(0.18, 0.34, u) * (0.8 + 0.4 * g);
+		float p = k * weight.x - TIME * omega + dot(w.xz, vec2(0.7, 0.9));
+		float reach = weight.x * swing;
+		ripple = across * reach * sin(p) + vec3(0.0, 1.0, 0.0) * reach * 0.9 * sin(p - 1.2);
+		// The slope of the across swing along the cloth, which bends the normal. A flag lies along the
+		// wind, a banner hangs.
+		float slope = clamp(swing * (sin(p) + weight.x * k * cos(p)), -1.0, 1.0);
+		float face = dot(normal, across);
+		if (abs(face) > 0.5) {
+			vec3 along = mix(vec3(0.0, 1.0, 0.0), -down, step(0.8, weight.y));
+			normal = normalize(normal + sign(face) * along * slope * 2.2 * rippling);
+		}
+	}
+	return motion * (weight.x * down * lean + mix(weight.x * flutter, ripple, rippling));
 }
 
 #include "res://shaders/structure_painterly.gdshaderinc"

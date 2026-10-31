@@ -355,6 +355,15 @@ func _build_variant(ref: String) -> void:
 				}
 			)
 		)
+	for mesh: Dictionary in parts.get("glow", []):
+		surfaces.append(
+			{
+				"key": "%s:%s" % [mesh["role"], mesh["kind"]],
+				"role": mesh["role"],
+				"kind": mesh["kind"],
+				"arrays": mesh["arrays"],
+			}
+		)
 	_variants[ref] = {"surfaces": surfaces}
 
 
@@ -385,13 +394,17 @@ func _bake_cell(cell: Dictionary) -> void:
 	var node := MeshInstance3D.new()
 	node.name = cell_name
 	var mesh := ArrayMesh.new()
+	var has_glow := false
 	for surface in surfaces:
+		has_glow = has_glow or String(surface["kind"]) == StructureGlow.KIND
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface["arrays"])
 		mesh.surface_set_material(
 			mesh.get_surface_count() - 1,
 			_material(String(surface["kind"]), String(surface["role"]))
 		)
 	node.mesh = mesh
+	if has_glow:
+		node.extra_cull_margin = StructureGlow.CULL_MARGIN_M
 	node.set_meta(META, int(cell["settlement"]))
 	add_child(node)
 	_keys[cell_name] = cell["key"]

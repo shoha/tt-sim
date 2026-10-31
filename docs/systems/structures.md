@@ -647,6 +647,46 @@ banner row changed, and the extra `length` draw moved the keep's random draws so
 no longer appears: 1559 to 1352 triangles, pin `2afe936a`); its tile in `thumbnails/structures/` was not
 redrawn.
 
+**Flags that flag (topic looks3, 2026-10-31).** The owner: "i don't see the pennants flagging in the
+calm weather". Cause: a pennant was three vertices, so the vertex shader could lean it but never bend
+it, and calm or windy it was a stiff triangle in a still frame (render job `looks2_banners`, before
+captures `looks3_base_banners`). Two changes. Procgen cuts the cloth into 6 to 9 strips
+(`ProcgenOrnamentParts.cloth`, procgen docs/architecture_styles.md "Banners, round three"; about 55
+triangles more per pennant). `structure_ornament.gdshader` adds a ripple for weights with lean above 0.5
+(a pennant, 1.0, and a hanging banner, 0.6; an awning keeps its flap): a wave from the pole or top edge
+to the free edge, across the wind and up and down (the vertical share 0.9 so it reads from the
+isometric camera), whose amplitude grows with the reach in `weight.x`. The sheet's normal is tilted by
+the wave's slope (`s_cloth_wind` takes the normal `inout`; the include in `structure_painterly` passes
+it), so the folds catch the light as a lighter band on each crest instead of one flat colour. Calm is
+slow and shallow (swing 0.18 of the reach, 2.4 rad/s, wave number 6 per metre of reach, about 1.3
+waves on a 1.5 m pennant), windy quicker and deeper (up to 0.34, 7.5 rad/s, 7.5 per metre); the gust
+field scales the swing by 0.8 to 1.2. The lean (the downwind stretch) is unchanged. Looks:
+`looks3_r2_banners` (calm pennants show a gentle S with a lighter band; windy is tighter and sharper,
+with a small kink at the tips where 8 strips are few for the wave). Core's `bartizan_keep` is the one
+core structure with banners: its pin moved from `2afe936a` (1352 triangles) to `9b37d53d` (1456) in
+`pins.txt` and `tests/fixtures/structure_digests.txt` (its recipe text did not change; its tile was not
+redrawn). procgen pin `4c1a524`.
+
+**Lantern glow (topic looks3, 2026-10-31).** The owner: lantern glow "not visible". The lantern's
+unshaded pane (`structure_lantern.gdshader`, energy 1.35) lifts the environment's glow only when it is
+very bright against a dark sky; in daylight it was a flat cream box. `StructureGlow` (pure, called by
+`build_one`) finds each box of a prop's `glass` mesh (vertices joined by index or coincident position)
+and writes one halo quad per lantern into `parts.glow`: four vertices at the pane's centre, the corner
+in UV, the half-size (3.0 times the pane's largest extent) in metres in UV2.x. `parts.glow` is NOT in
+`meshes`, `digest_of`, `triangle_count` or the budgets (no pin moved); `AuthoredStructures` draws it as
+a mesh instance beside the meshes (no shadow, `extra_cull_margin` 2.5 m because its bounds are empty)
+and `AuthoredSettlements` adds it to each prop variant's surfaces (`SettlementBake` keeps it a surface
+of its own and grows UV2.x by the placement's scale, so a hero lamp's halo grows with it).
+`structure_glow.gdshader` billboards the quad toward the camera and paints a small core and a wide
+amber halo, blended over the scene (not added: an additive glow washes to nothing on a lit meadow),
+steady (no day and night), pushed half its size toward the camera along the camera's back axis (never
+along the ray to the camera: an orthographic camera has none, and the first try drifted the disc off
+the pane). No Light3D node, no texture. `FORMAT_VERSION` 6. Cost: two triangles per lantern and one
+more surface per baked cell that holds a lamp. Counted with the `looks2_street` job: draw surfaces 14
+to 16, triangles 15180 to 15194 (7 lanterns); frame time was not pinned-measured, the halo is a few
+thousand pixels of alpha per lamp. Looks: `looks3_r2_lantern` (lamp_mid, lamp_close) and
+`looks3_r3_street` (market_close, the baked path). Tests: `tests/unit/test_structure_glow.gd`.
+
 **Weathervane.** `StructureVane.split` (pure, called by `AuthoredStructures._structure_node`, not by
 `build_one`, so `parts` and the digest are unchanged) cuts the triangles tagged
 `ornament/vane/{shaft, arrow, tail}` out of the static meshes; `vane_node` makes a `VaneMotion`
