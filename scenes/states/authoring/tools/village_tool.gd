@@ -1,0 +1,102 @@
+class_name VillageTool
+extends ToolDescriptor
+
+## The Village tool: opens, sizes and removes the plazas of a dressed village and picks its
+## character (VillageBrush does the gestures, SettlementEditor the edits, VillagePlazas the pure
+## rules). A plaza is a ring on the ground the street opens into: the ground under it is repaved
+## with the character's plaza surface and the character's plaza rules furnish it. Its pane is
+## VillageToolPane. A dressed Blender map's ground is the GLB's, so there the tool is disabled
+## with a tooltip saying why, as Wall is. Authoring only: what it does reaches every peer through
+## the ordinary `surface` and `settlements` live edits. Design: docs/systems/villages.md section 10.
+
+const ID := &"village"
+const LABEL := "Village"
+const UNAVAILABLE_TOOLTIP := "Village: not on a Blender map, whose ground is the map file's"
+
+
+func _init() -> void:
+	id = ID
+	label = LABEL
+	summary = "Open a plaza in a village and pick how it looks."
+	icon = "village"
+	brush_mode = VillageBrush
+	contexts = AUTHORING
+	unavailable_tooltip = UNAVAILABLE_TOOLTIP
+	help = [
+		[
+			"Left Click or Drag (Village)",
+			"Open a plaza on the ground; a drag sizes it. Dress a street with the Wall tool first",
+		],
+		["Drag a plaza's edge (Village)", "Resize it; the ground is repaved when you let go"],
+		["Click a plaza (Village)", "Pick it: the pane then sizes or removes it"],
+		["Delete (Village)", "Remove the plaza under the cursor with its paving"],
+		["[ and ] (Village)", "A plaza one metre smaller or larger; Shift + scroll over one"],
+		["Escape (picked plaza)", "Let go of the plaza"],
+	]
+
+
+## The tool's mode on `brush`.
+static func of(brush: BrushTool) -> VillageBrush:
+	return brush.mode_for(ToolRegistry.find(ID)) as VillageBrush
+
+
+## Only where the ground is the document's (a plaza is painted into its surfaces).
+func can_select(controller: AuthoringController) -> bool:
+	return controller.editor != null and works_on(controller.editor)
+
+
+func works_on(editor: AuthoringEditor) -> bool:
+	return editor.can_paint()
+
+
+func build_pane(panel: AuthoringPanel) -> Control:
+	return VillageToolPane.new(panel.palette_root)
+
+
+## The pane's picks are single editor calls (one history entry each), and the pane shows the
+## document again whenever the mode says what it shows changed. The brush's mode outlives the
+## pane, so the old connections (to a pane that is gone) are dropped first.
+func connect_pane(controller: AuthoringController, pane: Control) -> void:
+	var village_pane := pane as VillageToolPane
+	if village_pane == null or controller.brush == null:
+		return
+	var brush := controller.brush
+	var mode := of(brush)
+	for link: Dictionary in mode.view_changed.get_connections():
+		mode.view_changed.disconnect(link["callable"])
+	mode.view_changed.connect(func() -> void: refresh_pane(brush, mode, village_pane))
+	village_pane.village_picked.connect(
+		func(village: int) -> void:
+			mode.select(village, -1)
+			controller.pick_tool(ID)
+	)
+	village_pane.kit_picked.connect(
+		func(kit: String) -> void:
+			if brush.editor != null and mode.selected_village > 0:
+				brush.editor.settlements.set_kit(mode.selected_village, kit)
+			refresh_pane(brush, mode, village_pane)
+	)
+	village_pane.radius_committed.connect(
+		func(radius: float) -> void:
+			if brush.editor != null and mode.set_selected_radius(brush.editor, radius):
+				brush.redraw()
+			refresh_pane(brush, mode, village_pane)
+	)
+	village_pane.remove_requested.connect(
+		func() -> void:
+			if brush.editor != null:
+				mode.remove_selected(brush.editor)
+			refresh_pane(brush, mode, village_pane)
+	)
+
+
+## Shows the open document's villages, and the mode's pick, on `pane`.
+static func refresh_pane(brush: BrushTool, mode: VillageBrush, pane: VillageToolPane) -> void:
+	if not is_instance_valid(pane) or brush.editor == null:
+		return
+	var editor := brush.editor
+	var state := VillagePlazas.state_of(editor.document, mode.selected_village, mode.selected_plaza)
+	if mode.sizing():
+		state = VillagePlazas.with_preview(state, mode.preview_radius())
+	var k :=ScaleUtils.world_to_display(editor.map_scale(), brush.unit_cell_m, brush.unit_per_cell)
+	pane.show_state(state, k, brush.unit_label)

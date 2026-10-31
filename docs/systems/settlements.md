@@ -76,6 +76,10 @@ each is one history entry. The picked street's bar (`WallToolPane.selection_box`
 reads "Re-dress" once dressed, "Clear"); `SettlementBarLink` joins it to the editor and re-shows the street
 after any edit, undo or redo.
 
+A village's plazas and character are also edited in the Village tool (`VillageTool`, `VillageBrush`,
+`VillageToolPane`): the pane's character tiles call `set_kit`, its size slider `resize_plaza`, Remove
+`remove_plaza`; see `docs/systems/villages.md` section 10.
+
 ## Split into buildings
 
 `WallEditor.split_street` freezes the frontage (`from_lots` without neighbour discs) into the settlement in
@@ -196,9 +200,19 @@ surroundings with the trampled broad edge, show in the Paint tool, and reach eve
   a little at the crossing (re-dress it); a sliver of author paint that a stroke squeezed to almost nothing
   comes back as that sliver (the weight it had is not recorded); a settlement dressed before villages3 has no
   list, so its first re-dress lays the new ground over the old and only the new strokes are remembered.
-- **Plazas have no tool UI yet.** They are created through `SettlementEditor.add_plaza` (the probe action
-  `plaza`); the Village tool's drag is phase 3. Discs only (the design allowed polygons); a hand-placed
-  building inside a plaza is not refused.
+- **Plazas are made in the Village tool** (topic villagetool, 2026-10-31; `docs/systems/villages.md` section
+  10): `add_plaza`, `resize_plaza` and `remove_plaza` are the editor calls under its gestures (the probe action
+  `plaza` still calls the first). Discs only (the design allowed polygons); a hand-placed building inside a
+  plaza is not refused.
+- **Resize and remove take the plaza's paving back** (villagetool). A plaza's paving is the one disc stroke
+  `from == to == at`, radius 1.12 times the plaza's, that `add_plaza` appended to `Settlement.ground`
+  (`VillagePlazas.stroke_index` finds it). `resize_plaza(id, index, radius)` takes that stroke back
+  (`SettlementPaint.unlay` of the one stroke, `SettlementUnpaint` as for Clear), lays the new disc and forgets
+  the old stroke in the record, all in one history group: one Ctrl+Z, one `surface` op plus one `settlements`
+  op per peer entry. `remove_plaza` takes the stroke back with the plaza (it used to leave the paving until the
+  next re-dress). A plaza with no listed stroke (paving off, or refused for wet or steep ground) changes the
+  record only. Paint laid over the disc afterwards by the door paths or by hand is handled as Clear handles it
+  (the author's other paint gets its room back; a sliver squeezed to almost nothing comes back as the sliver).
 - **The building's own path gives way.** `StructureDressing` leaves out its alpha path ribbon (stones and
   steps stay) where the map's paint already covers the ground 0.8 m and 1.8 m out of the door
   (`StructureDoorPaint`, cover of 128 of 255 or more, any surface); the answer is part of the structure's
@@ -223,7 +237,7 @@ surroundings with the trampled broad edge, show in the Paint tool, and reach eve
 
 ## Not done
 
-The Dress row on the Buildings bar, the Village tool (plaza drag and resize, garden paint, prop select, move,
-swap, pin), plaza polygons, a yard surface, bridges, boundary walls and fields, GM Events pane wiring,
+The Dress row on the Buildings bar, the rest of the Village tool (plaza move and polygons, garden paint, prop
+select, move, swap, pin; the plaza gestures and the character tiles are built), plaza polygons, a yard surface, bridges, boundary walls and fields, GM Events pane wiring,
 pin/remove/swap gestures (the record and plan support them), collision `stand`/`solid`, the settlement
 following later house moves after a split, and a rebuild of a building's yard after a paint stroke alone.

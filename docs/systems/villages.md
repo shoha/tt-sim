@@ -599,4 +599,91 @@ about a third". Details and numbers in `docs/systems/settlements.md` "Ground".
 - The road is a third wider: `0.77 x setback` a side clamped to 1.2 to 3.2 m (2.31 m at the default setback,
   was 1.74 m).
 - Still open: where two dressed streets cross, taking one back thins the other at the crossing; the Village
-  tool; a paint stroke alone does not rebuild a building's yard.
+  tool (built in section 10); a paint stroke alone does not rebuild a building's yard.
+
+## 10. The Village tool, plazas and character (topic villagetool, 2026-10-31)
+
+Owner decision 2026-10-31: the next slice is the Village tool UI, "drag out a plaza, pick the kit and ground;
+makes the new ground usable by authors". Built as the design's section 3d.3 intended, scoped to plazas and the
+character pick. No bridges, walls, fields or touchable props. No new live-edit op kind, no format change.
+
+**A rail tool of its own** (`VillageTool`, `scenes/states/authoring/tools/village_tool.gd`, rail icon `village`,
+authoring only, no shortcut like its neighbours; disabled on a Blender map as Wall is). The Wall tool's picked-street
+bar keeps "Dress this street"; the Village tool is where a village is edited once it exists. The code and UI taste
+favoured a rail item over growing the street bar: a plaza is not a property of one street, the street bar only
+shows while a street is picked, and the Wall pane is already the longest.
+
+**Gestures** (`VillageBrush`, a `BrushMode`; pure rules in `VillagePlazas`, `utils/village_plazas.gd`):
+
+- Click bare ground: a plaza of `DEFAULT_RADIUS_M` (5 m) opens there. Drag from bare ground: the radius is how far
+  the pointer goes from the centre (2 to 16 m, tenths; a drag under 1.5 m is a click). The release is the edit.
+  A kit can raise the tool's floor (`VillagePlazas.KIT_MIN_RADIUS_M`; the record still takes anything): the market
+  town's is 6 m, since its stalls line a plaza's edge every 7 m and at 5 m hide the cobble (villagetool2 capture
+  `j_market_5_6_7`: 5 m overstuffed, 6 m reads paved round the well, 7 m roomy). A market click lays 6 m; a rim grab
+  never pushes a plaza already under the floor up.
+- Drag a plaza's rim (a band of 12 px, at least 0.9 m, each side of the edge, or within 22 px of one of its four
+  handle dots, the S6 44 px target): the rim follows the pointer without jumping where it was grabbed. Click inside a plaza: picks it. Delete or Backspace over a plaza (the Structure
+  tool's `decide` table, `picks`/`has_target`) removes it; the pane's Remove does the same for the picked plaza;
+  `[` `]` and Shift+wheel over a plaza step it a metre (one history entry each); Escape drops a held gesture, then
+  lets go of the picked plaza; right click puts the brush down as everywhere.
+- Which village a press joins: the nearest within 60 m of its street line or a plaza edge, the picked one keeping
+  the press while it is at most 6 m farther than the nearest. Until the author picks a village (a press, a plaza
+  click, the pane's village row) the picked one follows the pointer, as the village a press there would join, so the
+  pane, the ghost and its hint name the same village (round 1's captures showed the pane on the first village while the
+  ghost's hint named the other: a real disagreement, `test_the_pane_and_the_ghost_name_one_village_and_a_pick_stays`).
+  An author's pick stays; the ghost over another village's ground then names that village ("Click for a plaza in
+  village 1") and a press there moves the pick. No village in reach, or four plazas already: a toast says so (`NO_VILLAGE`, `FULL`), nothing is
+  laid. A plaza refused for wet or steep ground is still recorded and furnished, as `add_plaza` always did (the
+  paving is skipped and counted in `last_ground["refused"]`).
+- While a gesture is held the ring is a preview and nothing is repaved; the release repaves once. (A repave
+  mid-drag would cost the 30 to 70 ms the villages2 numbers give per lay on every pointer step.)
+
+**The edits** are `SettlementEditor.add_plaza`, `resize_plaza` and `remove_plaza`, each one history group (the paving
+and the record undo together), reaching peers as the ordinary `surface` ops and one `settlements` op
+(`test_a_peer_ends_level_through_add_resize_remove_and_their_undos`). Resize and remove take back exactly the
+plaza's own paving stroke (settlements.md "Ground"); that is the one change to the editor, plus `_replace`'s
+`drop` argument.
+
+**Feedback** (`VillageRings`, round 2 topic villagetool2). Every plaza of the map is a soft ring on the ground (a glow,
+a dark keyline and a bright line over a faint fill) in four weights that keep the states apart: the ghost a thin
+chalk line (0.55 of the brush cursor's widths) over a disc of the kit's paving colour at half opacity (the plaza
+surface's average, lifted toward white, `VillageSwatch.paving_color`); a calm plaza quiet paper (0.9); the picked one
+the Wall tool's gold (1.35) with handle dots of 5.5 px; the one under the pointer heavier still (1.75) with 8 px dots.
+While a drag sizes a plaza its disc is a flat tint of the kit's paving at the new radius (no repave until the
+release) and the pane's size reads the same width live (the mode's signature carries the preview radius;
+`VillagePlazas.with_preview`). A pill says what a press does ("Click for a plaza, or drag to size it", with two or more
+villages "Click for a plaza in village 2, ...", "Drag the edge to size this plaza", "Plaza: click to pick, Delete
+removes it", over the picked one "Drag the edge to size it, Delete removes it", "Plaza  33 ft across" while sizing, a
+refusal in salmon); the ghost's pill sits just past the ghost's right rim so it never covers it. With two or more
+villages each street carries a glass chip with its name ("Village 2", gold when picked) at its middle
+(`VillagePlazas.anchor_of`).
+
+**The pane** (`VillageToolPane`): one line for the gesture, then, when two or more villages exist, a row naming them
+("Village 1", "Village 2": one word, the board's chips' and the hint's), the primary choice; under it that village's
+character ("Character of village 2"), four tiles each a small painted vignette of the kit's plaza (`VillageSwatch`,
+generated in code: the kit's plaza paving as a disc on a ground colour of its own, meadow green, warm ochre, harbour
+blue, heather slate, with a well, a striped stall, barrels or a lamp; the tooltip names the road and plaza surfaces in
+plain words); then the plazas: a body line saying how many more the village can hold ("Room for 3 more
+plazas", "Four plazas: the village is full"; short so it never meets the pane's edge, and it wraps), and for the picked plaza (or the one a drag is sizing) one row with the size slider (shown as the width
+across in the level's units; keys reach it) and Remove. With no plaza picked the row is gone (no disabled boxes) and a
+caption says to click one. With no village it says to dress a street with the Wall tool first. At 1280x720 the whole
+pane fits without scrolling (capture `k_720_pane`). A character tile calls
+`SettlementEditor.set_kit`: the road, door paths, plaza and furnishings follow in one entry (villages3's take-back
+and lay), so "pick the kit and ground" is one gesture. The pane reads the document through
+`VillagePlazas.state_of` whenever the mode says the view changed (a signature of the villages, plazas and the pick,
+compared each frame), so undo and redo keep it right.
+
+**Tests:** `tests/unit/test_village_tool.gd` (pure rules, the swatch, resize and remove with their paint, the peer,
+the brush's gestures on a `BrushTool`, the pane). Render job `jobs/villagetool_look.json`.
+
+**Limits left:** a plaza is a disc and cannot be moved (delete and place again; its furnishings are derived so
+nothing is lost); no polygons; the paving of a plaza resized while its door paths overlap is laid on top of them
+(newest paint wins), so a door path ends at the plaza's new edge; gardens, fields, props, bridges and walls are
+not in this tool; a village's feel sliders are still on the Wall tool's street bar; keyboard reach of the tiles is
+as every tile row (mouse; the slider and Remove take focus); a plaza only joins a village that has a street or a
+frozen frontage in reach. Round 2 left: a picked plaza can sit under the left pane (no pan to clear it: the world
+renders in a scaled SubViewport and the brush holds no camera controller, so a framing pan needs plumbing of its own);
+until the author picks a village the pane follows the pointer, so crossing another village's ground on the way to the
+pane moves it (its chip on the board shows which); the paving colours of the four kits are close (pale sands and
+greys), so the ghost's tint says "paved here" more than which kit; only the market town's floor was measured (the
+harbour town's quay stalls may want one too).

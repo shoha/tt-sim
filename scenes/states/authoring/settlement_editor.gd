@@ -183,14 +183,43 @@ func add_plaza(settlement_id: int, at: Vector2, radius: float) -> bool:
 	return _replace(held, changed, "Add plaza", roles, only) > 0
 
 
-## Removes plaza `index` of settlement `settlement_id` (its paving stays: it is the map's paint).
+## Removes plaza `index` of settlement `settlement_id` with its paving (the one disc stroke the
+## record lists for it, VillagePlazas.stroke_index; ground painted by hand stays) as one history
+## entry. A plaza whose paving is not listed leaves the map's paint as it is.
 func remove_plaza(settlement_id: int, index: int) -> bool:
 	var held := _editor().document.settlement(settlement_id)
 	if held == null or index < 0 or index >= held.plazas.size():
 		return false
 	var changed := held.copy()
 	changed.plazas.remove_at(index)
-	return _replace(held, changed, "Remove plaza") > 0
+	var paving := VillagePlazas.stroke_index(held.ground, held.plazas[index])
+	return _replace(held, changed, "Remove plaza", [], null, false, paving) > 0
+
+
+## Sets the radius of plaza `index` of settlement `settlement_id` to `radius` metres (held to a
+## hundredth) as one history entry: the old paving is taken back, the new disc laid, and the kit's
+## plaza rules furnish the new size. False (last_refusal) when there is no such plaza, the radius
+## is outside the plaza range or it changes nothing.
+func resize_plaza(settlement_id: int, index: int, radius: float) -> bool:
+	var held := _editor().document.settlement(settlement_id)
+	last_refusal = &""
+	if held == null or index < 0 or index >= held.plazas.size():
+		last_refusal = REFUSED_STREET
+		return false
+	var wanted := snappedf(radius, Settlement.PLAZA_STEP_M)
+	if is_equal_approx(wanted, float(held.plazas[index]["radius"])):
+		return false
+	var changed := held.copy()
+	changed.plazas[index]["radius"] = wanted
+	if MapSettlementIO.settlement_problem(changed) != "":
+		last_refusal = REFUSED_PLAZA
+		return false
+	# Only the resized disc is paved: the plan reads a copy that holds it alone.
+	var only := held.copy()
+	only.plazas = [changed.plazas[index]]
+	var roles: Array[String] = ["plaza"]
+	var paving := VillagePlazas.stroke_index(held.ground, held.plazas[index])
+	return _replace(held, changed, "Resize plaza", roles, only, false, paving) > 0
 
 
 ## Sets how rich (0 shabby .. 1 wealthy) and how busy (0 sparse .. MAX_DENSITY) settlement
@@ -281,14 +310,17 @@ static func next_seed(current: int) -> int:
 ## (SettlementGround roles) also paves those roles of the kit's ground first, planned on `paved`
 ## (default `changed`); the paint and the record go into one history group. With `replaces`, the
 ## strokes `held` laid are taken back first (and the new plan replaces them in `changed.ground`);
-## otherwise the new strokes are added to the ones `changed` already lists.
+## otherwise the new strokes are added to the ones `changed` already lists. `drop` (an index into
+## `held.ground`, -1 for none) takes back that one stroke alone, and forgets it in `changed.ground`:
+## a removed or resized plaza's paving.
 func _replace(
 	held: Settlement,
 	changed: Settlement,
 	label: String,
 	roles: Array[String] = [],
 	paved: Settlement = null,
-	replaces: bool = false
+	replaces: bool = false,
+	drop: int = -1
 ) -> int:
 	var e := _editor()
 	var doc := e.document
@@ -296,7 +328,8 @@ func _replace(
 		last_refusal = REFUSED_INVALID
 		return -1
 	last_ground = {}
-	var laying := lays_ground and not roles.is_empty() and e.can_paint()
+	var dropping := held != null and drop >= 0 and drop < held.ground.size()
+	var laying := lays_ground and (not roles.is_empty() or dropping) and e.can_paint()
 	var strokes: Array[Dictionary] = []
 	if laying:
 		_settle()
@@ -306,8 +339,14 @@ func _replace(
 			var taken := SettlementPaint.unlay(e, held.ground)
 			var unpaint_ms := (Time.get_ticks_usec() - unpaving) / 1000.0
 			last_ground = {"unpaved": taken, "unpaint_ms": unpaint_ms}
+		elif dropping:
+			var gone: Array[Dictionary] = [held.ground[drop]]
+			last_ground = {"unpaved": SettlementPaint.unlay(e, gone)}
+			changed.ground.remove_at(drop)
 		var began := Time.get_ticks_usec()
-		var planned := _plan_ground(paved if paved != null else changed, roles)
+		var planned: Dictionary = {}
+		if not roles.is_empty():
+			planned = _plan_ground(paved if paved != null else changed, roles)
 		planned["plan_ms"] = (Time.get_ticks_usec() - began) / 1000.0
 		last_ground.merge(planned, true)
 		strokes.assign(last_ground.get("strokes", []))

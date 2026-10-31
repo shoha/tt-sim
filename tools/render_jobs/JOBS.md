@@ -1157,3 +1157,17 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   `probes/hitches.gd`: `rec` (`mode` begin or end, prints worst frames with their index), `place` (`count`, `per_frame`,
   `seed`), `split`, `info`, `dress`, `redress`, `clear`, `paint_split`, `save`, `cleanup`. `jobs/hitches_load.json`:
   saves a map with 44 structures as `_hitches_load`, opens it with the record running and removes it afterwards.
+- `jobs/villagetool_look.json` (about 70 s, keeps no level; topic villagetool, round 2 writes `villagetool2_look`): two
+  dressed streets, then the Village tool through real input (`gesture`, `input`): home zoom with both villages' number
+  chips and the two-village pane (`a_home_two_villages`), the ghost before any pick over the market and the hamlet, the pane
+  following it (`b_ghost_market`, `c_ghost_hamlet`), a drag that opens a market plaza (`d_market_plaza_5m`), the rim hover
+  (`e_rim_hover`), the rim dragged out with the paving disc and the pane's size read live (`f_resize_drag`) and let go
+  (`g_resized`), both villages switched to Harbour town and Hill fort village and their ghosts (`h_ghost_harbour`,
+  `i_ghost_hillfort`), the four ghosts on one sheet (`sheet_ghosts`), market plazas of 5, 6 and 7 m side by side
+  (`j_market_5_6_7`, the evidence for the market's 6 m floor), then the window at 1280x720 with a picked plaza
+  (`k_720_pane`). Run with `--full` for the verdict captures.
+- `jobs/villagetool_recheck.json` (about 40 s, keeps no level; topic villagetool, writes `villagetool2_recheck`): the
+  same two villages, then the ghost's paving fill (`a_ghost_market`), a click in the market village laying its 6 m
+  floor (`b_market_click`), the hint over the picked plaza (`c_hover_picked`), these three pinned at half size; a full
+  village's rim dragged out with the paving disc and the pane's count line at 1920x1080 (`d_drag_disc_1080`) and the
+  picked plaza's pane at 1280x720 (`e_720_pane`). Run with `--full`.
