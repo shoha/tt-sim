@@ -699,53 +699,78 @@ static func _by_role(a: Dictionary, b: Dictionary) -> bool:
 static func split_surface(surface: PlantSurface, roles: PackedStringArray) -> Array:
 	var tags := surface.tags
 	var indices := surface.indices
-	var triangles := indices.size() / 3
-	var role_of := PackedByteArray()
-	role_of.resize(triangles)
-	var present := PackedByteArray()
-	present.resize(StructureLook.ROLES.size())
-	for t in triangles:
-		var first := indices[t * 3]
-		var tag := tags[first] if first < tags.size() else -1
-		var role := roles[tag] if tag >= 0 and tag < roles.size() else StructureLook.WALL
-		var at := StructureLook.ROLES.find(StructureLook.material_role(surface.kind, role))
-		role_of[t] = at
-		present[at] = 1
+	var tag_count := tags.size()
+	var role_count := roles.size()
+	# The material role's slot of every tag, and of the tags no node named (walls), found once.
+	var slot_of_tag := PackedInt32Array()
+	slot_of_tag.resize(role_count)
+	for tag in role_count:
+		slot_of_tag[tag] = StructureLook.ROLES.find(
+			StructureLook.material_role(surface.kind, roles[tag])
+		)
+	var wall_slot := StructureLook.ROLES.find(
+		StructureLook.material_role(surface.kind, StructureLook.WALL)
+	)
+	# One pass over the triangles, each into the bucket of its role (in triangle order).
+	var buckets: Array[PackedInt32Array] = []
+	buckets.resize(StructureLook.ROLES.size())
+	for k in range(0, indices.size() - 2, 3):
+		var first := indices[k]
+		var tag := tags[first] if first < tag_count else -1
+		var slot := slot_of_tag[tag] if tag >= 0 and tag < role_count else wall_slot
+		var bucket := buckets[slot]
+		bucket.append(first)
+		bucket.append(indices[k + 1])
+		bucket.append(indices[k + 2])
+		buckets[slot] = bucket
 	var out: Array = []
 	for at in StructureLook.ROLES.size():
-		if present[at] == 0:
-			continue
-		var picked := PackedInt32Array()
-		for t in triangles:
-			if role_of[t] == at:
-				picked.append(indices[t * 3])
-				picked.append(indices[t * 3 + 1])
-				picked.append(indices[t * 3 + 2])
-		out.append(_mesh_of(surface, StructureLook.ROLES[at], picked))
+		if not buckets[at].is_empty():
+			out.append(_mesh_of(surface, StructureLook.ROLES[at], buckets[at]))
 	return out
 
 
 static func _mesh_of(surface: PlantSurface, role: String, picked: PackedInt32Array) -> Dictionary:
+	var count := surface.vertices.size()
 	var used := PackedByteArray()
-	used.resize(surface.vertices.size())
+	used.resize(count)
 	for v in picked:
 		used[v] = 1
+	var source_tags := surface.tags
+	# A tag array shorter than the vertices reads -1 beyond its end.
+	var padded := PackedInt32Array()
+	if source_tags.size() < count:
+		padded = source_tags.duplicate()
+		var short := padded.size()
+		padded.resize(count)
+		for v in range(short, count):
+			padded[v] = -1
+		source_tags = padded
+	# The vertices the role uses, copied as runs of neighbours (they keep their order, and a role's
+	# vertices come in long runs), with the new index of every one for the triangles.
 	var remap := PackedInt32Array()
-	remap.resize(surface.vertices.size())
+	remap.resize(count)
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var colors := PackedColorArray()
 	var tags := PackedInt32Array()
-	for v in surface.vertices.size():
+	var next := 0
+	var v := 0
+	while v < count:
 		if used[v] == 0:
+			v += 1
 			continue
-		remap[v] = vertices.size()
-		vertices.append(surface.vertices[v])
-		normals.append(surface.normals[v])
-		uvs.append(surface.uvs[v])
-		colors.append(surface.colors[v])
-		tags.append(surface.tags[v] if v < surface.tags.size() else -1)
+		var start := v
+		while v < count and used[v] == 1:
+			remap[v] = next
+			next += 1
+			v += 1
+		vertices.append_array(surface.vertices.slice(start, v))
+		normals.append_array(surface.normals.slice(start, v))
+		uvs.append_array(surface.uvs.slice(start, v))
+		colors.append_array(surface.colors.slice(start, v))
+		tags.append_array(source_tags.slice(start, v))
 	var indices := PackedInt32Array()
 	indices.resize(picked.size())
 	for k in picked.size():

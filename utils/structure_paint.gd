@@ -132,6 +132,171 @@ static func palette_of(seed_value: int, id: int, hints: Dictionary = {}) -> Dict
 static func paint(meshes: Array, group_of_tag: PackedInt32Array, palettes: Array) -> void:
 	if meshes.is_empty() or palettes.is_empty():
 		return
+	if palettes.size() == 1:
+		# One building: every vertex is group 0, so the palette, the mode of each mesh and the
+		# constants are read once per mesh instead of once per vertex (perf4, byte-identical).
+		_paint_single(meshes, palettes[0])
+	else:
+		_paint_groups(meshes, group_of_tag, palettes)
+
+
+## paint() for one palette. Same arithmetic as _paint_groups, term for term; the colour of each
+## vertex is made by the loop of its mesh's mode, with the palette's tones, the mesh's role and kind
+## tests and the height limits all read once outside it.
+static func _paint_single(meshes: Array, palette: Dictionary) -> void:
+	var roof_low := INF
+	var roof_high := -INF
+	var foot := INF
+	var moss_peak := 0.0
+	for mesh: Dictionary in meshes:
+		if not _paints(mesh):
+			continue
+		var vertices: PackedVector3Array = mesh.arrays[Mesh.ARRAY_VERTEX]
+		if _is_roof(mesh):
+			for vertex in vertices:
+				roof_low = minf(roof_low, vertex.y)
+				roof_high = maxf(roof_high, vertex.y)
+			continue
+		for vertex in vertices:
+			foot = minf(foot, vertex.y)
+		if mesh.role == StructureLook.WALL:
+			var source: PackedColorArray = mesh.arrays[Mesh.ARRAY_COLOR]
+			for v in mini(vertices.size(), source.size()):
+				var c := source[v]
+				if c.r >= 0.02:
+					moss_peak = maxf(
+						moss_peak,
+						clampf((c.g / c.r - MOSS_G_OVER_R_FROM) / MOSS_G_OVER_R_SPAN, 0.0, 1.0)
+					)
+	# The arrays of the general path hold these as 32-bit floats; keep that rounding.
+	var held := PackedFloat32Array([roof_low, roof_high, foot, moss_peak])
+	roof_low = held[0]
+	roof_high = held[1]
+	foot = held[2]
+	moss_peak = held[3]
+	var base := foot if foot < INF else 0.0
+	for mesh: Dictionary in meshes:
+		if not _paints(mesh):
+			continue
+		var arrays: Array = mesh.arrays
+		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+		var out := PackedColorArray()
+		out.resize(vertices.size())
+		var role: String = mesh.role
+		if role == StructureLook.ORNAMENT or role == StructureLook.CANOPY or role == StructureLook.PROP:
+			_paint_kept(vertices, colors, base, out)
+		elif mesh.kind == StructureLook.ACCENT_KIND:
+			_paint_accent(vertices, colors, base, palette.accent, out)
+		elif _is_roof(mesh):
+			_paint_roof(vertices, colors, roof_low, maxf(roof_high - roof_low, 0.1), palette.roof, out)
+		else:
+			_paint_wall(mesh, vertices, colors, base, moss_peak, palette, out)
+		arrays[Mesh.ARRAY_COLOR] = out
+
+
+static func _paint_kept(
+	vertices: PackedVector3Array, colors: PackedColorArray, base: float, out: PackedColorArray
+) -> void:
+	var count := colors.size()
+	for v in vertices.size():
+		var c: Color = colors[v] if v < count else Color.WHITE
+		var up := vertices[v].y - base
+		out[v] = Color(c.r, c.g, c.b, clampf(up / WALL_ALPHA_SPAN_M, 0.0, 1.0))
+
+
+static func _paint_accent(
+	vertices: PackedVector3Array,
+	colors: PackedColorArray,
+	base: float,
+	accent: Color,
+	out: PackedColorArray
+) -> void:
+	var count := colors.size()
+	for v in vertices.size():
+		var shade := colors[v].r if v < count else 1.0
+		var metres_up := vertices[v].y - base
+		out[v] = Color(
+			minf(accent.r * shade, 1.0),
+			minf(accent.g * shade, 1.0),
+			minf(accent.b * shade, 1.0),
+			clampf(metres_up / WALL_ALPHA_SPAN_M, 0.0, 1.0)
+		)
+
+
+static func _paint_roof(
+	vertices: PackedVector3Array,
+	colors: PackedColorArray,
+	low: float,
+	span: float,
+	tile: Color,
+	out: PackedColorArray
+) -> void:
+	var count := colors.size()
+	for v in vertices.size():
+		var tone := (colors[v].r if v < count else 1.0) / ROOF_REFERENCE_TONE
+		out[v] = Color(
+			minf(tile.r * tone, 1.0),
+			minf(tile.g * tone, 1.0),
+			minf(tile.b * tone, 1.0),
+			clampf((vertices[v].y - low) / span, 0.0, 1.0)
+		)
+
+
+static func _paint_wall(
+	mesh: Dictionary,
+	vertices: PackedVector3Array,
+	colors: PackedColorArray,
+	base: float,
+	moss_peak: float,
+	palette: Dictionary,
+	out: PackedColorArray
+) -> void:
+	var count := colors.size()
+	var role: String = mesh.role
+	var textured := TEXTURED_KINDS.has(String(mesh.kind))
+	if role == StructureLook.FRAME:
+		for v in vertices.size():
+			var c: Color = colors[v] if v < count else Color.WHITE
+			var alpha := clampf((vertices[v].y - base) / WALL_ALPHA_SPAN_M, 0.0, 1.0)
+			out[v] = Color(c.r, c.g, c.b, alpha)
+	elif role == StructureLook.WALL and palette.has("wall"):
+		var tint: Color = palette.wall
+		for v in vertices.size():
+			var c: Color = colors[v] if v < count else Color.WHITE
+			var metres := vertices[v].y - base
+			var alpha := clampf(metres / WALL_ALPHA_SPAN_M, 0.0, 1.0)
+			var tone := c.r / WALL_REFERENCE_TONE
+			if textured:
+				tone *= TEXTURED_WALL_GAIN
+			else:
+				tone = 1.0 + (tone - 1.0) * STYLE_TONE_KEEP
+			var moss := moss_of(c)
+			if not textured:
+				moss = maxf(moss, moss_peak * (1.0 - smoothstep(MOSS_FULL_M, MOSS_CLIMB_M, metres)))
+			var toned := Color(
+				tint.r * tone * lerpf(1.0, MOSS_TINT.r, moss),
+				tint.g * tone * lerpf(1.0, MOSS_TINT.g, moss),
+				tint.b * tone * lerpf(1.0, MOSS_TINT.b, moss),
+				alpha
+			)
+			if moss > 0.0 and not textured:
+				toned = _mossed(toned, moss)
+			out[v] = toned
+	else:
+		var lean: Color = Color.WHITE if role == StructureLook.TRIM else palette.lean
+		for v in vertices.size():
+			var c: Color = colors[v] if v < count else Color.WHITE
+			var alpha := clampf((vertices[v].y - base) / WALL_ALPHA_SPAN_M, 0.0, 1.0)
+			out[v] = Color(
+				minf(c.r * lean.r, 1.0), minf(c.g * lean.g, 1.0), minf(c.b * lean.b, 1.0), alpha
+			)
+
+
+## paint() for several palettes (a street row has one per lot): every vertex finds its group.
+static func _paint_groups(
+	meshes: Array, group_of_tag: PackedInt32Array, palettes: Array
+) -> void:
 	var roof_low := PackedFloat32Array()
 	var roof_high := PackedFloat32Array()
 	var foot := PackedFloat32Array()

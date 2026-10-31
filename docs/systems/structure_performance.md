@@ -173,6 +173,18 @@ core recipes with ornament masks, 320 m map; indicative, the GPU was shared), tw
 | before (synchronous create) | 612 ms, 339 ms in one frame | the same frame | 1 |
 | after (staged) | create 159 and 165 ms, then 3 ms a frame | 116 and 58 ms (the first installs) | 51 |
 
+Paint and split, kept (perf4): `StructurePaint.paint` with one palette (every structure; a street row's
+several palettes keep the per-vertex path `_paint_groups`) reads the palette, the mesh's role and kind tests and
+the height limits once per mesh and runs one tight loop per mode; `split_surface` finds each tag's material slot
+once, deals the triangles into per-role buckets in one pass and copies a role's vertices as runs of neighbours.
+Output is byte-identical: `tests/unit/test_structure_paint_equal.gd` keeps the old implementations as the
+reference and compares every array of every mesh over the 100 structures and 72 prop draws (also with two
+palettes), and the pinned digests did not move. `build_one` on the main thread over those 172 builds, best of
+three passes (indicative, shared machine): 3,198 and 3,313 ms before, 2,435 ms twice after (24 to 26 percent
+less); the worst ten (`hof_farm`, `coaching_inn`, `riad`, `siheyuan`, `hanseatic`, `chapel`, `flemish_stepped`,
+`castle_keep`, ...) summed 650 and 672 ms before, 488 and 486 ms after (25 to 27 percent). Alone, split fell from
+370 to 170 ms and paint from 719 to 153 ms over the 172. Over the 15 percent bar, so kept.
+
 What is left in the one create frame (headless probe, 128 cottages with ornaments): the decor library info
 (`_decor_info`, 108 ms the first time, loading plant meshes), the plant plans for a loader's parts (44 ms,
 `plan_missing`) and the keys (25 ms, the ground under every footprint). A loader that read the library on its
@@ -182,8 +194,8 @@ worker (`AuthoredLoadPrep` with decor info) would take the first two off the mai
 
 1. Procgen: profile and speed up `evaluate_structure` on the facade, layout and courtyard nodes, starting
    with `hof_farm`, `coaching_inn`, `dutch_bell_house`, `canal_house`. Digests must stay identical.
-2. Vectorise `StructurePaint.paint` and `split_surface` (not done in struct_perf2; needs a gain of 20
-   percent of build time and byte-identical output).
+2. (Done in perf4: paint and split, 24 to 27 percent of build time, byte-identical.) Left: the one-frame
+   `create` of a staged load (decor info 108 ms, plant plans 44 ms, keys 25 ms for 128).
 3. Builds scale badly past 4 to 6 threads (allocator contention); a build that allocates less would help
    edits and loads alike.
 4. structgen: the size sweep's mesh check dominates (2.6 s for the inn up to 22.6 s for `townhouse`,
