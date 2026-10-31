@@ -11,7 +11,7 @@ extends ToolDescriptor
 ## and what it lays reaches every peer as a "structures" live edit (LiveEditCodec).
 
 const ID := &"structure"
-const LABEL := "Building"
+const LABEL := "Buildings"
 ## Set on the map's AuthoredStructures while one sync_missing check waits for its next build.
 const WATCH_META := &"tt_missing_watch"
 const UNAVAILABLE_TOOLTIP := "Building: not on a Blender map, whose ground is the map file's"

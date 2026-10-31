@@ -1135,7 +1135,7 @@ nine captures; keeps no level, but clears the run's hint memory).
 - **Hint bar:** the "Bare ground: put another down" row never fades while a selection exists
   (`StructureHints.rows`), it is the only place that says a click lays another.
 - **Title and subtitle:** "Buildings" and "Cottages, castles, windmills and more: click to place,
-  drag to size." (the rail and key tooltips still say Building; the subtitle wraps).
+  drag to size." The tool's label is now "Buildings" too (rail tooltip, help rows, pane title: the tool registry test ties the pane's title to the label); the subtitle wraps.
 - **Toggle chips** use the `ToggleChip` button variation (`painted_theme_base.gd`): a quiet outlined
   pill off, the state role (lake) filled behind chalk words on; the Decorate row's chips too. (`Chip`
   is a PanelContainer variation, it never styled a Button, which is why chips read as plain buttons.)
