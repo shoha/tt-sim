@@ -78,7 +78,7 @@ const IVY_MAX := 1.0
 ## The ivy amount the Decorate slider starts at (batch_c: 0.85, was procgen's own 0.55: the plants
 ## on the anchors cover less than the blobs did).
 const IVY_DEFAULT := 0.85
-## procgen's own limits of the ivy options (ProcgenOrnaments.NUMBERS.ivy): key -> [default, min, max].
+## procgen's own ivy options (ProcgenOrnaments.NUMBERS.ivy): key -> [default, min, max].
 const IVY_OWN := {
 	"height": [0.7, 0.25, 1.0], "coverage": [0.55, 0.1, 1.0], "amount": [1.0, 0.4, 2.0]
 }
