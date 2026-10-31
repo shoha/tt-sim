@@ -66,7 +66,36 @@ func test_every_tool_is_on_the_rail_in_registry_order() -> void:
 			ResourceLoader.exists("res://assets/icons/ui/%s.svg" % tool.icon),
 			"%s's icon exists" % tool.id
 		)
-		assert_eq(button.tooltip_text, tool.rail_tooltip())
+		assert_eq(button.tooltip_text, tool.rail_tip())
+
+
+func test_every_authoring_rail_button_has_a_tooltip() -> void:
+	# Owner, 2026-10-30: every rail icon explains itself. The tool icons and the footer's undo, redo,
+	# save and leave all carry words, in every state a tool can be in.
+	var panel := _panel()
+	var rails: Array[IconRail] = [panel.get("_rail") as IconRail]
+	var footer := panel.get("_footer_rail") as IconRail
+	assert_not_null(footer, "the footer rail exists")
+	rails.append(footer)
+	var checked := 0
+	for rail in rails:
+		var buttons: Dictionary = rail.get("_buttons")
+		assert_gt(buttons.size(), 0)
+		for id: StringName in buttons:
+			var button: IconButton = buttons[id]
+			assert_ne(button.tooltip_text.strip_edges(), "", "rail item %s has a tooltip" % id)
+			checked += 1
+	assert_gte(checked, ToolRegistry.tools(ToolDescriptor.AUTHORING).size() + 4)
+	var tools_rail: Dictionary = (panel.get("_rail") as IconRail).get("_buttons")
+	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
+		panel.set_tool_available(tool.id, false)
+		assert_ne(
+			(tools_rail[tool.id] as IconButton).tooltip_text,
+			"",
+			"%s unavailable still says why" % tool.id
+		)
+		panel.set_tool_available(tool.id, true)
+		assert_string_contains((tools_rail[tool.id] as IconButton).tooltip_text, tool.summary)
 
 
 func test_every_tool_has_a_pane_titled_from_its_descriptor() -> void:
@@ -91,6 +120,7 @@ func test_every_tool_is_in_help_with_its_shortcut() -> void:
 	for tool in ToolRegistry.tools(ToolDescriptor.AUTHORING):
 		var rows := tool.help_rows()
 		assert_eq(rows[0][0], tool.rail_tooltip(), "%s's help row is named for it" % tool.id)
+		assert_string_starts_with(tool.rail_tip(), tool.rail_tooltip())
 		if tool.shortcut != KEY_NONE:
 			assert_string_contains(rows[0][0], tool.shortcut_label())
 		for row in rows:
@@ -166,4 +196,4 @@ func test_a_tool_with_an_unavailable_tooltip_says_why_on_the_rail() -> void:
 		assert_eq(button.tooltip_text, tool.unavailable_tooltip)
 		panel.set_tool_available(tool.id, true)
 		assert_false(button.disabled)
-		assert_eq(button.tooltip_text, tool.rail_tooltip())
+		assert_eq(button.tooltip_text, tool.rail_tip())

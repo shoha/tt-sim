@@ -504,7 +504,7 @@ func set_tool_available(id: StringName, available: bool) -> void:
 	if tool == null:
 		return
 	set_rail_item_enabled(id, available)
-	set_rail_item_tooltip(id, tool.rail_tooltip() if available else tool.unavailable_tooltip)
+	set_rail_item_tooltip(id, tool.rail_tip_for(available))
 
 
 ## Shows the Water tool's exact width (metres, the full channel) and flow, without signals.
