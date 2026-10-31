@@ -106,7 +106,9 @@ static func run(base: Node, step: Dictionary) -> String:
 		"load":
 			return _load(editor, int(step.get("count", 128)))
 		"load_staged":
-			return _load_staged(base, editor, int(step.get("count", 128)))
+			return _load_staged(
+				base, editor, int(step.get("count", 128)), bool(step.get("prepared", true))
+			)
 		"load_staged_report":
 			return _load_staged_report(base)
 		"cap":
@@ -189,7 +191,9 @@ static func _load(editor: AuthoringEditor, count: int) -> String:
 ## `load` with the nodes staged (perf4, what a play load does now): a second AuthoredStructures
 ## `count` lots strong is created with staged = true under the map root and a sampler records
 ## every frame until nothing is pending. Read the result with `load_staged_report`.
-static func _load_staged(base: Node, editor: AuthoringEditor, count: int) -> String:
+static func _load_staged(
+	base: Node, editor: AuthoringEditor, count: int, prepared: bool = true
+) -> String:
 	var rows := LibraryStructureStore.structures("core")
 	var doc := StructureGeometry.ground_snapshot(editor.document)
 	doc.structures.clear()
@@ -198,7 +202,13 @@ static func _load_staged(base: Node, editor: AuthoringEditor, count: int) -> Str
 		structure.id = k + 1
 		doc.structures.append(structure)
 	StructureRecipes.ensure_served()
-	var built := StructureGeometry.build(doc, true, StructureDecor.available())
+	# prepared (staged_load2): what a loader's worker hands create (info, plans, keys); false is the
+	# geometry alone, as before, so create reads the library, plans and keys on the main thread.
+	var built := (
+		StructureLoadInfo.prepare(doc, PaletteLibrary.DEFAULT_ROOT, true)
+		if prepared
+		else StructureGeometry.build(doc, true, StructureDecor.available())
+	)
 	var old := base.get_tree().root.get_node_or_null(STAGED)
 	if old != null:
 		old.free()
@@ -218,7 +228,10 @@ static func _load_staged(base: Node, editor: AuthoringEditor, count: int) -> Str
 	recorder.nodes = nodes
 	recorder.create_ms = create_ms
 	recorder.begin()
-	return "load_staged %d: create %.1f ms main, %d pending" % [count, create_ms, nodes.pending_count()]
+	return (
+		"load_staged %d: create %.1f ms main, %d pending"
+		% [count, create_ms, nodes.pending_count()]
+	)
 
 
 static func _load_staged_report(base: Node) -> String:

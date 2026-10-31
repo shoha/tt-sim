@@ -111,15 +111,16 @@ static func create(
 	structures._palette_root = root
 	# Parts a loader built with another decor setting (the library was not served yet) are rebuilt.
 	var decor := StructureDecor.available(root)
-	var info := structures._decor_info() if decor else {}
-	structures._info = info
 	var fresh := not built.is_empty() and bool(built.get("decor", false)) == decor
+	# A loader's worker made the library info, the plans and the keys (StructureLoadInfo.prepare).
+	var info := StructureLoadInfo.info_for(built if fresh else {}, root) if decor else {}
+	structures._info = info
 	var made := built if fresh else StructureGeometry.build(doc, true, decor, info)
 	var list: Array = made.get("structures", [])
 	if decor:
-		# A loader's worker could not read the library: place the plants of its parts now, as a group.
+		# Parts made without the library (a worker that could not read it): place their plants now.
 		StructureDecor.plan_missing(list, info, load_threads())
-	var keys := StructureGeometry.keys_of(doc, decor)
+	var keys := StructureLoadInfo.keys_for(doc, made if fresh else {}, decor)
 	if staged:
 		structures._stage(doc, list, keys)
 	else:
@@ -722,18 +723,12 @@ func vane_node(vane: Dictionary, style: String, tone: String) -> VaneMotion:
 	return pivot
 
 
-## What the pure decor work reads from the library, made on the main thread (the wind-dressed
-## meshes are main-thread resources): {"rows" (AssetStore.decor_rows), "by_id", "cost" (id ->
-## triangles of its mesh, 0 without one), "sig" (a hash of rows and costs: a plan made from another
-## state is made again)}.
+## What the pure decor work reads from the library (StructureLoadInfo.info_of; a load's worker
+## makes it, the wind-dressed copies stay main-thread): {"rows", "by_id", "cost" (id -> triangles
+## of its mesh, 0 without one), "sig" (a hash of rows and costs: a plan made from another state is
+## made again)}.
 func _decor_info() -> Dictionary:
-	var rows := AssetStore.decor_rows(_palette_root)
-	var by_id := {}
-	var cost := {}
-	for row in rows:
-		by_id[row.id] = row
-		cost[row.id] = int(_decor_entry(row).get("tris", 0))
-	return {"rows": rows, "by_id": by_id, "cost": cost, "sig": hash([rows, cost])}
+	return StructureLoadInfo.info_of(_palette_root)
 
 
 ## The decor info of the batch in hand, made once per batch (refresh, install, flush, create).
