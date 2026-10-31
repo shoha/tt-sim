@@ -52,6 +52,12 @@ const SHAPE_SQUARE := "square"
 ## value anchors go first (cap_triangles).
 const MAX_TRIANGLES := 3000
 const ID_PREFIX := "decor:"
+## The mesh_height the baked surfaces' shared wind materials hold. The wind shader weights a sway
+## by `COLOR.r * mesh_height` (mesh_height is one uniform per asset); a baked surface mixes assets,
+## so each plant's red weights carry its own mesh_height over this one (baked_colors) and the
+## uniform is this constant. It must stay at or above every decor asset's mesh_height (the tallest
+## ivy is 2.8 m): a colour channel holds 0 to 1.
+const BAKE_MESH_HEIGHT := 4.0
 
 
 ## The AssetStore id of a library's decor asset `local`.
@@ -534,3 +540,85 @@ static func cap_triangles(
 static func _area_of(plant: Dictionary) -> float:
 	var extent: Vector2 = plant.get("extent", plant.size)
 	return extent.x * extent.y
+
+
+# --- Baking ------------------------------------------------------------------------------------
+
+
+## `colors` (a surface's vertex colours: R the sway weight, G the flutter grade, B the flutter
+## phase) with R scaled by `mesh_height` over BAKE_MESH_HEIGHT, so a surface drawn with the shared
+## material sways as it did with its own mesh_height. Pure.
+static func baked_colors(colors: PackedColorArray, mesh_height: float) -> PackedColorArray:
+	var scale := clampf(mesh_height / BAKE_MESH_HEIGHT, 0.0, 1.0)
+	var out := colors.duplicate()
+	for i in out.size():
+		var c := out[i]
+		out[i] = Color(c.r * scale, c.g, c.b, c.a)
+	return out
+
+
+## The plants `placed` ({id, transform}: placements, capped) as a few surfaces: one per surface
+## `key` the plants' assets share (a material), every plant's vertices moved by its transform. The
+## `sources` are {asset id: Array of surfaces {key, vertices, normals, colors (baked_colors), uvs,
+## indices}}; a plant whose asset is missing is left out. Returns [{key, vertices, normals, colors,
+## uvs, indices}] sorted by key; the counts are the sums of the instances', positions are
+## transform times the asset's. Uniform scale only (the plants' frames), so a normal is rotated by
+## the orthonormal basis (it stays a unit vector). Pure: arrays in, arrays out, so a worker thread
+## may run it.
+static func bake(placed: Array[Dictionary], sources: Dictionary) -> Array[Dictionary]:
+	var by_key := {}
+	for plant in placed:
+		var surfaces: Variant = sources.get(plant.id)
+		if not surfaces is Array:
+			continue
+		var transform: Transform3D = plant.transform
+		var turn := Transform3D(transform.basis.orthonormalized(), Vector3.ZERO)
+		for surface: Dictionary in surfaces:
+			var key := str(surface.key)
+			if not by_key.has(key):
+				by_key[key] = {
+					"key": key,
+					"vertices": PackedVector3Array(),
+					"normals": PackedVector3Array(),
+					"colors": PackedColorArray(),
+					"uvs": PackedVector2Array(),
+					"indices": PackedInt32Array(),
+				}
+			var into: Dictionary = by_key[key]
+			var vertices: PackedVector3Array = into.vertices
+			var base := vertices.size()
+			vertices.append_array(transform * (surface.vertices as PackedVector3Array))
+			into.vertices = vertices
+			var normals: PackedVector3Array = into.normals
+			normals.append_array(turn * (surface.normals as PackedVector3Array))
+			into.normals = normals
+			var colors: PackedColorArray = into.colors
+			colors.append_array(surface.colors)
+			into.colors = colors
+			var uvs: PackedVector2Array = into.uvs
+			uvs.append_array(surface.uvs)
+			into.uvs = uvs
+			var indices: PackedInt32Array = into.indices
+			var from := indices.size()
+			indices.append_array(surface.indices)
+			for i in range(from, indices.size()):
+				indices[i] += base
+			into.indices = indices
+	var keys: Array = by_key.keys()
+	keys.sort()
+	var out: Array[Dictionary] = []
+	for key: String in keys:
+		out.append(by_key[key])
+	return out
+
+
+## The ArrayMesh arrays of a baked surface (bake's output).
+static func mesh_arrays(surface: Dictionary) -> Array:
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = surface.vertices
+	arrays[Mesh.ARRAY_NORMAL] = surface.normals
+	arrays[Mesh.ARRAY_COLOR] = surface.colors
+	arrays[Mesh.ARRAY_TEX_UV] = surface.uvs
+	arrays[Mesh.ARRAY_INDEX] = surface.indices
+	return arrays

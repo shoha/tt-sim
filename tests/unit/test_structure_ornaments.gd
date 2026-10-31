@@ -265,8 +265,8 @@ func test_the_standing_building_follows_an_edit_and_undo() -> void:
 	editor.structures.set_ornaments(id, ["ivy", "banner"], "Add")
 	nodes.flush()
 	var after := _mesh_names(nodes)
-	# The ivy is blobs (ornament_leaf) or, where the library has decor plants, multimeshes of them.
-	var plants := nodes.find_children("decor_*", "MultiMeshInstance3D", true, false)
+	# The ivy is blobs (ornament_leaf) or, where the library has decor plants, one baked mesh of them.
+	var plants := nodes.find_children("decor_*", "", true, false)
 	assert_true(
 		"ornament_leaf" in after or not plants.is_empty(),
 		"the standing building grew its ivy: %s" % str(after)
