@@ -93,7 +93,7 @@ static func split(
 		for part: Array in [[groups.rest, rest], [groups.wheel, wheel], [groups.cap, cap]]:
 			var picked: PackedInt32Array = part[0]
 			if not picked.is_empty():
-				(part[1] as Array).append(_subset(mesh, picked))
+				(part[1] as Array).append(subset(mesh, picked))
 	return {
 		"rest": rest,
 		"wheel": wheel,
@@ -134,7 +134,7 @@ static func _groups_of(mesh: Dictionary, wheel_ids: Dictionary, cap_from: float)
 
 ## A new mesh dictionary holding the triangles `picked` (index triples into `mesh`'s vertices),
 ## vertices renumbered in their old order. Carries every array the source has.
-static func _subset(mesh: Dictionary, picked: PackedInt32Array) -> Dictionary:
+static func subset(mesh: Dictionary, picked: PackedInt32Array) -> Dictionary:
 	var source: Array = mesh.arrays
 	var vertices: PackedVector3Array = source[Mesh.ARRAY_VERTEX]
 	var normals: PackedVector3Array = source[Mesh.ARRAY_NORMAL]
