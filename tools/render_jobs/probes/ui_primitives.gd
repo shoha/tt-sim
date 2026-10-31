@@ -98,6 +98,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _look_dropdown(base)
 		"sky_change":
 			return _sky_change(base)
+		"wind_pick":
+			return _wind_pick(base, step)
 		"unhover":
 			_pointer_to(Vector2.ONE)
 			return "pointer at the corner"
@@ -326,6 +328,25 @@ static func _sky_change(base: Node) -> String:
 	check.button_pressed = not check.button_pressed
 	var clear: IconButton = panel.sky_pane._clear_button
 	return "fog %s, eraser shown %s" % [check.button_pressed, clear.visible]
+
+
+## Picks on the Weather pane the way its chips do (card wind_de): `preset` (a strength chip),
+## `dir` (a compass id such as "nw" or "auto"), `reroll` (true presses New gust pattern). The
+## Visuals drawer must be open on Weather.
+static func _wind_pick(base: Node, step: Dictionary) -> String:
+	var panel := _find_drawer(base, "visuals") as LevelEditPanel
+	if panel == null or not panel.is_open:
+		return "the visuals drawer is not open"
+	var pane: WeatherPane = panel.weather_pane
+	if step.has("preset"):
+		pane._on_wind_preset(StringName(String(step["preset"])))
+	if step.has("dir"):
+		pane._on_wind_direction(StringName(String(step["dir"])))
+	if bool(step.get("reroll", false)):
+		pane._on_wind_reroll()
+	return "wind %s, %s, seed %d" % [
+		pane._weather.wind_intensity, pane._wind_readout.text, int(pane._weather.wind_seed)
+	]
 
 
 ## A synthetic pointer move to `window_pos` (window pixels); the OS cursor stays put.

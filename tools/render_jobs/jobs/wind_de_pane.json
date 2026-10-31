@@ -1,0 +1,127 @@
+{
+ "out_dir": "render_jobs/wind_de_pane",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 100,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.5
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ui_primitives.gd",
+   "action": "save",
+   "folder": "_ui_tour_room",
+   "name": "Wind room",
+   "replace": true
+  },
+  {
+   "op": "title"
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  },
+  {
+   "op": "play",
+   "folder": "_ui_tour_room"
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ui_primitives.gd",
+   "action": "drawer",
+   "which": "visuals",
+   "pane": "weather"
+  },
+  {
+   "op": "wait",
+   "s": 1.2
+  },
+  {
+   "op": "capture",
+   "name": "weather_default",
+   "desc": "Weather pane, nothing changed: the four tiles, then the wind strength chips, the compass with Auto picked (default direction), its readout and New gust pattern"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ui_primitives.gd",
+   "action": "wind_pick",
+   "preset": "windy",
+   "dir": "nw"
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "capture",
+   "name": "weather_windy_nw",
+   "desc": "Weather pane after Windy and North-west: the Windy chip and NW tile picked, the Wind tile and its Light to Heavy row shown, the readout Wind from the north-west"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ui_primitives.gd",
+   "action": "wind_pick",
+   "preset": "storm",
+   "reroll": true
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "weather_storm",
+   "desc": "Weather pane on Storm after a re-roll, the world behind it under storm wind"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ui_primitives.gd",
+   "action": "revert"
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ui_primitives.gd",
+   "action": "drawer",
+   "which": "visuals",
+   "open": false
+  },
+  {
+   "op": "wait",
+   "s": 0.5
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/ui_primitives.gd",
+   "action": "cleanup"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}
