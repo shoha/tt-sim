@@ -205,6 +205,8 @@ func _build_async(glb_path: String, cells: Dictionary) -> Node3D:
 		add_authored_walls(root, document)
 	if root.get_node_or_null(NodePath(AuthoredStructures.NODE_NAME)) == null:
 		add_authored_structures(root, document)
+	if root.get_node_or_null(NodePath(AuthoredSettlements.NODE_NAME)) == null:
+		add_authored_settlements(root, document)
 	add_fire_field(root, document)
 
 	var groups: Array = [[SCATTER_NODE, cells.get(SCATTER_NODE, {})]]
@@ -279,6 +281,14 @@ static func add_authored_walls(
 	var walls := AuthoredWalls.create(doc, built)
 	root.add_child(walls)
 	return walls
+
+
+## Adds the document's furnished streets (AuthoredSettlements) to a map root, their cells baked
+## over the next frames within a budget. Nothing without a document or a settlement.
+static func add_authored_settlements(root: Node3D, doc: MapDocument) -> AuthoredSettlements:
+	if doc == null or doc.settlements.is_empty():
+		return null
+	return AuthoredSettlements.refresh_map(root, doc)
 
 
 ## Adds the document's structures (AuthoredStructures) to a map root. Nothing without a document
@@ -389,6 +399,12 @@ func _create_authored_root_async(doc: MapDocument) -> Node3D:
 			root.free()
 			return null
 		add_authored_structures(root, doc, prepared.get(AuthoredLoadPrep.STRUCTURES, {}))
+	if not doc.settlements.is_empty():
+		await tree.process_frame
+		if is_superseded.call():
+			root.free()
+			return null
+		add_authored_settlements(root, doc)
 	held.clear()
 	return root
 

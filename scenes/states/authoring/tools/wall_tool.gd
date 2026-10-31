@@ -37,7 +37,10 @@ func _init() -> void:
 			"Q and E pick the side (left, right, both); R mixes the buildings afresh"
 		],
 		["Ctrl + Click (Wall)", "Remove the wall under the cursor"],
-		["Click a street", "Pick it; the pane then offers to split it into separate buildings"],
+		[
+			"Click a street",
+			"Pick it; the pane then offers to dress it with furnishings or split it into separate buildings",
+		],
 		[
 			"Split (picked street)",
 			"Replace the street with one Building per house, to move or restyle one by one",
@@ -96,13 +99,13 @@ func _connect_selection(controller: AuthoringController, pane: WallToolPane) -> 
 		mode.selection_changed.disconnect(link["callable"])
 	mode.selection_changed.connect(
 		func(wall_id: int) -> void:
-			var held := (
-				controller.brush.editor.document.wall(wall_id)
-				if wall_id >= 0 and controller.brush != null and controller.brush.editor != null
-				else null
-			)
-			pane.show_selection(held.copy() if held != null else null)
+			if controller.brush != null and controller.brush.editor != null:
+				SettlementBarLink.show(pane, controller.brush.editor, wall_id)
+			else:
+				pane.show_selection(null)
 	)
+	SettlementBarLink.connect_pane(controller, mode, pane)
+	SettlementBarLink.follow_edits(controller, mode, pane)
 	pane.split_requested.connect(
 		func() -> void:
 			if controller.brush == null or controller.brush.editor == null:
