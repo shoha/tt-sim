@@ -1,0 +1,64 @@
+{
+ "out_dir": "render_jobs/polish3_assets",
+ "timeout_s": 420,
+ "hang_s": 120,
+ "remove_override": true,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "temperate_forest_summer_s1",
+   "size": 320,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/env.gd",
+   "mouse": [
+    960,
+    540
+   ]
+  },
+  {
+   "op": "look_at",
+   "at": [
+    0,
+    0
+   ]
+  },
+  {
+   "op": "zoom",
+   "size": 30.0
+  },
+  {
+   "op": "vsync_off"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/decor.gd",
+   "action": "village",
+   "count": 1
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/decor.gd",
+   "action": "assets"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}

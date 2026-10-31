@@ -4207,3 +4207,12 @@ Painterly minus plain control: 0.28 and 0.38 ms on main, 0.03 ms on the branch, 
 (one more 3D value noise per wall and roof fragment, one `fwidth` of the normal, a fresnel) add no
 cost the noise floor shows; the old fine-mottle noise on walls was replaced, so walls evaluate the
 same two noises as before. No new texture reads.
+
+## Structure decor plants: one baked mesh (polish3, 2026-10-30)
+
+Ivy and flower-box plants of a decorated building were one MultiMesh per decor asset (about 8 nodes,
+14 or more draws each). They are now one baked `MeshInstance3D` with 2 to 4 surfaces. Render job
+`polish3_decor` (probe `decor.gd`, shared GPU, indicative; new 320 m map, home zoom 60 for 30
+buildings, zoom 30 for 12): draws 4,530 to 3,798 for 30 decorated buildings, 2,548 to 2,378 for 12;
+CPU frame median unchanged (5.8 and 5.3 ms); `_add_decor` 3.8-4.3 ms to 1.2-1.8 ms per building;
+baked mesh memory 10.8 MB for 30 buildings. Decision line was 40 MB.

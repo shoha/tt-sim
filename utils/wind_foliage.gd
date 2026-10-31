@@ -230,7 +230,24 @@ static func collect_foliage_shader_materials(map_container: Node3D) -> Array[Sha
 			var mat := mesh.surface_get_material(surface_idx)
 			if mat is ShaderMaterial and mat not in result:
 				result.append(mat as ShaderMaterial)
+	# Baked foliage (a structure's decor plants, one MeshInstance3D tagged like a MultiMesh).
+	var baked: Array[MeshInstance3D] = []
+	_collect_baked_foliage(map_container, baked)
+	for instance in baked:
+		for surface_idx in range(instance.mesh.get_surface_count()):
+			var mat := instance.mesh.surface_get_material(surface_idx)
+			if mat is ShaderMaterial and mat not in result:
+				result.append(mat as ShaderMaterial)
 	return result
+
+
+## Every MeshInstance3D under `node` that carries a wind foliage category and a mesh.
+static func _collect_baked_foliage(node: Node, result: Array[MeshInstance3D]) -> void:
+	for child in node.get_children():
+		if child is MeshInstance3D and (child as MeshInstance3D).mesh != null:
+			if PRESETS.has(str(child.get_meta("wind_foliage_category", ""))):
+				result.append(child as MeshInstance3D)
+		_collect_baked_foliage(child, result)
 
 
 ## Classifies a Geoscatter instance-source object's name into a PRESETS key, or "" for

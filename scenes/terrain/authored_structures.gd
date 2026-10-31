@@ -33,6 +33,9 @@ const TAGS_META := &"tt_tags"
 const NORMAL_SCALE := 0.8
 const CACHE_LIMIT := 48
 ## A queued build's task id until a worker takes it (see max_running()).
+## The one mesh a structure's decor plants are baked into (StructureDecor.bake), one surface per
+## material kind; an asset that cannot be baked keeps a MultiMeshInstance3D "decor_<asset>".
+const DECOR_NODE := "decor_baked"
 const NOT_STARTED := -1
 
 ## Highest structure top, map Y (-INF with none), and a counter that changes with every rebuild.
@@ -75,6 +78,8 @@ var _stale: PackedInt64Array = PackedInt64Array()
 var _reported: Dictionary = {}
 ## Decor row id -> {"source": instance id of the library's mesh, "mesh": its wind-dressed copy}.
 var _decor_meshes: Dictionary = {}
+## Surface key -> the ShaderMaterial the baked decor surfaces of that key share.
+var _decor_baked_materials: Dictionary = {}
 
 
 ## The structures of `doc` as nodes, from `built` (StructureGeometry.build(doc), which a loader's
@@ -592,10 +597,12 @@ func _decor() -> bool:
 	return plants and StructureDecor.available(_palette_root)
 
 
-## The decor plants of a structure (StructureDecor.placements on its anchors): one
-## MultiMeshInstance3D per decor asset, so a structure draws each asset once (per surface),
-## shadows off, dressed with the wind shader of its category as AssetStore.instance() dresses a
-## library asset. Freed with the node.
+## The decor plants of a structure (StructureDecor.placements on its anchors), baked into one
+## MeshInstance3D "decor_baked" with a surface per material kind (leaf, bark, planter parts), so a
+## decorated building draws 2 to 4 surfaces instead of a MultiMesh per asset (7 to 8 nodes, 14 or
+## more draws). Shadows off, dressed with the wind shader of its category as AssetStore.instance()
+## dresses a library asset (shared materials; the vertex weights carry each asset's mesh_height).
+## Freed with the node.
 func _add_decor(node: Node3D, parts: Dictionary) -> void:
 	if not bool(parts.get("decor", false)):
 		return
@@ -612,7 +619,7 @@ func _add_decor(node: Node3D, parts: Dictionary) -> void:
 	var cost := {}
 	for placement in placed:
 		if not cost.has(placement.id) and by_id.has(placement.id):
-			cost[placement.id] = _triangles_of(_decor_mesh(by_id[placement.id]))
+			cost[placement.id] = int(_decor_entry(by_id[placement.id]).get("tris", 0))
 	# At most StructureDecor.MAX_TRIANGLES of plants a structure: the lowest-value anchors go first.
 	for placement in StructureDecor.cap_triangles(placed, cost):
 		if not groups.has(placement.id):
@@ -620,24 +627,63 @@ func _add_decor(node: Node3D, parts: Dictionary) -> void:
 		(groups[placement.id] as Array[Transform3D]).append(placement.transform)
 	var ids: Array = groups.keys()
 	ids.sort()
+	# Plants whose asset can be baked (every surface a wind material with vertex weights) go into
+	# one mesh a structure draws once per surface kind; the rest keep a MultiMesh each.
+	var baked: Array[Dictionary] = []
+	var sources := {}
 	for id: String in ids:
 		var row: Dictionary = by_id[id]
-		var mesh := _decor_mesh(row)
-		if mesh == null:
+		var entry := _decor_entry(row)
+		if entry.is_empty():
 			continue
 		var transforms: Array[Transform3D] = groups[id]
-		var multi := MultiMesh.new()
-		multi.transform_format = MultiMesh.TRANSFORM_3D
-		multi.mesh = mesh
-		multi.instance_count = transforms.size()
-		for i in transforms.size():
-			multi.set_instance_transform(i, transforms[i])
-		var instance := MultiMeshInstance3D.new()
-		instance.name = "decor_%s" % row.local
-		instance.multimesh = multi
-		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		instance.set_meta(&"wind_foliage_category", row.wind_category)
-		node.add_child(instance)
+		if not (entry.bake as Array).is_empty():
+			sources[id] = entry.bake
+			for transform in transforms:
+				baked.append({"id": id, "transform": transform})
+			continue
+		_add_decor_multimesh(node, row, entry.mesh as Mesh, transforms)
+	if baked.is_empty():
+		return
+	var array_mesh := ArrayMesh.new()
+	for surface: Dictionary in StructureDecor.bake(baked, sources):
+		array_mesh.add_surface_from_arrays(
+			Mesh.PRIMITIVE_TRIANGLES, StructureDecor.mesh_arrays(surface)
+		)
+		array_mesh.surface_set_material(
+			array_mesh.get_surface_count() - 1, _decor_baked_materials[surface.key]
+		)
+	var instance := MeshInstance3D.new()
+	instance.name = DECOR_NODE
+	instance.mesh = array_mesh
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	instance.set_meta(&"wind_foliage_category", _decor_category(by_id, ids))
+	node.add_child(instance)
+
+
+## One MultiMeshInstance3D for `transforms` of `mesh` (a decor asset that cannot be baked).
+func _add_decor_multimesh(
+	node: Node3D, row: Dictionary, mesh: Mesh, transforms: Array[Transform3D]
+) -> void:
+	var multi := MultiMesh.new()
+	multi.transform_format = MultiMesh.TRANSFORM_3D
+	multi.mesh = mesh
+	multi.instance_count = transforms.size()
+	for i in transforms.size():
+		multi.set_instance_transform(i, transforms[i])
+	var instance := MultiMeshInstance3D.new()
+	instance.name = "decor_%s" % row.local
+	instance.multimesh = multi
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	instance.set_meta(&"wind_foliage_category", row.wind_category)
+	node.add_child(instance)
+
+
+## The wind category of the baked decor (the assets of one library share it; the first wins).
+static func _decor_category(by_id: Dictionary, ids: Array) -> String:
+	for id: String in ids:
+		return str((by_id[id] as Dictionary).wind_category)
+	return ""
 
 
 ## The triangles of `mesh` (every surface, the full-detail index arrays); 0 for null.
@@ -655,16 +701,90 @@ static func _triangles_of(mesh: Mesh) -> int:
 
 ## The wind-dressed mesh of a decor row, shared by every structure of this node.
 func _decor_mesh(row: Dictionary) -> Mesh:
+	return _decor_entry(row).get("mesh")
+
+
+## What a decor row keeps once per library asset: {"mesh" (wind-dressed copy, for a MultiMesh),
+## "tris" (its triangles), "bake" (the surfaces StructureDecor.bake takes, empty when the asset
+## cannot be baked)}; {} when the library has no mesh for it. Rebuilt when the library's mesh is.
+func _decor_entry(row: Dictionary) -> Dictionary:
 	var source := AssetStore.mesh(str(row.library), str(row.id), _palette_root)
 	if source == null:
-		return null
+		return {}
 	var held: Variant = _decor_meshes.get(row.id)
 	if held is Dictionary and held.source == source.get_instance_id():
-		return held.mesh
+		return held
 	var copy := source.duplicate() as Mesh
 	WindFoliage.apply_material(copy, str(row.wind_category))
-	_decor_meshes[row.id] = {"source": source.get_instance_id(), "mesh": copy}
-	return copy
+	var entry := {
+		"source": source.get_instance_id(),
+		"mesh": copy,
+		"tris": _triangles_of(copy),
+		"bake": _bake_surfaces(copy, str(row.wind_category)),
+	}
+	_decor_meshes[row.id] = entry
+	return entry
+
+
+## `mesh`'s surfaces as StructureDecor.bake's sources, each with the key of the material it
+## shares (registering that material in _decor_baked_materials); empty when a surface is not a
+## wind material with vertex weights, positions, normals, colours, UVs and an index (the asset then
+## keeps its MultiMesh, so nothing about how it sways can change).
+func _bake_surfaces(mesh: Mesh, category: String) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for surface in mesh.get_surface_count():
+		var material := mesh.surface_get_material(surface) as ShaderMaterial
+		var arrays := mesh.surface_get_arrays(surface)
+		if (
+			material == null
+			or not bool(material.get_shader_parameter("use_vertex_wind"))
+			or not arrays[Mesh.ARRAY_COLOR] is PackedColorArray
+			or not arrays[Mesh.ARRAY_NORMAL] is PackedVector3Array
+			or not arrays[Mesh.ARRAY_TEX_UV] is PackedVector2Array
+			or not arrays[Mesh.ARRAY_INDEX] is PackedInt32Array
+		):
+			return [] as Array[Dictionary]
+		var key := "%s|%s|%s" % [category, material.shader.resource_path, _texture_key(material)]
+		if not _decor_baked_materials.has(key):
+			var shared := material.duplicate() as ShaderMaterial
+			shared.set_shader_parameter("mesh_height", StructureDecor.BAKE_MESH_HEIGHT)
+			_decor_baked_materials[key] = shared
+		(
+			out
+			. append(
+				{
+					"key": key,
+					"vertices": arrays[Mesh.ARRAY_VERTEX],
+					"normals": arrays[Mesh.ARRAY_NORMAL],
+					"colors":
+					StructureDecor.baked_colors(
+						arrays[Mesh.ARRAY_COLOR],
+						float(material.get_shader_parameter("mesh_height"))
+					),
+					"uvs": arrays[Mesh.ARRAY_TEX_UV],
+					"indices": arrays[Mesh.ARRAY_INDEX],
+				}
+			)
+		)
+	return out
+
+
+## A short hash of the albedo texture of a wind `material` (its pixels, so two assets that carry
+## the same picture share a baked surface), or "none".
+static func _texture_key(material: ShaderMaterial) -> String:
+	var texture: Variant = material.get_shader_parameter("albedo_texture")
+	if not texture is Texture2D:
+		return "none"
+	var image := (texture as Texture2D).get_image()
+	if image == null:
+		return "none"
+	var hashing := HashingContext.new()
+	hashing.start(HashingContext.HASH_SHA256)
+	hashing.update(image.get_data())
+	return (
+		"%dx%d:%s"
+		% [image.get_width(), image.get_height(), hashing.finish().hex_encode().substr(0, 16)]
+	)
 
 
 ## The yard of a building (StructureDressing): the soft ground patch and path (no shadow) and the

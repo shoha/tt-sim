@@ -728,10 +728,12 @@ pure (`utils/structure_placement.gd`).
   `PlayEvents.hints_for`.
 - **Palette round 2 (card building_ui2, 2026-10-30).** The pane is a drawer of key facts, the
   gestures live on the hint bar:
-  - *Filter chips* (`StructurePalette.CHIPS`: Home, Farm, Inn, Castle, Church, Shop, Ruin, Toon,
-    Regional, Stone, Timber, Thatch) above the tiles, multi-select, with the search box and a Clear
+  - *Filter chips* (`StructurePalette.CHIPS`, polish3 2026-10-30: two captioned rows,
+    `StructurePalette.GROUPS`: **Kind** Home, Farm, Inn, Castle, Church, Shop, Ruin, Fantasy, Toon and
+    **Material** Stone, Timber, Thatch; the Regional chip was dropped, it matched 85 of 98 and filtered
+    nothing, the tag stays for street picking) above the tiles, multi-select, with the search box and a Clear
     (with the tally, "14 of 72"). A chip matches a row by its family or one of its tags. Chips of one
-    group (kind, look, material) widen the choice, chips of different groups narrow it; a chip's count is
+    group (kind, material) widen the choice, chips of different groups narrow it; a chip's count is
     what it would show given the search and the other groups' chips, and a chip that would show nothing
     is greyed. All pure (`passes_chips`, `chip_counts`, `toggled`).
   - *Tiles* are 80 px pictures (a "Small tiles" switch gives 48 px, remembered in the settings
@@ -935,10 +937,27 @@ records** (`ProcgenOrnaments.anchors`; fields in procgen `docs/architecture_styl
   index arrays) and `StructureDecor.cap_triangles` drops plants until the total fits: ivy before
   planters (a flower box is cheap and reads as lived in), the smallest wall area first, then the
   highest, the survivors keeping their order.
-- **Nodes.** `AuthoredStructures._add_decor`: one `MultiMeshInstance3D` per decor asset per
-  structure (`decor_<local>`), shadows off, the mesh dressed with `WindFoliage.apply_material` for
-  the asset's wind category (`climber`) and shared by every structure of the node, meta
-  `wind_foliage_category`. They are children of the structure's node, so they are freed, rebuilt
+- **Nodes (baked, polish3 2026-10-30).** `AuthoredStructures._add_decor` bakes all of a structure's
+  plants into ONE `MeshInstance3D` `decor_baked` (`StructureDecor.bake`: pure, arrays in and out, the
+  vertex and triangle counts are the sums of the instances', positions are transform times the
+  asset's) with one surface per material kind (ivy stem and leaf, planter parts: 2 to 4 surfaces),
+  shadows off, meta `wind_foliage_category` (so `WindFoliage.collect_foliage_shader_materials`, the
+  antialiasing swap, still reaches it). Measured by `tools/render_jobs/jobs/polish3_decor.json`
+  (probe `decor.gd`): 30 decorated buildings were 235 `MultiMeshInstance3D` (about 8 each) and are 30
+  baked nodes; draws per frame 4,530 to 3,798 at home zoom (about 24 fewer per building), 12 buildings
+  2,548 to 2,378; `_add_decor` 3.8-4.3 to 1.2-1.8 ms per building (main thread; the arrays are
+  cached per asset so the cost is the transforms); baked memory 10.8 MB for 30 buildings (85,400
+  triangles, 161k vertices), against the 40 MB decision line. The look is the same in a before and
+  after render pair. Wind: the wind shader's phase comes from a vertex's world position, so no
+  per-instance data is needed, but `mesh_height` is one uniform per asset: the shared materials hold
+  `StructureDecor.BAKE_MESH_HEIGHT` (4.0, above every asset's) and each plant's vertex red weights
+  carry its own `mesh_height` over it (`baked_colors`). What changes: the sway offset is now in the
+  structure's frame rather than the wall's, so wind direction is the same on every wall (the
+  per-wall frame was an accident of the instance basis), and the small bend droop uses height above
+  the structure origin rather than the plant's. An asset whose surfaces are not vertex-weighted wind
+  materials keeps a MultiMesh (`decor_<local>`). The old per-asset multimeshes: the mesh dressed with
+  `WindFoliage.apply_material` for the asset's wind category (`climber`) and shared by every
+  structure of the node, meta `wind_foliage_category`. They are children of the structure's node, so they are freed, rebuilt
   and cached with it; nothing new is stored (the ornaments mask and `ivy_amount` already are, and
   the amount reshapes the anchors' patches).
 - **Cost** (core, seed 5, one decorated building, after plant_decor2): 1,536 (cottage) to 2,976
@@ -1106,3 +1125,25 @@ words, the hint rows and their fade, the settings round trip, the live note's ma
 `why`, the pane's chips and columns, `connect_selection`) and the render job
 `tools/render_jobs/jobs/building_ui2.json` (probe `probes/building_ui2.gd`; a meadow with a pond,
 nine captures; keeps no level, but clears the run's hint memory).
+
+### Building tool UI round 3 (polish3, 2026-10-30)
+
+- **Place another strip** (`StructureToolPane.place_strip`): while a building is selected, a strip
+  under the panel title names the armed pick (its picture and name, the brush's next building) with a
+  Change button that puts the whole palette in the bar's place; a tile pick closes it again (or Back).
+  A click on the board (another selection) also closes it. `set_browsing`, `is_browsing`.
+- **Hint bar:** the "Bare ground: put another down" row never fades while a selection exists
+  (`StructureHints.rows`), it is the only place that says a click lays another.
+- **Title and subtitle:** "Buildings" and "Cottages, castles, windmills and more: click to place,
+  drag to size." (the rail and key tooltips still say Building; the subtitle wraps).
+- **Toggle chips** use the `ToggleChip` button variation (`painted_theme_base.gd`): a quiet outlined
+  pill off, the state role (lake) filled behind chalk words on; the Decorate row's chips too. (`Chip`
+  is a PanelContainer variation, it never styled a Button, which is why chips read as plain buttons.)
+  A Decorate chip with no room stays the on fill at half alpha, which reads differently from off.
+- **Style tile names** wrap to two lines (the tile is 94 px tall); the full name is also the tooltip.
+- **Roofs:** `structure_roof.gdshader` tiled only faces with `up > 0.25`; a steep cone or spire
+  (wizard tower, crystal spire, pitch 62 to 78 degrees, `up` 0.2 to 0.47) rendered as a flat colour.
+  The threshold is now 0.06 to 0.2 and the course length divisor clamps at 0.12.
+- **library.json stats:** `LibraryHashes` and `tools/recompute_library_hashes.gd` recompute
+  `stats.file_sha256` and the byte totals from the files after a tile is regenerated host-side
+  (`--check 1` only reports). On 2026-10-30 the hashes were right and `surface_bytes` was 556,876 short.
