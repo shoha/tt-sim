@@ -61,16 +61,16 @@ All on `main`, working tree clean, nothing unpushed, no sharded gates running at
 
 ## 2. Version decision (OWNER)
 
-- [ ] Choose the release number. `project.godot` already says 0.3.1; 173 commits and a new
-      Building tool, streets and a global wind may merit 0.4.0 instead. Same-version gate:
-      players must have exactly the host's version to join, so every player has to update.
-- [ ] Core library version: the owner decides whether the shipped `core` stays `1.0.0-dev` or
-      becomes `1.0.0` for this release. If it changes: edit `version` in the core-library
-      source `library.json`, rebuild or re-hash, copy to `tt-sim/libraries/core/library.json`,
+- [x] Release number: **0.4.0** (owner, 2026-10-31, decisions page). This records the
+      number only: `project.godot` still says 0.3.1, and it changes in step 5.2 after the
+      owner's "go". Same-version gate: players must have exactly the host's version to join,
+      so every player has to update.
+- [x] Core library version: **1.0.0** with this release (owner, 2026-10-31). Not applied yet.
+      Apply at the cut, with the version bump: edit `version` in the core-library source
+      `library.json`, rebuild or re-hash, copy to `tt-sim/libraries/core/library.json`,
       check `core ^1.0` dependency ranges in tests and docs still hold, and keep `contract` at
-      `1` (the contract number only moves with a format change). The reader accepts
-      pre-release versions, so keeping `1.0.0-dev` is safe but reads as unfinished in the UI.
-      TODO: confirm which the owner wants.
+      `1` (the contract number only moves with a format change). Then drop the "still
+      1.0.0-dev" line from the notes' known issues.
 
 ## 3. Licences and credits (OWNER confirms, AGENT checks)
 
@@ -81,17 +81,18 @@ All on `main`, working tree clean, nothing unpushed, no sharded gates running at
 - [ ] The app shows it: the collections manager's library detail page prints the library's
       licence (`scenes/ui/library_manager/library_detail.gd`, through `LibraryNames.license_text`).
       Check by eye on a build that Core reads "CC BY 4.0".
-- [ ] Stale text: `docs/systems/library.md` still says core's "placeholder licence ("TBD
-      (...)") reads "Included with the game"". The licence is decided, so that sentence
-      (and any "Included with the game" fallback shown for Core) should be corrected. AGENT
-      fixes on the owner's word.
+- [x] `docs/systems/library.md` no longer calls core's licence a placeholder (fixed in
+      `1802e34b`, 2026-10-31).
 - [ ] Third-party attributions that exist today: `THIRD_PARTY_LICENSES.md` (Tabler Icons, MIT;
-      ambientCG sky HDRIs, CC0, with a source table). TODO: confirm with a pass over the
-      shipped fonts, audio (`docs/SOUND_EFFECTS.md`), GodotSteam, godot-cpp and the Godot
-      engine notice that each has an entry; no audit was done for this draft. The
+      ambientCG sky HDRIs, CC0, with a source table). Owner, 2026-10-31: run the audit now.
+      A pass over the shipped fonts, audio (`docs/SOUND_EFFECTS.md`), GodotSteam, godot-cpp
+      and the Godot engine notice, so that each has an entry. Status: not done yet. The
       core-library `NOTICE.md` says third-party material: none.
-- [ ] The game's own licence: there is no licence file for tt-sim at the repository root.
-      OWNER decides the terms (the notes say so with a TODO) before a public release.
+- [ ] The game's own licence: **all rights reserved** (owner, 2026-10-31). Still to do, once
+      the audit is in: a short `LICENSE` file at the tt-sim root (copyright holder and year,
+      all rights reserved, and a pointer that the built-in Core library is CC BY 4.0 under its
+      own terms) plus one README line. The repository is public, so the file also tells
+      readers that viewing the source is not a licence to reuse it.
 
 ## 4. Notes and changelog (OWNER approves)
 
@@ -111,8 +112,9 @@ Names: the release tag is `v<version>` (for example `v0.3.1`); the per-build tag
 `v<version>-build.<sha>` are CI's own and are never made by hand.
 
 1. [ ] OWNER: "go for <version>".
-2. [ ] AGENT: set `project.godot` `config/version` to the release version if it is not
-       already (it is `0.3.1` now), commit, push, and let that main run finish green.
+2. [ ] AGENT: set `project.godot` `config/version` to the release version (chosen: `0.4.0`;
+       it is `0.3.1` now), together with the core library `1.0.0` change from section 2, commit,
+       push, and let that main run finish green.
 3. [ ] AGENT: `git tag v<version>` on that exact commit, then `git push origin v<version>`.
        CI fails the tag build if the tag differs from `project.godot` (the "Inject version"
        step compares them).
@@ -126,7 +128,7 @@ Names: the release tag is `v<version>` (for example `v0.3.1`); the per-build tag
        as every main push. OWNER sets the build live on the default branch in Steamworks by
        hand; the pipeline never does.
 6. [ ] AGENT, immediately after the tag: bump `project.godot` to the next version (for a
-       0.3.1 release, 0.3.2) and push, so later builds are prereleases of the next number.
+       0.4.0 release, 0.4.1) and push, so later builds are prereleases of the next number.
        OWNER approves that number too.
 
 ## 6. Post-release checks (AGENT does, OWNER reads)
@@ -141,8 +143,9 @@ Names: the release tag is `v<version>` (for example `v0.3.1`); the per-build tag
 - [ ] Join smoke test over ENet (host and client on the release builds, a map with
       buildings and a street: the client waits for the map, then plays), and over Steam
       (lobby, version gate between equal versions, a version mismatch is refused with a clear
-      message). The Steam map-download path with structures has not been run this cycle:
-      run it before announcing.
+      message). The Steam map-download path with structures passed on 2026-10-31 (host plus the
+      boxed alt-account client, four buildings, fingerprints equal; `docs/NETWORKING.md`
+      "Automated runs"). Run the same pair on the release build before announcing.
 - [ ] Core library in the release build: Core shows in the collections manager as built in,
       with its CC BY 4.0 licence; the Building tool palette lists 100 buildings and the
       Street tool 11 kinds.
