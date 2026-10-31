@@ -69,6 +69,11 @@ static func wait_async(
 		var structures := structures_of(root)
 		if frames >= MAX_FRAMES or not structures.is_inside_tree():
 			# A node outside the tree is never processed: make its structures now.
+			if frames >= MAX_FRAMES:
+				push_warning(
+					"StructureLoadWait: %d structures still pending after %d frames; making them now"
+					% [pending_of(root), frames]
+				)
 			structures.flush()
 			break
 		frames += 1

@@ -33,6 +33,8 @@ var _paths: Dictionary = {}
 var _dropped: Dictionary = {}
 ## Bumped on every request and reset, so a load finishing after either is discarded.
 var _generation: int = 0
+## The generation whose downloaded map is being loaded and finalised, else -1 (is_busy).
+var _finalizing_generation: int = -1
 var _streamer_connected: bool = false
 
 var _load_map_sources_fn: Callable
@@ -42,7 +44,7 @@ var _finalize_map_loading_fn: Callable
 ## Initialize with callables for loading the downloaded files into a scene.
 ## load_map_sources_fn(glb_path: String, document_path: String) -> Node3D (a coroutine;
 ## either path may be "")
-## finalize_map_loading_fn(map: Node3D) -> void
+## finalize_map_loading_fn(map: Node3D) -> void (a coroutine; awaited)
 func setup(load_map_sources_fn: Callable, finalize_map_loading_fn: Callable) -> void:
 	_load_map_sources_fn = load_map_sources_fn
 	_finalize_map_loading_fn = finalize_map_loading_fn
@@ -150,16 +152,21 @@ func _load_downloaded_map() -> void:
 	map_download_completed.emit(folder)
 	if document_dropped:
 		push_warning("MapDownloadCoordinator: loading %s without its map document" % folder)
+	_finalizing_generation = generation
 	var map: Node3D = await _load_map_sources_fn.call(glb_path, document_path)
 	if generation != _generation:
 		if is_instance_valid(map):
 			map.free()
 		return
 	if map:
-		_finalize_map_loading_fn.call(map)
+		# Awaited: the structures' nodes come a few a frame, and the level load that asked for this
+		# map (LevelPlayLoader, MapDownloadWait) sets its tokens down only once all of it stands.
+		await _finalize_map_loading_fn.call(map)
 	else:
 		push_error("MapDownloadCoordinator: Failed to load downloaded map")
 		map_download_failed.emit(folder, "Failed to load map file")
+	if _finalizing_generation == generation:
+		_finalizing_generation = -1
 
 
 ## The cached copy of one map file of a level, or "" when there is none or its content
@@ -212,6 +219,12 @@ func request_map_download(
 ## Check if a map download is in progress
 func is_map_downloading() -> bool:
 	return _pending_map_level_folder != ""
+
+
+## True from the request until the downloaded map is built and finalised (its structures standing),
+## or the request is replaced, reset or failed: what MapDownloadWait waits on.
+func is_busy() -> bool:
+	return _pending_map_level_folder != "" or _finalizing_generation == _generation
 
 
 ## The variant ids still downloading (for tests and diagnostics).
