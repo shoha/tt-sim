@@ -334,7 +334,7 @@ func test_plants_in_a_rectangle_overlap_by_at_most_the_limit() -> void:
 	assert_gt(stacked, 0, "the probe has stacked plants")
 
 
-func test_the_shaped_cap_still_holds_three_thousand_triangles() -> void:
+func test_the_shaped_cap_still_holds_the_triangle_cap() -> void:
 	var anchors: Array[Dictionary] = [
 		_anchor("ivy", 3.0, 2.5, _pier_windows()), _anchor("ivy", 7.0, 3.5, [[-0.5, 0.8, 0.5, 1.8]])
 	]
@@ -399,7 +399,9 @@ func test_no_plant_reaches_an_opening_grown_by_the_margin() -> void:
 				func(r: Array) -> bool:
 					return r[0] >= -float(width) * 0.5 and r[2] <= float(width) * 0.5
 			)
-			var out := StructureDecor.placements([_anchor("ivy", width, height, open)], _rows())
+			var out := StructureDecor.placements(
+				[_anchor("ivy", width, height, open)], _rows(), true
+			)
 			for plant in out:
 				assert_false(
 					_overlaps_grown(plant, open, StructureDecor.OPENING_MARGIN),
@@ -422,7 +424,7 @@ func test_a_wall_beside_a_window_keeps_plants_and_a_squeezed_gap_stays_bare() ->
 		[_anchor("ivy", 1.0, 1.0, [[-0.3, 0.2, 0.3, 0.8]])], _rows()
 	)
 	assert_eq(squeezed.size(), 0, "no room left around it")
-	var plain := StructureDecor.placements([_anchor("ivy", 5.0, 2.0)], _rows())
+	var plain := _main_layer(StructureDecor.placements([_anchor("ivy", 5.0, 2.0)], _rows()))
 	assert_eq(plain.size(), 3, "no opening: the largest class's tiles")
 
 
@@ -430,7 +432,7 @@ func test_the_triangle_cap_drops_ivy_first_smallest_then_highest() -> void:
 	var anchors: Array[Dictionary] = [
 		_anchor("ivy", 5.0, 5.0), _anchor("ivy", 1.1, 1.1), _anchor("box", 1.15, 0.2)
 	]
-	var placed := StructureDecor.placements(anchors, _rows())
+	var placed := _main_layer(StructureDecor.placements(anchors, _rows()))
 	var cost := {}
 	for plant in placed:
 		cost[plant.id] = 1000
@@ -446,7 +448,54 @@ func test_the_triangle_cap_drops_ivy_first_smallest_then_highest() -> void:
 	)
 	assert_false(capped.has(ivy[0]), "the smallest ivy patch went first")
 	assert_eq(StructureDecor.cap_triangles(placed, cost, 0).size(), 0, "a cap of 0 drops all")
-	assert_eq(StructureDecor.MAX_TRIANGLES, 3000)
+	assert_eq(StructureDecor.MAX_TRIANGLES, 4500)
+
+
+func _main_layer(placed: Array[Dictionary]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for plant in placed:
+		if not bool(plant.get("under", false)):
+			out.append(plant)
+	return out
+
+
+func test_an_under_layer_plant_sits_behind_a_smaller_one_inside_the_same_free_rectangle() -> void:
+	var anchor := _anchor("ivy", 5.0, 2.5, [[-0.5, 0.8, 0.5, 1.8]])
+	var placed := StructureDecor.placements([anchor], _rows(), true)
+	var unders :=placed.filter(func(p: Dictionary) -> bool: return bool(p.get("under", false)))
+	assert_gt(unders.size(), 0, "the probe has an under-layer")
+	assert_lte(unders.size(), _main_layer(placed).size(), "at most one behind each plant")
+	for plant in unders:
+		var depth: float = 3.0 - (plant.transform as Transform3D).origin.z
+		assert_between(
+			depth, StructureDecor.UNDER_DEPTH_MIN - 0.0001, StructureDecor.UNDER_DEPTH_MAX + 0.0001
+		)
+		var scale: float = (plant.transform as Transform3D).basis.get_scale().x
+		assert_lte(scale, 1.15 * StructureDecor.UNDER_SCALE + 0.0001, "smaller than a main plant")
+	var again := StructureDecor.placements([anchor], _rows(), true)
+	assert_eq(placed.size(), again.size(), "deterministic")
+
+
+func test_the_cap_drops_the_under_layer_before_any_main_plant() -> void:
+	var placed := StructureDecor.placements([_anchor("ivy", 5.0, 5.0)], _rows(), true)
+	var cost := {}
+	for plant in placed:
+		cost[plant.id] = 100
+	var main := _main_layer(placed).size()
+	assert_lt(main, placed.size(), "the probe has unders")
+	var capped := StructureDecor.cap_triangles(placed, cost, main * 100)
+	assert_eq(capped.size(), main)
+	assert_eq(_main_layer(capped).size(), main, "every main plant stayed")
+
+
+func test_shaded_normals_turn_toward_down_and_stay_unit_length() -> void:
+	var out := StructureDecor.shaded_normals(
+		PackedVector3Array([Vector3(0, 0, 1), Vector3(0, 0.5, 0.8660254)])
+	)
+	assert_almost_eq(out[0].length(), 1.0, 0.0001)
+	assert_lt(out[0].y, 0.0, "a wall normal now leans down")
+	assert_lt(out[1].y, 0.5, "a normal that leaned up leans less")
+	assert_gt(out[0].z, 0.5, "still mostly out of the wall")
 
 
 func test_a_planter_is_drawn_larger_from_a_smaller_class_and_sits_at_the_anchor() -> void:

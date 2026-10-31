@@ -75,8 +75,15 @@ const CHIPS: Array[Dictionary] = [
 ]
 const IVY_MIN := 0.2
 const IVY_MAX := 1.0
-## procgen's own coverage for ivy (ProcgenOrnaments.NUMBERS.ivy.coverage).
-const IVY_DEFAULT := 0.55
+## The ivy amount the Decorate slider starts at (batch_c: 0.85, was procgen's own 0.55: the plants
+## on the anchors cover less than the blobs did).
+const IVY_DEFAULT := 0.85
+## procgen's own limits of the ivy options (ProcgenOrnaments.NUMBERS.ivy): key -> [default, min, max].
+const IVY_OWN := {
+	"height": [0.7, 0.25, 1.0], "coverage": [0.55, 0.1, 1.0], "amount": [1.0, 0.4, 2.0]
+}
+## What soften does to every ivy node when plants are placed: the multipliers of its options.
+const DECOR_IVY := {"amount_mult": 1.0, "coverage_mult": 1.6, "height_mult": 1.3}
 const IVY_STEP := 0.05
 ## How many a "Surprise me" picks, at least and at most.
 const SURPRISE_MIN := 2
@@ -221,10 +228,33 @@ static func soften(recipe: PlantGraphDocument) -> int:
 		return 0
 	var changed := 0
 	for id in recipe.nodes_of_type("ornament"):
-		if str(recipe.node_params(id).get("soft", "")) != "anchors":
+		var params := recipe.node_params(id)
+		if str(params.get("soft", "")) != "anchors":
 			recipe.set_param(id, "soft", "anchors")
 			changed += 1
+		if str(params.get("kind", "")) == "ivy":
+			_enlarge_ivy(recipe, id, params)
 	return changed
+
+
+## Asks an ivy node of `recipe` for broader, taller, more numerous blankets than it was made with
+## (batch_c): library plants cover less than procgen's blobs did, so the anchors they stand on are
+## made bigger. Multiplies `amount`, `coverage` and `height` by DECOR_IVY (an unset 0 is procgen's
+## own default, IVY_OWN) within procgen's limits. Measured (batch_c): procgen's 270 triangle budget
+## per ivy node, spent on blobs that are not drawn in anchors mode, caps the patches, so these
+## multipliers add little on a wall with many windows; a second ivy node or `face: "all"` only
+## moved the patches to walls the camera does not see.
+static func _enlarge_ivy(recipe: PlantGraphDocument, id: String, params: Dictionary) -> void:
+	for key: String in ["amount", "coverage", "height"]:
+		var current := float(params.get(key, 0.0))
+		if current <= 0.0:
+			current = float(IVY_OWN[key][0])
+		var grown := clampf(
+			current * float(DECOR_IVY["%s_mult" % key]),
+			float(IVY_OWN[key][1]),
+			float(IVY_OWN[key][2])
+		)
+		recipe.set_param(id, key, grown)
 
 
 ## Why `recipe` with `params` cannot take ornaments ("" when it can): a ruin (the recipe's own, or

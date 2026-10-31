@@ -615,7 +615,7 @@ func _add_decor(node: Node3D, parts: Dictionary) -> void:
 	for row in rows:
 		by_id[row.id] = row
 	var groups := {}
-	var placed := StructureDecor.placements(anchors, rows)
+	var placed := StructureDecor.placements(anchors, rows, true)
 	var cost := {}
 	for placement in placed:
 		if not cost.has(placement.id) and by_id.has(placement.id):
@@ -623,8 +623,8 @@ func _add_decor(node: Node3D, parts: Dictionary) -> void:
 	# At most StructureDecor.MAX_TRIANGLES of plants a structure: the lowest-value anchors go first.
 	for placement in StructureDecor.cap_triangles(placed, cost):
 		if not groups.has(placement.id):
-			groups[placement.id] = [] as Array[Transform3D]
-		(groups[placement.id] as Array[Transform3D]).append(placement.transform)
+			groups[placement.id] = [] as Array[Dictionary]
+		(groups[placement.id] as Array[Dictionary]).append(placement)
 	var ids: Array = groups.keys()
 	ids.sort()
 	# Plants whose asset can be baked (every surface a wind material with vertex weights) go into
@@ -636,12 +636,21 @@ func _add_decor(node: Node3D, parts: Dictionary) -> void:
 		var entry := _decor_entry(row)
 		if entry.is_empty():
 			continue
-		var transforms: Array[Transform3D] = groups[id]
+		var group: Array[Dictionary] = groups[id]
 		if not (entry.bake as Array).is_empty():
 			sources[id] = entry.bake
-			for transform in transforms:
-				baked.append({"id": id, "transform": transform})
+			for placement in group:
+				baked.append(
+					{
+						"id": id,
+						"transform": placement.transform,
+						"under": bool(placement.get("under", false)),
+					}
+				)
 			continue
+		var transforms: Array[Transform3D] = []
+		for placement in group:
+			transforms.append(placement.transform)
 		_add_decor_multimesh(node, row, entry.mesh as Mesh, transforms)
 	if baked.is_empty():
 		return

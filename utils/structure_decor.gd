@@ -60,7 +60,17 @@ const SHAPE_BAND := "band"
 const SHAPE_SQUARE := "square"
 ## The most triangles of plants one structure draws (ivy and planters together). Past it the lowest
 ## value anchors go first (cap_triangles).
-const MAX_TRIANGLES := 3000
+const MAX_TRIANGLES := 4500
+## The under-layer (batch_c, 2026-10-30): behind every ivy plant of a free rectangle that has room,
+## a plant UNDER_SCALE as big, shifted by up to UNDER_SHIFT of the plant's extent along the wall and
+## sunk UNDER_DEPTH_MIN to UNDER_DEPTH_MAX metres into it, its normals turned UNDER_SHADE of the way
+## to straight down so the painted light reads it darker. Gaps in the main layer then show leaves
+## and not brick. It stays inside the same free rectangle, so a window is as clear as before.
+const UNDER_SCALE := 0.8
+const UNDER_SHIFT := 0.3
+const UNDER_DEPTH_MIN := 0.08
+const UNDER_DEPTH_MAX := 0.15
+const UNDER_SHADE := 0.45
 const ID_PREFIX := "decor:"
 ## The mesh_height the baked surfaces' shared wind materials hold. The wind shader weights a sway
 ## by `COLOR.r * mesh_height` (mesh_height is one uniform per asset); a baked surface mixes assets,
@@ -239,21 +249,25 @@ static func variant_of(ids: Array[String], seed_value: int, salt: int) -> String
 ## biggest class that fits inside it (shrunk to FIT_MIN_SCALE), so no plant's extent meets an
 ## opening and a rectangle nothing fits in stays bare. Planters: the class nearest the box's width.
 ## Nothing when `rows` lack the kind.
-static func placements(anchors: Array[Dictionary], rows: Array[Dictionary]) -> Array[Dictionary]:
+## `layered` adds the under-layer (UNDER_*; plants with "under" true, behind and smaller) after each
+## main plant, the way a building is built; false is the main layer alone.
+static func placements(
+	anchors: Array[Dictionary], rows: Array[Dictionary], layered: bool = false
+) -> Array[Dictionary]:
 	var ivy_classes := classes_of(rows, KIND_IVY)
 	var planter_classes := classes_of(rows, KIND_PLANTER)
 	var out: Array[Dictionary] = []
 	for index in anchors.size():
 		var anchor := anchors[index]
 		if anchor.get("kind") == "ivy":
-			out.append_array(_ivy_placements(anchor, index, ivy_classes))
+			out.append_array(_ivy_placements(anchor, index, ivy_classes, layered))
 		elif anchor.get("kind") == "box":
 			out.append_array(_planter_placements(anchor, index, planter_classes))
 	return out
 
 
 static func _ivy_placements(
-	anchor: Dictionary, index: int, classes: Array[Dictionary]
+	anchor: Dictionary, index: int, classes: Array[Dictionary], layered: bool
 ) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if classes.is_empty():
@@ -334,8 +348,66 @@ static func _ivy_placements(
 						}
 					)
 				)
+				if layered:
+					var under := _under_placement(
+						anchor, index, run, size, scale, centre_x, foot_y, ids, id, seed_value, salt
+					)
+					if not under.is_empty():
+						out.append(under)
 				salt += 1
 	return out
+
+
+## The under-layer plant behind the ivy plant of `size` (class size), `scale`, centred at
+## `centre_x` with its foot at `foot_y` in the free rectangle `run`: smaller, shifted along the wall
+## and sunk into it, a different variant than `id`; {} when it would not fit inside `run` (UNDER_*).
+static func _under_placement(
+	anchor: Dictionary,
+	index: int,
+	run: Array,
+	size: Vector2,
+	scale: float,
+	centre_x: float,
+	foot_y: float,
+	ids: Array[String],
+	id: String,
+	seed_value: int,
+	salt: int
+) -> Dictionary:
+	var under_scale := scale * UNDER_SCALE
+	var extent := size * under_scale
+	var angle := unit(seed_value, salt, 14) * deg_to_rad(MAX_TURN_DEGREES)
+	# The foot positions that keep the turned plant's box (centre: foot moved by the turn) inside.
+	var box := turned_box(size, under_scale, angle)
+	var lean_x := sin(angle) * extent.y * 0.5
+	var lean_y := cos(angle) * extent.y * 0.5
+	var x0 := float(run[0]) + box.x * 0.5 + lean_x
+	var x1 := float(run[2]) - box.x * 0.5 + lean_x
+	var y0 := float(run[1]) + box.y * 0.5 - lean_y
+	var y1 := float(run[3]) - box.y * 0.5 - lean_y
+	if x1 < x0 or y1 < y0:
+		return {}
+	var shift := UNDER_SHIFT * size * scale
+	var ux := clampf(centre_x + unit(seed_value, salt, 11) * shift.x, x0, x1)
+	var uy := clampf(foot_y + unit(seed_value, salt, 12) * shift.y, y0, y1)
+	var depth := lerpf(UNDER_DEPTH_MIN, UNDER_DEPTH_MAX, unit(seed_value, salt, 13) * 0.5 + 0.5)
+	var origin: Vector3 = (
+		anchor.origin
+		+ (anchor.along as Vector3) * ux
+		+ (anchor.up as Vector3) * uy
+		- (anchor.normal as Vector3) * depth
+	)
+	return {
+		"id": _unlike(ids, seed_value, salt + 1000, [id]),
+		"kind": KIND_IVY,
+		"under": true,
+		"transform": _frame(anchor, origin, under_scale, angle),
+		"anchor": index,
+		"size": extent,
+		"extent": extent,
+		"angle": angle,
+		"exclusions": _shifted(anchor.get("exclusions", []), ux, uy),
+	}
 
 
 ## A variant of `ids` for draw `salt` that differs from every id of `avoid` (the neighbours to the
@@ -667,8 +739,8 @@ static func cap_triangles(
 		func(a: int, b: int) -> bool:
 			var pa := placed[a]
 			var pb := placed[b]
-			var ka := 1 if pa.kind == KIND_PLANTER else 0
-			var kb := 1 if pb.kind == KIND_PLANTER else 0
+			var ka := _keep_rank(pa)
+			var kb := _keep_rank(pb)
 			if ka != kb:
 				return ka < kb
 			var area_a := _area_of(pa)
@@ -694,6 +766,13 @@ static func cap_triangles(
 	return out
 
 
+## How long a plant is kept under the cap: 0 an under-layer plant (first to go), 1 ivy, 2 a planter.
+static func _keep_rank(plant: Dictionary) -> int:
+	if plant.kind == KIND_PLANTER:
+		return 2
+	return 0 if bool(plant.get("under", false)) else 1
+
+
 static func _area_of(plant: Dictionary) -> float:
 	var extent: Vector2 = plant.get("extent", plant.size)
 	return extent.x * extent.y
@@ -714,7 +793,17 @@ static func baked_colors(colors: PackedColorArray, mesh_height: float) -> Packed
 	return out
 
 
-## The plants `placed` ({id, transform}: placements, capped) as a few surfaces: one per surface
+## `normals` (world frame) turned UNDER_SHADE of the way to straight down, unit length again: the
+## painted foliage light then reads an under-layer plant darker than the plants in front of it.
+static func shaded_normals(normals: PackedVector3Array) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	out.resize(normals.size())
+	for i in normals.size():
+		out[i] = normals[i].lerp(Vector3.DOWN, UNDER_SHADE).normalized()
+	return out
+
+
+## The plants `placed` (placements: id, transform, under) as a few surfaces: one per surface
 ## `key` the plants' assets share (a material), every plant's vertices moved by its transform. The
 ## `sources` are {asset id: Array of surfaces {key, vertices, normals, colors (baked_colors), uvs,
 ## indices}}; a plant whose asset is missing is left out. Returns [{key, vertices, normals, colors,
@@ -747,7 +836,10 @@ static func bake(placed: Array[Dictionary], sources: Dictionary) -> Array[Dictio
 			vertices.append_array(transform * (surface.vertices as PackedVector3Array))
 			into.vertices = vertices
 			var normals: PackedVector3Array = into.normals
-			normals.append_array(turn * (surface.normals as PackedVector3Array))
+			var turned: PackedVector3Array = turn * (surface.normals as PackedVector3Array)
+			if bool(plant.get("under", false)):
+				turned = shaded_normals(turned)
+			normals.append_array(turned)
 			into.normals = normals
 			var colors: PackedColorArray = into.colors
 			colors.append_array(surface.colors)

@@ -407,6 +407,15 @@ static func _tile(base: Node, step: Dictionary) -> String:
 		var surfaces := 0
 		if node != null:
 			for child in node.get_children():
+				if child is MeshInstance3D and child.name == AuthoredStructures.DECOR_NODE:
+					# The baked decor (batch_c): its surfaces are its draws.
+					var baked_mesh := (child as MeshInstance3D).mesh
+					for s in baked_mesh.get_surface_count():
+						surfaces += 1
+						var baked_index: PackedInt32Array = baked_mesh.surface_get_arrays(s)[
+							Mesh.ARRAY_INDEX
+						]
+						triangles += baked_index.size() / 3
 				if child is MultiMeshInstance3D:
 					var multi := (child as MultiMeshInstance3D).multimesh
 					multis += 1
@@ -419,7 +428,43 @@ static func _tile(base: Node, step: Dictionary) -> String:
 		report = (
 			"; decor: %d multimeshes, %d surfaces, %d triangles" % [multis, surfaces, triangles]
 		)
+		structure.id = id
+		report += _coverage(editor.document, structure)
 	return "tile %s -> %d%s" % [step.get("ref", ""), id, report]
+
+
+## The ivy patches of `structure` against the plants laid on them (batch_c): the patch area, the
+## free area (patches minus the openings' rectangles), the area of the plants' extents (overlaps
+## counted twice) and the plants kept by the triangle cap. A text suffix for the tile report.
+static func _coverage(doc: MapDocument, structure: Structure) -> String:
+	var parts := StructureGeometry.build_one(doc, structure, true)
+	var anchors: Array[Dictionary] = []
+	anchors.assign(parts.get("anchors", []))
+	var rows := AssetStore.decor_rows(PaletteLibrary.DEFAULT_ROOT)
+	if anchors.is_empty():
+		return "; no anchors (%s)" % str(parts.get("problem", ""))
+	var free := 0.0
+	var patch := 0.0
+	for anchor in anchors:
+		if anchor.get("kind") != "ivy":
+			continue
+		var area := float(anchor.width) * float(anchor.height)
+		patch += area
+		for rect: Variant in anchor.get("exclusions", []):
+			var r: Array = rect
+			area -= maxf(0.0, float(r[2]) - float(r[0])) * maxf(0.0, float(r[3]) - float(r[1]))
+		free += maxf(area, 0.0)
+	var covered := 0.0
+	var ivy_count := 0
+	for placement in StructureDecor.placements(anchors, rows):
+		if placement.kind == StructureDecor.KIND_IVY:
+			var extent: Vector2 = placement.extent
+			covered += extent.x * extent.y
+			ivy_count += 1
+	return (
+		"; ivy patch %.1f m2, free %.1f m2, plant extent %.1f m2 (%.0f%% of free), %d ivy plants uncapped"
+		% [patch, free, covered, 100.0 * covered / maxf(free, 0.001), ivy_count]
+	)
 
 
 ## How many scatter rows (plants, rocks) of the map root stand inside a structure's footprint,
