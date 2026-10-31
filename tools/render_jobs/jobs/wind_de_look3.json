@@ -1,0 +1,167 @@
+{
+ "out_dir": "render_jobs/wind_de_look3",
+ "timeout_s": 600,
+ "hang_s": 90,
+ "steps": [
+  {
+   "op": "wait",
+   "s": 1.0
+  },
+  {
+   "op": "new_map",
+   "biome": "grassland_meadow_summer_s1",
+   "size": 100,
+   "seed": 1234
+  },
+  {
+   "op": "wait_ready",
+   "settle": 1.0
+  },
+  {
+   "op": "no_autosave"
+  },
+  {
+   "op": "hide_ui"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "awning",
+    "banner"
+   ],
+   "ref": "core:townhouse",
+   "width": 5.0,
+   "depth": 7.0,
+   "yaw": 50.0,
+   "seed": 5,
+   "decor": false
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 7.0,
+   "at": [
+    0,
+    -5
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "calm",
+   "clock": 0.0,
+   "dir_deg": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "town_calm",
+   "desc": "town calm"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "windy",
+   "clock": 0.0,
+   "dir_deg": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "town_windy",
+   "desc": "town windy"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "storm",
+   "clock": 0.0,
+   "dir_deg": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "town_storm",
+   "desc": "town storm"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "remove_all"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "tile",
+   "ornaments": [
+    "banner"
+   ],
+   "ref": "core:cottage",
+   "width": 6.0,
+   "depth": 4.0,
+   "yaw": 50.0,
+   "seed": 5,
+   "decor": false
+  },
+  {
+   "op": "wait",
+   "s": 1.5
+  },
+  {
+   "op": "thumbnail_prepare",
+   "zoom": 5.5,
+   "at": [
+    0,
+    -3
+   ]
+  },
+  {
+   "op": "settle"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/wind.gd",
+   "action": "set",
+   "preset": "windy",
+   "clock": 0.0,
+   "dir_deg": 0.0
+  },
+  {
+   "op": "wait",
+   "s": 3.0
+  },
+  {
+   "op": "capture",
+   "name": "cottage_windy",
+   "desc": "cottage windy"
+  },
+  {
+   "op": "call",
+   "script": "res://tools/render_jobs/probes/structures.gd",
+   "action": "remove_all"
+  },
+  {
+   "op": "title"
+  }
+ ]
+}

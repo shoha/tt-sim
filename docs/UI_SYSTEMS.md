@@ -1035,6 +1035,10 @@ live one ends the silence; see `docs/SOUND_EFFECTS.md`.
   per-token dithered reveal of map geometry and tree cards: `OcclusionFadeManager`) and **Canopy
   fade** (default off; the close-zoom window of thinned crowns round the screen centre:
   `CanopyFade`). The three are independent. Tooltips are in `SettingsSeeThrough.apply_tooltips`.
+- **Wind motion** slider (`SettingsWindMotion`, `graphics/wind_motion`, 0 to 100 percent, default
+  100): scales how far plants, cloth and weather lean and sway on this player's screen. It moves the
+  `Wind` autoload as the slider moves (Apply saves it); 0 holds everything still, and the OS
+  reduce-motion setting also holds it still and wins. Not a level field and never networked.
 - Antialiasing, shadow quality, water quality option buttons
 - Advanced (`Foldout`): foliage density slider, SSAO/SSR/SDFGI toggles, renderer method option button
 
