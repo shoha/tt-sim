@@ -286,7 +286,7 @@ func test_resume_lists_saved_sessions_and_asks_for_one() -> void:
 	assert_false(bare.resume_entry.visible, "no saved session, no Resume")
 	_sessions = [
 		{"id": "s2", "name": "Old Mill", "last_played": 1000, "maps": 3},
-		{"id": "s1", "name": "Oak's Lab", "last_played": 500, "maps": 1},
+		{"id": "s1", "name": "Moon Keep", "last_played": 500, "maps": 1},
 	]
 	var title := _title()
 	watch_signals(title)

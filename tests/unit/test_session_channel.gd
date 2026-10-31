@@ -10,7 +10,7 @@ extends GutTest
 ## which leaves its bookkeeping and the phase it returns to check. The ENet scenario
 ## tests/net/enet_session_room.gd covers the RPCs between real peers.
 
-const MAP_A := "res://assets/models/maps/oakslabpainted.glb"
+const MAP_A := "res://tests/fixtures/net_map.glb"
 const HASH := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 var _session: SessionChannel

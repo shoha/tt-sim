@@ -332,7 +332,7 @@ func test_a_scene_with_no_water_mesh_leaves_the_shared_parameter_alone() -> void
 
 	var token_model := Node3D.new()
 	var body_mesh := MeshInstance3D.new()
-	body_mesh.name = "Bulbasaur"
+	body_mesh.name = "Wolf"
 	body_mesh.mesh = BoxMesh.new()
 	token_model.add_child(body_mesh)
 	WaterGlbUtils.process_water_meshes(token_model)

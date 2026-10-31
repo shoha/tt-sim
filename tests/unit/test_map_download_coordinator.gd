@@ -137,7 +137,7 @@ func test_other_levels_packs_and_variants_are_ignored() -> void:
 	_coordinator.request_map_download(FOLDER, ["ttmap"])
 	_streamer.receive("ttmap", "user://cache/other.ttmap", "other_level")
 	_streamer.receive("map", "user://cache/map.glb")
-	_streamer.asset_received.emit("pokemon", FOLDER, "ttmap", "user://x.glb", "model")
+	_streamer.asset_received.emit("creatures", FOLDER, "ttmap", "user://x.glb", "model")
 	assert_eq(_loads, [])
 	assert_eq(_coordinator.waiting_variants(), ["ttmap"])
 

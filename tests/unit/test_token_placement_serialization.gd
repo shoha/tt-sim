@@ -6,13 +6,13 @@ extends GutTest
 func test_to_dict_from_dict_round_trip() -> void:
 	var original = TokenPlacement.new()
 	original.placement_id = "test_id_123"
-	original.pack_id = "pokemon"
+	original.pack_id = "creatures"
 	original.asset_id = "25"
 	original.variant_id = "shiny"
 	original.position = Vector3(1.0, 2.0, 3.0)
 	original.rotation_y = 1.57
 	original.scale = Vector3(2.0, 2.0, 2.0)
-	original.token_name = "Pikachu"
+	original.token_name = "Test Token"
 	original.is_player_controlled = true
 	original.max_health = 200
 	original.current_health = 150
@@ -24,7 +24,7 @@ func test_to_dict_from_dict_round_trip() -> void:
 	var restored = TokenPlacement.from_dict(dict)
 
 	assert_eq(restored.placement_id, "test_id_123")
-	assert_eq(restored.pack_id, "pokemon")
+	assert_eq(restored.pack_id, "creatures")
 	assert_eq(restored.asset_id, "25")
 	assert_eq(restored.variant_id, "shiny")
 	assert_almost_eq(restored.position.x, 1.0, 0.001)
@@ -32,7 +32,7 @@ func test_to_dict_from_dict_round_trip() -> void:
 	assert_almost_eq(restored.position.z, 3.0, 0.001)
 	assert_almost_eq(restored.rotation_y, 1.57, 0.001)
 	assert_almost_eq(restored.scale.x, 2.0, 0.001)
-	assert_eq(restored.token_name, "Pikachu")
+	assert_eq(restored.token_name, "Test Token")
 	assert_true(restored.is_player_controlled)
 	assert_eq(restored.max_health, 200)
 	assert_eq(restored.current_health, 150)

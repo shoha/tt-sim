@@ -37,10 +37,10 @@ func test_the_button_and_the_menu_name_the_session() -> void:
 	var friday := {"id": "a", "name": "Old Mill", "last_played": FRIDAY_EVENING, "maps": 3}
 	assert_eq(ResumeEntry.button_text(friday, now, 0), "Resume yesterday's session")
 	assert_eq(ResumeEntry.maps_line(friday), "Old Mill and 2 more maps")
-	var old := {"id": "b", "name": "Oak's Lab", "last_played": FRIDAY_EVENING - 9 * DAY, "maps": 1}
+	var old := {"id": "b", "name": "Moon Keep", "last_played": FRIDAY_EVENING - 9 * DAY, "maps": 1}
 	assert_eq(ResumeEntry.button_text(old, now, 0), "Resume the session from 30 September")
-	assert_eq(ResumeEntry.maps_line(old), "Oak's Lab")
-	assert_eq(ResumeEntry.menu_text(old, now, 0), "The session from 30 September: Oak's Lab")
+	assert_eq(ResumeEntry.maps_line(old), "Moon Keep")
+	assert_eq(ResumeEntry.menu_text(old, now, 0), "The session from 30 September: Moon Keep")
 	var week := {"id": "c", "name": "Fen", "last_played": FRIDAY_EVENING - 3 * DAY, "maps": 2}
 	assert_eq(ResumeEntry.menu_text(week, now, 0), "Tuesday's session: Fen and 1 more map")
 	assert_eq(ResumeEntry.button_text({"id": "d"}, now, 0), ResumeEntry.RESUME_UNDATED)
@@ -56,7 +56,7 @@ func test_the_newest_leads_and_the_older_ones_are_in_its_menu() -> void:
 	var sessions: Array[Dictionary] = [
 		{"id": "new", "name": "Old Mill", "last_played": FRIDAY_EVENING, "maps": 3},
 		{"id": "mid", "name": "Fen", "last_played": FRIDAY_EVENING - 3 * DAY, "maps": 2},
-		{"id": "old", "name": "Oak's Lab", "last_played": FRIDAY_EVENING - 9 * DAY, "maps": 1},
+		{"id": "old", "name": "Moon Keep", "last_played": FRIDAY_EVENING - 9 * DAY, "maps": 1},
 	]
 	var entry := _entry(sessions)
 	watch_signals(entry)
