@@ -544,6 +544,14 @@ structures/index.json> [--out <folder to write into>] [--serve 1] [--only a,b] [
 `--library <tt-sim>/libraries/core --out <core-library>`, then copy the tiles to
 `libraries/core/thumbnails/structures/`. `--serve 1` lays a not yet installed library over the game first.
 
+`tools/render_structure_thumbnails.gd` fails to compile under `--script` in a worktree and then loops
+(2026-10-30). The durable route there is two steps: `godot --headless --path <wt> --script
+res://tools/make_tile_job.gd -- <library folder> <dest folder> <job json> <id,id,...>` writes the same
+`thumbnail_job` as JSON (`tools/make_tile_job.gd` header), and the render job runner draws it:
+`godot --path <wt> --windowed --resolution 1920x1080 --position 320,120 --script
+res://tools/render_jobs/run.gd -- <job json>` (set the job's `out_dir` to `render_jobs/<topic>_thumbs`).
+The tiles land in `<dest folder>/thumbnails/structures/`.
+
 Core's starter set is data in the `core-library` repo (`structures/`: thirty-seven recipes (nine added 2026-10-28: tudor, pueblo, two adobe kits and five ruins, see
 `structures.md` "Stacked, kit and ruin starters"; five at S3, eight added
 2026-10-28: timber, chimneyed, terrace-end, hip and flat variants, ten added 2026-10-29 from procgen's

@@ -276,6 +276,26 @@ static func palette_hints(doc: PlantGraphDocument) -> Dictionary:
 	return out
 
 
+## The palette hints of one street lot from its `palette` ({"wall": hex, "roof": hex, "accent":
+## [hex]}, ProcgenRow.lot_palette): the shape palette_hints makes, one wall tone and one roof tone
+## as single-entry lists (StructurePaint.palette_of then paints the lot with exactly that base
+## tone), the accent list whole. A part with no valid hex is left out, so a lot without palette
+## data ({} or empty strings) keeps StructurePaint's own draw. Pure.
+static func lot_hints(palette: Dictionary) -> Dictionary:
+	var out := {}
+	for part: String in ["wall", "roof"]:
+		var hex := String(palette.get(part, "")).strip_edges()
+		if hex.is_valid_html_color():
+			out[part] = [Color.html(hex)] as Array[Color]
+	var accents: Array[Color] = []
+	for hex: Variant in palette.get("accent", []):
+		if String(hex).strip_edges().is_valid_html_color():
+			accents.append(Color.html(String(hex).strip_edges()))
+	if not accents.is_empty():
+		out["accent"] = accents
+	return out
+
+
 ## The tint a role puts over its surface.
 static func tint_of(role: String) -> Color:
 	return ROLE_TINTS.get(role, Color.WHITE)

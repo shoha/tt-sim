@@ -632,6 +632,44 @@ func test_every_street_species_builds_closes_saves_and_survives_the_live_edit() 
 		)
 
 
+## Topic ivy_pins: every lot of a species' street carries its own `palette`, and the street paints
+## the lot from it, so the lots of one street differ in tone and a species keeps its own colours.
+func test_a_streets_lots_are_painted_from_their_own_palette() -> void:
+	for preset in [5, 6, 7, 8, 9, 10]:
+		var species: String = ProcgenStreetSpecies.NAMES[preset]
+		_doc = MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
+		var street := Wall.make(
+			1, Wall.Kind.ROW, PackedVector2Array([Vector2(-12, 0), Vector2(12, 0)]), false, 4.0
+		)
+		street.preset = preset
+		street.seed_value = 11
+		_doc.walls.append(street)
+		var walls := {}
+		var roofs := {}
+		for lot in WallGeometry.row_lots(_doc, street):
+			var palette: Dictionary = lot.get("palette", {})
+			assert_true(String(palette.get("wall", "")).is_valid_html_color(), "%s lot wall" % species)
+			walls[palette.wall] = true
+			roofs[palette.roof] = true
+		assert_gt(walls.size() + roofs.size(), 2, "%s: the lots differ in tone" % species)
+		var parts := WallGeometry.build_one(_doc, street)
+		var tones := {}
+		for part: Dictionary in parts[WallGeometry.EXTRA_PART]:
+			if part.roof:
+				continue
+			for color: Color in part.arrays[Mesh.ARRAY_COLOR]:
+				tones[color.to_html(false)] = true
+		assert_gt(tones.size(), 1, "%s paints more than one wall tone" % species)
+	# A lot with no palette data keeps the global draw.
+	assert_eq(StructureLook.lot_hints({}), {}, "nothing to hint")
+	var bad := {"wall": "", "roof": "zz", "accent": []}
+	assert_eq(StructureLook.lot_hints(bad), {}, "bad hex is ignored")
+	var good := {"wall": "#d9c9a8", "roof": "#8a3b2c", "accent": ["#445566"]}
+	var hints := StructureLook.lot_hints(good)
+	assert_eq(hints.wall, [Color.html("#d9c9a8")] as Array[Color], "one wall tone")
+	assert_eq(hints.accent.size(), 1, "the accent list")
+
+
 func test_the_pane_offers_the_species_only_for_a_street() -> void:
 	var pane := WallToolPane.new()
 	add_child_autofree(pane)

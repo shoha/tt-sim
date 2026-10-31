@@ -706,9 +706,10 @@ func test_anchors_are_in_the_parts_but_not_in_the_digest() -> void:
 	assert_false(plain.decor)
 	assert_true(soft.decor)
 	assert_gt((soft.anchors as Array).size(), 0, "the cottage has room for ivy")
-	assert_eq(
-		(plain.anchors as Array).size(), (soft.anchors as Array).size(), "same anchors either way"
-	)
+	# Anchors mode (procgen 657a90f) has no blob budget, so the decor switch's enlarged ivy options
+	# (StructureOrnaments.DECOR_IVY) now make more patches than the plain build's (6 against 10).
+	assert_gt((plain.anchors as Array).size(), 0, "anchors either way")
+	assert_gte((soft.anchors as Array).size(), (plain.anchors as Array).size(), "decor adds patches")
 	assert_lt(int(soft.triangles), int(plain.triangles), "the blobs are left out")
 	assert_true((soft.placed_kinds as Array).has("ivy"))
 	assert_true((plain.placed_kinds as Array).has("ivy"))
