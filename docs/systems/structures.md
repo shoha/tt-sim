@@ -892,7 +892,7 @@ building follows at once, like any edit.
 
 - **Storage:** no new field. Two reserved `Structure.params` entries, `ornaments` (a bit mask,
   bit i for `StructureOrnaments.KIND_BITS[i]`: never reorder, a saved map stores the bits) and
-  `ivy_amount` (0.2 to 1.0, absent for the default 0.55), so a set saves in `structures.json`,
+  `ivy_amount` (0.2 to 1.0, absent for the default 0.85; 0.55 until batch_c), so a set saves in `structures.json`,
   undoes, copies, restyles (`StructureEdit.kept_params` keeps the reserved names), reaches every
   peer in the "structures" live edit and moves the build key, by the paths a stepped parameter
   uses. `StructureRecipes.clamp_params` drops the names from the recipe's inputs.
@@ -999,11 +999,39 @@ records** (`ProcgenOrnaments.anchors`; fields in procgen `docs/architecture_styl
   and joints by `steep` (0 at a face normal 0.55 up or more, 1 at 0.30 or less), so cones, spires
   and domes read their courses and shingle, gable and thatch roofs are unchanged (renders
   `polish3_roof` before and after, notes folder `images/v4`).
-- **Triangle cap.** `StructureDecor.MAX_TRIANGLES` (3,000, ivy and planters together):
-  `AuthoredStructures._add_decor` counts each placed asset's triangles (`_triangles_of`, full-detail
-  index arrays) and `StructureDecor.cap_triangles` drops plants until the total fits: ivy before
-  planters (a flower box is cheap and reads as lived in), the smallest wall area first, then the
-  highest, the survivors keeping their order.
+- **Triangle cap.** `StructureDecor.MAX_TRIANGLES` (4,500 since batch_c, was 3,000; ivy and
+  planters together): `AuthoredStructures._add_decor` counts each placed asset's triangles
+  (`_triangles_of`, full-detail index arrays) and `StructureDecor.cap_triangles` drops plants until
+  the total fits: the under-layer first, then ivy before planters (a flower box is cheap and reads
+  as lived in), the smallest wall area first, then the highest, the survivors keeping their order.
+- **Lusher ivy (batch_c, 2026-10-30).** Owner: lush, no visible rows, windows clear (leaves may cross
+  a frame slightly). Measured first (render job `batch_c_look`, the probe's tile report): the plants
+  already covered 104 to 115 percent of the free patch area (the sum of their extents over the
+  patches minus the openings), so the thinness is the patches, not the plant density: procgen's
+  anchors cover 16 to 29 m2 of a building (cottage 16, ivy_manor 27, keep 26, townhouse 29), and the
+  patches are small because procgen spends its 270 triangle budget per ivy node on blobs that are
+  not even drawn in anchors mode (`ProcgenOrnamentsIvy.TRI_BUDGET`). Levers kept:
+  the default ivy amount 0.55 to 0.85 (the slider's coverage and height), `StructureOrnaments.soften`
+  multiplies every ivy node's options (`DECOR_IVY`: coverage x1.6, height x1.3, within procgen's
+  limits; also on `ivy_manor`'s own ivy), the cap 3,000 to 4,500, and an **under-layer**
+  (`StructureDecor.UNDER_*`, `placements(..., layered)`): behind each main plant that fits its
+  free rectangle, a plant 0.8 times the size, shifted up to 0.3 of an extent along the wall, sunk
+  0.08 to 0.15 m into it, another variant, with its normals turned 0.45 of the way to straight
+  down (`shaded_normals`) so the painted light reads it darker; it stays inside the same free
+  rectangle (window clearance holds, checked by the same test) and is the first to go under the cap.
+  Tried and dropped: `face: "all"` and a second ivy node per ivy (companion, `front` and `all`)
+  doubled the patches (23 to 52 m2) but put them on walls the camera does not see and, with the
+  cap binding, took plants from the visible wall (townhouse thinner than before); coverage and
+  height multipliers alone left some walls unchanged (ivy_manor's patches: 27.1 to 27.7 m2).
+  Measured plant triangles and surfaces (draws: surfaces of the one `decor_baked` mesh) before
+  and after: cottage 2,304 / 4 to 4,372 / 4, ivy_manor 2,756 / 4 to 4,316 / 4, keep 2,984 / 2 to
+  4,328 / 2, townhouse 2,880 / 4 to 4,376 / 4: the draw count is unchanged by construction; the frame
+  cost was not measured with `docs/PERFORMANCE.md`'s procedure. Look (images `images/v5`, compared
+  with `images/v4`): townhouse and keep clearly lusher with a darker layer visible behind the
+  columns, no rows, windows clear; ivy_manor unchanged (its anchors are the same strips). What
+  would make it lush on every wall needs procgen: a larger triangle budget (or none) for ivy nodes
+  in `soft: "anchors"` mode, and bigger blankets; the host cannot invent wall extent the anchors
+  do not carry.
 - **Nodes (baked, polish3 2026-10-30).** `AuthoredStructures._add_decor` bakes all of a structure's
   plants into ONE `MeshInstance3D` `decor_baked` (`StructureDecor.bake`: pure, arrays in and out, the
   vertex and triangle counts are the sums of the instances', positions are transform times the
