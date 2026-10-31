@@ -1,0 +1,16 @@
+TTSim
+Copyright (c) 2026 Hannah Shore. All rights reserved.
+
+The source code, scenes, shaders, tools and documentation in this repository, and the game built
+from them, are the property of the copyright holder. Having access to this repository, or to a
+build of the game, does not grant any licence to copy, modify, distribute, sublicense or use the
+code or the game in any other way, except as the copyright holder permits in writing.
+
+Third-party material keeps its own licence and is not covered by the statement above. It is
+listed in THIRD_PARTY_LICENSES.md, and each vendored addon carries its own licence file.
+
+The built-in Core library (libraries/core/) is licensed under the Creative Commons Attribution
+4.0 International licence (CC BY 4.0): see libraries/core/LICENSE.md. When you use or
+redistribute its content, give credit with this line:
+
+    Core library by Hannah Shore, CC BY 4.0

@@ -95,11 +95,15 @@ All on `main`, working tree clean, nothing unpushed, no sharded gates running at
         godot-cpp (MIT).
       - Fixed in `THIRD_PARTY_LICENSES.md`: a Fonts section for Fraunces (OFL 1.1, text
         shipped) and Inter (OFL 1.1).
-      - GAP, AGENT can fix: no OFL text file for Inter beside the font. The OFL asks that the
-        licence travel with the font; take the file from the Inter release the TTF came from.
-      - GAP, OWNER or AGENT: `addons/DragAndDrop3D` (author "DevDrache" in plugin.cfg) and
-        `addons/brackeys_particle_controls` carry no licence file and the table only says
-        "see the directory". Find each upstream licence and copy it in, or replace the addon.
+      - Fixed: `assets/fonts/Inter-OFL.txt` (the standard OFL 1.1 text with Inter's copyright
+        line, "Copyright (c) 2016 The Inter Project Authors", read from the upstream licence).
+      - `addons/DragAndDrop3D` ("Easy Drag and Drop 3D", author DevDrache, upstream
+        github.com/derdrache/DragAndDrop3D): the Godot asset library lists it as MIT, but the
+        addon folder has no licence file. Copy the upstream LICENSE in (needs the upstream
+        text, not a paraphrase). `addons/brackeys_particle_controls` (Brackeys): licence
+        not found online by search; the Brackeys VFX bundle says its assets are CC0, which
+        does not necessarily cover the plugin code. Both need a file from upstream, or a
+        replacement. GAP, AGENT after the owner confirms the upstreams.
       - GAP, OWNER: the 36 PBR surface sets in `core` (`surfaces/`, 26 ground, 7 built, 3 cliff)
         have no recorded provenance in either repository. `NOTICE.md` claims no third-party
         material, and CC BY 4.0 cannot be applied to textures you do not hold. If they came
@@ -110,11 +114,21 @@ All on `main`, working tree clean, nothing unpushed, no sharded gates running at
         `Engine.get_license_text()` and `Engine.get_license_info()`), or shipped as a file in
         the export. Valve's `steam_api64.dll` also needs its Steamworks SDK redistribution
         terms noted.
-- [ ] The game's own licence: **all rights reserved** (owner, 2026-10-31). Still to do, once
-      the audit is in: a short `LICENSE` file at the tt-sim root (copyright holder and year,
-      all rights reserved, and a pointer that the built-in Core library is CC BY 4.0 under its
-      own terms) plus one README line. The repository is public, so the file also tells
-      readers that viewing the source is not a licence to reuse it.
+- [x] The game's own licence: **all rights reserved** (owner, 2026-10-31). `LICENSE` at the
+      tt-sim root is written (copyright Hannah Shore 2026, third-party material and addons
+      excluded, Core library pointed at its CC BY 4.0 terms). There is no root README to add a
+      line to. The repository is public, so the file also tells readers that viewing the source
+      is not a licence to reuse it. It holds only if the owner holds the rights, see the next
+      item.
+- [ ] OWNER: Pokemon-derived content ships. `data/pokemon.json` (and
+      `tools/generate_pokemon_manifest.py`) is in the export (the filter excludes `tools/`
+      and `docs/` only), and the bundled map "Oak's Lab" (`assets/models/maps/oakslabpainted.glb`,
+      shown under "Bundled with TTSim", textures such as "Pokemon Tower Floor") appears to be
+      built on Pokemon material. The repository is public and the game goes to Steam. Provenance
+      is not recorded anywhere; if the map or the data is not wholly the owner's own work, "all
+      rights reserved" does not cover it and it is a takedown and Steam-review risk. Decide:
+      own work (say so in `THIRD_PARTY_LICENSES.md`), replace or remove before the release, or
+      keep out of the shipped build.
 
 ## 4. Notes and changelog (OWNER approves)
 
