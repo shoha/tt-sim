@@ -34,6 +34,8 @@ Documents here:
 - [structures.md](structures.md): buildings as a library recipe plus footprint, seed and params
   (`Structure`, the `structures.json` entry, validation, the live edit, the fingerprint key); the
   data layer only so far. Walls and fences are in `walls.md`.
+- [villages.md](villages.md): design (not built) for lived-in villages and streets: props, settlement
+  kits, the derived `Settlement` layer, dressing gestures and phases.
 - [landforms.md](landforms.md): the starting landforms a new map opens with (Valley, Hilltop,
   Terraces, Lakeshore, Gorge): the seeded frame, the shared steps, each recipe, the stage and
   the open path.
