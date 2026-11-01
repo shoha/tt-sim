@@ -30,7 +30,7 @@ drawer, Water; "Brushes and gestures").
 | `utils/water_surface.gd` | `WaterSurface` | Water as ground: its collision layer, `landing_y`, `floats_at`, `is_submerged`, `surface_below` |
 | `scenes/effects/water_zone.gd` | `WaterZone` | Per-body detection slabs for splashes, wakes and the visual sink |
 | `utils/water_glb_utils.gd` | `WaterGlbUtils` | `process_water_meshes()`, `apply_water_settings()`, the shared water material and the flow map plane |
-| `shaders/water.gdshader` | | The surface shader: `water_flow()`, shallows, foam, the waterline |
+| `shaders/water.gdshader` | | The surface shader: `water_flow()`, shallows, foam, the waterline, the wind's chop (wind.md phase f: the ripples' slope times `WindDrift.chop_factor`, 1 at calm and at motion 0, up to 1.75 under a storm's gust front; the gust field only worked out above calm) |
 | `utils/water_carve.gd` | `WaterCarve` | Pure: cross-section goals, `bed_line`, reach steps, the pond basin, `keeps_rock`, `min_half_width` |
 | `utils/water_edit.gd` | `WaterEdit` | Pure model edits: `plan_river`, `join_line`, `touch_rivers`, `erased_bodies`, `model_of` |
 | `utils/water_dressing.gd` | `WaterDressing` | The wet dressing rule layer (bed, shore, depth, wet line) |

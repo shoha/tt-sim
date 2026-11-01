@@ -43,6 +43,7 @@ shader_type spatial;
 render_mode unshaded, blend_premul_alpha, depth_draw_never, depth_test_disabled, cull_disabled, shadows_disabled, fog_disabled, skip_vertex_transform;
 
 #include "res://shaders/fire_noise.gdshaderinc"
+#include "res://shaders/wind_global.gdshaderinc"
 
 global uniform vec4 foliage_sun;
 uniform sampler2D depth_texture : hint_depth_texture, filter_linear;
@@ -54,7 +55,8 @@ uniform vec4 seq_bounds[16];
 uniform ivec4 class_first = ivec4(0, 3, 5, 8);
 uniform int drawings = 0;
 uniform int tear_layer = -1;
-// The map's wind (FireLook.wind_for): a direction in world XZ times FireLook.WIND_LEAN.
+// The map's wind (FireLook.wind_for): a direction in world XZ times FireLook.WIND_LEAN. Its
+// length is the lean; its direction gives way to the global wind's (flame_wind).
 uniform vec2 wind = vec2(0.25, 0.0);
 
 // The depth melt: how far behind the scene a flame fades out, and how far in front it is whole.
@@ -148,6 +150,7 @@ const vec2 HOT_FROM = vec2(0.35, 0.95);
 // (squared rows) a row moves.
 const float LEAN_MIN = 0.65;
 const float LEAN_REACH = 1.4;
+const float SIDE_SOFT = 0.15;
 // A spark's rise and drift (metres) over its life, and its lives a second.
 const float SPARK_RISE_M = 1.8;
 const float SPARK_RATE = 0.45;
@@ -169,6 +172,16 @@ varying flat vec4 f_state;
 varying flat vec4 f_bands;
 // The tile's UV (unmirrored), or a spark's quad UV.
 varying vec2 f_uv;
+
+// The wind the flames lean on: `wind`'s length (FireLook.WIND_LEAN) along the global wind
+// (wind.md phase f, so the flames lean the way their smoke does), along the map's own `wind`
+// when the motion scale is 0 (WindDrift.smoke_dir_at).
+vec2 flame_wind() {
+	vec2 still = length(wind) > 1e-4 ? normalize(wind) : wind_dir.xy;
+	vec2 mixed = mix(still, wind_dir.xy, wind_motion());
+	vec2 dir = dot(mixed, mixed) > 1e-6 ? normalize(mixed) : wind_dir.xy;
+	return dir * length(wind);
+}
 
 // PCG's integer hash.
 uint fire_pcg(uint v) {
@@ -204,7 +217,7 @@ void vertex() {
 	if (abs(kind - KIND_SPARK) < 0.5) {
 		float life = fract(TIME * SPARK_RATE * (0.7 + 0.6 * fract(seed * 7.1)) + seed * 5.0);
 		clock = life;
-		vec2 drift = length(wind) > 1e-4 ? normalize(wind) * SPARK_DRIFT_M : vec2(0.0);
+		vec2 drift = flame_wind() / max(length(wind), 1e-4) * SPARK_DRIFT_M;
 		vec3 rise = vec3(drift.x, 0.0, drift.y) * life;
 		rise.y = life * SPARK_RISE_M;
 		centre = (VIEW_MATRIX * vec4(origin + rise, 1.0)).xyz;
@@ -213,10 +226,13 @@ void vertex() {
 		offset = (right * VERTEX.x + up * VERTEX.y) * w;
 		f_uv = UV;
 	} else {
-		vec2 wind_view = (VIEW_MATRIX * vec4(wind.x, 0.0, wind.y, 0.0)).xy;
+		vec2 blown = flame_wind();
+		vec2 wind_view = (VIEW_MATRIX * vec4(blown.x, 0.0, blown.y, 0.0)).xy;
 		float across = dot(wind_view, right) / max(length(wind_view), 1e-4);
-		float gust = fire_noise(origin.xz * 0.22 - wind * TIME * 2.4);
-		float lean_m = (across < 0.0 ? -1.0 : 1.0) * mix(LEAN_MIN, 1.0, abs(across)) * length(wind) * h;
+		float gust = fire_noise(origin.xz * 0.22 - blown * TIME * 2.4);
+		// A soft sign, so a wind veering through the view axis swings the flames over.
+		float side = clamp(across / SIDE_SOFT, -1.0, 1.0);
+		float lean_m = side * mix(LEAN_MIN, 1.0, abs(across)) * length(blown) * h;
 		lean_m *= (0.85 + 0.3 * gust) * (0.9 + 0.2 * fract(seed * 29.3));
 		tear_seed = fire_pick(fire, PICK_TEAR);
 		grow *= mix(SIZE_JITTER.x, SIZE_JITTER.y, fire_pick(fire, PICK_SIZE));

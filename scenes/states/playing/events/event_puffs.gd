@@ -10,7 +10,8 @@ extends MultiMeshInstance3D
 ##
 ## - A blob (emit) faces the camera, its long axis along `axis` on screen (upright unless told
 ##   otherwise: along a trunk for a roll of dust). A drifting blob rises or spreads and slows,
-##   growing from a third of its size (dust); a thrown one (gravity) is a body of water flying
+##   growing from a third of its size, and drifts off with its share of the global wind (dust;
+##   wind.md phase f); a thrown one (gravity) is a body of water flying
 ##   apart instead, stretched along its flight, shrinking as it falls and fading as it goes
 ##   back under (a drop).
 ## - A plume (emit_plume) is a column of water standing on its point: it shoots up to its
@@ -79,6 +80,9 @@ var _born := PackedFloat32Array()
 var _life := PackedFloat32Array()
 var _from := PackedVector3Array()
 var _velocity := PackedVector3Array()
+## A drifting blob's share of the global wind (WindDrift.dust_drift, taken as it is emitted):
+## unlike its own velocity it does not slow, so dust rolls out, settles and drifts off downwind.
+var _blown := PackedVector3Array()
 var _axis := PackedVector3Array()
 var _size := PackedFloat32Array()
 var _aspect := PackedFloat32Array()
@@ -119,6 +123,7 @@ func _init(pool_size: int = CAPACITY, priority: int = RENDER_PRIORITY) -> void:
 	_kind.resize(capacity)
 	_from.resize(capacity)
 	_velocity.resize(capacity)
+	_blown.resize(capacity)
 	_axis.resize(capacity)
 	_colors.resize(capacity)
 	_born.fill(-1.0)
@@ -289,6 +294,7 @@ func _take(
 	_kind[slot] = kind
 	_from[slot] = at
 	_velocity[slot] = velocity
+	_blown[slot] = _dust_drift(at) if kind == Kind.BLOB and gravity <= 0.0 else Vector3.ZERO
 	_axis[slot] = axis
 	_size[slot] = size
 	_aspect[slot] = maxf(aspect, 0.2)
@@ -296,6 +302,15 @@ func _take(
 	_colors[slot] = color
 	_seed[slot] = fmod(_clock * 7.31 + slot * 0.618, 1.0)
 	_shape(slot, _aspect[slot])
+
+
+## The drift (this node's frame, metres a second) the global wind gives a dust blob born at `at`
+## (WindDrift.dust_drift, scaled by the player's motion scale: none at 0).
+func _dust_drift(at: Vector3) -> Vector3:
+	if not is_inside_tree():
+		return WindDrift.dust_drift(Wind.wind_at(at), Wind.motion_scale())
+	var wind: Vector3 = Wind.wind_at(to_global(at))
+	return global_basis.inverse() * WindDrift.dust_drift(wind, Wind.motion_scale())
 
 
 ## Hands puff `slot`'s seed, `shape` (a blob's or plume's length over its width, a ring's
@@ -332,8 +347,9 @@ func _place_blob(slot: int, age: float, k: float) -> float:
 			keep = clampf(1.0 - under / maxf(size, 0.05), 0.0, 1.0)
 			at.y = maxf(at.y, from.y - size)
 	else:
-		# Drifts as far as its velocity takes it in half its life, slowing all the way.
-		at = from + _velocity[slot] * age * (1.0 - 0.5 * k)
+		# Drifts as far as its velocity takes it in half its life, slowing all the way, and is
+		# carried off by its share of the wind.
+		at = from + _velocity[slot] * age * (1.0 - 0.5 * k) + _blown[slot] * age
 		var grown := 1.0 - pow(1.0 - k, 3.0)
 		size = _size[slot] * (0.35 + 0.65 * grown)
 	multimesh.set_instance_transform(slot, Transform3D(basis_along(axis, size), at))

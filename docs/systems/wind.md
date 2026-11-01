@@ -657,6 +657,70 @@ Deviations and what was learned:
 5. **The Wind motion slider applies live, ahead of Apply.** Closing Settings without Apply leaves the
    moved value in force until the next restart, while the saved file keeps the old one.
 
+### Phase (f) as built (2026-10-31, branch `windf`)
+
+The last three things that ignored the wind read it. Each is off at motion scale 0 (reduce-motion
+or the "Wind motion" setting at 0): it then looks exactly as it did before the wind existed.
+
+- **`utils/wind_drift.gd` (`WindDrift`)**: the pure parts, tested by `tests/unit/test_wind_drift.gd`:
+  `strength01(speed)` (0 at the calm stop's 1.5 m/s, 1 at the storm's 14), `smoke_lean`,
+  `smoke_lean_at`, `smoke_dir_at`, `event_drift`, `dust_drift`, `chop_factor`. The shaders evaluate
+  the same formulas; the test checks their constants against these and that the shaders'
+  gust field is the plants' term for term.
+- **`shaders/wind_global.gdshaderinc`**: the three globals, `wind_global_gust(xz)` (a copy of
+  `wind_gust_field`), `wind_strength01()` and `wind_motion()` for shaders that are not plants or
+  cloth. No new global state.
+- **Smoke.** The persistent fire's columns (`fire_smoke_book.gdshader`) lean down the global wind,
+  0.45 of their rise at calm (the tuned look) to 0.95 at a storm, leaning further as a gust front
+  passes over the column's source and standing back up in the lull (capped at 1.25;
+  `FireFieldSmoke.bounds` makes room). The flames (`fire_flames.gdshader`) take the wind's
+  direction at their old lean so flames and smoke agree. A fire event's drift (`FireSweep`: its
+  billows, tongues and embers) follows the wind at the stand's middle, sampled every 0.25 s,
+  0.35 m/s at calm to 1.1 at a storm. Both shaders blend from the map's own wind
+  (`FireLook.wind_for`) to the global wind by the motion scale, and the screen side of the lean is
+  a soft sign so a veer through the view axis swings rather than flips. Details: fire.md "The
+  smoke".
+- **Dust.** No ambient dust motes exist in the game, so none were added; the dust that does exist
+  drifts. A terrain event's drifting blobs (`EventPuffs.emit` with no gravity: a falling tree's
+  billow and roll, a collapsing bridge's dust) take `WindDrift.dust_drift` of the wind where they
+  are born (0.2 of it, at most 2.8 m/s) and keep it while their own throw slows, so dust rolls
+  out and drifts off downwind. Thrown drops, plumes, rings and fire are not blown. The token-drop
+  `DustBurst` (eight specks for 0.4 s, heavily damped) was left alone: a drift could not read.
+- **Water chop.** `water.gdshader` multiplies the ripples' slope by
+  `1 + strength01 * (0.15 + 0.6 * gust_amp * gust)` times the motion scale: untouched at calm,
+  about 1.1 to 1.3 at windy, 1.15 to 1.75 at a storm, rougher where a gust front crosses. The gust
+  field (three sines) runs only when the wind is above calm and the motion scale is on, both
+  uniform, so calm water pays one multiply and a branch. `structure_water` (moats, wells) and the
+  waterfalls do not chop.
+
+Cost: no particle counts and no passes changed, so nothing was measured with the PERFORMANCE.md
+procedure. Per column vertex and per flame vertex a few ALU ops plus the gust's three sines; per
+water pixel above calm three sines and a smoothstep; on the CPU one `Wind.wind_at` per dust emit and
+one per fire event every 0.25 s.
+
+Deviations and what was learned:
+
+1. **The flames were not in the card** but leaned down the map's own seeded wind; with the smoke
+   on the global wind the two would have disagreed, so their direction moved too (lean length
+   unchanged, so `FireLook.quad_box` holds).
+2. **The soft sign changes the motion-0 look slightly** for a map whose own wind lies within about
+   9 degrees of the view axis: the old hard sign leaned it fully to one side, now it leans less.
+3. **Chop has no visible cat's paws on a small pond**: a pond under 12 m sits inside one gust front,
+   so the storm reads as a uniformly livelier surface that breathes as fronts pass, not as patches.
+
+How the look reads (render job `windf_look`, grassland meadow 150 ft seed 1234, a deep pond, two
+blaze strokes, a held tree's dust; calm, windy, storm at wind clock 0, storm at clock 3, storm at
+motion 0; sheets `sheet_home`, `sheet_fire`, `sheet_water`, `sheet_dust`):
+- **Flames: good.** They lean downwind (screen right for the default diagonal) at every preset; the
+  lean does not grow with strength (by design).
+- **Smoke: not verified by eye.** At home zoom (13.85) and zoom 8 the columns rise out of the top of
+  the frame; only their base shows as a pale haze at the top edge. A framing with the view shifted
+  toward -z (as `wind_de` needed for the keep) is the next look.
+- **Dust: subtle but right.** At 0.5 s the storm's dust sits about a metre further downwind than calm,
+  motion 0 matches calm; soft cream shapes, no new noise.
+- **Water: faint, as asked.** Storm ripples are slightly more contrasty with more glints than calm,
+  windy between, motion 0 like calm; never noisy, but barely readable at home zoom.
+
 ## 5. Look, tuning and accessibility
 
 ### How gusts should read

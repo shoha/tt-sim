@@ -10,7 +10,9 @@ extends MultiMeshInstance3D
 ## pixel (round 6 of the reference fit; git history holds that shader, fire_field_smoke.gdshader,
 ## and the structures earlier rounds tried). The draw cross-fades the loop's frames on the
 ## column's own clock (a lobe climbs in about LIFE_S), from the flame tips to about four flame
-## heights, leaning down the map's wind, and tones them live by the sun and the night.
+## heights, leaning down the global wind (further in a storm and as each gust front passes; down
+## the map's own wind with the motion scale at 0, wind.md phase f), and tones them live by the sun
+## and the night.
 ##
 ## A column's size is its cluster's: the unit (column_unit) is the cluster's tallest flame,
 ## scaled down for a smaller cluster, so the biggest fire is the biggest smoker. place() writes
@@ -243,8 +245,8 @@ static func instance_buffer(clusters: Array[Dictionary]) -> PackedFloat32Array:
 
 ## The bounds of the columns over `clusters`: every source, with room for the book's frame
 ## (FireSmokeBook.DOMAIN: its half width either side of the leaning centre line, its foot below
-## the source and its top above) and the most the wind leans the top (LEAN x RISE, whichever way
-## the camera looks). Pure.
+## the source and its top above) and the most the wind leans the top (LEAN x RISE, or the global
+## wind's most, WindDrift.SMOKE_LEAN_MAX x RISE, whichever way the camera looks). Pure.
 static func bounds(clusters: Array[Dictionary]) -> AABB:
 	var box := AABB()
 	var reach := 0.0
@@ -252,7 +254,7 @@ static func bounds(clusters: Array[Dictionary]) -> AABB:
 		var at := source(clusters[site])
 		box = AABB(at, Vector3.ZERO) if site == 0 else box.expand(at)
 		reach = maxf(reach, column_unit(clusters[site]))
-	var side := reach * (LEAN * RISE + FireSmokeBook.DOMAIN.x)
+	var side := reach * (maxf(LEAN, WindDrift.SMOKE_LEAN_MAX) * RISE + FireSmokeBook.DOMAIN.x)
 	var room := Vector3(side, -reach * FireSmokeBook.DOMAIN.y, side)
 	var top := Vector3(0.0, reach * FireSmokeBook.DOMAIN.z, 0.0)
 	return AABB(box.position - room, box.size + room * 2.0 + top)

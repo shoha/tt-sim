@@ -221,8 +221,24 @@ the map's wind, `WIDTH` (0.3, 0.64). `shaders/fire_smoke_book.gdshader` cross-fa
 frames on the column's own clock (`LIFE_S` 10 s, each column within `LIFE_VARY` 0.1) and tones
 them live by the sun and the night (lavender-grey by day, a rose foot and darker crown at night,
 pink-lavender with a bluer crown at sunset); it is drawn before the flames (render priority -1)
-and adds an amber glow at its foot. Its bounds are `FireSmokeBook.DOMAIN` plus the wind's lean.
-One buffer is written when the blocks re-plan; nothing runs per frame.
+and adds an amber glow at its foot. Its bounds are `FireSmokeBook.DOMAIN` plus the wind's lean
+(the larger of `LEAN` and `WindDrift.SMOKE_LEAN_MAX` 1.25). One buffer is written when the blocks
+re-plan; nothing runs per frame.
+
+**The global wind (wind.md phase f).** The column leans down the global wind
+(`wind_global.gdshaderinc`), by `WindDrift.smoke_lean`: 0.45 at calm (the tuned `LEAN`) to 0.95 at
+a storm, times `1 + 0.5 * gust_amp * (gust - 0.4)` with the gust field sampled at the column's
+source, capped at 1.25. A gust front (12 m and 19 m sines moving at 3 m/s) leans it over for a
+couple of seconds and the lull stands it back up; nothing in it is faster than the fronts, so it
+does not wobble. The motion scale (`wind_gust.w`) blends the direction and the lean from the map's
+own (`lean_dir`, `lean`) to the wind's, so reduce-motion and Wind motion 0 give the old column.
+The side on screen is a soft sign (`SIDE_SOFT` 0.15 of the across-screen share) so a wind veering
+through the view axis swings the column over instead of flipping it. The flames
+(`fire_flames.gdshader` `flame_wind`) lean the same way: their lean's length stays `WIND_LEAN`,
+its direction blends from `FireLook.wind_for` to the global wind by the motion scale, with the
+same soft sign. A fire event (`FireSweep`) turns its drift (billows, tongues and embers) onto the
+wind every 0.25 s (`WindDrift.event_drift`: 0.35 m/s at calm, as before, to 1.1 at a storm,
+downwind; its own drawn heading at motion 0), so a billow born in a gust rides off faster.
 
 ### The lights
 
