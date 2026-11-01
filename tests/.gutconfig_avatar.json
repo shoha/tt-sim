@@ -19,7 +19,7 @@
 		"res://tests/unit/test_token_placement_from_token.gd",
 		"res://tests/unit/test_token_placement_serialization.gd",
 		"res://tests/unit/test_token_state_serialization.gd",
-		"res://tests/unit/test_token_toon_probe.gd",
+		"res://tests/unit/test_token_toon.gd",
 		"res://tests/unit/test_water_zone.gd"
 	],
 	"include_subdirs": false,

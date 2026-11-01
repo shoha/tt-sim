@@ -1,0 +1,16 @@
+{
+ "out_dir": "render_jobs/packtoon_settings",
+ "timeout_s": 120,
+ "hang_s": 60,
+ "steps": [
+  {"op": "wait_title"},
+  {"op": "wait", "s": 1.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "window", "size": "1280x720"},
+  {"op": "wait", "s": 2.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "settings", "section": "Graphics"},
+  {"op": "wait", "s": 1.0},
+  {"op": "capture", "name": "settings_graphics", "desc": "1280x720: Settings, Graphics, with the Token shading row (Painted) above Token ghost"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/ui_primitives.gd", "action": "close_settings"},
+  {"op": "wait", "s": 0.5}
+ ]
+}

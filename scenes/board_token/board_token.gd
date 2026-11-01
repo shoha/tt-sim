@@ -298,6 +298,13 @@ func is_avatar() -> bool:
 	return not avatar_recipe.is_empty()
 
 
+## Sets the alpha of the token's meshes (1.0 opaque, TokenToon.HIDDEN_ALPHA for the GM's view of a
+## hidden token).
+func set_mesh_alpha(alpha: float) -> void:
+	if rigid_body:
+		_set_mesh_transparency(rigid_body, alpha)
+
+
 func _set_mesh_transparency(node: Node, alpha: float) -> void:
 	# Recursively find all MeshInstance3D nodes and set their transparency
 	for child in node.get_children():
@@ -308,6 +315,9 @@ func _set_mesh_transparency(node: Node, alpha: float) -> void:
 			continue
 		if child is MeshInstance3D:
 			var mesh_instance := child as MeshInstance3D
+			# A painted pack mesh (TokenToon) fades through its blend variant and a `fade`
+			# uniform; its other surfaces (not paintable) go through the loop below.
+			TokenToon.set_fade(mesh_instance, alpha)
 			# Modify transparency on each surface material
 			for i in range(mesh_instance.get_surface_override_material_count()):
 				var mat = mesh_instance.get_surface_override_material(i)

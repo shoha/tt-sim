@@ -187,6 +187,7 @@ func _load_see_through_settings() -> void:
 	set_token_ghost_enabled(
 		config.get_value("graphics", "token_ghost_enabled", TokenGhost.DEFAULT_ENABLED)
 	)
+	TokenToon.painted = SettingsTokenShading.saved_id(config) == TokenToon.SHADING_PAINTED
 
 
 ## Turns the close-zoom canopy window on or off (it is independent of the occlusion fade).
@@ -203,6 +204,7 @@ func set_token_ghost_enabled(enabled: bool) -> void:
 ## Re-dresses every token after a map load (the map's tokens exist by then) with the current
 ## Token ghost setting.
 func refresh_token_ghosts() -> void:
+	TokenToon.refresh_all(_game_map.get_tree())
 	TokenGhost.refresh_all(_game_map.get_tree())
 
 

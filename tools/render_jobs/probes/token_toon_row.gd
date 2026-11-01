@@ -1,19 +1,20 @@
 extends RefCounted
 
-## Render-job probe (`call` op) for the token toon probe (TokenToonProbe, jobs/toonprobe_look.json,
-## docs/plans/2026-11-01-default-tokens/toonprobe.md). Positions are map XZ metres. `action`:
+## Render-job probe (`call` op) for the painted pack-token look (TokenToon, jobs/packtoon_look.json,
+## jobs/packtoon_perf.json, docs/systems/token_toon.md). Positions are map XZ metres. `action`:
 ## - `spawn_row` (`from` [x, z], `to` [x, z], `items`, `count` default items.size(), `yaw`
 ##   degrees default 0, `zig` metres default 0): tokens evenly along the line, cycling `items`.
-##   An item is `avatar:<preset>`, `chunky:<0|1>` (a synthetic flat-shaded vertex-coloured model,
-##   like the free chunky game art), or `<pack>:<file>:<height m>` (a GLB read from the developer's
-##   own user_assets folder, read-only, scaled to that height; local-only packs, never copied).
-## - `mode` (`mode` off|ramp|ink|screen): TokenToonProbe.set_mode.
+##   An item is `avatar:<preset>`, `chunky:<0|1|2>` (a synthetic flat-shaded vertex-coloured model,
+##   like the free chunky game art; 2 is a pale, near-white one), `cutout:0` (a double-sided
+##   alpha-cutout leaf bush), or `<pack>:<file>:<height m>` (a GLB read from the developer's own
+##   user_assets folder, read-only, scaled to that height; local-only packs, never copied).
+## - `mode` (`mode` painted|original): TokenToon.set_painted, the Settings choice.
 ## - `hide` (`index`, `hidden` default true): the GM-hidden state of the index-th row token.
 ## - `scan` (`xs`, `zs`): ground heights at the grid, to find open ground among the houses.
-## - `report`: the mode, the swapped mesh count, the tokens and their heights.
-## - `save` / `cleanup`: the `_toonprobe_` test level.
+## - `report`: the setting, the painted mesh count, the tokens and their heights.
+## - `save` / `cleanup`: the `_packtoon_` test level.
 
-const PREFIX := "_toonprobe_"
+const PREFIX := "_packtoon_"
 const PACKS_ROOT := "C:/Users/hshore/AppData/Roaming/Godot/app_userdata/TTSim/user_assets/"
 
 static var _row: Array[BoardToken] = []
@@ -26,9 +27,8 @@ static func run(base: Node, step: Dictionary) -> String:
 		"spawn_row":
 			return _spawn_row(gm, lpc, step)
 		"mode":
-			var m := TokenToonProbe.mode_named(String(step.get("mode", "off")))
-			TokenToonProbe.set_mode(m, gm.get_tree(), gm.viewport_container)
-			return "mode %s, %d meshes swapped" % [step.get("mode", "off"), _swapped(gm)]
+			TokenToon.set_painted(String(step.get("mode", "painted")) == "painted", gm.get_tree())
+			return "mode %s, %d meshes painted" % [step.get("mode", "painted"), _swapped(gm)]
 		"hide":
 			var i := int(step.get("index", 0))
 			if i >= _row.size() or not is_instance_valid(_row[i]):
@@ -54,7 +54,7 @@ static func run(base: Node, step: Dictionary) -> String:
 
 
 static func _swapped(gm: GameMap) -> int:
-	return TokenToonProbe.swapped_meshes(gm.get_tree())
+	return TokenToon.painted_meshes(gm.get_tree())
 
 
 static func _vec2(a: Variant) -> Vector2:
@@ -111,6 +111,9 @@ static func _make_token(
 	if parts[0] == "chunky":
 		model = _chunky(int(parts[1]))
 		height = 1.0
+	elif parts[0] == "cutout":
+		model = _cutout()
+		height = 1.0
 	else:
 		model = GlbUtils.load_glb_with_processing(PACKS_ROOT + parts[0] + "/models/" + parts[1] + ".glb")
 		height = float(parts[2])
@@ -155,6 +158,7 @@ static func _height_of(root: Node3D) -> float:
 ## imports (0: a bear-like animal, 1: a helmeted knight).
 static func _chunky(kind: int) -> Node3D:
 	var parts: Array = []
+	var pale := 0.0
 	if kind == 0:
 		parts = [
 			[Vector3(0, 0.45, 0), Vector3(0.7, 0.5, 1.0), Color(0.62, 0.38, 0.22)],
@@ -168,6 +172,8 @@ static func _chunky(kind: int) -> Node3D:
 			[Vector3(0.25, 0.12, -0.35), Vector3(0.2, 0.24, 0.2), Color(0.45, 0.27, 0.16)],
 		]
 	else:
+		# Kind 2 is the knight in near-white (a pale model, to see whether the lit band clips).
+		pale = 0.78 if kind == 2 else 0.0
 		parts = [
 			[Vector3(0, 0.8, 0), Vector3(0.5, 0.6, 0.3), Color(0.35, 0.45, 0.75)],
 			[Vector3(0, 1.28, 0), Vector3(0.34, 0.34, 0.34), Color(0.92, 0.72, 0.58)],
@@ -189,7 +195,7 @@ static func _chunky(kind: int) -> Node3D:
 		var base := verts.size()
 		for v in arr[Mesh.ARRAY_VERTEX]:
 			verts.append((v as Vector3) + (p[0] as Vector3))
-			cols.append(p[2] as Color)
+			cols.append((p[2] as Color).lerp(Color(0.96, 0.95, 0.92), pale))
 		norms.append_array(arr[Mesh.ARRAY_NORMAL])
 		for i in arr[Mesh.ARRAY_INDEX]:
 			idx.append(base + (i as int))
@@ -218,6 +224,46 @@ static func _chunky(kind: int) -> Node3D:
 	return model
 
 
+## A synthetic double-sided alpha-cutout bush: three crossed quads sharing one scissor material
+## whose texture is a procedural leaf mass (opaque leaf discs in two greens on transparent).
+static func _cutout() -> Node3D:
+	var size := 64
+	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	for k in 26:
+		var centre := Vector2(rng.randf_range(10.0, 54.0), rng.randf_range(10.0, 54.0))
+		var radius := rng.randf_range(5.0, 9.0)
+		var colour := Color(0.28, 0.62, 0.22).lerp(Color(0.62, 0.78, 0.24), rng.randf())
+		for y in size:
+			for x in size:
+				if Vector2(x, y).distance_to(centre) <= radius:
+					image.set_pixel(x, y, colour)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = ImageTexture.create_from_image(image)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	mat.alpha_scissor_threshold = 0.5
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mat.roughness = 0.9
+	var model := Node3D.new()
+	for k in 3:
+		var quad := QuadMesh.new()
+		quad.size = Vector2(1.0, 1.0)
+		quad.center_offset = Vector3(0, 0.5, 0)
+		quad.material = mat
+		var mi := MeshInstance3D.new()
+		mi.mesh = quad
+		mi.rotation.y = PI / 3.0 * k
+		model.add_child(mi)
+	var body := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(1.0, 1.0, 1.0)
+	body.shape = shape
+	body.position = Vector3(0, 0.5, 0)
+	model.add_child(body)
+	return model
+
+
 static func _report(gm: GameMap) -> String:
 	var out := PackedStringArray()
 	for token in _row:
@@ -239,7 +285,7 @@ static func _report(gm: GameMap) -> String:
 			out.append(
 				"%s (%d meshes, %d surfaces%s)" % [token.token_name, meshes.size(), surfaces, detail]
 			)
-	return "mode %d, %d swapped | %s" % [TokenToonProbe.mode, _swapped(gm), " | ".join(out)]
+	return "painted %s, %d meshes | %s" % [TokenToon.painted, _swapped(gm), " | ".join(out)]
 
 
 # --- test level ------------------------------------------------------------------------------

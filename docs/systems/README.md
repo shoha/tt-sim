@@ -60,6 +60,9 @@ Documents here:
 - [fire.md](fire.md): the persistent ground fire: the plan (FireFires, the lattice, the per-fire
   seed, the sorted splat, `plan_digest`), the stroke path and its worker, the shipped fire and
   smoke books and their lifecycle, the flames, the ground's sim bake, the smoke and the lights.
+- [token_toon.md](token_toon.md): the painted look of pack tokens (`TokenToon`, Settings >
+  Graphics > Token shading): the per-material swap, the bands and per-source shade tint, the
+  hidden fade, the ghost, the warm-up, the captures and the numbers.
 
 The last five were moved out of `AGENTS.md` Key Conventions on 2026-10-09 and are first cuts:
 they hold the map and the rules, use only the headings they have content for, and leave the
