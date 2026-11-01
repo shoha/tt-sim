@@ -712,14 +712,25 @@ away): discs, up to 4 per village, three kinds, no polygons, no move, no bridges
   MultiMesh per species), refreshed with the settlement layer, play time included.
 - **Editor:** `SettlementEditor.add_field`, `resize_field`, `remove_field`, one history group each, peers through
   the existing `surface` and `settlements` ops (`test_village_fields.gd`).
-- **Tool and pane:** a "Lay" row (Plaza, Field) under the character; with Field, a "Kind of field" row of painted
-  pictures (`VillageSwatch.field_texture`), the kit's default lit; a harbour town greys Field with a tooltip. The
-  brush picks plazas and fields alike (`VillageFields.pick_any`, `selected_group`), the ghost takes the kind's tint
+- **Tool and pane:** one "Lay" row of four picture tiles under the character (round 2): Plaza, pictured by the
+  village's own plaza vignette (`VillageSwatch.kit_texture`), then Crops, Orchard and Garden
+  (`VillageSwatch.field_texture`); the kit's default kind is lit when a field is laid. A kind the character does
+  not keep is greyed, and the row's caption line says so in words (`VillageToolPane.missing_note`: "Market town
+  keeps no crops", "Harbour town keeps no fields"), not only in a tooltip. The tool's summary names plazas and
+  fields; the hint line under it says the gesture for what is picked ("... to lay a crop field."). The brush picks
+  plazas and fields alike (`VillageFields.pick_any`, `selected_group`), the ghost takes the kind's tint
   (`KIND_TINTS`) and default size, the pills name the field.
 - **Look (job `fields_look`, two rounds):** where a field lay on the board, the green rows on brown earth read as a
   ploughed field in bold soft stripes, the scarecrow and haystack read well; but the job's map is 62.5 m across and
-  the fields sat in the board's fog margin, so the home-zoom read is NOT verified. The pane at 1280x720 overflows:
-  the room line and size row fall below the fold (the Lay and kind rows added about 160 px).
+  the fields sat in the board's fog margin, so the home-zoom read is NOT verified. Round 3 (320 ft map, the format's
+  64-cell limit; villages on short streets with fields past their ends): the pane fits at 1280x720 with the room line
+  and size row in view (`f_720_pane`, `h_720_pane_market`). The board does NOT pass: inside a crop field's picked
+  ring there is meadow grass, flowers and a scarecrow but no tilled earth or rows (`f_720_pane`, `d_ghost_crops`), at
+  home zoom no field reads apart from the biome's own yellow flower patches (`a_home_fields`), and the garden's ring
+  sits over a market building with a patch of earth and flower beds beside it rather than under it
+  (`h_720_pane_market`). Open: whether the field paint lands off its ring or lies hidden under the starting cover
+  (fields clear no wild plants: their surfaces are `ground` role, not `built`); a probe of the painted weights at a
+  field's centre decides it. A field may still be laid over a building (only its centre is checked).
 - **Limits left:** taking back a field that overlaps a road or path thins that paint (as for plazas); the plants'
   wind materials are not registered with the level's wind re-tuning; plants stand again only on a settlement
   refresh (a sculpt under an orchard leaves them floating until the next edit); fields refused for wet or steep

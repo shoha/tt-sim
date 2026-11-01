@@ -2,7 +2,8 @@ extends RefCounted
 
 ## Render-job probe (`call` op) for village fields (topic fields, docs/systems/villages.md
 ## section 11). step.action:
-##   lay {field, kind}            what a Village tool press lays (the pane's Lay and kind rows)
+##   lay {field, kind}            what a Village tool press lays (the pane's Lay row)
+##   pick {id}                    picks village `id` in the Village tool (its pane follows)
 ##   add {id, at, radius, kind}   lays a field for settlement `id` (map XZ) through the editor
 ##   report                       the fields, their strokes and the plants standing
 ## Every action returns the line the job log prints.
@@ -20,6 +21,11 @@ static func run(base: Node, step: Dictionary) -> String:
 			var mode := VillageTool.of(ctrl.brush)
 			mode.set_lay(bool(step.get("field", true)), String(step.get("kind", "")))
 			return "lay field=%s kind=%s" % [str(mode.lay_field), mode.field_kind]
+		"pick":
+			if ctrl.brush == null:
+				return "no brush"
+			VillageTool.of(ctrl.brush).select(int(step.get("id", 1)), -1)
+			return "picked village %d" % int(step.get("id", 1))
 		"add":
 			var at: Array = step.get("at", [0, 0])
 			var ok := editor.settlements.add_field(

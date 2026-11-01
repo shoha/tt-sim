@@ -375,22 +375,29 @@ func test_the_pane_offers_plaza_or_field_and_the_kinds_the_village_keeps() -> vo
 	state["lay_field"] = true
 	pane.show_state(state)
 	assert_true(pane.lay_field.visible)
-	assert_true(pane.kind_field.visible)
-	assert_eq(pane.kind_field.tiles.selected, &"village_kind_garden", "the kit's default is lit")
+	assert_eq(pane.lay_field.tiles.selected, &"village_kind_garden", "the kit's default is lit")
 	assert_eq(pane.plaza_title.text, VillageToolPane.field_room_text(0))
+	assert_eq(pane.hint.text, VillageToolPane.FIELD_HINT % "a garden", "the hint says the gesture")
+	var crops := pane.lay_field.tiles.get_node(^"village_kind_crops") as Button
+	assert_true(crops.disabled, "a market town keeps no crops")
+	assert_eq(pane.lay_field.note.text, "Market town keeps no crops", "said in the pane, not a tip")
 	var picks: Array = []
 	pane.lay_picked.connect(func(field: bool, kind: String) -> void: picks.append([field, kind]))
-	pane.kind_field.tiles.select(&"village_kind_orchard")
-	pane._on_kind_tile(&"village_kind_orchard")
-	assert_eq(picks, [[true, "orchard"]])
+	pane._on_lay_tile(&"village_kind_orchard")
+	pane._on_lay_tile(&"village_lay_plaza")
+	assert_eq(picks, [[true, "orchard"], [false, ""]])
 	doc.settlements[0].kit = "harbour_town"
 	state = VillageFields.with_fields(
 		VillagePlazas.state_of(doc, 1, -1), doc, 1, VillageFields.GROUP_PLAZAS, -1, ""
 	)
 	state["lay_field"] = false
 	pane.show_state(state)
-	assert_false(pane.kind_field.visible, "a harbour town keeps no fields")
 	assert_eq(pane.lay_field.tiles.selected, &"village_lay_plaza")
+	assert_eq(pane.hint.text, VillageToolPane.HINT)
+	assert_eq(pane.lay_field.note.text, "Harbour town keeps no fields")
+	for kind in Settlement.FIELD_KINDS:
+		var tile := pane.lay_field.tiles.get_node(NodePath("village_kind_" + kind)) as Button
+		assert_true(tile.disabled, "%s greyed in a harbour town" % kind)
 
 
 func test_a_field_tile_picture_is_painted_per_kind() -> void:

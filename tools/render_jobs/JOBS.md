@@ -1167,11 +1167,15 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   (`j_market_5_6_7`, the evidence for the market's 6 m floor), then the window at 1280x720 with a picked plaza
   (`k_720_pane`). Run with `--full` for the verdict captures.
 - `jobs/fields_look.json` (about 30 s, keeps no level; topic fields, writes `fields_look`, probe
-  `probes/fields.gd`): the two villages of villagetool_look with two crop fields and an orchard by the hamlet and a
-  garden by the market, at home zoom (`a_home_fields`), close (`b_close_crops`, `c_close_orchard_garden`), a crop
-  ghost (`d_ghost_crops`), after a re-dress (`e_home_redressed`) and the pane at 1280x720 (`f_720_pane`). Known
-  fault (round 2): the map is 62.5 m across (`size` 250 samples), so fields at x = -35 and z = 35 sit in the
-  board's fog margin; the next run needs a larger map or fields nearer the middle.
+  `probes/fields.gd`): a 320 ft map (80 m, the document's 64-cell limit; `new_map` `size` is feet, and 400 ft
+  stalls at `wait_ready`), the two villages of villagetool_look on short streets (x = -14 and 14, z -12..12), two crop
+  fields past the hamlet's south end and an orchard past its north end, a garden past the market's south end; at home zoom
+  (`a_home_fields`), close (`b_close_crops`, `c_close_orchard`, `c2_close_garden`), a crop ghost (`d_ghost_crops`),
+  after a re-dress with a new seed (`e_home_redressed`, `g_close_crops_redressed`), then the pane at 1280x720 on a
+  picked crop field (`f_720_pane`) and on the market town laying its garden (`h_720_pane_market`, Crops greyed with
+  the caption line's reason). Round 3 (2026-10-31): the pane fits at 720p; the fields do NOT read on the board (no
+  tilled earth or rows inside a crop field's ring, the garden's ring over a market building; villages.md section 11
+  "Look"). `e_home_redressed` is framed off the villages (zoom before look_at leaves the board's near edge in view).
 - `jobs/villagetool_recheck.json` (about 40 s, keeps no level; topic villagetool, writes `villagetool2_recheck`): the
   same two villages, then the ghost's paving fill (`a_ghost_market`), a click in the market village laying its 6 m
   floor (`b_market_click`), the hint over the picked plaza (`c_hover_picked`), these three pinned at half size; a full

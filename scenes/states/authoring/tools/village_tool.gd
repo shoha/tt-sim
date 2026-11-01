@@ -17,7 +17,7 @@ const UNAVAILABLE_TOOLTIP := "Village: not on a Blender map, whose ground is the
 func _init() -> void:
 	id = ID
 	label = LABEL
-	summary = "Open a plaza in a village and pick how it looks."
+	summary = "Open plazas and lay fields in a village."
 	icon = "village"
 	brush_mode = VillageBrush
 	contexts = AUTHORING
@@ -32,7 +32,7 @@ func _init() -> void:
 		["Delete (Village)", "Remove the plaza under the cursor with its paving"],
 		["[ and ] (Village)", "A plaza one metre smaller or larger; Shift + scroll over one"],
 		["Escape (picked plaza)", "Let go of the plaza"],
-		["Field (Village pane)", "Clicks then lay crops, an orchard or a garden; sized as a plaza"],
+		["Crops, Orchard, Garden (Lay)", "Clicks then lay that field at the village's edge"],
 	]
 
 
