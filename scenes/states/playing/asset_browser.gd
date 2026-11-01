@@ -59,6 +59,7 @@ func _create_tabs() -> void:
 		var tab = AssetPackTabScene.instantiate() as AssetPackTab
 		tab.name = pack.display_name
 		tab_container.add_child(tab)
+		tab_container.set_tab_tooltip(tab.get_index(), pack_tooltip(pack))
 		tab.setup(pack.pack_id)
 		tab.asset_selected.connect(_on_asset_selected)
 		tab.asset_drag_started.connect(_on_asset_drag_started)
@@ -70,6 +71,19 @@ func _create_tabs() -> void:
 
 	# Connect to tab changes
 	tab_container.tab_changed.connect(_on_tab_changed)
+
+
+## The tooltip of a pack's tab: "Built in" (LibraryNames.BUILT_IN) for a pack that ships with
+## the game, then the pack's credit line, one per line; "" for a user pack that declares neither
+## (no tooltip).
+static func pack_tooltip(pack: AssetPack) -> String:
+	var lines := PackedStringArray()
+	if pack.is_builtin:
+		lines.append(LibraryNames.BUILT_IN)
+	var credit := pack.credit_line()
+	if credit != "":
+		lines.append(credit)
+	return "\n".join(lines)
 
 
 ## Add a tab for a newly-completed pack download, or refresh it if a tab for
@@ -90,6 +104,7 @@ func _add_or_refresh_tab(pack_id: String) -> void:
 	var tab = AssetPackTabScene.instantiate() as AssetPackTab
 	tab.name = pack.display_name
 	tab_container.add_child(tab)
+	tab_container.set_tab_tooltip(tab.get_index(), pack_tooltip(pack))
 	tab.setup(pack.pack_id)
 	tab.asset_selected.connect(_on_asset_selected)
 	tab.asset_drag_started.connect(_on_asset_drag_started)

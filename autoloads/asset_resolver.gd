@@ -2,7 +2,7 @@ extends Node
 
 ## Asset resolution pipeline for locating and loading assets.
 ## Provides a unified interface for resolving assets through multiple sources:
-##   1. Local pack files (user://user_assets/)
+##   1. Local pack files (user://user_assets/, or the built-in res://builtin_packs/)
 ##   2. Disk cache (user://asset_cache/)
 ##   3. HTTP download (from URLs in manifest)
 ##   4. P2P streaming (from host in multiplayer)
@@ -259,10 +259,13 @@ func _check_local_pack(
 
 	if path == "":
 		return ""
-	# user:// paths need FileAccess; res:// paths use ResourceLoader
-	if path.begins_with("user://"):
-		return path if FileAccess.file_exists(path) else ""
-	return path if ResourceLoader.exists(path) else ""
+	# user:// paths need FileAccess. A res:// path may be a built-in pack's raw importer="keep"
+	# file, which ResourceLoader.exists does not see in an export, so it is asked second.
+	if FileAccess.file_exists(path):
+		return path
+	if not path.begins_with("user://") and ResourceLoader.exists(path):
+		return path
+	return ""
 
 
 ## Check cache for asset

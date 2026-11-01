@@ -111,9 +111,60 @@ user_assets/
 }
 ```
 
+#### Provenance fields (optional)
+
+Any manifest may say where its models came from. All are optional strings; a pack without them
+loads exactly as before.
+
+| Field | Meaning |
+| ----- | ------- |
+| `author` | who made the models |
+| `license` | SPDX-like id, e.g. `CC0-1.0`, `CC-BY-4.0` |
+| `license_url` | link to the licence text |
+| `source_url` | the page the models were obtained from |
+| `credit` | the one line shown to players, e.g. `Animals by Quaternius (CC0)`; when empty, `AssetPack.credit_line()` derives `<display_name> by <author> (<license>)` from the other fields |
+| `obtained` | `YYYY-MM-DD`, because a source's licence can change after the download |
+
+The credit shows as the pack tab's tooltip in the asset browser (for a built-in pack under a
+"Built in" line). A downloaded pack keeps them, since its whole manifest is saved.
+
+### Built-in Packs
+
+A pack can ship inside the game: `res://builtin_packs/<pack_id>/`, the same layout as a user pack
+(`manifest.json`, `models/*.glb`, `icons/*.png`). `BuiltinPacks` (`utils/builtin_packs.gd`) reads
+the folder in place at startup and `AssetManager` registers each pack before the user packs, through
+the same `AssetPack` and loader path, so variants, icons and animations work unchanged.
+
+- **Marked and protected.** `AssetPack.is_builtin` is set by discovery (never by a manifest).
+  `AssetManager.get_packs()` lists built-in packs first, then the rest, each by display name. A user
+  or downloaded pack with a built-in pack's id is skipped, `register_remote_pack` and a pack download
+  refuse it, and `AssetManager.is_pack_removable(id)` is false for it. Nothing in the game edits or
+  deletes a pack today, but anything that would must ask `is_pack_removable` first.
+- **Manifest required, assets required.** The credit lives in the manifest. A folder without one is
+  not a built-in pack, and a pack with no assets yet is skipped (no empty tab, no credit line), so a
+  roster can be staged before its models arrive.
+- **How the files ship.** Every `.glb` and `.png` there needs a constant `<file>.import` sidecar
+  holding `[remap]`, a blank line and `importer="keep"` (library Route K, `docs/systems/library.md`),
+  or an export would store imported copies and drop the raw bytes the loader reads. `.gitattributes`
+  puts the GLBs and PNGs in Git LFS; the manifests (named in the export presets' `include_filter`) and
+  the sidecars stay in plain git. `AssetResolver` and `AssetManager.is_asset_available` ask
+  `FileAccess.file_exists` first for this reason: `ResourceLoader.exists` answers false for a keep file
+  in an export.
+- **Multiplayer.** Peers on the same game version already hold the same files, so a built-in token
+  resolves locally on every client and needs no download. A peer that lacks the pack (an older build)
+  falls back to the host's P2P stream, which reads the file with `FileAccess` and so works for res://.
+- **Credits.** Each pack with assets becomes a "Token packs" entry on the Licences page, generated
+  from its manifest (`LicenceCatalog.pack_entries`): there is no second list to keep in step.
+  `tests/unit/test_builtin_packs.gd` fails a shipped pack that has no `license`, no credit line, an id
+  that is not its folder name, or a model or icon without a keep sidecar.
+- **Adding one.** Put the folder in `builtin_packs/`, write the manifest with the provenance fields,
+  add the sidecars, then run `godot --headless --import` (it does not touch keep files) and the gate.
+  Only CC0 and CC-BY sources with a credit line; the Pokemon and Trainers packs stay local.
+
 ### Pack Discovery
 
-Packs are automatically discovered on startup from `user://user_assets/` (the OS user data directory — on Windows: `%APPDATA%\Godot\app_userdata\TTSim\user_assets\`).
+Packs are automatically discovered on startup from `res://builtin_packs/` (built-in, see above) and
+`user://user_assets/` (the OS user data directory — on Windows: `%APPDATA%\Godot\app_userdata\TTSim\user_assets\`).
 
 Two layouts are supported:
 

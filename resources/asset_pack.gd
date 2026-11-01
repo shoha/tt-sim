@@ -2,7 +2,8 @@ class_name AssetPack
 extends Resource
 
 ## Represents a user-loadable asset pack containing models and icons for tokens.
-## Packs are discovered automatically from the user_assets/ directory.
+## Packs are discovered automatically from the user_assets/ directory, and from the game's own
+## read-only res://builtin_packs/ (is_builtin; docs/ASSET_MANAGEMENT.md "Built-in packs").
 ## Supports both local packs (with base_path) and remote packs (with base_url).
 
 ## Unique identifier for this pack (folder name)
@@ -24,8 +25,48 @@ extends Resource
 ## Whether this pack is remote-only (no local files)
 @export var is_remote: bool = false
 
+## Provenance, all optional manifest fields. A pack that ships with the game (is_builtin) must
+## declare `license` and a credit line (BuiltinPacks.problems); a user or downloaded pack may.
+## Who made the models.
+@export var author: String = ""
+
+## SPDX-like licence id, e.g. "CC0-1.0" or "CC-BY-4.0".
+@export var license: String = ""
+
+## Link to the licence text.
+@export var license_url: String = ""
+
+## Where the models were obtained (the page, not a file).
+@export var source_url: String = ""
+
+## The one line shown to players, e.g. "Animals by Quaternius (CC0)". Empty falls back to
+## credit_line()'s derived text.
+@export var credit: String = ""
+
+## Date the models were obtained (YYYY-MM-DD), because a source's licence can change later.
+@export var obtained: String = ""
+
+## True for a pack that ships inside the game (res://builtin_packs/). Set by discovery, never
+## read from a manifest: it is read-only, listed first, not removable and not overwritable.
+var is_builtin: bool = false
+
 ## Dictionary of asset_id -> AssetEntry
 var assets: Dictionary = {}
+
+
+## The credit line for this pack: `credit` when given, else "<display name> by <author>
+## (<license>)" built from whichever of author and license are present, else "".
+func credit_line() -> String:
+	if credit.strip_edges() != "":
+		return credit.strip_edges()
+	if author == "" and license == "":
+		return ""
+	var line := display_name
+	if author != "":
+		line += " by " + author
+	if license != "":
+		line += " (" + license + ")"
+	return line
 
 
 ## Get an asset entry by ID
@@ -137,6 +178,12 @@ static func from_manifest(manifest: Dictionary, pack_path: String = "") -> Asset
 	pack.base_path = pack_path
 	pack.base_url = manifest.get("base_url", "")
 	pack.is_remote = manifest.get("is_remote", pack_path == "")
+	pack.author = str(manifest.get("author", ""))
+	pack.license = str(manifest.get("license", ""))
+	pack.license_url = str(manifest.get("license_url", ""))
+	pack.source_url = str(manifest.get("source_url", ""))
+	pack.credit = str(manifest.get("credit", ""))
+	pack.obtained = str(manifest.get("obtained", ""))
 
 	# Ensure base_url ends with / if provided
 	if pack.base_url != "" and not pack.base_url.ends_with("/"):
