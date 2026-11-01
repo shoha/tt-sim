@@ -258,6 +258,106 @@ func test_the_boundary_round_trips_and_is_left_out_when_none() -> void:
 		assert_eq(MapSettlementIO.parse_list([bad], warnings).size(), 0, "%s skipped" % [hostile])
 
 
+func test_an_authors_pick_round_trips_and_is_left_out_otherwise() -> void:
+	var record := Settlement.make(2, "market_town", 3, 5)
+	assert_false(MapSettlementIO.settlement_json(record).has("boundary_manual"))
+	record.boundary_manual = true
+	var text := JSON.stringify(MapSettlementIO.settlement_json(record))
+	var warnings := MapDocumentIO._WarningLog.new()
+	var back := MapSettlementIO.parse_list([JSON.parse_string(text)], warnings)
+	assert_eq(back.size(), 1)
+	assert_true(back[0].boundary_manual, "a manual None survives a save")
+	assert_eq(JSON.stringify(MapSettlementIO.settlement_json(back[0])), text, "byte for byte")
+	assert_true(back[0].copy().boundary_manual, "a copy keeps it")
+	var bad: Variant = JSON.parse_string(text)
+	bad["boundary_manual"] = "yes"
+	assert_eq(MapSettlementIO.parse_list([bad], warnings).size(), 0, "a non-flag is skipped")
+
+
+# --- the pane's Boundary choice ---------------------------------------------------------------
+
+
+## A pane showing village `id` of the open document.
+func _pane_for(id: int) -> VillageToolPane:
+	var pane := VillageToolPane.new()
+	add_child_autofree(pane)
+	pane.show_state(VillagePlazas.state_of(_doc, id, -1))
+	return pane
+
+
+func test_the_pane_offers_five_choices_and_names_what_automatic_gives() -> void:
+	var editor := _editor()
+	var id := editor.settlements.dress(_street(editor), "hill_fort_village")
+	var pane := _pane_for(id)
+	assert_true(pane.boundary_row.visible)
+	assert_eq(pane.boundary_option.item_count, 5)
+	var words: Array[String] = []
+	for index in pane.boundary_option.item_count:
+		words.append(pane.boundary_option.get_item_text(index))
+	assert_eq(words, ["Automatic (wall)", "None", "Hedge", "Low wall", "Wall"])
+	assert_eq(pane.boundary_option.selected, 0, "a Dress leaves the village on Automatic")
+	assert_ne(pane.boundary_option.tooltip_text, "", "the dropdown carries a tooltip")
+	_doc.settlements[0].boundary_manual = true
+	_doc.settlements[0].boundary = ""
+	pane.show_state(VillagePlazas.state_of(_doc, id, -1))
+	assert_eq(pane.boundary_option.selected, 1, "an author's None reads as None, not Automatic")
+	_doc.settlements[0].boundary = VillageBoundary.LOW_WALL
+	pane.show_state(VillagePlazas.state_of(_doc, id, -1))
+	assert_eq(pane.boundary_option.get_item_text(pane.boundary_option.selected), "Low wall")
+	pane.show_state(VillagePlazas.state_of(_doc, -1, -1))
+	assert_false(pane.boundary_row.visible, "no village picked: no row")
+
+
+func test_a_pane_choice_reaches_the_village_and_automatic_restores_the_kit() -> void:
+	var editor := _editor()
+	var id := editor.settlements.dress(_street(editor), "hill_fort_village")
+	var pane := _pane_for(id)
+	watch_signals(pane)
+	pane.boundary_option.select(2)
+	pane.boundary_option.item_selected.emit(2)
+	assert_signal_emitted_with_parameters(pane, "boundary_picked", [VillageBoundary.HEDGE])
+	assert_signal_emit_count(pane, "boundary_picked", 1)
+	assert_true(VillageTool.apply_boundary(editor, id, VillageBoundary.HEDGE))
+	assert_eq(_doc.settlement(id).boundary, VillageBoundary.HEDGE)
+	assert_true(_doc.settlement(id).boundary_manual)
+	var layer := _map.get_node_or_null(AuthoredBoundaries.BOUNDARY_NODE) as AuthoredBoundaries
+	assert_true(layer == null or layer.get_wall_node(id) == null, "the stone wall is gone")
+	assert_true(VillageTool.apply_boundary(editor, id, VillageToolPane.NONE_CHOICE))
+	assert_eq(_doc.settlement(id).boundary, "")
+	assert_true(VillageTool.apply_boundary(editor, id, VillageBoundary.WALL))
+	assert_not_null(_map.get_node(AuthoredBoundaries.BOUNDARY_NODE).get_wall_node(id))
+	assert_true(VillageTool.apply_boundary(editor, id, VillageBoundary.LOW_WALL))
+	assert_eq(_doc.settlement(id).boundary, VillageBoundary.LOW_WALL)
+	var again := VillageTool.apply_boundary(editor, id, VillageBoundary.LOW_WALL)
+	assert_false(again, "no change, no entry")
+	assert_true(VillageTool.apply_boundary(editor, id, VillageToolPane.AUTO_CHOICE))
+	assert_eq(_doc.settlement(id).boundary, VillageBoundary.WALL, "the hill fort's own wall is back")
+	assert_false(_doc.settlement(id).boundary_manual)
+	assert_false(VillageTool.apply_boundary(editor, id, VillageToolPane.AUTO_CHOICE), "already there")
+	assert_false(VillageTool.apply_boundary(editor, 99, VillageBoundary.HEDGE), "an unknown village")
+
+
+func test_each_pane_choice_is_one_undo_step_and_a_redress_keeps_it() -> void:
+	var editor := _editor()
+	var id := editor.settlements.dress(_street(editor), "hill_fort_village")
+	assert_true(VillageTool.apply_boundary(editor, id, VillageToolPane.NONE_CHOICE))
+	assert_eq(_doc.settlement(id).boundary, "")
+	assert_true(editor.settlements.redress(id))
+	assert_eq(_doc.settlement(id).boundary, "", "a re-dress keeps the author's None")
+	assert_true(editor.settlements.set_kit(id, "market_town"))
+	assert_eq(_doc.settlement(id).boundary, "", "so does a change of character")
+	assert_eq(_history.undo(), "Change village character")
+	assert_eq(_history.undo(), "Re-dress street")
+	assert_eq(_history.undo(), "Village boundary", "one entry for the pick")
+	assert_eq(_doc.settlement(id).boundary, VillageBoundary.WALL, "undo is back on the kit's wall")
+	assert_false(_doc.settlement(id).boundary_manual)
+	_history.redo()
+	assert_true(_doc.settlement(id).boundary_manual)
+	assert_true(VillageTool.apply_boundary(editor, id, VillageToolPane.AUTO_CHOICE))
+	assert_true(editor.settlements.set_kit(id, "harbour_town"))
+	assert_eq(_doc.settlement(id).boundary, "", "on Automatic a new character redraws it")
+
+
 func test_a_village_dressed_without_a_boundary_saves_and_clears_as_before() -> void:
 	var editor := _editor()
 	editor.settlements.lays_boundary = false

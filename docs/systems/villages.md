@@ -875,8 +875,8 @@ rest, and a peer receives it as the ordinary `crossings` op inside the group (no
 
 A village can have a boundary: a low stone wall or a hedge round its edge with gates where its street leaves, so it
 reads as one place at home zoom (section 3e, last bullet). Decided in the card (owner away; for the board): the
-Dress draws it from the character and the seed, no `village_edge` kit rule and no pane control (the Village tool
-pane has 60 px of slack at 1280x720; `SettlementEditor.set_boundary` is ready for a future switch).
+Dress draws it from the character and the seed, no `village_edge` kit rule. User verdict 2026-11-01: ship that AND a
+pane switch, so the author can override it per village (see "The pane switch" below).
 
 - **Record:** `Settlement.boundary`, "" (none), `wall`, `low_wall` or `hedge`; saved as a name, left out when "", a
   hostile value skips the record. Only the kind is stored; everything else is derived on every peer, so a Dress,
@@ -885,6 +885,17 @@ pane has 60 px of slack at 1280x720; `SettlementEditor.set_boundary` is ready fo
 - **Kind by character** (`VillageBoundary.kind_for`, `KIT_RULES`): a hill fort village always a stone wall (1.0 m,
   gate piers 1.55 m); a market town a low stone wall (0.75 m, piers 1.2 m) on two seeds in three; a farming hamlet a
   hedge on one seed in two; a harbour town none. A re-dress draws again (no sameness).
+- **The pane switch** (2026-11-01): one dropdown line under the Village pane's character tiles, "Boundary":
+  Automatic (named in the item, "Automatic (low wall)", the kit's own pick and the default), None, Hedge, Low wall,
+  Wall (`VillageToolPane.BOUNDARY_CHOICES`, `boundary_picked`, each item with a tooltip). A choice is one
+  `SettlementEditor` call and one history entry "Village boundary" (`VillageTool.apply_boundary`): `set_boundary`
+  for None and the kinds, `auto_boundary` for Automatic. "Automatic" needs to be told apart from an author's None
+  (both are `boundary == ""` on a harbour town), so the record carries `Settlement.boundary_manual`: true once the
+  author picked (saved as `"boundary_manual": true`, left out when false, a non-flag skips the record). While it is
+  set a re-dress and a change of character keep `boundary`; `auto_boundary` clears it and draws the kit's kind again
+  (`kind_for`), so Automatic restores exactly the kit-driven result, including its seed draw. `VillagePlazas.state_of`
+  carries `boundary`, `boundary_manual` and `boundary_auto` for the pane. The row fits the 720p budget
+  (`test_the_pane_fits_720_with_three_villages_and_a_wrapped_note`).
 - **The line** (`VillageBoundary`, `utils/village_boundary.gd`, pure): the convex hull of the street's standing lots
   (yards included), the street widened 1 m past its road (so a one-sided street still has a line beyond its road)
   and the plazas, grown 2 m with rounded corners and sampled every 0.5 m. Fields are not in the hull.
@@ -906,8 +917,10 @@ pane has 60 px of slack at 1280x720; `SettlementEditor.set_boundary` is ready fo
 - **Tests:** `tests/unit/test_village_boundary.gd` (the ring round a hull, a one-sided street, gates at the street's
   ends with four piers, water, a house and a field breaking the line without piers, stubs dropped, the kind by
   character, a hill fort Dress with Undo, redo and Clear, a hedged hamlet, a river village with no wall on the water,
-  the round trip and hostile input, a village dressed without a boundary saving and clearing as before). Render job
-  `jobs/bounds_look.json`.
+  the round trip and hostile input, a village dressed without a boundary saving and clearing as before, the pane's five
+  choices and what Automatic names, a pane choice reaching the village, Automatic restoring the kit's kind, a re-dress
+  keeping an author's None, one undo entry per choice). Render jobs `jobs/bounds_look.json` and
+  `jobs/bounds_pane.json` (the pane at 720p, a Hedge and a Wall chosen from the pane's path).
 - **Look** (`render_jobs/bounds_look`, two rounds, `--full` for the verdict): round 1's 0.6 m low wall was a hairline
   at home zoom; at 0.75 m it reads. At home zoom (`b_home_after` beside `a_home_before`) each village reads as one
   place: the hamlet wrapped by a dark green hedge band, the market town's low cream wall along its front with a gap at

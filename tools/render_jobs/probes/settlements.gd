@@ -8,8 +8,8 @@ extends RefCounted
 ##   plaza {id, at, radius}              opens a paved plaza disc for settlement `id` (world XZ)
 ##   dress also takes {bridges: false} (no bridges: the before shot of job bridges_look) and
 ##                                       {boundary: false} (no boundary: bounds_look's before)
-##   boundary {id, kind}                 sets settlement `id`'s boundary ("kit": the kit's draw
-##                                       for its seed, "" none, wall, low_wall, hedge)
+##   boundary {id, kind}                 sets settlement `id`'s boundary ("kit": back to Automatic,
+##                                       the kit's draw; "" none, wall, low_wall, hedge)
 ##   redress / clear {id}              the Re-dress and Clear buttons (settlement id, default 1)
 ##   pave {id}                           lays the ground and bridges again with the same seed
 ##   select {id}                         picks the street in the Street tool, so its bar shows
@@ -48,12 +48,15 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _flush(ctrl.editor, "pave %d %s; %s" % [id, str(ok), bridge_note(ctrl.editor)])
 		"boundary":
 			var id := int(step.get("id", 1))
-			var held := ctrl.editor.document.settlement(id)
 			var kind := String(step.get("kind", "kit"))
-			if kind == "kit" and held != null:
-				kind = VillageBoundary.kind_for(held.kit, held.seed_value)
-			var ok := ctrl.editor.settlements.set_boundary(id, kind)
-			var planned := VillageBoundary.plan(ctrl.editor.document, ctrl.editor.document.settlement(id))
+			var auto := kind == "kit"
+			var ok := (
+					ctrl.editor.settlements.auto_boundary(id) if auto
+					else ctrl.editor.settlements.set_boundary(id, kind)
+				)
+			var after := ctrl.editor.document.settlement(id)
+			var planned := VillageBoundary.plan(ctrl.editor.document, after)
+			kind =("auto " if auto else "") + (after.boundary if after != null else "")
 			return _flush(
 				ctrl.editor,
 				(

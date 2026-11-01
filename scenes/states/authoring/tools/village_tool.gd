@@ -83,6 +83,12 @@ func connect_pane(controller: AuthoringController, pane: Control) -> void:
 					SettlementBarLink.tell_bridges(brush, brush.editor)
 			refresh_pane(brush, mode, village_pane)
 	)
+	village_pane.boundary_picked.connect(
+		func(choice: String) -> void:
+			if brush.editor != null and mode.selected_village > 0:
+				apply_boundary(brush.editor, mode.selected_village, choice)
+			refresh_pane(brush, mode, village_pane)
+	)
 	village_pane.radius_committed.connect(
 		func(radius: float) -> void:
 			if brush.editor != null and mode.set_selected_radius(brush.editor, radius):
@@ -100,6 +106,19 @@ func connect_pane(controller: AuthoringController, pane: Control) -> void:
 				mode.remove_selected(brush.editor)
 			refresh_pane(brush, mode, village_pane)
 	)
+
+
+## Applies a Boundary pane choice to village `village`: Automatic gives back the kit's draw, None
+## sets no boundary, any other choice is a VillageBoundary.KINDS entry. One history entry, or false
+## when nothing changed.
+static func apply_boundary(editor: AuthoringEditor, village: int, choice: String) -> bool:
+	match choice:
+		VillageToolPane.AUTO_CHOICE:
+			return editor.settlements.auto_boundary(village)
+		VillageToolPane.NONE_CHOICE:
+			return editor.settlements.set_boundary(village, "")
+		_:
+			return editor.settlements.set_boundary(village, choice)
 
 
 ## Shows the open document's villages, and the mode's pick, on `pane`.

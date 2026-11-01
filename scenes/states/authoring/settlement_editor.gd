@@ -345,14 +345,31 @@ func set_feel(settlement_id: int, wealth: float, density: float) -> bool:
 
 
 ## Sets the boundary of settlement `settlement_id` to `kind` (a VillageBoundary.KINDS entry, or ""
-## for none) as one history entry, keeping its seed and everything else. False when the record is
-## unknown, the kind is not one, or nothing changes.
+## for none) as one history entry, keeping its seed and everything else. It is the author's pick
+## (Settlement.boundary_manual): a re-dress or a change of character keeps it. False when the
+## record is unknown, the kind is not one, or nothing changes.
 func set_boundary(settlement_id: int, kind: String) -> bool:
 	var held := _editor().document.settlement(settlement_id)
-	if held == null or held.boundary == kind or (kind != "" and not VillageBoundary.KINDS.has(kind)):
+	if held == null or (kind != "" and not VillageBoundary.KINDS.has(kind)):
+		return false
+	if held.boundary == kind and held.boundary_manual:
 		return false
 	var changed := held.copy()
 	changed.boundary = kind
+	changed.boundary_manual = true
+	return _replace(held, changed, "Village boundary") > 0
+
+
+## Gives settlement `settlement_id` back the boundary its character and seed draw
+## (VillageBoundary.kind_for), as the Dress does, as one history entry. False when the record is
+## unknown or already follows the kit.
+func auto_boundary(settlement_id: int) -> bool:
+	var held := _editor().document.settlement(settlement_id)
+	if held == null or not held.boundary_manual:
+		return false
+	var changed := held.copy()
+	changed.boundary_manual = false
+	changed.boundary = _boundary_for(changed)
 	return _replace(held, changed, "Village boundary") > 0
 
 
@@ -482,6 +499,8 @@ func apply_list(settlements: Array[Settlement], area: Rect2) -> void:
 
 ## The boundary a Dress gives `settlement` (its character and seed: VillageBoundary.kind_for).
 func _boundary_for(settlement: Settlement) -> String:
+	if settlement.boundary_manual:
+		return settlement.boundary
 	return VillageBoundary.kind_for(settlement.kit, settlement.seed_value) if lays_boundary else ""
 
 

@@ -45,6 +45,10 @@ extends RefCounted
 ## low stone wall or a hedge; "" for none; topic bounds), drawn by the Dress from the character and
 ## the seed. The line itself, its gates and its piers are derived (VillageBoundary.plan), never
 ## stored. Saved as a name, left out when "".
+##
+## `boundary_manual` is true when the author chose the boundary in the Village pane (None included):
+## a re-dress and a change of character then keep `boundary`, where otherwise they draw it again
+## from the kit and the seed (the pane's Automatic). Saved as true, left out when false.
 
 ## The characters: procgen's settlement kits, in its order (a saved map stores the name).
 const KIND_NAMES: Array[String] = ProcgenSettlement.NAMES
@@ -87,6 +91,7 @@ var ground: Array[Dictionary] = []
 var fields: Array[Dictionary] = []
 var bridges: PackedInt32Array = PackedInt32Array()
 var boundary: String = ""
+var boundary_manual: bool = false
 
 
 static func make(settlement_id: int, kit_name: String, street: int, seed_number: int) -> Settlement:
@@ -111,6 +116,7 @@ func copy() -> Settlement:
 	out.fields = fields.duplicate(true)
 	out.bridges = bridges.duplicate()
 	out.boundary = boundary
+	out.boundary_manual = boundary_manual
 	return out
 
 

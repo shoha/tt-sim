@@ -21,6 +21,10 @@ extends VBoxContainer
 ## tooltip says why, and a line of its own under the tiles says it in words (the harbour town keeps
 ## no fields at all). The hint line under the header says the gesture for what is picked. The size
 ## row and Remove serve a picked field as they serve a plaza (VillageFields.with_fields).
+##
+## Boundary (topic bounds): one dropdown line under the character tiles, Automatic (the
+## character's own pick, named in the item: the default), None, Hedge, Low wall or Wall. It is the
+## picked village's own (Settlement.boundary_manual); Automatic gives back what the kit draws.
 
 ## A village tile was picked (a Settlement id).
 signal village_picked(village: int)
@@ -29,6 +33,8 @@ signal village_picked(village: int)
 signal lay_picked(field: bool, kind: String)
 ## A character tile was picked (a Settlement.KIND_NAMES entry): the picked village takes it.
 signal kit_picked(kit: String)
+## A Boundary choice was picked: AUTO_CHOICE, NONE_CHOICE or a VillageBoundary.KINDS entry.
+signal boundary_picked(choice: String)
 ## The size slider was let go (or keyed) at this radius in map metres.
 signal radius_committed(radius: float)
 signal remove_requested
@@ -64,6 +70,19 @@ const KIT_TIP := "%s: %s streets round a %s plaza"
 const REMOVE_TIP := "Remove the picked plaza and its paving (Delete)"
 const SIZE_TIP := "How wide the picked plaza is"
 const THUMB_PX := 28
+## The Boundary row: Automatic (the character's own pick, the default), None, then the kinds from
+## the lightest to the strongest. Each is [choice, label, tooltip].
+const AUTO_CHOICE := "auto"
+const NONE_CHOICE := "none"
+const BOUNDARY_TIP := "The line round the village's edge, with gates where its streets leave"
+const AUTO_TEXT := "Automatic (%s)"
+const BOUNDARY_CHOICES: Array[Array] = [
+	[AUTO_CHOICE, "Automatic", "Let the village's character and seed choose, as a Dress does"],
+	[NONE_CHOICE, "None", "No line round the village"],
+	[VillageBoundary.HEDGE, "Hedge", "A hedge of meadow bushes"],
+	[VillageBoundary.LOW_WALL, "Low wall", "A low stone wall"],
+	[VillageBoundary.WALL, "Wall", "A tall stone wall"],
+]
 const KIT_TILE_SIZE := Vector2(104, 38)
 const VILLAGE_TILE_SIZE := Vector2(96, 40)
 
@@ -74,6 +93,9 @@ var kit_field: TileField
 var lay_field: TileField
 ## What the village's character does not keep, on its own line under the Lay out tiles.
 var lay_note: Label
+## The Boundary row: a caption and a dropdown of BOUNDARY_CHOICES.
+var boundary_row: HBoxContainer
+var boundary_option: OptionButton
 var hint: Label
 var plaza_box: VBoxContainer
 var plaza_title: Label
@@ -116,6 +138,7 @@ func _init(palette_root: String = PaletteLibrary.DEFAULT_ROOT) -> void:
 	# Lay out first: it is the row an author comes back to; the character is picked once.
 	_build_lay_fields()
 	_build_kit_field()
+	_build_boundary_row()
 	_build_plaza_box()
 	show_state(VillagePlazas.state_of(MapDocument.new(), -1, -1))
 
@@ -145,6 +168,9 @@ func show_state(state: Dictionary, unit_k: float = 1.0, unit_label: String = "m"
 		kit_field.tiles.select(_kit_id(String(state["kit"])))
 	else:
 		kit_field.tiles.clear_selection()
+	boundary_row.visible = picked
+	if picked:
+		_show_boundary(state)
 	plaza_box.visible = picked
 	var laying := bool(state.get("lay_field", false))
 	_show_lay(state, picked, laying)
@@ -320,6 +346,63 @@ func _build_lay_fields() -> void:
 	lay_note = _caption("VillageLayNote", "")
 	lay_note.visible = false
 	add_child(lay_note)
+
+
+## The Boundary row, one line under the character tiles: a caption and a dropdown. Shown for a
+## picked village.
+func _build_boundary_row() -> void:
+	boundary_row = HBoxContainer.new()
+	boundary_row.name = "VillageBoundaryRow"
+	boundary_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	boundary_row.visible = false
+	var caption := Label.new()
+	caption.text = "Boundary"
+	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	boundary_row.add_child(caption)
+	boundary_option = OptionButton.new()
+	boundary_option.name = "VillageBoundary"
+	boundary_option.tooltip_text = BOUNDARY_TIP
+	boundary_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	boundary_option.fit_to_longest_item = false
+	boundary_option.clip_text = true
+	for choice in BOUNDARY_CHOICES:
+		boundary_option.add_item(str(choice[1]))
+		boundary_option.set_item_tooltip(boundary_option.item_count - 1, str(choice[2]))
+	boundary_option.item_selected.connect(_on_boundary_item)
+	boundary_row.add_child(boundary_option)
+	add_child(boundary_row)
+
+
+## Selects the choice the picked village is on and names what Automatic would give it.
+func _show_boundary(state: Dictionary) -> void:
+	var auto_kind := str(state.get("boundary_auto", ""))
+	boundary_option.set_item_text(0, AUTO_TEXT % boundary_name(auto_kind))
+	var choice := AUTO_CHOICE
+	if bool(state.get("boundary_manual", false)):
+		choice = str(state.get("boundary", ""))
+		if choice == "":
+			choice = NONE_CHOICE
+	boundary_option.select(_choice_index(choice))
+
+
+## The lower-case words for boundary `kind` ("" is "none"), as the Automatic item names it.
+static func boundary_name(kind: String) -> String:
+	if kind == "":
+		return "none"
+	return str(BOUNDARY_CHOICES[_choice_index(kind)][1]).to_lower()
+
+
+static func _choice_index(choice: String) -> int:
+	for index in BOUNDARY_CHOICES.size():
+		if BOUNDARY_CHOICES[index][0] == choice:
+			return index
+	return 0
+
+
+func _on_boundary_item(index: int) -> void:
+	if _syncing:
+		return
+	boundary_picked.emit(str(BOUNDARY_CHOICES[index][0]))
 
 
 ## A Lay tile was picked: Plaza lays plazas, a kind tile fields of that kind.

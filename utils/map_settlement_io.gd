@@ -13,7 +13,8 @@ extends RefCounted
 ##                       "ground": SettlementGroundIO's form  (left out when there are none),
 ##                       "fields": [{"at": [x, z], "radius", "kind"}, ...]  (left out when none),
 ##                       "bridges": [crossing id, ...]  (left out when none),
-##                       "boundary": "wall" | "low_wall" | "hedge"  (left out when none)}
+##                       "boundary": "wall" | "low_wall" | "hedge"  (left out when none),
+##                       "boundary_manual": true  (the author chose it; left out when false)}
 ##
 ## A map written before settlements has no such entry and loads unchanged; an older build ignores
 ## the entry (MapDocumentIO.KNOWN_ENTRIES) and drops it on its next save. Everything read is
@@ -201,6 +202,8 @@ static func settlement_json(settlement: Settlement) -> Dictionary:
 		out["bridges"] = Array(settlement.bridges)
 	if settlement.boundary != "":
 		out["boundary"] = settlement.boundary
+	if settlement.boundary_manual:
+		out["boundary_manual"] = true
 	return out
 
 
@@ -301,6 +304,10 @@ static func _settlement_from(value: Variant) -> Variant:
 	if not boundary is String or (boundary != "" and not VillageBoundary.KINDS.has(boundary)):
 		return "the boundary is not a known kind"
 	settlement.boundary = boundary
+	var manual: Variant = value.get("boundary_manual", false)
+	if not manual is bool:
+		return "boundary_manual is not a flag"
+	settlement.boundary_manual = manual
 	if value.has("ground"):
 		var ground: Variant = SettlementGroundIO.from_json(value["ground"])
 		if ground == null:
