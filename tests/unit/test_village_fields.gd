@@ -512,6 +512,23 @@ func test_the_pane_fits_720_with_three_villages_and_a_wrapped_note() -> void:
 	assert_gt(lay.size.y, kit.size.y, "the Lay out tiles are larger than the character's")
 
 
+func test_the_boundary_tiles_share_one_row_with_their_labels_whole() -> void:
+	var pane := _laid_out_pane(3, "market_town")
+	await wait_physics_frames(3)
+	var tiles := pane.boundary_field.tiles
+	var top := (tiles.get_child(0) as Button).position.y
+	for child in tiles.get_children():
+		var tile := child as Button
+		assert_eq(tile.position.y, top, "%s on the one row" % tile.text)
+		var font := tile.get_theme_font(&"font")
+		var wide := font.get_string_size(
+			tile.text, HORIZONTAL_ALIGNMENT_LEFT, -1, tile.get_theme_font_size(&"font_size")
+		).x
+		var note := "%s fits its tile (%.0f of %.0f)" % [tile.text, wide, tile.size.x]
+		assert_lt(wide, tile.size.x - 8.0, note)
+	assert_between(tiles.get_child(0).size.y, 38.0, 44.0, "controls about 40 px")
+
+
 func test_a_greyed_kind_reads_in_the_solid_disabled_role() -> void:
 	var pane := _laid_out_pane(1, "market_town")
 	await wait_physics_frames(2)

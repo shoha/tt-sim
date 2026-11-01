@@ -885,9 +885,13 @@ pane switch, so the author can override it per village (see "The pane switch" be
 - **Kind by character** (`VillageBoundary.kind_for`, `KIT_RULES`): a hill fort village always a stone wall (1.0 m,
   gate piers 1.55 m); a market town a low stone wall (0.75 m, piers 1.2 m) on two seeds in three; a farming hamlet a
   hedge on one seed in two; a harbour town none. A re-dress draws again (no sameness).
-- **The pane switch** (2026-11-01): one dropdown line under the Village pane's character tiles, "Boundary":
-  Automatic (named in the item, "Automatic (low wall)", the kit's own pick and the default), None, Hedge, Low wall,
-  Wall (`VillageToolPane.BOUNDARY_CHOICES`, `boundary_picked`, each item with a tooltip). A choice is one
+- **The pane switch** (2026-11-01; a dropdown first, rebuilt as tiles after the UI critic's FAIL: an OptionButton had
+  no visible edge and no sibling row uses one): a `TileField` under the Village pane's character tiles, captioned
+  "Boundary of village N" (just "Boundary" with one village) like its sibling rows, five text tiles in one row: Auto
+  (the kit's own pick and the default; the caption line's note names it, "Auto: hedge", and the tile's tooltip says it
+  in full), None, Hedge, Low wall, Wall (`VillageToolPane.BOUNDARY_CHOICES`, `boundary_picked`, each tile with a
+  tooltip; a tile is 60 x 40). To keep the pane in the 720p budget the hint became one line and the Lay out and
+  character tiles 4 px shorter each. A choice is one
   `SettlementEditor` call and one history entry "Village boundary" (`VillageTool.apply_boundary`): `set_boundary`
   for None and the kinds, `auto_boundary` for Automatic. "Automatic" needs to be told apart from an author's None
   (both are `boundary == ""` on a harbour town), so the record carries `Settlement.boundary_manual`: true once the
@@ -895,7 +899,8 @@ pane switch, so the author can override it per village (see "The pane switch" be
   set a re-dress and a change of character keep `boundary`; `auto_boundary` clears it and draws the kit's kind again
   (`kind_for`), so Automatic restores exactly the kit-driven result, including its seed draw. `VillagePlazas.state_of`
   carries `boundary`, `boundary_manual` and `boundary_auto` for the pane. The row fits the 720p budget
-  (`test_the_pane_fits_720_with_three_villages_and_a_wrapped_note`).
+  (`test_the_pane_fits_720_with_three_villages_and_a_wrapped_note`; 533 px tall at full size with three villages,
+  `bounds_pane`); `test_the_boundary_tiles_share_one_row_with_their_labels_whole` keeps the five on one line.
 - **The line** (`VillageBoundary`, `utils/village_boundary.gd`, pure): the convex hull of the street's standing lots
   (yards included), the street widened 1 m past its road (so a one-sided street still has a line beyond its road)
   and the plazas, grown 2 m with rounded corners and sampled every 0.5 m. Fields are not in the hull.

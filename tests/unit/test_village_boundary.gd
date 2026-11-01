@@ -285,27 +285,36 @@ func _pane_for(id: int) -> VillageToolPane:
 	return pane
 
 
-func test_the_pane_offers_five_choices_and_names_what_automatic_gives() -> void:
+func test_the_pane_offers_five_tiles_and_names_what_auto_gives() -> void:
 	var editor := _editor()
 	var id := editor.settlements.dress(_street(editor), "hill_fort_village")
 	var pane := _pane_for(id)
-	assert_true(pane.boundary_row.visible)
-	assert_eq(pane.boundary_option.item_count, 5)
+	assert_true(pane.boundary_field.visible)
+	var tiles := pane.boundary_field.tiles
 	var words: Array[String] = []
-	for index in pane.boundary_option.item_count:
-		words.append(pane.boundary_option.get_item_text(index))
-	assert_eq(words, ["Automatic (wall)", "None", "Hedge", "Low wall", "Wall"])
-	assert_eq(pane.boundary_option.selected, 0, "a Dress leaves the village on Automatic")
-	assert_ne(pane.boundary_option.tooltip_text, "", "the dropdown carries a tooltip")
+	for child in tiles.get_children():
+		words.append((child as Button).text)
+	assert_eq(words, ["Auto", "None", "Hedge", "Low wall", "Wall"], "five text tiles in one row")
+	assert_eq(tiles.selected, &"village_boundary_auto", "a Dress leaves the village on Auto")
+	assert_eq(pane.boundary_field.note.text, "Auto: wall", "the caption line names what Auto gives")
+	assert_eq(pane.boundary_field.caption, "Boundary", "one village: no number")
+	var auto_tile := tiles.get_node(^"village_boundary_auto") as Button
+	assert_true(auto_tile.tooltip_text.contains("wall"), "the full text is in the tooltip")
+	for child in tiles.get_children():
+		assert_ne((child as Button).tooltip_text, "", "every tile carries a tooltip")
 	_doc.settlements[0].boundary_manual = true
 	_doc.settlements[0].boundary = ""
 	pane.show_state(VillagePlazas.state_of(_doc, id, -1))
-	assert_eq(pane.boundary_option.selected, 1, "an author's None reads as None, not Automatic")
+	assert_eq(tiles.selected, &"village_boundary_none", "an author's None reads as None, not Auto")
 	_doc.settlements[0].boundary = VillageBoundary.LOW_WALL
 	pane.show_state(VillagePlazas.state_of(_doc, id, -1))
-	assert_eq(pane.boundary_option.get_item_text(pane.boundary_option.selected), "Low wall")
+	assert_eq(tiles.selected, &"village_boundary_low_wall")
+	_doc.settlements.append(Settlement.make(2, "harbour_town", 2, 5))
+	pane.show_state(VillagePlazas.state_of(_doc, 2, -1))
+	assert_eq(pane.boundary_field.caption, "Boundary of village 2", "like its sibling rows")
+	assert_eq(pane.boundary_field.note.text, "Auto: none", "a harbour town draws none")
 	pane.show_state(VillagePlazas.state_of(_doc, -1, -1))
-	assert_false(pane.boundary_row.visible, "no village picked: no row")
+	assert_false(pane.boundary_field.visible, "no village picked: no row")
 
 
 func test_a_pane_choice_reaches_the_village_and_automatic_restores_the_kit() -> void:
@@ -313,8 +322,8 @@ func test_a_pane_choice_reaches_the_village_and_automatic_restores_the_kit() -> 
 	var id := editor.settlements.dress(_street(editor), "hill_fort_village")
 	var pane := _pane_for(id)
 	watch_signals(pane)
-	pane.boundary_option.select(2)
-	pane.boundary_option.item_selected.emit(2)
+	var hedge := pane.boundary_field.tiles.get_node(^"village_boundary_hedge") as Button
+	hedge.button_pressed = true
 	assert_signal_emitted_with_parameters(pane, "boundary_picked", [VillageBoundary.HEDGE])
 	assert_signal_emit_count(pane, "boundary_picked", 1)
 	assert_true(VillageTool.apply_boundary(editor, id, VillageBoundary.HEDGE))
