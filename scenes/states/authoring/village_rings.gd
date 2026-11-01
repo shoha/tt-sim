@@ -67,11 +67,17 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> v
 				if mode.gesture == VillageBrush.GESTURE_RESIZE and picked:
 					radius = mode.preview_radius()
 					style["fill"] = _fill(editor, settlement.kit, str(plaza.get("kind", "")), PREVIEW_FILL_ALPHA)
+				if mode.gesture == VillageBrush.GESTURE_MOVE and picked:
+					# Where it stands stays a quiet ring; the moving disc is drawn below.
+					style = ring_style(false, false)
 				draw_plaza(canvas, camera, editor, plaza["at"], radius, style)
 	if doc.settlements.size() > 1:
 		for settlement in doc.settlements:
 			_draw_badge(canvas, camera, editor, settlement, settlement.id == mode.selected_village)
 	var units := [brush.unit_cell_m, brush.unit_per_cell, brush.unit_label]
+	if mode.gesture == VillageBrush.GESTURE_MOVE:
+		_draw_move(brush, cursor, mode)
+		return
 	if mode.gesture == VillageBrush.GESTURE_NEW or mode.gesture == VillageBrush.GESTURE_RESIZE:
 		var radius := mode.preview_radius()
 		var held_disc := mode.picked_disc(doc)
@@ -125,6 +131,39 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> v
 		)
 
 
+## The plaza a held move carries: a disc of the kit's paving at the place it would stand, in the
+## picked gold with its handles, and the pill that says it can go there; over a refused place the
+## disc is the refusal's salmon and the pill says why (VillageBrush.short_reason).
+static func _draw_move(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> void:
+	var editor := brush.editor
+	var doc := editor.document
+	var held := doc.settlement(mode.selected_village)
+	var disc := mode.picked_disc(doc)
+	if held == null or disc.is_empty():
+		return
+	var at := mode.move_destination()
+	var radius := float(disc["radius"])
+	var reason := mode.move_reason()
+	var style := ring_style(true, false)
+	if reason == &"":
+		style["fill"] = _fill(editor, held.kit, "", PREVIEW_FILL_ALPHA)
+	else:
+		style = ghost_style(_alpha(TINT_REFUSED, FILL_ALPHA), TINT_REFUSED)
+		style["weight"] = WEIGHT_PICKED
+		style["handles"] = HANDLE_PX
+	var ring := draw_plaza(cursor.canvas, cursor.camera, editor, at, radius, style)
+	var text := VillageBrush.short_reason(reason)
+	var colour := REFUSED_COLOR
+	if reason == &"":
+		colour = READOUT_COLOR
+		text = VillageBrush.MOVE_HINT
+		if mode.move_village() != mode.selected_village and mode.move_village() > 0:
+			text = VillageBrush.MOVE_HINT_IN % VillagePlazas.village_name(mode.move_village()).to_lower()
+	BridgeBrush.draw_pill(
+		cursor.canvas, beside(ring, cursor.camera.unproject_position(brush.hit)), text, colour
+	)
+
+
 ## The pill over the disc under the pointer: what a press on its rim or inside does.
 static func hover_text(doc: MapDocument, mode: VillageBrush) -> String:
 	var rim := mode.hover_part == VillagePlazas.PART_RIM
@@ -139,7 +178,7 @@ static func hover_text(doc: MapDocument, mode: VillageBrush) -> String:
 		if rim:
 			return VillageBrush.FIELD_HOVER_RIM
 		if picked:
-			return VillageBrush.HOVER_PICKED
+			return VillageBrush.HOVER_PICKED_FIELD
 		return VillageBrush.FIELD_HOVER_INSIDE % str(VillageFields.KIND_LABELS.get(kind, "Field"))
 	if rim:
 		return VillageBrush.HOVER_RIM

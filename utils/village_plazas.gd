@@ -22,6 +22,8 @@ const RIM_BAND_M := 0.9
 const VILLAGE_REACH_M := 60.0
 ## The picked village keeps a press that is this much nearer to another village.
 const PICKED_SLACK_M := 6.0
+## A dragged plaza's centre is held to this step.
+const MOVE_STEP_M := 0.1
 ## The paving disc is this much wider than the plaza (SettlementGround).
 const PAVING_FACTOR := 1.12
 ## The match of a stroke to a plaza (both are held to a hundredth).
@@ -181,17 +183,103 @@ static func distance_to(doc: MapDocument, settlement: Settlement, p: Vector2) ->
 static func village_for(
 	doc: MapDocument, p: Vector2, preferred: int, reach: float = VILLAGE_REACH_M
 ) -> int:
+	return _choose(doc, doc.settlements, p, preferred, reach)
+
+
+static func _choose(
+	doc: MapDocument, settlements: Array[Settlement], p: Vector2, preferred: int, reach: float
+) -> int:
 	var best := -1
 	var best_distance := reach
-	for settlement in doc.settlements:
+	var held: Settlement = null
+	for settlement in settlements:
 		var away := distance_to(doc, settlement, p)
 		if away <= best_distance:
 			best_distance = away
 			best = settlement.id
-	var held := doc.settlement(preferred) if preferred > 0 else null
+		if settlement.id == preferred:
+			held = settlement
 	if held != null and best >= 0 and distance_to(doc, held, p) <= best_distance + PICKED_SLACK_M:
 		return preferred
 	return best
+
+
+# --- moving a plaza ----------------------------------------------------------------------------
+
+
+## True once a press that landed at `pressed_at` has been dragged to `now`: a plaza the press was
+## inside moves from here on (a shorter press is a click that picks it).
+static func is_move(pressed_at: Vector2, now: Vector2) -> bool:
+	return pressed_at.distance_to(now) >= DRAG_MIN_M
+
+
+## Where a plaza's centre is from the pointer when it is grabbed: held through the drag, so the
+## disc follows the pointer without jumping to it.
+static func grab_offset(centre: Vector2, pointer: Vector2) -> Vector2:
+	return centre - pointer
+
+
+## The centre a dragged plaza takes with the pointer at `pointer` and the grab offset `offset`,
+## in tenths of a metre (like a drag's radius; the record then holds it to its own step).
+static func moved_to(pointer: Vector2, offset: Vector2) -> Vector2:
+	var at := pointer + offset
+	return Vector2(snappedf(at.x, MOVE_STEP_M), snappedf(at.y, MOVE_STEP_M))
+
+
+## The village plaza `index` of village `from` belongs to once it stands at `at`: the nearest
+## village in reach by village_for's rule (the plaza's own keeps it while it is at most
+## PICKED_SLACK_M farther), measured with the plaza itself taken out of its village, since its old
+## place says nothing about the new one. -1 when no village is in reach.
+static func destination_village(
+	doc: MapDocument, from: int, index: int, at: Vector2, reach: float = VILLAGE_REACH_M
+) -> int:
+	var without: Array[Settlement] = []
+	for settlement in doc.settlements:
+		if settlement.id == from and index >= 0 and index < settlement.plazas.size():
+			var trimmed := settlement.copy()
+			trimmed.plazas.remove_at(index)
+			without.append(trimmed)
+		else:
+			without.append(settlement)
+	return _choose(doc, without, at, from, reach)
+
+
+## Whether plaza `index` of village `from` may stand at map point `at`, and where it would belong:
+## `{"village": id or -1, "reason": SettlementEditor.REFUSED_* or &""}`. Refused: no village in
+## reach (REFUSED_REACH), the village it would join holds four plazas (REFUSED_FULL), its centre or
+## a quarter of its rim in water (REFUSED_WATER), ground too steep across it (REFUSED_STEEP), or
+## its disc over a building (REFUSED_BUILDING). `world` is SettlementGround.world_of and `plans`
+## VillageFieldGround.footprints, built once by a caller that asks every frame.
+static func move_problem(
+	doc: MapDocument,
+	from: int,
+	index: int,
+	at: Vector2,
+	world: RefCounted,
+	plans: Array[PackedVector2Array]
+) -> Dictionary:
+	var held := doc.settlement(from) if from > 0 else null
+	if held == null or index < 0 or index >= held.plazas.size():
+		return {"village": -1, "reason": SettlementEditor.REFUSED_STREET}
+	var target := destination_village(doc, from, index, at)
+	var out := {"village": target, "reason": &""}
+	if target < 0:
+		out["reason"] = SettlementEditor.REFUSED_REACH
+		return out
+	if target != from and doc.settlement(target).plazas.size() >= Settlement.MAX_PLAZAS:
+		out["reason"] = SettlementEditor.REFUSED_FULL
+		return out
+	var radius := float(held.plazas[index]["radius"])
+	match SettlementGround.plaza_problem(world, at, radius):
+		"water":
+			out["reason"] = SettlementEditor.REFUSED_WATER
+		"slope":
+			out["reason"] = SettlementEditor.REFUSED_STEEP
+		"building":
+			out["reason"] = SettlementEditor.REFUSED_BUILDING
+	if out["reason"] == &"" and VillageFieldGround.covers_building(plans, at, radius):
+		out["reason"] = SettlementEditor.REFUSED_BUILDING
+	return out
 
 
 ## The index in `ground` (a record's paint strokes) of the disc stroke that paves `plaza`, or -1
