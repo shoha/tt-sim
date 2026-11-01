@@ -17,8 +17,9 @@ extends RefCounted
 ## Every .gdshader under shaders/ is in exactly one of COVERED_SHADERS and EXCLUDED_SHADERS
 ## (a test checks). A new shader goes in one of them; see AGENTS.md "Adding Features".
 
-## Started at boot, one per frame. Terrain, water, foliage and the structure shaders also get a
-## built sample (sample_sources()); the rest are started only, which was enough in measurement.
+## Started at boot, one per frame. Terrain, water, foliage, the structure shaders and the pack
+## token look also get a built sample (sample_sources()); the rest are started only, which was
+## enough in measurement.
 const COVERED_SHADERS := [
 	"res://shaders/authored_ground.gdshader",
 	"res://shaders/authored_ground_looked.gdshader",
@@ -49,6 +50,7 @@ const COVERED_SHADERS := [
 	"res://shaders/submerged_marker.gdshader",
 	"res://shaders/texel_copy_blit.gdshader",
 	"res://shaders/token_ghost.gdshader",
+	"res://shaders/token_toon.gdshader",
 	"res://shaders/ui_backdrop.gdshader",
 	"res://shaders/ui_card_thumb.gdshader",
 	"res://shaders/ui_scrim.gdshader",
@@ -284,12 +286,13 @@ static func sample_sources() -> Array[Callable]:
 		AuthoredWater.warmup_samples,
 		WindFoliage.warmup_samples,
 		StructureWarmup.warmup_samples,
+		TokenToon.warmup_samples,
 	]
 
 
 ## What the screen's status line calls each source's samples, in sample_sources() order.
 static func sample_labels() -> PackedStringArray:
-	return PackedStringArray(["the ground", "water", "plants", "buildings"])
+	return PackedStringArray(["the ground", "water", "plants", "buildings", "tokens"])
 
 
 ## Every owner's warm-up samples.

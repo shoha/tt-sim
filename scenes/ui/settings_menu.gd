@@ -79,6 +79,7 @@ var _reset_tween: Tween
 @onready var interface_size_option: OptionButton = %InterfaceSizeOption
 @onready var vsync_check: CheckButton = %VSyncCheck
 @onready var lofi_check: CheckButton = %LofiCheck
+@onready var token_shading_option: OptionButton = %TokenShadingOption
 @onready var token_ghost_check: CheckButton = %TokenGhostCheck
 @onready var occlusion_fade_check: CheckButton = %OcclusionFadeCheck
 @onready var canopy_fade_check: CheckButton = %CanopyFadeCheck
@@ -487,6 +488,7 @@ func _show_saved_values(config: ConfigFile) -> void:
 	fullscreen_check.set_pressed_no_signal(config.get_value("graphics", "fullscreen", false))
 	vsync_check.set_pressed_no_signal(config.get_value("graphics", "vsync", true))
 	lofi_check.set_pressed_no_signal(config.get_value("graphics", "lofi_enabled", true))
+	SettingsTokenShading.show_saved(self, config)
 	SettingsSeeThrough.show_saved(self, config)
 	SettingsWindMotion.show_saved(self, config)
 	ssao_check.set_pressed_no_signal(
@@ -542,6 +544,7 @@ func _save_settings(path: String = Paths.SETTINGS_PATH) -> void:
 	config.set_value("graphics", "fullscreen", fullscreen_check.button_pressed)
 	config.set_value("graphics", "vsync", vsync_check.button_pressed)
 	config.set_value("graphics", "lofi_enabled", lofi_check.button_pressed)
+	SettingsTokenShading.save(self, config)
 	SettingsSeeThrough.save(self, config)
 	SettingsWindMotion.save(self, config)
 	config.set_value("graphics", "ssao_enabled", ssao_check.button_pressed)
@@ -590,7 +593,8 @@ func _apply_settings() -> void:
 	# Apply lo-fi filter setting
 	_apply_lofi_setting()
 
-	# Apply token ghost, occlusion fade and canopy fade settings
+	# Apply token shading, token ghost, occlusion fade and canopy fade settings
+	SettingsTokenShading.apply(self)
 	SettingsSeeThrough.apply(self, _find_game_map())
 
 	# Apply foliage antialiasing setting
@@ -833,6 +837,7 @@ func _show_defaults() -> void:
 	fullscreen_check.set_pressed_no_signal(false)
 	vsync_check.set_pressed_no_signal(true)
 	lofi_check.set_pressed_no_signal(true)
+	SettingsTokenShading.show_defaults(self)
 	SettingsSeeThrough.show_defaults(self)
 	antialiasing_option.select(antialiasing_option.get_item_index(Viewport.MSAA_DISABLED))
 	shadow_quality_option.select(

@@ -71,6 +71,10 @@ static func create_from_scene(model_scene: Node3D, config: Resource = null) -> B
 	# Assemble the full token from the rigid body
 	var instance = _assemble_token(rigid_body, components.collision_shape)
 
+	# A pack token gets the painted look (the avatar factory does not come through here)
+	if TokenToon.painted:
+		TokenToon.apply(instance)
+
 	# Apply config properties if provided
 	if config:
 		_apply_config(instance, config)
@@ -628,7 +632,9 @@ static func apply_model_upgrade(token: BoardToken, model: Node3D) -> void:
 	# Update display name (is_placeholder was already cleared at the top of this method)
 	token.name = token.token_name
 
-	# The real model is in: give it the token ghost (the placeholder had none)
+	# The real model is in: paint it (a hidden token gets its fade again) and give it the token
+	# ghost (the placeholder had none)
+	TokenToon.refresh(token)
 	TokenGhost.dress(token)
 
 	# Sparkle burst effect to signal "model is ready"

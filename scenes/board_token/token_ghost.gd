@@ -225,6 +225,9 @@ static func _source_of(mi: MeshInstance3D) -> Variant:
 			return palette
 	var src: Material = own
 	if src == null:
+		# A painted mesh (TokenToon) shows a ShaderMaterial; its colours are the original's.
+		src = TokenToon.source_of(mi, 0)
+	if src == null:
 		src = mi.get_surface_override_material(0)
 	if src == null and mi.mesh != null:
 		src = mi.mesh.surface_get_material(0)
