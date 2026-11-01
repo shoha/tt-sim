@@ -57,6 +57,12 @@ static func place(settlement: Settlement, frontages: Array[ProcgenFrontage]) -> 
 			if settlement.pinned.has(slot):
 				item = _pinned(slot, settlement.pinned[slot])
 			out.append(item)
+	# The fields' own props (a scarecrow, a haystack, skeps): derived from the record alone, drawn
+	# while the village has a street or frozen frontage like everything else.
+	if not frontages.is_empty():
+		for item in VillageFields.props_of(settlement):
+			if not settlement.removed.has(item["slot"]):
+				out.append(item)
 	# A pin whose derived placement is gone (a re-dress, a moved lot) is still drawn.
 	var seen := {}
 	for item in out:

@@ -32,6 +32,7 @@ func _init() -> void:
 		["Delete (Village)", "Remove the plaza under the cursor with its paving"],
 		["[ and ] (Village)", "A plaza one metre smaller or larger; Shift + scroll over one"],
 		["Escape (picked plaza)", "Let go of the plaza"],
+		["Field (Village pane)", "Clicks then lay crops, an orchard or a garden; sized as a plaza"],
 	]
 
 
@@ -87,6 +88,11 @@ func connect_pane(controller: AuthoringController, pane: Control) -> void:
 				brush.redraw()
 			refresh_pane(brush, mode, village_pane)
 	)
+	village_pane.lay_picked.connect(
+		func(field: bool, kind: String) -> void:
+			mode.set_lay(field, kind)
+			refresh_pane(brush, mode, village_pane)
+	)
 	village_pane.remove_requested.connect(
 		func() -> void:
 			if brush.editor != null:
@@ -100,8 +106,20 @@ static func refresh_pane(brush: BrushTool, mode: VillageBrush, pane: VillageTool
 	if not is_instance_valid(pane) or brush.editor == null:
 		return
 	var editor := brush.editor
-	var state := VillagePlazas.state_of(editor.document, mode.selected_village, mode.selected_plaza)
+	var state := state_for(editor.document, mode)
 	if mode.sizing():
 		state = VillagePlazas.with_preview(state, mode.preview_radius())
 	var k :=ScaleUtils.world_to_display(editor.map_scale(), brush.unit_cell_m, brush.unit_per_cell)
 	pane.show_state(state, k, brush.unit_label)
+
+
+## What the pane shows for `mode` on `doc`: the picked village, its plazas and fields, the picked
+## disc and what a press lays.
+static func state_for(doc: MapDocument, mode: VillageBrush) -> Dictionary:
+	var plaza := mode.selected_plaza if mode.selected_group == VillageFields.GROUP_PLAZAS else -1
+	var state := VillagePlazas.state_of(doc, mode.selected_village, plaza)
+	state = VillageFields.with_fields(
+		state, doc, mode.selected_village, mode.selected_group, mode.selected_plaza, mode.field_kind
+	)
+	state["lay_field"] = mode.lay_field
+	return state

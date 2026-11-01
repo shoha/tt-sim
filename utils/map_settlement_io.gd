@@ -10,7 +10,8 @@ extends RefCounted
 ##                       "pinned": {slot: {"prop", "at": [x, z], "yaw", "scale", "seed"}},
 ##                       "swapped": {slot: prop},
 ##                       "plazas": [{"at": [x, z], "radius"}, ...]  (left out when there are none),
-##                       "ground": SettlementGroundIO's form  (left out when there are none)}
+##                       "ground": SettlementGroundIO's form  (left out when there are none),
+##                       "fields": [{"at": [x, z], "radius", "kind"}, ...]  (left out when none)}
 ##
 ## A map written before settlements has no such entry and loads unchanged; an older build ignores
 ## the entry (MapDocumentIO.KNOWN_ENTRIES) and drops it on its next save. Everything read is
@@ -89,6 +90,11 @@ static func settlement_problem(settlement: Settlement) -> String:
 	for plaza in settlement.plazas:
 		if _plaza_problem(plaza) != "":
 			return "a plaza is not usable (%s)" % _plaza_problem(plaza)
+	if settlement.fields.size() > Settlement.MAX_FIELDS:
+		return "more than %d fields" % Settlement.MAX_FIELDS
+	for field in settlement.fields:
+		if _field_problem(field) != "":
+			return "a field is not usable (%s)" % _field_problem(field)
 	var ground_reason := SettlementGroundIO.problem(settlement.ground)
 	if ground_reason != "":
 		return ground_reason
@@ -170,6 +176,18 @@ static func settlement_json(settlement: Settlement) -> Dictionary:
 		out["plazas"] = plazas
 	if not settlement.ground.is_empty():
 		out["ground"] = SettlementGroundIO.to_json(settlement.ground)
+	if not settlement.fields.is_empty():
+		var fields: Array = []
+		for field in settlement.fields:
+			var at: Vector2 = field["at"]
+			fields.append(
+				{
+					"at": [snappedf(at.x, Settlement.PLAZA_STEP_M), snappedf(at.y, Settlement.PLAZA_STEP_M)],
+					"radius": snappedf(float(field["radius"]), Settlement.PLAZA_STEP_M),
+					"kind": str(field["kind"]),
+				}
+			)
+		out["fields"] = fields
 	return out
 
 
@@ -250,6 +268,14 @@ static func _settlement_from(value: Variant) -> Variant:
 		if plaza == null:
 			return "a plaza is not usable"
 		settlement.plazas.append(plaza)
+	var fields: Variant = value.get("fields", [])
+	if not fields is Array or (fields as Array).size() > Settlement.MAX_FIELDS:
+		return "fields is not a short list"
+	for entry: Variant in fields:
+		var field: Variant = _field_from(entry)
+		if field == null:
+			return "a field is not usable"
+		settlement.fields.append(field)
 	if value.has("ground"):
 		var ground: Variant = SettlementGroundIO.from_json(value["ground"])
 		if ground == null:
@@ -277,6 +303,38 @@ static func _plaza_from(value: Variant) -> Variant:
 		"radius": _number_or_nan(value.get("radius")),
 	}
 	return plaza if _plaza_problem(plaza) == "" else null
+
+
+static func _field_from(value: Variant) -> Variant:
+	if not value is Dictionary:
+		return null
+	var at: Variant = value.get("at")
+	var kind: Variant = value.get("kind")
+	if not at is Array or (at as Array).size() != 2 or not kind is String:
+		return null
+	var field := {
+		"at": Vector2(_number_or_nan(at[0]), _number_or_nan(at[1])),
+		"radius": _number_or_nan(value.get("radius")),
+		"kind": kind,
+	}
+	return field if _field_problem(field) == "" else null
+
+
+## What is wrong with a field disc {"at": Vector2, "radius", "kind"}, or "".
+static func _field_problem(field: Variant) -> String:
+	if not field is Dictionary or not field.get("at") is Vector2:
+		return "not a disc"
+	if not Settlement.FIELD_KINDS.has(str(field.get("kind", ""))):
+		return "kind"
+	var at: Vector2 = field["at"]
+	var reach := Settlement.PLAZA_MAX_REACH_M
+	if not _within(at.x, -reach, reach) or not _within(at.y, -reach, reach):
+		return "position"
+	if not _within(
+		float(field.get("radius", NAN)), Settlement.FIELD_MIN_RADIUS_M, Settlement.FIELD_MAX_RADIUS_M
+	):
+		return "radius"
+	return ""
 
 
 ## What is wrong with a plaza disc {"at": Vector2, "radius"}, or "".

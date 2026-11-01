@@ -1166,6 +1166,12 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   `i_ghost_hillfort`), the four ghosts on one sheet (`sheet_ghosts`), market plazas of 5, 6 and 7 m side by side
   (`j_market_5_6_7`, the evidence for the market's 6 m floor), then the window at 1280x720 with a picked plaza
   (`k_720_pane`). Run with `--full` for the verdict captures.
+- `jobs/fields_look.json` (about 30 s, keeps no level; topic fields, writes `fields_look`, probe
+  `probes/fields.gd`): the two villages of villagetool_look with two crop fields and an orchard by the hamlet and a
+  garden by the market, at home zoom (`a_home_fields`), close (`b_close_crops`, `c_close_orchard_garden`), a crop
+  ghost (`d_ghost_crops`), after a re-dress (`e_home_redressed`) and the pane at 1280x720 (`f_720_pane`). Known
+  fault (round 2): the map is 62.5 m across (`size` 250 samples), so fields at x = -35 and z = 35 sit in the
+  board's fog margin; the next run needs a larger map or fields nearer the middle.
 - `jobs/villagetool_recheck.json` (about 40 s, keeps no level; topic villagetool, writes `villagetool2_recheck`): the
   same two villages, then the ghost's paving fill (`a_ghost_market`), a click in the market village laying its 6 m
   floor (`b_market_click`), the hint over the picked plaza (`c_hover_picked`), these three pinned at half size; a full

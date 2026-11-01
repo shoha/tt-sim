@@ -35,6 +35,19 @@ const AWNING := Color(0.86, 0.2, 0.22)
 const CREAM := Color(0.98, 0.93, 0.8)
 const POST := Color(0.22, 0.2, 0.22)
 const LAMP_LIGHT := Color(1.0, 0.86, 0.42)
+## Field tiles: each kind's disc colour, and the colours drawn on it.
+const FIELD_DISC := {
+	"crops": Color(0.6, 0.38, 0.2),
+	"orchard": Color(0.64, 0.78, 0.32),
+	"garden": Color(0.56, 0.74, 0.34),
+}
+const CROP_GOLD := Color(0.96, 0.8, 0.36)
+const EARTH_DARK := Color(0.45, 0.28, 0.16)
+const CANOPY := Color(0.24, 0.5, 0.22)
+const CANOPY_LIGHT := Color(0.44, 0.7, 0.3)
+const FLOWERS: Array[Color] = [
+	Color(0.92, 0.42, 0.62), Color(0.62, 0.48, 0.9), Color(1.0, 0.86, 0.4)
+]
 
 ## The average colour of each (palette root, kit) plaza surface, read once.
 static var _paving: Dictionary = {}
@@ -151,6 +164,70 @@ static func _layer_color(layer: Dictionary, uv: Vector2) -> Color:
 	var r: Vector2 = layer["r"]
 	var band := floori((uv.x - c.x + r.x) / (2.0 * r.x) * int(layer["stripes"]))
 	return layer["color"] if band % 2 == 0 else layer["alt"]
+
+
+## The picture on a field-kind tile (topic fields) at `size` pixels: the same meadow and disc as a
+## character's vignette, the disc painted as the kind lays it: tilled earth with gold rows (crops),
+## warm grass with round fruit trees (orchard), grass with two flowering beds (garden).
+static func field_texture(kind: String, size: int) -> Texture2D:
+	return ImageTexture.create_from_image(field_image(kind, size))
+
+
+## field_texture's image. Pure.
+static func field_image(kind: String, size: int) -> Image:
+	var disc: Color = FIELD_DISC.get(kind, FIELD_DISC["orchard"])
+	var layers := field_layers(kind)
+	var out := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var px := 1.0 / size
+	var meadow: Color = LOOKS["farming_hamlet"]["ground"]
+	for y in size:
+		for x in size:
+			var uv := Vector2((x + 0.5) * px, (y + 0.5) * px)
+			var color := meadow.lightened(0.18 * (1.0 - uv.y))
+			color = _over(color, SHADE, _ellipse(uv, DISC_CENTRE + Vector2(0.0, 0.035), DISC_RADII, px))
+			var on_disc := _ellipse(uv, DISC_CENTRE, DISC_RADII, px)
+			color = color.lerp(disc, on_disc)
+			for layer in layers:
+				var amount := _coverage(layer, uv, px)
+				if layer.get("clip", false):
+					amount *= on_disc
+				color = _over(color, layer["color"], amount)
+			color.a = 1.0
+			out.set_pixel(x, y, color)
+	return out
+
+
+## The shapes over a field kind's disc, back to front (`"clip"` keeps a shape on the disc).
+static func field_layers(kind: String) -> Array[Dictionary]:
+	var c := DISC_CENTRE
+	var out: Array[Dictionary] = []
+	match kind:
+		"crops":
+			for k in 4:
+				var row := _shape(&"rect", c + Vector2(0.0, -0.21 + k * 0.14), Vector2(0.4, 0.035), CROP_GOLD)
+				row["clip"] = true
+				out.append(row)
+			out.append(_shape(&"rect", c + Vector2(0.06, -0.1), Vector2(0.012, 0.13), WOOD))
+			out.append(_shape(&"rect", c + Vector2(0.06, -0.15), Vector2(0.07, 0.012), WOOD))
+			out.append(_shape(&"ellipse", c + Vector2(0.06, -0.21), Vector2(0.035, 0.035), CROP_GOLD))
+		"garden":
+			for k in 2:
+				var at := c + Vector2(0.0, -0.08 + k * 0.17)
+				out.append(_shape(&"ellipse", at, Vector2(0.27, 0.06), EARTH_DARK))
+				for n in 5:
+					var bloom := FLOWERS[(k + n) % FLOWERS.size()]
+					var spot := at + Vector2(-0.2 + n * 0.1, -0.02)
+					out.append(_shape(&"ellipse", spot, Vector2(0.04, 0.035), bloom))
+			out.append(_shape(&"ellipse", c + Vector2(0.33, -0.12), Vector2(0.08, 0.08), CANOPY))
+		_:
+			for k in 5:
+				var x := -0.2 + float(k % 3) * 0.2 + (0.1 if k >= 3 else 0.0)
+				var at := c + Vector2(x, -0.13 + floorf(k / 3.0) * 0.17)
+				out.append(_shape(&"ellipse", at + Vector2(0.0, 0.05), Vector2(0.075, 0.03), SHADE))
+				out.append(_shape(&"ellipse", at, Vector2(0.085, 0.08), CANOPY))
+				out.append(_shape(&"ellipse", at + Vector2(-0.025, -0.03), Vector2(0.035, 0.03), CANOPY_LIGHT))
+				out.append(_shape(&"ellipse", at + Vector2(0.03, 0.01), Vector2(0.016, 0.016), AWNING))
+	return out
 
 
 ## How much of the pixel at `uv` (pixels `px` wide) `layer` covers, 0 to 1.

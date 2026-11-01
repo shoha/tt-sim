@@ -82,15 +82,21 @@ static func radius_for_rim_drag(
 ## `{"settlement": id, "index": plaza index, "part": PART_RIM or PART_INSIDE}`, or {}. The rim band
 ## (`rim_m` each side of the edge) wins over the inside; among several the nearest rim, or the
 ## smallest disc, wins. Within `handle_m` of one of a plaza's handle dots (handle_points) is on
-## its rim too: the dots are the larger target the author aims at.
+## its rim too: the dots are the larger target the author aims at. `group` names the record's
+## disc list read (&"plazas", or &"fields" for VillageFields.pick_any).
 static func pick(
-	settlements: Array[Settlement], p: Vector2, rim_m: float, handle_m: float = 0.0
+	settlements: Array[Settlement],
+	p: Vector2,
+	rim_m: float,
+	handle_m: float = 0.0,
+	group: StringName = &"plazas"
 ) -> Dictionary:
 	var best := {}
 	var best_score := INF
 	for settlement in settlements:
-		for index in settlement.plazas.size():
-			var plaza := settlement.plazas[index]
+		var discs: Array[Dictionary] = settlement.get(group)
+		for index in discs.size():
+			var plaza := discs[index]
 			var reach := p.distance_to(plaza["at"] as Vector2)
 			var radius := float(plaza["radius"])
 			var score := absf(reach - radius)
@@ -104,8 +110,9 @@ static func pick(
 		return best
 	best_score = INF
 	for settlement in settlements:
-		for index in settlement.plazas.size():
-			var plaza := settlement.plazas[index]
+		var discs: Array[Dictionary] = settlement.get(group)
+		for index in discs.size():
+			var plaza := discs[index]
 			var radius := float(plaza["radius"])
 			if p.distance_to(plaza["at"] as Vector2) < radius and radius < best_score:
 				best_score = radius
@@ -163,7 +170,7 @@ static func distance_to(doc: MapDocument, settlement: Settlement, p: Vector2) ->
 		for k in line.size() - 1:
 			var near := Geometry2D.get_closest_point_to_segment(p, line[k], line[k + 1])
 			best = minf(best, p.distance_to(near))
-	for plaza in settlement.plazas:
+	for plaza in settlement.plazas + settlement.fields:
 		best = minf(best, maxf(p.distance_to(plaza["at"] as Vector2) - float(plaza["radius"]), 0.0))
 	return best
 

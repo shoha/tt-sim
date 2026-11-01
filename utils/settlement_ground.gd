@@ -53,9 +53,12 @@ const MERGE_MAX_M := 30.0
 ## A plaza is refused when this share of its rim is wet.
 const PLAZA_WET_SHARE := 0.25
 const PLAZA_RIM_POINTS := 8
-## Roles in paint order, and in the order the slot budget serves them.
-const PAINT_ORDER: Array[String] = ["road", "plaza", "door_path"]
+## Roles in paint order, and in the order the slot budget serves them. Fields (VillageFields) go
+## first, under the road; their surfaces are the kind's own, not the kit's, and take the slots left.
+const PAINT_ORDER: Array[String] = ["field", "road", "plaza", "door_path"]
 const BUDGET_ORDER: Array[String] = ["road", "door_path", "plaza"]
+## A field is refused when its centre is wet, this share of its rim is, or its ground is steeper.
+const FIELD_MAX_SLOPE := 0.35
 
 
 ## The road's half width (full cover) for a street with setback `setback_m`.
@@ -116,7 +119,8 @@ static func plan(
 			refused["unknown"] += 1
 	var granted := affordable(doc, wanted)
 	refused["slots"] = wanted.size() - granted.size()
-	if granted.is_empty() or doc.heights.size() != doc.sample_count():
+	var fielding := roles.has("field") and not settlement.fields.is_empty()
+	if (granted.is_empty() and not fielding) or doc.heights.size() != doc.sample_count():
 		return result
 	var world := _World.new(doc)
 	var wall := doc.wall(settlement.source) if settlement.source > 0 else null
@@ -129,6 +133,19 @@ static func plan(
 		road_samples = resample(wall.points, ROAD_STEP_M)
 		road_kept = _road_kept(world, road_samples, half, refused)
 	for role in PAINT_ORDER:
+		if role == "field":
+			if not fielding:
+				continue
+			var laid := _field_strokes(world, doc, settlement, known, granted, refused)
+			for stroke in laid:
+				var held := stroke.duplicate()
+				held["role"] = role
+				strokes.append(held)
+				if not (result["surfaces"] as Array[String]).has(str(stroke["surface"])):
+					(result["surfaces"] as Array[String]).append(str(stroke["surface"]))
+			if not laid.is_empty():
+				(result["roles"] as Array[String]).append(role)
+			continue
 		if not granted.has(role):
 			continue
 		var made: Array[Dictionary] = []
@@ -348,6 +365,61 @@ static func _plaza_strokes(
 			refused[cause] += 1
 			continue
 		out.append({"from": at, "to": at, "radius": radius * 1.12, "seconds": PLAZA_SECONDS})
+	return out
+
+
+# --- fields ------------------------------------------------------------------------------------
+
+
+## The strokes of `settlement`'s fields (VillageFields.strokes_of), a whole field left out when its
+## centre or a quarter of its rim is wet or its ground is too steep, and a stroke left out when the
+## palette lacks its surface or the map has no slot left for it (after the kit's `granted` roles).
+static func _field_strokes(
+	world: _World,
+	doc: MapDocument,
+	settlement: Settlement,
+	known: Dictionary,
+	granted: Dictionary,
+	refused: Dictionary
+) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var used: Array[String] = []
+	for surface: Variant in granted.values():
+		if not doc.surface_ids.has(str(surface)) and not used.has(str(surface)):
+			used.append(str(surface))
+	var free := MapDocument.PAINT_SURFACE_LIMIT - doc.surface_ids.size() - used.size()
+	for field in settlement.fields:
+		var at: Vector2 = field["at"]
+		var radius := float(field["radius"])
+		var cause := world.problem_at(at, 0.0)
+		var wet := 0
+		var low := world.height(at)
+		var high := low
+		for k in PLAZA_RIM_POINTS:
+			var rim := at + Vector2.from_angle(TAU * k / PLAZA_RIM_POINTS) * radius
+			if world.problem_at(rim, 0.0) == "water":
+				wet += 1
+			low = minf(low, world.height(rim))
+			high = maxf(high, world.height(rim))
+		if cause == "" and float(wet) / PLAZA_RIM_POINTS > PLAZA_WET_SHARE:
+			cause = "water"
+		if cause == "" and (high - low) / (2.0 * radius) > FIELD_MAX_SLOPE:
+			cause = "slope"
+		if cause != "":
+			refused[cause] += 1
+			continue
+		for stroke in VillageFields.strokes_of(field, settlement.seed_value):
+			var surface := str(stroke["surface"])
+			if not known.has(surface):
+				refused["unknown"] += 1
+				continue
+			if not doc.surface_ids.has(surface) and not used.has(surface):
+				if free <= 0:
+					refused["slots"] += 1
+					continue
+				free -= 1
+				used.append(surface)
+			out.append(stroke)
 	return out
 
 

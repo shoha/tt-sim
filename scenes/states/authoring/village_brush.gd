@@ -24,6 +24,12 @@ extends BrushMode
 ## pane's village row) it follows the pointer: the village a press there would join, so the pane,
 ## the ghost and its hint always name the same village. Once picked it stays until the author
 ## picks again.
+##
+## Fields (topic fields, villages.md section 11). With the pane's "Field" picked (`lay_field`), a
+## press on bare ground lays a field of `field_kind` (or the village's default kind,
+## VillageFields.kind_for) instead of a plaza, through SettlementEditor.add_field. A field is
+## picked, sized and removed exactly as a plaza: the pick names its disc list (`selected_group`,
+## VillageFields.GROUP_PLAZAS or GROUP_FIELDS) and its index in it (`selected_plaza`).
 
 ## The picked village or plaza changed.
 signal selection_changed(village: int, plaza: int)
@@ -54,19 +60,36 @@ const IDLE := "Click for a plaza, or drag to size it"
 const IDLE_IN := "Click for a plaza in %s, or drag to size it"
 const NO_VILLAGE_SHORT := "Dress a street first"
 const FULL_SHORT := "Four plazas already"
+const FIELDS_FULL := "A village holds four fields. Remove one to make room."
+const FIELDS_FULL_SHORT := "Four fields already"
+const NO_FIELDS := "This village keeps no fields: pick another character, or lay a plaza."
+const NO_FIELDS_SHORT := "No fields here"
+const FIELD_HOVER_RIM := "Drag the edge to size this field"
+const FIELD_HOVER_INSIDE := "%s: click to pick, Delete removes it"
+const FIELD_IDLE := "Click for %s, or drag to size it"
+const FIELD_IDLE_IN := "Click for %s in %s, or drag to size it"
+## What a press lays, in the hint's words.
+const KIND_WORDS := {"crops": "a crop field", "orchard": "an orchard", "garden": "a garden"}
 
-## The picked village (a Settlement id) and plaza (an index in its plazas), or -1.
+## The picked village (a Settlement id) and disc (an index in its `selected_group` list), or -1.
 var selected_village: int = -1
 var selected_plaza: int = -1
-## The plaza under the pointer: its village, index and part (VillagePlazas.PART_*), or -1.
+var selected_group: StringName = VillageFields.GROUP_PLAZAS
+## The disc under the pointer: its village, list, index and part (VillagePlazas.PART_*), or -1.
 var hover_village: int = -1
 var hover_plaza: int = -1
+var hover_group: StringName = VillageFields.GROUP_PLAZAS
 var hover_part: StringName = &""
 ## The held press's gesture (GESTURE_*), or empty.
 var gesture: StringName = &""
+## A press on bare ground lays a field (true) or a plaza; the kind asked for ("" the default).
+var lay_field: bool = false
+var field_kind: String = ""
 
 var _grab_village: int = -1
 var _grab_plaza: int = -1
+var _grab_group: StringName = VillageFields.GROUP_PLAZAS
+var _grab_field_kind: String = ""
 var _grab_kit: String = ""
 var _centre: Vector2 = Vector2.ZERO
 var _to: Vector2 = Vector2.ZERO
@@ -94,12 +117,45 @@ static func refusal_text(reason: StringName) -> String:
 	return REFUSED
 
 
-## The words beside the ghost of a plaza that would join village `village` of `doc`: the village
-## is named once the map has two or more.
-static func ghost_hint(doc: MapDocument, village: int) -> String:
+## The words beside the ghost of a plaza (or, with `kind`, a field of that kind) that would join
+## village `village` of `doc`: the village is named once the map has two or more.
+static func ghost_hint(doc: MapDocument, village: int, kind: String = "") -> String:
+	var named := VillagePlazas.village_name(village).to_lower()
+	if kind != "":
+		var words := str(KIND_WORDS.get(kind, "a field"))
+		return FIELD_IDLE % words if doc.settlements.size() < 2 else FIELD_IDLE_IN % [words, named]
 	if doc.settlements.size() < 2:
 		return IDLE
-	return IDLE_IN % VillagePlazas.village_name(village).to_lower()
+	return IDLE_IN % named
+
+
+## The kind of field a press lays in village `village` of `doc`, or "" when it lays a plaza (the
+## pane's Plaza is picked) or the village keeps no fields.
+func laying_kind(doc: MapDocument, village: int) -> String:
+	var held := doc.settlement(village) if village > 0 else null
+	if not lay_field or held == null:
+		return ""
+	return VillageFields.kind_for(held.kit, field_kind)
+
+
+## The picked disc's record ({"at", "radius", ...}), or {}.
+func picked_disc(doc: MapDocument) -> Dictionary:
+	return _disc(doc, selected_village, selected_group, selected_plaza)
+
+
+static func _disc(doc: MapDocument, village: int, group: StringName, index: int) -> Dictionary:
+	var held := doc.settlement(village) if village > 0 else null
+	if held == null or index < 0:
+		return {}
+	var discs: Array[Dictionary] = held.get(group)
+	return discs[index] if index < discs.size() else {}
+
+
+## `radius` held to the range of the disc it sizes: a plaza of `kit` or a field of `kind`.
+static func clamp_for(radius: float, group: StringName, kit: String, kind: String) -> float:
+	if group == VillageFields.GROUP_FIELDS:
+		return VillageFields.clamp_radius(radius, kind)
+	return VillagePlazas.clamp_radius(radius, kit)
 
 
 ## Why the last press or edit made nothing, or "".
@@ -109,15 +165,23 @@ func message() -> String:
 
 ## The radius the held gesture is making now (metres in the map frame), or 0 with none.
 func preview_radius() -> float:
+	var field := _grab_group == VillageFields.GROUP_FIELDS
 	match gesture:
 		GESTURE_NEW:
+			if field:
+				return VillageFields.radius_for_drag(_centre, _to, _grab_field_kind)
 			return VillagePlazas.radius_for_drag(_centre, _to, _grab_kit)
 		GESTURE_RESIZE:
-			# A plaza already under its kit's floor is never pushed up by a grab alone.
+			# A disc already under its tool floor is never pushed up by a grab alone.
 			var floor_m := minf(VillagePlazas.min_radius(_grab_kit), _start_radius)
-			return VillagePlazas.radius_for_rim_drag(
+			if field:
+				floor_m = minf(VillageFields.clamp_radius(0.0, _grab_field_kind), _start_radius)
+			var radius := VillagePlazas.radius_for_rim_drag(
 				_start_radius, _grabbed_at, _centre.distance_to(_to), floor_m
 			)
+			if field:
+				radius = minf(radius, VillageFields.clamp_radius(INF, _grab_field_kind))
+			return radius
 	return 0.0
 
 
@@ -138,48 +202,80 @@ func ghost_village(editor: AuthoringEditor, p: Vector2) -> int:
 
 ## Picks village `village` and its plaza `plaza` (-1: the village alone). `explicit` false is the
 ## mode's own pick (the first village, or the one the pointer is over) that the next frame may
-## move; an author's pick stays.
-func select(village: int, plaza: int, explicit: bool = true) -> void:
+## move; an author's pick stays. `group` is the list `plaza` indexes (a plaza's or a field's).
+func select(
+	village: int, plaza: int, explicit: bool = true, group: StringName = VillageFields.GROUP_PLAZAS
+) -> void:
 	_explicit = explicit and village > 0
-	if village == selected_village and plaza == selected_plaza:
+	if village == selected_village and plaza == selected_plaza and group == selected_group:
 		return
 	selected_village = village
 	selected_plaza = plaza
+	selected_group = group
 	selection_changed.emit(village, plaza)
 	view_changed.emit()
 
 
-## Removes plaza `index` of village `village` with its paving, keeping the pick pointing at the
-## same plaza. False when the editor refuses.
-func remove(editor: AuthoringEditor, village: int, index: int) -> bool:
-	if not editor.settlements.remove_plaza(village, index):
+## Sets what a press on bare ground lays: a field (of `kind`, "" for the village's default) or a
+## plaza.
+func set_lay(field: bool, kind: String = "") -> void:
+	if field == lay_field and kind == field_kind:
+		return
+	lay_field = field
+	field_kind = kind
+	view_changed.emit()
+
+
+## Removes disc `index` of `group` (a plaza with its paving, or a field with its paint) of village
+## `village`, keeping the pick pointing at the same disc. False when the editor refuses.
+func remove(
+	editor: AuthoringEditor,
+	village: int,
+	index: int,
+	group: StringName = VillageFields.GROUP_PLAZAS
+) -> bool:
+	var fields := group == VillageFields.GROUP_FIELDS
+	var done := (
+		editor.settlements.remove_field(village, index)
+		if fields
+		else editor.settlements.remove_plaza(village, index)
+	)
+	if not done:
 		return false
 	hover_village = -1
 	hover_plaza = -1
-	if village == selected_village and selected_plaza >= 0:
+	if village == selected_village and selected_plaza >= 0 and group == selected_group:
 		if selected_plaza == index:
 			select(village, -1)
 		elif selected_plaza > index:
-			select(village, selected_plaza - 1)
+			select(village, selected_plaza - 1, true, group)
 	return true
 
 
-## Removes the picked plaza (the pane's Remove).
+## Removes the picked plaza or field (the pane's Remove).
 func remove_selected(editor: AuthoringEditor) -> bool:
 	if selected_plaza < 0:
 		return false
-	return remove(editor, selected_village, selected_plaza)
+	return remove(editor, selected_village, selected_plaza, selected_group)
 
 
-## Sets the picked plaza's radius to `radius` metres (the pane's slider). False when it changes
+## Sets the picked disc's radius to `radius` metres (the pane's slider). False when it changes
 ## nothing or the editor refuses.
 func set_selected_radius(editor: AuthoringEditor, radius: float) -> bool:
-	var held := editor.document.settlement(selected_village) if selected_village > 0 else null
-	if selected_plaza < 0 or held == null:
+	return _resize(editor, selected_village, selected_group, selected_plaza, radius)
+
+
+func _resize(
+	editor: AuthoringEditor, village: int, group: StringName, index: int, radius: float
+) -> bool:
+	var held := editor.document.settlement(village) if village > 0 else null
+	var disc := _disc(editor.document, village, group, index)
+	if disc.is_empty():
 		return false
-	return editor.settlements.resize_plaza(
-		selected_village, selected_plaza, VillagePlazas.clamp_radius(radius, held.kit)
-	)
+	var wanted := clamp_for(radius, group, held.kit, str(disc.get("kind", "")))
+	if group == VillageFields.GROUP_FIELDS:
+		return editor.settlements.resize_field(village, index, wanted)
+	return editor.settlements.resize_plaza(village, index, wanted)
 
 
 # ============================================================================
@@ -198,35 +294,49 @@ func press(brush: BrushTool) -> bool:
 	var editor := brush.editor
 	var doc := editor.document
 	var p := editor.to_map_xz(brush.hit)
-	var found := VillagePlazas.pick(doc.settlements, p, _rim_m, _handle_m)
+	var found := VillageFields.pick_any(doc.settlements, p, _rim_m, _handle_m)
 	if not found.is_empty():
 		var village := int(found["settlement"])
 		_grab_village = village
 		_grab_kit = doc.settlement(village).kit
+		_grab_group = found["group"]
 		_grab_plaza = int(found["index"])
-		_centre = doc.settlement(village).plazas[_grab_plaza]["at"]
-		_start_radius = float(doc.settlement(village).plazas[_grab_plaza]["radius"])
+		var disc := _disc(doc, village, _grab_group, _grab_plaza)
+		_grab_field_kind = str(disc.get("kind", ""))
+		_centre = disc["at"]
+		_start_radius = float(disc["radius"])
 		_to = p
 		_grabbed_at = _centre.distance_to(p)
 		gesture = GESTURE_RESIZE if found["part"] == VillagePlazas.PART_RIM else GESTURE_PICK
-		select(village, _grab_plaza)
+		select(village, _grab_plaza, true, _grab_group)
 		return false
 	var target := ghost_village(editor, p)
-	if target < 0:
-		_message = NO_VILLAGE
-	elif doc.settlement(target).plazas.size() >= Settlement.MAX_PLAZAS:
-		_message = FULL
+	_message = refusal_at(doc, target)
 	if _message != "":
 		brush.refused.emit(_message)
 		return false
 	_grab_village = target
 	_grab_kit = doc.settlement(target).kit
+	_grab_field_kind = laying_kind(doc, target)
+	_grab_group = VillageFields.GROUP_FIELDS if lay_field else VillageFields.GROUP_PLAZAS
 	_grab_plaza = -1
 	_centre = p
 	_to = p
 	gesture = GESTURE_NEW
 	select(target, -1)
 	return false
+
+
+## Why a press on bare ground joining village `target` (-1: none in reach) lays nothing, or "".
+func refusal_at(doc: MapDocument, target: int) -> String:
+	if target < 0:
+		return NO_VILLAGE
+	var held := doc.settlement(target)
+	if not lay_field:
+		return FULL if held.plazas.size() >= Settlement.MAX_PLAZAS else ""
+	if laying_kind(doc, target) == "":
+		return NO_FIELDS
+	return FIELDS_FULL if held.fields.size() >= Settlement.MAX_FIELDS else ""
 
 
 func took_press() -> bool:
@@ -258,9 +368,10 @@ func frame(brush: BrushTool) -> void:
 		if gesture != &"":
 			_to = p
 		else:
-			var found := VillagePlazas.pick(editor.document.settlements, p, _rim_m, _handle_m)
+			var found := VillageFields.pick_any(editor.document.settlements, p, _rim_m, _handle_m)
 			hover_village = int(found.get("settlement", -1))
 			hover_plaza = int(found.get("index", -1))
+			hover_group = found.get("group", VillageFields.GROUP_PLAZAS)
 			hover_part = found.get("part", &"")
 			if not _explicit:
 				var target := hover_village if hover_plaza >= 0 else ghost_village(editor, p)
@@ -277,12 +388,22 @@ func end(brush: BrushTool) -> void:
 		return
 	var radius := preview_radius()
 	var done := true
-	if gesture == GESTURE_NEW:
+	var fields := _grab_group == VillageFields.GROUP_FIELDS
+	if gesture == GESTURE_NEW and fields:
+		done = editor.settlements.add_field(_grab_village, _centre, radius, _grab_field_kind)
+		if done:
+			var count := editor.document.settlement(_grab_village).fields.size()
+			select(_grab_village, count - 1, true, _grab_group)
+	elif gesture == GESTURE_NEW:
 		done = editor.settlements.add_plaza(_grab_village, _centre, radius)
 		if done:
 			select(_grab_village, editor.document.settlement(_grab_village).plazas.size() - 1)
 	elif gesture == GESTURE_RESIZE and absf(radius - _start_radius) >= 0.1:
-		done = editor.settlements.resize_plaza(_grab_village, _grab_plaza, radius)
+		done = (
+			editor.settlements.resize_field(_grab_village, _grab_plaza, radius)
+			if fields
+			else editor.settlements.resize_plaza(_grab_village, _grab_plaza, radius)
+		)
 	if not done:
 		_message = refusal_text(editor.settlements.last_refusal)
 		brush.refused.emit(_message)
@@ -321,7 +442,7 @@ func reset() -> void:
 ## Delete or Backspace over a plaza.
 func remove_target(brush: BrushTool) -> void:
 	if brush.editor != null and hover_plaza >= 0:
-		if not remove(brush.editor, hover_village, hover_plaza):
+		if not remove(brush.editor, hover_village, hover_plaza, hover_group):
 			brush.refused.emit(REFUSED)
 
 
@@ -333,17 +454,16 @@ func step(brush: BrushTool, steps: int) -> void:
 		return
 	var village := hover_village if hover_plaza >= 0 else selected_village
 	var index := hover_plaza if hover_plaza >= 0 else selected_plaza
-	var held := editor.document.settlement(village) if village > 0 and index >= 0 else null
-	if held == null or index >= held.plazas.size():
+	var group := hover_group if hover_plaza >= 0 else selected_group
+	var disc := _disc(editor.document, village, group, index)
+	if disc.is_empty():
 		return
-	var wanted := VillagePlazas.clamp_radius(
-		float(held.plazas[index]["radius"]) + steps * VillagePlazas.RADIUS_STEP_M, held.kit
-	)
-	if not editor.settlements.resize_plaza(village, index, wanted):
+	var wanted := float(disc["radius"]) + steps * VillagePlazas.RADIUS_STEP_M
+	if not _resize(editor, village, group, index, wanted):
 		if editor.settlements.last_refusal != &"":
 			brush.refused.emit(REFUSED)
 		return
-	select(village, index)
+	select(village, index, true, group)
 	brush.redraw()
 
 
@@ -370,7 +490,7 @@ func _sync_selection(editor: AuthoringEditor) -> void:
 	if held == null:
 		var first: int = doc.settlements[0].id if not doc.settlements.is_empty() else -1
 		select(first, -1, false)
-	elif selected_plaza >= held.plazas.size():
+	elif selected_plaza >= 0 and picked_disc(doc).is_empty():
 		select(selected_village, -1, _explicit)
 	if gesture != &"" and doc.settlement(_grab_village) == null:
 		reset()
@@ -379,9 +499,16 @@ func _sync_selection(editor: AuthoringEditor) -> void:
 ## Emits view_changed when what the pane shows differs from the last frame (a held drag's size
 ## included, so the pane's size reads it live).
 func _announce(editor: AuthoringEditor) -> void:
-	var parts: Array = [selected_village, selected_plaza, preview_radius() if sizing() else 0.0]
+	var parts: Array = [
+		selected_village,
+		selected_plaza,
+		selected_group,
+		lay_field,
+		field_kind,
+		preview_radius() if sizing() else 0.0,
+	]
 	for settlement in editor.document.settlements:
-		parts.append([settlement.id, settlement.kit, settlement.plazas])
+		parts.append([settlement.id, settlement.kit, settlement.plazas, settlement.fields])
 	var now := var_to_str(parts)
 	if now != _signature:
 		_signature = now

@@ -11,9 +11,19 @@ extends VBoxContainer
 ## With no village it says what to do first. One line says the gesture; the ghost on the board
 ## teaches the rest. No state beyond what show_state was last given: the document is the truth
 ## (VillagePlazas.state_of). Built in code; every interactive Control is named.
+##
+## Fields (topic fields): a "Lay" row of two tiles, Plaza and Field, says what a press on bare
+## ground lays; with Field picked, a row of the kinds the village's character keeps (Crops,
+## Orchard, Garden, each a small painted picture, VillageSwatch.field_texture) picks the kind, the
+## kit's own first kind lit until the author picks. A character that keeps no fields (the harbour
+## town) greys the Field tile and says so in its tooltip. The size row and Remove serve a picked
+## field as they serve a plaza (VillageFields.with_fields).
 
 ## A village tile was picked (a Settlement id).
 signal village_picked(village: int)
+## The Lay row or a kind tile was picked: a press lays a field of `kind` ("" the village's
+## default) when `field`, else a plaza.
+signal lay_picked(field: bool, kind: String)
 ## A character tile was picked (a Settlement.KIND_NAMES entry): the picked village takes it.
 signal kit_picked(kit: String)
 ## The size slider was let go (or keyed) at this radius in map metres.
@@ -29,6 +39,17 @@ const PICK_NOTE := "Click a plaza on the board to size or remove it."
 const ROOM := "Room for %d more plazas"
 const ROOM_ONE := "Room for 1 more plaza"
 const ROOM_NONE := "Four plazas: the village is full"
+const FIELD_ROOM := "Room for %d more fields"
+const FIELD_ROOM_ONE := "Room for 1 more field"
+const FIELD_ROOM_NONE := "Four fields: the village is full"
+const FIELD_PICK_NOTE := "Click a field on the board to size or remove it."
+const LAY_PLAZA_TIP := "A click on the ground beside the street opens a plaza"
+const LAY_FIELD_TIP := "A click on the ground at the village's edge lays a field"
+const NO_FIELDS_TIP := "%s keeps no fields"
+const REMOVE_FIELD_TIP := "Remove the picked field and its paint (Delete)"
+const LAY_TILE_SIZE := Vector2(96, 40)
+const KIND_TILE_SIZE := Vector2(68, 78)
+const KIND_THUMB_PX := 44
 const KIT_TIP := "%s: %s streets round a %s plaza"
 const REMOVE_TIP := "Remove the picked plaza and its paving (Delete)"
 const SIZE_TIP := "How wide the picked plaza is"
@@ -39,6 +60,8 @@ const VILLAGE_TILE_SIZE := Vector2(96, 40)
 var empty_note: Label
 var village_field: TileField
 var kit_field: TileField
+var lay_field: TileField
+var kind_field: TileField
 var plaza_box: VBoxContainer
 var plaza_title: Label
 var pick_note: Label
@@ -74,6 +97,7 @@ func _init(palette_root: String = PaletteLibrary.DEFAULT_ROOT) -> void:
 	village_field.visible = false
 	add_child(village_field)
 	_build_kit_field()
+	_build_lay_fields()
 	_build_plaza_box()
 	show_state(VillagePlazas.state_of(MapDocument.new(), -1, -1))
 
@@ -104,18 +128,36 @@ func show_state(state: Dictionary, unit_k: float = 1.0, unit_label: String = "m"
 	else:
 		kit_field.tiles.clear_selection()
 	plaza_box.visible = picked
-	plaza_title.text = room_text(int(state["plazas"]))
+	var laying := bool(state.get("lay_field", false))
+	_show_lay(state, picked, laying)
 	var sizing := bool(state.get("sizing", false))
 	var has_plaza := int(state["plaza"]) >= 0
+	# The count, the note and the size follow the picked disc, else what a press lays.
+	var on_fields: bool = (
+		state.get("group", VillageFields.GROUP_PLAZAS) == VillageFields.GROUP_FIELDS
+		if has_plaza or sizing
+		else laying
+	)
+	var count := int(state.get("fields", 0)) if on_fields else int(state["plazas"])
+	plaza_title.text = field_room_text(count) if on_fields else room_text(count)
+	pick_note.text = FIELD_PICK_NOTE if on_fields else PICK_NOTE
 	size_row.visible = has_plaza or sizing
 	remove_button.visible = has_plaza and not sizing
-	pick_note.visible = not size_row.visible and int(state["plazas"]) > 0
+	remove_button.tooltip_text = REMOVE_FIELD_TIP if on_fields else REMOVE_TIP
+	pick_note.visible = not size_row.visible and count > 0
 	size_slider.editable = has_plaza and not sizing
 	remove_button.disabled = not has_plaza
-	# A plaza made under its kit's floor elsewhere still shows its own size.
+	var kind := str(state.get("picked_kind", ""))
+	if on_fields and kind == "":
+		kind = str(state.get("field_kind", ""))
+	var floor_m := VillagePlazas.min_radius(String(state["kit"]))
+	size_slider.max_value = Settlement.PLAZA_MAX_RADIUS_M
+	if on_fields:
+		floor_m = VillageFields.clamp_radius(0.0, kind)
+		size_slider.max_value = VillageFields.clamp_radius(INF, kind)
+	# A disc made under its floor elsewhere still shows its own size.
 	size_slider.min_value = minf(
-		VillagePlazas.min_radius(String(state["kit"])),
-		float(state["radius"]) if has_plaza else Settlement.PLAZA_MAX_RADIUS_M
+		floor_m, float(state["radius"]) if has_plaza else Settlement.PLAZA_MAX_RADIUS_M
 	)
 	if has_plaza or sizing:
 		size_slider.set_value_no_signal(float(state["radius"]))
@@ -129,6 +171,34 @@ static func room_text(plazas: int) -> String:
 	if more <= 0:
 		return ROOM_NONE
 	return ROOM_ONE if more == 1 else ROOM % more
+
+
+## The field count line for a village holding `fields`.
+static func field_room_text(fields: int) -> String:
+	var more := Settlement.MAX_FIELDS - fields
+	if more <= 0:
+		return FIELD_ROOM_NONE
+	return FIELD_ROOM_ONE if more == 1 else FIELD_ROOM % more
+
+
+## The Lay row and, with Field picked, the kinds the village keeps (the kit's default lit until
+## the author picks one).
+func _show_lay(state: Dictionary, picked: bool, laying: bool) -> void:
+	var kinds: Array = state.get("kinds", [])
+	lay_field.visible = picked
+	var none := kinds.is_empty()
+	lay_field.tiles.set_tile_disabled(&"village_lay_field", not picked or none)
+	lay_field.tiles.set_tile_tooltip(
+		&"village_lay_field",
+		NO_FIELDS_TIP % VillagePlazas.kit_label(String(state["kit"])) if none else LAY_FIELD_TIP
+	)
+	lay_field.tiles.select(&"village_lay_field" if laying and not none else &"village_lay_plaza")
+	kind_field.visible = picked and laying and not none
+	for kind in Settlement.FIELD_KINDS:
+		kind_field.tiles.set_tile_visible(_kind_id(kind), kinds.has(kind))
+	var current := str(state.get("field_kind", ""))
+	if current != "":
+		kind_field.tiles.select(_kind_id(current))
 
 
 ## Builds the four character tiles once, each with the vignette of its kit's plaza (the
@@ -166,6 +236,53 @@ func _build_kit_field() -> void:
 	kit_field.tiles.selection_changed.connect(_on_kit_tile)
 	kit_field.visible = false
 	add_child(kit_field)
+
+
+func _build_lay_fields() -> void:
+	lay_field = TileField.new()
+	lay_field.name = "VillageLayField"
+	lay_field.caption = "Lay"
+	lay_field.tiles.tile_min_size = LAY_TILE_SIZE
+	lay_field.tiles.columns = 2
+	lay_field.tiles.add_tile(&"village_lay_plaza", "Plaza", "", LAY_PLAZA_TIP)
+	lay_field.tiles.add_tile(&"village_lay_field", "Field", "", LAY_FIELD_TIP)
+	lay_field.tiles.selection_changed.connect(_on_lay_tile)
+	lay_field.visible = false
+	add_child(lay_field)
+	kind_field = TileField.new()
+	kind_field.name = "VillageKindField"
+	kind_field.caption = "Kind of field"
+	kind_field.tiles.photo_icons = true
+	kind_field.tiles.tile_min_size = KIND_TILE_SIZE
+	kind_field.tiles.columns = 3
+	for kind in Settlement.FIELD_KINDS:
+		kind_field.tiles.add_tile(
+			_kind_id(kind),
+			str(VillageFields.KIND_LABELS[kind]),
+			"",
+			str(VillageFields.KIND_TIPS[kind]),
+			VillageSwatch.field_texture(kind, KIND_THUMB_PX)
+		)
+	kind_field.tiles.selection_changed.connect(_on_kind_tile)
+	kind_field.visible = false
+	add_child(kind_field)
+
+
+func _on_lay_tile(id: StringName) -> void:
+	if _syncing:
+		return
+	var kind := String(kind_field.tiles.selected).trim_prefix("village_kind_")
+	lay_picked.emit(id == &"village_lay_field", kind)
+
+
+func _on_kind_tile(id: StringName) -> void:
+	if _syncing:
+		return
+	lay_picked.emit(true, String(id).trim_prefix("village_kind_"))
+
+
+static func _kind_id(kind: String) -> StringName:
+	return StringName("village_kind_" + kind)
 
 
 func _build_plaza_box() -> void:

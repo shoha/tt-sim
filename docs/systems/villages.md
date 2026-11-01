@@ -687,3 +687,40 @@ until the author picks a village the pane follows the pointer, so crossing anoth
 pane moves it (its chip on the board shows which); the paving colours of the four kits are close (pale sands and
 greys), so the ghost's tint says "paved here" more than which kit; only the market town's floor was measured (the
 harbour town's quay stalls may want one too).
+
+## 11. Phase 3, first slice as built (topic fields, 2026-10-31)
+
+A village's edge is no longer bare grass: the Village tool lays FIELDS as it lays plazas. Decided in the card (owner
+away): discs, up to 4 per village, three kinds, no polygons, no move, no bridges, walls or touchable props.
+
+- **Record:** `Settlement.fields`, discs `{at, radius 2.5..18 m, kind}`; saved, validated and round-tripped like
+  plazas (settlements.md "The record"), left out when empty, so a map without fields saves byte for byte as before.
+- **Kinds** (`VillageFields`, `utils/village_fields.gd`, pure): crops (a disc of tilled earth, `dirt`, with broad
+  rows 2.5 m apart, green `grass_alpine` or gold `grass_savanna` by the seed, a scarecrow, a haystack on two fields
+  in three); orchard (warm `grass_meadow` with fruit trees, the grassland meadow's broadleaf and oaks at 0.42..0.55
+  scale, on a loose quincunx 4.6 m apart turned by the seed, bee skeps by some); garden (a small `grass_meadow`
+  disc with two or three earth beds, one flower per bed in lavender or bloom mounds, one or two flowering shrubs at
+  the rim). A kit decides the kinds and its default (`KIT_KINDS`): farming hamlet crops, orchard, garden; market
+  town garden, orchard; hill fort garden, crops; harbour town none.
+- **Paint** goes into the record's `ground` (role `field`, first in `SettlementGround.PAINT_ORDER`, so a road
+  laid later runs over a field); `SettlementGroundIO.MAX_SURFACES` went from 4 to 8 to hold the field surfaces.
+  Because the strokes follow from the record and the seed, a resize or a removal finds exactly a field's strokes
+  (`VillageFields.stroke_indices`) and takes them back through `_replace`'s `drops` (was one `drop`); a re-dress
+  and a change of character replan the fields with everything else. Clear and undo need nothing new.
+- **Furnishings** are derived: props through `SettlementPlan.place` (slots `f<k>:scarecrow`, removable), plants
+  through `AuthoredFieldPlants` (`scenes/terrain/authored_field_plants.gd`, the scatter's own `build_scatter`, one
+  MultiMesh per species), refreshed with the settlement layer, play time included.
+- **Editor:** `SettlementEditor.add_field`, `resize_field`, `remove_field`, one history group each, peers through
+  the existing `surface` and `settlements` ops (`test_village_fields.gd`).
+- **Tool and pane:** a "Lay" row (Plaza, Field) under the character; with Field, a "Kind of field" row of painted
+  pictures (`VillageSwatch.field_texture`), the kit's default lit; a harbour town greys Field with a tooltip. The
+  brush picks plazas and fields alike (`VillageFields.pick_any`, `selected_group`), the ghost takes the kind's tint
+  (`KIND_TINTS`) and default size, the pills name the field.
+- **Look (job `fields_look`, two rounds):** where a field lay on the board, the green rows on brown earth read as a
+  ploughed field in bold soft stripes, the scarecrow and haystack read well; but the job's map is 62.5 m across and
+  the fields sat in the board's fog margin, so the home-zoom read is NOT verified. The pane at 1280x720 overflows:
+  the room line and size row fall below the fold (the Lay and kind rows added about 160 px).
+- **Limits left:** taking back a field that overlaps a road or path thins that paint (as for plazas); the plants'
+  wind materials are not registered with the level's wind re-tuning; plants stand again only on a settlement
+  refresh (a sculpt under an orchard leaves them floating until the next edit); fields refused for wet or steep
+  ground are recorded and furnished but unpainted.
