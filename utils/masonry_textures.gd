@@ -26,6 +26,13 @@ static func available() -> bool:
 static func textures() -> Dictionary:
 	if not _set.is_empty():
 		return _set
+	return adopt(decode())
+
+
+## The three images, decoded and mipmapped ({} when a file is missing). Pure and safe on any
+## thread: StructureWarmup decodes them on a worker so the first wall does not.
+static func decode() -> Dictionary:
+	var images := {}
 	for key in ["albedo", "normal", "orm"]:
 		# A raw PNG in the pack (importer "keep"): read its bytes, as the library surfaces are.
 		var image := Image.new()
@@ -33,7 +40,16 @@ static func textures() -> Dictionary:
 		if bytes.is_empty() or image.load_png_from_buffer(bytes) != OK:
 			return {}
 		image.generate_mipmaps()
-		_set[key] = ImageTexture.create_from_image(image)
+		images[key] = image
+	return images
+
+
+## Makes the textures from decode()'s images, once (main thread); the set textures() returns.
+static func adopt(images: Dictionary) -> Dictionary:
+	if not _set.is_empty() or images.is_empty():
+		return _set
+	for key: String in images:
+		_set[key] = ImageTexture.create_from_image(images[key])
 	return _set
 
 

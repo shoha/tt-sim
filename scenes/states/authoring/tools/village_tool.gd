@@ -49,6 +49,11 @@ func works_on(editor: AuthoringEditor) -> bool:
 	return editor.can_paint()
 
 
+## A Dress places buildings' furnishings: their decor and shaders warm up now (StructureWarmup).
+func prepare(controller: AuthoringController) -> void:
+	StructureTool.warm(controller)
+
+
 func build_pane(panel: AuthoringPanel) -> Control:
 	return VillageToolPane.new(panel.palette_root)
 

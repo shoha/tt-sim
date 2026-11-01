@@ -25,8 +25,15 @@ extends RefCounted
 const BLOCK := MaskStroke.BLOCK
 const COMPRESSION := SurfaceStroke.COMPRESSION
 const CHANNELS := MapDocument.SURFACE_CHANNELS
+const ENTRIES := MapDocument.SURFACE_ENTRIES
 ## A sample counts as full when its weights reach 255 less this (the scaling truncates).
 const FULL_SLACK := 4
+## The four quarters of the per-sample scratch buffer of _unpaint_sample, ENTRIES ints each.
+const LAID_SLOT := 0
+const LAID_WEIGHT := ENTRIES
+const INDEX := ENTRIES * 2
+const WEIGHT := ENTRIES * 3
+const WORK_SIZE := ENTRIES * 4
 
 
 ## Removes the paint of `strokes` ({"surface", "from", "to", "radius", "seconds"} in paint order,
@@ -40,7 +47,7 @@ static func remove(doc: MapDocument, strokes: Array[Dictionary]) -> Dictionary:
 	if scratch.surface_weights.is_empty():
 		return {}
 	# Real slot of each scratch slot, -1 when the map no longer paints that surface.
-	var real_of: Array[int] = []
+	var real_of := PackedInt32Array()
 	for name in scratch.surface_ids:
 		real_of.append(doc.surface_ids.find(name))
 	var before := _capture(doc, strokes)
@@ -49,9 +56,13 @@ static func remove(doc: MapDocument, strokes: Array[Dictionary]) -> Dictionary:
 	var seen := PackedByteArray()
 	seen.resize(count)
 	# The weight plane of the replay: a sample it left bare (most of a capsule's rectangle) has
-	# nothing to take back, which _unpaint_sample would find out after two array allocations.
+	# nothing to take back.
 	var laid := scratch.surface_weights
 	var plane := count * CHANNELS
+	# One scratch buffer for every sample's entries (see _unpaint_sample), so the walk allocates
+	# nothing per sample (hitches2: the walk was about half of a take-back).
+	var work := PackedInt32Array()
+	work.resize(WORK_SIZE)
 	for stroke in strokes:
 		var rect := MaskBrush.capsule_rect(doc, stroke["from"], stroke["to"], stroke["radius"])
 		for z in range(rect.position.y, rect.end.y):
@@ -61,7 +72,7 @@ static func remove(doc: MapDocument, strokes: Array[Dictionary]) -> Dictionary:
 					seen[i] = 1
 					var at := plane + i * CHANNELS
 					if laid[at] != 0 or laid[at + 1] != 0 or laid[at + 2] != 0 or laid[at + 3] != 0:
-						_unpaint_sample(doc, scratch, real_of, i, count)
+						_unpaint_sample(doc.surface_weights, laid, real_of, i, count, work)
 	return _finish(doc, before, ids_before)
 
 
@@ -84,67 +95,114 @@ static func _replay(doc: MapDocument, strokes: Array[Dictionary]) -> MapDocument
 
 
 ## One sample: lowers the weights of the surfaces the dressing laid, and gives the author's paint
-## its room back where the dressing's paint was intact on a full sample.
+## its room back where the dressing's paint was intact on a full sample. Reads `laid` (the replay's
+## weights) and edits `planes` (the document's) in place, with SurfaceEntries' rules spelt out: the
+## entries that carry weight, high to low with ties in entry order, written back in that canonical
+## order. `work` (WORK_SIZE ints, reused by every sample) holds the replay's
+## entries as real slots and weights, then the sample's own indices and weights; nothing is
+## allocated per sample.
 static func _unpaint_sample(
-	doc: MapDocument, scratch: MapDocument, real_of: Array[int], i: int, count: int
+	planes: PackedByteArray,
+	laid: PackedByteArray,
+	real_of: PackedInt32Array,
+	i: int,
+	count: int,
+	work: PackedInt32Array
 ) -> void:
-	var laid := SurfaceEntries.read_sample(scratch.surface_weights, i, count)
-	var laid_index: PackedInt32Array = laid[0]
-	if laid_index.is_empty():
-		return
-	var laid_weight: PackedInt32Array = laid[1]
-	var current := SurfaceEntries.read_sample(doc.surface_weights, i, count)
-	var index: PackedInt32Array = current[0]
-	var weight: PackedInt32Array = current[1]
+	var at := i * CHANNELS
+	var weight_at := count * CHANNELS + at
+	# The dressing's entries (in any order: a slot appears once) and what it owes the map's slots.
+	var laid_n := 0
 	var owed := 0
-	for k in laid_index.size():
-		if real_of[laid_index[k]] >= 0:
-			owed += laid_weight[k]
+	for e in ENTRIES:
+		var lw := laid[weight_at + e]
+		if lw > 0:
+			var real := real_of[laid[at + e]]
+			work[LAID_SLOT + laid_n] = real
+			work[LAID_WEIGHT + laid_n] = lw
+			laid_n += 1
+			if real >= 0:
+				owed += lw
+	if laid_n == 0:
+		return
+	# The sample's entries that carry weight, high to low, ties in entry order (read_sample).
+	var n := 0
+	for e in ENTRIES:
+		var w := planes[weight_at + e]
+		if w > 0:
+			var k := n - 1
+			while k >= 0 and work[WEIGHT + k] < w:
+				work[WEIGHT + k + 1] = work[WEIGHT + k]
+				work[INDEX + k + 1] = work[INDEX + k]
+				k -= 1
+			work[WEIGHT + k + 1] = w
+			work[INDEX + k + 1] = planes[at + e]
+			n += 1
 	var before_total := 0
 	var removed := 0
 	var laid_before := 0
 	var laid_after := 0
-	var mine := PackedInt32Array()
-	for e in index.size():
-		before_total += weight[e]
+	var mine := 0
+	for e in n:
+		var w := work[WEIGHT + e]
+		before_total += w
 		var found := -1
-		for k in laid_index.size():
-			if real_of[laid_index[k]] == index[e]:
+		for k in laid_n:
+			if work[LAID_SLOT + k] == work[INDEX + e]:
 				found = k
 		if found < 0:
 			continue
-		var left := maxi(weight[e] - laid_weight[found], 0)
-		removed += weight[e] - left
-		laid_before += weight[e]
+		var left := maxi(w - work[LAID_WEIGHT + found], 0)
+		removed += w - left
+		laid_before += w
 		laid_after += left
-		weight[e] = left
-		mine.append(e)
+		work[WEIGHT + e] = left
+		mine |= 1 << e
 	if removed == 0:
 		return
 	var others := before_total - laid_before
 	if removed >= owed - FULL_SLACK and others > 0 and before_total >= 255 - FULL_SLACK:
-		_give_room_back(weight, mine, laid_before, laid_after)
-	SurfaceEntries.write_sample(doc.surface_weights, i, count, index, weight)
+		_give_room_back(work, n, mine, laid_before, laid_after)
+	# Write back (write_sample): the entries left with weight, high to low, ties in their order,
+	# then unused (0, 0). The laid half of `work` is free now and holds the sorted result.
+	var kept := 0
+	for e in n:
+		var w := mini(work[WEIGHT + e], 255)
+		if w <= 0:
+			continue
+		var k := kept - 1
+		while k >= 0 and work[LAID_WEIGHT + k] < w:
+			work[LAID_WEIGHT + k + 1] = work[LAID_WEIGHT + k]
+			work[LAID_SLOT + k + 1] = work[LAID_SLOT + k]
+			k -= 1
+		work[LAID_WEIGHT + k + 1] = w
+		work[LAID_SLOT + k + 1] = work[INDEX + e]
+		kept += 1
+	for e in ENTRIES:
+		planes[at + e] = work[LAID_SLOT + e] if e < kept else 0
+		planes[weight_at + e] = work[LAID_WEIGHT + e] if e < kept else 0
 
 
-## Scales the weights of the entries not in `mine` up by the room the dressing's paint gave up
-## (255 less what is laid now over 255 less what was laid), never past the room there is.
+## Scales the weights of the sample's `n` entries in `work` that are not in `mine` (a bit per
+## entry) up by the room the dressing's paint gave up (255 less what is laid now over 255 less what
+## was laid), never past the room there is.
 static func _give_room_back(
-	weight: PackedInt32Array, mine: PackedInt32Array, laid_before: int, laid_after: int
+	work: PackedInt32Array, n: int, mine: int, laid_before: int, laid_after: int
 ) -> void:
 	var room := 255 - laid_after
 	var factor := float(room) / float(maxi(255 - laid_before, 1))
 	var total := 0
 	var largest := -1
-	for e in weight.size():
-		if mine.has(e):
+	for e in n:
+		if mine & (1 << e) != 0:
 			continue
-		weight[e] = mini(roundi(weight[e] * factor), room)
-		total += weight[e]
-		if largest < 0 or weight[e] > weight[largest]:
+		var w := mini(roundi(work[WEIGHT + e] * factor), room)
+		work[WEIGHT + e] = w
+		total += w
+		if largest < 0 or w > work[WEIGHT + largest]:
 			largest = e
 	if total > room and largest >= 0:
-		weight[largest] -= total - room
+		work[WEIGHT + largest] -= total - room
 
 
 ## The sample blocks `strokes` reach, as {block: {"rect", "bytes"}} before any change.

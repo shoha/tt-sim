@@ -957,6 +957,12 @@ static func _body(faces: PackedVector3Array, structure_id: int) -> StaticBody3D:
 ## the painterly wall and roof shaders over the rock's masonry and the planks), one shared per
 ## triple (masonry also by the style's `stone_tone` hint).
 func _material(kind: String, role: String, style: String, tone: String = "") -> Material:
+	return shared_material(kind, role, style, tone)
+
+
+## The shared material _material() hands an install, made now when it is not yet (StructureWarmup
+## makes the first ones before a building lands).
+func shared_material(kind: String, role: String, style: String, tone: String = "") -> Material:
 	var key := "%s:%s:%s" % [kind, role, style]
 	if kind == "masonry" and tone != "":
 		key += ":" + tone

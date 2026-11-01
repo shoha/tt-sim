@@ -334,6 +334,9 @@ func _replace(
 	if laying:
 		_settle()
 		e.history.begin_group()
+		# The take-back and the new paving cover one street: one ground and scatter update for
+		# both (released after the lay below).
+		e.hold_ground()
 		if replaces and held != null and not held.ground.is_empty():
 			var unpaving := Time.get_ticks_usec()
 			var taken := SettlementPaint.unlay(e, held.ground)
@@ -377,6 +380,7 @@ func _replace(
 		return changed.id
 	var painting := Time.get_ticks_usec()
 	last_ground["entries"] = SettlementPaint.lay(e, strokes)
+	e.release_ground()
 	last_ground["paint_ms"] = (Time.get_ticks_usec() - painting) / 1000.0
 	last_ground["strokes"] = strokes.size()
 	_change(label, after, [])
