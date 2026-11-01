@@ -1166,6 +1166,28 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   `i_ghost_hillfort`), the four ghosts on one sheet (`sheet_ghosts`), market plazas of 5, 6 and 7 m side by side
   (`j_market_5_6_7`, the evidence for the market's 6 m floor), then the window at 1280x720 with a picked plaza
   (`k_720_pane`). Run with `--full` for the verdict captures.
+- `jobs/fields_look.json` (about 30 s, keeps no level; topic fields, writes `fields_look`, probe
+  `probes/fields.gd`): a 320 ft map (80 m, the document's 64-cell limit; `new_map` `size` is feet, and 400 ft
+  stalls at `wait_ready`), the two villages of villagetool_look on short streets (x = -14 and 14, z -12..12). Round 4
+  layout, where an author would lay them and in the camera's view (fields behind a street's far end hide behind its
+  roofs): crops at the hamlet's near end (-14, 26) r 9 and beside its west houses (-32, 3) r 8, an orchard off its
+  north-west (-31, -19) r 8, the market's garden at its near end (14, 22) r 5.5. Captures: home zoom (`a_home_fields`,
+  and framed on the market `a2_home_market`), close (`b_close_crops`, `c_close_orchard`, `c2_close_garden`), the
+  pointer by a house where a click's crop field is refused (`d_ghost_crops`: the refused disc in salmon, pill "Over a
+  building: lay it on open ground") and a crop ghost on open ground (`d2_ghost_open`, the brush ring's ink stroke),
+  then the pane at 1280x720 on a picked crop field (`f_720_pane`, an `eval` logs the pane's rect: content scale 1.4,
+  canvas 771 px tall, pane top 122) and on the market town laying its garden (`h_720_pane_market`, Crops greyed with
+  the reason on its own line). The probe also has `clear` (every field removed through the editor), which the round 4
+  A/B used between modes; its captures `a0_home_plain`, `a1_home_hedge`, `a2_home_fringe` and `a3_home_both` stay in the
+  folder (villages.md 11). Framing: `look_at` reads the camera's view offset at once, so after a `zoom` put a `settle`
+  before it (round 3). Round 4 verdict (fields4, 2026-10-31): hedged crop fields are the boldest shapes on the board
+  at home zoom; the orchard reads as tended rows with blossom (modest); the garden is a small distinct plot.
+- `jobs/fields_crops.json` (about 27 s, keeps no level; topic fields round 5, writes `fields_crops`, probe
+  `probes/fields.gd` `look`): the fields_look map and villages with a third crop field (3, 37) r 7, so three
+  neighbouring fields show three tones. It lays the crops in each `VillageCrops` look in turn (`look` takes every
+  crop field back under the old look, switches, lays it again) and captures each at home zoom (`<look>_home`, size
+  60 on (-8, 14)) and half zoom (`<look>_mid`, size 30 on (-18, 24)), tiled into `sheet_crops.png` (A rows | B
+  patchwork | C plants; home above, half below). Round 5 verdict (villages.md 11): the plants look wins.
 - `jobs/villagetool_recheck.json` (about 40 s, keeps no level; topic villagetool, writes `villagetool2_recheck`): the
   same two villages, then the ghost's paving fill (`a_ghost_market`), a click in the market village laying its 6 m
   floor (`b_market_click`), the hint over the picked plaza (`c_hover_picked`), these three pinned at half size; a full

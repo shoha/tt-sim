@@ -129,9 +129,12 @@ func test_hostile_ground_skips_the_settlement_with_a_warning() -> void:
 	var many: Array = []
 	for k in SettlementGroundIO.MAX_STROKES + 1:
 		many.append([0, 0, 0, 1, 1, 2.0, 1.2])
+	var surfaces: Array = []
+	for k in SettlementGroundIO.MAX_SURFACES + 1:
+		surfaces.append("s%d" % k)
 	var cases := {
 		"too many strokes": {"surfaces": ["a"], "strokes": many},
-		"five surfaces": {"surfaces": ["a", "b", "c", "d", "e"], "strokes": [[0, 0, 0, 1, 1, 2, 1]]},
+		"one surface too many": {"surfaces": surfaces, "strokes": [[0, 0, 0, 1, 1, 2, 1]]},
 		"unlisted surface": {"surfaces": ["a"], "strokes": [[1, 0, 0, 1, 1, 2, 1]]},
 		"negative surface": {"surfaces": ["a"], "strokes": [[-1, 0, 0, 1, 1, 2, 1]]},
 		"short row": {"surfaces": ["a"], "strokes": [[0, 0, 0, 1, 1, 2]]},

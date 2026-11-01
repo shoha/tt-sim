@@ -27,9 +27,11 @@ const PREVIEW_FILL_ALPHA := 0.6
 ## Paving tints are lifted toward white this much, so a disc reads luminous over the ground rather
 ## than as a grey film (the round 2 drag capture).
 const FILL_LIFT := 0.25
-## Line weights (times the brush cursor's widths) and handle dot radii, in pixels.
-const WEIGHT_GHOST := 0.55
-const WEIGHT_CALM := 0.9
+## Line weights (times the brush cursor's widths) and handle dot radii, in pixels. The ghost and a
+## calm ring take the brush ring's full stroke (an ink outline under the tint): at 0.55 and 0.9 with
+## the ink thinned they were a pale 1-2 px hairline, about 1.2:1 over bright grass (fields round 4).
+const WEIGHT_GHOST := 1.0
+const WEIGHT_CALM := 1.0
 const WEIGHT_PICKED := 1.35
 const WEIGHT_HOVER := 1.75
 const HANDLE_PX := 5.5
@@ -44,36 +46,50 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> v
 	var canvas := cursor.canvas
 	var camera := cursor.camera
 	var doc := editor.document
-	for settlement in doc.settlements:
-		for index in settlement.plazas.size():
-			var plaza := settlement.plazas[index]
-			var picked := settlement.id == mode.selected_village and index == mode.selected_plaza
-			var hovered := (
-				mode.gesture == &""
-				and settlement.id == mode.hover_village
-				and index == mode.hover_plaza
-			)
-			var radius := float(plaza["radius"])
-			var style := ring_style(picked, hovered)
-			if mode.gesture == VillageBrush.GESTURE_RESIZE and picked:
-				radius = mode.preview_radius()
-				style["fill"] = _paving(editor, settlement.kit, PREVIEW_FILL_ALPHA)
-			draw_plaza(canvas, camera, editor, plaza["at"], radius, style)
+	for group: StringName in [VillageFields.GROUP_FIELDS, VillageFields.GROUP_PLAZAS]:
+		for settlement in doc.settlements:
+			var discs: Array[Dictionary] = settlement.get(group)
+			for index in discs.size():
+				var plaza := discs[index]
+				var picked := (
+					settlement.id == mode.selected_village
+					and index == mode.selected_plaza
+					and group == mode.selected_group
+				)
+				var hovered := (
+					mode.gesture == &""
+					and settlement.id == mode.hover_village
+					and index == mode.hover_plaza
+					and group == mode.hover_group
+				)
+				var radius := float(plaza["radius"])
+				var style := ring_style(picked, hovered)
+				if mode.gesture == VillageBrush.GESTURE_RESIZE and picked:
+					radius = mode.preview_radius()
+					style["fill"] = _fill(editor, settlement.kit, str(plaza.get("kind", "")), PREVIEW_FILL_ALPHA)
+				draw_plaza(canvas, camera, editor, plaza["at"], radius, style)
 	if doc.settlements.size() > 1:
 		for settlement in doc.settlements:
 			_draw_badge(canvas, camera, editor, settlement, settlement.id == mode.selected_village)
 	var units := [brush.unit_cell_m, brush.unit_per_cell, brush.unit_label]
 	if mode.gesture == VillageBrush.GESTURE_NEW or mode.gesture == VillageBrush.GESTURE_RESIZE:
 		var radius := mode.preview_radius()
+		var held_disc := mode.picked_disc(doc)
+		var kind := (
+			str(held_disc.get("kind", ""))
+			if not held_disc.is_empty()
+			else mode.laying_kind(doc, mode.selected_village)
+		)
 		if mode.gesture == VillageBrush.GESTURE_NEW:
 			var style := ring_style(true, false)
 			var kit := doc.settlement(mode.selected_village).kit
-			style["fill"] = _paving(editor, kit, PREVIEW_FILL_ALPHA)
+			style["fill"] = _fill(editor, kit, kind, PREVIEW_FILL_ALPHA)
 			draw_plaza(canvas, camera, editor, mode.centre(), radius, style)
+		var noun := "Plaza" if kind == "" else str(VillageFields.KIND_LABELS.get(kind, "Field"))
 		BridgeBrush.draw_pill(
 			canvas,
 			camera.unproject_position(brush.hit),
-			readout(radius * editor.map_scale(), units),
+			readout(radius * editor.map_scale(), units, noun),
 			READOUT_COLOR
 		)
 		return
@@ -81,29 +97,67 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> v
 		return
 	var pill_at := camera.unproject_position(brush.hit)
 	if mode.hover_plaza >= 0:
-		var rim := mode.hover_part == VillagePlazas.PART_RIM
-		var picked := (
-			mode.hover_village == mode.selected_village and mode.hover_plaza == mode.selected_plaza
-		)
-		var text := VillageBrush.HOVER_RIM
-		if not rim:
-			text = VillageBrush.HOVER_PICKED if picked else VillageBrush.HOVER_INSIDE
-		BridgeBrush.draw_pill(canvas, pill_at, text, READOUT_COLOR)
+		BridgeBrush.draw_pill(canvas, pill_at, hover_text(doc, mode), READOUT_COLOR)
 		return
 	var p := editor.to_map_xz(brush.hit)
 	var village := mode.ghost_village(editor, p)
-	if village < 0:
-		BridgeBrush.draw_marker(canvas, camera, brush.hit, TINT_REFUSED)
-		BridgeBrush.draw_pill(canvas, pill_at, VillageBrush.NO_VILLAGE_SHORT, REFUSED_COLOR)
-	elif doc.settlement(village).plazas.size() >= Settlement.MAX_PLAZAS:
-		BridgeBrush.draw_marker(canvas, camera, brush.hit, TINT_REFUSED)
-		BridgeBrush.draw_pill(canvas, pill_at, VillageBrush.FULL_SHORT, REFUSED_COLOR)
-	else:
-		var style := ghost_style(_paving(editor, doc.settlement(village).kit, GHOST_FILL_ALPHA))
-		var ring := draw_plaza(canvas, camera, editor, p, VillagePlazas.DEFAULT_RADIUS_M, style)
-		BridgeBrush.draw_pill(
-			canvas, beside(ring, pill_at), VillageBrush.ghost_hint(doc, village), READOUT_COLOR
+	var refusal := mode.refusal_at(doc, village, p)
+	if refusal == VillageBrush.ON_BUILDING:
+		# The disc a click would lay, in the refusal's salmon: the author sees which house it covers.
+		var refused_kind := mode.laying_kind(doc, village)
+		var refused_style := ghost_style(_alpha(TINT_REFUSED, FILL_ALPHA), TINT_REFUSED)
+		draw_plaza(
+			canvas, camera, editor, p, VillageFields.radius_for_drag(p, p, refused_kind), refused_style
 		)
+	if refusal != "":
+		BridgeBrush.draw_marker(canvas, camera, brush.hit, TINT_REFUSED)
+		BridgeBrush.draw_pill(canvas, pill_at, short_refusal(refusal), REFUSED_COLOR)
+	else:
+		var kit := doc.settlement(village).kit
+		var kind := mode.laying_kind(doc, village)
+		var style := ghost_style(_fill(editor, kit, kind, GHOST_FILL_ALPHA))
+		var radius := VillagePlazas.DEFAULT_RADIUS_M
+		if kind != "":
+			radius = VillageFields.radius_for_drag(p, p, kind)
+		var ring := draw_plaza(canvas, camera, editor, p, radius, style)
+		BridgeBrush.draw_pill(
+			canvas, beside(ring, pill_at), VillageBrush.ghost_hint(doc, village, kind), READOUT_COLOR
+		)
+
+
+## The pill over the disc under the pointer: what a press on its rim or inside does.
+static func hover_text(doc: MapDocument, mode: VillageBrush) -> String:
+	var rim := mode.hover_part == VillagePlazas.PART_RIM
+	var picked := (
+		mode.hover_village == mode.selected_village
+		and mode.hover_plaza == mode.selected_plaza
+		and mode.hover_group == mode.selected_group
+	)
+	if mode.hover_group == VillageFields.GROUP_FIELDS:
+		var held := doc.settlement(mode.hover_village)
+		var kind := str(held.fields[mode.hover_plaza]["kind"]) if held != null else ""
+		if rim:
+			return VillageBrush.FIELD_HOVER_RIM
+		if picked:
+			return VillageBrush.HOVER_PICKED
+		return VillageBrush.FIELD_HOVER_INSIDE % str(VillageFields.KIND_LABELS.get(kind, "Field"))
+	if rim:
+		return VillageBrush.HOVER_RIM
+	return VillageBrush.HOVER_PICKED if picked else VillageBrush.HOVER_INSIDE
+
+
+## The short pill for a refusal (VillageBrush.refusal_at's words).
+static func short_refusal(refusal: String) -> String:
+	match refusal:
+		VillageBrush.FULL:
+			return VillageBrush.FULL_SHORT
+		VillageBrush.FIELDS_FULL:
+			return VillageBrush.FIELDS_FULL_SHORT
+		VillageBrush.NO_FIELDS:
+			return VillageBrush.NO_FIELDS_SHORT
+		VillageBrush.ON_BUILDING:
+			return VillageBrush.ON_BUILDING_SHORT
+	return VillageBrush.NO_VILLAGE_SHORT
 
 
 ## The look of a placed plaza's ring: picked, under the pointer, both or neither.
@@ -115,18 +169,19 @@ static func ring_style(picked: bool, hovered: bool) -> Dictionary:
 		weight = WEIGHT_HOVER
 	return {
 		"tint": TINT_PICKED if picked else (TINT_HOVER if hovered else TINT_CALM),
-		"strength": 1.0 if (picked or hovered) else 0.55,
+		"strength": 1.0 if (picked or hovered) else 0.85,
 		"weight": weight,
 		"fill": Color.TRANSPARENT,
 		"handles": HANDLE_HOVER_PX if hovered else (HANDLE_PX if picked else 0.0),
 	}
 
 
-## The ghost's look: a thin chalk line over a faint disc of `fill` (the kit's paving).
-static func ghost_style(fill: Color) -> Dictionary:
+## The ghost's look: the brush ring's chalk stroke over a disc of `fill` (the kit's paving or the
+## field kind's tint), in `tint` (salmon for a disc a press would be refused).
+static func ghost_style(fill: Color, tint: Color = TINT_HOVER) -> Dictionary:
 	return {
-		"tint": TINT_HOVER,
-		"strength": 0.75,
+		"tint": tint,
+		"strength": 1.0,
 		"weight": WEIGHT_GHOST,
 		"fill": fill,
 		"handles": 0.0,
@@ -142,12 +197,13 @@ static func beside(ring: PackedVector2Array, at: Vector2) -> Vector2:
 	return Vector2(right + PILL_GAP_PX - 16.0, at.y - 14.0)
 
 
-## The readout of a plaza `radius_world` metres in radius: its width across in the level's units.
-static func readout(radius_world: float, units: Array) -> String:
+## The readout of a plaza (or the `noun` named disc) `radius_world` metres in radius: its width
+## across in the level's units.
+static func readout(radius_world: float, units: Array, noun: String = "Plaza") -> String:
 	var across := roundi(
 		ScaleUtils.world_to_display(2.0 * radius_world, float(units[0]), float(units[1]))
 	)
-	return "Plaza  %d %s across" % [across, str(units[2])]
+	return "%s  %d %s across" % [noun, across, str(units[2])]
 
 
 ## A plaza ring on `canvas` in `style` (ring_style, ghost_style): the disc filled on the ground
@@ -183,11 +239,9 @@ static func draw_plaza(
 	RenderingServer.canvas_item_add_triangle_array(
 		canvas.get_canvas_item(), BrushCursor.fan_indices(ring.size()), fan, colors
 	)
-	var glow := _alpha(tint, BrushCursor.GLOW_ALPHA * strength)
-	var ink := _alpha(SHADOW, BrushCursor.INK_ALPHA * 0.6 * strength)
-	canvas.draw_polyline(ring, glow, BrushCursor.GLOW_WIDTH * weight, true)
-	canvas.draw_polyline(ring, ink, BrushCursor.INK_WIDTH * weight, true)
-	canvas.draw_polyline(ring, _alpha(tint, strength), BrushCursor.LINE_WIDTH * weight, true)
+	# The brush ring's own stroke (glow, ink, line), the one every line tool and plaza shares.
+	for stroke: Array in BrushCursor.ring_strokes(_alpha(tint, strength)):
+		canvas.draw_polyline(ring, stroke[0], float(stroke[1]) * weight, true)
 	var dot_px := float(style["handles"])
 	if dot_px <= 0.0:
 		return ring
@@ -212,6 +266,14 @@ static func _draw_badge(
 	MapOverlayUtils.draw_chip(
 		canvas, at - box * 0.5, text, TINT_PICKED if picked else Color.TRANSPARENT
 	)
+
+
+## The tint a disc of field `kind` (VillageFields.KIND_TINTS), or of kit `kit`'s paving when `kind`
+## is "", is previewed in, at `alpha`.
+static func _fill(editor: AuthoringEditor, kit: String, kind: String, alpha: float) -> Color:
+	if kind != "" and VillageFields.KIND_TINTS.has(kind):
+		return _alpha(VillageFields.KIND_TINTS[kind], alpha)
+	return _paving(editor, kit, alpha)
 
 
 ## Kit `kit`'s paving colour at `alpha`, from the editor's palette.

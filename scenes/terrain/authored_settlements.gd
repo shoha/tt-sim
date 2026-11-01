@@ -63,8 +63,9 @@ static func of_map(root: Node3D) -> AuthoredSettlements:
 
 
 ## The layer under map root `root`, created if missing, brought up to `doc`. Nothing is created
-## for a document with no settlement.
+## for a document with no settlement. The fields' plants (AuthoredFieldPlants) follow with it.
 static func refresh_map(root: Node3D, doc: MapDocument) -> AuthoredSettlements:
+	AuthoredFieldPlants.refresh_map(root, doc)
 	var layer := root.get_node_or_null(NODE_NAME) as AuthoredSettlements
 	if layer == null:
 		if doc.settlements.is_empty():

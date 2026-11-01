@@ -281,6 +281,8 @@ static func sampler(
 	crossings.append_array(WallGeometry.clearance_crossings(doc))
 	# Structures clear everything under their footprint and a margin around it.
 	crossings.append_array(StructureGeometry.clearance_crossings(doc))
+	# A village's fields clear the wild cover over their painted ground (VillageFieldGround).
+	crossings.append_array(VillageFieldGround.clearance_crossings(doc))
 	facts["fringed"] = not fringe.is_empty()
 	facts["wet"] = wet_on
 	return func(p: Vector2, role: int) -> Vector3:

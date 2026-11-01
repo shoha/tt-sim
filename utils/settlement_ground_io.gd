@@ -16,7 +16,9 @@ extends RefCounted
 ## more than MAX_STROKES strokes or MAX_SURFACES surfaces refuses the whole list (null).
 
 const MAX_STROKES := 256
-const MAX_SURFACES := 4
+## A kit's road, paths and plaza take up to three; fields add up to four of their own
+## (VillageFields.KIND_GROUND).
+const MAX_SURFACES := 8
 const STEP := 0.01
 ## A stroke stays within this of the map's middle (a map is at most 640 m a side).
 const REACH_M := 1000.0

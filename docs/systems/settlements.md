@@ -20,7 +20,8 @@ or sent, and every peer derives the same list.
 | `swapped` | slot id to another prop name |
 | `pinned` | slot id to a placement `{prop, at, yaw, scale, seed}` drawn as recorded |
 | `plazas` | up to 4 discs `{at: map XZ (1 cm), radius: 2..16 m}` (villages2); the first frontage carries them to procgen's `plaza.centre` and `plaza.edge` rules, and the Dress paves them. Left out of the saved entry when empty, so older maps re-save byte for byte |
-| `ground` | up to 256 paint strokes the last Dress laid (villages3; `SettlementGroundIO`): `{surface, from, to, radius, seconds}` capsules in paint order, held to a hundredth. Saved as `"ground": {"surfaces": [...], "strokes": [[surface index, ax, az, bx, bz, radius, seconds], ...]}` (at most 4 surfaces), left out when empty; Clear and a re-dress take back exactly these |
+| `ground` | up to 256 paint strokes the last Dress laid (villages3; `SettlementGroundIO`): `{surface, from, to, radius, seconds}` capsules in paint order, held to a hundredth. Saved as `"ground": {"surfaces": [...], "strokes": [[surface index, ax, az, bx, bz, radius, seconds], ...]}` (at most 8 surfaces since topic fields, was 4), left out when empty; Clear and a re-dress take back exactly these |
+| `fields` | up to 4 discs `{at: map XZ (1 cm), radius: 2.5..18 m, kind: crops, orchard or garden}` (topic fields, villages.md section 11). Their paint is laid into `ground` (role `field`, first in paint order, VillageFields.strokes_of); their props (scarecrow, haystack, skeps) come from SettlementPlan and their plants (orchard trees, garden flowers) from `AuthoredFieldPlants`, all derived. Saved as `"fields": [{"at": [x, z], "radius", "kind"}]`, left out when empty; a bad kind, radius or count skips the record |
 
 One street has at most one settlement. A settlement whose street is gone draws nothing and returns with the
 street on undo (it is not deleted with the street: undoing the removal must bring both back).

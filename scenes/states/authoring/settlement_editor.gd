@@ -25,6 +25,8 @@ const REFUSED_FULL := &"full"
 const REFUSED_KIT := &"kit"
 const REFUSED_INVALID := &"invalid"
 const REFUSED_PLAZA := &"plaza"
+## A field would cover a building (VillageFieldGround.covers_building).
+const REFUSED_BUILDING := &"building"
 
 var last_refusal: StringName = &""
 ## What the last paving did: SettlementGround.plan's result without its strokes ({} when nothing
@@ -193,7 +195,7 @@ func remove_plaza(settlement_id: int, index: int) -> bool:
 	var changed := held.copy()
 	changed.plazas.remove_at(index)
 	var paving := VillagePlazas.stroke_index(held.ground, held.plazas[index])
-	return _replace(held, changed, "Remove plaza", [], null, false, paving) > 0
+	return _replace(held, changed, "Remove plaza", [], null, false, PackedInt32Array([paving])) > 0
 
 
 ## Sets the radius of plaza `index` of settlement `settlement_id` to `radius` metres (held to a
@@ -218,8 +220,90 @@ func resize_plaza(settlement_id: int, index: int, radius: float) -> bool:
 	var only := held.copy()
 	only.plazas = [changed.plazas[index]]
 	var roles: Array[String] = ["plaza"]
-	var paving := VillagePlazas.stroke_index(held.ground, held.plazas[index])
+	var paving := PackedInt32Array([VillagePlazas.stroke_index(held.ground, held.plazas[index])])
 	return _replace(held, changed, "Resize plaza", roles, only, false, paving) > 0
+
+
+## Lays a field of `kind` (a Settlement.FIELD_KINDS entry) and `radius` metres at map XZ `at` for
+## settlement `settlement_id`: its paint (VillageFields.strokes_of) goes into the record's ground,
+## its furnishings follow from the record. One history group. False (last_refusal) when the
+## settlement is unknown, holds Settlement.MAX_FIELDS, the field is not allowed, or it would cover
+## a building (REFUSED_BUILDING; a resize is refused so only when it grows).
+func add_field(settlement_id: int, at: Vector2, radius: float, kind: String) -> bool:
+	var held := _editor().document.settlement(settlement_id)
+	last_refusal = &""
+	if held == null:
+		last_refusal = REFUSED_STREET
+		return false
+	if held.fields.size() >= Settlement.MAX_FIELDS:
+		last_refusal = REFUSED_FULL
+		return false
+	var field := {
+		"at": Vector2(snappedf(at.x, Settlement.PLAZA_STEP_M), snappedf(at.y, Settlement.PLAZA_STEP_M)),
+		"radius": snappedf(radius, Settlement.PLAZA_STEP_M),
+		"kind": kind,
+	}
+	var changed := held.copy()
+	changed.fields.append(field)
+	if MapSettlementIO.settlement_problem(changed) != "":
+		last_refusal = REFUSED_PLAZA
+		return false
+	if _over_building(field):
+		last_refusal = REFUSED_BUILDING
+		return false
+	return _replace(held, changed, "Add field", ["field"], _with_fields(held, [field])) > 0
+
+
+## Removes field `index` of settlement `settlement_id` with its paint (the strokes the record lists
+## for it, VillageFields.stroke_indices) as one history entry.
+func remove_field(settlement_id: int, index: int) -> bool:
+	var held := _editor().document.settlement(settlement_id)
+	if held == null or index < 0 or index >= held.fields.size():
+		return false
+	var changed := held.copy()
+	changed.fields.remove_at(index)
+	var paint := VillageFields.stroke_indices(held.ground, held.fields[index], held.seed_value)
+	return _replace(held, changed, "Remove field", [], null, false, paint) > 0
+
+
+## Sets the radius of field `index` of settlement `settlement_id` to `radius` metres as one history
+## entry: its old paint is taken back and the new size laid. False (last_refusal) as resize_plaza.
+func resize_field(settlement_id: int, index: int, radius: float) -> bool:
+	var held := _editor().document.settlement(settlement_id)
+	last_refusal = &""
+	if held == null or index < 0 or index >= held.fields.size():
+		last_refusal = REFUSED_STREET
+		return false
+	var wanted := snappedf(radius, Settlement.PLAZA_STEP_M)
+	if is_equal_approx(wanted, float(held.fields[index]["radius"])):
+		return false
+	var changed := held.copy()
+	changed.fields[index]["radius"] = wanted
+	if MapSettlementIO.settlement_problem(changed) != "":
+		last_refusal = REFUSED_PLAZA
+		return false
+	if wanted > float(held.fields[index]["radius"]) and _over_building(changed.fields[index]):
+		last_refusal = REFUSED_BUILDING
+		return false
+	var paint := VillageFields.stroke_indices(held.ground, held.fields[index], held.seed_value)
+	var only := _with_fields(held, [changed.fields[index]])
+	return _replace(held, changed, "Resize field", ["field"], only, false, paint) > 0
+
+
+## True when field disc `field` would cover a building of the map (a structure or a street's house).
+func _over_building(field: Dictionary) -> bool:
+	var doc := _editor().document
+	return VillageFieldGround.covers_building(
+		VillageFieldGround.footprints(doc), field["at"], float(field["radius"])
+	)
+
+
+## A copy of `held` holding only `fields` and no plazas: what a field edit plans its paint on.
+static func _with_fields(held: Settlement, fields: Array[Dictionary]) -> Settlement:
+	var only := held.copy()
+	only.plazas = []
+	only.fields = fields
+	return only
 
 
 ## Sets how rich (0 shabby .. 1 wealthy) and how busy (0 sparse .. MAX_DENSITY) settlement
@@ -284,15 +368,18 @@ func freeze_street(wall_id: int) -> bool:
 	return _replace(held, changed, "Keep village furnishings") > 0
 
 
-## Puts `settlements` into the document and refreshes the nodes: the undo and redo of a settlement
-## edit, and a live settlements edit.
-func apply_list(settlements: Array[Settlement], _area: Rect2) -> void:
+## Puts `settlements` into the document and refreshes the nodes, and has the scatter regrow `area`
+## (the changed fields, VillageFieldGround.area_of): the undo and redo of a settlement edit, and a
+## live settlements edit.
+func apply_list(settlements: Array[Settlement], area: Rect2) -> void:
 	var e := _editor()
 	var copied: Array[Settlement] = []
 	copied.assign(settlements)
 	e.document.settlements = copied
 	if is_instance_valid(e.map_root):
 		AuthoredSettlements.refresh_map(e.map_root, e.document)
+	if is_instance_valid(e.scatter) and area.has_area():
+		e.scatter.request_region(area)
 	e.edited.emit()
 
 
@@ -310,9 +397,9 @@ static func next_seed(current: int) -> int:
 ## (SettlementGround roles) also paves those roles of the kit's ground first, planned on `paved`
 ## (default `changed`); the paint and the record go into one history group. With `replaces`, the
 ## strokes `held` laid are taken back first (and the new plan replaces them in `changed.ground`);
-## otherwise the new strokes are added to the ones `changed` already lists. `drop` (an index into
-## `held.ground`, -1 for none) takes back that one stroke alone, and forgets it in `changed.ground`:
-## a removed or resized plaza's paving.
+## otherwise the new strokes are added to the ones `changed` already lists. `drops` (indices into
+## `held.ground`; negatives ignored) takes back those strokes alone, and forgets them in
+## `changed.ground`: a removed or resized plaza's paving or field's paint.
 func _replace(
 	held: Settlement,
 	changed: Settlement,
@@ -320,7 +407,7 @@ func _replace(
 	roles: Array[String] = [],
 	paved: Settlement = null,
 	replaces: bool = false,
-	drop: int = -1
+	drops: PackedInt32Array = PackedInt32Array()
 ) -> int:
 	var e := _editor()
 	var doc := e.document
@@ -328,7 +415,13 @@ func _replace(
 		last_refusal = REFUSED_INVALID
 		return -1
 	last_ground = {}
-	var dropping := held != null and drop >= 0 and drop < held.ground.size()
+	var dropped := PackedInt32Array()
+	if held != null:
+		for index in drops:
+			if index >= 0 and index < held.ground.size() and not dropped.has(index):
+				dropped.append(index)
+	dropped.sort()
+	var dropping := not dropped.is_empty()
 	var laying := lays_ground and (not roles.is_empty() or dropping) and e.can_paint()
 	var strokes: Array[Dictionary] = []
 	if laying:
@@ -343,9 +436,12 @@ func _replace(
 			var unpaint_ms := (Time.get_ticks_usec() - unpaving) / 1000.0
 			last_ground = {"unpaved": taken, "unpaint_ms": unpaint_ms}
 		elif dropping:
-			var gone: Array[Dictionary] = [held.ground[drop]]
+			var gone: Array[Dictionary] = []
+			for index in dropped:
+				gone.append(held.ground[index])
 			last_ground = {"unpaved": SettlementPaint.unlay(e, gone)}
-			changed.ground.remove_at(drop)
+			for k in range(dropped.size() - 1, -1, -1):
+				changed.ground.remove_at(dropped[k])
 		var began := Time.get_ticks_usec()
 		var planned: Dictionary = {}
 		if not roles.is_empty():
@@ -418,15 +514,18 @@ func _change(label: String, after: Array[Settlement], _touched: Array[Settlement
 	var e := _editor()
 	_settle()
 	var before := _current()
-	apply_list(after, Rect2())
+	# The fields that changed clear (or give back) the wild plants under them: the scatter regrows
+	# there (VillageFieldGround), here, on undo and redo, and on a peer through the op's area.
+	var area := VillageFieldGround.area_of(before, after)
+	apply_list(after, area)
 	(
 		e
 		. history
 		. record(
 			{
 				"label": label,
-				"undo": apply_list.bind(before, Rect2()),
-				"redo": apply_list.bind(after, Rect2()),
+				"undo": apply_list.bind(before, area),
+				"redo": apply_list.bind(after, area),
 				"bytes": 1024 * (before.size() + after.size()),
 			}
 		)

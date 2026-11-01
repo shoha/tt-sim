@@ -527,6 +527,8 @@ static func snapshot(doc: MapDocument) -> MapDocument:
 	copy.crossings = doc.crossings.duplicate()
 	copy.walls = doc.walls.duplicate()
 	copy.structures = doc.structures.duplicate()
+	# The fields clear plants (VillageFieldGround); the list is replaced whole on every edit.
+	copy.settlements = doc.settlements.duplicate()
 	return copy
 
 

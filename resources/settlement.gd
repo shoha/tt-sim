@@ -28,6 +28,12 @@ extends RefCounted
 ## up to MAX_STROKES capsules in paint order, held to a hundredth). It is how Clear and a re-dress
 ## take back exactly that paint (SettlementUnpaint) and nothing the author painted by hand. Saved
 ## with the record, left out when empty.
+##
+## `fields` are up to MAX_FIELDS discs {"at": Vector2 (map XZ, 1 cm), "radius": metres (1 cm),
+## "kind": a FIELD_KINDS entry} laid round the village's edge with the Village tool (villages
+## phase 3, topic fields): crop rows, an orchard or a garden. Their paint goes into `ground` like a
+## plaza's; their furnishings (a scarecrow, fruit trees, shrubs) are derived by VillageFields, never
+## stored. Saved like plazas, left out when empty.
 
 ## The characters: procgen's settlement kits, in its order (a saved map stores the name).
 const KIND_NAMES: Array[String] = ProcgenSettlement.NAMES
@@ -47,6 +53,11 @@ const PLAZA_MAX_RADIUS_M := 16.0
 const PLAZA_STEP_M := 0.01
 ## A plaza's centre stays within this of the map's middle (a map is at most 640 m a side).
 const PLAZA_MAX_REACH_M := 1000.0
+const MAX_FIELDS := 4
+const FIELD_MIN_RADIUS_M := 2.5
+const FIELD_MAX_RADIUS_M := 18.0
+## The kinds of field, in the pane's order.
+const FIELD_KINDS: Array[String] = ["crops", "orchard", "garden"]
 
 var id: int = 0
 var kit: String = KIND_NAMES[0]
@@ -60,6 +71,7 @@ var pinned: Dictionary = {}
 var swapped: Dictionary = {}
 var plazas: Array[Dictionary] = []
 var ground: Array[Dictionary] = []
+var fields: Array[Dictionary] = []
 
 
 static func make(settlement_id: int, kit_name: String, street: int, seed_number: int) -> Settlement:
@@ -81,6 +93,7 @@ func copy() -> Settlement:
 	out.swapped = swapped.duplicate()
 	out.plazas = plazas.duplicate(true)
 	out.ground = ground.duplicate(true)
+	out.fields = fields.duplicate(true)
 	return out
 
 
