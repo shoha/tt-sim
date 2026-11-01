@@ -340,7 +340,11 @@ turns the streak emitter on above strength 0.15; rain and snow slant regardless 
   weight source must be checked when the phase starts: either a vertex colour channel the build
   already writes (probe `StructureOrnaments` meshes) or a new custom channel. Banners stream
   fully, awnings flap lightly (weight 0.25 of a banner). A flag-like penant gets the same.
-  `metal` is not swayed; a swaying `metal` part would be the vane.
+  `metal` is not swayed; a swaying `metal` part would be the vane. (As built, a pennant or hanging
+  banner ripples in `s_cloth_wind`: the wave's phase runs with the real distance from the
+  attachment, `1.14 * weight.x^(2/3)`, because the weight grows as the 1.5 power of it; a phase on the
+  weight itself ran 1.5 times too fast at the free end and kinked the tip, topic pennantkink,
+  `structures.md` "Pennant kink".)
 - **Vane.** A `VaneMotion` node like `MillMotion`: a yaw pivot at the vane's post, cut out of the
   ornament mesh by the part name (like `StructureMill.split`, `structures.md:576-584`), turning to
   `-wind_dir` with a 1.2 s lag and a small wobble scaled by gust. Because it is a pure function of

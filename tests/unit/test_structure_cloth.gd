@@ -34,6 +34,32 @@ func test_a_pennant_is_held_at_the_pole_and_free_at_the_tip() -> void:
 			assert_eq(w[k].y, StructureCloth.LEAN_FLAG)
 
 
+## The ripple's phase follows the real distance from the pole, not the reach (which grows as its
+## 1.5 power), so a 0.2 m strip never spans more than a third of a wave at the free end: the old
+## phase turned 2.2 rad a strip there and folded the tip into a kink (topic pennantkink).
+func test_the_ripple_phase_is_linear_in_the_distance_from_the_pole() -> void:
+	var k_max := 4.4
+	for length in [1.2, 1.5, 1.8]:
+		var pts: Array[Vector2] = [
+			Vector2(0.0, 5.0 - 0.02),
+			Vector2(0.0, 5.0 - 0.02 - 0.42 * length),
+			Vector2(length, 5.0 - 0.02 - 0.21 * length)
+		]
+		var dir := Vector3(0.6, 0.0, 0.8)
+		var points := _sheet(Vector3(3.0, 0.0, 4.0), dir, pts)
+		var w := StructureCloth.weights_of(points, false)
+		for k in points.size():
+			var s := (points[k] - Vector3(3.0, 0.0, 4.0)).dot(dir)
+			if s > 0.2:
+				assert_almost_eq(
+					StructureCloth.phase_distance(w[k].x), s, 0.08 * s, "length %.1f s %.2f" % [length, s]
+				)
+		var strip := 0.2
+		var before := length * pow((length - strip) / length, StructureCloth.CURVE)
+		var step := StructureCloth.phase_distance(length) - StructureCloth.phase_distance(before)
+		assert_lt(k_max * step, 1.5, "a strip at the tip turns the wave under 1.5 rad")
+
+
 func test_a_hanging_banner_swings_from_its_bar() -> void:
 	var pts: Array[Vector2] = [
 		Vector2(0.1, 4.9),

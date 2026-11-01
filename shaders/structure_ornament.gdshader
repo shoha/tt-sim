@@ -65,15 +65,21 @@ vec3 s_cloth_wind(vec3 vertex, vec2 weight, mat4 model, inout vec3 normal) {
 	vec3 ripple = vec3(0.0);
 	if (rippling > 0.0) {
 		float u = clamp((strength - 0.4) / 1.2, 0.0, 1.0);
-		float k = mix(6.0, 7.5, u);
-		float omega = mix(2.4, 7.5, u);
-		float swing = mix(0.18, 0.34, u) * (0.8 + 0.4 * g);
-		float p = k * weight.x - TIME * omega + dot(w.xz, vec2(0.7, 0.9));
+		// The wave's phase runs with the real distance from the attachment (s, metres), not with the
+		// reach, which grows as s^1.5: the reach's own phase ran 1.5 times too fast at the free end,
+		// under-sampled by the cloth's 0.2 m strips, and the tip folded into a kink (topic
+		// pennantkink). The wavelength (about 1.4 m windy, 1.65 m calm) spans seven or more strips.
+		// StructureCloth.PHASE_POW and PHASE_SCALE mirror the two constants here.
+		float s = 1.14 * pow(weight.x, 0.6666667);
+		float k = mix(3.8, 4.4, u);
+		float omega = mix(2.4, 7.0, u);
+		float swing = mix(0.18, 0.32, u) * (0.8 + 0.4 * g);
+		float p = k * s - TIME * omega + dot(w.xz, vec2(0.7, 0.9));
 		float reach = weight.x * swing;
 		ripple = across * reach * sin(p) + vec3(0.0, 1.0, 0.0) * reach * 0.9 * sin(p - 1.2);
 		// The slope of the across swing along the cloth, which bends the normal. A flag lies along the
-		// wind, a banner hangs.
-		float slope = clamp(swing * (sin(p) + weight.x * k * cos(p)), -1.0, 1.0);
+		// wind, a banner hangs. The reach grows as s^1.5, so its own slope adds 1.5 reach / s.
+		float slope = clamp(swing * weight.x * (k * cos(p) + 1.5 * sin(p) / max(s, 0.05)), -1.0, 1.0);
 		float face = dot(normal, across);
 		if (abs(face) > 0.5) {
 			vec3 along = mix(vec3(0.0, 1.0, 0.0), -down, step(0.8, weight.y));
