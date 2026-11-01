@@ -1188,6 +1188,14 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   crop field back under the old look, switches, lays it again) and captures each at home zoom (`<look>_home`, size
   60 on (-8, 14)) and half zoom (`<look>_mid`, size 30 on (-18, 24)), tiled into `sheet_crops.png` (A rows | B
   patchwork | C plants; home above, half below). Round 5 verdict (villages.md 11): the plants look wins.
+- `jobs/bridges_look.json` (about 38 s, keeps no level; topic bridges, villages.md 12, writes `bridges_look`, probe
+  `probes/settlements.gd` `dress` with `bridges: false` and `pave`): a 320 ft meadow map, a waist river drawn east-west
+  through z 0, a farming hamlet street on x -14 and a market town street on x 14 (z -24..24, long enough for houses
+  on both banks once the lots on the water are dropped, `VillageDryGround`), dressed without bridges
+  (`a_home_before`, home zoom 60 on the middle), then paved again with the same seeds, which lays a plank bridge and a
+  stone arch (`b_home_after`), close at zoom 22 on each (`c_close_hamlet`, `d_close_town`), and the same two with the
+  street rows hidden as a diagnostic (`e_hamlet_open`, `f_town_open`). The probe line lists each crossing laid. Run
+  with `--full` for verdicts (round 2 ran `--out render_jobs/bridges_look3`).
 - `jobs/villagetool_recheck.json` (about 40 s, keeps no level; topic villagetool, writes `villagetool2_recheck`): the
   same two villages, then the ghost's paving fill (`a_ghost_market`), a click in the market village laying its 6 m
   floor (`b_market_click`), the hint over the picked plaza (`c_hover_picked`), these three pinned at half size; a full

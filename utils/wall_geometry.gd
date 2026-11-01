@@ -105,9 +105,17 @@ static func inputs_for(doc: MapDocument, wall: Wall) -> ProcgenStructureInputs:
 
 ## The lots of row `wall` (ProcgenRow.plan: each {"points" (four corners, the first side the
 ## front), "height", "pitch", "ridge", "side", "index"}), made exactly as the recipe makes them
-## (the same node seed and parameters). [] when the recipe is missing. Cheap and pure: the tool
-## draws them as the preview, and scatter clears under them.
+## (the same node seed and parameters), less the lots on wet ground or on the street's crossings
+## (VillageDryGround.dry_lots: a dropped lot leaves a gap, the others stay as drawn). [] when the
+## recipe is missing. Cheap and pure: the tool draws them as the preview, and scatter clears under
+## them.
 static func row_lots(doc: MapDocument, wall: Wall) -> Array[Dictionary]:
+	return VillageDryGround.dry_lots(doc, wall, row_plan(doc, wall))
+
+
+## Every lot the row recipe builds for `wall` (ProcgenRow.plan, water or not); row_lots() is the
+## ones that stand.
+static func row_plan(doc: MapDocument, wall: Wall) -> Array[Dictionary]:
 	var recipe := load_recipe(STREET_ROW_RECIPE)
 	if recipe == null or not wall.is_row():
 		return []
@@ -148,7 +156,11 @@ static func build_one(doc: MapDocument, wall: Wall) -> Dictionary:
 		return parts
 	var geometry: PlantGeometry = plant["lods"][0]
 	if wall.is_row():
-		_row_surfaces(parts, doc, wall, geometry)
+		# The recipe builds every lot of the plan: the ones on water or a crossing come out again.
+		var plan := row_plan(doc, wall)
+		var lots := VillageDryGround.dry_lots(doc, wall, plan)
+		geometry = VillageDryGround.without_lots(geometry, VillageDryGround.dropped(plan, lots))
+		_row_surfaces(parts, doc, wall, geometry, lots)
 	else:
 		for surface in geometry.merged_by_kind():
 			parts[surface.kind] = _arrays(surface)
@@ -164,10 +176,14 @@ static func build_one(doc: MapDocument, wall: Wall) -> Dictionary:
 ## its wall and roof tones are the base tones and its accents the trim (StructureLook.lot_hints);
 ## a lot without one keeps the global draw.
 static func _row_surfaces(
-	parts: Dictionary, doc: MapDocument, wall: Wall, geometry: PlantGeometry
+	parts: Dictionary,
+	doc: MapDocument,
+	wall: Wall,
+	geometry: PlantGeometry,
+	standing: Array[Dictionary]
 ) -> void:
 	var lot_hints := {}
-	for lot in row_lots(doc, wall):
+	for lot in standing:
 		lot_hints[ProcgenRow.lot_path(lot)] = StructureLook.lot_hints(lot.get("palette", {}))
 	var roles := PackedStringArray()
 	var groups := PackedInt32Array()
@@ -222,22 +238,27 @@ static func key_of(doc: MapDocument, wall: Wall) -> int:
 		var steps := maxi(1, ceili(a.distance_to(b) / KEY_STEP_M))
 		for s in steps + 1:
 			samples.append(WaterGeometry.ground_at(doc, a.lerp(b, float(s) / steps)))
-	return hash(
-		[
-			doc.map_seed,
-			wall.id,
-			wall.kind,
-			wall.points,
-			wall.closed,
-			wall.height_m,
-			wall.style,
-			wall.seed_value,
-			wall.side,
-			wall.preset,
-			textured,
-			samples,
-		]
-	)
+	var fields := [
+		doc.map_seed,
+		wall.id,
+		wall.kind,
+		wall.points,
+		wall.closed,
+		wall.height_m,
+		wall.style,
+		wall.seed_value,
+		wall.side,
+		wall.preset,
+		textured,
+		samples,
+	]
+	if wall.is_row() and VillageDryGround.has_water(doc):
+		# Water beside the line (under a lot, not the street) moves which lots stand.
+		var standing := PackedStringArray()
+		for lot in row_lots(doc, wall):
+			standing.append(ProcgenRow.lot_path(lot))
+		fields.append(standing)
+	return hash(fields)
 
 
 ## Keys of every wall of `doc` (id -> key).

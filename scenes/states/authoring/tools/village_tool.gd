@@ -79,7 +79,8 @@ func connect_pane(controller: AuthoringController, pane: Control) -> void:
 	village_pane.kit_picked.connect(
 		func(kit: String) -> void:
 			if brush.editor != null and mode.selected_village > 0:
-				brush.editor.settlements.set_kit(mode.selected_village, kit)
+				if brush.editor.settlements.set_kit(mode.selected_village, kit):
+					SettlementBarLink.tell_bridges(brush, brush.editor)
 			refresh_pane(brush, mode, village_pane)
 	)
 	village_pane.radius_committed.connect(

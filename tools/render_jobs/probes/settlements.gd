@@ -6,7 +6,9 @@ extends RefCounted
 ##   dress {id, kit, wealth, density}    dresses street `id` (default: the first), bakes the cells
 ##                                       now and reports them
 ##   plaza {id, at, radius}              opens a paved plaza disc for settlement `id` (world XZ)
+##   dress also takes {bridges: false} (no bridges: the before shot of job bridges_look)
 ##   redress / clear {id}              the Re-dress and Clear buttons (settlement id, default 1)
+##   pave {id}                           lays the ground and bridges again with the same seed
 ##   select {id}                         picks the street in the Street tool, so its bar shows
 ##   report                              cells, surfaces, triangles, placements, skipped
 ##   perf {...}                          lays a long street, dresses it and measures the layer
@@ -37,6 +39,10 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _flush(
 				ctrl.editor, "clear %d %s; %s" % [id, str(ok), _ground_note(ctrl.editor)]
 			)
+		"pave":
+			var id := int(step.get("id", 1))
+			var ok := ctrl.editor.settlements.pave(id)
+			return _flush(ctrl.editor, "pave %d %s; %s" % [id, str(ok), bridge_note(ctrl.editor)])
 		"select":
 			return _select(base, int(step.get("id", 1)))
 		"undo":
@@ -73,6 +79,7 @@ static func _dress(editor: AuthoringEditor, step: Dictionary) -> String:
 	if street < 0 and not editor.document.walls.is_empty():
 		street = editor.document.walls[0].id
 	editor.settlements.lays_ground = bool(step.get("ground", true))
+	editor.settlements.lays_bridges = bool(step.get("bridges", true))
 	var started := Time.get_ticks_usec()
 	var id := editor.settlements.dress(
 		street,
@@ -84,8 +91,9 @@ static func _dress(editor: AuthoringEditor, step: Dictionary) -> String:
 	var layer := _layer(editor)
 	var made := layer.flush() if layer != null else 0
 	editor.settlements.lays_ground = true
+	editor.settlements.lays_bridges = true
 	return (
-		"dressed settlement %d on street %d: dress call %.1f ms, %d cells baked in %.1f ms; %s; %s"
+		"dressed settlement %d on street %d: dress call %.1f ms, %d cells baked in %.1f ms; %s; %s; %s"
 		% [
 			id,
 			street,
@@ -93,9 +101,30 @@ static func _dress(editor: AuthoringEditor, step: Dictionary) -> String:
 			made,
 			(Time.get_ticks_usec() - started) / 1000.0,
 			_ground_note(editor),
+			bridge_note(editor),
 			_report(editor)
 		]
 	)
+
+
+## What the last Dress, pave or Clear did with bridges (SettlementEditor.last_bridges), and every
+## crossing of the document (kind, anchors, width).
+static func bridge_note(editor: AuthoringEditor) -> String:
+	var parts: Array[String] = ["bridges %s" % str(editor.settlements.last_bridges)]
+	for crossing in editor.document.crossings:
+		parts.append(
+			(
+				"crossing %d %s %s->%s w %.2f"
+				% [
+					crossing.id,
+					Crossing.KIND_NAMES[crossing.kind],
+					crossing.start,
+					crossing.end,
+					crossing.width_m
+				]
+			)
+		)
+	return "; ".join(parts)
 
 
 ## The last paving: strokes by role are not kept, so the plan's counts, the slots and the entries.
