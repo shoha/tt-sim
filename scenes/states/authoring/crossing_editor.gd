@@ -160,6 +160,65 @@ func remove(crossing_id: int) -> bool:
 	return true
 
 
+## Takes crossings `gone` out and puts `added` in (map frame, ids replaced: the ids of `gone`
+## first, in order, then free ones) as ONE history entry labelled `label`, or none when the list
+## comes out the same: a village's Dress laying its bridges again (VillageBridges). An added
+## crossing past MapDocument.MAX_CROSSINGS or one the writer would refuse is left out. Returns
+## the ids the added crossings got, in order (a left-out one is missing).
+func swap(label: String, gone: PackedInt32Array, added: Array[Crossing]) -> PackedInt32Array:
+	var doc := _editor().document
+	var before := _current()
+	var after: Array[Crossing] = []
+	var touched: Array[Crossing] = []
+	var used := {}
+	for entry in before:
+		if gone.has(entry.id):
+			touched.append(entry)
+		else:
+			after.append(entry)
+			used[entry.id] = true
+	var reuse: Array[int] = []
+	for crossing_id in gone:
+		if doc.crossing(crossing_id) != null:
+			reuse.append(crossing_id)
+	var ids := PackedInt32Array()
+	for crossing in added:
+		if after.size() >= MapDocument.MAX_CROSSINGS:
+			break
+		var laid := crossing.copy()
+		laid.id = reuse.pop_front() if not reuse.is_empty() else _free_id(used)
+		if laid.id < 0 or MapCrossingIO.crossing_problem(laid, doc.extent_m()) != "":
+			continue
+		used[laid.id] = true
+		after.append(laid)
+		touched.append(laid)
+		ids.append(laid.id)
+	if not _same_lists(before, after):
+		_change(label, after, touched)
+	return ids
+
+
+## The smallest crossing id `used` does not hold, or -1.
+static func _free_id(used: Dictionary) -> int:
+	for crossing_id in range(1, Crossing.MAX_ID + 1):
+		if not used.has(crossing_id):
+			return crossing_id
+	return -1
+
+
+## True when `a` and `b` hold the same crossings (by id and every field), in any order.
+static func _same_lists(a: Array[Crossing], b: Array[Crossing]) -> bool:
+	if a.size() != b.size():
+		return false
+	var by_id := {}
+	for crossing in a:
+		by_id[crossing.id] = crossing
+	for crossing in b:
+		if not by_id.has(crossing.id) or not (by_id[crossing.id] as Crossing).same_as(crossing):
+			return false
+	return true
+
+
 ## The id of the crossing whose footprint holds world point `point` (within `margin` world
 ## metres of its deck or stones, anchors included), the nearest one when several do, or -1:
 ## what a Ctrl press over a crossing erases.

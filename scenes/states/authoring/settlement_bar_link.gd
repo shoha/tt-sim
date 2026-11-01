@@ -29,14 +29,16 @@ static func connect_pane(
 				return
 			if editor.settlements.dress(mode.selected_id, kit, wealth, density) < 0:
 				controller.brush.refused.emit(_refusal(editor))
+			else:
+				tell_bridges(controller.brush, editor)
 			show(pane, editor, mode.selected_id)
 	)
 	pane.kit_requested.connect(
 		func(kit: String) -> void:
 			var editor := _editor(controller)
 			var held := editor.settlements.of_street(mode.selected_id) if editor != null else null
-			if held != null:
-				editor.settlements.set_kit(held.id, kit)
+			if held != null and editor.settlements.set_kit(held.id, kit):
+				tell_bridges(controller.brush, editor)
 			if editor != null:
 				show(pane, editor, mode.selected_id)
 	)
@@ -73,6 +75,17 @@ static func _follow(pane: WallToolPane, editor: AuthoringEditor) -> void:
 			if is_instance_valid(editor) and editor.edited.is_connected(again):
 				editor.edited.disconnect(again)
 	)
+
+
+## Toasts on `brush` (its `refused` signal, as a refused field does) when the last Dress or change
+## of character left a stretch of water its street runs through without a bridge
+## (SettlementEditor.last_bridges, VillageBridges.refusal_text). The dress itself stands.
+static func tell_bridges(brush: BrushTool, editor: AuthoringEditor) -> void:
+	var refused: Array[StringName] = []
+	refused.assign(editor.settlements.last_bridges.get("refused", []))
+	var text := VillageBridges.refusal_text(refused)
+	if text != "" and brush != null:
+		brush.refused.emit(text)
 
 
 static func _editor(controller: AuthoringController) -> AuthoringEditor:

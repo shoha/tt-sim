@@ -414,7 +414,8 @@ All gestures write the `Settlement` record; none edits a prop directly unless th
   rejected for roads, kept for the soft yard skirt.
 - **Yards** keep the species' fence or wall (`row_gen.gd:222`); the kit adds a `yard` surface and the
   back-yard rules. The fence piece gains a real gate prop at the gap (prop 12), replacing the 1.4 m hole.
-- **Bridges.** Phase 5: when the street polyline crosses water (`WaterGeometry.is_wet_at`), Dress offers a
+- **Bridges (BUILT, topic bridges, 2026-10-31: section 12; laid by Dress in its own entry, not a
+  suggestion chip).** Phase 5: when the street polyline crosses water (`WaterGeometry.is_wet_at`), Dress offers a
   bridge through `CrossingEditor.plan` at the crossing, kind by character (planks for a hamlet, arch for a
   town, ford for a poor lane), as a separate undoable crossing; the street continues over it. The street
   data is untouched. This stays a suggestion chip, since a crossing changes the map's water reading.
@@ -804,3 +805,48 @@ away): discs, up to 4 per village, three kinds, no polygons, no move, no bridges
   refresh (a sculpt under an orchard leaves them floating until the next edit); fields refused for wet or steep
   ground are recorded and furnished but unpainted (their wild plants are still cleared); a building placed later
   over a field is not refused (the field stays under it).
+
+## 12. Phase 3, second slice as built: bridges (topic bridges, 2026-10-31)
+
+Where a dressed street crosses water, its Dress lays a bridge so the street continues over it (section 3e, third
+bullet). Decided in the card (owner away; for the board): the bridge is laid BY Dress, in the same history group as
+the props, the record and the road paint, not offered as a suggestion chip. A chip is a second gesture an author can
+miss, leaving a street that runs into a river; in Dress's own entry one Undo or Clear takes the bridge back with the
+rest, and a peer receives it as the ordinary `crossings` op inside the group (no new op kind, no new record type).
+
+- **Detection** (`VillageBridges.wet_runs`, `utils/village_bridges.gd`, pure over a wet predicate): the street
+  polyline is sampled every 0.25 m along its arc against `WaterGeometry.is_wet_at`; wet samples across a dry gap under
+  0.8 m join one run (a sandbar), a run needs at least 1 m of wet street (a puddle gets nothing) and dry street on both
+  sides (a street that ends in a pond gets nothing). One bridge per run.
+- **Placement:** each run is planned by the Bridge tool's own `CrossingPlacement.place`, drawn along the street's chord
+  from the last dry sample before the water to the first after it, so the deck lines up with the street and its
+  anchors snap to the real banks exactly as a drawn bridge's do; it follows later sculpts and water edits like any
+  crossing. The width is the painted road's full width held to the kind's range (3 m for planks and arches at the
+  default setback, 4 m for a ford). The road paint already stops at the water (`SettlementGround` refuses wet
+  samples), so nothing paints on water.
+- **Kind by character** (`kinds_for`): planks for a farming hamlet and a harbour town, a stone arch for a market town
+  and a hill fort, a ford first for a poor street (wealth under 0.25) where the water is wadeable. Each falls back to
+  the next (a ford over deep water becomes the kit's bridge, an arch that will not stand becomes planks).
+- **Record:** `Settlement.bridges`, the ids of the crossings the last Dress laid (up to 8, ids 1..255, saved as a list,
+  left out when empty, hostile input skips the record). Clear, a re-dress, a change of character and `pave` take back
+  exactly those (`CrossingEditor.swap`: one crossings entry, the old ids reused, nothing recorded when the list comes
+  out the same, so a re-dress over the same water keeps its bridge) and never a crossing placed by hand. A run already
+  crossed by a crossing the village did not lay is left to it (`covered`).
+- **Refusals** are a toast, never a refused Dress (`SettlementBarLink.tell_bridges`, the street bar's Dress and
+  character, the Village tool's character tiles): a map already holding 64 crossings, a span over 24 m, a waterfall
+  within reach, no dry bank (`VillageBridges.refusal_text`).
+- **Tests:** `tests/unit/test_village_bridges.gd` (the runs, kind and width, one entry with undo and redo, Clear leaves
+  a hand bridge, a change of character swaps the kind under the same id and a re-dress keeps it, a poor lane fords, a
+  full map toasts, the record round trip and hostile input, a live-edit peer through dress, character, Clear and the
+  undos). Render job `jobs/bridges_look.json` (before: dressed with `bridges: false`; after: `pave` with the same seeds).
+- **Look** (`render_jobs/bridges_look`, `--full`): with the street's houses hidden (a diagnostic), the hamlet's plank
+  bridge and the town's stone arch each stand bank to bank with the road meeting both ends in line with the deck
+  (`e_hamlet_open`, `f_town_open`). At home zoom the bridges do NOT read (`b_home_after`): a street row puts houses
+  on the water as anywhere else, since procgen's `ProcgenRow.plan` knows nothing of water, so houses stand in the
+  river over and beside the bridge and hide it. That needs a procgen change (a lot on wet ground left empty, through
+  the row's environment), outside this slice and the first thing to do next.
+- **Limits left:** houses on the water (above); settlement props are not kept off a bridge's landings (a crate or a
+  cart can stand at the deck's end) nor off the water; a street moved after its Dress keeps its bridges where they
+  were until the next re-dress or `pave`; a bridge the author erases by hand returns with the next re-dress; a bridge
+  laid by a village that a later water edit removed leaves its id in the record (harmless: a take-back skips ids the
+  document no longer holds, and a hand crossing that reuses the id over the same street would be taken back with it).

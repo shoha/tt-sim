@@ -11,7 +11,8 @@ extends RefCounted
 ##                       "swapped": {slot: prop},
 ##                       "plazas": [{"at": [x, z], "radius"}, ...]  (left out when there are none),
 ##                       "ground": SettlementGroundIO's form  (left out when there are none),
-##                       "fields": [{"at": [x, z], "radius", "kind"}, ...]  (left out when none)}
+##                       "fields": [{"at": [x, z], "radius", "kind"}, ...]  (left out when none),
+##                       "bridges": [crossing id, ...]  (left out when none)}
 ##
 ## A map written before settlements has no such entry and loads unchanged; an older build ignores
 ## the entry (MapDocumentIO.KNOWN_ENTRIES) and drops it on its next save. Everything read is
@@ -95,6 +96,11 @@ static func settlement_problem(settlement: Settlement) -> String:
 	for field in settlement.fields:
 		if _field_problem(field) != "":
 			return "a field is not usable (%s)" % _field_problem(field)
+	if settlement.bridges.size() > Settlement.MAX_BRIDGES:
+		return "more than %d bridges" % Settlement.MAX_BRIDGES
+	for crossing_id in settlement.bridges:
+		if crossing_id < 1 or crossing_id > Crossing.MAX_ID:
+			return "a bridge id outside 1..%d" % Crossing.MAX_ID
 	var ground_reason := SettlementGroundIO.problem(settlement.ground)
 	if ground_reason != "":
 		return ground_reason
@@ -188,6 +194,8 @@ static func settlement_json(settlement: Settlement) -> Dictionary:
 				}
 			)
 		out["fields"] = fields
+	if not settlement.bridges.is_empty():
+		out["bridges"] = Array(settlement.bridges)
 	return out
 
 
@@ -276,6 +284,14 @@ static func _settlement_from(value: Variant) -> Variant:
 		if field == null:
 			return "a field is not usable"
 		settlement.fields.append(field)
+	var bridges: Variant = value.get("bridges", [])
+	if not bridges is Array or (bridges as Array).size() > Settlement.MAX_BRIDGES:
+		return "bridges is not a short list"
+	for entry: Variant in bridges:
+		var crossing_id: Variant = MapDocumentIO._integer(entry, 1, Crossing.MAX_ID)
+		if crossing_id == null or settlement.bridges.has(crossing_id):
+			return "a bridge id is not usable"
+		settlement.bridges.append(crossing_id)
 	if value.has("ground"):
 		var ground: Variant = SettlementGroundIO.from_json(value["ground"])
 		if ground == null:

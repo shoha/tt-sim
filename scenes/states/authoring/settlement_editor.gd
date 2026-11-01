@@ -18,6 +18,14 @@ extends RefCounted
 ## road follows street edits made since; Clear takes the record's strokes back with the record.
 ## Paint the author laid by hand is never named by the record and so is left alone. A feel change
 ## paints nothing.
+##
+## Bridges (villages phase 3, topic bridges). A Dress, a re-dress, a change of character and `pave`
+## also lay a crossing over each stretch of water the street runs through (VillageBridges plans,
+## CrossingEditor.swap lays) in the SAME history group, after taking back the ones the record lists
+## (`Settlement.bridges`); Clear takes them back with the record. A peer receives them as the
+## ordinary `crossings` op inside the group. `last_bridges` says what the last laying did, and a
+## stretch that got no bridge is a toast for the caller (VillageBridges.refusal_text), never a
+## refused Dress.
 
 ## Why the last dress() or change made nothing (last_refusal).
 const REFUSED_STREET := &"street"
@@ -34,6 +42,11 @@ var last_refusal: StringName = &""
 var last_ground: Dictionary = {}
 ## False dresses without painting (the A/B switch of the performance probe and of tests).
 var lays_ground: bool = true
+## What the last laying of bridges did: VillageBridges.plan's result without its crossings, plus
+## "laid" (ids) and "taken" (ids taken back); {} when the edit laid none.
+var last_bridges: Dictionary = {}
+## False dresses without bridges (tests and probes).
+var lays_bridges: bool = true
 ## The editor (weak: it owns this object).
 var _owner: WeakRef = null
 
@@ -333,17 +346,78 @@ func clear(settlement_id: int) -> bool:
 		if entry.id != settlement_id:
 			after.append(entry)
 	last_ground = {}
-	if held.ground.is_empty() or not e.can_paint():
+	last_bridges = {}
+	var unpaving := not held.ground.is_empty() and e.can_paint()
+	var unbridging := not _own_bridges(held).is_empty()
+	if not unpaving and not unbridging:
 		_change("Clear village", after, [held])
 		return true
 	_settle()
 	e.history.begin_group()
-	var began := Time.get_ticks_usec()
-	last_ground["unpaved"] = SettlementPaint.unlay(e, held.ground)
-	last_ground["unpaint_ms"] = (Time.get_ticks_usec() - began) / 1000.0
+	if unpaving:
+		var began := Time.get_ticks_usec()
+		last_ground["unpaved"] = SettlementPaint.unlay(e, held.ground)
+		last_ground["unpaint_ms"] = (Time.get_ticks_usec() - began) / 1000.0
+	if unbridging:
+		var gone := _own_bridges(held)
+		e.crossings.swap("Clear village bridges", gone, [])
+		last_bridges = {"laid": PackedInt32Array(), "taken": gone}
 	_change("Clear village", after, [held])
 	e.history.end_group("Clear village")
 	return true
+
+
+## The ids of `held`'s bridges (Settlement.bridges) the document still holds.
+func _own_bridges(held: Settlement) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	if held == null:
+		return out
+	for crossing_id in held.bridges:
+		if _editor().document.crossing(crossing_id) != null:
+			out.append(crossing_id)
+	return out
+
+
+## The bridges `changed` lays over its street in place of the ones `held` laid:
+## VillageBridges.plan's result with "gone" (the ids to take back) added. Pure over the document.
+func _plan_bridges(held: Settlement, changed: Settlement) -> Dictionary:
+	var doc := _editor().document
+	var gone := _own_bridges(held)
+	var wall := doc.wall(changed.source) if changed.source > 0 else null
+	var planned := VillageBridges.plan(doc, changed, wall, gone)
+	var crossings: Array[Crossing] = planned["crossings"]
+	if crossings.size() > Settlement.MAX_BRIDGES:
+		crossings.resize(Settlement.MAX_BRIDGES)
+	planned["gone"] = gone
+	return planned
+
+
+## True when `planned` (_plan_bridges) changes any crossing: something to take back or to lay.
+static func _bridging(planned: Dictionary) -> bool:
+	return (
+		not planned.is_empty()
+		and not ((planned["gone"] as PackedInt32Array).is_empty() and planned["crossings"].is_empty())
+	)
+
+
+## Lays `planned` (_plan_bridges) inside the caller's history group, sets `changed.bridges` to the
+## ids laid and `last_bridges`. A crossing the document had no room for is refused REFUSED_FULL.
+func _lay_bridges(changed: Settlement, planned: Dictionary) -> void:
+	var crossings: Array[Crossing] = planned["crossings"]
+	var gone: PackedInt32Array = planned["gone"]
+	last_bridges = planned.duplicate()
+	last_bridges.erase("crossings")
+	last_bridges.erase("gone")
+	changed.bridges = PackedInt32Array()
+	if not _bridging(planned):
+		return
+	var laid := _editor().crossings.swap("Village bridges", gone, crossings)
+	var refused: Array[StringName] = last_bridges["refused"]
+	for _missing in crossings.size() - laid.size():
+		refused.append(VillageBridges.REFUSED_FULL)
+	changed.bridges = laid
+	last_bridges["laid"] = laid
+	last_bridges["taken"] = gone
 
 
 ## Freezes the frontage of street `wall_id` into the settlement that dresses it, which then
@@ -421,6 +495,13 @@ func _replace(
 			if index >= 0 and index < held.ground.size() and not dropped.has(index):
 				dropped.append(index)
 	dropped.sort()
+	# A plan that lays the road lays the bridges too (planned on the settled document).
+	last_bridges = {}
+	var bridge_plan: Dictionary = {}
+	if lays_bridges and roles.has("road"):
+		_settle()
+		bridge_plan = _plan_bridges(held, changed)
+	var bridging := _bridging(bridge_plan)
 	var dropping := not dropped.is_empty()
 	var laying := lays_ground and (not roles.is_empty() or dropping) and e.can_paint()
 	var strokes: Array[Dictionary] = []
@@ -472,13 +553,21 @@ func _replace(
 	if not found:
 		after.append(changed)
 	if not laying:
+		if bridging:
+			e.history.begin_group()
+		if not bridge_plan.is_empty():
+			_lay_bridges(changed, bridge_plan)
 		_change(label, after, [])
+		if bridging:
+			e.history.end_group(label)
 		return changed.id
 	var painting := Time.get_ticks_usec()
 	last_ground["entries"] = SettlementPaint.lay(e, strokes)
 	e.release_ground()
 	last_ground["paint_ms"] = (Time.get_ticks_usec() - painting) / 1000.0
 	last_ground["strokes"] = strokes.size()
+	if not bridge_plan.is_empty():
+		_lay_bridges(changed, bridge_plan)
 	_change(label, after, [])
 	e.history.end_group(label)
 	return changed.id

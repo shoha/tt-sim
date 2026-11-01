@@ -34,6 +34,12 @@ extends RefCounted
 ## phase 3, topic fields): crop rows, an orchard or a garden. Their paint goes into `ground` like a
 ## plaza's; their furnishings (a scarecrow, fruit trees, shrubs) are derived by VillageFields, never
 ## stored. Saved like plazas, left out when empty.
+##
+## `bridges` are the ids of the crossings (MapDocument.crossings) the last Dress laid where the
+## street crosses water (VillageBridges; topic bridges): ordinary Crossing records, so they draw,
+## follow sculpts and reach peers as any bridge does, and this list is how Clear and a re-dress
+## take back exactly those and never a bridge the author placed by hand. Up to MAX_BRIDGES ids in
+## 1..Crossing.MAX_ID, saved as a list, left out when empty.
 
 ## The characters: procgen's settlement kits, in its order (a saved map stores the name).
 const KIND_NAMES: Array[String] = ProcgenSettlement.NAMES
@@ -58,6 +64,8 @@ const FIELD_MIN_RADIUS_M := 2.5
 const FIELD_MAX_RADIUS_M := 18.0
 ## The kinds of field, in the pane's order.
 const FIELD_KINDS: Array[String] = ["crops", "orchard", "garden"]
+## Bridges one Dress lays at most (one per wet run of its street).
+const MAX_BRIDGES := 8
 
 var id: int = 0
 var kit: String = KIND_NAMES[0]
@@ -72,6 +80,7 @@ var swapped: Dictionary = {}
 var plazas: Array[Dictionary] = []
 var ground: Array[Dictionary] = []
 var fields: Array[Dictionary] = []
+var bridges: PackedInt32Array = PackedInt32Array()
 
 
 static func make(settlement_id: int, kit_name: String, street: int, seed_number: int) -> Settlement:
@@ -94,6 +103,7 @@ func copy() -> Settlement:
 	out.plazas = plazas.duplicate(true)
 	out.ground = ground.duplicate(true)
 	out.fields = fields.duplicate(true)
+	out.bridges = bridges.duplicate()
 	return out
 
 
