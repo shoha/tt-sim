@@ -5,16 +5,26 @@
   "author": "Quaternius",
   "license": "CC0-1.0",
   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
-  "source_url": "https://quaternius.com/packs/farmanimal.html",
+  "source_url": "https://quaternius.com/packs/ultimateanimatedanimals.html https://quaternius.com/packs/farmanimal.html",
   "credit": "Animals by Quaternius (CC0)",
   "obtained": "2026-11-01",
   "assets": {
-    "cow": {"display_name": "Cow", "variants": {"default": {"model": "cow.glb", "icon": "cow.png"}}},
     "horse": {"display_name": "Horse", "variants": {"default": {"model": "horse.glb", "icon": "horse.png"}}},
+    "horse_white": {"display_name": "White horse", "variants": {"default": {"model": "horse_white.glb", "icon": "horse_white.png"}}},
+    "donkey": {"display_name": "Donkey", "variants": {"default": {"model": "donkey.glb", "icon": "donkey.png"}}},
+    "bull": {"display_name": "Bull", "variants": {"default": {"model": "bull.glb", "icon": "bull.png"}}},
+    "cow": {"display_name": "Cow", "variants": {"default": {"model": "cow.glb", "icon": "cow.png"}}},
+    "alpaca": {"display_name": "Alpaca", "variants": {"default": {"model": "alpaca.glb", "icon": "alpaca.png"}}},
     "llama": {"display_name": "Llama", "variants": {"default": {"model": "llama.glb", "icon": "llama.png"}}},
-    "pig": {"display_name": "Pig", "variants": {"default": {"model": "pig.glb", "icon": "pig.png"}}},
-    "pug": {"display_name": "Pug", "variants": {"default": {"model": "pug.glb", "icon": "pug.png"}}},
+    "stag": {"display_name": "Stag", "variants": {"default": {"model": "stag.glb", "icon": "stag.png"}}},
+    "deer": {"display_name": "Deer", "variants": {"default": {"model": "deer.glb", "icon": "deer.png"}}},
+    "wolf": {"display_name": "Wolf", "variants": {"default": {"model": "wolf.glb", "icon": "wolf.png"}}},
+    "husky": {"display_name": "Husky", "variants": {"default": {"model": "husky.glb", "icon": "husky.png"}}},
+    "shiba_inu": {"display_name": "Shiba Inu", "variants": {"default": {"model": "shiba_inu.glb", "icon": "shiba_inu.png"}}},
+    "fox": {"display_name": "Fox", "variants": {"default": {"model": "fox.glb", "icon": "fox.png"}}},
+    "zebra": {"display_name": "Zebra", "variants": {"default": {"model": "zebra.glb", "icon": "zebra.png"}}},
     "sheep": {"display_name": "Sheep", "variants": {"default": {"model": "sheep.glb", "icon": "sheep.png"}}},
-    "zebra": {"display_name": "Zebra", "variants": {"default": {"model": "zebra.glb", "icon": "zebra.png"}}}
+    "pig": {"display_name": "Pig", "variants": {"default": {"model": "pig.glb", "icon": "pig.png"}}},
+    "pug": {"display_name": "Pug", "variants": {"default": {"model": "pug.glb", "icon": "pug.png"}}}
   }
 }

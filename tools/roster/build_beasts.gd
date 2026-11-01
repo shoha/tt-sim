@@ -1,12 +1,14 @@
 extends SceneTree
 
 ## Builds the Beasts and Farm Animals pack models (builtin_packs/beasts/models/) from Quaternius's
-## CC0 animal downloads. Godot's own FBX reader (FBXDocument) loads each source, the build sets the
-## animal's real-world size and feet on y = 0 on the root node, renames the clips the token
-## animation tree plays, and Godot's glTF exporter writes the GLB. No Blender is involved.
+## CC0 animal downloads. Godot's own readers (FBXDocument for the Farm pack, GLTFDocument for the
+## Animals pack) load each source, the build sets the animal's real-world size and feet on y = 0
+## on the root node, renames the clips the token animation tree plays, and Godot's glTF exporter
+## writes the GLB. No Blender is involved.
 ##   godot --headless --path <tt-sim> --script res://tools/roster/build_beasts.gd -- \
-##     --src "<dir with the FBX files>" --out <tt-sim>/builtin_packs/beasts/models [--only cow]
-## The sources are untrusted downloads: extract them outside the project and pass the folder.
+##     --farm "<dir with the FBX files>" --animals "<dir with the .gltf files>" \
+##     --out <tt-sim>/builtin_packs/beasts/models [--only cow]
+## The sources are untrusted downloads: extract them outside the project and pass the folders.
 ## Each model's `importer="keep"` sidecar is written beside it. Sizes are in BeastRecipes.
 
 const BeastRecipes := preload("res://tools/roster/beast_recipes.gd")
@@ -15,40 +17,41 @@ const SkinnedBounds := preload("res://tools/roster/skinned_bounds.gd")
 
 
 func _initialize() -> void:
-	var src := ""
+	var folders := {}
 	var out := ""
 	var only := ""
 	var args := OS.get_cmdline_user_args()
 	for i in range(0, args.size() - 1):
 		match args[i]:
-			"--src":
-				src = args[i + 1].trim_suffix("/")
+			"--farm":
+				folders["farm"] = args[i + 1].trim_suffix("/")
+			"--animals":
+				folders["animals"] = args[i + 1].trim_suffix("/")
 			"--out":
 				out = args[i + 1].trim_suffix("/")
 			"--only":
 				only = args[i + 1]
-	if src == "" or out == "":
-		push_error("usage: -- --src <fbx folder> --out <models folder> [--only <id>]")
+	if folders.is_empty() or out == "":
+		push_error("usage: -- [--farm <fbx folder>] [--animals <gltf folder>] --out <models> [--only id]")
 		quit(2)
 		return
 	DirAccess.make_dir_recursive_absolute(out)
 	var failed := 0
 	for id in BeastRecipes.ANIMALS:
-		if only != "" and id != only:
+		var recipe: Dictionary = BeastRecipes.ANIMALS[id]
+		if (only != "" and id != only) or not folders.has(recipe["source"]):
 			continue
-		var ok := _build(id, BeastRecipes.ANIMALS[id], src, out)
+		var ok := _build(id, recipe, folders[recipe["source"]], out)
 		failed += 0 if ok else 1
 	quit(1 if failed > 0 else 0)
 
 
 func _build(id: String, recipe: Dictionary, src: String, out: String) -> bool:
-	var doc := FBXDocument.new()
-	var state := FBXState.new()
-	var source: String = src + "/" + String(recipe["fbx"])
-	if doc.append_from_file(source, state) != OK:
+	var source: String = src + "/" + String(recipe["file"])
+	var root := _read(source)
+	if root == null:
 		push_error("cannot read " + source)
 		return false
-	var root := doc.generate_scene(state) as Node3D
 	var box := _bounds(root)
 	var scale_factor: float = float(recipe["height_m"]) / box.size.y
 	root.name = id
@@ -70,6 +73,21 @@ func _build(id: String, recipe: Dictionary, src: String, out: String) -> bool:
 	)
 	root.free()
 	return ok
+
+
+## The source scene: an FBX through FBXDocument, a glTF through GLTFDocument.
+func _read(path: String) -> Node3D:
+	if path.get_extension() == "fbx":
+		var fbx := FBXDocument.new()
+		var fbx_state := FBXState.new()
+		if fbx.append_from_file(path, fbx_state) != OK:
+			return null
+		return fbx.generate_scene(fbx_state) as Node3D
+	var doc := GLTFDocument.new()
+	var state := GLTFState.new()
+	if doc.append_from_file(path, state) != OK:
+		return null
+	return doc.generate_scene(state) as Node3D
 
 
 ## The model's bounds in the root's own space (meshes at rest; the skeleton is not posed).

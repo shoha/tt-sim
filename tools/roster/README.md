@@ -18,11 +18,13 @@ window) writes `icons/<id>.png` and its sidecar. The manifest is hand-written. R
 `godot --headless --import` after, and the gate (`tests/unit/test_folk_pack.gd` checks the pack).
 
 The Beasts and Farm Animals pack (`builtin_packs/beasts/`, `docs/licences/builtin_packs/beasts.md`) is
-converted from Quaternius's FBX animals with Godot's own FBX reader, no Blender:
+converted from Quaternius's FBX (Farm Animals) and glTF (Ultimate Animated Animals) with Godot's own
+readers and exporter, no Blender:
 
 ```
 godot --headless --path <tt-sim> --script res://tools/roster/build_beasts.gd -- \
-  --src "<dir>/FBX" --out <tt-sim>/builtin_packs/beasts/models [--only cow]
+  --farm "<dir>/FBX" --animals "<dir with the .gltf files>" \
+  --out <tt-sim>/builtin_packs/beasts/models [--only cow]
 godot --path <tt-sim> --resolution 520x520 --script res://tools/roster/render_icons.gd -- \
   --pack <tt-sim>/builtin_packs/beasts --yaw -50
 ```
