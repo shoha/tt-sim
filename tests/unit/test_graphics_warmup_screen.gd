@@ -55,6 +55,30 @@ func test_a_real_sample_is_built() -> void:
 	assert_eq(screen.built_names(), PackedStringArray(["tri"]))
 
 
+func test_many_samples_build_on_several_threads_and_keep_their_order() -> void:
+	var names: Array[String] = []
+	var first := func() -> Array:
+		return [_triangle_sample("a0"), _triangle_sample("a1"), _triangle_sample("a2")]
+	var second := func() -> Array:
+		OS.delay_msec(100)
+		return [_triangle_sample("b0"), _triangle_sample("b1")]
+	for sample_name in ["a0", "a1", "a2", "b0", "b1"]:
+		names.append(sample_name)
+	var screen := _screen(first)
+	screen.sample_sources.append(second)
+	screen.source_labels = PackedStringArray(["a", "b"])
+	add_child_autofree(screen)
+	await wait_until(_done(screen), 10.0, "reaches DONE")
+	assert_eq(screen.built_names(), PackedStringArray(names), "in source order, not finish order")
+	assert_eq(screen._rids.size(), 0, "the meshes are freed at the end")
+
+
+func test_the_build_thread_count_stays_between_two_and_the_cap() -> void:
+	var screen: GraphicsWarmupScreen = SCENE.instantiate()
+	assert_between(screen.build_workers, 2, GraphicsWarmupScreen.MAX_BUILD_WORKERS)
+	screen.free()
+
+
 func test_a_sample_without_geometry_is_skipped_with_a_warning() -> void:
 	var empty := _triangle_sample("empty")
 	empty["arrays"] = []
@@ -97,10 +121,16 @@ func test_freed_mid_build_joins_and_writes_no_marker() -> void:
 func test_progress_is_weighted_by_phase() -> void:
 	const PHASE := GraphicsWarmupScreen.Phase
 	assert_eq(GraphicsWarmupScreen.progress_for(PHASE.COMPILE, 0, 10), 0.0)
-	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.COMPILE, 10, 10), 0.06, 1e-6)
-	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.BUILD, 1, 2), 0.52, 1e-6)
+	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.COMPILE, 10, 10), 0.18, 1e-6)
+	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.BUILD, 1, 2), 0.58, 1e-6)
 	assert_almost_eq(
-		GraphicsWarmupScreen.progress_for(PHASE.BUILD, 0, 0), 0.06, 1e-6, "no samples yet"
+		GraphicsWarmupScreen.progress_for(PHASE.BUILD, 0, 0), 0.18, 1e-6, "no samples yet"
+	)
+	assert_almost_eq(
+		GraphicsWarmupScreen.PHASE_WEIGHTS.reduce(func(a: float, b: float) -> float: return a + b),
+		1.0,
+		1e-6,
+		"the phases add up to the whole bar"
 	)
 	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.DRAW, 0, 1), 0.98, 1e-6)
 	assert_eq(GraphicsWarmupScreen.progress_for(PHASE.DONE, 0, 0), 1.0)
