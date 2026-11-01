@@ -713,9 +713,14 @@ blaze strokes, a held tree's dust; calm, windy, storm at wind clock 0, storm at 
 motion 0; sheets `sheet_home`, `sheet_fire`, `sheet_water`, `sheet_dust`):
 - **Flames: good.** They lean downwind (screen right for the default diagonal) at every preset; the
   lean does not grow with strength (by design).
-- **Smoke: not verified by eye.** At home zoom (13.85) and zoom 8 the columns rise out of the top of
-  the frame; only their base shows as a pale haze at the top edge. A framing with the view shifted
-  toward -z (as `wind_de` needed for the keep) is the next look.
+- **Smoke: good, judged in `windf_smoke`.** At home zoom (13.85) and zoom 8 the columns rise out of
+  the top of the frame, so `windf_smoke` frames them at zoom 20 and 12 with the view moved 7 m toward
+  -z. Calm: the column rises nearly upright with a modest lean to the right. Storm: it bends clearly
+  downwind, about 35 to 40 degrees, its lobes drawn out along the lean into a soft ribbon (full-size
+  `storm_z20`). Storm at wind clock 3 against clock 0: about the same lean, the top fanning a little
+  further, so the gust's breathing is gentle. Motion 0: back to the map's own lean, close to calm
+  here because the map's wind also points right. The lavender-grey day palette reads a little washed
+  on a bright meadow; that is the existing smoke tone, not this phase's.
 - **Dust: subtle but right.** At 0.5 s the storm's dust sits about a metre further downwind than calm,
   motion 0 matches calm; soft cream shapes, no new noise.
 - **Water: faint, as asked.** Storm ripples are slightly more contrasty with more glints than calm,

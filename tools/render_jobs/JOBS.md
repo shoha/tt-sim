@@ -1177,4 +1177,8 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   billow and roll through EventPuffs), captured at home (`{preset}_home`) and at zoom 8 on the blaze, the pond and the
   dust (`{preset}_fire`, `_water`, `_dust`); the storm at wind clock 3 (`storm3_fire`, `storm3_water`) and the storm with
   Wind motion 0 (`still_*`); sheets `sheet_home`, `sheet_fire`, `sheet_water`, `sheet_dust`. The smoke columns rise
-  out of the top of these frames: a framing for them is still to do.
+  out of the top of these frames; `windf_smoke` frames them.
+- `jobs/windf_smoke.json` (about 45 s, keeps no level; topic windf): the same meadow and blaze without the pond, the
+  persistent fire's smoke column at zoom 20 (view at [-7.5, -13]) and zoom 12 for calm and storm at wind clock 0, the
+  storm at clock 3 and the storm at Wind motion 0 (`{calm,storm,storm3,still}_{z20,z12}`; sheets `sheet_z20`,
+  `sheet_z12`). The verdict pair: `--full --only calm_z20,storm_z20 --out render_jobs/windf_smoke_full`.
