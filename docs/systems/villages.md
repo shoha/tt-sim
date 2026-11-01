@@ -626,7 +626,8 @@ shows while a street is picked, and the Wall pane is already the longest.
   `j_market_5_6_7`: 5 m overstuffed, 6 m reads paved round the well, 7 m roomy). A market click lays 6 m; a rim grab
   never pushes a plaza already under the floor up.
 - Drag a plaza's rim (a band of 12 px, at least 0.9 m, each side of the edge, or within 22 px of one of its four
-  handle dots, the S6 44 px target): the rim follows the pointer without jumping where it was grabbed. Click inside a plaza: picks it. Delete or Backspace over a plaza (the Structure
+  handle dots, the S6 44 px target): the rim follows the pointer without jumping where it was grabbed. Click inside a plaza: picks it; press inside and drag past the 1.5 m click threshold (topic
+  plazamove, 2026-11-01): MOVES it (below). Delete or Backspace over a plaza (the Structure
   tool's `decide` table, `picks`/`has_target`) removes it; the pane's Remove does the same for the picked plaza;
   `[` `]` and Shift+wheel over a plaza step it a metre (one history entry each); Escape drops a held gesture, then
   lets go of the picked plaza; right click puts the brush down as everywhere.
@@ -641,12 +642,33 @@ shows while a street is picked, and the Wall pane is already the longest.
   paving is skipped and counted in `last_ground["refused"]`).
 - While a gesture is held the ring is a preview and nothing is repaved; the release repaves once. (A repave
   mid-drag would cost the 30 to 70 ms the villages2 numbers give per lay on every pointer step.)
+- **Moving a plaza** (topic plazamove). A press in a plaza's interior (the rim band and the handle dots keep
+  sizing: `VillagePlazas.pick` gives the rim priority, and the dots are the 44 px target) is a pick until the pointer
+  is `DRAG_MIN_M` (1.5 m) from where it landed, then a move (`GESTURE_MOVE`); once begun it stays a move. The disc
+  keeps its place under the pointer (`grab_offset`, `moved_to`, tenths of a metre), so it never jumps to the pointer.
+  Escape or right click drops it. The place is judged every frame it changes (`VillagePlazas.move_problem`, map
+  facts built once at the start of the move): no village in reach (the 60 m rule, measured with the plaza itself
+  taken out of its village: `destination_village`), a full village it would join, water, ground too steep across
+  it (`SettlementGround.plaza_problem`, the same rule that decides whether a plaza is paved) or a house
+  (`VillageFieldGround.covers_building`, with its 0.75 m grace) refuse it; the disc turns salmon, the pill says why
+  ("Too wet: needs dry ground", "Too steep: needs level ground", "Over a building: put it on open ground", "Too
+  far from the village", "Four plazas already"), and the release changes nothing: the plaza stays where it was and
+  a toast gives the long wording. A plaza carried back to where it began is never refused. The village it belongs
+  to afterwards is `destination_village`'s: its own while it is at most 6 m (`PICKED_SLACK_M`) farther than the
+  nearest, else the nearer village (the pill then says "Release to move it to village 2"). Fields are not movable
+  yet (their press still only picks).
 
-**The edits** are `SettlementEditor.add_plaza`, `resize_plaza` and `remove_plaza`, each one history group (the paving
+**The edits** are `SettlementEditor.add_plaza`, `resize_plaza`, `remove_plaza` and `move_plaza`, each one history group (the paving
 and the record undo together), reaching peers as the ordinary `surface` ops and one `settlements` op
 (`test_a_peer_ends_level_through_add_resize_remove_and_their_undos`). Resize and remove take back exactly the
 plaza's own paving stroke (settlements.md "Ground"); that is the one change to the editor, plus `_replace`'s
-`drop` argument.
+`drop` argument. `move_plaza` adds no op kind: inside its own village it is one `_replace` (the old stroke
+dropped, the new disc paved, the record's plaza replaced in place; the furnishings are derived from the record, so
+they stand at the new place), and between villages it is a `remove_plaza` and an `add_plaza` in one group
+(`AuthoringHistory.is_grouping`, so `_replace` joins the open group instead of opening its own). It refuses what
+`VillagePlazas.move_problem` refuses, with `last_refusal` one of `REFUSED_REACH`, `FULL`, `WATER`, `STEEP`,
+`BUILDING`. Tests: `tests/unit/test_village_plaza_move.gd` (pure rules, the editor, the peer for a move inside a
+village and between two, the brush).
 
 **Feedback** (`VillageRings`, round 2 topic villagetool2). Every plaza of the map is a soft ring on the ground (a glow,
 a dark keyline and a bright line over a faint fill) in four weights that keep the states apart: the ghost a thin
@@ -656,9 +678,16 @@ the Wall tool's gold (1.35) with handle dots of 5.5 px; the one under the pointe
 While a drag sizes a plaza its disc is a flat tint of the kit's paving at the new radius (no repave until the
 release) and the pane's size reads the same width live (the mode's signature carries the preview radius;
 `VillagePlazas.with_preview`). A pill says what a press does ("Click for a plaza, or drag to size it", with two or more
-villages "Click for a plaza in village 2, ...", "Drag the edge to size this plaza", "Plaza: click to pick, Delete
-removes it", over the picked one "Drag the edge to size it, Delete removes it", "Plaza  33 ft across" while sizing, a
-refusal in salmon); the ghost's pill sits just past the ghost's right rim so it never covers it. With two or more
+villages "Click for a plaza in village 2, ...", "Drag the edge to size this plaza", over a plaza's interior "Drag to
+move this plaza, click to pick it" (plazamove), over the picked one "Drag to move it, drag the edge to size it", "Plaza  33 ft
+across" while sizing, "Release to put it here" (or "... to move it to village 2") while a plaza is carried, a
+refusal in salmon). A carried plaza is a paving-tint disc in the picked gold with its handle dots, the place it left
+a calm ring at full ink, and over a refused place a disc washed in the erase salmon (0.28) inside the erase ring's
+5.5 px ink-backed stroke (plazamove fix round: the paving-grey fill turned bright grass chalky olive, so the carried
+disc and the ghost now share one warm wash, `WASH_TINT` pulled 0.7 over the kit's paving at 0.2 to 0.24 alpha; the
+handle dots carry an ink outline; the ghost is a dot and a pill, never a disc, where it would cross a standing plaza,
+`VillagePlazas.overlaps_any`); the pane's caption reads "Drag a plaza to move it, drag its edge to size it."; a field's pill keeps its old words ("Drag the edge to size it,
+Delete removes it"). The ghost's pill sits just past the ghost's right rim so it never covers it. With two or more
 villages each street carries a glass chip with its name ("Village 2", gold when picked) at its middle
 (`VillagePlazas.anchor_of`).
 
@@ -680,8 +709,7 @@ compared each frame), so undo and redo keep it right.
 **Tests:** `tests/unit/test_village_tool.gd` (pure rules, the swatch, resize and remove with their paint, the peer,
 the brush's gestures on a `BrushTool`, the pane). Render job `jobs/villagetool_look.json`.
 
-**Limits left:** a plaza is a disc and cannot be moved (delete and place again; its furnishings are derived so
-nothing is lost); no polygons; the paving of a plaza resized while its door paths overlap is laid on top of them
+**Limits left:** a plaza is a disc (it moves since plazamove, but a field does not yet); no polygons; the paving of a plaza resized while its door paths overlap is laid on top of them
 (newest paint wins), so a door path ends at the plaza's new edge; gardens, fields, props, bridges and walls are
 not in this tool; a village's feel sliders are still on the Wall tool's street bar; keyboard reach of the tiles is
 as every tile row (mouse; the slider and Remove take focus); a plaza only joins a village that has a street or a

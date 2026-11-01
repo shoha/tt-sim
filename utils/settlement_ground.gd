@@ -347,25 +347,43 @@ static func _plaza_strokes(
 	for plaza in settlement.plazas:
 		var at: Vector2 = plaza["at"]
 		var radius := float(plaza["radius"])
-		var cause := world.problem_at(at, 0.0)
-		var wet := 0
-		var low := world.height(at)
-		var high := low
-		for k in PLAZA_RIM_POINTS:
-			var rim := at + Vector2.from_angle(TAU * k / PLAZA_RIM_POINTS) * radius
-			if world.problem_at(rim, 0.0) == "water":
-				wet += 1
-			low = minf(low, world.height(rim))
-			high = maxf(high, world.height(rim))
-		if cause == "" and float(wet) / PLAZA_RIM_POINTS > PLAZA_WET_SHARE:
-			cause = "water"
-		if cause == "" and (high - low) / (2.0 * radius) > PLAZA_MAX_SLOPE:
-			cause = "slope"
+		var cause := _plaza_cause(world, at, radius)
 		if cause != "":
 			refused[cause] += 1
 			continue
 		out.append({"from": at, "to": at, "radius": radius * 1.12, "seconds": PLAZA_SECONDS})
 	return out
+
+
+## The map as the planner asks about it (water, ground height, buildings), built once for a run of
+## plaza_problem calls such as a held drag's.
+static func world_of(doc: MapDocument) -> RefCounted:
+	return _World.new(doc)
+
+
+## Why a plaza of `radius` at map point `at` would not be paved: "water" (its centre is wet or a
+## quarter of its rim), "building" (its centre is in a footprint) or "slope" (the ground across it
+## is too steep), else "". `world` is world_of's.
+static func plaza_problem(world: RefCounted, at: Vector2, radius: float) -> String:
+	return _plaza_cause(world as _World, at, radius)
+
+
+static func _plaza_cause(world: _World, at: Vector2, radius: float) -> String:
+	var cause := world.problem_at(at, 0.0)
+	var wet := 0
+	var low := world.height(at)
+	var high := low
+	for k in PLAZA_RIM_POINTS:
+		var rim := at + Vector2.from_angle(TAU * k / PLAZA_RIM_POINTS) * radius
+		if world.problem_at(rim, 0.0) == "water":
+			wet += 1
+		low = minf(low, world.height(rim))
+		high = maxf(high, world.height(rim))
+	if cause == "" and float(wet) / PLAZA_RIM_POINTS > PLAZA_WET_SHARE:
+		cause = "water"
+	if cause == "" and (high - low) / (2.0 * radius) > PLAZA_MAX_SLOPE:
+		cause = "slope"
+	return cause
 
 
 # --- fields ------------------------------------------------------------------------------------

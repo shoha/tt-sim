@@ -41,6 +41,11 @@ const REFUSED_INVALID := &"invalid"
 const REFUSED_PLAZA := &"plaza"
 ## A field would cover a building (VillageFieldGround.covers_building).
 const REFUSED_BUILDING := &"building"
+## A plaza moved onto water, onto steep ground, or out of every village's reach
+## (VillagePlazas.move_problem).
+const REFUSED_WATER := &"water"
+const REFUSED_STEEP := &"steep"
+const REFUSED_REACH := &"reach"
 
 var last_refusal: StringName = &""
 ## What the last paving did: SettlementGround.plan's result without its strokes ({} when nothing
@@ -246,6 +251,63 @@ func resize_plaza(settlement_id: int, index: int, radius: float) -> bool:
 	var roles: Array[String] = ["plaza"]
 	var paving := PackedInt32Array([VillagePlazas.stroke_index(held.ground, held.plazas[index])])
 	return _replace(held, changed, "Resize plaza", roles, only, false, paving) > 0
+
+
+## Moves plaza `index` of settlement `settlement_id` to map XZ `at` (held to the plaza step) as one
+## history group: the paving of the old place is taken back, the new place paved and the record
+## updated, and the plaza's furnishings, which follow from the record, stand at the new place. The
+## village is the one VillagePlazas.destination_village names: usually its own, but a plaza dropped
+## nearer another village joins it (as the last plaza there; the group then holds a removal and an
+## addition). A peer receives the ordinary `surface` and `settlements` ops. False (last_refusal)
+## when there is no such plaza, `at` is where it stands, or VillagePlazas.move_problem refuses the
+## place (out of reach, a full village, water, steep ground, a building).
+func move_plaza(settlement_id: int, index: int, at: Vector2) -> bool:
+	var e := _editor()
+	var doc := e.document
+	var held := doc.settlement(settlement_id)
+	last_refusal = &""
+	if held == null or index < 0 or index >= held.plazas.size():
+		last_refusal = REFUSED_STREET
+		return false
+	var plaza: Dictionary = held.plazas[index]
+	var wanted := Vector2(
+		snappedf(at.x, Settlement.PLAZA_STEP_M), snappedf(at.y, Settlement.PLAZA_STEP_M)
+	)
+	if wanted.is_equal_approx(plaza["at"]):
+		return false
+	var world := SettlementGround.world_of(doc)
+	var plans := VillageFieldGround.footprints(doc)
+	var verdict := VillagePlazas.move_problem(doc, settlement_id, index, wanted, world, plans)
+	if verdict["reason"] != &"":
+		last_refusal = verdict["reason"]
+		return false
+	var moved := plaza.duplicate()
+	moved["at"] = wanted
+	var target := int(verdict["village"])
+	var changed := held.copy()
+	if target != settlement_id:
+		changed = doc.settlement(target).copy()
+		changed.plazas.append(moved)
+	else:
+		changed.plazas[index] = moved
+	if MapSettlementIO.settlement_problem(changed) != "":
+		last_refusal = REFUSED_PLAZA
+		return false
+	if target == settlement_id:
+		# Only the moved disc is paved: the plan reads a copy that holds it alone.
+		var only := held.copy()
+		only.plazas = [moved]
+		var roles: Array[String] = ["plaza"]
+		var paving := PackedInt32Array([VillagePlazas.stroke_index(held.ground, plaza)])
+		return _replace(held, changed, "Move plaza", roles, only, false, paving) > 0
+	e.history.begin_group()
+	var removed := remove_plaza(settlement_id, index)
+	var done := removed and add_plaza(target, wanted, float(moved["radius"]))
+	e.history.end_group("Move plaza")
+	if removed and not done:
+		# The removal stood alone: take it back so a refused move leaves the map as it was.
+		e.history.undo()
+	return done
 
 
 ## Lays a field of `kind` (a Settlement.FIELD_KINDS entry) and `radius` metres at map XZ `at` for
@@ -552,9 +614,12 @@ func _replace(
 	var dropping := not dropped.is_empty()
 	var laying := lays_ground and (not roles.is_empty() or dropping) and e.can_paint()
 	var strokes: Array[Dictionary] = []
+	# An edit made inside a group of its own caller's (move_plaza between villages) joins it.
+	var owns_group := not e.history.is_grouping()
 	if laying:
 		_settle()
-		e.history.begin_group()
+		if owns_group:
+			e.history.begin_group()
 		# The take-back and the new paving cover one street: one ground and scatter update for
 		# both (released after the lay below).
 		e.hold_ground()
@@ -600,12 +665,13 @@ func _replace(
 	if not found:
 		after.append(changed)
 	if not laying:
-		if bridging:
+		var bridge_group := bridging and owns_group
+		if bridge_group:
 			e.history.begin_group()
 		if not bridge_plan.is_empty():
 			_lay_bridges(changed, bridge_plan)
 		_change(label, after, [])
-		if bridging:
+		if bridge_group:
 			e.history.end_group(label)
 		return changed.id
 	var painting := Time.get_ticks_usec()
@@ -616,7 +682,8 @@ func _replace(
 	if not bridge_plan.is_empty():
 		_lay_bridges(changed, bridge_plan)
 	_change(label, after, [])
-	e.history.end_group(label)
+	if owns_group:
+		e.history.end_group(label)
 	return changed.id
 
 

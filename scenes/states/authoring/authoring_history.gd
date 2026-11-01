@@ -65,6 +65,13 @@ func begin_group() -> void:
 	_group = []
 
 
+## True while a group is open (begin_group without its end_group): an edit that finds one open
+## joins it instead of opening its own, so two edits can make one entry (a plaza moved between
+## villages).
+func is_grouping() -> bool:
+	return _group != null
+
+
 ## Closes the group and records its entries as one entry labelled `label`, {"label", "undo",
 ## "redo", "parts", "bytes"}, which it returns; a group with nothing in it records nothing
 ## and returns {}.

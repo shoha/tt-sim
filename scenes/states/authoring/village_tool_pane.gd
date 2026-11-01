@@ -52,7 +52,7 @@ const EMPTY := (
 	"No village yet. Draw a street with the Wall tool and press Dress this street, then come back"
 	+ " here to open a plaza on it."
 )
-const PICK_NOTE := "Click a plaza on the board to size or remove it."
+const PICK_NOTE := "Drag a plaza to move it, drag its edge to size it."
 const ROOM := "Room for %d more plazas"
 const ROOM_ONE := "Room for 1 more plaza"
 const ROOM_NONE := "Four plazas: the village is full"

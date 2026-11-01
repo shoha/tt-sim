@@ -14,7 +14,11 @@ extends BrushMode
 ##   metres nearer to another. A click lays a plaza of DEFAULT_RADIUS_M, a drag sizes it by how
 ##   far the pointer goes from the centre.
 ## - A press on a plaza's rim (the soft ring, or near one of its handle dots) grabs the edge: the
-##   drag sizes that plaza, the rim following the pointer. A press inside a plaza picks it.
+##   drag sizes that plaza, the rim following the pointer. A press inside a plaza picks it; dragged
+##   past a click's distance (VillagePlazas.DRAG_MIN_M) it moves the plaza instead, the disc
+##   following the pointer without jumping to it. A place the plaza may not stand (water, steep
+##   ground, a building, out of reach of every village, a full village) shows the refusal pill, and
+##   the release there changes nothing.
 ## - The release does the edit as one history entry; the ring drawn while dragging is the preview.
 ## - Delete or Backspace over a plaza, or the pane's Remove, removes it with its paving; the
 ##   brackets and Shift+wheel over a plaza step its radius by a metre; Escape lets go of the
@@ -41,6 +45,8 @@ signal view_changed
 const GESTURE_NEW := &"new"
 const GESTURE_RESIZE := &"resize"
 const GESTURE_PICK := &"pick"
+## A press inside a plaza dragged past the click threshold: the plaza follows the pointer.
+const GESTURE_MOVE := &"move"
 
 ## The pixels a rim grab reaches each side of the edge, and round a handle dot (the dots are the
 ## S6 target, 44 px across).
@@ -52,10 +58,24 @@ const FADE_M := 3.0
 const NO_VILLAGE := "Dress a street with the Wall tool first: a plaza belongs to a village."
 const FULL := "A village holds four plazas. Remove one to make room."
 const REFUSED := "A plaza cannot go there."
+const WATER := "A plaza cannot stand in water: put it on dry ground."
+const STEEP := "A plaza needs level ground: that slope is too steep."
+const REACH := "That is too far from any village: a plaza stays near its village."
+## A plaza dropped over a house (ON_BUILDING says it for a field).
+const PLAZA_ON_BUILDING := "A plaza cannot cover a building."
+const PLAZA_ON_BUILDING_SHORT := "Over a building: put it on open ground"
+## The same in the pill's few words, for a plaza held over a refused place.
+const WATER_SHORT := "Too wet: needs dry ground"
+const STEEP_SHORT := "Too steep: needs level ground"
+const REACH_SHORT := "Too far from the village"
 ## The words beside the cursor.
 const HOVER_RIM := "Drag the edge to size this plaza"
-const HOVER_INSIDE := "Plaza: click to pick, Delete removes it"
-const HOVER_PICKED := "Drag the edge to size it, Delete removes it"
+const HOVER_INSIDE := "Drag to move this plaza, click to pick it"
+const HOVER_PICKED := "Drag to move it, drag the edge to size it"
+const HOVER_PICKED_FIELD := "Drag the edge to size it, Delete removes it"
+## The pill while a held plaza is over a place it may stand.
+const MOVE_HINT := "Release to put it here"
+const MOVE_HINT_IN := "Release to move it to %s"
 const IDLE := "Click for a plaza, or drag to size it"
 const IDLE_IN := "Click for a plaza in %s, or drag to size it"
 const NO_VILLAGE_SHORT := "Dress a street first"
@@ -95,6 +115,15 @@ var _grab_field_kind: String = ""
 var _grab_kit: String = ""
 var _centre: Vector2 = Vector2.ZERO
 var _to: Vector2 = Vector2.ZERO
+## A press inside a plaza: where it landed, the plaza's centre from there, and (once it moves) the
+## place the plaza would stand, with the verdict on it (VillagePlazas.move_problem) and the map
+## facts that verdict reads, built when the move starts.
+var _press_at: Vector2 = Vector2.ZERO
+var _offset: Vector2 = Vector2.ZERO
+var _dest: Vector2 = Vector2.ZERO
+var _verdict: Dictionary = {}
+var _world: RefCounted = null
+var _plans: Array[PackedVector2Array] = []
 var _start_radius: float = 0.0
 var _grabbed_at: float = 0.0
 var _rim_m: float = VillagePlazas.RIM_BAND_M
@@ -120,6 +149,28 @@ static func refusal_text(reason: StringName) -> String:
 			return NO_VILLAGE
 		SettlementEditor.REFUSED_BUILDING:
 			return ON_BUILDING
+		SettlementEditor.REFUSED_WATER:
+			return WATER
+		SettlementEditor.REFUSED_STEEP:
+			return STEEP
+		SettlementEditor.REFUSED_REACH:
+			return REACH
+	return REFUSED
+
+
+## The pill's few words for a refused place for a held plaza (VillagePlazas.move_problem's reason).
+static func short_reason(reason: StringName) -> String:
+	match reason:
+		SettlementEditor.REFUSED_FULL:
+			return FULL_SHORT
+		SettlementEditor.REFUSED_BUILDING:
+			return PLAZA_ON_BUILDING_SHORT
+		SettlementEditor.REFUSED_WATER:
+			return WATER_SHORT
+		SettlementEditor.REFUSED_STEEP:
+			return STEEP_SHORT
+		SettlementEditor.REFUSED_REACH:
+			return REACH_SHORT
 	return REFUSED
 
 
@@ -194,6 +245,21 @@ func preview_radius() -> float:
 ## The held gesture's plaza centre (map XZ).
 func centre() -> Vector2:
 	return _centre
+
+
+## Where the plaza a held move carries would stand (map XZ), or its own centre with none.
+func move_destination() -> Vector2:
+	return _dest if gesture == GESTURE_MOVE else _centre
+
+
+## Why the place a held move is over is refused (SettlementEditor.REFUSED_*), or &"".
+func move_reason() -> StringName:
+	return _verdict.get("reason", &"") if gesture == GESTURE_MOVE else &""
+
+
+## The village the held plaza would belong to at its place now, or -1.
+func move_village() -> int:
+	return int(_verdict.get("village", -1)) if gesture == GESTURE_MOVE else -1
 
 
 ## Whether a held drag is sizing a plaza (a new one or a grabbed rim).
@@ -314,6 +380,8 @@ func press(brush: BrushTool) -> bool:
 		_to = p
 		_grabbed_at = _centre.distance_to(p)
 		gesture = GESTURE_RESIZE if found["part"] == VillagePlazas.PART_RIM else GESTURE_PICK
+		_press_at = p
+		_offset = VillagePlazas.grab_offset(_centre, p)
 		select(village, _grab_plaza, true, _grab_group)
 		return false
 	var target := ghost_village(editor, p)
@@ -389,6 +457,7 @@ func frame(brush: BrushTool) -> void:
 		var p := editor.to_map_xz(brush.hit)
 		if gesture != &"":
 			_to = p
+			_track_move(editor, p)
 		else:
 			var found := VillageFields.pick_any(editor.document.settlements, p, _rim_m, _handle_m)
 			hover_village = int(found.get("settlement", -1))
@@ -402,10 +471,59 @@ func frame(brush: BrushTool) -> void:
 	_announce(editor)
 
 
-## The release: lays the new plaza, or sizes the grabbed one, as one history entry.
+## A press inside a plaza turns into a move once the pointer is a click's distance from where it
+## landed; while it is a move, the place the plaza would stand and the verdict on it follow the
+## pointer (the verdict is asked again only when the place changes).
+func _track_move(editor: AuthoringEditor, p: Vector2) -> void:
+	var plazas := _grab_group == VillageFields.GROUP_PLAZAS
+	if gesture == GESTURE_PICK and plazas and VillagePlazas.is_move(_press_at, p):
+		gesture = GESTURE_MOVE
+		_world = SettlementGround.world_of(editor.document)
+		_plans = VillageFieldGround.footprints(editor.document)
+		_dest = _centre
+		_verdict = {"village": _grab_village, "reason": &""}
+	if gesture != GESTURE_MOVE:
+		return
+	var at := VillagePlazas.moved_to(p, _offset)
+	if at.is_equal_approx(_dest):
+		return
+	_dest = at
+	if at.is_equal_approx(_centre):
+		# Back where it started: nothing to refuse, even if the plaza already covers a house.
+		_verdict = {"village": _grab_village, "reason": &""}
+		return
+	_verdict = VillagePlazas.move_problem(
+		editor.document, _grab_village, _grab_plaza, at, _world, _plans
+	)
+
+
+## The release of a move: the plaza goes where it was carried, unless that place is refused (then
+## it stays and the pill's reason is a toast).
+func _end_move(brush: BrushTool) -> void:
+	var editor := brush.editor
+	var reason: StringName = _verdict.get("reason", &"")
+	if reason == &"" and not _dest.is_equal_approx(_centre):
+		if editor.settlements.move_plaza(_grab_village, _grab_plaza, _dest):
+			var target := int(_verdict["village"])
+			if target != _grab_village:
+				select(target, editor.document.settlement(target).plazas.size() - 1)
+			return
+		reason = editor.settlements.last_refusal
+	if reason != &"":
+		_message = refusal_text(reason)
+		if reason == SettlementEditor.REFUSED_BUILDING:
+			_message = PLAZA_ON_BUILDING
+		brush.refused.emit(_message)
+
+
+## The release: lays the new plaza, or sizes or moves the grabbed one, as one history entry.
 func end(brush: BrushTool) -> void:
 	var editor := brush.editor
 	if gesture == &"" or editor == null:
+		reset()
+		return
+	if gesture == GESTURE_MOVE:
+		_end_move(brush)
 		reset()
 		return
 	var radius := preview_radius()
@@ -461,6 +579,9 @@ func reset() -> void:
 	gesture = &""
 	_grab_village = -1
 	_grab_plaza = -1
+	_verdict = {}
+	_world = null
+	_plans = []
 
 
 ## Delete or Backspace over a plaza.
@@ -495,9 +616,11 @@ func fade_focus(brush: BrushTool) -> Vector4:
 	var reach := FADE_M
 	var at := brush.hit
 	if gesture != &"" and brush.editor != null:
-		reach += preview_radius() * brush.editor.map_scale()
-		var y := WaterGeometry.ground_at(brush.editor.document, _centre)
-		at = brush.editor.to_world(Vector3(_centre.x, y, _centre.y))
+		var middle := move_destination()
+		var radius := _start_radius if gesture == GESTURE_MOVE else preview_radius()
+		reach += radius * brush.editor.map_scale()
+		var y := WaterGeometry.ground_at(brush.editor.document, middle)
+		at = brush.editor.to_world(Vector3(middle.x, y, middle.y))
 	return Vector4(at.x, at.y, at.z, reach)
 
 
