@@ -6,6 +6,9 @@ extends Node3D
 ## @warning Do not create with .new() - use BoardTokenAnimationTreeFactory instead.
 ## This class requires its scene structure to function properly.
 
+## The idle clip the state machine starts in (and the model's clip of that name loops).
+const IDLE := &"battlewait01"
+
 @export var anim_player: AnimationPlayer
 
 ## Set to true by BoardTokenAnimationTreeFactory - detects improper instantiation
@@ -27,6 +30,11 @@ func _ready() -> void:
 	if anim_player:
 		# Set the animation player path
 		tree.anim_player = tree.get_path_to(anim_player)
+
+		# A glTF clip carries no loop flag, so a model's idle would play once and freeze.
+		var idle := anim_player.get_animation(IDLE) if anim_player.has_animation(IDLE) else null
+		if idle != null:
+			idle.loop_mode = Animation.LOOP_LINEAR
 
 		# Set root_node to the model scene (AnimationPlayer's parent) where animation tracks are valid
 		# Animation tracks target paths like "Armature/Skeleton3D:bone" relative to this root

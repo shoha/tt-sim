@@ -157,6 +157,11 @@ the same `AssetPack` and loader path, so variants, icons and animations work unc
   from its manifest (`LicenceCatalog.pack_entries`): there is no second list to keep in step.
   `tests/unit/test_builtin_packs.gd` fails a shipped pack that has no `license`, no credit line, an id
   that is not its folder name, or a model or icon without a keep sidecar.
+- **Size and animation of a pack token.** A token's size is its GLB's own size in metres (no
+  automatic scale, no manifest field), so a pack bakes a real-world scale into each model's root
+  node (the Beasts pack: `tools/roster/beast_recipes.gd`). The token animation tree plays clips by
+  fixed names (`battlewait01` idle, `damage01`, `down01_start`, `down01`); a model that names its
+  clips so gets them, and its idle loops (a glTF clip has no loop flag, so the tree sets it).
 - **Adding one.** Put the folder in `builtin_packs/`, write the manifest with the provenance fields,
   add the sidecars, then run `godot --headless --import` (it does not touch keep files) and the gate.
   Only CC0 and CC-BY sources with a credit line; the Pokemon and Trainers packs stay local.

@@ -10,12 +10,17 @@ extends SceneTree
 ## light and an ambient fill, not the board's environment: an icon is a portrait, not a capture.
 
 const FolkGlb := preload("res://tools/roster/folk_glb.gd")
+const SkinnedBounds := preload("res://tools/roster/skinned_bounds.gd")
 const SIZE_PX := 128
 const SUPERSAMPLE := 4
 const AZIMUTH_RAD := PI / 4.0
 const PITCH_DEG := 21.6
 const MARGIN := 1.12
 const WATCHDOG_S := 120.0
+
+## Extra turn of the model away from facing the camera: people face it (0), a four-legged
+## animal reads better in three-quarter view (--yaw -50, say).
+var _yaw_deg := 0.0
 
 
 func _initialize() -> void:
@@ -27,8 +32,10 @@ func _initialize() -> void:
 			pack = args[i + 1].trim_suffix("/")
 		elif args[i] == "--only":
 			only = args[i + 1]
+		elif args[i] == "--yaw":
+			_yaw_deg = float(args[i + 1])
 	if pack == "":
-		push_error("usage: -- --pack <pack folder> [--only <id>]")
+		push_error("usage: -- --pack <pack folder> [--only <id>] [--yaw <degrees off the camera>]")
 		quit(2)
 		return
 	create_timer(WATCHDOG_S).timeout.connect(func() -> void: quit(3))
@@ -68,7 +75,7 @@ func _run(pack: String, only: String) -> void:
 		if model == null:
 			failed += 1
 			continue
-		model.rotation.y = AZIMUTH_RAD
+		model.rotation.y = AZIMUTH_RAD + deg_to_rad(_yaw_deg)
 		viewport.add_child(model)
 		_fit(camera, model)
 		for i in 4:
@@ -97,13 +104,13 @@ func _load(path: String) -> Node3D:
 func _fit(camera: Camera3D, model: Node3D) -> void:
 	var low := Vector3(INF, INF, INF)
 	var high := -low
-	for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
-		var box := mesh.get_aabb()
-		for corner in 8:
-			var point := box.position + box.size * Vector3(corner & 1, (corner >> 1) & 1, (corner >> 2) & 1)
-			var world := model.transform * (mesh.transform * point)
-			low = low.min(world)
-			high = high.max(world)
+	# The model's rendered bounds (a skinned mesh is measured through its bones), turned and placed.
+	var box := SkinnedBounds.of(model)
+	for corner in 8:
+		var point := box.position + box.size * Vector3(corner & 1, (corner >> 1) & 1, (corner >> 2) & 1)
+		var world := model.transform * point
+		low = low.min(world)
+		high = high.max(world)
 	var centre := (low + high) * 0.5
 	# The view height that holds the model's projected extent, in the camera's own axes.
 	var up := camera.basis.y

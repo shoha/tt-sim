@@ -1,0 +1,20 @@
+{
+  "pack_id": "beasts",
+  "display_name": "Beasts and Farm Animals",
+  "version": "1.0",
+  "author": "Quaternius",
+  "license": "CC0-1.0",
+  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "source_url": "https://quaternius.com/packs/farmanimal.html",
+  "credit": "Animals by Quaternius (CC0)",
+  "obtained": "2026-11-01",
+  "assets": {
+    "cow": {"display_name": "Cow", "variants": {"default": {"model": "cow.glb", "icon": "cow.png"}}},
+    "horse": {"display_name": "Horse", "variants": {"default": {"model": "horse.glb", "icon": "horse.png"}}},
+    "llama": {"display_name": "Llama", "variants": {"default": {"model": "llama.glb", "icon": "llama.png"}}},
+    "pig": {"display_name": "Pig", "variants": {"default": {"model": "pig.glb", "icon": "pig.png"}}},
+    "pug": {"display_name": "Pug", "variants": {"default": {"model": "pug.glb", "icon": "pug.png"}}},
+    "sheep": {"display_name": "Sheep", "variants": {"default": {"model": "sheep.glb", "icon": "sheep.png"}}},
+    "zebra": {"display_name": "Zebra", "variants": {"default": {"model": "zebra.glb", "icon": "zebra.png"}}}
+  }
+}
