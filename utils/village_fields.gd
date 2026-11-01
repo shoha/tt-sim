@@ -7,9 +7,10 @@ extends RefCounted
 ## a plaza. Three kinds, each a few bold painted shapes and a few confident furnishings rather than
 ## fine detail:
 ##
-## - crops: a disc of tilled earth with broad crop rows painted across it (green or gold, the seed's
-##   pick), and a scarecrow standing in it; a haystack by the rim on some fields; a hedgerow of
-##   meadow bushes round the rim with a gate, so the field reads as a parcel at home zoom.
+## - crops: a disc of light earth standing rows of real crop plants (VillageCrops: wheat, barley, a
+##   young crop or a flowering one, neighbouring fields in different tones), and a scarecrow
+##   standing in it; a haystack by the rim on some fields; a hedgerow of meadow bushes round the
+##   rim with a gate, so the field reads as a parcel at home zoom.
 ## - orchard: a disc of warm meadow grass with fruit trees in a loose grid turned by the seed, mown
 ##   green alleys between the tree rows, blossom round each trunk, and bee skeps by the rim on some.
 ## - garden: a small disc of meadow grass with two or three broad earth beds, each one mass of a
@@ -34,7 +35,7 @@ const KIT_KINDS := {
 }
 const KIND_LABELS := {"crops": "Crops", "orchard": "Orchard", "garden": "Garden"}
 const KIND_TIPS := {
-	"crops": "Tilled earth in broad rows, with a scarecrow",
+	"crops": "Rows of wheat, barley or flowers in a hedge, with a scarecrow",
 	"orchard": "Fruit trees in a loose grid on warm grass",
 	"garden": "Flower beds and a few shrubs: a small plot",
 }
@@ -51,22 +52,12 @@ const DEFAULT_RADIUS_M := {"crops": 8.0, "orchard": 8.0, "garden": 5.5}
 const MIN_RADIUS_M := {"crops": 4.0, "orchard": 4.0, "garden": 2.5}
 const MAX_RADIUS_M := {"crops": 18.0, "orchard": 16.0, "garden": 8.0}
 
-## The surfaces each kind paints (palette ids): the ground disc, and the rows or beds over it.
-## Tilled earth is the dark peat, not the pale `dirt`: at home zoom the pale tan read as one more
-## of the meadow's yellow patches (fields round 3), the dark disc under luminous rows reads as a
-## field from across the board.
+## The surfaces each kind paints (palette ids): the ground disc, and the rows or beds over it. A
+## crop field's earth and rows are VillageCrops' (round 5); a garden's beds are the dark peat.
 const EARTH := "dirt_peat"
 const MEADOW := "grass_meadow"
-## Crop rows: green (greens, beans) or gold (wheat), the seed's pick per field.
-const CROP_ROWS: Array[String] = ["grass_alpine", "grass_savanna"]
 ## The ground disc is this much wider than the field (its soft edge is the rest).
 const DISC_FACTOR := 1.05
-## Rows: this far apart, this brush radius (about 1.2 m of full cover, a metre of dark earth
-## between: broad enough to read as stripes at home zoom), and they stop this share of the disc's
-## half chord short of the rim.
-const ROW_PITCH_M := 3.0
-const ROW_RADIUS_M := 0.9
-const ROW_REACH := 0.84
 ## Garden beds: broad (round 4: 0.75 m beds 2.2 m apart with one line of flowers read as thin dark
 ## stripes with a few dots, c2_close_garden), each planted in two staggered lines this far apart.
 const BED_PITCH_M := 2.8
@@ -192,17 +183,13 @@ static func strokes_of(field: Dictionary, seed_value: int) -> Array[Dictionary]:
 	var radius := float(field["radius"])
 	var kind := str(field["kind"])
 	var out: Array[Dictionary] = []
-	var ground := EARTH if kind == "crops" else MEADOW
+	var ground := VillageCrops.EARTH if kind == "crops" else MEADOW
 	out.append(_stroke(ground, at, at, radius * DISC_FACTOR))
 	var along := Vector2.from_angle(angle_of(field, seed_value))
 	var across := Vector2(-along.y, along.x)
 	if kind == "crops":
-		var rows := CROP_ROWS[_hash(seed_value, at, "rows") % CROP_ROWS.size()]
-		for offset in _offsets(radius * ROW_REACH, ROW_PITCH_M):
-			var half := sqrt(maxf(radius * radius - offset * offset, 0.0)) * ROW_REACH - ROW_RADIUS_M
-			if half > 0.5:
-				var mid := at + across * offset
-				out.append(_stroke(rows, mid - along * half, mid + along * half, ROW_RADIUS_M))
+		for stroke in VillageCrops.strokes_of(field, seed_value, angle_of(field, seed_value)):
+			out.append(SettlementGroundIO.snapped_stroke(stroke))
 	elif kind == "orchard":
 		# A mown alley between each pair of tree rows (the rows _orchard plants), along the rows.
 		var spacing := TREE_PITCH_M * 0.9
@@ -282,6 +269,9 @@ static func plants_of(settlement: Settlement) -> Array[Dictionary]:
 				out.append_array(_orchard(field, settlement.seed_value))
 			"garden":
 				out.append_array(_garden(field, settlement.seed_value))
+			"crops":
+				var turn := angle_of(field, settlement.seed_value)
+				out.append_array(VillageCrops.plants_of(field, settlement.seed_value, turn))
 		if HEDGE_KINDS.has(str(field["kind"])):
 			out.append_array(hedge_of(field, settlement.seed_value))
 	return out

@@ -81,21 +81,54 @@ func test_a_kit_decides_the_kinds_and_its_default() -> void:
 	assert_eq(VillageFields.radius_for_drag(Vector2.ZERO, Vector2(6.04, 0), "orchard"), 6.0)
 
 
-func test_crops_are_an_earth_disc_with_broad_rows_inside_it() -> void:
+func test_crops_are_a_light_earth_disc_with_broad_rows_inside_it() -> void:
 	var field := _field(Vector2(3, 4), 8.0, "crops")
 	var strokes := VillageFields.strokes_of(field, 5)
-	assert_eq(strokes[0]["surface"], VillageFields.EARTH)
+	assert_eq(strokes[0]["surface"], VillageCrops.EARTH, "light warm earth, not the dark peat")
 	assert_eq(strokes[0]["from"], strokes[0]["to"], "the ground is one disc")
 	var rows := strokes.slice(1)
-	assert_between(rows.size(), 4, 8, "a few bold rows, not fine stripes")
-	var surface := str(rows[0]["surface"])
-	assert_true(VillageFields.CROP_ROWS.has(surface))
+	assert_between(rows.size(), 3, 16, "a few bold rows, not fine stripes")
 	for row: Dictionary in rows:
-		assert_eq(row["surface"], surface, "one crop per field")
+		assert_true(VillageCrops.surfaces().has(str(row["surface"])))
 		for key in ["from", "to"]:
 			assert_lt((row[key] as Vector2).distance_to(Vector2(3, 4)), 8.0, "rows stay on the disc")
 	assert_eq(VillageFields.strokes_of(field, 5), strokes, "the same record plans the same rows")
 	assert_ne(VillageFields.angle_of(field, 5), VillageFields.angle_of(field, 6), "seeds turn rows")
+
+
+func test_neighbouring_crop_fields_take_different_tones() -> void:
+	var step := VillageCrops.CELL_M
+	for seed_value in [0, 5, 11]:
+		var tone := VillageCrops.tone_of(Vector2(1, 1), seed_value)
+		for dx in [-1, 0, 1]:
+			for dz in [-1, 0, 1]:
+				if dx == 0 and dz == 0:
+					continue
+				var next := Vector2(1 + dx * step, 1 + dz * step)
+				assert_ne(VillageCrops.tone_of(next, seed_value), tone, "a quilt, not one crop")
+	assert_ne(
+		VillageCrops.tone_of(Vector2(1, 1), 5), VillageCrops.tone_of(Vector2(1, 1), 6), "a re-dress"
+	)
+
+
+func test_a_crop_field_stands_rows_of_real_plants_by_default() -> void:
+	assert_eq(VillageCrops.look, "plants", "round 5's verdict is the default")
+	var hedge := 0
+	for seed_value in 4:
+		var field := _field(Vector2(0, 12), 8.0, "crops")
+		var record := _hamlet([field])
+		record.seed_value = seed_value
+		var tone: Dictionary = VillageCrops.TONES[VillageCrops.tone_of(Vector2(0, 12), seed_value)]
+		var crops := VillageFields.plants_of(record).filter(
+			func(p: Dictionary) -> bool: return not VillageFields.HEDGE_SHRUBS.has(p["asset"])
+		)
+		hedge = VillageFields.plants_of(record).size() - crops.size()
+		assert_between(crops.size(), 150, 450, "a field of plants in rows, not a sprinkle")
+		var allowed: Array = VillageCrops.PLANT_ASSETS[str(tone["plant"])]
+		for plant: Dictionary in crops:
+			assert_true(allowed.has(plant["asset"]), "one crop per field")
+			assert_lt((plant["at"] as Vector2).distance_to(Vector2(0, 12)), 8.0, "on the disc")
+	assert_gt(hedge, 0, "the hedgerow still stands round it")
 
 
 func test_a_garden_has_beds_and_flowers_and_an_orchard_a_loose_grid_of_trees() -> void:
@@ -159,8 +192,8 @@ func test_the_strokes_a_field_laid_are_found_among_the_others() -> void:
 	var found := VillageFields.stroke_indices(ground, field, 5)
 	assert_eq(found.size(), own.size())
 	assert_eq(found[0], ground.size() - 1, "newest first")
-	assert_eq(
-		VillageFields.stroke_indices(ground, field, 6).size(), 1, "another seed's rows: the disc alone"
+	assert_lte(
+		VillageFields.stroke_indices(ground, field, 6).size(), 2, "another seed's rows: the discs alone"
 	)
 
 
@@ -254,7 +287,7 @@ func test_a_field_is_painted_in_one_entry_and_removing_it_restores_the_weights()
 	# Clear of the road's soft edge: paint over another stroke cannot be taken back exactly.
 	assert_true(editor.settlements.add_field(id, Vector2(0, 14), 4.0, "crops"))
 	assert_eq(_history.undo_count(), entries + 1, "one history entry")
-	assert_true(_doc.surface_ids.has(VillageFields.EARTH))
+	assert_true(_doc.surface_ids.has(VillageCrops.EARTH))
 	var laid := VillageFields.strokes_of(_doc.settlement(id).fields[0], _doc.settlement(id).seed_value)
 	assert_eq(_doc.settlement(id).ground.size(), strokes + laid.size(), "the record lists its paint")
 	var painted := _paint_state(_doc)

@@ -695,9 +695,9 @@ away): discs, up to 4 per village, three kinds, no polygons, no move, no bridges
 
 - **Record:** `Settlement.fields`, discs `{at, radius 2.5..18 m, kind}`; saved, validated and round-tripped like
   plazas (settlements.md "The record"), left out when empty, so a map without fields saves byte for byte as before.
-- **Kinds** (`VillageFields`, `utils/village_fields.gd`, pure): crops (a disc of tilled earth, the dark `dirt_peat`,
-  with broad rows 3 m apart, green `grass_alpine` or gold `grass_savanna` by the seed, a scarecrow, a haystack on two
-  fields in three); orchard (warm `grass_meadow` with fruit trees, the grassland meadow's broadleaf and oaks at
+- **Kinds** (`VillageFields`, `utils/village_fields.gd`, pure): crops (round 5, `VillageCrops`: a disc of light warm
+  earth, `dirt_opening`, standing rows of real plants from the core library in one of four tones, see "Round 5"
+  below; a scarecrow, a haystack on two fields in three, a hedgerow); orchard (warm `grass_meadow` with fruit trees, the grassland meadow's broadleaf and oaks at
   0.42..0.55 scale, on a loose quincunx 3.4 m apart turned by the seed, bee skeps by some); garden (a small `grass_meadow`
   disc with two or three earth beds, one flower per bed in lavender or bloom mounds, one or two flowering shrubs at
   the rim). A kit decides the kinds and its default (`KIT_KINDS`): farming hamlet crops, orchard, garden; market
@@ -784,6 +784,21 @@ away): discs, up to 4 per village, three kinds, no polygons, no move, no bridges
   1280x720 (content scale 1.4, a 771 px canvas) the pane is 508 px from y 122 with two villages; three villages and a
   wrapped harbour note measure 534 px, inside the 589 px that leaves 60 px of slack
   (`test_the_pane_fits_720_with_three_villages_and_a_wrapped_note`). World labels under the pane are not hidden.
+- **Round 5 (fields5): the crop look.** The user judged round 4's crops bad: dark `dirt_peat` furrows under pale
+  gold rows "read more like a striped chocolate desert". Three genuinely different looks were built behind a switch
+  (`VillageCrops.look`, never saved or sent) and compared at home zoom in one sheet (job `fields_crops`,
+  `sheet_crops.png`, three neighbouring crop fields): (A) rows, broad soft crop rows over light earth with narrow
+  furrows, one tone per field; (B) patchwork, three broad strips of different tones per field with a faint row hint;
+  (C) plants, rows of real plants standing on the earth. A read as tan sand discs (thin painted rows lose to the light
+  earth; ripe gold on tan is invisible); B as washed-out strips of lawn and sand; C as farmland, and won. C's four
+  tones (`VillageCrops.TONES`): barley (meadow tall grass on the earth), young (the same grass on a `grass_alpine`
+  disc), buckwheat (daisies in rows on `grass_alpine`) and ripe wheat (the savanna's golden tall grass), rows 1.15 m
+  apart with a plant every 0.55 m at 1.3..1.7 scale (about 250 plants for an 8 m field, one MultiMesh per species
+  through AuthoredFieldPlants). Neighbouring fields take different tones: the tone is the field centre's cell on a
+  16 m lattice coloured (x + 2 z) mod 4, so cells touching on a side or corner differ, shifted by the seed so a
+  re-dress repaints the quilt. Verdict (`plants_home`, `--full`): golden wheat, white flowering buckwheat and a young
+  yellow-green crop, each hedged, read as a quilt of farmland. The ripe field is close in hue to the biome's yellow
+  paint patches and out-reads them only by its rows and hedge; the young field is close to the meadow green.
 - **Limits left:** taking back a field that overlaps a road or path thins that paint (as for plazas); the plants'
   wind materials are not registered with the level's wind re-tuning; plants stand again only on a settlement
   refresh (a sculpt under an orchard leaves them floating until the next edit); fields refused for wet or steep
