@@ -22,6 +22,7 @@ or sent, and every peer derives the same list.
 | `plazas` | up to 4 discs `{at: map XZ (1 cm), radius: 2..16 m}` (villages2); the first frontage carries them to procgen's `plaza.centre` and `plaza.edge` rules, and the Dress paves them. Left out of the saved entry when empty, so older maps re-save byte for byte |
 | `ground` | up to 256 paint strokes the last Dress laid (villages3; `SettlementGroundIO`): `{surface, from, to, radius, seconds}` capsules in paint order, held to a hundredth. Saved as `"ground": {"surfaces": [...], "strokes": [[surface index, ax, az, bx, bz, radius, seconds], ...]}` (at most 8 surfaces since topic fields, was 4), left out when empty; Clear and a re-dress take back exactly these |
 | `fields` | up to 4 discs `{at: map XZ (1 cm), radius: 2.5..18 m, kind: crops, orchard or garden}` (topic fields, villages.md section 11). Their paint is laid into `ground` (role `field`, first in paint order, VillageFields.strokes_of); their props (scarecrow, haystack, skeps) come from SettlementPlan and their plants (orchard trees, garden flowers) from `AuthoredFieldPlants`, all derived. Saved as `"fields": [{"at": [x, z], "radius", "kind"}]`, left out when empty; a bad kind, radius or count skips the record |
+| `boundary` | the village's edge (topic bounds, villages.md section 13): `""` none, `wall`, `low_wall` or `hedge`, drawn by the Dress from the kit and seed (`VillageBoundary.kind_for`). The line, gates and piers are derived (`VillageBoundary.plan`, `AuthoredBoundaries`, the hedge through `AuthoredFieldPlants`). Saved as `"boundary": "<kind>"`, left out when none; an unknown kind skips the record |
 
 One street has at most one settlement. A settlement whose street is gone draws nothing and returns with the
 street on undo (it is not deleted with the street: undoing the removal must bring both back).
@@ -239,6 +240,6 @@ surroundings with the trampled broad edge, show in the Paint tool, and reach eve
 ## Not done
 
 The Dress row on the Buildings bar, the rest of the Village tool (plaza move and polygons, garden paint, prop
-select, move, swap, pin; the plaza gestures and the character tiles are built), plaza polygons, a yard surface, bridges, boundary walls and fields, GM Events pane wiring,
+select, move, swap, pin; the plaza gestures and the character tiles are built), plaza polygons, a yard surface (fields, bridges and boundary walls are built: villages.md 11 to 13), GM Events pane wiring,
 pin/remove/swap gestures (the record and plan support them), collision `stand`/`solid`, the settlement
 following later house moves after a split, and a rebuild of a building's yard after a paint stroke alone.

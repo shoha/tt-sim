@@ -26,6 +26,12 @@ extends RefCounted
 ## ordinary `crossings` op inside the group. `last_bridges` says what the last laying did, and a
 ## stretch that got no bridge is a toast for the caller (VillageBridges.refusal_text), never a
 ## refused Dress.
+##
+## Boundary (villages phase 3, topic bounds). A Dress, a re-dress and a change of character draw
+## the record's `boundary` from the kit and the seed (VillageBoundary.kind_for); the wall or hedge
+## is derived, so it comes and goes with the record (Clear, Undo, a peer's `settlements` op), and
+## the scatter regrows round the street of a bounded village that changed. `set_boundary` sets it
+## alone.
 
 ## Why the last dress() or change made nothing (last_refusal).
 const REFUSED_STREET := &"street"
@@ -47,6 +53,8 @@ var lays_ground: bool = true
 var last_bridges: Dictionary = {}
 ## False dresses without bridges (tests and probes).
 var lays_bridges: bool = true
+## False dresses without a boundary (the before captures, tests and probes).
+var lays_boundary: bool = true
 ## The editor (weak: it owns this object).
 var _owner: WeakRef = null
 
@@ -106,6 +114,7 @@ func dress(wall_id: int, kit: String, wealth: float = -1.0, density: float = -1.
 		changed.removed = PackedStringArray()
 		changed.pinned = {}
 		changed.swapped = {}
+	changed.boundary = _boundary_for(changed)
 	if wealth >= 0.0:
 		changed.wealth = clampf(snappedf(wealth, Settlement.WEALTH_STEP), 0.0, 1.0)
 	if density >= 0.0:
@@ -133,6 +142,7 @@ func redress(settlement_id: int) -> bool:
 	changed.removed = PackedStringArray()
 	changed.pinned = {}
 	changed.swapped = {}
+	changed.boundary = _boundary_for(changed)
 	return (
 		_replace(held, changed, "Re-dress street", SettlementGround.PAINT_ORDER, null, true) > 0
 	)
@@ -149,6 +159,7 @@ func set_kit(settlement_id: int, kit: String) -> bool:
 	changed.removed = PackedStringArray()
 	changed.pinned = {}
 	changed.swapped = {}
+	changed.boundary = _boundary_for(changed)
 	return (
 		_replace(
 			held, changed, "Change village character", SettlementGround.PAINT_ORDER, null, true
@@ -333,6 +344,35 @@ func set_feel(settlement_id: int, wealth: float, density: float) -> bool:
 	return _replace(held, changed, "Change village feel") > 0
 
 
+## Sets the boundary of settlement `settlement_id` to `kind` (a VillageBoundary.KINDS entry, or ""
+## for none) as one history entry, keeping its seed and everything else. It is the author's pick
+## (Settlement.boundary_manual): a re-dress or a change of character keeps it. False when the
+## record is unknown, the kind is not one, or nothing changes.
+func set_boundary(settlement_id: int, kind: String) -> bool:
+	var held := _editor().document.settlement(settlement_id)
+	if held == null or (kind != "" and not VillageBoundary.KINDS.has(kind)):
+		return false
+	if held.boundary == kind and held.boundary_manual:
+		return false
+	var changed := held.copy()
+	changed.boundary = kind
+	changed.boundary_manual = true
+	return _replace(held, changed, "Village boundary") > 0
+
+
+## Gives settlement `settlement_id` back the boundary its character and seed draw
+## (VillageBoundary.kind_for), as the Dress does, as one history entry. False when the record is
+## unknown or already follows the kit.
+func auto_boundary(settlement_id: int) -> bool:
+	var held := _editor().document.settlement(settlement_id)
+	if held == null or not held.boundary_manual:
+		return false
+	var changed := held.copy()
+	changed.boundary_manual = false
+	changed.boundary = _boundary_for(changed)
+	return _replace(held, changed, "Village boundary") > 0
+
+
 ## Removes settlement `settlement_id` (and with it every furnishing and the paint its Dress laid,
 ## SettlementUnpaint) as one history entry; ground painted by hand stays.
 func clear(settlement_id: int) -> bool:
@@ -455,6 +495,13 @@ func apply_list(settlements: Array[Settlement], area: Rect2) -> void:
 	if is_instance_valid(e.scatter) and area.has_area():
 		e.scatter.request_region(area)
 	e.edited.emit()
+
+
+## The boundary a Dress gives `settlement` (its character and seed: VillageBoundary.kind_for).
+func _boundary_for(settlement: Settlement) -> String:
+	if settlement.boundary_manual:
+		return settlement.boundary
+	return VillageBoundary.kind_for(settlement.kit, settlement.seed_value) if lays_boundary else ""
 
 
 ## The seed a street's first dressing uses (from the map seed, the street and its seed).
@@ -606,6 +653,10 @@ func _change(label: String, after: Array[Settlement], _touched: Array[Settlement
 	# The fields that changed clear (or give back) the wild plants under them: the scatter regrows
 	# there (VillageFieldGround), here, on undo and redo, and on a peer through the op's area.
 	var area := VillageFieldGround.area_of(before, after)
+	# So do the boundaries that changed (their line clears a strip: VillageBoundary).
+	var bounds := VillageBoundary.area_of(e.document, before, after)
+	if bounds.has_area():
+		area = bounds if not area.has_area() else area.merge(bounds)
 	apply_list(after, area)
 	(
 		e

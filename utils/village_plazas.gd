@@ -216,7 +216,9 @@ static func stroke_index(ground: Array[Dictionary], plaza: Dictionary) -> int:
 ## What the pane shows for the picked village and plaza (either -1 for none), from `doc`:
 ## `villages` ([{id, kit, label}] in id order), `village` (the picked id), `kit`, `plazas` (how
 ## many the village holds), `plaza` (the picked index), `radius`, `road` and `plaza_ground` (the
-## kit's surfaces named for the author) and `full` (the village holds as many plazas as it may).
+## kit's surfaces named for the author), `full` (the village holds as many plazas as it may), and
+## the boundary: `boundary` (the record's kind), `boundary_manual` (the author chose it) and
+## `boundary_auto` (what the character and seed would draw: the Automatic choice's meaning).
 static func state_of(doc: MapDocument, village: int, plaza: int) -> Dictionary:
 	var villages: Array[Dictionary] = []
 	for settlement in doc.settlements:
@@ -234,12 +236,18 @@ static func state_of(doc: MapDocument, village: int, plaza: int) -> Dictionary:
 		"plaza_ground": "",
 		"full": false,
 		"sizing": false,
+		"boundary": "",
+		"boundary_manual": false,
+		"boundary_auto": "",
 	}
 	var held := doc.settlement(village) if village > 0 else null
 	if held == null:
 		return state
 	state["village"] = held.id
 	state["kit"] = held.kit
+	state["boundary"] = held.boundary
+	state["boundary_manual"] = held.boundary_manual
+	state["boundary_auto"] = VillageBoundary.kind_for(held.kit, held.seed_value)
 	state["plazas"] = held.plazas.size()
 	state["full"] = held.plazas.size() >= Settlement.MAX_PLAZAS
 	var ground := ground_of(held.kit)

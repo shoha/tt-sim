@@ -421,7 +421,8 @@ All gestures write the `Settlement` record; none edits a prop directly unless th
   bridge through `CrossingEditor.plan` at the crossing, kind by character (planks for a hamlet, arch for a
   town, ford for a poor lane), as a separate undoable crossing; the street continues over it. The street
   data is untouched. This stays a suggestion chip, since a crossing changes the map's water reading.
-- **Boundary walls and gates.** A `village_edge` rule can ask for a wall or hedge line round the settlement
+- **Boundary walls and gates (BUILT, topic bounds, 2026-10-31: section 13; drawn by the Dress from the kit
+  and seed, not a `village_edge` rule).** A `village_edge` rule can ask for a wall or hedge line round the settlement
   hull (a closed `Wall` or plantgen hedge) with gates at street ends; it is generated as derived geometry
   (a procgen wall along the hull) in phase 4, not as `Wall` records, to stay under `MAX_WALLS` 64.
 
@@ -869,3 +870,70 @@ rest, and a peer receives it as the ordinary `crossings` op inside the group (no
   were until the next re-dress or `pave`; a bridge the author erases by hand returns with the next re-dress; a bridge
   laid by a village that a later water edit removed leaves its id in the record (harmless: a take-back skips ids the
   document no longer holds, and a hand crossing that reuses the id over the same street would be taken back with it).
+
+## 13. Phase 3, third slice as built: boundary walls and gates (topic bounds, 2026-10-31)
+
+A village can have a boundary: a low stone wall or a hedge round its edge with gates where its street leaves, so it
+reads as one place at home zoom (section 3e, last bullet). Decided in the card (owner away; for the board): the
+Dress draws it from the character and the seed, no `village_edge` kit rule. User verdict 2026-11-01: ship that AND a
+pane switch, so the author can override it per village (see "The pane switch" below).
+
+- **Record:** `Settlement.boundary`, "" (none), `wall`, `low_wall` or `hedge`; saved as a name, left out when "", a
+  hostile value skips the record. Only the kind is stored; everything else is derived on every peer, so a Dress,
+  Clear, Undo and a peer need nothing new (the `settlements` op carries it). A village dressed before this slice has
+  none until its next re-dress or change of character.
+- **Kind by character** (`VillageBoundary.kind_for`, `KIT_RULES`): a hill fort village always a stone wall (1.0 m,
+  gate piers 1.55 m); a market town a low stone wall (0.75 m, piers 1.2 m) on two seeds in three; a farming hamlet a
+  hedge on one seed in two; a harbour town none. A re-dress draws again (no sameness).
+- **The pane switch** (2026-11-01; a dropdown first, rebuilt as tiles after the UI critic's FAIL: an OptionButton had
+  no visible edge and no sibling row uses one): a `TileField` under the Village pane's character tiles, captioned
+  "Boundary of village N" (just "Boundary" with one village) like its sibling rows, five text tiles in one row: Auto
+  (the kit's own pick and the default; the caption line's note names it, "Auto: hedge", and the tile's tooltip says it
+  in full), None, Hedge, Low wall, Wall (`VillageToolPane.BOUNDARY_CHOICES`, `boundary_picked`, each tile with a
+  tooltip; a tile is 60 x 40). To keep the pane in the 720p budget the hint became one line and the Lay out and
+  character tiles 4 px shorter each. A choice is one
+  `SettlementEditor` call and one history entry "Village boundary" (`VillageTool.apply_boundary`): `set_boundary`
+  for None and the kinds, `auto_boundary` for Automatic. "Automatic" needs to be told apart from an author's None
+  (both are `boundary == ""` on a harbour town), so the record carries `Settlement.boundary_manual`: true once the
+  author picked (saved as `"boundary_manual": true`, left out when false, a non-flag skips the record). While it is
+  set a re-dress and a change of character keep `boundary`; `auto_boundary` clears it and draws the kit's kind again
+  (`kind_for`), so Automatic restores exactly the kit-driven result, including its seed draw. `VillagePlazas.state_of`
+  carries `boundary`, `boundary_manual` and `boundary_auto` for the pane. The row fits the 720p budget
+  (`test_the_pane_fits_720_with_three_villages_and_a_wrapped_note`; 533 px tall at full size with three villages,
+  `bounds_pane`); `test_the_boundary_tiles_share_one_row_with_their_labels_whole` keeps the five on one line.
+- **The line** (`VillageBoundary`, `utils/village_boundary.gd`, pure): the convex hull of the street's standing lots
+  (yards included), the street widened 1 m past its road (so a one-sided street still has a line beyond its road)
+  and the plazas, grown 2 m with rounded corners and sampled every 0.5 m. Fields are not in the hull.
+- **The gaps:** a sample within a street's road plus 0.8 m a side is a GATE (the village's own street is taken 14 m
+  past both ends, so its two ends are always gates; another street through the line gets one too); a sample is
+  BLOCKED when wet (`VillageDryGround.wet_flags`), within 0.5 m of a crossing's corridor (its deck and landings), within
+  1.6 m of one of the village's fields' rims (past their hedgerow) or within 0.8 m of any building (structures and
+  every street's houses). Runs under 2 m are dropped. A gate has a pier either side; a blocked gap has none.
+- **Stone:** each run is simplified (0.08 m) and cut into lines of at most 40 m, built as transient `Wall` records
+  (never in `MapDocument.walls`, so `MAX_WALLS` 64 is untouched) through `WallGeometry.build_one`, the procgen stone
+  wall recipe, and merged into one node per village under `AuthoredBoundaries` (`scenes/terrain/authored_boundaries.gd`,
+  an `AuthoredWalls`), its masonry in the street lots' warm painterly material (the yards' walls' look). No collision:
+  walk-through like the furnishings. It rebuilds when the walls or the ground under them move (`WallGeometry.key_of`).
+- **Hedge:** the fields' hedgerow bushes (`VillageFields.HEDGE_SHRUBS`) every 1 m along each run at 0.9..1.2 scale,
+  through `AuthoredFieldPlants`.
+- **Scatter:** the scatter clears a strip under each run (`VillageBoundary.clearance_crossings`, inside
+  `VillageFieldGround.clearance_crossings`, so the GDScript and native scatter both take it); a settlement edit that
+  changes a bounded village regrows round its street (`VillageBoundary.area_of`, merged into the op's area).
+- **Tests:** `tests/unit/test_village_boundary.gd` (the ring round a hull, a one-sided street, gates at the street's
+  ends with four piers, water, a house and a field breaking the line without piers, stubs dropped, the kind by
+  character, a hill fort Dress with Undo, redo and Clear, a hedged hamlet, a river village with no wall on the water,
+  the round trip and hostile input, a village dressed without a boundary saving and clearing as before, the pane's five
+  choices and what Automatic names, a pane choice reaching the village, Automatic restoring the kit's kind, a re-dress
+  keeping an author's None, one undo entry per choice). Render jobs `jobs/bounds_look.json` and
+  `jobs/bounds_pane.json` (the pane at 720p, a Hedge and a Wall chosen from the pane's path).
+- **Look** (`render_jobs/bounds_look`, two rounds, `--full` for the verdict): round 1's 0.6 m low wall was a hairline
+  at home zoom; at 0.75 m it reads. At home zoom (`b_home_after` beside `a_home_before`) each village reads as one
+  place: the hamlet wrapped by a dark green hedge band, the market town's low cream wall along its front with a gap at
+  its paved road, the hill fort enclosed by a cream wall with rounded corners and a gate at each end. Close
+  (`c_close_fort_gate`), warm coursed masonry, the yards' walls' look, with a pier either side of the gate where the
+  road leaves. Weak: a town with no yards has its wall 2 m off its facades; a hedge behind the roofs is hidden from the
+  board's camera.
+- **Limits left:** the hull is convex, so a bent street's boundary encloses the open ground inside the bend; a hand
+  drawn wall or fence crossing the line is not a gap; a boundary does not follow a crossing edit until the next
+  settlement refresh; a split street (source 0) has no boundary; the plan is derived several times per refresh (the
+  layer, the hedge plants, the scatter clearance), each reading every street's lots.

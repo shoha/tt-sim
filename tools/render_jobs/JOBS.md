@@ -1196,6 +1196,14 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   stone arch (`b_home_after`), close at zoom 22 on each (`c_close_hamlet`, `d_close_town`), and the same two with the
   street rows hidden as a diagnostic (`e_hamlet_open`, `f_town_open`). The probe line lists each crossing laid. Run
   with `--full` for verdicts (round 2 ran `--out render_jobs/bridges_look3`).
+- `jobs/bounds_look.json` (about 36 s, keeps no level; topic bounds, villages.md 13, writes `bounds_look`, probe
+  `probes/settlements.gd` `dress` with `boundary: false` and `boundary`): a 320 ft meadow map, three streets running
+  north-south (z -15..15): a farming hamlet on x -30 (preset 3), a market town on x 0 (preset 2) and a hill fort
+  village on x 30 (preset 4), dressed without a boundary (`a_home_before`, home zoom 60 on the middle), then given a
+  hedge, a low stone wall and a stone wall (`boundary` with an explicit kind; `kit` would take the seed's draw)
+  (`b_home_after`), close at zoom 22 on the fort's south gate (`c_close_fort_gate`), the market town's north gate
+  (`d_close_market`) and the hamlet (`e_close_hamlet`). The probe line gives each village's runs and gates. Run with
+  `--full` for verdicts.
 - `jobs/villagetool_recheck.json` (about 40 s, keeps no level; topic villagetool, writes `villagetool2_recheck`): the
   same two villages, then the ghost's paving fill (`a_ghost_market`), a click in the market village laying its 6 m
   floor (`b_market_click`), the hint over the picked plaza (`c_hover_picked`), these three pinned at half size; a full

@@ -33,12 +33,14 @@ const REGROW_M := (
 )
 
 
-## The plant clearance of every field of every settlement of `doc`, as Crossings.
+## The plant clearance of every field of every settlement of `doc`, and of every village boundary
+## (VillageBoundary.clearance_crossings: the strip under its wall or hedge), as Crossings.
 static func clearance_crossings(doc: MapDocument) -> Array[Crossing]:
 	var out: Array[Crossing] = []
 	for settlement in doc.settlements:
 		for field in settlement.fields:
 			out.append_array(strips_of(field))
+	out.append_array(VillageBoundary.clearance_crossings(doc))
 	return out
 
 
