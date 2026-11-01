@@ -147,6 +147,8 @@ static func run(base: Node, step: Dictionary) -> String:
 	match String(step.get("action", "")):
 		"info":
 			return _info_cost()
+		"cold":
+			return _cold_cost(ctrl)
 		"place":
 			return _place(base, ctrl.editor, step)
 		"split":
@@ -214,6 +216,40 @@ static func _info_cost() -> String:
 		"info_of %.2f ms: rows %.2f (%d), triangles old %.2f (%d tris) new %.2f (%d tris), hash %.2f"
 		% [whole, rows_ms, rows.size(), old_ms, old_total, new_ms, new_total, hash_ms]
 	)
+
+
+## The first-use costs of a structure on a fresh map, each timed once (hitches2): the decor info
+## (parses the decor GLBs), the baked masonry textures, then one material of each common kind for
+## the map's first biome, twice (the second pass shows what a cache keeps).
+static func _cold_cost(ctrl: AuthoringController) -> String:
+	var root := PaletteLibrary.DEFAULT_ROOT
+	var style := ctrl.document.biome_ids[0] if not ctrl.document.biome_ids.is_empty() else ""
+	var parts := PackedStringArray()
+	var t := Time.get_ticks_usec()
+	StructureLoadInfo.info_of(root)
+	parts.append("info_of %.1f" % ((Time.get_ticks_usec() - t) / 1000.0))
+	t = Time.get_ticks_usec()
+	MasonryTextures.textures()
+	parts.append("masonry_textures %.1f" % ((Time.get_ticks_usec() - t) / 1000.0))
+	var combos := [
+		["masonry", "wall"],
+		["wood", "roof"],
+		["boards", "wall"],
+		["tile", "roof"],
+		["plaster", "wall"],
+		["thatch", "roof"],
+		["stone", "trim"],
+		["glass", "opening"],
+		["leaf", "ornament"],
+	]
+	for pass_index in 2:
+		for combo: Array in combos:
+			t = Time.get_ticks_usec()
+			StructureMaterials.make(combo[0], combo[1], style, root)
+			parts.append(
+				"%s:%s#%d %.1f" % [combo[0], combo[1], pass_index, (Time.get_ticks_usec() - t) / 1000.0]
+			)
+	return "cold (%s) ms: %s" % [style, ", ".join(parts)]
 
 
 static func _fmt(values: Dictionary) -> String:

@@ -55,6 +55,23 @@ func works_on(editor: AuthoringEditor) -> bool:
 	return editor.can_paint()
 
 
+## The first building's decor GLBs, masonry and shaders warm up now, before the place
+## (StructureWarmup).
+func prepare(controller: AuthoringController) -> void:
+	warm(controller)
+
+
+## Starts the map's StructureWarmup (once per map): the Structure and Village tools' prepare().
+static func warm(controller: AuthoringController) -> void:
+	if controller == null or controller.editor == null or not is_instance_valid(controller.map_root):
+		return
+	StructureWarmup.warm(
+		AuthoredStructures.of_map(controller.map_root),
+		controller.document.biome_ids,
+		controller.editor.palette_root
+	)
+
+
 func build_pane(_panel: AuthoringPanel) -> Control:
 	return StructureToolPane.new()
 

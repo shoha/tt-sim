@@ -4390,3 +4390,52 @@ across unlay and lay (about 10 ms); the cold first-use costs (first `info_of` lo
 would hide; the map-open frame of 300 ms; and a second 75 to 85 ms frame about 15 frames after the first Dress, whose
 cause was not identified. Map load installs nodes cheaply (0.4 to 0.6 ms per structure), so its spikes are elsewhere
 (the open itself and the settlement layers), unchanged.
+
+## Build hitches, round 2 (topic hitches2, 2026-10-31)
+
+Same goal and rules as round 1: main-thread cost only, output byte-identical. Procedure:
+`jobs/hitches2_profile.json` (about 63 s; round 1's map, pose, vsync off, wind frozen, 1920x1080, debug
+build, shared RTX 3080 at 37 percent and P3 before each run), adding a recorded Structure tool open before the
+cold place, a re-dress of street 2 and a Clear of street 2 (the map's last dressing). One run before the change
+and one after, back to back; idle median 4.8/4.1 ms before and 4.7/4.2 after, idle worst 11.2/11.1 and
+10.8/10.5 (no drift; noise floor about 11 ms). Each call figure is one sample; call times of the same action
+repeat within about 3 ms in a run (the two re-dresses of street 1). `jobs/hitches2_cold.json` timed the cold
+costs one by one: decor `info_of` 68 ms, the masonry images 56 ms, and the first material of each structure
+shader 6 to 26 ms (a second material of the same shader 0 to 0.4 ms: the cost is the shader, not the material).
+
+| Action | Before | After |
+|--------|--------|-------|
+| Open the Structure tool | worst 19 ms, jank 2 | worst 49 ms, 5 frames of 44 to 49, jank 205 (the warm-up) |
+| Place 1 building, first of the session | worst 168 and 79 ms, jank 214 | worst 75 ms, jank 60 |
+| Place 1 building, warm | worst 16 ms | 18 ms (unchanged) |
+| Dress street 1 (first) | call 125.0, frames 142 and 79 (frame 15) | call 113.2, frame 129; the 79 ms frame is gone |
+| Dress street 2 | call 77.3, worst 94 | call 74.4, worst 92 |
+| Re-dress street 1 (twice) | call 143.6 / 146.5 (take-back 63.3 / 64.6), worst 161 / 165 | call 109.0 / 115.5 (take-back 33.6 / 35.4), worst 126 / 134 |
+| Re-dress street 2 | call 124.6 (take-back 54.3), worst 141 | call 102.6 (take-back 31.6), worst 120 |
+| Clear street 1 | call 70.4, worst 86 | call 52.6, worst 68 |
+| Clear street 2 (the last dressing) | call 149.6, worst 167 | call 132.0, worst 150 |
+
+What moved. (1) `SettlementUnpaint._unpaint_sample` reads and writes the weight bytes in place with one
+reused 16-int buffer (no `read_sample` arrays, no per-sample allocation, `real_of` a PackedInt32Array): the
+take-back fell from 63 to 34 ms. `tests/unit/test_build_hitches2.gd` runs the old array version beside it on
+4000 random samples (canonical and not, full and not, give-back cases) and compares every byte. (2)
+`SurfaceStroke.write_block` skips a row that already holds its bytes after one native compare: the redo every
+fresh diff gets through `apply_surface_diff` (the document holds the result already) wrote 12.8k bytes a block
+one by one. (3) `AuthoringEditor.hold_ground` / `release_ground`: a Dress, re-dress, `pave` or plaza edit
+applies the take-back's and every lay run's diffs at once and makes one ground update and one scatter request
+over their union (the same document bytes; the ground and scatter recompute the union from the document). (2)
+and (3) together are the rest of the re-dress and Clear drop (each 3 to 18 ms; not split per item). (4)
+`StructureWarmup` (Structure and Village tools' `prepare`, once per map): a worker parses the decor GLBs and
+decodes the masonry images, then one material of each of 12 structure shaders a frame through
+`AuthoredStructures.shared_material` (the cache an install reads) drawn once by a `PipelineWarmer`. It moved
+the cold first place from 168 + 79 ms to 75 ms and removed the 79 ms frame 15 frames after the first Dress
+(round 1's unidentified frame: first-use furnishing shaders). The cost went to the tool open instead, as five
+44 to 49 ms frames (the shader compiles, including their first draw): more total jank than before (265 against
+216 ms over open plus place), but no frame over 50 ms, at a moment that is not a click on the map.
+
+Not done or not explained. Async `ProcgenSettlement.place` (21 to 25 ms) was not attempted (budget). The
+remaining 75 ms frame of a cold place is not identified (every warmed cost is paid before it; the install
+itself is 0.7 ms in `split`). Clearing the map's last dressing costs about 80 ms more than another Clear
+(take-back 129 against 47 ms), in both runs; its cause (the trim of the emptied slot, or a whole-map ground
+update when the weights go) was not measured. The warm-up's open frames could be halved by warming fewer
+shaders (a first building uses about five), at the price of a compile at first use for the others.

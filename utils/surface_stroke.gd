@@ -412,7 +412,9 @@ static func read_block(
 	return out
 
 
-## Writes read_block() output back into `weights` (in place).
+## Writes read_block() output back into `weights` (in place). A row that already holds its bytes
+## is skipped after one native compare: the redo a fresh stroke's diff gets (the document holds its
+## result already) writes nothing byte by byte (hitches2).
 static func write_block(
 	document: MapDocument, weights: PackedByteArray, rect: Rect2i, block: PackedByteArray
 ) -> void:
@@ -423,6 +425,7 @@ static func write_block(
 	for p in 2:
 		for z in range(rect.position.y, rect.end.y):
 			var start := p * plane + (z * width + rect.position.x) * CHANNELS
-			for k in run:
-				weights[start + k] = block[source + k]
+			if weights.slice(start, start + run) != block.slice(source, source + run):
+				for k in run:
+					weights[start + k] = block[source + k]
 			source += run

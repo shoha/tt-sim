@@ -50,6 +50,8 @@ var palette_root: String = PaletteLibrary.DEFAULT_ROOT
 ## Microseconds of the last flush() and of the last dab, for measurement.
 var last_flush_usec: int = 0
 var last_dab_usec: int = 0
+## How many ground weight-map updates paint diffs made (tests count what a hold saved).
+var ground_updates: int = 0
 ## Rocks survive terrain changes: the rocks a sculpt stroke keeps (made by create()).
 var rock_keeper: RockKeeper = null
 ## The height (P3), water (P4-3) and crossing (P4b-1) edits, made by create().
@@ -73,6 +75,11 @@ var _surface: SurfaceStroke = null
 var _prop_edit: Dictionary = {}
 var _prop_edit_age: float = 0.0
 var _rng := RandomNumberGenerator.new()
+## hold_ground(): how many holds are open, and the sample areas whose ground update and scatter
+## request wait for the last release.
+var _ground_holds: int = 0
+var _held_ground := Rect2i()
+var _held_plants := Rect2i()
 
 
 static func create(
@@ -355,9 +362,40 @@ func _end_surface_stroke() -> bool:
 
 
 ## Undo (`redo` false) or redo of a Paint stroke (its SurfaceStroke diff), and a live paint edit.
+## Between hold_ground() and release_ground() the bytes land at once but the ground and scatter
+## updates wait, and are made once over the union of the areas.
 func apply_surface_diff(diff: Dictionary, redo: bool) -> void:
-	_refresh_ground(SurfaceStroke.apply_diff(document, diff, redo))
-	_regenerate_paint(diff)
+	var rect := SurfaceStroke.apply_diff(document, diff, redo)
+	if _ground_holds == 0:
+		_refresh_ground(rect)
+		_regenerate_paint(diff)
+		return
+	_held_ground = MaskBrush.merge_rect(_held_ground, rect)
+	if _paint_changes_plants(diff):
+		_held_plants = MaskBrush.merge_rect(_held_plants, diff.get("rect", Rect2i()))
+
+
+## Holds the ground and scatter updates of apply_surface_diff until the matching release_ground()
+## (holds nest), so a run of diffs over one area (a re-dress takes back its paving and lays the new,
+## SettlementEditor) updates the ground's weight maps and requests the scatter once (hitches2). The
+## document's bytes are not held, and the result is what the separate updates made.
+func hold_ground() -> void:
+	_ground_holds += 1
+
+
+## Ends a hold_ground(); the last one makes the held updates. Returns the rectangle of samples it
+## refreshed (empty when nothing was held).
+func release_ground() -> Rect2i:
+	_ground_holds = maxi(_ground_holds - 1, 0)
+	if _ground_holds > 0:
+		return Rect2i()
+	var ground := _held_ground
+	var plants := _held_plants
+	_held_ground = Rect2i()
+	_held_plants = Rect2i()
+	_refresh_ground(ground)
+	_request_paint_rect(plants)
+	return ground
 
 
 ## The ground's weight maps for the samples of `sample_rect` (no scatter: see the header).
@@ -367,16 +405,29 @@ func _refresh_ground(sample_rect: Rect2i) -> void:
 	var started := Time.get_ticks_usec()
 	terrain.update_ground_region(sample_rect.grow(1))
 	last_flush_usec = Time.get_ticks_usec() - started
+	ground_updates += 1
 
 
 ## Regenerates the scatter over a paint diff's area, grown by the painted edge warp and the
 ## path fringe (ScatterGround reads the weights that far off), when the diff involves a
 ## surface whose paint changes what grows (SurfaceStroke.changes_plants).
 func _regenerate_paint(diff: Dictionary) -> void:
+	if _paint_changes_plants(diff):
+		_request_paint_rect(diff.get("rect", Rect2i()))
+
+
+## Whether a paint diff's scatter must follow (a surface that changes what grows), on a map
+## with scatter and an area.
+func _paint_changes_plants(diff: Dictionary) -> bool:
 	var rect: Rect2i = diff.get("rect", Rect2i())
 	if not is_instance_valid(scatter) or not rect.has_area():
-		return
-	if not SurfaceStroke.changes_plants(diff, PaletteLibrary.surfaces(palette_root)):
+		return false
+	return SurfaceStroke.changes_plants(diff, PaletteLibrary.surfaces(palette_root))
+
+
+## Requests the scatter over the samples of `rect` (see _regenerate_paint); none when empty.
+func _request_paint_rect(rect: Rect2i) -> void:
+	if not is_instance_valid(scatter) or not rect.has_area():
 		return
 	var step := document.sample_step()
 	var reach := TerrainRules.PAINT_EDGE_WARP_M + ScatterGround.FRINGE_RADIUS_M
