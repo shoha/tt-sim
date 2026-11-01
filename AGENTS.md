@@ -112,7 +112,8 @@ you need rather than all of it.
   (`utils/graphics_warmup.gd`) if a map load or the title screen uses it, or in
   `EXCLUDED_SHADERS` with a reason; `test_graphics_warmup.gd` fails until you do. A covered
   shader that draws new geometry also needs a sample from its owner's `warmup_samples()`
-  (a new owner goes in `GraphicsWarmup.sample_sources()`). Editing a covered shader or anything it
+  (a new owner goes in `GraphicsWarmup.sample_sources()` with a label in `sample_labels()`; a
+  structure shader goes in `StructureWarmup.SAMPLE_SHADERS`). Editing a covered shader or anything it
   `#include`s re-runs the first-launch warm-up for players, by design. Shaders built in code
   (`Shader.new()` with `code` set, as in `pause_overlay.gd` and `transition_overlay.gd`) are
   invisible to that test, so the choice is yours to make: move one to a `.gdshader` file to

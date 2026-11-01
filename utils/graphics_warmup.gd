@@ -17,8 +17,8 @@ extends RefCounted
 ## Every .gdshader under shaders/ is in exactly one of COVERED_SHADERS and EXCLUDED_SHADERS
 ## (a test checks). A new shader goes in one of them; see AGENTS.md "Adding Features".
 
-## Started at boot, one per frame. Only those listed also get a built sample (terrain, water
-## and foliage); the rest are started only, which was enough in measurement.
+## Started at boot, one per frame. Terrain, water, foliage and the structure shaders also get a
+## built sample (sample_sources()); the rest are started only, which was enough in measurement.
 const COVERED_SHADERS := [
 	"res://shaders/authored_ground.gdshader",
 	"res://shaders/authored_ground_looked.gdshader",
@@ -283,7 +283,13 @@ static func sample_sources() -> Array[Callable]:
 		TerrainMeshBuilder.warmup_samples,
 		AuthoredWater.warmup_samples,
 		WindFoliage.warmup_samples,
+		StructureWarmup.warmup_samples,
 	]
+
+
+## What the screen's status line calls each source's samples, in sample_sources() order.
+static func sample_labels() -> PackedStringArray:
+	return PackedStringArray(["the ground", "water", "plants", "buildings"])
 
 
 ## Every owner's warm-up samples.
