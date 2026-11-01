@@ -1,0 +1,10 @@
+{
+  "out_dir": "render_jobs/warmstruct_boot",
+  "timeout_s": 120,
+  "hang_s": 90,
+  "steps": [
+    {"op": "capture", "name": "warm_screen", "desc": "the graphics warm-up screen while it builds"},
+    {"op": "wait_title"},
+    {"op": "wait", "s": 1.0}
+  ]
+}

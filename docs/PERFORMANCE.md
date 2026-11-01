@@ -887,6 +887,75 @@ there, since the editor rule no longer applies), Windows and Linux. The relaunch
 skip only. The marker skip is covered by `test_graphics_warmup.gd` and has not been seen in a
 real launch.
 
+## Structure shaders in the first-launch warm-up (topic warmstruct, 2026-10-31)
+
+Opening the Structure or Village tool compiled the structure shaders' pipelines in the frames that
+followed (`StructureWarmup`, hitches2 and hitches3), and a player's first run has no Godot shader
+or pipeline cache yet. `StructureWarmup.warmup_samples()` is now a fourth source of the graphics
+warm-up's samples (`GraphicsWarmup.sample_sources()`): one triangle per structure shader (wall,
+roof, style wall, style roof, pane, ornament, lantern, glow, water; a bare `ShaderMaterial`, since a
+pipeline does not depend on uniform values), the modelled stone (an `ORMMaterial3D` with albedo,
+normal and ORM textures, triplanar) and the two yard materials (`StructureMaterials.dressing_*`).
+They are built on the BUILD worker, which waits for their pipelines, and drawn in DRAW. The
+vertex layout is the real one: the triangle is made by `StructureGeometry.surface_arrays` (the
+function a building's surfaces use, now public) and the yard layout is vertex, normal, colour,
+index; `test_structure_samples_have_the_real_layouts` compares both with a built inn. The
+session's own `StructureWarmup` now draws that triangle too: it had no tangent, so the layout it
+warmed was not a building's.
+
+Procedure. `jobs/warmstruct_profile.json` (new; `hitches3_profile` cut to the tool open and the
+first two places) run with `--warm-graphics`, after `wait_title`, in a fresh user folder each
+time (`%APPDATA%/TTSim_warmstruct` deleted, so Godot's shader and pipeline caches start empty;
+the NVIDIA driver's own cache stays on, as in the 2026-09-26 pass). 1920x1080, vsync off after
+the load, wind frozen, RTX 3080 shared at 35 to 42 percent, P3 before each run; idle worst 10.5 to
+11.1 ms in every run (the noise floor), no drift. `hitches.gd` now also prints the count of
+frames over 25 ms. Warm-up times come from the screen's own `GraphicsWarmup:` lines.
+
+| Fresh folder (first launch) | Before (2 runs) | After (3 runs) |
+|---|---|---|
+| Tool open, worst frame | 1041.7, 931.4 ms | 71.0, 68.3, 67.3 ms |
+| Tool open, frames over 25 ms (over 33) | 18 (11) in the run that printed it, 16 over 33 in the other | 1 (1), 1 (1), 2 (1) |
+| Tool open, jank | 5360 ms in one run | 69 to 77 ms |
+| First building placed, worst frame | 1351.8, 1127.8 ms | 53.5, 55.2, 53.0 ms |
+| Warm-up screen, total | 9470 ms (COMPILE 1048, BUILD 8397, DRAW 21) | 16855, 17071, 16785 ms (COMPILE 994 to 1041, BUILD 15741 to 15977, DRAW 46 to 49) |
+| Warm-up screen, worst frame | 3 frames over 100 ms | 2 to 4 frames over 100 ms (worst 86 to 110 in BUILD) |
+| Second place (warm) | 16.3, 16.4 ms | 15.9, 15.8, 16.0 ms (no change) |
+
+What the before frames were: five tool-open frames of 875 to 931 ms, one per first draw of the wall,
+roof, ornament, style-wall and style-roof shaders (the units' logs put them in the frames after
+`masonry:wall`, `tile:roof`, `leaf:ornament`, `plaster:wall` and `thatch:roof` were drawn; the
+make units cost 0 to 2 ms, so it was the pipelines of the draw), and a 1.1 to 1.35 s frame four frames
+after the first place (a building's tangent layout, which the session warm-up did not draw). All of
+it is gone. What is left in the open is one frame of 64 to 71 ms: the make unit of
+`boards:wall`, the planks surface baked on the main thread in a fresh user folder (64 ms; 8.5 ms
+with the bake cache a used folder holds). Not moved: it is texture work, not a pipeline.
+The remaining first-place frame of 53 ms (it was 91.4 ms with everything warm) is the one
+round 3 left unidentified.
+
+The price is the screen: it takes 17 s instead of 9.5 s on a first launch (BUILD: the ground 0.4 s,
+water 1.4, plants 4.9, buildings 8.1, collecting the samples 1.8; the worker waits for each
+heavy shader about 0.7 s, one after another). The main thread is not blocked: its worst frame in
+BUILD stays 86 to 131 ms, as before. A second worker for the structure samples would likely
+cut it; not tried.
+
+Warm start (the shared `TTSim` user folder, every cache filled, one run each): the tool open is
+unchanged, 37.1 ms and five frames over 25 ms before, 37.6 and five after (31.6 to 37.6), and the first
+place 91.4 ms before and 56.3 after. So with warm caches the shader work was already cheap and
+the 31 to 37 ms frames are something the screen's draw does not cover; they are not in the fresh-folder
+runs, whose user settings are the defaults, and the difference between the two folders was
+not isolated (a settings-dependent pipeline variant is the first suspect).
+The gain is for the first-ever launch, which is the case the warm-up exists for.
+
+The screen's feedback. It already showed a bar (`LoadingOverlay`, `PHASE_WEIGHTS`); the line
+under it was one fixed sentence. It now says what is happening (`GraphicsWarmupScreen.status_for`):
+"Starting shaders: 12 of 40", then "Gathering plants", then "Compiling buildings: 5 of 26" (the
+group is the sample source: the ground, water, plants, buildings), then "Drawing a first frame".
+The bar's weights were 0.2, 0.7 and 0.1 against measured shares of 6, 92 and 0.3 percent; they are
+now 0.06, 0.92 and 0.02, and the collect share of BUILD 0.1 (it took 11 percent). Per-sample counts
+track time well enough (4, 2, 8 and 12 samples took 0.4, 1.4, 4.9 and 8.1 s), so the bar moves at a
+steady pace. A capture during BUILD (`jobs/warmstruct_boot.json`) shows the title, the bar a third
+full and "Gathering plants".
+
 ## Mobile renderer hang (2026-09-26): one occurrence, not reproduced
 
 macOS runs the Mobile renderer (`rendering_method.macos="mobile"`), so a load that hangs

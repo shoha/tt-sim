@@ -14,6 +14,9 @@ extends Node
 ##            there.
 ##   DRAW     each built sample drawn invisibly in %WarmupViewport through PipelineWarmer (the
 ##            draw-time variants), until none is pending. Nothing draws headless.
+## The bar is weighted by phase (PHASE_WEIGHTS) and the line under it says what is going on
+## (status_for): shaders started, then the group of samples (the ground, water, plants,
+## buildings) being gathered and compiled with a count, then the first frame.
 ## Then it writes the marker, frees the meshes and emits `finished`. %WarmupViewport is set up
 ## like the game world (camera, light, environment, MSAA, debanding) because a pipeline is
 ## keyed by the framebuffer format as well as the shader and vertex layout.
@@ -23,18 +26,23 @@ signal finished
 enum Phase { COMPILE, BUILD, DRAW, DONE }
 
 const TITLE := "Preparing graphics"
-const STATUS := "Preparing graphics for this version. This can take a few seconds."
-## Progress share of COMPILE, BUILD and DRAW.
-const PHASE_WEIGHTS: Array[float] = [0.2, 0.7, 0.1]
+## Progress share of COMPILE, BUILD and DRAW: their measured time shares on a cold cache
+## (1.0 s, 15 s and 0.05 s of 17 s, RTX 3080, docs/PERFORMANCE.md "Structure shaders in the
+## first-launch warm-up"), so the bar moves at an even pace.
+const PHASE_WEIGHTS: Array[float] = [0.06, 0.92, 0.02]
 ## The part of BUILD's share given to collecting the samples (one step per source); the rest
-## is building them. A fixed split, so the bar never steps back when the sample count becomes
-## known. Even because the real split is unmeasured.
-const COLLECT_SHARE := 0.5
+## is building them (one step per sample; the samples of a source cost alike, and sources have
+## a count in step with their time: 4, 2, 8 and 12 samples took 0.4, 1.4, 4.9 and 8.1 s). A
+## fixed split, so the bar never steps back when the sample count becomes known. Collecting
+## took 1.8 s of BUILD's 16.7.
+const COLLECT_SHARE := 0.1
 const LONG_FRAME_MS := 100.0
 
 ## Each returns some samples (GraphicsWarmup.collect_samples()'s shape). Called in order on the
 ## worker thread.
 var sample_sources: Array[Callable] = GraphicsWarmup.sample_sources()
+## What the status line calls each source's samples (GraphicsWarmup.sample_labels()).
+var source_labels: PackedStringArray = GraphicsWarmup.sample_labels()
 var marker_path: String = Paths.GRAPHICS_WARMUP_PATH
 var shader_paths: Array = GraphicsWarmup.COVERED_SHADERS
 var phase: Phase = Phase.COMPILE
@@ -51,9 +59,14 @@ var _collected := 0
 var _built := 0
 var _total := 0
 var _cancel := false
+## What the worker is on: its sources' label (also under _mutex), and how long collecting took.
+var _label := ""
+var _collect_ms := 0
 ## Written by the worker only; read on the main thread only after wait_to_finish().
 var _results: Array[Dictionary] = []
 var _skipped := PackedStringArray()
+## Milliseconds the worker spent building the samples of each source label.
+var _group_ms := {}
 var _rids: Array[RID] = []
 var _warmer: PipelineWarmer = null
 var _start_msec := 0
@@ -61,6 +74,7 @@ var _phase_start_msec := -1
 var _phase_worst_ms := 0.0
 var _long_frames := 0
 var _last_usec := 0
+var _status := ""
 
 @onready var _viewport: SubViewport = %WarmupViewport
 @onready var _overlay: LoadingOverlay = %LoadingOverlay
@@ -80,6 +94,23 @@ static func build_progress(collected: int, sources: int, built: int, total: int)
 	)
 
 
+## The status line under the bar, plain words for what the phase is doing: COMPILE counts
+## shaders started (`done` of `total`), BUILD names the group of samples being gathered
+## (`total` 0) and then compiled (`done` of `total`), DRAW says so. Pure.
+static func status_for(at: Phase, done: int, total: int, label: String) -> String:
+	match at:
+		Phase.COMPILE:
+			return "Starting shaders: %d of %d" % [done, total]
+		Phase.BUILD:
+			var group := label if label != "" else "graphics"
+			if total <= 0:
+				return "Gathering %s" % group
+			return "Compiling %s: %d of %d" % [group, mini(done + 1, total), total]
+		Phase.DRAW:
+			return "Drawing a first frame"
+	return ""
+
+
 static func _progress_at(at: Phase, fraction: float) -> float:
 	if at == Phase.DONE:
 		return 1.0
@@ -97,7 +128,7 @@ func _ready() -> void:
 	_viewport.msaa_3d = VisualEffectsController.saved_antialiasing_level() as Viewport.MSAA
 	_environment.apply_level_environment(LevelData.new(), _viewport)
 	_overlay.show_loading(TITLE)
-	_overlay.set_progress(0.0, STATUS)
+	_overlay.set_progress(0.0, _status_now())
 	_start_msec = Time.get_ticks_msec()
 	_enter_phase(Phase.COMPILE)
 
@@ -174,7 +205,25 @@ func _process(_delta: float) -> void:
 		Phase.DRAW:
 			if _warmer.pending_count() == 0:
 				_finish()
-	_overlay.set_progress(progress())
+	var status := _status_now()
+	# Only a changed line goes to the label (an empty one leaves it as it is).
+	_overlay.set_progress(progress(), status if status != _status else "")
+	_status = status
+
+
+## The status line for now (see status_for).
+func _status_now() -> String:
+	_mutex.lock()
+	var label := _label
+	var built := _built
+	var total := _total
+	_mutex.unlock()
+	match phase:
+		Phase.COMPILE:
+			return status_for(phase, _next_shader, shader_paths.size(), "")
+		Phase.BUILD:
+			return status_for(phase, built, total, label)
+	return status_for(phase, 0, 1, "")
 
 
 func _start_build() -> void:
@@ -192,28 +241,46 @@ func _build() -> void:
 	for shader in _worker_shaders:
 		shader.get_rid()
 	var samples: Array = []
-	for source in sample_sources:
+	# The status label of each sample's source, in sample order.
+	var labels := PackedStringArray()
+	var began := Time.get_ticks_msec()
+	for k in sample_sources.size():
 		if _cancelled():
 			return
-		samples.append_array(source.call())
+		var label := source_labels[k] if k < source_labels.size() else ""
+		_mutex.lock()
+		_label = label
+		_mutex.unlock()
+		var made: Array = sample_sources[k].call()
+		samples.append_array(made)
+		for i in made.size():
+			labels.append(label)
 		_mutex.lock()
 		_collected += 1
 		_mutex.unlock()
 	_mutex.lock()
 	_total = samples.size()
+	_collect_ms = Time.get_ticks_msec() - began
 	_mutex.unlock()
-	for sample: Dictionary in samples:
+	for index in samples.size():
+		var sample: Dictionary = samples[index]
 		if _cancelled():
 			return
+		_mutex.lock()
+		_label = labels[index]
+		_mutex.unlock()
 		assert(
 			GraphicsWarmup.valid_sample(sample), "GraphicsWarmup: malformed sample %s" % [sample]
 		)
+		var sample_began := Time.get_ticks_msec()
 		if (sample.arrays as Array).is_empty():
 			_skipped.append(String(sample.name))
 		else:
 			var data := GraphicsWarmup.surface_data(sample)
 			_rids.append(RenderingServer.mesh_create_from_surfaces([data]))
 			_results.append(sample)
+		var group: String = labels[index]
+		_group_ms[group] = int(_group_ms.get(group, 0)) + Time.get_ticks_msec() - sample_began
 		_mutex.lock()
 		_built += 1
 		_mutex.unlock()
@@ -227,6 +294,8 @@ func _cancelled() -> bool:
 
 
 func _start_draw() -> void:
+	print("GraphicsWarmup: collecting the samples took %d ms of BUILD" % _collect_ms)
+	print("GraphicsWarmup: building took (ms): %s" % [_group_ms])
 	_enter_phase(Phase.DRAW)
 	for sample_name in _skipped:
 		push_warning("GraphicsWarmup: sample %s has no geometry; skipped" % sample_name)

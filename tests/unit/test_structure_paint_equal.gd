@@ -231,7 +231,7 @@ static func _legacy_mesh_of(
 	return {
 		"kind": surface.kind,
 		"role": role,
-		"arrays": StructureGeometry._arrays(surface.kind, vertices, normals, uvs, colors, indices),
+		"arrays": StructureGeometry.surface_arrays(surface.kind, vertices, normals, uvs, colors, indices),
 		"tags": tags,
 	}
 
