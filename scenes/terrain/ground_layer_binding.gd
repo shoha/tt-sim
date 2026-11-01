@@ -448,9 +448,13 @@ func _plan_tints(role_of: Callable) -> void:
 	)
 	var biomes: PackedColorArray = tables.biome
 	var paints: PackedColorArray = tables.paint
+	# A painted surface list that only lost trailing slots (MapDocument.trim_unused_surfaces: no
+	# sample weighs them) leaves every drawn tint as it was, so the mirror stays: clearing a map's
+	# last dressing rebuilt it whole for nothing, about 70 ms on a 300 ft map (hitches3).
+	var kept := mini(paints.size(), paint_tints.size())
 	if (
 		biomes.slice(0, biome_tints.size()) != biome_tints
-		or paints.slice(0, paint_tints.size()) != paint_tints
+		or paints.slice(0, kept) != paint_tints.slice(0, kept)
 	):
 		_tint_stale = true
 	biome_tints = biomes

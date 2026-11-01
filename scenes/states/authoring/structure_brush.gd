@@ -155,6 +155,8 @@ var _message: String = ""
 var _planned_to: Vector3 = Vector3.INF
 var _wanted: Dictionary = {}
 var _last_ticks: int = 0
+## True after leave() paused the map's StructureWarmup; the next frame() resumes it.
+var _warm_paused: bool = false
 var _heights: Dictionary = {}
 ## For each lot laid over a selection: the id that was selected then (-1 for none).
 var _came_from: Dictionary = {}
@@ -750,6 +752,9 @@ func has_target() -> bool:
 
 
 func frame(brush: BrushTool) -> void:
+	if _warm_paused and brush.editor != null:
+		_warm_paused = false
+		StructureWarmup.resume_map(brush.editor.map_root)
 	_pick_radius_m = metres_for_pixels(
 		brush.cursor.camera,
 		brush.hit,
@@ -792,6 +797,8 @@ func cancel(brush: BrushTool) -> void:
 
 
 func leave(brush: BrushTool) -> void:
+	StructureWarmup.pause_map(brush.editor.map_root if brush.editor != null else null)
+	_warm_paused = true
 	abort_edit(brush.editor)
 	deselect()
 	reset()
