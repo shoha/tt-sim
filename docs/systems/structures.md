@@ -816,7 +816,9 @@ from the thatch), moorish_souk weak to fair (a plain flat box with a porch).
 ## Dressing
 
 Probe B (2026-10-28, branch `probe-b`): a building is settled into its place by a yard,
-`StructureDressing` (`utils/structure_dressing.gd`), built beside the building's meshes in
+`StructureDressing` (`utils/structure_dressing.gd`: the yard's layout; the props it plants are
+`StructureDressingProps` in `structure_dressing_props.gd`, drawn from the shape primitives, mesh soup
+and hash stream of `StructureDressingShapes` in `structure_dressing_shapes.gd`), built beside the building's meshes in
 `StructureGeometry.build_one` and carried in `parts.dressing` (not in `digest_of`, so no pin moved, and
 not in the building's triangle budget). A pure function of the record, the recipe's door
 (`ProcgenBuildingLayout.door_opening()`, else the middle of edge 0) and the ground; the random stream
@@ -947,9 +949,11 @@ pure (`utils/structure_placement.gd`).
     `refusal_text` words, a release lays nothing and toasts them as before), NOTE (amber: the lot
     was eased off water, a bank, the map edge or a building - `StructurePlacement.nearest_legal`'s new
     `why` - or held to the recipe's size range, stated in the level's units), else none. It is worked
-    out once per input change (`StructureBrush._refresh_note` keys on the problem, the why, the asked
+    out once per input change (`StructureBrush.refresh_note` keys on the problem, the why, the asked
     and given sizes and the units), not per frame; the ghost's lines wear the level's colour and the
-    note stacks under the name and size chip (`StructurePlanView.draw_pills`).
+    note stacks under the name and size chip (`StructurePlanView.draw_pills`). The ghost, the hovered
+    building and the note are drawn by `StructureGhostView` (`structure_ghost_view.gd`, split from
+    the brush on 2026-10-31), the selection by `StructureSelectionView`.
   - *GM Events pane.* It lists the tool and, since this card, wires the selection bar too
     (`StructureTool.connect_selection(brush, pane, hints_changed)`, called by
     `PlayEvents._wire_structure_bar` once per pane), so a click on a building in play shows the

@@ -5,7 +5,8 @@ extends BrushMode
 ## that drops it, a drag that sizes it, Q and E that turn it, R that re-rolls it, and the removal
 ## of the structure under the pointer. BrushTool routes the tool's press, frames, release and
 ## cancel to it (the BrushMode hooks below); what a lot may stand on and the plans it takes are
-## StructurePlacement's rules, the edit is StructureEditor's (`AuthoringEditor.structures`).
+## StructurePlacement's rules, the edit is StructureEditor's (`AuthoringEditor.structures`), and
+## the cursor is drawn by StructureGhostView (with StructureSelectionView over a selection).
 ##
 ## Gesture. With a structure picked (`ref`), the pointer carries a ghost lot at the recipe's
 ## default size: its footprint on the ground, the door marked on its front, its height as a ring
@@ -117,6 +118,8 @@ var eased: bool = false
 var problem: String = ""
 ## The note beside the readout, {"text", "level"} (StructureNote.live, redone when inputs change).
 var note: Dictionary = {}
+## When the pointer last moved: the amber note shows once it has rested (StructureNote.Rest).
+var note_rest := StructureNote.Rest.new()
 ## The size of the lot the ghost shows (map metres) and its plan.
 var ghost_size: Vector2 = Vector2.ZERO
 ## The structure under the pointer (its id), or -1.
@@ -137,7 +140,6 @@ var edit: Dictionary = {}
 var _why: String = ""
 var _asked: Vector2 = Vector2.ZERO
 var _note_key: Array = []
-var _rest := StructureNote.Rest.new()  # when the pointer last moved (the amber note's delay)
 var _bar_key: Variant = null
 var _single: bool = false
 var _pick_radius_m: float = PICK_FALLBACK_M
@@ -336,7 +338,7 @@ func track(editor: AuthoringEditor, hit: Vector3, delta: float) -> void:
 	ghost_size = default_size(editor)
 	_asked = _asked_size(editor)
 	var want := editor.to_map_xz(hit)
-	_rest.see(want)
+	note_rest.see(want)
 	var sides := StructurePlacement.sides_of(row())
 	var key := [StructurePlacement.snapped_centre(want), ghost_size, yaw, _signature(editor), sides]
 	if _wanted.get("key") != key:
@@ -876,104 +878,21 @@ func draw_cursor(brush: BrushTool, cursor: BrushCursor) -> void:
 		return
 	var units := [brush.unit_cell_m, brush.unit_per_cell, brush.unit_label]
 	var erasing := brush.ctrl and not brush.pressed
-	draw(cursor.canvas, cursor.camera, brush.editor, brush.hit, erasing, units)
+	StructureGhostView.draw(
+		self, cursor.canvas, cursor.camera, brush.editor, brush.hit, erasing, units
+	)
 
 
 # ============================================================================
-# Drawing
+# The ghost's note (StructureGhostView draws it)
 # ============================================================================
-
-
-## The cursor and previews on `canvas` (see the header), for the pointer's ground point `hit`
-## with Ctrl `erasing`; the readout in the level's units.
-func draw(
-	canvas: Control,
-	camera: Camera3D,
-	editor: AuthoringEditor,
-	hit: Vector3,
-	erasing: bool,
-	units: Array
-) -> void:
-	var cell_m: float = units[0]
-	var per_cell: float = units[1]
-	var label: String = units[2]
-	var scale := editor.map_scale()
-	var selecting := selected_id >= 0 and not drawing
-	if selecting:
-		StructureSelectionView.draw(self, canvas, camera, editor, units)
-		# The ghost lot follows over bare ground; it steps aside over a building or a handle.
-		if hover_id >= 0 and hover_id != selected_id:
-			_draw_hovered(canvas, camera, editor, hit, erasing)
-		if not edit.is_empty() or hover_id >= 0 or not hover_handle.is_empty():
-			return
-		if erasing:
-			if hit != Vector3.INF:
-				BridgeBrush.draw_marker(canvas, camera, hit, WallBrush.ERASE_TINT)
-			return
-	elif not drawing and hover_id >= 0:
-		_draw_hovered(canvas, camera, editor, hit, erasing)
-		# A click on a building selects it, so no lot follows the pointer over one.
-		return
-	elif erasing and not drawing:
-		if hit != Vector3.INF:
-			BridgeBrush.draw_marker(canvas, camera, hit, WallBrush.ERASE_TINT)
-		return
-	if row().is_empty():
-		if selecting:
-			return
-		if hit != Vector3.INF:
-			BridgeBrush.draw_marker(canvas, camera, hit, WallBrush.STONE_TINT)
-			BridgeBrush.draw_pill(
-				canvas, camera.unproject_position(hit), NONE_PICKED, WallBrush.REFUSED_COLOR
-			)
-		return
-	var plan := ghost_plan()
-	if plan.is_empty():
-		return
-	var ok := problem == "" and (not drawing or preview != null)
-	_refresh_note(scale, units, ok)
-	var level: int = note["level"]
-	var tint := StructureNote.ghost_tint(level)
-	var high := height_of(ref) / scale
-	StructurePlanView.draw_plan(canvas, camera, editor, plan, high, tint, 1.0 if drawing else 0.8)
-	if drawing:
-		for corner in [from, to]:
-			BridgeBrush.draw_marker(canvas, camera, corner, tint)
-	var ground := WaterGeometry.ground_at(editor.document, ghost_centre)
-	var anchor := editor.to_world(Vector3(ghost_centre.x, ground, ghost_centre.y))
-	var at := camera.unproject_position(anchor)
-	var text := readout(title(), ghost_size.x * scale, ghost_size.y * scale, cell_m, per_cell, label)
-	# The name and size always; a note (amber) or the reason a lot cannot stand (red) beneath.
-	var lines: Array[Dictionary] = [{"text": text, "color": WallBrush.READOUT_COLOR}]
-	if StructureNote.shown(level, String(note["text"]), _rest.rested()):
-		lines.append({"text": note["text"], "color": StructureNote.colour(level)})
-	StructurePlanView.draw_pills(canvas, at, lines)
-
-
-## The building under the pointer, tinted (a click selects it), or with Ctrl `erasing` red with a
-## pill saying what a click removes.
-func _draw_hovered(
-	canvas: Control, camera: Camera3D, editor: AuthoringEditor, hit: Vector3, erasing: bool
-) -> void:
-	var hovered := editor.document.structure(hover_id)
-	if hovered == null:
-		return
-	var strength := 1.0 if erasing else StructureNote.HOVER_STRENGTH
-	var tint := WallBrush.ERASE_TINT if erasing else WallBrush.STONE_TINT
-	StructurePlanView.draw_plan(canvas, camera, editor, hovered.footprint, 0.0, tint, strength)
-	if erasing:
-		BridgeBrush.draw_pill(
-			canvas,
-			camera.unproject_position(hit),
-			"Remove " + String(hovered.recipe.get_slice(":", 1)).replace("_", " "),
-			WallBrush.REFUSED_COLOR
-		)
 
 
 ## Works the ghost's note out again when something it reads changed (the spot's problem, what the
 ## lot was moved off, the size asked and given, the units, a lot being sized and why the editor
-## refused it): the per-frame draw only reads the cached note.
-func _refresh_note(scale: float, units: Array, ok: bool) -> void:
+## refused it, `ok` false when the lot cannot be laid): the per-frame draw only reads the cached
+## note.
+func refresh_note(scale: float, units: Array, ok: bool) -> void:
 	var stop := refusal if drawing else problem
 	if not ok and stop == "":
 		stop = refusal if refusal != "" else String(StructureEditor.REFUSED_INVALID)

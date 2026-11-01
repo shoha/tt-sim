@@ -394,7 +394,7 @@ All gestures write the `Settlement` record; none edits a prop directly unless th
    is also the pick table; baked meshes have no per-prop nodes). Click selects: Remove (adds a `removed`
    key), Swap (cycles `swapped`), Move (drag; becomes `pinned`), Pin (freeze where it is), Re-roll one.
 6. **No way to make something ugly.** The rules, not the player, prevent bad outcomes: clearances, slope and
-   water checks, no prop within 1.5 m of a door's path (`DOOR_CLEAR_M` is 1.5, `structure_dressing.gd:29`),
+   water checks, no prop within 1.5 m of a door's path (`DOOR_CLEAR_M` is 1.5, `structure_dressing.gd:31`),
    one density budget, and a character's palette. A drag past a limit clamps and shows the clamp, never an
    error, as the Building tool does.
 

@@ -2,7 +2,7 @@ extends GutTest
 
 ## The Buildings tool's live reason for a spot that will not take a building (check G3, 2026-10-31).
 ## Each crafted bad spot is hovered or dragged through the real StructureBrush, the ghost's note is
-## worked out as the draw does (StructureBrush._refresh_note), and the note's words are compared
+## worked out as the draw does (StructureBrush.refresh_note), and the note's words are compared
 ## with the brush's own constants: water, steep ground, off the map, a building already there, a
 ## full map, an unknown building, an unwritable plan, and the size stops. A good spot has no note.
 
@@ -44,7 +44,7 @@ func _brush(ref: String = COTTAGE) -> StructureBrush:
 ## The ghost's note after the pointer rests over `hit`, as the draw works it out.
 func _hover_note(editor: AuthoringEditor, brush: StructureBrush, hit: Vector3) -> Dictionary:
 	brush.track(editor, hit, 0.0)
-	brush._refresh_note(editor.map_scale(), UNITS, brush.problem == "")
+	brush.refresh_note(editor.map_scale(), UNITS, brush.problem == "")
 	return brush.note
 
 
@@ -123,7 +123,7 @@ func test_a_full_map_refuses_the_release_with_its_words() -> void:
 	var brush := _brush()
 	brush.begin(Vector3(3.0, 0.0, 3.0))
 	brush.track(editor, Vector3(6.0, 0.0, 6.0), 0.0)
-	brush._refresh_note(editor.map_scale(), UNITS, false)
+	brush.refresh_note(editor.map_scale(), UNITS, false)
 	assert_eq(brush.note["text"], StructureBrush.FULL_TEXT, "the live note while sizing")
 	assert_eq(brush.note["level"], StructureNote.Level.BLOCKED)
 	assert_eq(brush.finish(editor), -1, "nothing is laid")
@@ -156,13 +156,13 @@ func test_a_small_or_huge_drag_says_which_size_stop_held_it() -> void:
 	var brush := _brush()
 	brush.begin(Vector3(-5.0, 0.0, -5.0))
 	brush.track(editor, Vector3(-4.0, 0.0, -4.0), 0.0)
-	brush._refresh_note(editor.map_scale(), UNITS, brush.problem == "" and brush.preview != null)
+	brush.refresh_note(editor.map_scale(), UNITS, brush.problem == "" and brush.preview != null)
 	assert_string_starts_with(String(brush.note["text"]), "Smallest size this building goes")
 	assert_eq(brush.note["level"], StructureNote.Level.NOTE, "amber: a release still lays it")
 	brush.cancel(null)
 	brush.begin(Vector3(-9.0, 0.0, -9.0))
 	brush.track(editor, Vector3(60.0, 0.0, 9.0), 0.0)
-	brush._refresh_note(editor.map_scale(), UNITS, brush.problem == "" and brush.preview != null)
+	brush.refresh_note(editor.map_scale(), UNITS, brush.problem == "" and brush.preview != null)
 	assert_string_starts_with(String(brush.note["text"]), "Biggest size this building goes")
 	gut.p("size stops: %s" % brush.note["text"])
 
