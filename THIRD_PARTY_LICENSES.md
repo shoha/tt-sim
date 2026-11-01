@@ -120,4 +120,6 @@ under Settings, About, Licences. The page reads `data/third_party.json`; add an 
 every item added to this file (`tests/unit/test_third_party_licences.gd` fails when the two
 differ). Addons the export filter leaves out (GUT, Icon Explorer, theme_gen) are listed in that
 file's `not_shipped`, not on the page. The licence texts it points at ship through the export
-presets' `include_filter`.
+presets' `include_filter`. The built-in token packs (`builtin_packs/`) are the exception: their
+credits are generated from each pack's `manifest.json` (`LicenceCatalog.pack_entries`), so they
+are neither listed here nor in the data file (docs/ASSET_MANAGEMENT.md "Built-in Packs").
