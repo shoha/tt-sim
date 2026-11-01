@@ -49,7 +49,6 @@ const AssetStreamerScript = preload("res://autoloads/asset_streamer.gd")
 const AssetResolverScript = preload("res://autoloads/asset_resolver.gd")
 const AssetPackClass = preload("res://resources/asset_pack.gd")
 
-const USER_ASSETS_DIR: String = "res://user_assets/"
 const MANIFEST_FETCH_TIMEOUT: float = 30.0
 
 # =========================================================================
@@ -74,6 +73,10 @@ var library_transfer: LibraryTransferChannel
 # =========================================================================
 # Internal state
 # =========================================================================
+
+## Where the packs that ship with the game are read from (BuiltinPacks.ROOT; tests point it at
+## a scratch folder).
+var builtin_packs_dir: String = BuiltinPacks.ROOT
 
 ## Dictionary of pack_id -> AssetPack
 var _packs: Dictionary = {}
@@ -160,74 +163,26 @@ func _on_own_pack_download_completed(pack_id: String) -> void:
 func _discover_packs() -> void:
 	_packs.clear()
 
-	# 1. Built-in packs (res://user_assets/) — may be overwritten by user packs
-	_discover_packs_in_dir(USER_ASSETS_DIR, true)
+	# 1. Built-in packs (res://builtin_packs/): read-only, shipped with the game
+	for pack in BuiltinPacks.load_all(builtin_packs_dir):
+		_packs[pack.pack_id] = pack
+		print("AssetManager: Built-in pack '%s' with %d assets" % [pack.display_name, pack.assets.size()])
 
-	# 2. User-installed packs (user://user_assets/) — cannot overwrite built-ins
-	_discover_packs_in_dir(Paths.USER_ASSETS_DIR, false)
+	# 2. User-installed packs (user://user_assets/): cannot take a built-in pack's id
+	_discover_packs_in_dir(Paths.USER_ASSETS_DIR)
 
 	packs_loaded.emit()
 
 
-## Discover and register packs from a single directory.
-## allow_overwrite: if false, skip packs whose pack_id is already registered.
-func _discover_packs_in_dir(dir_path: String, allow_overwrite: bool) -> void:
-	var dir = DirAccess.open(dir_path)
-	if not dir:
-		return
-
-	dir.list_dir_begin()
-	var folder_name = dir.get_next()
-
-	while folder_name != "":
-		if dir.current_is_dir() and not folder_name.begins_with("."):
-			var pack_path = dir_path + folder_name + "/"
-			var manifest_path = pack_path + "manifest.json"
-
-			if FileAccess.file_exists(manifest_path):
-				var pack = _load_pack(manifest_path, pack_path)
-				if pack and (allow_overwrite or not _packs.has(pack.pack_id)):
-					_packs[pack.pack_id] = pack
-					print(
-						(
-							"AssetManager: Loaded pack '%s' with %d assets"
-							% [pack.display_name, pack.assets.size()]
-						)
-					)
-			else:
-				if allow_overwrite or not _packs.has(folder_name):
-					var pack = AssetPackClass.from_directory(pack_path, folder_name)
-					if pack and pack.assets.size() > 0:
-						_packs[pack.pack_id] = pack
-						print(
-							(
-								"AssetManager: Auto-discovered pack '%s' with %d assets"
-								% [pack.display_name, pack.assets.size()]
-							)
-						)
-
-		folder_name = dir.get_next()
-
-	dir.list_dir_end()
-
-
-## Load a single pack from its manifest file
-func _load_pack(manifest_path: String, pack_path: String) -> Variant:
-	var file = FileAccess.open(manifest_path, FileAccess.READ)
-	if file == null:
-		push_error("AssetManager: Failed to open manifest: " + manifest_path)
-		return null
-
-	var json_text = file.get_as_text()
-	file.close()
-
-	var json = JSON.new()
-	var parse_result = json.parse(json_text)
-	if parse_result != OK:
-		push_error("AssetManager: Failed to parse manifest JSON: " + json.get_error_message())
-		return null
-
-	return AssetPackClass.from_manifest(json.data, pack_path)
+## Discover and register packs from a single directory. A pack whose pack_id is already
+## registered is skipped, so a built-in pack cannot be shadowed.
+func _discover_packs_in_dir(dir_path: String) -> void:
+	for pack in UserPacks.scan(dir_path):
+		if _packs.has(pack.pack_id):
+			push_warning("AssetManager: pack '%s' is already registered, skipped" % pack.pack_id)
+			continue
+		_packs[pack.pack_id] = pack
+		print("AssetManager: Loaded pack '%s' with %d assets" % [pack.display_name, pack.assets.size()])
 
 
 ## Save manifest to user://user_assets/ for pack discovery on next game launch
@@ -284,12 +239,28 @@ func _delete_download_state(pack_id: String) -> void:
 # =========================================================================
 
 
-## Get all loaded packs
+## Get all loaded packs: the built-in ones first, then the rest, each group by display name.
 func get_packs() -> Array:
-	var result: Array = []
-	for pack in _packs.values():
-		result.append(pack)
+	var result: Array = _packs.values()
+	result.sort_custom(
+		func(a: AssetPack, b: AssetPack) -> bool:
+			if a.is_builtin != b.is_builtin:
+				return a.is_builtin
+			return a.display_name.naturalnocasecmp_to(b.display_name) < 0
+	)
 	return result
+
+
+## True for a pack that ships with the game (res://builtin_packs/).
+func is_builtin_pack(pack_id: String) -> bool:
+	var pack: AssetPack = _packs.get(pack_id)
+	return pack != null and pack.is_builtin
+
+
+## True for a pack the player may delete or replace: a registered pack that does not ship with
+## the game. Anything that removes, edits or overwrites a pack asks this first.
+func is_pack_removable(pack_id: String) -> bool:
+	return _packs.has(pack_id) and not is_builtin_pack(pack_id)
 
 
 ## Get a pack by ID
@@ -382,11 +353,18 @@ func is_asset_available(pack_id: String, asset_id: String, variant_id: String = 
 	# Check local
 	if pack.base_path != "":
 		var local_path = pack.get_model_path(asset_id, variant_id)
-		if local_path != "" and ResourceLoader.exists(local_path):
+		if local_path != "" and _local_file_exists(local_path):
 			return true
 
 	# Check cache
 	return cache.get_cached_path(pack_id, asset_id, variant_id, "model") != ""
+
+
+## True when a pack file is there to read. A built-in pack's GLB is a raw `importer="keep"` file
+## in an export: `ResourceLoader.exists` answers false for it (docs/systems/library.md "Route K"),
+## so the file itself is asked first.
+func _local_file_exists(path: String) -> bool:
+	return FileAccess.file_exists(path) or ResourceLoader.exists(path)
 
 
 ## Check if an asset needs to be downloaded
@@ -436,6 +414,10 @@ func register_remote_pack(manifest: Dictionary) -> bool:
 	var pack = AssetPackClass.from_manifest(manifest, "")
 	if pack.pack_id == "":
 		push_error("AssetManager: Remote pack manifest missing pack_id")
+		return false
+
+	if is_builtin_pack(pack.pack_id):
+		push_warning("AssetManager: '%s' is a built-in pack, not replaced" % pack.pack_id)
 		return false
 
 	if _packs.has(pack.pack_id):
@@ -690,6 +672,9 @@ func _inject_base_url_from_manifest_url(manifest: Dictionary, manifest_url: Stri
 
 
 func _finalize_pack_download(pack_id: String, manifest: Dictionary) -> bool:
+	if is_builtin_pack(pack_id):
+		pack_download_failed.emit(pack_id, "A built-in pack has this id")
+		return false
 	var pack_path = Paths.USER_ASSETS_DIR + pack_id + "/"
 	if not _save_pack_to_user_assets(pack_id, manifest):
 		pack_download_failed.emit("", "Failed to create user_assets directory")

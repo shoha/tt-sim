@@ -3,9 +3,11 @@ extends RefCounted
 
 ## The notices the Licences page (Settings, About, Licences) lists, as plain data.
 ##
-## Two sources, one shape. The shipped items come from `data/third_party.json`: one entry per
-## third-party item that ships in an export, each with the licence text inline or in a file that
-## ships beside it (the export presets' `include_filter` carries those files).
+## The built-in token packs (res://builtin_packs/) add one entry each, generated from their
+## manifests (`pack_entries`). Otherwise two sources, one shape. The shipped items come from
+## `data/third_party.json`: one entry per third-party item that ships in an export, each with
+## the licence text inline or in a file that ships beside it (the export presets'
+## `include_filter` carries those files).
 ## The Godot engine's own notices come from the engine at run time (`Engine.get_license_text`,
 ## `get_copyright_info`, `get_license_info`), so they are always those of the build in the
 ## player's hands. `tests/unit/test_third_party_licences.gd` keeps the data file in step with
@@ -17,6 +19,7 @@ extends RefCounted
 
 const DATA_PATH := "res://data/third_party.json"
 const GROUP_ENGINE := "Godot engine"
+const GROUP_TOKENS := "Token packs"
 
 ## Shown in place of a notice whose file cannot be read; the drift test makes this a failure.
 const MISSING_TEXT := "The licence text for this item could not be read."
@@ -24,11 +27,51 @@ const MISSING_TEXT := "The licence text for this item could not be read."
 static var _list_number: RegEx = RegEx.create_from_string("^\\d+[).]\\s")
 
 
-## Every entry in page order: the game's own and shipped items, then the engine's.
+## Every entry in page order: the game's own and shipped items, the built-in token packs, then
+## the engine's.
 static func entries() -> Array[Dictionary]:
 	var list: Array[Dictionary] = shipped_entries()
+	list.append_array(pack_entries())
 	list.append_array(engine_entries())
 	return list
+
+
+## One entry per built-in token pack under `root` (BuiltinPacks.ROOT), read from the pack's own
+## manifest so the credit that ships is the credit shown and nothing is kept in step by hand. The
+## `credit` is the pack's credit line; the text gives author, licence, source and date obtained.
+static func pack_entries(root: String = BuiltinPacks.ROOT) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for pack in BuiltinPacks.load_all(root):
+		out.append(
+			_make(
+				"tokens_" + pack.pack_id,
+				GROUP_TOKENS,
+				pack.display_name,
+				"Built-in token pack, %d models." % pack.assets.size(),
+				pack.license if pack.license != "" else "See source",
+				pack_notice(pack),
+				pack.credit_line(),
+			)
+		)
+	return out
+
+
+## The notice text of a token pack: its credit line, then each provenance field it declares.
+static func pack_notice(pack: AssetPack) -> String:
+	var lines := PackedStringArray()
+	if pack.credit_line() != "":
+		lines.append(pack.credit_line())
+	var fields := [
+		["Author", pack.author],
+		["Licence", pack.license],
+		["Licence text", pack.license_url],
+		["Source", pack.source_url],
+		["Obtained", pack.obtained],
+	]
+	for field in fields:
+		if str(field[1]) != "":
+			lines.append("%s: %s" % [field[0], field[1]])
+	return "\n".join(lines)
 
 
 ## The entries of the data file, texts resolved, in file order.
