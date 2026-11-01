@@ -4439,3 +4439,56 @@ itself is 0.7 ms in `split`). Clearing the map's last dressing costs about 80 ms
 (take-back 129 against 47 ms), in both runs; its cause (the trim of the emptied slot, or a whole-map ground
 update when the weights go) was not measured. The warm-up's open frames could be halved by warming fewer
 shaders (a first building uses about five), at the price of a compile at first use for the others.
+Round 3 (below) found and fixed the last-dressing Clear and reshaped the warm-up.
+
+## Build hitches, round 3 (topic hitches3, 2026-10-31)
+
+Same rules: main-thread cost only, output byte-identical. Procedure: `jobs/hitches3_profile.json` (about
+60 s; round 2's job with `paint_split` before each Clear, which times the take-back's phases and reports
+whether the ground re-tables, and `warm_report`, which prints `StructureWarmup.last_log`: each warm-up
+unit's process frame and main-thread ms). Round 2's map, pose and settings; shared RTX 3080 at 35 to 40
+percent and P3 before each run. One run of the round-2 code (with the logging added) and three after it,
+back to back; idle median 4.7/4.2 ms (start/end) in all four runs and idle worst 9 to 12.6 (the noise
+floor, about 11), so no drift. Run 2 split each draw into a colour pass and a shadow-only pass (worse:
+worst 36 ms, jank 178; reverted); the table's after is run 3. The warm-up cannot be A/B'd in one run (a
+shader compiles once per process), so the before and after are separate runs; the Clear fix was also
+seen in-run (`paint_split` against the real Clear, below).
+
+| Action | Before | After |
+|--------|--------|-------|
+| Open the Structure tool | worst 52.7 ms, frames over 25 ms: 10, over 33: 5, jank 205 | worst 34.5, over 25: 6, over 33: 1, jank 131 |
+| Place 1 building, first of the session | worst 82 ms, jank 66 | worst 72 ms, jank 57 (not changed) |
+| Open plus first place, jank | 271 ms (round 2's figure 265; before any warm-up 216) | 188 ms |
+| Clear street 1 | call 54.7, worst 73 | call 52.8, worst 70 (not changed) |
+| Clear street 2 (the last dressing) | call 137.1, worst 157, ground update 83.5 (broad tint 68.7) | call 70.9, worst 91, ground update 21.7 (broad 6.2) |
+| Dress street 1 / street 2 / re-dress, call | 116 / 72 / 110 ms | 114 to 124 / 73 to 79 / 110 to 115 over the three after runs (the run-to-run spread; nothing on that path changed) |
+
+The last-dressing Clear. Clearing the map's last dressing empties its paving surface, so the take-back
+trims that slot off the document's list (`MapDocument.trim_unused_surfaces`), the ground re-tables, and
+`GroundLayerBinding._plan_tints` compared the new paint tints, one shorter, against the old with
+`paints.slice(0, old size)`: never equal, so it marked the broad tint stale and rebuilt the mirror over the
+whole map (68.7 ms on the 300 ft map) instead of the dressing's rectangle (6.2 ms). A trimmed slot weighs
+nothing anywhere (the trim drops only trailing slots without paint), so every tint the mirror holds is
+unchanged; the check now compares the common prefix. `tests/unit/test_build_hitches3.gd` trims a slot and
+checks the mirror is the same image, updated in place, with the bytes and tint table a fresh terrain
+builds; a recoloured kept slot still rebuilds. What is left of the gap to another Clear (71 against 53 ms)
+is the re-table itself (ground update 21.7 against 11 ms) and the trim's whole-map slot count (take-back
+45 against 34 ms).
+
+The warm-up. Round 2 made one material and drew it in the same frame, 12 times. Measured per unit: making
+a material costs 6 to 30 ms of main-thread time (the shader compile; 0 to 1 ms for a second material of a
+compiled shader, and the `StandardMaterial3D` trim's own shader is generated at its RID, so `MAKE` now
+takes the RID), its first draw about 20 to 25 ms more in that frame's render (the pipelines), and
+`ArrayMesh.duplicate` of the one-triangle warm mesh 5 ms a draw, a GPU read-back of its buffers. Now the
+make and the draw are separate units in separate frames, the warm mesh is built from cached arrays (0.1 ms),
+a frame takes units until 8 ms of its own time has gone (a draw ends it), a frame after a slow one (over 20
+ms, at most 4 in a row) takes none, and the order puts a common first building's surfaces first (masonry,
+tile, trim stone, panes, ivy). The Structure and Village brushes pause it on `leave` and resume it on their
+next frame or the next `prepare`. The open now has no frame over 35 ms and one over 33, but the 25 ms
+target is not met: what is left is one unit per frame, the compile of one shader (plaster 29.7 ms, thatch
+20, masonry 16.7) or the first draw of one (26 to 32 ms frames), and neither can be split on the main
+thread in Godot 4.7's renderer (the shadow-only split showed the shadow pipelines are cheap: the cost is
+the colour and depth pipelines of the first draw).
+
+Not done. The 72 ms frame of a cold first place (5 frames after the add; still not identified) and an
+async `ProcgenSettlement.place` (21 to 25 ms) were not attempted (budget).

@@ -102,6 +102,8 @@ var _handle_m: float = 0.0
 var _explicit: bool = false
 var _message: String = ""
 var _signature: String = ""
+## True after leave() paused the map's StructureWarmup; the next frame() resumes it.
+var _warm_paused: bool = false
 
 
 func _init() -> void:
@@ -367,6 +369,9 @@ func frame(brush: BrushTool) -> void:
 	var editor := brush.editor
 	if editor == null:
 		return
+	if _warm_paused:
+		_warm_paused = false
+		StructureWarmup.resume_map(editor.map_root)
 	_sync_selection(editor)
 	if brush.hit == Vector3.INF:
 		hover_village = -1
@@ -441,7 +446,9 @@ func has_selection() -> bool:
 
 
 ## The tool is put down or another is picked.
-func leave(_brush: BrushTool) -> void:
+func leave(brush: BrushTool) -> void:
+	StructureWarmup.pause_map(brush.editor.map_root if brush.editor != null else null)
+	_warm_paused = true
 	reset()
 	hover_village = -1
 	hover_plaza = -1

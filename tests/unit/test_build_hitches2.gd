@@ -81,7 +81,11 @@ func test_warmup_runs_once_per_map_and_fills_the_material_cache() -> void:
 	var first := StructureWarmup.warm(structures, styles, root)
 	assert_not_null(first, "the first open starts it")
 	assert_eq(StructureWarmup.warm(structures, styles, root), first, "one at a time")
-	for frame in StructureWarmup.COMBOS.size() + 6:
+	# A unit or two a frame (hitches3); a busy test runner must not hold it back.
+	first.idle_frame_ms = INF
+	for frame in StructureWarmup.unit_count() * 2 + 8:
+		if not is_instance_valid(first):
+			break
 		await get_tree().process_frame
 	assert_false(is_instance_valid(first), "it frees itself when done")
 	assert_null(StructureWarmup.warm(structures, styles, root), "never again on this map")
