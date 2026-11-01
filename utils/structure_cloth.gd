@@ -24,6 +24,13 @@ const FLAG_RATIO := 1.2
 const END_SHARE := 0.15
 ## The free end bends more than the middle: the weight along a piece is t to this power.
 const CURVE := 1.5
+## The ripple's phase in the shader runs with the real distance from the attachment, which the
+## weight grows as the CURVE power of: phase_distance(weight) undoes the curve (the shader's
+## `1.14 * pow(weight.x, 2/3)`; a pennant's own length enters as its cube root, 1.06 to 1.22 for
+## 1.2 to 1.8 m, so one scale serves them all within 7%). A phase that followed the weight ran 1.5
+## times too fast at the free end and folded the tip into a kink (topic pennantkink, 2026-10-31).
+const PHASE_POW := 1.0 / CURVE
+const PHASE_SCALE := 1.14
 ## Shorter than this (metres) a piece has no usable direction and stays still.
 const MIN_EXTENT_M := 0.05
 ## A prop's cloth (tags `prop/<name>/<part>`, procgen ProcgenProps) that moves in the wind, by the
@@ -58,6 +65,12 @@ static func group_of(path: String) -> String:
 	if parts.size() >= 3 and parts[1].begins_with("awning") and parts[2].begins_with("stripe"):
 		return path.substr(0, at) + "ornament/" + parts[1]
 	return ""
+
+
+## The distance (metres) from the attachment that a weight's reach `x` stands for, as the shader
+## derives it for the ripple's phase (see PHASE_SCALE).
+static func phase_distance(reach: float) -> float:
+	return PHASE_SCALE * pow(maxf(reach, 0.0), PHASE_POW)
 
 
 ## Writes the weights into every `cloth` mesh of `meshes` (StructureGeometry mesh dictionaries that
