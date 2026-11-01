@@ -214,6 +214,12 @@ func cells_of(
 	var sig := settlement.fingerprint()
 	for frontage in frontages:
 		sig += "|" + JSON.stringify(frontage.to_dict(), "", true, true).md5_text()
+	# The crossings keep props off their landings (_stand): a bridge laid or moved stands them again.
+	var spans: Array = []
+	for crossing in doc.crossings:
+		spans.append([crossing.start, crossing.end, crossing.width_m])
+	if not spans.is_empty():
+		sig += "|%d" % hash(spans)
 	var plan: Dictionary = _plans.get(settlement.id, {})
 	var ground := ground_print if ground_print != 0 else StructureGeometry.ground_fingerprint(doc)
 	if plan.get("sig", "") != sig:
@@ -287,6 +293,20 @@ func _stand(doc: MapDocument, items: Array[Dictionary]) -> Array[Dictionary]:
 		points.append(at + Vector2(0.0, reach))
 		points.append(at - Vector2(0.0, reach))
 	var heights := WaterGeometry.grounds_at(doc, points)
+	# A prop stands clear of the water under its whole drawn footprint and a strip of bank
+	# (VillageDryGround.prop_ring: a log pile half in a stream beside a plank bridge, bridges_look3),
+	# and of every bridge's deck and landings (a crate at the end of a plank bridge, a cart on an
+	# arch's ramp).
+	var wet := PackedByteArray()
+	var corridors: Array[Dictionary] = VillageDryGround.crossing_corridors(doc)
+	if VillageDryGround.has_water(doc) and not points.is_empty():
+		var ring := PackedVector2Array()
+		for k in items.size():
+			ring.append_array(VillageDryGround.prop_ring(points[k * 5], reaches[k]))
+		var near := Rect2(ring[0], Vector2.ZERO)
+		for p in ring:
+			near = near.expand(p)
+		wet = VillageDryGround.wet_flags(doc, ring, near.grow(1.0))
 	var rows: Array[Dictionary] = []
 	for k in items.size():
 		var item := items[k]
@@ -297,7 +317,16 @@ func _stand(doc: MapDocument, items: Array[Dictionary]) -> Array[Dictionary]:
 		var rise := maxf(
 			absf(heights[base + 1] - heights[base + 2]), absf(heights[base + 3] - heights[base + 4])
 		)
-		if rise / run > SLOPE_LIMIT or WaterGeometry.is_wet_at(doc, at):
+		var soaked := false
+		if not wet.is_empty():
+			var first := k * VillageDryGround.PROP_RING_POINTS
+			for i in range(first, first + VillageDryGround.PROP_RING_POINTS):
+				soaked = soaked or wet[i] != 0
+		if (
+			rise / run > SLOPE_LIMIT
+			or soaked
+			or VillageDryGround.in_corridors(at, corridors, reach)
+		):
 			skipped_ground += 1
 			continue
 		var row := LibraryStructureStore.prop(str(item["prop"]), int(item["seed"]))

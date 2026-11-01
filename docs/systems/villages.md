@@ -47,7 +47,9 @@ There is no separate Street tool. A street is `Wall.Kind.ROW`, one of the Wall t
   gap, height, pitch and ridge from the species, from `rng.sub("side<n>")`, with every draw made for every
   lot so a skipped plot shifts nobody (row_gen.gd:119). `skip_chance` leaves an empty plot; a lot over a bend
   turning more than 0.5 rad is left empty (`MAX_BEND`); the first 0.5 m is clear (`END_MARGIN_M`). A lot
-  takes its own stream (`lot<index>_<side>`), so what it is built of shifts no other lot.
+  takes its own stream (`lot<index>_<side>`), so what it is built of shifts no other lot. On a map with water,
+  `row_lots` then drops the lots on wet ground or on the street's crossing (`WallGeometry.row_plan` is the
+  unfiltered plan; section 12 "Houses stand on dry ground"): a gap, never a reshuffle.
 - **Orientation.** Each lot's first side (the front) faces the street, a setback from the line; the gap is at
   least both neighbours' yard margins.
 - **Species.** `ProcgenStreetSpecies` (`recipes/species/*.json`, 11 of them) replaces the lot sizes, gaps,
@@ -838,15 +840,32 @@ rest, and a peer receives it as the ordinary `crossings` op inside the group (no
 - **Tests:** `tests/unit/test_village_bridges.gd` (the runs, kind and width, one entry with undo and redo, Clear leaves
   a hand bridge, a change of character swaps the kind under the same id and a re-dress keeps it, a poor lane fords, a
   full map toasts, the record round trip and hostile input, a live-edit peer through dress, character, Clear and the
-  undos). Render job `jobs/bridges_look.json` (before: dressed with `bridges: false`; after: `pave` with the same seeds).
-- **Look** (`render_jobs/bridges_look`, `--full`): with the street's houses hidden (a diagnostic), the hamlet's plank
-  bridge and the town's stone arch each stand bank to bank with the road meeting both ends in line with the deck
-  (`e_hamlet_open`, `f_town_open`). At home zoom the bridges do NOT read (`b_home_after`): a street row puts houses
-  on the water as anywhere else, since procgen's `ProcgenRow.plan` knows nothing of water, so houses stand in the
-  river over and beside the bridge and hide it. That needs a procgen change (a lot on wet ground left empty, through
-  the row's environment), outside this slice and the first thing to do next.
-- **Limits left:** houses on the water (above); settlement props are not kept off a bridge's landings (a crate or a
-  cart can stand at the deck's end) nor off the water; a street moved after its Dress keeps its bridges where they
+  undos); `tests/unit/test_village_dry_ground.gd` (the lot filter leaves a gap, a lot's sample grid meets a narrow
+  stream, the corridors, a prop's ring at the water's edge, a dry map's street is exactly its plan and keeps its key,
+  a street over a river stands lots on both banks and builds nothing on the water). Render job
+  `jobs/bridges_look.json` (before: dressed with `bridges: false`; after: `pave` with the same seeds).
+- **Houses stand on dry ground** (`utils/village_dry_ground.gd`, `VillageDryGround`, round 2). procgen's
+  `ProcgenRow.plan` knows nothing of water, so tt-sim filters its lots: `WallGeometry.row_plan` is every lot the
+  recipe builds, and `WallGeometry.row_lots` (the preview, the scatter clearing, the frontages and so the props, the
+  fields' refusal, Split) is the ones that stand. A lot is dropped when any sample of its building (a grid at most
+  1 m apart over its rectangle grown by 1 m: eaves and a strip of bank) or of its yard's plot is wet, or when a
+  sample of its building lies in the street's crossing corridor (each wet run of the street, the bridge's width
+  plus 0.5 m a side, reaching 2 m past each bank). Lots stay derived, never stored, and the filter runs after the
+  plan, so it changes no draw: the same seed gives the same houses minus the dropped ones, and a dropped lot leaves
+  a gap, never a reshuffle. The built street is the recipe's, which builds every lot, so `build_one` takes the
+  dropped lots' triangles out by provenance path ("left/lot3"), their collision faces by where they stand.
+  `key_of` adds the standing lots' paths on a map with water (water under a lot, not under the line, moves them).
+  A map with no water body takes none of this: `row_lots` returns the plan itself and the key its old fields.
+- **Props stand clear of water and bridges** (`AuthoredSettlements._stand`): a prop is dropped when its centre or
+  a ring at its drawn radius plus 0.5 m is wet (`VillageDryGround.prop_ring`), or when it stands within 1 m of a
+  crossing's deck or 3 m past an anchor (`crossing_corridors`, every crossing, a hand-placed one too); the plan
+  cache keys on the crossings, so a bridge laid or moved stands the props again.
+- **Look** (`render_jobs/bridges_look3`, `--full`, streets z -24..24): at home zoom the stream reads across both
+  villages; the hamlet's plank bridge is a clear shape between houses on both banks, each back from the water on a
+  grass strip (`b_home_after`, `c_close_hamlet`). The town's stone arch stands bank to bank (`f_town_open`) but at
+  home zoom is hidden by the south-bank house on the camera side of its landing and a scatter tree.
+- **Limits left:** a house beside a landing on the camera's side can hide a bridge at home zoom (a bridgehead
+  clearance would cost a riverside street most of its houses on a short street); a street moved after its Dress keeps its bridges where they
   were until the next re-dress or `pave`; a bridge the author erases by hand returns with the next re-dress; a bridge
   laid by a village that a later water edit removed leaves its id in the record (harmless: a take-back skips ids the
   document no longer holds, and a hand crossing that reuses the id over the same street would be taken back with it).
