@@ -31,11 +31,13 @@ class Rec:
 	var label := ""
 	var frames := PackedFloat64Array()
 	var last_us := 0
+	var first_frame := 0
 
 	func _ready() -> void:
 		process_mode = Node.PROCESS_MODE_ALWAYS
 		process_priority = -99
 		last_us = Time.get_ticks_usec()
+		first_frame = Engine.get_process_frames()
 
 	func _process(_delta: float) -> void:
 		var now := Time.get_ticks_usec()
@@ -66,9 +68,10 @@ class Rec:
 		if not late.is_empty():
 			worst.append("at " + " ".join(late))
 		return (
-			"hitch %s | frames %d total %.0f ms | median %.1f | worst [%s] | over 33 ms: %d | jank %.0f ms"
+			"hitch %s (from f%d) | frames %d total %.0f ms | median %.1f | worst [%s] | over 33 ms: %d | jank %.0f ms"
 			% [
 				label,
+				first_frame,
 				sorted.size(),
 				total,
 				sorted[sorted.size() / 2] if not sorted.is_empty() else 0.0,
@@ -153,6 +156,8 @@ static func run(base: Node, step: Dictionary) -> String:
 			return _place(base, ctrl.editor, step)
 		"split":
 			return _split(ctrl)
+		"warm_report":
+			return _warm_report()
 		"dress":
 			return _dress(ctrl.editor, step)
 		"paint_split":
@@ -250,6 +255,27 @@ static func _cold_cost(ctrl: AuthoringController) -> String:
 				"%s:%s#%d %.1f" % [combo[0], combo[1], pass_index, (Time.get_ticks_usec() - t) / 1000.0]
 			)
 	return "cold (%s) ms: %s" % [style, ", ".join(parts)]
+
+
+## The structure warm-up's units (StructureWarmup.last_log): process frame, kind:role, M(ake),
+## D(raw) or S(hadow draw), main-thread ms.
+static func _warm_report() -> String:
+	var parts := PackedStringArray()
+	for entry: Dictionary in StructureWarmup.last_log:
+		var pair: Array = StructureWarmup.COMBOS[int(entry.combo)]
+		parts.append(
+			(
+				"f%d %s:%s %s %.1f"
+				% [
+					int(entry.frame),
+					pair[0],
+					pair[1],
+					"MDS"[int(entry.phase)],
+					float(entry.ms)
+				]
+			)
+		)
+	return "warm-up units (%d): %s" % [parts.size(), ", ".join(parts)]
 
 
 static func _fmt(values: Dictionary) -> String:
@@ -413,18 +439,35 @@ static func _paint_split(editor: AuthoringEditor, step: Dictionary) -> String:
 	t = Time.get_ticks_usec()
 	var diff := SettlementUnpaint.remove(doc, strokes)
 	un.remove_total = Time.get_ticks_usec() - t
+	var extra := ""
 	if not diff.is_empty():
 		t = Time.get_ticks_usec()
 		var rect := SurfaceStroke.apply_diff(doc, diff, true)
 		un.apply_diff = Time.get_ticks_usec() - t
+		var terrain: AuthoredTerrain = editor.terrain
+		var retable := terrain._layers.needs_retable(terrain._has_water())
 		t = Time.get_ticks_usec()
 		editor._refresh_ground(rect)
 		un.update_ground = Time.get_ticks_usec() - t
+		extra = (
+			"retable %s, ids %s -> %s, weights %d bytes, broad %.1f ms, rect %s"
+			% [
+				str(retable),
+				str(diff.get("ids_before", [])),
+				str(diff.get("ids_after", [])),
+				doc.surface_weights.size(),
+				terrain.last_broad_update_usec / 1000.0,
+				str(rect)
+			]
+		)
 		t = Time.get_ticks_usec()
 		editor._regenerate_paint(diff)
 		un.scatter = Time.get_ticks_usec() - t
 		editor.apply_surface_diff(diff, false)
-	return "lay ms %s; unpaint ms %s (diff blocks %d)" % [lay_text, _ms(un), (diff.get("blocks", []) as Array).size()]
+	return (
+		"lay ms %s; unpaint ms %s (diff blocks %d; %s)"
+		% [lay_text, _ms(un), (diff.get("blocks", []) as Array).size(), extra]
+	)
 
 
 static func _ms(values: Dictionary) -> String:
