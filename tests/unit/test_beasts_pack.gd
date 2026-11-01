@@ -11,7 +11,7 @@ const SkinnedBounds := preload("res://tools/roster/skinned_bounds.gd")
 const BeastRecipes := preload("res://tools/roster/beast_recipes.gd")
 const PACK_PATH := "res://builtin_packs/beasts/"
 const MAX_MODEL_BYTES := 600_000
-const ANIMAL_COUNT := 17
+const ANIMAL_COUNT := 18
 ## The Farm pack's animals have no death clip (the Animals pack's all do).
 const NO_DEATH_CLIP: Array[String] = ["llama", "sheep", "pig", "pug"]
 

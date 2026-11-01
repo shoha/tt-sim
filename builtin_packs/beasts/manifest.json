@@ -14,6 +14,7 @@
     "donkey": {"display_name": "Donkey", "variants": {"default": {"model": "donkey.glb", "icon": "donkey.png"}}},
     "bull": {"display_name": "Bull", "variants": {"default": {"model": "bull.glb", "icon": "bull.png"}}},
     "cow": {"display_name": "Cow", "variants": {"default": {"model": "cow.glb", "icon": "cow.png"}}},
+    "cow_holstein": {"display_name": "Holstein cow", "variants": {"default": {"model": "cow_holstein.glb", "icon": "cow_holstein.png"}}},
     "alpaca": {"display_name": "Alpaca", "variants": {"default": {"model": "alpaca.glb", "icon": "alpaca.png"}}},
     "llama": {"display_name": "Llama", "variants": {"default": {"model": "llama.glb", "icon": "llama.png"}}},
     "stag": {"display_name": "Stag", "variants": {"default": {"model": "stag.glb", "icon": "stag.png"}}},

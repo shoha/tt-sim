@@ -10,8 +10,8 @@ extends RefCounted
 ## id -> {source, file, name, height_m}. `source` is the download it comes from ("farm": the
 ## Farm Animal Pack's FBX files; "animals": the Ultimate Animated Animal Pack's glTF files; the
 ## build takes a folder for each). Heights are bounding-box heights at rest in metres, head
-## (antlers, raised neck) to hoof, in the idle pose. The Farm pack's own Cow and Horse are not
-## built: the Animals pack's are richer and share its rig and clip set (docs/licences).
+## (antlers, raised neck) to hoof, in the idle pose. The Farm pack's Cow ships as a second cow, the
+## Holstein; its Horse is not built (the Animals pack's is richer, docs/licences).
 const ANIMALS := {
 	"horse": {"source": "animals", "file": "Horse.gltf", "name": "Horse", "height_m": 2.1},
 	"horse_white":
@@ -26,6 +26,8 @@ const ANIMALS := {
 	"husky": {"source": "animals", "file": "Husky.gltf", "name": "Husky", "height_m": 0.65},
 	"shiba_inu": {"source": "animals", "file": "ShibaInu.gltf", "name": "Shiba Inu", "height_m": 0.5},
 	"fox": {"source": "animals", "file": "Fox.gltf", "name": "Fox", "height_m": 0.5},
+	"cow_holstein":
+	{"source": "farm", "file": "Cow.fbx", "name": "Holstein cow", "height_m": 1.5},
 	"llama": {"source": "farm", "file": "Llama.fbx", "name": "Llama", "height_m": 1.8},
 	"zebra": {"source": "farm", "file": "Zebra.fbx", "name": "Zebra", "height_m": 1.5},
 	"sheep": {"source": "farm", "file": "Sheep.fbx", "name": "Sheep", "height_m": 1.0},

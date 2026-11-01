@@ -1,6 +1,6 @@
 # Beasts and Farm Animals (built-in token pack): provenance
 
-The 17 animal tokens in `builtin_packs/beasts/` are Quaternius's animated animals, converted to GLB
+The 18 animal tokens in `builtin_packs/beasts/` are Quaternius's animated animals, converted to GLB
 by `tools/roster/build_beasts.gd` (Godot's own FBX and glTF readers and glTF exporter, no Blender).
 Nothing else went in: no repainted colours, no AI-made content. The conversion sets each animal's
 real-world height (see "Scale"), renames the clips the token animation tree plays and drops the
@@ -40,7 +40,7 @@ F137EE67BD565244F7441F35B5594A597588CDA8B60AB109E2041CF13C58E1DD  Horse_White.gl
 3236979B94A840EB72D9CE091B1361DA327A96F5CE068E666680297480F30F6B  ShibaInu.gltf
 170B964909D16D1AB4D428B1D714F25016913D32481ACD9C3D62923192583BE6  Stag.gltf
 CC02E9D128B5715F352EE8BEA086F97A35F1D875D240DE99B0F9F2775C37D415  Wolf.gltf
-0202789CAD8C1DEBB8AE5B4A47D1A5D2E5F93A0875878BC0B05A80E42AE37E8D  FBX/Cow.fbx (not used, see below)
+0202789CAD8C1DEBB8AE5B4A47D1A5D2E5F93A0875878BC0B05A80E42AE37E8D  FBX/Cow.fbx
 6DB270DDC7591E9A013F96EAB445031381FA6D5D68D2FEBA567F964E0FE68D90  FBX/Horse.fbx (not used, see below)
 3FF44FD03D5793701B228CF88F00E776F89AFEFDB3DE0B226FEE807908AE79C9  FBX/Llama.fbx
 BDF5E149A974FFC2431546F30EA568D7C41F916D7BD87187F1532C45778A9A23  FBX/Pig.fbx
@@ -51,10 +51,11 @@ ECBFE34A4D1F5F0695D573E04F0287B03F8F37B8E4DDBF37F7EA9737063AE200  FBX/Zebra.fbx
 
 ## What was dropped
 
-Both packs have a Cow and a Horse. The pack keeps the Animals pack's (richer, about 2000 triangles
-with eyes and hooves, and the same rig and clip set as the Bull, the White horse and the others, so
-the bull and cow, and the two horses, pair up). The Farm pack's Holstein-patterned cow and its
-brown horse (about 700 triangles) were built, looked at and replaced; they are not shipped. Clips
+Both packs have a Cow and a Horse. For the horse the pack keeps the Animals pack's (richer, about
+2000 triangles with eyes and hooves, and the same rig and clip set as the White horse and the
+others); the Farm pack's brown horse (about 700 triangles) is not shipped. For the cow the pack
+ships both: the Animals pack's brown cow (`cow`, pairs with the Bull) and, at the owner's request
+(2026-11-01), the Farm pack's black-and-white Holstein as `cow_holstein`. Clips
 dropped from every model: walk, run, gallop, jump variants, attacks, eating and the idle variants
 (tt-sim moves tokens by sliding them, and the tree plays only four clips).
 
@@ -67,6 +68,7 @@ ba25e037ec86b967e9dedf03f0a8d74f22aa85d869171ba9541afba6dbef58d5  models/alpaca.
 3f5cb047e6142cae89d84b9e25bbde870fc37d34d90ce4457f7db1190a80b6fe  models/deer.glb
 ffade5e682689272eeab04c75a17d3ab08f395f68b7f0f64eb1d8abff79ad308  models/donkey.glb
 5e5f1b177341a7bbe7319d5b84f340aaed2698cdc031f2fc2bdb567f32bbb68d  models/fox.glb
+b11ab7cc71617bc78cc2062209712c9fbc06f8b57ba063a6fd90aca928d829bd  models/cow_holstein.glb
 b84ed017dac0bd7e2b6fb4494e2a99b3badc721abc580b0a923d11f0eaa51643  models/horse.glb
 7bbcede3c3022ce989fa94a3d80c8c6f297bf1f6ae14d7ebd0e64388eef12415  models/horse_white.glb
 45381a370643b0b584352de3a93b0656c9b7ab1d6c7555e1546c3aabaf7d2782  models/husky.glb
@@ -82,7 +84,7 @@ cce03f4f31c62b6399b721b8a29840182bccb54b44bbf633a7db5c956bb35a4b  models/zebra.g
 
 The icons (`icons/<id>.png`, 128 px, transparent, rendered by
 `tools/roster/render_icons.gd --yaw -50` from the game camera's angle) are regenerable and not
-hashed. Total 6.6 MB in Git LFS (17 GLBs 6.5 MB, 17 icons 0.16 MB).
+hashed. Total 7.0 MB in Git LFS (18 GLBs 6.8 MB, 18 icons 0.17 MB).
 
 ## Scale
 
@@ -91,7 +93,7 @@ cell is 1.524 m), and the sources are at an arbitrary modeller scale. Each GLB's
 carries a uniform scale and offset that make the animal stand on y = 0, centred, at a real-world
 height (head, antlers and raised neck included, from the skinned rest pose;
 `tools/roster/beast_recipes.gd`): horse and white horse 2.1 m, stag 1.9 m, llama 1.8 m, bull 1.6 m,
-cow and zebra 1.5 m (alpaca 1.5), donkey and deer 1.4 m, sheep 1.0 m, pig 0.9 m, wolf 0.85 m,
+cow, Holstein cow, zebra and alpaca 1.5 m, donkey and deer 1.4 m, sheep 1.0 m, pig 0.9 m, wolf 0.85 m,
 husky 0.65 m, fox and Shiba Inu 0.5 m, pug 0.4 m. No manifest field is needed.
 
 ## Animation

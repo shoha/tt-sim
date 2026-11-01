@@ -5,6 +5,7 @@ extends RefCounted
 ## state, its play position and the idle clip's length and loop mode, plus the sum of the
 ## skeleton's bone rotations (a pose fingerprint: it changes while the idle plays). Calling it
 ## twice a few seconds apart shows the clip advancing and, past the clip's length, wrapping.
+## `only` limits it to the token of that name (the render log cuts a long line).
 
 
 static func run(base: Node, step: Dictionary) -> String:
@@ -14,6 +15,8 @@ static func run(base: Node, step: Dictionary) -> String:
 	var out := PackedStringArray()
 	for node in gm.get_tree().get_nodes_in_group(BoardToken.GROUP_NAME):
 		var token := node as BoardToken
+		if step.has("only") and token.token_name != String(step["only"]):
+			continue
 		var trees := token.find_children("*", "BoardTokenAnimationTree", true, false)
 		if trees.is_empty():
 			out.append("%s: no animation tree" % token.token_name)
