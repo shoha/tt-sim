@@ -17,9 +17,17 @@ shader_type spatial;
 // basis's scale its unit; custom data is (phase, seed, life, 1): the loop's offset, the seed's
 // pick and the seconds a lobe takes to climb the column. The quad is the book's upright frame
 // (`domain`, in units), split into rows (FireLook's shared mesh) and leaned by moving each row
-// down the wind (lean_dir, the map's wind). Until FireFieldSmoke binds the book, `frames` is 0
-// and every quad collapses: nothing draws.
+// down the wind. Until FireFieldSmoke binds the book, `frames` is 0 and every quad collapses:
+// nothing draws.
+//
+// The wind (wind.md phase f): the column leans down the global wind (wind_global.gdshaderinc),
+// by WindDrift.smoke_lean of its speed and of the gust field at the column's source, so a front
+// passing leans it over and the lull after it stands it back up (the fronts take seconds; the
+// column never wobbles). With the motion scale at 0 it leans as it did before the wind, down
+// lean_dir (the map's own wind) by `lean`; between, the two blend.
 render_mode unshaded, blend_premul_alpha, depth_draw_never, cull_disabled, shadows_disabled, fog_disabled, skip_vertex_transform;
+
+#include "res://shaders/wind_global.gdshaderinc"
 
 global uniform vec4 foliage_sun;
 global uniform vec3 figure_ambient;
@@ -39,6 +47,7 @@ const vec2 NIGHT_GATE = vec2(0.1, 0.35);
 const vec2 DUSK_KEY = vec2(0.06, 0.3);
 const float LEAN_SCREEN = 0.6;
 const float LEAN_EASE = 1.5;
+const float SIDE_SOFT = 0.15;
 const float WIDEN_EASE = 0.75;
 const float BASE_PAD = 0.45;
 const float EDGE_SOFT = 0.5;
@@ -72,6 +81,12 @@ const vec2 CROWN_FADE = vec2(0.82, 1.15);
 const float EDGE_THIN = 0.25;
 const vec2 SD_RANGE = vec2(-0.5, 1.0);
 const vec2 TONE_RANGE = vec2(0.75, 1.15);
+// WindDrift's smoke constants (test_wind_drift.gd keeps them equal).
+const float SMOKE_LEAN_CALM = 0.45;
+const float SMOKE_LEAN_STORM = 0.95;
+const float SMOKE_GUST = 0.5;
+const float SMOKE_GUST_REST = 0.4;
+const float SMOKE_LEAN_MAX = 1.25;
 
 // (frame a, frame b, their blend, unused) as layers.
 varying flat vec4 v_frames;
@@ -91,10 +106,19 @@ void vertex() {
 	vec3 up_view = (VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz;
 	vec2 up_screen = length(up_view.xy) > 1e-4 ? normalize(up_view.xy) : vec2(0.0, 1.0);
 	vec2 right = vec2(up_screen.y, -up_screen.x);
-	vec3 lean_view = (VIEW_MATRIX * vec4(lean_dir.x, 0.0, lean_dir.y, 0.0)).xyz;
+	// The wind's lean (WindDrift.smoke_lean, smoke_dir_at and smoke_lean_at).
+	float motion = wind_motion();
+	float gust = motion > 0.0 ? wind_global_gust(born.xz) : SMOKE_GUST_REST;
+	float base = mix(SMOKE_LEAN_CALM, SMOKE_LEAN_STORM, wind_strength01());
+	float wind_lean = min(base * (1.0 + SMOKE_GUST * wind_gust.x * (gust - SMOKE_GUST_REST)), SMOKE_LEAN_MAX);
+	vec2 mixed = mix(lean_dir, wind_dir.xy, motion);
+	vec2 dir = dot(mixed, mixed) > 1e-6 ? normalize(mixed) : wind_dir.xy;
+	vec3 lean_view = (VIEW_MATRIX * vec4(dir.x, 0.0, dir.y, 0.0)).xyz;
 	float across = dot(lean_view.xy, right);
-	float side = across < 0.0 ? -1.0 : 1.0;
-	float lean_x = side * max(abs(across), LEAN_SCREEN) * lean * rise;
+	// A soft sign, so a wind veering through the view axis swings the column over rather than
+	// flipping it from one side to the other.
+	float side = clamp(across / SIDE_SOFT, -1.0, 1.0);
+	float lean_x = side * max(abs(across), LEAN_SCREEN) * mix(lean, wind_lean, motion) * rise;
 	// The column's frame: which seed's loop, which frame of it.
 	int count = max(frames, 1);
 	int k = int(fract(INSTANCE_CUSTOM.y * 7.31) * float(seeds));

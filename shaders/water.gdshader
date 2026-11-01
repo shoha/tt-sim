@@ -34,6 +34,10 @@ render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_sc
  *      breakup are advected along the local flow with a two-phase cross-fade, the swell
  *      travels downstream, foam stretches into streaks and token ripples become wakes.
  *      Without a map nothing changes.
+ *   6. Wind chop (docs/systems/wind.md phase f). The ripples' slope rises a little with the
+ *      global wind's strength and more where its gust fronts cross the water, so a storm
+ *      roughens dark patches that run downwind (cat's paws) while calm water, and any water
+ *      with the player's motion scale at 0, is exactly as before (WindDrift.chop_factor).
  *
  * The world-space normal is written to NORMAL directly (rather than via NORMAL_MAP) so the
  * result does not depend on the GLB plane carrying a sensible tangent basis.
@@ -154,6 +158,12 @@ global uniform bool water_quality_skip_refraction;
 // Updated by LevelEnvironmentManager whenever it applies environment settings,
 // so the sky-blend above tracks the level's actual ambient/sky color.
 global uniform vec3 water_ambient_reflection_color;
+
+#include "res://shaders/wind_global.gdshaderinc"
+
+// WindDrift's chop constants (test_wind_drift.gd keeps them equal).
+const float CHOP_BASE = 0.15;
+const float CHOP_GUST = 0.6;
 
 // Red is absorbed fastest, blue slowest -- gives the shallow-to-deep shift its
 // natural warm-to-cool progression without a second color uniform.
@@ -420,7 +430,14 @@ void fragment() {
 	}
 	// Sum of octave amplitudes normalizes the height into roughly [-1, 1] for the crest term.
 	float crest = wave.x / 2.2;
-	vec2 grad = wave.yz * ripple_strength * 0.25;
+	// The wind's chop (WindDrift.chop_factor): the gust field is only worked out when the wind
+	// is above calm and the motion scale is on (both uniform, so the branch is coherent).
+	float chop_gain = wind_motion() * wind_strength01();
+	float chop = 1.0;
+	if (chop_gain > 0.0) {
+		chop += chop_gain * (CHOP_BASE + CHOP_GUST * wind_gust.x * wind_global_gust(p));
+	}
+	vec2 grad = wave.yz * ripple_strength * 0.25 * chop;
 
 	// Persistent ripple rings around any token currently standing in the water (see
 	// WaterRippleRegistry / WaterZone) -- distance-based falloff around each active

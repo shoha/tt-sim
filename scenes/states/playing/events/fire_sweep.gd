@@ -132,6 +132,8 @@ const SMOKE_CHANCE := 0.5
 const SMOKE_MIN_TALL := 2.5
 const SMOKE_SIZE := 1.0
 const SMOKE_RISE := 0.6
+## How often the drift samples the global wind (seconds).
+const WIND_SAMPLE_S := 0.25
 ## The column over the centre: its billows' start times (seconds) and size against the trees'
 ## mean height (about a crown's width; at four times the crowns it hung as balloons).
 const COLUMN_AT: Array[float] = [0.8, 1.9]
@@ -159,8 +161,12 @@ var _flames: EventPuffs = null
 var _smoke: SmokePuffs = null
 var _ground: GroundBurn = null
 ## The way the smoke drifts (map frame, horizontal, metres a second), the stand's middle on
-## the ground and its trees' mean height, drawn in setup.
+## the ground and its trees' mean height, drawn in setup. The drift follows the global wind
+## (WindDrift.event_drift, sampled every WIND_SAMPLE_S at the middle, so a billow born in a gust
+## rides off faster); `_still_drift` is the heading drawn in setup, kept for motion scale 0.
 var _drift := Vector3.ZERO
+var _still_drift := Vector3.ZERO
+var _wind_wait := 0.0
 var _middle := Vector3.ZERO
 var _tall := 1.0
 var _columns := 0
@@ -280,7 +286,7 @@ func setup(editor: AuthoringEditor, event: TerrainEvent) -> bool:
 		return false
 	name = "FireSweep"
 	var heading := _rng.randf_range(0.0, TAU)
-	_drift = Vector3(cos(heading), 0.0, sin(heading)) * 0.35
+	_still_drift = Vector3(cos(heading), 0.0, sin(heading)) * WindDrift.EVENT_DRIFT_CALM
 	var total := Vector3.ZERO
 	var tall := 0.0
 	for tree in _trees:
@@ -288,6 +294,7 @@ func setup(editor: AuthoringEditor, event: TerrainEvent) -> bool:
 		tall += float(tree.height)
 	_middle = total / float(_trees.size())
 	_tall = maxf(tall / float(_trees.size()), 1.0)
+	_follow_wind()
 	var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
 	if camera != null:
 		var right := global_basis.inverse() * camera.global_basis.x
@@ -331,6 +338,9 @@ func step(elapsed: float, delta: float) -> void:
 	if _ended and _landed_at == INF and (_settled() or elapsed >= duration + HOLD_MAX_S):
 		_landed_at = elapsed
 	var end := end_at(elapsed)
+	_wind_wait -= delta
+	if _wind_wait <= 0.0:
+		_follow_wind()
 	for tree in _trees:
 		var t := elapsed - float(tree.start)
 		var burn := float(tree.burn)
@@ -611,3 +621,13 @@ func _column(index: int) -> void:
 		3.4,
 		Color.WHITE
 	)
+
+
+## Turns the drift onto the global wind at the stand's middle (WindDrift.event_drift), in this
+## node's frame.
+func _follow_wind() -> void:
+	_wind_wait = WIND_SAMPLE_S
+	var wind: Vector3 = Wind.wind_at(_middle)
+	if is_inside_tree():
+		wind = global_basis.inverse() * Wind.wind_at(global_transform * _middle)
+	_drift = WindDrift.event_drift(_still_drift, wind, Wind.motion_scale())
