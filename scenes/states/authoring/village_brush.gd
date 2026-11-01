@@ -64,6 +64,8 @@ const FIELDS_FULL := "A village holds four fields. Remove one to make room."
 const FIELDS_FULL_SHORT := "Four fields already"
 const NO_FIELDS := "This village keeps no fields: pick another character, or lay a plaza."
 const NO_FIELDS_SHORT := "No fields here"
+const ON_BUILDING := "A field cannot cover a building: lay it on open ground."
+const ON_BUILDING_SHORT := "Over a building"
 const FIELD_HOVER_RIM := "Drag the edge to size this field"
 const FIELD_HOVER_INSIDE := "%s: click to pick, Delete removes it"
 const FIELD_IDLE := "Click for %s, or drag to size it"
@@ -114,6 +116,8 @@ static func refusal_text(reason: StringName) -> String:
 			return FULL
 		SettlementEditor.REFUSED_STREET:
 			return NO_VILLAGE
+		SettlementEditor.REFUSED_BUILDING:
+			return ON_BUILDING
 	return REFUSED
 
 
@@ -311,7 +315,8 @@ func press(brush: BrushTool) -> bool:
 		select(village, _grab_plaza, true, _grab_group)
 		return false
 	var target := ghost_village(editor, p)
-	_message = refusal_at(doc, target)
+	# A press may still drag a small field beside a house: only the smallest disc is refused here.
+	_message = refusal_at(doc, target, p, true)
 	if _message != "":
 		brush.refused.emit(_message)
 		return false
@@ -328,15 +333,27 @@ func press(brush: BrushTool) -> bool:
 
 
 ## Why a press on bare ground joining village `target` (-1: none in reach) lays nothing, or "".
-func refusal_at(doc: MapDocument, target: int) -> String:
+## With map point `at`, a field there that would cover a building is refused too: the kind's
+## click size (the ghost), or with `smallest` its smallest size (a press, which may drag it).
+func refusal_at(
+	doc: MapDocument, target: int, at: Vector2 = Vector2.INF, smallest: bool = false
+) -> String:
 	if target < 0:
 		return NO_VILLAGE
 	var held := doc.settlement(target)
 	if not lay_field:
 		return FULL if held.plazas.size() >= Settlement.MAX_PLAZAS else ""
-	if laying_kind(doc, target) == "":
+	var kind := laying_kind(doc, target)
+	if kind == "":
 		return NO_FIELDS
-	return FIELDS_FULL if held.fields.size() >= Settlement.MAX_FIELDS else ""
+	if held.fields.size() >= Settlement.MAX_FIELDS:
+		return FIELDS_FULL
+	if at.is_finite():
+		var table := VillageFields.MIN_RADIUS_M if smallest else VillageFields.DEFAULT_RADIUS_M
+		var radius := float(table.get(kind, 4.0))
+		if VillageFieldGround.covers_building(VillageFieldGround.footprints(doc), at, radius):
+			return ON_BUILDING
+	return ""
 
 
 func took_press() -> bool:

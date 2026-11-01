@@ -695,10 +695,10 @@ away): discs, up to 4 per village, three kinds, no polygons, no move, no bridges
 
 - **Record:** `Settlement.fields`, discs `{at, radius 2.5..18 m, kind}`; saved, validated and round-tripped like
   plazas (settlements.md "The record"), left out when empty, so a map without fields saves byte for byte as before.
-- **Kinds** (`VillageFields`, `utils/village_fields.gd`, pure): crops (a disc of tilled earth, `dirt`, with broad
-  rows 2.5 m apart, green `grass_alpine` or gold `grass_savanna` by the seed, a scarecrow, a haystack on two fields
-  in three); orchard (warm `grass_meadow` with fruit trees, the grassland meadow's broadleaf and oaks at 0.42..0.55
-  scale, on a loose quincunx 4.6 m apart turned by the seed, bee skeps by some); garden (a small `grass_meadow`
+- **Kinds** (`VillageFields`, `utils/village_fields.gd`, pure): crops (a disc of tilled earth, the dark `dirt_peat`,
+  with broad rows 3 m apart, green `grass_alpine` or gold `grass_savanna` by the seed, a scarecrow, a haystack on two
+  fields in three); orchard (warm `grass_meadow` with fruit trees, the grassland meadow's broadleaf and oaks at
+  0.42..0.55 scale, on a loose quincunx 3.4 m apart turned by the seed, bee skeps by some); garden (a small `grass_meadow`
   disc with two or three earth beds, one flower per bed in lavender or bloom mounds, one or two flowering shrubs at
   the rim). A kit decides the kinds and its default (`KIT_KINDS`): farming hamlet crops, orchard, garden; market
   town garden, orchard; hill fort garden, crops; harbour town none.
@@ -728,10 +728,38 @@ away): discs, up to 4 per village, three kinds, no polygons, no move, no bridges
   ring there is meadow grass, flowers and a scarecrow but no tilled earth or rows (`f_720_pane`, `d_ghost_crops`), at
   home zoom no field reads apart from the biome's own yellow flower patches (`a_home_fields`), and the garden's ring
   sits over a market building with a patch of earth and flower beds beside it rather than under it
-  (`h_720_pane_market`). Open: whether the field paint lands off its ring or lies hidden under the starting cover
-  (fields clear no wild plants: their surfaces are `ground` role, not `built`); a probe of the painted weights at a
-  field's centre decides it. A field may still be laid over a building (only its centre is checked).
+  (`h_720_pane_market`).
+- **Round 3 (fields3): the diagnosis.** A headless probe of the painted weights after `add_field` (crops at
+  (6, -14) r 6 on a 61 m map) found the paint exactly under the ring (earth 245, rows 253 inside; 0 at every
+  mirrored point and 3 m past the rim), and the scatter sampler open at 1.0 for every role over it: the field was
+  hidden under the wild cover, not misplaced. A second cause showed in the game: the scatter's workers read a
+  document snapshot (`ScatterRegen.snapshot`, `RockKeep.snapshot`) that copied walls and structures but not
+  settlements. The "garden beside its ring" was the ring drawn over a market roof standing in front of it (a
+  roof hides the ground behind it; the footprint test finds no overlap).
+- **Plants** (`VillageFieldGround`, `utils/village_field_ground.gd`, pure): each field clears the scatter under it
+  as a structure's footprint does, as strips across the disc 2 m apart given to ScatterGround and the native
+  scatter as plank-like Crossings (no native change). They stop 0.5 m inside the rim and the clearance's soft edge
+  does the rest. Every kind clears all wild roles, rocks included: crops are bare tilled earth and rows, a garden's
+  beds and lawn are clear, and an orchard keeps its painted meadow and its own trees (AuthoredFieldPlants is not
+  scatter) with no wild flower or bush under them; the orchard's grass is therefore the painted surface, not grass
+  plants. The strips run east-west whatever the seed. A settlement edit asks the scatter to regrow the changed
+  fields' ground (`area_of`, through `apply_list`'s area, so undo, redo and peers regrow too).
+- **Buildings:** a field may not cover a building, a structure's footprint or a street's house
+  (`WallGeometry.row_lots`), by more than 0.75 m (`covers_building`). `add_field` refuses it and a resize that
+  grows into one (`SettlementEditor.REFUSED_BUILDING`, toast "A field cannot cover a building: lay it on open
+  ground."); the ghost shows the refusal marker and the salmon pill "Over a building" when a click's disc would
+  cover one, while a press there may still drag a field down to the kind's smallest size. Refused, not trimmed: a
+  trimmed disc would need a shape the record does not have.
+- **Look, round 3** (job `fields_look`, captures in `render_jobs/fields_look`): at close zoom the crop fields read as
+  ploughed fields, broad dark furrows and pale gold rows inside their rings with a scarecrow and haystack and no
+  wild plant on them (`b_close_crops`, `g_close_crops_redressed`, the rows turned by the re-dress); the orchard is a
+  grove of seven small trees on cleared meadow (`c_close_orchard`); the refusal pill shows by a house
+  (`d_ghost_crops`). At home zoom (`a_home_fields`) the fields read as striped shapes but small, half hidden behind
+  the hamlet's houses in this layout, and the biome's yellow patches and bushes still carry the board: not yet the
+  bold read wanted. The gold rows read more as straw than wheat, and an orchard's painted meadow is close in colour
+  to the meadow round it.
 - **Limits left:** taking back a field that overlaps a road or path thins that paint (as for plazas); the plants'
   wind materials are not registered with the level's wind re-tuning; plants stand again only on a settlement
   refresh (a sculpt under an orchard leaves them floating until the next edit); fields refused for wet or steep
-  ground are recorded and furnished but unpainted.
+  ground are recorded and furnished but unpainted (their wild plants are still cleared); a building placed later
+  over a field is not refused (the field stays under it).

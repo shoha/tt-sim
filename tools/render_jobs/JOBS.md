@@ -1170,12 +1170,15 @@ Output folders carry the topic name (`render_jobs/designer-s9_*`); each job is 2
   `probes/fields.gd`): a 320 ft map (80 m, the document's 64-cell limit; `new_map` `size` is feet, and 400 ft
   stalls at `wait_ready`), the two villages of villagetool_look on short streets (x = -14 and 14, z -12..12), two crop
   fields past the hamlet's south end and an orchard past its north end, a garden past the market's south end; at home zoom
-  (`a_home_fields`), close (`b_close_crops`, `c_close_orchard`, `c2_close_garden`), a crop ghost (`d_ghost_crops`),
-  after a re-dress with a new seed (`e_home_redressed`, `g_close_crops_redressed`), then the pane at 1280x720 on a
-  picked crop field (`f_720_pane`) and on the market town laying its garden (`h_720_pane_market`, Crops greyed with
-  the caption line's reason). Round 3 (2026-10-31): the pane fits at 720p; the fields do NOT read on the board (no
-  tilled earth or rows inside a crop field's ring, the garden's ring over a market building; villages.md section 11
-  "Look"). `e_home_redressed` is framed off the villages (zoom before look_at leaves the board's near edge in view).
+  (`a_home_fields`), close (`b_close_crops`, `c_close_orchard`, `c2_close_garden`), the pointer by a house where a
+  click's crop field is refused (`d_ghost_crops`, pill "Over a building") and a crop ghost on open ground
+  (`d2_ghost_open`), after a re-dress with a new seed (`e_home_redressed`, `g_close_crops_redressed`), then the pane
+  at 1280x720 on a picked crop field (`f_720_pane`) and on the market town laying its garden (`h_720_pane_market`,
+  Crops greyed with the caption line's reason). The probe's `report` prints the map scale and each field's world
+  place. Framing: `look_at` reads the camera's view offset at once, so after a `zoom` put a `settle` before it (zoom
+  then look_at at once overshot about 10 m up-screen, round 3). Round 3 then (fields3, 2026-10-31): the crop fields
+  read at close zoom as dark furrows and gold rows with no wild plants on them, the orchard as a grove of seven trees,
+  the refusal pill shows; at home zoom the fields sit behind the hamlet's houses and read small (villages.md 11).
 - `jobs/villagetool_recheck.json` (about 40 s, keeps no level; topic villagetool, writes `villagetool2_recheck`): the
   same two villages, then the ghost's paving fill (`a_ghost_market`), a click in the market village laying its 6 m
   floor (`b_market_click`), the hint over the picked plaza (`c_hover_picked`), these three pinned at half size; a full

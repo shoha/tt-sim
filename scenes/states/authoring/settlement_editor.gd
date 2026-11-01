@@ -25,6 +25,8 @@ const REFUSED_FULL := &"full"
 const REFUSED_KIT := &"kit"
 const REFUSED_INVALID := &"invalid"
 const REFUSED_PLAZA := &"plaza"
+## A field would cover a building (VillageFieldGround.covers_building).
+const REFUSED_BUILDING := &"building"
 
 var last_refusal: StringName = &""
 ## What the last paving did: SettlementGround.plan's result without its strokes ({} when nothing
@@ -225,7 +227,8 @@ func resize_plaza(settlement_id: int, index: int, radius: float) -> bool:
 ## Lays a field of `kind` (a Settlement.FIELD_KINDS entry) and `radius` metres at map XZ `at` for
 ## settlement `settlement_id`: its paint (VillageFields.strokes_of) goes into the record's ground,
 ## its furnishings follow from the record. One history group. False (last_refusal) when the
-## settlement is unknown, holds Settlement.MAX_FIELDS, or the field is not allowed.
+## settlement is unknown, holds Settlement.MAX_FIELDS, the field is not allowed, or it would cover
+## a building (REFUSED_BUILDING; a resize is refused so only when it grows).
 func add_field(settlement_id: int, at: Vector2, radius: float, kind: String) -> bool:
 	var held := _editor().document.settlement(settlement_id)
 	last_refusal = &""
@@ -244,6 +247,9 @@ func add_field(settlement_id: int, at: Vector2, radius: float, kind: String) -> 
 	changed.fields.append(field)
 	if MapSettlementIO.settlement_problem(changed) != "":
 		last_refusal = REFUSED_PLAZA
+		return false
+	if _over_building(field):
+		last_refusal = REFUSED_BUILDING
 		return false
 	return _replace(held, changed, "Add field", ["field"], _with_fields(held, [field])) > 0
 
@@ -276,9 +282,20 @@ func resize_field(settlement_id: int, index: int, radius: float) -> bool:
 	if MapSettlementIO.settlement_problem(changed) != "":
 		last_refusal = REFUSED_PLAZA
 		return false
+	if wanted > float(held.fields[index]["radius"]) and _over_building(changed.fields[index]):
+		last_refusal = REFUSED_BUILDING
+		return false
 	var paint := VillageFields.stroke_indices(held.ground, held.fields[index], held.seed_value)
 	var only := _with_fields(held, [changed.fields[index]])
 	return _replace(held, changed, "Resize field", ["field"], only, false, paint) > 0
+
+
+## True when field disc `field` would cover a building of the map (a structure or a street's house).
+func _over_building(field: Dictionary) -> bool:
+	var doc := _editor().document
+	return VillageFieldGround.covers_building(
+		VillageFieldGround.footprints(doc), field["at"], float(field["radius"])
+	)
 
 
 ## A copy of `held` holding only `fields` and no plazas: what a field edit plans its paint on.
@@ -351,15 +368,18 @@ func freeze_street(wall_id: int) -> bool:
 	return _replace(held, changed, "Keep village furnishings") > 0
 
 
-## Puts `settlements` into the document and refreshes the nodes: the undo and redo of a settlement
-## edit, and a live settlements edit.
-func apply_list(settlements: Array[Settlement], _area: Rect2) -> void:
+## Puts `settlements` into the document and refreshes the nodes, and has the scatter regrow `area`
+## (the changed fields, VillageFieldGround.area_of): the undo and redo of a settlement edit, and a
+## live settlements edit.
+func apply_list(settlements: Array[Settlement], area: Rect2) -> void:
 	var e := _editor()
 	var copied: Array[Settlement] = []
 	copied.assign(settlements)
 	e.document.settlements = copied
 	if is_instance_valid(e.map_root):
 		AuthoredSettlements.refresh_map(e.map_root, e.document)
+	if is_instance_valid(e.scatter) and area.has_area():
+		e.scatter.request_region(area)
 	e.edited.emit()
 
 
@@ -494,15 +514,18 @@ func _change(label: String, after: Array[Settlement], _touched: Array[Settlement
 	var e := _editor()
 	_settle()
 	var before := _current()
-	apply_list(after, Rect2())
+	# The fields that changed clear (or give back) the wild plants under them: the scatter regrows
+	# there (VillageFieldGround), here, on undo and redo, and on a peer through the op's area.
+	var area := VillageFieldGround.area_of(before, after)
+	apply_list(after, area)
 	(
 		e
 		. history
 		. record(
 			{
 				"label": label,
-				"undo": apply_list.bind(before, Rect2()),
-				"redo": apply_list.bind(after, Rect2()),
+				"undo": apply_list.bind(before, area),
+				"redo": apply_list.bind(after, area),
 				"bytes": 1024 * (before.size() + after.size()),
 			}
 		)

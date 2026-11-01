@@ -5,7 +5,7 @@ extends RefCounted
 ##   lay {field, kind}            what a Village tool press lays (the pane's Lay row)
 ##   pick {id}                    picks village `id` in the Village tool (its pane follows)
 ##   add {id, at, radius, kind}   lays a field for settlement `id` (map XZ) through the editor
-##   report                       the fields, their strokes and the plants standing
+##   report                       the map scale, each field's world place, the strokes and plants
 ## Every action returns the line the job log prints.
 
 
@@ -41,6 +41,13 @@ static func run(base: Node, step: Dictionary) -> String:
 				% [str(ok), editor.settlements.last_refusal, str(editor.settlements.last_ground)]
 			)
 	var lines := PackedStringArray()
+	# look_at takes world XZ; the fields are recorded in map XZ (editor.to_world maps one to the other).
+	lines.append("map scale %.3f" % editor.map_scale())
+	for settlement in editor.document.settlements:
+		for field in settlement.fields:
+			var at: Vector2 = field["at"]
+			var world := editor.to_world(Vector3(at.x, 0.0, at.y))
+			lines.append("%s at map %s world (%.1f, %.1f)" % [field["kind"], at, world.x, world.z])
 	for settlement in editor.document.settlements:
 		lines.append(
 			"village %d %s seed %d: %d fields, %d strokes"

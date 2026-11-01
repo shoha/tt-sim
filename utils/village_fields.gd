@@ -50,16 +50,20 @@ const MIN_RADIUS_M := {"crops": 4.0, "orchard": 4.0, "garden": 2.5}
 const MAX_RADIUS_M := {"crops": 18.0, "orchard": 16.0, "garden": 8.0}
 
 ## The surfaces each kind paints (palette ids): the ground disc, and the rows or beds over it.
-const EARTH := "dirt"
+## Tilled earth is the dark peat, not the pale `dirt`: at home zoom the pale tan read as one more
+## of the meadow's yellow patches (fields round 3), the dark disc under luminous rows reads as a
+## field from across the board.
+const EARTH := "dirt_peat"
 const MEADOW := "grass_meadow"
 ## Crop rows: green (greens, beans) or gold (wheat), the seed's pick per field.
 const CROP_ROWS: Array[String] = ["grass_alpine", "grass_savanna"]
 ## The ground disc is this much wider than the field (its soft edge is the rest).
 const DISC_FACTOR := 1.05
-## Rows: this far apart, this brush radius (about 1 m of full cover, 0.6 m of earth between), and
-## they stop this share of the disc's half chord short of the rim.
-const ROW_PITCH_M := 2.5
-const ROW_RADIUS_M := 0.8
+## Rows: this far apart, this brush radius (about 1.2 m of full cover, a metre of dark earth
+## between: broad enough to read as stripes at home zoom), and they stop this share of the disc's
+## half chord short of the rim.
+const ROW_PITCH_M := 3.0
+const ROW_RADIUS_M := 0.9
 const ROW_REACH := 0.84
 const BED_PITCH_M := 2.2
 const BED_RADIUS_M := 0.75
@@ -72,8 +76,9 @@ const ORCHARD_TREES: Array[String] = [
 	"grassland_meadow_summer_s1/Tree_Oak_v0",
 	"grassland_meadow_summer_s1/Tree_Oak_v1",
 ]
-const TREE_PITCH_M := 4.6
-const TREE_JITTER_M := 0.7
+## 3.4 m: at 4.6 an orchard of 6 m held one tree (fields round 3, c_close_orchard); now seven.
+const TREE_PITCH_M := 3.4
+const TREE_JITTER_M := 0.5
 const TREE_SCALE := Vector2(0.42, 0.55)
 const TREE_RIM_M := 1.6
 const GARDEN_FLOWERS: Array[String] = [

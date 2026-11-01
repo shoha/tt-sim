@@ -206,6 +206,7 @@ static func source_for(
 		doc.crossings
 		+ WallGeometry.clearance_crossings(doc)
 		+ StructureGeometry.clearance_crossings(doc)
+		+ VillageFieldGround.clearance_crossings(doc)
 	):
 		spans.append_array(
 			[crossing.start.x, crossing.start.y, crossing.end.x, crossing.end.y, crossing.width_m]
@@ -300,6 +301,7 @@ static func grids_for(
 		doc.crossings
 		+ WallGeometry.clearance_crossings(doc)
 		+ StructureGeometry.clearance_crossings(doc)
+		+ VillageFieldGround.clearance_crossings(doc)
 	):
 		spans.append_array(
 			[crossing.start.x, crossing.start.y, crossing.end.x, crossing.end.y, crossing.width_m]

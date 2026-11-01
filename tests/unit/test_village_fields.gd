@@ -17,7 +17,8 @@ func before_each() -> void:
 	_map.name = "LevelMap"
 	add_child_autofree(_map)
 	_history = AuthoringHistory.new()
-	_doc = MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
+	# 40 cells (61 m): the street's houses reach about 9 m each side, and a field may not cover one.
+	_doc = MapDocument.create_flat(Vector2i(40, 40), "grass", "v", 9)
 	StructureRecipes.ensure_served()
 
 
@@ -219,7 +220,7 @@ func test_a_field_is_painted_in_one_entry_and_removing_it_restores_the_weights()
 	var strokes := _doc.settlement(id).ground.size()
 	var entries := _history.undo_count()
 	# Clear of the road's soft edge: paint over another stroke cannot be taken back exactly.
-	assert_true(editor.settlements.add_field(id, Vector2(0, 11), 4.0, "crops"))
+	assert_true(editor.settlements.add_field(id, Vector2(0, 14), 4.0, "crops"))
 	assert_eq(_history.undo_count(), entries + 1, "one history entry")
 	assert_true(_doc.surface_ids.has(VillageFields.EARTH))
 	var laid := VillageFields.strokes_of(_doc.settlement(id).fields[0], _doc.settlement(id).seed_value)
@@ -242,8 +243,8 @@ func test_resize_repaints_a_field_and_clear_takes_everything_back() -> void:
 	var street := _street(editor)
 	var bare := _paint_state(_doc)
 	var id := editor.settlements.dress(street, "farming_hamlet")
-	assert_true(editor.settlements.add_field(id, Vector2(0, 9), 6.0, "orchard"))
-	assert_true(editor.settlements.add_field(id, Vector2(0, -9), 4.0, "garden"))
+	assert_true(editor.settlements.add_field(id, Vector2(0, 16), 6.0, "orchard"))
+	assert_true(editor.settlements.add_field(id, Vector2(0, -15), 4.0, "garden"))
 	var two := _paint_state(_doc)
 	assert_true(editor.settlements.resize_field(id, 0, 4.0))
 	assert_eq(_doc.settlement(id).fields[0]["radius"], 4.0)
@@ -263,7 +264,7 @@ func test_a_village_holds_four_fields() -> void:
 	var editor := _editor()
 	var id := editor.settlements.dress(_street(editor), "farming_hamlet")
 	for k in Settlement.MAX_FIELDS:
-		assert_true(editor.settlements.add_field(id, Vector2(-9 + 6 * k, 9), 2.5, "garden"))
+		assert_true(editor.settlements.add_field(id, Vector2(-9 + 6 * k, 13), 2.5, "garden"))
 	assert_false(editor.settlements.add_field(id, Vector2(0, -9), 3.0, "garden"))
 	assert_eq(editor.settlements.last_refusal, SettlementEditor.REFUSED_FULL)
 
@@ -271,13 +272,13 @@ func test_a_village_holds_four_fields() -> void:
 func test_a_peer_ends_level_through_add_resize_remove_and_their_undos() -> void:
 	var host := _editor()
 	var street := _street(host)
-	var peer_doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
+	var peer_doc := MapDocument.create_flat(Vector2i(40, 40), "grass", "v", 9)
 	peer_doc.walls = _doc.walls.duplicate()
 	var peer := _editor(peer_doc, AuthoringHistory.new())
 	var entries: Array[Dictionary] = []
 	_history.recorded.connect(func(entry: Dictionary) -> void: entries.append(entry))
 	var id := host.settlements.dress(street, "farming_hamlet")
-	assert_true(host.settlements.add_field(id, Vector2(0, 9), 6.0, "crops"))
+	assert_true(host.settlements.add_field(id, Vector2(0, 16), 6.0, "crops"))
 	assert_true(host.settlements.resize_field(id, 0, 5.0))
 	assert_true(host.settlements.remove_field(id, 0))
 	assert_eq(entries.size(), 4)
@@ -319,7 +320,7 @@ func test_with_field_picked_a_click_lays_the_kits_default_field_and_picks_it() -
 	var mode := VillageBrush.new()
 	var tool := _tool(editor)
 	mode.set_lay(true)
-	tool.hit = Vector3(0, 0, 9)
+	tool.hit = Vector3(0, 0, 18)
 	mode.frame(tool)
 	assert_false(mode.press(tool))
 	mode.end(tool)
@@ -355,7 +356,7 @@ func test_a_harbour_town_lays_no_field_and_says_why() -> void:
 func test_orchard_trees_are_drawn_on_the_map_as_derived_plants() -> void:
 	var editor := _editor()
 	var id := editor.settlements.dress(_street(editor), "farming_hamlet")
-	assert_true(editor.settlements.add_field(id, Vector2(0, 8), 7.0, "orchard"))
+	assert_true(editor.settlements.add_field(id, Vector2(0, 17), 7.0, "orchard"))
 	var plants := AuthoredFieldPlants.plants_of(_doc)
 	assert_false(plants.is_empty())
 	var layer := _map.get_node_or_null(AuthoredFieldPlants.NODE_NAME) as AuthoredFieldPlants

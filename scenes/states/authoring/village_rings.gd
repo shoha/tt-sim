@@ -99,7 +99,7 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> v
 		return
 	var p := editor.to_map_xz(brush.hit)
 	var village := mode.ghost_village(editor, p)
-	var refusal := mode.refusal_at(doc, village)
+	var refusal := mode.refusal_at(doc, village, p)
 	if refusal != "":
 		BridgeBrush.draw_marker(canvas, camera, brush.hit, TINT_REFUSED)
 		BridgeBrush.draw_pill(canvas, pill_at, short_refusal(refusal), REFUSED_COLOR)
@@ -146,6 +146,8 @@ static func short_refusal(refusal: String) -> String:
 			return VillageBrush.FIELDS_FULL_SHORT
 		VillageBrush.NO_FIELDS:
 			return VillageBrush.NO_FIELDS_SHORT
+		VillageBrush.ON_BUILDING:
+			return VillageBrush.ON_BUILDING_SHORT
 	return VillageBrush.NO_VILLAGE_SHORT
 
 
