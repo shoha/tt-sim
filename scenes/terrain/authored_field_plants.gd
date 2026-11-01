@@ -2,7 +2,8 @@ class_name AuthoredFieldPlants
 extends Node3D
 
 ## The plants of the document's village fields as nodes (the orchard trees, the garden's flowers
-## and shrubs; VillageFields.plants_of): a derived layer like AuthoredSettlements beside it, so
+## and shrubs; VillageFields.plants_of) and of its hedged village boundaries
+## (VillageBoundary.hedge_of): a derived layer like AuthoredSettlements beside it, so
 ## nothing here is saved or sent and every peer derives the same plants from the records. The
 ## plants are library assets drawn through the scatter's own builder (ScatterGlbUtils.build_scatter,
 ## PaletteLibrary.resolve), one MultiMesh per species, stood on the ground; a plant on water is
@@ -43,6 +44,10 @@ static func plants_of(doc: MapDocument) -> Dictionary:
 	var items: Array[Dictionary] = []
 	for settlement in doc.settlements:
 		items.append_array(VillageFields.plants_of(settlement))
+		# A hedged village's boundary (VillageBoundary.hedge_of) is the same meadow bushes.
+		if settlement.boundary == VillageBoundary.HEDGE:
+			var planned := VillageBoundary.plan(doc, settlement)
+			items.append_array(VillageBoundary.hedge_of(planned, settlement.seed_value))
 	var out := {}
 	if items.is_empty():
 		return out

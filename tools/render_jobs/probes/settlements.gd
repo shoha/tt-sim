@@ -6,7 +6,10 @@ extends RefCounted
 ##   dress {id, kit, wealth, density}    dresses street `id` (default: the first), bakes the cells
 ##                                       now and reports them
 ##   plaza {id, at, radius}              opens a paved plaza disc for settlement `id` (world XZ)
-##   dress also takes {bridges: false} (no bridges: the before shot of job bridges_look)
+##   dress also takes {bridges: false} (no bridges: the before shot of job bridges_look) and
+##                                       {boundary: false} (no boundary: bounds_look's before)
+##   boundary {id, kind}                 sets settlement `id`'s boundary ("kit": the kit's draw
+##                                       for its seed, "" none, wall, low_wall, hedge)
 ##   redress / clear {id}              the Re-dress and Clear buttons (settlement id, default 1)
 ##   pave {id}                           lays the ground and bridges again with the same seed
 ##   select {id}                         picks the street in the Street tool, so its bar shows
@@ -43,6 +46,21 @@ static func run(base: Node, step: Dictionary) -> String:
 			var id := int(step.get("id", 1))
 			var ok := ctrl.editor.settlements.pave(id)
 			return _flush(ctrl.editor, "pave %d %s; %s" % [id, str(ok), bridge_note(ctrl.editor)])
+		"boundary":
+			var id := int(step.get("id", 1))
+			var held := ctrl.editor.document.settlement(id)
+			var kind := String(step.get("kind", "kit"))
+			if kind == "kit" and held != null:
+				kind = VillageBoundary.kind_for(held.kit, held.seed_value)
+			var ok := ctrl.editor.settlements.set_boundary(id, kind)
+			var planned := VillageBoundary.plan(ctrl.editor.document, ctrl.editor.document.settlement(id))
+			return _flush(
+				ctrl.editor,
+				(
+					"boundary %d %s %s: %d runs, %d gates"
+					% [id, kind, str(ok), (planned["runs"] as Array).size(), int(planned["gates"])]
+				)
+			)
 		"select":
 			return _select(base, int(step.get("id", 1)))
 		"undo":
@@ -80,6 +98,7 @@ static func _dress(editor: AuthoringEditor, step: Dictionary) -> String:
 		street = editor.document.walls[0].id
 	editor.settlements.lays_ground = bool(step.get("ground", true))
 	editor.settlements.lays_bridges = bool(step.get("bridges", true))
+	editor.settlements.lays_boundary = bool(step.get("boundary", true))
 	var started := Time.get_ticks_usec()
 	var id := editor.settlements.dress(
 		street,
@@ -92,6 +111,7 @@ static func _dress(editor: AuthoringEditor, step: Dictionary) -> String:
 	var made := layer.flush() if layer != null else 0
 	editor.settlements.lays_ground = true
 	editor.settlements.lays_bridges = true
+	editor.settlements.lays_boundary = true
 	return (
 		"dressed settlement %d on street %d: dress call %.1f ms, %d cells baked in %.1f ms; %s; %s; %s"
 		% [

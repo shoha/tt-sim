@@ -12,7 +12,8 @@ extends RefCounted
 ##                       "plazas": [{"at": [x, z], "radius"}, ...]  (left out when there are none),
 ##                       "ground": SettlementGroundIO's form  (left out when there are none),
 ##                       "fields": [{"at": [x, z], "radius", "kind"}, ...]  (left out when none),
-##                       "bridges": [crossing id, ...]  (left out when none)}
+##                       "bridges": [crossing id, ...]  (left out when none),
+##                       "boundary": "wall" | "low_wall" | "hedge"  (left out when none)}
 ##
 ## A map written before settlements has no such entry and loads unchanged; an older build ignores
 ## the entry (MapDocumentIO.KNOWN_ENTRIES) and drops it on its next save. Everything read is
@@ -101,6 +102,8 @@ static func settlement_problem(settlement: Settlement) -> String:
 	for crossing_id in settlement.bridges:
 		if crossing_id < 1 or crossing_id > Crossing.MAX_ID:
 			return "a bridge id outside 1..%d" % Crossing.MAX_ID
+	if settlement.boundary != "" and not VillageBoundary.KINDS.has(settlement.boundary):
+		return "an unknown boundary kind"
 	var ground_reason := SettlementGroundIO.problem(settlement.ground)
 	if ground_reason != "":
 		return ground_reason
@@ -196,6 +199,8 @@ static func settlement_json(settlement: Settlement) -> Dictionary:
 		out["fields"] = fields
 	if not settlement.bridges.is_empty():
 		out["bridges"] = Array(settlement.bridges)
+	if settlement.boundary != "":
+		out["boundary"] = settlement.boundary
 	return out
 
 
@@ -292,6 +297,10 @@ static func _settlement_from(value: Variant) -> Variant:
 		if crossing_id == null or settlement.bridges.has(crossing_id):
 			return "a bridge id is not usable"
 		settlement.bridges.append(crossing_id)
+	var boundary: Variant = value.get("boundary", "")
+	if not boundary is String or (boundary != "" and not VillageBoundary.KINDS.has(boundary)):
+		return "the boundary is not a known kind"
+	settlement.boundary = boundary
 	if value.has("ground"):
 		var ground: Variant = SettlementGroundIO.from_json(value["ground"])
 		if ground == null:
