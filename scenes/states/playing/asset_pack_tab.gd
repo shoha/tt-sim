@@ -193,9 +193,27 @@ func _add_item_to_list(item: Dictionary) -> void:
 ## so the id is resolved on the main thread in _apply_icon instead.
 static func _load_icon_task(tab_id: int, path: String, cache_key: String, index: int) -> void:
 	var image := Image.new()
-	if image.load(path) != OK:
+	if _decode_icon(image, path) != OK:
 		return
 	_apply_icon.call_deferred(tab_id, image, cache_key, index)
+
+
+## Decodes the icon's bytes into `image`. A PNG, JPEG or WebP is read through FileAccess and
+## the matching buffer decoder, not Image.load(): for a res:// file (a built-in pack's icon,
+## shipped as a raw keep file) Image.load() logs the "will not work on export" warning on every
+## icon, although the raw-bytes route is exactly what works in an export.
+static func _decode_icon(image: Image, path: String) -> Error:
+	var bytes := FileAccess.get_file_as_bytes(path)
+	if bytes.is_empty():
+		return ERR_FILE_CANT_READ
+	match path.get_extension().to_lower():
+		"png":
+			return image.load_png_from_buffer(bytes)
+		"jpg", "jpeg":
+			return image.load_jpg_from_buffer(bytes)
+		"webp":
+			return image.load_webp_from_buffer(bytes)
+	return image.load(path)
 
 
 ## Main-thread end of the icon pipeline. Resolves the tab from its instance id and drops

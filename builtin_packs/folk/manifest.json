@@ -1,0 +1,29 @@
+{
+  "pack_id": "folk",
+  "display_name": "Folk",
+  "version": "1.0",
+  "author": "Quaternius",
+  "license": "CC0-1.0",
+  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "source_url": "https://quaternius.com/packs/universalbasecharacters.html https://quaternius.com/packs/modularcharacteroutfitsfantasy.html",
+  "credit": "People by Quaternius (CC0)",
+  "obtained": "2026-11-01",
+  "assets": {
+    "villager_man": {"display_name": "Villager (man)", "variants": {"default": {"model": "villager_man.glb", "icon": "villager_man.png"}}},
+    "farmhand_man": {"display_name": "Farmhand (man)", "variants": {"default": {"model": "farmhand_man.glb", "icon": "farmhand_man.png"}}},
+    "elder_man": {"display_name": "Elder (man)", "variants": {"default": {"model": "elder_man.glb", "icon": "elder_man.png"}}},
+    "labourer_man": {"display_name": "Labourer (man)", "variants": {"default": {"model": "labourer_man.glb", "icon": "labourer_man.png"}}},
+    "woodsman_man": {"display_name": "Woodsman (man)", "variants": {"default": {"model": "woodsman_man.glb", "icon": "woodsman_man.png"}}},
+    "scout_man": {"display_name": "Scout (man)", "variants": {"default": {"model": "scout_man.glb", "icon": "scout_man.png"}}},
+    "hunter_man": {"display_name": "Hunter (man)", "variants": {"default": {"model": "hunter_man.glb", "icon": "hunter_man.png"}}},
+    "wanderer_man": {"display_name": "Wanderer (man)", "variants": {"default": {"model": "wanderer_man.glb", "icon": "wanderer_man.png"}}},
+    "villager_woman": {"display_name": "Villager (woman)", "variants": {"default": {"model": "villager_woman.glb", "icon": "villager_woman.png"}}},
+    "farmhand_woman": {"display_name": "Farmhand (woman)", "variants": {"default": {"model": "farmhand_woman.glb", "icon": "farmhand_woman.png"}}},
+    "matron_woman": {"display_name": "Matron (woman)", "variants": {"default": {"model": "matron_woman.glb", "icon": "matron_woman.png"}}},
+    "herbalist_woman": {"display_name": "Herbalist (woman)", "variants": {"default": {"model": "herbalist_woman.glb", "icon": "herbalist_woman.png"}}},
+    "ranger_woman": {"display_name": "Ranger (woman)", "variants": {"default": {"model": "ranger_woman.glb", "icon": "ranger_woman.png"}}},
+    "scout_woman": {"display_name": "Scout (woman)", "variants": {"default": {"model": "scout_woman.glb", "icon": "scout_woman.png"}}},
+    "huntress_woman": {"display_name": "Huntress (woman)", "variants": {"default": {"model": "huntress_woman.glb", "icon": "huntress_woman.png"}}},
+    "wanderer_woman": {"display_name": "Wanderer (woman)", "variants": {"default": {"model": "wanderer_woman.glb", "icon": "wanderer_woman.png"}}}
+  }
+}
