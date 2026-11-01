@@ -204,6 +204,16 @@ static func _choose(
 	return best
 
 
+## Whether a disc of `radius` at map point `at` would cross a plaza or field that stands in any
+## village of `doc` (the ghost is not drawn across one).
+static func overlaps_any(doc: MapDocument, at: Vector2, radius: float) -> bool:
+	for settlement in doc.settlements:
+		for disc in settlement.plazas + settlement.fields:
+			if at.distance_to(disc["at"] as Vector2) < radius + float(disc["radius"]):
+				return true
+	return false
+
+
 # --- moving a plaza ----------------------------------------------------------------------------
 
 

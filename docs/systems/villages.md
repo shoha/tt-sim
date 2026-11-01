@@ -679,10 +679,14 @@ While a drag sizes a plaza its disc is a flat tint of the kit's paving at the ne
 release) and the pane's size reads the same width live (the mode's signature carries the preview radius;
 `VillagePlazas.with_preview`). A pill says what a press does ("Click for a plaza, or drag to size it", with two or more
 villages "Click for a plaza in village 2, ...", "Drag the edge to size this plaza", over a plaza's interior "Drag to
-move this plaza, click to pick it" (plazamove), over the picked one "Drag to move it, Delete removes it", "Plaza  33 ft
+move this plaza, click to pick it" (plazamove), over the picked one "Drag to move it, drag the edge to size it", "Plaza  33 ft
 across" while sizing, "Release to put it here" (or "... to move it to village 2") while a plaza is carried, a
 refusal in salmon). A carried plaza is a paving-tint disc in the picked gold with its handle dots, the place it left
-a calm ring, and over a refused place a salmon disc; a field's pill keeps its old words ("Drag the edge to size it,
+a calm ring at full ink, and over a refused place a disc washed in the erase salmon (0.28) inside the erase ring's
+5.5 px ink-backed stroke (plazamove fix round: the paving-grey fill turned bright grass chalky olive, so the carried
+disc and the ghost now share one warm wash, `WASH_TINT` pulled 0.7 over the kit's paving at 0.2 to 0.24 alpha; the
+handle dots carry an ink outline; the ghost is a dot and a pill, never a disc, where it would cross a standing plaza,
+`VillagePlazas.overlaps_any`); the pane's caption reads "Drag a plaza to move it, drag its edge to size it."; a field's pill keeps its old words ("Drag the edge to size it,
 Delete removes it"). The ghost's pill sits just past the ghost's right rim so it never covers it. With two or more
 villages each street carries a glass chip with its name ("Village 2", gold when picked) at its middle
 (`VillagePlazas.anchor_of`).

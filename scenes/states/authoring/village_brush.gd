@@ -62,7 +62,7 @@ const WATER := "A plaza cannot stand in water: put it on dry ground."
 const STEEP := "A plaza needs level ground: that slope is too steep."
 const REACH := "That is too far from any village: a plaza stays near its village."
 ## A plaza dropped over a house (ON_BUILDING says it for a field).
-const PLAZA_ON_BUILDING := "A plaza cannot cover a building: put it on open ground."
+const PLAZA_ON_BUILDING := "A plaza cannot cover a building."
 const PLAZA_ON_BUILDING_SHORT := "Over a building: put it on open ground"
 ## The same in the pill's few words, for a plaza held over a refused place.
 const WATER_SHORT := "Too wet: needs dry ground"
@@ -71,7 +71,7 @@ const REACH_SHORT := "Too far from the village"
 ## The words beside the cursor.
 const HOVER_RIM := "Drag the edge to size this plaza"
 const HOVER_INSIDE := "Drag to move this plaza, click to pick it"
-const HOVER_PICKED := "Drag to move it, Delete removes it"
+const HOVER_PICKED := "Drag to move it, drag the edge to size it"
 const HOVER_PICKED_FIELD := "Drag the edge to size it, Delete removes it"
 ## The pill while a held plaza is over a place it may stand.
 const MOVE_HINT := "Release to put it here"

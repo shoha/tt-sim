@@ -98,6 +98,14 @@ func test_the_rim_band_and_the_handle_dots_win_over_the_inside_and_the_inside_is
 	assert_eq(reach["part"], VillagePlazas.PART_RIM, "within a dot's reach it sizes")
 
 
+func test_a_ghost_disc_that_would_cross_a_standing_plaza_is_known() -> void:
+	var village := Settlement.make(1, "market_town", 1, 5)
+	village.plazas = [{"at": Vector2(0, 0), "radius": 6.0}]
+	_doc.settlements = [village]
+	assert_true(VillagePlazas.overlaps_any(_doc, Vector2(9, 0), 5.0), "the discs cross")
+	assert_false(VillagePlazas.overlaps_any(_doc, Vector2(12, 0), 5.0), "clear of it")
+
+
 func test_a_press_is_a_move_only_past_the_click_threshold() -> void:
 	var pressed := Vector2(2, 3)
 	assert_false(VillagePlazas.is_move(pressed, pressed))
@@ -408,5 +416,8 @@ func test_the_hover_pill_says_a_press_inside_drags_it_and_the_rim_still_sizes() 
 	mode.select(scene["id"], 0)
 	assert_eq(VillageRings.hover_text(_doc, mode), VillageBrush.HOVER_PICKED)
 	assert_true(VillageBrush.HOVER_PICKED.contains("move"))
+	assert_true(VillageBrush.HOVER_PICKED.contains("size"), "the picked pill keeps the sizing hint")
+	assert_true(VillageToolPane.PICK_NOTE.contains("move"), "the pane names the new gesture")
+	assert_false(VillageBrush.PLAZA_ON_BUILDING.contains(":"), "one short sentence")
 	_frame(mode, tool, Vector3(-4, 0, 10))
 	assert_eq(VillageRings.hover_text(_doc, mode), VillageBrush.HOVER_RIM)

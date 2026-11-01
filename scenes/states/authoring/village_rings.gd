@@ -22,11 +22,19 @@ const READOUT_COLOR := WallBrush.READOUT_COLOR
 const RING_POINTS := 56
 ## A calm ring's fill, and the paving tints of the ghost and of a held drag.
 const FILL_ALPHA := 0.13
-const GHOST_FILL_ALPHA := 0.5
-const PREVIEW_FILL_ALPHA := 0.6
-## Paving tints are lifted toward white this much, so a disc reads luminous over the ground rather
-## than as a grey film (the round 2 drag capture).
-const FILL_LIFT := 0.25
+const GHOST_FILL_ALPHA := 0.2
+const PREVIEW_FILL_ALPHA := 0.24
+## A disc the author carries or aims is a warm wash, not the paving's own grey: the kit's paving
+## colour is pulled this far toward WASH_TINT (warm paper gold), so a faint fill lights the grass
+## instead of turning it chalky olive (plazamove critic: the grey-khaki haze over bright grass,
+## blue doubling while red and green stayed).
+const WASH_TINT := Color("#FFE2A0")
+const WASH_PULL := 0.7
+## A refused place is washed in the one erase salmon at this alpha (the ring is the erase ring's
+## own stroke, 5.5 px over ink).
+const REFUSED_FILL_ALPHA := 0.28
+## The ink outline round a handle dot, beyond its radius, in pixels.
+const DOT_INK_PX := 2.5
 ## Line weights (times the brush cursor's widths) and handle dot radii, in pixels. The ghost and a
 ## calm ring take the brush ring's full stroke (an ink outline under the tint): at 0.55 and 0.9 with
 ## the ink thinned they were a pale 1-2 px hairline, about 1.2:1 over bright grass (fields round 4).
@@ -68,8 +76,10 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> v
 					radius = mode.preview_radius()
 					style["fill"] = _fill(editor, settlement.kit, str(plaza.get("kind", "")), PREVIEW_FILL_ALPHA)
 				if mode.gesture == VillageBrush.GESTURE_MOVE and picked:
-					# Where it stands stays a quiet ring; the moving disc is drawn below.
+					# Where it stands stays a quiet ring, at full ink so it reads over cobbles; the
+					# moving disc is drawn below.
 					style = ring_style(false, false)
+					style["strength"] = 1.0
 				draw_plaza(canvas, camera, editor, plaza["at"], radius, style)
 	if doc.settlements.size() > 1:
 		for settlement in doc.settlements:
@@ -111,7 +121,9 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> v
 	if refusal == VillageBrush.ON_BUILDING:
 		# The disc a click would lay, in the refusal's salmon: the author sees which house it covers.
 		var refused_kind := mode.laying_kind(doc, village)
-		var refused_style := ghost_style(_alpha(TINT_REFUSED, FILL_ALPHA), TINT_REFUSED)
+		var refused_style := ghost_style(
+			_alpha(TINT_REFUSED, REFUSED_FILL_ALPHA), TINT_REFUSED
+		)
 		draw_plaza(
 			canvas, camera, editor, p, VillageFields.radius_for_drag(p, p, refused_kind), refused_style
 		)
@@ -125,6 +137,13 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> v
 		var radius := VillagePlazas.DEFAULT_RADIUS_M
 		if kind != "":
 			radius = VillageFields.radius_for_drag(p, p, kind)
+		if VillagePlazas.overlaps_any(doc, p, radius):
+			# No second disc across one that stands: the pointer is a dot and the pill speaks.
+			BridgeBrush.draw_marker(canvas, camera, brush.hit, TINT_HOVER)
+			BridgeBrush.draw_pill(
+				canvas, pill_at, VillageBrush.ghost_hint(doc, village, kind), READOUT_COLOR
+			)
+			return
 		var ring := draw_plaza(canvas, camera, editor, p, radius, style)
 		BridgeBrush.draw_pill(
 			canvas, beside(ring, pill_at), VillageBrush.ghost_hint(doc, village, kind), READOUT_COLOR
@@ -148,8 +167,7 @@ static func _draw_move(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush
 	if reason == &"":
 		style["fill"] = _fill(editor, held.kit, "", PREVIEW_FILL_ALPHA)
 	else:
-		style = ghost_style(_alpha(TINT_REFUSED, FILL_ALPHA), TINT_REFUSED)
-		style["weight"] = WEIGHT_PICKED
+		style = ghost_style(_alpha(TINT_REFUSED, REFUSED_FILL_ALPHA), TINT_REFUSED)
 		style["handles"] = HANDLE_PX
 	var ring := draw_plaza(cursor.canvas, cursor.camera, editor, at, radius, style)
 	var text := VillageBrush.short_reason(reason)
@@ -286,7 +304,9 @@ static func draw_plaza(
 		return ring
 	for point in VillagePlazas.handle_points(at, radius):
 		var dot: Vector2 = screen.call(point)
-		canvas.draw_circle(dot, dot_px + 1.5, _alpha(SHADOW, 0.8))
+		var ink := ThemeColors.INK
+		ink.a = BrushCursor.INK_ALPHA * tint.a
+		canvas.draw_circle(dot, dot_px + DOT_INK_PX, ink)
 		canvas.draw_circle(dot, dot_px, tint)
 	return ring
 
@@ -318,7 +338,7 @@ static func _fill(editor: AuthoringEditor, kit: String, kind: String, alpha: flo
 ## Kit `kit`'s paving colour at `alpha`, from the editor's palette.
 static func _paving(editor: AuthoringEditor, kit: String, alpha: float) -> Color:
 	var paving := VillageSwatch.paving_color(kit, editor.palette_root)
-	return _alpha(paving.lerp(Color.WHITE, FILL_LIFT), alpha)
+	return _alpha(paving.lerp(WASH_TINT, WASH_PULL), alpha)
 
 
 ## `color` with alpha `alpha`.
