@@ -27,9 +27,11 @@ const PREVIEW_FILL_ALPHA := 0.6
 ## Paving tints are lifted toward white this much, so a disc reads luminous over the ground rather
 ## than as a grey film (the round 2 drag capture).
 const FILL_LIFT := 0.25
-## Line weights (times the brush cursor's widths) and handle dot radii, in pixels.
-const WEIGHT_GHOST := 0.55
-const WEIGHT_CALM := 0.9
+## Line weights (times the brush cursor's widths) and handle dot radii, in pixels. The ghost and a
+## calm ring take the brush ring's full stroke (an ink outline under the tint): at 0.55 and 0.9 with
+## the ink thinned they were a pale 1-2 px hairline, about 1.2:1 over bright grass (fields round 4).
+const WEIGHT_GHOST := 1.0
+const WEIGHT_CALM := 1.0
 const WEIGHT_PICKED := 1.35
 const WEIGHT_HOVER := 1.75
 const HANDLE_PX := 5.5
@@ -100,6 +102,13 @@ static func draw(brush: BrushTool, cursor: BrushCursor, mode: VillageBrush) -> v
 	var p := editor.to_map_xz(brush.hit)
 	var village := mode.ghost_village(editor, p)
 	var refusal := mode.refusal_at(doc, village, p)
+	if refusal == VillageBrush.ON_BUILDING:
+		# The disc a click would lay, in the refusal's salmon: the author sees which house it covers.
+		var refused_kind := mode.laying_kind(doc, village)
+		var refused_style := ghost_style(_alpha(TINT_REFUSED, FILL_ALPHA), TINT_REFUSED)
+		draw_plaza(
+			canvas, camera, editor, p, VillageFields.radius_for_drag(p, p, refused_kind), refused_style
+		)
 	if refusal != "":
 		BridgeBrush.draw_marker(canvas, camera, brush.hit, TINT_REFUSED)
 		BridgeBrush.draw_pill(canvas, pill_at, short_refusal(refusal), REFUSED_COLOR)
@@ -160,18 +169,19 @@ static func ring_style(picked: bool, hovered: bool) -> Dictionary:
 		weight = WEIGHT_HOVER
 	return {
 		"tint": TINT_PICKED if picked else (TINT_HOVER if hovered else TINT_CALM),
-		"strength": 1.0 if (picked or hovered) else 0.55,
+		"strength": 1.0 if (picked or hovered) else 0.85,
 		"weight": weight,
 		"fill": Color.TRANSPARENT,
 		"handles": HANDLE_HOVER_PX if hovered else (HANDLE_PX if picked else 0.0),
 	}
 
 
-## The ghost's look: a thin chalk line over a faint disc of `fill` (the kit's paving).
-static func ghost_style(fill: Color) -> Dictionary:
+## The ghost's look: the brush ring's chalk stroke over a disc of `fill` (the kit's paving or the
+## field kind's tint), in `tint` (salmon for a disc a press would be refused).
+static func ghost_style(fill: Color, tint: Color = TINT_HOVER) -> Dictionary:
 	return {
-		"tint": TINT_HOVER,
-		"strength": 0.75,
+		"tint": tint,
+		"strength": 1.0,
 		"weight": WEIGHT_GHOST,
 		"fill": fill,
 		"handles": 0.0,
@@ -229,11 +239,9 @@ static func draw_plaza(
 	RenderingServer.canvas_item_add_triangle_array(
 		canvas.get_canvas_item(), BrushCursor.fan_indices(ring.size()), fan, colors
 	)
-	var glow := _alpha(tint, BrushCursor.GLOW_ALPHA * strength)
-	var ink := _alpha(SHADOW, BrushCursor.INK_ALPHA * 0.6 * strength)
-	canvas.draw_polyline(ring, glow, BrushCursor.GLOW_WIDTH * weight, true)
-	canvas.draw_polyline(ring, ink, BrushCursor.INK_WIDTH * weight, true)
-	canvas.draw_polyline(ring, _alpha(tint, strength), BrushCursor.LINE_WIDTH * weight, true)
+	# The brush ring's own stroke (glow, ink, line), the one every line tool and plaza shares.
+	for stroke: Array in BrushCursor.ring_strokes(_alpha(tint, strength)):
+		canvas.draw_polyline(ring, stroke[0], float(stroke[1]) * weight, true)
 	var dot_px := float(style["handles"])
 	if dot_px <= 0.0:
 		return ring

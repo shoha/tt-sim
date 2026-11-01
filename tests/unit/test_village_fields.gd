@@ -7,6 +7,12 @@ extends GutTest
 ## back byte for byte and a live-edit peer ending level, the brush laying a field, the plants layer
 ## and the pane's Lay and kind rows.
 
+## The pane's rail width at 1280x720, and the height it may take there (round 4, P2-4, measured in
+## fields_look's f_720_pane: content scale 1.4 makes the canvas 771 px tall, the pane starts at 122
+## under the map-name block), less 60 px of slack.
+const PANE_WIDTH_PX := 364.0
+const PANE_BUDGET_PX := 771.0 - 122.0 - 60.0
+
 var _map: Node3D = null
 var _doc: MapDocument = null
 var _history: AuthoringHistory = null
@@ -110,6 +116,32 @@ func test_a_garden_has_beds_and_flowers_and_an_orchard_a_loose_grid_of_trees() -
 	var other := _hamlet([garden, _field(Vector2(30, 0), 8.0, "orchard")])
 	other.seed_value = 6
 	assert_ne(var_to_str(VillageFields.plants_of(other)), var_to_str(plants), "seeds differ")
+
+
+func test_an_orchard_has_mown_alleys_and_blossom_and_a_garden_broad_beds() -> void:
+	var orchard := _field(Vector2(30, 0), 8.0, "orchard")
+	var alleys := VillageFields.strokes_of(orchard, 5).slice(1)
+	assert_between(alleys.size(), 3, 7, "a few mown alleys between the tree rows")
+	for alley: Dictionary in alleys:
+		assert_eq(alley["surface"], VillageFields.ALLEY)
+		for key in ["from", "to"]:
+			assert_lt((alley[key] as Vector2).distance_to(Vector2(30, 0)), 8.0, "on the disc")
+	var record := _hamlet([orchard])
+	var plants := VillageFields.plants_of(record)
+	var trees := plants.filter(
+		func(p: Dictionary) -> bool: return VillageFields.ORCHARD_TREES.has(p["asset"])
+	)
+	var blossom := plants.filter(
+		func(p: Dictionary) -> bool: return VillageFields.BLOSSOM.has(p["asset"])
+	)
+	assert_eq(blossom.size(), trees.size() * VillageFields.BLOSSOM_COUNT, "blossom round each tree")
+	var garden := _field(Vector2.ZERO, VillageFields.DEFAULT_RADIUS_M["garden"], "garden")
+	var beds := VillageFields.strokes_of(garden, 5).slice(1)
+	assert_eq(beds.size(), 3, "a default garden holds three broad beds")
+	var flowers := VillageFields.plants_of(_hamlet([garden])).filter(
+		func(p: Dictionary) -> bool: return VillageFields.GARDEN_FLOWERS.has(p["asset"])
+	)
+	assert_gt(flowers.size(), 6 * beds.size(), "each bed one mass of flowers, not a dotted line")
 
 
 func test_the_strokes_a_field_laid_are_found_among_the_others() -> void:
@@ -378,10 +410,23 @@ func test_the_pane_offers_plaza_or_field_and_the_kinds_the_village_keeps() -> vo
 	assert_true(pane.lay_field.visible)
 	assert_eq(pane.lay_field.tiles.selected, &"village_kind_garden", "the kit's default is lit")
 	assert_eq(pane.plaza_title.text, VillageToolPane.field_room_text(0))
-	assert_eq(pane.hint.text, VillageToolPane.FIELD_HINT % "a garden", "the hint says the gesture")
+	assert_eq(
+		pane.hint.text,
+		VillageToolPane.FIELD_HINT % VillageToolPane.FIELD_NOUNS["garden"],
+		"the hint says the gesture"
+	)
+	assert_true(pane.hint.text.ends_with("a garden."), "the noun never wraps alone")
 	var crops := pane.lay_field.tiles.get_node(^"village_kind_crops") as Button
 	assert_true(crops.disabled, "a market town keeps no crops")
-	assert_eq(pane.lay_field.note.text, "Market town keeps no crops", "said in the pane, not a tip")
+	assert_eq(pane.lay_note.text, "Market town keeps no crops", "said in the pane, not a tip")
+	assert_true(pane.lay_note.visible)
+	# The greyed tile's tip says the same words.
+	assert_string_contains(crops.tooltip_text, pane.lay_note.text)
+	assert_eq(pane.lay_field.caption, "Lay out")
+	assert_lt(
+		pane.lay_field.get_index(), pane.kit_field.get_index(), "the most used row comes first"
+	)
+	assert_eq(pane.lay_note.get_index(), pane.lay_field.get_index() + 1, "under its tiles")
 	var picks: Array = []
 	pane.lay_picked.connect(func(field: bool, kind: String) -> void: picks.append([field, kind]))
 	pane._on_lay_tile(&"village_kind_orchard")
@@ -395,10 +440,86 @@ func test_the_pane_offers_plaza_or_field_and_the_kinds_the_village_keeps() -> vo
 	pane.show_state(state)
 	assert_eq(pane.lay_field.tiles.selected, &"village_lay_plaza")
 	assert_eq(pane.hint.text, VillageToolPane.HINT)
-	assert_eq(pane.lay_field.note.text, "Harbour town keeps no fields")
+	assert_eq(pane.lay_note.text, "Harbour town keeps no fields")
 	for kind in Settlement.FIELD_KINDS:
 		var tile := pane.lay_field.tiles.get_node(NodePath("village_kind_" + kind)) as Button
 		assert_true(tile.disabled, "%s greyed in a harbour town" % kind)
+
+
+## The pane on glass at its rail width, holding `villages` villages with village 1 of `kit` picked
+## and a field picked (the size row shown), laid out.
+func _laid_out_pane(villages: int, kit: String) -> VillageToolPane:
+	var host := VBoxContainer.new()
+	host.theme = load(ThemeColors.GLASS_THEME_PATH)
+	host.size = Vector2(PANE_WIDTH_PX, 900)
+	add_child_autofree(host)
+	var pane := VillageToolPane.new()
+	host.add_child(pane)
+	var doc := MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
+	for id in range(1, villages + 1):
+		doc.settlements.append(Settlement.make(id, kit if id == 1 else "farming_hamlet", 1, 5))
+	doc.settlements[0].fields.append(_field(Vector2(0, 0), 4.0, "garden"))
+	var state := VillagePlazas.state_of(doc, 1, -1)
+	state = VillageFields.with_fields(state, doc, 1, VillageFields.GROUP_FIELDS, 0, "")
+	state["lay_field"] = true
+	pane.show_state(state)
+	return pane
+
+
+
+func test_the_pane_fits_720_with_three_villages_and_a_wrapped_note() -> void:
+	var pane := _laid_out_pane(3, "harbour_town")
+	await wait_physics_frames(3)
+	assert_true(pane.village_field.visible and pane.lay_note.visible and pane.size_row.visible)
+	var tall := pane.get_combined_minimum_size().y
+	gut.p("pane %.0f px tall, budget %.0f" % [tall, PANE_BUDGET_PX])
+	assert_lt(tall, PANE_BUDGET_PX, "the pane leaves 60 px of slack at 720")
+	var lay := pane.lay_field.tiles.get_child(1) as Button
+	var kit := pane.kit_field.tiles.get_child(0) as Button
+	assert_gt(lay.size.y, kit.size.y, "the Lay out tiles are larger than the character's")
+
+
+func test_a_greyed_kind_reads_in_the_solid_disabled_role() -> void:
+	var pane := _laid_out_pane(1, "market_town")
+	await wait_physics_frames(2)
+	var crops := pane.lay_field.tiles.get_node(^"village_kind_crops") as Button
+	assert_true(crops.disabled)
+	assert_eq(crops.modulate, Color.WHITE, "no modulate alpha (UI_TASTE C2)")
+	assert_eq(crops.self_modulate, Color.WHITE)
+	var words := crops.get_theme_color(&"font_disabled_color")
+	assert_eq(words.a, 1.0, "a solid role")
+	# The disabled tile over the glass panel over a white board, the lightest case for light words.
+	var under := Color.WHITE
+	var tile := crops.get_theme_stylebox(&"disabled") as StyleBoxFlat
+	for layer: Color in [ThemeColors.GLASS, tile.bg_color]:
+		under = Color(under.lerp(Color(layer, 1.0), layer.a), 1.0)
+	var ratio := BackdropPaint.contrast(words, under)
+	gut.p("greyed label %.2f:1" % ratio)
+	assert_gt(ratio, 4.5, "the greyed label keeps 4.5:1 (C6)")
+
+
+func test_a_crop_field_grows_a_hedgerow_with_a_gate() -> void:
+	var field := _field(Vector2(3, -2), 8.0, "crops")
+	var hedge := VillageFields.hedge_of(field, 77)
+	assert_gt(hedge.size(), 25, "a ring of bushes round an 8 m field")
+	var widest := 0.0
+	var angles: Array[float] = []
+	for plant in hedge:
+		var off: Vector2 = (plant["at"] as Vector2) - Vector2(3, -2)
+		assert_almost_eq(off.length(), 8.0 + VillageFields.HEDGE_OUT_M, 0.2, "just past the rim")
+		assert_true(VillageFields.HEDGE_SHRUBS.has(plant["asset"]))
+		angles.append(off.angle())
+	angles.sort()
+	for k in angles.size():
+		var next := angles[(k + 1) % angles.size()] + (TAU if k == angles.size() - 1 else 0.0)
+		widest = maxf(widest, next - angles[k])
+	assert_gt(widest, VillageFields.HEDGE_GATE * 1.5, "a gate gap in the hedge")
+	assert_eq(VillageFields.hedge_of(field, 77), hedge, "the same record gives the same hedge")
+	var record := _hamlet([field, _field(Vector2(30, 0), 5.0, "garden")])
+	var plants := VillageFields.plants_of(record)
+	var shrubs := VillageFields.HEDGE_SHRUBS
+	var hedged := plants.filter(func(p: Dictionary) -> bool: return shrubs.has(p["asset"]))
+	assert_eq(hedged.size(), hedge.size(), "the crops are hedged, the garden is not")
 
 
 func test_a_field_tile_picture_is_painted_per_kind() -> void:

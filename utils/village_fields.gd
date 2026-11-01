@@ -8,11 +8,12 @@ extends RefCounted
 ## fine detail:
 ##
 ## - crops: a disc of tilled earth with broad crop rows painted across it (green or gold, the seed's
-##   pick), and a scarecrow standing in it; a haystack by the rim on some fields.
-## - orchard: a disc of warm meadow grass with fruit trees in a loose grid turned by the seed, and
-##   bee skeps by the rim on some.
-## - garden: a small disc of meadow grass with two or three earth beds, flowers along the beds and
-##   a flowering shrub or two at the rim.
+##   pick), and a scarecrow standing in it; a haystack by the rim on some fields; a hedgerow of
+##   meadow bushes round the rim with a gate, so the field reads as a parcel at home zoom.
+## - orchard: a disc of warm meadow grass with fruit trees in a loose grid turned by the seed, mown
+##   green alleys between the tree rows, blossom round each trunk, and bee skeps by the rim on some.
+## - garden: a small disc of meadow grass with two or three broad earth beds, each one mass of a
+##   single flower, and two or three flowering shrubs at the rim.
 ##
 ## Everything here is a function of the record and the settlement's seed: the strokes
 ## (`strokes_of`), the props drawn by AuthoredSettlements (`props_of`) and the plants drawn by
@@ -45,7 +46,8 @@ const KIND_TINTS := {
 	"garden": Color(0.93, 0.6, 0.74),
 }
 ## A click lays a field this wide; the tool's floor and ceiling per kind.
-const DEFAULT_RADIUS_M := {"crops": 8.0, "orchard": 8.0, "garden": 4.5}
+## A garden of 4.5 m was a speck at home zoom (round 4); 5.5 holds three broad beds.
+const DEFAULT_RADIUS_M := {"crops": 8.0, "orchard": 8.0, "garden": 5.5}
 const MIN_RADIUS_M := {"crops": 4.0, "orchard": 4.0, "garden": 2.5}
 const MAX_RADIUS_M := {"crops": 18.0, "orchard": 16.0, "garden": 8.0}
 
@@ -65,8 +67,12 @@ const DISC_FACTOR := 1.05
 const ROW_PITCH_M := 3.0
 const ROW_RADIUS_M := 0.9
 const ROW_REACH := 0.84
-const BED_PITCH_M := 2.2
-const BED_RADIUS_M := 0.75
+## Garden beds: broad (round 4: 0.75 m beds 2.2 m apart with one line of flowers read as thin dark
+## stripes with a few dots, c2_close_garden), each planted in two staggered lines this far apart.
+const BED_PITCH_M := 2.8
+const BED_RADIUS_M := 1.0
+const FLOWER_LINE_M := 0.8
+const FLOWER_SCALE := Vector2(1.2, 1.5)
 const SECONDS := 1.2
 ## Orchard trees (core library ids): this far apart, nudged by up to this, at this scale.
 ## Palette ids of the core library's grassland meadow biome (every one served by the default
@@ -91,7 +97,35 @@ const GARDEN_SHRUBS: Array[String] = [
 	"grassland_meadow_summer_s1/Bush_FloweringBush_v0",
 	"grassland_meadow_summer_s1/Bush_BerryBush_v0_grassland_meadow",
 ]
-const FLOWER_STEP_M := 1.0
+const FLOWER_STEP_M := 0.8
+## A crop field's hedgerow: low meadow bushes this far apart just past the rim, at this scale,
+## with a gate gap of this many radians where the haystack stands.
+const HEDGE_SHRUBS: Array[String] = [
+	"grassland_meadow_summer_s1/Bush_Bush_v0_grassland_meadow",
+	"grassland_meadow_summer_s1/Bush_Bush_v1_grassland_meadow",
+	"grassland_meadow_summer_s1/Bush_BerryBush_v1_grassland_meadow",
+]
+const HEDGE_STEP_M := 1.25
+const HEDGE_OUT_M := 0.4
+const HEDGE_SCALE := Vector2(0.7, 0.95)
+const HEDGE_GATE := 0.5
+## The kinds a hedgerow encloses. Round 4 probed two ways to make a field read at home zoom: this
+## hedge (a1_home_hedge: an enclosed parcel, the boldest shape on the board) and a calm cleared
+## margin past the rim (a2_home_fringe: no visible change, the meadow's yellow is paint). The hedge
+## won; the margin was dropped.
+const HEDGE_KINDS: Array[String] = ["crops"]
+## Orchard alleys: mown green strips between the tree rows (this brush radius), and blossom
+## mounds round each trunk (this many, this far out), so the kind reads as tended rows of fruit
+## trees rather than a grove.
+const ALLEY := "grass_alpine"
+const ALLEY_RADIUS_M := 0.8
+const BLOSSOM: Array[String] = [
+	"grassland_meadow_summer_s1/Flower_BloomMound_v0_grassland_meadow",
+	"grassland_meadow_summer_s1/Flower_BloomMound_v1_grassland_meadow",
+]
+## Past the canopy's edge: at 0.9 m the canopies hid it from the board's camera (round 4).
+const BLOSSOM_COUNT := 4
+const BLOSSOM_OUT_M := 1.6
 
 
 ## The kinds `kit` offers, its default first ([] when its villages keep no fields).
@@ -169,6 +203,16 @@ static func strokes_of(field: Dictionary, seed_value: int) -> Array[Dictionary]:
 			if half > 0.5:
 				var mid := at + across * offset
 				out.append(_stroke(rows, mid - along * half, mid + along * half, ROW_RADIUS_M))
+	elif kind == "orchard":
+		# A mown alley between each pair of tree rows (the rows _orchard plants), along the rows.
+		var spacing := TREE_PITCH_M * 0.9
+		var steps := floori((radius - TREE_RIM_M) / TREE_PITCH_M)
+		for row in range(-steps - 1, steps + 1):
+			var offset := (row + 0.5) * spacing
+			var half := sqrt(maxf(radius * radius - offset * offset, 0.0)) * 0.85 - ALLEY_RADIUS_M
+			if half > 0.5:
+				var mid := at + across * offset
+				out.append(_stroke(ALLEY, mid - along * half, mid + along * half, ALLEY_RADIUS_M))
 	elif kind == "garden":
 		for offset in _offsets(radius * 0.62, BED_PITCH_M):
 			var half := sqrt(maxf(radius * radius - offset * offset, 0.0)) * 0.6 - BED_RADIUS_M
@@ -228,7 +272,8 @@ static func props_of(settlement: Settlement) -> Array[Dictionary]:
 
 
 ## The plants of `settlement`'s fields: [{"asset" (a palette id), "at": Vector2, "yaw", "scale"}],
-## orchard trees and garden flowers and shrubs, in field order.
+## orchard trees and their blossom, garden flowers and shrubs and the crops' hedgerows, in field
+## order.
 static func plants_of(settlement: Settlement) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for field in settlement.fields:
@@ -237,6 +282,35 @@ static func plants_of(settlement: Settlement) -> Array[Dictionary]:
 				out.append_array(_orchard(field, settlement.seed_value))
 			"garden":
 				out.append_array(_garden(field, settlement.seed_value))
+		if HEDGE_KINDS.has(str(field["kind"])):
+			out.append_array(hedge_of(field, settlement.seed_value))
+	return out
+
+
+## The hedgerow round `field`: bushes HEDGE_STEP_M apart HEDGE_OUT_M past the rim, nudged and
+## sized by the seed, leaving a gate where the haystack stands (props_of), so the field reads as
+## a parcel at home zoom rather than a painted disc.
+static func hedge_of(field: Dictionary, seed_value: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var at: Vector2 = field["at"]
+	var ring := float(field["radius"]) + HEDGE_OUT_M
+	var roll := _hash(seed_value, at, "props")
+	var gate := angle_of(field, seed_value) + 2.6 + float(roll % 7) * 0.2
+	var count := maxi(ceili(TAU * ring / HEDGE_STEP_M), 8)
+	for n in count:
+		var angle := TAU * float(n) / float(count)
+		if absf(angle_difference(angle, gate)) < HEDGE_GATE:
+			continue
+		var h := _hash(seed_value, at + Vector2.from_angle(angle) * ring, "hedge")
+		var wobble := float(h % 101) / 100.0 - 0.5
+		out.append(
+			{
+				"asset": HEDGE_SHRUBS[(h >> 8) % HEDGE_SHRUBS.size()],
+				"at": at + Vector2.from_angle(angle) * (ring + 0.3 * wobble),
+				"yaw": float((h >> 4) % 6283) / 1000.0,
+				"scale": lerpf(HEDGE_SCALE.x, HEDGE_SCALE.y, float((h >> 14) % 101) / 100.0),
+			}
+		)
 	return out
 
 
@@ -299,6 +373,18 @@ static func _orchard(field: Dictionary, seed_value: int) -> Array[Dictionary]:
 					"scale": lerpf(TREE_SCALE.x, TREE_SCALE.y, float((h >> 14) % 101) / 100.0),
 				}
 			)
+			# Blossom fallen round the trunk: one colour per tree.
+			var blossom := BLOSSOM[(h >> 6) % BLOSSOM.size()]
+			for k in BLOSSOM_COUNT:
+				var around := float(h % 628) / 100.0 + TAU * float(k) / BLOSSOM_COUNT
+				out.append(
+					{
+						"asset": blossom,
+						"at": spot + Vector2.from_angle(around) * BLOSSOM_OUT_M,
+						"yaw": around,
+						"scale": 1.0 + 0.1 * float(k),
+					}
+				)
 	return out
 
 
@@ -318,20 +404,25 @@ static func _garden(field: Dictionary, seed_value: int) -> Array[Dictionary]:
 		var flower := GARDEN_FLOWERS[(_hash(seed_value, at, "bed%d" % bed)) % GARDEN_FLOWERS.size()]
 		bed += 1
 		var count := maxi(floori(2.0 * half / FLOWER_STEP_M), 1)
-		for n in count + 1:
-			var spot := at + across * offset + along * lerpf(-half, half, float(n) / maxf(count, 1))
-			var h := _hash(seed_value, spot, "flower")
-			out.append(
-				{
-					"asset": flower,
-					"at": spot,
-					"yaw": float(h % 6283) / 1000.0,
-					"scale": 0.9 + float((h >> 12) % 31) / 100.0,
-				}
-			)
-	var shrubs := 1 + _hash(seed_value, at, "shrubs") % 2
+		# Two staggered lines down each bed, so the bed is one mass of colour, not a dotted line.
+		for line in 2:
+			var side := across * (FLOWER_LINE_M * (float(line) - 0.5))
+			var stagger := 0.5 * float(line) / maxf(count, 1)
+			for n in count + 1 - line:
+				var t := float(n) / maxf(count, 1) + stagger
+				var spot := at + across * offset + side + along * lerpf(-half, half, t)
+				var h := _hash(seed_value, spot, "flower")
+				out.append(
+					{
+						"asset": flower,
+						"at": spot,
+						"yaw": float(h % 6283) / 1000.0,
+						"scale": FLOWER_SCALE.x + float((h >> 12) % 31) / 30.0 * (FLOWER_SCALE.y - FLOWER_SCALE.x),
+					}
+				)
+	var shrubs := 2 + _hash(seed_value, at, "shrubs") % 2
 	for k in shrubs:
-		var spot := at + Vector2.from_angle(turn + PI * 0.5 + k * 2.4) * radius * 0.95
+		var spot := at + Vector2.from_angle(turn + PI * 0.5 + k * 2.1) * radius * 0.95
 		var h := _hash(seed_value, spot, "shrub")
 		out.append(
 			{

@@ -3,8 +3,9 @@ extends VBoxContainer
 
 ## The Village tool's pane in AuthoringPanel (VillageTool). One primary choice and what follows
 ## from it: when the map has two or more villages, a row naming them by number (the same "Village
-## 2" the board's chips and the ghost's hint use) picks the one the pane is about; below it that
-## village's character, four picture tiles each a small painted vignette of its plaza
+## 2" the board's chips and the ghost's hint use) picks the one the pane is about; below it what a
+## press lays (Fields, below) and that village's character, four tiles each a small painted
+## vignette of its plaza
 ## (VillageSwatch: the kit's paving on its own ground colour with a well, a stall, barrels or a
 ## lamp); then the village's plazas: how many more it can hold, and for the picked plaza (or the
 ## one a drag is sizing, read live) its size on a slider the keys reach, with Remove beside it.
@@ -12,13 +13,14 @@ extends VBoxContainer
 ## teaches the rest. No state beyond what show_state was last given: the document is the truth
 ## (VillagePlazas.state_of). Built in code; every interactive Control is named.
 ##
-## Fields (topic fields): one "Lay" row of four picture tiles says what a press on bare ground
+## Fields (topic fields): one "Lay out" row of four picture tiles says what a press on bare ground
 ## lays: Plaza (the village's own plaza vignette, VillageSwatch.kit_texture) or a field of one
-## kind, Crops, Orchard or Garden (VillageSwatch.field_texture). A kind the village's character
-## does not keep is greyed, and the row's caption line says which in words (the harbour town keeps
-## no fields at all), not only in a tooltip. The hint line under the header says the gesture for
-## what is picked. The size row and Remove serve a picked field as they serve a plaza
-## (VillageFields.with_fields).
+## kind, Crops, Orchard or Garden (VillageSwatch.field_texture). It is the most used row, so it
+## stands above the character, in the pane's largest tiles, and the character row is compact. A
+## kind the village's character does not keep is greyed (the theme's solid disabled role), its
+## tooltip says why, and a line of its own under the tiles says it in words (the harbour town keeps
+## no fields at all). The hint line under the header says the gesture for what is picked. The size
+## row and Remove serve a picked field as they serve a plaza (VillageFields.with_fields).
 
 ## A village tile was picked (a Settlement id).
 signal village_picked(village: int)
@@ -32,9 +34,12 @@ signal radius_committed(radius: float)
 signal remove_requested
 
 const HINT := "Click or drag the ground beside a street to open a plaza."
-const FIELD_HINT := "Click or drag the ground at the village's edge to lay %s."
+const FIELD_HINT := "Click or drag the ground at the village's edge to lay %s."
 ## What the field hint calls each kind.
-const FIELD_NOUNS := {"crops": "a crop field", "orchard": "an orchard", "garden": "a garden"}
+## No-break spaces hold the noun to "lay" on the hint's last line (no widowed "field.").
+const FIELD_NOUNS := {
+	"crops": "a crop field", "orchard": "an orchard", "garden": "a garden"
+}
 const NO_KIND_NOTE := "%s keeps no %s"
 const EMPTY := (
 	"No village yet. Draw a street with the Wall tool and press Dress this street, then come back"
@@ -51,20 +56,24 @@ const FIELD_PICK_NOTE := "Click a field on the board to size or remove it."
 const LAY_PLAZA_TIP := "A click on the ground beside the street opens a plaza"
 const NO_FIELDS_TIP := "%s keeps no fields"
 const REMOVE_FIELD_TIP := "Remove the picked field and its paint (Delete)"
-const KIND_TILE_SIZE := Vector2(68, 78)
-const KIND_THUMB_PX := 44
+## The Lay out tiles are the pane's largest (round 4: the most used row was the smallest); the
+## character row below them is compact, a small picture above each name.
+const KIND_TILE_SIZE := Vector2(76, 96)
+const KIND_THUMB_PX := 58
 const KIT_TIP := "%s: %s streets round a %s plaza"
 const REMOVE_TIP := "Remove the picked plaza and its paving (Delete)"
 const SIZE_TIP := "How wide the picked plaza is"
-const THUMB_PX := 60
-const KIT_TILE_SIZE := Vector2(104, 94)
+const THUMB_PX := 28
+const KIT_TILE_SIZE := Vector2(104, 38)
 const VILLAGE_TILE_SIZE := Vector2(96, 40)
 
 var empty_note: Label
 var village_field: TileField
 var kit_field: TileField
-## The Lay row: Plaza and the three field kinds.
+## The Lay out row: Plaza and the three field kinds.
 var lay_field: TileField
+## What the village's character does not keep, on its own line under the Lay out tiles.
+var lay_note: Label
 var hint: Label
 var plaza_box: VBoxContainer
 var plaza_title: Label
@@ -104,8 +113,9 @@ func _init(palette_root: String = PaletteLibrary.DEFAULT_ROOT) -> void:
 	village_field.caption = "Village"
 	village_field.visible = false
 	add_child(village_field)
-	_build_kit_field()
+	# Lay out first: it is the row an author comes back to; the character is picked once.
 	_build_lay_fields()
+	_build_kit_field()
 	_build_plaza_box()
 	show_state(VillagePlazas.state_of(MapDocument.new(), -1, -1))
 
@@ -210,7 +220,8 @@ func _show_lay(state: Dictionary, picked: bool, laying: bool) -> void:
 				else NO_KIND_NOTE % [kit_label, str(VillageFields.KIND_LABELS[kind]).to_lower()]
 			)
 		)
-	lay_field.show_note(missing_note(kit, kinds) if picked else "")
+	lay_note.text = missing_note(kit, kinds) if picked else ""
+	lay_note.visible = lay_note.text != ""
 	var current := str(state.get("field_kind", ""))
 	var on_field := laying and current != "" and kinds.has(current)
 	lay_field.tiles.select(_kind_id(current) if on_field else &"village_lay_plaza")
@@ -258,13 +269,16 @@ func ensure_tiles() -> void:
 				VillagePlazas.surface_name(str(ground.get("plaza", ""))).to_lower(),
 			]
 		)
-		kit_field.tiles.add_tile(
+		var tile := kit_field.tiles.add_tile(
 			_kit_id(kit),
 			String(item["label"]),
 			"",
 			tip,
 			VillageSwatch.kit_texture(kit, _palette_root, THUMB_PX)
 		)
+		# Compact: the small picture beside the name, not above it.
+		tile.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		tile.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
 
 
 func _build_kit_field() -> void:
@@ -284,7 +298,7 @@ func _build_kit_field() -> void:
 func _build_lay_fields() -> void:
 	lay_field = TileField.new()
 	lay_field.name = "VillageLayField"
-	lay_field.caption = "Lay"
+	lay_field.caption = "Lay out"
 	lay_field.tiles.photo_icons = true
 	lay_field.tiles.tile_min_size = KIND_TILE_SIZE
 	lay_field.tiles.columns = 1 + Settlement.FIELD_KINDS.size()
@@ -303,6 +317,9 @@ func _build_lay_fields() -> void:
 	lay_field.tiles.selection_changed.connect(_on_lay_tile)
 	lay_field.visible = false
 	add_child(lay_field)
+	lay_note = _caption("VillageLayNote", "")
+	lay_note.visible = false
+	add_child(lay_note)
 
 
 ## A Lay tile was picked: Plaza lays plazas, a kind tile fields of that kind.
@@ -326,6 +343,7 @@ func _build_plaza_box() -> void:
 	plaza_box.theme_type_variation = &"BoxContainerSnug"
 	plaza_title = Label.new()
 	plaza_title.name = "VillagePlazaTitle"
+	plaza_title.theme_type_variation = &"Caption"
 	plaza_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	plaza_title.custom_minimum_size = Vector2(1, 0)
 	plaza_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL

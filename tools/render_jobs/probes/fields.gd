@@ -4,6 +4,7 @@ extends RefCounted
 ## section 11). step.action:
 ##   lay {field, kind}            what a Village tool press lays (the pane's Lay row)
 ##   pick {id}                    picks village `id` in the Village tool (its pane follows)
+##   clear                        removes every field of every settlement through the editor
 ##   add {id, at, radius, kind}   lays a field for settlement `id` (map XZ) through the editor
 ##   report                       the map scale, each field's world place, the strokes and plants
 ## Every action returns the line the job log prints.
@@ -26,6 +27,14 @@ static func run(base: Node, step: Dictionary) -> String:
 				return "no brush"
 			VillageTool.of(ctrl.brush).select(int(step.get("id", 1)), -1)
 			return "picked village %d" % int(step.get("id", 1))
+		"clear":
+			var removed := 0
+			for settlement in editor.document.settlements.duplicate():
+				for index in range(settlement.fields.size() - 1, -1, -1):
+					if editor.settlements.remove_field(settlement.id, index):
+						removed += 1
+			AuthoredSettlements.of_map(editor.map_root).flush()
+			return "cleared %d fields" % removed
 		"add":
 			var at: Array = step.get("at", [0, 0])
 			var ok := editor.settlements.add_field(
@@ -41,7 +50,7 @@ static func run(base: Node, step: Dictionary) -> String:
 				% [str(ok), editor.settlements.last_refusal, str(editor.settlements.last_ground)]
 			)
 	var lines := PackedStringArray()
-	# look_at takes world XZ; the fields are recorded in map XZ (editor.to_world maps one to the other).
+	# look_at takes world XZ; the fields are recorded in map XZ (editor.to_world maps between).
 	lines.append("map scale %.3f" % editor.map_scale())
 	for settlement in editor.document.settlements:
 		for field in settlement.fields:

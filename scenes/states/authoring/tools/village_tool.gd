@@ -32,7 +32,7 @@ func _init() -> void:
 		["Delete (Village)", "Remove the plaza under the cursor with its paving"],
 		["[ and ] (Village)", "A plaza one metre smaller or larger; Shift + scroll over one"],
 		["Escape (picked plaza)", "Let go of the plaza"],
-		["Crops, Orchard, Garden (Lay)", "Clicks then lay that field at the village's edge"],
+		["Crops, Orchard, Garden (Lay out)","Clicks then lay that field at the village's edge"],
 	]
 
 

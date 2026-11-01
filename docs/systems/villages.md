@@ -712,7 +712,7 @@ away): discs, up to 4 per village, three kinds, no polygons, no move, no bridges
   MultiMesh per species), refreshed with the settlement layer, play time included.
 - **Editor:** `SettlementEditor.add_field`, `resize_field`, `remove_field`, one history group each, peers through
   the existing `surface` and `settlements` ops (`test_village_fields.gd`).
-- **Tool and pane:** one "Lay" row of four picture tiles under the character (round 2): Plaza, pictured by the
+- **Tool and pane:** one "Lay out" row of four picture tiles above the character (round 2; moved up in round 4): Plaza, pictured by the
   village's own plaza vignette (`VillageSwatch.kit_texture`), then Crops, Orchard and Garden
   (`VillageSwatch.field_texture`); the kit's default kind is lit when a field is laid. A kind the character does
   not keep is greyed, and the row's caption line says so in words (`VillageToolPane.missing_note`: "Market town
@@ -758,6 +758,32 @@ away): discs, up to 4 per village, three kinds, no polygons, no move, no bridges
   the hamlet's houses in this layout, and the biome's yellow patches and bushes still carry the board: not yet the
   bold read wanted. The gold rows read more as straw than wheat, and an orchard's painted meadow is close in colour
   to the meadow round it.
+- **Round 4 (fields4): the home-zoom read.** Two different mechanisms were probed on the same hamlet at home zoom
+  (job `fields_look`, captures `a0_home_plain`, `a1_home_hedge`, `a2_home_fringe`, `a3_home_both`): (1) a field
+  silhouette, a HEDGEROW of meadow bushes round each crop field just past its rim (`VillageFields.hedge_of`, plants
+  through AuthoredFieldPlants, a gate gap where the haystack stands); (2) a calm fringe, the field's clearance and a
+  meadow paint disc reaching 3 m past the rim. The hedge made each field an enclosed parcel, the boldest shape on the
+  board; the fringe changed nothing that reads (the meadow's yellow patches are ground paint, which a plant clearance
+  cannot touch, and the cleared margin vanished into the green). The hedge was kept for crops (`HEDGE_KINDS`), the
+  fringe dropped. Placement mattered as much: fields past a street's far end sit behind its roofs from the board's
+  camera, so the job now lays them where an author would and the camera sees them (the street's near end, beside the
+  last houses). The orchard got mown green alleys between its tree rows (`ALLEY`, painted) and pink bloom mounds round
+  each trunk past the canopy (`BLOSSOM`), so it reads as tended rows rather than a grove; the garden got broad beds
+  (1 m, 2.8 m apart) each one mass of a single flower in two staggered lines, two or three shrubs, and a 5.5 m default
+  (4.5 was a speck at home zoom). Verdict (`a_home_fields`, `c_close_orchard`, `c2_close_garden`, `--full`): crops pass
+  at home zoom; the orchard is a modest pass (core has no fruit-tree species: the trees are slender meadow oaks); the
+  garden is a small, distinct planted plot. The biome's yellow paint patches still carry much of the board.
+- **Round 4, the pane and rings** (UI critic findings): the field ghost, the calm rings and the refused disc take the
+  brush ring's own stroke (`BrushCursor.ring_strokes`: ink under the tint, at full weight; the ghost was a pale 1-2 px
+  hairline about 1.2:1 over grass), and a click that would cover a house draws its refused disc in salmon. The pane
+  puts "Lay out" (was "Lay") above the character in its largest tiles (76x96, 58 px pictures) and the character in a
+  compact 2x2 row (picture beside the name); the "keeps no crops" reason sits on its own line under the tiles and the
+  greyed tile's tooltip says the same; the greyed label is the theme's solid disabled role (TEXT_SOFT, over 4.5:1 on
+  glass, `test_a_greyed_kind_reads_in_the_solid_disabled_role`); the room line is caption weight; no-break spaces keep
+  "a crop field." whole on the hint's last line; the refusal pill reads "Over a building: lay it on open ground". At
+  1280x720 (content scale 1.4, a 771 px canvas) the pane is 508 px from y 122 with two villages; three villages and a
+  wrapped harbour note measure 534 px, inside the 589 px that leaves 60 px of slack
+  (`test_the_pane_fits_720_with_three_villages_and_a_wrapped_note`). World labels under the pane are not hidden.
 - **Limits left:** taking back a field that overlaps a road or path thins that paint (as for plazas); the plants'
   wind materials are not registered with the level's wind re-tuning; plants stand again only on a settlement
   refresh (a sculpt under an orchard leaves them floating until the next edit); fields refused for wet or steep
