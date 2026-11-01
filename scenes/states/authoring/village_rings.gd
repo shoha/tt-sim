@@ -28,7 +28,7 @@ const PREVIEW_FILL_ALPHA := 0.24
 ## colour is pulled this far toward WASH_TINT (warm paper gold), so a faint fill lights the grass
 ## instead of turning it chalky olive (plazamove critic: the grey-khaki haze over bright grass,
 ## blue doubling while red and green stayed).
-const WASH_TINT := Color("#FFE2A0")
+const WASH_TINT := WallBrush.READOUT_COLOR
 const WASH_PULL := 0.7
 ## A refused place is washed in the one erase salmon at this alpha (the ring is the erase ring's
 ## own stroke, 5.5 px over ink).
