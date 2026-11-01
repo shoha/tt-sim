@@ -51,12 +51,15 @@ class Rec:
 		var total := 0.0
 		var jank := 0.0
 		var over := 0
+		var over_25 := 0
 		for ms in frames:
 			total += ms
 			if ms > JANK_FLOOR_MS:
 				jank += ms - JANK_FLOOR_MS
 			if ms > 33.4:
 				over += 1
+			if ms > 25.0:
+				over_25 += 1
 		var worst := PackedStringArray()
 		for k in mini(6, sorted.size()):
 			worst.append("%.1f" % sorted[sorted.size() - 1 - k])
@@ -68,7 +71,7 @@ class Rec:
 		if not late.is_empty():
 			worst.append("at " + " ".join(late))
 		return (
-			"hitch %s (from f%d) | frames %d total %.0f ms | median %.1f | worst [%s] | over 33 ms: %d | jank %.0f ms"
+			"hitch %s (from f%d) | frames %d total %.0f ms | median %.1f | worst [%s] | over 25 ms: %d | over 33 ms: %d | jank %.0f ms"
 			% [
 				label,
 				first_frame,
@@ -76,6 +79,7 @@ class Rec:
 				total,
 				sorted[sorted.size() / 2] if not sorted.is_empty() else 0.0,
 				", ".join(worst),
+				over_25,
 				over,
 				jank
 			]

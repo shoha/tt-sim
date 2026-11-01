@@ -55,6 +55,30 @@ func test_a_real_sample_is_built() -> void:
 	assert_eq(screen.built_names(), PackedStringArray(["tri"]))
 
 
+func test_many_samples_build_on_several_threads_and_keep_their_order() -> void:
+	var names: Array[String] = []
+	var first := func() -> Array:
+		return [_triangle_sample("a0"), _triangle_sample("a1"), _triangle_sample("a2")]
+	var second := func() -> Array:
+		OS.delay_msec(100)
+		return [_triangle_sample("b0"), _triangle_sample("b1")]
+	for sample_name in ["a0", "a1", "a2", "b0", "b1"]:
+		names.append(sample_name)
+	var screen := _screen(first)
+	screen.sample_sources.append(second)
+	screen.source_labels = PackedStringArray(["a", "b"])
+	add_child_autofree(screen)
+	await wait_until(_done(screen), 10.0, "reaches DONE")
+	assert_eq(screen.built_names(), PackedStringArray(names), "in source order, not finish order")
+	assert_eq(screen._rids.size(), 0, "the meshes are freed at the end")
+
+
+func test_the_build_thread_count_stays_between_two_and_the_cap() -> void:
+	var screen: GraphicsWarmupScreen = SCENE.instantiate()
+	assert_between(screen.build_workers, 2, GraphicsWarmupScreen.MAX_BUILD_WORKERS)
+	screen.free()
+
+
 func test_a_sample_without_geometry_is_skipped_with_a_warning() -> void:
 	var empty := _triangle_sample("empty")
 	empty["arrays"] = []
@@ -97,12 +121,18 @@ func test_freed_mid_build_joins_and_writes_no_marker() -> void:
 func test_progress_is_weighted_by_phase() -> void:
 	const PHASE := GraphicsWarmupScreen.Phase
 	assert_eq(GraphicsWarmupScreen.progress_for(PHASE.COMPILE, 0, 10), 0.0)
-	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.COMPILE, 10, 10), 0.2, 1e-6)
-	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.BUILD, 1, 2), 0.55, 1e-6)
+	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.COMPILE, 10, 10), 0.18, 1e-6)
+	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.BUILD, 1, 2), 0.58, 1e-6)
 	assert_almost_eq(
-		GraphicsWarmupScreen.progress_for(PHASE.BUILD, 0, 0), 0.2, 1e-6, "no samples yet"
+		GraphicsWarmupScreen.progress_for(PHASE.BUILD, 0, 0), 0.18, 1e-6, "no samples yet"
 	)
-	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.DRAW, 0, 1), 0.9, 1e-6)
+	assert_almost_eq(
+		GraphicsWarmupScreen.PHASE_WEIGHTS.reduce(func(a: float, b: float) -> float: return a + b),
+		1.0,
+		1e-6,
+		"the phases add up to the whole bar"
+	)
+	assert_almost_eq(GraphicsWarmupScreen.progress_for(PHASE.DRAW, 0, 1), 0.98, 1e-6)
 	assert_eq(GraphicsWarmupScreen.progress_for(PHASE.DONE, 0, 0), 1.0)
 
 
@@ -122,6 +152,51 @@ func test_build_progress_moves_during_collection_and_never_steps_back() -> void:
 		"a collected source moves the bar"
 	)
 	assert_almost_eq(last, GraphicsWarmupScreen.progress_for(PHASE.DRAW, 0, 1), 1e-6, "meets DRAW")
+
+
+func test_every_sample_source_has_a_status_label() -> void:
+	assert_eq(
+		GraphicsWarmup.sample_labels().size(),
+		GraphicsWarmup.sample_sources().size(),
+		"one label per source"
+	)
+	for label in GraphicsWarmup.sample_labels():
+		assert_false(label.is_empty())
+
+
+func test_the_status_line_says_what_each_phase_is_doing() -> void:
+	const PHASE := GraphicsWarmupScreen.Phase
+	assert_eq(GraphicsWarmupScreen.status_for(PHASE.COMPILE, 3, 40, ""), "Starting shaders: 3 of 40")
+	assert_eq(GraphicsWarmupScreen.status_for(PHASE.BUILD, 0, 0, "water"), "Gathering water")
+	assert_eq(GraphicsWarmupScreen.status_for(PHASE.BUILD, 0, 0, ""), "Gathering graphics")
+	assert_eq(
+		GraphicsWarmupScreen.status_for(PHASE.BUILD, 4, 26, "buildings"), "Compiling buildings: 5 of 26"
+	)
+	assert_eq(
+		GraphicsWarmupScreen.status_for(PHASE.BUILD, 26, 26, "buildings"),
+		"Compiling buildings: 26 of 26",
+		"never past the total"
+	)
+	assert_eq(GraphicsWarmupScreen.status_for(PHASE.DRAW, 0, 1, ""), "Drawing a first frame")
+	assert_eq(GraphicsWarmupScreen.status_for(PHASE.DONE, 0, 0, ""), "")
+
+
+func test_the_status_line_follows_the_worker_while_it_builds() -> void:
+	var gate := Semaphore.new()
+	var held := func() -> Array:
+		var deadline := Time.get_ticks_msec() + 5000
+		while not gate.try_wait() and Time.get_ticks_msec() < deadline:
+			OS.delay_msec(5)
+		return []
+	var screen := _screen(held)
+	screen.source_labels = PackedStringArray(["buildings"])
+	add_child_autofree(screen)
+	await wait_until(
+		func() -> bool: return screen._status_now() == "Gathering buildings", 5.0, "names the source"
+	)
+	assert_eq(screen.phase, GraphicsWarmupScreen.Phase.BUILD)
+	gate.post()
+	await wait_until(_done(screen), 10.0, "reaches DONE")
 
 
 func test_the_bar_moves_while_a_later_source_is_still_collecting() -> void:

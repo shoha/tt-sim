@@ -658,14 +658,26 @@ to the free edge, across the wind and up and down (the vertical share 0.9 so it 
 isometric camera), whose amplitude grows with the reach in `weight.x`. The sheet's normal is tilted by
 the wave's slope (`s_cloth_wind` takes the normal `inout`; the include in `structure_painterly` passes
 it), so the folds catch the light as a lighter band on each crest instead of one flat colour. Calm is
-slow and shallow (swing 0.18 of the reach, 2.4 rad/s, wave number 6 per metre of reach, about 1.3
-waves on a 1.5 m pennant), windy quicker and deeper (up to 0.34, 7.5 rad/s, 7.5 per metre); the gust
-field scales the swing by 0.8 to 1.2. The lean (the downwind stretch) is unchanged. Looks:
-`looks3_r2_banners` (calm pennants show a gentle S with a lighter band; windy is tighter and sharper,
-with a small kink at the tips where 8 strips are few for the wave). Core's `bartizan_keep` is the one
+slow and shallow (swing 0.18 of the reach, 2.4 rad/s), windy quicker and deeper (up to 0.32, 7 rad/s);
+the gust field scales the swing by 0.8 to 1.2. The lean (the downwind stretch) is unchanged. Looks:
+`looks3_r2_banners` (calm pennants show a gentle S with a lighter band; windy was tighter and sharper,
+with a small kink at the tips where 8 strips are few for the wave; fixed by pennantkink below). Core's `bartizan_keep` is the one
 core structure with banners: its pin moved from `2afe936a` (1352 triangles) to `9b37d53d` (1456) in
 `pins.txt` and `tests/fixtures/structure_digests.txt` (its recipe text did not change; its tile was not
 redrawn). procgen pin `4c1a524`.
+
+**Pennant kink (topic pennantkink, 2026-10-31).** The tip of a windy or stormy pennant folded into a
+small hook (render job `pennantkink_look`, cottage, `windy_t0` and `storm_t2`). Cause: the ripple's phase
+was `k * weight.x`, and `weight.x` is the reach, which grows as the 1.5 power of the distance from the
+pole (`StructureCloth.CURVE`), so the wave ran 1.5 times too fast at the free end: 2.2 rad a 0.2 m strip
+there (k 7.5), under two samples a wave for the cloth's linear strips, and the thin last strip ended in a
+zigzag. Fix, in the shader only (procgen untouched): the phase follows the real distance
+`s = 1.14 * pow(weight.x, 2/3)` (`StructureCloth.phase_distance`; the pennant's length enters as its cube
+root, 1.06 to 1.22 for 1.2 to 1.8 m, so one scale is within 7%), and the wave number drops to 3.8 (calm)
+to 4.4 (storm) per metre, a wavelength of 1.4 to 1.65 m, seven or more strips; the normal's slope adds
+the 1.5 reach / s term the growing reach contributes. Pennants still flag at calm (the S-curve and the
+lighter band stay, amplitude unchanged except the storm swing 0.34 to 0.32). Before captures
+`pennantkink_before`, after `pennantkink_look` (both in the user folder `render_jobs/`).
 
 **Lantern glow (topic looks3, 2026-10-31).** The owner: lantern glow "not visible". The lantern's
 unshaded pane (`structure_lantern.gdshader`, energy 1.35) lifts the environment's glow only when it is

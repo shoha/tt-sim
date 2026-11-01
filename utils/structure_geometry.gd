@@ -673,7 +673,7 @@ static func _plot(doc: MapDocument, plan: PackedVector2Array) -> Dictionary:
 	return {
 		"kind": PLOT_KIND,
 		"role": StructureLook.TRIM,
-		"arrays": _arrays(PLOT_KIND, vertices, normals, uvs, colors, indices),
+		"arrays": surface_arrays(PLOT_KIND, vertices, normals, uvs, colors, indices),
 		"tags": tags,
 	}
 
@@ -806,12 +806,15 @@ static func _mesh_of(surface: PlantSurface, role: String, picked: PackedInt32Arr
 	return {
 		"kind": surface.kind,
 		"role": role,
-		"arrays": _arrays(surface.kind, vertices, normals, uvs, colors, indices),
+		"arrays": surface_arrays(surface.kind, vertices, normals, uvs, colors, indices),
 		"tags": tags,
 	}
 
 
-static func _arrays(
+## The mesh arrays of one structure surface: vertex, normal, UV, colour, index and a tangent for
+## every vertex (textured kinds get quad tangents, the rest +X). StructureWarmup builds its sample
+## through this, so the warm-up's vertex layout cannot drift from a real building's.
+static func surface_arrays(
 	kind: String,
 	vertices: PackedVector3Array,
 	normals: PackedVector3Array,

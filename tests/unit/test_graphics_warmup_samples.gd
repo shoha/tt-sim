@@ -179,8 +179,11 @@ func test_collect_samples_has_every_owner_once() -> void:
 	for sample in samples:
 		assert_false(names.has(sample.name), "unique name %s" % sample.name)
 		names[sample.name] = true
-		shaders[(sample.material as ShaderMaterial).shader.resource_path] = true
+		if sample.material is ShaderMaterial:
+			shaders[(sample.material as ShaderMaterial).shader.resource_path] = true
 	for path in [
+		"res://shaders/structure_wall.gdshader",
+		"res://shaders/structure_roof.gdshader",
 		"res://shaders/authored_ground.gdshader",
 		"res://shaders/authored_ground_skirt.gdshader",
 		"res://shaders/authored_ground_looked.gdshader",
@@ -193,3 +196,75 @@ func test_collect_samples_has_every_owner_once() -> void:
 		"res://shaders/wind_foliage_painted_no_aa.gdshader",
 	]:
 		assert_true(shaders.has(path), "a sample draws %s" % path)
+
+
+func test_structure_samples_draw_every_structure_shader() -> void:
+	var samples := StructureWarmup.warmup_samples()
+	_assert_well_formed(samples)
+	var names := {}
+	var shaders := {}
+	for sample in samples:
+		assert_false(names.has(sample.name), "unique name %s" % sample.name)
+		names[sample.name] = true
+		assert_false(sample.multimesh, "%s draws through a MeshInstance3D" % sample.name)
+		if sample.material is ShaderMaterial:
+			shaders[(sample.material as ShaderMaterial).shader] = true
+	assert_eq(samples.size(), StructureWarmup.SAMPLE_SHADERS.size() + 3, "shaders, stone, two yards")
+	for shader: Shader in [
+		StructureMaterials.WALL_SHADER,
+		StructureMaterials.ROOF_SHADER,
+		StructureMaterials.STYLE_WALL_SHADER,
+		StructureMaterials.STYLE_ROOF_SHADER,
+		StructureMaterials.PANE_SHADER,
+		StructureMaterials.ORNAMENT_SHADER,
+		StructureMaterials.LANTERN_SHADER,
+		StructureMaterials.GLOW_SHADER,
+		StructureMaterials.WATER_SHADER,
+	]:
+		assert_true(shaders.has(shader), "a sample draws %s" % shader.resource_path)
+		assert_true(
+			GraphicsWarmup.COVERED_SHADERS.has(shader.resource_path),
+			"%s is a covered shader" % shader.resource_path
+		)
+	assert_true(names.has(StructureWarmup.STONE_SAMPLE))
+	assert_true(names.has(StructureWarmup.YARD_GROUND_SAMPLE))
+	assert_true(names.has(StructureWarmup.YARD_PROPS_SAMPLE))
+
+
+## A pipeline is keyed by the vertex layout, so the samples must have the layout a building's
+## surfaces and its yard meshes have.
+func test_structure_samples_have_the_real_layouts() -> void:
+	StructureRecipes.ensure_served()
+	var doc := MapDocument.create_flat(Vector2i(40, 40), "grass", "v", 9)
+	var inn := "core:coaching_inn"
+	var sides := StructurePlacement.sides_of(LibraryStructureStore.structure(inn))
+	var plan := StructurePlacement.lot_plan(Vector2.ZERO, Vector2(14, 12), 0.0, sides)
+	var parts := StructureGeometry.build_one(doc, Structure.make(1, inn, plan, 5))
+	assert_eq(parts.problem, "", "the inn builds")
+	var real := {}
+	for mesh: Dictionary in StructureGeometry.all_meshes(parts):
+		real[_layout_of(mesh.arrays)] = mesh.kind
+	assert_eq(real.size(), 1, "every surface of a building shares one layout")
+	assert_true(
+		real.has(_layout_of(StructureWarmup.quad_arrays())), "the structure samples have that layout"
+	)
+	var yards := {}
+	for part: String in ["ground", "props"]:
+		var mesh: Dictionary = (parts.get("dressing", {}) as Dictionary).get(part, {})
+		if not mesh.is_empty():
+			yards[_layout_of(mesh.arrays)] = part
+	assert_eq(yards.size(), 1, "the inn has a yard of one layout")
+	assert_true(
+		yards.has(_layout_of(StructureWarmup.yard_arrays())), "the yard samples have that layout"
+	)
+
+
+func _layout_of(arrays: Array) -> int:
+	return _format_of(
+		{
+			"name": "layout",
+			"primitive": Mesh.PRIMITIVE_TRIANGLES,
+			"arrays": arrays,
+			"material": GraphicsWarmup.material_for(StructureMaterials.WALL_SHADER),
+		}
+	)

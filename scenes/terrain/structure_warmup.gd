@@ -21,6 +21,11 @@ extends Node
 ## of stacking on a stroke. Closing the tool pauses it (pause()); opening it again resumes where it
 ## stopped. Nothing it makes changes what a build looks like: the materials are the ones an install
 ## would make, made earlier.
+##
+## The first-launch graphics warm-up (GraphicsWarmupScreen) takes the heavy part of this off the
+## tool open: warmup_samples() hands it one triangle per structure shader, on the layout of a
+## building's surfaces, so the shaders' pipelines compile under the "Preparing graphics" screen.
+## This session warm-up then finds them compiled and costs a few milliseconds.
 
 ## A unit: one material made (its shader compiles), or that material drawn once.
 enum Phase { MAKE, DRAW }
@@ -51,6 +56,24 @@ const IDLE_FRAME_MS := 20.0
 const MAX_WAIT_FRAMES := 4
 ## Units per combo, one per Phase.
 const UNITS_PER_COMBO := 2
+## The structure shaders the first-launch graphics warm-up draws (warmup_samples), by sample name:
+## one bare ShaderMaterial each, since a pipeline is keyed by the shader and the vertex layout and
+## not by uniform values. The wall shader serves masonry and boards, the ornament shader leaves,
+## cloth, metal and wood, and so on; a style or a kind adds no pipeline.
+const SAMPLE_SHADERS := {
+	"structure_wall": StructureMaterials.WALL_SHADER,
+	"structure_roof": StructureMaterials.ROOF_SHADER,
+	"structure_style_wall": StructureMaterials.STYLE_WALL_SHADER,
+	"structure_style_roof": StructureMaterials.STYLE_ROOF_SHADER,
+	"structure_pane": StructureMaterials.PANE_SHADER,
+	"structure_ornament": StructureMaterials.ORNAMENT_SHADER,
+	"structure_lantern": StructureMaterials.LANTERN_SHADER,
+	"structure_glow": StructureMaterials.GLOW_SHADER,
+	"structure_water": StructureMaterials.WATER_SHADER,
+}
+const STONE_SAMPLE := "structure_stone"
+const YARD_GROUND_SAMPLE := "structure_yard_ground"
+const YARD_PROPS_SAMPLE := "structure_yard_props"
 
 ## The last warm-up's units in order, {"frame", "combo", "phase", "ms"} (process frame, COMBOS
 ## index, Phase, main-thread ms); the hitches probe and the tests read it.
@@ -132,6 +155,76 @@ static func resume_map(map_root: Node) -> void:
 ## The number of units in a full warm-up.
 static func unit_count() -> int:
 	return COMBOS.size() * UNITS_PER_COMBO
+
+
+## GraphicsWarmup samples (the first-launch warm-up screen draws them): one triangle in each
+## structure shader on the layout a building's surfaces have, plus the modelled stone and the two
+## yard materials, so the pipelines a first building needs compile under the "Preparing graphics"
+## screen and not when the Structure tool opens (docs/PERFORMANCE.md "Structure shaders in the
+## first-launch warm-up"). Safe on a worker thread: it only makes resources.
+static func warmup_samples() -> Array[Dictionary]:
+	var arrays := quad_arrays()
+	var samples: Array[Dictionary] = []
+	for sample_name: String in SAMPLE_SHADERS:
+		var shader: Shader = SAMPLE_SHADERS[sample_name]
+		samples.append(_sample(sample_name, arrays, GraphicsWarmup.material_for(shader)))
+	samples.append(_sample(STONE_SAMPLE, arrays, _stone_material()))
+	var yard := yard_arrays()
+	samples.append(_sample(YARD_GROUND_SAMPLE, yard, StructureMaterials.dressing_ground()))
+	samples.append(_sample(YARD_PROPS_SAMPLE, yard, StructureMaterials.dressing_props()))
+	return samples
+
+
+## One triangle with the layout of a structure surface (StructureGeometry.surface_arrays: vertex,
+## normal, UV, colour, tangent, index).
+static func quad_arrays() -> Array:
+	return StructureGeometry.surface_arrays(
+		"stone",
+		PackedVector3Array([Vector3.ZERO, Vector3.RIGHT, Vector3.FORWARD]),
+		PackedVector3Array([Vector3.UP, Vector3.UP, Vector3.UP]),
+		PackedVector2Array([Vector2.ZERO, Vector2.RIGHT, Vector2.UP]),
+		PackedColorArray([Color.WHITE, Color.WHITE, Color.WHITE]),
+		PackedInt32Array([0, 1, 2])
+	)
+
+
+## One triangle with the layout of a yard mesh (StructureDressingShapes: vertex, normal, colour,
+## index; no UV and no tangent).
+static func yard_arrays() -> Array:
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3.ZERO, Vector3.RIGHT, Vector3.FORWARD])
+	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.UP, Vector3.UP, Vector3.UP])
+	arrays[Mesh.ARRAY_COLOR] = PackedColorArray([Color.WHITE, Color.WHITE, Color.WHITE])
+	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2])
+	return arrays
+
+
+static func _sample(sample_name: String, arrays: Array, material: Material) -> Dictionary:
+	return {
+		"name": sample_name,
+		"primitive": Mesh.PRIMITIVE_TRIANGLES,
+		"arrays": arrays,
+		"material": material,
+		"multimesh": false,
+	}
+
+
+## The modelled stone of a trim (StructureMaterials._stone, AuthoredCrossings.surface_material):
+## a vertex-colour ORM material with albedo, normal and ORM textures, triplanar. The textures are
+## placeholders; a pipeline does not depend on what a sampler holds.
+static func _stone_material() -> ORMMaterial3D:
+	var image := Image.create_empty(4, 4, false, Image.FORMAT_RGBA8)
+	var texture := ImageTexture.create_from_image(image)
+	var material := ORMMaterial3D.new()
+	material.vertex_color_use_as_albedo = true
+	material.albedo_texture = texture
+	material.normal_enabled = true
+	material.normal_texture = texture
+	material.orm_texture = texture
+	material.uv1_triplanar = true
+	material.uv1_triplanar_sharpness = 4.0
+	return material
 
 
 func _ready() -> void:
@@ -234,20 +327,12 @@ func _draw(combo: int) -> void:
 	_warmer.warm_mesh(_quad_mesh(material), "structure_%s_%s" % [pair[0], pair[1]])
 
 
-## A one-triangle mesh with the attributes a structure surface carries (normal, colour, UV) in
-## `material`, built from its arrays (duplicating an ArrayMesh reads its buffers back from the GPU).
+## A one-triangle mesh with the attributes a structure surface carries (normal, colour, UV,
+## tangent) in `material`, built from its arrays (duplicating an ArrayMesh reads its buffers back
+## from the GPU).
 func _quad_mesh(material: Material) -> ArrayMesh:
 	if _quad_arrays.is_empty():
-		_quad_arrays.resize(Mesh.ARRAY_MAX)
-		_quad_arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array(
-			[Vector3.ZERO, Vector3.RIGHT, Vector3.FORWARD]
-		)
-		_quad_arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.UP, Vector3.UP, Vector3.UP])
-		_quad_arrays[Mesh.ARRAY_COLOR] = PackedColorArray([Color.WHITE, Color.WHITE, Color.WHITE])
-		_quad_arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array(
-			[Vector2.ZERO, Vector2.RIGHT, Vector2.UP]
-		)
-		_quad_arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2])
+		_quad_arrays = quad_arrays()
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _quad_arrays)
 	mesh.surface_set_material(0, material)
