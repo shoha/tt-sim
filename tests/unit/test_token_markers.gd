@@ -41,11 +41,82 @@ func test_a_pin_is_never_drawn_for_a_token_the_players_cannot_see() -> void:
 
 
 func test_the_pin_head_keeps_its_pixel_size_at_every_zoom() -> void:
-	# 20 m across 1000 px: 24 px is 0.48 m; twice the view, twice the metres.
-	assert_almost_eq(TokenMarkers.head_metres(20.0, 1000.0), 0.48, 0.0001)
-	assert_almost_eq(TokenMarkers.head_metres(40.0, 1000.0), 0.96, 0.0001)
-	assert_almost_eq(TokenMarkers.head_metres(20.0, 1000.0) / 20.0 * 1000.0, 24.0, 0.0001)
-	assert_lt(TokenMarkers.HEAD_PX, 27.0, "the owner's size: 22 to 26 px")
+	# 20 m across 1000 px: 44 px is 0.88 m; twice the view, twice the metres.
+	assert_almost_eq(TokenMarkers.head_metres(20.0, 1000.0), 0.88, 0.0001)
+	assert_almost_eq(TokenMarkers.head_metres(40.0, 1000.0), 1.76, 0.0001)
+	var px := TokenMarkers.HEAD_PX
+	assert_almost_eq(TokenMarkers.head_metres(20.0, 1000.0) / 20.0 * 1000.0, px, 0.0001)
+	assert_between(px, 40.0, 48.0, "the owner: much bigger than the 24 px that was unreadable")
+
+
+# --- hover and click ---
+
+
+func test_the_head_centre_stands_above_the_tip_on_screen() -> void:
+	var tip := Vector2(300.0, 200.0)
+	var centre := TokenMarkers.pin_head_centre(tip)
+	assert_almost_eq(centre.x, 300.0, 0.0001)
+	assert_almost_eq(tip.y - centre.y, TokenMarkers.HEAD_ABOVE_TIP * TokenMarkers.HEAD_PX, 0.0001)
+	# The centre is where the shader's circle is: tip height + tip radius + tail length.
+	assert_almost_eq(TokenMarkers.HEAD_ABOVE_TIP, 0.03 + 0.80, 0.0001)
+
+
+func test_the_pointer_picks_the_pin_head_it_is_inside() -> void:
+	var centres := PackedVector2Array([Vector2(100, 100), Vector2(400, 100)])
+	var radii := PackedFloat32Array([22.0, 22.0])
+	assert_eq(TokenMarkers.pick_pin(centres, radii, Vector2(110, 105)), 0)
+	assert_eq(TokenMarkers.pick_pin(centres, radii, Vector2(400, 120)), 1)
+	assert_eq(TokenMarkers.pick_pin(centres, radii, Vector2(250, 100)), -1, "between: none")
+	assert_eq(TokenMarkers.pick_pin(centres, radii, Vector2(100, 123)), -1, "just outside the circle")
+	# The quad's corner is not the pin: a click there is not a pin click.
+	assert_eq(TokenMarkers.pick_pin(centres, radii, Vector2(100 + 21, 100 + 21)), -1)
+	assert_eq(TokenMarkers.pick_pin(PackedVector2Array(), PackedFloat32Array(), Vector2.ZERO), -1)
+
+
+func test_where_pins_overlap_the_nearest_head_centre_wins() -> void:
+	var centres := PackedVector2Array([Vector2(100, 100), Vector2(120, 100), Vector2(140, 100)])
+	var radii := PackedFloat32Array([22.0, 22.0, 22.0])
+	assert_eq(TokenMarkers.pick_pin(centres, radii, Vector2(105, 100)), 0)
+	assert_eq(TokenMarkers.pick_pin(centres, radii, Vector2(119, 100)), 1, "the middle one")
+	assert_eq(TokenMarkers.pick_pin(centres, radii, Vector2(131, 100)), 2)
+	var big := PackedFloat32Array([22.0, 22.0, 24.2])
+	assert_eq(TokenMarkers.pick_pin(centres, big, Vector2(122, 100)), 1, "by distance, not size")
+
+
+func test_the_hovered_pin_is_moved_to_the_end_of_the_draw_order() -> void:
+	var pins: Array[Array] = [[3.0, 1], [2.0, 2], [1.0, 3]]
+	var front := TokenMarkers.bring_to_front(pins, 1, 1)
+	assert_eq(front.map(func(p: Array) -> int: return p[1]), [2, 3, 1], "drawn last, on top")
+	assert_eq(pins.map(func(p: Array) -> int: return p[1]), [1, 2, 3], "the input is not changed")
+	var mid := TokenMarkers.bring_to_front(pins, 2, 1)
+	assert_eq(mid.map(func(p: Array) -> int: return p[1]), [1, 3, 2])
+	var none := TokenMarkers.bring_to_front(pins, 0, 1)
+	assert_eq(none.map(func(p: Array) -> int: return p[1]), [1, 2, 3], "no hover: unchanged")
+
+
+func test_a_pin_is_a_target_only_when_drawn_and_solid_enough() -> void:
+	assert_true(TokenMarkers.is_hittable(1.0, 1.0))
+	assert_true(TokenMarkers.is_hittable(0.5, 0.2), "the GM's dim pin of a hidden token")
+	assert_false(TokenMarkers.is_hittable(0.3, 0.3), "still fading in: it must not catch a click")
+	assert_false(TokenMarkers.is_hittable(0.0, 0.0), "pitch below the fade: no pins, no targets")
+	# A token hidden from a player has no pin alpha, so it is no target for them.
+	var player_alpha := TokenMarkers.pin_alpha(1.0, false, true, false)
+	assert_false(TokenMarkers.is_hittable(1.0, player_alpha), "hidden token, player")
+	var gm_alpha := TokenMarkers.pin_alpha(1.0, false, true, true)
+	assert_true(TokenMarkers.is_hittable(1.0, gm_alpha), "hidden token, the GM can pick it")
+
+
+func test_a_press_on_a_pin_takes_the_same_path_as_one_on_the_body() -> void:
+	var controller := DragController.new()
+	add_child_autofree(controller)
+	var object := Draggable3D.new()
+	var body := StaticBody3D.new()
+	object.add_child(body)
+	add_child_autofree(object)
+	await get_tree().process_frame
+	assert_true(object.press_at(Vector2(50, 60)), "armed")
+	controller.dragging_enabled = false
+	assert_false(object.press_at(Vector2(50, 60)), "a tool in use: the press is refused")
 
 
 func test_the_tip_stands_on_the_footprint_edge_from_above_and_the_head_from_the_side() -> void:
@@ -167,13 +238,13 @@ func test_the_visible_rect_ignores_faint_pixels_and_scales_back() -> void:
 func test_a_standing_figure_is_cropped_to_head_and_chest_and_an_animal_kept_whole() -> void:
 	var size := Vector2i(128, 128)
 	var person := TokenPortraits.portrait_rect(Rect2i(44, 10, 40, 108), size)
-	assert_eq(person.size.x, 54, "half the figure's height")
-	assert_eq(person.size.y, 54)
+	assert_eq(person.size.x, 50, "under half the figure's height (HEAD_FRACTION)")
+	assert_eq(person.size.y, 50)
 	assert_lt(person.position.y, 12, "from the top: the head is in")
-	assert_lt(person.end.y, 70, "and the legs are not")
+	assert_lt(person.end.y, 66, "and the legs are not")
 	assert_almost_eq(float(person.get_center().x), 64.0, 1.0, "centred on the figure")
 	var horse := TokenPortraits.portrait_rect(Rect2i(10, 30, 108, 70), size)
-	assert_eq(horse.size.x, 117, "a wide figure: whole, with air")
+	assert_eq(horse.size.x, 112, "a wide figure: whole, with air")
 	assert_true(Rect2i(Vector2i.ZERO, size).encloses(horse), "inside the picture")
 	var empty := TokenPortraits.portrait_rect(Rect2i(), size)
 	assert_eq(empty, Rect2i(Vector2i.ZERO, size), "no content: the whole picture")

@@ -8,15 +8,18 @@ render_mode unshaded, depth_test_disabled, cull_disabled;
 //   COLOR           the pin's body colour (the token's vivid colour) and, in alpha, the strength
 //                   (the fade-in with pitch, and the GM's dimmed view of a hidden token);
 //   INSTANCE_CUSTOM xy = the picture's top-left in the atlas (UV), z = 1 when the picture is in
-//                   the atlas (0 draws the plain coloured disc).
+//                   the atlas (0 draws the plain coloured disc), w = 1 for the hovered pin (a wider,
+//                   whiter rim; the instance transform makes it a tenth larger).
 // The quad is QUAD_W by QUAD_H head diameters, its bottom edge at v = 0; the head's size is set
 // by the quad's scale. The constants below mirror TokenMarkers (QUAD_W, QUAD_H, TIP_Y).
 
 uniform sampler2D atlas : source_color, filter_linear, repeat_disable;
 // The picture's side in atlas UV.
 uniform float picture_uv = 0.0546875;
-// The thin pale edge, in head diameters (about 1.3 px on a 24 px head), and the cream it is.
-uniform float rim = 0.055;
+// The thin pale edge, in head diameters (about 1.3 px on a 44 px head), and the cream it is.
+// The hovered pin (INSTANCE_CUSTOM.w = 1) has a wider, whiter one.
+uniform float rim_base = 0.03;
+uniform float rim_hover = 0.05;
 uniform vec3 rim_colour : source_color = vec3(1.0, 0.96, 0.86);
 uniform vec3 shadow_colour : source_color = vec3(0.16, 0.08, 0.26);
 uniform float shadow_strength = 0.30;
@@ -64,6 +67,8 @@ void fragment() {
 	float head_c = TIP_Y + TIP_R + TAIL_H;
 	float sd = pin_sd(q);
 	float aa = max(fwidth(sd), 0.002);
+	float hover = cell.w;
+	float rim = mix(rim_base, rim_hover, hover);
 	float cover = 1.0 - smoothstep(-aa, aa, sd);
 	// A soft shadow beneath and to the right, so the pin lifts off the board without an ink line.
 	float sd_shadow = pin_sd(q - vec2(0.035, -0.05));
@@ -86,7 +91,7 @@ void fragment() {
 	vec3 fill = mix(body, inner, in_picture);
 	// The pale rim is whatever of the pin lies within `rim` of its outline.
 	float rim_mix = smoothstep(-rim - aa, -rim + aa, sd);
-	vec3 pin = mix(fill, rim_colour, rim_mix);
+	vec3 pin = mix(fill, mix(rim_colour, vec3(1.0), hover * 0.6), rim_mix);
 
 	float alpha = cover + shadow * (1.0 - cover);
 	vec3 colour = (pin * cover + shadow_colour * shadow * (1.0 - cover)) / max(alpha, 0.0001);

@@ -9,6 +9,9 @@ extends RefCounted
 ##                             `scale: {item: factor}` then enlarges the named tokens
 ##   {action: "scale", scale}  enlarge named tokens (after the spawn pop-in, a wait of 0.5 s)
 ##   {action: "zoom", which}   camera size to "closest" (min_zoom) or "home" (the load zoom)
+##   {action: "hover", at, radius, nth, dx, dy, clear}   the pointer onto a token's pin (the nth from the
+##                             left within `radius` m of ground point `at`), or parked with `clear`
+##   {action: "click", ...}    the same, then a left press and release; reports the drag controller's state
 ##   {action: "keys", brush}   report the hint bar's chips and the compass tooltip (live mapping)
 ##   {action: "clip", name, dir, seconds, fps, width, events: [...]}
 ##                             a fixed-rate clip: ClipRig runs the scheduled `events` and saves every
@@ -50,6 +53,14 @@ static func run(base: Node, step: Dictionary) -> String:
 			# Saves the pin portrait atlas (cropped to the used rows, 2x) to `path` and lists each
 			# token's pin facts: key, cell, footprint radius and half height, colour.
 			return _atlas(gm, String(step.get("path", "user://render_jobs/atlas.png")))
+		"hover":
+			# Puts the pointer on a token's pin head (see _pointer for the choice) so the pin
+			# draws as hovered; `clear: true` parks it in a corner instead.
+			return _pointer(gm, step, "move")
+		"click":
+			# A left press and release on the same pin through the world viewport, and what the
+			# drag controller holds after the press (a pending press on the token it belongs to).
+			return _pointer(gm, step, "click")
 		"zoom":
 			# `which` closest (the controller's min_zoom) or home (its load zoom): the camera size.
 			var closest := String(step.get("which", "home")) == "closest"
@@ -76,6 +87,60 @@ static func run(base: Node, step: Dictionary) -> String:
 			base.get_tree().root.add_child(rig)
 			return "clip %s %d frames" % [rig.clip_name, rig.frames]
 	return "unknown action"
+
+
+## Moves the pointer onto a pin (or parks it) and optionally clicks it, all as events pushed into
+## the world viewport. The pin is the `nth` (0 first) of those within `radius` metres of `at`
+## ([x, z]; every pin when absent) counted by head position from the left; `dx`, `dy` shift the
+## point from the head centre in pixels.
+static func _pointer(gm: GameMap, step: Dictionary, mode: String) -> String:
+	var markers := gm.world_viewport.get_node_or_null("TokenMarkers") as TokenMarkers
+	if markers == null:
+		return "no markers"
+	markers.gui_blocked = Callable()
+	var point := Vector2(4.0, 4.0)
+	var who := "parked"
+	var token: BoardToken = null
+	if not bool(step.get("clear", false)):
+		var cands: Array[Array] = []
+		var at: Array = step.get("at", [])
+		for i in markers._hit_ids.size():
+			var t := instance_from_id(markers._hit_ids[i]) as BoardToken
+			if t == null:
+				continue
+			var p := t.rigid_body.global_position
+			if at.size() == 2 and Vector2(p.x, p.z).distance_to(Vector2(at[0], at[1])) > float(step.get("radius", 4.0)):
+				continue
+			var centre: Vector2 = markers._hit_centres[i]
+			if not Rect2(Vector2.ZERO, Vector2(gm.world_viewport.size)).has_point(centre):
+				continue
+			cands.append([centre, t])
+		cands.sort_custom(func(a: Array, b: Array) -> bool: return a[0].x < b[0].x)
+		var nth := int(step.get("nth", 0))
+		if nth >= cands.size():
+			return "no pin %d of %d" % [nth, cands.size()]
+		token = cands[nth][1]
+		point = cands[nth][0] + Vector2(float(step.get("dx", 0.0)), float(step.get("dy", 0.0)))
+		who = "%s (%d pins in range)" % [token.token_name, cands.size()]
+	var motion := InputEventMouseMotion.new()
+	motion.position = point
+	motion.global_position = point
+	gm.world_viewport.push_input(motion, true)
+	if mode != "click":
+		return "pointer at %s on %s" % [str(point.round()), who]
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = point
+	press.global_position = point
+	gm.world_viewport.push_input(press, true)
+	var state := (gm.drag_and_drop_node as DragController).get("_state") as DragState
+	var holder := state.subject as Draggable3D
+	var armed := "pending %s, subject %s" % [state.is_pending(), holder.get_parent().name if holder != null else "none"]
+	var release := press.duplicate() as InputEventMouseButton
+	release.pressed = false
+	gm.world_viewport.push_input(release, true)
+	return "click at %s on %s: %s" % [str(point.round()), who, armed]
 
 
 static func _atlas(gm: GameMap, path: String) -> String:

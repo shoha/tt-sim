@@ -11,6 +11,17 @@ extends Node3D
 ## (CameraRig.marker_strength) and is off below, where the model reads and the token ghost
 ## shows a token under cover.
 ##
+## Hover and click (camerarig-5): the pin is large (44 px, constant in the world viewport's own
+## pixels, which under the canvas_items stretch are the UI's pixels, so it grows and shrinks
+## with the window as the UI does) and is a target. The pin whose head the pointer is over
+## draws in front of every other (it is moved to the end of the instance order, still one draw
+## call), a tenth larger with a brighter rim; where several heads overlap the pointer, the one
+## whose centre is nearest wins. A left press on a pin hands that token's DraggableToken the
+## same press a click on its body would (Draggable3D.press_at), so it picks the token up with
+## the same permission rules, and the press is consumed only when that press took; a hit test
+## is the head circle, never the quad. Both work only while the pin is solid enough to be a
+## target (HIT_MIN_STRENGTH) and a token with no pin (hidden from a player) is no target.
+##
 ## One MultiMesh of camera-facing quads with a no-depth-test shader (shaders/token_marker.gdshader):
 ## one draw call whatever the token count (the pictures are cells of one atlas texture), and
 ## nothing at all while the pitch is low (the node does no work below the threshold, and the
@@ -25,13 +36,22 @@ extends Node3D
 
 const SHADER := preload("res://shaders/token_marker.gdshader")
 ## The pin head's diameter on screen, in pixels, whatever the zoom or the token's size.
-const HEAD_PX := 24.0
+const HEAD_PX := 44.0
 ## The pin's quad in head diameters, and the height of the tip above its bottom edge; the same
 ## numbers as the shader's QUAD_W, QUAD_H and TIP_Y.
 const QUAD_W := 1.3
 const QUAD_H := 1.65
 const TIP_Y := 0.14
+## How far the head's centre stands above the tip, in head diameters (the shader's TAIL_H + TIP_R).
+const HEAD_ABOVE_TIP := 0.83
+## The hovered pin is this much larger (about its tip, which stays on the token).
+const HOVER_SCALE := 1.1
+## A pin takes hover and clicks only once the fade has brought it to this strength, so a barely
+## visible pin never catches a click meant for the token or ground under it.
+const HIT_MIN_STRENGTH := 0.5
 const RENDER_PRIORITY := 20
+## Where a pin's token id sits in the per-frame pin arrays [depth, tip, colour, cell, id].
+const PIN_ID := 4
 ## How often the tokens' sizes and colours are read again, seconds.
 const REFRESH_PERIOD_S := 0.5
 ## The alpha a token hidden from the players has in the GM's view (as the token's own 0.4).
@@ -41,11 +61,25 @@ const NO_COLOUR := Color(0.62, 0.66, 0.78)
 ## Most vertex colours sampled from a mesh surface.
 const VERTEX_SAMPLES := 64
 
+## Set by the owner: Callable() -> bool, true while the pointer is over interface (not the
+## world), when pins take neither hover nor clicks.
+var gui_blocked: Callable = Callable()
+
 var _camera: Camera3D = null
 var _viewport: SubViewport = null
 var _instances: MultiMeshInstance3D = null
 var _portraits: TokenPortraits = null
 var _since_refresh: float = REFRESH_PERIOD_S
+## The pointer in the world viewport's pixels, from the motion events that reach the viewport,
+## and whether it is inside the window.
+var _pointer: Vector2 = Vector2.ZERO
+var _pointer_in: bool = false
+## Instance id of the BoardToken whose pin the pointer is over (0 for none).
+var _hovered: int = 0
+## This frame's pin targets, parallel: head centre (viewport px), head radius (px), token id.
+var _hit_centres: PackedVector2Array = PackedVector2Array()
+var _hit_radii: PackedFloat32Array = PackedFloat32Array()
+var _hit_ids: Array[int] = []
 ## BoardToken instance id -> {"offset": Vector3, "radius": float, "half_height": float,
 ## "colour": Color, "key": String ("" while the model is not loaded)}.
 var _look: Dictionary = {}
@@ -54,9 +88,13 @@ var _colours: Dictionary = {}
 
 
 ## A TokenMarkers under `viewport` (the world SubViewport), looking through `camera`.
-static func attach(viewport: SubViewport, camera: Camera3D) -> TokenMarkers:
+## `over_gui` (Callable() -> bool) says when the pointer is over interface.
+static func attach(
+	viewport: SubViewport, camera: Camera3D, over_gui: Callable = Callable()
+) -> TokenMarkers:
 	var markers := TokenMarkers.new()
 	markers.name = "TokenMarkers"
+	markers.gui_blocked = over_gui
 	markers.process_priority = 10  # after the camera controller has placed the camera
 	markers._camera = camera
 	markers._viewport = viewport
@@ -104,6 +142,45 @@ static func pin_alpha(
 ## `viewport_px` pixels.
 static func head_metres(camera_size: float, viewport_px: float, head_px: float = HEAD_PX) -> float:
 	return head_px * camera_size / maxf(viewport_px, 1.0)
+
+
+## Where a pin's head centre is on screen: straight above its tip by HEAD_ABOVE_TIP head
+## diameters (screen up is negative y). `tip_px` and the result are viewport pixels.
+static func pin_head_centre(tip_px: Vector2, head_px: float = HEAD_PX) -> Vector2:
+	return tip_px + Vector2(0.0, -HEAD_ABOVE_TIP * head_px)
+
+
+## Whether a pin is a target at all: it is drawn (alpha above 0, so a token hidden from a
+## player has none) and the fade has brought it to HIT_MIN_STRENGTH.
+static func is_hittable(strength: float, alpha: float) -> bool:
+	return alpha > 0.0 and strength >= HIT_MIN_STRENGTH
+
+
+## The pin under `point`: the index of the head circle (centre `centres[i]`, radius `radii[i]`)
+## that contains it, and where several do, the one whose centre is nearest. -1 for none.
+static func pick_pin(
+	centres: PackedVector2Array, radii: PackedFloat32Array, point: Vector2
+) -> int:
+	var best := -1
+	var best_d2 := INF
+	for i in centres.size():
+		var d2 := centres[i].distance_squared_to(point)
+		if d2 <= radii[i] * radii[i] and d2 < best_d2:
+			best_d2 = d2
+			best = i
+	return best
+
+
+## `pins` (in draw order, the last drawn on top) with the entry whose id (element `id_at`) is
+## `id` moved to the end, so it draws in front of the rest. Unchanged when `id` is not there.
+static func bring_to_front(pins: Array[Array], id: int, id_at: int) -> Array[Array]:
+	for i in pins.size():
+		if pins[i][id_at] == id:
+			var out := pins.duplicate()
+			out.remove_at(i)
+			out.append(pins[i])
+			return out
+	return pins
 
 
 ## How far a token's top edge lies from its centre along the unit screen-up vector `up`, in
@@ -185,6 +262,52 @@ static func sample_colours(
 	return out
 
 
+# --- input ---
+
+
+## Follow the pointer in the world viewport's pixels (never consumes the event).
+func _input(event: InputEvent) -> void:
+	var motion := event as InputEventMouseMotion
+	if motion != null:
+		_pointer = motion.position
+		_pointer_in = true
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_MOUSE_EXIT:
+		_pointer_in = false
+
+
+## A left press on a pin picks its token up as a press on the token's body would, and is
+## consumed only when that press took (a refused one, no permission or a tool in use, falls
+## through to whatever lies beneath).
+func _unhandled_input(event: InputEvent) -> void:
+	var button := event as InputEventMouseButton
+	if button == null or button.button_index != MOUSE_BUTTON_LEFT or not button.pressed:
+		return
+	var token := token_at(button.position)
+	if token == null:
+		return
+	var draggable := token.get_dragging_object()
+	if draggable != null and draggable.press_at(button.position):
+		_viewport.set_input_as_handled()
+
+
+## The token whose pin head is under `point` (viewport pixels) as of the last frame drawn, or
+## null: nothing while the pins are not targets (too faint, or off).
+func token_at(point: Vector2) -> BoardToken:
+	var i := pick_pin(_hit_centres, _hit_radii, point)
+	if i < 0:
+		return null
+	var token := instance_from_id(_hit_ids[i]) as BoardToken
+	return token if token != null and is_instance_valid(token) else null
+
+
+## The token whose pin is hovered now, or null.
+func hovered_token() -> BoardToken:
+	return instance_from_id(_hovered) as BoardToken if _hovered != 0 else null
+
+
 # --- per frame ---
 
 
@@ -196,6 +319,7 @@ func _process(delta: float) -> void:
 		if _instances.visible:
 			_instances.visible = false
 			_instances.multimesh.visible_instance_count = 0
+			_clear_hits()
 		return
 	_since_refresh += delta
 	var refresh := _since_refresh >= REFRESH_PERIOD_S
@@ -243,18 +367,66 @@ func _draw(strength: float, refresh: bool) -> void:
 		var tip := centre + up * top_edge_metres(look.radius, look.half_height, up)
 		var colour: Color = look.colour
 		colour.a = alpha
-		pins.append([tip.dot(up), tip, colour, cell])
+		pins.append([tip.dot(up), tip, colour, cell, id])
 	# Higher on the screen first, so a lower pin lies over the one above it.
 	pins.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0])
+	_update_hits(pins, strength)
+	# The pin under the pointer is drawn last: in front of every pin it overlaps.
+	pins = bring_to_front(pins, _hovered, PIN_ID)
 	for i in pins.size():
 		var pin: Array = pins[i]
-		multi.set_instance_transform(i, pin_transform(pin[1], head, camera_basis))
+		var hover: bool = _hovered != 0 and pin[PIN_ID] == _hovered
+		var scale := head * (HOVER_SCALE if hover else 1.0)
+		multi.set_instance_transform(i, pin_transform(pin[1], scale, camera_basis))
 		multi.set_instance_color(i, pin[2])
 		var cell: int = pin[3]
 		var uv := TokenPortraits.picture_uv(maxi(cell, 0))
-		multi.set_instance_custom_data(i, Color(uv.x, uv.y, 1.0 if cell >= 0 else 0.0, 0.0))
+		multi.set_instance_custom_data(
+			i, Color(uv.x, uv.y, 1.0 if cell >= 0 else 0.0, 1.0 if hover else 0.0)
+		)
 	multi.visible_instance_count = pins.size()
 	_instances.visible = not pins.is_empty()
+
+
+## Build this frame's pin targets from `pins` (in the sorted pin arrays) and find the hovered
+## one. Nothing is a target below HIT_MIN_STRENGTH, with the pointer outside the window or over
+## interface, or while a token is held.
+func _update_hits(pins: Array[Array], strength: float) -> void:
+	var was := _hovered
+	_clear_hits()
+	if strength < HIT_MIN_STRENGTH:
+		return
+	for pin in pins:
+		if not is_hittable(strength, (pin[2] as Color).a):
+			continue
+		var id: int = pin[PIN_ID]
+		# The hovered pin is tested at its enlarged size, so the pointer on its rim does not
+		# make it flicker between the two sizes.
+		var scale := HOVER_SCALE if id == was else 1.0
+		_hit_centres.append(pin_head_centre(_camera.unproject_position(pin[1]), HEAD_PX * scale))
+		_hit_radii.append(HEAD_PX * 0.5 * scale)
+		_hit_ids.append(id)
+	if not _pointer_in or _is_blocked():
+		return
+	var i := pick_pin(_hit_centres, _hit_radii, _pointer)
+	_hovered = _hit_ids[i] if i >= 0 else 0
+
+
+func _clear_hits() -> void:
+	_hovered = 0
+	_hit_centres.clear()
+	_hit_radii.clear()
+	_hit_ids.clear()
+
+
+## Whether the pointer is over interface, outside the world viewport, or holding a token.
+func _is_blocked() -> bool:
+	if not Rect2(Vector2.ZERO, Vector2(_viewport.size)).has_point(_pointer):
+		return true
+	if gui_blocked.is_valid() and gui_blocked.call():
+		return true
+	var drag := get_tree().get_first_node_in_group(DragController.GROUP) as DragController
+	return drag != null and drag.is_dragging()
 
 
 ## What a token's picture is made from (see TokenPortraits): the avatar's recipe, the pack's icon

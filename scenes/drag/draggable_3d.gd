@@ -60,9 +60,19 @@ func _on_body_input_event(
 	var button := event as InputEventMouseButton
 	if button.button_index != MOUSE_BUTTON_LEFT or not button.is_pressed():
 		return
+	press_at(button.position)
+
+
+## Arm a drag on this object as if its body were pressed at `screen_position` (viewport
+## coordinates). Returns whether a drag was armed (false when there is no controller, dragging
+## is switched off, or a subclass refuses). The one entry for a press that does not come from
+## the body's own picking, such as a click on a token's map pin (TokenMarkers).
+func press_at(screen_position: Vector2) -> bool:
 	var controller := get_tree().get_first_node_in_group(DragController.GROUP) as DragController
-	if controller:
-		controller.press(self, button.position)
+	if controller == null or not controller.dragging_enabled:
+		return false
+	controller.press(self, screen_position)
+	return true
 
 
 func _find_body() -> CollisionObject3D:

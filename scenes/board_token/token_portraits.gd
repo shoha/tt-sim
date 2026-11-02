@@ -40,8 +40,8 @@ const MARGIN := 1.12
 ## person, a pin only has room for the face and chest); any other is kept whole with WHOLE_AIR
 ## round it. SCAN_PX is the size the picture is reduced to for finding the figure.
 const TALL_RATIO := 1.12
-const HEAD_FRACTION := 0.5
-const WHOLE_AIR := 1.08
+const HEAD_FRACTION := 0.46
+const WHOLE_AIR := 1.04
 const SCAN_PX := 48
 ## Icon jobs per frame stop once they have used this much time, microseconds.
 const ICON_BUDGET_US := 2000

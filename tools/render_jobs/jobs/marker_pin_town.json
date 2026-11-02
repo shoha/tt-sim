@@ -50,15 +50,20 @@
    {"op": "wait", "s": 1.0},
    {"op": "capture", "name": "town_mid_p{value}", "desc": "town, 6 m view, pitch {value}"}
   ]},
-  {"op": "zoom", "size": 5.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "zoom", "which": "home"},
   {"op": "settle"},
-  {"op": "look_at", "at": [9.5, 2.2]},
+  {"op": "look_at", "at": [9.5, 2.0]},
   {"op": "settle"},
   {"op": "expand", "values": ["75", "90"], "template": [
    {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "pitch", "deg": "{value}"},
    {"op": "settle"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "hover", "clear": true},
    {"op": "wait", "s": 1.0},
-   {"op": "capture", "name": "town_crowd_p{value}", "desc": "town, 5 m view, pitch {value}: six tokens 0.6 m apart"}
+   {"op": "capture", "name": "town_crowd_p{value}", "desc": "town, home zoom, pitch {value}: six tokens 0.6 m apart, no hover"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "hover", "at": [9.5, 2.0], "radius": 3.0, "nth": 2},
+   {"op": "wait", "s": 1.0},
+   {"op": "capture", "name": "town_crowd_hover_p{value}", "desc": "town, home zoom, pitch {value}: the pointer on the third pin of the crowd"},
+   {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "hover", "clear": true}
   ]},
   {"op": "zoom", "size": 34.0},
   {"op": "settle"},

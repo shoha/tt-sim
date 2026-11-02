@@ -148,7 +148,7 @@ func setup(game_map: GameMap) -> void:
 	# React to viewport resizes (e.g. window resize) so aspect correction stays current
 	game_map.world_viewport.size_changed.connect(_on_viewport_size_changed)
 	_view = CameraView.new(self, game_map)
-	TokenMarkers.attach(game_map.world_viewport, camera_node)
+	TokenMarkers.attach(game_map.world_viewport, camera_node, game_map.is_mouse_over_gui)
 	compass = CameraCompass.attach(self)
 	compass.turn_requested.connect(turn_view)
 	compass.tilt_requested.connect(_view.tilt_by)

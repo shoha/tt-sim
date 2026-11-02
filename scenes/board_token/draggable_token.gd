@@ -106,18 +106,16 @@ func _ready() -> void:
 	super()
 
 
-## Override base class input handler to gate drag initiation on dragging_allowed.
-## The base class hands a left press to the DragController, which starts a drag. We suppress
-## that when dragging is disallowed.
-func _on_body_input_event(
-	camera: Node, event: InputEvent, event_position: Vector3, normal: Vector3, shape_idx: int
-) -> void:
+## Override base class press to gate drag initiation on dragging_allowed. The base class hands
+## a left press (on the body, or on the token's map pin) to the DragController, which starts a
+## drag. We suppress that when dragging is disallowed.
+func press_at(screen_position: Vector2) -> bool:
 	if not dragging_allowed:
-		return
+		return false
 	# Suppress drag when R is held — R+LMB is used for rotate/scale
 	if Input.is_key_pressed(KEY_R):
-		return
-	super(camera, event, event_position, normal, shape_idx)
+		return false
+	return super(screen_position)
 
 
 func _setup_drop_indicator() -> void:
