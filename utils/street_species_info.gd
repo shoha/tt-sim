@@ -8,10 +8,18 @@ extends RefCounted
 ##
 ## Numbering (saved maps store the index, so it never changes): 0 mixed, 1 terrace, 2 guild
 ## houses, 3 village, 4 cottages (the first five), then 5 pueblo village, 6 villa street, 7 alpine
-## hamlet, 8 canal row, 9 tudor lane, 10 minka village.
+## hamlet, 8 canal row, 9 tudor lane, 10 minka village, 11 modern row (the modern town's).
+##
+## Setback: a species may name the setback a new street of it starts at (`setback_m`, how far back
+## its buildings stand, the Wall row's height); the rest take the Street brush's default
+## (Wall.DEFAULT_HEIGHT_M, 3 m). The modern row stands back 3.6 m, a 2.7 m frontage strip against
+## 2.25 m (SettlementFrontage: 0.75 of the setback), room for its parked cars at the kerb. The
+## Street brush moves to it
+## when its tile is picked, unless the author has set the setback since (WallBrush.pick_preset).
 ## Pure data in, data out.
 
-## Per procgen species name: the tile's id, label, icon (a Tabler name) and tooltip.
+## Per procgen species name: the tile's id, label, icon (a Tabler name) and tooltip, and an
+## optional `setback_m`.
 const INFO: Dictionary = {
 	"mixed":
 	{
@@ -90,6 +98,14 @@ const INFO: Dictionary = {
 		"icon": "leaf",
 		"tooltip": "A minka village: low thatched farmhouses set far apart, fenced yards",
 	},
+	"modern_row":
+	{
+		"id": &"street_modern",
+		"label": "Modern",
+		"icon": "stairs-up",
+		"tooltip": "A mid-century high street: flat-roofed shops, terraces and bungalows in pastel",
+		"setback_m": 3.6,
+	},
 }
 
 
@@ -115,6 +131,16 @@ static func tiles() -> Array[Dictionary]:
 			}
 		)
 	return out
+
+
+## The setback (metres) a new street of species `preset` starts at: its own `setback_m`, else the
+## Street brush's default. An unknown preset gets the default.
+static func setback_m(preset: int) -> float:
+	var fallback: float = Wall.DEFAULT_HEIGHT_M[Wall.Kind.ROW]
+	if preset < 0 or preset >= count():
+		return fallback
+	var info: Dictionary = INFO.get(ProcgenStreetSpecies.NAMES[preset], {})
+	return float(info.get("setback_m", fallback))
 
 
 ## The readout name of species `preset` (clamped into range): "Mixed", "Guild houses"...

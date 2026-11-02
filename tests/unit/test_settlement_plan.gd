@@ -1,7 +1,7 @@
 extends GutTest
 
 ## Settlements, the pure half (card settlement, villages phase 1 host step B): the frontage of a
-## street from its lots (SettlementFrontage, golden digests for all 11 species), the plan
+## street from its lots (SettlementFrontage, golden digests for all 12 species), the plan
 ## (SettlementPlan: determinism, the overrides), the record (Settlement, MapSettlementIO: round
 ## trip, old maps, hostile input, caps) and the live-edit codec. Digests:
 ## tests/fixtures/settlement_digests.txt (`<species> <frontage digest> <plan digest> <count>`, the
@@ -60,7 +60,7 @@ func _lines(path: String) -> PackedStringArray:
 
 
 func test_the_frontage_of_every_species_matches_its_golden_digest() -> void:
-	assert_eq(Wall.ROW_PRESETS, 11)
+	assert_eq(Wall.ROW_PRESETS, 12)
 	var now := PackedStringArray()
 	for preset in Wall.ROW_PRESETS:
 		_doc = MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)

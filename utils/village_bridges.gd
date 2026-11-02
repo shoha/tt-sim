@@ -108,7 +108,8 @@ static func wet_runs(
 ## The crossing kinds a village of character `kit` and `wealth` tries, best first.
 static func kinds_for(kit: String, wealth: float) -> Array[Crossing.Kind]:
 	var main: Crossing.Kind = Crossing.Kind.PLANK
-	if kit == "market_town" or kit == "hill_fort_village":
+	# A town's road crosses on a built span (a modern town's too: the arch is the only one).
+	if kit == "market_town" or kit == "hill_fort_village" or kit == "modern_town":
 		main = Crossing.Kind.ARCH
 	var out: Array[Crossing.Kind] = []
 	if wealth < POOR_WEALTH:

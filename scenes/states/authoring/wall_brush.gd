@@ -68,8 +68,11 @@ var heights: Array[float] = [
 ## A new street's side (0 left, 1 right, 2 both; Q and E) and variation seed (R).
 var row_side: int = 2
 var row_seed: int = 0
-## A new street's species (Wall.preset).
+## A new street's species (Wall.preset); set it with pick_preset.
 var row_preset: int = 0
+## The author has stepped the street's setback (heights[ROW]) on this brush: a species tile
+## then keeps the author's value instead of moving it to the species' own (pick_preset).
+var row_height_touched: bool = false
 ## The street picked by a click (its id), or -1: the pane offers to split it into buildings.
 var selected_id: int = -1
 ## A side being drawn: its press point (world) and the pointer's last ground point.
@@ -157,14 +160,31 @@ static func readout_row(
 	)
 
 
+## The setback a street brush holds after species `preset` is picked: the species' own
+## (StreetSpeciesInfo.setback_m) unless the author has set one (`touched`), which stays. Pure.
+static func preset_setback(current_m: float, preset: int, touched: bool) -> float:
+	return current_m if touched else StreetSpeciesInfo.setback_m(preset)
+
+
 ## The picked kind's height (world metres).
 func height() -> float:
 	return heights[kind]
 
 
-## Steps the picked kind's height `steps` notches (Shift+wheel, [ and ]).
+## Steps the picked kind's height `steps` notches (Shift+wheel, [ and ]). A street's setback so
+## set is the author's and outlives a species pick.
 func step_height(steps: int) -> void:
 	heights[kind] = stepped_height(heights[kind], steps, kind)
+	if kind == Wall.Kind.ROW:
+		row_height_touched = true
+	_planned_to = Vector3.INF
+
+
+## Picks species `preset` for new streets, and with it the species' setback unless the author has
+## set the setback (preset_setback).
+func pick_preset(preset: int) -> void:
+	row_preset = preset
+	heights[Wall.Kind.ROW] = preset_setback(heights[Wall.Kind.ROW], preset, row_height_touched)
 	_planned_to = Vector3.INF
 
 

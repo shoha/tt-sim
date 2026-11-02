@@ -76,6 +76,9 @@ func test_a_kit_decides_the_kinds_and_its_default() -> void:
 	assert_eq(VillageFields.kind_for("market_town", "crops"), "garden", "not offered: the default")
 	assert_eq(VillageFields.kind_for("farming_hamlet", "orchard"), "orchard")
 	assert_eq(VillageFields.kind_for("harbour_town", "garden"), "", "a harbour keeps no fields")
+	assert_eq(VillageFields.kind_for("modern_town", ""), "garden", "a modern town's beds first")
+	assert_eq(VillageFields.kind_for("modern_town", "orchard"), "orchard")
+	assert_eq(VillageFields.kind_for("modern_town", "crops"), "garden", "a town ploughs no field")
 	assert_eq(VillageFields.radius_for_drag(Vector2.ZERO, Vector2(0.5, 0), "crops"), 8.0)
 	assert_eq(VillageFields.radius_for_drag(Vector2.ZERO, Vector2(30, 0), "garden"), 8.0)
 	assert_eq(VillageFields.radius_for_drag(Vector2.ZERO, Vector2(6.04, 0), "orchard"), 6.0)
@@ -527,6 +530,32 @@ func test_the_boundary_tiles_share_one_row_with_their_labels_whole() -> void:
 		var note := "%s fits its tile (%.0f of %.0f)" % [tile.text, wide, tile.size.x]
 		assert_lt(wide, tile.size.x - 8.0, note)
 	assert_between(tiles.get_child(0).size.y, 38.0, 44.0, "controls about 40 px")
+
+
+## Five characters on one line, each name whole: it breaks between its words under the picture,
+## every word fits the tile's width and the name takes at most two lines, so no tile grows past the
+## row height.
+func test_the_character_tiles_share_one_line_with_their_names_whole() -> void:
+	var pane := _laid_out_pane(1, "market_town")
+	await wait_physics_frames(3)
+	var tiles := pane.kit_field.tiles
+	assert_eq(tiles.get_child_count(), Settlement.KIND_NAMES.size())
+	var top := (tiles.get_child(0) as Button).position.y
+	for child in tiles.get_children():
+		var tile := child as Button
+		assert_eq(tile.position.y, top, "%s on the one line" % tile.text)
+		assert_eq(tile.size.y, VillageToolPane.KIT_TILE_SIZE.y, "%s keeps the row height" % tile.text)
+		var font := tile.get_theme_font(&"font")
+		var font_size := tile.get_theme_font_size(&"font_size")
+		var style := tile.get_theme_stylebox(&"normal")
+		var room := tile.size.x - style.get_margin(SIDE_LEFT) - style.get_margin(SIDE_RIGHT)
+		for word in tile.text.split(" "):
+			var wide := font.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+			assert_lte(wide, room, "%s fits its tile (%.0f of %.0f)" % [word, wide, room])
+		var lines := font.get_multiline_string_size(
+			tile.text, HORIZONTAL_ALIGNMENT_CENTER, room, font_size
+		)
+		assert_lte(lines.y, 2.0 * font.get_height(font_size), "%s on two lines" % tile.text)
 
 
 func test_a_greyed_kind_reads_in_the_solid_disabled_role() -> void:

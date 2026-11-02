@@ -86,7 +86,7 @@ core:yurt 9b4df1ba9f5188717cf7dcd2fcab8278 1028
 core:tulou 67faba7e4acddde34efd779e5251dc40 3546
 core:trullo 7718476918a8bb3124e48b9a8910b80b 738
 core:blackhouse 3bc0eb2b61797b58a44df3dc10330743 648
-core:riad 0b03dfc7ef90205eae094c6e5e93a659 4843
+core:riad 73449a337c4acba969471bcc31545b09 4275
 core:sahel_mosque 632ea457e68da4230f45f30201ace8ec 2514
 core:stave_church 01e3a5da11691daf815f7cd06362cd52 1618
 core:wizard_tower 60d51dd39f7a20a9e1fa66318c39ef7e 1132
@@ -96,5 +96,5 @@ core:elven_hall 62487c959d7e73da714ff4a6739de48d 2574
 core:dwarven_gatehall ba86bfedf6fb3d4f703ebb7e70698290 2114
 core:crystal_spire 67ea427408b4839b6556121f9869c3f2 780
 core:ruined_chapel f16e340893c25b7a30d06e71330f7ad4 1050
-core:moorish_souk 1bd5bf70afd7e645fca559c6a12e4186 1511
+core:moorish_souk ea221b8cd16c2c2c581c04f0aac28795 1251
 core:ice_lodge 024b6a473f3013176990b6df561f3cc6 1554

@@ -2,7 +2,7 @@ extends GutTest
 
 ## The faster StructurePaint.paint and StructureGeometry.split_surface (topic perf4) give the
 ## same meshes, byte for byte, as the implementations they replaced. The old ones are kept below as
-## the reference; every one of the 100 core structures and the 72 prop draws is split and painted
+## the reference; every one of the 100 core structures and the 108 prop draws is split and painted
 ## both ways (and painted with two palettes, the street row path), and every array and tag must
 ## match.
 ## The pinned digests (test_structure_build, test_library_props) prove the same through the build.
@@ -86,7 +86,7 @@ func _split(geometry: PlantGeometry, roles: PackedStringArray, legacy: bool) -> 
 
 func test_split_and_paint_equal_the_old_implementations_on_every_structure_and_prop() -> void:
 	var cases := _cases()
-	assert_eq(cases.size(), 172, "100 structures and 72 prop draws")
+	assert_eq(cases.size(), 208, "100 structures and 108 prop draws")
 	var split_moved := 0
 	var paint_moved := 0
 	var groups_moved := 0
@@ -135,7 +135,7 @@ func test_split_and_paint_equal_the_old_implementations_on_every_structure_and_p
 	assert_eq(paint_moved, 0, "painted meshes (one palette) that differ from the old ones")
 	assert_eq(groups_moved, 0, "painted meshes (two palettes) that differ from the old ones")
 	gut.p(
-		"split old %.0f ms new %.0f ms; paint old %.0f ms new %.0f ms (172 builds, main thread)"
+		"split old %.0f ms new %.0f ms; paint old %.0f ms new %.0f ms (208 builds, main thread)"
 		% [
 			_usec_old.split / 1000.0,
 			_usec_new.split / 1000.0,

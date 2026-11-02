@@ -378,7 +378,8 @@ Facts of the S5 build (still true of the shipped folder):
   `plan.json` `origins`. Nothing in the scatter code reads an id's text, so the renaming moves
   no row (checked byte for byte).
 - **Surfaces.** The 36 installed surfaces are `surfaces/<name>/{albedo,normal,orm,height}.png`
-  (byte-identical copies of the installed files) plus `surface.json` (`label` as the game shows
+  (byte-identical copies of the installed files; 39 since 2026-11-01, when the modern town's
+  `asphalt_road`, `paving_kerb` and `concrete_plaza` were added from core-library `24a3396`) plus `surface.json` (`label` as the game shows
   it today, `kind`, `role`, `tile_m`, `albedo_mean_linear` as the palette lists it, so the ground
   look reads the same mean). All nine biome-defs are `surfaces: library`: `ground.surface`,
   `cliff`, `scree`, `water_bed`, `shore`, accents and paths are bare names that resolve to the

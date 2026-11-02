@@ -607,7 +607,7 @@ func _parts_digest(parts: Dictionary) -> int:
 ## each: a 24 m street builds, its shell is closed under procgen's mesh check at the default
 ## settings, and the same buildings come back from a saved map and from a live edit.
 func test_every_street_species_builds_closes_saves_and_survives_the_live_edit() -> void:
-	assert_eq(Wall.ROW_PRESETS, 11, "procgen has eleven street species")
+	assert_eq(Wall.ROW_PRESETS, 12, "procgen has twelve street species")
 	for preset in Wall.ROW_PRESETS:
 		var species: String = ProcgenStreetSpecies.NAMES[preset]
 		_doc = MapDocument.create_flat(Vector2i(20, 20), "grass", "v", 9)
@@ -728,6 +728,8 @@ func test_the_pane_offers_the_species_only_for_a_street() -> void:
 	assert_eq(tiles[4].id, &"street_cottages")
 	assert_eq(StreetSpeciesInfo.readout_name(2), "Guild houses")
 	assert_eq(StreetSpeciesInfo.readout_name(10), "Minka village")
+	assert_eq(StreetSpeciesInfo.readout_name(11), "Modern row")
+	assert_eq(tiles[11].id, &"street_modern", "the modern town's species has its own tile")
 	pane.kind_field.tiles.selection_changed.emit(&"wall_row")
 	assert_true(pane.preset_field.visible, "shown for a street")
 	watch_signals(pane)
@@ -738,6 +740,39 @@ func test_the_pane_offers_the_species_only_for_a_street() -> void:
 	assert_eq(
 		WallBrush.readout_row(8, 0, 0.0, 0.0, 0.0, "", 3), "Street  Village, 8 buildings, left side"
 	)
+
+
+## The modern row starts its street 3.6 m back, the rest at the brush default; a setback the
+## author stepped stays through a species pick.
+func test_a_species_tile_sets_its_setback_until_the_author_sets_one() -> void:
+	var modern := ProcgenStreetSpecies.NAMES.find("modern_row")
+	var fallback: float = Wall.DEFAULT_HEIGHT_M[Wall.Kind.ROW]
+	assert_almost_eq(StreetSpeciesInfo.setback_m(modern), 3.6, 1e-6)
+	for preset in StreetSpeciesInfo.count():
+		if preset != modern:
+			assert_eq(StreetSpeciesInfo.setback_m(preset), fallback, "preset %d unchanged" % preset)
+	assert_eq(StreetSpeciesInfo.setback_m(-1), fallback, "an unknown preset gets the default")
+	assert_eq(StreetSpeciesInfo.setback_m(99), fallback)
+	assert_almost_eq(WallBrush.preset_setback(3.0, modern, false), 3.6, 1e-6)
+	assert_eq(WallBrush.preset_setback(4.2, modern, true), 4.2, "the author's value stays")
+	var brush := WallBrush.new()
+	brush.kind = Wall.Kind.ROW
+	brush.pick_preset(modern)
+	assert_eq(brush.row_preset, modern)
+	assert_almost_eq(brush.height(), 3.6, 1e-6, "modern tile, untouched: its own setback")
+	brush.pick_preset(3)
+	assert_eq(brush.height(), fallback, "another species, untouched: the default")
+	brush.step_height(2)
+	var stepped := brush.height()
+	assert_true(brush.row_height_touched)
+	brush.pick_preset(modern)
+	assert_eq(brush.height(), stepped, "touched: picking the modern tile keeps the author's value")
+	var walls := WallBrush.new()
+	walls.kind = Wall.Kind.STONE
+	walls.step_height(1)
+	assert_false(walls.row_height_touched, "a wall's height is not the street's setback")
+	walls.pick_preset(modern)
+	assert_almost_eq(walls.heights[Wall.Kind.ROW], 3.6, 1e-6)
 
 
 func test_q_e_and_r_choose_a_streets_side_and_mix() -> void:

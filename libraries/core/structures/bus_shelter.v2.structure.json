@@ -1,0 +1,56 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "prop_2",
+      "to_port": 0
+    },
+    {
+      "from": "prop_2",
+      "from_port": 0,
+      "to": "output_3",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        40.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "prop_2",
+      "params": {
+        "prop": "bus_shelter",
+        "spec": "{\"name\":\"Bus or tram shelter\",\"palette\":{\"accent\":[\"#E8472F\",\"#2F7FB8\",\"#F2B33A\",\"#2E9F73\",\"#E56B8A\"],\"cloth\":[\"#C8323C\",\"#2F63B5\",\"#2E8F5E\",\"#E8A42B\",\"#7B4BB0\",\"#1F9AA0\",\"#E0607E\",\"#F0B429\"],\"roof\":[\"#C98B52\",\"#D9A261\",\"#B97B46\",\"#CF9A5E\"],\"stone\":[\"#CFC6B6\",\"#C4BDB0\",\"#D8CDB8\"],\"wall\":[\"#2F4858\",\"#3A3F4A\",\"#F4EFE2\",\"#2F6B73\"]},\"prop\":\"bus_shelter\",\"radius_m\":1.4,\"size\":[2.6,1.2],\"tones\":{\"accent\":\"#2F7FB8\",\"cloth\":\"#7B4BB0\",\"cloth2\":\"#1F9AA0\",\"roof\":\"#CF9A5E\",\"stone\":\"#D8CDB8\",\"wall\":\"#2F6B73\"},\"variant\":{\"back\":\"poster\",\"roof\":\"gable\",\"sign\":\"none\"}}"
+      },
+      "position": [
+        250.0,
+        40.0
+      ],
+      "type": "prop"
+    },
+    {
+      "id": "output_3",
+      "params": {
+        "name": "Bus or tram shelter",
+        "palette_accent": "#E8472F,#2F7FB8,#F2B33A,#2E9F73,#E56B8A",
+        "palette_roof": "#C98B52,#D9A261,#B97B46,#CF9A5E",
+        "palette_wall": "#2F4858,#3A3F4A,#F4EFE2,#2F6B73"
+      },
+      "position": [
+        480.0,
+        40.0
+      ],
+      "type": "output"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

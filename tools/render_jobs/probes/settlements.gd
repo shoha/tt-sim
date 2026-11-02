@@ -2,7 +2,8 @@ extends RefCounted
 
 ## Render-job probe (`call` op) for dressed streets (card settlement, docs/systems/settlements.md).
 ## step.action:
-##   street {from, to, preset, side, seed, setback}   lays a street through the editor (world XZ)
+##   street {from, to, preset, side, seed, setback}   lays a street through the editor (world XZ);
+##                                       setback "tool" takes the Street tool's species default
 ##   dress {id, kit, wealth, density}    dresses street `id` (default: the first), bakes the cells
 ##                                       now and reports them
 ##   plaza {id, at, radius}              opens a paved plaza disc for settlement `id` (world XZ)
@@ -25,7 +26,7 @@ static func run(base: Node, step: Dictionary) -> String:
 		return "no authoring editor"
 	match String(step.get("action", "report")):
 		"street":
-			return _street(ctrl.editor, step)
+			return _street(base, ctrl.editor, step)
 		"dress":
 			return _dress(ctrl.editor, step)
 		"plaza":
@@ -78,21 +79,35 @@ static func run(base: Node, step: Dictionary) -> String:
 	return _report(ctrl.editor)
 
 
-static func _street(editor: AuthoringEditor, step: Dictionary) -> String:
+static func _street(base: Node, editor: AuthoringEditor, step: Dictionary) -> String:
 	var a: Array = step.get("from", [-12, 0])
 	var b: Array = step.get("to", [12, 0])
+	var preset := int(step.get("preset", 3))
+	var setback := _setback(base, step, preset)
 	var id := editor.walls.place(
 		Wall.Kind.ROW,
 		Vector3(float(a[0]), 0, float(a[1])),
 		Vector3(float(b[0]), 0, float(b[1])),
-		float(step.get("setback", 3.0)),
-		{
-			"seed": int(step.get("seed", 5)),
-			"side": int(step.get("side", 2)),
-			"preset": int(step.get("preset", 3))
-		}
+		setback,
+		{"seed": int(step.get("seed", 5)), "side": int(step.get("side", 2)), "preset": preset}
 	)
-	return "street %d" % id if id >= 0 else "refused: %s" % editor.walls.last_refusal
+	if id < 0:
+		return "refused: %s" % editor.walls.last_refusal
+	return "street %d setback %.2f" % [id, setback]
+
+
+## The street's setback: step.setback in metres, or "tool" for the one the Street tool gives the
+## species when its tile is picked (WallBrush.pick_preset), else the old 3.0 m default.
+static func _setback(base: Node, step: Dictionary, preset: int) -> float:
+	var want: Variant = step.get("setback", 3.0)
+	if not (want is String and String(want) == "tool"):
+		return float(want)
+	var gm := base.get("_game_map") as GameMap
+	if gm == null or gm.get_brush_tool() == null:
+		return WallBrush.preset_setback(3.0, preset, false)
+	var brush := WallTool.of(gm.get_brush_tool())
+	brush.pick_preset(preset)
+	return brush.heights[Wall.Kind.ROW]
 
 
 static func _dress(editor: AuthoringEditor, step: Dictionary) -> String:

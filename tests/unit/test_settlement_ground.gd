@@ -6,7 +6,8 @@ extends GutTest
 ## SettlementEditor's one-undo Dress with its paint, the plazas of the record (round trip,
 ## hostile input, live edit) and the paint reaching a live-edit peer.
 
-const KITS := ["farming_hamlet", "market_town", "harbour_town", "hill_fort_village"]
+## Every kit procgen ships (the modern town's asphalt, kerb paving and concrete plaza included).
+const KITS := Settlement.KIND_NAMES
 const POND_BED := -1.25
 const POND_LEVEL := -0.25
 

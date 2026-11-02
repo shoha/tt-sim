@@ -32,6 +32,8 @@ const KIT_KINDS := {
 	"market_town": ["garden", "orchard"],
 	"hill_fort_village": ["garden", "crops"],
 	"harbour_town": [],
+	# A modern town keeps flower beds and allotment orchards, never ploughland.
+	"modern_town": ["garden", "orchard"],
 }
 const KIND_LABELS := {"crops": "Crops", "orchard": "Orchard", "garden": "Garden"}
 const KIND_TIPS := {

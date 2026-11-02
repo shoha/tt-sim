@@ -4,8 +4,8 @@ extends VBoxContainer
 ## The Village tool's pane in AuthoringPanel (VillageTool). One primary choice and what follows
 ## from it: when the map has two or more villages, a row naming them by number (the same "Village
 ## 2" the board's chips and the ghost's hint use) picks the one the pane is about; below it what a
-## press lays (Fields, below) and that village's character, four tiles each a small painted
-## vignette of its plaza
+## press lays (Fields, below) and that village's character, five tiles on one line, each a small
+## painted vignette of its plaza over its name
 ## (VillageSwatch: the kit's paving on its own ground colour with a well, a stall, barrels or a
 ## lamp); then the village's plazas: how many more it can hold, and for the picked plaza (or the
 ## one a drag is sizing, read live) its size on a slider the keys reach, with Remove beside it.
@@ -70,7 +70,9 @@ const KIND_THUMB_PX := 54
 const KIT_TIP := "%s: %s streets round a %s plaza"
 const REMOVE_TIP := "Remove the picked plaza and its paving (Delete)"
 const SIZE_TIP := "How wide the picked plaza is"
-const THUMB_PX := 28
+## The character tile's picture, at the Tile variation's own icon size, so five tiles fit one line
+## at 720 with their names under them.
+const THUMB_PX := 24
 ## The Boundary row: Auto (the character's own pick, the default), None, then the kinds from the
 ## lightest to the strongest. Each is [choice, label, tooltip]; the Auto tooltip is completed with
 ## what the village's character would draw (AUTO_TIP).
@@ -86,7 +88,9 @@ const BOUNDARY_CHOICES: Array[Array] = [
 	[VillageBoundary.WALL, "Wall", "A tall wall round the village, gates where streets leave"],
 ]
 const BOUNDARY_TILE_SIZE := Vector2(60, 40)
-const KIT_TILE_SIZE := Vector2(104, 36)
+## A character tile: the width is the row's share (five to a line); the height is what a Button
+## needs for the picture over a name on two lines (it counts one font height more than the text).
+const KIT_TILE_SIZE := Vector2(60, 86)
 const VILLAGE_TILE_SIZE := Vector2(96, 40)
 
 var empty_note: Label
@@ -281,7 +285,7 @@ func _show_plaza_picture(kit: String) -> void:
 		tile.icon = _plaza_pictures[kit]
 
 
-## Builds the four character tiles once, each with the vignette of its kit's plaza (the
+## Builds the five character tiles once, each with the vignette of its kit's plaza (the
 ## palette is served by the time a pane is shown). Safe to call again.
 func ensure_tiles() -> void:
 	if kit_field.tiles.has_tile(_kit_id(String(SettlementSection.CHIPS[0]["kit"]))):
@@ -304,9 +308,6 @@ func ensure_tiles() -> void:
 			tip,
 			VillageSwatch.kit_texture(kit, _palette_root, THUMB_PX)
 		)
-		# Compact: the small picture beside the name, not above it.
-		tile.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
-		tile.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
 
 
 func _build_kit_field() -> void:
@@ -315,7 +316,9 @@ func _build_kit_field() -> void:
 	kit_field.caption = "Character"
 	kit_field.tiles.photo_icons = true
 	kit_field.tiles.tile_min_size = KIT_TILE_SIZE
-	kit_field.tiles.columns = 2
+	# Every character on one line, the name breaking between its words under the picture.
+	kit_field.tiles.wrap_labels = true
+	kit_field.tiles.columns = SettlementSection.CHIPS.size()
 	kit_field.tiles.selection_changed.connect(_on_kit_tile)
 	kit_field.visible = false
 	add_child(kit_field)

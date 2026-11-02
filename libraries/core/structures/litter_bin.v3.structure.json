@@ -1,0 +1,56 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "prop_2",
+      "to_port": 0
+    },
+    {
+      "from": "prop_2",
+      "from_port": 0,
+      "to": "output_3",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        40.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "prop_2",
+      "params": {
+        "prop": "litter_bin",
+        "spec": "{\"name\":\"Litter bin\",\"palette\":{\"accent\":[\"#F2C230\",\"#F7F2E4\",\"#E0583A\",\"#3FA7D6\"],\"roof\":[\"#EBC45A\",\"#F2D273\",\"#E0B04C\"],\"stone\":[\"#CFC6B6\",\"#C4BDB0\",\"#D8CDB8\"],\"wall\":[\"#2F7F5B\",\"#2F5FA8\",\"#3F4350\",\"#B8362E\",\"#2E6F73\",\"#6B7A8C\"]},\"prop\":\"litter_bin\",\"radius_m\":0.4,\"size\":[0.6,0.6],\"tones\":{\"accent\":\"#E0583A\",\"roof\":\"#F2D273\",\"stone\":\"#C4BDB0\",\"wall\":\"#6B7A8C\"},\"variant\":{\"style\":\"drum\"}}"
+      },
+      "position": [
+        250.0,
+        40.0
+      ],
+      "type": "prop"
+    },
+    {
+      "id": "output_3",
+      "params": {
+        "name": "Litter bin",
+        "palette_accent": "#F2C230,#F7F2E4,#E0583A,#3FA7D6",
+        "palette_roof": "#EBC45A,#F2D273,#E0B04C",
+        "palette_wall": "#2F7F5B,#2F5FA8,#3F4350,#B8362E,#2E6F73,#6B7A8C"
+      },
+      "position": [
+        480.0,
+        40.0
+      ],
+      "type": "output"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

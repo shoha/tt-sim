@@ -86,6 +86,11 @@ const TILE_PROP_ZOOM_FACTORS: Dictionary = {
 	"farm_wagon": 1.1,
 	"field_gate": 1.2,
 	"yard_gate": 1.3,
+	"modern_lamp": 3.3,
+	"phone_box": 2.14,
+	"bus_shelter": 1.4,
+	"post_box": 1.6,
+	"litter_bin": 1.4,
 }
 ## Where a tall prop's tile looks: metres along z from the map's centre (negative moves the prop
 ## down in the picture, so its top is not cut off).
@@ -100,6 +105,11 @@ const TILE_PROP_LOOK_Z: Dictionary = {
 	"yard_gate": -0.25,
 	"field_gate": -0.25,
 	"haystack": -0.3,
+	"modern_lamp": -3.2,
+	"phone_box": -1.3,
+	"bus_shelter": -1.0,
+	"post_box": -0.7,
+	"litter_bin": -0.45,
 }
 
 static var _param_re: RegEx = _compile("^[a-z][a-z0-9_]*$")

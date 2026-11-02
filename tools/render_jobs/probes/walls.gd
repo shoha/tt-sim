@@ -151,7 +151,7 @@ static func _preset(base: Node, preset: int) -> String:
 	var gm := base.get("_game_map") as GameMap
 	if gm == null or gm.get_brush_tool() == null:
 		return "no brush"
-	WallTool.of(gm.get_brush_tool()).row_preset = preset
+	WallTool.of(gm.get_brush_tool()).pick_preset(preset)
 	return "street species %d" % preset
 
 

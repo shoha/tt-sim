@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.3556,
+		0.3266,
+		0.281
+	],
+	"kind": "stone_tiles",
+	"label": "Paving",
+	"role": "built",
+	"tile_m": 2.0
+}

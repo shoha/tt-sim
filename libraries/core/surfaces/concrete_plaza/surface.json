@@ -1,0 +1,11 @@
+{
+	"albedo_mean_linear": [
+		0.4905,
+		0.4705,
+		0.4262
+	],
+	"kind": "stone_tiles",
+	"label": "Concrete plaza",
+	"role": "built",
+	"tile_m": 2.0
+}

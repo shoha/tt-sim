@@ -66,7 +66,7 @@ static func _cells(text: String, columns: int) -> PackedStringArray:
 	return out
 
 
-## [ref, footprint, label] of every served structure (the 100 placeable) and prop draw (72), the
+## [ref, footprint, label] of every served structure (the 100 placeable) and prop draw (108), the
 ## label being the pins' leading cells ("<id>" or "<id> <seed>").
 func _cases() -> Array[Array]:
 	var out: Array[Array] = []
@@ -100,7 +100,7 @@ func _digests(cases: Array[Array], order: Array[int]) -> Dictionary:
 
 func test_every_structure_and_prop_digests_the_same_in_any_build_order() -> void:
 	var cases := _cases()
-	assert_eq(cases.size(), 172, "100 structures and 72 prop draws")
+	assert_eq(cases.size(), 208, "100 structures and 108 prop draws")
 	var forward: Array[int] = []
 	var backward: Array[int] = []
 	var shuffled: Array[int] = []

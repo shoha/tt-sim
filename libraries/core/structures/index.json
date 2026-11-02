@@ -4239,6 +4239,377 @@
 			"thumb": "thumbnails/structures/scarecrow.jpg",
 			"tint": "jewel",
 			"variant": ""
+		},
+		{
+			"blocks": "solid",
+			"default_size_m": [
+				1.3,
+				0.5
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/bollard.structure.json",
+			"id": "bollard",
+			"max_area_m2": 3.0,
+			"max_side_m": 3.0,
+			"min_side_m": 0.25,
+			"name": "Bollard",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.65,
+			"slots": [
+				"street_edge",
+				"plaza"
+			],
+			"tags": [
+				"prop",
+				"prop/bollard",
+				"bollard",
+				"street",
+				"modern",
+				"modern_town",
+				"kerb",
+				"street_edge",
+				"plaza"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/bollard.jpg",
+			"tint": "none",
+			"variant": ""
+		},
+		{
+			"blocks": "solid",
+			"default_size_m": [
+				0.7,
+				0.7
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/post_box.structure.json",
+			"id": "post_box",
+			"max_area_m2": 1.0,
+			"max_side_m": 1.4,
+			"min_side_m": 0.35,
+			"name": "Post box",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.55,
+			"slots": [
+				"street_edge",
+				"beside_door",
+				"plaza"
+			],
+			"tags": [
+				"prop",
+				"prop/post_box",
+				"post_box",
+				"street",
+				"modern",
+				"modern_town",
+				"post",
+				"mail",
+				"pillar",
+				"street_edge",
+				"beside_door",
+				"plaza"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/post_box.jpg",
+			"tint": "none",
+			"variant": ""
+		},
+		{
+			"blocks": "solid",
+			"default_size_m": [
+				0.6,
+				0.6
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/litter_bin.structure.json",
+			"id": "litter_bin",
+			"max_area_m2": 0.8,
+			"max_side_m": 1.2,
+			"min_side_m": 0.3,
+			"name": "Litter bin",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.4,
+			"slots": [
+				"street_edge",
+				"beside_door",
+				"plaza"
+			],
+			"tags": [
+				"prop",
+				"prop/litter_bin",
+				"litter_bin",
+				"street",
+				"modern",
+				"modern_town",
+				"bin",
+				"litter",
+				"rubbish",
+				"street_edge",
+				"beside_door",
+				"plaza"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/litter_bin.jpg",
+			"tint": "none",
+			"variant": ""
+		},
+		{
+			"blocks": "solid",
+			"default_size_m": [
+				1.0,
+				1.0
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/phone_box.structure.json",
+			"id": "phone_box",
+			"max_area_m2": 3.0,
+			"max_side_m": 2.0,
+			"min_side_m": 0.5,
+			"name": "Phone box",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.65,
+			"slots": [
+				"street_edge",
+				"plaza"
+			],
+			"tags": [
+				"prop",
+				"prop/phone_box",
+				"phone_box",
+				"street",
+				"modern",
+				"modern_town",
+				"phone",
+				"kiosk",
+				"telephone",
+				"street_edge",
+				"plaza"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/phone_box.jpg",
+			"tint": "none",
+			"variant": ""
+		},
+		{
+			"blocks": "stand",
+			"default_size_m": [
+				2.6,
+				1.2
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/bus_shelter.structure.json",
+			"id": "bus_shelter",
+			"max_area_m2": 12.0,
+			"max_side_m": 5.2,
+			"min_side_m": 0.6,
+			"name": "Bus or tram shelter",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 1.4,
+			"slots": [
+				"street_edge",
+				"plaza"
+			],
+			"tags": [
+				"prop",
+				"prop/bus_shelter",
+				"bus_shelter",
+				"street",
+				"modern",
+				"modern_town",
+				"shelter",
+				"bus",
+				"tram",
+				"stop",
+				"seat",
+				"street_edge",
+				"plaza"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/bus_shelter.jpg",
+			"tint": "none",
+			"variant": ""
+		},
+		{
+			"blocks": "solid",
+			"default_size_m": [
+				0.9,
+				0.7
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/modern_lamp.structure.json",
+			"id": "modern_lamp",
+			"max_area_m2": 2.5,
+			"max_side_m": 1.8,
+			"min_side_m": 0.3,
+			"name": "Modern street lamp",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.5,
+			"slots": [
+				"street_edge",
+				"plaza",
+				"junction"
+			],
+			"tags": [
+				"prop",
+				"prop/modern_lamp",
+				"modern_lamp",
+				"street",
+				"modern",
+				"modern_town",
+				"lamp",
+				"light",
+				"lantern",
+				"street_edge",
+				"plaza",
+				"junction"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/modern_lamp.jpg",
+			"tint": "none",
+			"variant": ""
+		},
+		{
+			"blocks": "stand",
+			"default_size_m": [
+				1.4,
+				1.6
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/bike_rack.structure.json",
+			"id": "bike_rack",
+			"max_area_m2": 5.1,
+			"max_side_m": 3.2,
+			"min_side_m": 0.7,
+			"name": "Bike rack",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.9,
+			"slots": [
+				"street_edge",
+				"beside_door",
+				"plaza"
+			],
+			"tags": [
+				"prop",
+				"prop/bike_rack",
+				"bike_rack",
+				"street",
+				"modern",
+				"modern_town",
+				"bike",
+				"bicycle",
+				"rack",
+				"street_edge",
+				"beside_door",
+				"plaza"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/bike_rack.jpg",
+			"tint": "none",
+			"variant": ""
+		},
+		{
+			"blocks": "solid",
+			"default_size_m": [
+				0.9,
+				0.9
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/planter.structure.json",
+			"id": "planter",
+			"max_area_m2": 3.6,
+			"max_side_m": 1.9,
+			"min_side_m": 0.45,
+			"name": "Planter",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 0.55,
+			"slots": [
+				"street_edge",
+				"beside_door",
+				"plaza"
+			],
+			"tags": [
+				"prop",
+				"prop/planter",
+				"planter",
+				"street",
+				"modern",
+				"modern_town",
+				"flowers",
+				"tub",
+				"garden",
+				"street_edge",
+				"beside_door",
+				"plaza"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/planter.jpg",
+			"tint": "none",
+			"variant": ""
+		},
+		{
+			"blocks": "solid",
+			"default_size_m": [
+				1.9,
+				4.3
+			],
+			"expose": [],
+			"family": "prop",
+			"file": "structures/parked_car.structure.json",
+			"id": "parked_car",
+			"max_area_m2": 16.0,
+			"max_side_m": 8.6,
+			"min_side_m": 1.0,
+			"name": "Parked car",
+			"plans": [
+				"prop"
+			],
+			"radius_m": 2.3,
+			"slots": [
+				"street_edge",
+				"plaza"
+			],
+			"tags": [
+				"prop",
+				"prop/parked_car",
+				"parked_car",
+				"street",
+				"modern",
+				"modern_town",
+				"car",
+				"vehicle",
+				"saloon",
+				"parked",
+				"street_edge",
+				"plaza"
+			],
+			"textured": false,
+			"thumb": "thumbnails/structures/parked_car.jpg",
+			"tint": "none",
+			"variant": ""
 		}
 	]
 }

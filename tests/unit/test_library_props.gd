@@ -1,6 +1,6 @@
 extends GutTest
 
-## Props in the core library (villages.md, topic props_host): 18 entries of family `prop`, each with
+## Props in the core library (villages.md, topic props_host): 27 entries of family `prop`, each with
 ## four draws (seeds 0 to 3) served as `core:<id>` and `core:<id>_v<k>`. They are no placeable
 ## structure: LibraryStructureStore.structures() stays the 100 the Building tool lists, and the
 ## props are read with props() and prop(name, seed). Digests: tests/fixtures/prop_digests.txt
@@ -46,7 +46,7 @@ func _lines(path: String) -> PackedStringArray:
 	return out
 
 
-func test_the_core_library_serves_the_18_props_and_the_placeable_structures_stay_100() -> void:
+func test_the_core_library_serves_the_27_props_and_the_placeable_structures_stay_100() -> void:
 	var props := LibraryStructureStore.props("core")
 	var names := PackedStringArray()
 	for row in props:
@@ -132,7 +132,7 @@ func test_the_props_build_at_their_default_footprint_and_match_the_pins() -> voi
 		for line in _lines(path):
 			pinned.append(" ".join(line.split(" ").slice(0, 4)))
 		pinned.sort()
-		assert_eq(now.size(), 72, path)
+		assert_eq(now.size(), 108, path)
 		var moved := PackedStringArray()
 		for i in mini(now.size(), pinned.size()):
 			if now[i] != pinned[i]:

@@ -8,7 +8,8 @@ extends RefCounted
 ## The record holds only the kind (`Settlement.boundary`: "" for none, WALL, LOW_WALL or HEDGE),
 ## drawn by the Dress from the character and the seed (kind_for): a hill fort is always walled, a
 ## market town keeps a low wall on two seeds in three, a farming hamlet a hedge on one in two, a
-## harbour town none. Everything else is derived on every peer from the record and the map:
+## harbour town and a modern town none. Everything else is derived on every peer from the record
+## and the map:
 ##
 ## - The line (ring_of): the convex hull of the street's standing lots (their yards included), of
 ##   the street itself widened past its road, and of the plazas, grown by MARGIN_M with rounded
@@ -29,7 +30,7 @@ const HEDGE := "hedge"
 const KINDS: Array[String] = [WALL, LOW_WALL, HEDGE]
 ## Per character: the kind its villages are bounded by and `skip`: none on one seed in `skip`
 ## (0: always). Not every village is walled (the suite's no-sameness rule). A kit not listed
-## (harbour town) has no boundary.
+## (harbour town; modern town, a town of kerbs and front gardens) has no boundary.
 const KIT_RULES := {
 	"hill_fort_village": {"kind": WALL, "skip": 0},
 	"market_town": {"kind": LOW_WALL, "skip": 3},

@@ -1,0 +1,56 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "prop_2",
+      "to_port": 0
+    },
+    {
+      "from": "prop_2",
+      "from_port": 0,
+      "to": "output_3",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        40.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "prop_2",
+      "params": {
+        "prop": "phone_box",
+        "spec": "{\"name\":\"Phone box\",\"palette\":{\"accent\":[\"#D62E2B\",\"#E8B823\",\"#2F6DB5\",\"#2E8F5E\",\"#1F9AA0\",\"#E8693A\",\"#F4EFE2\"],\"roof\":[\"#EBC45A\",\"#F2D273\",\"#E0B04C\"],\"stone\":[\"#F6ECD2\",\"#EFE3C4\"],\"wall\":[\"#3A3A44\",\"#2F3140\"]},\"prop\":\"phone_box\",\"radius_m\":0.65,\"size\":[1.0,1.0],\"tones\":{\"accent\":\"#1F9AA0\",\"roof\":\"#F2D273\",\"stone\":\"#EFE3C4\",\"wall\":\"#2F3140\"},\"variant\":{\"bars\":\"cross\",\"roof\":\"domed\"}}"
+      },
+      "position": [
+        250.0,
+        40.0
+      ],
+      "type": "prop"
+    },
+    {
+      "id": "output_3",
+      "params": {
+        "name": "Phone box",
+        "palette_accent": "#D62E2B,#E8B823,#2F6DB5,#2E8F5E,#1F9AA0,#E8693A,#F4EFE2",
+        "palette_roof": "#EBC45A,#F2D273,#E0B04C",
+        "palette_wall": "#3A3A44,#2F3140"
+      },
+      "position": [
+        480.0,
+        40.0
+      ],
+      "type": "output"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

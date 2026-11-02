@@ -1,0 +1,56 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "prop_2",
+      "to_port": 0
+    },
+    {
+      "from": "prop_2",
+      "from_port": 0,
+      "to": "output_3",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        40.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "prop_2",
+      "params": {
+        "prop": "planter",
+        "spec": "{\"name\":\"Planter\",\"palette\":{\"accent\":[\"#E0607E\",\"#F0B429\",\"#E8502F\",\"#7B4BB0\",\"#F08CB4\"],\"cloth\":[\"#E0607E\",\"#F0B429\",\"#E8502F\",\"#7B4BB0\",\"#F08CB4\",\"#F6ECD2\"],\"roof\":[\"#4E9E5C\",\"#3F8F55\",\"#68AE5A\",\"#2F8566\"],\"stone\":[\"#E4DACA\",\"#D8CDB8\",\"#CFC6B6\"],\"wall\":[\"#C8693E\",\"#2F6B8C\",\"#E8D8B8\",\"#4E8F6E\",\"#A9714A\"]},\"prop\":\"planter\",\"radius_m\":0.55,\"size\":[0.9,0.9],\"tones\":{\"accent\":\"#F08CB4\",\"cloth\":\"#E0607E\",\"cloth2\":\"#F08CB4\",\"roof\":\"#68AE5A\",\"stone\":\"#CFC6B6\",\"wall\":\"#A9714A\"},\"variant\":{\"plant\":\"flowers\",\"style\":\"tub\"}}"
+      },
+      "position": [
+        250.0,
+        40.0
+      ],
+      "type": "prop"
+    },
+    {
+      "id": "output_3",
+      "params": {
+        "name": "Planter",
+        "palette_accent": "#E0607E,#F0B429,#E8502F,#7B4BB0,#F08CB4",
+        "palette_roof": "#4E9E5C,#3F8F55,#68AE5A,#2F8566",
+        "palette_wall": "#C8693E,#2F6B8C,#E8D8B8,#4E8F6E,#A9714A"
+      },
+      "position": [
+        480.0,
+        40.0
+      ],
+      "type": "output"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

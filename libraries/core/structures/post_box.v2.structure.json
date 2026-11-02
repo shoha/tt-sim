@@ -1,0 +1,56 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "prop_2",
+      "to_port": 0
+    },
+    {
+      "from": "prop_2",
+      "from_port": 0,
+      "to": "output_3",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        40.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "prop_2",
+      "params": {
+        "prop": "post_box",
+        "spec": "{\"name\":\"Post box\",\"palette\":{\"accent\":[\"#D62E2B\",\"#E23B2E\",\"#F0B823\",\"#2F6DB5\",\"#2E8F5E\",\"#C8262F\"],\"roof\":[\"#F0C75A\",\"#F4D58A\",\"#E8B84A\"],\"stone\":[\"#F6ECD2\",\"#EFE3C4\"],\"wall\":[\"#3A3A44\",\"#2F3140\"]},\"prop\":\"post_box\",\"radius_m\":0.55,\"size\":[0.7,0.7],\"tones\":{\"accent\":\"#F0B823\",\"roof\":\"#E8B84A\",\"stone\":\"#EFE3C4\",\"wall\":\"#2F3140\"},\"variant\":{\"style\":\"wall\"}}"
+      },
+      "position": [
+        250.0,
+        40.0
+      ],
+      "type": "prop"
+    },
+    {
+      "id": "output_3",
+      "params": {
+        "name": "Post box",
+        "palette_accent": "#D62E2B,#E23B2E,#F0B823,#2F6DB5,#2E8F5E,#C8262F",
+        "palette_roof": "#F0C75A,#F4D58A,#E8B84A",
+        "palette_wall": "#3A3A44,#2F3140"
+      },
+      "position": [
+        480.0,
+        40.0
+      ],
+      "type": "output"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

@@ -2,8 +2,9 @@ class_name StructureOrnaments
 extends RefCounted
 
 ## The ornaments a player puts on a placed building (card ornaments_ui): ivy, a corner turret,
-## buttresses, a rose window, a weathervane, a hanging sign, flower boxes, an awning, banners. They
-## are procgen's nine ornament kinds (ProcgenOrnaments), added to the building's recipe document
+## buttresses, a rose window, a weathervane, a hanging sign, flower boxes, an awning, banners, and
+## the modern town's shop board, water tank, clock and bay windows. They are procgen's thirteen
+## ornament kinds (ProcgenOrnaments), added to the building's recipe document
 ## when it is built (ProcgenRecipesOrnaments.apply_to_document), so every peer that has the record
 ## builds the same dressed building.
 ##
@@ -23,7 +24,20 @@ const RESERVED: Array[String] = [PARAM_MASK, PARAM_IVY]
 ## The kinds in mask-bit order. Never reorder: a saved map stores the bits. A test pins this set to
 ## ProcgenOrnaments.KINDS.
 const KIND_BITS: Array[String] = [
-	"ivy", "bartizan", "buttress", "rose", "vane", "sign", "flower_boxes", "awning", "banner"
+	"ivy",
+	"bartizan",
+	"buttress",
+	"rose",
+	"vane",
+	"sign",
+	"flower_boxes",
+	"awning",
+	"banner",
+	# Procgen's modern town kinds (topic moderntown), appended in procgen's order.
+	"fascia",
+	"tank",
+	"clock",
+	"bay",
 ]
 ## The chips, in display order: the kind, its plain-word label and what it does.
 const CHIPS: Array[Dictionary] = [
@@ -72,6 +86,26 @@ const CHIPS: Array[Dictionary] = [
 		"label": "Banners",
 		"tip": "Pennants or banners on poles at the roof corners.",
 	},
+	{
+		"kind": "fascia",
+		"label": "Shop board",
+		"tip": "A broad painted sign board over the shopfront.",
+	},
+	{
+		"kind": "tank",
+		"label": "Water tank",
+		"tip": "A water tank on four legs on the flat roof.",
+	},
+	{
+		"kind": "clock",
+		"label": "Clock",
+		"tip": "A clock face on each free side of the building's tower.",
+	},
+	{
+		"kind": "bay",
+		"label": "Bay windows",
+		"tip": "Glazed bay window boxes on the ground floor's windows.",
+	},
 ]
 const IVY_MIN := 0.2
 const IVY_MAX := 1.0
@@ -108,7 +142,7 @@ const RUIN_REASON := "A ruin has nothing left to hang it on."
 const BUILT_IN_REASON := "Already part of this building's style."
 
 
-## The mask of `params` (0 for none), clamped to the nine bits.
+## The mask of `params` (0 for none), clamped to the bits of KIND_BITS.
 static func mask_of(params: Dictionary) -> int:
 	var value: Variant = params.get(PARAM_MASK, 0)
 	if value is bool or not (value is float or value is int):
