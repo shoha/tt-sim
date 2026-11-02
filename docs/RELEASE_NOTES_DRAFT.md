@@ -41,11 +41,12 @@ grow around windows and doors without covering them.
 
 ### Streets and villages
 
-Draw a street and it fills with a row of varied buildings. There are 11 kinds of street, from
-mixed rows and terraces to alpine hamlets, canal rows, Tudor lanes, pueblo villages and
-minka villages, and each lot is painted from its street's colour palette. Use Dress this
-street to scatter small props along it: barrels, crates, benches, wells, lamp posts, market
-stalls, carts, washing lines, haystacks, scarecrows and more (18 props in all).
+Draw a street and it fills with a row of varied buildings. There are 12 kinds of street, from
+mixed rows and terraces to alpine hamlets, canal rows, Tudor lanes, pueblo villages, minka
+villages and a mid-century modern high street, and each lot is painted from its street's colour
+palette. Use Dress this street to scatter small props along it: barrels, crates, benches, wells,
+lamp posts, market stalls, carts, washing lines, haystacks, scarecrows, and on a modern street
+phone boxes, post boxes, bus shelters, bollards, bike racks and parked cars (27 props in all).
 
 ### A wind that blows through everything
 

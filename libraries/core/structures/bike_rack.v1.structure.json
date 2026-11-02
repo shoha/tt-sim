@@ -1,0 +1,56 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "prop_2",
+      "to_port": 0
+    },
+    {
+      "from": "prop_2",
+      "from_port": 0,
+      "to": "output_3",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        40.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "prop_2",
+      "params": {
+        "prop": "bike_rack",
+        "spec": "{\"name\":\"Bike rack\",\"palette\":{\"accent\":[\"#E8472F\",\"#2FA7A0\",\"#F2B33A\",\"#3F82B8\",\"#F7F2E4\",\"#E56B8A\"],\"roof\":[\"#C98B52\",\"#E8B84A\",\"#D9A261\"],\"stone\":[\"#CFC6B6\",\"#C4BDB0\",\"#D8CDB8\"],\"wall\":[\"#3F82B8\",\"#2FA7A0\",\"#6C7A8C\",\"#E8472F\",\"#F2B33A\"]},\"prop\":\"bike_rack\",\"radius_m\":0.9,\"size\":[1.4,1.6],\"tones\":{\"accent\":\"#F7F2E4\",\"roof\":\"#C98B52\",\"stone\":\"#CFC6B6\",\"wall\":\"#E8472F\"},\"variant\":{\"basket\":false,\"bikes\":1.0}}"
+      },
+      "position": [
+        250.0,
+        40.0
+      ],
+      "type": "prop"
+    },
+    {
+      "id": "output_3",
+      "params": {
+        "name": "Bike rack",
+        "palette_accent": "#E8472F,#2FA7A0,#F2B33A,#3F82B8,#F7F2E4,#E56B8A",
+        "palette_roof": "#C98B52,#E8B84A,#D9A261",
+        "palette_wall": "#3F82B8,#2FA7A0,#6C7A8C,#E8472F,#F2B33A"
+      },
+      "position": [
+        480.0,
+        40.0
+      ],
+      "type": "output"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

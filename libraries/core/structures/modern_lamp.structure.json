@@ -1,0 +1,56 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "prop_2",
+      "to_port": 0
+    },
+    {
+      "from": "prop_2",
+      "from_port": 0,
+      "to": "output_3",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        40.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "prop_2",
+      "params": {
+        "prop": "modern_lamp",
+        "spec": "{\"name\":\"Modern street lamp\",\"palette\":{\"accent\":[\"#E8472F\",\"#3FA7D6\",\"#F2B33A\",\"#2E9F73\",\"#F7F2E4\"],\"roof\":[\"#EBC45A\",\"#F2D273\",\"#E0B04C\"],\"stone\":[\"#CFC6B6\",\"#C4BDB0\",\"#D8CDB8\"],\"wall\":[\"#33384A\",\"#2F4858\",\"#3F4A5C\",\"#F1ECE0\",\"#2E6F73\"]},\"prop\":\"modern_lamp\",\"radius_m\":0.5,\"size\":[0.9,0.7],\"tones\":{\"accent\":\"#F7F2E4\",\"roof\":\"#F2D273\",\"stone\":\"#D8CDB8\",\"wall\":\"#2E6F73\"},\"variant\":{\"style\":\"arc\"}}"
+      },
+      "position": [
+        250.0,
+        40.0
+      ],
+      "type": "prop"
+    },
+    {
+      "id": "output_3",
+      "params": {
+        "name": "Modern street lamp",
+        "palette_accent": "#E8472F,#3FA7D6,#F2B33A,#2E9F73,#F7F2E4",
+        "palette_roof": "#EBC45A,#F2D273,#E0B04C",
+        "palette_wall": "#33384A,#2F4858,#3F4A5C,#F1ECE0,#2E6F73"
+      },
+      "position": [
+        480.0,
+        40.0
+      ],
+      "type": "output"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

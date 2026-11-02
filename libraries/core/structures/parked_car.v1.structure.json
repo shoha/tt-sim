@@ -1,0 +1,56 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "prop_2",
+      "to_port": 0
+    },
+    {
+      "from": "prop_2",
+      "from_port": 0,
+      "to": "output_3",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        40.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "prop_2",
+      "params": {
+        "prop": "parked_car",
+        "spec": "{\"name\":\"Parked car\",\"palette\":{\"accent\":[\"#D8402F\",\"#2F63B5\",\"#F0B429\",\"#4FB59A\",\"#1F9AA0\",\"#F3E7C4\",\"#8A5CA8\",\"#E8693A\"],\"roof\":[\"#F3E7C4\",\"#F7F2E4\",\"#E7D7A8\"],\"stone\":[\"#E6E8E4\",\"#D6DBDE\"],\"wall\":[\"#F3E7C4\",\"#33384A\",\"#F7F2E4\",\"#C8262F\"]},\"prop\":\"parked_car\",\"radius_m\":2.3,\"size\":[1.9,4.3],\"tones\":{\"accent\":\"#F3E7C4\",\"roof\":\"#F3E7C4\",\"stone\":\"#E6E8E4\",\"wall\":\"#F7F2E4\"},\"variant\":{\"roof\":\"body\",\"stripe\":true,\"style\":\"fastback\"}}"
+      },
+      "position": [
+        250.0,
+        40.0
+      ],
+      "type": "prop"
+    },
+    {
+      "id": "output_3",
+      "params": {
+        "name": "Parked car",
+        "palette_accent": "#D8402F,#2F63B5,#F0B429,#4FB59A,#1F9AA0,#F3E7C4,#8A5CA8,#E8693A",
+        "palette_roof": "#F3E7C4,#F7F2E4,#E7D7A8",
+        "palette_wall": "#F3E7C4,#33384A,#F7F2E4,#C8262F"
+      },
+      "position": [
+        480.0,
+        40.0
+      ],
+      "type": "output"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}

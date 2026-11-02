@@ -1,0 +1,56 @@
+{
+  "connections": [
+    {
+      "from": "guide_1",
+      "from_port": 0,
+      "to": "prop_2",
+      "to_port": 0
+    },
+    {
+      "from": "prop_2",
+      "from_port": 0,
+      "to": "output_3",
+      "to_port": 0
+    }
+  ],
+  "format": "plantgen-graph",
+  "nodes": [
+    {
+      "id": "guide_1",
+      "params": {},
+      "position": [
+        20.0,
+        40.0
+      ],
+      "type": "guide"
+    },
+    {
+      "id": "prop_2",
+      "params": {
+        "prop": "bollard",
+        "spec": "{\"name\":\"Bollard\",\"palette\":{\"accent\":[\"#F2C230\",\"#E8472F\",\"#F7F2E4\",\"#3FA7D6\"],\"roof\":[\"#EBC45A\",\"#F2D273\",\"#E0B04C\"],\"stone\":[\"#D8CDB8\",\"#CFC6B6\",\"#E2D6BE\"],\"wall\":[\"#2F5F6B\",\"#34405E\",\"#2F6B4E\",\"#F1E8D2\",\"#3A4C7A\",\"#2E6F73\"]},\"prop\":\"bollard\",\"radius_m\":0.65,\"size\":[1.3,0.5],\"tones\":{\"accent\":\"#F7F2E4\",\"roof\":\"#EBC45A\",\"stone\":\"#D8CDB8\",\"wall\":\"#3A4C7A\"},\"variant\":{\"band\":false,\"chain\":false,\"count\":2.0,\"head\":\"dome\",\"material\":\"iron\"}}"
+      },
+      "position": [
+        250.0,
+        40.0
+      ],
+      "type": "prop"
+    },
+    {
+      "id": "output_3",
+      "params": {
+        "name": "Bollard",
+        "palette_accent": "#F2C230,#E8472F,#F7F2E4,#3FA7D6",
+        "palette_roof": "#EBC45A,#F2D273,#E0B04C",
+        "palette_wall": "#2F5F6B,#34405E,#2F6B4E,#F1E8D2,#3A4C7A,#2E6F73"
+      },
+      "position": [
+        480.0,
+        40.0
+      ],
+      "type": "output"
+    }
+  ],
+  "seed": 1234,
+  "version": 1
+}
