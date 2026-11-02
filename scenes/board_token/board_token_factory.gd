@@ -211,17 +211,21 @@ static func _get_or_create_collision_shape(
 	var use_convex = true if not config else config.use_convex_collision
 
 	if components.collision_shape:
-		# Use existing collision shape - detach from parent first
+		# Use the authored collision shape: move it into the model's space before it is
+		# detached, since it loses the parents (and their scale) that placed it.
+		var authored := components.collision_shape
+		var xf := TokenShape.to_model_parent(authored, components.original_scene)
 		_detach_existing_collision(components)
-		components.collision_shape.owner = null
-		return components.collision_shape
+		authored.owner = null
+		TokenShape.rebase(authored, xf)
+		return authored
 
-	# Create new collision shape from mesh
+	# No authored shape: the hull of the visible meshes, in the model's own space (TokenShape)
 	var collision_shape = CollisionShape3D.new()
 	collision_shape.name = "CollisionShape3D"
 
-	if use_convex and components.mesh_model and components.mesh_model.mesh:
-		collision_shape.shape = components.mesh_model.mesh.create_convex_shape()
+	if use_convex:
+		collision_shape.shape = TokenShape.hull_of(components.original_scene)
 
 	return collision_shape
 

@@ -739,9 +739,9 @@ Follow-ups:
   the visible pass draws three or four ridge layers) plus depth fog of about 25 to 85 m; window
   fixes (windows are flat cream rectangles at eye level); a shadow sweep from 5 to 25 degrees
   (`lighting-and-environment.md` "Sun and Shadow"); then a full-size look round on the board.
-  Also queued: pack-token collision shapes are wrong (a horse's is 2.3 times its model, a pig's
-  a speck), a right-click and double-click route for the token pin, and a real-mouse check of pin
-  hover and click.
+  Also queued: a right-click and double-click route for the token pin, and a real-mouse check of
+  pin hover and click. (Pack-token collision shapes were fixed in the `collshapes` card,
+  `docs/CONVENTIONS.md` "Camera System".)
 - Future ideas: player avatar tokens in the house style (Future ideas, below).
 - Crossings over a dressed Blender map's own water, in the terrain-paint integration sprint
   (Open work, "Crossing follow-ups").

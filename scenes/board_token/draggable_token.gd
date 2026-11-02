@@ -492,10 +492,18 @@ func _restore_visual_scale() -> void:
 			)
 
 
+## Turn a visual child to `rotation` and keep its scale. A model's root node carries the scale
+## that sizes the model (a horse's is 0.435, a pig's 0.197) and the pick-up punch scales it, so
+## setting the whole basis made a pack animal jump to its raw size (a pig five times as big) the
+## moment it was dragged, moved by the network or placed.
+static func set_lean(child: Node3D, rotation: Basis) -> void:
+	child.transform.basis = rotation * Basis.from_scale(child.transform.basis.get_scale())
+
+
 func _reset_lean() -> void:
 	for child in _visual_children:
 		if is_instance_valid(child):
-			child.transform.basis = Basis.IDENTITY
+			set_lean(child, Basis.IDENTITY)
 
 
 ## Decide whether a whoosh should play for this frame's horizontal speed.
@@ -536,7 +544,8 @@ func _update_inertia_lean(delta: float) -> void:
 	for child in _visual_children:
 		if is_instance_valid(child):
 			var current_basis = child.transform.basis.orthonormalized()
-			child.transform.basis = (
+			set_lean(
+				child,
 				current_basis.slerp(_target_lean_rotation, LEAN_SMOOTHING * delta).orthonormalized()
 			)
 
@@ -688,7 +697,8 @@ func _update_network_interpolation(delta: float) -> void:
 	for child in _visual_children:
 		if is_instance_valid(child):
 			var current_basis = child.transform.basis.orthonormalized()
-			child.transform.basis = (
+			set_lean(
+				child,
 				current_basis.slerp(_target_lean_rotation, LEAN_SMOOTHING * delta).orthonormalized()
 			)
 
@@ -772,7 +782,7 @@ func _stop_network_interpolation() -> void:
 	_target_lean_rotation = Basis.IDENTITY
 	for child in _visual_children:
 		if is_instance_valid(child):
-			child.transform.basis = Basis.IDENTITY
+			set_lean(child, Basis.IDENTITY)
 	water.update_floating()
 	water.update_cue(false)
 
@@ -795,7 +805,7 @@ func set_transform_immediate(p_position: Vector3, p_rotation: Vector3, p_scale: 
 	# Reset lean on visual children
 	for child in _visual_children:
 		if is_instance_valid(child):
-			child.transform.basis = Basis.IDENTITY
+			set_lean(child, Basis.IDENTITY)
 
 	# Update targets to match
 	_network_target_position = p_position

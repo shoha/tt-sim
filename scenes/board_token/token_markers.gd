@@ -220,7 +220,7 @@ static func shape_extent(shape: Shape3D) -> AABB:
 		var cylinder := shape as CylinderShape3D
 		var c := cylinder.radius
 		return AABB(Vector3(-c, -cylinder.height * 0.5, -c), Vector3(2.0 * c, cylinder.height, 2.0 * c))
-	return shape.get_debug_mesh().get_aabb()
+	return TokenShape.extent_of(shape)
 
 
 ## The pin's transform: its tip at `tip`, `head` metres across, turned to `camera_basis`.
@@ -475,14 +475,13 @@ func _read_look(token: BoardToken) -> Dictionary:
 		token.avatar_recipe,
 		first_mesh.get_instance_id()
 	)
-	# An avatar's footprint is its capsule (AvatarExtent: the body core): the skinned meshes'
-	# rest-pose bounds, arms out, would put the pin well above the figure. A pack token's
-	# collision shape is not trusted (a horse's is 2.3 times its model, a pig's a speck, measured
-	# 2026-11-02), so its mesh bounds stand.
-	if token.is_avatar():
-		var footprint := shape_box(token.rigid_body)
-		if footprint.has_volume():
-			box = footprint
+	# The footprint is the token's collision shape: an avatar's capsule (AvatarExtent: the body
+	# core; the skinned meshes' rest-pose bounds, arms out, would put the pin well above the
+	# figure) and a pack token's hull of its meshes (TokenShape), the same box as the mesh
+	# bounds. The mesh bounds stand only for a token with no shape.
+	var footprint := shape_box(token.rigid_body)
+	if footprint.has_volume():
+		box = footprint
 	return {
 		"offset": box.get_center() - token.rigid_body.global_position,
 		"radius": maxf(box.size.x, box.size.z) * 0.5,
