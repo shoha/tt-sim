@@ -7,6 +7,8 @@ extends RefCounted
 ##   {action: "turn", dir}     start the real eased snap, +1 (E) or -1 (Q)
 ##   {action: "tokens", ...}   spawn tokens with token_toon_row.gd's spawn_row (from, to, items, zig);
 ##                             `scale: {item: factor}` then enlarges the named tokens
+##   {action: "scale", scale}  enlarge named tokens (after the spawn pop-in, a wait of 0.5 s)
+##   {action: "zoom", which}   camera size to "closest" (min_zoom) or "home" (the load zoom)
 ##   {action: "keys", brush}   report the hint bar's chips and the compass tooltip (live mapping)
 ##   {action: "clip", name, dir, seconds, fps, width, events: [...]}
 ##                             a fixed-rate clip: ClipRig runs the scheduled `events` and saves every
@@ -40,15 +42,20 @@ static func run(base: Node, step: Dictionary) -> String:
 		"tokens":
 			var row: GDScript = load(TOKEN_ROW)
 			var out := String(row.call("run", base, step.merged({"action": "spawn_row"}, true)))
-			var scales: Dictionary = step.get("scale", {})
-			for node in gm.get_tree().get_nodes_in_group(BoardToken.GROUP_NAME):
-				var token := node as BoardToken
-				if token != null and scales.has(token.token_name):
-					var at := token.rigid_body.global_position
-					var factor := float(scales[token.token_name])
-					token.set_transform_immediate(at, Vector3.ZERO, Vector3.ONE * factor)
-					token.transform_changed.emit()
-			return out
+			return out + _scale(gm, step.get("scale", {}))
+		"scale":
+			# Enlarges named tokens after the spawn pop-in has ended (it would reset the scale).
+			return "scaled" + _scale(gm, step.get("scale", {}))
+		"atlas":
+			# Saves the pin portrait atlas (cropped to the used rows, 2x) to `path` and lists each
+			# token's pin facts: key, cell, footprint radius and half height, colour.
+			return _atlas(gm, String(step.get("path", "user://render_jobs/atlas.png")))
+		"zoom":
+			# `which` closest (the controller's min_zoom) or home (its load zoom): the camera size.
+			var closest := String(step.get("which", "home")) == "closest"
+			var size: float = cc.min_zoom if closest else float(cc.get("_home_zoom"))
+			cc.set("_target_zoom", size)
+			return "zoom %s size %.2f (limits %.2f..%.2f)" % [step.get("which", "home"), size, cc.min_zoom, cc.max_zoom]
 		"keys":
 			var out := PackedStringArray()
 			var compass: CameraCompass = cc.compass
@@ -69,6 +76,63 @@ static func run(base: Node, step: Dictionary) -> String:
 			base.get_tree().root.add_child(rig)
 			return "clip %s %d frames" % [rig.clip_name, rig.frames]
 	return "unknown action"
+
+
+static func _atlas(gm: GameMap, path: String) -> String:
+	var markers := gm.world_viewport.get_node_or_null("TokenMarkers") as TokenMarkers
+	if markers == null or markers._portraits == null:
+		return "no portraits yet"
+	var portraits: TokenPortraits = markers._portraits
+	var image: Image = portraits._image.duplicate()
+	var rows := ceili(float(portraits._next_cell) / TokenPortraits.GRID)
+	image = image.get_region(Rect2i(0, 0, TokenPortraits.ATLAS_PX, maxi(rows, 1) * TokenPortraits.CELL_PX))
+	image.save_png(ProjectSettings.globalize_path(path))
+	var out := PackedStringArray(["cells %d, failed %d" % [portraits._next_cell, portraits._failed.size()]])
+	for id in markers._look:
+		var look: Dictionary = markers._look[id]
+		var token := instance_from_id(id) as BoardToken
+		if token == null:
+			continue
+		var cam := gm.camera_node
+		var body := token.rigid_body
+		var shapes := TokenMarkers.shape_box(body)
+		var mesh_box := AABB()
+		var first := true
+		for mi in TokenGhost.meshes_of(body):
+			var b := mi.global_transform * mi.get_aabb()
+			mesh_box = b if first else mesh_box.merge(b)
+			first = false
+		var centre: Vector3 = body.global_position + (look.offset as Vector3)
+		out.append(
+			"%s cell %d r %.2f hh %.2f colour %s | body px %s centre px %s | shape c %s s %s | mesh c %s s %s"
+			% [
+				token.token_name,
+				portraits.cell_of(String(look.key)),
+				look.radius,
+				look.half_height,
+				(look.colour as Color).to_html(false),
+				str(cam.unproject_position(body.global_position).round()),
+				str(cam.unproject_position(centre).round()),
+				str(shapes.get_center().snapped(Vector3.ONE * 0.01)),
+				str(shapes.size.snapped(Vector3.ONE * 0.01)),
+				str(mesh_box.get_center().snapped(Vector3.ONE * 0.01)),
+				str(mesh_box.size.snapped(Vector3.ONE * 0.01))
+			]
+		)
+	return "\n".join(out)
+
+
+static func _scale(gm: GameMap, scales: Dictionary) -> String:
+	var done := 0
+	for node in gm.get_tree().get_nodes_in_group(BoardToken.GROUP_NAME):
+		var token := node as BoardToken
+		if token != null and scales.has(token.token_name):
+			var at := token.rigid_body.global_position
+			var factor := float(scales[token.token_name])
+			token.set_transform_immediate(at, Vector3.ZERO, Vector3.ONE * factor)
+			token.transform_changed.emit()
+			done += 1
+	return " (%d scaled)" % done
 
 
 ## Drives the scheduled events at the clip's frame rate and saves every drawn frame.

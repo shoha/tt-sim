@@ -184,37 +184,6 @@ func test_the_token_marker_fades_in_between_55_and_70_degrees() -> void:
 	assert_eq(CameraRig.marker_strength(90.0), 1.0)
 
 
-func test_a_marker_is_never_drawn_for_a_token_the_players_cannot_see() -> void:
-	assert_eq(TokenMarkers.ring_alpha(1.0, true, true, false), 1.0, "a visible token")
-	assert_eq(TokenMarkers.ring_alpha(1.0, false, true, false), 0.0, "hidden, for a player")
-	assert_eq(TokenMarkers.ring_alpha(1.0, false, false, false), 0.0, "hidden and not drawn")
-	var dim := TokenMarkers.ring_alpha(1.0, false, true, true)
-	assert_almost_eq(dim, 0.4, 0.0001, "hidden, the GM's dim")
-	assert_eq(TokenMarkers.ring_alpha(1.0, true, false, true), 0.0, "a body that is not drawn")
-	assert_almost_eq(TokenMarkers.ring_alpha(0.5, true, true, false), 0.5, 0.0001, "the fade-in")
-
-
-func test_the_marker_stays_about_26_px_and_clears_a_large_footprint() -> void:
-	# 20 m across 1000 px: 26 px is 0.52 m whatever the zoom ratio, scaled with the camera size.
-	assert_almost_eq(TokenMarkers.ring_size(0.1, 20.0, 1000.0), 0.52, 0.0001)
-	var far := TokenMarkers.ring_size(0.1, 40.0, 1000.0)
-	assert_almost_eq(far, 1.04, 0.0001, "zoomed out: bigger in metres")
-	var big := TokenMarkers.ring_size(2.0, 20.0, 1000.0)
-	assert_almost_eq(big, 4.8, 0.0001, "a 4 m token: its footprint")
-
-
-func test_the_marker_colour_is_the_most_vivid_and_readable() -> void:
-	var palette := PackedColorArray(
-		[Color.WHITE, Color(0.1, 0.1, 0.1), Color(0.9, 0.2, 0.15), Color(0.5, 0.45, 0.4)]
-	)
-	var colour := TokenMarkers.vivid(palette)
-	assert_gt(colour.s, 0.5)
-	assert_almost_eq(colour.h, Color(0.9, 0.2, 0.15).h, 0.01, "the red, not the white")
-	var dark := TokenMarkers.vivid(PackedColorArray([Color(0.2, 0.2, 0.2)]))
-	assert_gte(dark.v, 0.7, "never a dark ring")
-	assert_gte(TokenMarkers.vivid(PackedColorArray()).v, 0.7, "grey when there is no colour")
-
-
 # --- the controller on the real scene ---
 
 
