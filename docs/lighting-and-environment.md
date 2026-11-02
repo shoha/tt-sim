@@ -688,6 +688,18 @@ independent layers.
   tuning for this game's geometry, not artistic dials, so they are not exposed
   on `SunSettings` or in the panel.
 
+The sun blends its shadow cascades (`directional_shadow_blend_splits`, `SUN_SHADOW_BLEND_SPLITS` in
+`level_environment_manager.gd`, 2026-11-02). Without it, far trees' shadows were missing at the
+home pitch and filled in as the camera tilted from 21.6 to about 25 degrees, so the top-down toggle
+popped them in and out (the share of the frame in shadow went 5.2% at 21.6, 9.3% at 25). The
+largest block-to-block change between pitches one degree apart fell from 32 to 8. The cascades'
+caster set depends on the camera slab, which changes with pitch; the engine mechanism is inferred,
+the effect measured (`tools/render_jobs/probes/camera_shadow.gd`, jobs `camera_shadow_*`). Max
+distance, fade start, split fractions and the 2 m shadow push are not involved. Cost about
++0.1 ms of GPU time a frame (indicative, not the pinned procedure). Street level (pitch below
+21.6) was not swept: re-run the sweep from 5 to 25 degrees on a street map, and consider a scatter
+chunk `extra_cull_margin` of about 30 m, before relying on it there.
+
 Shadow cost was measured directly rather than estimated: sun shadows are 41% of the
 frame on a dense forest map, but PCF filter quality is only 0.6 ms of it and shortening
 `directional_shadow_max_distance` changes nothing at all (every caster is already inside

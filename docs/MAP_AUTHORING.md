@@ -730,6 +730,18 @@ Follow-ups:
 
 **Next** (agreed at the end of the 2026-10-04 to 05 session; one line each, no plan yet):
 
+- Camera (owner's 2026-11-02 verdicts; `CONVENTIONS.md` "Camera System"): turn, tilt, top-down and
+  the token pin are done and shipped (tt-sim main c712849d). Next is **street level as a play view**
+  (tools, picking, bounds and tokens all work there; every view meets the home look bar, from every
+  side, with the sun fixed in the world), in this order: a perspective rig with eye-position
+  bounds, near-eye canopy fade, picking; the end of the ground hidden by a per-biome sky with a
+  painted horizon band (one sky shader: the cubemap pass keeps lighting from the existing HDRI,
+  the visible pass draws three or four ridge layers) plus depth fog of about 25 to 85 m; window
+  fixes (windows are flat cream rectangles at eye level); a shadow sweep from 5 to 25 degrees
+  (`lighting-and-environment.md` "Sun and Shadow"); then a full-size look round on the board.
+  Also queued: pack-token collision shapes are wrong (a horse's is 2.3 times its model, a pig's
+  a speck), a right-click and double-click route for the token pin, and a real-mouse check of pin
+  hover and click.
 - Future ideas: player avatar tokens in the house style (Future ideas, below).
 - Crossings over a dressed Blender map's own water, in the terrain-paint integration sprint
   (Open work, "Crossing follow-ups").

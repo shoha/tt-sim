@@ -277,8 +277,8 @@ The camera stands at +x, +z of what it looks at and looks along (-1, -1) in map 
 | WASD | Pan (isometric) | `cameraholder_node.translate()` with isometric direction mapping |
 | Edge of screen | Pan (during drag) | Reads `drag_and_drop_node.edge_pan_direction` |
 | Mouse near edge | Pan (idle) | `_handle_edge_panning()` with configurable margin |
-| Q / E, `[` / `]` | Turn the view a quarter (no brush out) | `CameraRig.event_turn`, `CameraController.turn_view` |
-| Alt+Q / Alt+E | Turn the view while an authoring brush is out (Q / E turn the brush, `[` `]` its size) | same |
+| Q / E | Turn the view a quarter (no brush out) | `CameraRig.event_turn`, `CameraController.turn_view` |
+| Alt+Q / Alt+E | Turn the view while an authoring brush is out (Q / E turn the brush; `[` `]` stay the brush size and never turn the view: owner verdict CR2, 2026-11-02) | same |
 | Compass buttons (top right) | Turn the view, always | `CameraCompass` |
 | Home | Reset position, zoom, turn and tilt (the turn and tilt first, then the glide) | `_reset_camera_to_home`, `CameraView.go_home` |
 | Alt + left drag | Tilt (vertical drag, pitch 21.6 to 90) and orbit (horizontal drag, free yaw) | `CameraRig.orbit_action`, `CameraView.handle_orbit_input`, called first in `GameMap._input` |

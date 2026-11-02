@@ -345,6 +345,19 @@ loading_overlay.show_indeterminate(RoomScreen.OPENING, true, RoomScreen.OPENING_
 
 ---
 
+## Camera Compass and Token Pins
+
+The play view has two camera widgets, both local to the viewer and neither synced. `CameraCompass`
+(`scenes/states/playing/camera_compass.gd`, top right) holds turn arrows, a tilt row (flatter,
+an elevation gauge that is the top-down button, steeper) and a tooltip that names the live
+Q / E mapping. The Input Hints bar carries a chip for the same mapping (`Q E`, or `Alt + Q E`
+while a brush is out). From pitch 55 degrees up, every token wears a map pin (`TokenMarkers`:
+a 44 px round picture with a tail onto the token, drawn in the world viewport, not as UI nodes);
+a hovered pin comes to the front and a left click on it picks its token. The rules, sizes and
+hit test are in `CONVENTIONS.md` "Camera System"; the owner's verdicts are in `UI_TASTE.md`.
+
+---
+
 ## Input Hints
 
 Contextual keybinding hints in a bar at the bottom centre of the screen (`InputHints`,

@@ -286,3 +286,12 @@ that conflicts with one stops and asks. Add each new verdict here with its date.
   focus and on Refresh and never watched; a button's shadow is never clipped by the scroll that
   holds it (ShadowGutter and its audit); an error is on the card and in the footer in red with an
   icon, never only a toast, and a toast always draws above a scrim.
+- **2026-11-02** Camera and token pin (the owner's review of the camera rig, board items CK, CR,
+  CT, PN). Q / E turn the view whenever no brush is out, Alt + Q / Alt + E under a brush, and `[`
+  `]` stay the brush size; the screen always shows which mapping is live (hint chip, compass
+  tooltip). Alt + left drag tilts and orbits, O toggles top-down, Home resets everything. From above
+  every token wears a map pin: a round picture of the token with a tail whose tip touches it, not a
+  ring. It is much bigger than first tried (44 px, not 24: "much bigger to be readable at any
+  zoom"), constant in screen space at every zoom, has no heavy outline (a thin soft rim), and a
+  pin under the mouse comes to the front of crowded ones so it can be selected. A pin is
+  never a way to learn where a hidden token stands.
