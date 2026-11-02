@@ -5,6 +5,8 @@ extends Node
 ## every step to out_dir/log.txt (appended). The ops are documented in REFERENCE.md.
 
 const Steady := preload("res://tools/render_jobs/steady.gd")
+## A `call` step whose probe names a blocker waits at most this long (seconds) for it to clear.
+const CALL_HOLD_S := 60.0
 
 var steps: Array = []
 var out_dir: String = ""
@@ -351,12 +353,33 @@ func _process(delta: float) -> void:
 			if script == null or not script.can_instantiate():
 				log_line("call %s FAILED to load; stopping the job" % step.script)
 				_i = steps.size()
+			elif not _call_ready(script, step):
+				done = false
 			else:
 				log_line("call %s -> %s" % [step.script, str(script.call("run", root_node, step))])
 		_:
 			log_line("unknown op %s" % step.op)
 	if done:
 		_next()
+
+
+## Whether a `call` step may run now: a probe with a static `blocker(root, step) -> String` holds
+## its step while that names a reason (water.gd's save waits for a scatter regeneration in
+## flight, else it would save the rows from before a Dress or paint), for at most CALL_HOLD_S
+## seconds; then the step runs anyway and the log says what it was still waiting for.
+func _call_ready(script: GDScript, step: Dictionary) -> bool:
+	var has_blocker := script.get_script_method_list().any(
+		func(m: Dictionary) -> bool: return m.name == "blocker"
+	)
+	if not has_blocker:
+		return true
+	var reason := String(script.call("blocker", root_node, step))
+	if reason == "":
+		return true
+	if _state.t >= CALL_HOLD_S:
+		log_line("call %s ran after %.0f s still held: %s" % [step.script, CALL_HOLD_S, reason])
+		return true
+	return false
 
 
 func _wait_ready(step: Dictionary) -> bool:

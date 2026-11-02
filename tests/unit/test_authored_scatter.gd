@@ -798,3 +798,22 @@ func test_brush_regeneration_runs_on_workers_and_matches_the_generator() -> void
 	for cell in expected:
 		assert_eq(scatter.cell_rows(cell), expected[cell], "cell %s" % cell)
 	assert_gt(scatter.last_worker_usec, 0)
+
+
+## The render jobs' save probe refuses while a regeneration is in flight: saving then kept the
+## rows from before a Dress, so its cleared road reloaded overgrown (widestreets, 2026-11-01).
+func test_job_save_waits_for_the_regeneration() -> void:
+	var probe := load("res://tools/render_jobs/probes/water.gd") as GDScript
+	var doc := _flat_doc(Vector2i(20, 20))
+	var scatter := _scatter(false)
+	scatter.attach_document(doc)
+	assert_eq(probe.call("save_blocker", scatter), "", "nothing in flight: the save may write")
+	var dab := Rect2(-4.0, -4.0, 6.0, 6.0)
+	_paint(doc, dab)
+	scatter.request_region(dab)
+	assert_ne(probe.call("save_blocker", scatter), "", "a regeneration in flight blocks the save")
+	var waited := 0
+	while scatter.is_regenerating() and waited < 400:
+		await get_tree().process_frame
+		waited += 1
+	assert_eq(probe.call("save_blocker", scatter), "", "landed: the save may write")

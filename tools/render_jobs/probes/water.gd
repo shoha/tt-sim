@@ -11,6 +11,7 @@ extends RefCounted
 ##                               mesh size and the refresh's worker and swap times.
 ##   save {folder, replace}      writes the open document and level as user://levels/<folder>
 ##                               (a test level; the caller deletes it; `replace` overwrites).
+##                               The driver holds it while the scatter regenerates (`blocker`).
 ##   tokens {points, assets}     in play: spawns one token per point (`assets` [[pack, id]],
 ##                               cycled, or the first locally cached asset that is not a
 ##                               light), each dropped onto the ground as a browser drop does.
@@ -87,6 +88,15 @@ const BASIN := {"id": 21, "at": [-17, -14], "r": 4.0, "depth": "waist"}
 static var _found: Dictionary = {}
 ## Rivers `carve` has made this run.
 static var _carves: int = 0
+
+
+## Why the driver should hold `step` a frame longer, or "" to run it now (driver._call_ready):
+## a `save` waits for the scatter regeneration in flight (save_blocker).
+static func blocker(base: Node, step: Dictionary) -> String:
+	if String(step.get("action", "")) != "save":
+		return ""
+	var ctrl := base.get("_authoring_controller") as AuthoringController
+	return save_blocker(ctrl.scatter) if ctrl != null else ""
 
 
 static func run(base: Node, step: Dictionary) -> String:
@@ -753,6 +763,17 @@ static func _remove_tree(path: String) -> void:
 # --- save --------------------------------------------------------------------------------------
 
 
+## Why `save` must not write now, or "" when it may. A scatter regeneration still in flight (a
+## Dress, paint or sculpt has just asked for one) would be saved as the rows from before it, and a
+## loaded map keeps its saved rows: a Dress's cleared road came back overgrown on reload
+## (widestreets, 2026-11-01). The game's own save (AuthoringController.save_async) awaits it; a
+## probe call cannot, so the driver holds the step (`blocker`) and `_save` refuses if it ran anyway.
+static func save_blocker(scatter: AuthoredScatter) -> String:
+	if is_instance_valid(scatter) and scatter.is_regenerating():
+		return "the scatter is still regenerating"
+	return ""
+
+
 static func _save(base: Node, step: Dictionary) -> String:
 	var ctrl: AuthoringController = base.get("_authoring_controller")
 	var folder := String(step.get("folder", "_p42_water"))
@@ -762,6 +783,9 @@ static func _save(base: Node, step: Dictionary) -> String:
 	var path := LevelManager.folder_path(folder)
 	if DirAccess.dir_exists_absolute(path) and not bool(step.get("replace", false)):
 		return "folder %s exists; not touching it (replace: true overwrites)" % folder
+	var held := save_blocker(ctrl.scatter)
+	if held != "":
+		return "NOT saved %s: %s" % [folder, held]
 	_remove_tree(path)
 	DirAccess.make_dir_recursive_absolute(path)
 	var saved := ctrl.level.duplicate(true) as LevelData

@@ -133,7 +133,11 @@ A skipped step logs `skip <op> (<reason>)`.
 
 ## Probe scripts for `call`
 
-In `probes/`. Each is a static `run(base, step)`; every field is optional.
+In `probes/`. Each is a static `run(base, step)`; every field is optional. A probe may also
+have a static `blocker(base, step) -> String`: while it names a reason the driver holds the
+step (at most 60 s, then runs it and logs the reason). `water.gd` uses it so `save` waits for
+a scatter regeneration in flight: saved straight after a Dress, a map kept its rows from before
+the Dress and reloaded with plants on the cleared road (widestreets, 2026-11-01).
 
 | Script | Fields | Effect |
 |---|---|---|
