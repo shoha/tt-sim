@@ -128,7 +128,7 @@ static func street_corridors(doc: MapDocument, wall: Wall) -> Array[Dictionary]:
 		return out
 	var courses := WaterGeometry.river_courses(doc, wall.bounds().grow(1.0))
 	var is_wet := func(p: Vector2) -> bool: return WaterGeometry.is_wet_at(doc, p, -1, courses)
-	var half := VillageBridges.width_for(Crossing.Kind.PLANK, wall.height_m) * 0.5
+	var half := VillageBridges.width_for(Crossing.Kind.PLANK, wall.height_m, wall.preset) * 0.5
 	for run in VillageBridges.wet_runs(wall.points, is_wet):
 		out.append(corridor(run["from"], run["to"], half + CORRIDOR_SIDE_M))
 	return out

@@ -1,0 +1,26 @@
+{
+ "out_dir": "render_jobs/widestreets_auth",
+ "timeout_s": 300,
+ "hang_s": 90,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "saved", "folder": "_widestreets_look", "load": "dress"},
+  {"op": "new_map", "biome": "grassland_meadow_summer_s1", "size": 320, "seed": 1234, "phase": "build"},
+  {"op": "no_autosave"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "wind", "freeze": true},
+  {"op": "eval", "expr": "_authoring_controller.panel._on_rail_item_pressed(\"village\")"},
+  {"op": "hide_ui"},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "zoom", "size": 70.0},
+  {"op": "settle"},
+  {"op": "capture", "name": "a_auth_village", "desc": "authoring view of the saved level: three Modern streets at z -40, 0, 40"},
+  {"op": "zoom", "size": 24.0},
+  {"op": "look_at", "at": [0, -40]},
+  {"op": "settle"},
+  {"op": "capture", "name": "b_auth_street_m40", "desc": "the z -40 street (buildings on its +z side) centred at x 0"},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "settle"},
+  {"op": "capture", "name": "c_auth_street_0", "desc": "the z 0 street (both sides) centred at x 0"}
+ ]
+}

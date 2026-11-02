@@ -1,8 +1,8 @@
 {
 	"albedo_mean_linear": [
-		0.1867,
-		0.1766,
-		0.1749
+		0.0546,
+		0.0522,
+		0.0487
 	],
 	"kind": "dirt_road",
 	"label": "Asphalt road",

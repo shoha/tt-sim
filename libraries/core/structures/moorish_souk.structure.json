@@ -89,12 +89,24 @@
       "from_port": 0,
       "to": "wonk_6",
       "to_port": 0
+    },
+    {
+      "from": "facade_7",
+      "from_port": 0,
+      "to": "ornament_12",
+      "to_port": 0
+    },
+    {
+      "from": "ornament_12",
+      "from_port": 0,
+      "to": "wonk_6",
+      "to_port": 0
     }
   ],
   "format": "plantgen-graph",
   "interface": [
     {
-      "default": 4.03,
+      "default": 6.35,
       "label": "Wall height",
       "max": 8,
       "min": 1.6,
@@ -161,8 +173,8 @@
     {
       "id": "building_layout_2",
       "params": {
-        "door_height": 2.5,
-        "door_width": 1.5,
+        "door_height": 2.3,
+        "door_width": 1.4,
         "height": "@height",
         "roof": "flat",
         "textured": "@textured",
@@ -229,7 +241,7 @@
       "id": "facade_7",
       "params": {
         "floors": "@floors",
-        "style": "{\"bay_width\":3.3,\"floor_height_target\":2.9,\"floors\":\"auto\",\"ground_floor_height\":0.0,\"name\":\"riad\",\"patterns\":{\"back\":{\"ground\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"blank\"}]}],\"upper\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"slit\"}]}]},\"front\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"blank\"}]},{\"size\":\"~bay\",\"symbol\":\"door\"},{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"blank\"}]}],\"upper\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"slit\"}]}]},\"side\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"arch\"}]}],\"upper\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"arch\"}]}]}},\"symbols\":{\"arch\":{\"head\":\"round\",\"height\":1.5,\"kind\":\"window\",\"sill\":0.8,\"width\":0.9},\"blank\":{\"kind\":\"blank\"},\"door\":{\"head\":\"round\",\"kind\":\"door\"},\"slit\":{\"height\":0.7,\"kind\":\"window\",\"sill\":1.2,\"width\":0.5}}}",
+        "style": "{\"bay_width\":3.3,\"floor_height_target\":2.8,\"floors\":\"auto\",\"ground_floor_height\":3.4,\"name\":\"riad\",\"patterns\":{\"back\":{\"ground\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"blank\"}]}],\"upper\":[{\"repeat\":[{\"size\":\"~1.4bay\",\"symbol\":\"slit\"}]}]},\"front\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"shop\"}]},{\"size\":\"~bay\",\"symbol\":\"door\"},{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"shop\"}]}],\"upper\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"arch\"}]}]},\"side\":{\"ground\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"arch\"}]}],\"upper\":[{\"repeat\":[{\"size\":\"~bay\",\"symbol\":\"arch\"}]}]}},\"symbols\":{\"arch\":{\"head\":\"round\",\"height\":1.5,\"kind\":\"window\",\"sill\":0.8,\"width\":0.9},\"blank\":{\"kind\":\"blank\"},\"door\":{\"head\":\"round\",\"kind\":\"door\"},\"shop\":{\"head\":\"round\",\"height\":1.7,\"kind\":\"window\",\"sill\":0.35,\"width\":1.3},\"slit\":{\"height\":0.7,\"kind\":\"window\",\"sill\":1.2,\"width\":0.5}}}",
         "window_width": "@window_width"
       },
       "position": [
@@ -269,11 +281,13 @@
     {
       "id": "gallery_10",
       "params": {
-        "depth": 1.92,
+        "arches": true,
+        "depth": 1.87,
         "kind": "porch",
         "rail": "none",
+        "role": "plaster",
         "roof": "pent",
-        "roof_pitch": 7.35,
+        "roof_pitch": 5.76,
         "roof_role": "adobe",
         "span": "front"
       },
@@ -294,6 +308,23 @@
         120.0
       ],
       "type": "arch_heads"
+    },
+    {
+      "id": "ornament_12",
+      "params": {
+        "count": 3.63,
+        "depth": 1.23,
+        "floor": 1,
+        "kind": "awning",
+        "over": "window",
+        "role": "plaster",
+        "stripes": 5.57
+      },
+      "position": [
+        1670.0,
+        920.0
+      ],
+      "type": "ornament"
     }
   ],
   "seed": 1234,

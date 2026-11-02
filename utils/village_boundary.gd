@@ -217,7 +217,7 @@ static func plan(doc: MapDocument, settlement: Settlement) -> Dictionary:
 	var wall := doc.wall(settlement.source)
 	if wall == null or not wall.is_row() or wall.points.size() < 2:
 		return none
-	var road := SettlementGround.road_half_width(wall.height_m)
+	var road := StreetProfile.road_half_m(wall)
 	var points := hull_points(
 		wall.points, road + STREET_SIDE_M, WallGeometry.row_lots(doc, wall), settlement.plazas
 	)
@@ -244,7 +244,7 @@ static func flags_of(
 		if not street.is_row() or street.points.size() < 2:
 			continue
 		var line := extended(street.points) if street.id == wall.id else street.points
-		var half := SettlementGround.road_half_width(street.height_m) + GATE_SIDE_M
+		var half := StreetProfile.road_half_m(street) + GATE_SIDE_M
 		for k in line.size() - 1:
 			gates.append({"from": line[k], "to": line[k + 1], "half": half})
 	var near := Rect2(ring[0], Vector2.ZERO)

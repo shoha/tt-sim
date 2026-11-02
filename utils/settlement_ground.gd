@@ -9,8 +9,11 @@ extends RefCounted
 ## the dressing, clear plants under them when the surface's role is `built`, tint their
 ## surroundings and travel as the existing `surface` live edit). Nothing here reads a scene.
 ##
-## The road follows the street's centre line, resampled every ROAD_STEP_M, as wide as the setback
-## asks (ROAD_HALF_SHARE of it each side, within ROAD_HALF_MIN_M..ROAD_HALF_MAX_M). A stretch is
+## The road follows the street's centre line, resampled every ROAD_STEP_M, as wide as the street's
+## profile asks (StreetProfile: its species and setback). A wide street (the modern row) also gets
+## its pavements: one band per side from kerb to facade in the kit's door path surface, painted
+## over the road's soft edge so the kerb reads (role "pavement", no slot of its own), and no door
+## paths. A stretch is
 ## left unpainted where the road or its edges would be wet, too steep along or across, or would
 ## touch a building (a Structure's footprint), counted in `refused`. Each door of each lot is
 ## joined to the street by two short strokes bending a little (the bend is a hash of the street,
@@ -26,11 +29,13 @@ extends RefCounted
 
 ## The road is sampled this far apart along the centre line.
 const ROAD_STEP_M := 1.5
-## The road's half width is this share of the setback, within the limits (all about a third more
-## than villages2's 0.58 and 0.9..2.4 m: at home zoom the road hid behind the near house rows).
-const ROAD_HALF_SHARE := 0.77
-const ROAD_HALF_MIN_M := 1.2
-const ROAD_HALF_MAX_M := 3.2
+## The road's half width is the street's profile's (StreetProfile); a lane street's limits.
+const ROAD_HALF_MIN_M := StreetProfile.ROAD_HALF_MIN_M
+const ROAD_HALF_MAX_M := StreetProfile.ROAD_HALF_MAX_M
+## A wide street's pavement (StreetProfile `pavement`) is laid as one band per side whose full
+## cover starts this share of the strip out from the kerb (the soft edge inside it reaches the
+## kerb, over the road's own edge) and runs to the facade.
+const PAVEMENT_KERB_SHARE := 0.15
 ## Rise over run limits: along the road, across it, along a door path or across a plaza.
 const ROAD_MAX_SLOPE := 0.5
 const CROSS_MAX_SLOPE := 0.7
@@ -55,15 +60,16 @@ const PLAZA_WET_SHARE := 0.25
 const PLAZA_RIM_POINTS := 8
 ## Roles in paint order, and in the order the slot budget serves them. Fields (VillageFields) go
 ## first, under the road; their surfaces are the kind's own, not the kit's, and take the slots left.
-const PAINT_ORDER: Array[String] = ["field", "road", "plaza", "door_path"]
+const PAINT_ORDER: Array[String] = ["field", "road", "pavement", "plaza", "door_path"]
 const BUDGET_ORDER: Array[String] = ["road", "door_path", "plaza"]
 ## A field is refused when its centre is wet, this share of its rim is, or its ground is steeper.
 const FIELD_MAX_SLOPE := 0.35
 
 
-## The road's half width (full cover) for a street with setback `setback_m`.
-static func road_half_width(setback_m: float) -> float:
-	return clampf(setback_m * ROAD_HALF_SHARE, ROAD_HALF_MIN_M, ROAD_HALF_MAX_M)
+## The road's half width (full cover) for a street of species `preset` with setback `setback_m`
+## (StreetProfile; preset 0, a lane street, by default).
+static func road_half_width(setback_m: float, preset: int = 0) -> float:
+	return float(StreetProfile.of(preset, setback_m)["road_half"])
 
 
 ## The roles of `wanted` ({role: surface id}) a map can paint: a role whose surface the map already
@@ -128,10 +134,16 @@ static func plan(
 	var road_samples := PackedVector2Array()
 	var road_kept: Array[bool] = []
 	var half := 0.0
+	# The surface each role paints: the kit's, and a wide street's pavement in its door paths' one
+	# (no slot of its own).
+	var surface_of := granted.duplicate()
 	if wall != null and wall.is_row():
-		half = road_half_width(wall.height_m)
+		var profile := StreetProfile.of_wall(wall)
+		half = float(profile["road_half"])
 		road_samples = resample(wall.points, ROAD_STEP_M)
 		road_kept = _road_kept(world, road_samples, half, refused)
+		if bool(profile["pavement"]) and roles.has("pavement") and granted.has("door_path"):
+			surface_of["pavement"] = granted["door_path"]
 	for role in PAINT_ORDER:
 		if role == "field":
 			if not fielding:
@@ -146,31 +158,35 @@ static func plan(
 			if not laid.is_empty():
 				(result["roles"] as Array[String]).append(role)
 			continue
-		if not granted.has(role):
+		if not surface_of.has(role):
 			continue
 		var made: Array[Dictionary] = []
 		match role:
 			"road":
 				made = _road_strokes(world, road_samples, road_kept, half, refused)
 				result["road_m"] = _length_of(made)
+			"pavement":
+				made = _pavement_strokes(world, wall, refused)
 			"plaza":
 				made = _plaza_strokes(world, settlement, refused)
 			"door_path":
-				if wall != null and wall.is_row():
+				# A paved pavement already joins every door to the kerb; a path would only push
+				# its paving into the road (it ends inside the road's edge).
+				if wall != null and wall.is_row() and not surface_of.has("pavement"):
 					made = _door_strokes(
 						world, doc, wall, road_samples, road_kept, granted.has("road"), half, refused
 					)
 					result["doors"] = int(made.size() * 0.5)
 		for stroke in made:
-			stroke["surface"] = granted[role]
+			stroke["surface"] = surface_of[role]
 			# Held to a hundredth (SettlementGroundIO), so the record and the paint agree.
 			var held := SettlementGroundIO.snapped_stroke(stroke)
 			held["role"] = role
 			strokes.append(held)
 		if not made.is_empty():
 			(result["roles"] as Array[String]).append(role)
-			if not (result["surfaces"] as Array[String]).has(granted[role]):
-				(result["surfaces"] as Array[String]).append(str(granted[role]))
+			if not (result["surfaces"] as Array[String]).has(surface_of[role]):
+				(result["surfaces"] as Array[String]).append(str(surface_of[role]))
 	result["strokes"] = strokes
 	return result
 
@@ -264,6 +280,29 @@ static func _road_strokes(
 			}
 		)
 		k += 1
+	return out
+
+
+# --- pavement ----------------------------------------------------------------------------------
+
+
+## A wide street's pavements: per side, a band along the centre line pushed out so that its full
+## cover runs from PAVEMENT_KERB_SHARE of the strip past the kerb to the facade, its soft inner edge
+## reaching back to the kerb. Laid where the band is dry and not too steep, as the road is.
+static func _pavement_strokes(world: _World, wall: Wall, refused: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var profile := StreetProfile.of_wall(wall)
+	var kerb := float(profile["road_half"])
+	var strip := float(profile["strip"])
+	# Full cover kerb + share * strip .. kerb + strip; the soft edge (EDGE_REACH) ends at the kerb.
+	var band := strip * (1.0 - PAVEMENT_KERB_SHARE) * 0.5
+	var centre := kerb + strip - band
+	band = minf(band, (centre - kerb) / EDGE_REACH)
+	for side in [1, -1]:
+		var line := SettlementFrontage.facade_line(wall.points, centre, side)
+		var samples := resample(line, ROAD_STEP_M)
+		var kept := _road_kept(world, samples, band, refused)
+		out.append_array(_road_strokes(world, samples, kept, band, refused))
 	return out
 
 

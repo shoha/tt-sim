@@ -12,14 +12,17 @@ extends RefCounted
 ##
 ## Setback: a species may name the setback a new street of it starts at (`setback_m`, how far back
 ## its buildings stand, the Wall row's height); the rest take the Street brush's default
-## (Wall.DEFAULT_HEIGHT_M, 3 m). The modern row stands back 3.6 m, a 2.7 m frontage strip against
-## 2.25 m (SettlementFrontage: 0.75 of the setback), room for its parked cars at the kerb. The
-## Street brush moves to it
-## when its tile is picked, unless the author has set the setback since (WallBrush.pick_preset).
-## Pure data in, data out.
+## (Wall.DEFAULT_HEIGHT_M, 3 m). The Street brush moves to it when its tile is picked, unless the
+## author has set the setback since (WallBrush.pick_preset).
+##
+## Wide: a species marked `wide` is a two-lane road between pavements rather than a lane
+## (StreetProfile: the road and the strip split the setback between them, and the Dress paves the
+## strip). The modern row is one, standing back 8.4 m: a 4.3 m road half and a 4.1 m pavement each
+## side, the width its kit parks cars and stands street trees on (owner, 2026-11-02: "think
+## two-lane street with ample sidewalks"). Pure data in, data out.
 
 ## Per procgen species name: the tile's id, label, icon (a Tabler name) and tooltip, and an
-## optional `setback_m`.
+## optional `setback_m` and `wide`.
 const INFO: Dictionary = {
 	"mixed":
 	{
@@ -104,7 +107,8 @@ const INFO: Dictionary = {
 		"label": "Modern",
 		"icon": "stairs-up",
 		"tooltip": "A mid-century high street: flat-roofed shops, terraces and bungalows in pastel",
-		"setback_m": 3.6,
+		"setback_m": 8.4,
+		"wide": true,
 	},
 }
 
@@ -141,6 +145,14 @@ static func setback_m(preset: int) -> float:
 		return fallback
 	var info: Dictionary = INFO.get(ProcgenStreetSpecies.NAMES[preset], {})
 	return float(info.get("setback_m", fallback))
+
+
+## Whether species `preset` is a wide street (a two-lane road between pavements, StreetProfile);
+## false for an unknown preset.
+static func is_wide(preset: int) -> bool:
+	if preset < 0 or preset >= count():
+		return false
+	return bool(INFO.get(ProcgenStreetSpecies.NAMES[preset], {}).get("wide", false))
 
 
 ## The readout name of species `preset` (clamped into range): "Mixed", "Guild houses"...

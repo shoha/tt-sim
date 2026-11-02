@@ -45,7 +45,20 @@ same method. A late joiner gets the settlements with the map document (they are 
 - `SettlementFrontage` (`utils/settlement_frontage.gd`): the `ProcgenFrontage` of each street side from
   `WallGeometry.row_lots`. The facade line is the centre line pushed out by the setback (mitred corners); a
   lot is the arc range of its front edge, its door the middle of the front (1.1 m), the strip to the kerb
-  `0.75 x setback` (1 to 4 m); neighbouring `Structure`s within 14 m become obstacle discs.
+  the street profile's (below); neighbouring `Structure`s within 14 m become obstacle discs.
+- `StreetProfile` (`utils/street_profile.gd`, tests `tests/unit/test_street_profile.gd`): the one place a
+  street's cross-section comes from, `{setback, strip, road_half, pavement}` from its species (`Wall.preset`)
+  and setback (`Wall.height_m`). The frontage strip, the road paint, the boundary's gates and the bridges
+  and dry ground of a crossing all read it. A lane street (every species but the wide ones) keeps the old
+  numbers byte for byte: strip `0.75 x setback` (1 to 4 m), road half `0.77 x setback` (1.2 to 3.2 m), so
+  the road paint runs under most of the strip. A wide street (`StreetSpeciesInfo` `wide`: only the modern
+  row) is a two-lane road between pavements: road half `0.512 x setback` (1.2 to 4.3 m), strip the rest
+  (at least 1 m), so road half plus strip is the setback and the kerb is where the road ends. The modern
+  row's default setback is 8.4 m (was 3.6): road 8.6 m, pavements 4.1 m, 16.8 m between facades, the
+  cross-section procgen's kit is tuned for (procgen `docs/modern_town.md` section 15; owner, 2026-11-02:
+  "think two-lane street with ample sidewalks"). An author who moves the setback keeps the shape: both
+  parts scale. Two modern streets side by side need about 40 m between centre lines (each street's
+  buildings reach about 11 m past its facade line).
 - `SettlementPlan` (`utils/settlement_plan.gd`): `ProcgenSettlement.place` per side, then the overrides.
   Golden digests: `tests/fixtures/settlement_digests.txt` (11 species, frontage digest, plan digest, count).
 - `SettlementBake` (`utils/settlement_bake.gd`): the placements of a cell merged into one surface per
@@ -157,7 +170,8 @@ surroundings with the trampled broad edge, show in the Paint tool, and reach eve
 - **The plan** (`SettlementGround`, `utils/settlement_ground.gd`, pure, tests in
   `tests/unit/test_settlement_ground.gd`): capsule strokes `{role, surface, from, to, radius, seconds}` in map
   metres (each held to a hundredth, so the record and the paint agree). Road: the centre line resampled every
-  1.5 m (corners kept), half width `0.77 x setback` clamped to 1.2 to 3.2 m (2.31 m at the default 3 m; villages3
+  1.5 m (corners kept), half width the street profile's road half: for a lane street `0.77 x setback` clamped
+  to 1.2 to 3.2 m (2.31 m at the default 3 m; villages3
   widened it a third from 0.58 and 0.9 to 2.4 m, 1.74 m, because at home zoom the road hid behind the near
   house rows), brush radius 1.4 times that for the soft edge, nearly straight
   runs merged into one capsule (at most 30 m, under 4 degrees of drift), which cuts the dab cost about five
@@ -166,7 +180,11 @@ surroundings with the trampled broad edge, show in the Paint tool, and reach eve
   `Structure` footprint. Door paths: two strokes from each lot's door on the facade line to just inside the
   road's edge (half the half width), bent sideways up to 25 cm by a hash of street, side and lot (never the
   seed, so a re-dress moves no path), radius 0.75 m (1.05 m with the soft edge), refused when wet, steeper
-  than 0.6, blocked, or the road stretch they join was refused. Plazas: one disc stroke at 1.12 times the
+  than 0.6, blocked, or the road stretch they join was refused. A wide street (the modern row, `StreetProfile`
+  `pavement`) gets its pavements instead of door paths (role `pavement`, painted after the road in the kit's
+  door path surface, so no slot of its own): one band per side whose full cover runs from 0.15 of the strip
+  past the kerb to the facade and whose soft inner edge ends at the kerb; door paths are skipped there, since
+  they would only push paving 2 m into the road. Plazas: one disc stroke at 1.12 times the
   radius, refused when the centre or a quarter of the rim is wet or the disc spans more than 0.45 slope.
   Paint order: road, plaza, door paths (the newest paint wins a sample). Counts of every refusal are in
   `plan["refused"]`.

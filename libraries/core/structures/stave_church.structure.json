@@ -27,7 +27,7 @@
     {
       "from": "facade_7",
       "from_port": 0,
-      "to": "roof_gable_4",
+      "to": "roof_profile_4",
       "to_port": 0
     },
     {
@@ -37,7 +37,7 @@
       "to_port": 0
     },
     {
-      "from": "roof_gable_4",
+      "from": "roof_profile_4",
       "from_port": 0,
       "to": "wonk_6",
       "to_port": 0
@@ -65,78 +65,12 @@
       "from_port": 0,
       "to": "wonk_6",
       "to_port": 0
-    },
-    {
-      "from": "facade_7",
-      "from_port": 0,
-      "to": "tower_10",
-      "to_port": 0
-    },
-    {
-      "from": "tower_10",
-      "from_port": 0,
-      "to": "facade_11",
-      "to_port": 0
-    },
-    {
-      "from": "facade_11",
-      "from_port": 0,
-      "to": "building_timber_12",
-      "to_port": 0
-    },
-    {
-      "from": "building_timber_12",
-      "from_port": 0,
-      "to": "wonk_6",
-      "to_port": 0
-    },
-    {
-      "from": "facade_11",
-      "from_port": 0,
-      "to": "roof_round_13",
-      "to_port": 0
-    },
-    {
-      "from": "roof_round_13",
-      "from_port": 0,
-      "to": "wonk_6",
-      "to_port": 0
-    },
-    {
-      "from": "facade_11",
-      "from_port": 0,
-      "to": "glazing_14",
-      "to_port": 0
-    },
-    {
-      "from": "glazing_14",
-      "from_port": 0,
-      "to": "wonk_6",
-      "to_port": 0
-    },
-    {
-      "from": "facade_7",
-      "from_port": 0,
-      "to": "ornament_15",
-      "to_port": 0
-    },
-    {
-      "from": "tower_10",
-      "from_port": 0,
-      "to": "ornament_15",
-      "to_port": 2
-    },
-    {
-      "from": "ornament_15",
-      "from_port": 0,
-      "to": "wonk_6",
-      "to_port": 0
     }
   ],
   "format": "plantgen-graph",
   "interface": [
     {
-      "default": 3.83,
+      "default": 2.88,
       "label": "Wall height",
       "max": 8,
       "min": 1.6,
@@ -147,7 +81,7 @@
     {
       "default": 56.15,
       "label": "Roof pitch",
-      "max": 55,
+      "max": 70,
       "min": 15,
       "name": "roof_pitch",
       "tip": "Slope of the roof in degrees.",
@@ -206,6 +140,66 @@
       "name": "fringe",
       "tip": "How far pointed teeth reach down past the eaves, as thatch does; 0 for a clean edge.",
       "type": "float"
+    },
+    {
+      "default": 0.29,
+      "label": "Sweep",
+      "max": 1.5,
+      "min": 0,
+      "name": "sweep",
+      "step": 0.05,
+      "tip": "The stave roof's sweep.",
+      "type": "float"
+    },
+    {
+      "default": 0.18,
+      "label": "Eave flick",
+      "max": 1.2,
+      "min": 0,
+      "name": "flick",
+      "step": 0.05,
+      "tip": "The stave roof's eave flick.",
+      "type": "float"
+    },
+    {
+      "default": 3.13,
+      "label": "Tiers",
+      "max": 6,
+      "min": 2,
+      "name": "tiers",
+      "step": 1,
+      "tip": "The stave roof's tiers.",
+      "type": "float"
+    },
+    {
+      "default": 0.96,
+      "label": "Tier setback",
+      "max": 2,
+      "min": 0.4,
+      "name": "tier_step",
+      "step": 0.05,
+      "tip": "The stave roof's tier setback.",
+      "type": "float"
+    },
+    {
+      "default": 1.87,
+      "label": "Tier height",
+      "max": 3,
+      "min": 0.8,
+      "name": "tier_height",
+      "step": 0.1,
+      "tip": "The stave roof's tier height.",
+      "type": "float"
+    },
+    {
+      "default": 0.96,
+      "label": "Dragon finials",
+      "max": 2,
+      "min": 0,
+      "name": "dragons",
+      "step": 0.1,
+      "tip": "The stave roof's dragon finials.",
+      "type": "float"
     }
   ],
   "nodes": [
@@ -222,9 +216,13 @@
       "id": "building_layout_2",
       "params": {
         "height": "@height",
+        "overhang": 0.46,
         "ridge": "@ridge",
-        "roof": "gable",
+        "roof": "profile",
+        "roof_form": "stave",
         "roof_pitch": "@roof_pitch",
+        "roof_shape": "{\"dragons\":0.96,\"flick\":0.18,\"sweep\":0.29,\"tier_height\":1.87,\"tier_step\":0.96,\"tiers\":3.13}",
+        "roof_thickness": 0.16,
         "window_width": "@window_width"
       },
       "position": [
@@ -245,21 +243,30 @@
       "type": "building_timber"
     },
     {
-      "id": "roof_gable_4",
+      "id": "roof_profile_4",
       "params": {
+        "body_role": "boards",
+        "dragons": "@dragons",
+        "finial": 1.39,
+        "flick": "@flick",
+        "form": "stave",
         "fringe": "@fringe",
         "gable_role": "boards",
-        "overhang": 0.51,
+        "overhang": 0.46,
         "roof_pitch": "@roof_pitch",
         "roof_role": "shingle",
         "roof_thickness": 0.16,
-        "segments": 6
+        "segments": 6,
+        "sweep": "@sweep",
+        "tier_height": "@tier_height",
+        "tier_step": "@tier_step",
+        "tiers": "@tiers"
       },
       "position": [
         710.0,
         220.0
       ],
-      "type": "roof_gable"
+      "type": "roof_profile"
     },
     {
       "id": "output_5",
@@ -327,92 +334,6 @@
         420.0
       ],
       "type": "glazing"
-    },
-    {
-      "id": "tower_10",
-      "params": {
-        "attach": "corner",
-        "corner": 1,
-        "extra": 3.62,
-        "overhang": 0.45,
-        "roof": "cone",
-        "roof_pitch": 71.03,
-        "sides": 4,
-        "size": 2.77
-      },
-      "position": [
-        480.0,
-        820.0
-      ],
-      "type": "tower"
-    },
-    {
-      "id": "facade_11",
-      "params": {
-        "floors": 0,
-        "style": "turret",
-        "window_width": 0
-      },
-      "position": [
-        710.0,
-        820.0
-      ],
-      "type": "facade"
-    },
-    {
-      "id": "building_timber_12",
-      "params": {
-        "role": "boards"
-      },
-      "position": [
-        940.0,
-        820.0
-      ],
-      "type": "building_timber"
-    },
-    {
-      "id": "roof_round_13",
-      "params": {
-        "finial": 0.91,
-        "fringe": 0,
-        "overhang": 0.45,
-        "roof_pitch": 71.03,
-        "roof_role": "shingle",
-        "segments": 3,
-        "shape": "pyramid",
-        "top": 0
-      },
-      "position": [
-        940.0,
-        1020.0
-      ],
-      "type": "roof_round"
-    },
-    {
-      "id": "glazing_14",
-      "params": {
-        "lit": "@lit",
-        "muntins": true
-      },
-      "position": [
-        1180.0,
-        1220.0
-      ],
-      "type": "glazing"
-    },
-    {
-      "id": "ornament_15",
-      "params": {
-        "form": "finial",
-        "height": 1.37,
-        "kind": "vane",
-        "role": "boards"
-      },
-      "position": [
-        1670.0,
-        920.0
-      ],
-      "type": "ornament"
     }
   ],
   "seed": 1234,

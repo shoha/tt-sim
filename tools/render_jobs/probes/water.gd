@@ -42,7 +42,8 @@ extends RefCounted
 ##                               asset, rock props under the water, the ground layers.
 ##   profile {every}             ground and depth along every river's course.
 ##   joints                      the reach steps of every river, named "joint<k>" (P4-5).
-##   cleanup                     deletes TEST_PREFIXES folders but _p42_, and NET_PREFIX ones.
+##   cleanup {prefix}            deletes TEST_PREFIXES folders but _p42_, and NET_PREFIX ones;
+##                               with `prefix` (one of them) only that prefix's folders.
 
 ## The `build` map: the river's control line, its reaches' half-widths, the bank width of
 ## the carve, and the two ponds.
@@ -76,7 +77,8 @@ const TEST_PREFIXES: Array[String] = [
 	"_pol_",
 	"_g2_",
 	"_g3_",
-	"_g4_"
+	"_g4_",
+	"_widestreets_"
 ]
 const NET_PREFIX := "_nettest_"
 const BASIN := {"id": 21, "at": [-17, -14], "r": 4.0, "depth": "waist"}
@@ -118,7 +120,7 @@ static func run(base: Node, step: Dictionary) -> String:
 		"joints":
 			return _joints(base)
 		"cleanup":
-			return _cleanup()
+			return _cleanup(String(step.get("prefix", "")))
 		"save":
 			return _save(base, step)
 		"tokens":
@@ -714,15 +716,22 @@ static func _joints(base: Node) -> String:
 
 
 ## Deletes the test levels this probe saved (user://levels/_p43_*, _p44_*, _p45_*, _p4b_*,
-## _p4c_*, _p4d_*, _p5_*, _p5j_*, _p6_*, _pol_*, _nettest_* only).
-static func _cleanup() -> String:
+## _p4c_*, _p4d_*, _p5_*, _p5j_*, _p6_*, _pol_*, _widestreets_*, _nettest_* only); with `only`
+## (one of those prefixes) just the folders of that prefix, so one topic's run leaves another's
+## kept levels alone.
+static func _cleanup(only: String = "") -> String:
 	var dir := DirAccess.open(LevelManager.levels_dir)
 	if dir == null:
 		return "no levels folder"
+	var prefixes: Array = TEST_PREFIXES.slice(1) + [NET_PREFIX]
+	if only != "":
+		if not prefixes.has(only):
+			return "not a test prefix: %s" % only
+		prefixes = [only]
 	var removed := PackedStringArray()
 	for folder in dir.get_directories():
 		var is_test := func(prefix: String) -> bool: return folder.begins_with(prefix)
-		if not (TEST_PREFIXES.slice(1) + [NET_PREFIX]).any(is_test):
+		if not prefixes.any(is_test):
 			continue
 		var path := LevelManager.folder_path(folder)
 		_remove_tree(path)

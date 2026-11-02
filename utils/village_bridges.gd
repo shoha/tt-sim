@@ -17,7 +17,7 @@ extends RefCounted
 ## a stone arch for a market town and a hill fort, and a ford for a poor street (wealth under
 ## POOR_WEALTH) where the water is wadeable. Each kind falls back to the next when the placement
 ## refuses it (a ford over deep water becomes the kit's bridge, an arch that will not stand becomes
-## planks). The width is the painted road's (`SettlementGround.road_half_width`), held to the kind's
+## planks). The width is the painted road's (`StreetProfile`), held to the kind's
 ## range. A run already crossed by a crossing the village did not lay (`own` ids) is left to it.
 ##
 ## SettlementEditor lays the plan through `CrossingEditor.swap` in the Dress's own history group
@@ -120,10 +120,11 @@ static func kinds_for(kit: String, wealth: float) -> Array[Crossing.Kind]:
 	return out
 
 
-## The width (metres) of a `kind` crossing on a street with setback `setback_m`: the painted
-## road's full width held to the kind's range (a ford's width runs along the river, as the road's).
-static func width_for(kind: Crossing.Kind, setback_m: float) -> float:
-	var road := 2.0 * SettlementGround.road_half_width(setback_m)
+## The width (metres) of a `kind` crossing on a street of species `preset` (a lane street by
+## default) with setback `setback_m`: the painted road's full width (StreetProfile) held to the
+## kind's range (a ford's width runs along the river, as the road's).
+static func width_for(kind: Crossing.Kind, setback_m: float, preset: int = 0) -> float:
+	var road := 2.0 * SettlementGround.road_half_width(setback_m, preset)
 	return clampf(road, Crossing.MIN_WIDTH_M[kind], Crossing.MAX_WIDTH_M[kind])
 
 
@@ -218,7 +219,7 @@ static func _bridge(
 	var refusal: StringName = CrossingPlacement.REFUSED_NO_WATER
 	for kind in kinds_for(settlement.kit, settlement.wealth):
 		var placed := CrossingPlacement.place(
-			doc, from, to, kind, width_for(kind, wall.height_m), style
+			doc, from, to, kind, width_for(kind, wall.height_m, wall.preset), style
 		)
 		if placed.crossing != null:
 			return placed.crossing

@@ -742,24 +742,24 @@ func test_the_pane_offers_the_species_only_for_a_street() -> void:
 	)
 
 
-## The modern row starts its street 3.6 m back, the rest at the brush default; a setback the
-## author stepped stays through a species pick.
+## The modern row starts its street 8.4 m back (a two-lane road between 4.1 m pavements), the
+## rest at the brush default; a setback the author stepped stays through a species pick.
 func test_a_species_tile_sets_its_setback_until_the_author_sets_one() -> void:
 	var modern := ProcgenStreetSpecies.NAMES.find("modern_row")
 	var fallback: float = Wall.DEFAULT_HEIGHT_M[Wall.Kind.ROW]
-	assert_almost_eq(StreetSpeciesInfo.setback_m(modern), 3.6, 1e-6)
+	assert_almost_eq(StreetSpeciesInfo.setback_m(modern), 8.4, 1e-6)
 	for preset in StreetSpeciesInfo.count():
 		if preset != modern:
 			assert_eq(StreetSpeciesInfo.setback_m(preset), fallback, "preset %d unchanged" % preset)
 	assert_eq(StreetSpeciesInfo.setback_m(-1), fallback, "an unknown preset gets the default")
 	assert_eq(StreetSpeciesInfo.setback_m(99), fallback)
-	assert_almost_eq(WallBrush.preset_setback(3.0, modern, false), 3.6, 1e-6)
+	assert_almost_eq(WallBrush.preset_setback(3.0, modern, false), 8.4, 1e-6)
 	assert_eq(WallBrush.preset_setback(4.2, modern, true), 4.2, "the author's value stays")
 	var brush := WallBrush.new()
 	brush.kind = Wall.Kind.ROW
 	brush.pick_preset(modern)
 	assert_eq(brush.row_preset, modern)
-	assert_almost_eq(brush.height(), 3.6, 1e-6, "modern tile, untouched: its own setback")
+	assert_almost_eq(brush.height(), 8.4, 1e-6, "modern tile, untouched: its own setback")
 	brush.pick_preset(3)
 	assert_eq(brush.height(), fallback, "another species, untouched: the default")
 	brush.step_height(2)
@@ -772,7 +772,7 @@ func test_a_species_tile_sets_its_setback_until_the_author_sets_one() -> void:
 	walls.step_height(1)
 	assert_false(walls.row_height_touched, "a wall's height is not the street's setback")
 	walls.pick_preset(modern)
-	assert_almost_eq(walls.heights[Wall.Kind.ROW], 3.6, 1e-6)
+	assert_almost_eq(walls.heights[Wall.Kind.ROW], 8.4, 1e-6)
 
 
 func test_q_e_and_r_choose_a_streets_side_and_mix() -> void:

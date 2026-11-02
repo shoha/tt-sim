@@ -13,10 +13,7 @@ extends RefCounted
 ## index along the side, which counts empty plots, so a lot keeps its name when others change).
 ## The side key is "w<street id>l" or "w<street id>r".
 
-## The share of the setback that is the strip between facade and kerb.
-const STRIP_SHARE := 0.75
-const STRIP_MIN_M := 1.0
-const STRIP_MAX_M := 4.0
+## The strip between facade and kerb is the street's profile's (StreetProfile.strip_m).
 const DOOR_WIDTH_M := 1.1
 const MIN_LOT_M := 1.0
 ## The widest a mitred corner may push out, in setbacks.
@@ -59,7 +56,7 @@ static func _side_frontage(wall: Wall, lots: Array[Dictionary], side: int) -> Pr
 	# Walking with the street's centre line, the buildings on `side` lie to its `side` and the
 	# kerb to the other: ProcgenFrontage counts +1 for a street to the right of travel.
 	frontage.street_side = -side
-	frontage.gap_m = clampf(wall.height_m * STRIP_SHARE, STRIP_MIN_M, STRIP_MAX_M)
+	frontage.gap_m = StreetProfile.strip_m(wall)
 	frontage.open_start = true
 	frontage.open_end = true
 	var line := frontage.line

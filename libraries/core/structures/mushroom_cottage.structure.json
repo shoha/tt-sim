@@ -212,6 +212,9 @@
         "roof_role": "tile",
         "segments": 3,
         "shape": "dome",
+        "spot_role": "plaster",
+        "spot_size": 1,
+        "spots": 6,
         "top": 0
       },
       "position": [
