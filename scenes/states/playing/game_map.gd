@@ -223,6 +223,12 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		_camera_controller.record_mouse_position(event.position)
 
+	# Alt + left drag orbits the view; it comes before every tool so a token drag, a brush stroke
+	# or a selection never starts under it (CameraRig.orbit_action).
+	if _camera_controller.handle_orbit_input(event, _is_mouse_over_gui()):
+		get_viewport().set_input_as_handled()
+		return
+
 	# Drag-to-place: track ghost and handle drop/cancel
 	if _drag_place.handle_input(event):
 		return

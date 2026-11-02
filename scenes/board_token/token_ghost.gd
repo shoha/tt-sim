@@ -206,7 +206,7 @@ static func _strip_mesh(mi: MeshInstance3D) -> void:
 
 
 static func _dress_mesh(mi: MeshInstance3D, highlighted: bool, bounds: Dictionary) -> void:
-	var source: Variant = _source_of(mi)
+	var source: Variant = source_of(mi)
 	var ghost := overlay_of(mi)
 	if ghost == null or ghost.get_meta(SOURCE_META) != source:
 		ghost = _make_ghost(source)
@@ -217,7 +217,7 @@ static func _dress_mesh(mi: MeshInstance3D, highlighted: bool, bounds: Dictionar
 
 ## What a mesh's colours come from: an avatar part's palette texture, or a pack mesh's
 ## material (its first surface's), or null for neither.
-static func _source_of(mi: MeshInstance3D) -> Variant:
+static func source_of(mi: MeshInstance3D) -> Variant:
 	var own := mi.material_override
 	if own is ShaderMaterial:
 		var palette: Variant = (own as ShaderMaterial).get_shader_parameter("palette")

@@ -14,8 +14,23 @@ extends RefCounted
 ## Unwrapped yaws are kept while a turn runs (a state may read 495), so an eased turn never
 ## runs backwards over the wrap; wrap_deg() gives the 0 to 360 reading for display.
 
+## What an event means to an Alt + drag in progress (orbit_action).
+enum Orbit { NONE, BEGIN, MOVE, END }
+
 ## The yaw of the scene's own camera pose, and of Home.
 const HOME_YAW := 45.0
+## The home view's elevation above the ground in degrees (the scene's own camera pose), and the
+## flattest the rig allows: no flatter than home, which the owner has not judged (2026-11-02).
+const HOME_PITCH := 21.6
+const MIN_PITCH := 21.6
+## Straight down.
+const TOP_DOWN_PITCH := 90.0
+## The seconds the O toggle and Home take over the whole range (eased like a turn).
+const TILT_SECONDS := 0.5
+## Alt + drag: degrees of yaw per pixel dragged sideways, and of pitch per pixel dragged down.
+## A 1080 px drag down the screen covers the 68 degree pitch range three times over.
+const ORBIT_YAW_PER_PX := 0.3
+const ORBIT_PITCH_PER_PX := 0.2
 ## One snap, in degrees.
 const SNAP_STEP := 90.0
 ## The seconds a 90 degree turn takes (a quicker, flatter ease would read as a cut).
@@ -114,6 +129,90 @@ static func north_angle(yaw_deg: float) -> float:
 	return deg_to_rad(yaw_deg)
 
 
+## `pitch_deg` held to the rig's range, [MIN_PITCH, TOP_DOWN_PITCH].
+static func clamp_pitch(pitch_deg: float) -> float:
+	return clampf(pitch_deg, MIN_PITCH, TOP_DOWN_PITCH)
+
+
+## The elevation in degrees of a camera whose back axis rises `back_y` per metre.
+static func pitch_of_back_y(back_y: float) -> float:
+	return rad_to_deg(asin(clampf(back_y, -1.0, 1.0)))
+
+
+## The camera's basis (local to the yawed holder) at elevation `pitch_deg`, built from an explicit
+## horizontal `right` axis so that exactly 90 degrees has no gimbal: back leans over the ground
+## along right x up by `cos` and rises by `sin`. At HOME_PITCH it is the scene's own pose.
+static func camera_basis(right: Vector3, pitch_deg: float) -> Basis:
+	var p := deg_to_rad(pitch_deg)
+	var back := right.cross(Vector3.UP) * cos(p) + Vector3.UP * sin(p)
+	return Basis(right, back.cross(right).normalized(), back)
+
+
+## The camera's local offset from the holder at `pitch_deg`: the scene's `home_offset` swung about
+## the right axis by the rotation that takes the home back axis to the pitched one, so its length
+## and its place relative to the view axis are kept (an orthographic picture does not depend on
+## the offset, only the near plane and the pivot do; CameraController re-fits both).
+static func pitched_offset(home_offset: Vector3, right: Vector3, pitch_deg: float) -> Vector3:
+	var home_back := camera_basis(right, HOME_PITCH).z
+	var back := camera_basis(right, pitch_deg).z
+	return Basis(Quaternion(home_back, back)) * home_offset
+
+
+## The pitch to ease to when the top-down key is pressed: straight down, or back to `before` (the
+## pitch it was pressed at; home when that was already steep) when the view is already top-down.
+static func top_down_target(current_target: float, before: float) -> float:
+	if current_target < TOP_DOWN_PITCH - 0.5:
+		return TOP_DOWN_PITCH
+	return HOME_PITCH if before > TOP_DOWN_PITCH - 0.5 else clamp_pitch(before)
+
+
+## The yaw and pitch change in degrees (x, y) a mouse move of `motion` pixels means during an
+## Alt + drag: dragging the picture right turns the camera to the left (yaw falls), dragging it down
+## tilts the camera higher (pitch rises), as if the ground were held.
+static func orbit_delta(motion: Vector2) -> Vector2:
+	return Vector2(-motion.x * ORBIT_YAW_PER_PX, motion.y * ORBIT_PITCH_PER_PX)
+
+
+## What `event` means to an Alt + left drag: it BEGINs on a left press with Alt held (and no Ctrl
+## or Meta) when the pointer is not over the UI and no other drag owns the mouse (`blocked`: a
+## token, brush or tool drag), MOVEs the view while `orbiting`, and ENDs on the left release
+## wherever the pointer is.
+static func orbit_action(
+	event: InputEvent, orbiting: bool, over_gui: bool, blocked: bool
+) -> Orbit:
+	var button := event as InputEventMouseButton
+	if button != null and button.button_index == MOUSE_BUTTON_LEFT:
+		if not button.pressed:
+			return Orbit.END if orbiting else Orbit.NONE
+		var chord := button.alt_pressed and not button.ctrl_pressed and not button.meta_pressed
+		if chord and not orbiting and not over_gui and not blocked:
+			return Orbit.BEGIN
+		return Orbit.NONE
+	if orbiting and event is InputEventMouseMotion:
+		return Orbit.MOVE
+	return Orbit.NONE
+
+
+## Whether `event` is a fresh bare O press: the top-down toggle.
+static func is_top_down_key(event: InputEvent) -> bool:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo or key.keycode != KEY_O:
+		return false
+	return not (key.alt_pressed or key.ctrl_pressed or key.meta_pressed or key.shift_pressed)
+
+
+## Whether edge panning (a token dragged to the screen edge) waits: Alt is the orbit chord, so the
+## view must not slide while it is held or an Alt drag runs.
+static func edge_pan_paused(alt_held: bool, orbiting: bool) -> bool:
+	return alt_held or orbiting
+
+
+## The 0..1 strength of the top-down token marker at `pitch_deg`: off below 55 degrees, full from
+## 70, smooth between (the token's own model is readable up to about 60).
+static func marker_strength(pitch_deg: float) -> float:
+	return smoothstep(55.0, 70.0, pitch_deg)
+
+
 ## The turn direction (+1 clockwise, -1 counter-clockwise, 0 none) a key press means.
 ## Q and E turn the view while no brush owns them; with a brush active they are the brush's
 ## and Alt+Q / Alt+E turn the view instead (the brush leaves Alt chords alone). `[` and `]`
@@ -140,6 +239,11 @@ static func event_turn(event: InputEvent, brush_owns_keys: bool) -> int:
 		return 0
 	var other := key.ctrl_pressed or key.meta_pressed or key.shift_pressed
 	return key_turn(key.keycode, key.alt_pressed, other, brush_owns_keys)
+
+
+## The hint-bar key cap and caption for the tilt gesture (O and Home are in the help overlay).
+static func tilt_hint() -> Dictionary:
+	return {"key": "Alt + drag", "action": "Tilt (O top-down)"}
 
 
 ## The hint-bar key cap and caption naming the turn keys that are live.

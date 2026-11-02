@@ -126,7 +126,9 @@ func _get_shortcut_data() -> Array:
 				["Q / E", "Turn the view a quarter (also the compass buttons, top right)"],
 				["[ / ]", "Turn the view too, while no brush is out (a brush's size otherwise)"],
 				["Alt + Q / E", "Turn the view while a brush is out (Q / E turn the brush)"],
-				[InputProfile.label(&"reset_camera"), "Reset camera (position, zoom and view)"],
+				["Alt + left-drag", "Tilt and orbit the view (up and down tilts, sideways turns freely)"],
+				["O", "Top-down view; press again to go back (also the gauge under the compass)"],
+				[InputProfile.label(&"reset_camera"), "Reset camera (position, zoom, turn and tilt)"],
 			],
 		},
 		{

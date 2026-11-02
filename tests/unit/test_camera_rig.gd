@@ -287,6 +287,6 @@ func test_the_keys_turn_the_controllers_view() -> void:
 	var cc := _game_map.get_camera_controller()
 	cc.call("_unhandled_key_input", _key(KEY_E))
 	assert_true(cc.is_turning())
-	assert_almost_eq((cc.get("_view_yaw") as CameraYaw).target, 135.0, 0.0001)
+	assert_almost_eq((cc.get("_view") as CameraView).yaw.target, 135.0, 0.0001)
 	cc.call("_unhandled_key_input", _key(KEY_Q))
-	assert_almost_eq((cc.get("_view_yaw") as CameraYaw).target, 45.0, 0.0001, "Q steps back")
+	assert_almost_eq((cc.get("_view") as CameraView).yaw.target, 45.0, 0.0001, "Q steps back")

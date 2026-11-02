@@ -45,6 +45,14 @@ func step(delta: float) -> float:
 	return moved
 
 
+## Turn by `degrees` at once, ending any ease (an Alt + drag orbit: the yaw is free between snaps).
+func nudge(degrees: float) -> void:
+	yaw += degrees
+	target = yaw
+	_from = yaw
+	_t = 1.0
+
+
 ## Land on the target: the yaw is wrapped to 0..360 and no turn runs.
 func land() -> void:
 	yaw = CameraRig.wrap_deg(target)

@@ -55,9 +55,12 @@ func setup(game_map: GameMap, environment: LevelEnvironmentManager) -> void:
 	var camera_controller := game_map.get_camera_controller()
 	if camera_controller != null and not camera_controller.view_turned.is_connected(_on_turned):
 		camera_controller.view_turned.connect(_on_turned)
+	# A pitch change moves the basis too (the whole-map fit is steeper looking down).
+	if camera_controller != null and not camera_controller.view_tilted.is_connected(_on_turned):
+		camera_controller.view_tilted.connect(_on_turned)
 
 
-func _on_turned(_yaw_deg: float) -> void:
+func _on_turned(_degrees: float) -> void:
 	refit()
 
 

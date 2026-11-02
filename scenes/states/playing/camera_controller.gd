@@ -33,9 +33,13 @@ extends Node
 ## its local pan axes (WASD, edge pan) keep W away from the viewer. Keys: CameraRig.key_turn;
 ## the on-screen CameraCompass always. Local to each player (nothing synced); the sun stays put
 ## in the world. The yaw is applied in _process, before CanopyFade publishes the camera's axis.
+## The pitch (CameraPitch; 21.6 degrees home to straight down) tilts the camera child the same way,
+## by Alt + left drag, O (top-down toggle) or the compass; CameraView owns both orientations.
 
 ## Emitted when a turn (or Home) has landed on its yaw; MapViewFit refits for the new basis.
 signal view_turned(yaw_deg: float)
+## Emitted whenever the pitch (or an orbit's yaw) moved the view's basis, every frame it moves.
+signal view_tilted(pitch_deg: float)
 
 # RMB pan thresholds (short-click vs. drag detection)
 const RMB_PAN_CLICK_THRESHOLD_MS: int = 150  # Max ms for a short-click (not a drag)
@@ -73,6 +77,8 @@ const REFERENCE_ASPECT := 16.0 / 9.0  # Reference window aspect ratio for frustu
 ## World height of the highest ground the near plane must stay above: 0 for Blender maps
 ## (unchanged behaviour), the terrain's top for an authored map (set_ground_top).
 var ground_top_y: float = 0.0
+## The on-screen compass and tilt handle, or null before setup().
+var compass: CameraCompass = null
 
 var _game_map: GameMap = null
 var _measure_tool: MeasureTool = null
@@ -112,10 +118,8 @@ var _fit_size: float = INF
 var _shake_tween: Tween = null
 var _shake_offset: Vector3 = Vector3.ZERO
 
-# View yaw: the yaw drawn now and the snap it eases to (CameraYaw; CameraRig has the maths)
-var _view_yaw := CameraYaw.new()
-var _glide_home_after_turn: bool = false  # Home: glide to the home position once the yaw is home
-var _compass: CameraCompass = null
+# The view's yaw, pitch and orbit (CameraView; CameraRig has the maths); made in setup()
+var _view: CameraView = null
 
 
 ## Wire this controller to its owning GameMap and perform initial camera setup:
@@ -143,8 +147,12 @@ func setup(game_map: GameMap) -> void:
 	_last_mouse_position = get_viewport().get_mouse_position()
 	# React to viewport resizes (e.g. window resize) so aspect correction stays current
 	game_map.world_viewport.size_changed.connect(_on_viewport_size_changed)
-	_compass = CameraCompass.attach(self)
-	_compass.turn_requested.connect(turn_view)
+	_view = CameraView.new(self, game_map)
+	TokenMarkers.attach(game_map.world_viewport, camera_node)
+	compass = CameraCompass.attach(self)
+	compass.turn_requested.connect(turn_view)
+	compass.tilt_requested.connect(_view.tilt_by)
+	compass.top_down_requested.connect(_view.toggle_top_down)
 
 
 ## Store the current camera position/zoom as "home" for the Home-key reset.
@@ -156,12 +164,17 @@ func capture_home_position() -> void:
 
 ## The view's yaw as drawn now (CameraRig: 45 is home, a snap is 90), unwrapped mid-turn.
 func current_yaw() -> float:
-	return _view_yaw.yaw
+	return _view.yaw.yaw
 
 
-## Whether an eased yaw turn is running.
+## The view's pitch as drawn now, degrees above the ground (CameraRig: 21.6 home, 90 top-down).
+func current_pitch() -> float:
+	return _view.pitch.pitch
+
+
+## Whether an eased turn or tilt, or an Alt + drag orbit, is running.
 func is_turning() -> bool:
-	return _view_yaw.is_turning()
+	return _view.is_moving()
 
 
 ## Whether an authoring brush is out, so Q / E are its footprint turn and the view turns on
@@ -173,64 +186,54 @@ func brush_owns_turn_keys() -> bool:
 ## Turn the view one snap, +1 clockwise on the compass (E) and -1 the other way (Q). Presses
 ## made while a turn runs add up: the next snap is taken from the one being eased to.
 func turn_view(direction: int) -> void:
-	set_yaw_target(CameraRig.snap_target(_view_yaw.target, direction))
+	set_yaw_target(CameraRig.snap_target(_view.yaw.target, direction))
 
 
 ## Ease the view to the yaw `yaw_deg` about the ground point under the screen centre.
 func set_yaw_target(yaw_deg: float) -> void:
-	if _reset_tween and _reset_tween.is_valid():
-		_reset_tween.kill()
-	_glide_home_after_turn = false
-	_view_yaw.retarget(yaw_deg)
+	_view.set_yaw_target(yaw_deg)
 
 
 ## Put the view at the yaw `yaw_deg` at once, about the same ground point (render jobs, tests).
 func set_yaw_now(yaw_deg: float) -> void:
-	set_yaw_target(yaw_deg)
-	if _view_yaw.is_turning():
-		_rotate_view(yaw_deg - _view_yaw.yaw)
-		_view_yaw.yaw = yaw_deg
-		_finish_turn()
+	_view.set_yaw_now(yaw_deg)
 
 
-## One frame of the eased turn: turn the holder about the ground point under the screen
-## centre by the yaw's step, so the stage stays in frame.
-func _advance_turn(delta: float) -> void:
-	if not _view_yaw.is_turning():
-		return
-	_rotate_view(_view_yaw.step(delta))
-	_compass.set_yaw(_view_yaw.yaw)
-	if not _view_yaw.is_turning():
-		_finish_turn()
+## Put the view at the pitch `pitch_deg` at once, about the same ground point (render jobs, tests).
+func set_pitch_now(pitch_deg: float) -> void:
+	_view.set_pitch_now(pitch_deg)
 
 
-## Turn the holder by `delta_deg` about the vertical axis through the ground point under the
-## screen centre, found now, so panning or a zoom easing at the same time cannot pull it off.
-func _rotate_view(delta_deg: float) -> void:
-	var holder := _game_map.cameraholder_node
-	var offset := _get_view_center_ground_offset()
-	var pivot := Vector3(
-		holder.global_position.x + offset.x, 0.0, holder.global_position.z + offset.y
-	)
-	holder.global_position = CameraRig.rotate_about_pivot(
-		holder.global_position, pivot, delta_deg
-	)
-	holder.global_basis = Basis(Vector3.UP, deg_to_rad(delta_deg)) * holder.global_basis
+## The view's orientation: its eased tilts (CameraView.set_pitch_target, toggle_top_down,
+## tilt_by) and the Alt + drag orbit.
+func view() -> CameraView:
+	return _view
 
 
-## The turn has landed: the holder takes the snap's exact basis (no drift from the steps), the
-## pan bounds are fit again for it, and Home's glide follows if it was waiting on the turn.
-func _finish_turn() -> void:
-	_view_yaw.land()
-	_game_map.cameraholder_node.global_basis = CameraRig.holder_basis(_view_yaw.yaw)
+## Route a mouse event to the Alt + left drag orbit (GameMap._input, ahead of every tool): true
+## when it is the orbit's. `over_gui` is whether the pointer is over the UI; a token, brush or tool
+## drag in progress owns the mouse and the orbit does not begin.
+func handle_orbit_input(event: InputEvent, over_gui: bool) -> bool:
+	return _view.handle_orbit_input(event, over_gui, _another_drag_owns_mouse())
+
+
+func _another_drag_owns_mouse() -> bool:
+	var dnd := _game_map.drag_and_drop_node
+	var token_drag: bool = dnd != null and dnd.is_dragging()
+	var brush_drag: bool = _brush_tool != null and _brush_tool.is_dragging()
+	return token_drag or brush_drag or (_sun_gizmo != null and _sun_gizmo.is_dragging())
+
+
+## Stop the Home / focus glide, if one runs (a turn, tilt or orbit takes over the view).
+func _cancel_home_tween() -> void:
+	if _reset_tween and _reset_tween.is_valid():
+		_reset_tween.kill()
+
+
+## Fit the pan bounds again for the camera's basis as it is now.
+func _refit_bounds() -> void:
 	if _has_map_bounds:
 		_fit_size = _fit_size_for_bounds(_map_bounds)
-	_clamp_camera_to_bounds()
-	_compass.set_yaw(_view_yaw.yaw)
-	view_turned.emit(_view_yaw.yaw)
-	if _glide_home_after_turn:
-		_glide_home_after_turn = false
-		_glide_to_home()
 
 
 ## Wire the MeasureTool reference used by rmb_can_start_pan() to suppress RMB
@@ -260,8 +263,8 @@ func _process(delta: float) -> void:
 	if _game_map._is_level_loading():
 		return
 	PerformanceMonitor.start_timer(&"perf/camera_update_ms")
-	_advance_turn(delta)
-	_compass.sync_keys(brush_owns_turn_keys())
+	_view.advance(delta)
+	compass.sync_keys(brush_owns_turn_keys())
 	handle_movement(delta)
 	handle_zoom(delta)
 	_handle_edge_pan(delta)
@@ -270,6 +273,12 @@ func _process(delta: float) -> void:
 		_game_map.camera_node, _base_camera_size, Vector2(_game_map.world_viewport.size), delta
 	)
 	PerformanceMonitor.stop_timer(&"perf/camera_update_ms")
+
+
+func _notification(what: int) -> void:
+	# The window lost focus mid-drag: the button release will never arrive.
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and _view != null and _view.orbiting:
+		_view.end_orbit()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -290,6 +299,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	var turn := CameraRig.event_turn(event, brush_owns_turn_keys())
 	if turn != 0:
 		turn_view(turn)
+		get_viewport().set_input_as_handled()
+		return
+	if CameraRig.is_top_down_key(event):
+		_view.toggle_top_down()
 		get_viewport().set_input_as_handled()
 		return
 
@@ -503,7 +516,7 @@ func is_at_rest() -> bool:
 	var camera_node := _game_map.camera_node
 	if absf(camera_node.size - _corrected_size(_target_zoom)) > 0.001 or is_turning():
 		return false
-	if _glide_home_after_turn:
+	if _view.is_waiting_to_glide():
 		return false
 	for tween: Tween in [_reset_tween, _shake_tween]:
 		if tween != null and tween.is_valid() and tween.is_running():
@@ -717,13 +730,10 @@ func _reset_camera_to_home() -> void:
 	# Let handle_zoom() smoothly interpolate size toward home zoom.
 	# Don't tween camera size directly — that would fight with handle_zoom().
 	_target_zoom = _home_zoom
-	# A turned view first eases back to the home yaw (a glide would fight the turn), then glides.
-	var back := CameraRig.shortest_turn(_view_yaw.target, CameraRig.HOME_YAW)
-	if not is_zero_approx(back):
-		set_yaw_target(_view_yaw.target + back)
-		_glide_home_after_turn = true
-		return
-	_glide_to_home()
+	# A turned or tilted view first eases back to the home yaw and pitch (a glide would fight the
+	# pivot-keeping shift of the ease), then glides.
+	if not _view.go_home():
+		_glide_to_home()
 
 
 ## Tween the holder to the home position (the clamped one).
@@ -866,7 +876,8 @@ func _handle_edge_pan(delta: float) -> void:
 	var drag_and_drop_node := _game_map.drag_and_drop_node
 	# Determine raw target pan direction (zero if not dragging)
 	var target_pan = Vector2.ZERO
-	if drag_and_drop_node and drag_and_drop_node.is_dragging():
+	var paused := CameraRig.edge_pan_paused(Input.is_key_pressed(KEY_ALT), _view.orbiting)
+	if drag_and_drop_node and drag_and_drop_node.is_dragging() and not paused:
 		target_pan = drag_and_drop_node.edge_pan_direction
 
 	# Smoothly interpolate toward the target pan direction
@@ -894,34 +905,15 @@ func _handle_edge_pan(delta: float) -> void:
 ## Compute the bounding box of all mesh geometry in the map container.
 ## Used for camera soft bounds to prevent panning into the void.
 func _compute_map_bounds() -> void:
-	var map_container := _game_map.map_container
-	if not map_container:
-		_has_map_bounds = false
+	# The mesh walk skips decoration beyond the map (Constants.BOUNDS_EXEMPT_META).
+	_has_map_bounds = false
+	if not _game_map.map_container:
 		return
-
-	var mesh_aabbs: Array[AABB] = []
-	_collect_mesh_aabbs(map_container, mesh_aabbs)
-
-	if mesh_aabbs.is_empty():
-		_has_map_bounds = false
-		return
-
-	var bounds: AABB = mesh_aabbs[0]
-	for i in range(1, mesh_aabbs.size()):
-		bounds = bounds.merge(mesh_aabbs[i])
-
-	_map_bounds = bounds
-	_has_map_bounds = true
-	_fit_size = _fit_size_for_bounds(bounds)
-
-
-## Recursively collect world-space AABBs from all MeshInstance3D children, except
-## decoration beyond the map (Constants.BOUNDS_EXEMPT_META).
-func _collect_mesh_aabbs(node: Node, out: Array[AABB]) -> void:
-	if node is MeshInstance3D and node.mesh and not node.has_meta(Constants.BOUNDS_EXEMPT_META):
-		out.append(node.global_transform * node.mesh.get_aabb())
-	for child in node.get_children():
-		_collect_mesh_aabbs(child, out)
+	var bounds := LevelEnvironmentManager.compute_map_bounds(_game_map.map_container)
+	_has_map_bounds = bounds != AABB()
+	if _has_map_bounds:
+		_map_bounds = bounds
+		_fit_size = _fit_size_for_bounds(bounds)
 
 
 ## Compute the XZ offset from the camera holder to the ground-level view center.

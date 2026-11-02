@@ -25,7 +25,7 @@
   {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "yaw", "deg": 45},
   {"op": "settle"},
   {"op": "wind", "freeze": false},
-  {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "clip", "name": "wild_snap", "dir": "user://render_jobs/camera_rig_wild/wild_snap", "seconds": 3.0, "lead": 0.5, "turn": 1, "fps": 30, "width": 960},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "clip", "name": "wild_snap", "dir": "user://render_jobs/camera_rig_wild/wild_snap", "seconds": 3.0, "events": [{"at": 15, "do": "turn", "dir": 1}], "fps": 30, "width": 960},
   {"op": "wait", "s": 3.5},
   {"op": "index", "title": "camera rig wild", "intro": "Camera rig card 1: snap yaw, valley"},
   {"op": "title"},

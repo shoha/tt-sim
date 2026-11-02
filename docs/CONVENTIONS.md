@@ -280,13 +280,24 @@ The camera stands at +x, +z of what it looks at and looks along (-1, -1) in map 
 | Q / E, `[` / `]` | Turn the view a quarter (no brush out) | `CameraRig.event_turn`, `CameraController.turn_view` |
 | Alt+Q / Alt+E | Turn the view while an authoring brush is out (Q / E turn the brush, `[` `]` its size) | same |
 | Compass buttons (top right) | Turn the view, always | `CameraCompass` |
-| Home | Reset position, zoom and view (the turn first, then the glide) | `_reset_camera_to_home` |
+| Home | Reset position, zoom, turn and tilt (the turn and tilt first, then the glide) | `_reset_camera_to_home`, `CameraView.go_home` |
+| Alt + left drag | Tilt (vertical drag, pitch 21.6 to 90) and orbit (horizontal drag, free yaw) | `CameraRig.orbit_action`, `CameraView.handle_orbit_input`, called first in `GameMap._input` |
+| O | Top-down toggle: 0.5 s eased to pitch 90, a second press returns to the pitch it left | `CameraRig.is_top_down_key`, `CameraPitch.toggle_top_down` |
+| Compass tilt row (top right) | Flatter and steeper arrows (15 degrees) and an elevation gauge that is the top-down button | `CameraCompass` |
 
 The hint bar chip (`Q E` or `Alt + Q E`, `CameraRig.turn_hint`) and the compass tooltip name the mapping that is live.
 
 ### View yaw (turning the view)
 
 The view turns in 90 degree snaps: 45 (home), 135, 225, 315, as the camera's compass azimuth. `CameraController` eases the CameraHolder's yaw over about 0.35 s (`CameraYaw`, `CameraRig.TURN_SECONDS`) about the ground point under the screen centre, so the stage stays in frame, and applies it inside `_process` before it publishes `canopy_fade_view` (the foliage shaders' camera-pass test reads it; the 2 m `shadow_caster_push` now keys off the engine's `IN_SHADOW_PASS` instead, so no turn speed can sink the crowns). The holder carries the yaw, so its local pan axes follow it: W is always away from the viewer. W/S speed uses the live elevation (`CameraRig.vertical_pan_factor`), so it matches A/D on screen. The sun stays fixed in the world; the view is local to each player (not synced). A landed turn emits `view_turned`, which `MapViewFit` answers with a refit of the zoom limit and pan bounds for the new basis. The maths is in `utils/camera_rig.gd` (pure, tested in `tests/unit/test_camera_rig.gd`); a render-job probe (`tools/render_jobs/probes/camera_rig.gd`, jobs `camera_rig_*`) shoots stills and a fixed-rate clip of a snap.
+
+### View pitch (tilt and top-down)
+
+The pitch is the camera's elevation: 21.6 degrees is home, 90 is straight down, and nothing flatter than home is allowed (the owner has not judged flatter; street level is a later stage). `CameraView` (`scenes/states/playing/camera_view.gd`) owns the yaw and pitch state (`CameraYaw`, `CameraPitch`) and keeps the ground point under the screen centre fixed through every change: a pitch change swings the Camera3D child's basis, built from an explicit horizontal right axis so 90 has no gimbal (`CameraRig.camera_basis`), and its offset about that axis (`pitched_offset`), then moves the holder by whatever the pivot slipped. At home pitch the camera takes the scene's own basis and offset exactly. Orthographic, so the picture depends on the basis and pivot only; `_update_camera_offset` keeps the near plane above the ground and canopies at every pitch (`near_plane_hold` uses the live back axis, tested at 21.6 to 90), and `view_tilted` (every frame of a tilt) makes `MapViewFit` refit the zoom limit (a square map seen from above needs a wider view) and the pan bounds for the live basis.
+
+An Alt + left drag is decided by `CameraRig.orbit_action` before every tool in `GameMap._input`, so a token drag, a brush stroke or a selection never starts under it; it does not begin over the UI or while a token, brush or tool drag owns the mouse. Dragging down raises the camera 0.2 degrees a pixel, dragging sideways turns it 0.3 degrees a pixel (picture dragged right turns the camera left); the move is direct (no inertia). Q / E and the compass snap from the free yaw to the next 45 + 90k. Edge pan (a token dragged to the screen edge) pauses while Alt is held or an orbit runs. Pan speed follows the live pitch: W's ground factor is 1 / sin(pitch) (`vertical_pan_factor`), so W and A cover the same screen distance at every pitch; the keyboard and the edge pan share it (`tests/unit/test_camera_pitch.gd` drives both at 21.6, 35, 50, 70 and 90).
+
+Above about 55 degrees of pitch (full from 70, `CameraRig.marker_strength`) every token gets a ring marker (`TokenMarkers`, `shaders/token_marker.gdshader`): one MultiMesh quad per token turned to face the camera, drawn on top without a depth test, about 26 px across whatever the zoom (a larger token's ring is its footprint), open in the middle, in the token's most vivid palette or material colour between two ink lines. A token hidden from players gets no ring for a player and a dimmed one for the GM (`TokenMarkers.ring_alpha`). It does no work below the threshold.
 
 ### Isometric Direction Mapping
 

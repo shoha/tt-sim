@@ -1,0 +1,53 @@
+{
+ "out_dir": "render_jobs/camera_rig2_town",
+ "timeout_s": 1200,
+ "hang_s": 120,
+ "steps": [
+  {"op": "wait", "s": 1.0},
+  {"op": "saved", "folder": "_camera_fantasy", "load": "play"},
+  {"op": "new_map", "biome": "", "size": 250, "seed": 1234, "phase": "build"},
+  {"op": "wait_ready", "settle": 1.0, "phase": "build"},
+  {"op": "no_autosave", "phase": "build"},
+  {"op": "eval", "expr": "_authoring_controller.panel._on_rail_item_pressed(\"wall\")", "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/walls.gd", "action": "kind", "kind": "row", "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "street", "from": [-18, -26], "to": [-18, 26], "preset": 3, "seed": 21, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "street", "from": [18, -26], "to": [18, 26], "preset": 2, "seed": 31, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "dress", "id": 1, "kit": "farming_hamlet", "wealth": 0.3, "density": 1.2, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/settlements.gd", "action": "dress", "id": 2, "kit": "market_town", "wealth": 0.7, "density": 1.2, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/water.gd", "action": "save", "folder": "_camera_fantasy", "replace": true, "phase": "build"},
+  {"op": "play", "folder": "_camera_fantasy", "phase": "build"},
+  {"op": "wait_ready", "settle": 2.0, "phase": "build"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/env.gd", "mouse": [960, 540]},
+  {"op": "hide_ui"},
+  {"op": "wind", "freeze": true},
+  {"op": "look_at", "at": [0, 0]},
+  {"op": "zoom", "size": 34.0},
+  {"op": "settle"},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "tokens", "from": [-4, 0], "to": [4, 0], "zig": 1.5, "items": ["avatar:0", "chunky:0", "chunky:2"], "scale": {"chunky:2": 3.0}},
+  {"op": "wait", "s": 1.0},
+  {"op": "expand", "values": ["21.6", "50", "90"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "pitch", "deg": "{value}"},
+   {"op": "settle"},
+   {"op": "capture", "name": "town_p{value}", "desc": "hamlet and market town, pitch {value}, size 34, three tokens (avatar, 1 m, 3 m), compass with tilt gauge top right"}
+  ]},
+  {"op": "zoom", "size": 9.0},
+  {"op": "expand", "values": ["21.6", "60", "75", "90"], "template": [
+   {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "pitch", "deg": "{value}"},
+   {"op": "settle"},
+   {"op": "capture", "name": "town_close_p{value}", "desc": "the three tokens close, pitch {value}, size 9: the marker fades in from 55 to 70"}
+  ]},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "pitch", "deg": 21.6},
+  {"op": "zoom", "size": 34.0},
+  {"op": "settle"},
+  {"op": "wind", "freeze": false},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "clip", "name": "town_o_toggle", "dir": "user://render_jobs/camera_rig2_town/town_o_toggle", "seconds": 3.0, "fps": 30, "width": 960, "events": [{"at": 10, "do": "toggle"}, {"at": 55, "do": "toggle"}]},
+  {"op": "wait", "s": 3.5},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "clip", "name": "town_tilt_drag", "dir": "user://render_jobs/camera_rig2_town/town_tilt_drag", "seconds": 4.5, "fps": 30, "width": 960, "events": [{"at": 8, "do": "drag", "to": 68, "dx": 0, "dy": 340}, {"at": 76, "do": "drag", "to": 116, "dx": 0, "dy": -340}]},
+  {"op": "wait", "s": 5.0},
+  {"op": "call", "script": "res://tools/render_jobs/probes/camera_rig.gd", "action": "clip", "name": "town_orbit", "dir": "user://render_jobs/camera_rig2_town/town_orbit", "seconds": 4.5, "fps": 30, "width": 960, "events": [{"at": 8, "do": "drag", "to": 68, "dx": -400, "dy": 200}, {"at": 80, "do": "home"}]},
+  {"op": "wait", "s": 5.0},
+  {"op": "index", "title": "camera rig 2 town", "intro": "Camera rig card 2: pitch, O toggle, Alt drag, token marker, hamlet and market town"},
+  {"op": "title"},
+  {"op": "wait", "s": 0.5}
+ ]
+}
