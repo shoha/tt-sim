@@ -120,6 +120,11 @@ func test_the_kind_follows_the_character_and_the_width_the_road() -> void:
 		[Crossing.Kind.ARCH, Crossing.Kind.PLANK]
 	)
 	assert_eq(
+		VillageBridges.kinds_for("modern_town", 0.6),
+		[Crossing.Kind.ARCH, Crossing.Kind.PLANK],
+		"a modern town's road crosses on the built span"
+	)
+	assert_eq(
 		VillageBridges.kinds_for("farming_hamlet", 0.1),
 		[Crossing.Kind.FORD, Crossing.Kind.PLANK],
 		"a poor lane fords first"

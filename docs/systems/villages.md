@@ -58,7 +58,8 @@ There is no separate Street tool. A street is `Wall.Kind.ROW`, one of the Wall t
   tags. **Phase 0 done (batch_c, 2026-10-30):** the Street tool offers all 11. `Wall.ROW_PRESETS` is
   `ProcgenRow.PRESET_MINKA + 1` (11), the pane's tiles, the readout names and the tooltips come from
   `StreetSpeciesInfo` (built from `ProcgenStreetSpecies.NAMES`, only the plain label, icon and tooltip
-  are tt-sim's), `MapWallIO` and the live-edit codec take 0 to 10, and `StreetSplit.region_tags` takes
+  are tt-sim's, and a default setback where a species has one: modern row 3.6 m, `walls.md` "Setback per
+  species"), `MapWallIO` and the live-edit codec take 0 to 10, and `StreetSplit.region_tags` takes
   the newer species' tags from procgen. Numbering (saved as the index, never reorder): 0 mixed, 1 terrace,
   2 guild houses, 3 village, 4 cottages, 5 pueblo village, 6 villa street, 7 alpine hamlet, 8 canal row,
   9 tudor lane, 10 minka village; the first five keep their indices and tile ids.
@@ -310,6 +311,7 @@ range, which gates lamps, paving, planters, awnings and banners, and a **density
 | Harbour town | canal row / guild houses | quay crates, jetties, boats, lamps, signs, stalls; paved edge |
 | Hill fort village | alpine hamlet / cottages | low walls, shrine, standing stone, gate, woodpiles, sheep trough |
 | Market town | terrace / guild houses | plaza with cross or fountain, stalls, benches, lamps, signs, laundry |
+| Modern town (2026-11-01) | modern row | kerb lamps, bins, post boxes, bollards, bike racks, parked cars, hero phone boxes, planters and bus shelters; asphalt road, kerb paving, concrete plaza |
 
 Pueblo, minka and tudor species map to later kits (ovens, ladders, rice drying racks); regional props follow
 the `regional` tag convention: a prop tagged with a region joins only that region's kits.
@@ -693,9 +695,12 @@ villages each street carries a glass chip with its name ("Village 2", gold when 
 
 **The pane** (`VillageToolPane`): one line for the gesture, then, when two or more villages exist, a row naming them
 ("Village 1", "Village 2": one word, the board's chips' and the hint's), the primary choice; under it that village's
-character ("Character of village 2"), four tiles each a small painted vignette of the kit's plaza (`VillageSwatch`,
-generated in code: the kit's plaza paving as a disc on a ground colour of its own, meadow green, warm ochre, harbour
-blue, heather slate, with a well, a striped stall, barrels or a lamp; the tooltip names the road and plaza surfaces in
+character ("Character of village 2"), five tiles (the modern town's since topic moderntown) on one line, the name
+breaking between its words under a 24 px picture (`TileRow.wrap_labels`; the 2x2 rows beside-the-picture of round 4
+took a third row with the fifth and passed the 720 budget, 622 px against 589; now 588), each a small painted
+vignette of the kit's plaza (`VillageSwatch`, generated in code: the kit's plaza paving as a disc on a ground colour
+of its own, meadow green, warm ochre, harbour blue, heather slate, cool mint, with a well, a striped stall, barrels, a
+lamp or a red phone box; the tooltip names the road and plaza surfaces in
 plain words); then the plazas: a body line saying how many more the village can hold ("Room for 3 more
 plazas", "Four plazas: the village is full"; short so it never meets the pane's edge, and it wraps), and for the picked plaza (or the one a drag is sizing) one row with the size slider (shown as the width
 across in the level's units; keys reach it) and Remove. With no plaza picked the row is gone (no disabled boxes) and a
@@ -733,7 +738,8 @@ away): discs, up to 4 per village, three kinds, no polygons, no move, no bridges
   0.42..0.55 scale, on a loose quincunx 3.4 m apart turned by the seed, bee skeps by some); garden (a small `grass_meadow`
   disc with two or three earth beds, one flower per bed in lavender or bloom mounds, one or two flowering shrubs at
   the rim). A kit decides the kinds and its default (`KIT_KINDS`): farming hamlet crops, orchard, garden; market
-  town garden, orchard; hill fort garden, crops; harbour town none.
+  town garden, orchard; hill fort garden, crops; harbour town none; modern town garden, orchard (flower beds and
+  allotment orchards, never ploughland).
 - **Paint** goes into the record's `ground` (role `field`, first in `SettlementGround.PAINT_ORDER`, so a road
   laid later runs over a field); `SettlementGroundIO.MAX_SURFACES` went from 4 to 8 to hold the field surfaces.
   Because the strokes follow from the record and the seed, a resize or a removal finds exactly a field's strokes
@@ -855,8 +861,8 @@ rest, and a peer receives it as the ordinary `crossings` op inside the group (no
   crossing. The width is the painted road's full width held to the kind's range (3 m for planks and arches at the
   default setback, 4 m for a ford). The road paint already stops at the water (`SettlementGround` refuses wet
   samples), so nothing paints on water.
-- **Kind by character** (`kinds_for`): planks for a farming hamlet and a harbour town, a stone arch for a market town
-  and a hill fort, a ford first for a poor street (wealth under 0.25) where the water is wadeable. Each falls back to
+- **Kind by character** (`kinds_for`): planks for a farming hamlet and a harbour town, a stone arch for a market town,
+  a hill fort and a modern town (the only built span there is), a ford first for a poor street (wealth under 0.25) where the water is wadeable. Each falls back to
   the next (a ford over deep water becomes the kit's bridge, an arch that will not stand becomes planks).
 - **Record:** `Settlement.bridges`, the ids of the crossings the last Dress laid (up to 8, ids 1..255, saved as a list,
   left out when empty, hostile input skips the record). Clear, a re-dress, a change of character and `pave` take back
@@ -912,7 +918,7 @@ pane switch, so the author can override it per village (see "The pane switch" be
   none until its next re-dress or change of character.
 - **Kind by character** (`VillageBoundary.kind_for`, `KIT_RULES`): a hill fort village always a stone wall (1.0 m,
   gate piers 1.55 m); a market town a low stone wall (0.75 m, piers 1.2 m) on two seeds in three; a farming hamlet a
-  hedge on one seed in two; a harbour town none. A re-dress draws again (no sameness).
+  hedge on one seed in two; a harbour town and a modern town (kerbs and front gardens, no ring wall) none. A re-dress draws again (no sameness).
 - **The pane switch** (2026-11-01; a dropdown first, rebuilt as tiles after the UI critic's FAIL: an OptionButton had
   no visible edge and no sibling row uses one): a `TileField` under the Village pane's character tiles, captioned
   "Boundary of village N" (just "Boundary" with one village) like its sibling rows, five text tiles in one row: Auto

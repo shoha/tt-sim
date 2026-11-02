@@ -18,10 +18,11 @@ const BIOME_COUNT := 9
 const ASSET_COUNT := 293
 ## The palette lists an asset once per biome that places it (shared stems appear several times).
 const PALETTE_ASSET_COUNT := 288
-const SURFACE_COUNT := 36
+## 39 since the modern town's asphalt, kerb paving and concrete plaza (all built), 2026-11-01.
+const SURFACE_COUNT := 39
 ## Surfaces per role; the rest of SURFACE_COUNT is ground.
 const CLIFF_SURFACE_COUNT := 3
-const BUILT_SURFACE_COUNT := 7
+const BUILT_SURFACE_COUNT := 10
 const WIND_CATEGORIES := ["tree", "grass"]
 ## The constant sidecar beside every PNG, GLB and JPG of the folder: the raw file ships in the pack.
 const KEEP_SIDECAR := '[remap]\n\nimporter="keep"\n'

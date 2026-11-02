@@ -1,8 +1,8 @@
 extends GutTest
 
 ## The Decorate row in the GM's Events pane (check G5, 2026-10-31): with the Buildings brush out in
-## play and a building selected, the pane's bar shows the Decorate row (nine ornament toggles and
-## Surprise me), and a toggle edits the building's record and rebuilds the standing structure.
+## play and a building selected, the pane's bar shows the Decorate row (thirteen ornament toggles
+## and Surprise me), and a toggle edits the building's record and rebuilds the standing structure.
 ## Wired as PlayEvents wires it (StructureTool.connect_selection on the Events pane's own Building
 ## pane). Unselected, the row is hidden and the palette shows instead.
 
@@ -72,7 +72,8 @@ func test_the_row_appears_with_a_selected_building_and_a_toggle_rebuilds_it() ->
 		var chip := section.chips[kind] as Button
 		assert_true(chip.is_visible_in_tree(), "%s toggle is shown" % kind)
 		labels.append(chip.text)
-	assert_eq(section.chips.size(), 9, "nine toggles")
+	assert_eq(section.chips.size(), StructureOrnaments.CHIPS.size(), "a toggle per ornament")
+	assert_eq(section.chips.size(), 13, "thirteen toggles")
 	assert_true(section.surprise_button.is_visible_in_tree(), "Surprise me is shown")
 	assert_eq(section.surprise_button.text, "Surprise me")
 	gut.p("Decorate toggles: %s" % ", ".join(labels))

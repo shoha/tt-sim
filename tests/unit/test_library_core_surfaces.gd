@@ -9,10 +9,15 @@ extends GutTest
 ## below), the biome thumbnails read, and the library's bindings equal the constants the game held
 ## before bindings existed.
 
-const SURFACE_COUNT := 36
-## The labels the retired AuthoringPanel.SURFACE_LABELS table gave; a surface not in it was shown
-## as its id spelled out (AuthoringPanel.species_label).
+## 36 until 2026-11-01, when the modern town's three ground surfaces joined (topic moderntown).
+const SURFACE_COUNT := 39
+## The labels the retired AuthoringPanel.SURFACE_LABELS table gave, and the labels of surfaces
+## added since that are not their id spelled out; any other surface shows its id spelled out
+## (AuthoringPanel.species_label).
 const LEGACY_LABELS := {
+	"asphalt_road": "Asphalt road",
+	"concrete_plaza": "Concrete plaza",
+	"paving_kerb": "Paving",
 	"cliff": "Rock",
 	"cliff_basalt": "Basalt",
 	"cliff_sandstone": "Sandstone",
@@ -52,7 +57,10 @@ func after_all() -> void:
 
 func test_core_serves_its_surfaces_and_labels() -> void:
 	var names := PaletteLibrary.surfaces().keys()
-	assert_eq(names.size(), SURFACE_COUNT, "the 36 surfaces")
+	assert_eq(names.size(), SURFACE_COUNT, "the 39 surfaces")
+	for name: String in ["asphalt_road", "paving_kerb", "concrete_plaza"]:
+		assert_true(names.has(name), name + ": the modern town's ground is served")
+		assert_eq(PaletteLibrary.surfaces()[name]["role"], "built", name + " clears plants")
 	for name: String in names:
 		assert_true(SurfaceStore.is_library_surface(name), name + " is served by the library")
 		var legacy_label: String = LEGACY_LABELS.get(name, AuthoringPanel.species_label(name))

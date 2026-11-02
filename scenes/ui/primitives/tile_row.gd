@@ -46,6 +46,10 @@ const OWN_VARIATION_META := &"tile_own_variation"
 ## (Button.expand_icon), for pictures painted as wide strips; the tile's height is then
 ## tile_min_size's alone.
 @export var photo_fill: bool = false
+## Labels may break between words onto further lines: a row with [member columns] then fits its
+## count by its widest word rather than its longest label (five village characters on one line,
+## "Hill fort / village"), and tile_min_size's height should hold the lines.
+@export var wrap_labels: bool = false
 
 var selected: StringName = &""
 
@@ -261,8 +265,12 @@ func _fit_columns() -> void:
 		tile.custom_minimum_size = Vector2(width, tile_min_size.y)
 		# A label wider than its share would widen the tile and break the wrap
 		# count; it ends in an ellipsis instead, with its full name in the tooltip.
+		# A wrapping label breaks between words first, and only a word wider than
+		# the tile ends in the ellipsis.
 		tile.clip_text = true
 		tile.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		if wrap_labels:
+			tile.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		var tooltip: String = tile.get_meta(TOOLTIP_META, "")
 		if _natural_width(tile) > width and not tooltip.contains(tile.text):
 			tooltip = tile.text if tooltip.is_empty() else "%s\n%s" % [tile.text, tooltip]
@@ -270,11 +278,16 @@ func _fit_columns() -> void:
 
 
 ## The width `tile` needs to show its label and icon whole: the wider of the two
-## plus the Tile style's side padding.
+## plus the Tile style's side padding. A wrapping label needs only its widest word.
 func _natural_width(tile: Button) -> float:
 	var font := tile.get_theme_font(&"font")
 	var font_size := tile.get_theme_font_size(&"font_size")
-	var text_width := font.get_string_size(tile.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	var text_width := 0.0
+	var words := tile.text.split(" ", false) if wrap_labels else PackedStringArray([tile.text])
+	for word in words:
+		text_width = maxf(
+			text_width, font.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		)
 	var icon_width := 0.0
 	# A filling picture shrinks to the tile, so only the label sets the width it needs.
 	if tile.icon and not tile.expand_icon:

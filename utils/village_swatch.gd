@@ -4,9 +4,10 @@ extends RefCounted
 ## The picture on a Village tool character tile: a small painted vignette of that character's
 ## plaza. The kit's own plaza paving (its Paint tile thumbnail) is a disc seen a little from the
 ## side, lying on a ground colour of the kit's own (meadow green for the farming hamlet, warm
-## ochre for the market town, harbour blue, heather slate for the hill fort village), with one
-## signature piece standing on it: a well, a striped stall, barrels, a lamp. The ground colours
-## sit far apart so the four tiles read apart at a glance even where two kits pave alike; the
+## ochre for the market town, harbour blue, heather slate for the hill fort village, a cool
+## mid-century mint for the modern town), with one signature piece standing on it: a well, a
+## striped stall, barrels, a lamp, a red phone box. The ground colours sit far apart so the five
+## tiles read apart at a glance even where two kits pave alike; the
 ## paving still says what the ground will be. Painted pixel by pixel with soft edges from a list
 ## of flat shapes (layers); every function here is pure.
 ##
@@ -19,6 +20,7 @@ const LOOKS := {
 	"market_town": {"ground": Color(0.9, 0.6, 0.24), "piece": &"stall"},
 	"harbour_town": {"ground": Color(0.22, 0.52, 0.74), "piece": &"barrels"},
 	"hill_fort_village": {"ground": Color(0.46, 0.42, 0.6), "piece": &"lamp"},
+	"modern_town": {"ground": Color(0.5, 0.78, 0.72), "piece": &"phone_box"},
 }
 ## The paving disc in the picture's unit square: its centre and half axes (wider than tall, a
 ## plaza seen from the tabletop camera's height).
@@ -35,6 +37,10 @@ const AWNING := Color(0.86, 0.2, 0.22)
 const CREAM := Color(0.98, 0.93, 0.8)
 const POST := Color(0.22, 0.2, 0.22)
 const LAMP_LIGHT := Color(1.0, 0.86, 0.42)
+## The phone box: pillar-box red with a deeper cap and pale glazing.
+const BOX_RED := Color(0.84, 0.16, 0.14)
+const BOX_RED_DARK := Color(0.6, 0.1, 0.1)
+const GLAZING := Color(0.86, 0.93, 0.92)
 ## Field tiles: each kind's disc colour, and the colours drawn on it.
 const FIELD_DISC := {
 	"crops": Color(0.6, 0.38, 0.2),
@@ -125,6 +131,16 @@ static func piece_layers(piece: StringName) -> Array[Dictionary]:
 			out.append(_shape(&"rect", c + Vector2(0.0, 0.04), Vector2(0.05, 0.02), POST))
 			out.append(_shape(&"rect", c + Vector2(0.0, -0.3), Vector2(0.05, 0.055), LAMP_LIGHT))
 			out.append(_shape(&"rect", c + Vector2(0.0, -0.37), Vector2(0.065, 0.016), POST))
+		&"phone_box":
+			out.append(_shape(&"ellipse", c + Vector2(0.05, 0.06), Vector2(0.15, 0.05), SHADE))
+			out.append(_shape(&"rect", c + Vector2(0.0, -0.14), Vector2(0.085, 0.2), BOX_RED))
+			for row in 3:
+				for dx in [-0.034, 0.034]:
+					var pane := c + Vector2(dx, -0.22 + row * 0.075)
+					out.append(_shape(&"rect", pane, Vector2(0.024, 0.03), GLAZING))
+			out.append(_shape(&"rect", c + Vector2(0.0, -0.3), Vector2(0.068, 0.016), CREAM))
+			out.append(_shape(&"rect", c + Vector2(0.0, -0.355), Vector2(0.1, 0.03), BOX_RED_DARK))
+			out.append(_shape(&"ellipse", c + Vector2(0.0, -0.39), Vector2(0.05, 0.026), BOX_RED_DARK))
 	return out
 
 

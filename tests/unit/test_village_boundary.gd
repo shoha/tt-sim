@@ -157,6 +157,7 @@ func test_the_kind_follows_the_character_and_not_every_seed_is_walled() -> void:
 	for seed_value in 60:
 		assert_eq(VillageBoundary.kind_for("hill_fort_village", seed_value), VillageBoundary.WALL)
 		assert_eq(VillageBoundary.kind_for("harbour_town", seed_value), "")
+		assert_eq(VillageBoundary.kind_for("modern_town", seed_value), "", "a town has no ring wall")
 		town[VillageBoundary.kind_for("market_town", seed_value)] = true
 		hamlet[VillageBoundary.kind_for("farming_hamlet", seed_value)] = true
 	assert_eq(town.keys().size(), 2, "a market town is walled low on some seeds, open on others")

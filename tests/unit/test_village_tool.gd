@@ -208,6 +208,32 @@ func test_a_kit_vignette_is_its_paving_on_its_own_ground_with_a_piece() -> void:
 			assert_gt(_distance(means[a], means[b]), 0.08, "two kits paved alike still read apart")
 
 
+func test_the_modern_town_is_the_fifth_character_with_its_phone_box_on_mint() -> void:
+	assert_eq(Settlement.KIND_NAMES.size(), 5, "procgen's five kits")
+	var kits: Array[String] = []
+	for item in SettlementSection.CHIPS:
+		kits.append(String(item["kit"]))
+		assert_ne(String(item["tip"]), "", "%s has a tip" % item["kit"])
+	assert_eq(kits, Settlement.KIND_NAMES, "a chip per kit, in procgen's order")
+	assert_eq(String(SettlementSection.CHIPS[4]["label"]), "Modern town")
+	assert_eq(VillageSwatch.LOOKS["modern_town"]["piece"], &"phone_box")
+	var paving := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	paving.fill(Color(0.8, 0.8, 0.78))
+	var picture := VillageSwatch.vignette("modern_town", paving)
+	var body := picture.get_pixel(32, 38)
+	assert_lt(_distance(body, VillageSwatch.BOX_RED), 0.12, "the box's red stands mid-tile")
+	var corner := picture.get_pixel(1, 62)
+	assert_gt(corner.g, corner.r, "the ground is a cool mint, not a warm one")
+	var pane := VillageToolPane.new()
+	add_child_autofree(pane)
+	_doc.settlements = _list([_village([{"at": Vector2(0, 9), "radius": 4.0}])])
+	pane.show_state(VillagePlazas.state_of(_doc, 1, 0))
+	assert_true(pane.kit_field.tiles.has_tile(&"village_kit_modern_town"), "the fifth tile")
+	watch_signals(pane)
+	pane.kit_field.tiles.get_node("village_kit_modern_town").button_pressed = true
+	assert_signal_emitted_with_parameters(pane, "kit_picked", ["modern_town"])
+
+
 func _distance(a: Color, b: Color) -> float:
 	return Vector3(a.r - b.r, a.g - b.g, a.b - b.b).length()
 

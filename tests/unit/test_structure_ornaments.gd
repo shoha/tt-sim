@@ -69,7 +69,7 @@ func test_the_bits_name_procgens_kinds_and_every_kind_has_a_chip() -> void:
 	chipped.sort()
 	var sorted_bits := StructureOrnaments.KIND_BITS.duplicate()
 	sorted_bits.sort()
-	assert_eq(chipped, sorted_bits, "a chip for each of the nine")
+	assert_eq(chipped, sorted_bits, "a chip for each of the thirteen")
 
 
 func test_kinds_round_trip_through_the_mask_and_leave_other_params_alone() -> void:
@@ -84,7 +84,8 @@ func test_kinds_round_trip_through_the_mask_and_leave_other_params_alone() -> vo
 	off = StructureOrnaments.with_kind(off, "ivy", false)
 	assert_eq(off, {"floors": 2.0}, "none left removes the reserved entries")
 	assert_eq(StructureOrnaments.mask_of({"ornaments": true}), 0, "a bool is no mask")
-	assert_eq(StructureOrnaments.mask_of({"ornaments": 99999.0}), 511, "clamped to nine bits")
+	assert_eq(StructureOrnaments.KIND_BITS.size(), 13, "thirteen kinds")
+	assert_eq(StructureOrnaments.mask_of({"ornaments": 99999.0}), 8191, "clamped to thirteen bits")
 	assert_eq(StructureOrnaments.kinds_of({"ornaments": 2.0}), ["bartizan"] as Array[String])
 
 
@@ -334,7 +335,7 @@ func test_the_row_shows_the_chips_greys_the_blocked_ones_and_asks_on_a_click() -
 	var section := StructureOrnamentsSection.new()
 	add_child_autofree(section)
 	section.show_for(_doc.structure(id))
-	assert_eq(section.chips.size(), 9, "nine chips")
+	assert_eq(section.chips.size(), 13, "thirteen chips")
 	assert_false((section.chips["ivy"] as Button).button_pressed)
 	assert_true(section.clear_button.disabled, "nothing to clear")
 	assert_false(section.ivy_row.visible, "no ivy, no slider")
@@ -392,6 +393,43 @@ func test_the_tool_turns_a_click_into_an_edit_and_the_bar_shows_it() -> void:
 	assert_ne(_doc.structure(id).params, {} as Dictionary, "Surprise me dresses it")
 	pane.ornaments_section.clear_button.pressed.emit()
 	assert_eq(_doc.structure(id).params, {} as Dictionary, "Clear takes them off")
+
+
+## The thirteen chips at the rail's 720 width (364 px, test_village_fields) wrap to whole chips on
+## at most five lines (146 px; topic moderntown). The picked building's bar as a whole scrolls
+## (about 1260 px at 720 with every section), so no height budget applies to it; the chips must
+## only stay whole and compact.
+func test_the_thirteen_chips_wrap_whole_at_720() -> void:
+	var editor := _editor()
+	var id := _lay(editor)
+	var tool := ToolRegistry.find(StructureTool.ID) as StructureTool
+	var controller := AuthoringController.new()
+	add_child_autofree(controller)
+	var brush := BrushTool.new()
+	add_child_autofree(brush)
+	brush.editor = editor
+	controller.brush = brush
+	controller.editor = editor
+	var host := VBoxContainer.new()
+	host.theme = load(ThemeColors.GLASS_THEME_PATH)
+	host.size = Vector2(364, 1200)
+	add_child_autofree(host)
+	var pane := tool.build_pane(null) as StructureToolPane
+	host.add_child(pane)
+	tool.connect_pane(controller, pane)
+	StructureTool.of(brush).select(id)
+	await wait_physics_frames(3)
+	var section := pane.ornaments_section
+	assert_eq(section.chips.size(), StructureOrnaments.CHIPS.size())
+	for kind: String in section.chips:
+		var chip := section.chips[kind] as Button
+		assert_lte(chip.position.x + chip.size.x, section.size.x + 0.5, "%s inside the row" % kind)
+		assert_gte(chip.size.x, chip.get_combined_minimum_size().x, "%s whole" % kind)
+	var lines := {}
+	for kind: String in section.chips:
+		lines[(section.chips[kind] as Button).position.y] = true
+	gut.p("ornament chips on %d lines, %.0f px" % [lines.size(), section._flow.size.y])
+	assert_lte(lines.size(), 5, "thirteen chips take at most five lines")
 
 
 # --- the placed kinds ----------------------------------------------------------------------

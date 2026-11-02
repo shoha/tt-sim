@@ -1,8 +1,9 @@
 class_name SettlementSection
 extends VBoxContainer
 
-## The "Dress this street" section of a picked street's bar (WallToolPane.selection_box): four
-## chips for the character (Farming hamlet, Market town, Harbour town, Hill fort village), one
+## The "Dress this street" section of a picked street's bar (WallToolPane.selection_box): five
+## chips for the character (Farming hamlet, Market town, Harbour town, Hill fort village, Modern
+## town), one
 ## slider for how rich the street is and one for how busy, "Dress this street" (it reads "Re-dress"
 ## once dressed, and draws a new arrangement) and "Clear". Every press is one request; the editor
 ## makes it one history entry (SettlementEditor). No state beyond what show_for was last given:
@@ -41,6 +42,11 @@ const CHIPS: Array[Dictionary] = [
 		"kit": "hill_fort_village",
 		"label": "Hill fort village",
 		"tip": "Woodpiles, shrines, troughs and gates for a hard, quiet hill village",
+	},
+	{
+		"kit": "modern_town",
+		"label": "Modern town",
+		"tip": "Lamps, phone boxes, post boxes, planters and parked cars on a mid-century high street",
 	},
 ]
 const DRESS_TIP := "Furnish this street with the chosen character"

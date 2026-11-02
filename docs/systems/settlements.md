@@ -11,7 +11,7 @@ or sent, and every peer derives the same list.
 
 | Field | Meaning |
 |-------|---------|
-| `kit` | one of `ProcgenSettlement.NAMES` (farming_hamlet, market_town, harbour_town, hill_fort_village) |
+| `kit` | one of `ProcgenSettlement.NAMES` (farming_hamlet, market_town, harbour_town, hill_fort_village, modern_town; the last since topic moderntown, 2026-11-01: species `modern_row`, ground `asphalt_road`, `paving_kerb`, `concrete_plaza`) |
 | `seed_value` | 0 to 1e9; Re-dress takes `SettlementEditor.next_seed` |
 | `wealth` 0..1, `density` 0..1.5 | 0.01 steps; the kit clamps wealth to its own range |
 | `source` | the id of the street (a row `Wall`), or 0 after "Split into buildings" |

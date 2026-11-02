@@ -111,6 +111,17 @@ facade style (windows, floors), all drawn from species data (procgen `ProcgenStr
 plot, yard included. Verified with the `street_species` render job (the tiles and a street of each
 species, the village's fences visible).
 
+Setback per species (topic moderntown, 2026-11-01): a species may carry a default setback
+(`StreetSpeciesInfo.INFO[...]["setback_m"]`, read with `StreetSpeciesInfo.setback_m(preset)`); today
+only Modern row has one, 3.6 m (a 2.7 m frontage strip, room for parked cars at the kerb), and every
+other species keeps the brush default of 3 m. Picking a species tile calls `WallBrush.pick_preset`,
+which moves the brush's street setback (`heights[ROW]`) to the species' own, unless the author has
+stepped the setback with Shift+wheel or the height keys since (`row_height_touched`, set by
+`step_height` on a Street brush): then the author's value stays through every later pick. The rule
+is the pure `WallBrush.preset_setback`; the authoring pane, the play-mode Events pane and the
+`walls.gd` probe all pick through `pick_preset`. Tested in `test_walls`
+(`test_a_species_tile_sets_its_setback_until_the_author_sets_one`).
+
 Look (card S6, 2026-10-28): a street's lots wear the structures' look. `WallGeometry` splits a
 row's roofs off its planks (found from each vertex's provenance path, `StructureLook.role_of_tag_path`)
 into a `roof` part, which `AuthoredWalls` draws as a `Roof` mesh with the structures' roof tile shader,
